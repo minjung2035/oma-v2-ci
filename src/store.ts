@@ -459,7 +459,9 @@ export class Store {
    * (e.g. context candidate OID from CTX-003) may correct it, still in tx. */
   updateOperationPlanJson(id: OperationId, planJson: string): void {
     this.requireTx();
-    this.db.prepare("UPDATE operations SET plan_json=?, updated_at_ms=? WHERE id=?").run(planJson, Date.now(), id);
+    this.db
+      .prepare("UPDATE operations SET plan_json=?, updated_at_ms=? WHERE id=?")
+      .run(planJson, Date.now(), id);
   }
 
   setOperationSucceeded(id: OperationId, resultJson: string): void {
@@ -706,7 +708,9 @@ export class Store {
   }
 
   usageRows(): UsageRow[] {
-    const rows = this.db.prepare("SELECT * FROM usage ORDER BY created_at_ms, request_id").all() as Record<string, unknown>[];
+    const rows = this.db
+      .prepare("SELECT * FROM usage ORDER BY created_at_ms, request_id")
+      .all() as Record<string, unknown>[];
     return rows.map(rowToUsage);
   }
 

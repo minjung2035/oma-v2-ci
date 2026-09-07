@@ -207,14 +207,26 @@ export class Broker {
   ): void {
     const parser = new FrameParser(256 * 1024);
     const write = (obj: unknown) => sock.write(JSON.stringify(obj) + "\n");
-    let streamMode: { remaining: number; chunks: Uint8Array[]; total: number; sha: ReturnType<typeof createHash>; onDone: (all: Uint8Array) => void } | null = null;
+    let streamMode: {
+      remaining: number;
+      chunks: Uint8Array[];
+      total: number;
+      sha: ReturnType<typeof createHash>;
+      onDone: (all: Uint8Array) => void;
+    } | null = null;
     sock.on("data", (chunk: Buffer) => {
       if (streamMode) {
         streamMode.chunks.push(chunk);
         streamMode.total += chunk.length;
         streamMode.sha.update(chunk);
         if (streamMode.total > streamMode.remaining) {
-          write(Broker.errorAnswer("x", { code: "STREAM_INVALID", message: "stream exceeds descriptor.bytes", retry: "same-key" }));
+          write(
+            Broker.errorAnswer("x", {
+              code: "STREAM_INVALID",
+              message: "stream exceeds descriptor.bytes",
+              retry: "same-key",
+            }),
+          );
           streamMode = null;
           return;
         }
@@ -264,8 +276,15 @@ export class Broker {
         const id = typeof raw.id === "string" ? raw.id : "x";
         const method = raw.method as string;
         const p = (raw.params ?? {}) as Record<string, unknown>;
-        const desc = (typeof p.bundle === "object" && p.bundle !== null ? p.bundle : typeof p.content === "object" && p.content !== null ? p.content : null) as Record<string, unknown> | null;
-        const wantsStream = method === "git.submit" || method === "context.publish";
+        const desc = (
+          typeof p.bundle === "object" && p.bundle !== null
+            ? p.bundle
+            : typeof p.content === "object" && p.content !== null
+              ? p.content
+              : null
+        ) as Record<string, unknown> | null;
+        const wantsStream =
+          method === "git.submit" || method === "context.publish";
         if (wantsStream && desc && typeof desc.bytes === "number") {
           streamMode = {
             remaining: desc.bytes,
@@ -273,18 +292,25 @@ export class Broker {
             total: 0,
             sha: createHash("sha256"),
             onDone: (all) => {
-              this.pendingStream = (async function* () { yield all; })();
-              Promise.resolve(handle(raw)).then(
-                (r) => write(r),
-                (e) =>
-                  write(
-                    Broker.errorAnswer(id, {
-                      code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
-                      message: (e as Error).message,
-                      retry: "same-key",
-                    }),
-                  ),
-              ).finally(() => { this.pendingStream = null; });
+              this.pendingStream = (async function* () {
+                yield all;
+              })();
+              Promise.resolve(handle(raw))
+                .then(
+                  (r) => write(r),
+                  (e) =>
+                    write(
+                      Broker.errorAnswer(id, {
+                        code:
+                          e instanceof StoreError ? e.code : "INTERNAL_ERROR",
+                        message: (e as Error).message,
+                        retry: "same-key",
+                      }),
+                    ),
+                )
+                .finally(() => {
+                  this.pendingStream = null;
+                });
             },
           };
           return;
@@ -422,9 +448,21 @@ export class Broker {
     try {
       switch (method) {
         case "status.get": {
-          const obs = (a: string): { activeState: string; subState: string; result: string; execMainStatus: number } => {
+          const obs = (
+            a: string,
+          ): {
+            activeState: string;
+            subState: string;
+            result: string;
+            execMainStatus: number;
+          } => {
             const o = this.units.observe(a);
-            return { activeState: o.activeState, subState: o.subState, result: o.result, execMainStatus: o.execMainStatus };
+            return {
+              activeState: o.activeState,
+              subState: o.subState,
+              result: o.result,
+              execMainStatus: o.execMainStatus,
+            };
           };
           return Broker.okAnswer(id, await this.views.status(undefined, obs));
         }
@@ -504,33 +542,80 @@ export class Broker {
         case "agent.wait":
           return Broker.okAnswer(id, { accepted: true }); // memory intent; runner applies at the safe boundary
         case "git.known": {
-          if (!this.git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          if (!this.git)
+            throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
           const r = this.git.knownRefs();
-          return Broker.okAnswer(id, { hasCandidate: r.published.includes((params as { candidate: string }).candidate), prerequisites: [...r.published] });
+          return Broker.okAnswer(id, {
+            hasCandidate: r.published.includes(
+              (params as { candidate: string }).candidate,
+            ),
+            prerequisites: [...r.published],
+          });
         }
         case "git.submit": {
-          if (!this.git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          if (!this.git)
+            throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
           const bytes = this.pendingStream ?? emptyStream();
-          const receipt = await this.git.submit(auth, keyOf(req), params as never, bytes);
+          const receipt = await this.git.submit(
+            auth,
+            keyOf(req),
+            params as never,
+            bytes,
+          );
           return Broker.okAnswer(id, receipt);
         }
         case "git.integrate": {
-          if (!this.git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          if (!this.git)
+            throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
           const p = params as { candidate: string; expected: string };
-          return Broker.okAnswer(id, await this.git.integrate(auth, keyOf(req), { candidate: p.candidate, expected: p.expected }, "policy-rev-1", []));
+          return Broker.okAnswer(
+            id,
+            await this.git.integrate(
+              auth,
+              keyOf(req),
+              { candidate: p.candidate, expected: p.expected },
+              "policy-rev-1",
+              [],
+            ),
+          );
         }
         case "context.publish": {
-          if (!this.git) throw new StoreError("SPIKE_UNRESOLVED", "context module unavailable");
+          if (!this.git)
+            throw new StoreError(
+              "SPIKE_UNRESOLVED",
+              "context module unavailable",
+            );
           const bytes = this.pendingStream ?? emptyStream();
-          const receipt = await this.git.publishContext(auth, keyOf(req), params as never, bytes);
+          const receipt = await this.git.publishContext(
+            auth,
+            keyOf(req),
+            params as never,
+            bytes,
+          );
           return Broker.okAnswer(id, receipt);
         }
         case "logs.read": {
           const p = params as { agent: string; sinceSeconds: number };
           const svc = unitName(this.paths.society, p.agent, "service");
-          const r = spawnSync("journalctl", ["--user", "--unit", svc, "--since", `${p.sinceSeconds}s ago`, "--no-pager", "--output=cat"], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+          const r = spawnSync(
+            "journalctl",
+            [
+              "--user",
+              "--unit",
+              svc,
+              "--since",
+              `${p.sinceSeconds}s ago`,
+              "--no-pager",
+              "--output=cat",
+            ],
+            { encoding: "utf8", maxBuffer: 1024 * 1024 },
+          );
           const text = (r.stdout ?? "").slice(0, logLimit());
-          return Broker.okAnswer(id, { text, truncated: (r.stdout ?? "").length > text.length, observedAtMs: Date.now() });
+          return Broker.okAnswer(id, {
+            text,
+            truncated: (r.stdout ?? "").length > text.length,
+            observedAtMs: Date.now(),
+          });
         }
         default:
           return Broker.errorAnswer(id, {
@@ -717,7 +802,9 @@ export class Broker {
         });
       }
       case "host.reconcile": {
-        const rep = this.reconcile ? await this.reconcile.sweep() : await this.mail.reconcilePending();
+        const rep = this.reconcile
+          ? await this.reconcile.sweep()
+          : await this.mail.reconcilePending();
         return Broker.okAnswer(id, rep);
       }
       default:
@@ -803,7 +890,9 @@ function writeViewSheet(path: string, content: string): void {
 }
 
 function emptyStream(): AsyncIterable<Uint8Array> {
-  return (async function* () { /* no bytes */ })();
+  return (async function* () {
+    /* no bytes */
+  })();
 }
 
 function logLimit(): number {

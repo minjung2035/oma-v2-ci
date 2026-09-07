@@ -3,22 +3,32 @@
 // provider codec the open() stream refuses with SPIKE_UNRESOLVED (never an
 // arbitrary HTTP proxy). Reservation/quota/unknown accounting is real and is
 // exercisable with a mock provider (SP-04-T).
-import type { Actor, AuthContext, InferenceEvent, InferenceStart, Json } from "../implementation/contracts.js";
+import type {
+  Actor,
+  AuthContext,
+  InferenceEvent,
+  InferenceStart,
+  Json,
+} from "../implementation/contracts.js";
 import { Store, StoreError } from "./store.js";
 
 export interface InferenceConfig {
-  inferenceSlots: number;          // quota.inferenceSlots
-  principalReservedSlots: number;  // quota.principalReservedSlots
-  societyUnits: number;            // quota.societyUnits (reserved commitment cap)
-  lineageUnits: number;            // quota.lineageUnits per lineage
-  principalReservedUnits: number;  // quota.principalReservedUnits
+  inferenceSlots: number; // quota.inferenceSlots
+  principalReservedSlots: number; // quota.principalReservedSlots
+  societyUnits: number; // quota.societyUnits (reserved commitment cap)
+  lineageUnits: number; // quota.lineageUnits per lineage
+  principalReservedUnits: number; // quota.principalReservedUnits
   /** MUST [SP-04-A]: host-pinned per-request upper bound; 0 => unsupported. */
   maxUnitsPerRequest: number;
 }
 
 export interface ProviderTransport {
   /** SPIKE [S-04]: real provider codec is pinned deployment data. null => unresolved. */
-  stream(requestId: string, profile: string, payload: AsyncIterable<Uint8Array>): AsyncIterable<InferenceEvent> | null;
+  stream(
+    requestId: string,
+    profile: string,
+    payload: AsyncIterable<Uint8Array>,
+  ): AsyncIterable<InferenceEvent> | null;
 }
 
 interface Waiter {
@@ -63,7 +73,14 @@ export class InferenceSlot {
   /** MUST [RUN-002]: bounded wait; cancels on signal. */
   async waitForSlot(actor: Actor, signal?: AbortSignal): Promise<boolean> {
     const timeout = setTimeout(() => this.failFirst(), waitTimeoutMs(actor));
-    const waiter: Waiter = { resolve: () => { clearTimeout(timeout); this.pump(); }, cancelled: false, timer: null };
+    const waiter: Waiter = {
+      resolve: () => {
+        clearTimeout(timeout);
+        this.pump();
+      },
+      cancelled: false,
+      timer: null,
+    };
     this.waiters.push(waiter);
     const abort = (): void => {
       if (waiter.cancelled) return;
@@ -78,7 +95,10 @@ export class InferenceSlot {
       return true;
     }
     await new Promise<void>((resolve) => {
-      waiter.resolve = () => { clearTimeout(timeout); resolve(); };
+      waiter.resolve = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
     });
     signal?.removeEventListener("abort", abort);
     return !waiter.cancelled;
@@ -119,7 +139,8 @@ export function lineageOf(store: Store, actor: Actor): LiageNode[] {
   const seen = new Set<string>();
   let cur: string | null = actor;
   while (cur) {
-    if (seen.has(cur)) throw new StoreError("STORE_CORRUPT", `created_by cycle at ${cur}`);
+    if (seen.has(cur))
+      throw new StoreError("STORE_CORRUPT", `created_by cycle at ${cur}`);
     seen.add(cur);
     const a = store.getAgent(cur);
     if (!a) break;
@@ -141,7 +162,9 @@ export function reservationAllowed(
   requestedUnits: number,
   isPrincipal: boolean,
 ): boolean {
-  const reservedCap = isPrincipal ? cfg.principalReservedUnits : cfg.societyUnits;
+  const reservedCap = isPrincipal
+    ? cfg.principalReservedUnits
+    : cfg.societyUnits;
   if (requestedUnits > reservedCap) return false;
   const society = sumUnits(store, actor, null);
   if (society + requestedUnits > cfg.societyUnits) return false;
@@ -153,7 +176,11 @@ export function reservationAllowed(
 }
 
 /** committed+reserved+unknown units attributed to an actor subtree (or all when createdBy scope is null). */
-export function sumUnits(store: Store, root: string | null, _scope: null): number {
+export function sumUnits(
+  store: Store,
+  root: string | null,
+  _scope: null,
+): number {
   const rows = store.listAgents();
   const names = new Set<string>();
   if (root === null) {
@@ -170,7 +197,10 @@ export function sumUnits(store: Store, root: string | null, _scope: null): numbe
           changed = true;
         }
       }
-      if (!names.has(root)) { names.add(root); changed = true; }
+      if (!names.has(root)) {
+        names.add(root);
+        changed = true;
+      }
     }
   }
   let total = 0;
@@ -189,10 +219,20 @@ export class InferenceModule {
     private readonly cfg: InferenceConfig,
     private readonly provider: ProviderTransport,
   ) {
-    if (!Number.isSafeInteger(cfg.maxUnitsPerRequest) || cfg.maxUnitsPerRequest <= 0) {
-      throw new StoreError("UNSUPPORTED_PROFILE", "no pinned per-request billing upper bound (S-04)");
+    if (
+      !Number.isSafeInteger(cfg.maxUnitsPerRequest) ||
+      cfg.maxUnitsPerRequest <= 0
+    ) {
+      throw new StoreError(
+        "UNSUPPORTED_PROFILE",
+        "no pinned per-request billing upper bound (S-04)",
+      );
     }
-    this.slots = new InferenceSlot(cfg.inferenceSlots, cfg.principalReservedSlots, (a) => a === "principal");
+    this.slots = new InferenceSlot(
+      cfg.inferenceSlots,
+      cfg.principalReservedSlots,
+      (a) => a === "principal",
+    );
   }
 
   /** exposed slot view for operators/tests; the slot object stays internal. */
@@ -201,15 +241,31 @@ export class InferenceModule {
   }
 
   /** MUST [INF-005]: same request id -> existing outcome, never a re-call. */
-  private existingOutcome(requestId: string): AsyncIterable<InferenceEvent> | null {
+  private existingOutcome(
+    requestId: string,
+  ): AsyncIterable<InferenceEvent> | null {
     const u = this.store.getUsage(requestId);
     if (!u) return null;
     return (async function* () {
-      yield { v: 1, request: requestId, sequence: 0, event: "error", error: { code: "REQUEST_KEY_REUSED", message: `usage ${u.outcome} already recorded`, retry: "never" } };
+      yield {
+        v: 1,
+        request: requestId,
+        sequence: 0,
+        event: "error",
+        error: {
+          code: "REQUEST_KEY_REUSED",
+          message: `usage ${u.outcome} already recorded`,
+          retry: "never",
+        },
+      };
     })();
   }
 
-  async *open(auth: AuthContext, input: InferenceStart, payload: AsyncIterable<Uint8Array>): AsyncIterable<InferenceEvent> {
+  async *open(
+    auth: AuthContext,
+    input: InferenceStart,
+    payload: AsyncIterable<Uint8Array>,
+  ): AsyncIterable<InferenceEvent> {
     const isPrincipal = auth.actor === "principal";
     const existing = this.existingOutcome(input.request);
     if (existing) {
@@ -217,41 +273,79 @@ export class InferenceModule {
       return;
     }
     if (!(await this.slots.waitForSlot(auth.actor))) {
-      yield this.errorOf(input.request, 0, { code: "DEADLINE_EXCEEDED", message: "inference slot wait cancelled/timed out", retry: "same-key" });
+      yield this.errorOf(input.request, 0, {
+        code: "DEADLINE_EXCEEDED",
+        message: "inference slot wait cancelled/timed out",
+        retry: "same-key",
+      });
       return;
     }
     try {
       const upperBound = this.upperBoundUnits(input);
       // MUST [INF-003]: commit the reservation before any provider contact.
-      if (!reservationAllowed(this.store, this.cfg, auth.actor, upperBound, isPrincipal)) {
-        yield this.errorOf(input.request, 0, { code: "QUOTA_EXCEEDED", message: "society/lineage/reserve cap exceeded", retry: "never" });
+      if (
+        !reservationAllowed(
+          this.store,
+          this.cfg,
+          auth.actor,
+          upperBound,
+          isPrincipal,
+        )
+      ) {
+        yield this.errorOf(input.request, 0, {
+          code: "QUOTA_EXCEEDED",
+          message: "society/lineage/reserve cap exceeded",
+          retry: "never",
+        });
         return;
       }
       this.store.transaction((_tx) => {
         this.store.reserveUsage({
-          requestId: input.request, actor: auth.actor, incarnation: auth.incarnation,
-          profile: input.profile, pricingRevision: input.codecRevision, reservedUnits: upperBound,
+          requestId: input.request,
+          actor: auth.actor,
+          incarnation: auth.incarnation,
+          profile: input.profile,
+          pricingRevision: input.codecRevision,
+          reservedUnits: upperBound,
         });
       });
       // SPIKE [S-04]: without the pinned provider codec there is no transport.
-      const stream = this.provider.stream(input.request, input.profile, payload);
+      const stream = this.provider.stream(
+        input.request,
+        input.profile,
+        payload,
+      );
       if (!stream) {
         this.store.transaction((_tx) => {
           this.store.settleUsage(input.request, "unknown", null, null);
         });
-        yield this.errorOf(input.request, 0, { code: "SPIKE_UNRESOLVED", message: "provider codec not pinned (S-04)", retry: "never" });
+        yield this.errorOf(input.request, 0, {
+          code: "SPIKE_UNRESOLVED",
+          message: "provider codec not pinned (S-04)",
+          retry: "never",
+        });
         return;
       }
       let seq = 0;
       for await (const evt of stream) {
-        const e = { ...evt, v: 1 as const, request: input.request, sequence: seq++ };
+        const e = {
+          ...evt,
+          v: 1 as const,
+          request: input.request,
+          sequence: seq++,
+        };
         if (e.event === "end") {
           // MUST [INF-004]: settle only on provider-confirmed detail. The unit
           // field shape is SPIKE [S-04] data; the mock/pinned codec carries the
           // reported integer in data.reportedUnits and the module narrows it.
           const reported = readReportedUnits(e.data);
           this.store.transaction((_tx) => {
-            this.store.settleUsage(input.request, "completed", reported, JSON.stringify(detailsOf(e.data)));
+            this.store.settleUsage(
+              input.request,
+              "completed",
+              reported,
+              JSON.stringify(detailsOf(e.data)),
+            );
           });
         }
         yield e;
@@ -264,7 +358,8 @@ export class InferenceModule {
   async cancel(auth: AuthContext, request: string): Promise<void> {
     const u = this.store.getUsage(request);
     if (!u) return;
-    if (u.actor !== auth.actor) throw new StoreError("AUTH_FAILED", "not your inference request");
+    if (u.actor !== auth.actor)
+      throw new StoreError("AUTH_FAILED", "not your inference request");
     // MUST [INF-004]: cancellation only settles at 0/cancelled when no provider
     // contact is proven; here the transport is S-04-gated so contact is absent.
     if (u.outcome === "reserved") {
@@ -276,7 +371,14 @@ export class InferenceModule {
 
   /** MUST [INF-006]/[LIFE-003]: revoke the run: drop waiters and cancel active streams. */
   async fence(actor: Actor, incarnation: number): Promise<void> {
-    const rows = this.store.usageRows().filter((u) => u.actor === actor && u.incarnation === incarnation && u.outcome === "reserved");
+    const rows = this.store
+      .usageRows()
+      .filter(
+        (u) =>
+          u.actor === actor &&
+          u.incarnation === incarnation &&
+          u.outcome === "reserved",
+      );
     for (const r of rows) {
       this.store.transaction((_tx) => {
         this.store.settleUsage(r.requestId, "unknown", null, null);
@@ -289,13 +391,24 @@ export class InferenceModule {
     return this.cfg.maxUnitsPerRequest;
   }
 
-  private errorOf(request: string, seq: number, error: { code: string; message: string; retry: string }): InferenceEvent {
-    return { v: 1, request, sequence: seq, event: "error", error: error as never };
+  private errorOf(
+    request: string,
+    seq: number,
+    error: { code: string; message: string; retry: string },
+  ): InferenceEvent {
+    return {
+      v: 1,
+      request,
+      sequence: seq,
+      event: "error",
+      error: error as never,
+    };
   }
 }
 
 function readReportedUnits(data: unknown): number {
-  if (typeof data === "number" && Number.isSafeInteger(data) && data >= 0) return data;
+  if (typeof data === "number" && Number.isSafeInteger(data) && data >= 0)
+    return data;
   if (typeof data === "object" && data !== null) {
     const v = (data as Record<string, unknown>).reportedUnits;
     if (typeof v === "number" && Number.isSafeInteger(v) && v >= 0) return v;

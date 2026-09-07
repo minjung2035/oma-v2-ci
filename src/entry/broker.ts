@@ -23,28 +23,56 @@ if (societyIdx < 0 || args[societyIdx + 1] === undefined) usage();
 const society = args[societyIdx + 1]!;
 
 const stateRoot = join(
-  process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/tmp", ".local", "share"),
-  "oma", society,
+  process.env.XDG_DATA_HOME ??
+    join(process.env.HOME ?? "/tmp", ".local", "share"),
+  "oma",
+  society,
 );
 const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
-const configPath = configIdx >= 0 && args[configIdx + 1] !== undefined ? args[configIdx + 1]! : join(stateRoot, "config.json");
+const configPath =
+  configIdx >= 0 && args[configIdx + 1] !== undefined
+    ? args[configIdx + 1]!
+    : join(stateRoot, "config.json");
 
 const cfg = loadConfig(configPath);
 const store = new Store(join(stateRoot, "runtime.sqlite"));
-const mail = new MailModule({ stateRoot, society: cfg.society }, store, cfg.limits.replyReferences);
+const mail = new MailModule(
+  { stateRoot, society: cfg.society },
+  store,
+  cfg.limits.replyReferences,
+);
 const units = new UnitsModule(cfg.society, {
-  node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society: cfg.society, agent: "",
-});
-const views = new ViewsModule(store, stateRoot, cfg.society, cfg.principalProfile);
-const lifecycle = new LifecycleModule(store, units, {
-  stateRoot,
-  projectGit: join(stateRoot, "repos", "project.git"),
+  node: cfg.installation.node,
+  libdir: cfg.installation.libdir,
+  state: stateRoot,
   society: cfg.society,
-  hasGoal: () => requireFss().existsSync(join(stateRoot, "world", "context", "current")),
-}, (parent, input) => {
-  const r = resolveChildSpec(cfg, { name: parent.name, profile: parent.profile }, { name: input.name, from: input.from, brief: input.brief });
-  return r ? r.spec : null;
+  agent: "",
 });
+const views = new ViewsModule(
+  store,
+  stateRoot,
+  cfg.society,
+  cfg.principalProfile,
+);
+const lifecycle = new LifecycleModule(
+  store,
+  units,
+  {
+    stateRoot,
+    projectGit: join(stateRoot, "repos", "project.git"),
+    society: cfg.society,
+    hasGoal: () =>
+      requireFss().existsSync(join(stateRoot, "world", "context", "current")),
+  },
+  (parent, input) => {
+    const r = resolveChildSpec(
+      cfg,
+      { name: parent.name, profile: parent.profile },
+      { name: input.name, from: input.from, brief: input.brief },
+    );
+    return r ? r.spec : null;
+  },
+);
 const git = new GitModule(
   {
     stateRoot,
@@ -62,8 +90,19 @@ const git = new GitModule(
 const reconcile = new ReconcileModule(store, mail, git, units, {
   projectGit: join(stateRoot, "repos", "project.git"),
 });
-const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile, { stateRoot, runRoot, society: cfg.society });
-void reconcile.startup().catch((e) => console.error("reconcile startup:", (e as Error).message));
+const broker = new Broker(
+  store,
+  mail,
+  units,
+  views,
+  lifecycle,
+  git,
+  reconcile,
+  { stateRoot, runRoot, society: cfg.society },
+);
+void reconcile
+  .startup()
+  .catch((e) => console.error("reconcile startup:", (e as Error).message));
 
 broker.start();
 // MUST [LIFE-006]: reconcile pending physical effects before READY.

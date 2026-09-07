@@ -41,7 +41,11 @@ export class ReconcileModule {
   }
 
   /** MUST [REC-002]: one bounded sweep; concurrent sweeps join/skip. */
-  async sweep(): Promise<{ examined: number; repaired: number; remaining: number }> {
+  async sweep(): Promise<{
+    examined: number;
+    repaired: number;
+    remaining: number;
+  }> {
     if (this.sweeping) return { examined: 0, repaired: 0, remaining: 0 };
     this.sweeping = true;
     try {
@@ -56,7 +60,8 @@ export class ReconcileModule {
         if (!op) continue;
         if (op.kind === "git.submit" && this.git) {
           await this.git.reconcile(id);
-          if (this.store.getOperationById(id)!.state === "succeeded") repaired++;
+          if (this.store.getOperationById(id)!.state === "succeeded")
+            repaired++;
           else remaining++;
         }
       }
@@ -65,13 +70,19 @@ export class ReconcileModule {
       for (const a of this.store.listAgents()) {
         if (a.role !== "resident" || a.desired === "retired") continue;
         const obs = this.units.observe(a.name);
-        if (a.desired === "stopped" && (obs.activeState === "active" || obs.activeState === "activating")) {
+        if (
+          a.desired === "stopped" &&
+          (obs.activeState === "active" || obs.activeState === "activating")
+        ) {
           this.units.stop(a.name, a.incarnation);
           continue;
         }
         if (a.desired !== "enabled") continue;
-        const pendingCount = this.store.pendingDeliveries(a.name).length + this.store.preparedBatches(a.name).length;
-        const inactive = obs.activeState === "inactive" || obs.activeState === "dead";
+        const pendingCount =
+          this.store.pendingDeliveries(a.name).length +
+          this.store.preparedBatches(a.name).length;
+        const inactive =
+          obs.activeState === "inactive" || obs.activeState === "dead";
         if (pendingCount > 0 && inactive) {
           this.units.start(a.name, false);
         }
@@ -95,7 +106,15 @@ export class ReconcileModule {
 
   /** integrity guard for the shared repo (REC-001: never silently overwrite). */
   assertCanonicalHealthy(): void {
-    const r = spawnSync("git", ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs"], { encoding: "utf8" });
-    if (r.status !== 0) throw new StoreError("STORE_CORRUPT", `canonical repo fsck failed: ${(r.stderr ?? "").slice(0, 300)}`);
+    const r = spawnSync(
+      "git",
+      ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs"],
+      { encoding: "utf8" },
+    );
+    if (r.status !== 0)
+      throw new StoreError(
+        "STORE_CORRUPT",
+        `canonical repo fsck failed: ${(r.stderr ?? "").slice(0, 300)}`,
+      );
   }
 }

@@ -559,26 +559,38 @@ export class MailModule {
    */
   async publishGated(operationId: string): Promise<void> {
     const op = this.store.getOperationById(operationId);
-    if (!op) throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
+    if (!op)
+      throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
     let plan: { message: { id: MessageId } };
     try {
       plan = JSON.parse(op.planJson) as { message: { id: MessageId } };
     } catch {
-      throw new StoreError("STORE_CORRUPT", `operation ${operationId} has corrupt plan`);
+      throw new StoreError(
+        "STORE_CORRUPT",
+        `operation ${operationId} has corrupt plan`,
+      );
     }
     const messageId = plan.message.id;
     const object = this.objectPath(messageId);
-    if (!existsSync(object)) throw new StoreError("STORE_CORRUPT", `object missing for ${messageId}`);
+    if (!existsSync(object))
+      throw new StoreError("STORE_CORRUPT", `object missing for ${messageId}`);
     publishImmutableFile(object, this.archivePath(messageId));
     for (const d of this.store.deliveriesForOperation(operationId)) {
       if (existsSync(this.inboxCurPath(d.recipient, d.messageId))) {
-        this.store.transaction((_tx) => this.store.markMaterialized(d.messageId, d.recipient));
+        this.store.transaction((_tx) =>
+          this.store.markMaterialized(d.messageId, d.recipient),
+        );
         continue;
       }
       if (!existsSync(this.inboxNewPath(d.recipient, d.messageId))) {
-        publishImmutableFile(object, this.inboxNewPath(d.recipient, d.messageId));
+        publishImmutableFile(
+          object,
+          this.inboxNewPath(d.recipient, d.messageId),
+        );
       }
-      this.store.transaction((_tx) => this.store.markMaterialized(d.messageId, d.recipient));
+      this.store.transaction((_tx) =>
+        this.store.markMaterialized(d.messageId, d.recipient),
+      );
     }
   }
 

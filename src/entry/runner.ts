@@ -6,7 +6,9 @@ import { RunnerModule } from "../runner.js";
 import { loadConfig } from "../config.js";
 
 function usage(): never {
-  console.error("usage: runner.js --society <name> --agent <name> [--config <path>]");
+  console.error(
+    "usage: runner.js --society <name> --agent <name> [--config <path>]",
+  );
   process.exit(4);
 }
 
@@ -20,16 +22,25 @@ const society = args[societyIdx + 1]!;
 const agent = args[agentIdx + 1]!;
 
 const stateRoot = join(
-  process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/tmp", ".local", "share"),
-  "oma", society,
+  process.env.XDG_DATA_HOME ??
+    join(process.env.HOME ?? "/tmp", ".local", "share"),
+  "oma",
+  society,
 );
 const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
-const configPath = configIdx >= 0 && args[configIdx + 1] !== undefined ? args[configIdx + 1]! : join(stateRoot, "config.json");
+const configPath =
+  configIdx >= 0 && args[configIdx + 1] !== undefined
+    ? args[configIdx + 1]!
+    : join(stateRoot, "config.json");
 
 const cfg = loadConfig(configPath);
 const resident = cfg.initialResidents.find((r) => r.name === agent);
-const profileName = resident?.profile ?? (agent === "principal" ? cfg.principalProfile : undefined);
-const resources = profileName ? cfg.agentProfiles[profileName]?.resources : undefined;
+const profileName =
+  resident?.profile ??
+  (agent === "principal" ? cfg.principalProfile : undefined);
+const resources = profileName
+  ? cfg.agentProfiles[profileName]?.resources
+  : undefined;
 if (!resources) {
   console.error(`runner: unsupported profile for ${agent}`);
   process.exit(4);
@@ -48,7 +59,12 @@ const store = new Store(join(stateRoot, "runtime.sqlite")); // open+close valida
 store.close();
 
 const runner = new RunnerModule(
-  { runRoot, stateRoot, society, extensionArtifact: join(cfg.installation.libdir, "dist", "pi-extension.js") },
+  {
+    runRoot,
+    stateRoot,
+    society,
+    extensionArtifact: join(cfg.installation.libdir, "dist", "pi-extension.js"),
+  },
   sandbox,
   agent,
   join(stateRoot, "agents", agent, "home"),
