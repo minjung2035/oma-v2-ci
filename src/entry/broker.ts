@@ -7,6 +7,7 @@ import { UnitsModule } from "../units.js";
 import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "../lifecycle.js";
 import { Broker } from "../broker.js";
+import { GitModule } from "../git.js";
 import { loadConfig, resolveChildSpec } from "../config.js";
 
 function usage(): never {
@@ -43,7 +44,21 @@ const lifecycle = new LifecycleModule(store, units, {
   const r = resolveChildSpec(cfg, { name: parent.name, profile: parent.profile }, { name: input.name, from: input.from, brief: input.brief });
   return r ? r.spec : null;
 });
-const broker = new Broker(store, mail, units, views, lifecycle, { stateRoot, runRoot, society: cfg.society });
+const git = new GitModule(
+  {
+    stateRoot,
+    projectGit: join(stateRoot, "repos", "project.git"),
+    contextGit: join(stateRoot, "repos", "context.git"),
+    worldDir: join(stateRoot, "world"),
+    society: cfg.society,
+    quarantineTmpBytes: cfg.limits.bundleBytes,
+    checkTimeoutSeconds: 60,
+  },
+  store,
+  mail,
+  null, // host integration checks come from cfg.integration.checks (phase 8 wiring)
+);
+const broker = new Broker(store, mail, units, views, lifecycle, git, { stateRoot, runRoot, society: cfg.society });
 
 broker.start();
 // MUST [LIFE-006]: reconcile pending physical effects before READY.

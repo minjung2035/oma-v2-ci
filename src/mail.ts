@@ -541,6 +541,47 @@ export class MailModule {
       : { operation: opId, state: "pending", result };
   }
 
+  /**
+   * MUST [DB-009]: freeze the result object (broker-only, unpublished) before
+   * any Git/context effect; its id/hash/bytes are never recomputed later.
+   */
+  freezeObject(messageId: MessageId, eml: { text: string }): void {
+    const object = this.objectPath(messageId);
+    mkdirSync(dirname(object), { recursive: true });
+    writeFsynced(object, eml.text);
+  }
+
+  /**
+   * MUST [MAIL-010]: gated publication of a submit/context/create result mail.
+   * The caller (GitModule) has already proven the effect condition; this only
+   * shows the frozen object in archive + recipient inboxes and marks
+   * materialized. Never re-renders message metadata from templates.
+   */
+  async publishGated(operationId: string): Promise<void> {
+    const op = this.store.getOperationById(operationId);
+    if (!op) throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
+    let plan: { message: { id: MessageId } };
+    try {
+      plan = JSON.parse(op.planJson) as { message: { id: MessageId } };
+    } catch {
+      throw new StoreError("STORE_CORRUPT", `operation ${operationId} has corrupt plan`);
+    }
+    const messageId = plan.message.id;
+    const object = this.objectPath(messageId);
+    if (!existsSync(object)) throw new StoreError("STORE_CORRUPT", `object missing for ${messageId}`);
+    publishImmutableFile(object, this.archivePath(messageId));
+    for (const d of this.store.deliveriesForOperation(operationId)) {
+      if (existsSync(this.inboxCurPath(d.recipient, d.messageId))) {
+        this.store.transaction((_tx) => this.store.markMaterialized(d.messageId, d.recipient));
+        continue;
+      }
+      if (!existsSync(this.inboxNewPath(d.recipient, d.messageId))) {
+        publishImmutableFile(object, this.inboxNewPath(d.recipient, d.messageId));
+      }
+      this.store.transaction((_tx) => this.store.markMaterialized(d.messageId, d.recipient));
+    }
+  }
+
   /** MUST [MAIL-010]: publish archive + inbox links for one operation. */
   async materialize(operationId: string): Promise<void> {
     const op = this.store.getOperationById(operationId);

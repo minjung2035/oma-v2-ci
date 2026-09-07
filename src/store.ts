@@ -455,6 +455,13 @@ export class Store {
     return rows.map((r) => r.id as OperationId);
   }
 
+  /** plan_json is fixed at acceptance; only the broker's own completion steps
+   * (e.g. context candidate OID from CTX-003) may correct it, still in tx. */
+  updateOperationPlanJson(id: OperationId, planJson: string): void {
+    this.requireTx();
+    this.db.prepare("UPDATE operations SET plan_json=?, updated_at_ms=? WHERE id=?").run(planJson, Date.now(), id);
+  }
+
   setOperationSucceeded(id: OperationId, resultJson: string): void {
     this.requireTx();
     this.db

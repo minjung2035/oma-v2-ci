@@ -28,10 +28,12 @@ import {
   isValidTopicName,
 } from "./ids.js";
 import { FrameParser, FrameError } from "./frame.js";
+import { createHash } from "node:crypto";
 import { MailModule, StopSignal } from "./mail.js";
 import { UnitsModule } from "./units.js";
 import { peerCred, tryFlock, sdNotifyReady } from "./leaf.js";
 import { LifecycleModule } from "./lifecycle.js";
+import { GitModule } from "./git.js";
 import { ViewsModule } from "./views.js";
 import { batchOf } from "./mail.js";
 import { unitName } from "./units.js";
@@ -78,6 +80,7 @@ export class Broker {
     private readonly units: UnitsModule,
     private readonly views: ViewsModule,
     private readonly lifecycle: LifecycleModule,
+    private readonly git: GitModule | null,
     private readonly paths: BrokerPaths,
   ) {}
 
@@ -190,13 +193,36 @@ export class Broker {
     this.serveFrames(sock, (raw) => this.dispatchInternal(raw, cred));
   }
 
+  private pendingStream: AsyncIterable<Uint8Array> | null = null;
+
+  /** MUST [IPC-002]: a metadata frame with a body descriptor switches this
+   * connection to raw-byte collection of exactly descriptor.bytes (no JSON
+   * frames interleaved), then dispatches with the collected bytes. */
   private serveFrames(
     sock: Socket,
     handle: (raw: Record<string, unknown>) => Promise<unknown> | unknown,
   ): void {
     const parser = new FrameParser(256 * 1024);
     const write = (obj: unknown) => sock.write(JSON.stringify(obj) + "\n");
-    sock.on("data", (chunk) => {
+    let streamMode: { remaining: number; chunks: Uint8Array[]; total: number; sha: ReturnType<typeof createHash>; onDone: (all: Uint8Array) => void } | null = null;
+    sock.on("data", (chunk: Buffer) => {
+      if (streamMode) {
+        streamMode.chunks.push(chunk);
+        streamMode.total += chunk.length;
+        streamMode.sha.update(chunk);
+        if (streamMode.total > streamMode.remaining) {
+          write(Broker.errorAnswer("x", { code: "STREAM_INVALID", message: "stream exceeds descriptor.bytes", retry: "same-key" }));
+          streamMode = null;
+          return;
+        }
+        if (streamMode.total === streamMode.remaining) {
+          const done = streamMode.onDone;
+          const all = Buffer.concat(streamMode.chunks);
+          streamMode = null;
+          done(all);
+        }
+        return;
+      }
       let frames: { raw: unknown; text: string }[];
       try {
         frames = parser.feed(Buffer.from(chunk));
@@ -233,6 +259,33 @@ export class Broker {
           continue;
         }
         const id = typeof raw.id === "string" ? raw.id : "x";
+        const method = raw.method as string;
+        const p = (raw.params ?? {}) as Record<string, unknown>;
+        const desc = (typeof p.bundle === "object" && p.bundle !== null ? p.bundle : typeof p.content === "object" && p.content !== null ? p.content : null) as Record<string, unknown> | null;
+        const wantsStream = method === "git.submit" || method === "context.publish";
+        if (wantsStream && desc && typeof desc.bytes === "number") {
+          streamMode = {
+            remaining: desc.bytes,
+            chunks: [],
+            total: 0,
+            sha: createHash("sha256"),
+            onDone: (all) => {
+              this.pendingStream = (async function* () { yield all; })();
+              Promise.resolve(handle(raw)).then(
+                (r) => write(r),
+                (e) =>
+                  write(
+                    Broker.errorAnswer(id, {
+                      code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
+                      message: (e as Error).message,
+                      retry: "same-key",
+                    }),
+                  ),
+              ).finally(() => { this.pendingStream = null; });
+            },
+          };
+          return;
+        }
         Promise.resolve(handle(raw)).then(
           (r) => write(r),
           (e) =>
@@ -442,18 +495,28 @@ export class Broker {
           );
         case "agent.wait":
           return Broker.okAnswer(id, { accepted: true }); // memory intent; runner applies at the safe boundary
-        case "git.known":
-          throw new StoreError(
-            "SPIKE_UNRESOLVED",
-            "git.known is gated by the phase 7 git module",
-          );
-        case "git.submit":
-        case "git.integrate":
-        case "context.publish":
-          throw new StoreError(
-            "SPIKE_UNRESOLVED",
-            `${method} is gated by the phase 7 git/context module`,
-          );
+        case "git.known": {
+          if (!this.git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          const r = this.git.knownRefs();
+          return Broker.okAnswer(id, { hasCandidate: r.published.includes((params as { candidate: string }).candidate), prerequisites: [...r.published] });
+        }
+        case "git.submit": {
+          if (!this.git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          const bytes = this.pendingStream ?? emptyStream();
+          const receipt = await this.git.submit(auth, keyOf(req), params as never, bytes);
+          return Broker.okAnswer(id, receipt);
+        }
+        case "git.integrate": {
+          if (!this.git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          const p = params as { candidate: string; expected: string };
+          return Broker.okAnswer(id, await this.git.integrate(auth, keyOf(req), { candidate: p.candidate, expected: p.expected }, "policy-rev-1", []));
+        }
+        case "context.publish": {
+          if (!this.git) throw new StoreError("SPIKE_UNRESOLVED", "context module unavailable");
+          const bytes = this.pendingStream ?? emptyStream();
+          const receipt = await this.git.publishContext(auth, keyOf(req), params as never, bytes);
+          return Broker.okAnswer(id, receipt);
+        }
         case "logs.read":
           throw new StoreError(
             "SPIKE_UNRESOLVED",
@@ -727,6 +790,10 @@ function writeViewSheet(path: string, content: string): void {
   } finally {
     closeSync(fd);
   }
+}
+
+function emptyStream(): AsyncIterable<Uint8Array> {
+  return (async function* () { /* no bytes */ })();
 }
 
 function keyOf(req: { request?: string }): string {
