@@ -1,18 +1,25 @@
 // MUST [IPC-001/002]: uint32 BE length + JSON frame parser over a stream.
 // Byte-split tolerant (T04); rejects oversize length, invalid UTF-8, duplicate
 // JSON keys, NaN/Infinity and non-object roots with bounded memory.
-import { TextDecoder } from 'node:util';
+import { TextDecoder } from "node:util";
 
 export class FrameError extends Error {
-  constructor(readonly code: 'FRAME_TOO_LARGE' | 'INVALID_REQUEST', message: string) {
+  constructor(
+    readonly code: "FRAME_TOO_LARGE" | "INVALID_REQUEST",
+    message: string,
+  ) {
     super(message);
-    this.name = 'FrameError';
+    this.name = "FrameError";
   }
 }
 
 /** Reject duplicate object keys in JSON text (IPC-001). Returns the offending key. */
 export function findDuplicateKey(text: string): string | null {
-  interface Container { isObj: boolean; keys: Set<string> | null; expectKey: boolean }
+  interface Container {
+    isObj: boolean;
+    keys: Set<string> | null;
+    expectKey: boolean;
+  }
   const stack: Container[] = [];
   let i = 0;
   const n = text.length;
@@ -20,16 +27,19 @@ export function findDuplicateKey(text: string): string | null {
     const c = text[i]!;
     if (c === '"') {
       let j = i + 1;
-      let s = '';
+      let s = "";
       let closed = false;
       while (j < n) {
         const ch = text[j]!;
-        if (ch === '\\') {
-          s += text[j + 1] ?? '';
+        if (ch === "\\") {
+          s += text[j + 1] ?? "";
           j += 2;
           continue;
         }
-        if (ch === '"') { closed = true; break; }
+        if (ch === '"') {
+          closed = true;
+          break;
+        }
         s += ch;
         j++;
       }
@@ -44,15 +54,15 @@ export function findDuplicateKey(text: string): string | null {
       i = j;
       continue;
     }
-    if (c === '{') {
+    if (c === "{") {
       stack.push({ isObj: true, keys: new Set(), expectKey: true });
-    } else if (c === '[') {
+    } else if (c === "[") {
       stack.push({ isObj: false, keys: null, expectKey: false });
-    } else if (c === '}') {
+    } else if (c === "}") {
       stack.pop();
-    } else if (c === ']') {
+    } else if (c === "]") {
       stack.pop();
-    } else if (c === ',') {
+    } else if (c === ",") {
       const top = stack[stack.length - 1];
       if (top) top.expectKey = top.isObj;
     }
@@ -61,7 +71,7 @@ export function findDuplicateKey(text: string): string | null {
   return null;
 }
 
-const decoder = new TextDecoder('utf-8', { fatal: true });
+const decoder = new TextDecoder("utf-8", { fatal: true });
 
 export interface ParsedFrame {
   raw: unknown;
@@ -89,11 +99,17 @@ export class FrameParser {
         const skip = 4 + len;
         if (this.buf.length >= skip) {
           this.buf = this.buf.subarray(skip);
-          throw new FrameError('FRAME_TOO_LARGE', `frame length ${len} exceeds max ${this.maxFrameBytes}`);
+          throw new FrameError(
+            "FRAME_TOO_LARGE",
+            `frame length ${len} exceeds max ${this.maxFrameBytes}`,
+          );
         }
         // cannot resync yet; drop all buffered data and wait for the full frame
         this.buf = this.buf.subarray(0, 0);
-        throw new FrameError('FRAME_TOO_LARGE', `frame length ${len} exceeds max ${this.maxFrameBytes}`);
+        throw new FrameError(
+          "FRAME_TOO_LARGE",
+          `frame length ${len} exceeds max ${this.maxFrameBytes}`,
+        );
       }
       if (this.buf.length < 4 + len) break;
       const rawBytes = this.buf.subarray(4, 4 + len);
@@ -109,21 +125,28 @@ export class FrameParser {
     try {
       text = decoder.decode(rawBytes);
     } catch {
-      throw new FrameError('INVALID_REQUEST', 'invalid UTF-8 in frame');
+      throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in frame");
     }
-    if (text.includes('NaN') || text.includes('Infinity')) {
-      throw new FrameError('INVALID_REQUEST', 'non-finite literal in frame');
+    if (text.includes("NaN") || text.includes("Infinity")) {
+      throw new FrameError("INVALID_REQUEST", "non-finite literal in frame");
     }
     const dup = findDuplicateKey(text);
-    if (dup !== null) throw new FrameError('INVALID_REQUEST', `duplicate JSON key "${dup}"`);
+    if (dup !== null)
+      throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${dup}"`);
     let raw: unknown;
     try {
       raw = JSON.parse(text);
     } catch (e) {
-      throw new FrameError('INVALID_REQUEST', `malformed JSON: ${(e as Error).message}`);
+      throw new FrameError(
+        "INVALID_REQUEST",
+        `malformed JSON: ${(e as Error).message}`,
+      );
     }
-    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-      throw new FrameError('INVALID_REQUEST', 'frame root must be a JSON object');
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      throw new FrameError(
+        "INVALID_REQUEST",
+        "frame root must be a JSON object",
+      );
     }
     return { raw, text };
   }
