@@ -698,6 +698,11 @@ export class Store {
       );
   }
 
+  usageRows(): UsageRow[] {
+    const rows = this.db.prepare("SELECT * FROM usage ORDER BY created_at_ms, request_id").all() as Record<string, unknown>[];
+    return rows.map(rowToUsage);
+  }
+
   getUsage(requestId: string): UsageRow | null {
     const r = this.db
       .prepare("SELECT * FROM usage WHERE request_id=?")
