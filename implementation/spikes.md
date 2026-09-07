@@ -14,9 +14,29 @@
 
 **MUST [SP-01-A]** 해당 incarnation의 실제 cgroup 후손만 actor listener를 사용할 수 있고 타 actor·host arbitrary process·stale run은 거절해야 한다. READY 전 요청은 접수하지 않는다. systemd/bwrap 미지원 환경은 UNSUPPORTED_PROFILE이어야 한다. 최소 native leaf를 쓰면 TS application 경계/LOC에 반영한다. userns-try·UID-only 인증·host network fallback은 금지한다.
 
+**S-01 실험 기록 (2026-09-07, 격리 /tmp/oma-spike-s01에서 실행)** — 검증 versions:
+node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `node:sqlite` OK) · bwrap 0.11.2 · systemd 261 (user manager running) · koffi 3.2.1 · host: Arch Linux (cachyos), unprivileged_userns_clone=1, max_user_namespaces=62964. notmuch 미설치.
+
+1. **bwrap userns 격리 (SP-01-T: host home/network/pid)** — 일반 user로 `--unshare-all --new-session --die-with-parent --cap-drop ALL --ro-bind <rootfs> / --proc --dev --size 1MiB --tmpfs /tmp --bind <ws> /workspace --ro-bind <obj> /mail/archive ...` 실행:
+   - 내부 `id -u`=1000 (userns), host `/home/user` 비노출 (access denied), `/tmp` 쓰기 가능, `/workspace` bind RW.
+   - network namespace 분리: `/sys/class/net` empty (기본 egress 없음). PID namespace 분리: 내부 pid=2, `pid:[4026533184]`. → SB-001/002 mount/namespace primitive 검증 통과.
+   - **부정 발견**: `/run/user/1000` 전체를 `--ro-bind`하면 `at-spi` 데스크톱 소켓이 노출됨. → 규범 FS-001/arch처럼 **호스트 runtime 디렉터리 전체를 mount하지 않고 특정 incarnation socket(`R/actors/<actor>/<incarnation>/control.sock`) 하나만 mount**한다는 결정을 실증.
+2. **Node SO_PEERCRED 없음** — `net.Server` unix socket에서 `remoteAddress/remoteFamily/remotePort` 모두 undefined, peer/pid/uid 필드 없음. Node 내장으로는 peer identity를 얻을 수 없음 → 최소 native leaf 필요.
+3. **koffi FFI로 SO_PEERCRED 획득** — `getsockopt(fd, SOL_SOCKET=1, SO_PEERCRED=17)` 결과 `ret=0 pid=<connector-pid> uid=1000 gid=1000`. fd는 `sock._handle.fd`(비공개 필드)에서 취득. → S-01의 peer identity leaf 경로 실증. (비공개 `_handle.fd` 의존은 SP-02/S-02에서 노출 경계 재검토.)
+4. **Node dgram은 AF_UNIX datagram 미지원** — `dgram.createSocket('unix'|'unix_dgram')` → `ERR_SOCKET_BAD_TYPE` (udp4/udp6만).
+5. **koffi로 sd_notify (Type=notify READY=1)** — `socket(AF_UNIX,SOCK_DGRAM)`+`connect(NOTIFY_SOCKET)`+`send('READY=1')`: `systemctl --user start oma-spike-notify2.service` exit 0, `Result=success ExecMainStatus=0`. → UNIT-004 broker READY notify 경로 실증.
+6. **systemd user service 수명주기** — Type=exec service: start→active, `ControlGroup=/user.slice/.../oma-*.service`에 pid 1개 배정; stop 후 cgroup 디렉터리 제거(후손 종료). start/stop/reset-failed 동작.
+7. Pi bundle/소스는 `SO_PEERCRED`/`NOTIFY_SOCKET`/`sd_notify`/`unix_dgram` 미사용 — Pi가 이 leaf를 제공하지 않으므로 OMA leaf가 필요함.
+
+**결정**: systemd+bwrap+sqlite(내장)+git substrate는 사용 가능. SO_PEERCRED와 sd_notify는 **최소 native leaf(koffi FFI)로 충족**. TS 경계는 `sandbox.ts`/`units.ts`/`auth`에 이 leaf를 격리한다.
+
+**아직 OPEN (후속 단계 필요)**: 실제 broker+runner를 통한 actor-listener 인증 강제, PID 재사용 stress, READY 전 요청 거절, 저장소 quota 강제(파일시스템 수준), full FD enumeration. 이들은 runtime 구현 단계(phase 2+)에서 재실행한다.
+
 ## S-02 — 기존 Principal Pi의 host/private 경계
 
 **SPIKE [S-02]** 기존 interactive Pi session에 attach하는 정확한 API/credential 전달, 모든 model-facing tool override, trusted extension helper와 model tool의 분리 방식을 검증한다. Principal에게 full Human context를 유지하면서 model tool이 host filesystem/credentials를 읽지 못해야 한다.
+
+**S-02 상태 (2026-09-07)**: 실험 미실행 — 기존 interactive Human Pi session에 attach하는 경로는 사용자 host의 실제 Pi 환경을 건드리지 않아야 하며(작업 지시: 격리 검증 환경 요구), attach 대상이 될 Human session이 격리 환경에 존재하지 않는다. → **OPEN, 실행 불가 환경**. phase 5(principal-relay/extension attach)에서 격리 Human session을 구축할 수 있는지 재평가한다. UID-only/무격리 fallback은 만들지 않는다 (SP-03).
 
 **MUST [SP-02-T]** 기본 shell/read/write/edit, alias, 추가 extension tool, subtool, custom provider hook, 경로 traversal/symlink를 각각 실행한다. model에게 attach credential·session 파일 읽기를 요청해 거절을 확인한다. duplicate attach와 UI 종료/재연결을 반복하고 commons 100개와 principal 질문 1개를 보낸다.
 
@@ -25,6 +45,17 @@
 ## S-03 — Pi 실시간 알림과 durable batch 경계
 
 **SPIKE [S-03]** architecture §§7.1/18.2는 성공 agent_end에서 batch 완료를 기록하고 prepared snapshot을 확장하지 않는다. 동시에 §7은 busy Pi의 현재 tool group 다음 LLM 호출 전에 새 direct mail을 steer하도록 요구한다. 이 둘을 만족하는 pinned Pi의 custom message 귀속·batch prepare 시점·동시 prepared 수는 아직 확정되지 않았다.
+
+**S-03 실험 기록 (2026-09-07, 격리 /tmp/oma-spike-s03에서 실행)** — pi 0.85.1 (설치본, reference commit e687434a60174db1a9c961d973881a7a851a0597과 version 일치). `PI_CODING_AGENT_DIR=<tmp>/agent`로 격리 (사용자 확장 미로드), `pi --mode rpc -e <oma-ext.ts> --no-session`.
+
+1. **extension command 실행**: RPC prompt `{"type":"prompt","message":"/oma-deliver b-123"}` → 등록한 `oma-deliver` handler 실행, `ctx.ui.notify('oma-deliver executed for b-123')` 수신.
+2. **custom message + triggerTurn + deliverAs=steer**: handler의 `pi.sendMessage({customType:'oma-mail', content, display:true, details:{batchId}}, {triggerTurn:true, deliverAs:'steer'})` → `turn_start` 후 `message_start{role:'custom',customType:'oma-mail',...}`로 스트림 전달. → **peer content가 Human role로 위장되지 않음**(role='custom' 확증).
+3. provider 미설정 격리 프로파일에서 assistant turn은 `Unknown provider: unknown`, `stopReason:'error'`로 종료 — 모델 없는 프로브의 기대 동작이며 S-04(provider codec)가 별도 gate임을 재확인.
+4. RPC 계약(rpc.md) 확인: `steer` = 실행 중 assistant turn의 tool call들을 마친 뒤 다음 LLM 호출 전에 전달; `followUp` = agent 종료 후 전달; `set_steering_mode`(all/one-at-a-time) 존재. S-03의 steer/followUp 경로가 pinned Pi에 존재함을 실증.
+
+**결정**: 확장 command + custom message + deliverAs 경로는 pi 0.85.1에서 동작. 준비된 batch를 읽어 steer/followUp으로 안내하는 `pi-extension.ts` adapter 계약의 기반 확보.
+
+**아직 OPEN**: 두 tool 실행 중 steer의 tool-result 보존, batch prepare/completed 귀속 경계, 동시 prepared batch 수, session-boundary 증거(session flush/fsync), 모델의 session JSON 변조 대응 — 이는 runner+Pi adapter 구현(phase 5)과 실provider(S-04)에서 재검증.
 
 **MUST [SP-03-T]** tool 두 개가 실행 중인 Pi에 direct 질문을 넣고, 두 tool 결과가 모두 보존된 다음 inference에 custom notice가 포함되는지 확인한다. 별도 public followUp도 넣는다. 첫 batch가 끝나기 전에 두 번째 질문, context update, stop/abort, UI reconnect를 주입한다. batch prepare 전/후, cur 이동 후, custom notice 전/후, tool effect 후, agent_end 직전/직후, session 저장 전/후, DB complete 전/후에 kill한다.
 
@@ -35,6 +66,8 @@
 ## S-04 — Pi provider codec / usage upper bound
 
 **SPIKE [S-04]** pinned Pi의 model/provider registration과 streaming data codec, abort/error/finish event mapping, provider input/output/cache/reasoning token 회계, request 최대비용 upper bound를 검증한다. 특정 model 이름만으로 가격이나 context limit을 추정하지 않는다.
+
+**S-04 상태 (2026-09-07)**: 실험 미실행 — 격리 프로파일에 provider credential/model profile이 없어 실제 stream codec/usage 상한을 시험할 수 없다 (`Unknown provider: unknown`로 확인). → **OPEN, credential 부재**. mock provider 기반 concurrent reservation/lineage 경계 테스트(T48-T51)는 phase 6(inference module)에서 실행 가능하며 그때 기록한다. provider relay를 임의 URL proxy로 구현하지 않는다 (SP-04-A).
 
 **MUST [SP-04-T]** 실제 허용된 cheap/Principal profile에서 stream 성공·429·5xx·중간 끊김·초기 연결 실패·취소·provider가 응답 직전 broker kill을 시험한다. mock provider로 concurrent reservation/lineage/reserve 경계를 대량 검사하고 실제 provider로 codec 호환을 확인한다. raw Human payload가 journal/mail/DB에 없는지 검색한다.
 
@@ -48,9 +81,25 @@
 
 **MUST [SP-05-A]** invalid input은 canonical ref를 바꾸지 않으며 검증된 reachable C만 게시할 수 있어야 한다. canonical objects를 읽는 quarantine은 RO이고 Resident는 canonical objects에 쓰지 못한다. publish 후 crash에도 object/ref 연결성이 유지되어야 한다. 사용한 Git versions/object formats별 정확한 argv/env·fsync 설정을 기록한다.
 
+
+**S-05 실험 기록 (2026-09-07, 격리 /tmp/oma-spike-s05에서 실행)** — git 2.55.0, `GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 GIT_NO_REPLACE_OBJECTS=1`, branch `main` 명시 생성.
+
+1. **증분 bundle vs full bundle**: 256KiB base + 1줄 수정 commit C. `bundle create ... refs/oma/export/req1 ^<BASE>` = 389B, full `... refs/oma/export/req1` = 779B. → prerequisite 제외 증분 경로 실증.
+2. **quarantine + RO alternate (GIT-007)**: fresh bare quarantine에 `objects/info/alternates`로 canonical `objects/` RO 참조 추가. `bundle verify` 통과(sha1), `fetch --no-tags <bundle> refs/oma/export/req1:refs/oma/input` → input=C, `fsck --strict --no-reflogs` 0 issues.
+3. **canonical 객체 수입 + published ref**: quarantine에서 canonical으로 `fetch --no-tags <quarantine> refs/oma/input:refs/oma/input` → canonical에 C object 존재(`cat-file -t C`=commit). `update-ref refs/oma/published/a/op-1 C <zero>` 성공.
+4. **peer fetch exact candidate**: B가 `fetch --no-tags origin refs/oma/published/a/op-1` → `FETCH_HEAD=C`, `show FETCH_HEAD:fix.txt`=`fix` (정확한 candidate/path).
+5. **CAS 경쟁 (INT-003)**: 같은 base에서 A의 C로 `update-ref refs/heads/main C BASE` 성공 → main=C. 이후 B의 C2(같은 base)로 stale `update-ref ... C2 BASE` → `exit 128`, actual main=C 유지. → 첫 승자만 성공, 패자는 stale-base 실패.
+6. **hostile bundle (GIT-006)**: export ref + `main`을 함께 담은 bundle의 `list-heads`가 `refs/oma/export/req1` + `refs/heads/main`을 노출 → 요청 export ref 하나만 허용 규칙으로 BUNDLE_INVALID 거절 대상임을 확인.
+7. 이 환경의 git 기본 브랜치는 `master`(main 아님) — 규범 canonical `main`은 init 시 명시 생성 필요. git default branch config는 host 배포 manifest에서 고정.
+
+**결정**: bundle+RO alternate quarantine+canonical 수입+published ref+peer fetch+CAS race의 실제 argv/env recipe가 동작. S-05의 순수 git substrate는 검증됨.
+
+**아직 OPEN (후속 단계 필요)**: quarantine resource limit(CPU/mem/pid/tmp), excessive expansion/depth, symlink staging, hook/config injection, interrupted import의 crash 내구성, pack flush 세부 — runtime harness(phase 7)에서 재실행.
 ## S-06 — durability / systemd races / storage qualification
 
 **SPIKE [S-06]** SQLite FULL+WAL, eml/object/link/rename, Git object/ref, directory fsync와 지원 filesystem의 전원 장애 보장을 검증한다. systemd .path 재활성화 및 cgroup death 확인도 실서비스에서 검증한다.
+
+**S-06 상태 (2026-09-07)**: 전원 장애(abrupt power loss)·VM fault 시험은 전용 disposable VM/fault-injection harness가 없어 **미실행, OPEN (환경 부재)** — SIGKILL/sudo 불가 환경이므로 host를 위험에 빠뜨리지 않는다 (작업 지시: VM 없으면 S-06 결과를 unresolved로 남긴다). process-kill 지점(T18-T22/T27/T30/T39/T57/T58/T63/T66)은 실제 subprocess kill로 실행 가능하며 구현 단계(phase 3 mail, phase 7 git)에서 실행해 별도 기록한다. systemd `.path` 재활성화·cgroup death는 phase 4(units)에서 실서비스로 재검증한다. SIGKILL 통과만으로 power-loss passed로 표시하지 않는다 (SP-06-A).
 
 **MUST [SP-06-T]** test matrix의 process kill 지점을 실제 subprocess kill로 실행하고, 별도 VM/지원 fault 환경에서 write ordering·abrupt power loss·ENOSPC·read-only remount를 시험한다. accepted receipt를 외부 harness에 기록한 뒤 reboot 결과와 대조한다. stop 중 mail 도착, 마지막 idle check 뒤 mail 도착, start-limit, broker crash, principal offline backlog를 실서비스로 반복한다.
 
