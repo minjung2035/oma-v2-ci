@@ -463,7 +463,7 @@ test("REC-007: broker singleton lock — second broker refuses the society", () 
   const { env, cleanup } = envOf();
   try {
     const mk = () =>
-      new Broker(env.store, env.mail, env.units, env.views, env.lifecycle, null, {
+      new Broker(env.store, env.mail, env.units, env.views, env.lifecycle, null, null, {
         stateRoot: join(env.dir, "state"),
         runRoot: join(env.dir, "R"),
         society: env.society,

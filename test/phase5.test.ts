@@ -46,7 +46,7 @@ function envOf(): Env {
     hasGoal: () => true,
   }, resolver);
   const views = new ViewsModule(store, state, society, "p");
-  const broker = new Broker(store, mail, units, views, lifecycle, null, { stateRoot: state, runRoot, society });
+  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: state, runRoot, society });
   broker.start();
   return {
     dir, state, runRoot, society, store, broker,

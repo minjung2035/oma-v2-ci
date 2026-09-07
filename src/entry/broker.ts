@@ -8,6 +8,7 @@ import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "../lifecycle.js";
 import { Broker } from "../broker.js";
 import { GitModule } from "../git.js";
+import { ReconcileModule } from "../reconcile.js";
 import { loadConfig, resolveChildSpec } from "../config.js";
 
 function usage(): never {
@@ -58,7 +59,11 @@ const git = new GitModule(
   mail,
   null, // host integration checks come from cfg.integration.checks (phase 8 wiring)
 );
-const broker = new Broker(store, mail, units, views, lifecycle, git, { stateRoot, runRoot, society: cfg.society });
+const reconcile = new ReconcileModule(store, mail, git, units, {
+  projectGit: join(stateRoot, "repos", "project.git"),
+});
+const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile, { stateRoot, runRoot, society: cfg.society });
+void reconcile.startup().catch((e) => console.error("reconcile startup:", (e as Error).message));
 
 broker.start();
 // MUST [LIFE-006]: reconcile pending physical effects before READY.

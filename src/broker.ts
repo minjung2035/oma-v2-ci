@@ -29,11 +29,13 @@ import {
 } from "./ids.js";
 import { FrameParser, FrameError } from "./frame.js";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { MailModule, StopSignal } from "./mail.js";
 import { UnitsModule } from "./units.js";
 import { peerCred, tryFlock, sdNotifyReady } from "./leaf.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { GitModule } from "./git.js";
+import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
 import { batchOf } from "./mail.js";
 import { unitName } from "./units.js";
@@ -81,6 +83,7 @@ export class Broker {
     private readonly views: ViewsModule,
     private readonly lifecycle: LifecycleModule,
     private readonly git: GitModule | null,
+    private readonly reconcile: ReconcileModule | null,
     private readonly paths: BrokerPaths,
   ) {}
 
@@ -418,8 +421,13 @@ export class Broker {
     }
     try {
       switch (method) {
-        case "status.get":
-          return Broker.okAnswer(id, await this.views.status());
+        case "status.get": {
+          const obs = (a: string): { activeState: string; subState: string; result: string; execMainStatus: number } => {
+            const o = this.units.observe(a);
+            return { activeState: o.activeState, subState: o.subState, result: o.result, execMainStatus: o.execMainStatus };
+          };
+          return Broker.okAnswer(id, await this.views.status(undefined, obs));
+        }
         case "operation.get": {
           const op = this.store.getOperation(
             auth.actor,
@@ -517,11 +525,13 @@ export class Broker {
           const receipt = await this.git.publishContext(auth, keyOf(req), params as never, bytes);
           return Broker.okAnswer(id, receipt);
         }
-        case "logs.read":
-          throw new StoreError(
-            "SPIKE_UNRESOLVED",
-            "logs.read needs the phase 8 observability module",
-          );
+        case "logs.read": {
+          const p = params as { agent: string; sinceSeconds: number };
+          const svc = unitName(this.paths.society, p.agent, "service");
+          const r = spawnSync("journalctl", ["--user", "--unit", svc, "--since", `${p.sinceSeconds}s ago`, "--no-pager", "--output=cat"], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+          const text = (r.stdout ?? "").slice(0, logLimit());
+          return Broker.okAnswer(id, { text, truncated: (r.stdout ?? "").length > text.length, observedAtMs: Date.now() });
+        }
         default:
           return Broker.errorAnswer(id, {
             code:
@@ -707,7 +717,7 @@ export class Broker {
         });
       }
       case "host.reconcile": {
-        const rep = await this.mail.reconcilePending();
+        const rep = this.reconcile ? await this.reconcile.sweep() : await this.mail.reconcilePending();
         return Broker.okAnswer(id, rep);
       }
       default:
@@ -794,6 +804,10 @@ function writeViewSheet(path: string, content: string): void {
 
 function emptyStream(): AsyncIterable<Uint8Array> {
   return (async function* () { /* no bytes */ })();
+}
+
+function logLimit(): number {
+  return 1024 * 1024; // VIEW-003 default 1 MiB
 }
 
 function keyOf(req: { request?: string }): string {
