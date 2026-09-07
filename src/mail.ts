@@ -564,9 +564,14 @@ export class MailModule {
     const deliveries = this.store.deliveriesForOperation(operationId);
     // message id comes from the plan, not the (possibly empty) delivery list:
     // a zero-recipient mail must still be archived.
-    const messageId = (plan as { message?: { id: string } }).message?.id
-      ?? deliveries[0]?.messageId;
-    if (!messageId) throw new StoreError("STORE_CORRUPT", `operation ${operationId} has no message plan`);
+    const messageId =
+      (plan as { message?: { id: string } }).message?.id ??
+      deliveries[0]?.messageId;
+    if (!messageId)
+      throw new StoreError(
+        "STORE_CORRUPT",
+        `operation ${operationId} has no message plan`,
+      );
     const object = this.objectPath(messageId);
     if (!existsSync(object))
       throw new StoreError("STORE_CORRUPT", `object missing for ${messageId}`);
@@ -771,7 +776,7 @@ export function receiptOf(op: OperationRow): Receipt {
   return rec;
 }
 
-function batchOf(
+export function batchOf(
   b: {
     id: string;
     incarnation: number;

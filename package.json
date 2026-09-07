@@ -11,6 +11,7 @@
     "test": "npm run build && node --test dist/test/*.test.js"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.85.1",
     "@types/node": "^26.0.0",
     "typescript": "5.9.3"
   },

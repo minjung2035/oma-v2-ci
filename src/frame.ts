@@ -71,6 +71,15 @@ export function findDuplicateKey(text: string): string | null {
   return null;
 }
 
+/** MUST [IPC-001]: client-side frame encoding: uint32 BE length + UTF-8 JSON. */
+export function encodeFrame(obj: unknown): Buffer {
+  const body = Buffer.from(JSON.stringify(obj), "utf8");
+  const out = Buffer.alloc(4 + body.length);
+  out.writeUInt32BE(body.length, 0);
+  body.copy(out, 4);
+  return out;
+}
+
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
 export interface ParsedFrame {
