@@ -1,0 +1,8 @@
+# MUST [UNIT-005..006]: Only enable when desired and GOAL permit activation.
+[Unit]
+Description=Wake OMA @SOCIETY@ resident @AGENT@ on mail
+[Path]
+DirectoryNotEmpty=@STATE@/mail/inboxes/@AGENT@/new
+Unit=oma-@SOCIETY@-@AGENT@.service
+[Install]
+WantedBy=default.target

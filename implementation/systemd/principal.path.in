@@ -1,0 +1,8 @@
+# MUST [PR-002]: The target drains Maildir; it MUST NOT start a model.
+[Unit]
+Description=Wake OMA @SOCIETY@ Principal mail relay
+[Path]
+DirectoryNotEmpty=@STATE@/mail/inboxes/principal/new
+Unit=oma-@SOCIETY@-principal-relay.service
+[Install]
+WantedBy=default.target

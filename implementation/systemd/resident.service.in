@@ -1,0 +1,21 @@
+# MUST [UNIT-001..004]: Resource numbers are the reference host profile.
+[Unit]
+Description=OMA @SOCIETY@ resident @AGENT@
+BindsTo=oma-@SOCIETY@-broker.service
+After=oma-@SOCIETY@-broker.service
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+[Service]
+Type=exec
+ExecStart=@NODE@ @LIBDIR@/dist/entry/runner.js --society @SOCIETY@ --agent @AGENT@
+Restart=on-failure
+RestartSec=3s
+KillMode=control-group
+TimeoutStopSec=10s
+MemoryMax=3G
+TasksMax=128
+CPUQuota=200%
+OOMPolicy=kill
+UMask=0077
+StandardOutput=journal
+StandardError=journal

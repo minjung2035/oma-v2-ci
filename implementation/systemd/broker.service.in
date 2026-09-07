@@ -1,0 +1,18 @@
+# MUST [UNIT-001..004]: Render trusted placeholders; never install .in directly.
+[Unit]
+Description=OMA @SOCIETY@ broker
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=@NODE@ @LIBDIR@/dist/entry/broker.js --society @SOCIETY@
+Restart=on-failure
+RestartSec=3s
+KillMode=control-group
+TimeoutStopSec=15s
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+[Install]
+WantedBy=default.target

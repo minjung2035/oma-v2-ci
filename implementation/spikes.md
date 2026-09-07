@@ -1,0 +1,77 @@
+# OMA Core v1 — 미확정 구현 경계
+
+**MUST [SP-001]** 이 파일은 [구현 계약](../implementation-spec.md)의 일부다. 모든 항목의 현재 상태는 `OPEN`이다. 이전 primitive 실험이나 문서 열람은 아래 실행 검증을 대신하지 않는다. 이 파일은 runtime state가 아닌 구현 검증 기록이다.
+
+**MUST [SP-002]** 각 spike의 산출물은 `검증한 versions/config`, `실행 가능한 최소 harness`, `명령과 raw 결과`, `fault/negative 결과`, `선택한 좁은 adapter 계약`, `상위 architecture와의 차이 유무`다. 산출물은 tests/검증 문서에 보관한다. 성공한 것처럼 채운 signature·mock·boolean은 통과 증거가 아니다.
+
+**MUST [SP-003]** 실패 시 해당 profile/경로를 차단하고 이유를 반환한다. 아키텍처 변경이 필요한 결과는 제안만 하며 이 spec의 근거 없는 확정으로 바꾸지 않는다. 아래 기재한 후보는 선택이 확정된 설계가 아니다.
+
+## S-01 — Linux / Node / systemd / sandbox substrate
+
+**SPIKE [S-01]** 정확한 Node/Pi/Git/systemd/bwrap/SQLite/email codec pin, SO_PEERCRED/cgroup identity binding, READY notify, inherited FD close, rootfs/UID mapping, storage quota enforce 방법을 검증한다. Node에서 필요한 syscall binding을 제공할 library와 최소 native leaf 필요성이 미정이다.
+
+**MUST [SP-01-T]** 일반 user service로 broker+runner+bwrap를 시작해 다음을 실행한다: Pi echo/tool, 동일 UID 타 actor 연결 시도, 직접 admin socket 접근, namespace PID와 host PID 매핑, actor exit 직후 PID 재사용 stress, grandchild process 생성 후 stop, FD enumeration, host home/bus/network 접근, tmp cap 및 persistent workspace/storage cap 초과. race 때문에 identity를 확정할 수 없으면 fail closed 결과가 나와야 한다.
+
+**MUST [SP-01-A]** 해당 incarnation의 실제 cgroup 후손만 actor listener를 사용할 수 있고 타 actor·host arbitrary process·stale run은 거절해야 한다. READY 전 요청은 접수하지 않는다. systemd/bwrap 미지원 환경은 UNSUPPORTED_PROFILE이어야 한다. 최소 native leaf를 쓰면 TS application 경계/LOC에 반영한다. userns-try·UID-only 인증·host network fallback은 금지한다.
+
+## S-02 — 기존 Principal Pi의 host/private 경계
+
+**SPIKE [S-02]** 기존 interactive Pi session에 attach하는 정확한 API/credential 전달, 모든 model-facing tool override, trusted extension helper와 model tool의 분리 방식을 검증한다. Principal에게 full Human context를 유지하면서 model tool이 host filesystem/credentials를 읽지 못해야 한다.
+
+**MUST [SP-02-T]** 기본 shell/read/write/edit, alias, 추가 extension tool, subtool, custom provider hook, 경로 traversal/symlink를 각각 실행한다. model에게 attach credential·session 파일 읽기를 요청해 거절을 확인한다. duplicate attach와 UI 종료/재연결을 반복하고 commons 100개와 principal 질문 1개를 보낸다.
+
+**MUST [SP-02-A]** Human history는 기존 session에 유지되고 commons 자동 주입은 0건, principal 질문은 동일 session에만 전달되어야 한다. UI 부재 동안 Astra 호출은 0건이다. tool 하나라도 host로 우회하면 profile 출시를 막는다. 별도 SOTA worker 생성으로 우회하지 않는다.
+
+## S-03 — Pi 실시간 알림과 durable batch 경계
+
+**SPIKE [S-03]** architecture §§7.1/18.2는 성공 agent_end에서 batch 완료를 기록하고 prepared snapshot을 확장하지 않는다. 동시에 §7은 busy Pi의 현재 tool group 다음 LLM 호출 전에 새 direct mail을 steer하도록 요구한다. 이 둘을 만족하는 pinned Pi의 custom message 귀속·batch prepare 시점·동시 prepared 수는 아직 확정되지 않았다.
+
+**MUST [SP-03-T]** tool 두 개가 실행 중인 Pi에 direct 질문을 넣고, 두 tool 결과가 모두 보존된 다음 inference에 custom notice가 포함되는지 확인한다. 별도 public followUp도 넣는다. 첫 batch가 끝나기 전에 두 번째 질문, context update, stop/abort, UI reconnect를 주입한다. batch prepare 전/후, cur 이동 후, custom notice 전/후, tool effect 후, agent_end 직전/직후, session 저장 전/후, DB complete 전/후에 kill한다.
+
+**MUST [SP-03-A]** 각 notice의 immutable message ID snapshot과 정상 boundary 귀속을 증명하고, 미확정은 동일 ID로 재안내한다. tool result 유실·자동 tool replay·미완료 mail 영구 누락은 0건이어야 한다. 모델이 writable session JSON을 바꿔 trusted completion을 위조하지 못해야 한다. 오래된 incarnation의 complete는 거절해야 한다.
+
+**MUST [SP-03-D]** 통과 결과로 PiAdapter의 실제 import/signature, prepared batch 동시성, 클래스 분리, completion receipt 필드/flush 순서, FIFO와 fairness의 적용 시점을 확정한다. 여섯 entity와 prepared/completed 의미 안에서 증명이 안 되면 상위 architecture 검토로 올린다. 임의로 `active/queued/thinking/reviewing` state, notice event log, cognitive checkpoint를 추가하지 않는다. 모든 busy mail을 agent_end까지 미루는 타협도 조용히 확정하지 않는다.
+
+## S-04 — Pi provider codec / usage upper bound
+
+**SPIKE [S-04]** pinned Pi의 model/provider registration과 streaming data codec, abort/error/finish event mapping, provider input/output/cache/reasoning token 회계, request 최대비용 upper bound를 검증한다. 특정 model 이름만으로 가격이나 context limit을 추정하지 않는다.
+
+**MUST [SP-04-T]** 실제 허용된 cheap/Principal profile에서 stream 성공·429·5xx·중간 끊김·초기 연결 실패·취소·provider가 응답 직전 broker kill을 시험한다. mock provider로 concurrent reservation/lineage/reserve 경계를 대량 검사하고 실제 provider로 codec 호환을 확인한다. raw Human payload가 journal/mail/DB에 없는지 검색한다.
+
+**MUST [SP-04-A]** 정확한 request/event schema와 codec revision이 확정되고 Pi tool loop가 정상 작동해야 한다. uncertain charge는 unknown reservation으로 남고 새 request 자동 replay는 없어야 한다. 최대 과금 bound를 증명할 수 없는 profile은 quota enforced production profile로 지원하지 않는다. provider relay를 임의 URL proxy로 만들지 않는다.
+
+## S-05 — hostile bundle / canonical object import
+
+**SPIKE [S-05]** 검증된 quarantine에서 canonical object store로 옮길 정확한 pack/import/flush recipe와 resource limit을 결정한다. Resident clone의 objects hardlink/mutable alternate는 후보가 아니다.
+
+**MUST [SP-05-T]** prerequisite 있는 작은 incremental bundle과 full bundle을 만들고 exact C peer fetch를 확인한다. 누락 prerequisite, 추가 main ref, exported C 불일치, malformed pack, object hash 손상, excessive expansion/depth, symlink staging, hook/config injection, interrupted import, published ref 충돌을 주입한다. quarantine은 network 없는 제한 sandbox로 실행한다.
+
+**MUST [SP-05-A]** invalid input은 canonical ref를 바꾸지 않으며 검증된 reachable C만 게시할 수 있어야 한다. canonical objects를 읽는 quarantine은 RO이고 Resident는 canonical objects에 쓰지 못한다. publish 후 crash에도 object/ref 연결성이 유지되어야 한다. 사용한 Git versions/object formats별 정확한 argv/env·fsync 설정을 기록한다.
+
+## S-06 — durability / systemd races / storage qualification
+
+**SPIKE [S-06]** SQLite FULL+WAL, eml/object/link/rename, Git object/ref, directory fsync와 지원 filesystem의 전원 장애 보장을 검증한다. systemd .path 재활성화 및 cgroup death 확인도 실서비스에서 검증한다.
+
+**MUST [SP-06-T]** test matrix의 process kill 지점을 실제 subprocess kill로 실행하고, 별도 VM/지원 fault 환경에서 write ordering·abrupt power loss·ENOSPC·read-only remount를 시험한다. accepted receipt를 외부 harness에 기록한 뒤 reboot 결과와 대조한다. stop 중 mail 도착, 마지막 idle check 뒤 mail 도착, start-limit, broker crash, principal offline backlog를 실서비스로 반복한다.
+
+**MUST [SP-06-A]** 지원 profile의 accepted message/operation은 복구 가능하고 false-success가 없어야 한다. cur에 있는 미완료 mail이 유실되지 않고 stopped agent가 inference하지 않아야 한다. resource cap·fsync의 보장 범위와 미지원 filesystem을 명시한다. SIGKILL test만으로 power-loss passed라고 표시하지 않는다.
+
+## S-07 — OPTIONAL notmuch / reflink / egress
+
+**SPIKE [S-07]** 각 optional 기능은 독립 gate다. notmuch의 database.path/mail_root와 indexer/model mount mapping, reflink의 inode/object 독립성, egress proxy allowlist와 credential 비노출을 검증한다.
+
+**MUST [SP-07-A]** notmuch rebuild/손상/old index 후에도 archive path가 직접 열리고 routing에는 영향이 없어야 한다. reflink 불가면 독립 clone으로 fallback하며 hardlink하지 않는다. egress는 Human 설정 endpoint 외 연결을 거절한다. 기능별 결과가 없으면 각각 꺼 둔다. 새 index daemon은 기본으로 추가하지 않고 기존 reconcile이 제한된 index subprocess를 요청한다.
+
+## S-08 — OPTIONAL formal approval policy
+
+**SPIKE [S-08]** Human이 신뢰 주체/quorum/보호 경로/Principal 위임을 선택한 뒤 최소 append-only attestation DDL, revoke relation, tuple evaluation을 확정한다. 이 계약은 quorum 수나 'agent 2명=독립 2표'를 결정하지 않는다.
+
+**MUST [SP-08-A]** 동일 actor 중복/자식 생성/다른 base/candidate/policy 재사용/자연어 위조/Human channel 위조를 거절해야 한다. 필요한 추가 entity는 architecture에 이미 허용된 attestation 범위만 사용한다. 결과가 없으면 기본 profile의 protected path 거절을 유지하고 approve/object/revoke를 노출하지 않는다.
+
+## S-09 — 성능 목표와 모델 사용성 수용 기준
+
+**SPIKE [S-09]** 동일 task 집합·예산/시간 cap·반복 수·통계 및 품질 비열등성 margin은 실험 전에 고정한다. Principal tokens 감소와 Astra 단독 수준 이상 품질이라는 목표의 실제 달성 여부는 아직 미검증이다.
+
+**MUST [SP-09-T]** strong 단독/cheap 단독/hybrid에 같은 repository snapshot과 tools를 제공하고 반복한다. quality/defect/omission, Principal 및 전체 tokens/cost, latency, commons의 Principal 유입 건수, 경로/ID lookup 실패, 첫 유용한 행동까지 tool 수, Principal 재검증 비용을 기록한다.
+
+**MUST [SP-09-A]** 값은 task별·반복별로 남기고 목표 미달도 공개한다. production runtime correctness gate와 '성능 목표 달성' 주장을 구분한다. S-09 gate는 평가 protocol과 결과 제출을 필수로 요구하며, 미달 결과를 성공으로 바꿀 권한은 없다. 성능 목표를 release acceptance로 삼을 정확한 threshold는 사용자 합의 전까지 미정이다.

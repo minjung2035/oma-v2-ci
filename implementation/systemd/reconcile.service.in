@@ -1,0 +1,12 @@
+# MUST [REC-001..002]: No LLM call; request a bounded broker sweep.
+[Unit]
+Description=Reconcile OMA @SOCIETY@ physical state
+Requires=oma-@SOCIETY@-broker.service
+After=oma-@SOCIETY@-broker.service
+[Service]
+Type=oneshot
+ExecStart=@NODE@ @LIBDIR@/dist/entry/host.js reconcile --society @SOCIETY@
+TimeoutStartSec=10s
+UMask=0077
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,17 @@
+{
+  "name": "oma-core-v1",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OMA Core v1 — Principal + Unix mailing-list society + Git (architecture.md is source of truth)",
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/node": "^26.0.0"
+  }
+}
