@@ -7,11 +7,9 @@ import { fileURLToPath } from "node:url";
 import type {
   Actor,
   BatchId,
-  Capability,
   ErrorCode,
   MessageId,
   OperationId,
-  Oid,
   RequestKey,
 } from "../implementation/contracts.js";
 import type { OperationPlan } from "../implementation/contracts.js";
@@ -726,6 +724,7 @@ function validDesiredTransition(
   from: AgentRow["desired"],
   to: AgentRow["desired"],
 ): boolean {
+  if (from === to) return true; // idempotent no-op (LIFE-007)
   switch (from) {
     case "provisioning":
       return to === "enabled" || to === "stopped";
@@ -735,6 +734,8 @@ function validDesiredTransition(
       return to === "enabled" || to === "retired";
     case "retired":
       return false;
+    default:
+      return false; // unreachable: AgentRow['desired'] is the closed union
   }
 }
 
