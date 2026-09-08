@@ -25,6 +25,7 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { GitModule } from "../src/git.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker } from "../src/broker.js";
+import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 
 const G = {
@@ -67,7 +68,7 @@ function envOf(): Env {
         incarnation: 0,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS),
       });
     }
   });

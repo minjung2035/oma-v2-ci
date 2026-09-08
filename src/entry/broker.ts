@@ -67,7 +67,11 @@ const lifecycle = new LifecycleModule(
   (parent, input) => {
     const r = resolveChildSpec(
       cfg,
-      { name: parent.name, profile: parent.profile },
+      {
+        name: parent.name,
+        profile: parent.profile,
+        capabilities: parent.capabilities,
+      },
       { name: input.name, from: input.from, brief: input.brief },
     );
     return r ? r.spec : null;
@@ -81,11 +85,27 @@ const git = new GitModule(
     worldDir: join(stateRoot, "world"),
     society: cfg.society,
     quarantineTmpBytes: cfg.limits.bundleBytes,
-    checkTimeoutSeconds: 60,
+    checkTimeoutSeconds: Math.max(
+      1,
+      ...cfg.integration.checks.map((c) => c.resources.checkTimeoutSeconds),
+    ),
+    checkRootfs: cfg.installation.rootfs,
+    checkAssetsDir: cfg.installation.rootfs,
+    checkTmpBytes: Math.max(1, ...cfg.integration.checks.map((c) => c.resources.tmpBytes)),
   },
   store,
   mail,
-  null, // host integration checks come from cfg.integration.checks (phase 8 wiring)
+  {
+    policyRevision: cfg.integration.policyRevision,
+    protectedPaths: [...cfg.integration.protectedPaths],
+    checks: cfg.integration.checks.map((c) => ({
+      id: c.id,
+      argv: [...c.argv],
+      env: { ...c.env },
+      timeoutSeconds: c.resources.checkTimeoutSeconds,
+      tmpBytes: c.resources.tmpBytes,
+    })),
+  },
 );
 const reconcile = new ReconcileModule(store, mail, git, units, {
   projectGit: join(stateRoot, "repos", "project.git"),
@@ -99,6 +119,7 @@ const broker = new Broker(
   git,
   reconcile,
   { stateRoot, runRoot, society: cfg.society },
+  cfg.limits,
 );
 
 /**

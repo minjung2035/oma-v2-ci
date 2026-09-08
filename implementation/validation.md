@@ -25,20 +25,20 @@
 | 검사 | 실제 수행 결과 |
 |---|---|
 | 기준 hash | `2a2e74c1e6b4986145a7ac54b37a9f50c297363a9c134a360f75bbba3db4a404` 유지 (N-001) |
-| 타입 검사 | strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes + noEmit 통과; `tsc -p tsconfig.build.json` 전체 49개 테스트 빌드 통과 |
-| 전체 테스트 | `node --test dist/test/*.test.js` → **49/49 pass, 0 fail** (phase2-8) |
+| 타입 검사 | strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes + noEmit 통과; `tsc -p tsconfig.build.json` 전체 68개 테스트 빌드 통과 |
+| 전체 테스트 | `npm test` → **68/68 pass, 0 fail, 0 skipped** (phase2-8 + authority + request-cache + actor-socket audit) |
 | DDL | 정확히 6개 테이블; user_version=1; FK/integrity ok; negative CHECK (presented w/o materialized+batch) 거절 |
 | process-kill | T18-T22 mail 경계를 외부 kill harness(SIGKILL)로 실제 실행 후 외부 가시 상태(파일 hash/DB rows) 대조 |
 | systemd 실서비스 | T36 start-limit(자동 reset 없음), T37 stop 중 mail 도착(cgroup 후손 0), T38 cgroup 미확인 시 RUN_TERMINATION_UNKNOWN, REC-007 broker lock |
 | sandbox E2E | bwrap(SB-001 rootfs + 시스템 오버레이) → sandboxed Pi 0.85.1 → 신뢰 확장 로드 → custom message role='custom' 전달; provider 없음 → stopReason=error → batch 미완료(위조 증거 없음) |
 | git 실저장소 | bundle quarantine(RO alternate)+수입+published ref+peer exact fetch, CAS 경쟁/보호 경로/재개, context commit+CAS+스냅샷 (git 2.55.0) |
 | NEG 스캔 | Board/Artifact/Focus/Change/Review 엔티티, task queue/outbox/event bus/workflow, 자동 복구/요약 에이전트 → src/ 전역 검색 0건 |
-| LOC | 6,393 (비어 있지 않은 물리 줄; A-008 목표 8,000 이하) |
+| LOC | 9,190 (non-empty physical lines from `node scripts/loc.mjs`; A-008 target is 8,000). The 8,001–10,000 allowance requires the documented reason and module breakdown below. |
 | release gate | **미달** — S-02(격리 Human session 없음), S-04(provider credential 없음), S-06(VM/전원장애 환경 없음) OPEN; 해당 경로는 fail-closed(SPIKE_UNRESOLVED) 또는 청구되지 않음 |
 
 ## Normative test coverage map (T01–T77) — runtime audit 2026-09-08
 
-결과 구분: ✅ 실행(해당 executable test가 suite에서 통과) / ◐ 부분(핵심 일부만, 나머지 미실행) / ❌ 미실행(unresolved/blocker). suite 명령: `node --test dist/test/*.test.js` (60/60).
+결과 구분: ✅ 실행(해당 executable test가 suite에서 통과) / ◐ 부분(핵심 일부만, 나머지 미실행) / ❌ 미실행(unresolved/blocker). suite 명령: `npm test` (`68/68`).
 
 | T# | 상태 | 증명 executable test | 비고 |
 |---|---|---|---|
@@ -47,11 +47,11 @@
 | T03 | ✅ | phase2 "T03: invalid enum…" | |
 | T04 | ✅ | phase2 "T04: frame reconstruction…" + audit A1/A3 | |
 | T05 | ✅ | phase2 "T05: malicious frames…" + audit B1(UNKNOWN_METHOD framed) | |
-| T06 | ✅ | audit A4(decoder) + audit2 (실 socket: exact/short+EOF/excess-garbage/coalesced/split; excess는 STREAM_INVALID로 mutation 미성공) | |
+| T06 | ✅ | audit A4(decoder) + audit2 실 socket exact/short/EOF/N+1/N+2/N+3/excess-garbage/hash-mismatch/timeout/coalesced/split | 모든 stream failure는 STREAM_INVALID preaccept; mutation 미성공 |
 | T05 | ✅ | phase2 + audit B1 + audit2 neg-* (unknown field/OID/version/read-request) | |
 | T73 | ✅ | cli.test (실 systemd 유닛 + 실 socket) | + P1-4/5/6: submit/context frozen-first, agent create --from HEAD, submit --to 다중/기본 |
-| T07 | ✅ | phase2 "T07: same actor/key/payload…" | |
-| T08 | ✅ | phase2 "T08: REQUEST_KEY_REUSED" + cli 시나리오 3(exit 2) | |
+| T07 | ✅ | phase2 + audit2 real actor-socket git/mail same-key same-payload (serial + concurrent) | same operation/receipt, delivery 1 |
+| T08 | ✅ | phase2 + audit2 real actor-socket mail/git same-key different body/recipient/candidate (serial + concurrent mail race) | REQUEST_KEY_REUSED; winner delivery 1 |
 | T09 | ◐ | cli 시나리오 6+7(dead socket → operation.get miss → replay) | "accepted 뒤 response kill" 정확 재현 아님 |
 | T10 | ✅ | phase2 "T10: different keys…" | |
 | T11 | ✅ | phase5 "T11-neg…" | |
@@ -79,7 +79,7 @@
 | T57–T58 | ❌ | — | TEST-004 git kill 지점 미실행 |
 | T59 | ✅ | phase7 T55/T59 + phase8 T68b | |
 | T60–T61 | ✅ | phase7 | |
-| T62 | ❌ | — | check 중 policy 변경 재검사 없음(check 경로 비활성) |
+| T62 | ◐ | audit2 real actor-socket HostConfig protected-path policy; integrate final policy/CAS code path | candidate-check execution remains SPIKE_UNRESOLVED unless trusted sandbox inputs are configured; policy-change race not executed |
 | T63–T64 | ❌ | — | INT kill 지점 미실행 |
 | T65/T67 | ✅ | phase7 | |
 | T66 | ❌ | — | CTX kill 지점 미실행 |
@@ -108,4 +108,18 @@ unresolved 요약: T12,T23,T24,T26–T28,T33–T35,T39–T41,T43,T44,T46,T47,T52
 - **P1-8** closed runtime schemas: status.get/git.known/git.submit/git.integrate/context.publish/logs.read unknown-field·OID·safe-int·nested entries 검증 + envelope `v===1`(UNSUPPORTED_VERSION) + read/ephemeral top-level `request` 금지. audit2 neg-* 테스트.
 - **P1-9** FrameParser의 substring `NaN`/`Infinity` 거절 제거 → 문자열 값 허용, invalid numeric literal은 JSON.parse로 거절(phase2 P1-9 테스트).
 
-production LOC: 7848 → **8299** (필수 CLI + closed validators). 8,000 상한 **초과** — spec이 CLI(T73)와 closed schema(IPC-001)를 요구하면서 LOC 예산 8,000을 유지하는 내부 긴장으로, 기능 삭제 없이 해소 불가(정직 보고).
+## 3rd consolidation/correctness pass (2026-09-08) — P0-A..D + durability
+
+실행·수정·검증:
+- **P0-A AUTH**: `src/authority.ts`가 persisted `agents.spec_json`의 닫힌 resolved spec만 수용하고 unknown/malformed capability는 empty set으로 fail-closed; actor entrypoint와 runner auth가 이 단일 근거를 사용한다. `authority.test.ts`, CREATE-002, AUTH-002 및 real actor-socket capability gate 통과.
+- **P0-B INT**: HostConfig integration policy가 `GitModule`에 조립 주입되고 protected path/policy revision/check profile이 caller wire에서 오지 않는다. integrate에 process-local main-writer mutex와 unresolved pending integrate 차단을 추가했다. candidate checks는 sandbox 입력이 없으면 `SPIKE_UNRESOLVED`로 fail-closed하며 host에서 직접 실행하지 않는다.
+- **P0-C IPC/DB**: broker/store canonical request hash 및 DB unique winner를 유지하고 real actor socket에서 git/mail same-key same/different payload, concurrent same-key races, delivery 단일성을 확인했다.
+- **P0-D STREAM**: N+1/N+2/N+3, malformed excess, short EOF, hash mismatch, idle timeout 및 accepted key의 bad-stream retry를 real Unix socket에서 확인했다. 모두 preaccept `STREAM_INVALID`이며 operation이 없다.
+- **FS-003/IPC-008**: RequestCache가 unknown field/digest/receipt/key를 reject하고 file fsync → rename → parent-directory fsync를 수행한다. body bytes와 0600 mode round-trip test를 추가했다.
+
+현재 runtime suite는 `npm test` **68/68 pass, 0 fail, 0 skipped**; S-02/S-04/S-06/S-09 release gate는 여전히 OPEN이며 아래 coverage의 미실행 항목은 PASS로 계산하지 않는다.
+
+production LOC: 8,299 baseline → **9,190** current. The 8,001–10,000 allowance is used because the executable contract requires broker-side idempotency, exact stream-boundary and digest enforcement, closed runtime/config validation, host integration policy wiring, durable CLI cache fsync, candidate-check fail-closed sandbox wiring, and the complete CLI command surface; deleting those would weaken IPC/DB/CFG/CLI requirements. No new durable entity/service/framework was added.
+
+### A-009 production LOC breakdown (2026-09-08)
+`node scripts/loc.mjs` output (non-empty physical lines): broker 1,251; git 1,170; mail 899; store 833; cli 734; lifecycle 483; config 452; inference 402; frame 293; runner 293; contracts 283; validate 270; units 243; sandbox 199; views 158; request-cache 147; entry/broker 141; hash 114; reconcile 113; schema-v1.sql 108; leaf 106; ids 83; entry/host 81; entry/runner 76; pi-extension 59; rpc-client 59; authority 49; systemd templates 91; **total 9,190**.

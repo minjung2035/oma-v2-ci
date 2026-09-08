@@ -70,6 +70,43 @@ export function sha256Hex(utf8: string): string {
 }
 
 /**
+ * MUST [IPC-005]: per-method canonicalization of request params before hashing.
+ * Set-like array fields (recipient/prerequisite/path lists) are deduped and
+ * lexically sorted so a different wire ordering is the SAME request; scalar
+ * values (subject/body/OIDs) and ordered arrays (context entries, refs) are
+ * kept verbatim — body bytes and subject are never trimmed.
+ */
+const SET_ARRAY_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  "mail.send": ["to"],
+  "git.submit": ["prerequisites", "to", "paths"],
+};
+
+export function canonicalRequestParams(method: string, params: Json): Json {
+  const setFields = SET_ARRAY_FIELDS[method];
+  if (
+    !setFields ||
+    typeof params !== "object" ||
+    params === null ||
+    Array.isArray(params)
+  ) {
+    return params;
+  }
+  const rec: Record<string, Json> = {};
+  for (const [k, v] of Object.entries(params as Record<string, Json>)) {
+    if (
+      setFields.includes(k) &&
+      Array.isArray(v) &&
+      v.every((x) => typeof x === "string")
+    ) {
+      rec[k] = sortedUnique(v as string[]);
+    } else {
+      rec[k] = v;
+    }
+  }
+  return rec;
+}
+
+/**
  * MUST [IPC-005]: request hash = SHA-256 over canonical JSON of
  * { method, params(canonicalized), ...(stream descriptor when present) }.
  * The caller must already have normalised sets via sortedUnique(); the stream

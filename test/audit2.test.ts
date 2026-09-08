@@ -3,6 +3,8 @@
 // a raw-socket driver (encodeFrame/FrameParser) so we can exercise pipelining,
 // stream-length/excess, closed-schema validation, and status filtering at the
 // actual broker boundary — never only unit-testing the decoder.
+// Consolidation pass additions: capability gate (P0-A), request-key claim (P0-C),
+// stream excess pre-accept (P0-D) at the same actor boundary.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -25,8 +27,8 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { GitModule } from "../src/git.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker } from "../src/broker.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
 
 const G = {
   ...process.env,
@@ -68,7 +70,7 @@ function envOf(): Env {
         incarnation: 0,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS),
       });
     }
   });
@@ -116,7 +118,7 @@ function envOf(): Env {
     },
     store,
     mail,
-    null,
+    { policyRevision: "audit", protectedPaths: ["x.txt"], checks: [] },
   );
   const recon = new ReconcileModule(store, mail, git, units, {
     projectGit: join(state, "repos", "project.git"),
@@ -125,7 +127,22 @@ function envOf(): Env {
     stateRoot: state,
     runRoot,
     society,
-  });
+  },
+  {
+    frameBytes: 256 * 1024,
+    mailBodyBytes: 64 * 1024,
+    subjectBytes: 8 * 1024,
+    addresses: 64,
+    replyReferences: 64,
+    contextFiles: 1024,
+    contextBytes: 256 * 1024 * 1024,
+    bundleBytes: 256 * 1024 * 1024,
+    logBytes: 1024 * 1024,
+    batchMaxMessages: 64,
+    idleStreamSeconds: 1,
+    receiptWaitSeconds: 30,
+  },
+ );
   broker.start();
   return {
     dir,
@@ -290,6 +307,44 @@ async function main() {
 main().catch((e) => { try { writeFileSync(process.env.OMA_OUT, JSON.stringify({ fatal: String(e && e.message || e) })); } catch {} process.exit(3); });
 `;
 
+const CONCURRENT_DRIVER = String.raw`import { writeFileSync, readFileSync } from "node:fs";
+import { connect } from "node:net";
+import { FrameParser, encodeFrame } from "@ABS@";
+
+const once = (path, request) => new Promise((resolve, reject) => {
+  const sock = connect(path, () => sock.write(encodeFrame(request)));
+  const parser = new FrameParser(256 * 1024);
+  let buf = Buffer.alloc(0);
+  const timer = setTimeout(() => { sock.destroy(); reject(new Error("request timeout")); }, 30000);
+  sock.on("data", (d) => {
+    buf = Buffer.concat([buf, Buffer.from(d)]);
+    try {
+      for (const f of parser.feed(buf)) {
+        clearTimeout(timer);
+        sock.destroy();
+        resolve(f.raw);
+        return;
+      }
+    } catch {}
+    buf = Buffer.alloc(0);
+  });
+  sock.on("error", reject);
+});
+
+async function main() {
+  const admin = process.env.OMA_ADMIN_SOCK;
+  const actor = process.env.OMA_ACTOR;
+  const lease = await once(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: actor } });
+  if (!lease.ok) throw new Error(JSON.stringify(lease));
+  const actorSock = lease.result.socketHostPath;
+  const requests = JSON.parse(readFileSync(process.env.OMA_REQUESTS_FILE, "utf8"));
+  const replies = await Promise.all(requests.map((request) => once(actorSock, request)));
+  writeFileSync(process.env.OMA_OUT, JSON.stringify(replies));
+}
+
+main().catch((e) => { try { writeFileSync(process.env.OMA_OUT, JSON.stringify({ fatal: String(e && e.message || e) })); } catch {} process.exit(3); });
+`;
+
 test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema, status filter", async (t) => {
   const probe = spawnSync("systemctl", ["--user", "is-system-running"], {
     encoding: "utf8",
@@ -303,6 +358,9 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
   try {
     const base = seedProject(env);
     const cand = makeCandidate(env, base, "x");
+    const cand2 = makeCandidate(env, base, "y");
+    const badBundle = Buffer.from(cand.bundle);
+    badBundle[0] = badBundle[0]! ^ 1;
     const submitMeta = (key: string, bundle: Buffer) => ({
       v: 1,
       id: key,
@@ -322,6 +380,13 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
           mediaType: "application/x-git-bundle",
         },
       },
+    });
+    const mailFrame = (id: string, key: string, body: string, to = ["b"]) => ({
+      v: 1,
+      id,
+      method: "mail.send",
+      request: key,
+      params: { to, subject: "mail", kind: "message", body },
     });
     const scenarios = [
       // P0-1 serialization: slow git.submit FIRST, fast status.get SECOND,
@@ -366,6 +431,58 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
           },
         ],
       },
+      // P0-D exact over-delivery boundaries (N+1, N+2, N+3) stay preaccept.
+      {
+        name: "excess-1",
+        expect: 0,
+        closeAfterMs: 300,
+        events: [
+          { t: "frame", frame: submitMeta("excess-1", Buffer.from("abcd")) },
+          { t: "raw", b64: Buffer.from("abcdX").toString("base64") },
+        ],
+      },
+      {
+        name: "excess-2",
+        expect: 0,
+        closeAfterMs: 300,
+        events: [
+          { t: "frame", frame: submitMeta("excess-2", Buffer.from("abcd")) },
+          { t: "raw", b64: Buffer.from("abcdXY").toString("base64") },
+        ],
+      },
+      {
+        name: "excess-3",
+        expect: 0,
+        closeAfterMs: 300,
+        events: [
+          { t: "frame", frame: submitMeta("excess-3", Buffer.from("abcd")) },
+          { t: "raw", b64: Buffer.from("abcdXYZ").toString("base64") },
+        ],
+      },
+      {
+        name: "hash-mismatch",
+        expect: 1,
+        events: [
+          {
+            t: "frame",
+            frame: {
+              ...submitMeta("hash-mismatch", cand.bundle),
+              params: {
+                ...submitMeta("hash-mismatch", cand.bundle).params,
+                bundle: { ...submitMeta("hash-mismatch", cand.bundle).params.bundle, sha256: "0".repeat(64) },
+              },
+            },
+          },
+          { t: "raw", b64: cand.bundle.toString("base64") },
+        ],
+      },
+      {
+        name: "stream-timeout",
+        expect: 1,
+        timeoutMs: 5000,
+        events: [{ t: "frame", frame: submitMeta("stream-timeout", cand.bundle) }],
+      },
+
       // P0-2 exact stream
       {
         name: "exact",
@@ -487,6 +604,78 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
         ],
       },
       // P1-7 status filter: different agents must not collapse to unfiltered
+      {
+        name: "mail-idempotent",
+        expect: 2,
+        events: [
+          { t: "frame", frame: mailFrame("m1", "mail-same", "body") },
+          { t: "frame", frame: mailFrame("m2", "mail-same", "body") },
+        ],
+      },
+      {
+        name: "mail-reused-body",
+        expect: 2,
+        events: [
+          { t: "frame", frame: mailFrame("m3", "mail-body", "body") },
+          { t: "frame", frame: mailFrame("m4", "mail-body", "different") },
+        ],
+      },
+      {
+        name: "mail-reused-recipient",
+        expect: 2,
+        events: [
+          { t: "frame", frame: mailFrame("m5", "mail-to", "body", ["b"]) },
+          { t: "frame", frame: mailFrame("m6", "mail-to", "body", ["commons"]) },
+        ],
+      },
+      {
+        name: "git-idempotent",
+        expect: 2,
+        timeoutMs: 120000,
+        events: [
+          { t: "frame", frame: submitMeta("git-same", cand.bundle) },
+          { t: "raw", b64: cand.bundle.toString("base64") },
+          { t: "frame", frame: { ...submitMeta("git-same", cand.bundle), id: "git-same-2" } },
+          { t: "raw", b64: cand.bundle.toString("base64") },
+        ],
+      },
+      {
+        name: "git-retry-bad-stream",
+        expect: 1,
+        events: [
+          { t: "frame", frame: { ...submitMeta("git-same", cand.bundle), id: "git-same-bad" } },
+          { t: "raw", b64: badBundle.toString("base64") },
+        ],
+      },
+      {
+        name: "integrate-protected",
+        expect: 1,
+        events: [{ t: "frame", frame: {
+          v: 1, id: "integrate-protected", method: "git.integrate", request: "integrate-protected",
+          params: { candidate: cand.candidate, expected: base },
+        } }],
+      },
+      {
+        name: "git-reused-candidate",
+        expect: 2,
+        timeoutMs: 120000,
+        events: [
+          { t: "frame", frame: submitMeta("git-different", cand.bundle) },
+          { t: "raw", b64: cand.bundle.toString("base64") },
+          {
+            t: "frame",
+            frame: {
+              ...submitMeta("git-different", cand2.bundle),
+              id: "git-different-2",
+              params: { ...submitMeta("git-different", cand2.bundle).params, exportRef: "refs/oma/export/req-y" },
+            },
+          },
+          { t: "raw", b64: cand2.bundle.toString("base64") },
+        ],
+      },
+
+      // P0-A: method-specific capabilities are enforced at the actor boundary.
+
       {
         name: "status-a",
         expect: 1,
@@ -692,6 +881,18 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       `short stream: ${JSON.stringify(short?.replies)}`,
     );
 
+    for (const name of ["excess-1", "excess-2", "excess-3"] as const) {
+      const result = byName(name);
+      assert.ok(result?.replies?.length === 0 || result?.replies?.some((r) => r.error?.code === "STREAM_INVALID") || result?.timeout, `${name}: ${JSON.stringify(result)}`);
+      assert.equal(env.store.getOperation("a", name), null, `${name} must remain preaccept`);
+    }
+    const mismatch = byName("hash-mismatch");
+    assert.equal(mismatch?.replies?.[0]?.error?.code, "STREAM_INVALID");
+    assert.equal(env.store.getOperation("a", "hash-mismatch"), null);
+    const timeout = byName("stream-timeout");
+    assert.equal(timeout?.replies?.[0]?.error?.code, "STREAM_INVALID");
+    assert.equal(env.store.getOperation("a", "stream-timeout"), null);
+
     // P0-2 excess garbage: STREAM_INVALID, mutation must NOT succeed
     const eg = byName("excess-garbage");
     assert.ok(
@@ -720,6 +921,41 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       ["stn", "s2"],
       "next request must wait for the stream submit",
     );
+    // P0-C: broker-side request-key semantics on the real actor socket.
+    const same = byName("mail-idempotent")?.replies ?? [];
+    assert.equal(same[0]?.ok, true);
+    assert.equal(same[1]?.ok, true);
+    assert.equal((same[0]?.result as { operation: string }).operation, (same[1]?.result as { operation: string }).operation);
+    assert.equal(env.store.getOperation("a", "mail-same")?.state, "succeeded");
+    const bodyReuse = byName("mail-reused-body")?.replies ?? [];
+    assert.equal(bodyReuse[0]?.ok, true);
+    assert.equal(bodyReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
+    const bodyOp = env.store.getOperation("a", "mail-body");
+    assert.ok(bodyOp);
+    assert.equal(env.store.deliveriesForOperation(bodyOp.id).length, 1);
+    const recipientReuse = byName("mail-reused-recipient")?.replies ?? [];
+    assert.equal(recipientReuse[0]?.ok, true);
+    assert.equal(recipientReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
+    const recipientOp = env.store.getOperation("a", "mail-to");
+    assert.ok(recipientOp);
+    assert.equal(env.store.deliveriesForOperation(recipientOp.id).length, 1);
+    const gitSame = byName("git-idempotent")?.replies ?? [];
+    assert.equal(gitSame[0]?.ok, true);
+    assert.equal(gitSame[1]?.ok, true);
+    assert.equal((gitSame[0]?.result as { operation: string }).operation, (gitSame[1]?.result as { operation: string }).operation);
+    const badRetry = byName("git-retry-bad-stream")?.replies ?? [];
+    assert.equal(badRetry[0]?.error?.code, "STREAM_INVALID");
+    assert.equal(env.store.getOperation("a", "git-same")?.state, "succeeded");
+    const gitReuse = byName("git-reused-candidate")?.replies ?? [];
+    assert.equal(gitReuse[0]?.ok, true);
+    assert.equal(gitReuse[1]?.error?.code, "REQUEST_KEY_REUSED");
+    const gitOp = env.store.getOperation("a", "git-different");
+    assert.ok(gitOp);
+    assert.equal(env.store.deliveriesForOperation(gitOp.id).length, 1);
+    const protectedIntegrate = byName("integrate-protected")?.replies ?? [];
+    assert.equal(protectedIntegrate[0]?.error?.code, "PROTECTED_PATH");
+    assert.equal(env.store.getOperation("a", "integrate-protected"), null);
+
 
     // P1-7: status filter — a and b return only their own agent
     const sa = byName("status-a")?.replies?.[0]?.result as
@@ -763,6 +999,63 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       "INVALID_REQUEST",
       "read method with top-level request",
     );
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("P0-C: concurrent request-key races converge on one actor-socket effect", async (t) => {
+  const probe = spawnSync("systemctl", ["--user", "is-system-running"], { encoding: "utf8" });
+  if (probe.status !== 0 && !/running|degraded/.test(probe.stdout)) {
+    t.skip("no systemd user manager");
+    return;
+  }
+  const env = envOf();
+  try {
+    const mail = (id: string, key: string, body: string) => ({
+      v: 1, id, method: "mail.send", request: key,
+      params: { to: ["b"], subject: "race", kind: "message", body },
+    });
+    const requests = [mail("same-1", "race-same", "body"), mail("same-2", "race-same", "body"), mail("diff-1", "race-diff", "one"), mail("diff-2", "race-diff", "two")];
+    const driverPath = join(env.dir, "concurrent-driver.mjs");
+    const requestsPath = join(env.dir, "concurrent-requests.json");
+    const outPath = join(env.dir, "concurrent-out.json");
+    writeFileSync(driverPath, CONCURRENT_DRIVER.replace("@ABS@", join(ROOT, "dist", "src", "frame.js")), "utf8");
+    writeFileSync(requestsPath, JSON.stringify(requests), "utf8");
+    const unit = unitName(env.society, "a", "service");
+    writeFileSync(join(env.dir, unit), [
+      "[Unit]",
+      "Description=concurrent audit driver",
+      "[Service]",
+      "Type=oneshot",
+      `Environment=OMA_ADMIN_SOCK=${join(env.runRoot, "admin.sock")}`,
+      `Environment=OMA_ACTOR=a`,
+      `Environment=OMA_REQUESTS_FILE=${requestsPath}`,
+      `Environment=OMA_OUT=${outPath}`,
+      `Environment=HOME=${env.dir}`,
+      `ExecStart=/usr/bin/node ${driverPath}`,
+      "[Install]",
+      "WantedBy=default.target",
+      "",
+    ].join("\n"), "utf8");
+    assert.equal(spawnSync("systemctl", ["--user", "link", join(env.dir, unit)], { env: G }).status, 0);
+    spawnSync("systemctl", ["--user", "daemon-reload"], { env: G });
+    const started = spawn("systemctl", ["--user", "start", unit], { env: G });
+    const exit = await new Promise<number | null>((resolve) => started.once("exit", (code) => resolve(code)));
+    assert.equal(exit, 0);
+    assert.ok(existsSync(outPath));
+    const replies = JSON.parse(readFileSync(outPath, "utf8")) as Array<{ ok?: boolean; result?: { operation: string }; error?: { code: string } }>;
+    const same = replies.slice(0, 2);
+    assert.equal(same[0]?.ok, true);
+    assert.equal(same[1]?.ok, true);
+    assert.equal(same[0]?.result?.operation, same[1]?.result?.operation);
+    const diff = replies.slice(2);
+    assert.equal(diff.filter((r) => r.ok).length, 1);
+    assert.equal(diff.filter((r) => r.error?.code === "REQUEST_KEY_REUSED").length, 1);
+    assert.ok(env.store.getOperation("a", "race-same"));
+    const raceDiff = env.store.getOperation("a", "race-diff");
+    assert.ok(raceDiff);
+    assert.equal(env.store.deliveriesForOperation(raceDiff.id).length, 1);
   } finally {
     env.cleanup();
   }

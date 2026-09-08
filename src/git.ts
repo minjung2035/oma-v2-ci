@@ -22,13 +22,22 @@ import type {
   AuthContext,
   BlobDescriptor,
   ContextEntry,
+  Json,
   Oid,
   Receipt,
 } from "../implementation/contracts.js";
-import { Store, StoreError } from "./store.js";
+import { Store, StoreError, reused } from "./store.js";
 import { MailModule, buildEml } from "./mail.js";
 import { generateOperationId, generateMessageId } from "./ids.js";
+import {
+  requestHash,
+  canonicalRequestParams,
+  canonicalJson,
+  sha256Hex,
+} from "./hash.js";
+import { capabilitiesOf } from "./authority.js";
 
+import { candidateArgv } from "./sandbox.js";
 export interface GitPaths {
   stateRoot: string;
   projectGit: string; // S/repos/project.git (shared, broker-written)
@@ -37,6 +46,10 @@ export interface GitPaths {
   society: string;
   quarantineTmpBytes: number;
   checkTimeoutSeconds: number;
+  /** Trusted candidate-check sandbox inputs; absent means fail closed. */
+  checkRootfs?: string;
+  checkAssetsDir?: string;
+  checkTmpBytes?: number;
 }
 
 export interface CheckProfile {
@@ -69,13 +82,53 @@ function sha256Of(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function checkDigest(
+  checks: readonly IntegrationPolicy["checks"][number][],
+ ): string {
+  // SAFETY: HostConfig validation admits only JSON scalar/array/object values;
+  // this cast narrows the already-closed check policy for canonical hashing.
+  return sha256Hex(canonicalJson(checks as unknown as Json));
+}
+
+/**
+ * MUST [INT-001..004, CFG-005]: closed host integration policy — the single
+ * ownership point for policy revision, protected paths, and fixed checks.
+ * Wired from HostConfig.integration at composition; never caller-supplied.
+ */
+export interface IntegrationPolicy {
+  policyRevision: string;
+  protectedPaths: string[];
+  checks: Array<{
+    id: string;
+    argv: string[];
+    env: Record<string, string>;
+    timeoutSeconds: number;
+    tmpBytes?: number;
+  }>;
+}
+
+const EMPTY_INTEGRATION_POLICY: IntegrationPolicy = {
+  policyRevision: "p1",
+  protectedPaths: [],
+  checks: [],
+};
+
 export class GitModule {
+  private readonly integration: IntegrationPolicy;
+  private readonly legacyDirect: boolean;
+  // ponytail: one in-process main writer; restart recovery handles durable pending rows.
+  private integrationTail: Promise<void> = Promise.resolve();
   constructor(
     private readonly paths: GitPaths,
     private readonly store: Store,
     private readonly mail: MailModule,
-    private readonly checkProfile: CheckProfile | null,
-  ) {}
+    /** MUST [P0-B]: host integration policy; mutable for future config reloads. */
+    integration: IntegrationPolicy | null = EMPTY_INTEGRATION_POLICY,
+  ) {
+    this.legacyDirect = integration === null;
+    this.integration = integration ?? EMPTY_INTEGRATION_POLICY;
+  }
+  // stream uploads carry bytes; the descriptor digest is part of the IPC-005 hash.
 
   // -------------------------------------------------------------------------
   // git.submit (GIT-001..009)
@@ -96,8 +149,18 @@ export class GitModule {
     },
     bytes: AsyncIterable<Uint8Array>,
   ): Promise<Receipt> {
-    const existing = this.store.getOperation(auth.actor, key);
-    if (existing) return receiptOf(existing);
+    // MUST [IPC-005]: canonical hash (sets normalized) + fast-path claim before
+    // any staging/import work.
+    // SAFETY: broker-side closed-schema validation supplies JSON-only submit
+    // fields; this cast widens the DTO solely for canonical hashing.
+    const newHash = requestHash(
+      "git.submit",
+      canonicalRequestParams("git.submit", input as unknown as Json),
+    );
+    const claim = this.store.claimKey(auth.actor, key, newHash);
+    if (claim === "retry")
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
+    if (claim === "reused") throw reused(auth.actor, key);
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
     const staging = join(this.paths.stateRoot, "staging", `submit-${key}`);
@@ -160,20 +223,25 @@ export class GitModule {
         replyHeaders: { replyTo: input.to, inReplyTo: null, references: [] },
       },
     };
+    // SAFETY: object property escapes the tx callback's closure narrowing.
+    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
-      this.store.insertOperation({
+      claimOut.txClaim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
         requestKey: key,
-        requestHash: sha256Of(Buffer.from(JSON.stringify(input))),
+        requestHash: newHash,
         kind: "git.submit",
         payloadJson: JSON.stringify(input),
         planJson: JSON.stringify(plan),
       });
+      if (claimOut.txClaim === "retry") return;
       this.store.insertDeliveries(
         input.to.map((r) => ({ messageId, recipient: r, operationId: opId })),
       );
     });
+    if (claimOut.txClaim === "retry")
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
     // freeze the result object before any effect (DB-009)
     this.mail.freezeObject(messageId, eml);
 
@@ -425,11 +493,45 @@ export class GitModule {
     auth: AuthContext,
     key: string,
     input: { candidate: Oid; expected: Oid },
-    policyRevision: string,
-    protectedPaths: string[],
+    currentPolicyRevision: string = this.integration.policyRevision,
+    legacyProtectedPaths: readonly string[] = this.integration.protectedPaths,
   ): Promise<Receipt> {
-    const existing = this.store.getOperation(auth.actor, key);
-    if (existing) return receiptOf(existing);
+    const previous = this.integrationTail;
+    let release: (() => void) | undefined;
+    this.integrationTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await this.integrateUnsafe(
+        auth, key, input, currentPolicyRevision, legacyProtectedPaths,
+      );
+    } finally {
+      release?.();
+    }
+  }
+
+  private async integrateUnsafe(
+    auth: AuthContext,
+    key: string,
+    input: { candidate: Oid; expected: Oid },
+    currentPolicyRevision: string,
+    legacyProtectedPaths: readonly string[],
+  ): Promise<Receipt> {
+    // MUST [IPC-005]: canonical hash + fast-path claim before any check.
+    const newHash = requestHash("git.integrate", {
+      candidate: input.candidate,
+      expected: input.expected,
+    });
+    const claim = this.store.claimKey(auth.actor, key, newHash);
+    if (claim === "retry")
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
+    if (claim === "reused") throw reused(auth.actor, key);
+    // INT-003/004: an unresolved prior integrate blocks every new main writer.
+    if (this.store.recoverableOperations().some((id) => this.store.getOperationById(id)?.kind === "git.integrate")) {
+      throw new StoreError("REF_STATE_UNKNOWN", "pending integrate operation requires recovery");
+    }
+    // INT-001: caller must hold code.integrate.
+    if (!auth.capabilities.has("code.integrate"))
+      throw new StoreError("CAPABILITY_DENIED", "no code.integrate");
     const base = this.currentMain();
     // INT-001 condition checks
     if (!this.isPublished(input.candidate))
@@ -459,6 +561,7 @@ export class GitModule {
         "NOT_DESCENDANT",
         "candidate is not a descendant of expected main",
       );
+    const protectedPaths = legacyProtectedPaths;
     if (protectedPaths.length > 0) {
       const diff = spawnSync(
         "git",
@@ -491,10 +594,9 @@ export class GitModule {
       }
     }
     // fixed host check (INT-002) on the actual candidate
-    if (this.checkProfile) {
-      this.runCheck(input.candidate);
-    }
+    for (const c of this.integration.checks) this.runCheck(input.candidate, c);
     const opId = generateOperationId();
+    const policyRevision = this.integration.policyRevision;
     const result = {
       kind: "git.integrate" as const,
       base,
@@ -503,13 +605,14 @@ export class GitModule {
       policyRevision,
       changed: true,
     };
-    // T-integrate-intent
+    // T-integrate-intent: authoritative in-tx claim, then record the plan.
+    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
-      this.store.insertOperation({
+      claimOut.txClaim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
         requestKey: key,
-        requestHash: sha256Of(Buffer.from(JSON.stringify(input))),
+        requestHash: newHash,
         kind: "git.integrate",
         payloadJson: JSON.stringify(input),
         planJson: JSON.stringify({
@@ -519,17 +622,46 @@ export class GitModule {
           base,
           candidate: input.candidate,
           policyRevision,
-          checkProfileDigest: "fixed",
+          checkProfileDigest: checkDigest(this.integration.checks),
         }),
       });
     });
-    // serialized CAS (INT-003): main must still equal base right before the write
+    if (claimOut.txClaim === "retry")
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
+    // MUST [INT-003]: recheck main, policy revision, capability, and stop
+    // intent immediately before the CAS.
     const head = this.currentMain();
     if (head !== base) {
       this.store.transaction((_tx) =>
         this.store.setOperationFailed(opId, "STALE_BASE"),
       );
       throw new StoreError("STALE_BASE", `main moved to ${head}`);
+    }
+    if (currentPolicyRevision !== policyRevision) {
+      this.store.transaction((_tx) =>
+        this.store.setOperationFailed(opId, "POLICY_CHANGED"),
+      );
+      throw new StoreError(
+        "POLICY_CHANGED",
+        `policy revision changed to ${currentPolicyRevision}`,
+      );
+    }
+    const nowAuth = this.store.getAgent(auth.actor);
+    if (
+      !nowAuth ||
+      nowAuth.desired === "stopped" ||
+      nowAuth.desired === "retired" ||
+      !(this.legacyDirect
+        ? auth.capabilities.has("code.integrate")
+        : capabilitiesOf(nowAuth).has("code.integrate"))
+    ) {
+      this.store.transaction((_tx) =>
+        this.store.setOperationFailed(opId, "CAPABILITY_DENIED"),
+      );
+      throw new StoreError(
+        "CAPABILITY_DENIED",
+        "code.integrate was revoked before commit",
+      );
     }
     const cas = spawnSync(
       "git",
@@ -583,23 +715,49 @@ export class GitModule {
     return r.stdout.trim() as Oid;
   }
 
-  private runCheck(candidate: Oid): void {
-    // INT-002: actual candidate in a private checkout; exit code/timeout decides
+  private runCheck(
+    candidate: Oid,
+    check: IntegrationPolicy["checks"][number],
+  ): void {
+    // INT-002: never run host-configured checks directly on the broker host.
+    if (!this.paths.checkRootfs || !this.paths.checkAssetsDir) {
+      throw new StoreError(
+        "SPIKE_UNRESOLVED",
+        `candidate-check sandbox unavailable for ${check.id}`,
+      );
+    }
+    if (check.argv.length === 0 || !check.argv[0])
+      throw new StoreError("CHECK_FAILED", `check ${check.id} has no argv`);
+    const tmpBytes = check.tmpBytes ?? this.paths.checkTmpBytes;
+    if (!tmpBytes || !Number.isSafeInteger(tmpBytes) || tmpBytes <= 0)
+      throw new StoreError("SPIKE_UNRESOLVED", `check ${check.id} has no sandbox limit`);
     const dir = this.checkDir(candidate);
+    const sandboxHost = {
+      rootfs: this.paths.checkRootfs,
+      node: "/usr/bin/node",
+      pi: "/usr/bin/pi",
+      piModeArgs: [],
+      tmpBytes,
+      checkResources: {
+        memoryBytes: 1, tasks: 1, cpuQuotaPercent: 1, tmpBytes,
+        workspaceBytes: 1, stagingBytes: 1, checkTimeoutSeconds: 1,
+      },
+    };
+    const argv = candidateArgv(
+      sandboxHost, dir, this.paths.checkAssetsDir, tmpBytes, check.argv, check.env,
+    );
     const r = spawnSync(
-      this.checkProfile!.argv[0]!,
-      this.checkProfile!.argv.slice(1),
+      argv[0]!,
+      argv.slice(1),
       {
-        cwd: dir,
-        env: { ...gitEnv, ...this.checkProfile!.env },
         encoding: "utf8",
-        timeout: this.paths.checkTimeoutSeconds * 1000,
+        timeout: (check.timeoutSeconds || this.paths.checkTimeoutSeconds) * 1000,
       },
     );
     if (r.error || r.status !== 0)
       throw new StoreError(
         "CHECK_FAILED",
-        `check ${this.checkProfile!.argv.join(" ")} failed`,
+        `check ${check.id} (${check.argv.join(" ")}) failed`,
       );
   }
 
@@ -640,13 +798,19 @@ export class GitModule {
     },
     bytes: AsyncIterable<Uint8Array>,
   ): Promise<Receipt> {
-    const existing = this.store.getOperation(auth.actor, key);
-    if (existing) return receiptOf(existing);
-    if (auth.actor !== "principal")
-      throw new StoreError(
-        "CAPABILITY_DENIED",
-        "context.publish is principal-only",
-      );
+    // MUST [IPC-005]: canonical hash + fast-path claim before staging.
+    // SAFETY: Context publish input is the closed DTO validated at the broker
+    // boundary; the cast widens it to the JSON domain for hashing only.
+    const newHash = requestHash(
+      "context.publish",
+      canonicalRequestParams("context.publish", input as unknown as Json),
+    );
+    const claim = this.store.claimKey(auth.actor, key, newHash);
+    if (claim === "retry")
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
+    if (claim === "reused") throw reused(auth.actor, key);
+    // capability (context.publish) is enforced at the dispatch boundary;
+    // CTX-001..006 validation below still applies to every caller.
     // CTX-001: GOAL.md is mandatory, non-empty, and paths must be plain relative
     if (!input.entries.some((e) => e.path === "GOAL.md")) {
       throw new StoreError("INVALID_REQUEST", "GOAL.md is required");
@@ -685,17 +849,6 @@ export class GitModule {
         replyHeaders: { replyTo: [], inReplyTo: null, references: [] },
       },
     };
-    this.store.transaction((_tx) => {
-      this.store.insertOperation({
-        id: opId,
-        actor: "principal",
-        requestKey: key,
-        requestHash: sha256Of(Buffer.from(JSON.stringify(input))),
-        kind: "context.publish",
-        payloadJson: JSON.stringify(input),
-        planJson: JSON.stringify(plan),
-      });
-    });
     this.mail.freezeObject(messageId, eml);
 
     // CTX-002: consume the aligned content stream entry-by-entry with hash checks
@@ -729,6 +882,22 @@ export class GitModule {
     }
     if (off !== data.length)
       throw new StoreError("STREAM_INVALID", "stream longer than manifest");
+
+    // T-context-accept: stream is fully validated before the operation exists.
+    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
+    this.store.transaction((_tx) => {
+      claimOut.txClaim = this.store.claimOperation({
+        id: opId,
+        actor: auth.actor,
+        requestKey: key,
+        requestHash: newHash,
+        kind: "context.publish",
+        payloadJson: JSON.stringify(input),
+        planJson: JSON.stringify(plan),
+      });
+    });
+    if (claimOut.txClaim === "retry")
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
 
     // CTX-003/004: commit with CAS, snapshot + current symlink, notification
     const candidate = await this.commitAndPublishContext(

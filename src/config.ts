@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import type { HostConfigV1, Capability } from "../implementation/contracts.js";
 import { StoreError } from "./store.js";
-import { isValidActorName, isValidSocietyName } from "./ids.js";
+import { isValidActorName, isValidSocietyName, isValidWirePath } from "./ids.js";
 
 function err(message: string): never {
   throw new StoreError("INVALID_REQUEST", `config: ${message}`);
@@ -31,6 +31,16 @@ function needRecord(v: unknown, what: string): Record<string, unknown> {
 function needArray(v: unknown, what: string): unknown[] {
   if (!Array.isArray(v)) err(`${what} must be an array`);
   return v;
+}
+
+function requireKeys(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  what: string,
+ ): void {
+  for (const key of keys)
+    if (!Object.prototype.hasOwnProperty.call(record, key))
+      err(`${what}.${key} is required`);
 }
 
 export function loadConfig(path: string): HostConfigV1 {
@@ -63,6 +73,23 @@ export function loadConfig(path: string): HostConfigV1 {
       err(`unknown top-level field ${k}`);
     }
   }
+  requireKeys(
+    cfg,
+    [
+      "schemaVersion",
+      "society",
+      "installation",
+      "modelProfiles",
+      "agentProfiles",
+      "principalProfile",
+      "initialResidents",
+      "quota",
+      "integration",
+      "limits",
+      "features",
+    ],
+    "root",
+  );
   if (cfg["schemaVersion"] !== 1) err("schemaVersion must be 1");
   const society = needString(cfg["society"], "society");
   if (!isValidSocietyName(society)) err("invalid society name");
@@ -72,6 +99,11 @@ export function loadConfig(path: string): HostConfigV1 {
     if (!["node", "libdir", "rootfs", "deploymentDigest"].includes(k))
       err(`installation.${k} unknown`);
   }
+  requireKeys(
+    installation,
+    ["node", "libdir", "rootfs", "deploymentDigest"],
+    "installation",
+  );
   const node = needString(installation["node"], "installation.node");
   const libdir = needString(installation["libdir"], "installation.libdir");
   const rootfs = needString(installation["rootfs"], "installation.rootfs");
@@ -81,8 +113,73 @@ export function loadConfig(path: string): HostConfigV1 {
   );
 
   const modelProfiles = needRecord(cfg["modelProfiles"], "modelProfiles");
+  for (const [name, p] of Object.entries(modelProfiles)) {
+    const prof = needRecord(p, `modelProfiles.${name}`);
+    for (const k of Object.keys(prof)) {
+      if (
+        ![
+          "provider",
+          "model",
+          "credentialRef",
+          "codecRevision",
+          "pricingRevision",
+          "maxInputTokens",
+          "maxOutputTokens",
+          "inferenceTimeoutSeconds",
+        ].includes(k)
+      )
+        err(`modelProfiles.${name}.${k} unknown`);
+    }
+    requireKeys(
+      prof,
+      [
+        "provider",
+        "model",
+        "credentialRef",
+        "codecRevision",
+        "pricingRevision",
+        "maxInputTokens",
+        "maxOutputTokens",
+        "inferenceTimeoutSeconds",
+      ],
+      `modelProfiles.${name}`,
+    );
+    for (const k of [
+      "provider",
+      "model",
+      "credentialRef",
+      "codecRevision",
+      "pricingRevision",
+    ])
+      needString(prof[k], `modelProfiles.${name}.${k}`);
+    needInt(
+      prof["maxInputTokens"],
+      `modelProfiles.${name}.maxInputTokens`,
+      1,
+    );
+    needInt(
+      prof["maxOutputTokens"],
+      `modelProfiles.${name}.maxOutputTokens`,
+      1,
+    );
+    needInt(
+      prof["inferenceTimeoutSeconds"],
+      `modelProfiles.${name}.inferenceTimeoutSeconds`,
+      1,
+    );
+  }
   const agentProfiles = needRecord(cfg["agentProfiles"], "agentProfiles");
   const profileNames = new Set(Object.keys(agentProfiles));
+  const allowedCapabilities = new Set<Capability>([
+    "mail.send",
+    "route.follow",
+    "agent.create",
+    "agent.manage.self",
+    "agent.manage.descendants",
+    "git.submit",
+    "code.integrate",
+    "context.publish",
+  ]);
   for (const [name, p] of Object.entries(agentProfiles)) {
     const prof = needRecord(p, `agentProfiles.${name}`);
     for (const k of Object.keys(prof)) {
@@ -97,6 +194,11 @@ export function loadConfig(path: string): HostConfigV1 {
       )
         err(`agentProfiles.${name}.${k} unknown`);
     }
+    requireKeys(
+      prof,
+      ["modelProfile", "capabilities", "delegable", "childProfile", "resources"],
+      `agentProfiles.${name}`,
+    );
     const modelProfile = needString(
       prof["modelProfile"],
       `agentProfiles.${name}.modelProfile`,
@@ -109,11 +211,46 @@ export function loadConfig(path: string): HostConfigV1 {
     )
       err(`agentProfiles.${name} capabilities/delegable arrays required`);
     if (
+      !prof["capabilities"].every(
+        (c) => typeof c === "string" && allowedCapabilities.has(c as Capability),
+      ) ||
+      !prof["delegable"].every(
+        (c) => typeof c === "string" && allowedCapabilities.has(c as Capability),
+      )
+    )
+      err(`agentProfiles.${name} contains unknown capability`);
+    if (
       prof["childProfile"] !== null &&
       typeof prof["childProfile"] !== "string"
     )
       err(`agentProfiles.${name}.childProfile must be a string or null`);
-    needRecord(prof["resources"], `agentProfiles.${name}.resources`);
+    if (
+      typeof prof["childProfile"] === "string" &&
+      !profileNames.has(prof["childProfile"] as string)
+    )
+      err(`agentProfiles.${name}.childProfile unknown`);
+    const resources = needRecord(
+      prof["resources"],
+      `agentProfiles.${name}.resources`,
+    );
+    const resourceKeys = [
+      "memoryBytes",
+      "tasks",
+      "cpuQuotaPercent",
+      "tmpBytes",
+      "workspaceBytes",
+      "stagingBytes",
+      "checkTimeoutSeconds",
+    ];
+    requireKeys(resources, resourceKeys, `agentProfiles.${name}.resources`);
+    for (const k of Object.keys(resources)) {
+      if (!resourceKeys.includes(k)) err(`agentProfiles.${name}.resources.${k} unknown`);
+      needInt(
+        resources[k],
+        `agentProfiles.${name}.resources.${k}`,
+        0,
+      );
+    }
   }
 
   const principalProfile = needString(
@@ -126,10 +263,16 @@ export function loadConfig(path: string): HostConfigV1 {
     cfg["initialResidents"],
     "initialResidents",
   );
+  const residentNames = new Set<string>();
   for (const r of initialResidents) {
     const row = needRecord(r, "initialResidents entry");
+    requireKeys(row, ["name", "profile", "brief"], "initialResidents entry");
+    for (const k of Object.keys(row))
+      if (!["name", "profile", "brief"].includes(k))
+        err(`initialResidents.${k} unknown`);
     const name = needString(row["name"], "initialResidents.name");
     if (!isValidActorName(name)) err("initialResidents.name invalid");
+    if (!residentNames.add(name)) err("initialResidents.name duplicate");
     const profile = needString(row["profile"], "initialResidents.profile");
     if (!profileNames.has(profile)) err("initialResidents.profile unknown");
     needString(row["brief"], "initialResidents.brief");
@@ -150,6 +293,7 @@ export function loadConfig(path: string): HostConfigV1 {
     if (!quotaKeys.includes(k)) err(`quota.${k} unknown`);
     needInt(quota[k], `quota.${k}`, 0);
   }
+  requireKeys(quota, quotaKeys, "quota");
   const societyUnits = needInt(quota["societyUnits"], "quota.societyUnits", 0);
   const principalReservedUnits = needInt(
     quota["principalReservedUnits"],
@@ -160,6 +304,11 @@ export function loadConfig(path: string): HostConfigV1 {
     err("quota.principalReservedUnits exceeds quota.societyUnits");
 
   const integration = needRecord(cfg["integration"], "integration");
+  requireKeys(
+    integration,
+    ["policyRevision", "protectedPaths", "checks"],
+    "integration",
+  );
   const policyRevision = needString(
     integration["policyRevision"],
     "integration.policyRevision",
@@ -168,11 +317,23 @@ export function loadConfig(path: string): HostConfigV1 {
     integration["protectedPaths"],
     "integration.protectedPaths",
   );
-  if (protectedPaths.some((x) => typeof x !== "string"))
-    err("integration.protectedPaths must be strings");
+  if (
+    protectedPaths.some(
+      (x) =>
+        typeof x !== "string" ||
+        !isValidWirePath(x.endsWith("/") ? x.slice(0, -1) : x) ||
+        /[*?[\]{}!]/.test(x),
+    )
+  )
+    err("integration.protectedPaths must be safe literal paths");
   const checks = needArray(integration["checks"], "integration.checks");
   for (const [i, c] of checks.entries()) {
     const row = needRecord(c, `integration.checks[${i}]`);
+    requireKeys(
+      row,
+      ["id", "argv", "env", "resources"],
+      `integration.checks[${i}]`,
+    );
     for (const k of Object.keys(row)) {
       if (!["id", "argv", "env", "resources"].includes(k))
         err(`integration.checks[${i}].${k} unknown`);
@@ -181,6 +342,37 @@ export function loadConfig(path: string): HostConfigV1 {
     const argv = needArray(row["argv"], `integration.checks[${i}].argv`);
     if (argv.some((x) => typeof x !== "string"))
       err(`integration.checks[${i}].argv must be strings`);
+    const env = needRecord(row["env"], `integration.checks[${i}].env`);
+    for (const [k, v] of Object.entries(env))
+      if (typeof v !== "string")
+        err(`integration.checks[${i}].env.${k} must be a string`);
+    const resources = needRecord(
+      row["resources"],
+      `integration.checks[${i}].resources`,
+    );
+    const resourceKeys = [
+      "memoryBytes",
+      "tasks",
+      "cpuQuotaPercent",
+      "tmpBytes",
+      "workspaceBytes",
+      "stagingBytes",
+      "checkTimeoutSeconds",
+    ];
+    requireKeys(
+      resources,
+      resourceKeys,
+      `integration.checks[${i}].resources`,
+    );
+    for (const k of Object.keys(resources)) {
+      if (!resourceKeys.includes(k))
+        err(`integration.checks[${i}].resources.${k} unknown`);
+      needInt(
+        resources[k],
+        `integration.checks[${i}].resources.${k}`,
+        0,
+      );
+    }
   }
 
   const limits = needRecord(cfg["limits"], "limits");
@@ -202,9 +394,14 @@ export function loadConfig(path: string): HostConfigV1 {
     if (!limitKeys.includes(k)) err(`limits.${k} unknown`);
     needInt(limits[k], `limits.${k}`, 1);
   }
+  requireKeys(limits, limitKeys, "limits");
 
   const features = needRecord(cfg["features"], "features");
-  for (const k of ["notmuch", "reflinkSeed", "formalApproval", "egress"]) {
+  const featureKeys = ["notmuch", "reflinkSeed", "formalApproval", "egress"];
+  for (const k of Object.keys(features))
+    if (!featureKeys.includes(k)) err(`features.${k} unknown`);
+  requireKeys(features, featureKeys, "features");
+  for (const k of featureKeys) {
     if (features[k] !== false)
       err(`features.${k} must be false in Core v1 default build`);
   }
@@ -238,7 +435,7 @@ export function loadConfig(path: string): HostConfigV1 {
 /** MUST [CREATE-002]: broker-owned spec resolution from host policy only. */
 export function resolveChildSpec(
   cfg: HostConfigV1,
-  parent: { name: string; profile: string },
+  parent: { name: string; profile: string; capabilities: readonly Capability[] },
   input: { name: string; from: string; brief: string },
 ): {
   spec: {
@@ -256,7 +453,7 @@ export function resolveChildSpec(
   if (childName === null) return null;
   const child = cfg.agentProfiles[childName];
   if (!child) return null;
-  const intersection = parentProfile.capabilities.filter(
+  const intersection = parent.capabilities.filter(
     (c) =>
       parentProfile.delegable.includes(c) && child.capabilities.includes(c),
   );

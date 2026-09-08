@@ -95,8 +95,16 @@ export function candidateArgv(
   candidateDir: string,
   checkAssetsDir: string,
   checkTmpBytes: number,
-): string[] {
+  command: readonly string[],
+  env: Readonly<Record<string, string>> = {},
+ ): string[] {
   void h.node;
+  if (command.length === 0 || !command[0] || !Number.isSafeInteger(checkTmpBytes) || checkTmpBytes <= 0) {
+    throw new StoreError("CHECK_FAILED", "candidate check command/resources are invalid");
+  }
+  const checkEnv = Object.entries(env)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .flatMap(([key, value]) => ["--setenv", key, value]);
   return [
     "bwrap",
     "--unshare-all",
@@ -128,9 +136,11 @@ export function candidateArgv(
     "--setenv",
     "PATH",
     "/usr/bin:/bin",
+    ...checkEnv,
     "--chdir",
     "/candidate",
     "--",
+    ...command,
   ];
 }
 

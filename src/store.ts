@@ -108,6 +108,14 @@ export class StoreError extends Error {
     this.name = "StoreError";
   }
 }
+
+/** MUST [IPC-005]: a request key already accepted under a different payload. */
+export function reused(actor: Actor, key: RequestKey): StoreError {
+  return new StoreError(
+    "REQUEST_KEY_REUSED",
+    `request key ${key} (actor ${actor}) already used with a different payload`,
+  );
+}
 export function isBusyError(e: unknown): boolean {
   return (
     e instanceof Error &&
@@ -426,6 +434,65 @@ export class Store {
           "REQUEST_KEY_REUSED",
           "request key already used by this actor",
         );
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * MUST [IPC-005]: single ownership of the request-key claim. Given the
+   * actor+key and the canonical IPC-005 hash of the incoming request:
+   *  - "retry"  — same key+hash already accepted; caller returns the existing
+   *                receipt and applies NO effects (idempotent re-send);
+   *  - "reused" — same key with a DIFFERENT hash; caller must reject
+   *                REQUEST_KEY_REUSED and never touch the accepted request;
+   *  - "absent" — no prior request; caller may accept this one.
+   *
+   * The DB unique constraint alone cannot distinguish retry from reuse, so
+   * every durable mutation routes its decision through this one comparison.
+   */
+  claimKey(
+    actor: Actor,
+    key: RequestKey,
+    requestHash: string,
+  ): "retry" | "reused" | "absent" {
+    const existing = this.getOperation(actor, key);
+    if (!existing) return "absent";
+    return existing.requestHash === requestHash ? "retry" : "reused";
+  }
+
+  /**
+   * MUST [IPC-005]/[DB-007]: authoritative in-transaction claim + insert.
+   * Prefer claimKey() as a fast path before building the effect payload; this
+   * runs inside the caller's transaction and also resolves a concurrent
+   * same-key race (the loser re-reads and compares hashes) so a different-hash
+   * reuse can never be mistaken for an idempotent retry.
+   */
+  claimOperation(op: {
+    id: OperationId;
+    actor: Actor;
+    requestKey: RequestKey;
+    requestHash: string;
+    kind: OperationPlan["kind"];
+    payloadJson: string;
+    planJson: string;
+  }): "inserted" | "retry" {
+    this.requireTx();
+    const pre = this.claimKey(op.actor, op.requestKey, op.requestHash);
+    if (pre === "retry") return "retry";
+    if (pre === "reused") throw reused(op.actor, op.requestKey);
+    try {
+      this.insertOperation(op);
+      return "inserted";
+    } catch (e) {
+      if (e instanceof StoreError && e.code === "REQUEST_KEY_REUSED") {
+        // concurrent same-key insert lost the race: compare hashes again
+        if (
+          this.claimKey(op.actor, op.requestKey, op.requestHash) === "retry"
+        ) {
+          return "retry";
+        }
+        throw reused(op.actor, op.requestKey);
       }
       throw e;
     }

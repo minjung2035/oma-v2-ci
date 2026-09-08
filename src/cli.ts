@@ -6,12 +6,12 @@
 // REQUEST_KEY_REUSED (IPC-008).
 import { connect } from "node:net";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { FrameParser, encodeFrame } from "./frame.js";
 import { RequestCache, type CachedRequest } from "./request-cache.js";
-import { isValidRequestKey, FULL_OID_RE, uuidV4 } from "./ids.js";
+import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4 } from "./ids.js";
 import type { Json, Receipt } from "../implementation/contracts.js";
 
 type ExitCode = 0 | 2 | 3 | 4;
@@ -29,7 +29,8 @@ function usage(): never {
     [
       "usage:",
       "  oma send <address...> --subject S --file P [--kind K] [--reply P] [--request K]",
-      "  oma agent create <name> --from <rev> --file <brief> [--request K]",
+      "  oma ack <mail-path-or-id> [--request K]",
+      "  oma follow <topic> [--request K] | oma unfollow <topic> [--request K]",
       "  oma agent start <name> [--request K] | oma agent stop <name> [--request K]",
       "  oma agent continue --note <text> [--request K]",
       "  oma agent wait",
@@ -390,9 +391,10 @@ async function cmdSend(args: string[]): Promise<void> {
     "--reply",
     "--request",
   ]);
-  if (to.length === 0) fail("send requires at least one address", 2);
   const subject = opt(args, "--subject");
   const reply = opt(args, "--reply");
+  if (to.length === 0 && !reply)
+    fail("send requires an address (or --reply)", 2);
   if (!subject && !reply)
     fail("send requires --subject (or --reply to reuse its subject)", 2);
   const kindRaw = opt(args, "--kind") ?? "message";
@@ -420,6 +422,42 @@ async function cmdSend(args: string[]): Promise<void> {
   );
 }
 
+
+function parseMessageArg(value: string): string {
+  const id = value.startsWith("m-")
+    ? value
+    : basename(value).replace(/:2,$/, "");
+  if (!/^m-[0-9a-f-]{36}-\d+$/.test(id))
+    fail("ack requires a message id or mail path", 2);
+  return id;
+}
+
+async function cmdAck(args: string[]): Promise<void> {
+  const raw = args[0];
+  if (!raw) usage();
+  const message = parseMessageArg(raw);
+  const key = keyOf(args) ?? randKey();
+  await effect(
+    key,
+    () => ({ method: "mail.ack", params: { message } }),
+    () => ({ message }),
+  );
+}
+
+async function cmdFollow(args: string[], subscribe: boolean): Promise<void> {
+  const topic = args[0];
+  if (!topic || !isValidTopicName(topic))
+    fail("invalid topic", 2);
+  const key = keyOf(args) ?? randKey();
+  await effect(
+    key,
+    () => ({
+      method: subscribe ? "route.follow" : "route.unfollow",
+      params: { topic },
+    }),
+    () => ({ topic }),
+  );
+}
 async function cmdAgent(args: string[]): Promise<void> {
   const sub = args[0];
   if (sub === "create") {
@@ -693,6 +731,15 @@ export async function main(argv: string[]): Promise<never> {
   switch (cmd) {
     case "send":
       await cmdSend(rest);
+      break;
+    case "ack":
+      await cmdAck(rest);
+      break;
+    case "follow":
+      await cmdFollow(rest, true);
+      break;
+    case "unfollow":
+      await cmdFollow(rest, false);
       break;
     case "agent":
       await cmdAgent(rest);

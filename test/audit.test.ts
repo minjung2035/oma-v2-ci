@@ -30,6 +30,8 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { GitModule } from "../src/git.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker } from "../src/broker.js";
+import { loadConfig, resolveChildSpec } from "../src/config.js";
+import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
 import { unitName } from "../src/units.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 
@@ -582,7 +584,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
             incarnation: 0,
             profile: "p",
             createdBy: null,
-            specJson: "{}",
+            specJson: resolvedSpec(ALL_CAPS),
           });
         }
       }
@@ -744,8 +746,12 @@ function minimalConfig(society: string): Record<string, unknown> {
       md: {
         provider: "none",
         model: "none",
+        credentialRef: "none",
+        codecRevision: "none",
         pricingRevision: "none",
-        maxUnitsPerRequest: 1000,
+        maxInputTokens: 1,
+        maxOutputTokens: 1,
+        inferenceTimeoutSeconds: 1,
       },
     },
     agentProfiles: {
@@ -754,14 +760,30 @@ function minimalConfig(society: string): Record<string, unknown> {
         capabilities: ["mail.send", "git.submit"],
         delegable: [],
         childProfile: null,
-        resources: {},
+        resources: {
+          memoryBytes: 1,
+          tasks: 1,
+          cpuQuotaPercent: 100,
+          tmpBytes: 1,
+          workspaceBytes: 1,
+          stagingBytes: 1,
+          checkTimeoutSeconds: 1,
+        },
       },
       child: {
         modelProfile: "md",
         capabilities: ["mail.send"],
         delegable: [],
         childProfile: null,
-        resources: {},
+        resources: {
+          memoryBytes: 1,
+          tasks: 1,
+          cpuQuotaPercent: 100,
+          tmpBytes: 1,
+          workspaceBytes: 1,
+          stagingBytes: 1,
+          checkTimeoutSeconds: 1,
+        },
       },
     },
     principalProfile: "p",
@@ -799,6 +821,29 @@ function minimalConfig(society: string): Record<string, unknown> {
     },
   };
 }
+test("CREATE-002: child capabilities use the authenticated parent's effective set", () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-audit-auth-"));
+  try {
+    const society = `au${Date.now().toString(36)}`;
+    const raw = minimalConfig(society);
+    const profiles = raw.agentProfiles as Record<string, Record<string, unknown>>;
+    const parentProfile = profiles.p!;
+    parentProfile.childProfile = "child";
+    parentProfile.delegable = ["mail.send"];
+    profiles.child = { ...parentProfile, capabilities: ["mail.send", "git.submit"], childProfile: null };
+    const configPath = join(dir, "config.json");
+    writeFileSync(configPath, JSON.stringify(raw), "utf8");
+    const cfg = loadConfig(configPath);
+    const input = { name: "child-a", from: "0".repeat(40), brief: "brief" };
+    const limited = resolveChildSpec(cfg, { name: "a", profile: "p", capabilities: ["git.submit"] }, input);
+    assert.deepEqual(limited?.spec.capabilities, []);
+    const granted = resolveChildSpec(cfg, { name: "a", profile: "p", capabilities: ["mail.send", "git.submit"] }, input);
+    assert.deepEqual(granted?.spec.capabilities, ["mail.send"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 
 test("D1: READY=1 arrives after startup recovery (recovered mail op observable), never before", async (t) => {
   const probe = spawnSync("systemctl", ["--user", "is-system-running"], {
@@ -837,7 +882,7 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
           incarnation: 0,
           profile: "p",
           createdBy: null,
-          specJson: "{}",
+          specJson: resolvedSpec(ALL_CAPS),
         });
       }
       const opId = "recover-me";
@@ -952,7 +997,7 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
         incarnation: 0,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS),
       });
       // pending mail.send whose frozen OBJECT FILE is missing -> reconcile
       // startup must fail (STORE_CORRUPT), never serve, never READY.

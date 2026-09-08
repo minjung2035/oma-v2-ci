@@ -11,6 +11,8 @@ import {
 } from "./ids.js";
 
 export type Check = (v: unknown) => string | null;
+const OPTIONAL = Symbol("optional");
+type OptionalCheck = Check & { [OPTIONAL]?: true };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -26,18 +28,26 @@ export function typeName(v: unknown): string {
 export function checkObject(spec: Readonly<Record<string, Check>>): Check {
   return (v) => {
     if (!isPlainObject(v)) return `expected object, got ${typeName(v)}`;
-    for (const key of Object.keys(v)) {
-      const c = spec[key];
-      if (!c) return `unknown field "${key}"`;
+    for (const [key, c] of Object.entries(spec)) {
+      if (!Object.prototype.hasOwnProperty.call(v, key)) {
+        if (!(c as OptionalCheck)[OPTIONAL]) return `missing field "${key}"`;
+        continue;
+      }
       const err = c(v[key]);
       if (err) return `field "${key}": ${err}`;
+    }
+    for (const key of Object.keys(v)) {
+      if (!spec[key]) return `unknown field "${key}"`;
     }
     return null;
   };
 }
 
 export function checkOptional(spec: Check): Check {
-  return (v) => (v === undefined ? null : spec(v));
+  const check = ((v: unknown) =>
+    v === undefined ? null : spec(v)) as OptionalCheck;
+  check[OPTIONAL] = true;
+  return check;
 }
 
 export function checkString(opts?: {
@@ -172,7 +182,7 @@ export function mailParamsCheck(
   l: ParamsLimits,
 ): Check {
   return checkObject({
-    to: checkArray(checkAddress(actorNames), { min: 1, max: l.addresses }),
+    to: checkArray(checkAddress(actorNames), { min: 0, max: l.addresses }),
     subject: checkString({ max: l.subjectBytes }),
     kind: checkEnum([
       "message",
@@ -235,7 +245,7 @@ export const gitIntegrateParamsCheck: Check = checkObject({
 
 export function contextPublishParamsCheck(l: ParamsLimits): Check {
   return checkObject({
-    expected: checkOptional(checkOid),
+    expected: (v) => (v === null ? null : checkOid(v)),
     entries: checkArray(
       checkObject({
         path: (v) =>

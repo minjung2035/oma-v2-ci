@@ -19,6 +19,7 @@ import { join, dirname } from "node:path";
 import type {
   Actor,
   Address,
+  Json,
   MailInput,
   MessageId,
   Oid,
@@ -34,7 +35,8 @@ import {
   generateOperationId,
   generateBatchId,
 } from "./ids.js";
-import { sha256Hex } from "./hash.js";
+import { isValidTopicName } from "./ids.js";
+import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 
 // ---------------------------------------------------------------------------
 // eml encoding (MAIL-003/004)
@@ -286,6 +288,7 @@ export function publishImmutableFile(
 // ---------------------------------------------------------------------------
 
 export interface ParsedEmlHeaders {
+  from: string | null;
   messageId: MessageId | null;
   inReplyTo: MessageId | null;
   references: MessageId[];
@@ -322,6 +325,7 @@ export function parseEmlHeaders(text: string): ParsedEmlHeaders {
     return out;
   };
   return {
+    from: headers.from ?? null,
     messageId: mid(headers["message-id"]),
     inReplyTo: mid(headers["in-reply-to"]),
     references: refs(headers["references"]),
@@ -329,6 +333,27 @@ export function parseEmlHeaders(text: string): ParsedEmlHeaders {
       ? headers["reply-to"].split(",").map((s) => s.trim())
       : null,
   };
+}
+
+function logicalReplyAddress(
+  store: Store,
+  value: string,
+  society: string,
+ ): Address | null {
+  const raw = value.trim().replace(/^<|>$/g, "");
+  if (raw === "commons" || raw === "residents" || raw === "principal")
+    return raw;
+  if (raw.startsWith("topic/") && isValidTopicName(raw.slice(6)))
+    return raw;
+  if (store.getAgent(raw)) return raw;
+  const suffix = `@${society}.oma.invalid`;
+  if (!raw.endsWith(suffix)) return null;
+  const local = raw.slice(0, -suffix.length);
+  if (local === "commons" || local === "residents" || local === "principal")
+    return local;
+  if (local.startsWith("topic-") && isValidTopicName(local.slice(6)))
+    return `topic/${local.slice(6)}`;
+  return store.getAgent(local) ? local : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -393,28 +418,67 @@ export class MailModule {
     key: RequestKey,
     input: MailInput,
     stopAfter?: MailStopPoint,
+    requestContext?: {
+      kind: "mail.send" | "agent.continue";
+      params: Json;
+    },
   ): Promise<Receipt> {
     this.stopAfter = stopAfter ?? null;
+    const operationKind = requestContext?.kind ?? "mail.send";
+    const requestParams = requestContext?.params ?? (input as unknown as Json);
     const society = this.paths.society;
-    if (input.to.length === 0 && !input.replyToMessage) {
-      throw new StoreError(
-        "INVALID_REQUEST",
-        "no recipients and no reply target",
-      );
-    }
-    const existingOp = this.store.getOperation(auth.actor, key);
-    if (existingOp) return receiptOf(existingOp);
-
-    const route = expandAddresses(
-      this.store,
-      input.to.length > 0 ? input.to : ["commons"],
-      society,
+    // MUST [IPC-005]: canonical request hash; fast-path claim before any effect work.
+    // SAFETY: MailInput fields are JSON values; the cast widens the validated
+    // domain input so the canonicalizer can read it for hashing only.
+    const newHash = requestHash(
+      operationKind,
+      canonicalRequestParams(operationKind, requestParams),
     );
+    const claim = this.store.claimKey(auth.actor, key, newHash);
+    if (claim === "retry")
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
+    if (claim === "reused")
+      throw new StoreError(
+        "REQUEST_KEY_REUSED",
+        `request key ${key} already used with a different payload`,
+      );
+
+    let parent: ParsedEmlHeaders | null = null;
+    if (input.replyToMessage) {
+      const obj = this.objectPath(input.replyToMessage);
+      if (!existsSync(obj))
+        throw new StoreError(
+          "INVALID_REQUEST",
+          `reply target ${input.replyToMessage} unknown`,
+        );
+      parent = parseEmlHeaders(readFileSync(obj, "utf8"));
+      const parentId = parent.messageId?.split("@", 1)[0];
+      if (parentId !== input.replyToMessage) {
+        throw new StoreError(
+          "STORE_CORRUPT",
+          `object ${input.replyToMessage} header mismatch`,
+        );
+      }
+    }
+    const targetAddresses: Address[] = [...input.to];
+    if (targetAddresses.length === 0) {
+      const inherited = parent
+        ? parent.replyTo ?? (parent.from ? [parent.from] : [])
+        : ["commons" as Address];
+      const logical = inherited.map((v) =>
+        logicalReplyAddress(this.store, v, society),
+      );
+      if (logical.some((v) => v === null))
+        throw new StoreError(
+          "INVALID_REQUEST",
+          "reply target has no valid logical recipient",
+        );
+      targetAddresses.push(...(logical as Address[]));
+    }
+    const route = expandAddresses(this.store, targetAddresses, society);
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
     const dateMs = Date.now();
-
-    // MUST [MAIL-005]: verify ancestry against the accepted original.
     let replyHeaders: {
       replyTo: string[];
       inReplyTo: MessageId | null;
@@ -424,29 +488,16 @@ export class MailModule {
       inReplyTo: null,
       references: [],
     };
-    if (input.replyToMessage) {
-      const obj = this.objectPath(input.replyToMessage);
-      if (!existsSync(obj))
-        throw new StoreError(
-          "INVALID_REQUEST",
-          `reply target ${input.replyToMessage} unknown`,
-        );
-      const parent = parseEmlHeaders(readFileSync(obj, "utf8"));
-      if (parent.messageId !== input.replyToMessage) {
-        throw new StoreError(
-          "STORE_CORRUPT",
-          `object ${input.replyToMessage} header mismatch`,
-        );
-      }
+    if (parent) {
       const ancestry = [...(parent.references ?? [])];
       if (parent.inReplyTo && !ancestry.includes(parent.inReplyTo))
         ancestry.push(parent.inReplyTo);
-      if (!ancestry.includes(parent.messageId)) ancestry.push(parent.messageId);
-      const capped = ancestry.slice(-this.maxReplyReferences);
+      if (!ancestry.includes(parent.messageId!)) ancestry.push(parent.messageId!);
+      const inheritedReplyTo = parent.replyTo ?? (parent.from ? [parent.from] : []);
       replyHeaders = {
-        replyTo: parent.replyTo ?? [actorAddress(auth.actor, society)],
+        replyTo: input.to.length > 0 ? route.displayTo : inheritedReplyTo,
         inReplyTo: parent.messageId,
-        references: capped,
+        references: ancestry.slice(-this.maxReplyReferences),
       };
     }
 
@@ -475,7 +526,7 @@ export class MailModule {
 
     // ④ T-send: recheck key, snapshot recipients, insert op + deliveries
     const plan = {
-      kind: "mail.send" as const,
+      kind: operationKind,
       message: {
         id: messageId,
         objectPath: `mail/objects/${messageId}.eml`,
@@ -490,19 +541,22 @@ export class MailModule {
         replyHeaders,
       },
     };
+    // T-send: authoritative in-tx claim, then insert op + deliveries.
+    // SAFETY: the object property is captured so the transaction callback's
+    // assignment escapes TS control-flow narrowing of the outer variable.
+    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     try {
       this.store.transaction((_tx) => {
-        this.store.insertOperation({
+        claimOut.txClaim = this.store.claimOperation({
           id: opId,
           actor: auth.actor,
           requestKey: key,
-          requestHash: sha256Hex(
-            input.body + input.subject + input.to.join(","),
-          ),
-          kind: "mail.send",
-          payloadJson: JSON.stringify(input),
+          requestHash: newHash,
+          kind: operationKind,
+          payloadJson: JSON.stringify(requestParams),
           planJson: JSON.stringify(plan),
         });
+        if (claimOut.txClaim === "retry") return; // concurrent same-key winner; no effects
         this.store.insertDeliveries(
           route.recipients.map((r) => ({
             messageId,
@@ -513,14 +567,13 @@ export class MailModule {
       });
     } catch (e) {
       if (e instanceof StopSignal) throw e;
-      if (e instanceof StoreError && e.code === "REQUEST_KEY_REUSED") {
-        return receiptOf(this.store.getOperation(auth.actor, key)!);
-      }
       throw e;
     }
+    if (claimOut.txClaim === "retry")
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (stopAfter === "accepted") throw new StopSignal("accepted");
     const result = {
-      kind: "mail.send" as const,
+      kind: operationKind,
       message: messageId,
       recipientCount: route.recipients.length,
       archivePath: this.archivePath(messageId),
@@ -731,6 +784,7 @@ export class MailModule {
         remaining++;
         continue;
       }
+      const operationKind = kind;
       let plan: { message: { id: MessageId } };
       try {
         plan = JSON.parse(op.planJson) as { message: { id: MessageId } };
@@ -760,7 +814,7 @@ export class MailModule {
             : fresh.every((d) => d.materialized === 1) && archiveDone;
         if (allDone) {
           const result = {
-            kind: "mail.send" as const,
+            kind: operationKind,
             message: plan.message.id,
             recipientCount: fresh.length,
             archivePath: this.archivePath(plan.message.id),

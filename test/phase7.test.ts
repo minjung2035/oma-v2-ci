@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { Store, StoreError } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
-import { GitModule, type GitPaths } from "../src/git.js";
+import { GitModule, type GitPaths, type IntegrationPolicy } from "../src/git.js";
 import type {
   AuthContext,
   Capability,
@@ -42,7 +42,7 @@ interface Env {
   seal: () => void;
 }
 
-function envOf(): Env {
+function envOf(integration: IntegrationPolicy | null = null): Env {
   const dir = mkdtempSync(join(tmpdir(), "oma-t7-"));
   const society = "demo";
   mkdirSync(join(dir, "state", "repos"), { recursive: true });
@@ -79,7 +79,7 @@ function envOf(): Env {
     quarantineTmpBytes: 256 * 1024 * 1024,
     checkTimeoutSeconds: 30,
   };
-  const git = new GitModule(paths, store, mail, null);
+  const git = new GitModule(paths, store, mail, integration);
   return {
     dir,
     society,

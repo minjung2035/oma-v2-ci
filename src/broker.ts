@@ -1,6 +1,7 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: broker core — singleton lock, actor
 // listener auth (SO_PEERCRED + cgroup), public dispatch, runner channel.
 import { createServer, type Socket } from "node:net";
+import { createHash } from "node:crypto";
 import {
   openSync,
   mkdirSync,
@@ -17,6 +18,8 @@ import type {
   Actor,
   AuthContext,
   Capability,
+  PublicMethod,
+  ProtocolLimits,
   Request,
   Receipt,
   RunLease,
@@ -25,7 +28,6 @@ import { Store, StoreError } from "./store.js";
 import {
   isValidActorName,
   isValidRequestKey,
-  isValidTopicName,
 } from "./ids.js";
 import { ConnectionDecoder, encodeFrame } from "./frame.js";
 import { spawnSync } from "node:child_process";
@@ -39,12 +41,45 @@ import { ViewsModule } from "./views.js";
 import { batchOf } from "./mail.js";
 import { unitName } from "./units.js";
 
+import { capabilitiesOf } from "./authority.js";
+import {
+  agentActionParamsCheck,
+  agentContinueParamsCheck,
+  agentCreateParamsCheck,
+  agentWaitParamsCheck,
+  contextPublishParamsCheck,
+  gitIntegrateParamsCheck,
+  gitSubmitParamsCheck,
+  logsReadParamsCheck,
+  mailAckParamsCheck,
+  mailParamsCheck,
+  operationGetParamsCheck,
+  routeParamsCheck,
+  statusGetParamsCheck,
+  checkObject,
+  checkOid,
+} from "./validate.js";
 export interface BrokerPaths {
   stateRoot: string; // S
   runRoot: string; // R
   society: string;
 }
 
+
+const DEFAULT_LIMITS: ProtocolLimits = {
+  frameBytes: 256 * 1024,
+  mailBodyBytes: 64 * 1024,
+  subjectBytes: 8 * 1024,
+  addresses: 64,
+  replyReferences: 64,
+  contextFiles: 1024,
+  contextBytes: 256 * 1024 * 1024,
+  bundleBytes: 256 * 1024 * 1024,
+  logBytes: 1024 * 1024,
+  batchMaxMessages: 64,
+  idleStreamSeconds: 60,
+  receiptWaitSeconds: 30,
+};
 /** /proc/<pid>/cgroup path of a peer (cgroup v2 path is the last segment after ':'). */
 export function peerCgroup(pid: number): string | null {
   try {
@@ -85,6 +120,7 @@ export class Broker {
     private readonly git: GitModule | null,
     private readonly reconcile: ReconcileModule | null,
     private readonly paths: BrokerPaths,
+    private readonly limits: ProtocolLimits = DEFAULT_LIMITS,
   ) {}
 
   /** MUST [REC-007]: process-lifetime lock before any DB use; admin socket bind. */
@@ -145,7 +181,14 @@ export class Broker {
   // -------------------------------------------------------------------------
 
   private handleActor(sock: Socket, actor: Actor, incarnation: number): void {
-    void incarnation;
+    if (this.store.getAgent(actor)?.incarnation !== incarnation) {
+      this.fail(sock, {
+        code: "STALE_RUN",
+        message: "actor incarnation is stale",
+        retry: "never",
+      });
+      return;
+    }
     const cred = peerCred(socketFd(sock));
     if (!cred) {
       this.fail(sock, {
@@ -180,13 +223,14 @@ export class Broker {
     const unitCg = this.units.observe(actor).cgroup;
     const peerCg = peerCgroup(cred.pid);
     if (!unitCg || !peerCg) return null;
-    if (!peerCg.startsWith(unitCg)) return null;
+    const cgroupPrefix = unitCg.endsWith("/") ? unitCg : `${unitCg}/`;
+    if (peerCg !== unitCg && !peerCg.startsWith(cgroupPrefix)) return null;
     return {
       actor,
       incarnation: agent.incarnation,
       role: agent.role,
       channel: "actor",
-      capabilities: relevantCapabilities(agent),
+      capabilities: capabilitiesOf(agent),
       peer: { pid: cred.pid, uid: cred.uid, gid: cred.gid, cgroup: peerCg },
     };
   }
@@ -242,9 +286,14 @@ export class Broker {
       stream: AsyncIterable<Uint8Array> | null,
     ) => Promise<unknown> | unknown,
   ): void {
-    const dec = new ConnectionDecoder(256 * 1024);
+    const dec = new ConnectionDecoder(this.limits.frameBytes);
     const write = (obj: unknown) => sock.write(encodeFrame(obj));
     let streamFrame: { raw: Record<string, unknown>; id: string } | null = null;
+    let pendingStream: {
+      raw: Record<string, unknown>;
+      id: string;
+      bytes: Uint8Array;
+    } | null = null;
     let busy = false;
     const units: Array<{
       raw: Record<string, unknown>;
@@ -293,6 +342,44 @@ export class Broker {
       });
     };
 
+    const rejectStream = (id: string, message: string): void => {
+      write(
+        Broker.errorAnswer(id, {
+          code: "STREAM_INVALID",
+          message,
+          retry: "same-key",
+        }),
+      );
+      sock.destroy();
+    };
+
+    /** Resolve a completed stream boundary before any returned next-frame event
+     * is processed, preserving current-request-before-next-request ordering. */
+    const settlePendingStream = (
+      events: import("./frame.js").DecoderEvent[],
+    ): boolean => {
+      if (!pendingStream) return true;
+      if (events.some((ev) => ev.kind === "invalid")) {
+        const id = pendingStream.id;
+        pendingStream = null;
+        rejectStream(id, "stream has excess bytes");
+        return false;
+      }
+      if (events.some((ev) => ev.kind === "frame" || ev.kind === "stream")) {
+        units.push({ ...pendingStream, retry: "same-key" });
+        pendingStream = null;
+        return true;
+      }
+      const status = dec.excessStatus();
+      if (status === "excess") {
+        const id = pendingStream.id;
+        pendingStream = null;
+        rejectStream(id, "stream has excess bytes");
+        return false;
+      }
+      return true;
+    };
+
     const processEvents = (
       events: import("./frame.js").DecoderEvent[],
     ): void => {
@@ -311,26 +398,41 @@ export class Broker {
           const sf = streamFrame;
           streamFrame = null;
           if (!sf) continue;
-          // MUST [IPC-002]: excess raw after the declared length rejects
-          // pre-dispatch; the mutation must not succeed on a truncated/excess
-          // stream.
-          if (dec.excessStatus() === "excess") {
-            write(
-              Broker.errorAnswer(sf.id, {
-                code: "STREAM_INVALID",
-                message: "stream exceeds descriptor.bytes",
-                retry: "same-key",
-              }),
-            );
-            sock.destroy();
+          // MUST [IPC-002]: stream bytes beyond descriptor.bytes are rejected
+          const streamParams = sf?.raw.params;
+          const streamRecord = typeof streamParams === "object" && streamParams !== null && !Array.isArray(streamParams)
+            ? streamParams as Record<string, unknown>
+            : null;
+          const streamDescriptor = streamRecord && (typeof streamRecord.bundle === "object" && streamRecord.bundle !== null
+            ? streamRecord.bundle
+            : typeof streamRecord.content === "object" && streamRecord.content !== null
+              ? streamRecord.content
+              : null);
+          const expectedSha = streamDescriptor && typeof (streamDescriptor as Record<string, unknown>).sha256 === "string"
+            ? (streamDescriptor as Record<string, unknown>).sha256 as string
+            : null;
+          if (expectedSha && /^[0-9a-f]{64}$/.test(expectedSha) &&
+            createHash("sha256").update(ev.bytes).digest("hex") !== expectedSha) {
+            rejectStream(sf.id, "stream digest mismatch");
             return;
           }
-          units.push({
-            raw: sf.raw,
-            id: sf.id,
-            bytes: ev.bytes,
-            retry: "same-key",
-          });
+          // before dispatch; partial next-frame bytes stay pending until the
+          // boundary is confirmed by more bytes or EOF.
+          const status = dec.excessStatus();
+          if (status === "excess") {
+            rejectStream(sf.id, "stream has excess bytes");
+            return;
+          }
+          if (status === "pending") {
+            pendingStream = { raw: sf.raw, id: sf.id, bytes: ev.bytes };
+          } else {
+            units.push({
+              raw: sf.raw,
+              id: sf.id,
+              bytes: ev.bytes,
+              retry: "same-key",
+            });
+          }
           continue;
         }
         const raw = ev.frame.raw as Record<string, unknown>;
@@ -356,34 +458,66 @@ export class Broker {
         ) as Record<string, unknown> | null;
         const wantsStream =
           method === "git.submit" || method === "context.publish";
-        if (
-          wantsStream &&
-          desc &&
-          typeof desc.bytes === "number" &&
-          desc.bytes > 0
-        ) {
-          streamFrame = { raw, id };
-          const more = dec.beginStream(desc.bytes);
-          if (more.length > 0) processEvents(more);
-          continue;
+        const streamLimit =
+          method === "git.submit"
+            ? this.limits.bundleBytes
+            : this.limits.contextBytes;
+        if (wantsStream && desc && typeof desc.bytes === "number") {
+          if (
+            !Number.isSafeInteger(desc.bytes) ||
+            desc.bytes < 0 ||
+            desc.bytes > streamLimit
+          ) {
+            write(
+              Broker.errorAnswer(id, {
+                code: "INVALID_REQUEST",
+                message: "stream descriptor exceeds host limits",
+                retry: "never",
+              }),
+            );
+            sock.destroy();
+            return;
+          }
+          if (desc.bytes > 0) {
+            streamFrame = { raw, id };
+            const more = dec.beginStream(desc.bytes);
+            if (more.length > 0) processEvents(more);
+            continue;
+          }
         }
         units.push({ raw, id, bytes: null, retry: "never" });
       }
     };
 
     sock.on("data", (chunk: Buffer) => {
-      processEvents(dec.push(chunk));
+      const events = dec.push(chunk);
+      if (!settlePendingStream(events)) return;
+      processEvents(events);
       pump();
+    });
+    sock.setTimeout(this.limits.idleStreamSeconds * 1000, () => {
+      if (!dec.streaming() && !pendingStream) return;
+      const id = streamFrame?.id ?? pendingStream?.id ?? "x";
+      streamFrame = null;
+      pendingStream = null;
+      rejectStream(id, "stream timed out before acceptance");
     });
     sock.on("end", () => {
       if (dec.streaming()) {
+        const id = streamFrame?.id ?? "x";
+        streamFrame = null;
         write(
-          Broker.errorAnswer("x", {
+          Broker.errorAnswer(id, {
             code: "STREAM_INVALID",
             message: "stream ended before descriptor.bytes",
             retry: "same-key",
           }),
         );
+      } else if (pendingStream) {
+        const id = pendingStream.id;
+        pendingStream = null;
+        rejectStream(id, "stream ended with an incomplete next frame");
+        return;
       }
       sock.destroy();
     });
@@ -422,189 +556,68 @@ export class Broker {
   }
 
   /** MUST [M-003]/[IPC-009]: runtime params validation at the trust boundary. */
-  /** small closed-schema helpers for the IPC-001 runtime validators. */
-  private fullOid(v: unknown): v is string {
-    return typeof v === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(v);
-  }
-  private safePosInt(v: unknown): v is number {
-    return typeof v === "number" && Number.isSafeInteger(v) && v > 0;
-  }
-  private stringArray(v: unknown): v is string[] {
-    return Array.isArray(v) && v.every((x) => typeof x === "string");
-  }
-  private hasOnlyKeys(
-    p: Record<string, unknown>,
-    allowed: readonly string[],
-  ): boolean {
-    return Object.keys(p).every((k) => allowed.includes(k));
-  }
-
   private checkParams(
     method: string,
     rawParams: unknown,
   ): Record<string, unknown> | null {
-    const p =
-      typeof rawParams === "object" &&
-      rawParams !== null &&
-      !Array.isArray(rawParams)
-        ? (rawParams as Record<string, unknown>)
-        : {};
+    if (
+      typeof rawParams !== "object" ||
+      rawParams === null ||
+      Array.isArray(rawParams)
+    )
+      return null;
+    const p = rawParams as Record<string, unknown>;
+    const actorNames = new Set(this.store.listAgents().map((a) => a.name));
+    let check: ((v: unknown) => string | null) | null = null;
     switch (method) {
       case "operation.get":
-        return typeof p.key === "string" && isValidRequestKey(p.key)
-          ? { key: p.key }
-          : null;
+        check = operationGetParamsCheck;
+        break;
       case "status.get":
-        if (!this.hasOnlyKeys(p, ["agent"])) return null;
-        if (p.agent === undefined) return {};
-        return typeof p.agent === "string" && isValidActorName(p.agent)
-          ? { agent: p.agent }
-          : null;
+        check = statusGetParamsCheck;
+        break;
       case "mail.ack":
-        return typeof p.message === "string" &&
-          /^m-[0-9a-f-]{36}-\d+$/.test(p.message)
-          ? { message: p.message }
-          : null;
+        check = mailAckParamsCheck;
+        break;
       case "route.follow":
       case "route.unfollow":
-        return typeof p.topic === "string" && isValidTopicName(p.topic)
-          ? { topic: p.topic }
-          : null;
+        check = routeParamsCheck;
+        break;
       case "agent.start":
       case "agent.stop":
-        return typeof p.agent === "string" && isValidActorName(p.agent)
-          ? { agent: p.agent }
-          : null;
+        check = agentActionParamsCheck;
+        break;
       case "agent.continue":
-        return typeof p.note === "string" &&
-          p.note.length > 0 &&
-          p.note.length <= 65536
-          ? { note: p.note }
-          : null;
+        check = agentContinueParamsCheck;
+        break;
       case "agent.create":
-        // MUST [CREATE-001]: only name/from/brief; profile/capabilities are forbidden
-        if (Object.keys(p).some((k) => !["name", "from", "brief"].includes(k)))
-          return null;
-        if (typeof p.name !== "string" || !isValidActorName(p.name))
-          return null;
-        if (
-          typeof p.from !== "string" ||
-          !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(p.from)
-        )
-          return null;
-        if (
-          typeof p.brief !== "string" ||
-          p.brief.length === 0 ||
-          p.brief.length > 8192
-        )
-          return null;
-        return { name: p.name, from: p.from, brief: p.brief };
-      case "mail.send": {
-        // mail.send enters through MailModule.send which revalidates shape+limits
-        return p;
-      }
+        check = agentCreateParamsCheck;
+        break;
       case "agent.wait":
-        return Object.keys(p).length === 0 ? {} : null;
+        check = agentWaitParamsCheck;
+        break;
+      case "mail.send":
+        check = mailParamsCheck(actorNames, this.limits);
+        break;
       case "git.known":
-        if (!this.hasOnlyKeys(p, ["candidate"])) return null;
-        return this.fullOid(p.candidate) ? { candidate: p.candidate } : null;
-      case "git.submit": {
-        const b = p.bundle as Record<string, unknown> | undefined;
-        if (
-          !this.hasOnlyKeys(p, [
-            "candidate",
-            "exportRef",
-            "prerequisites",
-            "to",
-            "subject",
-            "body",
-            "paths",
-            "bundle",
-          ])
-        )
-          return null;
-        const bundleOk =
-          b === undefined ||
-          (typeof b === "object" &&
-            b !== null &&
-            this.safePosInt(b.bytes) &&
-            typeof b.sha256 === "string" &&
-            b.sha256.length === 64 &&
-            typeof b.mediaType === "string");
-        return this.fullOid(p.candidate) &&
-          typeof p.exportRef === "string" &&
-          Array.isArray(p.prerequisites) &&
-          p.prerequisites.every((x) => this.fullOid(x)) &&
-          this.stringArray(p.to) &&
-          typeof p.subject === "string" &&
-          typeof p.body === "string" &&
-          this.stringArray(p.paths) &&
-          bundleOk
-          ? {
-              candidate: p.candidate,
-              exportRef: p.exportRef,
-              prerequisites: p.prerequisites,
-              to: p.to,
-              subject: p.subject,
-              body: p.body,
-              paths: p.paths,
-              bundle: b as unknown,
-            }
-          : null;
-      }
+        check = checkObject({ candidate: checkOid });
+        break;
+      case "git.submit":
+        check = gitSubmitParamsCheck(actorNames, this.limits);
+        break;
       case "git.integrate":
-        if (!this.hasOnlyKeys(p, ["candidate", "expected"])) return null;
-        return this.fullOid(p.candidate) && this.fullOid(p.expected)
-          ? { candidate: p.candidate, expected: p.expected }
-          : null;
-      case "context.publish": {
-        if (!this.hasOnlyKeys(p, ["expected", "entries", "content"]))
-          return null;
-        const entries = p.entries;
-        const content = p.content as Record<string, unknown> | null;
-        const entriesOk =
-          Array.isArray(entries) &&
-          entries.every(
-            (e) =>
-              typeof e === "object" &&
-              e !== null &&
-              !Array.isArray(e) &&
-              this.hasOnlyKeys(e as Record<string, unknown>, [
-                "path",
-                "bytes",
-                "sha256",
-              ]) &&
-              typeof (e as Record<string, unknown>).path === "string" &&
-              this.safePosInt((e as Record<string, unknown>).bytes) &&
-              typeof (e as Record<string, unknown>).sha256 === "string" &&
-              ((e as Record<string, unknown>).sha256 as string).length === 64,
-          );
-        const contentOk =
-          typeof content === "object" &&
-          content !== null &&
-          this.safePosInt(content.bytes) &&
-          typeof content.sha256 === "string" &&
-          content.sha256.length === 64 &&
-          typeof content.mediaType === "string";
-        const expectedOk = p.expected === null || this.fullOid(p.expected);
-        return entriesOk && contentOk && expectedOk
-          ? {
-              expected: p.expected as string | null,
-              entries: entries as unknown,
-              content: content as unknown,
-            }
-          : null;
-      }
+        check = gitIntegrateParamsCheck;
+        break;
+      case "context.publish":
+        check = contextPublishParamsCheck(this.limits);
+        break;
       case "logs.read":
-        if (!this.hasOnlyKeys(p, ["agent", "sinceSeconds"])) return null;
-        return typeof p.agent === "string" &&
-          isValidActorName(p.agent) &&
-          this.safePosInt(p.sinceSeconds)
-          ? { agent: p.agent, sinceSeconds: p.sinceSeconds }
-          : null;
+        check = logsReadParamsCheck;
+        break;
       default:
         return null;
     }
+    return check(p) === null ? p : null;
   }
 
   /** MUST [IPC-009]: dispatch only the closed public method set. */
@@ -613,18 +626,57 @@ export class Broker {
     req: Request,
     stream: AsyncIterable<Uint8Array> | null,
   ): Promise<object> {
-    const id = req.id;
-    // SAFETY: the frame parser already rejected non-object roots; the method key
-    // is narrowed by the switch below and params are runtime-checked.
-    const method = (req as unknown as { method: string }).method;
-    // SAFETY: params shape is runtime-checked by checkParams() before use;
-    // the cast only widens the envelope so the validator can read it.
+    // SAFETY: serveFrames only calls dispatch after FrameParser has rejected
+    // non-object roots; this cast exposes the closed envelope for validation.
     const envelope = req as unknown as Record<string, unknown>;
+    const id = typeof envelope.id === "string" ? envelope.id : "x";
+    const method =
+      typeof envelope.method === "string" ? envelope.method : "";
+    // MUST [IPC-001]/[IPC-009]: reject malformed or extended envelopes.
+    if (
+      typeof envelope.id !== "string" ||
+      typeof envelope.method !== "string" ||
+      !Object.keys(envelope).every((k) =>
+        ["v", "id", "method", "params", "request"].includes(k),
+      )
+    ) {
+      return Broker.errorAnswer(id, {
+        code: "INVALID_REQUEST",
+        message: "invalid request envelope",
+        retry: "never",
+      });
+    }
+    // SAFETY: the frame parser rejected non-object roots; the cast only widens
+    // the envelope so the closed-schema validator can inspect it.
+    if (
+      auth.channel === "actor" &&
+      this.store.getAgent(auth.actor)?.incarnation !== auth.incarnation
+    ) {
+      return Broker.errorAnswer(id, {
+        code: "STALE_RUN",
+        message: "actor incarnation is stale",
+        retry: "never",
+      });
+    }
     // MUST [IPC-001]: envelope version must be 1.
     if (envelope.v !== 1) {
       return Broker.errorAnswer(id, {
         code: "UNSUPPORTED_VERSION",
         message: "unsupported protocol version",
+        retry: "never",
+      });
+    }
+    if (!KNOWN_METHODS.has(method)) {
+      return Broker.errorAnswer(id, {
+        code: "UNKNOWN_METHOD",
+        message: `unknown method ${method}`,
+        retry: "never",
+      });
+    }
+    if (MUTATION_METHODS.has(method) && !isValidRequestKey(envelope.request)) {
+      return Broker.errorAnswer(id, {
+        code: "INVALID_REQUEST",
+        message: "mutation requires a valid request key",
         retry: "never",
       });
     }
@@ -635,10 +687,23 @@ export class Broker {
       method === "logs.read" ||
       method === "git.known" ||
       method === "agent.wait";
-    if (readOrEphemeral && envelope.request !== undefined) {
+    if (
+      readOrEphemeral &&
+      Object.prototype.hasOwnProperty.call(envelope, "request")
+    ) {
       return Broker.errorAnswer(id, {
         code: "INVALID_REQUEST",
         message: "read/ephemeral requests forbid a top-level request key",
+        retry: "never",
+      });
+    }
+    // MUST [AUTH-002]: capability enforcement at the trust boundary — the
+    // method's required capability must be in the connection's resolved set.
+    const need = METHOD_CAPABILITY[method as PublicMethod];
+    if (need && !auth.capabilities.has(need)) {
+      return Broker.errorAnswer(id, {
+        code: "CAPABILITY_DENIED",
+        message: `missing capability ${need}`,
         retry: "never",
       });
     }
@@ -695,6 +760,7 @@ export class Broker {
             this.lifecycle.ack(
               auth,
               (params as { message: string }).message as never,
+              keyOf(req),
             ),
           );
         case "route.follow":
@@ -704,6 +770,7 @@ export class Broker {
               auth,
               (params as { topic: string }).topic,
               true,
+              keyOf(req),
             ),
           );
         case "route.unfollow":
@@ -713,6 +780,7 @@ export class Broker {
               auth,
               (params as { topic: string }).topic,
               false,
+              keyOf(req),
             ),
           );
         case "agent.start":
@@ -746,7 +814,13 @@ export class Broker {
               subject: "continue",
               kind: "message",
               body: (params as { note: string }).note,
-            }),
+            },
+            undefined,
+            {
+              kind: "agent.continue",
+              params: { note: (params as { note: string }).note },
+            },
+          ),
           );
         case "agent.wait":
           return Broker.okAnswer(id, { accepted: true }); // memory intent; runner applies at the safe boundary
@@ -782,8 +856,6 @@ export class Broker {
               auth,
               keyOf(req),
               { candidate: p.candidate, expected: p.expected },
-              "policy-rev-1",
-              [],
             ),
           );
         }
@@ -815,9 +887,9 @@ export class Broker {
               "--no-pager",
               "--output=cat",
             ],
-            { encoding: "utf8", maxBuffer: 1024 * 1024 },
+            { encoding: "utf8", maxBuffer: this.limits.logBytes },
           );
-          const text = (r.stdout ?? "").slice(0, logLimit());
+          const text = (r.stdout ?? "").slice(0, this.limits.logBytes);
           return Broker.okAnswer(id, {
             text,
             truncated: (r.stdout ?? "").length > text.length,
@@ -848,7 +920,8 @@ export class Broker {
     const unit = unitName(this.paths.society, agent, "service");
     const unitCg = this.units.observe(agent).cgroup;
     const peerCg = peerCgroup(pid);
-    if (!unitCg || !peerCg || !peerCg.startsWith(unitCg)) {
+    const prefix = unitCg?.endsWith("/") ? unitCg : `${unitCg}/`;
+    if (!unitCg || !peerCg || (peerCg !== unitCg && !peerCg.startsWith(prefix))) {
       throw new StoreError("AUTH_FAILED", `caller is not inside ${unit}`);
     }
   }
@@ -858,9 +931,27 @@ export class Broker {
     peer: { pid: number; uid: number; gid: number },
     _stream: AsyncIterable<Uint8Array> | null, // IPC-011: internal channel has no body streams
   ): Promise<object> {
-    const method = raw.method as string;
-    const params = (raw.params ?? {}) as Record<string, unknown>;
     const id = typeof raw.id === "string" ? raw.id : "x";
+    const method = typeof raw.method === "string" ? raw.method : "";
+    const paramsRaw = raw.params;
+    if (
+      raw.v !== 1 ||
+      typeof raw.id !== "string" ||
+      typeof raw.method !== "string" ||
+      typeof paramsRaw !== "object" ||
+      paramsRaw === null ||
+      Array.isArray(paramsRaw) ||
+      !Object.keys(raw).every((k) =>
+        ["v", "id", "method", "params"].includes(k),
+      )
+    ) {
+      return Broker.errorAnswer(id, {
+        code: "INVALID_REQUEST",
+        message: "invalid internal envelope",
+        retry: "never",
+      });
+    }
+    const params = paramsRaw as Record<string, unknown>;
     switch (method) {
       case "runner.open": {
         if (
@@ -1031,7 +1122,7 @@ export class Broker {
       incarnation,
       role: row?.role ?? "resident",
       channel: "trusted-runner",
-      capabilities: new Set<Capability>(["mail.send", "agent.manage.self"]),
+      capabilities: capabilitiesOf(row ?? { specJson: "{}" }),
       peer: { pid: 0, uid: -1, gid: -1, cgroup: null },
     };
   }
@@ -1111,12 +1202,8 @@ function emptyStream(): AsyncIterable<Uint8Array> {
   })();
 }
 
-function logLimit(): number {
-  return 1024 * 1024; // VIEW-003 default 1 MiB
-}
-
 function keyOf(req: { request?: string }): string {
-  if (typeof req.request !== "string" || req.request.length === 0) {
+  if (!isValidRequestKey(req.request)) {
     throw new StoreError("INVALID_REQUEST", "mutation requires a request key");
   }
   return req.request;
@@ -1149,24 +1236,17 @@ function receiptOfRow(op: {
   return rec;
 }
 
-function relevantCapabilities(agent: {
-  role: string;
-  desired: string;
-}): ReadonlySet<Capability> {
-  if (agent.role === "principal") {
-    return new Set<Capability>([
-      "mail.send",
-      "route.follow",
-      "context.publish",
-    ]);
-  }
-  return new Set<Capability>([
-    "mail.send",
-    "route.follow",
-    "agent.manage.self",
-    "git.submit",
-  ]);
-}
+/** MUST [AUTH-002]: method -> required capability, enforced at dispatch. */
+const METHOD_CAPABILITY: Readonly<Partial<Record<PublicMethod, Capability>>> = {
+  "mail.send": "mail.send",
+  "route.follow": "route.follow",
+  "route.unfollow": "route.follow",
+  "agent.create": "agent.create",
+  "agent.continue": "mail.send",
+  "git.submit": "git.submit",
+  "git.integrate": "code.integrate",
+  "context.publish": "context.publish",
+};
 
 const receiptNotFound: Receipt = {
   operation: "",
@@ -1195,4 +1275,18 @@ const KNOWN_METHODS: ReadonlySet<string> = new Set([
   "operation.get",
   "status.get",
   "logs.read",
+]);
+
+const MUTATION_METHODS: ReadonlySet<string> = new Set([
+  "mail.send",
+  "mail.ack",
+  "route.follow",
+  "route.unfollow",
+  "agent.create",
+  "agent.start",
+  "agent.stop",
+  "agent.continue",
+  "git.submit",
+  "git.integrate",
+  "context.publish",
 ]);

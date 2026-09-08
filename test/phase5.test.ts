@@ -120,6 +120,47 @@ function seed(store: Store, specs: Array<[string, string, string]>): void {
     }
   });
 }
+test("AUTH-002: durable effect requires the resolved method capability", async () => {
+  const env = envOf();
+  try {
+    seed(env.store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
+    const auth = (capabilities: Capability[]): AuthContext => ({
+      actor: "a",
+      incarnation: 0,
+      role: "resident",
+      channel: "actor",
+      capabilities: new Set(capabilities),
+      peer: { pid: 0, uid: -1, gid: -1, cgroup: null },
+    });
+    const params = { to: ["b"], subject: "s", kind: "message", body: "body" };
+    const denied = await env.broker.dispatch(
+      auth(["route.follow"]),
+      { v: 1, id: "deny", method: "mail.send", request: "deny", params } as never,
+      null,
+    );
+    assert.equal((denied as { ok: boolean; error?: { code: string } }).ok, false);
+    assert.equal((denied as { error?: { code: string } }).error?.code, "CAPABILITY_DENIED");
+    assert.equal(env.store.getOperation("a", "deny"), null);
+    const allowed = await env.broker.dispatch(
+      auth(["mail.send"]),
+      { v: 1, id: "allow", method: "mail.send", request: "allow", params } as never,
+      null,
+    );
+    assert.equal((allowed as { ok: boolean }).ok, true);
+    assert.equal(env.store.getOperation("a", "allow")?.state, "succeeded");
+    for (const [method, capability] of [["agent.create", "agent.create"], ["git.integrate", "code.integrate"], ["context.publish", "context.publish"]] as const) {
+      const deniedMethod = await env.broker.dispatch(
+        auth(["mail.send"]),
+        { v: 1, id: method, method, request: method, params: {} } as never,
+        null,
+      );
+      assert.equal((deniedMethod as { error?: { code: string } }).error?.code, "CAPABILITY_DENIED", `${method} must require ${capability}`);
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 
 function adminCall(
   adminSock: string,
