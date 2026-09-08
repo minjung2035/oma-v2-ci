@@ -78,4 +78,30 @@ export class RequestCache {
     writeFileSync(tmp, JSON.stringify(entry), "utf8");
     renameSync(tmp, this.path(entry.key));
   }
+
+  /** MUST [IPC-008]: durable body path for streamed mutations — the exact bytes
+   * frozen at preaccept are persisted so `--request` recovery reproduces the
+   * SAME bytes instead of rebuilding them from mutable current state. */
+  bodyPath(key: RequestKey): string {
+    return join(this.dir(), `${key}.body`);
+  }
+
+  persistBody(key: RequestKey, bytes: Uint8Array): void {
+    const dir = this.dir();
+    mkdirSync(dir, { recursive: true });
+    const p = this.bodyPath(key);
+    const tmp = join(dir, `.${key}.body.tmp`);
+    writeFileSync(tmp, bytes);
+    renameSync(tmp, p);
+  }
+
+  readBody(key: RequestKey): Uint8Array | null {
+    const p = this.bodyPath(key);
+    if (!existsSync(p)) return null;
+    try {
+      return new Uint8Array(readFileSync(p));
+    } catch {
+      return null;
+    }
+  }
 }

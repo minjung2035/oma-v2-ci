@@ -208,6 +208,42 @@ test("T05: malicious frames are rejected pre-accept with bounded effect", () => 
   assert.throws(() => p5.feed(nan), /non-finite literal|malformed JSON/);
 });
 
+test("P1-9: NaN/Infinity as string values are accepted; invalid numeric literals rejected", () => {
+  // IPC-001: only invalid JSON numeric literals are rejected by JSON.parse;
+  // a substring check must not reject legitimate string values.
+  const mk = (body: string): Buffer => {
+    const payload = JSON.stringify({ body });
+    const buf = Buffer.alloc(4 + Buffer.byteLength(payload));
+    buf.writeUInt32BE(Buffer.byteLength(payload), 0);
+    buf.write(payload, 4, "utf8");
+    return buf;
+  };
+  const p = new FrameParser(256);
+  const f = p.feed(mk("Infinity is a concept and NaN is a number"));
+  assert.equal(f.length, 1);
+  assert.equal(
+    (f[0]!.raw as { body: string }).body,
+    "Infinity is a concept and NaN is a number",
+  );
+  const p2 = new FrameParser(256);
+  const f2 = p2.feed(mk("NaN"));
+  assert.equal(f2.length, 1);
+  assert.equal((f2[0]!.raw as { body: string }).body, "NaN");
+  // a real invalid numeric literal (bare NaN) is still rejected by JSON.parse
+  const nan = Buffer.concat([
+    Buffer.from([0, 0, 0, 6]),
+    Buffer.from('{"a":NaN}'),
+  ]);
+  const p3 = new FrameParser(64);
+  assert.throws(() => p3.feed(nan), /malformed JSON|non-finite/);
+  const inf = Buffer.concat([
+    Buffer.from([0, 0, 0, 12]),
+    Buffer.from('{"a":Infinity}'),
+  ]);
+  const p4 = new FrameParser(64);
+  assert.throws(() => p4.feed(inf), /malformed JSON|non-finite/);
+});
+
 test("T07: same actor/key/payload converges to one operation with identical receipts (unique constraint)", () => {
   const { store, dir } = freshStore();
   insertAgentTx(store, "a");

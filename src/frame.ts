@@ -137,9 +137,6 @@ export class FrameParser {
     } catch {
       throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in frame");
     }
-    if (text.includes("NaN") || text.includes("Infinity")) {
-      throw new FrameError("INVALID_REQUEST", "non-finite literal in frame");
-    }
     const dup = findDuplicateKey(text);
     if (dup !== null)
       throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${dup}"`);
@@ -244,6 +241,30 @@ export class ConnectionDecoder {
     const events: DecoderEvent[] = [];
     this.drain(events);
     return events;
+  }
+
+  /**
+   * MUST [IPC-002]: after a raw stream completes, classify any leftover bytes:
+   *  - "clean": empty, or an incomplete partial frame (wait for more bytes);
+   *  - "next": a complete, valid follow-up frame (legitimate next request);
+   *  - "excess": >=4 bytes that cannot be a valid frame (the peer sent more
+   *    raw than declared). The broker MUST reject excess BEFORE dispatching
+   *    the mutation so a truncated/excess stream can never succeed.
+   * Uses a throwaway parser so this probe never mutates connection state.
+   */
+  excessStatus(): "clean" | "next" | "excess" {
+    if (this.queue.length < 4) return "clean";
+    const len = this.queue.readUInt32BE(0);
+    if (len > this.maxFrameBytes) return "excess";
+    if (this.queue.length < 4 + len) return "clean"; // partial next frame
+    const slice = this.queue.subarray(0, 4 + len);
+    const probe = new FrameParser(this.maxFrameBytes);
+    try {
+      const frames = probe.feed(slice);
+      return frames.length > 0 ? "next" : "clean";
+    } catch {
+      return "excess";
+    }
   }
 
   /** continue parsing after the broker decided the previous frame opened no stream. */

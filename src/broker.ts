@@ -217,6 +217,24 @@ export class Broker {
    * immediately by the next control frame. Connection-local state only: two
    * concurrent uploads on different sockets never share stream bytes.
    */
+  /**
+   * MUST [IPC-001/002/011]: framed stream server. Requests and responses are
+   * uint32 BE length + UTF-8 JSON (identical on the public actor channel and
+   * the internal runner channel).
+   *
+   * IPC-002 one-request-at-a-time: a single control connection dispatches at
+   * most ONE request at a time and only STARTS the next request after the
+   * current one has fully settled (response boundary written). Frames are
+   * decoded as they arrive (the decoder may buffer bytes), but dispatch is
+   * serialized per connection via a FIFO unit queue — request B can never
+   * overtake request A, and errors from A cannot corrupt B's state. Different
+   * connections run concurrently (no shared dispatch state).
+   *
+   * Streams: a metadata frame with a descriptor switches THIS connection to
+   * raw collection of exactly descriptor.bytes. On completion the broker
+   * checks for excess raw (excessStatus) and rejects STREAM_INVALID BEFORE
+   * dispatching, so a truncated/excess stream never succeeds.
+   */
   private serveFrames(
     sock: Socket,
     handle: (
@@ -227,23 +245,52 @@ export class Broker {
     const dec = new ConnectionDecoder(256 * 1024);
     const write = (obj: unknown) => sock.write(encodeFrame(obj));
     let streamFrame: { raw: Record<string, unknown>; id: string } | null = null;
+    let busy = false;
+    const units: Array<{
+      raw: Record<string, unknown>;
+      id: string;
+      bytes: Uint8Array | null;
+      retry: "never" | "same-key";
+    }> = [];
 
     const respond = (
       id: string,
       p: Promise<unknown> | unknown,
       retry: "never" | "same-key",
-    ): void => {
-      Promise.resolve(p).then(
-        (r) => write(r),
-        (e) =>
+    ): Promise<void> => {
+      return Promise.resolve(p).then(
+        (r) => {
+          write(r);
+        },
+        (e) => {
           write(
             Broker.errorAnswer(id, {
               code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
               message: (e as Error).message,
               retry,
             }),
-          ),
+          );
+        },
       );
+    };
+
+    /** MUST [IPC-002]: dispatch one unit; resume parsing only after it settles. */
+    const pump = (): void => {
+      if (busy) return;
+      const u = units.shift();
+      if (!u) return;
+      busy = true;
+      const iter = u.bytes
+        ? (async function* () {
+            yield u.bytes!;
+          })()
+        : null;
+      respond(u.id, handle(u.raw, iter), u.retry).finally(() => {
+        busy = false;
+        const more = dec.resumeParsing();
+        processEvents(more);
+        pump();
+      });
     };
 
     const processEvents = (
@@ -264,10 +311,26 @@ export class Broker {
           const sf = streamFrame;
           streamFrame = null;
           if (!sf) continue;
-          const bytes = (async function* () {
-            yield ev.bytes;
-          })();
-          respond(sf.id, handle(sf.raw, bytes), "same-key");
+          // MUST [IPC-002]: excess raw after the declared length rejects
+          // pre-dispatch; the mutation must not succeed on a truncated/excess
+          // stream.
+          if (dec.excessStatus() === "excess") {
+            write(
+              Broker.errorAnswer(sf.id, {
+                code: "STREAM_INVALID",
+                message: "stream exceeds descriptor.bytes",
+                retry: "same-key",
+              }),
+            );
+            sock.destroy();
+            return;
+          }
+          units.push({
+            raw: sf.raw,
+            id: sf.id,
+            bytes: ev.bytes,
+            retry: "same-key",
+          });
           continue;
         }
         const raw = ev.frame.raw as Record<string, unknown>;
@@ -304,16 +367,14 @@ export class Broker {
           if (more.length > 0) processEvents(more);
           continue;
         }
-        respond(id, handle(raw, null), "never");
-        // MUST [IPC-002]: one frame per drain; parse the next one now that the
-        // broker has decided this frame opens no stream.
-        const more = dec.resumeParsing();
-        if (more.length > 0) processEvents(more);
-        return;
+        units.push({ raw, id, bytes: null, retry: "never" });
       }
     };
 
-    sock.on("data", (chunk: Buffer) => processEvents(dec.push(chunk)));
+    sock.on("data", (chunk: Buffer) => {
+      processEvents(dec.push(chunk));
+      pump();
+    });
     sock.on("end", () => {
       if (dec.streaming()) {
         write(
@@ -361,6 +422,23 @@ export class Broker {
   }
 
   /** MUST [M-003]/[IPC-009]: runtime params validation at the trust boundary. */
+  /** small closed-schema helpers for the IPC-001 runtime validators. */
+  private fullOid(v: unknown): v is string {
+    return typeof v === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(v);
+  }
+  private safePosInt(v: unknown): v is number {
+    return typeof v === "number" && Number.isSafeInteger(v) && v > 0;
+  }
+  private stringArray(v: unknown): v is string[] {
+    return Array.isArray(v) && v.every((x) => typeof x === "string");
+  }
+  private hasOnlyKeys(
+    p: Record<string, unknown>,
+    allowed: readonly string[],
+  ): boolean {
+    return Object.keys(p).every((k) => allowed.includes(k));
+  }
+
   private checkParams(
     method: string,
     rawParams: unknown,
@@ -377,9 +455,10 @@ export class Broker {
           ? { key: p.key }
           : null;
       case "status.get":
-        return p.agent === undefined ||
-          (typeof p.agent === "string" && isValidActorName(p.agent))
-          ? {}
+        if (!this.hasOnlyKeys(p, ["agent"])) return null;
+        if (p.agent === undefined) return {};
+        return typeof p.agent === "string" && isValidActorName(p.agent)
+          ? { agent: p.agent }
           : null;
       case "mail.ack":
         return typeof p.message === "string" &&
@@ -427,40 +506,40 @@ export class Broker {
       case "agent.wait":
         return Object.keys(p).length === 0 ? {} : null;
       case "git.known":
-        return { candidate: p.candidate }; // candidate checked by the module
+        if (!this.hasOnlyKeys(p, ["candidate"])) return null;
+        return this.fullOid(p.candidate) ? { candidate: p.candidate } : null;
       case "git.submit": {
-        const b = p.bundle;
+        const b = p.bundle as Record<string, unknown> | undefined;
         if (
-          Object.keys(p).some(
-            (k) =>
-              ![
-                "candidate",
-                "exportRef",
-                "prerequisites",
-                "to",
-                "subject",
-                "body",
-                "paths",
-                "bundle",
-              ].includes(k),
-          )
+          !this.hasOnlyKeys(p, [
+            "candidate",
+            "exportRef",
+            "prerequisites",
+            "to",
+            "subject",
+            "body",
+            "paths",
+            "bundle",
+          ])
         )
           return null;
-        return typeof p.candidate === "string" &&
-          /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(p.candidate) &&
+        const bundleOk =
+          b === undefined ||
+          (typeof b === "object" &&
+            b !== null &&
+            this.safePosInt(b.bytes) &&
+            typeof b.sha256 === "string" &&
+            b.sha256.length === 64 &&
+            typeof b.mediaType === "string");
+        return this.fullOid(p.candidate) &&
           typeof p.exportRef === "string" &&
           Array.isArray(p.prerequisites) &&
-          p.prerequisites.every((x: unknown) => typeof x === "string") &&
-          Array.isArray(p.to) &&
-          p.to.every((x: unknown) => typeof x === "string") &&
+          p.prerequisites.every((x) => this.fullOid(x)) &&
+          this.stringArray(p.to) &&
           typeof p.subject === "string" &&
           typeof p.body === "string" &&
-          Array.isArray(p.paths) &&
-          (b === undefined ||
-            (typeof b === "object" &&
-              b !== null &&
-              typeof (b as Record<string, unknown>).bytes === "number" &&
-              typeof (b as Record<string, unknown>).sha256 === "string"))
+          this.stringArray(p.paths) &&
+          bundleOk
           ? {
               candidate: p.candidate,
               exportRef: p.exportRef,
@@ -474,18 +553,41 @@ export class Broker {
           : null;
       }
       case "git.integrate":
-        return typeof p.candidate === "string" && typeof p.expected === "string"
+        if (!this.hasOnlyKeys(p, ["candidate", "expected"])) return null;
+        return this.fullOid(p.candidate) && this.fullOid(p.expected)
           ? { candidate: p.candidate, expected: p.expected }
           : null;
       case "context.publish": {
+        if (!this.hasOnlyKeys(p, ["expected", "entries", "content"]))
+          return null;
         const entries = p.entries;
-        const content = p.content;
-        return Array.isArray(entries) &&
+        const content = p.content as Record<string, unknown> | null;
+        const entriesOk =
+          Array.isArray(entries) &&
+          entries.every(
+            (e) =>
+              typeof e === "object" &&
+              e !== null &&
+              !Array.isArray(e) &&
+              this.hasOnlyKeys(e as Record<string, unknown>, [
+                "path",
+                "bytes",
+                "sha256",
+              ]) &&
+              typeof (e as Record<string, unknown>).path === "string" &&
+              this.safePosInt((e as Record<string, unknown>).bytes) &&
+              typeof (e as Record<string, unknown>).sha256 === "string" &&
+              ((e as Record<string, unknown>).sha256 as string).length === 64,
+          );
+        const contentOk =
           typeof content === "object" &&
           content !== null &&
-          typeof (content as Record<string, unknown>).bytes === "number" &&
-          typeof (content as Record<string, unknown>).sha256 === "string" &&
-          (p.expected === null || typeof p.expected === "string")
+          this.safePosInt(content.bytes) &&
+          typeof content.sha256 === "string" &&
+          content.sha256.length === 64 &&
+          typeof content.mediaType === "string";
+        const expectedOk = p.expected === null || this.fullOid(p.expected);
+        return entriesOk && contentOk && expectedOk
           ? {
               expected: p.expected as string | null,
               entries: entries as unknown,
@@ -494,10 +596,10 @@ export class Broker {
           : null;
       }
       case "logs.read":
+        if (!this.hasOnlyKeys(p, ["agent", "sinceSeconds"])) return null;
         return typeof p.agent === "string" &&
           isValidActorName(p.agent) &&
-          typeof p.sinceSeconds === "number" &&
-          p.sinceSeconds > 0
+          this.safePosInt(p.sinceSeconds)
           ? { agent: p.agent, sinceSeconds: p.sinceSeconds }
           : null;
       default:
@@ -517,6 +619,31 @@ export class Broker {
     const method = (req as unknown as { method: string }).method;
     // SAFETY: params shape is runtime-checked by checkParams() before use;
     // the cast only widens the envelope so the validator can read it.
+    const envelope = req as unknown as Record<string, unknown>;
+    // MUST [IPC-001]: envelope version must be 1.
+    if (envelope.v !== 1) {
+      return Broker.errorAnswer(id, {
+        code: "UNSUPPORTED_VERSION",
+        message: "unsupported protocol version",
+        retry: "never",
+      });
+    }
+    // MUST [IPC-004]: read/ephemeral requests forbid the top-level request key.
+    const readOrEphemeral =
+      method === "operation.get" ||
+      method === "status.get" ||
+      method === "logs.read" ||
+      method === "git.known" ||
+      method === "agent.wait";
+    if (readOrEphemeral && envelope.request !== undefined) {
+      return Broker.errorAnswer(id, {
+        code: "INVALID_REQUEST",
+        message: "read/ephemeral requests forbid a top-level request key",
+        retry: "never",
+      });
+    }
+    // SAFETY: the FrameParser rejected non-object roots; the cast only widens
+    // the envelope so the closed-schema validator (checkParams) can read it.
     const rawParams = (req as unknown as { params: unknown }).params;
     const params = this.checkParams(method, rawParams);
     if (!params) {
@@ -545,7 +672,8 @@ export class Broker {
               execMainStatus: o.execMainStatus,
             };
           };
-          return Broker.okAnswer(id, await this.views.status(undefined, obs));
+          const agent = (params as { agent?: string }).agent;
+          return Broker.okAnswer(id, await this.views.status(agent, obs));
         }
         case "operation.get": {
           const op = this.store.getOperation(

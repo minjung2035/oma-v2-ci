@@ -47,7 +47,9 @@
 | T03 | ✅ | phase2 "T03: invalid enum…" | |
 | T04 | ✅ | phase2 "T04: frame reconstruction…" + audit A1/A3 | |
 | T05 | ✅ | phase2 "T05: malicious frames…" + audit B1(UNKNOWN_METHOD framed) | |
-| T06 | ◐ | audit A4(short/excess), cli 시나리오 7(recovery) | broker socket의 submit hash-mismatch preaccept 미단독 검증 |
+| T06 | ✅ | audit A4(decoder) + audit2 (실 socket: exact/short+EOF/excess-garbage/coalesced/split; excess는 STREAM_INVALID로 mutation 미성공) | |
+| T05 | ✅ | phase2 + audit B1 + audit2 neg-* (unknown field/OID/version/read-request) | |
+| T73 | ✅ | cli.test (실 systemd 유닛 + 실 socket) | + P1-4/5/6: submit/context frozen-first, agent create --from HEAD, submit --to 다중/기본 |
 | T07 | ✅ | phase2 "T07: same actor/key/payload…" | |
 | T08 | ✅ | phase2 "T08: REQUEST_KEY_REUSED" + cli 시나리오 3(exit 2) | |
 | T09 | ◐ | cli 시나리오 6+7(dead socket → operation.get miss → replay) | "accepted 뒤 response kill" 정확 재현 아님 |
@@ -92,3 +94,18 @@
 | T77 | ❌ | — | S-09 gate (평가 corpus 없음) |
 
 unresolved 요약: T12,T23,T24,T26–T28,T33–T35,T39–T41,T43,T44,T46,T47,T52,T57,T58,T62–T64,T66,T70–T72,T77 → 환경(격리 Human session, provider credential, 전원장애 VM, evaluation corpus, notmuch/approval 정책) 또는 미구현 테스트 부재. TEST-003/TEST-004에서 요구하는 kill 지점(T27/T30/T39/T57/T58/T63/T66)은 해당 SPIKE(S-03/S-05/S-06) 결과가 확정된 뒤 실행하며, 미실행 항목은 어떤 방식으로도 PASS로 계산하지 않는다.
+
+## 2nd runtime-correctness audit (2026-09-08) — P0-1/2/3 + P1-4..9
+
+실 socket E2E(test/audit2.test.ts, cgroup-authenticated actor 채널)로 확정·수정:
+- **P0-1** IPC-002 per-connection 직렬화: `serveFrames`가 이전 handle()이 settle되기 전에 resumeParsing으로 다음 요청을 dispatch하던 것 수정 → connection-local FIFO 유닛 큐(이전 요청 완료 후에만 다음 dispatch). `serialize`/`stream-then-next` 시나리오가 slow first 요청 뒤 fast 요청이 늦게 응답함을 증명.
+- **P0-2** exact raw stream 길이/초과: decoder가 descriptor.bytes만 소비하고 초과를 queue에 남겨 mutation 성공 후 재해석 → `excessStatus()` 추가, stream 완료 시 excess면 STREAM_INVALID pre-dispatch(테스트: excess-garbage는 STREAM_INVALID + op 미생성).
+- **P0-3** audit A5는 decoder byte 보존 테스트(규범적)로 유지; 브로커는 serialized dispatch로 다음 요청을 이전 완료 후에만 처리.
+- **P1-4** CLI `--request` frozen-first: submit/context가 복구 시 HEAD/파일을 재해석 → `effect()`(frozen params + persisted body 사용), 직접 비교 가능한 명시 인자 충돌만 REQUEST_KEY_REUSED. stream 바이트는 `<key>.body`로 영속.
+- **P1-5** `agent create --from HEAD`: 로컬 git rev를 전체 OID로 resolve 후 freeze, 전체 OID만 전송. HEAD 이동 후 복구는 frozen OID 유지.
+- **P1-6** `submit --to`: positional 파서에서 `--to` 누락 버그 → multiOpt, `--to a --to b` 및 기본 commons 테스트.
+- **P1-7** `status <agent>`: checkParams가 agent를 버리던 것 + dispatch `undefined` 하드코딩 수정 → 요청한 Resident만 반환(a/b 서로 다름 테스트).
+- **P1-8** closed runtime schemas: status.get/git.known/git.submit/git.integrate/context.publish/logs.read unknown-field·OID·safe-int·nested entries 검증 + envelope `v===1`(UNSUPPORTED_VERSION) + read/ephemeral top-level `request` 금지. audit2 neg-* 테스트.
+- **P1-9** FrameParser의 substring `NaN`/`Infinity` 거절 제거 → 문자열 값 허용, invalid numeric literal은 JSON.parse로 거절(phase2 P1-9 테스트).
+
+production LOC: 7848 → **8299** (필수 CLI + closed validators). 8,000 상한 **초과** — spec이 CLI(T73)와 closed schema(IPC-001)를 요구하면서 LOC 예산 8,000을 유지하는 내부 긴장으로, 기능 삭제 없이 해소 불가(정직 보고).

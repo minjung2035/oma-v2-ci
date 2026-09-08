@@ -222,6 +222,11 @@ if (!lease.ok) { writeFileSync(process.env.OMA_OUT, JSON.stringify({ leaseError:
 const sock = lease.result.socketHostPath;
 const results = [];
 for (const s of scenarios) {
+  if (s.git) {
+    const g = spawnSync("git", s.git, { cwd: s.cwd ?? "/tmp", encoding: "utf8" });
+    results.push({ git: s.git, code: g.status, stdout: g.stdout ?? "", stderr: g.stderr ?? "" });
+    continue;
+  }
   const r = spawnSync(process.execPath, [process.env.OMA_CLI, ...s.args], {
     cwd: s.cwd ?? "/tmp",
     env: { ...process.env, OMA_SOCKET: s.socket ?? sock, HOME: s.home ?? process.env.OMA_HOME, ...(s.env ?? {}) },
@@ -274,6 +279,8 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
     );
     const bodyFile = join(env.dir, "body.txt");
     writeFileSync(bodyFile, "hello body\n", "utf8");
+    const briefFile = join(env.dir, "brief.md");
+    writeFileSync(briefFile, "# checker brief\n", "utf8");
     const homeDir = join(env.dir, "home-a");
     mkdirSync(homeDir, { recursive: true });
     // scenarios (in one unit run; shared HOME = shared freeze cache)
@@ -347,6 +354,105 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
       },
       {
         args: ["submit", "HEAD", "--request", "ksub2"],
+        cwd: work,
+        home: homeDir,
+      },
+      // P1-6: --to parsing (single / repeatable / default commons)
+      {
+        args: ["submit", "HEAD", "--to", "a", "--request", "kto1"],
+        cwd: work,
+        home: homeDir,
+      },
+      {
+        args: ["submit", "HEAD", "--to", "a", "--to", "b", "--request", "kto2"],
+        cwd: work,
+        home: homeDir,
+      },
+      {
+        args: ["submit", "HEAD", "--request", "kto3"],
+        cwd: work,
+        home: homeDir,
+      },
+      // P1-5: agent create --from HEAD (resolved locally), then frozen recovery
+      {
+        args: [
+          "agent",
+          "create",
+          "checker",
+          "--from",
+          "HEAD",
+          "--file",
+          briefFile,
+          "--request",
+          "kfrom",
+        ],
+        cwd: work,
+        home: homeDir,
+      },
+      {
+        git: [
+          "-c",
+          "user.name=C",
+          "-c",
+          "user.email=c@localhost",
+          "commit",
+          "-qm",
+          "move-head",
+          "--allow-empty",
+        ],
+        cwd: work,
+      },
+      {
+        args: [
+          "agent",
+          "create",
+          "checker",
+          "--from",
+          "HEAD",
+          "--file",
+          briefFile,
+          "--request",
+          "kfrom",
+        ],
+        cwd: work,
+        home: homeDir,
+      },
+      {
+        args: [
+          "agent",
+          "create",
+          "checker2",
+          "--from",
+          "HEAD",
+          "--file",
+          briefFile,
+          "--request",
+          "kfrom2",
+        ],
+        cwd: work,
+        home: homeDir,
+      },
+      // P1-4: submit frozen-first after HEAD moves
+      {
+        args: ["submit", "HEAD", "--request", "ksubf"],
+        cwd: work,
+        home: homeDir,
+      },
+      {
+        git: [
+          "-c",
+          "user.name=C",
+          "-c",
+          "user.email=c@localhost",
+          "commit",
+          "-qm",
+          "move2",
+          "--allow-empty",
+        ],
+        cwd: work,
+      },
+      {
+        args: ["submit", "HEAD", "--request", "ksubf"],
         cwd: work,
         home: homeDir,
       },
@@ -513,6 +619,129 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
       ref2Oid,
       rec2.result.candidate,
       "recovered submit's ref must resolve to ITS candidate",
+    );
+
+    // ---- P1-6: submit --to parsing ----
+    const rTo1 = results[7]!;
+    assert.equal(
+      rTo1.code,
+      0,
+      `--to a submit failed: ${rTo1.stdout}${rTo1.stderr}`,
+    );
+    const rTo2 = results[8]!;
+    assert.equal(
+      rTo2.code,
+      0,
+      `--to a --to b submit failed: ${rTo2.stdout}${rTo2.stderr}`,
+    );
+    const rTo3 = results[9]!;
+    assert.equal(
+      rTo3.code,
+      0,
+      `no --to submit failed: ${rTo3.stdout}${rTo3.stderr}`,
+    );
+    // "--to" must never leak as a recipient: a's inbox got the kto1 result mail
+    const inboxA = join(env.state, "mail", "inboxes", "a", "new");
+    const inboxB = join(env.state, "mail", "inboxes", "b", "new");
+    const inboxCommons = join(env.state, "mail", "inboxes", "commons", "new");
+    const mA = existsSync(inboxA)
+      ? readdirSync(inboxA).filter((f) => f.startsWith("m-"))
+      : [];
+    const mC = existsSync(inboxCommons)
+      ? readdirSync(inboxCommons).filter((f) => f.startsWith("m-"))
+      : [];
+    assert.ok(
+      mA.length >= 1,
+      `kto1 result mail must reach a's inbox; ${JSON.stringify(mA)}`,
+    );
+    // kto2 targets a AND b (repeatable --to) -> both have new result mail from kto2
+    const a2 = existsSync(inboxA)
+      ? readdirSync(inboxA).filter((f) => f.startsWith("m-"))
+      : [];
+    const b2 = existsSync(inboxB)
+      ? readdirSync(inboxB).filter((f) => f.startsWith("m-"))
+      : [];
+    assert.ok(
+      a2.length >= 2,
+      `kto2 should add another mail to a (now ${a2.length})`,
+    );
+    assert.ok(
+      b2.length >= 1,
+      `kto2 must reach b via the repeatable --to; ${JSON.stringify(b2)}`,
+    );
+    // kto3 (no --to) defaults to commons
+    assert.ok(
+      mC.length >= 1,
+      `kto3 (default) must reach commons; ${JSON.stringify(mC)}`,
+    );
+
+    // ---- P1-5: agent create --from HEAD ----
+    const rFrom1 = results[10]!;
+    assert.equal(
+      rFrom1.code,
+      0,
+      `agent create --from HEAD failed: ${rFrom1.stdout}${rFrom1.stderr}`,
+    );
+    const fromRec = JSON.parse(rFrom1.stdout) as {
+      operation: string;
+      state: string;
+    };
+    assert.equal(fromRec.state, "succeeded");
+    const gitCode = results[11]!;
+    assert.equal(gitCode.code, 0, `git move-head: ${gitCode.stderr}`);
+    // recovery after HEAD moved: MUST use the originally frozen OID (exit 0,
+    // same receipt) — the old code would re-resolve HEAD and fail REQUEST_KEY_REUSED.
+    const rFrom2 = results[12]!;
+    assert.equal(
+      rFrom2.code,
+      0,
+      `agent create --from HEAD --request recovery failed: ${rFrom2.stdout}${rFrom2.stderr}`,
+    );
+    assert.equal(
+      (JSON.parse(rFrom2.stdout) as { operation: string }).operation,
+      fromRec.operation,
+      "recovery must reuse the frozen agent-create request",
+    );
+    // a fresh create resolves the CURRENT HEAD (moved) and succeeds
+    const rFrom3 = results[13]!;
+    assert.equal(
+      rFrom3.code,
+      0,
+      `fresh agent create failed: ${rFrom3.stdout}${rFrom3.stderr}`,
+    );
+
+    // ---- P1-4: submit frozen-first after HEAD moves ----
+    const rSubf1 = results[14]!;
+    assert.equal(
+      rSubf1.code,
+      0,
+      `submit freeze failed: ${rSubf1.stdout}${rSubf1.stderr}`,
+    );
+    const subf1 = JSON.parse(rSubf1.stdout) as {
+      operation: string;
+      result: { candidate: string };
+    };
+    const git2 = results[15]!;
+    assert.equal(git2.code, 0, `git move2: ${git2.stderr}`);
+    const rSubf2 = results[16]!;
+    assert.equal(
+      rSubf2.code,
+      0,
+      `submit recovery after HEAD moved failed: ${rSubf2.stdout}${rSubf2.stderr}`,
+    );
+    const subf2 = JSON.parse(rSubf2.stdout) as {
+      operation: string;
+      result: { candidate: string };
+    };
+    assert.equal(
+      subf2.operation,
+      subf1.operation,
+      "submit recovery must not create a new operation",
+    );
+    assert.equal(
+      subf2.result.candidate,
+      subf1.result.candidate,
+      "recovery must use the frozen candidate, not the moved HEAD",
     );
   } finally {
     env.cleanup();
