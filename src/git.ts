@@ -26,7 +26,7 @@ import type {
   Receipt,
 } from "../implementation/contracts.js";
 import { Store, StoreError } from "./store.js";
-import { MailModule } from "./mail.js";
+import { MailModule, buildEml } from "./mail.js";
 import { generateOperationId, generateMessageId } from "./ids.js";
 
 export interface GitPaths {
@@ -127,7 +127,7 @@ export class GitModule {
     }
 
     // T-submit-accept: op + frozen result-mail plan + deliveries (DB-005/009)
-    const eml = this.resultEml(
+    const eml = await this.resultEml(
       auth.actor,
       {
         candidate: input.candidate,
@@ -230,7 +230,7 @@ export class GitModule {
     return receipt;
   }
 
-  private resultEml(
+  private async resultEml(
     actor: Actor,
     r: {
       candidate: Oid;
@@ -240,25 +240,25 @@ export class GitModule {
       to: string[];
     },
     messageId: string,
-  ): { text: string; bytes: number; sha256: string; dateMs: number } {
+  ): Promise<{ text: string; bytes: number; sha256: string; dateMs: number }> {
     const fetchHint = `git fetch origin ${`refs/oma/published/${actor}`}; git show FETCH_HEAD\n`;
     const bodyText = `${r.body}\n\n게시됨: refs/oma/published/${actor}\nCommit: ${r.candidate}\n${r.paths.length > 0 ? `경로: ${r.paths.join(", ")}\n` : ""}${fetchHint}`;
-    const text = [
-      `From: ${actor}@${this.paths.society}.oma.invalid`,
-      `To: ${r.to?.length ? r.to.join(", ") : "commons@dummy"}`,
-      `Message-ID: <${messageId}@${this.paths.society}.oma.invalid>`,
-      `Subject: ${r.subject}`,
-      "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=utf-8",
-      "Content-Transfer-Encoding: 8bit",
-      "X-OMA-Kind: result",
-      "",
-      bodyText,
-    ].join("\r\n");
+    const eml = await buildEml({
+      from: `${actor}@${this.paths.society}.oma.invalid`,
+      to: r.to.length > 0 ? r.to : ["commons"],
+      replyTo: [],
+      subject: r.subject,
+      kind: "result",
+      contextRevision: null,
+      inReplyTo: null,
+      references: [],
+      messageId: `${messageId}@${this.paths.society}.oma.invalid`,
+      body: bodyText,
+    });
     return {
-      text,
-      bytes: Buffer.byteLength(text, "utf8"),
-      sha256: sha256Of(Buffer.from(text, "utf8")),
+      text: eml.text,
+      bytes: eml.bytes,
+      sha256: eml.sha256,
       dateMs: Date.now(),
     };
   }
@@ -664,7 +664,7 @@ export class GitModule {
     const staging = join(this.paths.stateRoot, "staging", `context-${key}`);
     const treeDir = join(staging, "tree");
     mkdirSync(treeDir, { recursive: true });
-    const eml = this.contextNoticeEml(messageId, input.entries);
+    const eml = await this.contextNoticeEml(messageId, input.entries);
     const plan = {
       kind: "context.publish" as const,
       base: input.expected,
@@ -777,27 +777,27 @@ export class GitModule {
     };
   }
 
-  private contextNoticeEml(
+  private async contextNoticeEml(
     messageId: string,
     entries: ContextEntry[],
-  ): { text: string; bytes: number; sha256: string; dateMs: number } {
-    const text = [
-      `From: principal@${this.paths.society}.oma.invalid`,
-      `To: residents@${this.paths.society}.oma.invalid`,
-      `Message-ID: <${messageId}@${this.paths.society}.oma.invalid>`,
-      "Subject: 공유 목표 갱신",
-      "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=utf-8",
-      "Content-Transfer-Encoding: 8bit",
-      "X-OMA-Kind: context",
-      "",
-      "GOAL이 갱신되었습니다. 전체 제약: /world/context/current/GOAL.md",
-      `파일: ${entries.map((e) => e.path).join(", ")}`,
-    ].join("\r\n");
+  ): Promise<{ text: string; bytes: number; sha256: string; dateMs: number }> {
+    const bodyText = `GOAL이 갱신되었습니다. 전체 제약: /world/context/current/GOAL.md\n파일: ${entries.map((e) => e.path).join(", ")}`;
+    const eml = await buildEml({
+      from: `principal@${this.paths.society}.oma.invalid`,
+      to: ["residents"],
+      replyTo: [],
+      subject: "공유 목표 갱신",
+      kind: "context",
+      contextRevision: null,
+      inReplyTo: null,
+      references: [],
+      messageId: `${messageId}@${this.paths.society}.oma.invalid`,
+      body: bodyText,
+    });
     return {
-      text,
-      bytes: Buffer.byteLength(text, "utf8"),
-      sha256: sha256Of(Buffer.from(text, "utf8")),
+      text: eml.text,
+      bytes: eml.bytes,
+      sha256: eml.sha256,
       dateMs: Date.now(),
     };
   }

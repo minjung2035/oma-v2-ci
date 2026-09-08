@@ -192,14 +192,14 @@ test("T16: follow/unfollow, union dedupe, snapshot fixed after membership change
   seal({ store, dir });
 });
 
-test("T17: reply header contract; CR/LF injection rejected", () => {
+test("T17: reply header contract; CR/LF injection rejected", async () => {
   const { store, dir, society } = fresh();
   seedAgents(store, [
     ["a", "resident", "enabled"],
     ["b", "resident", "enabled"],
   ]);
   // direct mail: Reply-To defaults to sender
-  const emlDirect = buildEml({
+  const emlDirect = await buildEml({
     from: actorAddress("a", society),
     to: [actorAddress("b", society)],
     replyTo: [actorAddress("a", society)],
@@ -216,36 +216,34 @@ test("T17: reply header contract; CR/LF injection rejected", () => {
   assert.equal(direct.messageId, "m-1@demo.oma.invalid");
   assert.ok(emlDirect.text.includes("X-OMA-Kind: message"));
   // forged CRLF in subject or body must be rejected
-  assert.throws(
-    () =>
-      buildEml({
-        from: "a",
-        to: ["b"],
-        replyTo: [],
-        subject: "evil\r\nBcc: x",
-        kind: "message",
-        contextRevision: null,
-        inReplyTo: null,
-        references: [],
-        messageId: "m",
-        body: "x",
-      }),
+  await assert.rejects(
+    buildEml({
+      from: "a",
+      to: ["b"],
+      replyTo: [],
+      subject: "evil\r\nBcc: x",
+      kind: "message",
+      contextRevision: null,
+      inReplyTo: null,
+      references: [],
+      messageId: "m",
+      body: "x",
+    }),
     /CR\/LF/,
   );
-  assert.throws(
-    () =>
-      buildEml({
-        from: "a",
-        to: ["b"],
-        replyTo: [],
-        subject: "s",
-        kind: "message",
-        contextRevision: null,
-        inReplyTo: null,
-        references: [],
-        messageId: "m",
-        body: "x\r\ny",
-      }),
+  await assert.rejects(
+    buildEml({
+      from: "a",
+      to: ["b"],
+      replyTo: [],
+      subject: "s",
+      kind: "message",
+      contextRevision: null,
+      inReplyTo: null,
+      references: [],
+      messageId: "m",
+      body: "x\r\ny",
+    }),
     /CR/,
   );
   // topic address form

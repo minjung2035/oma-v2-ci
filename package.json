@@ -13,10 +13,12 @@
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.85.1",
     "@types/node": "^26.0.0",
+    "@types/nodemailer": "8.0.1",
     "typescript": "5.9.3"
   },
   "dependencies": {
-    "koffi": "^3.2.1"
+    "koffi": "^3.2.1",
+    "nodemailer": "10.0.1"
   },
   "allowScripts": {
     "koffi@3.2.1": true

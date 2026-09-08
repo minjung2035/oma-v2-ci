@@ -1,6 +1,7 @@
 // MUST [UNIT-004]/[LIFE-006]: broker entrypoint — composition only. Loads the
 // closed host config, recovers durable state, binds endpoints, then READY=1.
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { Store } from "../store.js";
 import { MailModule } from "../mail.js";
 import { UnitsModule } from "../units.js";
@@ -61,8 +62,7 @@ const lifecycle = new LifecycleModule(
     stateRoot,
     projectGit: join(stateRoot, "repos", "project.git"),
     society: cfg.society,
-    hasGoal: () =>
-      requireFss().existsSync(join(stateRoot, "world", "context", "current")),
+    hasGoal: () => existsSync(join(stateRoot, "world", "context", "current")),
   },
   (parent, input) => {
     const r = resolveChildSpec(
@@ -100,15 +100,23 @@ const broker = new Broker(
   reconcile,
   { stateRoot, runRoot, society: cfg.society },
 );
-void reconcile
-  .startup()
-  .catch((e) => console.error("reconcile startup:", (e as Error).message));
 
-broker.start();
-// MUST [LIFE-006]: reconcile pending physical effects before READY.
-void mail.reconcilePending().then(() => {
+/**
+ * MUST [LIFE-006]/[REC-001]: ordered bootstrap — start-up recovery completes
+ * (mail effects, then Git operation reconciliation) BEFORE the sockets bind
+ * and READY=1 is signalled. A startup recovery failure aborts the broker:
+ * no READY, no serving, non-zero exit (never a log-only swallow).
+ */
+async function bootstrap(): Promise<void> {
+  await reconcile.startup();
+  broker.start();
   broker.notifyReady();
   console.error("broker ready");
+}
+
+bootstrap().catch((e) => {
+  console.error("broker startup failed:", (e as Error).message);
+  process.exitCode = 1;
 });
 
 function shutdown(): void {
@@ -117,8 +125,3 @@ function shutdown(): void {
 }
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
-
-function requireFss(): typeof import("node:fs") {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("node:fs") as typeof import("node:fs");
-}

@@ -24,7 +24,7 @@ import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { Broker } from "../src/broker.js";
-import { encodeFrame } from "../src/frame.js";
+import { FrameParser, encodeFrame } from "../src/frame.js";
 import { SandboxModule } from "../src/sandbox.js";
 import { PiRpcClient } from "../src/rpc-client.js";
 import type {
@@ -126,27 +126,34 @@ function adminCall(
   method: string,
   params: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  // MUST [IPC-001]: responses are uint32 BE length + JSON; parse with the
+  // same FrameParser the production clients use.
   return new Promise((resolve, reject) => {
     const sock = connect(adminSock, () => {
       sock.write(encodeFrame({ v: 1, id: "t", method, params }));
     });
-    let out = "";
+    const parser = new FrameParser(256 * 1024);
+    let partial = Buffer.alloc(0);
     const timer = setTimeout(() => {
       sock.destroy();
-      reject(new Error(`admin timeout; got: ${out}`));
+      reject(new Error("admin timeout"));
     }, 10000);
     sock.on("data", (d) => {
-      out += String(d);
-      const nl = out.indexOf("\n");
-      if (nl >= 0) {
-        clearTimeout(timer);
-        sock.destroy();
-        try {
-          resolve(JSON.parse(out.slice(0, nl)) as Record<string, unknown>);
-        } catch (e) {
-          reject(e as Error);
+      partial = Buffer.concat([partial, Buffer.from(d)]);
+      let done = false;
+      try {
+        for (const f of parser.feed(partial)) {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            sock.destroy();
+            resolve(f.raw as Record<string, unknown>);
+          }
         }
+      } catch {
+        /* incomplete frame; keep buffering */
       }
+      partial = Buffer.alloc(0);
     });
     sock.on("error", (e) => {
       clearTimeout(timer);

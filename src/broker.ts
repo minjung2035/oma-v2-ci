@@ -27,8 +27,7 @@ import {
   isValidRequestKey,
   isValidTopicName,
 } from "./ids.js";
-import { FrameParser, FrameError } from "./frame.js";
-import { createHash } from "node:crypto";
+import { ConnectionDecoder, encodeFrame } from "./frame.js";
 import { spawnSync } from "node:child_process";
 import { MailModule, StopSignal } from "./mail.js";
 import { UnitsModule } from "./units.js";
@@ -73,6 +72,7 @@ function socketFd(sock: Socket): number {
 
 export class Broker {
   private adminServer: ReturnType<typeof createServer> | null = null;
+  private actorServers: Set<ReturnType<typeof createServer>> = new Set();
   private lockFd: number | null = null;
   private running = false;
 
@@ -130,7 +130,14 @@ export class Broker {
       this.handleActor(sock, actor, incarnation),
     );
     srv.listen(path);
-    return { socketHostPath: path, done: () => srv.close() };
+    this.actorServers.add(srv);
+    return {
+      socketHostPath: path,
+      done: () => {
+        this.actorServers.delete(srv);
+        srv.close();
+      },
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -157,7 +164,9 @@ export class Broker {
       });
       return;
     }
-    this.serveFrames(sock, (raw) => this.dispatch(auth, raw as Request));
+    this.serveFrames(sock, (raw, stream) =>
+      this.dispatch(auth, raw as Request, stream ?? null),
+    );
   }
 
   /** MUST [AUTH-003]: cgroup-mapped identity; fail closed on ambiguity. */
@@ -193,76 +202,75 @@ export class Broker {
       });
       return;
     }
-    this.serveFrames(sock, (raw) => this.dispatchInternal(raw, cred));
+    this.serveFrames(sock, (raw, stream) =>
+      this.dispatchInternal(raw, cred, stream ?? null),
+    );
   }
 
-  private pendingStream: AsyncIterable<Uint8Array> | null = null;
-
-  /** MUST [IPC-002]: a metadata frame with a body descriptor switches this
-   * connection to raw-byte collection of exactly descriptor.bytes (no JSON
-   * frames interleaved), then dispatches with the collected bytes. */
+  /**
+   * MUST [IPC-001/002/011]: framed stream server. Requests and responses are
+   * uint32 BE length + UTF-8 JSON (identical on the public actor channel and
+   * the internal runner channel). A metadata frame carrying a stream
+   * descriptor switches THIS connection into raw collection of exactly
+   * descriptor.bytes — the decoder owns the byte queue, so raw bytes may be
+   * coalesced with the metadata frame, split on any boundary, or followed
+   * immediately by the next control frame. Connection-local state only: two
+   * concurrent uploads on different sockets never share stream bytes.
+   */
   private serveFrames(
     sock: Socket,
-    handle: (raw: Record<string, unknown>) => Promise<unknown> | unknown,
+    handle: (
+      raw: Record<string, unknown>,
+      stream: AsyncIterable<Uint8Array> | null,
+    ) => Promise<unknown> | unknown,
   ): void {
-    const parser = new FrameParser(256 * 1024);
-    const write = (obj: unknown) => sock.write(JSON.stringify(obj) + "\n");
-    let streamMode: {
-      remaining: number;
-      chunks: Uint8Array[];
-      total: number;
-      sha: ReturnType<typeof createHash>;
-      onDone: (all: Uint8Array) => void;
-    } | null = null;
-    sock.on("data", (chunk: Buffer) => {
-      if (streamMode) {
-        streamMode.chunks.push(chunk);
-        streamMode.total += chunk.length;
-        streamMode.sha.update(chunk);
-        if (streamMode.total > streamMode.remaining) {
+    const dec = new ConnectionDecoder(256 * 1024);
+    const write = (obj: unknown) => sock.write(encodeFrame(obj));
+    let streamFrame: { raw: Record<string, unknown>; id: string } | null = null;
+
+    const respond = (
+      id: string,
+      p: Promise<unknown> | unknown,
+      retry: "never" | "same-key",
+    ): void => {
+      Promise.resolve(p).then(
+        (r) => write(r),
+        (e) =>
           write(
-            Broker.errorAnswer("x", {
-              code: "STREAM_INVALID",
-              message: "stream exceeds descriptor.bytes",
-              retry: "same-key",
+            Broker.errorAnswer(id, {
+              code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
+              message: (e as Error).message,
+              retry,
             }),
-          );
-          streamMode = null;
-          return;
-        }
-        if (streamMode.total === streamMode.remaining) {
-          const done = streamMode.onDone;
-          const all = Buffer.concat(streamMode.chunks);
-          streamMode = null;
-          done(all);
-        }
-        return;
-      }
-      let frames: { raw: unknown; text: string }[];
-      try {
-        frames = parser.feed(Buffer.from(chunk));
-      } catch (e) {
-        if (e instanceof FrameError) {
+          ),
+      );
+    };
+
+    const processEvents = (
+      events: import("./frame.js").DecoderEvent[],
+    ): void => {
+      for (const ev of events) {
+        if (ev.kind === "invalid") {
           write(
             Broker.errorAnswer("x", {
-              code: e.code,
-              message: e.message,
+              code: ev.code,
+              message: ev.message,
               retry: "never",
             }),
           );
-        } else {
-          write(
-            Broker.errorAnswer("x", {
-              code: "INVALID_REQUEST",
-              message: "frame error",
-              retry: "never",
-            }),
-          );
+          continue;
         }
-        return;
-      }
-      for (const f of frames) {
-        const raw = f.raw as Record<string, unknown>;
+        if (ev.kind === "stream") {
+          const sf = streamFrame;
+          streamFrame = null;
+          if (!sf) continue;
+          const bytes = (async function* () {
+            yield ev.bytes;
+          })();
+          respond(sf.id, handle(sf.raw, bytes), "same-key");
+          continue;
+        }
+        const raw = ev.frame.raw as Record<string, unknown>;
         if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
           write(
             Broker.errorAnswer("x", {
@@ -285,48 +293,43 @@ export class Broker {
         ) as Record<string, unknown> | null;
         const wantsStream =
           method === "git.submit" || method === "context.publish";
-        if (wantsStream && desc && typeof desc.bytes === "number") {
-          streamMode = {
-            remaining: desc.bytes,
-            chunks: [],
-            total: 0,
-            sha: createHash("sha256"),
-            onDone: (all) => {
-              this.pendingStream = (async function* () {
-                yield all;
-              })();
-              Promise.resolve(handle(raw))
-                .then(
-                  (r) => write(r),
-                  (e) =>
-                    write(
-                      Broker.errorAnswer(id, {
-                        code:
-                          e instanceof StoreError ? e.code : "INTERNAL_ERROR",
-                        message: (e as Error).message,
-                        retry: "same-key",
-                      }),
-                    ),
-                )
-                .finally(() => {
-                  this.pendingStream = null;
-                });
-            },
-          };
-          return;
+        if (
+          wantsStream &&
+          desc &&
+          typeof desc.bytes === "number" &&
+          desc.bytes > 0
+        ) {
+          streamFrame = { raw, id };
+          const more = dec.beginStream(desc.bytes);
+          if (more.length > 0) processEvents(more);
+          continue;
         }
-        Promise.resolve(handle(raw)).then(
-          (r) => write(r),
-          (e) =>
-            write(
-              Broker.errorAnswer(id, {
-                code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
-                message: (e as Error).message,
-                retry: "never",
-              }),
-            ),
+        respond(id, handle(raw, null), "never");
+        // MUST [IPC-002]: one frame per drain; parse the next one now that the
+        // broker has decided this frame opens no stream.
+        const more = dec.resumeParsing();
+        if (more.length > 0) processEvents(more);
+        return;
+      }
+    };
+
+    sock.on("data", (chunk: Buffer) => processEvents(dec.push(chunk)));
+    sock.on("end", () => {
+      if (dec.streaming()) {
+        write(
+          Broker.errorAnswer("x", {
+            code: "STREAM_INVALID",
+            message: "stream ended before descriptor.bytes",
+            retry: "same-key",
+          }),
         );
       }
+      sock.destroy();
+    });
+    // A peer may destroy its socket while a reply is in flight; an unhandled
+    // 'error' here would crash the whole broker (observed in audit E2E).
+    sock.on("error", () => {
+      sock.destroy();
     });
   }
 
@@ -338,7 +341,7 @@ export class Broker {
       retry: "never" | "same-key" | "after-repair";
     },
   ): void {
-    sock.end(JSON.stringify(Broker.errorAnswer("x", error)));
+    sock.end(encodeFrame(Broker.errorAnswer("x", error)));
     sock.destroy();
   }
 
@@ -423,13 +426,91 @@ export class Broker {
       }
       case "agent.wait":
         return Object.keys(p).length === 0 ? {} : null;
+      case "git.known":
+        return { candidate: p.candidate }; // candidate checked by the module
+      case "git.submit": {
+        const b = p.bundle;
+        if (
+          Object.keys(p).some(
+            (k) =>
+              ![
+                "candidate",
+                "exportRef",
+                "prerequisites",
+                "to",
+                "subject",
+                "body",
+                "paths",
+                "bundle",
+              ].includes(k),
+          )
+        )
+          return null;
+        return typeof p.candidate === "string" &&
+          /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(p.candidate) &&
+          typeof p.exportRef === "string" &&
+          Array.isArray(p.prerequisites) &&
+          p.prerequisites.every((x: unknown) => typeof x === "string") &&
+          Array.isArray(p.to) &&
+          p.to.every((x: unknown) => typeof x === "string") &&
+          typeof p.subject === "string" &&
+          typeof p.body === "string" &&
+          Array.isArray(p.paths) &&
+          (b === undefined ||
+            (typeof b === "object" &&
+              b !== null &&
+              typeof (b as Record<string, unknown>).bytes === "number" &&
+              typeof (b as Record<string, unknown>).sha256 === "string"))
+          ? {
+              candidate: p.candidate,
+              exportRef: p.exportRef,
+              prerequisites: p.prerequisites,
+              to: p.to,
+              subject: p.subject,
+              body: p.body,
+              paths: p.paths,
+              bundle: b as unknown,
+            }
+          : null;
+      }
+      case "git.integrate":
+        return typeof p.candidate === "string" && typeof p.expected === "string"
+          ? { candidate: p.candidate, expected: p.expected }
+          : null;
+      case "context.publish": {
+        const entries = p.entries;
+        const content = p.content;
+        return Array.isArray(entries) &&
+          typeof content === "object" &&
+          content !== null &&
+          typeof (content as Record<string, unknown>).bytes === "number" &&
+          typeof (content as Record<string, unknown>).sha256 === "string" &&
+          (p.expected === null || typeof p.expected === "string")
+          ? {
+              expected: p.expected as string | null,
+              entries: entries as unknown,
+              content: content as unknown,
+            }
+          : null;
+      }
+      case "logs.read":
+        return typeof p.agent === "string" &&
+          isValidActorName(p.agent) &&
+          typeof p.sinceSeconds === "number" &&
+          p.sinceSeconds > 0
+          ? { agent: p.agent, sinceSeconds: p.sinceSeconds }
+          : null;
       default:
         return null;
     }
   }
 
   /** MUST [IPC-009]: dispatch only the closed public method set. */
-  async dispatch(auth: AuthContext, req: Request): Promise<object> {
+  async dispatch(
+    auth: AuthContext,
+    req: Request,
+    stream: AsyncIterable<Uint8Array> | null,
+  ): Promise<object> {
     const id = req.id;
     // SAFETY: the frame parser already rejected non-object roots; the method key
     // is narrowed by the switch below and params are runtime-checked.
@@ -555,12 +636,11 @@ export class Broker {
         case "git.submit": {
           if (!this.git)
             throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
-          const bytes = this.pendingStream ?? emptyStream();
           const receipt = await this.git.submit(
             auth,
             keyOf(req),
             params as never,
-            bytes,
+            stream ?? emptyStream(),
           );
           return Broker.okAnswer(id, receipt);
         }
@@ -585,12 +665,11 @@ export class Broker {
               "SPIKE_UNRESOLVED",
               "context module unavailable",
             );
-          const bytes = this.pendingStream ?? emptyStream();
           const receipt = await this.git.publishContext(
             auth,
             keyOf(req),
             params as never,
-            bytes,
+            stream ?? emptyStream(),
           );
           return Broker.okAnswer(id, receipt);
         }
@@ -649,6 +728,7 @@ export class Broker {
   private async dispatchInternal(
     raw: Record<string, unknown>,
     peer: { pid: number; uid: number; gid: number },
+    _stream: AsyncIterable<Uint8Array> | null, // IPC-011: internal channel has no body streams
   ): Promise<object> {
     const method = raw.method as string;
     const params = (raw.params ?? {}) as Record<string, unknown>;
@@ -847,6 +927,14 @@ export class Broker {
 
   drainAndClose(): void {
     this.adminServer?.close();
+    for (const srv of this.actorServers) {
+      try {
+        srv.close();
+      } catch {
+        /* already closed */
+      }
+    }
+    this.actorServers.clear();
     this.store.close();
     if (this.lockFd !== null) {
       try {

@@ -1,7 +1,7 @@
 // MUST [MAIL-001..010]: eml encoding, recipient expansion, materialization,
-// batch handoff. The eml encoder implements the MAIL-003 header contract with
-// CR/LF injection rejection; the S-01 email-library pin decision remains
-// deployment manifest work and this encoder is the same narrow boundary.
+// batch handoff. Headers are encoded through a pinned, widely-deployed email
+// library (nodemailer 10.0.1) per MAIL-003; CR/LF injection is still rejected
+// at this boundary before the library sees the values.
 import {
   mkdirSync,
   writeFileSync,
@@ -14,6 +14,7 @@ import {
   readFileSync,
   unlinkSync,
 } from "node:fs";
+import { createTransport } from "nodemailer";
 import { join, dirname } from "node:path";
 import type {
   Actor,
@@ -58,24 +59,6 @@ function assertNoCrlf(value: string, what: string): void {
     throw new StoreError("INVALID_REQUEST", `${what} contains CR/LF`);
 }
 
-/** Fold long header values on spaces (RFC 5322). */
-function fold(value: string, prefix: string): string {
-  const width = 78;
-  if (prefix.length + value.length <= width) return `${prefix}${value}`;
-  const out: string[] = [];
-  let line = prefix;
-  for (const ch of value) {
-    if (line.length + 1 > width && ch === " ") {
-      out.push(line);
-      line = " ";
-    } else {
-      line += ch;
-    }
-  }
-  out.push(line);
-  return out.join("\r\n");
-}
-
 const MONTHS = [
   "Jan",
   "Feb",
@@ -98,31 +81,51 @@ export function rfc5322Date(ms: number): string {
   return `${DAYS[d.getUTCDay()]}, ${pad(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]!} ${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} +0000`;
 }
 
-export function buildEml(p: EmlParams): {
+/** MUST [MAIL-003]: broker headers encoded through a pinned, widely-deployed
+ * email library (nodemailer 10.0.1, streamTransport), never a hand-rolled
+ * serializer. CR/LF injection is rejected at OUR boundary first; the library
+ * additionally RFC-encodes header values (e.g. UTF-8 subjects).
+ */
+export async function buildEml(p: EmlParams): Promise<{
   text: string;
   bytes: number;
   sha256: string;
-} {
+}> {
   assertNoCrlf(p.subject, "subject");
+  for (const h of ["from", ...p.to, ...p.replyTo]) assertNoCrlf(h, "address");
   if (p.body.includes("\r"))
     throw new StoreError("INVALID_REQUEST", "body contains CR");
-  const headers: string[] = [
-    `From: ${p.from}`,
-    `To: ${p.to.join(", ")}`,
-    `Reply-To: ${p.replyTo.join(", ")}`,
-    `Message-ID: <${p.messageId}>`,
-  ];
-  if (p.inReplyTo) headers.push(`In-Reply-To: <${p.inReplyTo}>`);
-  if (p.references.length > 0)
-    headers.push(`References: ${p.references.map((r) => `<${r}>`).join(" ")}`);
-  headers.push(fold(p.subject, "Subject: "));
-  headers.push(rfc5322Date(Date.now()));
-  headers.push("MIME-Version: 1.0");
-  headers.push("Content-Type: text/plain; charset=utf-8");
-  headers.push("Content-Transfer-Encoding: 8bit");
-  headers.push(`X-OMA-Kind: ${p.kind}`);
-  if (p.contextRevision) headers.push(`X-OMA-Context: ${p.contextRevision}`);
-  const text = `${headers.join("\r\n")}\r\n\r\n${p.body}`;
+  const transporter = createTransport({
+    streamTransport: true,
+    buffer: true,
+    newline: "\r\n",
+  });
+  const info = await transporter.sendMail({
+    from: p.from,
+    to: p.to.join(", "),
+    replyTo: p.replyTo.length > 0 ? p.replyTo.join(", ") : undefined,
+    subject: p.subject,
+    text: p.body,
+    messageId: `<${p.messageId}>`,
+    ...(p.inReplyTo ? { inReplyTo: `<${p.inReplyTo}>` } : {}),
+    ...(p.references.length > 0
+      ? { references: p.references.map((r) => `<${r}>`) }
+      : {}),
+    date: new Date(),
+    headers: {
+      "X-OMA-Kind": p.kind,
+      ...(p.contextRevision ? { "X-OMA-Context": p.contextRevision } : {}),
+    },
+  });
+  // SAFETY: streamTransport+buffer returns the full serialized message in
+  // info.message (nodemailer 10 dropped getMessage(); types are lossy).
+  const raw = (info as unknown as { message: Buffer }).message;
+  // MUST [MAIL-003]: keep the exact X-OMA-Kind / X-OMA-Context header tokens;
+  // nodemailer normalizes custom-header casing, so canonicalize the name only.
+  const text = raw
+    .toString("utf8")
+    .replace(/X-Oma-Kind:/g, "X-OMA-Kind:")
+    .replace(/X-Oma-Context:/g, "X-OMA-Context:");
   const bytes = Buffer.byteLength(text, "utf8");
   return { text, bytes, sha256: sha256Hex(text) };
 }
@@ -447,7 +450,7 @@ export class MailModule {
       };
     }
 
-    const eml = buildEml({
+    const eml = await buildEml({
       from: actorAddress(auth.actor, society),
       to: route.displayTo,
       replyTo: replyHeaders.replyTo,
@@ -735,6 +738,15 @@ export class MailModule {
         throw new StoreError(
           "STORE_CORRUPT",
           `operation ${id} has corrupt plan`,
+        );
+      }
+      // MUST [REC-001]: a pending op whose frozen immutable object is missing
+      // is permanent corruption, not a transient failure — reconcile must
+      // refuse to serve on it instead of counting it as merely 'remaining'.
+      if (!existsSync(this.objectPath(plan.message.id))) {
+        throw new StoreError(
+          "STORE_CORRUPT",
+          `object missing for ${plan.message.id}`,
         );
       }
       try {

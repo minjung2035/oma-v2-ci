@@ -81,6 +81,7 @@ export function encodeFrame(obj: unknown): Buffer {
 }
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
+import { createHash } from "node:crypto";
 
 export interface ParsedFrame {
   raw: unknown;
@@ -158,5 +159,130 @@ export class FrameParser {
       );
     }
     return { raw, text };
+  }
+}
+
+export type DecoderEvent =
+  | { kind: "frame"; frame: ParsedFrame }
+  | { kind: "stream"; bytes: Buffer }
+  | {
+      kind: "invalid";
+      code: "FRAME_TOO_LARGE" | "INVALID_REQUEST";
+      message: string;
+    };
+
+/**
+ * MUST [IPC-001/002]: connection-level decoder. Owns the byte queue so that a
+ * metadata frame and its raw stream body can be split at exact byte
+ * boundaries regardless of how the kernel chunks them: frame mode parses
+ * uint32 BE length + JSON; beginStream() switches the SAME queue into raw
+ * collection of exactly declared bytes (never trusting read boundaries), and
+ * any leftover bytes after the stream become frames again. Per-connection
+ * instance; no state is shared across sockets.
+ */
+export class ConnectionDecoder {
+  private queue: Buffer = Buffer.alloc(0);
+  private parser: FrameParser;
+  private stream: {
+    remaining: number;
+    chunks: Buffer[];
+    total: number;
+    sha: ReturnType<typeof createHash>;
+  } | null = null;
+
+  constructor(readonly maxFrameBytes: number) {
+    this.parser = new FrameParser(maxFrameBytes);
+  }
+
+  streaming(): boolean {
+    return this.stream !== null;
+  }
+
+  /**
+   * Parse at most ONE frame per drain (then stop), so the broker can decide —
+   * before any following bytes are interpreted — whether this frame opens a
+   * raw stream. runByteBoundary tests depend on this: a frame's tail bytes and
+   * the raw's first bytes may share a data event, and the raw may already be
+   * queued; beginStream() consumes it byte-exactly.
+   */
+  private drain(events: DecoderEvent[]): void {
+    if (this.stream) {
+      this.consumeStream(events);
+      return;
+    }
+    if (this.queue.length < 4) return;
+    const len = this.queue.readUInt32BE(0);
+    if (len > this.maxFrameBytes) {
+      events.push({
+        kind: "invalid",
+        code: "FRAME_TOO_LARGE",
+        message: `frame length ${len} exceeds max ${this.maxFrameBytes}`,
+      });
+      this.queue = Buffer.alloc(0);
+      return;
+    }
+    if (this.queue.length < 4 + len) return; // wait for the full frame
+    const slice = this.queue.subarray(0, 4 + len);
+    this.queue = this.queue.subarray(4 + len);
+    let frames: ParsedFrame[];
+    try {
+      frames = this.parser.feed(slice);
+    } catch (e) {
+      events.push({
+        kind: "invalid",
+        code: e instanceof FrameError ? e.code : "INVALID_REQUEST",
+        message: (e as Error).message,
+      });
+      return;
+    }
+    for (const f of frames) events.push({ kind: "frame", frame: f });
+  }
+
+  push(chunk: Buffer): DecoderEvent[] {
+    this.queue =
+      this.queue.length === 0 ? chunk : Buffer.concat([this.queue, chunk]);
+    const events: DecoderEvent[] = [];
+    this.drain(events);
+    return events;
+  }
+
+  /** continue parsing after the broker decided the previous frame opened no stream. */
+  resumeParsing(): DecoderEvent[] {
+    const events: DecoderEvent[] = [];
+    this.drain(events);
+    return events;
+  }
+
+  /** Switch this connection to raw collection of exactly declared bytes; any
+   * bytes already queued (coalesced chunk) are consumed immediately. */
+  beginStream(declaredBytes: number): DecoderEvent[] {
+    if (declaredBytes <= 0) return [];
+    this.stream = {
+      remaining: declaredBytes,
+      chunks: [],
+      total: 0,
+      sha: createHash("sha256"),
+    };
+    const events: DecoderEvent[] = [];
+    this.consumeStream(events);
+    return events;
+  }
+
+  private consumeStream(events: DecoderEvent[]): void {
+    while (this.stream && this.queue.length > 0) {
+      const take = Math.min(this.stream.remaining, this.queue.length);
+      const part = this.queue.subarray(0, take);
+      this.stream.chunks.push(part);
+      this.stream.total += part.length;
+      this.stream.sha.update(part);
+      this.queue = this.queue.subarray(take);
+      this.stream.remaining -= take;
+      if (this.stream.remaining === 0) {
+        const done = this.stream;
+        this.stream = null;
+        events.push({ kind: "stream", bytes: Buffer.concat(done.chunks) });
+        return;
+      }
+    }
   }
 }
