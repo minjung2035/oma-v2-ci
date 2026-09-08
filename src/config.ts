@@ -248,7 +248,7 @@ export function loadConfig(path: string): HostConfigV1 {
       needInt(
         resources[k],
         `agentProfiles.${name}.resources.${k}`,
-        0,
+        1,
       );
     }
   }
@@ -370,7 +370,7 @@ export function loadConfig(path: string): HostConfigV1 {
       needInt(
         resources[k],
         `integration.checks[${i}].resources.${k}`,
-        0,
+        1,
       );
     }
   }

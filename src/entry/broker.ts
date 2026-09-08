@@ -104,8 +104,10 @@ const git = new GitModule(
       env: { ...c.env },
       timeoutSeconds: c.resources.checkTimeoutSeconds,
       tmpBytes: c.resources.tmpBytes,
+      resources: { ...c.resources },
     })),
   },
+  () => loadConfig(configPath).integration.policyRevision,
 );
 const reconcile = new ReconcileModule(store, mail, git, units, {
   projectGit: join(stateRoot, "repos", "project.git"),

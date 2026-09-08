@@ -79,7 +79,7 @@
 | T57–T58 | ❌ | — | TEST-004 git kill 지점 미실행 |
 | T59 | ✅ | phase7 T55/T59 + phase8 T68b | |
 | T60–T61 | ✅ | phase7 | |
-| T62 | ◐ | audit2 real actor-socket HostConfig protected-path policy; integrate final policy/CAS code path | candidate-check execution remains SPIKE_UNRESOLVED unless trusted sandbox inputs are configured; policy-change race not executed |
+| T62 | ◐ | phase7 T62 policy-reread race + malformed-policy + resource-boundary tests; phase5 descendant-timeout/sandbox negatives | policy change during actual candidate execution and quota-backed workspace/staging enforcement remain SPIKE_UNRESOLVED |
 | T63–T64 | ❌ | — | INT kill 지점 미실행 |
 | T65/T67 | ✅ | phase7 | |
 | T66 | ❌ | — | CTX kill 지점 미실행 |
@@ -112,14 +112,14 @@ unresolved 요약: T12,T23,T24,T26–T28,T33–T35,T39–T41,T43,T44,T46,T47,T52
 
 실행·수정·검증:
 - **P0-A AUTH**: `src/authority.ts`가 persisted `agents.spec_json`의 닫힌 resolved spec만 수용하고 unknown/malformed capability는 empty set으로 fail-closed; actor entrypoint와 runner auth가 이 단일 근거를 사용한다. `authority.test.ts`, CREATE-002, AUTH-002 및 real actor-socket capability gate 통과.
-- **P0-B INT**: HostConfig integration policy가 `GitModule`에 조립 주입되고 protected path/policy revision/check profile이 caller wire에서 오지 않는다. integrate에 process-local main-writer mutex와 unresolved pending integrate 차단을 추가했다. candidate checks는 sandbox 입력이 없으면 `SPIKE_UNRESOLVED`로 fail-closed하며 host에서 직접 실행하지 않는다.
+- **P0-B INT**: HostConfig integration policy가 `GitModule`에 조립 주입되고 protected path/policy revision/check profile이 caller wire에서 오지 않는다. CAS 직전 authoritative policy revision을 config reader로 재조회하고 unreadable/malformed/race를 `POLICY_CHANGED`로 fail-closed한다. candidate checks는 실제 systemd transient cgroup에서 memory/tasks/CPU/runtime, bwrap에서 tmp cap을 사용하며 workspace/staging byte quota는 `SPIKE_UNRESOLVED`로 명시한다.
 - **P0-C IPC/DB**: broker/store canonical request hash 및 DB unique winner를 유지하고 real actor socket에서 git/mail same-key same/different payload, concurrent same-key races, delivery 단일성을 확인했다.
 - **P0-D STREAM**: N+1/N+2/N+3, malformed excess, short EOF, hash mismatch, idle timeout 및 accepted key의 bad-stream retry를 real Unix socket에서 확인했다. 모두 preaccept `STREAM_INVALID`이며 operation이 없다.
 - **FS-003/IPC-008**: RequestCache가 unknown field/digest/receipt/key를 reject하고 file fsync → rename → parent-directory fsync를 수행한다. body bytes와 0600 mode round-trip test를 추가했다.
 
-현재 runtime suite는 `npm test` **68/68 pass, 0 fail, 0 skipped**; S-02/S-04/S-06/S-09 release gate는 여전히 OPEN이며 아래 coverage의 미실행 항목은 PASS로 계산하지 않는다.
+현재 runtime suite는 `npm test` **73/73 pass, 0 fail, 0 skipped**; S-02/S-04/S-06/S-09 release gate는 여전히 OPEN이며 아래 coverage의 미실행 항목은 PASS로 계산하지 않는다.
 
-production LOC: 8,299 baseline → **9,190** current. The 8,001–10,000 allowance is used because the executable contract requires broker-side idempotency, exact stream-boundary and digest enforcement, closed runtime/config validation, host integration policy wiring, durable CLI cache fsync, candidate-check fail-closed sandbox wiring, and the complete CLI command surface; deleting those would weaken IPC/DB/CFG/CLI requirements. No new durable entity/service/framework was added.
+production LOC: 8,299 baseline → **9,268** current. The 8,001–10,000 allowance is used because the executable contract requires broker-side idempotency, exact stream-boundary and digest enforcement, closed runtime/config validation, host integration policy wiring, durable CLI cache fsync, candidate-check fail-closed sandbox wiring, and the complete CLI command surface; deleting those would weaken IPC/DB/CFG/CLI requirements. No new durable entity/service/framework was added.
 
 ### A-009 production LOC breakdown (2026-09-08)
-`node scripts/loc.mjs` output (non-empty physical lines): broker 1,251; git 1,170; mail 899; store 833; cli 734; lifecycle 483; config 452; inference 402; frame 293; runner 293; contracts 283; validate 270; units 243; sandbox 199; views 158; request-cache 147; entry/broker 141; hash 114; reconcile 113; schema-v1.sql 108; leaf 106; ids 83; entry/host 81; entry/runner 76; pi-extension 59; rpc-client 59; authority 49; systemd templates 91; **total 9,190**.
+`node scripts/loc.mjs` output (non-empty physical lines): broker 1,251; git 1,246; mail 899; store 833; cli 734; lifecycle 483; config 452; inference 402; frame 293; runner 293; contracts 283; validate 270; units 243; sandbox 199; views 158; request-cache 147; entry/broker 143; hash 114; reconcile 113; schema-v1.sql 108; leaf 106; ids 83; entry/host 81; entry/runner 76; pi-extension 59; rpc-client 59; authority 49; systemd templates 91; **total 9,268**.

@@ -25,6 +25,7 @@ import type {
   Json,
   Oid,
   Receipt,
+  ResourceLimits,
 } from "../implementation/contracts.js";
 import { Store, StoreError, reused } from "./store.js";
 import { MailModule, buildEml } from "./mail.js";
@@ -104,8 +105,11 @@ export interface IntegrationPolicy {
     env: Record<string, string>;
     timeoutSeconds: number;
     tmpBytes?: number;
+    resources?: ResourceLimits;
   }>;
 }
+
+export type PolicyRevisionReader = () => string;
 
 const EMPTY_INTEGRATION_POLICY: IntegrationPolicy = {
   policyRevision: "p1",
@@ -116,6 +120,7 @@ const EMPTY_INTEGRATION_POLICY: IntegrationPolicy = {
 export class GitModule {
   private readonly integration: IntegrationPolicy;
   private readonly legacyDirect: boolean;
+  private readonly policyRevisionReader: PolicyRevisionReader | null;
   // ponytail: one in-process main writer; restart recovery handles durable pending rows.
   private integrationTail: Promise<void> = Promise.resolve();
   constructor(
@@ -124,9 +129,12 @@ export class GitModule {
     private readonly mail: MailModule,
     /** MUST [P0-B]: host integration policy; mutable for future config reloads. */
     integration: IntegrationPolicy | null = EMPTY_INTEGRATION_POLICY,
+    /** Reads the authoritative host policy immediately before CAS. */
+    policyRevisionReader: PolicyRevisionReader | null = null,
   ) {
     this.legacyDirect = integration === null;
     this.integration = integration ?? EMPTY_INTEGRATION_POLICY;
+    this.policyRevisionReader = policyRevisionReader;
   }
   // stream uploads carry bytes; the descriptor digest is part of the IPC-005 hash.
 
@@ -593,10 +601,10 @@ export class GitModule {
         }
       }
     }
+    const policyRevision = this.integration.policyRevision;
     // fixed host check (INT-002) on the actual candidate
     for (const c of this.integration.checks) this.runCheck(input.candidate, c);
     const opId = generateOperationId();
-    const policyRevision = this.integration.policyRevision;
     const result = {
       kind: "git.integrate" as const,
       base,
@@ -637,15 +645,6 @@ export class GitModule {
       );
       throw new StoreError("STALE_BASE", `main moved to ${head}`);
     }
-    if (currentPolicyRevision !== policyRevision) {
-      this.store.transaction((_tx) =>
-        this.store.setOperationFailed(opId, "POLICY_CHANGED"),
-      );
-      throw new StoreError(
-        "POLICY_CHANGED",
-        `policy revision changed to ${currentPolicyRevision}`,
-      );
-    }
     const nowAuth = this.store.getAgent(auth.actor);
     if (
       !nowAuth ||
@@ -661,6 +660,41 @@ export class GitModule {
       throw new StoreError(
         "CAPABILITY_DENIED",
         "code.integrate was revoked before commit",
+      );
+    }
+    // MUST [INT-003]: reread the authoritative policy after checks and immediately
+    // before CAS. A malformed/unreadable policy fails closed; intent revision stays
+    // persisted in the operation plan for crash recovery and audit.
+    let authoritativePolicyRevision = currentPolicyRevision;
+    if (this.policyRevisionReader) {
+      try {
+        authoritativePolicyRevision = this.policyRevisionReader();
+      } catch (error) {
+        this.store.transaction((_tx) =>
+          this.store.setOperationFailed(opId, "POLICY_CHANGED"),
+        );
+        throw new StoreError(
+          "POLICY_CHANGED",
+          `authoritative policy unreadable: ${(error as Error).message}`,
+        );
+      }
+      if (
+        typeof authoritativePolicyRevision !== "string" ||
+        authoritativePolicyRevision.length === 0
+      ) {
+        this.store.transaction((_tx) =>
+          this.store.setOperationFailed(opId, "POLICY_CHANGED"),
+        );
+        throw new StoreError("POLICY_CHANGED", "authoritative policy is malformed");
+      }
+    }
+    if (authoritativePolicyRevision !== policyRevision) {
+      this.store.transaction((_tx) =>
+        this.store.setOperationFailed(opId, "POLICY_CHANGED"),
+      );
+      throw new StoreError(
+        "POLICY_CHANGED",
+        `policy revision changed to ${authoritativePolicyRevision}`,
       );
     }
     const cas = spawnSync(
@@ -728,32 +762,75 @@ export class GitModule {
     }
     if (check.argv.length === 0 || !check.argv[0])
       throw new StoreError("CHECK_FAILED", `check ${check.id} has no argv`);
-    const tmpBytes = check.tmpBytes ?? this.paths.checkTmpBytes;
-    if (!tmpBytes || !Number.isSafeInteger(tmpBytes) || tmpBytes <= 0)
-      throw new StoreError("SPIKE_UNRESOLVED", `check ${check.id} has no sandbox limit`);
+    const resources = check.resources;
+    if (!resources) {
+      throw new StoreError(
+        "SPIKE_UNRESOLVED",
+        `check ${check.id} has no closed resource profile`,
+      );
+    }
+    const resourceValues = Object.values(resources);
+    if (
+      resourceValues.some(
+        (value) => !Number.isSafeInteger(value) || value <= 0,
+      )
+    ) {
+      throw new StoreError(
+        "SPIKE_UNRESOLVED",
+        `check ${check.id} has invalid resource limits`,
+      );
+    }
+    // Linux has no portable per-directory byte quota here. Do not claim that
+    // the host checkout enforces these two disk limits until a quota-backed
+    // staging primitive is pinned; fail closed instead of silently dropping them.
+    if (resources.workspaceBytes > 0 || resources.stagingBytes > 0) {
+      throw new StoreError(
+        "SPIKE_UNRESOLVED",
+        `check ${check.id} workspace/staging quotas are unresolved`,
+      );
+    }
     const dir = this.checkDir(candidate);
     const sandboxHost = {
       rootfs: this.paths.checkRootfs,
       node: "/usr/bin/node",
       pi: "/usr/bin/pi",
       piModeArgs: [],
-      tmpBytes,
-      checkResources: {
-        memoryBytes: 1, tasks: 1, cpuQuotaPercent: 1, tmpBytes,
-        workspaceBytes: 1, stagingBytes: 1, checkTimeoutSeconds: 1,
-      },
+      tmpBytes: resources.tmpBytes,
+      checkResources: resources,
     };
     const argv = candidateArgv(
-      sandboxHost, dir, this.paths.checkAssetsDir, tmpBytes, check.argv, check.env,
+      sandboxHost,
+      dir,
+      this.paths.checkAssetsDir,
+      resources.tmpBytes,
+      check.argv,
+      check.env,
     );
     const r = spawnSync(
-      argv[0]!,
-      argv.slice(1),
-      {
-        encoding: "utf8",
-        timeout: (check.timeoutSeconds || this.paths.checkTimeoutSeconds) * 1000,
-      },
+      "systemd-run",
+      [
+        "--user",
+        "--wait",
+        "--collect",
+        "--service-type=exec",
+        "--property=MemoryMax=" + resources.memoryBytes,
+        "--property=TasksMax=" + resources.tasks,
+        "--property=CPUQuota=" + resources.cpuQuotaPercent + "%",
+        "--property=RuntimeMaxSec=" + resources.checkTimeoutSeconds + "s",
+        "--property=KillMode=control-group",
+        "--property=OOMPolicy=kill",
+        "--",
+        argv[0]!,
+        ...argv.slice(1),
+      ],
+      { encoding: "utf8", maxBuffer: 64 * 1024 },
     );
+    if ((r.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT" || r.status === null) {
+      throw new StoreError(
+        "SPIKE_UNRESOLVED",
+        `systemd candidate-check boundary unavailable for ${check.id}`,
+      );
+    }
     if (r.error || r.status !== 0)
       throw new StoreError(
         "CHECK_FAILED",

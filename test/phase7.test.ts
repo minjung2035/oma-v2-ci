@@ -42,7 +42,10 @@ interface Env {
   seal: () => void;
 }
 
-function envOf(integration: IntegrationPolicy | null = null): Env {
+function envOf(
+  integration: IntegrationPolicy | null = null,
+  policyRevisionReader: (() => string) | null = null,
+ ): Env {
   const dir = mkdtempSync(join(tmpdir(), "oma-t7-"));
   const society = "demo";
   mkdirSync(join(dir, "state", "repos"), { recursive: true });
@@ -79,7 +82,7 @@ function envOf(integration: IntegrationPolicy | null = null): Env {
     quarantineTmpBytes: 256 * 1024 * 1024,
     checkTimeoutSeconds: 30,
   };
-  const git = new GitModule(paths, store, mail, integration);
+  const git = new GitModule(paths, store, mail, integration, policyRevisionReader);
   return {
     dir,
     society,
@@ -163,6 +166,34 @@ function auth(actor: string, caps: Capability[]): AuthContext {
 
 async function* iter(b: Buffer): AsyncIterable<Uint8Array> {
   yield b;
+}
+
+function publishedFastForward(env: Env): { base: Oid; candidate: Oid } {
+  const base = seedProject(env);
+  const work = join(env.dir, "policy-candidate");
+  sh(env, ["clone", "-q", env.paths.projectGit, work]);
+  writeFileSync(join(work, "policy.txt"), "candidate\n", "utf8");
+  sh(env, ["add", "policy.txt"], work);
+  sh(
+    env,
+    [
+      "-c",
+      "user.name=policy",
+      "-c",
+      "user.email=policy@localhost",
+      "commit",
+      "-qm",
+      "policy",
+    ],
+    work,
+  );
+  const candidate = sh(env, ["rev-parse", "HEAD"], work) as Oid;
+  sh(env, ["--git-dir", env.paths.projectGit, "fetch", "-q", work, "HEAD"]);
+  sh(
+    env,
+    ["--git-dir", env.paths.projectGit, "update-ref", "refs/oma/published/policy", candidate],
+  );
+  return { base, candidate };
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +612,90 @@ test("T60/T61: integrate CAS — first wins, stale/undescendant/protected refuse
       ]),
       C1,
     );
+  } finally {
+    env.seal();
+  }
+});
+
+test("T62: policy revision is reread before CAS and a race fails closed", async () => {
+  let reads = 0;
+  const env = envOf(null, () => {
+    reads += 1;
+    return "p2";
+  });
+  try {
+    const { base, candidate } = publishedFastForward(env);
+    await assert.rejects(
+      env.git.integrate(
+        auth("a", ["code.integrate"]),
+        "policy-race",
+        { candidate, expected: base },
+      ),
+      (e: unknown) => e instanceof StoreError && e.code === "POLICY_CHANGED",
+    );
+    assert.equal(reads, 1);
+    assert.equal(sh(env, ["--git-dir", env.paths.projectGit, "rev-parse", "refs/heads/main"]), base);
+    assert.equal(env.store.getOperation("a", "policy-race")?.state, "failed");
+  } finally {
+    env.seal();
+  }
+});
+
+test("T62-negative: unreadable authoritative policy cannot integrate", async () => {
+  const env = envOf(null, () => {
+    throw new Error("malformed policy");
+  });
+  try {
+    const { base, candidate } = publishedFastForward(env);
+    await assert.rejects(
+      env.git.integrate(
+        auth("a", ["code.integrate"]),
+        "policy-malformed",
+        { candidate, expected: base },
+      ),
+      (e: unknown) => e instanceof StoreError && e.code === "POLICY_CHANGED",
+    );
+    assert.equal(sh(env, ["--git-dir", env.paths.projectGit, "rev-parse", "refs/heads/main"]), base);
+    assert.equal(env.store.getOperation("a", "policy-malformed")?.state, "failed");
+  } finally {
+    env.seal();
+  }
+});
+
+test("T62-resource: unresolved workspace/staging limits fail closed before candidate execution", async () => {
+  const env = envOf({
+    policyRevision: "p1",
+    protectedPaths: [],
+    checks: [{
+      id: "resource-boundary",
+      argv: ["true"],
+      env: {},
+      timeoutSeconds: 1,
+      tmpBytes: 1024,
+      resources: {
+        memoryBytes: 64 * 1024 * 1024,
+        tasks: 16,
+        cpuQuotaPercent: 10,
+        tmpBytes: 1024,
+        workspaceBytes: 1024,
+        stagingBytes: 1024,
+        checkTimeoutSeconds: 1,
+      },
+    }],
+  });
+  env.paths.checkRootfs = "/trusted/rootfs";
+  env.paths.checkAssetsDir = "/trusted/checks";
+  try {
+    const { base, candidate } = publishedFastForward(env);
+    await assert.rejects(
+      env.git.integrate(
+        auth("a", ["code.integrate"]),
+        "resource-boundary",
+        { candidate, expected: base },
+      ),
+      (e: unknown) => e instanceof StoreError && e.code === "SPIKE_UNRESOLVED",
+    );
+    assert.equal(sh(env, ["--git-dir", env.paths.projectGit, "rev-parse", "refs/heads/main"]), base);
   } finally {
     env.seal();
   }

@@ -25,7 +25,7 @@ import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { Broker } from "../src/broker.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
-import { SandboxModule } from "../src/sandbox.js";
+import { SandboxModule, candidateArgv } from "../src/sandbox.js";
 import { PiRpcClient } from "../src/rpc-client.js";
 import type {
   AuthContext,
@@ -529,6 +529,67 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     );
     assert.equal(failed, true);
     void settled;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("SB-005-negative: candidate argv rejects empty commands and keeps tmp cap", () => {
+  const host = {
+    rootfs: "/trusted/rootfs",
+    node: "/usr/bin/node",
+    pi: "/usr/bin/pi",
+    piModeArgs: [],
+    tmpBytes: 4096,
+    checkResources: {
+      memoryBytes: 1,
+      tasks: 1,
+      cpuQuotaPercent: 1,
+      tmpBytes: 4096,
+      workspaceBytes: 1,
+      stagingBytes: 1,
+      checkTimeoutSeconds: 1,
+    },
+  };
+  const argv = candidateArgv(host, "/candidate", "/checks", 4096, ["/bin/true"]);
+  const size = argv.indexOf("--size");
+  assert.notEqual(size, -1);
+  assert.equal(argv[size + 1], "4096");
+  assert.throws(
+    () => candidateArgv(host, "/candidate", "/checks", 0, ["/bin/true"]),
+    (e: unknown) => e instanceof Error && (e as { code?: string }).code === "CHECK_FAILED",
+  );
+  assert.throws(
+    () => candidateArgv(host, "/candidate", "/checks", 4096, []),
+    (e: unknown) => e instanceof Error && (e as { code?: string }).code === "CHECK_FAILED",
+  );
+});
+
+test("SB-005: systemd timeout kills candidate descendants", { timeout: 10000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-t7-timeout-"));
+  const marker = join(dir, "late-marker");
+  try {
+    const child = `setTimeout(() => require("node:fs").writeFileSync(${JSON.stringify(marker)}, "late"), 1000);`;
+    const parent = `const { spawn } = require("node:child_process"); spawn(process.execPath, ["-e", ${JSON.stringify(child)}], { stdio: "ignore" }); setTimeout(() => {}, 2000);`;
+    const r = spawnSync(
+      "systemd-run",
+      [
+        "--user",
+        "--wait",
+        "--collect",
+        "--service-type=exec",
+        "--property=RuntimeMaxSec=0.1s",
+        "--property=KillMode=control-group",
+        "--",
+        process.execPath,
+        "-e",
+        parent,
+      ],
+      { encoding: "utf8" },
+    );
+    assert.notEqual(r.status, 0);
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    assert.equal(existsSync(marker), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
