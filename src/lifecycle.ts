@@ -20,10 +20,12 @@ import type {
   ResolvedAgentSpec,
   AgentCreateInput,
   MessageId,
+  OperationPlan,
   OperationResult,
 } from "../implementation/contracts.js";
 import { Store, StoreError, reused, type OperationRow } from "./store.js";
-import { UnitsModule } from "./units.js";
+import { UnitsModule, unitName } from "./units.js";
+import { MailModule } from "./mail.js";
 import { generateOperationId } from "./ids.js";
 import { requestHash } from "./hash.js";
 
@@ -47,6 +49,8 @@ export interface SpecResolver {
   ): ResolvedAgentSpec | null;
 }
 
+type CreatePlan = Extract<OperationPlan, { kind: "agent.create" }>;
+
 const cloneEnv: NodeJS.ProcessEnv = {
   HOME: "/nonexistent",
   PATH: "/usr/bin:/bin",
@@ -68,6 +72,7 @@ export class LifecycleModule {
     private readonly units: UnitsModule,
     private readonly paths: LifecyclePaths,
     private readonly resolveSpec: SpecResolver,
+    private readonly mail: MailModule | null = null,
   ) {}
 
   ack(auth: AuthContext, message: MessageId, key: string): Receipt {
@@ -310,11 +315,7 @@ export class LifecycleModule {
     return { operation: opId, state: "succeeded", result };
   }
 
-  /**
-   * MUST [CREATE-002/003,LIFE-001/002/007]: freeze authority/spec and exact
-   * base, then provision physical identity. Until initial-message publication
-   * is completed, the agent remains provisioning and cannot run.
-   */
+  /** MUST [CREATE-002/003,LIFE-001/002/007]: accept one frozen physical plan. */
   async create(
     auth: AuthContext,
     input: AgentCreateInput,
@@ -345,15 +346,13 @@ export class LifecycleModule {
     if (!spec)
       throw new StoreError("CAPABILITY_DENIED", "no delegable child profile");
     const specHash = createHash("sha256")
-      .update(
-        JSON.stringify({
-          name: spec.name,
-          from: spec.from,
-          brief: spec.brief,
-          profile: spec.profile,
-          capabilities: spec.capabilities,
-        }),
-      )
+      .update(JSON.stringify({
+        name: spec.name,
+        from: spec.from,
+        brief: spec.brief,
+        profile: spec.profile,
+        capabilities: spec.capabilities,
+      }))
       .digest("hex");
 
     const existing = this.store.getAgent(input.name);
@@ -364,6 +363,23 @@ export class LifecycleModule {
           `name ${input.name} already exists with a different resolved spec`,
         );
       const opId = generateOperationId();
+      const original =
+        existing.desired === "provisioning"
+          ? this.findRecoverableCreate(input.name, specHash)
+          : null;
+      const plan: CreatePlan = {
+        kind: "agent.create",
+        spec,
+        specHash,
+        parent: auth.actor,
+        workspacePath: join(this.paths.stateRoot, "agents", input.name, "workspace"),
+        unitNames: [
+          unitName(this.paths.society, input.name, "service"),
+          unitName(this.paths.society, input.name, "path"),
+        ],
+        initialMessage: null,
+        existingCreation: original?.id ?? null,
+      };
       const result: OperationResult = {
         kind: "agent.create",
         agent: input.name,
@@ -378,21 +394,7 @@ export class LifecycleModule {
           requestHash: hash,
           kind: "agent.create",
           payloadJson: JSON.stringify(input),
-          planJson: JSON.stringify({
-            kind: "agent.create",
-            spec,
-            specHash,
-            parent: auth.actor,
-            workspacePath: join(
-              this.paths.stateRoot,
-              "agents",
-              input.name,
-              "workspace",
-            ),
-            unitNames: [],
-            initialMessage: null,
-            existingCreation: null,
-          }),
+          planJson: JSON.stringify(plan),
         });
         if (existing.desired !== "provisioning")
           this.store.setOperationSucceeded(opId, JSON.stringify(result));
@@ -402,27 +404,33 @@ export class LifecycleModule {
         : { operation: opId, state: "succeeded", result };
     }
 
-    const canonicalBase = spawnSync(
-      "/usr/bin/git",
-      [
-        "--git-dir",
-        this.paths.projectGit,
-        "cat-file",
-        "-e",
-        `${input.from}^{commit}`,
-      ],
-      { env: cloneEnv, encoding: "utf8" },
-    );
-    if (canonicalBase.status !== 0)
-      throw new StoreError(
-        "PREREQUISITE_MISSING",
-        `create base ${input.from} is not present in the canonical repository`,
-      );
+    this.assertCanonicalBase(input.from);
+    if (!this.mail)
+      throw new StoreError("INTERNAL_ERROR", "create mail boundary unavailable");
 
     const opId = generateOperationId();
     const workspaceRoot = join(this.paths.stateRoot, "agents", input.name);
-    const workspaceTmp = join(workspaceRoot, "workspace.tmp");
     const workspace = join(workspaceRoot, "workspace");
+    const initialMessage = await this.mail.freezeCreateInitial(
+      auth,
+      opId,
+      input.name,
+      input.brief,
+    );
+    const plan: CreatePlan = {
+      kind: "agent.create",
+      spec,
+      specHash,
+      parent: auth.actor,
+      workspacePath: workspace,
+      unitNames: [
+        unitName(this.paths.society, input.name, "service"),
+        unitName(this.paths.society, input.name, "path"),
+      ],
+      initialMessage,
+      existingCreation: null,
+    };
+
     const outcome = { claim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
       outcome.claim = this.store.claimOperation({
@@ -432,16 +440,7 @@ export class LifecycleModule {
         requestHash: hash,
         kind: "agent.create",
         payloadJson: JSON.stringify(input),
-        planJson: JSON.stringify({
-          kind: "agent.create",
-          spec,
-          specHash,
-          parent: auth.actor,
-          workspacePath: workspace,
-          unitNames: [],
-          initialMessage: null,
-          existingCreation: null,
-        }),
+        planJson: JSON.stringify(plan),
       });
       if (outcome.claim === "retry") return;
       this.store.insertAgent({
@@ -454,85 +453,212 @@ export class LifecycleModule {
         createdBy: auth.actor,
         specJson: JSON.stringify(spec),
       });
+      this.store.insertDeliveries([
+        {
+          messageId: initialMessage.id,
+          recipient: input.name,
+          operationId: opId,
+        },
+      ]);
     });
     if (outcome.claim === "retry")
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
+    return this.finishCreate(opId);
+  }
 
-    try {
-      if (!existsSync(workspace)) {
-        mkdirSync(workspaceTmp, { recursive: true });
-        if (!existsSync(join(workspaceTmp, ".git"))) {
-          const cloned = spawnSync(
-            "/usr/bin/git",
-            [
-              "clone",
-              "--no-local",
-              "--single-branch",
-              "--branch",
-              "main",
-              this.paths.projectGit,
-              workspaceTmp,
-            ],
-            { env: cloneEnv, encoding: "utf8" },
-          );
-          if (cloned.status !== 0)
-            throw new StoreError(
-              "INTERNAL_ERROR",
-              `clone failed: ${cloned.stderr}`,
-            );
-        }
-        const haveBase = spawnSync(
-          "/usr/bin/git",
-          ["-C", workspaceTmp, "cat-file", "-e", `${input.from}^{commit}`],
-          { env: cloneEnv, encoding: "utf8" },
+  /** Mechanical create recovery: re-check the frozen plan; never re-render mail. */
+  async reconcileCreate(operationId: string): Promise<void> {
+    const op = this.store.getOperationById(operationId);
+    if (!op || op.kind !== "agent.create") return;
+    if (op.state !== "pending" && op.state !== "unknown") return;
+    const plan = parseCreatePlan(op);
+    if (plan.existingCreation) {
+      const original = this.store.getOperationById(plan.existingCreation);
+      if (!original) throw new StoreError("STORE_CORRUPT", "missing existingCreation");
+      if (original.state === "succeeded") {
+        const agent = this.store.getAgent(plan.spec.name);
+        if (!agent) throw new StoreError("STORE_CORRUPT", "converged agent missing");
+        const result: OperationResult = {
+          kind: "agent.create",
+          agent: agent.name,
+          desired: agent.desired,
+          remainingOperations: [],
+        };
+        this.store.transaction((_tx) =>
+          this.store.setOperationSucceeded(operationId, JSON.stringify(result)),
         );
-        if (haveBase.status !== 0)
-          throw new StoreError(
-            "PREREQUISITE_MISSING",
-            `cloned workspace does not contain frozen base ${input.from}`,
-          );
-        const checkout = spawnSync(
-          "/usr/bin/git",
-          ["-C", workspaceTmp, "checkout", "--detach", input.from],
-          { env: cloneEnv, encoding: "utf8" },
+      } else if (original.state === "failed" && original.errorCode) {
+        this.store.transaction((_tx) =>
+          this.store.setOperationFailed(operationId, original.errorCode!),
         );
-        if (checkout.status !== 0)
-          throw new StoreError(
-            "INTERNAL_ERROR",
-            `base checkout failed: ${checkout.stderr}`,
-          );
-        const head = spawnSync(
-          "/usr/bin/git",
-          ["-C", workspaceTmp, "rev-parse", "HEAD"],
-          { env: cloneEnv, encoding: "utf8" },
-        );
-        if (head.status !== 0 || head.stdout.trim() !== input.from)
-          throw new StoreError(
-            "STORE_CORRUPT",
-            `workspace base mismatch for ${input.name}`,
-          );
-        renameSync(workspaceTmp, workspace);
-        fsyncDir(workspaceRoot);
       }
-    } catch (e) {
-      if (e instanceof StoreError) throw e;
+      return;
+    }
+    if (!plan.initialMessage)
       throw new StoreError(
-        "INTERNAL_ERROR",
-        `provisioning failed: ${(e as Error).message}`,
+        "STORE_CORRUPT",
+        `accepted create ${operationId} has no frozen initial message`,
+      );
+    await this.finishCreate(operationId, plan);
+  }
+
+  private async finishCreate(
+    operationId: string,
+    acceptedPlan?: CreatePlan,
+  ): Promise<Receipt> {
+    if (!this.mail)
+      throw new StoreError("INTERNAL_ERROR", "create mail boundary unavailable");
+    const op = this.store.getOperationById(operationId);
+    if (!op || op.kind !== "agent.create")
+      throw new StoreError("REQUEST_NOT_FOUND", `no create operation ${operationId}`);
+    if (op.state === "succeeded" || op.state === "failed") return receiptOfOp(op);
+    const plan = acceptedPlan ?? parseCreatePlan(op);
+    if (plan.existingCreation)
+      throw new StoreError("AGENT_NOT_READY", "linked create awaits original creation");
+    if (!plan.initialMessage)
+      throw new StoreError("STORE_CORRUPT", "create plan has no initial message");
+
+    const agent = this.store.getAgent(plan.spec.name);
+    if (!agent || agent.specHash !== plan.specHash)
+      throw new StoreError("STORE_CORRUPT", "create agent/spec mismatch");
+    this.ensureWorkspace(plan);
+    const root = join(this.paths.stateRoot, "agents", plan.spec.name);
+    mkdirSync(join(root, "home"), { recursive: true });
+    mkdirSync(join(this.paths.stateRoot, "mail", "inboxes", plan.spec.name), {
+      recursive: true,
+    });
+    this.units.ensureResident(plan.spec.name, plan.spec.profile);
+
+    let desired = agent.desired;
+    if (desired === "provisioning") {
+      desired = this.paths.hasGoal() ? "enabled" : "stopped";
+      this.store.transaction((_tx) =>
+        this.store.updateAgent({ name: plan.spec.name, desired }),
       );
     }
 
-    mkdirSync(join(workspaceRoot, "home"), { recursive: true });
-    mkdirSync(join(this.paths.stateRoot, "mail", "inboxes", input.name), {
-      recursive: true,
-    });
-    this.units.ensureResident(input.name, spec.profile);
+    await this.mail.publishGated(operationId);
+    if (desired === "enabled") this.units.start(plan.spec.name, false);
 
-    // LIFE-002/MAIL-010 requires the initial brief/context message before
-    // T-create-ready. That publication path is not yet complete, therefore
-    // desired remains provisioning and the operation remains pending. This is
-    // deliberately fail-closed: reconcile/path activation cannot wake it.
-    return { operation: opId, state: "pending" };
+    const result: OperationResult = {
+      kind: "agent.create",
+      agent: plan.spec.name,
+      desired,
+      remainingOperations: [],
+    };
+    this.store.transaction((_tx) =>
+      this.store.setOperationSucceeded(operationId, JSON.stringify(result)),
+    );
+    return { operation: operationId, state: "succeeded", result };
+  }
+
+  private ensureWorkspace(plan: CreatePlan): void {
+    this.assertCanonicalBase(plan.spec.from);
+    const workspace = plan.workspacePath;
+    const workspaceRoot = join(this.paths.stateRoot, "agents", plan.spec.name);
+    const workspaceTmp = join(workspaceRoot, "workspace.tmp");
+    if (!existsSync(workspace)) {
+      mkdirSync(workspaceTmp, { recursive: true });
+      if (!existsSync(join(workspaceTmp, ".git"))) {
+        const cloned = spawnSync(
+          "/usr/bin/git",
+          [
+            "clone",
+            "--no-local",
+            "--single-branch",
+            "--branch",
+            "main",
+            this.paths.projectGit,
+            workspaceTmp,
+          ],
+          { env: cloneEnv, encoding: "utf8" },
+        );
+        if (cloned.status !== 0)
+          throw new StoreError("INTERNAL_ERROR", `clone failed: ${cloned.stderr}`);
+      }
+      const haveBase = spawnSync(
+        "/usr/bin/git",
+        ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`],
+        { env: cloneEnv, encoding: "utf8" },
+      );
+      if (haveBase.status !== 0)
+        throw new StoreError(
+          "PREREQUISITE_MISSING",
+          `cloned workspace does not contain frozen base ${plan.spec.from}`,
+        );
+      const checkout = spawnSync(
+        "/usr/bin/git",
+        ["-C", workspaceTmp, "checkout", "--detach", plan.spec.from],
+        { env: cloneEnv, encoding: "utf8" },
+      );
+      if (checkout.status !== 0)
+        throw new StoreError("INTERNAL_ERROR", `base checkout failed: ${checkout.stderr}`);
+      renameSync(workspaceTmp, workspace);
+      fsyncDir(workspaceRoot);
+    }
+    const head = spawnSync(
+      "/usr/bin/git",
+      ["-C", workspace, "rev-parse", "HEAD"],
+      { env: cloneEnv, encoding: "utf8" },
+    );
+    if (head.status !== 0 || head.stdout.trim() !== plan.spec.from)
+      throw new StoreError(
+        "STORE_CORRUPT",
+        `workspace base mismatch for ${plan.spec.name}`,
+      );
+  }
+
+  private assertCanonicalBase(oid: string): void {
+    const r = spawnSync(
+      "/usr/bin/git",
+      ["--git-dir", this.paths.projectGit, "cat-file", "-e", `${oid}^{commit}`],
+      { env: cloneEnv, encoding: "utf8" },
+    );
+    if (r.status !== 0)
+      throw new StoreError(
+        "PREREQUISITE_MISSING",
+        `create base ${oid} is not present in the canonical repository`,
+      );
+  }
+
+  private findRecoverableCreate(name: Actor, specHash: string): OperationRow | null {
+    for (const id of this.store.recoverableOperations()) {
+      const op = this.store.getOperationById(id);
+      if (!op || op.kind !== "agent.create") continue;
+      try {
+        const plan = parseCreatePlan(op);
+        if (
+          plan.spec.name === name &&
+          plan.specHash === specHash &&
+          plan.existingCreation === null
+        ) return op;
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+}
+
+function parseCreatePlan(op: OperationRow): CreatePlan {
+  try {
+    const plan = JSON.parse(op.planJson) as CreatePlan;
+    if (
+      plan.kind !== "agent.create" ||
+      !plan.spec ||
+      typeof plan.spec.name !== "string" ||
+      typeof plan.spec.from !== "string" ||
+      typeof plan.specHash !== "string" ||
+      !Array.isArray(plan.unitNames)
+    ) {
+      throw new Error("invalid create plan");
+    }
+    return plan;
+  } catch (e) {
+    throw new StoreError(
+      "STORE_CORRUPT",
+      `operation ${op.id} has corrupt create plan: ${(e as Error).message}`,
+    );
   }
 }
 
