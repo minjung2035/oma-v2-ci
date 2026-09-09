@@ -576,14 +576,17 @@ export class LifecycleModule {
 
     let desired = agent.desired;
     if (desired === "provisioning") {
-      desired = this.paths.hasGoal() ? "enabled" : "stopped";
+      // CTX-006/T41: logical enablement survives a missing GOAL; only physical
+      // activation is gated, so the first context publication can wake it.
+      desired = "enabled";
       this.store.transaction((_tx) =>
         this.store.updateAgent({ name: plan.spec.name, desired }),
       );
     }
 
     await this.mail.publishGated(op.id);
-    if (desired === "enabled") this.units.start(plan.spec.name, false);
+    if (desired === "enabled" && this.paths.hasGoal())
+      this.units.start(plan.spec.name, false);
 
     const result: OperationResult = {
       kind: "agent.create",
