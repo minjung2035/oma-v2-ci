@@ -1,7 +1,5 @@
-// MUST [UNIT-001..006]: systemd user unit render/install/lifecycle against the
-// operationally running `systemctl --user`. Units are rendered from the
-// normative templates; names and ExecStart args come from validated host
-// values only (no caller strings).
+// MUST [UNIT-001..006]: fixed systemd user units rendered only from validated
+// host values. Physical systemctl failures are never silently treated as success.
 import {
   readFileSync,
   writeFileSync,
@@ -14,11 +12,7 @@ import {
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import type {
-  Actor,
-  ResourceLimits,
-  UnitObservation,
-} from "../implementation/contracts.js";
+import type { Actor, ResourceLimits, UnitObservation } from "../implementation/contracts.js";
 import { StoreError } from "./store.js";
 
 export const UNIT_TPL_DIR = fileURLToPath(
@@ -31,6 +25,10 @@ export interface RenderValues {
   state: string;
   society: string;
   agent: string;
+  profileHex?: string;
+  memoryBytes?: number;
+  tasks?: number;
+  cpuQuotaPercent?: number;
 }
 
 export const INSTALL_DIR = join(
@@ -45,22 +43,32 @@ const REFERENCE_RESOURCES = {
   cpuQuotaPercent: 200,
 } as const;
 
-/** MUST [UNIT-002]: placeholder substitution; NUL/newline rejected. */
+/** MUST [UNIT-002/003]: one renderer owns every template substitution. */
 export function renderUnit(template: string, v: RenderValues): string {
-  for (const [k, val] of Object.entries(v)) {
-    if (val.includes("\0") || val.includes("\n")) {
-      throw new StoreError(
-        "INVALID_REQUEST",
-        `render value ${k} contains NUL/newline`,
-      );
-    }
+  for (const [key, value] of Object.entries(v)) {
+    if (typeof value === "string" && (value.includes("\0") || value.includes("\n")))
+      throw new StoreError("INVALID_REQUEST", `render value ${key} contains NUL/newline`);
   }
-  return template
+  const memoryBytes = v.memoryBytes ?? REFERENCE_RESOURCES.memoryBytes;
+  const tasks = v.tasks ?? REFERENCE_RESOURCES.tasks;
+  const cpuQuotaPercent = v.cpuQuotaPercent ?? REFERENCE_RESOURCES.cpuQuotaPercent;
+  for (const [key, value] of Object.entries({ memoryBytes, tasks, cpuQuotaPercent })) {
+    if (!Number.isSafeInteger(value) || value <= 0)
+      throw new StoreError("UNSUPPORTED_PROFILE", `${key} is not an enforceable positive integer`);
+  }
+  const rendered = template
     .replaceAll("@NODE@", v.node)
     .replaceAll("@LIBDIR@", v.libdir)
     .replaceAll("@STATE@", v.state)
     .replaceAll("@SOCIETY@", v.society)
-    .replaceAll("@AGENT@", v.agent);
+    .replaceAll("@AGENT@", v.agent)
+    .replaceAll("@PROFILE_HEX@", v.profileHex ?? Buffer.from("test", "utf8").toString("hex"))
+    .replaceAll("@MEMORY_BYTES@", String(memoryBytes))
+    .replaceAll("@TASKS@", String(tasks))
+    .replaceAll("@CPU_QUOTA@", String(cpuQuotaPercent));
+  if (/@[A-Z0-9_]+@/.test(rendered))
+    throw new StoreError("UNSUPPORTED_PROFILE", "unit template has an unresolved placeholder");
+  return rendered;
 }
 
 export function unitName(
@@ -85,43 +93,25 @@ export class UnitsModule {
     const stderr = r.stderr?.trim() ?? "";
     if (r.error || r.status === null) {
       if (tolerateFailure) return stdout;
-      throw new StoreError(
-        "UNSUPPORTED_PROFILE",
-        `systemctl unavailable for ${argv[0] ?? "operation"}`,
-      );
+      throw new StoreError("UNSUPPORTED_PROFILE", `systemctl unavailable for ${argv[0] ?? "operation"}`);
     }
     if (r.status !== 0 && !tolerateFailure) {
       const detail = `${stdout}\n${stderr}`.trim();
-      const code = /start-limit/i.test(detail) ? "START_LIMIT" : "INTERNAL_ERROR";
       throw new StoreError(
-        code,
+        /start-limit/i.test(detail) ? "START_LIMIT" : "INTERNAL_ERROR",
         `systemctl ${argv.join(" ")} failed${detail ? `: ${detail}` : ""}`,
       );
     }
     return stdout;
   }
 
-  /** MUST [UNIT-TPL-002]: atomic install + daemon-reload. */
-  private install(
-    name: string,
-    templateName: string,
-    replacements: Readonly<Record<string, string>> = {},
-  ): void {
+  private install(name: string, templateName: string, overrides: Partial<RenderValues> = {}): void {
     mkdirSync(this.installDir, { recursive: true });
-    const template = readFileSync(join(UNIT_TPL_DIR, templateName), "utf8");
-    let rendered = renderUnit(template, {
+    const rendered = renderUnit(readFileSync(join(UNIT_TPL_DIR, templateName), "utf8"), {
       ...this.values,
+      ...overrides,
       agent: this.agentFrom(name),
     });
-    for (const [token, value] of Object.entries(replacements)) {
-      if (!/^@[A-Z0-9_]+@$/.test(token) || value.includes("\0") || value.includes("\n")) {
-        throw new StoreError("INVALID_REQUEST", `invalid unit replacement ${token}`);
-      }
-      rendered = rendered.replaceAll(token, value);
-    }
-    if (/@[A-Z0-9_]+@/.test(rendered)) {
-      throw new StoreError("UNSUPPORTED_PROFILE", `unresolved unit placeholder in ${name}`);
-    }
     const target = join(this.installDir, name);
     const tmp = join(this.installDir, `.${name}.${process.pid}.tmp`);
     const fd = openSync(tmp, "w", 0o600);
@@ -138,16 +128,10 @@ export class UnitsModule {
     } finally {
       closeSync(dirFd);
     }
-    const linked = spawnSync("systemctl", ["--user", "link", target], {
-      encoding: "utf8",
-    });
-    if (
-      linked.error ||
-      linked.status === null ||
-      (linked.status !== 0 && !/already|exists/i.test(`${linked.stdout ?? ""}\n${linked.stderr ?? ""}`))
-    ) {
+    const linked = spawnSync("systemctl", ["--user", "link", target], { encoding: "utf8" });
+    const detail = `${linked.stdout ?? ""}\n${linked.stderr ?? ""}`;
+    if (linked.error || linked.status === null || (linked.status !== 0 && !/already|exists/i.test(detail)))
       throw new StoreError("INTERNAL_ERROR", `systemctl link failed for ${name}`);
-    }
     this.run(["daemon-reload"]);
   }
 
@@ -159,151 +143,87 @@ export class UnitsModule {
 
   ensureResident(agent: Actor, profile?: string): void {
     const configured = profile ? this.profiles[profile] : undefined;
-    if (profile && !configured) {
+    if (profile && !configured)
       throw new StoreError("UNSUPPORTED_PROFILE", `unknown resident profile ${profile}`);
-    }
-    if (!profile && Object.keys(this.profiles).length > 0) {
+    if (!profile && Object.keys(this.profiles).length > 0)
       throw new StoreError("UNSUPPORTED_PROFILE", `resident profile missing for ${agent}`);
-    }
     const resources = configured ?? REFERENCE_RESOURCES;
-    for (const [name, value] of Object.entries({
+    this.install(unitName(this.society, agent, "service"), "resident.service.in", {
+      profileHex: Buffer.from(profile ?? "test", "utf8").toString("hex"),
       memoryBytes: resources.memoryBytes,
       tasks: resources.tasks,
       cpuQuotaPercent: resources.cpuQuotaPercent,
-    })) {
-      if (!Number.isSafeInteger(value) || value <= 0) {
-        throw new StoreError("UNSUPPORTED_PROFILE", `${name} is not enforceable for ${agent}`);
-      }
-    }
-    const profileHex = Buffer.from(profile ?? "test", "utf8").toString("hex");
-    this.install(
-      unitName(this.society, agent, "service"),
-      "resident.service.in",
-      {
-        "@PROFILE_HEX@": profileHex,
-        "@MEMORY_BYTES@": String(resources.memoryBytes),
-        "@TASKS@": String(resources.tasks),
-        "@CPU_QUOTA@": String(resources.cpuQuotaPercent),
-      },
-    );
+    });
     this.install(unitName(this.society, agent, "path"), "resident.path.in");
   }
 
   ensureBroker(): void {
-    this.install(
-      unitName(this.society, "broker", "service"),
-      "broker.service.in",
-    );
+    this.install(unitName(this.society, "broker", "service"), "broker.service.in");
   }
 
   ensurePrincipal(): void {
-    this.install(
-      unitName(this.society, "principal", "path"),
-      "principal.path.in",
-    );
-    this.install(
-      unitName(this.society, "principal-relay", "service"),
-      "principal-relay.service.in",
-    );
+    this.install(unitName(this.society, "principal", "path"), "principal.path.in");
+    this.install(unitName(this.society, "principal-relay", "service"), "principal-relay.service.in");
   }
 
   ensureReconcile(): void {
-    this.install(
-      unitName(this.society, "reconcile", "service"),
-      "reconcile.service.in",
-    );
-    this.install(
-      unitName(this.society, "reconcile", "timer"),
-      "reconcile.timer.in",
-    );
+    this.install(unitName(this.society, "reconcile", "service"), "reconcile.service.in");
+    this.install(unitName(this.society, "reconcile", "timer"), "reconcile.timer.in");
   }
 
-  /** MUST [UNIT-005]: enable/start only under host conditions; explicit start resets failure state (UNIT-006). */
   start(agent: Actor, explicitRepair: boolean): void {
-    const svc = unitName(this.society, agent, "service");
+    const service = unitName(this.society, agent, "service");
     const path = unitName(this.society, agent, "path");
-    if (explicitRepair) this.run(["reset-failed", svc]);
+    if (explicitRepair) this.run(["reset-failed", service]);
     this.run(["enable", "--now", path]);
-    this.run(["start", svc]);
+    this.run(["start", service]);
   }
 
-  /** MUST [LIFE-003]: stop path first so mail no longer wakes, then the service. */
   stop(agent: Actor, incarnation: number): UnitObservation {
-    const svc = unitName(this.society, agent, "service");
+    const service = unitName(this.society, agent, "service");
     const path = unitName(this.society, agent, "path");
     this.run(["stop", path]);
     this.run(["disable", path]);
-    const obs = this.observe(agent);
-    if (
-      obs.activeState === "inactive" ||
-      obs.activeState === "dead" ||
-      obs.activeState === "failed"
-    ) {
-      if (!this.cgroupHasProcs(agent)) return obs;
-    }
-    this.run(["stop", svc]);
-    const after = this.observe(agent);
+    const before = this.observe(agent);
+    if (["inactive", "dead", "failed"].includes(before.activeState) && !this.cgroupHasProcs(agent))
+      return before;
+    this.run(["stop", service]);
     void incarnation;
-    return after;
+    return this.observe(agent);
   }
 
   observe(agent: Actor): UnitObservation {
-    const svc = unitName(this.society, agent, "service");
-    const out = this.run(
-      [
-        "show",
-        svc,
-        "-p",
-        "ActiveState",
-        "-p",
-        "SubState",
-        "-p",
-        "Result",
-        "-p",
-        "ExecMainStatus",
-        "-p",
-        "ControlGroup",
-      ],
-      true,
-    );
-    const kv = new Map(
-      out.split("\n").map((l) => {
-        const i = l.indexOf("=");
-        return i < 0
-          ? ([l, ""] as const)
-          : ([l.slice(0, i), l.slice(i + 1)] as const);
-      }),
-    );
+    const out = this.run([
+      "show",
+      unitName(this.society, agent, "service"),
+      "-p", "ActiveState",
+      "-p", "SubState",
+      "-p", "Result",
+      "-p", "ExecMainStatus",
+      "-p", "ControlGroup",
+    ], true);
+    const kv = new Map(out.split("\n").map((line) => {
+      const i = line.indexOf("=");
+      return i < 0 ? [line, ""] as const : [line.slice(0, i), line.slice(i + 1)] as const;
+    }));
     const rawStatus = kv.get("ExecMainStatus");
-    const execMainStatus =
-      rawStatus === undefined ||
-      rawStatus === "" ||
-      Number.isNaN(Number(rawStatus))
-        ? 0
-        : Number(rawStatus);
     return {
       activeState: kv.get("ActiveState") ?? "unknown",
       subState: kv.get("SubState") ?? "unknown",
       result: kv.get("Result") ?? "unknown",
-      execMainStatus,
+      execMainStatus: rawStatus && !Number.isNaN(Number(rawStatus)) ? Number(rawStatus) : 0,
       cgroup: kv.get("ControlGroup") ?? "",
       invocationId: "",
     };
   }
 
-  /** Actual cgroup descendants of a unit (S-01: cgroup is the identity source). */
   cgroupProcs(agent: Actor): number[] {
-    const obs = this.observe(agent);
-    const cg = obs.cgroup;
-    if (!cg) return [];
+    const cgroup = this.observe(agent).cgroup;
+    if (!cgroup) return [];
     try {
-      const text = readFileSync(
-        join("/sys/fs/cgroup", cg, "cgroup.procs"),
-        "utf8",
-      );
-      return text
+      return readFileSync(join("/sys/fs/cgroup", cgroup, "cgroup.procs"), "utf8")
         .split("\n")
-        .flatMap((l) => (l && Number.isInteger(Number(l)) ? [Number(l)] : []));
+        .flatMap((line) => line && Number.isInteger(Number(line)) ? [Number(line)] : []);
     } catch {
       return [];
     }
@@ -313,25 +233,15 @@ export class UnitsModule {
     return this.cgroupProcs(agent).length > 0;
   }
 
-  /** MUST [AUTH-003]/[RUN-001]: death confirmed only via an empty cgroup, never by PID polling. */
   confirmDead(agent: Actor, incarnation: number): boolean {
     void incarnation;
-    const procs = this.cgroupProcs(agent);
-    if (procs.length > 0) return false;
+    if (this.cgroupProcs(agent).length > 0) return false;
     const obs = this.observe(agent);
-    return (
-      obs.activeState === "inactive" ||
-      obs.activeState === "dead" ||
-      obs.activeState === "failed" ||
-      obs.cgroup === ""
-    );
+    return ["inactive", "dead", "failed"].includes(obs.activeState) || obs.cgroup === "";
   }
 
-  /** start-limit surface (UNIT-006): show, never auto reset. */
   startLimitStatus(agent: Actor): string | null {
     const obs = this.observe(agent);
-    return obs.activeState === "failed" && obs.result === "start-limit-hit"
-      ? "start_limit"
-      : null;
+    return obs.activeState === "failed" && obs.result === "start-limit-hit" ? "start_limit" : null;
   }
 }
