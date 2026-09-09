@@ -512,6 +512,19 @@ export class Store {
     return r ? rowToOperation(r) : null;
   }
 
+  /** MUST [LIFE-001/007]: locate the one physical create behind stable-name convergence. */
+  findPhysicalCreate(name: Actor, specHash: string): OperationRow | null {
+    const r = this.db.prepare(`SELECT * FROM operations
+      WHERE kind='agent.create'
+        AND json_extract(plan_json,'$.spec.name')=?
+        AND json_extract(plan_json,'$.specHash')=?
+        AND json_type(plan_json,'$.existingCreation')='null'
+      ORDER BY created_at_ms, id LIMIT 1`).get(name, specHash) as
+      | Record<string, unknown>
+      | undefined;
+    return r ? rowToOperation(r) : null;
+  }
+
   /** MUST [REC-001]: pending/unknown operations needing physical reconciliation. */
   recoverableOperations(): OperationId[] {
     const rows = this.db
