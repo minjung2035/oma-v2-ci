@@ -362,11 +362,14 @@ export class LifecycleModule {
           "AGENT_CONFLICT",
           `name ${input.name} already exists with a different resolved spec`,
         );
+      const original = this.store.findPhysicalCreate(input.name, specHash);
+      if (!original)
+        throw new StoreError(
+          "STORE_CORRUPT",
+          `agent ${input.name} has no physical create operation`,
+        );
       const opId = generateOperationId();
-      const original =
-        existing.desired === "provisioning"
-          ? this.findRecoverableCreate(input.name, specHash)
-          : null;
+      const outcome = { claim: "inserted" as "inserted" | "retry" };
       const plan: CreatePlan = {
         kind: "agent.create",
         spec,
@@ -378,16 +381,10 @@ export class LifecycleModule {
           unitName(this.paths.society, input.name, "path"),
         ],
         initialMessage: null,
-        existingCreation: original?.id ?? null,
-      };
-      const result: OperationResult = {
-        kind: "agent.create",
-        agent: input.name,
-        desired: existing.desired,
-        remainingOperations: [],
+        existingCreation: original.id,
       };
       this.store.transaction((_tx) => {
-        this.store.claimOperation({
+        outcome.claim = this.store.claimOperation({
           id: opId,
           actor: auth.actor,
           requestKey: key,
@@ -396,12 +393,10 @@ export class LifecycleModule {
           payloadJson: JSON.stringify(input),
           planJson: JSON.stringify(plan),
         });
-        if (existing.desired !== "provisioning")
-          this.store.setOperationSucceeded(opId, JSON.stringify(result));
       });
-      return existing.desired === "provisioning"
-        ? { operation: opId, state: "pending" }
-        : { operation: opId, state: "succeeded", result };
+      if (outcome.claim === "retry")
+        return receiptOfOp(this.store.getOperation(auth.actor, key)!);
+      return this.settleLinkedCreate(opId, original.id, input.name);
     }
 
     this.assertCanonicalBase(input.from);
@@ -417,7 +412,7 @@ export class LifecycleModule {
       input.name,
       input.brief,
     );
-    const plan: CreatePlan = {
+    const physicalPlan: CreatePlan = {
       kind: "agent.create",
       spec,
       specHash,
@@ -431,8 +426,41 @@ export class LifecycleModule {
       existingCreation: null,
     };
 
-    const outcome = { claim: "inserted" as "inserted" | "retry" };
+    const outcome = {
+      claim: "inserted" as "inserted" | "retry",
+      linked: null as string | null,
+    };
     this.store.transaction((_tx) => {
+      const raced = this.store.getAgent(input.name);
+      if (raced) {
+        if (raced.specHash !== specHash)
+          throw new StoreError(
+            "AGENT_CONFLICT",
+            `name ${input.name} already exists with a different resolved spec`,
+          );
+        const original = this.store.findPhysicalCreate(input.name, specHash);
+        if (!original)
+          throw new StoreError(
+            "STORE_CORRUPT",
+            `agent ${input.name} has no physical create operation`,
+          );
+        outcome.linked = original.id;
+        outcome.claim = this.store.claimOperation({
+          id: opId,
+          actor: auth.actor,
+          requestKey: key,
+          requestHash: hash,
+          kind: "agent.create",
+          payloadJson: JSON.stringify(input),
+          planJson: JSON.stringify({
+            ...physicalPlan,
+            initialMessage: null,
+            existingCreation: original.id,
+          } satisfies CreatePlan),
+        });
+        return;
+      }
+
       outcome.claim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
@@ -440,7 +468,7 @@ export class LifecycleModule {
         requestHash: hash,
         kind: "agent.create",
         payloadJson: JSON.stringify(input),
-        planJson: JSON.stringify(plan),
+        planJson: JSON.stringify(physicalPlan),
       });
       if (outcome.claim === "retry") return;
       this.store.insertAgent({
@@ -463,6 +491,8 @@ export class LifecycleModule {
     });
     if (outcome.claim === "retry")
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
+    if (outcome.linked)
+      return this.settleLinkedCreate(opId, outcome.linked, input.name);
     return this.finishCreate(opId);
   }
 
@@ -473,25 +503,7 @@ export class LifecycleModule {
     if (op.state !== "pending" && op.state !== "unknown") return;
     const plan = parseCreatePlan(op);
     if (plan.existingCreation) {
-      const original = this.store.getOperationById(plan.existingCreation);
-      if (!original) throw new StoreError("STORE_CORRUPT", "missing existingCreation");
-      if (original.state === "succeeded") {
-        const agent = this.store.getAgent(plan.spec.name);
-        if (!agent) throw new StoreError("STORE_CORRUPT", "converged agent missing");
-        const result: OperationResult = {
-          kind: "agent.create",
-          agent: agent.name,
-          desired: agent.desired,
-          remainingOperations: [],
-        };
-        this.store.transaction((_tx) =>
-          this.store.setOperationSucceeded(operationId, JSON.stringify(result)),
-        );
-      } else if (original.state === "failed" && original.errorCode) {
-        this.store.transaction((_tx) =>
-          this.store.setOperationFailed(operationId, original.errorCode!),
-        );
-      }
+      this.settleLinkedCreate(operationId, plan.existingCreation, plan.spec.name);
       return;
     }
     if (!plan.initialMessage)
@@ -502,13 +514,46 @@ export class LifecycleModule {
     await this.finishCreate(operationId, plan);
   }
 
+  private settleLinkedCreate(
+    operationId: string,
+    originalId: string,
+    name: Actor,
+  ): Receipt {
+    const original = this.store.getOperationById(originalId as never);
+    if (!original || original.kind !== "agent.create")
+      throw new StoreError("STORE_CORRUPT", "missing existingCreation");
+    const linked = this.store.getOperationById(operationId as never);
+    if (!linked)
+      throw new StoreError("STORE_CORRUPT", "linked create operation missing");
+    if (original.state === "succeeded") {
+      const agent = this.store.getAgent(name);
+      if (!agent) throw new StoreError("STORE_CORRUPT", "converged agent missing");
+      const result: OperationResult = {
+        kind: "agent.create",
+        agent: agent.name,
+        desired: agent.desired,
+        remainingOperations: [],
+      };
+      this.store.transaction((_tx) =>
+        this.store.setOperationSucceeded(linked.id, JSON.stringify(result)),
+      );
+    } else if (original.state === "failed") {
+      if (!original.errorCode)
+        throw new StoreError("STORE_CORRUPT", "failed create has no error code");
+      this.store.transaction((_tx) =>
+        this.store.setOperationFailed(linked.id, original.errorCode!),
+      );
+    }
+    return receiptOfOp(this.store.getOperationById(linked.id)!);
+  }
+
   private async finishCreate(
     operationId: string,
     acceptedPlan?: CreatePlan,
   ): Promise<Receipt> {
     if (!this.mail)
       throw new StoreError("INTERNAL_ERROR", "create mail boundary unavailable");
-    const op = this.store.getOperationById(operationId);
+    const op = this.store.getOperationById(operationId as never);
     if (!op || op.kind !== "agent.create")
       throw new StoreError("REQUEST_NOT_FOUND", `no create operation ${operationId}`);
     if (op.state === "succeeded" || op.state === "failed") return receiptOfOp(op);
@@ -537,7 +582,7 @@ export class LifecycleModule {
       );
     }
 
-    await this.mail.publishGated(operationId);
+    await this.mail.publishGated(op.id);
     if (desired === "enabled") this.units.start(plan.spec.name, false);
 
     const result: OperationResult = {
@@ -547,9 +592,9 @@ export class LifecycleModule {
       remainingOperations: [],
     };
     this.store.transaction((_tx) =>
-      this.store.setOperationSucceeded(operationId, JSON.stringify(result)),
+      this.store.setOperationSucceeded(op.id, JSON.stringify(result)),
     );
-    return { operation: operationId, state: "succeeded", result };
+    return { operation: op.id, state: "succeeded", result };
   }
 
   private ensureWorkspace(plan: CreatePlan): void {
@@ -619,24 +664,6 @@ export class LifecycleModule {
         "PREREQUISITE_MISSING",
         `create base ${oid} is not present in the canonical repository`,
       );
-  }
-
-  private findRecoverableCreate(name: Actor, specHash: string): OperationRow | null {
-    for (const id of this.store.recoverableOperations()) {
-      const op = this.store.getOperationById(id);
-      if (!op || op.kind !== "agent.create") continue;
-      try {
-        const plan = parseCreatePlan(op);
-        if (
-          plan.spec.name === name &&
-          plan.specHash === specHash &&
-          plan.existingCreation === null
-        ) return op;
-      } catch {
-        continue;
-      }
-    }
-    return null;
   }
 }
 
