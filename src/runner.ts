@@ -2,7 +2,13 @@
 // sandboxed Pi RPC session connected to the durable mail boundary of a single
 // agent. It is NOT a replacement agent runtime: activation, fencing, batch
 // recovery, delivery and boundary receipts are all it owns.
-import { mkdirSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  writeFileSync,
+  openSync,
+  fsyncSync,
+  closeSync,
+} from "node:fs";
 import { join } from "node:path";
 import { connect } from "node:net";
 import type { PreparedBatch, RunLease } from "../implementation/contracts.js";
@@ -12,10 +18,10 @@ import { PiRpcClient, spawnSandboxed } from "./rpc-client.js";
 import { SandboxModule } from "./sandbox.js";
 
 export interface RunnerPaths {
-  runRoot: string; // R (admin.sock lives here)
-  stateRoot: string; // S
+  runRoot: string;
+  stateRoot: string;
   society: string;
-  extensionArtifact: string; // host path of the trusted pi-extension.js
+  extensionArtifact: string;
 }
 
 interface RpcReply {
@@ -24,7 +30,6 @@ interface RpcReply {
   error?: { code: string; message: string };
 }
 
-/** Minimal trusted channel client to the broker admin socket. */
 export class BrokerChannel {
   private parser = new FrameParser(256 * 1024);
   private buf = Buffer.alloc(0);
@@ -98,8 +103,8 @@ export class RunnerModule {
     private readonly paths: RunnerPaths,
     private readonly sandbox: SandboxModule,
     private readonly agent: string,
-    private readonly homeDir: string, // S/agents/<a>/home
-    private readonly workspaceDir: string, // S/agents/<a>/workspace
+    private readonly homeDir: string,
+    private readonly workspaceDir: string,
   ) {}
 
   stop(): Promise<void> {
@@ -109,7 +114,10 @@ export class RunnerModule {
 
   private async open(): Promise<void> {
     await this.channel.connect(join(this.paths.runRoot, "admin.sock"));
-    const r = await this.channel.call("runner.open", { agent: this.agent });
+    const r = await this.channel.call("runner.open", {
+      agent: this.agent,
+      invocationId: process.env.INVOCATION_ID ?? "",
+    });
     if (!r.ok || !r.result)
       throw new StoreError(
         (r.error?.code as never) ?? "BROKER_UNAVAILABLE",
@@ -119,10 +127,7 @@ export class RunnerModule {
   }
 
   private async prepareBatch(): Promise<PreparedBatch | null> {
-    const r = await this.channel.call("batch.prepare", {
-      agent: this.agent,
-      incarnation: this.lease!.incarnation,
-    });
+    const r = await this.channel.call("batch.prepare", {});
     if (!r.ok)
       throw new StoreError(
         (r.error?.code as never) ?? "BROKER_UNAVAILABLE",
@@ -131,22 +136,10 @@ export class RunnerModule {
     return (r.result ?? null) as PreparedBatch | null;
   }
 
-  private async stageBatch(batchId: string): Promise<void> {
-    const r = await this.channel.call("batch.stage", {
-      agent: this.agent,
-      batchId,
-    });
-    if (!r.ok)
-      throw new StoreError(
-        (r.error?.code as never) ?? "BROKER_UNAVAILABLE",
-        r.error?.message ?? "batch.stage failed",
-      );
-  }
-
   private async completeBatch(
     batch: PreparedBatch,
     receipt: Record<string, unknown>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const receiptPath = this.writeReceipt(batch.id, receipt);
     const r = await this.channel.call("batch.complete", {
       batchId: batch.id,
@@ -155,11 +148,17 @@ export class RunnerModule {
       adapterRevision: "pi-0.85.1-oma-batch-v1",
       receiptPath,
     });
-    if (!r.ok)
-      throw new StoreError(
-        (r.error?.code as never) ?? "BROKER_UNAVAILABLE",
-        r.error?.message ?? "batch.complete failed",
-      );
+    if (r.ok) return true;
+    if (
+      r.error?.code === "SESSION_BOUNDARY_UNCONFIRMED" ||
+      r.error?.code === "SPIKE_UNRESOLVED"
+    ) {
+      return false;
+    }
+    throw new StoreError(
+      (r.error?.code as never) ?? "BROKER_UNAVAILABLE",
+      r.error?.message ?? "batch.complete failed",
+    );
   }
 
   private sessionPath(): string {
@@ -179,34 +178,30 @@ export class RunnerModule {
     );
     mkdirSync(dir, { recursive: true });
     const p = join(dir, `${batchId}.json`);
-    const fd = openFdSync(p);
-    writeFileSync(fd, JSON.stringify(receipt), "utf8");
-    fsyncSyncFd(fd);
+    const fd = openSync(p, "w", 0o600);
+    try {
+      writeFileSync(fd, JSON.stringify(receipt), "utf8");
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     return p;
   }
 
   /**
    * MUST [RUN-001]: activation loop. Returns exit code 0 when drained.
-   * Batch completion needs trusted session-boundary evidence (S-03); a Pi turn
-   * that ends with provider errors keeps the batch prepared for re-delivery.
+   * Until S-03 is proven, completion is rejected and the same prepared batch
+   * remains durable for a later compatible runner rather than spinning.
    */
   async run(): Promise<0> {
     await this.open();
     try {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const batch = await this.prepareBatch();
         if (!batch) return 0;
-        await this.stageBatch(batch.id);
         const evidence = await this.deliver(batch);
-        if (evidence) {
-          await this.completeBatch(batch, evidence);
-        } else {
-          // MUST [BATCH-005]: unconfirmed batch stays prepared under its id;
-          // the reconcile timer / path reactor retries later — exiting now
-          // avoids a tight re-delivery loop on the same snapshots.
-          return 0;
-        }
+        if (!evidence) return 0;
+        if (!(await this.completeBatch(batch, evidence))) return 0;
       }
     } finally {
       this.channel.close();
@@ -275,14 +270,11 @@ export class RunnerModule {
       }
       throw e;
     }
-    // boundary evidence: turns after our custom message must not have failed
     const lastEnd = [...events].reverse().find((e) => e.type === "message_end");
     const failed = events.some(
       (e) => e.type === "message_end" && e.stopReason === "error",
     );
-    if (!lastEnd || failed) {
-      return null; // unconfirmed: same batch id will be re-delivered
-    }
+    if (!lastEnd || failed) return null;
     return {
       batchId: batch.id,
       agent: this.agent,
@@ -294,20 +286,5 @@ export class RunnerModule {
       ).length,
       observedEvents: events.map((e) => e.type),
     };
-  }
-}
-
-function openFdSync(p: string): number {
-  const { openSync } = require("node:fs") as typeof import("node:fs");
-  return openSync(p, "w", 0o600);
-}
-
-function fsyncSyncFd(fd: number): void {
-  const { fsyncSync, closeSync } =
-    require("node:fs") as typeof import("node:fs");
-  try {
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
   }
 }
