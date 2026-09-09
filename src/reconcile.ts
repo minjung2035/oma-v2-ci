@@ -7,6 +7,7 @@ import { Store, StoreError } from "./store.js";
 import { MailModule } from "./mail.js";
 import { GitModule, gitEnv } from "./git.js";
 import { UnitsModule } from "./units.js";
+import { LifecycleModule } from "./lifecycle.js";
 
 export interface ReconcilePaths {
   projectGit: string;
@@ -20,24 +21,31 @@ export class ReconcileModule {
     private readonly mail: MailModule,
     private readonly git: GitModule | null,
     private readonly units: UnitsModule,
+    private readonly lifecycle: LifecycleModule,
     private readonly paths: ReconcilePaths,
   ) {}
 
-  /** MUST [LIFE-006]/[REC-001]: order matters — mail effects, git effects, units. */
+  /** MUST [LIFE-006]/[REC-001]: order matters — mail, create/Git, then units. */
   async startup(): Promise<void> {
     if (this.sweeping) return;
     this.sweeping = true;
     try {
       await this.mail.reconcilePending();
-      const ids = this.store.recoverableOperations();
-      for (const id of ids) {
+      for (const id of this.store.recoverableOperations()) {
         const op = this.store.getOperationById(id);
         if (!op) continue;
+        if (op.kind === "agent.create") {
+          await this.lifecycle.reconcileCreate(id);
+          continue;
+        }
         if (
-          (op.kind === "git.submit" || op.kind === "git.integrate" || op.kind === "context.publish") &&
+          (op.kind === "git.submit" ||
+            op.kind === "git.integrate" ||
+            op.kind === "context.publish") &&
           this.git
-        )
+        ) {
           await this.git.reconcile(id);
+        }
       }
     } finally {
       this.sweeping = false;
@@ -56,21 +64,29 @@ export class ReconcileModule {
       const mailRes = await this.mail.reconcilePending();
       let repaired = mailRes.repaired;
       let remaining = mailRes.remaining;
-      const ids = this.store.recoverableOperations();
       let examined = mailRes.examined;
-      for (const id of ids) {
-        examined++;
+      for (const id of this.store.recoverableOperations()) {
         const op = this.store.getOperationById(id);
-        if (!op) continue;
-        if (
-          (op.kind === "git.submit" || op.kind === "git.integrate" || op.kind === "context.publish") &&
+        if (!op || op.kind === "mail.send" || op.kind === "agent.continue")
+          continue;
+        examined++;
+        if (op.kind === "agent.create") {
+          await this.lifecycle.reconcileCreate(id);
+        } else if (
+          (op.kind === "git.submit" ||
+            op.kind === "git.integrate" ||
+            op.kind === "context.publish") &&
           this.git
         ) {
           await this.git.reconcile(id);
-          if (this.store.getOperationById(id)?.state === "succeeded") repaired++;
-          else remaining++;
+        } else {
+          remaining++;
+          continue;
         }
+        if (this.store.getOperationById(id)?.state === "succeeded") repaired++;
+        else remaining++;
       }
+
       // UNIT-005: stopped agents with a live unit are stopped; enabled agents
       // with pending work and an inactive unit are started.
       for (const a of this.store.listAgents()) {
@@ -89,9 +105,7 @@ export class ReconcileModule {
           this.store.preparedBatches(a.name).length;
         const inactive =
           obs.activeState === "inactive" || obs.activeState === "dead";
-        if (pendingCount > 0 && inactive) {
-          this.units.start(a.name, false);
-        }
+        if (pendingCount > 0 && inactive) this.units.start(a.name, false);
       }
       return { examined, repaired, remaining };
     } finally {
