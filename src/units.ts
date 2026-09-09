@@ -14,7 +14,11 @@ import {
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import type { Actor, UnitObservation } from "../implementation/contracts.js";
+import type {
+  Actor,
+  ResourceLimits,
+  UnitObservation,
+} from "../implementation/contracts.js";
 import { StoreError } from "./store.js";
 
 export const UNIT_TPL_DIR = fileURLToPath(
@@ -34,6 +38,12 @@ export const INSTALL_DIR = join(
   "systemd",
   "user",
 );
+
+const REFERENCE_RESOURCES = {
+  memoryBytes: 3 * 1024 * 1024 * 1024,
+  tasks: 128,
+  cpuQuotaPercent: 200,
+} as const;
 
 /** MUST [UNIT-002]: placeholder substitution; NUL/newline rejected. */
 export function renderUnit(template: string, v: RenderValues): string {
@@ -66,21 +76,52 @@ export class UnitsModule {
     private readonly society: string,
     private readonly values: RenderValues,
     private readonly installDir: string = INSTALL_DIR,
+    private readonly profiles: Readonly<Record<string, ResourceLimits>> = {},
   ) {}
 
-  private run(...argv: string[]): string {
+  private run(argv: readonly string[], tolerateFailure = false): string {
     const r = spawnSync("systemctl", ["--user", ...argv], { encoding: "utf8" });
-    return r.stdout?.trim() ?? "";
+    const stdout = r.stdout?.trim() ?? "";
+    const stderr = r.stderr?.trim() ?? "";
+    if (r.error || r.status === null) {
+      if (tolerateFailure) return stdout;
+      throw new StoreError(
+        "UNSUPPORTED_PROFILE",
+        `systemctl unavailable for ${argv[0] ?? "operation"}`,
+      );
+    }
+    if (r.status !== 0 && !tolerateFailure) {
+      const detail = `${stdout}\n${stderr}`.trim();
+      const code = /start-limit/i.test(detail) ? "START_LIMIT" : "INTERNAL_ERROR";
+      throw new StoreError(
+        code,
+        `systemctl ${argv.join(" ")} failed${detail ? `: ${detail}` : ""}`,
+      );
+    }
+    return stdout;
   }
 
   /** MUST [UNIT-TPL-002]: atomic install + daemon-reload. */
-  private install(name: string, templateName: string): void {
+  private install(
+    name: string,
+    templateName: string,
+    replacements: Readonly<Record<string, string>> = {},
+  ): void {
     mkdirSync(this.installDir, { recursive: true });
     const template = readFileSync(join(UNIT_TPL_DIR, templateName), "utf8");
-    const rendered = renderUnit(template, {
+    let rendered = renderUnit(template, {
       ...this.values,
       agent: this.agentFrom(name),
     });
+    for (const [token, value] of Object.entries(replacements)) {
+      if (!/^@[A-Z0-9_]+@$/.test(token) || value.includes("\0") || value.includes("\n")) {
+        throw new StoreError("INVALID_REQUEST", `invalid unit replacement ${token}`);
+      }
+      rendered = rendered.replaceAll(token, value);
+    }
+    if (/@[A-Z0-9_]+@/.test(rendered)) {
+      throw new StoreError("UNSUPPORTED_PROFILE", `unresolved unit placeholder in ${name}`);
+    }
     const target = join(this.installDir, name);
     const tmp = join(this.installDir, `.${name}.${process.pid}.tmp`);
     const fd = openSync(tmp, "w", 0o600);
@@ -91,16 +132,23 @@ export class UnitsModule {
       closeSync(fd);
     }
     renameSync(tmp, target);
+    const dirFd = openSync(this.installDir, "r");
     try {
-      fsyncSync(openSync(this.installDir, "r"));
-    } catch {
-      /* directory fsync best-effort */
+      fsyncSync(dirFd);
+    } finally {
+      closeSync(dirFd);
     }
-    // `systemctl --user link` registers the unit with the user manager even when
-    // the install dir is not the manager's own search path (tests use isolated
-    // XDG dirs; the manager resolves paths from ITS startup environment).
-    this.run("link", target);
-    this.run("daemon-reload");
+    const linked = spawnSync("systemctl", ["--user", "link", target], {
+      encoding: "utf8",
+    });
+    if (
+      linked.error ||
+      linked.status === null ||
+      (linked.status !== 0 && !/already|exists/i.test(`${linked.stdout ?? ""}\n${linked.stderr ?? ""}`))
+    ) {
+      throw new StoreError("INTERNAL_ERROR", `systemctl link failed for ${name}`);
+    }
+    this.run(["daemon-reload"]);
   }
 
   private agentFrom(unit: string): string {
@@ -109,10 +157,34 @@ export class UnitsModule {
     return suffix ? base.slice(0, -suffix[0].length) : base;
   }
 
-  ensureResident(agent: Actor): void {
+  ensureResident(agent: Actor, profile?: string): void {
+    const configured = profile ? this.profiles[profile] : undefined;
+    if (profile && !configured) {
+      throw new StoreError("UNSUPPORTED_PROFILE", `unknown resident profile ${profile}`);
+    }
+    if (!profile && Object.keys(this.profiles).length > 0) {
+      throw new StoreError("UNSUPPORTED_PROFILE", `resident profile missing for ${agent}`);
+    }
+    const resources = configured ?? REFERENCE_RESOURCES;
+    for (const [name, value] of Object.entries({
+      memoryBytes: resources.memoryBytes,
+      tasks: resources.tasks,
+      cpuQuotaPercent: resources.cpuQuotaPercent,
+    })) {
+      if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new StoreError("UNSUPPORTED_PROFILE", `${name} is not enforceable for ${agent}`);
+      }
+    }
+    const profileHex = Buffer.from(profile ?? "test", "utf8").toString("hex");
     this.install(
       unitName(this.society, agent, "service"),
       "resident.service.in",
+      {
+        "@PROFILE_HEX@": profileHex,
+        "@MEMORY_BYTES@": String(resources.memoryBytes),
+        "@TASKS@": String(resources.tasks),
+        "@CPU_QUOTA@": String(resources.cpuQuotaPercent),
+      },
     );
     this.install(unitName(this.society, agent, "path"), "resident.path.in");
   }
@@ -150,27 +222,26 @@ export class UnitsModule {
   start(agent: Actor, explicitRepair: boolean): void {
     const svc = unitName(this.society, agent, "service");
     const path = unitName(this.society, agent, "path");
-    if (explicitRepair) this.run("reset-failed", svc);
-    this.run("enable", "--now", path);
-    this.run("start", svc);
+    if (explicitRepair) this.run(["reset-failed", svc]);
+    this.run(["enable", "--now", path]);
+    this.run(["start", svc]);
   }
 
   /** MUST [LIFE-003]: stop path first so mail no longer wakes, then the service. */
   stop(agent: Actor, incarnation: number): UnitObservation {
     const svc = unitName(this.society, agent, "service");
     const path = unitName(this.society, agent, "path");
-    this.run("stop", path);
-    this.run("disable", path);
+    this.run(["stop", path]);
+    this.run(["disable", path]);
     const obs = this.observe(agent);
     if (
       obs.activeState === "inactive" ||
       obs.activeState === "dead" ||
       obs.activeState === "failed"
     ) {
-      // cgroup already empty (no descendants) — StopUnit is a no-op
       if (!this.cgroupHasProcs(agent)) return obs;
     }
-    this.run("stop", svc);
+    this.run(["stop", svc]);
     const after = this.observe(agent);
     void incarnation;
     return after;
@@ -179,18 +250,21 @@ export class UnitsModule {
   observe(agent: Actor): UnitObservation {
     const svc = unitName(this.society, agent, "service");
     const out = this.run(
-      "show",
-      svc,
-      "-p",
-      "ActiveState",
-      "-p",
-      "SubState",
-      "-p",
-      "Result",
-      "-p",
-      "ExecMainStatus",
-      "-p",
-      "ControlGroup",
+      [
+        "show",
+        svc,
+        "-p",
+        "ActiveState",
+        "-p",
+        "SubState",
+        "-p",
+        "Result",
+        "-p",
+        "ExecMainStatus",
+        "-p",
+        "ControlGroup",
+      ],
+      true,
     );
     const kv = new Map(
       out.split("\n").map((l) => {
@@ -201,8 +275,6 @@ export class UnitsModule {
       }),
     );
     const rawStatus = kv.get("ExecMainStatus");
-    // systemd reports 0 for never-run/inactive units; the failure detail lives
-    // in activeState/subState/result (contracts.ts types this field as number).
     const execMainStatus =
       rawStatus === undefined ||
       rawStatus === "" ||
@@ -229,9 +301,11 @@ export class UnitsModule {
         join("/sys/fs/cgroup", cg, "cgroup.procs"),
         "utf8",
       );
-      return text.split("\n").flatMap((l) => (l ? [Number(l)] : []));
+      return text
+        .split("\n")
+        .flatMap((l) => (l && Number.isInteger(Number(l)) ? [Number(l)] : []));
     } catch {
-      return []; // unit dead or cgroup removed
+      return [];
     }
   }
 
