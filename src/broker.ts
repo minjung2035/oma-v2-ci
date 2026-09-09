@@ -17,6 +17,7 @@ import { join } from "node:path";
 import type {
   Actor,
   AuthContext,
+  BoundaryEvidence,
   Capability,
   PublicMethod,
   ProtocolLimits,
@@ -25,22 +26,16 @@ import type {
   RunLease,
 } from "../implementation/contracts.js";
 import { Store, StoreError } from "./store.js";
-import {
-  isValidActorName,
-  isValidRequestKey,
-} from "./ids.js";
+import { isValidActorName, isValidRequestKey } from "./ids.js";
 import { ConnectionDecoder, encodeFrame } from "./frame.js";
 import { spawnSync } from "node:child_process";
 import { MailModule, StopSignal } from "./mail.js";
-import { UnitsModule } from "./units.js";
+import { UnitsModule, unitName } from "./units.js";
 import { peerCred, tryFlock, sdNotifyReady } from "./leaf.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { GitModule } from "./git.js";
 import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
-import { batchOf } from "./mail.js";
-import { unitName } from "./units.js";
-
 import { capabilitiesOf } from "./authority.js";
 import {
   agentActionParamsCheck,
@@ -59,12 +54,12 @@ import {
   checkObject,
   checkOid,
 } from "./validate.js";
+
 export interface BrokerPaths {
-  stateRoot: string; // S
-  runRoot: string; // R
+  stateRoot: string;
+  runRoot: string;
   society: string;
 }
-
 
 const DEFAULT_LIMITS: ProtocolLimits = {
   frameBytes: 256 * 1024,
@@ -76,11 +71,11 @@ const DEFAULT_LIMITS: ProtocolLimits = {
   contextBytes: 256 * 1024 * 1024,
   bundleBytes: 256 * 1024 * 1024,
   logBytes: 1024 * 1024,
-  batchMaxMessages: 64,
+  batchMaxMessages: 24,
   idleStreamSeconds: 60,
   receiptWaitSeconds: 30,
 };
-/** /proc/<pid>/cgroup path of a peer (cgroup v2 path is the last segment after ':'). */
+
 export function peerCgroup(pid: number): string | null {
   try {
     const text = readFileSync(`/proc/${pid}/cgroup`, "utf8");
@@ -93,11 +88,7 @@ export function peerCgroup(pid: number): string | null {
   }
 }
 
-/** SAFETY: Node does not expose the unix-socket fd; S-01 verified `sock._handle.fd`
- * is the stable private accessor (peer identity comes from SO_PEERCRED on it). */
 function socketFd(sock: Socket): number {
-  // SAFETY: Node hides the unix-socket fd; S-01 verified `_handle.fd` is the
-  // stable private accessor and peer identity comes from SO_PEERCRED on it.
   const handle = (sock as unknown as { _handle?: { fd?: number } })._handle;
   const fd = handle?.fd;
   if (typeof fd !== "number" || fd < 0)
@@ -123,7 +114,6 @@ export class Broker {
     private readonly limits: ProtocolLimits = DEFAULT_LIMITS,
   ) {}
 
-  /** MUST [REC-007]: process-lifetime lock before any DB use; admin socket bind. */
   start(): void {
     if (this.running) return;
     mkdirSync(this.paths.runRoot, { recursive: true });
@@ -141,7 +131,6 @@ export class Broker {
     this.running = true;
   }
 
-  /** MUST [UNIT-004]: READY=1 after recovery and endpoints are prepared. */
   notifyReady(): boolean {
     return sdNotifyReady(process.env.NOTIFY_SOCKET ?? "");
   }
@@ -176,10 +165,6 @@ export class Broker {
     };
   }
 
-  // -------------------------------------------------------------------------
-  // actor endpoint (AUTH-003): the listener pins actor+incarnation; payload never does.
-  // -------------------------------------------------------------------------
-
   private handleActor(sock: Socket, actor: Actor, incarnation: number): void {
     if (this.store.getAgent(actor)?.incarnation !== incarnation) {
       this.fail(sock, {
@@ -212,7 +197,6 @@ export class Broker {
     );
   }
 
-  /** MUST [AUTH-003]: cgroup-mapped identity; fail closed on ambiguity. */
   private trustedContext(
     actor: Actor,
     cred: { pid: number; uid: number; gid: number },
@@ -223,8 +207,8 @@ export class Broker {
     const unitCg = this.units.observe(actor).cgroup;
     const peerCg = peerCgroup(cred.pid);
     if (!unitCg || !peerCg) return null;
-    const cgroupPrefix = unitCg.endsWith("/") ? unitCg : `${unitCg}/`;
-    if (peerCg !== unitCg && !peerCg.startsWith(cgroupPrefix)) return null;
+    const prefix = unitCg.endsWith("/") ? unitCg : `${unitCg}/`;
+    if (peerCg !== unitCg && !peerCg.startsWith(prefix)) return null;
     return {
       actor,
       incarnation: agent.incarnation,
@@ -235,7 +219,6 @@ export class Broker {
     };
   }
 
-  /** runner channel (IPC-009): internal methods on the host admin socket. */
   private handleAdmin(sock: Socket): void {
     const cred = peerCred(socketFd(sock));
     if (!cred) {
@@ -251,34 +234,6 @@ export class Broker {
     );
   }
 
-  /**
-   * MUST [IPC-001/002/011]: framed stream server. Requests and responses are
-   * uint32 BE length + UTF-8 JSON (identical on the public actor channel and
-   * the internal runner channel). A metadata frame carrying a stream
-   * descriptor switches THIS connection into raw collection of exactly
-   * descriptor.bytes — the decoder owns the byte queue, so raw bytes may be
-   * coalesced with the metadata frame, split on any boundary, or followed
-   * immediately by the next control frame. Connection-local state only: two
-   * concurrent uploads on different sockets never share stream bytes.
-   */
-  /**
-   * MUST [IPC-001/002/011]: framed stream server. Requests and responses are
-   * uint32 BE length + UTF-8 JSON (identical on the public actor channel and
-   * the internal runner channel).
-   *
-   * IPC-002 one-request-at-a-time: a single control connection dispatches at
-   * most ONE request at a time and only STARTS the next request after the
-   * current one has fully settled (response boundary written). Frames are
-   * decoded as they arrive (the decoder may buffer bytes), but dispatch is
-   * serialized per connection via a FIFO unit queue — request B can never
-   * overtake request A, and errors from A cannot corrupt B's state. Different
-   * connections run concurrently (no shared dispatch state).
-   *
-   * Streams: a metadata frame with a descriptor switches THIS connection to
-   * raw collection of exactly descriptor.bytes. On completion the broker
-   * checks for excess raw (excessStatus) and rejects STREAM_INVALID BEFORE
-   * dispatching, so a truncated/excess stream never succeeds.
-   */
   private serveFrames(
     sock: Socket,
     handle: (
@@ -306,24 +261,19 @@ export class Broker {
       id: string,
       p: Promise<unknown> | unknown,
       retry: "never" | "same-key",
-    ): Promise<void> => {
-      return Promise.resolve(p).then(
-        (r) => {
-          write(r);
-        },
-        (e) => {
-          write(
+    ): Promise<void> =>
+      Promise.resolve(p).then(
+        (r) => void write(r),
+        (e) =>
+          void write(
             Broker.errorAnswer(id, {
               code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
               message: (e as Error).message,
               retry,
             }),
-          );
-        },
+          ),
       );
-    };
 
-    /** MUST [IPC-002]: dispatch one unit; resume parsing only after it settles. */
     const pump = (): void => {
       if (busy) return;
       const u = units.shift();
@@ -336,8 +286,7 @@ export class Broker {
         : null;
       respond(u.id, handle(u.raw, iter), u.retry).finally(() => {
         busy = false;
-        const more = dec.resumeParsing();
-        processEvents(more);
+        processEvents(dec.resumeParsing());
         pump();
       });
     };
@@ -353,8 +302,6 @@ export class Broker {
       sock.destroy();
     };
 
-    /** Resolve a completed stream boundary before any returned next-frame event
-     * is processed, preserving current-request-before-next-request ordering. */
     const settlePendingStream = (
       events: import("./frame.js").DecoderEvent[],
     ): boolean => {
@@ -370,8 +317,7 @@ export class Broker {
         pendingStream = null;
         return true;
       }
-      const status = dec.excessStatus();
-      if (status === "excess") {
+      if (dec.excessStatus() === "excess") {
         const id = pendingStream.id;
         pendingStream = null;
         rejectStream(id, "stream has excess bytes");
@@ -398,26 +344,29 @@ export class Broker {
           const sf = streamFrame;
           streamFrame = null;
           if (!sf) continue;
-          // MUST [IPC-002]: stream bytes beyond descriptor.bytes are rejected
-          const streamParams = sf?.raw.params;
-          const streamRecord = typeof streamParams === "object" && streamParams !== null && !Array.isArray(streamParams)
-            ? streamParams as Record<string, unknown>
-            : null;
-          const streamDescriptor = streamRecord && (typeof streamRecord.bundle === "object" && streamRecord.bundle !== null
-            ? streamRecord.bundle
-            : typeof streamRecord.content === "object" && streamRecord.content !== null
-              ? streamRecord.content
-              : null);
-          const expectedSha = streamDescriptor && typeof (streamDescriptor as Record<string, unknown>).sha256 === "string"
-            ? (streamDescriptor as Record<string, unknown>).sha256 as string
-            : null;
-          if (expectedSha && /^[0-9a-f]{64}$/.test(expectedSha) &&
-            createHash("sha256").update(ev.bytes).digest("hex") !== expectedSha) {
+          const p = sf.raw.params;
+          const rec =
+            typeof p === "object" && p !== null && !Array.isArray(p)
+              ? (p as Record<string, unknown>)
+              : null;
+          const desc =
+            rec && typeof rec.bundle === "object" && rec.bundle !== null
+              ? rec.bundle
+              : rec && typeof rec.content === "object" && rec.content !== null
+                ? rec.content
+                : null;
+          const expectedSha =
+            desc && typeof (desc as Record<string, unknown>).sha256 === "string"
+              ? ((desc as Record<string, unknown>).sha256 as string)
+              : null;
+          if (
+            expectedSha &&
+            /^[0-9a-f]{64}$/.test(expectedSha) &&
+            createHash("sha256").update(ev.bytes).digest("hex") !== expectedSha
+          ) {
             rejectStream(sf.id, "stream digest mismatch");
             return;
           }
-          // before dispatch; partial next-frame bytes stay pending until the
-          // boundary is confirmed by more bytes or EOF.
           const status = dec.excessStatus();
           if (status === "excess") {
             rejectStream(sf.id, "stream has excess bytes");
@@ -521,11 +470,7 @@ export class Broker {
       }
       sock.destroy();
     });
-    // A peer may destroy its socket while a reply is in flight; an unhandled
-    // 'error' here would crash the whole broker (observed in audit E2E).
-    sock.on("error", () => {
-      sock.destroy();
-    });
+    sock.on("error", () => sock.destroy());
   }
 
   private fail(
@@ -555,7 +500,6 @@ export class Broker {
     return { v: 1, id, ok: true, result };
   }
 
-  /** MUST [M-003]/[IPC-009]: runtime params validation at the trust boundary. */
   private checkParams(
     method: string,
     rawParams: unknown,
@@ -564,75 +508,40 @@ export class Broker {
       typeof rawParams !== "object" ||
       rawParams === null ||
       Array.isArray(rawParams)
-    )
-      return null;
+    ) return null;
     const p = rawParams as Record<string, unknown>;
     const actorNames = new Set(this.store.listAgents().map((a) => a.name));
     let check: ((v: unknown) => string | null) | null = null;
     switch (method) {
-      case "operation.get":
-        check = operationGetParamsCheck;
-        break;
-      case "status.get":
-        check = statusGetParamsCheck;
-        break;
-      case "mail.ack":
-        check = mailAckParamsCheck;
-        break;
+      case "operation.get": check = operationGetParamsCheck; break;
+      case "status.get": check = statusGetParamsCheck; break;
+      case "mail.ack": check = mailAckParamsCheck; break;
       case "route.follow":
-      case "route.unfollow":
-        check = routeParamsCheck;
-        break;
+      case "route.unfollow": check = routeParamsCheck; break;
       case "agent.start":
-      case "agent.stop":
-        check = agentActionParamsCheck;
-        break;
-      case "agent.continue":
-        check = agentContinueParamsCheck;
-        break;
-      case "agent.create":
-        check = agentCreateParamsCheck;
-        break;
-      case "agent.wait":
-        check = agentWaitParamsCheck;
-        break;
-      case "mail.send":
-        check = mailParamsCheck(actorNames, this.limits);
-        break;
-      case "git.known":
-        check = checkObject({ candidate: checkOid });
-        break;
-      case "git.submit":
-        check = gitSubmitParamsCheck(actorNames, this.limits);
-        break;
-      case "git.integrate":
-        check = gitIntegrateParamsCheck;
-        break;
-      case "context.publish":
-        check = contextPublishParamsCheck(this.limits);
-        break;
-      case "logs.read":
-        check = logsReadParamsCheck;
-        break;
-      default:
-        return null;
+      case "agent.stop": check = agentActionParamsCheck; break;
+      case "agent.continue": check = agentContinueParamsCheck; break;
+      case "agent.create": check = agentCreateParamsCheck; break;
+      case "agent.wait": check = agentWaitParamsCheck; break;
+      case "mail.send": check = mailParamsCheck(actorNames, this.limits); break;
+      case "git.known": check = checkObject({ candidate: checkOid }); break;
+      case "git.submit": check = gitSubmitParamsCheck(actorNames, this.limits); break;
+      case "git.integrate": check = gitIntegrateParamsCheck; break;
+      case "context.publish": check = contextPublishParamsCheck(this.limits); break;
+      case "logs.read": check = logsReadParamsCheck; break;
+      default: return null;
     }
     return check(p) === null ? p : null;
   }
 
-  /** MUST [IPC-009]: dispatch only the closed public method set. */
   async dispatch(
     auth: AuthContext,
     req: Request,
     stream: AsyncIterable<Uint8Array> | null,
   ): Promise<object> {
-    // SAFETY: serveFrames only calls dispatch after FrameParser has rejected
-    // non-object roots; this cast exposes the closed envelope for validation.
     const envelope = req as unknown as Record<string, unknown>;
     const id = typeof envelope.id === "string" ? envelope.id : "x";
-    const method =
-      typeof envelope.method === "string" ? envelope.method : "";
-    // MUST [IPC-001]/[IPC-009]: reject malformed or extended envelopes.
+    const method = typeof envelope.method === "string" ? envelope.method : "";
     if (
       typeof envelope.id !== "string" ||
       typeof envelope.method !== "string" ||
@@ -646,8 +555,6 @@ export class Broker {
         retry: "never",
       });
     }
-    // SAFETY: the frame parser rejected non-object roots; the cast only widens
-    // the envelope so the closed-schema validator can inspect it.
     if (
       auth.channel === "actor" &&
       this.store.getAgent(auth.actor)?.incarnation !== auth.incarnation
@@ -658,7 +565,6 @@ export class Broker {
         retry: "never",
       });
     }
-    // MUST [IPC-001]: envelope version must be 1.
     if (envelope.v !== 1) {
       return Broker.errorAnswer(id, {
         code: "UNSUPPORTED_VERSION",
@@ -680,7 +586,6 @@ export class Broker {
         retry: "never",
       });
     }
-    // MUST [IPC-004]: read/ephemeral requests forbid the top-level request key.
     const readOrEphemeral =
       method === "operation.get" ||
       method === "status.get" ||
@@ -697,8 +602,6 @@ export class Broker {
         retry: "never",
       });
     }
-    // MUST [AUTH-002]: capability enforcement at the trust boundary — the
-    // method's required capability must be in the connection's resolved set.
     const need = METHOD_CAPABILITY[method as PublicMethod];
     if (need && !auth.capabilities.has(need)) {
       return Broker.errorAnswer(id, {
@@ -707,8 +610,6 @@ export class Broker {
         retry: "never",
       });
     }
-    // SAFETY: the FrameParser rejected non-object roots; the cast only widens
-    // the envelope so the closed-schema validator (checkParams) can read it.
     const rawParams = (req as unknown as { params: unknown }).params;
     const params = this.checkParams(method, rawParams);
     if (!params) {
@@ -721,14 +622,7 @@ export class Broker {
     try {
       switch (method) {
         case "status.get": {
-          const obs = (
-            a: string,
-          ): {
-            activeState: string;
-            subState: string;
-            result: string;
-            execMainStatus: number;
-          } => {
+          const obs = (a: string) => {
             const o = this.units.observe(a);
             return {
               activeState: o.activeState,
@@ -738,7 +632,7 @@ export class Broker {
             };
           };
           const agent = (params as { agent?: string }).agent;
-          return Broker.okAnswer(id, await this.views.status(agent, obs));
+          return Broker.okAnswer(id, this.views.status(agent, obs));
         }
         case "operation.get": {
           const op = this.store.getOperation(
@@ -747,13 +641,11 @@ export class Broker {
           );
           return Broker.okAnswer(id, op ? receiptOfRow(op) : receiptNotFound);
         }
-        case "mail.send": {
-          // mail.send params are revalidated inside MailModule.send (limits+shape)
+        case "mail.send":
           return Broker.okAnswer(
             id,
             await this.mail.send(auth, keyOf(req), params as never),
           );
-        }
         case "mail.ack":
           return Broker.okAnswer(
             id,
@@ -809,42 +701,47 @@ export class Broker {
         case "agent.continue":
           return Broker.okAnswer(
             id,
-            await this.mail.send(auth, keyOf(req), {
-              to: [auth.actor],
-              subject: "continue",
-              kind: "message",
-              body: (params as { note: string }).note,
-            },
-            undefined,
-            {
-              kind: "agent.continue",
-              params: { note: (params as { note: string }).note },
-            },
-          ),
+            await this.mail.send(
+              auth,
+              keyOf(req),
+              {
+                to: [auth.actor],
+                subject: "continue",
+                kind: "message",
+                body: (params as { note: string }).note,
+              },
+              undefined,
+              {
+                kind: "agent.continue",
+                params: { note: (params as { note: string }).note },
+              },
+            ),
           );
         case "agent.wait":
-          return Broker.okAnswer(id, { accepted: true }); // memory intent; runner applies at the safe boundary
+          return Broker.okAnswer(id, { accepted: true });
         case "git.known": {
           if (!this.git)
             throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
-          const r = this.git.knownRefs();
+          const refs = this.git.knownRefs();
           return Broker.okAnswer(id, {
-            hasCandidate: r.published.includes(
+            hasCandidate: refs.published.includes(
               (params as { candidate: string }).candidate,
             ),
-            prerequisites: [...r.published],
+            prerequisites: [...refs.published],
           });
         }
         case "git.submit": {
           if (!this.git)
             throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
-          const receipt = await this.git.submit(
-            auth,
-            keyOf(req),
-            params as never,
-            stream ?? emptyStream(),
+          return Broker.okAnswer(
+            id,
+            await this.git.submit(
+              auth,
+              keyOf(req),
+              params as never,
+              stream ?? emptyStream(),
+            ),
           );
-          return Broker.okAnswer(id, receipt);
         }
         case "git.integrate": {
           if (!this.git)
@@ -852,11 +749,10 @@ export class Broker {
           const p = params as { candidate: string; expected: string };
           return Broker.okAnswer(
             id,
-            await this.git.integrate(
-              auth,
-              keyOf(req),
-              { candidate: p.candidate, expected: p.expected },
-            ),
+            await this.git.integrate(auth, keyOf(req), {
+              candidate: p.candidate,
+              expected: p.expected,
+            }),
           );
         }
         case "context.publish": {
@@ -865,13 +761,15 @@ export class Broker {
               "SPIKE_UNRESOLVED",
               "context module unavailable",
             );
-          const receipt = await this.git.publishContext(
-            auth,
-            keyOf(req),
-            params as never,
-            stream ?? emptyStream(),
+          return Broker.okAnswer(
+            id,
+            await this.git.publishContext(
+              auth,
+              keyOf(req),
+              params as never,
+              stream ?? emptyStream(),
+            ),
           );
-          return Broker.okAnswer(id, receipt);
         }
         case "logs.read": {
           const p = params as { agent: string; sinceSeconds: number };
@@ -898,8 +796,7 @@ export class Broker {
         }
         default:
           return Broker.errorAnswer(id, {
-            code:
-              method in KNOWN_METHODS ? "CAPABILITY_DENIED" : "UNKNOWN_METHOD",
+            code: "UNKNOWN_METHOD",
             message: `unhandled method ${method}`,
             retry: "never",
           });
@@ -914,22 +811,36 @@ export class Broker {
     }
   }
 
-  /** MUST [IPC-009]/[AUTH-003]: runner-channel identity = peer cgroup inside the
-   * resident unit. Fail closed when the caller is not that unit's descendant. */
   private requireRunnerUnit(pid: number, agent: Actor): void {
     const unit = unitName(this.paths.society, agent, "service");
     const unitCg = this.units.observe(agent).cgroup;
     const peerCg = peerCgroup(pid);
     const prefix = unitCg?.endsWith("/") ? unitCg : `${unitCg}/`;
-    if (!unitCg || !peerCg || (peerCg !== unitCg && !peerCg.startsWith(prefix))) {
+    if (!unitCg || !peerCg || (peerCg !== unitCg && !peerCg.startsWith(prefix)))
       throw new StoreError("AUTH_FAILED", `caller is not inside ${unit}`);
+  }
+
+  /** Resolve the runner actor from physical cgroup identity, never request params. */
+  private runnerActor(pid: number): Actor {
+    const peerCg = peerCgroup(pid);
+    if (!peerCg) throw new StoreError("AUTH_FAILED", "runner cgroup unavailable");
+    const matches: Actor[] = [];
+    for (const row of this.store.listAgents()) {
+      if (row.role !== "resident" || row.desired === "retired") continue;
+      const unitCg = this.units.observe(row.name).cgroup;
+      if (!unitCg) continue;
+      const prefix = unitCg.endsWith("/") ? unitCg : `${unitCg}/`;
+      if (peerCg === unitCg || peerCg.startsWith(prefix)) matches.push(row.name);
     }
+    if (matches.length !== 1)
+      throw new StoreError("AUTH_FAILED", "runner cgroup identity is ambiguous");
+    return matches[0]!;
   }
 
   private async dispatchInternal(
     raw: Record<string, unknown>,
     peer: { pid: number; uid: number; gid: number },
-    _stream: AsyncIterable<Uint8Array> | null, // IPC-011: internal channel has no body streams
+    _stream: AsyncIterable<Uint8Array> | null,
   ): Promise<object> {
     const id = typeof raw.id === "string" ? raw.id : "x";
     const method = typeof raw.method === "string" ? raw.method : "";
@@ -941,9 +852,7 @@ export class Broker {
       typeof paramsRaw !== "object" ||
       paramsRaw === null ||
       Array.isArray(paramsRaw) ||
-      !Object.keys(raw).every((k) =>
-        ["v", "id", "method", "params"].includes(k),
-      )
+      !Object.keys(raw).every((k) => ["v", "id", "method", "params"].includes(k))
     ) {
       return Broker.errorAnswer(id, {
         code: "INVALID_REQUEST",
@@ -952,166 +861,121 @@ export class Broker {
       });
     }
     const params = paramsRaw as Record<string, unknown>;
-    switch (method) {
-      case "runner.open": {
-        if (
-          typeof params.agent !== "string" ||
-          !isValidActorName(params.agent)
-        ) {
-          return Broker.errorAnswer(id, {
-            code: "INVALID_REQUEST",
-            message: "runner.open needs an agent",
-            retry: "never",
-          });
+    try {
+      switch (method) {
+        case "runner.open": {
+          if (
+            typeof params.agent !== "string" ||
+            !isValidActorName(params.agent) ||
+            !Object.keys(params).every((k) => ["agent", "invocationId"].includes(k))
+          ) {
+            throw new StoreError("INVALID_REQUEST", "runner.open args invalid");
+          }
+          this.requireRunnerUnit(peer.pid, params.agent);
+          return Broker.okAnswer(id, this.openRun(params.agent));
         }
-        this.requireRunnerUnit(peer.pid, params.agent);
-        return Broker.okAnswer(id, this.openRun(params.agent));
-      }
-      case "batch.prepare": {
-        const agent = typeof params.agent === "string" ? params.agent : "";
-        if (!isValidActorName(agent)) {
-          return Broker.errorAnswer(id, {
-            code: "INVALID_REQUEST",
-            message: "batch.prepare needs an agent",
-            retry: "never",
-          });
+        case "batch.prepare": {
+          if (Object.keys(params).length !== 0)
+            throw new StoreError("INVALID_REQUEST", "batch.prepare takes no params");
+          const agent = this.runnerActor(peer.pid);
+          const row = this.store.getAgent(agent);
+          if (!row) throw new StoreError("AUTH_FAILED", "runner identity missing");
+          const batch = await this.mail.prepare(
+            this.runnerAuth(agent, row.incarnation),
+          );
+          if (!batch) return Broker.okAnswer(id, null);
+          this.mail.moveToCur(agent, batch.messageIds);
+          const viewDir = join(
+            this.paths.stateRoot,
+            "agents",
+            agent,
+            "runner",
+            "view",
+          );
+          mkdirSync(viewDir, { recursive: true });
+          writeViewSheet(
+            join(viewDir, `batch-${batch.id}.json`),
+            JSON.stringify({
+              id: batch.id,
+              agent: batch.agent,
+              incarnation: batch.incarnation,
+              deliveryMode: batch.deliveryMode,
+              notice: batch.notice,
+              messageIds: batch.messageIds,
+            }),
+          );
+          this.views.publishInbox(batch);
+          return Broker.okAnswer(id, batch);
         }
-        this.requireRunnerUnit(peer.pid, agent);
-        const auth = this.runnerAuth(
-          agent,
-          this.store.getAgent(agent)?.incarnation ?? 0,
-        );
-        const batch = await this.mail.prepare(auth);
-        return Broker.okAnswer(id, batch);
-      }
-      case "batch.stage": {
-        const agent = typeof params.agent === "string" ? params.agent : "";
-        const batchId =
-          typeof params.batchId === "string" ? params.batchId : "";
-        if (!isValidActorName(agent) || !/^b-[0-9a-f-]{36}$/.test(batchId)) {
-          return Broker.errorAnswer(id, {
-            code: "INVALID_REQUEST",
-            message: "batch.stage args invalid",
-            retry: "never",
-          });
-        }
-        this.requireRunnerUnit(peer.pid, agent);
-        const batch = this.store.getBatch(batchId);
-        if (!batch || batch.agent !== agent) {
-          return Broker.errorAnswer(id, {
-            code: "BATCH_CONFLICT",
-            message: "batch ownership mismatch",
-            retry: "same-key",
-          });
-        }
-        const ids = safeList(batch.messageIdsJson, batchId);
-        this.mail.moveToCur(agent, ids);
-        const prepared = batchOf(
-          {
-            id: batch.id,
-            incarnation: batch.incarnation,
-            messageIds: ids,
-            sessionPath: batch.sessionPath,
-          },
-          agent,
-        );
-        const viewDir = join(
-          this.paths.stateRoot,
-          "agents",
-          agent,
-          "runner",
-          "view",
-        );
-        mkdirSync(viewDir, { recursive: true });
-        const view = {
-          id: prepared.id,
-          agent: prepared.agent,
-          incarnation: prepared.incarnation,
-          deliveryMode: prepared.deliveryMode,
-          notice: prepared.notice,
-          messageIds: prepared.messageIds,
-        };
-        writeViewSheet(
-          join(viewDir, `batch-${batchId}.json`),
-          JSON.stringify(view),
-        );
-        this.views.publishInbox(prepared);
-        // the extension reads the notice from the view manifest
-        writeViewSheet(
-          join(viewDir, `batch-${batchId}.json`),
-          JSON.stringify({ ...view, notice: prepared.notice }),
-        );
-        return Broker.okAnswer(id, { staged: true });
-      }
-      case "batch.complete": {
-        const agent = typeof params.agent === "string" ? params.agent : "";
-        if (!isValidActorName(agent)) {
-          return Broker.errorAnswer(id, {
-            code: "INVALID_REQUEST",
-            message: "batch.complete needs an agent",
-            retry: "never",
-          });
-        }
-        this.requireRunnerUnit(peer.pid, agent);
-        const auth = this.runnerAuth(
-          agent,
-          this.store.getAgent(agent)?.incarnation ?? 0,
-        );
-        const evidence = params as {
-          batchId: string;
-          incarnation: number;
-          sessionPath: string;
-          adapterRevision: string;
-          receiptPath: string;
-        };
-        if (
-          typeof evidence.batchId !== "string" ||
-          !/^b-[0-9a-f-]{36}$/.test(evidence.batchId)
-        ) {
-          return Broker.errorAnswer(id, {
-            code: "INVALID_REQUEST",
-            message: "bad evidence",
-            retry: "never",
-          });
-        }
-        try {
-          await this.mail.complete(auth, evidence);
+        case "batch.complete": {
+          const allowed = [
+            "batchId",
+            "incarnation",
+            "sessionPath",
+            "adapterRevision",
+            "receiptPath",
+          ];
+          if (!Object.keys(params).every((k) => allowed.includes(k)))
+            throw new StoreError("INVALID_REQUEST", "batch.complete args invalid");
+          const evidence = params as unknown as BoundaryEvidence;
+          if (
+            typeof evidence.batchId !== "string" ||
+            !/^b-[0-9a-f-]{36}$/.test(evidence.batchId) ||
+            !Number.isSafeInteger(evidence.incarnation) ||
+            typeof evidence.sessionPath !== "string" ||
+            typeof evidence.adapterRevision !== "string" ||
+            typeof evidence.receiptPath !== "string"
+          ) {
+            throw new StoreError("INVALID_REQUEST", "bad boundary evidence");
+          }
+          const batch = this.store.getBatch(evidence.batchId);
+          if (!batch)
+            throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
+          const agent = batch.agent;
+          this.requireRunnerUnit(peer.pid, agent);
+          const row = this.store.getAgent(agent);
+          if (!row || row.incarnation !== evidence.incarnation)
+            throw new StoreError("BATCH_CONFLICT", "runner incarnation mismatch");
+          await this.mail.complete(
+            this.runnerAuth(agent, row.incarnation),
+            evidence,
+          );
           return Broker.okAnswer(id, { completed: true });
-        } catch (e) {
-          return Broker.errorAnswer(id, {
-            code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
-            message: (e as Error).message,
-            retry: "same-key",
+        }
+        case "host.principalRelay": {
+          const principal = this.store.getAgent("principal");
+          if (!principal) return Broker.okAnswer(id, { moved: 0, pending: 0 });
+          const moved = this.mail.moveToCur("principal", []);
+          const pending = this.store.pendingDeliveries("principal").length;
+          const newFiles = listNewFiles(
+            join(this.paths.stateRoot, "mail", "inboxes", "principal", "new"),
+          );
+          for (const f of newFiles)
+            this.mail.moveToCur("principal", [f as never]);
+          return Broker.okAnswer(id, {
+            moved: newFiles.length,
+            pending: pending + moved,
           });
         }
+        case "host.reconcile": {
+          const rep = this.reconcile
+            ? await this.reconcile.sweep()
+            : await this.mail.reconcilePending();
+          return Broker.okAnswer(id, rep);
+        }
+        default:
+          return Broker.errorAnswer(id, {
+            code: "UNKNOWN_METHOD",
+            message: `internal ${method}`,
+            retry: "never",
+          });
       }
-      case "host.principalRelay": {
-        const principal = this.store.getAgent("principal");
-        if (!principal) return Broker.okAnswer(id, { moved: 0, pending: 0 });
-        const moved = this.mail.moveToCur("principal", []);
-        const pending = this.store.pendingDeliveries("principal").length;
-        const newFiles = listNewFiles(
-          join(this.paths.stateRoot, "mail", "inboxes", "principal", "new"),
-        );
-        for (const f of newFiles)
-          this.mail.moveToCur("principal", [f as never]);
-        return Broker.okAnswer(id, {
-          moved: newFiles.length,
-          pending: pending + moved,
-        });
-      }
-      case "host.reconcile": {
-        const rep = this.reconcile
-          ? await this.reconcile.sweep()
-          : await this.mail.reconcilePending();
-        return Broker.okAnswer(id, rep);
-      }
-      default:
-        return Broker.errorAnswer(id, {
-          code: "UNKNOWN_METHOD",
-          message: `internal ${method}`,
-          retry: "never",
-        });
+    } catch (e) {
+      return Broker.errorAnswer(id, {
+        code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
+        message: (e as Error).message,
+        retry: "same-key",
+      });
     }
   }
 
@@ -1127,7 +991,6 @@ export class Broker {
     };
   }
 
-  /** MUST [LIFE-004]/[T-run-open]: fence previous incarnation, then issue a lease. */
   private openRun(actor: Actor): RunLease {
     const agent = this.store.getAgent(actor);
     if (!agent) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${actor}`);
@@ -1140,8 +1003,8 @@ export class Broker {
       next = this.store.getAgent(actor)!.incarnation + 1;
       this.store.updateAgent({ name: actor, incarnation: next });
     });
-    const ls = this.listenActor(actor);
-    return { actor, incarnation: next, socketHostPath: ls.socketHostPath };
+    const listener = this.listenActor(actor);
+    return { actor, incarnation: next, socketHostPath: listener.socketHostPath };
   }
 
   drainAndClose(): void {
@@ -1166,17 +1029,6 @@ export class Broker {
   }
 }
 
-function safeList(json: string, what: string): string[] {
-  try {
-    const v = JSON.parse(json);
-    if (Array.isArray(v) && v.every((x) => typeof x === "string"))
-      return v as string[];
-  } catch {
-    /* fallthrough */
-  }
-  throw new StoreError("STORE_CORRUPT", `${what} has corrupt message list`);
-}
-
 function listNewFiles(dir: string): string[] {
   try {
     mkdirSync(dir, { recursive: true });
@@ -1197,15 +1049,12 @@ function writeViewSheet(path: string, content: string): void {
 }
 
 function emptyStream(): AsyncIterable<Uint8Array> {
-  return (async function* () {
-    /* no bytes */
-  })();
+  return (async function* () {})();
 }
 
 function keyOf(req: { request?: string }): string {
-  if (!isValidRequestKey(req.request)) {
+  if (!isValidRequestKey(req.request))
     throw new StoreError("INVALID_REQUEST", "mutation requires a request key");
-  }
   return req.request;
 }
 
@@ -1236,7 +1085,6 @@ function receiptOfRow(op: {
   return rec;
 }
 
-/** MUST [AUTH-002]: method -> required capability, enforced at dispatch. */
 const METHOD_CAPABILITY: Readonly<Partial<Record<PublicMethod, Capability>>> = {
   "mail.send": "mail.send",
   "route.follow": "route.follow",
