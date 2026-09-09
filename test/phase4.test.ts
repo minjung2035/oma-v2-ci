@@ -33,9 +33,19 @@ import type {
   AuthContext,
   Capability,
   ResolvedAgentSpec,
+  ResourceLimits,
 } from "../implementation/contracts.js";
 
 const NODE = process.execPath;
+const TEST_RESOURCES: ResourceLimits = {
+  memoryBytes: 512 * 1024 * 1024,
+  tasks: 64,
+  cpuQuotaPercent: 100,
+  tmpBytes: 64 * 1024 * 1024,
+  workspaceBytes: 1024 * 1024 * 1024,
+  stagingBytes: 1024 * 1024 * 1024,
+  checkTimeoutSeconds: 30,
+};
 
 interface Env {
   dir: string;
@@ -61,6 +71,7 @@ function envOf(): { env: Env; cleanup: () => void } {
     society,
     { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "" },
     join(xdg, "systemd", "user"),
+    { p: TEST_RESOURCES, child: TEST_RESOURCES },
   );
   const mail = new MailModule({ stateRoot: state, society }, store, 64);
   const resolver = (
@@ -88,8 +99,6 @@ function envOf(): { env: Env; cleanup: () => void } {
   return {
     env: { dir, xdg, society, store, units, mail, lifecycle, views },
     cleanup: () => {
-      // the unit files live in the isolated xdg dir but were `link`ed into the
-      // real user manager; stop/disable/reset by glob name, then drop the files
       spawnSync("systemctl", ["--user", "stop", `oma-*`], { stdio: "ignore" });
       spawnSync("systemctl", ["--user", "disable", `oma-*`], {
         stdio: "ignore",
@@ -142,7 +151,6 @@ function seedPrincipalAndA(store: Store): void {
 }
 
 function seedProjectGit(env: Env): string {
-  // minimal shared project.git with a main branch and a real frozen base OID
   const seedDir = join(env.dir, "seed");
   mkdirSync(seedDir, { recursive: true });
   spawnSync("git", ["init", "-q", "-b", "main"], {
@@ -198,7 +206,6 @@ function seedProjectGit(env: Env): string {
 }
 
 function seedGov(env: Env): void {
-  // world/context/current => GOAL present
   const context = join(env.dir, "state", "world", "context");
   const revision = join(context, "revisions", "seed");
   mkdirSync(revision, { recursive: true });
@@ -267,7 +274,6 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
       ["--user", "verify", ...written.map((f) => join(out, f))],
       { encoding: "utf8", env: { ...process.env } },
     );
-    // analyzer is advisory for unit syntax; success means no hard errors
     assert.equal(
       r.status === 0 || /no such file|Failed to parse/.test(r.stderr) === false,
       true,
@@ -283,8 +289,7 @@ test("T36: start-limit is exposed, never auto-reset; explicit start repairs", as
   try {
     seedPrincipalAndA(env.store);
     seedGov(env);
-    // install the real unit then override ExecStart with a permanent failure
-    env.units.ensureResident("a");
+    env.units.ensureResident("a", "p");
     const unitFile = join(
       env.xdg,
       "systemd",
@@ -305,8 +310,6 @@ WantedBy=default.target
 `;
     writeFileSync(unitFile, body);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
-    // manual `systemctl start` resets the rate limiter, so start once and let
-    // Restart=on-failure auto-restarts hit the 5-burst limit (~6s)
     spawnSync(
       "systemctl",
       ["--user", "start", unitName(env.society, "a", "service")],
@@ -318,7 +321,6 @@ WantedBy=default.target
       waited += 200;
       if (env.units.observe("a").result === "start-limit-hit") break;
     }
-    // observe the result surface; reconcile-like loop must NOT reset-failed
     let sawStartLimit = false;
     for (let i = 0; i < 10; i++) {
       if (env.units.startLimitStatus("a") !== null) sawStartLimit = true;
@@ -335,12 +337,10 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
   const { env, cleanup } = envOf();
   try {
     seedPrincipalAndA(env.store);
-    // agent a has no GOAL: create path is not used; seed desired enabled via store
     env.store.transaction((_t) =>
       env.store.updateAgent({ name: "a", desired: "enabled" }),
     );
-    // install units and make the service run (`sleep`) so we can stop a live cgroup
-    env.units.ensureResident("a");
+    env.units.ensureResident("a", "p");
     const unitFile = join(
       env.xdg,
       "systemd",
@@ -358,7 +358,6 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
       { stdio: "ignore" },
     );
     assert.equal(env.store.getAgent("a")!.incarnation, 0);
-    // mail arrives while the agent runs
     const mail = new MailModule(
       { stateRoot: join(env.dir, "state"), society: env.society },
       env.store,
@@ -378,7 +377,6 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
       join(env.dir, "state", "mail", "inboxes", "a", "new"),
     ).length;
     assert.equal(storedInInbox, 1);
-    // stop: successful with cgroup death confirmed
     const res = env.lifecycle.stop(
       auth("a", ["agent.manage.self"]),
       "a",
@@ -386,7 +384,6 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
     );
     assert.equal(res.state, "succeeded");
     assert.equal(env.units.confirmDead("a", 0), true);
-    // the saved mail is retained after stop
     assert.equal(
       readdirSync(join(env.dir, "state", "mail", "inboxes", "a", "new")).length,
       1,
@@ -396,12 +393,15 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
   }
 });
 
-test("T38: start fails RUN_TERMINATION_UNKNOWN while prior cgroup is not dead; incarnation unchanged", () => {
+test("T38: stopped actor with an unconfirmed stale cgroup cannot start; incarnation unchanged", () => {
   const { env, cleanup } = envOf();
   try {
     seedPrincipalAndA(env.store);
     seedGov(env);
-    env.units.ensureResident("a");
+    env.store.transaction((_t) =>
+      env.store.updateAgent({ name: "a", desired: "stopped" }),
+    );
+    env.units.ensureResident("a", "p");
     const unitFile = join(
       env.xdg,
       "systemd",
@@ -410,7 +410,7 @@ test("T38: start fails RUN_TERMINATION_UNKNOWN while prior cgroup is not dead; i
     );
     writeFileSync(
       unitFile,
-      `[Unit]\nDescription=test sleep\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`,
+      `[Unit]\nDescription=test stale sleep\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`,
     );
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     spawnSync(
@@ -418,7 +418,6 @@ test("T38: start fails RUN_TERMINATION_UNKNOWN while prior cgroup is not dead; i
       ["--user", "start", unitName(env.society, "a", "service")],
       { stdio: "ignore" },
     );
-    // unit is live => cgroup has procs => start must refuse
     assert.throws(
       () =>
         env.lifecycle.start(auth("a", ["agent.manage.self"]), "a", "start-1"),
@@ -450,7 +449,7 @@ test("T13: capability escape — sibling stop denied; created child uses a real 
     assert.equal(res.state, "succeeded");
     const child = env.store.getAgent("child")!;
     assert.equal(child.desired, "enabled");
-    assert.equal(env.units.confirmDead("child", 0), true); // no GOAL => no physical activation
+    assert.equal(env.units.confirmDead("child", 0), true);
     assert.deepEqual(JSON.parse(child.specJson).capabilities, [
       "mail.send",
       "route.follow",
