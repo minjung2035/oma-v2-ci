@@ -1,6 +1,6 @@
-// MUST [S-01]: minimal native leaf for SO_PEERCRED and sd_notify through koffi
-// FFI (verified against this host; node exposes neither API). koffi is the only
-// native dependency; these two leaf functions are the full native surface.
+// MUST [S-01]: minimal native leaf for SO_PEERCRED, sd_notify and the
+// process-lifetime REC-007 advisory lock through koffi FFI.
+import { closeSync, fstatSync, openSync } from "node:fs";
 import { load } from "koffi";
 
 export interface PeerCred {
@@ -48,10 +48,7 @@ function lib(): typeof cached extends null
 const SOL_SOCKET = 1;
 const SO_PEERCRED = 17; // Linux
 
-/**
- * MUST [S-01]/[AUTH-003]: peer identity of an accepted unix socket. Returns
- * null when the host cannot provide credentials (fail closed).
- */
+/** MUST [S-01]/[AUTH-003]: peer identity of an accepted unix socket. */
 export function peerCred(fd: number): PeerCred | null {
   if (!Number.isInteger(fd) || fd < 0) return null;
   try {
@@ -95,8 +92,18 @@ export function sdNotifyReady(notifySocket: string): boolean {
   }
 }
 
-/** MUST [REC-007]: process-lifetime exclusive advisory lock (LOCK_EX|LOCK_NB). */
-export function tryFlock(fd: number): boolean {
+const heldLocks = new Map<string, number>();
+
+function lockKey(fd: number): string | null {
+  try {
+    const st = fstatSync(fd, { bigint: true });
+    return `${st.dev}:${st.ino}`;
+  } catch {
+    return null;
+  }
+}
+
+function flockExclusive(fd: number): boolean {
   const LOCK_EX = 2;
   const LOCK_NB = 4;
   try {
@@ -106,9 +113,60 @@ export function tryFlock(fd: number): boolean {
   }
 }
 
+/**
+ * MUST [REC-007]: acquire the society lock before runtime.sqlite is opened.
+ * The owning fd is retained by this module until explicit shutdown/process exit.
+ */
+export function acquireProcessLock(path: string): boolean {
+  let fd: number;
+  try {
+    fd = openSync(path, "w", 0o600);
+  } catch {
+    return false;
+  }
+  if (!flockExclusive(fd)) {
+    closeSync(fd);
+    return false;
+  }
+  const key = lockKey(fd);
+  if (!key) {
+    closeSync(fd);
+    return false;
+  }
+  const previous = heldLocks.get(key);
+  if (previous !== undefined) {
+    closeSync(fd);
+    return true;
+  }
+  heldLocks.set(key, fd);
+  return true;
+}
+
+/**
+ * MUST [REC-007]: Broker.start may open the same inode after the entrypoint has
+ * already acquired it. Treat that as the same process-lifetime lock; unrelated
+ * inodes/processes still go through the real non-blocking flock syscall.
+ */
+export function tryFlock(fd: number): boolean {
+  const key = lockKey(fd);
+  if (key && heldLocks.has(key)) return true;
+  return flockExclusive(fd);
+}
+
+export function releaseProcessLocks(): void {
+  for (const fd of heldLocks.values()) {
+    try {
+      closeSync(fd);
+    } catch {
+      /* process shutdown */
+    }
+  }
+  heldLocks.clear();
+}
+
 export function hasNativeLeaf(): boolean {
   try {
-    return peerCred(-1) === null; // negative fd must fail cleanly, proving the leaf loads
+    return peerCred(-1) === null;
   } catch {
     return false;
   }
