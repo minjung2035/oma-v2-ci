@@ -1,6 +1,32 @@
-# 설계 검증 기록
+# 설계 및 runtime 검증 기록
 
-현재 OMA 저장소를 열지 않고 별도 임시 디렉터리에서 수행했다. 이는 아키텍처에 사용하는 기존 도구의 동작 확인이며, OMA runtime 구현 완료를 뜻하지 않는다.
+이 문서는 primitive 조합의 초기 검증과 현재 `oma-v2` runtime 검증의 색인을 제공한다. 최신 실행 결과와 남은 release blocker는 [implementation/validation.md](implementation/validation.md)를 기준으로 한다.
+
+## 2026-09-10 현재 상태
+
+현재 HEAD는 `326a1d6` (`close lifecycle and batch deterministic contracts`)이며 다음을 실행했다.
+
+```text
+npm test              83 passed, 0 failed, 0 skipped
+node scripts/loc.mjs  9,900 non-empty physical lines
+```
+
+이번 상태에서 확인된 구현 범위는 다음과 같다.
+
+- persisted resolved spec을 기준으로 capability를 확인하고, 동적으로 만든 Resident도 자신의 workspace/profile로 runner를 연다.
+- 같은 name과 resolved spec의 create 요청은 하나의 physical create로 수렴하고, 다른 resolved spec은 충돌한다.
+- GOAL 전 activation 차단, broker singleton lock, stop/start의 실제 systemd 관측, stale cgroup 차단이 실행된다.
+- batch fairness/notice shape와 Principal relay의 new→cur 동작이 실행된다.
+- Git bundle quarantine, published ref, main CAS, policy reread, context CAS/reconcile이 실행된다.
+- Pi 0.85.1 sandbox/custom message 전달은 확인했지만, provider가 없는 환경에서는 trusted session-boundary evidence가 생성되지 않는다.
+
+전체 test-to-requirement audit과 unresolved 목록은 [implementation/validation.md](implementation/validation.md)의 Phase 10 및 coverage map을 본다. `npm test`의 성공은 S-03/S-04/S-06/S-09 release gate를 통과했다는 뜻이 아니다.
+
+## LOC 계산 주의
+
+현재 `scripts/loc.mjs`는 기존 baseline 호환을 위해 공백 줄만 제외한 non-empty physical line을 계산하며 결과는 9,900이다. 공백과 comment-only line을 모두 제외한 code-only cloc audit은 9,407이다. 두 계산을 동일한 숫자로 취급하지 않으며, canonical LOC 계산기는 normative spec에서 최종 고정해야 한다.
+
+아래의 초기 primitive 검증 기록은 2026-09-07 설계 단계에 OMA 저장소를 열지 않고 별도 임시 디렉터리에서 수행한 것이다. 이는 아키텍처에 사용하는 기존 도구의 동작 확인이며, OMA runtime 구현 완료를 뜻하지 않는다. 현재 runtime audit은 위의 2026-09-10 상태와 [implementation/validation.md](implementation/validation.md)에 별도로 기록한다.
 
 ## systemd 설정
 

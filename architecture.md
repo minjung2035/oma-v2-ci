@@ -206,7 +206,7 @@ X-OMA-Context: <context-oid>
 재현 코드: project <commit> tests/refresh-race.test.ts
 ```
 
-From/ID/시각은 broker가 확정한다. kind는 message/question/result/alert/context 정도이며 권한을 뜻하지 않는다. 본문의 'Human approved' 문자열은 인증 metadata가 아니다.
+From/ID/시각은 broker가 확정한다. kind는 message/question/result/alert/context/approval_required/critical로 구분하며 권한을 뜻하지 않는다. approval_required는 exact identity를 가진 승인 요청이고 critical은 긴급 인지 요청이다. 의미와 권한의 구분은 §8.5를 따른다. 본문의 'Human approved' 문자열은 인증 metadata가 아니다.
 
 ### 5.2 접수 순서
 
@@ -385,6 +385,8 @@ systemd invocation + agent 상태 확인
  → 새 mail/continue 있으면 반복, 없으면 정상 종료
 ```
 
+S-03의 trusted receipt/adapter 의미와 저장 경계를 검증 기록에 pin하기 전에는 production batch.complete를 SPIKE_UNRESOLVED로 막고 presented를 쓰지 않는다. 타입 필드나 임시 adapter 성공 응답으로 검증을 대신하지 않는다.
+
 오류·중단 종료는 presented로 확정하지 않는다. Pi에 충분한 저장 경계가 없으면 중복 안내 가능성을 택하고 receipt를 보수적으로 기록한다. agent_end는 사용자 작업의 완료 선언이 아니다.
 
 ### 7.2 자체 계속 실행과 대기
@@ -464,6 +466,22 @@ broker는 파일 묶음을 context.git에 commit → current ref CAS → RO revi
 - Principal의 답변은 해당 mail thread로 돌아감. 지속할 결정만 context에 게시.
 
 Principal의 고급 판단을 기다리는 부분만 대기하고 독립 작업은 계속된다. 인지적 도움과 시스템 실행 권한 승인은 서로 다른 계약이다.
+
+### 8.5 Principal mail의 명시적 의미
+
+기존 message(일반 전달), question(판단 요청), result(결과/종합 후보), alert(일반 경고), context(공유 의도)를 유지하고 approval_required(HIGH 등 exact-candidate 승인 요청), critical(심각한 결함/손상의 긴급 인지 요청)을 추가한다. normal이나 RESULT_READY 같은 동의어를 별도 wire enum으로 늘리지 않는다.
+
+approval_required는 repo/target_ref/expected_base/candidate/policy_revision을 구조화한 approvalFor와 명시 principal 수신자를 가진다. kind는 sender의 요청 의미이며 실제 HIGH 판정·peer quorum·Principal ACCEPT의 증명이 아니다. broker의 authenticated attestation만 authority가 된다. critical도 예산·격리·Human 권한을 우회하거나 현재 tool을 강제 취소하지 않는다.
+
+result는 sender가 유용한 결과를 보고한다는 의미다. agent_end/idle/메일 침묵을 result나 사용자 작업 완료로 변환하지 않는다. Principal이 Human에게 실제 설명한 경계는 별개다. commons는 여전히 Principal에게 자동 전달하지 않고 UI 오프라인이면 새로운 Astra를 띄우지 않는다.
+
+### 8.6 progressive decision packet
+
+Resident는 질문, 최소 맥락, 선택지, 추천, tradeoff, exact evidence locator, 미확정/반대 증거를 일반 Markdown으로 정리한다. HIGH 요청에는 policy revision을 포함한 exact candidate, tier 근거, peer 상태, 실제 검사 evidence, changed surface를 추가한다. packet은 별도 Decision 객체나 workflow가 아니다.
+
+첫 overview는 8 KiB 이내를 작성 기준으로 권장하고 큰 diff/log는 immutable Git/mail 경로로 분리한다. 새로운 강제 preview 제한이나 자동 절단을 만들지는 않는다. 자동 Pi notice는 여전히 metadata와 경로만 넣으며 packet 전문도 자동 주입하지 않는다.
+
+Principal은 semantic summary→architecture/behavior→risk/disagreement→evidence→changed files/diff→원자료 순으로 필요만큼 읽는다. 순서·모든 단계 이행을 runtime이 강제하지 않는다. 요약만 믿는 자동 승인을 하지 않고 중요한 불확실성이 남으면 exact source/check/attestation을 직접 확인한다. 상세 규범은 [tiered policy 계약](implementation/integration-policy.md) §5다.
 
 ## 9. 모델이 사용하는 표면과 정보 주입
 
@@ -700,9 +718,11 @@ main이 이동하면 STALE_BASE와 actual OID를 반환한다. agent가 새 후�
 
 일반 통합 권한은 설정상 Residents에게 부여할 수 있으며 Principal 독점으로 두지 않는다. host credential/egress/배포 설정은 code repo 밖에서 보호한다. 위험 등급을 모델의 LOW 자기선언으로 낮추지 않는다.
 
-초기 기본 프로필의 peer review는 메일 관례다. protected path는 Resident 통합에서 거절한다. 강제 승인을 요구하는 프로젝트에서는 아래의 작은 조건 검사를 추가한다. 모든 프로젝트에 LOW/MEDIUM/HIGH workflow를 강요하지 않는다.
+기존 base substrate의 peer review는 메일 관례이고 protected path는 Resident 통합에서 거절한다. 2026-09-09에 채택한 목표는 §12.5의 tiered integration profile이다. base 구현만으로 tiered가 완료됐다고 부르지 않는다. tiered도 LOW/MEDIUM/HIGH 업무 workflow를 강제하지 않고 canonical main 변경의 조건만 검사한다. protected path hard deny는 HIGH로 우회하지 않는다.
 
-### 12.3 강제 승인 옵션
+후보 검사의 CPU/memory/PID/storage 및 후손 종료를 기존 fixed unit 경계 안에서 집행할 exact primitive는 S-01-CANDIDATE로 검증한다. 그 전 nonempty checks profile은 production에서 차단하고 transient systemd unit/무제한 실행으로 우회하지 않는다.
+
+### 12.3 exact-candidate 승인 경계
 
 승인 대상은 `(repo, target_ref, expected_base, candidate, policy_revision)`이다. 단독 SHA만으로 서로 다른 base나 target에 승인을 재사용하지 않는다.
 
@@ -714,7 +734,7 @@ oma revoke <own-attestation>
 
 이 명령은 인증된 identity의 append-only attestation과 관련 mail을 만든다. 일반 reply의 approve 문자열을 파싱해 권한으로 바꾸지 않는다. 동일 주체는 중복 집계하지 않고 object는 명시적으로 취소할 때까지 유효하다. 새 candidate/base/policy에는 새 승인이 필요하다.
 
-Principal에게 승인 능력을 줄지는 Human의 위임 설정이다. 기술적 조언과 승인 권한은 다르다. Human 승인은 model shell이 접근할 수 없는 UI/host channel에서만 발급한다. 새 agent를 만들었다고 독립적인 신뢰 주체가 늘었다고 간주하지 않는다.
+base에서 이 승인은 선택 기능이고, 목표 tiered에서 MEDIUM/HIGH 조건을 집행하는 attestation은 필수다. 정확한 DDL/IPC와 revoke·Principal 결정 평가의 구현 경계는 S-08에서 확정한다. Principal에게 승인 능력을 줄지는 Human의 위임 설정이다. HIGH는 위임이 없으면 통합할 수 없다. 기술적 조언과 승인 권한은 다르다. Human 승인은 model shell이 접근할 수 없는 UI/host channel에서만 발급한다. 새 agent를 만들었다고 독립적인 신뢰 주체가 늘었다고 간주하지 않는다.
 
 ### 12.4 통합 crash 대조
 
@@ -727,6 +747,38 @@ pending operation의 base/candidate를 먼저 영속화하고 ref를 갱신한 �
 ```
 
 모든 canonical writer가 이 경계를 통과해야 성립한다. 수동 ref 변경으로 전제를 깨면 자동 복구하지 않는다. cherry-pick의 의미적 동등성과 원래 commit ancestry도 혼동하지 않는다.
+
+### 12.5 LOW / MEDIUM / HIGH는 integration policy다
+
+목표 tiered profile의 effectiveTier는 deterministicRiskTier, repositoryPolicyFloor, challengeReentryFloor, residentRequestedTier의 max다. Resident는 상향을 요청할 수 있지만 다른 floor를 낮출 수 없다. host가 지정한 path/mode/checker rule만 deterministic risk 신호로 사용한다. concurrency/security 같은 의미를 runtime이 LLM으로 분류하지 않고 rule miss를 안전 증명으로 취급하지 않는다.
+
+- LOW: 공통 physical checks를 통과하면 사전 peer APPROVE 없이 통합 가능하다. 이미 제출된 active exact OBJECT는 무시하지 않는다.
+- MEDIUM: self가 아닌 eligible logical Resident 최소 1명의 exact APPROVE, zero active OBJECT, 공통 checks가 필요하다. distinct identity는 cognition 독립성의 증명이 아니다.
+- HIGH: MEDIUM 이상의 peer floor, zero active OBJECT, 위임받은 Principal의 exact ACCEPT, 공통 checks가 필요하다. REQUEST_REVISION/REJECT는 승인 부재이며 사회의 session을 지우거나 task lifecycle을 만들지 않는다.
+
+base/candidate/policy 또는 적용 authority 조건이 바뀌면 stale review를 재사용하지 않는다. 부족 조건은 응답으로 알려 주며 reviewer가 나타날 때까지 mutex를 잡거나 중앙 배정 queue를 만들지 않는다. formal HIGH 요청이 peer 조건으로 막혀 있어도 question/critical로 Principal에게 문제를 물을 수 있다. 조언은 OBJECT의 자동 취소가 아니다.
+
+모든 통합은 CAS 후 exact integration 사실과 tier/evidence를 commons에 공개한다. submit mail만으로 통합 공개를 대신하지 않는다. CAS 성공 후 mail 전 crash는 같은 op/message ID로 공개를 보충하며 CAS를 다시 실행하지 않는다. detailed schema/authority evaluator는 S-08/S-10에서 검증한다.
+
+### 12.6 post-merge challenge와 persistent re-entry floor
+
+Resident는 integration receipt의 exact candidate와 evidence를 지목해 공개 challenge할 수 있다. 신고 접수와 유효성 판정은 다르다. 유효한 결함 판정은 corrective/revert candidate 또는 해당 변경/직접 후속 변경의 minimum re-entry tier 상승으로 연결한다. LOW의 유효 결함은 최소 MEDIUM, 중대한 architecture/security/data-loss 문제는 host policy에 따라 HIGH로 올릴 수 있어야 한다.
+
+floor는 session·재시작·revert로 사라지지 않는 최소 authenticated metadata다. Git ancestry로 모든 후속 main commit에 floor를 퍼뜨리거나, rebased/cherry-picked 수정이 새 OID라는 이유로 floor를 무시해서는 안 된다. 의미 lineage는 Git이 자동 판별해 주는 속성이 아니다. 판정권·scope/mapping·보존/해제·CAS 경합·최소 schema는 S-10 미결정으로 둔다. 새 Change graph나 임시 notes/file DB를 만들어 채우지 않는다.
+
+revert도 Resident가 현재 main에서 만든 새 commit을 submit/integrate하는 경로다. 자동 reset/force-push/history rewind/충돌 해결/권한 우회는 없다. challenge 접수만으로 자동 revert·floor 상향하지 않는다. S-10이 미완료면 LOW optimistic+지속적 오류교정이 production으로 지원된다고 표시하지 않는다.
+
+### 12.7 OPTIONAL fresh-context evidence verifier
+
+fresh verifier는 고정 Critic 직책이나 approval vote가 아니다. 필요할 때 exact candidate/goal/acceptance/constraints/check evidence/risk signals로 별도 관점을 얻고 ordinary evidence를 반환하는 선택 primitive다. reviewer quota·자동 Principal 대체·replacement patch ownership을 만들지 않는다.
+
+현재 Resident는 public archive/world/Git history를 읽을 수 있으므로 agent.create만으로 clean-room이라고 주장할 수 없다. author/peer framing은 archive 외 reports/commit messages/context에도 남을 수 있다. fresh session과 실제 input/mount 제한, quota/identity/lifecycle을 S-11에서 검증한다. 기본 public society 계약을 몰래 바꾸거나 모델에게 읽지 말라고 지시하는 것만으로 격리를 흉내내지 않는다.
+
+### 12.8 반영 범위와 출시 경계
+
+이 확장은 2026-09-09 사용자 제안 검토에 따른 architecture 변경이다. tiered의 authenticated attestation 및 최소 persistent floor metadata만 제한적으로 허용한다. 현재 여섯 base entity/DB version은 그대로 두고 S-08/S-10이 끝날 때 migration·closed IPC·CLI·transaction·crash 계약을 함께 확정한다. base profile은 새 tiered 요구를 구현한 대체품이 아니다.
+
+구현 계약 및 판단 근거는 [integration-policy.md](implementation/integration-policy.md)에 둔다. 기존 8,000 LOC 목표와 10,000 초과 architecture review, tests 제외를 유지한다. 새로운 tier 정책의 성능 우위는 long-task benchmark로 검증할 가설이며 workflow/governance를 계속 확대하는 근거가 아니다.
 
 ## 13. Broker IPC, 권한, inference
 
@@ -831,7 +883,7 @@ CREATE TABLE usage (
 );
 ```
 
-이 schema는 migration의 출발점이다. timestamps, FK indexes, CHECK constraints, byte count는 구현 시 보충한다. 비용은 고정된 최소 화폐 단위의 정수로 계산하며 provider usage token은 별도 상세 필드에 기록한다. approval profile에는 attestation table을 추가한다.
+이 schema는 migration의 출발점이다. timestamps, FK indexes, CHECK constraints, byte count는 구현 시 보충한다. 비용은 고정된 최소 화폐 단위의 정수로 계산하며 provider usage token은 별도 상세 필드에 기록한다. base의 선택 approval/목표 tiered의 승인 기록은 authenticated attestation 확장에 둔다. tiered의 최소 floor metadata까지 허용하되 정확한 DDL과 migration은 S-08/S-10 완료 후 확정한다. 본 절의 여섯 표는 base schema이며 tiered persistence가 완성됐다는 뜻이 아니다.
 
 mail body, artifact versions, focus, task ownership, review stages 테이블은 없다. agents는 실행해도 되는 논리 identity를 보존하며 process 생존의 원본은 systemd다.
 
@@ -874,6 +926,8 @@ pending/succeeded/failed/unknown을 구분한다. timeout이나 빈 tool result�
 7. Principal이 GOAL을 게시하면 residents mail로 알린다.
 8. 각 Resident가 자기 session에서 목표를 읽고 일을 선택한다.
 ```
+
+initialResidents는 최초 bootstrap seed다. 동적 child를 포함한 실행 registry는 agents의 durable resolved spec이다. runner/unit/auth는 initialResidents에서 현재 actor를 찾거나 default profile로 대체하지 않는다. resolved spec에는 생성 당시 model profile 참조와 자원 상한도 고정하고 현재 host의 명시적 권한 폐기는 별도로 적용한다.
 
 초기 population의 크기와 capability는 host 설정이다. Principal이 매번 task를 분할해 spawn해야 사회가 시작되는 구조로 만들지 않는다. 예시 초기 population은 3명이며 성능 실험으로 조정한다.
 
@@ -1080,8 +1134,8 @@ Human: '로그인 갱신 오류를 고쳐줘. 기존 클라이언트 호환성�
 5. 두 수정안의 장기 의미가 애매해 a가 principal에 question mail을 보낸다. 질문에는 두 선택지, 반대 증거, commit과 테스트 경로가 있다.
 6. relay와 Principal extension이 기존 Astra session에 질문을 안내한다. Principal은 필요 시 git fetch/show로 원자료를 읽고 고수준 판단을 답장한다.
 7. a는 답변을 반영해 자기 clone에서 수정·테스트·commit한다. submit은 증분 bundle로 게시 ref를 만들고 b에게 result mail을 보낸다.
-8. b는 안내된 ref를 fetch하여 같은 candidate를 확인한다. 의견은 reply로 남긴다. 강제 승인 profile이면 정확한 tuple의 attestation도 남긴다.
-9. 자격 있는 a 또는 b가 integrate를 요청한다. broker는 실제 candidate 검사와 main CAS를 수행한다. main이 바뀌었으면 Resident가 다시 통합 후보를 만든다.
+8. b는 안내된 ref를 fetch하여 같은 candidate를 확인한다. 의견은 reply로 남긴다. tiered의 MEDIUM/HIGH이면 정확한 tuple의 attestation도 남기고 HIGH는 Principal ACCEPT를 받는다.
+9. 자격 있는 a 또는 b가 integrate를 요청한다. broker는 실제 candidate 검사·현재 tier/authority 조건과 main CAS를 수행한다. main이 바뀌었으면 Resident가 다시 통합 후보를 만든다. tiered는 실제 integration을 commons에 공개하고 사후 challenge를 허용한다.
 10. 관련 결과를 종합한 Resident가 `--to principal`로 보고서를 제출한다. Principal은 증거와 Human 목표를 대조해 설명한다. 개별 tool trace는 전달되지 않는다.
 11. 더 할 일이 없는 Residents는 정상 종료한다. workspace/session은 남고, 새 메일이 오면 같은 논리 agent가 다시 깨어난다.
 
@@ -1105,12 +1159,16 @@ src/
   inference.ts            provider relay, quota, usage
   reconcile.ts            미완료 물리 효과 대조
   views.ts                inbox/agents/topics, scoped journal 조회
-  approval.ts             선택적 강제 승인
+  approval.ts             tiered의 deterministic tier/attestation 검사 (base에서는 비활성)
 examples/
   systemd/                실제 형식의 unit 초안
 ```
 
 독립 service 여럿, 범용 bus, manager/controller 계층을 추가하지 않는다. 파일이 커지면 책임별로 나누되 각 모듈은 위 재사용 프로그램 하나 또는 명확한 경계 하나를 담당한다.
+
+구현 완료는 requirement 이름의 test가 있다는 뜻이 아니다. 모든 runtime MUST/MUST NOT은 실제 production owner, 설치 entrypoint부터의 호출 경로, 위반을 검출하는 실행 시험과 현재 revision 증거를 가져야 한다. canonical 물리 순서와 release trace는 구현 계약의 physical-ordering/compliance 문서를 따른다.
+
+Core production LOC는 공백 줄과 comment-only 줄을 제외한 code lines로 계산한다. code+inline comment 줄은 1줄이다. tests 제외, 8,000 이하 목표와 10,000 초과 architecture review는 유지하며 pinned cloc/manifest 규칙은 구현 계약의 loc-budget 문서를 따른다.
 
 ### 21.2 구현 전 통과해야 할 spike
 
@@ -1129,7 +1187,7 @@ spike에서 Pi의 특정 기능이 부족하면 adapter를 고친다. 정확한 
 
 ### 21.3 실제 모델 사회 평가
 
-동일 task/도구 접근/성공 기준으로 강한 모델 단독, 저비용 society 단독, Principal+society를 비교한다. 동일 비용과 동일 시간 한도를 각각 평가하고 반복 실험의 편차를 남긴다.
+동일 task/도구 접근/성공 기준으로 강한 모델 단독, 저비용 society 단독, Principal+society를 비교한다. tiered 유무와 optional verifier 유무도 분리해 false LOW/불필요 HIGH·challenge 후 반복 결함·Principal 대기/비용을 측정한다. 동일 비용과 동일 시간 한도를 각각 평가하고 반복 실험의 편차를 남긴다.
 
 품질·결함·누락, Principal input/output token, 전체 token/비용, 지연을 측정한다. 추가로 commons가 Principal에 유입된 건수, 실제 도움 된 question 비율, ID/경로 lookup 실패, 첫 유용한 행동까지 tool 수, 재검증 비용을 기록한다.
 

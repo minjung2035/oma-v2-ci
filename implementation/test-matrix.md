@@ -4,6 +4,12 @@
 
 **MUST [TEST-002]** fault injection은 test-only boundary hook 또는 외부 kill harness로 구현한다. production에 관리자용 arbitrary failpoint IPC를 추가하지 않는다. 실서비스/process tests와 mocked primitive tests를 결과에서 분리한다. test source는 LOC budget에서 제외하지만 production이 test helper에 의존해서는 안 된다.
 
+## Runtime suite alignment
+
+**MUST [TEST-006]** T01–T77은 normative acceptance contract다. 현재 `npm test`의 총 test 수가 77과 다르더라도 이 표의 행을 삭제하거나 다른 의미로 재분류하지 않는다.
+
+**MUST [TEST-007]** 2026-09-10 현재 runtime suite는 `83 passed, 0 failed, 0 skipped`다. 83개에는 T01–T77의 구현 test와 lifecycle/broker/request-cache/authority 및 audit 회귀 test가 함께 포함될 수 있다. 보조 회귀 test의 통과는 대응하는 acceptance 행의 미실행 oracle을 자동으로 충족하지 않는다. 상세한 실행 범위와 미해결 항목은 [validation.md](validation.md)를 따른다.
+
 | ID / 요구 | Given → When → Then |
 |---|---|
 | T01 / N,A | pinned source와 신규 구현 → baseline hash/import/schema/method inventory 검사 → architecture unchanged, native-v2 domain import 0, 허용 여섯 tables만 존재 |

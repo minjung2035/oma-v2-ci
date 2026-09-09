@@ -32,6 +32,14 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **아직 OPEN (후속 단계 필요)**: 실제 broker+runner를 통한 actor-listener 인증 강제, PID 재사용 stress, READY 전 요청 거절, 저장소 quota 강제(파일시스템 수준), full FD enumeration. 이들은 runtime 구현 단계(phase 2+)에서 재실행한다.
 
+### S-01-CANDIDATE — candidate resource execution primitive
+
+**SPIKE [S-01-CANDIDATE]** fixed unit set을 변경하지 않고 candidate check의 CPU/memory/tasks/tmp/workspace/staging 한도와 모든 후손 종료를 실제 kernel 경계에서 집행하는 primitive가 필요하다. 현재 구현은 bwrap/systemd cgroup으로 candidate descendant timeout을 검증하지만 workspace/staging quota와 고정 worker 경계 전체를 production profile로 확정하지 않았다.
+
+**현재 상태 (2026-09-10)**: T62-resource는 unresolved workspace/staging limit을 candidate 실행 전에 `SPIKE_UNRESOLVED`로 차단하는 것을 확인했고, T61 계열은 candidate descendant 종료를 확인했다. 이것은 S-01-CANDIDATE 전체 통과가 아니다.
+
+**MUST** transient `systemd-run`/새 durable unit, userland polling만으로 candidate 격리를 완성했다고 표시하지 않는다. 허용 primitive와 exact argv/mount/FD/resource observation이 validation 기록에 고정되기 전 non-empty integration checks production profile을 활성화하지 않는다. checks를 자동으로 빈 배열로 바꾸는 fallback도 금지한다.
+
 ## S-02 — 기존 Principal Pi의 host/private 경계
 
 **SPIKE [S-02]** 기존 interactive Pi session에 attach하는 정확한 API/credential 전달, 모든 model-facing tool override, trusted extension helper와 model tool의 분리 방식을 검증한다. Principal에게 full Human context를 유지하면서 model tool이 host filesystem/credentials를 읽지 못해야 한다.
@@ -57,6 +65,8 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **아직 OPEN**: 두 tool 실행 중 steer의 tool-result 보존, batch prepare/completed 귀속 경계, 동시 prepared batch 수, session-boundary 증거(session flush/fsync), 모델의 session JSON 변조 대응 — 이는 runner+Pi adapter 구현(phase 5)과 실provider(S-04)에서 재검증.
 
+**현재 runtime gate (2026-09-10)**: sandboxed Pi custom-message 전달과 provider 오류 시 presented 미확정은 test suite에서 확인했다. 그러나 adapter revision/receipt semantics가 production validation에 pin되지 않았으므로 `batch.complete`가 성공적으로 presented를 commit했다고 해석하지 않는다. 이 gate가 닫히기 전 smoke test는 delivery plumbing 검증일 뿐 batch completion 증명이 아니다.
+
 **MUST [SP-03-T]** tool 두 개가 실행 중인 Pi에 direct 질문을 넣고, 두 tool 결과가 모두 보존된 다음 inference에 custom notice가 포함되는지 확인한다. 별도 public followUp도 넣는다. 첫 batch가 끝나기 전에 두 번째 질문, context update, stop/abort, UI reconnect를 주입한다. batch prepare 전/후, cur 이동 후, custom notice 전/후, tool effect 후, agent_end 직전/직후, session 저장 전/후, DB complete 전/후에 kill한다.
 
 **MUST [SP-03-A]** 각 notice의 immutable message ID snapshot과 정상 boundary 귀속을 증명하고, 미확정은 동일 ID로 재안내한다. tool result 유실·자동 tool replay·미완료 mail 영구 누락은 0건이어야 한다. 모델이 writable session JSON을 바꿔 trusted completion을 위조하지 못해야 한다. 오래된 incarnation의 complete는 거절해야 한다.
@@ -68,6 +78,8 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 **SPIKE [S-04]** pinned Pi의 model/provider registration과 streaming data codec, abort/error/finish event mapping, provider input/output/cache/reasoning token 회계, request 최대비용 upper bound를 검증한다. 특정 model 이름만으로 가격이나 context limit을 추정하지 않는다.
 
 **S-04 상태 (2026-09-07)**: 실험 미실행 — 격리 프로파일에 provider credential/model profile이 없어 실제 stream codec/usage 상한을 시험할 수 없다 (`Unknown provider: unknown`로 확인). → **OPEN, credential 부재**. mock provider 기반 concurrent reservation/lineage 경계 테스트(T48-T51)는 phase 6(inference module)에서 실행 가능하며 그때 기록한다. provider relay를 임의 URL proxy로 구현하지 않는다 (SP-04-A).
+
+**현재 runtime 상태 (2026-09-10)**: T48–T51 mock provider/usage semantics는 `npm test`에서 통과한다. 이는 실제 provider codec, 가격 upper bound, provider cancellation 과금 의미를 확정하지 않는다. 실제 provider pin과 raw stream evidence 전까지 S-04는 OPEN이다.
 
 **MUST [SP-04-T]** 실제 허용된 cheap/Principal profile에서 stream 성공·429·5xx·중간 끊김·초기 연결 실패·취소·provider가 응답 직전 broker kill을 시험한다. mock provider로 concurrent reservation/lineage/reserve 경계를 대량 검사하고 실제 provider로 codec 호환을 확인한다. raw Human payload가 journal/mail/DB에 없는지 검색한다.
 
@@ -95,6 +107,8 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 **결정**: bundle+RO alternate quarantine+canonical 수입+published ref+peer fetch+CAS race의 실제 argv/env recipe가 동작. S-05의 순수 git substrate는 검증됨.
 
 **아직 OPEN (후속 단계 필요)**: quarantine resource limit(CPU/mem/pid/tmp), excessive expansion/depth, symlink staging, hook/config injection, interrupted import의 crash 내구성, pack flush 세부 — runtime harness(phase 7)에서 재실행.
+
+**현재 runtime 상태 (2026-09-10)**: published ref/peer exact fetch/CAS race/extra-ref rejection 및 private quarantine 경로는 test suite에서 실행됐다. hostile malformed pack, interrupted import, 전체 resource exhaustion corpus가 남아 있으므로 S-05 전체를 완료로 표시하지 않는다.
 ## S-06 — durability / systemd races / storage qualification
 
 **SPIKE [S-06]** SQLite FULL+WAL, eml/object/link/rename, Git object/ref, directory fsync와 지원 filesystem의 전원 장애 보장을 검증한다. systemd .path 재활성화 및 cgroup death 확인도 실서비스에서 검증한다.
@@ -104,6 +118,8 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 **MUST [SP-06-T]** test matrix의 process kill 지점을 실제 subprocess kill로 실행하고, 별도 VM/지원 fault 환경에서 write ordering·abrupt power loss·ENOSPC·read-only remount를 시험한다. accepted receipt를 외부 harness에 기록한 뒤 reboot 결과와 대조한다. stop 중 mail 도착, 마지막 idle check 뒤 mail 도착, start-limit, broker crash, principal offline backlog를 실서비스로 반복한다.
 
 **MUST [SP-06-A]** 지원 profile의 accepted message/operation은 복구 가능하고 false-success가 없어야 한다. cur에 있는 미완료 mail이 유실되지 않고 stopped agent가 inference하지 않아야 한다. resource cap·fsync의 보장 범위와 미지원 filesystem을 명시한다. SIGKILL test만으로 power-loss passed라고 표시하지 않는다.
+
+**현재 runtime 상태 (2026-09-10)**: process-level mail kill 지점, systemd stop/start-limit/stale cgroup, broker singleton lock, Git/context crash-equivalent reconcile이 실행됐다. VM 전원 장애, ENOSPC, read-only remount, backup/restore는 미실행이며 S-06 release gate는 OPEN이다.
 
 ## S-07 — OPTIONAL notmuch / reflink / egress
 

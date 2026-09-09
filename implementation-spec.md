@@ -1,8 +1,10 @@
 # OMA Core v1 — 구현 계약
 
-문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07.
+문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `2a2e74c1e6b4986145a7ac54b37a9f50c297363a9c134a360f75bbba3db4a404`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+
+**MUST [N-006]** 2026-09-09 승인된 변경은 목표 `tiered` profile의 integration policy다. [정책 확장 계약](implementation/integration-policy.md)은 이 spec의 일부이며 기존 `base` substrate와 tiered의 완료 범위를 구분한다. 충돌한 기존 선택 approval 서술은 아래 INT/APP와 확장 계약으로 대체한다. S-08/S-10 전 base schema/IPC만 구현한 상태를 tiered production 지원으로 표시하지 않는다.
 
 **MUST [N-002]** 충돌 시 사용자 지시 → 기준 architecture → 이 계약 → 코드/기존 관례 순으로 적용한다. 이 계약의 상세화가 상위 구조와 충돌하면 해당 부분을 `SPIKE`로 올리고 구현을 차단한다. 구현자가 architecture를 코드에 맞춰 수정해서는 안 된다.
 
@@ -21,10 +23,14 @@
 | 파일 | 용도 |
 |---|---|
 | [implementation/schema-v1.sql](implementation/schema-v1.sql) | 여섯 기본 DB entity의 실행 가능한 초기 DDL |
+| [implementation/integration-policy.md](implementation/integration-policy.md) | 제안 검토·tiered authority·challenge/floor·Principal packet 계약 |
 | [implementation/contracts.ts](implementation/contracts.ts) | 모듈 및 closed IPC 타입 계약. 실행 코드 아님 |
 | [implementation/spikes.md](implementation/spikes.md) | 미확정 부분, 실험, release gate |
 | [implementation/test-matrix.md](implementation/test-matrix.md) | 기능·장애·격리·수용 시험 |
 | [implementation/systemd/](implementation/systemd/) | 설치 renderer에 입력할 unit template |
+| [implementation/physical-ordering.md](implementation/physical-ordering.md) | production 호출 경로의 canonical 물리 순서 |
+| [implementation/compliance.md](implementation/compliance.md) | requirement→owner→entrypoint→실행 증거 release gate |
+| [implementation/loc-budget.md](implementation/loc-budget.md) | 공백/주석 제외 LOC 계산 계약 |
 | [implementation/validation.md](implementation/validation.md) | 이번 산출물 검사 결과와 검증하지 않은 범위 |
 
 **MUST NOT [N-005]** 이 문서의 존재, DDL 검사 통과, TypeScript 타입 검사 통과를 runtime 구현·end-to-end 검증·전원 장애 내구성 증명으로 표현하지 않는다.
@@ -43,11 +49,11 @@
 
 **MUST NOT [A-006]** 다음을 승인된 architecture 변경 없이 추가한다: durable entity/table/sidecar database, task queue, durable outbox, event bus, message acknowledgement workflow, lease service, scheduler model, manager agent, daemon, custom Git server, SMTP/IMAP, distributed consensus, automatic semantic summarizer, autonomous repair LLM, 새로운 model-facing subcommand. `operations`와 `deliveries` 외에 effect queue를 만들지 않는다.
 
-**MUST [A-007]** 허용 durable state는 §4의 allowlist와 여섯 DB entity뿐이다. JSON column을 이용해 숨은 task entity나 범용 key/value store를 만들지 않는다. 파일이 작다는 이유로 이 제한에서 제외하지 않는다. 런타임용 process handle, socket map, mutex, FIFO inference waiter, cache는 메모리에만 둘 수 있으며 crash 후 원본에서 재구성한다.
+**MUST [A-007]** base의 허용 durable state는 §4의 allowlist와 여섯 DB entity뿐이다. 목표 tiered에는 POL-006의 authenticated attestation/최소 floor metadata만 추가 허용하되 S-08/S-10의 DDL·migration 계약 확정 전 임의로 저장소를 추가하지 않는다. JSON column을 이용해 숨은 task entity나 범용 key/value store를 만들지 않는다. 파일이 작다는 이유로 이 제한에서 제외하지 않는다. 런타임용 process handle, socket map, mutex, FIFO inference waiter, cache는 메모리에만 둘 수 있으며 crash 후 원본에서 재구성한다.
 
 **MUST [A-008]** Core v1 production source LOC 목표는 **8,000 이하**다. **10,000 초과 시 architecture review가 필수**이며, review 완료 전 release하지 않는다. Tests는 budget에서 제외한다. 직접 작성한 TS, SQL, unit template, shell/native glue와 기본 build에 포함한 optional 기능을 포함한다. 컴파일 산출물·lockfile·수정하지 않은 외부 dependency·문서·test fixture는 중복 계산하지 않는다. test helper가 production에 import되면 포함한다.
 
-**MUST [A-009]** LOC는 production manifest에 나열한 원본 파일의 비어 있지 않은 물리 줄 수로 계산한다. 주석도 포함한다. minify·한 줄 몰아쓰기·vendor로 이동하여 회피하지 않는다. 8,001–10,000은 목표 초과 사유와 모듈별 수치를 남기고, 10,001부터 상위 review gate를 적용한다.
+**MUST [A-009]** LOC는 공백 줄과 comment-only 줄을 제외한 source code line 수다. 코드와 inline comment가 함께 있는 줄은 code 1줄로 센다. production manifest의 모든 원본을 [LOC 계약](implementation/loc-budget.md)의 pinned cloc 방식으로 계산한다. 주석을 포함했던 이전 정의는 폐기한다. minify·한 줄 몰아쓰기·vendor 이동으로 회피하지 않는다. 8,001–10,000은 목표 초과 사유/모듈별 수치를 남기고 10,001부터 architecture review를 요구한다.
 
 ## 2. TypeScript 모듈과 의존성
 
@@ -69,7 +75,7 @@
 | `inference.ts` | identity, quota reservation, slot, provider stream | store, credential adapter | 사용자 대화 archive, tool replay |
 | `reconcile.ts` | pending 효과와 실제 파일/ref/unit 대조 | 각 물리 모듈 | 범용 event replay, 모델 호출 |
 | `views.ts` | START/inbox/agents/topics/status, 제한된 logs | 읽기 store, filesystem, units | 새 원본·새 workflow |
-| `approval.ts` | 선택 profile의 정확한 tuple attestation | gated schema, auth, mail, git | 자연어 승인 추출 |
+| `approval.ts` | tiered의 deterministic tier/정확한 tuple attestation 평가; base 비활성 | S-08/S-10 gated schema, auth, mail, git | 자연어 승인 추출·업무 scheduler |
 
 **MUST [M-003]** production build는 `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`를 켠다. 외부 JSON·DB JSON·Pi 이벤트를 런타임 schema로 검증하고 unknown field를 거절한다. `as SomeType`을 검증으로 사용하지 않는다. DTO schema와 타입은 동일 정의에서 생성하거나 호환성 검사를 둔다.
 
@@ -146,7 +152,7 @@
 
 ## 5. DB schema, transaction, 허용 상태
 
-**MUST [DB-001; arch §14]** 기본 entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `usage` 여섯 개뿐이다. [schema-v1.sql](implementation/schema-v1.sql)을 초기 migration으로 실행한다. migration version은 SQLite `user_version`을 사용하고 migrations table을 추가하지 않는다. 기존 native-v2 DB를 변환·공유하지 않는다.
+**MUST [DB-001; arch §14]** base entity는 `agents`, `operations`, `subscriptions`, `deliveries`, `batches`, `usage` 여섯 개뿐이다. [schema-v1.sql](implementation/schema-v1.sql)을 base 초기 migration으로 실행한다. tiered persistence는 POL-006/S-08/S-10의 후속 계약 전 지원하지 않는다. migration version은 SQLite `user_version`을 사용하고 migrations table을 추가하지 않는다. 기존 native-v2 DB를 변환·공유하지 않는다.
 
 **MUST [DB-002]** broker만 DB를 쓴다. 연결마다 foreign_keys=ON, synchronous=FULL, busy_timeout=5000, WAL을 확인한다. 일반 mutation은 `BEGIN IMMEDIATE`; schema migration은 `BEGIN EXCLUSIVE`다. commit 성공 전에 accepted/succeeded를 반환하지 않는다. DB_BUSY는 같은 key retry, DB 손상은 mutation 중단으로 처리한다.
 
@@ -225,6 +231,8 @@
 
 **MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 실제 credential 발급·교환 handshake는 S-02를 통과하기 전 구현을 확정하지 않는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.
 
+**MUST [IPC-012]** InternalMethods의 key set은 exhaustive socket surface다. 내부 helper는 분리할 수 있지만 batch.stage 등 새 socket method/phase를 추가하지 않는다. batch.prepare는 transaction뿐 아니라 BATCH-001의 rename/fsync/view publish까지 소유한다. post-transaction 실패를 별도 stage RPC로 모델/runner가 수습하게 하지 않는다. unknown method는 side effect 전에 UNKNOWN_METHOD다.
+
 **MUST [IPC-010]** `mail_available`는 데이터 없는 힌트이며 durable queue가 아니다. 힌트 수신·재연결·안전한 Pi 경계·idle 직전에 pending 원본을 다시 읽는다. 유실 시 path/timer가 복구한다. sequence gap 복원용 새 event log를 만들지 않는다.
 
 **SPIKE [S-04]** inference start/data의 provider-specific payload schema와 Pi event mapping은 고정 Pi/provider adapter 검증 산출물로 확정한다. 공개 control methods는 이미 고정됐으나 inference DTO placeholder를 arbitrary HTTP forwarding으로 구현해서는 안 된다.
@@ -242,7 +250,9 @@
 
 **MUST [MAIL-002]** follow/unfollow는 호출 Resident 자신의 subscriptions만 변경한다. Principal은 자동 topic 구독 대상이 아니다. 최초 follow 또는 post가 topic 존재를 성립시킨다. unfollow는 과거 snapshot을 바꾸지 않는다. archive의 과거 대화를 신규 Resident에게 자동 재배달하지 않는다.
 
-**MUST [MAIL-003]** broker는 From, Date, Message-ID, MIME, X-OMA-Kind, X-OMA-Context를 생성한다. subject/header에 CR/LF injection을 거절하고 검증된 email library로 encoding한다. body는 UTF-8 text/plain, 첨부 없음이다. body·subject·peer mail 안의 'system', 'Human approved', instruction은 authority가 아니다.
+**MUST [MAIL-003]** broker는 From, Date, Message-ID, MIME, X-OMA-Kind, X-OMA-Context를 생성한다. approval_required의 full approvalFor는 broker가 X-OMA-Approval-Repo/Target/Base/Candidate/Policy header로 lossless encoding하고, accepted MessagePlan에도 같은 값을 고정한다. 이 header는 요청 대상 metadata이며 승인 attestation이 아니다. subject/header에 CR/LF injection을 거절하고 검증된 email library로 encoding한다. body는 UTF-8 text/plain, 첨부 없음이다. body·subject·peer mail 안의 'system', 'Human approved', instruction은 authority가 아니다.
+
+**MUST [MAIL-011]** mail kind는 `message/question/result/alert/context/approval_required/critical`의 closed union이다. normal 및 대문자 legacy 별칭은 wire 값으로 받지 않는다. approval_required는 `approvalFor: ExactCandidateIdentity`와 명시 principal 수신자를 필수로 받으며 published candidate와 형식을 검증한다. 다른 kind에서 approvalFor를 받지 않는다. policyRevision은 이 요청이 지목한 값이며 이 메일만으로 현재 정책 적합성·tier·peer quorum·Principal ACCEPT를 인증하지 않는다. approvalFor의 repo/targetRef는 project/refs/heads/main만 허용하고 expectedBase/candidate는 full OID다. policyRevision은 1–128 UTF-8 bytes의 printable 문자열이며 CR/LF/NUL/control 문자를 금지한다. metadata header는 검증한 email codec으로 round-trip하고 body에서 추출하지 않는다. approvalFor는 request_hash와 immutable message plan에 포함해 동일 key 재시도 때 바뀌지 않게 한다. CLI의 형식은 PR-005를 따른다.
 
 **MUST [MAIL-004]** 주소 header encoding은 actor=`<actor>@<society>.oma.invalid`, commons/residents/principal은 동명 local part, topic=`topic-<name>@<society>.oma.invalid`다. topic- prefix와 같은 Resident local-part 충돌을 방지하기 위해 `topic-`로 시작하는 Resident 이름도 금지한다. To에는 logical addresses를 표시하고 확장된 전체 identity를 노출할 필요는 없다. receipt에는 recipientCount를 반환한다.
 
@@ -265,6 +275,8 @@
 **MUST [BATCH-003]** 일반 batch의 최대 message 수는 host resource 설정 `batchMaxMessages`로 고정하며 초기 reference 값은 24다. direct/question/result/context class와 public-list class 양쪽이 있으면 각각 최소 1개를 포함하고, 남은 자리는 두 class를 교대로 oldest `(created_at_ms,message_id)`부터 선택한다. notice 6개도 이 순서를 사용한다. kind만 바꿔 권한·Principal 강제 개입을 얻을 수 없다.
 
 **MUST [BATCH-004]** prepared batch 복구 시 원래 message IDs와 session을 유지한다. 이전 run 사망 확인과 현재 incarnation fencing 후 transaction에서 소유만 바꾼다. 성공 agent_end 및 `S-03`의 trusted session-boundary 증거가 확인된 batch만 completed/presented로 만든다. 오류·abort·timeout·모델의 '완료했습니다'는 증거가 아니다.
+
+**MUST [BATCH-006]** S-03 adapter revision·receipt 의미·flush/ownership 검증 결과가 release validation record에 pin되기 전 production batch.complete는 SPIKE_UNRESOLVED를 반환하고 batch/deliveries presented를 commit하지 않는다. BoundaryEvidence 타입이나 adapterRevision 문자열이 존재한다는 사실은 gate 통과가 아니다. 테스트용 mock completion을 production에 주입하거나 환경 변수로 우회하지 않는다. gate 미해결 상태의 반복 재안내로 유료 inference를 소모하는 경로도 지원 profile로 활성화하지 않는다.
 
 **MUST [BATCH-005]** session 경계 증거가 불충분하면 같은 batch ID로 재안내할 수 있다. 같은 mail을 다시 안내했다는 사실을 표시하고 기존 operation receipt와 workspace를 대조하게 한다. 이전 shell/tool을 자동 replay하지 않는다. Pi 사고과정·tool cursor·reasoning snapshot용 state를 추가하지 않는다.
 
@@ -297,6 +309,8 @@ pi.sendMessage(
 **MUST [PR-002]** principal-relay는 mailbox new 항목마다 deliveries의 durable 수신 기록과 원문을 확인하고 모두 cur로 이동한다. 기존 질문/batch가 pending이어도 새 항목을 계속 인수한다. UI가 없으면 batch를 새로 prepare하지 않는다. UI reconnect 시 extension이 pending을 조회하여 제한된 batch를 인수한다. relay는 Pi model call을 하지 않는다.
 
 **MUST [PR-003]** Principal의 Human context·private memory는 principal/private와 기존 Pi session에 남긴다. context publish는 공유 문서만 전달한다. mailbox urgent alert는 UI 경고일 수 있지만 Human 입력을 위장하거나 현재 깊은 판단을 강제 abort하지 않는다. 모델이 질문에 답하는 데 필요한 peer evidence는 archive/Git에서 선택해서 읽는다.
+
+**MUST [PR-005]** typed Principal mail과 progressive packet은 확장 계약 SEM/PACK을 따른다. 기존 `oma send`의 `--kind approval_required`에 한해 `--candidate <published-oid> --expect <base-oid> --policy-revision <revision>`을 모두 요구하고 CLI가 `approvalFor={repo:project,targetRef:refs/heads/main,expectedBase,candidate,policyRevision}`을 만든다. 그 외 kind에서는 세 flag를 거절한다. 별도 decision/interrupt command 또는 DB를 추가하지 않는다. `critical`은 UI 인지 hint이고 followUp/tool 보존/예산 제한을 우회하지 않는다. `result`는 sender의 결과 보고이며 task/Human 전달 완료의 증거가 아니다. HIGH의 authoritative decision command/record는 여전히 S-08 gate다.
 
 **MUST [PR-004]** Principal host Pi의 모든 model-facing shell/read/write/edit 및 동적으로 등록된 tool 경로를 sandbox-backed 구현으로 제한한다. extension attach credential·Human 원본 session·provider credential을 model tool sandbox에 mount하지 않는다. trusted extension은 session 접근이 필요하지만 model에게 그 권한을 위임하지 않는다.
 
@@ -342,21 +356,25 @@ pi.sendMessage(
 
 **MUST [GIT-009]** submit succeeded는 published ref와 result mail materialization이 완료됐다는 뜻이다. main 통합·review 완료·Principal 판단·agent 종료를 뜻하지 않는다. report/document도 private clone에서 commit하고 published ref+path로 전달할 수 있다. 별도 Artifact repository나 모든 report를 main에 넣는 규칙을 추가하지 않는다.
 
-**MUST [INT-001]** integrate는 candidate가 하나 이상의 canonical published ref로 보존됨, code.integrate capability, actual main==expected, expected ancestor of candidate, protected path 조건, fixed host checks, 현재 policy를 검사한다. protected path는 default profile에서 Resident integrate를 거절한다. candidate==expected면 main은 변경하지 않는 검증된 no-op receipt로 처리할 수 있지만 published/권한 조건을 생략하지 않는다.
+**MUST [INT-001]** base 및 tiered의 공통 조건으로 integrate는 candidate가 하나 이상의 canonical published ref로 보존됨, code.integrate capability, actual main==expected, expected ancestor of candidate, protected path 조건, fixed host checks, 현재 policy를 검사한다. protected path는 default profile에서 Resident integrate를 거절한다. candidate==expected면 main은 변경하지 않는 검증된 no-op receipt로 처리할 수 있지만 published/권한 조건을 생략하지 않는다.
 
 **MUST [INT-002]** candidate 검사는 별도 sandbox의 해당 C checkout에서 host 지정 argv/env로 수행한다. 검사의 stdout 'PASS'가 아닌 실제 exit code/timeout을 사용한다. candidate가 수정할 수 있는 검사 script가 존재한다는 사실만으로 trusted 검사 정책을 대체하지 않는다. test sandbox에 actor/admin socket, credential, shared repo RW, workspace 밖 host FS를 노출하지 않는다.
 
+**SPIKE [S-01-CANDIDATE]** 허용 fixed unit 집합 안에서 candidate check의 CPU/memory/tasks/tmp/workspace/staging 한도와 모든 후손 종료를 kernel-enforced 하는 정확한 실행 primitive는 미확정이다. transient systemd-run/service/scope, userland polling, broker 전체 cgroup 한도만을 candidate별 격리로 취급하는 방식, 무제한 fallback을 허용하지 않는다. 증거가 pin되기 전 nonempty integration.checks를 가진 production profile의 활성화 및 실제 검사 요청은 SPIKE_UNRESOLVED로 차단한다. checks를 자동으로 []로 바꾸어 회피하지 않는다. host가 원래 명시적으로 선택한 checks=[] base profile만 이 sub-gate의 비적용 범위다.
+
+**MUST [INT-007]** 실제 spawn의 candidate OID/argv/env/resources는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 kernel limits를 production entrypoint 시험에서 확인한다.
+
 **MUST [INT-003]** project main mutation은 repo별 메모리 mutex와 pending integrate operation 검사로 직렬화한다. 먼저 T-integrate-intent, 그 뒤 검사·Git CAS, 마지막 T-integrate-done다. crash 후 unresolved integrate가 있으면 새로운 main writer를 시작하지 않는다. CAS 바로 전에 main/policy/capability/stop intent를 재검사한다.
 
-**MUST [INT-004]** 복구에서 main==candidate는 이미 효과 발생이므로 receipt를 완료한다. main==base면 현재 조건을 다시 검사하고 진행하거나 증명된 precommit 실패로 끝낸다. 그 외는 REF_STATE_UNKNOWN으로 unknown을 남기고 해당 repo main write를 차단한다. 외부 수동 main 변경을 새로운 정상 base로 수용하지 않는다. CAS 경쟁 패자는 STALE_BASE와 actual main을 받는다.
+**MUST [INT-004]** 복구에서 main==candidate는 이미 ref 효과가 발생한 것으로 대조한다. base는 receipt를 완료하고 tiered는 PUB-001/002의 미완료 공개 메일까지 보충한 뒤 succeeded로 완료한다. main==base면 현재 조건을 다시 검사하고 진행하거나 증명된 precommit 실패로 끝낸다. 그 외는 REF_STATE_UNKNOWN으로 unknown을 남기고 해당 repo main write를 차단한다. 외부 수동 main 변경을 새로운 정상 base로 수용하지 않는다. CAS 경쟁 패자는 STALE_BASE와 actual main을 받는다.
 
 **MUST NOT [INT-005]** broker가 rebase/merge/cherry-pick/충돌 해결·자동 재승인·새 candidate 생성을 한다. Resident가 자기 clone에서 새 candidate를 만들고 새 request로 제출한다. Principal만 integrate할 수 있는 gate도 추가하지 않는다.
 
-**OPTIONAL [OPT-APPROVAL]** 강제 approval profile은 architecture §12.3의 정확한 `(repo,target,base,candidate,policyRevision)` attestation만 추가할 수 있다. 기본 schema/build에는 없다. `approve`, `object`, `revoke` model command는 해당 profile을 활성화한 경우에만 허용되는 기존 architecture의 확장이다.
+**MUST [INT-006]** 목표 tiered는 확장 계약 TIER/PUB/CHAL의 max-tier, exact approval/OBJECT, HIGH Principal ACCEPT, post-CAS 공개, challenge/re-entry floor를 구현해야 한다. 기존 base의 optional approval만으로 이 요구를 충족했다고 표시하지 않는다. base의 현재 schema/build는 승인 evaluator를 활성화하지 않는다. approve/object/revoke 및 필요한 최소 확장의 closed syntax/schema는 S-08/S-10 완료 시 함께 반영한다.
 
-**MUST [APP-001]** optional 구현은 actor를 인증하고 append-only fact+mail을 기록하며 동일 actor의 중복 승인은 한 번만 집계한다. object는 명시 revoke 전까지 유효하고 자기 attestation만 취소할 수 있다. branch/base/candidate/policy가 다르면 재사용하지 않는다. Human 승인은 host/UI channel만 발급한다. mail의 approve 문구를 parser로 권한화하지 않는다.
+**MUST [APP-001]** tiered attestation 구현은 actor를 인증하고 append-only fact+mail을 기록하며 동일 actor의 중복 승인은 한 번만 집계한다. object는 명시 revoke 전까지 유효하고 자기 attestation만 취소할 수 있다. branch/base/candidate/policy가 다르면 재사용하지 않는다. Human 승인은 host/UI channel만 발급한다. mail의 approve 문구를 parser로 권한화하지 않는다.
 
-**SPIKE [S-08]** approval profile의 최소 quorum/신뢰 domain/attestation DDL과 revocation schema는 Human policy 선택이 필요하다. Core v1 구현자는 임의 quorum·table·자동 독립 reviewer를 추가하지 않는다. 이 spike는 optional 기능만 차단하며 default protected-path 거절 profile은 구현할 수 있다.
+**SPIKE [S-08]** tiered의 MEDIUM 기본 peer floor 1, zero active OBJECT, HIGH의 peer floor+Principal ACCEPT는 채택했다. eligible actor/author provenance·host trust 설정·exact decision/revoke evaluator·최소 DDL/IPC는 아직 검증이 필요하다. S-08은 이제 tiered의 필수 gate이며 S-10의 floor/정책 snapshot 계약과 함께 통과해야 한다. base의 protected-path 거절 구현은 계속 가능하지만 tiered 지원의 대체품은 아니다.
 
 ## 10. 공유 context 게시
 
@@ -380,6 +398,8 @@ pi.sendMessage(
 
 **MUST [UNIT-003]** 초기 reference profile은 resident MemoryMax=3G, TasksMax=128, CPUQuota=200%, OOMPolicy=kill, KillMode=control-group, TimeoutStopSec=10s, Restart=on-failure, RestartSec=3s, StartLimitIntervalSec=60s, StartLimitBurst=5다. 실제 host cap은 bootstrap config에 명시하고 renderer가 반영한다. resource profile이 지원되지 않으면 무제한으로 실행하지 않고 UNSUPPORTED_PROFILE이다.
 
+**MUST [UNIT-007]** systemctl effect 성공은 subprocess spawn이 아니라 정상 exit status와 해당 effect의 후속 actual observation으로 판정한다. nonzero/timeout/signal/malformed 결과를 성공으로 바꾸지 않는다. daemon-reload는 정상 exit와 대상 unit의 LoadState=loaded 및 렌더링한 설정 일치, enable/disable은 unit-file 상태, path start/stop은 path 실제 상태, service stop은 inactive와 cgroup 후손 사망을 확인한다. 관측 실패는 succeeded가 아니며 accepted op는 실제 효과를 대조한다. 짧게 실행 후 정상 종료한 Resident start는 동일 InvocationID의 정상 종료와 pending 재검사를 허용하되 전혀 시작 안 된 inactive와 구분한다. 정확한 systemd property/binding 증거는 S-01/S-06에 pin한다.
+
 **MUST [UNIT-004]** broker는 Type=notify이며 DB/open-operation 복구, 이전 Resident cgroup 정리, socket/인증 준비가 완료된 뒤에만 READY=1을 보낸다. Resident는 After+BindsTo broker다. Type=exec인 runner의 모든 Pi/shell/test 후손은 동일 cgroup에 남는다. runner 하나의 PID만 종료하고 완료로 응답하지 않는다.
 
 **MUST [UNIT-005]** .path는 inbox/new에 DirectoryNotEmpty를 사용한다. enabled+GOAL 조건이 충족될 때만 enable/start한다. prepared batch만 cur에 남은 경우 reconcile과 startup DB 조회로 service를 시작한다. path 상태만으로 pending을 판단하지 않는다. default.target에 enable된 path가 reboot 때 잘못 켜져도 broker 인증은 stopped/GOAL 없는 실행을 거절하고 reconcile이 path를 중지한다.
@@ -388,19 +408,23 @@ pi.sendMessage(
 
 **MUST [CREATE-001]** model-facing `agent.create`의 `params`는 `AgentCreateInput`으로 고정하고 `name`, CLI가 freeze한 full `from` OID, UTF-8 `brief`만 받는다. `profile`/`capabilities`는 CLI 옵션·wire 입력·request cache의 caller payload에 넣지 않는다. 해당 field가 들어오면 값이 host default와 같더라도 INVALID_REQUEST로 거절하고, 무시하거나 caller 선호로 사용하지 않는다. TypeScript의 `profile?: never`/`capabilities?: never`는 이러한 입력 금지 제약이며 선택 입력이 아니다. 다른 unknown field도 기존 strict validator 규칙으로 거절한다.
 
-**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities를 결정한다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합을 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.
+**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile/resources를 결정한다. modelProfile/resources는 선택한 자식 host profile에서 복사해 고정한다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합을 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.
 
 **MUST [CREATE-003]** `operations.payload_json`과 request_hash는 정규화한 `AgentCreateInput`만 포함한다. `plan_json.spec` 및 `agents.spec_json`에는 broker가 확정한 `ResolvedAgentSpec`을 저장하고 `spec_hash`는 그 전체 canonical spec의 hash다. 접수 transaction에서 부모 권한과 선택한 host 정책이 resolution 때와 같은지 재검사하고 달라졌으면 접수 전에 다시 계산한다. 같은 key의 accepted 요청은 새 host default를 해석하기 전에 기존 hash/receipt를 조회하고 저장된 resolved spec으로 복구한다. 재시도로 profile/capabilities를 재선택하거나 확대하지 않는다. 다른 key의 stable-name dedup은 최종 resolved spec hash를 비교하므로 host default 변경으로 spec이 달라졌으면 AGENT_CONFLICT다. 현재 권한의 폐기와 run 차단은 기존 AUTH/LIFE 규칙을 계속 적용한다.
+
+**MUST [LIFE-008]** initialResidents는 최초 bootstrap seed만 지정하며 runtime registry가 아니다. ready 이후 모든 actor의 identity/profile/capabilities/modelProfile/resources/from/parent는 agents의 검증된 resolved spec 및 created_by에서 가져온다. `ResolvedAgentSpec`은 생성 시 선택한 host profile의 modelProfile 참조와 ResourceLimits 전체를 포함하고 spec_hash에 포함한다. runner/unit renderer/authenticator는 `initialResidents.find()`나 seed 부재 시 default profile을 사용하지 않는다. 호스트의 현재 credential/가격/명시적 권한 폐기 정책은 계속 적용하되 persisted 권한·자원 상한을 조용히 확대하지 않는다. 저장된 profile/model 참조를 현재 배포가 지원하지 못하면 UNSUPPORTED_PROFILE로 차단하고 임의 대체하지 않는다. DB column name/profile과 spec의 대응 값이 다르면 STORE_CORRUPT다. 부모는 created_by가 원본이며 새 parent registry를 만들지 않는다.
+
+**MUST [LIFE-009]** 최초 bootstrap 중 seed마다 stable-name create intent를 남기고 같은 intent로 중단 복구한다. bootstrap seed가 추가/삭제됐다는 이유로 다음 broker restart 때 agent를 자동 생성/삭제/중지하지 않는다. 최초 GOAL publication 이후는 seed 보충 단계가 아니며 explicit lifecycle 경로만 사용한다. 최초 bootstrap 도중 seed 설정 변경은 지원하지 않는다. 중단 복구는 기존 seed create intent부터 재개하며 host는 원래 seed 설정을 유지해야 한다. 이미 기록된 intent와 현재 seed spec이 다르면 AGENT_CONFLICT로 중단한다. bootstrap 완료/중단은 기존 최초 context ref와 provisioning/create intent로 대조하고 새로운 bootstrap 상태 DB를 만들지 않는다.
 
 **MUST [LIFE-001]** create는 stable name/spec hash와 request key를 동시에 dedup한다. 같은 이름·같은 spec이면 기존 생성 결과로 수렴한다. 다른 spec이면 AGENT_CONFLICT다. lineage quota는 provisioning을 포함해 예약하고 failed provisioning을 멋대로 삭제·이름 재사용하지 않는다. 생성 실패의 자동 재개는 같은 physical intent에 한한다.
 
 **MUST [LIFE-007]** 같은 이름/spec에 다른 request key로 create가 오면 기존 create operation에 연결한 `existingCreation` plan을 만들고 clone/unit/mail을 추가 생성하지 않는다. 새 key의 operation은 기존 provisioning 결과를 대조해 같은 agent 결과로 끝낸다. 이는 create 한 종류의 stable-name dedup이며 범용 dependency/workflow graph가 아니다. provisioning actor에 대한 model start/stop은 AGENT_NOT_READY로 거절한다. already enabled이며 현재 cgroup이 정상인 agent.start는 idempotent no-op이고 incarnation을 증가시키지 않는다.
 
-**MUST [LIFE-002]** create 순서는 T-create-intent → workspace.tmp 독립 clone 및 pinned base 검증 → workspace atomic rename+dir fsync → mailbox/runner/unit 생성 → daemon-reload → T-create-ready → initial mail materialize → GOAL 있으면 path 활성화다. 준비 전 identity는 commons/topic expansion과 status의 ready count에서 제외한다. unit 생성 성공만으로 enabled라고 기록하지 않는다.
+**MUST [LIFE-002]** create 순서는 T-create-intent → workspace.tmp 독립 clone 및 pinned base 검증 → workspace atomic rename+dir fsync → mailbox/runner/unit 생성 → daemon-reload 결과와 unit LoadState/설정 확인 → T-create-ready → initial mail materialize → GOAL 있으면 path 활성화다. 준비 전 identity는 commons/topic expansion과 status의 ready count에서 제외한다. unit 생성 성공만으로 enabled라고 기록하지 않는다.
 
 **MUST [LIFE-003]** stop은 T-stop-intent → StopUnit(path)/disable activation → endpoint+inference revoke → StopUnit(service) → systemd cgroup 사망 확인 → succeeded다. 종료 확인 불가면 RUN_TERMINATION_UNKNOWN/unknown이고 새 incarnation을 발급하지 않는다. 이미 accepted mail/submit은 broker가 완료한다. 아직 CAS하지 않은 integrate는 CANCELLED_BEFORE_COMMIT, CAS한 것은 실제 ref와 대조해 완료한다. stop receipt에 남은 broker-owned op ID를 포함한다.
 
-**MUST [LIFE-004]** start는 retired를 거절하고, 이전 cgroup 사망 확인 후 desired=enabled와 operation을 기록한다. GOAL 없으면 GOAL_REQUIRED로 inference/path를 시작하지 않는다. path와 필요 시 cur prepared service를 활성화하고 actual unit result를 receipt/status에 반영한다. start가 새로운 논리 agent/session/workspace를 생성하지 않는다.
+**MUST [LIFE-004]** start는 retired를 거절하고, 이전 cgroup 사망 및 GOAL을 확인한 뒤 desired=enabled와 operation을 기록한다. GOAL 없으면 GOAL_REQUIRED로 반환하며 desired/path를 변경하지 않는다. path와 필요 시 cur prepared service를 활성화하고 actual unit result를 receipt/status에 반영한다. start가 새로운 논리 agent/session/workspace를 생성하지 않는다.
 
 **MUST [LIFE-005]** retirement는 이름을 보존하는 host 명시 행위다. 기본 model CLI에 retirement/delete/purge를 추가하지 않는다. host 운영 UI/maintenance 구현 범위가 필요하면 기존 stopped→retired와 미래 routing 제외만 제공하고 repo/mail/session의 자동 삭제를 결합하지 않는다.
 
@@ -457,11 +481,11 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 ## 14. model-facing CLI와 파생 view
 
-**MUST [CLI-001; arch §§9,14]** 기본 model-facing command allowlist는 다음과 같다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력한다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.
+**MUST [CLI-001; arch §§9,14]** base model-facing command allowlist는 다음과 같다. tiered의 추가 authority 문법은 S-08/S-10 gate이며 현재 허용된 것으로 추정하지 않는다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력한다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.
 
 | command | 의미·기본값 |
 |---|---|
-| `oma send <address...> --subject S --file P [--kind K] [--reply P] [--request K]` | default kind=message; reply가 없고 to가 비면 오류; subject 생략한 reply는 원문 Re: 사용 |
+| `oma send <address...> --subject S --file P [--kind K] [--reply P] [--request K]` | default kind=message; approval_required 전용 identity flags는 PR-005; reply가 없고 to가 비면 오류; reply subject 생략 시 원문 Re: |
 | `oma ack <mail-path-or-id> [--request K]` | 자기 delivery 명시 ACK |
 | `oma follow <topic> [--request K]` / `oma unfollow <topic> [--request K]` | 자기 향후 topic routing |
 | `oma agent create <name> --from <rev> --file <brief> [--request K]` | wire는 name/from/brief만; broker가 CREATE-002에 따라 profile/capabilities 확정 |
@@ -547,15 +571,22 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 | 7 | Git submit/integrate/context | hostile bundle, exact candidate checks, CAS races, ref/mail crash, GOAL activation |
 | 8 | reconcile/observability/backup | 전체 fault matrix, clean restore, resource exhaustion |
 | 9 | production audit 및 S-09 평가 | 필수 tests+spikes, LOC, packaging, no domain leakage |
-| 선택 | notmuch/reflink/approval/egress | 해당 optional spike 완료 후 별도 기능 활성화 |
+| tiered 필수 | S-08/S-10, tier evaluator/attestation, integration mail/challenge/floor, HIGH 경로 | 확장 계약 POL-008과 T78–T90 통과 |
+| 선택 | notmuch/reflink/egress/fresh-context verifier | S-07/S-11의 해당 optional gate 통과 |
 
 **MUST [ORDER-002]** 구현 PR에는 변경 requirement IDs, source LOC 전후/모듈별 수치, 수행 tests, 남은 SPIKE, schema/method/state/service 변경 유무를 기록한다. 마지막 항목에 '있음'이면 기존 계약의 허용 확장인지 증명하고 아니면 architecture review를 요청한다. 구현 편의성만으로 새 entity를 승인한 것으로 간주하지 않는다.
 
-**MUST [ORDER-003]** default Core release gate는 S-01~06 및 S-09의 요구 산출물, test matrix의 core cases, package/type/schema 검증, 실제 systemd+bwrap+Pi E2E다. S-07/08은 optional feature만 차단한다. unresolved spike가 남은 adapter는 stub success 대신 SPIKE_UNRESOLVED로 명시적으로 실패해야 한다.
+**MUST [ORDER-003]** default Core release gate는 S-01~06 및 S-09의 요구 산출물, test matrix의 core cases, package/type/schema 검증, 실제 systemd+bwrap+Pi E2E다. S-07/S-11은 optional feature만 차단한다. 목표 tiered release는 S-08/S-10 및 T78–T90을 추가로 요구한다. base gate 통과만으로 현재 목표 아키텍처가 완료됐다고 표시하지 않는다. unresolved spike가 남은 adapter는 stub success 대신 SPIKE_UNRESOLVED로 명시적으로 실패해야 한다.
 
 **MUST [ORDER-004]** performance가 목표에 미달하면 수치를 보고하고 모델/profile/배치 resource 설정을 평가한다. Principal의 필수 판단 경로 삭제·숨은 자동 요약 agent·task scheduler 추가로 평가를 통과시키지 않는다. 구조 변경은 별도 architecture 판단이다.
 
 ## 18. architecture 추적 및 최종 금지 확인
+
+**MUST [TRACE-002]** 모든 적용 runtime MUST/MUST NOT은 release 시 requirement→단일 authoritative production owner→실제 entrypoint/call path→negative executable test→현재 source revision의 실행 evidence를 갖는다. 타입/enum/comment/helper/mock만 존재하면 implemented/proven이 아니다. [compliance 계약](implementation/compliance.md)의 파일을 release 산출물로 유지하며 runtime durable state로 만들지 않는다.
+
+**MUST [TRACE-003]** spec 위반이 기존 requirement에 이미 금지돼 있으면 동의어 requirement를 더 만들기보다 production-path negative test와 trace를 연결한다. 계약·기계 검증과 production 통과 증거를 분리하고 누락은 unverified/blocked로 표시한다. source/spec/adapter 변경 뒤 옛 evidence를 자동 재사용하지 않는다.
+
+**MUST [REC-008]** bootstrap/create/start/stop/batch/check의 canonical 순서는 [physical-ordering.md](implementation/physical-ordering.md)를 따른다. constructor/import에서 DB open 또는 외부 effect를 실행하지 않는다. lock 확보 전 SQLite migration/reconcile을 시작하는 숨은 호출 경로를 금지한다.
 
 **MUST [TRACE-001]** 다음 mapping으로 상위 규범 보존을 review한다. 추가 필드·검사·순서는 물리 경계 상세화이며, 새로운 철학/업무 protocol을 도입하는 근거가 아니다.
 
@@ -565,7 +596,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 | §§3–5 주소/파일/배달 | ID, FS, MAIL, DB, IPC |
 | §§6–7 lifecycle/Pi | UNIT, LIFE, RUN, PI, BATCH; S-01/03 |
 | §§8–9 Principal/attention | PR, CTX, CLI, VIEW |
-| §§10–12 Git/review | GIT, INT, APP; S-05/08 |
+| §§10–12 Git/review | GIT, INT, APP, 확장 TIER/PUB/CHAL/VERIFY; S-05/08/10/11 |
 | §§13–14 auth/usage/DB | AUTH, INF, DB, IPC; S-01/02/04 |
 | §§15–19 recovery/isolation | LIFE, SB, REC, ERR; S-06 |
 | §§20–22 implementation/evaluation | ORDER, TRACE, test matrix; S-09 |
