@@ -448,11 +448,19 @@ export function resolveChildSpec(
 } | null {
   void parent.name;
   const parentProfile = cfg.agentProfiles[parent.profile];
-  if (!parentProfile) return null;
+  if (!parentProfile)
+    throw new StoreError(
+      "UNSUPPORTED_PROFILE",
+      `parent profile ${parent.profile} is not configured`,
+    );
   const childName = parentProfile.childProfile;
   if (childName === null) return null;
   const child = cfg.agentProfiles[childName];
-  if (!child) return null;
+  if (!child)
+    throw new StoreError(
+      "UNSUPPORTED_PROFILE",
+      `child profile ${childName} is not configured`,
+    );
   const intersection = parent.capabilities.filter(
     (c) =>
       parentProfile.delegable.includes(c) && child.capabilities.includes(c),

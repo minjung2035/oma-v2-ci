@@ -81,7 +81,7 @@ function envOf(
     worldDir: join(dir, "state", "world"),
     society,
     quarantineTmpBytes: 256 * 1024 * 1024,
-    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
+    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
     checkTimeoutSeconds: 30,
   };
   const git = new GitModule(paths, store, mail, integration, policyRevisionReader);

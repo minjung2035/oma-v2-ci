@@ -25,20 +25,20 @@
 | 검사 | 실제 수행 결과 |
 |---|---|
 | 기준 hash | `2a2e74c1e6b4986145a7ac54b37a9f50c297363a9c134a360f75bbba3db4a404` 유지 (N-001) |
-| 타입 검사 | strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes + noEmit 통과; `tsc -p tsconfig.build.json` 전체 68개 테스트 빌드 통과 |
-| 전체 테스트 | `npm test` → **68/68 pass, 0 fail, 0 skipped** (phase2-8 + authority + request-cache + actor-socket audit) |
+| 타입 검사 | strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes + noEmit 통과; `tsc -p tsconfig.build.json` 전체 83개 테스트 빌드 통과 |
+| 전체 테스트 | `npm test` → **83/83 pass, 0 fail, 0 skipped** (실 systemd 검사는 user-manager 경합 방지를 위해 file concurrency 1) |
 | DDL | 정확히 6개 테이블; user_version=1; FK/integrity ok; negative CHECK (presented w/o materialized+batch) 거절 |
 | process-kill | T18-T22 mail 경계를 외부 kill harness(SIGKILL)로 실제 실행 후 외부 가시 상태(파일 hash/DB rows) 대조 |
 | systemd 실서비스 | T36 start-limit(자동 reset 없음), T37 stop 중 mail 도착(cgroup 후손 0), T38 cgroup 미확인 시 RUN_TERMINATION_UNKNOWN, REC-007 broker lock |
 | sandbox E2E | bwrap(SB-001 rootfs + 시스템 오버레이) → sandboxed Pi 0.85.1 → 신뢰 확장 로드 → custom message role='custom' 전달; provider 없음 → stopReason=error → batch 미완료(위조 증거 없음) |
 | git 실저장소 | bundle quarantine(RO alternate)+수입+published ref+peer exact fetch, CAS 경쟁/보호 경로/재개, context commit+CAS+스냅샷 (git 2.55.0) |
 | NEG 스캔 | Board/Artifact/Focus/Change/Review 엔티티, task queue/outbox/event bus/workflow, 자동 복구/요약 에이전트 → src/ 전역 검색 0건 |
-| LOC | 9,190 (non-empty physical lines from `node scripts/loc.mjs`; A-008 target is 8,000). The 8,001–10,000 allowance requires the documented reason and module breakdown below. |
-| release gate | **미달** — S-02(격리 Human session 없음), S-04(provider credential 없음), S-06(VM/전원장애 환경 없음) OPEN; 해당 경로는 fail-closed(SPIKE_UNRESOLVED) 또는 청구되지 않음 |
+| LOC | 9,900 (non-empty physical lines from `node scripts/loc.mjs`; A-008 target is 8,000). The documented A-009 allowance applies; 10,000-line review gate is not crossed. |
+| release gate | **미달** — S-01–S-06 및 S-09는 raw spike evidence 전까지 OPEN; S-03-dependent Pi completion은 fail-closed이며 미실행 항목은 PASS로 계산하지 않음 |
 
 ## Normative test coverage map (T01–T77) — runtime audit 2026-09-08
 
-결과 구분: ✅ 실행(해당 executable test가 suite에서 통과) / ◐ 부분(핵심 일부만, 나머지 미실행) / ❌ 미실행(unresolved/blocker). suite 명령: `npm test` (`76/76`).
+결과 구분: ✅ 실행(해당 executable test가 suite에서 통과) / ◐ 부분(핵심 일부만, 나머지 미실행) / ❌ 미실행(unresolved/blocker). suite 명령: `npm test` (`83/83`).
 
 | T# | 상태 | 증명 executable test | 비고 |
 |---|---|---|---|
@@ -60,15 +60,18 @@
 | T14–T22 | ✅ | phase3 (T18–T22 외부 kill harness) | TEST-004 kill 지점 실행됨 |
 | T23 | ❌ | — | cross-FS/hardlink fixture 미실행 |
 | T24 | ❌ | — | forged approval/ack 테스트 없음 |
-| T25 | ◐ | phase3 "batch notice caps at 6…" | batch prepare/fairness full 경계 미실행 |
-| T26–T27 | ❌ | — | batch snapshot/kill 지점 미실행 |
+| T25 | ◐ | phase5 "T25 deterministic core…" + manifest compatibility | 40개 두 class의 cap/fairness/notice와 frozen manifest는 실행; full-index/original-byte oracle은 미실행 |
+| T26 | ✅ | phase5 T25 test의 prepare 뒤 late-mail 재prepare | 기존 prepared IDs 불변 |
+| T27 | ❌ | — | batch prepare/cur kill 지점 미실행 |
 | T28 | ❌ | — | Pi steer 귀속은 S-03 gate |
 | T29–T30 | ◐ | phase5 "deliver smoke" (provider error → complete 미발생, presented 0) | T30 kill 지점 미실행 |
 | T31 | ✅ | phase5 "T31-neg…" | |
 | T32 | ✅ | phase3 "T32: path-based views…" | |
 | T33–T35 | ❌ | — | path enable/timer 재발견/slot 대기 미실행 |
 | T36–T38 | ✅ | phase4 (실 systemd user) | |
-| T39–T41 | ❌ | — | create durable kill / AGENT_CONFLICT / GOAL gate 미실행(T41 일부: deliver smoke no-provider) |
+| T39 | ◐ | phase4 "T39/LIFE-007…" | same-spec 수렴은 실행; 각 durable 경계 process-kill 미실행 |
+| T40 | ✅ | phase4 "T40/LIFE-001…" + CREATE-003 policy recheck | changed resolved spec은 AGENT_CONFLICT, 기존 workspace 보존 |
+| T41 | ◐ | phase4 "T41/CTX-006…" + dynamic Resident fenced runner | pre-GOAL 무활성/GOAL 후 runner.open은 실행; reboot/provider-call oracle 일부 미실행 |
 | T42 | ✅ | phase5 "T42…" | |
 | T43–T44 | ❌ | — | S-02 gate (격리 Human session 없음) |
 | T45–T47 | ◐ | phase5 "deliver smoke" (sandboxed Pi 로드, host home 미노출 일부) | sandbox escape 항목 다수 미실행 |
@@ -93,7 +96,7 @@
 | T75/T76 | — | default core 비활성(notmuch/approval false) | optional 활성 시 필수 |
 | T77 | ❌ | — | S-09 gate (평가 corpus 없음) |
 
-unresolved 요약: T12,T23,T24,T26–T28,T33–T35,T39–T41,T43,T44,T46,T47,T52,T57,T58,T62–T64,T66,T70–T72,T77 → 환경(격리 Human session, provider credential, 전원장애 VM, evaluation corpus, notmuch/approval 정책) 또는 실제 kill/corpus harness 부재. T66은 crash-equivalent recovery만 실행했으며 실제 SIGKILL/전원장애는 미실행이다. TEST-003/TEST-004에서 요구하는 kill 지점(T27/T30/T39/T57/T58/T63/T66)은 해당 SPIKE(S-03/S-05/S-06) 결과가 확정된 뒤 실행하며, 미실행 항목은 어떤 방식으로도 PASS로 계산하지 않는다.
+unresolved 요약: T12,T23,T24,T27,T28,T33–T35,T39,T41,T43,T44,T46,T47,T52,T57,T58,T62–T64,T66,T70–T72,T77은 환경 또는 실제 kill/corpus harness가 남아 있다. T66은 crash-equivalent recovery만 실행했다. TEST-004 kill 지점(T27/T30/T39/T57/T58/T63/T66)은 실제 process/power-cut harness 전까지 PASS로 계산하지 않는다.
 
 ## 2nd runtime-correctness audit (2026-09-08) — P0-1/2/3 + P1-4..9
 
@@ -118,9 +121,9 @@ unresolved 요약: T12,T23,T24,T26–T28,T33–T35,T39–T41,T43,T44,T46,T47,T52
 - **FS-003/IPC-008**: RequestCache가 unknown field/digest/receipt/key를 reject하고 file fsync → rename → parent-directory fsync를 수행한다. body bytes와 0600 mode round-trip test를 추가했다.
 - **CTX-003/004**: context commit이 expected revision을 parent로 기록하고 candidate를 CAS 전에 plan에 영속화한다. CAS 후 snapshot/current/mail 단계가 중단돼도 `GitModule.reconcile`/`ReconcileModule`이 ref==candidate를 보충하고, 제3 ref는 unknown으로 유지한다. crash-equivalent CTX-004 회귀 테스트 통과.
 
-현재 runtime suite는 `npm test` **76/76 pass, 0 fail, 0 skipped**; CTX-004 crash-equivalent recovery를 추가 검증했다. S-02/S-04/S-06/S-09 release gate는 여전히 OPEN이며 아래 coverage의 미실행 항목은 PASS로 계산하지 않는다.
+현재 runtime suite는 `npm test` **83/83 pass, 0 fail, 0 skipped**다. S-01–S-06/S-09 release gate는 raw evidence 전까지 OPEN이며 coverage의 미실행 항목은 PASS로 계산하지 않는다.
 
-production LOC: 8,299 baseline → **9,619** current (`node scripts/loc.mjs`). The 8,001–10,000 allowance is used because the executable contract requires broker-side idempotency, exact stream-boundary and digest enforcement, closed runtime/config validation, host integration policy wiring, durable CLI cache fsync, candidate-check fail-closed sandbox wiring, Git quarantine isolation, context publication reconciliation, and the complete CLI command surface; deleting those would weaken IPC/DB/CFG/CLI requirements. No new durable entity/service/framework was added.
+production LOC: 8,299 baseline → **9,900** current (`node scripts/loc.mjs`). The 8,001–10,000 allowance is used for the executable IPC, lifecycle, batch, recovery, quarantine, and validation contracts; no new durable entity/service/framework was added. The 10,001-line architecture-review gate is not crossed.
 
 ### A-009 production LOC breakdown (2026-09-08)
-`node scripts/loc.mjs` output (non-empty physical lines): broker 1,251; git 1,564; mail 899; store 833; cli 749; lifecycle 490; config 452; inference 402; frame 293; runner 293; contracts 283; validate 270; units 243; sandbox 199; views 158; request-cache 147; entry/broker 148; hash 114; reconcile 119; schema-v1.sql 108; leaf 106; ids 83; entry/host 81; entry/runner 76; pi-extension 59; rpc-client 59; authority 49; systemd templates 91; **total 9,619**.
+`node scripts/loc.mjs` output (non-empty physical lines): git 1,564; broker 1,166; mail 980; store 851; lifecycle 829; cli 749; config 460; inference 402; frame 293; contracts 283; validate 270; units 235; sandbox 199; entry/broker 184; leaf 159; views 159; reconcile 149; request-cache 147; runner 118; hash 114; schema-v1.sql 108; ids 83; entry/host 81; pi-extension 59; rpc-client 59; entry/runner 58; authority 49; systemd templates 92; **total 9,900**.

@@ -3,7 +3,6 @@
 // dynamically-created Resident never re-derives authority from initialResidents
 // and the runner never opens runtime.sqlite directly.
 import { join } from "node:path";
-import { SandboxModule } from "../sandbox.js";
 import { RunnerModule } from "../runner.js";
 import { loadConfig } from "../config.js";
 
@@ -46,32 +45,11 @@ if (Buffer.from(profileName, "utf8").toString("hex") !== profileHex) {
   console.error(`runner: malformed broker-rendered profile for ${agent}`);
   process.exit(4);
 }
-const resources = cfg.agentProfiles[profileName]?.resources;
-if (!resources) {
+if (!cfg.agentProfiles[profileName]) {
   console.error(`runner: unsupported profile ${profileName} for ${agent}`);
   process.exit(4);
 }
-const sandbox = new SandboxModule({
-  rootfs: cfg.installation.rootfs,
-  node: "/usr/bin/node", // in-rootfs executable paths
-  pi: "/usr/bin/pi",
-  piModeArgs: ["--mode", "rpc", "-e", "/opt/oma/pi-extension.js"],
-  tmpBytes: resources.tmpBytes,
-  checkResources: resources,
-});
-
-const runner = new RunnerModule(
-  {
-    runRoot,
-    stateRoot,
-    society,
-    extensionArtifact: join(cfg.installation.libdir, "dist", "pi-extension.js"),
-  },
-  sandbox,
-  agent,
-  join(stateRoot, "agents", agent, "home"),
-  join(stateRoot, "agents", agent, "workspace"),
-);
+const runner = new RunnerModule({ runRoot }, agent);
 
 process.on("SIGTERM", () => {
   void runner.stop().then(() => process.exit(0));

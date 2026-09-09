@@ -674,6 +674,13 @@ export class Store {
       .all(agent) as Record<string, unknown>[];
     return rows.map(rowToBatch);
   }
+  reassignPreparedBatches(agent: Actor, incarnation: number): void {
+    this.requireTx();
+    this.db
+      .prepare("UPDATE batches SET incarnation=? WHERE agent=? AND state='prepared'")
+      .run(incarnation, agent);
+  }
+
 
   /**
    * MUST [DB-008]: implied_by set of batch.message_ids must equal deliveries

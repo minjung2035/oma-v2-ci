@@ -16,7 +16,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { Store, StoreError } from "../src/store.js";
 import {
   UnitsModule,
@@ -29,6 +29,7 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker, peerCgroup } from "../src/broker.js";
 import { ViewsModule } from "../src/views.js";
+import { generateOperationId } from "../src/ids.js";
 import type {
   AuthContext,
   Capability,
@@ -429,6 +430,72 @@ test("T38: stopped actor with an unconfirmed stale cgroup cannot start; incarnat
     cleanup();
   }
 });
+test("REC-001: pending start and stop effects settle from actual systemd state", () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    seedGov(env);
+    env.units.ensureResident("a", "p");
+    const service = join(
+      env.xdg,
+      "systemd",
+      "user",
+      unitName(env.society, "a", "service"),
+    );
+    writeFileSync(
+      service,
+      "[Unit]\nDescription=reconcile action\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n",
+    );
+    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+
+    const startId = generateOperationId();
+    env.store.transaction((_tx) => {
+      env.store.claimOperation({
+        id: startId,
+        actor: "principal",
+        requestKey: "recover-start",
+        requestHash: "1".repeat(64),
+        kind: "agent.start",
+        payloadJson: JSON.stringify({ agent: "a" }),
+        planJson: JSON.stringify({
+          kind: "agent.start",
+          agent: "a",
+          previousIncarnation: 0,
+          desired: "enabled",
+          remainingOperations: [],
+        }),
+      });
+    });
+    env.lifecycle.reconcileAction(startId);
+    assert.equal(env.store.getOperationById(startId)!.state, "succeeded");
+
+    const stopId = generateOperationId();
+    env.store.transaction((_tx) => {
+      env.store.updateAgent({ name: "a", desired: "stopped" });
+      env.store.claimOperation({
+        id: stopId,
+        actor: "principal",
+        requestKey: "recover-stop",
+        requestHash: "2".repeat(64),
+        kind: "agent.stop",
+        payloadJson: JSON.stringify({ agent: "a" }),
+        planJson: JSON.stringify({
+          kind: "agent.stop",
+          agent: "a",
+          previousIncarnation: 0,
+          desired: "stopped",
+          remainingOperations: [],
+        }),
+      });
+    });
+    env.lifecycle.reconcileAction(stopId);
+    assert.equal(env.store.getOperationById(stopId)!.state, "succeeded");
+    assert.equal(env.units.confirmDead("a", 0), true);
+  } finally {
+    cleanup();
+  }
+});
+
 
 test("T13: capability escape — sibling stop denied; created child uses a real frozen base", async () => {
   const { env, cleanup } = envOf();
@@ -507,6 +574,114 @@ test("T40/LIFE-001: same stable name with a different resolved spec conflicts", 
       (e: unknown) => e instanceof StoreError && e.code === "AGENT_CONFLICT",
     );
   } finally {
+    cleanup();
+  }
+});
+
+test("CREATE-003: resolved child policy is rechecked at T-create-intent", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    const base = seedProjectGit(env);
+    let resolutions = 0;
+    const lifecycle = new LifecycleModule(
+      env.store,
+      env.units,
+      {
+        stateRoot: join(env.dir, "state"),
+        projectGit: join(env.dir, "state", "repos", "project.git"),
+        society: env.society,
+        hasGoal: () => false,
+      },
+      (_parent, input) => ({
+        ...input,
+        profile: ++resolutions === 1 ? "child" : "p",
+        capabilities: ["mail.send"],
+      }),
+      env.mail,
+    );
+    const receipt = await lifecycle.create(
+      auth("a", ["agent.create"]),
+      { name: "policy-child", from: base, brief: "frozen" },
+      "policy-race",
+    );
+    assert.equal(receipt.state, "succeeded");
+    assert.equal(env.store.getAgent("policy-child")!.profile, "p");
+    assert.equal(
+      (JSON.parse(env.store.getAgent("policy-child")!.specJson) as { profile: string })
+        .profile,
+      "p",
+    );
+    assert.equal(resolutions >= 2, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test("T-create-ready: a dynamically created Resident opens a fenced runner", async () => {
+  const { env, cleanup } = envOf();
+  let broker: Broker | null = null;
+  try {
+    seedPrincipalAndA(env.store);
+    const base = seedProjectGit(env);
+    await env.lifecycle.create(
+      auth("a", ["agent.create"]),
+      { name: "dynamic", from: base, brief: "start me" },
+      "dynamic-create",
+    );
+    const wrapper = join(env.dir, "dynamic-runner.mjs");
+    writeFileSync(
+      wrapper,
+      `import { RunnerModule } from ${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))};
+const runner = new RunnerModule({ runRoot: process.env.OMA_RUN_ROOT }, process.env.OMA_AGENT);
+runner.run().then(() => process.exit(0), () => process.exit(2));`,
+    );
+    const service = join(
+      env.xdg,
+      "systemd",
+      "user",
+      unitName(env.society, "dynamic", "service"),
+    );
+    writeFileSync(
+      service,
+      `[Unit]\nDescription=dynamic runner\n[Service]\nType=exec\nEnvironment=OMA_RUN_ROOT=${join(env.dir, "R")}\nEnvironment=OMA_AGENT=dynamic\nExecStart=${NODE} ${wrapper}\nRestart=no\n`,
+    );
+    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+    broker = new Broker(
+      env.store,
+      env.mail,
+      env.units,
+      env.views,
+      env.lifecycle,
+      null,
+      null,
+      {
+        stateRoot: join(env.dir, "state"),
+        runRoot: join(env.dir, "R"),
+        society: env.society,
+        hasGoal: () => true,
+      },
+    );
+    broker.start();
+    const started = spawn(
+      "systemctl",
+      ["--user", "start", unitName(env.society, "dynamic", "service")],
+      { stdio: "ignore" },
+    );
+    const code = await new Promise<number | null>((resolve) => started.on("exit", resolve));
+    assert.equal(code, 0);
+    for (
+      let i = 0;
+      i < 500 &&
+      (env.store.getAgent("dynamic")!.incarnation === 0 ||
+        env.store.preparedBatches("dynamic").length === 0);
+      i++
+    )
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 1);
+    assert.equal(env.store.preparedBatches("dynamic").length, 1);
+  } finally {
+    broker?.drainAndClose();
     cleanup();
   }
 });

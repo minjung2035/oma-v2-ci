@@ -28,6 +28,7 @@ import { UnitsModule, unitName } from "./units.js";
 import { MailModule } from "./mail.js";
 import { generateOperationId } from "./ids.js";
 import { requestHash } from "./hash.js";
+import { capabilitiesOf } from "./authority.js";
 
 export interface LifecyclePaths {
   stateRoot: string;
@@ -50,6 +51,10 @@ export interface SpecResolver {
 }
 
 type CreatePlan = Extract<OperationPlan, { kind: "agent.create" }>;
+type ActionPlan = Extract<
+  OperationPlan,
+  { kind: "agent.start" | "agent.stop" }
+>;
 
 const cloneEnv: NodeJS.ProcessEnv = {
   HOME: "/nonexistent",
@@ -235,6 +240,14 @@ export class LifecycleModule {
     }
 
     if (!alreadyRunning) this.units.start(agent, true);
+    const after = this.units.observe(agent);
+    if (!alreadyRunning && !["active", "activating"].includes(after.activeState)) {
+      this.store.transaction((_tx) => this.store.setOperationUnknown(opId));
+      throw new StoreError(
+        "RUN_TERMINATION_UNKNOWN",
+        `start of ${agent} was not observed active`,
+      );
+    }
     const result: OperationResult = {
       kind: "agent.start",
       agent,
@@ -259,6 +272,8 @@ export class LifecycleModule {
     if (target.desired === "provisioning")
       throw new StoreError("AGENT_NOT_READY", `${agent} is provisioning`);
 
+    if (target.desired === "retired")
+      throw new StoreError("AGENT_RETIRED", `${agent} is retired`);
     const prior =
       claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
     if (prior && prior.state !== "pending" && prior.state !== "unknown")
@@ -290,15 +305,13 @@ export class LifecycleModule {
         return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     }
 
+    this.units.stop(agent, target.incarnation);
     if (!this.units.confirmDead(agent, target.incarnation)) {
-      this.units.stop(agent, target.incarnation);
-      if (!this.units.confirmDead(agent, target.incarnation)) {
-        this.store.transaction((_tx) => this.store.setOperationUnknown(opId));
-        throw new StoreError(
-          "RUN_TERMINATION_UNKNOWN",
-          `could not confirm cgroup death of ${agent}`,
-        );
-      }
+      this.store.transaction((_tx) => this.store.setOperationUnknown(opId));
+      throw new StoreError(
+        "RUN_TERMINATION_UNKNOWN",
+        `could not confirm cgroup death of ${agent}`,
+      );
     }
     const remaining = this.store
       .recoverableOperations()
@@ -313,6 +326,39 @@ export class LifecycleModule {
       this.store.setOperationSucceeded(opId, JSON.stringify(result)),
     );
     return { operation: opId, state: "succeeded", result };
+  }
+
+  private resolveCreate(
+    auth: AuthContext,
+    input: AgentCreateInput,
+  ): { spec: ResolvedAgentSpec; specHash: string } {
+    const parent = this.store.getAgent(auth.actor);
+    if (!parent) throw new StoreError("AUTH_FAILED", "parent identity missing");
+    const durableCaps = capabilitiesOf(parent);
+    const spec = this.resolveSpec(
+      {
+        name: parent.name,
+        profile: parent.profile,
+        role: parent.role,
+        desired: parent.desired,
+        capabilities: [...auth.capabilities].filter((cap) => durableCaps.has(cap)),
+      },
+      input,
+    );
+    if (!spec)
+      throw new StoreError("CAPABILITY_DENIED", "no delegable child profile");
+    const specHash = createHash("sha256")
+      .update(
+        JSON.stringify({
+          name: spec.name,
+          from: spec.from,
+          brief: spec.brief,
+          profile: spec.profile,
+          capabilities: spec.capabilities,
+        }),
+      )
+      .digest("hex");
+    return { spec, specHash };
   }
 
   /** MUST [CREATE-002/003,LIFE-001/002/007]: accept one frozen physical plan. */
@@ -331,29 +377,7 @@ export class LifecycleModule {
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
 
-    const parent = this.store.getAgent(auth.actor);
-    if (!parent) throw new StoreError("AUTH_FAILED", "parent identity missing");
-    const spec = this.resolveSpec(
-      {
-        name: parent.name,
-        profile: parent.profile,
-        role: parent.role,
-        desired: parent.desired,
-        capabilities: [...auth.capabilities],
-      },
-      input,
-    );
-    if (!spec)
-      throw new StoreError("CAPABILITY_DENIED", "no delegable child profile");
-    const specHash = createHash("sha256")
-      .update(JSON.stringify({
-        name: spec.name,
-        from: spec.from,
-        brief: spec.brief,
-        profile: spec.profile,
-        capabilities: spec.capabilities,
-      }))
-      .digest("hex");
+    let { spec, specHash } = this.resolveCreate(auth, input);
 
     const existing = this.store.getAgent(input.name);
     if (existing) {
@@ -384,6 +408,14 @@ export class LifecycleModule {
         existingCreation: original.id,
       };
       this.store.transaction((_tx) => {
+        ({ spec, specHash } = this.resolveCreate(auth, input));
+        if (existing.specHash !== specHash)
+          throw new StoreError(
+            "AGENT_CONFLICT",
+            `name ${input.name} already exists with a different resolved spec`,
+          );
+        plan.spec = spec;
+        plan.specHash = specHash;
         outcome.claim = this.store.claimOperation({
           id: opId,
           actor: auth.actor,
@@ -431,6 +463,9 @@ export class LifecycleModule {
       linked: null as string | null,
     };
     this.store.transaction((_tx) => {
+      ({ spec, specHash } = this.resolveCreate(auth, input));
+      physicalPlan.spec = spec;
+      physicalPlan.specHash = specHash;
       const raced = this.store.getAgent(input.name);
       if (raced) {
         if (raced.specHash !== specHash)
@@ -495,6 +530,49 @@ export class LifecycleModule {
       return this.settleLinkedCreate(opId, outcome.linked, input.name);
     return this.finishCreate(opId);
   }
+  /** MUST [REC-001/LIFE-003/004]: settle accepted lifecycle effects by observation. */
+  reconcileAction(operationId: string): void {
+    const op = this.store.getOperationById(operationId as never);
+    if (!op || (op.kind !== "agent.start" && op.kind !== "agent.stop")) return;
+    if (op.state !== "pending" && op.state !== "unknown") return;
+    const plan = parseActionPlan(op);
+    const agent = this.store.getAgent(plan.agent);
+    if (!agent) throw new StoreError("STORE_CORRUPT", `missing agent ${plan.agent}`);
+    if (plan.kind === "agent.start") {
+      if (agent.desired !== "enabled" || !this.paths.hasGoal()) return;
+      let observed = this.units.observe(plan.agent);
+      if (!["active", "activating"].includes(observed.activeState)) {
+        if (!this.units.confirmDead(plan.agent, plan.previousIncarnation)) {
+          this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+          return;
+        }
+        this.units.start(plan.agent, false);
+        observed = this.units.observe(plan.agent);
+        if (!["active", "activating"].includes(observed.activeState)) {
+          this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+          return;
+        }
+      }
+    } else {
+      if (agent.desired !== "stopped") return;
+      this.units.stop(plan.agent, plan.previousIncarnation);
+      if (!this.units.confirmDead(plan.agent, plan.previousIncarnation)) {
+        this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+        return;
+      }
+    }
+    const remaining = this.store.recoverableOperations().filter((id) => id !== op.id);
+    const result: OperationResult = {
+      kind: plan.kind,
+      agent: plan.agent,
+      desired: plan.desired,
+      remainingOperations: remaining,
+    };
+    this.store.transaction((_tx) =>
+      this.store.setOperationSucceeded(op.id, JSON.stringify(result)),
+    );
+  }
+
 
   /** Mechanical create recovery: re-check the frozen plan; never re-render mail. */
   async reconcileCreate(operationId: string): Promise<void> {
@@ -624,16 +702,28 @@ export class LifecycleModule {
         if (cloned.status !== 0)
           throw new StoreError("INTERNAL_ERROR", `clone failed: ${cloned.stderr}`);
       }
-      const haveBase = spawnSync(
+      let haveBase = spawnSync(
         "/usr/bin/git",
         ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`],
         { env: cloneEnv, encoding: "utf8" },
       );
-      if (haveBase.status !== 0)
-        throw new StoreError(
-          "PREREQUISITE_MISSING",
-          `cloned workspace does not contain frozen base ${plan.spec.from}`,
+      if (haveBase.status !== 0) {
+        const fetched = spawnSync(
+          "/usr/bin/git",
+          ["-C", workspaceTmp, "fetch", "--no-tags", this.paths.projectGit, plan.spec.from],
+          { env: cloneEnv, encoding: "utf8" },
         );
+        haveBase = spawnSync(
+          "/usr/bin/git",
+          ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`],
+          { env: cloneEnv, encoding: "utf8" },
+        );
+        if (fetched.status !== 0 || haveBase.status !== 0)
+          throw new StoreError(
+            "PREREQUISITE_MISSING",
+            `cloned workspace does not contain frozen base ${plan.spec.from}`,
+          );
+      }
       const checkout = spawnSync(
         "/usr/bin/git",
         ["-C", workspaceTmp, "checkout", "--detach", plan.spec.from],
@@ -670,6 +760,39 @@ export class LifecycleModule {
   }
 }
 
+function parseActionPlan(op: OperationRow): ActionPlan {
+  try {
+    const plan = JSON.parse(op.planJson) as ActionPlan;
+    if (
+      plan.kind !== op.kind ||
+      (plan.kind !== "agent.start" && plan.kind !== "agent.stop") ||
+      typeof plan.agent !== "string" ||
+      !Number.isSafeInteger(plan.previousIncarnation) ||
+      plan.previousIncarnation < 0 ||
+      plan.desired !== (plan.kind === "agent.start" ? "enabled" : "stopped") ||
+      !Array.isArray(plan.remainingOperations) ||
+      plan.remainingOperations.some((id) => typeof id !== "string") ||
+      !Object.keys(plan).every((key) =>
+        [
+          "kind",
+          "agent",
+          "previousIncarnation",
+          "desired",
+          "remainingOperations",
+        ].includes(key),
+      )
+    ) {
+      throw new Error("invalid lifecycle plan");
+    }
+    return plan;
+  } catch (e) {
+    throw new StoreError(
+      "STORE_CORRUPT",
+      `operation ${op.id} has corrupt lifecycle plan: ${(e as Error).message}`,
+    );
+  }
+}
+
 function parseCreatePlan(op: OperationRow): CreatePlan {
   try {
     const plan = JSON.parse(op.planJson) as CreatePlan;
@@ -678,8 +801,31 @@ function parseCreatePlan(op: OperationRow): CreatePlan {
       !plan.spec ||
       typeof plan.spec.name !== "string" ||
       typeof plan.spec.from !== "string" ||
+      typeof plan.spec.brief !== "string" ||
+      typeof plan.spec.profile !== "string" ||
+      !Array.isArray(plan.spec.capabilities) ||
+      plan.spec.capabilities.some((cap) => typeof cap !== "string") ||
+      !Object.keys(plan.spec).every((key) =>
+        ["name", "from", "brief", "profile", "capabilities"].includes(key),
+      ) ||
       typeof plan.specHash !== "string" ||
-      !Array.isArray(plan.unitNames)
+      typeof plan.parent !== "string" ||
+      typeof plan.workspacePath !== "string" ||
+      !Array.isArray(plan.unitNames) ||
+      plan.unitNames.some((name) => typeof name !== "string") ||
+      (plan.existingCreation !== null && typeof plan.existingCreation !== "string") ||
+      !Object.keys(plan).every((key) =>
+        [
+          "kind",
+          "spec",
+          "specHash",
+          "parent",
+          "workspacePath",
+          "unitNames",
+          "initialMessage",
+          "existingCreation",
+        ].includes(key),
+      )
     ) {
       throw new Error("invalid create plan");
     }
@@ -707,7 +853,10 @@ function receiptOfOp(op: OperationRow): Receipt {
     try {
       receipt.result = JSON.parse(op.resultJson);
     } catch {
-      /* corrupt result remains visible through the minimal receipt */
+      throw new StoreError(
+        "STORE_CORRUPT",
+        `operation ${op.id} has corrupt result`,
+      );
     }
   }
   if (op.errorCode) {

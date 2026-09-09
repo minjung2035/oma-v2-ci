@@ -150,7 +150,12 @@ const broker = new Broker(
   lifecycle,
   git,
   reconcile,
-  { stateRoot, runRoot, society: cfg.society },
+  {
+    stateRoot,
+    runRoot,
+    society: cfg.society,
+    hasGoal: () => existsSync(join(stateRoot, "world", "context", "current")),
+  },
   cfg.limits,
 );
 

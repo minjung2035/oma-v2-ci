@@ -8,6 +8,7 @@ import {
   rmSync,
   mkdirSync,
   writeFileSync,
+  readFileSync,
   existsSync,
   readdirSync,
   openSync,
@@ -225,7 +226,7 @@ test("T11-neq: non-unit process cannot open a run on the runner channel", async 
     const reply = await adminCall(
       join(env.runRoot, "admin.sock"),
       "runner.open",
-      { agent: "a" },
+      { agent: "a", invocationId: "00000000000000000000000000000000" },
     );
     assert.equal(reply.ok, false);
     assert.equal((reply.error as { code: string }).code, "AUTH_FAILED");
@@ -283,11 +284,49 @@ test("T42: principal relay moves new mail to cur, counts pending, spawns no mode
     );
     const newDir = join(env.state, "mail", "inboxes", "principal", "new");
     assert.equal(readdirSync(newDir).length, 1);
-    const reply = await adminCall(
-      join(env.runRoot, "admin.sock"),
+    const forged = await adminCall(
+      join(env.runRoot, "host.sock"),
       "host.principalRelay",
       {},
     );
+    assert.equal(forged.ok, false);
+    assert.equal((forged.error as { code: string }).code, "AUTH_FAILED");
+
+    const helper = join(env.dir, "host-call.mjs");
+    const out = join(env.dir, "host-call.json");
+    writeFileSync(
+      helper,
+      `import { connect } from "node:net";
+const request = Buffer.from(JSON.stringify({v:1,id:"h",method:"host.principalRelay",params:{}}));
+const frame = Buffer.alloc(4 + request.length); frame.writeUInt32BE(request.length); request.copy(frame, 4);
+let data = Buffer.alloc(0); const socket = connect(process.env.OMA_HOST_SOCK, () => socket.write(frame));
+socket.on("data", chunk => { data = Buffer.concat([data, chunk]); if (data.length >= 4 && data.length >= 4 + data.readUInt32BE(0)) {
+  import("node:fs").then(fs => fs.writeFileSync(process.env.OMA_OUT, data.subarray(4, 4 + data.readUInt32BE(0)))); socket.destroy();
+}});`,
+      "utf8",
+    );
+    const unit = `oma-${env.society}-principal-relay.service`;
+    const started = spawn(
+      "systemd-run",
+      [
+        "--user",
+        "--quiet",
+        "--wait",
+        "--collect",
+        `--unit=${unit}`,
+        `--setenv=OMA_HOST_SOCK=${join(env.runRoot, "host.sock")}`,
+        `--setenv=OMA_OUT=${out}`,
+        process.execPath,
+        helper,
+      ],
+      { env: process.env },
+    );
+    const exit = new Promise<number | null>((resolve) => started.on("exit", resolve));
+    for (let i = 0; i < 500 && !existsSync(out); i++)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(existsSync(out), true, "host unit produced no response");
+    assert.equal(await exit, 0);
+    const reply = JSON.parse(readFileSync(out, "utf8")) as Record<string, unknown>;
     assert.equal(reply.ok, true);
     const res = reply.result as { moved: number; pending: number };
     assert.equal(res.moved, 1);
@@ -298,6 +337,61 @@ test("T42: principal relay moves new mail to cur, counts pending, spawns no mode
       1,
     );
     assert.equal(env.store.preparedBatches("principal").length, 0);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("T25 deterministic core: capped batches alternate direct and public mail", async () => {
+  const env = envOf();
+  try {
+    seed(env.store, [
+      ["a", "resident", "enabled"],
+      ["b", "resident", "enabled"],
+    ]);
+    const mail = new MailModule(
+      { stateRoot: env.state, society: env.society },
+      env.store,
+      64,
+      4,
+    );
+    const direct = new Set<string>();
+    const publicList = new Set<string>();
+    for (let i = 0; i < 20; i++) {
+      const d = await mail.send(auth("b", []), `direct-${i}`, {
+        to: ["a"],
+        subject: `direct ${i}`,
+        kind: "question",
+        body: "d",
+      });
+      direct.add((d.result as { message: string }).message);
+      const p = await mail.send(auth("b", []), `public-${i}`, {
+        to: ["commons"],
+        subject: `public ${i}`,
+        kind: "message",
+        body: "p",
+      });
+      publicList.add((p.result as { message: string }).message);
+    }
+    const batch = await mail.prepare(auth("a", []));
+    assert.ok(batch);
+    assert.equal(batch.messageIds.length, 4);
+    assert.deepEqual(
+      batch.messageIds.map((id) =>
+        direct.has(id) ? "direct" : publicList.has(id) ? "public" : "unknown",
+      ),
+      ["direct", "public", "direct", "public"],
+    );
+    assert.match(batch.notice, /sender=.*subject=.*kind=.*path=\/mail\/archive\/cur\//);
+    assert.match(batch.notice, /전체 목록: \/inbox\.md/);
+    await mail.send(auth("b", []), "late-direct", {
+      to: ["a"],
+      subject: "late",
+      kind: "question",
+      body: "late",
+    });
+    const recovered = await mail.prepare(auth("a", []));
+    assert.deepEqual(recovered?.messageIds, batch.messageIds);
   } finally {
     env.cleanup();
   }

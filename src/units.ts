@@ -192,6 +192,15 @@ export class UnitsModule {
     return this.observe(agent);
   }
 
+  unitCgroup(kind: "principal-relay" | "reconcile"): string {
+    const out = this.run(
+      ["show", unitName(this.society, kind, "service"), "-p", "ControlGroup"],
+      true,
+    );
+    const line = out.split("\n").find((value) => value.startsWith("ControlGroup="));
+    return line?.slice("ControlGroup=".length) ?? "";
+  }
+
   observe(agent: Actor): UnitObservation {
     const out = this.run([
       "show",
@@ -201,6 +210,7 @@ export class UnitsModule {
       "-p", "Result",
       "-p", "ExecMainStatus",
       "-p", "ControlGroup",
+      "-p", "InvocationID",
     ], true);
     const kv = new Map(out.split("\n").map((line) => {
       const i = line.indexOf("=");
@@ -213,7 +223,7 @@ export class UnitsModule {
       result: kv.get("Result") ?? "unknown",
       execMainStatus: rawStatus && !Number.isNaN(Number(rawStatus)) ? Number(rawStatus) : 0,
       cgroup: kv.get("ControlGroup") ?? "",
-      invocationId: "",
+      invocationId: kv.get("InvocationID") ?? "",
     };
   }
 

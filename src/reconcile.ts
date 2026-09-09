@@ -39,6 +39,10 @@ export class ReconcileModule {
           await this.lifecycle.reconcileCreate(id);
           continue;
         }
+        if (op.kind === "agent.start" || op.kind === "agent.stop") {
+          this.lifecycle.reconcileAction(id);
+          continue;
+        }
         if (
           (op.kind === "git.submit" ||
             op.kind === "git.integrate" ||
@@ -71,21 +75,28 @@ export class ReconcileModule {
         if (!op || op.kind === "mail.send" || op.kind === "agent.continue")
           continue;
         examined++;
-        if (op.kind === "agent.create") {
-          await this.lifecycle.reconcileCreate(id);
-        } else if (
-          (op.kind === "git.submit" ||
-            op.kind === "git.integrate" ||
-            op.kind === "context.publish") &&
-          this.git
-        ) {
-          await this.git.reconcile(id);
-        } else {
+        try {
+          if (op.kind === "agent.create") {
+            await this.lifecycle.reconcileCreate(id);
+          } else if (op.kind === "agent.start" || op.kind === "agent.stop") {
+            this.lifecycle.reconcileAction(id);
+          } else if (
+            (op.kind === "git.submit" ||
+              op.kind === "git.integrate" ||
+              op.kind === "context.publish") &&
+            this.git
+          ) {
+            await this.git.reconcile(id);
+          } else {
+            remaining++;
+            continue;
+          }
+          if (this.store.getOperationById(id)?.state === "succeeded") repaired++;
+          else remaining++;
+        } catch (error) {
+          if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
           remaining++;
-          continue;
         }
-        if (this.store.getOperationById(id)?.state === "succeeded") repaired++;
-        else remaining++;
       }
 
       // UNIT-005/CTX-006: stopped agents with a live unit are stopped. Enabled
@@ -93,22 +104,25 @@ export class ReconcileModule {
       // must not wake a newly created Resident.
       for (const a of this.store.listAgents()) {
         if (a.role !== "resident" || a.desired === "retired") continue;
-        const obs = this.units.observe(a.name);
-        if (
-          a.desired === "stopped" &&
-          (obs.activeState === "active" || obs.activeState === "activating")
-        ) {
-          this.units.stop(a.name, a.incarnation);
-          continue;
+        try {
+          const obs = this.units.observe(a.name);
+          if (
+            a.desired === "stopped" &&
+            (obs.activeState === "active" || obs.activeState === "activating")
+          ) {
+            this.units.stop(a.name, a.incarnation);
+            continue;
+          }
+          if (a.desired !== "enabled") continue;
+          if (this.paths.hasGoal && !this.paths.hasGoal()) continue;
+          const pendingCount = this.store.pendingDeliveries(a.name).length;
+          const inactive =
+            obs.activeState === "inactive" || obs.activeState === "dead";
+          if (pendingCount > 0 && inactive) this.units.start(a.name, false);
+        } catch (error) {
+          if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
+          remaining++;
         }
-        if (a.desired !== "enabled") continue;
-        if (this.paths.hasGoal && !this.paths.hasGoal()) continue;
-        const pendingCount =
-          this.store.pendingDeliveries(a.name).length +
-          this.store.preparedBatches(a.name).length;
-        const inactive =
-          obs.activeState === "inactive" || obs.activeState === "dead";
-        if (pendingCount > 0 && inactive) this.units.start(a.name, false);
       }
       return { examined, repaired, remaining };
     } finally {

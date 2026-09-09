@@ -28,7 +28,7 @@ const parser = new FrameParser(256 * 1024);
 let buf = Buffer.alloc(0);
 let settled = false;
 
-const sock = connect(join(runRoot, "admin.sock"), () => {
+const sock = connect(join(runRoot, "host.sock"), () => {
     sock.write(
         encodeFrame({
             v: 1,

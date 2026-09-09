@@ -244,6 +244,7 @@ function brokerEnv(): BrokerEnv {
       hasGoal: () => false,
     },
     resolver,
+    mail,
   );
   const views = new ViewsModule(store, state, society, "p");
   const git = new GitModule(
@@ -254,20 +255,21 @@ function brokerEnv(): BrokerEnv {
       worldDir: join(state, "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
       checkTimeoutSeconds: 30,
     },
     store,
     mail,
     null,
   );
-  const recon = new ReconcileModule(store, mail, git, units, {
+  const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
     projectGit: join(state, "repos", "project.git"),
   });
   const broker = new Broker(store, mail, units, views, lifecycle, git, recon, {
     stateRoot: state,
     runRoot,
     society,
+    hasGoal: () => true,
   });
   broker.start();
   return {
@@ -358,7 +360,7 @@ function framedCall(
   });
 }
 
-test("B1: admin channel round-trip is uint32-BE-length framed (production client path)", async () => {
+test("B1/IPC-009: framed runner channel rejects host methods", async () => {
   const env = brokerEnv();
   try {
     const replies = await framedCall(join(env.runRoot, "admin.sock"), {
@@ -368,10 +370,10 @@ test("B1: admin channel round-trip is uint32-BE-length framed (production client
       params: {},
     });
     assert.equal(replies.length, 1);
-    assert.equal(replies[0]!.ok, true);
+    assert.equal(replies[0]!.ok, false);
     assert.equal(
-      typeof (replies[0]!.result as { examined: number }).examined,
-      "number",
+      (replies[0]!.error as { code: string }).code,
+      "AUTH_FAILED",
     );
     // unknown method -> framed error answer, still parsable by a FrameParser client
     const err = await framedCall(join(env.runRoot, "admin.sock"), {
@@ -534,9 +536,14 @@ function framed(sockPath, frame, streamBytes, mode, wantReplies = 1) {
 }
 
 async function main() {
-  const lease = await framed(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: actor } }, Buffer.alloc(0), "coalesced");
+  const lease = await framed(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: actor, invocationId: process.env.INVOCATION_ID } }, Buffer.alloc(0), "coalesced");
   if (!lease[0] || lease[0].ok !== true) {
     writeFileSync(out, JSON.stringify({ error: lease[0]?.error ?? "no-lease" }));
+    process.exit(2);
+  }
+  const replay = await framed(admin, { v: 1, id: "ro2", method: "runner.open", params: { agent: actor, invocationId: process.env.INVOCATION_ID } }, Buffer.alloc(0), "coalesced");
+  if (!replay[0] || replay[0].ok !== true || replay[0].result.incarnation !== lease[0].result.incarnation || replay[0].result.socketHostPath !== lease[0].result.socketHostPath) {
+    writeFileSync(out, JSON.stringify({ error: "same invocation did not converge" }));
     process.exit(2);
   }
   const actorSock = lease[0].result.socketHostPath;

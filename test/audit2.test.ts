@@ -104,6 +104,7 @@ function envOf(): Env {
       hasGoal: () => true,
     },
     resolver,
+    mail,
   );
   const views = new ViewsModule(store, state, society, "p");
   const git = new GitModule(
@@ -114,20 +115,21 @@ function envOf(): Env {
       worldDir: join(state, "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
       checkTimeoutSeconds: 30,
     },
     store,
     mail,
     { policyRevision: "audit", protectedPaths: ["x.txt"], checks: [] },
   );
-  const recon = new ReconcileModule(store, mail, git, units, {
+  const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
     projectGit: join(state, "repos", "project.git"),
   });
   const broker = new Broker(store, mail, units, views, lifecycle, git, recon, {
     stateRoot: state,
     runRoot,
     society,
+    hasGoal: () => true,
   },
   {
     frameBytes: 256 * 1024,
@@ -257,7 +259,7 @@ async function main() {
   const scenarios = JSON.parse(readFileSync(process.env.OMA_SCENARIOS_FILE, "utf8"));
   // obtain the actor socket via runner.open
   const actorSock = await new Promise((resolve, reject) => {
-    const s = connect(admin, () => s.write(encodeFrame({ v: 1, id: "ro", method: "runner.open", params: { agent: process.env.OMA_ACTOR } })));
+    const s = connect(admin, () => s.write(encodeFrame({ v: 1, id: "ro", method: "runner.open", params: { agent: process.env.OMA_ACTOR, invocationId: process.env.INVOCATION_ID } })));
     const parser = new FrameParser(256 * 1024);
     let buf = Buffer.alloc(0);
     const t = setTimeout(() => reject(new Error("no lease")), 30000);
@@ -335,7 +337,7 @@ const once = (path, request) => new Promise((resolve, reject) => {
 async function main() {
   const admin = process.env.OMA_ADMIN_SOCK;
   const actor = process.env.OMA_ACTOR;
-  const lease = await once(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: actor } });
+  const lease = await once(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: actor, invocationId: process.env.INVOCATION_ID } });
   if (!lease.ok) throw new Error(JSON.stringify(lease));
   const actorSock = lease.result.socketHostPath;
   const requests = JSON.parse(readFileSync(process.env.OMA_REQUESTS_FILE, "utf8"));

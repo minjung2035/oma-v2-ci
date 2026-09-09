@@ -82,6 +82,17 @@ function envOf(): Env {
       agent: "",
     },
     join(dir, "xdg"),
+    {
+      child: {
+        memoryBytes: 3 * 1024 ** 3,
+        tasks: 128,
+        cpuQuotaPercent: 200,
+        tmpBytes: 512 * 1024 ** 2,
+        workspaceBytes: 1024 ** 3,
+        stagingBytes: 512 * 1024 ** 2,
+        checkTimeoutSeconds: 30,
+      },
+    },
   );
   const mail = new MailModule({ stateRoot: state, society }, store, 64);
   const resolver = (
@@ -102,6 +113,7 @@ function envOf(): Env {
       hasGoal: () => false,
     },
     resolver,
+    mail,
   );
   const views = new ViewsModule(store, state, society, "p");
   const git = new GitModule(
@@ -112,20 +124,21 @@ function envOf(): Env {
       worldDir: join(state, "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
       checkTimeoutSeconds: 30,
     },
     store,
     mail,
     null,
   );
-  const recon = new ReconcileModule(store, mail, git, units, {
+  const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
     projectGit: join(state, "repos", "project.git"),
   });
   const broker = new Broker(store, mail, units, views, lifecycle, git, recon, {
     stateRoot: state,
     runRoot,
     society,
+    hasGoal: () => true,
   });
   broker.start();
   return {
@@ -219,7 +232,7 @@ function framed(sockPath, frame) {
   });
 }
 
-const lease = await framed(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: process.env.OMA_ACTOR } });
+const lease = await framed(admin, { v: 1, id: "ro", method: "runner.open", params: { agent: process.env.OMA_ACTOR, invocationId: process.env.INVOCATION_ID } });
 if (!lease.ok) { writeFileSync(process.env.OMA_OUT, JSON.stringify({ leaseError: lease.error })); process.exit(2); }
 const sock = lease.result.socketHostPath;
 const results = [];
@@ -704,13 +717,10 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
       fromRec.operation,
       "recovery must reuse the frozen agent-create request",
     );
-    // a fresh create resolves the CURRENT HEAD (moved) and succeeds
+    // A fresh local-only HEAD is not in canonical project.git and must fail closed.
     const rFrom3 = results[13]!;
-    assert.equal(
-      rFrom3.code,
-      0,
-      `fresh agent create failed: ${rFrom3.stdout}${rFrom3.stderr}`,
-    );
+    assert.equal(rFrom3.code, 2);
+    assert.match(rFrom3.stderr, /PREREQUISITE_MISSING/);
 
     // ---- P1-4: submit frozen-first after HEAD moves ----
     const rSubf1 = results[14]!;

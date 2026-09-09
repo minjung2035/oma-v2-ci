@@ -18,6 +18,7 @@ import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
 import { UnitsModule } from "../src/units.js";
 import { ReconcileModule } from "../src/reconcile.js";
+import { LifecycleModule } from "../src/lifecycle.js";
 import { GitModule, type GitPaths } from "../src/git.js";
 import type { Capability } from "../implementation/contracts.js";
 import { generateOperationId, generateMessageId } from "../src/ids.js";
@@ -86,13 +87,30 @@ function envOf(withGit: boolean): Env {
       worldDir: join(dir, "state", "world"),
       society: "demo",
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
       checkTimeoutSeconds: 30,
     };
     git = new GitModule(paths, store, mail, null);
   }
-  const recon = new ReconcileModule(store, mail, git, units, {
+  const lifecycle = new LifecycleModule(
+    store,
+    units,
+    {
+      stateRoot: join(dir, "state"),
+      projectGit: join(dir, "state", "repos", "project.git"),
+      society: "demo",
+      hasGoal: () => false,
+    },
+    (_parent, input) => ({
+      ...input,
+      profile: "p",
+      capabilities: [],
+    }),
+    mail,
+  );
+  const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
     projectGit: join(dir, "state", "repos", "project.git"),
+    hasGoal: () => false,
   });
   return {
     dir,

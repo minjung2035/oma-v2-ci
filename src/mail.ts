@@ -759,8 +759,8 @@ export class MailModule {
     const suffix = `@${this.paths.society}.oma.invalid`;
     return message.to.every(
       (to) =>
-        to === "commons" ||
-        to === "residents" ||
+        to === `commons${suffix}` ||
+        to === `residents${suffix}` ||
         (to.startsWith("topic-") && to.endsWith(suffix)),
     );
   }
@@ -769,7 +769,11 @@ export class MailModule {
     const op = this.store.getOperationById(delivery.operationId);
     if (!op)
       throw new StoreError("STORE_CORRUPT", `missing operation ${delivery.operationId}`);
-    let decoded: { message?: MessagePlan; initialMessage?: MessagePlan | null };
+    let decoded: {
+      message?: MessagePlan;
+      initialMessage?: MessagePlan | null;
+      candidate?: string;
+    };
     try {
       decoded = JSON.parse(op.planJson) as typeof decoded;
     } catch {
@@ -778,7 +782,9 @@ export class MailModule {
     const message = decoded.message ?? decoded.initialMessage;
     if (!message || message.id !== delivery.messageId)
       throw new StoreError("STORE_CORRUPT", `message plan mismatch for ${delivery.messageId}`);
-    return message;
+    return message.kind === "context" && decoded.candidate
+      ? { ...message, contextRevision: decoded.candidate as Oid }
+      : message;
   }
 
   /** MUST [BATCH-002]: at most six deterministic metadata items; never body summary. */

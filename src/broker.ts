@@ -59,6 +59,7 @@ export interface BrokerPaths {
   stateRoot: string;
   runRoot: string;
   society: string;
+  hasGoal?: () => boolean;
 }
 
 const DEFAULT_LIMITS: ProtocolLimits = {
@@ -98,10 +99,15 @@ function socketFd(sock: Socket): number {
 
 export class Broker {
   private adminServer: ReturnType<typeof createServer> | null = null;
+  private hostServer: ReturnType<typeof createServer> | null = null;
   private actorServers: Set<ReturnType<typeof createServer>> = new Set();
   private lockFd: number | null = null;
   private running = false;
 
+  private runLeases = new Map<
+    Actor,
+    { invocationId: string; lease: RunLease; done: () => void }
+>();
   constructor(
     private readonly store: Store,
     private readonly mail: MailModule,
@@ -127,7 +133,14 @@ export class Broker {
         "another broker holds the society lock",
       );
     }
-    this.adminServer = this.listenAdmin(join(this.paths.runRoot, "admin.sock"));
+    this.adminServer = this.listenInternal(
+      join(this.paths.runRoot, "admin.sock"),
+      "runner",
+    );
+    this.hostServer = this.listenInternal(
+      join(this.paths.runRoot, "host.sock"),
+      "host",
+    );
     this.running = true;
   }
 
@@ -135,9 +148,12 @@ export class Broker {
     return sdNotifyReady(process.env.NOTIFY_SOCKET ?? "");
   }
 
-  private listenAdmin(path: string): ReturnType<typeof createServer> {
+  private listenInternal(
+    path: string,
+    channel: "runner" | "host",
+  ): ReturnType<typeof createServer> {
     if (existsSync(path)) unlinkSync(path);
-    const srv = createServer((sock) => this.handleAdmin(sock));
+    const srv = createServer((sock) => this.handleInternal(sock, channel));
     srv.listen(path);
     return srv;
   }
@@ -219,18 +235,18 @@ export class Broker {
     };
   }
 
-  private handleAdmin(sock: Socket): void {
+  private handleInternal(sock: Socket, channel: "runner" | "host"): void {
     const cred = peerCred(socketFd(sock));
-    if (!cred) {
+    if (!cred || cred.uid !== (process.getuid?.() ?? -1)) {
       this.fail(sock, {
         code: "AUTH_FAILED",
-        message: "no peer credentials",
+        message: "invalid internal peer credentials",
         retry: "never",
       });
       return;
     }
     this.serveFrames(sock, (raw, stream) =>
-      this.dispatchInternal(raw, cred, stream ?? null),
+      this.dispatchInternal(raw, cred, stream ?? null, channel),
     );
   }
 
@@ -811,13 +827,36 @@ export class Broker {
     }
   }
 
-  private requireRunnerUnit(pid: number, agent: Actor): void {
+  private requireRunnerUnit(
+    pid: number,
+    agent: Actor,
+    invocationId?: string,
+  ): void {
     const unit = unitName(this.paths.society, agent, "service");
-    const unitCg = this.units.observe(agent).cgroup;
+    const observed = this.units.observe(agent);
     const peerCg = peerCgroup(pid);
-    const prefix = unitCg?.endsWith("/") ? unitCg : `${unitCg}/`;
+    const prefix = observed.cgroup?.endsWith("/")
+      ? observed.cgroup
+      : `${observed.cgroup}/`;
+    if (
+      !observed.cgroup ||
+      !peerCg ||
+      (peerCg !== observed.cgroup && !peerCg.startsWith(prefix)) ||
+      (invocationId !== undefined && observed.invocationId !== invocationId)
+    ) {
+      throw new StoreError("AUTH_FAILED", `caller is not the current ${unit} invocation`);
+    }
+  }
+
+  private requireHostUnit(
+    pid: number,
+    kind: "principal-relay" | "reconcile",
+  ): void {
+    const unitCg = this.units.unitCgroup(kind);
+    const peerCg = peerCgroup(pid);
+    const prefix = unitCg.endsWith("/") ? unitCg : `${unitCg}/`;
     if (!unitCg || !peerCg || (peerCg !== unitCg && !peerCg.startsWith(prefix)))
-      throw new StoreError("AUTH_FAILED", `caller is not inside ${unit}`);
+      throw new StoreError("AUTH_FAILED", `caller is not inside the ${kind} service`);
   }
 
   /** Resolve the runner actor from physical cgroup identity, never request params. */
@@ -841,6 +880,7 @@ export class Broker {
     raw: Record<string, unknown>,
     peer: { pid: number; uid: number; gid: number },
     _stream: AsyncIterable<Uint8Array> | null,
+    channel: "runner" | "host",
   ): Promise<object> {
     const id = typeof raw.id === "string" ? raw.id : "x";
     const method = typeof raw.method === "string" ? raw.method : "";
@@ -862,17 +902,27 @@ export class Broker {
     }
     const params = paramsRaw as Record<string, unknown>;
     try {
+      const hostMethod = method === "host.principalRelay" || method === "host.reconcile";
+      if ((channel === "host") !== hostMethod)
+        throw new StoreError("AUTH_FAILED", `method ${method} is not allowed on ${channel} channel`);
       switch (method) {
         case "runner.open": {
           if (
             typeof params.agent !== "string" ||
             !isValidActorName(params.agent) ||
-            !Object.keys(params).every((k) => ["agent", "invocationId"].includes(k))
+            typeof params.invocationId !== "string" ||
+            !/^[0-9a-f]{32}$/.test(params.invocationId) ||
+            !Object.keys(params).every((k) =>
+              ["agent", "invocationId"].includes(k),
+            )
           ) {
             throw new StoreError("INVALID_REQUEST", "runner.open args invalid");
           }
-          this.requireRunnerUnit(peer.pid, params.agent);
-          return Broker.okAnswer(id, this.openRun(params.agent));
+          this.requireRunnerUnit(peer.pid, params.agent, params.invocationId);
+          return Broker.okAnswer(
+            id,
+            this.openRun(params.agent, params.invocationId),
+          );
         }
         case "batch.prepare": {
           if (Object.keys(params).length !== 0)
@@ -943,6 +993,7 @@ export class Broker {
           return Broker.okAnswer(id, { completed: true });
         }
         case "host.principalRelay": {
+          this.requireHostUnit(peer.pid, "principal-relay");
           const principal = this.store.getAgent("principal");
           if (!principal) return Broker.okAnswer(id, { moved: 0, pending: 0 });
           const moved = this.mail.moveToCur("principal", []);
@@ -958,6 +1009,7 @@ export class Broker {
           });
         }
         case "host.reconcile": {
+          this.requireHostUnit(peer.pid, "reconcile");
           const rep = this.reconcile
             ? await this.reconcile.sweep()
             : await this.mail.reconcilePending();
@@ -991,24 +1043,38 @@ export class Broker {
     };
   }
 
-  private openRun(actor: Actor): RunLease {
+  private openRun(actor: Actor, invocationId: string): RunLease {
     const agent = this.store.getAgent(actor);
     if (!agent) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${actor}`);
+    if (agent.desired === "provisioning")
+      throw new StoreError("AGENT_NOT_READY", `${actor} is provisioning`);
     if (agent.desired === "stopped")
       throw new StoreError("STALE_RUN", `${actor} is stopped`);
     if (agent.desired === "retired")
       throw new StoreError("AGENT_RETIRED", `${actor} is retired`);
+    const hasGoal =
+      this.paths.hasGoal?.() ??
+      existsSync(join(this.paths.stateRoot, "world", "context", "current"));
+    if (!hasGoal)
+      throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
+    const active = this.runLeases.get(actor);
+    if (active?.invocationId === invocationId) return active.lease;
+    active?.done();
     let next = agent.incarnation;
     this.store.transaction((_tx) => {
       next = this.store.getAgent(actor)!.incarnation + 1;
       this.store.updateAgent({ name: actor, incarnation: next });
+      this.store.reassignPreparedBatches(actor, next);
     });
     const listener = this.listenActor(actor);
-    return { actor, incarnation: next, socketHostPath: listener.socketHostPath };
+    const lease = { actor, incarnation: next, socketHostPath: listener.socketHostPath };
+    this.runLeases.set(actor, { invocationId, lease, done: listener.done });
+    return lease;
   }
 
   drainAndClose(): void {
     this.adminServer?.close();
+    this.hostServer?.close();
     for (const srv of this.actorServers) {
       try {
         srv.close();
@@ -1017,6 +1083,7 @@ export class Broker {
       }
     }
     this.actorServers.clear();
+    this.runLeases.clear();
     this.store.close();
     if (this.lockFd !== null) {
       try {
