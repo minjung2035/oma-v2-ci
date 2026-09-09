@@ -30,7 +30,12 @@ import type {
   BoundaryEvidence,
   Receipt,
 } from "../implementation/contracts.js";
-import { Store, StoreError, type OperationRow } from "./store.js";
+import {
+  Store,
+  StoreError,
+  type DeliveryRow,
+  type OperationRow,
+} from "./store.js";
 import {
   generateMessageId,
   generateOperationId,
@@ -52,11 +57,10 @@ export interface EmlParams {
   contextRevision: Oid | null;
   inReplyTo: MessageId | null;
   references: MessageId[];
-  messageId: string; // `<m-id@society.oma.invalid>` contents without angle brackets
-  body: string; // LF-normalized (IPC-005)
+  messageId: string;
+  body: string;
 }
 
-/** MUST [MAIL-003]: reject CR/LF injection in any header value (incl. subject). */
 function assertNoCrlf(value: string, what: string): void {
   if (/[\r\n]/.test(value))
     throw new StoreError("INVALID_REQUEST", `${what} contains CR/LF`);
@@ -84,11 +88,6 @@ export function rfc5322Date(ms: number): string {
   return `${DAYS[d.getUTCDay()]}, ${pad(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]!} ${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} +0000`;
 }
 
-/** MUST [MAIL-003]: broker headers encoded through a pinned, widely-deployed
- * email library (nodemailer 10.0.1, streamTransport), never a hand-rolled
- * serializer. CR/LF injection is rejected at OUR boundary first; the library
- * additionally RFC-encodes header values (e.g. UTF-8 subjects).
- */
 export async function buildEml(p: EmlParams): Promise<{
   text: string;
   bytes: number;
@@ -279,6 +278,7 @@ export function publishImmutableFile(
 
 export interface ParsedEmlHeaders {
   from: string | null;
+  subject: string | null;
   messageId: MessageId | null;
   inReplyTo: MessageId | null;
   references: MessageId[];
@@ -316,6 +316,7 @@ export function parseEmlHeaders(text: string): ParsedEmlHeaders {
   };
   return {
     from: headers.from ?? null,
+    subject: headers.subject ?? null,
     messageId: mid(headers["message-id"]),
     inReplyTo: mid(headers["in-reply-to"]),
     references: refs(headers["references"]),
@@ -569,7 +570,6 @@ export class MailModule {
       : { operation: opId, state: "pending", result };
   }
 
-  /** Freeze a broker-owned create brief before T-create-intent. */
   async freezeCreateInitial(
     auth: AuthContext,
     operationId: string,
@@ -615,7 +615,6 @@ export class MailModule {
     writeFsynced(object, eml.text);
   }
 
-  /** Publish the already-frozen gated result/create message, never re-render it. */
   async publishGated(operationId: string): Promise<void> {
     const op = this.store.getOperationById(operationId);
     if (!op)
@@ -725,12 +724,107 @@ export class MailModule {
     }
   }
 
+  /** MUST [BATCH-003]: two-class oldest-first capped selection without semantic policy. */
+  private selectBatch(pending: DeliveryRow[]): DeliveryRow[] {
+    if (pending.length === 0) return [];
+    const direct: DeliveryRow[] = [];
+    const publicList: DeliveryRow[] = [];
+    for (const d of pending) {
+      (this.isPublicList(d) ? publicList : direct).push(d);
+    }
+    if (direct.length === 0 || publicList.length === 0)
+      return pending.slice(0, this.batchMaxMessages);
+    if (this.batchMaxMessages < 2)
+      throw new StoreError(
+        "UNSUPPORTED_PROFILE",
+        "batchMaxMessages must be at least 2 when both batch classes are pending",
+      );
+    const out: DeliveryRow[] = [direct[0]!, publicList[0]!];
+    let di = 1;
+    let pi = 1;
+    let takeDirect = true;
+    while (out.length < this.batchMaxMessages && (di < direct.length || pi < publicList.length)) {
+      if (takeDirect && di < direct.length) out.push(direct[di++]!);
+      else if (!takeDirect && pi < publicList.length) out.push(publicList[pi++]!);
+      else if (di < direct.length) out.push(direct[di++]!);
+      else if (pi < publicList.length) out.push(publicList[pi++]!);
+      takeDirect = !takeDirect;
+    }
+    return out;
+  }
+
+  private isPublicList(delivery: DeliveryRow): boolean {
+    const message = this.messagePlan(delivery);
+    if (message.kind !== "message" || message.to.length === 0) return false;
+    const suffix = `@${this.paths.society}.oma.invalid`;
+    return message.to.every(
+      (to) =>
+        to === "commons" ||
+        to === "residents" ||
+        (to.startsWith("topic-") && to.endsWith(suffix)),
+    );
+  }
+
+  private messagePlan(delivery: DeliveryRow): MessagePlan {
+    const op = this.store.getOperationById(delivery.operationId);
+    if (!op)
+      throw new StoreError("STORE_CORRUPT", `missing operation ${delivery.operationId}`);
+    let decoded: { message?: MessagePlan; initialMessage?: MessagePlan | null };
+    try {
+      decoded = JSON.parse(op.planJson) as typeof decoded;
+    } catch {
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`);
+    }
+    const message = decoded.message ?? decoded.initialMessage;
+    if (!message || message.id !== delivery.messageId)
+      throw new StoreError("STORE_CORRUPT", `message plan mismatch for ${delivery.messageId}`);
+    return message;
+  }
+
+  /** MUST [BATCH-002]: at most six deterministic metadata items; never body summary. */
+  private noticeFor(agent: Actor, ids: readonly MessageId[]): string {
+    const lines: string[] = [];
+    for (const [i, id] of ids.slice(0, 6).entries()) {
+      const delivery = this.store.getDelivery(id, agent);
+      if (!delivery)
+        throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
+      const message = this.messagePlan(delivery);
+      const object = this.objectPath(id);
+      if (!existsSync(object))
+        throw new StoreError("STORE_CORRUPT", `missing mail object ${id}`);
+      const headers = parseEmlHeaders(readFileSync(object, "utf8"));
+      if (headers.messageId?.split("@", 1)[0] !== id)
+        throw new StoreError("STORE_CORRUPT", `mail header mismatch for ${id}`);
+      const reply = headers.inReplyTo ?? headers.references.at(-1) ?? null;
+      const context = message.contextRevision
+        ? ` context=/world/context/revisions/${message.contextRevision}${message.kind === "context" ? "/GOAL.md" : ""}`
+        : "";
+      lines.push(
+        `${i + 1}. sender=${oneLine(headers.from)} subject=${oneLine(headers.subject)} kind=${message.kind} path=/mail/archive/cur/${id}:2,${reply ? ` reply=${reply}` : ""}${context}`,
+      );
+    }
+    if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
+    lines.push("전체 목록: /inbox.md");
+    return lines.join("\n");
+  }
+
   async prepare(auth: AuthContext): Promise<PreparedBatch | null> {
     const existing = this.store.preparedBatches(auth.actor);
-    if (existing.length > 0) return batchFromRow(existing[0]!, auth.actor);
-    const pending = this.store
-      .pendingDeliveries(auth.actor)
-      .slice(0, this.batchMaxMessages);
+    if (existing.length > 0) {
+      const row = existing[0]!;
+      const messageIds = parseJsonList(row.messageIdsJson, `batch ${row.id}`) as MessageId[];
+      return batchOf(
+        {
+          id: row.id,
+          incarnation: row.incarnation,
+          messageIds,
+          sessionPath: row.sessionPath,
+        },
+        auth.actor,
+        this.noticeFor(auth.actor, messageIds),
+      );
+    }
+    const pending = this.selectBatch(this.store.pendingDeliveries(auth.actor));
     if (pending.length === 0) return null;
     const batch = {
       id: generateBatchId(),
@@ -748,7 +842,7 @@ export class MailModule {
       if (e instanceof StoreError && e.code === "BATCH_CONFLICT") return null;
       throw e;
     }
-    return batchOf(batch, auth.actor);
+    return batchOf(batch, auth.actor, this.noticeFor(auth.actor, batch.messageIds));
   }
 
   async complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> {
@@ -874,6 +968,10 @@ function parseJsonList(json: string, what: string): string[] {
   }
 }
 
+function oneLine(value: string | null): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
 export function receiptOf(op: OperationRow): Receipt {
   let result: unknown;
   if (op.resultJson) {
@@ -907,6 +1005,7 @@ export function batchOf(
     sessionPath: string | null;
   },
   agent: Actor,
+  notice = batchNotice(b.messageIds),
 ): PreparedBatch {
   return {
     id: b.id as unknown as PreparedBatch["id"],
@@ -915,29 +1014,11 @@ export function batchOf(
     messageIds: b.messageIds as PreparedBatch["messageIds"],
     sessionPath: b.sessionPath,
     deliveryMode: "followUp",
-    notice: batchNotice(b.messageIds),
+    notice,
     indexPath: "/inbox.md",
   };
 }
-function batchFromRow(
-  row: {
-    id: string;
-    incarnation: number;
-    messageIdsJson: string;
-    sessionPath: string | null;
-  },
-  agent: Actor,
-): PreparedBatch {
-  return batchOf(
-    {
-      id: row.id,
-      incarnation: row.incarnation,
-      messageIds: parseJsonList(row.messageIdsJson, `batch ${row.id}`),
-      sessionPath: row.sessionPath,
-    },
-    agent,
-  );
-}
+
 export function batchNotice(ids: readonly string[]): string {
   const shown = ids.slice(0, 6);
   const lines = shown.map((id, i) => `${i + 1}. mail ${id}`);
