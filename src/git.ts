@@ -416,6 +416,7 @@ export class GitModule {
       "fail_bundle() { echo OMA_ERROR=BUNDLE_INVALID >&2; exit 71; }",
       "fail_prereq() { echo OMA_ERROR=PREREQUISITE_MISSING >&2; exit 72; }",
       "fail_internal() { echo OMA_ERROR=INTERNAL_ERROR >&2; exit 73; }",
+      "mount --make-rprivate / || fail_spike",
       "mkdir -p \"$root/project\" \"$root/bundle\" \"$root/quarantine\"",
       "touch \"$root/bundle/input.bundle\"",
       "cleanup() { umount \"$root/project\" 2>/dev/null || true; umount \"$root/bundle/input.bundle\" 2>/dev/null || true; umount \"$root/quarantine\" 2>/dev/null || true; rmdir \"$root/project\" \"$root/bundle\" \"$root/quarantine\" \"$root/hooks\" \"$root\" 2>/dev/null || true; }",
