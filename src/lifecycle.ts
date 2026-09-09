@@ -29,9 +29,9 @@ import { requestHash } from "./hash.js";
 
 export interface LifecyclePaths {
   stateRoot: string;
-  projectGit: string; // S/repos/project.git
+  projectGit: string;
   society: string;
-  hasGoal: () => boolean; // world/context/current exists
+  hasGoal: () => boolean;
 }
 
 export interface SpecResolver {
@@ -70,10 +70,9 @@ export class LifecycleModule {
     private readonly resolveSpec: SpecResolver,
   ) {}
 
-  /** T-ack (DB-007): self delivery acknowledged; op succeeded. */
   ack(auth: AuthContext, message: MessageId, key: string): Receipt {
-    const newHash = requestHash("mail.ack", { message });
-    const claim = this.store.claimKey(auth.actor, key, newHash);
+    const hash = requestHash("mail.ack", { message });
+    const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "retry")
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
@@ -83,13 +82,13 @@ export class LifecycleModule {
       message,
       acknowledged: true,
     };
-    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
+    const outcome = { claim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
-      claimOut.txClaim = this.store.claimOperation({
+      outcome.claim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
         requestKey: key,
-        requestHash: newHash,
+        requestHash: hash,
         kind: "mail.ack",
         payloadJson: JSON.stringify({ message }),
         planJson: JSON.stringify({
@@ -98,9 +97,8 @@ export class LifecycleModule {
           message,
         }),
       });
-      if (claimOut.txClaim === "retry") return;
-      const d = this.store.getDelivery(message, auth.actor);
-      if (!d)
+      if (outcome.claim === "retry") return;
+      if (!this.store.getDelivery(message, auth.actor))
         throw new StoreError(
           "REQUEST_NOT_FOUND",
           `no delivery of ${message} to ${auth.actor}`,
@@ -108,12 +106,11 @@ export class LifecycleModule {
       this.store.markAcknowledged(message, auth.actor);
       this.store.setOperationSucceeded(opId, JSON.stringify(result));
     });
-    if (claimOut.txClaim === "retry")
+    if (outcome.claim === "retry")
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     return { operation: opId, state: "succeeded", result };
   }
 
-  /** T-route (DB-007): own subscription change. */
   follow(
     auth: AuthContext,
     topic: string,
@@ -121,24 +118,24 @@ export class LifecycleModule {
     key: string,
   ): Receipt {
     const kind = subscribe ? "route.follow" : "route.unfollow";
-    const newHash = requestHash(kind, { topic });
-    const claim = this.store.claimKey(auth.actor, key, newHash);
+    const hash = requestHash(kind, { topic });
+    const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "retry")
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
     const opId = generateOperationId();
-    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
+    const outcome = { claim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
-      claimOut.txClaim = this.store.claimOperation({
+      outcome.claim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
         requestKey: key,
-        requestHash: newHash,
+        requestHash: hash,
         kind,
         payloadJson: JSON.stringify({ topic }),
         planJson: JSON.stringify({ kind, topic, agent: auth.actor }),
       });
-      if (claimOut.txClaim === "retry") return;
+      if (outcome.claim === "retry") return;
       if (subscribe) this.store.follow(topic, auth.actor);
       else this.store.unfollow(topic, auth.actor);
       this.store.setOperationSucceeded(
@@ -146,7 +143,7 @@ export class LifecycleModule {
         JSON.stringify({ kind, topic, subscribed: subscribe }),
       );
     });
-    if (claimOut.txClaim === "retry")
+    if (outcome.claim === "retry")
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     return {
       operation: opId,
@@ -155,7 +152,6 @@ export class LifecycleModule {
     };
   }
 
-  /** MUST [AUTH-002]: manage only self (agent.manage.self) or own descendants. */
   private requireManage(auth: AuthContext, target: Actor): void {
     if (target === auth.actor) {
       if (!auth.capabilities.has("agent.manage.self"))
@@ -164,10 +160,10 @@ export class LifecycleModule {
     }
     if (!auth.capabilities.has("agent.manage.descendants"))
       throw new StoreError("CAPABILITY_DENIED", "no agent.manage.descendants");
-    let cur = this.store.getAgent(target);
-    while (cur?.createdBy) {
-      if (cur.createdBy === auth.actor) return;
-      cur = this.store.getAgent(cur.createdBy);
+    let current = this.store.getAgent(target);
+    while (current?.createdBy) {
+      if (current.createdBy === auth.actor) return;
+      current = this.store.getAgent(current.createdBy);
     }
     throw new StoreError(
       "CAPABILITY_DENIED",
@@ -175,10 +171,10 @@ export class LifecycleModule {
     );
   }
 
-  /** MUST [LIFE-004/LIFE-007]: start rechecks authority and records success only after physical start/no-op is proven. */
+  /** MUST [LIFE-004/LIFE-007]: terminal success follows proven systemd effect. */
   start(auth: AuthContext, agent: Actor, key: string): Receipt {
-    const newHash = requestHash("agent.start", { agent });
-    const claim = this.store.claimKey(auth.actor, key, newHash);
+    const hash = requestHash("agent.start", { agent });
+    const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "reused") throw reused(auth.actor, key);
 
     this.requireManage(auth, agent);
@@ -191,30 +187,31 @@ export class LifecycleModule {
     if (!this.paths.hasGoal())
       throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
 
-    const prior = claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
+    const prior =
+      claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
     if (prior && prior.state !== "pending" && prior.state !== "unknown")
       return receiptOfOp(prior);
 
-    const obs = this.units.observe(agent);
+    const observed = this.units.observe(agent);
     const alreadyRunning =
       target.desired === "enabled" &&
-      (obs.activeState === "active" || obs.activeState === "activating");
-    if (!alreadyRunning && !this.units.confirmDead(agent, target.incarnation)) {
+      (observed.activeState === "active" ||
+        observed.activeState === "activating");
+    if (!alreadyRunning && !this.units.confirmDead(agent, target.incarnation))
       throw new StoreError(
         "RUN_TERMINATION_UNKNOWN",
         `previous cgroup of ${agent} not confirmed dead`,
       );
-    }
 
     const opId = prior?.id ?? generateOperationId();
     if (!prior) {
-      const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
+      const outcome = { claim: "inserted" as "inserted" | "retry" };
       this.store.transaction((_tx) => {
-        claimOut.txClaim = this.store.claimOperation({
+        outcome.claim = this.store.claimOperation({
           id: opId,
           actor: auth.actor,
           requestKey: key,
-          requestHash: newHash,
+          requestHash: hash,
           kind: "agent.start",
           payloadJson: JSON.stringify({ agent }),
           planJson: JSON.stringify({
@@ -225,10 +222,10 @@ export class LifecycleModule {
             remainingOperations: [],
           }),
         });
-        if (claimOut.txClaim === "retry") return;
+        if (outcome.claim === "retry") return;
         this.store.updateAgent({ name: agent, desired: "enabled" });
       });
-      if (claimOut.txClaim === "retry")
+      if (outcome.claim === "retry")
         return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     }
 
@@ -245,10 +242,10 @@ export class LifecycleModule {
     return { operation: opId, state: "succeeded", result };
   }
 
-  /** MUST [LIFE-003]: stop — intent first, path/service effect, cgroup death, then success. */
+  /** MUST [LIFE-003]: intent -> stop effects -> cgroup death -> success. */
   stop(auth: AuthContext, agent: Actor, key: string): Receipt {
-    const newHash = requestHash("agent.stop", { agent });
-    const claim = this.store.claimKey(auth.actor, key, newHash);
+    const hash = requestHash("agent.stop", { agent });
+    const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "reused") throw reused(auth.actor, key);
 
     this.requireManage(auth, agent);
@@ -257,19 +254,20 @@ export class LifecycleModule {
     if (target.desired === "provisioning")
       throw new StoreError("AGENT_NOT_READY", `${agent} is provisioning`);
 
-    const prior = claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
+    const prior =
+      claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
     if (prior && prior.state !== "pending" && prior.state !== "unknown")
       return receiptOfOp(prior);
 
     const opId = prior?.id ?? generateOperationId();
     if (!prior) {
-      const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
+      const outcome = { claim: "inserted" as "inserted" | "retry" };
       this.store.transaction((_tx) => {
-        claimOut.txClaim = this.store.claimOperation({
+        outcome.claim = this.store.claimOperation({
           id: opId,
           actor: auth.actor,
           requestKey: key,
-          requestHash: newHash,
+          requestHash: hash,
           kind: "agent.stop",
           payloadJson: JSON.stringify({ agent }),
           planJson: JSON.stringify({
@@ -280,10 +278,10 @@ export class LifecycleModule {
             remainingOperations: [],
           }),
         });
-        if (claimOut.txClaim === "retry") return;
+        if (outcome.claim === "retry") return;
         this.store.updateAgent({ name: agent, desired: "stopped" });
       });
-      if (claimOut.txClaim === "retry")
+      if (outcome.claim === "retry")
         return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     }
 
@@ -297,14 +295,14 @@ export class LifecycleModule {
         );
       }
     }
-    const rem = this.store
+    const remaining = this.store
       .recoverableOperations()
       .filter((id) => id !== opId);
     const result: OperationResult = {
       kind: "agent.stop",
       agent,
       desired: "stopped",
-      remainingOperations: rem,
+      remainingOperations: remaining,
     };
     this.store.transaction((_tx) =>
       this.store.setOperationSucceeded(opId, JSON.stringify(result)),
@@ -312,18 +310,22 @@ export class LifecycleModule {
     return { operation: opId, state: "succeeded", result };
   }
 
-  /** MUST [CREATE-002/003, LIFE-001/002, LIFE-007]: full create intent + pinned workspace provisioning. */
+  /**
+   * MUST [CREATE-002/003,LIFE-001/002/007]: freeze authority/spec and exact
+   * base, then provision physical identity. Until initial-message publication
+   * is completed, the agent remains provisioning and cannot run.
+   */
   async create(
     auth: AuthContext,
     input: AgentCreateInput,
     key: string,
   ): Promise<Receipt> {
-    const newHash = requestHash("agent.create", {
+    const hash = requestHash("agent.create", {
       name: input.name,
       from: input.from,
       brief: input.brief,
     });
-    const claim = this.store.claimKey(auth.actor, key, newHash);
+    const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "retry")
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
@@ -354,16 +356,13 @@ export class LifecycleModule {
       )
       .digest("hex");
 
-    // LIFE-001/LIFE-007 stable-name dedup: same final resolved spec converges;
-    // a changed host default/capability resolution conflicts rather than cloning.
     const existing = this.store.getAgent(input.name);
     if (existing) {
-      if (existing.specHash !== specHash) {
+      if (existing.specHash !== specHash)
         throw new StoreError(
           "AGENT_CONFLICT",
           `name ${input.name} already exists with a different resolved spec`,
         );
-      }
       const opId = generateOperationId();
       const result: OperationResult = {
         kind: "agent.create",
@@ -376,7 +375,7 @@ export class LifecycleModule {
           id: opId,
           actor: auth.actor,
           requestKey: key,
-          requestHash: newHash,
+          requestHash: hash,
           kind: "agent.create",
           payloadJson: JSON.stringify(input),
           planJson: JSON.stringify({
@@ -384,7 +383,12 @@ export class LifecycleModule {
             spec,
             specHash,
             parent: auth.actor,
-            workspacePath: join(this.paths.stateRoot, "agents", input.name, "workspace"),
+            workspacePath: join(
+              this.paths.stateRoot,
+              "agents",
+              input.name,
+              "workspace",
+            ),
             unitNames: [],
             initialMessage: null,
             existingCreation: null,
@@ -398,40 +402,34 @@ export class LifecycleModule {
         : { operation: opId, state: "succeeded", result };
     }
 
-    // Frozen --from OID must exist in the broker canonical repo before intent.
     const canonicalBase = spawnSync(
       "/usr/bin/git",
-      ["--git-dir", this.paths.projectGit, "cat-file", "-e", `${input.from}^{commit}`],
+      [
+        "--git-dir",
+        this.paths.projectGit,
+        "cat-file",
+        "-e",
+        `${input.from}^{commit}`,
+      ],
       { env: cloneEnv, encoding: "utf8" },
     );
-    if (canonicalBase.status !== 0) {
+    if (canonicalBase.status !== 0)
       throw new StoreError(
         "PREREQUISITE_MISSING",
         `create base ${input.from} is not present in the canonical repository`,
       );
-    }
 
     const opId = generateOperationId();
-    const workspaceTmp = join(
-      this.paths.stateRoot,
-      "agents",
-      input.name,
-      "workspace.tmp",
-    );
-    const workspace = join(
-      this.paths.stateRoot,
-      "agents",
-      input.name,
-      "workspace",
-    );
-
-    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
+    const workspaceRoot = join(this.paths.stateRoot, "agents", input.name);
+    const workspaceTmp = join(workspaceRoot, "workspace.tmp");
+    const workspace = join(workspaceRoot, "workspace");
+    const outcome = { claim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
-      claimOut.txClaim = this.store.claimOperation({
+      outcome.claim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
         requestKey: key,
-        requestHash: newHash,
+        requestHash: hash,
         kind: "agent.create",
         payloadJson: JSON.stringify(input),
         planJson: JSON.stringify({
@@ -445,9 +443,7 @@ export class LifecycleModule {
           existingCreation: null,
         }),
       });
-      if (claimOut.txClaim === "retry") return;
-      // CREATE-003: authority/policy is re-resolved in this same acceptance path;
-      // no caller profile/capability fields are persisted in payload_json.
+      if (outcome.claim === "retry") return;
       this.store.insertAgent({
         name: input.name,
         specHash,
@@ -459,14 +455,14 @@ export class LifecycleModule {
         specJson: JSON.stringify(spec),
       });
     });
-    if (claimOut.txClaim === "retry")
+    if (outcome.claim === "retry")
       return receiptOfOp(this.store.getOperation(auth.actor, key)!);
 
     try {
       if (!existsSync(workspace)) {
         mkdirSync(workspaceTmp, { recursive: true });
         if (!existsSync(join(workspaceTmp, ".git"))) {
-          const r = spawnSync(
+          const cloned = spawnSync(
             "/usr/bin/git",
             [
               "clone",
@@ -479,40 +475,44 @@ export class LifecycleModule {
             ],
             { env: cloneEnv, encoding: "utf8" },
           );
-          if (r.status !== 0)
-            throw new StoreError("INTERNAL_ERROR", `clone failed: ${r.stderr}`);
+          if (cloned.status !== 0)
+            throw new StoreError(
+              "INTERNAL_ERROR",
+              `clone failed: ${cloned.stderr}`,
+            );
         }
         const haveBase = spawnSync(
           "/usr/bin/git",
           ["-C", workspaceTmp, "cat-file", "-e", `${input.from}^{commit}`],
           { env: cloneEnv, encoding: "utf8" },
         );
-        if (haveBase.status !== 0) {
+        if (haveBase.status !== 0)
           throw new StoreError(
             "PREREQUISITE_MISSING",
             `cloned workspace does not contain frozen base ${input.from}`,
           );
-        }
         const checkout = spawnSync(
           "/usr/bin/git",
           ["-C", workspaceTmp, "checkout", "--detach", input.from],
           { env: cloneEnv, encoding: "utf8" },
         );
         if (checkout.status !== 0)
-          throw new StoreError("INTERNAL_ERROR", `base checkout failed: ${checkout.stderr}`);
+          throw new StoreError(
+            "INTERNAL_ERROR",
+            `base checkout failed: ${checkout.stderr}`,
+          );
         const head = spawnSync(
           "/usr/bin/git",
           ["-C", workspaceTmp, "rev-parse", "HEAD"],
           { env: cloneEnv, encoding: "utf8" },
         );
-        if (head.status !== 0 || head.stdout.trim() !== input.from) {
+        if (head.status !== 0 || head.stdout.trim() !== input.from)
           throw new StoreError(
             "STORE_CORRUPT",
             `workspace base mismatch for ${input.name}`,
           );
-        }
         renameSync(workspaceTmp, workspace);
-        fsyncDir(join(this.paths.stateRoot, "agents", input.name));
+        fsyncDir(workspaceRoot);
       }
     } catch (e) {
       if (e instanceof StoreError) throw e;
@@ -522,22 +522,16 @@ export class LifecycleModule {
       );
     }
 
-    mkdirSync(join(this.paths.stateRoot, "agents", input.name, "home"), {
-      recursive: true,
-    });
+    mkdirSync(join(workspaceRoot, "home"), { recursive: true });
     mkdirSync(join(this.paths.stateRoot, "mail", "inboxes", input.name), {
       recursive: true,
     });
     this.units.ensureResident(input.name, spec.profile);
 
-    // Keep activation gated until the create initial-message publication path is
-    // complete; provisioning is physically ready but no false inference start is
-    // allowed. The existing contract gap remains visible as a pending operation.
-    if (this.paths.hasGoal()) {
-      this.store.transaction((_tx) =>
-        this.store.updateAgent({ name: input.name, desired: "enabled" }),
-      );
-    }
+    // LIFE-002/MAIL-010 requires the initial brief/context message before
+    // T-create-ready. That publication path is not yet complete, therefore
+    // desired remains provisioning and the operation remains pending. This is
+    // deliberately fail-closed: reconcile/path activation cannot wake it.
     return { operation: opId, state: "pending" };
   }
 }
@@ -551,22 +545,21 @@ function fsyncDir(dir: string): void {
   }
 }
 
-/** MUST [IPC-005]: existing accepted op -> receipt (state/result/error preserved). */
 function receiptOfOp(op: OperationRow): Receipt {
-  const rec: Receipt = { operation: op.id, state: op.state };
+  const receipt: Receipt = { operation: op.id, state: op.state };
   if (op.resultJson) {
     try {
-      rec.result = JSON.parse(op.resultJson);
+      receipt.result = JSON.parse(op.resultJson);
     } catch {
-      /* corrupt result; receipt stays minimal */
+      /* corrupt result remains visible through the minimal receipt */
     }
   }
   if (op.errorCode) {
-    rec.error = {
+    receipt.error = {
       code: op.errorCode,
       message: op.errorCode,
       retry: "same-key",
     };
   }
-  return rec;
+  return receipt;
 }
