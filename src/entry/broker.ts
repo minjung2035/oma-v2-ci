@@ -1,7 +1,7 @@
-// MUST [UNIT-004]/[LIFE-006]: broker entrypoint — composition only. Loads the
-// closed host config, recovers durable state, binds endpoints, then READY=1.
+// MUST [UNIT-004]/[LIFE-006]/[REC-007]: broker entrypoint — composition only.
+// The society advisory lock is acquired before runtime.sqlite is opened.
 import { join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { Store } from "../store.js";
 import { MailModule } from "../mail.js";
 import { UnitsModule } from "../units.js";
@@ -11,6 +11,7 @@ import { Broker } from "../broker.js";
 import { GitModule } from "../git.js";
 import { ReconcileModule } from "../reconcile.js";
 import { loadConfig, resolveChildSpec } from "../config.js";
+import { acquireProcessLock, releaseProcessLocks } from "../leaf.js";
 
 function usage(): never {
   console.error("usage: broker.js --society <name> [--config <path>]");
@@ -34,6 +35,14 @@ const configPath =
   configIdx >= 0 && args[configIdx + 1] !== undefined
     ? args[configIdx + 1]!
     : join(stateRoot, "config.json");
+
+// MUST [REC-007]: the singleton decision precedes Store construction/migration
+// and every reconcile/Git/mail write reachable from bootstrap.
+mkdirSync(runRoot, { recursive: true });
+if (!acquireProcessLock(join(runRoot, "broker.lock"))) {
+  console.error("broker startup failed: another broker holds the society lock");
+  process.exit(1);
+}
 
 const cfg = loadConfig(configPath);
 const store = new Store(join(stateRoot, "runtime.sqlite"));
@@ -141,9 +150,7 @@ const broker = new Broker(
 
 /**
  * MUST [LIFE-006]/[REC-001]: ordered bootstrap — start-up recovery completes
- * (mail effects, then Git operation reconciliation) BEFORE the sockets bind
- * and READY=1 is signalled. A startup recovery failure aborts the broker:
- * no READY, no serving, non-zero exit (never a log-only swallow).
+ * before sockets bind and READY=1 is signalled.
  */
 async function bootstrap(): Promise<void> {
   await reconcile.startup();
@@ -154,11 +161,20 @@ async function bootstrap(): Promise<void> {
 
 bootstrap().catch((e) => {
   console.error("broker startup failed:", (e as Error).message);
+  try {
+    broker.drainAndClose();
+  } finally {
+    releaseProcessLocks();
+  }
   process.exitCode = 1;
 });
 
 function shutdown(): void {
-  broker.drainAndClose();
+  try {
+    broker.drainAndClose();
+  } finally {
+    releaseProcessLocks();
+  }
   process.exit(0);
 }
 process.on("SIGTERM", shutdown);
