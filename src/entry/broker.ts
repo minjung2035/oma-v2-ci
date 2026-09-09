@@ -50,6 +50,7 @@ const mail = new MailModule(
   { stateRoot, society: cfg.society },
   store,
   cfg.limits.replyReferences,
+  cfg.limits.batchMaxMessages,
 );
 const units = new UnitsModule(
   cfg.society,
@@ -95,6 +96,7 @@ const lifecycle = new LifecycleModule(
     );
     return r ? r.spec : null;
   },
+  mail,
 );
 const git = new GitModule(
   {
@@ -115,7 +117,10 @@ const git = new GitModule(
     ),
     checkRootfs: cfg.installation.rootfs,
     checkAssetsDir: cfg.installation.rootfs,
-    checkTmpBytes: Math.max(1, ...cfg.integration.checks.map((c) => c.resources.tmpBytes)),
+    checkTmpBytes: Math.max(
+      1,
+      ...cfg.integration.checks.map((c) => c.resources.tmpBytes),
+    ),
   },
   store,
   mail,
@@ -133,7 +138,7 @@ const git = new GitModule(
   },
   () => loadConfig(configPath).integration.policyRevision,
 );
-const reconcile = new ReconcileModule(store, mail, git, units, {
+const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
   projectGit: join(stateRoot, "repos", "project.git"),
 });
 const broker = new Broker(
