@@ -1,6 +1,8 @@
-// MUST [RUN-001]: runner entrypoint — one agent, one sandboxed Pi session.
+// MUST [RUN-001]/[UNIT-003]: runner entrypoint — one agent, one sandboxed Pi session.
+// The fixed resident unit carries the broker-rendered profile as hex so a
+// dynamically-created Resident never re-derives authority from initialResidents
+// and the runner never opens runtime.sqlite directly.
 import { join } from "node:path";
-import { Store } from "../store.js";
 import { SandboxModule } from "../sandbox.js";
 import { RunnerModule } from "../runner.js";
 import { loadConfig } from "../config.js";
@@ -34,15 +36,19 @@ const configPath =
     : join(stateRoot, "config.json");
 
 const cfg = loadConfig(configPath);
-const resident = cfg.initialResidents.find((r) => r.name === agent);
-const profileName =
-  resident?.profile ??
-  (agent === "principal" ? cfg.principalProfile : undefined);
-const resources = profileName
-  ? cfg.agentProfiles[profileName]?.resources
-  : undefined;
+const profileHex = process.env.OMA_PROFILE_HEX ?? "";
+if (!/^(?:[0-9a-f]{2})+$/.test(profileHex)) {
+  console.error(`runner: missing broker-rendered profile for ${agent}`);
+  process.exit(4);
+}
+const profileName = Buffer.from(profileHex, "hex").toString("utf8");
+if (Buffer.from(profileName, "utf8").toString("hex") !== profileHex) {
+  console.error(`runner: malformed broker-rendered profile for ${agent}`);
+  process.exit(4);
+}
+const resources = cfg.agentProfiles[profileName]?.resources;
 if (!resources) {
-  console.error(`runner: unsupported profile for ${agent}`);
+  console.error(`runner: unsupported profile ${profileName} for ${agent}`);
   process.exit(4);
 }
 const sandbox = new SandboxModule({
@@ -50,13 +56,9 @@ const sandbox = new SandboxModule({
   node: "/usr/bin/node", // in-rootfs executable paths
   pi: "/usr/bin/pi",
   piModeArgs: ["--mode", "rpc", "-e", "/opt/oma/pi-extension.js"],
-  tmpBytes: 512 * 1024 * 1024,
+  tmpBytes: resources.tmpBytes,
   checkResources: resources,
 });
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const store = new Store(join(stateRoot, "runtime.sqlite")); // open+close validates write access
-store.close();
 
 const runner = new RunnerModule(
   {
