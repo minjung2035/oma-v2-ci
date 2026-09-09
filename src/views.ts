@@ -109,7 +109,7 @@ export class ViewsModule {
     return lines.join("\n");
   }
 
-  /** MUST [BATCH-002]/VIEW: batch notice index as /inbox.md; parent dir is the stable mount. */
+  /** MUST [BATCH-002]/VIEW: full batch IDs plus directly readable archive paths. */
   publishInbox(batch: PreparedBatch): void {
     const runView = join(
       this.stateRoot,
@@ -124,10 +124,11 @@ export class ViewsModule {
       "",
       `안내 batch ${batch.id} (incarnation ${batch.incarnation})`,
       "",
-      ...batch.messageIds.map((id, i) => `${i + 1}. ${id}`),
+      ...batch.messageIds.map(
+        (id, i) => `${i + 1}. ${id}\t/mail/archive/cur/${id}:2,`,
+      ),
       "",
-      "전체 원문: /mail/archive/cur/<id>:2,",
-      "읽기: cat /mail/archive/cur/<id>:2,",
+      "읽기: cat <위 archive path>",
     ];
     writeAtomic(join(runView, "inbox.md"), `${lines.join("\n")}\n`, 0o444);
   }
