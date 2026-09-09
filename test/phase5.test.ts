@@ -40,6 +40,7 @@ interface Env {
   runRoot: string;
   society: string;
   store: Store;
+  mail: MailModule;
   broker: Broker;
   cleanup: () => void;
 }
@@ -82,6 +83,7 @@ function envOf(): Env {
       hasGoal: () => true,
     },
     resolver,
+    mail,
   );
   const views = new ViewsModule(store, state, society, "p");
   const broker = new Broker(store, mail, units, views, lifecycle, null, null, {
@@ -96,6 +98,7 @@ function envOf(): Env {
     runRoot,
     society,
     store,
+    mail,
     broker,
     cleanup: () => {
       broker.drainAndClose();
@@ -161,14 +164,11 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
   }
 });
 
-
 function adminCall(
   adminSock: string,
   method: string,
   params: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  // MUST [IPC-001]: responses are uint32 BE length + JSON; parse with the
-  // same FrameParser the production clients use.
   return new Promise((resolve, reject) => {
     const sock = connect(adminSock, () => {
       sock.write(encodeFrame({ v: 1, id: "t", method, params }));
@@ -234,17 +234,24 @@ test("T11-neq: non-unit process cannot open a run on the runner channel", async 
   }
 });
 
-test("T31-neg: forged batch.complete from outside the unit is rejected", async () => {
+test("T31-neg: forged batch.complete from outside the owning unit is rejected", async () => {
   const env = envOf();
   try {
     seed(env.store, [["a", "resident", "enabled"]]);
+    await env.mail.send(auth("a", []), "self-1", {
+      to: ["a"],
+      subject: "self",
+      kind: "message",
+      body: "x",
+    });
+    const batch = await env.mail.prepare(auth("a", []));
+    assert.ok(batch !== null);
     const reply = await adminCall(
       join(env.runRoot, "admin.sock"),
       "batch.complete",
       {
-        agent: "a",
-        batchId: "b-00000000-0000-4000-8000-000000000000",
-        incarnation: 1,
+        batchId: batch.id,
+        incarnation: batch.incarnation,
         sessionPath: "/tmp/x",
         adapterRevision: "fake",
         receiptPath: "/tmp/fake.json",
@@ -264,12 +271,7 @@ test("T42: principal relay moves new mail to cur, counts pending, spawns no mode
       ["a", "resident", "enabled"],
       ["principal", "principal", "enabled"],
     ]);
-    const mail = new MailModule(
-      { stateRoot: env.state, society: env.society },
-      env.store,
-      64,
-    );
-    const receipt = await mail.send(auth("a", []), "q1", {
+    const receipt = await env.mail.send(auth("a", []), "q1", {
       to: ["principal"],
       subject: "question",
       kind: "question",
@@ -295,31 +297,24 @@ test("T42: principal relay moves new mail to cur, counts pending, spawns no mode
         .length,
       1,
     );
-    // relay only moves files; it never prepares a batch or starts inference for the UI-less principal
     assert.equal(env.store.preparedBatches("principal").length, 0);
   } finally {
     env.cleanup();
   }
 });
 
-test("batch stage view: prepared batch renders a manifest the extension can read", async () => {
+test("prepared batch manifest shape stays compatible with the trusted extension", async () => {
   const env = envOf();
   try {
     seed(env.store, [["a", "resident", "enabled"]]);
-    const mail = new MailModule(
-      { stateRoot: env.state, society: env.society },
-      env.store,
-      64,
-    );
-    await mail.send(auth("a", []), "s1", {
+    await env.mail.send(auth("a", []), "s1", {
       to: ["a"],
       subject: "s",
       kind: "message",
       body: "x",
     });
-    const batch = await mail.prepare(auth("a", []));
+    const batch = await env.mail.prepare(auth("a", []));
     assert.ok(batch !== null);
-    // the extension path reads <view>/batch-<id>.json mounted at /run/oma-view
     const viewDir = join(env.state, "agents", "a", "runner", "view");
     mkdirSync(viewDir, { recursive: true });
     const manifest = {
@@ -334,12 +329,9 @@ test("batch stage view: prepared batch renders a manifest the extension can read
       join(viewDir, `batch-${batch.id}.json`),
       JSON.stringify(manifest),
     );
-    // validate the extension parses it (import the compiled artifact in a child)
     const extCheck = `node -e "
       const fs = require('node:fs');
-      const p = '/tmp/oma-t5-view/batch.json';
       process.chdir('/tmp/oma-t5-view');
-      // extension uses readFileSync on /run/oma-view/batch-<id>.json; emulate the mount by copying
       const m = JSON.parse(fs.readFileSync('batch.json','utf8'));
       if (typeof m.notice !== 'string' || !Array.isArray(m.messageIds)) process.exit(1);
       console.log('manifest ok');
@@ -355,8 +347,6 @@ test("batch stage view: prepared batch renders a manifest the extension can read
   }
 });
 
-/** SB-001: the trusted rootfs carries the empty mount targets; real system dirs
- * overlay them. The trusted extension artifact lives outside the overlays. */
 function makeSyntheticRootfs(root: string, extHostPath: string): string {
   for (const t of [
     "usr",
@@ -389,7 +379,6 @@ function makeSyntheticRootfs(root: string, extHostPath: string): string {
 test("deliver smoke: sandboxed Pi loads the trusted extension; custom message role is 'custom'; no provider -> no boundary evidence", {
   timeout: 60000,
 }, async () => {
-  // standalone reproduction of the runner's deliver path: bwrap -> pi --mode rpc -e pi-extension
   if (!existsSync(extPath)) {
     assert.fail("dist/src/pi-extension.js missing; build first");
   }
@@ -446,8 +435,6 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
       world: join(dir, "world"),
       projectGit: join(dir, "git"),
     }).argv;
-    // SB-001: the deployment rootfs ships the pinned toolchain; the synthetic
-    // rootfs needs the system overlays injected right after the rootfs bind.
     const sysOverlays = [
       "--ro-bind",
       "/usr",
@@ -499,7 +486,7 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
       });
       child.on("error", () => resolve());
     });
-    await new Promise((r) => setTimeout(r, 3000)); // let pi boot
+    await new Promise((r) => setTimeout(r, 3000));
     pi.send({
       id: "d1",
       type: "prompt",
@@ -521,8 +508,6 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
       `no custom message delivered; events=${JSON.stringify(events)}`,
     );
     assert.equal(custom.message?.customType, "oma-mail");
-    // no provider configured -> the triggered turn ends with an error: exactly
-    // the condition under which the runner must NOT complete the batch
     void custom;
     const failed = events.some(
       (e) => e.type === "message_end" && e.message?.stopReason === "error",
