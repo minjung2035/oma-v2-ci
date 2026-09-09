@@ -10,6 +10,7 @@ import {
   writeFileSync,
   existsSync,
   readFileSync,
+  readlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -833,10 +834,7 @@ test("T65/T67: context publish — unsafe paths/missing GOAL rejected; concurren
       true,
     );
     assert.equal(
-      readFileSync(
-        join(env.dir, "state", "world", "context", "current"),
-        "utf8",
-      ),
+      readlinkSync(join(env.dir, "state", "world", "context", "current")),
       `revisions/${rev1}`,
     );
     // T67: concurrent publish of the SAME expected -> one succeeds, the other CONTEXT_CONFLICT
@@ -875,10 +873,57 @@ test("T65/T67: context publish — unsafe paths/missing GOAL rejected; concurren
     ]);
     // with the same expected revision only one CAS can win; the loser is CONTEXT_CONFLICT
     assert.deepEqual([ok1, ok2].sort(), ["conflict", "succeeded"]);
+    const rev2 = sh(env, ["--git-dir", env.paths.contextGit, "rev-parse", "refs/heads/main"]) as Oid;
+    assert.equal(
+      sh(env, ["--git-dir", env.paths.contextGit, "rev-parse", `${rev2}^`]),
+      rev1,
+    );
   } finally {
     env.seal();
   }
 });
+test("CTX-004: pending context publication after CAS is completed by reconcile", async () => {
+  const env = envOf();
+  try {
+    const goal = Buffer.from("# GOAL recovery\n", "utf8");
+    const original = env.mail.publishGated.bind(env.mail);
+    (env.mail as unknown as { publishGated: (id: string) => Promise<void> }).publishGated =
+      async () => {
+        throw new Error("simulated process loss after context effect");
+      };
+    await assert.rejects(
+      env.git.publishContext(
+        auth("principal", ["context.publish"]),
+        "ctx-recovery",
+        {
+          expected: null,
+          entries: [{ path: "GOAL.md", bytes: goal.length, sha256: sha256Hex(goal) }],
+          content: {
+            bytes: goal.length,
+            sha256: sha256Hex(goal),
+            mediaType: "application/vnd.oma.context-v1",
+          },
+        },
+        iter(goal),
+      ),
+    );
+    (env.mail as unknown as { publishGated: (id: string) => Promise<void> }).publishGated = original;
+    const pending = env.store.getOperation("principal", "ctx-recovery");
+    assert.ok(pending);
+    assert.equal(pending.state, "pending");
+    const candidate = JSON.parse(pending.planJson) as { candidate: string };
+    assert.ok(candidate.candidate);
+    assert.equal(
+      sh(env, ["--git-dir", env.paths.contextGit, "rev-parse", "refs/heads/main"]),
+      candidate.candidate,
+    );
+    await env.git.reconcile(pending.id);
+    assert.equal(env.store.getOperation("principal", "ctx-recovery")?.state, "succeeded");
+  } finally {
+    env.seal();
+  }
+});
+
 
 function sha256Hex(b: Buffer): string {
   return createHash("sha256").update(b).digest("hex");

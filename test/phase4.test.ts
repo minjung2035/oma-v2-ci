@@ -12,6 +12,7 @@ import {
   readdirSync,
   mkdirSync,
   readFileSync,
+  symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -189,9 +190,11 @@ function seedProjectGit(env: Env): void {
 
 function seedGov(env: Env): void {
   // world/context/current => GOAL present
-  const world = join(env.dir, "state", "world", "context", "current");
-  mkdirSync(world, { recursive: true });
-  writeFileSync(join(world, "GOAL.md"), "# GOAL\n", "utf8");
+  const context = join(env.dir, "state", "world", "context");
+  const revision = join(context, "revisions", "seed");
+  mkdirSync(revision, { recursive: true });
+  writeFileSync(join(revision, "GOAL.md"), "# GOAL\n", "utf8");
+  symlinkSync("revisions/seed", join(context, "current"));
 }
 
 // ---------------------------------------------------------------------------

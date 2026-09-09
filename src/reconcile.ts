@@ -33,7 +33,11 @@ export class ReconcileModule {
       for (const id of ids) {
         const op = this.store.getOperationById(id);
         if (!op) continue;
-        if (op.kind === "git.submit" && this.git) await this.git.reconcile(id);
+        if (
+          (op.kind === "git.submit" || op.kind === "git.integrate" || op.kind === "context.publish") &&
+          this.git
+        )
+          await this.git.reconcile(id);
       }
     } finally {
       this.sweeping = false;
@@ -58,10 +62,12 @@ export class ReconcileModule {
         examined++;
         const op = this.store.getOperationById(id);
         if (!op) continue;
-        if (op.kind === "git.submit" && this.git) {
+        if (
+          (op.kind === "git.submit" || op.kind === "git.integrate" || op.kind === "context.publish") &&
+          this.git
+        ) {
           await this.git.reconcile(id);
-          if (this.store.getOperationById(id)!.state === "succeeded")
-            repaired++;
+          if (this.store.getOperationById(id)?.state === "succeeded") repaired++;
           else remaining++;
         }
       }

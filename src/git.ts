@@ -11,7 +11,7 @@ import {
   fsyncSync,
   closeSync,
   renameSync,
-  copyFileSync,
+  symlinkSync,
   readdirSync,
   statSync,
   rmSync,
@@ -866,7 +866,7 @@ export class GitModule {
         bytes: eml.bytes,
         dateMs: Date.now(),
         to: ["residents"],
-        recipients: ["residents"],
+        recipients: [] as Actor[],
         kind: "context" as const,
         contextRevision: null,
         replyHeaders: { replyTo: [], inReplyTo: null, references: [] },
@@ -909,6 +909,15 @@ export class GitModule {
     // T-context-accept: stream is fully validated before the operation exists.
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
+      plan.message.recipients = this.store
+        .listAgents()
+        .filter(
+          (a) =>
+            a.role === "resident" &&
+            a.desired !== "retired" &&
+            a.desired !== "provisioning",
+        )
+        .map((a) => a.name);
       claimOut.txClaim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
@@ -923,49 +932,44 @@ export class GitModule {
       return receiptOf(this.store.getOperation(auth.actor, key)!);
 
     // CTX-003/004: commit with CAS, snapshot + current symlink, notification
-    const candidate = await this.commitAndPublishContext(
-      opId,
-      input.expected,
-      input.entries,
-      treeDir,
-    );
+    let candidate: Oid;
+    try {
+      candidate = await this.commitAndPublishContext(
+        opId,
+        input.expected,
+        input.entries,
+        treeDir,
+      );
+    } catch (error) {
+      if (error instanceof StoreError && error.code === "CONTEXT_CONFLICT") {
+        this.store.transaction((_tx) => this.store.setOperationFailed(opId, error.code));
+      }
+      throw error;
+    }
     const updated = { ...plan, candidate };
-    const residents = this.store
-      .listAgents()
-      .filter(
-        (a) =>
-          a.role === "resident" &&
-          a.desired !== "retired" &&
-          a.desired !== "provisioning",
-      )
-      .map((a) => a.name);
+    const residents = (plan.message.recipients ?? []) as Actor[];
+    const result = {
+      kind: "context.publish" as const,
+      previous: input.expected,
+      revision: candidate,
+      message: messageId,
+      recipientCount: residents.length,
+    };
+    // Keep the operation pending until the gated notification is durable.
     this.store.transaction((_tx) => {
       this.store.updateOperationPlanJson(opId, JSON.stringify(updated));
       this.store.insertDeliveries(
         residents.map((r) => ({ messageId, recipient: r, operationId: opId })),
       );
-      this.store.setOperationSucceeded(
-        opId,
-        JSON.stringify({
-          kind: "context.publish",
-          previous: input.expected,
-          revision: candidate,
-          message: messageId,
-          recipientCount: residents.length,
-        }),
-      );
     });
     await this.mail.publishGated(opId);
+    this.store.transaction((_tx) => {
+      this.store.setOperationSucceeded(opId, JSON.stringify(result));
+    });
     return {
       operation: opId,
       state: "succeeded",
-      result: {
-        kind: "context.publish",
-        previous: input.expected,
-        revision: candidate,
-        message: messageId,
-        recipientCount: residents.length,
-      },
+      result,
     };
   }
 
@@ -1002,13 +1006,13 @@ export class GitModule {
     entries: ContextEntry[],
     treeDir: string,
   ): Promise<Oid> {
-    void opId;
     const contextGit = this.paths.contextGit;
     mkdirSync(contextGit, { recursive: true });
     if (!existsSync(join(contextGit, "HEAD"))) {
       const init = spawnSync("git", ["init", "-q", "--bare"], {
         cwd: contextGit,
         env: gitEnv,
+        encoding: "utf8",
       });
       if (init.status !== 0)
         throw new StoreError(
@@ -1018,42 +1022,113 @@ export class GitModule {
     }
     const tmp = join(treeDir, "..", "commit-work");
     mkdirSync(tmp, { recursive: true });
-    spawnSync("git", ["init", "-q", "-b", "main"], { cwd: tmp, env: gitEnv });
-    for (const e of entries) {
-      const dir = join(tmp, e.path, "..");
-      mkdirSync(dir, { recursive: true });
-      renameSync(join(treeDir, e.path), join(tmp, e.path));
+    const existing = spawnSync("git", ["rev-parse", "HEAD"], {
+      cwd: tmp,
+      env: gitEnv,
+      encoding: "utf8",
+    });
+    let oid: string;
+    if (existing.status === 0 && String(existing.stdout).trim()) {
+      oid = String(existing.stdout).trim();
+    } else {
+      const init = spawnSync("git", ["init", "-q", "-b", "main"], {
+        cwd: tmp,
+        env: gitEnv,
+        encoding: "utf8",
+      });
+      if (init.status !== 0)
+        throw new StoreError(
+          "INTERNAL_ERROR",
+          `context worktree init failed: ${init.stderr.slice(0, 200)}`,
+        );
+      for (const e of entries) {
+        const source = join(treeDir, e.path);
+        const target = join(tmp, e.path);
+        if (!existsSync(source)) continue;
+        mkdirSync(join(target, ".."), { recursive: true });
+        renameSync(source, target);
+      }
+      if (expected) {
+        const parent = spawnSync(
+          GIT_BIN,
+          ["--git-dir", contextGit, "cat-file", "-e", `${expected}^{commit}`],
+          { env: gitEnv },
+        );
+        if (parent.status !== 0)
+          throw new StoreError(
+            "CONTEXT_CONFLICT",
+            `context base ${expected} is not present`,
+          );
+      }
+      const add = spawnSync("git", ["add", "-A"], {
+        cwd: tmp,
+        env: gitEnv,
+        encoding: "utf8",
+      });
+      if (add.status !== 0)
+        throw new StoreError(
+          "INTERNAL_ERROR",
+          `context add: ${add.stderr.slice(0, 300)}`,
+        );
+      if (expected) {
+        const alternates = join(tmp, ".git", "objects", "info", "alternates");
+        mkdirSync(join(alternates, ".."), { recursive: true });
+        writeFileSync(alternates, `${join(contextGit, "objects")}\n`, "utf8");
+      }
+      const tree = spawnSync("git", ["write-tree"], {
+        cwd: tmp,
+        env: gitEnv,
+        encoding: "utf8",
+      });
+      if (tree.status !== 0)
+        throw new StoreError(
+          "INTERNAL_ERROR",
+          `context tree: ${tree.stderr.slice(0, 300)}`,
+        );
+      const parentArgs = expected ? ["-p", expected] : [];
+      const commit = spawnSync(
+        GIT_BIN,
+        [
+          "-c",
+          "user.name=OMA",
+          "-c",
+          "user.email=oma@localhost",
+          "commit-tree",
+          String(tree.stdout).trim(),
+          ...parentArgs,
+          "-m",
+          "context update",
+        ],
+        {
+          cwd: tmp,
+          env: {
+            ...gitEnv,
+            GIT_AUTHOR_NAME: "OMA",
+            GIT_AUTHOR_EMAIL: "oma@localhost",
+            GIT_COMMITTER_NAME: "OMA",
+            GIT_COMMITTER_EMAIL: "oma@localhost",
+          },
+          encoding: "utf8",
+        },
+      );
+      if (commit.status !== 0)
+        throw new StoreError(
+          "INTERNAL_ERROR",
+          `context commit: ${commit.stderr.slice(0, 300)}`,
+        );
+      oid = String(commit.stdout ?? "").trim();
+      const head = spawnSync(
+        "git",
+        ["update-ref", "refs/heads/main", oid],
+        { cwd: tmp, env: gitEnv, encoding: "utf8" },
+      );
+      if (head.status !== 0)
+        throw new StoreError(
+          "INTERNAL_ERROR",
+          `context head: ${head.stderr.slice(0, 300)}`,
+        );
     }
-    const add = spawnSync("git", ["add", "-A"], { cwd: tmp, env: gitEnv });
-    if (add.status !== 0)
-      throw new StoreError(
-        "INTERNAL_ERROR",
-        `context add: ${add.stderr.slice(0, 300)}`,
-      );
-    const commit = spawnSync(
-      "git",
-      [
-        "-c",
-        "user.name=OMA",
-        "-c",
-        "user.email=oma@localhost",
-        "commit",
-        "-qm",
-        `context update`,
-      ],
-      { cwd: tmp, env: gitEnv },
-    );
-    if (commit.status !== 0)
-      throw new StoreError(
-        "INTERNAL_ERROR",
-        `context commit: ${commit.stderr.slice(0, 300)}`,
-      );
-    const oid = String(
-      spawnSync("git", ["rev-parse", "HEAD"], { cwd: tmp, env: gitEnv })
-        .stdout ?? "",
-    ).trim();
-    // transfer the commit objects into the bare context repo before the CAS
-    // carrier ref only; force is safe (the tree was built and hashed by us)
+    // Transfer objects before recording the candidate in the durable plan.
     const imp = spawnSync(
       "git",
       [
@@ -1073,6 +1148,23 @@ export class GitModule {
         "INTERNAL_ERROR",
         `context object import failed: ${imp.stderr.slice(0, 300)}`,
       );
+    let acceptedPlan: Record<string, unknown>;
+    const accepted = this.store.getOperationById(opId);
+    if (!accepted) throw new StoreError("STORE_CORRUPT", "context operation missing");
+    try {
+      const parsed: unknown = JSON.parse(accepted.planJson);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        throw new Error("plan is not an object");
+      acceptedPlan = parsed as Record<string, unknown>;
+    } catch {
+      throw new StoreError("STORE_CORRUPT", "context plan is invalid");
+    }
+    this.store.transaction((_tx) => {
+      this.store.updateOperationPlanJson(
+        opId,
+        JSON.stringify({ ...acceptedPlan, candidate: oid }),
+      );
+    });
     const prev = expected ?? ZERO;
     const upd = spawnSync(
       "git",
@@ -1084,23 +1176,169 @@ export class GitModule {
         "CONTEXT_CONFLICT",
         `context CAS failed; actual revision ${this.currentContext()}`,
       );
-    // CTX-004: immutable revision snapshot + relative current symlink
-    const revDir = join(this.paths.worldDir, "context", "revisions", oid);
-    mkdirSync(revDir, { recursive: true });
-    for (const e of entries) {
-      const dir = join(revDir, e.path, "..");
-      mkdirSync(dir, { recursive: true });
-      copyFileSync(join(tmp, e.path), join(revDir, e.path));
-    }
-    fsyncAll(revDir);
-    const current = join(this.paths.worldDir, "context", "current");
-    mkdirSync(join(this.paths.worldDir, "context"), { recursive: true });
-    const linkTmp = `${current}.tmp-${process.pid}`;
-    writeFileSync(linkTmp, `revisions/${oid}`, "utf8");
-    renameSync(linkTmp, current);
-    fsyncAll(join(this.paths.worldDir, "context"));
+    this.publishContextSnapshot(oid as Oid, entries, tmp);
     return oid as Oid;
   }
+
+  private publishContextSnapshot(
+    oid: Oid,
+    entries: ContextEntry[],
+    sourceDir: string,
+  ): void {
+    const contextDir = join(this.paths.worldDir, "context");
+    const revDir = join(contextDir, "revisions", oid);
+    mkdirSync(revDir, { recursive: true });
+    for (const e of entries) {
+      const source = join(sourceDir, e.path);
+      let bytes: Buffer;
+      if (existsSync(source)) {
+        bytes = readFileSync(source);
+      } else {
+        const shown = spawnSync(
+          GIT_BIN,
+          ["--git-dir", this.paths.contextGit, "show", `${oid}:${e.path}`],
+          { env: gitEnv },
+        );
+        if (shown.status !== 0 || !Buffer.isBuffer(shown.stdout))
+          throw new StoreError(
+            "STORE_CORRUPT",
+            `context candidate is missing ${e.path}`,
+          );
+        bytes = shown.stdout;
+      }
+      if (bytes.length !== e.bytes || sha256Of(bytes) !== e.sha256)
+        throw new StoreError(
+          "STORE_CORRUPT",
+          `context candidate entry mismatch: ${e.path}`,
+        );
+      const target = join(revDir, e.path);
+      if (existsSync(target)) {
+        const existing = readFileSync(target);
+        if (existing.length !== bytes.length || sha256Of(existing) !== e.sha256)
+          throw new StoreError(
+            "STORE_CORRUPT",
+            `context snapshot entry mismatch: ${e.path}`,
+          );
+      } else {
+        mkdirSync(join(target, ".."), { recursive: true });
+        writeFileSync(target, bytes, { mode: 0o644 });
+      }
+    }
+    fsyncAll(revDir);
+    mkdirSync(contextDir, { recursive: true });
+    const current = join(contextDir, "current");
+    const linkTmp = `${current}.tmp-${process.pid}`;
+    rmSync(linkTmp, { force: true });
+    symlinkSync(`revisions/${oid}`, linkTmp);
+    renameSync(linkTmp, current);
+    fsyncAll(contextDir);
+  }
+
+  private async reconcileContext(op: { id: string; planJson: string }): Promise<void> {
+    let plan: {
+      base: Oid | null;
+      candidate: Oid | "";
+      entries: ContextEntry[];
+      stagingPath: string;
+      message: { id: string; recipients?: string[] };
+    };
+    try {
+      const parsed: unknown = JSON.parse(op.planJson);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        throw new Error("plan is not an object");
+      plan = parsed as typeof plan;
+      if (
+        !Array.isArray(plan.entries) ||
+        typeof plan.stagingPath !== "string" ||
+        !plan.message ||
+        typeof plan.message.id !== "string"
+      )
+        throw new Error("context plan fields missing");
+    } catch {
+      this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+      return;
+    }
+    const base = plan.base ?? ZERO;
+    let candidate = plan.candidate;
+    const current = this.currentContext();
+    if (!candidate) {
+      if (current !== base) {
+        this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+        return;
+      }
+      candidate = await this.commitAndPublishContext(
+        op.id,
+        plan.base,
+        plan.entries,
+        join(plan.stagingPath, "tree"),
+      );
+    } else {
+      const object = spawnSync(
+        GIT_BIN,
+        ["--git-dir", this.paths.contextGit, "cat-file", "-e", `${candidate}^{commit}`],
+        { env: gitEnv },
+      );
+      if (object.status !== 0) {
+        this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+        return;
+      }
+      if (current !== candidate) {
+        if (current !== base) {
+          this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+          return;
+        }
+        const upd = spawnSync(
+          GIT_BIN,
+          [
+            "--git-dir",
+            this.paths.contextGit,
+            "update-ref",
+            "refs/heads/main",
+            candidate,
+            base,
+          ],
+          { env: gitEnv, encoding: "utf8" },
+        );
+        if (upd.status !== 0) {
+          this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+          return;
+        }
+      }
+      this.publishContextSnapshot(
+        candidate,
+        plan.entries,
+        join(plan.stagingPath, "commit-work"),
+      );
+    }
+    if (this.currentContext() !== candidate) {
+      this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+      return;
+    }
+    const recipients = (plan.message.recipients ?? []) as Actor[];
+    const result = {
+      kind: "context.publish" as const,
+      previous: plan.base,
+      revision: candidate,
+      message: plan.message.id,
+      recipientCount: recipients.length,
+    };
+    const updated = { ...plan, candidate };
+    this.store.transaction((_tx) => {
+      this.store.updateOperationPlanJson(op.id, JSON.stringify(updated));
+      this.store.insertDeliveries(
+        recipients.map((recipient) => ({
+          messageId: plan.message.id,
+          recipient,
+          operationId: op.id,
+        })),
+      );
+    });
+    await this.mail.publishGated(op.id);
+    this.store.transaction((_tx) => {
+      this.store.setOperationSucceeded(op.id, JSON.stringify(result));
+    });
+  }
+
 
   private currentContext(): Oid {
     const r = spawnSync(
@@ -1126,9 +1364,13 @@ export class GitModule {
 
   private async reconcileUnsafe(operationId: string): Promise<void> {
     const op = this.store.getOperationById(operationId);
-    if (!op || op.state !== "pending") return;
+    if (!op || (op.state !== "pending" && op.state !== "unknown")) return;
     if (op.kind === "git.integrate") {
       await this.reconcileIntegrate(op);
+      return;
+    }
+    if (op.kind === "context.publish") {
+      await this.reconcileContext(op);
       return;
     }
     if (op.kind !== "git.submit") return;
@@ -1347,27 +1589,23 @@ function statBytes(p: string): number {
 }
 
 function fsyncAll(dir: string): void {
+  const fd = openSync(dir, "r");
   try {
-    const fd = openSync(dir, "r");
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    if (statSync(p).isDirectory()) {
+      fsyncAll(p);
+      continue;
+    }
+    const fd2 = openSync(p, "r");
     try {
-      fsyncSync(fd);
+      fsyncSync(fd2);
     } finally {
-      closeSync(fd);
+      closeSync(fd2);
     }
-    for (const f of readdirSync(dir)) {
-      const p = join(dir, f);
-      try {
-        const fd2 = openSync(p, "r");
-        try {
-          fsyncSync(fd2);
-        } finally {
-          closeSync(fd2);
-        }
-      } catch {
-        /* files only */
-      }
-    }
-  } catch {
-    /* best effort */
   }
 }
