@@ -11,6 +11,7 @@ import { LifecycleModule } from "./lifecycle.js";
 
 export interface ReconcilePaths {
   projectGit: string;
+  hasGoal?: () => boolean;
 }
 
 export class ReconcileModule {
@@ -87,8 +88,9 @@ export class ReconcileModule {
         else remaining++;
       }
 
-      // UNIT-005: stopped agents with a live unit are stopped; enabled agents
-      // with pending work and an inactive unit are started.
+      // UNIT-005/CTX-006: stopped agents with a live unit are stopped. Enabled
+      // agents only activate after a shared GOAL exists; pre-GOAL initial mail
+      // must not wake a newly created Resident.
       for (const a of this.store.listAgents()) {
         if (a.role !== "resident" || a.desired === "retired") continue;
         const obs = this.units.observe(a.name);
@@ -100,6 +102,7 @@ export class ReconcileModule {
           continue;
         }
         if (a.desired !== "enabled") continue;
+        if (this.paths.hasGoal && !this.paths.hasGoal()) continue;
         const pendingCount =
           this.store.pendingDeliveries(a.name).length +
           this.store.preparedBatches(a.name).length;
