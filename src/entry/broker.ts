@@ -85,6 +85,11 @@ const git = new GitModule(
     worldDir: join(stateRoot, "world"),
     society: cfg.society,
     quarantineTmpBytes: cfg.limits.bundleBytes,
+    quarantineResources: {
+      cpuSeconds: 30,
+      memoryBytes: 512 * 1024 * 1024,
+      tasks: 1024,
+    },
     checkTimeoutSeconds: Math.max(
       1,
       ...cfg.integration.checks.map((c) => c.resources.checkTimeoutSeconds),

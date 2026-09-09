@@ -114,6 +114,7 @@ function envOf(): Env {
       worldDir: join(state, "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
       checkTimeoutSeconds: 30,
     },
     store,
@@ -954,7 +955,8 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
     assert.equal(env.store.deliveriesForOperation(gitOp.id).length, 1);
     const protectedIntegrate = byName("integrate-protected")?.replies ?? [];
     assert.equal(protectedIntegrate[0]?.error?.code, "PROTECTED_PATH");
-    assert.equal(env.store.getOperation("a", "integrate-protected"), null);
+    assert.equal(env.store.getOperation("a", "integrate-protected")?.state, "failed");
+    assert.equal(env.store.getOperation("a", "integrate-protected")?.errorCode, "PROTECTED_PATH");
 
 
     // P1-7: status filter — a and b return only their own agent

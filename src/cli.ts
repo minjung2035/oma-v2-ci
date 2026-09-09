@@ -14,6 +14,20 @@ import { RequestCache, type CachedRequest } from "./request-cache.js";
 import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4 } from "./ids.js";
 import type { Json, Receipt } from "../implementation/contracts.js";
 
+const cliGitEnv: NodeJS.ProcessEnv = {
+  HOME: "/nonexistent",
+  PATH: "/usr/bin:/bin",
+  LANG: "C",
+  LC_ALL: "C",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_NO_REPLACE_OBJECTS: "1",
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "core.hooksPath",
+  GIT_CONFIG_VALUE_0: "/dev/null",
+};
 type ExitCode = 0 | 2 | 3 | 4;
 
 const HOME = process.env.HOME ?? "/tmp";
@@ -372,8 +386,9 @@ function multiOpt(args: string[], name: string): string[] {
 function resolveOid(rev: string): string {
   if (FULL_OID_RE.test(rev)) return rev;
   const cwd = process.cwd();
-  const r = spawnSync("git", ["rev-parse", "--verify", `${rev}^{commit}`], {
+  const r = spawnSync("/usr/bin/git", ["rev-parse", "--verify", `${rev}^{commit}`], {
     cwd,
+    env: cliGitEnv,
     encoding: "utf8",
   });
   const oid = (r.stdout ?? "").trim();
@@ -515,7 +530,7 @@ async function cmdAgent(args: string[]): Promise<void> {
 }
 
 function git(cwd: string, args: string[]): string {
-  const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+  const r = spawnSync("/usr/bin/git", args, { cwd, env: cliGitEnv, encoding: "utf8" });
   if (r.status !== 0)
     fail(`git ${args[0] ?? "?"}: ${(r.stderr ?? "").slice(0, 200)}`, 2);
   return (r.stdout ?? "").trim();
@@ -541,9 +556,9 @@ async function cmdSubmit(args: string[]): Promise<void> {
       // prerequisite is the candidate's own parent (never invented)
       git(cwd, ["update-ref", exportRef, candidate]);
       const parent = spawnSync(
-        "git",
+        "/usr/bin/git",
         ["rev-parse", "--verify", "-q", `${candidate}^`],
-        { cwd, encoding: "utf8" },
+        { cwd, env: cliGitEnv, encoding: "utf8" },
       );
       const prerequisites: string[] =
         parent.status === 0 && parent.stdout.trim()

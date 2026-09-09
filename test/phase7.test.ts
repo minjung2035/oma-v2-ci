@@ -80,6 +80,7 @@ function envOf(
     worldDir: join(dir, "state", "world"),
     society,
     quarantineTmpBytes: 256 * 1024 * 1024,
+    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
     checkTimeoutSeconds: 30,
   };
   const git = new GitModule(paths, store, mail, integration, policyRevisionReader);
@@ -284,7 +285,7 @@ test("T54: submit with incremental bundle creates the published ref and the resu
         candidate: C,
         exportRef,
         prerequisites: [base],
-        to: ["b"],
+        to: ["commons"],
         subject: "fix",
         body: "done",
         paths: ["fix.txt"],
@@ -311,11 +312,55 @@ test("T54: submit with incremental bundle creates the published ref and the resu
       env.store.getOperation("a", "k1"),
     )!;
     assert.equal(op.state, "succeeded");
+    const frozenMessage = JSON.parse(op.planJson) as { message: { to: string[]; recipients: string[] } };
+    assert.deepEqual(frozenMessage.message.to, ["commons"]);
+    assert.deepEqual(frozenMessage.message.recipients.sort(), ["a", "b"]);
     // peer B fetches exactly C
     const b = join(env.dir, "peer");
     sh(env, ["clone", "-q", env.paths.projectGit, b]);
     sh(env, ["fetch", "-q", "origin", ref], b);
     assert.equal(sh(env, ["rev-parse", "FETCH_HEAD"], b), C);
+  } finally {
+    env.seal();
+  }
+});
+
+test("GIT-006: bundle with an extra ref fails closed after durable intent", async () => {
+  const env = envOf();
+  try {
+    const base = seedProject(env);
+    const clone = join(env.dir, "clone-hostile");
+    sh(env, ["clone", "-q", "--no-local", env.paths.projectGit, clone]);
+    writeFileSync(join(clone, "hostile.txt"), "x\n", "utf8");
+    sh(env, ["add", "hostile.txt"], clone);
+    sh(env, ["-c", "user.name=A", "-c", "user.email=a@localhost", "commit", "-qm", "hostile"], clone);
+    const candidate = sh(env, ["rev-parse", "HEAD"], clone) as Oid;
+    const exportRef = "refs/oma/export/hostile";
+    sh(env, ["update-ref", exportRef, candidate], clone);
+    sh(env, ["update-ref", "refs/oma/extra", candidate], clone);
+    const bundlePath = join(env.dir, "hostile.bundle");
+    sh(env, ["bundle", "create", bundlePath, exportRef, "refs/oma/extra", `^${base}`], clone);
+    const content = readFileSync(bundlePath) as Buffer;
+    await assert.rejects(
+      env.git.submit(
+        auth("a", ["git.submit"]),
+        "hostile-bundle",
+        {
+          candidate,
+          exportRef,
+          prerequisites: [base],
+          to: ["b"],
+          subject: "s",
+          body: "",
+          paths: [],
+          bundle: { bytes: content.length, sha256: sha256Hex(content), mediaType: "application/x-git-bundle" },
+        },
+        iter(content),
+      ),
+      (e: unknown) => e instanceof StoreError && e.code === "BUNDLE_INVALID",
+    );
+    assert.equal(env.store.getOperation("a", "hostile-bundle")?.state, "failed");
+    assert.equal(env.store.getOperation("a", "hostile-bundle")?.errorCode, "BUNDLE_INVALID");
   } finally {
     env.seal();
   }
@@ -429,7 +474,11 @@ test("T55/T59: same key resubmits the frozen candidate; a conflicting ref OID is
     ); // untouched
     assert.equal(
       env.store.transaction((_t) => env.store.getOperationById(pendId))!.state,
-      "pending",
+      "failed",
+    );
+    assert.equal(
+      env.store.transaction((_t) => env.store.getOperationById(pendId))!.errorCode,
+      "PUBLISHED_REF_CONFLICT",
     );
     // idempotent resubmit with the same key still returns the original receipt
     assert.equal(again.operation, receipt.operation);
@@ -612,6 +661,29 @@ test("T60/T61: integrate CAS — first wins, stale/undescendant/protected refuse
       ]),
       C1,
     );
+  } finally {
+    env.seal();
+  }
+});
+
+test("INT-003: accepted stop intent cancels before main CAS", async () => {
+  const env = envOf();
+  try {
+    const base = seedProject(env);
+    sh(env, ["--git-dir", env.paths.projectGit, "update-ref", "refs/oma/published/a/manual", base]);
+    env.store.transaction((_t) => env.store.updateAgent({ name: "a", desired: "stopped" }));
+    await assert.rejects(
+      env.git.integrate(
+        auth("a", ["code.integrate"]),
+        "stop-before-cas",
+        { candidate: base, expected: base },
+        "p1",
+        [],
+      ),
+      (e: unknown) => e instanceof StoreError && e.code === "CANCELLED_BEFORE_COMMIT",
+    );
+    assert.equal(sh(env, ["--git-dir", env.paths.projectGit, "rev-parse", "refs/heads/main"]), base);
+    assert.equal(env.store.getOperation("a", "stop-before-cas")?.errorCode, "CANCELLED_BEFORE_COMMIT");
   } finally {
     env.seal();
   }

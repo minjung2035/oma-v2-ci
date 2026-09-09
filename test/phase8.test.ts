@@ -85,7 +85,8 @@ function envOf(withGit: boolean): Env {
       contextGit: join(dir, "state", "repos", "context.git"),
       worldDir: join(dir, "state", "world"),
       society: "demo",
-      quarantineTmpBytes: 1,
+      quarantineTmpBytes: 64 * 1024 * 1024,
+      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
       checkTimeoutSeconds: 30,
     };
     git = new GitModule(paths, store, mail, null);
@@ -303,13 +304,18 @@ test("T68b: reconcile never overwrites a moved published ref; ref==candidate rec
     );
     assert.equal(
       env.store.transaction((_t) => env.store.getOperationById(pendId))!.state,
-      "pending",
+      "failed",
+    );
+    assert.equal(
+      env.store.transaction((_t) => env.store.getOperationById(pendId))!.errorCode,
+      "PUBLISHED_REF_CONFLICT",
     );
     assert.ok(res.examined >= 1);
   } finally {
     env.seal();
   }
 });
+
 
 test("T68c: canonical repo integrity is asserted; start-limit surface reported without reset", () => {
   const env = envOf(true);

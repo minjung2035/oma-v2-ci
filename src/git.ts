@@ -1,9 +1,10 @@
 // MUST [GIT-001..009]/[INT-001..005]/[CTX-001..006]: the broker-owned Git
-// boundary. The bundle/quarantine/alternate/import/CAS recipe was verified in
-// SPIKE S-05 on git 2.55.0; quarantine-to-canonical object transfer goes
-// through the validated quarantine repo, never the agent's clone.
+// boundary. Bundle validation runs in an isolated, resource-bounded namespace;
+// unresolved sandbox primitives fail closed instead of parsing bundles on the host.
+import { constants } from "node:fs";
 import {
   mkdirSync,
+  mkdtempSync,
   writeFileSync,
   existsSync,
   openSync,
@@ -13,12 +14,15 @@ import {
   copyFileSync,
   readdirSync,
   statSync,
+  rmSync,
+  readFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
 import type {
   Actor,
+  Address,
   AuthContext,
   BlobDescriptor,
   ContextEntry,
@@ -28,7 +32,7 @@ import type {
   ResourceLimits,
 } from "../implementation/contracts.js";
 import { Store, StoreError, reused } from "./store.js";
-import { MailModule, buildEml } from "./mail.js";
+import { MailModule, buildEml, expandAddresses } from "./mail.js";
 import { generateOperationId, generateMessageId } from "./ids.js";
 import {
   requestHash,
@@ -38,7 +42,6 @@ import {
 } from "./hash.js";
 import { capabilitiesOf } from "./authority.js";
 
-import { candidateArgv } from "./sandbox.js";
 export interface GitPaths {
   stateRoot: string;
   projectGit: string; // S/repos/project.git (shared, broker-written)
@@ -46,6 +49,12 @@ export interface GitPaths {
   worldDir: string; // S/world
   society: string;
   quarantineTmpBytes: number;
+  /** Resource limits for the disposable quarantine namespace. */
+  quarantineResources?: {
+    cpuSeconds: number;
+    memoryBytes: number;
+    tasks: number;
+  };
   checkTimeoutSeconds: number;
   /** Trusted candidate-check sandbox inputs; absent means fail closed. */
   checkRootfs?: string;
@@ -58,18 +67,27 @@ export interface CheckProfile {
   env: Record<string, string>;
 }
 
-const gitEnv = {
-  ...process.env,
+const GIT_BIN = "/usr/bin/git";
+/** GIT-001: only a fixed, broker-owned environment reaches host Git. */
+export const gitEnv: NodeJS.ProcessEnv = {
+  HOME: "/nonexistent",
+  PATH: "/usr/bin:/bin",
+  LANG: "C",
+  LC_ALL: "C",
   GIT_CONFIG_NOSYSTEM: "1",
   GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_TERMINAL_PROMPT: "0",
   GIT_NO_REPLACE_OBJECTS: "1",
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "core.hooksPath",
+  GIT_CONFIG_VALUE_0: "/dev/null",
 };
 
 const ZERO = "0000000000000000000000000000000000000000";
 
 function git(dir: string, args: string[]): SpawnSyncReturns<string> {
-  const r = spawnSync("git", args, { cwd: dir, env: gitEnv, encoding: "utf8" });
+  const r = spawnSync(GIT_BIN, args, { cwd: dir, env: gitEnv, encoding: "utf8" });
   if (r.status !== 0) {
     throw new StoreError(
       "INTERNAL_ERROR",
@@ -179,7 +197,11 @@ export class GitModule {
     let digest: string | null = null;
     if (input.bundle) {
       const h = createHash("sha256");
-      const out = openSync(bundlePath, "w");
+      const out = openSync(
+        bundlePath,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+        0o600,
+      );
       try {
         for await (const chunk of bytes) {
           h.update(chunk);
@@ -196,7 +218,13 @@ export class GitModule {
         throw new StoreError("STREAM_INVALID", "bundle byte count mismatch");
       }
     }
-
+    const targetAddresses = (input.to.length > 0 ? input.to : ["commons"]) as Address[];
+    const route = expandAddresses(
+      this.store,
+      targetAddresses,
+      this.paths.society,
+    );
+    const publishedRef = `refs/oma/published/${auth.actor}/${opId}`;
     // T-submit-accept: op + frozen result-mail plan + deliveries (DB-005/009)
     const eml = await this.resultEml(
       auth.actor,
@@ -205,7 +233,8 @@ export class GitModule {
         subject: input.subject,
         body: input.body,
         paths: input.paths,
-        to: input.to,
+        to: route.displayTo,
+        publishedRef,
       },
       messageId,
     );
@@ -217,23 +246,33 @@ export class GitModule {
       bundle: input.bundle
         ? { path: bundlePath, sha256: digest!, bytes: input.bundle.bytes }
         : null,
-      publishedRef: `refs/oma/published/${auth.actor}/${opId}`,
+      publishedRef,
       message: {
         id: messageId,
         objectPath: `mail/objects/${messageId}.eml`,
         sha256: eml.sha256,
         bytes: eml.bytes,
         dateMs: Date.now(),
-        to: [...input.to],
-        recipients: input.to,
+        to: [...route.displayTo],
+        recipients: route.recipients,
         kind: "result" as const,
         contextRevision: null,
-        replyHeaders: { replyTo: input.to, inReplyTo: null, references: [] },
+        replyHeaders: { replyTo: route.displayTo, inReplyTo: null, references: [] },
       },
     };
+    // Freeze the immutable result object before acceptance so a crash cannot leave
+    // an accepted operation without the bytes needed for reconciliation.
+    this.mail.freezeObject(messageId, eml);
     // SAFETY: object property escapes the tx callback's closure narrowing.
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
+      const acceptedRoute = expandAddresses(
+        this.store,
+        targetAddresses,
+        this.paths.society,
+      );
+      if (JSON.stringify(acceptedRoute) !== JSON.stringify(route))
+        throw new StoreError("POLICY_CHANGED", "recipient route changed before acceptance");
       claimOut.txClaim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
@@ -245,13 +284,11 @@ export class GitModule {
       });
       if (claimOut.txClaim === "retry") return;
       this.store.insertDeliveries(
-        input.to.map((r) => ({ messageId, recipient: r, operationId: opId })),
+        route.recipients.map((r) => ({ messageId, recipient: r, operationId: opId })),
       );
     });
     if (claimOut.txClaim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
-    // freeze the result object before any effect (DB-009)
-    this.mail.freezeObject(messageId, eml);
 
     const receipt: Receipt = {
       operation: opId,
@@ -261,7 +298,7 @@ export class GitModule {
         candidate: input.candidate,
         publishedRef: plan.publishedRef,
         message: messageId,
-        recipientCount: input.to.length,
+        recipientCount: route.recipients.length,
       },
     };
     try {
@@ -294,6 +331,7 @@ export class GitModule {
           "PREREQUISITE_MISSING",
           "INVALID_OID",
           "STREAM_INVALID",
+          "SPIKE_UNRESOLVED",
         ].includes(e.code)
       ) {
         this.store.transaction((_tx) =>
@@ -314,11 +352,12 @@ export class GitModule {
       body: string;
       paths: string[];
       to: string[];
+      publishedRef: string;
     },
     messageId: string,
   ): Promise<{ text: string; bytes: number; sha256: string; dateMs: number }> {
-    const fetchHint = `git fetch origin ${`refs/oma/published/${actor}`}; git show FETCH_HEAD\n`;
-    const bodyText = `${r.body}\n\n게시됨: refs/oma/published/${actor}\nCommit: ${r.candidate}\n${r.paths.length > 0 ? `경로: ${r.paths.join(", ")}\n` : ""}${fetchHint}`;
+    const fetchHint = `git fetch origin ${r.publishedRef}; git show FETCH_HEAD\n`;
+    const bodyText = `${r.body}\n\n게시됨: ${r.publishedRef}\nCommit: ${r.candidate}\n${r.paths.length > 0 ? `경로: ${r.paths.join(", ")}\n` : ""}${fetchHint}`;
     const eml = await buildEml({
       from: `${actor}@${this.paths.society}.oma.invalid`,
       to: r.to.length > 0 ? r.to : ["commons"],
@@ -348,124 +387,143 @@ export class GitModule {
     return r.status === 0;
   }
 
-  /** MUST [GIT-006/007]/[S-05]: validated quarantine with RO alternate, single export ref. */
+  /** MUST [GIT-006/007]/[S-05]: disposable namespace with bounded resources. */
   private quarantineImport(
     bundlePath: string,
     candidate: Oid,
     exportRef: string,
     prerequisites: Oid[],
   ): void {
-    const quarDir = join(
-      this.paths.stateRoot,
-      "staging",
-      `quarantine-${candidate.slice(0, 12)}`,
-    );
-    mkdirSync(join(quarDir, "objects", "info"), { recursive: true });
-    writeFileSync(
-      join(quarDir, "objects", "info", "alternates"),
-      `${this.paths.projectGit}/objects\n`,
-      "utf8",
-    );
-    spawnSync("git", ["init", "-q", "--bare"], { cwd: quarDir, env: gitEnv });
-    // verify: prerequisites resolvable via the RO alternate; exactly one head
-    const verify = spawnSync(
-      "git",
-      ["--git-dir", quarDir, "bundle", "verify", bundlePath],
-      { env: gitEnv, encoding: "utf8" },
-    );
-    if (verify.status !== 0)
+    const limits = this.paths.quarantineResources;
+    if (!limits || !Number.isSafeInteger(limits.cpuSeconds) || limits.cpuSeconds <= 0 ||
+      !Number.isSafeInteger(limits.memoryBytes) || limits.memoryBytes <= 0 ||
+      !Number.isSafeInteger(limits.tasks) || limits.tasks <= 0 ||
+      !Number.isSafeInteger(this.paths.quarantineTmpBytes) || this.paths.quarantineTmpBytes <= 0) {
       throw new StoreError(
-        "BUNDLE_INVALID",
-        `bundle verify: ${verify.stderr.slice(0, 300)}`,
-      );
-    const heads = spawnSync(
-      "git",
-      ["--git-dir", quarDir, "bundle", "list-heads", bundlePath],
-      { env: gitEnv, encoding: "utf8" },
-    );
-    const refs = (heads.stdout ?? "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((l) => l.split(/\s+/).pop() ?? "");
-    if (refs.length !== 1 || refs[0] !== exportRef) {
-      throw new StoreError(
-        "BUNDLE_INVALID",
-        `bundle must carry exactly ${exportRef}; got ${refs.join(",")}`,
+        "SPIKE_UNRESOLVED",
+        "quarantine resource profile is unavailable",
       );
     }
-    const fetch = spawnSync(
-      "git",
-      [
-        "--git-dir",
-        quarDir,
-        "fetch",
-        "-q",
-        "--no-tags",
-        bundlePath,
-        `${exportRef}:refs/oma/input`,
-      ],
-      { env: gitEnv, encoding: "utf8" },
+    const namespaceRoot = mkdtempSync(
+      join(this.paths.stateRoot, "staging", "quarantine-ns-"),
     );
-    if (fetch.status !== 0)
-      throw new StoreError(
-        "BUNDLE_INVALID",
-        `bundle fetch: ${fetch.stderr.slice(0, 300)}`,
+    const script = [
+      "set -eu",
+      "bundle=$1; project=$2; candidate=$3; export_ref=$4; tmp_bytes=$5; shift 5",
+      "root=$1; shift",
+      "git=/usr/bin/git",
+      "fail_spike() { echo OMA_ERROR=SPIKE_UNRESOLVED >&2; exit 70; }",
+      "fail_bundle() { echo OMA_ERROR=BUNDLE_INVALID >&2; exit 71; }",
+      "fail_prereq() { echo OMA_ERROR=PREREQUISITE_MISSING >&2; exit 72; }",
+      "fail_internal() { echo OMA_ERROR=INTERNAL_ERROR >&2; exit 73; }",
+      "mkdir -p \"$root/project\" \"$root/bundle\" \"$root/quarantine\"",
+      "touch \"$root/bundle/input.bundle\"",
+      "cleanup() { umount \"$root/project\" 2>/dev/null || true; umount \"$root/bundle/input.bundle\" 2>/dev/null || true; umount \"$root/quarantine\" 2>/dev/null || true; rmdir \"$root/project\" \"$root/bundle\" \"$root/quarantine\" \"$root/hooks\" \"$root\" 2>/dev/null || true; }",
+      "trap cleanup EXIT",
+      "mount --bind \"$project\" \"$root/project\" || fail_spike",
+      "mount -o remount,bind,ro \"$root/project\" || fail_spike",
+      "mount --bind \"$bundle\" \"$root/bundle/input.bundle\" || fail_spike",
+      "mount -o remount,bind,ro \"$root/bundle/input.bundle\" || fail_spike",
+      "mount -t tmpfs -o size=\"$tmp_bytes\" tmpfs \"$root/quarantine\" || fail_spike",
+      "mkdir -p \"$root/quarantine/tmp\"",
+      "export TMPDIR=\"$root/quarantine/tmp\"",
+      "mkdir -p \"$root/hooks\"",
+      "export GIT_CONFIG_VALUE_0=\"$root/hooks\"",
+      "repo=\"$root/quarantine/repo\"",
+      "$git --git-dir=\"$repo\" init -q --bare >/dev/null 2>&1 || fail_spike",
+      "mkdir -p \"$repo/objects/info\"",
+      "printf '%s\\n' \"$root/project/objects\" > \"$repo/objects/info/alternates\"",
+      "$git --git-dir=\"$repo\" bundle verify \"$root/bundle/input.bundle\" >/dev/null 2>&1 || fail_bundle",
+      "heads=$($git --git-dir=\"$repo\" bundle list-heads \"$root/bundle/input.bundle\" 2>/dev/null) || fail_bundle",
+      "count=0; head_ref=''",
+      "while IFS= read -r line; do [ -z \"$line\" ] && continue; count=$((count + 1)); head_ref=${line##* }; done <<EOF",
+      "$heads",
+      "EOF",
+      "[ \"$count\" -eq 1 ] && [ \"$head_ref\" = \"$export_ref\" ] || fail_bundle",
+      "refspec=\"$export_ref:refs/oma/input\"",
+      "$git --git-dir=\"$repo\" fetch -q --no-tags \"$root/bundle/input.bundle\" \"$refspec\" >/dev/null 2>&1 || fail_bundle",
+      "input=$($git --git-dir=\"$repo\" rev-parse refs/oma/input 2>/dev/null) || fail_bundle",
+      "[ \"$input\" = \"$candidate\" ] || fail_bundle",
+      "$git --git-dir=\"$repo\" fsck --strict --no-reflogs >/dev/null 2>&1 || fail_bundle",
+      "for prerequisite in \"$@\"; do $git --git-dir=\"$repo\" cat-file -e \"$prerequisite^{commit}\" >/dev/null 2>&1 || fail_prereq; done",
+      "mount -o remount,bind,rw \"$root/project\" || fail_spike",
+      "$git --git-dir=\"$root/project\" fetch -q -f --no-tags \"$repo\" +refs/oma/input:refs/oma/input >/dev/null 2>&1 || fail_internal",
+      "printf '%s\\n' \"$input\"",
+    ].join("\n");
+    try {
+      const result = spawnSync(
+        "/usr/bin/prlimit",
+        [
+          `--cpu=${limits.cpuSeconds}`,
+          `--as=${limits.memoryBytes}`,
+          `--nproc=${limits.tasks}`,
+          "--",
+          "/usr/bin/env",
+          "-i",
+          "HOME=/nonexistent",
+          "PATH=/usr/bin:/bin",
+          "LANG=C",
+          "LC_ALL=C",
+          "TMPDIR=/nonexistent",
+          "GIT_CONFIG_NOSYSTEM=1",
+          "GIT_CONFIG_GLOBAL=/dev/null",
+          "GIT_CONFIG_SYSTEM=/dev/null",
+          "GIT_TERMINAL_PROMPT=0",
+          "GIT_NO_REPLACE_OBJECTS=1",
+          "GIT_CONFIG_COUNT=3",
+          "GIT_CONFIG_KEY_0=core.hooksPath",
+          "GIT_CONFIG_KEY_1=core.fsync",
+          "GIT_CONFIG_KEY_2=core.fsyncMethod",
+          "GIT_CONFIG_VALUE_0=/dev/null",
+          "GIT_CONFIG_VALUE_1=all",
+          "GIT_CONFIG_VALUE_2=fsync",
+          "/usr/bin/unshare",
+          "--user",
+          "--map-root-user",
+          "--mount",
+          "--pid",
+          "--net",
+          "--fork",
+          "--kill-child=SIGKILL",
+          "--forward-signals",
+          "--mount-proc",
+          "/bin/sh",
+          "-c",
+          script,
+          "oma-quarantine",
+          bundlePath,
+          this.paths.projectGit,
+          candidate,
+          exportRef,
+          String(this.paths.quarantineTmpBytes),
+          namespaceRoot,
+          ...prerequisites,
+        ],
+        { encoding: "utf8", maxBuffer: 64 * 1024 },
       );
-    const input = spawnSync(
-      "git",
-      ["--git-dir", quarDir, "rev-parse", "refs/oma/input"],
-      { env: gitEnv, encoding: "utf8" },
-    ).stdout.trim();
-    if (input !== candidate)
-      throw new StoreError(
-        "BUNDLE_INVALID",
-        `exported commit ${input} != candidate ${candidate}`,
-      );
-    const fsck = spawnSync(
-      "git",
-      ["--git-dir", quarDir, "fsck", "--strict", "--no-reflogs"],
-      { env: gitEnv, encoding: "utf8" },
-    );
-    if (fsck.status !== 0)
-      throw new StoreError(
-        "BUNDLE_INVALID",
-        `fsck: ${fsck.stderr.slice(0, 300)}`,
-      );
-    for (const p of prerequisites) {
-      const ok = spawnSync(
-        "git",
-        ["--git-dir", quarDir, "cat-file", "-e", `${p}^{commit}`],
-        { env: gitEnv, encoding: "utf8" },
-      );
-      if (ok.status !== 0)
+      const stderr = String(result.stderr ?? "");
+      if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT" || result.status === null) {
         throw new StoreError(
-          "PREREQUISITE_MISSING",
-          `prerequisite ${p} not present`,
+          "SPIKE_UNRESOLVED",
+          "quarantine namespace boundary unavailable",
         );
+      }
+      if (result.signal)
+        throw new StoreError("SPIKE_UNRESOLVED", `quarantine child terminated by ${result.signal}`);
+      if (result.status !== 0) {
+        if (stderr.includes("OMA_ERROR=PREREQUISITE_MISSING"))
+          throw new StoreError("PREREQUISITE_MISSING", "bundle prerequisite is unavailable");
+        if (stderr.includes("OMA_ERROR=BUNDLE_INVALID"))
+          throw new StoreError("BUNDLE_INVALID", "bundle failed quarantine validation");
+        if (stderr.includes("OMA_ERROR=SPIKE_UNRESOLVED"))
+          throw new StoreError("SPIKE_UNRESOLVED", "quarantine namespace setup failed");
+        throw new StoreError("INTERNAL_ERROR", "quarantine import failed");
+      }
+      if (String(result.stdout ?? "").trim() !== candidate)
+        throw new StoreError("INTERNAL_ERROR", "quarantine candidate result mismatch");
+    } finally {
+      rmSync(namespaceRoot, { recursive: true, force: true });
     }
-    // import validated objects quarantine -> canonical
-    // transfer carrier ref only; forcing is safe because the quarantine was
-    // validated (fetch -f) and the real contract is the immutable published ref.
-    const imp = spawnSync(
-      "git",
-      [
-        "--git-dir",
-        this.paths.projectGit,
-        "fetch",
-        "-q",
-        "-f",
-        "--no-tags",
-        quarDir,
-        "+refs/oma/input:refs/oma/input",
-      ],
-      { env: gitEnv, encoding: "utf8" },
-    );
-    if (imp.status !== 0)
-      throw new StoreError(
-        "INTERNAL_ERROR",
-        `canonical import: ${imp.stderr.slice(0, 300)}`,
-      );
   }
 
   /** MUST [GIT-008]: immutable published ref; conflicting OID stops the effect. */
@@ -524,7 +582,6 @@ export class GitModule {
     currentPolicyRevision: string,
     legacyProtectedPaths: readonly string[],
   ): Promise<Receipt> {
-    // MUST [IPC-005]: canonical hash + fast-path claim before any check.
     const newHash = requestHash("git.integrate", {
       candidate: input.candidate,
       expected: input.expected,
@@ -533,77 +590,15 @@ export class GitModule {
     if (claim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
-    // INT-003/004: an unresolved prior integrate blocks every new main writer.
-    if (this.store.recoverableOperations().some((id) => this.store.getOperationById(id)?.kind === "git.integrate")) {
+    if (this.store.recoverableOperations().some((id) =>
+      this.store.getOperationById(id)?.kind === "git.integrate")) {
       throw new StoreError("REF_STATE_UNKNOWN", "pending integrate operation requires recovery");
     }
-    // INT-001: caller must hold code.integrate.
     if (!auth.capabilities.has("code.integrate"))
       throw new StoreError("CAPABILITY_DENIED", "no code.integrate");
+
     const base = this.currentMain();
-    // INT-001 condition checks
-    if (!this.isPublished(input.candidate))
-      throw new StoreError(
-        "CANDIDATE_NOT_PUBLISHED",
-        "candidate must be preserved by a published ref",
-      );
-    if (input.expected !== base)
-      throw new StoreError(
-        "STALE_BASE",
-        `expected ${input.expected} but main is ${base}`,
-      );
-    const anc = spawnSync(
-      "git",
-      [
-        "--git-dir",
-        this.paths.projectGit,
-        "merge-base",
-        "--is-ancestor",
-        input.expected,
-        input.candidate,
-      ],
-      { env: gitEnv, encoding: "utf8" },
-    );
-    if (anc.status !== 0)
-      throw new StoreError(
-        "NOT_DESCENDANT",
-        "candidate is not a descendant of expected main",
-      );
-    const protectedPaths = legacyProtectedPaths;
-    if (protectedPaths.length > 0) {
-      const diff = spawnSync(
-        "git",
-        [
-          "--git-dir",
-          this.paths.projectGit,
-          "diff-tree",
-          "--no-commit-id",
-          "--name-status",
-          "-r",
-          "-z",
-          "--no-renames",
-          input.expected,
-          input.candidate,
-        ],
-        { env: gitEnv, encoding: "utf8" },
-      );
-      const touched = (diff.stdout ?? "")
-        .split("\0")
-        .filter((p) => p.length > 0 && /^[^\t\n]+/.test(p));
-      for (const p of touched) {
-        const name = p.replace(/^[A-Z]\s+/, "");
-        if (
-          protectedPaths.some((pp) =>
-            pp.endsWith("/") ? name.startsWith(pp) : name === pp,
-          )
-        ) {
-          throw new StoreError("PROTECTED_PATH", `path ${name} is protected`);
-        }
-      }
-    }
     const policyRevision = this.integration.policyRevision;
-    // fixed host check (INT-002) on the actual candidate
-    for (const c of this.integration.checks) this.runCheck(input.candidate, c);
     const opId = generateOperationId();
     const result = {
       kind: "git.integrate" as const,
@@ -613,7 +608,7 @@ export class GitModule {
       policyRevision,
       changed: true,
     };
-    // T-integrate-intent: authoritative in-tx claim, then record the plan.
+    // INT-003: persist the physical main-writer intent before any candidate check.
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
       claimOut.txClaim = this.store.claimOperation({
@@ -631,96 +626,133 @@ export class GitModule {
           candidate: input.candidate,
           policyRevision,
           checkProfileDigest: checkDigest(this.integration.checks),
+          result,
         }),
       });
     });
     if (claimOut.txClaim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
-    // MUST [INT-003]: recheck main, policy revision, capability, and stop
-    // intent immediately before the CAS.
-    const head = this.currentMain();
-    if (head !== base) {
-      this.store.transaction((_tx) =>
-        this.store.setOperationFailed(opId, "STALE_BASE"),
+
+    const terminalCodes = new Set([
+      "CANDIDATE_NOT_PUBLISHED",
+      "STALE_BASE",
+      "NOT_DESCENDANT",
+      "PROTECTED_PATH",
+      "CHECK_FAILED",
+      "POLICY_CHANGED",
+      "CANCELLED_BEFORE_COMMIT",
+      "CAPABILITY_DENIED",
+      "SPIKE_UNRESOLVED",
+    ]);
+    const fail = (code: Parameters<Store["setOperationFailed"]>[1], message: string): never => {
+      this.store.transaction((_tx) => this.store.setOperationFailed(opId, code));
+      throw new StoreError(code, message);
+    };
+    try {
+      if (!this.isPublished(input.candidate))
+        fail("CANDIDATE_NOT_PUBLISHED", "candidate must be preserved by a published ref");
+      if (input.expected !== base)
+        fail("STALE_BASE", `expected ${input.expected} but main is ${base}`);
+      const anc = spawnSync(
+        "git",
+        [
+          "--git-dir",
+          this.paths.projectGit,
+          "merge-base",
+          "--is-ancestor",
+          input.expected,
+          input.candidate,
+        ],
+        { env: gitEnv, encoding: "utf8" },
       );
-      throw new StoreError("STALE_BASE", `main moved to ${head}`);
-    }
-    const nowAuth = this.store.getAgent(auth.actor);
-    if (
-      !nowAuth ||
-      nowAuth.desired === "stopped" ||
-      nowAuth.desired === "retired" ||
-      !(this.legacyDirect
-        ? auth.capabilities.has("code.integrate")
-        : capabilitiesOf(nowAuth).has("code.integrate"))
-    ) {
-      this.store.transaction((_tx) =>
-        this.store.setOperationFailed(opId, "CAPABILITY_DENIED"),
-      );
-      throw new StoreError(
-        "CAPABILITY_DENIED",
-        "code.integrate was revoked before commit",
-      );
-    }
-    // MUST [INT-003]: reread the authoritative policy after checks and immediately
-    // before CAS. A malformed/unreadable policy fails closed; intent revision stays
-    // persisted in the operation plan for crash recovery and audit.
-    let authoritativePolicyRevision = currentPolicyRevision;
-    if (this.policyRevisionReader) {
-      try {
-        authoritativePolicyRevision = this.policyRevisionReader();
-      } catch (error) {
-        this.store.transaction((_tx) =>
-          this.store.setOperationFailed(opId, "POLICY_CHANGED"),
+      if (anc.status !== 0)
+        fail("NOT_DESCENDANT", "candidate is not a descendant of expected main");
+      const protectedPaths = legacyProtectedPaths;
+      if (protectedPaths.length > 0) {
+        const diff = spawnSync(
+          "git",
+          [
+            "--git-dir",
+            this.paths.projectGit,
+            "diff-tree",
+            "--no-commit-id",
+            "--name-status",
+            "-r",
+            "-z",
+            "--no-renames",
+            input.expected,
+            input.candidate,
+          ],
+          { env: gitEnv, encoding: "utf8" },
         );
-        throw new StoreError(
-          "POLICY_CHANGED",
-          `authoritative policy unreadable: ${(error as Error).message}`,
-        );
+        const touched = (diff.stdout ?? "")
+        .split("\0")
+        .filter((p) => p.length > 0 && /^[^\t\n]+/.test(p));
+      for (const p of touched) {
+        const name = p.replace(/^[A-Z]\s+/, "");
+          if (protectedPaths.some((pp) => pp.endsWith("/") ? name.startsWith(pp) : name === pp))
+            fail("PROTECTED_PATH", `path ${name} is protected`);
+        }
       }
-      if (
-        typeof authoritativePolicyRevision !== "string" ||
-        authoritativePolicyRevision.length === 0
-      ) {
-        this.store.transaction((_tx) =>
-          this.store.setOperationFailed(opId, "POLICY_CHANGED"),
-        );
-        throw new StoreError("POLICY_CHANGED", "authoritative policy is malformed");
+      // INT-002: candidate checks are sandbox-gated and settle before CAS.
+      for (const check of this.integration.checks) await this.runCheck(input.candidate, check);
+
+      // INT-003: policy, capability, stop intent, and main are re-read at the CAS boundary.
+      const head = this.currentMain();
+      if (head !== base) fail("STALE_BASE", `main moved to ${head}`);
+      const nowAuth = this.store.getAgent(auth.actor);
+      if (!nowAuth) {
+        this.store.transaction((_tx) => this.store.setOperationFailed(opId, "CAPABILITY_DENIED"));
+        throw new StoreError("CAPABILITY_DENIED", "actor disappeared before commit");
       }
-    }
-    if (authoritativePolicyRevision !== policyRevision) {
-      this.store.transaction((_tx) =>
-        this.store.setOperationFailed(opId, "POLICY_CHANGED"),
+      if (nowAuth.desired === "retired" ||
+        !(this.legacyDirect
+          ? auth.capabilities.has("code.integrate")
+          : capabilitiesOf(nowAuth).has("code.integrate")))
+        fail("CAPABILITY_DENIED", "code.integrate was revoked before commit");
+      if (nowAuth.desired === "stopped")
+        fail("CANCELLED_BEFORE_COMMIT", "stop intent was accepted before commit");
+
+      let authoritativePolicyRevision = currentPolicyRevision;
+      if (this.policyRevisionReader) {
+        try {
+          authoritativePolicyRevision = this.policyRevisionReader();
+        } catch (error) {
+          fail("POLICY_CHANGED", `authoritative policy unreadable: ${(error as Error).message}`);
+        }
+        if (typeof authoritativePolicyRevision !== "string" || authoritativePolicyRevision.length === 0)
+          fail("POLICY_CHANGED", "authoritative policy is malformed");
+      }
+      if (authoritativePolicyRevision !== policyRevision)
+        fail("POLICY_CHANGED", `policy revision changed to ${authoritativePolicyRevision}`);
+
+      const cas = spawnSync(
+        "git",
+        [
+          "--git-dir",
+          this.paths.projectGit,
+          "update-ref",
+          "refs/heads/main",
+          input.candidate,
+          base,
+        ],
+        { env: gitEnv, encoding: "utf8" },
       );
-      throw new StoreError(
-        "POLICY_CHANGED",
-        `policy revision changed to ${authoritativePolicyRevision}`,
-      );
+      if (cas.status !== 0) {
+        const actual = this.currentMain();
+        fail("STALE_BASE", `CAS failed; actual main ${actual}`);
+      }
+      this.store.transaction((_tx) => {
+        this.store.setOperationSucceeded(opId, JSON.stringify(result));
+      });
+      return { operation: opId, state: "succeeded", result: result as never };
+    } catch (error) {
+      const op = this.store.getOperationById(opId);
+      if (error instanceof StoreError && op?.state === "pending" && terminalCodes.has(error.code)) {
+        this.store.transaction((_tx) => this.store.setOperationFailed(opId, error.code));
+      }
+      throw error;
     }
-    const cas = spawnSync(
-      "git",
-      [
-        "--git-dir",
-        this.paths.projectGit,
-        "update-ref",
-        "refs/heads/main",
-        input.candidate,
-        base,
-      ],
-      { env: gitEnv, encoding: "utf8" },
-    );
-    if (cas.status !== 0) {
-      const actual = this.currentMain();
-      this.store.transaction((_tx) =>
-        this.store.setOperationFailed(opId, "STALE_BASE"),
-      );
-      throw new StoreError("STALE_BASE", `CAS failed; actual main ${actual}`);
-    }
-    // T-integrate-done
-    this.store.transaction((_tx) => {
-      this.store.setOperationSucceeded(opId, JSON.stringify(result));
-    });
-    return { operation: opId, state: "succeeded", result: result as never };
   }
 
   private isPublished(candidate: Oid): boolean {
@@ -749,111 +781,24 @@ export class GitModule {
     return r.stdout.trim() as Oid;
   }
 
-  private runCheck(
+  private async runCheck(
     candidate: Oid,
     check: IntegrationPolicy["checks"][number],
-  ): void {
-    // INT-002: never run host-configured checks directly on the broker host.
-    if (!this.paths.checkRootfs || !this.paths.checkAssetsDir) {
-      throw new StoreError(
-        "SPIKE_UNRESOLVED",
-        `candidate-check sandbox unavailable for ${check.id}`,
-      );
-    }
+  ): Promise<void> {
+    void candidate;
+    if (!this.paths.checkRootfs || !this.paths.checkAssetsDir)
+      throw new StoreError("SPIKE_UNRESOLVED", `candidate-check sandbox unavailable for ${check.id}`);
     if (check.argv.length === 0 || !check.argv[0])
       throw new StoreError("CHECK_FAILED", `check ${check.id} has no argv`);
     const resources = check.resources;
-    if (!resources) {
-      throw new StoreError(
-        "SPIKE_UNRESOLVED",
-        `check ${check.id} has no closed resource profile`,
-      );
-    }
-    const resourceValues = Object.values(resources);
-    if (
-      resourceValues.some(
-        (value) => !Number.isSafeInteger(value) || value <= 0,
-      )
-    ) {
-      throw new StoreError(
-        "SPIKE_UNRESOLVED",
-        `check ${check.id} has invalid resource limits`,
-      );
-    }
-    // Linux has no portable per-directory byte quota here. Do not claim that
-    // the host checkout enforces these two disk limits until a quota-backed
-    // staging primitive is pinned; fail closed instead of silently dropping them.
-    if (resources.workspaceBytes > 0 || resources.stagingBytes > 0) {
-      throw new StoreError(
-        "SPIKE_UNRESOLVED",
-        `check ${check.id} workspace/staging quotas are unresolved`,
-      );
-    }
-    const dir = this.checkDir(candidate);
-    const sandboxHost = {
-      rootfs: this.paths.checkRootfs,
-      node: "/usr/bin/node",
-      pi: "/usr/bin/pi",
-      piModeArgs: [],
-      tmpBytes: resources.tmpBytes,
-      checkResources: resources,
-    };
-    const argv = candidateArgv(
-      sandboxHost,
-      dir,
-      this.paths.checkAssetsDir,
-      resources.tmpBytes,
-      check.argv,
-      check.env,
+    if (!resources || Object.values(resources).some((value) => !Number.isSafeInteger(value) || value <= 0))
+      throw new StoreError("SPIKE_UNRESOLVED", `check ${check.id} has invalid resource limits`);
+    // UNIT-001 permits only fixed society units; transient systemd-run is not a
+    // candidate-check boundary. Until a fixed, quota-backed worker exists, fail closed.
+    throw new StoreError(
+      "SPIKE_UNRESOLVED",
+      `candidate-check resource boundary unavailable for ${check.id}`,
     );
-    const r = spawnSync(
-      "systemd-run",
-      [
-        "--user",
-        "--wait",
-        "--collect",
-        "--service-type=exec",
-        "--property=MemoryMax=" + resources.memoryBytes,
-        "--property=TasksMax=" + resources.tasks,
-        "--property=CPUQuota=" + resources.cpuQuotaPercent + "%",
-        "--property=RuntimeMaxSec=" + resources.checkTimeoutSeconds + "s",
-        "--property=KillMode=control-group",
-        "--property=OOMPolicy=kill",
-        "--",
-        argv[0]!,
-        ...argv.slice(1),
-      ],
-      { encoding: "utf8", maxBuffer: 64 * 1024 },
-    );
-    if ((r.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT" || r.status === null) {
-      throw new StoreError(
-        "SPIKE_UNRESOLVED",
-        `systemd candidate-check boundary unavailable for ${check.id}`,
-      );
-    }
-    if (r.error || r.status !== 0)
-      throw new StoreError(
-        "CHECK_FAILED",
-        `check ${check.id} (${check.argv.join(" ")}) failed`,
-      );
-  }
-
-  private checkDir(candidate: Oid): string {
-    const dir = join(
-      this.paths.stateRoot,
-      "staging",
-      `check-${candidate.slice(0, 12)}`,
-    );
-    mkdirSync(dir, { recursive: true });
-    if (!existsSync(join(dir, ".git"))) {
-      spawnSync(
-        "git",
-        ["clone", "-q", "--no-local", this.paths.projectGit, dir],
-        { env: gitEnv, encoding: "utf8" },
-      );
-    }
-    git(dir, ["checkout", "-q", candidate]);
-    return dir;
   }
 
   // -------------------------------------------------------------------------
@@ -1165,46 +1110,187 @@ export class GitModule {
     return (r.stdout ?? ZERO).trim() as Oid;
   }
 
-  /** MUST [GIT-009]: submit success = published ref + result mail materialized. */
+  /** MUST [GIT-009]/[INT-004]: reconcile accepted Git effects from durable plans. */
   async reconcile(operationId: string): Promise<void> {
-    const op = this.store.getOperationById(operationId);
-    if (!op || op.state !== "pending") return;
-    if (op.kind === "git.submit") {
-      let plan: { publishedRef: string; candidate: string };
-      try {
-        plan = JSON.parse(op.planJson) as {
-          publishedRef: string;
-          candidate: string;
-        };
-      } catch {
-        throw new StoreError(
-          "STORE_CORRUPT",
-          `operation ${op.id} has corrupt plan`,
-        );
-      }
-      const refOid = spawnSync(
-        "git",
-        ["--git-dir", this.paths.projectGit, "rev-parse", plan.publishedRef],
-        { env: gitEnv, encoding: "utf8" },
-      );
-      if (refOid.status === 0 && refOid.stdout.trim() === plan.candidate) {
-        await this.mail.publishGated(operationId);
-        let receipt: unknown = { operation: operationId, state: "pending" };
-        try {
-          if (op.resultJson) receipt = JSON.parse(op.resultJson);
-        } catch {
-          /* keep default */
-        }
-        this.store.transaction((_tx) =>
-          this.store.setOperationSucceeded(
-            operationId,
-            JSON.stringify(receipt),
-          ),
-        );
-      }
+    const previous = this.integrationTail;
+    let release: (() => void) | undefined;
+    this.integrationTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      await this.reconcileUnsafe(operationId);
+    } finally {
+      release?.();
     }
   }
 
+  private async reconcileUnsafe(operationId: string): Promise<void> {
+    const op = this.store.getOperationById(operationId);
+    if (!op || op.state !== "pending") return;
+    if (op.kind === "git.integrate") {
+      await this.reconcileIntegrate(op);
+      return;
+    }
+    if (op.kind !== "git.submit") return;
+    let plan: {
+      publishedRef: string;
+      candidate: Oid;
+      exportRef: string;
+      prerequisites: Oid[];
+      bundle?: { path: string; sha256: string; bytes: number } | null;
+      message?: { id: string; recipients?: string[] };
+    };
+    try {
+      plan = JSON.parse(op.planJson) as typeof plan;
+    } catch {
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`);
+    }
+    const refOid = spawnSync(
+      "git",
+      ["--git-dir", this.paths.projectGit, "rev-parse", plan.publishedRef],
+      { env: gitEnv, encoding: "utf8" },
+    );
+    if (refOid.status === 0 && refOid.stdout.trim() !== plan.candidate) {
+      this.store.transaction((_tx) => this.store.setOperationFailed(op.id, "PUBLISHED_REF_CONFLICT"));
+      return;
+    }
+    if (refOid.status !== 0) {
+      if (plan.bundle) {
+        if (!existsSync(plan.bundle.path) || statBytes(plan.bundle.path) !== plan.bundle.bytes ||
+          sha256Of(readFileSync(plan.bundle.path)) !== plan.bundle.sha256) {
+          this.store.transaction((_tx) => this.store.setOperationFailed(op.id, "STREAM_INVALID"));
+          throw new StoreError("STREAM_INVALID", "staged bundle no longer matches its digest");
+        }
+        try {
+          this.quarantineImport(
+            plan.bundle.path,
+            plan.candidate,
+            plan.exportRef,
+            plan.prerequisites,
+          );
+        } catch (error) {
+          if (error instanceof StoreError && ["BUNDLE_INVALID", "PREREQUISITE_MISSING", "SPIKE_UNRESOLVED", "STREAM_INVALID"].includes(error.code))
+            this.store.transaction((_tx) => this.store.setOperationFailed(op.id, error.code));
+          throw error;
+        }
+      } else if (!this.canonicalHas(plan.candidate)) {
+        throw new StoreError("REF_STATE_UNKNOWN", "accepted submit candidate is not in canonical objects");
+      }
+      this.publishRef(plan.publishedRef, plan.candidate);
+    }
+    await this.mail.publishGated(operationId);
+    let receipt: unknown;
+    try {
+      receipt = op.resultJson ? JSON.parse(op.resultJson) : {
+        kind: "git.submit",
+        candidate: plan.candidate,
+        publishedRef: plan.publishedRef,
+        message: plan.message?.id ?? "",
+        recipientCount: plan.message?.recipients?.length ?? 0,
+      };
+    } catch {
+      receipt = { operation: operationId, state: "pending" };
+    }
+    this.store.transaction((_tx) =>
+      this.store.setOperationSucceeded(operationId, JSON.stringify(receipt)));
+  }
+
+  private async reconcileIntegrate(op: { id: string; actor: Actor; planJson: string }): Promise<void> {
+    let plan: {
+      base: Oid;
+      candidate: Oid;
+      policyRevision: string;
+      checkProfileDigest: string;
+      result?: unknown;
+    };
+    try {
+      plan = JSON.parse(op.planJson) as typeof plan;
+    } catch {
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`);
+    }
+    const main = this.currentMain();
+    if (main === plan.candidate) {
+      this.store.transaction((_tx) => this.store.setOperationSucceeded(op.id, JSON.stringify(plan.result ?? {
+        kind: "git.integrate", base: plan.base, candidate: plan.candidate,
+        target: "refs/heads/main", policyRevision: plan.policyRevision, changed: true,
+      })));
+      return;
+    }
+    if (main !== plan.base) {
+      this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+      return;
+    }
+    const fail = (code: Parameters<Store["setOperationFailed"]>[1], message: string): never => {
+      this.store.transaction((_tx) => this.store.setOperationFailed(op.id, code));
+      throw new StoreError(code, message);
+    };
+    const agent = this.store.getAgent(op.actor);
+    if (!agent || agent.desired === "retired" || agent.desired === "stopped" ||
+      !capabilitiesOf(agent).has("code.integrate"))
+      fail(agent?.desired === "stopped" ? "CANCELLED_BEFORE_COMMIT" : "CAPABILITY_DENIED", "integrate capability is unavailable during recovery");
+    if (!this.isPublished(plan.candidate)) fail("CANDIDATE_NOT_PUBLISHED", "candidate is no longer published");
+    const anc = spawnSync(
+      "git",
+      ["--git-dir", this.paths.projectGit, "merge-base", "--is-ancestor", plan.base, plan.candidate],
+      { env: gitEnv, encoding: "utf8" },
+    );
+    if (anc.status !== 0) fail("NOT_DESCENDANT", "candidate is not a descendant of the recorded base");
+    if (this.integration.protectedPaths.length > 0) {
+      const diff = spawnSync(
+        "git",
+        ["--git-dir", this.paths.projectGit, "diff-tree", "--no-commit-id", "--name-status", "-r", "-z", "--no-renames", plan.base, plan.candidate],
+        { env: gitEnv, encoding: "utf8" },
+      );
+      for (const p of (diff.stdout ?? "").split("\0").filter(Boolean)) {
+        const name = p.replace(/^[A-Z]\s+/, "");
+        if (this.integration.protectedPaths.some((pp) => pp.endsWith("/") ? name.startsWith(pp) : name === pp))
+          fail("PROTECTED_PATH", `path ${name} is protected`);
+      }
+    }
+    if (plan.checkProfileDigest !== checkDigest(this.integration.checks))
+      fail("POLICY_CHANGED", "integration check profile changed during recovery");
+    try {
+      for (const check of this.integration.checks) await this.runCheck(plan.candidate, check);
+    } catch (error) {
+      if (error instanceof StoreError && ["CHECK_FAILED", "SPIKE_UNRESOLVED"].includes(error.code))
+        this.store.transaction((_tx) => this.store.setOperationFailed(op.id, error.code));
+      throw error;
+    }
+    const head = this.currentMain();
+    if (head !== plan.base) {
+      this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+      return;
+    }
+    const finalAgent = this.store.getAgent(op.actor);
+    if (!finalAgent) {
+      this.store.transaction((_tx) => this.store.setOperationFailed(op.id, "CAPABILITY_DENIED"));
+      throw new StoreError("CAPABILITY_DENIED", "actor disappeared during recovery");
+    }
+    if (finalAgent.desired === "stopped")
+      fail("CANCELLED_BEFORE_COMMIT", "stop intent was accepted during recovery");
+    if (finalAgent.desired === "retired" || !capabilitiesOf(finalAgent).has("code.integrate"))
+      fail("CAPABILITY_DENIED", "integrate capability was revoked during recovery");
+    let revision: string = this.integration.policyRevision;
+    try {
+      revision = this.policyRevisionReader ? this.policyRevisionReader() : this.integration.policyRevision;
+    } catch (error) {
+      fail("POLICY_CHANGED", `authoritative policy unreadable: ${(error as Error).message}`);
+    }
+    if (typeof revision !== "string" || revision.length === 0 || revision !== plan.policyRevision)
+      fail("POLICY_CHANGED", "integration policy changed during recovery");
+    const cas = spawnSync(
+      "git",
+      ["--git-dir", this.paths.projectGit, "update-ref", "refs/heads/main", plan.candidate, plan.base],
+      { env: gitEnv, encoding: "utf8" },
+    );
+    if (cas.status !== 0) {
+      this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+      return;
+    }
+    this.store.transaction((_tx) => this.store.setOperationSucceeded(op.id, JSON.stringify(plan.result ?? {
+      kind: "git.integrate", base: plan.base, candidate: plan.candidate,
+      target: "refs/heads/main", policyRevision: plan.policyRevision, changed: true,
+    })));
+  }
   /** known refs for git.known (GIT-004): main + immutable published refs. */
   knownRefs(): { main: string; published: string[] } {
     const main = this.currentMain();

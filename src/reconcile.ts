@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import type { Actor } from "../implementation/contracts.js";
 import { Store, StoreError } from "./store.js";
 import { MailModule } from "./mail.js";
-import { GitModule } from "./git.js";
+import { GitModule, gitEnv } from "./git.js";
 import { UnitsModule } from "./units.js";
 
 export interface ReconcilePaths {
@@ -107,9 +107,9 @@ export class ReconcileModule {
   /** integrity guard for the shared repo (REC-001: never silently overwrite). */
   assertCanonicalHealthy(): void {
     const r = spawnSync(
-      "git",
+      "/usr/bin/git",
       ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs"],
-      { encoding: "utf8" },
+      { env: gitEnv, encoding: "utf8" },
     );
     if (r.status !== 0)
       throw new StoreError(

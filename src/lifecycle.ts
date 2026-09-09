@@ -47,12 +47,19 @@ export interface SpecResolver {
   ): ResolvedAgentSpec | null;
 }
 
-const cloneEnv = {
-  ...process.env,
+const cloneEnv: NodeJS.ProcessEnv = {
+  HOME: "/nonexistent",
+  PATH: "/usr/bin:/bin",
+  LANG: "C",
+  LC_ALL: "C",
   GIT_CONFIG_NOSYSTEM: "1",
   GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_TERMINAL_PROMPT: "0",
   GIT_NO_REPLACE_OBJECTS: "1",
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "core.hooksPath",
+  GIT_CONFIG_VALUE_0: "/dev/null",
 };
 
 export class LifecycleModule {
@@ -412,7 +419,7 @@ export class LifecycleModule {
       mkdirSync(workspaceTmp, { recursive: true });
       if (!existsSync(join(workspaceTmp, ".git"))) {
         const r = spawnSync(
-          "git",
+          "/usr/bin/git",
           [
             "clone",
             "--no-local",
