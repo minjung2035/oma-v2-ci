@@ -140,6 +140,7 @@ const git = new GitModule(
 );
 const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
   projectGit: join(stateRoot, "repos", "project.git"),
+  hasGoal: () => existsSync(join(stateRoot, "world", "context", "current")),
 });
 const broker = new Broker(
   store,
