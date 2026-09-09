@@ -42,13 +42,23 @@ const mail = new MailModule(
   store,
   cfg.limits.replyReferences,
 );
-const units = new UnitsModule(cfg.society, {
-  node: cfg.installation.node,
-  libdir: cfg.installation.libdir,
-  state: stateRoot,
-  society: cfg.society,
-  agent: "",
-});
+const units = new UnitsModule(
+  cfg.society,
+  {
+    node: cfg.installation.node,
+    libdir: cfg.installation.libdir,
+    state: stateRoot,
+    society: cfg.society,
+    agent: "",
+  },
+  undefined,
+  Object.fromEntries(
+    Object.entries(cfg.agentProfiles).map(([name, profile]) => [
+      name,
+      profile.resources,
+    ]),
+  ),
+);
 const views = new ViewsModule(
   store,
   stateRoot,
