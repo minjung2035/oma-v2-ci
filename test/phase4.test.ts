@@ -26,6 +26,7 @@ import {
 } from "../src/units.js";
 import { MailModule } from "../src/mail.js";
 import { LifecycleModule } from "../src/lifecycle.js";
+import { ReconcileModule } from "../src/reconcile.js";
 import { Broker, peerCgroup } from "../src/broker.js";
 import { ViewsModule } from "../src/views.js";
 import type {
@@ -80,6 +81,7 @@ function envOf(): { env: Env; cleanup: () => void } {
       hasGoal: () => existsSync(join(state, "world", "context", "current")),
     },
     resolver,
+    mail,
   );
   const views = new ViewsModule(store, state, society, "p");
   const cleanups: Array<() => void> = [];
@@ -139,8 +141,8 @@ function seedPrincipalAndA(store: Store): void {
   });
 }
 
-function seedProjectGit(env: Env): void {
-  // minimal shared project.git with a main branch so create's initial clone works
+function seedProjectGit(env: Env): string {
+  // minimal shared project.git with a main branch and a real frozen base OID
   const seedDir = join(env.dir, "seed");
   mkdirSync(seedDir, { recursive: true });
   spawnSync("git", ["init", "-q", "-b", "main"], {
@@ -186,6 +188,13 @@ function seedProjectGit(env: Env): void {
     ["--git-dir", git, "symbolic-ref", "HEAD", "refs/heads/main"],
     { stdio: "ignore" },
   );
+  const head = spawnSync(
+    "git",
+    ["--git-dir", git, "rev-parse", "refs/heads/main"],
+    { encoding: "utf8" },
+  );
+  assert.equal(head.status, 0);
+  return head.stdout.trim();
 }
 
 function seedGov(env: Env): void {
@@ -422,41 +431,129 @@ test("T38: start fails RUN_TERMINATION_UNKNOWN while prior cgroup is not dead; i
   }
 });
 
-test("T13: capability escape — sibling stop denied; created child inherits only the delegable intersection", async () => {
+test("T13: capability escape — sibling stop denied; created child uses a real frozen base", async () => {
   const { env, cleanup } = envOf();
   try {
     seedPrincipalAndA(env.store);
-    seedProjectGit(env);
-    // sibling stop: a has no agent.manage.descendants capability
+    const base = seedProjectGit(env);
     const bAuth = auth("b", ["mail.send"]);
     assert.throws(
       () => env.lifecycle.stop(bAuth, "a", "stop-x"),
       (e: unknown) => e instanceof StoreError && e.code === "CAPABILITY_DENIED",
     );
-    // create requires agent.create capability; a does not have it -> CAPABILITY_DENIED via resolver? resolver is permissive,
-    // so gate the capability at the module boundary: only allowed when parent has agent.create
     const createAuth = auth("a", ["agent.create"]);
     const res = await env.lifecycle.create(
       createAuth,
-      { name: "child", from: "a".repeat(40), brief: "b" },
+      { name: "child", from: base, brief: "b" },
       "c1",
     );
     assert.equal(res.state, "succeeded");
     const child = env.store.getAgent("child")!;
-    assert.equal(child.desired, "stopped"); // no GOAL => not enabled
+    assert.equal(child.desired, "enabled");
+    assert.equal(env.units.confirmDead("child", 0), true); // no GOAL => no physical activation
     assert.deepEqual(JSON.parse(child.specJson).capabilities, [
       "mail.send",
       "route.follow",
     ]);
-    // same name different spec -> AGENT_CONFLICT (LIFE-001)
+  } finally {
+    cleanup();
+  }
+});
+
+test("T39/LIFE-007: same name + same resolved spec converges without a second physical create", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    const base = seedProjectGit(env);
+    const createAuth = auth("a", ["agent.create"]);
+    const first = await env.lifecycle.create(
+      createAuth,
+      { name: "child", from: base, brief: "same" },
+      "c1",
+    );
+    const second = await env.lifecycle.create(
+      createAuth,
+      { name: "child", from: base, brief: "same" },
+      "c2",
+    );
+    assert.equal(first.state, "succeeded");
+    assert.equal(second.state, "succeeded");
+    assert.equal(env.store.listAgents().filter((a) => a.name === "child").length, 1);
+    const linked = env.store.getOperation("a", "c2")!;
+    const plan = JSON.parse(linked.planJson) as { existingCreation: string | null };
+    assert.equal(plan.existingCreation, first.operation);
+    assert.equal(existsSync(join(env.dir, "state", "agents", "child", "workspace")), true);
+  } finally {
+    cleanup();
+  }
+});
+
+test("T40/LIFE-001: same stable name with a different resolved spec conflicts", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    const base = seedProjectGit(env);
+    const createAuth = auth("a", ["agent.create"]);
+    await env.lifecycle.create(
+      createAuth,
+      { name: "child", from: base, brief: "one" },
+      "c1",
+    );
     await assert.rejects(
       env.lifecycle.create(
         createAuth,
-        { name: "child", from: "b".repeat(40), brief: "b2" },
+        { name: "child", from: base, brief: "two" },
         "c2",
       ),
       (e: unknown) => e instanceof StoreError && e.code === "AGENT_CONFLICT",
     );
+  } finally {
+    cleanup();
+  }
+});
+
+test("T41/CTX-006: pre-GOAL create stays logically enabled but cannot activate until GOAL exists", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    const base = seedProjectGit(env);
+    await env.lifecycle.create(
+      auth("a", ["agent.create"]),
+      { name: "child", from: base, brief: "wait for goal" },
+      "c1",
+    );
+    assert.equal(env.store.getAgent("child")!.desired, "enabled");
+
+    const service = join(
+      env.xdg,
+      "systemd",
+      "user",
+      unitName(env.society, "child", "service"),
+    );
+    writeFileSync(
+      service,
+      `[Unit]\nDescription=t41 child\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`,
+    );
+    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+
+    const reconcile = new ReconcileModule(
+      env.store,
+      env.mail,
+      null,
+      env.units,
+      env.lifecycle,
+      {
+        projectGit: join(env.dir, "state", "repos", "project.git"),
+        hasGoal: () => existsSync(join(env.dir, "state", "world", "context", "current")),
+      },
+    );
+    await reconcile.sweep();
+    assert.equal(env.units.confirmDead("child", 0), true);
+
+    seedGov(env);
+    await reconcile.sweep();
+    const obs = env.units.observe("child");
+    assert.equal(obs.activeState === "active" || obs.activeState === "activating", true);
   } finally {
     cleanup();
   }
