@@ -65,7 +65,7 @@ export function canonicalJson(v: Json): string {
   return out.join("");
 }
 
-export function sha256Hex(utf8: string): string {
+export function sha256Hex(utf8: string | Uint8Array): string {
   return createHash("sha256").update(utf8, "utf8").digest("hex");
 }
 

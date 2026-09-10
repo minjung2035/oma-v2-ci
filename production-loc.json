@@ -1,0 +1,184 @@
+{"header" : {
+  "cloc_url"           : "github.com/AlDanial/cloc",
+  "cloc_version"       : "2.08",
+  "elapsed_seconds"    : 0.0339570045471191,
+  "n_files"            : 34,
+  "n_lines"            : 10829,
+  "files_per_second"   : 1001.26617331105,
+  "lines_per_second"   : 318903.27619957,
+  "report_file"        : "production-loc.json"},
+"src/git.ts" :{
+  "blank": 47,
+  "comment": 64,
+  "code": 1532,
+  "language": "TypeScript"},
+"src/broker.ts" :{
+  "blank": 46,
+  "comment": 9,
+  "code": 1247,
+  "language": "TypeScript"},
+"src/mail.ts" :{
+  "blank": 59,
+  "comment": 26,
+  "code": 972,
+  "language": "TypeScript"},
+"src/lifecycle.ts" :{
+  "blank": 43,
+  "comment": 13,
+  "code": 882,
+  "language": "TypeScript"},
+"src/store.ts" :{
+  "blank": 75,
+  "comment": 79,
+  "code": 772,
+  "language": "TypeScript"},
+"src/cli.ts" :{
+  "blank": 40,
+  "comment": 58,
+  "code": 729,
+  "language": "TypeScript"},
+"src/config.ts" :{
+  "blank": 17,
+  "comment": 5,
+  "code": 450,
+  "language": "TypeScript"},
+"src/inference.ts" :{
+  "blank": 25,
+  "comment": 28,
+  "code": 375,
+  "language": "TypeScript"},
+"src/validate.ts" :{
+  "blank": 32,
+  "comment": 13,
+  "code": 304,
+  "language": "TypeScript"},
+"src/units.ts" :{
+  "blank": 24,
+  "comment": 3,
+  "code": 281,
+  "language": "TypeScript"},
+"implementation/contracts.ts" :{
+  "blank": 2,
+  "comment": 21,
+  "code": 270,
+  "language": "TypeScript"},
+"src/frame.ts" :{
+  "blank": 20,
+  "comment": 43,
+  "code": 251,
+  "language": "TypeScript"},
+"src/entry/broker.ts" :{
+  "blank": 8,
+  "comment": 9,
+  "code": 197,
+  "language": "TypeScript"},
+"src/sandbox.ts" :{
+  "blank": 7,
+  "comment": 8,
+  "code": 191,
+  "language": "TypeScript"},
+"src/leaf.ts" :{
+  "blank": 17,
+  "comment": 16,
+  "code": 175,
+  "language": "TypeScript"},
+"src/reconcile.ts" :{
+  "blank": 8,
+  "comment": 10,
+  "code": 150,
+  "language": "TypeScript"},
+"src/runner.ts" :{
+  "blank": 16,
+  "comment": 4,
+  "code": 139,
+  "language": "TypeScript"},
+"src/request-cache.ts" :{
+  "blank": 16,
+  "comment": 10,
+  "code": 137,
+  "language": "TypeScript"},
+"src/views.ts" :{
+  "blank": 8,
+  "comment": 9,
+  "code": 115,
+  "language": "TypeScript"},
+"implementation/schema-v1.sql" :{
+  "blank": 0,
+  "comment": 4,
+  "code": 104,
+  "language": "SQL"},
+"src/hash.ts" :{
+  "blank": 8,
+  "comment": 21,
+  "code": 93,
+  "language": "TypeScript"},
+"src/ids.ts" :{
+  "blank": 13,
+  "comment": 11,
+  "code": 72,
+  "language": "TypeScript"},
+"src/entry/runner.ts" :{
+  "blank": 6,
+  "comment": 4,
+  "code": 60,
+  "language": "TypeScript"},
+"src/authority.ts" :{
+  "blank": 4,
+  "comment": 9,
+  "code": 56,
+  "language": "TypeScript"},
+"src/rpc-client.ts" :{
+  "blank": 8,
+  "comment": 6,
+  "code": 53,
+  "language": "TypeScript"},
+"src/pi-extension.ts" :{
+  "blank": 3,
+  "comment": 8,
+  "code": 51,
+  "language": "TypeScript"},
+"src/entry/host.ts" :{
+  "blank": 4,
+  "comment": 1,
+  "code": 31,
+  "language": "TypeScript"},
+"implementation/systemd/resident.service.in" :{
+  "blank": 0,
+  "comment": 1,
+  "code": 21,
+  "language": "OMA systemd"},
+"implementation/systemd/broker.service.in" :{
+  "blank": 0,
+  "comment": 1,
+  "code": 17,
+  "language": "OMA systemd"},
+"implementation/systemd/principal-relay.service.in" :{
+  "blank": 0,
+  "comment": 1,
+  "code": 13,
+  "language": "OMA systemd"},
+"implementation/systemd/reconcile.service.in" :{
+  "blank": 0,
+  "comment": 1,
+  "code": 11,
+  "language": "OMA systemd"},
+"implementation/systemd/reconcile.timer.in" :{
+  "blank": 0,
+  "comment": 1,
+  "code": 9,
+  "language": "OMA systemd"},
+"implementation/systemd/principal.path.in" :{
+  "blank": 0,
+  "comment": 1,
+  "code": 7,
+  "language": "OMA systemd"},
+"implementation/systemd/resident.path.in" :{
+  "blank": 0,
+  "comment": 1,
+  "code": 7,
+  "language": "OMA systemd"},
+"SUM": {
+  "blank": 556,
+  "comment": 499,
+  "code": 9774,
+  "nFiles": 34} }

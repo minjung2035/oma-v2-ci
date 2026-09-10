@@ -3,6 +3,7 @@
 // library (nodemailer 10.0.1) per MAIL-003; CR/LF injection is still rejected
 // at this boundary before the library sees the values.
 import {
+  constants,
   mkdirSync,
   writeFileSync,
   openSync,
@@ -13,8 +14,12 @@ import {
   existsSync,
   readFileSync,
   unlinkSync,
+  renameSync,
+  lstatSync,
+  rmSync,
 } from "node:fs";
 import { createTransport } from "nodemailer";
+import { encodeWord } from "nodemailer/lib/mime-funcs";
 import { join, dirname } from "node:path";
 import type {
   Actor,
@@ -36,13 +41,16 @@ import {
   type DeliveryRow,
   type OperationRow,
 } from "./store.js";
+import { assertCurrentActor } from "./authority.js";
 import {
   generateMessageId,
   generateOperationId,
   generateBatchId,
+  parseMessageId,
 } from "./ids.js";
 import { isValidTopicName } from "./ids.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
+import { exactCandidateCheck, messagePlanCheck, checkOid } from "./validate.js";
 
 // ---------------------------------------------------------------------------
 // eml encoding (MAIL-003/004)
@@ -59,6 +67,7 @@ export interface EmlParams {
   references: MessageId[];
   messageId: string;
   body: string;
+  approvalFor?: MailInput["approvalFor"];
 }
 
 function assertNoCrlf(value: string, what: string): void {
@@ -93,10 +102,12 @@ export async function buildEml(p: EmlParams): Promise<{
   bytes: number;
   sha256: string;
 }> {
+  if (p.approvalFor) {
+    const error = exactCandidateCheck(p.approvalFor);
+    if (error) throw new StoreError("INVALID_REQUEST", error);
+  }
   assertNoCrlf(p.subject, "subject");
-  for (const h of ["from", ...p.to, ...p.replyTo]) assertNoCrlf(h, "address");
-  if (p.body.includes("\r"))
-    throw new StoreError("INVALID_REQUEST", "body contains CR");
+  for (const h of [p.from, ...p.to, ...p.replyTo, p.messageId, ...(p.inReplyTo ? [p.inReplyTo] : []), ...p.references]) assertNoCrlf(h, "header");
   const transporter = createTransport({
     streamTransport: true,
     buffer: true,
@@ -117,6 +128,13 @@ export async function buildEml(p: EmlParams): Promise<{
     headers: {
       "X-OMA-Kind": p.kind,
       ...(p.contextRevision ? { "X-OMA-Context": p.contextRevision } : {}),
+      ...(p.approvalFor ? {
+        "X-OMA-Approval-Repo": p.approvalFor.repo,
+        "X-OMA-Approval-Target": p.approvalFor.targetRef,
+        "X-OMA-Approval-Base": p.approvalFor.expectedBase,
+        "X-OMA-Approval-Candidate": p.approvalFor.candidate,
+        "X-OMA-Approval-Policy": encodeWord(p.approvalFor.policyRevision, "B"),
+      } : {}),
     },
   });
   const raw = (info as unknown as { message: Buffer }).message;
@@ -172,7 +190,7 @@ export function expandAddresses(
           "principal identity not created",
         );
       recipients.add("principal");
-      display.add("principal");
+      display.add(listAddress("principal", society));
       continue;
     }
     if (addr === "commons" || addr === "residents") {
@@ -185,7 +203,7 @@ export function expandAddresses(
           recipients.add(name);
         }
       }
-      display.add(addr);
+      display.add(listAddress(addr, society));
       continue;
     }
     if (addr.startsWith("topic/")) {
@@ -217,6 +235,12 @@ export function expandAddresses(
   return { recipients: [...recipients].sort(), displayTo: [...display] };
 }
 
+/** MAIL-005: list replies stay on lists; direct replies return to the sender. */
+export function defaultReplyTo(from: string, to: readonly string[]): string[] {
+  const lists = to.filter(address => /^(commons|residents|topic-[a-z][a-z0-9-]*)@/.test(address));
+  return [...new Set(lists.length ? lists : [from])];
+}
+
 // ---------------------------------------------------------------------------
 // durable maildir writes (FS-002/MAIL-007)
 // ---------------------------------------------------------------------------
@@ -240,34 +264,65 @@ export function fsyncDir(dir: string): void {
   }
 }
 
+export function writeAtomic(file: string, content: string, mode = 0o600): void {
+  mkdirSync(dirname(file), { recursive: true });
+  const tmp = `${file}.tmp-${process.pid}`;
+  rmSync(tmp, { force: true });
+  const fd = openSync(tmp, "wx", mode);
+  try { writeFileSync(fd, content, "utf8"); fsyncSync(fd); }
+  finally { closeSync(fd); }
+  renameSync(tmp, file);
+  fsyncDir(dirname(file));
+}
+
+export function publishBatchView(stateRoot: string, batch: PreparedBatch): void {
+  const runView = join(stateRoot, "agents", batch.agent, "runner", "view");
+  writeAtomic(join(runView, `batch-${batch.id}.json`), JSON.stringify({
+    id: batch.id, agent: batch.agent, incarnation: batch.incarnation,
+    deliveryMode: batch.deliveryMode, notice: batch.notice, messageIds: batch.messageIds,
+  }));
+  const lines = [
+    `# inbox — ${batch.agent}`, "",
+    `안내 batch ${batch.id} (incarnation ${batch.incarnation})`, "",
+    ...batch.messageIds.map((id, i) => `${i + 1}. ${id}\t/mail/archive/cur/${id}:2,`),
+    "", "읽기: cat <위 archive path>",
+  ];
+  writeAtomic(join(runView, "inbox.md"), `${lines.join("\n")}\n`, 0o444);
+}
+
 export function publishImmutableFile(
   src: string,
   dst: string,
   verifyHash?: string,
 ): void {
-  if (existsSync(dst)) {
-    const existing = sha256Hex(readFileSync(dst, "utf8"));
-    if (verifyHash !== undefined && existing !== verifyHash) {
+  if (!lstatSync(src).isFile()) throw new StoreError("STORE_CORRUPT", `non-regular source ${src}`);
+  const expected = sha256Hex(readFileSync(src));
+  if (verifyHash !== undefined && expected !== verifyHash)
+    throw new StoreError("STORE_CORRUPT", `source ${src} hash mismatch`);
+  const verifyExisting = () => {
+    if (!lstatSync(dst).isFile() || sha256Hex(readFileSync(dst)) !== expected)
       throw new StoreError("STORE_CORRUPT", `existing ${dst} hash mismatch`);
-    }
-    return;
-  }
+  };
   mkdirSync(dirname(dst), { recursive: true });
   try {
     linkSync(src, dst);
-  } catch (e) {
-    const err = e as NodeJS.ErrnoException;
-    if (err.code === "EXDEV") {
-      copyFileSync(src, dst);
-      const fd = openSync(dst, "r+");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EEXIST") verifyExisting();
+    else if (code === "EXDEV") {
+      const temporary = `${dst}.${generateOperationId()}.tmp`;
       try {
-        fsyncSync(fd);
-      } finally {
-        closeSync(fd);
-      }
-    } else {
-      throw e;
-    }
+        copyFileSync(src, temporary, constants.COPYFILE_EXCL);
+        const fd = openSync(temporary, "r");
+        try { fsyncSync(fd); } finally { closeSync(fd); }
+        if (sha256Hex(readFileSync(temporary)) !== expected)
+          throw new StoreError("STORE_CORRUPT", `copied ${dst} hash mismatch`);
+        try { linkSync(temporary, dst); } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+          verifyExisting();
+        }
+      } finally { rmSync(temporary, { force: true }); }
+    } else throw error;
   }
   fsyncDir(dirname(dst));
 }
@@ -356,23 +411,7 @@ export interface MailSociety {
   society: string;
 }
 
-export type MailStopPoint =
-  | "stage"
-  | "object"
-  | "accepted"
-  | "archive"
-  | `inbox-${number}`;
-
-export class StopSignal extends Error {
-  constructor(readonly point: MailStopPoint) {
-    super(`stop at ${point}`);
-    this.name = "StopSignal";
-  }
-}
-
 export class MailModule {
-  private stopAfter: MailStopPoint | null = null;
-
   constructor(
     private readonly paths: MailSociety,
     private readonly store: Store,
@@ -404,13 +443,11 @@ export class MailModule {
     auth: AuthContext,
     key: RequestKey,
     input: MailInput,
-    stopAfter?: MailStopPoint,
     requestContext?: {
       kind: "mail.send" | "agent.continue";
       params: Json;
     },
   ): Promise<Receipt> {
-    this.stopAfter = stopAfter ?? null;
     const operationKind = requestContext?.kind ?? "mail.send";
     const requestParams = requestContext?.params ?? (input as unknown as Json);
     const society = this.paths.society;
@@ -429,20 +466,13 @@ export class MailModule {
 
     let parent: ParsedEmlHeaders | null = null;
     if (input.replyToMessage) {
-      const obj = this.objectPath(input.replyToMessage);
-      if (!existsSync(obj))
-        throw new StoreError(
-          "INVALID_REQUEST",
-          `reply target ${input.replyToMessage} unknown`,
-        );
-      parent = parseEmlHeaders(readFileSync(obj, "utf8"));
-      const parentId = parent.messageId?.split("@", 1)[0];
-      if (parentId !== input.replyToMessage) {
-        throw new StoreError(
-          "STORE_CORRUPT",
-          `object ${input.replyToMessage} header mismatch`,
-        );
-      }
+      const parsed = parseMessageId(input.replyToMessage);
+      const operation = parsed && this.store.getOperationById(parsed.operationId);
+      if (!operation) throw new StoreError("INVALID_REQUEST", `reply target ${input.replyToMessage} is not accepted`);
+      const message = this.operationMessage(operation);
+      if (message.id !== input.replyToMessage)
+        throw new StoreError("INVALID_REQUEST", `reply target ${input.replyToMessage} unknown`);
+      parent = this.messageHeaders(message);
     }
     const targetAddresses: Address[] = [...input.to];
     if (targetAddresses.length === 0) {
@@ -468,7 +498,7 @@ export class MailModule {
       inReplyTo: MessageId | null;
       references: MessageId[];
     } = {
-      replyTo: route.displayTo,
+      replyTo: defaultReplyTo(actorAddress(auth.actor, society), route.displayTo),
       inReplyTo: null,
       references: [],
     };
@@ -477,11 +507,12 @@ export class MailModule {
       if (parent.inReplyTo && !ancestry.includes(parent.inReplyTo))
         ancestry.push(parent.inReplyTo);
       if (!ancestry.includes(parent.messageId!)) ancestry.push(parent.messageId!);
-      const inheritedReplyTo = parent.replyTo ?? (parent.from ? [parent.from] : []);
+      const references = ancestry.slice(-this.maxReplyReferences);
+      if (ancestry.length > this.maxReplyReferences) references[0] = ancestry[0]!;
       replyHeaders = {
-        replyTo: input.to.length > 0 ? route.displayTo : inheritedReplyTo,
+        replyTo: replyHeaders.replyTo,
         inReplyTo: parent.messageId,
-        references: ancestry.slice(-this.maxReplyReferences),
+        references,
       };
     }
 
@@ -491,6 +522,7 @@ export class MailModule {
       replyTo: replyHeaders.replyTo,
       subject: input.subject,
       kind: input.kind,
+      approvalFor: input.approvalFor,
       contextRevision:
         input.refs?.find((r) => r.repo === "context")?.oid ?? null,
       inReplyTo: replyHeaders.inReplyTo,
@@ -503,9 +535,7 @@ export class MailModule {
     mkdirSync(staging, { recursive: true });
     const staged = join(staging, `${messageId}.eml`);
     writeFsynced(staged, eml.text);
-    if (stopAfter === "stage") throw new StopSignal("stage");
     publishImmutableFile(staged, this.objectPath(messageId));
-    if (stopAfter === "object") throw new StopSignal("object");
 
     const plan = {
       kind: operationKind,
@@ -518,6 +548,7 @@ export class MailModule {
         to: [...route.displayTo].sort(),
         recipients: route.recipients,
         kind: input.kind,
+        ...(input.approvalFor ? { approvalFor: input.approvalFor } : {}),
         contextRevision:
           input.refs?.find((r) => r.repo === "context")?.oid ?? null,
         replyHeaders,
@@ -525,6 +556,7 @@ export class MailModule {
     };
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
+      assertCurrentActor(this.store, auth, "mail.send");
       claimOut.txClaim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
@@ -535,6 +567,10 @@ export class MailModule {
         planJson: JSON.stringify(plan),
       });
       if (claimOut.txClaim === "retry") return;
+      // MAIL-001: freeze membership in the accepting transaction, not before rendering.
+      route.recipients = expandAddresses(this.store, targetAddresses, society).recipients;
+      plan.message.recipients = route.recipients;
+      this.store.updateOperationPlanJson(opId, JSON.stringify(plan));
       this.store.insertDeliveries(
         route.recipients.map((r) => ({
           messageId,
@@ -545,7 +581,6 @@ export class MailModule {
     });
     if (claimOut.txClaim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
-    if (stopAfter === "accepted") throw new StopSignal("accepted");
     const result = {
       kind: operationKind,
       message: messageId,
@@ -555,8 +590,7 @@ export class MailModule {
     let materializedAll = true;
     try {
       await this.materialize(opId);
-    } catch (e) {
-      if (e instanceof StopSignal) throw e;
+    } catch {
       materializedAll = false;
     }
     if (materializedAll) {
@@ -590,7 +624,9 @@ export class MailModule {
       messageId: `${messageId}@${this.paths.society}.oma.invalid`,
       body: brief,
     });
-    this.freezeObject(messageId, eml);
+    const staging = join(this.paths.stateRoot, "staging", `${messageId}.eml`);
+    mkdirSync(dirname(staging), { recursive: true });
+    writeFsynced(staging, eml.text);
     return {
       id: messageId,
       objectPath: `mail/objects/${messageId}.eml`,
@@ -609,57 +645,77 @@ export class MailModule {
     };
   }
 
+  publishCreateInitial(message: MessagePlan): void {
+    const staging = join(this.paths.stateRoot, "staging", `${message.id}.eml`);
+    const object = this.objectPath(message.id);
+    publishImmutableFile(existsSync(object) ? object : staging, object, message.sha256);
+  }
+
   freezeObject(messageId: MessageId, eml: { text: string }): void {
     const object = this.objectPath(messageId);
     mkdirSync(dirname(object), { recursive: true });
     writeFsynced(object, eml.text);
   }
 
+  private operationMessage(op: OperationRow): MessagePlan {
+    let decoded: Record<string, unknown>;
+    try { decoded = JSON.parse(op.planJson); } catch {
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`);
+    }
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded) || decoded.kind !== op.kind)
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} plan kind mismatch`);
+    const raw = decoded.message ?? decoded.initialMessage;
+    const invalid = messagePlanCheck(raw);
+    if (invalid) throw new StoreError("STORE_CORRUPT", `operation ${op.id} message: ${invalid}`);
+    const message = raw as MessagePlan; // Closed subtree validated above.
+    if (parseMessageId(message.id)?.operationId !== op.id || message.objectPath !== `mail/objects/${message.id}.eml` ||
+      new Set(message.recipients).size !== message.recipients.length ||
+      (message.kind === "approval_required") !== (message.approvalFor !== undefined) ||
+      (message.kind === "approval_required" && !message.to.some(address => logicalReplyAddress(this.store, address, this.paths.society) === "principal")))
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} message identity mismatch`);
+    if (message.kind === "context" && decoded.candidate) {
+      if (checkOid(decoded.candidate)) throw new StoreError("STORE_CORRUPT", `operation ${op.id} context OID invalid`);
+      return { ...message, contextRevision: decoded.candidate as Oid };
+    }
+    return message;
+  }
+
+  private messageHeaders(message: MessagePlan): ParsedEmlHeaders {
+    const path = this.objectPath(message.id);
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    if (!stat?.isFile() || stat.size !== message.bytes)
+      throw new StoreError("STORE_CORRUPT", `mail object size/type mismatch: ${message.id}`);
+    const bytes = readFileSync(path);
+    if (sha256Hex(bytes) !== message.sha256)
+      throw new StoreError("STORE_CORRUPT", `mail object hash mismatch: ${message.id}`);
+    const headers = parseEmlHeaders(bytes.toString("utf8"));
+    if (headers.messageId?.split("@", 1)[0] !== message.id)
+      throw new StoreError("STORE_CORRUPT", `mail header mismatch: ${message.id}`);
+    return headers;
+  }
+
+  private publishDelivery(message: MessagePlan, delivery: DeliveryRow): void {
+    if (delivery.messageId !== message.id || !message.recipients.includes(delivery.recipient))
+      throw new StoreError("STORE_CORRUPT", `delivery message mismatch for ${delivery.operationId}`);
+    const current = this.inboxCurPath(delivery.recipient, message.id);
+    const fresh = this.inboxNewPath(delivery.recipient, message.id);
+    const object = this.objectPath(message.id);
+    if (lstatSync(current, { throwIfNoEntry: false })) {
+      publishImmutableFile(object, current, message.sha256);
+      if (lstatSync(fresh, { throwIfNoEntry: false })) publishImmutableFile(object, fresh, message.sha256);
+    } else publishImmutableFile(object, fresh, message.sha256);
+  }
+
   async publishGated(operationId: string): Promise<void> {
     const op = this.store.getOperationById(operationId);
     if (!op)
       throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
-    let decoded: {
-      message?: MessagePlan;
-      initialMessage?: MessagePlan | null;
-    };
-    try {
-      decoded = JSON.parse(op.planJson) as {
-        message?: MessagePlan;
-        initialMessage?: MessagePlan | null;
-      };
-    } catch {
-      throw new StoreError(
-        "STORE_CORRUPT",
-        `operation ${operationId} has corrupt plan`,
-      );
-    }
-    const message = decoded.message ?? decoded.initialMessage;
-    if (!message)
-      throw new StoreError(
-        "STORE_CORRUPT",
-        `operation ${operationId} has no frozen gated message`,
-      );
+    const message = this.operationMessage(op);
+    this.messageHeaders(message);
     const object = this.objectPath(message.id);
-    if (!existsSync(object) || sha256Hex(readFileSync(object, "utf8")) !== message.sha256)
-      throw new StoreError("STORE_CORRUPT", `object mismatch for ${message.id}`);
     publishImmutableFile(object, this.archivePath(message.id), message.sha256);
     for (const d of this.store.deliveriesForOperation(operationId)) {
-      if (d.messageId !== message.id)
-        throw new StoreError("STORE_CORRUPT", `delivery message mismatch for ${operationId}`);
-      if (existsSync(this.inboxCurPath(d.recipient, d.messageId))) {
-        this.store.transaction((_tx) =>
-          this.store.markMaterialized(d.messageId, d.recipient),
-        );
-        continue;
-      }
-      if (!existsSync(this.inboxNewPath(d.recipient, d.messageId))) {
-        publishImmutableFile(
-          object,
-          this.inboxNewPath(d.recipient, d.messageId),
-          message.sha256,
-        );
-      }
+      this.publishDelivery(message, d);
       this.store.transaction((_tx) =>
         this.store.markMaterialized(d.messageId, d.recipient),
       );
@@ -670,54 +726,19 @@ export class MailModule {
     const op = this.store.getOperationById(operationId);
     if (!op)
       throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
-    let plan: { kind: string };
-    try {
-      plan = JSON.parse(op.planJson) as { kind: string };
-    } catch {
-      throw new StoreError(
-        "STORE_CORRUPT",
-        `operation ${operationId} has corrupt plan`,
-      );
-    }
-    if (plan.kind !== "mail.send" && plan.kind !== "agent.continue") {
+    if (op.kind !== "mail.send" && op.kind !== "agent.continue") {
       throw new StoreError(
         "INVALID_REQUEST",
         `operation ${op.kind} uses gated publication`,
       );
     }
     const deliveries = this.store.deliveriesForOperation(operationId);
-    const messageId =
-      (plan as { message?: { id: string } }).message?.id ??
-      deliveries[0]?.messageId;
-    if (!messageId)
-      throw new StoreError(
-        "STORE_CORRUPT",
-        `operation ${operationId} has no message plan`,
-      );
-    const object = this.objectPath(messageId);
-    if (!existsSync(object))
-      throw new StoreError("STORE_CORRUPT", `object missing for ${messageId}`);
-    publishImmutableFile(object, this.archivePath(messageId));
-    if (this.stopAfter === "archive") throw new StopSignal("archive");
-    let published = 0;
+    const message = this.operationMessage(op);
+    this.messageHeaders(message);
+    const object = this.objectPath(message.id);
+    publishImmutableFile(object, this.archivePath(message.id), message.sha256);
     for (const d of deliveries) {
-      if (existsSync(this.inboxCurPath(d.recipient, d.messageId))) {
-        this.store.transaction((_tx) =>
-          this.store.markMaterialized(d.messageId, d.recipient),
-        );
-        continue;
-      }
-      if (!existsSync(this.inboxNewPath(d.recipient, d.messageId))) {
-        publishImmutableFile(
-          object,
-          this.inboxNewPath(d.recipient, d.messageId),
-        );
-      }
-      published++;
-      if (this.stopAfter?.startsWith("inbox-")) {
-        const want = Number(this.stopAfter.slice("inbox-".length));
-        if (published === want) throw new StopSignal(this.stopAfter);
-      }
+      this.publishDelivery(message, d);
       this.store.transaction((_tx) =>
         this.store.markMaterialized(d.messageId, d.recipient),
       );
@@ -769,22 +790,10 @@ export class MailModule {
     const op = this.store.getOperationById(delivery.operationId);
     if (!op)
       throw new StoreError("STORE_CORRUPT", `missing operation ${delivery.operationId}`);
-    let decoded: {
-      message?: MessagePlan;
-      initialMessage?: MessagePlan | null;
-      candidate?: string;
-    };
-    try {
-      decoded = JSON.parse(op.planJson) as typeof decoded;
-    } catch {
-      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`);
-    }
-    const message = decoded.message ?? decoded.initialMessage;
-    if (!message || message.id !== delivery.messageId)
+    const message = this.operationMessage(op);
+    if (message.id !== delivery.messageId || !message.recipients.includes(delivery.recipient))
       throw new StoreError("STORE_CORRUPT", `message plan mismatch for ${delivery.messageId}`);
-    return message.kind === "context" && decoded.candidate
-      ? { ...message, contextRevision: decoded.candidate as Oid }
-      : message;
+    return message;
   }
 
   /** MUST [BATCH-002]: at most six deterministic metadata items; never body summary. */
@@ -795,12 +804,7 @@ export class MailModule {
       if (!delivery)
         throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
       const message = this.messagePlan(delivery);
-      const object = this.objectPath(id);
-      if (!existsSync(object))
-        throw new StoreError("STORE_CORRUPT", `missing mail object ${id}`);
-      const headers = parseEmlHeaders(readFileSync(object, "utf8"));
-      if (headers.messageId?.split("@", 1)[0] !== id)
-        throw new StoreError("STORE_CORRUPT", `mail header mismatch for ${id}`);
+      const headers = this.messageHeaders(message);
       const reply = headers.inReplyTo ?? headers.references.at(-1) ?? null;
       const context = message.contextRevision
         ? ` context=/world/context/revisions/${message.contextRevision}${message.kind === "context" ? "/GOAL.md" : ""}`
@@ -814,12 +818,18 @@ export class MailModule {
     return lines.join("\n");
   }
 
+  private finishPrepared(batch: PreparedBatch): PreparedBatch {
+    this.moveToCur(batch.agent, batch.messageIds);
+    publishBatchView(this.paths.stateRoot, batch);
+    return batch;
+  }
+
   async prepare(auth: AuthContext): Promise<PreparedBatch | null> {
     const existing = this.store.preparedBatches(auth.actor);
     if (existing.length > 0) {
       const row = existing[0]!;
       const messageIds = parseJsonList(row.messageIdsJson, `batch ${row.id}`) as MessageId[];
-      return batchOf(
+      return this.finishPrepared(batchOf(
         {
           id: row.id,
           incarnation: row.incarnation,
@@ -828,7 +838,7 @@ export class MailModule {
         },
         auth.actor,
         this.noticeFor(auth.actor, messageIds),
-      );
+      ));
     }
     const pending = this.selectBatch(this.store.pendingDeliveries(auth.actor));
     if (pending.length === 0) return null;
@@ -839,6 +849,7 @@ export class MailModule {
       messageIds: pending.map((d) => d.messageId),
       sessionPath: null,
     };
+    const notice = this.noticeFor(auth.actor, batch.messageIds);
     try {
       this.store.transaction((_tx) => {
         this.store.insertPreparedBatch(batch);
@@ -848,7 +859,7 @@ export class MailModule {
       if (e instanceof StoreError && e.code === "BATCH_CONFLICT") return null;
       throw e;
     }
-    return batchOf(batch, auth.actor, this.noticeFor(auth.actor, batch.messageIds));
+    return this.finishPrepared(batchOf(batch, auth.actor, notice));
   }
 
   async complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> {
@@ -860,13 +871,13 @@ export class MailModule {
       );
     if (
       batch.agent !== auth.actor ||
+      auth.incarnation !== evidence.incarnation ||
       batch.incarnation !== evidence.incarnation
     ) {
       throw new StoreError("BATCH_CONFLICT", "batch ownership mismatch");
     }
-    if (batch.state === "completed") return;
     throw new StoreError(
-      "SESSION_BOUNDARY_UNCONFIRMED",
+      "SPIKE_UNRESOLVED",
       "S-03 trusted Pi session-boundary evidence is not implemented",
     );
   }
@@ -945,16 +956,28 @@ export class MailModule {
     for (const id of messageIds) {
       const from = this.inboxNewPath(agent, id);
       const to = this.inboxCurPath(agent, id);
-      if (existsSync(from) && !existsSync(to)) {
-        try {
-          publishImmutableFile(from, to);
-          unlinkSync(from);
-          fsyncDir(dirname(to));
-          n++;
-        } catch {
-          // left in new; canonical-path checks keep delivery idempotent
-        }
+      const delivery = this.store.getDelivery(id, agent);
+      if (!delivery)
+        throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
+      const message = this.messagePlan(delivery);
+      const object = this.objectPath(id);
+      for (const path of [object, from, to]) {
+        const stat = lstatSync(path, { throwIfNoEntry: false });
+        if (path !== object && !stat) continue;
+        if (!stat?.isFile() ||
+          sha256Hex(readFileSync(path)) !== message.sha256)
+          throw new StoreError("STORE_CORRUPT", `mail integrity mismatch: ${path}`);
       }
+      if (existsSync(from)) {
+        mkdirSync(dirname(to), { recursive: true });
+        if (existsSync(to)) unlinkSync(from); // rename is a no-op when both names hardlink the same inode.
+        else renameSync(from, to);
+        n++;
+      } else if (!existsSync(to)) {
+        throw new StoreError("STORE_CORRUPT", `missing mailbox delivery ${id}/${agent}`);
+      }
+      fsyncDir(dirname(from));
+      fsyncDir(dirname(to));
     }
     return n;
   }

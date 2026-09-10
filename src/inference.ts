@@ -11,6 +11,7 @@ import type {
   Json,
 } from "../implementation/contracts.js";
 import { Store, StoreError } from "./store.js";
+import { assertCurrentActor, resolvedSpecOf } from "./authority.js";
 
 export interface InferenceConfig {
   inferenceSlots: number; // quota.inferenceSlots
@@ -28,104 +29,77 @@ export interface ProviderTransport {
     requestId: string,
     profile: string,
     payload: AsyncIterable<Uint8Array>,
+    signal: AbortSignal,
   ): AsyncIterable<InferenceEvent> | null;
 }
 
 interface Waiter {
-  resolve: () => void;
-  cancelled: boolean;
-  timer: ReturnType<typeof setTimeout> | null;
+  actor: Actor;
+  finish: (acquired: boolean) => void;
 }
 
-/** MUST [INF-002]: memory FIFO waiter, never a durable queue. */
+/** MUST [INF-002]: FIFO among eligible waiters; residents cannot consume the reserve. */
 export class InferenceSlot {
-  private busy = 0;
+  // ponytail: scan bounded active slots; use counters if large slot counts matter.
+  private active: Actor[] = [];
   private waiters: Waiter[] = [];
 
   constructor(
     private readonly total: number,
     private readonly principalReserved: number,
     private readonly isPrincipal: (actor: Actor) => boolean,
-  ) {}
+  ) {
+    if (!Number.isSafeInteger(total) || total < 1 || !Number.isSafeInteger(principalReserved) || principalReserved < 0 || principalReserved > total)
+      throw new RangeError("invalid inference slot limits");
+  }
 
   availableFor(actor: Actor): number {
-    const free = this.total - this.busy;
-    if (free <= 0) return 0;
+    const free = this.total - this.active.length;
     if (this.isPrincipal(actor)) return free;
-    // residents may not consume the principal reserve (INF-002)
-    const residentFree = this.total - this.principalReserved - this.busy;
-    return Math.max(0, residentFree);
+    const residents = this.active.filter(a => !this.isPrincipal(a)).length;
+    return Math.max(0, Math.min(free, this.total - this.principalReserved - residents));
   }
 
   acquire(actor: Actor): boolean {
     if (this.availableFor(actor) < 1) return false;
-    this.busy++;
+    this.active.push(actor);
     return true;
   }
 
-  /** MUST [INF-002]: release hands the freed slot to the first FIFO waiter;
-   * never a lost wakeup (busy-- alone would strand waiters). */
-  release(): void {
-    if (this.busy > 0) this.busy--;
+  release(actor: Actor): void {
+    const index = this.active.indexOf(actor);
+    if (index < 0) return;
+    this.active.splice(index, 1);
     this.pump();
   }
 
-  /** MUST [RUN-002]: bounded wait; cancels on signal. */
-  async waitForSlot(actor: Actor, signal?: AbortSignal): Promise<boolean> {
-    const timeout = setTimeout(() => this.failFirst(), waitTimeoutMs(actor));
-    const waiter: Waiter = {
-      resolve: () => {
-        clearTimeout(timeout);
-        this.pump();
-      },
-      cancelled: false,
-      timer: null,
-    };
-    this.waiters.push(waiter);
-    const abort = (): void => {
-      if (waiter.cancelled) return;
-      waiter.cancelled = true;
-      clearTimeout(timeout);
-      const i = this.waiters.indexOf(waiter);
-      if (i >= 0) this.waiters.splice(i, 1);
-    };
-    signal?.addEventListener("abort", abort, { once: true });
-    if (this.acquire(actor)) {
-      abort();
-      return true;
-    }
-    await new Promise<void>((resolve) => {
-      waiter.resolve = () => {
-        clearTimeout(timeout);
-        resolve();
-      };
+  /** MUST [RUN-002]: cancellation and timeout settle this waiter, never another one. */
+  waitForSlot(actor: Actor, signal?: AbortSignal): Promise<boolean> {
+    if (signal?.aborted) return Promise.resolve(false);
+    return new Promise(resolve => {
+      const waiter: Waiter = { actor, finish: acquired => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
+        const index = this.waiters.indexOf(waiter);
+        if (index >= 0) this.waiters.splice(index, 1);
+        resolve(acquired);
+      } };
+      const abort = () => { waiter.finish(false); this.pump(); };
+      const timer = setTimeout(abort, 300000);
+      signal?.addEventListener("abort", abort, { once: true });
+      this.waiters.push(waiter);
+      this.pump();
     });
-    signal?.removeEventListener("abort", abort);
-    return !waiter.cancelled;
-  }
-
-  private failFirst(): void {
-    const w = this.waiters.shift();
-    if (w) {
-      w.cancelled = true;
-      w.resolve();
-    }
   }
 
   private pump(): void {
-    while (this.busy < this.total) {
-      const w = this.waiters.shift();
-      if (!w) return;
-      if (w.cancelled) continue;
-      this.busy++; // the slot is now this waiter's
-      w.resolve();
-      return;
+    for (;;) {
+      const waiter = this.waiters.find(w => this.availableFor(w.actor) > 0);
+      if (!waiter) return;
+      this.acquire(waiter.actor);
+      waiter.finish(true);
     }
   }
-}
-
-function waitTimeoutMs(_actor: Actor): number {
-  return 300000; // bounded waiter; systemd/broker cancel interrupts it per RUN-002
 }
 
 export interface LiageNode {
@@ -143,7 +117,7 @@ export function lineageOf(store: Store, actor: Actor): LiageNode[] {
       throw new StoreError("STORE_CORRUPT", `created_by cycle at ${cur}`);
     seen.add(cur);
     const a = store.getAgent(cur);
-    if (!a) break;
+    if (!a) throw new StoreError("STORE_CORRUPT", `missing lineage actor ${cur}`);
     out.push({ name: a.name, createdBy: a.createdBy });
     cur = a.createdBy;
   }
@@ -162,14 +136,12 @@ export function reservationAllowed(
   requestedUnits: number,
   isPrincipal: boolean,
 ): boolean {
-  const reservedCap = isPrincipal
-    ? cfg.principalReservedUnits
-    : cfg.societyUnits;
-  if (requestedUnits > reservedCap) return false;
-  const society = sumUnits(store, actor, null);
+  if (!Number.isSafeInteger(requestedUnits) || requestedUnits < 0) return false;
+  const society = sumUnits(store, null);
   if (society + requestedUnits > cfg.societyUnits) return false;
+  if (!isPrincipal && sumUnits(store, null, true) + requestedUnits > cfg.societyUnits - cfg.principalReservedUnits) return false;
   for (const node of lineageOf(store, actor)) {
-    const sum = sumUnits(store, node.name, null);
+    const sum = sumUnits(store, node.name);
     if (sum + requestedUnits > cfg.lineageUnits) return false;
   }
   return true;
@@ -179,7 +151,7 @@ export function reservationAllowed(
 export function sumUnits(
   store: Store,
   root: string | null,
-  _scope: null,
+  residentsOnly = false,
 ): number {
   const rows = store.listAgents();
   const names = new Set<string>();
@@ -205,14 +177,20 @@ export function sumUnits(
   }
   let total = 0;
   for (const u of store.usageRows()) {
-    if (!names.has(u.actor)) continue;
-    total += u.reservedUnits; // commitment: reserved amounts are charged until settled
+    if (!names.has(u.actor) || (residentsOnly && u.actor === "principal")) continue;
+    const units = u.outcome === "completed" || u.outcome === "cancelled" ? u.reportedUnits : u.reservedUnits;
+    if (units === null || !Number.isSafeInteger(units) || units < 0)
+      throw new StoreError("STORE_CORRUPT", "invalid settled usage units");
+    total += units;
+    if (!Number.isSafeInteger(total)) throw new StoreError("STORE_CORRUPT", "usage sum exceeds integer range");
   }
   return total;
 }
 
 export class InferenceModule {
   private readonly slots: InferenceSlot;
+  private readonly calls = new Map<string, { actor: Actor; incarnation: number; controller: AbortController }>();
+  private readonly fenced = new Map<Actor, number>();
 
   constructor(
     private readonly store: Store,
@@ -272,52 +250,57 @@ export class InferenceModule {
       for await (const e of existing) yield e;
       return;
     }
-    if (!(await this.slots.waitForSlot(auth.actor))) {
-      yield this.errorOf(input.request, 0, {
-        code: "DEADLINE_EXCEEDED",
-        message: "inference slot wait cancelled/timed out",
-        retry: "same-key",
-      });
+    if (auth.incarnation <= (this.fenced.get(auth.actor) ?? -1)) {
+      yield this.errorOf(input.request, 0, { code: "STALE_RUN", message: "inference run was fenced", retry: "never" });
       return;
     }
+    if (this.calls.has(input.request)) {
+      yield this.errorOf(input.request, 0, { code: "REQUEST_KEY_REUSED", message: "inference request is already active", retry: "never" });
+      return;
+    }
+    const controller = new AbortController();
+    this.calls.set(input.request, { actor: auth.actor, incarnation: auth.incarnation, controller });
+    let acquired = false;
+    let reserved = false;
     try {
-      const upperBound = this.upperBoundUnits(input);
-      // MUST [INF-003]: commit the reservation before any provider contact.
-      if (
-        !reservationAllowed(
-          this.store,
-          this.cfg,
-          auth.actor,
-          upperBound,
-          isPrincipal,
-        )
-      ) {
-        yield this.errorOf(input.request, 0, {
-          code: "QUOTA_EXCEEDED",
-          message: "society/lineage/reserve cap exceeded",
-          retry: "never",
-        });
+      acquired = await this.slots.waitForSlot(auth.actor, controller.signal);
+      if (!acquired || controller.signal.aborted) {
+        yield this.errorOf(input.request, 0, { code: "DEADLINE_EXCEEDED", message: "inference slot wait cancelled/timed out", retry: "same-key" });
         return;
       }
-      this.store.transaction((_tx) => {
+      const upperBound = this.upperBoundUnits(input);
+      // MUST [INF-003]: check all budgets and reserve in the same transaction.
+      const accepted = this.store.transaction((_tx) => {
+        const actor = assertCurrentActor(this.store, auth);
+        if (resolvedSpecOf(actor).modelProfile !== input.profile)
+          throw new StoreError("UNSUPPORTED_PROFILE", "inference profile does not match frozen authority");
+        if (this.store.getUsage(input.request)) return "existing" as const;
+        if (!reservationAllowed(this.store, this.cfg, auth.actor, upperBound, isPrincipal)) return false;
         this.store.reserveUsage({
-          requestId: input.request,
-          actor: auth.actor,
-          incarnation: auth.incarnation,
-          profile: input.profile,
-          pricingRevision: input.codecRevision,
-          reservedUnits: upperBound,
+          requestId: input.request, actor: auth.actor, incarnation: auth.incarnation,
+          profile: input.profile, pricingRevision: input.codecRevision, reservedUnits: upperBound,
         });
+        return true;
       });
+      if (accepted === "existing") {
+        for await (const event of this.existingOutcome(input.request)!) yield event;
+        return;
+      }
+      reserved = accepted;
+      if (!accepted) {
+        yield this.errorOf(input.request, 0, { code: "QUOTA_EXCEEDED", message: "society/lineage/reserve cap exceeded", retry: "never" });
+        return;
+      }
       // SPIKE [S-04]: without the pinned provider codec there is no transport.
       const stream = this.provider.stream(
         input.request,
         input.profile,
         payload,
+        controller.signal,
       );
       if (!stream) {
         this.store.transaction((_tx) => {
-          this.store.settleUsage(input.request, "unknown", null, null);
+          this.store.settleUsage(input.request, "cancelled", 0, null);
         });
         yield this.errorOf(input.request, 0, {
           code: "SPIKE_UNRESOLVED",
@@ -328,6 +311,7 @@ export class InferenceModule {
       }
       let seq = 0;
       for await (const evt of stream) {
+        if (controller.signal.aborted) return;
         const e = {
           ...evt,
           v: 1 as const,
@@ -342,35 +326,50 @@ export class InferenceModule {
           this.store.transaction((_tx) => {
             this.store.settleUsage(
               input.request,
-              "completed",
+              reported === null ? "unknown" : "completed",
               reported,
               JSON.stringify(detailsOf(e.data)),
             );
           });
         }
         yield e;
+        if (e.event === "end") return;
       }
     } finally {
-      this.slots.release();
+      try {
+        if (reserved && this.store.getUsage(input.request)?.outcome === "reserved")
+          this.store.transaction(() => this.store.settleUsage(input.request, "unknown", null, null));
+      } finally {
+        controller.abort();
+        this.calls.delete(input.request);
+        if (acquired) this.slots.release(auth.actor);
+      }
     }
   }
 
   async cancel(auth: AuthContext, request: string): Promise<void> {
+    const call = this.calls.get(request);
+    if (call) {
+      if (call.actor !== auth.actor || call.incarnation !== auth.incarnation) throw new StoreError("AUTH_FAILED", "not your inference run");
+      call.controller.abort();
+    }
     const u = this.store.getUsage(request);
     if (!u) return;
     if (u.actor !== auth.actor)
       throw new StoreError("AUTH_FAILED", "not your inference request");
-    // MUST [INF-004]: cancellation only settles at 0/cancelled when no provider
-    // contact is proven; here the transport is S-04-gated so contact is absent.
+    // A reserved row alone does not prove that provider contact never happened.
     if (u.outcome === "reserved") {
       this.store.transaction((_tx) => {
-        this.store.settleUsage(request, "cancelled", 0, null);
+        this.store.settleUsage(request, "unknown", null, null);
       });
     }
   }
 
   /** MUST [INF-006]/[LIFE-003]: revoke the run: drop waiters and cancel active streams. */
   async fence(actor: Actor, incarnation: number): Promise<void> {
+    this.fenced.set(actor, Math.max(incarnation, this.fenced.get(actor) ?? -1));
+    for (const call of this.calls.values())
+      if (call.actor === actor && call.incarnation === incarnation) call.controller.abort();
     const rows = this.store
       .usageRows()
       .filter(
@@ -406,14 +405,14 @@ export class InferenceModule {
   }
 }
 
-function readReportedUnits(data: unknown): number {
+function readReportedUnits(data: unknown): number | null {
   if (typeof data === "number" && Number.isSafeInteger(data) && data >= 0)
     return data;
   if (typeof data === "object" && data !== null) {
     const v = (data as Record<string, unknown>).reportedUnits;
     if (typeof v === "number" && Number.isSafeInteger(v) && v >= 0) return v;
   }
-  return 0; // no confirmed units => 0 is the only provable settlement
+  return null; // Missing/invalid reported cost is unknown, never proof of zero.
 }
 
 function detailsOf(data: unknown): Json | null {

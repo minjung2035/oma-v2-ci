@@ -1,8 +1,10 @@
 // MUST [AUTH-001/002/003, CREATE-002]: single ownership of capability parsing.
 // The ONLY authoritative capability source is the broker-resolved spec
 // persisted in agents.spec_json; capabilities are never derived from role.
-import type { Capability } from "../implementation/contracts.js";
-import { isValidFullOid } from "./ids.js";
+import type { AuthContext, Capability } from "../implementation/contracts.js";
+import { StoreError, type Store } from "./store.js";
+import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import { checkObject, checkString, checkArray, checkInt, checkOid } from "./validate.js";
 
 /** Closed capability set (contracts.ts Capability union). */
 const KNOWN_CAPABILITIES: ReadonlySet<string> = new Set([
@@ -15,17 +17,28 @@ const KNOWN_CAPABILITIES: ReadonlySet<string> = new Set([
   "code.integrate",
   "context.publish",
 ]);
-const SPEC_FIELDS = ["name", "from", "brief", "profile", "capabilities"] as const;
-const SPEC_FIELD_SET: ReadonlySet<string> = new Set(SPEC_FIELDS);
+const resourceCheck = checkObject(Object.fromEntries(
+  ["memoryBytes", "tasks", "cpuQuotaPercent", "tmpBytes", "workspaceBytes", "stagingBytes", "checkTimeoutSeconds"]
+    .map((key) => [key, checkInt({ min: 1 })]),
+));
+const resolvedCheck = checkObject({
+  name: checkString({ min: 1 }), from: checkOid, brief: checkString({ min: 1 }),
+  profile: checkString({ min: 1 }), modelProfile: checkString({ min: 1 }),
+  resources: resourceCheck,
+  capabilities: checkArray((value) => typeof value === "string" && KNOWN_CAPABILITIES.has(value) ? null : "invalid capability"),
+});
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+export function resolvedSpecOf(agent: { name: string; profile: string; specJson: string }): ResolvedAgentSpec {
+  let value: unknown;
+  try { value = JSON.parse(agent.specJson); }
+  catch { throw new StoreError("STORE_CORRUPT", `invalid resolved spec for ${agent.name}`); }
+  if (resolvedCheck(value))
+    throw new StoreError("UNSUPPORTED_PROFILE", `unsupported stored spec for ${agent.name}; reviewed migration required`);
+  const spec = value as ResolvedAgentSpec;
+  if (spec.name !== agent.name || spec.profile !== agent.profile)
+    throw new StoreError("STORE_CORRUPT", `resolved identity mismatch for ${agent.name}`);
+  return spec;
 }
-
-function hasOnlySpecFields(value: Record<string, unknown>): boolean {
-  return Object.keys(value).every((key) => SPEC_FIELD_SET.has(key));
-}
-
 
 /**
  * Parse the capabilities from a resolved spec's spec_json. Fail closed (empty
@@ -40,15 +53,17 @@ export function capabilitiesOf(agent: {
   } catch {
     return new Set();
   }
-  if (!isRecord(parsed) || !hasOnlySpecFields(parsed)) return new Set();
-  if (typeof parsed.name !== "string" || parsed.name.length === 0 ||
-    typeof parsed.from !== "string" || !isValidFullOid(parsed.from) ||
-    typeof parsed.brief !== "string" || typeof parsed.profile !== "string" ||
-    !Array.isArray(parsed.capabilities)) return new Set();
-  const out = new Set<Capability>();
-  for (const c of parsed.capabilities) {
-    if (typeof c !== "string" || !KNOWN_CAPABILITIES.has(c)) return new Set();
-    out.add(c as Capability);
-  }
-  return out;
+  if (resolvedCheck(parsed)) return new Set();
+  return new Set((parsed as ResolvedAgentSpec).capabilities);
+}
+
+/** Recheck after asynchronous preparation, inside the acceptance transaction. */
+export function assertCurrentActor(store: Store, auth: AuthContext, need?: Capability) {
+  const actor = store.getAgent(auth.actor);
+  if (!actor || actor.role !== auth.role) throw new StoreError("AUTH_FAILED", "actor identity changed before acceptance");
+  if (actor.incarnation !== auth.incarnation || actor.desired !== "enabled")
+    throw new StoreError("STALE_RUN", "actor stopped or incarnation changed before acceptance");
+  if (need && (!auth.capabilities.has(need) || !capabilitiesOf(actor).has(need)))
+    throw new StoreError("CAPABILITY_DENIED", `${need} was revoked before acceptance`);
+  return actor;
 }

@@ -1,8 +1,95 @@
 # 구현 계약 산출물 및 runtime 검증 기록
 
-최초 작성일: 2026-09-07. 마지막 runtime audit: 2026-09-10, HEAD `326a1d6`.
+최신 작업 검증: 2026-09-10 UTC, `d3a3b98` 위 working-tree 변경. 아래 최신 절이 과거 audit의 '현재' 수치와 상태 설명을 대체한다.
 
 이 문서는 설계 문서의 구현 상태를 기록한다. `architecture.md`와 `implementation-spec.md`는 normative baseline이며, 이 파일의 PASS는 해당 요구 전체가 production release 조건을 충족했다는 뜻이 아니다. OPEN SPIKE와 미실행 test는 PASS로 승격하지 않는다.
+
+## 최신 구현 검증 — 2026-09-10 UTC
+
+- 기준 architecture SHA-256: `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`.
+- `npm run typecheck`: exit 0. `npm test`: **178 passed, 0 failed, 0 skipped**. [실행 로그](evidence/runtime-tests.txt). [환경 원본](evidence/environment.txt): Node v26.7.0 / systemd 261.2-1-arch / Git 2.55.0 / cloc 2.08.
+- `node scripts/loc.mjs`: **9,774 code lines**, cloc **2.08**. [명시적 원본 목록](../production-files.txt), [파일별 집계](../production-loc.json), [원본 hash](../production-loc-hashes.json).
+- LOC 목표 초과 사유: 기존 recovery/IPC/Git 경계에 더해 typed Principal mail, frozen runtime resources/model, bootstrap intent/recovery, 실제 unit 관측이 필요하다. 줄 합치기나 파일 누락으로 예산을 회피하지 않는다. 사용자 지시에 따라 이번 기능 작업은 10,000 초과 여부로 중단하지 않는다.
+
+### 구현·회귀 검증한 경로
+
+| 경로 | 수행 시험과 한계 |
+|---|---|
+| prepared-only wake | phase4 T-create-ready: 실제 systemd에서 new=0/pending=0/prepared=1 → reconcile → 새 invocation, 같은 batch ID/message IDs |
+| BATCH-001 handoff | MailModule.prepare가 linkage commit → 실제 rename/양쪽 fsync → atomic manifest/inbox publication을 소유. post-commit view 실패 복구 및 snapshot/cur 이동 직후 실제 SIGKILL·같은 batch 회수 시험 통과. helper 경계 시험이며 실제 Pi/전원장애 전체 증명은 아님 |
+| LIFE-007 경쟁 | concurrent same-name/spec create는 staging까지만 선행하고 physical winner만 immutable object 게시. object 하나와 delivery 하나 확인 |
+| PR-002 integrity | 공용 moveToCur가 delivery·canonical object·mailbox byte digest/regular file 검증. rogue/corrupt 항목은 실패, relay는 실제 moved 개수 반환 |
+| MAIL-011/PR-005 | 실제 systemd cgroup 안 CLI→actor socket→broker→EML 경로에서 exact identity/Unicode·공백 policy 보존과 동일 key 재시도를 확인. identity 변경, 미게시 candidate, Principal 누락, 짧은 OID를 거절. raw socket의 추가 identity field·잘못된 kind·header newline도 INVALID_REQUEST이며 operation 없음. 이는 승인 attestation이 아님 |
+| LIFE-008 | modelProfile/resources를 resolved spec과 canonical hash에 고정하고 unit renderer로 전달. startup에서 stale stored format/missing profile을 차단. 실제 migration 및 S-03 이후 Pi 실행 증명은 미완료 |
+| LIFE-009 | seed 전체 intent를 원자적으로 고정, 변경된 pending seed 거절, ready registry 재seed 금지. bootstrap 및 일반 create 각각 staging/intent/object/workspace/unit/ready/mail 7개 helper 경계에서 실제 SIGKILL 후 복구. systemd는 실제 사용하되 전체 broker crash matrix와는 구분 |
+| UNIT-002/007 | 실제 loaded fragment/drop-in/resource property, path activation state 확인. 실제 systemd에서 공백/%/$/따옴표 경로 실행. failed/partial observation은 성공으로 해석하지 않음 |
+| BATCH-006 | 올바른 batch라도 S-03 미확정이면 SPIKE_UNRESOLVED, presented=0. caller receipt/boolean으로 우회하지 않음 |
+
+### 적대적 검토에서 추가 수정한 사항
+
+- 실패한 inbox atomic rename 뒤 남은 0444 임시파일이 다음 재시도를 EACCES로 막던 문제를 재현·수정했다.
+- canonical/mailbox 검증은 UTF-8 재인코딩이 아닌 원본 bytes를 hash하며 dangling symlink도 거절한다.
+- stored create spec과 plan의 canonical digest를 재검증한다.
+- stop의 path 실패가 service stop 시도를 건너뛰지 않게 했고 explicit effect 실패는 operation을 unknown으로 남긴다.
+- 관측이 없는데 execMainStatus=0 또는 cgroup death=true가 되던 fallback을 제거했다.
+- phase4 cleanup의 광범위한 `oma-*` 지정을 해당 테스트 society로 제한했다.
+- 기존 연결에 캐시된 capability만으로 durable effect를 허용하지 않고 현재 stored authority도 재검증한다. production create resolver는 intent마다 host config를 다시 읽는다.
+- RUN-001에서 이전 cgroup directory FD를 lease에 보존한다. 새 invocation은 그 고정 객체의 populated=0 또는 커널 제거(ENOENT)를 확인하기 전 incarnation을 올리지 않는다. 실제 systemd 재시작은 통과했고, populated kernel cgroup을 이전 lease로 주입한 fault-seam은 handoff를 거절했다. 이것만으로 전체 T12/S-01을 PASS 처리하지 않는다.
+- compliance structural checker는 duplicate/stale/extra trace, 잘못된 분류·빈 callPath, owner/test locator 누락, production/dependency/spec/package/test digest 누락·변경을 거절한다. `--inventory`는 같은 fingerprint의 검토 기록을 보존한다. 합성 양성 대조군과 실패 변형을 모두 실행했으며, 이는 real-boundary 증명을 대신하지 않는다.
+- 로그가 `.gitignore`의 `*.log` 규칙으로 누락되는 문제를 피하도록 versionable `evidence/runtime-tests.txt`에 실행 결과를 보존했다.
+
+### 아직 완료/출시로 간주하지 않는 범위
+
+- RUN-001 이전 invocation 전체 cgroup 사망 증명, T12 old connection 전체 oracle 및 S-01 raw pin은 미완료다.
+- S-01–S-06/S-09 및 tiered S-08/S-10, optional S-11의 기존 OPEN 상태를 유지한다. 새 승인/challenge/floor schema·command는 임의 추가하지 않았다.
+- nonempty candidate checks production profile은 S-01-CANDIDATE 때문에 startup에서 SPIKE_UNRESOLVED다.
+- 후속 IPC 검증: escaped duplicate JSON keys, 비유한/unsafe 숫자, malformed UTF-8, unknown fields, UTF-8 byte 한도를 거절한다. runner/host channel은 EOF·오류·timeout·close에서 pending 호출을 정리한다.
+- 실제 systemd Resident에서 endpoint revoke 후 기존 연결 종료·동일 invocation 재open 및 batch.prepare 거절·populated cgroup FD 유지를 확인했다. endpoint 디렉터리의 실제 파일 충돌 실패 뒤에도 같은 invocation은 재발급되지 않으며, 종료 후 incarnation 6까지 같은 prepared batch로 복구했다.
+- startup은 old-run death 및 canonical fsck를 recovery 전에 확인하고 READY 이전 activation을 보류한다. D1/D2는 실제 user bus와 유효한 identity fixture를 사용하며 D2는 정확히 missing-object 실패를 확인한다.
+- 파생 world view 실패가 이미 durable한 성공/재시도 receipt를 덮어쓰지 않음을 fault seam으로 확인했다. socket 길이 한도와 inherited profile-name 우회도 검사한다.
+- [전체 범위 점검표](adversarial-review.md)는 **258개 labelled 규범 절과 T01–T77 전 행**을 포함한다. 이전 221개 목록에서 빠진 test-matrix/spikes/validation와 SHOULD/OPTIONAL을 추가했다. scope는 분류했지만 full-clause owner/실행 증거는 완료하지 않았으며 [compliance 결과](evidence/compliance.txt)는 **0/258, exit 1**이다.
+- `test/crash-boundaries.test.ts`는 mail/cross-FS 9개, Git submit/integrate/context 12개, bootstrap/create 14개 시점에서 실제 SIGKILL했다. 합계 35개 kill point는 test worker의 filesystem/transaction/subprocess 경계이며 CLI/broker 전체 crash matrix나 전원단절 증거가 아니다.
+- staging 및 archive fsync 전 ENOSPC/후 EIO를 주입하고 recovery 재실패 후 동일 operation으로 수렴함을 확인했다. 실제 디스크 고갈 시험과 구분한다.
+- create/bootstrap의 transaction 내부 object fsync를 제거했다. durable winner의 recovery 경로가 frozen staging/object를 게시한다. stored spec의 model/resources가 불완전하면 capability도 거절한다.
+- SHA-256 bootstrap/quarantine/context/CAS를 실제 Git으로 검증했다. SHA-1 고정 zero OID를 제거하고 repository와 다른 길이의 OID는 stream 소비·acceptance 전에 거절한다. context의 absent ref와 관측 실패를 구분하여 최초 publication 복구도 검증했다.
+- Git/context staging을 request key가 아닌 operation ID로 격리했다. 다른 actor의 같은 key 제출·malformed bundle이 accepted upload를 덮어쓰지 않는다. 동일 bytes의 symlink/hardlink staging도 복구에서 거절한다.
+- CTX-001/002: `.git/config` 등 비허용 경로, 중복/역순 manifest, 잘못된 UTF-8·binary·빈 GOAL을 acceptance 전에 거절한다. CLI는 고정 directory FD와 nofollow file open으로 symlink/hardlink를 거절한다. 정상 CLI → 실제 unit/인증 socket → broker/Git publication·동일 key 재시도 및 raw invalid context frame을 검증했고 Git tree의 regular 100644 mode도 확인했다.
+- context staging은 파일/하위 디렉터리→상위 디렉터리 fsync 후 접수하며 umask 0077에서도 0644다. host Git/clone/CLI Git에 core.fsync=all, core.fsyncMethod=fsync를 명시했다. SIGKILL은 VM power-loss 증명을 대체하지 않는다.
+- AUTH-003: mail.send/continue, git.submit/integrate, context.publish, agent.create의 acceptance transaction에서 현재 role/incarnation/desired/capability를 재검사한다. async render/upload/serialization 대기 중 변경 시험 5개가 통과했다. 이 시험은 domain 경계이며 실제 socket stop race 전체를 대신하지 않는다.
+- actor 연결 인증도 live RunLease, 실제 관측 invocation, pinned cgroup FD의 dev/inode를 대조한다. lease revoke는 이미 render/upload 대기 중인 AuthContext의 권한도 무효화한다. real CLI 회귀와 native cgroup FD를 쓰는 fault-seam 시험을 통과했지만 PID 재사용 stress·전체 S-01 증명은 별개다.
+- INF-002/003: 대기 취소·개별 timeout이 실제로 완료되며 eligible FIFO와 Principal reserved slot/budget을 보존한다. 전체 society 및 ancestor 비용을 예약과 같은 transaction에서 확인하고, 확정 비용/unknown reservation을 구분한다.
+- INF-004/005/006: 미확인 provider 비용은 0이 아닌 unknown, 명시적 null transport만 cancelled/0으로 기록한다. 중도 종료·취소 비용을 보존하고, slot 대기 중 나타난 기존 request winner를 재전송·재정산하지 않는다. 현재 incarnation/frozen model도 접수 직전에 검사한다. fence는 해당 incarnation의 waiter와 협조적 transport signal을 취소한다. 이들 검증은 mock/domain 범위이며 S-04나 production 연결 완료를 뜻하지 않는다.
+- UNIT-004 native leaf: sd_notify socket을 성공/실패 모두 닫고 CLOEXEC 및 주소 길이/NUL 검증을 추가했다. 실제 Unix datagram READY 수신과 반복 실패 전후 FD 개수 불변을 검증했다. native availability도 실제 FFI symbol loading을 수행하며 잘못된 fd의 즉시 반환을 검증으로 오인하지 않는다.
+- 기존 phase3–8 fixture의 빈 spec/불일치 incarnation/누락 mail capability를 실제 계약에 맞췄다. mail kill harness의 이미 발생한 exit 재대기와 무효 timeout도 고쳐 경계 도달 및 실제 SIGKILL을 모두 확인한다.
+- cross-FS에서 canonical 목적지에 직접 copy하던 결함을 수정했다. destination-side exclusive 임시 copy→fsync/hash→atomic link이며 기존 파일·symlink·손상은 검증한다. `/dev/shm`과 다른 실제 filesystem 간 복사와 partial copy SIGKILL 후 미공개/재시도를 확인했다.
+- internal method/channel key 집합을 계약과 타입 검사로 연결했다. runner.pending은 현재 lease를 검증하며 observe는 S-03 gate로 거절한다. 실제 runner socket의 unknown/추가 field/extension-channel 우회도 거절했다. protected extension channel과 inference production 연결은 여전히 미완료다.
+- source import closure에서 literal 상대 import의 test/manifest 탈출은 0건이다. 이것은 inline fault seam·reflection·SDK wiring의 무결성 증명이 아니다. `npm audit --omit=dev`는 [보고된 취약점 0건](evidence/dependency-audit.json)이며 전역 Pi 배포 검증을 대신하지 않는다.
+- 전체 bootstrap/Git/context/CAS kill matrix, VM power-cut, 실제 Pi/Principal/provider 및 benchmark oracle, 개별 규범의 증거 확정은 미완료다. qemu/virsh 및 /dev/kvm 부재는 [환경 기록](evidence/environment.txt)에 남겼으며 사용자 host의 강제 종료로 대신하지 않았다.
+- 따라서 **178/178은 suite 결과일 뿐이며 전체 적대적 검증 완료 또는 release 통과가 아니다**.
+
+### 추가 경계 감사 — 178-test checkpoint
+
+- Actor/internal socket은 SO_PEERPIDFD로 원래 연결자를 pin한다. 자식이 상속 socket을 유지한 채 원래 연결자가 종료되는 실제 프로세스 시험과 반복 연결의 FD 회수 시험을 통과했다. 전체 PID-wrap/S-01 스트레스 증명은 아니다.
+- config와 wire frame은 같은 strict JSON decoder를 사용하며 잘못된 UTF-8, 중복 key, 비정상 수치, unpaired surrogate를 거절한다.
+- mail/submit의 수신자는 acceptance transaction 안에서 확정된다. 동시 same-key loser는 winner의 snapshot을 유지한다.
+- frozen MessagePlan subtree를 검사하고 object·기존 new/cur의 hash/type을 검증한 뒤 materialized를 기록한다. 손상 원문은 reply와 batch prepare를 막으며 동일 inode의 new/cur 중복은 new를 제거한다. 기존 축약 recovery fixture는 실제 accepted mail로 교체했다.
+- direct Reply-To는 sender, list Reply-To는 list 집합으로 생성한다. reserved alias를 wire 주소로 인코딩하고 Git/context 알림에도 적용했다. actual From/Message-ID/ancestry header injection은 거절하되 정상 CRLF 본문은 허용한다.
+- 실제 systemd invocation → CLI → authenticated actor socket으로 `send --reply <eml>`을 실행했다. CLI가 path 대신 원문의 message ID를 전송하고, 같은 key 재시도는 원문 파일 없이 frozen request를 재사용한다. Python email parser로 Reply-To/In-Reply-To를 독립 확인했다. 잘못된 UTF-8 파일, forged From, subject CRLF는 미수락이다.
+- canonical commit 조회는 bounded `git cat-file --batch-check`의 명시적 missing만 부재로 취급한다. 저장소 접근 실패/불명확 출력은 REF_STATE_UNKNOWN으로 pending을 보존한다. SHA-1/SHA-256 각각 실제 저장소 경로를 일시 격리한 fault seam에서 같은 operation ID로 복구됨을 검증했다.
+- COMP-006 재검토로 production의 MailStopPoint/StopSignal/stopAfter와 broker 예외 분기를 제거했다. 장애 주입은 test/fixtures/mail-faults.ts의 실제 fsync 이후/transaction 이후 interception으로 옮겼으며 기존 T18–T22 kill/recovery 시험과 전체 suite를 재실행했다. 이는 모든 semantic backdoor 부재의 증명으로 확대하지 않는다.
+- 후속 oracle 감사: CLI forged From/header injection 시험의 잘못된 `requestKey` envelope를 `request`로 수정하고 정상 frame 대조군의 실제 수락도 확인했다. 이전 시험은 envelope 거절까지만 입증했으므로 해당 입력 검사 증거로 충분하지 않았다. 수정 후 build와 실제 unit/socket CLI 시험 1/1을 재실행했다([별도 로그](evidence/cli-oracle-tests.txt)). production 코드는 바뀌지 않았으며 178/178 로그는 이전 전체 실행 기록이다.
+- MAIL-005 References cap은 최초 root와 최신 suffix를 보존하도록 수정했다. 제한 3으로 연속 reply를 생성하여 root 유지와 최신 ancestry를 확인했다.
+- 위 회귀 결과는 관련 실행 경계에 한정한다. S-02/S-03/S-04와 production runner/extension/inference 연결, 전체 clause 증거 확정은 여전히 미완료다.
+
+### Production 연결 재검토 — 미구현과 gate 구분
+
+- `src/entry/runner.ts` → `RunnerModule.run/open/prepareBatch`: 실제 경로는 runner.open과 batch.prepare까지만 실행한다. batch가 있으면 `SPIKE_UNRESOLVED`로 실패하며 prepared 상태를 유지한다(조용한 exit 0 제거). RunLease를 sandbox/Pi 실행에 연결하지 않는다. 실제 unit의 실패 상태와 명시적 idle-unit fixture 이후 같은 batch 재시도를 확인했지만, 이는 Pi consumption 증명이 아니다.
+- `src/broker.ts#INTERNAL_CHANNEL`은 extension용 batch.read/principal.attach/detach를 분류하지만 이 분류 자체가 보호된 extension transport의 구현은 아니다. 현재 runner/host 채널의 거절 시험은 음성 경계 증거에 한정된다.
+- `src/inference.ts#InferenceModule`은 broker entry의 호출 경로에 연결되지 않았다. provider/취소/계량 helper의 회귀 성공을 실제 broker inference 동작으로 간주하지 않는다. 연결 구현과 S-04 codec 증거가 모두 남아 있다.
+- S-03의 미검증 상태를 해제하거나 guest가 제공한 완료 flag로 대체하지 않았다. 이 목록은 실질적인 연결 누락의 확인이며 전체 규범 owner/evidence 검토 완료가 아니다.
+
+## 과거 검증 기록 — 아래 수치는 해당 checkpoint에 한정
+
 
 **MUST [VAL-001]** 다음 결과의 범위를 구분한다. 초기 설계 검증 결과를 실제 runtime 구현 또는 S-01~09(+S-01-CANDIDATE) 통과로 인용하지 않는다.
 
@@ -24,7 +111,7 @@
 
 **MUST [VAL-004]** 현재 저장소의 runtime 결과를 갱신할 때는 반드시 `git rev-parse --short HEAD`, `npm test`, `node scripts/loc.mjs`의 출력과 실행 날짜를 함께 기록한다. 이전 commit의 test 수나 LOC를 현재 결과로 재사용하지 않는다.
 
-**MUST [VAL-005]** `node scripts/loc.mjs`의 기존 출력은 non-empty physical line legacy count다. 주석을 제외한 새 LOC 정책과 혼동하지 않는다. 주석·공백 제외 code-only audit은 `cloc 2.08` + OMA systemd language definition으로 별도 계산하며 두 수치를 모두 기록한다.
+**MUST [VAL-005]** 과거 `loc.mjs`의 non-empty physical line 결과는 legacy 기록이다. 현재 `node scripts/loc.mjs`는 cloc 2.08 및 OMA systemd filter로 code lines를 계산하며 이 값만 현재 A-009 수치로 사용한다.
 
 ## Phase 0-9 구현 중 실행된 검증 기록 (2026-09-07)
 

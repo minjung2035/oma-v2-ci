@@ -30,6 +30,7 @@ import { ReconcileModule } from "../src/reconcile.js";
 import { Broker, peerCgroup } from "../src/broker.js";
 import { ViewsModule } from "../src/views.js";
 import { generateOperationId } from "../src/ids.js";
+import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
 import type {
   AuthContext,
   Capability,
@@ -80,6 +81,8 @@ function envOf(): { env: Env; cleanup: () => void } {
     input: { name: string; from: string; brief: string },
   ): ResolvedAgentSpec => ({
     ...input,
+    modelProfile: "m",
+    resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576, workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
     profile: "child",
     capabilities: ["mail.send", "route.follow"],
   });
@@ -100,11 +103,11 @@ function envOf(): { env: Env; cleanup: () => void } {
   return {
     env: { dir, xdg, society, store, units, mail, lifecycle, views },
     cleanup: () => {
-      spawnSync("systemctl", ["--user", "stop", `oma-*`], { stdio: "ignore" });
-      spawnSync("systemctl", ["--user", "disable", `oma-*`], {
+      spawnSync("systemctl", ["--user", "stop", `oma-${society}-*`], { stdio: "ignore" });
+      spawnSync("systemctl", ["--user", "disable", `oma-${society}-*`], {
         stdio: "ignore",
       });
-      spawnSync("systemctl", ["--user", "reset-failed", `oma-*`], {
+      spawnSync("systemctl", ["--user", "reset-failed", `oma-${society}-*`], {
         stdio: "ignore",
       });
       spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
@@ -119,6 +122,7 @@ function envOf(): { env: Env; cleanup: () => void } {
   };
 }
 
+// Domain fixtures represent an already authenticated incarnation with a complete stored spec.
 function auth(actor: string, caps: Capability[] = []): AuthContext {
   return {
     actor,
@@ -142,10 +146,10 @@ function seedPrincipalAndA(store: Store): void {
         specHash: "h",
         role,
         desired,
-        incarnation: 0,
+        incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -285,6 +289,27 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
   }
 });
 
+test("UNIT-002: systemd executes literal paths containing spaces and specifiers", () => {
+  const { env, cleanup } = envOf();
+  try {
+    env.units.ensureResident("a", "p");
+    const libdir = join(env.dir, 'space % $HOME "quote"');
+    mkdirSync(libdir);
+    const output = join(env.dir, "literal-path.json");
+    const script = join(libdir, "probe.mjs");
+    writeFileSync(script, `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(output)}, JSON.stringify(process.argv[1]));`);
+    const service = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
+    writeFileSync(service, renderUnit("[Service]\nType=oneshot\nExecStart=@NODE@ @LIBDIR@/probe.mjs\n", {
+      node: process.execPath, libdir, state: env.dir, society: env.society, agent: "a",
+    }));
+    const reload = spawnSync("systemctl", ["--user", "daemon-reload"], { encoding: "utf8" });
+    assert.equal(reload.status, 0, reload.stderr);
+    const run = spawnSync("systemctl", ["--user", "start", unitName(env.society, "a", "service")], { encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(JSON.parse(readFileSync(output, "utf8")), script);
+  } finally { cleanup(); }
+});
+
 test("T36: start-limit is exposed, never auto-reset; explicit start repairs", async () => {
   const { env, cleanup } = envOf();
   try {
@@ -358,7 +383,7 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
       ["--user", "start", unitName(env.society, "a", "service")],
       { stdio: "ignore" },
     );
-    assert.equal(env.store.getAgent("a")!.incarnation, 0);
+    assert.equal(env.store.getAgent("a")!.incarnation, 1);
     const mail = new MailModule(
       { stateRoot: join(env.dir, "state"), society: env.society },
       env.store,
@@ -425,7 +450,7 @@ test("T38: stopped actor with an unconfirmed stale cgroup cannot start; incarnat
       (e: unknown) =>
         e instanceof StoreError && e.code === "RUN_TERMINATION_UNKNOWN",
     );
-    assert.equal(env.store.getAgent("a")!.incarnation, 0);
+    assert.equal(env.store.getAgent("a")!.incarnation, 1);
   } finally {
     cleanup();
   }
@@ -526,6 +551,64 @@ test("T13: capability escape — sibling stop denied; created child uses a real 
   }
 });
 
+test("SEQ-002: unknown old-run death stops startup before mail reconciliation", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    Reflect.set(env.units, "confirmDead", () => false);
+    Reflect.set(env.units, "stop", () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "injected unknown death"); });
+    Reflect.set(env.mail, "reconcilePending", () => assert.fail("mail reconciled before death proof"));
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
+      projectGit: join(env.dir, "state", "repos", "project.git"),
+    });
+    await assert.rejects(reconcile.startup(false), /injected unknown death/);
+  } finally { cleanup(); }
+});
+
+test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a ready registry", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    const from = seedProjectGit(env);
+    const config: Parameters<LifecycleModule["bootstrap"]>[0] = {
+      principalProfile: "p", initialResidents: [{ name: "child", profile: "p", brief: "seed" }],
+      modelProfiles: { m: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none",
+        pricingRevision: "none", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+      agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null,
+        resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
+          workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 } } },
+    };
+    await env.lifecycle.bootstrap(config);
+    const op = env.store.getOperation("principal", "bootstrap-child")!;
+    assert.equal(op.state, "pending");
+    assert.equal(env.store.getAgent("child")!.desired, "provisioning");
+    assert.equal(JSON.parse(op.planJson).spec.from, from);
+    assert.equal(existsSync(join(env.dir, "state", "agents", "child", "workspace")), false);
+    await assert.rejects(env.lifecycle.bootstrap({ ...config, initialResidents: [] }), /seed set changed/);
+    await assert.rejects(env.lifecycle.bootstrap({ ...config, initialResidents: [{ name: "child", profile: "p", brief: "changed" }] }), /seed spec changed/);
+    await env.lifecycle.bootstrap(config);
+    assert.equal(env.store.getOperation("principal", "bootstrap-child")!.id, op.id);
+    const goal = join(env.dir, "state", "world", "context", "current");
+    mkdirSync(goal, { recursive: true });
+    const start = env.units.start.bind(env.units);
+    Reflect.set(env.units, "start", () => assert.fail("activation before broker READY"));
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
+      projectGit: join(env.dir, "state", "repos", "project.git"),
+    });
+    await reconcile.startup(false);
+    assert.equal(env.store.getOperationById(op.id)!.state, "pending");
+    assert.equal(env.store.getAgent("child")!.desired, "enabled");
+    assert.equal(env.store.pendingDeliveries("child").length, 1);
+    Reflect.set(env.units, "start", start);
+    rmSync(goal, { recursive: true });
+    await env.lifecycle.reconcileCreate(op.id);
+    assert.equal(env.store.getOperationById(op.id)!.state, "succeeded");
+    assert.equal(env.store.pendingDeliveries("child").length, 1);
+    await env.lifecycle.bootstrap({ ...config, initialResidents: [{ name: "another", profile: "p", brief: "not a new seed" }] });
+    assert.equal(env.store.getAgent("another"), null);
+    assert.equal(env.store.getAgent("principal")!.role, "principal");
+  } finally { cleanup(); }
+});
+
 test("T39/LIFE-007: same name + same resolved spec converges without a second physical create", async () => {
   const { env, cleanup } = envOf();
   try {
@@ -552,6 +635,23 @@ test("T39/LIFE-007: same name + same resolved spec converges without a second ph
   } finally {
     cleanup();
   }
+});
+
+test("LIFE-007 race: concurrent stable-name creates publish only one mail object", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    const from = seedProjectGit(env);
+    const receipts = await Promise.all(["race-1", "race-2"].map((key) =>
+      env.lifecycle.create(auth("a", ["agent.create"]),
+        { name: "child", from, brief: "same" }, key),
+    ));
+    const plans = receipts.map((r) => JSON.parse(env.store.getOperationById(r.operation)!.planJson));
+    assert.equal(plans.filter((p) => p.existingCreation === null).length, 1);
+    assert.equal(plans.filter((p) => p.initialMessage !== null).length, 1);
+    assert.equal(readdirSync(join(env.dir, "state", "mail", "objects")).length, 1);
+    assert.equal(env.store.pendingDeliveries("child").length, 1);
+  } finally { cleanup(); }
 });
 
 test("T40/LIFE-001: same stable name with a different resolved spec conflicts", async () => {
@@ -595,6 +695,8 @@ test("CREATE-003: resolved child policy is rechecked at T-create-intent", async 
       },
       (_parent, input) => ({
         ...input,
+        modelProfile: "m",
+        resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576, workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
         profile: ++resolutions === 1 ? "child" : "p",
         capabilities: ["mail.send"],
       }),
@@ -680,6 +782,125 @@ runner.run().then(() => process.exit(0), () => process.exit(2));`,
       await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(env.store.getAgent("dynamic")!.incarnation, 1);
     assert.equal(env.store.preparedBatches("dynamic").length, 1);
+    const prepared = env.store.preparedBatches("dynamic")[0]!;
+    for (let i = 0; i < 500 && env.units.observe("dynamic").activeState !== "failed"; i++)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(env.units.observe("dynamic").activeState, "failed");
+    assert.equal(env.units.observe("dynamic").execMainStatus, 2, "an unverified Pi adapter must not report a successful run");
+    assert.equal(env.store.pendingDeliveries("dynamic").length, 0);
+    assert.equal(readdirSync(join(env.dir, "state", "mail", "inboxes", "dynamic", "new")).length, 0);
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
+      projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true,
+    });
+    await reconcile.sweep();
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 1, "a failed gated profile is not silently restarted");
+    env.units.stop("dynamic", 1); // Explicit physical stop leaves logical desired=enabled.
+    const gatedWrapper = readFileSync(wrapper, "utf8");
+    writeFileSync(wrapper, "process.exit(0);\n"); // Isolated idle-unit fixture, not Pi consumption.
+    env.units.start("dynamic", false);
+    for (let i = 0; i < 500 && env.units.observe("dynamic").activeState !== "inactive"; i++)
+      await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(env.units.observe("dynamic").activeState, "inactive");
+    writeFileSync(wrapper, gatedWrapper);
+    await reconcile.sweep();
+    for (let i = 0; i < 500 && env.store.getAgent("dynamic")!.incarnation === 1; i++)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 2);
+    assert.equal(env.store.preparedBatches("dynamic")[0]!.id, prepared.id);
+    assert.equal(env.store.preparedBatches("dynamic")[0]!.messageIdsJson, prepared.messageIdsJson);
+    // Hold a real authenticated connection while revoking its listener, before death.
+    for (let i = 0; i < 500 && !env.units.confirmDead("dynamic", 2); i++)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    const readyFile = join(env.dir, "connection-ready");
+    const closedFile = join(env.dir, "connection-closed");
+    const originalWrapper = readFileSync(wrapper, "utf8");
+    writeFileSync(wrapper, `
+import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))};
+import { FrameParser, encodeFrame } from ${JSON.stringify(join(process.cwd(), "dist", "src", "frame.js"))};
+import { connect } from 'node:net';
+import { writeFileSync } from 'node:fs';
+const admin = new BrokerChannel();
+await admin.connect(process.env.OMA_RUN_ROOT + '/admin.sock');
+const lease = await admin.call('runner.open', {agent: process.env.OMA_AGENT, invocationId: process.env.INVOCATION_ID});
+if (!lease.ok) throw new Error(JSON.stringify(lease));
+const probes = {
+  pending: await admin.call('runner.pending', {}),
+  invalid: await admin.call('runner.pending', {agent:'dynamic'}),
+  observe: await admin.call('runner.observe', {reason:'test',observedAtMs:Date.now()}),
+  unknown: await admin.call('not.a.method', {}),
+  extension: await admin.call('batch.read', {batchId:'forged'}),
+};
+const parser = new FrameParser(262144);
+const socket = connect(lease.result.socketHostPath, () => socket.write(encodeFrame({v:1,id:'hold',method:'status.get',params:{}})));
+socket.on('data', bytes => { for (const frame of parser.feed(bytes)) if (frame.raw.ok) writeFileSync(${JSON.stringify(readyFile)}, JSON.stringify(probes)); });
+socket.on('error', () => {});
+socket.on('close', async () => {
+  const reopen = await admin.call('runner.open', {agent: process.env.OMA_AGENT, invocationId: process.env.INVOCATION_ID});
+  const prepare = await admin.call('batch.prepare', {});
+  writeFileSync(${JSON.stringify(closedFile)}, JSON.stringify({reopen, prepare}));
+});
+setInterval(() => {}, 1000);
+`);
+    const hold = spawn("systemctl", ["--user", "start", unitName(env.society, "dynamic", "service")], { stdio: "ignore" });
+    assert.equal(await new Promise((resolve) => hold.on("exit", resolve)), 0);
+    for (let i = 0; i < 500 && !existsSync(readyFile); i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(existsSync(readyFile), true);
+    const probes = JSON.parse(readFileSync(readyFile, "utf8"));
+    assert.deepEqual(probes.pending.result.recoverableBatchIds, [prepared.id]);
+    assert.equal(probes.invalid.error.code, "INVALID_REQUEST");
+    assert.equal(probes.observe.error.code, "SPIKE_UNRESOLVED");
+    assert.equal(probes.unknown.error.code, "UNKNOWN_METHOD");
+    assert.equal(probes.extension.error.code, "AUTH_FAILED");
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 3);
+    const oldFd = Reflect.get(broker, "runLeases").get("dynamic").cgroupFd;
+    env.units.onRevokeRun!("dynamic");
+    for (let i = 0; i < 500 && !existsSync(closedFile); i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(existsSync(closedFile), true, "existing authenticated socket must close on revocation");
+    const revokedReplies = JSON.parse(readFileSync(closedFile, "utf8"));
+    assert.equal(revokedReplies.reopen.error.code, "STALE_RUN");
+    assert.equal(revokedReplies.prepare.error.code, "STALE_RUN");
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 3);
+    assert.equal(env.units.observe("dynamic").activeState, "active");
+    assert.match(readFileSync(`/proc/self/fd/${oldFd}/cgroup.events`, "utf8"), /^populated 1$/m);
+    env.units.stop("dynamic", 3);
+    assert.equal(env.units.confirmDead("dynamic", 3), true);
+    env.units.stop("dynamic", 3); // Recovery must tolerate the path link removed by disable.
+    writeFileSync(wrapper, originalWrapper);
+    env.units.start("dynamic", false);
+    for (let i = 0; i < 500 && env.store.getAgent("dynamic")!.incarnation === 3; i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 4);
+    assert.equal(env.store.preparedBatches("dynamic")[0]!.id, prepared.id);
+    for (let i = 0; i < 500 && !env.units.confirmDead("dynamic", 4); i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    const failedDir = join(env.dir, "R", "actors", "dynamic", "5");
+    writeFileSync(failedDir, "not a directory");
+    const failureFile = join(env.dir, "failed-listener");
+    writeFileSync(wrapper, `
+import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))};
+import { writeFileSync } from 'node:fs';
+const admin = new BrokerChannel();
+await admin.connect(process.env.OMA_RUN_ROOT + '/admin.sock');
+const params = {agent: process.env.OMA_AGENT, invocationId: process.env.INVOCATION_ID};
+const first = await admin.call('runner.open', params);
+const retry = await admin.call('runner.open', params);
+writeFileSync(${JSON.stringify(failureFile)}, JSON.stringify({first, retry}));
+setInterval(() => {}, 1000);
+`);
+    env.units.start("dynamic", false);
+    for (let i = 0; i < 500 && !existsSync(failureFile); i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(existsSync(failureFile), true);
+    const failedReplies = JSON.parse(readFileSync(failureFile, "utf8"));
+    assert.equal(failedReplies.first.error.code, "INTERNAL_ERROR");
+    assert.equal(failedReplies.retry.error.code, "STALE_RUN");
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 5);
+    const failedFd = Reflect.get(broker, "runLeases").get("dynamic").cgroupFd;
+    assert.match(readFileSync(`/proc/self/fd/${failedFd}/cgroup.events`, "utf8"), /^populated 1$/m);
+    env.units.stop("dynamic", 5);
+    rmSync(failedDir);
+    writeFileSync(wrapper, originalWrapper);
+    env.units.start("dynamic", false);
+    for (let i = 0; i < 500 && env.store.getAgent("dynamic")!.incarnation === 5; i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 6);
+    assert.equal(env.store.preparedBatches("dynamic")[0]!.id, prepared.id);
   } finally {
     broker?.drainAndClose();
     cleanup();

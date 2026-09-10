@@ -12,6 +12,9 @@ import { GitModule } from "../git.js";
 import { ReconcileModule } from "../reconcile.js";
 import { loadConfig, resolveChildSpec } from "../config.js";
 import { acquireProcessLock, releaseProcessLocks } from "../leaf.js";
+import { resolvedSpecOf } from "../authority.js";
+import { StoreError } from "../store.js";
+import { isValidSocietyName } from "../ids.js";
 
 function usage(): never {
   console.error("usage: broker.js --society <name> [--config <path>]");
@@ -23,6 +26,7 @@ const societyIdx = args.indexOf("--society");
 const configIdx = args.indexOf("--config");
 if (societyIdx < 0 || args[societyIdx + 1] === undefined) usage();
 const society = args[societyIdx + 1]!;
+if (!isValidSocietyName(society)) usage();
 
 const stateRoot = join(
   process.env.XDG_DATA_HOME ??
@@ -45,6 +49,10 @@ if (!acquireProcessLock(join(runRoot, "broker.lock"))) {
 }
 
 const cfg = loadConfig(configPath);
+if (cfg.society !== society)
+  throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
+if (cfg.integration.checks.length > 0)
+  throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE does not support nonempty checks profiles yet");
 const store = new Store(join(stateRoot, "runtime.sqlite"));
 const mail = new MailModule(
   { stateRoot, society: cfg.society },
@@ -86,7 +94,7 @@ const lifecycle = new LifecycleModule(
   },
   (parent, input) => {
     const r = resolveChildSpec(
-      cfg,
+      loadConfig(configPath),
       {
         name: parent.name,
         profile: parent.profile,
@@ -164,10 +172,24 @@ const broker = new Broker(
  * before sockets bind and READY=1 is signalled.
  */
 async function bootstrap(): Promise<void> {
-  await reconcile.startup();
+  await lifecycle.bootstrap(cfg);
+  for (const agent of store.listAgents()) {
+    const spec = resolvedSpecOf(agent);
+    if (!cfg.agentProfiles[spec.profile] || !cfg.modelProfiles[spec.modelProfile])
+      throw new StoreError("UNSUPPORTED_PROFILE", `unsupported stored profile for ${agent.name}`);
+  }
+  await reconcile.startup(false);
+  if (store.getAgent("principal")) {
+    for (const subdir of ["new", "cur", "tmp"])
+      mkdirSync(join(stateRoot, "mail", "inboxes", "principal", subdir), { recursive: true });
+    units.ensurePrincipal();
+  }
   broker.start();
   broker.notifyReady();
   console.error("broker ready");
+  // Resident units are After=broker; synchronous starts before READY deadlock.
+  await reconcile.sweep();
+  views.refreshWorld();
 }
 
 bootstrap().catch((e) => {

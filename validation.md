@@ -2,6 +2,12 @@
 
 이 문서는 primitive 조합의 초기 검증과 현재 `oma-v2` runtime 검증의 색인을 제공한다. 최신 실행 결과와 남은 release blocker는 [implementation/validation.md](implementation/validation.md)를 기준으로 한다.
 
+## 최신 작업 상태 — 2026-09-10 UTC
+
+`d3a3b98` 위 구현 변경을 검증했다. `npm test` **178/178**, cloc 2.08 기준 **9,774 code lines**다. [전체 범위 점검표](implementation/adversarial-review.md)는 258개 labelled 규범 절과 T01–T77을 포함하지만 전체 준수 판정은 **FAIL**이다. 원본 hash·실행 로그·미검증 범위는 [최신 검증 기록](implementation/validation.md)에 연결되어 있다.
+
+prepared 복구·mail 무결성·typed mail·frozen spec·bootstrap·unit 관측을 보강했으나 RUN-001/SPIKE와 전체 compliance trace는 아직 미완료다. 아래의 과거 '현재' 수치는 당시 checkpoint 기록이며 최신 상태가 아니다.
+
 ## 2026-09-10 현재 상태
 
 현재 HEAD는 `326a1d6` (`close lifecycle and batch deterministic contracts`)이며 다음을 실행했다.

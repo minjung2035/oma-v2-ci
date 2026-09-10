@@ -70,7 +70,7 @@ function envOf(): Env {
         incarnation: 0,
         profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS),
+        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -91,6 +91,8 @@ function envOf(): Env {
     input: { name: string; from: string; brief: string },
   ): ResolvedAgentSpec => ({
     ...input,
+    modelProfile: "m",
+    resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576, workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
     profile: "child",
     capabilities: ["mail.send", "git.submit", "context.publish"],
   });

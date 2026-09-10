@@ -10,8 +10,8 @@ import {
   readFileSync,
   closeSync,
   readdirSync,
-  writeFileSync,
-  fsyncSync,
+  fstatSync,
+  statSync,
 } from "node:fs";
 import { join } from "node:path";
 import type {
@@ -20,6 +20,7 @@ import type {
   BoundaryEvidence,
   Capability,
   PublicMethod,
+  InternalMethods,
   ProtocolLimits,
   Request,
   Receipt,
@@ -29,14 +30,14 @@ import { Store, StoreError } from "./store.js";
 import { isValidActorName, isValidRequestKey } from "./ids.js";
 import { ConnectionDecoder, encodeFrame } from "./frame.js";
 import { spawnSync } from "node:child_process";
-import { MailModule, StopSignal } from "./mail.js";
+import { MailModule } from "./mail.js";
 import { UnitsModule, unitName } from "./units.js";
-import { peerCred, tryFlock, sdNotifyReady } from "./leaf.js";
+import { peerCred, peerPidFd, peerPidAlive, type PeerCred, tryFlock, sdNotifyReady } from "./leaf.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { GitModule } from "./git.js";
 import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
-import { capabilitiesOf } from "./authority.js";
+import { capabilitiesOf, resolvedSpecOf } from "./authority.js";
 import {
   agentActionParamsCheck,
   agentContinueParamsCheck,
@@ -64,16 +65,16 @@ export interface BrokerPaths {
 
 const DEFAULT_LIMITS: ProtocolLimits = {
   frameBytes: 256 * 1024,
-  mailBodyBytes: 64 * 1024,
-  subjectBytes: 8 * 1024,
+  mailBodyBytes: 256 * 1024,
+  subjectBytes: 512,
   addresses: 64,
   replyReferences: 64,
-  contextFiles: 1024,
-  contextBytes: 256 * 1024 * 1024,
+  contextFiles: 256,
+  contextBytes: 8 * 1024 * 1024,
   bundleBytes: 256 * 1024 * 1024,
   logBytes: 1024 * 1024,
   batchMaxMessages: 24,
-  idleStreamSeconds: 60,
+  idleStreamSeconds: 30,
   receiptWaitSeconds: 30,
 };
 
@@ -97,6 +98,15 @@ function socketFd(sock: Socket): number {
   return fd;
 }
 
+const INTERNAL_CHANNEL = {
+  "runner.open": "runner", "runner.pending": "runner", "batch.prepare": "runner",
+  "batch.complete": "runner", "runner.observe": "runner", "batch.read": "extension",
+  "principal.attach": "extension", "principal.detach": "extension",
+  "host.principalRelay": "host", "host.reconcile": "host",
+} as const satisfies Record<keyof InternalMethods, "runner" | "host" | "extension">;
+
+type BoundPeer = PeerCred & { alive: () => boolean };
+
 export class Broker {
   private adminServer: ReturnType<typeof createServer> | null = null;
   private hostServer: ReturnType<typeof createServer> | null = null;
@@ -106,7 +116,7 @@ export class Broker {
 
   private runLeases = new Map<
     Actor,
-    { invocationId: string; lease: RunLease; done: () => void }
+    { invocationId: string; cgroupFd: number; lease: RunLease | null; revoke: () => void; done: () => void }
 >();
   constructor(
     private readonly store: Store,
@@ -133,6 +143,8 @@ export class Broker {
         "another broker holds the society lock",
       );
     }
+    this.units.onRevokeRun = (actor) => this.runLeases.get(actor)?.revoke();
+    this.views.refreshWorld();
     this.adminServer = this.listenInternal(
       join(this.paths.runRoot, "admin.sock"),
       "runner",
@@ -158,27 +170,64 @@ export class Broker {
     return srv;
   }
 
-  private listenActor(actor: Actor): {
+  private refreshViews(): void {
+    try { this.views.refreshWorld(); } catch (error) {
+      // Derived views can be rebuilt; their failure must not replace a durable receipt.
+      console.error("world view refresh failed:", error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private actorSocketDirectory(actor: Actor, incarnation: number): string {
+    const dir = join(this.paths.runRoot, "actors", actor, String(incarnation));
+    if (Buffer.byteLength(join(dir, "control.sock")) > 107)
+      throw new StoreError("UNSUPPORTED_PROFILE", "actor socket path exceeds Linux sun_path");
+    return dir;
+  }
+
+  private listenActor(actor: Actor, incarnation = this.store.getAgent(actor)?.incarnation ?? 0): {
     socketHostPath: string;
     done: () => void;
   } {
-    const incarnation = this.store.getAgent(actor)?.incarnation ?? 0;
-    const dir = join(this.paths.runRoot, "actors", actor, String(incarnation));
-    mkdirSync(dir, { recursive: true });
+    const dir = this.actorSocketDirectory(actor, incarnation);
     const path = join(dir, "control.sock");
+    mkdirSync(dir, { recursive: true });
     if (existsSync(path)) unlinkSync(path);
-    const srv = createServer((sock) =>
-      this.handleActor(sock, actor, incarnation),
-    );
+    const sockets = new Set<Socket>();
+    let revoked = false;
+    const srv = createServer((sock) => {
+      if (revoked) return this.fail(sock, { code: "STALE_RUN", message: "run endpoint revoked", retry: "never" });
+      sockets.add(sock);
+      sock.once("close", () => sockets.delete(sock));
+      this.handleActor(sock, actor, incarnation);
+    });
+    srv.once("error", () => {
+      const run = this.runLeases.get(actor);
+      if (run?.lease?.incarnation === incarnation) run.revoke();
+    });
     srv.listen(path);
     this.actorServers.add(srv);
     return {
       socketHostPath: path,
       done: () => {
+        if (revoked) return;
+        revoked = true;
+        for (const socket of sockets) this.fail(socket, { code: "STALE_RUN", message: "run endpoint revoked", retry: "never" });
         this.actorServers.delete(srv);
         srv.close();
       },
     };
+  }
+
+  private bindPeer(sock: Socket): BoundPeer | null {
+    const fd = socketFd(sock);
+    const cred = peerCred(fd);
+    if (!cred) return null;
+    const pinned = peerPidFd(fd);
+    if (pinned === null) return null;
+    if (!peerPidAlive(pinned)) { closeSync(pinned); return null; }
+    let closed = false;
+    sock.once("close", () => { closed = true; closeSync(pinned); });
+    return { ...cred, alive: () => !closed && peerPidAlive(pinned) };
   }
 
   private handleActor(sock: Socket, actor: Actor, incarnation: number): void {
@@ -190,7 +239,7 @@ export class Broker {
       });
       return;
     }
-    const cred = peerCred(socketFd(sock));
+    const cred = this.bindPeer(sock);
     if (!cred) {
       this.fail(sock, {
         code: "AUTH_FAILED",
@@ -215,28 +264,42 @@ export class Broker {
 
   private trustedContext(
     actor: Actor,
-    cred: { pid: number; uid: number; gid: number },
+    cred: BoundPeer,
   ): AuthContext | null {
     const agent = this.store.getAgent(actor);
     if (!agent) return null;
     if (cred.uid !== (process.getuid?.() ?? -1)) return null;
-    const unitCg = this.units.observe(actor).cgroup;
+    const run = this.runLeases.get(actor);
+    if (!run?.lease || run.lease.incarnation !== agent.incarnation) return null;
+    const observed = this.units.observe(actor);
+    if (observed.invocationId !== run.invocationId) return null;
+    const unitCg = observed.cgroup;
     const peerCg = peerCgroup(cred.pid);
     if (!unitCg || !peerCg) return null;
     const prefix = unitCg.endsWith("/") ? unitCg : `${unitCg}/`;
     if (peerCg !== unitCg && !peerCg.startsWith(prefix)) return null;
+    try {
+      const pinned = fstatSync(run.cgroupFd, { bigint: true });
+      const current = statSync(join("/sys/fs/cgroup", unitCg), { bigint: true });
+      if (!pinned.isDirectory() || pinned.dev !== current.dev || pinned.ino !== current.ino) return null;
+    } catch { return null; }
+    if (!cred.alive()) return null; // Validate the original peer after cgroup observations.
+    const lease = run.lease;
+    const granted = capabilitiesOf(agent);
+    const currentCapabilities = () => cred.alive() && this.runLeases.get(actor) === run && run.lease === lease ? granted : new Set<Capability>();
     return {
       actor,
       incarnation: agent.incarnation,
       role: agent.role,
       channel: "actor",
-      capabilities: capabilitiesOf(agent),
+      // Revocation also fences requests already awaiting body/render before acceptance.
+      get capabilities() { return currentCapabilities(); },
       peer: { pid: cred.pid, uid: cred.uid, gid: cred.gid, cgroup: peerCg },
     };
   }
 
   private handleInternal(sock: Socket, channel: "runner" | "host"): void {
-    const cred = peerCred(socketFd(sock));
+    const cred = this.bindPeer(sock);
     if (!cred || cred.uid !== (process.getuid?.() ?? -1)) {
       this.fail(sock, {
         code: "AUTH_FAILED",
@@ -571,9 +634,10 @@ export class Broker {
         retry: "never",
       });
     }
+    const actor = this.store.getAgent(auth.actor);
     if (
       auth.channel === "actor" &&
-      this.store.getAgent(auth.actor)?.incarnation !== auth.incarnation
+      (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled")
     ) {
       return Broker.errorAnswer(id, {
         code: "STALE_RUN",
@@ -619,7 +683,7 @@ export class Broker {
       });
     }
     const need = METHOD_CAPABILITY[method as PublicMethod];
-    if (need && !auth.capabilities.has(need)) {
+    if (need && (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))) {
       return Broker.errorAnswer(id, {
         code: "CAPABILITY_DENIED",
         message: `missing capability ${need}`,
@@ -657,11 +721,16 @@ export class Broker {
           );
           return Broker.okAnswer(id, op ? receiptOfRow(op) : receiptNotFound);
         }
-        case "mail.send":
+        case "mail.send": {
+          const mail = params as unknown as import("../implementation/contracts.js").MailInput;
+          if (mail.approvalFor && !this.store.getOperation(auth.actor, keyOf(req)) &&
+            !this.git?.isPublished(mail.approvalFor.candidate))
+            throw new StoreError("CANDIDATE_NOT_PUBLISHED", "approval request requires a published candidate");
           return Broker.okAnswer(
             id,
-            await this.mail.send(auth, keyOf(req), params as never),
+            await this.mail.send(auth, keyOf(req), mail),
           );
+        }
         case "mail.ack":
           return Broker.okAnswer(
             id,
@@ -726,7 +795,6 @@ export class Broker {
                 kind: "message",
                 body: (params as { note: string }).note,
               },
-              undefined,
               {
                 kind: "agent.continue",
                 params: { note: (params as { note: string }).note },
@@ -818,27 +886,29 @@ export class Broker {
           });
       }
     } catch (e) {
-      if (e instanceof StopSignal) throw e;
       return Broker.errorAnswer(id, {
         code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
         message: (e as Error).message,
         retry: "never",
       });
+    } finally {
+      if (MUTATION_METHODS.has(method)) this.refreshViews();
     }
   }
 
   private requireRunnerUnit(
-    pid: number,
+    peer: BoundPeer,
     agent: Actor,
     invocationId?: string,
   ): void {
     const unit = unitName(this.paths.society, agent, "service");
     const observed = this.units.observe(agent);
-    const peerCg = peerCgroup(pid);
+    const peerCg = peerCgroup(peer.pid);
     const prefix = observed.cgroup?.endsWith("/")
       ? observed.cgroup
       : `${observed.cgroup}/`;
     if (
+      !peer.alive() ||
       !observed.cgroup ||
       !peerCg ||
       (peerCg !== observed.cgroup && !peerCg.startsWith(prefix)) ||
@@ -849,19 +919,19 @@ export class Broker {
   }
 
   private requireHostUnit(
-    pid: number,
+    peer: BoundPeer,
     kind: "principal-relay" | "reconcile",
   ): void {
     const unitCg = this.units.unitCgroup(kind);
-    const peerCg = peerCgroup(pid);
+    const peerCg = peerCgroup(peer.pid);
     const prefix = unitCg.endsWith("/") ? unitCg : `${unitCg}/`;
-    if (!unitCg || !peerCg || (peerCg !== unitCg && !peerCg.startsWith(prefix)))
+    if (!peer.alive() || !unitCg || !peerCg || (peerCg !== unitCg && !peerCg.startsWith(prefix)))
       throw new StoreError("AUTH_FAILED", `caller is not inside the ${kind} service`);
   }
 
   /** Resolve the runner actor from physical cgroup identity, never request params. */
-  private runnerActor(pid: number): Actor {
-    const peerCg = peerCgroup(pid);
+  private runnerActor(peer: BoundPeer): Actor {
+    const peerCg = peerCgroup(peer.pid);
     if (!peerCg) throw new StoreError("AUTH_FAILED", "runner cgroup unavailable");
     const matches: Actor[] = [];
     for (const row of this.store.listAgents()) {
@@ -871,14 +941,14 @@ export class Broker {
       const prefix = unitCg.endsWith("/") ? unitCg : `${unitCg}/`;
       if (peerCg === unitCg || peerCg.startsWith(prefix)) matches.push(row.name);
     }
-    if (matches.length !== 1)
+    if (matches.length !== 1 || !peer.alive())
       throw new StoreError("AUTH_FAILED", "runner cgroup identity is ambiguous");
     return matches[0]!;
   }
 
   private async dispatchInternal(
     raw: Record<string, unknown>,
-    peer: { pid: number; uid: number; gid: number },
+    peer: BoundPeer,
     _stream: AsyncIterable<Uint8Array> | null,
     channel: "runner" | "host",
   ): Promise<object> {
@@ -902,8 +972,9 @@ export class Broker {
     }
     const params = paramsRaw as Record<string, unknown>;
     try {
-      const hostMethod = method === "host.principalRelay" || method === "host.reconcile";
-      if ((channel === "host") !== hostMethod)
+      if (!Object.hasOwn(INTERNAL_CHANNEL, method))
+        throw new StoreError("UNKNOWN_METHOD", `internal ${method}`);
+      if (INTERNAL_CHANNEL[method as keyof InternalMethods] !== channel)
         throw new StoreError("AUTH_FAILED", `method ${method} is not allowed on ${channel} channel`);
       switch (method) {
         case "runner.open": {
@@ -918,43 +989,39 @@ export class Broker {
           ) {
             throw new StoreError("INVALID_REQUEST", "runner.open args invalid");
           }
-          this.requireRunnerUnit(peer.pid, params.agent, params.invocationId);
+          this.requireRunnerUnit(peer, params.agent, params.invocationId);
           return Broker.okAnswer(
             id,
             this.openRun(params.agent, params.invocationId),
           );
         }
+        case "runner.pending": {
+          if (Object.keys(params).length) throw new StoreError("INVALID_REQUEST", "runner.pending takes no params");
+          const agent = this.runnerActor(peer);
+          this.runnerAuth(agent, this.store.getAgent(agent)!.incarnation);
+          return Broker.okAnswer(id, {
+            pending: this.store.pendingDeliveries(agent).length,
+            recoverableBatchIds: this.store.preparedBatches(agent).map(batch => batch.id),
+          });
+        }
+        case "runner.observe": {
+          if (!Object.keys(params).every(key => ["reason", "toolName", "observedAtMs"].includes(key)) ||
+            typeof params.reason !== "string" || !Number.isSafeInteger(params.observedAtMs) ||
+            (params.observedAtMs as number) < 0 || (params.toolName !== undefined && typeof params.toolName !== "string"))
+            throw new StoreError("INVALID_REQUEST", "runner.observe args invalid");
+          const agent = this.runnerActor(peer);
+          this.runnerAuth(agent, this.store.getAgent(agent)!.incarnation);
+          throw new StoreError("SPIKE_UNRESOLVED", "S-03 observation adapter is not pinned");
+        }
         case "batch.prepare": {
           if (Object.keys(params).length !== 0)
             throw new StoreError("INVALID_REQUEST", "batch.prepare takes no params");
-          const agent = this.runnerActor(peer.pid);
+          const agent = this.runnerActor(peer);
           const row = this.store.getAgent(agent);
           if (!row) throw new StoreError("AUTH_FAILED", "runner identity missing");
           const batch = await this.mail.prepare(
             this.runnerAuth(agent, row.incarnation),
           );
-          if (!batch) return Broker.okAnswer(id, null);
-          this.mail.moveToCur(agent, batch.messageIds);
-          const viewDir = join(
-            this.paths.stateRoot,
-            "agents",
-            agent,
-            "runner",
-            "view",
-          );
-          mkdirSync(viewDir, { recursive: true });
-          writeViewSheet(
-            join(viewDir, `batch-${batch.id}.json`),
-            JSON.stringify({
-              id: batch.id,
-              agent: batch.agent,
-              incarnation: batch.incarnation,
-              deliveryMode: batch.deliveryMode,
-              notice: batch.notice,
-              messageIds: batch.messageIds,
-            }),
-          );
-          this.views.publishInbox(batch);
           return Broker.okAnswer(id, batch);
         }
         case "batch.complete": {
@@ -982,7 +1049,7 @@ export class Broker {
           if (!batch)
             throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
           const agent = batch.agent;
-          this.requireRunnerUnit(peer.pid, agent);
+          this.requireRunnerUnit(peer, agent);
           const row = this.store.getAgent(agent);
           if (!row || row.incarnation !== evidence.incarnation)
             throw new StoreError("BATCH_CONFLICT", "runner incarnation mismatch");
@@ -993,26 +1060,26 @@ export class Broker {
           return Broker.okAnswer(id, { completed: true });
         }
         case "host.principalRelay": {
-          this.requireHostUnit(peer.pid, "principal-relay");
+          if (Object.keys(params).length) throw new StoreError("INVALID_REQUEST", "host.principalRelay takes no params");
+          this.requireHostUnit(peer, "principal-relay");
           const principal = this.store.getAgent("principal");
           if (!principal) return Broker.okAnswer(id, { moved: 0, pending: 0 });
-          const moved = this.mail.moveToCur("principal", []);
-          const pending = this.store.pendingDeliveries("principal").length;
-          const newFiles = listNewFiles(
+          const newFiles = readdirSync(
             join(this.paths.stateRoot, "mail", "inboxes", "principal", "new"),
           );
-          for (const f of newFiles)
-            this.mail.moveToCur("principal", [f as never]);
+          const moved = this.mail.moveToCur("principal", newFiles);
           return Broker.okAnswer(id, {
-            moved: newFiles.length,
-            pending: pending + moved,
+            moved,
+            pending: this.store.pendingDeliveries("principal").length,
           });
         }
         case "host.reconcile": {
-          this.requireHostUnit(peer.pid, "reconcile");
+          if (Object.keys(params).length) throw new StoreError("INVALID_REQUEST", "host.reconcile takes no params");
+          this.requireHostUnit(peer, "reconcile");
           const rep = this.reconcile
             ? await this.reconcile.sweep()
             : await this.mail.reconcilePending();
+          this.refreshViews();
           return Broker.okAnswer(id, rep);
         }
         default:
@@ -1033,12 +1100,17 @@ export class Broker {
 
   private runnerAuth(agent: Actor, incarnation: number): AuthContext {
     const row = this.store.getAgent(agent);
+    const run = this.runLeases.get(agent);
+    if (!row || row.desired !== "enabled" || !run?.lease ||
+      run.lease.incarnation !== incarnation || row.incarnation !== incarnation ||
+      this.units.observe(agent).invocationId !== run.invocationId)
+      throw new StoreError("STALE_RUN", "runner has no current live lease");
     return {
       actor: agent,
       incarnation,
-      role: row?.role ?? "resident",
+      role: row.role,
       channel: "trusted-runner",
-      capabilities: capabilitiesOf(row ?? { specJson: "{}" }),
+      capabilities: capabilitiesOf(row),
       peer: { pid: 0, uid: -1, gid: -1, cgroup: null },
     };
   }
@@ -1046,6 +1118,7 @@ export class Broker {
   private openRun(actor: Actor, invocationId: string): RunLease {
     const agent = this.store.getAgent(actor);
     if (!agent) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${actor}`);
+    resolvedSpecOf(agent);
     if (agent.desired === "provisioning")
       throw new StoreError("AGENT_NOT_READY", `${actor} is provisioning`);
     if (agent.desired === "stopped")
@@ -1058,23 +1131,62 @@ export class Broker {
     if (!hasGoal)
       throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
     const active = this.runLeases.get(actor);
-    if (active?.invocationId === invocationId) return active.lease;
-    active?.done();
-    let next = agent.incarnation;
-    this.store.transaction((_tx) => {
-      next = this.store.getAgent(actor)!.incarnation + 1;
-      this.store.updateAgent({ name: actor, incarnation: next });
-      this.store.reassignPreparedBatches(actor, next);
-    });
-    const listener = this.listenActor(actor);
-    const lease = { actor, incarnation: next, socketHostPath: listener.socketHostPath };
-    this.runLeases.set(actor, { invocationId, lease, done: listener.done });
-    return lease;
+    if (active?.invocationId === invocationId) {
+      if (!active.lease) throw new StoreError("STALE_RUN", "run endpoint is revoked or failed");
+      return active.lease;
+    }
+    if (active) {
+      let dead = false;
+      try {
+        dead = /^populated 0$/m.test(readFileSync(`/proc/self/fd/${active.cgroupFd}/cgroup.events`, "utf8"));
+      } catch (error) {
+        dead = (error as NodeJS.ErrnoException).code === "ENOENT";
+      }
+      if (!dead) throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous invocation cgroup is not proven empty");
+    }
+    const observation = this.units.observe(actor);
+    if (observation.invocationId !== invocationId || !observation.cgroup)
+      throw new StoreError("AUTH_FAILED", "runner invocation changed during open");
+    const cgroupFd = openSync(join("/sys/fs/cgroup", observation.cgroup), "r");
+    try {
+      if (!/^populated 1$/m.test(readFileSync(`/proc/self/fd/${cgroupFd}/cgroup.events`, "utf8")))
+        throw new StoreError("AUTH_FAILED", "current runner cgroup is not populated");
+      active?.done();
+      this.runLeases.delete(actor);
+      const next = agent.incarnation + 1;
+      if (!Number.isSafeInteger(next)) throw new StoreError("STORE_CORRUPT", "incarnation exhausted");
+      this.actorSocketDirectory(actor, next);
+      this.store.transaction((_tx) => {
+        this.store.updateAgent({ name: actor, incarnation: next });
+        this.store.reassignPreparedBatches(actor, next);
+      });
+      let listener: ReturnType<Broker["listenActor"]> | undefined;
+      let closed = false;
+      const record = {
+        invocationId, cgroupFd, lease: null as RunLease | null,
+        revoke: () => { record.lease = null; listener?.done(); },
+        done: () => {
+          if (closed) return;
+          closed = true;
+          try { record.revoke(); } finally { closeSync(cgroupFd); }
+        },
+      };
+      // Keep the failed invocation fenced and its kernel identity pinned until death.
+      this.runLeases.set(actor, record);
+      listener = this.listenActor(actor, next);
+      record.lease = { actor, incarnation: next, socketHostPath: listener.socketHostPath };
+      this.refreshViews();
+      return record.lease;
+    } catch (error) {
+      if (this.runLeases.get(actor)?.cgroupFd !== cgroupFd) closeSync(cgroupFd);
+      throw error;
+    }
   }
 
   drainAndClose(): void {
     this.adminServer?.close();
     this.hostServer?.close();
+    for (const run of this.runLeases.values()) run.done();
     for (const srv of this.actorServers) {
       try {
         srv.close();
@@ -1096,24 +1208,7 @@ export class Broker {
   }
 }
 
-function listNewFiles(dir: string): string[] {
-  try {
-    mkdirSync(dir, { recursive: true });
-    return readdirSync(dir).filter((f) => !f.endsWith(":2,"));
-  } catch {
-    return [];
-  }
-}
 
-function writeViewSheet(path: string, content: string): void {
-  const fd = openSync(path, "w", 0o600);
-  try {
-    writeFileSync(fd, content, "utf8");
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-}
 
 function emptyStream(): AsyncIterable<Uint8Array> {
   return (async function* () {})();

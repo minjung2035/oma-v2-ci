@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import type {
+  HostConfigV1,
   Capability,
   Actor,
   AuthContext,
@@ -26,9 +27,9 @@ import type {
 import { Store, StoreError, reused, type OperationRow } from "./store.js";
 import { UnitsModule, unitName } from "./units.js";
 import { MailModule } from "./mail.js";
-import { generateOperationId } from "./ids.js";
-import { requestHash } from "./hash.js";
-import { capabilitiesOf } from "./authority.js";
+import { generateOperationId, isValidFullOid } from "./ids.js";
+import { requestHash, canonicalJson } from "./hash.js";
+import { capabilitiesOf, resolvedSpecOf, assertCurrentActor } from "./authority.js";
 
 export interface LifecyclePaths {
   stateRoot: string;
@@ -66,10 +67,19 @@ const cloneEnv: NodeJS.ProcessEnv = {
   GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_TERMINAL_PROMPT: "0",
   GIT_NO_REPLACE_OBJECTS: "1",
-  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_COUNT: "3",
   GIT_CONFIG_KEY_0: "core.hooksPath",
   GIT_CONFIG_VALUE_0: "/dev/null",
+  GIT_CONFIG_KEY_1: "core.fsync", GIT_CONFIG_VALUE_1: "all",
+  GIT_CONFIG_KEY_2: "core.fsyncMethod", GIT_CONFIG_VALUE_2: "fsync",
 };
+
+function specDigest(spec: ResolvedAgentSpec): string {
+  return createHash("sha256").update(canonicalJson({
+    ...spec, resources: { ...spec.resources },
+    capabilities: [...new Set(spec.capabilities)].sort(),
+  })).digest("hex");
+}
 
 export class LifecycleModule {
   constructor(
@@ -239,14 +249,11 @@ export class LifecycleModule {
         return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     }
 
-    if (!alreadyRunning) this.units.start(agent, true);
-    const after = this.units.observe(agent);
-    if (!alreadyRunning && !["active", "activating"].includes(after.activeState)) {
+    try {
+      if (!alreadyRunning) this.units.start(agent, true);
+    } catch (error) {
       this.store.transaction((_tx) => this.store.setOperationUnknown(opId));
-      throw new StoreError(
-        "RUN_TERMINATION_UNKNOWN",
-        `start of ${agent} was not observed active`,
-      );
+      throw error;
     }
     const result: OperationResult = {
       kind: "agent.start",
@@ -305,7 +312,11 @@ export class LifecycleModule {
         return receiptOfOp(this.store.getOperation(auth.actor, key)!);
     }
 
-    this.units.stop(agent, target.incarnation);
+    try { this.units.stop(agent, target.incarnation); }
+    catch (error) {
+      this.store.transaction((_tx) => this.store.setOperationUnknown(opId));
+      throw error;
+    }
     if (!this.units.confirmDead(agent, target.incarnation)) {
       this.store.transaction((_tx) => this.store.setOperationUnknown(opId));
       throw new StoreError(
@@ -328,6 +339,68 @@ export class LifecycleModule {
     return { operation: opId, state: "succeeded", result };
   }
 
+  /** LIFE-009: accept the complete host seed set atomically; startup owns recovery. */
+  async bootstrap(config: Pick<HostConfigV1, "initialResidents" | "principalProfile" | "agentProfiles" | "modelProfiles">): Promise<void> {
+    if (this.paths.hasGoal()) return;
+    const agents = this.store.listAgents();
+    const recorded = agents.flatMap((agent) => {
+      const op = this.store.getOperation("principal", `bootstrap-${agent.name}`);
+      return op?.kind === "agent.create" ? [op] : [];
+    });
+    const resolve = (name: string, profile: string, brief: string, from: string): ResolvedAgentSpec => {
+      const selected = config.agentProfiles[profile];
+      if (!selected || !config.modelProfiles[selected.modelProfile])
+        throw new StoreError("UNSUPPORTED_PROFILE", `unsupported bootstrap profile ${profile}`);
+      return { name, profile, brief, from, modelProfile: selected.modelProfile,
+        capabilities: [...new Set(selected.capabilities)].sort(), resources: { ...selected.resources } };
+    };
+    if (agents.length > 0) {
+      if (!recorded.some((op) => op.state === "pending" || op.state === "unknown")) return;
+      if (recorded.length !== config.initialResidents.length)
+        throw new StoreError("AGENT_CONFLICT", "bootstrap seed set changed during recovery");
+      for (const op of recorded) {
+        const plan = parseCreatePlan(op);
+        const seed = config.initialResidents.find((value) => value.name === plan.spec.name);
+        if (!seed || specDigest(resolve(seed.name, seed.profile, seed.brief, plan.spec.from)) !== plan.specHash)
+          throw new StoreError("AGENT_CONFLICT", "bootstrap seed spec changed during recovery");
+      }
+      return;
+    }
+    if (!this.mail) throw new StoreError("INTERNAL_ERROR", "bootstrap mail boundary unavailable");
+    const base = spawnSync("/usr/bin/git", ["--git-dir", this.paths.projectGit, "rev-parse", "refs/heads/main^{commit}"],
+      { env: cloneEnv, encoding: "utf8" });
+    if (base.status !== 0 || !isValidFullOid(base.stdout.trim()))
+      throw new StoreError("STORE_CORRUPT", "bootstrap requires a host-pinned canonical main");
+    const from = base.stdout.trim();
+    this.assertCanonicalBase(from);
+    const principal = resolve("principal", config.principalProfile, "Principal", from);
+    const auth: AuthContext = { actor: "principal", incarnation: 0, role: "principal", channel: "host",
+      capabilities: new Set(principal.capabilities), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+    const plans = await Promise.all(config.initialResidents.map(async (seed) => {
+      const spec = resolve(seed.name, seed.profile, seed.brief, from);
+      const id = generateOperationId();
+      const initialMessage = await this.mail!.freezeCreateInitial(auth, id, seed.name, seed.brief);
+      const plan: CreatePlan = { kind: "agent.create", spec, specHash: specDigest(spec), parent: "principal",
+        workspacePath: join(this.paths.stateRoot, "agents", seed.name, "workspace"),
+        unitNames: [unitName(this.paths.society, seed.name, "service"), unitName(this.paths.society, seed.name, "path")],
+        initialMessage, existingCreation: null };
+      return { id, plan };
+    }));
+    this.store.transaction(() => {
+      this.store.insertAgent({ name: "principal", specHash: specDigest(principal), role: "principal", desired: "enabled",
+        incarnation: 0, profile: principal.profile, createdBy: null, specJson: JSON.stringify(principal) });
+      for (const { id, plan } of plans) {
+        const input = { name: plan.spec.name, from, brief: plan.spec.brief };
+        this.store.claimOperation({ id, actor: "principal", requestKey: `bootstrap-${plan.spec.name}`,
+          requestHash: requestHash("agent.create", input), kind: "agent.create",
+          payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
+        this.store.insertAgent({ name: plan.spec.name, specHash: plan.specHash, role: "resident", desired: "provisioning",
+          incarnation: 0, profile: plan.spec.profile, createdBy: "principal", specJson: JSON.stringify(plan.spec) });
+        this.store.insertDeliveries([{ messageId: plan.initialMessage!.id, recipient: plan.spec.name, operationId: id }]);
+      }
+    });
+  }
+
   private resolveCreate(
     auth: AuthContext,
     input: AgentCreateInput,
@@ -347,17 +420,7 @@ export class LifecycleModule {
     );
     if (!spec)
       throw new StoreError("CAPABILITY_DENIED", "no delegable child profile");
-    const specHash = createHash("sha256")
-      .update(
-        JSON.stringify({
-          name: spec.name,
-          from: spec.from,
-          brief: spec.brief,
-          profile: spec.profile,
-          capabilities: spec.capabilities,
-        }),
-      )
-      .digest("hex");
+    const specHash = specDigest(spec);
     return { spec, specHash };
   }
 
@@ -463,6 +526,7 @@ export class LifecycleModule {
       linked: null as string | null,
     };
     this.store.transaction((_tx) => {
+      assertCurrentActor(this.store, auth, "agent.create");
       ({ spec, specHash } = this.resolveCreate(auth, input));
       physicalPlan.spec = spec;
       physicalPlan.specHash = specHash;
@@ -531,7 +595,7 @@ export class LifecycleModule {
     return this.finishCreate(opId);
   }
   /** MUST [REC-001/LIFE-003/004]: settle accepted lifecycle effects by observation. */
-  reconcileAction(operationId: string): void {
+  reconcileAction(operationId: string, allowActivation = true): void {
     const op = this.store.getOperationById(operationId as never);
     if (!op || (op.kind !== "agent.start" && op.kind !== "agent.stop")) return;
     if (op.state !== "pending" && op.state !== "unknown") return;
@@ -539,19 +603,15 @@ export class LifecycleModule {
     const agent = this.store.getAgent(plan.agent);
     if (!agent) throw new StoreError("STORE_CORRUPT", `missing agent ${plan.agent}`);
     if (plan.kind === "agent.start") {
+      if (!allowActivation) return;
       if (agent.desired !== "enabled" || !this.paths.hasGoal()) return;
-      let observed = this.units.observe(plan.agent);
+      const observed = this.units.observe(plan.agent);
       if (!["active", "activating"].includes(observed.activeState)) {
         if (!this.units.confirmDead(plan.agent, plan.previousIncarnation)) {
           this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
           return;
         }
         this.units.start(plan.agent, false);
-        observed = this.units.observe(plan.agent);
-        if (!["active", "activating"].includes(observed.activeState)) {
-          this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
-          return;
-        }
       }
     } else {
       if (agent.desired !== "stopped") return;
@@ -575,7 +635,7 @@ export class LifecycleModule {
 
 
   /** Mechanical create recovery: re-check the frozen plan; never re-render mail. */
-  async reconcileCreate(operationId: string): Promise<void> {
+  async reconcileCreate(operationId: string, allowActivation = true): Promise<void> {
     const op = this.store.getOperationById(operationId);
     if (!op || op.kind !== "agent.create") return;
     if (op.state !== "pending" && op.state !== "unknown") return;
@@ -589,7 +649,7 @@ export class LifecycleModule {
         "STORE_CORRUPT",
         `accepted create ${operationId} has no frozen initial message`,
       );
-    await this.finishCreate(operationId, plan);
+    await this.finishCreate(operationId, plan, allowActivation);
   }
 
   private settleLinkedCreate(
@@ -628,6 +688,7 @@ export class LifecycleModule {
   private async finishCreate(
     operationId: string,
     acceptedPlan?: CreatePlan,
+    allowActivation = true,
   ): Promise<Receipt> {
     if (!this.mail)
       throw new StoreError("INTERNAL_ERROR", "create mail boundary unavailable");
@@ -642,15 +703,17 @@ export class LifecycleModule {
       throw new StoreError("STORE_CORRUPT", "create plan has no initial message");
 
     const agent = this.store.getAgent(plan.spec.name);
-    if (!agent || agent.specHash !== plan.specHash)
+    if (!agent || agent.specHash !== plan.specHash || specDigest(resolvedSpecOf(agent)) !== plan.specHash)
       throw new StoreError("STORE_CORRUPT", "create agent/spec mismatch");
+    // The committed physical winner alone publishes; recovery uses the frozen staging bytes.
+    this.mail.publishCreateInitial(plan.initialMessage);
     this.ensureWorkspace(plan);
     const root = join(this.paths.stateRoot, "agents", plan.spec.name);
     mkdirSync(join(root, "home"), { recursive: true });
     mkdirSync(join(this.paths.stateRoot, "mail", "inboxes", plan.spec.name), {
       recursive: true,
     });
-    this.units.ensureResident(plan.spec.name, plan.spec.profile);
+    this.units.ensureResident(plan.spec.name, plan.spec.profile, plan.spec.resources);
 
     let desired = agent.desired;
     if (desired === "provisioning") {
@@ -663,8 +726,11 @@ export class LifecycleModule {
     }
 
     await this.mail.publishGated(op.id);
-    if (desired === "enabled" && this.paths.hasGoal())
+    if (desired === "enabled" && this.paths.hasGoal()) {
+      // Keep the existing operation pending until the broker can serve the runner.
+      if (!allowActivation) return receiptOfOp(this.store.getOperationById(op.id)!);
       this.units.start(plan.spec.name, false);
+    }
 
     const result: OperationResult = {
       kind: "agent.create",
@@ -806,7 +872,7 @@ function parseCreatePlan(op: OperationRow): CreatePlan {
       !Array.isArray(plan.spec.capabilities) ||
       plan.spec.capabilities.some((cap) => typeof cap !== "string") ||
       !Object.keys(plan.spec).every((key) =>
-        ["name", "from", "brief", "profile", "capabilities"].includes(key),
+        ["name", "from", "brief", "profile", "capabilities", "modelProfile", "resources"].includes(key),
       ) ||
       typeof plan.specHash !== "string" ||
       typeof plan.parent !== "string" ||
@@ -829,6 +895,8 @@ function parseCreatePlan(op: OperationRow): CreatePlan {
     ) {
       throw new Error("invalid create plan");
     }
+    resolvedSpecOf({ name: plan.spec.name, profile: plan.spec.profile, specJson: JSON.stringify(plan.spec) });
+    if (specDigest(plan.spec) !== plan.specHash) throw new Error("resolved spec hash mismatch");
     return plan;
   } catch (e) {
     throw new StoreError(

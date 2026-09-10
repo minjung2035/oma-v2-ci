@@ -1,9 +1,10 @@
 // MUST [CFG-001/002/005]: closed host configuration. Every field is required;
 // unknown fields and unsafe integers are rejected. No unlimited defaults.
 import { readFileSync } from "node:fs";
-import type { HostConfigV1, Capability } from "../implementation/contracts.js";
+import type { HostConfigV1, Capability, ResolvedAgentSpec } from "../implementation/contracts.js";
 import { StoreError } from "./store.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./ids.js";
+import { parseJsonObject } from "./frame.js";
 
 function err(message: string): never {
   throw new StoreError("INVALID_REQUEST", `config: ${message}`);
@@ -46,7 +47,7 @@ function requireKeys(
 export function loadConfig(path: string): HostConfigV1 {
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(path, "utf8"));
+    raw = parseJsonObject(readFileSync(path)).raw;
   } catch (e) {
     throw new StoreError(
       "INVALID_REQUEST",
@@ -203,7 +204,7 @@ export function loadConfig(path: string): HostConfigV1 {
       prof["modelProfile"],
       `agentProfiles.${name}.modelProfile`,
     );
-    if (!(modelProfile in modelProfiles))
+    if (!Object.prototype.hasOwnProperty.call(modelProfiles, modelProfile))
       err(`agentProfiles.${name}.modelProfile unknown`);
     if (
       !Array.isArray(prof["capabilities"]) ||
@@ -410,8 +411,8 @@ export function loadConfig(path: string): HostConfigV1 {
     schemaVersion: 1,
     society,
     installation: { node, libdir, rootfs, deploymentDigest },
-    modelProfiles: modelProfiles as HostConfigV1["modelProfiles"],
-    agentProfiles: agentProfiles as HostConfigV1["agentProfiles"],
+    modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfigV1["modelProfiles"],
+    agentProfiles: Object.assign(Object.create(null), agentProfiles) as HostConfigV1["agentProfiles"],
     principalProfile,
     initialResidents: initialResidents as HostConfigV1["initialResidents"],
     quota: quota as HostConfigV1["quota"],
@@ -437,15 +438,7 @@ export function resolveChildSpec(
   cfg: HostConfigV1,
   parent: { name: string; profile: string; capabilities: readonly Capability[] },
   input: { name: string; from: string; brief: string },
-): {
-  spec: {
-    name: string;
-    from: string;
-    brief: string;
-    profile: string;
-    capabilities: Capability[];
-  };
-} | null {
+): { spec: ResolvedAgentSpec } | null {
   void parent.name;
   const parentProfile = cfg.agentProfiles[parent.profile];
   if (!parentProfile)
@@ -472,6 +465,8 @@ export function resolveChildSpec(
       brief: input.brief,
       profile: childName,
       capabilities: [...new Set(intersection)].sort(),
+      modelProfile: child.modelProfile,
+      resources: { ...child.resources },
     },
   };
 }

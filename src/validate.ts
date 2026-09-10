@@ -37,7 +37,7 @@ export function checkObject(spec: Readonly<Record<string, Check>>): Check {
       if (err) return `field "${key}": ${err}`;
     }
     for (const key of Object.keys(v)) {
-      if (!spec[key]) return `unknown field "${key}"`;
+      if (!Object.prototype.hasOwnProperty.call(spec, key)) return `unknown field "${key}"`;
     }
     return null;
   };
@@ -57,10 +57,12 @@ export function checkString(opts?: {
 }): Check {
   return (v) => {
     if (typeof v !== "string") return `expected string, got ${typeName(v)}`;
-    if (opts?.min !== undefined && v.length < opts.min)
-      return `too short (min ${opts.min})`;
-    if (opts?.max !== undefined && v.length > opts.max)
-      return `too long (max ${opts.max})`;
+    if (/\p{Cs}/u.test(v)) return "unpaired Unicode surrogate";
+    const bytes = Buffer.byteLength(v, "utf8");
+    if (opts?.min !== undefined && bytes < opts.min)
+      return `too short (min ${opts.min} UTF-8 bytes)`;
+    if (opts?.max !== undefined && bytes > opts.max)
+      return `too long (max ${opts.max} UTF-8 bytes)`;
     if (opts?.re && !opts.re.test(v)) return `invalid format`;
     return null;
   };
@@ -177,21 +179,50 @@ export interface ParamsLimits {
   bundleBytes: number;
 }
 
+const exactCandidateShape = checkObject({
+  repo: checkEnum(["project"]),
+  targetRef: checkEnum(["refs/heads/main"]),
+  expectedBase: checkOid,
+  candidate: checkOid,
+  policyRevision: checkString({ min: 1, max: 128, re: /^[^\p{Cc}\p{Cf}]+$/u }),
+});
+export const exactCandidateCheck: Check = (value) => {
+  const error = exactCandidateShape(value);
+  if (error) return error;
+  const identity = value as { expectedBase: string; candidate: string };
+  return identity.expectedBase.length === identity.candidate.length ? null : "approval OIDs must use the same object format";
+};
+
+const messageKindCheck = checkEnum(["message", "question", "result", "alert", "context", "approval_required", "critical"]);
+
+export const messagePlanCheck = checkObject({
+  id: checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ }),
+  objectPath: checkString({ min: 1 }),
+  sha256: checkString({ re: /^[0-9a-f]{64}$/ }),
+  bytes: checkInt({ min: 0 }),
+  dateMs: checkInt({ min: 0 }),
+  to: checkArray(checkString({ min: 1 })),
+  recipients: checkArray(v => v === "principal" ? null : checkActor(v)),
+  kind: messageKindCheck,
+  approvalFor: checkOptional(exactCandidateCheck),
+  contextRevision: v => v === null ? null : checkOid(v),
+  replyHeaders: checkObject({
+    replyTo: checkArray(checkString({ min: 1 })),
+    inReplyTo: v => v === null ? null : checkString({ min: 1 })(v),
+    references: checkArray(checkString({ min: 1 })),
+  }),
+});
+
 export function mailParamsCheck(
   actorNames: ReadonlySet<string>,
   l: ParamsLimits,
 ): Check {
-  return checkObject({
+  const shape = checkObject({
     to: checkArray(checkAddress(actorNames), { min: 0, max: l.addresses }),
     subject: checkString({ max: l.subjectBytes }),
-    kind: checkEnum([
-      "message",
-      "question",
-      "result",
-      "alert",
-      "context",
-    ] as const),
+    kind: messageKindCheck,
     body: checkString({ max: l.mailBodyBytes }),
+    approvalFor: checkOptional(exactCandidateCheck),
     replyToMessage: checkOptional(checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ })),
     refs: checkOptional(
       checkArray(
@@ -208,6 +239,15 @@ export function mailParamsCheck(
       ),
     ),
   });
+  return (value) => {
+    const error = shape(value);
+    if (error) return error;
+    const mail = value as { kind: string; to: string[]; approvalFor?: unknown };
+    if (mail.kind === "approval_required")
+      return mail.approvalFor && mail.to.includes("principal")
+        ? null : "approval_required needs approvalFor and explicit principal recipient";
+    return mail.approvalFor === undefined ? null : "approvalFor is only allowed for approval_required";
+  };
 }
 
 export const agentCreateParamsCheck: Check = checkObject({
@@ -243,15 +283,27 @@ export const gitIntegrateParamsCheck: Check = checkObject({
   expected: checkOid,
 });
 
+export const contextPathCheck: Check = (value) =>
+  typeof value === "string" && isValidWirePath(value) &&
+  (value === "GOAL.md" || value === "RATIONALE.md" || /^decisions\/[^/]+\.md$/.test(value))
+    ? null : "unsupported context path";
+
+export function contextFileCheck(path: string, data: Uint8Array): string | null {
+  const pathError = contextPathCheck(path);
+  if (pathError) return pathError;
+  let text: string;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(data); }
+  catch { return "context must be UTF-8 text"; }
+  if (path === "GOAL.md" && text.length === 0) return "GOAL.md must not be empty";
+  return /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text) ? "binary context is forbidden" : null;
+}
+
 export function contextPublishParamsCheck(l: ParamsLimits): Check {
   return checkObject({
     expected: (v) => (v === null ? null : checkOid(v)),
     entries: checkArray(
       checkObject({
-        path: (v) =>
-          typeof v === "string" && isValidWirePath(v)
-            ? null
-            : `invalid wire path`,
+        path: contextPathCheck,
         bytes: checkInt({ min: 0, max: l.contextBytes }),
         sha256: checkString({ re: /^[0-9a-f]{64}$/ }),
       }),

@@ -21,10 +21,11 @@ import { join } from "node:path";
 import { connect } from "node:net";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
+import { resolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
-import { Broker } from "../src/broker.js";
+import { Broker, peerCgroup } from "../src/broker.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
 import { SandboxModule, candidateArgv } from "../src/sandbox.js";
 import { PiRpcClient } from "../src/rpc-client.js";
@@ -71,6 +72,8 @@ function envOf(): Env {
     input: { name: string; from: string; brief: string },
   ): ResolvedAgentSpec => ({
     ...input,
+    modelProfile: "m",
+    resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576, workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
     profile: "child",
     capabilities: ["mail.send", "route.follow"],
   });
@@ -116,10 +119,10 @@ function seed(store: Store, specs: Array<[string, string, string]>): void {
         specHash: "h",
         role: role as "resident" | "principal",
         desired: desired as never,
-        incarnation: 0,
+        incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -130,7 +133,7 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
     seed(env.store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
     const auth = (capabilities: Capability[]): AuthContext => ({
       actor: "a",
-      incarnation: 0,
+      incarnation: 1,
       role: "resident",
       channel: "actor",
       capabilities: new Set(capabilities),
@@ -152,6 +155,27 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
     );
     assert.equal((allowed as { ok: boolean }).ok, true);
     assert.equal(env.store.getOperation("a", "allow")?.state, "succeeded");
+    const views = Reflect.get(env.broker, "views") as ViewsModule;
+    const refresh = views.refreshWorld;
+    try {
+      views.refreshWorld = () => { throw new Error("injected derived-view failure"); };
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const receipt = await env.broker.dispatch(auth(["mail.send"]),
+          { v: 1, id: "view-fault", method: "mail.send", request: "view-fault", params } as never, null);
+        assert.equal((receipt as { result: { state: string } }).result.state, "succeeded");
+      }
+    } finally { views.refreshWorld = refresh; }
+    const socketDirectory = Reflect.get(env.broker, "actorSocketDirectory");
+    const socketOwner = { paths: { runRoot: `/run/user/1000/oma/${"s".repeat(31)}` } };
+    assert.equal(typeof socketDirectory.call(socketOwner, "a".repeat(31), 1), "string");
+    assert.throws(() => socketDirectory.call(socketOwner, "a".repeat(31), Number.MAX_SAFE_INTEGER), /sun_path/);
+    const staleAuth = auth(["mail.send"]);
+    const spec = JSON.parse(env.store.getAgent("a")!.specJson);
+    env.store.transaction(() => env.store.updateAgent({ name: "a", specJson: JSON.stringify({ ...spec, capabilities: [] }) }));
+    const revoked = await env.broker.dispatch(staleAuth,
+      { v: 1, id: "revoked", method: "mail.send", request: "revoked", params } as never, null);
+    assert.equal((revoked as { error: { code: string } }).error.code, "CAPABILITY_DENIED");
+    assert.equal(env.store.getOperation("a", "revoked"), null);
     for (const [method, capability] of [["agent.create", "agent.create"], ["git.integrate", "code.integrate"], ["context.publish", "context.publish"]] as const) {
       const deniedMethod = await env.broker.dispatch(
         auth(["mail.send"]),
@@ -160,6 +184,11 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
       );
       assert.equal((deniedMethod as { error?: { code: string } }).error?.code, "CAPABILITY_DENIED", `${method} must require ${capability}`);
     }
+    env.store.transaction(() => env.store.updateAgent({ name: "a", desired: "stopped", specJson: JSON.stringify(spec) }));
+    const stopped = await env.broker.dispatch(staleAuth,
+      { v: 1, id: "stopped", method: "mail.send", request: "stopped", params } as never, null);
+    assert.equal((stopped as { error: { code: string } }).error.code, "STALE_RUN");
+    assert.equal(env.store.getOperation("a", "stopped"), null);
   } finally {
     env.cleanup();
   }
@@ -239,7 +268,7 @@ test("T31-neg: forged batch.complete from outside the owning unit is rejected", 
   const env = envOf();
   try {
     seed(env.store, [["a", "resident", "enabled"]]);
-    await env.mail.send(auth("a", []), "self-1", {
+    await env.mail.send(auth("a", ["mail.send"]), "self-1", {
       to: ["a"],
       subject: "self",
       kind: "message",
@@ -272,7 +301,7 @@ test("T42: principal relay moves new mail to cur, counts pending, spawns no mode
       ["a", "resident", "enabled"],
       ["principal", "principal", "enabled"],
     ]);
-    const receipt = await env.mail.send(auth("a", []), "q1", {
+    const receipt = await env.mail.send(auth("a", ["mail.send"]), "q1", {
       to: ["principal"],
       subject: "question",
       kind: "question",
@@ -342,6 +371,109 @@ socket.on("data", chunk => { data = Buffer.concat([data, chunk]); if (data.lengt
   }
 });
 
+test("RUN-001: a populated pinned old cgroup blocks incarnation handoff", () => {
+  const env = envOf();
+  const cgroup = readFileSync("/proc/self/cgroup", "utf8").trim().split("::")[1]!;
+  const fd = openSync(join("/sys/fs/cgroup", cgroup), "r");
+  const leases = Reflect.get(env.broker, "runLeases") as Map<string, unknown>;
+  try {
+    seed(env.store, [["a", "resident", "enabled"]]);
+    mkdirSync(join(env.state, "world", "context", "current"), { recursive: true });
+    assert.match(readFileSync(`/proc/self/fd/${fd}/cgroup.events`, "utf8"), /^populated 1$/m);
+    // Fault seam: retain a genuinely populated kernel cgroup as the previous run.
+    leases.set("a", { invocationId: "1".repeat(32), cgroupFd: fd, lease: {}, done: () => assert.fail("live old lease revoked") });
+    assert.throws(() => Reflect.get(env.broker, "openRun").call(env.broker, "a", "2".repeat(32)), /previous invocation cgroup/);
+    assert.equal(env.store.getAgent("a")!.incarnation, 1);
+  } finally { leases.delete("a"); closeSync(fd); env.cleanup(); }
+});
+
+test("AUTH-003 fault seam: actor auth requires a live lease, matching invocation and pinned cgroup inode", async () => {
+  const env = envOf();
+  const units = Reflect.get(env.broker, "units") as UnitsModule;
+  const observe = units.observe.bind(units);
+  const leases = Reflect.get(env.broker, "runLeases") as Map<string, unknown>;
+  const cg = peerCgroup(process.pid)!;
+  const fd = openSync(join("/sys/fs/cgroup", cg), "r");
+  const wrong = openSync(env.dir, "r");
+  try {
+    seed(env.store, [["a", "resident", "enabled"]]);
+    const baseline = observe("a");
+    let invocation = "1".repeat(32);
+    units.observe = () => ({ ...baseline, cgroup: cg, invocationId: invocation });
+    const lease: RunLease = { actor: "a", incarnation: 1, socketHostPath: "/unused" };
+    const record = { invocationId: invocation, cgroupFd: fd, lease: lease as RunLease | null };
+    let peerAlive = true; // Explicit peer-liveness seam; native pidfd has its own process-exit test.
+    const authenticate = () => Reflect.get(env.broker, "trustedContext").call(env.broker, "a", { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => peerAlive });
+    assert.equal(authenticate(), null);
+    leases.set("a", record);
+    const authenticated = authenticate() as AuthContext;
+    assert.equal(authenticated.actor, "a");
+    assert.equal(authenticated.capabilities.has("mail.send"), true);
+    invocation = "2".repeat(32);
+    assert.equal(authenticate(), null, "cgroup pathname alone is not invocation identity");
+    invocation = record.invocationId;
+    const inFlight = env.mail.send(authenticated, "lease-revoked", { to: ["a"], subject: "revoked", kind: "message", body: "body" });
+    record.lease = null;
+    assert.equal(authenticate(), null);
+    assert.equal(authenticated.capabilities.size, 0, "revocation must invalidate in-flight authorization too");
+    await assert.rejects(inFlight, { code: "CAPABILITY_DENIED" });
+    assert.equal(env.store.getOperation("a", "lease-revoked"), null);
+    record.lease = lease;
+    record.cgroupFd = wrong;
+    assert.equal(authenticate(), null, "a different pinned inode cannot authenticate the same path");
+    record.cgroupFd = fd;
+    peerAlive = false;
+    assert.equal(authenticate(), null);
+    assert.equal(authenticated.capabilities.size, 0);
+  } finally { leases.delete("a"); units.observe = observe; closeSync(fd); closeSync(wrong); env.cleanup(); }
+});
+
+test("BATCH-001: failed view publication retries the same prepared snapshot", async () => {
+  const env = envOf();
+  try {
+    seed(env.store, [["a", "resident", "enabled"], ["b", "resident", "enabled"]]);
+    await env.mail.send(auth("b", ["mail.send"]), "view-failure", {
+      to: ["a"], subject: "recover", kind: "message", body: "original",
+    });
+    const view = join(env.state, "agents", "a", "runner", "view", "inbox.md");
+    mkdirSync(view, { recursive: true });
+    await assert.rejects(env.mail.prepare(auth("a", [])));
+    const frozen = env.store.preparedBatches("a")[0]!;
+    assert.ok(frozen);
+    assert.equal(env.store.pendingDeliveries("a").length, 0);
+    rmSync(view, { recursive: true });
+    const recovered = await env.mail.prepare(auth("a", []));
+    assert.equal(recovered!.id, frozen.id);
+    assert.deepEqual(recovered!.messageIds, JSON.parse(frozen.messageIdsJson));
+    assert.match(readFileSync(view, "utf8"), new RegExp(frozen.id));
+  } finally { env.cleanup(); }
+});
+
+test("PR-002/BATCH-001: mailbox moves reject rogue bytes and preserve valid recovery", async () => {
+  const env = envOf();
+  try {
+    seed(env.store, [["a", "resident", "enabled"], ["principal", "principal", "enabled"]]);
+    const receipt = await env.mail.send(auth("a", ["mail.send"]), "relay-integrity", {
+      to: ["principal"], subject: "test", kind: "question", body: "original",
+    });
+    const id = (receipt.result as { message: string }).message;
+    const from = env.mail.inboxNewPath("principal", id);
+    const to = env.mail.inboxCurPath("principal", id);
+    const bytes = readFileSync(from);
+    rmSync(from);
+    writeFileSync(from, "forged");
+    assert.throws(() => env.mail.moveToCur("principal", [id]), /integrity mismatch/);
+    assert.equal(existsSync(to), false);
+    writeFileSync(from, bytes);
+    assert.equal(env.mail.moveToCur("principal", [id]), 1);
+    assert.equal(existsSync(from), false);
+    assert.deepEqual(readFileSync(to), bytes);
+    assert.equal(env.mail.moveToCur("principal", [id]), 0);
+    writeFileSync(join(env.state, "mail", "inboxes", "principal", "new", "rogue"), bytes);
+    assert.throws(() => env.mail.moveToCur("principal", ["rogue"]), /missing delivery/);
+  } finally { env.cleanup(); }
+});
+
 test("T25 deterministic core: capped batches alternate direct and public mail", async () => {
   const env = envOf();
   try {
@@ -358,14 +490,14 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
     const direct = new Set<string>();
     const publicList = new Set<string>();
     for (let i = 0; i < 20; i++) {
-      const d = await mail.send(auth("b", []), `direct-${i}`, {
+      const d = await mail.send(auth("b", ["mail.send"]), `direct-${i}`, {
         to: ["a"],
         subject: `direct ${i}`,
         kind: "question",
         body: "d",
       });
       direct.add((d.result as { message: string }).message);
-      const p = await mail.send(auth("b", []), `public-${i}`, {
+      const p = await mail.send(auth("b", ["mail.send"]), `public-${i}`, {
         to: ["commons"],
         subject: `public ${i}`,
         kind: "message",
@@ -384,7 +516,7 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
     );
     assert.match(batch.notice, /sender=.*subject=.*kind=.*path=\/mail\/archive\/cur\//);
     assert.match(batch.notice, /전체 목록: \/inbox\.md/);
-    await mail.send(auth("b", []), "late-direct", {
+    await mail.send(auth("b", ["mail.send"]), "late-direct", {
       to: ["a"],
       subject: "late",
       kind: "question",
@@ -392,6 +524,11 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
     });
     const recovered = await mail.prepare(auth("a", []));
     assert.deepEqual(recovered?.messageIds, batch.messageIds);
+    await assert.rejects(mail.complete(auth("a", []), {
+      batchId: batch.id, incarnation: batch.incarnation, sessionPath: "/tmp/untrusted",
+      adapterRevision: "unverified", receiptPath: "/tmp/untrusted",
+    }), (error: unknown) => error instanceof Error && "code" in error && error.code === "SPIKE_UNRESOLVED");
+    assert.equal(env.store.getDelivery(batch.messageIds[0]!, "a")!.presented, 0);
   } finally {
     env.cleanup();
   }
@@ -401,7 +538,7 @@ test("prepared batch manifest shape stays compatible with the trusted extension"
   const env = envOf();
   try {
     seed(env.store, [["a", "resident", "enabled"]]);
-    await env.mail.send(auth("a", []), "s1", {
+    await env.mail.send(auth("a", ["mail.send"]), "s1", {
       to: ["a"],
       subject: "s",
       kind: "message",

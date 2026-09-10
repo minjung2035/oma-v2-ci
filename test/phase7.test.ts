@@ -19,6 +19,7 @@ import { createHash } from "node:crypto";
 import { Store, StoreError } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
 import { GitModule, type GitPaths, type IntegrationPolicy } from "../src/git.js";
+import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
 import type {
   AuthContext,
   Capability,
@@ -62,10 +63,10 @@ function envOf(
         specHash: "h",
         role,
         desired,
-        incarnation: 0,
+        incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -314,7 +315,7 @@ test("T54: submit with incremental bundle creates the published ref and the resu
     )!;
     assert.equal(op.state, "succeeded");
     const frozenMessage = JSON.parse(op.planJson) as { message: { to: string[]; recipients: string[] } };
-    assert.deepEqual(frozenMessage.message.to, ["commons"]);
+    assert.deepEqual(frozenMessage.message.to, ["commons@demo.oma.invalid"]);
     assert.deepEqual(frozenMessage.message.recipients.sort(), ["a", "b"]);
     // peer B fetches exactly C
     const b = join(env.dir, "peer");
@@ -672,7 +673,14 @@ test("INT-003: accepted stop intent cancels before main CAS", async () => {
   try {
     const base = seedProject(env);
     sh(env, ["--git-dir", env.paths.projectGit, "update-ref", "refs/oma/published/a/manual", base]);
-    env.store.transaction((_t) => env.store.updateAgent({ name: "a", desired: "stopped" }));
+    const transaction = env.store.transaction.bind(env.store);
+    env.store.transaction = (body) => {
+      const result = transaction(body);
+      // Fault seam: accept stop in a separate transaction after the integrate intent.
+      if (env.store.getOperation("a", "stop-before-cas")?.state === "pending" && env.store.getAgent("a")!.desired === "enabled")
+        transaction(() => env.store.updateAgent({ name: "a", desired: "stopped" }));
+      return result;
+    };
     await assert.rejects(
       env.git.integrate(
         auth("a", ["code.integrate"]),

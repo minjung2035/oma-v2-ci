@@ -3,8 +3,10 @@
 // waits to be SIGKILLed by the parent. Production never loads this file.
 import { join } from "node:path";
 import { Store } from "../../src/store.js";
-import { MailModule, StopSignal, type MailStopPoint } from "../../src/mail.js";
+import { MailModule } from "../../src/mail.js";
+import { sendWithStop, StopSignal, type MailStopPoint } from "./mail-faults.js";
 import type { AuthContext, MailInput } from "../../implementation/contracts.js";
+import { ALL_CAPS, resolvedSpec } from "./spec.js";
 
 const state = process.env.OMA_STATE!;
 const society = process.env.OMA_SOCIETY ?? "demo";
@@ -21,10 +23,10 @@ if (role === "seed") {
         specHash: "h",
         role: name === "principal" ? "principal" : "resident",
         desired: desired as "enabled" | "stopped" | "provisioning" | "retired",
-        incarnation: 0,
+        incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
     store.insertAgent({
@@ -35,7 +37,7 @@ if (role === "seed") {
       incarnation: 0,
       profile: "p",
       createdBy: null,
-      specJson: "{}",
+      specJson: resolvedSpec(ALL_CAPS, "p", "principal"),
     });
   });
   store.close();
@@ -61,7 +63,7 @@ if (role === "send") {
     body: process.env.OMA_BODY ?? "body",
   };
   try {
-    const receipt = await mail.send(
+    const receipt = await sendWithStop(mail, store,
       auth,
       process.env.OMA_KEY ?? "k",
       input,
@@ -73,6 +75,7 @@ if (role === "send") {
   } catch (e) {
     if (e instanceof StopSignal) {
       console.log(`BOUNDARY:${e.point}`);
+      process.kill(process.pid, "SIGSTOP");
     } else {
       console.log(`ERROR:${(e as Error).message}`);
       store.close();

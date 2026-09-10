@@ -26,6 +26,8 @@ import { GitModule } from "../src/git.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker } from "../src/broker.js";
 import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { encodeFrame } from "../src/frame.js";
+import { sha256Hex } from "../src/hash.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 
 const G = {
@@ -58,7 +60,6 @@ function envOf(): Env {
       ["principal", "principal"],
       ["a", "resident"],
       ["b", "resident"],
-      ["commons", "resident"],
     ] as const) {
       store.insertAgent({
         name,
@@ -68,7 +69,7 @@ function envOf(): Env {
         incarnation: 0,
         profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS),
+        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -100,6 +101,8 @@ function envOf(): Env {
     input: { name: string; from: string; brief: string },
   ): ResolvedAgentSpec => ({
     ...input,
+    modelProfile: "m",
+    resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576, workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
     profile: "child",
     capabilities: ["mail.send", "git.submit"],
   });
@@ -219,7 +222,15 @@ const scenarios = JSON.parse(readFileSync(process.env.OMA_SCENARIOS_FILE, "utf8"
 
 function framed(sockPath, frame) {
   return new Promise((resolve, reject) => {
-    const sock = connect(sockPath, () => sock.write(encodeFrame(frame)));
+    let bytes;
+    if (Array.isArray(frame)) bytes = Buffer.from(frame);
+    else if (typeof frame === "string") {
+      const body = Buffer.from(frame);
+      bytes = Buffer.alloc(4 + body.length);
+      bytes.writeUInt32BE(body.length);
+      body.copy(bytes, 4);
+    } else bytes = encodeFrame(frame);
+    const sock = connect(sockPath, () => sock.write(bytes));
     const parser = new FrameParser(256 * 1024);
     let buf = Buffer.alloc(0);
     const timer = setTimeout(() => { sock.destroy(); reject(new Error("wrap timeout")); }, 30000);
@@ -237,6 +248,11 @@ if (!lease.ok) { writeFileSync(process.env.OMA_OUT, JSON.stringify({ leaseError:
 const sock = lease.result.socketHostPath;
 const results = [];
 for (const s of scenarios) {
+  if (s.frame) {
+    const reply = await framed(sock, s.frame);
+    results.push({ code: reply.ok ? 0 : 2, stdout: JSON.stringify(reply), stderr: reply.error?.code ?? "" });
+    continue;
+  }
   if (s.git) {
     const g = spawnSync("git", s.git, { cwd: s.cwd ?? "/tmp", encoding: "utf8" });
     results.push({ git: s.git, code: g.status, stdout: g.stdout ?? "", stderr: g.stderr ?? "" });
@@ -265,7 +281,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
   const env = envOf();
   const society = env.society;
   try {
-    seedProject(env);
+    const base = seedProject(env);
     // CLI workdir: a clone with one local commit to submit
     const work = join(env.dir, "work");
     const sh = (args: string[], cwd?: string): string => {
@@ -292,6 +308,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
       ],
       work,
     );
+    const candidate = sh(["rev-parse", "HEAD"], work);
     const bodyFile = join(env.dir, "body.txt");
     writeFileSync(bodyFile, "hello body\n", "utf8");
     const briefFile = join(env.dir, "brief.md");
@@ -299,7 +316,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
     const homeDir = join(env.dir, "home-a");
     mkdirSync(homeDir, { recursive: true });
     // scenarios (in one unit run; shared HOME = shared freeze cache)
-    const scenarios = [
+    const scenarios: Array<{ args?: string[]; git?: string[]; frame?: unknown; cwd: string; home?: string; socket?: string }> = [
       {
         args: [
           "send",
@@ -472,6 +489,76 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         home: homeDir,
       },
     ];
+    const typedStart = scenarios.length;
+    const policyRevision = " 정책-v1 ";
+    const approvalArgs = (key: string, oid = candidate, policy = policyRevision, recipient = "principal") => [
+      "send", recipient, "--kind", "approval_required", "--subject", "exact approval",
+      "--candidate", oid, "--expect", base, "--policy-revision", policy,
+      "--file", bodyFile, "--request", key,
+    ];
+    for (const args of [
+      approvalArgs("approval"), approvalArgs("approval"),
+      approvalArgs("approval", candidate, "changed-policy"),
+      approvalArgs("unpublished-approval", base),
+      approvalArgs("missing-principal", candidate, policyRevision, "b"),
+      approvalArgs("short-oid", candidate.slice(0, 8)),
+    ]) scenarios.push({ args, cwd: work, home: homeDir });
+    const identity = { repo: "project", targetRef: "refs/heads/main", candidate, expectedBase: base, policyRevision };
+    const validMail = { to: ["principal"], subject: "raw approval", body: "body", kind: "approval_required", approvalFor: identity };
+    const invalidMail = [
+      { ...validMail, to: ["b"] },
+      { ...validMail, approvalFor: { ...identity, trusted: true } },
+      { ...validMail, kind: "critical" },
+      { ...validMail, approvalFor: { ...identity, policyRevision: "bad\nheader" } },
+    ];
+    for (const [index, params] of invalidMail.entries()) scenarios.push({
+      cwd: work, frame: { v: 1, id: `raw-${index}`, request: `raw-${index}`, method: "mail.send", params },
+    });
+    scenarios.push({ cwd: work, frame: String.raw`{"v":1,"id":"raw-4","request":"raw-4","method":"status.get","\u006dethod":"mail.send","params":${JSON.stringify(validMail)}}` });
+    const rawRequest = { v: 1, id: "invalid-wire", request: "invalid-wire", method: "mail.send", params: validMail };
+    const invalidFrames = [
+      { frame: [0, 0, 0, 1, 0xff], code: "INVALID_REQUEST" },
+      { frame: "[]", code: "INVALID_REQUEST" },
+      { frame: '{"value":1e999}', code: "INVALID_REQUEST" },
+      { frame: '{"value":9007199254740992}', code: "INVALID_REQUEST" },
+      { frame: { ...rawRequest, v: 2 }, code: "UNSUPPORTED_VERSION" },
+      { frame: { ...rawRequest, method: "mail.forge" }, code: "UNKNOWN_METHOD" },
+      { frame: { ...rawRequest, trusted: true }, code: "INVALID_REQUEST" },
+      { frame: { ...rawRequest, params: { ...validMail, toString: "not a schema field" } }, code: "INVALID_REQUEST" },
+      { frame: { ...rawRequest, params: { ...validMail, kind: "normal" } }, code: "INVALID_REQUEST" },
+      { frame: { ...rawRequest, params: { ...validMail, subject: "한".repeat(171) } }, code: "INVALID_REQUEST" },
+      ...[
+        { ...identity, policyRevision: "한".repeat(43) },
+        { ...identity, policyRevision: "\ud800" },
+        { ...identity, expectedBase: "a".repeat(64) },
+        { ...identity, repo: "context" },
+        { ...identity, targetRef: "refs/heads/other" },
+      ].map((approvalFor) => ({ frame: { ...rawRequest, params: { ...validMail, approvalFor } }, code: "INVALID_REQUEST" })),
+    ];
+    for (const item of invalidFrames) scenarios.push({ cwd: work, frame: item.frame });
+    const contextStart = scenarios.length;
+    const contextDir = join(env.dir, "context-docs");
+    mkdirSync(join(contextDir, "decisions"), { recursive: true });
+    writeFileSync(join(contextDir, "GOAL.md"), "# authenticated context\n");
+    writeFileSync(join(contextDir, "RATIONALE.md"), "");
+    writeFileSync(join(contextDir, "decisions/a..b.md"), "decision\n");
+    for (let retry = 0; retry < 2; retry++) scenarios.push({
+      args: ["context", "publish", contextDir, "--expect", "none", "--request", "ctx-live"], cwd: work, home: homeDir,
+    });
+    const contextInvalid: Array<Array<[string, Buffer]>> = [
+      [[".git/config", Buffer.from("[core]\nfsmonitor=false\n")], ["GOAL.md", Buffer.from("goal")]],
+      [["GOAL.md", Buffer.from([0xc0, 0xaf])]],
+      [["GOAL.md", Buffer.alloc(0)]],
+      [["GOAL.md", Buffer.from("x")], ["GOAL.md", Buffer.from("y")]],
+    ];
+    for (const [index, files] of contextInvalid.entries()) {
+      const body = Buffer.concat(files.map(([, bytes]) => bytes));
+      const frame = { v: 1, id: `ctx-wire-${index}`, request: `ctx-wire-${index}`, method: "context.publish", params: {
+        expected: null, entries: files.map(([path, bytes]) => ({ path, bytes: bytes.length, sha256: sha256Hex(bytes) })),
+        content: { bytes: body.length, sha256: sha256Hex(body), mediaType: "application/vnd.oma.context-v1" },
+      } };
+      scenarios.push({ cwd: work, frame: [...Buffer.concat([encodeFrame(frame), body])] });
+    }
     // wrap + unit
     const wrapPath = join(env.dir, "wrap.mjs");
     writeFileSync(
@@ -662,9 +749,6 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
     const mA = existsSync(inboxA)
       ? readdirSync(inboxA).filter((f) => f.startsWith("m-"))
       : [];
-    const mC = existsSync(inboxCommons)
-      ? readdirSync(inboxCommons).filter((f) => f.startsWith("m-"))
-      : [];
     assert.ok(
       mA.length >= 1,
       `kto1 result mail must reach a's inbox; ${JSON.stringify(mA)}`,
@@ -685,10 +769,9 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
       `kto2 must reach b via the repeatable --to; ${JSON.stringify(b2)}`,
     );
     // kto3 (no --to) defaults to commons
-    assert.ok(
-      mC.length >= 1,
-      `kto3 (default) must reach commons; ${JSON.stringify(mC)}`,
-    );
+    const broadcast = JSON.parse(env.store.getOperation("a", "kto3")!.planJson).message;
+    assert.deepEqual([...broadcast.recipients].sort(), ["a", "b"]);
+    assert.equal(existsSync(inboxCommons), false, "commons is an address, not an actor mailbox");
 
     // ---- P1-5: agent create --from HEAD ----
     const rFrom1 = results[10]!;
@@ -702,6 +785,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
       state: string;
     };
     assert.equal(fromRec.state, "succeeded");
+    assert.match(readFileSync(join(env.state, "world", "agents.tsv"), "utf8"), /checker\tresident\tenabled\tchild/);
     const gitCode = results[11]!;
     assert.equal(gitCode.code, 0, `git move-head: ${gitCode.stderr}`);
     // recovery after HEAD moved: MUST use the originally frozen OID (exit 0,
@@ -755,6 +839,99 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
       subf1.result.candidate,
       "recovery must use the frozen candidate, not the moved HEAD",
     );
+    const typed = results.slice(typedStart, typedStart + 6);
+    for (const [index, result] of results.slice(typedStart + 6, typedStart + 11).entries()) {
+      assert.equal(result.code, 2);
+      assert.equal(result.stderr, "INVALID_REQUEST");
+      assert.equal(env.store.getOperation("a", `raw-${index}`), null);
+    }
+    const wireResults = results.slice(typedStart + 11, contextStart);
+    assert.equal(wireResults.length, invalidFrames.length);
+    for (const [index, result] of wireResults.entries()) {
+      assert.equal(result.code, 2, JSON.stringify({ index, input: invalidFrames[index], result }));
+      assert.equal(result.stderr, invalidFrames[index]!.code);
+    }
+    assert.equal(env.store.getOperation("a", "invalid-wire"), null);
+    assert.deepEqual(typed.map((result) => result.code), [0, 0, 2, 2, 2, 2], JSON.stringify(typed));
+    assert.equal(JSON.parse(typed[0]!.stdout).operation, JSON.parse(typed[1]!.stdout).operation);
+    assert.match(typed[2]!.stderr, /REQUEST_KEY_REUSED/);
+    assert.match(typed[3]!.stderr, /CANDIDATE_NOT_PUBLISHED/);
+    for (const key of ["unpublished-approval", "missing-principal", "short-oid"])
+      assert.equal(env.store.getOperation("a", key), null, `${key} must remain preaccept`);
+    const approval = env.store.getOperation("a", "approval")!;
+    const message = JSON.parse(approval.planJson).message;
+    assert.deepEqual(message.approvalFor, { repo: "project", targetRef: "refs/heads/main",
+      candidate, expectedBase: base, policyRevision });
+    assert.equal(env.store.getDelivery(message.id, "principal")!.materialized, 1);
+    const parsed = spawnSync("python3", ["-c",
+      "import sys,json,email.policy; from email.parser import BytesParser; m=BytesParser(policy=email.policy.default).parsebytes(sys.stdin.buffer.read()); print(json.dumps({k.lower():str(v) for k,v in m.items()}))",
+    ], { input: readFileSync(join(env.state, message.objectPath)), encoding: "utf8" });
+    assert.equal(parsed.status, 0, parsed.stderr);
+    const headers = JSON.parse(parsed.stdout);
+    assert.equal(headers.to, `principal@${society}.oma.invalid`);
+    assert.equal(headers["x-oma-approval-policy"], policyRevision);
+    assert.equal(headers["x-oma-approval-candidate"], candidate);
+    assert.equal(headers["x-oma-approval-base"], base);
+    const contexts = results.slice(contextStart);
+    assert.deepEqual(contexts.map(result => result.code), [0, 0, 2, 2, 2, 2], JSON.stringify(contexts));
+    const firstContext = JSON.parse(contexts[0]!.stdout);
+    assert.equal(firstContext.operation, JSON.parse(contexts[1]!.stdout).operation);
+    assert.equal(firstContext.state, "succeeded");
+    assert.equal(readFileSync(join(env.state, "world/context/current/GOAL.md"), "utf8"), "# authenticated context\n");
+    assert.equal(sh(["--git-dir", join(env.state, "repos/context.git"), "rev-parse", "refs/heads/main"]), firstContext.result.revision);
+    const tree = sh(["--git-dir", join(env.state, "repos/context.git"), "ls-tree", "-r", firstContext.result.revision]).split("\n");
+    assert.ok(tree.every(line => line.startsWith("100644 blob ")), JSON.stringify(tree));
+    assert.deepEqual(tree.map(line => line.split("\t")[1]), ["GOAL.md", "RATIONALE.md", "decisions/a..b.md"]);
+    for (const [index, result] of contexts.slice(2).entries()) {
+      assert.equal(result.stderr, "INVALID_REQUEST");
+      assert.equal(env.store.getOperation("a", `ctx-wire-${index}`), null);
+    }
+    // A new real invocation exercises CLI --reply against an accepted archive object.
+    const originalMessage = JSON.parse(env.store.getOperationById(rec1.operation)!.planJson).message;
+    const invalidText = join(env.dir, "invalid-text.txt");
+    writeFileSync(invalidText, Buffer.from([0xff]));
+    writeFileSync(join(env.dir, "scenarios.json"), JSON.stringify([{
+      args: ["send", "--reply", join(env.state, "mail/archive/cur", `${originalMessage.id}:2,`), "--subject", "reply", "--file", bodyFile, "--request", "real-reply"],
+      cwd: work, home: homeDir,
+    }, {
+      args: ["send", "--reply", join(env.dir, "missing-reply.eml"), "--subject", "reply", "--file", bodyFile, "--request", "real-reply"],
+    }, {
+      args: ["send", "b", "--subject", "invalid text", "--file", invalidText, "--request", "invalid-text"],
+    }, {
+      frame: { v: 1, id: "forged-from", request: "forged-from", method: "mail.send", params: { to: ["b"], subject: "forged", kind: "message", body: "body", from: "principal" } },
+    }, {
+      frame: { v: 1, id: "header-injection", request: "header-injection", method: "mail.send", params: { to: ["b"], subject: "subject\r\nBcc: principal", kind: "message", body: "body" } },
+    }, {
+      frame: { v: 1, id: "valid-mail-control", request: "valid-mail-control", method: "mail.send", params: { to: ["b"], subject: "valid", kind: "message", body: "body" } },
+    }]));
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn("systemctl", ["--user", "start", unit], { env: G, timeout: 90000 });
+      child.once("error", reject);
+      child.once("exit", code => code === 0 ? resolve() : reject(new Error(`reply unit exit ${code}`)));
+    });
+    const replyResults = JSON.parse(readFileSync(outPath, "utf8"));
+    assert.equal(replyResults[0].code, 0, JSON.stringify(replyResults));
+    assert.equal(replyResults[1].code, 0, JSON.stringify(replyResults));
+    assert.equal(JSON.parse(replyResults[0].stdout).operation, JSON.parse(replyResults[1].stdout).operation);
+    assert.equal(replyResults[2].code, 2, JSON.stringify(replyResults));
+    assert.equal(env.store.getOperation("a", "invalid-text"), null);
+    for (const [index, key] of ["forged-from", "header-injection"].entries()) {
+      assert.equal(replyResults[index + 3].code, 2, JSON.stringify(replyResults));
+      assert.equal(replyResults[index + 3].stderr, "INVALID_REQUEST");
+      assert.equal(env.store.getOperation("a", key), null);
+    }
+    assert.equal(replyResults[5].code, 0, JSON.stringify(replyResults));
+    assert.equal(env.store.getOperation("a", "valid-mail-control")?.state, "succeeded");
+    const replyMessage = JSON.parse(env.store.getOperation("a", "real-reply")!.planJson).message;
+    assert.deepEqual(replyMessage.recipients, ["a"], "direct reply uses original sender, not original recipient");
+    assert.ok(env.store.getDelivery(replyMessage.id, "a"));
+    const replyDecoded = spawnSync("python3", ["-c",
+      "import sys,json,email.policy; from email.parser import BytesParser; m=BytesParser(policy=email.policy.default).parsebytes(sys.stdin.buffer.read()); print(json.dumps({k:str(m[k]) for k in ['Reply-To','In-Reply-To']}))",
+    ], { input: readFileSync(join(env.state, replyMessage.objectPath)), encoding: "utf8" });
+    assert.equal(replyDecoded.status, 0, replyDecoded.stderr);
+    const replyHeaders = JSON.parse(replyDecoded.stdout);
+    assert.equal(replyHeaders["Reply-To"], `a@${society}.oma.invalid`);
+    assert.equal(replyHeaders["In-Reply-To"], `<${originalMessage.id}@${society}.oma.invalid>`);
   } finally {
     env.cleanup();
   }

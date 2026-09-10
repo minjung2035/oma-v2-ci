@@ -18,10 +18,16 @@ export const ALL_CAPS: readonly Capability[] = [
 /** ResolvedAgentSpec JSON: capabilities are the broker-authorized set. */
 export function resolvedSpec(
   capabilities: readonly Capability[],
-  profile = "child",
+  profile: string,
+  name: string,
 ): string {
   return JSON.stringify({
-    name: "x",
+    name,
+    modelProfile: "md",
+    resources: {
+      memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
+      workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30,
+    },
     from: "0000000000000000000000000000000000000000",
     brief: "test",
     profile,

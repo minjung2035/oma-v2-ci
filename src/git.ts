@@ -14,6 +14,8 @@ import {
   symlinkSync,
   readdirSync,
   statSync,
+  lstatSync,
+  chmodSync,
   rmSync,
   readFileSync,
 } from "node:fs";
@@ -32,15 +34,16 @@ import type {
   ResourceLimits,
 } from "../implementation/contracts.js";
 import { Store, StoreError, reused } from "./store.js";
-import { MailModule, buildEml, expandAddresses } from "./mail.js";
-import { generateOperationId, generateMessageId } from "./ids.js";
+import { MailModule, buildEml, expandAddresses, fsyncDir, defaultReplyTo, actorAddress, listAddress } from "./mail.js";
+import { generateOperationId, generateMessageId, isValidFullOid } from "./ids.js";
 import {
   requestHash,
   canonicalRequestParams,
   canonicalJson,
   sha256Hex,
 } from "./hash.js";
-import { capabilitiesOf } from "./authority.js";
+import { capabilitiesOf, assertCurrentActor } from "./authority.js";
+import { contextFileCheck, contextPathCheck } from "./validate.js";
 
 export interface GitPaths {
   stateRoot: string;
@@ -79,12 +82,12 @@ export const gitEnv: NodeJS.ProcessEnv = {
   GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_TERMINAL_PROMPT: "0",
   GIT_NO_REPLACE_OBJECTS: "1",
-  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_COUNT: "3",
   GIT_CONFIG_KEY_0: "core.hooksPath",
   GIT_CONFIG_VALUE_0: "/dev/null",
+  GIT_CONFIG_KEY_1: "core.fsync", GIT_CONFIG_VALUE_1: "all",
+  GIT_CONFIG_KEY_2: "core.fsyncMethod", GIT_CONFIG_VALUE_2: "fsync",
 };
-
-const ZERO = "0000000000000000000000000000000000000000";
 
 function git(dir: string, args: string[]): SpawnSyncReturns<string> {
   const r = spawnSync(GIT_BIN, args, { cwd: dir, env: gitEnv, encoding: "utf8" });
@@ -156,6 +159,17 @@ export class GitModule {
   }
   // stream uploads carry bytes; the descriptor digest is part of the IPC-005 hash.
 
+  private objectFormat(repo: string, oids: readonly string[] = []): "sha1" | "sha256" {
+    const observed = spawnSync(GIT_BIN, ["--git-dir", repo, "rev-parse", "--show-object-format"],
+      { env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 1024 });
+    const format = String(observed.stdout ?? "").trim();
+    if (observed.status !== 0 || (format !== "sha1" && format !== "sha256"))
+      throw new StoreError("INTERNAL_ERROR", "cannot observe repository object format");
+    if (oids.some(oid => !isValidFullOid(oid) || oid.length !== (format === "sha1" ? 40 : 64)))
+      throw new StoreError("INVALID_OID", `OID does not match repository object format ${format}`);
+    return format;
+  }
+
   // -------------------------------------------------------------------------
   // git.submit (GIT-001..009)
   // -------------------------------------------------------------------------
@@ -187,9 +201,10 @@ export class GitModule {
     if (claim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
+    this.objectFormat(this.paths.projectGit, [input.candidate, ...input.prerequisites]);
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
-    const staging = join(this.paths.stateRoot, "staging", `submit-${key}`);
+    const staging = join(this.paths.stateRoot, "staging", `submit-${opId}`);
     mkdirSync(staging, { recursive: true });
     const bundlePath = join(staging, "upload.bundle");
 
@@ -199,11 +214,14 @@ export class GitModule {
       const h = createHash("sha256");
       const out = openSync(
         bundlePath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
         0o600,
       );
       try {
+        let total = 0;
         for await (const chunk of bytes) {
+          total += chunk.length;
+          if (total > input.bundle.bytes) throw new StoreError("STREAM_INVALID", "bundle exceeds descriptor bytes");
           h.update(chunk);
           writeFileSync(out, chunk);
         }
@@ -218,6 +236,8 @@ export class GitModule {
         throw new StoreError("STREAM_INVALID", "bundle byte count mismatch");
       }
     }
+    fsyncDir(staging);
+    fsyncDir(join(this.paths.stateRoot, "staging"));
     const targetAddresses = (input.to.length > 0 ? input.to : ["commons"]) as Address[];
     const route = expandAddresses(
       this.store,
@@ -257,7 +277,7 @@ export class GitModule {
         recipients: route.recipients,
         kind: "result" as const,
         contextRevision: null,
-        replyHeaders: { replyTo: route.displayTo, inReplyTo: null, references: [] },
+        replyHeaders: { replyTo: defaultReplyTo(actorAddress(auth.actor, this.paths.society), route.displayTo), inReplyTo: null, references: [] },
       },
     };
     // Freeze the immutable result object before acceptance so a crash cannot leave
@@ -266,13 +286,7 @@ export class GitModule {
     // SAFETY: object property escapes the tx callback's closure narrowing.
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
-      const acceptedRoute = expandAddresses(
-        this.store,
-        targetAddresses,
-        this.paths.society,
-      );
-      if (JSON.stringify(acceptedRoute) !== JSON.stringify(route))
-        throw new StoreError("POLICY_CHANGED", "recipient route changed before acceptance");
+      assertCurrentActor(this.store, auth, "git.submit");
       claimOut.txClaim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
@@ -283,6 +297,9 @@ export class GitModule {
         planJson: JSON.stringify(plan),
       });
       if (claimOut.txClaim === "retry") return;
+      route.recipients = expandAddresses(this.store, targetAddresses, this.paths.society).recipients;
+      plan.message.recipients = route.recipients;
+      this.store.updateOperationPlanJson(opId, JSON.stringify(plan));
       this.store.insertDeliveries(
         route.recipients.map((r) => ({ messageId, recipient: r, operationId: opId })),
       );
@@ -360,8 +377,8 @@ export class GitModule {
     const bodyText = `${r.body}\n\n게시됨: ${r.publishedRef}\nCommit: ${r.candidate}\n${r.paths.length > 0 ? `경로: ${r.paths.join(", ")}\n` : ""}${fetchHint}`;
     const eml = await buildEml({
       from: `${actor}@${this.paths.society}.oma.invalid`,
-      to: r.to.length > 0 ? r.to : ["commons"],
-      replyTo: [],
+      to: r.to,
+      replyTo: defaultReplyTo(actorAddress(actor, this.paths.society), r.to),
       subject: r.subject,
       kind: "result",
       contextRevision: null,
@@ -379,12 +396,17 @@ export class GitModule {
   }
 
   private canonicalHas(oid: string): boolean {
+    const expression = `${oid}^{commit}`;
     const r = spawnSync(
       "git",
-      ["--git-dir", this.paths.projectGit, "cat-file", "-e", `${oid}^{commit}`],
-      { env: gitEnv, encoding: "utf8" },
+      ["--git-dir", this.paths.projectGit, "cat-file", "--batch-check=%(objecttype)"],
+      { env: gitEnv, encoding: "utf8", input: `${expression}\n`, timeout: 10000, maxBuffer: 64 * 1024 },
     );
-    return r.status === 0;
+    if (r.status === 0 && !r.stderr) {
+      if (r.stdout.trim() === "commit") return true;
+      if (r.stdout.trim() === `${expression} missing`) return false;
+    }
+    throw new StoreError("REF_STATE_UNKNOWN", "cannot observe canonical commit");
   }
 
   /** MUST [GIT-006/007]/[S-05]: disposable namespace with bounded resources. */
@@ -431,7 +453,8 @@ export class GitModule {
       "mkdir -p \"$root/hooks\"",
       "export GIT_CONFIG_VALUE_0=\"$root/hooks\"",
       "repo=\"$root/quarantine/repo\"",
-      "$git --git-dir=\"$repo\" init -q --bare >/dev/null 2>&1 || fail_spike",
+      "format=$($git --git-dir=\"$root/project\" rev-parse --show-object-format) || fail_internal",
+      "$git --git-dir=\"$repo\" init -q --bare --object-format=\"$format\" >/dev/null 2>&1 || fail_spike",
       "mkdir -p \"$repo/objects/info\"",
       "printf '%s\\n' \"$root/project/objects\" > \"$repo/objects/info/alternates\"",
       "$git --git-dir=\"$repo\" bundle verify \"$root/bundle/input.bundle\" >/dev/null 2>&1 || fail_bundle",
@@ -542,7 +565,7 @@ export class GitModule {
       );
     const upd = spawnSync(
       "git",
-      ["--git-dir", this.paths.projectGit, "update-ref", ref, candidate, ZERO],
+      ["--git-dir", this.paths.projectGit, "update-ref", ref, candidate, ""],
       { env: gitEnv, encoding: "utf8" },
     );
     if (upd.status !== 0)
@@ -591,6 +614,7 @@ export class GitModule {
     if (claim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
+    this.objectFormat(this.paths.projectGit, [input.candidate, input.expected]);
     if (this.store.recoverableOperations().some((id) =>
       this.store.getOperationById(id)?.kind === "git.integrate")) {
       throw new StoreError("REF_STATE_UNKNOWN", "pending integrate operation requires recovery");
@@ -612,6 +636,7 @@ export class GitModule {
     // INT-003: persist the physical main-writer intent before any candidate check.
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
+      assertCurrentActor(this.store, auth, "code.integrate");
       claimOut.txClaim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
@@ -756,7 +781,7 @@ export class GitModule {
     }
   }
 
-  private isPublished(candidate: Oid): boolean {
+  isPublished(candidate: Oid): boolean {
     const r = spawnSync(
       "git",
       [
@@ -832,23 +857,22 @@ export class GitModule {
     if (claim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
+    if (input.expected !== null) this.objectFormat(this.paths.contextGit, [input.expected]);
     // capability (context.publish) is enforced at the dispatch boundary;
     // CTX-001..006 validation below still applies to every caller.
     // CTX-001: GOAL.md is mandatory, non-empty, and paths must be plain relative
     if (!input.entries.some((e) => e.path === "GOAL.md")) {
       throw new StoreError("INVALID_REQUEST", "GOAL.md is required");
     }
+    let previousPath = "";
     for (const e of input.entries) {
-      if (!e.path || e.path.includes("..") || e.path.startsWith("/")) {
-        throw new StoreError(
-          "INVALID_REQUEST",
-          `unsafe context path ${e.path}`,
-        );
-      }
+      if (contextPathCheck(e.path) || e.path <= previousPath)
+        throw new StoreError("INVALID_REQUEST", `unsupported, duplicate or unsorted context path ${e.path}`);
+      previousPath = e.path;
     }
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
-    const staging = join(this.paths.stateRoot, "staging", `context-${key}`);
+    const staging = join(this.paths.stateRoot, "staging", `context-${opId}`);
     const treeDir = join(staging, "tree");
     mkdirSync(treeDir, { recursive: true });
     const eml = await this.contextNoticeEml(messageId, input.entries);
@@ -865,11 +889,11 @@ export class GitModule {
         sha256: eml.sha256,
         bytes: eml.bytes,
         dateMs: Date.now(),
-        to: ["residents"],
+        to: [listAddress("residents", this.paths.society)],
         recipients: [] as Actor[],
         kind: "context" as const,
         contextRevision: null,
-        replyHeaders: { replyTo: [], inReplyTo: null, references: [] },
+        replyHeaders: { replyTo: [listAddress("residents", this.paths.society)], inReplyTo: null, references: [] },
       },
     };
     this.mail.freezeObject(messageId, eml);
@@ -879,9 +903,10 @@ export class GitModule {
     let total = 0;
     const chunks: Uint8Array[] = [];
     for await (const c of bytes) {
-      h.update(c);
       total += c.length;
-      chunks.push(c);
+      if (total > input.content.bytes) throw new StoreError("STREAM_INVALID", "context exceeds descriptor bytes");
+      h.update(c);
+      chunks.push(Buffer.from(c));
     }
     if (
       h.digest("hex") !== input.content.sha256 ||
@@ -899,16 +924,22 @@ export class GitModule {
       off += e.bytes;
       if (sha256Of(slice) !== e.sha256)
         throw new StoreError("STREAM_INVALID", `entry ${e.path} hash mismatch`);
+      const invalid = contextFileCheck(e.path, slice);
+      if (invalid) throw new StoreError("INVALID_REQUEST", invalid);
       const target = join(treeDir, e.path);
       mkdirSync(join(target, ".."), { recursive: true });
       writeFileSync(target, slice, { mode: 0o644 });
+      chmodSync(target, 0o644);
     }
     if (off !== data.length)
       throw new StoreError("STREAM_INVALID", "stream longer than manifest");
 
+    fsyncAll(staging);
+    fsyncDir(join(this.paths.stateRoot, "staging"));
     // T-context-accept: stream is fully validated before the operation exists.
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
+      assertCurrentActor(this.store, auth, "context.publish");
       plan.message.recipients = this.store
         .listAgents()
         .filter(
@@ -980,8 +1011,8 @@ export class GitModule {
     const bodyText = `GOAL이 갱신되었습니다. 전체 제약: /world/context/current/GOAL.md\n파일: ${entries.map((e) => e.path).join(", ")}`;
     const eml = await buildEml({
       from: `principal@${this.paths.society}.oma.invalid`,
-      to: ["residents"],
-      replyTo: [],
+      to: [listAddress("residents", this.paths.society)],
+      replyTo: [listAddress("residents", this.paths.society)],
       subject: "공유 목표 갱신",
       kind: "context",
       contextRevision: null,
@@ -1020,6 +1051,7 @@ export class GitModule {
           `context git init failed: ${init.stderr.slice(0, 200)}`,
         );
     }
+    const format = this.objectFormat(contextGit);
     const tmp = join(treeDir, "..", "commit-work");
     mkdirSync(tmp, { recursive: true });
     const existing = spawnSync("git", ["rev-parse", "HEAD"], {
@@ -1031,7 +1063,7 @@ export class GitModule {
     if (existing.status === 0 && String(existing.stdout).trim()) {
       oid = String(existing.stdout).trim();
     } else {
-      const init = spawnSync("git", ["init", "-q", "-b", "main"], {
+      const init = spawnSync("git", ["init", "-q", "-b", "main", `--object-format=${format}`], {
         cwd: tmp,
         env: gitEnv,
         encoding: "utf8",
@@ -1165,7 +1197,7 @@ export class GitModule {
         JSON.stringify({ ...acceptedPlan, candidate: oid }),
       );
     });
-    const prev = expected ?? ZERO;
+    const prev = expected ?? "";
     const upd = spawnSync(
       "git",
       ["--git-dir", contextGit, "update-ref", "refs/heads/main", oid, prev],
@@ -1258,7 +1290,7 @@ export class GitModule {
       this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
       return;
     }
-    const base = plan.base ?? ZERO;
+    const base = plan.base;
     let candidate = plan.candidate;
     const current = this.currentContext();
     if (!candidate) {
@@ -1295,7 +1327,7 @@ export class GitModule {
             "update-ref",
             "refs/heads/main",
             candidate,
-            base,
+            base ?? "",
           ],
           { env: gitEnv, encoding: "utf8" },
         );
@@ -1340,13 +1372,17 @@ export class GitModule {
   }
 
 
-  private currentContext(): Oid {
+  private currentContext(): Oid | null {
+    if (!existsSync(this.paths.contextGit)) return null;
     const r = spawnSync(
-      "git",
-      ["--git-dir", this.paths.contextGit, "rev-parse", "refs/heads/main"],
-      { env: gitEnv, encoding: "utf8" },
+      GIT_BIN,
+      ["--git-dir", this.paths.contextGit, "rev-parse", "--verify", "--quiet", "refs/heads/main"],
+      { env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 1024 },
     );
-    return (r.stdout ?? ZERO).trim() as Oid;
+    const oid = String(r.stdout ?? "").trim();
+    if (r.status === 0 && isValidFullOid(oid)) return oid;
+    if (r.status === 1 && !oid && !String(r.stderr ?? "").trim()) return null;
+    throw new StoreError("INTERNAL_ERROR", "cannot observe context main ref");
   }
 
   /** MUST [GIT-009]/[INT-004]: reconcile accepted Git effects from durable plans. */
@@ -1585,16 +1621,11 @@ function receiptOf(op: {
 }
 
 function statBytes(p: string): number {
-  return statSync(p).size;
+  const stat = lstatSync(p);
+  return stat.isFile() && stat.nlink === 1 ? stat.size : -1;
 }
 
 function fsyncAll(dir: string): void {
-  const fd = openSync(dir, "r");
-  try {
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
     if (statSync(p).isDirectory()) {
@@ -1608,4 +1639,5 @@ function fsyncAll(dir: string): void {
       closeSync(fd2);
     }
   }
+  fsyncDir(dir);
 }

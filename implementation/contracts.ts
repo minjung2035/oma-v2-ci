@@ -46,9 +46,15 @@ export interface Receipt<T = OperationResult> {
 }
 export interface BlobDescriptor { bytes: number; sha256: string; mediaType: 'text/plain; charset=utf-8' | 'application/x-git-bundle' | 'application/vnd.oma.context-v1' | 'application/vnd.oma.provider-v1' }
 export interface GitReference { repo: 'project' | 'context'; oid: Oid; path?: string }
+export type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH';
+export interface ExactCandidateIdentity {
+  repo: 'project'; targetRef: 'refs/heads/main';
+  expectedBase: Oid; candidate: Oid; policyRevision: string;
+}
 export interface MailInput {
-  to: Address[]; subject: string; kind: 'message' | 'question' | 'result' | 'alert' | 'context';
+  to: Address[]; subject: string; kind: 'message' | 'question' | 'result' | 'alert' | 'context' | 'approval_required' | 'critical';
   body: string; replyToMessage?: MessageId; refs?: GitReference[];
+  approvalFor?: ExactCandidateIdentity;
 }
 /** MUST [CREATE-001]: Actor input only; forbidden properties also reject
  * structurally compatible variables carrying broker-resolved authority.
@@ -60,6 +66,7 @@ export interface AgentCreateInput {
 /** MUST [CREATE-002]: Broker-owned result of host policy resolution, never wire input. */
 export interface ResolvedAgentSpec extends Pick<AgentCreateInput, 'name' | 'from' | 'brief'> {
   profile: string; capabilities: Capability[];
+  modelProfile: string; resources: ResourceLimits;
 }
 export interface ContextEntry { path: string; bytes: number; sha256: string }
 export interface PublicMethods {
@@ -219,6 +226,7 @@ export interface CliModule { main(argv: readonly string[]): Promise<0 | 2 | 3 | 
 export interface MessagePlan {
   id: MessageId; objectPath: string; sha256: string; bytes: number; dateMs: number;
   to: Address[]; recipients: Actor[]; kind: MailInput['kind'];
+  approvalFor?: ExactCandidateIdentity;
   contextRevision: Oid | null; replyHeaders: { replyTo: Address[]; inReplyTo: string | null; references: string[] };
 }
 export type OperationPlan =

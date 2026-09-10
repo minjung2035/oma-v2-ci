@@ -2,6 +2,9 @@
 // Byte-split tolerant (T04); rejects oversize length, invalid UTF-8, duplicate
 // JSON keys, NaN/Infinity and non-object roots with bounded memory.
 import { TextDecoder } from "node:util";
+import { checkString } from "./validate.js";
+
+const unicodeString = checkString();
 
 export class FrameError extends Error {
   constructor(
@@ -27,12 +30,10 @@ export function findDuplicateKey(text: string): string | null {
     const c = text[i]!;
     if (c === '"') {
       let j = i + 1;
-      let s = "";
       let closed = false;
       while (j < n) {
         const ch = text[j]!;
         if (ch === "\\") {
-          s += text[j + 1] ?? "";
           j += 2;
           continue;
         }
@@ -40,13 +41,15 @@ export function findDuplicateKey(text: string): string | null {
           closed = true;
           break;
         }
-        s += ch;
         j++;
       }
       if (!closed) return null; // unterminated string; JSON.parse will fail
       j++;
       const top = stack[stack.length - 1];
       if (top && top.isObj && top.expectKey) {
+        let s: string;
+        try { s = JSON.parse(text.slice(i, j)); }
+        catch { return null; } // The frame parser reports malformed JSON.
         if (top.keys!.has(s)) return s;
         top.keys!.add(s);
         top.expectKey = false;
@@ -124,39 +127,39 @@ export class FrameParser {
       if (this.buf.length < 4 + len) break;
       const rawBytes = this.buf.subarray(4, 4 + len);
       this.buf = this.buf.subarray(4 + len);
-      out.push(this.parseText(rawBytes));
+      out.push(parseJsonObject(rawBytes));
     }
     return out;
   }
 
-  private parseText(rawBytes: Buffer): ParsedFrame {
-    // MUST [IPC-001]: reject invalid UTF-8 via strict decode of the raw bytes.
-    let text: string;
-    try {
-      text = decoder.decode(rawBytes);
-    } catch {
-      throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in frame");
-    }
-    const dup = findDuplicateKey(text);
-    if (dup !== null)
-      throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${dup}"`);
-    let raw: unknown;
-    try {
-      raw = JSON.parse(text);
-    } catch (e) {
-      throw new FrameError(
-        "INVALID_REQUEST",
-        `malformed JSON: ${(e as Error).message}`,
-      );
-    }
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-      throw new FrameError(
-        "INVALID_REQUEST",
-        "frame root must be a JSON object",
-      );
-    }
-    return { raw, text };
+}
+
+/** Strict JSON object decoding shared by wire frames and host configuration. */
+export function parseJsonObject(rawBytes: Buffer): ParsedFrame {
+  let text: string;
+  try {
+    text = decoder.decode(rawBytes);
+  } catch {
+    throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in JSON");
   }
+  const dup = findDuplicateKey(text);
+  if (dup !== null)
+    throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${dup}"`);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text, (key: string, value: unknown) => {
+      if (unicodeString(key) || (typeof value === "string" && unicodeString(value)))
+        throw new Error("unpaired Unicode surrogate");
+      if (typeof value === "number" && (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value))))
+        throw new Error("non-finite number or unsafe integer");
+      return value;
+    });
+  } catch (e) {
+    throw new FrameError("INVALID_REQUEST", `malformed JSON: ${(e as Error).message}`);
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    throw new FrameError("INVALID_REQUEST", "root must be a JSON object");
+  return { raw, text };
 }
 
 export type DecoderEvent =

@@ -21,7 +21,8 @@ import { ReconcileModule } from "../src/reconcile.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { GitModule, type GitPaths } from "../src/git.js";
 import type { Capability } from "../implementation/contracts.js";
-import { generateOperationId, generateMessageId } from "../src/ids.js";
+import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { sendWithStop } from "./fixtures/mail-faults.js";
 
 const G = {
   ...process.env,
@@ -55,10 +56,10 @@ function envOf(withGit: boolean): Env {
         specHash: "h",
         role,
         desired,
-        incarnation: 0,
+        incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -103,6 +104,8 @@ function envOf(withGit: boolean): Env {
     },
     (_parent, input) => ({
       ...input,
+      modelProfile: "m",
+      resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576, workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
       profile: "p",
       capabilities: [],
     }),
@@ -161,7 +164,7 @@ const auth = {
   incarnation: 1,
   role: "resident" as const,
   channel: "actor" as const,
-  capabilities: new Set<Capability>(),
+  capabilities: new Set<Capability>(["mail.send"]),
   peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null },
 };
 
@@ -182,24 +185,8 @@ test("T68a: reconcile startup completes a pending accepted mail (accepted-before
     });
     assert.equal(receipt.state, "succeeded"); // normal path already completes
     // simulate an accepted-pending mail op: freeze object, mark deliveries pending
-    const opId = generateOperationId();
-    const mid = generateMessageId(opId, 0);
-    const eml = { text: "test eml" };
-    env.mail.freezeObject(mid, eml);
-    env.store.transaction((_t) => {
-      env.store.insertOperation({
-        id: opId,
-        actor: "a",
-        requestKey: "kp",
-        requestHash: "h",
-        kind: "mail.send",
-        payloadJson: "{}",
-        planJson: JSON.stringify({ kind: "mail.send", message: { id: mid } }),
-      });
-      env.store.insertDeliveries([
-        { messageId: mid, recipient: "b", operationId: opId },
-      ]);
-    });
+    await assert.rejects(sendWithStop(env.mail, env.store, auth, "kp", { to: ["b"], subject: "pending", kind: "message", body: "recover me" }, "accepted"));
+    const opId = env.store.getOperation("a", "kp")!.id;
     const before = env.store.transaction((_t) =>
       env.store.getOperationById(opId),
     )!;

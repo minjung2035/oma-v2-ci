@@ -189,12 +189,18 @@ test("T05: malicious frames are rejected pre-accept with bounded effect", () => 
   assert.equal(findDuplicateKey('{"a":1,"a":2}'), "a");
   assert.equal(findDuplicateKey('{"a":{"b":1,"b":2}}'), "b");
   assert.equal(findDuplicateKey('{"a":[1,2],"b":{"c":3}}'), null);
-  const dupBody = Buffer.from('{"a":1,"a":2}');
-  const dup = Buffer.alloc(4 + dupBody.length);
-  dup.writeUInt32BE(dupBody.length, 0);
-  dup.set(dupBody, 4);
-  const p3 = new FrameParser(64);
-  assert.throws(() => p3.feed(dup), /duplicate JSON key/);
+  assert.equal(findDuplicateKey(String.raw`{"a":1,"\\u0061":2}`), null);
+  for (const text of [
+    '{"a":1,"a":2}', String.raw`{"a":1,"\u0061":2}`,
+    String.raw`{"nested":{"a\"b":1,"a\u0022b":2}}`,
+    String.raw`{"😀":1,"\ud83d\ude00":2}`,
+  ]) {
+    const dupBody = Buffer.from(text);
+    const dup = Buffer.alloc(4 + dupBody.length);
+    dup.writeUInt32BE(dupBody.length, 0);
+    dup.set(dupBody, 4);
+    assert.throws(() => new FrameParser(256).feed(dup), /duplicate JSON key/, text);
+  }
   // non-object root
   const arr = Buffer.concat([Buffer.from([0, 0, 0, 3]), Buffer.from("[1]")]);
   const p4 = new FrameParser(64);
@@ -206,6 +212,12 @@ test("T05: malicious frames are rejected pre-accept with bounded effect", () => 
   ]);
   const p5 = new FrameParser(64);
   assert.throws(() => p5.feed(nan), /non-finite literal|malformed JSON/);
+  for (const text of ['{"value":1e999}', '{"value":9007199254740992}']) {
+    const body = Buffer.from(text);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(body.length);
+    assert.throws(() => new FrameParser(256).feed(Buffer.concat([length, body])), /non-finite number or unsafe integer/);
+  }
 });
 
 test("P1-9: NaN/Infinity as string values are accepted; invalid numeric literals rejected", () => {

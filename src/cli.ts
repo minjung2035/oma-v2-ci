@@ -5,14 +5,16 @@
 // re-reads the current HEAD — it replays the frozen payload or stops on
 // REQUEST_KEY_REUSED (IPC-008).
 import { connect } from "node:net";
-import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync, lstatSync, openSync, closeSync, fstatSync, constants } from "node:fs";
 import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { FrameParser, encodeFrame } from "./frame.js";
 import { RequestCache, type CachedRequest } from "./request-cache.js";
-import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4 } from "./ids.js";
+import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4, parseMessageId } from "./ids.js";
 import type { Json, Receipt } from "../implementation/contracts.js";
+import { exactCandidateCheck, contextFileCheck } from "./validate.js";
+import { parseEmlHeaders } from "./mail.js";
 
 const cliGitEnv: NodeJS.ProcessEnv = {
   HOME: "/nonexistent",
@@ -24,9 +26,11 @@ const cliGitEnv: NodeJS.ProcessEnv = {
   GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_TERMINAL_PROMPT: "0",
   GIT_NO_REPLACE_OBJECTS: "1",
-  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_COUNT: "3",
   GIT_CONFIG_KEY_0: "core.hooksPath",
   GIT_CONFIG_VALUE_0: "/dev/null",
+  GIT_CONFIG_KEY_1: "core.fsync", GIT_CONFIG_VALUE_1: "all",
+  GIT_CONFIG_KEY_2: "core.fsyncMethod", GIT_CONFIG_VALUE_2: "fsync",
 };
 type ExitCode = 0 | 2 | 3 | 4;
 
@@ -43,8 +47,11 @@ function usage(): never {
     [
       "usage:",
       "  oma send <address...> --subject S --file P [--kind K] [--reply P] [--request K]",
+      "  approval_required: send principal --kind approval_required --candidate C --expect B --policy-revision R --subject S --file P",
+      "  kinds: message/question/result/alert/context/approval_required/critical (mail is not approval authority)",
       "  oma ack <mail-path-or-id> [--request K]",
       "  oma follow <topic> [--request K] | oma unfollow <topic> [--request K]",
+      "  oma agent create <name> --from <revision> --file <brief> [--request K]",
       "  oma agent start <name> [--request K] | oma agent stop <name> [--request K]",
       "  oma agent continue --note <text> [--request K]",
       "  oma agent wait",
@@ -303,7 +310,8 @@ function keyOf(args: string[]): string | null {
 function readBody(path: string | null): string {
   if (path === null) return "";
   if (!existsSync(path)) fail(`file not found: ${path}`, 2);
-  return readFileSync(path, "utf8");
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(path)); }
+  catch { return fail(`cannot read UTF-8 text file: ${path}`, 2); }
 }
 
 function randKey(): string {
@@ -405,6 +413,9 @@ async function cmdSend(args: string[]): Promise<void> {
     "--kind",
     "--reply",
     "--request",
+    "--candidate",
+    "--expect",
+    "--policy-revision",
   ]);
   const subject = opt(args, "--subject");
   const reply = opt(args, "--reply");
@@ -413,8 +424,23 @@ async function cmdSend(args: string[]): Promise<void> {
   if (!subject && !reply)
     fail("send requires --subject (or --reply to reuse its subject)", 2);
   const kindRaw = opt(args, "--kind") ?? "message";
-  if (!["message", "question", "result", "alert", "context"].includes(kindRaw))
+  if (!["message", "question", "result", "alert", "context", "approval_required", "critical"].includes(kindRaw))
     fail(`invalid --kind ${kindRaw}`, 2);
+  const candidate = opt(args, "--candidate");
+  const expectedBase = opt(args, "--expect");
+  const policyRevision = opt(args, "--policy-revision");
+  let approvalFor: {
+    repo: string; targetRef: string; candidate: string | null;
+    expectedBase: string | null; policyRevision: string | null;
+  } | undefined;
+  if (kindRaw === "approval_required") {
+    approvalFor = { repo: "project", targetRef: "refs/heads/main", candidate, expectedBase, policyRevision };
+    const error = exactCandidateCheck(approvalFor);
+    if (error || !to.includes("principal"))
+      fail(error ?? "approval_required requires explicit principal recipient", 2);
+  } else if (candidate !== null || expectedBase !== null || policyRevision !== null) {
+    fail("approval identity flags require --kind approval_required", 2);
+  }
   const key = keyOf(args) ?? randKey();
   await effect(
     key,
@@ -425,14 +451,20 @@ async function cmdSend(args: string[]): Promise<void> {
         kind: kindRaw,
         body: readBody(opt(args, "--file")),
       };
-      if (reply) params.replyToMessage = reply;
+      if (reply) {
+        const id = parseEmlHeaders(readBody(reply)).messageId?.split("@", 1)[0];
+        if (!id || !parseMessageId(id)) fail("reply file has no valid Message-ID", 2);
+        params.replyToMessage = id;
+      }
+      if (approvalFor) params.approvalFor = approvalFor;
       return { method: "mail.send", params };
     },
     () => ({
       to,
       subject: subject ?? "Re",
       kind: kindRaw,
-      ...(reply ? { replyToMessage: reply } : {}),
+      // Like --file, --reply is read only when freezing a fresh request.
+      ...(approvalFor ? { approvalFor } : {}),
     }),
   );
 }
@@ -629,25 +661,31 @@ function walk(
     data: Uint8Array;
   }> = [];
   const walker = (d: string, rel: string): void => {
-    for (const f of readdirSync(d).sort()) {
-      const full = join(d, f);
-      const st = statSync(full);
-      const relPath = rel ? `${rel}/${f}` : f;
-      if (st.isDirectory()) {
-        walker(full, relPath);
-        continue;
+    if (!lstatSync(d).isDirectory()) fail(`unsupported context directory ${rel}`, 2);
+    const directory = openSync(d, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try {
+      const pinned = `/proc/self/fd/${directory}`;
+      for (const f of readdirSync(pinned).sort()) {
+        const full = join(pinned, f);
+        const st = lstatSync(full);
+        const relPath = rel ? `${rel}/${f}` : f;
+        if (st.isDirectory()) {
+          if (relPath !== "decisions") fail(`unsupported context directory ${relPath}`, 2);
+          walker(full, relPath);
+          continue;
+        }
+        if (!st.isFile() || st.nlink !== 1) fail(`unsupported file type/link at ${relPath}`, 2);
+        const fd = openSync(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        try {
+          const opened = fstatSync(fd);
+          if (!opened.isFile() || opened.nlink !== 1) fail(`unsupported file type/link at ${relPath}`, 2);
+          const data = readFileSync(fd);
+          const invalid = contextFileCheck(relPath, data);
+          if (invalid) fail(`${invalid}: ${relPath}`, 2);
+          out.push({ path: relPath, bytes: data.length, sha256: sha256Hex(data), data });
+        } finally { closeSync(fd); }
       }
-      if (!st.isFile()) fail(`unsupported file type at ${relPath}`, 2);
-      if (relPath.includes("..") || relPath.startsWith("/"))
-        fail(`unsafe path ${relPath}`, 2);
-      const data = readFileSync(full);
-      out.push({
-        path: relPath,
-        bytes: data.length,
-        sha256: sha256Hex(data),
-        data,
-      });
-    }
+    } finally { closeSync(directory); }
   };
   walker(dir, "");
   return out;

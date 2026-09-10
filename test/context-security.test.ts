@@ -1,0 +1,92 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, linkSync, symlinkSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { Store } from "../src/store.js";
+import { RequestCache } from "../src/request-cache.js";
+import { sha256Hex } from "../src/hash.js";
+import { contextFileCheck } from "../src/validate.js";
+import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
+
+const cases = [
+  { name: "empty", path: "GOAL.md", bytes: Buffer.alloc(0) },
+  { name: "invalid-utf8", path: "GOAL.md", bytes: Buffer.from([0xc0, 0xaf]) },
+  { name: "binary", path: "GOAL.md", bytes: Buffer.from("hello\0world") },
+  { name: "config", path: ".git/config", bytes: Buffer.from("[core]\nfsmonitor = false\n") },
+  { name: "attributes", path: ".gitattributes", bytes: Buffer.from("* filter=evil\n") },
+  { name: "traversal", path: "decisions/../escape.md", bytes: Buffer.from("escape") },
+];
+
+test("CTX-001: broker-domain rejects unsupported paths and non-text before acceptance", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-context-security-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  try {
+    seedGit(root);
+    const { git } = gitFixture(root, store);
+    for (const item of cases) {
+      const files = item.path === "GOAL.md" ? [item] : [{ path: "GOAL.md", bytes: Buffer.from("# goal\n") }, item];
+      files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+      const body = Buffer.concat(files.map(file => file.bytes));
+      await assert.rejects(git.publishContext(gitAuth, item.name, {
+        expected: null, entries: files.map(file => ({ path: file.path, bytes: file.bytes.length, sha256: sha256Hex(file.bytes) })),
+        content: { bytes: body.length, sha256: sha256Hex(body), mediaType: "application/vnd.oma.context-v1" },
+      }, (async function* () { yield body; })()), { code: "INVALID_REQUEST" });
+      assert.equal(store.getOperation("a", item.name), null);
+    }
+    for (const paths of [["GOAL.md", "GOAL.md"], ["RATIONALE.md", "GOAL.md"]]) {
+      const data = Buffer.from("xx");
+      await assert.rejects(git.publishContext(gitAuth, "bad-order", {
+        expected: null, entries: paths.map(path => ({ path, bytes: 1, sha256: sha256Hex(Buffer.from("x")) })),
+        content: { bytes: 2, sha256: sha256Hex(data), mediaType: "application/vnd.oma.context-v1" },
+      }, (async function* () { yield data; })()), { code: "INVALID_REQUEST" });
+      assert.equal(store.getOperation("a", "bad-order"), null);
+    }
+    assert.equal(contextFileCheck("decisions/a..b.md", Buffer.from("valid 한글\n")), null);
+    assert.equal(contextFileCheck("RATIONALE.md", Buffer.alloc(0)), null);
+  } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before connecting", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-context-cli-"));
+  try {
+    for (const name of ["symlink", "directory-link", "hardlink", ...cases.filter(item => item.name !== "traversal").map(item => item.name)]) {
+      const dir = join(root, name);
+      mkdirSync(dir);
+      writeFileSync(join(dir, "GOAL.md"), "# goal\n");
+      if (name === "symlink" || name === "hardlink") {
+        const target = join(root, `${name}-target`);
+        writeFileSync(target, "private source\n");
+        rmSync(join(dir, "GOAL.md"));
+        (name === "symlink" ? symlinkSync : linkSync)(target, join(dir, "GOAL.md"));
+      } else if (name === "directory-link") symlinkSync(root, join(dir, "decisions"));
+      else {
+        const item = cases.find(item => item.name === name)!;
+        if (item.path === ".git/config") mkdirSync(join(dir, ".git"));
+        writeFileSync(join(dir, item.path), item.bytes);
+      }
+      const child = spawnSync(process.execPath, [fileURLToPath(new URL("../src/cli.js", import.meta.url)), "context", "publish", dir, "--expect", "none", "--request", name], {
+        env: { ...process.env, HOME: join(root, "home"), OMA_SOCKET: join(root, "absent.sock") }, encoding: "utf8", timeout: 10000,
+      });
+      assert.equal(child.status, 2, `${name}: ${child.stderr}`);
+      assert.doesNotMatch(child.stderr, /connect.*absent\.sock/);
+      assert.equal(new RequestCache(join(root, "home")).read(name), null);
+    }
+    const valid = join(root, "valid");
+    mkdirSync(join(valid, "decisions"), { recursive: true });
+    writeFileSync(join(valid, "GOAL.md"), "# 한글 goal\n");
+    writeFileSync(join(valid, "RATIONALE.md"), "");
+    writeFileSync(join(valid, "decisions/a..b.md"), "valid\n");
+    const child = spawnSync(process.execPath, [fileURLToPath(new URL("../src/cli.js", import.meta.url)), "context", "publish", valid, "--expect", "none", "--request", "valid"], {
+      env: { ...process.env, HOME: join(root, "home"), OMA_SOCKET: join(root, "absent.sock") }, encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(child.status, 3, child.stderr);
+    const cache = new RequestCache(join(root, "home"));
+    const frozen = cache.read("valid");
+    assert.equal(frozen?.method, "context.publish");
+    assert.equal(frozen?.lastReceipt, null);
+    assert.equal(Buffer.from(cache.readBody("valid")!).toString(), "# 한글 goal\nvalid\n");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

@@ -5,6 +5,7 @@
 import { join } from "node:path";
 import { RunnerModule } from "../runner.js";
 import { loadConfig } from "../config.js";
+import { isValidActorName, isValidSocietyName } from "../ids.js";
 
 function usage(): never {
   console.error(
@@ -21,6 +22,7 @@ if (societyIdx < 0 || args[societyIdx + 1] === undefined) usage();
 if (agentIdx < 0 || args[agentIdx + 1] === undefined) usage();
 const society = args[societyIdx + 1]!;
 const agent = args[agentIdx + 1]!;
+if (!isValidSocietyName(society) || !isValidActorName(agent)) usage();
 
 const stateRoot = join(
   process.env.XDG_DATA_HOME ??
@@ -35,6 +37,10 @@ const configPath =
     : join(stateRoot, "config.json");
 
 const cfg = loadConfig(configPath);
+if (cfg.society !== society) {
+  console.error("runner: config society does not match the requested society");
+  process.exit(4);
+}
 const profileHex = process.env.OMA_PROFILE_HEX ?? "";
 if (!/^(?:[0-9a-f]{2})+$/.test(profileHex)) {
   console.error(`runner: missing broker-rendered profile for ${agent}`);
@@ -49,7 +55,7 @@ if (!cfg.agentProfiles[profileName]) {
   console.error(`runner: unsupported profile ${profileName} for ${agent}`);
   process.exit(4);
 }
-const runner = new RunnerModule({ runRoot }, agent);
+const runner = new RunnerModule({ runRoot }, agent, cfg.limits);
 
 process.on("SIGTERM", () => {
   void runner.stop().then(() => process.exit(0));

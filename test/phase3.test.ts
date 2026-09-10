@@ -24,11 +24,12 @@ import {
   topicAddress,
   actorAddress,
   listAddress,
-  type MailStopPoint,
 } from "../src/mail.js";
+import type { MailStopPoint } from "./fixtures/mail-faults.js";
 import { writeAtomic } from "../src/views.js";
 import type { AuthContext, Capability } from "../implementation/contracts.js";
 import { generateOperationId, generateMessageId } from "../src/ids.js";
+import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
 
 function fresh(): {
   store: Store;
@@ -83,10 +84,10 @@ function seedAgents(
         specHash: "h",
         role,
         desired,
-        incarnation: 0,
+        incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: "{}",
+        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -215,7 +216,7 @@ test("T17: reply header contract; CR/LF injection rejected", async () => {
   assert.equal(direct.replyTo![0], actorAddress("a", society));
   assert.equal(direct.messageId, "m-1@demo.oma.invalid");
   assert.ok(emlDirect.text.includes("X-OMA-Kind: message"));
-  // forged CRLF in subject or body must be rejected
+  // CRLF cannot inject headers; ordinary CRLF text bodies remain valid.
   await assert.rejects(
     buildEml({
       from: "a",
@@ -231,8 +232,7 @@ test("T17: reply header contract; CR/LF injection rejected", async () => {
     }),
     /CR\/LF/,
   );
-  await assert.rejects(
-    buildEml({
+  const crlfBody = await buildEml({
       from: "a",
       to: ["b"],
       replyTo: [],
@@ -243,9 +243,8 @@ test("T17: reply header contract; CR/LF injection rejected", async () => {
       references: [],
       messageId: "m",
       body: "x\r\ny",
-    }),
-    /CR/,
-  );
+  });
+  assert.ok(crlfBody.text.includes("x\r\ny"));
   // topic address form
   assert.equal(topicAddress("auth", society), "topic-auth@demo.oma.invalid");
   assert.equal(listAddress("commons", society), "commons@demo.oma.invalid");
@@ -309,40 +308,27 @@ async function sendAndKill(
       ...opts,
     },
   });
-  const lines: string[] = [];
-  let resolved = false;
-  const finish = () => {
-    if (resolved) return;
-    resolved = true;
-    clearTimeout(timer);
-  };
-  const timer = setTimeout(finish, 15000); // hard bound: never hang the suite
-  const boundary = new Promise<void>((resolve) => {
-    child.stdout.on("data", (d) => {
-      const s = String(d);
-      lines.push(...s.split("\n").filter(Boolean));
-      if (s.includes("BOUNDARY:")) {
-        finish();
-        resolve();
-      }
-    });
-    child.on("error", () => {
-      finish();
-      resolve();
-    });
-    child.on("exit", () => {
-      finish();
-      resolve();
-    });
+  let output = "";
+  const closed = new Promise<NodeJS.Signals | null>((resolve, reject) => {
+    child.once("close", (_code, signal) => resolve(signal));
+    child.once("error", reject);
   });
-  await boundary;
+  const boundary = new Promise<void>((resolve) => {
+    child.stdout.on("data", (data) => {
+      output += String(data);
+      if (output.includes(`BOUNDARY:${stop}`)) resolve();
+    });
+    child.stderr.on("data", (data) => { output += String(data); });
+  });
+  const timer = setTimeout(() => child.kill("SIGKILL"), 15000);
   try {
+    await Promise.race([boundary, closed]);
     child.kill("SIGKILL");
-  } catch {
-    /* already gone */
-  }
-  await new Promise<void>((resolve) => child.on("exit", () => resolve()));
-  return lines;
+    const signal = await closed;
+    assert.ok(output.includes(`BOUNDARY:${stop}`), output);
+    assert.equal(signal, "SIGKILL", output);
+    return output.split("\n").filter(Boolean);
+  } finally { clearTimeout(timer); child.kill("SIGKILL"); }
 }
 
 /// T18: kill after staging — no object, no DB row; same-key re-send works.

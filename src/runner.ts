@@ -3,7 +3,7 @@
 // claim a trusted session boundary yet.
 import { join } from "node:path";
 import { connect } from "node:net";
-import type { PreparedBatch } from "../implementation/contracts.js";
+import type { PreparedBatch, ProtocolLimits } from "../implementation/contracts.js";
 import { StoreError } from "./store.js";
 import { FrameParser, encodeFrame } from "./frame.js";
 
@@ -17,9 +17,14 @@ interface RpcReply {
   error?: { code: string; message: string };
 }
 
+type ChannelLimits = Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">;
+
 export class BrokerChannel {
-  private parser = new FrameParser(256 * 1024);
-  private buf = Buffer.alloc(0);
+  private parser: FrameParser;
+
+  constructor(private readonly limits: ChannelLimits = { frameBytes: 256 * 1024, idleStreamSeconds: 30, receiptWaitSeconds: 30 }) {
+    this.parser = new FrameParser(limits.frameBytes);
+  }
   private pending = new Map<
     string,
     { resolve: (r: RpcReply) => void; reject: (e: unknown) => void }
@@ -29,19 +34,24 @@ export class BrokerChannel {
   connect(adminPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const sock = connect(adminPath, () => resolve());
-      sock.on("error", reject);
+      sock.on("error", (error) => { reject(error); this.fail(error); });
+      sock.on("close", () => {
+        const error = new StoreError("BROKER_UNAVAILABLE", "broker channel closed");
+        reject(error);
+        this.fail(error);
+      });
+      sock.setTimeout(this.limits.idleStreamSeconds * 1000, () => this.fail(new StoreError("BROKER_UNAVAILABLE", "broker channel timed out")));
       sock.on("data", (d) => this.onData(Buffer.from(d)));
       this.sock = sock;
     });
   }
 
   private onData(chunk: Buffer): void {
-    this.buf = Buffer.concat([this.buf, chunk]);
     let frames: { raw: unknown }[];
     try {
-      frames = this.parser.feed(this.buf);
-      this.buf = this.buf.subarray(0, 0);
-    } catch {
+      frames = this.parser.feed(chunk);
+    } catch (error) {
+      this.fail(error);
       return;
     }
     for (const f of frames) {
@@ -70,25 +80,42 @@ export class BrokerChannel {
   }
 
   call(method: string, params: Record<string, unknown>): Promise<RpcReply> {
+    if (!this.sock || this.sock.destroyed)
+      return Promise.reject(new StoreError("BROKER_UNAVAILABLE", "broker channel is not connected"));
     const id = `${method}-${Math.random().toString(36).slice(2)}`;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-      this.sock!.write(encodeFrame({ v: 1, id, method, params }));
+      const frame = encodeFrame({ v: 1, id, method, params });
+      if (frame.length - 4 > this.limits.frameBytes)
+        throw new StoreError("FRAME_TOO_LARGE", "broker request exceeds frame limit");
+      const timer = setTimeout(() => this.fail(new StoreError("BROKER_UNAVAILABLE", "broker receipt timed out")), this.limits.receiptWaitSeconds * 1000);
+      this.pending.set(id, {
+        resolve: (reply) => { clearTimeout(timer); resolve(reply); },
+        reject: (error) => { clearTimeout(timer); reject(error); },
+      });
+      this.sock!.write(frame);
     });
   }
 
   close(): void {
+    this.fail(new StoreError("BROKER_UNAVAILABLE", "broker channel closed"));
+  }
+
+  private fail(error: unknown): void {
+    for (const pending of this.pending.values()) pending.reject(error);
+    this.pending.clear();
     this.sock?.destroy();
+    this.sock = null;
   }
 }
 
 export class RunnerModule {
-  private channel = new BrokerChannel();
+  private channel: BrokerChannel;
 
   constructor(
     private readonly paths: RunnerPaths,
     private readonly agent: string,
-  ) {}
+    limits?: ChannelLimits,
+  ) { this.channel = new BrokerChannel(limits); }
 
   stop(): Promise<void> {
     this.channel.close();
@@ -120,9 +147,10 @@ export class RunnerModule {
 
   /** S-03 remains OPEN: persist the batch handoff, but do not invoke Pi or present it. */
   async run(): Promise<0> {
-    await this.open();
     try {
-      await this.prepareBatch();
+      await this.open();
+      const batch = await this.prepareBatch();
+      if (batch) throw new StoreError("SPIKE_UNRESOLVED", "S-03 consumption adapter is unverified; prepared batch retained");
       return 0;
     } finally {
       this.channel.close();

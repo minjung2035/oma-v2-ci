@@ -27,20 +27,28 @@ export class ReconcileModule {
   ) {}
 
   /** MUST [LIFE-006]/[REC-001]: order matters — mail, create/Git, then units. */
-  async startup(): Promise<void> {
+  async startup(allowActivation = true): Promise<void> {
     if (this.sweeping) return;
     this.sweeping = true;
     try {
+      for (const agent of this.store.listAgents()) {
+        if (agent.role !== "resident") continue;
+        if (!this.units.confirmDead(agent.name, agent.incarnation))
+          this.units.stop(agent.name, agent.incarnation);
+        if (!this.units.confirmDead(agent.name, agent.incarnation))
+          throw new StoreError("RUN_TERMINATION_UNKNOWN", `startup cannot prove ${agent.name} terminated`);
+      }
+      if (this.git) this.assertCanonicalHealthy();
       await this.mail.reconcilePending();
       for (const id of this.store.recoverableOperations()) {
         const op = this.store.getOperationById(id);
         if (!op) continue;
         if (op.kind === "agent.create") {
-          await this.lifecycle.reconcileCreate(id);
+          await this.lifecycle.reconcileCreate(id, allowActivation);
           continue;
         }
         if (op.kind === "agent.start" || op.kind === "agent.stop") {
-          this.lifecycle.reconcileAction(id);
+          this.lifecycle.reconcileAction(id, allowActivation);
           continue;
         }
         if (
@@ -115,7 +123,8 @@ export class ReconcileModule {
           }
           if (a.desired !== "enabled") continue;
           if (this.paths.hasGoal && !this.paths.hasGoal()) continue;
-          const pendingCount = this.store.pendingDeliveries(a.name).length;
+          const pendingCount = this.store.pendingDeliveries(a.name).length +
+            this.store.preparedBatches(a.name).length;
           const inactive =
             obs.activeState === "inactive" || obs.activeState === "dead";
           if (pendingCount > 0 && inactive) this.units.start(a.name, false);
@@ -146,8 +155,10 @@ export class ReconcileModule {
     const r = spawnSync(
       "/usr/bin/git",
       ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs"],
-      { env: gitEnv, encoding: "utf8" },
+      { env: gitEnv, encoding: "utf8", timeout: 30_000, maxBuffer: 1024 * 1024 },
     );
+    if (r.error || r.signal)
+      throw new StoreError("INTERNAL_ERROR", "canonical repository health could not be observed within bounds");
     if (r.status !== 0)
       throw new StoreError(
         "STORE_CORRUPT",
