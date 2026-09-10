@@ -139,15 +139,28 @@ export const checkOid: Check = (v) =>
 export const checkRequestKey: Check = (v) =>
   isValidRequestKey(v) ? null : `invalid request key`;
 
+/** Structurally valid logical address for persisted MessagePlan DTOs. */
+export const checkLogicalAddress: Check = (v) => {
+  if (typeof v !== "string")
+    return `expected address string, got ${typeName(v)}`;
+  if (v.startsWith("topic/"))
+    return isValidTopicName(v.slice(6)) ? null : `invalid topic address`;
+  if (v === "principal" || v === "commons" || v === "residents") return null;
+  return isValidActorName(v) ? null : `invalid logical address`;
+};
+
 /** logical address: registered resident name, principal, commons, residents, or topic/<name> */
 export function checkAddress(actorNames: ReadonlySet<string>): Check {
   return (v) => {
-    if (typeof v !== "string")
-      return `expected address string, got ${typeName(v)}`;
-    if (v.startsWith("topic/"))
-      return isValidTopicName(v.slice(6)) ? null : `invalid topic address`;
-    if (v === "principal" || v === "commons" || v === "residents") return null;
-    return actorNames.has(v) ? null : `unknown address "${v}"`;
+    const structural = checkLogicalAddress(v);
+    if (structural) return structural;
+    if (
+      v === "principal" ||
+      v === "commons" ||
+      v === "residents" ||
+      (typeof v === "string" && v.startsWith("topic/"))
+    ) return null;
+    return actorNames.has(v as string) ? null : `unknown address "${String(v)}"`;
   };
 }
 
@@ -194,22 +207,23 @@ export const exactCandidateCheck: Check = (value) => {
 };
 
 const messageKindCheck = checkEnum(["message", "question", "result", "alert", "context", "approval_required", "critical"]);
+const messageIdCheck = checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ });
 
 export const messagePlanCheck = checkObject({
-  id: checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ }),
+  id: messageIdCheck,
   objectPath: checkString({ min: 1 }),
   sha256: checkString({ re: /^[0-9a-f]{64}$/ }),
   bytes: checkInt({ min: 0 }),
   dateMs: checkInt({ min: 0 }),
-  to: checkArray(checkString({ min: 1 })),
+  to: checkArray(checkLogicalAddress),
   recipients: checkArray(v => v === "principal" ? null : checkActor(v)),
   kind: messageKindCheck,
   approvalFor: checkOptional(exactCandidateCheck),
   contextRevision: v => v === null ? null : checkOid(v),
   replyHeaders: checkObject({
-    replyTo: checkArray(checkString({ min: 1 })),
-    inReplyTo: v => v === null ? null : checkString({ min: 1 })(v),
-    references: checkArray(checkString({ min: 1 })),
+    replyTo: checkArray(checkLogicalAddress),
+    inReplyTo: v => v === null ? null : messageIdCheck(v),
+    references: checkArray(messageIdCheck),
   }),
 });
 
@@ -223,7 +237,7 @@ export function mailParamsCheck(
     kind: messageKindCheck,
     body: checkString({ max: l.mailBodyBytes }),
     approvalFor: checkOptional(exactCandidateCheck),
-    replyToMessage: checkOptional(checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ })),
+    replyToMessage: checkOptional(messageIdCheck),
     refs: checkOptional(
       checkArray(
         checkObject({
@@ -324,7 +338,7 @@ export const logsReadParamsCheck: Check = checkObject({
   sinceSeconds: checkInt({ min: 1, max: 31536000 }),
 });
 export const mailAckParamsCheck: Check = checkObject({
-  message: checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ }),
+  message: messageIdCheck,
 });
 export const routeParamsCheck: Check = checkObject({ topic: checkTopic });
 export const agentActionParamsCheck: Check = checkObject({ agent: checkActor });
