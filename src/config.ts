@@ -295,14 +295,29 @@ export function loadConfig(path: string): HostConfigV1 {
     needInt(quota[k], `quota.${k}`, 0);
   }
   requireKeys(quota, quotaKeys, "quota");
+  const societyAgents = needInt(quota["societyAgents"], "quota.societyAgents", 0);
+  const lineageAgents = needInt(quota["lineageAgents"], "quota.lineageAgents", 0);
   const societyUnits = needInt(quota["societyUnits"], "quota.societyUnits", 0);
   const principalReservedUnits = needInt(
     quota["principalReservedUnits"],
     "quota.principalReservedUnits",
     0,
   );
+  const inferenceSlots = needInt(quota["inferenceSlots"], "quota.inferenceSlots", 1);
+  const principalReservedSlots = needInt(
+    quota["principalReservedSlots"],
+    "quota.principalReservedSlots",
+    0,
+  );
+  needInt(quota["storageBytes"], "quota.storageBytes", 1);
+  if (lineageAgents > societyAgents)
+    err("quota.lineageAgents exceeds quota.societyAgents");
+  if (initialResidents.length > societyAgents)
+    err("initialResidents exceed quota.societyAgents");
   if (principalReservedUnits > societyUnits)
     err("quota.principalReservedUnits exceeds quota.societyUnits");
+  if (principalReservedSlots > inferenceSlots)
+    err("quota.principalReservedSlots exceeds quota.inferenceSlots");
 
   const integration = needRecord(cfg["integration"], "integration");
   requireKeys(
@@ -322,7 +337,7 @@ export function loadConfig(path: string): HostConfigV1 {
     protectedPaths.some(
       (x) =>
         typeof x !== "string" ||
-        !isValidWirePath(x.endsWith("/") ? x.slice(0, -1) : x) ||
+        (x !== "/" && !isValidWirePath(x.endsWith("/") ? x.slice(0, -1) : x)) ||
         /[*?[\]{}!]/.test(x),
     )
   )
@@ -421,8 +436,6 @@ export function loadConfig(path: string): HostConfigV1 {
       protectedPaths: protectedPaths as string[],
       checks: checks as HostConfigV1["integration"]["checks"],
     },
-    // SAFETY: every limits.* key was validated via needInt above; the cast
-    // only narrows the already-checked record to the contract type.
     limits: limits as unknown as HostConfigV1["limits"],
     features: {
       notmuch: false,
