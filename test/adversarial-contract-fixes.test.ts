@@ -81,6 +81,63 @@ test("adversarial: persisted MessagePlan accepts logical addresses only", () => 
   );
 });
 
+test("adversarial: approval plan and immutable EML headers must be identical", async () => {
+  const root = tempRoot("oma-approval-");
+  const store = new Store(join(root, "runtime.sqlite"));
+  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
+  const actual = {
+    repo: "project" as const,
+    targetRef: "refs/heads/main" as const,
+    expectedBase: "1".repeat(40),
+    candidate: "2".repeat(40),
+    policyRevision: "정책-v1",
+  };
+  try {
+    const eml = await buildEml({
+      from: "alice@demo.oma.invalid",
+      to: ["principal@demo.oma.invalid"],
+      replyTo: ["alice@demo.oma.invalid"],
+      subject: "approval",
+      kind: "approval_required",
+      approvalFor: actual,
+      contextRevision: null,
+      inReplyTo: null,
+      references: [],
+      messageId: `${MESSAGE_ID}@demo.oma.invalid`,
+      body: "review",
+    });
+    mail.freezeObject(MESSAGE_ID, eml);
+    const plan: MessagePlan = {
+      id: MESSAGE_ID,
+      objectPath: `mail/objects/${MESSAGE_ID}.eml`,
+      sha256: eml.sha256,
+      bytes: eml.bytes,
+      dateMs: 1,
+      to: ["principal"],
+      recipients: ["principal"],
+      kind: "approval_required",
+      approvalFor: { ...actual, candidate: "3".repeat(40) },
+      contextRevision: null,
+      replyHeaders: {
+        replyTo: ["alice"],
+        inReplyTo: null,
+        references: [],
+      },
+    };
+    const internal = mail as unknown as {
+      messageHeaders(message: MessagePlan): unknown;
+    };
+    assert.throws(
+      () => internal.messageHeaders(plan),
+      (error: unknown) =>
+        error instanceof StoreError && error.code === "STORE_CORRUPT",
+    );
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("adversarial: operation results are closed and kind-specific", () => {
   const valid = {
     kind: "route.follow",
