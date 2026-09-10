@@ -138,10 +138,9 @@ export async function buildEml(p: EmlParams): Promise<{
     },
   });
   const raw = (info as unknown as { message: Buffer }).message;
-  const text = raw
-    .toString("utf8")
-    .replace(/X-Oma-Kind:/g, "X-OMA-Kind:")
-    .replace(/X-Oma-Context:/g, "X-OMA-Context:");
+  // Header field names are case-insensitive. Rewriting the complete serialized
+  // message would also mutate matching byte sequences in the user body.
+  const text = raw.toString("utf8");
   const bytes = Buffer.byteLength(text, "utf8");
   return { text, bytes, sha256: sha256Hex(text) };
 }
@@ -163,6 +162,14 @@ export function listAddress(
 
 export function topicAddress(topic: string, society: string): string {
   return `topic-${topic}@${society}.oma.invalid`;
+}
+
+/** Encode a logical Address only at the RFC presentation boundary. */
+export function displayAddress(address: Address, society: string): string {
+  if (address === "principal" || address === "commons" || address === "residents")
+    return listAddress(address, society);
+  if (address.startsWith("topic/")) return topicAddress(address.slice(6), society);
+  return actorAddress(address, society);
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +245,14 @@ export function expandAddresses(
 /** MAIL-005: list replies stay on lists; direct replies return to the sender. */
 export function defaultReplyTo(from: string, to: readonly string[]): string[] {
   const lists = to.filter(address => /^(commons|residents|topic-[a-z][a-z0-9-]*)@/.test(address));
+  return [...new Set(lists.length ? lists : [from])];
+}
+
+/** Logical form stored in MessagePlan; RFC mailbox encoding is presentation only. */
+export function defaultLogicalReplyTo(from: Address, to: readonly Address[]): Address[] {
+  const lists = to.filter(
+    (address) => address === "commons" || address === "residents" || address.startsWith("topic/"),
+  );
   return [...new Set(lists.length ? lists : [from])];
 }
 
@@ -338,6 +353,31 @@ export interface ParsedEmlHeaders {
   inReplyTo: MessageId | null;
   references: MessageId[];
   replyTo: string[] | null;
+  omaKind: string | null;
+  approvalFor: {
+    repo: string | null;
+    targetRef: string | null;
+    expectedBase: string | null;
+    candidate: string | null;
+    policyRevision: string | null;
+  } | null;
+}
+
+function decodeUtf8Base64Words(value: string): string {
+  const unfolded = value.replace(/\n/g, " ");
+  const pattern = /=\?UTF-8\?B\?([A-Za-z0-9+/=]+)\?=/gi;
+  let output = "";
+  let last = 0;
+  let previousEncoded = false;
+  for (const match of unfolded.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    const gap = unfolded.slice(last, index);
+    if (!(previousEncoded && /^\s*$/.test(gap))) output += gap;
+    output += Buffer.from(match[1]!, "base64").toString("utf8");
+    last = index + match[0].length;
+    previousEncoded = true;
+  }
+  return output + unfolded.slice(last);
 }
 
 export function parseEmlHeaders(text: string): ParsedEmlHeaders {
@@ -369,6 +409,16 @@ export function parseEmlHeaders(text: string): ParsedEmlHeaders {
     for (const m of h.matchAll(/<([^>]+)>/g)) out.push(m[1] as MessageId);
     return out;
   };
+  const approval = {
+    repo: headers["x-oma-approval-repo"] ?? null,
+    targetRef: headers["x-oma-approval-target"] ?? null,
+    expectedBase: headers["x-oma-approval-base"] ?? null,
+    candidate: headers["x-oma-approval-candidate"] ?? null,
+    policyRevision: headers["x-oma-approval-policy"]
+      ? decodeUtf8Base64Words(headers["x-oma-approval-policy"])
+      : null,
+  };
+  const hasApproval = Object.values(approval).some((value) => value !== null);
   return {
     from: headers.from ?? null,
     subject: headers.subject ?? null,
@@ -378,6 +428,8 @@ export function parseEmlHeaders(text: string): ParsedEmlHeaders {
     replyTo: headers["reply-to"]
       ? headers["reply-to"].split(",").map((s) => s.trim())
       : null,
+    omaKind: headers["x-oma-kind"] ?? null,
+    approvalFor: hasApproval ? approval : null,
   };
 }
 
@@ -489,16 +541,17 @@ export class MailModule {
         );
       targetAddresses.push(...(logical as Address[]));
     }
-    const route = expandAddresses(this.store, targetAddresses, society);
+    const logicalTo = [...new Set(targetAddresses)].sort() as Address[];
+    const route = expandAddresses(this.store, logicalTo, society);
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
     const dateMs = Date.now();
     let replyHeaders: {
-      replyTo: string[];
+      replyTo: Address[];
       inReplyTo: MessageId | null;
       references: MessageId[];
     } = {
-      replyTo: defaultReplyTo(actorAddress(auth.actor, society), route.displayTo),
+      replyTo: defaultLogicalReplyTo(auth.actor, logicalTo),
       inReplyTo: null,
       references: [],
     };
@@ -519,7 +572,7 @@ export class MailModule {
     const eml = await buildEml({
       from: actorAddress(auth.actor, society),
       to: route.displayTo,
-      replyTo: replyHeaders.replyTo,
+      replyTo: replyHeaders.replyTo.map((address) => displayAddress(address, society)),
       subject: input.subject,
       kind: input.kind,
       approvalFor: input.approvalFor,
@@ -545,7 +598,7 @@ export class MailModule {
         sha256: eml.sha256,
         bytes: eml.bytes,
         dateMs,
-        to: [...route.displayTo].sort(),
+        to: [...logicalTo],
         recipients: route.recipients,
         kind: input.kind,
         ...(input.approvalFor ? { approvalFor: input.approvalFor } : {}),
@@ -568,7 +621,7 @@ export class MailModule {
       });
       if (claimOut.txClaim === "retry") return;
       // MAIL-001: freeze membership in the accepting transaction, not before rendering.
-      route.recipients = expandAddresses(this.store, targetAddresses, society).recipients;
+      route.recipients = expandAddresses(this.store, logicalTo, society).recipients;
       plan.message.recipients = route.recipients;
       this.store.updateOperationPlanJson(opId, JSON.stringify(plan));
       this.store.insertDeliveries(
@@ -627,6 +680,7 @@ export class MailModule {
     const staging = join(this.paths.stateRoot, "staging", `${messageId}.eml`);
     mkdirSync(dirname(staging), { recursive: true });
     writeFsynced(staging, eml.text);
+    fsyncDir(dirname(staging));
     return {
       id: messageId,
       objectPath: `mail/objects/${messageId}.eml`,
@@ -651,10 +705,23 @@ export class MailModule {
     publishImmutableFile(existsSync(object) ? object : staging, object, message.sha256);
   }
 
-  freezeObject(messageId: MessageId, eml: { text: string }): void {
-    const object = this.objectPath(messageId);
-    mkdirSync(dirname(object), { recursive: true });
-    writeFsynced(object, eml.text);
+  freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): void {
+    const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects");
+    mkdirSync(stagingDir, { recursive: true });
+    const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
+    const fd = openSync(staged, "wx", 0o600);
+    try {
+      writeFileSync(fd, eml.text, "utf8");
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    try {
+      publishImmutableFile(staged, this.objectPath(messageId), eml.sha256 ?? sha256Hex(eml.text));
+    } finally {
+      rmSync(staged, { force: true });
+      fsyncDir(stagingDir);
+    }
   }
 
   private operationMessage(op: OperationRow): MessagePlan {
@@ -689,8 +756,21 @@ export class MailModule {
     if (sha256Hex(bytes) !== message.sha256)
       throw new StoreError("STORE_CORRUPT", `mail object hash mismatch: ${message.id}`);
     const headers = parseEmlHeaders(bytes.toString("utf8"));
-    if (headers.messageId?.split("@", 1)[0] !== message.id)
+    if (headers.messageId?.split("@", 1)[0] !== message.id || headers.omaKind !== message.kind)
       throw new StoreError("STORE_CORRUPT", `mail header mismatch: ${message.id}`);
+    const expectedApproval = message.approvalFor ?? null;
+    const actualApproval = headers.approvalFor;
+    if (expectedApproval) {
+      if (!actualApproval ||
+        actualApproval.repo !== expectedApproval.repo ||
+        actualApproval.targetRef !== expectedApproval.targetRef ||
+        actualApproval.expectedBase !== expectedApproval.expectedBase ||
+        actualApproval.candidate !== expectedApproval.candidate ||
+        actualApproval.policyRevision !== expectedApproval.policyRevision)
+        throw new StoreError("STORE_CORRUPT", `mail approval metadata mismatch: ${message.id}`);
+    } else if (actualApproval) {
+      throw new StoreError("STORE_CORRUPT", `unexpected mail approval metadata: ${message.id}`);
+    }
     return headers;
   }
 
@@ -777,12 +857,8 @@ export class MailModule {
   private isPublicList(delivery: DeliveryRow): boolean {
     const message = this.messagePlan(delivery);
     if (message.kind !== "message" || message.to.length === 0) return false;
-    const suffix = `@${this.paths.society}.oma.invalid`;
     return message.to.every(
-      (to) =>
-        to === `commons${suffix}` ||
-        to === `residents${suffix}` ||
-        (to.startsWith("topic-") && to.endsWith(suffix)),
+      (to) => to === "commons" || to === "residents" || to.startsWith("topic/"),
     );
   }
 
