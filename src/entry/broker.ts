@@ -105,6 +105,7 @@ const lifecycle = new LifecycleModule(
     return r ? r.spec : null;
   },
   mail,
+  cfg.quota,
 );
 const git = new GitModule(
   {
