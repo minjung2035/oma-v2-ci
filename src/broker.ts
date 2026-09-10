@@ -50,6 +50,7 @@ import {
   mailAckParamsCheck,
   mailParamsCheck,
   operationGetParamsCheck,
+  operationResultCheck,
   routeParamsCheck,
   statusGetParamsCheck,
   checkObject,
@@ -117,7 +118,7 @@ export class Broker {
   private runLeases = new Map<
     Actor,
     { invocationId: string; cgroupFd: number; lease: RunLease | null; revoke: () => void; done: () => void }
->();
+  >();
   constructor(
     private readonly store: Store,
     private readonly mail: MailModule,
@@ -257,8 +258,10 @@ export class Broker {
       });
       return;
     }
-    this.serveFrames(sock, (raw, stream) =>
-      this.dispatch(auth, raw as Request, stream ?? null),
+    this.serveFrames(
+      sock,
+      (raw, stream) => this.dispatch(auth, raw as Request, stream ?? null),
+      (raw) => this.preflightPublicStream(auth, raw),
     );
   }
 
@@ -319,6 +322,7 @@ export class Broker {
       raw: Record<string, unknown>,
       stream: AsyncIterable<Uint8Array> | null,
     ) => Promise<unknown> | unknown,
+    preflightStream?: (raw: Record<string, unknown>) => object | null,
   ): void {
     const dec = new ConnectionDecoder(this.limits.frameBytes);
     const write = (obj: unknown) => sock.write(encodeFrame(obj));
@@ -381,6 +385,11 @@ export class Broker {
       sock.destroy();
     };
 
+    const resumeRejectedFrame = (): void => {
+      const more = dec.resumeParsing();
+      if (more.length > 0) processEvents(more);
+    };
+
     const settlePendingStream = (
       events: import("./frame.js").DecoderEvent[],
     ): boolean => {
@@ -417,6 +426,7 @@ export class Broker {
               retry: "never",
             }),
           );
+          resumeRejectedFrame();
           continue;
         }
         if (ev.kind === "stream") {
@@ -472,6 +482,7 @@ export class Broker {
               retry: "never",
             }),
           );
+          resumeRejectedFrame();
           continue;
         }
         const id = typeof raw.id === "string" ? raw.id : "x";
@@ -505,6 +516,12 @@ export class Broker {
             );
             sock.destroy();
             return;
+          }
+          const rejected = preflightStream?.(raw) ?? null;
+          if (rejected) {
+            write(rejected);
+            resumeRejectedFrame();
+            continue;
           }
           if (desc.bytes > 0) {
             streamFrame = { raw, id };
@@ -611,6 +628,42 @@ export class Broker {
       default: return null;
     }
     return check(p) === null ? p : null;
+  }
+
+  private preflightPublicStream(
+    auth: AuthContext,
+    envelope: Record<string, unknown>,
+  ): object | null {
+    const id = typeof envelope.id === "string" ? envelope.id : "x";
+    const method = typeof envelope.method === "string" ? envelope.method : "";
+    const reject = (code: string, message: string) =>
+      Broker.errorAnswer(id, { code, message, retry: "never" as const });
+    if (
+      typeof envelope.id !== "string" ||
+      typeof envelope.method !== "string" ||
+      !Object.keys(envelope).every((key) =>
+        ["v", "id", "method", "params", "request"].includes(key),
+      )
+    ) return reject("INVALID_REQUEST", "invalid request envelope");
+    if (envelope.v !== 1)
+      return reject("UNSUPPORTED_VERSION", "unsupported protocol version");
+    if (method !== "git.submit" && method !== "context.publish")
+      return reject("INVALID_REQUEST", "method does not accept a stream body");
+    if (!isValidRequestKey(envelope.request))
+      return reject("INVALID_REQUEST", "mutation requires a valid request key");
+    const actor = this.store.getAgent(auth.actor);
+    if (
+      auth.channel === "actor" &&
+      (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled")
+    ) return reject("STALE_RUN", "actor incarnation is stale");
+    const need = METHOD_CAPABILITY[method as PublicMethod];
+    if (
+      need &&
+      (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))
+    ) return reject("CAPABILITY_DENIED", `missing capability ${need}`);
+    if (!this.checkParams(method, envelope.params))
+      return reject("INVALID_REQUEST", `invalid params for ${method}`);
+    return null;
   }
 
   async dispatch(
@@ -869,12 +922,32 @@ export class Broker {
               "--no-pager",
               "--output=cat",
             ],
-            { encoding: "utf8", maxBuffer: this.limits.logBytes },
+            {
+              encoding: "utf8",
+              maxBuffer: this.limits.logBytes,
+              timeout: 30_000,
+              killSignal: "SIGKILL",
+            },
           );
-          const text = (r.stdout ?? "").slice(0, this.limits.logBytes);
+          if (r.error) {
+            const code = (r.error as NodeJS.ErrnoException).code;
+            throw new StoreError(
+              code === "ENOBUFS"
+                ? "LIMIT_EXCEEDED"
+                : code === "ETIMEDOUT"
+                  ? "DEADLINE_EXCEEDED"
+                  : "INTERNAL_ERROR",
+              `journalctl failed: ${r.error.message}`,
+            );
+          }
+          if (r.signal || r.status !== 0)
+            throw new StoreError(
+              "INTERNAL_ERROR",
+              `journalctl exited unsuccessfully: ${String(r.stderr ?? "").slice(0, 300)}`,
+            );
           return Broker.okAnswer(id, {
-            text,
-            truncated: (r.stdout ?? "").length > text.length,
+            text: r.stdout ?? "",
+            truncated: false,
             observedAtMs: Date.now(),
           });
         }
@@ -1208,8 +1281,6 @@ export class Broker {
   }
 }
 
-
-
 function emptyStream(): AsyncIterable<Uint8Array> {
   return (async function* () {})();
 }
@@ -1222,26 +1293,42 @@ function keyOf(req: { request?: string }): string {
 
 function receiptOfRow(op: {
   id: string;
+  kind: string;
   state: string;
   resultJson: string | null;
   errorCode: string | null;
 }): Receipt {
+  if (!(["pending", "succeeded", "failed", "unknown"] as const).includes(op.state as never))
+    throw new StoreError("STORE_CORRUPT", `operation ${op.id} has invalid state`);
   const rec: Receipt = {
     operation: op.id,
     state: op.state as Receipt["state"],
   };
-  if (op.resultJson) {
+  if (op.state === "succeeded") {
+    if (!op.resultJson)
+      throw new StoreError("STORE_CORRUPT", `succeeded operation ${op.id} has no result`);
+    let result: unknown;
     try {
-      rec.result = JSON.parse(op.resultJson);
+      result = JSON.parse(op.resultJson);
     } catch {
-      /* corrupt result; receipt stays minimal */
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt result JSON`);
     }
+    const invalid = operationResultCheck(op.kind)(result);
+    if (invalid)
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} result: ${invalid}`);
+    rec.result = result as Exclude<Receipt["result"], undefined>;
+  } else if (op.resultJson !== null) {
+    throw new StoreError("STORE_CORRUPT", `non-success operation ${op.id} has a result`);
   }
+  if (op.state === "failed" && !op.errorCode)
+    throw new StoreError("STORE_CORRUPT", `failed operation ${op.id} has no error code`);
+  if (op.errorCode && op.state !== "failed")
+    throw new StoreError("STORE_CORRUPT", `non-failed operation ${op.id} has an error code`);
   if (op.errorCode) {
     rec.error = {
       code: op.errorCode as never,
       message: op.errorCode,
-      retry: "same-key",
+      retry: "never",
     };
   }
   return rec;
