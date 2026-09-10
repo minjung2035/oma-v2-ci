@@ -208,6 +208,7 @@ export const exactCandidateCheck: Check = (value) => {
 
 const messageKindCheck = checkEnum(["message", "question", "result", "alert", "context", "approval_required", "critical"]);
 const messageIdCheck = checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ });
+const operationIdCheck = checkString({ re: /^op-[0-9a-f-]{36}$/ });
 
 export const messagePlanCheck = checkObject({
   id: messageIdCheck,
@@ -226,6 +227,69 @@ export const messagePlanCheck = checkObject({
     references: checkArray(messageIdCheck),
   }),
 });
+
+/** MUST [DB-009/M-003]: result_json is a closed result variant keyed by kind. */
+export function operationResultCheck(kind: string): Check {
+  switch (kind) {
+    case "mail.send":
+    case "agent.continue":
+      return checkObject({
+        kind: checkEnum([kind]),
+        message: messageIdCheck,
+        recipientCount: checkInt({ min: 0 }),
+        archivePath: checkString({ min: 1 }),
+      });
+    case "mail.ack":
+      return checkObject({
+        kind: checkEnum(["mail.ack"]),
+        message: messageIdCheck,
+        acknowledged: (v) => v === true ? null : "expected true",
+      });
+    case "route.follow":
+    case "route.unfollow":
+      return checkObject({
+        kind: checkEnum([kind]),
+        topic: checkTopic,
+        subscribed: checkBool(),
+      });
+    case "agent.create":
+    case "agent.start":
+    case "agent.stop":
+      return checkObject({
+        kind: checkEnum([kind]),
+        agent: checkActor,
+        desired: checkEnum(["provisioning", "enabled", "stopped", "retired"] as const),
+        remainingOperations: checkArray(operationIdCheck),
+      });
+    case "git.submit":
+      return checkObject({
+        kind: checkEnum(["git.submit"]),
+        candidate: checkOid,
+        publishedRef: checkString({ min: 1 }),
+        message: messageIdCheck,
+        recipientCount: checkInt({ min: 0 }),
+      });
+    case "git.integrate":
+      return checkObject({
+        kind: checkEnum(["git.integrate"]),
+        base: checkOid,
+        candidate: checkOid,
+        target: checkEnum(["refs/heads/main"]),
+        policyRevision: checkString({ min: 1 }),
+        changed: checkBool(),
+      });
+    case "context.publish":
+      return checkObject({
+        kind: checkEnum(["context.publish"]),
+        previous: (v) => v === null ? null : checkOid(v),
+        revision: checkOid,
+        message: messageIdCheck,
+        recipientCount: checkInt({ min: 0 }),
+      });
+    default:
+      return () => `unknown operation kind ${kind}`;
+  }
+}
 
 export function mailParamsCheck(
   actorNames: ReadonlySet<string>,
