@@ -20,7 +20,7 @@ import {
   readFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { spawnSync as nodeSpawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
 import type {
   Actor,
@@ -34,7 +34,7 @@ import type {
   ResourceLimits,
 } from "../implementation/contracts.js";
 import { Store, StoreError, reused } from "./store.js";
-import { MailModule, buildEml, expandAddresses, fsyncDir, defaultReplyTo, actorAddress, listAddress } from "./mail.js";
+import { MailModule, buildEml, expandAddresses, fsyncDir, defaultReplyTo, defaultLogicalReplyTo, actorAddress, listAddress } from "./mail.js";
 import { generateOperationId, generateMessageId, isValidFullOid } from "./ids.js";
 import {
   requestHash,
@@ -71,6 +71,17 @@ export interface CheckProfile {
 }
 
 const GIT_BIN = "/usr/bin/git";
+const spawnSync: typeof nodeSpawnSync = ((
+  command: string,
+  args?: readonly string[],
+  options?: object,
+) => nodeSpawnSync(command, args ? [...args] : [], {
+  timeout: 120_000,
+  killSignal: "SIGKILL",
+  maxBuffer: 4 * 1024 * 1024,
+  ...(options ?? {}),
+} as never)) as typeof nodeSpawnSync;
+
 /** GIT-001: only a fixed, broker-owned environment reaches host Git. */
 export const gitEnv: NodeJS.ProcessEnv = {
   HOME: "/nonexistent",
@@ -239,9 +250,10 @@ export class GitModule {
     fsyncDir(staging);
     fsyncDir(join(this.paths.stateRoot, "staging"));
     const targetAddresses = (input.to.length > 0 ? input.to : ["commons"]) as Address[];
+    const logicalTo = [...new Set(targetAddresses)].sort() as Address[];
     const route = expandAddresses(
       this.store,
-      targetAddresses,
+      logicalTo,
       this.paths.society,
     );
     const publishedRef = `refs/oma/published/${auth.actor}/${opId}`;
@@ -273,11 +285,11 @@ export class GitModule {
         sha256: eml.sha256,
         bytes: eml.bytes,
         dateMs: Date.now(),
-        to: [...route.displayTo],
+        to: logicalTo,
         recipients: route.recipients,
         kind: "result" as const,
         contextRevision: null,
-        replyHeaders: { replyTo: defaultReplyTo(actorAddress(auth.actor, this.paths.society), route.displayTo), inReplyTo: null, references: [] },
+        replyHeaders: { replyTo: defaultLogicalReplyTo(auth.actor, logicalTo), inReplyTo: null, references: [] },
       },
     };
     // Freeze the immutable result object before acceptance so a crash cannot leave
@@ -297,7 +309,7 @@ export class GitModule {
         planJson: JSON.stringify(plan),
       });
       if (claimOut.txClaim === "retry") return;
-      route.recipients = expandAddresses(this.store, targetAddresses, this.paths.society).recipients;
+      route.recipients = expandAddresses(this.store, logicalTo, this.paths.society).recipients;
       plan.message.recipients = route.recipients;
       this.store.updateOperationPlanJson(opId, JSON.stringify(plan));
       this.store.insertDeliveries(
@@ -889,11 +901,11 @@ export class GitModule {
         sha256: eml.sha256,
         bytes: eml.bytes,
         dateMs: Date.now(),
-        to: [listAddress("residents", this.paths.society)],
+        to: ["residents"],
         recipients: [] as Actor[],
         kind: "context" as const,
         contextRevision: null,
-        replyHeaders: { replyTo: [listAddress("residents", this.paths.society)], inReplyTo: null, references: [] },
+        replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
       },
     };
     this.mail.freezeObject(messageId, eml);
@@ -1371,7 +1383,6 @@ export class GitModule {
     });
   }
 
-
   private currentContext(): Oid | null {
     if (!existsSync(this.paths.contextGit)) return null;
     const r = spawnSync(
@@ -1467,7 +1478,7 @@ export class GitModule {
         recipientCount: plan.message?.recipients?.length ?? 0,
       };
     } catch {
-      receipt = { operation: operationId, state: "pending" };
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt result`);
     }
     this.store.transaction((_tx) =>
       this.store.setOperationSucceeded(operationId, JSON.stringify(receipt)));
@@ -1608,7 +1619,7 @@ function receiptOf(op: {
     try {
       rec.result = JSON.parse(op.resultJson);
     } catch {
-      /* keep minimal */
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt result`);
     }
   }
   if (op.errorCode)
