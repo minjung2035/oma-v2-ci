@@ -15,12 +15,16 @@ export interface BatchView {
   messageIds: string[];
 }
 
+const BATCH_ID = /^b-[0-9a-f-]{36}$/;
+const MESSAGE_ID = /^m-[0-9a-f-]{36}-\d+$/;
+const ACTOR = /^[a-z][a-z0-9-]{0,31}$/;
+
 export default function (pi: ExtensionAPI): void {
   pi.registerCommand("oma-deliver", {
     description: "Deliver an OMA notification batch (trusted broker view)",
     handler: async (args: string, ctx) => {
       const batchId = args.trim().split(/\s+/)[0] ?? "";
-      if (!/^b-[0-9a-f-]{36}$/.test(batchId)) {
+      if (!BATCH_ID.test(batchId)) {
         ctx.ui.notify(`oma-deliver: invalid batch id ${batchId}`, "error");
         return;
       }
@@ -44,18 +48,52 @@ export default function (pi: ExtensionAPI): void {
   });
 }
 
-function readBatchView(batchId: string): BatchView | null {
+/** M-003: the broker-owned JSON view is still an external runtime boundary. */
+export function readBatchView(
+  batchId: string,
+  viewDir = "/run/oma-view",
+): BatchView | null {
   try {
-    // /run/oma-view is the runner's RO-mounted public view dir (FS-002).
-    const raw = readFileSync(`/run/oma-view/batch-${batchId}.json`, "utf8");
-    const v = JSON.parse(raw) as BatchView;
+    if (!BATCH_ID.test(batchId)) return null;
+    const raw = readFileSync(`${viewDir}/batch-${batchId}.json`, "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const value = parsed as Record<string, unknown>;
+    const expectedKeys = [
+      "id",
+      "agent",
+      "incarnation",
+      "deliveryMode",
+      "notice",
+      "messageIds",
+    ];
     if (
-      typeof v.id !== "string" ||
-      typeof v.notice !== "string" ||
-      !Array.isArray(v.messageIds)
-    )
+      Object.keys(value).length !== expectedKeys.length ||
+      !Object.keys(value).every((key) => expectedKeys.includes(key)) ||
+      value.id !== batchId ||
+      typeof value.agent !== "string" ||
+      !ACTOR.test(value.agent) ||
+      typeof value.incarnation !== "number" ||
+      !Number.isSafeInteger(value.incarnation) ||
+      value.incarnation < 0 ||
+      (value.deliveryMode !== "steer" && value.deliveryMode !== "followUp") ||
+      typeof value.notice !== "string" ||
+      !Array.isArray(value.messageIds) ||
+      value.messageIds.some(
+        (id) => typeof id !== "string" || !MESSAGE_ID.test(id),
+      ) ||
+      new Set(value.messageIds).size !== value.messageIds.length
+    ) {
       return null;
-    return v;
+    }
+    return {
+      id: value.id,
+      agent: value.agent,
+      incarnation: value.incarnation,
+      deliveryMode: value.deliveryMode,
+      notice: value.notice,
+      messageIds: [...value.messageIds] as string[],
+    };
   } catch {
     return null;
   }
