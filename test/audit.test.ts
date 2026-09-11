@@ -807,7 +807,7 @@ function minimalConfig(society: string): Record<string, unknown> {
       principalReservedUnits: 100,
       inferenceSlots: 1,
       principalReservedSlots: 1,
-      storageBytes: 0,
+      storageBytes: 1,
     },
     integration: { policyRevision: "1", protectedPaths: [], checks: [] },
     limits: {
