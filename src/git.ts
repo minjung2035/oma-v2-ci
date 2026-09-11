@@ -293,7 +293,7 @@ export class GitModule {
         objectPath: `mail/objects/${messageId}.eml`,
         sha256: eml.sha256,
         bytes: eml.bytes,
-        dateMs: Date.now(),
+        dateMs: eml.dateMs,
         to: logicalTo,
         recipients: route.recipients,
         kind: "result" as const,
@@ -412,7 +412,7 @@ export class GitModule {
       text: eml.text,
       bytes: eml.bytes,
       sha256: eml.sha256,
-      dateMs: Date.now(),
+      dateMs: eml.dateMs,
     };
   }
 
@@ -889,9 +889,6 @@ export class GitModule {
       return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
     if (input.expected !== null) this.objectFormat(this.paths.contextGit, [input.expected]);
-    // capability (context.publish) is enforced at the dispatch boundary;
-    // CTX-001..006 validation below still applies to every caller.
-    // CTX-001: GOAL.md is mandatory, non-empty, and paths must be plain relative
     if (!input.entries.some((e) => e.path === "GOAL.md")) {
       throw new StoreError("INVALID_REQUEST", "GOAL.md is required");
     }
@@ -901,53 +898,27 @@ export class GitModule {
         throw new StoreError("INVALID_REQUEST", `unsupported, duplicate or unsorted context path ${e.path}`);
       previousPath = e.path;
     }
+
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
     const staging = join(this.paths.stateRoot, "staging", `context-${opId}`);
     const treeDir = join(staging, "tree");
     mkdirSync(treeDir, { recursive: true });
-    const eml = await this.contextNoticeEml(messageId, input.entries);
-    const plan = {
-      kind: "context.publish" as const,
-      base: input.expected,
-      candidate: "", // filled after the commit below (CTX-003)
-      target: "refs/heads/main" as const,
-      entries: input.entries,
-      stagingPath: staging,
-      message: {
-        id: messageId,
-        objectPath: `mail/objects/${messageId}.eml`,
-        sha256: eml.sha256,
-        bytes: eml.bytes,
-        dateMs: Date.now(),
-        to: ["residents"],
-        recipients: [] as Actor[],
-        kind: "context" as const,
-        contextRevision: null,
-        replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
-      },
-    };
-    this.mail.freezeObject(messageId, eml);
 
-    // CTX-002: consume the aligned content stream entry-by-entry with hash checks
+    // CTX-002: consume and validate the entire content stream before candidate creation.
     const h = createHash("sha256");
     let total = 0;
     const chunks: Uint8Array[] = [];
     for await (const c of bytes) {
       total += c.length;
-      if (total > input.content.bytes) throw new StoreError("STREAM_INVALID", "context exceeds descriptor bytes");
+      if (total > input.content.bytes)
+        throw new StoreError("STREAM_INVALID", "context exceeds descriptor bytes");
       h.update(c);
       chunks.push(Buffer.from(c));
     }
-    if (
-      h.digest("hex") !== input.content.sha256 ||
-      total !== input.content.bytes
-    ) {
-      throw new StoreError(
-        "STREAM_INVALID",
-        "context stream digest/bytes mismatch",
-      );
-    }
+    if (h.digest("hex") !== input.content.sha256 || total !== input.content.bytes)
+      throw new StoreError("STREAM_INVALID", "context stream digest/bytes mismatch");
+
     const data = Buffer.concat(chunks);
     let off = 0;
     for (const e of input.entries) {
@@ -964,10 +935,40 @@ export class GitModule {
     }
     if (off !== data.length)
       throw new StoreError("STREAM_INVALID", "stream longer than manifest");
-
     fsyncAll(staging);
     fsyncDir(join(this.paths.stateRoot, "staging"));
-    // T-context-accept: stream is fully validated before the operation exists.
+
+    // DB-009/CTX-003: candidate bytes/OID are frozen before acceptance, but main
+    // is not mutated yet. The imported object is broker-owned recovery material.
+    const prepared = this.prepareContextCandidate(input.expected, input.entries, treeDir);
+    const candidate = prepared.candidate;
+    fsyncAll(staging);
+    const eml = await this.contextNoticeEml(messageId, input.entries, candidate);
+    this.mail.freezeObject(messageId, eml);
+
+    const plan = {
+      kind: "context.publish" as const,
+      base: input.expected,
+      candidate,
+      target: "refs/heads/main" as const,
+      entries: input.entries,
+      stagingPath: staging,
+      message: {
+        id: messageId,
+        objectPath: `mail/objects/${messageId}.eml`,
+        sha256: eml.sha256,
+        bytes: eml.bytes,
+        dateMs: eml.dateMs,
+        to: ["residents"],
+        recipients: [] as Actor[],
+        kind: "context" as const,
+        contextRevision: candidate,
+        replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
+      },
+    };
+
+    // T-context-accept: candidate, immutable EML and recipient snapshot are all
+    // durable in one acceptance transaction before canonical main CAS/publication.
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
       assertCurrentActor(this.store, auth, "context.publish");
@@ -989,85 +990,72 @@ export class GitModule {
         payloadJson: JSON.stringify(input),
         planJson: JSON.stringify(plan),
       });
+      if (claimOut.txClaim === "retry") return;
+      this.store.insertDeliveries(
+        plan.message.recipients.map((recipient) => ({
+          messageId,
+          recipient,
+          operationId: opId,
+        })),
+      );
     });
     if (claimOut.txClaim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
 
-    // CTX-003/004: commit with CAS, snapshot + current symlink, notification
-    let candidate: Oid;
     try {
-      candidate = await this.commitAndPublishContext(
-        opId,
+      this.finalizeContextCandidate(
+        candidate,
         input.expected,
         input.entries,
-        treeDir,
+        prepared.sourceDir,
       );
     } catch (error) {
-      if (error instanceof StoreError && error.code === "CONTEXT_CONFLICT") {
+      if (error instanceof StoreError && error.code === "CONTEXT_CONFLICT")
         this.store.transaction((_tx) => this.store.setOperationFailed(opId, error.code));
-      }
       throw error;
     }
-    const updated = { ...plan, candidate };
-    const residents = (plan.message.recipients ?? []) as Actor[];
+
     const result = {
       kind: "context.publish" as const,
       previous: input.expected,
       revision: candidate,
       message: messageId,
-      recipientCount: residents.length,
+      recipientCount: plan.message.recipients.length,
     };
-    // Keep the operation pending until the gated notification is durable.
-    this.store.transaction((_tx) => {
-      this.store.updateOperationPlanJson(opId, JSON.stringify(updated));
-      this.store.insertDeliveries(
-        residents.map((r) => ({ messageId, recipient: r, operationId: opId })),
-      );
-    });
     await this.mail.publishGated(opId);
     this.store.transaction((_tx) => {
       this.store.setOperationSucceeded(opId, JSON.stringify(result));
     });
-    return {
-      operation: opId,
-      state: "succeeded",
-      result,
-    };
+    return { operation: opId, state: "succeeded", result };
   }
 
   private async contextNoticeEml(
     messageId: string,
     entries: ContextEntry[],
+    candidate: Oid,
   ): Promise<{ text: string; bytes: number; sha256: string; dateMs: number }> {
     const bodyText = `GOAL이 갱신되었습니다. 전체 제약: /world/context/current/GOAL.md\n파일: ${entries.map((e) => e.path).join(", ")}`;
-    const eml = await buildEml({
+    return buildEml({
       from: `principal@${this.paths.society}.oma.invalid`,
       to: [listAddress("residents", this.paths.society)],
       replyTo: [listAddress("residents", this.paths.society)],
       subject: "공유 목표 갱신",
       kind: "context",
-      contextRevision: null,
+      contextRevision: candidate,
       inReplyTo: null,
       references: [],
       messageId: `${messageId}@${this.paths.society}.oma.invalid`,
       body: bodyText,
     });
-    return {
-      text: eml.text,
-      bytes: eml.bytes,
-      sha256: eml.sha256,
-      dateMs: Date.now(),
-    };
   }
 
-  /** CTX-003/004: commit the tree with the broker identity, CAS the context
-   * branch, publish the immutable revision snapshot and the current symlink. */
-  private async commitAndPublishContext(
-    opId: string,
+  /** Build and import the exact context candidate before operation acceptance.
+   * This does not mutate refs/heads/main or public context views. */
+  private prepareContextCandidate(
     expected: Oid | null,
     entries: ContextEntry[],
     treeDir: string,
-  ): Promise<Oid> {
+  ): { candidate: Oid; sourceDir: string } {
     const contextGit = this.paths.contextGit;
     mkdirSync(contextGit, { recursive: true });
     if (!existsSync(join(contextGit, "HEAD"))) {
@@ -1120,10 +1108,7 @@ export class GitModule {
         );
         if (gitUncertain(parent)) throw gitObservationError("context parent", parent);
         if (parent.status !== 0)
-          throw new StoreError(
-            "CONTEXT_CONFLICT",
-            `context base ${expected} is not present`,
-          );
+          throw new StoreError("CONTEXT_CONFLICT", `context base ${expected} is not present`);
       }
       const add = spawnSync("git", ["add", "-A"], {
         cwd: tmp,
@@ -1193,7 +1178,9 @@ export class GitModule {
           `context head: ${head.error?.message ?? head.stderr.slice(0, 300)}`,
         );
     }
-    // Transfer objects before recording the candidate in the durable plan.
+    if (!isValidFullOid(oid))
+      throw new StoreError("INTERNAL_ERROR", "context candidate OID is malformed");
+
     const imp = spawnSync(
       "git",
       [
@@ -1213,27 +1200,21 @@ export class GitModule {
         "INTERNAL_ERROR",
         `context object import failed: ${imp.error?.message ?? imp.stderr.slice(0, 300)}`,
       );
-    let acceptedPlan: Record<string, unknown>;
-    const accepted = this.store.getOperationById(opId);
-    if (!accepted) throw new StoreError("STORE_CORRUPT", "context operation missing");
-    try {
-      const parsed: unknown = JSON.parse(accepted.planJson);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-        throw new Error("plan is not an object");
-      acceptedPlan = parsed as Record<string, unknown>;
-    } catch {
-      throw new StoreError("STORE_CORRUPT", "context plan is invalid");
-    }
-    this.store.transaction((_tx) => {
-      this.store.updateOperationPlanJson(
-        opId,
-        JSON.stringify({ ...acceptedPlan, candidate: oid }),
-      );
-    });
+    this.objectFormat(contextGit, [oid]);
+    return { candidate: oid as Oid, sourceDir: tmp };
+  }
+
+  /** CTX-003/004: after acceptance, CAS canonical context main and publish views. */
+  private finalizeContextCandidate(
+    candidate: Oid,
+    expected: Oid | null,
+    entries: ContextEntry[],
+    sourceDir: string,
+  ): void {
     const prev = expected ?? "";
     const upd = spawnSync(
       "git",
-      ["--git-dir", contextGit, "update-ref", "refs/heads/main", oid, prev],
+      ["--git-dir", this.paths.contextGit, "update-ref", "refs/heads/main", candidate, prev],
       { env: gitEnv, encoding: "utf8" },
     );
     if (gitUncertain(upd)) throw gitObservationError("context CAS", upd);
@@ -1242,8 +1223,7 @@ export class GitModule {
         "CONTEXT_CONFLICT",
         `context CAS failed; actual revision ${this.currentContext()}`,
       );
-    this.publishContextSnapshot(oid as Oid, entries, tmp);
-    return oid as Oid;
+    this.publishContextSnapshot(candidate, entries, sourceDir);
   }
 
   private publishContextSnapshot(
@@ -1303,7 +1283,7 @@ export class GitModule {
   private async reconcileContext(op: { id: string; planJson: string }): Promise<void> {
     let plan: {
       base: Oid | null;
-      candidate: Oid | "";
+      candidate: Oid;
       entries: ContextEntry[];
       stagingPath: string;
       message: { id: string; recipients?: string[] };
@@ -1314,6 +1294,7 @@ export class GitModule {
         throw new Error("plan is not an object");
       plan = parsed as typeof plan;
       if (
+        !isValidFullOid(plan.candidate) ||
         !Array.isArray(plan.entries) ||
         typeof plan.stagingPath !== "string" ||
         !plan.message ||
@@ -1321,84 +1302,59 @@ export class GitModule {
       )
         throw new Error("context plan fields missing");
     } catch {
-      this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
-      return;
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt context plan`);
     }
-    const base = plan.base;
-    let candidate = plan.candidate;
+
+    const object = spawnSync(
+      GIT_BIN,
+      ["--git-dir", this.paths.contextGit, "cat-file", "-e", `${plan.candidate}^{commit}`],
+      { env: gitEnv },
+    );
+    if (gitUncertain(object) || object.status !== 0)
+      throw new StoreError("STORE_CORRUPT", `accepted context candidate ${plan.candidate} is missing`);
+
     const current = this.currentContext();
-    if (!candidate) {
-      if (current !== base) {
+    if (current !== plan.candidate) {
+      if (current !== plan.base) {
         this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
         return;
       }
-      candidate = await this.commitAndPublishContext(
-        op.id,
-        plan.base,
-        plan.entries,
-        join(plan.stagingPath, "tree"),
-      );
-    } else {
-      const object = spawnSync(
+      const upd = spawnSync(
         GIT_BIN,
-        ["--git-dir", this.paths.contextGit, "cat-file", "-e", `${candidate}^{commit}`],
-        { env: gitEnv },
+        [
+          "--git-dir",
+          this.paths.contextGit,
+          "update-ref",
+          "refs/heads/main",
+          plan.candidate,
+          plan.base ?? "",
+        ],
+        { env: gitEnv, encoding: "utf8" },
       );
-      if (gitUncertain(object) || object.status !== 0) {
+      if (gitUncertain(upd)) throw gitObservationError("recovery context CAS", upd);
+      if (upd.status !== 0) {
         this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
         return;
       }
-      if (current !== candidate) {
-        if (current !== base) {
-          this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
-          return;
-        }
-        const upd = spawnSync(
-          GIT_BIN,
-          [
-            "--git-dir",
-            this.paths.contextGit,
-            "update-ref",
-            "refs/heads/main",
-            candidate,
-            base ?? "",
-          ],
-          { env: gitEnv, encoding: "utf8" },
-        );
-        if (gitUncertain(upd) || upd.status !== 0) {
-          this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
-          return;
-        }
-      }
-      this.publishContextSnapshot(
-        candidate,
-        plan.entries,
-        join(plan.stagingPath, "commit-work"),
-      );
     }
-    if (this.currentContext() !== candidate) {
+    this.publishContextSnapshot(
+      plan.candidate,
+      plan.entries,
+      join(plan.stagingPath, "commit-work"),
+    );
+    if (this.currentContext() !== plan.candidate) {
       this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
       return;
     }
+
     const recipients = (plan.message.recipients ?? []) as Actor[];
     const result = {
       kind: "context.publish" as const,
       previous: plan.base,
-      revision: candidate,
+      revision: plan.candidate,
       message: plan.message.id,
       recipientCount: recipients.length,
     };
-    const updated = { ...plan, candidate };
-    this.store.transaction((_tx) => {
-      this.store.updateOperationPlanJson(op.id, JSON.stringify(updated));
-      this.store.insertDeliveries(
-        recipients.map((recipient) => ({
-          messageId: plan.message.id,
-          recipient,
-          operationId: op.id,
-        })),
-      );
-    });
     await this.mail.publishGated(op.id);
     this.store.transaction((_tx) => {
       this.store.setOperationSucceeded(op.id, JSON.stringify(result));
