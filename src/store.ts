@@ -13,6 +13,7 @@ import type {
   RequestKey,
 } from "../implementation/contracts.js";
 import type { OperationPlan } from "../implementation/contracts.js";
+import { operationResultCheck } from "./validate.js";
 
 export const SCHEMA_PATH = fileURLToPath(
   new URL("../../implementation/schema-v1.sql", import.meta.url),
@@ -795,7 +796,7 @@ function rowToAgent(r: Record<string, unknown>): AgentRow {
 }
 
 function rowToOperation(r: Record<string, unknown>): OperationRow {
-  return {
+  const row: OperationRow = {
     id: r.id as OperationId,
     actor: r.actor as Actor,
     requestKey: r.request_key as RequestKey,
@@ -809,6 +810,25 @@ function rowToOperation(r: Record<string, unknown>): OperationRow {
     createdAtMs: num(r.created_at_ms),
     updatedAtMs: num(r.updated_at_ms),
   };
+  const terminal = row.state === "succeeded" || row.state === "failed";
+  if (!(["pending", "succeeded", "failed", "unknown"] as const).includes(row.state))
+    throw new StoreError("STORE_CORRUPT", `operation ${row.id} has invalid state`);
+  if (row.state === "succeeded") {
+    if (!row.resultJson || row.errorCode !== null)
+      throw new StoreError("STORE_CORRUPT", `operation ${row.id} has inconsistent succeeded state`);
+    let result: unknown;
+    try { result = JSON.parse(row.resultJson); }
+    catch { throw new StoreError("STORE_CORRUPT", `operation ${row.id} has corrupt result JSON`); }
+    const invalid = operationResultCheck(row.kind)(result);
+    if (invalid)
+      throw new StoreError("STORE_CORRUPT", `operation ${row.id} result: ${invalid}`);
+  } else if (row.state === "failed") {
+    if (row.resultJson !== null || row.errorCode === null)
+      throw new StoreError("STORE_CORRUPT", `operation ${row.id} has inconsistent failed state`);
+  } else if (row.resultJson !== null || row.errorCode !== null || terminal) {
+    throw new StoreError("STORE_CORRUPT", `operation ${row.id} has terminal data in ${row.state} state`);
+  }
+  return row;
 }
 
 function rowToDelivery(r: Record<string, unknown>): DeliveryRow {
