@@ -15,8 +15,9 @@ export interface BatchView {
   messageIds: string[];
 }
 
-const BATCH_ID = /^b-[0-9a-f-]{36}$/;
-const MESSAGE_ID = /^m-[0-9a-f-]{36}-\d+$/;
+const UUID_V4 = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+const BATCH_ID = new RegExp(`^b-${UUID_V4}$`);
+const MESSAGE_ID = new RegExp(`^m-${UUID_V4}-(\\d+)$`);
 const ACTOR_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 const RESERVED_ACTORS = new Set([
   "principal",
@@ -29,14 +30,21 @@ const RESERVED_ACTORS = new Set([
 ]);
 
 // Keep the trusted extension deployable as one compiled file. This mirrors the
-// ID-001 resident-name grammar without creating a runtime dependency on the
-// host-side ids.js module inside the sandbox rootfs.
+// host identity grammar without creating a runtime dependency on ids.js inside
+// the sandbox rootfs.
 function isValidBatchActor(name: string): boolean {
   return (
     ACTOR_NAME.test(name) &&
     !RESERVED_ACTORS.has(name) &&
     !name.startsWith("topic-")
   );
+}
+
+function isValidMessageId(id: string): boolean {
+  const match = MESSAGE_ID.exec(id);
+  if (!match) return false;
+  const ordinal = Number(match[1]);
+  return Number.isSafeInteger(ordinal) && ordinal >= 0;
 }
 
 export default function (pi: ExtensionAPI): void {
@@ -100,7 +108,7 @@ export function readBatchView(
       typeof value.notice !== "string" ||
       !Array.isArray(value.messageIds) ||
       value.messageIds.some(
-        (id) => typeof id !== "string" || !MESSAGE_ID.test(id),
+        (id) => typeof id !== "string" || !isValidMessageId(id),
       ) ||
       new Set(value.messageIds).size !== value.messageIds.length
     ) {
