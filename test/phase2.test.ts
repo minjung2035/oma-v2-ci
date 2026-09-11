@@ -23,6 +23,7 @@ import {
   parseMessageId,
   isValidWirePath,
 } from "../src/ids.js";
+import type { OperationId } from "../implementation/contracts.js";
 
 const FRAME_LIMIT = 256 * 1024;
 
@@ -63,6 +64,25 @@ function insertAgentTx(
       specJson: "{}",
     });
   });
+}
+
+function validMailPlan(opId: OperationId, ordinal = 0) {
+  const id = generateMessageId(opId, ordinal);
+  return {
+    kind: "mail.send" as const,
+    message: {
+      id,
+      objectPath: `mail/objects/${id}.eml`,
+      sha256: "a".repeat(64),
+      bytes: 3,
+      dateMs: 1,
+      to: ["a"],
+      recipients: [] as string[],
+      kind: "message" as const,
+      contextRevision: null,
+      replyHeaders: { replyTo: ["a"], inReplyTo: null, references: [] },
+    },
+  };
 }
 
 function frameOf(obj: unknown): Buffer {
@@ -260,21 +280,7 @@ test("T07: same actor/key/payload converges to one operation with identical rece
   const { store, dir } = freshStore();
   insertAgentTx(store, "a");
   const opId = generateOperationId();
-  const plan = {
-    kind: "mail.send" as const,
-    message: {
-      id: generateMessageId(opId, 0),
-      objectPath: "o.eml",
-      sha256: "a".repeat(64),
-      bytes: 3,
-      dateMs: 1,
-      to: ["b"],
-      recipients: [],
-      kind: "message" as const,
-      contextRevision: null,
-      replyHeaders: { replyTo: [], inReplyTo: null, references: [] },
-    },
-  };
+  const plan = validMailPlan(opId);
   const payload = JSON.stringify({
     to: ["b"],
     subject: "s",
@@ -308,28 +314,30 @@ test("T07: same actor/key/payload converges to one operation with identical rece
 test("T08: same key, different payload -> REQUEST_KEY_REUSED", () => {
   const { store, dir } = freshStore();
   insertAgentTx(store, "a");
+  const firstId = generateOperationId();
   store.transaction((t) =>
     store.insertOperation({
-      id: generateOperationId(),
+      id: firstId,
       actor: "a",
       requestKey: "k",
       requestHash: "h1",
       kind: "mail.send",
       payloadJson: "{}",
-      planJson: JSON.stringify({ kind: "mail.send", message: null }),
+      planJson: JSON.stringify(validMailPlan(firstId)),
     }),
   );
+  const secondId = generateOperationId();
   assert.throws(
     () =>
       store.transaction((t) =>
         store.insertOperation({
-          id: generateOperationId(),
+          id: secondId,
           actor: "a",
           requestKey: "k",
           requestHash: "h2",
           kind: "mail.send",
           payloadJson: "{}",
-          planJson: JSON.stringify({ kind: "mail.send", message: null }),
+          planJson: JSON.stringify(validMailPlan(secondId)),
         }),
       ),
     (e: unknown) => e instanceof StoreError && e.code === "REQUEST_KEY_REUSED",
@@ -340,18 +348,20 @@ test("T08: same key, different payload -> REQUEST_KEY_REUSED", () => {
 test("T10: different keys are distinct operations; no semantic dedup", () => {
   const { store, dir } = freshStore();
   insertAgentTx(store, "a");
-  const mk = (k: string) =>
-    store.transaction((t) =>
+  const mk = (k: string) => {
+    const opId = generateOperationId();
+    return store.transaction((t) =>
       store.insertOperation({
-        id: generateOperationId(),
+        id: opId,
         actor: "a",
         requestKey: k,
         requestHash: "h",
         kind: "mail.send",
         payloadJson: "{}",
-        planJson: JSON.stringify({ kind: "mail.send", message: null }),
+        planJson: JSON.stringify(validMailPlan(opId)),
       }),
     );
+  };
   mk("k1");
   mk("k2");
   assert.equal(
@@ -445,7 +455,7 @@ test("store: batch link cross-row invariant (DB-008/BATCH-001)", () => {
       requestHash: "h",
       kind: "mail.send",
       payloadJson: "{}",
-      planJson: JSON.stringify({ kind: "mail.send", message: null }),
+      planJson: JSON.stringify(validMailPlan(opId)),
     });
     // msgA broadcast to a and b; msgB only to b
     store.insertDeliveries([
