@@ -11,6 +11,7 @@ src/authority.ts
 src/broker.ts
 src/cli.ts
 src/config.ts
+src/durable.ts
 src/entry/broker.ts
 src/entry/host.ts
 src/entry/runner.ts
