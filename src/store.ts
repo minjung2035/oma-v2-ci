@@ -21,6 +21,55 @@ export const SCHEMA_PATH = fileURLToPath(
   new URL("../../implementation/schema-v1.sql", import.meta.url),
 );
 
+const ERROR_CODES = new Set<ErrorCode>([
+  "INVALID_REQUEST",
+  "UNSUPPORTED_VERSION",
+  "UNKNOWN_METHOD",
+  "FRAME_TOO_LARGE",
+  "STREAM_INVALID",
+  "AUTH_FAILED",
+  "STALE_RUN",
+  "CAPABILITY_DENIED",
+  "REQUEST_KEY_REUSED",
+  "REQUEST_NOT_FOUND",
+  "ADDRESS_NOT_FOUND",
+  "AGENT_CONFLICT",
+  "AGENT_NOT_READY",
+  "AGENT_RETIRED",
+  "GOAL_REQUIRED",
+  "LIMIT_EXCEEDED",
+  "STORAGE_FULL",
+  "DB_BUSY",
+  "STORE_CORRUPT",
+  "BROKER_UNAVAILABLE",
+  "DEADLINE_EXCEEDED",
+  "RUN_TERMINATION_UNKNOWN",
+  "START_LIMIT",
+  "PRINCIPAL_DISCONNECTED",
+  "ATTACH_CONFLICT",
+  "BATCH_CONFLICT",
+  "SESSION_BOUNDARY_UNCONFIRMED",
+  "INVALID_OID",
+  "CANDIDATE_NOT_PUBLISHED",
+  "BUNDLE_INVALID",
+  "PREREQUISITE_MISSING",
+  "PUBLISHED_REF_CONFLICT",
+  "STALE_BASE",
+  "NOT_DESCENDANT",
+  "PROTECTED_PATH",
+  "CHECK_FAILED",
+  "POLICY_CHANGED",
+  "REF_STATE_UNKNOWN",
+  "CANCELLED_BEFORE_COMMIT",
+  "CONTEXT_CONFLICT",
+  "QUOTA_EXCEEDED",
+  "PROVIDER_FAILED",
+  "PROVIDER_OUTCOME_UNKNOWN",
+  "UNSUPPORTED_PROFILE",
+  "SPIKE_UNRESOLVED",
+  "INTERNAL_ERROR",
+]);
+
 export interface AgentRow {
   name: Actor;
   specHash: string;
@@ -503,6 +552,13 @@ export class Store {
 
   setOperationFailed(id: OperationId, code: ErrorCode): void {
     this.requireTx();
+    // ERR-001: STREAM_INVALID is a preaccept error. Once an operation is durable,
+    // later byte/digest mismatch means broker-owned recovery material is corrupt.
+    if (code === "STREAM_INVALID")
+      throw new StoreError(
+        "STORE_CORRUPT",
+        `accepted operation ${id} cannot transition to preaccept STREAM_INVALID`,
+      );
     const updated = this.db
       .prepare(
         "UPDATE operations SET state='failed', result_json=NULL, error_code=?, updated_at_ms=? WHERE id=? AND state IN ('pending','unknown')",
@@ -814,6 +870,8 @@ function rowToOperation(r: Record<string, unknown>, stateRoot: string): Operatio
   };
   if (!(["pending", "succeeded", "failed", "unknown"] as const).includes(row.state))
     throw new StoreError("STORE_CORRUPT", `operation ${row.id} has invalid state`);
+  if (row.errorCode !== null && !ERROR_CODES.has(row.errorCode))
+    throw new StoreError("STORE_CORRUPT", `operation ${row.id} has invalid error code`);
 
   let plan: unknown;
   try { plan = JSON.parse(row.planJson); }
