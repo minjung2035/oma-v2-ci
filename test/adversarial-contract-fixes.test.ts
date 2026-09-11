@@ -268,9 +268,12 @@ test("adversarial: lineage quota counts retired descendants", () => {
         specJson: "{}",
       });
     });
+    const units = {
+      bindIncarnationReader: (_reader: (agent: string) => number | null) => undefined,
+    } as never;
     const lifecycle = new LifecycleModule(
       store,
-      null as never,
+      units,
       {
         stateRoot: root,
         projectGit: join(root, "project.git"),
