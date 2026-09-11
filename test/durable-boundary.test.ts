@@ -294,6 +294,47 @@ test("ERR-001/REC-006: accepted submit bundle corruption cannot become terminal 
   }
 });
 
+test("ERR-001: preaccept-only failures cannot terminalize an accepted operation", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-preaccept-terminal-"));
+  const store = seed(join(root, "runtime.sqlite"));
+  try {
+    for (const code of ["STREAM_INVALID", "LIMIT_EXCEEDED", "STORAGE_FULL"] as const) {
+      assert.throws(
+        () => store.transaction(() => store.setOperationFailed(OP as never, code)),
+        (error: unknown) =>
+          error instanceof StoreError && error.code === "STORE_CORRUPT",
+        code,
+      );
+      assert.equal(store.getOperationById(OP as never)?.state, "pending");
+    }
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("ERR-001: persisted failed preaccept-only code is STORE_CORRUPT", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-preaccept-persisted-"));
+  const path = join(root, "runtime.sqlite");
+  let store = seed(path);
+  store.close();
+  const raw = new DatabaseSync(path);
+  raw.prepare("UPDATE operations SET state='failed', error_code=?, result_json=NULL WHERE id=?")
+    .run("STREAM_INVALID", OP);
+  raw.close();
+  store = new Store(path);
+  try {
+    assert.throws(
+      () => store.getOperationById(OP as never),
+      (error: unknown) =>
+        error instanceof StoreError && error.code === "STORE_CORRUPT",
+    );
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("ERR-001: persisted operation error code is a closed runtime enum", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-durable-error-code-"));
   const path = join(root, "runtime.sqlite");
