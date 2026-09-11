@@ -217,7 +217,7 @@ export const messagePlanCheck = checkObject({
   id: messageIdCheck,
   objectPath: checkString({ min: 1 }),
   sha256: checkString({ re: /^[0-9a-f]{64}$/ }),
-  bytes: checkInt({ min: 0 }),
+  bytes: checkInt({ min: 1 }),
   dateMs: checkInt({ min: 0 }),
   to: checkArray(checkLogicalAddress),
   recipients: checkArray(v => v === "principal" ? null : checkActor(v)),
