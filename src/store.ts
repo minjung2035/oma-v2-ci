@@ -3,6 +3,7 @@
 // inside transactions (M-004).
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   Actor,
@@ -449,14 +450,14 @@ export class Store {
     const r = this.db
       .prepare("SELECT * FROM operations WHERE actor=? AND request_key=?")
       .get(actor, key) as Record<string, unknown> | undefined;
-    return r ? rowToOperation(r) : null;
+    return r ? rowToOperation(r, dirname(this.path)) : null;
   }
 
   getOperationById(id: OperationId): OperationRow | null {
     const r = this.db.prepare("SELECT * FROM operations WHERE id=?").get(id) as
       | Record<string, unknown>
       | undefined;
-    return r ? rowToOperation(r) : null;
+    return r ? rowToOperation(r, dirname(this.path)) : null;
   }
 
   findPhysicalCreate(name: Actor, specHash: string): OperationRow | null {
@@ -468,7 +469,7 @@ export class Store {
       ORDER BY created_at_ms, id LIMIT 1`).get(name, specHash) as
       | Record<string, unknown>
       | undefined;
-    return r ? rowToOperation(r) : null;
+    return r ? rowToOperation(r, dirname(this.path)) : null;
   }
 
   recoverableOperations(): OperationId[] {
@@ -796,7 +797,7 @@ function rowToAgent(r: Record<string, unknown>): AgentRow {
   };
 }
 
-function rowToOperation(r: Record<string, unknown>): OperationRow {
+function rowToOperation(r: Record<string, unknown>, stateRoot: string): OperationRow {
   const row: OperationRow = {
     id: r.id as OperationId,
     actor: r.actor as Actor,
@@ -817,7 +818,11 @@ function rowToOperation(r: Record<string, unknown>): OperationRow {
   let plan: unknown;
   try { plan = JSON.parse(row.planJson); }
   catch { throw new StoreError("STORE_CORRUPT", `operation ${row.id} has corrupt plan JSON`); }
-  const invalidPlan = operationPlanCheck(row.kind)(plan);
+  const invalidPlan = operationPlanCheck(row.kind, {
+    operationId: row.id,
+    actor: row.actor,
+    stateRoot,
+  })(plan);
   if (invalidPlan)
     throw new StoreError("STORE_CORRUPT", `operation ${row.id} plan: ${invalidPlan}`);
 
