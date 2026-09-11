@@ -13,6 +13,11 @@ export const ACTOR_NAME_RE = /^[a-z][a-z0-9-]{0,31}$/;
 export const TOPIC_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
 /** MUST [ID-002]: request key `[A-Za-z0-9._-]{1,96}`. */
 export const REQUEST_KEY_RE = /^[A-Za-z0-9._-]{1,96}$/;
+/** MUST [ID-002]: canonical lowercase RFC 4122 UUIDv4. */
+export const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+export const OPERATION_ID_RE = new RegExp(`^op-${UUID_V4_RE.source.slice(1, -1)}$`);
+export const BATCH_ID_RE = new RegExp(`^b-${UUID_V4_RE.source.slice(1, -1)}$`);
+export const MESSAGE_ID_RE = new RegExp(`^m-(${UUID_V4_RE.source.slice(1, -1)})-(\\d+)$`);
 /** MUST [ID-003]: full lowercase hex OID (sha1 40 or sha256 64). */
 export const FULL_OID_RE = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
@@ -47,6 +52,22 @@ export function isValidRequestKey(key: unknown): key is string {
   return typeof key === "string" && REQUEST_KEY_RE.test(key);
 }
 
+export function isValidOperationId(id: unknown): id is OperationId {
+  return typeof id === "string" && OPERATION_ID_RE.test(id);
+}
+
+export function isValidBatchId(id: unknown): id is BatchId {
+  return typeof id === "string" && BATCH_ID_RE.test(id);
+}
+
+export function isValidMessageId(id: unknown): id is MessageId {
+  if (typeof id !== "string") return false;
+  const match = MESSAGE_ID_RE.exec(id);
+  if (!match) return false;
+  const ordinal = Number(match[2]);
+  return Number.isSafeInteger(ordinal) && ordinal >= 0;
+}
+
 export function isValidFullOid(oid: string): oid is Oid {
   return FULL_OID_RE.test(oid);
 }
@@ -69,19 +90,22 @@ export function generateMessageId(
   operationId: OperationId,
   ordinal: number,
 ): MessageId {
-  const uuid = operationId.startsWith("op-")
-    ? operationId.slice(3)
-    : operationId;
-  return `m-${uuid}-${ordinal}`;
+  if (!isValidOperationId(operationId))
+    throw new Error(`invalid operation id ${operationId}`);
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0)
+    throw new Error(`invalid message ordinal ${ordinal}`);
+  return `m-${operationId.slice(3)}-${ordinal}`;
 }
 
 /** Parse `m-<uuid>-<ordinal>` back into (operationId, ordinal); null if malformed. */
 export function parseMessageId(
   id: string,
 ): { operationId: OperationId; ordinal: number } | null {
-  const m = /^m-([0-9a-f-]{36})-(\d+)$/.exec(id);
-  if (!m) return null;
-  return { operationId: `op-${m[1]}`, ordinal: Number(m[2]) };
+  const match = MESSAGE_ID_RE.exec(id);
+  if (!match) return null;
+  const ordinal = Number(match[2]);
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0) return null;
+  return { operationId: `op-${match[1]}` as OperationId, ordinal };
 }
 
 /** MUST [ID-003]: `/`-separated relative path; rejects NUL, `.`/`..` components, absolute paths. */
