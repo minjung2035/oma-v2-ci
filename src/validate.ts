@@ -8,6 +8,8 @@ import {
   isValidFullOid,
   isValidTopicName,
   isValidWirePath,
+  isValidMessageId,
+  isValidOperationId,
 } from "./ids.js";
 
 export type Check = (v: unknown) => string | null;
@@ -207,11 +209,21 @@ export const exactCandidateCheck: Check = (value) => {
 };
 
 const messageKindCheck = checkEnum(["message", "question", "result", "alert", "context", "approval_required", "critical"]);
-const messageIdCheck = checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ });
-const headerMessageIdCheck = checkString({
-  re: /^m-[0-9a-f-]{36}-\d+(?:@[a-z][a-z0-9-]{0,31}\.oma\.invalid)?$/,
-});
-const operationIdCheck = checkString({ re: /^op-[0-9a-f-]{36}$/ });
+const messageIdCheck: Check = (value) =>
+  isValidMessageId(value) ? null : "invalid message id";
+const headerMessageIdCheck: Check = (value) => {
+  if (typeof value !== "string") return `expected string, got ${typeName(value)}`;
+  const at = value.indexOf("@");
+  if (at < 0) return isValidMessageId(value) ? null : "invalid message id";
+  if (value.indexOf("@", at + 1) >= 0) return "invalid message id";
+  const fileId = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  return isValidMessageId(fileId) && /^[a-z][a-z0-9-]{0,31}\.oma\.invalid$/.test(domain)
+    ? null
+    : "invalid message id";
+};
+const operationIdCheck: Check = (value) =>
+  isValidOperationId(value) ? null : "invalid operation id";
 
 export const messagePlanCheck = checkObject({
   id: messageIdCheck,
