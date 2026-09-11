@@ -99,7 +99,7 @@ export class UnitsModule {
 
   /** Bind the durable monotonic incarnation source used by death proof. */
   bindIncarnationReader(reader: IncarnationReader): void {
-    if (!this.incarnationOf) this.incarnationOf = reader;
+    this.incarnationOf = reader;
   }
 
   private run(argv: readonly string[], tolerateFailure = false): string {
