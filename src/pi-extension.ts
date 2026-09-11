@@ -5,7 +5,6 @@
 // mail, followUp otherwise; S-03 verified the mechanism on pi 0.85.1).
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
-import { isValidActorName } from "./ids.js";
 
 export interface BatchView {
   id: string;
@@ -18,6 +17,27 @@ export interface BatchView {
 
 const BATCH_ID = /^b-[0-9a-f-]{36}$/;
 const MESSAGE_ID = /^m-[0-9a-f-]{36}-\d+$/;
+const ACTOR_NAME = /^[a-z][a-z0-9-]{0,31}$/;
+const RESERVED_ACTORS = new Set([
+  "principal",
+  "commons",
+  "residents",
+  "topic",
+  "broker",
+  "principal-relay",
+  "reconcile",
+]);
+
+// Keep the trusted extension deployable as one compiled file. This mirrors the
+// ID-001 resident-name grammar without creating a runtime dependency on the
+// host-side ids.js module inside the sandbox rootfs.
+function isValidBatchActor(name: string): boolean {
+  return (
+    ACTOR_NAME.test(name) &&
+    !RESERVED_ACTORS.has(name) &&
+    !name.startsWith("topic-")
+  );
+}
 
 export default function (pi: ExtensionAPI): void {
   pi.registerCommand("oma-deliver", {
@@ -72,7 +92,7 @@ export function readBatchView(
       !Object.keys(value).every((key) => expectedKeys.includes(key)) ||
       value.id !== batchId ||
       typeof value.agent !== "string" ||
-      !isValidActorName(value.agent) ||
+      !isValidBatchActor(value.agent) ||
       typeof value.incarnation !== "number" ||
       !Number.isSafeInteger(value.incarnation) ||
       value.incarnation < 0 ||
