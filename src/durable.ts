@@ -5,7 +5,6 @@ import type {
   Capability,
   OperationPlan,
   Receipt,
-  ResourceLimits,
 } from "../implementation/contracts.js";
 import type { OperationRow } from "./store.js";
 import { StoreError } from "./store.js";
@@ -13,7 +12,6 @@ import {
   checkArray,
   checkEnum,
   checkInt,
-  checkLogicalAddress,
   checkObject,
   checkOid,
   checkString,
@@ -72,6 +70,26 @@ const nullableMessagePlan: Check = (value) =>
 const nullableOperationId: Check = (value) =>
   value === null ? null : operationIdCheck(value);
 const nullableOid: Check = (value) => (value === null ? null : checkOid(value));
+
+const integrateBaseCheck = checkObject({
+  kind: checkEnum(["git.integrate"] as const),
+  repo: checkEnum(["project"] as const),
+  target: checkEnum(["refs/heads/main"] as const),
+  base: checkOid,
+  candidate: checkOid,
+  policyRevision: nonEmpty,
+  checkProfileDigest: sha256Check,
+});
+const integrateWithResultCheck = checkObject({
+  kind: checkEnum(["git.integrate"] as const),
+  repo: checkEnum(["project"] as const),
+  target: checkEnum(["refs/heads/main"] as const),
+  base: checkOid,
+  candidate: checkOid,
+  policyRevision: nonEmpty,
+  checkProfileDigest: sha256Check,
+  result: operationResultCheck("git.integrate"),
+});
 
 const checks: Readonly<Record<string, Check>> = {
   "mail.send": checkObject({
@@ -134,38 +152,21 @@ const checks: Readonly<Record<string, Check>> = {
     publishedRef: checkString({ re: /^refs\/oma\/published\/[a-z][a-z0-9-]{0,31}\/op-[0-9a-f-]{36}$/ }),
     message: messagePlanCheck,
   }),
-  // `result` is retained here only for compatibility with already-accepted
-  // branch rows; new code should derive the receipt from the other frozen fields.
+  // `result` is retained only for compatibility with accepted branch rows;
+  // new integration plans should derive the receipt from frozen plan fields.
   "git.integrate": (value) => {
     if (!value || typeof value !== "object" || Array.isArray(value))
       return "expected object";
-    const record = value as Record<string, unknown>;
-    const allowed = [
-      "kind", "repo", "target", "base", "candidate", "policyRevision",
-      "checkProfileDigest", "result",
-    ];
-    if (!Object.keys(record).every((key) => allowed.includes(key)))
-      return "unknown field";
-    const base = checkObject({
-      kind: checkEnum(["git.integrate"] as const),
-      repo: checkEnum(["project"] as const),
-      target: checkEnum(["refs/heads/main"] as const),
-      base: checkOid,
-      candidate: checkOid,
-      policyRevision: nonEmpty,
-      checkProfileDigest: sha256Check,
-      ...(Object.prototype.hasOwnProperty.call(record, "result")
-        ? { result: operationResultCheck("git.integrate") }
-        : {}),
-    });
-    return base(value);
+    return Object.prototype.hasOwnProperty.call(value, "result")
+      ? integrateWithResultCheck(value)
+      : integrateBaseCheck(value);
   },
   "context.publish": checkObject({
     kind: checkEnum(["context.publish"] as const),
     base: nullableOid,
     // Existing accepted rows may be between T-context-accept and candidate
-    // commit publication. This is still closed (only "" or a valid OID), and
-    // will be removed when that ordering is made DB-009 exact.
+    // commit publication. This is closed (only "" or a valid OID) but remains
+    // a DB-009 ordering debt until candidate is frozen before acceptance.
     candidate: (value) => value === "" ? null : checkOid(value),
     target: checkEnum(["refs/heads/main"] as const),
     entries: checkArray(checkObject({
