@@ -1,13 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { MailModule } from "../src/mail.js";
 import { Store, StoreError } from "../src/store.js";
+import type { AuthContext } from "../implementation/contracts.js";
 import { resolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000001";
+const CREATE_OP = "op-00000000-0000-4000-8000-000000000002";
 
 function seed(path: string): Store {
   const store = new Store(path);
@@ -97,6 +101,36 @@ test("DB-009: parseable wrong result fails closed for every operation read", () 
       (error: unknown) =>
         error instanceof StoreError && error.code === "STORE_CORRUPT",
     );
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("DB-009: create initial EML is an immutable object before acceptance", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-create-preaccept-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
+  const auth: AuthContext = {
+    actor: "alice",
+    incarnation: 0,
+    role: "resident",
+    channel: "actor",
+    capabilities: new Set(["agent.create"]),
+    peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null },
+  };
+  try {
+    const message = await mail.freezeCreateInitial(
+      auth,
+      CREATE_OP,
+      "bob",
+      "frozen brief",
+    );
+    const object = mail.objectPath(message.id);
+    assert.equal(existsSync(object), true);
+    const bytes = readFileSync(object);
+    assert.equal(bytes.length, message.bytes);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), message.sha256);
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });
