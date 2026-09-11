@@ -707,16 +707,24 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
       type: string;
       message?: { role?: string; customType?: string; stopReason?: string };
     }> = [];
-    pi.onEvent((e) => events.push(e as never));
-    let settled = false;
-    const done = new Promise<void>((resolve) => {
+    let stderr = "";
+    child.stderr.on("data", (data) => { stderr += String(data); });
+    let customSeen = false;
+    let providerErrorSeen = false;
+    const evidence = new Promise<void>((resolve) => {
       pi.onEvent((e) => {
-        if (e.type === "agent_settled") {
-          settled = true;
-          resolve();
-        }
+        events.push(e as never);
+        if (e.type === "message_start" &&
+            (e as { message?: { role?: string; customType?: string } }).message?.role === "custom" &&
+            (e as { message?: { role?: string; customType?: string } }).message?.customType === "oma-mail")
+          customSeen = true;
+        if (e.type === "message_end" &&
+            (e as { message?: { stopReason?: string } }).message?.stopReason === "error")
+          providerErrorSeen = true;
+        if (customSeen && providerErrorSeen) resolve();
       });
-      child.on("error", () => resolve());
+      child.once("error", () => resolve());
+      child.once("exit", () => resolve());
     });
     await new Promise((r) => setTimeout(r, 3000));
     pi.send({
@@ -724,7 +732,15 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
       type: "prompt",
       message: `/oma-deliver ${manifest.id}`,
     });
-    await done;
+    await Promise.race([
+      evidence,
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(
+          () => reject(new Error(`Pi delivery evidence timeout; events=${JSON.stringify(events)} stderr=${JSON.stringify(stderr)}`)),
+          15000,
+        ),
+      ),
+    ]);
     pi.close();
     try {
       child.kill("SIGKILL");
@@ -737,15 +753,13 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     );
     assert.ok(
       custom,
-      `no custom message delivered; events=${JSON.stringify(events)}`,
+      `no custom message delivered; events=${JSON.stringify(events)} stderr=${JSON.stringify(stderr)}`,
     );
     assert.equal(custom.message?.customType, "oma-mail");
-    void custom;
     const failed = events.some(
       (e) => e.type === "message_end" && e.message?.stopReason === "error",
     );
-    assert.equal(failed, true);
-    void settled;
+    assert.equal(failed, true, `provider error not observed; events=${JSON.stringify(events)} stderr=${JSON.stringify(stderr)}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
