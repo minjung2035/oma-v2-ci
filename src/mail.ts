@@ -67,6 +67,7 @@ export interface EmlParams {
   references: MessageId[];
   messageId: string;
   body: string;
+  dateMs?: number;
   approvalFor?: MailInput["approvalFor"];
 }
 
@@ -101,6 +102,7 @@ export async function buildEml(p: EmlParams): Promise<{
   text: string;
   bytes: number;
   sha256: string;
+  dateMs: number;
 }> {
   if (p.approvalFor) {
     const error = exactCandidateCheck(p.approvalFor);
@@ -108,6 +110,9 @@ export async function buildEml(p: EmlParams): Promise<{
   }
   assertNoCrlf(p.subject, "subject");
   for (const h of [p.from, ...p.to, ...p.replyTo, p.messageId, ...(p.inReplyTo ? [p.inReplyTo] : []), ...p.references]) assertNoCrlf(h, "header");
+  const dateMs = p.dateMs ?? Math.floor(Date.now() / 1000) * 1000;
+  if (!Number.isSafeInteger(dateMs) || dateMs < 0)
+    throw new StoreError("INVALID_REQUEST", "dateMs must be a non-negative safe integer");
   const transporter = createTransport({
     streamTransport: true,
     buffer: true,
@@ -124,7 +129,7 @@ export async function buildEml(p: EmlParams): Promise<{
     ...(p.references.length > 0
       ? { references: p.references.map((r) => `<${r}>`) }
       : {}),
-    date: new Date(),
+    date: new Date(dateMs),
     headers: {
       "X-OMA-Kind": p.kind,
       ...(p.contextRevision ? { "X-OMA-Context": p.contextRevision } : {}),
@@ -142,7 +147,7 @@ export async function buildEml(p: EmlParams): Promise<{
   // message would also mutate matching byte sequences in the user body.
   const text = raw.toString("utf8");
   const bytes = Buffer.byteLength(text, "utf8");
-  return { text, bytes, sha256: sha256Hex(text) };
+  return { text, bytes, sha256: sha256Hex(text), dateMs };
 }
 
 // ---------------------------------------------------------------------------
@@ -348,12 +353,15 @@ export function publishImmutableFile(
 
 export interface ParsedEmlHeaders {
   from: string | null;
+  to: string[] | null;
   subject: string | null;
+  dateMs: number | null;
   messageId: MessageId | null;
   inReplyTo: MessageId | null;
   references: MessageId[];
   replyTo: string[] | null;
   omaKind: string | null;
+  omaContext: string | null;
   approvalFor: {
     repo: string | null;
     targetRef: string | null;
@@ -409,6 +417,13 @@ export function parseEmlHeaders(text: string): ParsedEmlHeaders {
     for (const m of h.matchAll(/<([^>]+)>/g)) out.push(m[1] as MessageId);
     return out;
   };
+  const addresses = (h: string | undefined): string[] | null =>
+    h
+      ? h.split(",").map((value) => value.replace(/\n/g, " ").trim()).filter(Boolean)
+      : null;
+  const parsedDate = headers.date
+    ? Date.parse(headers.date.replace(/\n/g, " "))
+    : Number.NaN;
   const approval = {
     repo: headers["x-oma-approval-repo"] ?? null,
     targetRef: headers["x-oma-approval-target"] ?? null,
@@ -421,14 +436,15 @@ export function parseEmlHeaders(text: string): ParsedEmlHeaders {
   const hasApproval = Object.values(approval).some((value) => value !== null);
   return {
     from: headers.from ?? null,
+    to: addresses(headers.to),
     subject: headers.subject ?? null,
+    dateMs: Number.isFinite(parsedDate) ? parsedDate : null,
     messageId: mid(headers["message-id"]),
     inReplyTo: mid(headers["in-reply-to"]),
     references: refs(headers["references"]),
-    replyTo: headers["reply-to"]
-      ? headers["reply-to"].split(",").map((s) => s.trim())
-      : null,
+    replyTo: addresses(headers["reply-to"]),
     omaKind: headers["x-oma-kind"] ?? null,
+    omaContext: headers["x-oma-context"] ?? null,
     approvalFor: hasApproval ? approval : null,
   };
 }
@@ -545,7 +561,6 @@ export class MailModule {
     const route = expandAddresses(this.store, logicalTo, society);
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
-    const dateMs = Date.now();
     let replyHeaders: {
       replyTo: Address[];
       inReplyTo: MessageId | null;
@@ -597,7 +612,7 @@ export class MailModule {
         objectPath: `mail/objects/${messageId}.eml`,
         sha256: eml.sha256,
         bytes: eml.bytes,
-        dateMs,
+        dateMs: eml.dateMs,
         to: [...logicalTo],
         recipients: route.recipients,
         kind: input.kind,
@@ -664,7 +679,6 @@ export class MailModule {
     brief: string,
   ): Promise<MessagePlan> {
     const messageId = generateMessageId(operationId, 0);
-    const dateMs = Date.now();
     const eml = await buildEml({
       from: actorAddress(auth.actor, this.paths.society),
       to: [actorAddress(recipient, this.paths.society)],
@@ -683,7 +697,7 @@ export class MailModule {
       objectPath: `mail/objects/${messageId}.eml`,
       sha256: eml.sha256,
       bytes: eml.bytes,
-      dateMs,
+      dateMs: eml.dateMs,
       to: [recipient],
       recipients: [recipient],
       kind: "message",
@@ -756,6 +770,40 @@ export class MailModule {
     const headers = parseEmlHeaders(bytes.toString("utf8"));
     if (headers.messageId?.split("@", 1)[0] !== message.id || headers.omaKind !== message.kind)
       throw new StoreError("STORE_CORRUPT", `mail header mismatch: ${message.id}`);
+
+    const logicalAddresses = (values: string[] | null): Address[] | null => {
+      if (!values) return null;
+      const logical = values.map((value) =>
+        logicalReplyAddress(this.store, value, this.paths.society),
+      );
+      return logical.some((value) => value === null)
+        ? null
+        : (logical as Address[]);
+    };
+    const sameAddresses = (left: readonly Address[], right: readonly Address[]): boolean => {
+      if (left.length !== right.length) return false;
+      const a = [...left].sort();
+      const b = [...right].sort();
+      return a.every((value, index) => value === b[index]);
+    };
+    const actualTo = logicalAddresses(headers.to);
+    const actualReplyTo = logicalAddresses(headers.replyTo ?? []);
+    if (
+      !actualTo ||
+      !actualReplyTo ||
+      !sameAddresses(actualTo, message.to) ||
+      !sameAddresses(actualReplyTo, message.replyHeaders.replyTo) ||
+      headers.inReplyTo !== message.replyHeaders.inReplyTo ||
+      headers.references.length !== message.replyHeaders.references.length ||
+      headers.references.some((value, index) => value !== message.replyHeaders.references[index]) ||
+      headers.dateMs === null ||
+      headers.dateMs !== Math.floor(message.dateMs / 1000) * 1000
+    ) {
+      throw new StoreError("STORE_CORRUPT", `mail frozen metadata mismatch: ${message.id}`);
+    }
+    if (message.kind !== "context" && headers.omaContext !== message.contextRevision)
+      throw new StoreError("STORE_CORRUPT", `mail context metadata mismatch: ${message.id}`);
+
     const expectedApproval = message.approvalFor ?? null;
     const actualApproval = headers.approvalFor;
     if (expectedApproval) {
