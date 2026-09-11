@@ -180,6 +180,16 @@ test("adversarial: terminal operation state cannot be rewritten", () => {
   const operation = "op-00000000-0000-4000-8000-000000000001";
   try {
     store.transaction(() => {
+      store.insertAgent({
+        name: "alice",
+        specHash: "alice",
+        role: "resident",
+        desired: "enabled",
+        incarnation: 0,
+        profile: "resident",
+        createdBy: null,
+        specJson: "{}",
+      });
       store.insertOperation({
         id: operation,
         actor: "alice",
