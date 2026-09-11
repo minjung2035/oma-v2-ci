@@ -16,8 +16,9 @@ import {
   statSync,
   writeFileSync,
   fsyncSync,
+  rmSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type {
   Actor,
   AuthContext,
@@ -31,6 +32,7 @@ import type {
   RunLease,
 } from "../implementation/contracts.js";
 import { Store, StoreError } from "./store.js";
+import { receiptFromOperation } from "./durable.js";
 import { isValidActorName, isValidRequestKey } from "./ids.js";
 import { ConnectionDecoder, encodeFrame } from "./frame.js";
 import { spawnSync } from "node:child_process";
@@ -54,7 +56,6 @@ import {
   mailAckParamsCheck,
   mailParamsCheck,
   operationGetParamsCheck,
-  operationResultCheck,
   routeParamsCheck,
   statusGetParamsCheck,
   checkObject,
@@ -177,7 +178,6 @@ export class Broker {
 
   private refreshViews(): void {
     try { this.views.refreshWorld(); } catch (error) {
-      // Derived views can be rebuilt; their failure must not replace a durable receipt.
       console.error("world view refresh failed:", error instanceof Error ? error.message : String(error));
     }
   }
@@ -237,29 +237,17 @@ export class Broker {
 
   private handleActor(sock: Socket, actor: Actor, incarnation: number): void {
     if (this.store.getAgent(actor)?.incarnation !== incarnation) {
-      this.fail(sock, {
-        code: "STALE_RUN",
-        message: "actor incarnation is stale",
-        retry: "never",
-      });
+      this.fail(sock, { code: "STALE_RUN", message: "actor incarnation is stale", retry: "never" });
       return;
     }
     const cred = this.bindPeer(sock);
     if (!cred) {
-      this.fail(sock, {
-        code: "AUTH_FAILED",
-        message: "no peer credentials",
-        retry: "never",
-      });
+      this.fail(sock, { code: "AUTH_FAILED", message: "no peer credentials", retry: "never" });
       return;
     }
     const auth = this.trustedContext(actor, cred);
     if (!auth) {
-      this.fail(sock, {
-        code: "AUTH_FAILED",
-        message: "cgroup mismatch",
-        retry: "never",
-      });
+      this.fail(sock, { code: "AUTH_FAILED", message: "cgroup mismatch", retry: "never" });
       return;
     }
     this.serveFrames(
@@ -269,10 +257,7 @@ export class Broker {
     );
   }
 
-  private trustedContext(
-    actor: Actor,
-    cred: BoundPeer,
-  ): AuthContext | null {
+  private trustedContext(actor: Actor, cred: BoundPeer): AuthContext | null {
     const agent = this.store.getAgent(actor);
     if (!agent) return null;
     if (cred.uid !== (process.getuid?.() ?? -1)) return null;
@@ -290,7 +275,7 @@ export class Broker {
       const current = statSync(join("/sys/fs/cgroup", unitCg), { bigint: true });
       if (!pinned.isDirectory() || pinned.dev !== current.dev || pinned.ino !== current.ino) return null;
     } catch { return null; }
-    if (!cred.alive()) return null; // Validate the original peer after cgroup observations.
+    if (!cred.alive()) return null;
     const lease = run.lease;
     const granted = capabilitiesOf(agent);
     const currentCapabilities = () => cred.alive() && this.runLeases.get(actor) === run && run.lease === lease ? granted : new Set<Capability>();
@@ -299,7 +284,6 @@ export class Broker {
       incarnation: agent.incarnation,
       role: agent.role,
       channel: "actor",
-      // Revocation also fences requests already awaiting body/render before acceptance.
       get capabilities() { return currentCapabilities(); },
       peer: { pid: cred.pid, uid: cred.uid, gid: cred.gid, cgroup: peerCg },
     };
@@ -308,11 +292,7 @@ export class Broker {
   private handleInternal(sock: Socket, channel: "runner" | "host"): void {
     const cred = this.bindPeer(sock);
     if (!cred || cred.uid !== (process.getuid?.() ?? -1)) {
-      this.fail(sock, {
-        code: "AUTH_FAILED",
-        message: "invalid internal peer credentials",
-        retry: "never",
-      });
+      this.fail(sock, { code: "AUTH_FAILED", message: "invalid internal peer credentials", retry: "never" });
       return;
     }
     this.serveFrames(sock, (raw, stream) =>
@@ -340,16 +320,17 @@ export class Broker {
     };
     const stagingDir = join(this.paths.stateRoot, "staging");
     mkdirSync(stagingDir, { recursive: true });
+    const cleanupPath = (path: string): void => {
+      try { rmSync(dirname(path), { recursive: true, force: true }); } catch { /* absent */ }
+    };
     let activeSpool: Spool | null = null;
-    const cleanupSpool = (spool: Spool | null, remove = true): void => {
+    const cleanupSpool = (spool: Spool | null): void => {
       if (!spool) return;
       if (spool.fd !== null) {
         try { closeSync(spool.fd); } catch { /* already closed */ }
         spool.fd = null;
       }
-      if (remove) {
-        try { unlinkSync(spool.path); } catch { /* absent */ }
-      }
+      cleanupPath(spool.path);
     };
     const dec = new ConnectionDecoder(this.limits.frameBytes, (chunk) => {
       const spool = activeSpool;
@@ -379,14 +360,11 @@ export class Broker {
     ): Promise<void> =>
       Promise.resolve(p).then(
         (r) => void write(r),
-        (e) =>
-          void write(
-            Broker.errorAnswer(id, {
-              code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
-              message: (e as Error).message,
-              retry,
-            }),
-          ),
+        (e) => void write(Broker.errorAnswer(id, {
+          code: e instanceof StoreError ? e.code : "INTERNAL_ERROR",
+          message: (e as Error).message,
+          retry,
+        })),
       );
 
     const pump = (): void => {
@@ -396,9 +374,7 @@ export class Broker {
       busy = true;
       const iter = u.streamPath ? createReadStream(u.streamPath) : null;
       respond(u.id, handle(u.raw, iter), u.retry).finally(() => {
-        if (u.streamPath) {
-          try { unlinkSync(u.streamPath); } catch { /* absent */ }
-        }
+        if (u.streamPath) cleanupPath(u.streamPath);
         busy = false;
         const more = dec.resumeParsing();
         processEvents(more);
@@ -410,16 +386,14 @@ export class Broker {
       cleanupSpool(activeSpool);
       activeSpool = null;
       if (pendingStream) {
-        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        cleanupPath(pendingStream.path);
         pendingStream = null;
       }
-      write(
-        Broker.errorAnswer(id, {
-          code: "STREAM_INVALID",
-          message,
-          retry: "same-key",
-        }),
-      );
+      write(Broker.errorAnswer(id, {
+        code: "STREAM_INVALID",
+        message,
+        retry: "same-key",
+      }));
       sock.destroy();
     };
 
@@ -429,7 +403,7 @@ export class Broker {
       if (!pendingStream) return true;
       if (events.some((ev) => ev.kind === "invalid")) {
         const id = pendingStream.id;
-        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        cleanupPath(pendingStream.path);
         pendingStream = null;
         rejectStream(id, "stream has excess bytes");
         return false;
@@ -441,7 +415,7 @@ export class Broker {
       }
       if (dec.excessStatus() === "excess") {
         const id = pendingStream.id;
-        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        cleanupPath(pendingStream.path);
         pendingStream = null;
         rejectStream(id, "stream has excess bytes");
         return false;
@@ -449,18 +423,14 @@ export class Broker {
       return true;
     };
 
-    const processEvents = (
-      events: import("./frame.js").DecoderEvent[],
-    ): void => {
+    const processEvents = (events: import("./frame.js").DecoderEvent[]): void => {
       for (const ev of events) {
         if (ev.kind === "invalid") {
-          write(
-            Broker.errorAnswer("x", {
-              code: ev.code,
-              message: ev.message,
-              retry: "never",
-            }),
-          );
+          write(Broker.errorAnswer("x", {
+            code: ev.code,
+            message: ev.message,
+            retry: "never",
+          }));
           sock.destroy();
           return;
         }
@@ -480,13 +450,11 @@ export class Broker {
             spool.fd = null;
           } catch (error) {
             cleanupSpool(spool);
-            write(
-              Broker.errorAnswer(sf.id, {
-                code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : "INTERNAL_ERROR",
-                message: `stream spool failed: ${(error as Error).message}`,
-                retry: "same-key",
-              }),
-            );
+            write(Broker.errorAnswer(sf.id, {
+              code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : "INTERNAL_ERROR",
+              message: `stream spool failed: ${(error as Error).message}`,
+              retry: "same-key",
+            }));
             sock.destroy();
             return;
           }
@@ -507,24 +475,17 @@ export class Broker {
           if (status === "pending") {
             pendingStream = { raw: sf.raw, id: sf.id, path: spool.path };
           } else {
-            units.push({
-              raw: sf.raw,
-              id: sf.id,
-              streamPath: spool.path,
-              retry: "same-key",
-            });
+            units.push({ raw: sf.raw, id: sf.id, streamPath: spool.path, retry: "same-key" });
           }
           continue;
         }
         const raw = ev.frame.raw as Record<string, unknown>;
         if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-          write(
-            Broker.errorAnswer("x", {
-              code: "INVALID_REQUEST",
-              message: "frame root must be an object",
-              retry: "never",
-            }),
-          );
+          write(Broker.errorAnswer("x", {
+            code: "INVALID_REQUEST",
+            message: "frame root must be an object",
+            retry: "never",
+          }));
           sock.destroy();
           return;
         }
@@ -538,25 +499,15 @@ export class Broker {
               ? p.content
               : null
         ) as Record<string, unknown> | null;
-        const wantsStream =
-          method === "git.submit" || method === "context.publish";
-        const streamLimit =
-          method === "git.submit"
-            ? this.limits.bundleBytes
-            : this.limits.contextBytes;
+        const wantsStream = method === "git.submit" || method === "context.publish";
+        const streamLimit = method === "git.submit" ? this.limits.bundleBytes : this.limits.contextBytes;
         if (wantsStream && desc && typeof desc.bytes === "number") {
-          if (
-            !Number.isSafeInteger(desc.bytes) ||
-            desc.bytes < 0 ||
-            desc.bytes > streamLimit
-          ) {
-            write(
-              Broker.errorAnswer(id, {
-                code: "INVALID_REQUEST",
-                message: "stream descriptor exceeds host limits",
-                retry: "never",
-              }),
-            );
+          if (!Number.isSafeInteger(desc.bytes) || desc.bytes < 0 || desc.bytes > streamLimit) {
+            write(Broker.errorAnswer(id, {
+              code: "INVALID_REQUEST",
+              message: "stream descriptor exceeds host limits",
+              retry: "never",
+            }));
             sock.destroy();
             return;
           }
@@ -568,7 +519,9 @@ export class Broker {
           }
           if (desc.bytes > 0) {
             const expectedSha = typeof desc.sha256 === "string" ? desc.sha256 : "";
-            const path = join(stagingDir, `.wire-${randomUUID()}.stream`);
+            const spoolDir = join(stagingDir, `wire-${randomUUID()}`);
+            mkdirSync(spoolDir, { mode: 0o700 });
+            const path = join(spoolDir, "body.stream");
             let fd: number;
             try {
               fd = openSync(
@@ -577,13 +530,12 @@ export class Broker {
                 0o600,
               );
             } catch (error) {
-              write(
-                Broker.errorAnswer(id, {
-                  code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : "INTERNAL_ERROR",
-                  message: `cannot create stream spool: ${(error as Error).message}`,
-                  retry: "same-key",
-                }),
-              );
+              rmSync(spoolDir, { recursive: true, force: true });
+              write(Broker.errorAnswer(id, {
+                code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : "INTERNAL_ERROR",
+                message: `cannot create stream spool: ${(error as Error).message}`,
+                retry: "same-key",
+              }));
               sock.destroy();
               return;
             }
@@ -606,13 +558,11 @@ export class Broker {
               cleanupSpool(spool);
               activeSpool = null;
               streamFrame = null;
-              write(
-                Broker.errorAnswer(id, {
-                  code: error instanceof StoreError ? error.code : "INTERNAL_ERROR",
-                  message: (error as Error).message,
-                  retry: "same-key",
-                }),
-              );
+              write(Broker.errorAnswer(id, {
+                code: error instanceof StoreError ? error.code : "INTERNAL_ERROR",
+                message: (error as Error).message,
+                retry: "same-key",
+              }));
               sock.destroy();
             }
             continue;
@@ -631,13 +581,11 @@ export class Broker {
         cleanupSpool(activeSpool);
         activeSpool = null;
         streamFrame = null;
-        write(
-          Broker.errorAnswer(id, {
-            code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : error instanceof StoreError ? error.code : "INTERNAL_ERROR",
-            message: (error as Error).message,
-            retry: "same-key",
-          }),
-        );
+        write(Broker.errorAnswer(id, {
+          code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : error instanceof StoreError ? error.code : "INTERNAL_ERROR",
+          message: (error as Error).message,
+          retry: "same-key",
+        }));
         sock.destroy();
         return;
       }
@@ -652,7 +600,7 @@ export class Broker {
       activeSpool = null;
       streamFrame = null;
       if (pendingStream) {
-        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        cleanupPath(pendingStream.path);
         pendingStream = null;
       }
       rejectStream(id, "stream timed out before acceptance");
@@ -663,16 +611,14 @@ export class Broker {
         cleanupSpool(activeSpool);
         activeSpool = null;
         streamFrame = null;
-        write(
-          Broker.errorAnswer(id, {
-            code: "STREAM_INVALID",
-            message: "stream ended before descriptor.bytes",
-            retry: "same-key",
-          }),
-        );
+        write(Broker.errorAnswer(id, {
+          code: "STREAM_INVALID",
+          message: "stream ended before descriptor.bytes",
+          retry: "same-key",
+        }));
       } else if (pendingStream) {
         const id = pendingStream.id;
-        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        cleanupPath(pendingStream.path);
         pendingStream = null;
         rejectStream(id, "stream ended with an incomplete next frame");
         return;
@@ -684,14 +630,10 @@ export class Broker {
       cleanupSpool(activeSpool);
       activeSpool = null;
       if (pendingStream) {
-        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        cleanupPath(pendingStream.path);
         pendingStream = null;
       }
-      for (const unit of units) {
-        if (unit.streamPath) {
-          try { unlinkSync(unit.streamPath); } catch { /* absent */ }
-        }
-      }
+      for (const unit of units) if (unit.streamPath) cleanupPath(unit.streamPath);
       units.length = 0;
     });
   }
@@ -899,7 +841,7 @@ export class Broker {
             auth.actor,
             (params as { key: string }).key,
           );
-          return Broker.okAnswer(id, op ? receiptOfRow(op) : receiptNotFound);
+          return Broker.okAnswer(id, op ? receiptFromOperation(op) : receiptNotFound);
         }
         case "mail.send": {
           const mail = params as unknown as import("../implementation/contracts.js").MailInput;
@@ -1129,7 +1071,6 @@ export class Broker {
       throw new StoreError("AUTH_FAILED", `caller is not inside the ${kind} service`);
   }
 
-  /** Resolve the runner actor from physical cgroup identity, never request params. */
   private runnerActor(peer: BoundPeer): Actor {
     const peerCg = peerCgroup(peer.pid);
     if (!peerCg) throw new StoreError("AUTH_FAILED", "runner cgroup unavailable");
@@ -1183,17 +1124,10 @@ export class Broker {
             !isValidActorName(params.agent) ||
             typeof params.invocationId !== "string" ||
             !/^[0-9a-f]{32}$/.test(params.invocationId) ||
-            !Object.keys(params).every((k) =>
-              ["agent", "invocationId"].includes(k),
-            )
-          ) {
-            throw new StoreError("INVALID_REQUEST", "runner.open args invalid");
-          }
+            !Object.keys(params).every((k) => ["agent", "invocationId"].includes(k))
+          ) throw new StoreError("INVALID_REQUEST", "runner.open args invalid");
           this.requireRunnerUnit(peer, params.agent, params.invocationId);
-          return Broker.okAnswer(
-            id,
-            this.openRun(params.agent, params.invocationId),
-          );
+          return Broker.okAnswer(id, this.openRun(params.agent, params.invocationId));
         }
         case "runner.pending": {
           if (Object.keys(params).length) throw new StoreError("INVALID_REQUEST", "runner.pending takes no params");
@@ -1219,19 +1153,11 @@ export class Broker {
           const agent = this.runnerActor(peer);
           const row = this.store.getAgent(agent);
           if (!row) throw new StoreError("AUTH_FAILED", "runner identity missing");
-          const batch = await this.mail.prepare(
-            this.runnerAuth(agent, row.incarnation),
-          );
+          const batch = await this.mail.prepare(this.runnerAuth(agent, row.incarnation));
           return Broker.okAnswer(id, batch);
         }
         case "batch.complete": {
-          const allowed = [
-            "batchId",
-            "incarnation",
-            "sessionPath",
-            "adapterRevision",
-            "receiptPath",
-          ];
+          const allowed = ["batchId", "incarnation", "sessionPath", "adapterRevision", "receiptPath"];
           if (!Object.keys(params).every((k) => allowed.includes(k)))
             throw new StoreError("INVALID_REQUEST", "batch.complete args invalid");
           const evidence = params as unknown as BoundaryEvidence;
@@ -1242,21 +1168,15 @@ export class Broker {
             typeof evidence.sessionPath !== "string" ||
             typeof evidence.adapterRevision !== "string" ||
             typeof evidence.receiptPath !== "string"
-          ) {
-            throw new StoreError("INVALID_REQUEST", "bad boundary evidence");
-          }
+          ) throw new StoreError("INVALID_REQUEST", "bad boundary evidence");
           const batch = this.store.getBatch(evidence.batchId);
-          if (!batch)
-            throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
+          if (!batch) throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
           const agent = batch.agent;
           this.requireRunnerUnit(peer, agent);
           const row = this.store.getAgent(agent);
           if (!row || row.incarnation !== evidence.incarnation)
             throw new StoreError("BATCH_CONFLICT", "runner incarnation mismatch");
-          await this.mail.complete(
-            this.runnerAuth(agent, row.incarnation),
-            evidence,
-          );
+          await this.mail.complete(this.runnerAuth(agent, row.incarnation), evidence);
           return Broker.okAnswer(id, { completed: true });
         }
         case "host.principalRelay": {
@@ -1264,9 +1184,7 @@ export class Broker {
           this.requireHostUnit(peer, "principal-relay");
           const principal = this.store.getAgent("principal");
           if (!principal) return Broker.okAnswer(id, { moved: 0, pending: 0 });
-          const newFiles = readdirSync(
-            join(this.paths.stateRoot, "mail", "inboxes", "principal", "new"),
-          );
+          const newFiles = readdirSync(join(this.paths.stateRoot, "mail", "inboxes", "principal", "new"));
           const moved = this.mail.moveToCur("principal", newFiles);
           return Broker.okAnswer(id, {
             moved,
@@ -1276,9 +1194,7 @@ export class Broker {
         case "host.reconcile": {
           if (Object.keys(params).length) throw new StoreError("INVALID_REQUEST", "host.reconcile takes no params");
           this.requireHostUnit(peer, "reconcile");
-          const rep = this.reconcile
-            ? await this.reconcile.sweep()
-            : await this.mail.reconcilePending();
+          const rep = this.reconcile ? await this.reconcile.sweep() : await this.mail.reconcilePending();
           this.refreshViews();
           return Broker.okAnswer(id, rep);
         }
@@ -1325,11 +1241,9 @@ export class Broker {
       throw new StoreError("STALE_RUN", `${actor} is stopped`);
     if (agent.desired === "retired")
       throw new StoreError("AGENT_RETIRED", `${actor} is retired`);
-    const hasGoal =
-      this.paths.hasGoal?.() ??
+    const hasGoal = this.paths.hasGoal?.() ??
       existsSync(join(this.paths.stateRoot, "world", "context", "current"));
-    if (!hasGoal)
-      throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
+    if (!hasGoal) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
     const active = this.runLeases.get(actor);
     if (active?.invocationId === invocationId) {
       if (!active.lease) throw new StoreError("STALE_RUN", "run endpoint is revoked or failed");
@@ -1371,7 +1285,6 @@ export class Broker {
           try { record.revoke(); } finally { closeSync(cgroupFd); }
         },
       };
-      // Keep the failed invocation fenced and its kernel identity pinned until death.
       this.runLeases.set(actor, record);
       listener = this.listenActor(actor, next);
       record.lease = { actor, incarnation: next, socketHostPath: listener.socketHostPath };
@@ -1388,21 +1301,13 @@ export class Broker {
     this.hostServer?.close();
     for (const run of this.runLeases.values()) run.done();
     for (const srv of this.actorServers) {
-      try {
-        srv.close();
-      } catch {
-        /* already closed */
-      }
+      try { srv.close(); } catch { /* already closed */ }
     }
     this.actorServers.clear();
     this.runLeases.clear();
     this.store.close();
     if (this.lockFd !== null) {
-      try {
-        closeSync(this.lockFd);
-      } catch {
-        /* already closed */
-      }
+      try { closeSync(this.lockFd); } catch { /* already closed */ }
       this.lockFd = null;
     }
   }
@@ -1416,49 +1321,6 @@ function keyOf(req: { request?: string }): string {
   if (!isValidRequestKey(req.request))
     throw new StoreError("INVALID_REQUEST", "mutation requires a request key");
   return req.request;
-}
-
-function receiptOfRow(op: {
-  id: string;
-  kind: string;
-  state: string;
-  resultJson: string | null;
-  errorCode: string | null;
-}): Receipt {
-  if (!(["pending", "succeeded", "failed", "unknown"] as const).includes(op.state as never))
-    throw new StoreError("STORE_CORRUPT", `operation ${op.id} has invalid state`);
-  const rec: Receipt = {
-    operation: op.id,
-    state: op.state as Receipt["state"],
-  };
-  if (op.state === "succeeded") {
-    if (!op.resultJson)
-      throw new StoreError("STORE_CORRUPT", `succeeded operation ${op.id} has no result`);
-    let result: unknown;
-    try {
-      result = JSON.parse(op.resultJson);
-    } catch {
-      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt result JSON`);
-    }
-    const invalid = operationResultCheck(op.kind)(result);
-    if (invalid)
-      throw new StoreError("STORE_CORRUPT", `operation ${op.id} result: ${invalid}`);
-    rec.result = result as Exclude<Receipt["result"], undefined>;
-  } else if (op.resultJson !== null) {
-    throw new StoreError("STORE_CORRUPT", `non-success operation ${op.id} has a result`);
-  }
-  if (op.state === "failed" && !op.errorCode)
-    throw new StoreError("STORE_CORRUPT", `failed operation ${op.id} has no error code`);
-  if (op.errorCode && op.state !== "failed")
-    throw new StoreError("STORE_CORRUPT", `non-failed operation ${op.id} has an error code`);
-  if (op.errorCode) {
-    rec.error = {
-      code: op.errorCode as never,
-      message: op.errorCode,
-      retry: "never",
-    };
-  }
-  return rec;
 }
 
 const METHOD_CAPABILITY: Readonly<Partial<Record<PublicMethod, Capability>>> = {
