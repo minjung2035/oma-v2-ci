@@ -215,7 +215,8 @@ test("T17: reply header contract; CR/LF injection rejected", async () => {
   const direct = parseEmlHeaders(emlDirect.text);
   assert.equal(direct.replyTo![0], actorAddress("a", society));
   assert.equal(direct.messageId, "m-1@demo.oma.invalid");
-  assert.ok(emlDirect.text.includes("X-OMA-Kind: message"));
+  const headerBlock = emlDirect.text.split(/\r?\n\r?\n/, 1)[0] ?? "";
+  assert.match(headerBlock, /^X-OMA-Kind: message$/im);
   // CRLF cannot inject headers; ordinary CRLF text bodies remain valid.
   await assert.rejects(
     buildEml({
