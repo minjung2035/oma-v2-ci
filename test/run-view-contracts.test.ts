@@ -20,7 +20,7 @@ function fakeObservation(units: UnitsModule): void {
   (units as unknown as { observe: (agent: string) => UnitObservation }).observe = () => observation;
 }
 
-test("RUN-001: confirmDead proves only the durable current incarnation", () => {
+test("RUN-001: confirmDead is fenced by the durable monotonic incarnation", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-death-proof-"));
   try {
     const values = {
@@ -32,8 +32,9 @@ test("RUN-001: confirmDead proves only the durable current incarnation", () => {
     };
     const units = new UnitsModule("demo", values, root, {}, () => 7);
     fakeObservation(units);
-    assert.equal(units.confirmDead("alice", 6), false, "old incarnation must never borrow current unit death evidence");
-    assert.equal(units.confirmDead("alice", 7), true, "matching durable incarnation may use empty fixed-unit evidence");
+    assert.equal(units.confirmDead("alice", 6), true, "empty fixed cgroup proves historical incarnations are dead");
+    assert.equal(units.confirmDead("alice", 7), true, "current durable incarnation may use empty fixed-cgroup evidence");
+    assert.equal(units.confirmDead("alice", 8), false, "future incarnation must never borrow current death evidence");
 
     const unbound = new UnitsModule("demo", values, root);
     fakeObservation(unbound);
