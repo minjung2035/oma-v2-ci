@@ -81,6 +81,8 @@ export function unitName(
   return `oma-${society}-${kind}.${suffix}`;
 }
 
+export type IncarnationReader = (agent: Actor) => number | null;
+
 export class UnitsModule {
   onRevokeRun: ((agent: Actor) => void) | undefined;
 
@@ -89,6 +91,7 @@ export class UnitsModule {
     private readonly values: RenderValues,
     private readonly installDir: string = INSTALL_DIR,
     private readonly profiles: Readonly<Record<string, ResourceLimits>> = {},
+    private readonly incarnationOf: IncarnationReader | null = null,
   ) {}
 
   private run(argv: readonly string[], tolerateFailure = false): string {
@@ -288,9 +291,9 @@ export class UnitsModule {
     }
   }
 
-
   confirmDead(agent: Actor, incarnation: number): boolean {
-    void incarnation;
+    if (!Number.isSafeInteger(incarnation) || incarnation < 0) return false;
+    if (!this.incarnationOf || this.incarnationOf(agent) !== incarnation) return false;
     const obs = this.observe(agent);
     if (!["inactive", "dead", "failed"].includes(obs.activeState)) return false;
     if (!obs.cgroup) return true;
