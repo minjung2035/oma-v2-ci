@@ -85,14 +85,22 @@ export type IncarnationReader = (agent: Actor) => number | null;
 
 export class UnitsModule {
   onRevokeRun: ((agent: Actor) => void) | undefined;
+  private incarnationOf: IncarnationReader | null;
 
   constructor(
     private readonly society: string,
     private readonly values: RenderValues,
     private readonly installDir: string = INSTALL_DIR,
     private readonly profiles: Readonly<Record<string, ResourceLimits>> = {},
-    private readonly incarnationOf: IncarnationReader | null = null,
-  ) {}
+    incarnationOf: IncarnationReader | null = null,
+  ) {
+    this.incarnationOf = incarnationOf;
+  }
+
+  /** Bind the durable monotonic incarnation source used by death proof. */
+  bindIncarnationReader(reader: IncarnationReader): void {
+    if (!this.incarnationOf) this.incarnationOf = reader;
+  }
 
   private run(argv: readonly string[], tolerateFailure = false): string {
     const r = spawnSync("systemctl", ["--user", ...argv], { encoding: "utf8", timeout: 30000, killSignal: "SIGKILL" });
