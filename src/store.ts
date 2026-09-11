@@ -15,7 +15,10 @@ import type {
 } from "../implementation/contracts.js";
 import type { OperationPlan } from "../implementation/contracts.js";
 import { operationResultCheck } from "./validate.js";
-import { operationPlanCheck } from "./durable.js";
+import {
+  operationPlanCheck,
+  operationResultRelationCheck,
+} from "./durable.js";
 
 export const SCHEMA_PATH = fileURLToPath(
   new URL("../../implementation/schema-v1.sql", import.meta.url),
@@ -545,14 +548,37 @@ export class Store {
 
   setOperationSucceeded(id: OperationId, resultJson: string): void {
     this.requireTx();
+    const current = this.getOperationById(id);
+    if (!current)
+      throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
+    let result: unknown;
+    try { result = JSON.parse(resultJson); }
+    catch { throw new StoreError("STORE_CORRUPT", `operation ${id} result is not valid JSON`); }
+    const invalidResult = operationResultCheck(current.kind)(result);
+    if (invalidResult)
+      throw new StoreError("STORE_CORRUPT", `operation ${id} result: ${invalidResult}`);
+    const plan = JSON.parse(current.planJson) as unknown;
+    const relation = operationResultRelationCheck(
+      current.kind,
+      plan,
+      result,
+      {
+        operationId: current.id,
+        actor: current.actor,
+        stateRoot: dirname(this.path),
+      },
+    );
+    if (relation)
+      throw new StoreError("STORE_CORRUPT", `operation ${id} result: ${relation}`);
+
     const updated = this.db
       .prepare(
         "UPDATE operations SET state='succeeded', result_json=?, error_code=NULL, updated_at_ms=? WHERE id=? AND state IN ('pending','unknown')",
       )
       .run(resultJson, Date.now(), id);
     if (Number(updated.changes) !== 0) return;
-    const current = this.getOperationById(id);
-    if (current?.state === "succeeded" && current.resultJson === resultJson && current.errorCode === null) return;
+    const after = this.getOperationById(id);
+    if (after?.state === "succeeded" && after.resultJson === resultJson && after.errorCode === null) return;
     throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
   }
 
@@ -892,11 +918,12 @@ function rowToOperation(r: Record<string, unknown>, stateRoot: string): Operatio
   let plan: unknown;
   try { plan = JSON.parse(row.planJson); }
   catch { throw new StoreError("STORE_CORRUPT", `operation ${row.id} has corrupt plan JSON`); }
-  const invalidPlan = operationPlanCheck(row.kind, {
+  const context = {
     operationId: row.id,
     actor: row.actor,
     stateRoot,
-  })(plan);
+  };
+  const invalidPlan = operationPlanCheck(row.kind, context)(plan);
   if (invalidPlan)
     throw new StoreError("STORE_CORRUPT", `operation ${row.id} plan: ${invalidPlan}`);
 
@@ -909,6 +936,9 @@ function rowToOperation(r: Record<string, unknown>, stateRoot: string): Operatio
     const invalid = operationResultCheck(row.kind)(result);
     if (invalid)
       throw new StoreError("STORE_CORRUPT", `operation ${row.id} result: ${invalid}`);
+    const relation = operationResultRelationCheck(row.kind, plan, result, context);
+    if (relation)
+      throw new StoreError("STORE_CORRUPT", `operation ${row.id} result: ${relation}`);
   } else if (row.state === "failed") {
     if (row.resultJson !== null || row.errorCode === null)
       throw new StoreError("STORE_CORRUPT", `operation ${row.id} has inconsistent failed state`);
