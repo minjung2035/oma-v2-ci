@@ -14,10 +14,17 @@ import {
   operationResultCheck,
   type Check,
 } from "./validate.js";
-import { isValidActorName, parseMessageId } from "./ids.js";
+import {
+  isValidActorName,
+  isValidMessageId,
+  isValidOperationId,
+  parseMessageId,
+} from "./ids.js";
 
-const operationIdCheck = checkString({ re: /^op-[0-9a-f-]{36}$/ });
-const messageIdCheck = checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ });
+const operationIdCheck: Check = (value) =>
+  isValidOperationId(value) ? null : "invalid operation id";
+const messageIdCheck: Check = (value) =>
+  isValidMessageId(value) ? null : "invalid message id";
 const sha256Check = checkString({ re: /^[0-9a-f]{64}$/ });
 const nonEmpty = checkString({ min: 1 });
 const actorOrPrincipal: Check = (value) =>
@@ -157,7 +164,7 @@ const checks: Readonly<Record<string, Check>> = {
       sha256: sha256Check,
       bytes: checkInt({ min: 1 }),
     })(value),
-    publishedRef: checkString({ re: /^refs\/oma\/published\/[a-z][a-z0-9-]{0,31}\/op-[0-9a-f-]{36}$/ }),
+    publishedRef: nonEmpty,
     message: messagePlanCheck,
   }),
   // `result` is retained only for compatibility with already accepted rows.
@@ -193,6 +200,7 @@ export function operationPlanCheck(
   return (value) => {
     const invalid = base(value);
     if (invalid || !context) return invalid;
+    if (!isValidOperationId(context.operationId)) return "invalid operation identity";
     const plan = value as Record<string, unknown>;
 
     const rawMessage = plan.message ?? plan.initialMessage;
