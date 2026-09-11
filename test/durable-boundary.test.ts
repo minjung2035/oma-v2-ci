@@ -14,6 +14,9 @@ const OP = "op-00000000-0000-4000-8000-000000000001";
 const CREATE_OP = "op-00000000-0000-4000-8000-000000000002";
 const ACK_OP = "op-00000000-0000-4000-8000-000000000003";
 const ACK_MESSAGE = "m-00000000-0000-4000-8000-000000000004-0";
+const MAIL_OP = "op-00000000-0000-4000-8000-000000000005";
+const SUBMIT_REF_OP = "op-00000000-0000-4000-8000-000000000006";
+const SUBMIT_PATH_OP = "op-00000000-0000-4000-8000-000000000007";
 
 function seed(path: string): Store {
   const store = new Store(path);
@@ -43,6 +46,34 @@ function seed(path: string): Store {
     });
   });
   return store;
+}
+
+function messagePlan(operationId: string, id = `m-${operationId.slice(3)}-0`) {
+  return {
+    id,
+    objectPath: `mail/objects/${id}.eml`,
+    sha256: "a".repeat(64),
+    bytes: 1,
+    dateMs: 1,
+    to: ["alice"],
+    recipients: ["alice"],
+    kind: "message" as const,
+    contextRevision: null,
+    replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] },
+  };
+}
+
+function insertAlice(store: Store): void {
+  store.insertAgent({
+    name: "alice",
+    specHash: "alice",
+    role: "resident",
+    desired: "enabled",
+    incarnation: 0,
+    profile: "p",
+    createdBy: null,
+    specJson: resolvedSpec(ALL_CAPS, "p", "alice"),
+  });
 }
 
 test("DB-009: unknown durable plan fields fail closed before recovery use", () => {
@@ -79,22 +110,113 @@ test("DB-009: unknown durable plan fields fail closed before recovery use", () =
   }
 });
 
+test("DB-009: message identity and object path are derived from the operation", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-durable-message-relation-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  try {
+    store.transaction(() => {
+      insertAlice(store);
+      const wrongMessage = "m-00000000-0000-4000-8000-000000000099-0";
+      store.insertOperation({
+        id: MAIL_OP,
+        actor: "alice",
+        requestKey: "mail-relation",
+        requestHash: "hash",
+        kind: "mail.send",
+        payloadJson: "{}",
+        planJson: JSON.stringify({
+          kind: "mail.send",
+          message: messagePlan(MAIL_OP, wrongMessage),
+        }),
+      });
+    });
+    assert.throws(
+      () => store.getOperationById(MAIL_OP as never),
+      (error: unknown) =>
+        error instanceof StoreError && error.code === "STORE_CORRUPT",
+    );
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("DB-009: git.submit published ref and bundle path are operation-derived", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-durable-submit-relation-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  const validBundlePath = (operationId: string) =>
+    join(root, "staging", `submit-${operationId}`, "upload.bundle");
+  const submitPlan = (
+    operationId: string,
+    publishedRef: string,
+    bundlePath: string,
+  ) => ({
+    kind: "git.submit" as const,
+    candidate: "1".repeat(40),
+    exportRef: `refs/oma/export/req-${operationId.slice(-2)}`,
+    prerequisites: [],
+    bundle: {
+      path: bundlePath,
+      sha256: "b".repeat(64),
+      bytes: 1,
+    },
+    publishedRef,
+    message: { ...messagePlan(operationId), kind: "result" as const },
+  });
+  try {
+    store.transaction(() => {
+      insertAlice(store);
+      store.insertOperation({
+        id: SUBMIT_REF_OP,
+        actor: "alice",
+        requestKey: "bad-ref",
+        requestHash: "hash-ref",
+        kind: "git.submit",
+        payloadJson: "{}",
+        planJson: JSON.stringify(
+          submitPlan(
+            SUBMIT_REF_OP,
+            `refs/oma/published/alice/op-00000000-0000-4000-8000-000000000099`,
+            validBundlePath(SUBMIT_REF_OP),
+          ),
+        ),
+      });
+      store.insertOperation({
+        id: SUBMIT_PATH_OP,
+        actor: "alice",
+        requestKey: "bad-path",
+        requestHash: "hash-path",
+        kind: "git.submit",
+        payloadJson: "{}",
+        planJson: JSON.stringify(
+          submitPlan(
+            SUBMIT_PATH_OP,
+            `refs/oma/published/alice/${SUBMIT_PATH_OP}`,
+            join(root, "outside", "upload.bundle"),
+          ),
+        ),
+      });
+    });
+    for (const operationId of [SUBMIT_REF_OP, SUBMIT_PATH_OP]) {
+      assert.throws(
+        () => store.getOperationById(operationId as never),
+        (error: unknown) =>
+          error instanceof StoreError && error.code === "STORE_CORRUPT",
+      );
+    }
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("DB-009: scalar message ids are not treated as MessagePlan objects", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-durable-ack-"));
   const path = join(root, "runtime.sqlite");
   const store = new Store(path);
   try {
     store.transaction(() => {
-      store.insertAgent({
-        name: "alice",
-        specHash: "alice",
-        role: "resident",
-        desired: "enabled",
-        incarnation: 0,
-        profile: "p",
-        createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", "alice"),
-      });
+      insertAlice(store);
       store.insertOperation({
         id: ACK_OP,
         actor: "alice",
