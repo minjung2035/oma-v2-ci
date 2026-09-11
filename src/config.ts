@@ -303,13 +303,13 @@ export function loadConfig(path: string): HostConfigV1 {
     "quota.principalReservedUnits",
     0,
   );
-  const inferenceSlots = needInt(quota["inferenceSlots"], "quota.inferenceSlots", 0);
+  const inferenceSlots = needInt(quota["inferenceSlots"], "quota.inferenceSlots", 1);
   const principalReservedSlots = needInt(
     quota["principalReservedSlots"],
     "quota.principalReservedSlots",
     0,
   );
-  needInt(quota["storageBytes"], "quota.storageBytes", 0);
+  needInt(quota["storageBytes"], "quota.storageBytes", 1);
   if (lineageAgents > societyAgents)
     err("quota.lineageAgents exceeds quota.societyAgents");
   if (initialResidents.length > societyAgents)
