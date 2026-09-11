@@ -70,6 +70,12 @@ const ERROR_CODES = new Set<ErrorCode>([
   "INTERNAL_ERROR",
 ]);
 
+const PREACCEPT_ONLY_FAILURE_CODES = new Set<ErrorCode>([
+  "STREAM_INVALID",
+  "LIMIT_EXCEEDED",
+  "STORAGE_FULL",
+]);
+
 export interface AgentRow {
   name: Actor;
   specHash: string;
@@ -552,12 +558,12 @@ export class Store {
 
   setOperationFailed(id: OperationId, code: ErrorCode): void {
     this.requireTx();
-    // ERR-001: STREAM_INVALID is a preaccept error. Once an operation is durable,
-    // later byte/digest mismatch means broker-owned recovery material is corrupt.
-    if (code === "STREAM_INVALID")
+    // ERR-001: these errors are preaccept-only. Once an operation is durable,
+    // resource/stream loss is recovery damage and the accepted row stays pending.
+    if (PREACCEPT_ONLY_FAILURE_CODES.has(code))
       throw new StoreError(
         "STORE_CORRUPT",
-        `accepted operation ${id} cannot transition to preaccept STREAM_INVALID`,
+        `accepted operation ${id} cannot transition to preaccept ${code}`,
       );
     const updated = this.db
       .prepare(
@@ -872,6 +878,16 @@ function rowToOperation(r: Record<string, unknown>, stateRoot: string): Operatio
     throw new StoreError("STORE_CORRUPT", `operation ${row.id} has invalid state`);
   if (row.errorCode !== null && !ERROR_CODES.has(row.errorCode))
     throw new StoreError("STORE_CORRUPT", `operation ${row.id} has invalid error code`);
+  if (
+    row.state === "failed" &&
+    row.errorCode !== null &&
+    PREACCEPT_ONLY_FAILURE_CODES.has(row.errorCode)
+  ) {
+    throw new StoreError(
+      "STORE_CORRUPT",
+      `operation ${row.id} persisted a preaccept-only terminal error`,
+    );
+  }
 
   let plan: unknown;
   try { plan = JSON.parse(row.planJson); }
