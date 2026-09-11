@@ -81,6 +81,7 @@ const units = new UnitsModule(
       profile.resources,
     ]),
   ),
+  (agent) => store.getAgent(agent)?.incarnation ?? null,
 );
 const views = new ViewsModule(
   store,
