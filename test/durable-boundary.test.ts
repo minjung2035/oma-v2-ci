@@ -12,6 +12,8 @@ import { resolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000001";
 const CREATE_OP = "op-00000000-0000-4000-8000-000000000002";
+const ACK_OP = "op-00000000-0000-4000-8000-000000000003";
+const ACK_MESSAGE = "m-00000000-0000-4000-8000-000000000004-0";
 
 function seed(path: string): Store {
   const store = new Store(path);
@@ -71,6 +73,44 @@ test("DB-009: unknown durable plan fields fail closed before recovery use", () =
       (error: unknown) =>
         error instanceof StoreError && error.code === "STORE_CORRUPT",
     );
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("DB-009: scalar message ids are not treated as MessagePlan objects", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-durable-ack-"));
+  const path = join(root, "runtime.sqlite");
+  const store = new Store(path);
+  try {
+    store.transaction(() => {
+      store.insertAgent({
+        name: "alice",
+        specHash: "alice",
+        role: "resident",
+        desired: "enabled",
+        incarnation: 0,
+        profile: "p",
+        createdBy: null,
+        specJson: resolvedSpec(ALL_CAPS, "p", "alice"),
+      });
+      store.insertOperation({
+        id: ACK_OP,
+        actor: "alice",
+        requestKey: "ack",
+        requestHash: "hash",
+        kind: "mail.ack",
+        payloadJson: JSON.stringify({ message: ACK_MESSAGE }),
+        planJson: JSON.stringify({
+          kind: "mail.ack",
+          recipient: "alice",
+          message: ACK_MESSAGE,
+        }),
+      });
+    });
+    assert.equal(store.getOperation("alice", "ack")?.id, ACK_OP);
+    assert.equal(store.getOperationById(ACK_OP as never)?.kind, "mail.ack");
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });
