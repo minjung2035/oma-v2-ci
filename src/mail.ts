@@ -50,7 +50,7 @@ import {
 } from "./ids.js";
 import { isValidTopicName } from "./ids.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
-import { exactCandidateCheck, messagePlanCheck, checkOid } from "./validate.js";
+import { exactCandidateCheck, messagePlanCheck } from "./validate.js";
 
 // ---------------------------------------------------------------------------
 // eml encoding (MAIL-003/004)
@@ -752,10 +752,8 @@ export class MailModule {
       (message.kind === "approval_required") !== (message.approvalFor !== undefined) ||
       (message.kind === "approval_required" && !message.to.some(address => logicalReplyAddress(this.store, address, this.paths.society) === "principal")))
       throw new StoreError("STORE_CORRUPT", `operation ${op.id} message identity mismatch`);
-    if (message.kind === "context" && decoded.candidate) {
-      if (checkOid(decoded.candidate)) throw new StoreError("STORE_CORRUPT", `operation ${op.id} context OID invalid`);
-      return { ...message, contextRevision: decoded.candidate as Oid };
-    }
+    if (message.kind === "context" && decoded.candidate !== message.contextRevision)
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} context candidate/message mismatch`);
     return message;
   }
 
@@ -801,7 +799,7 @@ export class MailModule {
     ) {
       throw new StoreError("STORE_CORRUPT", `mail frozen metadata mismatch: ${message.id}`);
     }
-    if (message.kind !== "context" && headers.omaContext !== message.contextRevision)
+    if (headers.omaContext !== message.contextRevision)
       throw new StoreError("STORE_CORRUPT", `mail context metadata mismatch: ${message.id}`);
 
     const expectedApproval = message.approvalFor ?? null;
