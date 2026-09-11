@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { GitModule } from "../src/git.js";
 import { MailModule } from "../src/mail.js";
 import { Store, StoreError } from "../src/store.js";
 import type { AuthContext } from "../implementation/contracts.js";
@@ -17,6 +19,7 @@ const ACK_MESSAGE = "m-00000000-0000-4000-8000-000000000004-0";
 const MAIL_OP = "op-00000000-0000-4000-8000-000000000005";
 const SUBMIT_REF_OP = "op-00000000-0000-4000-8000-000000000006";
 const SUBMIT_PATH_OP = "op-00000000-0000-4000-8000-000000000007";
+const SUBMIT_RECOVERY_OP = "op-00000000-0000-4000-8000-000000000008";
 
 function seed(path: string): Store {
   const store = new Store(path);
@@ -204,6 +207,109 @@ test("DB-009: git.submit published ref and bundle path are operation-derived", (
           error instanceof StoreError && error.code === "STORE_CORRUPT",
       );
     }
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("ERR-001/REC-006: accepted submit bundle corruption cannot become terminal STREAM_INVALID", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-durable-submit-recovery-"));
+  const projectGit = join(root, "project.git");
+  const initialized = spawnSync("git", ["init", "-q", "--bare", projectGit], {
+    encoding: "utf8",
+  });
+  assert.equal(initialized.status, 0, initialized.stderr);
+  const store = new Store(join(root, "runtime.sqlite"));
+  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
+  const git = new GitModule(
+    {
+      stateRoot: root,
+      projectGit,
+      contextGit: join(root, "context.git"),
+      worldDir: join(root, "world"),
+      society: "demo",
+      quarantineTmpBytes: 1024 * 1024,
+      quarantineResources: {
+        cpuSeconds: 1,
+        memoryBytes: 64 * 1024 * 1024,
+        tasks: 32,
+      },
+      checkTimeoutSeconds: 1,
+    },
+    store,
+    mail,
+  );
+  const message = { ...messagePlan(SUBMIT_RECOVERY_OP), kind: "result" as const };
+  try {
+    store.transaction(() => {
+      insertAlice(store);
+      store.insertOperation({
+        id: SUBMIT_RECOVERY_OP,
+        actor: "alice",
+        requestKey: "submit-recovery",
+        requestHash: "hash",
+        kind: "git.submit",
+        payloadJson: "{}",
+        planJson: JSON.stringify({
+          kind: "git.submit",
+          candidate: "1".repeat(40),
+          exportRef: "refs/oma/export/req-recovery",
+          prerequisites: [],
+          bundle: {
+            path: join(
+              root,
+              "staging",
+              `submit-${SUBMIT_RECOVERY_OP}`,
+              "upload.bundle",
+            ),
+            sha256: "b".repeat(64),
+            bytes: 1,
+          },
+          publishedRef: `refs/oma/published/alice/${SUBMIT_RECOVERY_OP}`,
+          message,
+        }),
+      });
+      store.insertDeliveries([
+        {
+          messageId: message.id,
+          recipient: "alice",
+          operationId: SUBMIT_RECOVERY_OP,
+        },
+      ]);
+    });
+    await assert.rejects(
+      git.reconcile(SUBMIT_RECOVERY_OP),
+      (error: unknown) =>
+        error instanceof StoreError && error.code === "STORE_CORRUPT",
+    );
+    assert.equal(
+      store.getOperationById(SUBMIT_RECOVERY_OP as never)?.state,
+      "pending",
+      "recovery corruption must not be rewritten as a client STREAM_INVALID failure",
+    );
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("ERR-001: persisted operation error code is a closed runtime enum", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-durable-error-code-"));
+  const path = join(root, "runtime.sqlite");
+  let store = seed(path);
+  store.transaction(() => store.setOperationFailed(OP as never, "INTERNAL_ERROR"));
+  store.close();
+  const raw = new DatabaseSync(path);
+  raw.prepare("UPDATE operations SET error_code=? WHERE id=?").run("BOGUS_ERROR", OP);
+  raw.close();
+  store = new Store(path);
+  try {
+    assert.throws(
+      () => store.getOperationById(OP as never),
+      (error: unknown) =>
+        error instanceof StoreError && error.code === "STORE_CORRUPT",
+    );
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });
