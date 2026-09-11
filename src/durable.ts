@@ -240,3 +240,101 @@ export function operationPlanCheck(
     return null;
   };
 }
+
+/** DB-009: a closed success DTO must also describe the effect accepted in plan_json. */
+export function operationResultRelationCheck(
+  kind: string,
+  planValue: unknown,
+  resultValue: unknown,
+  context: OperationPlanContext,
+): string | null {
+  const plan = planValue as Record<string, unknown>;
+  const result = resultValue as Record<string, unknown>;
+  const message = plan.message as
+    | { id?: unknown; recipients?: unknown[] }
+    | undefined;
+  const recipientCount = Array.isArray(message?.recipients)
+    ? message.recipients.length
+    : null;
+
+  switch (kind) {
+    case "mail.send":
+    case "agent.continue": {
+      if (result.message !== message?.id)
+        return "result message does not match accepted message";
+      if (result.recipientCount !== recipientCount)
+        return "result recipient count does not match accepted snapshot";
+      if (
+        typeof message?.id !== "string" ||
+        result.archivePath !== join(
+          context.stateRoot,
+          "mail",
+          "archive",
+          "cur",
+          `${message.id}:2,`,
+        )
+      ) return "result archive path does not match accepted message";
+      return null;
+    }
+    case "mail.ack":
+      return result.message === plan.message
+        ? null
+        : "ack result message does not match accepted plan";
+    case "route.follow":
+    case "route.unfollow":
+      if (result.topic !== plan.topic)
+        return "route result topic does not match accepted plan";
+      return result.subscribed === (kind === "route.follow")
+        ? null
+        : "route result subscription state does not match operation kind";
+    case "agent.create": {
+      const spec = plan.spec as { name?: unknown } | undefined;
+      return result.agent === spec?.name
+        ? null
+        : "create result agent does not match accepted spec";
+    }
+    case "agent.start":
+    case "agent.stop":
+      if (result.agent !== plan.agent)
+        return "lifecycle result agent does not match accepted plan";
+      return result.desired === plan.desired
+        ? null
+        : "lifecycle result desired state does not match accepted plan";
+    case "git.submit":
+      if (result.candidate !== plan.candidate)
+        return "submit result candidate does not match accepted plan";
+      if (result.publishedRef !== plan.publishedRef)
+        return "submit result ref does not match accepted plan";
+      if (result.message !== message?.id)
+        return "submit result message does not match accepted plan";
+      return result.recipientCount === recipientCount
+        ? null
+        : "submit result recipient count does not match accepted snapshot";
+    case "git.integrate": {
+      for (const key of ["base", "candidate", "target", "policyRevision"] as const) {
+        if (result[key] !== plan[key])
+          return `integrate result ${key} does not match accepted plan`;
+      }
+      const acceptedResult = plan.result;
+      if (
+        acceptedResult &&
+        typeof acceptedResult === "object" &&
+        !Array.isArray(acceptedResult) &&
+        result.changed !== (acceptedResult as Record<string, unknown>).changed
+      ) return "integrate result changed flag does not match accepted result";
+      return null;
+    }
+    case "context.publish":
+      if (result.previous !== plan.base)
+        return "context result previous revision does not match accepted base";
+      if (result.revision !== plan.candidate)
+        return "context result revision does not match accepted candidate";
+      if (result.message !== message?.id)
+        return "context result message does not match accepted plan";
+      return result.recipientCount === recipientCount
+        ? null
+        : "context result recipient count does not match accepted snapshot";
+    default:
+      return `unknown operation kind ${kind}`;
+  }
+}
