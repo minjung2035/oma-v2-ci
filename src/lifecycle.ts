@@ -126,7 +126,13 @@ export class LifecycleModule {
     private readonly resolveSpec: SpecResolver,
     private readonly mail: MailModule | null = null,
     private readonly agentQuota: AgentQuota | null = null,
-  ) {}
+  ) {
+    // RUN-001: every lifecycle composition derives death proof from the same
+    // durable monotonic incarnation owned by Store; callers cannot forget it.
+    this.units.bindIncarnationReader(
+      (agent) => this.store.getAgent(agent)?.incarnation ?? null,
+    );
+  }
 
   ack(auth: AuthContext, message: MessageId, key: string): Receipt {
     const hash = requestHash("mail.ack", { message });
