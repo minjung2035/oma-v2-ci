@@ -195,11 +195,9 @@ export function operationPlanCheck(
     if (invalid || !context) return invalid;
     const plan = value as Record<string, unknown>;
 
-    const message = (plan.message ?? plan.initialMessage) as
-      | { id?: unknown; objectPath?: unknown }
-      | null
-      | undefined;
-    if (message) {
+    const rawMessage = plan.message ?? plan.initialMessage;
+    if (rawMessage && typeof rawMessage === "object" && !Array.isArray(rawMessage)) {
+      const message = rawMessage as { id?: unknown; objectPath?: unknown };
       if (
         typeof message.id !== "string" ||
         parseMessageId(message.id)?.operationId !== context.operationId ||
