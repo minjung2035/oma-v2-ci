@@ -1,6 +1,7 @@
 // MUST [DB-009/M-003]: durable operation plans are closed runtime DTOs.
 // This module is deliberately store-independent so Store can validate every
 // plan_json read before recovery code can use it for filesystem/Git effects.
+import { join } from "node:path";
 import type { Capability } from "../implementation/contracts.js";
 import {
   checkArray,
@@ -13,7 +14,7 @@ import {
   operationResultCheck,
   type Check,
 } from "./validate.js";
-import { isValidActorName } from "./ids.js";
+import { isValidActorName, parseMessageId } from "./ids.js";
 
 const operationIdCheck = checkString({ re: /^op-[0-9a-f-]{36}$/ });
 const messageIdCheck = checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ });
@@ -178,6 +179,66 @@ const checks: Readonly<Record<string, Check>> = {
   },
 };
 
-export function operationPlanCheck(kind: string): Check {
-  return checks[kind] ?? (() => `unknown operation kind ${kind}`);
+export interface OperationPlanContext {
+  operationId: string;
+  actor: string;
+  stateRoot: string;
+}
+
+export function operationPlanCheck(
+  kind: string,
+  context?: OperationPlanContext,
+): Check {
+  const base = checks[kind] ?? (() => `unknown operation kind ${kind}`);
+  return (value) => {
+    const invalid = base(value);
+    if (invalid || !context) return invalid;
+    const plan = value as Record<string, unknown>;
+
+    const message = (plan.message ?? plan.initialMessage) as
+      | { id?: unknown; objectPath?: unknown }
+      | null
+      | undefined;
+    if (message) {
+      if (
+        typeof message.id !== "string" ||
+        parseMessageId(message.id)?.operationId !== context.operationId ||
+        message.objectPath !== `mail/objects/${message.id}.eml`
+      ) return "message identity/path does not match operation";
+    }
+
+    if (kind === "agent.create") {
+      const spec = plan.spec as { name?: unknown } | undefined;
+      if (
+        typeof spec?.name !== "string" ||
+        plan.workspacePath !== join(context.stateRoot, "agents", spec.name, "workspace")
+      ) return "create workspace path does not match state root/agent";
+    }
+
+    if (kind === "git.submit") {
+      if (plan.publishedRef !== `refs/oma/published/${context.actor}/${context.operationId}`)
+        return "published ref does not match actor/operation";
+      const bundle = plan.bundle as { path?: unknown } | null | undefined;
+      if (
+        bundle &&
+        bundle.path !== join(
+          context.stateRoot,
+          "staging",
+          `submit-${context.operationId}`,
+          "upload.bundle",
+        )
+      ) return "bundle path does not match operation staging root";
+    }
+
+    if (
+      kind === "context.publish" &&
+      plan.stagingPath !== join(
+        context.stateRoot,
+        "staging",
+        `context-${context.operationId}`,
+      )
+    ) return "context staging path does not match operation";
+
+    return null;
+  };
 }
