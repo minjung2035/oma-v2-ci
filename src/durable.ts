@@ -84,6 +84,19 @@ const integrateWithResultCheck = checkObject({
   checkProfileDigest: sha256Check,
   result: operationResultCheck("git.integrate"),
 });
+const contextPlanShape = checkObject({
+  kind: checkEnum(["context.publish"] as const),
+  base: nullableOid,
+  candidate: checkOid,
+  target: checkEnum(["refs/heads/main"] as const),
+  entries: checkArray(checkObject({
+    path: nonEmpty,
+    bytes: checkInt({ min: 0 }),
+    sha256: sha256Check,
+  })),
+  stagingPath: nonEmpty,
+  message: messagePlanCheck,
+});
 
 const checks: Readonly<Record<string, Check>> = {
   "mail.send": checkObject({
@@ -154,19 +167,15 @@ const checks: Readonly<Record<string, Check>> = {
       ? integrateWithResultCheck(value)
       : integrateBaseCheck(value);
   },
-  "context.publish": checkObject({
-    kind: checkEnum(["context.publish"] as const),
-    base: nullableOid,
-    candidate: checkOid,
-    target: checkEnum(["refs/heads/main"] as const),
-    entries: checkArray(checkObject({
-      path: nonEmpty,
-      bytes: checkInt({ min: 0 }),
-      sha256: sha256Check,
-    })),
-    stagingPath: nonEmpty,
-    message: messagePlanCheck,
-  }),
+  "context.publish": (value) => {
+    const shape = contextPlanShape(value);
+    if (shape) return shape;
+    const plan = value as { candidate: unknown; message: { contextRevision: unknown; kind: unknown } };
+    if (plan.message.kind !== "context") return "context publish message kind mismatch";
+    if (plan.message.contextRevision !== plan.candidate)
+      return "context candidate/message revision mismatch";
+    return null;
+  },
 };
 
 export function operationPlanCheck(kind: string): Check {
