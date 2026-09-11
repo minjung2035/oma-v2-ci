@@ -1,13 +1,7 @@
-// MUST [DB-009/M-003]: durable DB JSON crosses a trust boundary on every read.
-// Recovery and same-key retry must reject malformed/extended variants before
-// using them for filesystem/Git effects or returning them as successful receipts.
-import type {
-  Capability,
-  OperationPlan,
-  Receipt,
-} from "../implementation/contracts.js";
-import type { OperationRow } from "./store.js";
-import { StoreError } from "./store.js";
+// MUST [DB-009/M-003]: durable operation plans are closed runtime DTOs.
+// This module is deliberately store-independent so Store can validate every
+// plan_json read before recovery code can use it for filesystem/Git effects.
+import type { Capability } from "../implementation/contracts.js";
 import {
   checkArray,
   checkEnum,
@@ -152,8 +146,7 @@ const checks: Readonly<Record<string, Check>> = {
     publishedRef: checkString({ re: /^refs\/oma\/published\/[a-z][a-z0-9-]{0,31}\/op-[0-9a-f-]{36}$/ }),
     message: messagePlanCheck,
   }),
-  // `result` is retained only for compatibility with accepted branch rows;
-  // new integration plans should derive the receipt from frozen plan fields.
+  // `result` is retained only for compatibility with already accepted rows.
   "git.integrate": (value) => {
     if (!value || typeof value !== "object" || Array.isArray(value))
       return "expected object";
@@ -164,9 +157,9 @@ const checks: Readonly<Record<string, Check>> = {
   "context.publish": checkObject({
     kind: checkEnum(["context.publish"] as const),
     base: nullableOid,
-    // Existing accepted rows may be between T-context-accept and candidate
-    // commit publication. This is closed (only "" or a valid OID) but remains
-    // a DB-009 ordering debt until candidate is frozen before acceptance.
+    // Existing rows may be between T-context-accept and candidate creation.
+    // Only the exact empty sentinel or a valid OID is admitted; the sentinel is
+    // still an ordering debt and is not treated as a production-ready invariant.
     candidate: (value) => value === "" ? null : checkOid(value),
     target: checkEnum(["refs/heads/main"] as const),
     entries: checkArray(checkObject({
@@ -179,58 +172,6 @@ const checks: Readonly<Record<string, Check>> = {
   }),
 };
 
-export function parseOperationPlan(op: Pick<OperationRow, "id" | "kind" | "planJson">): OperationPlan {
-  let value: unknown;
-  try {
-    value = JSON.parse(op.planJson);
-  } catch (error) {
-    throw new StoreError(
-      "STORE_CORRUPT",
-      `operation ${op.id} has corrupt plan JSON: ${(error as Error).message}`,
-    );
-  }
-  const check = checks[op.kind];
-  if (!check)
-    throw new StoreError("STORE_CORRUPT", `operation ${op.id} has unknown kind ${op.kind}`);
-  const invalid = check(value);
-  if (invalid)
-    throw new StoreError("STORE_CORRUPT", `operation ${op.id} plan: ${invalid}`);
-  return value as OperationPlan;
-}
-
-export function receiptFromOperation(op: OperationRow): Receipt {
-  const state = op.state;
-  const receipt: Receipt = { operation: op.id, state };
-  if (state === "succeeded") {
-    if (!op.resultJson)
-      throw new StoreError("STORE_CORRUPT", `succeeded operation ${op.id} has no result`);
-    let result: unknown;
-    try {
-      result = JSON.parse(op.resultJson);
-    } catch (error) {
-      throw new StoreError(
-        "STORE_CORRUPT",
-        `operation ${op.id} has corrupt result JSON: ${(error as Error).message}`,
-      );
-    }
-    const invalid = operationResultCheck(op.kind)(result);
-    if (invalid)
-      throw new StoreError("STORE_CORRUPT", `operation ${op.id} result: ${invalid}`);
-    receipt.result = result as Exclude<Receipt["result"], undefined>;
-  } else if (op.resultJson !== null) {
-    throw new StoreError("STORE_CORRUPT", `non-success operation ${op.id} has a result`);
-  }
-
-  if (state === "failed") {
-    if (!op.errorCode)
-      throw new StoreError("STORE_CORRUPT", `failed operation ${op.id} has no error code`);
-    receipt.error = {
-      code: op.errorCode,
-      message: op.errorCode,
-      retry: "never",
-    };
-  } else if (op.errorCode !== null) {
-    throw new StoreError("STORE_CORRUPT", `non-failed operation ${op.id} has an error code`);
-  }
-  return receipt;
+export function operationPlanCheck(kind: string): Check {
+  return checks[kind] ?? (() => `unknown operation kind ${kind}`);
 }
