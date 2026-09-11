@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store.js";
@@ -21,6 +21,7 @@ async function* once(bytes: Uint8Array): AsyncIterable<Uint8Array> {
 test("CTX-003/DB-009: T-context-accept already freezes candidate and matching EML context", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-context-accept-"));
   const state = join(root, "state");
+  mkdirSync(state, { recursive: true });
   const store = new Store(join(state, "runtime.sqlite"));
   const mail = new MailModule({ stateRoot: state, society: "demo" }, store, 16);
   const git = new GitModule(
