@@ -17,6 +17,7 @@ import {
   renameSync,
   lstatSync,
   rmSync,
+  chmodSync,
 } from "node:fs";
 import { createTransport } from "nodemailer";
 import { encodeWord } from "nodemailer/lib/mime-funcs";
@@ -266,7 +267,7 @@ export function defaultLogicalReplyTo(from: Address, to: readonly Address[]): Ad
 // ---------------------------------------------------------------------------
 
 function writeFsynced(path: string, data: string): void {
-  const fd = openSync(path, "w", 0o600);
+  const fd = openSync(path, "wx", 0o600);
   try {
     writeFileSync(fd, data, "utf8");
     fsyncSync(fd);
@@ -344,6 +345,9 @@ export function publishImmutableFile(
       } finally { rmSync(temporary, { force: true }); }
     } else throw error;
   }
+  chmodSync(dst, 0o444);
+  const fd = openSync(dst, "r");
+  try { fsyncSync(fd); } finally { closeSync(fd); }
   fsyncDir(dirname(dst));
 }
 
@@ -603,7 +607,12 @@ export class MailModule {
     mkdirSync(staging, { recursive: true });
     const staged = join(staging, `${messageId}.eml`);
     writeFsynced(staged, eml.text);
-    publishImmutableFile(staged, this.objectPath(messageId));
+    try {
+      publishImmutableFile(staged, this.objectPath(messageId));
+    } finally {
+      rmSync(staged, { force: true });
+      fsyncDir(staging);
+    }
 
     const plan = {
       kind: operationKind,
@@ -658,7 +667,8 @@ export class MailModule {
     let materializedAll = true;
     try {
       await this.materialize(opId);
-    } catch {
+    } catch (error) {
+      if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
       materializedAll = false;
     }
     if (materializedAll) {
@@ -830,15 +840,38 @@ export class MailModule {
     } else publishImmutableFile(object, fresh, message.sha256);
   }
 
+  private operationDeliveries(operationId: string, message: MessagePlan): DeliveryRow[] {
+    const deliveries = this.store.deliveriesForOperation(operationId);
+    const actual = new Set<string>();
+    for (const delivery of deliveries) {
+      if (
+        delivery.operationId !== operationId ||
+        delivery.messageId !== message.id ||
+        !message.recipients.includes(delivery.recipient) ||
+        !actual.add(delivery.recipient)
+      ) {
+        throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operationId}`);
+      }
+    }
+    if (
+      actual.size !== message.recipients.length ||
+      message.recipients.some((recipient) => !actual.has(recipient))
+    ) {
+      throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operationId}`);
+    }
+    return deliveries;
+  }
+
   async publishGated(operationId: string): Promise<void> {
     const op = this.store.getOperationById(operationId);
     if (!op)
       throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
     const message = this.operationMessage(op);
+    const deliveries = this.operationDeliveries(operationId, message);
     this.messageHeaders(message);
     const object = this.objectPath(message.id);
     publishImmutableFile(object, this.archivePath(message.id), message.sha256);
-    for (const d of this.store.deliveriesForOperation(operationId)) {
+    for (const d of deliveries) {
       this.publishDelivery(message, d);
       this.store.transaction((_tx) =>
         this.store.markMaterialized(d.messageId, d.recipient),
@@ -856,8 +889,8 @@ export class MailModule {
         `operation ${op.kind} uses gated publication`,
       );
     }
-    const deliveries = this.store.deliveriesForOperation(operationId);
     const message = this.operationMessage(op);
+    const deliveries = this.operationDeliveries(operationId, message);
     this.messageHeaders(message);
     const object = this.objectPath(message.id);
     publishImmutableFile(object, this.archivePath(message.id), message.sha256);
@@ -1064,7 +1097,8 @@ export class MailModule {
         } else {
           remaining++;
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
         remaining++;
       }
     }
