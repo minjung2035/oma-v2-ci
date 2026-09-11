@@ -620,13 +620,14 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     makeSyntheticRootfs(rootfs, extPath);
     const viewDir = join(dir, "view");
     mkdirSync(viewDir, { recursive: true });
+    const smokeMessageId = "m-00000000-0000-4000-8000-000000000001-0";
     const manifest = {
       id: "b-00000000-0000-4000-8000-000000000000",
       agent: "a",
       incarnation: 1,
       deliveryMode: "followUp",
-      notice: "새 연락 1건. 전체 목록: /inbox.md\n1. mail m-x-0",
-      messageIds: ["m-x-0"],
+      notice: `새 연락 1건. 전체 목록: /inbox.md\n1. mail ${smokeMessageId}`,
+      messageIds: [smokeMessageId],
     };
     writeFileSync(
       join(viewDir, `batch-${manifest.id}.json`),
