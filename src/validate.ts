@@ -208,6 +208,9 @@ export const exactCandidateCheck: Check = (value) => {
 
 const messageKindCheck = checkEnum(["message", "question", "result", "alert", "context", "approval_required", "critical"]);
 const messageIdCheck = checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ });
+const headerMessageIdCheck = checkString({
+  re: /^m-[0-9a-f-]{36}-\d+(?:@[a-z][a-z0-9-]{0,31}\.oma\.invalid)?$/,
+});
 const operationIdCheck = checkString({ re: /^op-[0-9a-f-]{36}$/ });
 
 export const messagePlanCheck = checkObject({
@@ -223,8 +226,8 @@ export const messagePlanCheck = checkObject({
   contextRevision: v => v === null ? null : checkOid(v),
   replyHeaders: checkObject({
     replyTo: checkArray(checkLogicalAddress),
-    inReplyTo: v => v === null ? null : messageIdCheck(v),
-    references: checkArray(messageIdCheck),
+    inReplyTo: v => v === null ? null : headerMessageIdCheck(v),
+    references: checkArray(headerMessageIdCheck),
   }),
 });
 
