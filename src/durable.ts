@@ -157,10 +157,7 @@ const checks: Readonly<Record<string, Check>> = {
   "context.publish": checkObject({
     kind: checkEnum(["context.publish"] as const),
     base: nullableOid,
-    // Existing rows may be between T-context-accept and candidate creation.
-    // Only the exact empty sentinel or a valid OID is admitted; the sentinel is
-    // still an ordering debt and is not treated as a production-ready invariant.
-    candidate: (value) => value === "" ? null : checkOid(value),
+    candidate: checkOid,
     target: checkEnum(["refs/heads/main"] as const),
     entries: checkArray(checkObject({
       path: nonEmpty,
