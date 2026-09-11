@@ -61,6 +61,7 @@ test("adversarial: persisted MessagePlan accepts logical addresses only", () => 
     },
   };
   assert.equal(messagePlanCheck(plan), null);
+  assert.notEqual(messagePlanCheck({ ...plan, bytes: 0 }), null);
   assert.notEqual(
     messagePlanCheck({ ...plan, to: ["commons@demo.oma.invalid"] }),
     null,
