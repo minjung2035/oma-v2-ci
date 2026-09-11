@@ -293,7 +293,12 @@ export class UnitsModule {
 
   confirmDead(agent: Actor, incarnation: number): boolean {
     if (!Number.isSafeInteger(incarnation) || incarnation < 0) return false;
-    if (!this.incarnationOf || this.incarnationOf(agent) !== incarnation) return false;
+    const current = this.incarnationOf?.(agent) ?? null;
+    // The resident unit/cgroup is fixed per agent and every incarnation runs
+    // beneath it. If that cgroup is empty now, every durable incarnation up to
+    // the current monotonic value is dead. A future/unbound incarnation is never
+    // inferred dead from today's observation.
+    if (current === null || incarnation > current) return false;
     const obs = this.observe(agent);
     if (!["inactive", "dead", "failed"].includes(obs.activeState)) return false;
     if (!obs.cgroup) return true;
