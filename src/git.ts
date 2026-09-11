@@ -100,12 +100,21 @@ export const gitEnv: NodeJS.ProcessEnv = {
   GIT_CONFIG_KEY_2: "core.fsyncMethod", GIT_CONFIG_VALUE_2: "fsync",
 };
 
+function gitUncertain(r: { error?: Error; signal: NodeJS.Signals | null; status: number | null }): boolean {
+  return Boolean(r.error) || r.signal !== null || r.status === null;
+}
+
+function gitObservationError(what: string, r: { error?: Error; signal: NodeJS.Signals | null; status: number | null; stderr?: string | Buffer | null }): StoreError {
+  const detail = r.error?.message ?? (r.signal ? `signal ${r.signal}` : String(r.stderr ?? "").slice(0, 300));
+  return new StoreError("REF_STATE_UNKNOWN", `${what} unavailable${detail ? `: ${detail}` : ""}`);
+}
+
 function git(dir: string, args: string[]): SpawnSyncReturns<string> {
   const r = spawnSync(GIT_BIN, args, { cwd: dir, env: gitEnv, encoding: "utf8" });
-  if (r.status !== 0) {
+  if (gitUncertain(r) || r.status !== 0) {
     throw new StoreError(
       "INTERNAL_ERROR",
-      `git ${args[0] ?? "?"} failed: ${(r.stderr ?? "").slice(0, 400)}`,
+      `git ${args[0] ?? "?"} failed: ${r.error?.message ?? (r.stderr ?? "").slice(0, 400)}`,
     );
   }
   return r;
@@ -174,7 +183,7 @@ export class GitModule {
     const observed = spawnSync(GIT_BIN, ["--git-dir", repo, "rev-parse", "--show-object-format"],
       { env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 1024 });
     const format = String(observed.stdout ?? "").trim();
-    if (observed.status !== 0 || (format !== "sha1" && format !== "sha256"))
+    if (gitUncertain(observed) || observed.status !== 0 || (format !== "sha1" && format !== "sha256"))
       throw new StoreError("INTERNAL_ERROR", "cannot observe repository object format");
     if (oids.some(oid => !isValidFullOid(oid) || oid.length !== (format === "sha1" ? 40 : 64)))
       throw new StoreError("INVALID_OID", `OID does not match repository object format ${format}`);
@@ -414,6 +423,7 @@ export class GitModule {
       ["--git-dir", this.paths.projectGit, "cat-file", "--batch-check=%(objecttype)"],
       { env: gitEnv, encoding: "utf8", input: `${expression}\n`, timeout: 10000, maxBuffer: 64 * 1024 },
     );
+    if (gitUncertain(r)) throw gitObservationError("canonical commit observation", r);
     if (r.status === 0 && !r.stderr) {
       if (r.stdout.trim() === "commit") return true;
       if (r.stdout.trim() === `${expression} missing`) return false;
@@ -569,6 +579,7 @@ export class GitModule {
       ["--git-dir", this.paths.projectGit, "rev-parse", ref],
       { env: gitEnv, encoding: "utf8" },
     );
+    if (gitUncertain(cur)) throw gitObservationError(`published ref ${ref}`, cur);
     if (cur.status === 0 && cur.stdout.trim() === candidate) return; // idempotent
     if (cur.status === 0)
       throw new StoreError(
@@ -580,6 +591,7 @@ export class GitModule {
       ["--git-dir", this.paths.projectGit, "update-ref", ref, candidate, ""],
       { env: gitEnv, encoding: "utf8" },
     );
+    if (gitUncertain(upd)) throw gitObservationError(`publish ${ref}`, upd);
     if (upd.status !== 0)
       throw new StoreError(
         "PUBLISHED_REF_CONFLICT",
@@ -703,7 +715,9 @@ export class GitModule {
         ],
         { env: gitEnv, encoding: "utf8" },
       );
-      if (anc.status !== 0)
+      if (gitUncertain(anc) || (anc.status !== 0 && anc.status !== 1))
+        throw gitObservationError("merge-base ancestry check", anc);
+      if (anc.status === 1)
         fail("NOT_DESCENDANT", "candidate is not a descendant of expected main");
       const protectedPaths = legacyProtectedPaths;
       if (protectedPaths.length > 0) {
@@ -723,11 +737,13 @@ export class GitModule {
           ],
           { env: gitEnv, encoding: "utf8" },
         );
+        if (gitUncertain(diff) || diff.status !== 0)
+          throw gitObservationError("protected-path diff", diff);
         const touched = (diff.stdout ?? "")
-        .split("\0")
-        .filter((p) => p.length > 0 && /^[^\t\n]+/.test(p));
-      for (const p of touched) {
-        const name = p.replace(/^[A-Z]\s+/, "");
+          .split("\0")
+          .filter((p) => p.length > 0 && /^[^\t\n]+/.test(p));
+        for (const p of touched) {
+          const name = p.replace(/^[A-Z]\s+/, "");
           if (protectedPaths.some((pp) => pp.endsWith("/") ? name.startsWith(pp) : name === pp))
             fail("PROTECTED_PATH", `path ${name} is protected`);
         }
@@ -776,6 +792,7 @@ export class GitModule {
         ],
         { env: gitEnv, encoding: "utf8" },
       );
+      if (gitUncertain(cas)) throw gitObservationError("main CAS", cas);
       if (cas.status !== 0) {
         const actual = this.currentMain();
         fail("STALE_BASE", `CAS failed; actual main ${actual}`);
@@ -805,6 +822,8 @@ export class GitModule {
       ],
       { env: gitEnv, encoding: "utf8" },
     );
+    if (gitUncertain(r) || r.status !== 0)
+      throw gitObservationError("published-ref enumeration", r);
     return (r.stdout ?? "").split("\n").some((l) => l.trim() === candidate);
   }
 
@@ -814,8 +833,8 @@ export class GitModule {
       ["--git-dir", this.paths.projectGit, "rev-parse", "refs/heads/main"],
       { env: gitEnv, encoding: "utf8" },
     );
-    if (r.status !== 0)
-      throw new StoreError("REF_STATE_UNKNOWN", "no main ref");
+    if (gitUncertain(r) || r.status !== 0)
+      throw new StoreError("REF_STATE_UNKNOWN", "no trustworthy main ref observation");
     return r.stdout.trim() as Oid;
   }
 
@@ -1057,10 +1076,10 @@ export class GitModule {
         env: gitEnv,
         encoding: "utf8",
       });
-      if (init.status !== 0)
+      if (gitUncertain(init) || init.status !== 0)
         throw new StoreError(
           "INTERNAL_ERROR",
-          `context git init failed: ${init.stderr.slice(0, 200)}`,
+          `context git init failed: ${init.error?.message ?? init.stderr.slice(0, 200)}`,
         );
     }
     const format = this.objectFormat(contextGit);
@@ -1071,6 +1090,7 @@ export class GitModule {
       env: gitEnv,
       encoding: "utf8",
     });
+    if (gitUncertain(existing)) throw gitObservationError("context worktree HEAD", existing);
     let oid: string;
     if (existing.status === 0 && String(existing.stdout).trim()) {
       oid = String(existing.stdout).trim();
@@ -1080,10 +1100,10 @@ export class GitModule {
         env: gitEnv,
         encoding: "utf8",
       });
-      if (init.status !== 0)
+      if (gitUncertain(init) || init.status !== 0)
         throw new StoreError(
           "INTERNAL_ERROR",
-          `context worktree init failed: ${init.stderr.slice(0, 200)}`,
+          `context worktree init failed: ${init.error?.message ?? init.stderr.slice(0, 200)}`,
         );
       for (const e of entries) {
         const source = join(treeDir, e.path);
@@ -1098,6 +1118,7 @@ export class GitModule {
           ["--git-dir", contextGit, "cat-file", "-e", `${expected}^{commit}`],
           { env: gitEnv },
         );
+        if (gitUncertain(parent)) throw gitObservationError("context parent", parent);
         if (parent.status !== 0)
           throw new StoreError(
             "CONTEXT_CONFLICT",
@@ -1109,10 +1130,10 @@ export class GitModule {
         env: gitEnv,
         encoding: "utf8",
       });
-      if (add.status !== 0)
+      if (gitUncertain(add) || add.status !== 0)
         throw new StoreError(
           "INTERNAL_ERROR",
-          `context add: ${add.stderr.slice(0, 300)}`,
+          `context add: ${add.error?.message ?? add.stderr.slice(0, 300)}`,
         );
       if (expected) {
         const alternates = join(tmp, ".git", "objects", "info", "alternates");
@@ -1124,10 +1145,10 @@ export class GitModule {
         env: gitEnv,
         encoding: "utf8",
       });
-      if (tree.status !== 0)
+      if (gitUncertain(tree) || tree.status !== 0)
         throw new StoreError(
           "INTERNAL_ERROR",
-          `context tree: ${tree.stderr.slice(0, 300)}`,
+          `context tree: ${tree.error?.message ?? tree.stderr.slice(0, 300)}`,
         );
       const parentArgs = expected ? ["-p", expected] : [];
       const commit = spawnSync(
@@ -1155,10 +1176,10 @@ export class GitModule {
           encoding: "utf8",
         },
       );
-      if (commit.status !== 0)
+      if (gitUncertain(commit) || commit.status !== 0)
         throw new StoreError(
           "INTERNAL_ERROR",
-          `context commit: ${commit.stderr.slice(0, 300)}`,
+          `context commit: ${commit.error?.message ?? commit.stderr.slice(0, 300)}`,
         );
       oid = String(commit.stdout ?? "").trim();
       const head = spawnSync(
@@ -1166,10 +1187,10 @@ export class GitModule {
         ["update-ref", "refs/heads/main", oid],
         { cwd: tmp, env: gitEnv, encoding: "utf8" },
       );
-      if (head.status !== 0)
+      if (gitUncertain(head) || head.status !== 0)
         throw new StoreError(
           "INTERNAL_ERROR",
-          `context head: ${head.stderr.slice(0, 300)}`,
+          `context head: ${head.error?.message ?? head.stderr.slice(0, 300)}`,
         );
     }
     // Transfer objects before recording the candidate in the durable plan.
@@ -1187,10 +1208,10 @@ export class GitModule {
       ],
       { env: gitEnv, encoding: "utf8" },
     );
-    if (imp.status !== 0)
+    if (gitUncertain(imp) || imp.status !== 0)
       throw new StoreError(
         "INTERNAL_ERROR",
-        `context object import failed: ${imp.stderr.slice(0, 300)}`,
+        `context object import failed: ${imp.error?.message ?? imp.stderr.slice(0, 300)}`,
       );
     let acceptedPlan: Record<string, unknown>;
     const accepted = this.store.getOperationById(opId);
@@ -1215,6 +1236,7 @@ export class GitModule {
       ["--git-dir", contextGit, "update-ref", "refs/heads/main", oid, prev],
       { env: gitEnv, encoding: "utf8" },
     );
+    if (gitUncertain(upd)) throw gitObservationError("context CAS", upd);
     if (upd.status !== 0)
       throw new StoreError(
         "CONTEXT_CONFLICT",
@@ -1243,7 +1265,7 @@ export class GitModule {
           ["--git-dir", this.paths.contextGit, "show", `${oid}:${e.path}`],
           { env: gitEnv },
         );
-        if (shown.status !== 0 || !Buffer.isBuffer(shown.stdout))
+        if (gitUncertain(shown) || shown.status !== 0 || !Buffer.isBuffer(shown.stdout))
           throw new StoreError(
             "STORE_CORRUPT",
             `context candidate is missing ${e.path}`,
@@ -1322,7 +1344,7 @@ export class GitModule {
         ["--git-dir", this.paths.contextGit, "cat-file", "-e", `${candidate}^{commit}`],
         { env: gitEnv },
       );
-      if (object.status !== 0) {
+      if (gitUncertain(object) || object.status !== 0) {
         this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
         return;
       }
@@ -1343,7 +1365,7 @@ export class GitModule {
           ],
           { env: gitEnv, encoding: "utf8" },
         );
-        if (upd.status !== 0) {
+        if (gitUncertain(upd) || upd.status !== 0) {
           this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
           return;
         }
@@ -1391,6 +1413,7 @@ export class GitModule {
       { env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 1024 },
     );
     const oid = String(r.stdout ?? "").trim();
+    if (gitUncertain(r)) throw gitObservationError("context main ref", r);
     if (r.status === 0 && isValidFullOid(oid)) return oid;
     if (r.status === 1 && !oid && !String(r.stderr ?? "").trim()) return null;
     throw new StoreError("INTERNAL_ERROR", "cannot observe context main ref");
@@ -1439,6 +1462,7 @@ export class GitModule {
       ["--git-dir", this.paths.projectGit, "rev-parse", plan.publishedRef],
       { env: gitEnv, encoding: "utf8" },
     );
+    if (gitUncertain(refOid)) throw gitObservationError(`published ref ${plan.publishedRef}`, refOid);
     if (refOid.status === 0 && refOid.stdout.trim() !== plan.candidate) {
       this.store.transaction((_tx) => this.store.setOperationFailed(op.id, "PUBLISHED_REF_CONFLICT"));
       return;
@@ -1523,13 +1547,17 @@ export class GitModule {
       ["--git-dir", this.paths.projectGit, "merge-base", "--is-ancestor", plan.base, plan.candidate],
       { env: gitEnv, encoding: "utf8" },
     );
-    if (anc.status !== 0) fail("NOT_DESCENDANT", "candidate is not a descendant of the recorded base");
+    if (gitUncertain(anc) || (anc.status !== 0 && anc.status !== 1))
+      throw gitObservationError("recovery merge-base ancestry check", anc);
+    if (anc.status === 1) fail("NOT_DESCENDANT", "candidate is not a descendant of the recorded base");
     if (this.integration.protectedPaths.length > 0) {
       const diff = spawnSync(
         "git",
         ["--git-dir", this.paths.projectGit, "diff-tree", "--no-commit-id", "--name-status", "-r", "-z", "--no-renames", plan.base, plan.candidate],
         { env: gitEnv, encoding: "utf8" },
       );
+      if (gitUncertain(diff) || diff.status !== 0)
+        throw gitObservationError("recovery protected-path diff", diff);
       for (const p of (diff.stdout ?? "").split("\0").filter(Boolean)) {
         const name = p.replace(/^[A-Z]\s+/, "");
         if (this.integration.protectedPaths.some((pp) => pp.endsWith("/") ? name.startsWith(pp) : name === pp))
@@ -1572,6 +1600,7 @@ export class GitModule {
       ["--git-dir", this.paths.projectGit, "update-ref", "refs/heads/main", plan.candidate, plan.base],
       { env: gitEnv, encoding: "utf8" },
     );
+    if (gitUncertain(cas)) throw gitObservationError("recovery main CAS", cas);
     if (cas.status !== 0) {
       this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
       return;
@@ -1595,6 +1624,8 @@ export class GitModule {
       ],
       { env: gitEnv, encoding: "utf8" },
     );
+    if (gitUncertain(r) || r.status !== 0)
+      throw gitObservationError("known published refs", r);
     return {
       main,
       published: (r.stdout ?? "")
