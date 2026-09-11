@@ -12,7 +12,6 @@ import {
 import { join } from "node:path";
 import {
   spawnSync as nodeSpawnSync,
-  type SpawnSyncOptions,
   type SpawnSyncOptionsWithStringEncoding,
   type SpawnSyncReturns,
 } from "node:child_process";
@@ -80,10 +79,10 @@ const cloneEnv: NodeJS.ProcessEnv = {
   GIT_CONFIG_KEY_2: "core.fsyncMethod", GIT_CONFIG_VALUE_2: "fsync",
 };
 
-function checkedSpawn<T extends string | Buffer>(
-  result: SpawnSyncReturns<T>,
+function checkedSpawn(
+  result: SpawnSyncReturns<string>,
   operation: string,
-): SpawnSyncReturns<T> {
+): SpawnSyncReturns<string> {
   if (result.error) {
     const code = (result.error as NodeJS.ErrnoException).code;
     if (code === "ETIMEDOUT")
@@ -102,33 +101,13 @@ function boundedSpawnSync(
   command: string,
   args: readonly string[],
   options: SpawnSyncOptionsWithStringEncoding,
-): SpawnSyncReturns<string>;
-function boundedSpawnSync(
-  command: string,
-  args: readonly string[],
-  options?: SpawnSyncOptions,
-): SpawnSyncReturns<Buffer>;
-function boundedSpawnSync(
-  command: string,
-  args: readonly string[],
-  options: SpawnSyncOptions = {},
-): SpawnSyncReturns<string> | SpawnSyncReturns<Buffer> {
-  const bounded: SpawnSyncOptions = {
+): SpawnSyncReturns<string> {
+  const bounded: SpawnSyncOptionsWithStringEncoding = {
     timeout: 120_000,
     maxBuffer: 4 * 1024 * 1024,
     killSignal: "SIGKILL",
     ...options,
   };
-  if (typeof bounded.encoding === "string" && bounded.encoding !== "buffer") {
-    return checkedSpawn(
-      nodeSpawnSync(
-        command,
-        [...args],
-        bounded as SpawnSyncOptionsWithStringEncoding,
-      ),
-      command,
-    );
-  }
   return checkedSpawn(nodeSpawnSync(command, [...args], bounded), command);
 }
 
