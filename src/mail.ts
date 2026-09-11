@@ -677,10 +677,7 @@ export class MailModule {
       messageId: `${messageId}@${this.paths.society}.oma.invalid`,
       body: brief,
     });
-    const staging = join(this.paths.stateRoot, "staging", `${messageId}.eml`);
-    mkdirSync(dirname(staging), { recursive: true });
-    writeFsynced(staging, eml.text);
-    fsyncDir(dirname(staging));
+    this.freezeObject(messageId, eml);
     return {
       id: messageId,
       objectPath: `mail/objects/${messageId}.eml`,
@@ -700,9 +697,10 @@ export class MailModule {
   }
 
   publishCreateInitial(message: MessagePlan): void {
-    const staging = join(this.paths.stateRoot, "staging", `${message.id}.eml`);
     const object = this.objectPath(message.id);
-    publishImmutableFile(existsSync(object) ? object : staging, object, message.sha256);
+    const stat = lstatSync(object, { throwIfNoEntry: false });
+    if (!stat?.isFile() || stat.size !== message.bytes || sha256Hex(readFileSync(object)) !== message.sha256)
+      throw new StoreError("STORE_CORRUPT", `create initial object mismatch: ${message.id}`);
   }
 
   freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): void {
