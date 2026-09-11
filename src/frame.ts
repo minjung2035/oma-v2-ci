@@ -179,18 +179,25 @@ export type DecoderEvent =
  * collection of exactly declared bytes (never trusting read boundaries), and
  * any leftover bytes after the stream become frames again. Per-connection
  * instance; no state is shared across sockets.
+ *
+ * A broker may supply `streamSink` to consume raw stream chunks incrementally.
+ * In that mode the decoder never retains the stream body; the terminal stream
+ * event carries an empty Buffer and the sink owns durable/bounded storage.
  */
 export class ConnectionDecoder {
   private queue: Buffer = Buffer.alloc(0);
   private parser: FrameParser;
   private stream: {
     remaining: number;
-    chunks: Buffer[];
+    chunks: Buffer[] | null;
     total: number;
     sha: ReturnType<typeof createHash>;
   } | null = null;
 
-  constructor(readonly maxFrameBytes: number) {
+  constructor(
+    readonly maxFrameBytes: number,
+    private readonly streamSink: ((chunk: Buffer) => void) | null = null,
+  ) {
     this.parser = new FrameParser(maxFrameBytes);
   }
 
@@ -285,7 +292,7 @@ export class ConnectionDecoder {
     if (declaredBytes <= 0) return [];
     this.stream = {
       remaining: declaredBytes,
-      chunks: [],
+      chunks: this.streamSink ? null : [],
       total: 0,
       sha: createHash("sha256"),
     };
@@ -298,7 +305,8 @@ export class ConnectionDecoder {
     while (this.stream && this.queue.length > 0) {
       const take = Math.min(this.stream.remaining, this.queue.length);
       const part = this.queue.subarray(0, take);
-      this.stream.chunks.push(part);
+      if (this.streamSink) this.streamSink(part);
+      else this.stream.chunks!.push(part);
       this.stream.total += part.length;
       this.stream.sha.update(part);
       this.queue = this.queue.subarray(take);
@@ -306,7 +314,10 @@ export class ConnectionDecoder {
       if (this.stream.remaining === 0) {
         const done = this.stream;
         this.stream = null;
-        events.push({ kind: "stream", bytes: Buffer.concat(done.chunks) });
+        events.push({
+          kind: "stream",
+          bytes: done.chunks ? Buffer.concat(done.chunks) : Buffer.alloc(0),
+        });
         return;
       }
     }

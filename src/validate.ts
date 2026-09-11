@@ -8,6 +8,8 @@ import {
   isValidFullOid,
   isValidTopicName,
   isValidWirePath,
+  isValidMessageId,
+  isValidOperationId,
 } from "./ids.js";
 
 export type Check = (v: unknown) => string | null;
@@ -139,15 +141,28 @@ export const checkOid: Check = (v) =>
 export const checkRequestKey: Check = (v) =>
   isValidRequestKey(v) ? null : `invalid request key`;
 
+/** Structurally valid logical address for persisted MessagePlan DTOs. */
+export const checkLogicalAddress: Check = (v) => {
+  if (typeof v !== "string")
+    return `expected address string, got ${typeName(v)}`;
+  if (v.startsWith("topic/"))
+    return isValidTopicName(v.slice(6)) ? null : `invalid topic address`;
+  if (v === "principal" || v === "commons" || v === "residents") return null;
+  return isValidActorName(v) ? null : `invalid logical address`;
+};
+
 /** logical address: registered resident name, principal, commons, residents, or topic/<name> */
 export function checkAddress(actorNames: ReadonlySet<string>): Check {
   return (v) => {
-    if (typeof v !== "string")
-      return `expected address string, got ${typeName(v)}`;
-    if (v.startsWith("topic/"))
-      return isValidTopicName(v.slice(6)) ? null : `invalid topic address`;
-    if (v === "principal" || v === "commons" || v === "residents") return null;
-    return actorNames.has(v) ? null : `unknown address "${v}"`;
+    const structural = checkLogicalAddress(v);
+    if (structural) return structural;
+    if (
+      v === "principal" ||
+      v === "commons" ||
+      v === "residents" ||
+      (typeof v === "string" && v.startsWith("topic/"))
+    ) return null;
+    return actorNames.has(v as string) ? null : `unknown address "${String(v)}"`;
   };
 }
 
@@ -194,24 +209,102 @@ export const exactCandidateCheck: Check = (value) => {
 };
 
 const messageKindCheck = checkEnum(["message", "question", "result", "alert", "context", "approval_required", "critical"]);
+const messageIdCheck: Check = (value) =>
+  isValidMessageId(value) ? null : "invalid message id";
+const headerMessageIdCheck: Check = (value) => {
+  if (typeof value !== "string") return `expected string, got ${typeName(value)}`;
+  const at = value.indexOf("@");
+  if (at < 0) return isValidMessageId(value) ? null : "invalid message id";
+  if (value.indexOf("@", at + 1) >= 0) return "invalid message id";
+  const fileId = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  return isValidMessageId(fileId) && /^[a-z][a-z0-9-]{0,31}\.oma\.invalid$/.test(domain)
+    ? null
+    : "invalid message id";
+};
+const operationIdCheck: Check = (value) =>
+  isValidOperationId(value) ? null : "invalid operation id";
 
 export const messagePlanCheck = checkObject({
-  id: checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ }),
+  id: messageIdCheck,
   objectPath: checkString({ min: 1 }),
   sha256: checkString({ re: /^[0-9a-f]{64}$/ }),
-  bytes: checkInt({ min: 0 }),
+  bytes: checkInt({ min: 1 }),
   dateMs: checkInt({ min: 0 }),
-  to: checkArray(checkString({ min: 1 })),
+  to: checkArray(checkLogicalAddress),
   recipients: checkArray(v => v === "principal" ? null : checkActor(v)),
   kind: messageKindCheck,
   approvalFor: checkOptional(exactCandidateCheck),
   contextRevision: v => v === null ? null : checkOid(v),
   replyHeaders: checkObject({
-    replyTo: checkArray(checkString({ min: 1 })),
-    inReplyTo: v => v === null ? null : checkString({ min: 1 })(v),
-    references: checkArray(checkString({ min: 1 })),
+    replyTo: checkArray(checkLogicalAddress),
+    inReplyTo: v => v === null ? null : headerMessageIdCheck(v),
+    references: checkArray(headerMessageIdCheck),
   }),
 });
+
+/** MUST [DB-009/M-003]: result_json is a closed result variant keyed by kind. */
+export function operationResultCheck(kind: string): Check {
+  switch (kind) {
+    case "mail.send":
+    case "agent.continue":
+      return checkObject({
+        kind: checkEnum([kind]),
+        message: messageIdCheck,
+        recipientCount: checkInt({ min: 0 }),
+        archivePath: checkString({ min: 1 }),
+      });
+    case "mail.ack":
+      return checkObject({
+        kind: checkEnum(["mail.ack"]),
+        message: messageIdCheck,
+        acknowledged: (v) => v === true ? null : "expected true",
+      });
+    case "route.follow":
+    case "route.unfollow":
+      return checkObject({
+        kind: checkEnum([kind]),
+        topic: checkTopic,
+        subscribed: checkBool(),
+      });
+    case "agent.create":
+    case "agent.start":
+    case "agent.stop":
+      return checkObject({
+        kind: checkEnum([kind]),
+        agent: checkActor,
+        desired: checkEnum(["provisioning", "enabled", "stopped", "retired"] as const),
+        remainingOperations: checkArray(operationIdCheck),
+      });
+    case "git.submit":
+      return checkObject({
+        kind: checkEnum(["git.submit"]),
+        candidate: checkOid,
+        publishedRef: checkString({ min: 1 }),
+        message: messageIdCheck,
+        recipientCount: checkInt({ min: 0 }),
+      });
+    case "git.integrate":
+      return checkObject({
+        kind: checkEnum(["git.integrate"]),
+        base: checkOid,
+        candidate: checkOid,
+        target: checkEnum(["refs/heads/main"]),
+        policyRevision: checkString({ min: 1 }),
+        changed: checkBool(),
+      });
+    case "context.publish":
+      return checkObject({
+        kind: checkEnum(["context.publish"]),
+        previous: (v) => v === null ? null : checkOid(v),
+        revision: checkOid,
+        message: messageIdCheck,
+        recipientCount: checkInt({ min: 0 }),
+      });
+    default:
+      return () => `unknown operation kind ${kind}`;
+  }
+}
 
 export function mailParamsCheck(
   actorNames: ReadonlySet<string>,
@@ -223,7 +316,7 @@ export function mailParamsCheck(
     kind: messageKindCheck,
     body: checkString({ max: l.mailBodyBytes }),
     approvalFor: checkOptional(exactCandidateCheck),
-    replyToMessage: checkOptional(checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ })),
+    replyToMessage: checkOptional(messageIdCheck),
     refs: checkOptional(
       checkArray(
         checkObject({
@@ -324,7 +417,7 @@ export const logsReadParamsCheck: Check = checkObject({
   sinceSeconds: checkInt({ min: 1, max: 31536000 }),
 });
 export const mailAckParamsCheck: Check = checkObject({
-  message: checkString({ re: /^m-[0-9a-f-]{36}-\d+$/ }),
+  message: messageIdCheck,
 });
 export const routeParamsCheck: Check = checkObject({ topic: checkTopic });
 export const agentActionParamsCheck: Check = checkObject({ agent: checkActor });

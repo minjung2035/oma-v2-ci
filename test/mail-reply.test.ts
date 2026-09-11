@@ -28,13 +28,13 @@ test("MAIL-004/005: direct replies return to sender, list replies retain lists, 
     assert.deepEqual(message("a", "reply-again").recipients, ["b"]);
     for (const alias of ["commons", "residents", "principal"]) {
       await mail.send(gitAuth, alias, { to: [alias], subject: alias, kind: "message", body: "body" });
-      assert.deepEqual(message("a", alias).to, [`${alias}@crash.oma.invalid`]);
+      assert.deepEqual(message("a", alias).to, [alias]);
       assert.match(readFileSync(mail.objectPath(message("a", alias).id), "utf8"), new RegExp(`To: ${alias}@crash\\.oma\\.invalid`));
     }
     await mail.send(gitAuth, "lists", { to: ["b", "commons", "topic/news"], subject: "lists", kind: "message", body: "body" });
     assert.deepEqual(headers("a", "lists").replyTo, ["commons@crash.oma.invalid", "topic-news@crash.oma.invalid"]);
     await mail.send({ ...gitAuth, actor: "b" }, "list-reply", { to: [], replyToMessage: message("a", "lists").id, subject: "reply", kind: "message", body: "body" });
-    assert.deepEqual(message("b", "list-reply").to, ["commons@crash.oma.invalid", "topic-news@crash.oma.invalid"]);
+    assert.deepEqual(message("b", "list-reply").to, ["commons", "topic/news"]);
     seedGit(root);
     const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
     await git.submit(gitAuth, "candidate", { candidate: info.base, exportRef: info.exportRef, prerequisites: [], to: ["commons"], subject: "candidate", body: "body", paths: [] }, (async function* () {})());

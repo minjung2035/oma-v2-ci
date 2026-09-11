@@ -3,8 +3,9 @@ import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { Store } from "../../src/store.js";
-import { MailModule, publishImmutableFile } from "../../src/mail.js";
+import { MailModule, publishImmutableFile, parseEmlHeaders } from "../../src/mail.js";
 import type { AuthContext, MailInput } from "../../implementation/contracts.js";
+import { isValidFullOid } from "../../src/ids.js";
 import cp from "node:child_process";
 import { gitFixture, gitAuth, submitFixture, contextFixture } from "./git-crash.js";
 import { lifecycleFixture } from "./lifecycle-crash.js";
@@ -100,13 +101,21 @@ store.transaction = (body) => {
   if (point === "submit-accepted" && operation?.kind === "git.submit") checkpoint();
   if (point.startsWith("ctx-accepted") && operation?.kind === "context.publish") {
     const plan = JSON.parse(operation.planJson);
-    const required = [join(root, "staging"), plan.stagingPath, join(plan.stagingPath, "tree"),
-      ...plan.entries.map((entry: { path: string }) => join(plan.stagingPath, "tree", entry.path))];
-    if (required.some(path => !beforeSync.has(path))) throw new Error("context accepted before staging fsync");
+    if (!isValidFullOid(plan.candidate) || plan.message?.contextRevision !== plan.candidate)
+      throw new Error("context candidate/message not frozen at acceptance");
+    const commitWork = join(plan.stagingPath, "commit-work");
+    const required = [join(root, "staging"), plan.stagingPath, commitWork, join(commitWork, ".git")];
+    if (required.some(path => !beforeSync.has(path)))
+      throw new Error("context accepted before candidate staging fsync");
     for (const entry of plan.entries) {
-      const file = fs.lstatSync(join(plan.stagingPath, "tree", entry.path));
-      if (!file.isFile() || (file.mode & 0o777) !== 0o644) throw new Error("context mode is not fixed regular 0644");
+      const file = fs.lstatSync(join(commitWork, entry.path));
+      if (!file.isFile() || (file.mode & 0o777) !== 0o644)
+        throw new Error("context candidate mode is not fixed regular 0644");
     }
+    const object = mail.objectPath(plan.message.id);
+    const headers = parseEmlHeaders(fs.readFileSync(object, "utf8"));
+    if (headers.omaContext !== plan.candidate)
+      throw new Error("context EML candidate mismatch at acceptance");
     checkpoint();
   }
   if (point === "int-done" && operation?.kind === "git.integrate" && operation.state === "succeeded") checkpoint();

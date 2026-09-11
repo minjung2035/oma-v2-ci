@@ -81,15 +81,26 @@ export function unitName(
   return `oma-${society}-${kind}.${suffix}`;
 }
 
+export type IncarnationReader = (agent: Actor) => number | null;
+
 export class UnitsModule {
   onRevokeRun: ((agent: Actor) => void) | undefined;
+  private incarnationOf: IncarnationReader | null;
 
   constructor(
     private readonly society: string,
     private readonly values: RenderValues,
     private readonly installDir: string = INSTALL_DIR,
     private readonly profiles: Readonly<Record<string, ResourceLimits>> = {},
-  ) {}
+    incarnationOf: IncarnationReader | null = null,
+  ) {
+    this.incarnationOf = incarnationOf;
+  }
+
+  /** Bind the durable monotonic incarnation source used by death proof. */
+  bindIncarnationReader(reader: IncarnationReader): void {
+    this.incarnationOf = reader;
+  }
 
   private run(argv: readonly string[], tolerateFailure = false): string {
     const r = spawnSync("systemctl", ["--user", ...argv], { encoding: "utf8", timeout: 30000, killSignal: "SIGKILL" });
@@ -288,9 +299,14 @@ export class UnitsModule {
     }
   }
 
-
   confirmDead(agent: Actor, incarnation: number): boolean {
-    void incarnation;
+    if (!Number.isSafeInteger(incarnation) || incarnation < 0) return false;
+    const current = this.incarnationOf?.(agent) ?? null;
+    // The resident unit/cgroup is fixed per agent and every incarnation runs
+    // beneath it. If that cgroup is empty now, every durable incarnation up to
+    // the current monotonic value is dead. A future/unbound incarnation is never
+    // inferred dead from today's observation.
+    if (current === null || incarnation > current) return false;
     const obs = this.observe(agent);
     if (!["inactive", "dead", "failed"].includes(obs.activeState)) return false;
     if (!obs.cgroup) return true;

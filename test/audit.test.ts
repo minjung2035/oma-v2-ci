@@ -807,7 +807,7 @@ function minimalConfig(society: string): Record<string, unknown> {
       principalReservedUnits: 100,
       inferenceSlots: 1,
       principalReservedSlots: 1,
-      storageBytes: 0,
+      storageBytes: 1,
     },
     integration: { policyRevision: "1", protectedPaths: [], checks: [] },
     limits: {
@@ -1101,6 +1101,8 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
       "utf8",
     );
     const store = new Store(join(stateRoot, "runtime.sqlite"));
+    const missingOp = "op-00000000-0000-4000-8000-0000000000d2";
+    const missingMessage = "m-00000000-0000-4000-8000-0000000000d2-0";
     store.transaction((_t) => {
       store.insertAgent({
         name: "a",
@@ -1112,10 +1114,10 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
         createdBy: null,
         specJson: resolvedSpec(ALL_CAPS, "p", "a"),
       });
-      // pending mail.send whose frozen OBJECT FILE is missing -> reconcile
-      // startup must fail (STORE_CORRUPT), never serve, never READY.
+      // Valid accepted plan, but its immutable object is deliberately absent.
+      // Recovery must fail on the missing object, never on plan-shape corruption.
       store.insertOperation({
-        id: "missing-object-op",
+        id: missingOp,
         actor: "a",
         requestKey: "k1",
         requestHash: "h",
@@ -1123,14 +1125,25 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
         payloadJson: "{}",
         planJson: JSON.stringify({
           kind: "mail.send",
-          message: { id: "m-missing-object" },
+          message: {
+            id: missingMessage,
+            objectPath: `mail/objects/${missingMessage}.eml`,
+            sha256: "0".repeat(64),
+            bytes: 1,
+            dateMs: 1,
+            to: ["a"],
+            recipients: ["a"],
+            kind: "message",
+            contextRevision: null,
+            replyHeaders: { replyTo: ["a"], inReplyTo: null, references: [] },
+          },
         }),
       });
       store.insertDeliveries([
         {
-          messageId: "m-missing-object",
+          messageId: missingMessage,
           recipient: "a",
-          operationId: "missing-object-op",
+          operationId: missingOp,
         },
       ]);
     });
@@ -1178,7 +1191,7 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
       });
     });
     assert.equal(exitCode, 1, "broker must exit non-zero on startup failure");
-    assert.match(stderr, /object missing for m-missing-object/);
+    assert.match(stderr, new RegExp(`object missing for ${missingMessage}`));
     const events = existsSync(notifyLog) ? readFileSync(notifyLog, "utf8") : "";
     assert.equal(events.includes("READY=1"), false, "READY must never be sent");
     assert.equal(

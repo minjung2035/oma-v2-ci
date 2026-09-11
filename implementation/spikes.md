@@ -127,11 +127,13 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **MUST [SP-07-A]** notmuch rebuild/손상/old index 후에도 archive path가 직접 열리고 routing에는 영향이 없어야 한다. reflink 불가면 독립 clone으로 fallback하며 hardlink하지 않는다. egress는 Human 설정 endpoint 외 연결을 거절한다. 기능별 결과가 없으면 각각 꺼 둔다. 새 index daemon은 기본으로 추가하지 않고 기존 reconcile이 제한된 index subprocess를 요청한다.
 
-## S-08 — OPTIONAL formal approval policy
+## S-08 — base optional / tiered required attestation gate
 
 **SPIKE [S-08]** Human이 신뢰 주체/quorum/보호 경로/Principal 위임을 선택한 뒤 최소 append-only attestation DDL, revoke relation, tuple evaluation을 확정한다. 이 계약은 quorum 수나 'agent 2명=독립 2표'를 결정하지 않는다.
 
 **MUST [SP-08-A]** 동일 actor 중복/자식 생성/다른 base/candidate/policy 재사용/자연어 위조/Human channel 위조를 거절해야 한다. 필요한 추가 entity는 architecture에 이미 허용된 attestation 범위만 사용한다. 결과가 없으면 기본 profile의 protected path 거절을 유지하고 approve/object/revoke를 노출하지 않는다.
+
+Tiered profile에서 S-08은 [`integration-policy.md`](./integration-policy.md)의 authenticated exact-candidate attestation 계약을 충족하기 전까지 `OPEN`이다. base에서 optional이라는 이유로 tiered에서 생략하거나 approval DB/API를 추측 구현해서는 안 된다.
 
 ## S-09 — 성능 목표와 모델 사용성 수용 기준
 
@@ -140,3 +142,15 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 **MUST [SP-09-T]** strong 단독/cheap 단독/hybrid에 같은 repository snapshot과 tools를 제공하고 반복한다. quality/defect/omission, Principal 및 전체 tokens/cost, latency, commons의 Principal 유입 건수, 경로/ID lookup 실패, 첫 유용한 행동까지 tool 수, Principal 재검증 비용을 기록한다.
 
 **MUST [SP-09-A]** 값은 task별·반복별로 남기고 목표 미달도 공개한다. production runtime correctness gate와 '성능 목표 달성' 주장을 구분한다. S-09 gate는 평가 protocol과 결과 제출을 필수로 요구하며, 미달 결과를 성공으로 바꿀 권한은 없다. 성능 목표를 release acceptance로 삼을 정확한 threshold는 사용자 합의 전까지 미정이다.
+
+## S-10 — tiered challenge + persistent floor
+
+**SPIKE [S-10]** canonical 범위와 성공 기준은 [`integration-policy.md`](./integration-policy.md)의 challenge/floor 계약이다. authenticated challenge와 persistent floor의 DDL/migration/recovery 의미가 실행 증거로 고정되기 전에는 challenge mutation API나 durable floor state를 추가하지 않는다. 현재 상태는 `OPEN`이다.
+
+**MUST [SP-10-A]** S-10이 닫히기 전 tiered integration을 활성화하지 않는다. challenge 또는 floor를 process-local cache, caller boolean, 자연어 mail, 임의 DB column으로 대체하지 않는다.
+
+## S-11 — OPTIONAL fresh clean-room verifier
+
+**SPIKE [S-11]** canonical 범위와 성공 기준은 [`integration-policy.md`](./integration-policy.md)의 fresh-context verifier 계약이다. 선택 기능이며 exact verifier input/output, isolation, revision pin과 negative evidence가 별도로 고정되기 전에는 구현 또는 활성화하지 않는다. 현재 상태는 `OPEN`이다.
+
+**MUST [SP-11-A]** S-11을 선택하지 않은 base/tiered profile에 verifier state/API를 추가하지 않는다. 선택하는 profile은 fresh verifier가 기존 writable session이나 caller-supplied verdict를 authority로 받아들이지 못함을 증명해야 한다.

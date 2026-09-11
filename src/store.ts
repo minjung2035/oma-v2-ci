@@ -3,6 +3,7 @@
 // inside transactions (M-004).
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   Actor,
@@ -13,14 +14,70 @@ import type {
   RequestKey,
 } from "../implementation/contracts.js";
 import type { OperationPlan } from "../implementation/contracts.js";
+import { operationResultCheck } from "./validate.js";
+import {
+  operationPlanCheck,
+  operationResultRelationCheck,
+} from "./durable.js";
 
 export const SCHEMA_PATH = fileURLToPath(
   new URL("../../implementation/schema-v1.sql", import.meta.url),
 );
 
-// ---------------------------------------------------------------------------
-// rows
-// ---------------------------------------------------------------------------
+const ERROR_CODES = new Set<ErrorCode>([
+  "INVALID_REQUEST",
+  "UNSUPPORTED_VERSION",
+  "UNKNOWN_METHOD",
+  "FRAME_TOO_LARGE",
+  "STREAM_INVALID",
+  "AUTH_FAILED",
+  "STALE_RUN",
+  "CAPABILITY_DENIED",
+  "REQUEST_KEY_REUSED",
+  "REQUEST_NOT_FOUND",
+  "ADDRESS_NOT_FOUND",
+  "AGENT_CONFLICT",
+  "AGENT_NOT_READY",
+  "AGENT_RETIRED",
+  "GOAL_REQUIRED",
+  "LIMIT_EXCEEDED",
+  "STORAGE_FULL",
+  "DB_BUSY",
+  "STORE_CORRUPT",
+  "BROKER_UNAVAILABLE",
+  "DEADLINE_EXCEEDED",
+  "RUN_TERMINATION_UNKNOWN",
+  "START_LIMIT",
+  "PRINCIPAL_DISCONNECTED",
+  "ATTACH_CONFLICT",
+  "BATCH_CONFLICT",
+  "SESSION_BOUNDARY_UNCONFIRMED",
+  "INVALID_OID",
+  "CANDIDATE_NOT_PUBLISHED",
+  "BUNDLE_INVALID",
+  "PREREQUISITE_MISSING",
+  "PUBLISHED_REF_CONFLICT",
+  "STALE_BASE",
+  "NOT_DESCENDANT",
+  "PROTECTED_PATH",
+  "CHECK_FAILED",
+  "POLICY_CHANGED",
+  "REF_STATE_UNKNOWN",
+  "CANCELLED_BEFORE_COMMIT",
+  "CONTEXT_CONFLICT",
+  "QUOTA_EXCEEDED",
+  "PROVIDER_FAILED",
+  "PROVIDER_OUTCOME_UNKNOWN",
+  "UNSUPPORTED_PROFILE",
+  "SPIKE_UNRESOLVED",
+  "INTERNAL_ERROR",
+]);
+
+const PREACCEPT_ONLY_FAILURE_CODES = new Set<ErrorCode>([
+  "STREAM_INVALID",
+  "LIMIT_EXCEEDED",
+  "STORAGE_FULL",
+]);
 
 export interface AgentRow {
   name: Actor;
@@ -95,10 +152,6 @@ export interface UsageRow {
   updatedAtMs: number;
 }
 
-// ---------------------------------------------------------------------------
-// errors (mapped at the broker boundary)
-// ---------------------------------------------------------------------------
-
 export class StoreError extends Error {
   constructor(
     readonly code: ErrorCode,
@@ -109,7 +162,6 @@ export class StoreError extends Error {
   }
 }
 
-/** MUST [IPC-005]: a request key already accepted under a different payload. */
 export function reused(actor: Actor, key: RequestKey): StoreError {
   return new StoreError(
     "REQUEST_KEY_REUSED",
@@ -124,23 +176,13 @@ export function isBusyError(e: unknown): boolean {
   );
 }
 
-// ---------------------------------------------------------------------------
-// transaction marker
-// ---------------------------------------------------------------------------
-
 export interface Transaction {
   readonly transactionBrand: unique symbol;
 }
 
-// SAFETY: the only Transaction value this process ever holds is TX;
-// requireTx() guards every mutation so a forged marker cannot reach the DB.
 const TX: Transaction = {
   transactionBrand: Symbol("tx"),
 } as unknown as Transaction;
-
-// ---------------------------------------------------------------------------
-// store
-// ---------------------------------------------------------------------------
 
 export interface NewAgent {
   name: Actor;
@@ -158,7 +200,6 @@ const DEFAULT_BUSY_RETRIES = 5;
 export class Store {
   private readonly db: DatabaseSync;
   private depth = 0;
-  /** per-connection WAL/compat settings are set in the constructor (DB-002). */
   constructor(
     readonly path: string,
     readonly busyRetries: number = DEFAULT_BUSY_RETRIES,
@@ -175,11 +216,6 @@ export class Store {
     this.db.close();
   }
 
-  /** MUST [DB-001]: initial DDL from the normative schema file; user_version gate.
-   * The DDL itself is one BEGIN EXCLUSIVE..COMMIT transaction (DB-002), so it
-   * runs un-wrapped; its leading PRAGMAs are outside that transaction and are
-   * the same values this constructor already set per connection.
-   */
   private migrate(): void {
     const v = this.userVersion();
     if (v === 1) return;
@@ -225,10 +261,6 @@ export class Store {
     return row.user_version;
   }
 
-  // -------------------------------------------------------------------------
-  // transactions (M-004: synchronous only; BEGIN IMMEDIATE for mutations)
-  // -------------------------------------------------------------------------
-
   private begin(): void {
     let ok = false;
     for (let i = 0; i < this.busyRetries + 1 && !ok; i++) {
@@ -236,8 +268,14 @@ export class Store {
         this.db.exec("BEGIN IMMEDIATE");
         ok = true;
       } catch (e) {
-        if (isBusyError(e) && i < this.busyRetries) continue;
-        throw new StoreError("DB_BUSY", "BEGIN IMMEDIATE blocked");
+        if (isBusyError(e)) {
+          if (i < this.busyRetries) continue;
+          throw new StoreError("DB_BUSY", "BEGIN IMMEDIATE blocked");
+        }
+        throw new StoreError(
+          "STORE_CORRUPT",
+          `BEGIN IMMEDIATE failed: ${(e as Error).message}`,
+        );
       }
     }
   }
@@ -271,10 +309,6 @@ export class Store {
     if (this.depth === 0)
       throw new StoreError("INTERNAL_ERROR", "mutation outside transaction");
   }
-
-  // -------------------------------------------------------------------------
-  // agents
-  // -------------------------------------------------------------------------
 
   insertAgent(a: NewAgent): void {
     this.requireTx();
@@ -355,10 +389,6 @@ export class Store {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // subscriptions
-  // -------------------------------------------------------------------------
-
   follow(topic: string, agent: string): void {
     this.requireTx();
     this.db
@@ -392,10 +422,6 @@ export class Store {
       createdAtMs: num(r.created_at_ms),
     }));
   }
-
-  // -------------------------------------------------------------------------
-  // operations
-  // -------------------------------------------------------------------------
 
   insertOperation(op: {
     id: OperationId;
@@ -439,18 +465,6 @@ export class Store {
     }
   }
 
-  /**
-   * MUST [IPC-005]: single ownership of the request-key claim. Given the
-   * actor+key and the canonical IPC-005 hash of the incoming request:
-   *  - "retry"  — same key+hash already accepted; caller returns the existing
-   *                receipt and applies NO effects (idempotent re-send);
-   *  - "reused" — same key with a DIFFERENT hash; caller must reject
-   *                REQUEST_KEY_REUSED and never touch the accepted request;
-   *  - "absent" — no prior request; caller may accept this one.
-   *
-   * The DB unique constraint alone cannot distinguish retry from reuse, so
-   * every durable mutation routes its decision through this one comparison.
-   */
   claimKey(
     actor: Actor,
     key: RequestKey,
@@ -461,13 +475,6 @@ export class Store {
     return existing.requestHash === requestHash ? "retry" : "reused";
   }
 
-  /**
-   * MUST [IPC-005]/[DB-007]: authoritative in-transaction claim + insert.
-   * Prefer claimKey() as a fast path before building the effect payload; this
-   * runs inside the caller's transaction and also resolves a concurrent
-   * same-key race (the loser re-reads and compares hashes) so a different-hash
-   * reuse can never be mistaken for an idempotent retry.
-   */
   claimOperation(op: {
     id: OperationId;
     actor: Actor;
@@ -486,7 +493,6 @@ export class Store {
       return "inserted";
     } catch (e) {
       if (e instanceof StoreError && e.code === "REQUEST_KEY_REUSED") {
-        // concurrent same-key insert lost the race: compare hashes again
         if (
           this.claimKey(op.actor, op.requestKey, op.requestHash) === "retry"
         ) {
@@ -502,17 +508,16 @@ export class Store {
     const r = this.db
       .prepare("SELECT * FROM operations WHERE actor=? AND request_key=?")
       .get(actor, key) as Record<string, unknown> | undefined;
-    return r ? rowToOperation(r) : null;
+    return r ? rowToOperation(r, dirname(this.path)) : null;
   }
 
   getOperationById(id: OperationId): OperationRow | null {
     const r = this.db.prepare("SELECT * FROM operations WHERE id=?").get(id) as
       | Record<string, unknown>
       | undefined;
-    return r ? rowToOperation(r) : null;
+    return r ? rowToOperation(r, dirname(this.path)) : null;
   }
 
-  /** MUST [LIFE-001/007]: locate the one physical create behind stable-name convergence. */
   findPhysicalCreate(name: Actor, specHash: string): OperationRow | null {
     const r = this.db.prepare(`SELECT * FROM operations
       WHERE kind='agent.create'
@@ -522,10 +527,9 @@ export class Store {
       ORDER BY created_at_ms, id LIMIT 1`).get(name, specHash) as
       | Record<string, unknown>
       | undefined;
-    return r ? rowToOperation(r) : null;
+    return r ? rowToOperation(r, dirname(this.path)) : null;
   }
 
-  /** MUST [REC-001]: pending/unknown operations needing physical reconciliation. */
   recoverableOperations(): OperationId[] {
     const rows = this.db
       .prepare(
@@ -535,8 +539,6 @@ export class Store {
     return rows.map((r) => r.id as OperationId);
   }
 
-  /** plan_json is fixed at acceptance; only the broker's own completion steps
-   * (e.g. context candidate OID from CTX-003) may correct it, still in tx. */
   updateOperationPlanJson(id: OperationId, planJson: string): void {
     this.requireTx();
     this.db
@@ -546,34 +548,73 @@ export class Store {
 
   setOperationSucceeded(id: OperationId, resultJson: string): void {
     this.requireTx();
-    this.db
+    const current = this.getOperationById(id);
+    if (!current)
+      throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
+    let result: unknown;
+    try { result = JSON.parse(resultJson); }
+    catch { throw new StoreError("STORE_CORRUPT", `operation ${id} result is not valid JSON`); }
+    const invalidResult = operationResultCheck(current.kind)(result);
+    if (invalidResult)
+      throw new StoreError("STORE_CORRUPT", `operation ${id} result: ${invalidResult}`);
+    const plan = JSON.parse(current.planJson) as unknown;
+    const relation = operationResultRelationCheck(
+      current.kind,
+      plan,
+      result,
+      {
+        operationId: current.id,
+        actor: current.actor,
+        stateRoot: dirname(this.path),
+      },
+    );
+    if (relation)
+      throw new StoreError("STORE_CORRUPT", `operation ${id} result: ${relation}`);
+
+    const updated = this.db
       .prepare(
-        "UPDATE operations SET state='succeeded', result_json=?, error_code=NULL, updated_at_ms=? WHERE id=?",
+        "UPDATE operations SET state='succeeded', result_json=?, error_code=NULL, updated_at_ms=? WHERE id=? AND state IN ('pending','unknown')",
       )
       .run(resultJson, Date.now(), id);
+    if (Number(updated.changes) !== 0) return;
+    const after = this.getOperationById(id);
+    if (after?.state === "succeeded" && after.resultJson === resultJson && after.errorCode === null) return;
+    throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
   }
 
   setOperationFailed(id: OperationId, code: ErrorCode): void {
     this.requireTx();
-    this.db
+    // ERR-001: these errors are preaccept-only. Once an operation is durable,
+    // resource/stream loss is recovery damage and the accepted row stays pending.
+    if (PREACCEPT_ONLY_FAILURE_CODES.has(code))
+      throw new StoreError(
+        "STORE_CORRUPT",
+        `accepted operation ${id} cannot transition to preaccept ${code}`,
+      );
+    const updated = this.db
       .prepare(
-        "UPDATE operations SET state='failed', result_json=NULL, error_code=?, updated_at_ms=? WHERE id=?",
+        "UPDATE operations SET state='failed', result_json=NULL, error_code=?, updated_at_ms=? WHERE id=? AND state IN ('pending','unknown')",
       )
       .run(code, Date.now(), id);
+    if (Number(updated.changes) !== 0) return;
+    const current = this.getOperationById(id);
+    if (current?.state === "failed" && current.resultJson === null && current.errorCode === code) return;
+    throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
   }
 
   setOperationUnknown(id: OperationId): void {
     this.requireTx();
+    const current = this.getOperationById(id);
+    if (!current) throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
+    if (current.state === "unknown") return;
+    if (current.state !== "pending")
+      throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
     this.db
       .prepare(
-        "UPDATE operations SET state='unknown', updated_at_ms=? WHERE id=?",
+        "UPDATE operations SET state='unknown', updated_at_ms=? WHERE id=? AND state='pending'",
       )
       .run(Date.now(), id);
   }
-
-  // -------------------------------------------------------------------------
-  // deliveries
-  // -------------------------------------------------------------------------
 
   insertDeliveries(
     ds: Array<{
@@ -608,7 +649,6 @@ export class Store {
       .run(Date.now(), messageId, recipient);
   }
 
-  /** MUST [BATCH-001]: pending (materialized=1, presented=0, not yet batched). */
   pendingDeliveries(agent: Actor): DeliveryRow[] {
     const rows = this.db
       .prepare(`SELECT * FROM deliveries
@@ -633,10 +673,6 @@ export class Store {
       .all(operationId) as Record<string, unknown>[];
     return rows.map(rowToDelivery);
   }
-
-  // -------------------------------------------------------------------------
-  // batches (DB-008 cross-row invariants live in linkDeliveriesToBatch)
-  // -------------------------------------------------------------------------
 
   insertPreparedBatch(b: {
     id: BatchId;
@@ -681,12 +717,6 @@ export class Store {
       .run(incarnation, agent);
   }
 
-
-  /**
-   * MUST [DB-008]: implied_by set of batch.message_ids must equal deliveries
-   * whose batch_id points at this batch, recipients must equal batch.agent,
-   * and completed batches are immutable.
-   */
   linkDeliveriesToBatch(batchId: BatchId, messageIds: MessageId[]): void {
     this.requireTx();
     const batch = this.getBatch(batchId);
@@ -713,8 +743,6 @@ export class Store {
         "batch message ids do not match the linked deliveries",
       );
     }
-    // every message must have a delivery for batch.agent, not yet claimed by
-    // another prepared batch (BATCH-001: no ID copied into two batches)
     for (const id of messageIds) {
       const d = this.getDelivery(id, batch.agent);
       if (!d)
@@ -753,7 +781,7 @@ export class Store {
     const batch = this.getBatch(batchId);
     if (!batch)
       throw new StoreError("BATCH_CONFLICT", `no such batch ${batchId}`);
-    if (batch.state === "completed") return; // idempotent
+    if (batch.state === "completed") return;
     this.db
       .prepare(
         "UPDATE batches SET state='completed', completed_at_ms=? WHERE id=?",
@@ -764,10 +792,6 @@ export class Store {
     );
     for (const id of markPresentedIds) st.run(Date.now(), id, agent);
   }
-
-  // -------------------------------------------------------------------------
-  // usage
-  // -------------------------------------------------------------------------
 
   reserveUsage(u: {
     requestId: string;
@@ -827,7 +851,7 @@ function validDesiredTransition(
   from: AgentRow["desired"],
   to: AgentRow["desired"],
 ): boolean {
-  if (from === to) return true; // idempotent no-op (LIFE-007)
+  if (from === to) return true;
   switch (from) {
     case "provisioning":
       return to === "enabled" || to === "stopped";
@@ -838,7 +862,7 @@ function validDesiredTransition(
     case "retired":
       return false;
     default:
-      return false; // unreachable: AgentRow['desired'] is the closed union
+      return false;
   }
 }
 
@@ -861,8 +885,8 @@ function rowToAgent(r: Record<string, unknown>): AgentRow {
   };
 }
 
-function rowToOperation(r: Record<string, unknown>): OperationRow {
-  return {
+function rowToOperation(r: Record<string, unknown>, stateRoot: string): OperationRow {
+  const row: OperationRow = {
     id: r.id as OperationId,
     actor: r.actor as Actor,
     requestKey: r.request_key as RequestKey,
@@ -876,6 +900,52 @@ function rowToOperation(r: Record<string, unknown>): OperationRow {
     createdAtMs: num(r.created_at_ms),
     updatedAtMs: num(r.updated_at_ms),
   };
+  if (!(["pending", "succeeded", "failed", "unknown"] as const).includes(row.state))
+    throw new StoreError("STORE_CORRUPT", `operation ${row.id} has invalid state`);
+  if (row.errorCode !== null && !ERROR_CODES.has(row.errorCode))
+    throw new StoreError("STORE_CORRUPT", `operation ${row.id} has invalid error code`);
+  if (
+    row.state === "failed" &&
+    row.errorCode !== null &&
+    PREACCEPT_ONLY_FAILURE_CODES.has(row.errorCode)
+  ) {
+    throw new StoreError(
+      "STORE_CORRUPT",
+      `operation ${row.id} persisted a preaccept-only terminal error`,
+    );
+  }
+
+  let plan: unknown;
+  try { plan = JSON.parse(row.planJson); }
+  catch { throw new StoreError("STORE_CORRUPT", `operation ${row.id} has corrupt plan JSON`); }
+  const context = {
+    operationId: row.id,
+    actor: row.actor,
+    stateRoot,
+  };
+  const invalidPlan = operationPlanCheck(row.kind, context)(plan);
+  if (invalidPlan)
+    throw new StoreError("STORE_CORRUPT", `operation ${row.id} plan: ${invalidPlan}`);
+
+  if (row.state === "succeeded") {
+    if (!row.resultJson || row.errorCode !== null)
+      throw new StoreError("STORE_CORRUPT", `operation ${row.id} has inconsistent succeeded state`);
+    let result: unknown;
+    try { result = JSON.parse(row.resultJson); }
+    catch { throw new StoreError("STORE_CORRUPT", `operation ${row.id} has corrupt result JSON`); }
+    const invalid = operationResultCheck(row.kind)(result);
+    if (invalid)
+      throw new StoreError("STORE_CORRUPT", `operation ${row.id} result: ${invalid}`);
+    const relation = operationResultRelationCheck(row.kind, plan, result, context);
+    if (relation)
+      throw new StoreError("STORE_CORRUPT", `operation ${row.id} result: ${relation}`);
+  } else if (row.state === "failed") {
+    if (row.resultJson !== null || row.errorCode === null)
+      throw new StoreError("STORE_CORRUPT", `operation ${row.id} has inconsistent failed state`);
+  } else if (row.resultJson !== null || row.errorCode !== null) {
+    throw new StoreError("STORE_CORRUPT", `operation ${row.id} has terminal data in ${row.state} state`);
+  }
+  return row;
 }
 
 function rowToDelivery(r: Record<string, unknown>): DeliveryRow {

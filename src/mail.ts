@@ -17,6 +17,7 @@ import {
   renameSync,
   lstatSync,
   rmSync,
+  chmodSync,
 } from "node:fs";
 import { createTransport } from "nodemailer";
 import { encodeWord } from "nodemailer/lib/mime-funcs";
@@ -50,7 +51,7 @@ import {
 } from "./ids.js";
 import { isValidTopicName } from "./ids.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
-import { exactCandidateCheck, messagePlanCheck, checkOid } from "./validate.js";
+import { exactCandidateCheck, messagePlanCheck } from "./validate.js";
 
 // ---------------------------------------------------------------------------
 // eml encoding (MAIL-003/004)
@@ -67,6 +68,7 @@ export interface EmlParams {
   references: MessageId[];
   messageId: string;
   body: string;
+  dateMs?: number;
   approvalFor?: MailInput["approvalFor"];
 }
 
@@ -101,6 +103,7 @@ export async function buildEml(p: EmlParams): Promise<{
   text: string;
   bytes: number;
   sha256: string;
+  dateMs: number;
 }> {
   if (p.approvalFor) {
     const error = exactCandidateCheck(p.approvalFor);
@@ -108,6 +111,9 @@ export async function buildEml(p: EmlParams): Promise<{
   }
   assertNoCrlf(p.subject, "subject");
   for (const h of [p.from, ...p.to, ...p.replyTo, p.messageId, ...(p.inReplyTo ? [p.inReplyTo] : []), ...p.references]) assertNoCrlf(h, "header");
+  const dateMs = p.dateMs ?? Math.floor(Date.now() / 1000) * 1000;
+  if (!Number.isSafeInteger(dateMs) || dateMs < 0)
+    throw new StoreError("INVALID_REQUEST", "dateMs must be a non-negative safe integer");
   const transporter = createTransport({
     streamTransport: true,
     buffer: true,
@@ -124,7 +130,7 @@ export async function buildEml(p: EmlParams): Promise<{
     ...(p.references.length > 0
       ? { references: p.references.map((r) => `<${r}>`) }
       : {}),
-    date: new Date(),
+    date: new Date(dateMs),
     headers: {
       "X-OMA-Kind": p.kind,
       ...(p.contextRevision ? { "X-OMA-Context": p.contextRevision } : {}),
@@ -138,12 +144,11 @@ export async function buildEml(p: EmlParams): Promise<{
     },
   });
   const raw = (info as unknown as { message: Buffer }).message;
-  const text = raw
-    .toString("utf8")
-    .replace(/X-Oma-Kind:/g, "X-OMA-Kind:")
-    .replace(/X-Oma-Context:/g, "X-OMA-Context:");
+  // Header field names are case-insensitive. Rewriting the complete serialized
+  // message would also mutate matching byte sequences in the user body.
+  const text = raw.toString("utf8");
   const bytes = Buffer.byteLength(text, "utf8");
-  return { text, bytes, sha256: sha256Hex(text) };
+  return { text, bytes, sha256: sha256Hex(text), dateMs };
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +168,14 @@ export function listAddress(
 
 export function topicAddress(topic: string, society: string): string {
   return `topic-${topic}@${society}.oma.invalid`;
+}
+
+/** Encode a logical Address only at the RFC presentation boundary. */
+export function displayAddress(address: Address, society: string): string {
+  if (address === "principal" || address === "commons" || address === "residents")
+    return listAddress(address, society);
+  if (address.startsWith("topic/")) return topicAddress(address.slice(6), society);
+  return actorAddress(address, society);
 }
 
 // ---------------------------------------------------------------------------
@@ -241,12 +254,20 @@ export function defaultReplyTo(from: string, to: readonly string[]): string[] {
   return [...new Set(lists.length ? lists : [from])];
 }
 
+/** Logical form stored in MessagePlan; RFC mailbox encoding is presentation only. */
+export function defaultLogicalReplyTo(from: Address, to: readonly Address[]): Address[] {
+  const lists = to.filter(
+    (address) => address === "commons" || address === "residents" || address.startsWith("topic/"),
+  );
+  return [...new Set(lists.length ? lists : [from])];
+}
+
 // ---------------------------------------------------------------------------
 // durable maildir writes (FS-002/MAIL-007)
 // ---------------------------------------------------------------------------
 
 function writeFsynced(path: string, data: string): void {
-  const fd = openSync(path, "w", 0o600);
+  const fd = openSync(path, "wx", 0o600);
   try {
     writeFileSync(fd, data, "utf8");
     fsyncSync(fd);
@@ -324,6 +345,9 @@ export function publishImmutableFile(
       } finally { rmSync(temporary, { force: true }); }
     } else throw error;
   }
+  chmodSync(dst, 0o444);
+  const fd = openSync(dst, "r");
+  try { fsyncSync(fd); } finally { closeSync(fd); }
   fsyncDir(dirname(dst));
 }
 
@@ -333,11 +357,39 @@ export function publishImmutableFile(
 
 export interface ParsedEmlHeaders {
   from: string | null;
+  to: string[] | null;
   subject: string | null;
+  dateMs: number | null;
   messageId: MessageId | null;
   inReplyTo: MessageId | null;
   references: MessageId[];
   replyTo: string[] | null;
+  omaKind: string | null;
+  omaContext: string | null;
+  approvalFor: {
+    repo: string | null;
+    targetRef: string | null;
+    expectedBase: string | null;
+    candidate: string | null;
+    policyRevision: string | null;
+  } | null;
+}
+
+function decodeUtf8Base64Words(value: string): string {
+  const unfolded = value.replace(/\n/g, " ");
+  const pattern = /=\?UTF-8\?B\?([A-Za-z0-9+/=]+)\?=/gi;
+  let output = "";
+  let last = 0;
+  let previousEncoded = false;
+  for (const match of unfolded.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    const gap = unfolded.slice(last, index);
+    if (!(previousEncoded && /^\s*$/.test(gap))) output += gap;
+    output += Buffer.from(match[1]!, "base64").toString("utf8");
+    last = index + match[0].length;
+    previousEncoded = true;
+  }
+  return output + unfolded.slice(last);
 }
 
 export function parseEmlHeaders(text: string): ParsedEmlHeaders {
@@ -369,15 +421,35 @@ export function parseEmlHeaders(text: string): ParsedEmlHeaders {
     for (const m of h.matchAll(/<([^>]+)>/g)) out.push(m[1] as MessageId);
     return out;
   };
+  const addresses = (h: string | undefined): string[] | null =>
+    h
+      ? h.split(",").map((value) => value.replace(/\n/g, " ").trim()).filter(Boolean)
+      : null;
+  const parsedDate = headers.date
+    ? Date.parse(headers.date.replace(/\n/g, " "))
+    : Number.NaN;
+  const approval = {
+    repo: headers["x-oma-approval-repo"] ?? null,
+    targetRef: headers["x-oma-approval-target"] ?? null,
+    expectedBase: headers["x-oma-approval-base"] ?? null,
+    candidate: headers["x-oma-approval-candidate"] ?? null,
+    policyRevision: headers["x-oma-approval-policy"]
+      ? decodeUtf8Base64Words(headers["x-oma-approval-policy"])
+      : null,
+  };
+  const hasApproval = Object.values(approval).some((value) => value !== null);
   return {
     from: headers.from ?? null,
+    to: addresses(headers.to),
     subject: headers.subject ?? null,
+    dateMs: Number.isFinite(parsedDate) ? parsedDate : null,
     messageId: mid(headers["message-id"]),
     inReplyTo: mid(headers["in-reply-to"]),
     references: refs(headers["references"]),
-    replyTo: headers["reply-to"]
-      ? headers["reply-to"].split(",").map((s) => s.trim())
-      : null,
+    replyTo: addresses(headers["reply-to"]),
+    omaKind: headers["x-oma-kind"] ?? null,
+    omaContext: headers["x-oma-context"] ?? null,
+    approvalFor: hasApproval ? approval : null,
   };
 }
 
@@ -489,16 +561,16 @@ export class MailModule {
         );
       targetAddresses.push(...(logical as Address[]));
     }
-    const route = expandAddresses(this.store, targetAddresses, society);
+    const logicalTo = [...new Set(targetAddresses)].sort() as Address[];
+    const route = expandAddresses(this.store, logicalTo, society);
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
-    const dateMs = Date.now();
     let replyHeaders: {
-      replyTo: string[];
+      replyTo: Address[];
       inReplyTo: MessageId | null;
       references: MessageId[];
     } = {
-      replyTo: defaultReplyTo(actorAddress(auth.actor, society), route.displayTo),
+      replyTo: defaultLogicalReplyTo(auth.actor, logicalTo),
       inReplyTo: null,
       references: [],
     };
@@ -519,7 +591,7 @@ export class MailModule {
     const eml = await buildEml({
       from: actorAddress(auth.actor, society),
       to: route.displayTo,
-      replyTo: replyHeaders.replyTo,
+      replyTo: replyHeaders.replyTo.map((address) => displayAddress(address, society)),
       subject: input.subject,
       kind: input.kind,
       approvalFor: input.approvalFor,
@@ -535,7 +607,12 @@ export class MailModule {
     mkdirSync(staging, { recursive: true });
     const staged = join(staging, `${messageId}.eml`);
     writeFsynced(staged, eml.text);
-    publishImmutableFile(staged, this.objectPath(messageId));
+    try {
+      publishImmutableFile(staged, this.objectPath(messageId));
+    } finally {
+      rmSync(staged, { force: true });
+      fsyncDir(staging);
+    }
 
     const plan = {
       kind: operationKind,
@@ -544,8 +621,8 @@ export class MailModule {
         objectPath: `mail/objects/${messageId}.eml`,
         sha256: eml.sha256,
         bytes: eml.bytes,
-        dateMs,
-        to: [...route.displayTo].sort(),
+        dateMs: eml.dateMs,
+        to: [...logicalTo],
         recipients: route.recipients,
         kind: input.kind,
         ...(input.approvalFor ? { approvalFor: input.approvalFor } : {}),
@@ -568,7 +645,7 @@ export class MailModule {
       });
       if (claimOut.txClaim === "retry") return;
       // MAIL-001: freeze membership in the accepting transaction, not before rendering.
-      route.recipients = expandAddresses(this.store, targetAddresses, society).recipients;
+      route.recipients = expandAddresses(this.store, logicalTo, society).recipients;
       plan.message.recipients = route.recipients;
       this.store.updateOperationPlanJson(opId, JSON.stringify(plan));
       this.store.insertDeliveries(
@@ -590,7 +667,8 @@ export class MailModule {
     let materializedAll = true;
     try {
       await this.materialize(opId);
-    } catch {
+    } catch (error) {
+      if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
       materializedAll = false;
     }
     if (materializedAll) {
@@ -611,7 +689,6 @@ export class MailModule {
     brief: string,
   ): Promise<MessagePlan> {
     const messageId = generateMessageId(operationId, 0);
-    const dateMs = Date.now();
     const eml = await buildEml({
       from: actorAddress(auth.actor, this.paths.society),
       to: [actorAddress(recipient, this.paths.society)],
@@ -624,15 +701,13 @@ export class MailModule {
       messageId: `${messageId}@${this.paths.society}.oma.invalid`,
       body: brief,
     });
-    const staging = join(this.paths.stateRoot, "staging", `${messageId}.eml`);
-    mkdirSync(dirname(staging), { recursive: true });
-    writeFsynced(staging, eml.text);
+    this.freezeObject(messageId, eml);
     return {
       id: messageId,
       objectPath: `mail/objects/${messageId}.eml`,
       sha256: eml.sha256,
       bytes: eml.bytes,
-      dateMs,
+      dateMs: eml.dateMs,
       to: [recipient],
       recipients: [recipient],
       kind: "message",
@@ -646,15 +721,29 @@ export class MailModule {
   }
 
   publishCreateInitial(message: MessagePlan): void {
-    const staging = join(this.paths.stateRoot, "staging", `${message.id}.eml`);
     const object = this.objectPath(message.id);
-    publishImmutableFile(existsSync(object) ? object : staging, object, message.sha256);
+    const stat = lstatSync(object, { throwIfNoEntry: false });
+    if (!stat?.isFile() || stat.size !== message.bytes || sha256Hex(readFileSync(object)) !== message.sha256)
+      throw new StoreError("STORE_CORRUPT", `create initial object mismatch: ${message.id}`);
   }
 
-  freezeObject(messageId: MessageId, eml: { text: string }): void {
-    const object = this.objectPath(messageId);
-    mkdirSync(dirname(object), { recursive: true });
-    writeFsynced(object, eml.text);
+  freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): void {
+    const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects");
+    mkdirSync(stagingDir, { recursive: true });
+    const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
+    const fd = openSync(staged, "wx", 0o600);
+    try {
+      writeFileSync(fd, eml.text, "utf8");
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    try {
+      publishImmutableFile(staged, this.objectPath(messageId), eml.sha256 ?? sha256Hex(eml.text));
+    } finally {
+      rmSync(staged, { force: true });
+      fsyncDir(stagingDir);
+    }
   }
 
   private operationMessage(op: OperationRow): MessagePlan {
@@ -673,10 +762,8 @@ export class MailModule {
       (message.kind === "approval_required") !== (message.approvalFor !== undefined) ||
       (message.kind === "approval_required" && !message.to.some(address => logicalReplyAddress(this.store, address, this.paths.society) === "principal")))
       throw new StoreError("STORE_CORRUPT", `operation ${op.id} message identity mismatch`);
-    if (message.kind === "context" && decoded.candidate) {
-      if (checkOid(decoded.candidate)) throw new StoreError("STORE_CORRUPT", `operation ${op.id} context OID invalid`);
-      return { ...message, contextRevision: decoded.candidate as Oid };
-    }
+    if (message.kind === "context" && decoded.candidate !== message.contextRevision)
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} context candidate/message mismatch`);
     return message;
   }
 
@@ -689,8 +776,55 @@ export class MailModule {
     if (sha256Hex(bytes) !== message.sha256)
       throw new StoreError("STORE_CORRUPT", `mail object hash mismatch: ${message.id}`);
     const headers = parseEmlHeaders(bytes.toString("utf8"));
-    if (headers.messageId?.split("@", 1)[0] !== message.id)
+    if (headers.messageId?.split("@", 1)[0] !== message.id || headers.omaKind !== message.kind)
       throw new StoreError("STORE_CORRUPT", `mail header mismatch: ${message.id}`);
+
+    const logicalAddresses = (values: string[] | null): Address[] | null => {
+      if (!values) return null;
+      const logical = values.map((value) =>
+        logicalReplyAddress(this.store, value, this.paths.society),
+      );
+      return logical.some((value) => value === null)
+        ? null
+        : (logical as Address[]);
+    };
+    const sameAddresses = (left: readonly Address[], right: readonly Address[]): boolean => {
+      if (left.length !== right.length) return false;
+      const a = [...left].sort();
+      const b = [...right].sort();
+      return a.every((value, index) => value === b[index]);
+    };
+    const actualTo = logicalAddresses(headers.to);
+    const actualReplyTo = logicalAddresses(headers.replyTo ?? []);
+    if (
+      !actualTo ||
+      !actualReplyTo ||
+      !sameAddresses(actualTo, message.to) ||
+      !sameAddresses(actualReplyTo, message.replyHeaders.replyTo) ||
+      headers.inReplyTo !== message.replyHeaders.inReplyTo ||
+      headers.references.length !== message.replyHeaders.references.length ||
+      headers.references.some((value, index) => value !== message.replyHeaders.references[index]) ||
+      headers.dateMs === null ||
+      headers.dateMs !== Math.floor(message.dateMs / 1000) * 1000
+    ) {
+      throw new StoreError("STORE_CORRUPT", `mail frozen metadata mismatch: ${message.id}`);
+    }
+    if (headers.omaContext !== message.contextRevision)
+      throw new StoreError("STORE_CORRUPT", `mail context metadata mismatch: ${message.id}`);
+
+    const expectedApproval = message.approvalFor ?? null;
+    const actualApproval = headers.approvalFor;
+    if (expectedApproval) {
+      if (!actualApproval ||
+        actualApproval.repo !== expectedApproval.repo ||
+        actualApproval.targetRef !== expectedApproval.targetRef ||
+        actualApproval.expectedBase !== expectedApproval.expectedBase ||
+        actualApproval.candidate !== expectedApproval.candidate ||
+        actualApproval.policyRevision !== expectedApproval.policyRevision)
+        throw new StoreError("STORE_CORRUPT", `mail approval metadata mismatch: ${message.id}`);
+    } else if (actualApproval) {
+      throw new StoreError("STORE_CORRUPT", `unexpected mail approval metadata: ${message.id}`);
+    }
     return headers;
   }
 
@@ -706,15 +840,38 @@ export class MailModule {
     } else publishImmutableFile(object, fresh, message.sha256);
   }
 
+  private operationDeliveries(operationId: string, message: MessagePlan): DeliveryRow[] {
+    const deliveries = this.store.deliveriesForOperation(operationId);
+    const actual = new Set<string>();
+    for (const delivery of deliveries) {
+      if (
+        delivery.operationId !== operationId ||
+        delivery.messageId !== message.id ||
+        !message.recipients.includes(delivery.recipient) ||
+        !actual.add(delivery.recipient)
+      ) {
+        throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operationId}`);
+      }
+    }
+    if (
+      actual.size !== message.recipients.length ||
+      message.recipients.some((recipient) => !actual.has(recipient))
+    ) {
+      throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operationId}`);
+    }
+    return deliveries;
+  }
+
   async publishGated(operationId: string): Promise<void> {
     const op = this.store.getOperationById(operationId);
     if (!op)
       throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
     const message = this.operationMessage(op);
+    const deliveries = this.operationDeliveries(operationId, message);
     this.messageHeaders(message);
     const object = this.objectPath(message.id);
     publishImmutableFile(object, this.archivePath(message.id), message.sha256);
-    for (const d of this.store.deliveriesForOperation(operationId)) {
+    for (const d of deliveries) {
       this.publishDelivery(message, d);
       this.store.transaction((_tx) =>
         this.store.markMaterialized(d.messageId, d.recipient),
@@ -732,8 +889,8 @@ export class MailModule {
         `operation ${op.kind} uses gated publication`,
       );
     }
-    const deliveries = this.store.deliveriesForOperation(operationId);
     const message = this.operationMessage(op);
+    const deliveries = this.operationDeliveries(operationId, message);
     this.messageHeaders(message);
     const object = this.objectPath(message.id);
     publishImmutableFile(object, this.archivePath(message.id), message.sha256);
@@ -777,12 +934,8 @@ export class MailModule {
   private isPublicList(delivery: DeliveryRow): boolean {
     const message = this.messagePlan(delivery);
     if (message.kind !== "message" || message.to.length === 0) return false;
-    const suffix = `@${this.paths.society}.oma.invalid`;
     return message.to.every(
-      (to) =>
-        to === `commons${suffix}` ||
-        to === `residents${suffix}` ||
-        (to.startsWith("topic-") && to.endsWith(suffix)),
+      (to) => to === "commons" || to === "residents" || to.startsWith("topic/"),
     );
   }
 
@@ -944,7 +1097,8 @@ export class MailModule {
         } else {
           remaining++;
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
         remaining++;
       }
     }

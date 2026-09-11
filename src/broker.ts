@@ -1,8 +1,10 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: broker core — singleton lock, actor
 // listener auth (SO_PEERCRED + cgroup), public dispatch, runner channel.
 import { createServer, type Socket } from "node:net";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
+  constants,
+  createReadStream,
   openSync,
   mkdirSync,
   unlinkSync,
@@ -12,6 +14,8 @@ import {
   readdirSync,
   fstatSync,
   statSync,
+  writeFileSync,
+  fsyncSync,
 } from "node:fs";
 import { join } from "node:path";
 import type {
@@ -29,7 +33,7 @@ import type {
 import { Store, StoreError } from "./store.js";
 import { isValidActorName, isValidRequestKey } from "./ids.js";
 import { ConnectionDecoder, encodeFrame } from "./frame.js";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 import { MailModule } from "./mail.js";
 import { UnitsModule, unitName } from "./units.js";
 import { peerCred, peerPidFd, peerPidAlive, type PeerCred, tryFlock, sdNotifyReady } from "./leaf.js";
@@ -50,6 +54,7 @@ import {
   mailAckParamsCheck,
   mailParamsCheck,
   operationGetParamsCheck,
+  operationResultCheck,
   routeParamsCheck,
   statusGetParamsCheck,
   checkObject,
@@ -77,6 +82,26 @@ const DEFAULT_LIMITS: ProtocolLimits = {
   idleStreamSeconds: 30,
   receiptWaitSeconds: 30,
 };
+
+/** VIEW-003: turn an already-bounded byte prefix into bounded UTF-8 text. */
+export function boundedLogOutput(
+  bytes: Buffer,
+  maxBytes: number,
+  forcedTruncated = false,
+): { text: string; truncated: boolean } {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
+    throw new StoreError("INTERNAL_ERROR", "invalid log byte limit");
+  const prefix = bytes.subarray(0, Math.min(bytes.length, maxBytes));
+  let text = prefix.toString("utf8");
+  let truncated = forcedTruncated || bytes.length > maxBytes;
+  // An incomplete/invalid UTF-8 sequence can expand to U+FFFD. Keep the
+  // returned UTF-8 encoding within the configured byte limit as well.
+  while (Buffer.byteLength(text, "utf8") > maxBytes && text.length > 0) {
+    text = text.slice(0, -1);
+    truncated = true;
+  }
+  return { text, truncated };
+}
 
 export function peerCgroup(pid: number): string | null {
   try {
@@ -117,7 +142,7 @@ export class Broker {
   private runLeases = new Map<
     Actor,
     { invocationId: string; cgroupFd: number; lease: RunLease | null; revoke: () => void; done: () => void }
->();
+  >();
   constructor(
     private readonly store: Store,
     private readonly mail: MailModule,
@@ -257,8 +282,10 @@ export class Broker {
       });
       return;
     }
-    this.serveFrames(sock, (raw, stream) =>
-      this.dispatch(auth, raw as Request, stream ?? null),
+    this.serveFrames(
+      sock,
+      (raw, stream) => this.dispatch(auth, raw as Request, stream ?? null),
+      (raw) => this.preflightPublicStream(auth, raw),
     );
   }
 
@@ -319,20 +346,49 @@ export class Broker {
       raw: Record<string, unknown>,
       stream: AsyncIterable<Uint8Array> | null,
     ) => Promise<unknown> | unknown,
+    preflightStream?: (raw: Record<string, unknown>) => object | null,
   ): void {
-    const dec = new ConnectionDecoder(this.limits.frameBytes);
-    const write = (obj: unknown) => sock.write(encodeFrame(obj));
-    let streamFrame: { raw: Record<string, unknown>; id: string } | null = null;
-    let pendingStream: {
+    type Spool = {
       raw: Record<string, unknown>;
       id: string;
-      bytes: Uint8Array;
-    } | null = null;
+      path: string;
+      fd: number | null;
+      hash: ReturnType<typeof createHash>;
+      total: number;
+      expectedBytes: number;
+      expectedSha: string;
+    };
+    const stagingDir = join(this.paths.stateRoot, "staging");
+    mkdirSync(stagingDir, { recursive: true });
+    let activeSpool: Spool | null = null;
+    const cleanupSpool = (spool: Spool | null, remove = true): void => {
+      if (!spool) return;
+      if (spool.fd !== null) {
+        try { closeSync(spool.fd); } catch { /* already closed */ }
+        spool.fd = null;
+      }
+      if (remove) {
+        try { unlinkSync(spool.path); } catch { /* absent */ }
+      }
+    };
+    const dec = new ConnectionDecoder(this.limits.frameBytes, (chunk) => {
+      const spool = activeSpool;
+      if (!spool || spool.fd === null)
+        throw new StoreError("INTERNAL_ERROR", "stream sink has no active spool");
+      spool.total += chunk.length;
+      if (spool.total > spool.expectedBytes)
+        throw new StoreError("STREAM_INVALID", "stream exceeds descriptor bytes");
+      spool.hash.update(chunk);
+      writeFileSync(spool.fd, chunk);
+    });
+    const write = (obj: unknown) => sock.write(encodeFrame(obj));
+    let streamFrame: { raw: Record<string, unknown>; id: string; spool: Spool } | null = null;
+    let pendingStream: { raw: Record<string, unknown>; id: string; path: string } | null = null;
     let busy = false;
     const units: Array<{
       raw: Record<string, unknown>;
       id: string;
-      bytes: Uint8Array | null;
+      streamPath: string | null;
       retry: "never" | "same-key";
     }> = [];
 
@@ -358,19 +414,25 @@ export class Broker {
       const u = units.shift();
       if (!u) return;
       busy = true;
-      const iter = u.bytes
-        ? (async function* () {
-            yield u.bytes!;
-          })()
-        : null;
+      const iter = u.streamPath ? createReadStream(u.streamPath) : null;
       respond(u.id, handle(u.raw, iter), u.retry).finally(() => {
+        if (u.streamPath) {
+          try { unlinkSync(u.streamPath); } catch { /* absent */ }
+        }
         busy = false;
-        processEvents(dec.resumeParsing());
+        const more = dec.resumeParsing();
+        processEvents(more);
         pump();
       });
     };
 
     const rejectStream = (id: string, message: string): void => {
+      cleanupSpool(activeSpool);
+      activeSpool = null;
+      if (pendingStream) {
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        pendingStream = null;
+      }
       write(
         Broker.errorAnswer(id, {
           code: "STREAM_INVALID",
@@ -387,17 +449,19 @@ export class Broker {
       if (!pendingStream) return true;
       if (events.some((ev) => ev.kind === "invalid")) {
         const id = pendingStream.id;
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
         pendingStream = null;
         rejectStream(id, "stream has excess bytes");
         return false;
       }
       if (events.some((ev) => ev.kind === "frame" || ev.kind === "stream")) {
-        units.push({ ...pendingStream, retry: "same-key" });
+        units.push({ ...pendingStream, streamPath: pendingStream.path, retry: "same-key" });
         pendingStream = null;
         return true;
       }
       if (dec.excessStatus() === "excess") {
         const id = pendingStream.id;
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
         pendingStream = null;
         rejectStream(id, "stream has excess bytes");
         return false;
@@ -417,47 +481,56 @@ export class Broker {
               retry: "never",
             }),
           );
-          continue;
+          sock.destroy();
+          return;
         }
         if (ev.kind === "stream") {
           const sf = streamFrame;
           streamFrame = null;
-          if (!sf) continue;
-          const p = sf.raw.params;
-          const rec =
-            typeof p === "object" && p !== null && !Array.isArray(p)
-              ? (p as Record<string, unknown>)
-              : null;
-          const desc =
-            rec && typeof rec.bundle === "object" && rec.bundle !== null
-              ? rec.bundle
-              : rec && typeof rec.content === "object" && rec.content !== null
-                ? rec.content
-                : null;
-          const expectedSha =
-            desc && typeof (desc as Record<string, unknown>).sha256 === "string"
-              ? ((desc as Record<string, unknown>).sha256 as string)
-              : null;
+          const spool = sf?.spool ?? null;
+          activeSpool = null;
+          if (!sf || !spool || spool.fd === null) {
+            cleanupSpool(spool);
+            sock.destroy();
+            return;
+          }
+          try {
+            fsyncSync(spool.fd);
+            closeSync(spool.fd);
+            spool.fd = null;
+          } catch (error) {
+            cleanupSpool(spool);
+            write(
+              Broker.errorAnswer(sf.id, {
+                code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : "INTERNAL_ERROR",
+                message: `stream spool failed: ${(error as Error).message}`,
+                retry: "same-key",
+              }),
+            );
+            sock.destroy();
+            return;
+          }
           if (
-            expectedSha &&
-            /^[0-9a-f]{64}$/.test(expectedSha) &&
-            createHash("sha256").update(ev.bytes).digest("hex") !== expectedSha
+            spool.total !== spool.expectedBytes ||
+            spool.hash.digest("hex") !== spool.expectedSha
           ) {
-            rejectStream(sf.id, "stream digest mismatch");
+            cleanupSpool(spool);
+            rejectStream(sf.id, "stream digest/bytes mismatch");
             return;
           }
           const status = dec.excessStatus();
           if (status === "excess") {
+            cleanupSpool(spool);
             rejectStream(sf.id, "stream has excess bytes");
             return;
           }
           if (status === "pending") {
-            pendingStream = { raw: sf.raw, id: sf.id, bytes: ev.bytes };
+            pendingStream = { raw: sf.raw, id: sf.id, path: spool.path };
           } else {
             units.push({
               raw: sf.raw,
               id: sf.id,
-              bytes: ev.bytes,
+              streamPath: spool.path,
               retry: "same-key",
             });
           }
@@ -472,7 +545,8 @@ export class Broker {
               retry: "never",
             }),
           );
-          continue;
+          sock.destroy();
+          return;
         }
         const id = typeof raw.id === "string" ? raw.id : "x";
         const method = raw.method as string;
@@ -506,19 +580,87 @@ export class Broker {
             sock.destroy();
             return;
           }
+          const rejected = preflightStream?.(raw) ?? null;
+          if (rejected) {
+            write(rejected);
+            sock.destroy();
+            return;
+          }
           if (desc.bytes > 0) {
-            streamFrame = { raw, id };
-            const more = dec.beginStream(desc.bytes);
-            if (more.length > 0) processEvents(more);
+            const expectedSha = typeof desc.sha256 === "string" ? desc.sha256 : "";
+            const path = join(stagingDir, `.wire-${randomUUID()}.stream`);
+            let fd: number;
+            try {
+              fd = openSync(
+                path,
+                constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+                0o600,
+              );
+            } catch (error) {
+              write(
+                Broker.errorAnswer(id, {
+                  code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : "INTERNAL_ERROR",
+                  message: `cannot create stream spool: ${(error as Error).message}`,
+                  retry: "same-key",
+                }),
+              );
+              sock.destroy();
+              return;
+            }
+            const spool: Spool = {
+              raw,
+              id,
+              path,
+              fd,
+              hash: createHash("sha256"),
+              total: 0,
+              expectedBytes: desc.bytes,
+              expectedSha,
+            };
+            activeSpool = spool;
+            streamFrame = { raw, id, spool };
+            try {
+              const more = dec.beginStream(desc.bytes);
+              if (more.length > 0) processEvents(more);
+            } catch (error) {
+              cleanupSpool(spool);
+              activeSpool = null;
+              streamFrame = null;
+              write(
+                Broker.errorAnswer(id, {
+                  code: error instanceof StoreError ? error.code : "INTERNAL_ERROR",
+                  message: (error as Error).message,
+                  retry: "same-key",
+                }),
+              );
+              sock.destroy();
+            }
             continue;
           }
         }
-        units.push({ raw, id, bytes: null, retry: "never" });
+        units.push({ raw, id, streamPath: null, retry: "never" });
       }
     };
 
     sock.on("data", (chunk: Buffer) => {
-      const events = dec.push(chunk);
+      let events: import("./frame.js").DecoderEvent[];
+      try {
+        events = dec.push(chunk);
+      } catch (error) {
+        const id = streamFrame?.id ?? "x";
+        cleanupSpool(activeSpool);
+        activeSpool = null;
+        streamFrame = null;
+        write(
+          Broker.errorAnswer(id, {
+            code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : error instanceof StoreError ? error.code : "INTERNAL_ERROR",
+            message: (error as Error).message,
+            retry: "same-key",
+          }),
+        );
+        sock.destroy();
+        return;
+      }
       if (!settlePendingStream(events)) return;
       processEvents(events);
       pump();
@@ -526,13 +668,20 @@ export class Broker {
     sock.setTimeout(this.limits.idleStreamSeconds * 1000, () => {
       if (!dec.streaming() && !pendingStream) return;
       const id = streamFrame?.id ?? pendingStream?.id ?? "x";
+      cleanupSpool(activeSpool);
+      activeSpool = null;
       streamFrame = null;
-      pendingStream = null;
+      if (pendingStream) {
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        pendingStream = null;
+      }
       rejectStream(id, "stream timed out before acceptance");
     });
     sock.on("end", () => {
       if (dec.streaming()) {
         const id = streamFrame?.id ?? "x";
+        cleanupSpool(activeSpool);
+        activeSpool = null;
         streamFrame = null;
         write(
           Broker.errorAnswer(id, {
@@ -543,6 +692,7 @@ export class Broker {
         );
       } else if (pendingStream) {
         const id = pendingStream.id;
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
         pendingStream = null;
         rejectStream(id, "stream ended with an incomplete next frame");
         return;
@@ -550,6 +700,20 @@ export class Broker {
       sock.destroy();
     });
     sock.on("error", () => sock.destroy());
+    sock.once("close", () => {
+      cleanupSpool(activeSpool);
+      activeSpool = null;
+      if (pendingStream) {
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        pendingStream = null;
+      }
+      for (const unit of units) {
+        if (unit.streamPath) {
+          try { unlinkSync(unit.streamPath); } catch { /* absent */ }
+        }
+      }
+      units.length = 0;
+    });
   }
 
   private fail(
@@ -611,6 +775,131 @@ export class Broker {
       default: return null;
     }
     return check(p) === null ? p : null;
+  }
+
+  private preflightPublicStream(
+    auth: AuthContext,
+    envelope: Record<string, unknown>,
+  ): object | null {
+    const id = typeof envelope.id === "string" ? envelope.id : "x";
+    const method = typeof envelope.method === "string" ? envelope.method : "";
+    const reject = (code: string, message: string) =>
+      Broker.errorAnswer(id, { code, message, retry: "never" as const });
+    if (
+      typeof envelope.id !== "string" ||
+      typeof envelope.method !== "string" ||
+      !Object.keys(envelope).every((key) =>
+        ["v", "id", "method", "params", "request"].includes(key),
+      )
+    ) return reject("INVALID_REQUEST", "invalid request envelope");
+    if (envelope.v !== 1)
+      return reject("UNSUPPORTED_VERSION", "unsupported protocol version");
+    if (method !== "git.submit" && method !== "context.publish")
+      return reject("INVALID_REQUEST", "method does not accept a stream body");
+    if (!isValidRequestKey(envelope.request))
+      return reject("INVALID_REQUEST", "mutation requires a valid request key");
+    const actor = this.store.getAgent(auth.actor);
+    if (
+      auth.channel === "actor" &&
+      (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled")
+    ) return reject("STALE_RUN", "actor incarnation is stale");
+    const need = METHOD_CAPABILITY[method as PublicMethod];
+    if (
+      need &&
+      (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))
+    ) return reject("CAPABILITY_DENIED", `missing capability ${need}`);
+    if (!this.checkParams(method, envelope.params))
+      return reject("INVALID_REQUEST", `invalid params for ${method}`);
+    return null;
+  }
+
+  private readLogs(
+    agent: string,
+    sinceSeconds: number,
+  ): Promise<{ text: string; truncated: boolean; observedAtMs: number }> {
+    const svc = unitName(this.paths.society, agent, "service");
+    return new Promise((resolve, reject) => {
+      const child = spawn(
+        "journalctl",
+        [
+          "--user",
+          "--unit",
+          svc,
+          "--since",
+          `${sinceSeconds}s ago`,
+          "--no-pager",
+          "--output=cat",
+        ],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
+      const chunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+      let total = 0;
+      let stderrTotal = 0;
+      let truncated = false;
+      let timedOut = false;
+      let spawnError: Error | null = null;
+      const limit = this.limits.logBytes;
+      const diagnosticLimit = 16 * 1024;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGKILL");
+      }, 30_000);
+
+      child.stdout.on("data", (chunk: Buffer) => {
+        if (truncated) return;
+        const part = Buffer.from(chunk);
+        const remaining = Math.max(0, limit - total);
+        if (part.length <= remaining) {
+          chunks.push(part);
+          total += part.length;
+          return;
+        }
+        if (remaining > 0) {
+          chunks.push(part.subarray(0, remaining));
+          total += remaining;
+        }
+        truncated = true;
+        child.kill("SIGKILL");
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        const part = Buffer.from(chunk);
+        const remaining = Math.max(0, diagnosticLimit - stderrTotal);
+        if (remaining > 0) {
+          const keep = part.subarray(0, remaining);
+          stderrChunks.push(keep);
+          stderrTotal += keep.length;
+        }
+      });
+      child.once("error", (error) => {
+        spawnError = error;
+      });
+      child.once("close", (code, signal) => {
+        clearTimeout(timer);
+        if (timedOut) {
+          reject(new StoreError("DEADLINE_EXCEEDED", "journalctl timed out"));
+          return;
+        }
+        if (spawnError) {
+          reject(new StoreError("INTERNAL_ERROR", `journalctl spawn failed: ${spawnError.message}`));
+          return;
+        }
+        const output = boundedLogOutput(Buffer.concat(chunks, total), limit, truncated);
+        if (truncated) {
+          resolve({ ...output, observedAtMs: Date.now() });
+          return;
+        }
+        if (signal || code !== 0) {
+          const stderr = Buffer.concat(stderrChunks, stderrTotal).toString("utf8");
+          reject(new StoreError(
+            "INTERNAL_ERROR",
+            `journalctl exited unsuccessfully: ${stderr.slice(0, 300)}`,
+          ));
+          return;
+        }
+        resolve({ ...output, observedAtMs: Date.now() });
+      });
+    });
   }
 
   async dispatch(
@@ -857,26 +1146,7 @@ export class Broker {
         }
         case "logs.read": {
           const p = params as { agent: string; sinceSeconds: number };
-          const svc = unitName(this.paths.society, p.agent, "service");
-          const r = spawnSync(
-            "journalctl",
-            [
-              "--user",
-              "--unit",
-              svc,
-              "--since",
-              `${p.sinceSeconds}s ago`,
-              "--no-pager",
-              "--output=cat",
-            ],
-            { encoding: "utf8", maxBuffer: this.limits.logBytes },
-          );
-          const text = (r.stdout ?? "").slice(0, this.limits.logBytes);
-          return Broker.okAnswer(id, {
-            text,
-            truncated: (r.stdout ?? "").length > text.length,
-            observedAtMs: Date.now(),
-          });
+          return Broker.okAnswer(id, await this.readLogs(p.agent, p.sinceSeconds));
         }
         default:
           return Broker.errorAnswer(id, {
@@ -1208,8 +1478,6 @@ export class Broker {
   }
 }
 
-
-
 function emptyStream(): AsyncIterable<Uint8Array> {
   return (async function* () {})();
 }
@@ -1222,26 +1490,42 @@ function keyOf(req: { request?: string }): string {
 
 function receiptOfRow(op: {
   id: string;
+  kind: string;
   state: string;
   resultJson: string | null;
   errorCode: string | null;
 }): Receipt {
+  if (!(["pending", "succeeded", "failed", "unknown"] as const).includes(op.state as never))
+    throw new StoreError("STORE_CORRUPT", `operation ${op.id} has invalid state`);
   const rec: Receipt = {
     operation: op.id,
     state: op.state as Receipt["state"],
   };
-  if (op.resultJson) {
+  if (op.state === "succeeded") {
+    if (!op.resultJson)
+      throw new StoreError("STORE_CORRUPT", `succeeded operation ${op.id} has no result`);
+    let result: unknown;
     try {
-      rec.result = JSON.parse(op.resultJson);
+      result = JSON.parse(op.resultJson);
     } catch {
-      /* corrupt result; receipt stays minimal */
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt result JSON`);
     }
+    const invalid = operationResultCheck(op.kind)(result);
+    if (invalid)
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} result: ${invalid}`);
+    rec.result = result as Exclude<Receipt["result"], undefined>;
+  } else if (op.resultJson !== null) {
+    throw new StoreError("STORE_CORRUPT", `non-success operation ${op.id} has a result`);
   }
+  if (op.state === "failed" && !op.errorCode)
+    throw new StoreError("STORE_CORRUPT", `failed operation ${op.id} has no error code`);
+  if (op.errorCode && op.state !== "failed")
+    throw new StoreError("STORE_CORRUPT", `non-failed operation ${op.id} has an error code`);
   if (op.errorCode) {
     rec.error = {
       code: op.errorCode as never,
       message: op.errorCode,
-      retry: "same-key",
+      retry: "never",
     };
   }
   return rec;

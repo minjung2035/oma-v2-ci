@@ -10,7 +10,11 @@ import {
   closeSync,
 } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import {
+  spawnSync as nodeSpawnSync,
+  type SpawnSyncOptionsWithStringEncoding,
+  type SpawnSyncReturns,
+} from "node:child_process";
 import { createHash } from "node:crypto";
 import type {
   HostConfigV1,
@@ -56,6 +60,7 @@ type ActionPlan = Extract<
   OperationPlan,
   { kind: "agent.start" | "agent.stop" }
 >;
+type AgentQuota = Pick<HostConfigV1["quota"], "societyAgents" | "lineageAgents">;
 
 const cloneEnv: NodeJS.ProcessEnv = {
   HOME: "/nonexistent",
@@ -74,6 +79,38 @@ const cloneEnv: NodeJS.ProcessEnv = {
   GIT_CONFIG_KEY_2: "core.fsyncMethod", GIT_CONFIG_VALUE_2: "fsync",
 };
 
+function checkedSpawn(
+  result: SpawnSyncReturns<string>,
+  operation: string,
+): SpawnSyncReturns<string> {
+  if (result.error) {
+    const code = (result.error as NodeJS.ErrnoException).code;
+    if (code === "ETIMEDOUT")
+      throw new StoreError("DEADLINE_EXCEEDED", `${operation} timed out`);
+    if (code === "ENOBUFS")
+      throw new StoreError("LIMIT_EXCEEDED", `${operation} output exceeded the bound`);
+    throw new StoreError(
+      "INTERNAL_ERROR",
+      `${operation} spawn failed: ${result.error.message}`,
+    );
+  }
+  return result;
+}
+
+function boundedSpawnSync(
+  command: string,
+  args: readonly string[],
+  options: SpawnSyncOptionsWithStringEncoding,
+): SpawnSyncReturns<string> {
+  const bounded: SpawnSyncOptionsWithStringEncoding = {
+    timeout: 120_000,
+    maxBuffer: 4 * 1024 * 1024,
+    killSignal: "SIGKILL",
+    ...options,
+  };
+  return checkedSpawn(nodeSpawnSync(command, [...args], bounded), command);
+}
+
 function specDigest(spec: ResolvedAgentSpec): string {
   return createHash("sha256").update(canonicalJson({
     ...spec, resources: { ...spec.resources },
@@ -88,7 +125,14 @@ export class LifecycleModule {
     private readonly paths: LifecyclePaths,
     private readonly resolveSpec: SpecResolver,
     private readonly mail: MailModule | null = null,
-  ) {}
+    private readonly agentQuota: AgentQuota | null = null,
+  ) {
+    // RUN-001: every lifecycle composition derives death proof from the same
+    // durable monotonic incarnation owned by Store; callers cannot forget it.
+    this.units.bindIncarnationReader(
+      (agent) => this.store.getAgent(agent)?.incarnation ?? null,
+    );
+  }
 
   ack(auth: AuthContext, message: MessageId, key: string): Receipt {
     const hash = requestHash("mail.ack", { message });
@@ -189,6 +233,55 @@ export class LifecycleModule {
       "CAPABILITY_DENIED",
       `${target} is not a descendant of ${auth.actor}`,
     );
+  }
+
+  /** AUTH-002: provisioning/retired rows still consume durable agent quota. */
+  private enforceCreateQuota(parentName: Actor): void {
+    if (!this.agentQuota) return;
+    const agents = this.store.listAgents();
+    const byName = new Map(agents.map((agent) => [agent.name, agent]));
+    const residents = agents.filter((agent) => agent.role === "resident");
+    if (residents.length >= this.agentQuota.societyAgents)
+      throw new StoreError("QUOTA_EXCEEDED", "society agent quota exhausted");
+
+    const descendsFrom = (rowName: Actor, ancestorName: Actor): boolean => {
+      let current = byName.get(rowName);
+      const seen = new Set<string>();
+      while (current?.createdBy) {
+        if (current.createdBy === ancestorName) return true;
+        if (!seen.add(current.name))
+          throw new StoreError("STORE_CORRUPT", "agent ancestry cycle detected");
+        current = byName.get(current.createdBy);
+        if (!current)
+          throw new StoreError(
+            "STORE_CORRUPT",
+            "agent ancestry references a missing parent",
+          );
+      }
+      return false;
+    };
+
+    let ancestor = byName.get(parentName);
+    const ancestry = new Set<string>();
+    while (ancestor && ancestor.role === "resident") {
+      if (!ancestry.add(ancestor.name))
+        throw new StoreError("STORE_CORRUPT", "agent ancestry cycle detected");
+      const descendants = residents.filter((row) =>
+        descendsFrom(row.name, ancestor!.name),
+      ).length;
+      if (descendants >= this.agentQuota.lineageAgents)
+        throw new StoreError(
+          "QUOTA_EXCEEDED",
+          `lineage agent quota exhausted at ${ancestor.name}`,
+        );
+      if (!ancestor.createdBy) break;
+      ancestor = byName.get(ancestor.createdBy);
+      if (!ancestor)
+        throw new StoreError(
+          "STORE_CORRUPT",
+          "agent ancestry references a missing parent",
+        );
+    }
   }
 
   /** MUST [LIFE-004/LIFE-007]: terminal success follows proven systemd effect. */
@@ -367,7 +460,9 @@ export class LifecycleModule {
       return;
     }
     if (!this.mail) throw new StoreError("INTERNAL_ERROR", "bootstrap mail boundary unavailable");
-    const base = spawnSync("/usr/bin/git", ["--git-dir", this.paths.projectGit, "rev-parse", "refs/heads/main^{commit}"],
+    if (this.agentQuota && config.initialResidents.length > this.agentQuota.societyAgents)
+      throw new StoreError("QUOTA_EXCEEDED", "bootstrap exceeds society agent quota");
+    const base = boundedSpawnSync("/usr/bin/git", ["--git-dir", this.paths.projectGit, "rev-parse", "refs/heads/main^{commit}"],
       { env: cloneEnv, encoding: "utf8" });
     if (base.status !== 0 || !isValidFullOid(base.stdout.trim()))
       throw new StoreError("STORE_CORRUPT", "bootstrap requires a host-pinned canonical main");
@@ -570,6 +665,9 @@ export class LifecycleModule {
         planJson: JSON.stringify(physicalPlan),
       });
       if (outcome.claim === "retry") return;
+      // The quota check is in the same BEGIN IMMEDIATE transaction as acceptance
+      // and the provisioning row, so concurrent creates cannot over-admit.
+      this.enforceCreateQuota(auth.actor);
       this.store.insertAgent({
         name: input.name,
         specHash,
@@ -594,6 +692,7 @@ export class LifecycleModule {
       return this.settleLinkedCreate(opId, outcome.linked, input.name);
     return this.finishCreate(opId);
   }
+
   /** MUST [REC-001/LIFE-003/004]: settle accepted lifecycle effects by observation. */
   reconcileAction(operationId: string, allowActivation = true): void {
     const op = this.store.getOperationById(operationId as never);
@@ -632,7 +731,6 @@ export class LifecycleModule {
       this.store.setOperationSucceeded(op.id, JSON.stringify(result)),
     );
   }
-
 
   /** Mechanical create recovery: re-check the frozen plan; never re-render mail. */
   async reconcileCreate(operationId: string, allowActivation = true): Promise<void> {
@@ -752,7 +850,7 @@ export class LifecycleModule {
     if (!existsSync(workspace)) {
       mkdirSync(workspaceTmp, { recursive: true });
       if (!existsSync(join(workspaceTmp, ".git"))) {
-        const cloned = spawnSync(
+        const cloned = boundedSpawnSync(
           "/usr/bin/git",
           [
             "clone",
@@ -768,18 +866,18 @@ export class LifecycleModule {
         if (cloned.status !== 0)
           throw new StoreError("INTERNAL_ERROR", `clone failed: ${cloned.stderr}`);
       }
-      let haveBase = spawnSync(
+      let haveBase = boundedSpawnSync(
         "/usr/bin/git",
         ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`],
         { env: cloneEnv, encoding: "utf8" },
       );
       if (haveBase.status !== 0) {
-        const fetched = spawnSync(
+        const fetched = boundedSpawnSync(
           "/usr/bin/git",
           ["-C", workspaceTmp, "fetch", "--no-tags", this.paths.projectGit, plan.spec.from],
           { env: cloneEnv, encoding: "utf8" },
         );
-        haveBase = spawnSync(
+        haveBase = boundedSpawnSync(
           "/usr/bin/git",
           ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`],
           { env: cloneEnv, encoding: "utf8" },
@@ -790,7 +888,7 @@ export class LifecycleModule {
             `cloned workspace does not contain frozen base ${plan.spec.from}`,
           );
       }
-      const checkout = spawnSync(
+      const checkout = boundedSpawnSync(
         "/usr/bin/git",
         ["-C", workspaceTmp, "checkout", "--detach", plan.spec.from],
         { env: cloneEnv, encoding: "utf8" },
@@ -800,7 +898,7 @@ export class LifecycleModule {
       renameSync(workspaceTmp, workspace);
       fsyncDir(workspaceRoot);
     }
-    const head = spawnSync(
+    const head = boundedSpawnSync(
       "/usr/bin/git",
       ["-C", workspace, "rev-parse", "HEAD"],
       { env: cloneEnv, encoding: "utf8" },
@@ -813,7 +911,7 @@ export class LifecycleModule {
   }
 
   private assertCanonicalBase(oid: string): void {
-    const r = spawnSync(
+    const r = boundedSpawnSync(
       "/usr/bin/git",
       ["--git-dir", this.paths.projectGit, "cat-file", "-e", `${oid}^{commit}`],
       { env: cloneEnv, encoding: "utf8" },

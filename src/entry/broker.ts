@@ -53,6 +53,11 @@ if (cfg.society !== society)
   throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
 if (cfg.integration.checks.length > 0)
   throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE does not support nonempty checks profiles yet");
+// CFG-005 admits `/` as the whole-repository protected subtree, but Git paths
+// are relative. Until the integration matcher is explicitly root-aware, refuse
+// this profile rather than silently running with no paths protected.
+if (cfg.integration.protectedPaths.includes("/"))
+  throw new StoreError("SPIKE_UNRESOLVED", "root protected-path matching is not implemented yet");
 const store = new Store(join(stateRoot, "runtime.sqlite"));
 const mail = new MailModule(
   { stateRoot, society: cfg.society },
@@ -76,6 +81,7 @@ const units = new UnitsModule(
       profile.resources,
     ]),
   ),
+  (agent) => store.getAgent(agent)?.incarnation ?? null,
 );
 const views = new ViewsModule(
   store,
@@ -105,6 +111,7 @@ const lifecycle = new LifecycleModule(
     return r ? r.spec : null;
   },
   mail,
+  cfg.quota,
 );
 const git = new GitModule(
   {

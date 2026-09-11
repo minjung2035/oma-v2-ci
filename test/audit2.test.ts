@@ -419,7 +419,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
                 bundle: {
                   bytes: cand.bundle.length,
                   sha256: SHA(cand.bundle),
-                  mediaType: "x",
+                  mediaType: "application/x-git-bundle",
                 },
               },
             },
@@ -514,7 +514,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
               request: "short",
               params: {
                 candidate: cand.candidate,
-                exportRef: "r",
+                exportRef: "refs/oma/export/req-short",
                 prerequisites: [base],
                 to: ["b"],
                 subject: "s",
@@ -523,7 +523,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
                 bundle: {
                   bytes: cand.bundle.length,
                   sha256: SHA(cand.bundle),
-                  mediaType: "x",
+                  mediaType: "application/x-git-bundle",
                 },
               },
             },
@@ -548,7 +548,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
               request: "excess-garbage",
               params: {
                 candidate: cand.candidate,
-                exportRef: "r",
+                exportRef: "refs/oma/export/req-excess-garbage",
                 prerequisites: [base],
                 to: ["b"],
                 subject: "s",
@@ -557,7 +557,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
                 bundle: {
                   bytes: 4,
                   sha256: SHA(Buffer.from("abcd")),
-                  mediaType: "x",
+                  mediaType: "application/x-git-bundle",
                 },
               },
             },

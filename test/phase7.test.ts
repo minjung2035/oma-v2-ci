@@ -315,7 +315,7 @@ test("T54: submit with incremental bundle creates the published ref and the resu
     )!;
     assert.equal(op.state, "succeeded");
     const frozenMessage = JSON.parse(op.planJson) as { message: { to: string[]; recipients: string[] } };
-    assert.deepEqual(frozenMessage.message.to, ["commons@demo.oma.invalid"]);
+    assert.deepEqual(frozenMessage.message.to, ["commons"]);
     assert.deepEqual(frozenMessage.message.recipients.sort(), ["a", "b"]);
     // peer B fetches exactly C
     const b = join(env.dir, "peer");
