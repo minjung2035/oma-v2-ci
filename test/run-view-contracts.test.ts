@@ -44,6 +44,31 @@ test("RUN-001: confirmDead is fenced by the durable monotonic incarnation", () =
   }
 });
 
+test("RUN-001: authoritative incarnation binding replaces a stale constructor reader", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-death-bind-"));
+  try {
+    const values = {
+      node: process.execPath,
+      libdir: "/usr/lib/oma",
+      state: root,
+      society: "demo",
+      agent: "",
+    };
+    const units = new UnitsModule("demo", values, root, {}, () => 99);
+    fakeObservation(units);
+    assert.equal(units.confirmDead("alice", 4), true);
+    units.bindIncarnationReader(() => 3);
+    assert.equal(units.confirmDead("alice", 3), true);
+    assert.equal(
+      units.confirmDead("alice", 4),
+      false,
+      "lifecycle/store binding must override an older reader instead of borrowing future death proof",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("VIEW-003: bounded UTF-8 log prefix never exceeds byte limit", () => {
   const exact = boundedLogOutput(Buffer.from("abc"), 3);
   assert.deepEqual(exact, { text: "abc", truncated: false });
