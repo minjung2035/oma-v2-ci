@@ -14,6 +14,7 @@ import type {
 } from "../implementation/contracts.js";
 import type { OperationPlan } from "../implementation/contracts.js";
 import { operationResultCheck } from "./validate.js";
+import { operationPlanCheck } from "./durable.js";
 
 export const SCHEMA_PATH = fileURLToPath(
   new URL("../../implementation/schema-v1.sql", import.meta.url),
@@ -810,9 +811,16 @@ function rowToOperation(r: Record<string, unknown>): OperationRow {
     createdAtMs: num(r.created_at_ms),
     updatedAtMs: num(r.updated_at_ms),
   };
-  const terminal = row.state === "succeeded" || row.state === "failed";
   if (!(["pending", "succeeded", "failed", "unknown"] as const).includes(row.state))
     throw new StoreError("STORE_CORRUPT", `operation ${row.id} has invalid state`);
+
+  let plan: unknown;
+  try { plan = JSON.parse(row.planJson); }
+  catch { throw new StoreError("STORE_CORRUPT", `operation ${row.id} has corrupt plan JSON`); }
+  const invalidPlan = operationPlanCheck(row.kind)(plan);
+  if (invalidPlan)
+    throw new StoreError("STORE_CORRUPT", `operation ${row.id} plan: ${invalidPlan}`);
+
   if (row.state === "succeeded") {
     if (!row.resultJson || row.errorCode !== null)
       throw new StoreError("STORE_CORRUPT", `operation ${row.id} has inconsistent succeeded state`);
@@ -825,7 +833,7 @@ function rowToOperation(r: Record<string, unknown>): OperationRow {
   } else if (row.state === "failed") {
     if (row.resultJson !== null || row.errorCode === null)
       throw new StoreError("STORE_CORRUPT", `operation ${row.id} has inconsistent failed state`);
-  } else if (row.resultJson !== null || row.errorCode !== null || terminal) {
+  } else if (row.resultJson !== null || row.errorCode !== null) {
     throw new StoreError("STORE_CORRUPT", `operation ${row.id} has terminal data in ${row.state} state`);
   }
   return row;
