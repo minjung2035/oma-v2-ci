@@ -1,8 +1,10 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: broker core — singleton lock, actor
 // listener auth (SO_PEERCRED + cgroup), public dispatch, runner channel.
 import { createServer, type Socket } from "node:net";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
+  constants,
+  createReadStream,
   openSync,
   mkdirSync,
   unlinkSync,
@@ -12,6 +14,8 @@ import {
   readdirSync,
   fstatSync,
   statSync,
+  writeFileSync,
+  fsyncSync,
 } from "node:fs";
 import { join } from "node:path";
 import type {
@@ -324,19 +328,47 @@ export class Broker {
     ) => Promise<unknown> | unknown,
     preflightStream?: (raw: Record<string, unknown>) => object | null,
   ): void {
-    const dec = new ConnectionDecoder(this.limits.frameBytes);
-    const write = (obj: unknown) => sock.write(encodeFrame(obj));
-    let streamFrame: { raw: Record<string, unknown>; id: string } | null = null;
-    let pendingStream: {
+    type Spool = {
       raw: Record<string, unknown>;
       id: string;
-      bytes: Uint8Array;
-    } | null = null;
+      path: string;
+      fd: number | null;
+      hash: ReturnType<typeof createHash>;
+      total: number;
+      expectedBytes: number;
+      expectedSha: string;
+    };
+    const stagingDir = join(this.paths.stateRoot, "staging");
+    mkdirSync(stagingDir, { recursive: true });
+    let activeSpool: Spool | null = null;
+    const cleanupSpool = (spool: Spool | null, remove = true): void => {
+      if (!spool) return;
+      if (spool.fd !== null) {
+        try { closeSync(spool.fd); } catch { /* already closed */ }
+        spool.fd = null;
+      }
+      if (remove) {
+        try { unlinkSync(spool.path); } catch { /* absent */ }
+      }
+    };
+    const dec = new ConnectionDecoder(this.limits.frameBytes, (chunk) => {
+      const spool = activeSpool;
+      if (!spool || spool.fd === null)
+        throw new StoreError("INTERNAL_ERROR", "stream sink has no active spool");
+      spool.total += chunk.length;
+      if (spool.total > spool.expectedBytes)
+        throw new StoreError("STREAM_INVALID", "stream exceeds descriptor bytes");
+      spool.hash.update(chunk);
+      writeFileSync(spool.fd, chunk);
+    });
+    const write = (obj: unknown) => sock.write(encodeFrame(obj));
+    let streamFrame: { raw: Record<string, unknown>; id: string; spool: Spool } | null = null;
+    let pendingStream: { raw: Record<string, unknown>; id: string; path: string } | null = null;
     let busy = false;
     const units: Array<{
       raw: Record<string, unknown>;
       id: string;
-      bytes: Uint8Array | null;
+      streamPath: string | null;
       retry: "never" | "same-key";
     }> = [];
 
@@ -362,19 +394,25 @@ export class Broker {
       const u = units.shift();
       if (!u) return;
       busy = true;
-      const iter = u.bytes
-        ? (async function* () {
-            yield u.bytes!;
-          })()
-        : null;
+      const iter = u.streamPath ? createReadStream(u.streamPath) : null;
       respond(u.id, handle(u.raw, iter), u.retry).finally(() => {
+        if (u.streamPath) {
+          try { unlinkSync(u.streamPath); } catch { /* absent */ }
+        }
         busy = false;
-        processEvents(dec.resumeParsing());
+        const more = dec.resumeParsing();
+        processEvents(more);
         pump();
       });
     };
 
     const rejectStream = (id: string, message: string): void => {
+      cleanupSpool(activeSpool);
+      activeSpool = null;
+      if (pendingStream) {
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        pendingStream = null;
+      }
       write(
         Broker.errorAnswer(id, {
           code: "STREAM_INVALID",
@@ -385,28 +423,25 @@ export class Broker {
       sock.destroy();
     };
 
-    const resumeRejectedFrame = (): void => {
-      const more = dec.resumeParsing();
-      if (more.length > 0) processEvents(more);
-    };
-
     const settlePendingStream = (
       events: import("./frame.js").DecoderEvent[],
     ): boolean => {
       if (!pendingStream) return true;
       if (events.some((ev) => ev.kind === "invalid")) {
         const id = pendingStream.id;
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
         pendingStream = null;
         rejectStream(id, "stream has excess bytes");
         return false;
       }
       if (events.some((ev) => ev.kind === "frame" || ev.kind === "stream")) {
-        units.push({ ...pendingStream, retry: "same-key" });
+        units.push({ ...pendingStream, streamPath: pendingStream.path, retry: "same-key" });
         pendingStream = null;
         return true;
       }
       if (dec.excessStatus() === "excess") {
         const id = pendingStream.id;
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
         pendingStream = null;
         rejectStream(id, "stream has excess bytes");
         return false;
@@ -426,48 +461,56 @@ export class Broker {
               retry: "never",
             }),
           );
-          resumeRejectedFrame();
-          continue;
+          sock.destroy();
+          return;
         }
         if (ev.kind === "stream") {
           const sf = streamFrame;
           streamFrame = null;
-          if (!sf) continue;
-          const p = sf.raw.params;
-          const rec =
-            typeof p === "object" && p !== null && !Array.isArray(p)
-              ? (p as Record<string, unknown>)
-              : null;
-          const desc =
-            rec && typeof rec.bundle === "object" && rec.bundle !== null
-              ? rec.bundle
-              : rec && typeof rec.content === "object" && rec.content !== null
-                ? rec.content
-                : null;
-          const expectedSha =
-            desc && typeof (desc as Record<string, unknown>).sha256 === "string"
-              ? ((desc as Record<string, unknown>).sha256 as string)
-              : null;
+          const spool = sf?.spool ?? null;
+          activeSpool = null;
+          if (!sf || !spool || spool.fd === null) {
+            cleanupSpool(spool);
+            sock.destroy();
+            return;
+          }
+          try {
+            fsyncSync(spool.fd);
+            closeSync(spool.fd);
+            spool.fd = null;
+          } catch (error) {
+            cleanupSpool(spool);
+            write(
+              Broker.errorAnswer(sf.id, {
+                code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : "INTERNAL_ERROR",
+                message: `stream spool failed: ${(error as Error).message}`,
+                retry: "same-key",
+              }),
+            );
+            sock.destroy();
+            return;
+          }
           if (
-            expectedSha &&
-            /^[0-9a-f]{64}$/.test(expectedSha) &&
-            createHash("sha256").update(ev.bytes).digest("hex") !== expectedSha
+            spool.total !== spool.expectedBytes ||
+            spool.hash.digest("hex") !== spool.expectedSha
           ) {
-            rejectStream(sf.id, "stream digest mismatch");
+            cleanupSpool(spool);
+            rejectStream(sf.id, "stream digest/bytes mismatch");
             return;
           }
           const status = dec.excessStatus();
           if (status === "excess") {
+            cleanupSpool(spool);
             rejectStream(sf.id, "stream has excess bytes");
             return;
           }
           if (status === "pending") {
-            pendingStream = { raw: sf.raw, id: sf.id, bytes: ev.bytes };
+            pendingStream = { raw: sf.raw, id: sf.id, path: spool.path };
           } else {
             units.push({
               raw: sf.raw,
               id: sf.id,
-              bytes: ev.bytes,
+              streamPath: spool.path,
               retry: "same-key",
             });
           }
@@ -482,8 +525,8 @@ export class Broker {
               retry: "never",
             }),
           );
-          resumeRejectedFrame();
-          continue;
+          sock.destroy();
+          return;
         }
         const id = typeof raw.id === "string" ? raw.id : "x";
         const method = raw.method as string;
@@ -520,22 +563,84 @@ export class Broker {
           const rejected = preflightStream?.(raw) ?? null;
           if (rejected) {
             write(rejected);
-            resumeRejectedFrame();
-            continue;
+            sock.destroy();
+            return;
           }
           if (desc.bytes > 0) {
-            streamFrame = { raw, id };
-            const more = dec.beginStream(desc.bytes);
-            if (more.length > 0) processEvents(more);
+            const expectedSha = typeof desc.sha256 === "string" ? desc.sha256 : "";
+            const path = join(stagingDir, `.wire-${randomUUID()}.stream`);
+            let fd: number;
+            try {
+              fd = openSync(
+                path,
+                constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+                0o600,
+              );
+            } catch (error) {
+              write(
+                Broker.errorAnswer(id, {
+                  code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : "INTERNAL_ERROR",
+                  message: `cannot create stream spool: ${(error as Error).message}`,
+                  retry: "same-key",
+                }),
+              );
+              sock.destroy();
+              return;
+            }
+            const spool: Spool = {
+              raw,
+              id,
+              path,
+              fd,
+              hash: createHash("sha256"),
+              total: 0,
+              expectedBytes: desc.bytes,
+              expectedSha,
+            };
+            activeSpool = spool;
+            streamFrame = { raw, id, spool };
+            try {
+              const more = dec.beginStream(desc.bytes);
+              if (more.length > 0) processEvents(more);
+            } catch (error) {
+              cleanupSpool(spool);
+              activeSpool = null;
+              streamFrame = null;
+              write(
+                Broker.errorAnswer(id, {
+                  code: error instanceof StoreError ? error.code : "INTERNAL_ERROR",
+                  message: (error as Error).message,
+                  retry: "same-key",
+                }),
+              );
+              sock.destroy();
+            }
             continue;
           }
         }
-        units.push({ raw, id, bytes: null, retry: "never" });
+        units.push({ raw, id, streamPath: null, retry: "never" });
       }
     };
 
     sock.on("data", (chunk: Buffer) => {
-      const events = dec.push(chunk);
+      let events: import("./frame.js").DecoderEvent[];
+      try {
+        events = dec.push(chunk);
+      } catch (error) {
+        const id = streamFrame?.id ?? "x";
+        cleanupSpool(activeSpool);
+        activeSpool = null;
+        streamFrame = null;
+        write(
+          Broker.errorAnswer(id, {
+            code: (error as NodeJS.ErrnoException).code === "ENOSPC" ? "LIMIT_EXCEEDED" : error instanceof StoreError ? error.code : "INTERNAL_ERROR",
+            message: (error as Error).message,
+            retry: "same-key",
+          }),
+        );
+        sock.destroy();
+        return;
+      }
       if (!settlePendingStream(events)) return;
       processEvents(events);
       pump();
@@ -543,13 +648,20 @@ export class Broker {
     sock.setTimeout(this.limits.idleStreamSeconds * 1000, () => {
       if (!dec.streaming() && !pendingStream) return;
       const id = streamFrame?.id ?? pendingStream?.id ?? "x";
+      cleanupSpool(activeSpool);
+      activeSpool = null;
       streamFrame = null;
-      pendingStream = null;
+      if (pendingStream) {
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        pendingStream = null;
+      }
       rejectStream(id, "stream timed out before acceptance");
     });
     sock.on("end", () => {
       if (dec.streaming()) {
         const id = streamFrame?.id ?? "x";
+        cleanupSpool(activeSpool);
+        activeSpool = null;
         streamFrame = null;
         write(
           Broker.errorAnswer(id, {
@@ -560,6 +672,7 @@ export class Broker {
         );
       } else if (pendingStream) {
         const id = pendingStream.id;
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
         pendingStream = null;
         rejectStream(id, "stream ended with an incomplete next frame");
         return;
@@ -567,6 +680,20 @@ export class Broker {
       sock.destroy();
     });
     sock.on("error", () => sock.destroy());
+    sock.once("close", () => {
+      cleanupSpool(activeSpool);
+      activeSpool = null;
+      if (pendingStream) {
+        try { unlinkSync(pendingStream.path); } catch { /* absent */ }
+        pendingStream = null;
+      }
+      for (const unit of units) {
+        if (unit.streamPath) {
+          try { unlinkSync(unit.streamPath); } catch { /* absent */ }
+        }
+      }
+      units.length = 0;
+    });
   }
 
   private fail(
