@@ -7,20 +7,18 @@ import { tmpdir } from "node:os";
 import type { Receipt } from "../implementation/contracts.js";
 import {
   parseActor, parseResidentName, parseSocietyName, parseTopicName, parseRequestKey,
-  parseOperationId, parseBatchId, parseMessageFileId, parseMessageId,
-  parseFullOid, parseRepositoryRelativePath,
+  parseOperationId, parseBatchId, parseMessageFileId, parseMessageId, parseFullOid, parseRepositoryRelativePath,
 } from "../src/domain/identifiers.js";
 import {
   messageIdForOperation, publishedRefFor, exportRefForRequestKey, submitStagingFor,
   contextStagingFor, workspaceFor, batchViewFor, mailObjectRelativePath,
   mailArchiveRelativePath, mailInboxRelativePath, contextRevisionFor, contextRevisionLinkFor,
-  actorSocketFor, residentUnitsFor, isMessageIdForOperation, isPublishedRefFor,
-  isMailObjectRelativePathFor,
+  actorSocketFor, residentUnitsFor, isMessageIdForOperation, isPublishedRefFor, isMailObjectRelativePathFor,
 } from "../src/domain/derived.js";
 import {
-  workspacePathAt, submitBundlePathAt, contextStagingPathAt, mailObjectPathAt,
-  mailArchivePathAt, actorSocketPathAt, isWorkspacePathFor, isSubmitBundlePathFor,
-  isContextStagingPathFor, isMailArchivePathFor, isActorSocketPathFor,
+  workspacePathAt, submitBundlePathAt, contextStagingPathAt, mailObjectPathAt, mailArchivePathAt,
+  actorSocketPathAt, isWorkspacePathFor, isSubmitBundlePathFor, isContextStagingPathFor,
+  isMailArchivePathFor, isActorSocketPathFor,
 } from "../src/storage/paths.js";
 import { parseEmlHeaders } from "../src/mail.js";
 import { contextPathCheck } from "../src/validate.js";
@@ -36,46 +34,30 @@ const BATCH = "b-00000000-0000-4000-8000-000000000003";
 const OID = "1111111111111111111111111111111111111111";
 
 test("R03: resident names and authenticated actor names are distinct contexts", () => {
-  assert.equal(parseResidentName("alice"), "alice");
-  assert.equal(parseActor("alice"), "alice");
-  assert.equal(parseActor("principal"), "principal");
-  assert.equal(parseResidentName("principal"), null);
+  assert.equal(parseResidentName("alice"), "alice"); assert.equal(parseActor("alice"), "alice");
+  assert.equal(parseActor("principal"), "principal"); assert.equal(parseResidentName("principal"), null);
   for (const name of ["commons", "residents", "topic", "broker", "principal-relay", "reconcile", "topic-dev", "Alice", "../alice", "a".repeat(33)]) {
-    assert.equal(parseActor(name), null, name);
-    assert.equal(parseResidentName(name), null, name);
+    assert.equal(parseActor(name), null, name); assert.equal(parseResidentName(name), null, name);
   }
   assert.equal(parseSocietyName("principal"), "principal", "society grammar is not resident reservation policy");
   assert.equal(parseSocietyName("Demo"), null);
-  assert.equal(parseTopicName("a".repeat(64)), "a".repeat(64));
-  assert.equal(parseTopicName("a".repeat(65)), null);
-  assert.equal(parseRequestKey("K._-"), "K._-");
-  assert.equal(parseRequestKey("k".repeat(96)), "k".repeat(96));
+  assert.equal(parseTopicName("a".repeat(64)), "a".repeat(64)); assert.equal(parseTopicName("a".repeat(65)), null);
+  assert.equal(parseRequestKey("K._-"), "K._-"); assert.equal(parseRequestKey("k".repeat(96)), "k".repeat(96));
   for (const key of ["", "k".repeat(97), "../key", "키", "a\0b", "a b"]) assert.equal(parseRequestKey(key), null);
 });
 
 test("R03: UUID version, variant, lowercase and safe ordinal grammar are preserved", () => {
-  assert.equal(parseOperationId(OP), OP);
-  assert.equal(parseBatchId(BATCH), BATCH);
-  assert.equal(parseMessageFileId(MESSAGE), MESSAGE);
-  assert.deepEqual(parseMessageId(MESSAGE), { operationId: OP, ordinal: 0 });
-  for (const uuid of [
-    "00000000-0000-1000-8000-000000000003",
-    "00000000-0000-4000-7000-000000000003",
-    "ABCDEF00-0000-4000-8000-000000000003",
-    "00000000000040008000000000000003",
-  ]) {
-    assert.equal(parseOperationId(`op-${uuid}`), null);
-    assert.equal(parseBatchId(`b-${uuid}`), null);
+  assert.equal(parseOperationId(OP), OP); assert.equal(parseBatchId(BATCH), BATCH);
+  assert.equal(parseMessageFileId(MESSAGE), MESSAGE); assert.deepEqual(parseMessageId(MESSAGE), { operationId: OP, ordinal: 0 });
+  for (const uuid of ["00000000-0000-1000-8000-000000000003", "00000000-0000-4000-7000-000000000003",
+    "ABCDEF00-0000-4000-8000-000000000003", "00000000000040008000000000000003"]) {
+    assert.equal(parseOperationId(`op-${uuid}`), null); assert.equal(parseBatchId(`b-${uuid}`), null);
     assert.equal(parseMessageFileId(`m-${uuid}-0`), null);
   }
-  assert.equal(parseMessageFileId("m-00000000-0000-4000-8000-000000000003-9007199254740991"),
-    "m-00000000-0000-4000-8000-000000000003-9007199254740991");
+  assert.equal(parseMessageFileId("m-00000000-0000-4000-8000-000000000003-9007199254740991"), "m-00000000-0000-4000-8000-000000000003-9007199254740991");
   assert.equal(parseMessageFileId("m-00000000-0000-4000-8000-000000000003-9007199254740992"), null);
-  // Existing decimal-ordinal acceptance is not a durable string normalization step.
-  assert.equal(parseMessageFileId("m-00000000-0000-4000-8000-000000000003-00"),
-    "m-00000000-0000-4000-8000-000000000003-00");
-  assert.equal(parseFullOid(OID), OID);
-  assert.equal(parseFullOid("a".repeat(64)), "a".repeat(64));
+  assert.equal(parseMessageFileId("m-00000000-0000-4000-8000-000000000003-00"), "m-00000000-0000-4000-8000-000000000003-00");
+  assert.equal(parseFullOid(OID), OID); assert.equal(parseFullOid("a".repeat(64)), "a".repeat(64));
   for (const oid of ["HEAD", "a".repeat(39), "a".repeat(41), "A".repeat(40)]) assert.equal(parseFullOid(oid), null);
 });
 
@@ -85,10 +67,8 @@ test("R03: internal IDs, RFC ancestry and context paths do not share a grammar",
   assert.deepEqual(headers.references, ["root@elsewhere.invalid", "parent@example.invalid"]);
   assert.equal(parseMessageFileId(headers.messageId), null);
   assert.equal(parseRepositoryRelativePath("src/file.ts"), "src/file.ts");
-  assert.notEqual(contextPathCheck("src/file.ts"), null);
-  assert.equal(contextPathCheck("GOAL.md"), null);
-  for (const path of ["", "/GOAL.md", "../GOAL.md", "a/../GOAL.md", "a//b", "a/./b", "a\0b"])
-    assert.equal(parseRepositoryRelativePath(path), null);
+  assert.notEqual(contextPathCheck("src/file.ts"), null); assert.equal(contextPathCheck("GOAL.md"), null);
+  for (const path of ["", "/GOAL.md", "../GOAL.md", "a/../GOAL.md", "a//b", "a/./b", "a\0b"]) assert.equal(parseRepositoryRelativePath(path), null);
 });
 
 test("R03: constructors retain literal legacy layout, with bounded fresh export refs", () => {
@@ -106,13 +86,11 @@ test("R03: constructors retain literal legacy layout, with bounded fresh export 
   assert.equal(contextRevisionLinkFor(OID), "revisions/1111111111111111111111111111111111111111");
   assert.equal(actorSocketFor("alice", 7), "actors/alice/7/control.sock");
   assert.deepEqual(residentUnitsFor("demo", "alice"), ["oma-demo-alice.service", "oma-demo-alice.path"]);
-  assert.equal(exportRefForRequestKey("abc"),
-    "refs/oma/export/cli-ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  assert.equal(exportRefForRequestKey("abc"), "refs/oma/export/cli-ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
   assert.match(exportRefForRequestKey("k".repeat(96)), /^refs\/oma\/export\/cli-[0-9a-f]{64}$/);
   assert.throws(() => messageIdForOperation(OP, -1), TypeError);
   assert.throws(() => messageIdForOperation(OP, Number.MAX_SAFE_INTEGER + 1), TypeError);
-  assert.throws(() => publishedRefFor("../alice", OP), TypeError);
-  assert.throws(() => actorSocketFor("alice", -1), TypeError);
+  assert.throws(() => publishedRefFor("../alice", OP), TypeError); assert.throws(() => actorSocketFor("alice", -1), TypeError);
 });
 
 test("R03: valid syntax does not establish expected operation actor root or incarnation", () => {
@@ -177,8 +155,8 @@ test("R03: single-file Pi UUID copy agrees on independent boundary vectors", () 
       const view = { id: batchId, agent: "alice", incarnation: 1, deliveryMode: "followUp", notice: "fixture", messageIds: [messageId] };
       writeFileSync(join(dir, `batch-${batchId}.json`), JSON.stringify(view));
       assert.equal(parseBatchId(batchId) !== null && parseMessageFileId(messageId) !== null, accepted);
-      if (accepted) assert.deepEqual(readBatchView(dir, batchId), view);
-      else assert.throws(() => readBatchView(dir, batchId));
+      if (accepted) assert.deepEqual(readBatchView(batchId, dir), view);
+      else assert.equal(readBatchView(batchId, dir), null, "invalid views never reach the runner");
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -192,11 +170,9 @@ test("R03: actual CLI ACK rejects non-v4 IDs before replay or networking", async
     cache.updateReceipt("ack-key", receipt);
     const invoke = (message: string) => runCliWithLookup(home, home, ["ack", message, "--request", "ack-key"], "ack-key", receipt);
     const good = await invoke(`/mail/archive/cur/${MESSAGE}:2,`);
-    assert.equal(good.status, 0, good.stderr);
-    assert.deepEqual(good.requests.map(request => request.method), ["operation.get"]);
+    assert.equal(good.status, 0, good.stderr); assert.deepEqual(good.requests.map(request => request.method), ["operation.get"]);
     const bad = await invoke("m-00000000-0000-1000-8000-000000000003-0");
-    assert.equal(bad.status, 2, bad.stderr);
-    assert.match(bad.stderr, /ack requires a message id/);
+    assert.equal(bad.status, 2, bad.stderr); assert.match(bad.stderr, /ack requires a message id/);
     assert.deepEqual(bad.requests, [], "invalid IDs must fail before lookup");
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
@@ -211,17 +187,12 @@ test("R03: actual CLI preserves an old frozen submit exportRef without consultin
       params: { candidate: OID, exportRef: "refs/oma/export/cli-legacy-key", prerequisites: [],
         to: ["commons"], subject: "Re: submit", body: "frozen", paths: [] } });
     cache.updateReceipt("legacy-key", receipt);
-    const path = join(home, ".local/state/oma/requests/legacy-key.json");
-    const before = readFileSync(path);
-    const cwd = join(home, "not-a-git-repository");
-    mkdirSync(cwd);
+    const path = join(home, ".local/state/oma/requests/legacy-key.json"); const before = readFileSync(path);
+    const cwd = join(home, "not-a-git-repository"); mkdirSync(cwd);
     const result = await runCliWithLookup(home, cwd, ["submit", "HEAD", "--request", "legacy-key"], "legacy-key", receipt);
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(result.requests.map(request => request.method), ["operation.get"]);
+    assert.equal(result.status, 0, result.stderr); assert.deepEqual(result.requests.map(request => request.method), ["operation.get"]);
     assert.deepEqual(readFileSync(path), before, "a frozen request is read, not rewritten into the fresh ref convention");
-    const frozen = cache.read("legacy-key");
-    assert.ok(frozen.kind === "present");
-    const params = frozen.value.params;
+    const frozen = cache.read("legacy-key"); assert.ok(frozen.kind === "present"); const params = frozen.value.params;
     assert.ok(params !== null && typeof params === "object" && !Array.isArray(params));
     assert.equal(params.exportRef, "refs/oma/export/cli-legacy-key");
   } finally { rmSync(home, { recursive: true, force: true }); }
