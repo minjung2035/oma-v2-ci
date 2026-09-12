@@ -2,6 +2,8 @@
 // rejected; `as SomeType` is never validation. Validators return an error string
 // or null; they do not coerce.
 import type { Json, RequestKey } from "../implementation/contracts.js";
+import { contextEntriesCheck } from "./domain/context-policy.js";
+export { contextPathCheck, contextFileCheck } from "./domain/context-policy.js";
 import {
   isValidActorName,
   isValidRequestKey,
@@ -376,34 +378,23 @@ export const gitIntegrateParamsCheck: Check = checkObject({
   expected: checkOid,
 });
 
-export const contextPathCheck: Check = (value) =>
-  typeof value === "string" && isValidWirePath(value) &&
-  (value === "GOAL.md" || value === "RATIONALE.md" || /^decisions\/[^/]+\.md$/.test(value))
-    ? null : "unsupported context path";
-
-export function contextFileCheck(path: string, data: Uint8Array): string | null {
-  const pathError = contextPathCheck(path);
-  if (pathError) return pathError;
-  let text: string;
-  try { text = new TextDecoder("utf-8", { fatal: true }).decode(data); }
-  catch { return "context must be UTF-8 text"; }
-  if (path === "GOAL.md" && text.length === 0) return "GOAL.md must not be empty";
-  return /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text) ? "binary context is forbidden" : null;
-}
-
+/** CTX-002: input and accepted plans use the same ordered manifest policy.
+ * Metadata is rejected before spooling; the stream handler still verifies bytes.
+ */
 export function contextPublishParamsCheck(l: ParamsLimits): Check {
-  return checkObject({
+  const shape = checkObject({
     expected: (v) => (v === null ? null : checkOid(v)),
-    entries: checkArray(
-      checkObject({
-        path: contextPathCheck,
-        bytes: checkInt({ min: 0, max: l.contextBytes }),
-        sha256: checkString({ re: /^[0-9a-f]{64}$/ }),
-      }),
-      { min: 1, max: l.contextFiles },
-    ),
+    entries: value => contextEntriesCheck(value, {
+      requireSorted: true, maxFiles: l.contextFiles, maxBytes: l.contextBytes,
+    }),
     content: checkBlobDescriptor(l.contextBytes),
   });
+  return value => {
+    const invalid = shape(value);
+    if (invalid) return invalid;
+    const input = value as { entries: unknown; content: { bytes: number } };
+    return contextEntriesCheck(input.entries, { requireSorted: true, contentBytes: input.content.bytes });
+  };
 }
 
 export const operationGetParamsCheck: Check = checkObject({
