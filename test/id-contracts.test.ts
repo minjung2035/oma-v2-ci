@@ -69,6 +69,7 @@ test("DB-009/ID-002: durable lifecycle operation references require UUIDv4", () 
     operationId: OP,
     actor: "alice",
     stateRoot: "/tmp/state",
+    repositoryIdentity: { society: "demo" },
   });
   assert.equal(
     check({
@@ -95,6 +96,7 @@ test("DB-009/ID-002: durable lifecycle operation references require UUIDv4", () 
       operationId: `op-${BAD_VERSION}`,
       actor: "alice",
       stateRoot: "/tmp/state",
+      repositoryIdentity: { society: "demo" },
     })({
       kind: "agent.start",
       agent: "alice",
