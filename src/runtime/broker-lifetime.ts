@@ -1,5 +1,6 @@
 import { StoreError } from "../domain/errors.js";
 import { NODE_ALARMS } from "../broker/connection.js";
+import { preparationShutdownBarrier } from "../process/preparation.js";
 
 export interface LifetimeLock { close(): void }
 export interface LifetimeRuntime { closeAdmission(): void; drainAndClose(): Promise<void> }
@@ -11,9 +12,9 @@ export interface StartupSteps {
 }
 export type LifetimePhase = "acquired" | "recovering" | "listening" | "ready" | "draining" | "closed";
 
-/** The bound applies to waiting, not permission to release a live writer's lock.
- * Timeout retains Store and lock for process termination/recovery; it is not a
- * successful graceful close and does not delete accepted plans or evidence.
+/** A dispatched request may finish with an unknown native outcome. That does
+ * not permit Store/lock release. Both logical tasks and native preparation must
+ * settle within the existing grace, otherwise process termination is required.
  */
 export async function settleWithin(tasks: Iterable<Promise<unknown>>, seconds: number): Promise<void> {
   let expired = false;
@@ -22,7 +23,8 @@ export async function settleWithin(tasks: Iterable<Promise<unknown>>, seconds: n
     alarm = NODE_ALARMS.after(seconds, () => { expired = true; resolve(); });
   });
   try {
-    await Promise.race([Promise.allSettled([...tasks]), timeout]);
+    const completed = Promise.allSettled([...tasks]).then(() => preparationShutdownBarrier());
+    await Promise.race([completed, timeout]);
     if (expired) throw new StoreError("DEADLINE_EXCEEDED", "durable shutdown handoff exceeded its grace period; writer resources remain held");
   } finally { alarm?.cancel(); }
 }
@@ -62,7 +64,10 @@ export class BrokerLifetime {
     this.closing = (async () => {
       if (this.starting) await settleWithin([this.starting], this.graceSeconds());
       if (this.runtime) await this.runtime.drainAndClose();
-      else this.fallbackClose?.();
+      else {
+        await settleWithin([], this.graceSeconds());
+        this.fallbackClose?.();
+      }
       this.lock.close(); this.current = "closed";
     })();
     return this.closing;
