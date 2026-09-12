@@ -8,6 +8,8 @@ export interface CommandSpec {
   readonly env: Readonly<NodeJS.ProcessEnv>; readonly cwd?: string;
   readonly input?: string | Uint8Array;
   readonly timeoutMs: number; readonly stdoutBytes: number; readonly stderrBytes: number;
+  /** Discard is only for diagnostics. Decision stdout always fails on overflow. */
+  readonly stderrOverflow?: "limit" | "discard";
 }
 interface Capture {
   readonly stdout: Buffer; readonly stderr: Buffer;
@@ -31,6 +33,7 @@ export function validateCommand(spec: CommandSpec): void {
   positive(spec.timeoutMs, "timeout"); positive(spec.stdoutBytes, "stdout budget", true); positive(spec.stderrBytes, "stderr budget", true);
   if (spec.timeoutMs > 0x7fffffff) throw new RangeError("subprocess timeout exceeds the supported native timer interval");
   positive(spec.stdoutBytes + spec.stderrBytes, "combined output budget", true);
+  if (spec.stderrOverflow !== undefined && spec.stderrOverflow !== "limit" && spec.stderrOverflow !== "discard") throw new TypeError("invalid subprocess stderr policy");
 }
 function errorCode(error: unknown): string | null {
   return error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : null;
@@ -60,9 +63,9 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
     result = invoke(spec.executable, [...spec.argv], { env: { ...spec.env }, cwd: spec.cwd,
       input: spec.input === undefined ? undefined : typeof spec.input === "string" ? spec.input : Buffer.from(spec.input),
       encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: "SIGKILL",
-      // Native allocation is finite even when one stream consumes the entire
-      // combined budget. Separate returned prefixes are bounded below.
-      maxBuffer: Math.max(1, spec.stdoutBytes + spec.stderrBytes), stdio: ["pipe", "pipe", "pipe"],
+      // Preserve the existing native cap, not the sum of two legacy caps.
+      // Native ENOBUFS is uncertain even when diagnostic discard is requested.
+      maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: ["pipe", "pipe", "pipe"],
     });
   } catch (error) {
     return { kind: "spawn-failed", exitCode: null, signal: null, errorCode: errorCode(error), elapsedMs: performance.now() - started,
@@ -71,7 +74,8 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
   const stdout = bytes(result.stdout); const stderr = bytes(result.stderr);
   const stdoutTruncated = stdout !== null && stdout.length > spec.stdoutBytes;
   const stderrTruncated = stderr !== null && stderr.length > spec.stderrBytes;
-  const kind = stdout === null || stderr === null ? "unobserved" : classify(result, stdoutTruncated || stderrTruncated);
+  const limited = stdoutTruncated || (stderrTruncated && spec.stderrOverflow !== "discard");
+  const kind = stdout === null || stderr === null ? "unobserved" : classify(result, limited);
   const capture: Capture = {
     stdout: Buffer.from((stdout ?? Buffer.alloc(0)).subarray(0, spec.stdoutBytes)),
     stderr: Buffer.from((stderr ?? Buffer.alloc(0)).subarray(0, spec.stderrBytes)),
@@ -112,23 +116,26 @@ export function runProcess(spec: CommandSpec): Promise<ProcessObservation> {
       }
       if (value.length > remaining) {
         if (output) outLimited = true; else errLimited = true;
-        terminate("output-limited");
+        if (output || spec.stderrOverflow !== "discard") terminate("output-limited");
       }
     };
+    const streamError = (error: Error) => { nativeError ??= error; terminate("unobserved"); };
     child.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));
     child.stderr?.on("data", (chunk: Buffer) => collect(chunk, false));
+    child.stdout?.on("error", streamError); child.stderr?.on("error", streamError);
     child.once("error", error => { nativeError = error; failure ??= "spawn-failed"; });
-    child.stdin?.on("error", error => { nativeError ??= error; terminate("unobserved"); });
+    child.stdin?.on("error", streamError);
     child.once("close", (exitCode, signal) => {
       if (settled) return;
       settled = true; clearTimeout(timer);
       const capture: Capture = { stdout: Buffer.concat(out, outBytes), stderr: Buffer.concat(err, errBytes),
         stdoutTruncated: outLimited, stderrTruncated: errLimited, signal, errorCode: errorCode(nativeError), elapsedMs: performance.now() - started };
-      const kind = failure ?? (signal ? "signalled" : typeof exitCode === "number" && exitCode >= 0 ? "exited" : "unobserved");
+      const kind = failure ?? (signal ? "signalled" : typeof exitCode === "number" && Number.isSafeInteger(exitCode) && exitCode >= 0 ? "exited" : "unobserved");
       if (kind === "exited" && typeof exitCode === "number") resolve({ ...capture, kind, exitCode });
       else resolve({ ...capture, kind: kind === "exited" ? "unobserved" : kind, exitCode });
     });
-    child.stdin?.end(spec.input === undefined ? undefined : typeof spec.input === "string" ? spec.input : Buffer.from(spec.input));
+    try { child.stdin?.end(spec.input === undefined ? undefined : typeof spec.input === "string" ? spec.input : Buffer.from(spec.input)); }
+    catch (error) { nativeError ??= error; terminate("unobserved"); }
   });
 }
 export function decodeProcessText(bytes: Uint8Array): string { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
