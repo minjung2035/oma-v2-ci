@@ -101,7 +101,6 @@ export class InferenceModule {
         }
         call.reserve();
         if (call.controller.signal.aborted) { this.settleAborted(call); return; }
-        // The call may contact the provider synchronously; record that phase first.
         call.beginContact();
         const stream = this.provider.stream(input.request, input.profile, payload, call.controller.signal);
         if (stream === null) {
@@ -156,11 +155,17 @@ export class InferenceModule {
   }
   async fence(actor: Actor, incarnation: number): Promise<void> {
     this.fenced.set(actor, Math.max(incarnation, this.fenced.get(actor) ?? -1));
-    for (const call of this.calls.values()) if (call.actor === actor && call.incarnation === incarnation) this.settleAborted(call);
-    for (const row of this.store.usageRows()) {
-      if (row.actor === actor && row.incarnation === incarnation && row.outcome === "reserved")
-        this.store.transaction(tx => tx.settleUsage(row.requestId, "unknown", null, null));
+    const errors: unknown[] = [];
+    for (const call of this.calls.values()) if (call.actor === actor && call.incarnation === incarnation) {
+      try { this.settleAborted(call); } catch (error) { errors.push(error); }
     }
+    try {
+      for (const row of this.store.usageRows()) if (row.actor === actor && row.incarnation === incarnation && row.outcome === "reserved") {
+        try { this.store.transaction(tx => tx.settleUsage(row.requestId, "unknown", null, null)); }
+        catch (error) { errors.push(error); }
+      }
+    } catch (error) { errors.push(error); }
+    if (errors.length > 0) throw new AggregateError(errors, "inference fencing left unresolved accounting");
   }
   /** Startup accounting only; it neither replays providers nor creates an endpoint. */
   recoverReservations(): number {
@@ -173,12 +178,17 @@ export class InferenceModule {
   }
   shutdown(): void {
     this.closed = true; this.slots.close();
-    for (const call of this.calls.values()) this.settleAborted(call);
-    // Noncooperative providers keep their own live slot until iterator cleanup.
-    // A real provider/input/abort deadline requires the still-unresolved S-04/D05 policy.
+    const errors: unknown[] = [];
+    // A failed accounting transaction must not prevent cancellation of other calls.
+    for (const call of this.calls.values()) {
+      try { this.settleAborted(call); } catch (error) { errors.push(error); }
+    }
+    if (errors.length > 0) throw new AggregateError(errors, "inference shutdown left unresolved accounting");
+    // Noncooperative providers retain their slot until iterator cleanup. The real
+    // provider/input/abort deadline still requires the S-04/D05 policy.
   }
   private upperBoundUnits(input: InferenceStart): number {
-    void input.codecRevision; // Mock/domain bound, not proof from a real pinned pricing codec.
+    void input.codecRevision; // Mock/domain bound, not real pinned pricing proof.
     return this.cfg.maxUnitsPerRequest;
   }
   private errorOf(request: string, sequence: number, error: Failure): InferenceEvent {
