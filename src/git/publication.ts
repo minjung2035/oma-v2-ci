@@ -25,7 +25,7 @@ export class GitPublicationObserver {
     const result = this.observer.ref(this.projectRepository, operation.plan.publishedRef);
     if (result.kind !== "present" || result.value !== operation.plan.candidate)
       throw new StoreError(result.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", "canonical publication is not the accepted candidate");
-    const proof: SubmissionPublicationEvidence = Object.freeze({ [publicationBrand]: true });
+    const proof = Object.freeze({ [publicationBrand]: true as const });
     issued.set(proof, Object.freeze({ operationId: operation.id, actor: operation.actor,
       planJson: operation.planJson, publishedRef: operation.plan.publishedRef, candidate: result.value }));
     return proof;
@@ -37,10 +37,12 @@ export class GitPublicationObserver {
  * never an observation. A retry must obtain a fresh ref observation and token.
  */
 export function consumeSubmissionPublication(proof: unknown, operation: OperationOf<"git.submit">): void {
-  const facts = proof !== null && typeof proof === "object" ? issued.get(proof) : undefined;
+  if (proof === null || typeof proof !== "object")
+    throw new StoreError("REF_STATE_UNKNOWN", "mail publication requires canonical-ref evidence");
+  const facts = issued.get(proof);
   if (!facts || facts.operationId !== operation.id || facts.actor !== operation.actor ||
       facts.planJson !== operation.planJson || facts.publishedRef !== operation.plan.publishedRef ||
       facts.candidate !== operation.plan.candidate)
     throw new StoreError("REF_STATE_UNKNOWN", "mail publication requires fresh matching canonical-ref evidence");
-  issued.delete(proof as object);
+  issued.delete(proof);
 }
