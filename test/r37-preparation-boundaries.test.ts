@@ -19,6 +19,9 @@ function deferred() {
   const promise = new Promise<void>(yes => { resolve = yes; });
   return { promise, resolve };
 }
+async function atBoundary(entered: Promise<void>, work: Promise<unknown>): Promise<void> {
+  await Promise.race([entered, work.then(() => { throw new Error("workflow completed before the controlled preparation boundary"); })]);
+}
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-r37-boundary-"));
   seedGit(root);
@@ -48,7 +51,7 @@ test("R37: submit facade awaits quarantined preparation and retains accepted bun
       bundle: { bytes: body.length, sha256: sha256Hex(body), mediaType: "application/x-git-bundle" } },
       (async function* () { yield body; })());
     let settled = false; void work.then(() => { settled = true; }, () => { settled = true; });
-    await entered.promise; await new Promise<void>(resolve => setImmediate(resolve));
+    await atBoundary(entered.promise, work); await new Promise<void>(resolve => setImmediate(resolve));
     assert.equal(settled, false, "a facade must not discard the import Promise");
     const accepted = f.store.getOperation("a", "await-import");
     assert.ok(accepted?.kind === "git.submit"); assert.equal(accepted.state, "pending");
@@ -83,7 +86,7 @@ for (const change of ["none", "revoke", "main"] as const) {
           content: { bytes: body.length, sha256: sha256Hex(body), mediaType: "application/vnd.oma.context-v1" } },
           (async function* () { yield body; })());
         void work.catch(() => undefined);
-        await entered.promise;
+        await atBoundary(entered.promise, work);
         assert.equal(f.store.getOperation("a", "context-await"), null);
         assert.ok(prepared);
         if (change === "revoke") f.caps.delete("context.publish");
@@ -121,7 +124,7 @@ test("R37: creation awaits a real private workspace before unit publication and 
   try {
     work = creates.create(f.auth, { name: "child", from: f.base, brief: "child" }, "create-await");
     void work.catch(() => undefined);
-    await entered.promise;
+    await atBoundary(entered.promise, work);
     const accepted = f.store.getOperation("a", "create-await");
     assert.ok(accepted?.kind === "agent.create"); assert.equal(accepted.state, "pending");
     assert.equal(unitPublications, 0); assert.equal(existsSync(join(accepted.plan.workspacePath, ".git")), true);
