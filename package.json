@@ -10,7 +10,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:transactions": "node scripts/transaction-check.mjs",
     "check:architecture": "node scripts/architecture-check.mjs && npm run check:transactions",
-    "test": "npm run build && node --test --test-concurrency=1 dist/test/*.test.js"
+    "test": "npm run build && node --test --test-concurrency=1 dist/test/*.test.js test/*.test.mjs",
+    "verify:lane": "node scripts/verify-lane.mjs",
+    "verify:fast": "node scripts/verify-lane.mjs fast",
+    "verify:durable": "node scripts/verify-lane.mjs durable",
+    "verify:kernel": "node scripts/verify-lane.mjs kernel",
+    "verify:crash": "node scripts/verify-lane.mjs crash",
+    "verify:property": "node scripts/verify-lane.mjs property",
+    "verify:stress": "node scripts/verify-lane.mjs stress",
+    "verify:all": "node scripts/verify-lane.mjs all"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.85.1",
