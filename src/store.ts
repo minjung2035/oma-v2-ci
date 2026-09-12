@@ -10,11 +10,13 @@ import { operationResultRelationCheck, type RepositoryIdentity, type OperationPl
 import type { DecodedOperation, OperationOf } from "./storage/operation-codec.js";
 import { LedgerReader } from "./storage/ledger-reader.js";
 import { decodeBatchRow, decodeBatchManifest, fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
+import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName } from "./ids.js";
 import { StoreError, isErrorCode, isPreacceptOnlyFailure } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
 export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
+export type { Transaction, StoreReads, StoreWrites } from "./storage/transaction.js";
 
 export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v1.sql", import.meta.url));
 export type OperationRow = DecodedOperation;
@@ -24,8 +26,6 @@ export function reused(actor: Actor, key: RequestKey): StoreError {
 export function isBusyError(error: unknown): boolean {
   return error instanceof Error && /busy|locked/i.test(error.message) && !(error instanceof StoreError);
 }
-export interface Transaction { readonly transactionBrand: unique symbol }
-const TX: Transaction = { transactionBrand: Symbol("tx") } as unknown as Transaction;
 export interface NewAgent {
   name: Actor; specHash: string; role: "resident" | "principal"; desired: AgentRow["desired"];
   incarnation: number; profile: string; createdBy: string | null; specJson: string;
@@ -34,7 +34,7 @@ const DEFAULT_BUSY_RETRIES = 5;
 export class Store {
   private readonly db: DatabaseSync;
   private readonly reader: LedgerReader;
-  private depth = 0;
+  private readonly transactions = new TransactionScope(this);
   private repositoryIdentity: RepositoryIdentity | null;
   constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null) {
     this.repositoryIdentity = null;
@@ -47,7 +47,6 @@ export class Store {
     this.migrate();
     this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
   }
-  /** Supplied by host configuration, never inferred from an untrusted plan. */
   bindRepositoryIdentity(identity: RepositoryIdentity): void {
     if (!isValidSocietyName(identity.society)) throw new StoreError("STORE_CORRUPT", "invalid repository society identity");
     if (this.repositoryIdentity !== null && this.repositoryIdentity.society !== identity.society)
@@ -57,7 +56,10 @@ export class Store {
   private planContext(operation: OperationRow): OperationPlanContext {
     return { operationId: operation.id, actor: operation.actor, stateRoot: dirname(this.path), repositoryIdentity: this.repositoryIdentity };
   }
-  close(): void { this.db.close(); }
+  close(): void {
+    if (this.inTransaction) throw new StoreError("INTERNAL_ERROR", "cannot close a live transaction");
+    this.db.close();
+  }
   private migrate(): void {
     const version = this.userVersion();
     if (version === 1) return;
@@ -88,21 +90,32 @@ export class Store {
       }
     }
   }
-  transaction<T>(fn: (tx: Transaction) => T): T {
-    if (this.depth > 0) throw new StoreError("INTERNAL_ERROR", "nested store transaction");
-    this.begin(); this.depth = 1;
+  transaction<T>(fn: SyncCallback<T>): T {
+    // Preserve the characterized no-nesting contract: no implicit savepoints.
+    if (this.inTransaction) throw new StoreError("INTERNAL_ERROR", "nested store transaction");
+    this.begin();
     try {
-      const result = fn(TX);
-      this.db.exec("COMMIT"); this.depth = 0;
-      return result;
+      return this.transactions.run<T>(tx => {
+        const result = fn(tx);
+        assertSynchronousResult(result);
+        // Before an acceptance becomes visible, validate the complete frozen plan,
+        // current related rows, recipient snapshot and optional terminal intent.
+        for (const id of this.transactions.insertedIds()) {
+          if (this.getOperationById(id) === null) throw new StoreError("STORE_CORRUPT", "newly accepted operation disappeared");
+        }
+        this.db.exec("COMMIT");
+        return result;
+      });
     } catch (error) {
       try { this.db.exec("ROLLBACK"); } catch { /* already rolled back */ }
-      this.depth = 0;
       throw error;
     }
   }
-  get inTransaction(): boolean { return this.depth > 0; }
-  private requireTx(): void { if (this.depth === 0) throw new StoreError("INTERNAL_ERROR", "mutation outside transaction"); }
+  get inTransaction(): boolean { return this.transactions.active; }
+  /** Compatibility mutations require the same live capability as tx.* methods.
+   * New consumers should depend on StoreReads and write through the callback tx.
+   */
+  private requireTx(): void { this.transactions.requireLive(); }
   insertAgent(agent: NewAgent): void {
     this.requireTx();
     this.db.prepare(`INSERT INTO agents
@@ -143,6 +156,7 @@ export class Store {
         (id, actor, request_key, request_hash, kind, payload_json, plan_json, state, created_at_ms, updated_at_ms)
         VALUES (?,?,?,?,?,?,?, 'pending', ?, ?)`).run(operation.id, operation.actor, operation.requestKey, operation.requestHash,
         operation.kind, operation.payloadJson, operation.planJson, Date.now(), Date.now());
+      this.transactions.recordInserted(operation.id);
     } catch (error) {
       if (error instanceof Error && /UNIQUE constraint failed: operations.actor, operations.request_key/.test(error.message)) throw new StoreError("REQUEST_KEY_REUSED", "request key already used by this actor");
       throw error;
@@ -166,14 +180,20 @@ export class Store {
       throw error;
     }
   }
+  acceptOperation(operation: Parameters<Store["insertOperation"]>[0]): "inserted" | "retry" {
+    return this.claimOperation(operation);
+  }
   getOperation(actor: Actor, key: RequestKey): OperationRow | null { return this.reader.operation(actor, key); }
   getOperationById(id: OperationId): OperationRow | null { return this.reader.operationById(id); }
   findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
   recoverableOperations(): OperationId[] { return this.reader.recoverableIds(); }
   updateOperationPlanJson(id: OperationId, planJson: string): void {
-    this.requireTx();
-    // Acceptance may still be inserting its related delivery rows in this transaction.
-    this.db.prepare("UPDATE operations SET plan_json=?, updated_at_ms=? WHERE id=?").run(planJson, Date.now(), id);
+    this.requireTx(); this.transactions.requireUnaccepted(id);
+    const value = this.db.prepare("SELECT state FROM operations WHERE id=?").get(id);
+    const row = fullRow(value, ["state"], "unaccepted operation state");
+    if (row.state !== "pending") throw new StoreError("STORE_CORRUPT", "terminal or unknown operation plan is immutable");
+    const result = this.db.prepare("UPDATE operations SET plan_json=?, updated_at_ms=? WHERE id=? AND state='pending'").run(planJson, Date.now(), id);
+    if (Number(result.changes) !== 1) throw new StoreError("STORE_CORRUPT", "unaccepted plan update was not applied exactly once");
   }
   setOperationSucceeded(id: OperationId, resultJson: string): void {
     this.requireTx(); const current = this.getOperationById(id);
@@ -236,15 +256,13 @@ export class Store {
   }
   linkDeliveriesToBatch(batchId: string, messageIds: MessageId[]): void {
     this.requireTx();
-    // This transition owns the just-inserted batch. Its linked set is intentionally
-    // incomplete until this method finishes; public getBatch always checks the full set.
+    // A just-inserted batch is not externally accepted until its exact set is linked.
     const raw = this.db.prepare("SELECT * FROM batches WHERE id=?").get(batchId);
     if (raw === undefined) throw new StoreError("BATCH_CONFLICT", `no such batch ${batchId}`);
     const batch = decodeBatchRow(raw);
     if (batch.state === "completed") throw new StoreError("BATCH_CONFLICT", `completed batch ${batchId} is immutable`);
     const implied = decodeBatchManifest(batch.messageIdsJson);
-    if (implied.length !== messageIds.length || implied.some((id, index) => id !== messageIds[index]))
-      throw new StoreError("BATCH_CONFLICT", "batch message order differs from the frozen manifest");
+    if (implied.length !== messageIds.length || implied.some((id, index) => id !== messageIds[index])) throw new StoreError("BATCH_CONFLICT", "batch message order differs from the frozen manifest");
     for (const id of messageIds) {
       const delivery = this.getDelivery(id, batch.agent);
       if (!delivery || delivery.materialized !== 1 || delivery.presented !== 0) throw new StoreError("BATCH_CONFLICT", `message ${id} is not pending for ${batch.agent}`);
@@ -252,7 +270,7 @@ export class Store {
     }
     const update = this.db.prepare("UPDATE deliveries SET batch_id=? WHERE message_id=? AND recipient=?");
     for (const id of messageIds) update.run(batchId, id, batch.agent);
-    this.getBatch(batchId); // the completed transition must now satisfy exact-set relations
+    this.getBatch(batchId);
   }
   pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation === incarnation); }
   completeBatch(batchId: string, markPresentedIds: MessageId[], agent: Actor): void {
