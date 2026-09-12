@@ -7,7 +7,7 @@ StartLimitIntervalSec=60s
 StartLimitBurst=5
 [Service]
 Type=oneshot
-ExecStart=@NODE@ @LIBDIR@/dist/entry/host.js principal-relay --society @SOCIETY@
+ExecStart=@NODE@ @LIBDIR@/dist/src/entry/host.js principal-relay --society @SOCIETY@
 TimeoutStartSec=10s
 UMask=0077
 StandardOutput=journal
