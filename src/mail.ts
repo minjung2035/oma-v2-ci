@@ -1,5 +1,5 @@
-// MUST [MAIL-001..010]: acceptance orchestration; publication and batch views have explicit owners.
-import { mkdirSync, existsSync, readFileSync, lstatSync, rmSync } from "node:fs";
+// MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
+import { mkdirSync, readFileSync, lstatSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
 import { Store } from "./store.js";
@@ -19,6 +19,7 @@ import { actorAddress, listAddress, topicAddress, parseDisplayedAddress } from "
 import type { ParsedEmlHeaders } from "./mail/headers.js";
 import { MailMaterializer, operationMessage, type PublicationEvidence } from "./mail/materializer.js";
 import { BatchCoordinator } from "./mail/batches.js";
+import { reconcileOrdinaryMail, type RecoveryCounts } from "./mail/reconcile.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
 export { batchOf, batchNotice } from "./mail/batches.js";
 export { fsyncDir, replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
@@ -169,22 +170,5 @@ export class MailModule {
   prepare(auth: AuthContext): Promise<PreparedBatch | null> { return this.batches.prepare(auth); }
   complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> { return this.batches.complete(auth, evidence); }
   moveToCur(agent: Actor, ids: readonly MessageId[]): number { return this.batches.moveToCur(agent, ids); }
-  async reconcilePending(): Promise<{ examined: number; repaired: number; remaining: number }> {
-    const ids = this.store.recoverableOperations(); let repaired = 0; let remaining = 0;
-    for (const id of ids) {
-      const operation = this.store.getOperationById(id); if (!operation) continue;
-      if (operation.kind !== "mail.send" && operation.kind !== "agent.continue") { remaining++; continue; }
-      const message = operation.plan.message;
-      if (!existsSync(this.objectPath(message.id))) throw new StoreError("STORE_CORRUPT", `object missing for ${message.id}`);
-      try {
-        await this.materialize(id); const fresh = this.store.deliveriesForOperation(id); const archiveDone = existsSync(this.archivePath(message.id));
-        const allDone = fresh.length === 0 ? archiveDone : fresh.every(delivery => delivery.materialized === 1) && archiveDone;
-        if (allDone) {
-          const result = { kind: operation.kind, message: message.id, recipientCount: fresh.length, archivePath: this.archivePath(message.id) };
-          this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify(result))); repaired++;
-        } else remaining++;
-      } catch (error) { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; remaining++; }
-    }
-    return { examined: ids.length, repaired, remaining };
-  }
+  reconcilePending(): Promise<RecoveryCounts> { return reconcileOrdinaryMail(this.store, this); }
 }
