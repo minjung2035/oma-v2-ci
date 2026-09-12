@@ -1,0 +1,116 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, writeFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import type { BlobDescriptor, ContextEntry } from "../implementation/contracts.js";
+import { generateOperationId } from "../src/ids.js";
+import { ContextTextValidator, contextFileCheck } from "../src/domain/context-policy.js";
+import { prepareContextStream } from "../src/storage/context-stream.js";
+import { contextStagingPathAt } from "../src/storage/paths.js";
+
+const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+const files = [
+  { path: "GOAL.md", data: Buffer.from("\uFEFF# 한글 GOAL\r\nunchanged bytes\n") },
+  { path: "RATIONALE.md", data: Buffer.alloc(0) },
+  { path: "decisions/a..b.md", data: Buffer.from("final 한글\r\n") },
+];
+const body = Buffer.concat(files.map(file => file.data));
+const entries = (): ContextEntry[] => files.map(file => ({ path: file.path, bytes: file.data.length, sha256: digest(file.data) }));
+const descriptor = (): BlobDescriptor => ({ bytes: body.length, sha256: digest(body), mediaType: "application/vnd.oma.context-v1" });
+async function* parts(bytes: Uint8Array, width: number): AsyncIterable<Uint8Array> {
+  yield new Uint8Array(0);
+  for (let offset = 0; offset < bytes.byteLength; offset += width) yield bytes.subarray(offset, offset + width);
+  yield new Uint8Array(0);
+}
+
+test("R21: streaming text policy agrees with independent valid and invalid UTF-8 vectors at every split", () => {
+  const cases: Array<{ path: string; bytes: Buffer; valid: boolean }> = [
+    { path: "GOAL.md", bytes: Buffer.from("한글\r\n"), valid: true },
+    { path: "GOAL.md", bytes: Buffer.from("\uFEFFhello"), valid: true },
+    { path: "GOAL.md", bytes: Buffer.from("\uFEFF"), valid: false },
+    { path: "GOAL.md", bytes: Buffer.alloc(0), valid: false },
+    { path: "RATIONALE.md", bytes: Buffer.alloc(0), valid: true },
+    { path: "GOAL.md", bytes: Buffer.from([0xe3, 0x81]), valid: false },
+    { path: "GOAL.md", bytes: Buffer.from([0xc0, 0xaf]), valid: false },
+    { path: "GOAL.md", bytes: Buffer.from("a\0b"), valid: false },
+    { path: "GOAL.md", bytes: Buffer.from("a\x7fb"), valid: false },
+    { path: "../GOAL.md", bytes: Buffer.from("valid text"), valid: false },
+  ];
+  for (const item of cases) {
+    assert.equal(contextFileCheck(item.path, item.bytes) === null, item.valid);
+    for (let split = 0; split <= item.bytes.length; split++) {
+      const validator = new ContextTextValidator(item.path);
+      const a = validator.append(item.bytes.subarray(0, split));
+      const b = validator.append(item.bytes.subarray(split));
+      const c = validator.finish();
+      assert.equal(a === null && b === null && c === null, item.valid, `${item.path}/${item.bytes.toString("hex")}/${split}`);
+    }
+  }
+});
+
+test("R21: file boundaries, zero-byte non-GOAL and UTF-8 splits preserve literal bytes and fixed modes", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-r21-stream-"));
+  try {
+    for (const width of [1, 2, 3, 7, body.length]) {
+      const id = generateOperationId();
+      const tree = await prepareContextStream(root, id, entries(), descriptor(), parts(body, width));
+      assert.equal(tree, join(contextStagingPathAt(root, id), "tree"));
+      for (const file of files) {
+        assert.deepEqual(readFileSync(join(tree, file.path)), file.data);
+        assert.equal(lstatSync(join(tree, file.path)).mode & 0o777, 0o644);
+        assert.equal(lstatSync(join(tree, file.path)).nlink, 1);
+      }
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+for (const fault of ["short", "long", "aggregate-hash", "entry-hash", "invalid-text"] as const) {
+  test(`R21: ${fault} fails before acceptance and cleans only that preparation`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "oma-r21-fault-"));
+    try {
+      const control = await prepareContextStream(root, generateOperationId(), entries(), descriptor(), parts(body, 2));
+      const manifest = entries(); const content = descriptor(); const id = generateOperationId();
+      let bytes = body;
+      if (fault === "short") bytes = body.subarray(0, -1);
+      if (fault === "long") bytes = Buffer.concat([body, Buffer.from("x")]);
+      if (fault === "aggregate-hash") content.sha256 = "0".repeat(64);
+      if (fault === "entry-hash") manifest[0]!.sha256 = "0".repeat(64);
+      if (fault === "invalid-text") { bytes = Buffer.from(body); bytes[0] = 0xff; }
+      const sibling = join(root, "unrelated"); writeFileSync(sibling, "retained");
+      await assert.rejects(prepareContextStream(root, id, manifest, content, parts(bytes, 2)), {
+        code: fault === "invalid-text" ? "INVALID_REQUEST" : "STREAM_INVALID",
+      });
+      for (const file of files) {
+        assert.equal(existsSync(join(contextStagingPathAt(root, id), "tree", file.path)), false);
+        assert.deepEqual(readFileSync(join(control, file.path)), file.data);
+      }
+      assert.equal(readFileSync(sibling, "utf8"), "retained");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+test("R21: source mutations after the first await cannot alter frozen metadata", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-r21-freeze-"));
+  try {
+    const manifest = entries(); const content = descriptor();
+    async function* mutation(): AsyncIterable<Uint8Array> {
+      manifest[0]!.path = "../outside"; manifest[0]!.bytes = 1; content.sha256 = "0".repeat(64);
+      yield body;
+    }
+    const tree = await prepareContextStream(root, generateOperationId(), manifest, content, mutation());
+    assert.deepEqual(readFileSync(join(tree, "GOAL.md")), files[0]!.data);
+    assert.deepEqual(readdirSync(tree).sort(), ["GOAL.md", "RATIONALE.md", "decisions"]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("R21: an exclusive-path collision cannot delete an earlier operation's frozen files", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-r21-collision-"));
+  try {
+    const id = generateOperationId();
+    const tree = await prepareContextStream(root, id, entries(), descriptor(), parts(body, 3));
+    await assert.rejects(prepareContextStream(root, id, entries(), descriptor(), parts(body, 3)), { code: "EEXIST" });
+    for (const file of files) assert.deepEqual(readFileSync(join(tree, file.path)), file.data);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
