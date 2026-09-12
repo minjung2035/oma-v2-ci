@@ -10,17 +10,20 @@ import { sha256Hex } from "../../src/hash.js";
 import cp from "node:child_process";
 import { gitFixture, gitAuth, gitCommand, submitFixture, contextFixture } from "./git-crash.js";
 import { lifecycleFixture } from "./lifecycle-crash.js";
+import { TEST_VIEW_LIMITS } from "./limits.js";
+import { assertGlobalInvariants } from "../invariants/index.js";
 
 const [root, rawPoint] = process.argv.slice(2);
 if (!root || !rawPoint) throw new Error("crash worker requires its owned root and requested boundary");
 const point = rawPoint.replace(/^create-/, "boot-");
 if (point.startsWith("ctx-accepted")) process.umask(0o077);
 const store = new Store(join(root, "runtime.sqlite"));
-// One Store has one society identity. Do not bind a lifecycle worker to 'crash' first.
 const lifecycle = point.startsWith("boot-") ? lifecycleFixture(root, store) : null;
-const mail = lifecycle?.mail ?? new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+const mail = lifecycle?.mail ?? new MailModule({ stateRoot: root, society: "crash" }, store, 64, 24, TEST_VIEW_LIMITS);
 const checkpoint = () => {
   if (!process.send) throw new Error("parent IPC observation channel is missing");
+  assertGlobalInvariants(store, { stateRoot: root, society: lifecycle?.society ?? "crash",
+    phase: "partial-materialization", viewLimits: TEST_VIEW_LIMITS });
   process.send({ point: rawPoint });
   process.kill(process.pid, "SIGSTOP");
   throw new Error("crash worker resumed unexpectedly");
@@ -105,10 +108,8 @@ store.transaction = body => {
     const bundle = operation.plan.bundle;
     if (!bundle || ![bundle.path, dirname(bundle.path), join(root, "staging")].every(path => beforeSync.has(path)))
       throw new Error("submit accepted before bundle/file/parent fsync");
-    if (sha256Hex(fs.readFileSync(bundle.path)) !== bundle.sha256)
-      throw new Error("accepted submit bundle digest differs from frozen bytes");
-    if (fs.existsSync(mail.archivePath(operation.plan.message.id)))
-      throw new Error("submit result mail was exposed before ref publication");
+    if (sha256Hex(fs.readFileSync(bundle.path)) !== bundle.sha256) throw new Error("accepted submit bundle digest differs from frozen bytes");
+    if (fs.existsSync(mail.archivePath(operation.plan.message.id))) throw new Error("submit result mail was exposed before ref publication");
     checkpoint();
   }
   if (point === "submit-done" && operation?.kind === "git.submit" && operation.state === "succeeded") checkpoint();
