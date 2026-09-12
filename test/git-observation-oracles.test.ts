@@ -130,8 +130,8 @@ for (const format of ["sha1", "sha256"] as const) {
       git("add", "-A"); git("commit", "-qm", "candidate");
       const output = git("diff-tree", "--no-commit-id", "--name-status", "-r", "-z", "--no-renames", base, "HEAD");
       const parsed = parseNameStatusZ(output);
-      assert.equal(parsed.ok, true);
       if (!parsed.ok) assert.fail(parsed.reason);
+      assert.equal(parsed.ok, true);
       assert.deepEqual(parsed.value, [
         { status: "A", path: "A" }, { status: "M", path: "M secret.txt" },
         { status: "T", path: "line\nname" }, { status: "D", path: "tab\tname" },
