@@ -1,0 +1,93 @@
+/** MAIL-003: pinned nodemailer adapter. Existing EML is never passed through
+ * this code for recovery. Only fresh facts are rendered; archive integrity uses
+ * the original emitted bytes, not decoded/re-encoded text or a new timestamp.
+ */
+import { createTransport } from "nodemailer";
+import { encodeWord } from "nodemailer/lib/mime-funcs";
+import type { MailInput, Oid } from "../../implementation/contracts.js";
+import { StoreError } from "../domain/errors.js";
+import { exactCandidateCheck } from "../domain/mail-values.js";
+import { sha256Hex } from "../domain/canonical-json.js";
+import { actorAddress, displayAddress, rfcMessageIdFor } from "./addresses.js";
+import { freezeMessageDate, freezeMessageFacts, type FrozenMessageFacts, type MessageFactsInput, type RenderedMessage } from "./facts.js";
+import { parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
+
+/** Compatibility input for callers testing the pre-refactor serializer. These
+ * are RFC presentation values, not MessagePlan logical routing/authority.
+ */
+export interface EmlParams {
+  from: string; to: string[]; replyTo: string[]; subject: string; kind: MailInput["kind"];
+  contextRevision: Oid | null; inReplyTo: string | null; references: string[];
+  messageId: string; body: string; dateMs?: number; approvalFor?: MailInput["approvalFor"];
+}
+export interface EmlEmission { text: string; bytes: number; sha256: string; dateMs: number }
+export interface RenderedMessageWithHeaders extends RenderedMessage { readonly headerFacts: Readonly<ParsedEmlHeaders> }
+
+function assertNoCrlf(value: string, what: string): void {
+  if (/[\r\n]/.test(value)) throw new StoreError("INVALID_REQUEST", `${what} contains CR/LF`);
+}
+
+/** Retain the exact pinned transport/sendMail options and authoritative header
+ * insertion order. New workflow callers use buildFrozenMessage below instead of
+ * independently constructing a second set of logical/date/identity facts.
+ */
+export async function buildEml(p: EmlParams): Promise<EmlEmission> {
+  if (p.approvalFor) { const error = exactCandidateCheck(p.approvalFor); if (error) throw new StoreError("INVALID_REQUEST", error); }
+  assertNoCrlf(p.subject, "subject");
+  for (const header of [p.from, ...p.to, ...p.replyTo, p.messageId, ...(p.inReplyTo ? [p.inReplyTo] : []), ...p.references]) assertNoCrlf(header, "header");
+  const dateMs = freezeMessageDate(p.dateMs);
+  const transporter = createTransport({ streamTransport: true, buffer: true, newline: "\r\n" });
+  const info = await transporter.sendMail({
+    from: p.from, to: p.to.join(", "), replyTo: p.replyTo.length > 0 ? p.replyTo.join(", ") : undefined,
+    subject: p.subject, text: p.body, messageId: `<${p.messageId}>`,
+    ...(p.inReplyTo ? { inReplyTo: `<${p.inReplyTo}>` } : {}),
+    ...(p.references.length > 0 ? { references: p.references.map(reference => `<${reference}>`) } : {}),
+    date: new Date(dateMs), headers: {
+      "X-OMA-Kind": p.kind, ...(p.contextRevision ? { "X-OMA-Context": p.contextRevision } : {}),
+      ...(p.approvalFor ? {
+        "X-OMA-Approval-Repo": p.approvalFor.repo, "X-OMA-Approval-Target": p.approvalFor.targetRef,
+        "X-OMA-Approval-Base": p.approvalFor.expectedBase, "X-OMA-Approval-Candidate": p.approvalFor.candidate,
+        "X-OMA-Approval-Policy": encodeWord(p.approvalFor.policyRevision, "B"),
+      } : {}),
+    },
+  });
+  const raw = (info as unknown as { message: unknown }).message;
+  if (!Buffer.isBuffer(raw)) throw new StoreError("INTERNAL_ERROR", "MIME adapter did not emit a byte buffer");
+  const sha256 = sha256Hex(raw);
+  const text = raw.toString("utf8");
+  if (!Buffer.from(text, "utf8").equals(raw)) throw new StoreError("INTERNAL_ERROR", "MIME adapter emitted unsupported non-UTF-8 bytes");
+  return { text, bytes: raw.byteLength, sha256, dateMs };
+}
+
+function same(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+export async function renderFrozenMessage(
+  facts: FrozenMessageFacts, content: { readonly subject: string; readonly body: string },
+): Promise<RenderedMessageWithHeaders> {
+  const from = actorAddress(facts.sender, facts.society);
+  const to = facts.to.map(address => displayAddress(address, facts.society));
+  const replyTo = facts.replyHeaders.replyTo.map(address => displayAddress(address, facts.society));
+  const messageId = rfcMessageIdFor(facts.id, facts.society);
+  const emitted = await buildEml({ from, to, replyTo, subject: content.subject, body: content.body,
+    kind: facts.kind, contextRevision: facts.contextRevision, messageId, dateMs: facts.dateMs,
+    inReplyTo: facts.replyHeaders.inReplyTo, references: [...facts.replyHeaders.references],
+    ...(facts.approvalFor === undefined ? {} : { approvalFor: { ...facts.approvalFor } }),
+  });
+  const actual = parseEmlHeaders(emitted.text, { maxHeaderBytes: emitted.bytes });
+  if (actual.from !== from || !same(actual.to ?? [], to) || !same(actual.replyTo ?? [], replyTo) ||
+    actual.messageId !== messageId || actual.omaKind !== facts.kind || actual.omaContext !== facts.contextRevision ||
+    actual.dateMs !== Math.floor(facts.dateMs / 1000) * 1000 ||
+    actual.inReplyTo !== facts.replyHeaders.inReplyTo || !same(actual.references, facts.replyHeaders.references))
+    throw new StoreError("INTERNAL_ERROR", "MIME emission differs from frozen message facts");
+  const approval = facts.approvalFor;
+  if (approval === undefined ? actual.approvalFor !== null : actual.approvalFor === null ||
+    actual.approvalFor.repo !== approval.repo || actual.approvalFor.targetRef !== approval.targetRef ||
+    actual.approvalFor.expectedBase !== approval.expectedBase || actual.approvalFor.candidate !== approval.candidate ||
+    actual.approvalFor.policyRevision !== approval.policyRevision)
+    throw new StoreError("INTERNAL_ERROR", "MIME emission differs from frozen approval claim");
+  return Object.freeze({ ...emitted, facts, headerFacts: Object.freeze(actual) });
+}
+export function buildFrozenMessage(input: MessageFactsInput, content: { readonly subject: string; readonly body: string }): Promise<RenderedMessageWithHeaders> {
+  return renderFrozenMessage(freezeMessageFacts(input), content);
+}
