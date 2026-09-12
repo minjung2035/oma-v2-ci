@@ -2,7 +2,8 @@
 // This module is deliberately store-independent so Store can validate every
 // plan_json read before recovery code can use it for filesystem/Git effects.
 import { join } from "node:path";
-import type { Capability } from "../implementation/contracts.js";
+import { capabilityCheck } from "./domain/capabilities.js";
+import { resourceLimitsCheck } from "./domain/resources.js";
 import {
   checkArray,
   checkEnum,
@@ -33,27 +34,6 @@ const actorOrPrincipal: Check = (value) =>
     ? null
     : "invalid actor";
 
-const capabilities = [
-  "mail.send",
-  "route.follow",
-  "agent.create",
-  "agent.manage.self",
-  "agent.manage.descendants",
-  "git.submit",
-  "code.integrate",
-  "context.publish",
-] as const satisfies readonly Capability[];
-
-const resourceCheck = checkObject({
-  memoryBytes: checkInt({ min: 1 }),
-  tasks: checkInt({ min: 1 }),
-  cpuQuotaPercent: checkInt({ min: 1 }),
-  tmpBytes: checkInt({ min: 1 }),
-  workspaceBytes: checkInt({ min: 1 }),
-  stagingBytes: checkInt({ min: 1 }),
-  checkTimeoutSeconds: checkInt({ min: 1 }),
-});
-
 const resolvedSpecCheck = checkObject({
   name: (value) =>
     typeof value === "string" && isValidActorName(value)
@@ -62,9 +42,9 @@ const resolvedSpecCheck = checkObject({
   from: checkOid,
   brief: nonEmpty,
   profile: nonEmpty,
-  capabilities: checkArray(checkEnum(capabilities)),
+  capabilities: checkArray(capabilityCheck),
   modelProfile: nonEmpty,
-  resources: resourceCheck,
+  resources: resourceLimitsCheck,
 });
 
 const nullableMessagePlan: Check = (value) =>
