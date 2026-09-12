@@ -1,6 +1,6 @@
 // MUST [MAIL-001..010]: EML encoding, recipient expansion, materialization and batch handoff.
 // Pinned nodemailer serialization remains unchanged; CR/LF is rejected before encoding.
-import { constants, mkdirSync, writeFileSync, openSync, fsyncSync, closeSync, linkSync, copyFileSync, existsSync, readFileSync, unlinkSync, renameSync, lstatSync, rmSync, chmodSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, unlinkSync, renameSync, lstatSync, rmSync } from "node:fs";
 import { createTransport } from "nodemailer";
 import { encodeWord } from "nodemailer/lib/mime-funcs";
 import { join, dirname } from "node:path";
@@ -15,6 +15,10 @@ import { mailObjectFileName, mailObjectRelativePath, mailArchiveDisplayPath, con
 import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt, runnerViewPathAt, batchViewPathAt } from "./storage/paths.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { exactCandidateCheck } from "./validate.js";
+import { fsyncDir, replaceDerivedFile as writeAtomic, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
+import { publishImmutableFile } from "./storage/immutable-file.js";
+export { fsyncDir, replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
+export { publishImmutableFile } from "./storage/immutable-file.js";
 
 export interface EmlParams {
   from: string; to: string[]; replyTo: string[]; subject: string; kind: MailInput["kind"];
@@ -100,50 +104,11 @@ export function defaultLogicalReplyTo(from: Address, to: readonly Address[]): Ad
   const lists = to.filter(address => address === "commons" || address === "residents" || address.startsWith("topic/"));
   return [...new Set(lists.length ? lists : [from])];
 }
-function writeFsynced(path: string, data: string): void {
-  const fd = openSync(path, "wx", 0o600);
-  try { writeFileSync(fd, data, "utf8"); fsyncSync(fd); } finally { closeSync(fd); }
-}
-export function fsyncDir(dir: string): void {
-  const fd = openSync(dir, "r"); try { fsyncSync(fd); } finally { closeSync(fd); }
-}
-export function writeAtomic(file: string, content: string, mode = 0o600): void {
-  mkdirSync(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}`; rmSync(tmp, { force: true });
-  const fd = openSync(tmp, "wx", mode);
-  try { writeFileSync(fd, content, "utf8"); fsyncSync(fd); } finally { closeSync(fd); }
-  renameSync(tmp, file); fsyncDir(dirname(file));
-}
 export function publishBatchView(stateRoot: string, batch: PreparedBatch): void {
   const runView = runnerViewPathAt(stateRoot, batch.agent);
   writeAtomic(batchViewPathAt(stateRoot, batch.agent, batch.id), JSON.stringify({ id: batch.id, agent: batch.agent, incarnation: batch.incarnation, deliveryMode: batch.deliveryMode, notice: batch.notice, messageIds: batch.messageIds }));
   const lines = [`# inbox — ${batch.agent}`, "", `안내 batch ${batch.id} (incarnation ${batch.incarnation})`, "", ...batch.messageIds.map((id, index) => `${index + 1}. ${id}\t${mailArchiveDisplayPath(id)}`), "", "읽기: cat <위 archive path>"];
   writeAtomic(join(runView, "inbox.md"), `${lines.join("\n")}\n`, 0o444);
-}
-export function publishImmutableFile(src: string, dst: string, verifyHash?: string): void {
-  if (!lstatSync(src).isFile()) throw new StoreError("STORE_CORRUPT", `non-regular source ${src}`);
-  const expected = sha256Hex(readFileSync(src));
-  if (verifyHash !== undefined && expected !== verifyHash) throw new StoreError("STORE_CORRUPT", `source ${src} hash mismatch`);
-  const verifyExisting = () => { if (!lstatSync(dst).isFile() || sha256Hex(readFileSync(dst)) !== expected) throw new StoreError("STORE_CORRUPT", `existing ${dst} hash mismatch`); };
-  mkdirSync(dirname(dst), { recursive: true });
-  try { linkSync(src, dst); }
-  catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "EEXIST") verifyExisting();
-    else if (code === "EXDEV") {
-      const temporary = `${dst}.${generateOperationId()}.tmp`;
-      try {
-        copyFileSync(src, temporary, constants.COPYFILE_EXCL);
-        const fd = openSync(temporary, "r"); try { fsyncSync(fd); } finally { closeSync(fd); }
-        if (sha256Hex(readFileSync(temporary)) !== expected) throw new StoreError("STORE_CORRUPT", `copied ${dst} hash mismatch`);
-        try { linkSync(temporary, dst); }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; verifyExisting(); }
-      } finally { rmSync(temporary, { force: true }); }
-    } else throw error;
-  }
-  chmodSync(dst, 0o444);
-  const fd = openSync(dst, "r"); try { fsyncSync(fd); } finally { closeSync(fd); }
-  fsyncDir(dirname(dst));
 }
 export interface ParsedEmlHeaders {
   from: string | null; to: string[] | null; subject: string | null; dateMs: number | null;
@@ -297,8 +262,7 @@ export class MailModule {
   freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): void {
     const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); mkdirSync(stagingDir, { recursive: true });
     const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
-    const fd = openSync(staged, "wx", 0o600);
-    try { writeFileSync(fd, eml.text, "utf8"); fsyncSync(fd); } finally { closeSync(fd); }
+    writeFsynced(staged, eml.text);
     try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256 ?? sha256Hex(eml.text)); }
     finally { rmSync(staged, { force: true }); fsyncDir(stagingDir); }
   }
