@@ -8,7 +8,7 @@ StartLimitBurst=5
 [Service]
 Type=exec
 Environment=OMA_PROFILE_HEX=@PROFILE_HEX@
-ExecStart=@NODE@ @LIBDIR@/dist/entry/runner.js --society @SOCIETY@ --agent @AGENT@
+ExecStart=@NODE@ @LIBDIR@/dist/src/entry/runner.js --society @SOCIETY@ --agent @AGENT@
 Restart=on-failure
 RestartSec=3s
 KillMode=control-group
