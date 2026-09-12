@@ -1,33 +1,15 @@
 /** M-003 / IPC-006: structural receipt decoding, never ledger authority. */
-import type { ErrorCode, Failure, Json, MutationMethod, OperationResult, Receipt } from "../../implementation/contracts.js";
+import type { Failure, Json, MutationMethod, OperationResult, Receipt } from "../../implementation/contracts.js";
 import { parseOperationId } from "../domain/identifiers.js";
 import { snapshotJson } from "../domain/canonical-json.js";
+import { isErrorCode } from "../domain/errors.js";
 import { checkString, operationResultCheck } from "../validate.js";
 import { isPublicMethod, PUBLIC_METHODS } from "./methods.js";
+export { isErrorCode } from "../domain/errors.js";
 
 export type Decoded<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
 const invalid = (reason: string): Decoded<never> => ({ ok: false, reason });
 
-const ERROR_CODES = {
-  INVALID_REQUEST: true, UNSUPPORTED_VERSION: true, UNKNOWN_METHOD: true, FRAME_TOO_LARGE: true,
-  STREAM_INVALID: true, AUTH_FAILED: true, STALE_RUN: true, CAPABILITY_DENIED: true,
-  REQUEST_KEY_REUSED: true, REQUEST_NOT_FOUND: true, ADDRESS_NOT_FOUND: true,
-  AGENT_CONFLICT: true, AGENT_NOT_READY: true, AGENT_RETIRED: true, GOAL_REQUIRED: true,
-  LIMIT_EXCEEDED: true, STORAGE_FULL: true, DB_BUSY: true, STORE_CORRUPT: true,
-  BROKER_UNAVAILABLE: true, DEADLINE_EXCEEDED: true, RUN_TERMINATION_UNKNOWN: true,
-  START_LIMIT: true, PRINCIPAL_DISCONNECTED: true, ATTACH_CONFLICT: true,
-  BATCH_CONFLICT: true, SESSION_BOUNDARY_UNCONFIRMED: true,
-  INVALID_OID: true, CANDIDATE_NOT_PUBLISHED: true, BUNDLE_INVALID: true,
-  PREREQUISITE_MISSING: true, PUBLISHED_REF_CONFLICT: true, STALE_BASE: true,
-  NOT_DESCENDANT: true, PROTECTED_PATH: true, CHECK_FAILED: true, POLICY_CHANGED: true,
-  REF_STATE_UNKNOWN: true, CANCELLED_BEFORE_COMMIT: true, CONTEXT_CONFLICT: true,
-  QUOTA_EXCEEDED: true, PROVIDER_FAILED: true, PROVIDER_OUTCOME_UNKNOWN: true,
-  UNSUPPORTED_PROFILE: true, SPIKE_UNRESOLVED: true, INTERNAL_ERROR: true,
-} as const satisfies Record<ErrorCode, true>;
-
-export function isErrorCode(value: unknown): value is ErrorCode {
-  return typeof value === "string" && Object.hasOwn(ERROR_CODES, value);
-}
 export function isMutationMethod(value: unknown): value is MutationMethod {
   return isPublicMethod(value) && PUBLIC_METHODS[value].mode === "mutation";
 }
@@ -62,7 +44,6 @@ export function decodeOperationResultShape(value: unknown, expectedKind?: Mutati
   if (expectedKind !== undefined && row.kind !== expectedKind) return invalid("receipt result kind differs from request method");
   const error = operationResultCheck(row.kind)(row);
   if (error) return invalid(error);
-  // This narrowing follows the closed kind-specific result validator above.
   return { ok: true, value: row as OperationResult };
 }
 
