@@ -5,7 +5,7 @@ Requires=oma-@SOCIETY@-broker.service
 After=oma-@SOCIETY@-broker.service
 [Service]
 Type=oneshot
-ExecStart=@NODE@ @LIBDIR@/dist/entry/host.js reconcile --society @SOCIETY@
+ExecStart=@NODE@ @LIBDIR@/dist/src/entry/host.js reconcile --society @SOCIETY@
 TimeoutStartSec=10s
 UMask=0077
 StandardOutput=journal
