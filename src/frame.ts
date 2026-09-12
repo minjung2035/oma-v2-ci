@@ -3,51 +3,47 @@ import { TextDecoder } from "node:util";
 import { checkString } from "./validate.js";
 import { ByteQueue } from "./protocol/byte-queue.js";
 const unicodeString = checkString();
-
 export class FrameError extends Error {
-  constructor(readonly code: "FRAME_TOO_LARGE" | "INVALID_REQUEST", message: string) {
-    super(message); this.name = "FrameError";
-  }
+  constructor(readonly code: "FRAME_TOO_LARGE" | "INVALID_REQUEST", message: string) { super(message); this.name = "FrameError"; }
 }
 /** Reject duplicate object keys, including escaped spelling of the same key. */
 export function findDuplicateKey(text: string): string | null {
   interface Container { isObj: boolean; keys: Set<string> | null; expectKey: boolean }
   const stack: Container[] = [];
-  let i = 0;
-  while (i < text.length) {
-    const char = text[i]!;
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index]!;
     if (char === '"') {
-      let j = i + 1; let closed = false;
-      while (j < text.length) {
-        const next = text[j]!;
-        if (next === "\\") { j += 2; continue; }
+      let end = index + 1; let closed = false;
+      while (end < text.length) {
+        const next = text[end]!;
+        if (next === "\\") { end += 2; continue; }
         if (next === '"') { closed = true; break; }
-        j++;
+        end++;
       }
       if (!closed) return null;
-      j++;
+      end++;
       const top = stack[stack.length - 1];
       if (top?.isObj && top.expectKey) {
         let key: unknown;
-        try { key = JSON.parse(text.slice(i, j)); } catch { return null; }
+        try { key = JSON.parse(text.slice(index, end)); } catch { return null; }
         if (typeof key !== "string") return null;
         if (top.keys!.has(key)) return key;
         top.keys!.add(key); top.expectKey = false;
       }
-      i = j; continue;
+      index = end; continue;
     }
     if (char === "{") stack.push({ isObj: true, keys: new Set(), expectKey: true });
     else if (char === "[") stack.push({ isObj: false, keys: null, expectKey: false });
     else if (char === "}" || char === "]") stack.pop();
     else if (char === ",") { const top = stack[stack.length - 1]; if (top) top.expectKey = top.isObj; }
-    i++;
+    index++;
   }
   return null;
 }
 export function encodeFrame(value: unknown): Buffer {
   const body = Buffer.from(JSON.stringify(value), "utf8");
-  const out = Buffer.alloc(4 + body.length);
-  out.writeUInt32BE(body.length, 0); body.copy(out, 4);
+  const out = Buffer.alloc(4 + body.length); out.writeUInt32BE(body.length, 0); body.copy(out, 4);
   return out;
 }
 const utf8 = new TextDecoder("utf-8", { fatal: true });
@@ -61,8 +57,7 @@ export function parseJsonObject(bytes: Buffer): ParsedFrame {
   try {
     raw = JSON.parse(text, (key: string, value: unknown) => {
       if (unicodeString(key) || (typeof value === "string" && unicodeString(value))) throw new Error("unpaired Unicode surrogate");
-      if (typeof value === "number" && (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value))))
-        throw new Error("non-finite number or unsafe integer");
+      if (typeof value === "number" && (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value)))) throw new Error("non-finite number or unsafe integer");
       return value;
     });
   } catch (error) { throw new FrameError("INVALID_REQUEST", `malformed JSON: ${error instanceof Error ? error.message : "invalid JSON"}`); }
@@ -71,9 +66,8 @@ export function parseJsonObject(bytes: Buffer): ParsedFrame {
 }
 function checkedLimit(maximum: number): number {
   if (!Number.isSafeInteger(maximum) || maximum < 0) throw new RangeError("invalid frame byte limit");
-  return Math.min(maximum, 0xffffffff); // derived from the existing uint32 wire length
+  return Math.min(maximum, 0xffffffff);
 }
-
 /** Arbitrary byte splits; no retained body exceeds one declared frame. */
 export class FrameParser {
   private readonly bytes = new ByteQueue();
@@ -91,26 +85,22 @@ export class FrameParser {
         const length = this.bytes.uint32BE();
         if (length > this.bound) throw new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${this.maxFrameBytes}`);
         if (this.bytes.length < length + 4) break;
-        this.bytes.shift(4);
+        this.bytes.take(4); // exact header, including headers split across four chunks
         frames.push(parseJsonObject(this.bytes.take(length)));
       }
       this.bytes.ownRemainder(this.bound + 4);
       return frames;
-    } catch (error) {
-      return this.poison(error instanceof FrameError ? error : new FrameError("INVALID_REQUEST", "invalid frame state"));
-    }
+    } catch (error) { return this.poison(error instanceof FrameError ? error : new FrameError("INVALID_REQUEST", "invalid frame state")); }
   }
   finish(): void {
     if (this.failure) throw this.failure;
     if (this.bytes.length) this.poison(new FrameError("INVALID_REQUEST", "EOF inside frame header or body"));
   }
 }
-
 export type DecoderEvent = { kind: "frame"; frame: ParsedFrame } | { kind: "stream"; bytes: Buffer } |
   { kind: "invalid"; code: "FRAME_TOO_LARGE" | "INVALID_REQUEST"; message: string };
-
-/** One queue, at most one decoded control frame per call. A sink streams raw
- * bytes without retaining them. Collection mode has an explicit finite budget.
+/** One queue, at most one decoded control frame per call. Streaming sinks retain
+ * no body chunks. Explicit collection mode has a separate finite budget.
  */
 export class ConnectionDecoder {
   private readonly queue = new ByteQueue();
@@ -128,26 +118,20 @@ export class ConnectionDecoder {
   poison(error = new FrameError("INVALID_REQUEST", "connection decoder is closed")): void {
     this.failure ??= error; this.queue.clear(); this.stream = null;
   }
-  private invalid(error: FrameError): DecoderEvent[] {
-    this.poison(error);
-    return [{ kind: "invalid", code: error.code, message: error.message }];
-  }
+  private invalid(error: FrameError): DecoderEvent[] { this.poison(error); return [{ kind: "invalid", code: error.code, message: error.message }]; }
   private guardedDrain(): DecoderEvent[] {
     if (this.failure) return this.invalid(this.failure);
     try { return this.drain(); }
     catch (error) {
       if (error instanceof FrameError) return this.invalid(error);
-      this.poison(); throw error; // preserve sink I/O failure for the preaccept owner
+      this.poison(); throw error;
     }
   }
   push(chunk: Buffer): DecoderEvent[] {
     if (this.failure) return this.invalid(this.failure);
-    this.queue.append(chunk);
-    return this.guardedDrain();
+    this.queue.append(chunk); return this.guardedDrain();
   }
-  /** While a task is executing, only one frame's worth of undecoded bytes may
-   * be retained. The socket is paused; no separate unbounded request queue exists.
-   */
+  /** During execution the socket is paused; only one next control frame may be retained. */
   bufferControl(chunk: Buffer): DecoderEvent[] {
     if (this.failure) return this.invalid(this.failure);
     this.queue.append(chunk);
@@ -165,10 +149,8 @@ export class ConnectionDecoder {
   resumeParsing(): DecoderEvent[] { return this.guardedDrain(); }
   beginStream(declaredBytes: number): DecoderEvent[] {
     if (this.failure) return this.invalid(this.failure);
-    if (this.stream !== null || !Number.isSafeInteger(declaredBytes) || declaredBytes < 0)
-      return this.invalid(new FrameError("INVALID_REQUEST", "invalid raw stream transition or length"));
-    if (this.streamSink === null && declaredBytes > this.maxCollectedStreamBytes)
-      return this.invalid(new FrameError("FRAME_TOO_LARGE", "collected raw body exceeds its finite byte budget"));
+    if (this.stream !== null || !Number.isSafeInteger(declaredBytes) || declaredBytes < 0) return this.invalid(new FrameError("INVALID_REQUEST", "invalid raw stream transition or length"));
+    if (this.streamSink === null && declaredBytes > this.maxCollectedStreamBytes) return this.invalid(new FrameError("FRAME_TOO_LARGE", "collected raw body exceeds its finite byte budget"));
     this.stream = { remaining: declaredBytes, chunks: this.streamSink ? null : [], total: 0 };
     return this.guardedDrain();
   }
@@ -187,10 +169,10 @@ export class ConnectionDecoder {
     const length = this.queue.uint32BE();
     if (length > this.bound) throw new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${this.maxFrameBytes}`);
     if (this.queue.length < length + 4) return [];
-    this.queue.shift(4);
+    this.queue.take(4); // shift() intentionally returns only one raw chunk
     return [{ kind: "frame", frame: parseJsonObject(this.queue.take(length)) }];
   }
-  /** Probe without consuming the possible next frame or accepting a raw mutation. */
+  /** Probe without consuming a possible next frame or accepting a raw mutation. */
   excessStatus(): "clean" | "next" | "pending" | "excess" {
     if (this.failure) return "excess";
     if (this.queue.length === 0) return "clean";
@@ -198,8 +180,7 @@ export class ConnectionDecoder {
     const length = this.queue.uint32BE();
     if (length > this.bound) return "excess";
     if (this.queue.length < length + 4) return "pending";
-    try { parseJsonObject(this.queue.peek(length + 4).subarray(4)); return "next"; }
-    catch { return "excess"; }
+    try { parseJsonObject(this.queue.peek(length + 4).subarray(4)); return "next"; } catch { return "excess"; }
   }
   finish(): DecoderEvent[] {
     if (this.failure) return this.invalid(this.failure);
