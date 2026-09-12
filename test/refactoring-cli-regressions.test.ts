@@ -159,7 +159,10 @@ test("R01 IPC-005: recipient order and duplicates do not change request identity
   const home = temp();
   try {
     frozen(home, "mail.send", { to: ["alice", "bob"], subject: "hello", kind: "message", body: "frozen" }, {
-      operation: OP, state: "succeeded", result: { kind: "mail.send", message: "m-00000000-0000-4000-8000-000000000091-0", recipientCount: 2 },
+      operation: OP, state: "succeeded", result: {
+        kind: "mail.send", message: "m-00000000-0000-4000-8000-000000000091-0", recipientCount: 2,
+        archivePath: "/mail/archive/new/m-00000000-0000-4000-8000-000000000091-0",
+      },
     });
     const same = run(home, ["send", "alice", "bob", "--subject", "hello", "--request", "same-key"]);
     assert.equal(same.status, 0, same.stderr);
