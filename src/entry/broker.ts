@@ -1,9 +1,9 @@
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
-import { Store } from "../store.js";
+import { Store, SCHEMA_PATH } from "../store.js";
 import { MailModule } from "../mail.js";
-import { UnitsModule } from "../units.js";
+import { UnitsModule, UNIT_TPL_DIR } from "../units.js";
 import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "../lifecycle.js";
 import { Broker } from "../broker.js";
@@ -14,6 +14,7 @@ import { loadConfig } from "../config.js";
 import { createChildSpecResolver } from "../config/policy.js";
 import { ProcessLock } from "../runtime/process-lock.js";
 import { BrokerLifetime } from "../runtime/broker-lifetime.js";
+import { assertRuntimeAssets, runtimeAssets } from "../runtime/assets.js";
 import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
@@ -48,6 +49,8 @@ async function main(): Promise<void> {
   try {
     const cfg = loadConfig(configPath);
     if (cfg.society !== society) throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
+    // No schema search, path flattening or cross-installation fallback.
+    assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH, systemd: UNIT_TPL_DIR });
     graceSeconds = cfg.limits.receiptWaitSeconds;
     const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
     assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
