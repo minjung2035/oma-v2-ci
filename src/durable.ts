@@ -1,9 +1,14 @@
 // MUST [DB-009/M-003]: durable operation plans are closed runtime DTOs.
 // This module is deliberately store-independent so Store can validate every
 // plan_json read before recovery code can use it for filesystem/Git effects.
-import { join } from "node:path";
 import { capabilityCheck } from "./domain/capabilities.js";
 import { resourceLimitsCheck } from "./domain/resources.js";
+import {
+  isMessageIdForOperation, isMailObjectRelativePathFor, isPublishedRefFor,
+} from "./domain/derived.js";
+import {
+  isWorkspacePathFor, isSubmitBundlePathFor, isContextStagingPathFor, isMailArchivePathFor,
+} from "./storage/paths.js";
 import {
   checkArray,
   checkEnum,
@@ -19,7 +24,6 @@ import {
   isValidActorName,
   isValidMessageId,
   isValidOperationId,
-  parseMessageId,
 } from "./ids.js";
 
 const operationIdCheck: Check = (value) =>
@@ -188,8 +192,8 @@ export function operationPlanCheck(
       const message = rawMessage as { id?: unknown; objectPath?: unknown };
       if (
         typeof message.id !== "string" ||
-        parseMessageId(message.id)?.operationId !== context.operationId ||
-        message.objectPath !== `mail/objects/${message.id}.eml`
+        !isMessageIdForOperation(message.id, { operationId: context.operationId }) ||
+        !isMailObjectRelativePathFor(message.objectPath, { messageId: message.id })
       ) return "message identity/path does not match operation";
     }
 
@@ -197,32 +201,26 @@ export function operationPlanCheck(
       const spec = plan.spec as { name?: unknown } | undefined;
       if (
         typeof spec?.name !== "string" ||
-        plan.workspacePath !== join(context.stateRoot, "agents", spec.name, "workspace")
+        !isWorkspacePathFor(plan.workspacePath, { stateRoot: context.stateRoot, actor: spec.name })
       ) return "create workspace path does not match state root/agent";
     }
 
     if (kind === "git.submit") {
-      if (plan.publishedRef !== `refs/oma/published/${context.actor}/${context.operationId}`)
+      if (!isPublishedRefFor(plan.publishedRef, { actor: context.actor, operationId: context.operationId }))
         return "published ref does not match actor/operation";
       const bundle = plan.bundle as { path?: unknown } | null | undefined;
       if (
-        bundle &&
-        bundle.path !== join(
-          context.stateRoot,
-          "staging",
-          `submit-${context.operationId}`,
-          "upload.bundle",
-        )
+        bundle && !isSubmitBundlePathFor(bundle.path, {
+          stateRoot: context.stateRoot, operationId: context.operationId,
+        })
       ) return "bundle path does not match operation staging root";
     }
 
     if (
       kind === "context.publish" &&
-      plan.stagingPath !== join(
-        context.stateRoot,
-        "staging",
-        `context-${context.operationId}`,
-      )
+      !isContextStagingPathFor(plan.stagingPath, {
+        stateRoot: context.stateRoot, operationId: context.operationId,
+      })
     ) return "context staging path does not match operation";
 
     return null;
@@ -254,13 +252,7 @@ export function operationResultRelationCheck(
         return "result recipient count does not match accepted snapshot";
       if (
         typeof message?.id !== "string" ||
-        result.archivePath !== join(
-          context.stateRoot,
-          "mail",
-          "archive",
-          "cur",
-          `${message.id}:2,`,
-        )
+        !isMailArchivePathFor(result.archivePath, { stateRoot: context.stateRoot, messageId: message.id })
       ) return "result archive path does not match accepted message";
       return null;
     }
@@ -284,7 +276,7 @@ export function operationResultRelationCheck(
     case "agent.start":
     case "agent.stop":
       if (result.agent !== plan.agent)
-        return "lifecycle result agent does not match accepted plan";
+        return "lifecycle result agent doesnot match accepted plan";
       return result.desired === plan.desired
         ? null
         : "lifecycle result desired state does not match accepted plan";
