@@ -1,0 +1,90 @@
+[
+  {
+    "source": "implementation-spec.md",
+    "requirements": ["M-004"],
+    "owner": "src/store.ts#Store.transaction",
+    "entrypoint": "src/entry/broker.ts#main",
+    "callPath": ["src/entry/broker.ts#main", "src/broker.ts#Broker", "src/store.ts#Store.transaction"],
+    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/compliance.test.ts#COMP-005/006"]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": ["AUTH-003"],
+    "owner": "src/authority.ts#assertCurrentActor",
+    "entrypoint": "src/broker.ts#Broker",
+    "callPath": ["src/broker.ts#Broker", "src/git.ts#GitModule", "src/git/submit.ts#SubmitCoordinator", "src/git/context.ts#ContextCoordinator", "src/lifecycle/create.ts#CreateCoordinator", "src/authority.ts#assertCurrentActor"],
+    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/r37-recovery-observation.test.ts#R37"]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": ["INT-003"],
+    "owner": "src/git/integration.ts#IntegrationCoordinator",
+    "entrypoint": "src/git.ts#GitModule.integrate",
+    "callPath": ["src/git.ts#GitModule.integrate", "src/git/integration.ts#IntegrationCoordinator", "src/git/canonical-command.ts#compareAndSwapCanonicalRef"],
+    "negativeTests": ["test/crash-boundaries.test.ts#T63", "test/r37-preparation-boundaries.test.ts#R37"]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": ["REC-002", "REC-003"],
+    "owner": "src/reconcile.ts#ReconcileModule",
+    "entrypoint": "src/broker.ts#Broker",
+    "callPath": ["src/broker.ts#Broker", "src/reconcile.ts#ReconcileModule", "src/reconcile/operations.ts#OperationRecovery", "src/process/preparation.ts#PreparationExecutor"],
+    "negativeTests": ["test/r29-reconcile-accounting.test.ts#R29", "test/r37-recovery-observation.test.ts#R37", "test/r37-shutdown-observation.test.ts#R37"]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": ["UNIT-007"],
+    "owner": "src/units.ts#UnitsModule",
+    "entrypoint": "src/lifecycle/create.ts#CreateCoordinator",
+    "callPath": ["src/lifecycle/create.ts#CreateCoordinator", "src/lifecycle/create-publication.ts#CreationPublicationObserver", "src/units.ts#UnitsModule", "src/units/execute.ts#executeUnitCommand"],
+    "negativeTests": ["test/phase4.test.ts#UNIT", "test/r37-preparation-boundaries.test.ts#R37"]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": ["CTX-003", "CTX-004", "CTX-006"],
+    "owner": "src/git/context.ts#ContextCoordinator",
+    "entrypoint": "src/git.ts#GitModule.publishContext",
+    "callPath": ["src/git.ts#GitModule.publishContext", "src/git/context.ts#ContextCoordinator", "src/git/context-repository.ts#ContextRepository", "src/git/context-publication.ts#ContextPublicationObserver", "src/git/canonical-command.ts#compareAndSwapCanonicalRef"],
+    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/crash-boundaries.test.ts#T66"]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": ["LIFE-007", "LIFE-008"],
+    "owner": "src/lifecycle/create.ts#CreateCoordinator",
+    "entrypoint": "src/lifecycle.ts#LifecycleModule",
+    "callPath": ["src/lifecycle.ts#LifecycleModule", "src/lifecycle/create.ts#CreateCoordinator", "src/lifecycle/workspace.ts#WorkspaceCoordinator", "src/lifecycle/create-publication.ts#CreationPublicationObserver"],
+    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/crash-boundaries.test.ts#T39"]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": ["ERR-002"],
+    "owner": "src/domain/errors.ts#classifyError",
+    "entrypoint": "src/git/submit.ts#SubmitCoordinator",
+    "callPath": ["src/git/submit.ts#SubmitCoordinator", "src/domain/errors.ts#classifyError", "src/protocol/receipts.ts#receiptOfOperation"],
+    "negativeTests": ["test/r37-async-process.test.ts#R37", "test/r37-preparation-boundaries.test.ts#R37"]
+  },
+  {
+    "source": "implementation/physical-ordering.md",
+    "requirements": ["SEQ-003"],
+    "owner": "src/runtime/broker-lifetime.ts#BrokerLifetime",
+    "entrypoint": "src/entry/broker.ts#main",
+    "callPath": ["src/entry/broker.ts#main", "src/runtime/broker-lifetime.ts#BrokerLifetime", "src/runtime/broker-lifetime.ts#settleWithin", "src/process/preparation.ts#preparationShutdownBarrier"],
+    "negativeTests": ["test/r37-shutdown-observation.test.ts#R37"]
+  },
+  {
+    "source": "implementation/compliance.md",
+    "requirements": ["COMP-005", "COMP-006"],
+    "owner": "scripts/traceability.mjs#applyOwnerLinks",
+    "entrypoint": "scripts/compliance.mjs#loadTraceInventory",
+    "callPath": ["scripts/compliance.mjs#loadTraceInventory", "scripts/traceability.mjs#loadTraceInventory", "scripts/traceability.mjs#applyOwnerLinks", "scripts/traceability.mjs#indexTrace"],
+    "negativeTests": ["test/compliance.test.ts#COMP-005/006", "test/traceability-policy.test.mjs#R39"]
+  },
+  {
+    "source": "implementation/test-matrix.md",
+    "requirements": ["TEST-006"],
+    "owner": "scripts/traceability.mjs#inventoryAcceptance",
+    "entrypoint": "scripts/adversarial-report.mjs#inventoryAcceptance",
+    "callPath": ["scripts/adversarial-report.mjs#inventoryAcceptance", "scripts/traceability.mjs#inventoryAcceptance"],
+    "negativeTests": ["test/traceability-policy.test.mjs#R39"]
+  }
+]
