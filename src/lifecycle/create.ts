@@ -22,6 +22,7 @@ import { CreationPublicationObserver } from "./create-publication.js";
  */
 export class CreateCoordinator {
   private readonly publication: CreationPublicationObserver;
+  private completing: { readonly id: string; readonly task: Promise<Receipt> } | null = null;
   constructor(private readonly store: Store, private readonly units: UnitsModule,
     private readonly paths: LifecyclePaths, private readonly policy: LifecyclePolicy,
     private readonly workspace: WorkspaceCoordinator, private readonly mail: MailModule | null) {
@@ -143,7 +144,7 @@ export class CreateCoordinator {
     });
     if (accepted.outcome === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
     if (accepted.linked) return this.settleLinked(id, accepted.linked, input.name);
-    return this.finish(id);
+    return this.finish(id, true, auth);
   }
 
   async reconcile(id: string, allowActivation = true): Promise<void> {
@@ -171,7 +172,15 @@ export class CreateCoordinator {
     return lifecycleReceipt(this.store, id);
   }
 
-  private async finish(id: string, allowActivation = true): Promise<Receipt> {
+  private finish(id: string, allowActivation = true, auth?: AuthContext): Promise<Receipt> {
+    if (this.completing) return this.completing.id === id ? this.completing.task :
+      Promise.reject(new StoreError("BROKER_UNAVAILABLE", "another accepted creation is completing; its intent is retained"));
+    const task = Promise.resolve().then(() => this.finishAccepted(id, allowActivation, auth))
+      .finally(() => { if (this.completing?.task === task) this.completing = null; });
+    this.completing = { id, task }; return task;
+  }
+
+  private async finishAccepted(id: string, allowActivation: boolean, auth?: AuthContext): Promise<Receipt> {
     const mail = this.requireMail();
     const operation = this.store.getOperationById(id);
     if (!operation || operation.kind !== "agent.create") throw new StoreError("REQUEST_NOT_FOUND", `no create operation ${id}`);
@@ -186,17 +195,36 @@ export class CreateCoordinator {
     const agent = this.store.getAgent(plan.spec.name);
     if (!agent || agent.specHash !== plan.specHash || resolvedSpecDigest(resolvedSpecOf(agent)) !== plan.specHash)
       throw new StoreError("STORE_CORRUPT", "create agent/spec mismatch");
-    mail.publishCreateInitial(plan.initialMessage); // Validate immutable bytes before physical preparation.
-    this.workspace.ensure(plan);
+    const assertCurrent = (): void => {
+      const current = this.store.getAgent(plan.spec.name);
+      if (!current || current.specHash !== plan.specHash) throw new StoreError("STORE_CORRUPT", "create owner changed during preparation");
+      if (current.incarnation !== agent.incarnation) throw new StoreError("RUN_TERMINATION_UNKNOWN", "create incarnation changed during preparation");
+      if (auth) {
+        // Keep the live lease object, not a copied capability Set. Recovery has
+        // its own accepted-intent policy and never fabricates this live context.
+        this.policy.refresh();
+        const resolved = this.policy.resolve(auth, { name: plan.spec.name, from: plan.spec.from, brief: plan.spec.brief });
+        if (resolved.specHash !== plan.specHash) throw new StoreError("POLICY_CHANGED", "child policy differs from accepted creation");
+      }
+    };
+    mail.publishCreateInitial(plan.initialMessage);
+    await this.workspace.ensure(plan);
+    const fresh = this.store.getOperationById(id);
+    if (!fresh || fresh.kind !== "agent.create" || fresh.planJson !== operation.planJson)
+      throw new StoreError("STORE_CORRUPT", "accepted creation changed during workspace preparation");
+    if (fresh.state === "succeeded" || fresh.state === "failed") return receiptOfOperation(fresh);
+    assertCurrent();
     ensureDurableDirectory(join(agentRootPathAt(this.paths.stateRoot, plan.spec.name), "home"));
     ensureDurableDirectory(join(this.paths.stateRoot, "mail", "inboxes", plan.spec.name));
-    const proof = this.publication.ready(operation); // actual unit install -> logical readiness
+    // Current authority -> installation/readiness is a synchronous section.
+    const proof = this.publication.ready(fresh);
     await mail.publishGated(id, proof);
-    const current = this.store.getAgent(plan.spec.name);
-    if (!current || current.specHash !== plan.specHash) throw new StoreError("STORE_CORRUPT", "create owner changed during publication");
+    assertCurrent();
+    const current = this.store.getAgent(plan.spec.name)!;
     const desired = current.desired;
     if (desired === "enabled" && this.paths.hasGoal()) {
       if (!allowActivation || this.paths.activationAllowed?.() === false) return lifecycleReceipt(this.store, id);
+      // No await between current identity/stop/activation checks and start.
       this.units.start(plan.spec.name, false);
     }
     this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.create", agent: plan.spec.name, desired, remainingOperations: [] })));
