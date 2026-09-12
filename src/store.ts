@@ -132,7 +132,7 @@ export class Store {
       if (!validDesiredTransition(existing.desired, agent.desired)) throw new StoreError("INVALID_REQUEST", `invalid desired transition ${existing.desired}->${agent.desired}`);
       this.db.prepare("UPDATE agents SET desired=?, updated_at_ms=? WHERE name=?").run(agent.desired, now, agent.name);
     }
-    if (agent.incarnation !== undefined) this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=? WHERE name=?").run(agent.incarnation, Date.now(), agent.name);
+    if (agent.incarnation !== undefined) this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=? WHERE name=?").run(agent.incarnation, now, agent.name);
     if (agent.specHash !== undefined || agent.specJson !== undefined) {
       const current = this.getAgent(agent.name);
       if (!current) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
