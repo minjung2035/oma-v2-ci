@@ -4,7 +4,7 @@
 import { capabilityCheck } from "./domain/capabilities.js";
 import { resourceLimitsCheck } from "./domain/resources.js";
 import {
-  isMessageIdForOperation, isMailObjectRelativePathFor, isPublishedRefFor,
+  isMessageIdForOperation, isMailObjectRelativePathFor, isPublishedRefFor, isPublishedRef,
 } from "./domain/derived.js";
 import {
   isWorkspacePathFor, isSubmitBundlePathFor, isContextStagingPathFor, isMailArchivePathFor,
@@ -16,12 +16,14 @@ import {
   checkObject,
   checkOid,
   checkString,
+  checkExportRef,
   messagePlanCheck,
   operationResultCheck,
   type Check,
 } from "./validate.js";
 import {
   isValidActorName,
+  isValidActor,
   isValidMessageId,
   isValidOperationId,
 } from "./ids.js";
@@ -32,11 +34,7 @@ const messageIdCheck: Check = (value) =>
   isValidMessageId(value) ? null : "invalid message id";
 const sha256Check = checkString({ re: /^[0-9a-f]{64}$/ });
 const nonEmpty = checkString({ min: 1 });
-const actorOrPrincipal: Check = (value) =>
-  value === "principal" ||
-  (typeof value === "string" && isValidActorName(value))
-    ? null
-    : "invalid actor";
+const actorOrPrincipal: Check = (value) => isValidActor(value) ? null : "invalid actor";
 
 const resolvedSpecCheck = checkObject({
   name: (value) =>
@@ -141,14 +139,14 @@ const checks: Readonly<Record<string, Check>> = {
   "git.submit": checkObject({
     kind: checkEnum(["git.submit"] as const),
     candidate: checkOid,
-    exportRef: checkString({ re: /^refs\/oma\/export\/[A-Za-z0-9._-]{1,96}$/ }),
+    exportRef: checkExportRef,
     prerequisites: checkArray(checkOid),
     bundle: (value) => value === null ? null : checkObject({
       path: nonEmpty,
       sha256: sha256Check,
       bytes: checkInt({ min: 1 }),
     })(value),
-    publishedRef: nonEmpty,
+    publishedRef: (value) => isPublishedRef(value) ? null : "invalid published ref",
     message: messagePlanCheck,
   }),
   // `result` is retained only for compatibility with already accepted rows.
@@ -276,7 +274,7 @@ export function operationResultRelationCheck(
     case "agent.start":
     case "agent.stop":
       if (result.agent !== plan.agent)
-        return "lifecycle result agent doesnot match accepted plan";
+        return "lifecycle result agent does not match accepted plan";
       return result.desired === plan.desired
         ? null
         : "lifecycle result desired state does not match accepted plan";
