@@ -1,4 +1,4 @@
-// MUST [UNIT-004]/[LIFE-006]/[REC-007]: composition under a single process lifetime.
+// UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { Store } from "../store.js";
@@ -18,9 +18,7 @@ import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
 
-function usage(): never {
-  console.error("usage: broker.js --society <name> [--config <path>]"); process.exit(4);
-}
+function usage(): never { console.error("usage: broker.js --society <name> [--config <path>]"); process.exit(4); }
 const args = process.argv.slice(2);
 const societyIdx = args.indexOf("--society"); const configIdx = args.indexOf("--config");
 if (societyIdx < 0 || args[societyIdx + 1] === undefined) usage();
@@ -29,10 +27,8 @@ if (!isValidSocietyName(society)) usage();
 const stateRoot = join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/tmp", ".local", "share"), "oma", society);
 const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
 const configPath = configIdx >= 0 && args[configIdx + 1] !== undefined ? args[configIdx + 1]! : join(stateRoot, "config.json");
-
 async function main(): Promise<void> {
   mkdirSync(runRoot, { recursive: true });
-  // No config, database, migration, bootstrap or repository observation precedes this lock.
   const lock = ProcessLock.acquire(join(runRoot, "broker.lock"));
   let graceSeconds: number | null = null;
   const lifetime = new BrokerLifetime(lock, () => {
@@ -44,15 +40,11 @@ async function main(): Promise<void> {
     exitStatus = Math.max(exitStatus, code);
     if (stopping) return stopping;
     stopping = lifetime.shutdown().then(() => { process.exitCode = exitStatus; }, error => {
-      console.error("broker shutdown requires process termination:", error instanceof Error ? error.message : String(error));
-      // Grace expiry keeps DB/lock held. OS termination releases descriptors;
-      // durable accepted intents remain recovery input, never fabricated success.
-      process.exit(1);
+      console.error("broker shutdown requires process termination:", error instanceof Error ? error.message : String(error)); process.exit(1);
     });
     return stopping;
   };
-  process.once("SIGTERM", () => { void stop(0); });
-  process.once("SIGINT", () => { void stop(0); });
+  process.once("SIGTERM", () => { void stop(0); }); process.once("SIGINT", () => { void stop(0); });
   try {
     const cfg = loadConfig(configPath);
     if (cfg.society !== society) throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
@@ -62,10 +54,9 @@ async function main(): Promise<void> {
     const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
     lifetime.retainStore(() => store.close());
     const mail = new MailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages, cfg.limits);
-    const units = new UnitsModule(society, {
-      node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society, agent: "",
-    }, undefined, Object.fromEntries(Object.entries(cfg.agentProfiles).map(([name, profile]) => [name, profile.resources])),
-    agent => store.getAgent(agent)?.incarnation ?? null);
+    const units = new UnitsModule(society, { node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society, agent: "" },
+      undefined, Object.fromEntries(Object.entries(cfg.agentProfiles).map(([name, profile]) => [name, profile.resources])),
+      agent => store.getAgent(agent)?.incarnation ?? null);
     const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
     const resolveSpec = createChildSpecResolver(() => {
       const current = loadConfig(configPath);
@@ -74,12 +65,9 @@ async function main(): Promise<void> {
     }, () => store.inTransaction);
     let contextOwner: GitModule | null = null;
     const hasGoal = (): boolean => contextOwner?.hasCommittedContext() ?? false;
-    const lifecycle = new LifecycleModule(store, units, {
-      stateRoot, projectGit: join(stateRoot, "repos", "project.git"), society, hasGoal,
-      activationAllowed: () => lifetime.permitsActivation,
-    }, resolveSpec, mail, cfg.quota);
-    const git = new GitModule({
-      stateRoot, projectGit: join(stateRoot, "repos", "project.git"), contextGit: join(stateRoot, "repos", "context.git"),
+    const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: join(stateRoot, "repos", "project.git"), society,
+      hasGoal, activationAllowed: () => lifetime.permitsActivation }, resolveSpec, mail, cfg.quota);
+    const git = new GitModule({ stateRoot, projectGit: join(stateRoot, "repos", "project.git"), contextGit: join(stateRoot, "repos", "context.git"),
       worldDir: join(stateRoot, "world"), society, quarantineTmpBytes: cfg.limits.bundleBytes,
       quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
       checkTimeoutSeconds: Math.max(1, ...cfg.integration.checks.map(check => check.resources.checkTimeoutSeconds)),
@@ -93,10 +81,9 @@ async function main(): Promise<void> {
     contextOwner = git;
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
       projectGit: join(stateRoot, "repos", "project.git"), hasGoal, activationAllowed: () => lifetime.permitsActivation,
+      sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
     });
-    const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile, {
-      stateRoot, runRoot, society, hasGoal,
-    }, cfg.limits, lock);
+    const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile, { stateRoot, runRoot, society, hasGoal }, cfg.limits, lock);
     lifetime.attach(broker);
     const validateStoredProfiles = () => {
       for (const agent of store.listAgents()) {
@@ -123,10 +110,7 @@ async function main(): Promise<void> {
       activate: async () => { await reconcile.sweep(); views.refreshWorld(); },
     });
   } catch (error) {
-    console.error("broker startup failed:", error instanceof Error ? error.message : String(error));
-    await stop(1);
+    console.error("broker startup failed:", error instanceof Error ? error.message : String(error)); await stop(1);
   }
 }
-void main().catch(error => {
-  console.error("broker initialization failed:", error instanceof Error ? error.message : String(error)); process.exitCode = 1;
-});
+void main().catch(error => { console.error("broker initialization failed:", error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
