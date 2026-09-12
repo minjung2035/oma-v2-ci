@@ -2,8 +2,7 @@
 // Unresolved sandbox primitives fail closed; no bundle parsing on the host.
 import {
   constants, mkdirSync, mkdtempSync, writeFileSync, existsSync, openSync,
-  fsyncSync, closeSync, renameSync, symlinkSync, readdirSync,
-  lstatSync, chmodSync, rmSync, readFileSync,
+  fsyncSync, closeSync, readdirSync, lstatSync, rmSync, readFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { spawnSync as nodeSpawnSync, type SpawnSyncReturns } from "node:child_process";
@@ -15,9 +14,11 @@ import { assertContextDirectory, readContextEntry } from "./storage/context-file
 import { contextEntriesCheck } from "./domain/context-policy.js";
 import { StoreError, classifyError, type EffectKnowledge } from "./domain/errors.js";
 import { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
-import { MailModule, buildEml, expandAddresses, fsyncDir, defaultReplyTo, defaultLogicalReplyTo, actorAddress, listAddress } from "./mail.js";
+import { MailModule, buildEml, expandAddresses, defaultReplyTo, defaultLogicalReplyTo, actorAddress, listAddress } from "./mail.js";
+import { fsyncDir, fsyncTree, ensureDurableDirectory } from "./storage/durable-fs.js";
+import { publishContextRevision } from "./storage/context-snapshot.js";
 import { generateOperationId, generateMessageId, isValidFullOid } from "./ids.js";
-import { publishedRefFor, mailObjectRelativePath, contextRevisionDisplayPath, contextRevisionLinkFor } from "./domain/derived.js";
+import { publishedRefFor, mailObjectRelativePath, contextRevisionDisplayPath } from "./domain/derived.js";
 import { submitStagingPathAt, submitBundlePathAt, contextStagingPathAt, contextRevisionPathAt } from "./storage/paths.js";
 import { requestHash, canonicalRequestParams, canonicalJson, sha256Hex } from "./hash.js";
 import { capabilitiesOf, assertCurrentActor } from "./authority.js";
@@ -145,7 +146,7 @@ export class GitModule {
     if (claim === "reused") throw reused(auth.actor, key);
     this.objectFormat(this.paths.projectGit, [input.candidate, ...input.prerequisites]);
     const opId = generateOperationId(); const messageId = generateMessageId(opId, 0);
-    const staging = submitStagingPathAt(this.paths.stateRoot, opId); mkdirSync(staging, { recursive: true });
+    const staging = submitStagingPathAt(this.paths.stateRoot, opId); ensureDurableDirectory(staging);
     const bundlePath = submitBundlePathAt(this.paths.stateRoot, opId);
     let digest: string | null = null;
     if (input.bundle) {
@@ -400,12 +401,12 @@ export class GitModule {
       verifyOffset += entry.bytes;
     }
     const opId = generateOperationId(); const staging = contextStagingPathAt(this.paths.stateRoot, opId);
-    const treeDir = join(staging, "tree"); mkdirSync(treeDir, { recursive: true }); assertContextDirectory(treeDir);
+    const treeDir = join(staging, "tree"); ensureDurableDirectory(treeDir); assertContextDirectory(treeDir);
     let offset = 0;
     for (const entry of input.entries) {
       const data = content.subarray(offset, offset + entry.bytes); offset += entry.bytes;
       const absolute = join(treeDir, entry.path); const parent = join(absolute, "..");
-      mkdirSync(parent, { recursive: true }); assertContextDirectory(parent);
+      ensureDurableDirectory(parent); assertContextDirectory(parent);
       const fd = openSync(absolute, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
     }
@@ -440,11 +441,11 @@ export class GitModule {
     // Verify all frozen source bytes before invoking a materializing Git command.
     for (const entry of entries) readContextEntry(treeDir, entry);
     if (!this.repositoryExists(this.paths.contextGit)) {
-      mkdirSync(this.paths.contextGit, { recursive: true });
+      ensureDurableDirectory(this.paths.contextGit);
       git(this.paths.contextGit, ["--git-dir", this.paths.contextGit, "init", "--bare"]);
     }
     const contextFormat = this.objectFormat(this.paths.contextGit, expected ? [expected] : []);
-    const work = join(treeDir, "..", "commit-work"); mkdirSync(work, { recursive: true }); assertContextDirectory(work);
+    const work = join(treeDir, "..", "commit-work"); ensureDurableDirectory(work); assertContextDirectory(work);
     const gitdir = join(work, ".git");
     const contextEnv: NodeJS.ProcessEnv = {
       ...gitEnv, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "broker@oma.invalid", GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: "broker@oma.invalid",
@@ -463,7 +464,7 @@ export class GitModule {
     for (const entry of entries) {
       const data = readContextEntry(treeDir, entry);
       const destination = join(work, entry.path); const parent = join(destination, "..");
-      mkdirSync(parent, { recursive: true }); assertContextDirectory(parent);
+      ensureDurableDirectory(parent); assertContextDirectory(parent);
       const existing = lstatSync(destination, { throwIfNoEntry: false });
       if (existing && !existing.isFile()) throw new StoreError("STORE_CORRUPT", `context work entry is not regular: ${entry.path}`);
       const fd = openSync(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
@@ -505,50 +506,9 @@ export class GitModule {
   private publishContextSnapshot(plan: ValidatedPlan<"context.publish">, source: string): void {
     this.publishSnapshotFiles(plan.candidate, plan.entries, source);
   }
-  /** CTX-004: also used by mirror repair only after canonical-tree verification. */
+  /** Mirror repair reaches this only after canonical-tree verification. */
   private publishSnapshotFiles(candidate: Oid, entries: ContextEntry[], source: string): void {
-    const invalid = contextEntriesCheck(entries, { requireSorted: true });
-    if (invalid || !isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", invalid ?? "invalid context revision");
-    assertContextDirectory(source);
-    const revisionsDir = join(this.paths.worldDir, "context", "revisions"); mkdirSync(revisionsDir, { recursive: true }); assertContextDirectory(revisionsDir);
-    const final = contextRevisionPathAt(this.paths.worldDir, candidate);
-    if (!lstatSync(final, { throwIfNoEntry: false })) {
-      const temporary = join(revisionsDir, `.prepare-${candidate}-${generateOperationId()}`); mkdirSync(temporary, { recursive: true });
-      try {
-        for (const entry of entries) {
-          const data = readContextEntry(source, entry);
-          const destination = join(temporary, entry.path); const parent = join(destination, "..");
-          mkdirSync(parent, { recursive: true }); assertContextDirectory(parent);
-          const fd = openSync(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o444);
-          try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
-        }
-        fsyncAll(temporary);
-        if (existsSync(join(temporary, "decisions"))) chmodSync(join(temporary, "decisions"), 0o555);
-        chmodSync(temporary, 0o555); renameSync(temporary, final); fsyncDir(revisionsDir);
-      } finally {
-        if (existsSync(temporary)) {
-          chmodSync(temporary, 0o700);
-          if (existsSync(join(temporary, "decisions"))) chmodSync(join(temporary, "decisions"), 0o700);
-          rmSync(temporary, { recursive: true, force: true });
-        }
-      }
-    }
-    assertContextDirectory(final);
-    const expectedPaths = new Set(entries.map(entry => entry.path));
-    const verifyTree = (directory: string, relative = ""): void => {
-      for (const name of readdirSync(directory)) {
-        const path = relative ? `${relative}/${name}` : name; const stat = lstatSync(join(directory, name));
-        if (stat.isDirectory() && path === "decisions" && entries.some(entry => entry.path.startsWith("decisions/"))) verifyTree(join(directory, name), path);
-        else if (!stat.isFile() || !expectedPaths.has(path)) throw new StoreError("STORE_CORRUPT", `unexpected context entry ${path}`);
-      }
-    };
-    verifyTree(final);
-    for (const entry of entries) { readContextEntry(final, entry); chmodSync(join(final, entry.path), 0o444); }
-    if (existsSync(join(final, "decisions"))) chmodSync(join(final, "decisions"), 0o555);
-    chmodSync(final, 0o555); fsyncAll(final);
-    const contextRoot = join(this.paths.worldDir, "context"); assertContextDirectory(contextRoot);
-    const link = join(contextRoot, `.current-${generateOperationId()}`);
-    symlinkSync(contextRevisionLinkFor(candidate), link); renameSync(link, join(contextRoot, "current")); fsyncDir(contextRoot);
+    publishContextRevision(this.paths.worldDir, candidate, entries, source);
   }
   private cleanContextExtras(root: string, keep: string[], relative = ""): void {
     assertContextDirectory(join(root, relative));
@@ -703,13 +663,5 @@ function statBytes(path: string): number {
   const stat = lstatSync(path); return stat.isFile() && stat.nlink === 1 ? stat.size : -1;
 }
 function fsyncAll(dir: string): void {
-  assertContextDirectory(dir);
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name); const stat = lstatSync(path);
-    if (stat.isDirectory()) { fsyncAll(path); continue; }
-    if (!stat.isFile()) throw new StoreError("STORE_CORRUPT", `non-regular context entry ${path}`);
-    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-    try { fsyncSync(fd); } finally { closeSync(fd); }
-  }
-  fsyncDir(dir);
+  fsyncTree(dir, "context-single-link");
 }
