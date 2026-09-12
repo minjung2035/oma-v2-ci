@@ -6,6 +6,7 @@ import { Store, type DeliveryRow, type OperationRow } from "./store.js";
 import { StoreError } from "./domain/errors.js";
 import { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
 export { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
+import { consumeSubmissionPublication, type SubmissionPublicationEvidence } from "./git/publication.js";
 import { assertCurrentActor } from "./authority.js";
 import { generateMessageId, generateOperationId, generateBatchId, parseMessageId } from "./ids.js";
 import { mailObjectFileName, mailArchiveDisplayPath, contextRevisionDisplayPath } from "./domain/derived.js";
@@ -211,9 +212,12 @@ export class MailModule {
     if (actual.size !== message.recipients.length || message.recipients.some(recipient => !actual.has(recipient))) throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operationId}`);
     return deliveries;
   }
-  async publishGated(operationId: string): Promise<void> {
+  async publishGated(operationId: string, proof?: SubmissionPublicationEvidence): Promise<void> {
     const operation = this.store.getOperationById(operationId);
     if (!operation) throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
+    // A submit must prove its own canonical ref before any archive/inbox effect.
+    // Other operation kinds retain their existing coordinator-owned gates.
+    if (operation.kind === "git.submit") consumeSubmissionPublication(proof, operation);
     const message = this.operationMessage(operation); const deliveries = this.operationDeliveries(operationId, message);
     this.messageHeaders(message); publishImmutableFile(this.objectPath(message.id), this.archivePath(message.id), message.sha256);
     for (const delivery of deliveries) { this.publishDelivery(message, delivery); this.store.transaction(() => this.store.markMaterialized(delivery.messageId, delivery.recipient)); }
