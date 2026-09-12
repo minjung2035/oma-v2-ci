@@ -11,9 +11,9 @@ import {
   receiptOfOperation, receiptExit, receiptLines, receiptNotFound,
   isRequestNotFound, type ReceiptOperation,
 } from "../src/protocol/receipts.js";
+import { receiptOperation } from "./fixtures/receipt-operation.js";
 
-const id = "op-12345678-1234-4234-8234-123456789abc";
-const pending: ReceiptOperation = { id, kind: "route.follow", state: "pending", resultJson: null, errorCode: null };
+const pending = receiptOperation();
 const corrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
 
 // Source specifications only. No test execution or generated PASS evidence is implied.
@@ -73,47 +73,55 @@ test("all public error codes preserve terminal rows and cannot authorize ambiguo
   assert.equal(StoreCompatibilityError, StoreError, "existing StoreError imports retain instanceof identity");
 });
 
-test("receipt projection is shared, validates results, and never rewrites its operation input", () => {
+test("receipt projection is shared and never reparses or rewrites its decoded operation", () => {
   assert.equal(mailReceipt, receiptOfOperation);
   const rows: ReceiptOperation[] = [
     pending,
-    { ...pending, state: "unknown" },
-    { ...pending, state: "failed", errorCode: "CHECK_FAILED" },
-    { ...pending, state: "succeeded", resultJson: '{"kind":"route.follow","topic":"commons","subscribed":true}' },
+    receiptOperation({ state: "unknown" }),
+    receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }),
+    receiptOperation({ state: "succeeded", result_json: '{"kind":"route.follow","topic":"work","subscribed":true}' }),
   ];
   for (const row of rows) {
     const before = JSON.stringify(row);
-    const immutable = Object.freeze(row);
-    const first = receiptOfOperation(immutable);
-    assert.deepEqual(mailReceipt(immutable), first);
-    assert.deepEqual(receiptOfOperation(immutable), first);
+    const first = receiptOfOperation(row);
+    assert.deepEqual(mailReceipt(row), first);
+    assert.deepEqual(receiptOfOperation(row), first);
     assert.equal(JSON.stringify(row), before, "projection must not normalize durable bytes");
+    assert.equal(Object.isFrozen(row), true);
     assert.equal(Object.hasOwn(first, "reason"), false, "no synthetic unknown wire field");
     if (first.state === "failed") assert.equal(first.error?.retry, "never");
   }
-  for (const row of [
-    { ...pending, resultJson: "{}" },
-    { ...pending, errorCode: "INTERNAL_ERROR" as const },
-    { ...pending, state: "succeeded" as const },
-    { ...pending, state: "succeeded" as const, resultJson: "{" },
-    { ...pending, state: "succeeded" as const, resultJson: '{"kind":"route.unfollow","topic":"commons","subscribed":false}' },
-    { ...pending, state: "failed" as const },
-  ]) assert.throws(() => receiptOfOperation(row), corrupt);
+  for (const damaged of [
+    { result_json: "{}" },
+    { error_code: "INTERNAL_ERROR" },
+    { state: "succeeded" },
+    { state: "succeeded", result_json: "{" },
+    { state: "succeeded", result_json: '{"kind":"route.unfollow","topic":"work","subscribed":false}' },
+    { state: "failed" },
+  ]) {
+    let projections = 0;
+    assert.throws(() => {
+      const decoded = receiptOperation(damaged);
+      projections++;
+      receiptOfOperation(decoded);
+    }, corrupt);
+    assert.equal(projections, 0, "corrupt raw rows must not reach receipt projection");
+  }
 });
 
 test("terminal receipt exit codes differ from uncertain direct failures", () => {
   assert.equal(receiptExit(receiptOfOperation(pending)), 0);
   assert.equal(receiptLines(receiptOfOperation(pending), "frozen-1")[0], "접수됨 / 아직 완료되지 않음");
   assert.match(receiptLines(receiptOfOperation(pending), "frozen-1")[1]!, /--request frozen-1/);
-  assert.equal(receiptExit(receiptOfOperation({ ...pending, state: "unknown" })), 3);
-  assert.equal(receiptExit(receiptOfOperation({ ...pending, state: "failed", errorCode: "CHECK_FAILED" })), 2);
-  assert.equal(receiptExit(receiptOfOperation({ ...pending, state: "failed", errorCode: "SPIKE_UNRESOLVED" })), 4);
+  assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "unknown" }))), 3);
+  assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }))), 2);
+  assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "SPIKE_UNRESOLVED" }))), 4);
   assert.equal(errorExit("STORE_CORRUPT"), 3);
   assert.equal(errorExit("BROKER_UNAVAILABLE"), 3);
   assert.equal(errorExit("CAPABILITY_DENIED"), 2);
   assert.equal(errorExit("UNSUPPORTED_PROFILE"), 4);
   assert.equal(isRequestNotFound(receiptNotFound), true);
-  assert.equal(isRequestNotFound(receiptOfOperation({ ...pending, state: "failed", errorCode: "REQUEST_NOT_FOUND" })), false);
+  assert.equal(isRequestNotFound(receiptOfOperation(receiptOperation({ state: "failed", error_code: "REQUEST_NOT_FOUND" }))), false);
 });
 
 test("public failures omit exception payloads and retain repair or lookup guidance", () => {
