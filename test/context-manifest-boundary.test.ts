@@ -18,14 +18,10 @@ test("a canonical manifest retains its frozen order and exact metadata", () => {
   assert.equal(JSON.stringify(valid), before);
 });
 
-test("unsafe paths never reach a context materializer", () => {
+// Physical effect spies are exercised by context-recovery-corruption-oracle.test.ts.
+test("unsafe paths are rejected by the canonical manifest policy", () => {
   for (const path of ["../GOAL.md", "/GOAL.md", ".git/config", "decisions/../GOAL.md", "decisions/nested/one.md", "decisions\\one.md", "GOAL.md\0"]) {
-    const damaged = [{ ...goal, path }];
-    let effects = 0;
-    const invalid = check(damaged);
-    if (invalid === null) effects++;
-    assert.notEqual(invalid, null, path);
-    assert.equal(effects, 0, path);
+    assert.notEqual(check([{ ...goal, path }]), null, path);
   }
 });
 
