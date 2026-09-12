@@ -7,7 +7,7 @@ import { StoreError } from "./domain/errors.js";
 import { unitNameFor as unitName } from "./domain/derived.js";
 import { replaceDerivedFile } from "./storage/durable-fs.js";
 import { renderUnit, type RenderValues } from "./units/render.js";
-import { executeUnitCommand, type UnitCommandOutcome } from "./units/execute.js";
+import { executeUnitCommand, observeUnitCommand, type UnitCommandOutcome } from "./units/execute.js";
 import { parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "./units/observe.js";
 
 export { unitName, renderUnit };
@@ -19,6 +19,7 @@ export type IncarnationReader = (agent: Actor) => number | null;
 export class UnitsModule {
   onRevokeRun: ((agent: Actor) => void) | undefined;
   private incarnationOf: IncarnationReader | null;
+  private observationTask: { readonly agent: Actor; readonly task: Promise<UnitObservation> } | null = null;
   constructor(
     private readonly society: string,
     private readonly values: RenderValues,
@@ -48,7 +49,6 @@ export class UnitsModule {
       ...this.values, ...overrides, agent: this.agentFrom(name),
     });
     const target = join(this.installDir, name);
-    // Rebuildable view: durable-fs owns write -> file fsync -> rename -> parent fsync.
     replaceDerivedFile(target, rendered, 0o600);
     const linked = this.command(["link", target]);
     if (linked.kind === "unknown" || (linked.kind === "failed" && !/already|exists/i.test(linked.stdout + linked.stderr)))
@@ -70,7 +70,6 @@ export class UnitsModule {
       if (parsed.kind !== "succeeded" || !micros || Number(micros[1]) !== overrides.cpuQuotaPercent * 10000)
         throw new StoreError("UNSUPPORTED_PROFILE", `${name} effective CPU quota mismatch`);
     }
-    // tmp/workspace/staging enforcement is a separate kernel/filesystem gate.
   }
 
   private agentFrom(unit: string): string {
@@ -133,7 +132,6 @@ export class UnitsModule {
       const outcome = this.command(["show", unit, "--property=LoadState", "--value"]);
       return outcome.kind === "succeeded" && outcome.stdout.trim() === "not-found";
     };
-    // Each action is independent. Unknown observations do not skip safety actions.
     for (const action of [
       () => { if (!missing(path)) this.run(["stop", path]); },
       () => { if (!missing(path)) this.run(["disable", path]); },
@@ -152,16 +150,27 @@ export class UnitsModule {
 
   unitCgroup(kind: "principal-relay" | "reconcile"): string {
     const outcome = this.command(["show", unitName(this.society, kind, "service"), "-p", "ControlGroup"]);
-    if (outcome.kind !== "succeeded") return ""; // diagnostic/authentication failure, never death proof
+    if (outcome.kind !== "succeeded") return "";
     const lines = outcome.stdout.trim().split("\n");
     return lines.length === 1 && lines[0]!.startsWith("ControlGroup=/") ? lines[0]!.slice("ControlGroup=".length) : "";
   }
 
+  private observationArgs(agent: Actor): readonly string[] {
+    return ["show", unitName(this.society, agent, "service"),
+      "-p", "ActiveState", "-p", "SubState", "-p", "Result", "-p", "ExecMainStatus", "-p", "ControlGroup", "-p", "InvocationID"];
+  }
   observe(agent: Actor): UnitObservation {
-    return parseUnitObservation(this.command([
-      "show", unitName(this.society, agent, "service"),
-      "-p", "ActiveState", "-p", "SubState", "-p", "Result", "-p", "ExecMainStatus", "-p", "ControlGroup", "-p", "InvocationID",
-    ]));
+    return parseUnitObservation(this.command(this.observationArgs(agent)));
+  }
+  /** Recovery diagnostics only. Never use this stale-able result as death proof.
+   * One outstanding observation; no array of queued show commands is retained.
+   */
+  observeAsync(agent: Actor): Promise<UnitObservation> {
+    if (this.observationTask) return this.observationTask.agent === agent ? this.observationTask.task :
+      Promise.reject(new StoreError("BROKER_UNAVAILABLE", "unit observation is busy"));
+    const task = observeUnitCommand(["--user", ...this.observationArgs(agent)]).then(parseUnitObservation)
+      .finally(() => { if (this.observationTask?.task === task) this.observationTask = null; });
+    this.observationTask = { agent, task }; return task;
   }
 
   /** Diagnostic API. Read failure throws rather than pretending the cgroup is empty. */
