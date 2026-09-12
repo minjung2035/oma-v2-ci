@@ -1,67 +1,159 @@
-// Pi RPC JSONL client (rpc.md): LF-delimited frames on the child's stdio.
-// Buffers partial lines, parses events, and exposes send + observer hooks.
+// Gated Pi RPC transport. This helper neither starts Runner consumption nor proves S-03.
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { spawn } from "node:child_process";
-
-export interface PiEvent {
-  type: string;
-  id?: string;
-  [k: string]: unknown;
+import { performance } from "node:perf_hooks";
+import type { ProtocolLimits } from "../implementation/contracts.js";
+import { StoreError } from "./domain/errors.js";
+import { JsonlReader, type PiEvent } from "./protocol/jsonl.js";
+export type { PiEvent } from "./protocol/jsonl.js";
+export type PiRpcLimits = Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">;
+interface Timer { cancel(): void }
+function alarm(seconds: number, action: () => void): Timer {
+  const deadline = performance.now() + seconds * 1000;
+  let active = true; let timer: ReturnType<typeof setTimeout> | undefined;
+  const tick = (): void => {
+    if (!active) return;
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) { active = false; action(); return; }
+    timer = setTimeout(tick, Math.max(1, Math.min(0x7fffffff, remaining)));
+  };
+  tick();
+  return { cancel() { active = false; if (timer !== undefined) clearTimeout(timer); } };
 }
+interface PendingWrite { callbackDone: boolean; drained: boolean; timer: Timer; resolve(): void; reject(error: unknown): void }
+export type PiTransportEnd = { readonly state: "closed" } | { readonly state: "failed"; readonly error: unknown };
 
 export class PiRpcClient {
-  private out = Buffer.alloc(0);
-  private observers: Array<(e: PiEvent) => void> = [];
-  readonly child: ChildProcessWithoutNullStreams;
+  private readonly reader: JsonlReader;
+  private readonly limits: Readonly<PiRpcLimits>;
+  private readonly observers = new Set<(event: PiEvent) => void>();
+  private state: "open" | "closed" = "open";
+  private partialLineTimer: Timer | null = null;
+  private pending: PendingWrite | null = null;
+  private stderrCount = 0;
+  private endTransport!: (result: PiTransportEnd) => void;
+  readonly completion: Promise<PiTransportEnd>;
 
-  constructor(child: ChildProcessWithoutNullStreams) {
-    this.child = child;
-    child.stdout.on("data", (d) => this.ingest(Buffer.from(d)));
+  /** Caller must supply already reviewed host limits. There is no new unlimited
+   * Pi budget or silent fallback profile. There is one pending stdin write and
+   * zero queued parsed events; observers are synchronous and may unsubscribe.
+   */
+  constructor(readonly child: ChildProcessWithoutNullStreams, limits: PiRpcLimits) {
+    if (!limits || [limits.frameBytes, limits.idleStreamSeconds, limits.receiptWaitSeconds]
+      .some(value => !Number.isSafeInteger(value) || value <= 0))
+      throw new StoreError("UNSUPPORTED_PROFILE", "Pi transport requires explicit positive channel limits");
+    this.limits = Object.freeze({ ...limits });
+    this.reader = new JsonlReader(limits.frameBytes);
+    this.completion = new Promise(resolve => { this.endTransport = resolve; });
+    child.stdout.on("data", this.onData); child.stdout.once("end", this.onEnd);
+    child.stdout.on("error", this.onError); child.stderr.on("data", this.onStderr);
+    child.stderr.on("error", this.onError); child.stdin.on("error", this.onError);
+    child.stdin.on("drain", this.onDrain); child.once("error", this.onError);
+    child.once("close", this.onChildClose);
   }
-
-  onEvent(fn: (e: PiEvent) => void): void {
-    this.observers.push(fn);
+  get diagnosticMetadata(): Readonly<{ stderrBytes: number }> { return { stderrBytes: this.stderrCount }; }
+  onEvent(observer: (event: PiEvent) => void): () => void {
+    if (this.state !== "open") throw new StoreError("BROKER_UNAVAILABLE", "Pi transport is closed");
+    this.observers.add(observer);
+    return () => { this.observers.delete(observer); };
   }
-
-  /** MUST [rpc.md]: one JSON object per line; split on LF only (readline is not compliant). */
-  private ingest(chunk: Buffer): void {
-    this.out = Buffer.concat([this.out, chunk]);
-    let nl: number;
-    while ((nl = this.out.indexOf(0x0a)) >= 0) {
-      const line = this.out.subarray(0, nl).toString("utf8").replace(/\r$/, "");
-      this.out = this.out.subarray(nl + 1);
-      if (!line.trim()) continue;
-      try {
-        const evt = JSON.parse(line) as PiEvent;
-        if (typeof evt.type === "string") {
-          for (const fn of this.observers) fn(evt);
-        }
-      } catch {
-        // non-JSON progress lines (if any) are ignored; structured events matter
-      }
-    }
-  }
-
-  send(obj: Record<string, unknown>): void {
-    this.child.stdin.write(JSON.stringify(obj) + "\n");
-  }
-
-  close(): void {
+  private readonly onData = (data: Buffer | string): void => {
+    if (this.state !== "open") return;
+    if (!Buffer.isBuffer(data)) { this.terminate(new StoreError("INVALID_REQUEST", "Pi stdout must remain in byte mode")); return; }
     try {
-      this.child.stdin.end();
-    } catch {
-      /* already closed */
-    }
+      this.reader.feed(data, event => {
+        for (const observer of [...this.observers]) {
+          if (this.state !== "open") break;
+          if (this.observers.has(observer)) observer(event);
+        }
+      });
+      if (this.state !== "open") return;
+      if (this.reader.pendingBytes === 0) { this.partialLineTimer?.cancel(); this.partialLineTimer = null; }
+      else if (this.partialLineTimer === null) {
+        // Absolute lifetime of a partial line: dribbling bytes cannot renew it forever.
+        this.partialLineTimer = alarm(this.limits.idleStreamSeconds,
+          () => this.terminate(new StoreError("DEADLINE_EXCEEDED", "Pi JSONL line deadline exceeded")));
+      }
+    } catch (error) { this.terminate(error); }
+  };
+  private readonly onStderr = (data: Buffer | string): void => {
+    // Drain without retaining or copying prompt/provider bytes to public logs.
+    const length = typeof data === "string" ? Buffer.byteLength(data) : data.byteLength;
+    this.stderrCount = Math.min(Number.MAX_SAFE_INTEGER, this.stderrCount + length);
+  };
+  private readonly onError = (error: Error): void => this.terminate(error);
+  private readonly onEnd = (): void => {
+    if (this.state !== "open") return;
+    try { this.reader.finish(); this.terminate(); } catch (error) { this.terminate(error); }
+  };
+  private readonly onChildClose = (): void => this.onEnd();
+  private readonly onDrain = (): void => {
+    if (!this.pending) return;
+    this.pending.drained = true; this.finishWrite();
+  };
+  private finishWrite(): void {
+    const pending = this.pending;
+    if (!pending || !pending.callbackDone || !pending.drained) return;
+    this.pending = null; pending.timer.cancel(); pending.resolve();
+  }
+  send(object: Record<string, unknown>): Promise<void> {
+    if (this.state !== "open") return Promise.reject(new StoreError("BROKER_UNAVAILABLE", "Pi transport is closed"));
+    if (this.pending) return Promise.reject(new StoreError("LIMIT_EXCEEDED", "one Pi command may be pending"));
+    let text: string;
+    try {
+      const value = JSON.stringify(object);
+      if (value === undefined) throw new Error("not serializable");
+      text = value;
+      if (Buffer.byteLength(text) > this.limits.frameBytes)
+        return Promise.reject(new StoreError("FRAME_TOO_LARGE", "Pi command exceeds the configured frame bound"));
+    } catch { return Promise.reject(new StoreError("INVALID_REQUEST", "Pi command is not serializable JSON")); }
+    return new Promise((resolve, reject) => {
+      const pending: PendingWrite = { callbackDone: false, drained: false, resolve, reject,
+        timer: alarm(this.limits.receiptWaitSeconds,
+          () => this.terminate(new StoreError("DEADLINE_EXCEEDED", "Pi stdin write deadline exceeded"))) };
+      this.pending = pending;
+      try {
+        const accepted = this.child.stdin.write(`${text}\n`, error => {
+          if (this.pending !== pending) return;
+          if (error) { this.terminate(error); return; }
+          pending.callbackDone = true; this.finishWrite();
+        });
+        if (accepted) pending.drained = true;
+        this.finishWrite();
+      } catch (error) { this.terminate(error); }
+    });
+  }
+  close(): void { this.terminate(); }
+  private terminate(error?: unknown): void {
+    if (this.state === "closed") return;
+    this.state = "closed"; this.reader.close(); this.observers.clear();
+    this.partialLineTimer?.cancel(); this.partialLineTimer = null;
+    const pending = this.pending; this.pending = null;
+    pending?.timer.cancel(); pending?.reject(error ?? new StoreError("BROKER_UNAVAILABLE", "Pi transport closed during write"));
+    const child = this.child;
+    child.stdout.off("data", this.onData); child.stdout.off("end", this.onEnd);
+    child.stdout.off("error", this.onError); child.stderr.off("data", this.onStderr);
+    child.stderr.off("error", this.onError); child.stdin.off("error", this.onError);
+    child.stdin.off("drain", this.onDrain); child.off("error", this.onError); child.off("close", this.onChildClose);
+    // Late OS stream errors are absorbed after ownership is released, not emitted
+    // as unhandled EventEmitter errors or delivered to stale observers.
+    const ignore = (): void => {};
+    child.on("error", ignore);
+    for (const stream of [child.stdin, child.stdout, child.stderr]) { stream.on("error", ignore); stream.destroy(); }
+    if (child.exitCode === null && child.signalCode === null) { try { child.kill("SIGKILL"); } catch { /* only this owned child */ } }
+    this.endTransport(error === undefined ? { state: "closed" } : { state: "failed", error });
   }
 }
 
-/** spawn the sandboxed Pi from a ready argv array (already contains bwrap ... -- pi). */
-export function spawnSandboxed(
-  argv: readonly string[],
-  env: Record<string, string>,
-): ChildProcessWithoutNullStreams {
-  return spawn(argv[0]!, argv.slice(1), {
-    env: { ...process.env, ...env },
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+/** Host-only spawn boundary; never inherits credentials from process.env.
+ * The sandbox plan owns namespace/mount/FD policy. This is not a kernel proof
+ * or a route around the Runner/candidate SPIKE gates.
+ */
+export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
+  if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2 || argv.some(value => typeof value !== "string" || value.includes("\0")))
+    throw new StoreError("UNSUPPORTED_PROFILE", "sandbox spawn requires direct pinned bubblewrap argv");
+  for (const [key, value] of Object.entries(env))
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0"))
+      throw new StoreError("UNSUPPORTED_PROFILE", "sandbox environment is invalid");
+  return spawn("/usr/bin/bwrap", argv.slice(1), { env: { ...env }, stdio: ["pipe", "pipe", "pipe"] });
 }
