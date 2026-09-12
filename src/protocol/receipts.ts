@@ -1,6 +1,6 @@
 /** DB-005/009, IPC-008: one receipt projection, with no durable writes. */
 import type { ErrorCode, MutationMethod, OperationId, Receipt } from "../../implementation/contracts.js";
-import { StoreError, terminalFailure, isErrorCode, type CliExitCode } from "../domain/errors.js";
+import { StoreError, terminalFailure, isErrorCode, isPreacceptOnlyFailure, type CliExitCode } from "../domain/errors.js";
 import { decodeReceipt } from "./receipt-codec.js";
 
 /** Store validates plan/result relations before exposing this projection. This
@@ -26,6 +26,8 @@ export function receiptOfOperation(operation: ReceiptOperation): Receipt {
       throw new StoreError("STORE_CORRUPT", "non-success operation has a result");
     if (operation.state === "failed") {
       if (!isErrorCode(operation.errorCode)) throw new StoreError("STORE_CORRUPT", "failed operation has no valid error code");
+      if (isPreacceptOnlyFailure(operation.errorCode))
+        throw new StoreError("STORE_CORRUPT", "accepted operation has a preaccept-only failure");
       raw.error = terminalFailure(operation.errorCode);
     } else if (operation.errorCode !== null) {
       throw new StoreError("STORE_CORRUPT", "non-failed operation has an error code");
