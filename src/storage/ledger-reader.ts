@@ -1,9 +1,10 @@
-/** DB-009: SELECT-only facade. Each relation is scoped to an identity/index;
- * scalar decoding, local references and whole-list checks remain distinct.
+/** DB-009: SELECT-only facade. Full-row, local-reference and whole-list
+ * validation are distinct; every lineage rule belongs to LineageSnapshot.
  */
 import type { DatabaseSync } from "node:sqlite";
 import type { MessagePlan } from "../../implementation/contracts.js";
 import type { RepositoryIdentity } from "../durable.js";
+import { LineageSnapshot } from "../domain/lineage.js";
 import { decodeOperation, type DecodedOperation, type OperationDecodeContext, type OperationOf } from "./operation-codec.js";
 import {
   decodeAgentRow, decodeAgentSpec, decodeSubscriptionRow, decodeDeliveryRow, decodeBatchRow,
@@ -12,29 +13,30 @@ import {
 } from "./rows.js";
 
 export class LedgerReader {
-  constructor(
-    private readonly db: Pick<DatabaseSync, "prepare">,
-    private readonly stateRoot: string,
-    private readonly identity: () => RepositoryIdentity | null,
-  ) {}
-
+  constructor(private readonly db: Pick<DatabaseSync, "prepare">, private readonly stateRoot: string, private readonly identity: () => RepositoryIdentity | null) {}
   private rawAgent(name: string) { return this.db.prepare("SELECT * FROM agents WHERE name=?").get(name); }
+  private lineage(agent: AgentRow): void {
+    // Collect only this ancestor chain. Stop fetching repeats, but pass the
+    // original cyclic/missing edge to the domain validator; never truncate it.
+    const rows = [agent];
+    const fetched = new Set([agent.name]);
+    let parent = agent.createdBy;
+    while (parent !== null && !fetched.has(parent)) {
+      const raw = this.rawAgent(parent);
+      if (raw === undefined) break;
+      const row = decodeAgentRow(raw);
+      if (row.name !== parent) rowCorrupt("agent query identity mismatch");
+      rows.push(row); fetched.add(row.name); parent = row.createdBy;
+    }
+    new LineageSnapshot(rows);
+  }
   private requiredAgent(name: string): AgentRow {
     const raw = this.rawAgent(name);
     if (raw === undefined) return rowCorrupt("referenced agent is missing");
     const agent = decodeAgentRow(raw);
     if (agent.name !== name) return rowCorrupt("agent query identity mismatch");
+    this.lineage(agent);
     return agent;
-  }
-  private lineage(agent: AgentRow, cache?: ReadonlyMap<string, AgentRow>): void {
-    const seen = new Set<string>([agent.name]);
-    let parent = agent.createdBy;
-    while (parent !== null) {
-      if (seen.has(parent)) rowCorrupt("agent creator cycle");
-      seen.add(parent);
-      const row = cache ? cache.get(parent) ?? rowCorrupt("agent creator is missing") : this.requiredAgent(parent);
-      parent = row.createdBy;
-    }
   }
   agent(name: string): AgentRow | null {
     const raw = this.rawAgent(name);
@@ -43,12 +45,9 @@ export class LedgerReader {
   }
   agents(): AgentRow[] {
     const rows = this.db.prepare("SELECT * FROM agents ORDER BY name").all().map(decodeAgentRow);
-    const byName = new Map(rows.map(row => [row.name, row]));
-    if (byName.size !== rows.length) rowCorrupt("duplicate agent identity");
-    for (const row of rows) this.lineage(row, byName);
+    new LineageSnapshot(rows); // validate the complete list once, not once per row
     return rows;
   }
-
   private subscription(value: unknown): SubscriptionRow {
     const row = decodeSubscriptionRow(value); this.requiredAgent(row.agent); return row;
   }
@@ -65,8 +64,6 @@ export class LedgerReader {
     }
     return rows;
   }
-
-  /** Local batch relations only. Never calls batch() or delivery() recursively. */
   private batchMembership(delivery: DeliveryRow): void {
     if (delivery.batchId === null) return;
     const raw = this.db.prepare("SELECT * FROM batches WHERE id=?").get(delivery.batchId);
@@ -82,15 +79,13 @@ export class LedgerReader {
       operation: id => this.db.prepare("SELECT * FROM operations WHERE id=?").get(id) ?? null,
       agent: name => {
         const raw = this.rawAgent(name);
-        if (raw !== undefined) decodeAgentRow(raw);
+        if (raw !== undefined) this.lineage(decodeAgentRow(raw));
         return raw ?? null;
       },
       deliveries: id => {
         const rows = this.db.prepare("SELECT * FROM deliveries WHERE operation_id=? ORDER BY message_id, recipient").all(id);
         for (const raw of rows) {
-          const row = decodeDeliveryRow(raw);
-          this.requiredAgent(row.recipient);
-          this.batchMembership(row);
+          const row = decodeDeliveryRow(raw); this.requiredAgent(row.recipient); this.batchMembership(row);
         }
         return rows;
       },
@@ -98,7 +93,7 @@ export class LedgerReader {
   }
   private operationRow(raw: unknown): DecodedOperation {
     const row = decodeOperation(raw, this.context());
-    const actor = this.requiredAgent(row.actor); this.lineage(actor);
+    this.requiredAgent(row.actor);
     safeInteger(row.updatedAtMs, "operation update time", row.createdAtMs);
     return row;
   }
@@ -156,7 +151,6 @@ export class LedgerReader {
     if (operation === null && rows.length > 0) rowCorrupt("deliveries reference a missing operation");
     return rows.map(raw => this.deliveryRow(raw));
   }
-
   private batchRow(raw: unknown): BatchRow {
     const batch = decodeBatchRow(raw);
     const owner = this.requiredAgent(batch.agent);
