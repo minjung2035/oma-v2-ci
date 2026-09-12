@@ -24,7 +24,6 @@ const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes)
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-
 function validConfig() {
   const resources = { memoryBytes: 1024, tasks: 1, cpuQuotaPercent: 1, tmpBytes: 1024,
     workspaceBytes: 1024, stagingBytes: 1024, checkTimeoutSeconds: 1 };
@@ -59,20 +58,15 @@ function frozen(home: string, method: MutationMethod, params: CachedRequest["par
 async function withPeer(home: string, args: string[], receipt: Receipt): Promise<{
   code: number | null; stdout: string; stderr: string; methods: string[]; params: Record<string, unknown>[];
 }> {
-  const methods: string[] = [];
-  const params: Record<string, unknown>[] = [];
-  const sockets = new Set<Socket>();
-  const errors: unknown[] = [];
+  const methods: string[] = []; const params: Record<string, unknown>[] = [];
+  const sockets = new Set<Socket>(); const errors: unknown[] = [];
   const server = createServer(socket => {
-    sockets.add(socket);
-    socket.on("close", () => sockets.delete(socket));
-    let pending = Buffer.alloc(0);
-    let answered = false;
+    sockets.add(socket); socket.on("close", () => sockets.delete(socket));
+    let pending = Buffer.alloc(0); let answered = false;
     socket.on("data", chunk => {
       if (answered) return;
       try {
         assert.ok(Buffer.isBuffer(chunk), "fixture sockets stay in byte mode");
-        // Keep only the finite metadata prefix; raw upload bytes are not frames.
         pending = Buffer.concat([pending, chunk.subarray(0, Math.max(0, 256 * 1024 + 4 - pending.length))]);
         if (pending.length < 4) return;
         const length = pending.readUInt32BE(0);
@@ -80,12 +74,9 @@ async function withPeer(home: string, args: string[], receipt: Receipt): Promise
         if (pending.length < 4 + length) return;
         // Independent one-frame parser: no production request parser as oracle.
         const request: unknown = JSON.parse(pending.subarray(4, 4 + length).toString("utf8"));
-        assert.ok(record(request));
-        assert.equal(typeof request.id, "string");
-        assert.ok(typeof request.method === "string");
-        assert.ok(record(request.params));
-        answered = true;
-        methods.push(request.method); params.push(request.params);
+        assert.ok(record(request)); assert.equal(typeof request.id, "string");
+        assert.ok(typeof request.method === "string"); assert.ok(record(request.params));
+        answered = true; methods.push(request.method); params.push(request.params);
         socket.end(encodeFrame({ v: 1, id: request.id, ok: true, result: receipt }));
       } catch (error) { errors.push(error); socket.destroy(); }
     });
@@ -122,10 +113,8 @@ test("R01 CFG-005: valid config succeeds; one duplicate initialResident is rejec
   const home = temp();
   try {
     const path = join(home, "config.json"); const config = validConfig();
-    writeFileSync(path, JSON.stringify(config));
-    assert.equal(loadConfig(path).initialResidents.length, 1);
-    config.initialResidents.push({ ...config.initialResidents[0]! });
-    writeFileSync(path, JSON.stringify(config));
+    writeFileSync(path, JSON.stringify(config)); assert.equal(loadConfig(path).initialResidents.length, 1);
+    config.initialResidents.push({ ...config.initialResidents[0]! }); writeFileSync(path, JSON.stringify(config));
     assert.throws(() => loadConfig(path), (error: unknown) => error instanceof StoreError && error.code === "INVALID_REQUEST");
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
@@ -150,15 +139,13 @@ for (const [first, second, method, params, result] of [
   test(`R01 IPC-006: real CLI ${first.join(" ")} cannot replay as ${second.join(" ")}`, async () => {
     const home = temp();
     try {
-      const receipt: Receipt = { operation: OP, state: "succeeded", result: { ...result,
-        ...(result.kind === "agent.start" ? { remainingOperations: [...result.remainingOperations] } : {}) } };
+      const receipt: Receipt = { operation: OP, state: "succeeded", result: result.kind === "agent.start"
+        ? { ...result, remainingOperations: [...result.remainingOperations] } : { ...result } };
       frozen(home, method, params, receipt);
       const positive = await withPeer(home, [...first, "--request", "same-key"], receipt);
-      assert.equal(positive.code, 0, positive.stderr);
-      assert.deepEqual(positive.methods, ["operation.get"]);
+      assert.equal(positive.code, 0, positive.stderr); assert.deepEqual(positive.methods, ["operation.get"]);
       const negative = run(home, [...second, "--request", "same-key"]);
-      assert.equal(negative.status, 2, negative.stderr);
-      assert.match(negative.stderr, /REQUEST_KEY_REUSED/);
+      assert.equal(negative.status, 2, negative.stderr); assert.match(negative.stderr, /REQUEST_KEY_REUSED/);
     } finally { rmSync(home, { recursive: true, force: true }); }
   });
 }
@@ -172,11 +159,9 @@ test("R01 IPC-005: recipient order and duplicates do not change request identity
     } };
     frozen(home, "mail.send", { to: ["alice", "bob"], subject: "hello", kind: "message", body: "frozen" }, receipt);
     const same = await withPeer(home, ["send", "alice", "bob", "--subject", "hello", "--request", "same-key"], receipt);
-    assert.equal(same.code, 0, same.stderr);
-    assert.deepEqual(same.methods, ["operation.get"]);
+    assert.equal(same.code, 0, same.stderr); assert.deepEqual(same.methods, ["operation.get"]);
     const reordered = await withPeer(home, ["send", "bob", "alice", "alice", "--subject", "hello", "--request", "same-key"], receipt);
-    assert.equal(reordered.code, 0, reordered.stderr);
-    assert.deepEqual(reordered.methods, ["operation.get"]);
+    assert.equal(reordered.code, 0, reordered.stderr); assert.deepEqual(reordered.methods, ["operation.get"]);
     const changed = run(home, ["send", "alice", "--subject", "hello", "--request", "same-key"]);
     assert.equal(changed.status, 2, changed.stderr);
   } finally { rmSync(home, { recursive: true, force: true }); }
@@ -195,12 +180,9 @@ test("R01 IPC-008: missing frozen body is not an empty body or successful cached
     cache.updateReceipt("same-key", receipt);
     const args = ["context", "publish", "/not-read-on-replay", "--expect", "none", "--request", "same-key"];
     const positive = await withPeer(home, args, receipt);
-    assert.equal(positive.code, 0, positive.stderr);
-    assert.deepEqual(positive.methods, ["operation.get"]);
-    unlinkSync(cache.bodyPath("same-key"));
-    const result = run(home, args);
-    assert.equal(result.status, 3, result.stderr);
-    assert.match(result.stderr, /body|본문|복구/);
+    assert.equal(positive.code, 0, positive.stderr); assert.deepEqual(positive.methods, ["operation.get"]);
+    unlinkSync(cache.bodyPath("same-key")); const result = run(home, args);
+    assert.equal(result.status, 3, result.stderr); assert.match(result.stderr, /body|본문|복구/);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
@@ -230,31 +212,23 @@ test("R01 CLI-002: maximum 96-character request key derives a valid export ref",
         env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" } });
       assert.equal(r.status, 0, r.stderr); return r.stdout.trim();
     };
-    git(["init", "-q", "-b", "main"]);
-    writeFileSync(join(home, "file.txt"), "content\n"); git(["add", "file.txt"]);
+    git(["init", "-q", "-b", "main"]); writeFileSync(join(home, "file.txt"), "content\n"); git(["add", "file.txt"]);
     git(["-c", "user.name=R01", "-c", "user.email=r01@example.invalid", "commit", "-qm", "fixture"]);
-    const candidate = git(["rev-parse", "HEAD"]);
-    const receipt: Receipt = { operation: OP, state: "pending" };
+    const candidate = git(["rev-parse", "HEAD"]); const receipt: Receipt = { operation: OP, state: "pending" };
     const result = await withPeer(home, ["submit", "HEAD", "--request", key], receipt);
-    assert.equal(result.code, 0, result.stderr);
-    assert.deepEqual(result.methods, ["git.submit"]);
+    assert.equal(result.code, 0, result.stderr); assert.deepEqual(result.methods, ["git.submit"]);
     assert.equal(result.params[0]?.candidate, candidate);
     assert.match(String(result.params[0]?.exportRef), /^refs\/oma\/export\/[A-Za-z0-9._-]{1,96}$/);
-  } finally {
-    rmSync(home, { recursive: true, force: true }); rmSync(join(tmpdir(), `oma-submit-${key}.bundle`), { force: true });
-  }
+  } finally { rmSync(home, { recursive: true, force: true }); rmSync(join(tmpdir(), `oma-submit-${key}.bundle`), { force: true }); }
 });
 
 test("R01 IPC-008: corrupt cached JSON is never indistinguishable from absence", () => {
   const home = temp();
   try {
-    const cache = new RequestCache(home);
-    assert.equal(cache.read("missing").kind, "absent");
-    frozen(home, "route.follow", { topic: "dev" });
-    const positive = cache.read("same-key");
+    const cache = new RequestCache(home); assert.equal(cache.read("missing").kind, "absent");
+    frozen(home, "route.follow", { topic: "dev" }); const positive = cache.read("same-key");
     assert.ok(positive.kind === "present"); assert.equal(positive.value.method, "route.follow");
-    const path = join(home, ".local/state/oma/requests/same-key.json");
-    writeFileSync(path, "{broken");
+    const path = join(home, ".local/state/oma/requests/same-key.json"); writeFileSync(path, "{broken");
     const damaged = cache.read("same-key");
     assert.ok(damaged.kind === "corrupt", "malformed JSON must not be treated as a fresh request key");
     assert.match(damaged.reason, /JSON|invalid|malformed/i);
