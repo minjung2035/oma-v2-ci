@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, writeFileSync, rmSync, unlinkSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,7 @@ import { createServer, type Socket } from "node:net";
 import { loadConfig } from "../src/config.js";
 import { StoreError } from "../src/store.js";
 import { RequestCache, type CachedRequest } from "../src/request-cache.js";
-import { FrameParser, encodeFrame } from "../src/frame.js";
+import { encodeFrame } from "../src/frame.js";
 import type { Receipt } from "../implementation/contracts.js";
 
 const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
@@ -64,17 +64,25 @@ async function withPeer(
   const server = createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
-    const parser = new FrameParser(256 * 1024);
+    let pending = Buffer.alloc(0);
+    let answered = false;
     socket.on("data", (chunk) => {
+      if (answered) return;
       try {
-        for (const frame of parser.feed(chunk)) {
-          const request = frame.raw as { id: string; method: string; params: Record<string, unknown> };
-          methods.push(request.method);
-          params.push(request.params);
-          socket.end(encodeFrame({ v: 1, id: request.id, ok: true, result: receipt }));
-          // A streamed command sends raw bytes after metadata, not another JSON frame.
-          break;
-        }
+        pending = Buffer.concat([pending, chunk]);
+        if (pending.length < 4) return;
+        const length = pending.readUInt32BE(0);
+        if (length > 256 * 1024) throw new Error("fixture metadata exceeds bound");
+        if (pending.length < 4 + length) return;
+        // Parse exactly one metadata frame. Any following bytes are the raw upload,
+        // not a second frame. This fixture does not reuse the production parser as its oracle.
+        const request = JSON.parse(pending.subarray(4, 4 + length).toString("utf8")) as {
+          id: string; method: string; params: Record<string, unknown>;
+        };
+        answered = true;
+        methods.push(request.method);
+        params.push(request.params);
+        socket.end(encodeFrame({ v: 1, id: request.id, ok: true, result: receipt }));
       } catch (error) { socket.destroy(error as Error); }
     });
     socket.on("error", () => undefined);
@@ -137,7 +145,7 @@ for (const [first, second, method, params, result] of [
   test(`R01 IPC-006: real CLI ${first.join(" ")} cannot replay as ${second.join(" ")}`, () => {
     const home = temp();
     try {
-      frozen(home, method, params, { operation: OP, state: "succeeded", result: result as Receipt["result"] });
+      frozen(home, method, params, { operation: OP, state: "succeeded", result: result as NonNullable<Receipt["result"]> });
       const positive = run(home, [...first, "--request", "same-key"]);
       assert.equal(positive.status, 0, positive.stderr);
       const negative = run(home, [...second, "--request", "same-key"]);
