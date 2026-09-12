@@ -1,21 +1,13 @@
 // MUST [UNIT-001..006]: fixed systemd user units rendered only from validated
 // host values. Physical systemctl failures are never silently treated as success.
-import {
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  openSync,
-  fsyncSync,
-  closeSync,
-  mkdirSync,
-  realpathSync,
-} from "node:fs";
+import { readFileSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { Actor, ResourceLimits, UnitObservation } from "../implementation/contracts.js";
 import { StoreError } from "./store.js";
 import { unitNameFor as unitName } from "./domain/derived.js";
+import { replaceDerivedFile } from "./storage/durable-fs.js";
 
 export { unitName };
 
@@ -123,21 +115,7 @@ export class UnitsModule {
       agent: this.agentFrom(name),
     });
     const target = join(this.installDir, name);
-    const tmp = join(this.installDir, `.${name}.${process.pid}.tmp`);
-    const fd = openSync(tmp, "w", 0o600);
-    try {
-      writeFileSync(fd, rendered, "utf8");
-      fsyncSync(fd);
-    } finally {
-      closeSync(fd);
-    }
-    renameSync(tmp, target);
-    const dirFd = openSync(this.installDir, "r");
-    try {
-      fsyncSync(dirFd);
-    } finally {
-      closeSync(dirFd);
-    }
+    replaceDerivedFile(target, rendered, 0o600);
     const linked = spawnSync("systemctl", ["--user", "link", target], { encoding: "utf8" });
     const detail = `${linked.stdout ?? ""}\n${linked.stderr ?? ""}`;
     if (linked.error || linked.status === null || (linked.status !== 0 && !/already|exists/i.test(detail)))
