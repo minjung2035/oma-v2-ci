@@ -73,15 +73,20 @@ export function mailArchiveDisplayPath(messageId: string): string {
   return `/${mailArchiveRelativePath(messageId)}`;
 }
 export function mailInboxRelativePath(actor: string, messageId: string, folder: "new" | "cur"): string {
+  if (folder !== "new" && folder !== "cur") throw new TypeError("invalid mailbox folder");
   const owner = required(actor, parseActor, "actor");
   const message = required(messageId, parseMessageFileId, "message id");
   const name = folder === "cur" ? maildirCurName(message) : message;
   return `mail/inboxes/${owner}/${folder}/${name}`;
 }
 
+/** Relative symlink target from the trusted world's context directory. */
+export function contextRevisionLinkFor(oid: string): string {
+  return `revisions/${required(oid, parseFullOid, "full oid")}`;
+}
 /** Relative to the trusted world root, not the state root or a caller-provided path. */
 export function contextRevisionFor(oid: string): string {
-  return `context/revisions/${required(oid, parseFullOid, "full oid")}`;
+  return `context/${contextRevisionLinkFor(oid)}`;
 }
 export function contextRevisionDisplayPath(oid: string): string {
   return `/world/${contextRevisionFor(oid)}`;
@@ -102,6 +107,8 @@ export function unitNameFor(society: string, kind: string, suffix: "service" | "
   const societyName = required(society, parseSocietyName, "society name");
   if (parseActor(kind) === null && !["broker", "principal-relay", "reconcile"].includes(kind))
     throw new TypeError(`invalid unit kind ${kind}`);
+  if (suffix !== "service" && suffix !== "path" && suffix !== "timer")
+    throw new TypeError("invalid unit suffix");
   return `oma-${societyName}-${kind}.${suffix}`;
 }
 export function residentUnitsFor(society: string, resident: string): string[] {
