@@ -4,19 +4,21 @@
  */
 import {
   constants, closeSync, fchmodSync, fstatSync, fsyncSync, linkSync, lstatSync,
-  mkdirSync, openSync, readSync, unlinkSync, writeFileSync,
+  openSync, readSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { sha256Hex } from "../domain/canonical-json.js";
 import { StoreError } from "../domain/errors.js";
-import { fsyncDir } from "./durable-fs.js";
+import { ensureDurableDirectory, fsyncDir } from "./durable-fs.js";
+import { assertDirectory } from "./directory.js";
 
 /** Return the exact descriptor whose bytes were checked. Holding this descriptor
  * prevents a pathname replacement between validation and chmod/fsync from being
  * mistaken for validation of the replacement. Parent races remain a host gate.
  */
 function verifiedFile(path: string, expectedHash?: string): { fd: number; bytes: Buffer; hash: string } {
+  assertDirectory(dirname(path));
   const observed = lstatSync(path);
   if (!observed.isFile() || observed.isSymbolicLink()) throw new StoreError("STORE_CORRUPT", `non-regular immutable file: ${path}`);
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -34,7 +36,7 @@ function verifiedFile(path: string, expectedHash?: string): { fd: number; bytes:
     }
     if (readSync(fd, Buffer.allocUnsafe(1), 0, 1, null) !== 0) throw new StoreError("STORE_CORRUPT", `immutable file grew: ${path}`);
     const after = fstatSync(fd);
-    if (!after.isFile() || before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs)
+    if (!after.isFile() || before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
       throw new StoreError("STORE_CORRUPT", `immutable file bytes changed: ${path}`);
     const bytes = Buffer.concat(parts, before.size);
     const hash = sha256Hex(bytes);
@@ -54,7 +56,7 @@ function verifiedFile(path: string, expectedHash?: string): { fd: number; bytes:
 export function publishImmutableFile(source: string, destination: string, expectedHash?: string): void {
   const original = verifiedFile(source, expectedHash);
   closeSync(original.fd);
-  mkdirSync(dirname(destination), { recursive: true });
+  ensureDurableDirectory(dirname(destination));
   let temporary: string | null = null;
   let ownsTemporary = false;
   try {
