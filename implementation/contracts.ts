@@ -172,12 +172,13 @@ export interface InferenceEvent {
   v: 1; request: string; sequence: number;
   event: 'data' | 'end' | 'error'; data?: Json; error?: Failure;
 }
-export interface Store {
-  transaction<T>(fn: (tx: Transaction) => T): T;
-  getOperation(actor: Actor, key: RequestKey): Receipt | null;
-  recoverableOperations(): readonly OperationId[];
-}
-export interface Transaction { readonly transactionBrand: unique symbol }
+/** R40/D12: internal owner ports, not wire DTOs. See src/module-ports.ts for
+ * the reviewed signature inventory and production compile-time conformance.
+ * Store row queries and receipt projection intentionally remain separate.
+ */
+export type Store = import('../src/module-ports.js').StorePort;
+export type OperationReceiptPort = import('../src/module-ports.js').OperationReceiptPort;
+export type Transaction = import('../src/store.js').Transaction;
 export interface MailModule {
   send(auth: AuthContext, key: RequestKey, input: MailInput): Promise<Receipt>;
   materialize(operation: OperationId): Promise<void>;
@@ -185,13 +186,8 @@ export interface MailModule {
   complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void>;
 }
 export interface UnitObservation { activeState: string; subState: string; result: string; execMainStatus: number; cgroup: string; invocationId: string }
-export interface UnitsModule {
-  ensureResident(agent: Actor): Promise<void>;
-  start(agent: Actor, explicitRepair: boolean): Promise<void>;
-  stop(agent: Actor): Promise<UnitObservation>;
-  observe(agent: Actor): Promise<UnitObservation>;
-  confirmDead(agent: Actor, incarnation: number): Promise<boolean>;
-}
+export type UnitsModule = import('../src/module-ports.js').SyncUnitsPort;
+export type AsyncUnitsOrchestrationPort = import('../src/module-ports.js').AsyncUnitsOrchestrationPort;
 export interface GitModule {
   submit(auth: AuthContext, key: RequestKey, input: PublicMethods['git.submit']['params'], bytes?: AsyncIterable<Uint8Array>): Promise<Receipt>;
   integrate(auth: AuthContext, key: RequestKey, input: PublicMethods['git.integrate']['params']): Promise<Receipt>;
@@ -199,7 +195,7 @@ export interface GitModule {
   reconcile(operation: OperationId): Promise<void>;
 }
 export interface SandboxPlan { argv: readonly string[]; env: Readonly<Record<string,string>>; inheritedFds: readonly number[] }
-export interface SandboxModule { resident(lease: RunLease): SandboxPlan; candidate(oid: Oid, checkProfile: string): SandboxPlan }
+export type SandboxModule = import('../src/module-ports.js').SandboxPort;
 export interface PiAdapter {
   startOrResume(sessionPath: string | null): Promise<string>;
   deliver(batch: PreparedBatch): Promise<void>;
@@ -212,14 +208,14 @@ export interface InferenceModule {
   cancel(auth: AuthContext, request: string): Promise<void>;
   fence(actor: Actor, incarnation: number): Promise<void>;
 }
-export interface ViewsModule { refreshWorld(): Promise<void>; publishInbox(batch: PreparedBatch): Promise<void>; status(agent?: Actor): Promise<AgentStatus[]> }
-export interface ReconcileModule { startup(): Promise<void>; sweep(): Promise<void> }
+export type ViewsModule = import('../src/module-ports.js').DerivedViewsPort;
+export type ReconcileModule = import('../src/module-ports.js').ReconcilePort;
 export interface BrokerModule {
   start(): Promise<void>;
   dispatch<M extends PublicMethod>(auth: AuthContext, request: Request<M>): Promise<Response<M>>;
   drainAndClose(): Promise<void>;
 }
-export interface RunnerModule { run(agent: Actor): Promise<0>; stop(): Promise<void> }
+export type RunnerModule = import('../src/module-ports.js').BoundRunnerPort;
 export interface CliModule { main(argv: readonly string[]): Promise<0 | 2 | 3 | 4> }
 
 /** MUST [DB-009]: plan_json is this closed union, not an arbitrary object bag. */
