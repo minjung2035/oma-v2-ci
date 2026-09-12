@@ -22,7 +22,6 @@ export function contextPathsCheck(value: unknown): string | null {
     const path: unknown = value[index];
     const invalid = contextPathCheck(path);
     if (invalid) return `[${index}]: ${invalid}`;
-    // contextPathCheck established a string; keep the original bytes and order.
     const name = path as string;
     if (seen.has(name)) return `duplicate context path ${name}`;
     seen.add(name);
@@ -36,6 +35,8 @@ export interface ContextEntryBounds {
   readonly maxBytes?: number;
   /** Exact bytes in the advertised or received concatenated stream, when available. */
   readonly contentBytes?: number;
+  /** CTX-002 snapshots preserve the manifest order instead of silently sorting it. */
+  readonly requireSorted?: boolean;
 }
 
 /** Closed entry records; no mutation, sorting, deduplication, or hash recomputation. */
@@ -70,8 +71,12 @@ export function contextEntriesCheck(value: unknown, bounds: ContextEntryBounds =
       return `[${index}].sha256: invalid SHA-256`;
     if (entry.bytes > Number.MAX_SAFE_INTEGER - total)
       return "context aggregate bytes exceed safe integer range";
+    const name = entry.path as string;
+    const previous = paths.at(-1);
+    if (bounds.requireSorted && previous !== undefined && previous >= name)
+      return "context entries must be sorted and unique";
     total += entry.bytes;
-    paths.push(entry.path as string);
+    paths.push(name);
   }
   const pathsError = contextPathsCheck(paths);
   if (pathsError) return pathsError;
