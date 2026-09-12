@@ -1,25 +1,26 @@
-// MUST [MAIL-001..010]: acceptance orchestration; publication proof belongs to the materializer.
-import { mkdirSync, existsSync, readFileSync, unlinkSync, renameSync, lstatSync, rmSync } from "node:fs";
-import { join, dirname } from "node:path";
+// MUST [MAIL-001..010]: acceptance orchestration; publication and batch views have explicit owners.
+import { mkdirSync, existsSync, readFileSync, lstatSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
-import { Store, type DeliveryRow } from "./store.js";
+import { Store } from "./store.js";
 import { StoreError } from "./domain/errors.js";
 import { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
 export { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
 import { assertCurrentActor } from "./authority.js";
-import { generateMessageId, generateOperationId, generateBatchId, parseMessageId } from "./ids.js";
-import { mailObjectFileName, mailArchiveDisplayPath, contextRevisionDisplayPath } from "./domain/derived.js";
+import { generateMessageId, generateOperationId, parseMessageId } from "./ids.js";
+import { mailObjectFileName } from "./domain/derived.js";
 import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "./storage/paths.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
 import { publishImmutableFile } from "./storage/immutable-file.js";
-import { publishBatchView } from "./storage/batch-view.js";
 import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { actorAddress, listAddress, topicAddress, parseDisplayedAddress } from "./mail/addresses.js";
 import type { ParsedEmlHeaders } from "./mail/headers.js";
 import { MailMaterializer, operationMessage, type PublicationEvidence } from "./mail/materializer.js";
-import { selectBatch } from "./mail/batch-policy.js";
+import { BatchCoordinator } from "./mail/batches.js";
+import type { BatchViewLimits } from "./protocol/batch-view.js";
+export { batchOf, batchNotice } from "./mail/batches.js";
 export { fsyncDir, replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 export { publishImmutableFile } from "./storage/immutable-file.js";
 export { publishBatchView } from "./storage/batch-view.js";
@@ -65,9 +66,12 @@ function logicalReplyAddress(store: Store, value: string, society: string): Addr
 export interface MailSociety { stateRoot: string; society: string }
 export class MailModule {
   private readonly materializer: MailMaterializer;
-  constructor(private readonly paths: MailSociety, private readonly store: Store, private readonly maxReplyReferences: number, private readonly batchMaxMessages = 24) {
+  private readonly batches: BatchCoordinator;
+  constructor(private readonly paths: MailSociety, private readonly store: Store, private readonly maxReplyReferences: number,
+    batchMaxMessages = 24, viewLimits?: BatchViewLimits) {
     this.store.bindRepositoryIdentity({ society: paths.society });
     this.materializer = new MailMaterializer(store, paths.stateRoot, paths.society);
+    this.batches = new BatchCoordinator(store, paths.stateRoot, this.materializer, batchMaxMessages, viewLimits);
   }
   objectPath(id: MessageId): string { return mailObjectPathAt(this.paths.stateRoot, id); }
   archivePath(id: MessageId): string { return mailArchivePathAt(this.paths.stateRoot, id); }
@@ -160,61 +164,11 @@ export class MailModule {
     try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256 ?? sha256Hex(eml.text)); }
     finally { rmSync(staged, { force: true }); fsyncDir(stagingDir); }
   }
-  async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> {
-    this.materializer.gated(operationId, proof);
-  }
+  async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> { this.materializer.gated(operationId, proof); }
   async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }
-  private selectBatch(pending: DeliveryRow[]): DeliveryRow[] {
-    return selectBatch(pending.map(value => ({ value, publicList: this.isPublicList(value) })), this.batchMaxMessages);
-  }
-  private isPublicList(delivery: DeliveryRow): boolean {
-    const message = this.messagePlan(delivery);
-    return message.kind === "message" && message.to.length > 0 && message.to.every(to => to === "commons" || to === "residents" || to.startsWith("topic/"));
-  }
-  private messagePlan(delivery: DeliveryRow): MessagePlan {
-    const operation = this.store.getOperationById(delivery.operationId);
-    if (!operation) throw new StoreError("STORE_CORRUPT", `missing operation ${delivery.operationId}`);
-    const message = operationMessage(operation);
-    if (message.id !== delivery.messageId || !message.recipients.includes(delivery.recipient))
-      throw new StoreError("STORE_CORRUPT", `message plan mismatch for ${delivery.messageId}`);
-    return message;
-  }
-  private noticeFor(agent: Actor, ids: readonly MessageId[]): string {
-    const lines: string[] = [];
-    for (const [index, id] of ids.slice(0, 6).entries()) {
-      const delivery = this.store.getDelivery(id, agent);
-      if (!delivery) throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
-      const message = this.messagePlan(delivery); const headers = this.materializer.headers(message);
-      const reply = headers.inReplyTo ?? headers.references.at(-1) ?? null;
-      const context = message.contextRevision ? ` context=${contextRevisionDisplayPath(message.contextRevision)}${message.kind === "context" ? "/GOAL.md" : ""}` : "";
-      lines.push(`${index + 1}. sender=${oneLine(headers.from)} subject=${oneLine(headers.subject)} kind=${message.kind} path=${mailArchiveDisplayPath(id)}${reply ? ` reply=${reply}` : ""}${context}`);
-    }
-    if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
-    lines.push("전체 목록: /inbox.md"); return lines.join("\n");
-  }
-  private finishPrepared(batch: PreparedBatch): PreparedBatch {
-    this.moveToCur(batch.agent, batch.messageIds); publishBatchView(this.paths.stateRoot, batch); return batch;
-  }
-  async prepare(auth: AuthContext): Promise<PreparedBatch | null> {
-    const existing = this.store.preparedBatches(auth.actor);
-    if (existing.length > 0) {
-      const row = existing[0]!; const messageIds = parseJsonList(row.messageIdsJson, `batch ${row.id}`) as MessageId[];
-      return this.finishPrepared(batchOf({ id: row.id, incarnation: row.incarnation, messageIds, sessionPath: row.sessionPath }, auth.actor, this.noticeFor(auth.actor, messageIds)));
-    }
-    const pending = this.selectBatch(this.store.pendingDeliveries(auth.actor)); if (pending.length === 0) return null;
-    const batch = { id: generateBatchId(), agent: auth.actor, incarnation: auth.incarnation, messageIds: pending.map(delivery => delivery.messageId), sessionPath: null };
-    const notice = this.noticeFor(auth.actor, batch.messageIds);
-    try { this.store.transaction(tx => { tx.insertPreparedBatch(batch); tx.linkDeliveriesToBatch(batch.id, batch.messageIds); }); }
-    catch (error) { if (error instanceof StoreError && error.code === "BATCH_CONFLICT") return null; throw error; }
-    return this.finishPrepared(batchOf(batch, auth.actor, notice));
-  }
-  async complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> {
-    const batch = this.store.getBatch(evidence.batchId);
-    if (!batch) throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
-    if (batch.agent !== auth.actor || auth.incarnation !== evidence.incarnation || batch.incarnation !== evidence.incarnation)
-      throw new StoreError("BATCH_CONFLICT", "batch ownership mismatch");
-    throw new StoreError("SPIKE_UNRESOLVED", "S-03 trusted Pi session-boundary evidence is not implemented");
-  }
+  prepare(auth: AuthContext): Promise<PreparedBatch | null> { return this.batches.prepare(auth); }
+  complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> { return this.batches.complete(auth, evidence); }
+  moveToCur(agent: Actor, ids: readonly MessageId[]): number { return this.batches.moveToCur(agent, ids); }
   async reconcilePending(): Promise<{ examined: number; repaired: number; remaining: number }> {
     const ids = this.store.recoverableOperations(); let repaired = 0; let remaining = 0;
     for (const id of ids) {
@@ -233,33 +187,4 @@ export class MailModule {
     }
     return { examined: ids.length, repaired, remaining };
   }
-  moveToCur(agent: Actor, messageIds: readonly MessageId[]): number {
-    let count = 0;
-    for (const id of messageIds) {
-      const from = this.inboxNewPath(agent, id); const to = this.inboxCurPath(agent, id); const delivery = this.store.getDelivery(id, agent);
-      if (!delivery) throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
-      const message = this.messagePlan(delivery); const object = this.objectPath(id);
-      for (const path of [object, from, to]) {
-        const stat = lstatSync(path, { throwIfNoEntry: false }); if (path !== object && !stat) continue;
-        if (!stat?.isFile() || sha256Hex(readFileSync(path)) !== message.sha256) throw new StoreError("STORE_CORRUPT", `mail integrity mismatch: ${path}`);
-      }
-      if (existsSync(from)) {
-        mkdirSync(dirname(to), { recursive: true }); if (existsSync(to)) unlinkSync(from); else renameSync(from, to); count++;
-      } else if (!existsSync(to)) throw new StoreError("STORE_CORRUPT", `missing mailbox delivery ${id}/${agent}`);
-      fsyncDir(dirname(from)); fsyncDir(dirname(to));
-    }
-    return count;
-  }
-}
-function parseJsonList(json: string, what: string): string[] {
-  try { const value = JSON.parse(json); if (!Array.isArray(value) || value.some(item => typeof item !== "string")) throw new Error("not a string list"); return value as string[]; }
-  catch (error) { throw new StoreError("STORE_CORRUPT", `${what} has corrupt JSON: ${(error as Error).message}`); }
-}
-function oneLine(value: string | null): string { return (value ?? "").replace(/\s+/g, " ").trim(); }
-export function batchOf(batch: { id: string; incarnation: number; messageIds: string[]; sessionPath: string | null }, agent: Actor, notice = batchNotice(batch.messageIds)): PreparedBatch {
-  return { id: batch.id as PreparedBatch["id"], agent, incarnation: batch.incarnation, messageIds: batch.messageIds as PreparedBatch["messageIds"], sessionPath: batch.sessionPath, deliveryMode: "followUp", notice, indexPath: "/inbox.md" };
-}
-export function batchNotice(ids: readonly string[]): string {
-  const lines = ids.slice(0, 6).map((id, index) => `${index + 1}. mail ${id}`); if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
-  lines.push("전체 목록: /inbox.md"); return lines.join("\n");
 }
