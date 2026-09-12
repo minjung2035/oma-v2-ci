@@ -41,7 +41,8 @@ export function makeValidBatch(agent = "alice", messageIds = [messageIdForOperat
 }
 
 export function makeValidUsage(actor = "alice"): UsageRow {
-  return { requestId: uuidV4(), actor, incarnation: actor === "principal" ? 0 : 1, profile: "p", pricingRevision: "fixture-v1",
+  // usage.profile is the frozen modelProfile, not the agent profile name.
+  return { requestId: uuidV4(), actor, incarnation: actor === "principal" ? 0 : 1, profile: "md", pricingRevision: "fixture-v1",
     reservedUnits: 1, reportedUnits: null, outcome: "reserved", detailsJson: null, createdAtMs: 1, updatedAtMs: 1 };
 }
 
