@@ -104,19 +104,43 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
   }
 }
 
-/** Only a caller-validated tree is admitted. Symlinks, devices and FIFOs are
- * rejected rather than recursively followed; current links need only their
- * own parent's flush. Mail hardlinks remain legal; context adds nlink=1 itself.
- * Parent path checks are observations, not a kernel containment proof.
+export type TreeFlushPolicy = "regular-files" | "context-single-link" | "workspace-links";
+
+/** The initial root is caller-owned and checked before opening. Descendants
+ * are then addressed through held parent descriptors, not a recursive lookup
+ * through pathnames already observed. This is still not an openat2/S-06 proof.
+ * The default admits regular immutable hardlinks. Context adds nlink=1.
+ * Workspace symlinks are never followed: their containing directory is flushed.
+ * Current pointers use their separate parent-only publication primitive.
  */
-export function fsyncTree(root: string): void {
+export function fsyncTree(root: string, policy: TreeFlushPolicy = "regular-files"): void {
   assertDirectory(root);
-  for (const name of readdirSync(root)) {
-    const path = join(root, name);
-    const entry = lstatSync(path);
-    if (entry.isDirectory() && !entry.isSymbolicLink()) fsyncTree(path);
-    else if (entry.isFile() && !entry.isSymbolicLink()) fsyncFile(path);
-    else throw new StoreError("STORE_CORRUPT", `unsupported fsync tree entry: ${path}`);
-  }
-  fsyncDir(root);
+  const walk = (path: string): void => {
+    const observed = lstatSync(path);
+    if (!observed.isDirectory()) throw new StoreError("STORE_CORRUPT", "invalid fsync tree directory");
+    const directory = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try {
+      const opened = fstatSync(directory);
+      if (!opened.isDirectory() || opened.dev !== observed.dev || opened.ino !== observed.ino)
+        throw new StoreError("STORE_CORRUPT", "fsync tree directory changed before open");
+      const pinned = `/proc/self/fd/${directory}`;
+      for (const name of readdirSync(pinned)) {
+        const child = join(pinned, name);
+        const entry = lstatSync(child);
+        if (entry.isDirectory()) { walk(child); continue; }
+        if (entry.isSymbolicLink() && policy === "workspace-links") continue;
+        if (!entry.isFile()) throw new StoreError("STORE_CORRUPT", `unsupported fsync tree entry: ${name}`);
+        const file = openSync(child, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        try {
+          const current = fstatSync(file);
+          if (!current.isFile() || current.dev !== entry.dev || current.ino !== entry.ino ||
+            (policy === "context-single-link" && current.nlink !== 1))
+            throw new StoreError("STORE_CORRUPT", `fsync tree identity/link mismatch: ${name}`);
+          fsyncSync(file);
+        } finally { closeSync(file); }
+      }
+      fsyncSync(directory);
+    } finally { closeSync(directory); }
+  };
+  walk(root);
 }
