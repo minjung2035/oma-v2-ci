@@ -59,8 +59,8 @@ function submitFixture(root: string, id: string, bytes = Buffer.from("fixture bu
   const message = makeValidMessagePlan(id, { kind: "result" });
   const payload = { candidate, exportRef, prerequisites: [], to: ["alice"], subject: "candidate", body: "fixture", paths: [],
     bundle: { ...digest, mediaType: "application/x-git-bundle" } };
-  const plan = { kind: "git.submit", candidate, exportRef, prerequisites: [], bundle: { path: join(root, submitBundleFor(id)), ...digest },
-    publishedRef: publishedRefFor("alice", id), message } as const;
+  const plan = { kind: "git.submit" as const, candidate, exportRef, prerequisites: [], bundle: { path: join(root, submitBundleFor(id)), ...digest },
+    publishedRef: publishedRefFor("alice", id), message };
   return { payload, plan, message };
 }
 
