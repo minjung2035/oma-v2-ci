@@ -5,7 +5,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { GitPaths } from "./paths.js";
 import { StoreError } from "../domain/errors.js";
-import { runProcessSync, decodeProcessText } from "../process/run.js";
+import { decodeProcessText } from "../process/run.js";
+import { PreparationExecutor } from "../process/preparation.js";
 import { GIT_ENV } from "../process/policies.js";
 
 const SCRIPT = [
@@ -55,8 +56,9 @@ const SCRIPT = [
 ].join("\n");
 
 export class QuarantineImporter {
+  private readonly executor = new PreparationExecutor();
   constructor(private readonly paths: GitPaths, private readonly canonicalHas: (candidate: string) => boolean) {}
-  importBundle(bundlePath: string, candidate: string, exportRef: string, prerequisites: readonly string[]): void {
+  async importBundle(bundlePath: string, candidate: string, exportRef: string, prerequisites: readonly string[]): Promise<void> {
     const limits = this.paths.quarantineResources;
     if (!limits || ![limits.cpuSeconds, limits.memoryBytes, limits.tasks, this.paths.quarantineTmpBytes, this.paths.checkTimeoutSeconds]
       .every(value => Number.isSafeInteger(value) && value > 0))
@@ -64,10 +66,11 @@ export class QuarantineImporter {
     const timeoutMs = this.paths.checkTimeoutSeconds * 1000;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs > 0x7fffffff)
       throw new StoreError("SPIKE_UNRESOLVED", "quarantine timeout cannot be enforced by the native timer");
+    if (this.executor.blocked) throw new StoreError("REF_STATE_UNKNOWN", "canonical quarantine preparation is active or uncertain");
     const root = mkdtempSync(join(this.paths.stateRoot, "staging", "quarantine-ns-"));
     let settledNamespaceCommand = false;
     try {
-      const result = runProcessSync({ executable: "/usr/bin/prlimit", argv: [
+      const result = await this.executor.run({ executable: "/usr/bin/prlimit", argv: [
         `--cpu=${limits.cpuSeconds}`, `--as=${limits.memoryBytes}`, `--nproc=${limits.tasks}`, "--",
         "/usr/bin/env", "-i", "HOME=/nonexistent", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C", "TMPDIR=/nonexistent",
         "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
@@ -78,8 +81,7 @@ export class QuarantineImporter {
         "--kill-child=SIGKILL", "--forward-signals", "--mount-proc", "/bin/sh", "-c", SCRIPT, "oma-quarantine",
         bundlePath, this.paths.projectGit, candidate, exportRef, String(this.paths.quarantineTmpBytes), root, ...prerequisites,
       ], env: GIT_ENV, timeoutMs: Math.max(1000, timeoutMs), stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 });
-      if (result.kind !== "exited")
-        throw new StoreError("REF_STATE_UNKNOWN", `quarantine import outcome is ${result.kind}`);
+      if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", `quarantine import outcome is ${result.kind}`);
       settledNamespaceCommand = true;
       let stdout: string; let stderr: string;
       try { stdout = decodeProcessText(result.stdout); stderr = decodeProcessText(result.stderr); }
@@ -90,11 +92,10 @@ export class QuarantineImporter {
           throw new StoreError(code, stderr.slice(0, 400) || "quarantine failed");
         throw new StoreError("SPIKE_UNRESOLVED", "required quarantine namespace is unavailable");
       }
-      if (stdout !== `${candidate}\n` || !this.canonicalHas(candidate))
-        throw new StoreError("BUNDLE_INVALID", "bundle candidate was not imported exactly");
+      if (stdout !== `${candidate}\n` || !this.canonicalHas(candidate)) throw new StoreError("BUNDLE_INVALID", "bundle candidate was not imported exactly");
     } finally {
-      // A timeout/signal/output limit is not quiescence. Retain its staging;
-      // future cleanup requires the separately specified native liveness proof.
+      // No abort/disconnect cleanup of accepted bundle evidence. Unknown native
+      // quiescence retains the namespace staging and blocks this executor owner.
       if (settledNamespaceCommand) rmSync(root, { recursive: true, force: true });
     }
   }
