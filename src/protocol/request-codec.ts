@@ -1,0 +1,29 @@
+/** Structural caller DTO decoding for frozen cache/ledger bytes. Host admission
+ * and live actor authority remain separate, stricter checks in the broker.
+ */
+import type { MutationMethod, ProtocolLimits, PublicMethods } from "../../implementation/contracts.js";
+import { isValidActorName } from "../domain/identifiers.js";
+import { snapshotJson } from "../domain/canonical-json.js";
+import { decodePublicParams } from "./methods.js";
+
+const structuralLimits: ProtocolLimits = Object.freeze({
+  frameBytes: Number.MAX_SAFE_INTEGER, mailBodyBytes: Number.MAX_SAFE_INTEGER,
+  subjectBytes: Number.MAX_SAFE_INTEGER, addresses: Number.MAX_SAFE_INTEGER,
+  replyReferences: Number.MAX_SAFE_INTEGER, contextFiles: Number.MAX_SAFE_INTEGER,
+  contextBytes: Number.MAX_SAFE_INTEGER, bundleBytes: Number.MAX_SAFE_INTEGER,
+  logBytes: Number.MAX_SAFE_INTEGER, batchMaxMessages: Number.MAX_SAFE_INTEGER,
+  idleStreamSeconds: Number.MAX_SAFE_INTEGER, receiptWaitSeconds: Number.MAX_SAFE_INTEGER,
+});
+
+export function decodeMutationPayload<K extends MutationMethod>(method: K, value: unknown): PublicMethods[K]["params"] {
+  const copied = snapshotJson(value);
+  if (copied === null || typeof copied !== "object" || Array.isArray(copied))
+    throw new TypeError("mutation payload must be a JSON object");
+  const actorNames = new Set<string>();
+  if (Array.isArray(copied.to)) {
+    for (const address of copied.to) if (typeof address === "string" && isValidActorName(address)) actorNames.add(address);
+  }
+  const decoded = decodePublicParams(method, copied, { actorNames, limits: structuralLimits });
+  if (decoded === null) throw new TypeError(`invalid caller DTO for ${method}`);
+  return decoded;
+}
