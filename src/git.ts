@@ -1,7 +1,7 @@
 // MUST [GIT-001..009]/[INT-001..005]/[CTX-001..006]: broker-owned Git boundary.
 // Unresolved sandbox primitives fail closed; no bundle parsing on the host.
 import {
-  constants, mkdirSync, mkdtempSync, writeFileSync, existsSync, openSync,
+  constants, writeFileSync, existsSync, openSync,
   fsyncSync, closeSync, readdirSync, lstatSync, rmSync, readFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -12,31 +12,29 @@ import { Store, reused } from "./store.js";
 import type { OperationOf, ValidatedPlan } from "./storage/operation-codec.js";
 import { assertContextDirectory, readContextEntry } from "./storage/context-files.js";
 import { contextEntriesCheck } from "./domain/context-policy.js";
-import { StoreError, classifyError, type EffectKnowledge } from "./domain/errors.js";
+import { StoreError } from "./domain/errors.js";
 import { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
-import { MailModule, buildEml, expandAddresses, defaultReplyTo, defaultLogicalReplyTo, actorAddress, listAddress } from "./mail.js";
-import { fsyncDir, fsyncTree, ensureDurableDirectory } from "./storage/durable-fs.js";
+import { MailModule, buildEml, expandAddresses, actorAddress, listAddress } from "./mail.js";
+import { fsyncTree, ensureDurableDirectory } from "./storage/durable-fs.js";
 import { publishContextRevision } from "./storage/context-snapshot.js";
 import { generateOperationId, generateMessageId, isValidFullOid } from "./ids.js";
-import { publishedRefFor, mailObjectRelativePath, contextRevisionDisplayPath } from "./domain/derived.js";
-import { submitStagingPathAt, submitBundlePathAt, contextStagingPathAt, contextRevisionPathAt } from "./storage/paths.js";
-import { requestHash, canonicalRequestParams } from "./hash.js";
+import { mailObjectRelativePath, contextRevisionDisplayPath } from "./domain/derived.js";
+import { contextStagingPathAt, contextRevisionPathAt } from "./storage/paths.js";
+import { requestHash } from "./hash.js";
 import { assertCurrentActor } from "./authority.js";
 import { contextFileCheck, contextPathCheck } from "./validate.js";
 import { GitObserver, classifyRefAfterCas, type GitObservation, type RefAfterCas } from "./git/observe.js";
 import { IntegrationCoordinator } from "./git/integration.js";
+import { SubmitCoordinator, type SubmitInput } from "./git/submit.js";
+import { GitPublicationObserver } from "./git/publication.js";
+import { QuarantineImporter } from "./git/quarantine.js";
+import type { GitPaths } from "./git/paths.js";
 import type { IntegrationPolicy, IntegrationPolicyReader, FrozenCheck } from "./git/integration-policy.js";
 import { GIT_ENV } from "./process/policies.js";
+export type { GitPaths, CheckProfile } from "./git/paths.js";
 export type { IntegrationPolicy } from "./git/integration-policy.js";
 export type PolicyRevisionReader = IntegrationPolicyReader;
 
-export interface GitPaths {
-  stateRoot: string; projectGit: string; contextGit: string; worldDir: string; society: string;
-  quarantineTmpBytes: number;
-  quarantineResources?: { cpuSeconds: number; memoryBytes: number; tasks: number };
-  checkTimeoutSeconds: number; checkRootfs?: string; checkAssetsDir?: string; checkTmpBytes?: number;
-}
-export interface CheckProfile { argv: string[]; env: Record<string, string> }
 const GIT_BIN = "/usr/bin/git";
 const spawnSync: typeof nodeSpawnSync = ((command: string, args?: readonly string[], options?: object) =>
   nodeSpawnSync(command, args ? [...args] : [], {
@@ -65,6 +63,8 @@ function sha256Of(bytes: Buffer): string { return createHash("sha256").update(by
 
 export class GitModule {
   private readonly integrationCoordinator: IntegrationCoordinator;
+  private readonly submissionCoordinator: SubmitCoordinator;
+  private readonly quarantine: QuarantineImporter;
   private integrationTail: Promise<void> = Promise.resolve();
   private readonly observations = new GitObserver((args, input) => {
     const format = args.includes("--show-object-format");
@@ -92,6 +92,14 @@ export class GitModule {
       compareAndSwap: (base, candidate) => this.casRef(paths.projectGit, "refs/heads/main", candidate, base),
       runCheck: (candidate, check) => this.runCheck(candidate, check),
     }, integration, policyRevisionReader);
+    this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate));
+    this.submissionCoordinator = new SubmitCoordinator(paths, store, mail, {
+      verifyObjectFormat: oids => { this.objectFormat(paths.projectGit, oids); },
+      canonicalHas: candidate => this.canonicalHas(candidate),
+      quarantineImport: (path, candidate, exportRef, prerequisites) => this.quarantineImport(path, candidate, exportRef, prerequisites),
+      publishRef: (ref, candidate) => this.publishRef(ref, candidate),
+      observeRef: ref => this.observations.ref(paths.projectGit, ref),
+    }, new GitPublicationObserver(this.observations, paths.projectGit));
   }
   private repositoryExists(repository: string): boolean {
     try {
@@ -110,179 +118,20 @@ export class GitModule {
       throw new StoreError("INVALID_OID", `OID does not match repository object format ${format}`);
     return format;
   }
-  /** A command exit is not post-effect proof. Every CAS, including exit zero,
-   * gets a new canonical observation; no fallback ref, retry or rollback.
-   */
+  /** Every CAS, including exit zero, gets a new canonical observation. */
   private casRef(repository: string, ref: string, candidate: string, expected: string | null): RefAfterCas {
     spawnSync(GIT_BIN, ["--git-dir", repository, "update-ref", ref, candidate, expected ?? ""], { env: gitEnv, encoding: "utf8" });
     return classifyRefAfterCas(this.observations.ref(repository, ref), expected, candidate);
   }
-  private rejectAcceptedSubmit(operation: string, error: StoreError, phase: "accepted" | "recovering", effectKnowledge: EffectKnowledge): never {
-    const policy = classifyError({ code: error.code, phase, effectKnowledge,
-      observationKind: error.code === "STREAM_INVALID" || error.code === "STORE_CORRUPT" ? "corrupt" : "rejected" });
-    if (policy.terminal === "failed") this.store.transaction(() => this.store.setOperationFailed(operation, policy.code));
-    if (policy.terminal === "unknown") this.store.transaction(() => this.store.setOperationUnknown(operation));
-    if (policy.code !== error.code) throw new StoreError(policy.code, "accepted submit artifact failed integrity validation");
-    throw error;
-  }
-  async submit(auth: AuthContext, key: string,
-    input: { candidate: Oid; exportRef: string; prerequisites: Oid[]; to: string[]; subject: string; body: string; paths: string[]; bundle?: BlobDescriptor },
-    bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
-    const newHash = requestHash("git.submit", canonicalRequestParams("git.submit", input));
-    const claim = this.store.claimKey(auth.actor, key, newHash);
-    if (claim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
-    if (claim === "reused") throw reused(auth.actor, key);
-    this.objectFormat(this.paths.projectGit, [input.candidate, ...input.prerequisites]);
-    const opId = generateOperationId(); const messageId = generateMessageId(opId, 0);
-    const staging = submitStagingPathAt(this.paths.stateRoot, opId); ensureDurableDirectory(staging);
-    const bundlePath = submitBundlePathAt(this.paths.stateRoot, opId);
-    let digest: string | null = null;
-    if (input.bundle) {
-      const hash = createHash("sha256");
-      const out = openSync(bundlePath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-      try {
-        let total = 0;
-        for await (const chunk of bytes) {
-          total += chunk.length;
-          if (total > input.bundle.bytes) throw new StoreError("STREAM_INVALID", "bundle exceeds descriptor bytes");
-          hash.update(chunk); writeFileSync(out, chunk);
-        }
-        fsyncSync(out);
-      } finally { closeSync(out); }
-      digest = hash.digest("hex");
-      if (digest !== input.bundle.sha256) throw new StoreError("STREAM_INVALID", "bundle digest mismatch");
-      if (!input.bundle.bytes || statBytes(bundlePath) !== input.bundle.bytes) throw new StoreError("STREAM_INVALID", "bundle byte count mismatch");
-    }
-    fsyncDir(staging); fsyncDir(join(this.paths.stateRoot, "staging"));
-    const targetAddresses = (input.to.length > 0 ? input.to : ["commons"]) as Address[];
-    const logicalTo = [...new Set(targetAddresses)].sort() as Address[];
-    const route = expandAddresses(this.store, logicalTo, this.paths.society);
-    const publishedRef = publishedRefFor(auth.actor, opId);
-    const eml = await this.resultEml(auth.actor, { candidate: input.candidate, subject: input.subject, body: input.body, paths: input.paths, to: route.displayTo, publishedRef }, messageId);
-    const plan = { kind: "git.submit" as const, candidate: input.candidate, exportRef: input.exportRef, prerequisites: input.prerequisites,
-      bundle: input.bundle ? { path: bundlePath, sha256: digest!, bytes: input.bundle.bytes } : null, publishedRef,
-      message: { id: messageId, objectPath: mailObjectRelativePath(messageId), sha256: eml.sha256, bytes: eml.bytes,
-        dateMs: eml.dateMs, to: logicalTo, recipients: route.recipients, kind: "result" as const, contextRevision: null,
-        replyHeaders: { replyTo: defaultLogicalReplyTo(auth.actor, logicalTo), inReplyTo: null, references: [] } } };
-    this.mail.freezeObject(messageId, eml);
-    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
-    this.store.transaction(() => {
-      assertCurrentActor(this.store, auth, "git.submit");
-      claimOut.txClaim = this.store.claimOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash, kind: "git.submit", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
-      if (claimOut.txClaim === "retry") return;
-      route.recipients = expandAddresses(this.store, logicalTo, this.paths.society).recipients;
-      plan.message.recipients = route.recipients;
-      this.store.updateOperationPlanJson(opId, JSON.stringify(plan));
-      this.store.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
-    });
-    if (claimOut.txClaim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
-    const result = { kind: "git.submit" as const, candidate: input.candidate, publishedRef: plan.publishedRef, message: messageId, recipientCount: route.recipients.length };
-    let publicationAttempted = false;
-    try {
-      if (input.bundle) this.quarantineImport(bundlePath, input.candidate, input.exportRef, input.prerequisites);
-      else if (!this.canonicalHas(input.candidate)) throw new StoreError("PREREQUISITE_MISSING", "no bundle and candidate unknown to the broker");
-      publicationAttempted = true;
-      this.publishRef(plan.publishedRef, input.candidate);
-      await this.mail.publishGated(opId);
-      this.store.transaction(() => this.store.setOperationSucceeded(opId, JSON.stringify(result)));
-    } catch (error) {
-      if (error instanceof StoreError && ["PUBLISHED_REF_CONFLICT", "BUNDLE_INVALID", "PREREQUISITE_MISSING", "INVALID_OID", "STREAM_INVALID", "SPIKE_UNRESOLVED"].includes(error.code))
-        this.rejectAcceptedSubmit(opId, error, "accepted", publicationAttempted ? "possible" : "none");
-      throw error;
-    }
-    return receiptOf(this.store.getOperationById(opId)!);
-  }
-  private async resultEml(actor: Actor, result: { candidate: Oid; subject: string; body: string; paths: string[]; to: string[]; publishedRef: string }, messageId: string): Promise<{ text: string; bytes: number; sha256: string; dateMs: number }> {
-    const fetchHint = `git fetch origin ${result.publishedRef}; git show FETCH_HEAD\n`;
-    const bodyText = `${result.body}\n\n게시됨: ${result.publishedRef}\nCommit: ${result.candidate}\n${result.paths.length > 0 ? `경로: ${result.paths.join(", ")}\n` : ""}${fetchHint}`;
-    const eml = await buildEml({ from: `${actor}@${this.paths.society}.oma.invalid`, to: result.to,
-      replyTo: defaultReplyTo(actorAddress(actor, this.paths.society), result.to), subject: result.subject,
-      kind: "result", contextRevision: null, inReplyTo: null, references: [],
-      messageId: `${messageId}@${this.paths.society}.oma.invalid`, body: bodyText });
-    return { text: eml.text, bytes: eml.bytes, sha256: eml.sha256, dateMs: eml.dateMs };
+  submit(auth: AuthContext, key: string, input: SubmitInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
+    return this.submissionCoordinator.submit(auth, key, input, bytes);
   }
   private canonicalHas(oid: string): boolean {
     const value = this.observations.commit(this.paths.projectGit, oid);
     return value.kind === "absent" ? false : observed(value, "canonical commit");
   }
-  /** MUST [GIT-006/007]/[S-05]: disposable namespace with bounded resources. */
-  private quarantineImport(bundlePath: string, candidate: Oid, exportRef: string, prerequisites: Oid[]): void {
-    const limits = this.paths.quarantineResources;
-    if (!limits || !Number.isSafeInteger(limits.cpuSeconds) || limits.cpuSeconds <= 0 || !Number.isSafeInteger(limits.memoryBytes) || limits.memoryBytes <= 0 || !Number.isSafeInteger(limits.tasks) || limits.tasks <= 0 || !Number.isSafeInteger(this.paths.quarantineTmpBytes) || this.paths.quarantineTmpBytes <= 0)
-      throw new StoreError("SPIKE_UNRESOLVED", "quarantine resource profile is unavailable");
-    const namespaceRoot = mkdtempSync(join(this.paths.stateRoot, "staging", "quarantine-ns-"));
-    const script = [
-      "set -eu",
-      "bundle=$1; project=$2; candidate=$3; export_ref=$4; tmp_bytes=$5; shift 5",
-      "root=$1; shift",
-      "git=/usr/bin/git",
-      "fail_spike() { echo OMA_ERROR=SPIKE_UNRESOLVED >&2; exit 70; }",
-      "fail_bundle() { echo OMA_ERROR=BUNDLE_INVALID >&2; exit 71; }",
-      "fail_prereq() { echo OMA_ERROR=PREREQUISITE_MISSING >&2; exit 72; }",
-      "fail_internal() { echo OMA_ERROR=INTERNAL_ERROR >&2; exit 73; }",
-      "mount --make-rprivate / || fail_spike",
-      "mkdir -p \"$root/project\" \"$root/bundle\" \"$root/quarantine\"",
-      "touch \"$root/bundle/input.bundle\"",
-      "cleanup() { umount \"$root/project\" 2>/dev/null || true; umount \"$root/bundle/input.bundle\" 2>/dev/null || true; umount \"$root/quarantine\" 2>/dev/null || true; rmdir \"$root/project\" \"$root/bundle\" \"$root/quarantine\" \"$root/hooks\" \"$root\" 2>/dev/null || true; }",
-      "trap cleanup EXIT",
-      "mount --bind \"$project\" \"$root/project\" || fail_spike",
-      "mount -o remount,bind,ro \"$root/project\" || fail_spike",
-      "mount --bind \"$bundle\" \"$root/bundle/input.bundle\" || fail_spike",
-      "mount -o remount,bind,ro \"$root/bundle/input.bundle\" || fail_spike",
-      "mount -t tmpfs -o size=\"$tmp_bytes\" tmpfs \"$root/quarantine\" || fail_spike",
-      "mkdir -p \"$root/quarantine/tmp\"",
-      "export TMPDIR=\"$root/quarantine/tmp\"",
-      "mkdir -p \"$root/hooks\"",
-      "export GIT_CONFIG_VALUE_0=\"$root/hooks\"",
-      "repo=\"$root/quarantine/repo\"",
-      "format=$($git --git-dir=\"$root/project\" rev-parse --show-object-format) || fail_internal",
-      "$git --git-dir=\"$repo\" init -q --bare --object-format=\"$format\" >/dev/null 2>&1 || fail_spike",
-      "mkdir -p \"$repo/objects/info\"",
-      "printf '%s\\n' \"$root/project/objects\" > \"$repo/objects/info/alternates\"",
-      "$git --git-dir=\"$repo\" bundle verify \"$root/bundle/input.bundle\" >/dev/null 2>&1 || fail_bundle",
-      "heads=$($git --git-dir=\"$repo\" bundle list-heads \"$root/bundle/input.bundle\" 2>/dev/null) || fail_bundle",
-      "count=0; head_ref=''",
-      "while IFS= read -r line; do [ -z \"$line\" ] && continue; count=$((count + 1)); head_ref=${line##* }; done <<EOF",
-      "$heads",
-      "EOF",
-      "[ \"$count\" -eq 1 ] && [ \"$head_ref\" = \"$export_ref\" ] || fail_bundle",
-      "refspec=\"$export_ref:refs/oma/input\"",
-      "$git --git-dir=\"$repo\" fetch -q --no-tags \"$root/bundle/input.bundle\" \"$refspec\" >/dev/null 2>&1 || fail_bundle",
-      "input=$($git --git-dir=\"$repo\" rev-parse refs/oma/input 2>/dev/null) || fail_bundle",
-      "[ \"$input\" = \"$candidate\" ] || fail_bundle",
-      "$git --git-dir=\"$repo\" fsck --strict --no-reflogs >/dev/null 2>&1 || fail_bundle",
-      "for prerequisite in \"$@\"; do $git --git-dir=\"$repo\" cat-file -e \"$prerequisite^{commit}\" >/dev/null 2>&1 || fail_prereq; done",
-      "mount -o remount,bind,rw \"$root/project\" || fail_spike",
-      "$git --git-dir=\"$root/project\" fetch -q -f --no-tags \"$repo\" +refs/oma/input:refs/oma/input >/dev/null 2>&1 || fail_internal",
-      "printf '%s\\n' \"$input\"",
-    ].join("\n");
-    let observedExit = false;
-    try {
-      const result = spawnSync("/usr/bin/prlimit", [
-        `--cpu=${limits.cpuSeconds}`, `--as=${limits.memoryBytes}`, `--nproc=${limits.tasks}`, "--",
-        "/usr/bin/env", "-i", "HOME=/nonexistent", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C", "TMPDIR=/nonexistent",
-        "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
-        "GIT_TERMINAL_PROMPT=0", "GIT_NO_REPLACE_OBJECTS=1", "GIT_CONFIG_COUNT=3",
-        "GIT_CONFIG_KEY_0=core.hooksPath", "GIT_CONFIG_KEY_1=core.fsync", "GIT_CONFIG_KEY_2=core.fsyncMethod",
-        "GIT_CONFIG_VALUE_0=/dev/null", "GIT_CONFIG_VALUE_1=all", "GIT_CONFIG_VALUE_2=fsync",
-        "/usr/bin/unshare", "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork",
-        "--kill-child=SIGKILL", "--forward-signals", "--mount-proc", "/bin/sh", "-c", script, "oma-quarantine",
-        bundlePath, this.paths.projectGit, candidate, exportRef, String(this.paths.quarantineTmpBytes), namespaceRoot, ...prerequisites,
-      ], { encoding: "utf8", timeout: Math.max(1000, this.paths.checkTimeoutSeconds * 1000), killSignal: "SIGKILL", maxBuffer: 4 * 1024 * 1024, env: gitEnv });
-      if (result.error || result.signal || result.status === null) throw new StoreError("REF_STATE_UNKNOWN", `quarantine import outcome unavailable: ${result.error?.message ?? result.signal ?? "no status"}`);
-      observedExit = true;
-      if (result.status !== 0) {
-        const stderr = String(result.stderr ?? "");
-        const code = /OMA_ERROR=(BUNDLE_INVALID|PREREQUISITE_MISSING|INTERNAL_ERROR|SPIKE_UNRESOLVED)/.exec(stderr)?.[1];
-        if (code === "BUNDLE_INVALID" || code === "PREREQUISITE_MISSING" || code === "INTERNAL_ERROR" || code === "SPIKE_UNRESOLVED") throw new StoreError(code, stderr.slice(0, 400) || "quarantine failed");
-        throw new StoreError("SPIKE_UNRESOLVED", "required quarantine namespace is unavailable");
-      }
-      const head = String(result.stdout ?? "").trim().split("\n").at(-1);
-      if (head !== candidate || !this.canonicalHas(candidate)) throw new StoreError("BUNDLE_INVALID", "bundle candidate was not imported exactly");
-    } finally {
-      // Timeout/signal is not namespace quiescence. Preserve its staging evidence.
-      if (observedExit) rmSync(namespaceRoot, { recursive: true, force: true });
-    }
+  private quarantineImport(bundlePath: string, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): void {
+    this.quarantine.importBundle(bundlePath, candidate, exportRef, prerequisites);
   }
   private publishRef(ref: string, candidate: Oid): void {
     const current = this.observations.ref(this.paths.projectGit, ref);
@@ -300,10 +149,7 @@ export class GitModule {
     const previous = this.integrationTail; let release: (() => void) | undefined;
     this.integrationTail = new Promise<void>(resolve => { release = resolve; });
     await previous;
-    try { return await this.integrateUnsafe(auth, key, input); } finally { release?.(); }
-  }
-  private integrateUnsafe(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {
-    return this.integrationCoordinator.execute(auth, key, input);
+    try { return await this.integrationCoordinator.execute(auth, key, input); } finally { release?.(); }
   }
   isPublished(oid: Oid): boolean {
     return observed(this.observations.published(this.paths.projectGit), "published refs").includes(oid);
@@ -384,7 +230,6 @@ export class GitModule {
     const invalid = contextEntriesCheck(entries, { requireSorted: true });
     if (invalid) throw new StoreError("STORE_CORRUPT", invalid);
     assertContextDirectory(treeDir);
-    // Verify all frozen source bytes before invoking a materializing Git command.
     for (const entry of entries) readContextEntry(treeDir, entry);
     if (!this.repositoryExists(this.paths.contextGit)) {
       ensureDurableDirectory(this.paths.contextGit);
@@ -448,11 +293,9 @@ export class GitModule {
     this.publishContextSnapshot(plan, work);
     return candidate;
   }
-  /** Accepted-operation entry point: callers cannot substitute a shape-only plan. */
   private publishContextSnapshot(plan: ValidatedPlan<"context.publish">, source: string): void {
     this.publishSnapshotFiles(plan.candidate, plan.entries, source);
   }
-  /** Mirror repair reaches this only after canonical-tree verification. */
   private publishSnapshotFiles(candidate: Oid, entries: ContextEntry[], source: string): void {
     publishContextRevision(this.paths.worldDir, candidate, entries, source);
   }
@@ -500,7 +343,6 @@ export class GitModule {
     };
     verify();
     if (seen.size !== expected.size) throw new StoreError("STORE_CORRUPT", "context mirror is incomplete");
-    // This is a fresh canonical observation, not normalization of a durable plan.
     entries.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
     this.publishSnapshotFiles(revision, entries, immutable);
   }
@@ -538,41 +380,18 @@ export class GitModule {
     try { await this.reconcileUnsafe(operationId); } finally { release?.(); }
   }
   private async reconcileUnsafe(operationId: string): Promise<void> {
-    const op = this.store.getOperationById(operationId);
-    if (!op || (op.state !== "pending" && op.state !== "unknown")) return;
-    if (op.kind === "git.integrate") { await this.reconcileIntegrate(op); return; }
-    if (op.kind === "context.publish") { await this.reconcileContext(op); return; }
-    if (op.kind !== "git.submit") return;
-    const plan = op.plan;
-    const ref = this.observations.ref(this.paths.projectGit, plan.publishedRef);
-    if (ref.kind === "present") {
-      if (ref.value !== plan.candidate) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
-    } else if (ref.kind === "absent") {
-      if (plan.bundle) {
-        if (!existsSync(plan.bundle.path) || statBytes(plan.bundle.path) !== plan.bundle.bytes || sha256Of(readFileSync(plan.bundle.path)) !== plan.bundle.sha256)
-          throw new StoreError("STORE_CORRUPT", "accepted staged bundle no longer matches its frozen digest");
-        try { this.quarantineImport(plan.bundle.path, plan.candidate, plan.exportRef, plan.prerequisites); }
-        catch (error) {
-          if (error instanceof StoreError && ["BUNDLE_INVALID", "PREREQUISITE_MISSING", "SPIKE_UNRESOLVED", "STREAM_INVALID"].includes(error.code))
-            this.rejectAcceptedSubmit(op.id, error, "recovering", "possible");
-          throw error;
-        }
-      } else if (!this.canonicalHas(plan.candidate)) throw new StoreError("REF_STATE_UNKNOWN", "accepted submit candidate is not in canonical objects");
-      this.publishRef(plan.publishedRef, plan.candidate);
-    } else observed(ref, `published ref ${plan.publishedRef}`);
-    await this.mail.publishGated(operationId);
-    const result = { kind: "git.submit", candidate: plan.candidate, publishedRef: plan.publishedRef, message: plan.message.id, recipientCount: plan.message.recipients.length };
-    this.store.transaction(() => this.store.setOperationSucceeded(operationId, JSON.stringify(result)));
-  }
-  private reconcileIntegrate(op: OperationOf<"git.integrate">): Promise<void> {
-    return this.integrationCoordinator.reconcile(op);
+    const operation = this.store.getOperationById(operationId);
+    if (!operation || (operation.state !== "pending" && operation.state !== "unknown")) return;
+    switch (operation.kind) {
+      case "git.integrate": await this.integrationCoordinator.reconcile(operation); return;
+      case "context.publish": await this.reconcileContext(operation); return;
+      case "git.submit": await this.submissionCoordinator.reconcile(operation); return;
+      default: return;
+    }
   }
   knownRefs(): { main: string; published: string[] } {
     const main = this.currentMain();
     return { main, published: [...observed(this.observations.published(this.paths.projectGit), "known published refs")] };
   }
-}
-function statBytes(path: string): number {
-  const stat = lstatSync(path); return stat.isFile() && stat.nlink === 1 ? stat.size : -1;
 }
 function fsyncAll(dir: string): void { fsyncTree(dir, "context-single-link"); }
