@@ -28,34 +28,36 @@ export async function prepareContextStream(
   const tree = join(staging, "tree");
   ensureDurableDirectory(tree, 0o700); assertDirectory(tree);
   const owned: OwnedFile[] = [];
-  let active: EntryWriter | null = null;
-  let index = 0; let received = 0;
+  const state: { active: EntryWriter | null; index: number } = { active: null, index: 0 };
+  let received = 0;
   const aggregate = createHash("sha256");
 
   const openEntry = (): void => {
-    const entry = entries[index];
+    const entry = entries[state.index];
     if (!entry) return;
     const path = join(tree, entry.path);
     ensureDurableDirectory(dirname(path), 0o700);
     const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    state.active = { entry, fd, remaining: entry.bytes, hash: createHash("sha256"), text: new ContextTextValidator(entry.path) };
+    // Register FD ownership before fstat so even an observation failure closes it.
     const stat = fstatSync(fd);
     owned.push({ path, dev: stat.dev, ino: stat.ino });
-    active = { entry, fd, remaining: entry.bytes, hash: createHash("sha256"), text: new ContextTextValidator(entry.path) };
   };
   const finishEntry = (): void => {
-    if (!active || active.fd === null || active.remaining !== 0) throw new StoreError("INTERNAL_ERROR", "context file has no complete writer");
+    const active = state.active;
+    if (active === null || active.fd === null || active.remaining !== 0) throw new StoreError("INTERNAL_ERROR", "context file has no complete writer");
     const error = active.text.finish();
     if (error) throw new StoreError("INVALID_REQUEST", `${active.entry.path}: ${error}`);
     if (active.hash.digest("hex") !== active.entry.sha256) throw new StoreError("STREAM_INVALID", `context file digest mismatch: ${active.entry.path}`);
     // Unlike mail objects, context candidate/snapshot files have fixed 0644.
     fchmodSync(active.fd, 0o644); fsyncSync(active.fd);
     const fd = active.fd; active.fd = null; closeSync(fd);
-    active = null; index++;
+    state.active = null; state.index++;
   };
   const advanceEmptyEntries = (): void => {
-    while (index < entries.length) {
-      if (active === null) openEntry();
-      if (active === null || active.remaining !== 0) return;
+    while (state.index < entries.length) {
+      if (state.active === null) openEntry();
+      if (state.active === null || state.active.remaining !== 0) return;
       finishEntry();
     }
   };
@@ -68,6 +70,7 @@ export async function prepareContextStream(
       let offset = 0;
       while (offset < chunk.byteLength) {
         advanceEmptyEntries();
+        const active = state.active;
         if (active === null || active.fd === null) throw new StoreError("STREAM_INVALID", "bytes remain after the final context entry");
         const count = Math.min(active.remaining, chunk.byteLength - offset, 64 * 1024);
         const part = chunk.subarray(offset, offset + count);
@@ -79,13 +82,14 @@ export async function prepareContextStream(
       advanceEmptyEntries();
     }
     advanceEmptyEntries();
-    if (received !== content.bytes || index !== entries.length || active !== null)
+    if (received !== content.bytes || state.index !== entries.length || state.active !== null)
       throw new StoreError("STREAM_INVALID", "EOF before all declared context bytes");
     if (aggregate.digest("hex") !== content.sha256) throw new StoreError("STREAM_INVALID", "context aggregate digest mismatch");
     fsyncTree(tree, "context-single-link"); fsyncDir(staging); fsyncDir(dirname(staging));
     return tree;
   } catch (error) {
     const failures: unknown[] = [error];
+    const active = state.active;
     if (active !== null && active.fd !== null) {
       const fd = active.fd; active.fd = null;
       try { closeSync(fd); } catch (failure) { failures.push(failure); }
