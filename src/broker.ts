@@ -31,7 +31,8 @@ import type {
   RunLease,
 } from "../implementation/contracts.js";
 import { Store, StoreError } from "./store.js";
-import { isValidActorName, isValidRequestKey } from "./ids.js";
+import { isValidActorName, isValidRequestKey, parseBatchId } from "./ids.js";
+import { actorSocketDirectoryAt, actorSocketPathAt } from "./storage/paths.js";
 import { ConnectionDecoder, encodeFrame } from "./frame.js";
 import { spawnSync, spawn } from "node:child_process";
 import { MailModule } from "./mail.js";
@@ -203,8 +204,8 @@ export class Broker {
   }
 
   private actorSocketDirectory(actor: Actor, incarnation: number): string {
-    const dir = join(this.paths.runRoot, "actors", actor, String(incarnation));
-    if (Buffer.byteLength(join(dir, "control.sock")) > 107)
+    const dir = actorSocketDirectoryAt(this.paths.runRoot, actor, incarnation);
+    if (Buffer.byteLength(actorSocketPathAt(this.paths.runRoot, actor, incarnation)) > 107)
       throw new StoreError("UNSUPPORTED_PROFILE", "actor socket path exceeds Linux sun_path");
     return dir;
   }
@@ -214,7 +215,7 @@ export class Broker {
     done: () => void;
   } {
     const dir = this.actorSocketDirectory(actor, incarnation);
-    const path = join(dir, "control.sock");
+    const path = actorSocketPathAt(this.paths.runRoot, actor, incarnation);
     mkdirSync(dir, { recursive: true });
     if (existsSync(path)) unlinkSync(path);
     const sockets = new Set<Socket>();
@@ -1305,9 +1306,9 @@ export class Broker {
           if (!Object.keys(params).every((k) => allowed.includes(k)))
             throw new StoreError("INVALID_REQUEST", "batch.complete args invalid");
           const evidence = params as unknown as BoundaryEvidence;
+          // ID-002: validate canonical grammar before existence/ownership queries.
           if (
-            typeof evidence.batchId !== "string" ||
-            !/^b-[0-9a-f-]{36}$/.test(evidence.batchId) ||
+            parseBatchId(evidence.batchId) === null ||
             !Number.isSafeInteger(evidence.incarnation) ||
             typeof evidence.sessionPath !== "string" ||
             typeof evidence.adapterRevision !== "string" ||
