@@ -1,21 +1,14 @@
 // TEST-002: shared resolved-spec JSON for seeding agents in actor-channel
 // tests. Production never imports this file; the broker reads capabilities
 // ONLY from agents.spec_json, so fixtures must store a realistic spec.
-import type { Capability } from "../../implementation/contracts.js";
+import { CAPABILITIES, type Capability } from "../../src/domain/capabilities.js";
 
-/** Every public capability — the default test actor's resolved spec. */
-export const ALL_CAPS: readonly Capability[] = [
-  "mail.send",
-  "route.follow",
-  "agent.create",
-  "agent.manage.self",
-  "agent.manage.descendants",
-  "git.submit",
-  "code.integrate",
-  "context.publish",
-];
+/** Every public capability. An independent literal inventory lives in domain-policy tests. */
+export const ALL_CAPS: readonly Capability[] = CAPABILITIES;
 
-/** ResolvedAgentSpec JSON: capabilities are the broker-authorized set. */
+/** ResolvedAgentSpec JSON: capabilities are the broker-authorized set.
+ * Resource numbers below are test reference values, never production defaults.
+ */
 export function resolvedSpec(
   capabilities: readonly Capability[],
   profile: string,
