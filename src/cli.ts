@@ -11,8 +11,9 @@ import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4, parseMessageI
 import { exportRefForRequestKey } from "./domain/derived.js";
 import { errorExit, type CliExitCode } from "./domain/errors.js";
 import type { Json, MutationMethod, Receipt } from "../implementation/contracts.js";
-import { exactCandidateCheck, contextFileCheck } from "./validate.js";
-import { parseEmlHeaders } from "./mail.js";
+import { exactCandidateCheck, isMailKind } from "./domain/mail-values.js";
+import { contextFileCheck } from "./domain/context-policy.js";
+import { parseEmlHeaders } from "./mail/headers.js";
 import { snapshotJson } from "./domain/canonical-json.js";
 import { requestParamsEqual } from "./domain/request-identity.js";
 import { requestIntentConflict, explicitFullOid } from "./cli/request-intent.js";
@@ -234,7 +235,7 @@ async function cmdSend(args: string[]): Promise<void> {
   if (to.length === 0 && !reply) fail("send requires an address (or --reply)", 2);
   if (!subject && !reply) fail("send requires --subject (or --reply to reuse its subject)", 2);
   const kindRaw = opt(args, "--kind") ?? "message";
-  if (!["message", "question", "result", "alert", "context", "approval_required", "critical"].includes(kindRaw)) fail(`invalid --kind ${kindRaw}`, 2);
+  if (!isMailKind(kindRaw)) fail(`invalid --kind ${kindRaw}`, 2);
   const candidate = opt(args, "--candidate"); const expectedBase = opt(args, "--expect"); const policyRevision = opt(args, "--policy-revision");
   let approvalFor: { repo: string; targetRef: string; candidate: string | null; expectedBase: string | null; policyRevision: string | null } | undefined;
   if (kindRaw === "approval_required") {
@@ -246,7 +247,9 @@ async function cmdSend(args: string[]): Promise<void> {
   await effect("mail.send", key, () => {
     const params: Record<string, unknown> = { to, subject: subject ?? "Re", kind: kindRaw, body: readBody(opt(args, "--file")) };
     if (reply) {
-      const id = parseEmlHeaders(readBody(reply)).messageId?.split("@", 1)[0];
+      let id: string | undefined;
+      try { id = parseEmlHeaders(readBody(reply)).messageId?.split("@", 1)[0]; }
+      catch { fail("reply file has invalid OMA headers", 2); }
       if (!id || !parseMessageId(id)) fail("reply file has no valid Message-ID", 2);
       params.replyToMessage = id;
     }
