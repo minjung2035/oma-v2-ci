@@ -6,7 +6,7 @@ import { lstatSync, renameSync, symlinkSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
-import { fsyncDir, fsyncTree } from "./durable-fs.js";
+import { fsyncDir, fsyncTree, type TreeFlushPolicy } from "./durable-fs.js";
 import { assertDirectory } from "./directory.js";
 
 function requireDirectory(path: string): void {
@@ -23,18 +23,21 @@ function requireDirectory(path: string): void {
  * error is ambiguous, never permission to overwrite an observed destination.
  * Empty/raced destination handling remains bounded by the caller's trusted
  * serialized publication authority and the S-06 filesystem admission gate.
+ * The explicit flush policy distinguishes context single-link entries from
+ * legitimate workspace symlinks; it never enables following a link target.
  */
 export function publishStagedDirectory(
   staging: string,
   destination: string,
   verify: (root: string) => void,
+  policy: TreeFlushPolicy = "regular-files",
 ): "published" | "existing" {
   if (staging === destination) throw new StoreError("STORE_CORRUPT", "staging and destination must differ");
   assertDirectory(dirname(destination));
   const existing = (): "existing" => {
     requireDirectory(destination);
     verify(destination);
-    fsyncTree(destination);
+    fsyncTree(destination, policy);
     fsyncDir(dirname(destination));
     return "existing";
   };
@@ -48,7 +51,7 @@ export function publishStagedDirectory(
   assertDirectory(dirname(staging));
   requireDirectory(staging);
   verify(staging);
-  fsyncTree(staging);
+  fsyncTree(staging, policy);
   try { renameSync(staging, destination); }
   catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
