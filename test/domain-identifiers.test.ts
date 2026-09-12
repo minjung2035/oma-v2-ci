@@ -4,8 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import type { Receipt } from "../implementation/contracts.js";
 import {
   parseActor, parseResidentName, parseSocietyName, parseTopicName, parseRequestKey,
   parseOperationId, parseBatchId, parseMessageFileId, parseMessageId,
@@ -28,13 +27,13 @@ import { contextPathCheck } from "../src/validate.js";
 import { operationPlanCheck } from "../src/durable.js";
 import { readBatchView } from "../src/pi-extension.js";
 import { RequestCache } from "../src/request-cache.js";
+import { runCliWithLookup } from "./fixtures/cli-lookup.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000003";
 const OTHER_OP = "op-00000000-0000-4000-8000-000000000004";
 const MESSAGE = "m-00000000-0000-4000-8000-000000000003-0";
 const BATCH = "b-00000000-0000-4000-8000-000000000003";
 const OID = "1111111111111111111111111111111111111111";
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 
 test("R03: resident names and authenticated actor names are distinct contexts", () => {
   assert.equal(parseResidentName("alice"), "alice");
@@ -156,7 +155,7 @@ test("R03: the durable submit boundary rejects a syntactically valid foreign ref
       sha256: "a".repeat(64), bytes: 1, dateMs: 0, to: ["commons"], recipients: [], kind: "result", contextRevision: null,
       replyHeaders: { replyTo: ["commons"], inReplyTo: null, references: [] } },
   };
-  const check = operationPlanCheck("git.submit", { operationId: OP, actor: "alice", stateRoot: "/state" });
+  const check = operationPlanCheck("git.submit", { operationId: OP, actor: "alice", stateRoot: "/state", repositoryIdentity: { society: "demo" } });
   assert.equal(check(plan), null);
   assert.notEqual(check({ ...plan, publishedRef: "refs/oma/published/bob/op-00000000-0000-4000-8000-000000000003" }), null);
   assert.notEqual(check({ ...plan, message: { ...plan.message, objectPath: "mail/objects/m-00000000-0000-4000-8000-000000000004-0.eml" } }), null);
@@ -184,41 +183,46 @@ test("R03: single-file Pi UUID copy agrees on independent boundary vectors", () 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("R03: actual CLI ACK rejects non-v4 IDs before replay or networking", () => {
+test("R03: actual CLI ACK rejects non-v4 IDs before replay or networking", async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-r03-ack-"));
   try {
     const cache = new RequestCache(home);
-    cache.write({ key: "ack-key", method: "mail.ack", params: { message: MESSAGE }, createdAtMs: 1,
-      lastReceipt: { operation: OP, state: "succeeded", result: { kind: "mail.ack", message: MESSAGE, acknowledged: true } } });
-    const invoke = (message: string) => spawnSync(process.execPath, [CLI, "ack", message, "--request", "ack-key"], {
-      env: { ...process.env, HOME: home, OMA_SOCKET: join(home, "absent.sock") }, encoding: "utf8", timeout: 5000,
-    });
-    const good = invoke(`/mail/archive/cur/${MESSAGE}:2,`);
+    const receipt: Receipt = { operation: OP, state: "succeeded", result: { kind: "mail.ack", message: MESSAGE, acknowledged: true } };
+    cache.freeze({ key: "ack-key", method: "mail.ack", params: { message: MESSAGE }, createdAtMs: 1 });
+    cache.updateReceipt("ack-key", receipt);
+    const invoke = (message: string) => runCliWithLookup(home, home, ["ack", message, "--request", "ack-key"], "ack-key", receipt);
+    const good = await invoke(`/mail/archive/cur/${MESSAGE}:2,`);
     assert.equal(good.status, 0, good.stderr);
-    const bad = invoke("m-00000000-0000-1000-8000-000000000003-0");
+    assert.deepEqual(good.requests.map(request => request.method), ["operation.get"]);
+    const bad = await invoke("m-00000000-0000-1000-8000-000000000003-0");
     assert.equal(bad.status, 2, bad.stderr);
     assert.match(bad.stderr, /ack requires a message id/);
+    assert.deepEqual(bad.requests, [], "invalid IDs must fail before lookup");
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-test("R03: actual CLI preserves an old frozen submit exportRef without consulting HEAD", () => {
+test("R03: actual CLI preserves an old frozen submit exportRef without consulting HEAD", async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-r03-frozen-"));
   try {
     const cache = new RequestCache(home);
-    cache.write({ key: "legacy-key", method: "git.submit", createdAtMs: 1,
+    const receipt: Receipt = { operation: OP, state: "succeeded", result: { kind: "git.submit", candidate: OID,
+      publishedRef: "refs/oma/published/alice/op-00000000-0000-4000-8000-000000000003", message: MESSAGE, recipientCount: 0 } };
+    cache.freeze({ key: "legacy-key", method: "git.submit", createdAtMs: 1,
       params: { candidate: OID, exportRef: "refs/oma/export/cli-legacy-key", prerequisites: [],
-        to: ["commons"], subject: "Re: submit", body: "frozen", paths: [] },
-      lastReceipt: { operation: OP, state: "succeeded", result: { kind: "git.submit", candidate: OID,
-        publishedRef: "refs/oma/published/alice/op-00000000-0000-4000-8000-000000000003", message: MESSAGE, recipientCount: 0 } } });
+        to: ["commons"], subject: "Re: submit", body: "frozen", paths: [] } });
+    cache.updateReceipt("legacy-key", receipt);
     const path = join(home, ".local/state/oma/requests/legacy-key.json");
     const before = readFileSync(path);
     const cwd = join(home, "not-a-git-repository");
     mkdirSync(cwd);
-    const result = spawnSync(process.execPath, [CLI, "submit", "HEAD", "--request", "legacy-key"], {
-      cwd, env: { ...process.env, HOME: home, OMA_SOCKET: join(home, "absent.sock") }, encoding: "utf8", timeout: 5000,
-    });
+    const result = await runCliWithLookup(home, cwd, ["submit", "HEAD", "--request", "legacy-key"], "legacy-key", receipt);
     assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(result.requests.map(request => request.method), ["operation.get"]);
     assert.deepEqual(readFileSync(path), before, "a frozen request is read, not rewritten into the fresh ref convention");
-    assert.equal((cache.read("legacy-key")?.params as Record<string, unknown>).exportRef, "refs/oma/export/cli-legacy-key");
+    const frozen = cache.read("legacy-key");
+    assert.ok(frozen.kind === "present");
+    const params = frozen.value.params;
+    assert.ok(params !== null && typeof params === "object" && !Array.isArray(params));
+    assert.equal(params.exportRef, "refs/oma/export/cli-legacy-key");
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
