@@ -4,39 +4,20 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Actor, BatchId, ErrorCode, MessageId, OperationId, RequestKey, OperationPlan } from "../implementation/contracts.js";
+import type { Actor, ErrorCode, MessageId, OperationId, RequestKey, OperationPlan } from "../implementation/contracts.js";
 import { operationResultCheck } from "./validate.js";
 import { operationResultRelationCheck, type RepositoryIdentity, type OperationPlanContext } from "./durable.js";
-import { decodeOperation, type DecodedOperation, type OperationOf, type OperationDecodeContext } from "./storage/operation-codec.js";
-import { isValidOperationId, isValidSocietyName } from "./ids.js";
+import type { DecodedOperation, OperationOf } from "./storage/operation-codec.js";
+import { LedgerReader } from "./storage/ledger-reader.js";
+import { decodeBatchRow, decodeBatchManifest, fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
+import { isValidSocietyName } from "./ids.js";
 import { StoreError, isErrorCode, isPreacceptOnlyFailure } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
+export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
 
 export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v1.sql", import.meta.url));
-export interface AgentRow {
-  name: Actor; specHash: string; role: "resident" | "principal";
-  desired: "provisioning" | "enabled" | "stopped" | "retired";
-  incarnation: number; profile: string; createdBy: string | null; specJson: string;
-  createdAtMs: number; updatedAtMs: number;
-}
-/** Compatibility type name; every exposed value now carries decoded plan/payload/result. */
 export type OperationRow = DecodedOperation;
-export interface SubscriptionRow { topic: string; agent: Actor; createdAtMs: number }
-export interface DeliveryRow {
-  messageId: MessageId; recipient: Actor; operationId: OperationId; materialized: 0 | 1;
-  batchId: BatchId | null; presented: 0 | 1; acknowledged: 0 | 1; createdAtMs: number;
-  materializedAtMs: number | null; presentedAtMs: number | null; acknowledgedAtMs: number | null;
-}
-export interface BatchRow {
-  id: BatchId; agent: Actor; incarnation: number; messageIdsJson: string;
-  sessionPath: string | null; state: "prepared" | "completed"; createdAtMs: number; completedAtMs: number | null;
-}
-export interface UsageRow {
-  requestId: string; actor: Actor; incarnation: number; profile: string; pricingRevision: string;
-  reservedUnits: number; reportedUnits: number | null; outcome: "reserved" | "completed" | "cancelled" | "unknown";
-  detailsJson: string | null; createdAtMs: number; updatedAtMs: number;
-}
 export function reused(actor: Actor, key: RequestKey): StoreError {
   return new StoreError("REQUEST_KEY_REUSED", `request key ${key} (actor ${actor}) already used with a different payload`);
 }
@@ -52,6 +33,7 @@ export interface NewAgent {
 const DEFAULT_BUSY_RETRIES = 5;
 export class Store {
   private readonly db: DatabaseSync;
+  private readonly reader: LedgerReader;
   private depth = 0;
   private repositoryIdentity: RepositoryIdentity | null;
   constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null) {
@@ -63,23 +45,14 @@ export class Store {
     this.db.exec("PRAGMA synchronous = FULL");
     this.db.exec("PRAGMA busy_timeout = 5000");
     this.migrate();
+    this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
   }
-  /** Existing host configuration supplies this fact, never a value parsed from a plan. */
+  /** Supplied by host configuration, never inferred from an untrusted plan. */
   bindRepositoryIdentity(identity: RepositoryIdentity): void {
     if (!isValidSocietyName(identity.society)) throw new StoreError("STORE_CORRUPT", "invalid repository society identity");
     if (this.repositoryIdentity !== null && this.repositoryIdentity.society !== identity.society)
       throw new StoreError("STORE_CORRUPT", "conflicting repository society identities");
     this.repositoryIdentity = Object.freeze({ society: identity.society });
-  }
-  private decodeContext(): OperationDecodeContext {
-    return {
-      stateRoot: dirname(this.path), repositoryIdentity: this.repositoryIdentity,
-      relations: {
-        operation: id => this.db.prepare("SELECT * FROM operations WHERE id=?").get(id) ?? null,
-        agent: name => this.db.prepare("SELECT * FROM agents WHERE name=?").get(name) ?? null,
-        deliveries: id => this.db.prepare("SELECT * FROM deliveries WHERE operation_id=? ORDER BY message_id, recipient").all(id),
-      },
-    };
   }
   private planContext(operation: OperationRow): OperationPlanContext {
     return { operationId: operation.id, actor: operation.actor, stateRoot: dirname(this.path), repositoryIdentity: this.repositoryIdentity };
@@ -100,8 +73,7 @@ export class Store {
     if (this.userVersion() !== 1) throw new StoreError("STORE_CORRUPT", "migration did not set user_version=1");
   }
   private userVersion(): number {
-    const row = this.db.prepare("PRAGMA user_version").get() as { user_version: number };
-    return row.user_version;
+    return safeInteger(fullRow(this.db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
   }
   private begin(): void {
     let ok = false;
@@ -138,16 +110,10 @@ export class Store {
       VALUES (?,?,?,?,?,?,?,?,?,?)`).run(agent.name, agent.specHash, agent.role, agent.desired, agent.incarnation,
       agent.profile, agent.createdBy, agent.specJson, Date.now(), Date.now());
   }
-  getAgent(name: string): AgentRow | null {
-    const row = this.db.prepare("SELECT * FROM agents WHERE name = ?").get(name) as Record<string, unknown> | undefined;
-    return row ? rowToAgent(row) : null;
-  }
-  listAgents(): AgentRow[] {
-    return (this.db.prepare("SELECT * FROM agents ORDER BY name").all() as Record<string, unknown>[]).map(rowToAgent);
-  }
+  getAgent(name: string): AgentRow | null { return this.reader.agent(name); }
+  listAgents(): AgentRow[] { return this.reader.agents(); }
   updateAgent(agent: { name: string; desired?: AgentRow["desired"]; incarnation?: number; specHash?: string; specJson?: string }): void {
-    this.requireTx();
-    const now = Date.now();
+    this.requireTx(); const now = Date.now();
     if (agent.desired !== undefined) {
       const existing = this.getAgent(agent.name);
       if (!existing) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
@@ -158,8 +124,7 @@ export class Store {
     if (agent.specHash !== undefined || agent.specJson !== undefined) {
       const current = this.getAgent(agent.name);
       if (!current) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
-      this.db.prepare("UPDATE agents SET spec_hash=?, spec_json=?, updated_at_ms=? WHERE name=?")
-        .run(agent.specHash ?? current.specHash, agent.specJson ?? current.specJson, now, agent.name);
+      this.db.prepare("UPDATE agents SET spec_hash=?, spec_json=?, updated_at_ms=? WHERE name=?").run(agent.specHash ?? current.specHash, agent.specJson ?? current.specJson, now, agent.name);
     }
   }
   follow(topic: string, agent: string): void {
@@ -167,24 +132,17 @@ export class Store {
     this.db.prepare("INSERT OR IGNORE INTO subscriptions (topic, agent, created_at_ms) VALUES (?,?,?)").run(topic, agent, Date.now());
   }
   unfollow(topic: string, agent: string): void {
-    this.requireTx();
-    this.db.prepare("DELETE FROM subscriptions WHERE topic=? AND agent=?").run(topic, agent);
+    this.requireTx(); this.db.prepare("DELETE FROM subscriptions WHERE topic=? AND agent=?").run(topic, agent);
   }
-  subscribers(topic: string): string[] {
-    const rows = this.db.prepare("SELECT agent FROM subscriptions WHERE topic=? ORDER BY agent").all(topic) as { agent: string }[];
-    return rows.map(row => row.agent);
-  }
-  allSubscriptions(): SubscriptionRow[] {
-    const rows = this.db.prepare("SELECT * FROM subscriptions ORDER BY topic, agent").all() as Record<string, unknown>[];
-    return rows.map(row => ({ topic: row.topic as string, agent: row.agent as Actor, createdAtMs: num(row.created_at_ms) }));
-  }
+  subscribers(topic: string): string[] { return this.reader.subscriptions(topic).map(row => row.agent); }
+  allSubscriptions(): SubscriptionRow[] { return this.reader.subscriptions(); }
   insertOperation(operation: { id: OperationId; actor: Actor; requestKey: RequestKey; requestHash: string; kind: OperationPlan["kind"]; payloadJson: string; planJson: string }): void {
     this.requireTx();
     try {
       this.db.prepare(`INSERT INTO operations
         (id, actor, request_key, request_hash, kind, payload_json, plan_json, state, created_at_ms, updated_at_ms)
-        VALUES (?,?,?,?,?,?,?, 'pending', ?, ?)`).run(operation.id, operation.actor, operation.requestKey,
-        operation.requestHash, operation.kind, operation.payloadJson, operation.planJson, Date.now(), Date.now());
+        VALUES (?,?,?,?,?,?,?, 'pending', ?, ?)`).run(operation.id, operation.actor, operation.requestKey, operation.requestHash,
+        operation.kind, operation.payloadJson, operation.planJson, Date.now(), Date.now());
     } catch (error) {
       if (error instanceof Error && /UNIQUE constraint failed: operations.actor, operations.request_key/.test(error.message)) throw new StoreError("REQUEST_KEY_REUSED", "request key already used by this actor");
       throw error;
@@ -208,42 +166,20 @@ export class Store {
       throw error;
     }
   }
-  getOperation(actor: Actor, key: RequestKey): OperationRow | null {
-    const raw = this.db.prepare("SELECT * FROM operations WHERE actor=? AND request_key=?").get(actor, key);
-    return raw === undefined ? null : decodeOperation(raw, this.decodeContext());
-  }
-  getOperationById(id: OperationId): OperationRow | null {
-    const raw = this.db.prepare("SELECT * FROM operations WHERE id=?").get(id);
-    return raw === undefined ? null : decodeOperation(raw, this.decodeContext());
-  }
-  findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null {
-    const raw = this.db.prepare(`SELECT * FROM operations
-      WHERE kind='agent.create' AND json_extract(plan_json,'$.spec.name')=?
-        AND json_extract(plan_json,'$.specHash')=? AND json_type(plan_json,'$.existingCreation')='null'
-      ORDER BY created_at_ms, id LIMIT 1`).get(name, specHash);
-    if (raw === undefined) return null;
-    const operation = decodeOperation(raw, this.decodeContext());
-    if (operation.kind !== "agent.create") throw new StoreError("STORE_CORRUPT", "physical create query returned another kind");
-    return operation;
-  }
-  recoverableOperations(): OperationId[] {
-    const rows = this.db.prepare("SELECT id FROM operations WHERE state IN ('pending','unknown') ORDER BY created_at_ms, id").all();
-    return rows.map(row => {
-      if (!isValidOperationId(row.id)) throw new StoreError("STORE_CORRUPT", "invalid recoverable operation id");
-      return row.id;
-    });
-  }
+  getOperation(actor: Actor, key: RequestKey): OperationRow | null { return this.reader.operation(actor, key); }
+  getOperationById(id: OperationId): OperationRow | null { return this.reader.operationById(id); }
+  findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
+  recoverableOperations(): OperationId[] { return this.reader.recoverableIds(); }
   updateOperationPlanJson(id: OperationId, planJson: string): void {
     this.requireTx();
+    // Acceptance may still be inserting its related delivery rows in this transaction.
     this.db.prepare("UPDATE operations SET plan_json=?, updated_at_ms=? WHERE id=?").run(planJson, Date.now(), id);
   }
   setOperationSucceeded(id: OperationId, resultJson: string): void {
-    this.requireTx();
-    const current = this.getOperationById(id);
+    this.requireTx(); const current = this.getOperationById(id);
     if (!current) throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
     let result: unknown;
-    try { result = JSON.parse(resultJson); }
-    catch { throw new StoreError("STORE_CORRUPT", `operation ${id} result is not valid JSON`); }
+    try { result = JSON.parse(resultJson); } catch { throw new StoreError("STORE_CORRUPT", `operation ${id} result is not valid JSON`); }
     const invalid = operationResultCheck(current.kind)(result) ?? operationResultRelationCheck(current.kind, current.plan, result, this.planContext(current));
     if (invalid) throw new StoreError("STORE_CORRUPT", `operation ${id} result: ${invalid}`);
     if (current.state === "succeeded") {
@@ -265,8 +201,7 @@ export class Store {
     if (Number(updated.changes) !== 1) throw new StoreError("STORE_CORRUPT", `operation ${id} transition was not applied exactly once`);
   }
   setOperationUnknown(id: OperationId): void {
-    this.requireTx();
-    const current = this.getOperationById(id);
+    this.requireTx(); const current = this.getOperationById(id);
     if (!current) throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
     if (current.state === "unknown") return;
     if (current.state !== "pending") throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
@@ -280,72 +215,57 @@ export class Store {
   }
   markMaterialized(messageId: MessageId, recipient: Actor): void {
     this.requireTx();
-    this.db.prepare("UPDATE deliveries SET materialized=1, materialized_at_ms=? WHERE message_id=? AND recipient=?").run(Date.now(), messageId, recipient);
+    this.db.prepare("UPDATE deliveries SET materialized=1, materialized_at_ms=? WHERE message_id=? AND recipient=? AND materialized=0").run(Date.now(), messageId, recipient);
   }
   markAcknowledged(messageId: MessageId, recipient: Actor): void {
     this.requireTx();
-    this.db.prepare("UPDATE deliveries SET acknowledged=1, acknowledged_at_ms=? WHERE message_id=? AND recipient=?").run(Date.now(), messageId, recipient);
+    this.db.prepare("UPDATE deliveries SET acknowledged=1, acknowledged_at_ms=? WHERE message_id=? AND recipient=? AND acknowledged=0").run(Date.now(), messageId, recipient);
   }
-  pendingDeliveries(agent: Actor): DeliveryRow[] {
-    const rows = this.db.prepare(`SELECT * FROM deliveries
-      WHERE recipient=? AND materialized=1 AND presented=0 AND batch_id IS NULL ORDER BY created_at_ms, message_id`).all(agent) as Record<string, unknown>[];
-    return rows.map(rowToDelivery);
-  }
-  getDelivery(messageId: MessageId, recipient: Actor): DeliveryRow | null {
-    const row = this.db.prepare("SELECT * FROM deliveries WHERE message_id=? AND recipient=?").get(messageId, recipient) as Record<string, unknown> | undefined;
-    return row ? rowToDelivery(row) : null;
-  }
-  deliveriesForOperation(operationId: OperationId): DeliveryRow[] {
-    const rows = this.db.prepare("SELECT * FROM deliveries WHERE operation_id=? ORDER BY created_at_ms, message_id").all(operationId) as Record<string, unknown>[];
-    return rows.map(rowToDelivery);
-  }
-  insertPreparedBatch(batch: { id: BatchId; agent: Actor; incarnation: number; messageIds: MessageId[]; sessionPath: string | null }): void {
+  pendingDeliveries(agent: Actor): DeliveryRow[] { return this.reader.pendingDeliveries(agent); }
+  getDelivery(messageId: MessageId, recipient: Actor): DeliveryRow | null { return this.reader.delivery(messageId, recipient); }
+  deliveriesForOperation(operationId: OperationId): DeliveryRow[] { return this.reader.operationDeliveries(operationId); }
+  insertPreparedBatch(batch: { id: string; agent: Actor; incarnation: number; messageIds: MessageId[]; sessionPath: string | null }): void {
     this.requireTx();
     this.db.prepare(`INSERT INTO batches (id, agent, incarnation, message_ids_json, session_path, state, created_at_ms, completed_at_ms)
       VALUES (?,?,?,?,?, 'prepared', ?, NULL)`).run(batch.id, batch.agent, batch.incarnation, JSON.stringify(batch.messageIds), batch.sessionPath, Date.now());
   }
-  getBatch(id: BatchId): BatchRow | null {
-    const row = this.db.prepare("SELECT * FROM batches WHERE id=?").get(id) as Record<string, unknown> | undefined;
-    return row ? rowToBatch(row) : null;
-  }
-  preparedBatches(agent: Actor): BatchRow[] {
-    const rows = this.db.prepare("SELECT * FROM batches WHERE agent=? AND state='prepared' ORDER BY created_at_ms, id").all(agent) as Record<string, unknown>[];
-    return rows.map(rowToBatch);
-  }
+  getBatch(id: string): BatchRow | null { return this.reader.batch(id); }
+  preparedBatches(agent: Actor): BatchRow[] { return this.reader.preparedBatches(agent); }
   reassignPreparedBatches(agent: Actor, incarnation: number): void {
-    this.requireTx();
-    this.db.prepare("UPDATE batches SET incarnation=? WHERE agent=? AND state='prepared'").run(incarnation, agent);
+    this.requireTx(); this.db.prepare("UPDATE batches SET incarnation=? WHERE agent=? AND state='prepared'").run(incarnation, agent);
   }
-  linkDeliveriesToBatch(batchId: BatchId, messageIds: MessageId[]): void {
+  linkDeliveriesToBatch(batchId: string, messageIds: MessageId[]): void {
     this.requireTx();
-    const batch = this.getBatch(batchId);
-    if (!batch) throw new StoreError("BATCH_CONFLICT", `no such batch ${batchId}`);
+    // This transition owns the just-inserted batch. Its linked set is intentionally
+    // incomplete until this method finishes; public getBatch always checks the full set.
+    const raw = this.db.prepare("SELECT * FROM batches WHERE id=?").get(batchId);
+    if (raw === undefined) throw new StoreError("BATCH_CONFLICT", `no such batch ${batchId}`);
+    const batch = decodeBatchRow(raw);
     if (batch.state === "completed") throw new StoreError("BATCH_CONFLICT", `completed batch ${batchId} is immutable`);
-    let implied: Set<string>;
-    try { implied = new Set(JSON.parse(batch.messageIdsJson) as string[]); }
-    catch { throw new StoreError("STORE_CORRUPT", `batch ${batchId} has corrupt message list`); }
-    const have = new Set(messageIds);
-    if (implied.size !== have.size || [...implied].some(id => !have.has(id))) throw new StoreError("BATCH_CONFLICT", "batch message ids do not match the linked deliveries");
+    const implied = decodeBatchManifest(batch.messageIdsJson);
+    if (implied.length !== messageIds.length || implied.some((id, index) => id !== messageIds[index]))
+      throw new StoreError("BATCH_CONFLICT", "batch message order differs from the frozen manifest");
     for (const id of messageIds) {
       const delivery = this.getDelivery(id, batch.agent);
-      if (!delivery) throw new StoreError("BATCH_CONFLICT", `message ${id} has no delivery for ${batch.agent}`);
-      if (delivery.batchId !== null && delivery.batchId !== batchId) throw new StoreError("BATCH_CONFLICT", `message ${id} already in batch ${delivery.batchId}`);
+      if (!delivery || delivery.materialized !== 1 || delivery.presented !== 0) throw new StoreError("BATCH_CONFLICT", `message ${id} is not pending for ${batch.agent}`);
+      if (delivery.batchId !== null && delivery.batchId !== batchId) throw new StoreError("BATCH_CONFLICT", `message ${id} already in another batch`);
     }
     const update = this.db.prepare("UPDATE deliveries SET batch_id=? WHERE message_id=? AND recipient=?");
     for (const id of messageIds) update.run(batchId, id, batch.agent);
+    this.getBatch(batchId); // the completed transition must now satisfy exact-set relations
   }
-  pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] {
-    const rows = this.db.prepare("SELECT * FROM batches WHERE agent=? AND state='prepared' ORDER BY created_at_ms, id").all(agent) as Record<string, unknown>[];
-    return rows.map(rowToBatch).filter(batch => batch.incarnation === incarnation);
-  }
-  completeBatch(batchId: BatchId, markPresentedIds: MessageId[], agent: Actor): void {
-    this.requireTx();
-    const batch = this.getBatch(batchId);
+  pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation === incarnation); }
+  completeBatch(batchId: string, markPresentedIds: MessageId[], agent: Actor): void {
+    this.requireTx(); const batch = this.getBatch(batchId);
     if (!batch) throw new StoreError("BATCH_CONFLICT", `no such batch ${batchId}`);
+    if (batch.agent !== agent) throw new StoreError("BATCH_CONFLICT", "batch owner mismatch");
+    const manifest = decodeBatchManifest(batch.messageIdsJson);
+    if (manifest.length !== markPresentedIds.length || manifest.some((id, index) => id !== markPresentedIds[index])) throw new StoreError("BATCH_CONFLICT", "batch completion manifest mismatch");
     if (batch.state === "completed") return;
     this.db.prepare("UPDATE batches SET state='completed', completed_at_ms=? WHERE id=?").run(Date.now(), batchId);
-    const statement = this.db.prepare("UPDATE deliveries SET presented=1, presented_at_ms=? WHERE message_id=? AND recipient=?");
+    const statement = this.db.prepare("UPDATE deliveries SET presented=1, presented_at_ms=? WHERE message_id=? AND recipient=? AND presented=0");
     for (const id of markPresentedIds) statement.run(Date.now(), id, agent);
+    this.getBatch(batchId);
   }
   reserveUsage(usage: { requestId: string; actor: Actor; incarnation: number; profile: string; pricingRevision: string; reservedUnits: number }): void {
     this.requireTx();
@@ -354,17 +274,10 @@ export class Store {
       VALUES (?,?,?,?,?,?,NULL,'reserved',NULL,?,?)`).run(usage.requestId, usage.actor, usage.incarnation, usage.profile,
       usage.pricingRevision, usage.reservedUnits, Date.now(), Date.now());
   }
-  usageRows(): UsageRow[] {
-    const rows = this.db.prepare("SELECT * FROM usage ORDER BY created_at_ms, request_id").all() as Record<string, unknown>[];
-    return rows.map(rowToUsage);
-  }
-  getUsage(requestId: string): UsageRow | null {
-    const row = this.db.prepare("SELECT * FROM usage WHERE request_id=?").get(requestId) as Record<string, unknown> | undefined;
-    return row ? rowToUsage(row) : null;
-  }
+  usageRows(): UsageRow[] { return this.reader.usages(); }
+  getUsage(requestId: string): UsageRow | null { return this.reader.usage(requestId); }
   settleUsage(requestId: string, outcome: UsageRow["outcome"], reportedUnits: number | null, detailsJson: string | null): void {
-    this.requireTx();
-    this.db.prepare("UPDATE usage SET outcome=?, reported_units=?, details_json=?, updated_at_ms=? WHERE request_id=?").run(outcome, reportedUnits, detailsJson, Date.now(), requestId);
+    this.requireTx(); this.db.prepare("UPDATE usage SET outcome=?, reported_units=?, details_json=?, updated_at_ms=? WHERE request_id=?").run(outcome, reportedUnits, detailsJson, Date.now(), requestId);
   }
 }
 function validDesiredTransition(from: AgentRow["desired"], to: AgentRow["desired"]): boolean {
@@ -375,17 +288,4 @@ function validDesiredTransition(from: AgentRow["desired"], to: AgentRow["desired
     case "stopped": return to === "enabled" || to === "retired";
     case "retired": return false;
   }
-}
-function num(value: unknown): number { return typeof value === "number" ? value : Number(value); }
-function rowToAgent(row: Record<string, unknown>): AgentRow {
-  return { name: row.name as Actor, specHash: row.spec_hash as string, role: row.role as AgentRow["role"], desired: row.desired as AgentRow["desired"], incarnation: num(row.incarnation), profile: row.profile as string, createdBy: row.created_by as string | null, specJson: row.spec_json as string, createdAtMs: num(row.created_at_ms), updatedAtMs: num(row.updated_at_ms) };
-}
-function rowToDelivery(row: Record<string, unknown>): DeliveryRow {
-  return { messageId: row.message_id as MessageId, recipient: row.recipient as Actor, operationId: row.operation_id as OperationId, materialized: row.materialized as 0 | 1, batchId: row.batch_id as BatchId | null, presented: row.presented as 0 | 1, acknowledged: row.acknowledged as 0 | 1, createdAtMs: num(row.created_at_ms), materializedAtMs: row.materialized_at_ms === null ? null : num(row.materialized_at_ms), presentedAtMs: row.presented_at_ms === null ? null : num(row.presented_at_ms), acknowledgedAtMs: row.acknowledged_at_ms === null ? null : num(row.acknowledged_at_ms) };
-}
-function rowToBatch(row: Record<string, unknown>): BatchRow {
-  return { id: row.id as BatchId, agent: row.agent as Actor, incarnation: num(row.incarnation), messageIdsJson: row.message_ids_json as string, sessionPath: row.session_path as string | null, state: row.state as BatchRow["state"], createdAtMs: num(row.created_at_ms), completedAtMs: row.completed_at_ms === null ? null : num(row.completed_at_ms) };
-}
-function rowToUsage(row: Record<string, unknown>): UsageRow {
-  return { requestId: row.request_id as string, actor: row.actor as Actor, incarnation: num(row.incarnation), profile: row.profile as string, pricingRevision: row.pricing_revision as string, reservedUnits: num(row.reserved_units), reportedUnits: row.reported_units === null ? null : num(row.reported_units), outcome: row.outcome as UsageRow["outcome"], detailsJson: row.details_json as string | null, createdAtMs: num(row.created_at_ms), updatedAtMs: num(row.updated_at_ms) };
 }
