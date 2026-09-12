@@ -1,16 +1,15 @@
 // MUST [CLI-001..003]/[IPC-004..008]: model-facing CLI; freeze before transport.
 // Same-key replay never rebuilds from current HEAD or mutable source files.
-import { connect } from "node:net";
 import { readFileSync, existsSync, readdirSync, statSync, lstatSync, openSync, closeSync, fstatSync, constants } from "node:fs";
 import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { FrameParser, encodeFrame } from "./frame.js";
+import { callActor } from "./cli/transport.js";
 import { RequestCache, CacheError, type CachedRequest, type FreezeInput } from "./request-cache.js";
 import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4, parseMessageId, parseMessageFileId } from "./ids.js";
 import { exportRefForRequestKey } from "./domain/derived.js";
 import { errorExit, type CliExitCode } from "./domain/errors.js";
-import type { Json, MutationMethod, Receipt } from "../implementation/contracts.js";
+import type { Json, MutationMethod, PublicMethod, Receipt } from "../implementation/contracts.js";
 import { exactCandidateCheck, isMailKind } from "./domain/mail-values.js";
 import { contextFileCheck } from "./domain/context-policy.js";
 import { parseEmlHeaders } from "./mail/headers.js";
@@ -59,35 +58,8 @@ function socketPath(): string {
   fail("no broker socket (set OMA_SOCKET, or run inside the OMA sandbox)", 4);
 }
 interface WireReply { ok: boolean; result?: unknown; error?: { code: string; message: string; retry: string } | undefined }
-function call(method: string, params: Record<string, unknown>, requestKey?: string, streamBytes?: Uint8Array): Promise<WireReply[]> {
-  const path = socketPath();
-  return new Promise((resolve, reject) => {
-    const socket = connect(path, () => {
-      const envelope: Record<string, unknown> = { v: 1, id: `cli-${uuidV4()}`, method, params };
-      if (requestKey !== undefined) envelope.request = requestKey;
-      const meta = encodeFrame(envelope);
-      socket.write(streamBytes ? Buffer.concat([meta, Buffer.from(streamBytes)]) : meta);
-    });
-    const parser = new FrameParser(256 * 1024);
-    let buffer = Buffer.alloc(0);
-    const replies: WireReply[] = [];
-    const timer = setTimeout(() => { socket.destroy(); reject(new Error("broker did not answer")); }, 60000);
-    socket.on("data", data => {
-      buffer = Buffer.concat([buffer, Buffer.from(data)]);
-      try {
-        for (const frame of parser.feed(buffer)) {
-          const raw = frame.raw as { ok?: boolean; result?: unknown; error?: { code: string; message: string; retry: string } };
-          const reply: WireReply = { ok: raw.ok === true };
-          if (raw.result !== undefined) reply.result = raw.result;
-          if (raw.error !== undefined) reply.error = raw.error;
-          replies.push(reply);
-        }
-      } catch { /* The transport-session card supplies strict framing termination. */ }
-      buffer = Buffer.alloc(0);
-      if (replies.length > 0) { clearTimeout(timer); socket.destroy(); resolve(replies); }
-    });
-    socket.on("error", error => { clearTimeout(timer); reject(error); });
-  });
+function call(method: PublicMethod, params: Record<string, unknown>, requestKey?: string, streamBytes?: Uint8Array): Promise<WireReply[]> {
+  return callActor(socketPath(), method, params, requestKey, streamBytes);
 }
 function finishFailure(reply: WireReply | undefined, prefix = ""): never {
   const decoded = decodeFailure(reply?.error);
