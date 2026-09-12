@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import ts from "typescript";
+import { runtimeImportClosure } from "./architecture-check.mjs";
 const hash = file => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 const tracePath = "implementation/traceability.json";
 const rows = JSON.parse(fs.readFileSync(tracePath, "utf8"));
@@ -16,47 +17,18 @@ for (const row of rows) {
   const id = row.requirement.split(";")[0];
   const rule = scopeRules.find(([pattern]) => pattern.test(id));
   if (!rule) throw new Error(`Unreviewed scope: ${row.requirement}`);
-  if (row.applicability === "unclassified") {
-    row.applicability = rule[1];
-    row.rationale = rule[2];
-  }
+  if (row.applicability === "unclassified") { row.applicability = rule[1]; row.rationale = rule[2]; }
 }
 fs.writeFileSync(tracePath, JSON.stringify(rows, null, 2) + "\n");
 
 const manifest = fs.readFileSync("production-files.txt", "utf8").trim().split(/\r?\n/);
-const manifestSet = new Set(manifest);
 const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
 if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
 const options = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd()).options;
 const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
-const reachable = new Set();
-const findings = [];
-const external = new Set();
-function visit(file) {
-  if (reachable.has(file)) return;
-  reachable.add(file);
-  if (!manifestSet.has(file)) findings.push(`Runtime import outside production manifest: ${file}`);
-  if (/(^|\/)test(s)?\//.test(file)) findings.push(`Production imports a test: ${file}`);
-  const source = ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
-  function walk(node) {
-    const declaration = ts.isImportDeclaration(node) || ts.isExportDeclaration(node);
-    const dynamic = ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || node.expression.getText(source) === "require");
-    const value = declaration ? node.moduleSpecifier : dynamic ? node.arguments[0] : undefined;
-    const typeOnly = declaration && (node.isTypeOnly || node.importClause?.isTypeOnly);
-    if (value && !typeOnly) {
-      if (!ts.isStringLiteral(value)) findings.push(`Nonliteral runtime import: ${file}:${source.getLineAndCharacterOfPosition(node.pos).line + 1}`);
-      else if (!value.text.startsWith(".")) external.add(value.text);
-      else {
-        const resolved = ts.resolveModuleName(value.text, path.resolve(file), options, ts.sys).resolvedModule;
-        if (!resolved) findings.push(`Unresolved runtime import: ${file} -> ${value.text}`);
-        else visit(path.relative(process.cwd(), resolved.resolvedFileName));
-      }
-    }
-    ts.forEachChild(node, walk);
-  }
-  walk(source);
-}
-roots.forEach(visit);
+const { reachable, findings, external } = runtimeImportClosure({
+  rootDir: process.cwd(), roots, manifest, compilerOptions: options,
+});
 const notReached = manifest.filter(file => file.endsWith(".ts") && !reachable.has(file));
 const lines = [
   "# Whole-scope adversarial audit ledger", "",
@@ -97,7 +69,8 @@ for (const match of fs.readFileSync("implementation/test-matrix.md", "utf8").mat
 if (acceptanceRows !== 77) throw new Error(`Expected all 77 acceptance rows, got ${acceptanceRows}`);
 const testSources = fs.readdirSync("test", { recursive: true }).filter(file => file.endsWith(".ts")).map(file => `test/${file}`);
 const runArtifacts = ["implementation/evidence/runtime-tests.txt", "implementation/evidence/environment.txt", "implementation/evidence/dependency-audit.json"].filter(file => fs.existsSync(file));
-const pins = [...new Set([...manifest, ...testSources, ...runArtifacts, ...rows.map(row => row.source), "architecture.md", "package.json", "package-lock.json", "scripts/compliance.mjs", "scripts/adversarial-report.mjs"])];
+const pins = [...new Set([...manifest, ...testSources, ...runArtifacts, ...rows.map(row => row.source), "architecture.md", "package.json", "package-lock.json", "scripts/compliance.mjs", "scripts/adversarial-report.mjs", "scripts/architecture-check.mjs"])];
 fs.writeFileSync("implementation/evidence/audit-source-pins.json", JSON.stringify(Object.fromEntries(pins.map(file => [file, hash(file)])), null, 2) + "\n");
 fs.writeFileSync("implementation/adversarial-review.md", lines.join("\n") + "\n");
 console.log(`Classified ${rows.length} clauses; ${findings.length} static import-closure findings; no proof promotion.`);
+if (findings.length) process.exitCode = 1;
