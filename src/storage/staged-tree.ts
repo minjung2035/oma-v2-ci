@@ -16,10 +16,10 @@ function requireDirectory(path: string): void {
 }
 
 /** Caller prepares file contents and proves artifact identity. An existing
- * destination is verified and flushed first: staging may already be gone after
- * an earlier successful rename. ENOENT from verification is damage, NOT proof
- * that the destination is absent. Nothing here merges or removes either tree.
- * On "existing" any surviving staging remains caller-owned. A post-rename
+ * destination is verified and flushed first: staging and its parent may already
+ * be gone after an earlier successful rename. ENOENT from verification is damage,
+ * NOT proof that the destination is absent. Nothing here merges or removes either
+ * tree. On "existing" any surviving staging remains caller-owned. A post-rename
  * error is ambiguous, never permission to overwrite an observed destination.
  * Empty/raced destination handling remains bounded by the caller's trusted
  * serialized publication authority and the S-06 filesystem admission gate.
@@ -30,7 +30,6 @@ export function publishStagedDirectory(
   verify: (root: string) => void,
 ): "published" | "existing" {
   if (staging === destination) throw new StoreError("STORE_CORRUPT", "staging and destination must differ");
-  assertDirectory(dirname(staging));
   assertDirectory(dirname(destination));
   const existing = (): "existing" => {
     requireDirectory(destination);
@@ -46,6 +45,7 @@ export function publishStagedDirectory(
     present = false;
   }
   if (present) return existing();
+  assertDirectory(dirname(staging));
   requireDirectory(staging);
   verify(staging);
   fsyncTree(staging);
