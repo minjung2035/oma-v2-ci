@@ -11,6 +11,7 @@ import { OperationRecovery, type RecoveryRow } from "./reconcile/operations.js";
 import { GitModule } from "./git.js";
 import { UnitsModule } from "./units.js";
 import { LifecycleModule } from "./lifecycle.js";
+import { pendingWork } from "./views/pending-work.js";
 
 export interface ReconcilePaths {
   projectGit: string; hasGoal?: () => boolean; activationAllowed?: () => boolean;
@@ -106,8 +107,8 @@ export class ReconcileModule {
             diagnostics.push({ agent: agent.name, outcome: "stopped", reason: null }); continue;
           }
           if (agent.desired === "enabled" && this.activation() && (!this.paths.hasGoal || this.paths.hasGoal())) {
-            const pending = this.store.pendingDeliveries(agent.name).length + this.store.preparedBatches(agent.name).length;
-            if (pending > 0 && ["inactive", "dead"].includes(observation.activeState)) {
+            const { hasPendingWork } = pendingWork(this.store, agent.name);
+            if (hasPendingWork && ["inactive", "dead"].includes(observation.activeState)) {
               this.units.start(agent.name, false);
               diagnostics.push({ agent: agent.name, outcome: "started", reason: null }); continue;
             }
