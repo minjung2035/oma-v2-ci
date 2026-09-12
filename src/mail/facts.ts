@@ -5,6 +5,7 @@
 import type { Actor, Address, ExactCandidateIdentity, MailInput, MessageId, MessagePlan, Oid } from "../../implementation/contracts.js";
 import { isValidActor, isValidMessageId, isValidFullOid, isValidSocietyName } from "../domain/identifiers.js";
 import { exactCandidateCheck, headerMessageIdCheck, isLogicalAddress, isMailKind } from "../domain/mail-values.js";
+import { mailObjectRelativePath } from "../domain/derived.js";
 import { StoreError } from "../domain/errors.js";
 
 export interface FrozenMessageFacts {
@@ -89,7 +90,7 @@ export function messagePlanFrom(message: RenderedMessage, recipients: readonly A
     throw new StoreError("INTERNAL_ERROR", "invalid accepting recipient snapshot");
   const facts = message.facts;
   return {
-    id: facts.id, objectPath: `mail/objects/${facts.id}.eml`, bytes: message.bytes, sha256: message.sha256,
+    id: facts.id, objectPath: mailObjectRelativePath(facts.id), bytes: message.bytes, sha256: message.sha256,
     dateMs: message.dateMs, to: [...facts.to], recipients: [...recipients], kind: facts.kind,
     contextRevision: facts.contextRevision,
     replyHeaders: { replyTo: [...facts.replyHeaders.replyTo], inReplyTo: facts.replyHeaders.inReplyTo,
