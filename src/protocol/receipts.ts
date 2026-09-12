@@ -1,37 +1,27 @@
 /** DB-005/009, IPC-008: one receipt projection, with no durable writes. */
-import type { ErrorCode, MutationMethod, OperationId, Receipt } from "../../implementation/contracts.js";
-import { StoreError, terminalFailure, isErrorCode, isPreacceptOnlyFailure, type CliExitCode } from "../domain/errors.js";
+import type { Receipt } from "../../implementation/contracts.js";
+import { StoreError, terminalFailure, type CliExitCode } from "../domain/errors.js";
+import type { DecodedOperation } from "../storage/operation-codec.js";
 import { decodeReceipt } from "./receipt-codec.js";
 
-/** Store validates plan/result relations before exposing this projection. This
- * builder rechecks the receipt shape and never repairs or rewrites legacy rows.
+/** A receipt is a projection of the Store's relationally decoded snapshot.
+ * Original JSON strings remain on that snapshot for audit; they are not parsed
+ * a second time, normalized, repaired, or used as an alternate source of facts.
  */
-export interface ReceiptOperation {
-  readonly id: OperationId;
-  readonly kind: MutationMethod;
-  readonly state: Receipt["state"];
-  readonly resultJson: string | null;
-  readonly errorCode: ErrorCode | null;
-}
+export type ReceiptOperation = DecodedOperation;
 
 export function receiptOfOperation(operation: ReceiptOperation): Receipt {
   const raw: Record<string, unknown> = { operation: operation.id, state: operation.state };
-  if (operation.state === "succeeded") {
-    if (operation.resultJson === null || operation.errorCode !== null)
-      throw new StoreError("STORE_CORRUPT", "inconsistent succeeded operation");
-    try { raw.result = JSON.parse(operation.resultJson); }
-    catch { throw new StoreError("STORE_CORRUPT", "invalid operation result JSON"); }
-  } else {
-    if (operation.resultJson !== null)
-      throw new StoreError("STORE_CORRUPT", "non-success operation has a result");
-    if (operation.state === "failed") {
-      if (!isErrorCode(operation.errorCode)) throw new StoreError("STORE_CORRUPT", "failed operation has no valid error code");
-      if (isPreacceptOnlyFailure(operation.errorCode))
-        throw new StoreError("STORE_CORRUPT", "accepted operation has a preaccept-only failure");
+  switch (operation.state) {
+    case "succeeded":
+      raw.result = operation.result;
+      break;
+    case "failed":
       raw.error = terminalFailure(operation.errorCode);
-    } else if (operation.errorCode !== null) {
-      throw new StoreError("STORE_CORRUPT", "non-failed operation has an error code");
-    }
+      break;
+    case "pending":
+    case "unknown":
+      break;
   }
   const decoded = decodeReceipt(raw, { expectedKind: operation.kind });
   if (!decoded.ok) throw new StoreError("STORE_CORRUPT", `invalid durable receipt: ${decoded.reason}`);
