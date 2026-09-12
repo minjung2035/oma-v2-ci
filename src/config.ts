@@ -5,6 +5,10 @@ import type { HostConfigV1, Capability, ResolvedAgentSpec } from "../implementat
 import { StoreError } from "./store.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./ids.js";
 import { parseJsonObject } from "./frame.js";
+import { isCapability } from "./domain/capabilities.js";
+import { RESOURCE_FIELDS } from "./domain/resources.js";
+import { PROTOCOL_LIMIT_FIELDS } from "./domain/limits.js";
+import type { IntegerField } from "./domain/integer-fields.js";
 
 function err(message: string): never {
   throw new StoreError("INVALID_REQUEST", `config: ${message}`);
@@ -38,10 +42,24 @@ function requireKeys(
   record: Record<string, unknown>,
   keys: readonly string[],
   what: string,
- ): void {
+): void {
   for (const key of keys)
     if (!Object.prototype.hasOwnProperty.call(record, key))
       err(`${what}.${key} is required`);
+}
+
+/** Values/ranges come from the domain; config retains its error path and code. */
+function needIntegerFields(
+  record: Record<string, unknown>,
+  fields: Readonly<Record<string, IntegerField>>,
+  what: string,
+): void {
+  requireKeys(record, Object.keys(fields), what);
+  for (const key of Object.keys(record)) {
+    if (!Object.prototype.hasOwnProperty.call(fields, key))
+      err(`${what}.${key} unknown`);
+    needInt(record[key], `${what}.${key}`, fields[key]!.minInclusive);
+  }
 }
 
 export function loadConfig(path: string): HostConfigV1 {
@@ -171,16 +189,6 @@ export function loadConfig(path: string): HostConfigV1 {
   }
   const agentProfiles = needRecord(cfg["agentProfiles"], "agentProfiles");
   const profileNames = new Set(Object.keys(agentProfiles));
-  const allowedCapabilities = new Set<Capability>([
-    "mail.send",
-    "route.follow",
-    "agent.create",
-    "agent.manage.self",
-    "agent.manage.descendants",
-    "git.submit",
-    "code.integrate",
-    "context.publish",
-  ]);
   for (const [name, p] of Object.entries(agentProfiles)) {
     const prof = needRecord(p, `agentProfiles.${name}`);
     for (const k of Object.keys(prof)) {
@@ -212,12 +220,8 @@ export function loadConfig(path: string): HostConfigV1 {
     )
       err(`agentProfiles.${name} capabilities/delegable arrays required`);
     if (
-      !prof["capabilities"].every(
-        (c) => typeof c === "string" && allowedCapabilities.has(c as Capability),
-      ) ||
-      !prof["delegable"].every(
-        (c) => typeof c === "string" && allowedCapabilities.has(c as Capability),
-      )
+      !prof["capabilities"].every(isCapability) ||
+      !prof["delegable"].every(isCapability)
     )
       err(`agentProfiles.${name} contains unknown capability`);
     if (
@@ -234,24 +238,7 @@ export function loadConfig(path: string): HostConfigV1 {
       prof["resources"],
       `agentProfiles.${name}.resources`,
     );
-    const resourceKeys = [
-      "memoryBytes",
-      "tasks",
-      "cpuQuotaPercent",
-      "tmpBytes",
-      "workspaceBytes",
-      "stagingBytes",
-      "checkTimeoutSeconds",
-    ];
-    requireKeys(resources, resourceKeys, `agentProfiles.${name}.resources`);
-    for (const k of Object.keys(resources)) {
-      if (!resourceKeys.includes(k)) err(`agentProfiles.${name}.resources.${k} unknown`);
-      needInt(
-        resources[k],
-        `agentProfiles.${name}.resources.${k}`,
-        1,
-      );
-    }
+    needIntegerFields(resources, RESOURCE_FIELDS, `agentProfiles.${name}.resources`);
   }
 
   const principalProfile = needString(
@@ -366,51 +353,11 @@ export function loadConfig(path: string): HostConfigV1 {
       row["resources"],
       `integration.checks[${i}].resources`,
     );
-    const resourceKeys = [
-      "memoryBytes",
-      "tasks",
-      "cpuQuotaPercent",
-      "tmpBytes",
-      "workspaceBytes",
-      "stagingBytes",
-      "checkTimeoutSeconds",
-    ];
-    requireKeys(
-      resources,
-      resourceKeys,
-      `integration.checks[${i}].resources`,
-    );
-    for (const k of Object.keys(resources)) {
-      if (!resourceKeys.includes(k))
-        err(`integration.checks[${i}].resources.${k} unknown`);
-      needInt(
-        resources[k],
-        `integration.checks[${i}].resources.${k}`,
-        1,
-      );
-    }
+    needIntegerFields(resources, RESOURCE_FIELDS, `integration.checks[${i}].resources`);
   }
 
   const limits = needRecord(cfg["limits"], "limits");
-  const limitKeys = [
-    "frameBytes",
-    "mailBodyBytes",
-    "subjectBytes",
-    "addresses",
-    "replyReferences",
-    "contextFiles",
-    "contextBytes",
-    "bundleBytes",
-    "logBytes",
-    "batchMaxMessages",
-    "idleStreamSeconds",
-    "receiptWaitSeconds",
-  ];
-  for (const k of Object.keys(limits)) {
-    if (!limitKeys.includes(k)) err(`limits.${k} unknown`);
-    needInt(limits[k], `limits.${k}`, 1);
-  }
-  requireKeys(limits, limitKeys, "limits");
+  needIntegerFields(limits, PROTOCOL_LIMIT_FIELDS, "limits");
 
   const features = needRecord(cfg["features"], "features");
   const featureKeys = ["notmuch", "reflinkSeed", "formalApproval", "egress"];
