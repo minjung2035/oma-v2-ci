@@ -7,7 +7,7 @@ export const GIT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1", GIT_CONFIG_COUNT: "3",
   GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "/dev/null",
-  GIT_CONFIG_KEY_1: "core.fsync", GIT_CONFIG_VALUE_1: "/dev/null",
+  GIT_CONFIG_KEY_1: "core.fsync", GIT_CONFIG_VALUE_1: "all",
   GIT_CONFIG_KEY_2: "core.fsyncMethod", GIT_CONFIG_VALUE_2: "fsync",
 });
 export interface TextExit { readonly status: number; readonly stdout: string; readonly stderr: string }
