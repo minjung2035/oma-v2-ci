@@ -2,13 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fork, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { mkdtempSync, rmSync, readdirSync, existsSync, readFileSync, writeFileSync, statSync, symlinkSync, linkSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync, existsSync, readFileSync, writeFileSync, statSync, symlinkSync, linkSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store.js";
 import { sha256Hex } from "../src/hash.js";
 import { MailModule, publishImmutableFile } from "../src/mail.js";
-import { resolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
+import { makeValidAgent } from "./fixtures/spec.js";
 import type { AuthContext, MailInput } from "../implementation/contracts.js";
 import { gitFixture, gitAuth, seedGit, gitCommand, submitFixture } from "./fixtures/git-crash.js";
 import { lifecycleFixture } from "./fixtures/lifecycle-crash.js";
@@ -16,6 +16,10 @@ import { lifecycleFixture } from "./fixtures/lifecycle-crash.js";
 const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "trusted-runner", capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 const input: MailInput = { to: ["a", "b", "c"], subject: "crash", kind: "message", body: "immutable payload" };
 const files = (path: string) => existsSync(path) ? readdirSync(path) : [];
+function seedAgents(store: Store, names: readonly string[] = ["a", "b", "c"]): void {
+  store.transaction(tx => { for (const name of names) tx.insertAgent(makeValidAgent(name)); });
+  for (const name of names) assert.equal(store.getAgent(name)?.name, name, "normal setup must decode before fault injection");
+}
 
 async function killAt(root: string, point: string): Promise<void> {
   const child = fork(new URL("./fixtures/crash-worker.js", import.meta.url), [root, point], { stdio: ["ignore", "ignore", "pipe", "ipc"] });
@@ -47,9 +51,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
     try {
-      store.transaction(() => {
-        for (const name of ["a", "b", "c"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, specHash: "fixture", specJson: resolvedSpec(ALL_CAPS, "p", name), createdBy: null });
-      });
+      seedAgents(store);
       let mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
       const batchPoint = point === "prepared" || point === "cur";
       if (batchPoint) await mail.send(auth, "crash-send", input);
@@ -108,11 +110,12 @@ test("T23 real cross-filesystem immutable copy rejects corrupt and symlink desti
     publishImmutableFile(source, destination);
     assert.deepEqual(readFileSync(destination), bytes);
     assert.deepEqual(readdirSync(destinationRoot), ["destination"]);
+    chmodSync(destination, 0o600); // explicit corruption of an otherwise immutable artifact
     writeFileSync(destination, "corrupt");
-    assert.throws(() => publishImmutableFile(source, destination), /hash mismatch/);
+    assert.throws(() => publishImmutableFile(source, destination), { code: "STORE_CORRUPT" });
     rmSync(destination);
     symlinkSync(source, destination);
-    assert.throws(() => publishImmutableFile(source, destination), /hash mismatch/);
+    assert.throws(() => publishImmutableFile(source, destination), { code: "STORE_CORRUPT" });
   } finally { rmSync(sourceRoot, { recursive: true, force: true }); rmSync(destinationRoot, { recursive: true, force: true }); }
 });
 
@@ -132,25 +135,46 @@ test("T23 real SIGKILL during cross-filesystem copy never publishes a partial de
   } finally { rmSync(sourceRoot, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); }
 });
 
-for (const point of ["submit-accepted", "submit-ref", "submit-mail", "int-before", "int-cas", "int-done", "ctx-accepted", "ctx-accepted-missing", "ctx-cas", "ctx-snapshot", "ctx-link", "ctx-mail"]) {
-  const format = ["submit-ref", "int-cas", "ctx-accepted", "ctx-cas"].includes(point) ? "sha256" : "sha1";
+for (const format of ["sha1", "sha256"] as const) {
+  test(`R20 primitive SIGKILL at submit-stage (${format}): no accepted intent or published result`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "oma-submit-stage-"));
+    let store = new Store(join(root, "runtime.sqlite"));
+    let open = true;
+    try {
+      seedAgents(store); seedGit(root, format);
+      store.close(); open = false;
+      await killAt(root, "submit-stage");
+      store = new Store(join(root, "runtime.sqlite")); open = true;
+      const { git, paths } = gitFixture(root, store);
+      assert.equal(store.getOperation("a", "git-crash"), null);
+      assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "for-each-ref", "--format=%(refname)", "refs/oma/published/"]), "");
+      assert.deepEqual(files(join(root, "mail/archive/cur")), []);
+      const oldNames = files(join(root, "staging")).filter(name => name.startsWith("submit-"));
+      assert.equal(oldNames.length, 1);
+      const orphan = join(root, "staging", oldNames[0]!, "upload.bundle");
+      const original = readFileSync(orphan);
+      assert.equal((await submitFixture(root, git)).state, "succeeded");
+      assert.deepEqual(readFileSync(orphan), original, "a new preparation must not delete an unclaimed earlier operation artifact");
+      assert.equal(files(join(root, "mail/archive/cur")).length, 1);
+    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-mail", "submit-done", "int-before", "int-cas", "int-done", "ctx-accepted", "ctx-accepted-missing", "ctx-cas", "ctx-snapshot", "ctx-link", "ctx-mail"]) {
+  const format = ["submit-ref", "submit-done", "int-cas", "ctx-accepted", "ctx-cas"].includes(point) ? "sha256" : "sha1";
   test(`T57/T58/T63/T66 primitive SIGKILL at ${point} (${format}): exact ref and fixed receipt recovery`, async () => {
     const root = mkdtempSync(join(tmpdir(), "oma-git-crash-"));
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
     try {
-      store.transaction(() => {
-        for (const name of ["a", "b", "c"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, specHash: "fixture", specJson: resolvedSpec(ALL_CAPS, "p", name), createdBy: null });
-      });
+      seedAgents(store);
       seedGit(root, format);
       if (point === "ctx-accepted-missing") rmSync(join(root, "repos/context.git"), { recursive: true });
       const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
       if (point.startsWith("int-")) await submitFixture(root, gitFixture(root, store).git, "pre-published");
-      store.close();
-      open = false;
+      store.close(); open = false;
       await killAt(root, point);
-      store = new Store(join(root, "runtime.sqlite"));
-      open = true;
+      store = new Store(join(root, "runtime.sqlite")); open = true;
       const { git, mail, paths } = gitFixture(root, store);
       const accepted = store.getOperation("a", "git-crash");
       assert.ok(accepted, "durable acceptance must survive SIGKILL");
@@ -171,19 +195,23 @@ for (const point of ["submit-accepted", "submit-ref", "submit-mail", "int-before
       if (point === "ctx-accepted") {
         const ref = join(paths.contextGit, "refs/heads/main");
         writeFileSync(ref, "corrupt-ref\n");
-        await assert.rejects(git.reconcile(accepted.id), { code: "INTERNAL_ERROR" });
+        await assert.rejects(git.reconcile(accepted.id), { code: "REF_STATE_UNKNOWN" });
         assert.equal(readFileSync(ref, "utf8"), "corrupt-ref\n", "unknown is not an absent ref");
         assert.equal(store.getOperationById(accepted.id)!.state, "pending");
         rmSync(ref);
       }
       await git.reconcile(accepted.id);
+      const firstResult = store.getOperationById(accepted.id)!.resultJson;
       await git.reconcile(accepted.id);
       const recovered = store.getOperation("a", "git-crash")!;
       assert.equal(recovered.id, accepted.id);
       assert.equal(recovered.state, "succeeded");
+      assert.equal(recovered.resultJson, firstResult, "terminal result bytes are never rewritten on repeated recovery");
+      assert.equal(recovered.planJson, accepted.planJson, "recovery must consume the original immutable plan");
       if (point.startsWith("submit-")) {
         assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "rev-parse", plan.publishedRef]), info.candidate);
         assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "rev-parse", "refs/heads/main"]), info.base);
+        assert.equal(sha256Hex(readFileSync(plan.bundle.path)), plan.bundle.sha256, "accepted bundle is retained after settlement");
       } else if (point.startsWith("int-")) {
         assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "rev-parse", "refs/heads/main"]), info.candidate);
       } else {
@@ -210,9 +238,7 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
       return JSON.parse(readFileSync(join(root, "failure.json"), "utf8"));
     };
     try {
-      store.transaction(() => {
-        for (const name of ["a", "b", "c"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, specHash: "fixture", specJson: resolvedSpec(ALL_CAPS, "p", name), createdBy: null });
-      });
+      seedAgents(store);
       store.close(); open = false;
       const outcome = fault(point);
       if (point.startsWith("error-stage-")) {
@@ -289,7 +315,7 @@ for (const point of ["create-stage", "create-intent", "create-object", "create-w
     let open = true;
     const cleanup = lifecycleFixture(root, store).cleanup;
     try {
-      store.transaction(() => store.insertAgent({ name: "a", role: "resident", profile: "p", desired: "enabled", incarnation: 1, specHash: "fixture", specJson: resolvedSpec(ALL_CAPS, "p", "a"), createdBy: null }));
+      seedAgents(store, ["a"]);
       seedGit(root);
       const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
       const input = { name: "child", from: info.base, brief: "new child" };
@@ -328,10 +354,7 @@ for (const kind of ["symlink", "hardlink"]) {
     let store = new Store(join(root, "runtime.sqlite"));
     let open = true;
     try {
-      seedGit(root);
-      store.transaction(() => {
-        for (const name of ["a", "b"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, specHash: "fixture", specJson: resolvedSpec(ALL_CAPS, "p", name), createdBy: null });
-      });
+      seedGit(root); seedAgents(store, ["a", "b"]);
       store.close(); open = false;
       await killAt(root, "submit-accepted");
       store = new Store(join(root, "runtime.sqlite")); open = true;
@@ -343,10 +366,12 @@ for (const kind of ["symlink", "hardlink"]) {
       (kind === "symlink" ? symlinkSync : linkSync)(external, plan.bundle.path);
       assert.equal(sha256Hex(readFileSync(plan.bundle.path)), plan.bundle.sha256);
       const { git, paths } = gitFixture(root, store);
-      await assert.rejects(git.reconcile(op.id), { code: "STREAM_INVALID" });
-      assert.equal(store.getOperationById(op.id)!.state, "failed");
+      await assert.rejects(git.reconcile(op.id), { code: "STORE_CORRUPT" });
+      assert.equal(store.getOperationById(op.id)!.state, "pending", "corrupt accepted evidence must not be rewritten as a terminal input failure");
+      assert.equal(store.getOperationById(op.id)!.planJson, op.planJson);
       assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "for-each-ref", "--format=%(refname)", "refs/oma/published"]), "");
       assert.equal(files(join(root, "mail/archive/cur")).length, 0);
+      assert.equal(sha256Hex(readFileSync(external)), plan.bundle.sha256);
     } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
   });
 }
