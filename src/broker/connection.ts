@@ -7,10 +7,18 @@ import type { ConnectionPeerPin } from "./peer-pin.js";
 export interface SocketEvents { data: [Buffer]; end: []; close: [boolean]; error: [Error]; drain: [] }
 export interface RpcSocket {
   readonly destroyed: boolean;
-  on<E extends keyof SocketEvents>(event: E, listener: (...args: SocketEvents[E]) => void): unknown;
-  off<E extends keyof SocketEvents>(event: E, listener: (...args: SocketEvents[E]) => void): unknown;
+  on(event: "data", listener: (bytes: Buffer) => void): unknown;
+  on(event: "end" | "drain", listener: () => void): unknown;
+  on(event: "close", listener: (hadError: boolean) => void): unknown;
+  on(event: "error", listener: (error: Error) => void): unknown;
+  off(event: "data", listener: (bytes: Buffer) => void): unknown;
+  off(event: "end" | "drain", listener: () => void): unknown;
+  off(event: "close", listener: (hadError: boolean) => void): unknown;
+  off(event: "error", listener: (error: Error) => void): unknown;
   pause(): unknown; resume(): unknown; write(bytes: Uint8Array): boolean;
-  end(bytes?: Uint8Array): unknown; destroy(error?: Error): unknown;
+  end(): unknown;
+  end(bytes: Uint8Array): unknown;
+  destroy(error?: Error): unknown;
 }
 export interface Alarm { cancel(): void }
 export interface AlarmFactory { after(seconds: number, callback: () => void): Alarm }
