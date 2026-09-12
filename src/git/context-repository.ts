@@ -15,6 +15,7 @@ import { contextStagingPathAt, contextRevisionPathAt } from "../storage/paths.js
 import { ensureDurableDirectory, fsyncDir, fsyncTree, fsyncFile, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { publishContextRevision, verifyContextRevision } from "../storage/context-snapshot.js";
 import { runProcessSync, type ProcessObservation } from "../process/run.js";
+import { PreparationExecutor, requirePreparedSuccess } from "../process/preparation.js";
 import { GIT_ENV } from "../process/policies.js";
 import type { GitPaths } from "./paths.js";
 import type { GitObserver, GitObservation } from "./observe.js";
@@ -43,6 +44,8 @@ function oneLine(bytes: Uint8Array): string {
 
 export class ContextRepository {
   private readonly paths: Readonly<Pick<GitPaths, "stateRoot" | "contextGit" | "worldDir">>;
+  private readonly preparation = new PreparationExecutor();
+  private preparing = false;
   constructor(paths: Pick<GitPaths, "stateRoot" | "contextGit" | "worldDir">, private readonly observer: GitObserver) {
     this.paths = Object.freeze({ stateRoot: paths.stateRoot, contextGit: paths.contextGit, worldDir: paths.worldDir });
   }
@@ -55,9 +58,14 @@ export class ContextRepository {
       throw new StoreError("REF_STATE_UNKNOWN", "context Git effect or observation was not completed successfully");
     return result.stdout;
   }
+  private prepareCommand(argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = CONTEXT_ENV): Promise<ProcessObservation> {
+    return this.preparation.run({ executable: "/usr/bin/git", argv, env, timeoutMs: 120000,
+      stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 });
+  }
+  private async prepareSuccess(argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = CONTEXT_ENV): Promise<Buffer> {
+    return requirePreparedSuccess(await this.prepareCommand(argv, env), "context preparation");
+  }
   private exists(): boolean {
-    // assertDirectory intentionally treats missing components as corruption.
-    // Observe repository absence separately, without swallowing EACCES/EIO.
     const stat = lstatSync(this.paths.contextGit, { throwIfNoEntry: false });
     if (!stat) return false;
     assertContextDirectory(this.paths.contextGit);
@@ -68,11 +76,10 @@ export class ContextRepository {
     const observed = this.observer.ref(this.paths.contextGit, "refs/heads/main");
     return observed.kind === "absent" ? null : present(observed, "context main");
   }
-  private initialize(): "sha1" | "sha256" {
+  private async initialize(): Promise<"sha1" | "sha256"> {
     if (!this.exists()) {
       ensureDurableDirectory(this.paths.contextGit);
-      // The former sanitized Git init also used SHA-1 for a new repository.
-      this.success(["--git-dir", this.paths.contextGit, "init", "--bare", "--object-format=sha1"]);
+      await this.prepareSuccess(["--git-dir", this.paths.contextGit, "init", "--bare", "--object-format=sha1"], GIT_ENV);
       fsyncDir(this.paths.contextGit); fsyncDir(dirname(this.paths.contextGit));
     }
     return present(this.observer.objectFormat(this.paths.contextGit), "context object format");
@@ -93,36 +100,48 @@ export class ContextRepository {
     fsyncTree(join(this.paths.contextGit, "objects")); fsyncDir(this.paths.contextGit);
   }
 
-  prepareCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid {
-    const invalid = contextEntriesCheck(entries, { requireSorted: true });
+  async prepareCandidate(tree: string, source: ContextEntry[], expected: Oid | null): Promise<Oid> {
+    const invalid = contextEntriesCheck(source, { requireSorted: true });
     if (invalid) throw new StoreError("STORE_CORRUPT", invalid);
-    assertContextDirectory(tree);
-    for (const entry of entries) readContextEntry(tree, entry);
-    const format = this.initialize();
-    if (expected !== null && (!isValidFullOid(expected) || expected.length !== (format === "sha1" ? 40 : 64)))
-      throw new StoreError("INVALID_OID", "context base has the wrong repository object format");
-    const staging = dirname(tree); const work = join(staging, "commit-work");
-    mkdirSync(work, { mode: 0o700 }); fsyncDir(staging);
-    this.success(["-C", work, "init", "-q", `--object-format=${format}`], CONTEXT_ENV);
-    if (expected !== null) {
-      this.success(["-C", work, "fetch", "--no-tags", this.paths.contextGit, expected], CONTEXT_ENV);
-      this.success(["-C", work, "update-ref", "HEAD", expected], CONTEXT_ENV);
+    // Copy every entry before the first await. Caller mutation cannot replace
+    // the manifest while Git is running; file bytes are verified again on use.
+    const entries = Object.freeze(source.map(entry => Object.freeze({ ...entry })));
+    if (this.preparing || this.preparation.blocked) throw new StoreError("REF_STATE_UNKNOWN", "context preparation is active or uncertain");
+    this.preparing = true;
+    try {
+      assertContextDirectory(tree);
+      for (const entry of entries) readContextEntry(tree, entry);
+      const format = await this.initialize();
+      if (expected !== null && (!isValidFullOid(expected) || expected.length !== (format === "sha1" ? 40 : 64)))
+        throw new StoreError("INVALID_OID", "context base has the wrong repository object format");
+      const staging = dirname(tree); const work = join(staging, "commit-work");
+      mkdirSync(work, { mode: 0o700 }); fsyncDir(staging);
+      await this.prepareSuccess(["-C", work, "init", "-q", `--object-format=${format}`]);
+      if (expected !== null) {
+        await this.prepareSuccess(["-C", work, "fetch", "--no-tags", this.paths.contextGit, expected]);
+        await this.prepareSuccess(["-C", work, "update-ref", "HEAD", expected]);
+      }
+      await this.prepareSuccess(["-C", work, "read-tree", "--empty"]);
+      for (const entry of entries) this.writeEntry(work, entry, readContextEntry(tree, entry));
+      await this.prepareSuccess(["-C", work, "add", "-f", "-A"]);
+      const committed = await this.prepareCommand(["-C", work, "commit", "-q", "--no-gpg-sign", "-m", "context"]);
+      if (committed.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", "context candidate creation is uncertain");
+      if (committed.exitCode !== 0) {
+        if (expected === null) throw new StoreError("REF_STATE_UNKNOWN", "initial context commit was not created");
+        await this.prepareSuccess(["-C", work, "diff", "--cached", "--quiet", expected]);
+      }
+      const candidate = present(this.observer.ref(join(work, ".git"), "HEAD"), "prepared context candidate");
+      fsyncTree(work, "context-single-link"); fsyncDir(staging); fsyncDir(dirname(staging));
+      await this.prepareSuccess(["--git-dir", this.paths.contextGit, "fetch", "--no-tags", work, candidate], GIT_ENV);
+      fsyncTree(join(this.paths.contextGit, "objects")); fsyncDir(this.paths.contextGit);
+      // A successful worker exit is insufficient: canonical object/manifest
+      // observation remains authoritative. Main is not written by this worker.
+      this.verifyCandidate(candidate, entries, expected);
+      return candidate;
+    } finally {
+      this.preparing = false;
+      // No cleanup here: uncertain native children/staging need recovery proof.
     }
-    // No checkout of a prior tree: only the validated full snapshot enters work.
-    this.success(["-C", work, "read-tree", "--empty"], CONTEXT_ENV);
-    for (const entry of entries) this.writeEntry(work, entry, readContextEntry(tree, entry));
-    this.success(["-C", work, "add", "-f", "-A"], CONTEXT_ENV);
-    const committed = this.command(["-C", work, "commit", "-q", "--no-gpg-sign", "-m", "context"], CONTEXT_ENV);
-    if (committed.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", "context candidate creation is uncertain");
-    if (committed.exitCode !== 0) {
-      if (expected === null) throw new StoreError("REF_STATE_UNKNOWN", "initial context commit was not created");
-      this.success(["-C", work, "diff", "--cached", "--quiet", expected], CONTEXT_ENV);
-    }
-    const candidate = present(this.observer.ref(join(work, ".git"), "HEAD"), "prepared context candidate");
-    fsyncTree(work, "context-single-link"); fsyncDir(staging); fsyncDir(dirname(staging));
-    this.importCandidate(work, candidate);
-    this.verifyCandidate(candidate, entries, expected);
-    return candidate;
   }
 
   private blobs(candidate: Oid): Map<string, Oid> {
