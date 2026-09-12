@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { spawnSync as nodeSpawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { HostConfigV1, Capability, Actor, AuthContext, Receipt, ResolvedAgentSpec, AgentCreateInput, MessageId, OperationPlan, OperationResult } from "../implementation/contracts.js";
-import { Store, reused, type OperationRow } from "./store.js";
+import { Store, reused } from "./store.js";
+import type { ValidatedPlan } from "./storage/operation-codec.js";
 import { StoreError } from "./domain/errors.js";
 import { receiptOfOperation as receiptOfOp } from "./protocol/receipts.js";
 import { UnitsModule } from "./units.js";
@@ -21,7 +22,6 @@ export interface SpecResolver {
   (parent: { name: Actor; profile: string; role: "resident" | "principal"; desired: string; capabilities: readonly Capability[] }, input: AgentCreateInput): ResolvedAgentSpec | null;
 }
 type CreatePlan = Extract<OperationPlan, { kind: "agent.create" }>;
-type ActionPlan = Extract<OperationPlan, { kind: "agent.start" | "agent.stop" }>;
 type AgentQuota = Pick<HostConfigV1["quota"], "societyAgents" | "lineageAgents">;
 const cloneEnv: NodeJS.ProcessEnv = {
   HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
@@ -54,6 +54,7 @@ export class LifecycleModule {
     private readonly resolveSpec: SpecResolver, private readonly mail: MailModule | null = null,
     private readonly agentQuota: AgentQuota | null = null,
   ) {
+    this.store.bindRepositoryIdentity({ society: paths.society });
     this.units.bindIncarnationReader(agent => this.store.getAgent(agent)?.incarnation ?? null);
   }
   private receipt(operationId: string): Receipt {
@@ -245,7 +246,7 @@ export class LifecycleModule {
       if (!recorded.some(op => op.state === "pending" || op.state === "unknown")) return;
       if (recorded.length !== config.initialResidents.length) throw new StoreError("AGENT_CONFLICT", "bootstrap seed set changed during recovery");
       for (const op of recorded) {
-        const plan = parseCreatePlan(op);
+        const plan = op.plan;
         const seed = config.initialResidents.find(value => value.name === plan.spec.name);
         if (!seed || specDigest(resolve(seed.name, seed.profile, seed.brief, plan.spec.from)) !== plan.specHash)
           throw new StoreError("AGENT_CONFLICT", "bootstrap seed spec changed during recovery");
@@ -334,7 +335,6 @@ export class LifecycleModule {
       }
       outcome.claim = this.store.claimOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create", payloadJson: JSON.stringify(input), planJson: JSON.stringify(physicalPlan) });
       if (outcome.claim === "retry") return;
-      // Quota and provisioning acceptance share one BEGIN IMMEDIATE transaction.
       this.enforceCreateQuota(auth.actor);
       this.store.insertAgent({ name: input.name, specHash, role: "resident", desired: "provisioning", incarnation: 0, profile: spec.profile, createdBy: auth.actor, specJson: JSON.stringify(spec) });
       this.store.insertDeliveries([{ messageId: initialMessage.id, recipient: input.name, operationId: opId }]);
@@ -345,10 +345,10 @@ export class LifecycleModule {
   }
   /** MUST [REC-001/LIFE-003/004]: settle accepted lifecycle effects by observation. */
   reconcileAction(operationId: string, allowActivation = true): void {
-    const op = this.store.getOperationById(operationId as never);
+    const op = this.store.getOperationById(operationId);
     if (!op || (op.kind !== "agent.start" && op.kind !== "agent.stop")) return;
     if (op.state !== "pending" && op.state !== "unknown") return;
-    const plan = parseActionPlan(op);
+    const plan = op.plan;
     const agent = this.store.getAgent(plan.agent);
     if (!agent) throw new StoreError("STORE_CORRUPT", `missing agent ${plan.agent}`);
     if (plan.kind === "agent.start") {
@@ -368,20 +368,20 @@ export class LifecycleModule {
     const result: OperationResult = { kind: plan.kind, agent: plan.agent, desired: plan.desired, remainingOperations: remaining };
     this.store.transaction(_tx => this.store.setOperationSucceeded(op.id, JSON.stringify(result)));
   }
-  /** Mechanical create recovery: re-check the frozen plan; never re-render mail. */
+  /** Mechanical create recovery uses only Store-decoded plans. */
   async reconcileCreate(operationId: string, allowActivation = true): Promise<void> {
     const op = this.store.getOperationById(operationId);
     if (!op || op.kind !== "agent.create") return;
     if (op.state !== "pending" && op.state !== "unknown") return;
-    const plan = parseCreatePlan(op);
+    const plan = op.plan;
     if (plan.existingCreation) { this.settleLinkedCreate(operationId, plan.existingCreation, plan.spec.name); return; }
     if (!plan.initialMessage) throw new StoreError("STORE_CORRUPT", `accepted create ${operationId} has no frozen initial message`);
-    await this.finishCreate(operationId, plan, allowActivation);
+    await this.finishCreate(operationId, allowActivation);
   }
   private settleLinkedCreate(operationId: string, originalId: string, name: Actor): Receipt {
-    const original = this.store.getOperationById(originalId as never);
+    const original = this.store.getOperationById(originalId);
     if (!original || original.kind !== "agent.create") throw new StoreError("STORE_CORRUPT", "missing existingCreation");
-    const linked = this.store.getOperationById(operationId as never);
+    const linked = this.store.getOperationById(operationId);
     if (!linked) throw new StoreError("STORE_CORRUPT", "linked create operation missing");
     if (original.state === "succeeded") {
       const agent = this.store.getAgent(name);
@@ -389,17 +389,16 @@ export class LifecycleModule {
       const result: OperationResult = { kind: "agent.create", agent: agent.name, desired: agent.desired, remainingOperations: [] };
       this.store.transaction(_tx => this.store.setOperationSucceeded(linked.id, JSON.stringify(result)));
     } else if (original.state === "failed") {
-      if (!original.errorCode) throw new StoreError("STORE_CORRUPT", "failed create has no error code");
-      this.store.transaction(_tx => this.store.setOperationFailed(linked.id, original.errorCode!));
+      this.store.transaction(_tx => this.store.setOperationFailed(linked.id, original.errorCode));
     }
     return this.receipt(linked.id);
   }
-  private async finishCreate(operationId: string, acceptedPlan?: CreatePlan, allowActivation = true): Promise<Receipt> {
+  private async finishCreate(operationId: string, allowActivation = true): Promise<Receipt> {
     if (!this.mail) throw new StoreError("INTERNAL_ERROR", "create mail boundary unavailable");
-    const op = this.store.getOperationById(operationId as never);
+    const op = this.store.getOperationById(operationId);
     if (!op || op.kind !== "agent.create") throw new StoreError("REQUEST_NOT_FOUND", `no create operation ${operationId}`);
     if (op.state === "succeeded" || op.state === "failed") return receiptOfOp(op);
-    const plan = acceptedPlan ?? parseCreatePlan(op);
+    const plan = op.plan;
     if (plan.existingCreation) throw new StoreError("AGENT_NOT_READY", "linked create awaits original creation");
     if (!plan.initialMessage) throw new StoreError("STORE_CORRUPT", "create plan has no initial message");
     const expectedUnits = residentUnitsFor(this.paths.society, plan.spec.name);
@@ -415,7 +414,6 @@ export class LifecycleModule {
     this.units.ensureResident(plan.spec.name, plan.spec.profile, plan.spec.resources);
     let desired = agent.desired;
     if (desired === "provisioning") {
-      // Logical enablement survives missing GOAL; only physical activation is gated.
       desired = "enabled";
       this.store.transaction(_tx => this.store.updateAgent({ name: plan.spec.name, desired }));
     }
@@ -428,7 +426,7 @@ export class LifecycleModule {
     this.store.transaction(_tx => this.store.setOperationSucceeded(op.id, JSON.stringify(result)));
     return this.receipt(op.id);
   }
-  private ensureWorkspace(plan: CreatePlan): void {
+  private ensureWorkspace(plan: ValidatedPlan<"agent.create">): void {
     this.assertCanonicalBase(plan.spec.from);
     const workspace = plan.workspacePath;
     const workspaceRoot = agentRootPathAt(this.paths.stateRoot, plan.spec.name);
@@ -457,24 +455,6 @@ export class LifecycleModule {
     const result = boundedSpawnSync("/usr/bin/git", ["--git-dir", this.paths.projectGit, "cat-file", "-e", `${oid}^{commit}`], { env: cloneEnv, encoding: "utf8" });
     if (result.status !== 0) throw new StoreError("PREREQUISITE_MISSING", `create base ${oid} is not present in the canonical repository`);
   }
-}
-function parseActionPlan(op: OperationRow): ActionPlan {
-  try {
-    const plan = JSON.parse(op.planJson) as ActionPlan;
-    if (plan.kind !== op.kind || (plan.kind !== "agent.start" && plan.kind !== "agent.stop") || typeof plan.agent !== "string" || !Number.isSafeInteger(plan.previousIncarnation) || plan.previousIncarnation < 0 || plan.desired !== (plan.kind === "agent.start" ? "enabled" : "stopped") || !Array.isArray(plan.remainingOperations) || plan.remainingOperations.some(id => typeof id !== "string") || !Object.keys(plan).every(key => ["kind", "agent", "previousIncarnation", "desired", "remainingOperations"].includes(key)))
-      throw new Error("invalid lifecycle plan");
-    return plan;
-  } catch (error) { throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt lifecycle plan: ${(error as Error).message}`); }
-}
-function parseCreatePlan(op: OperationRow): CreatePlan {
-  try {
-    const plan = JSON.parse(op.planJson) as CreatePlan;
-    if (plan.kind !== "agent.create" || !plan.spec || typeof plan.spec.name !== "string" || typeof plan.spec.from !== "string" || typeof plan.spec.brief !== "string" || typeof plan.spec.profile !== "string" || !Array.isArray(plan.spec.capabilities) || plan.spec.capabilities.some(cap => typeof cap !== "string") || !Object.keys(plan.spec).every(key => ["name", "from", "brief", "profile", "capabilities", "modelProfile", "resources"].includes(key)) || typeof plan.specHash !== "string" || typeof plan.parent !== "string" || typeof plan.workspacePath !== "string" || !Array.isArray(plan.unitNames) || plan.unitNames.some(name => typeof name !== "string") || (plan.existingCreation !== null && typeof plan.existingCreation !== "string") || !Object.keys(plan).every(key => ["kind", "spec", "specHash", "parent", "workspacePath", "unitNames", "initialMessage", "existingCreation"].includes(key)))
-      throw new Error("invalid create plan");
-    resolvedSpecOf({ name: plan.spec.name, profile: plan.spec.profile, specJson: JSON.stringify(plan.spec) });
-    if (specDigest(plan.spec) !== plan.specHash) throw new Error("resolved spec hash mismatch");
-    return plan;
-  } catch (error) { throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt create plan: ${(error as Error).message}`); }
 }
 function fsyncDir(dir: string): void {
   const fd = openSync(dir, "r");
