@@ -1,8 +1,9 @@
 /** IPC-006/008: cache shape validation, not broker authority or host admission. */
-import type { Json, MutationMethod, ProtocolLimits, Receipt, RequestKey } from "../../implementation/contracts.js";
-import { isValidActorName, isValidRequestKey } from "../domain/identifiers.js";
+import type { Json, MutationMethod, Receipt, RequestKey } from "../../implementation/contracts.js";
+import { isValidRequestKey } from "../domain/identifiers.js";
 import { snapshotJson } from "../domain/canonical-json.js";
-import { PUBLIC_METHODS, decodePublicParams } from "../protocol/methods.js";
+import { PUBLIC_METHODS } from "../protocol/methods.js";
+import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { decodeReceipt, isMutationMethod, type Decoded } from "../protocol/receipt-codec.js";
 
 export interface StreamDigest { bytes: number; sha256: string }
@@ -15,32 +16,16 @@ export interface CachedRequest {
   createdAtMs: number;
   lastReceipt: Receipt | null;
 }
-
 const invalid = (reason: string): Decoded<never> => ({ ok: false, reason });
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-
-/** No host configuration is inferred from model-mutable cache data. These maxima
- * turn the shared DTO checker into a structural checker only. The broker still
- * enforces its configured resource/recipient limits before accepting a request.
- */
-const structuralLimits: ProtocolLimits = {
-  frameBytes: Number.MAX_SAFE_INTEGER, mailBodyBytes: Number.MAX_SAFE_INTEGER,
-  subjectBytes: Number.MAX_SAFE_INTEGER, addresses: Number.MAX_SAFE_INTEGER,
-  replyReferences: Number.MAX_SAFE_INTEGER, contextFiles: Number.MAX_SAFE_INTEGER,
-  contextBytes: Number.MAX_SAFE_INTEGER, bundleBytes: Number.MAX_SAFE_INTEGER,
-  logBytes: Number.MAX_SAFE_INTEGER, batchMaxMessages: Number.MAX_SAFE_INTEGER,
-  idleStreamSeconds: Number.MAX_SAFE_INTEGER, receiptWaitSeconds: Number.MAX_SAFE_INTEGER,
-};
-
 export function decodeStreamDigest(value: unknown): Decoded<StreamDigest> {
   if (!record(value) || Object.keys(value).some(key => key !== "bytes" && key !== "sha256") ||
     typeof value.bytes !== "number" || !Number.isSafeInteger(value.bytes) || value.bytes < 0 ||
     typeof value.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(value.sha256)) return invalid("invalid stream digest");
   return { ok: true, value: { bytes: value.bytes, sha256: value.sha256 } };
 }
-
 export function decodeCachedRequest(value: unknown, expectedKey: RequestKey): Decoded<CachedRequest> {
   let row: Json;
   try { row = snapshotJson(value); }
@@ -50,14 +35,8 @@ export function decodeCachedRequest(value: unknown, expectedKey: RequestKey): De
   if (!isValidRequestKey(row.key) || row.key !== expectedKey) return invalid("cache key differs from file key");
   if (!isMutationMethod(row.method)) return invalid("cache method is not a mutation");
   if (!record(row.params)) return invalid("cached params must be an object");
-  // Only lexical actor candidates are supplied to the structural address check.
-  // Their existence and permissions remain broker-owned facts.
-  const actorNames = new Set<string>();
-  if (Array.isArray(row.params.to)) {
-    for (const value of row.params.to) if (typeof value === "string" && isValidActorName(value)) actorNames.add(value);
-  }
-  if (decodePublicParams(row.method, row.params, { actorNames, limits: structuralLimits }) === null)
-    return invalid(`invalid cached caller DTO for ${row.method}`);
+  try { decodeMutationPayload(row.method, row.params); }
+  catch { return invalid(`invalid cached caller DTO for ${row.method}`); }
   if (typeof row.createdAtMs !== "number" || !Number.isSafeInteger(row.createdAtMs) || row.createdAtMs < 0)
     return invalid("invalid cache timestamp");
   let lastReceipt: Receipt | null = null;
@@ -82,10 +61,8 @@ export function decodeCachedRequest(value: unknown, expectedKey: RequestKey): De
     digest = decoded.value;
   }
   const params = snapshotJson(row.params);
-  const entry: CachedRequest = {
-    key: row.key, method: row.method, params, createdAtMs: row.createdAtMs, lastReceipt,
-  };
+  const entry: CachedRequest = { key: row.key, method: row.method, params, createdAtMs: row.createdAtMs, lastReceipt };
   if (digest !== undefined) entry.digest = digest;
-  // Preserve the order of existing metadata keys, as well as nested payload order.
+  // Preserve metadata key order and frozen nested payload order.
   return { ok: true, value: Object.assign(row, entry) };
 }
