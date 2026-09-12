@@ -3,54 +3,104 @@
  * These helpers neither modify a ledger nor collect accepted recovery evidence.
  */
 import {
-  constants, closeSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync,
+  constants, closeSync, fstatSync, fsyncSync, lstatSync, openSync,
   readdirSync, renameSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
+import { assertDirectory, ensureDirectory } from "./directory.js";
 
 export function fsyncDir(directory: string): void {
+  assertDirectory(directory);
+  const observed = lstatSync(directory);
   const fd = openSync(directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-  try { fsyncSync(fd); } finally { closeSync(fd); }
-}
-
-export function fsyncFile(path: string): void {
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    if (!fstatSync(fd).isFile()) throw new StoreError("STORE_CORRUPT", `non-regular file: ${path}`);
+    const current = fstatSync(fd);
+    if (!current.isDirectory() || current.dev !== observed.dev || current.ino !== observed.ino)
+      throw new StoreError("STORE_CORRUPT", `directory changed before fsync: ${directory}`);
     fsyncSync(fd);
   } finally { closeSync(fd); }
 }
 
-/** The caller owns the unique staging name after success, including its later
- * unlink and parent flush. A partial write is not an accepted immutable object.
+/** Flush newly created directory names from the deepest parent upward. Existing
+ * modes are never rewritten. This is a persistence barrier, not a race-proof
+ * capability to traverse an arbitrary directory tree.
  */
-export function writeExclusiveFsyncedFile(path: string, bytes: string | Uint8Array, mode = 0o600): void {
-  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
-  try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); }
+export function ensureDurableDirectory(directory: string, mode = 0o755): void {
+  const created = ensureDirectory(directory, mode);
+  for (const path of [...created].reverse()) {
+    fsyncDir(path);
+    fsyncDir(dirname(path));
+  }
+  // Fence an immediate parent even when another creator won mkdir's EEXIST.
+  fsyncDir(directory);
+  fsyncDir(dirname(directory));
 }
 
-/** Derived-only replacement: exclusive temporary -> file fsync -> rename ->
- * parent fsync. This function owns only its random temporary, never a glob or
- * an accepted source. A post-rename flush failure does not prove no replacement.
+export function fsyncFile(path: string): void {
+  assertDirectory(dirname(path));
+  const observed = lstatSync(path);
+  if (!observed.isFile() || observed.isSymbolicLink())
+    throw new StoreError("STORE_CORRUPT", `non-regular file: ${path}`);
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const current = fstatSync(fd);
+    if (!current.isFile() || current.dev !== observed.dev || current.ino !== observed.ino)
+      throw new StoreError("STORE_CORRUPT", `file changed before fsync: ${path}`);
+    fsyncSync(fd);
+  } finally { closeSync(fd); }
+}
+
+/** Only the exact name successfully created by this invocation may reach here.
+ * ENOENT after an uncertain rename does not establish that replacement failed;
+ * the original error still propagates and the parent is flushed either way.
  */
-export function replaceDerivedFile(target: string, bytes: string | Uint8Array, mode = 0o600): void {
-  mkdirSync(dirname(target), { recursive: true });
-  const temporary = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`);
-  let created = false;
-  let renamed = false;
-  const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
-  created = true;
+function cleanupOwnedTemporary(path: string): void {
+  try { unlinkSync(path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  fsyncDir(dirname(path));
+}
+
+function cleanupAfterFailure(path: string, failure: unknown): never {
+  try { cleanupOwnedTemporary(path); }
+  catch (cleanupFailure) {
+    throw new AggregateError([failure, cleanupFailure], "filesystem effect and owned temporary cleanup both failed");
+  }
+  throw failure;
+}
+
+/** Exclusive open -> write -> file fsync -> close. A failed write owns and
+ * removes only its partial name, then flushes its parent. After success the
+ * caller owns the staging name and its later unlink/parent flush. No accepted
+ * evidence is collected and no existing name is removed on an EEXIST failure.
+ */
+export function writeExclusiveFsyncedFile(path: string, bytes: string | Uint8Array, mode = 0o600): void {
+  assertDirectory(dirname(path));
+  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
   try {
     try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); }
-    renameSync(temporary, target); renamed = true;
+  } catch (error) { cleanupAfterFailure(path, error); }
+}
+
+/** Derived-only replacement: exclusive temporary -> file fsync -> close ->
+ * rename -> parent fsync. This function owns only its random temporary, never a
+ * glob or an accepted source. A post-rename flush failure does not prove that
+ * replacement did not happen; callers must not downgrade a durable operation.
+ */
+export function replaceDerivedFile(target: string, bytes: string | Uint8Array, mode = 0o600): void {
+  ensureDurableDirectory(dirname(target));
+  const temporary = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`);
+  const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+  let renamed = false;
+  try {
+    try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); }
+    renameSync(temporary, target);
+    renamed = true;
     fsyncDir(dirname(target));
-  } finally {
-    if (created && !renamed) {
-      unlinkSync(temporary);
-      fsyncDir(dirname(temporary));
-    }
+  } catch (error) {
+    if (!renamed) cleanupAfterFailure(temporary, error);
+    throw error;
   }
 }
 
@@ -60,8 +110,7 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
  * Parent path checks are observations, not a kernel containment proof.
  */
 export function fsyncTree(root: string): void {
-  const stat = lstatSync(root);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new StoreError("STORE_CORRUPT", `invalid fsync tree root: ${root}`);
+  assertDirectory(root);
   for (const name of readdirSync(root)) {
     const path = join(root, name);
     const entry = lstatSync(path);
