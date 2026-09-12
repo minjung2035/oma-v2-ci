@@ -1,4 +1,4 @@
-/** CTX-002/007: pure context-document policy. No filesystem, Git, defaults, or normalization. */
+/** CTX-001/002: pure context-document policy. No filesystem, Git, defaults, or normalization. */
 import { isValidWirePath } from "./identifiers.js";
 import type { ContextEntry } from "../../implementation/contracts.js";
 
@@ -9,7 +9,7 @@ export function isContextDirectoryPath(value: unknown): value is "decisions" {
 
 export function contextPathCheck(value: unknown): string | null {
   if (!isValidWirePath(value)) return "unsafe context path";
-  if (value === "GOAL.md" || value === "CURRENT.md") return null;
+  if (value === "GOAL.md" || value === "RATIONALE.md") return null;
   if (/^decisions\/[^/]+\.md$/.test(value)) return null;
   return "unsupported context path";
 }
@@ -91,20 +91,16 @@ export function isContextEntries(value: unknown, bounds: ContextEntryBounds = {}
   return contextEntriesCheck(value, bounds) === null;
 }
 
-/** Strict UTF-8 Markdown; byte/hash verification and filesystem type checks stay at effects. */
+/** Preserve the supported wire content policy. Markdown is data, not executable
+ * authority; refactoring does not add an HTML/shebang content blacklist.
+ * Byte/hash verification and filesystem type checks stay at effect boundaries.
+ */
 export function contextFileCheck(path: string, bytes: Uint8Array): string | null {
   const pathError = contextPathCheck(path);
   if (pathError) return pathError;
   let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return "context file is not valid UTF-8";
-  }
-  if (text.includes("\0")) return "context file contains NUL";
-  if (/^\uFEFF?\s*#!/.test(text)) return "context file contains a shebang";
-  if (/<\s*(?:html|head|body|script|iframe|object|embed|style)(?:\s|>)/i.test(text) || /<!doctype\s+html/i.test(text))
-    return "context file contains HTML";
-  if (path === "GOAL.md" && text.trim().length === 0) return "GOAL.md must be non-empty";
-  return null;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch { return "context must be UTF-8 text"; }
+  if (path === "GOAL.md" && text.length === 0) return "GOAL.md must not be empty";
+  return /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text) ? "binary context is forbidden" : null;
 }
