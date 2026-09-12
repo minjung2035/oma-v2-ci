@@ -1,0 +1,67 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
+import { freezeMessageFacts, messagePlanFrom } from "../src/mail/facts.js";
+import { renderFrozenMessage } from "../src/mail/serialize.js";
+
+const root = fileURLToPath(new URL("../../", import.meta.url));
+const id = "m-11111111-1111-4111-8111-111111111111-0";
+
+test("pure header runtime closure excludes mail coordinator SQLite transport and effects", () => {
+  const seen = new Set<string>();
+  const visit = (path: string): void => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+    for (const node of source.statements) {
+      let specifier: ts.Expression | undefined;
+      if (ts.isImportDeclaration(node)) {
+        const clause = node.importClause;
+        if (clause?.isTypeOnly) continue;
+        if (clause && !clause.name && clause.namedBindings && ts.isNamedImports(clause.namedBindings) &&
+          clause.namedBindings.elements.every(element => element.isTypeOnly)) continue;
+        specifier = node.moduleSpecifier;
+      } else if (ts.isExportDeclaration(node)) {
+        if (node.isTypeOnly) continue;
+        if (node.exportClause && ts.isNamedExports(node.exportClause) &&
+          node.exportClause.elements.every(element => element.isTypeOnly)) continue;
+        specifier = node.moduleSpecifier;
+      }
+      if (!specifier || !ts.isStringLiteral(specifier)) continue;
+      const target = specifier.text;
+      assert.ok(target.startsWith("."), `pure header closure imports external runtime ${target}`);
+      const next = resolve(dirname(path), target.replace(/\.js$/, ".ts"));
+      assert.notEqual(next, resolve(root, "src/mail.ts"));
+      assert.notEqual(next, resolve(root, "src/store.ts"));
+      assert.notEqual(next, resolve(root, "src/mail/serialize.ts"));
+      visit(next);
+    }
+  };
+  visit(resolve(root, "src/mail/headers.ts"));
+  const cli = readFileSync(resolve(root, "src/cli.ts"), "utf8");
+  assert.doesNotMatch(cli, /from\s+["']\.\/mail\.js["']/);
+  assert.match(cli, /from\s+["']\.\/mail\/headers\.js["']/);
+  assert.ok(seen.size >= 3);
+});
+
+test("facts freeze one clock value; emission and plan never select another date", async t => {
+  let reads = 0;
+  t.mock.method(Date, "now", () => { reads++; return 946684800987; });
+  const facts = freezeMessageFacts({ id, society: "demo", sender: "alice", to: ["bob"],
+    kind: "message", contextRevision: null,
+    replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } });
+  assert.equal(reads, 1);
+  assert.equal(facts.dateMs, 946684800000);
+  t.mock.restoreAll();
+  const rendered = await renderFrozenMessage(facts, { subject: "s", body: "body\n" });
+  const plan = messagePlanFrom(rendered, ["bob"]);
+  assert.equal(rendered.dateMs, facts.dateMs);
+  assert.equal(rendered.headerFacts.dateMs, facts.dateMs);
+  assert.equal(plan.dateMs, facts.dateMs);
+  assert.deepEqual(plan.to, ["bob"]);
+  assert.deepEqual(plan.replyHeaders.replyTo, ["alice"]);
+  await assert.rejects(renderFrozenMessage(facts, { subject: "bad\r\nX-OMA-Kind: critical", body: "b" }), /CR\/LF/);
+});
