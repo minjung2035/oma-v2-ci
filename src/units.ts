@@ -1,6 +1,6 @@
 // MUST [UNIT-001..006]: fixed systemd user units rendered only from validated
 // host values. Physical systemctl failures are never silently treated as success.
-import { readFileSync, mkdirSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -108,13 +108,14 @@ export class UnitsModule {
   }
 
   private install(name: string, templateName: string, overrides: Partial<RenderValues> = {}): void {
-    mkdirSync(this.installDir, { recursive: true });
     const rendered = renderUnit(readFileSync(join(UNIT_TPL_DIR, templateName), "utf8"), {
       ...this.values,
       ...overrides,
       agent: this.agentFrom(name),
     });
     const target = join(this.installDir, name);
+    // This is a rebuildable view, not immutable evidence. The owner checks
+    // existing parent components before creating directories or replacing it.
     replaceDerivedFile(target, rendered, 0o600);
     const linked = spawnSync("systemctl", ["--user", "link", target], { encoding: "utf8" });
     const detail = `${linked.stdout ?? ""}\n${linked.stderr ?? ""}`;
