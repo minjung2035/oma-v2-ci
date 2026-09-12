@@ -1,163 +1,231 @@
-// MUST [FS-003]/[IPC-006]: CLI preaccept cache under <home>/.local/state/oma/requests.
-// Model-mutable; the broker always revalidates. Contains only the frozen
-// request, body/bundle digest, and the last receipt. Not a queue or replay engine.
+// MUST [FS-003]/[IPC-006/008]: private model-mutable preaccept cache.
+// This is neither a durable effect ledger nor broker/session authority.
 import {
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-  existsSync,
-  openSync,
-  fsyncSync,
-  closeSync,
+  mkdirSync, readFileSync, renameSync, writeFileSync, openSync, fsyncSync,
+  closeSync, linkSync, unlinkSync, fstatSync, lstatSync, constants,
 } from "node:fs";
-import { dirname, join } from "node:path";
-import type { Json, Receipt, RequestKey } from "../implementation/contracts.js";
-import { isValidRequestKey } from "./ids.js";
+import { randomUUID } from "node:crypto";
+import { basename, dirname, join } from "node:path";
+import type { Receipt, RequestKey } from "../implementation/contracts.js";
+import { isValidRequestKey } from "./domain/identifiers.js";
+import { requestParamsEqual } from "./domain/request-identity.js";
+import { sha256Hex } from "./domain/canonical-json.js";
+import { parseJsonObject } from "./frame.js";
+import { decodeReceipt } from "./protocol/receipt-codec.js";
+import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./cli/cache-codec.js";
 
-export interface CachedRequest {
-  key: RequestKey;
-  method: string;
-  /** frozen normalized payload (immutable after first freeze) */
-  params: Json;
-  /** stream digest when the request carries bytes, else absent */
-  digest?: { bytes: number; sha256: string };
-  createdAtMs: number;
-  lastReceipt: Receipt | null;
+export type { CachedRequest, StreamDigest } from "./cli/cache-codec.js";
+export type FreezeInput = Omit<CachedRequest, "lastReceipt">;
+export type FileObservation<T> =
+  | { readonly kind: "absent" }
+  | { readonly kind: "present"; readonly value: T }
+  | { readonly kind: "corrupt"; readonly reason: string }
+  | { readonly kind: "unavailable"; readonly reason: string };
+export type CacheRead = FileObservation<CachedRequest>;
+export type BodyRead = FileObservation<Uint8Array>;
+export type FreezeResult = { readonly kind: "created" | "existing"; readonly value: CachedRequest };
+export type CacheReader = (path: string, expectedBytes?: number) => FileObservation<Uint8Array>;
+
+export class CacheError extends Error {
+  constructor(readonly code: "INVALID_REQUEST" | "REQUEST_KEY_REUSED" | "CACHE_CORRUPT" | "CACHE_UNAVAILABLE", message: string) {
+    super(message);
+    this.name = "CacheError";
+  }
 }
+
+const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error);
+function ioObservation(error: unknown): FileObservation<never> {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "ENOENT") return { kind: "absent" };
+  if (code === "ELOOP" || code === "EISDIR" || code === "ENOTDIR")
+    return { kind: "corrupt", reason: messageOf(error) };
+  return { kind: "unavailable", reason: messageOf(error) };
+}
+function requirePresent<T>(observation: FileObservation<T>, what: string): T {
+  if (observation.kind === "present") return observation.value;
+  if (observation.kind === "unavailable") throw new CacheError("CACHE_UNAVAILABLE", `${what}: ${observation.reason}`);
+  throw new CacheError("CACHE_CORRUPT", `${what}: ${observation.kind === "absent" ? "missing" : observation.reason}`);
+}
+
+/** No existsSync precheck, symlink following, or FIFO read can erase an I/O failure. */
+export const readCacheFile: CacheReader = (path, expectedBytes) => {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || !Number.isSafeInteger(stat.size) || stat.size < 0)
+      return { kind: "corrupt", reason: "cache entry is not a regular file with a safe size" };
+    if (expectedBytes !== undefined && stat.size !== expectedBytes)
+      return { kind: "corrupt", reason: "body size differs from frozen digest" };
+    const bytes = readFileSync(fd);
+    if (bytes.length !== stat.size) return { kind: "corrupt", reason: "cache file changed during read" };
+    return { kind: "present", value: bytes };
+  } catch (error) {
+    return ioObservation(error);
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+};
 
 function fsyncDir(dir: string): void {
-  const fd = openSync(dir, "r");
+  const fd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+
+/** Unique temporary name is transient, not a new cache format, queue, or lock. */
+function prepareTemp(target: string, data: string | Uint8Array): string {
+  const temp = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`);
+  const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try { writeFileSync(fd, data); fsyncSync(fd); }
+  catch (error) {
+    try { unlinkSync(temp); } catch { /* cleanup only; retain the write error */ }
+    throw error;
+  } finally { closeSync(fd); }
+  return temp;
+}
+
+/** File fsync -> no-replace hardlink -> directory fsync. Existing bytes are never overwritten. */
+function publishNoReplace(target: string, data: string | Uint8Array): "created" | "existing" {
+  const temp = prepareTemp(target, data);
+  let result: "created" | "existing" = "created";
   try {
-    fsyncSync(fd);
+    try { linkSync(temp, target); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      result = "existing";
+    }
   } finally {
-    closeSync(fd);
+    unlinkSync(temp);
+    // Also fence an already-visible competing publication before any send.
+    fsyncDir(dirname(target));
+  }
+  return result;
+}
+
+/** Receipt-only replacement: tmp fsync -> rename -> directory fsync. */
+function replaceReceiptFile(target: string, data: string): void {
+  const temp = prepareTemp(target, data);
+  try { renameSync(temp, target); fsyncDir(dirname(target)); }
+  finally {
+    try { unlinkSync(temp); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
   }
 }
 
-function atomicWrite(
-  target: string,
-  tmp: string,
-  data: string | Uint8Array,
-): void {
-  const fd = openSync(tmp, "w", 0o600);
-  try {
-    writeFileSync(fd, data);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  renameSync(tmp, target);
-  fsyncDir(dirname(target));
-}
-const CACHE_FIELDS = ["key", "method", "params", "digest", "createdAtMs", "lastReceipt"] as const;
-const DIGEST_FIELDS = ["bytes", "sha256"] as const;
-const RECEIPT_FIELDS = ["operation", "state", "result", "error", "reason"] as const;
-const FAILURE_FIELDS = ["code", "message", "retry", "details"] as const;
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function hasOnly(record: Record<string, unknown>, fields: readonly string[]): boolean {
-  return Object.keys(record).every((key) => fields.includes(key));
-}
-
-function isJsonValue(v: unknown): v is Json {
-  if (v === null || typeof v === "string" || typeof v === "boolean") return true;
-  if (typeof v === "number") return Number.isFinite(v) && Number.isSafeInteger(v);
-  if (Array.isArray(v)) return v.every(isJsonValue);
-  return isRecord(v) && Object.values(v).every(isJsonValue);
-}
-
-function isReceiptValue(v: unknown): v is Receipt {
-  if (v === null) return true;
-  if (!isRecord(v) || !hasOnly(v, RECEIPT_FIELDS)) return false;
-  if (typeof v.operation !== "string" || v.operation.length === 0) return false;
-  if (v.state !== "pending" && v.state !== "succeeded" && v.state !== "failed" && v.state !== "unknown") return false;
-  if (v.result !== undefined && !isJsonValue(v.result)) return false;
-  if (v.reason !== undefined && typeof v.reason !== "string") return false;
-  if (v.error === undefined) return true;
-  if (!isRecord(v.error) || !hasOnly(v.error, FAILURE_FIELDS)) return false;
-  return typeof v.error.code === "string" && typeof v.error.message === "string" &&
-    (v.error.retry === "never" || v.error.retry === "same-key" || v.error.retry === "after-repair") &&
-    (v.error.details === undefined || isJsonValue(v.error.details));
-}
-
-function isCachedRecord(raw: unknown, key: RequestKey): raw is CachedRequest {
-  if (!isRecord(raw)) return false;
-  if (!hasOnly(raw, CACHE_FIELDS) || raw.key !== key || !isValidRequestKey(raw.key)) return false;
-  if (typeof raw.method !== "string" || raw.method.length === 0 || !isJsonValue(raw.params)) return false;
-  if (!Number.isSafeInteger(raw.createdAtMs) || (raw.createdAtMs as number) < 0) return false;
-  if (!isReceiptValue(raw.lastReceipt)) return false;
-  if (raw.digest !== undefined) {
-    const digest = raw.digest;
-    if (!isRecord(digest) || !hasOnly(digest, DIGEST_FIELDS) ||
-      typeof digest.bytes !== "number" || !Number.isSafeInteger(digest.bytes) || digest.bytes < 0 ||
-      typeof digest.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(digest.sha256)) return false;
-  }
-  return true;
+function sameIdentity(left: CachedRequest, right: CachedRequest): boolean {
+  return left.key === right.key && left.method === right.method &&
+    requestParamsEqual(left.method, left.params, right.params) &&
+    ((left.digest === undefined && right.digest === undefined) ||
+      (left.digest !== undefined && right.digest !== undefined && left.digest.bytes === right.digest.bytes && left.digest.sha256 === right.digest.sha256));
 }
 
 export class RequestCache {
-  constructor(readonly homeDir: string) {}
+  /** The injected reader is for deterministic I/O-failure tests, never wire input. */
+  constructor(readonly homeDir: string, private readonly reader: CacheReader = readCacheFile) {}
 
-  private dir(): string {
-    return join(this.homeDir, ".local", "state", "oma", "requests");
-  }
-
+  private dir(): string { return join(this.homeDir, ".local", "state", "oma", "requests"); }
   private path(key: RequestKey): string {
-    if (!isValidRequestKey(key)) throw new Error("invalid request key");
+    if (!isValidRequestKey(key)) throw new CacheError("INVALID_REQUEST", "invalid request key");
     return join(this.dir(), `${key}.json`);
   }
+  bodyPath(key: RequestKey): string { return this.path(key).replace(/\.json$/, ".body"); }
 
-  read(key: RequestKey): CachedRequest | null {
-    if (!isValidRequestKey(key)) return null;
-    const p = this.path(key);
-    if (!existsSync(p)) return null;
+  private readMetadata(key: RequestKey): CacheRead {
+    if (!isValidRequestKey(key)) return { kind: "corrupt", reason: "invalid request key" };
+    const bytes = this.reader(this.path(key));
+    if (bytes.kind !== "present") return bytes;
     try {
-      const raw = JSON.parse(readFileSync(p, "utf8")) as unknown;
-      if (!isRecord(raw) || !isCachedRecord(raw, key)) return null;
-      return raw;
-    } catch {
-      return null;
-    }
+      const decoded = decodeCachedRequest(parseJsonObject(bytes.value).raw, key);
+      return decoded.ok ? { kind: "present", value: decoded.value } : { kind: "corrupt", reason: decoded.reason };
+    } catch (error) { return { kind: "corrupt", reason: messageOf(error) }; }
   }
 
-  /** MUST [FS-003]: fsync tmp file, atomic rename, then fsync parent dir. */
-  write(entry: CachedRequest): void {
-    if (!isCachedRecord(entry, entry.key)) {
-      throw new Error("invalid cached request");
-    }
-    const dir = this.dir();
-    mkdirSync(dir, { recursive: true });
-    const tmp = join(dir, `.${entry.key}.tmp`);
-    atomicWrite(this.path(entry.key), tmp, JSON.stringify(entry));
-  }
-
-  /** MUST [IPC-008]: durable body path for streamed mutations — the exact bytes
-   * frozen at preaccept are persisted so `--request` recovery reproduces the
-   * SAME bytes instead of rebuilding them from mutable current state. */
-  bodyPath(key: RequestKey): string {
-    return this.path(key).replace(/\.json$/, ".body");
-  }
-
-  /** MUST [IPC-008/FS-003]: publish the exact body bytes durably. */
-  persistBody(key: RequestKey, bytes: Uint8Array): void {
-    const dir = this.dir();
-    mkdirSync(dir, { recursive: true });
-    const p = this.bodyPath(key);
-    const tmp = join(dir, `.${key}.body.tmp`);
-    atomicWrite(p, tmp, bytes);
-  }
-
-  readBody(key: RequestKey): Uint8Array | null {
-    const p = this.bodyPath(key);
-    if (!existsSync(p)) return null;
+  /** ENOENT metadata is absent only when no earlier body publication survives. */
+  read(key: RequestKey): CacheRead {
+    const metadata = this.readMetadata(key);
+    if (metadata.kind !== "absent") return metadata;
     try {
-      return new Uint8Array(readFileSync(p));
-    } catch {
-      return null;
+      lstatSync(this.bodyPath(key));
+      return { kind: "corrupt", reason: "orphan body without frozen metadata; original caller payload is unknown" };
+    } catch (error) {
+      const body = ioObservation(error);
+      return body.kind === "absent" ? metadata : body;
     }
+  }
+
+  readBody(key: RequestKey, expected: StreamDigest): BodyRead {
+    if (!isValidRequestKey(key)) return { kind: "corrupt", reason: "invalid request key" };
+    const digest = decodeStreamDigest(expected);
+    if (!digest.ok) return { kind: "corrupt", reason: digest.reason };
+    const body = this.reader(this.bodyPath(key), expected.bytes);
+    if (body.kind !== "present") return body;
+    if (body.value.byteLength !== expected.bytes || sha256Hex(body.value) !== expected.sha256)
+      return { kind: "corrupt", reason: "body bytes/hash differ from frozen digest" };
+    return body;
+  }
+
+  private existing(request: CachedRequest, actual: CacheRead): FreezeResult {
+    const frozen = requirePresent(actual, "frozen metadata");
+    if (!sameIdentity(request, frozen)) throw new CacheError("REQUEST_KEY_REUSED", `key ${request.key} is already frozen for another request`);
+    if (frozen.digest) requirePresent(this.readBody(frozen.key, frozen.digest), "frozen body");
+    // A second CLI may observe the first CLI's link before its directory fsync.
+    // Establish that barrier ourselves before returning replay-ready metadata.
+    fsyncDir(this.dir());
+    return { kind: "existing", value: frozen };
+  }
+
+  /**
+   * Initial freeze only. Body fsync/publication precedes metadata publication.
+   * The two files are NOT one filesystem transaction. A body-only crash is
+   * retained as an ambiguous orphan; no new payload is reconstructed for its key.
+   */
+  freeze(input: FreezeInput, body?: Uint8Array): FreezeResult {
+    if (Object.hasOwn(input, "lastReceipt")) throw new CacheError("INVALID_REQUEST", "initial freeze cannot set lastReceipt");
+    const decoded = decodeCachedRequest({ ...input, lastReceipt: null }, input.key);
+    if (!decoded.ok) throw new CacheError("INVALID_REQUEST", decoded.reason);
+    const request = decoded.value;
+    const initial = this.read(request.key);
+    if (initial.kind === "present") return this.existing(request, initial);
+    if (initial.kind !== "absent") requirePresent(initial, "initial freeze");
+    if (request.digest) {
+      if (body === undefined || body.byteLength !== request.digest.bytes || sha256Hex(body) !== request.digest.sha256)
+        throw new CacheError("INVALID_REQUEST", "fresh body does not match frozen digest");
+    } else if (body !== undefined) throw new CacheError("INVALID_REQUEST", "request without a descriptor cannot freeze a body");
+    try {
+      mkdirSync(this.dir(), { recursive: true, mode: 0o700 });
+      if (request.digest && body !== undefined) {
+        const published = publishNoReplace(this.bodyPath(request.key), body);
+        if (published === "existing") {
+          const metadata = this.readMetadata(request.key);
+          if (metadata.kind === "present") return this.existing(request, metadata);
+          const observedBody = this.readBody(request.key, request.digest);
+          if (observedBody.kind === "corrupt") throw new CacheError("REQUEST_KEY_REUSED", `key ${request.key} has a different frozen body`);
+          if (metadata.kind !== "absent") requirePresent(metadata, "competing metadata publication");
+          if (observedBody.kind !== "present") requirePresent(observedBody, "competing body publication");
+          // Equal body bytes do not prove that another writer had equal params.
+          throw new CacheError("CACHE_UNAVAILABLE", "another body publication exists without proven metadata; no reconstruction attempted");
+        }
+      }
+      const published = publishNoReplace(this.path(request.key), JSON.stringify(request));
+      if (published === "existing") return this.existing(request, this.readMetadata(request.key));
+      return { kind: "created", value: request };
+    } catch (error) {
+      if (error instanceof CacheError) throw error;
+      throw new CacheError("CACHE_UNAVAILABLE", `freeze publication failed: ${messageOf(error)}`);
+    }
+  }
+
+  /** Only this API changes lastReceipt; callers cannot supply replacement identity fields. */
+  updateReceipt(key: RequestKey, receipt: unknown): CachedRequest {
+    const frozen = requirePresent(this.read(key), "receipt update metadata");
+    const decoded = decodeReceipt(receipt, { expectedKind: frozen.method });
+    if (!decoded.ok) throw new CacheError("CACHE_CORRUPT", `invalid receipt observation: ${decoded.reason}`);
+    if (frozen.lastReceipt !== null && frozen.lastReceipt.operation !== decoded.value.operation)
+      throw new CacheError("CACHE_CORRUPT", "receipt operation differs from the previous observation");
+    const updated: CachedRequest = { ...frozen, lastReceipt: decoded.value };
+    try { replaceReceiptFile(this.path(key), JSON.stringify(updated)); }
+    catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt update failed: ${messageOf(error)}`); }
+    return updated;
   }
 }
