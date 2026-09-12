@@ -34,7 +34,7 @@ export class GitModule {
   private readonly contextCoordinator: ContextCoordinator;
   private readonly contextRepository: ContextRepository;
   private readonly quarantine: QuarantineImporter;
-  private integrationTail: Promise<void> = Promise.resolve();
+  private writerActive = false;
   private readonly observations = createCanonicalObserver();
   constructor(
     private readonly paths: GitPaths, private readonly store: Store, mail: MailModule,
@@ -67,6 +67,15 @@ export class GitModule {
       publishSnapshot: (operation, proof) => this.publishContextSnapshot(operation, proof),
     }, new ContextPublicationObserver(this.observations, paths.contextGit));
   }
+  /** Preserve one main writer, without retaining an unbounded promise chain.
+   * Busy callers have not entered admission and can retry the SAME request key.
+   * Accepted/unknown rows remain the coordinators' independent durable barrier.
+   */
+  private async withWriter<T>(work: () => Promise<T>): Promise<T> {
+    if (this.writerActive) throw new StoreError("BROKER_UNAVAILABLE", "repository writer is busy; retry the same request key");
+    this.writerActive = true;
+    try { return await work(); } finally { this.writerActive = false; }
+  }
   private objectFormat(repo: string, oids: readonly string[] = []): "sha1" | "sha256" {
     const format = observed(this.observations.objectFormat(repo), "repository object format");
     if (oids.some(oid => !isValidFullOid(oid) || oid.length !== (format === "sha1" ? 40 : 64)))
@@ -84,8 +93,8 @@ export class GitModule {
     const value = this.observations.commit(this.paths.projectGit, oid);
     return value.kind === "absent" ? false : observed(value, "canonical commit");
   }
-  private quarantineImport(bundlePath: string, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): void {
-    this.quarantine.importBundle(bundlePath, candidate, exportRef, prerequisites);
+  private quarantineImport(bundlePath: string, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): Promise<void> {
+    return this.quarantine.importBundle(bundlePath, candidate, exportRef, prerequisites);
   }
   private publishRef(ref: string, candidate: Oid): void {
     const current = this.observations.ref(this.paths.projectGit, ref);
@@ -99,26 +108,20 @@ export class GitModule {
     if (after.kind === "third" && after.oid !== null) throw new StoreError("PUBLISHED_REF_CONFLICT", `CAS publish found another value for ${ref}`);
     throw new StoreError("REF_STATE_UNKNOWN", `published ref ${ref} is not proven after CAS`);
   }
-  async integrate(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {
-    const previous = this.integrationTail; let release: (() => void) | undefined;
-    this.integrationTail = new Promise<void>(resolve => { release = resolve; });
-    await previous;
-    try { return await this.integrationCoordinator.execute(auth, key, input); } finally { release?.(); }
+  integrate(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {
+    return this.withWriter(() => this.integrationCoordinator.execute(auth, key, input));
   }
   isPublished(oid: Oid): boolean { return observed(this.observations.published(this.paths.projectGit), "published refs").includes(oid); }
   private currentMain(): Oid { return observed(this.observations.ref(this.paths.projectGit, "refs/heads/main"), "canonical main ref"); }
   private async runCheck(_candidate: Oid, _check: FrozenCheck): Promise<void> {
     throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE bounded writable work area is not verified");
   }
-  async publishContext(auth: AuthContext, key: string, input: ContextInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
-    const previous = this.integrationTail; let release: (() => void) | undefined;
-    this.integrationTail = new Promise<void>(resolve => { release = resolve; });
-    await previous;
-    try { return await this.contextCoordinator.publish(auth, key, input, bytes); } finally { release?.(); }
+  publishContext(auth: AuthContext, key: string, input: ContextInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
+    return this.withWriter(() => this.contextCoordinator.publish(auth, key, input, bytes));
   }
   // Named physical seams remain reachable for corruption/crash oracles.
   private currentContext(): Oid | null { return this.contextRepository.current(); }
-  private prepareContextCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid {
+  private prepareContextCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid | Promise<Oid> {
     return this.contextRepository.prepareCandidate(tree, entries, expected);
   }
   private publishContextSnapshot(operation: OperationOf<"context.publish">, proof: ContextPublicationEvidence): void {
@@ -145,11 +148,8 @@ export class GitModule {
     const revision = this.currentContext(); if (!revision) return;
     repairContextMirror(this.paths, revision);
   }
-  async reconcile(operationId: string): Promise<void> {
-    const previous = this.integrationTail; let release: (() => void) | undefined;
-    this.integrationTail = new Promise<void>(resolve => { release = resolve; });
-    await previous;
-    try {
+  reconcile(operationId: string): Promise<void> {
+    return this.withWriter(async () => {
       const operation = this.store.getOperationById(operationId);
       if (!operation || (operation.state !== "pending" && operation.state !== "unknown")) return;
       switch (operation.kind) {
@@ -158,7 +158,7 @@ export class GitModule {
         case "git.submit": await this.submissionCoordinator.reconcile(operation); return;
         default: return;
       }
-    } finally { release?.(); }
+    });
   }
   knownRefs(): { main: string; published: string[] } {
     return { main: this.currentMain(), published: [...observed(this.observations.published(this.paths.projectGit), "known published refs")] };
