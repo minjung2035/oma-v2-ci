@@ -61,12 +61,12 @@ async function main(): Promise<void> {
     assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
     const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
     lifetime.retainStore(() => store.close());
-    const mail = new MailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages);
+    const mail = new MailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages, cfg.limits);
     const units = new UnitsModule(society, {
       node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society, agent: "",
     }, undefined, Object.fromEntries(Object.entries(cfg.agentProfiles).map(([name, profile]) => [name, profile.resources])),
     agent => store.getAgent(agent)?.incarnation ?? null);
-    const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile);
+    const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
     const resolveSpec = createChildSpecResolver(() => {
       const current = loadConfig(configPath);
       if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
@@ -76,6 +76,7 @@ async function main(): Promise<void> {
     const hasGoal = (): boolean => contextOwner?.hasCommittedContext() ?? false;
     const lifecycle = new LifecycleModule(store, units, {
       stateRoot, projectGit: join(stateRoot, "repos", "project.git"), society, hasGoal,
+      activationAllowed: () => lifetime.permitsActivation,
     }, resolveSpec, mail, cfg.quota);
     const git = new GitModule({
       stateRoot, projectGit: join(stateRoot, "repos", "project.git"), contextGit: join(stateRoot, "repos", "context.git"),
@@ -119,7 +120,6 @@ async function main(): Promise<void> {
         if (process.env.NOTIFY_SOCKET && !notified) throw new StoreError("BROKER_UNAVAILABLE", "systemd READY notification failed");
         console.error(notified ? "broker ready" : "broker listening (foreground, no systemd notification)");
       },
-      // Resident units are After=broker. Activation cannot precede READY.
       activate: async () => { await reconcile.sweep(); views.refreshWorld(); },
     });
   } catch (error) {
