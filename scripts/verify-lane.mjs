@@ -6,9 +6,11 @@ import { join, resolve, relative } from "node:path";
 import { arch, platform, release } from "node:os";
 import ts from "typescript";
 import { lanes, evaluateExecution } from "./verification-lanes.mjs";
+import { extractExplorationParameters } from "./exploration-parameters.mjs";
 
-const [name, ...args] = process.argv.slice(2);
-if (!Object.hasOwn(lanes, name ?? "")) throw new Error(`usage: verify-lane.mjs <${Object.keys(lanes).join("|")}> --out <new-directory> [--baseline <result.json>]`);
+const [name, ...rawArgs] = process.argv.slice(2);
+if (!Object.hasOwn(lanes, name ?? "")) throw new Error(`usage: verify-lane.mjs <${Object.keys(lanes).join("|")}> --out <new-directory> [--baseline <result.json>] [--seed N --actions N --fuzz-cases N --stress-cycles N --stress-seconds N --rss-bytes N]`);
+const exploration = extractExplorationParameters(rawArgs), args = exploration.remaining;
 const valueOf = key => { const index = args.indexOf(key); return index < 0 ? undefined : args[index + 1]; };
 const outputArg = valueOf("--out");
 if (!outputArg) throw new Error("a new output directory is required; evidence is never overwritten");
@@ -18,9 +20,12 @@ mkdirSync(output, { recursive: true });
 const environment = {};
 for (const key of ["PATH", "HOME", "LANG", "LC_ALL", "TZ", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "DBUS_SESSION_BUS_ADDRESS"])
   if (process.env[key] !== undefined) environment[key] = process.env[key];
+const inheritedKeys = Object.keys(environment);
+Object.assign(environment, exploration.env, { OMA_TEST_ARTIFACT_DIR: join(output, "exploration") });
 const report = { schema: 1, lane: name, status: "SETUP_FAILED", execution: "NOT_RUN", proof: lane.proof,
   startedAt: new Date().toISOString(), concurrency: 1, environment: { node: process.version, platform: platform(), arch: arch(), kernel: release(), uid: process.getuid?.() ?? null,
-    inheritedKeys: Object.keys(environment), paidProviderCredentialsInherited: false },
+    inheritedKeys, paidProviderCredentialsInherited: false },
+  exploration: { parameters: exploration.parameters, artifacts: "exploration", defaults: "declared and reported by each test; not inferred measurements" },
   commands: [], selectedFiles: [], sourceDigests: {}, sourceTestCallSites: [], runtime: null,
   limitations: ["S-03/S-04 feature completion remains BLOCKED", "VM power loss NOT_RUN", "host reboot and paid provider calls are outside this runner", "raw test failure does not identify product-vs-environment cause"] };
 function filesUnder(path) {
