@@ -1,7 +1,7 @@
 // MUST [UNIT-004]/[LIFE-006]/[REC-007]: broker entrypoint — composition only.
 // The society advisory lock is acquired before runtime.sqlite is opened.
 import { join } from "node:path";
-import { existsSync, mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { Store } from "../store.js";
 import { MailModule } from "../mail.js";
 import { UnitsModule } from "../units.js";
@@ -32,7 +32,6 @@ const stateRoot = join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/t
 const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
 const configPath = configIdx >= 0 && args[configIdx + 1] !== undefined ? args[configIdx + 1]! : join(stateRoot, "config.json");
 
-// MUST [REC-007]: singleton decision precedes Store construction and recovery.
 mkdirSync(runRoot, { recursive: true });
 if (!acquireProcessLock(join(runRoot, "broker.lock"))) {
   console.error("broker startup failed: another broker holds the society lock");
@@ -54,9 +53,12 @@ const resolveSpec = createChildSpecResolver(() => {
   if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
   return current;
 }, () => store.inTransaction);
+// A path, prepared candidate or partially notified context is not activation proof.
+// The closure resolves its owner before bootstrap, and fails closed during setup.
+let contextOwner: GitModule | null = null;
+const hasGoal = (): boolean => contextOwner?.hasCommittedContext() ?? false;
 const lifecycle = new LifecycleModule(store, units, {
-  stateRoot, projectGit: join(stateRoot, "repos", "project.git"), society: cfg.society,
-  hasGoal: () => existsSync(join(stateRoot, "world", "context", "current")),
+  stateRoot, projectGit: join(stateRoot, "repos", "project.git"), society: cfg.society, hasGoal,
 }, resolveSpec, mail, cfg.quota);
 const git = new GitModule({
   stateRoot, projectGit: join(stateRoot, "repos", "project.git"), contextGit: join(stateRoot, "repos", "context.git"),
@@ -70,11 +72,12 @@ const git = new GitModule({
   if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
   return integrationPolicyFromConfig(current.integration);
 });
+contextOwner = git;
 const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
-  projectGit: join(stateRoot, "repos", "project.git"), hasGoal: () => existsSync(join(stateRoot, "world", "context", "current")),
+  projectGit: join(stateRoot, "repos", "project.git"), hasGoal,
 });
 const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile, {
-  stateRoot, runRoot, society: cfg.society, hasGoal: () => existsSync(join(stateRoot, "world", "context", "current")),
+  stateRoot, runRoot, society: cfg.society, hasGoal,
 }, cfg.limits);
 
 /** MUST [LIFE-006]/[REC-001]: startup recovery precedes listeners and READY. */
