@@ -64,10 +64,12 @@ export class BrokerLifetime {
     this.closing = (async () => {
       if (this.starting) await settleWithin([this.starting], this.graceSeconds());
       if (this.runtime) await this.runtime.drainAndClose();
-      else {
+      else if (this.fallbackClose) {
         await settleWithin([], this.graceSeconds());
-        this.fallbackClose?.();
+        this.fallbackClose();
       }
+      // Before configuration/Store acquisition there is no native preparation
+      // and no loaded grace policy to query; release only the acquired lock.
       this.lock.close(); this.current = "closed";
     })();
     return this.closing;
