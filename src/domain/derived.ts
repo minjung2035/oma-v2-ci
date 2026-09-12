@@ -32,6 +32,25 @@ export function exportRefForRequestKey(key: string): string {
   return `refs/oma/export/cli-${suffix}`;
 }
 
+/** Grammar only: historical export suffixes use the existing request-key alphabet.
+ * A valid spelling does not prove that a ref exists or belongs to an operation.
+ */
+export function isExportRef(value: unknown): value is string {
+  const prefix = "refs/oma/export/";
+  return typeof value === "string" && value.startsWith(prefix) && parseRequestKey(value.slice(prefix.length)) !== null;
+}
+export function isPublishedRef(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const parts = value.split("/");
+  return parts.length === 5 && parts[0] === "refs" && parts[1] === "oma" && parts[2] === "published" &&
+    parseActor(parts[3]) !== null && parseOperationId(parts[4]) !== null;
+}
+export function isMailObjectRelativePath(value: unknown): value is string {
+  const prefix = "mail/objects/";
+  return typeof value === "string" && value.startsWith(prefix) && value.endsWith(".eml") &&
+    parseMessageFileId(value.slice(prefix.length, -4)) !== null;
+}
+
 export function submitStagingFor(operationId: string): string {
   return `staging/submit-${required(operationId, parseOperationId, "operation id")}`;
 }
