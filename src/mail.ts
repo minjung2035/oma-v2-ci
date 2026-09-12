@@ -1,26 +1,28 @@
-// MUST [MAIL-001..010]: recipient expansion, materialization and batch handoff.
+// MUST [MAIL-001..010]: acceptance orchestration; publication proof belongs to the materializer.
 import { mkdirSync, existsSync, readFileSync, unlinkSync, renameSync, lstatSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
-import { Store, type DeliveryRow, type OperationRow } from "./store.js";
+import { Store, type DeliveryRow } from "./store.js";
 import { StoreError } from "./domain/errors.js";
 import { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
 export { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
-import { consumeSubmissionPublication, type SubmissionPublicationEvidence } from "./git/publication.js";
-import { consumeContextPublication, type ContextPublicationEvidence } from "./git/context-publication.js";
 import { assertCurrentActor } from "./authority.js";
 import { generateMessageId, generateOperationId, generateBatchId, parseMessageId } from "./ids.js";
 import { mailObjectFileName, mailArchiveDisplayPath, contextRevisionDisplayPath } from "./domain/derived.js";
-import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt, runnerViewPathAt, batchViewPathAt } from "./storage/paths.js";
+import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "./storage/paths.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
-import { fsyncDir, replaceDerivedFile as writeAtomic, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
+import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
 import { publishImmutableFile } from "./storage/immutable-file.js";
+import { publishBatchView } from "./storage/batch-view.js";
 import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { actorAddress, listAddress, topicAddress, parseDisplayedAddress } from "./mail/addresses.js";
-import { parseEmlHeaders, type ParsedEmlHeaders } from "./mail/headers.js";
+import type { ParsedEmlHeaders } from "./mail/headers.js";
+import { MailMaterializer, operationMessage, type PublicationEvidence } from "./mail/materializer.js";
+import { selectBatch } from "./mail/batch-policy.js";
 export { fsyncDir, replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 export { publishImmutableFile } from "./storage/immutable-file.js";
+export { publishBatchView } from "./storage/batch-view.js";
 export { buildEml } from "./mail/serialize.js";
 export type { EmlParams } from "./mail/serialize.js";
 export { parseEmlHeaders, rfc5322Date } from "./mail/headers.js";
@@ -57,19 +59,15 @@ export function expandAddresses(store: Store, to: readonly Address[], society: s
   }
   return { recipients: [...recipients].sort(), displayTo: [...display] };
 }
-export function publishBatchView(stateRoot: string, batch: PreparedBatch): void {
-  const runView = runnerViewPathAt(stateRoot, batch.agent);
-  writeAtomic(batchViewPathAt(stateRoot, batch.agent, batch.id), JSON.stringify({ id: batch.id, agent: batch.agent, incarnation: batch.incarnation, deliveryMode: batch.deliveryMode, notice: batch.notice, messageIds: batch.messageIds }));
-  const lines = [`# inbox — ${batch.agent}`, "", `안내 batch ${batch.id} (incarnation ${batch.incarnation})`, "", ...batch.messageIds.map((id, index) => `${index + 1}. ${id}\t${mailArchiveDisplayPath(id)}`), "", "읽기: cat <위 archive path>"];
-  writeAtomic(join(runView, "inbox.md"), `${lines.join("\n")}\n`, 0o444);
-}
 function logicalReplyAddress(store: Store, value: string, society: string): Address | null {
   return parseDisplayedAddress(value, society, new Set(store.listAgents().map(agent => agent.name)));
 }
 export interface MailSociety { stateRoot: string; society: string }
 export class MailModule {
+  private readonly materializer: MailMaterializer;
   constructor(private readonly paths: MailSociety, private readonly store: Store, private readonly maxReplyReferences: number, private readonly batchMaxMessages = 24) {
     this.store.bindRepositoryIdentity({ society: paths.society });
+    this.materializer = new MailMaterializer(store, paths.stateRoot, paths.society);
   }
   objectPath(id: MessageId): string { return mailObjectPathAt(this.paths.stateRoot, id); }
   archivePath(id: MessageId): string { return mailArchivePathAt(this.paths.stateRoot, id); }
@@ -88,9 +86,9 @@ export class MailModule {
       const parsed = parseMessageId(input.replyToMessage);
       const operation = parsed && this.store.getOperationById(parsed.operationId);
       if (!operation) throw new StoreError("INVALID_REQUEST", `reply target ${input.replyToMessage} is not accepted`);
-      const message = this.operationMessage(operation);
+      const message = operationMessage(operation);
       if (message.id !== input.replyToMessage) throw new StoreError("INVALID_REQUEST", `reply target ${input.replyToMessage} unknown`);
-      parent = this.messageHeaders(message);
+      parent = this.materializer.headers(message);
     }
     const targetAddresses: Address[] = [...input.to];
     if (targetAddresses.length === 0) {
@@ -119,23 +117,24 @@ export class MailModule {
     const staged = join(staging, mailObjectFileName(messageId)); writeFsynced(staged, eml.text);
     try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256); }
     finally { rmSync(staged, { force: true }); fsyncDir(staging); }
-    const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients) };
-    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
-    this.store.transaction(() => {
+    const txClaim = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth, "mail.send");
-      claimOut.txClaim = this.store.claimOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash, kind: operationKind, payloadJson: JSON.stringify(requestParams), planJson: JSON.stringify(plan) });
-      if (claimOut.txClaim === "retry") return;
+      const current = this.store.claimKey(auth.actor, key, newHash);
+      if (current === "retry") return "retry" as const;
+      if (current === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
       route.recipients = expandAddresses(this.store, logicalTo, society).recipients;
-      plan.message.recipients = route.recipients;
-      this.store.updateOperationPlanJson(opId, JSON.stringify(plan));
-      this.store.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
+      const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients) };
+      const accepted = tx.acceptOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash,
+        kind: operationKind, payloadJson: JSON.stringify(requestParams), planJson: JSON.stringify(plan) });
+      if (accepted === "inserted") tx.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
+      return accepted;
     });
-    if (claimOut.txClaim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
+    if (txClaim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
     const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId) };
     let materializedAll = true;
     try { await this.materialize(opId); }
     catch (error) { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; materializedAll = false; }
-    if (materializedAll) this.store.transaction(() => this.store.setOperationSucceeded(opId, JSON.stringify(result)));
+    if (materializedAll) this.store.transaction(tx => tx.setOperationSucceeded(opId, JSON.stringify(result)));
     const finalOp = this.store.getOperation(auth.actor, key);
     if (!finalOp) throw new StoreError("STORE_CORRUPT", "accepted mail operation missing");
     return receiptOf(finalOp);
@@ -151,7 +150,8 @@ export class MailModule {
   }
   publishCreateInitial(message: MessagePlan): void {
     const object = this.objectPath(message.id); const stat = lstatSync(object, { throwIfNoEntry: false });
-    if (!stat?.isFile() || stat.size !== message.bytes || sha256Hex(readFileSync(object)) !== message.sha256) throw new StoreError("STORE_CORRUPT", `create initial object mismatch: ${message.id}`);
+    if (!stat?.isFile() || stat.size !== message.bytes || sha256Hex(readFileSync(object)) !== message.sha256)
+      throw new StoreError("STORE_CORRUPT", `create initial object mismatch: ${message.id}`);
   }
   freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): void {
     const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); mkdirSync(stagingDir, { recursive: true });
@@ -160,89 +160,12 @@ export class MailModule {
     try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256 ?? sha256Hex(eml.text)); }
     finally { rmSync(staged, { force: true }); fsyncDir(stagingDir); }
   }
-  private operationMessage(operation: OperationRow): MessagePlan {
-    switch (operation.kind) {
-      case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return operation.plan.message;
-      case "agent.create":
-        if (operation.plan.initialMessage !== null) return operation.plan.initialMessage;
-        throw new StoreError("STORE_CORRUPT", "linked create owns no separate initial message");
-      default: throw new StoreError("STORE_CORRUPT", `operation ${operation.kind} owns no message`);
-    }
+  async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> {
+    this.materializer.gated(operationId, proof);
   }
-  private messageHeaders(message: MessagePlan): ParsedEmlHeaders {
-    const path = this.objectPath(message.id); const stat = lstatSync(path, { throwIfNoEntry: false });
-    if (!stat?.isFile() || stat.size !== message.bytes) throw new StoreError("STORE_CORRUPT", `mail object size/type mismatch: ${message.id}`);
-    const bytes = readFileSync(path);
-    if (sha256Hex(bytes) !== message.sha256) throw new StoreError("STORE_CORRUPT", `mail object hash mismatch: ${message.id}`);
-    let headers: ParsedEmlHeaders;
-    try { headers = parseEmlHeaders(bytes, { maxHeaderBytes: message.bytes }); }
-    catch { throw new StoreError("STORE_CORRUPT", `unsupported or corrupt accepted mail headers: ${message.id}`); }
-    if (headers.messageId?.split("@", 1)[0] !== message.id || headers.omaKind !== message.kind) throw new StoreError("STORE_CORRUPT", `mail header mismatch: ${message.id}`);
-    const logicalAddresses = (values: string[] | null): Address[] | null => {
-      if (!values) return null; const logical = values.map(value => logicalReplyAddress(this.store, value, this.paths.society));
-      return logical.some(value => value === null) ? null : logical as Address[];
-    };
-    const sameAddresses = (left: readonly Address[], right: readonly Address[]): boolean => {
-      if (left.length !== right.length) return false; const a = [...left].sort(); const b = [...right].sort();
-      return a.every((value, index) => value === b[index]);
-    };
-    const actualTo = logicalAddresses(headers.to); const actualReplyTo = logicalAddresses(headers.replyTo ?? []);
-    if (!actualTo || !actualReplyTo || !sameAddresses(actualTo, message.to) || !sameAddresses(actualReplyTo, message.replyHeaders.replyTo) || headers.inReplyTo !== message.replyHeaders.inReplyTo || headers.references.length !== message.replyHeaders.references.length || headers.references.some((value, index) => value !== message.replyHeaders.references[index]) || headers.dateMs === null || headers.dateMs !== Math.floor(message.dateMs / 1000) * 1000) throw new StoreError("STORE_CORRUPT", `mail frozen metadata mismatch: ${message.id}`);
-    if (headers.omaContext !== message.contextRevision) throw new StoreError("STORE_CORRUPT", `mail context metadata mismatch: ${message.id}`);
-    const expected = message.approvalFor ?? null; const actual = headers.approvalFor;
-    if (expected) {
-      if (!actual || actual.repo !== expected.repo || actual.targetRef !== expected.targetRef || actual.expectedBase !== expected.expectedBase || actual.candidate !== expected.candidate || actual.policyRevision !== expected.policyRevision) throw new StoreError("STORE_CORRUPT", `mail approval metadata mismatch: ${message.id}`);
-    } else if (actual) throw new StoreError("STORE_CORRUPT", `unexpected mail approval metadata: ${message.id}`);
-    return headers;
-  }
-  private publishDelivery(message: MessagePlan, delivery: DeliveryRow): void {
-    if (delivery.messageId !== message.id || !message.recipients.includes(delivery.recipient)) throw new StoreError("STORE_CORRUPT", `delivery message mismatch for ${delivery.operationId}`);
-    const current = this.inboxCurPath(delivery.recipient, message.id); const fresh = this.inboxNewPath(delivery.recipient, message.id); const object = this.objectPath(message.id);
-    if (lstatSync(current, { throwIfNoEntry: false })) {
-      publishImmutableFile(object, current, message.sha256);
-      if (lstatSync(fresh, { throwIfNoEntry: false })) publishImmutableFile(object, fresh, message.sha256);
-    } else publishImmutableFile(object, fresh, message.sha256);
-  }
-  private operationDeliveries(operationId: string, message: MessagePlan): DeliveryRow[] {
-    const deliveries = this.store.deliveriesForOperation(operationId); const actual = new Set<string>();
-    for (const delivery of deliveries) {
-      if (delivery.operationId !== operationId || delivery.messageId !== message.id || !message.recipients.includes(delivery.recipient) || actual.has(delivery.recipient)) throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operationId}`);
-      actual.add(delivery.recipient);
-    }
-    if (actual.size !== message.recipients.length || message.recipients.some(recipient => !actual.has(recipient))) throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operationId}`);
-    return deliveries;
-  }
-  async publishGated(operationId: string, proof?: SubmissionPublicationEvidence | ContextPublicationEvidence): Promise<void> {
-    const operation = this.store.getOperationById(operationId);
-    if (!operation) throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
-    if (operation.kind === "git.submit") consumeSubmissionPublication(proof, operation);
-    if (operation.kind === "context.publish") consumeContextPublication(proof, operation);
-    const message = this.operationMessage(operation); const deliveries = this.operationDeliveries(operationId, message);
-    this.messageHeaders(message); publishImmutableFile(this.objectPath(message.id), this.archivePath(message.id), message.sha256);
-    for (const delivery of deliveries) { this.publishDelivery(message, delivery); this.store.transaction(() => this.store.markMaterialized(delivery.messageId, delivery.recipient)); }
-  }
-  async materialize(operationId: string): Promise<void> {
-    const operation = this.store.getOperationById(operationId);
-    if (!operation) throw new StoreError("REQUEST_NOT_FOUND", `no operation ${operationId}`);
-    if (operation.kind !== "mail.send" && operation.kind !== "agent.continue") throw new StoreError("INVALID_REQUEST", `operation ${operation.kind} uses gated publication`);
-    const message = operation.plan.message; const deliveries = this.operationDeliveries(operationId, message);
-    this.messageHeaders(message); publishImmutableFile(this.objectPath(message.id), this.archivePath(message.id), message.sha256);
-    for (const delivery of deliveries) { this.publishDelivery(message, delivery); this.store.transaction(() => this.store.markMaterialized(delivery.messageId, delivery.recipient)); }
-  }
+  async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }
   private selectBatch(pending: DeliveryRow[]): DeliveryRow[] {
-    if (pending.length === 0) return [];
-    const direct: DeliveryRow[] = []; const publicList: DeliveryRow[] = [];
-    for (const delivery of pending) (this.isPublicList(delivery) ? publicList : direct).push(delivery);
-    if (direct.length === 0 || publicList.length === 0) return pending.slice(0, this.batchMaxMessages);
-    if (this.batchMaxMessages < 2) throw new StoreError("UNSUPPORTED_PROFILE", "batchMaxMessages must be at least 2 when both batch classes are pending");
-    const out: DeliveryRow[] = [direct[0]!, publicList[0]!]; let di = 1; let pi = 1; let takeDirect = true;
-    while (out.length < this.batchMaxMessages && (di < direct.length || pi < publicList.length)) {
-      if (takeDirect && di < direct.length) out.push(direct[di++]!);
-      else if (!takeDirect && pi < publicList.length) out.push(publicList[pi++]!);
-      else if (di < direct.length) out.push(direct[di++]!); else if (pi < publicList.length) out.push(publicList[pi++]!);
-      takeDirect = !takeDirect;
-    }
-    return out;
+    return selectBatch(pending.map(value => ({ value, publicList: this.isPublicList(value) })), this.batchMaxMessages);
   }
   private isPublicList(delivery: DeliveryRow): boolean {
     const message = this.messagePlan(delivery);
@@ -251,8 +174,9 @@ export class MailModule {
   private messagePlan(delivery: DeliveryRow): MessagePlan {
     const operation = this.store.getOperationById(delivery.operationId);
     if (!operation) throw new StoreError("STORE_CORRUPT", `missing operation ${delivery.operationId}`);
-    const message = this.operationMessage(operation);
-    if (message.id !== delivery.messageId || !message.recipients.includes(delivery.recipient)) throw new StoreError("STORE_CORRUPT", `message plan mismatch for ${delivery.messageId}`);
+    const message = operationMessage(operation);
+    if (message.id !== delivery.messageId || !message.recipients.includes(delivery.recipient))
+      throw new StoreError("STORE_CORRUPT", `message plan mismatch for ${delivery.messageId}`);
     return message;
   }
   private noticeFor(agent: Actor, ids: readonly MessageId[]): string {
@@ -260,7 +184,7 @@ export class MailModule {
     for (const [index, id] of ids.slice(0, 6).entries()) {
       const delivery = this.store.getDelivery(id, agent);
       if (!delivery) throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
-      const message = this.messagePlan(delivery); const headers = this.messageHeaders(message);
+      const message = this.messagePlan(delivery); const headers = this.materializer.headers(message);
       const reply = headers.inReplyTo ?? headers.references.at(-1) ?? null;
       const context = message.contextRevision ? ` context=${contextRevisionDisplayPath(message.contextRevision)}${message.kind === "context" ? "/GOAL.md" : ""}` : "";
       lines.push(`${index + 1}. sender=${oneLine(headers.from)} subject=${oneLine(headers.subject)} kind=${message.kind} path=${mailArchiveDisplayPath(id)}${reply ? ` reply=${reply}` : ""}${context}`);
@@ -280,14 +204,15 @@ export class MailModule {
     const pending = this.selectBatch(this.store.pendingDeliveries(auth.actor)); if (pending.length === 0) return null;
     const batch = { id: generateBatchId(), agent: auth.actor, incarnation: auth.incarnation, messageIds: pending.map(delivery => delivery.messageId), sessionPath: null };
     const notice = this.noticeFor(auth.actor, batch.messageIds);
-    try { this.store.transaction(() => { this.store.insertPreparedBatch(batch); this.store.linkDeliveriesToBatch(batch.id, batch.messageIds); }); }
+    try { this.store.transaction(tx => { tx.insertPreparedBatch(batch); tx.linkDeliveriesToBatch(batch.id, batch.messageIds); }); }
     catch (error) { if (error instanceof StoreError && error.code === "BATCH_CONFLICT") return null; throw error; }
     return this.finishPrepared(batchOf(batch, auth.actor, notice));
   }
   async complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> {
     const batch = this.store.getBatch(evidence.batchId);
     if (!batch) throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
-    if (batch.agent !== auth.actor || auth.incarnation !== evidence.incarnation || batch.incarnation !== evidence.incarnation) throw new StoreError("BATCH_CONFLICT", "batch ownership mismatch");
+    if (batch.agent !== auth.actor || auth.incarnation !== evidence.incarnation || batch.incarnation !== evidence.incarnation)
+      throw new StoreError("BATCH_CONFLICT", "batch ownership mismatch");
     throw new StoreError("SPIKE_UNRESOLVED", "S-03 trusted Pi session-boundary evidence is not implemented");
   }
   async reconcilePending(): Promise<{ examined: number; repaired: number; remaining: number }> {
@@ -302,7 +227,7 @@ export class MailModule {
         const allDone = fresh.length === 0 ? archiveDone : fresh.every(delivery => delivery.materialized === 1) && archiveDone;
         if (allDone) {
           const result = { kind: operation.kind, message: message.id, recipientCount: fresh.length, archivePath: this.archivePath(message.id) };
-          this.store.transaction(() => this.store.setOperationSucceeded(id, JSON.stringify(result))); repaired++;
+          this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify(result))); repaired++;
         } else remaining++;
       } catch (error) { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; remaining++; }
     }
