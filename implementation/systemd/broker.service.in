@@ -6,7 +6,7 @@ StartLimitBurst=5
 [Service]
 Type=notify
 NotifyAccess=main
-ExecStart=@NODE@ @LIBDIR@/dist/entry/broker.js --society @SOCIETY@
+ExecStart=@NODE@ @LIBDIR@/dist/src/entry/broker.js --society @SOCIETY@
 Restart=on-failure
 RestartSec=3s
 KillMode=control-group
