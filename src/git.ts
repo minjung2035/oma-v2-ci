@@ -2,7 +2,7 @@
 // Unresolved sandbox primitives fail closed; no bundle parsing on the host.
 import {
   constants, mkdirSync, mkdtempSync, writeFileSync, existsSync, openSync,
-  fsyncSync, closeSync, renameSync, symlinkSync, readdirSync, statSync,
+  fsyncSync, closeSync, renameSync, symlinkSync, readdirSync,
   lstatSync, chmodSync, rmSync, readFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -10,6 +10,9 @@ import { spawnSync as nodeSpawnSync, type SpawnSyncReturns } from "node:child_pr
 import { createHash } from "node:crypto";
 import type { Actor, Address, AuthContext, BlobDescriptor, ContextEntry, Json, Oid, Receipt, ResourceLimits } from "../implementation/contracts.js";
 import { Store, reused } from "./store.js";
+import type { OperationOf, ValidatedPlan } from "./storage/operation-codec.js";
+import { assertContextDirectory, readContextEntry } from "./storage/context-files.js";
+import { contextEntriesCheck } from "./domain/context-policy.js";
 import { StoreError, classifyError, type EffectKnowledge } from "./domain/errors.js";
 import { receiptOfOperation as receiptOf } from "./protocol/receipts.js";
 import { MailModule, buildEml, expandAddresses, fsyncDir, defaultReplyTo, defaultLogicalReplyTo, actorAddress, listAddress } from "./mail.js";
@@ -72,6 +75,7 @@ export class GitModule {
     integration: IntegrationPolicy | null = EMPTY_INTEGRATION_POLICY,
     policyRevisionReader: PolicyRevisionReader | null = null,
   ) {
+    this.store.bindRepositoryIdentity({ society: paths.society });
     this.legacyDirect = integration === null;
     this.integration = integration ?? EMPTY_INTEGRATION_POLICY;
     this.policyRevisionReader = policyRevisionReader;
@@ -83,33 +87,24 @@ export class GitModule {
     if (oids.some(oid => !isValidFullOid(oid) || oid.length !== (format === "sha1" ? 40 : 64))) throw new StoreError("INVALID_OID", `OID does not match repository object format ${format}`);
     return format;
   }
-  /** Only a confirmed pre-publication rejection can become a failed row.
-   * On recovery the caller cannot infer historical effect absence from an error.
-   */
   private rejectAcceptedSubmit(operation: string, error: StoreError, phase: "accepted" | "recovering", effectKnowledge: EffectKnowledge): never {
-    const policy = classifyError({
-      code: error.code, phase, effectKnowledge,
-      observationKind: error.code === "STREAM_INVALID" || error.code === "STORE_CORRUPT" ? "corrupt" : "rejected",
-    });
+    const policy = classifyError({ code: error.code, phase, effectKnowledge,
+      observationKind: error.code === "STREAM_INVALID" || error.code === "STORE_CORRUPT" ? "corrupt" : "rejected" });
     if (policy.terminal === "failed") this.store.transaction(() => this.store.setOperationFailed(operation, policy.code));
     if (policy.terminal === "unknown") this.store.transaction(() => this.store.setOperationUnknown(operation));
     if (policy.code !== error.code) throw new StoreError(policy.code, "accepted submit artifact failed integrity validation");
     throw error;
   }
-  async submit(
-    auth: AuthContext, key: string,
+  async submit(auth: AuthContext, key: string,
     input: { candidate: Oid; exportRef: string; prerequisites: Oid[]; to: string[]; subject: string; body: string; paths: string[]; bundle?: BlobDescriptor },
-    bytes: AsyncIterable<Uint8Array>,
-  ): Promise<Receipt> {
+    bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     const newHash = requestHash("git.submit", canonicalRequestParams("git.submit", input));
     const claim = this.store.claimKey(auth.actor, key, newHash);
     if (claim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
     this.objectFormat(this.paths.projectGit, [input.candidate, ...input.prerequisites]);
-    const opId = generateOperationId();
-    const messageId = generateMessageId(opId, 0);
-    const staging = submitStagingPathAt(this.paths.stateRoot, opId);
-    mkdirSync(staging, { recursive: true });
+    const opId = generateOperationId(); const messageId = generateMessageId(opId, 0);
+    const staging = submitStagingPathAt(this.paths.stateRoot, opId); mkdirSync(staging, { recursive: true });
     const bundlePath = submitBundlePathAt(this.paths.stateRoot, opId);
     let digest: string | null = null;
     if (input.bundle) {
@@ -134,15 +129,11 @@ export class GitModule {
     const route = expandAddresses(this.store, logicalTo, this.paths.society);
     const publishedRef = publishedRefFor(auth.actor, opId);
     const eml = await this.resultEml(auth.actor, { candidate: input.candidate, subject: input.subject, body: input.body, paths: input.paths, to: route.displayTo, publishedRef }, messageId);
-    const plan = {
-      kind: "git.submit" as const, candidate: input.candidate, exportRef: input.exportRef, prerequisites: input.prerequisites,
+    const plan = { kind: "git.submit" as const, candidate: input.candidate, exportRef: input.exportRef, prerequisites: input.prerequisites,
       bundle: input.bundle ? { path: bundlePath, sha256: digest!, bytes: input.bundle.bytes } : null, publishedRef,
-      message: {
-        id: messageId, objectPath: mailObjectRelativePath(messageId), sha256: eml.sha256, bytes: eml.bytes,
+      message: { id: messageId, objectPath: mailObjectRelativePath(messageId), sha256: eml.sha256, bytes: eml.bytes,
         dateMs: eml.dateMs, to: logicalTo, recipients: route.recipients, kind: "result" as const, contextRevision: null,
-        replyHeaders: { replyTo: defaultLogicalReplyTo(auth.actor, logicalTo), inReplyTo: null, references: [] },
-      },
-    };
+        replyHeaders: { replyTo: defaultLogicalReplyTo(auth.actor, logicalTo), inReplyTo: null, references: [] } } };
     this.mail.freezeObject(messageId, eml);
     const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
     this.store.transaction(() => {
@@ -174,12 +165,10 @@ export class GitModule {
   private async resultEml(actor: Actor, result: { candidate: Oid; subject: string; body: string; paths: string[]; to: string[]; publishedRef: string }, messageId: string): Promise<{ text: string; bytes: number; sha256: string; dateMs: number }> {
     const fetchHint = `git fetch origin ${result.publishedRef}; git show FETCH_HEAD\n`;
     const bodyText = `${result.body}\n\n게시됨: ${result.publishedRef}\nCommit: ${result.candidate}\n${result.paths.length > 0 ? `경로: ${result.paths.join(", ")}\n` : ""}${fetchHint}`;
-    const eml = await buildEml({
-      from: `${actor}@${this.paths.society}.oma.invalid`, to: result.to,
+    const eml = await buildEml({ from: `${actor}@${this.paths.society}.oma.invalid`, to: result.to,
       replyTo: defaultReplyTo(actorAddress(actor, this.paths.society), result.to), subject: result.subject,
       kind: "result", contextRevision: null, inReplyTo: null, references: [],
-      messageId: `${messageId}@${this.paths.society}.oma.invalid`, body: bodyText,
-    });
+      messageId: `${messageId}@${this.paths.society}.oma.invalid`, body: bodyText });
     return { text: eml.text, bytes: eml.bytes, sha256: eml.sha256, dateMs: eml.dateMs };
   }
   private canonicalHas(oid: string): boolean {
@@ -285,8 +274,7 @@ export class GitModule {
     }
   }
   async integrate(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {
-    const previous = this.integrationTail;
-    let release: (() => void) | undefined;
+    const previous = this.integrationTail; let release: (() => void) | undefined;
     this.integrationTail = new Promise<void>(resolve => { release = resolve; });
     await previous;
     try { return await this.integrateUnsafe(auth, key, input); } finally { release?.(); }
@@ -302,8 +290,7 @@ export class GitModule {
     const main = this.currentMain();
     if (main !== expected) throw new StoreError("STALE_BASE", "main differs from expected");
     const opId = generateOperationId();
-    const checkProfileDigest = checkDigest(this.integration.checks);
-    const policyRevision = this.integration.policyRevision;
+    const checkProfileDigest = checkDigest(this.integration.checks); const policyRevision = this.integration.policyRevision;
     const result = { kind: "git.integrate" as const, base: expected, candidate, target: "refs/heads/main" as const, policyRevision, changed: main !== candidate };
     const plan = { kind: "git.integrate", repo: "project", target: "refs/heads/main", base: expected, candidate, policyRevision, checkProfileDigest, result };
     this.store.transaction(() => this.store.claimOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash, kind: "git.integrate", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) }));
@@ -344,7 +331,6 @@ export class GitModule {
     if (typeof finalRevision !== "string" || finalRevision.length === 0 || finalRevision !== policyRevision) fail("POLICY_CHANGED", "policy changed before CAS");
     const cas = spawnSync("git", ["--git-dir", this.paths.projectGit, "update-ref", "refs/heads/main", candidate, expected], { env: gitEnv, encoding: "utf8" });
     if (gitUncertain(cas) || cas.status !== 0) {
-      // Process failure after attempting CAS does not prove that the ref stayed B.
       this.store.transaction(() => this.store.setOperationUnknown(opId));
       return receiptOf(this.store.getOperationById(opId)!);
     }
@@ -366,8 +352,7 @@ export class GitModule {
     throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE bounded writable work area is not verified");
   }
   async publishContext(auth: AuthContext, key: string, input: { expected: Oid | null; entries: ContextEntry[]; content: BlobDescriptor }, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
-    const previous = this.integrationTail;
-    let release: (() => void) | undefined;
+    const previous = this.integrationTail; let release: (() => void) | undefined;
     this.integrationTail = new Promise<void>(resolve => { release = resolve; });
     await previous;
     try { return await this.publishContextUnsafe(auth, key, input, bytes); } finally { release?.(); }
@@ -377,11 +362,12 @@ export class GitModule {
     const claim = this.store.claimKey(auth.actor, key, newHash);
     if (claim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
+    const manifestError = contextEntriesCheck(input.entries, { requireSorted: true, contentBytes: input.content.bytes });
+    if (manifestError) throw new StoreError("INVALID_REQUEST", manifestError);
     const current = this.currentContext();
     if (current !== input.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
     if (existsSync(this.paths.contextGit)) this.objectFormat(this.paths.contextGit, input.expected ? [input.expected] : []);
-    const streamParts: Buffer[] = [];
-    let total = 0;
+    const streamParts: Buffer[] = []; let total = 0;
     for await (const chunk of bytes) {
       total += chunk.length;
       if (total > input.content.bytes) throw new StoreError("STREAM_INVALID", "context exceeds descriptor bytes");
@@ -389,45 +375,32 @@ export class GitModule {
     }
     const content = Buffer.concat(streamParts);
     if (content.length !== input.content.bytes || sha256Of(content) !== input.content.sha256) throw new StoreError("STREAM_INVALID", "context digest/bytes mismatch");
-    const advertised = input.entries.reduce((sum, entry) => sum + entry.bytes, 0);
-    if (!Number.isSafeInteger(advertised) || advertised !== content.length) throw new StoreError("INVALID_REQUEST", "context entries do not consume content");
-    if (!input.entries.some(entry => entry.path === "GOAL.md")) throw new StoreError("INVALID_REQUEST", "GOAL.md is required");
-    const seen = new Set<string>();
     let verifyOffset = 0;
     for (const entry of input.entries) {
-      const pathError = contextPathCheck(entry.path);
-      if (pathError || seen.has(entry.path)) throw new StoreError("INVALID_REQUEST", pathError ?? `duplicate context path ${entry.path}`);
-      seen.add(entry.path);
-      const invalid = contextFileCheck(entry.path, content.subarray(verifyOffset, verifyOffset + entry.bytes));
+      const data = content.subarray(verifyOffset, verifyOffset + entry.bytes);
+      const invalid = contextFileCheck(entry.path, data);
       if (invalid) throw new StoreError("INVALID_REQUEST", `${invalid}: ${entry.path}`);
+      if (sha256Of(data) !== entry.sha256) throw new StoreError("STREAM_INVALID", `context file digest mismatch: ${entry.path}`);
       verifyOffset += entry.bytes;
     }
-    const opId = generateOperationId();
-    const staging = contextStagingPathAt(this.paths.stateRoot, opId);
-    const treeDir = join(staging, "tree");
-    mkdirSync(treeDir, { recursive: true });
+    const opId = generateOperationId(); const staging = contextStagingPathAt(this.paths.stateRoot, opId);
+    const treeDir = join(staging, "tree"); mkdirSync(treeDir, { recursive: true }); assertContextDirectory(treeDir);
     let offset = 0;
     for (const entry of input.entries) {
       const data = content.subarray(offset, offset + entry.bytes); offset += entry.bytes;
-      if (sha256Of(data) !== entry.sha256) throw new StoreError("STREAM_INVALID", `context file digest mismatch: ${entry.path}`);
-      const absolute = join(treeDir, entry.path);
-      mkdirSync(join(absolute, ".."), { recursive: true });
-      const fd = openSync(absolute, "wx", 0o600);
+      const absolute = join(treeDir, entry.path); const parent = join(absolute, "..");
+      mkdirSync(parent, { recursive: true }); assertContextDirectory(parent);
+      const fd = openSync(absolute, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
     }
     fsyncAll(treeDir);
     const candidate = this.prepareContextCandidate(treeDir, input.entries, current);
-    const messageId = generateMessageId(opId, 0);
-    const eml = await this.contextEml(auth.actor, messageId, candidate);
+    const messageId = generateMessageId(opId, 0); const eml = await this.contextEml(auth.actor, messageId, candidate);
     this.mail.freezeObject(messageId, eml);
-    const plan = {
-      kind: "context.publish" as const, base: current, candidate, target: "refs/heads/main" as const, entries: input.entries, stagingPath: staging,
-      message: {
-        id: messageId, objectPath: mailObjectRelativePath(messageId), sha256: eml.sha256, bytes: eml.bytes,
+    const plan = { kind: "context.publish" as const, base: current, candidate, target: "refs/heads/main" as const, entries: input.entries, stagingPath: staging,
+      message: { id: messageId, objectPath: mailObjectRelativePath(messageId), sha256: eml.sha256, bytes: eml.bytes,
         dateMs: eml.dateMs, to: ["residents"] as Address[], recipients: [] as Actor[], kind: "context" as const,
-        contextRevision: candidate, replyHeaders: { replyTo: ["residents"] as Address[], inReplyTo: null, references: [] },
-      },
-    };
+        contextRevision: candidate, replyHeaders: { replyTo: ["residents"] as Address[], inReplyTo: null, references: [] } } };
     const outcome = { claim: "inserted" as "inserted" | "retry" };
     this.store.transaction(() => {
       assertCurrentActor(this.store, auth, "context.publish");
@@ -437,7 +410,7 @@ export class GitModule {
       this.store.insertDeliveries(plan.message.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
     });
     if (outcome.claim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
-    this.commitContext(opId, treeDir, input.entries, current);
+    this.commitContext(opId);
     if (this.currentContext() !== candidate) throw new StoreError("REF_STATE_UNKNOWN", "context main does not match frozen candidate");
     await this.mail.publishGated(opId);
     const result = { kind: "context.publish" as const, previous: current, revision: candidate, message: messageId, recipientCount: plan.message.recipients.length };
@@ -445,13 +418,17 @@ export class GitModule {
     return receiptOf(this.store.getOperationById(opId)!);
   }
   private prepareContextCandidate(treeDir: string, entries: ContextEntry[], expected: Oid | null): Oid {
+    const invalid = contextEntriesCheck(entries, { requireSorted: true });
+    if (invalid) throw new StoreError("STORE_CORRUPT", invalid);
+    assertContextDirectory(treeDir);
+    // Verify all frozen source bytes before invoking a materializing Git command.
+    for (const entry of entries) readContextEntry(treeDir, entry);
     if (!existsSync(this.paths.contextGit)) {
       mkdirSync(this.paths.contextGit, { recursive: true });
       git(this.paths.contextGit, ["--git-dir", this.paths.contextGit, "init", "--bare"]);
     }
     const contextFormat = this.objectFormat(this.paths.contextGit, expected ? [expected] : []);
-    const work = join(treeDir, "..", "commit-work");
-    mkdirSync(work, { recursive: true });
+    const work = join(treeDir, "..", "commit-work"); mkdirSync(work, { recursive: true }); assertContextDirectory(work);
     const gitdir = join(work, ".git");
     const contextEnv: NodeJS.ProcessEnv = {
       ...gitEnv, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "broker@oma.invalid", GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: "broker@oma.invalid",
@@ -468,8 +445,13 @@ export class GitModule {
     run(["-C", work, "init", "-q", `--object-format=${contextFormat}`]);
     if (expected) { run(["-C", work, "fetch", "--no-tags", this.paths.contextGit, "refs/heads/main"]); run(["-C", work, "checkout", "--detach", "FETCH_HEAD"]); }
     for (const entry of entries) {
-      const destination = join(work, entry.path);
-      mkdirSync(join(destination, ".."), { recursive: true }); writeFileSync(destination, readFileSync(join(treeDir, entry.path)));
+      const data = readContextEntry(treeDir, entry);
+      const destination = join(work, entry.path); const parent = join(destination, "..");
+      mkdirSync(parent, { recursive: true }); assertContextDirectory(parent);
+      const existing = lstatSync(destination, { throwIfNoEntry: false });
+      if (existing && !existing.isFile()) throw new StoreError("STORE_CORRUPT", `context work entry is not regular: ${entry.path}`);
+      const fd = openSync(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+      try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
     }
     this.cleanContextExtras(work, entries.map(entry => entry.path));
     run(["-C", work, "add", "-f", "-A"]);
@@ -485,43 +467,44 @@ export class GitModule {
   }
   private async contextEml(actor: Actor, messageId: string, candidate: Oid) {
     const residents = listAddress("residents", this.paths.society);
-    return buildEml({
-      from: actorAddress(actor, this.paths.society), to: [residents], replyTo: [residents],
+    return buildEml({ from: actorAddress(actor, this.paths.society), to: [residents], replyTo: [residents],
       subject: "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
-      messageId: `${messageId}@${this.paths.society}.oma.invalid`,
-      body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n`,
-    });
+      messageId: `${messageId}@${this.paths.society}.oma.invalid`, body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` });
   }
-  private commitContext(opId: string, treeDir: string, entries: ContextEntry[], expected: Oid | null): Oid {
+  private commitContext(opId: string): Oid {
     const accepted = this.store.getOperationById(opId);
     if (!accepted || accepted.kind !== "context.publish") throw new StoreError("STORE_CORRUPT", "context operation missing before publication");
-    let plan: { candidate: Oid };
-    try { plan = JSON.parse(accepted.planJson); } catch { throw new StoreError("STORE_CORRUPT", "context plan corrupt before publication"); }
-    const work = join(treeDir, "..", "commit-work");
+    const plan = accepted.plan;
+    const work = join(plan.stagingPath, "commit-work"); assertContextDirectory(work);
     const candidate = git(work, ["rev-parse", "HEAD"]).stdout.trim();
     if (candidate !== plan.candidate) throw new StoreError("STORE_CORRUPT", "staged context candidate differs from accepted plan");
     git(this.paths.contextGit, ["--git-dir", this.paths.contextGit, "fetch", "--no-tags", work, "HEAD"]);
-    const cas = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "update-ref", "refs/heads/main", candidate, expected ?? ""], { env: gitEnv, encoding: "utf8" });
+    const cas = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "update-ref", plan.target, candidate, plan.base ?? ""], { env: gitEnv, encoding: "utf8" });
     if (gitUncertain(cas)) throw gitObservationError("context CAS", cas);
     if (cas.status !== 0) throw new StoreError("CONTEXT_CONFLICT", "context CAS failed");
-    this.publishContextSnapshot(candidate, entries, work);
+    this.publishContextSnapshot(plan, work);
     return candidate;
   }
-  /** CTX-004: immutable revision then durable current rename. */
-  private publishContextSnapshot(candidate: Oid, entries: ContextEntry[], source: string): void {
-    const revisionsDir = join(this.paths.worldDir, "context", "revisions");
-    mkdirSync(revisionsDir, { recursive: true });
+  /** Accepted-operation entry point: callers cannot substitute a shape-only plan. */
+  private publishContextSnapshot(plan: ValidatedPlan<"context.publish">, source: string): void {
+    this.publishSnapshotFiles(plan.candidate, plan.entries, source);
+  }
+  /** CTX-004: also used by mirror repair only after canonical-tree verification. */
+  private publishSnapshotFiles(candidate: Oid, entries: ContextEntry[], source: string): void {
+    const invalid = contextEntriesCheck(entries, { requireSorted: true });
+    if (invalid || !isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", invalid ?? "invalid context revision");
+    assertContextDirectory(source);
+    const revisionsDir = join(this.paths.worldDir, "context", "revisions"); mkdirSync(revisionsDir, { recursive: true }); assertContextDirectory(revisionsDir);
     const final = contextRevisionPathAt(this.paths.worldDir, candidate);
-    if (!existsSync(final)) {
-      const temporary = join(revisionsDir, `.prepare-${candidate}-${generateOperationId()}`);
-      mkdirSync(temporary, { recursive: true });
+    if (!lstatSync(final, { throwIfNoEntry: false })) {
+      const temporary = join(revisionsDir, `.prepare-${candidate}-${generateOperationId()}`); mkdirSync(temporary, { recursive: true });
       try {
         for (const entry of entries) {
-          const destination = join(temporary, entry.path);
-          mkdirSync(join(destination, ".."), { recursive: true });
-          const data = readFileSync(join(source, entry.path));
-          if (data.length !== entry.bytes || sha256Of(data) !== entry.sha256) throw new StoreError("STORE_CORRUPT", `context source mismatch ${entry.path}`);
-          writeFileSync(destination, data, { flag: "wx", mode: 0o444 });
+          const data = readContextEntry(source, entry);
+          const destination = join(temporary, entry.path); const parent = join(destination, "..");
+          mkdirSync(parent, { recursive: true }); assertContextDirectory(parent);
+          const fd = openSync(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o444);
+          try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
         }
         fsyncAll(temporary);
         if (existsSync(join(temporary, "decisions"))) chmodSync(join(temporary, "decisions"), 0o555);
@@ -534,35 +517,28 @@ export class GitModule {
         }
       }
     }
-    if (!lstatSync(final).isDirectory()) throw new StoreError("STORE_CORRUPT", "context revision is not a directory");
+    assertContextDirectory(final);
     const expectedPaths = new Set(entries.map(entry => entry.path));
     const verifyTree = (directory: string, relative = ""): void => {
       for (const name of readdirSync(directory)) {
-        const path = relative ? `${relative}/${name}` : name;
-        const stat = lstatSync(join(directory, name));
+        const path = relative ? `${relative}/${name}` : name; const stat = lstatSync(join(directory, name));
         if (stat.isDirectory() && path === "decisions" && entries.some(entry => entry.path.startsWith("decisions/"))) verifyTree(join(directory, name), path);
         else if (!stat.isFile() || !expectedPaths.has(path)) throw new StoreError("STORE_CORRUPT", `unexpected context entry ${path}`);
       }
     };
     verifyTree(final);
-    for (const entry of entries) {
-      const path = join(final, entry.path);
-      if (!lstatSync(path).isFile()) throw new StoreError("STORE_CORRUPT", `context revision mismatch ${entry.path}`);
-      const data = readFileSync(path);
-      if (data.length !== entry.bytes || sha256Of(data) !== entry.sha256) throw new StoreError("STORE_CORRUPT", `context revision mismatch ${entry.path}`);
-      chmodSync(path, 0o444);
-    }
+    for (const entry of entries) { readContextEntry(final, entry); chmodSync(join(final, entry.path), 0o444); }
     if (existsSync(join(final, "decisions"))) chmodSync(join(final, "decisions"), 0o555);
     chmodSync(final, 0o555); fsyncAll(final);
-    const contextRoot = join(this.paths.worldDir, "context");
+    const contextRoot = join(this.paths.worldDir, "context"); assertContextDirectory(contextRoot);
     const link = join(contextRoot, `.current-${generateOperationId()}`);
     symlinkSync(contextRevisionLinkFor(candidate), link); renameSync(link, join(contextRoot, "current")); fsyncDir(contextRoot);
   }
   private cleanContextExtras(root: string, keep: string[], relative = ""): void {
+    assertContextDirectory(join(root, relative));
     for (const entry of readdirSync(join(root, relative))) {
       if (relative === "" && entry === ".git") continue;
-      const path = relative ? `${relative}/${entry}` : entry;
-      const absolute = join(root, path);
+      const path = relative ? `${relative}/${entry}` : entry; const absolute = join(root, path);
       if (lstatSync(absolute).isDirectory()) {
         this.cleanContextExtras(root, keep, path);
         if (!keep.some(key => key.startsWith(`${path}/`))) rmSync(absolute, { recursive: true, force: true });
@@ -570,15 +546,13 @@ export class GitModule {
     }
   }
   repairContextMirror(): void {
-    const revision = this.currentContext();
-    if (!revision) return;
+    const revision = this.currentContext(); if (!revision) return;
     const immutable = contextRevisionPathAt(this.paths.worldDir, revision);
     if (!existsSync(immutable)) throw new StoreError("REF_STATE_UNKNOWN", `immutable context revision ${revision} missing; reconcile accepted context first`);
-    if (!lstatSync(immutable).isDirectory()) throw new StoreError("STORE_CORRUPT", "context revision mirror is not a directory");
+    assertContextDirectory(immutable);
     const listing = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "ls-tree", "-r", "-z", "--full-tree", revision], { env: gitEnv, encoding: "utf8" });
     if (gitUncertain(listing) || listing.status !== 0) throw gitObservationError("context revision tree", listing);
-    const entries: ContextEntry[] = [];
-    const expected = new Map<string, string>();
+    const entries: ContextEntry[] = []; const expected = new Map<string, string>();
     for (const line of listing.stdout.split("\0").filter(Boolean)) {
       const match = /^(100644) blob ([0-9a-f]{40}|[0-9a-f]{64})\t(.+)$/.exec(line);
       if (!match || contextPathCheck(match[3])) throw new StoreError("STORE_CORRUPT", "context canonical tree contains an unsupported entry");
@@ -587,13 +561,14 @@ export class GitModule {
     if (!expected.has("GOAL.md")) throw new StoreError("STORE_CORRUPT", "context canonical tree has no GOAL.md");
     const seen = new Set<string>();
     const verify = (relative = ""): void => {
+      assertContextDirectory(join(immutable, relative));
       for (const name of readdirSync(join(immutable, relative))) {
-        const path = relative ? `${relative}/${name}` : name;
-        const absolute = join(immutable, path);
-        const stat = lstatSync(absolute);
+        const path = relative ? `${relative}/${name}` : name; const absolute = join(immutable, path); const stat = lstatSync(absolute);
         if (stat.isDirectory() && path === "decisions" && [...expected.keys()].some(key => key.startsWith("decisions/"))) { verify(path); continue; }
         if (!stat.isFile() || !expected.has(path)) throw new StoreError("STORE_CORRUPT", `unexpected context mirror entry ${path}`);
-        const bytes = readFileSync(absolute);
+        const fd = openSync(absolute, constants.O_RDONLY | constants.O_NOFOLLOW);
+        let bytes: Buffer;
+        try { bytes = readFileSync(fd); } finally { closeSync(fd); }
         if (contextFileCheck(path, bytes)) throw new StoreError("STORE_CORRUPT", `context mirror policy mismatch ${path}`);
         const canonical = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "hash-object", "--stdin"], { input: bytes, env: gitEnv, encoding: "utf8" });
         if (gitUncertain(canonical) || canonical.status !== 0) throw gitObservationError("context mirror object hash", canonical);
@@ -603,17 +578,15 @@ export class GitModule {
     };
     verify();
     if (seen.size !== expected.size) throw new StoreError("STORE_CORRUPT", "context mirror is incomplete");
-    this.publishContextSnapshot(revision, entries, immutable);
+    // This is a fresh canonical observation, not normalization of a durable plan.
+    entries.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+    this.publishSnapshotFiles(revision, entries, immutable);
   }
-  private async reconcileContext(op: { id: string; planJson: string }): Promise<void> {
-    let plan: { base: Oid | null; candidate: Oid; entries: ContextEntry[]; stagingPath: string; message: { id: string; recipients?: string[] } };
-    try { plan = JSON.parse(op.planJson) as typeof plan; } catch { throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`); }
-    if (!plan.candidate || !plan.message?.id) throw new StoreError("STORE_CORRUPT", "accepted context has no frozen candidate/message");
-    const treeDir = join(plan.stagingPath, "tree");
-    const main = this.currentContext();
+  private async reconcileContext(op: OperationOf<"context.publish">): Promise<void> {
+    const plan = op.plan; const treeDir = join(plan.stagingPath, "tree"); const main = this.currentContext();
     if (main !== plan.candidate && main !== plan.base) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
     if (main !== plan.candidate) {
-      if (!existsSync(treeDir)) throw new StoreError("STORE_CORRUPT", "accepted context tree is missing");
+      assertContextDirectory(treeDir);
       const rebuilt = this.prepareContextCandidate(treeDir, plan.entries, plan.base);
       if (rebuilt !== plan.candidate) throw new StoreError("STORE_CORRUPT", "accepted context candidate cannot be reproduced");
       const haveCandidate = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "cat-file", "-e", `${plan.candidate}^{commit}`], { env: gitEnv, encoding: "utf8" });
@@ -623,14 +596,13 @@ export class GitModule {
         const fetched = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "fetch", "--no-tags", work, "HEAD"], { env: gitEnv, encoding: "utf8" });
         if (gitUncertain(fetched) || fetched.status !== 0) throw new StoreError("REF_STATE_UNKNOWN", "context candidate cannot be recovered");
       }
-      const updated = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "update-ref", "refs/heads/main", plan.candidate, plan.base ?? ""], { env: gitEnv, encoding: "utf8" });
+      const updated = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "update-ref", plan.target, plan.candidate, plan.base ?? ""], { env: gitEnv, encoding: "utf8" });
       if (gitUncertain(updated)) throw gitObservationError("recovery context CAS", updated);
       if (updated.status !== 0) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
     }
-    this.publishContextSnapshot(plan.candidate, plan.entries, join(plan.stagingPath, "commit-work"));
+    this.publishContextSnapshot(plan, join(plan.stagingPath, "commit-work"));
     if (this.currentContext() !== plan.candidate) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
-    const recipients = (plan.message.recipients ?? []) as Actor[];
-    const result = { kind: "context.publish" as const, previous: plan.base, revision: plan.candidate, message: plan.message.id, recipientCount: recipients.length };
+    const result = { kind: "context.publish" as const, previous: plan.base, revision: plan.candidate, message: plan.message.id, recipientCount: plan.message.recipients.length };
     await this.mail.publishGated(op.id);
     this.store.transaction(() => this.store.setOperationSucceeded(op.id, JSON.stringify(result)));
   }
@@ -644,8 +616,7 @@ export class GitModule {
     throw new StoreError("INTERNAL_ERROR", "cannot observe context main ref");
   }
   async reconcile(operationId: string): Promise<void> {
-    const previous = this.integrationTail;
-    let release: (() => void) | undefined;
+    const previous = this.integrationTail; let release: (() => void) | undefined;
     this.integrationTail = new Promise<void>(resolve => { release = resolve; });
     await previous;
     try { await this.reconcileUnsafe(operationId); } finally { release?.(); }
@@ -656,18 +627,13 @@ export class GitModule {
     if (op.kind === "git.integrate") { await this.reconcileIntegrate(op); return; }
     if (op.kind === "context.publish") { await this.reconcileContext(op); return; }
     if (op.kind !== "git.submit") return;
-    let plan: { publishedRef: string; candidate: Oid; exportRef: string; prerequisites: Oid[]; bundle?: { path: string; sha256: string; bytes: number } | null; message?: { id: string; recipients?: string[] } };
-    try { plan = JSON.parse(op.planJson) as typeof plan; } catch { throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`); }
+    const plan = op.plan;
     const refOid = spawnSync("git", ["--git-dir", this.paths.projectGit, "rev-parse", "--verify", "--quiet", plan.publishedRef], { env: gitEnv, encoding: "utf8" });
     if (gitUncertain(refOid)) throw gitObservationError(`published ref ${plan.publishedRef}`, refOid);
     const observedOid = refOid.stdout.trim();
     if (refOid.status === 0) {
       if (!isValidFullOid(observedOid) || refOid.stderr.trim()) throw gitObservationError(`published ref ${plan.publishedRef}`, refOid);
-      if (observedOid !== plan.candidate) {
-        // A different ref value on recovery cannot disprove an earlier publication.
-        this.store.transaction(() => this.store.setOperationUnknown(op.id));
-        return;
-      }
+      if (observedOid !== plan.candidate) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
     } else {
       if (refOid.status !== 1 || observedOid || refOid.stderr.trim()) throw gitObservationError(`published ref ${plan.publishedRef}`, refOid);
       if (plan.bundle) {
@@ -683,20 +649,13 @@ export class GitModule {
       this.publishRef(plan.publishedRef, plan.candidate);
     }
     await this.mail.publishGated(operationId);
-    let result: unknown;
-    try {
-      result = op.resultJson ? JSON.parse(op.resultJson) : { kind: "git.submit", candidate: plan.candidate, publishedRef: plan.publishedRef, message: plan.message?.id ?? "", recipientCount: plan.message?.recipients?.length ?? 0 };
-    } catch { throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt result`); }
+    const result = { kind: "git.submit", candidate: plan.candidate, publishedRef: plan.publishedRef, message: plan.message.id, recipientCount: plan.message.recipients.length };
     this.store.transaction(() => this.store.setOperationSucceeded(operationId, JSON.stringify(result)));
   }
-  private async reconcileIntegrate(op: { id: string; actor: Actor; planJson: string }): Promise<void> {
-    let plan: { base: Oid; candidate: Oid; policyRevision: string; checkProfileDigest: string; result?: unknown };
-    try { plan = JSON.parse(op.planJson) as typeof plan; } catch { throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`); }
-    const main = this.currentMain();
-    if (main === plan.candidate) {
-      this.store.transaction(() => this.store.setOperationSucceeded(op.id, JSON.stringify(plan.result ?? { kind: "git.integrate", base: plan.base, candidate: plan.candidate, target: "refs/heads/main", policyRevision: plan.policyRevision, changed: true })));
-      return;
-    }
+  private async reconcileIntegrate(op: OperationOf<"git.integrate">): Promise<void> {
+    const plan = op.plan; const main = this.currentMain();
+    const result = plan.result ?? { kind: "git.integrate", base: plan.base, candidate: plan.candidate, target: plan.target, policyRevision: plan.policyRevision, changed: plan.base !== plan.candidate };
+    if (main === plan.candidate) { this.store.transaction(() => this.store.setOperationSucceeded(op.id, JSON.stringify(result))); return; }
     if (main !== plan.base) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
     const fail = (code: Parameters<Store["setOperationFailed"]>[1], message: string): never => {
       this.store.transaction(() => this.store.setOperationFailed(op.id, code)); throw new StoreError(code, message);
@@ -735,7 +694,7 @@ export class GitModule {
     if (typeof revision !== "string" || revision.length === 0 || revision !== plan.policyRevision) fail("POLICY_CHANGED", "integration policy changed during recovery");
     const cas = spawnSync("git", ["--git-dir", this.paths.projectGit, "update-ref", "refs/heads/main", plan.candidate, plan.base], { env: gitEnv, encoding: "utf8" });
     if (gitUncertain(cas) || cas.status !== 0) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
-    this.store.transaction(() => this.store.setOperationSucceeded(op.id, JSON.stringify(plan.result ?? { kind: "git.integrate", base: plan.base, candidate: plan.candidate, target: "refs/heads/main", policyRevision: plan.policyRevision, changed: true })));
+    this.store.transaction(() => this.store.setOperationSucceeded(op.id, JSON.stringify(result)));
   }
   knownRefs(): { main: string; published: string[] } {
     const main = this.currentMain();
@@ -745,14 +704,15 @@ export class GitModule {
   }
 }
 function statBytes(path: string): number {
-  const stat = lstatSync(path);
-  return stat.isFile() && stat.nlink === 1 ? stat.size : -1;
+  const stat = lstatSync(path); return stat.isFile() && stat.nlink === 1 ? stat.size : -1;
 }
 function fsyncAll(dir: string): void {
+  assertContextDirectory(dir);
   for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) { fsyncAll(path); continue; }
-    const fd = openSync(path, "r");
+    const path = join(dir, name); const stat = lstatSync(path);
+    if (stat.isDirectory()) { fsyncAll(path); continue; }
+    if (!stat.isFile()) throw new StoreError("STORE_CORRUPT", `non-regular context entry ${path}`);
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
     try { fsyncSync(fd); } finally { closeSync(fd); }
   }
   fsyncDir(dir);
