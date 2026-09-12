@@ -2,12 +2,12 @@
  * operation decoder. A TypeScript brand is not proof about the filesystem.
  * Parent observations are not an openat2/kernel containment proof.
  */
-import { constants, openSync, closeSync, fstatSync, lstatSync, readFileSync } from "node:fs";
+import { constants, openSync, closeSync, fstatSync, lstatSync, readSync } from "node:fs";
 import { isAbsolute, join, parse } from "node:path";
 import type { ContextEntry } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { sha256Hex } from "../hash.js";
-import { contextPathCheck } from "../validate.js";
+import { contextPathCheck, contextFileCheck } from "../domain/context-policy.js";
 
 export function assertContextDirectory(path: string): void {
   if (!isAbsolute(path)) throw new StoreError("STORE_CORRUPT", "context root must be absolute");
@@ -21,8 +21,27 @@ export function assertContextDirectory(path: string): void {
   }
 }
 
+/** Consume at most the frozen length plus one byte. A growing file must not
+ * turn a readFileSync-to-EOF operation into an unbounded allocation.
+ */
+function readFrozenLength(fd: number, length: number, path: string): Buffer {
+  const chunks: Buffer[] = [];
+  let remaining = length;
+  while (remaining > 0) {
+    const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, remaining));
+    const count = readSync(fd, chunk, 0, chunk.length, null);
+    if (count === 0) throw new StoreError("STORE_CORRUPT", `context source was truncated: ${path}`);
+    chunks.push(chunk.subarray(0, count));
+    remaining -= count;
+  }
+  const probe = Buffer.allocUnsafe(1);
+  if (readSync(fd, probe, 0, 1, null) !== 0)
+    throw new StoreError("STORE_CORRUPT", `context source grew beyond its descriptor: ${path}`);
+  return Buffer.concat(chunks, length);
+}
+
 /** Check the descriptor again at the effect boundary; never follow a leaf link
- * and hash the bytes read from the same opened regular-file descriptor.
+ * and hash the bytes read from the same opened single-link regular descriptor.
  */
 export function readContextEntry(root: string, entry: ContextEntry): Buffer {
   const invalid = contextPathCheck(entry.path);
@@ -37,11 +56,14 @@ export function readContextEntry(root: string, entry: ContextEntry): Buffer {
   }
   const path = join(root, entry.path);
   const observed = lstatSync(path, { throwIfNoEntry: false });
-  if (!observed?.isFile() || observed.isSymbolicLink() || observed.size !== entry.bytes)
-    throw new StoreError("STORE_CORRUPT", `context source type/size mismatch: ${entry.path}`);
+  if (!observed?.isFile() || observed.isSymbolicLink() || observed.nlink !== 1 || observed.size !== entry.bytes)
+    throw new StoreError("STORE_CORRUPT", `context source type/link/size mismatch: ${entry.path}`);
   let fd: number;
-  try { fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW); }
-  catch (error) {
+  try {
+    // O_NONBLOCK prevents a replacement FIFO from hanging before fstat can
+    // reject its type. It does not change reads from regular files.
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ELOOP" || code === "ENOENT" || code === "ENOTDIR")
       throw new StoreError("STORE_CORRUPT", `context source changed before open: ${entry.path}`);
@@ -49,12 +71,14 @@ export function readContextEntry(root: string, entry: ContextEntry): Buffer {
   }
   try {
     const before = fstatSync(fd);
-    if (!before.isFile() || before.dev !== observed.dev || before.ino !== observed.ino || before.size !== entry.bytes)
+    if (!before.isFile() || before.nlink !== 1 || before.dev !== observed.dev || before.ino !== observed.ino || before.size !== entry.bytes)
       throw new StoreError("STORE_CORRUPT", `context source identity changed: ${entry.path}`);
-    const bytes = readFileSync(fd);
+    const bytes = readFrozenLength(fd, entry.bytes, entry.path);
     const after = fstatSync(fd);
-    if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || bytes.length !== entry.bytes || sha256Hex(bytes) !== entry.sha256)
+    if (!after.isFile() || after.nlink !== 1 || before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || bytes.length !== entry.bytes || sha256Hex(bytes) !== entry.sha256)
       throw new StoreError("STORE_CORRUPT", `context source bytes changed: ${entry.path}`);
+    const contentError = contextFileCheck(entry.path, bytes);
+    if (contentError) throw new StoreError("STORE_CORRUPT", `${entry.path}: ${contentError}`);
     return bytes;
   } finally { closeSync(fd); }
 }
