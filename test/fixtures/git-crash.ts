@@ -5,13 +5,15 @@ import { GitModule, gitEnv, type GitPaths } from "../../src/git.js";
 import { MailModule } from "../../src/mail.js";
 import { Store } from "../../src/store.js";
 import { sha256Hex } from "../../src/hash.js";
+import { isValidFullOid } from "../../src/ids.js";
+import { checkExportRef } from "../../src/validate.js";
 import { ALL_CAPS } from "./spec.js";
 import type { AuthContext } from "../../implementation/contracts.js";
 
 export const gitAuth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor", capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 export function gitCommand(root: string, args: string[]): string {
-  const out = spawnSync("/usr/bin/git", args, { cwd: root, env: gitEnv, encoding: "utf8", timeout: 30000 });
-  if (out.status !== 0) throw new Error(`git ${args.join(" ")}: ${out.stderr}`);
+  const out = spawnSync("/usr/bin/git", args, { cwd: root, env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024, killSignal: "SIGKILL" });
+  if (out.error || out.signal || out.status !== 0) throw new Error(`git ${args.join(" ")}: ${out.stderr ?? out.error?.message ?? "unknown outcome"}`);
   return out.stdout.trim();
 }
 export function gitFixture(root: string, store: Store) {
@@ -24,28 +26,27 @@ export function gitFixture(root: string, store: Store) {
   return { git, mail, paths };
 }
 export function seedGit(root: string, format: "sha1" | "sha256" = "sha1"): void {
-  const seed = join(root, "seed");
-  mkdirSync(seed, { recursive: true });
-  mkdirSync(join(root, "repos"), { recursive: true });
+  const seed = join(root, "seed"); mkdirSync(seed, { recursive: true }); mkdirSync(join(root, "repos"), { recursive: true });
   gitCommand(seed, ["init", "-q", "-b", "main", `--object-format=${format}`]);
-  writeFileSync(join(seed, "base.txt"), "base\n".repeat(4096));
-  gitCommand(seed, ["add", "."]);
+  writeFileSync(join(seed, "base.txt"), "base\n".repeat(4096)); gitCommand(seed, ["add", "."]);
   const commit = () => gitCommand(seed, ["-c", "user.name=Fixture", "-c", "user.email=fixture@localhost", "commit", "-qm", "fixture"]);
-  commit();
-  const base = gitCommand(seed, ["rev-parse", "HEAD"]);
+  commit(); const base = gitCommand(seed, ["rev-parse", "HEAD"]);
   gitCommand(root, ["clone", "--bare", seed, join(root, "repos/project.git")]);
   gitCommand(root, ["init", "--bare", "-b", "main", `--object-format=${format}`, join(root, "repos/context.git")]);
-  writeFileSync(join(seed, "change.txt"), "candidate\n");
-  gitCommand(seed, ["add", "."]);
-  commit();
-  const candidate = gitCommand(seed, ["rev-parse", "HEAD"]);
-  const exportRef = "refs/oma/export/crash";
+  writeFileSync(join(seed, "change.txt"), "candidate\n"); gitCommand(seed, ["add", "."]); commit();
+  const candidate = gitCommand(seed, ["rev-parse", "HEAD"]); const exportRef = "refs/oma/export/crash";
   gitCommand(seed, ["update-ref", exportRef, candidate]);
   gitCommand(seed, ["bundle", "create", join(root, "candidate.bundle"), exportRef, `^${base}`]);
   writeFileSync(join(root, "git-fixture.json"), JSON.stringify({ base, candidate, exportRef }));
 }
+function isFixtureInfo(value: unknown): value is { base: string; candidate: string; exportRef: string } {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 3 &&
+    "base" in value && isValidFullOid(value.base) && "candidate" in value && isValidFullOid(value.candidate) &&
+    "exportRef" in value && typeof value.exportRef === "string" && checkExportRef(value.exportRef) === null;
+}
 export async function submitFixture(root: string, git: GitModule, key = "git-crash") {
-  const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
+  const info: unknown = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
+  if (!isFixtureInfo(info)) throw new Error("normal Git fixture metadata is invalid");
   const bytes = readFileSync(join(root, "candidate.bundle"));
   return git.submit(gitAuth, key, { candidate: info.candidate, exportRef: info.exportRef, prerequisites: [info.base], to: ["b"], subject: "candidate", body: "fixed candidate", paths: ["change.txt"], bundle: { bytes: bytes.length, sha256: sha256Hex(bytes), mediaType: "application/x-git-bundle" } }, (async function* () { yield bytes; })());
 }
