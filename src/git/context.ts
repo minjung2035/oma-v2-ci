@@ -9,7 +9,7 @@ import type { PlanFor } from "../durable.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
 import { StoreError, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
 import { requestHash } from "../hash.js";
-import { generateOperationId, generateMessageId, isValidRequestKey } from "../ids.js";
+import { generateOperationId, generateMessageId, isValidRequestKey, isValidFullOid } from "../ids.js";
 import { mailObjectRelativePath, contextRevisionDisplayPath } from "../domain/derived.js";
 import { contextStagingPathAt } from "../storage/paths.js";
 import { prepareContextStream } from "../storage/context-stream.js";
@@ -23,7 +23,7 @@ export type ContextInput = PublicMethods["context.publish"]["params"];
 export interface ContextEffects {
   /** null is observed absence only; unknown/corrupt observations throw. */
   current(): Oid | null;
-  prepareCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid;
+  prepareCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid | Promise<Oid>;
   ensureCandidate(operation: OperationOf<"context.publish">): void;
   compareAndSwap(base: Oid | null, candidate: Oid): RefAfterCas;
   publishSnapshot(operation: OperationOf<"context.publish">, evidence: ContextPublicationEvidence): void;
@@ -93,13 +93,20 @@ export class ContextCoordinator {
     if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
     const id = generateOperationId(); const messageId = generateMessageId(id, 0);
     const tree = await prepareContextStream(this.paths.stateRoot, id, request.entries, request.content, bytes);
-    const candidate = this.effects.prepareCandidate(tree, request.entries, request.expected);
+    assertCurrentActor(this.store, auth, "context.publish");
+    const candidate = await this.effects.prepareCandidate(tree, request.entries, request.expected);
+    if (!isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
+    assertCurrentActor(this.store, auth, "context.publish");
+    if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed during preparation");
     const address = listAddress("residents", this.paths.society);
     const eml = await buildEml({ from: actorAddress(auth.actor, this.paths.society), to: [address], replyTo: [address],
       subject: "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
       messageId: `${messageId}@${this.paths.society}.oma.invalid`,
       body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` });
     this.mail.freezeObject(messageId, eml);
+    // Canonical observation is outside T. There is no await before the pure
+    // current-authority/recipient snapshot and acceptance below.
+    if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance");
     const accepted = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth, "context.publish");
       const current = this.store.claimKey(auth.actor, key, hash);
@@ -118,8 +125,7 @@ export class ContextCoordinator {
       if (result !== "retry") tx.insertDeliveries(recipients.map(recipient => ({ messageId, recipient, operationId: id })));
       return result;
     });
-    // All preparation artifacts are retained; accepted evidence is never cleaned
-    // by a connection-finally or a failed terminal settlement.
+    // Preparation artifacts are retained: connection close cannot remove intent.
     if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
     const operation = this.operation(id);
     let knowledge: EffectKnowledge = "none";
@@ -154,7 +160,6 @@ export class ContextCoordinator {
       this.requireWriterSlot(operation.id);
       this.requireRecoveryAuthority(operation.actor);
       this.effects.ensureCandidate(operation);
-      // Current authority and ref are observed again after candidate I/O.
       this.requireRecoveryAuthority(operation.actor);
       if (this.effects.current() !== operation.plan.base) { this.unknown(operation.id); return; }
       knowledge = "possible";
