@@ -1,45 +1,42 @@
-// COMP-001..006: source-derived inventory. Missing evidence is a failing gate.
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { createHash } from "node:crypto";
-const digest = (value) => createHash("sha256").update(value).digest("hex");
-const sources = ["implementation-spec.md", "implementation/integration-policy.md",
-  "implementation/physical-ordering.md", "implementation/compliance.md", "implementation/loc-budget.md",
-  "implementation/test-matrix.md", "implementation/spikes.md", "implementation/validation.md"];
-// Whole-source pins also invalidate evidence for tables/paragraphs outside a MUST line.
-const key = (row) => JSON.stringify([row.source, row.requirement, row.digest]);
-const textValue = (value) => typeof value === "string" && value.trim().length > 0;
-const textList = (value) => Array.isArray(value) && value.length > 0 && value.every(textValue);
-const fileOf = (locator) => locator.split("#")[0];
-const entries = sources.flatMap((source) => {
-  const text = readFileSync(source, "utf8");
-  return [...text.matchAll(/\*\*(MUST(?: NOT)?|SHOULD|OPTIONAL) \[([^\]]+)\]\*\*([^\n]*(?:\n(?!\s*\n|\*\*)[^\n]+)*)/g)].map((match) => ({
-    requirement: match[2], source, digest: digest(match[0]), normativeText: match[0],
-    applicability: "unclassified", rationale: "Requires production-path review; no inference from test names.",
-    owner: null, entrypoint: null, callPath: [], negativeTests: [], evidence: null, status: "unverified",
-  }));
-});
-const tracePath = "implementation/traceability.json";
-const trace = existsSync(tracePath) ? JSON.parse(readFileSync(tracePath, "utf8")) : [];
-if (!Array.isArray(trace) || trace.some((row) => !row || typeof row !== "object"))
-  throw new Error("trace must be an array of requirement records");
-const previous = new Map(trace.map((row) => [key(row), row]));
-if (previous.size !== trace.length) throw new Error("duplicate trace identity");
+// COMP-001..008: inventory, source linkage and executed proof are distinct.
+import { readFileSync, writeFileSync } from "node:fs";
+import ts from "typescript";
+import { runtimeImportClosure } from "./architecture-check.mjs";
+import { digest, normativeSources, traceIdentity, indexTrace, loadTraceInventory, inventoryAcceptance, sourceFiles } from "./traceability.mjs";
+const textValue = value => typeof value === "string" && value.trim().length > 0;
+const textList = value => Array.isArray(value) && value.length > 0 && value.every(textValue);
+const fileOf = locator => locator.split("#")[0];
+const { entries, rows, linkedRows, extras } = loadTraceInventory();
+const previous = indexTrace(rows);
 if (process.argv.includes("--inventory")) {
-  const refreshed = entries.map((entry) => previous.get(key(entry)) ?? entry);
-  writeFileSync(tracePath, JSON.stringify(refreshed, null, 2) + "\n");
-  console.log(`Inventoried ${entries.length} normative clauses; matching records preserved, new clauses unverified.`);
+  writeFileSync("implementation/traceability.json", JSON.stringify(linkedRows, null, 2) + "\n");
+  console.log(`Inventoried ${entries.length} normative clauses; same fingerprints and unchanged links preserved; changed clauses/owners unverified. No source evidence regenerated.`);
 } else {
   const production = readFileSync("production-files.txt", "utf8").trim().split(/\r?\n/);
-  const closure = [...sources, ...production, "architecture.md", "implementation/spikes.md",
-    "production-files.txt", "package.json", "package-lock.json"];
-  const failures = entries.filter((entry) => {
-    const row = previous.get(key(entry));
-    if (!row || !["runtime", "build", "document", "optional"].includes(row.applicability) ||
+  if (production.length === 0 || production.some(file => !textValue(file)) || new Set(production).size !== production.length)
+    throw new Error("production inventory is empty or duplicated");
+  const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
+  if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd());
+  const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
+  const { findings } = runtimeImportClosure({ rootDir: process.cwd(), roots, manifest: production, compilerOptions: parsed.options });
+  const acceptance = inventoryAcceptance([...normativeSources, "architecture.md"].map(source => ({ source, text: readFileSync(source, "utf8") })));
+  // The generated inventory is not a complete dependency closure after a move.
+  // Include ALL current source/test/tool inputs so an added helper or changed
+  // negative test cannot hide behind an old production-files.txt snapshot.
+  const authoredImplementation = sourceFiles(".", "implementation").filter(file =>
+    file !== "implementation/traceability.json" && file !== "implementation/adversarial-review.md");
+  const closure = [...new Set([...normativeSources, ...production, ...authoredImplementation,
+    ...["src", "test", "scripts"].flatMap(directory => sourceFiles(".", directory)),
+    "architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"] )];
+  const failures = linkedRows.filter((row, index) => {
+    const entry = entries[index];
+    if (!previous.has(traceIdentity(entry)) || !["runtime", "build", "document", "optional"].includes(row.applicability) ||
       !["proven", "not_applicable"].includes(row.status) || !textValue(row.rationale) ||
       !textValue(row.owner) || !textValue(row.entrypoint) || !textList(row.callPath) ||
       !textList(row.negativeTests) || !row.evidence) return true;
     if (row.status === "not_applicable" && row.applicability !== "optional") return true;
-    if (!/^.+#[^#]+$/.test(row.owner) || row.negativeTests.some((test) => !/^.+#[^#]+$/.test(test))) return true;
+    if (!/^.+#[^#]+$/.test(row.owner) || row.negativeTests.some(test => !/^.+#[^#]+$/.test(test))) return true;
     if (!row.callPath.includes(row.owner) || !row.callPath.includes(row.entrypoint)) return true;
     const evidence = row.evidence;
     if (evidence.specDigest !== entry.digest || evidence.buildExit !== 0 || evidence.testExit !== 0 ||
@@ -47,15 +44,14 @@ if (process.argv.includes("--inventory")) {
       !evidence.sourceDigests || typeof evidence.sourceDigests !== "object" || Array.isArray(evidence.sourceDigests)) return true;
     try {
       if (digest(readFileSync(evidence.logPath)) !== evidence.logDigest) return true;
-      const required = [...closure, fileOf(row.owner), fileOf(row.entrypoint),
-        ...row.callPath.map(fileOf), ...row.negativeTests.map(fileOf)];
-      if (required.some((file) => !Object.hasOwn(evidence.sourceDigests, file))) return true;
-      return Object.entries(evidence.sourceDigests).some(([file, expected]) => digest(readFileSync(file)) !== expected);
+      const required = [...closure, fileOf(row.owner), fileOf(row.entrypoint), ...row.callPath.map(fileOf), ...row.negativeTests.map(fileOf)];
+      if (required.some(file => !Object.hasOwn(evidence.sourceDigests, file))) return true;
+      return Object.entries(evidence.sourceDigests).some(([file, expected]) => !/^[0-9a-f]{64}$/.test(expected) || digest(readFileSync(file)) !== expected);
     } catch { return true; }
   });
-  const identities = new Set(entries.map(key));
-  const extras = trace.filter((row) => !identities.has(key(row))).length;
-  console.log(`${entries.length - failures.length}/${entries.length} clauses pass structural evidence checks; ${failures.length} unresolved; ${extras} stale/extra rows.`);
-  // Behavioral ownership and real boundary evidence still require review (COMP-004).
-  process.exitCode = failures.length || extras || entries.length === 0 ? 1 : 0;
+  for (const finding of findings) console.error(`Import closure: ${finding}`);
+  for (const scope of [acceptance.core, acceptance.tiered]) console.log(`${scope.name}: ${scope.rows.length} matrix rows; missing=[${scope.missing.join(",")}]; duplicates=[${scope.duplicate.join(",")}]; empty=[${scope.empty.join(",")}]`);
+  console.log(`${entries.length - failures.length}/${entries.length} clauses pass structural evidence checks; ${failures.length} unresolved; ${extras.length} stale/extra rows; ${findings.length} import-closure findings.`);
+  console.log("Structural checks do not certify full-clause behavior, disabled-profile rejection or kernel isolation.");
+  process.exitCode = failures.length || extras.length || findings.length || entries.length === 0 || !acceptance.complete ? 1 : 0;
 }
