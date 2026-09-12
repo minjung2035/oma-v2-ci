@@ -1,7 +1,7 @@
 // MUST [FS-003]/[IPC-006/008]: private model-mutable preaccept cache.
 // This is neither a durable effect ledger nor broker/session authority.
 import {
-  mkdirSync, readFileSync, renameSync, writeFileSync, openSync, fsyncSync,
+  mkdirSync, readFileSync, writeFileSync, openSync, fsyncSync,
   closeSync, linkSync, unlinkSync, fstatSync, lstatSync, constants,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -13,6 +13,7 @@ import { sha256Hex } from "./domain/canonical-json.js";
 import { parseJsonObject } from "./frame.js";
 import { decodeReceipt } from "./protocol/receipt-codec.js";
 import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./cli/cache-codec.js";
+import { fsyncDir, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
 
 export type { CachedRequest, StreamDigest } from "./cli/cache-codec.js";
 export type FreezeInput = Omit<CachedRequest, "lastReceipt">;
@@ -70,18 +71,16 @@ export const readCacheFile: CacheReader = (path, expectedBytes) => {
   }
 };
 
-function fsyncDir(dir: string): void {
-  const fd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-  try { fsyncSync(fd); } finally { closeSync(fd); }
-}
-
-/** Unique temporary name is transient, not a new cache format, queue, or lock. */
+/** Unique temporary name is transient, not a new cache format, queue, or lock.
+ * Initial cache publication owns this descriptor and its unlink separately from
+ * immutable mail and from the receipt-only derived replacement API.
+ */
 function prepareTemp(target: string, data: string | Uint8Array): string {
   const temp = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`);
   const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   try { writeFileSync(fd, data); fsyncSync(fd); }
   catch (error) {
-    try { unlinkSync(temp); } catch { /* cleanup only; retain the write error */ }
+    try { unlinkSync(temp); fsyncDir(dirname(temp)); } catch { /* cleanup only; retain the write error */ }
     throw error;
   } finally { closeSync(fd); }
   return temp;
@@ -102,17 +101,6 @@ function publishNoReplace(target: string, data: string | Uint8Array): "created" 
     fsyncDir(dirname(target));
   }
   return result;
-}
-
-/** Receipt-only replacement: tmp fsync -> rename -> directory fsync. */
-function replaceReceiptFile(target: string, data: string): void {
-  const temp = prepareTemp(target, data);
-  try { renameSync(temp, target); fsyncDir(dirname(target)); }
-  finally {
-    try { unlinkSync(temp); } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-  }
 }
 
 function sameIdentity(left: CachedRequest, right: CachedRequest): boolean {
