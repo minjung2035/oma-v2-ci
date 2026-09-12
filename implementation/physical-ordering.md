@@ -18,3 +18,19 @@
 **MUST [SEQ-003]** lock 전 허용 작업은 argv/path 문법 검사와 lock 획득에 필요한 trusted runtime directory mkdir/open뿐이다. state root 초기화, SQLite constructor/open, migration, Git/systemd effect, reconciliation을 import/constructor의 side effect로 실행하지 않는다. DB 연결 factory는 lock 획득 이후에만 호출한다. 동시 두 broker 시험에서 loser가 DB-open seam에 도달하지 않았음을 검증한다.
 
 **MUST [SEQ-004]** create-ready는 생성 가능한 물리 자원이 준비됐다는 뜻이다. 최초 GOAL 전에는 ready/stopped 또는 enabled-with-GOAL-gate 상태에서 inference 없이 준비될 수 있다. 단, 실패한 explicit start에서 desired를 enabled로 바꾸지는 않는다. bootstrap 복구·일반 start의 성공 의미를 혼동하지 않는다. 위 표가 기존 절과 불일치하면 두 문서를 함께 정정하고 제3의 순서를 코드에 만들지 않는다.
+
+## R37–R39 현재 source binding — 비규범적 구현 기록
+
+위 순서를 바꾸거나 새 phase를 추가한 표가 아니다. 현재 경로와 미검증 범위는 [refactoring-closure.md](refactoring-closure.md)에 상세히 기록했다. 아래 연결과 관련 시험은 정적으로 검토했으며 **실행 NOT_RUN**이다.
+
+| 기존 경계 | 현재 source owner | `await` 뒤 재검사와 최종 구간 |
+|---|---|---|
+| lock/startup/READY/shutdown | `src/entry/broker.ts` → `src/runtime/broker-lifetime.ts` → `src/reconcile.ts` | async fsck 뒤 old run death를 재확인. READY 전 복구 순서 유지. shutdown은 logical task와 native preparation barrier를 모두 확인하기 전 Store/lock 해제 금지 |
+| create intent/workspace/ready | `src/lifecycle/create.ts` → `src/lifecycle/workspace.ts` → `src/lifecycle/create-publication.ts` | workspace Promise를 기다린 뒤 operation/plan bytes/spec/incarnation과 current authority를 재조회. 공개·ready 이전 준비 완료 확인 |
+| create initial mail/activation | `src/lifecycle/create.ts` → mail gate → `src/units.ts` | mail 대기 뒤 current identity/desired/GOAL/activation 재확인. 최종 검사와 start 사이 새 await 없음 |
+| submit 준비/publication | `src/git/submit.ts` → `src/git/quarantine.ts` → `src/git/canonical-command.ts` | facade가 Promise를 유실하지 않음. accepted evidence 유지, final live authority 확인 뒤 canonical publication 관측 |
+| integrate final decision/CAS | `src/git/integration.ts` → `src/git/canonical-command.ts` | 최종 policy/base/authority 확인부터 CAS와 ref 재관측까지 동기 구간. preparation worker에는 Store 또는 authority 결정권 없음 |
+| context 준비/CAS/알림 | `src/git/context.ts` → `src/git/context-repository.ts` → `src/git/context-publication.ts` | candidate 준비·mail 렌더 대기 뒤 expected/current authority 재확인. accepted candidate를 복구에서 새로 계산하지 않음 |
+| unit 관측/사망 판정 | `src/units/execute.ts`, `src/units/observe.ts`, `src/units.ts` | 비동기 show는 facts만 반환. Store incarnation reader와 동기 `confirmDead`를 대체하지 않음 |
+
+process timeout/abort/output cap은 관측 결과이지 physical rollback이 아니다. 불확실한 native preparation은 `src/process/preparation.ts`의 barrier에 남으며, 연결 종료나 response 실패만으로 accepted staging을 지우지 않는다. 실제 cgroup/Pi/kernel 자원 보장 및 power-loss 증명은 기존 SPIKE gate에 남는다.
