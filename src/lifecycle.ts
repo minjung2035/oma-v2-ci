@@ -1,6 +1,6 @@
 // MUST [LIFE-001..007]/[CREATE-001..003]: agent create/start/stop + routes/ack.
 // Physical effects run outside DB transactions; each step compares actual state.
-import { mkdirSync, renameSync, existsSync, openSync, fsyncSync, closeSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync as nodeSpawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -14,6 +14,9 @@ import { MailModule } from "./mail.js";
 import { generateOperationId, isValidFullOid } from "./ids.js";
 import { residentUnitsFor } from "./domain/derived.js";
 import { workspacePathAt, agentRootPathAt, isWorkspacePathFor } from "./storage/paths.js";
+import { ensureDurableDirectory, fsyncDir } from "./storage/durable-fs.js";
+import { publishStagedDirectory } from "./storage/staged-tree.js";
+import { assertDirectory } from "./storage/directory.js";
 import { requestHash, canonicalJson } from "./hash.js";
 import { capabilitiesOf, resolvedSpecOf, assertCurrentActor } from "./authority.js";
 
@@ -409,8 +412,8 @@ export class LifecycleModule {
     this.mail.publishCreateInitial(plan.initialMessage);
     this.ensureWorkspace(plan);
     const root = agentRootPathAt(this.paths.stateRoot, plan.spec.name);
-    mkdirSync(join(root, "home"), { recursive: true });
-    mkdirSync(join(this.paths.stateRoot, "mail", "inboxes", plan.spec.name), { recursive: true });
+    ensureDurableDirectory(join(root, "home"));
+    ensureDurableDirectory(join(this.paths.stateRoot, "mail", "inboxes", plan.spec.name));
     this.units.ensureResident(plan.spec.name, plan.spec.profile, plan.spec.resources);
     let desired = agent.desired;
     if (desired === "provisioning") {
@@ -431,32 +434,41 @@ export class LifecycleModule {
     const workspace = plan.workspacePath;
     const workspaceRoot = agentRootPathAt(this.paths.stateRoot, plan.spec.name);
     const workspaceTmp = join(workspaceRoot, "workspace.tmp");
-    if (!existsSync(workspace)) {
-      mkdirSync(workspaceTmp, { recursive: true });
-      if (!existsSync(join(workspaceTmp, ".git"))) {
-        const cloned = boundedSpawnSync("/usr/bin/git", ["clone", "--no-local", "--single-branch", "--branch", "main", this.paths.projectGit, workspaceTmp], { env: cloneEnv, encoding: "utf8" });
-        if (cloned.status !== 0) throw new StoreError("INTERNAL_ERROR", `clone failed: ${cloned.stderr}`);
-      }
-      let haveBase = boundedSpawnSync("/usr/bin/git", ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`], { env: cloneEnv, encoding: "utf8" });
-      if (haveBase.status !== 0) {
-        const fetched = boundedSpawnSync("/usr/bin/git", ["-C", workspaceTmp, "fetch", "--no-tags", this.paths.projectGit, plan.spec.from], { env: cloneEnv, encoding: "utf8" });
-        haveBase = boundedSpawnSync("/usr/bin/git", ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`], { env: cloneEnv, encoding: "utf8" });
-        if (fetched.status !== 0 || haveBase.status !== 0) throw new StoreError("PREREQUISITE_MISSING", `cloned workspace does not contain frozen base ${plan.spec.from}`);
-      }
-      const checkout = boundedSpawnSync("/usr/bin/git", ["-C", workspaceTmp, "checkout", "--detach", plan.spec.from], { env: cloneEnv, encoding: "utf8" });
-      if (checkout.status !== 0) throw new StoreError("INTERNAL_ERROR", `base checkout failed: ${checkout.stderr}`);
-      renameSync(workspaceTmp, workspace);
+    ensureDurableDirectory(workspaceRoot);
+    const verify = (root: string): void => {
+      assertDirectory(root);
+      assertDirectory(join(root, ".git"));
+      const head = boundedSpawnSync("/usr/bin/git", ["-C", root, "rev-parse", "HEAD"], { env: cloneEnv, encoding: "utf8" });
+      if (head.status !== 0 || head.stdout.trim() !== plan.spec.from)
+        throw new StoreError("STORE_CORRUPT", `workspace base mismatch for ${plan.spec.name}`);
+    };
+    const existing = lstatSync(workspace, { throwIfNoEntry: false });
+    if (existing) {
+      if (!existing.isDirectory()) throw new StoreError("STORE_CORRUPT", "workspace destination is not a directory");
+      verify(workspace);
       fsyncDir(workspaceRoot);
+      return;
     }
-    const head = boundedSpawnSync("/usr/bin/git", ["-C", workspace, "rev-parse", "HEAD"], { env: cloneEnv, encoding: "utf8" });
-    if (head.status !== 0 || head.stdout.trim() !== plan.spec.from) throw new StoreError("STORE_CORRUPT", `workspace base mismatch for ${plan.spec.name}`);
+    ensureDurableDirectory(workspaceTmp);
+    if (!existsSync(join(workspaceTmp, ".git"))) {
+      const cloned = boundedSpawnSync("/usr/bin/git", ["clone", "--no-local", "--single-branch", "--branch", "main", this.paths.projectGit, workspaceTmp], { env: cloneEnv, encoding: "utf8" });
+      if (cloned.status !== 0) throw new StoreError("INTERNAL_ERROR", `clone failed: ${cloned.stderr}`);
+    }
+    assertDirectory(join(workspaceTmp, ".git"));
+    let haveBase = boundedSpawnSync("/usr/bin/git", ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`], { env: cloneEnv, encoding: "utf8" });
+    if (haveBase.status !== 0) {
+      const fetched = boundedSpawnSync("/usr/bin/git", ["-C", workspaceTmp, "fetch", "--no-tags", this.paths.projectGit, plan.spec.from], { env: cloneEnv, encoding: "utf8" });
+      haveBase = boundedSpawnSync("/usr/bin/git", ["-C", workspaceTmp, "cat-file", "-e", `${plan.spec.from}^{commit}`], { env: cloneEnv, encoding: "utf8" });
+      if (fetched.status !== 0 || haveBase.status !== 0) throw new StoreError("PREREQUISITE_MISSING", `cloned workspace does not contain frozen base ${plan.spec.from}`);
+    }
+    const checkout = boundedSpawnSync("/usr/bin/git", ["-C", workspaceTmp, "checkout", "--detach", plan.spec.from], { env: cloneEnv, encoding: "utf8" });
+    if (checkout.status !== 0) throw new StoreError("INTERNAL_ERROR", `base checkout failed: ${checkout.stderr}`);
+    // This accepted operation owns workspace.tmp. Neither a matching existing
+    // destination nor a failed flush authorizes deleting its recovery evidence.
+    publishStagedDirectory(workspaceTmp, workspace, verify, "workspace-links");
   }
   private assertCanonicalBase(oid: string): void {
     const result = boundedSpawnSync("/usr/bin/git", ["--git-dir", this.paths.projectGit, "cat-file", "-e", `${oid}^{commit}`], { env: cloneEnv, encoding: "utf8" });
     if (result.status !== 0) throw new StoreError("PREREQUISITE_MISSING", `create base ${oid} is not present in the canonical repository`);
   }
-}
-function fsyncDir(dir: string): void {
-  const fd = openSync(dir, "r");
-  try { fsyncSync(fd); } finally { closeSync(fd); }
 }
