@@ -17,7 +17,8 @@ import type { Json, MutationMethod, Receipt } from "../implementation/contracts.
 import { exactCandidateCheck, contextFileCheck } from "./validate.js";
 import { parseEmlHeaders } from "./mail.js";
 import { snapshotJson } from "./domain/canonical-json.js";
-import { requestParamsEqual, firstRequestProjectionMismatch } from "./domain/request-identity.js";
+import { requestParamsEqual } from "./domain/request-identity.js";
+import { requestIntentConflict, explicitFullOid } from "./cli/request-intent.js";
 
 const cliGitEnv: NodeJS.ProcessEnv = {
   HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
@@ -245,32 +246,27 @@ interface FreshBuild {
 
 /**
  * Frozen-first: cached recovery never calls build or re-reads HEAD/files.
- * The intended command method is checked before using the cached method, and
- * comparable contains only explicit fields that require no mutable input reads.
+ * The intended command method is checked before even projecting arguments.
  */
 async function effect(
-  method: MutationMethod,
+  expectedMethod: MutationMethod,
   key: string,
   build: () => FreshBuild | Promise<FreshBuild>,
-  comparable?: () => Record<string, unknown>,
+  comparable: () => Record<string, unknown>,
 ): Promise<never> {
   const cached = cache.read(key);
   if (cached) {
-    if (cached.method !== method)
-      fail(`REQUEST_KEY_REUSED: key ${key} was already frozen for ${cached.method}`, 2);
+    const mismatch = requestIntentConflict({ expectedMethod, explicitParams: comparable }, cached);
+    if (mismatch !== null)
+      fail(`REQUEST_KEY_REUSED: key ${key} conflicts with explicit argument ${mismatch}`, 2);
     const frozen = requestPayload(cached.params);
-    if (comparable) {
-      const mismatch = firstRequestProjectionMismatch(method, comparable(), frozen);
-      if (mismatch !== null)
-        fail(`REQUEST_KEY_REUSED: key ${key} conflicts with explicit argument ${mismatch}`, 2);
-    }
     const body = cached.digest ? cache.readBody(key) : undefined;
     if (cached.digest && body === undefined)
       fail(`frozen request body missing for ${key} (복구: /inbox.md 경로의 원래 command)`, 3);
     return replayOrSend(cached.method, frozen, key, cached.digest, body ?? undefined);
   }
   const b = await build();
-  if (b.method !== method) throw new Error("fresh request builder returned a different method");
+  if (b.method !== expectedMethod) throw new Error("fresh request builder returned a different method");
   if (b.digest && b.stream) cache.persistBody(key, b.stream);
   return replayOrSend(b.method, b.params, key, b.digest, b.stream);
 }
@@ -376,7 +372,7 @@ async function cmdAgent(args: string[]): Promise<void> {
       const brief = readBody(briefFile);
       if (!brief) fail("agent create requires --file <brief>", 2);
       return { method: "agent.create", params: { name, from: oid, brief } };
-    }, () => ({ name }));
+    }, () => ({ name, ...explicitFullOid("from", from) }));
   } else if (sub === "start" || sub === "stop") {
     const name = args[1];
     if (!name) usage();
@@ -435,6 +431,7 @@ async function cmdSubmit(args: string[]): Promise<void> {
     return {
       to: toRaw.length > 0 ? toRaw : ["commons"],
       subject: opt(args, "--subject") ?? "Re: submit", paths: multiOpt(args, "--path"),
+      ...explicitFullOid("candidate", revision),
     };
   });
 }
