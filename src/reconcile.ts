@@ -4,7 +4,8 @@ import type { Actor } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { StoreError, classifyError } from "./domain/errors.js";
 import { observeStoreFailure } from "./domain/admission.js";
-import { runGitText } from "./process/policies.js";
+import { runGitText, GIT_ENV } from "./process/policies.js";
+import { PreparationExecutor } from "./process/preparation.js";
 import { MailModule } from "./mail.js";
 import { reconcileMailOperation, type RecoveryCounts } from "./mail/reconcile.js";
 import { OperationRecovery, type RecoveryRow } from "./reconcile/operations.js";
@@ -24,6 +25,8 @@ export class ReconcileModule {
   private starting = false;
   private inFlight: Promise<RecoveryCounts> | null = null;
   private readonly operations: OperationRecovery;
+  private readonly healthExecutor = new PreparationExecutor();
+  private healthTask: Promise<void> | null = null;
   private diagnostics: readonly UnitRecoveryDiagnostic[] = [];
   constructor(private readonly store: Store, private readonly mail: MailModule, private readonly git: GitModule | null,
     private readonly units: UnitsModule, private readonly lifecycle: LifecycleModule, private readonly paths: ReconcilePaths) {
@@ -34,16 +37,23 @@ export class ReconcileModule {
   get operationOutcomes() { return this.operations.lastOutcomes; }
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
   private activation(allowed = true): boolean { return allowed && (this.paths.activationAllowed?.() ?? true); }
+  private quiesceResidents(): void {
+    for (const agent of this.store.listAgents()) {
+      if (agent.role !== "resident") continue;
+      if (!this.units.confirmDead(agent.name, agent.incarnation)) this.units.stop(agent.name, agent.incarnation);
+      if (!this.units.confirmDead(agent.name, agent.incarnation)) throw new StoreError("RUN_TERMINATION_UNKNOWN", `startup cannot prove ${agent.name} terminated`);
+    }
+  }
   async startup(allowActivation = true, prepare?: () => Promise<void>): Promise<void> {
     if (this.starting || this.inFlight) throw new StoreError("BROKER_UNAVAILABLE", "startup cannot share an active recovery pass");
     this.starting = true;
     try {
-      for (const agent of this.store.listAgents()) {
-        if (agent.role !== "resident") continue;
-        if (!this.units.confirmDead(agent.name, agent.incarnation)) this.units.stop(agent.name, agent.incarnation);
-        if (!this.units.confirmDead(agent.name, agent.incarnation)) throw new StoreError("RUN_TERMINATION_UNKNOWN", `startup cannot prove ${agent.name} terminated`);
+      this.quiesceResidents();
+      if (this.git) {
+        await this.assertCanonicalHealthyAsync();
+        // An earlier death observation is not a token valid across fsck's await.
+        this.quiesceResidents();
       }
-      if (this.git) this.assertCanonicalHealthy();
       await prepare?.();
       const snapshot = [...new Set(this.store.recoverableOperations())];
       for (const id of snapshot) {
@@ -87,33 +97,51 @@ export class ReconcileModule {
     const work = Promise.resolve().then(() => sweepScope.run(this, async () => {
       try {
         const counts = await this.operations.sweep();
-        this.observeUnits();
+        await this.observeUnits();
         return counts;
       } catch (error) { observeStoreFailure(this.store, error); throw error; }
     }));
     const owned = work.finally(() => { if (this.inFlight === owned) this.inFlight = null; });
     this.inFlight = owned; return owned;
   }
-  private observeUnits(): void {
+  private async observeUnits(): Promise<void> {
     const diagnostics: UnitRecoveryDiagnostic[] = [];
     try {
-      // One finite agent snapshot. Units owns each command's independent bound.
       for (const agent of this.store.listAgents()) {
         if (agent.role !== "resident" || agent.desired === "retired") continue;
         try {
-          const observation = this.units.observe(agent.name);
-          if (agent.desired === "stopped" && ["active", "activating"].includes(observation.activeState)) {
-            this.units.stop(agent.name, agent.incarnation);
-            diagnostics.push({ agent: agent.name, outcome: "stopped", reason: null }); continue;
+          const observation = await this.units.observeAsync(agent.name);
+          const current = this.store.getAgent(agent.name);
+          if (!current || current.role !== "resident" || current.incarnation !== agent.incarnation || current.specHash !== agent.specHash) {
+            diagnostics.push({ agent: agent.name, outcome: "unknown", reason: "identity_changed" }); continue;
           }
-          if (agent.desired === "enabled" && this.activation() && (!this.paths.hasGoal || this.paths.hasGoal())) {
-            const { hasPendingWork } = pendingWork(this.store, agent.name);
+          if (current.desired === "retired") {
+            diagnostics.push({ agent: agent.name, outcome: "unknown", reason: "retired_during_observation" }); continue;
+          }
+          if (current.desired === "stopped") {
+            // Do not trust an old async inactive observation as death proof.
+            if (!this.units.confirmDead(current.name, current.incarnation)) {
+              this.units.stop(current.name, current.incarnation);
+              diagnostics.push({ agent: current.name, outcome: "stopped", reason: null });
+            } else diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
+            continue;
+          }
+          if (observation.activeState === "unknown") {
+            diagnostics.push({ agent: current.name, outcome: "unknown", reason: "RUN_TERMINATION_UNKNOWN" }); continue;
+          }
+          if (current.desired === "enabled" && this.activation() && (!this.paths.hasGoal || this.paths.hasGoal())) {
+            const { hasPendingWork } = pendingWork(this.store, current.name);
             if (hasPendingWork && ["inactive", "dead"].includes(observation.activeState)) {
-              this.units.start(agent.name, false);
-              diagnostics.push({ agent: agent.name, outcome: "started", reason: null }); continue;
+              const fresh = this.units.observe(current.name);
+              if (["inactive", "dead"].includes(fresh.activeState)) {
+                // Current desired/incarnation/activation check -> start has no await.
+                this.units.start(current.name, false);
+                diagnostics.push({ agent: current.name, outcome: "started", reason: null }); continue;
+              }
+              if (fresh.activeState === "unknown") throw new StoreError("RUN_TERMINATION_UNKNOWN", "final unit observation is unknown");
             }
           }
-          diagnostics.push({ agent: agent.name, outcome: "observed", reason: null });
+          diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
         } catch (error) {
           this.retainRecoveryFailure(error);
           const reason = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
@@ -131,8 +159,19 @@ export class ReconcileModule {
     }
     return result;
   }
+  /** Compatibility observation for synchronous callers, not the startup path. */
   assertCanonicalHealthy(): void {
     const result = runGitText(["fsck", "--strict", "--no-reflogs"], { gitDir: this.paths.projectGit, timeout: 30000, maxBuffer: 1024 * 1024 });
     if (result.status !== 0) throw new StoreError("STORE_CORRUPT", "canonical repository health observation failed");
+  }
+  assertCanonicalHealthyAsync(): Promise<void> {
+    if (this.healthTask) return this.healthTask;
+    const task = this.healthExecutor.run({ executable: "/usr/bin/git",
+      argv: ["--git-dir", this.paths.projectGit, "fsck", "--strict", "--no-reflogs"], env: GIT_ENV,
+      timeoutMs: 30000, stdoutBytes: 1024 * 1024, stderrBytes: 1024 * 1024 }).then(result => {
+      if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", "canonical health observation is uncertain");
+      if (result.exitCode !== 0) throw new StoreError("STORE_CORRUPT", "canonical repository health observation failed");
+    }).finally(() => { if (this.healthTask === task) this.healthTask = null; });
+    this.healthTask = task; return task;
   }
 }
