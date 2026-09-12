@@ -52,12 +52,13 @@ test("R30 empty, unbatched, prepared, mixed and acknowledged work all use messag
   assert.equal(status.runnerObservedAtMs, null);
   assert.equal(views.unitObservations[0]!.unknownReason, null);
   assert.ok(Number.isSafeInteger(views.unitObservations[0]!.observedAtMs));
-  const second = prepare(f.store, messages.slice(10));
-  assert.equal(pendingWork(f.store, "alice").pendingDeliveryMessages, 0);
-  assert.equal(pendingWork(f.store, "alice").preparedMessageCount, 13);
   // Low-level ledger characterization only; this does not authorize S-03's public batch.complete.
+  // The next batch is prepared only after the first completes, never concurrently.
   f.store.transaction(tx => { tx.completeBatch(first, messages.slice(0, 10), "alice", 1); });
   assert.equal(pendingWork(f.store, "alice").pendingMessages, 3);
+  const second = prepare(f.store, messages.slice(10));
+  assert.deepEqual(pendingWork(f.store, "alice"), { pendingDeliveryMessages: 0, preparedBatchCount: 1,
+    preparedMessageCount: 3, pendingMessages: 3, hasPendingWork: true });
   f.store.transaction(tx => { tx.completeBatch(second, messages.slice(10), "alice", 1); });
   assert.deepEqual(pendingWork(f.store, "alice"), { pendingDeliveryMessages: 0, preparedBatchCount: 0,
     preparedMessageCount: 0, pendingMessages: 0, hasPendingWork: false });
