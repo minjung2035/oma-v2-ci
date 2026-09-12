@@ -8,10 +8,9 @@ import {
 } from "../src/domain/errors.js";
 import {
   receiptOfOperation, receiptNotFound, isRequestNotFound, receiptExit, receiptLines,
-  type ReceiptOperation,
 } from "../src/protocol/receipts.js";
+import { receiptOperation, receiptOperationId } from "./fixtures/receipt-operation.js";
 
-const operation = "op-00000000-0000-4000-8000-000000000001";
 const phases: readonly ErrorPhase[] = ["preaccept", "accepted", "recovering", "terminal"];
 const effects: readonly EffectKnowledge[] = ["none", "possible", "applied"];
 const observations: readonly ObservationKind[] = ["absent", "present", "rejected", "unavailable", "corrupt"];
@@ -76,38 +75,39 @@ test("public failures contain no private exception payload and retain recovery c
   assert.equal(errorExit("CAPABILITY_DENIED"), 2);
 });
 
-test("one receipt builder retains terminal bytes and rejects contradictory durable states", () => {
-  const row: ReceiptOperation = Object.freeze({
-    id: operation, kind: "route.follow", state: "succeeded",
-    resultJson: '{"subscribed":true,"topic":"work","kind":"route.follow"}', errorCode: null,
-  });
+test("one receipt builder retains terminal bytes after the decoder rejects contradictory states", () => {
+  const resultJson = '{"subscribed":true,"topic":"work","kind":"route.follow"}';
+  const row = receiptOperation({ state: "succeeded", result_json: resultJson });
   const before = JSON.stringify(row);
   const first = receiptOfOperation(row);
   assert.deepEqual(first, receiptOfOperation(row));
   assert.equal(first.state, "succeeded");
+  assert.equal(row.resultJson, resultJson);
   assert.equal(JSON.stringify(row), before);
-  const failed = receiptOfOperation({ ...row, state: "failed", resultJson: null, errorCode: "CHECK_FAILED" });
+  const failed = receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }));
   assert.deepEqual(failed.error, { code: "CHECK_FAILED", message: "CHECK_FAILED", retry: "never" });
   assert.equal(isRequestNotFound(failed), false);
-  const unknown = receiptOfOperation({ ...row, state: "unknown", resultJson: null });
-  assert.deepEqual(unknown, { operation, state: "unknown" });
+  const unknown = receiptOfOperation(receiptOperation({ state: "unknown" }));
+  assert.deepEqual(unknown, { operation: receiptOperationId, state: "unknown" });
   assert.equal(isRequestNotFound(unknown), false);
   assert.equal(isRequestNotFound(receiptNotFound), true);
-  assert.throws(() => receiptOfOperation({ ...row, state: "failed", resultJson: null }), /failed operation/);
-  assert.throws(() => receiptOfOperation({ ...row, state: "pending" }), /non-success operation/);
-  assert.throws(() => receiptOfOperation({ ...row, errorCode: "CHECK_FAILED" }), /inconsistent succeeded/);
-  assert.throws(() => receiptOfOperation({ ...row, resultJson: "{" }), /invalid operation result JSON/);
+  const corrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
+  for (const damaged of [
+    { state: "failed" },
+    { state: "pending", result_json: resultJson },
+    { state: "succeeded", result_json: resultJson, error_code: "CHECK_FAILED" },
+    { state: "succeeded", result_json: "{" },
+  ]) assert.throws(() => receiptOfOperation(receiptOperation(damaged)), corrupt);
 });
 
 test("CLI receipt mapping distinguishes pending, terminal failure and unknown effect", () => {
-  const base: ReceiptOperation = { id: operation, kind: "route.follow", state: "pending", resultJson: null, errorCode: null };
-  const pending = receiptOfOperation(base);
+  const pending = receiptOfOperation(receiptOperation());
   assert.equal(receiptExit(pending), 0);
   assert.equal(receiptLines(pending, "same-key")[0], "접수됨 / 아직 완료되지 않음");
   assert.match(receiptLines(pending, "same-key").join("\n"), /--request same-key/);
-  const unknown = receiptOfOperation({ ...base, state: "unknown" });
+  const unknown = receiptOfOperation(receiptOperation({ state: "unknown" }));
   assert.equal(receiptExit(unknown), 3);
   assert.match(receiptLines(unknown, "same-key")[0]!, /결과 불명확/);
-  assert.equal(receiptExit(receiptOfOperation({ ...base, state: "failed", errorCode: "CHECK_FAILED" })), 2);
-  assert.equal(receiptExit(receiptOfOperation({ ...base, state: "failed", errorCode: "SPIKE_UNRESOLVED" })), 4);
+  assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }))), 2);
+  assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "SPIKE_UNRESOLVED" }))), 4);
 });
