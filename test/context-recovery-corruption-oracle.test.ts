@@ -101,7 +101,7 @@ test("corrupt accepted context rows fail before Git observation or snapshot/mail
           assert.throws(() => store.getOperationById(accepted.id), isCorrupt, label);
           await assert.rejects(git.reconcile(accepted.id), isCorrupt, label);
           assert.deepEqual(calls, [], label);
-          const retained = raw.prepare("SELECT plan_json FROM operations WHERE id=?").get(accepted.id);
+          const retained: Record<string, unknown> | undefined = raw.prepare("SELECT plan_json FROM operations WHERE id=?").get(accepted.id);
           assert.equal(retained?.plan_json, damagedJson, "decoding must not silently repair corruption");
           raw.prepare("UPDATE operations SET plan_json=? WHERE id=?").run(originalPlanJson, accepted.id);
           assert.equal(store.getOperationById(accepted.id)?.kind, "context.publish", "restored positive control");
