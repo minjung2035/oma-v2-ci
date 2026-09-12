@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "check:architecture": "node scripts/architecture-check.mjs",
+    "check:transactions": "node scripts/transaction-check.mjs",
+    "check:architecture": "node scripts/architecture-check.mjs && npm run check:transactions",
     "test": "npm run build && node --test --test-concurrency=1 dist/test/*.test.js"
   },
   "devDependencies": {
