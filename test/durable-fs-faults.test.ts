@@ -57,7 +57,7 @@ test("a derived write failure before rename preserves the old file and removes o
   fixture((root, _source, target) => {
     fs.writeFileSync(target, "old");
     scoped(t, () => {
-      t.mock.method(fs, "fsyncSync", fd => { if (fs.fstatSync(fd).isFile()) throw eio(); native.fsync(fd); });
+      t.mock.method(fs, "fsyncSync", (...[fd]: Parameters<typeof native.fsync>) => { if (fs.fstatSync(fd).isFile()) throw eio(); native.fsync(fd); });
     }, () => assert.throws(() => replaceDerivedFile(target, "new"), isEio));
     assert.equal(fs.readFileSync(target, "utf8"), "old");
     assert.deepEqual(fs.readdirSync(root).sort(), ["source.eml", "target.eml"]);
@@ -68,7 +68,7 @@ test("an uncertain rename can leave the new derived file visible and is never re
   fixture((root, _source, target) => {
     fs.writeFileSync(target, "old");
     scoped(t, () => {
-      t.mock.method(fs, "renameSync", (from, to) => { native.rename(from, to); throw eio(); });
+      t.mock.method(fs, "renameSync", (...[from, to]: Parameters<typeof native.rename>) => { native.rename(from, to); throw eio(); });
     }, () => assert.throws(() => replaceDerivedFile(target, "new"), isEio));
     assert.equal(fs.readFileSync(target, "utf8"), "new");
     assert.deepEqual(fs.readdirSync(root).sort(), ["source.eml", "target.eml"]);
@@ -78,7 +78,7 @@ test("an uncertain rename can leave the new derived file visible and is never re
 test("post-link fsync failure leaves immutable evidence for an idempotent retry", { concurrency: false }, t => {
   fixture((_root, source, target, bytes) => {
     scoped(t, () => {
-      t.mock.method(fs, "fsyncSync", fd => { if (fs.fstatSync(fd).isFile()) throw eio(); native.fsync(fd); });
+      t.mock.method(fs, "fsyncSync", (...[fd]: Parameters<typeof native.fsync>) => { if (fs.fstatSync(fd).isFile()) throw eio(); native.fsync(fd); });
     }, () => assert.throws(() => publishImmutableFile(source, target, sha256Hex(bytes)), isEio));
     assert.deepEqual(fs.readFileSync(source), bytes);
     assert.deepEqual(fs.readFileSync(target), bytes);
@@ -90,11 +90,11 @@ test("post-link fsync failure leaves immutable evidence for an idempotent retry"
 test("EXDEV partial destination-side copy never exposes partial canonical bytes", { concurrency: false }, t => {
   fixture((root, source, target, bytes) => {
     scoped(t, () => {
-      t.mock.method(fs, "linkSync", (from, to) => {
+      t.mock.method(fs, "linkSync", (...[from, to]: Parameters<typeof native.link>) => {
         if (from === source && to === target) throw Object.assign(new Error("cross filesystem"), { code: "EXDEV" });
         native.link(from, to);
       });
-      t.mock.method(fs, "writeFileSync", (file, data, options) => {
+      t.mock.method(fs, "writeFileSync", (...[file, data, options]: Parameters<typeof native.write>) => {
         if (typeof file === "number") { native.write(file, Buffer.from("partial")); throw eio(); }
         native.write(file, data, options);
       });
