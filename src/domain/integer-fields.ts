@@ -4,7 +4,8 @@ export interface IntegerField {
   readonly unit: "bytes" | "count" | "percent" | "seconds";
 }
 
-export type IntegerRecord<Fields> = { [K in keyof Fields]: number };
+// Metadata is frozen, but the pre-existing DTO contract did not make values readonly.
+export type IntegerRecord<Fields> = { -readonly [K in keyof Fields]: number };
 
 export function integerFieldsCheck(
   fields: Readonly<Record<string, IntegerField>>,
