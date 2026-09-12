@@ -1,10 +1,11 @@
 /** Verification tooling, not production runtime. Commands run only when invoked. */
 export const lanes = Object.freeze({
   fast: { files: ["domain-identifiers.test.js", "domain-policy.test.js", "id-contracts.test.js", "r27-resource-phases.test.js", "r29-reconcile-accounting.test.js"],
-    sourceFiles: ["test/verification-policy.test.mjs", "test/exploration-policy.test.mjs"], requiredNames: ["ID-002", "R27", "R29"], environment: "node", timeoutSeconds: 600,
+    sourceFiles: ["test/verification-policy.test.mjs", "test/exploration-policy.test.mjs", "test/traceability-policy.test.mjs"], requiredNames: ["ID-002", "R27", "R29", "R39"], environment: "node", timeoutSeconds: 600,
     proof: "type/schema/AST and deterministic domain behavior" },
-  durable: { files: ["durable-boundary.test.js", "mail-integrity.test.js", "mail-recovery-integrity.test.js", "context-file-identity.test.js", "r30-views.test.js", "r31-owner-seams.test.js"],
-    sourceFiles: [], requiredNames: ["R30", "R31"], environment: "git-fs", timeoutSeconds: 1200, proof: "real SQLite/Git/filesystem, not systemd or power loss" },
+  durable: { files: ["durable-boundary.test.js", "mail-integrity.test.js", "mail-recovery-integrity.test.js", "context-file-identity.test.js", "r30-views.test.js", "r31-owner-seams.test.js",
+      "r37-async-process.test.js", "r37-preparation-boundaries.test.js", "r37-recovery-observation.test.js", "r37-shutdown-observation.test.js"],
+    sourceFiles: [], requiredNames: ["R30", "R31", "R37"], environment: "git-fs", timeoutSeconds: 1200, proof: "real SQLite/Git/filesystem/native child boundaries; scripted unit race controls are not actual systemd or power-loss proof" },
   kernel: { files: ["audit.test.js", "audit2.test.js", "phase4.test.js", "phase5.test.js", "peer-pid.test.js", "native-leaf.test.js", "runner-channel.test.js", "compliance.test.js"],
     sourceFiles: [], requiredNames: ["AUTH-003 native", "UNIT-004"], environment: "systemd", timeoutSeconds: 3600,
     proof: "actual user-systemd/native/socket/cgroup oracles; unsupported environment is not a pass" },
@@ -17,7 +18,7 @@ export const lanes = Object.freeze({
   stress: { files: ["verification-stress.test.js", "r36-resource-stress.test.js"], sourceFiles: [],
     requiredNames: ["R35 stress", "R36 stress native transport", "R36 stress no-progress"], environment: "git-fs", timeoutSeconds: 600,
     proof: "finite real Linux socket/pidfd/cgroup-FD and direct-child pipe cleanup, measured test RSS and queue bounds; not provider throughput, kernel quota or process-tree death certification" },
-  all: { files: "all", sourceFiles: ["test/verification-policy.test.mjs", "test/exploration-policy.test.mjs"], requiredNames: ["ID-002", "T18", "T39", "AUTH-003 native", "R36 model seed=", "R36 parser corpus"],
+  all: { files: "all", sourceFiles: ["test/verification-policy.test.mjs", "test/exploration-policy.test.mjs", "test/traceability-policy.test.mjs"], requiredNames: ["ID-002", "T18", "T39", "AUTH-003 native", "R36 model seed=", "R36 parser corpus", "R37", "R39"],
     environment: "systemd", timeoutSeconds: 7200, proof: "full serial suite; each oracle retains its own proof scope" },
 });
 export function parseTap(raw) {
