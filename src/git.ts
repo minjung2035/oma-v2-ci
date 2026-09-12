@@ -22,6 +22,7 @@ import { submitStagingPathAt, submitBundlePathAt, contextStagingPathAt, contextR
 import { requestHash, canonicalRequestParams, canonicalJson, sha256Hex } from "./hash.js";
 import { capabilitiesOf, assertCurrentActor } from "./authority.js";
 import { contextFileCheck, contextPathCheck } from "./validate.js";
+import { GitObserver, classifyRefAfterCas, protectedPathMatches, type GitObservation, type RefAfterCas } from "./git/observe.js";
 
 export interface GitPaths {
   stateRoot: string; projectGit: string; contextGit: string; worldDir: string; society: string;
@@ -50,6 +51,10 @@ function gitObservationError(what: string, result: { error?: Error; signal: Node
   const detail = result.error?.message ?? (result.signal ? `signal ${result.signal}` : String(result.stderr ?? "").slice(0, 300));
   return new StoreError("REF_STATE_UNKNOWN", `${what} unavailable${detail ? `: ${detail}` : ""}`);
 }
+function observed<T>(observation: GitObservation<T>, what: string): T {
+  if (observation.kind === "present") return observation.value;
+  throw new StoreError("REF_STATE_UNKNOWN", `${what}: ${observation.kind}${observation.kind === "absent" ? "" : ` (${observation.reason})`}`);
+}
 function git(dir: string, args: string[]): SpawnSyncReturns<string> {
   const result = spawnSync(GIT_BIN, args, { cwd: dir, env: gitEnv, encoding: "utf8" });
   if (gitUncertain(result) || result.status !== 0)
@@ -70,6 +75,17 @@ export class GitModule {
   private readonly legacyDirect: boolean;
   private readonly policyRevisionReader: PolicyRevisionReader | null;
   private integrationTail: Promise<void> = Promise.resolve();
+  private readonly observations = new GitObserver((args, input) => {
+    const format = args.includes("--show-object-format");
+    const commit = args.includes("--batch-check=%(objecttype)");
+    const result = spawnSync(GIT_BIN, [...args], {
+      env: gitEnv, timeout: format ? 30000 : commit ? 10000 : 120000,
+      maxBuffer: format ? 1024 : commit ? 64 * 1024 : 4 * 1024 * 1024,
+      ...(input === undefined ? {} : { input }),
+    });
+    return { status: result.status, signal: result.signal, stdout: result.stdout, stderr: result.stderr,
+      ...(result.error === undefined ? {} : { error: result.error }) };
+  });
   constructor(
     private readonly paths: GitPaths, private readonly store: Store, private readonly mail: MailModule,
     integration: IntegrationPolicy | null = EMPTY_INTEGRATION_POLICY,
@@ -80,12 +96,37 @@ export class GitModule {
     this.integration = integration ?? EMPTY_INTEGRATION_POLICY;
     this.policyRevisionReader = policyRevisionReader;
   }
+  private repositoryExists(repository: string): boolean {
+    try {
+      const stat = lstatSync(repository);
+      if (!stat.isDirectory()) throw new StoreError("REF_STATE_UNKNOWN", "repository root is not a directory");
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      if (error instanceof StoreError) throw error;
+      throw new StoreError("REF_STATE_UNKNOWN", "repository root observation unavailable");
+    }
+  }
   private objectFormat(repo: string, oids: readonly string[] = []): "sha1" | "sha256" {
-    const observed = spawnSync(GIT_BIN, ["--git-dir", repo, "rev-parse", "--show-object-format"], { env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 1024 });
-    const format = String(observed.stdout ?? "").trim();
-    if (gitUncertain(observed) || observed.status !== 0 || (format !== "sha1" && format !== "sha256")) throw new StoreError("INTERNAL_ERROR", "cannot observe repository object format");
-    if (oids.some(oid => !isValidFullOid(oid) || oid.length !== (format === "sha1" ? 40 : 64))) throw new StoreError("INVALID_OID", `OID does not match repository object format ${format}`);
+    const format = observed(this.observations.objectFormat(repo), "repository object format");
+    if (oids.some(oid => !isValidFullOid(oid) || oid.length !== (format === "sha1" ? 40 : 64)))
+      throw new StoreError("INVALID_OID", `OID does not match repository object format ${format}`);
     return format;
+  }
+  private protectedChange(base: string, candidate: string): string | null {
+    if (this.integration.protectedPaths.includes("/"))
+      throw new StoreError("SPIKE_UNRESOLVED", "root protected-path matching remains gated");
+    if (this.integration.protectedPaths.length === 0) return null;
+    const paths = observed(this.observations.changedPaths(this.paths.projectGit, base, candidate), "protected-path diff");
+    for (const change of paths)
+      if (this.integration.protectedPaths.some(path => protectedPathMatches(change.path, path))) return change.path;
+    return null;
+  }
+  /** A failed process is not a failed CAS. Reobserve, without retry/rollback. */
+  private casRef(repository: string, ref: string, candidate: string, expected: string | null): RefAfterCas {
+    const result = spawnSync(GIT_BIN, ["--git-dir", repository, "update-ref", ref, candidate, expected ?? ""], { env: gitEnv, encoding: "utf8" });
+    if (!gitUncertain(result) && result.status === 0) return { kind: "candidate", oid: candidate };
+    return classifyRefAfterCas(this.observations.ref(repository, ref), expected, candidate);
   }
   private rejectAcceptedSubmit(operation: string, error: StoreError, phase: "accepted" | "recovering", effectKnowledge: EffectKnowledge): never {
     const policy = classifyError({ code: error.code, phase, effectKnowledge,
@@ -172,14 +213,8 @@ export class GitModule {
     return { text: eml.text, bytes: eml.bytes, sha256: eml.sha256, dateMs: eml.dateMs };
   }
   private canonicalHas(oid: string): boolean {
-    const expression = `${oid}^{commit}`;
-    const result = spawnSync("git", ["--git-dir", this.paths.projectGit, "cat-file", "--batch-check=%(objecttype)"], { env: gitEnv, encoding: "utf8", input: `${expression}\n`, timeout: 10000, maxBuffer: 64 * 1024 });
-    if (gitUncertain(result)) throw gitObservationError("canonical commit observation", result);
-    if (result.status === 0 && !result.stderr) {
-      if (result.stdout.trim() === "commit") return true;
-      if (result.stdout.trim() === `${expression} missing`) return false;
-    }
-    throw new StoreError("REF_STATE_UNKNOWN", "cannot observe canonical commit");
+    const value = this.observations.commit(this.paths.projectGit, oid);
+    return value.kind === "absent" ? false : observed(value, "canonical commit");
   }
   /** MUST [GIT-006/007]/[S-05]: disposable namespace with bounded resources. */
   private quarantineImport(bundlePath: string, candidate: Oid, exportRef: string, prerequisites: Oid[]): void {
@@ -256,22 +291,16 @@ export class GitModule {
     } finally { rmSync(namespaceRoot, { recursive: true, force: true }); }
   }
   private publishRef(ref: string, candidate: Oid): void {
-    const current = spawnSync("git", ["--git-dir", this.paths.projectGit, "rev-parse", "--verify", "--quiet", ref], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(current)) throw gitObservationError(`published ref ${ref}`, current);
-    if (current.status === 0) {
-      if (current.stdout.trim() !== candidate) throw new StoreError("PUBLISHED_REF_CONFLICT", `ref ${ref} already points elsewhere`);
+    const current = this.observations.ref(this.paths.projectGit, ref);
+    if (current.kind === "present") {
+      if (current.value !== candidate) throw new StoreError("PUBLISHED_REF_CONFLICT", `ref ${ref} already points elsewhere`);
       return;
     }
-    if (current.status !== 1 || current.stderr.trim() || current.stdout.trim()) throw new StoreError("REF_STATE_UNKNOWN", `cannot observe published ref ${ref}`);
-    const result = spawnSync("git", ["--git-dir", this.paths.projectGit, "update-ref", ref, candidate, ""], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(result)) throw gitObservationError(`publish ref ${ref}`, result);
-    if (result.status !== 0) {
-      const after = spawnSync("git", ["--git-dir", this.paths.projectGit, "rev-parse", ref], { env: gitEnv, encoding: "utf8" });
-      if (gitUncertain(after)) throw gitObservationError(`published ref ${ref}`, after);
-      if (after.status === 0 && after.stdout.trim() === candidate) return;
-      if (after.status === 0) throw new StoreError("PUBLISHED_REF_CONFLICT", `CAS publish failed for ${ref}`);
-      throw new StoreError("REF_STATE_UNKNOWN", `published ref ${ref} cannot be observed after CAS`);
-    }
+    if (current.kind !== "absent") observed(current, `published ref ${ref}`);
+    const after = this.casRef(this.paths.projectGit, ref, candidate, null);
+    if (after.kind === "candidate") return;
+    if (after.kind === "third" && after.oid !== null) throw new StoreError("PUBLISHED_REF_CONFLICT", `CAS publish found another value for ${ref}`);
+    throw new StoreError("REF_STATE_UNKNOWN", `published ref ${ref} is not proven after CAS`);
   }
   async integrate(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {
     const previous = this.integrationTail; let release: (() => void) | undefined;
@@ -301,17 +330,9 @@ export class GitModule {
       this.store.transaction(() => this.store.setOperationSucceeded(opId, JSON.stringify(result)));
       return receiptOf(this.store.getOperationById(opId)!);
     }
-    const ancestor = spawnSync("git", ["--git-dir", this.paths.projectGit, "merge-base", "--is-ancestor", expected, candidate], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(ancestor) || (ancestor.status !== 0 && ancestor.status !== 1)) throw gitObservationError("merge-base ancestry check", ancestor);
-    if (ancestor.status === 1) fail("NOT_DESCENDANT", "candidate is not a descendant of expected");
-    if (this.integration.protectedPaths.length > 0) {
-      const diff = spawnSync("git", ["--git-dir", this.paths.projectGit, "diff-tree", "--no-commit-id", "--name-status", "-r", "-z", "--no-renames", expected, candidate], { env: gitEnv, encoding: "utf8" });
-      if (gitUncertain(diff) || diff.status !== 0) throw gitObservationError("protected-path diff", diff);
-      for (const part of (diff.stdout ?? "").split("\0").filter(Boolean)) {
-        const name = part.replace(/^[A-Z]\s+/, "");
-        if (this.integration.protectedPaths.some(path => path.endsWith("/") ? name.startsWith(path) : name === path)) fail("PROTECTED_PATH", `path ${name} is protected`);
-      }
-    }
+    if (!observed(this.observations.ancestry(this.paths.projectGit, expected, candidate), "merge-base ancestry")) fail("NOT_DESCENDANT", "candidate is not a descendant of expected");
+    const protectedPath = this.protectedChange(expected, candidate);
+    if (protectedPath !== null) fail("PROTECTED_PATH", `path ${protectedPath} is protected`);
     try { for (const check of this.integration.checks) await this.runCheck(candidate, check); }
     catch (error) {
       if (error instanceof StoreError && ["CHECK_FAILED", "SPIKE_UNRESOLVED"].includes(error.code)) this.store.transaction(() => this.store.setOperationFailed(opId, error.code));
@@ -329,8 +350,8 @@ export class GitModule {
     try { finalRevision = this.policyRevisionReader ? this.policyRevisionReader() : this.integration.policyRevision; }
     catch (error) { fail("POLICY_CHANGED", `authoritative policy unreadable: ${(error as Error).message}`); }
     if (typeof finalRevision !== "string" || finalRevision.length === 0 || finalRevision !== policyRevision) fail("POLICY_CHANGED", "policy changed before CAS");
-    const cas = spawnSync("git", ["--git-dir", this.paths.projectGit, "update-ref", "refs/heads/main", candidate, expected], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(cas) || cas.status !== 0) {
+    const after = this.casRef(this.paths.projectGit, "refs/heads/main", candidate, expected);
+    if (after.kind !== "candidate") {
       this.store.transaction(() => this.store.setOperationUnknown(opId));
       return receiptOf(this.store.getOperationById(opId)!);
     }
@@ -338,15 +359,10 @@ export class GitModule {
     return receiptOf(this.store.getOperationById(opId)!);
   }
   isPublished(oid: Oid): boolean {
-    const result = spawnSync("git", ["--git-dir", this.paths.projectGit, "for-each-ref", "--format=%(objectname)", "refs/oma/published/"], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(result) || result.status !== 0) throw gitObservationError("published refs", result);
-    return (result.stdout ?? "").split("\n").some(line => line.trim() === oid);
+    return observed(this.observations.published(this.paths.projectGit), "published refs").includes(oid);
   }
   private currentMain(): Oid {
-    const result = spawnSync("git", ["--git-dir", this.paths.projectGit, "rev-parse", "refs/heads/main"], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(result)) throw gitObservationError("main ref", result);
-    if (result.status !== 0 || !isValidFullOid(result.stdout.trim())) throw new StoreError("REF_STATE_UNKNOWN", "cannot observe canonical main ref");
-    return result.stdout.trim();
+    return observed(this.observations.ref(this.paths.projectGit, "refs/heads/main"), "canonical main ref");
   }
   private async runCheck(_candidate: Oid, _check: IntegrationPolicy["checks"][number]): Promise<void> {
     throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE bounded writable work area is not verified");
@@ -366,7 +382,7 @@ export class GitModule {
     if (manifestError) throw new StoreError("INVALID_REQUEST", manifestError);
     const current = this.currentContext();
     if (current !== input.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
-    if (existsSync(this.paths.contextGit)) this.objectFormat(this.paths.contextGit, input.expected ? [input.expected] : []);
+    if (this.repositoryExists(this.paths.contextGit)) this.objectFormat(this.paths.contextGit, input.expected ? [input.expected] : []);
     const streamParts: Buffer[] = []; let total = 0;
     for await (const chunk of bytes) {
       total += chunk.length;
@@ -423,7 +439,7 @@ export class GitModule {
     assertContextDirectory(treeDir);
     // Verify all frozen source bytes before invoking a materializing Git command.
     for (const entry of entries) readContextEntry(treeDir, entry);
-    if (!existsSync(this.paths.contextGit)) {
+    if (!this.repositoryExists(this.paths.contextGit)) {
       mkdirSync(this.paths.contextGit, { recursive: true });
       git(this.paths.contextGit, ["--git-dir", this.paths.contextGit, "init", "--bare"]);
     }
@@ -461,9 +477,7 @@ export class GitModule {
       const unchanged = spawnSync(GIT_BIN, ["-C", work, "diff", "--cached", "--quiet"], { env: contextEnv, encoding: "utf8" });
       if (gitUncertain(unchanged) || unchanged.status !== 0) throw new StoreError("INTERNAL_ERROR", `context commit failed: ${committed.stderr.slice(0, 300)}`);
     }
-    const candidate = run(["--git-dir", gitdir, "rev-parse", "HEAD"]).stdout.trim();
-    if (!isValidFullOid(candidate)) throw new StoreError("INTERNAL_ERROR", "invalid context candidate");
-    return candidate;
+    return observed(this.observations.ref(gitdir, "HEAD"), "context candidate");
   }
   private async contextEml(actor: Actor, messageId: string, candidate: Oid) {
     const residents = listAddress("residents", this.paths.society);
@@ -476,12 +490,14 @@ export class GitModule {
     if (!accepted || accepted.kind !== "context.publish") throw new StoreError("STORE_CORRUPT", "context operation missing before publication");
     const plan = accepted.plan;
     const work = join(plan.stagingPath, "commit-work"); assertContextDirectory(work);
-    const candidate = git(work, ["rev-parse", "HEAD"]).stdout.trim();
+    const candidate = observed(this.observations.ref(join(work, ".git"), "HEAD"), "staged context candidate");
     if (candidate !== plan.candidate) throw new StoreError("STORE_CORRUPT", "staged context candidate differs from accepted plan");
     git(this.paths.contextGit, ["--git-dir", this.paths.contextGit, "fetch", "--no-tags", work, "HEAD"]);
-    const cas = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "update-ref", plan.target, candidate, plan.base ?? ""], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(cas)) throw gitObservationError("context CAS", cas);
-    if (cas.status !== 0) throw new StoreError("CONTEXT_CONFLICT", "context CAS failed");
+    const after = this.casRef(this.paths.contextGit, plan.target, candidate, plan.base);
+    if (after.kind !== "candidate") {
+      this.store.transaction(() => this.store.setOperationUnknown(opId));
+      throw new StoreError("REF_STATE_UNKNOWN", `context CAS observation: ${after.kind}`);
+    }
     this.publishContextSnapshot(plan, work);
     return candidate;
   }
@@ -589,16 +605,14 @@ export class GitModule {
       assertContextDirectory(treeDir);
       const rebuilt = this.prepareContextCandidate(treeDir, plan.entries, plan.base);
       if (rebuilt !== plan.candidate) throw new StoreError("STORE_CORRUPT", "accepted context candidate cannot be reproduced");
-      const haveCandidate = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "cat-file", "-e", `${plan.candidate}^{commit}`], { env: gitEnv, encoding: "utf8" });
-      if (gitUncertain(haveCandidate)) throw gitObservationError("context candidate observation", haveCandidate);
-      if (haveCandidate.status !== 0) {
+      const haveCandidate = this.observations.commit(this.paths.contextGit, plan.candidate);
+      if (haveCandidate.kind === "absent") {
         const work = join(plan.stagingPath, "commit-work");
         const fetched = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "fetch", "--no-tags", work, "HEAD"], { env: gitEnv, encoding: "utf8" });
         if (gitUncertain(fetched) || fetched.status !== 0) throw new StoreError("REF_STATE_UNKNOWN", "context candidate cannot be recovered");
-      }
-      const updated = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "update-ref", plan.target, plan.candidate, plan.base ?? ""], { env: gitEnv, encoding: "utf8" });
-      if (gitUncertain(updated)) throw gitObservationError("recovery context CAS", updated);
-      if (updated.status !== 0) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
+      } else observed(haveCandidate, "context candidate");
+      const after = this.casRef(this.paths.contextGit, plan.target, plan.candidate, plan.base);
+      if (after.kind !== "candidate") { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
     }
     this.publishContextSnapshot(plan, join(plan.stagingPath, "commit-work"));
     if (this.currentContext() !== plan.candidate) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
@@ -607,13 +621,9 @@ export class GitModule {
     this.store.transaction(() => this.store.setOperationSucceeded(op.id, JSON.stringify(result)));
   }
   private currentContext(): Oid | null {
-    if (!existsSync(this.paths.contextGit)) return null;
-    const result = spawnSync(GIT_BIN, ["--git-dir", this.paths.contextGit, "rev-parse", "--verify", "--quiet", "refs/heads/main"], { env: gitEnv, encoding: "utf8", timeout: 30000, maxBuffer: 1024 });
-    const oid = String(result.stdout ?? "").trim();
-    if (gitUncertain(result)) throw gitObservationError("context main ref", result);
-    if (result.status === 0 && isValidFullOid(oid)) return oid;
-    if (result.status === 1 && !oid && !String(result.stderr ?? "").trim()) return null;
-    throw new StoreError("INTERNAL_ERROR", "cannot observe context main ref");
+    if (!this.repositoryExists(this.paths.contextGit)) return null;
+    const value = this.observations.ref(this.paths.contextGit, "refs/heads/main");
+    return value.kind === "absent" ? null : observed(value, "context main ref");
   }
   async reconcile(operationId: string): Promise<void> {
     const previous = this.integrationTail; let release: (() => void) | undefined;
@@ -628,14 +638,10 @@ export class GitModule {
     if (op.kind === "context.publish") { await this.reconcileContext(op); return; }
     if (op.kind !== "git.submit") return;
     const plan = op.plan;
-    const refOid = spawnSync("git", ["--git-dir", this.paths.projectGit, "rev-parse", "--verify", "--quiet", plan.publishedRef], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(refOid)) throw gitObservationError(`published ref ${plan.publishedRef}`, refOid);
-    const observedOid = refOid.stdout.trim();
-    if (refOid.status === 0) {
-      if (!isValidFullOid(observedOid) || refOid.stderr.trim()) throw gitObservationError(`published ref ${plan.publishedRef}`, refOid);
-      if (observedOid !== plan.candidate) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
-    } else {
-      if (refOid.status !== 1 || observedOid || refOid.stderr.trim()) throw gitObservationError(`published ref ${plan.publishedRef}`, refOid);
+    const ref = this.observations.ref(this.paths.projectGit, plan.publishedRef);
+    if (ref.kind === "present") {
+      if (ref.value !== plan.candidate) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
+    } else if (ref.kind === "absent") {
       if (plan.bundle) {
         if (!existsSync(plan.bundle.path) || statBytes(plan.bundle.path) !== plan.bundle.bytes || sha256Of(readFileSync(plan.bundle.path)) !== plan.bundle.sha256)
           throw new StoreError("STORE_CORRUPT", "accepted staged bundle no longer matches its frozen digest");
@@ -647,7 +653,7 @@ export class GitModule {
         }
       } else if (!this.canonicalHas(plan.candidate)) throw new StoreError("REF_STATE_UNKNOWN", "accepted submit candidate is not in canonical objects");
       this.publishRef(plan.publishedRef, plan.candidate);
-    }
+    } else observed(ref, `published ref ${plan.publishedRef}`);
     await this.mail.publishGated(operationId);
     const result = { kind: "git.submit", candidate: plan.candidate, publishedRef: plan.publishedRef, message: plan.message.id, recipientCount: plan.message.recipients.length };
     this.store.transaction(() => this.store.setOperationSucceeded(operationId, JSON.stringify(result)));
@@ -663,17 +669,9 @@ export class GitModule {
     const agent = this.store.getAgent(op.actor);
     if (!agent || agent.desired === "retired" || agent.desired === "stopped" || !capabilitiesOf(agent).has("code.integrate")) fail(agent?.desired === "stopped" ? "CANCELLED_BEFORE_COMMIT" : "CAPABILITY_DENIED", "integrate capability is unavailable during recovery");
     if (!this.isPublished(plan.candidate)) fail("CANDIDATE_NOT_PUBLISHED", "candidate is no longer published");
-    const ancestor = spawnSync("git", ["--git-dir", this.paths.projectGit, "merge-base", "--is-ancestor", plan.base, plan.candidate], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(ancestor) || (ancestor.status !== 0 && ancestor.status !== 1)) throw gitObservationError("recovery merge-base ancestry check", ancestor);
-    if (ancestor.status === 1) fail("NOT_DESCENDANT", "candidate is not a descendant of the recorded base");
-    if (this.integration.protectedPaths.length > 0) {
-      const diff = spawnSync("git", ["--git-dir", this.paths.projectGit, "diff-tree", "--no-commit-id", "--name-status", "-r", "-z", "--no-renames", plan.base, plan.candidate], { env: gitEnv, encoding: "utf8" });
-      if (gitUncertain(diff) || diff.status !== 0) throw gitObservationError("recovery protected-path diff", diff);
-      for (const part of (diff.stdout ?? "").split("\0").filter(Boolean)) {
-        const name = part.replace(/^[A-Z]\s+/, "");
-        if (this.integration.protectedPaths.some(path => path.endsWith("/") ? name.startsWith(path) : name === path)) fail("PROTECTED_PATH", `path ${name} is protected`);
-      }
-    }
+    if (!observed(this.observations.ancestry(this.paths.projectGit, plan.base, plan.candidate), "recovery merge-base ancestry")) fail("NOT_DESCENDANT", "candidate is not a descendant of the recorded base");
+    const protectedPath = this.protectedChange(plan.base, plan.candidate);
+    if (protectedPath !== null) fail("PROTECTED_PATH", `path ${protectedPath} is protected`);
     if (plan.checkProfileDigest !== checkDigest(this.integration.checks)) fail("POLICY_CHANGED", "integration check profile changed during recovery");
     try { for (const check of this.integration.checks) await this.runCheck(plan.candidate, check); }
     catch (error) {
@@ -692,15 +690,13 @@ export class GitModule {
     try { revision = this.policyRevisionReader ? this.policyRevisionReader() : this.integration.policyRevision; }
     catch (error) { fail("POLICY_CHANGED", `authoritative policy unreadable: ${(error as Error).message}`); }
     if (typeof revision !== "string" || revision.length === 0 || revision !== plan.policyRevision) fail("POLICY_CHANGED", "integration policy changed during recovery");
-    const cas = spawnSync("git", ["--git-dir", this.paths.projectGit, "update-ref", "refs/heads/main", plan.candidate, plan.base], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(cas) || cas.status !== 0) { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
+    const after = this.casRef(this.paths.projectGit, plan.target, plan.candidate, plan.base);
+    if (after.kind !== "candidate") { this.store.transaction(() => this.store.setOperationUnknown(op.id)); return; }
     this.store.transaction(() => this.store.setOperationSucceeded(op.id, JSON.stringify(result)));
   }
   knownRefs(): { main: string; published: string[] } {
     const main = this.currentMain();
-    const result = spawnSync("git", ["--git-dir", this.paths.projectGit, "for-each-ref", "--format=%(objectname)", "refs/oma/published/"], { env: gitEnv, encoding: "utf8" });
-    if (gitUncertain(result) || result.status !== 0) throw gitObservationError("known published refs", result);
-    return { main, published: (result.stdout ?? "").split("\n").map(line => line.trim()).filter(Boolean) };
+    return { main, published: [...observed(this.observations.published(this.paths.projectGit), "known published refs")] };
   }
 }
 function statBytes(path: string): number {
