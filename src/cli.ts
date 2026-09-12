@@ -10,7 +10,7 @@ import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { FrameParser, encodeFrame } from "./frame.js";
-import { RequestCache, type CachedRequest } from "./request-cache.js";
+import { RequestCache, CacheError, type CachedRequest, type FreezeInput } from "./request-cache.js";
 import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4, parseMessageId, parseMessageFileId } from "./ids.js";
 import { exportRefForRequestKey } from "./domain/derived.js";
 import type { Json, MutationMethod, Receipt } from "../implementation/contracts.js";
@@ -19,6 +19,7 @@ import { parseEmlHeaders } from "./mail.js";
 import { snapshotJson } from "./domain/canonical-json.js";
 import { requestParamsEqual } from "./domain/request-identity.js";
 import { requestIntentConflict, explicitFullOid } from "./cli/request-intent.js";
+import { decodeReceipt } from "./protocol/receipt-codec.js";
 
 const cliGitEnv: NodeJS.ProcessEnv = {
   HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
@@ -58,7 +59,6 @@ function usage(): never {
   process.exit(2);
 }
 
-// socket client (uint32 BE length + JSON both directions; IPC-001)
 function socketPath(): string {
   if (process.env.OMA_SOCKET) return process.env.OMA_SOCKET;
   if (existsSync("/run/oma/control.sock")) return "/run/oma/control.sock";
@@ -81,7 +81,6 @@ function call(method: string, params: Record<string, unknown>, requestKey?: stri
   const path = socketPath();
   return new Promise((resolve, reject) => {
     const sock = connect(path, () => {
-      // Durable mutations carry the key on the envelope, never inside params.
       const envelope: Record<string, unknown> = { v: 1, id: `cli-${uuidV4()}`, method, params };
       if (requestKey !== undefined) envelope.request = requestKey;
       const meta = encodeFrame(envelope);
@@ -106,7 +105,7 @@ function call(method: string, params: Record<string, unknown>, requestKey?: stri
           if (raw.error !== undefined) reply.error = raw.error;
           replies.push(reply);
         }
-      } catch { /* incomplete frame */ }
+      } catch { /* transport hardening is handled by the protocol-session card */ }
       buf = Buffer.alloc(0);
       if (replies.length > 0) {
         clearTimeout(timer);
@@ -118,12 +117,10 @@ function call(method: string, params: Record<string, unknown>, requestKey?: stri
   });
 }
 
-// IPC-006 freeze cache flow
 function sha256Hex(b: Uint8Array): string {
   return createHash("sha256").update(b).digest("hex");
 }
 
-/** Structural JSON validation does not replace method-specific input checks. */
 function requestPayload(value: unknown): { [key: string]: Json } {
   const copied = snapshotJson(value);
   if (copied === null || typeof copied !== "object" || Array.isArray(copied))
@@ -131,80 +128,110 @@ function requestPayload(value: unknown): { [key: string]: Json } {
   return copied;
 }
 
+function readFrozen(key: string): CachedRequest | null {
+  const observed = cache.read(key);
+  if (observed.kind === "present") return observed.value;
+  if (observed.kind === "absent") return null;
+  fail(`CACHE_${observed.kind === "corrupt" ? "CORRUPT" : "UNAVAILABLE"}: ${key}: ${observed.reason}; 원래 freeze를 복구하기 전에는 재전송하지 않음`, 3);
+}
+
+function frozenBody(entry: CachedRequest): Uint8Array | undefined {
+  if (entry.digest === undefined) return undefined;
+  const observed = cache.readBody(entry.key, entry.digest);
+  if (observed.kind === "present") return observed.value;
+  fail(`frozen request body ${observed.kind} for ${entry.key}${observed.kind === "absent" ? "" : `: ${observed.reason}`} (복구: 원래 freeze 보존; 새 payload 생성 금지)`, 3);
+}
+
 function printReceipt(rec: Receipt, key: string): void {
   if (rec.state === "succeeded") { console.log(JSON.stringify(rec)); return; }
   if (rec.state === "pending") {
     console.log("접수됨 / 아직 완료되지 않음");
     console.log(`재조회: 동일 command에 --request ${key}`);
+  } else if (rec.state === "unknown") {
+    console.log(`결과 불명확: ${rec.reason ?? "authoritative evidence required"}`);
+    console.log(`재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요`);
   } else {
     console.log(`실패: ${rec.error?.code ?? "?"} ${rec.error?.message ?? ""}`);
   }
 }
 
-/** Freeze before network I/O; identity comparison never edits the frozen payload. */
+function finishReceipt(rec: Receipt, key: string): never {
+  printReceipt(rec, key);
+  if (rec.state === "unknown") process.exit(3);
+  if (rec.state === "failed")
+    process.exit(rec.error?.code === "SPIKE_UNRESOLVED" || rec.error?.code === "UNSUPPORTED_PROFILE" ? 4 : 2);
+  process.exit(0);
+}
+
+/** Immutable body is published before metadata; only an explicit not-found
+ * observation permits replay. Cache corruption never triggers a fresh build.
+ */
 async function replayOrSend(
-  method: string, params: Record<string, unknown>, key: string,
+  method: MutationMethod, params: Record<string, unknown>, key: string,
   digest?: { bytes: number; sha256: string }, streamBytes?: Uint8Array,
 ): Promise<never> {
-  // Keep original field/array order for persisted and transmitted bytes. Only
-  // the identity builder applies set semantics for equality and hashing.
   const payload = requestPayload(params);
-  const cached = cache.read(key);
-  if (cached) {
+  const cached = readFrozen(key);
+  let frozen: CachedRequest;
+  let replay: boolean;
+  if (cached !== null) {
     const sameMethod = cached.method === method && requestParamsEqual(method, cached.params, payload);
     const sameDigest = (cached.digest === undefined && digest === undefined) ||
       (cached.digest !== undefined && digest !== undefined &&
         cached.digest.bytes === digest.bytes && cached.digest.sha256 === digest.sha256);
     if (!sameMethod || !sameDigest)
       fail(`REQUEST_KEY_REUSED: key ${key} was already frozen for a different request`, 2);
-    if (cached.lastReceipt && cached.lastReceipt.state === "succeeded") {
-      printReceipt(cached.lastReceipt, key);
-      process.exit(0);
-    }
-    let op: WireReply[] = [];
-    try { op = await call("operation.get", { key }); }
-    catch {
-      fail(`미접수 여부 불명확: ${key} (복구: /inbox.md 경로의 원래 command 또는 --request ${key})`, 3);
-    }
-    if (op.length > 0 && op[0]!.ok && op[0]!.result !== undefined) {
-      const rec = op[0]!.result as Receipt;
-      // Only an accepted operation is reported; not-found resends the freeze.
-      if (rec.state === "succeeded" || rec.state === "pending") {
-        cache.write({ ...cached, lastReceipt: rec });
-        printReceipt(rec, key);
-        process.exit(0);
-      }
-    }
+    frozen = cached;
+    replay = true;
   } else {
-    const entry: CachedRequest = { key, method, params: payload, createdAtMs: Date.now(), lastReceipt: null };
-    if (digest) entry.digest = digest;
-    cache.write(entry);
+    const input: FreezeInput = { key, method, params: payload, createdAtMs: Date.now() };
+    if (digest !== undefined) input.digest = digest;
+    try {
+      const publication = cache.freeze(input, streamBytes);
+      frozen = publication.value;
+      replay = publication.kind === "existing";
+    } catch (error) {
+      if (error instanceof CacheError)
+        fail(`${error.code}: ${error.message}`, error.code === "INVALID_REQUEST" || error.code === "REQUEST_KEY_REUSED" ? 2 : 3);
+      throw error;
+    }
   }
-  let replies: WireReply[] = [];
-  try { replies = await call(method, params, key, streamBytes); }
-  catch {
-    fail(`미접수 여부 불명확: ${key} (복구: /inbox.md 경로의 원래 command 또는 --request ${key})`, 3);
+  // Validate bytes even for metadata with a cached receipt. Neither the private
+  // receipt nor caller buffers can manufacture a missing immutable body.
+  const body = frozenBody(frozen);
+  if (replay) {
+    let op: WireReply[];
+    try { op = await call("operation.get", { key }); }
+    catch { fail(`미접수 여부 불명확: ${key} (복구: 원래 command에 --request ${key})`, 3); }
+    const reply = op[0];
+    if (reply?.ok === true) {
+      const decoded = decodeReceipt(reply.result, { expectedKind: method, allowNotFound: true });
+      if (!decoded.ok) fail(`invalid operation lookup: ${decoded.reason}; --request ${key}`, 3);
+      const rec = decoded.value;
+      if (!(rec.operation === "" && rec.state === "failed" && rec.error?.code === "REQUEST_NOT_FOUND")) {
+        cache.updateReceipt(key, rec);
+        finishReceipt(rec, key);
+      }
+    } else if (reply?.error?.code !== "REQUEST_NOT_FOUND") {
+      fail(`operation lookup did not prove REQUEST_NOT_FOUND: ${reply?.error?.code ?? "no reply"}; --request ${key}`, 3);
+    }
   }
-  const reply = replies[0]!;
-  if (reply.ok && reply.result !== undefined) {
-    const rec = reply.result as Receipt;
-    const prev = cache.read(key);
-    const entry: CachedRequest = {
-      key, method, params: payload, createdAtMs: prev?.createdAtMs ?? Date.now(), lastReceipt: rec,
-    };
-    if (digest) entry.digest = digest;
-    cache.write(entry);
-    printReceipt(rec, key);
-    process.exit(0);
+  let replies: WireReply[];
+  try { replies = await call(frozen.method, requestPayload(frozen.params), key, body); }
+  catch { fail(`미접수 여부 불명확: ${key} (복구: 원래 command에 --request ${key})`, 3); }
+  const reply = replies[0];
+  if (reply?.ok === true) {
+    const decoded = decodeReceipt(reply.result, { expectedKind: method });
+    if (!decoded.ok) fail(`invalid mutation receipt: ${decoded.reason}; --request ${key}`, 3);
+    cache.updateReceipt(key, decoded.value);
+    finishReceipt(decoded.value, key);
   }
-  const code = reply.error?.code ?? "INTERNAL_ERROR";
-  if (code === "REQUEST_KEY_REUSED") fail(`${code}: ${reply.error?.message ?? ""}`, 2);
+  const code = reply?.error?.code ?? "INTERNAL_ERROR";
   if (code === "SPIKE_UNRESOLVED" || code === "UNSUPPORTED_PROFILE")
-    fail(`${code}: ${reply.error?.message ?? ""}`, 4);
-  fail(`${code}: ${reply.error?.message ?? ""}`, 2);
+    fail(`${code}: ${reply?.error?.message ?? ""}`, 4);
+  fail(`${code}: ${reply?.error?.message ?? ""}`, 2);
 }
 
-// arg helpers
 function opt(args: string[], name: string): string | null {
   const i = args.indexOf(name);
   if (i < 0) return null;
@@ -244,30 +271,22 @@ interface FreshBuild {
   stream?: Uint8Array;
 }
 
-/**
- * Frozen-first: cached recovery never calls build or re-reads HEAD/files.
- * The intended command method is checked before even projecting arguments.
- */
+/** Frozen-first: no source reads or source regeneration on any non-absent cache. */
 async function effect(
   expectedMethod: MutationMethod,
   key: string,
   build: () => FreshBuild | Promise<FreshBuild>,
   comparable: () => Record<string, unknown>,
 ): Promise<never> {
-  const cached = cache.read(key);
-  if (cached) {
+  const cached = readFrozen(key);
+  if (cached !== null) {
     const mismatch = requestIntentConflict({ expectedMethod, explicitParams: comparable }, cached);
     if (mismatch !== null)
       fail(`REQUEST_KEY_REUSED: key ${key} conflicts with explicit argument ${mismatch}`, 2);
-    const frozen = requestPayload(cached.params);
-    const body = cached.digest ? cache.readBody(key) : undefined;
-    if (cached.digest && body === undefined)
-      fail(`frozen request body missing for ${key} (복구: /inbox.md 경로의 원래 command)`, 3);
-    return replayOrSend(cached.method, frozen, key, cached.digest, body ?? undefined);
+    return replayOrSend(cached.method, requestPayload(cached.params), key, cached.digest, frozenBody(cached));
   }
   const b = await build();
   if (b.method !== expectedMethod) throw new Error("fresh request builder returned a different method");
-  if (b.digest && b.stream) cache.persistBody(key, b.stream);
   return replayOrSend(b.method, b.params, key, b.digest, b.stream);
 }
 
@@ -331,7 +350,6 @@ async function cmdSend(args: string[]): Promise<void> {
     return { method: "mail.send", params };
   }, () => ({
     to, subject: subject ?? "Re", kind: kindRaw,
-    // --file and --reply are read only when freezing a fresh request.
     ...(approvalFor ? { approvalFor } : {}),
   }));
 }
