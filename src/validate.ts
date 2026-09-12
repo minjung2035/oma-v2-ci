@@ -4,6 +4,8 @@
 import type { Json, RequestKey } from "../implementation/contracts.js";
 import { contextEntriesCheck } from "./domain/context-policy.js";
 export { contextPathCheck, contextFileCheck } from "./domain/context-policy.js";
+import { exactCandidateCheck, headerMessageIdCheck, messageKindCheck, logicalAddressCheck as checkLogicalAddress } from "./domain/mail-values.js";
+export { exactCandidateCheck, logicalAddressCheck as checkLogicalAddress } from "./domain/mail-values.js";
 import {
   isValidActorName,
   isValidRequestKey,
@@ -143,17 +145,9 @@ export const checkOid: Check = (v) =>
 export const checkRequestKey: Check = (v) =>
   isValidRequestKey(v) ? null : `invalid request key`;
 
-/** Structurally valid logical address for persisted MessagePlan DTOs. */
-export const checkLogicalAddress: Check = (v) => {
-  if (typeof v !== "string")
-    return `expected address string, got ${typeName(v)}`;
-  if (v.startsWith("topic/"))
-    return isValidTopicName(v.slice(6)) ? null : `invalid topic address`;
-  if (v === "principal" || v === "commons" || v === "residents") return null;
-  return isValidActorName(v) ? null : `invalid logical address`;
-};
-
-/** logical address: registered resident name, principal, commons, residents, or topic/<name> */
+/** Structural logical grammar comes from mail-values; this adds only the
+ * caller-supplied registered-resident set, never a display-address fallback.
+ */
 export function checkAddress(actorNames: ReadonlySet<string>): Check {
   return (v) => {
     const structural = checkLogicalAddress(v);
@@ -196,34 +190,8 @@ export interface ParamsLimits {
   bundleBytes: number;
 }
 
-const exactCandidateShape = checkObject({
-  repo: checkEnum(["project"]),
-  targetRef: checkEnum(["refs/heads/main"]),
-  expectedBase: checkOid,
-  candidate: checkOid,
-  policyRevision: checkString({ min: 1, max: 128, re: /^[^\p{Cc}\p{Cf}]+$/u }),
-});
-export const exactCandidateCheck: Check = (value) => {
-  const error = exactCandidateShape(value);
-  if (error) return error;
-  const identity = value as { expectedBase: string; candidate: string };
-  return identity.expectedBase.length === identity.candidate.length ? null : "approval OIDs must use the same object format";
-};
-
-const messageKindCheck = checkEnum(["message", "question", "result", "alert", "context", "approval_required", "critical"]);
 const messageIdCheck: Check = (value) =>
   isValidMessageId(value) ? null : "invalid message id";
-const headerMessageIdCheck: Check = (value) => {
-  if (typeof value !== "string") return `expected string, got ${typeName(value)}`;
-  const at = value.indexOf("@");
-  if (at < 0) return isValidMessageId(value) ? null : "invalid message id";
-  if (value.indexOf("@", at + 1) >= 0) return "invalid message id";
-  const fileId = value.slice(0, at);
-  const domain = value.slice(at + 1);
-  return isValidMessageId(fileId) && /^[a-z][a-z0-9-]{0,31}\.oma\.invalid$/.test(domain)
-    ? null
-    : "invalid message id";
-};
 const operationIdCheck: Check = (value) =>
   isValidOperationId(value) ? null : "invalid operation id";
 
