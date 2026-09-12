@@ -14,7 +14,8 @@ export interface GitProcessEvidence {
 export type GitObservation<T> =
   | { readonly kind: "present"; readonly value: T; readonly evidence: GitProcessEvidence }
   | { readonly kind: "absent"; readonly evidence: GitProcessEvidence }
-  | { readonly kind: "unknown" | "corrupt"; readonly reason: string; readonly evidence: GitProcessEvidence };
+  | { readonly kind: "unknown"; readonly reason: string; readonly evidence: GitProcessEvidence }
+  | { readonly kind: "corrupt"; readonly reason: string; readonly evidence: GitProcessEvidence };
 export type GitObservationRunner = (args: readonly string[], input?: string) => GitProcessEvidence;
 export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
 export interface ChangedPath { readonly status: "A" | "M" | "D" | "T"; readonly path: string }
