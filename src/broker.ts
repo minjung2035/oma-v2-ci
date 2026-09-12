@@ -266,7 +266,7 @@ export class Broker {
     if (envelope.v !== 1) throw new StoreError("UNSUPPORTED_VERSION", "unsupported protocol version");
     if (!isPublicMethod(method) || PUBLIC_METHODS[method].stream === "none") throw new StoreError("INVALID_REQUEST", "method does not accept a stream body");
     const descriptor = PUBLIC_METHODS[method];
-    if (descriptor.key === "required" && !isValidRequestKey(envelope.request)) throw new StoreError("INVALID_REQUEST", "mutation requires a valid request key");
+    if (descriptor.key === "required" && !isValidRequestKey(envelope.request)) throw new StoreError("INVALID_REQUEST", "mutation requires a request key");
     const actor = this.store.getAgent(auth.actor);
     if (auth.channel === "actor" && (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled")) throw new StoreError("STALE_RUN", "actor incarnation is stale");
     const need = descriptor.capability;
@@ -334,7 +334,9 @@ export class Broker {
       switch (method) {
         case "status.get": {
           const observe = (agent: string) => { const value = this.units.observe(agent); return { activeState: value.activeState, subState: value.subState, result: value.result, execMainStatus: value.execMainStatus }; };
-          return Broker.okAnswer(id, this.views.status((params as { agent?: string }).agent, observe));
+          const agents = this.views.status((params as { agent?: string }).agent, observe);
+          // Collection time is not an individual unit or runner observation timestamp.
+          return Broker.okAnswer(id, { observedAtMs: Date.now(), agents });
         }
         case "operation.get": {
           const operation = this.store.getOperation(auth.actor, (params as { key: string }).key);
