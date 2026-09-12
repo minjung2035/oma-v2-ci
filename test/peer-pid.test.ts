@@ -7,7 +7,7 @@ import { closeSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { peerCred, peerPidFd, peerPidAlive } from "../src/leaf.js";
-import { Broker } from "../src/broker.js";
+import { PeerAuthenticator } from "../src/broker/peer-authenticator.js";
 
 test("AUTH-003 native: peer pidfd detects connector death while an inherited socket stays open", { timeout: 5000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-peer-pid-"));
@@ -65,9 +65,12 @@ test("AUTH-003 native binding seam: closing sockets releases pidfds and cannot r
   const bindings: Array<{ alive: () => boolean } | null> = [];
   const validWhileConnected: boolean[] = [];
   const closed: Array<Promise<unknown>> = [];
+  const cleanupErrors: unknown[] = [];
   const server = createServer(peer => {
-    // Exercise the actual broker binding without substituting kernel peer facts.
-    const bound = Reflect.get(Broker.prototype, "bindPeer").call(null, peer) as { alive: () => boolean } | null;
+    // The exact moved native method is invoked; no cgroup, credential, PID or
+    // pidfd observation is replaced. Only its diagnostic sink is supplied.
+    const bound: ReturnType<PeerAuthenticator["bind"]> = Reflect.apply(PeerAuthenticator.prototype.bind,
+      { cleanupError: (error: unknown) => { cleanupErrors.push(error); } }, [peer]);
     validWhileConnected.push(!!bound?.alive() && bindings.every(binding => binding && !binding.alive()));
     bindings.push(bound);
     closed.push(once(peer, "close"));
@@ -85,6 +88,7 @@ test("AUTH-003 native binding seam: closing sockets releases pidfds and cannot r
       assert.equal(validWhileConnected[index], true);
       assert.ok(bindings.every(binding => binding && !binding.alive()));
       assert.equal(readdirSync("/proc/self/fd").length, before);
+      assert.deepEqual(cleanupErrors, []);
     }
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()));
