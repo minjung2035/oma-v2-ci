@@ -4,21 +4,24 @@
  */
 import { lstatSync, renameSync, symlinkSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { fsyncDir, fsyncTree } from "./durable-fs.js";
+import { assertDirectory } from "./directory.js";
 
 function requireDirectory(path: string): void {
+  assertDirectory(path);
   const stat = lstatSync(path);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new StoreError("STORE_CORRUPT", `non-directory staged tree: ${path}`);
 }
 
-/** Caller prepares/fsyncs file contents and verifies identity. The primitive
- * rechecks the tree, flushes it, then renames and flushes both affected parents.
- * An existing destination is verified, not merged, overwritten, or cleaned up.
- * On "existing" the staging tree remains caller-owned. On a post-rename error,
- * recovery must observe both names; the exception does not imply no publication.
- * Empty or raced destination handling is still bounded by the caller's trusted
+/** Caller prepares file contents and proves artifact identity. An existing
+ * destination is verified and flushed first: staging may already be gone after
+ * an earlier successful rename. ENOENT from verification is damage, NOT proof
+ * that the destination is absent. Nothing here merges or removes either tree.
+ * On "existing" any surviving staging remains caller-owned. A post-rename
+ * error is ambiguous, never permission to overwrite an observed destination.
+ * Empty/raced destination handling remains bounded by the caller's trusted
  * serialized publication authority and the S-06 filesystem admission gate.
  */
 export function publishStagedDirectory(
@@ -26,31 +29,47 @@ export function publishStagedDirectory(
   destination: string,
   verify: (root: string) => void,
 ): "published" | "existing" {
-  requireDirectory(staging); verify(staging); fsyncTree(staging);
-  try {
-    lstatSync(destination);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    try { renameSync(staging, destination); }
-    catch (renameError) {
-      const code = (renameError as NodeJS.ErrnoException).code;
-      if (code !== "EEXIST" && code !== "ENOTEMPTY") throw renameError;
-      requireDirectory(destination); verify(destination); fsyncDir(dirname(destination));
-      return "existing";
-    }
+  if (staging === destination) throw new StoreError("STORE_CORRUPT", "staging and destination must differ");
+  assertDirectory(dirname(staging));
+  assertDirectory(dirname(destination));
+  const existing = (): "existing" => {
+    requireDirectory(destination);
+    verify(destination);
+    fsyncTree(destination);
     fsyncDir(dirname(destination));
-    if (dirname(staging) !== dirname(destination)) fsyncDir(dirname(staging));
-    return "published";
+    return "existing";
+  };
+  let present = true;
+  try { lstatSync(destination); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    present = false;
   }
-  requireDirectory(destination); verify(destination); fsyncDir(dirname(destination));
-  return "existing";
+  if (present) return existing();
+  requireDirectory(staging);
+  verify(staging);
+  fsyncTree(staging);
+  try { renameSync(staging, destination); }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error;
+    return existing();
+  }
+  fsyncDir(dirname(destination));
+  if (dirname(staging) !== dirname(destination)) fsyncDir(dirname(staging));
+  requireDirectory(destination);
+  verify(destination);
+  return "published";
 }
 
-/** Mutable current link: create one owned link -> rename -> flush its parent.
- * Neither the link's target nor an old target is opened, traversed or removed.
- * Target identity/relative-path policy remains with the context owner.
+/** Mutable current link: one owned link -> rename -> parent fsync. No target
+ * is opened or recursively flushed. Context retains revision identity policy;
+ * this primitive additionally rejects lexical escape in the relative target.
  */
 export function replaceDerivedSymlink(path: string, target: string): void {
+  assertDirectory(dirname(path));
+  if (isAbsolute(target) || target.includes("\0") || target.split("/").some(part => part === "" || part === "." || part === ".."))
+    throw new StoreError("STORE_CORRUPT", "derived link target must remain relative and contained");
   const temporary = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
   symlinkSync(target, temporary);
   let owned = true;
@@ -58,6 +77,10 @@ export function replaceDerivedSymlink(path: string, target: string): void {
     renameSync(temporary, path); owned = false;
     fsyncDir(dirname(path));
   } finally {
-    if (owned) { unlinkSync(temporary); fsyncDir(dirname(temporary)); }
+    if (owned) {
+      try { unlinkSync(temporary); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+      fsyncDir(dirname(temporary));
+    }
   }
 }
