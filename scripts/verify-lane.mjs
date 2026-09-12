@@ -39,7 +39,7 @@ function command(executable, argv, label, seconds) {
     const child = spawn(executable, argv, { cwd: root, env: environment, detached: process.platform !== "win32", stdio: ["ignore", stdout, stderr] });
     const timer = setTimeout(() => {
       timedOut = true;
-      try { if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL"); } catch { /* this owned group may already have exited */ }
+      try { if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL"); } catch { /* only this owned group */ }
     }, seconds * 1000);
     const finish = (code, signal, error = null) => {
       if (settled) return; settled = true; clearTimeout(timer); closeSync(stdout); closeSync(stderr);
@@ -56,7 +56,10 @@ function requirePreflight(executable, argv) {
   return result.stdout.trim();
 }
 try {
-  if (Number(process.versions.node.split(".")[0]) < 26) throw new Error("pinned Node 26+ toolchain required for this repository");
+  // @types/node is not a runtime support matrix. Probe the actual required API.
+  const sqlite = await import("node:sqlite");
+  if (typeof sqlite.DatabaseSync !== "function") throw new Error("required runtime SQLite API is unavailable");
+  report.environment.sqliteApi = "DatabaseSync available; not a database-operation test";
   if (lane.environment !== "node") {
     if (process.platform !== "linux") throw new Error("real filesystem/kernel lanes require Linux");
     report.environment.git = requirePreflight("git", ["--version"]);
@@ -82,7 +85,10 @@ try {
     }
   }
   report.sourceTestCallSiteUnit = "AST call sites, NOT expanded executed test cases";
-  report.environment.sourceHead = requirePreflight("git", ["rev-parse", "HEAD"]);
+  const head = spawnSync("git", ["rev-parse", "HEAD"], { env: environment, encoding: "utf8", timeout: 10000, maxBuffer: 65536, killSignal: "SIGKILL" });
+  const sha = head.stdout?.trim();
+  report.environment.sourceHead = head.status === 0 && !head.error && !head.signal && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha ?? "") ? sha : null;
+  report.environment.sourceHeadStatus = report.environment.sourceHead ? "OBSERVED" : "NOT_AVAILABLE";
   const build = await command("npm", ["run", "build"], "build", 600);
   if (build.code !== 0 || build.signal) { report.status = "BUILD_FAILED"; throw new Error("build failed; test execution did not begin"); }
   if (name === "fast" || name === "all") {
