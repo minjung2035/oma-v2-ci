@@ -4,6 +4,7 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { StoreError } from "../domain/errors.js";
+import { assertNewAcceptance, observeStoreFailure } from "../domain/admission.js";
 import type { Store } from "../store.js";
 
 const BRAND: unique symbol = Symbol("StoreTransaction");
@@ -28,8 +29,6 @@ const current = new AsyncLocalStorage<Scope>();
 export function assertSynchronousResult(value: unknown): void {
   if (value !== null && (typeof value === "object" || typeof value === "function") &&
       "then" in value && typeof value.then === "function") {
-    // Observe a native rejected Promise to avoid an unrelated unhandled rejection;
-    // never invoke an arbitrary thenable as part of the SQL transaction.
     if (value instanceof Promise) void value.catch(() => undefined);
     throw new StoreError("INTERNAL_ERROR", "transaction callback returned a Promise/thenable; external effects are not cancelled by rollback");
   }
@@ -46,7 +45,13 @@ export class TransactionScope {
     return scope;
   }
   requireLive(): void { this.requireScope(); }
-  recordInserted(id: string): void { this.requireScope().inserted.add(id); }
+  recordInserted(id: string): void {
+    const scope = this.requireScope();
+    // Called inside the same T as INSERT. A closed gate rolls the entire T back,
+    // including old ambient Store callers; it never creates a half-accepted row.
+    assertNewAcceptance(this.store);
+    scope.inserted.add(id);
+  }
   insertedIds(): readonly string[] { return [...this.requireScope().inserted]; }
   requireUnaccepted(id: string): void {
     if (!this.requireScope().inserted.has(id))
@@ -58,11 +63,12 @@ export class TransactionScope {
     this.scope = scope;
     const methods = Object.fromEntries(WRITE_METHODS.map(name => [name, (...args: unknown[]) => {
       this.requireScope(scope);
+      if (name === "insertPreparedBatch" || name === "reserveUsage") assertNewAcceptance(this.store);
       return Reflect.apply(this.store[name], this.store, args);
     }]));
-    // Factory-only cast: exact method set, private brand and runtime owner checks.
     const tx = Object.freeze({ ...methods, [BRAND]: true }) as Transaction;
     try { return current.run(scope, () => body(tx)); }
+    catch (error) { observeStoreFailure(this.store, error); throw error; }
     finally { scope.active = false; scope.inserted.clear(); this.scope = null; }
   }
 }
