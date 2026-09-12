@@ -4,7 +4,6 @@
 import { StoreError } from "./errors.js";
 import { isValidActor } from "./identifiers.js";
 export interface LineageNode { readonly name: string; readonly createdBy: string | null }
-
 function corrupt(message: string): never { throw new StoreError("STORE_CORRUPT", message); }
 export class LineageSnapshot<N extends LineageNode = LineageNode> {
   private readonly nodes: ReadonlyMap<string, Readonly<N>>;
@@ -23,7 +22,6 @@ export class LineageSnapshot<N extends LineageNode = LineageNode> {
       const siblings = children.get(node.createdBy) ?? [];
       siblings.push(node.name); children.set(node.createdBy, siblings);
     }
-    // Iterative validation supports deep trees without a call-stack depth policy.
     const complete = new Set<string>();
     for (const node of nodes.values()) {
       const visiting = new Set<string>();
@@ -44,10 +42,7 @@ export class LineageSnapshot<N extends LineageNode = LineageNode> {
     const out: Readonly<N>[] = [];
     let node: Readonly<N> | null = this.node(name);
     if (!includeSelf) node = node.createdBy === null ? null : this.node(node.createdBy);
-    while (node !== null) {
-      out.push(node);
-      node = node.createdBy === null ? null : this.node(node.createdBy);
-    }
+    while (node !== null) { out.push(node); node = node.createdBy === null ? null : this.node(node.createdBy); }
     return out;
   }
   descendants(name: string, includeSelf = true): readonly Readonly<N>[] {
@@ -57,7 +52,7 @@ export class LineageSnapshot<N extends LineageNode = LineageNode> {
     for (let index = 0; index < queue.length; index++) {
       const current = queue[index]!;
       out.push(this.node(current));
-      queue.push(...(this.children.get(current) ?? []));
+      for (const child of this.children.get(current) ?? []) queue.push(child);
     }
     return out;
   }
@@ -66,7 +61,6 @@ export class LineageSnapshot<N extends LineageNode = LineageNode> {
     return this.ancestors(name, includeSelf).some(node => node.name === ancestor);
   }
 }
-
 /** All resident states consume quota; principal is excluded, exactly as before. */
 export function assertCreateCapacity<N extends LineageNode & { readonly role: "resident" | "principal" }>(
   graph: LineageSnapshot<N>, parent: string, quota: { societyAgents: number; lineageAgents: number },
