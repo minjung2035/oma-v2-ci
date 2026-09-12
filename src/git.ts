@@ -67,14 +67,14 @@ export class GitModule {
       publishSnapshot: (operation, proof) => this.publishContextSnapshot(operation, proof),
     }, new ContextPublicationObserver(this.observations, paths.contextGit));
   }
-  /** Preserve one main writer, without retaining an unbounded promise chain.
-   * Busy callers have not entered admission and can retry the SAME request key.
-   * Accepted/unknown rows remain the coordinators' independent durable barrier.
+  /** One main writer, no retained waiting chain. Busy requests have not entered
+   * admission and retry the SAME key; accepted/unknown rows still form a barrier.
    */
   private async withWriter<T>(work: () => Promise<T>): Promise<T> {
     if (this.writerActive) throw new StoreError("BROKER_UNAVAILABLE", "repository writer is busy; retry the same request key");
     this.writerActive = true;
-    try { return await work(); } finally { this.writerActive = false; }
+    // Preserve the former await-previous pre-admission scheduling boundary.
+    try { return await Promise.resolve().then(work); } finally { this.writerActive = false; }
   }
   private objectFormat(repo: string, oids: readonly string[] = []): "sha1" | "sha256" {
     const format = observed(this.observations.objectFormat(repo), "repository object format");
@@ -82,7 +82,6 @@ export class GitModule {
       throw new StoreError("INVALID_OID", `OID does not match repository object format ${format}`);
     return format;
   }
-  /** Every CAS, including exit zero, gets a NEW canonical observation. */
   private casRef(repository: string, ref: string, candidate: string, expected: string | null): RefAfterCas {
     return compareAndSwapCanonicalRef(this.observations, repository, ref, candidate, expected);
   }
@@ -109,7 +108,8 @@ export class GitModule {
     throw new StoreError("REF_STATE_UNKNOWN", `published ref ${ref} is not proven after CAS`);
   }
   integrate(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {
-    return this.withWriter(() => this.integrationCoordinator.execute(auth, key, input));
+    const frozen = Object.freeze({ candidate: input.candidate, expected: input.expected });
+    return this.withWriter(() => this.integrationCoordinator.execute(auth, key, frozen));
   }
   isPublished(oid: Oid): boolean { return observed(this.observations.published(this.paths.projectGit), "published refs").includes(oid); }
   private currentMain(): Oid { return observed(this.observations.ref(this.paths.projectGit, "refs/heads/main"), "canonical main ref"); }
@@ -119,7 +119,6 @@ export class GitModule {
   publishContext(auth: AuthContext, key: string, input: ContextInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     return this.withWriter(() => this.contextCoordinator.publish(auth, key, input, bytes));
   }
-  // Named physical seams remain reachable for corruption/crash oracles.
   private currentContext(): Oid | null { return this.contextRepository.current(); }
   private prepareContextCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid | Promise<Oid> {
     return this.contextRepository.prepareCandidate(tree, entries, expected);
@@ -129,8 +128,8 @@ export class GitModule {
   }
   private reconcileContext(operation: OperationOf<"context.publish">): Promise<void> { return this.contextCoordinator.reconcile(operation); }
 
-  /** CTX-006: the first GOAL is usable only after canonical publication,
-   * complete snapshot/current and notification settlement. Never do this I/O in T.
+  /** CTX-006: canonical publication, snapshot/current and notification settlement
+   * precede activation. This I/O must remain outside synchronous Store T.
    */
   hasCommittedContext(): boolean {
     if (this.store.inTransaction) throw new StoreError("INTERNAL_ERROR", "context activation proof cannot run inside a transaction");
