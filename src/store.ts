@@ -4,16 +4,16 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Actor, ErrorCode, MessageId, OperationId, RequestKey, OperationPlan } from "../implementation/contracts.js";
-import { operationResultCheck } from "./validate.js";
-import { operationResultRelationCheck, type RepositoryIdentity, type OperationPlanContext } from "./durable.js";
+import type { Actor, ErrorCode, MessageId, OperationId, RequestKey } from "../implementation/contracts.js";
+import type { RepositoryIdentity, OperationPlanContext } from "./durable.js";
 import type { DecodedOperation, OperationOf } from "./storage/operation-codec.js";
 import { LedgerReader } from "./storage/ledger-reader.js";
 import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
 import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput, type UsageReservation } from "./storage/transitions.js";
+import { OperationTransitions, type NewOperation } from "./storage/operation-transitions.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./ids.js";
-import { StoreError, isErrorCode, isPreacceptOnlyFailure } from "./domain/errors.js";
+import { StoreError } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
 export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
@@ -36,6 +36,7 @@ export class Store {
   private readonly db: DatabaseSync;
   private readonly reader: LedgerReader;
   private readonly transitions: LedgerTransitions;
+  private readonly operations: OperationTransitions;
   private readonly transactions = new TransactionScope(this);
   private repositoryIdentity: RepositoryIdentity | null;
   constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null) {
@@ -49,6 +50,7 @@ export class Store {
     this.migrate();
     this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
     this.transitions = new LedgerTransitions(this.db, this.reader, () => this.requireTx());
+    this.operations = new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation));
   }
   bindRepositoryIdentity(identity: RepositoryIdentity): void {
     if (!isValidSocietyName(identity.society)) throw new StoreError("STORE_CORRUPT", "invalid repository society identity");
@@ -130,7 +132,7 @@ export class Store {
       if (!validDesiredTransition(existing.desired, agent.desired)) throw new StoreError("INVALID_REQUEST", `invalid desired transition ${existing.desired}->${agent.desired}`);
       this.db.prepare("UPDATE agents SET desired=?, updated_at_ms=? WHERE name=?").run(agent.desired, now, agent.name);
     }
-    if (agent.incarnation !== undefined) this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=? WHERE name=?").run(agent.incarnation, now, agent.name);
+    if (agent.incarnation !== undefined) this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=? WHERE name=?").run(agent.incarnation, Date.now(), agent.name);
     if (agent.specHash !== undefined || agent.specJson !== undefined) {
       const current = this.getAgent(agent.name);
       if (!current) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
@@ -143,24 +145,12 @@ export class Store {
   }
   subscribers(topic: string): string[] { return this.reader.subscriptions(topic).map(row => row.agent); }
   allSubscriptions(): SubscriptionRow[] { return this.reader.subscriptions(); }
-  insertOperation(operation: { id: OperationId; actor: Actor; requestKey: RequestKey; requestHash: string; kind: OperationPlan["kind"]; payloadJson: string; planJson: string }): void {
-    this.requireTx();
-    try {
-      this.db.prepare(`INSERT INTO operations
-        (id, actor, request_key, request_hash, kind, payload_json, plan_json, state, created_at_ms, updated_at_ms)
-        VALUES (?,?,?,?,?,?,?, 'pending', ?, ?)`).run(operation.id, operation.actor, operation.requestKey, operation.requestHash,
-        operation.kind, operation.payloadJson, operation.planJson, Date.now(), Date.now());
-      this.transactions.recordInserted(operation.id);
-    } catch (error) {
-      if (error instanceof Error && /UNIQUE constraint failed: operations.actor, operations.request_key/.test(error.message)) throw new StoreError("REQUEST_KEY_REUSED", "request key already used by this actor");
-      throw error;
-    }
-  }
+  insertOperation(operation: NewOperation): void { this.operations.insert(operation); }
   claimKey(actor: Actor, key: RequestKey, hash: string): "retry" | "reused" | "absent" {
     const existing = this.getOperation(actor, key);
     return existing === null ? "absent" : existing.requestHash === hash ? "retry" : "reused";
   }
-  claimOperation(operation: { id: OperationId; actor: Actor; requestKey: RequestKey; requestHash: string; kind: OperationPlan["kind"]; payloadJson: string; planJson: string }): "inserted" | "retry" {
+  claimOperation(operation: NewOperation): "inserted" | "retry" {
     this.requireTx();
     const before = this.claimKey(operation.actor, operation.requestKey, operation.requestHash);
     if (before === "retry") return "retry";
@@ -200,46 +190,10 @@ export class Store {
       throw new StoreError("STORE_CORRUPT", "completed context projection differs from its decoded row");
     return operation;
   }
-  updateOperationPlanJson(id: OperationId, planJson: string): void {
-    this.requireTx(); this.transactions.requireUnaccepted(id);
-    const row = fullRow(this.db.prepare("SELECT state FROM operations WHERE id=?").get(id), ["state"], "unaccepted operation state");
-    if (row.state !== "pending") throw new StoreError("STORE_CORRUPT", "terminal or unknown operation plan is immutable");
-    const result = this.db.prepare("UPDATE operations SET plan_json=?, updated_at_ms=? WHERE id=? AND state='pending'").run(planJson, Date.now(), id);
-    if (Number(result.changes) !== 1) throw new StoreError("STORE_CORRUPT", "unaccepted plan update was not applied exactly once");
-  }
-  setOperationSucceeded(id: OperationId, resultJson: string): void {
-    this.requireTx(); const current = this.getOperationById(id);
-    if (!current) throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
-    let result: unknown;
-    try { result = JSON.parse(resultJson); } catch { throw new StoreError("STORE_CORRUPT", `operation ${id} result is not valid JSON`); }
-    const invalid = operationResultCheck(current.kind)(result) ?? operationResultRelationCheck(current.kind, current.plan, result, this.planContext(current));
-    if (invalid) throw new StoreError("STORE_CORRUPT", `operation ${id} result: ${invalid}`);
-    if (current.state === "succeeded") {
-      if (current.resultJson === resultJson) return;
-      throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
-    }
-    if (current.state === "failed") throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
-    const updated = this.db.prepare("UPDATE operations SET state='succeeded', result_json=?, error_code=NULL, updated_at_ms=? WHERE id=? AND state IN ('pending','unknown')").run(resultJson, Date.now(), id);
-    if (Number(updated.changes) !== 1) throw new StoreError("STORE_CORRUPT", `operation ${id} transition was not applied exactly once`);
-  }
-  setOperationFailed(id: OperationId, code: ErrorCode): void {
-    this.requireTx();
-    if (!isErrorCode(code) || isPreacceptOnlyFailure(code)) throw new StoreError("STORE_CORRUPT", `accepted operation ${id} cannot transition to preaccept or invalid failure`);
-    const current = this.getOperationById(id);
-    if (!current) throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
-    if (current.state === "failed" && current.errorCode === code) return;
-    if (current.state === "failed" || current.state === "succeeded") throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
-    const updated = this.db.prepare("UPDATE operations SET state='failed', result_json=NULL, error_code=?, updated_at_ms=? WHERE id=? AND state IN ('pending','unknown')").run(code, Date.now(), id);
-    if (Number(updated.changes) !== 1) throw new StoreError("STORE_CORRUPT", `operation ${id} transition was not applied exactly once`);
-  }
-  setOperationUnknown(id: OperationId): void {
-    this.requireTx(); const current = this.getOperationById(id);
-    if (!current) throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
-    if (current.state === "unknown") return;
-    if (current.state !== "pending") throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
-    const result = this.db.prepare("UPDATE operations SET state='unknown', updated_at_ms=? WHERE id=? AND state='pending'").run(Date.now(), id);
-    if (Number(result.changes) !== 1) throw new StoreError("STORE_CORRUPT", `operation ${id} transition was not applied exactly once`);
-  }
+  updateOperationPlanJson(id: OperationId, planJson: string): void { this.operations.updatePlan(id, planJson); }
+  setOperationSucceeded(id: OperationId, resultJson: string): void { this.operations.succeed(id, resultJson); }
+  setOperationFailed(id: OperationId, code: ErrorCode): void { this.operations.fail(id, code); }
+  setOperationUnknown(id: OperationId): void { this.operations.unknown(id); }
   insertDeliveries(deliveries: DeliveryIdentity[]): void { this.transitions.insertDeliveries(deliveries); }
   markMaterialized(message: MessageId, recipient: Actor): void { this.transitions.markMaterialized(message, recipient); }
   markAcknowledged(message: MessageId, recipient: Actor): void { this.transitions.markAcknowledged(message, recipient); }
