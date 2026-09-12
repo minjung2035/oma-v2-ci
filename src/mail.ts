@@ -15,12 +15,14 @@ import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/d
 import { publishImmutableFile } from "./storage/immutable-file.js";
 import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
-import { actorAddress, listAddress, topicAddress, parseDisplayedAddress } from "./mail/addresses.js";
+import { expandAddresses, logicalReplyAddress } from "./mail/routing.js";
 import type { ParsedEmlHeaders } from "./mail/headers.js";
 import { MailMaterializer, operationMessage, type PublicationEvidence } from "./mail/materializer.js";
 import { BatchCoordinator } from "./mail/batches.js";
 import { reconcileOrdinaryMail, type RecoveryCounts } from "./mail/reconcile.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
+export { expandAddresses } from "./mail/routing.js";
+export type { RouteResult } from "./mail/routing.js";
 export { batchOf, batchNotice } from "./mail/batches.js";
 export { fsyncDir, replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 export { publishImmutableFile } from "./storage/immutable-file.js";
@@ -32,38 +34,6 @@ export type { ParsedEmlHeaders } from "./mail/headers.js";
 export { actorAddress, listAddress, topicAddress, displayAddress, defaultReplyTo } from "./mail/addresses.js";
 export { defaultLogicalReplyTo } from "./mail/facts.js";
 
-export interface RouteResult { recipients: Actor[]; displayTo: string[] }
-export function expandAddresses(store: Store, to: readonly Address[], society: string): RouteResult {
-  const agents = new Map(store.listAgents().map(agent => [agent.name, agent]));
-  const recipients = new Set<string>(); const display = new Set<string>();
-  for (const address of to) {
-    if (address === "principal") {
-      if (!agents.has("principal")) throw new StoreError("ADDRESS_NOT_FOUND", "principal identity not created");
-      recipients.add("principal"); display.add(listAddress("principal", society)); continue;
-    }
-    if (address === "commons" || address === "residents") {
-      for (const [name, agent] of agents) if (agent.role === "resident" && agent.desired !== "provisioning" && agent.desired !== "retired") recipients.add(name);
-      display.add(listAddress(address, society)); continue;
-    }
-    if (address.startsWith("topic/")) {
-      const topic = address.slice(6);
-      for (const sub of store.subscribers(topic)) {
-        const agent = agents.get(sub);
-        if (agent && agent.role === "resident" && agent.desired !== "provisioning" && agent.desired !== "retired") recipients.add(sub);
-      }
-      display.add(topicAddress(topic, society)); continue;
-    }
-    const agent = agents.get(address);
-    if (!agent) throw new StoreError("ADDRESS_NOT_FOUND", `unknown address "${address}"`);
-    if (agent.desired === "provisioning") throw new StoreError("AGENT_NOT_READY", `${address} is provisioning`);
-    if (agent.desired === "retired") throw new StoreError("AGENT_RETIRED", `${address} is retired`);
-    recipients.add(address); display.add(actorAddress(address, society));
-  }
-  return { recipients: [...recipients].sort(), displayTo: [...display] };
-}
-function logicalReplyAddress(store: Store, value: string, society: string): Address | null {
-  return parseDisplayedAddress(value, society, new Set(store.listAgents().map(agent => agent.name)));
-}
 export interface MailSociety { stateRoot: string; society: string }
 export class MailModule {
   private readonly materializer: MailMaterializer;
