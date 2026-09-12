@@ -1,6 +1,6 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: broker core and authenticated listeners.
 import { createServer, type Socket } from "node:net";
-import { openSync, mkdirSync, unlinkSync, existsSync, readFileSync, closeSync, readdirSync, fstatSync, statSync } from "node:fs";
+import { openSync, mkdirSync, unlinkSync, existsSync, readFileSync, closeSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import type { Actor, AuthContext, BoundaryEvidence, Capability, Failure, ProtocolLimits, Request, RunLease } from "../implementation/contracts.js";
@@ -12,6 +12,7 @@ import { actorSocketDirectoryAt, actorSocketPathAt } from "./storage/paths.js";
 import { encodeFrame } from "./frame.js";
 import { RpcConnection, NODE_ALARMS } from "./broker/connection.js";
 import { SharedPeerPin, type ConnectionPeerPin } from "./broker/peer-pin.js";
+import { RunRegistry } from "./runtime/run-registry.js";
 import { MailModule } from "./mail.js";
 import { UnitsModule, unitName } from "./units.js";
 import { peerCred, peerPidFd, peerPidAlive, type PeerCred, tryFlock, sdNotifyReady } from "./leaf.js";
@@ -61,7 +62,7 @@ export class Broker {
   private readonly executingTasks = new Set<Promise<void>>();
   private lockFd: number | null = null;
   private running = false;
-  private runLeases = new Map<Actor, { invocationId: string; cgroupFd: number; lease: RunLease | null; revoke: () => void; done: () => void }>();
+  private readonly runLeases = new RunRegistry();
   constructor(
     private readonly store: Store, private readonly mail: MailModule, private readonly units: UnitsModule,
     private readonly views: ViewsModule, private readonly lifecycle: LifecycleModule,
@@ -112,7 +113,7 @@ export class Broker {
     });
     server.once("error", () => {
       const run = this.runLeases.get(actor);
-      if (run?.lease?.incarnation === incarnation) run.revoke();
+      if (run?.identity.incarnation === incarnation) run.revoke();
     });
     server.listen(path); this.actorServers.add(server);
     return { socketHostPath: path, done: () => {
@@ -130,6 +131,8 @@ export class Broker {
     if (pinned === null) return null;
     const owner = new SharedPeerPin(() => peerPidAlive(pinned), () => closeSync(pinned));
     if (!owner.alive()) { owner.releaseConnection(); return null; }
+    // Both transport and early authentication cleanup may release; the owner is idempotent.
+    socket.once("close", () => { try { owner.releaseConnection(); } catch (error) { this.cleanupError(error); } });
     return { ...credentials, alive: () => owner.alive(),
       retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() };
   }
@@ -147,28 +150,34 @@ export class Broker {
     } catch (error) { this.fail(socket, publicFailure(error)); }
     finally { if (!transferred) { try { peer?.releaseConnection(); } catch (error) { this.cleanupError(error); } } }
   }
-  private trustedContext(actor: Actor, credentials: BoundPeer): AuthContext | null {
+  private trustedContext(actor: Actor, credentials: BoundPeer, channel: "actor" | "trusted-runner" = "actor"): AuthContext | null {
     const agent = this.store.getAgent(actor);
     if (!agent || credentials.uid !== (process.getuid?.() ?? -1)) return null;
     const run = this.runLeases.get(actor);
-    if (!run?.lease || run.lease.incarnation !== agent.incarnation) return null;
+    const lease = run?.lease;
+    if (!run || !lease || lease.incarnation !== agent.incarnation) return null;
+    const currentCapabilities = (): ReadonlySet<Capability> => {
+      if (!credentials.alive() || this.runLeases.get(actor) !== run || run.lease !== lease) return new Set<Capability>();
+      const current = this.store.getAgent(actor);
+      if (!current || current.desired !== "enabled" || current.incarnation !== lease.incarnation ||
+          current.role !== agent.role || current.specHash !== agent.specHash) return new Set<Capability>();
+      const observed = this.units.observe(actor);
+      const peerGroup = peerCgroup(credentials.pid);
+      if (observed.activeState === "unknown" || observed.invocationId !== run.invocationId || !observed.cgroup || !peerGroup)
+        return new Set<Capability>();
+      const prefix = observed.cgroup.endsWith("/") ? observed.cgroup : `${observed.cgroup}/`;
+      if ((peerGroup !== observed.cgroup && !peerGroup.startsWith(prefix)) || !run.matches(observed.cgroup) || !credentials.alive())
+        return new Set<Capability>();
+      return capabilitiesOf(current);
+    };
+    // Empty legitimate grants still require identity proof, independently of capability count.
     const observed = this.units.observe(actor);
-    if (observed.invocationId !== run.invocationId) return null;
-    const unitCgroup = observed.cgroup;
     const peerGroup = peerCgroup(credentials.pid);
-    if (!unitCgroup || !peerGroup) return null;
-    const prefix = unitCgroup.endsWith("/") ? unitCgroup : `${unitCgroup}/`;
-    if (peerGroup !== unitCgroup && !peerGroup.startsWith(prefix)) return null;
-    try {
-      const pinned = fstatSync(run.cgroupFd, { bigint: true });
-      const current = statSync(join("/sys/fs/cgroup", unitCgroup), { bigint: true });
-      if (!pinned.isDirectory() || pinned.dev !== current.dev || pinned.ino !== current.ino) return null;
-    } catch { return null; }
-    if (!credentials.alive()) return null;
-    const lease = run.lease;
-    const granted = capabilitiesOf(agent);
-    const currentCapabilities = () => credentials.alive() && this.runLeases.get(actor) === run && run.lease === lease ? granted : new Set<Capability>();
-    return { actor, incarnation: agent.incarnation, role: agent.role, channel: "actor",
+    const prefix = observed.cgroup?.endsWith("/") ? observed.cgroup : `${observed.cgroup}/`;
+    if (agent.desired !== "enabled" || observed.activeState === "unknown" || observed.invocationId !== run.invocationId ||
+        !observed.cgroup || !peerGroup || (peerGroup !== observed.cgroup && !peerGroup.startsWith(prefix)) ||
+        !run.matches(observed.cgroup) || !credentials.alive()) return null;
+    return { actor, incarnation: agent.incarnation, role: agent.role, channel,
       get capabilities() { return currentCapabilities(); },
       peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid, cgroup: peerGroup } };
   }
@@ -207,7 +216,6 @@ export class Broker {
     const connection = this.connections.get(socket);
     if (connection) { connection.reject(new StoreError(error.code, error.message)); return; }
     if (socket.destroyed) return;
-    // Even authentication failures own their bounded final write and deadline.
     const alarm = NODE_ALARMS.after(this.limits.idleStreamSeconds, () => socket.destroy());
     socket.once("close", () => alarm.cancel());
     socket.once("error", () => socket.destroy());
@@ -383,17 +391,17 @@ export class Broker {
           return Broker.okAnswer(id, this.openRun(input.agent, input.invocationId));
         }
         case "runner.pending": {
-          const agent = this.runnerActor(peer); this.runnerAuth(agent, this.store.getAgent(agent)!.incarnation);
+          const agent = this.runnerActor(peer); this.runnerAuth(agent, this.store.getAgent(agent)!.incarnation, peer);
           return Broker.okAnswer(id, { pending: this.store.pendingDeliveries(agent).length, recoverableBatchIds: this.store.preparedBatches(agent).map(batch => batch.id) });
         }
         case "runner.observe": {
-          const agent = this.runnerActor(peer); this.runnerAuth(agent, this.store.getAgent(agent)!.incarnation);
+          const agent = this.runnerActor(peer); this.runnerAuth(agent, this.store.getAgent(agent)!.incarnation, peer);
           throw new StoreError("SPIKE_UNRESOLVED", "S-03 observation adapter is not pinned");
         }
         case "batch.prepare": {
           const agent = this.runnerActor(peer); const row = this.store.getAgent(agent);
           if (!row) throw new StoreError("AUTH_FAILED", "runner identity missing");
-          return Broker.okAnswer(id, await this.mail.prepare(this.runnerAuth(agent, row.incarnation)));
+          return Broker.okAnswer(id, await this.mail.prepare(this.runnerAuth(agent, row.incarnation, peer)));
         }
         case "batch.complete": {
           const evidence = params as unknown as BoundaryEvidence;
@@ -401,7 +409,7 @@ export class Broker {
           if (!batch) throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
           const agent = batch.agent; this.requireRunnerUnit(peer, agent); const row = this.store.getAgent(agent);
           if (!row || row.incarnation !== evidence.incarnation) throw new StoreError("BATCH_CONFLICT", "runner incarnation mismatch");
-          await this.mail.complete(this.runnerAuth(agent, row.incarnation), evidence);
+          await this.mail.complete(this.runnerAuth(agent, row.incarnation, peer), evidence);
           return Broker.okAnswer(id, { completed: true });
         }
         case "host.principalRelay": {
@@ -420,11 +428,10 @@ export class Broker {
       }
     } catch (error) { return Broker.errorAnswer(id, publicFailure(error)); }
   }
-  private runnerAuth(agent: Actor, incarnation: number): AuthContext {
-    const row = this.store.getAgent(agent);
-    const run = this.runLeases.get(agent);
-    if (!row || row.desired !== "enabled" || !run?.lease || run.lease.incarnation !== incarnation || row.incarnation !== incarnation || this.units.observe(agent).invocationId !== run.invocationId) throw new StoreError("STALE_RUN", "runner has no current live lease");
-    return { actor: agent, incarnation, role: row.role, channel: "trusted-runner", capabilities: capabilitiesOf(row), peer: { pid: 0, uid: -1, gid: -1, cgroup: null } };
+  private runnerAuth(agent: Actor, incarnation: number, peer: BoundPeer): AuthContext {
+    const auth = this.trustedContext(agent, peer, "trusted-runner");
+    if (!auth || auth.incarnation !== incarnation) throw new StoreError("STALE_RUN", "runner has no current live lease");
+    return auth;
   }
   private openRun(actor: Actor, invocationId: string): RunLease {
     const agent = this.store.getAgent(actor);
@@ -436,44 +443,39 @@ export class Broker {
     const hasGoal = this.paths.hasGoal?.() ?? existsSync(join(this.paths.stateRoot, "world", "context", "current"));
     if (!hasGoal) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
     const active = this.runLeases.get(actor);
+    const observation = this.units.observe(actor);
+    if (observation.activeState === "unknown" || observation.invocationId !== invocationId || !observation.cgroup)
+      throw new StoreError("AUTH_FAILED", "runner invocation changed during open");
     if (active?.invocationId === invocationId) {
-      if (!active.lease) throw new StoreError("STALE_RUN", "run endpoint is revoked or failed");
+      if (!active.lease || active.lease.incarnation !== agent.incarnation || !active.matches(observation.cgroup))
+        throw new StoreError("STALE_RUN", "run endpoint is revoked, replaced or failed");
       return active.lease;
     }
-    if (active) {
-      let dead = false;
-      try { dead = /^populated 0$/m.test(readFileSync(`/proc/self/fd/${active.cgroupFd}/cgroup.events`, "utf8")); }
-      catch (error) { dead = (error as NodeJS.ErrnoException).code === "ENOENT"; }
-      if (!dead) throw new StoreError("RUN_TERMINATION_UNKNOWN", "previous invocation cgroup is not proven empty");
-    }
-    const observation = this.units.observe(actor);
-    if (observation.invocationId !== invocationId || !observation.cgroup) throw new StoreError("AUTH_FAILED", "runner invocation changed during open");
-    const cgroupFd = openSync(join("/sys/fs/cgroup", observation.cgroup), "r");
+    const next = agent.incarnation + 1;
+    if (!Number.isSafeInteger(next)) throw new StoreError("STORE_CORRUPT", "incarnation exhausted");
+    this.actorSocketDirectory(actor, next);
+    const record = this.runLeases.begin(actor, next, invocationId, observation.cgroup);
     try {
-      if (!/^populated 1$/m.test(readFileSync(`/proc/self/fd/${cgroupFd}/cgroup.events`, "utf8"))) throw new StoreError("AUTH_FAILED", "current runner cgroup is not populated");
-      active?.done(); this.runLeases.delete(actor);
-      const next = agent.incarnation + 1;
-      if (!Number.isSafeInteger(next)) throw new StoreError("STORE_CORRUPT", "incarnation exhausted");
-      this.actorSocketDirectory(actor, next);
-      this.store.transaction(tx => { tx.updateAgent({ name: actor, incarnation: next }); tx.reassignPreparedBatches(actor, next); });
-      let listener: ReturnType<Broker["listenActor"]> | undefined;
-      let closed = false;
-      const record = {
-        invocationId, cgroupFd, lease: null as RunLease | null,
-        revoke: () => { record.lease = null; listener?.done(); },
-        done: () => { if (closed) return; closed = true; try { record.revoke(); } finally { closeSync(cgroupFd); } },
-      };
-      this.runLeases.set(actor, record); listener = this.listenActor(actor, next);
-      record.lease = { actor, incarnation: next, socketHostPath: listener.socketHostPath };
-      this.refreshViews(); return record.lease;
-    } catch (error) { if (this.runLeases.get(actor)?.cgroupFd !== cgroupFd) closeSync(cgroupFd); throw error; }
+      this.store.transaction(tx => {
+        const current = this.store.getAgent(actor);
+        if (!current || current.incarnation !== agent.incarnation || current.desired !== "enabled")
+          throw new StoreError("STALE_RUN", "run admission changed before incarnation commit");
+        tx.updateAgent({ name: actor, incarnation: next }); tx.reassignPreparedBatches(actor, next);
+      });
+      const lease = record.publish(this.listenActor(actor, next));
+      this.refreshViews(); return lease;
+    } catch (error) {
+      // The durable increment and attempted InvocationID are never rolled back by cleanup.
+      try { record.revoke(); } catch (cleanup) { this.cleanupError(cleanup); }
+      throw error;
+    }
   }
   drainAndClose(): void {
     this.adminServer?.close(); this.hostServer?.close();
-    for (const run of this.runLeases.values()) run.done();
+    try { this.runLeases.close(); } catch (error) { this.cleanupError(error); }
     for (const connection of this.connections.values()) connection.close();
     for (const server of this.actorServers) { try { server.close(); } catch { /* already closed */ } }
-    this.actorServers.clear(); this.runLeases.clear(); this.store.close();
+    this.actorServers.clear(); this.store.close();
     if (this.lockFd !== null) { try { closeSync(this.lockFd); } catch { /* already closed */ } this.lockFd = null; }
   }
 }
