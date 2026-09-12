@@ -5,7 +5,7 @@ import { createRequire, syncBuiltinESMExports } from "node:module";
 import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { publishContextRevision } from "../src/storage/context-snapshot.js";
+import { publishContextRevision, verifyContextRevision } from "../src/storage/context-snapshot.js";
 import { fsyncTree, replaceDerivedFile } from "../src/storage/durable-fs.js";
 import { StoreError } from "../src/domain/errors.js";
 
@@ -24,7 +24,6 @@ function fixture() {
   return { root, source, world, target };
 }
 function cleanup(root: string): void {
-  // Test cleanup only: tests own every generated name. Production does not GC.
   const walk = (path: string): void => {
     const stat = lstatSync(path);
     if (!stat.isDirectory()) return;
@@ -37,11 +36,14 @@ function cleanup(root: string): void {
 test("context revision replay retains exact bytes modes and parent-only current target", () => {
   const f = fixture();
   try {
-    publishContextRevision(f.world, revision, entries, f.source);
+    const mask = process.umask(0o077);
+    try { publishContextRevision(f.world, revision, entries, f.source); }
+    finally { process.umask(mask); }
     const inode = lstatSync(f.target).ino;
     assert.equal(readFileSync(join(f.target, "GOAL.md"), "utf8"), goal);
-    assert.equal(lstatSync(join(f.target, "GOAL.md")).mode & 0o777, 0o444);
+    assert.equal(lstatSync(join(f.target, "GOAL.md")).mode & 0o777, 0o644, "context mode is fixed, independent of umask and mail policy");
     assert.equal(lstatSync(f.target).mode & 0o777, 0o555);
+    assert.doesNotThrow(() => verifyContextRevision(f.target, entries, true));
     assert.equal(readlinkSync(join(f.world, "context", "current")), `revisions/${revision}`);
     publishContextRevision(f.world, revision, entries, f.source);
     assert.equal(lstatSync(f.target).ino, inode);
@@ -107,8 +109,6 @@ for (const phase of ["file-before-rename", "directory-after-rename"] as const) {
       assert.equal(readFileSync(path, "utf8"), phase === "file-before-rename" ? "old" : "new");
       assert.equal(readFileSync(foreign, "utf8"), "foreign");
       assert.deepEqual(readdirSync(root).sort(), [".view.other-owner.tmp", "view"]);
-    } finally {
-      t.mock.restoreAll(); syncBuiltinESMExports(); cleanup(root);
-    }
+    } finally { t.mock.restoreAll(); syncBuiltinESMExports(); cleanup(root); }
   });
 }
