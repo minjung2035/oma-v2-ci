@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, lstatSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { join, resolve, relative } from "node:path";
+import { arch, platform, release } from "node:os";
+import ts from "typescript";
+import { lanes, evaluateExecution } from "./verification-lanes.mjs";
+
+const [name, ...args] = process.argv.slice(2);
+if (!Object.hasOwn(lanes, name ?? "")) throw new Error(`usage: verify-lane.mjs <${Object.keys(lanes).join("|")}> --out <new-directory> [--baseline <result.json>]`);
+const valueOf = key => { const index = args.indexOf(key); return index < 0 ? undefined : args[index + 1]; };
+const outputArg = valueOf("--out");
+if (!outputArg) throw new Error("a new output directory is required; evidence is never overwritten");
+const root = process.cwd(); const output = resolve(outputArg); const lane = lanes[name];
+if (existsSync(output)) throw new Error("output directory already exists");
+mkdirSync(output, { recursive: true });
+const environment = {};
+for (const key of ["PATH", "HOME", "LANG", "LC_ALL", "TZ", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "DBUS_SESSION_BUS_ADDRESS"])
+  if (process.env[key] !== undefined) environment[key] = process.env[key];
+const report = { schema: 1, lane: name, status: "SETUP_FAILED", execution: "NOT_RUN", proof: lane.proof,
+  startedAt: new Date().toISOString(), concurrency: 1, environment: { node: process.version, platform: platform(), arch: arch(), kernel: release(), uid: process.getuid?.() ?? null,
+    inheritedKeys: Object.keys(environment), paidProviderCredentialsInherited: false },
+  commands: [], selectedFiles: [], sourceDigests: {}, sourceTestCallSites: [], runtime: null,
+  limitations: ["S-03/S-04 feature completion remains BLOCKED", "VM power loss NOT_RUN", "host reboot and paid provider calls are outside this runner", "raw test failure does not identify product-vs-environment cause"] };
+function filesUnder(path) {
+  if (!existsSync(path)) return [];
+  const stat = lstatSync(path);
+  if (stat.isSymbolicLink()) throw new Error(`source input is a symlink: ${path}`);
+  if (stat.isFile()) return [path];
+  if (!stat.isDirectory()) throw new Error(`unsupported source input: ${path}`);
+  return readdirSync(path).sort().filter(name => name !== "evidence").flatMap(name => filesUnder(join(path, name)));
+}
+function command(executable, argv, label, seconds) {
+  const stdoutPath = join(output, `${label}.stdout.log`); const stderrPath = join(output, `${label}.stderr.log`);
+  const stdout = openSync(stdoutPath, "wx"); const stderr = openSync(stderrPath, "wx");
+  return new Promise(resolveResult => {
+    const startedAt = new Date().toISOString(); let timedOut = false; let settled = false;
+    const child = spawn(executable, argv, { cwd: root, env: environment, detached: process.platform !== "win32", stdio: ["ignore", stdout, stderr] });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL"); } catch { /* this owned group may already have exited */ }
+    }, seconds * 1000);
+    const finish = (code, signal, error = null) => {
+      if (settled) return; settled = true; clearTimeout(timer); closeSync(stdout); closeSync(stderr);
+      const result = { executable, argv, label, startedAt, endedAt: new Date().toISOString(), code, signal, timedOut,
+        error: error ? String(error.message ?? error) : null, stdout: relative(output, stdoutPath), stderr: relative(output, stderrPath) };
+      report.commands.push(result); resolveResult(result);
+    };
+    child.once("error", error => finish(null, null, error)); child.once("close", (code, signal) => finish(code, signal));
+  });
+}
+function requirePreflight(executable, argv) {
+  const result = spawnSync(executable, argv, { env: environment, encoding: "utf8", timeout: 10000, maxBuffer: 65536, killSignal: "SIGKILL" });
+  if (result.error || result.signal || result.status !== 0) throw new Error(`environment preflight failed: ${executable} ${argv.join(" ")}`);
+  return result.stdout.trim();
+}
+try {
+  if (Number(process.versions.node.split(".")[0]) < 26) throw new Error("pinned Node 26+ toolchain required for this repository");
+  if (lane.environment !== "node") {
+    if (process.platform !== "linux") throw new Error("real filesystem/kernel lanes require Linux");
+    report.environment.git = requirePreflight("git", ["--version"]);
+    if (!existsSync("/dev/shm")) throw new Error("cross-filesystem test mount missing");
+  }
+  if (lane.environment === "systemd") {
+    report.environment.systemd = requirePreflight("systemctl", ["--user", "show", "--property=Version", "--value"]);
+    report.environment.bubblewrap = requirePreflight("bwrap", ["--version"]);
+    report.environment.python = requirePreflight("python3", ["--version"]);
+    if (!existsSync("/proc/self/fd") || !existsSync("/sys/fs/cgroup/cgroup.controllers")) throw new Error("required proc/cgroup v2 observations unavailable");
+  }
+  const roots = ["src", "test", "scripts", "implementation", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "architecture.md", "implementation-spec.md"];
+  for (const path of roots.flatMap(name => filesUnder(join(root, name))).sort()) {
+    const rel = relative(root, path); const bytes = readFileSync(path);
+    report.sourceDigests[rel] = createHash("sha256").update(bytes).digest("hex");
+    if (rel.startsWith("test/") && rel.endsWith(".ts")) {
+      const source = ts.createSourceFile(rel, bytes.toString("utf8"), ts.ScriptTarget.Latest, true);
+      const visit = node => {
+        if (ts.isCallExpression(node) && (node.expression.getText(source) === "test" || node.expression.getText(source) === "it" || /^(?:test|it)\.(?:skip|todo|only)$/.test(node.expression.getText(source))))
+          report.sourceTestCallSites.push({ file: rel, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1, expression: node.arguments[0]?.getText(source) ?? null });
+        ts.forEachChild(node, visit);
+      }; visit(source);
+    }
+  }
+  report.sourceTestCallSiteUnit = "AST call sites, NOT expanded executed test cases";
+  report.environment.sourceHead = requirePreflight("git", ["rev-parse", "HEAD"]);
+  const build = await command("npm", ["run", "build"], "build", 600);
+  if (build.code !== 0 || build.signal) { report.status = "BUILD_FAILED"; throw new Error("build failed; test execution did not begin"); }
+  if (name === "fast" || name === "all") {
+    for (const script of ["typecheck", "check:architecture"]) {
+      const check = await command("npm", ["run", script], script.replace(":", "-"), 600);
+      if (check.code !== 0 || check.signal) { report.status = "PRECHECK_FAILED"; throw new Error(`${script} failed; runtime tests did not begin`); }
+    }
+  }
+  const compiled = readdirSync(join(root, "dist/test")).filter(file => file.endsWith(".test.js")).sort();
+  const selected = lane.files === "all" ? compiled : lane.files;
+  for (const file of selected) if (!compiled.includes(file)) throw new Error(`required test file missing: ${file}`);
+  const sourceNames = readdirSync(join(root, "test")).filter(file => file.endsWith(".test.ts")).map(file => file.replace(/\.ts$/, ".js")).sort();
+  if (JSON.stringify(compiled) !== JSON.stringify(sourceNames)) throw new Error("compiled/source test inventories differ; clean rebuild required");
+  report.selectedFiles = [...selected.map(file => `dist/test/${file}`), ...lane.sourceFiles];
+  for (const file of report.selectedFiles) if (!lstatSync(join(root, file)).isFile()) throw new Error(`test entry is not a file: ${file}`);
+  const baselinePath = valueOf("--baseline");
+  const baseline = baselinePath ? JSON.parse(readFileSync(resolve(baselinePath), "utf8")) : null;
+  if (baseline && (baseline.lane !== name || baseline.status !== "PASS" || !Array.isArray(baseline.runtime?.names))) throw new Error("baseline is not a successful same-lane execution record");
+  const result = await command(process.execPath, ["--test", "--test-concurrency=1", "--test-reporter=tap", ...report.selectedFiles], "tests", lane.timeoutSeconds);
+  report.execution = result.error ? "NOT_RUN" : "EXECUTED";
+  const log = join(output, result.stdout);
+  if (statSync(log).size > 64 * 1024 * 1024) throw new Error("raw test log preserved, but evidence parser's 64 MiB bound exceeded");
+  report.runtime = evaluateExecution({ exitCode: result.code, signal: result.signal, tap: readFileSync(log, "utf8"), requiredNames: lane.requiredNames,
+    ...(baseline ? { baselineNames: baseline.runtime.names } : {}) });
+  if (baseline && report.runtime.totals.tests < baseline.runtime.totals.tests) {
+    report.runtime.errors.push("executed-test-count-decreased"); report.runtime.status = "FAIL";
+  }
+  report.status = report.runtime.status;
+} catch (error) {
+  report.failure = error instanceof Error ? error.message : String(error);
+  if (report.status === "PASS" || report.execution === "EXECUTED") report.status = "FAIL";
+} finally {
+  report.endedAt = new Date().toISOString();
+  writeFileSync(join(output, "result.json"), JSON.stringify(report, null, 2) + "\n", { flag: "wx" });
+  console.error(`${name}: ${report.status}; ${report.execution}; artifacts=${output}`);
+  process.exitCode = report.status === "PASS" ? 0 : 1;
+}
