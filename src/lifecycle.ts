@@ -29,9 +29,11 @@ import type {
   OperationResult,
 } from "../implementation/contracts.js";
 import { Store, StoreError, reused, type OperationRow } from "./store.js";
-import { UnitsModule, unitName } from "./units.js";
+import { UnitsModule } from "./units.js";
 import { MailModule } from "./mail.js";
 import { generateOperationId, isValidFullOid } from "./ids.js";
+import { residentUnitsFor } from "./domain/derived.js";
+import { workspacePathAt, agentRootPathAt, isWorkspacePathFor } from "./storage/paths.js";
 import { requestHash, canonicalJson } from "./hash.js";
 import { capabilitiesOf, resolvedSpecOf, assertCurrentActor } from "./authority.js";
 
@@ -476,8 +478,8 @@ export class LifecycleModule {
       const id = generateOperationId();
       const initialMessage = await this.mail!.freezeCreateInitial(auth, id, seed.name, seed.brief);
       const plan: CreatePlan = { kind: "agent.create", spec, specHash: specDigest(spec), parent: "principal",
-        workspacePath: join(this.paths.stateRoot, "agents", seed.name, "workspace"),
-        unitNames: [unitName(this.paths.society, seed.name, "service"), unitName(this.paths.society, seed.name, "path")],
+        workspacePath: workspacePathAt(this.paths.stateRoot, seed.name),
+        unitNames: residentUnitsFor(this.paths.society, seed.name),
         initialMessage, existingCreation: null };
       return { id, plan };
     }));
@@ -557,11 +559,8 @@ export class LifecycleModule {
         spec,
         specHash,
         parent: auth.actor,
-        workspacePath: join(this.paths.stateRoot, "agents", input.name, "workspace"),
-        unitNames: [
-          unitName(this.paths.society, input.name, "service"),
-          unitName(this.paths.society, input.name, "path"),
-        ],
+        workspacePath: workspacePathAt(this.paths.stateRoot, input.name),
+        unitNames: residentUnitsFor(this.paths.society, input.name),
         initialMessage: null,
         existingCreation: original.id,
       };
@@ -594,8 +593,7 @@ export class LifecycleModule {
       throw new StoreError("INTERNAL_ERROR", "create mail boundary unavailable");
 
     const opId = generateOperationId();
-    const workspaceRoot = join(this.paths.stateRoot, "agents", input.name);
-    const workspace = join(workspaceRoot, "workspace");
+    const workspace = workspacePathAt(this.paths.stateRoot, input.name);
     const initialMessage = await this.mail.freezeCreateInitial(
       auth,
       opId,
@@ -608,10 +606,7 @@ export class LifecycleModule {
       specHash,
       parent: auth.actor,
       workspacePath: workspace,
-      unitNames: [
-        unitName(this.paths.society, input.name, "service"),
-        unitName(this.paths.society, input.name, "path"),
-      ],
+      unitNames: residentUnitsFor(this.paths.society, input.name),
       initialMessage,
       existingCreation: null,
     };
@@ -800,13 +795,19 @@ export class LifecycleModule {
     if (!plan.initialMessage)
       throw new StoreError("STORE_CORRUPT", "create plan has no initial message");
 
+    // Grammar is not ownership: check the host root and expected resident before effects.
+    const expectedUnits = residentUnitsFor(this.paths.society, plan.spec.name);
+    if (!isWorkspacePathFor(plan.workspacePath, { stateRoot: this.paths.stateRoot, actor: plan.spec.name }) ||
+      plan.unitNames.length !== expectedUnits.length ||
+      plan.unitNames.some((name, index) => name !== expectedUnits[index]))
+      throw new StoreError("STORE_CORRUPT", "create path/unit identity mismatch");
     const agent = this.store.getAgent(plan.spec.name);
     if (!agent || agent.specHash !== plan.specHash || specDigest(resolvedSpecOf(agent)) !== plan.specHash)
       throw new StoreError("STORE_CORRUPT", "create agent/spec mismatch");
     // The committed physical winner alone publishes; recovery uses the frozen staging bytes.
     this.mail.publishCreateInitial(plan.initialMessage);
     this.ensureWorkspace(plan);
-    const root = join(this.paths.stateRoot, "agents", plan.spec.name);
+    const root = agentRootPathAt(this.paths.stateRoot, plan.spec.name);
     mkdirSync(join(root, "home"), { recursive: true });
     mkdirSync(join(this.paths.stateRoot, "mail", "inboxes", plan.spec.name), {
       recursive: true,
@@ -845,7 +846,7 @@ export class LifecycleModule {
   private ensureWorkspace(plan: CreatePlan): void {
     this.assertCanonicalBase(plan.spec.from);
     const workspace = plan.workspacePath;
-    const workspaceRoot = join(this.paths.stateRoot, "agents", plan.spec.name);
+    const workspaceRoot = agentRootPathAt(this.paths.stateRoot, plan.spec.name);
     const workspaceTmp = join(workspaceRoot, "workspace.tmp");
     if (!existsSync(workspace)) {
       mkdirSync(workspaceTmp, { recursive: true });
@@ -965,6 +966,7 @@ function parseCreatePlan(op: OperationRow): CreatePlan {
       !plan.spec ||
       typeof plan.spec.name !== "string" ||
       typeof plan.spec.from !== "string" ||
+      typeof plan.spec.brief !== "string" ||
       typeof plan.spec.brief !== "string" ||
       typeof plan.spec.profile !== "string" ||
       !Array.isArray(plan.spec.capabilities) ||
