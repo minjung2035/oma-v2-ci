@@ -50,6 +50,13 @@ import {
   parseMessageId,
 } from "./ids.js";
 import { isValidTopicName } from "./ids.js";
+import {
+  mailObjectFileName, mailObjectRelativePath, mailArchiveDisplayPath,
+  contextRevisionDisplayPath, isMessageIdForOperation, isMailObjectRelativePathFor,
+} from "./domain/derived.js";
+import {
+  mailObjectPathAt, mailArchivePathAt, mailInboxPathAt, runnerViewPathAt, batchViewPathAt,
+} from "./storage/paths.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { exactCandidateCheck, messagePlanCheck } from "./validate.js";
 
@@ -297,15 +304,15 @@ export function writeAtomic(file: string, content: string, mode = 0o600): void {
 }
 
 export function publishBatchView(stateRoot: string, batch: PreparedBatch): void {
-  const runView = join(stateRoot, "agents", batch.agent, "runner", "view");
-  writeAtomic(join(runView, `batch-${batch.id}.json`), JSON.stringify({
+  const runView = runnerViewPathAt(stateRoot, batch.agent);
+  writeAtomic(batchViewPathAt(stateRoot, batch.agent, batch.id), JSON.stringify({
     id: batch.id, agent: batch.agent, incarnation: batch.incarnation,
     deliveryMode: batch.deliveryMode, notice: batch.notice, messageIds: batch.messageIds,
   }));
   const lines = [
     `# inbox — ${batch.agent}`, "",
     `안내 batch ${batch.id} (incarnation ${batch.incarnation})`, "",
-    ...batch.messageIds.map((id, i) => `${i + 1}. ${id}\t/mail/archive/cur/${id}:2,`),
+    ...batch.messageIds.map((id, i) => `${i + 1}. ${id}\t${mailArchiveDisplayPath(id)}`),
     "", "읽기: cat <위 archive path>",
   ];
   writeAtomic(join(runView, "inbox.md"), `${lines.join("\n")}\n`, 0o444);
@@ -491,24 +498,20 @@ export class MailModule {
     private readonly batchMaxMessages = 24,
   ) {}
 
-  private mailRoot(): string {
-    return join(this.paths.stateRoot, "mail");
-  }
-
   objectPath(id: MessageId): string {
-    return join(this.mailRoot(), "objects", `${id}.eml`);
+    return mailObjectPathAt(this.paths.stateRoot, id);
   }
 
   archivePath(id: MessageId): string {
-    return join(this.mailRoot(), "archive", "cur", `${id}:2,`);
+    return mailArchivePathAt(this.paths.stateRoot, id);
   }
 
   inboxNewPath(actor: Actor, id: MessageId): string {
-    return join(this.mailRoot(), "inboxes", actor, "new", id);
+    return mailInboxPathAt(this.paths.stateRoot, actor, id, "new");
   }
 
   inboxCurPath(actor: Actor, id: MessageId): string {
-    return join(this.mailRoot(), "inboxes", actor, "cur", `${id}:2,`);
+    return mailInboxPathAt(this.paths.stateRoot, actor, id, "cur");
   }
 
   async send(
@@ -605,7 +608,7 @@ export class MailModule {
 
     const staging = join(this.paths.stateRoot, "staging", `send-${key}`);
     mkdirSync(staging, { recursive: true });
-    const staged = join(staging, `${messageId}.eml`);
+    const staged = join(staging, mailObjectFileName(messageId));
     writeFsynced(staged, eml.text);
     try {
       publishImmutableFile(staged, this.objectPath(messageId));
@@ -618,7 +621,7 @@ export class MailModule {
       kind: operationKind,
       message: {
         id: messageId,
-        objectPath: `mail/objects/${messageId}.eml`,
+        objectPath: mailObjectRelativePath(messageId),
         sha256: eml.sha256,
         bytes: eml.bytes,
         dateMs: eml.dateMs,
@@ -704,7 +707,7 @@ export class MailModule {
     this.freezeObject(messageId, eml);
     return {
       id: messageId,
-      objectPath: `mail/objects/${messageId}.eml`,
+      objectPath: mailObjectRelativePath(messageId),
       sha256: eml.sha256,
       bytes: eml.bytes,
       dateMs: eml.dateMs,
@@ -757,7 +760,8 @@ export class MailModule {
     const invalid = messagePlanCheck(raw);
     if (invalid) throw new StoreError("STORE_CORRUPT", `operation ${op.id} message: ${invalid}`);
     const message = raw as MessagePlan; // Closed subtree validated above.
-    if (parseMessageId(message.id)?.operationId !== op.id || message.objectPath !== `mail/objects/${message.id}.eml` ||
+    if (!isMessageIdForOperation(message.id, { operationId: op.id }) ||
+      !isMailObjectRelativePathFor(message.objectPath, { messageId: message.id }) ||
       new Set(message.recipients).size !== message.recipients.length ||
       (message.kind === "approval_required") !== (message.approvalFor !== undefined) ||
       (message.kind === "approval_required" && !message.to.some(address => logicalReplyAddress(this.store, address, this.paths.society) === "principal")))
@@ -960,10 +964,10 @@ export class MailModule {
       const headers = this.messageHeaders(message);
       const reply = headers.inReplyTo ?? headers.references.at(-1) ?? null;
       const context = message.contextRevision
-        ? ` context=/world/context/revisions/${message.contextRevision}${message.kind === "context" ? "/GOAL.md" : ""}`
+        ? ` context=${contextRevisionDisplayPath(message.contextRevision)}${message.kind === "context" ? "/GOAL.md" : ""}`
         : "";
       lines.push(
-        `${i + 1}. sender=${oneLine(headers.from)} subject=${oneLine(headers.subject)} kind=${message.kind} path=/mail/archive/cur/${id}:2,${reply ? ` reply=${reply}` : ""}${context}`,
+        `${i + 1}. sender=${oneLine(headers.from)} subject=${oneLine(headers.subject)} kind=${message.kind} path=${mailArchiveDisplayPath(id)}${reply ? ` reply=${reply}` : ""}${context}`,
       );
     }
     if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
