@@ -25,11 +25,12 @@ and method capability preflight still precede all these module entrypoints.
 const code = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
 
 test("R13: cycles, self-parent, missing parents and unknown actors never become partial trees", () => {
-  for (const rows of [
+  const corruptGraphs: Array<Array<{ name: string; createdBy: string | null }>> = [
     [{ name: "alice", createdBy: "bob" }, { name: "bob", createdBy: "alice" }],
     [{ name: "alice", createdBy: "alice" }], [{ name: "alice", createdBy: "missing" }],
     [{ name: "alice", createdBy: null }, { name: "alice", createdBy: null }],
-  ]) assert.throws(() => new LineageSnapshot(rows), code("STORE_CORRUPT"));
+  ];
+  for (const rows of corruptGraphs) assert.throws(() => new LineageSnapshot(rows), code("STORE_CORRUPT"));
   const graph = new LineageSnapshot([{ name: "alice", createdBy: null }]);
   assert.throws(() => graph.ancestors("missing"), code("STORE_CORRUPT"));
   assert.throws(() => graph.descendants("missing"), code("STORE_CORRUPT"));
