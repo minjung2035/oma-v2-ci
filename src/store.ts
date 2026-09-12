@@ -12,7 +12,7 @@ import { LedgerReader } from "./storage/ledger-reader.js";
 import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
 import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput, type UsageReservation } from "./storage/transitions.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
-import { isValidSocietyName } from "./ids.js";
+import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./ids.js";
 import { StoreError, isErrorCode, isPreacceptOnlyFailure } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
@@ -112,7 +112,6 @@ export class Store {
     } finally { this.transitions.reset(); }
   }
   get inTransaction(): boolean { return this.transactions.active; }
-  /** Compatibility mutations require the same live capability as tx.* methods. */
   private requireTx(): void { this.transactions.requireLive(); }
   insertAgent(agent: NewAgent): void {
     this.requireTx();
@@ -180,6 +179,27 @@ export class Store {
   getOperationById(id: OperationId): OperationRow | null { return this.reader.operationById(id); }
   findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
   recoverableOperations(): OperationId[] { return this.reader.recoverableIds(); }
+  /** CTX-006: a prepared tree or current symlink is not a completed GOAL.
+   * This filtered identity projection is followed by the full relational decoder.
+   * No new index, table, receipt variant or schema migration is introduced.
+   */
+  findSucceededContext(candidate: string): OperationOf<"context.publish"> | null {
+    if (!isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", "invalid completed context candidate");
+    let selected: unknown;
+    try {
+      selected = this.db.prepare(`SELECT id FROM operations WHERE kind='context.publish' AND state='succeeded'
+        AND json_extract(plan_json, '$.candidate')=? ORDER BY created_at_ms DESC, id DESC LIMIT 1`).get(candidate);
+    } catch (error) {
+      throw new StoreError(isBusyError(error) ? "DB_BUSY" : "STORE_CORRUPT", "completed context identity query failed");
+    }
+    if (selected === undefined) return null;
+    const id = fullRow(selected, ["id"], "completed context projection").id;
+    if (!isValidOperationId(id)) throw new StoreError("STORE_CORRUPT", "invalid completed context operation identity");
+    const operation = this.getOperationById(id);
+    if (!operation || operation.kind !== "context.publish" || operation.state !== "succeeded" || operation.plan.candidate !== candidate)
+      throw new StoreError("STORE_CORRUPT", "completed context projection differs from its decoded row");
+    return operation;
+  }
   updateOperationPlanJson(id: OperationId, planJson: string): void {
     this.requireTx(); this.transactions.requireUnaccepted(id);
     const row = fullRow(this.db.prepare("SELECT state FROM operations WHERE id=?").get(id), ["state"], "unaccepted operation state");
