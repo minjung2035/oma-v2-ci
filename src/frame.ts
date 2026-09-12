@@ -47,8 +47,12 @@ export function encodeFrame(value: unknown): Buffer {
   return out;
 }
 const utf8 = new TextDecoder("utf-8", { fatal: true });
-export interface ParsedFrame { raw: unknown; text: string }
-export function parseJsonObject(bytes: Buffer): ParsedFrame {
+/** Only the JSON root shape is established here; request fields remain unknown. */
+export interface ParsedFrame { raw: Record<string, unknown>; text: string }
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+export function parseJsonObject(bytes: Uint8Array): ParsedFrame {
   let text: string;
   try { text = utf8.decode(bytes); } catch { throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in JSON"); }
   const duplicate = findDuplicateKey(text);
@@ -61,7 +65,7 @@ export function parseJsonObject(bytes: Buffer): ParsedFrame {
       return value;
     });
   } catch (error) { throw new FrameError("INVALID_REQUEST", `malformed JSON: ${error instanceof Error ? error.message : "invalid JSON"}`); }
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new FrameError("INVALID_REQUEST", "root must be a JSON object");
+  if (!isJsonObject(raw)) throw new FrameError("INVALID_REQUEST", "root must be a JSON object");
   return { raw, text };
 }
 function checkedLimit(maximum: number): number {
@@ -78,9 +82,9 @@ export class FrameParser {
   private poison(error: FrameError): never { this.failure = error; this.bytes.clear(); throw error; }
   feed(chunk: Buffer): ParsedFrame[] {
     if (this.failure) throw this.failure;
-    this.bytes.append(chunk);
     const frames: ParsedFrame[] = [];
     try {
+      this.bytes.append(chunk);
       while (this.bytes.length >= 4) {
         const length = this.bytes.uint32BE();
         if (length > this.bound) throw new FrameError("FRAME_TOO_LARGE", `frame length ${length} exceeds max ${this.maxFrameBytes}`);
