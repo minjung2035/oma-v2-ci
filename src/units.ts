@@ -15,6 +15,9 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { Actor, ResourceLimits, UnitObservation } from "../implementation/contracts.js";
 import { StoreError } from "./store.js";
+import { unitNameFor as unitName } from "./domain/derived.js";
+
+export { unitName };
 
 export const UNIT_TPL_DIR = fileURLToPath(
   new URL("../../implementation/systemd", import.meta.url),
@@ -71,14 +74,6 @@ export function renderUnit(template: string, v: RenderValues): string {
       char === "%" ? "%%" : `\\x${char.charCodeAt(0).toString(16).padStart(2, "0")}`,
     );
   });
-}
-
-export function unitName(
-  society: string,
-  kind: "broker" | Actor | "principal" | "principal-relay" | "reconcile",
-  suffix: "service" | "path" | "timer",
-): string {
-  return `oma-${society}-${kind}.${suffix}`;
 }
 
 export type IncarnationReader = (agent: Actor) => number | null;
