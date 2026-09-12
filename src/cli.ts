@@ -11,7 +11,8 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { FrameParser, encodeFrame } from "./frame.js";
 import { RequestCache, type CachedRequest } from "./request-cache.js";
-import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4, parseMessageId } from "./ids.js";
+import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4, parseMessageId, parseMessageFileId } from "./ids.js";
+import { exportRefForRequestKey } from "./domain/derived.js";
 import type { Json, Receipt } from "../implementation/contracts.js";
 import { exactCandidateCheck, contextFileCheck } from "./validate.js";
 import { parseEmlHeaders } from "./mail.js";
@@ -469,14 +470,14 @@ async function cmdSend(args: string[]): Promise<void> {
   );
 }
 
-
 function parseMessageArg(value: string): string {
   const id = value.startsWith("m-")
     ? value
     : basename(value).replace(/:2,$/, "");
-  if (!/^m-[0-9a-f-]{36}-\d+$/.test(id))
+  const parsed = parseMessageFileId(id);
+  if (parsed === null)
     fail("ack requires a message id or mail path", 2);
-  return id;
+  return parsed;
 }
 
 async function cmdAck(args: string[]): Promise<void> {
@@ -583,7 +584,8 @@ async function cmdSubmit(args: string[]): Promise<void> {
       const subject = opt(args, "--subject") ?? "Re: submit";
       const body = readBody(opt(args, "--file"));
       const paths = multiOpt(args, "--path");
-      const exportRef = `refs/oma/export/cli-${key}`;
+      // D03: only fresh requests derive this bounded ref; replay keeps the frozen ref.
+      const exportRef = exportRefForRequestKey(key);
       // CLI-002: candidate resolved from the LOCAL repo; the bundle's
       // prerequisite is the candidate's own parent (never invented)
       git(cwd, ["update-ref", exportRef, candidate]);
