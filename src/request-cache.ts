@@ -63,7 +63,10 @@ export const readCacheFile: CacheReader = (path, expectedBytes) => {
   } catch (error) {
     return ioObservation(error);
   } finally {
-    if (fd !== undefined) closeSync(fd);
+    if (fd !== undefined) {
+      try { closeSync(fd); }
+      catch (error) { return { kind: "unavailable", reason: `cache close failed: ${messageOf(error)}` }; }
+    }
   }
 };
 
@@ -96,7 +99,6 @@ function publishNoReplace(target: string, data: string | Uint8Array): "created" 
     }
   } finally {
     unlinkSync(temp);
-    // Also fence an already-visible competing publication before any send.
     fsyncDir(dirname(target));
   }
   return result;
@@ -118,6 +120,12 @@ function sameIdentity(left: CachedRequest, right: CachedRequest): boolean {
     requestParamsEqual(left.method, left.params, right.params) &&
     ((left.digest === undefined && right.digest === undefined) ||
       (left.digest !== undefined && right.digest !== undefined && left.digest.bytes === right.digest.bytes && left.digest.sha256 === right.digest.sha256));
+}
+function freezeInput(input: FreezeInput): CachedRequest {
+  if (Object.hasOwn(input, "lastReceipt")) throw new CacheError("INVALID_REQUEST", "initial freeze cannot set lastReceipt");
+  const decoded = decodeCachedRequest({ ...input, lastReceipt: null }, input.key);
+  if (!decoded.ok) throw new CacheError("INVALID_REQUEST", decoded.reason);
+  return decoded.value;
 }
 
 export class RequestCache {
@@ -169,10 +177,15 @@ export class RequestCache {
     const frozen = requirePresent(actual, "frozen metadata");
     if (!sameIdentity(request, frozen)) throw new CacheError("REQUEST_KEY_REUSED", `key ${request.key} is already frozen for another request`);
     if (frozen.digest) requirePresent(this.readBody(frozen.key, frozen.digest), "frozen body");
-    // A second CLI may observe the first CLI's link before its directory fsync.
-    // Establish that barrier ourselves before returning replay-ready metadata.
-    fsyncDir(this.dir());
+    // Fence a competing link even when its original publisher has not fsynced yet.
+    try { fsyncDir(this.dir()); }
+    catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `replay durability barrier failed: ${messageOf(error)}`); }
     return { kind: "existing", value: frozen };
+  }
+
+  /** Never creates metadata: disappearance during a replay is not a fresh key. */
+  prepareReplay(input: FreezeInput): CachedRequest {
+    return this.existing(freezeInput(input), this.read(input.key)).value;
   }
 
   /**
@@ -181,10 +194,7 @@ export class RequestCache {
    * retained as an ambiguous orphan; no new payload is reconstructed for its key.
    */
   freeze(input: FreezeInput, body?: Uint8Array): FreezeResult {
-    if (Object.hasOwn(input, "lastReceipt")) throw new CacheError("INVALID_REQUEST", "initial freeze cannot set lastReceipt");
-    const decoded = decodeCachedRequest({ ...input, lastReceipt: null }, input.key);
-    if (!decoded.ok) throw new CacheError("INVALID_REQUEST", decoded.reason);
-    const request = decoded.value;
+    const request = freezeInput(input);
     const initial = this.read(request.key);
     if (initial.kind === "present") return this.existing(request, initial);
     if (initial.kind !== "absent") requirePresent(initial, "initial freeze");
