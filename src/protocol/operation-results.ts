@@ -14,3 +14,10 @@ export function integrationResult(plan: ValidatedPlan<"git.integrate">): ResultF
     changed: plan.base !== plan.candidate,
   };
 }
+
+export function submitResult(plan: ValidatedPlan<"git.submit">): ResultFor<"git.submit"> {
+  return {
+    kind: "git.submit", candidate: plan.candidate, publishedRef: plan.publishedRef,
+    message: plan.message.id, recipientCount: plan.message.recipients.length,
+  };
+}
