@@ -74,7 +74,6 @@ test("R20: an accepted submit plan alone cannot publish result mail", async () =
 test("R20: publication proof is issued for the exact observed canonical ref and is single-use", async () => {
   const f = await fixture();
   try {
-    const invocations: readonly string[][] = [];
     const calls: string[][] = [];
     const observer = new GitObserver(args => { calls.push([...args]); return native(); });
     const issuer = new GitPublicationObserver(observer, "/trusted/project.git");
@@ -86,16 +85,18 @@ test("R20: publication proof is issued for the exact observed canonical ref and 
       assert.throws(() => consumeSubmissionPublication(forged, f.operation), code("REF_STATE_UNKNOWN"));
     }
     const originalPlan = f.operation.planJson;
-    const result = await f.mail.publishGated(f.operation.id, proof);
-    assert.deepEqual(result, { message: f.operation.plan.message.id, recipientCount: 1 });
-    const path = mailArchivePathAt(f.root, result.message);
+    assert.equal(await f.mail.publishGated(f.operation.id, proof), undefined);
+    const message = f.operation.plan.message.id;
+    const path = mailArchivePathAt(f.root, message);
     const before = readFileSync(path);
-    assert.equal(f.store.getDelivery(result.message, "bob")?.materialized, 1);
+    assert.deepEqual(before, readFileSync(f.mail.objectPath(message)), "published bytes are the original immutable message");
+    assert.deepEqual(f.store.deliveriesForOperation(f.operation.id).map(row => ({ message: row.messageId, recipient: row.recipient, materialized: row.materialized })),
+      [{ message, recipient: "bob", materialized: 1 }]);
     assert.equal(f.store.getOperationById(f.operation.id)?.planJson, originalPlan);
+    assert.equal(f.store.getOperationById(f.operation.id)?.state, "pending", "mail publication is not operation settlement");
     await assert.rejects(f.mail.publishGated(f.operation.id, proof), code("REF_STATE_UNKNOWN"));
     assert.deepEqual(readFileSync(path), before);
     assert.equal(calls.length, 1, "consuming a token is not an invented new observation");
-    assert.equal(invocations.length, 0);
   } finally { f.close(); }
 });
 
