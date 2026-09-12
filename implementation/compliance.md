@@ -25,3 +25,15 @@
 **MUST [COMP-007]** 기존 명확한 요구를 반복 설명하는 대신 다음 priority trace를 먼저 채운다: LIFE-001/007 stable-name dedup, LIFE-008 dynamic identity, REC-007/SEQ-003 singleton-before-DB, UNIT-007 actual effect result, IPC-012 exhaustive internal surface, BATCH-001/006 handoff/gate, INT-007/S-01-CANDIDATE actual candidate resource binding, IPC-004/006 key, AUTH-001/003 capability/fencing.
 
 **MUST [COMP-008]** schema migration과 RuntimeAgentRecord decoder가 stale resolved spec을 받으면 missing resources/modelProfile을 initialResidents/default로 채우지 않는다. 기존 spec draft를 바탕으로 만들어진 DB가 있다면 host가 검토한 migration을 먼저 설계한다. 이 문서 작성은 사용자 DB를 검사·변경하거나 migration을 실행한 것이 아니다. unsupported stored format은 명시적으로 차단한다.
+
+## R39 구현 연결과 현재 상태 — 비규범적 기록
+
+[현재 source 연결](source-owners.json)은 검토한 경계의 명시적 owner/entrypoint/callPath/negativeTests를 담는다. shared loader `scripts/traceability.mjs`는 실제 clause와 연결을 결합하여 effective row를 만든다. 원본 `traceability.json`의 실행 evidence를 추측하여 채우는 과정이 아니며, 미연결 규범은 UNLINKED/unverified로 남는다. 전체 조항의 source 경로 검토 완료나 formal proof를 선언하지 않는다.
+
+`compliance.mjs --inventory`는 동일 fingerprint와 동일 linkage의 record를 보존하고 변경된 owner/entrypoint/callPath/test는 unverified로 무효화한다. 잘못된/중복 link를 추측으로 고치지 않는다. 일반 checker와 report는 missing/stale/extra/duplicate record 또는 import closure 위반을 통과시키지 않는다. source dependency와 새 negative-test 파일도 현재 proof closure에 포함한다. tests를 proof source pin에 포함하는 것과 production LOC에 포함하는 것은 다른 정책이다.
+
+`adversarial-report.mjs`는 report 생성과 trace inventory 갱신을 분리했다. 이 스크립트는 과거 runtime log를 현재 source hash에 연결하거나 historical `audit-source-pins.json`을 덮어쓰지 않는다. structural inventory 결과와 full-clause 실행 증거는 분리되어 있다.
+
+core T01–T77과 tiered target T78–T90은 실제 규범 matrix row를 각각 조사한다. missing/duplicate/empty oracle은 별도로 실패한다. target 계약의 미확정 범위를 core 완료 수치에 숨기거나 분모 상수만 바꾸지 않는다.
+
+이번 GitHub-only 작업에서 inventory/compliance/report/build/test는 모두 **NOT_RUN**이다. 원본 generated trace/report, historical raw logs와 source pins는 새 실행의 증거가 아니다. 현재 판정은 **release 미인증**이며 세부 범위는 [종료 기록](refactoring-closure.md)과 [검증 상태](validation.md)에 기록했다.
