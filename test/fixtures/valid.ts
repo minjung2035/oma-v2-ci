@@ -23,7 +23,7 @@ export function makeValidOperation(options: {
 
 export function makeValidMessagePlan(operationId: string, options: {
   bytes?: Uint8Array; recipient?: string; kind?: MessagePlan["kind"]; contextRevision?: string | null;
-} = {}): MessagePlan {
+} = {}): MessagePlan & { id: ReturnType<typeof messageIdForOperation> } {
   const bytes = options.bytes ?? Buffer.from("fixture\n");
   const id = messageIdForOperation(operationId, 0);
   const recipient = options.recipient ?? "alice";
