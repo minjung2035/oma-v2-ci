@@ -56,6 +56,7 @@ test("actual CLI uses authoritative receipts without inventing resend permission
         const parser = new FrameParser(256 * 1024);
         socket.on("data", bytes => {
           try {
+            assert.ok(Buffer.isBuffer(bytes), "fixture sockets must remain in byte mode");
             for (const frame of parser.feed(bytes)) {
               requests.push(frame.raw);
               const response = frame.raw.method === "operation.get" ? scenario.lookup : { ok: true, result: success };
