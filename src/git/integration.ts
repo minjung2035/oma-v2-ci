@@ -47,7 +47,7 @@ export class IntegrationCoordinator {
   }
   private verifyCurrentPolicy(snapshot: IntegrationSnapshot): void {
     if (this.store.inTransaction) throw new StoreError("INTERNAL_ERROR", "policy I/O cannot run inside acceptance");
-    if (this.policyReader === null) return; // explicitly pinned immutable host configuration
+    if (this.policyReader === null) return;
     try {
       const current = this.policyReader();
       if (typeof current === "string") {
@@ -69,10 +69,6 @@ export class IntegrationCoordinator {
     this.store.transaction(tx => tx.setOperationSucceeded(operation.id, resultJson));
   }
   private unknown(id: string): void { this.store.transaction(tx => tx.setOperationUnknown(id)); }
-
-  /** An unclosed project-main intent is a repository writer barrier, including
-   * unknown outcomes. Same-key lookup is handled before this check.
-   */
   private requireWriterSlot(exceptId?: string): void {
     for (const id of this.store.recoverableOperations()) {
       if (id === exceptId) continue;
@@ -96,8 +92,7 @@ export class IntegrationCoordinator {
       throw new StoreError("CANCELLED_BEFORE_COMMIT", "stopped or retired actor cannot advance main during recovery");
     if (!actor || actor.desired !== "enabled" || !capabilitiesOf(actor).has("code.integrate"))
       throw new StoreError("CAPABILITY_DENIED", "current durable integration authority is unavailable");
-    // No fabricated live lease: a restart reconciles existing accepted intent,
-    // whereas execute rechecks the original live AuthContext at commit time.
+    // A restart reconciles accepted intent without fabricating a live lease.
   }
   private requireEligible(snapshot: IntegrationSnapshot, base: Oid, candidate: Oid): void {
     if (!observed(this.effects.published(), "published refs").includes(candidate))
@@ -150,6 +145,9 @@ export class IntegrationCoordinator {
     };
     const accepted = this.store.transaction(tx => {
       this.requireExecuteAuthority(auth, false);
+      const current = this.store.claimKey(auth.actor, key, hash);
+      if (current === "retry") return "retry" as const;
+      if (current === "reused") throw reused(auth.actor, key);
       this.requireWriterSlot();
       return tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash,
         kind: "git.integrate", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
@@ -160,15 +158,13 @@ export class IntegrationCoordinator {
     try {
       if (!this.stillAtBase(operation)) return this.receipt(id);
       this.requireEligible(policy, plan.base, plan.candidate);
-      // This remains the original explicit gate. An empty array is never
-      // substituted for an unsupported nonempty host check profile.
       for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check);
       if (!this.stillAtBase(operation)) return this.receipt(id);
-      this.requireEligible(policy, plan.base, plan.candidate); // fresh pre-CAS observations
+      this.requireEligible(policy, plan.base, plan.candidate);
       this.verifyCurrentPolicy(policy);
       this.requireExecuteAuthority(auth, true);
       this.requireWriterSlot(id);
-      // Even a no-op integration must survive current authority/stop/policy checks.
+      // No-op integrations also retain the current authority/stop/policy checks.
       if (plan.base !== plan.candidate) {
         knowledge = "possible";
         const after = this.effects.compareAndSwap(plan.base, plan.candidate);
@@ -189,7 +185,7 @@ export class IntegrationCoordinator {
       if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
       if (main.kind === "present" && main.value === plan.candidate) {
         knowledge = "applied";
-        this.succeed(operation); // settle proven effect, not a new execute/admission
+        this.succeed(operation);
         return;
       }
       if (main.kind !== "present" || main.value !== plan.base) { this.unknown(operation.id); return; }
