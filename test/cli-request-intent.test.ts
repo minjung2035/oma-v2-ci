@@ -94,6 +94,7 @@ test("actual CLI cached create ignores missing brief and unresolvable HEAD while
     const parser = new FrameParser(256 * 1024);
     socket.on("error", () => {});
     socket.on("data", bytes => {
+      assert.ok(Buffer.isBuffer(bytes), "fixture sockets must remain in byte mode");
       for (const frame of parser.feed(bytes)) {
         methods.push(frame.raw.method);
         assert.equal(frame.raw.method, "operation.get");
