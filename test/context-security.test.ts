@@ -72,7 +72,7 @@ test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before co
       });
       assert.equal(child.status, 2, `${name}: ${child.stderr}`);
       assert.doesNotMatch(child.stderr, /connect.*absent\.sock/);
-      assert.equal(new RequestCache(join(root, "home")).read(name), null);
+      assert.equal(new RequestCache(join(root, "home")).read(name).kind, "absent");
     }
     const valid = join(root, "valid");
     mkdirSync(join(valid, "decisions"), { recursive: true });
@@ -85,8 +85,13 @@ test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before co
     assert.equal(child.status, 3, child.stderr);
     const cache = new RequestCache(join(root, "home"));
     const frozen = cache.read("valid");
-    assert.equal(frozen?.method, "context.publish");
-    assert.equal(frozen?.lastReceipt, null);
-    assert.equal(Buffer.from(cache.readBody("valid")!).toString(), "# 한글 goal\nvalid\n");
+    assert.ok(frozen.kind === "present", "valid context must have a readable frozen request");
+    assert.equal(frozen.value.method, "context.publish");
+    assert.equal(frozen.value.lastReceipt, null);
+    const digest = frozen.value.digest;
+    assert.ok(digest, "a context freeze must retain its body digest");
+    const body = cache.readBody("valid", digest);
+    assert.ok(body.kind === "present", "the frozen body must match its recorded digest");
+    assert.equal(Buffer.from(body.value).toString(), "# 한글 goal\nvalid\n");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
