@@ -10,9 +10,7 @@ export type BatchId = string;
 export type RequestKey = string;
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 export type Address = Actor | `topic/${string}`;
-export type Capability = 'mail.send' | 'route.follow' | 'agent.create' |
-  'agent.manage.self' | 'agent.manage.descendants' | 'git.submit' |
-  'code.integrate' | 'context.publish';
+export type Capability = import('../src/domain/capabilities.js').Capability;
 export type ErrorCode =
   | 'INVALID_REQUEST' | 'UNSUPPORTED_VERSION' | 'UNKNOWN_METHOD' | 'FRAME_TOO_LARGE'
   | 'STREAM_INVALID' | 'AUTH_FAILED' | 'STALE_RUN' | 'CAPABILITY_DENIED'
@@ -242,20 +240,11 @@ export type OperationPlan =
   | { kind: 'context.publish'; base: Oid | null; candidate: Oid;
       target: 'refs/heads/main'; entries: ContextEntry[]; stagingPath: string; message: MessagePlan };
 
-/** MUST [CFG-005]: Closed host configuration; prices/versions are host inputs.
- * MUST: Reject missing values, extra fields, negative/unsafe integers and
- * inconsistent reserves. No default unlimited quota.
+/** MUST [CFG-005]: Canonical field descriptors own names, ranges and units.
+ * These aliases are erased; contracts.ts has no runtime import or defaults.
  */
-export interface ResourceLimits {
-  memoryBytes: number; tasks: number; cpuQuotaPercent: number; tmpBytes: number;
-  workspaceBytes: number; stagingBytes: number; checkTimeoutSeconds: number;
-}
-export interface ProtocolLimits {
-  frameBytes: number; mailBodyBytes: number; subjectBytes: number; addresses: number;
-  replyReferences: number; contextFiles: number; contextBytes: number;
-  bundleBytes: number; logBytes: number; batchMaxMessages: number;
-  idleStreamSeconds: number; receiptWaitSeconds: number;
-}
+export type ResourceLimits = import('../src/domain/resources.js').ResourceLimits;
+export type ProtocolLimits = import('../src/domain/limits.js').ProtocolLimits;
 export interface ModelProfile {
   provider: string; model: string; credentialRef: string; codecRevision: string;
   pricingRevision: string; maxInputTokens: number; maxOutputTokens: number;
