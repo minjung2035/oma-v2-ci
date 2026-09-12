@@ -9,9 +9,10 @@ import { MailModule, buildEml, expandAddresses, defaultReplyTo, defaultLogicalRe
 import { assertCurrentActor } from "../authority.js";
 import { StoreError, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
 import { requestHash, canonicalRequestParams } from "../hash.js";
-import { generateOperationId, generateMessageId } from "../ids.js";
+import { generateOperationId, generateMessageId, isValidRequestKey } from "../ids.js";
 import { publishedRefFor, mailObjectRelativePath } from "../domain/derived.js";
 import { prepareSubmitSpool, requireFrozenBundle, type PreparedSubmitSpool } from "../storage/submit-spool.js";
+import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../protocol/receipts.js";
 import { submitResult } from "../protocol/operation-results.js";
 import { GitPublicationObserver } from "./publication.js";
@@ -60,10 +61,12 @@ export class SubmitCoordinator {
 
   async submit(auth: AuthContext, key: string, input: SubmitInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     assertCurrentActor(this.store, auth, "git.submit");
-    // Copy before the first await. Later caller mutation cannot change accepted
-    // identity, MIME bytes, export ref, descriptor or the source of recovery.
-    const request: SubmitInput = { ...input, prerequisites: [...input.prerequisites], to: [...input.to], paths: [...input.paths],
-      ...(input.bundle === undefined ? {} : { bundle: { ...input.bundle } }) };
+    if (!isValidRequestKey(key)) throw new StoreError("INVALID_REQUEST", "invalid submit request key");
+    // The shared decoder copies and validates candidate/exportRef/prerequisites
+    // before any file effect. Broker admission still enforces the host budgets.
+    let request: SubmitInput;
+    try { request = decodeMutationPayload("git.submit", input); }
+    catch { throw new StoreError("INVALID_REQUEST", "invalid submit caller payload"); }
     Object.freeze(request.prerequisites); Object.freeze(request.to); Object.freeze(request.paths);
     if (request.bundle) Object.freeze(request.bundle);
     Object.freeze(request);
