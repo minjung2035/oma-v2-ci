@@ -91,7 +91,7 @@ function references(value: string | undefined): string[] {
 function addresses(value: string | undefined): string[] | null {
   if (value === undefined) return null;
   const list = unfold(value).split(",").map(part => part.trim());
-  if (list.some(part => !/^[^\s<>(),;:\\"\[\]]+@[^\s<>(),;:\\"\[\]]+$/.test(part)))
+  if (list.some(part => !/^[^@\s<>(),;:\\"\[\]]+@[^@\s<>(),;:\\"\[\]]+$/.test(part)))
     return invalid("unsupported mailbox representation");
   return list;
 }
