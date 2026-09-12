@@ -1,87 +1,115 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync, lstatSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
 
-test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate records", () => {
+test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate records", { timeout: 120000 }, () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-compliance-"));
   const script = resolve("scripts/compliance.mjs");
+  const reportScript = resolve("scripts/adversarial-report.mjs");
   const put = (file: string, text: string) => {
-    mkdirSync(dirname(join(dir, file)), { recursive: true });
-    writeFileSync(join(dir, file), text);
+    mkdirSync(dirname(join(dir, file)), { recursive: true }); writeFileSync(join(dir, file), text);
   };
   const hash = (file: string) => createHash("sha256").update(readFileSync(join(dir, file))).digest("hex");
-  const run = (...args: string[]) => spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: "utf8" });
+  const run = (...args: string[]) => spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: "utf8", timeout: 10000, maxBuffer: 1024 * 1024 });
+  const report = () => spawnSync(process.execPath, [reportScript], { cwd: dir, encoding: "utf8", timeout: 10000, maxBuffer: 1024 * 1024 });
   const trace = "implementation/traceability.json";
+  const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
+  const matrix = (first: number, last: number) => Array.from({ length: last - first + 1 }, (_, index) =>
+    `| T${String(index + first).padStart(2, "0")} / fixture | synthetic structural oracle, not production evidence |`).join("\n");
+  const sourceWalk = (path: string): string[] => {
+    if (lstatSync(join(dir, path)).isFile()) return [path];
+    return readdirSync(join(dir, path)).sort().filter(name => !(path === "implementation" && name === "evidence"))
+      .flatMap(name => sourceWalk(`${path}/${name}`));
+  };
   try {
-    const sources = ["implementation-spec.md", "implementation/integration-policy.md",
-      "implementation/physical-ordering.md", "implementation/compliance.md", "implementation/loc-budget.md",
-      "implementation/test-matrix.md", "implementation/spikes.md", "implementation/validation.md"];
+    const sources = ["implementation-spec.md", "implementation/integration-policy.md", "implementation/physical-ordering.md",
+      "implementation/compliance.md", "implementation/loc-budget.md", "implementation/test-matrix.md", "implementation/spikes.md", "implementation/validation.md"];
     for (const file of sources) put(file, "**MUST [TEST-001]** Reject absent proof.\n");
-    const pins = ["architecture.md", "package.json", "package-lock.json",
-      "src/owner.ts", "src/entry.ts", "src/dependency.ts", "test/negative.ts"];
-    for (const file of pins) put(file, "synthetic structural-check fixture\n");
-    put("production-files.txt", "src/owner.ts\nsrc/entry.ts\nsrc/dependency.ts\n");
+    const matrixText = "**MUST [TEST-001]** Reject absent proof.\n\n" + matrix(1, 77) + "\n\n" + matrix(78, 90) + "\n";
+    put("implementation/test-matrix.md", matrixText);
+    put("architecture.md", "Synthetic normative baseline for checker controls only.\n");
+    put("package.json", JSON.stringify({ type: "module" })); put("package-lock.json", "{}\n");
+    put("tsconfig.json", JSON.stringify({ compilerOptions: { module: "NodeNext", moduleResolution: "NodeNext", target: "ES2022" }, include: ["src/**/*.ts"] }));
+    put("tsconfig.build.json", JSON.stringify({ extends: "./tsconfig.json" }));
+    put("production-manifest.json", JSON.stringify(["src"]));
+    put("src/owner.ts", "export function effect() {}\n"); put("src/entry.ts", "export {};\n");
+    put("src/dependency.ts", "export const dependency = 1;\n"); put("test/negative.ts", "export const reject = true;\n");
+    for (const root of roots) put(root, "export {};\n");
+    put("production-files.txt", ["src/owner.ts", "src/entry.ts", "src/dependency.ts", ...roots].sort().join("\n") + "\n");
+    put("implementation/source-owners.json", "[]\n");
+    for (const name of ["compliance.mjs", "adversarial-report.mjs", "traceability.mjs", "architecture-check.mjs"])
+      put(`scripts/${name}`, readFileSync(resolve("scripts", name), "utf8"));
     put("run.log", "synthetic log: this is not production evidence\n");
     assert.equal(run("--inventory").status, 0);
     const rows = JSON.parse(readFileSync(join(dir, trace), "utf8"));
-    assert.equal(rows.length, sources.length);
-    assert.equal(run().status, 1);
-    const sourceDigests = Object.fromEntries([...sources, ...pins, "production-files.txt"].map((file) => [file, hash(file)]));
+    assert.equal(rows.length, sources.length); assert.equal(run().status, 1);
+    const authored = ["src", "test", "scripts", "implementation"].flatMap(sourceWalk)
+      .filter(file => file !== trace && file !== "implementation/adversarial-review.md");
+    const inputs = [...new Set([...authored, ...sources, "architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"])];
+    const sourceDigests = Object.fromEntries(inputs.map(file => [file, hash(file)]));
     for (const row of rows) Object.assign(row, {
       applicability: "runtime", status: "proven", rationale: "synthetic checker fixture only",
       owner: "src/owner.ts#effect", entrypoint: "src/entry.ts",
       callPath: ["src/entry.ts", "src/owner.ts#effect"], negativeTests: ["test/negative.ts#reject"],
-      evidence: { specDigest: row.digest, buildExit: 0, testExit: 0,
-        buildCommand: "fixture build", testCommand: "fixture test", environmentPin: "synthetic",
+      evidence: { specDigest: row.digest, buildExit: 0, testExit: 0, buildCommand: "fixture build", testCommand: "fixture test", environmentPin: "synthetic",
         logPath: "run.log", logDigest: hash("run.log"), sourceDigests },
     });
     const save = (value: unknown = rows) => put(trace, JSON.stringify(value));
     save();
-    assert.equal(run().status, 0, "the structural positive control must pass");
+    const positive = run(); assert.equal(positive.status, 0, positive.stderr + positive.stdout);
     assert.equal(run("--inventory").status, 0);
     assert.deepEqual(JSON.parse(readFileSync(join(dir, trace), "utf8")), rows, "refresh preserves reviewed records");
     for (const change of [
-      { applicability: "invented" }, { rationale: "" }, { callPath: [] },
-      { owner: "src/owner.ts" }, { negativeTests: "not an array" },
-      { status: "not_applicable" }, { evidence: { ...rows[0].evidence, sourceDigests: {} } },
+      { applicability: "invented" }, { rationale: "" }, { callPath: [] }, { owner: "src/owner.ts" },
+      { negativeTests: "not an array" }, { status: "not_applicable" }, { evidence: { ...rows[0].evidence, sourceDigests: {} } },
     ]) {
-      save([{ ...rows[0], ...change }, ...rows.slice(1)]);
-      assert.equal(run().status, 1, JSON.stringify(change));
+      save([{ ...rows[0], ...change }, ...rows.slice(1)]); assert.equal(run().status, 1, JSON.stringify(change));
     }
-    save([...rows, rows[0]]);
-    assert.equal(run().status, 1, "duplicate identity rejected");
-    save([...rows, { ...rows[0], digest: "outdated" }]);
-    assert.equal(run().status, 1, "extra stale identity rejected");
+    save(rows.slice(1)); assert.equal(run().status, 1, "a missing record cannot be synthesized into proof");
+    save([...rows, rows[0]]); assert.equal(run().status, 1, "duplicate identity rejected");
+    save([...rows, { ...rows[0], digest: "outdated" }]); assert.equal(run().status, 1, "extra malformed fingerprint rejected");
+    save([...rows, { ...rows[0], digest: "f".repeat(64) }]); assert.equal(run().status, 1, "well-formed extra stale fingerprint rejected");
     save();
-    put("src/dependency.ts", "changed dependency\n");
-    assert.equal(run().status, 1, "unchanged owner does not hide a changed dependency");
+    put("src/dependency.ts", "export const dependency = 2;\n");
+    assert.equal(run().status, 1, "unchanged owner cannot hide a changed dependency");
+    put("src/dependency.ts", "export const dependency = 1;\n");
+    put("test/new-negative.ts", "export const newlyRequiredOracle = true;\n");
+    assert.equal(run().status, 1, "a newly added negative test is part of the source closure");
+    rmSync(join(dir, "test/new-negative.ts"));
+    put("implementation/source-owners.json", JSON.stringify([{ source: sources[0], requirements: ["TEST-001"], owner: "src/dependency.ts#dependency",
+      entrypoint: "src/entry.ts#main", callPath: ["src/entry.ts#main", "src/dependency.ts#dependency"], negativeTests: ["test/negative.ts#reject"] }]));
+    assert.equal(run("--inventory").status, 0);
+    const relinked = JSON.parse(readFileSync(join(dir, trace), "utf8"));
+    assert.equal(relinked[0].status, "unverified"); assert.equal(relinked[0].evidence, null);
+    assert.equal(relinked[0].digest, rows[0].digest, "relinking must not forge a new normative digest");
+    put("implementation/source-owners.json", "[]\n"); save();
     put(sources[0]!, "**MUST [TEST-001]** Changed contract.\n");
     assert.equal(run("--inventory").status, 0);
     const refreshed = JSON.parse(readFileSync(join(dir, trace), "utf8"));
     assert.equal(refreshed[0].status, "unverified", "changed clause loses old proof");
-    // The whole-scope report must expose dependency escapes, never promote proof.
-    const reportScript = resolve("scripts/adversarial-report.mjs");
-    const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
-    put("tsconfig.json", JSON.stringify({ compilerOptions: { module: "NodeNext", moduleResolution: "NodeNext" } }));
-    put("package.json", JSON.stringify({ type: "module" }));
-    for (const root of roots) put(root, "export {};\n");
+    const traceBeforeReport = readFileSync(join(dir, trace), "utf8");
+    put("implementation/evidence/audit-source-pins.json", "{\"historical\":\"must-not-be-rebound\"}\n");
+    const originalPins = readFileSync(join(dir, "implementation/evidence/audit-source-pins.json"), "utf8");
+    const inventoryControl = report(); assert.equal(inventoryControl.status, 0, inventoryControl.stderr);
+    assert.equal(readFileSync(join(dir, trace), "utf8"), traceBeforeReport, "report is not an implicit inventory rewrite");
+    assert.equal(readFileSync(join(dir, "implementation/evidence/audit-source-pins.json"), "utf8"), originalPins);
     put(roots[0]!, "import '../../test/negative.js';\n");
-    put("test/negative.ts", "export const sentinel = 1;\n");
-    put("production-files.txt", roots.join("\n") + "\n");
-    put("scripts/compliance.mjs", readFileSync(script, "utf8"));
-    put("scripts/adversarial-report.mjs", readFileSync(reportScript, "utf8"));
-    mkdirSync(join(dir, "implementation/evidence"), { recursive: true });
-    put("implementation/test-matrix.md", Array.from({ length: 77 }, (_, i) => `| T${String(i + 1).padStart(2, "0")} / fixture | synthetic oracle |`).join("\n"));
-    const report = spawnSync(process.execPath, [reportScript], { cwd: dir, encoding: "utf8" });
-    assert.equal(report.status, 0, report.stderr);
-    assert.match(report.stdout, /2 static import-closure findings/);
-    assert.match(readFileSync(join(dir, "implementation/adversarial-review.md"), "utf8"), /Production imports a test: test\/negative.ts/);
-    assert.deepEqual(JSON.parse(readFileSync(join(dir, trace), "utf8")).map((row: { status: string }) => row.status), refreshed.map((row: { status: string }) => row.status));
+    const escaped = report(); assert.equal(escaped.status, 1, escaped.stderr);
+    assert.match(escaped.stdout, /2 static import-closure findings/);
+    const review = readFileSync(join(dir, "implementation/adversarial-review.md"), "utf8");
+    assert.match(review, /Production imports a test: test\/negative.ts/);
+    assert.match(review, /NOT_RUN/); assert.doesNotMatch(review, /runtime\/regression suite executed/);
+    assert.equal(readFileSync(join(dir, trace), "utf8"), traceBeforeReport);
+    put(roots[0]!, "export {};\n");
+    put("implementation/test-matrix.md", "**MUST [TEST-001]** Reject absent proof.\n\n" + matrix(1, 77) + "\n");
+    assert.equal(report().status, 1, "complete core cannot hide missing tiered target rows");
+    put("implementation/test-matrix.md", matrixText + matrix(78, 78) + "\n");
+    assert.equal(report().status, 1, "duplicate tiered row is not another proof");
     put("implementation/test-matrix.md", "| T01 / fixture | synthetic oracle |\n");
-    assert.equal(spawnSync(process.execPath, [reportScript], { cwd: dir, encoding: "utf8" }).status, 1, "missing acceptance rows cannot disappear from the report");
+    assert.equal(report().status, 1, "missing acceptance rows cannot disappear from the report");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
