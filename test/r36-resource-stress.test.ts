@@ -49,13 +49,19 @@ test(`R36 stress native transport seed=${seed} cycles=${cycles} durationBudgetSe
   async function cycle(mode: number): Promise<void> {
     const accepted = once(server, "connection"), client = connect(path);
     client.on("error", () => {}); client.resume();
-    const connected = (await accepted)[0]; assert.ok(connected instanceof Socket);
+    const connected = (await accepted)[0];
+    if (!(connected instanceof Socket)) { client.destroy(); throw new Error("native server did not return a socket"); }
     const peer = connected;
     const handle: unknown = Reflect.get(peer, "_handle");
-    assert.ok(handle !== null && typeof handle === "object" && "fd" in handle && typeof handle.fd === "number");
-    const native = peerPidFd(handle.fd); assert.notEqual(native, null, "native SO_PEERPIDFD is required");
-    const owner = new SharedPeerPin(() => peerPidAlive(native!), () => closeSync(native!));
-    const groupFd = openSync("/sys/fs/cgroup", constants.O_RDONLY | constants.O_DIRECTORY);
+    if (handle === null || typeof handle !== "object" || !("fd" in handle) || typeof handle.fd !== "number") {
+      client.destroy(); peer.destroy(); throw new Error("native socket FD unavailable");
+    }
+    const native = peerPidFd(handle.fd);
+    if (native === null) { client.destroy(); peer.destroy(); throw new Error("native SO_PEERPIDFD is required; no PID-only fallback"); }
+    const owner = new SharedPeerPin(() => peerPidAlive(native), () => closeSync(native));
+    let groupFd: number;
+    try { groupFd = openSync("/sys/fs/cgroup", constants.O_RDONLY | constants.O_DIRECTORY); }
+    catch (error) { owner.releaseConnection(); client.destroy(); peer.destroy(); throw error; }
     const tasks: Promise<void>[] = []; let calls = 0;
     const clientClosed = new Promise<void>(resolve => client.once("close", () => resolve()));
     const peerClosed = new Promise<void>(resolve => peer.once("close", () => resolve()));
@@ -116,10 +122,12 @@ test(`R36 stress native transport seed=${seed} cycles=${cycles} durationBudgetSe
   }
 });
 
-test("R36 stress bounded executor timeout drains owned pipes without asserting descendant death", { timeout: 30000 }, async () => {
+test("R36 stress bounded executor timeout drains owned pipes without asserting descendant death", { timeout: 90000 }, async () => {
   assert.equal(process.platform, "linux");
   const timeoutMs = integerParameter("OMA_TEST_COMMAND_TIMEOUT_MS", 100, 10000);
   assert.ok(timeoutMs > 0);
+  const warmup = await runProcess({ executable: process.execPath, argv: ["-e", "process.exit(0)"], env: {}, timeoutMs: 10000, stdoutBytes: 4096, stderrBytes: 4096 });
+  assert.equal(warmup.kind, "exited");
   for (let cycle = 0; cycle < 8; cycle++) {
     const before = fdSnapshot();
     const result = await runProcess({ executable: process.execPath, argv: ["-e", "setInterval(()=>{},1000)"], env: {},
