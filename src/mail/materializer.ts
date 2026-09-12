@@ -22,8 +22,8 @@ export function operationMessage(operation: OperationRow): MessagePlan {
   }
 }
 
-/** The Store owns all operation/delivery relations. This owner adds physical
- * source/header/hash proof and the sole archive/inbox effect loop.
+/** Adds physical source/header/hash proof and the sole archive/inbox effect loop
+ * to the Store's validated rows. Missing rows are not an empty fanout success.
  */
 export class MailMaterializer {
   constructor(private readonly store: Store, private readonly stateRoot: string, private readonly society: string) {}
@@ -89,8 +89,17 @@ export class MailMaterializer {
   }
   private publish(operation: OperationRow): void {
     const message = operationMessage(operation);
-    // The decoder checks the exact accepted recipient set; do not invent a second relation policy.
     const deliveries = this.store.deliveriesForOperation(operation.id);
+    const expected = new Set(message.recipients);
+    const actual = new Set<string>();
+    for (const delivery of deliveries) {
+      if (delivery.operationId !== operation.id || delivery.messageId !== message.id ||
+        !expected.has(delivery.recipient) || actual.has(delivery.recipient))
+        throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
+      actual.add(delivery.recipient);
+    }
+    if (expected.size !== message.recipients.length || actual.size !== expected.size)
+      throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
     this.headers(message);
     publishImmutableFile(mailObjectPathAt(this.stateRoot, message.id), mailArchivePathAt(this.stateRoot, message.id), message.sha256);
     for (const delivery of deliveries) {
