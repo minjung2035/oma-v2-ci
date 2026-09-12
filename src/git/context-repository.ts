@@ -1,7 +1,7 @@
 /** CTX-003/004: canonical object and filesystem mechanisms. This owner never
  * chooses a new request, changes an accepted plan, or authorizes a main writer.
  */
-import { constants, mkdirSync, lstatSync, openSync, closeSync, writeFileSync, fchmodSync, fsyncSync, readlinkSync } from "node:fs";
+import { mkdirSync, lstatSync, chmodSync, readlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ContextEntry, Oid } from "../../implementation/contracts.js";
 import type { OperationOf, ValidatedPlan } from "../storage/operation-codec.js";
@@ -12,7 +12,7 @@ import { isValidFullOid } from "../ids.js";
 import { sha256Hex } from "../hash.js";
 import { readContextEntry, assertContextDirectory } from "../storage/context-files.js";
 import { contextStagingPathAt, contextRevisionPathAt } from "../storage/paths.js";
-import { ensureDurableDirectory, fsyncDir, fsyncTree } from "../storage/durable-fs.js";
+import { ensureDurableDirectory, fsyncDir, fsyncTree, fsyncFile, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { publishContextRevision, verifyContextRevision } from "../storage/context-snapshot.js";
 import { runProcessSync, type ProcessObservation } from "../process/run.js";
 import { GIT_ENV } from "../process/policies.js";
@@ -56,11 +56,12 @@ export class ContextRepository {
     return result.stdout;
   }
   private exists(): boolean {
-    try { assertContextDirectory(this.paths.contextGit); return true; }
-    catch (error) {
-      if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") return false;
-      throw error;
-    }
+    // assertDirectory intentionally treats missing components as corruption.
+    // Observe repository absence separately, without swallowing EACCES/EIO.
+    const stat = lstatSync(this.paths.contextGit, { throwIfNoEntry: false });
+    if (!stat) return false;
+    assertContextDirectory(this.paths.contextGit);
+    return true;
   }
   current(): Oid | null {
     if (!this.exists()) return null;
@@ -81,9 +82,8 @@ export class ContextRepository {
       throw new StoreError("STORE_CORRUPT", `context file does not match frozen intent: ${entry.path}`);
     const path = join(root, entry.path);
     ensureDurableDirectory(dirname(path), 0o700);
-    const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-    try { writeFileSync(fd, bytes); fchmodSync(fd, 0o644); fsyncSync(fd); } finally { closeSync(fd); }
-    fsyncDir(dirname(path));
+    writeExclusiveFsyncedFile(path, bytes, 0o644);
+    chmodSync(path, 0o644); fsyncFile(path); fsyncDir(dirname(path));
   }
   private importCandidate(work: string, candidate: Oid): void {
     assertContextDirectory(work); assertContextDirectory(join(work, ".git"));
@@ -102,11 +102,9 @@ export class ContextRepository {
     if (expected !== null && (!isValidFullOid(expected) || expected.length !== (format === "sha1" ? 40 : 64)))
       throw new StoreError("INVALID_OID", "context base has the wrong repository object format");
     const staging = dirname(tree); const work = join(staging, "commit-work");
-    // A fresh operation never overwrites an older preparation, even on collision.
     mkdirSync(work, { mode: 0o700 }); fsyncDir(staging);
     this.success(["-C", work, "init", "-q", `--object-format=${format}`], CONTEXT_ENV);
     if (expected !== null) {
-      // Fetch the frozen base OID, never a moving refs/heads/main or FETCH_HEAD.
       this.success(["-C", work, "fetch", "--no-tags", this.paths.contextGit, expected], CONTEXT_ENV);
       this.success(["-C", work, "update-ref", "HEAD", expected], CONTEXT_ENV);
     }
@@ -122,7 +120,7 @@ export class ContextRepository {
     }
     const candidate = present(this.observer.ref(join(work, ".git"), "HEAD"), "prepared context candidate");
     fsyncTree(work, "context-single-link"); fsyncDir(staging); fsyncDir(dirname(staging));
-    this.importCandidate(work, candidate); // objects, not canonical main, before T-intent
+    this.importCandidate(work, candidate);
     this.verifyCandidate(candidate, entries, expected);
     return candidate;
   }
@@ -134,8 +132,7 @@ export class ContextRepository {
     for (const line of text(raw).slice(0, -1).split("\0")) {
       const tab = line.indexOf("\t");
       if (tab < 0) throw new StoreError("STORE_CORRUPT", "context tree metadata is malformed");
-      const fields = line.slice(0, tab).split(" "); const path = line.slice(tab + 1);
-      const oid = fields[2];
+      const fields = line.slice(0, tab).split(" "); const path = line.slice(tab + 1); const oid = fields[2];
       if (fields.length !== 3 || fields[0] !== "100644" || fields[1] !== "blob" || !isValidFullOid(oid) ||
           oid.length !== candidate.length || contextPathCheck(path) || entries.has(path))
         throw new StoreError("STORE_CORRUPT", "context candidate has unsupported paths, modes or duplicate entries");
@@ -145,7 +142,11 @@ export class ContextRepository {
   }
   private blob(oid: Oid, entry: ContextEntry): Buffer {
     if (!Number.isSafeInteger(entry.bytes + 1)) throw new StoreError("UNSUPPORTED_PROFILE", "context blob observation exceeds the supported byte counter");
-    const bytes = this.success(["--git-dir", this.paths.contextGit, "cat-file", "blob", oid], GIT_ENV, Math.max(1, entry.bytes + 1));
+    const result = this.command(["--git-dir", this.paths.contextGit, "cat-file", "blob", oid], GIT_ENV, Math.max(1, entry.bytes + 1));
+    if (result.kind === "output-limited" && result.stdoutTruncated)
+      throw new StoreError("STORE_CORRUPT", "canonical context blob exceeds its accepted size");
+    if (result.kind !== "exited" || result.exitCode !== 0) throw new StoreError("REF_STATE_UNKNOWN", "canonical context blob could not be observed");
+    const bytes = result.stdout;
     if (bytes.length !== entry.bytes || sha256Hex(bytes) !== entry.sha256 || contextFileCheck(entry.path, bytes))
       throw new StoreError("STORE_CORRUPT", `canonical context bytes differ from the accepted manifest: ${entry.path}`);
     return bytes;
@@ -172,11 +173,8 @@ export class ContextRepository {
     const plan = operation.plan;
     if (plan.stagingPath !== contextStagingPathAt(this.paths.stateRoot, operation.id)) throw new StoreError("STORE_CORRUPT", "context staging root differs from accepted identity");
     const observed = this.observer.commit(this.paths.contextGit, plan.candidate);
-    if (observed.kind === "absent") {
-      // Legacy acceptance may predate object import. Reimport the frozen commit
-      // only; recovery must never run commit or create a replacement candidate.
-      this.importCandidate(join(plan.stagingPath, "commit-work"), plan.candidate);
-    } else present(observed, "accepted canonical context candidate");
+    if (observed.kind === "absent") this.importCandidate(join(plan.stagingPath, "commit-work"), plan.candidate);
+    else present(observed, "accepted canonical context candidate");
     this.verifyCandidate(plan.candidate, plan.entries, plan.base);
   }
   publishSnapshot(operation: OperationOf<"context.publish">, proof: ContextPublicationEvidence): void {
@@ -206,7 +204,7 @@ export class ContextRepository {
     const root = contextRevisionPathAt(this.paths.worldDir, plan.candidate);
     if (!lstatSync(root, { throwIfNoEntry: false })) return false;
     this.verifyCandidate(plan.candidate, plan.entries, plan.base);
-    verifyContextRevision(root, plan.entries);
+    verifyContextRevision(root, plan.entries, true);
     return true;
   }
 }
