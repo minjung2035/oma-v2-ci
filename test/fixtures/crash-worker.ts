@@ -1,11 +1,12 @@
 // Isolated primitive crash worker: never imported by production.
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { Store } from "../../src/store.js";
 import { MailModule, publishImmutableFile, parseEmlHeaders } from "../../src/mail.js";
 import type { AuthContext, MailInput } from "../../implementation/contracts.js";
 import { isValidFullOid } from "../../src/ids.js";
+import { sha256Hex } from "../../src/hash.js";
 import cp from "node:child_process";
 import { gitFixture, gitAuth, gitCommand, submitFixture, contextFixture } from "./git-crash.js";
 import { lifecycleFixture } from "./lifecycle-crash.js";
@@ -38,6 +39,7 @@ fs.fsyncSync = fd => {
   if (faultTarget) fail();
   if (point === "stage" && path.includes("/staging/") && path.endsWith(".eml")) checkpoint();
   if (point === "object" && path === join(root, "mail", "objects")) checkpoint();
+  if (point === "submit-stage" && path.endsWith("/upload.bundle") && path.startsWith(join(root, "staging") + "/")) checkpoint();
   if (point === "ctx-snapshot" && /\/world\/context\/revisions\/[0-9a-f]{40,64}$/.test(path)) checkpoint();
   if (point === "boot-stage" && path.includes("/staging/") && path.endsWith(".eml")) checkpoint();
   if (point === "boot-object" && path === join(root, "mail/objects")) checkpoint();
@@ -78,11 +80,12 @@ cp.spawnSync = new Proxy(spawn, {
     const context = argv.includes(join(root, "repos/context.git"));
     if (point === "int-before" && main && project) checkpoint();
     const result = Reflect.apply(target, receiver, args);
-    if (result.status === 0) {
+    if (result.status === 0 && !result.error && !result.signal) {
       if (point === "boot-unit" && argv.includes("daemon-reload")) checkpoint();
       if (point === "int-cas" && main && project) checkpoint();
       if (point === "ctx-cas" && main && context) checkpoint();
       if (point === "submit-ref" && argv.includes("update-ref") && argv.some(arg => arg.startsWith("refs/oma/published/"))) checkpoint();
+      if (point === "submit-import" && args[0] === "/usr/bin/prlimit" && argv.includes("oma-quarantine")) checkpoint();
     }
     return result;
   },
@@ -98,7 +101,17 @@ store.transaction = body => {
   if (point === "accepted" && store.getOperation("a", "crash-send")) checkpoint();
   if (point === "prepared" && store.preparedBatches("a").length) checkpoint();
   const operation = store.getOperation("a", "git-crash");
-  if (point === "submit-accepted" && operation?.kind === "git.submit") checkpoint();
+  if (point === "submit-accepted" && operation?.kind === "git.submit") {
+    const bundle = operation.plan.bundle;
+    if (!bundle || ![bundle.path, dirname(bundle.path), join(root, "staging")].every(path => beforeSync.has(path)))
+      throw new Error("submit accepted before bundle/file/parent fsync");
+    if (sha256Hex(fs.readFileSync(bundle.path)) !== bundle.sha256)
+      throw new Error("accepted submit bundle digest differs from frozen bytes");
+    if (fs.existsSync(mail.archivePath(operation.plan.message.id)))
+      throw new Error("submit result mail was exposed before ref publication");
+    checkpoint();
+  }
+  if (point === "submit-done" && operation?.kind === "git.submit" && operation.state === "succeeded") checkpoint();
   if (point.startsWith("ctx-accepted") && operation?.kind === "context.publish") {
     const plan = operation.plan;
     if (!isValidFullOid(plan.candidate) || plan.message.contextRevision !== plan.candidate) throw new Error("context candidate/message not frozen at acceptance");
