@@ -9,6 +9,7 @@ import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "../lifecycle.js";
 import { Broker } from "../broker.js";
 import { GitModule } from "../git.js";
+import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "../git/integration-policy.js";
 import { ReconcileModule } from "../reconcile.js";
 import { loadConfig } from "../config.js";
 import { createChildSpecResolver } from "../config/policy.js";
@@ -39,8 +40,8 @@ if (!acquireProcessLock(join(runRoot, "broker.lock"))) {
 }
 const cfg = loadConfig(configPath);
 if (cfg.society !== society) throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
-if (cfg.integration.checks.length > 0) throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE does not support nonempty checks profiles yet");
-if (cfg.integration.protectedPaths.includes("/")) throw new StoreError("SPIKE_UNRESOLVED", "root protected-path matching is not implemented yet");
+const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
+assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
 const store = new Store(join(stateRoot, "runtime.sqlite"));
 const mail = new MailModule({ stateRoot, society: cfg.society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages);
 const units = new UnitsModule(cfg.society, {
@@ -64,11 +65,11 @@ const git = new GitModule({
   checkTimeoutSeconds: Math.max(1, ...cfg.integration.checks.map(check => check.resources.checkTimeoutSeconds)),
   checkRootfs: cfg.installation.rootfs, checkAssetsDir: cfg.installation.rootfs,
   checkTmpBytes: Math.max(1, ...cfg.integration.checks.map(check => check.resources.tmpBytes)),
-}, store, mail, {
-  policyRevision: cfg.integration.policyRevision, protectedPaths: [...cfg.integration.protectedPaths],
-  checks: cfg.integration.checks.map(check => ({ id: check.id, argv: [...check.argv], env: { ...check.env },
-    timeoutSeconds: check.resources.checkTimeoutSeconds, tmpBytes: check.resources.tmpBytes, resources: { ...check.resources } })),
-}, () => loadConfig(configPath).integration.policyRevision);
+}, store, mail, integrationPolicy, () => {
+  const current = loadConfig(configPath);
+  if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
+  return integrationPolicyFromConfig(current.integration);
+});
 const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
   projectGit: join(stateRoot, "repos", "project.git"), hasGoal: () => existsSync(join(stateRoot, "world", "context", "current")),
 });
