@@ -5,6 +5,7 @@ import type { MutationMethod, OperationPlan, OperationResult } from "../implemen
 import { capabilityCheck } from "./domain/capabilities.js";
 import { resourceLimitsCheck } from "./domain/resources.js";
 import { resolvedSpecDigest } from "./domain/spec-identity.js";
+import { contextEntriesCheck as checkContextEntries } from "./domain/context-policy.js";
 import {
   messageIdForOperation, isMailObjectRelativePathFor, isPublishedRefFor, residentUnitsFor,
 } from "./domain/derived.js";
@@ -13,7 +14,7 @@ import {
 } from "./storage/paths.js";
 import {
   checkArray, checkEnum, checkInt, checkObject, checkOid, checkString, checkExportRef,
-  checkTopic, contextPathCheck, messagePlanCheck, operationResultCheck, type Check,
+  checkTopic, messagePlanCheck, operationResultCheck, type Check,
 } from "./validate.js";
 import { isValidActorName, isValidActor, isValidMessageId, isValidOperationId, isValidSocietyName } from "./ids.js";
 
@@ -44,23 +45,10 @@ const nullableMessagePlan: Check = value => value === null ? null : messagePlanC
 const nullableOperationId: Check = value => value === null ? null : operationIdCheck(value);
 const nullableOid: Check = value => value === null ? null : checkOid(value);
 
-/** Same path/order/byte semantics as incoming context metadata. No coercion. */
-export const contextEntriesCheck: Check = value => {
-  const shape = checkArray(checkObject({ path: contextPathCheck, bytes: checkInt({ min: 0 }), sha256: sha256Check }), { min: 1 })(value);
-  if (shape) return shape;
-  const entries = value as Array<{ path: string; bytes: number; sha256: string }>;
-  let previous: string | null = null;
-  let total = 0;
-  let goal = false;
-  for (const entry of entries) {
-    if (previous !== null && entry.path <= previous) return "context entries must be sorted and unique";
-    if (entry.bytes > Number.MAX_SAFE_INTEGER - total) return "context byte total exceeds safe integer range";
-    total += entry.bytes;
-    previous = entry.path;
-    if (entry.path === "GOAL.md") goal = true;
-  }
-  return goal ? null : "context entries require GOAL.md";
-};
+/** The domain policy owns context paths, closed fields, ordering and byte sums.
+ * Accepted rows keep their exact bytes; this boundary never sorts or repairs them.
+ */
+export const contextEntriesCheck: Check = value => checkContextEntries(value, { requireSorted: true });
 const integrateFields = {
   kind: checkEnum(["git.integrate"] as const), repo: checkEnum(["project"] as const),
   target: checkEnum(["refs/heads/main"] as const), base: checkOid, candidate: checkOid,
