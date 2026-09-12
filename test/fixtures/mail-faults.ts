@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
+import { messageIdForOperation } from "../../src/domain/derived.js";
 import type { AuthContext, MailInput } from "../../implementation/contracts.js";
 import type { MailModule } from "../../src/mail.js";
 import type { Store } from "../../src/store.js";
@@ -13,7 +14,8 @@ export class StopSignal extends Error {
 
 export async function sendWithStop(mail: MailModule, store: Store, auth: AuthContext, key: string, input: MailInput, point?: MailStopPoint) {
   if (!point) return mail.send(auth, key, input);
-  const root = dirname(dirname(mail.objectPath("unused")));
+  const probeId = messageIdForOperation("op-00000000-0000-4000-8000-000000000001", 0);
+  const root = dirname(dirname(mail.objectPath(probeId)));
   const stage = join(dirname(root), "staging", `send-${key}`);
   const fsync = fs.fsyncSync;
   const transaction = store.transaction;
@@ -27,8 +29,7 @@ export async function sendWithStop(mail: MailModule, store: Store, auth: AuthCon
     const stat = fs.fstatSync(fd);
     if (point === "stage" && stat.isFile() && dirname(path) === stage) stop();
     if (!stat.isDirectory()) return;
-    if (
-      (point === "object" && path === join(root, "objects")) ||
+    if ((point === "object" && path === join(root, "objects")) ||
       (point === "archive" && path === join(root, "archive", "cur"))) stop();
     if (point.startsWith("inbox-") && path.startsWith(join(root, "inboxes") + "/") && path.endsWith("/new") && ++inboxes === Number(point.slice(6))) stop();
   };
@@ -42,7 +43,6 @@ export async function sendWithStop(mail: MailModule, store: Store, auth: AuthCon
   syncBuiltinESMExports();
   try {
     const receipt = await mail.send(auth, key, input);
-    // A post-acceptance I/O fault legitimately returns pending from production.
     if (stopped) throw new StopSignal(point);
     throw new Error(`mail fault boundary not reached: ${point}; ${receipt.state}`);
   } finally {
