@@ -37,6 +37,12 @@ import { Store, StoreError, reused } from "./store.js";
 import { MailModule, buildEml, expandAddresses, fsyncDir, defaultReplyTo, defaultLogicalReplyTo, actorAddress, listAddress } from "./mail.js";
 import { generateOperationId, generateMessageId, isValidFullOid } from "./ids.js";
 import {
+  publishedRefFor, mailObjectRelativePath, contextRevisionDisplayPath, contextRevisionLinkFor,
+} from "./domain/derived.js";
+import {
+  submitStagingPathAt, submitBundlePathAt, contextStagingPathAt, contextRevisionPathAt,
+} from "./storage/paths.js";
+import {
   requestHash,
   canonicalRequestParams,
   canonicalJson,
@@ -224,9 +230,9 @@ export class GitModule {
     this.objectFormat(this.paths.projectGit, [input.candidate, ...input.prerequisites]);
     const opId = generateOperationId();
     const messageId = generateMessageId(opId, 0);
-    const staging = join(this.paths.stateRoot, "staging", `submit-${opId}`);
+    const staging = submitStagingPathAt(this.paths.stateRoot, opId);
     mkdirSync(staging, { recursive: true });
-    const bundlePath = join(staging, "upload.bundle");
+    const bundlePath = submitBundlePathAt(this.paths.stateRoot, opId);
 
     // durable bundle staging + digest check (GIT-006)
     let digest: string | null = null;
@@ -265,7 +271,7 @@ export class GitModule {
       logicalTo,
       this.paths.society,
     );
-    const publishedRef = `refs/oma/published/${auth.actor}/${opId}`;
+    const publishedRef = publishedRefFor(auth.actor, opId);
     // T-submit-accept: op + frozen result-mail plan + deliveries (DB-005/009)
     const eml = await this.resultEml(
       auth.actor,
@@ -290,7 +296,7 @@ export class GitModule {
       publishedRef,
       message: {
         id: messageId,
-        objectPath: `mail/objects/${messageId}.eml`,
+        objectPath: mailObjectRelativePath(messageId),
         sha256: eml.sha256,
         bytes: eml.bytes,
         dateMs: eml.dateMs,
@@ -545,58 +551,68 @@ export class GitModule {
           namespaceRoot,
           ...prerequisites,
         ],
-        { encoding: "utf8", maxBuffer: 64 * 1024 },
+        {
+          encoding: "utf8",
+          timeout: Math.max(1000, this.paths.checkTimeoutSeconds * 1000),
+          killSignal: "SIGKILL",
+          maxBuffer: 4 * 1024 * 1024,
+          env: gitEnv,
+        },
       );
-      const stderr = String(result.stderr ?? "");
-      if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT" || result.status === null) {
+      if (result.error || result.signal || result.status === null) {
         throw new StoreError(
-          "SPIKE_UNRESOLVED",
-          "quarantine namespace boundary unavailable",
+          "REF_STATE_UNKNOWN",
+          `quarantine import outcome unavailable: ${result.error?.message ?? result.signal ?? "no status"}`,
         );
       }
-      if (result.signal)
-        throw new StoreError("SPIKE_UNRESOLVED", `quarantine child terminated by ${result.signal}`);
       if (result.status !== 0) {
-        if (stderr.includes("OMA_ERROR=PREREQUISITE_MISSING"))
-          throw new StoreError("PREREQUISITE_MISSING", "bundle prerequisite is unavailable");
-        if (stderr.includes("OMA_ERROR=BUNDLE_INVALID"))
-          throw new StoreError("BUNDLE_INVALID", "bundle failed quarantine validation");
-        if (stderr.includes("OMA_ERROR=SPIKE_UNRESOLVED"))
-          throw new StoreError("SPIKE_UNRESOLVED", "quarantine namespace setup failed");
-        throw new StoreError("INTERNAL_ERROR", "quarantine import failed");
+        const stderr = String(result.stderr ?? "");
+        const code = /OMA_ERROR=(BUNDLE_INVALID|PREREQUISITE_MISSING|INTERNAL_ERROR|SPIKE_UNRESOLVED)/.exec(stderr)?.[1];
+        if (code === "BUNDLE_INVALID" || code === "PREREQUISITE_MISSING" || code === "INTERNAL_ERROR" || code === "SPIKE_UNRESOLVED") {
+          throw new StoreError(code, stderr.slice(0, 400) || "quarantine failed");
+        }
+        throw new StoreError("SPIKE_UNRESOLVED", "required quarantine namespace is unavailable");
       }
-      if (String(result.stdout ?? "").trim() !== candidate)
-        throw new StoreError("INTERNAL_ERROR", "quarantine candidate result mismatch");
+      const head = String(result.stdout ?? "").trim().split("\n").at(-1);
+      if (head !== candidate || !this.canonicalHas(candidate)) {
+        throw new StoreError("BUNDLE_INVALID", "bundle candidate was not imported exactly");
+      }
     } finally {
       rmSync(namespaceRoot, { recursive: true, force: true });
     }
   }
 
-  /** MUST [GIT-008]: immutable published ref; conflicting OID stops the effect. */
   private publishRef(ref: string, candidate: Oid): void {
-    const cur = spawnSync(
+    const current = spawnSync(
       "git",
-      ["--git-dir", this.paths.projectGit, "rev-parse", ref],
+      ["--git-dir", this.paths.projectGit, "rev-parse", "--verify", "--quiet", ref],
       { env: gitEnv, encoding: "utf8" },
     );
-    if (gitUncertain(cur)) throw gitObservationError(`published ref ${ref}`, cur);
-    if (cur.status === 0 && cur.stdout.trim() === candidate) return; // idempotent
-    if (cur.status === 0)
-      throw new StoreError(
-        "PUBLISHED_REF_CONFLICT",
-        `${ref} already points elsewhere`,
-      );
-    const upd = spawnSync(
+    if (gitUncertain(current)) throw gitObservationError(`published ref ${ref}`, current);
+    if (current.status === 0) {
+      if (current.stdout.trim() !== candidate)
+        throw new StoreError("PUBLISHED_REF_CONFLICT", `ref ${ref} already points elsewhere`);
+      return;
+    }
+    if (current.status !== 1 || current.stderr.trim() || current.stdout.trim())
+      throw new StoreError("REF_STATE_UNKNOWN", `cannot observe published ref ${ref}`);
+    const r = spawnSync(
       "git",
       ["--git-dir", this.paths.projectGit, "update-ref", ref, candidate, ""],
       { env: gitEnv, encoding: "utf8" },
     );
-    if (gitUncertain(upd)) throw gitObservationError(`publish ${ref}`, upd);
-    if (upd.status !== 0)
-      throw new StoreError(
-        "PUBLISHED_REF_CONFLICT",
-        `update-ref: ${upd.stderr.slice(0, 300)}`,
+    if (gitUncertain(r)) throw gitObservationError(`publish ref ${ref}`, r);
+    if (r.status !== 0) {
+      const after = spawnSync(
+        "git",
+        ["--git-dir", this.paths.projectGit, "rev-parse", ref],
+        { env: gitEnv, encoding: "utf8" },
       );
+      if (gitUncertain(after)) throw gitObservationError(`published ref ${ref}`, after);
+      if (after.status === 0 && after.stdout.trim() === candidate) return;
+      if (after.status === 0) throw new StoreError("PUBLISHED_REF_CONFLICT", `CAS publish failed for ${ref}`);
+      throw new StoreError("REF_STATE_UNKNOWN", `published ref ${ref} cannot be observed after CAS`);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -607,17 +623,13 @@ export class GitModule {
     auth: AuthContext,
     key: string,
     input: { candidate: Oid; expected: Oid },
-    currentPolicyRevision: string = this.integration.policyRevision,
-    legacyProtectedPaths: readonly string[] = this.integration.protectedPaths,
   ): Promise<Receipt> {
     const previous = this.integrationTail;
     let release: (() => void) | undefined;
     this.integrationTail = new Promise<void>((resolve) => { release = resolve; });
     await previous;
     try {
-      return await this.integrateUnsafe(
-        auth, key, input, currentPolicyRevision, legacyProtectedPaths,
-      );
+      return await this.integrateUnsafe(auth, key, input);
     } finally {
       release?.();
     }
@@ -627,190 +639,102 @@ export class GitModule {
     auth: AuthContext,
     key: string,
     input: { candidate: Oid; expected: Oid },
-    currentPolicyRevision: string,
-    legacyProtectedPaths: readonly string[],
   ): Promise<Receipt> {
-    const newHash = requestHash("git.integrate", {
-      candidate: input.candidate,
-      expected: input.expected,
-    });
+    const { candidate, expected } = input;
+    const newHash = requestHash("git.integrate", { candidate, expected });
     const claim = this.store.claimKey(auth.actor, key, newHash);
     if (claim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
-    this.objectFormat(this.paths.projectGit, [input.candidate, input.expected]);
-    if (this.store.recoverableOperations().some((id) =>
-      this.store.getOperationById(id)?.kind === "git.integrate")) {
-      throw new StoreError("REF_STATE_UNKNOWN", "pending integrate operation requires recovery");
+    this.objectFormat(this.paths.projectGit, [candidate, expected]);
+
+    if (!this.isPublished(candidate)) {
+      throw new StoreError("CANDIDATE_NOT_PUBLISHED", `candidate ${candidate} not published`);
     }
-    if (!auth.capabilities.has("code.integrate"))
-      throw new StoreError("CAPABILITY_DENIED", "no code.integrate");
+    const main = this.currentMain();
+    if (main !== expected) throw new StoreError("STALE_BASE", "main differs from expected");
 
-    const base = this.currentMain();
-    const policyRevision = this.integration.policyRevision;
     const opId = generateOperationId();
-    const result = {
-      kind: "git.integrate" as const,
-      base,
-      candidate: input.candidate,
-      target: "refs/heads/main" as const,
-      policyRevision,
-      changed: true,
-    };
-    // INT-003: persist the physical main-writer intent before any candidate check.
-    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
-    this.store.transaction((_tx) => {
-      assertCurrentActor(this.store, auth, "code.integrate");
-      claimOut.txClaim = this.store.claimOperation({
-        id: opId,
-        actor: auth.actor,
-        requestKey: key,
-        requestHash: newHash,
-        kind: "git.integrate",
-        payloadJson: JSON.stringify(input),
-        planJson: JSON.stringify({
-          kind: "git.integrate",
-          repo: "project",
-          target: "refs/heads/main",
-          base,
-          candidate: input.candidate,
-          policyRevision,
-          checkProfileDigest: checkDigest(this.integration.checks),
-          result,
-        }),
-      });
-    });
-    if (claimOut.txClaim === "retry")
-      return receiptOf(this.store.getOperation(auth.actor, key)!);
-
-    const terminalCodes = new Set([
-      "CANDIDATE_NOT_PUBLISHED",
-      "STALE_BASE",
-      "NOT_DESCENDANT",
-      "PROTECTED_PATH",
-      "CHECK_FAILED",
-      "POLICY_CHANGED",
-      "CANCELLED_BEFORE_COMMIT",
-      "CAPABILITY_DENIED",
-      "SPIKE_UNRESOLVED",
-    ]);
+    const checkProfileDigest = checkDigest(this.integration.checks);
+    const policyRevision = this.integration.policyRevision;
+    const result = { kind: "git.integrate" as const, base: expected, candidate,
+      target: "refs/heads/main" as const, policyRevision, changed: main !== candidate };
+    const plan = { kind: "git.integrate", repo: "project", target: "refs/heads/main",
+      base: expected, candidate, policyRevision, checkProfileDigest, result };
+    this.store.transaction((_tx) => this.store.claimOperation({
+      id: opId, actor: auth.actor, requestKey: key, requestHash: newHash,
+      kind: "git.integrate", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan),
+    }));
     const fail = (code: Parameters<Store["setOperationFailed"]>[1], message: string): never => {
       this.store.transaction((_tx) => this.store.setOperationFailed(opId, code));
       throw new StoreError(code, message);
     };
+    if (main === candidate) {
+      this.store.transaction((_tx) => this.store.setOperationSucceeded(opId, JSON.stringify(result)));
+      return { operation: opId, state: "succeeded", result };
+    }
+    const anc = spawnSync(
+      "git", ["--git-dir", this.paths.projectGit, "merge-base", "--is-ancestor", expected, candidate],
+      { env: gitEnv, encoding: "utf8" },
+    );
+    if (gitUncertain(anc) || (anc.status !== 0 && anc.status !== 1))
+      throw gitObservationError("merge-base ancestry check", anc);
+    if (anc.status === 1) fail("NOT_DESCENDANT", "candidate is not a descendant of expected");
+
+    if (this.integration.protectedPaths.length > 0) {
+      const diff = spawnSync(
+        "git", ["--git-dir", this.paths.projectGit, "diff-tree", "--no-commit-id", "--name-status", "-r", "-z", "--no-renames", expected, candidate],
+        { env: gitEnv, encoding: "utf8" },
+      );
+      if (gitUncertain(diff) || diff.status !== 0) throw gitObservationError("protected-path diff", diff);
+      for (const p of (diff.stdout ?? "").split("\0").filter(Boolean)) {
+        const name = p.replace(/^[A-Z]\s+/, "");
+        if (this.integration.protectedPaths.some((pp) => pp.endsWith("/") ? name.startsWith(pp) : name === pp))
+          fail("PROTECTED_PATH", `path ${name} is protected`);
+      }
+    }
+    // S-06: unresolved profiles fail closed. Tests/verified deployments may supply a runner.
     try {
-      if (!this.isPublished(input.candidate))
-        fail("CANDIDATE_NOT_PUBLISHED", "candidate must be preserved by a published ref");
-      if (input.expected !== base)
-        fail("STALE_BASE", `expected ${input.expected} but main is ${base}`);
-      const anc = spawnSync(
-        "git",
-        [
-          "--git-dir",
-          this.paths.projectGit,
-          "merge-base",
-          "--is-ancestor",
-          input.expected,
-          input.candidate,
-        ],
-        { env: gitEnv, encoding: "utf8" },
-      );
-      if (gitUncertain(anc) || (anc.status !== 0 && anc.status !== 1))
-        throw gitObservationError("merge-base ancestry check", anc);
-      if (anc.status === 1)
-        fail("NOT_DESCENDANT", "candidate is not a descendant of expected main");
-      const protectedPaths = legacyProtectedPaths;
-      if (protectedPaths.length > 0) {
-        const diff = spawnSync(
-          "git",
-          [
-            "--git-dir",
-            this.paths.projectGit,
-            "diff-tree",
-            "--no-commit-id",
-            "--name-status",
-            "-r",
-            "-z",
-            "--no-renames",
-            input.expected,
-            input.candidate,
-          ],
-          { env: gitEnv, encoding: "utf8" },
-        );
-        if (gitUncertain(diff) || diff.status !== 0)
-          throw gitObservationError("protected-path diff", diff);
-        const touched = (diff.stdout ?? "")
-          .split("\0")
-          .filter((p) => p.length > 0 && /^[^\t\n]+/.test(p));
-        for (const p of touched) {
-          const name = p.replace(/^[A-Z]\s+/, "");
-          if (protectedPaths.some((pp) => pp.endsWith("/") ? name.startsWith(pp) : name === pp))
-            fail("PROTECTED_PATH", `path ${name} is protected`);
-        }
-      }
-      // INT-002: candidate checks are sandbox-gated and settle before CAS.
-      for (const check of this.integration.checks) await this.runCheck(input.candidate, check);
-
-      // INT-003: policy, capability, stop intent, and main are re-read at the CAS boundary.
-      const head = this.currentMain();
-      if (head !== base) fail("STALE_BASE", `main moved to ${head}`);
-      const nowAuth = this.store.getAgent(auth.actor);
-      if (!nowAuth) {
-        this.store.transaction((_tx) => this.store.setOperationFailed(opId, "CAPABILITY_DENIED"));
-        throw new StoreError("CAPABILITY_DENIED", "actor disappeared before commit");
-      }
-      if (nowAuth.desired === "retired" ||
-        !(this.legacyDirect
-          ? auth.capabilities.has("code.integrate")
-          : capabilitiesOf(nowAuth).has("code.integrate")))
-        fail("CAPABILITY_DENIED", "code.integrate was revoked before commit");
-      if (nowAuth.desired === "stopped")
-        fail("CANCELLED_BEFORE_COMMIT", "stop intent was accepted before commit");
-
-      let authoritativePolicyRevision = currentPolicyRevision;
-      if (this.policyRevisionReader) {
-        try {
-          authoritativePolicyRevision = this.policyRevisionReader();
-        } catch (error) {
-          fail("POLICY_CHANGED", `authoritative policy unreadable: ${(error as Error).message}`);
-        }
-        if (typeof authoritativePolicyRevision !== "string" || authoritativePolicyRevision.length === 0)
-          fail("POLICY_CHANGED", "authoritative policy is malformed");
-      }
-      if (authoritativePolicyRevision !== policyRevision)
-        fail("POLICY_CHANGED", `policy revision changed to ${authoritativePolicyRevision}`);
-
-      const cas = spawnSync(
-        "git",
-        [
-          "--git-dir",
-          this.paths.projectGit,
-          "update-ref",
-          "refs/heads/main",
-          input.candidate,
-          base,
-        ],
-        { env: gitEnv, encoding: "utf8" },
-      );
-      if (gitUncertain(cas)) throw gitObservationError("main CAS", cas);
-      if (cas.status !== 0) {
-        const actual = this.currentMain();
-        fail("STALE_BASE", `CAS failed; actual main ${actual}`);
-      }
-      this.store.transaction((_tx) => {
-        this.store.setOperationSucceeded(opId, JSON.stringify(result));
-      });
-      return { operation: opId, state: "succeeded", result: result as never };
+      for (const check of this.integration.checks) await this.runCheck(candidate, check);
     } catch (error) {
-      const op = this.store.getOperationById(opId);
-      if (error instanceof StoreError && op?.state === "pending" && terminalCodes.has(error.code)) {
+      if (error instanceof StoreError && ["CHECK_FAILED", "SPIKE_UNRESOLVED"].includes(error.code)) {
         this.store.transaction((_tx) => this.store.setOperationFailed(opId, error.code));
       }
       throw error;
     }
+
+    // MUST [INT-002]: all checks immediately preceding the single-writer CAS.
+    const finalMain = this.currentMain();
+    if (finalMain !== expected) fail("STALE_BASE", "main changed before CAS");
+    const agent = this.store.getAgent(auth.actor);
+    if (!agent && !this.legacyDirect) fail("AUTH_FAILED", "actor identity disappeared");
+    if (agent) {
+      if (agent.desired === "stopped" || agent.desired === "retired")
+        fail("CANCELLED_BEFORE_COMMIT", "stop/retire intent accepted before CAS");
+      if (!capabilitiesOf(agent).has("code.integrate"))
+        fail("CAPABILITY_DENIED", "integrate capability was revoked before CAS");
+    }
+    let finalRevision: string = this.integration.policyRevision;
+    try {
+      finalRevision = this.policyRevisionReader
+        ? this.policyRevisionReader()
+        : this.integration.policyRevision;
+    } catch (error) {
+      fail("POLICY_CHANGED", `authoritative policy unreadable: ${(error as Error).message}`);
+    }
+    if (typeof finalRevision !== "string" || finalRevision.length === 0 || finalRevision !== policyRevision)
+      fail("POLICY_CHANGED", "policy changed before CAS");
+    const r = spawnSync(
+      "git", ["--git-dir", this.paths.projectGit, "update-ref", "refs/heads/main", candidate, expected],
+      { env: gitEnv, encoding: "utf8" },
+    );
+    if (gitUncertain(r)) throw gitObservationError("main CAS", r);
+    if (r.status !== 0) fail("STALE_BASE", "CAS failed");
+    this.store.transaction((_tx) => this.store.setOperationSucceeded(opId, JSON.stringify(result)));
+    return { operation: opId, state: "succeeded", result };
   }
 
-  isPublished(candidate: Oid): boolean {
+  isPublished(oid: Oid): boolean {
     const r = spawnSync(
       "git",
       [
@@ -823,8 +747,8 @@ export class GitModule {
       { env: gitEnv, encoding: "utf8" },
     );
     if (gitUncertain(r) || r.status !== 0)
-      throw gitObservationError("published-ref enumeration", r);
-    return (r.stdout ?? "").split("\n").some((l) => l.trim() === candidate);
+      throw gitObservationError("published refs", r);
+    return (r.stdout ?? "").split("\n").some((l) => l.trim() === oid);
   }
 
   private currentMain(): Oid {
@@ -833,28 +757,22 @@ export class GitModule {
       ["--git-dir", this.paths.projectGit, "rev-parse", "refs/heads/main"],
       { env: gitEnv, encoding: "utf8" },
     );
-    if (gitUncertain(r) || r.status !== 0)
-      throw new StoreError("REF_STATE_UNKNOWN", "no trustworthy main ref observation");
-    return r.stdout.trim() as Oid;
+    if (gitUncertain(r)) throw gitObservationError("main ref", r);
+    if (r.status !== 0 || !isValidFullOid(r.stdout.trim()))
+      throw new StoreError("REF_STATE_UNKNOWN", "cannot observe canonical main ref");
+    return r.stdout.trim();
   }
 
   private async runCheck(
-    candidate: Oid,
-    check: IntegrationPolicy["checks"][number],
+    _candidate: Oid,
+    _check: IntegrationPolicy["checks"][number],
   ): Promise<void> {
-    void candidate;
-    if (!this.paths.checkRootfs || !this.paths.checkAssetsDir)
-      throw new StoreError("SPIKE_UNRESOLVED", `candidate-check sandbox unavailable for ${check.id}`);
-    if (check.argv.length === 0 || !check.argv[0])
-      throw new StoreError("CHECK_FAILED", `check ${check.id} has no argv`);
-    const resources = check.resources;
-    if (!resources || Object.values(resources).some((value) => !Number.isSafeInteger(value) || value <= 0))
-      throw new StoreError("SPIKE_UNRESOLVED", `check ${check.id} has invalid resource limits`);
-    // UNIT-001 permits only fixed society units; transient systemd-run is not a
-    // candidate-check boundary. Until a fixed, quota-backed worker exists, fail closed.
+    // S-01-CANDIDATE: read-only candidate files do not bound *new* files created
+    // in a writable check cwd. The existing adapter has no verified separate
+    // bounded work area, so do not run candidate code until that gate is proven.
     throw new StoreError(
       "SPIKE_UNRESOLVED",
-      `candidate-check resource boundary unavailable for ${check.id}`,
+      "S-01-CANDIDATE bounded writable work area is not verified",
     );
   }
 
@@ -862,126 +780,121 @@ export class GitModule {
   // context.publish (CTX-001..006)
   // -------------------------------------------------------------------------
 
-  /**
-   * MUST [CTX-001..006]: full context publish. The candidate is NOT caller
-   * input: the broker commits the manifest tree with its trusted identity and
-   * the resulting OID is the plan's candidate (CTX-003).
-   */
   async publishContext(
     auth: AuthContext,
     key: string,
-    input: {
-      expected: Oid | null;
-      entries: ContextEntry[];
-      content: BlobDescriptor;
-    },
+    input: { expected: Oid | null; entries: ContextEntry[]; content: BlobDescriptor },
     bytes: AsyncIterable<Uint8Array>,
   ): Promise<Receipt> {
-    // MUST [IPC-005]: canonical hash + fast-path claim before staging.
-    // SAFETY: Context publish input is the closed DTO validated at the broker
-    // boundary; the cast widens it to the JSON domain for hashing only.
-    const newHash = requestHash(
-      "context.publish",
-      canonicalRequestParams("context.publish", input as unknown as Json),
-    );
+    const previous = this.integrationTail;
+    let release: (() => void) | undefined;
+    this.integrationTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await this.publishContextUnsafe(auth, key, input, bytes);
+    } finally {
+      release?.();
+    }
+  }
+
+  private async publishContextUnsafe(
+    auth: AuthContext,
+    key: string,
+    input: { expected: Oid | null; entries: ContextEntry[]; content: BlobDescriptor },
+    bytes: AsyncIterable<Uint8Array>,
+  ): Promise<Receipt> {
+    const newHash = requestHash("context.publish", {
+      expected: input.expected,
+      entries: input.entries as unknown as Json,
+      content: input.content as unknown as Json,
+    });
     const claim = this.store.claimKey(auth.actor, key, newHash);
     if (claim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
-    if (input.expected !== null) this.objectFormat(this.paths.contextGit, [input.expected]);
-    if (!input.entries.some((e) => e.path === "GOAL.md")) {
-      throw new StoreError("INVALID_REQUEST", "GOAL.md is required");
+    const current = this.currentContext();
+    if (current !== input.expected)
+      throw new StoreError("CONTEXT_CONFLICT", "context base changed");
+    if (existsSync(this.paths.contextGit))
+      this.objectFormat(this.paths.contextGit, input.expected ? [input.expected] : []);
+
+    const streamParts: Buffer[] = [];
+    let total = 0;
+    for await (const b of bytes) {
+      total += b.length;
+      if (total > input.content.bytes)
+        throw new StoreError("STREAM_INVALID", "context exceeds descriptor bytes");
+      streamParts.push(Buffer.from(b));
     }
-    let previousPath = "";
-    for (const e of input.entries) {
-      if (contextPathCheck(e.path) || e.path <= previousPath)
-        throw new StoreError("INVALID_REQUEST", `unsupported, duplicate or unsorted context path ${e.path}`);
-      previousPath = e.path;
+    const content = Buffer.concat(streamParts);
+    if (content.length !== input.content.bytes || sha256Of(content) !== input.content.sha256)
+      throw new StoreError("STREAM_INVALID", "context digest/bytes mismatch");
+    const advertised = input.entries.reduce((sum, entry) => sum + entry.bytes, 0);
+    if (!Number.isSafeInteger(advertised) || advertised !== content.length)
+      throw new StoreError("INVALID_REQUEST", "context entries do not consume content");
+    if (!input.entries.some((entry) => entry.path === "GOAL.md"))
+      throw new StoreError("INVALID_REQUEST", "GOAL.md is required");
+    const seen = new Set<string>();
+    let verifyOffset = 0;
+    for (const entry of input.entries) {
+      const pathError = contextPathCheck(entry.path);
+      if (pathError || seen.has(entry.path))
+        throw new StoreError("INVALID_REQUEST", pathError ?? `duplicate context path ${entry.path}`);
+      seen.add(entry.path);
+      const invalid = contextFileCheck(
+        entry.path,
+        content.subarray(verifyOffset, verifyOffset + entry.bytes),
+      );
+      if (invalid) throw new StoreError("INVALID_REQUEST", `${invalid}: ${entry.path}`);
+      verifyOffset += entry.bytes;
     }
 
     const opId = generateOperationId();
-    const messageId = generateMessageId(opId, 0);
-    const staging = join(this.paths.stateRoot, "staging", `context-${opId}`);
+    const staging = contextStagingPathAt(this.paths.stateRoot, opId);
     const treeDir = join(staging, "tree");
     mkdirSync(treeDir, { recursive: true });
-
-    // CTX-002: consume and validate the entire content stream before candidate creation.
-    const h = createHash("sha256");
-    let total = 0;
-    const chunks: Uint8Array[] = [];
-    for await (const c of bytes) {
-      total += c.length;
-      if (total > input.content.bytes)
-        throw new StoreError("STREAM_INVALID", "context exceeds descriptor bytes");
-      h.update(c);
-      chunks.push(Buffer.from(c));
+    let offset = 0;
+    for (const entry of input.entries) {
+      const data = content.subarray(offset, offset + entry.bytes);
+      offset += entry.bytes;
+      if (sha256Of(data) !== entry.sha256)
+        throw new StoreError("STREAM_INVALID", `context file digest mismatch: ${entry.path}`);
+      const abs = join(treeDir, entry.path);
+      mkdirSync(join(abs, ".."), { recursive: true });
+      const fd = openSync(abs, "wx", 0o600);
+      try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }
     }
-    if (h.digest("hex") !== input.content.sha256 || total !== input.content.bytes)
-      throw new StoreError("STREAM_INVALID", "context stream digest/bytes mismatch");
+    fsyncAll(treeDir);
 
-    const data = Buffer.concat(chunks);
-    let off = 0;
-    for (const e of input.entries) {
-      const slice = data.subarray(off, off + e.bytes);
-      off += e.bytes;
-      if (sha256Of(slice) !== e.sha256)
-        throw new StoreError("STREAM_INVALID", `entry ${e.path} hash mismatch`);
-      const invalid = contextFileCheck(e.path, slice);
-      if (invalid) throw new StoreError("INVALID_REQUEST", invalid);
-      const target = join(treeDir, e.path);
-      mkdirSync(join(target, ".."), { recursive: true });
-      writeFileSync(target, slice, { mode: 0o644 });
-      chmodSync(target, 0o644);
-    }
-    if (off !== data.length)
-      throw new StoreError("STREAM_INVALID", "stream longer than manifest");
-    fsyncAll(staging);
-    fsyncDir(join(this.paths.stateRoot, "staging"));
-
-    // DB-009/CTX-003: candidate bytes/OID are frozen before acceptance, but main
-    // is not mutated yet. The imported object is broker-owned recovery material.
-    const prepared = this.prepareContextCandidate(input.expected, input.entries, treeDir);
-    const candidate = prepared.candidate;
-    fsyncAll(staging);
-    const eml = await this.contextNoticeEml(messageId, input.entries, candidate);
+    const candidate = this.prepareContextCandidate(treeDir, input.entries, current);
+    const messageId = generateMessageId(opId, 0);
+    const eml = await this.contextEml(auth.actor, messageId, candidate);
     this.mail.freezeObject(messageId, eml);
-
     const plan = {
       kind: "context.publish" as const,
-      base: input.expected,
+      base: current,
       candidate,
       target: "refs/heads/main" as const,
       entries: input.entries,
       stagingPath: staging,
       message: {
         id: messageId,
-        objectPath: `mail/objects/${messageId}.eml`,
+        objectPath: mailObjectRelativePath(messageId),
         sha256: eml.sha256,
         bytes: eml.bytes,
         dateMs: eml.dateMs,
-        to: ["residents"],
+        to: ["residents"] as Address[],
         recipients: [] as Actor[],
         kind: "context" as const,
         contextRevision: candidate,
-        replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
+        replyHeaders: { replyTo: ["residents"] as Address[], inReplyTo: null, references: [] },
       },
     };
-
-    // T-context-accept: candidate, immutable EML and recipient snapshot are all
-    // durable in one acceptance transaction before canonical main CAS/publication.
-    const claimOut = { txClaim: "inserted" as "inserted" | "retry" };
+    const outcome = { claim: "inserted" as "inserted" | "retry" };
     this.store.transaction((_tx) => {
       assertCurrentActor(this.store, auth, "context.publish");
-      plan.message.recipients = this.store
-        .listAgents()
-        .filter(
-          (a) =>
-            a.role === "resident" &&
-            a.desired !== "retired" &&
-            a.desired !== "provisioning",
-        )
-        .map((a) => a.name);
-      claimOut.txClaim = this.store.claimOperation({
+      plan.message.recipients = expandAddresses(this.store, ["residents"], this.paths.society).recipients;
+      outcome.claim = this.store.claimOperation({
         id: opId,
         actor: auth.actor,
         requestKey: key,
@@ -990,294 +903,261 @@ export class GitModule {
         payloadJson: JSON.stringify(input),
         planJson: JSON.stringify(plan),
       });
-      if (claimOut.txClaim === "retry") return;
-      this.store.insertDeliveries(
-        plan.message.recipients.map((recipient) => ({
-          messageId,
-          recipient,
-          operationId: opId,
-        })),
-      );
+      if (outcome.claim === "retry") return;
+      this.store.insertDeliveries(plan.message.recipients.map(recipient => ({
+        messageId, recipient, operationId: opId,
+      })));
     });
-    if (claimOut.txClaim === "retry")
+    if (outcome.claim === "retry")
       return receiptOf(this.store.getOperation(auth.actor, key)!);
 
-    try {
-      this.finalizeContextCandidate(
-        candidate,
-        input.expected,
-        input.entries,
-        prepared.sourceDir,
-      );
-    } catch (error) {
-      if (error instanceof StoreError && error.code === "CONTEXT_CONFLICT")
-        this.store.transaction((_tx) => this.store.setOperationFailed(opId, error.code));
-      throw error;
-    }
-
-    const result = {
-      kind: "context.publish" as const,
-      previous: input.expected,
-      revision: candidate,
-      message: messageId,
-      recipientCount: plan.message.recipients.length,
-    };
+    this.commitContext(opId, treeDir, input.entries, current);
+    if (this.currentContext() !== candidate)
+      throw new StoreError("REF_STATE_UNKNOWN", "context main does not match frozen candidate");
     await this.mail.publishGated(opId);
-    this.store.transaction((_tx) => {
-      this.store.setOperationSucceeded(opId, JSON.stringify(result));
-    });
+    const result = { kind: "context.publish" as const, previous: current, revision: candidate,
+      message: messageId, recipientCount: plan.message.recipients.length };
+    this.store.transaction((_tx) => this.store.setOperationSucceeded(opId, JSON.stringify(result)));
     return { operation: opId, state: "succeeded", result };
   }
 
-  private async contextNoticeEml(
-    messageId: string,
-    entries: ContextEntry[],
-    candidate: Oid,
-  ): Promise<{ text: string; bytes: number; sha256: string; dateMs: number }> {
-    const bodyText = `GOAL이 갱신되었습니다. 전체 제약: /world/context/current/GOAL.md\n파일: ${entries.map((e) => e.path).join(", ")}`;
-    return buildEml({
-      from: `principal@${this.paths.society}.oma.invalid`,
-      to: [listAddress("residents", this.paths.society)],
-      replyTo: [listAddress("residents", this.paths.society)],
-      subject: "공유 목표 갱신",
-      kind: "context",
-      contextRevision: candidate,
-      inReplyTo: null,
-      references: [],
-      messageId: `${messageId}@${this.paths.society}.oma.invalid`,
-      body: bodyText,
-    });
-  }
-
-  /** Build and import the exact context candidate before operation acceptance.
-   * This does not mutate refs/heads/main or public context views. */
   private prepareContextCandidate(
-    expected: Oid | null,
-    entries: ContextEntry[],
     treeDir: string,
-  ): { candidate: Oid; sourceDir: string } {
-    const contextGit = this.paths.contextGit;
-    mkdirSync(contextGit, { recursive: true });
-    if (!existsSync(join(contextGit, "HEAD"))) {
-      const init = spawnSync("git", ["init", "-q", "--bare"], {
-        cwd: contextGit,
-        env: gitEnv,
-        encoding: "utf8",
-      });
-      if (gitUncertain(init) || init.status !== 0)
-        throw new StoreError(
-          "INTERNAL_ERROR",
-          `context git init failed: ${init.error?.message ?? init.stderr.slice(0, 200)}`,
-        );
-    }
-    const format = this.objectFormat(contextGit);
-    const tmp = join(treeDir, "..", "commit-work");
-    mkdirSync(tmp, { recursive: true });
-    const existing = spawnSync("git", ["rev-parse", "HEAD"], {
-      cwd: tmp,
-      env: gitEnv,
-      encoding: "utf8",
-    });
-    if (gitUncertain(existing)) throw gitObservationError("context worktree HEAD", existing);
-    let oid: string;
-    if (existing.status === 0 && String(existing.stdout).trim()) {
-      oid = String(existing.stdout).trim();
-    } else {
-      const init = spawnSync("git", ["init", "-q", "-b", "main", `--object-format=${format}`], {
-        cwd: tmp,
-        env: gitEnv,
-        encoding: "utf8",
-      });
-      if (gitUncertain(init) || init.status !== 0)
-        throw new StoreError(
-          "INTERNAL_ERROR",
-          `context worktree init failed: ${init.error?.message ?? init.stderr.slice(0, 200)}`,
-        );
-      for (const e of entries) {
-        const source = join(treeDir, e.path);
-        const target = join(tmp, e.path);
-        if (!existsSync(source)) continue;
-        mkdirSync(join(target, ".."), { recursive: true });
-        renameSync(source, target);
-      }
-      if (expected) {
-        const parent = spawnSync(
-          GIT_BIN,
-          ["--git-dir", contextGit, "cat-file", "-e", `${expected}^{commit}`],
-          { env: gitEnv },
-        );
-        if (gitUncertain(parent)) throw gitObservationError("context parent", parent);
-        if (parent.status !== 0)
-          throw new StoreError("CONTEXT_CONFLICT", `context base ${expected} is not present`);
-      }
-      const add = spawnSync("git", ["add", "-A"], {
-        cwd: tmp,
-        env: gitEnv,
-        encoding: "utf8",
-      });
-      if (gitUncertain(add) || add.status !== 0)
-        throw new StoreError(
-          "INTERNAL_ERROR",
-          `context add: ${add.error?.message ?? add.stderr.slice(0, 300)}`,
-        );
-      if (expected) {
-        const alternates = join(tmp, ".git", "objects", "info", "alternates");
-        mkdirSync(join(alternates, ".."), { recursive: true });
-        writeFileSync(alternates, `${join(contextGit, "objects")}\n`, "utf8");
-      }
-      const tree = spawnSync("git", ["write-tree"], {
-        cwd: tmp,
-        env: gitEnv,
-        encoding: "utf8",
-      });
-      if (gitUncertain(tree) || tree.status !== 0)
-        throw new StoreError(
-          "INTERNAL_ERROR",
-          `context tree: ${tree.error?.message ?? tree.stderr.slice(0, 300)}`,
-        );
-      const parentArgs = expected ? ["-p", expected] : [];
-      const commit = spawnSync(
-        GIT_BIN,
-        [
-          "-c",
-          "user.name=OMA",
-          "-c",
-          "user.email=oma@localhost",
-          "commit-tree",
-          String(tree.stdout).trim(),
-          ...parentArgs,
-          "-m",
-          "context update",
-        ],
-        {
-          cwd: tmp,
-          env: {
-            ...gitEnv,
-            GIT_AUTHOR_NAME: "OMA",
-            GIT_AUTHOR_EMAIL: "oma@localhost",
-            GIT_COMMITTER_NAME: "OMA",
-            GIT_COMMITTER_EMAIL: "oma@localhost",
-          },
-          encoding: "utf8",
-        },
-      );
-      if (gitUncertain(commit) || commit.status !== 0)
-        throw new StoreError(
-          "INTERNAL_ERROR",
-          `context commit: ${commit.error?.message ?? commit.stderr.slice(0, 300)}`,
-        );
-      oid = String(commit.stdout ?? "").trim();
-      const head = spawnSync(
-        "git",
-        ["update-ref", "refs/heads/main", oid],
-        { cwd: tmp, env: gitEnv, encoding: "utf8" },
-      );
-      if (gitUncertain(head) || head.status !== 0)
-        throw new StoreError(
-          "INTERNAL_ERROR",
-          `context head: ${head.error?.message ?? head.stderr.slice(0, 300)}`,
-        );
-    }
-    if (!isValidFullOid(oid))
-      throw new StoreError("INTERNAL_ERROR", "context candidate OID is malformed");
-
-    const imp = spawnSync(
-      "git",
-      [
-        "--git-dir",
-        contextGit,
-        "fetch",
-        "-q",
-        "-f",
-        "--no-tags",
-        tmp,
-        "+main:refs/oma/input-context",
-      ],
-      { env: gitEnv, encoding: "utf8" },
-    );
-    if (gitUncertain(imp) || imp.status !== 0)
-      throw new StoreError(
-        "INTERNAL_ERROR",
-        `context object import failed: ${imp.error?.message ?? imp.stderr.slice(0, 300)}`,
-      );
-    this.objectFormat(contextGit, [oid]);
-    return { candidate: oid as Oid, sourceDir: tmp };
-  }
-
-  /** CTX-003/004: after acceptance, CAS canonical context main and publish views. */
-  private finalizeContextCandidate(
-    candidate: Oid,
+    entries: ContextEntry[],
     expected: Oid | null,
-    entries: ContextEntry[],
-    sourceDir: string,
-  ): void {
-    const prev = expected ?? "";
-    const upd = spawnSync(
-      "git",
-      ["--git-dir", this.paths.contextGit, "update-ref", "refs/heads/main", candidate, prev],
-      { env: gitEnv, encoding: "utf8" },
+  ): Oid {
+    if (!existsSync(this.paths.contextGit)) {
+      mkdirSync(this.paths.contextGit, { recursive: true });
+      git(this.paths.contextGit, ["--git-dir", this.paths.contextGit, "init", "--bare"]);
+    }
+    const contextFormat = this.objectFormat(this.paths.contextGit, expected ? [expected] : []);
+    const work = join(treeDir, "..", "commit-work");
+    mkdirSync(work, { recursive: true });
+    const gitdir = join(work, ".git");
+    const contextEnv: NodeJS.ProcessEnv = {
+      ...gitEnv,
+      GIT_AUTHOR_NAME: "OMA",
+      GIT_AUTHOR_EMAIL: "broker@oma.invalid",
+      GIT_COMMITTER_NAME: "OMA",
+      GIT_COMMITTER_EMAIL: "broker@oma.invalid",
+      GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z",
+      GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
+      GIT_CONFIG_COUNT: "8",
+      GIT_CONFIG_KEY_3: "core.autocrlf",
+      GIT_CONFIG_VALUE_3: "false",
+      GIT_CONFIG_KEY_4: "commit.gpgSign",
+      GIT_CONFIG_VALUE_4: "false",
+      GIT_CONFIG_KEY_5: "user.signingKey",
+      GIT_CONFIG_VALUE_5: "",
+      GIT_CONFIG_KEY_6: "core.fileMode",
+      GIT_CONFIG_VALUE_6: "false",
+      GIT_CONFIG_KEY_7: "core.excludesFile",
+      GIT_CONFIG_VALUE_7: "/dev/null",
+    };
+    const run = (args: string[]) => {
+      const r = spawnSync(GIT_BIN, args, { env: contextEnv, encoding: "utf8" });
+      if (gitUncertain(r) || r.status !== 0)
+        throw new StoreError("INTERNAL_ERROR", `context git failed: ${r.error?.message ?? r.stderr.slice(0, 300)}`);
+      return r;
+    };
+    run(["-C", work, "init", "-q", `--object-format=${contextFormat}`]);
+    if (expected) {
+      run(["-C", work, "fetch", "--no-tags", this.paths.contextGit, "refs/heads/main"]);
+      run(["-C", work, "checkout", "--detach", "FETCH_HEAD"]);
+    }
+    for (const e of entries) {
+      const src = join(treeDir, e.path);
+      const dst = join(work, e.path);
+      mkdirSync(join(dst, ".."), { recursive: true });
+      writeFileSync(dst, readFileSync(src));
+    }
+    this.cleanContextExtras(work, entries.map(e => e.path));
+    run(["-C", work, "add", "-f", "-A"]);
+    const committed = spawnSync(
+      GIT_BIN, ["-C", work, "commit", "-q", "--no-gpg-sign", "-m", "context"],
+      { env: contextEnv, encoding: "utf8" },
     );
-    if (gitUncertain(upd)) throw gitObservationError("context CAS", upd);
-    if (upd.status !== 0)
-      throw new StoreError(
-        "CONTEXT_CONFLICT",
-        `context CAS failed; actual revision ${this.currentContext()}`,
-      );
-    this.publishContextSnapshot(candidate, entries, sourceDir);
+    if (gitUncertain(committed)) throw gitObservationError("context commit", committed);
+    if (committed.status !== 0) {
+      const unchanged = spawnSync(GIT_BIN, ["-C", work, "diff", "--cached", "--quiet"], { env: contextEnv, encoding: "utf8" });
+      if (gitUncertain(unchanged) || unchanged.status !== 0)
+        throw new StoreError("INTERNAL_ERROR", `context commit failed: ${committed.stderr.slice(0, 300)}`);
+    }
+    const candidate = run(["--git-dir", gitdir, "rev-parse", "HEAD"]).stdout.trim();
+    if (!isValidFullOid(candidate)) throw new StoreError("INTERNAL_ERROR", "invalid context candidate");
+    return candidate;
   }
 
-  private publishContextSnapshot(
-    oid: Oid,
+  private async contextEml(actor: Actor, messageId: string, candidate: Oid) {
+    const residents = listAddress("residents", this.paths.society);
+    return buildEml({
+      from: actorAddress(actor, this.paths.society),
+      to: [residents], replyTo: [residents], subject: "Shared context updated", kind: "context",
+      contextRevision: candidate, inReplyTo: null, references: [],
+      messageId: `${messageId}@${this.paths.society}.oma.invalid`,
+      body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n`,
+    });
+  }
+
+  private commitContext(
+    opId: string,
+    treeDir: string,
     entries: ContextEntry[],
-    sourceDir: string,
-  ): void {
-    const contextDir = join(this.paths.worldDir, "context");
-    const revDir = join(contextDir, "revisions", oid);
-    mkdirSync(revDir, { recursive: true });
-    for (const e of entries) {
-      const source = join(sourceDir, e.path);
-      let bytes: Buffer;
-      if (existsSync(source)) {
-        bytes = readFileSync(source);
-      } else {
-        const shown = spawnSync(
-          GIT_BIN,
-          ["--git-dir", this.paths.contextGit, "show", `${oid}:${e.path}`],
-          { env: gitEnv },
-        );
-        if (gitUncertain(shown) || shown.status !== 0 || !Buffer.isBuffer(shown.stdout))
-          throw new StoreError(
-            "STORE_CORRUPT",
-            `context candidate is missing ${e.path}`,
-          );
-        bytes = shown.stdout;
-      }
-      if (bytes.length !== e.bytes || sha256Of(bytes) !== e.sha256)
-        throw new StoreError(
-          "STORE_CORRUPT",
-          `context candidate entry mismatch: ${e.path}`,
-        );
-      const target = join(revDir, e.path);
-      if (existsSync(target)) {
-        const existing = readFileSync(target);
-        if (existing.length !== bytes.length || sha256Of(existing) !== e.sha256)
-          throw new StoreError(
-            "STORE_CORRUPT",
-            `context snapshot entry mismatch: ${e.path}`,
-          );
-      } else {
-        mkdirSync(join(target, ".."), { recursive: true });
-        writeFileSync(target, bytes, { mode: 0o644 });
+    expected: Oid | null,
+  ): Oid {
+    const accepted = this.store.getOperationById(opId);
+    if (!accepted || accepted.kind !== "context.publish")
+      throw new StoreError("STORE_CORRUPT", "context operation missing before publication");
+    let plan: { candidate: Oid };
+    try { plan = JSON.parse(accepted.planJson); }
+    catch { throw new StoreError("STORE_CORRUPT", "context plan corrupt before publication"); }
+    const work = join(treeDir, "..", "commit-work");
+    const candidate = git(work, ["rev-parse", "HEAD"]).stdout.trim();
+    if (candidate !== plan.candidate)
+      throw new StoreError("STORE_CORRUPT", "staged context candidate differs from accepted plan");
+    git(this.paths.contextGit, ["--git-dir", this.paths.contextGit, "fetch", "--no-tags", work, "HEAD"]);
+    const cas = spawnSync(GIT_BIN,
+      ["--git-dir", this.paths.contextGit, "update-ref", "refs/heads/main", candidate, expected ?? ""],
+      { env: gitEnv, encoding: "utf8" });
+    if (gitUncertain(cas)) throw gitObservationError("context CAS", cas);
+    if (cas.status !== 0) throw new StoreError("CONTEXT_CONFLICT", "context CAS failed");
+    this.publishContextSnapshot(candidate, entries, work);
+    return candidate;
+  }
+
+  /** MUST [CTX-004]: immutable revision then durable current rename. */
+  private publishContextSnapshot(candidate: Oid, entries: ContextEntry[], source: string): void {
+    const revisionsDir = join(this.paths.worldDir, "context", "revisions");
+    mkdirSync(revisionsDir, { recursive: true });
+    const final = contextRevisionPathAt(this.paths.worldDir, candidate);
+    if (!existsSync(final)) {
+      const temporary = join(revisionsDir, `.prepare-${candidate}-${generateOperationId()}`);
+      mkdirSync(temporary, { recursive: true });
+      try {
+        for (const entry of entries) {
+          const dst = join(temporary, entry.path);
+          mkdirSync(join(dst, ".."), { recursive: true });
+          const data = readFileSync(join(source, entry.path));
+          if (data.length !== entry.bytes || sha256Of(data) !== entry.sha256)
+            throw new StoreError("STORE_CORRUPT", `context source mismatch ${entry.path}`);
+          writeFileSync(dst, data, { flag: "wx", mode: 0o444 });
+        }
+        fsyncAll(temporary);
+        if (existsSync(join(temporary, "decisions"))) chmodSync(join(temporary, "decisions"), 0o555);
+        chmodSync(temporary, 0o555);
+        renameSync(temporary, final);
+        fsyncDir(revisionsDir);
+      } finally {
+        if (existsSync(temporary)) {
+          chmodSync(temporary, 0o700);
+          if (existsSync(join(temporary, "decisions"))) chmodSync(join(temporary, "decisions"), 0o700);
+          rmSync(temporary, { recursive: true, force: true });
+        }
       }
     }
-    fsyncAll(revDir);
-    mkdirSync(contextDir, { recursive: true });
-    const current = join(contextDir, "current");
-    const linkTmp = `${current}.tmp-${process.pid}`;
-    rmSync(linkTmp, { force: true });
-    symlinkSync(`revisions/${oid}`, linkTmp);
-    renameSync(linkTmp, current);
-    fsyncAll(contextDir);
+    if (!lstatSync(final).isDirectory())
+      throw new StoreError("STORE_CORRUPT", "context revision is not a directory");
+    const expectedPaths = new Set(entries.map(entry => entry.path));
+    const verifyTree = (directory: string, relative = ""): void => {
+      for (const name of readdirSync(directory)) {
+        const path = relative ? `${relative}/${name}` : name;
+        const stat = lstatSync(join(directory, name));
+        if (stat.isDirectory() && path === "decisions" && entries.some(entry => entry.path.startsWith("decisions/")))
+          verifyTree(join(directory, name), path);
+        else if (!stat.isFile() || !expectedPaths.has(path))
+          throw new StoreError("STORE_CORRUPT", `unexpected context entry ${path}`);
+      }
+    };
+    verifyTree(final);
+    for (const entry of entries) {
+      const path = join(final, entry.path);
+      if (!lstatSync(path).isFile()) throw new StoreError("STORE_CORRUPT", `context revision mismatch ${entry.path}`);
+      const data = readFileSync(path);
+      if (data.length !== entry.bytes || sha256Of(data) !== entry.sha256)
+        throw new StoreError("STORE_CORRUPT", `context revision mismatch ${entry.path}`);
+      chmodSync(path, 0o444);
+    }
+    if (existsSync(join(final, "decisions"))) chmodSync(join(final, "decisions"), 0o555);
+    chmodSync(final, 0o555);
+    fsyncAll(final);
+    const contextRoot = join(this.paths.worldDir, "context");
+    const link = join(contextRoot, `.current-${generateOperationId()}`);
+    symlinkSync(contextRevisionLinkFor(candidate), link);
+    renameSync(link, join(contextRoot, "current"));
+    fsyncDir(contextRoot);
+  }
+
+  private cleanContextExtras(root: string, keep: string[], relative = ""): void {
+    for (const entry of readdirSync(join(root, relative))) {
+      if (relative === "" && entry === ".git") continue;
+      const path = relative ? `${relative}/${entry}` : entry;
+      const abs = join(root, path);
+      const st = lstatSync(abs);
+      if (st.isDirectory()) {
+        this.cleanContextExtras(root, keep, path);
+        if (!keep.some((k) => k.startsWith(`${path}/`))) rmSync(abs, { recursive: true, force: true });
+      } else if (!keep.includes(path)) rmSync(abs, { force: true });
+    }
+  }
+
+  /** MUST [CTX-004]: physical mirror observations before notices/startup. */
+  repairContextMirror(): void {
+    const revision = this.currentContext();
+    if (!revision) return;
+    const immutable = contextRevisionPathAt(this.paths.worldDir, revision);
+    if (!existsSync(immutable)) {
+      throw new StoreError(
+        "REF_STATE_UNKNOWN",
+        `immutable context revision ${revision} missing; reconcile accepted context first`,
+      );
+    }
+    if (!lstatSync(immutable).isDirectory())
+      throw new StoreError("STORE_CORRUPT", "context revision mirror is not a directory");
+    const listing = spawnSync(GIT_BIN,
+      ["--git-dir", this.paths.contextGit, "ls-tree", "-r", "-z", "--full-tree", revision],
+      { env: gitEnv, encoding: "utf8" });
+    if (gitUncertain(listing) || listing.status !== 0)
+      throw gitObservationError("context revision tree", listing);
+    const entries: ContextEntry[] = [];
+    const expected = new Map<string, string>();
+    for (const line of listing.stdout.split("\0").filter(Boolean)) {
+      const match = /^(100644) blob ([0-9a-f]{40}|[0-9a-f]{64})\t(.+)$/.exec(line);
+      if (!match || contextPathCheck(match[3]))
+        throw new StoreError("STORE_CORRUPT", "context canonical tree contains an unsupported entry");
+      expected.set(match[3]!, match[2]!);
+    }
+    if (!expected.has("GOAL.md"))
+      throw new StoreError("STORE_CORRUPT", "context canonical tree has no GOAL.md");
+    const seen = new Set<string>();
+    const verify = (relative = ""): void => {
+      for (const name of readdirSync(join(immutable, relative))) {
+        const path = relative ? `${relative}/${name}` : name;
+        const abs = join(immutable, path);
+        const stat = lstatSync(abs);
+        if (stat.isDirectory() && path === "decisions" && [...expected.keys()].some(key => key.startsWith("decisions/"))) {
+          verify(path);
+          continue;
+        }
+        if (!stat.isFile() || !expected.has(path))
+          throw new StoreError("STORE_CORRUPT", `unexpected context mirror entry ${path}`);
+        const bytes = readFileSync(abs);
+        if (contextFileCheck(path, bytes))
+          throw new StoreError("STORE_CORRUPT", `context mirror policy mismatch ${path}`);
+        const canonical = spawnSync(GIT_BIN,
+          ["--git-dir", this.paths.contextGit, "hash-object", "--stdin"],
+          { input: bytes, env: gitEnv, encoding: "utf8" });
+        if (gitUncertain(canonical) || canonical.status !== 0)
+          throw gitObservationError("context mirror object hash", canonical);
+        if (canonical.stdout.trim() !== expected.get(path))
+          throw new StoreError("STORE_CORRUPT", `context mirror bytes differ from canonical revision: ${path}`);
+        seen.add(path);
+        entries.push({ path, bytes: bytes.length, sha256: sha256Of(bytes) });
+      }
+    };
+    verify();
+    if (seen.size !== expected.size)
+      throw new StoreError("STORE_CORRUPT", "context mirror is incomplete");
+    this.publishContextSnapshot(revision, entries, immutable);
   }
 
   private async reconcileContext(op: { id: string; planJson: string }): Promise<void> {
@@ -1289,35 +1169,46 @@ export class GitModule {
       message: { id: string; recipients?: string[] };
     };
     try {
-      const parsed: unknown = JSON.parse(op.planJson);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-        throw new Error("plan is not an object");
-      plan = parsed as typeof plan;
-      if (
-        !isValidFullOid(plan.candidate) ||
-        !Array.isArray(plan.entries) ||
-        typeof plan.stagingPath !== "string" ||
-        !plan.message ||
-        typeof plan.message.id !== "string"
-      )
-        throw new Error("context plan fields missing");
+      plan = JSON.parse(op.planJson) as typeof plan;
     } catch {
-      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt context plan`);
+      throw new StoreError("STORE_CORRUPT", `operation ${op.id} has corrupt plan`);
     }
-
-    const object = spawnSync(
-      GIT_BIN,
-      ["--git-dir", this.paths.contextGit, "cat-file", "-e", `${plan.candidate}^{commit}`],
-      { env: gitEnv },
-    );
-    if (gitUncertain(object) || object.status !== 0)
-      throw new StoreError("STORE_CORRUPT", `accepted context candidate ${plan.candidate} is missing`);
-
-    const current = this.currentContext();
-    if (current !== plan.candidate) {
-      if (current !== plan.base) {
-        this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
-        return;
+    if (!plan.candidate || !plan.message?.id)
+      throw new StoreError("STORE_CORRUPT", "accepted context has no frozen candidate/message");
+    const treeDir = join(plan.stagingPath, "tree");
+    const main = this.currentContext();
+    if (main !== plan.candidate && main !== plan.base) {
+      this.store.transaction((_tx) => this.store.setOperationUnknown(op.id));
+      return;
+    }
+    if (main !== plan.candidate) {
+      if (!existsSync(treeDir))
+        throw new StoreError("STORE_CORRUPT", "accepted context tree is missing");
+      const rebuilt = this.prepareContextCandidate(treeDir, plan.entries, plan.base);
+      if (rebuilt !== plan.candidate)
+        throw new StoreError("STORE_CORRUPT", "accepted context candidate cannot be reproduced");
+      const haveCandidate = spawnSync(
+        GIT_BIN,
+        ["--git-dir", this.paths.contextGit, "cat-file", "-e", `${plan.candidate}^{commit}`],
+        { env: gitEnv, encoding: "utf8" },
+      );
+      if (gitUncertain(haveCandidate)) throw gitObservationError("context candidate observation", haveCandidate);
+      if (haveCandidate.status !== 0) {
+        const work = join(plan.stagingPath, "commit-work");
+        const fetched = spawnSync(
+          GIT_BIN,
+          [
+            "--git-dir",
+            this.paths.contextGit,
+            "fetch",
+            "--no-tags",
+            work,
+            "HEAD",
+          ],
+          { env: gitEnv, encoding: "utf8" },
+        );
+        if (gitUncertain(fetched) || fetched.status !== 0)
+          throw new StoreError("REF_STATE_UNKNOWN", "context candidate cannot be recovered");
       }
       const upd = spawnSync(
         GIT_BIN,
