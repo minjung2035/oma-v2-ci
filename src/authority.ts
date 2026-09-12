@@ -4,28 +4,15 @@
 import type { AuthContext, Capability } from "../implementation/contracts.js";
 import { StoreError, type Store } from "./store.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
-import { checkObject, checkString, checkArray, checkInt, checkOid } from "./validate.js";
+import { checkObject, checkString, checkArray, checkOid } from "./validate.js";
+import { capabilityCheck } from "./domain/capabilities.js";
+import { resourceLimitsCheck } from "./domain/resources.js";
 
-/** Closed capability set (contracts.ts Capability union). */
-const KNOWN_CAPABILITIES: ReadonlySet<string> = new Set([
-  "mail.send",
-  "route.follow",
-  "agent.create",
-  "agent.manage.self",
-  "agent.manage.descendants",
-  "git.submit",
-  "code.integrate",
-  "context.publish",
-]);
-const resourceCheck = checkObject(Object.fromEntries(
-  ["memoryBytes", "tasks", "cpuQuotaPercent", "tmpBytes", "workspaceBytes", "stagingBytes", "checkTimeoutSeconds"]
-    .map((key) => [key, checkInt({ min: 1 })]),
-));
 const resolvedCheck = checkObject({
   name: checkString({ min: 1 }), from: checkOid, brief: checkString({ min: 1 }),
   profile: checkString({ min: 1 }), modelProfile: checkString({ min: 1 }),
-  resources: resourceCheck,
-  capabilities: checkArray((value) => typeof value === "string" && KNOWN_CAPABILITIES.has(value) ? null : "invalid capability"),
+  resources: resourceLimitsCheck,
+  capabilities: checkArray(capabilityCheck),
 });
 
 export function resolvedSpecOf(agent: { name: string; profile: string; specJson: string }): ResolvedAgentSpec {
