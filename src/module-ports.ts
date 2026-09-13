@@ -14,10 +14,10 @@
  * adapter, capability omission, epoch omission or assertion cast bridges them.
  * Directory/config trust is a composition precondition, never actor input.
  */
-import type {
-  Actor, AgentStatus, OperationId, PreparedBatch, Receipt, RequestKey,
-  ResourceLimits, RunLease, SandboxPlan, UnitObservation,
-} from "../implementation/contracts.js";
+import type { Actor, OperationId, RequestKey } from "../implementation/contracts/identity.js";
+import type { AgentStatus, PreparedBatch, RunLease, SandboxPlan, UnitObservation } from "../implementation/contracts/runtime.js";
+import type { Receipt } from "../implementation/contracts/durable.js";
+import type { ResourceLimits } from "../implementation/contracts/host.js";
 import type { Store as StoreImplementation, OperationRow, Transaction } from "./store.js";
 import type { UnitsModule as UnitsImplementation } from "./units.js";
 import type { ViewsModule as ViewsImplementation, UnitObserve } from "./views.js";

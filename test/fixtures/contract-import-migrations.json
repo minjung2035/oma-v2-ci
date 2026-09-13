@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "sourceCommit": "cbe25a050772da336a95a01c9e81cdd5414468c1",
+  "files": {
+    "src/module-ports.ts": {
+      "sourceBlob": "e2259e91ad49c62477997c1cbc387df808b8dc0e",
+      "bodySha256": "e86c1941ca6328181022eca066c84d4e4178b16554d7f300e09c888f5867f9fe",
+      "bindings": [["Actor","Actor"],["AgentStatus","AgentStatus"],["OperationId","OperationId"],["PreparedBatch","PreparedBatch"],["Receipt","Receipt"],["RequestKey","RequestKey"],["ResourceLimits","ResourceLimits"],["RunLease","RunLease"],["SandboxPlan","SandboxPlan"],["UnitObservation","UnitObservation"]],
+      "inline": []
+    }
+  }
+}
