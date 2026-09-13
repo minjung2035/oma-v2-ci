@@ -199,7 +199,9 @@ for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-m
         writeFileSync(ref, "corrupt-ref\n");
         await assert.rejects(git.reconcile(accepted.id), { code: "REF_STATE_UNKNOWN" });
         assert.equal(readFileSync(ref, "utf8"), "corrupt-ref\n", "unknown is not an absent ref");
-        assert.equal(store.getOperationById(accepted.id)!.state, "pending");
+        // A corrupt ref file cannot prove the effect did or did not happen, so
+        // the operation stays explicitly unknown rather than retryable-pending.
+        assert.equal(store.getOperationById(accepted.id)!.state, "unknown");
         rmSync(ref);
       }
       await git.reconcile(accepted.id);
@@ -281,7 +283,7 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
       store = new Store(join(root, "runtime.sqlite")); open = true;
       const fixture = lifecycleFixture(root, store);
       const before = ["child", "peer"].map(name => store.getOperation("principal", `bootstrap-${name}`));
-      if (point === "boot-stage") assert.equal(store.listAgents().length, 0);
+      if (point === "boot-stage" || point === "boot-object") assert.equal(store.listAgents().length, 0);
       else {
         assert.equal(store.listAgents().length, 3, "all bootstrap identities commit together");
         assert.ok(before.every(Boolean));
@@ -302,7 +304,15 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
         assert.equal(fixture.units.observe(name).activeState, "inactive");
         assert.equal(files(join(root, "mail/inboxes", name, "new")).length, 1);
       }
-      assert.equal(files(join(root, "mail/objects")).length, 2);
+      // A kill before the bootstrap intent leaves an unreferenced object; FS-007
+      // forbids automatic removal, so it survives as an orphan next to the two
+      // accepted initial messages.
+      const bootObjects = files(join(root, "mail/objects"));
+      assert.equal(bootObjects.length, point === "boot-object" ? 3 : 2, JSON.stringify(bootObjects));
+      for (const name of ["child", "peer"]) {
+        const initial = JSON.parse(store.getOperation("principal", `bootstrap-${name}`)!.planJson).initialMessage.id;
+        assert.ok(bootObjects.includes(`${initial}.eml`), JSON.stringify(bootObjects));
+      }
       assert.equal(files(join(root, "mail/archive/cur")).length, 2);
       await fixture.lifecycle.bootstrap({ ...fixture.config, initialResidents: [] });
       assert.equal(store.listAgents().length, 3);
@@ -326,7 +336,9 @@ for (const point of ["create-stage", "create-intent", "create-object", "create-w
       store = new Store(join(root, "runtime.sqlite")); open = true;
       const fixture = lifecycleFixture(root, store);
       const before = store.getOperation("a", "create-child");
-      if (point === "create-stage") {
+      // The initial EML is frozen before the create intent is durable, so both
+      // boundaries leave no accepted operation behind.
+      if (point === "create-stage" || point === "create-object") {
         assert.equal(before, null);
         assert.equal(store.getAgent("child"), null);
         await fixture.lifecycle.create(gitAuth, input, "create-child");
@@ -343,7 +355,13 @@ for (const point of ["create-stage", "create-intent", "create-object", "create-w
       assert.equal(gitCommand(root, ["-C", join(root, "agents/child/workspace"), "rev-parse", "HEAD"]), info.base);
       assert.equal(store.getAgent("child")!.incarnation, 0);
       assert.equal(fixture.units.observe("child").activeState, "inactive");
-      assert.equal(files(join(root, "mail/objects")).length, 1);
+      // A kill after the object freeze but before the intent leaves an
+      // unreferenced object; FS-007 forbids automatic removal, so it survives
+      // next to the accepted initial message.
+      const createObjects = files(join(root, "mail/objects"));
+      const acceptedInitial = JSON.parse(op.planJson).initialMessage.id;
+      assert.ok(createObjects.includes(`${acceptedInitial}.eml`), JSON.stringify(createObjects));
+      assert.equal(createObjects.length, point === "create-object" ? 2 : 1, JSON.stringify(createObjects));
       assert.equal(files(join(root, "mail/archive/cur")).length, 1);
       assert.equal(files(join(root, "mail/inboxes/child/new")).length, 1);
     } finally { cleanup(); if (open) store.close(); removeTree(root); }

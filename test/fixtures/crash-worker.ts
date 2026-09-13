@@ -40,12 +40,19 @@ fs.fsyncSync = fd => {
   if (faultTarget && point.endsWith("before")) fail();
   fsync(fd); synced.add(path);
   if (faultTarget) fail();
+  /** A directory fence fsync also runs before its entries exist. A durability
+   * checkpoint means the entry is already published, so wait for content. */
+  const populated = (directory: string): boolean => {
+    try { return fs.readdirSync(directory).length > 0; } catch { return false; }
+  };
   if (point === "stage" && path.includes("/staging/") && path.endsWith(".eml")) checkpoint();
-  if (point === "object" && path === join(root, "mail", "objects")) checkpoint();
+  if (point === "object" && path === join(root, "mail", "objects") && populated(path)) checkpoint();
   if (point === "submit-stage" && path.endsWith("/upload.bundle") && path.startsWith(join(root, "staging") + "/")) checkpoint();
-  if (point === "ctx-snapshot" && /\/world\/context\/revisions\/[0-9a-f]{40,64}$/.test(path)) checkpoint();
-  if (point === "boot-stage" && path.includes("/staging/") && path.endsWith(".eml")) checkpoint();
-  if (point === "boot-object" && path === join(root, "mail/objects")) checkpoint();
+  if (point === "ctx-snapshot" && /\/world\/context\/revisions\/[0-9a-f]{40,64}$/.test(path) && populated(path)) checkpoint();
+  // The create/bootstrap initial mail is staged under staging/mail-objects
+  // before its intent transaction; that fence is the "stage" boundary.
+  if (point === "boot-stage" && (path.includes("/staging/mail-objects/") || (path.includes("/staging/") && path.endsWith(".eml")))) checkpoint();
+  if (point === "boot-object" && path === join(root, "mail/objects") && populated(path)) checkpoint();
 };
 const link = fs.linkSync;
 fs.linkSync = (source, destination) => {
@@ -65,9 +72,18 @@ fs.renameSync = (source, destination) => {
 };
 const copy = fs.copyFileSync;
 fs.copyFileSync = (source, destination, mode) => {
-  if (point === "copy") { fs.writeFileSync(destination, "partial", { flag: "wx" }); checkpoint(); }
+  // The cross-device publication path no longer calls copyFileSync; the "copy"
+  // boundary is injected through the durability seam on the primitive itself.
   copy(source, destination, mode);
 };
+/** Preparation runs through the async process owner, so the same boundary must
+ * observe cp.spawn as well as cp.spawnSync. */
+const spawnAsync = cp.spawn as (...args: unknown[]) => unknown;
+cp.spawn = ((command: unknown, args?: unknown, options?: unknown) => {
+  const argv = Array.isArray(args) ? args as string[] : [];
+  if (point === "submit-import" && command === "/usr/bin/prlimit" && argv.includes("oma-quarantine")) checkpoint();
+  return spawnAsync(command, args, options);
+}) as unknown as typeof cp.spawn;
 const spawn = cp.spawnSync;
 cp.spawnSync = new Proxy(spawn, {
   apply(target, receiver, args) {
@@ -152,7 +168,12 @@ if (rawPoint.startsWith("create-")) {
 else if (point.startsWith("int-")) {
   await gitFixture(root, store).git.integrate(gitAuth, "git-crash", { candidate: gitCommand(join(root, "seed"), ["rev-parse", "HEAD"]), expected: gitCommand(join(root, "seed"), ["rev-parse", "HEAD^"]) });
 } else if (point.startsWith("ctx-")) await contextFixture(gitFixture(root, store).git);
-else if (point === "copy") publishImmutableFile(fs.readFileSync(join(root, "source-path"), "utf8"), join(root, "destination"));
+else if (point === "copy") {
+  // Cross-device publication writes an owned temporary and then links it. The
+  // boundary is the ambiguous write: the destination must not exist yet.
+  publishImmutableFile(fs.readFileSync(join(root, "source-path"), "utf8"), join(root, "destination"), undefined,
+    fault => { if (fault.point === "file-write" && fault.phase === "ambiguous") checkpoint(); });
+}
 else if (point === "prepared" || point === "cur") await mail.prepare(auth);
 else await mail.send(auth, "crash-send", input);
 throw new Error(`checkpoint ${point} was not reached`);
