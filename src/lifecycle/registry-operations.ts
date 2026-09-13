@@ -19,41 +19,41 @@ export class RegistryOperations {
   ack(auth: AuthContext, message: MessageId, key: string): Receipt {
     assertActorIdentity(this.store, auth);
     const hash = requestHash("mail.ack", { message });
-    const claim = this.store.claimKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    const claim = this.store.operations.classifyKey(auth.actor, key, hash);
+    if (claim === "retry") return receiptOfOperation(this.store.operations.get(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
     const id = generateOperationId();
     const outcome = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth);
-      const accepted = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "mail.ack",
+      const accepted = tx.operations.accept({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "mail.ack",
         payloadJson: JSON.stringify({ message }), planJson: JSON.stringify({ kind: "mail.ack", recipient: auth.actor, message }) });
       if (accepted === "retry") return accepted;
-      if (!this.store.getDelivery(message, auth.actor))
+      if (!this.store.deliveries.get(message, auth.actor))
         throw new StoreError("REQUEST_NOT_FOUND", `no delivery of ${message} to ${auth.actor}`);
-      tx.markAcknowledged(message, auth.actor);
-      tx.setOperationSucceeded(id, JSON.stringify({ kind: "mail.ack", message, acknowledged: true }));
+      tx.deliveries.acknowledge(message, auth.actor);
+      tx.operations.succeed(id, JSON.stringify({ kind: "mail.ack", message, acknowledged: true }));
       return accepted;
     });
-    return outcome === "retry" ? receiptOfOperation(this.store.getOperation(auth.actor, key)!) : lifecycleReceipt(this.store, id);
+    return outcome === "retry" ? receiptOfOperation(this.store.operations.get(auth.actor, key)!) : lifecycleReceipt(this.store, id);
   }
 
   follow(auth: AuthContext, topic: string, subscribe: boolean, key: string): Receipt {
     assertActorIdentity(this.store, auth);
     const kind = subscribe ? "route.follow" : "route.unfollow";
     const hash = requestHash(kind, { topic });
-    const claim = this.store.claimKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    const claim = this.store.operations.classifyKey(auth.actor, key, hash);
+    if (claim === "retry") return receiptOfOperation(this.store.operations.get(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
     const id = generateOperationId();
     const outcome = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth);
-      const accepted = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind,
+      const accepted = tx.operations.accept({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind,
         payloadJson: JSON.stringify({ topic }), planJson: JSON.stringify({ kind, topic, agent: auth.actor }) });
       if (accepted === "retry") return accepted;
-      if (subscribe) tx.follow(topic, auth.actor); else tx.unfollow(topic, auth.actor);
-      tx.setOperationSucceeded(id, JSON.stringify({ kind, topic, subscribed: subscribe }));
+      if (subscribe) tx.subscriptions.follow(topic, auth.actor); else tx.subscriptions.unfollow(topic, auth.actor);
+      tx.operations.succeed(id, JSON.stringify({ kind, topic, subscribed: subscribe }));
       return accepted;
     });
-    return outcome === "retry" ? receiptOfOperation(this.store.getOperation(auth.actor, key)!) : lifecycleReceipt(this.store, id);
+    return outcome === "retry" ? receiptOfOperation(this.store.operations.get(auth.actor, key)!) : lifecycleReceipt(this.store, id);
   }
 }
