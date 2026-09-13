@@ -63,6 +63,9 @@ test(`R36 stress native transport seed=${seed} cycles=${cycles} durationBudgetSe
     let groupFd: number;
     try { groupFd = openSync("/sys/fs/cgroup", constants.O_RDONLY | constants.O_DIRECTORY); }
     catch (error) { owner.releaseConnection(); client.destroy(); peer.destroy(); throw error; }
+    // Node's own net.Socket owns an internal "end" listener on this runtime, so
+    // the oracle compares against the accepted socket's baseline instead of zero.
+    const baselineListeners = { data: peer.listenerCount("data"), end: peer.listenerCount("end"), drain: peer.listenerCount("drain") };
     const tasks: Promise<void>[] = []; let calls = 0;
     const clientClosed = new Promise<void>(resolve => client.once("close", () => resolve()));
     const peerClosed = new Promise<void>(resolve => peer.once("close", () => resolve()));
@@ -91,7 +94,8 @@ test(`R36 stress native transport seed=${seed} cycles=${cycles} durationBudgetSe
       await Promise.all([clientClosed, peerClosed, ...tasks]);
       connection.close(); connection.close();
       assert.equal(owner.alive(), false); assert.equal(calls, mode === 2 ? 1 : 0);
-      for (const event of ["data", "end", "drain"]) assert.equal(peer.listenerCount(event), 0, `RPC_LISTENER_LEAK:${event}`);
+      for (const event of ["data", "end", "drain"] as const)
+        assert.equal(peer.listenerCount(event), baselineListeners[event], `RPC_LISTENER_LEAK:${event}`);
       assert.deepEqual(readdirSync(staging), [], "PREACCEPT_SPOOL_LEAK");
       assert.deepEqual(cleanupErrors, []);
     } finally {

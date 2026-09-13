@@ -10,6 +10,7 @@ import { RequestCache } from "../src/request-cache.js";
 import { sha256Hex } from "../src/hash.js";
 import { contextFileCheck } from "../src/validate.js";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
+import { makeValidAgent } from "./fixtures/spec.js";
 
 const cases = [
   { name: "empty", path: "GOAL.md", bytes: Buffer.alloc(0) },
@@ -25,6 +26,9 @@ test("CTX-001: broker-domain rejects unsupported paths and non-text before accep
   const store = new Store(join(root, "runtime.sqlite"));
   try {
     seedGit(root);
+    // The published actor identity and its durable capability are the boundary
+    // under test, so the fixture seeds a real, decodable agent row first.
+    store.transaction(() => store.insertAgent(makeValidAgent("a")));
     const { git } = gitFixture(root, store);
     for (const item of cases) {
       const files = item.path === "GOAL.md" ? [item] : [{ path: "GOAL.md", bytes: Buffer.from("# goal\n") }, item];

@@ -250,14 +250,29 @@ test("T65/T67: context publish — unsafe paths/missing GOAL rejected; concurren
     assert.equal(existsSync(join(env.paths.worldDir, "context/revisions", rev1, "GOAL.md")), true);
     assert.equal(readlinkSync(join(env.paths.worldDir, "context/current")), `revisions/${rev1}`);
     const goal2 = Buffer.from("# GOAL v2\n");
-    const attempt = async (key: string, expected: string | null): Promise<"succeeded" | "conflict" | "other"> => {
+    const attempt = async (key: string, expected: string | null): Promise<"succeeded" | "conflict" | "busy" | "other"> => {
       try {
         const receipt = await env.git.publishContext(auth("principal", ["context.publish"]), key, { expected,
           entries: [{ path: "GOAL.md", bytes: goal2.length, sha256: sha256Hex(goal2) }], content: { bytes: goal2.length, sha256: sha256Hex(goal2), mediaType: "application/vnd.oma.context-v1" } }, iter(goal2));
         return receipt.state === "succeeded" ? "succeeded" : "other";
-      } catch (error) { return failure("CONTEXT_CONFLICT")(error) ? "conflict" : "other"; }
+      } catch (error) {
+        if (failure("CONTEXT_CONFLICT")(error)) return "conflict";
+        // One writer at a time with no waiting chain: a request that arrives
+        // while another holds the repository slot is rejected before admission.
+        if (failure("BROKER_UNAVAILABLE")(error)) return "busy";
+        return "other";
+      }
     };
-    const results = await Promise.all([attempt("ctx2a", rev1), attempt("ctx2b", rev1)]); assert.deepEqual(results.sort(), ["conflict", "succeeded"]);
+    const results = await Promise.all([attempt("ctx2a", rev1), attempt("ctx2b", rev1)]);
+    assert.equal(results.filter(outcome => outcome === "succeeded").length, 1, results.join(","));
+    const loser = results.find(outcome => outcome !== "succeeded")!;
+    assert.ok(["conflict", "busy"].includes(loser), loser);
+    // A busy loser never entered admission, so the same key retried now observes
+    // the moved base and fails closed instead of publishing a second candidate.
+    if (loser === "busy") {
+      const retryKey = results[0] === "busy" ? "ctx2a" : "ctx2b";
+      assert.equal(await attempt(retryKey, rev1), "conflict");
+    }
     const rev2 = sh(env, ["--git-dir", env.paths.contextGit, "rev-parse", "refs/heads/main"]);
     assert.equal(sh(env, ["--git-dir", env.paths.contextGit, "rev-parse", `${rev2}^`]), rev1);
   } finally { env.seal(); }

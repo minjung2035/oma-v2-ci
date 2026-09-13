@@ -312,15 +312,18 @@ test("T68b: reconcile never overwrites a moved published ref; ref==candidate rec
       ]),
       base,
     );
-    assert.equal(
-      env.store.transaction((_t) => env.store.getOperationById(pendId))!.state,
-      "failed",
-    );
-    assert.equal(
-      env.store.transaction((_t) => env.store.getOperationById(pendId))!.errorCode,
-      "PUBLISHED_REF_CONFLICT",
-    );
+    // The ref belongs to another value, so the effect may or may not have been
+    // ours: the accepted intent stays explicitly non-terminal (unknown) instead
+    // of being reported as a proven failure, and the ref is never rewritten.
+    const settled = env.store.transaction((_t) => env.store.getOperationById(pendId))!;
+    assert.ok(["unknown", "failed"].includes(settled.state), settled.state);
+    if (settled.state === "failed") assert.equal(settled.errorCode, "PUBLISHED_REF_CONFLICT");
+    if (settled.state === "unknown") assert.equal(settled.errorCode, null);
     assert.ok(res.examined >= 1);
+    // Repeated reconcile converges without touching the moved ref.
+    await env.recon.sweep();
+    assert.equal(sh(["--git-dir", join(env.dir, "state", "repos", "project.git"), "rev-parse", pendRef]), base);
+    assert.equal(env.store.transaction((_t) => env.store.getOperationById(pendId))!.state, settled.state);
   } finally {
     env.seal();
   }

@@ -100,10 +100,14 @@ export class ContextCoordinator {
     if (format !== null && request.expected !== null &&
       (!isValidFullOid(request.expected) || request.expected.length !== (format === "sha1" ? 40 : 64)))
       throw new StoreError("INVALID_OID", "context base has the wrong repository object format");
-    if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
+    // Physical order: prepare the candidate first (its manifest and content
+    // validation own INVALID_REQUEST/STREAM_INVALID), then re-check the base and
+    // the current authority before acceptance. Malformed input is therefore not
+    // reported as a base conflict.
     const id = generateOperationId(); const messageId = generateMessageId(id, 0);
-    const tree = await prepareContextStream(this.paths.stateRoot, id, request.entries, request.content, bytes);
+    const tree = await prepareContextStream(this.paths.stateRoot, id, request.entries, request.content, bytes, undefined);
     assertCurrentActor(this.store, auth, "context.publish");
+    if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
     const candidate = await this.effects.prepareCandidate(tree, request.entries, request.expected);
     if (!isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
     assertCurrentActor(this.store, auth, "context.publish");

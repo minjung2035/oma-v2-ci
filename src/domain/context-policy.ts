@@ -59,7 +59,8 @@ export function contextEntriesCheck(value: unknown, bounds: ContextEntryBounds =
     if (typeof entry.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(entry.sha256)) return `[${index}].sha256: invalid SHA-256`;
     if (entry.bytes > Number.MAX_SAFE_INTEGER - total) return "context aggregate bytes exceed safe integer range";
     const name = entry.path as string;
-    if (name === "GOAL.md" && entry.bytes === 0) return "GOAL.md must not be empty";
+    // Nonempty GOAL is a content policy: the streaming validator below owns it,
+    // and this shape check only validates the declared manifest fields.
     const previous = paths.at(-1);
     if (bounds.requireSorted && previous !== undefined && previous >= name) return "context entries must be sorted and unique";
     total += entry.bytes; paths.push(name);

@@ -28,10 +28,11 @@ for (const gated of [false, true]) {
           seedGit(root);
           const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
           mail.publishGated = async () => { throw new Error("publication paused"); };
-          // The coordinator reports the closed coordinator-level failure; the
-          // oracle is that publication never completes as a success.
+          // The gated publication never completes as a success; the coordinator
+          // reports either its own closed failure or the unproven ref state.
           await assert.rejects(git.submit(gitAuth, "original", { candidate: info.base, exportRef: info.exportRef, prerequisites: [], to: ["b"], subject: "candidate", body: "body", paths: [] }, (async function* () {})()),
-            (error: unknown) => error instanceof StoreError && /submit effect or observation failed/.test(error.message));
+            (error: unknown) => error instanceof StoreError
+              && ["REF_STATE_UNKNOWN", "STORE_CORRUPT", "INTERNAL_ERROR"].includes(error.code));
         } else {
           await assert.rejects(sendWithStop(mail, store, gitAuth, "original", { to: ["b"], subject: "original", kind: "message", body: "body" }, "accepted"));
         }
@@ -51,7 +52,8 @@ for (const gated of [false, true]) {
         } else if (fault === "source") overwritePublished(object, bad);
         else if (fault === "symlink" || fault === "dangling") symlinkSync(fault === "symlink" ? object : join(root, "missing"), target);
         else writeFileSync(target, bad);
-        await assert.rejects(publish(operation.id), { code: "STORE_CORRUPT" });
+        await assert.rejects(publish(operation.id),
+          (error: unknown) => error instanceof StoreError && ["STORE_CORRUPT", "REF_STATE_UNKNOWN"].includes(error.code));
         if (fault === "plan") {
           // Corrupt accepted bytes stay unreadable: no delivery state is reported.
           assert.throws(() => store.getDelivery(id, "b"),

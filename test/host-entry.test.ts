@@ -38,9 +38,11 @@ test("PR-002: host entry reports EOF/malformed replies as failure and parses spl
           assert.equal(request.method, "host.reconcile");
           if (mode === "eof") return peer.end();
           if (mode === "malformed") return peer.end(Buffer.from([0, 0, 0, 1, 0xff]));
+          // Protocol v1 responses carry the version like every other boundary.
           const reply = encodeFrame(mode === "denied"
-            ? { id: request.id, ok: false, error: { code: "AUTH_FAILED", message: "denied" } }
-            : { id: request.id, ok: true, result: { examined: 1 } });
+            ? { v: 1, id: request.id, ok: false, error: { code: "AUTH_FAILED", message: "denied", retry: "never" } }
+            // The closed host.reconcile result schema, not a partial object.
+            : { v: 1, id: request.id, ok: true, result: { examined: 1, repaired: 1, remaining: 0 } });
           peer.write(reply.subarray(0, 2));
           setTimeout(() => { if (!peer.destroyed) peer.end(reply.subarray(2)); }, 20);
         }
@@ -57,7 +59,7 @@ test("PR-002: host entry reports EOF/malformed replies as failure and parses spl
     try {
       const [code] = await once(child, "exit");
       assert.equal(code, mode === "success" ? 0 : mode === "denied" ? 2 : 3, mode);
-      if (mode === "success") assert.deepEqual(JSON.parse(stdout), { examined: 1 });
+      if (mode === "success") assert.deepEqual(JSON.parse(stdout), { examined: 1, repaired: 1, remaining: 0 });
       else assert.equal(stdout, "");
     } finally {
       clearTimeout(timer);
