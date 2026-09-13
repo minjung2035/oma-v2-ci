@@ -5,7 +5,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store, StoreError } from "../src/store.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { requestHash } from "../src/hash.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000081";
 
@@ -14,19 +15,18 @@ function seed(path: string): Store {
   store.transaction(() => {
     store.insertAgent({
       name: "alice",
-      specHash: "alice",
+      ...storedSpec(ALL_CAPS, "p", "alice"),
       role: "resident",
+      profile: "p",
       desired: "enabled",
       incarnation: 0,
-      profile: "p",
       createdBy: null,
-      specJson: resolvedSpec(ALL_CAPS, "p", "alice"),
     });
     store.insertOperation({
       id: OP,
       actor: "alice",
       requestKey: "result-relation",
-      requestHash: "hash",
+      requestHash: requestHash("route.follow", { topic: "dev" }),
       kind: "route.follow",
       payloadJson: JSON.stringify({ topic: "dev" }),
       planJson: JSON.stringify({

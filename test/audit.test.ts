@@ -23,6 +23,7 @@ import { connect } from "node:net";
 import { spawnSync, spawn } from "node:child_process";
 import { ConnectionDecoder, FrameParser, encodeFrame } from "../src/frame.js";
 import { Store } from "../src/store.js";
+import { requestHash } from "../src/hash.js";
 import { MailModule } from "../src/mail.js";
 import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
@@ -31,7 +32,7 @@ import { GitModule } from "../src/git.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker } from "../src/broker.js";
 import { loadConfig, resolveChildSpec } from "../src/config.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 import { unitName } from "../src/units.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
@@ -588,14 +589,21 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
       ] as const) {
         if (!env.store.getAgent(name)) {
           env.store.insertAgent({
+
             name,
-            specHash: "h",
+
+            ...storedSpec(ALL_CAPS, "p", name),
+
             role,
+
             desired: "enabled",
+
             incarnation: 0,
+
             profile: "p",
+
             createdBy: null,
-            specJson: resolvedSpec(ALL_CAPS, "p", name),
+
           });
         }
       }
@@ -749,7 +757,10 @@ function minimalConfig(society: string): Record<string, unknown> {
     society,
     installation: {
       node: process.execPath,
-      libdir: "/usr/lib/oma",
+      // MUST [R38]: the configured LIBDIR must be the layout the loaded modules
+      // resolve from, or the entry refuses to start. Tests run from the package
+      // root, where dist/ and implementation/ live side by side.
+      libdir: process.cwd(),
       rootfs: "/",
       deploymentDigest: "audit",
     },
@@ -1001,14 +1012,21 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
         ["b", "resident"],
       ] as const) {
         store.insertAgent({
+
           name,
-          specHash: "h",
+
+          ...storedSpec(ALL_CAPS, "p", name),
+
           role,
+
           desired: "enabled",
+
           incarnation: 0,
+
           profile: "p",
+
           createdBy: null,
-          specJson: resolvedSpec(ALL_CAPS, "p", name),
+
         });
       }
     });
@@ -1106,23 +1124,23 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
     store.transaction((_t) => {
       store.insertAgent({
         name: "a",
-        specHash: "h",
+        ...storedSpec(ALL_CAPS, "p", "a"),
         role: "resident",
         desired: "enabled",
         incarnation: 0,
         profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", "a"),
       });
       // Valid accepted plan, but its immutable object is deliberately absent.
       // Recovery must fail on the missing object, never on plan-shape corruption.
+      const missingPayload = { to: ["a"], subject: "absent", body: "object", kind: "message" };
       store.insertOperation({
         id: missingOp,
         actor: "a",
         requestKey: "k1",
-        requestHash: "h",
+        requestHash: requestHash("mail.send", missingPayload),
         kind: "mail.send",
-        payloadJson: "{}",
+        payloadJson: JSON.stringify(missingPayload),
         planJson: JSON.stringify({
           kind: "mail.send",
           message: {

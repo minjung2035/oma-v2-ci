@@ -17,7 +17,7 @@ import { GitModule } from "../src/git.js";
 import { MailModule } from "../src/mail.js";
 import { Store, StoreError } from "../src/store.js";
 import type { AuthContext, ProtocolLimits } from "../implementation/contracts.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 const GIT_ENV = {
   ...process.env,
@@ -44,13 +44,12 @@ test("P0: protected-path observation failure cannot reach main CAS", async (t) =
     store.transaction(() => {
       store.insertAgent({
         name: "a",
-        specHash: "a",
+        ...storedSpec(ALL_CAPS, "p", "a"),
         role: "resident",
+        profile: "p",
         desired: "enabled",
         incarnation: 1,
-        profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", "a"),
       });
     });
     git(work, ["init", "-q", "-b", "main"]);

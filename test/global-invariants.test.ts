@@ -12,6 +12,7 @@ import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { gitFixture, gitAuth, seedGit, gitCommand, submitFixture } from "./fixtures/git-crash.js";
 import { assertGlobalInvariants, type InvariantPhase } from "./invariants/index.js";
+import { removeTree } from "./fixtures/cleanup.js";
 
 async function killExistingCheckpoint(root: string, point: string): Promise<void> {
   const child = fork(new URL("./fixtures/crash-worker.js", import.meta.url), [root, point], { stdio: ["ignore", "ignore", "pipe", "ipc"] });
@@ -65,7 +66,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
       const repeated = assertGlobalInvariants(fixture.store, { ...context(root, "settled"), before: settled.ledger });
       assert.deepEqual(repeated.ledger.raw, settled.ledger.raw, "checker must not write rows or timestamps");
       assert.deepEqual(repeated.incomplete, []);
-    } finally { if (open) fixture.store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) fixture.store.close(); removeTree(root); }
   });
 }
 
@@ -86,7 +87,7 @@ for (const point of ["submit-accepted", "submit-ref", "ctx-cas", "ctx-mail", "in
       for (const operation of after.ledger.operations) await git.reconcile(operation.id);
       const again = assertGlobalInvariants(fixture.store, { ...context(root, "settled"), git: paths, before: after.ledger });
       assert.deepEqual(again.ledger.raw, after.ledger.raw);
-    } finally { if (open) fixture.store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) fixture.store.close(); removeTree(root); }
   });
 }
 
@@ -114,7 +115,7 @@ for (const corruption of ["missing-source", "extra-delivery", "duplicate-batch-l
       try { assert.throws(() => assertGlobalInvariants(store, { ...context(root, "settled"), before: healthy.ledger })); }
       finally { store.close(); }
       if (corruption !== "missing-source") assert.deepEqual(readFileSync(fixture.mail.objectPath(message.id)), bytes);
-    } finally { if (open) fixture.store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) fixture.store.close(); removeTree(root); }
   });
 }
 
@@ -130,5 +131,5 @@ test("R33 checker negative control: immutable published ref points to another va
     gitCommand(root, ["--git-dir", paths.projectGit, "update-ref", operation.plan.publishedRef, base]);
     assert.throws(() => assertGlobalInvariants(fixture.store, { ...context(root, "settled"), git: paths }), /IMMUTABLE_PUBLISHED_REF/);
     assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "rev-parse", operation.plan.publishedRef]), base, "checker must not repair the bad ref");
-  } finally { fixture.store.close(); rmSync(root, { recursive: true, force: true }); }
+  } finally { fixture.store.close(); removeTree(root); }
 });

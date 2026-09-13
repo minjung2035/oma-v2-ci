@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { Store } from "../src/store.js";
 import { sha256Hex } from "../src/hash.js";
 import { gitFixture, gitAuth, gitCommand, seedGit } from "./fixtures/git-crash.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 for (const format of ["sha1", "sha256"] as const) {
   test(`ID-003: ${format} rejects mismatched full OIDs before acceptance or stream consumption`, async () => {
@@ -15,7 +15,7 @@ for (const format of ["sha1", "sha256"] as const) {
     try {
       seedGit(root, format);
       const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
-      store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, specHash: "fixture", specJson: resolvedSpec(ALL_CAPS, "p", name), createdBy: null }); });
+      store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, ...storedSpec(ALL_CAPS, "p", name), createdBy: null }); });
       const { git } = gitFixture(root, store);
       const wrong = "a".repeat(format === "sha1" ? 64 : 40);
       const bytes = Buffer.from("# GOAL\n");
@@ -68,7 +68,7 @@ for (const format of ["sha1", "sha256"] as const) {
     try {
       seedGit(root, format);
       const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
-      store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, specHash: "fixture", specJson: resolvedSpec(ALL_CAPS, "p", name), createdBy: null }); });
+      store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent({ name, role: "resident", profile: "p", desired: "enabled", incarnation: 1, ...storedSpec(ALL_CAPS, "p", name), createdBy: null }); });
       const { git, mail, paths } = gitFixture(root, store);
       const observe = (oid: string) => Reflect.get(git, "canonicalHas").call(git, oid);
       assert.equal(observe(info.base), true);

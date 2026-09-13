@@ -6,14 +6,14 @@ import { join } from "node:path";
 import { Store } from "../src/store.js";
 import { MailModule, buildEml, parseEmlHeaders } from "../src/mail.js";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 test("MAIL-004/005: direct replies return to sender, list replies retain lists, and aliases are encoded", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-reply-"));
   const store = new Store(join(root, "runtime.sqlite"));
   try {
     store.transaction(() => {
-      for (const name of ["a", "b", "principal"]) store.insertAgent({ name, role: name === "principal" ? "principal" : "resident", profile: "p", desired: "enabled", incarnation: 1, specHash: "fixture", specJson: resolvedSpec(ALL_CAPS, "p", name), createdBy: null });
+      for (const name of ["a", "b", "principal"]) store.insertAgent({ name, role: name === "principal" ? "principal" : "resident", profile: "p", desired: "enabled", incarnation: 1, ...storedSpec(ALL_CAPS, "p", name), createdBy: null });
       store.follow("news", "b");
     });
     const { mail, git } = gitFixture(root, store);

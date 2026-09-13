@@ -9,9 +9,11 @@ import { Store } from "../src/store.js";
 import { sha256Hex } from "../src/hash.js";
 import { MailModule, publishImmutableFile } from "../src/mail.js";
 import { makeValidAgent } from "./fixtures/spec.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, MailInput } from "../implementation/contracts.js";
 import { gitFixture, gitAuth, seedGit, gitCommand, submitFixture } from "./fixtures/git-crash.js";
 import { lifecycleFixture } from "./fixtures/lifecycle-crash.js";
+import { removeTree } from "./fixtures/cleanup.js";
 
 const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "trusted-runner", capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 const input: MailInput = { to: ["a", "b", "c"], subject: "crash", kind: "message", body: "immutable payload" };
@@ -52,7 +54,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
     let open = true;
     try {
       seedAgents(store);
-      let mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+      let mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
       const batchPoint = point === "prepared" || point === "cur";
       if (batchPoint) await mail.send(auth, "crash-send", input);
       store.close();
@@ -60,7 +62,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
       await killAt(root, point);
       store = new Store(join(root, "runtime.sqlite"));
       open = true;
-      mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+      mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
       const accepted = store.getOperation("a", "crash-send");
       if (point === "stage" || point === "object") {
         assert.equal(accepted, null);
@@ -93,7 +95,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
           assert.deepEqual(readFileSync(path), original);
         }
       }
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -116,7 +118,7 @@ test("T23 real cross-filesystem immutable copy rejects corrupt and symlink desti
     rmSync(destination);
     symlinkSync(source, destination);
     assert.throws(() => publishImmutableFile(source, destination), { code: "STORE_CORRUPT" });
-  } finally { rmSync(sourceRoot, { recursive: true, force: true }); rmSync(destinationRoot, { recursive: true, force: true }); }
+  } finally { removeTree(sourceRoot); removeTree(destinationRoot); }
 });
 
 test("T23 real SIGKILL during cross-filesystem copy never publishes a partial destination", async () => {
@@ -132,7 +134,7 @@ test("T23 real SIGKILL during cross-filesystem copy never publishes a partial de
     assert.equal(existsSync(destination), false, "partial copy must remain unpublished");
     publishImmutableFile(source, destination);
     assert.deepEqual(readFileSync(destination), readFileSync(source));
-  } finally { rmSync(sourceRoot, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); }
+  } finally { removeTree(sourceRoot); removeTree(root); }
 });
 
 for (const format of ["sha1", "sha256"] as const) {
@@ -156,7 +158,7 @@ for (const format of ["sha1", "sha256"] as const) {
       assert.equal((await submitFixture(root, git)).state, "succeeded");
       assert.deepEqual(readFileSync(orphan), original, "a new preparation must not delete an unclaimed earlier operation artifact");
       assert.equal(files(join(root, "mail/archive/cur")).length, 1);
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -223,7 +225,7 @@ for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-m
       }
       if (original) assert.deepEqual(readFileSync(mail.objectPath(plan.message.id)), original);
       assert.equal(files(join(root, "mail/archive/cur")).length, 1, "recovery must not duplicate result mail");
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -246,7 +248,7 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
         store = new Store(join(root, "runtime.sqlite")); open = true;
         assert.equal(store.getOperation("a", "crash-send"), null);
         assert.deepEqual(files(join(root, "mail/archive/cur")), []);
-        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
         assert.equal((await mail.send(auth, "crash-send", input)).state, "succeeded");
       } else {
         assert.equal(outcome.state, "pending");
@@ -254,14 +256,14 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
         store = new Store(join(root, "runtime.sqlite")); open = true;
         assert.equal(store.getOperation("a", "crash-send")!.id, outcome.operation);
         assert.equal(store.getOperation("a", "crash-send")!.state, "pending");
-        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
         await mail.reconcilePending();
         assert.equal(store.getOperation("a", "crash-send")!.state, "succeeded");
         assert.equal(store.getOperation("a", "crash-send")!.id, outcome.operation);
       }
       assert.equal(files(join(root, "mail/archive/cur")).length, 1);
       for (const actor of ["a", "b", "c"]) assert.equal(files(join(root, "mail/inboxes", actor, "new")).length, 1);
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -304,7 +306,7 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
       assert.equal(files(join(root, "mail/archive/cur")).length, 2);
       await fixture.lifecycle.bootstrap({ ...fixture.config, initialResidents: [] });
       assert.equal(store.listAgents().length, 3);
-    } finally { cleanup(); if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { cleanup(); if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -344,7 +346,7 @@ for (const point of ["create-stage", "create-intent", "create-object", "create-w
       assert.equal(files(join(root, "mail/objects")).length, 1);
       assert.equal(files(join(root, "mail/archive/cur")).length, 1);
       assert.equal(files(join(root, "mail/inboxes/child/new")).length, 1);
-    } finally { cleanup(); if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { cleanup(); if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -372,6 +374,6 @@ for (const kind of ["symlink", "hardlink"]) {
       assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "for-each-ref", "--format=%(refname)", "refs/oma/published"]), "");
       assert.equal(files(join(root, "mail/archive/cur")).length, 0);
       assert.equal(sha256Hex(readFileSync(external)), plan.bundle.sha256);
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }

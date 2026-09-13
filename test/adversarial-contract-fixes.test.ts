@@ -15,7 +15,10 @@ import {
   operationResultCheck,
 } from "../src/validate.js";
 import { Store, StoreError } from "../src/store.js";
-import { LifecycleModule } from "../src/lifecycle.js";
+import { assertCreateCapacity, LineageSnapshot } from "../src/domain/lineage.js";
+import { ALL_CAPS, makeValidAgent, storedSpec } from "./fixtures/spec.js";
+import { requestHash } from "../src/hash.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { readBatchView } from "../src/pi-extension.js";
 import type { MessagePlan } from "../implementation/contracts.js";
 
@@ -126,10 +129,10 @@ test("adversarial: approval plan and immutable EML headers must be identical", a
       },
     };
     const internal = mail as unknown as {
-      messageHeaders(message: MessagePlan): unknown;
+      materializer: { headers(message: MessagePlan): unknown };
     };
     assert.throws(
-      () => internal.messageHeaders(plan),
+      () => internal.materializer.headers(plan),
       (error: unknown) =>
         error instanceof StoreError && error.code === "STORE_CORRUPT",
     );
@@ -183,19 +186,18 @@ test("adversarial: terminal operation state cannot be rewritten", () => {
     store.transaction(() => {
       store.insertAgent({
         name: "alice",
-        specHash: "alice",
+        ...storedSpec(ALL_CAPS, "resident", "alice"),
         role: "resident",
         desired: "enabled",
         incarnation: 0,
         profile: "resident",
         createdBy: null,
-        specJson: "{}",
       });
       store.insertOperation({
         id: operation,
         actor: "alice",
         requestKey: "terminal-key",
-        requestHash: "hash",
+        requestHash: requestHash("route.follow", { topic: "dev" }),
         kind: "route.follow",
         payloadJson: JSON.stringify({ topic: "dev" }),
         planJson: JSON.stringify({
@@ -238,60 +240,16 @@ test("adversarial: lineage quota counts retired descendants", () => {
   const store = new Store(join(root, "runtime.sqlite"));
   try {
     store.transaction(() => {
-      store.insertAgent({
-        name: "principal",
-        specHash: "principal",
-        role: "principal",
-        desired: "enabled",
-        incarnation: 0,
-        profile: "principal",
-        createdBy: null,
-        specJson: "{}",
-      });
-      store.insertAgent({
-        name: "alice",
-        specHash: "alice",
-        role: "resident",
-        desired: "enabled",
-        incarnation: 0,
-        profile: "resident",
-        createdBy: "principal",
-        specJson: "{}",
-      });
-      store.insertAgent({
-        name: "old-child",
-        specHash: "old-child",
-        role: "resident",
-        desired: "retired",
-        incarnation: 0,
-        profile: "resident",
-        createdBy: "alice",
-        specJson: "{}",
-      });
+      store.insertAgent(makeValidAgent("principal"));
+      store.insertAgent(makeValidAgent("alice", { createdBy: "principal" }));
+      store.insertAgent(makeValidAgent("old-child", { createdBy: "alice", desired: "retired" }));
     });
-    const units = {
-      bindIncarnationReader: (_reader: (agent: string) => number | null) => undefined,
-    } as never;
-    const lifecycle = new LifecycleModule(
-      store,
-      units,
-      {
-        stateRoot: root,
-        projectGit: join(root, "project.git"),
-        society: "demo",
-        hasGoal: () => false,
-      },
-      () => null,
-      null,
-      { societyAgents: 10, lineageAgents: 1 },
-    );
-    const quota = lifecycle as unknown as {
-      enforceCreateQuota(parentName: string): void;
-    };
+    // CREATE-002/AUTH-002: a retired resident still consumes its lineage quota.
+    const graph = new LineageSnapshot(store.listAgents()
+      .map(agent => ({ name: agent.name, createdBy: agent.createdBy, role: agent.role })));
     assert.throws(
-      () => quota.enforceCreateQuota("alice"),
-      (error: unknown) =>
-        error instanceof StoreError && error.code === "QUOTA_EXCEEDED",
+      () => assertCreateCapacity(graph, "alice", { societyAgents: 10, lineageAgents: 1 }),
+      (error: unknown) => error instanceof StoreError && error.code === "QUOTA_EXCEEDED",
     );
   } finally {
     store.close();
@@ -314,11 +272,11 @@ test("adversarial: trusted Pi batch view is a closed runtime DTO", () => {
   try {
     mkdirSync(root, { recursive: true });
     writeFileSync(file, JSON.stringify(valid));
-    assert.deepEqual(readBatchView(batchId, root), valid);
+    assert.deepEqual(readBatchView(batchId, root, TEST_VIEW_LIMITS), valid);
     writeFileSync(file, JSON.stringify({ ...valid, extra: true }));
-    assert.equal(readBatchView(batchId, root), null);
+    assert.equal(readBatchView(batchId, root, TEST_VIEW_LIMITS), null);
     writeFileSync(file, JSON.stringify({ ...valid, messageIds: [7] }));
-    assert.equal(readBatchView(batchId, root), null);
+    assert.equal(readBatchView(batchId, root, TEST_VIEW_LIMITS), null);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

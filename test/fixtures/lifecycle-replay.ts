@@ -26,7 +26,8 @@ export class ObservedUnits extends UnitsModule {
   failEffect = false;
   override observe(_agent: string): UnitObservation {
     return { activeState: this.active ? "active" : "inactive", subState: this.active ? "running" : "dead",
-      result: "success", execMainStatus: 0, cgroup: null, invocationId: "1".repeat(32) };
+      result: "success", execMainStatus: 0, cgroup: this.active ? "/system.slice/oma-replay-a.service" : "",
+      invocationId: "1".repeat(32) };
   }
   override confirmDead(_agent: string, _incarnation: number): boolean { return this.deathKnown && !this.active; }
   override start(agent: string, _explicitRepair: boolean): void {

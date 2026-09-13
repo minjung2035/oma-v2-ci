@@ -28,7 +28,7 @@ import { GitModule } from "../src/git.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker } from "../src/broker.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 const G = {
   ...process.env,
@@ -64,13 +64,12 @@ function envOf(): Env {
     ] as const) {
       store.insertAgent({
         name,
-        specHash: "h",
+        ...storedSpec(ALL_CAPS, "p", name),
         role,
         desired: "enabled",
         incarnation: 0,
         profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });

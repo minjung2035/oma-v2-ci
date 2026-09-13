@@ -20,7 +20,8 @@ import {
 } from "../src/mail.js";
 import { Store, StoreError } from "../src/store.js";
 import { generateMessageId } from "../src/ids.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { requestHash } from "../src/hash.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000071";
 
@@ -44,26 +45,26 @@ async function acceptedMail(
     body: "body",
   });
   mail.freezeObject(messageId, eml);
+  const payload = { to: ["residents"], subject: "recovery integrity", body: "body", kind: "message" };
   store.transaction(() => {
     for (const name of ["alice", "bob"] as const) {
       store.insertAgent({
         name,
-        specHash: name,
+        ...storedSpec(ALL_CAPS, "p", name),
         role: "resident",
+        profile: "p",
         desired: "enabled",
         incarnation: 0,
-        profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
     store.insertOperation({
       id: OP,
       actor: "alice",
       requestKey: "mail-integrity",
-      requestHash: "hash",
+      requestHash: requestHash("mail.send", payload),
       kind: "mail.send",
-      payloadJson: "{}",
+      payloadJson: JSON.stringify(payload),
       planJson: JSON.stringify({
         kind: "mail.send",
         message: {
@@ -101,12 +102,12 @@ test("DB-005/006: missing delivery from the accepted recipient snapshot fails cl
   try {
     await assert.rejects(
       mail.materialize(OP),
-      (error: unknown) =>
-        error instanceof StoreError &&
-        error.code === "STORE_CORRUPT" &&
-        /delivery snapshot mismatch/.test(error.message),
+      (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT",
     );
-    assert.equal(store.getOperationById(OP as never)?.state, "pending");
+    // The delivery set is part of accepted evidence: the corrupt row stays
+    // unreadable instead of reporting a plausible operation state.
+    assert.throws(() => store.getOperationById(OP as never),
+      (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });

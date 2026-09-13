@@ -101,23 +101,23 @@ test("T17: reply header contract; CR/LF injection rejected", async () => {
   const emlDirect = await buildEml({
     from: actorAddress("a", society), to: [actorAddress("b", society)], replyTo: [actorAddress("a", society)],
     subject: "S", kind: "message", contextRevision: null, inReplyTo: null, references: [],
-    messageId: "m-1@demo.oma.invalid", body: "hi",
+    messageId: "m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid", body: "hi",
   });
   const direct = parseEmlHeaders(emlDirect.text);
   assert.equal(direct.replyTo![0], actorAddress("a", society));
-  assert.equal(direct.messageId, "m-1@demo.oma.invalid");
+  assert.equal(direct.messageId, "m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid");
   const headerBlock = emlDirect.text.split(/\r?\n\r?\n/, 1)[0] ?? "";
   assert.match(headerBlock, /^X-OMA-Kind: message$/im);
   // Only the subject is corrupt; ordinary CRLF text bodies remain valid.
   await assert.rejects(buildEml({
     from: actorAddress("a", society), to: [actorAddress("b", society)], replyTo: [],
     subject: "evil\r\nBcc: x", kind: "message", contextRevision: null,
-    inReplyTo: null, references: [], messageId: "m-1@demo.oma.invalid", body: "x",
+    inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid", body: "x",
   }), /CR\/LF/);
   const crlfBody = await buildEml({
     from: actorAddress("a", society), to: [actorAddress("b", society)], replyTo: [],
     subject: "s", kind: "message", contextRevision: null,
-    inReplyTo: null, references: [], messageId: "m-1@demo.oma.invalid", body: "x\r\ny",
+    inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid", body: "x\r\ny",
   });
   assert.ok(crlfBody.text.includes("x\r\ny"));
   assert.equal(topicAddress("auth", society), "topic-auth@demo.oma.invalid");

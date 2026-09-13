@@ -1,5 +1,5 @@
 /** Test-only accepted-v1 fixture. Production never imports this file. */
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -12,11 +12,25 @@ import { publishImmutableFile } from "../../dist/src/storage/immutable-file.js";
 import { publishedRefFor } from "../../dist/src/domain/derived.js";
 import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt, contextStagingPathAt } from "../../dist/src/storage/paths.js";
 import { rfc5322Date } from "../../dist/src/mail/headers.js";
+/** Published context revisions are 0555; cleanup needs the owner write bit
+ * on every directory it empties (mirrors test/fixtures/cleanup.ts). */
+export function removeTree(root) {
+  if (!existsSync(root)) return;
+  const restore = path => {
+    let stat;
+    try { stat = lstatSync(path); } catch { return; }
+    if (!stat.isDirectory()) return;
+    chmodSync(path, 0o700);
+    for (const name of readdirSync(path)) restore(join(path, name));
+  };
+  restore(root);
+  rmSync(root, { recursive: true, force: true });
+}
 export function physicalLedger(t, options = {}) {
   const root = mkdtempSync(join(tmpdir(), "oma-integrity-"));
   let store = new Store(join(root, "runtime.sqlite"), 0, { society: "fixture" });
   store.transaction(tx => { tx.agents.insert(agentRecord("principal")); tx.agents.insert(agentRecord("alice", "principal")); });
-  t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
+  t.after(() => { try { store.close(); } finally { removeTree(root); } });
   const id = generateOperationId(), messageId = generateMessageId(id, 0), dateMs = Math.floor(Date.now() / 1000) * 1000;
   const body = "the immutable fixture\n";
   const kind = options.kind ?? "mail.send";

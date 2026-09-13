@@ -24,6 +24,7 @@ import { parseEmlHeaders } from "../src/mail.js";
 import { contextPathCheck } from "../src/validate.js";
 import { operationPlanCheck } from "../src/durable.js";
 import { readBatchView } from "../src/pi-extension.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { RequestCache } from "../src/request-cache.js";
 import { runCliWithLookup } from "./fixtures/cli-lookup.js";
 
@@ -32,6 +33,8 @@ const OTHER_OP = "op-00000000-0000-4000-8000-000000000004";
 const MESSAGE = "m-00000000-0000-4000-8000-000000000003-0";
 const BATCH = "b-00000000-0000-4000-8000-000000000003";
 const OID = "1111111111111111111111111111111111111111";
+/** PI-002: the runner-supplied view limits, never an implicit unlimited read. */
+const VIEW_LIMITS = TEST_VIEW_LIMITS;
 
 test("R03: resident names and authenticated actor names are distinct contexts", () => {
   assert.equal(parseResidentName("alice"), "alice"); assert.equal(parseActor("alice"), "alice");
@@ -62,10 +65,17 @@ test("R03: UUID version, variant, lowercase and safe ordinal grammar are preserv
 });
 
 test("R03: internal IDs, RFC ancestry and context paths do not share a grammar", () => {
-  const headers = parseEmlHeaders("Message-ID: <external@example.invalid>\r\nReferences: <root@elsewhere.invalid> <parent@example.invalid>\r\n\r\nbody");
-  assert.equal(headers.messageId, "external@example.invalid");
-  assert.deepEqual(headers.references, ["root@elsewhere.invalid", "parent@example.invalid"]);
+  // MAIL-005: only the supported OMA header identity is accepted; the qualified
+  // header form is still not the internal MessageId grammar.
+  const headers = parseEmlHeaders(`Message-ID: <${MESSAGE}@demo.oma.invalid>\r\nReferences: <${MESSAGE}@demo.oma.invalid> <m-00000000-0000-4000-8000-000000000004-0@demo.oma.invalid>\r\n\r\nbody`);
+  assert.equal(headers.messageId, `${MESSAGE}@demo.oma.invalid`);
+  assert.deepEqual(headers.references, [`${MESSAGE}@demo.oma.invalid`, "m-00000000-0000-4000-8000-000000000004-0@demo.oma.invalid"]);
   assert.equal(parseMessageFileId(headers.messageId), null);
+  // A foreign RFC identity is not OMA ancestry and is rejected, not silently kept.
+  assert.throws(() => parseEmlHeaders("Message-ID: <external@example.invalid>\r\n\r\nbody"),
+    (error: unknown) => (error as { code?: string }).code === "INVALID_REQUEST");
+  assert.throws(() => parseEmlHeaders("References: <root@elsewhere.invalid>\r\n\r\nbody"),
+    (error: unknown) => (error as { code?: string }).code === "INVALID_REQUEST");
   assert.equal(parseRepositoryRelativePath("src/file.ts"), "src/file.ts");
   assert.notEqual(contextPathCheck("src/file.ts"), null); assert.equal(contextPathCheck("GOAL.md"), null);
   for (const path of ["", "/GOAL.md", "../GOAL.md", "a/../GOAL.md", "a//b", "a/./b", "a\0b"]) assert.equal(parseRepositoryRelativePath(path), null);
@@ -155,8 +165,8 @@ test("R03: single-file Pi UUID copy agrees on independent boundary vectors", () 
       const view = { id: batchId, agent: "alice", incarnation: 1, deliveryMode: "followUp", notice: "fixture", messageIds: [messageId] };
       writeFileSync(join(dir, `batch-${batchId}.json`), JSON.stringify(view));
       assert.equal(parseBatchId(batchId) !== null && parseMessageFileId(messageId) !== null, accepted);
-      if (accepted) assert.deepEqual(readBatchView(batchId, dir), view);
-      else assert.equal(readBatchView(batchId, dir), null, "invalid views never reach the runner");
+      if (accepted) assert.deepEqual(readBatchView(batchId, dir, VIEW_LIMITS), view);
+      else assert.equal(readBatchView(batchId, dir, VIEW_LIMITS), null, "invalid views never reach the runner");
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
