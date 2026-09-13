@@ -26,8 +26,9 @@
 | `npm run build` | PASS | PASS | `check-package` 포함 |
 | `npm run check:package` | PASS | PASS | |
 | `npm run check:architecture` | **FAIL 5건** | **PASS 0건** | 아래 §3 |
-| `npm test` | **FAIL** | **PARTIAL** | 아래 §4 |
+| `npm test` | **FAIL** | **PARTIAL** | 135 file 중 120 PASS / 15 FAIL / 1 timeout, §4 |
 | `npm run verify:*` lane | NOT_RUN | NOT_RUN | §5 |
+| `node scripts/loc.mjs` | NOT_RUN | **FAIL (gate)** | 12,343 code lines > A-009 10,000 review 조건 |
 
 `npm run check:architecture`의 5건은 master에서도 존재하던 latent 실패였다(master에서 103건). 상세는 §3.
 
@@ -76,33 +77,28 @@
 
 ### 4.3 아직 남은 실패 (미완료로 기록)
 
-121개 file을 재실행한 결과 **114 PASS / 17 FAIL**. phase5는 timeout(BLOCKED)이다. 남은 실패는 원인 분석 수준이 서로 다르며, PASS로 포장하지 않는다.
+최신 전수 실행(per-file, timeout 240s, 단일 실행): **135 file 중 120 PASS / 15 FAIL / 1 timeout**. phase5는 timeout(BLOCKED)이다. 착수 시점(97/131 PASS) 대비 새로 추가한 P7/P8/P9 테스트 4개를 포함한 수치다.
 
 | file | 관측된 원인 | 분류 |
 | --- | --- | --- |
-| `phase5` (sandbox Pi) | per-file timeout(240–420s) 안에 끝나지 않음 | BLOCKED (환경) |
-| `phase4` | `systemd-analyze --user verify`가 설치된 `oma-*-broker.service`를 요구 | BLOCKED (설치 환경) |
-| `audit`, `audit2` | broker entry/실제 unit 상태를 요구하는 entry 관측 | BLOCKED (systemd 설치) |
-| `crash-boundaries` | crash worker가 checkpoint에 도달하기 전에 실패(worker stderr에 원인 남음) | 조사 필요 |
-| `phase3` | mail fault boundary 이름이 현재 seam과 불일치 | 조사 필요 |
-| `phase7` | 동시 context publish 결과 분류(`other` vs `conflict`) | 조사 필요 |
-| `r36-resource-stress` | `RPC_LISTENER_LEAK:end 1 !== 0` — 사이클 종료 후 listener 1개 잔존 | 조사 필요(product leak 여부 미확정) |
-| `runner-channel` | lease decode가 fixture의 endpoint identity를 거부 | 조사 필요 |
-| `host-entry` | split reply 성공 시 exit 3(unknown)으로 종료 | 조사 필요 |
-| `contract-import-migrations.test.mjs` | `scripts/contract-imports.mjs`가 `contractImportSnapshot`을 export하지 않는다(P2 snapshot helper 미구현) | 미구현 gap |
+| `phase5` | per-file timeout(240s) | BLOCKED (sandbox/Pi 환경) |
+| `phase4`, `audit`(2), `audit2` | 설치된 systemd unit/broker entry 상태를 요구. `audit`는 `NOTIFY_SOCKET` 없이 spawn해 foreground 기동 메시지를 받는다 | BLOCKED (설치 환경) / fixture 조정 필요 |
+| `crash-boundaries`(7) | crash worker가 checkpoint에 도달하기 전에 실패(worker stderr에 원인 남음) | 조사 필요 |
+| `phase3`(4) | `unknown requested mail fault boundary` — fixture가 존재하지 않는 fault boundary 이름을 요청 | fixture/조사 |
+| `phase7` | 동시 context publish 패자가 `BROKER_UNAVAILABLE`(writer busy)을 받는다. fixture는 queued-serialization을 전제로 `CONTEXT_CONFLICT`를 기대 | 설계 판단 필요 |
+| `cli`, `context-security`, `context-manifest-boundary` | context.publish malformed input이 base conflict보다 늦게 검사되어 `INVALID_REQUEST` 대신 `CONTEXT_CONFLICT`/`AUTH_FAILED`가 나온다 | 설계 판단 필요 |
 | `mail-integrity` | gated publication arm이 `REF_STATE_UNKNOWN`을 반환(fixture는 `STORE_CORRUPT` 기대) | oracle 조정 필요 |
 | `phase8` | 이동된 published ref에 대해 `unknown`으로 남김(fixture는 `failed`+`PUBLISHED_REF_CONFLICT` 기대) | 설계 판단 필요 |
-| `context-security` | broker-domain이 `AUTH_FAILED`를 먼저 반환(fixture는 `INVALID_REQUEST` 기대) | 설계 판단 필요 |
-| `context-manifest-boundary` | 빈 GOAL을 `'GOAL.md must not be empty'`로 보고(fixture는 entry shape 위반을 기대) | 설계 판단 필요 |
-| `git-format` | wrong-format `expected` context base를 `CONTEXT_CONFLICT`로 반환(fixture는 `INVALID_OID` 기대) | **product gap 의심** |
-| `cli` | 위와 같은 context 경로에서 `CONTEXT_CONFLICT`(fixture는 `INVALID_REQUEST` 기대) | 설계 판단 필요 |
+| `host-entry` | split reply 성공 시 exit 3(unknown)으로 종료 | 조사 필요 |
+| `r36-resource-stress` | `RPC_LISTENER_LEAK:end 1 !== 0` — 사이클 종료 후 listener 1개 잔존 | 조사 필요(product leak 여부 미확정) |
+| `runner-channel` | lease decode가 fixture endpoint identity를 거부 | fixture 조정 필요 |
+| `contract-import-migrations.test.mjs` | `scripts/contract-imports.mjs`가 `contractImportSnapshot`을 export하지 않는다(P2 snapshot helper 미구현) | 미구현 gap |
 
-#### 관찰된 product gap (다음 작업자가 우선 확인)
-
-`src/git/context-repository.ts`는 wrong-format context base를 `INVALID_OID`로 거부하는 검사를 갖고 있지만, `src/git/context.ts`가 그보다 먼저 `this.effects.current() !== request.expected`로 비교해 `CONTEXT_CONFLICT`를 반환한다. ID-003("repository object format에 맞는 full lowercase hex만 wire에서 받는다")과 `git.submit`/`git.integrate`의 `INVALID_OID` 처리와 비대칭이며, `test/git-format.test.ts`가 이 비대칭을 지적한다. 입력 검증이 effect/관측보다 먼저 오도록 순서를 조정하고 회귀 oracle을 유지하는 것이 다음 수정 후보다.
+이번 세션에서 해소된 항목: `git-format`(context base locator를 object format으로 먼저 검증 + read-only tree cleanup), `p0-hardening`(malformed frame oracle과 fake broker 경계), `r10-ledger-rows`(raw FK 주입), `request-identity-kernel`(canonical byte vector 오타), `mail-recovery-integrity`, `runtime-contracts`(unit fault seam이 실제 command 경계를 제어), `authority`, `r21-context-workflow`(folded header 수정), `refactoring-cli-regressions`(lineage quota owner), `integrity-files`/`integrity-publications`/`global-invariants`/`context-acceptance-integrity`/`r37-preparation-boundaries`(read-only tree cleanup).
 
 ## 5. 실행하지 않은 것
 
 - `npm run verify:fast|durable|property|kernel|crash|stress|all` lane: NOT_RUN. (개별 test file 실행은 했지만 lane runner의 evidence/skip 정책 평가는 실행하지 않았다.)
 - VM power-cut, ENOSPC, read-only remount, backup/restore: NOT_RUN (환경 없음).
-- `node scripts/loc.mjs`: 실행했다. 결과는 TOTAL production LOC **12,170 code lines**로 A-008/A-009의 architecture review 조건(10,000 초과)에 걸린다. 이 수치는 release gate FAIL로 기록한다.
+- `node scripts/loc.mjs`: 실행했다. 결과는 TOTAL production LOC **12,343 code lines**(P8 이후 재측정)로 A-008/A-009의 architecture review 조건(10,000 초과)에 걸린다. 이 수치는 release gate FAIL로 기록한다.
+- `npm run verify:powercut`: 로컬에서는 guard가 `UNSUPPORTED_PROFILE`로 거부한다(disposable VM 아님). 실제 실행은 NOT_RUN이다.
