@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { resolveExportDeclaration } from "./contract-surface.mjs";
 import { DEFAULT_POLICY, pureBoundaryViolation } from "./architecture-owners.mjs";
 export { DEFAULT_POLICY } from "./architecture-owners.mjs";
 
@@ -235,7 +236,9 @@ export function analyzeProgram(program, { rootDir = process.cwd(), policy = DEFA
       }
     });
   }
-  const canonicalDeclaration = (name, owner) => declarations.get(name)?.find(node => !owner || relative(root, node.getSourceFile().fileName) === owner);
+  const canonicalDeclaration = (name, owner) =>
+    declarations.get(name)?.find(node => !owner || relative(root, node.getSourceFile().fileName) === owner) ??
+    (owner ? resolveExportDeclaration(checker, sourceByFile.get(owner), name) : undefined);
   const stringsInOwner = owner => {
     const values = new Set();
     const source = sourceByFile.get(owner);
