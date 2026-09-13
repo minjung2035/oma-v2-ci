@@ -924,9 +924,12 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     child.stderr!.on("data", (bytes) => { output += bytes.toString(); });
     const exited = new Promise<void>((resolve) => child.on("close", () => resolve()));
     try {
-      for (let i = 0; i < 500 && !output.includes("broker ready") && child.exitCode === null; i++)
+      // Without a NOTIFY_SOCKET the entry reports the same readiness boundary in
+      // its foreground wording; both lines mean startup completed.
+      const ready = () => /broker (ready|listening)/.test(output);
+      for (let i = 0; i < 500 && !ready() && child.exitCode === null; i++)
         await new Promise((resolve) => setTimeout(resolve, 20));
-      assert.match(output, /broker ready/);
+      assert.match(output, /broker (ready|listening)/);
     } finally { child.kill("SIGTERM"); await exited; }
   };
   try {
@@ -955,6 +958,9 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     assert.match(start, /QUESTION.*MINIMUM CONTEXT.*UNCERTAINTY/);
     assert.match(readFileSync(join(state, "world", "agents.tsv"), "utf8"), /child\tresident\tenabled\tchild/);
     let store = new Store(join(state, "runtime.sqlite"));
+    // Reading a create/bootstrap plan needs the trusted repository identity,
+    // exactly like the broker composition binds it on its own connection.
+    store.bindRepositoryIdentity({ society });
     const op = store.getOperation("principal", "bootstrap-child")!;
     assert.equal(op.state, "succeeded");
     assert.equal(store.pendingDeliveries("child").length, 1);
@@ -965,6 +971,7 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     writeFileSync(join(state, "config.json"), JSON.stringify(cfg));
     await run();
     store = new Store(join(state, "runtime.sqlite"));
+    store.bindRepositoryIdentity({ society });
     assert.equal(store.getAgent("another"), null);
     assert.equal(store.getOperation("principal", "bootstrap-child")!.id, op.id);
     assert.equal(store.pendingDeliveries("child").length, 1);
@@ -1006,6 +1013,9 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
     );
     // seed a pending mail operation (accepted-before-materialize fixture)
     const store = new Store(join(stateRoot, "runtime.sqlite"));
+    // A reader of create/context plans needs the trusted repository identity,
+    // exactly like the broker composition binds it.
+    store.bindRepositoryIdentity({ society });
     store.transaction((_t) => {
       for (const [name, role] of [
         ["a", "resident"],

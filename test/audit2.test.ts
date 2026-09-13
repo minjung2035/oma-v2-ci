@@ -963,18 +963,18 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
 
 
     // P1-7: status filter — a and b return only their own agent
-    const sa = byName("status-a")?.replies?.[0]?.result as
-      | Array<{ agent: string }>
+    // The closed status.get result carries the observation time and the agents.
+    const statusOf = (name: string) => byName(name)?.replies?.[0]?.result as
+      | { observedAtMs?: number; agents?: Array<{ agent: string }> }
       | undefined;
-    const sb = byName("status-b")?.replies?.[0]?.result as
-      | Array<{ agent: string }>
-      | undefined;
+    const sa = statusOf("status-a");
+    const sb = statusOf("status-b");
     assert.ok(
-      Array.isArray(sa) && sa.length === 1 && sa[0]!.agent === "a",
+      Number.isSafeInteger(sa?.observedAtMs) && sa?.agents?.length === 1 && sa.agents[0]!.agent === "a",
       `status a: ${JSON.stringify(sa)}`,
     );
     assert.ok(
-      Array.isArray(sb) && sb.length === 1 && sb[0]!.agent === "b",
+      Number.isSafeInteger(sb?.observedAtMs) && sb?.agents?.length === 1 && sb.agents[0]!.agent === "b",
       `status b: ${JSON.stringify(sb)}`,
     );
 

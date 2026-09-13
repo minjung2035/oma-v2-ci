@@ -95,7 +95,9 @@ export class ReconcileModule {
     const policy = classifyError({ code, phase: "recovering", effectKnowledge: "possible",
       observationKind: code === "STORE_CORRUPT" || code === "STREAM_INVALID" ? "corrupt" : "unavailable" });
     if (policy.blockScope === "store") {
-      const failure = new StoreError(policy.code, "recovery observation is corrupt");
+      // The closed code and the store block are the contract; the original
+      // reason is preserved so startup diagnostics keep the observed fact.
+      const failure = new StoreError(policy.code, error instanceof StoreError ? error.message : "recovery observation is corrupt");
       observeStoreFailure(this.store, failure); throw failure;
     }
   }
