@@ -10,6 +10,7 @@ import {
   isValidActor, isValidActorName, isValidTopicName, isValidRequestKey,
   isValidOperationId, isValidMessageId, isValidBatchId, parseMessageId,
 } from "../domain/identifiers.js";
+import type { Actor, BatchId, MessageId, OperationId, RequestKey, TopicName } from "../domain/identifiers.js";
 
 export interface AgentRow {
   name: string; specHash: string; role: "resident" | "principal";
@@ -32,6 +33,15 @@ export interface UsageRow {
   reservedUnits: number; reportedUnits: number | null; outcome: "reserved" | "completed" | "cancelled" | "unknown";
   detailsJson: string | null; createdAtMs: number; updatedAtMs: number;
 }
+
+/** Output brands retain parser evidence without changing legacy producer DTOs. */
+export type DecodedAgentRow = AgentRow & { name: Actor; createdBy: Actor | null };
+export type DecodedSubscriptionRow = SubscriptionRow & { topic: TopicName; agent: Actor };
+export type DecodedDeliveryRow = DeliveryRow & {
+  messageId: MessageId; recipient: Actor; operationId: OperationId; batchId: BatchId | null;
+};
+export type DecodedBatchRow = BatchRow & { id: BatchId; agent: Actor };
+export type DecodedUsageRow = UsageRow & { requestId: RequestKey; actor: Actor };
 
 export function rowCorrupt(message: string): never { throw new StoreError("STORE_CORRUPT", message); }
 export function fullRow(value: unknown, keys: readonly string[], entity: string): Record<string, unknown> {
@@ -74,7 +84,7 @@ export function decodeAgentSpec(specJson: string): ResolvedAgentSpec {
   return parsed as ResolvedAgentSpec; // audited narrowing after closed runtime validation
 }
 
-export function decodeAgentRow(value: unknown): AgentRow {
+export function decodeAgentRow(value: unknown): DecodedAgentRow {
   const raw = fullRow(value, ["name", "spec_hash", "role", "desired", "incarnation", "profile", "created_by", "spec_json", "created_at_ms", "updated_at_ms"], "agent");
   const name = identity(raw.name, isValidActor, "agent name");
   const role = choice(raw.role, ["resident", "principal"] as const, "agent role");
@@ -96,12 +106,12 @@ export function decodeAgentRow(value: unknown): AgentRow {
     updatedAtMs: safeInteger(raw.updated_at_ms, "agent update time", createdAtMs) };
 }
 
-export function decodeSubscriptionRow(value: unknown): SubscriptionRow {
+export function decodeSubscriptionRow(value: unknown): DecodedSubscriptionRow {
   const raw = fullRow(value, ["topic", "agent", "created_at_ms"], "subscription");
   return { topic: identity(raw.topic, isValidTopicName, "topic"), agent: identity(raw.agent, isValidActor, "subscriber"), createdAtMs: safeInteger(raw.created_at_ms, "subscription creation time") };
 }
 
-export function decodeDeliveryRow(value: unknown): DeliveryRow {
+export function decodeDeliveryRow(value: unknown): DecodedDeliveryRow {
   const raw = fullRow(value, ["message_id", "recipient", "operation_id", "materialized", "batch_id", "presented", "acknowledged", "created_at_ms", "materialized_at_ms", "presented_at_ms", "acknowledged_at_ms"], "delivery");
   const messageId = identity(raw.message_id, isValidMessageId, "delivery message");
   const operationId = identity(raw.operation_id, isValidOperationId, "delivery operation");
@@ -129,7 +139,7 @@ export function decodeBatchManifest(json: string): string[] {
     return rowCorrupt("batch manifest must be an ordered nonempty list of unique message identities");
   return [...parsed]; // preserve exact order, never sort or deduplicate durable identity
 }
-export function decodeBatchRow(value: unknown): BatchRow {
+export function decodeBatchRow(value: unknown): DecodedBatchRow {
   const raw = fullRow(value, ["id", "agent", "incarnation", "message_ids_json", "session_path", "state", "created_at_ms", "completed_at_ms"], "batch");
   const state = choice(raw.state, ["prepared", "completed"] as const, "batch state");
   const createdAtMs = safeInteger(raw.created_at_ms, "batch creation time");
@@ -155,7 +165,7 @@ function validateUsageDetails(json: string, pricingRevision: string): void {
     } else rowCorrupt("usage details contains unsupported payload or token-stream data");
   }
 }
-export function decodeUsageRow(value: unknown): UsageRow {
+export function decodeUsageRow(value: unknown): DecodedUsageRow {
   const raw = fullRow(value, ["request_id", "actor", "incarnation", "profile", "pricing_revision", "reserved_units", "reported_units", "outcome", "details_json", "created_at_ms", "updated_at_ms"], "usage");
   const outcome = choice(raw.outcome, ["reserved", "completed", "cancelled", "unknown"] as const, "usage outcome");
   const reportedUnits = raw.reported_units === null ? null : safeInteger(raw.reported_units, "reported units");
@@ -172,6 +182,6 @@ export function decodeUsageRow(value: unknown): UsageRow {
 }
 
 /** Only the actual SELECT id projection is accepted, not a pretend full operation. */
-export function decodeOperationIdProjection(value: unknown): string {
+export function decodeOperationIdProjection(value: unknown): OperationId {
   return identity(fullRow(value, ["id"], "operation id projection").id, isValidOperationId, "operation id");
 }

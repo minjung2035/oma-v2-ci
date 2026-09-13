@@ -10,6 +10,7 @@ import {
   type OperationPlanContext, type PlanFor, type RepositoryIdentity, type ResultFor,
 } from "../durable.js";
 import { isValidActor, isValidOperationId, isValidRequestKey } from "../ids.js";
+import type { Actor, OperationId, RequestKey } from "../domain/identifiers.js";
 import { snapshotJson, canonicalJson } from "../domain/canonical-json.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { requestHash } from "../hash.js";
@@ -37,9 +38,9 @@ const PLAN = Symbol("ValidatedOperationPlan");
 const OPERATION = Symbol("DecodedOperation");
 export type ValidatedPlan<K extends MutationMethod> = PlanFor<K> & { readonly [PLAN]: true };
 interface IdentityFields {
-  readonly id: string;
-  readonly actor: string;
-  readonly requestKey: string;
+  readonly id: OperationId;
+  readonly actor: Actor;
+  readonly requestKey: RequestKey;
   readonly requestHash: string;
   /** Original bytes are retained for CAS/audit, not for workflow parsing. */
   readonly payloadJson: string;
