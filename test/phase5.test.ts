@@ -17,8 +17,8 @@ import {
   copyFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { connect } from "node:net";
+import { dirname, join } from "node:path";
+import { connect, createServer } from "node:net";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
 import { resolvedSpec, ALL_CAPS, storedSpec } from "./fixtures/spec.js";
@@ -736,6 +736,15 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     mkdirSync(join(dir, "self"), { recursive: true });
     mkdirSync(join(dir, "world"), { recursive: true });
     mkdirSync(join(dir, "git"), { recursive: true });
+    // The broker owns the actor control socket before a runner starts, and the
+    // profile binds that host path into the sandbox. Without it bwrap exits
+    // before exec, so the fixture creates the real endpoint.
+    const controlServer = createServer();
+    mkdirSync(dirname(lease.socketHostPath), { recursive: true });
+    await new Promise<void>((resolve, reject) => {
+      controlServer.once("error", reject);
+      controlServer.listen(lease.socketHostPath, resolve);
+    });
 
     const child = spawn(withSys[0]!, withSys.slice(1), {
       stdio: ["pipe", "pipe", "pipe"],
@@ -764,7 +773,9 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
         if (customSeen && providerErrorSeen) resolve();
       });
       child.once("error", () => resolve());
-      child.once("exit", () => resolve());
+      // "close" runs after stdio ends, so diagnostics are complete when the
+      // assertion below reports them.
+      child.once("close", () => resolve());
     });
     await new Promise((r) => setTimeout(r, 3000));
     pi.send({
@@ -787,13 +798,14 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     } catch {
       /* */
     }
+    controlServer.close();
 
     const custom = events.find(
       (e) => e.type === "message_start" && e.message?.role === "custom",
     );
     assert.ok(
       custom,
-      `no custom message delivered; spawn=${JSON.stringify(spawnFailure)} events=${JSON.stringify(events)} stderr=${JSON.stringify(stderr)}`,
+      `no custom message delivered; spawn=${JSON.stringify(spawnFailure)} code=${child.exitCode} signal=${child.signalCode} events=${JSON.stringify(events)} stderr=${JSON.stringify(stderr)}`,
     );
     assert.equal(custom.message?.customType, "oma-mail");
     const failed = events.some(
