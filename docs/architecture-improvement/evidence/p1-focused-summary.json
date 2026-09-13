@@ -1,0 +1,35 @@
+{
+  "scope": "focused P1 tests in a partial local workspace; not full repository or native verification",
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "repositoryPinnedTypescript": "5.9.3",
+  "pinnedToolchainVerified": false,
+  "productionSemanticTypecheck": "NOT_RUN",
+  "fullBaseline": "BLOCKED / NOT_RUN",
+  "command": "node --test --test-concurrency=1 --test-reporter=tap test/operation-registry-policy.test.mjs test/broker-composition-policy.test.mjs test/public-validation-policy.test.mjs",
+  "tests": 25,
+  "pass": 25,
+  "fail": 0,
+  "cancelled": 0,
+  "skipped": 0,
+  "todo": 0,
+  "tapSha256": "0d86407250954c3a6a327cbfd153720436cdd7655e200f89a9fe9c07cf36b1d3",
+  "evaluation": {
+    "implementation": "scripts/verification-lanes.mjs evaluateExecution",
+    "status": "PASS",
+    "errors": [],
+    "requiredNames": ["P1 operation registry", "P1 composition root", "P1 public validation"],
+    "baselineComparison": "NOT_AVAILABLE"
+  },
+  "laneWiring": { "fast": "P1 files and required names present", "all": "P1 files and required names present", "actualLaneExecution": "NOT_RUN" },
+  "baseCommit": "e2afe9ab050d87705451cd127c458ad216aa52d4",
+  "testedGitBlobs": {
+    "scripts/architecture-check.mjs": "04097f55bfa1b73ed7ed1102b1cf22193f4848bd",
+    "scripts/architecture-owners.mjs": "16ce722965bd64a8b9e33fd542b76612bb365712",
+    "scripts/verification-lanes.mjs": "f6cef978d87478173320e8dd25c30ca28040b6ca",
+    "src/entry/broker.ts": "5ddfc7322944bedad54ba98ff61e7f3b11cb05d0",
+    "src/broker/public-dispatcher.ts": "ba19f3de7ecae1b477ee1a6ae0194f1959a83bf9",
+    "src/broker/replies.ts": "0e9aab7e8b962f22f32571d7a502849796f9a05f",
+    "test/public-validation-policy.test.mjs": "5aa74d43377b5c30b58bf7e427fafdeb8668702f"
+  }
+}

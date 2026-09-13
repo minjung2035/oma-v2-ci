@@ -2,8 +2,9 @@
 export const lanes = Object.freeze({
   fast: { files: ["domain-identifiers.test.js", "domain-policy.test.js", "id-contracts.test.js", "r27-resource-phases.test.js", "r29-reconcile-accounting.test.js"],
     sourceFiles: ["test/verification-policy.test.mjs", "test/exploration-policy.test.mjs", "test/traceability-policy.test.mjs",
-      "test/r34-owner-policy.test.mjs", "test/production-inventory.test.mjs", "test/operation-registry-policy.test.mjs"],
-    requiredNames: ["ID-002", "R27", "R29", "R39", "R34 C04", "R38 C05", "P1 operation registry"], environment: "node", timeoutSeconds: 600,
+      "test/r34-owner-policy.test.mjs", "test/production-inventory.test.mjs", "test/operation-registry-policy.test.mjs",
+      "test/broker-composition-policy.test.mjs", "test/public-validation-policy.test.mjs"],
+    requiredNames: ["ID-002", "R27", "R29", "R39", "R34 C04", "R38 C05", "P1 operation registry", "P1 composition root", "P1 public validation"], environment: "node", timeoutSeconds: 600,
     proof: "type/schema/AST and deterministic domain behavior" },
   durable: { files: ["durable-boundary.test.js", "mail-integrity.test.js", "mail-recovery-integrity.test.js", "context-file-identity.test.js", "r30-views.test.js", "r31-owner-seams.test.js",
       "r37-async-process.test.js", "r37-preparation-boundaries.test.js", "r37-recovery-observation.test.js", "r37-shutdown-observation.test.js",
@@ -24,9 +25,10 @@ export const lanes = Object.freeze({
     requiredNames: ["R35 stress", "R36 stress native transport", "R36 stress no-progress"], environment: "git-fs", timeoutSeconds: 600,
     proof: "finite real Linux socket/pidfd/cgroup-FD and direct-child pipe cleanup, measured test RSS and queue bounds; not provider throughput, kernel quota or process-tree death certification" },
   all: { files: "all", sourceFiles: ["test/verification-policy.test.mjs", "test/exploration-policy.test.mjs", "test/traceability-policy.test.mjs",
-      "test/r34-owner-policy.test.mjs", "test/production-inventory.test.mjs", "test/operation-registry-policy.test.mjs"],
+      "test/r34-owner-policy.test.mjs", "test/production-inventory.test.mjs", "test/operation-registry-policy.test.mjs",
+      "test/broker-composition-policy.test.mjs", "test/public-validation-policy.test.mjs"],
     requiredNames: ["ID-002", "T18", "T39", "AUTH-003 native", "R36 model seed=", "R36 parser corpus", "R37", "R39",
-      "R25 C01/C02", "R34 C04", "R38 C05", "R36 lifecycle replay seed=", "P1 operation registry"],
+      "R25 C01/C02", "R34 C04", "R38 C05", "R36 lifecycle replay seed=", "P1 operation registry", "P1 composition root", "P1 public validation"],
     environment: "systemd", timeoutSeconds: 7200, proof: "full serial suite; each oracle retains its own proof scope" },
 });
 export function parseTap(raw) {

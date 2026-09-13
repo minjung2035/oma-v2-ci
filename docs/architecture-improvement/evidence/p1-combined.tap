@@ -1,0 +1,160 @@
+TAP version 13
+# Subtest: P1 composition root: Git exists when Lifecycle receives its context reader
+ok 1 - P1 composition root: Git exists when Lifecycle receives its context reader
+  ---
+  duration_ms: 98.517057
+  type: 'test'
+  ...
+# Subtest: P1 composition root: all consumers share a live reader that preserves observation failure
+ok 2 - P1 composition root: all consumers share a live reader that preserves observation failure
+  ---
+  duration_ms: 23.934544
+  type: 'test'
+  ...
+# Subtest: P1 composition root: startup still wires recovery before listen, notify and activation
+ok 3 - P1 composition root: startup still wires recovery before listen, notify and activation
+  ---
+  duration_ms: 15.674463
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: a matching closed set of 1 kinds is independent of count
+ok 4 - P1 operation registry: a matching closed set of 1 kinds is independent of count
+  ---
+  duration_ms: 791.190647
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: a matching closed set of 2 kinds is independent of count
+ok 5 - P1 operation registry: a matching closed set of 2 kinds is independent of count
+  ---
+  duration_ms: 558.535471
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: a matching closed set of 11 kinds is independent of count
+ok 6 - P1 operation registry: a matching closed set of 11 kinds is independent of count
+  ---
+  duration_ms: 481.705091
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: a matching closed set of 12 kinds is independent of count
+ok 7 - P1 operation registry: a matching closed set of 12 kinds is independent of count
+  ---
+  duration_ms: 435.756294
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: missing and extra keys fail closed
+ok 8 - P1 operation registry: missing and extra keys fail closed
+  ---
+  duration_ms: 1804.376001
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: each codec field must remain callable
+ok 9 - P1 operation registry: each codec field must remain callable
+  ---
+  duration_ms: 2773.331531
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: missing, empty and nonliteral plan domains are not closed sets
+ok 10 - P1 operation registry: missing, empty and nonliteral plan domains are not closed sets
+  ---
+  duration_ms: 3103.441144
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: compiler rejects a new kind without its codec and accepts complete coverage
+ok 11 - P1 operation registry: compiler rejects a new kind without its codec and accepts complete coverage
+  ---
+  duration_ms: 1054.584081
+  type: 'test'
+  ...
+# Subtest: P1 public validation: dispatch rechecks stop after preflight
+ok 12 - P1 public validation: dispatch rechecks stop after preflight
+  ---
+  duration_ms: 84.248218
+  type: 'test'
+  ...
+# Subtest: P1 public validation: dispatch rechecks new incarnation after preflight
+ok 13 - P1 public validation: dispatch rechecks new incarnation after preflight
+  ---
+  duration_ms: 26.415758
+  type: 'test'
+  ...
+# Subtest: P1 public validation: dispatch rechecks actor removal after preflight
+ok 14 - P1 public validation: dispatch rechecks actor removal after preflight
+  ---
+  duration_ms: 21.025538
+  type: 'test'
+  ...
+# Subtest: P1 public validation: dispatch rechecks capability revocation after preflight
+ok 15 - P1 public validation: dispatch rechecks capability revocation after preflight
+  ---
+  duration_ms: 19.024759
+  type: 'test'
+  ...
+# Subtest: P1 public validation: dispatch rechecks parameter policy change after preflight
+ok 16 - P1 public validation: dispatch rechecks parameter policy change after preflight
+  ---
+  duration_ms: 21.980901
+  type: 'test'
+  ...
+# Subtest: P1 public validation: dispatch rechecks admission closure after preflight
+ok 17 - P1 public validation: dispatch rechecks admission closure after preflight
+  ---
+  duration_ms: 13.409016
+  type: 'test'
+  ...
+# Subtest: P1 public validation: changing one version rule changes both phases
+ok 18 - P1 public validation: changing one version rule changes both phases
+  ---
+  duration_ms: 17.228994
+  type: 'test'
+  ...
+# Subtest: P1 public validation: a stream without its optional bundle descriptor is rejected before receiving bytes
+ok 19 - P1 public validation: a stream without its optional bundle descriptor is rejected before receiving bytes
+  ---
+  duration_ms: 18.034445
+  type: 'test'
+  ...
+# Subtest: P1 public validation: envelope, key, capability and parameter rejection stay shared
+ok 20 - P1 public validation: envelope, key, capability and parameter rejection stay shared
+  ---
+  duration_ms: 102.736795
+  type: 'test'
+  ...
+# Subtest: P1 public validation: phase-specific error precedence is preserved
+ok 21 - P1 public validation: phase-specific error precedence is preserved
+  ---
+  duration_ms: 10.529959
+  type: 'test'
+  ...
+# Subtest: P1 public validation: successful requests re-read and re-decode rather than caching preflight
+ok 22 - P1 public validation: successful requests re-read and re-decode rather than caching preflight
+  ---
+  duration_ms: 19.59304
+  type: 'test'
+  ...
+# Subtest: P1 public validation: read/ephemeral keys and draining admission remain fail-closed
+ok 23 - P1 public validation: read/ephemeral keys and draining admission remain fail-closed
+  ---
+  duration_ms: 23.174505
+  type: 'test'
+  ...
+# Subtest: P1 public validation: failed current-state observation is never treated as authorization
+ok 24 - P1 public validation: failed current-state observation is never treated as authorization
+  ---
+  duration_ms: 8.956423
+  type: 'test'
+  ...
+# Subtest: P1 public validation: bundle-omitted submission without a stream remains valid
+ok 25 - P1 public validation: bundle-omitted submission without a stream remains valid
+  ---
+  duration_ms: 12.379454
+  type: 'test'
+  ...
+1..25
+# tests 25
+# suites 0
+# pass 25
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12568.924702

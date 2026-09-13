@@ -1,5 +1,5 @@
 // IPC-004/AUTH-003: public preflight and method dispatch; no socket or lease ownership.
-import type { AuthContext, ProtocolLimits, Request } from "../../implementation/contracts.js";
+import type { AuthContext, Failure, ProtocolLimits, PublicMethod, Request } from "../../implementation/contracts.js";
 import type { Store } from "../store.js";
 import type { MailModule } from "../mail.js";
 import type { UnitsModule } from "../units.js";
@@ -23,25 +23,54 @@ export interface PublicDispatchDependencies {
   refreshViews(): void;
   readLogs(agent: string, sinceSeconds: number): Promise<{ text: string; truncated: boolean; observedAtMs: number }>;
 }
+type PublicValidation =
+  | { ok: true; id: string; method: PublicMethod; descriptor: (typeof PUBLIC_METHODS)[PublicMethod]; params: Record<string, unknown> }
+  | { ok: false; id: string; failure: Failure };
+
 export class PublicDispatcher {
   constructor(private readonly deps: PublicDispatchDependencies) {}
   private checkParams(method: string, rawParams: unknown): Record<string, unknown> | null {
     if (!isPublicMethod(method)) return null;
     return decodePublicParams(method, rawParams, { actorNames: new Set(this.deps.store.listAgents().map(agent => agent.name)), limits: this.deps.limits }) as Record<string, unknown> | null;
   }
-  preflight(auth: AuthContext, envelope: Record<string, unknown>): void {
-    const method = typeof envelope.method === "string" ? envelope.method : "";
-    if (typeof envelope.id !== "string" || typeof envelope.method !== "string" || !Object.keys(envelope).every(key => ["v", "id", "method", "params", "request"].includes(key))) throw new StoreError("INVALID_REQUEST", "invalid request envelope");
-    if (envelope.v !== 1) throw new StoreError("UNSUPPORTED_VERSION", "unsupported protocol version");
-    if (!isPublicMethod(method) || PUBLIC_METHODS[method].stream === "none") throw new StoreError("INVALID_REQUEST", "method does not accept a stream body");
-    const descriptor = PUBLIC_METHODS[method];
-    if (descriptor.key === "required" && !isValidRequestKey(envelope.request)) throw new StoreError("INVALID_REQUEST", "mutation requires a request key");
+  private readAuthority(auth: AuthContext): { actor: ReturnType<Store["getAgent"]>; failure: Failure | null } {
     const actor = this.deps.store.getAgent(auth.actor);
-    if (auth.channel === "actor" && (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled")) throw new StoreError("STALE_RUN", "actor incarnation is stale");
-    const need = descriptor.capability;
-    if (need && (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))) throw new StoreError("CAPABILITY_DENIED", `missing capability ${need}`);
-    if (!this.checkParams(method, envelope.params)) throw new StoreError("INVALID_REQUEST", `invalid params for ${method}`);
-    this.deps.assertAdmission();
+    const stale = auth.channel === "actor" && (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled");
+    return { actor, failure: stale ? { code: "STALE_RUN", message: "actor incarnation is stale", retry: "never" } : null };
+  }
+  /** Share rules, never a retained authorization result. Every call reads current authority.
+   * The phase selects the existing error precedence and admission/stream policy.
+   */
+  private validatePublicRequest(auth: AuthContext, envelope: Record<string, unknown>, phase: "stream-preflight" | "dispatch", hasStream: boolean): PublicValidation {
+    const id = typeof envelope.id === "string" ? envelope.id : "x";
+    const method = typeof envelope.method === "string" ? envelope.method : "";
+    const fail = (code: Failure["code"], message: string): PublicValidation => ({ ok: false, id, failure: { code, message, retry: "never" } });
+    if (typeof envelope.id !== "string" || typeof envelope.method !== "string" || !Object.keys(envelope).every(key => ["v", "id", "method", "params", "request"].includes(key))) return fail("INVALID_REQUEST", "invalid request envelope");
+    // Dispatch historically fences stale actors before version/method errors.
+    // Stream preflight rejects invalid metadata before querying current authority.
+    const earlyAuthority = phase === "dispatch" ? this.readAuthority(auth) : null;
+    if (earlyAuthority?.failure) return { ok: false, id, failure: earlyAuthority.failure };
+    if (envelope.v !== 1) return fail("UNSUPPORTED_VERSION", "unsupported protocol version");
+    if (!isPublicMethod(method)) return phase === "stream-preflight"
+      ? fail("INVALID_REQUEST", "method does not accept a stream body") : fail("UNKNOWN_METHOD", `unknown method ${method}`);
+    const descriptor = PUBLIC_METHODS[method];
+    if (phase === "stream-preflight" && descriptor.stream === "none") return fail("INVALID_REQUEST", "method does not accept a stream body");
+    if (descriptor.key === "required" && !isValidRequestKey(envelope.request)) return fail("INVALID_REQUEST",
+      phase === "stream-preflight" ? "mutation requires a request key" : "mutation requires a valid request key");
+    if (descriptor.key === "forbidden" && Object.prototype.hasOwnProperty.call(envelope, "request")) return fail("INVALID_REQUEST", "read/ephemeral requests forbid a top-level request key");
+    const authority = earlyAuthority ?? this.readAuthority(auth);
+    if (authority.failure) return { ok: false, id, failure: authority.failure };
+    const need = descriptor.capability, actor = authority.actor;
+    if (need && (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))) return fail("CAPABILITY_DENIED", `missing capability ${need}`);
+    const params = this.checkParams(method, envelope.params);
+    if (!params) return fail("INVALID_REQUEST", `invalid params for ${method}`);
+    if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
+    if (phase === "stream-preflight" || this.deps.isDraining() || descriptor.mode === "mutation") this.deps.assertAdmission();
+    return { ok: true, id, method, descriptor, params };
+  }
+  preflight(auth: AuthContext, envelope: Record<string, unknown>): void {
+    const validation = this.validatePublicRequest(auth, envelope, "stream-preflight", true);
+    if (!validation.ok) throw new StoreError(validation.failure.code, validation.failure.message);
   }
   async dispatch(auth: AuthContext, request: Request, stream: AsyncIterable<Uint8Array> | null): Promise<object> {
     try { return await this.dispatchChecked(auth, request, stream); }
@@ -49,23 +78,9 @@ export class PublicDispatcher {
   }
   private async dispatchChecked(auth: AuthContext, request: Request, stream: AsyncIterable<Uint8Array> | null): Promise<object> {
     const { store, mail, units, views, lifecycle, git } = this.deps;
-    const envelope = request as unknown as Record<string, unknown>;
-    const id = typeof envelope.id === "string" ? envelope.id : "x";
-    const method = typeof envelope.method === "string" ? envelope.method : "";
-    if (typeof envelope.id !== "string" || typeof envelope.method !== "string" || !Object.keys(envelope).every(key => ["v", "id", "method", "params", "request"].includes(key))) return errorAnswer(id, { code: "INVALID_REQUEST", message: "invalid request envelope", retry: "never" });
-    const actor = store.getAgent(auth.actor);
-    if (auth.channel === "actor" && (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled")) return errorAnswer(id, { code: "STALE_RUN", message: "actor incarnation is stale", retry: "never" });
-    if (envelope.v !== 1) return errorAnswer(id, { code: "UNSUPPORTED_VERSION", message: "unsupported protocol version", retry: "never" });
-    if (!isPublicMethod(method)) return errorAnswer(id, { code: "UNKNOWN_METHOD", message: `unknown method ${method}`, retry: "never" });
-    const descriptor = PUBLIC_METHODS[method];
-    if (descriptor.key === "required" && !isValidRequestKey(envelope.request)) return errorAnswer(id, { code: "INVALID_REQUEST", message: "mutation requires a valid request key", retry: "never" });
-    if (descriptor.key === "forbidden" && Object.prototype.hasOwnProperty.call(envelope, "request")) return errorAnswer(id, { code: "INVALID_REQUEST", message: "read/ephemeral requests forbid a top-level request key", retry: "never" });
-    const need = descriptor.capability;
-    if (need && (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))) return errorAnswer(id, { code: "CAPABILITY_DENIED", message: `missing capability ${need}`, retry: "never" });
-    const params = this.checkParams(method, envelope.params);
-    if (!params) return errorAnswer(id, { code: "INVALID_REQUEST", message: `invalid params for ${method}`, retry: "never" });
-    if (stream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return errorAnswer(id, { code: "INVALID_REQUEST", message: "method does not accept this stream body", retry: "never" });
-    if (this.deps.isDraining() || descriptor.mode === "mutation") this.deps.assertAdmission();
+    const validation = this.validatePublicRequest(auth, request as unknown as Record<string, unknown>, "dispatch", Boolean(stream));
+    if (!validation.ok) return errorAnswer(validation.id, validation.failure);
+    const { id, method, descriptor, params } = validation;
     try {
       switch (method) {
         case "status.get": {
