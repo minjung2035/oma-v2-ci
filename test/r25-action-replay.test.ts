@@ -6,17 +6,24 @@ import { makeValidAgent } from "./fixtures/spec.js";
 for (const kind of ["agent.start", "agent.stop"] as const) {
   for (const state of ["pending", "unknown"] as const) {
     for (const entry of ["normal", "recovery"] as const) {
-      for (const changed of ["desired", "incarnation"] as const) {
+      for (const changed of ["desired", "incarnation", "desired-and-incarnation"] as const) {
         test(`R25 C01/C02 ${kind} ${state} ${entry}: superseded ${changed} never authorizes a new physical effect`, async () => {
           const f = lifecycleReplayFixture();
           try {
             const prior = f.seedPending(kind, "old-action", state);
             const desired = kind === "agent.start" ? "stopped" : "enabled";
-            f.store.transaction(tx => tx.updateAgent(changed === "desired" ? { name: "a", desired } : { name: "a", incarnation: 2 }));
+            f.store.transaction(tx => tx.updateAgent(changed === "desired" ? { name: "a", desired }
+              : changed === "incarnation" ? { name: "a", incarnation: 2 }
+              : { name: "a", desired, incarnation: 2 }));
             const target = f.store.getAgent("a");
+            // Exact C02 report witness: old stop epoch 1, current enabled run
+            // epoch 2. Controlled physical liveness must remain unchanged.
+            f.units.active = kind === "agent.stop" && target?.desired === "enabled";
+            const physicalBefore = f.units.active;
             if (entry === "normal") await f.dispatch(kind, "old-action");
             else f.lifecycle.reconcileAction(prior.id);
             assert.deepEqual(f.units.effects, []);
+            assert.equal(f.units.active, physicalBefore);
             assert.deepEqual(f.store.getAgent("a"), target, "replay cannot repair desired or overwrite the new epoch");
             const after = f.store.getOperationById(prior.id)!;
             assert.equal(after.planJson, prior.planJson);
@@ -72,7 +79,7 @@ test("R25: no GOAL, provisioning, retired and unknown death retain their own rej
     assert.equal(f.store.getOperation("manager", "no-goal"), null);
     f.controls.hasGoal = true;
     f.store.transaction(tx => {
-      tx.insertAgent(makeValidAgent("notready", { desired: "provisioning", createdBy: "manager" }));
+      tx.insertAgent(makeValidAgent("notready", { desired: "provisioning", incarnation: 0, createdBy: "manager" }));
       tx.insertAgent(makeValidAgent("retired", { desired: "retired", createdBy: "manager" }));
     });
     assert.throws(() => f.lifecycle.start(f.auth, "notready", "provisioning"), { code: "AGENT_NOT_READY" });
