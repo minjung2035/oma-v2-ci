@@ -19,6 +19,7 @@ import { readFacets } from "./storage/facets.js";
 export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./ids.js";
+import { SCHEMA_USER_VERSION_READABLE, SCHEMA_USER_VERSION_WRITTEN } from "./domain/persisted-formats.js";
 import { StoreError } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
@@ -59,7 +60,8 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
   try {
     db.exec("PRAGMA query_only = ON; BEGIN"); reading = true;
     const version = safeInteger(fullRow(db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
-    if (version !== 1) throw new StoreError("STORE_CORRUPT", "diagnostics require schema version 1; no migration was attempted");
+    if (!SCHEMA_USER_VERSION_READABLE.includes(version))
+      throw new StoreError("STORE_CORRUPT", `diagnostics require a readable schema version; found ${version} and no migration was attempted`);
     const schema = [];
     for (const row of db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND type IN ('table','view','trigger')").iterate()) {
       if (schema.length >= LEDGER_TABLES.length) throw new StoreError("STORE_CORRUPT", "unexpected diagnostic database objects");
@@ -141,8 +143,10 @@ export class Store {
   }
   private migrate(): void {
     const version = this.userVersion();
-    if (version === 1) return;
-    if (version !== 0) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}`);
+    // P8: the readable version set is explicit. Anything else fails closed with
+    // no migration attempt and no rewrite of the existing file.
+    if (SCHEMA_USER_VERSION_READABLE.includes(version)) return;
+    if (version !== 0) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
     let ddl: string;
     try { ddl = readFileSync(SCHEMA_PATH, "utf8"); }
     catch (error) { throw new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`); }
@@ -151,7 +155,8 @@ export class Store {
       try { this.db.exec("ROLLBACK"); } catch { /* no open transaction */ }
       throw new StoreError("STORE_CORRUPT", `migration failed: ${(error as Error).message}`);
     }
-    if (this.userVersion() !== 1) throw new StoreError("STORE_CORRUPT", "migration did not set user_version=1");
+    if (this.userVersion() !== SCHEMA_USER_VERSION_WRITTEN)
+      throw new StoreError("STORE_CORRUPT", `migration did not set user_version=${SCHEMA_USER_VERSION_WRITTEN}`);
   }
   private userVersion(): number {
     return safeInteger(fullRow(this.db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
