@@ -66,10 +66,6 @@ async function main(): Promise<void> {
       if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
       return current;
     }, () => store.inTransaction);
-    let contextOwner: GitModule | null = null;
-    const hasGoal = (): boolean => contextOwner?.hasCommittedContext() ?? false;
-    const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: join(stateRoot, "repos", "project.git"), society,
-      hasGoal, activationAllowed: () => lifetime.permitsActivation }, resolveSpec, mail, cfg.quota);
     const git = new GitModule({ stateRoot, projectGit: join(stateRoot, "repos", "project.git"), contextGit: join(stateRoot, "repos", "context.git"),
       worldDir: join(stateRoot, "world"), society, quarantineTmpBytes: cfg.limits.bundleBytes,
       quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
@@ -81,7 +77,9 @@ async function main(): Promise<void> {
       if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
       return integrationPolicyFromConfig(current.integration);
     });
-    contextOwner = git;
+    const hasGoal = (): boolean => git.hasCommittedContext();
+    const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: join(stateRoot, "repos", "project.git"), society,
+      hasGoal, activationAllowed: () => lifetime.permitsActivation }, resolveSpec, mail, cfg.quota);
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
       projectGit: join(stateRoot, "repos", "project.git"), hasGoal, activationAllowed: () => lifetime.permitsActivation,
       sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
