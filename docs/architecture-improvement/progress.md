@@ -6,7 +6,7 @@
 
 | 단계 | 현재 상태 | 근거 / 남은 일 |
 | --- | --- | --- |
-| P0 gate | **PARTIAL** | pinned TS 5.9.3에서 inventory/check:inventory/typecheck/build/check:package/check:architecture PASS. `npm test`는 131 file 중 일부 실패가 남아 있다(§4.3). LOC gate는 12,170 code lines로 A-008/A-009 review 조건에 걸린다. verify lane과 full LOC/hash 재생성은 부분 실행 |
+| P0 gate | **PARTIAL / release gate FAIL** | pinned TS 5.9.3에서 inventory/check:inventory/typecheck/build/check:package/check:architecture PASS. `npm test`는 131 file 중 **114 PASS / 17 FAIL**(`phase5`는 timeout)이다. 남은 실패 목록과 원인은 [p0-baseline-execution.md](p0-baseline-execution.md) §4.3에 있다. LOC gate는 12,170 code lines로 A-008/A-009 review 조건에 걸린다. verify lane과 full LOC/hash 재생성은 부분 실행 |
 | P1 operation closure | **PROVEN (source-bound static)** | `OPERATION_CODECS` registry를 신설해 closed kind set과 plan/result/relation validator를 `satisfies Record<MutationMethod, ...>`로 묶었고, decode 경계가 실제로 이 registry를 쓴다. magic count 의존 없음 |
 | P1 composition / validation | 구현 반영(이전 단계) | 착수 시점 source에 이미 존재. 이번 실행에서 해당 focused 검증은 재실행하지 않았다 |
 | P2 contract owner 분리 | **구현 반영, 재검증 PARTIAL** | `implementation/contracts.ts`는 facade로 남고 production의 facade import는 49건이며 **전부 type-only**다(runtime 0). P5 evidence에 고정 |
@@ -15,9 +15,9 @@
 | P4 logical Store facets | 구현 반영 | SQLite writer는 여전히 `src/store.ts` 하나다. facets와 Store의 type 참조는 한 layer 안의 cycle로 측정·문서화 |
 | P5 dependency lattice | **PROVEN (measured + enforced)** | 137 files, runtime 547, type-only 147, runtime SCC 0. `dependency-lattice`/`-unclassified`/`type-import-cycle`/`dependency-evidence-stale` gate와 negative fixture 6건, evidence generator 연결 |
 | P6 independent integrity | **구현 존재, 재검증 PARTIAL** | HEAD에 `src/diagnostics/*`와 `scripts/check-state.mjs`가 있다. 이번 세션에서 실제 state root에 대한 offline/live 실행 증거는 새로 만들지 않았다 |
-| P7 durable-FS fault seam | **NOT_RUN** | deterministic seam과 fault matrix 미구현 |
-| P8 persisted format evolution | **NOT_RUN** | format inventory/migration policy 미구현. v1 silent rewrite는 여전히 금지 |
-| P9 VM power-cut / fuzz | **NOT_RUN** | power-cut lane, persisted-state fuzz corpus 미구현 |
+| P7 durable-FS fault seam | **NOT_RUN (미착수)** | deterministic seam과 fault matrix 미구현 |
+| P8 persisted format evolution | **NOT_RUN (미착수)** | format inventory/migration policy 미구현. v1 silent rewrite는 여전히 금지 |
+| P9 VM power-cut / fuzz | **NOT_RUN (미착수)** | power-cut lane, persisted-state fuzz corpus 미구현 |
 
 ## 1. 이번 실행에서 실제로 고친 것
 
