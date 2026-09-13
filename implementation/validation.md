@@ -1,103 +1,70 @@
-# 검증 상태 — R37/R39 종료 시점
+# 검증 상태 — C01–C07 코드 이행 감사 후속
 
-**현재 상태: 실행 검증 NOT_RUN, release 미인증.** 카드 처리와 GitHub commit 성공을 runtime PASS 또는 배포 승인으로 해석하지 않는다. 이번 종료 기록은 [refactoring-closure.md](refactoring-closure.md), 카드/commit 목록은 [HANDOFF.md](../HANDOFF.md)에 있다.
+**현재 상태: source 수정 및 시험 작성, 실행 검증 NOT_RUN, release 미인증.** 상세 변경·commit·미충족 범위는 [conformance-followup.md](conformance-followup.md), 재개 기준은 [HANDOFF.md](../HANDOFF.md)에 있다.
 
-이 파일의 과거 장문 실행 기록은 삭제된 증거가 아니라 Git history의 고정 snapshot으로 보존했다: [R37 종료 시점의 이전 validation.md](https://github.com/minjung2035/oma-v2/blob/7875afbbe71ae44a65415648774e7f9b95fa4b34/implementation/validation.md). 이전 파일의 “현재”, 83/83, 178/178, 9,774 LOC 및 개별 PASS는 각각 그 기록의 source/environment에 한정된다. 현재 리팩터링 코드에서 재실행한 값이 아니다.
+이번 후속 작업의 기준은 사용자가 첨부한 `01_CODE_CONFORMANCE_REPORT.md`, `02_CARD_CONFORMANCE.md`의 `2a00fa20dae8f68d8f489401ba821c16d3c35fc4`다. 해당 SHA에서 보고된 결함과 변경 후의 source 상태를 구분한다. 기존 [R37/R39 검증 기록](https://github.com/minjung2035/oma-v2/blob/2a00fa20dae8f68d8f489401ba821c16d3c35fc4/implementation/validation.md)과 [그 이전 실행 기록](https://github.com/minjung2035/oma-v2/blob/7875afbbe71ae44a65415648774e7f9b95fa4b34/implementation/validation.md)은 고정 snapshot으로 보존한다.
 
-## 1. 실제 수행한 작업과 하지 않은 작업
+## 1. 실제 수행과 미실행
 
-| 종류 | 이번 결과 | 해석 |
-|---|---|---|
-| GitHub master/ref/source 조회 | 수행 | 기존 R37 중간 변경과 대상 owner의 코드를 읽음 |
-| GitHub contents write/commit | 수행, 반환된 commit SHA 확인 | 저장소에 source/test/doc가 기록됐다는 확인 |
-| source의 정적 읽기 | 수행 | Promise 연결, final authorization/CAS 순서, immutable plan, 관측과 effect 분리 점검 |
-| runtime/typecheck/build/test | NOT_RUN | pass/fail/test count를 새로 산출하지 않음 |
-| package/install/native/kernel/Pi/provider probe | NOT_RUN | 실제 설치 asset, SDK, cgroup, provider 또는 전체 E2E 보장 아님 |
-| LOC/trace inventory/report/compliance generator | NOT_RUN | 새 집계·normative fingerprint·실행 source pin을 손으로 만들지 않음 |
-| 품질/비용/성능 평가 | NOT_RUN | 개선률, 예상 통과율 또는 release-ready 점수 없음 |
-
-R37 종료 marker는 `7875afbbe71ae44a65415648774e7f9b95fa4b34`다. R39는 source 연결/검증 도구/문서를 변경했으므로 R37의 source snapshot만으로도 최종 R39 proof를 대신할 수 없다.
-
-## 2. 현재 source에서 정적으로 확인한 보호 경계
-
-Git façade는 quarantine과 context 준비 Promise를 반환하고 호출자는 이를 기다린다. 생성은 workspace 준비가 끝난 뒤에만 공개 경계로 진행한다. 비동기 대기 뒤 현재 권한·spec/incarnation·desired·expected ref를 다시 읽으며, 최종 검사와 CAS/start 사이에 임의의 새 await를 두지 않았다.
-
-systemd show와 startup fsck는 bounded async 관측 경로를 사용한다. 비동기 결과는 Store-bound `confirmDead`를 대체하지 않는다. logical 요청 완료 후에도 불확실한 native 준비가 남으면 shutdown barrier가 Store/lock 해제를 차단한다. 이것을 임의 descendant 사망 또는 kernel quota 인증으로 확대하지 않는다.
-
-증거 checker는 같은 fingerprint/같은 link의 record를 보존하며 바뀐 owner/entrypoint/call path/test는 unverified로 처리한다. 새 dependency/test 파일, missing/stale/extra/duplicate trace, import closure 이탈을 실패로 남긴다. report가 과거 runtime log를 현재 source hash에 재결합하던 경로는 제거했다. 이 설명은 checker 자체를 실제 실행하여 확인한 PASS가 아니다.
-
-## 3. 작성한 시험과 미실행 lane
-
-| lane/검사 | 현재 상태 | 실행 시 요구되는 환경과 범위 |
-|---|---|---|
-| typecheck, build, check:package | NOT_RUN | 현재 lockfile/Node/TypeScript와 실제 emitted/install asset |
-| check:architecture, check:transactions | NOT_RUN | source closure, transaction capability와 async callback 정적 규칙 |
-| verify:fast | NOT_RUN | deterministic domain/schema 및 R39 trace policy |
-| verify:durable | NOT_RUN | 실제 SQLite/Git/filesystem, R37 child/preparation/shutdown 경합 |
-| verify:kernel | NOT_RUN | 실제 user-systemd/native socket/cgroup/Pi 관련 기존 oracle |
-| verify:crash | NOT_RUN | 요구된 physical stop point 도달 후 SIGKILL/restart; 단순 예외 주입과 구분 |
-| verify:property | NOT_RUN | 고정 seed 모델·parser corpus·global invariant |
-| verify:stress | NOT_RUN | 자원/queue/FD/RSS 계측; 임의 process-tree death 인증 아님 |
-| verify:all, npm test | NOT_RUN | 전체 serial suite, skip/todo/critical-oracle 누락을 통과로 세지 않음 |
-| cloc/loc fixture | NOT_RUN | pinned cloc 2.08 및 systemd language filter |
-| trace inventory/report/compliance | NOT_RUN | 현재 source/문서의 실제 분모 및 새 scope-matched 실행 evidence |
-
-새 R37 시험은 `r37-async-process`, `r37-preparation-boundaries`, `r37-recovery-observation`, `r37-shutdown-observation`이다. R39는 `traceability-policy.test.mjs`, 기존 `compliance.test.ts` 및 `acceptance-auth.test.ts`를 정리했다. recovery의 scripted unit race test와 실제 kernel lane은 별개의 oracle이다. 기존 성공 이름을 재사용했다는 이유로 새 연결 전체를 proven으로 간주하지 않는다.
-
-다음은 실행 환경에서 사용할 명령 목록이며 **이번에 실행했다는 기록이 아니다**.
-
-```sh
-npm run typecheck
-npm run build
-npm run check:package
-npm run check:architecture
-npm run verify:fast
-npm run verify:durable
-npm run verify:kernel
-npm run verify:crash
-npm run verify:property
-npm run verify:stress
-npm run verify:all
-node scripts/loc.mjs
-node scripts/compliance.mjs --inventory
-node scripts/adversarial-report.mjs
-node scripts/compliance.mjs
-```
-
-`--inventory`와 LOC/report 명령은 파일을 생성/갱신하므로 실제 source closure와 실행 로그를 고정해 기록해야 한다. 실패하거나 환경이 미지원이면 해당 상태를 유지한다. 임의로 skip하거나 OPEN profile을 비활성 성공으로 위장해 전체 PASS를 만들지 않는다.
-
-## 4. 현재 재사용할 수 없는 생성 산출물
-
-| 기존 파일 | R39 처리 |
+| 종류 | 이번 결과 |
 |---|---|
-| `production-files.txt`, `production-loc.json`, `production-loc-hashes.json` | 이전 snapshot, 현재 수치로 재사용하지 않음. 재생성 NOT_RUN |
-| `implementation/traceability.json` | 수동 hash 갱신 없음. 명시적 `source-owners.json` overlay와 current source 검사를 거쳐 읽음. 미연결 행은 unverified |
-| `implementation/adversarial-review.md` | 이전 generated report 유지. 새 generator 실행 NOT_RUN; 현재 full-scope 결과로 인용 금지 |
-| `implementation/evidence/runtime-tests.txt`, `cli-oracle-tests.txt` | 과거 raw log 보존. 현재 코드 재실행이나 class-wide proof가 아님 |
-| `implementation/evidence/audit-source-pins.json` 등 이전 pin | 변경된 owner/dependency/spec에 대해 stale. 과거 로그를 새 hash에 붙이지 않음 |
-| `implementation/source-owners.json` | 검토한 locator의 authored metadata. 실행 evidence나 자동 완전 coverage가 아님 |
+| GitHub master/source 조회 | 수행; 감사 기준과 시작 HEAD가 같음을 확인 |
+| GitHub source/test/tooling/doc write 및 commit | 수행; 반환된 commit/blob SHA 확인 |
+| C01/C02 normal/recovery 제어 흐름 정적 검토 | 수행; frozen desired/epoch fence와 별도 결정 경로 확인 |
+| 정상 fixture와 architecture policy의 source 대조 | phase2/phase4 및 관련 actual owner 범위 수행 |
+| GitHub Actions master 실행 이력 조회 | total_count=0; 실행 증거가 아니며 권한 거부 판정도 아님 |
+| typecheck/build/test/package/architecture/transaction gate | NOT_RUN |
+| kernel/Pi/provider/설치/VM power-loss probe | NOT_RUN |
+| production inventory/LOC/hash/trace/report generator | NOT_RUN |
+| status/stop latency, queue/RSS/FD 성능 측정 | NOT_RUN |
 
-core T01–T77과 target tiered T78–T90은 별도 actual-row inventory다. 이번에는 전체 inventory를 실행하지 않았으므로 새 분모를 보고하지 않는다. 누락/중복 target oracle은 실패 조건이며 새 oracle을 규범 결정 없이 발명하지 않았다. 오래된 0/258 표시는 당시 evidence gap이지 구현이 0%라는 뜻이 아니다.
+자료에 실린 과거 5/5 leaf test, 178/178 runtime, 9,774 LOC, 0/258 compliance를 이번 source 결과로 재사용하지 않는다. source-only 판단을 actual coordinator test execution이나 native proof로 부르지 않는다.
 
-## 5. 계속 남는 게이트와 위험
+## 2. 수정한 경계와 작성한 회귀
 
-S-01의 실제 isolation/descendant/resource proof, S-01-CANDIDATE의 kernel-bounded 작업 영역, S-02의 기존 Human Pi attach 경계, S-03의 trusted consumption, S-04의 provider codec/cancel/accounting은 관련 실제 evidence 전까지 해제하지 않는다. S-05/S-06의 hostile import/crash/power-loss 범위도 이번 코드 작성으로 새 인증을 얻지 않았다. VM 전원단절이나 유료 provider 호출을 수행하지 않았다.
+C01/C02: 과거 nonterminal start/stop은 accepted plan의 desired/previousIncarnation과 현재 target이 맞지 않으면 새 unit 효과를 발행하지 않는다. plan과 target을 덮어쓰지 않고 unknown을 유지한다. `r25-action-replay.test.ts`는 actual PublicDispatcher/LifecycleModule/Store와 controlled unit port를 사용한다. 실제 socket·systemd·cgroup은 이 대역 시험의 범위가 아니다.
 
-S-08/S-10의 tiered attestation/challenge/floor 계약과 S-11의 strict clean-room verifier는 기존 OPEN/비활성 경계를 유지한다. base 경로를 tiered 구현으로 재명명하지 않는다. S-09의 사회 품질·비용·지연 비교는 미실행이다. optional feature도 실제 disabled-profile rejection 증거 없이는 not_applicable로 승격하지 않는다.
+C03: `phase4.test.ts`의 valid Agent/hash/auth/epoch 및 awaited cleanup을 수정했다. 추가로 `phase2.test.ts`의 정상 데이터는 actual Mail/Store로 생성하고, CHECK/FK 음성은 정상 Store를 닫은 뒤 명시적 raw helper로 주입한다. 다른 legacy phase/audit 전체의 valid fixture 이관은 아직 전수 검증하지 않았다.
 
-미연결 규범의 authoritative owner와 negative oracle 검토, 설치된 production entrypoint의 실행 증거 및 formal trace promotion은 남아 있다. 타입/API·test source·commit marker만으로 이 공백이 닫혔다고 보고하지 않는다. 현재 LOC가 10,000 이하인지도 재측정 전에는 알 수 없다.
+C04: 실제 framed channel의 node:net와 구체적 subprocess owner를 구분했다. Units/CLI raw spawn은 공통 bounded mechanism으로 이동했다. `r34-owner-policy.test.mjs`는 actual import와 금지된 neighboring/pure import를 검사하도록 작성했다. 전체 AST/compiler/import SCC가 통과했다는 뜻은 아니다.
 
-## 6. 검증 기록에 적용되는 기존 규범
+C07: `r36-lifecycle-sequences.test.ts`의 start/stop/retry는 actual lifecycle dispatch를 통과한다. 독립 예상 trace, seed, authored C01/C02 corpus와 minimizer를 연결했다. 기존 Store/Mail model을 삭제하지 않았다.
 
-다음 다섯 규범은 기존 문서의 문구를 유지한다. Phase 0–10의 상세 수치/표/실행 이력은 위 고정 historical snapshot에서 확인한다. 이 절에 남은 과거 단계의 설명을 R37/R39의 새 실행 결과로 해석하지 않는다.
+새 tests는 기존 fast/durable/property/all lane에 추가됐다. kernel/crash의 기존 필수 파일과 no-skip/critical-oracle 정책은 제거하지 않았다. expanded 실행 개수·이름·도달성의 전후 비교는 NOT_RUN이다.
+
+## 3. C05/C06 및 generated artifact 상태
+
+| 파일/범위 | 현재 해석 |
+|---|---|
+| production-files.txt | 이전 generated list, STALE. 재생성하지 않았으므로 C05의 실제 omission 해결은 미확인 |
+| production-loc.json, production-loc-hashes.json | STALE. 현 코드의 LOC 또는 source-bound 측정값으로 사용 금지 |
+| production-inventory.mjs / loc.mjs --inventory-only | actual recursive source-list 생성·누락 검사 코드 작성. 실행은 NOT_RUN |
+| check:inventory | 현재 stale list를 거절하도록 연결. 실행 PASS 아님 |
+| traceability.json / adversarial-review.md | 새 generator 실행 없음. 전 규범 owner/evidence 완료로 해석 금지 |
+| 기존 raw test logs 및 audit-source-pins.json | 당시 source/environment의 역사적 기록. 새 source hash에 재결합하지 않음 |
+| source-owners.json | authored locator metadata이며 current-source execution proof가 아님 |
+
+`npm run inventory`는 실제 실행 시 source list만 생성한다. full LOC/hash는 `node scripts/loc.mjs`의 pinned cloc 2.08 실행이 필요하다. source list 생성과 LOC 측정을 나눈 것은 cloc를 다른 계산기로 대체하거나 LOC 규범을 완화한 것이 아니다.
+
+실행 환경용 명령 순서와 각 lane의 새 output directory 예시는 [후속 기록 §7](conformance-followup.md#7-inventory실행증거의-남은-경계)에 있다. 명령 예시 자체는 실행 로그가 아니다. 실패·환경 미지원·누락 oracle은 그대로 기록해야 하며 skip으로 전체 PASS를 만들지 않는다.
+
+## 4. 계속 남는 게이트
+
+S-01/S-01-CANDIDATE의 실제 isolation/descendant/resource, S-02의 기존 Human Pi attach, S-03의 trusted consumption, S-04의 provider codec/accounting은 실제 evidence 없이 해제하지 않는다. S-05/S-06의 hostile import, crash, 전원단절 및 backup/restore를 새로 인증하지 않았다. 유료 provider와 host reboot는 실행하지 않았다.
+
+S-08/S-10 tiered attestation/challenge/floor와 S-11 strict clean-room, S-09 품질·비용·latency 평가는 기존 미확정 상태다. base를 tiered 완료로 바꾸거나 not_applicable을 선언해 필수 proof를 면제하지 않는다. current source가 10,000 LOC 이하인지도 새 cloc 측정 전에는 알 수 없다.
+
+## 5. 보존한 검증 규범
+
+다음 규범의 문구는 유지한다. 기존 상세 실행 기록은 위 고정 historical snapshot에 있다.
 
 **MUST [VAL-001]** 다음 결과의 범위를 구분한다. 초기 설계 검증 결과를 실제 runtime 구현 또는 S-01~09(+S-01-CANDIDATE) 통과로 인용하지 않는다.
 
 | 결과 범주 | 참조 | 현재 해석 |
 |---|---|---|
-| 초기 설계/primitive/선언 검사 | 고정 historical validation snapshot의 Phase 0–9 | 해당 당시 환경의 제한된 결과 |
-| 이전 runtime 및 단일 CLI oracle | 같은 snapshot의 runtime audit 및 raw logs | 당시 source 범위, 현재 실행 아님 |
-| R37/R39 코드·문서 정리 | 이 문서 §§1–5 | 정적 source 읽기와 commit 확인, 실행 NOT_RUN |
+| 초기 설계/primitive/선언 검사 | historical validation Phase 0–9 | 당시 환경의 제한된 결과 |
+| 이전 runtime/CLI/첨부 감사의 leaf 진단 | 각 source SHA와 raw logs | 당시 범위, 이번 변경의 실행 아님 |
+| C01–C07 후속 source 변경 | conformance-followup.md | source review 및 commit 확인, 실행 NOT_RUN |
 
 **MUST [VAL-002]** 구현 시작 시 [spikes.md](spikes.md)의 OPEN 상태를 유지하고 실제 harness 결과로만 갱신한다. [test-matrix.md](test-matrix.md)의 77개 항목은 구현해야 할 수용 계약이며 현재 통과한 runtime suite가 아니다.
 
