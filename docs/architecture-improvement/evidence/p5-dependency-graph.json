@@ -1,0 +1,200 @@
+{
+ "layers": [
+  {
+   "index": 0,
+   "name": "L0-contracts",
+   "prefixes": [
+    "implementation/"
+   ],
+   "files": 1
+  },
+  {
+   "index": 1,
+   "name": "L1-kernel",
+   "prefixes": [
+    "src/domain/",
+    "src/ids.ts",
+    "src/hash.ts",
+    "src/leaf.ts",
+    "src/module-ports.ts",
+    "src/validate.ts",
+    "src/frame.ts",
+    "src/durable.ts",
+    "src/config.ts",
+    "src/config/",
+    "src/process/",
+    "src/protocol/",
+    "src/storage/",
+    "src/cli/cache-codec.ts",
+    "src/mail/addresses.ts",
+    "src/mail/facts.ts",
+    "src/mail/headers.ts",
+    "src/store.ts"
+   ],
+   "files": 67
+  },
+  {
+   "index": 2,
+   "name": "L2-facts",
+   "prefixes": [
+    "src/units/",
+    "src/units.ts",
+    "src/diagnostics/",
+    "src/authority.ts",
+    "src/request-cache.ts"
+   ],
+   "files": 10
+  },
+  {
+   "index": 3,
+   "name": "L3-workflow",
+   "prefixes": [
+    "src/mail/",
+    "src/mail.ts",
+    "src/git/",
+    "src/git.ts",
+    "src/lifecycle/",
+    "src/lifecycle.ts",
+    "src/inference/",
+    "src/inference.ts",
+    "src/views/",
+    "src/views.ts",
+    "src/reconcile/"
+   ],
+   "files": 34
+  },
+  {
+   "index": 4,
+   "name": "L4-orchestration",
+   "prefixes": [
+    "src/reconcile.ts",
+    "src/broker/",
+    "src/broker.ts",
+    "src/runtime/",
+    "src/runner.ts",
+    "src/sandbox.ts"
+   ],
+   "files": 16
+  },
+  {
+   "index": 5,
+   "name": "L5-entry",
+   "prefixes": [
+    "src/entry/",
+    "src/cli/",
+    "src/cli.ts",
+    "src/pi-extension.ts",
+    "src/rpc-client.ts"
+   ],
+   "files": 9
+  }
+ ],
+ "files": 137,
+ "runtimeEdges": 547,
+ "typeOnlyEdges": 147,
+ "runtimeEdgeMatrix": {
+  "L1-kernel -> L1-kernel": 177,
+  "L2-facts -> L1-kernel": 27,
+  "L2-facts -> L2-facts": 5,
+  "L3-workflow -> L1-kernel": 157,
+  "L3-workflow -> L2-facts": 12,
+  "L3-workflow -> L3-workflow": 47,
+  "L4-orchestration -> L1-kernel": 42,
+  "L4-orchestration -> L2-facts": 7,
+  "L4-orchestration -> L3-workflow": 10,
+  "L4-orchestration -> L4-orchestration": 17,
+  "L5-entry -> L1-kernel": 29,
+  "L5-entry -> L2-facts": 4,
+  "L5-entry -> L3-workflow": 5,
+  "L5-entry -> L4-orchestration": 6,
+  "L5-entry -> L5-entry": 2
+ },
+ "upwardTypeOnlyEdges": [
+  {
+   "from": "src/diagnostics/integrity.ts",
+   "to": "src/git/observe.ts"
+  },
+  {
+   "from": "src/module-ports.ts",
+   "to": "src/reconcile.ts"
+  },
+  {
+   "from": "src/module-ports.ts",
+   "to": "src/runner.ts"
+  },
+  {
+   "from": "src/module-ports.ts",
+   "to": "src/sandbox.ts"
+  },
+  {
+   "from": "src/module-ports.ts",
+   "to": "src/units.ts"
+  },
+  {
+   "from": "src/module-ports.ts",
+   "to": "src/views.ts"
+  }
+ ],
+ "runtimeCycles": [],
+ "unionCycles": [
+  [
+   "src/storage/facets.ts",
+   "src/storage/operation-journal.ts",
+   "src/storage/operation-transitions.ts",
+   "src/storage/transaction.ts",
+   "src/store.ts"
+  ]
+ ],
+ "fanIn": {
+  "src/domain/errors.ts": 85,
+  "src/ids.ts": 27,
+  "src/domain/identifiers.ts": 21,
+  "src/storage/paths.ts": 18,
+  "src/domain/derived.ts": 17,
+  "src/storage/durable-fs.ts": 17,
+  "src/store.ts": 17,
+  "src/domain/canonical-json.ts": 14,
+  "src/hash.ts": 14,
+  "src/authority.ts": 13,
+  "src/protocol/receipts.ts": 11,
+  "src/process/policies.ts": 10,
+  "src/storage/directory.ts": 10,
+  "src/domain/context-policy.ts": 9,
+  "src/validate.ts": 9
+ },
+ "fanOut": {
+  "src/mail.ts": 26,
+  "src/broker.ts": 24,
+  "src/entry/broker.ts": 17,
+  "src/git.ts": 15,
+  "src/cli.ts": 14,
+  "src/git/context-repository.ts": 13,
+  "src/lifecycle/create.ts": 13,
+  "src/reconcile.ts": 13,
+  "src/store.ts": 13,
+  "src/git/context.ts": 12,
+  "src/git/submit.ts": 12,
+  "src/mail/batches.ts": 11,
+  "src/git/context-mirror.ts": 10,
+  "src/mail/materializer.ts": 10,
+  "src/git/integration.ts": 9
+ },
+ "external": {
+  "@earendil-works/pi-coding-agent": 1,
+  "koffi": 1,
+  "node:async_hooks": 3,
+  "node:child_process": 5,
+  "node:crypto": 14,
+  "node:fs": 33,
+  "node:net": 3,
+  "node:os": 1,
+  "node:path": 39,
+  "node:perf_hooks": 5,
+  "node:sqlite": 4,
+  "node:url": 2,
+  "node:util": 1,
+  "nodemailer": 1,
+  "nodemailer/lib/mime-funcs": 1
+ },
+ "unresolved": []
+}
