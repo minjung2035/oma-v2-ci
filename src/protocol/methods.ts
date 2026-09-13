@@ -2,10 +2,11 @@
  * Dynamic authority checks still run in the owning acceptance transaction.
  * This is a wire registry, not the model-facing CLI command allowlist.
  */
-import type {
-  Capability, EphemeralMethod, InternalMethods, MutationMethod,
-  ProtocolLimits, PublicMethod, PublicMethods,
-} from "../../implementation/contracts.js";
+import type { Capability } from "../../implementation/contracts/identity.js";
+import type { EphemeralMethod, PublicMethod, PublicMethods } from "../../implementation/contracts/public-wire.js";
+import type { InternalMethods } from "../../implementation/contracts/internal-wire.js";
+import type { MutationMethod } from "../../implementation/contracts/durable.js";
+import type { ProtocolLimits } from "../../implementation/contracts/host.js";
 import { parseBatchId } from "../ids.js";
 import {
   type Check, agentActionParamsCheck, agentContinueParamsCheck,

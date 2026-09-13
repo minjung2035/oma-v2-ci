@@ -1,0 +1,118 @@
+TAP version 13
+# Subtest: P2 wire golden: mail.send retains values and rejects extra fields
+ok 1 - P2 wire golden: mail.send retains values and rejects extra fields
+  ---
+  duration_ms: 1.441417
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: mail.ack retains values and rejects extra fields
+ok 2 - P2 wire golden: mail.ack retains values and rejects extra fields
+  ---
+  duration_ms: 0.256346
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: route.follow retains values and rejects extra fields
+ok 3 - P2 wire golden: route.follow retains values and rejects extra fields
+  ---
+  duration_ms: 0.182374
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: route.unfollow retains values and rejects extra fields
+ok 4 - P2 wire golden: route.unfollow retains values and rejects extra fields
+  ---
+  duration_ms: 0.070647
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: agent.create retains values and rejects extra fields
+ok 5 - P2 wire golden: agent.create retains values and rejects extra fields
+  ---
+  duration_ms: 0.215694
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: agent.start retains values and rejects extra fields
+ok 6 - P2 wire golden: agent.start retains values and rejects extra fields
+  ---
+  duration_ms: 0.074322
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: agent.stop retains values and rejects extra fields
+ok 7 - P2 wire golden: agent.stop retains values and rejects extra fields
+  ---
+  duration_ms: 0.104838
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: agent.continue retains values and rejects extra fields
+ok 8 - P2 wire golden: agent.continue retains values and rejects extra fields
+  ---
+  duration_ms: 0.06671
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: agent.wait retains values and rejects extra fields
+ok 9 - P2 wire golden: agent.wait retains values and rejects extra fields
+  ---
+  duration_ms: 0.311899
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: git.known retains values and rejects extra fields
+ok 10 - P2 wire golden: git.known retains values and rejects extra fields
+  ---
+  duration_ms: 0.294222
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: git.submit retains values and rejects extra fields
+ok 11 - P2 wire golden: git.submit retains values and rejects extra fields
+  ---
+  duration_ms: 0.493311
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: git.integrate retains values and rejects extra fields
+ok 12 - P2 wire golden: git.integrate retains values and rejects extra fields
+  ---
+  duration_ms: 0.120451
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: context.publish retains values and rejects extra fields
+ok 13 - P2 wire golden: context.publish retains values and rejects extra fields
+  ---
+  duration_ms: 0.441063
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: operation.get retains values and rejects extra fields
+ok 14 - P2 wire golden: operation.get retains values and rejects extra fields
+  ---
+  duration_ms: 0.081853
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: status.get retains values and rejects extra fields
+ok 15 - P2 wire golden: status.get retains values and rejects extra fields
+  ---
+  duration_ms: 0.07309
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: logs.read retains values and rejects extra fields
+ok 16 - P2 wire golden: logs.read retains values and rejects extra fields
+  ---
+  duration_ms: 0.055273
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: closed public/internal vocabularies and canonical bytes stay v1
+ok 17 - P2 wire golden: closed public/internal vocabularies and canonical bytes stay v1
+  ---
+  duration_ms: 0.62585
+  type: 'test'
+  ...
+# Subtest: P2 wire golden: terminal receipt shape is distinct from pending and lookup absence
+ok 18 - P2 wire golden: terminal receipt shape is distinct from pending and lookup absence
+  ---
+  duration_ms: 0.633823
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 66.861697

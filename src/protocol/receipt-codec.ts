@@ -1,5 +1,7 @@
 /** M-003 / IPC-006: structural receipt decoding, never ledger authority. */
-import type { Failure, Json, MutationMethod, OperationResult, Receipt } from "../../implementation/contracts.js";
+import type { Failure } from "../../implementation/contracts/errors.js";
+import type { Json } from "../../implementation/contracts/identity.js";
+import type { MutationMethod, OperationResult, Receipt } from "../../implementation/contracts/durable.js";
 import { parseOperationId } from "../domain/identifiers.js";
 import { snapshotJson } from "../domain/canonical-json.js";
 import { isErrorCode } from "../domain/errors.js";

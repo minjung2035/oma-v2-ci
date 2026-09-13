@@ -1,0 +1,53 @@
+/** Runtime schemas, not host authorization or transport/kernel evidence. */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { PUBLIC_METHODS, INTERNAL_METHODS, decodePublicParams } from '../dist/src/protocol/methods.js';
+import { decodeReceipt } from '../dist/src/protocol/receipt-codec.js';
+import { canonicalJson } from '../dist/src/domain/canonical-json.js';
+
+const oid = 'a'.repeat(40), digest = 'b'.repeat(64);
+const operation = 'op-00000000-0000-4000-8000-000000000001';
+const message = 'm-00000000-0000-4000-8000-000000000001-0';
+const context = { actorNames: new Set(['alice', 'bob']), limits: {
+  frameBytes: 1048576, mailBodyBytes: 65536, subjectBytes: 1024, addresses: 24,
+  replyReferences: 24, contextFiles: 24, contextBytes: 1048576, bundleBytes: 1048576,
+  logBytes: 65536, batchMaxMessages: 24, idleStreamSeconds: 30, receiptWaitSeconds: 30,
+} };
+const vectors = {
+  'mail.send': { to: ['alice'], subject: 'subject', kind: 'message', body: 'body\n' },
+  'mail.ack': { message }, 'route.follow': { topic: 'design' }, 'route.unfollow': { topic: 'design' },
+  'agent.create': { name: 'bob', from: oid, brief: 'build' },
+  'agent.start': { agent: 'bob' }, 'agent.stop': { agent: 'bob' },
+  'agent.continue': { note: 'continue' }, 'agent.wait': {}, 'git.known': { candidate: oid },
+  'git.submit': { candidate: oid, exportRef: 'refs/oma/export/cli-example', prerequisites: [], to: [], subject: 'result', body: 'body', paths: [] },
+  'git.integrate': { candidate: oid, expected: oid },
+  'context.publish': { expected: null, entries: [{ path: 'GOAL.md', bytes: 3, sha256: digest }], content: { bytes: 3, sha256: digest, mediaType: 'application/vnd.oma.context-v1' } },
+  'operation.get': { key: 'existing-request' }, 'status.get': { agent: 'bob' },
+  'logs.read': { agent: 'bob', sinceSeconds: 1 },
+};
+for (const [method, params] of Object.entries(vectors)) {
+  test(`P2 wire golden: ${method} retains values and rejects extra fields`, () => {
+    const before = JSON.stringify(params);
+    assert.deepEqual(decodePublicParams(method, params, context), params);
+    assert.equal(JSON.stringify(params), before);
+    assert.equal(decodePublicParams(method, { ...params, unexpected: true }, context), null);
+  });
+}
+test('P2 wire golden: closed public/internal vocabularies and canonical bytes stay v1', () => {
+  assert.deepEqual(Object.keys(PUBLIC_METHODS).sort(), Object.keys(vectors).sort());
+  assert.deepEqual(Object.keys(INTERNAL_METHODS).sort(), [
+    'batch.complete', 'batch.prepare', 'batch.read', 'host.principalRelay', 'host.reconcile',
+    'principal.attach', 'principal.detach', 'runner.observe', 'runner.open', 'runner.pending',
+  ]);
+  assert.equal(canonicalJson({ method: 'mail.send', params: vectors['mail.send'] }),
+    '{"method":"mail.send","params":{"body":"body\\n","kind":"message","subject":"subject","to":["alice"]}}');
+});
+test('P2 wire golden: terminal receipt shape is distinct from pending and lookup absence', () => {
+  const result = { kind: 'mail.ack', message, acknowledged: true };
+  assert.equal(decodeReceipt({ operation, state: 'succeeded', result }).ok, true);
+  assert.equal(decodeReceipt({ operation, state: 'pending', result }).ok, false);
+  assert.equal(decodeReceipt({ operation, state: 'succeeded', result: { ...result, extra: true } }).ok, false);
+  const missing = { operation: '', state: 'failed', error: { code: 'REQUEST_NOT_FOUND', message: 'not found', retry: 'never' } };
+  assert.equal(decodeReceipt(missing).ok, false);
+  assert.equal(decodeReceipt(missing, { allowNotFound: true }).ok, true);
+});
