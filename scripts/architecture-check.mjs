@@ -4,6 +4,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { DEFAULT_POLICY, pureBoundaryViolation } from "./architecture-owners.mjs";
+export { DEFAULT_POLICY } from "./architecture-owners.mjs";
 
 const slash = value => value.split(path.sep).join("/");
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
@@ -12,16 +14,6 @@ const isTest = file => /(^|\/)(?:test|tests)\//.test(file);
 const EFFECT_MODULES = new Set(["node:fs", "fs", "node:fs/promises", "fs/promises", "node:child_process", "child_process", "node:sqlite", "node:net", "node:process", "process", "koffi"]);
 const SPAWN_MODULES = new Set(["node:child_process", "child_process"]);
 const SQLITE_MODULES = new Set(["node:sqlite", "sqlite", "better-sqlite3"]);
-const DEFAULT_POLICY = Object.freeze({
-  capabilityOwner: "src/domain/capabilities.ts",
-  resourceOwner: "src/domain/resources.ts",
-  limitOwner: "src/domain/limits.ts",
-  identifierOwner: "src/domain/identifiers.ts",
-  methodOwner: "src/protocol/methods.ts",
-  identityOwner: "src/domain/request-identity.ts",
-  sqliteOwners: ["src/store.ts", "src/storage/sqlite-store.ts"],
-  subprocessOwners: ["src/process/command-runner.ts"],
-});
 
 /** Explicit type-only specifiers do not create runtime dependencies. */
 export function runtimeModuleReference(node) {
@@ -302,8 +294,8 @@ export function analyzeProgram(program, { rootDir = process.cwd(), policy = DEFA
           const target = resolved ? relative(root, resolved.resolvedFileName) : null;
           if (target) graph.get(file).add(target);
           if ((target && isTest(target)) || isTest(specifier)) report("production-test-import", node, `Production depends on test source ${target ?? specifier}`);
-          if (/^src\/(?:domain|protocol)\//.test(file) && (EFFECT_MODULES.has(specifier) || target === "src/store.ts" || target?.startsWith("src/entry/")))
-            report("pure-boundary-import", node, `Pure domain/protocol imports an effect owner: ${specifier}`);
+          if (pureBoundaryViolation(file, specifier, target, EFFECT_MODULES, policy))
+            report("pure-boundary-import", node, `Pure codec/domain imports an effect owner outside its declared transport role: ${specifier}`);
           if (SQLITE_MODULES.has(specifier) && !policy.sqliteOwners.includes(file)) report("sqlite-owner", node, "Raw SQLite is outside its concrete storage owner");
           if (SPAWN_MODULES.has(specifier) && !policy.subprocessOwners.includes(file)) report("subprocess-owner", node, "Raw child_process is outside the process runner owner");
         }
