@@ -42,6 +42,7 @@ src/domain/integer-fields.ts
 src/domain/limits.ts
 src/domain/lineage.ts
 src/domain/mail-values.ts
+src/domain/persisted-formats.ts
 src/domain/request-identity.ts
 src/domain/resources.ts
 src/domain/spec-identity.ts

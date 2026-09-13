@@ -6,6 +6,7 @@
  * The v1 writer format is unchanged by this module's existence.
  */
 import { isValidFullOid } from "./identifiers.js";
+import { isMutationMethod } from "../protocol/receipt-codec.js";
 
 /** Versions this build reads and writes. A persisted version outside this set is
  * fail-closed: no migration is attempted and no rewrite happens. */
@@ -65,16 +66,14 @@ export const HOST_DERIVED_PLAN_FIELDS: readonly string[] = Object.freeze(
 
 export type PlanFormatClassification = { readonly format: "v1" } | { readonly format: "unknown"; readonly reason: string };
 
-const KINDS = new Set(["mail.send", "mail.ack", "route.follow", "route.unfollow", "agent.create", "agent.start",
-  "agent.stop", "agent.continue", "git.submit", "git.integrate", "context.publish"]);
-
 /** Shape classifier, not a validator: decoding still runs the closed plan check
  * and the relation checks. A shape this build does not recognize is `unknown`,
  * which means fail closed - never "upgrade" and never "rewrite". */
 export function classifyPersistedPlan(value: unknown): PlanFormatClassification {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return { format: "unknown", reason: "plan is not an object" };
   const plan = value as Record<string, unknown>;
-  if (typeof plan.kind !== "string" || !KINDS.has(plan.kind)) return { format: "unknown", reason: "plan kind is outside the persisted kind set" };
+  // The closed kind set is owned by the protocol method table, never restated here.
+  if (!isMutationMethod(plan.kind)) return { format: "unknown", reason: "plan kind is outside the persisted kind set" };
   if (typeof plan.version === "string") return { format: "unknown", reason: `plan declares format ${plan.version}, which this build does not read` };
   if (plan.kind === "agent.create" && typeof plan.workspacePath !== "string") return { format: "unknown", reason: "v1 create plan has no workspace locator" };
   if (plan.kind === "git.submit" && plan.bundle !== null && typeof (plan.bundle as { path?: unknown })?.path !== "string")

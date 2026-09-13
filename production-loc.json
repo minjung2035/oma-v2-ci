@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0547668933868408,
-  "n_files"            : 145,
-  "n_lines"            : 13444,
-  "files_per_second"   : 2647.58490089635,
-  "lines_per_second"   : 245476.768328624,
+  "elapsed_seconds"    : 0.057664155960083,
+  "n_files"            : 146,
+  "n_lines"            : 13667,
+  "files_per_second"   : 2531.90214213949,
+  "lines_per_second"   : 237010.319017948,
   "report_file"        : "production-loc.json"},
 "src/cli.ts" :{
   "blank": 1,
@@ -19,8 +19,8 @@
   "language": "TypeScript"},
 "src/store.ts" :{
   "blank": 3,
-  "comment": 11,
-  "code": 269,
+  "comment": 13,
+  "code": 272,
   "language": "TypeScript"},
 "src/broker/connection.ts" :{
   "blank": 1,
@@ -137,6 +137,11 @@
   "comment": 4,
   "code": 156,
   "language": "TypeScript"},
+"src/storage/durable-fs.ts" :{
+  "blank": 11,
+  "comment": 40,
+  "code": 156,
+  "language": "TypeScript"},
 "src/protocol/methods.ts" :{
   "blank": 6,
   "comment": 5,
@@ -207,10 +212,10 @@
   "comment": 1,
   "code": 108,
   "language": "TypeScript"},
-"src/storage/durable-fs.ts" :{
-  "blank": 9,
-  "comment": 30,
-  "code": 107,
+"src/storage/context-stream.ts" :{
+  "blank": 3,
+  "comment": 8,
+  "code": 108,
   "language": "TypeScript"},
 "src/process/async.ts" :{
   "blank": 1,
@@ -237,11 +242,6 @@
   "comment": 5,
   "code": 100,
   "language": "TypeScript"},
-"src/storage/context-stream.ts" :{
-  "blank": 3,
-  "comment": 8,
-  "code": 100,
-  "language": "TypeScript"},
 "src/domain/context-policy.ts" :{
   "blank": 8,
   "comment": 8,
@@ -251,6 +251,11 @@
   "blank": 2,
   "comment": 5,
   "code": 95,
+  "language": "TypeScript"},
+"src/domain/persisted-formats.ts" :{
+  "blank": 11,
+  "comment": 25,
+  "code": 93,
   "language": "TypeScript"},
 "src/sandbox.ts" :{
   "blank": 3,
@@ -266,6 +271,11 @@
   "blank": 2,
   "comment": 4,
   "code": 91,
+  "language": "TypeScript"},
+"src/storage/immutable-file.ts" :{
+  "blank": 2,
+  "comment": 16,
+  "code": 90,
   "language": "TypeScript"},
 "src/mail/facts.ts" :{
   "blank": 5,
@@ -341,11 +351,6 @@
   "blank": 0,
   "comment": 4,
   "code": 71,
-  "language": "TypeScript"},
-"src/storage/immutable-file.ts" :{
-  "blank": 2,
-  "comment": 16,
-  "code": 70,
   "language": "TypeScript"},
 "src/runtime/broker-lifetime.ts" :{
   "blank": 3,
@@ -733,7 +738,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 434,
-  "comment": 840,
-  "code": 12170,
-  "nFiles": 145} }
+  "blank": 447,
+  "comment": 877,
+  "code": 12343,
+  "nFiles": 146} }
