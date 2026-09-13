@@ -80,6 +80,9 @@ test("R10: one-field durable corruption fails before validated values escape on 
     seed(path).close();
     try {
       mutateRawRowAfterClose(path, raw => {
+        // Inject the boundary value itself; node:sqlite enables foreign keys by
+        // default and an invalid reference is one of the cases under test.
+        raw.exec("PRAGMA foreign_keys=OFF");
         raw.exec("PRAGMA ignore_check_constraints=ON");
         const result = raw.prepare(`UPDATE ${item.table} SET ${item.column}=? WHERE ${item.where}`).run(item.value);
         assert.equal(Number(result.changes), 1);

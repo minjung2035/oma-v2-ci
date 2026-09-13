@@ -19,6 +19,8 @@ import {
   publishImmutableFile,
 } from "../src/mail.js";
 import { Store, StoreError } from "../src/store.js";
+import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
+import { removeTree } from "./fixtures/cleanup.js";
 import { generateMessageId } from "../src/ids.js";
 import { requestHash } from "../src/hash.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
@@ -98,19 +100,28 @@ async function acceptedMail(
 
 test("DB-005/006: missing delivery from the accepted recipient snapshot fails closed", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mail-delivery-set-"));
-  const { store, mail } = await acceptedMail(root, ["alice"]);
+  const { store, mail, messageId } = await acceptedMail(root, ["alice", "bob"]);
+  // A complete accepted state is created through the Store; the missing row is
+  // then injected as an explicit boundary violation, because the accept
+  // transaction itself refuses to leave one out.
+  store.close();
+  mutateRawRowAfterClose(join(root, "runtime.sqlite"), (raw) => {
+    raw.exec("PRAGMA foreign_keys=OFF");
+    const removed = raw.prepare("DELETE FROM deliveries WHERE message_id=? AND recipient=?").run(messageId, "bob");
+    assert.equal(Number(removed.changes), 1);
+  });
+  const reopened = new Store(join(root, "runtime.sqlite"));
   try {
-    await assert.rejects(
-      mail.materialize(OP),
-      (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT",
-    );
+    const reopenedMail = new MailModule({ stateRoot: root, society: "demo" }, reopened, 8);
+    await assert.rejects(reopenedMail.materialize(OP as never),
+      (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
     // The delivery set is part of accepted evidence: the corrupt row stays
     // unreadable instead of reporting a plausible operation state.
-    assert.throws(() => store.getOperationById(OP as never),
+    assert.throws(() => reopened.getOperationById(OP as never),
       (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
   } finally {
-    store.close();
-    rmSync(root, { recursive: true, force: true });
+    reopened.close();
+    removeTree(root);
   }
 });
 

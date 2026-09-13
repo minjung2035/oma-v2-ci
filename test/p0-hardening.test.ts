@@ -119,6 +119,16 @@ class FakeSocket {
     this.writes.push(Buffer.from(value));
     return true;
   }
+  /** Fatal protocol errors close the transport with a final error frame. */
+  ended = false;
+  paused = false;
+  end(value?: Uint8Array): this {
+    this.ended = true;
+    if (value !== undefined) this.writes.push(Buffer.from(value));
+    return this;
+  }
+  pause(): this { this.paused = true; return this; }
+  off(): this { return this; }
   destroy(): this {
     this.destroyed = true;
     return this;
@@ -162,17 +172,29 @@ test("P0: 20,000 malformed frames close one connection without recursive drain",
     Object.assign(broker, {
       paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo" },
       limits: TEST_LIMITS,
+      // The connection registry and task set are part of serveFrames' contract.
+      connections: new Map(),
+      executingTasks: new Set(),
+      health: { observe: () => undefined },
     });
     const socket = new FakeSocket();
     const serveFrames = Reflect.get(broker, "serveFrames") as (
       sock: FakeSocket,
+      peer: { pid: number; uid: number; gid: number; cgroup: string | null; releaseConnection: () => void },
       handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => unknown,
+      preflight: (raw: Record<string, unknown>) => void,
     ) => void;
-    serveFrames.call(broker, socket, () => assert.fail("malformed input must not dispatch"));
+    const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null, releaseConnection: () => undefined };
+    serveFrames.call(broker, socket, peer, () => assert.fail("malformed input must not dispatch"), () => undefined);
     const malformed = Buffer.from([0, 0, 0, 1, 0x7b]); // one-byte "{" JSON body
     socket.emitData(Buffer.concat(Array.from({ length: 20_000 }, () => malformed)));
-    assert.equal(socket.destroyed, true);
+    // MAINTENANCE §19: after a fatal framing error the connection is poisoned and
+    // closed. One error frame is emitted, the socket stops reading, and the
+    // remaining 19,999 frames never create work or another connection.
     assert.equal(socket.writes.length, 1);
+    assert.equal(socket.paused, true);
+    assert.equal(socket.ended, true);
+    assert.equal((Reflect.get(broker, "connections") as Map<unknown, unknown>).size, 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
