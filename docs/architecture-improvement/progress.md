@@ -6,7 +6,7 @@
 
 | 단계 | 현재 상태 | 근거 / 남은 일 |
 | --- | --- | --- |
-| P0 gate | **PARTIAL / release gate FAIL** | pinned TS 5.9.3에서 inventory/check:inventory/typecheck/build/check:package/check:architecture PASS. `npm test`에는 잔여 실패가 남아 있다(최신 수치는 [p0-baseline-execution.md](p0-baseline-execution.md) §4.3). LOC는 12,343 code lines로 A-008/A-009 review 조건에 걸린다. `verify:*` lane은 NOT_RUN |
+| P0 gate | **PASS (suite 134/135) / release gate FAIL** | pinned TS 5.9.3에서 inventory/check:inventory/typecheck/build/check:package/check:architecture PASS. `npm test`는 135 file 중 phase5의 sandboxed-Pi smoke 한 건만 남는다(§4.3). LOC는 12,343 code lines로 A-008/A-009 review 조건에 걸린다. `verify:*` lane은 NOT_RUN |
 | P1 operation closure | **PROVEN (source-bound static)** | `OPERATION_CODECS` registry를 신설해 closed kind set과 plan/result/relation validator를 `satisfies Record<MutationMethod, ...>`로 묶었고, decode 경계가 실제로 이 registry를 쓴다. magic count 의존 없음 |
 | P1 composition / validation | 구현 반영(이전 단계) | 착수 시점 source에 이미 존재. 이번 실행에서 해당 focused 검증은 재실행하지 않았다 |
 | P2 contract owner 분리 | **구현 반영, 재검증 PARTIAL** | `implementation/contracts.ts`는 facade로 남고 production의 facade import는 49건이며 **전부 type-only**다(runtime 0). P5 evidence에 고정 |
@@ -44,10 +44,7 @@ stale fixture 원인별 조치는 [p0-baseline-execution.md](p0-baseline-executi
 
 ## 2. 남은 것 (다음 작업자가 먼저 볼 것)
 
-1. `npm test` 잔여 실패와 원인 분류: [p0-baseline-execution.md](p0-baseline-execution.md) §4.3. 그중 다음은 "입력 검증 vs conflict 비교 순서"와 "동시 writer scheduling"이라는 설계 판단이 먼저 필요하다.
-   - `context.publish`에서 malformed input(`.git/config` 포함, invalid UTF-8, 빈 GOAL, 중복 path)이 base conflict보다 **나중에** 검사되어 `INVALID_REQUEST` 대신 `CONTEXT_CONFLICT`가 나온다(`cli`, `context-security`, `context-manifest-boundary`).
-   - 동시 context publish 패자는 `BROKER_UNAVAILABLE`(writer busy)을 받는다. 테스트는 queued-serialization을 전제로 `CONTEXT_CONFLICT`를 기대한다(`phase7`).
-2. `test/contract-import-migrations.test.mjs`가 요구하는 P2 `contractImportSnapshot` helper 미구현(import 단계에서 실패).
-3. LOC gate: 12,343 code lines. A-009에 따라 10,001 이상은 architecture review 전 release 불가다. 모듈별 수치와 초과 사유 정리가 필요하다.
-4. `npm run verify:fast|durable|property|kernel|crash|stress|all` lane 미실행. VM power-cut, ENOSPC, backup/restore 미실행.
-5. P1/P2/P3/P4의 focused 재실행(이번 세션은 gate·P5~P9에 집중했다).
+1. `phase5`의 sandboxed-Pi smoke 한 건만 남는다: harness 밖에서 동일 profile이 custom message를 전달함을 확인했지만 harness 안에서는 child 출력이 없다. [p0-baseline-execution.md](p0-baseline-execution.md) §4.3.
+2. LOC gate: 12,343 code lines. A-009에 따라 10,001 이상은 architecture review 전 release 불가다. 모듈별 수치와 초과 사유 정리가 필요하다.
+3. `npm run verify:fast|durable|property|kernel|crash|stress|all` lane 미실행. VM power-cut, ENOSPC, backup/restore 미실행.
+4. P1/P2/P3/P4의 focused 재실행(이번 세션은 gate·P5~P9와 suite 정렬에 집중했다).

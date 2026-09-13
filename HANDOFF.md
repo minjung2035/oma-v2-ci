@@ -6,32 +6,34 @@
 
 ## 0-A. 이번 재개(2026-09-13, pinned local 실행)의 판정
 
-착수 HEAD `d13310585c412fef3e32db24ba2b42b7b006b1f5`는 green이 아니었다. pinned toolchain(Node 26.7.0 / TypeScript 5.9.3, `npm ci --include=dev`)에서 `typecheck` 4건, `check:architecture` 5건이 실패했고 `npm test`는 suite 전반의 fixture drift를 드러냈다. 현재 HEAD `f00c428` 기준:
+착수 HEAD `d13310585c412fef3e32db24ba2b42b7b006b1f5`는 green이 아니었다. pinned toolchain(Node 26.7.0 / TypeScript 5.9.3, `npm ci --include=dev`)에서 `typecheck` 4건·`check:architecture` 5건이 실패했고 suite 전반의 fixture drift가 있었다. 현재 HEAD 기준:
 
 - **PASS**: `inventory`, `check:inventory`, `typecheck`, `build`(+`check:package`), `check:architecture`(0 findings).
-- **PARTIAL**: `npm test` — 135 file 중 **120 PASS / 15 FAIL / 1 timeout**. 남은 실패와 원인은 [docs/architecture-improvement/p0-baseline-execution.md](docs/architecture-improvement/p0-baseline-execution.md) §4.3.
+- **suite**: 135 file 중 **134 PASS / 1 FAIL**. 남은 하나는 `phase5`의 sandboxed-Pi smoke로, 동일 profile이 harness 밖에서 custom message를 전달함은 확인했지만 harness 안에서 child 출력이 없다(원인 미확정). [docs/architecture-improvement/p0-baseline-execution.md](docs/architecture-improvement/p0-baseline-execution.md) §4.3.
 - **FAIL(gate)**: LOC 12,343 code lines — A-008/A-009에 따라 architecture review 전 release 불가.
 - **NOT_RUN/BLOCKED**: `verify:*` lane 전체, VM power-cut(guard만 구현·검증), live systemd/cgroup 관측, ENOSPC/backup-restore.
 
-단계별 상태(PROVEN/PARTIAL/BLOCKED)는 [docs/architecture-improvement/progress.md](docs/architecture-improvement/progress.md)에 있다. 요약: P1 registry P5 lattice P6 offline integrity P7 process-crash fault matrix P8 version boundary P9 persisted fuzz는 PROVEN, power-cut VM 실행만 BLOCKED다.
+단계별 상태는 [docs/architecture-improvement/progress.md](docs/architecture-improvement/progress.md)에 있다(P1 registry·P5 lattice·P6 offline integrity·P7 process-crash fault matrix·P8 version boundary·P9 persisted fuzz = PROVEN, power-cut VM 실행만 BLOCKED).
 
 이번에 바뀐 authoritative owner:
 
 - `src/storage/operation-codec.ts`의 `OPERATION_CODECS` — kind와 plan/result/relation validator binding. decode 경계가 이 registry를 사용한다.
-- `src/mail/headers.ts` — OMA header metadata 검증 전 unfold(folded header read failure 수정).
-- `src/domain/persisted-formats.ts` — persisted field 분류, version 경계, portability 정책. `src/store.ts`가 상수를 사용한다.
+- `src/mail/headers.ts` — OMA header metadata 검증 전 unfold.
+- `src/domain/persisted-formats.ts` — persisted field 분류, version 경계, portability 정책.
 - `src/storage/durable-fs.ts`·`immutable-file.ts`·`context-stream.ts`·`batch-view.ts` — test-only `DurabilityObserver` seam.
-- native 실행 adapter 3곳은 이제 process owner를 경유한다.
-- `scripts/dependency-graph.mjs`·`dependency-lattice.mjs` — 측정과 enforcement의 단일 extractor. `scripts/powercut-lane.mjs` — guarded power-cut lane.
+- `src/git/context.ts`·`context-repository.ts`·`src/git.ts` — context 후보 준비 뒤 base/authority 재확인, base locator의 object format 선검증.
+- `src/reconcile.ts` — store-scope recovery 실패에서 원래 진단 메시지 보존.
+- `src/domain/admission.ts` — 두 번째 broker 소유 충돌을 BROKER_UNAVAILABLE로 보고.
+- native 실행 adapter 3곳은 process owner를 경유한다.
+- `scripts/dependency-graph.mjs`·`dependency-lattice.mjs` — 측정·enforcement 단일 extractor, `scripts/powercut-lane.mjs` — guarded power-cut lane, `scripts/contract-imports.mjs` — P2 import migration snapshot.
 
 먼저 실행할 명령:
 
 ```sh
 npm ci --include=dev
 npm run typecheck && npm run check:architecture
-node --test --test-concurrency=1 dist/test/<실패 file>.test.js
+node --test --test-concurrency=1 dist/test/phase5.test.js
 node --test --test-concurrency=1 dist/test/durable-fault-matrix.test.js dist/test/persisted-format-boundary.test.js dist/test/persisted-state-fuzz.test.js
-node --test --test-concurrency=1 test/powercut-lane.test.mjs
 ```
 
 변경하지 않은 normative surface: wire method, DB schema(version 1), persisted v1 plan/result bytes, OPEN SPIKE 상태, physical effect ordering.

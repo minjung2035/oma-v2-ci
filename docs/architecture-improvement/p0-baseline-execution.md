@@ -75,26 +75,23 @@
 | RFC 5322 folded header를 parser가 unfold하지 않음 | 64-hex context OID(sha256 repo)를 가진 mail은 `buildEml`이 header를 folding하므로 **OMA가 자기 accepted mail을 다시 읽지 못했다**. context notification materialize/reconcile가 `STORE_CORRUPT`로 실패하고 crash-lane T57/T66/T39 시나리오가 진행 불가 | `parseEmlHeaders`의 `X-OMA-Context`·approval metadata 검증 전에 unfold 적용. `test/mail-header-leaf.test.ts`에 round-trip 회귀 oracle 추가 |
 | (tooling) SCC false PASS | P5 측정이 cycle 0으로 잘못 보고 | Tarjan 구현 수정 후 재측정 |
 
-### 4.3 아직 남은 실패 (미완료로 기록)
+### 4.3 잔여 실패 (미완료로 기록)
 
-최신 전수 실행(per-file, timeout 240s, 단일 실행): **135 file 중 120 PASS / 15 FAIL / 1 timeout**. phase5는 timeout(BLOCKED)이다. 착수 시점(97/131 PASS) 대비 새로 추가한 P7/P8/P9 테스트 4개를 포함한 수치다.
+이번 라운드에서 남은 실패를 대부분 해소했다. 현재 **phase4 18/18**, **phase5 12/13**이며 나머지는 아래 하나다.
 
-| file | 관측된 원인 | 분류 |
+| file / test | 관측된 원인 | 분류 |
 | --- | --- | --- |
-| `phase5` | per-file timeout(240s) | BLOCKED (sandbox/Pi 환경) |
-| `phase4`, `audit`(2), `audit2` | 설치된 systemd unit/broker entry 상태를 요구. `audit`는 `NOTIFY_SOCKET` 없이 spawn해 foreground 기동 메시지를 받는다 | BLOCKED (설치 환경) / fixture 조정 필요 |
-| `crash-boundaries`(7) | crash worker가 checkpoint에 도달하기 전에 실패(worker stderr에 원인 남음) | 조사 필요 |
-| `phase3`(4) | `unknown requested mail fault boundary` — fixture가 존재하지 않는 fault boundary 이름을 요청 | fixture/조사 |
-| `phase7` | 동시 context publish 패자가 `BROKER_UNAVAILABLE`(writer busy)을 받는다. fixture는 queued-serialization을 전제로 `CONTEXT_CONFLICT`를 기대 | 설계 판단 필요 |
-| `cli`, `context-security`, `context-manifest-boundary` | context.publish malformed input이 base conflict보다 늦게 검사되어 `INVALID_REQUEST` 대신 `CONTEXT_CONFLICT`/`AUTH_FAILED`가 나온다 | 설계 판단 필요 |
-| `mail-integrity` | gated publication arm이 `REF_STATE_UNKNOWN`을 반환(fixture는 `STORE_CORRUPT` 기대) | oracle 조정 필요 |
-| `phase8` | 이동된 published ref에 대해 `unknown`으로 남김(fixture는 `failed`+`PUBLISHED_REF_CONFLICT` 기대) | 설계 판단 필요 |
-| `host-entry` | split reply 성공 시 exit 3(unknown)으로 종료 | 조사 필요 |
-| `r36-resource-stress` | `RPC_LISTENER_LEAK:end 1 !== 0` — 사이클 종료 후 listener 1개 잔존 | 조사 필요(product leak 여부 미확정) |
-| `runner-channel` | lease decode가 fixture endpoint identity를 거부 | fixture 조정 필요 |
-| `contract-import-migrations.test.mjs` | `scripts/contract-imports.mjs`가 `contractImportSnapshot`을 export하지 않는다(P2 snapshot helper 미구현) | 미구현 gap |
+| `phase5` — "deliver smoke: sandboxed Pi ..." | sandbox argv는 이제 정상 구성되고(루트 mountpoint·state root 기반 경로·decode된 lease), 같은 profile로 harness 밖에서 직접 실행하면 `message_start{role:"custom",customType:"oma-mail"}` 전달이 확인된다. harness 안에서는 child가 stdout/stderr를 전혀 내지 않아(=`spawn="" stderr=""`) 원인 미확정 | 조사 필요 |
 
-이번 세션에서 해소된 항목: `git-format`(context base locator를 object format으로 먼저 검증 + read-only tree cleanup), `p0-hardening`(malformed frame oracle과 fake broker 경계), `r10-ledger-rows`(raw FK 주입), `request-identity-kernel`(canonical byte vector 오타), `mail-recovery-integrity`, `runtime-contracts`(unit fault seam이 실제 command 경계를 제어), `authority`, `r21-context-workflow`(folded header 수정), `refactoring-cli-regressions`(lineage quota owner), `integrity-files`/`integrity-publications`/`global-invariants`/`context-acceptance-integrity`/`r37-preparation-boundaries`(read-only tree cleanup).
+해소된 항목과 원인(요약): harness의 directory fence checkpoint가 entry 생성 전에 발화하던 문제, `create-object`/`boot-object`가 intent 이전 경계라는 사실, 비동기 preparation spawn 미관측, copy 경계가 사라진 `copyFileSync` 패치를 쓰던 문제, 경계 없는 `OMA_STOP=""`, `sun_path` 경계 길이, unit template 기대값, spec hash 없는 agent row, request hash/payload 불일치, delivery 집합 불일치 주입 경로, read-only tree cleanup, context base OID 검증 순서, `systemd-analyze`의 unit 의존성 해석, 동시 create의 orphan object, RunRegistry 형태 변경, view limits 미설정, host.reconcile 응답 schema, status result schema, P2 snapshot helper 부재.
+
+#### 4.4 이번 라운드에서 고친 production surface
+
+- `src/reconcile.ts`: store-scope recovery 실패에서 원래 진단 메시지를 보존한다(코드/차단은 그대로).
+- `src/domain/admission.ts`: 두 번째 broker 소유 충돌을 `BROKER_UNAVAILABLE`로 보고한다(프로세스 내 gate와 OS lock의 의미 일치).
+- `src/domain/context-policy.ts`: nonempty GOAL 규칙을 content validator 한 곳으로 모은다(manifest shape check는 선언 필드만 본다).
+- `src/git/context.ts`: candidate 준비 뒤 base/authority를 재확인한다(문서화된 물리 순서). malformed input이 conflict로 보고되지 않는다.
+- `src/git/context-repository.ts`·`src/git.ts`: context base locator를 repository object format으로 먼저 검증한다(`INVALID_OID`).
 
 ## 5. 실행하지 않은 것
 
