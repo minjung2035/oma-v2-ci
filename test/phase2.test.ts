@@ -1,522 +1,265 @@
 // Phase 2 acceptance: DDL/FK/idempotency/framing/fuzz (T02-T10, TEST-001).
-// Uses the production schema/codec/store boundaries only.
+// Normal data uses the actual Store/Mail boundaries. Deliberate SQL corruption
+// is isolated after the Store closes, not smuggled into the normal constructors.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store, StoreError, SCHEMA_PATH } from "../src/store.js";
+import { MailModule } from "../src/mail.js";
 import { FrameParser, FrameError, findDuplicateKey } from "../src/frame.js";
-import {
-  requestHash,
-  sha256Hex,
-  sortedUnique,
-  canonicalJson,
-} from "../src/hash.js";
-import {
-  generateOperationId,
-  generateBatchId,
-  generateMessageId,
-  isValidActorName,
-  isValidRequestKey,
-  isValidFullOid,
-  parseMessageId,
-  isValidWirePath,
-} from "../src/ids.js";
-import type { OperationId } from "../implementation/contracts.js";
+import { requestHash, sha256Hex, sortedUnique, canonicalJson } from "../src/hash.js";
+import { generateOperationId, generateBatchId, generateMessageId, uuidV4, isValidActorName,
+  isValidRequestKey, isValidFullOid, parseMessageId, isValidWirePath } from "../src/ids.js";
+import type { AuthContext } from "../implementation/contracts.js";
+import { makeValidAgent } from "./fixtures/spec.js";
+import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
 
 const FRAME_LIMIT = 256 * 1024;
-
 function freshStore(): { store: Store; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), "oma-t2-"));
-  const store = new Store(join(dir, "runtime.sqlite"));
-  return { store, dir };
+  return { store: new Store(join(dir, "runtime.sqlite")), dir };
 }
-
-function seal(s: Store, dir: string): void {
-  s.close();
-  rmSync(dir, { recursive: true, force: true });
+function seal(store: Store, dir: string): void {
+  try { store.close(); } finally { rmSync(dir, { recursive: true, force: true }); }
 }
-
-function agent(
-  name: string,
-  role: "resident" | "principal" = "resident",
-  desired: "enabled" | "stopped" | "provisioning" | "retired" = "enabled",
-): void {
-  return; // fixture helper; store.insertAgent requires tx — see below
+function insertAgentTx(store: Store, name: string): void {
+  store.transaction(tx => tx.insertAgent(makeValidAgent(name)));
+  assert.equal(store.getAgent(name)?.name, name, "normal fixture must pass the production decoder first");
 }
-
-function insertAgentTx(
-  store: Store,
-  name: string,
-  desired: "enabled" | "stopped" | "provisioning" | "retired" = "enabled",
-  role: "resident" | "principal" = "resident",
-): void {
-  store.transaction((tx) => {
-    store.insertAgent({
-      name,
-      specHash: "h",
-      role,
-      desired,
-      incarnation: 0,
-      profile: "p",
-      createdBy: null,
-      specJson: "{}",
-    });
-  });
+function mailFixture(store: Store, dir: string) {
+  const mail = new MailModule({ stateRoot: dir, society: "phase2" }, store, 64);
+  const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "actor",
+    capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } };
+  return { mail, auth };
 }
-
-function validMailPlan(opId: OperationId, ordinal = 0) {
-  const id = generateMessageId(opId, ordinal);
-  return {
-    kind: "mail.send" as const,
-    message: {
-      id,
-      objectPath: `mail/objects/${id}.eml`,
-      sha256: "a".repeat(64),
-      bytes: 3,
-      dateMs: 1,
-      to: ["a"],
-      recipients: [] as string[],
-      kind: "message" as const,
-      contextRevision: null,
-      replyHeaders: { replyTo: ["a"], inReplyTo: null, references: [] },
-    },
-  };
-}
-
-function frameOf(obj: unknown): Buffer {
-  const text = JSON.stringify(obj);
+function rawFrame(text: string): Buffer {
   const body = Buffer.from(text, "utf8");
-  const out = Buffer.alloc(4 + body.length);
-  out.writeUInt32BE(body.length, 0);
-  body.copy(out, 4);
-  return out;
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(body.length);
+  return Buffer.concat([length, body]);
 }
-
-// ---------------------------------------------------------------------------
+function frameOf(value: unknown): Buffer { return rawFrame(JSON.stringify(value)); }
 
 test("T02: fresh DDL applies; six entities; user_version=1; reapply rejected", () => {
   const { store, dir } = freshStore();
-  const tables = store.listAgents !== undefined;
-  assert.ok(tables);
-  // user_version check via a second open of the same file (migration gate)
-  const db2 = new Store(join(dir, "runtime.sqlite"));
-  assert.equal(
-    db2.transaction((t) => 1),
-    1,
-  ); // opens without re-migrating (version 1)
-  db2.close();
-  const sql = readFileSync(SCHEMA_PATH, "utf8");
-  const ddlTables = [...sql.matchAll(/CREATE TABLE (\w+)/g)].map((m) => m[1]); // eslint-disable-line @typescript-eslint/no-unused-vars
-  assert.deepEqual([...ddlTables].sort(), [
-    "agents",
-    "batches",
-    "deliveries",
-    "operations",
-    "subscriptions",
-    "usage",
-  ]);
-  seal(store, dir);
+  let closed = false;
+  try {
+    const other = new Store(join(dir, "runtime.sqlite"));
+    try { assert.equal(other.transaction(() => 1), 1); } finally { other.close(); }
+    const sql = readFileSync(SCHEMA_PATH, "utf8");
+    assert.deepEqual([...sql.matchAll(/CREATE TABLE (\w+)/g)].map(match => match[1]).sort(),
+      ["agents", "batches", "deliveries", "operations", "subscriptions", "usage"]);
+    store.close(); closed = true;
+    mutateRawRowAfterClose(join(dir, "runtime.sqlite"), raw => {
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 1);
+      assert.throws(() => raw.exec(sql), /already exists/);
+      raw.exec("ROLLBACK");
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 1);
+    });
+  } finally { if (!closed) store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("T03: invalid enum / negative units / FK / bad flags rejected by constraints", () => {
+test("T03: invalid enum / negative units / FK / bad flags rejected by constraints", async () => {
   const { store, dir } = freshStore();
-  insertAgentTx(store, "a");
-  assert.throws(
-    () =>
-      store.transaction((t) =>
-        store.insertAgent({
-          name: "z",
-          specHash: "h",
-          role: "resident",
-          desired: "enabled",
-          incarnation: 0,
-          profile: "p",
-          createdBy: null,
-          specJson: "not-json",
-        }),
-      ),
-    /CHECK constraint failed/,
-  );
-  // FK: delivery to unknown operation must fail
-  assert.throws(
-    () =>
-      store.transaction((t) =>
-        store.insertDeliveries([
-          { messageId: "m-x-0", recipient: "a", operationId: "op-none" },
-        ]),
-      ),
-    /FOREIGN KEY constraint failed/,
-  );
-  seal(store, dir);
+  let closed = false;
+  try {
+    insertAgentTx(store, "a");
+    const { mail, auth } = mailFixture(store, dir);
+    const sent = await mail.send(auth, "valid-control", { to: ["a"], subject: "control", kind: "message", body: "bytes" });
+    const operation = store.getOperationById(sent.operation);
+    assert.ok(operation?.kind === "mail.send");
+    assert.equal(operation.state, "succeeded");
+    const message = operation.plan.message.id;
+    assert.equal(store.getDelivery(message, "a")?.materialized, 1);
+    const usage = uuidV4();
+    store.transaction(tx => tx.reserveUsage({ requestId: usage, actor: "a", incarnation: 1,
+      profile: "md", pricingRevision: "phase2-v1", reservedUnits: 1 }));
+    assert.equal(store.getUsage(usage)?.reservedUnits, 1);
+    store.close(); closed = true;
+    mutateRawRowAfterClose(join(dir, "runtime.sqlite"), raw => {
+      raw.exec("PRAGMA foreign_keys=ON");
+      assert.throws(() => raw.prepare("UPDATE agents SET desired=? WHERE name='a'").run("invented"), /CHECK constraint failed/);
+      assert.throws(() => raw.prepare("UPDATE agents SET spec_json=? WHERE name='a'").run("not-json"), /CHECK constraint failed/);
+      assert.throws(() => raw.prepare("UPDATE usage SET reserved_units=-1 WHERE request_id=?").run(usage), /CHECK constraint failed/);
+      assert.throws(() => raw.prepare("UPDATE deliveries SET materialized=2 WHERE message_id=? AND recipient='a'").run(message), /CHECK constraint failed/);
+      const missingOperation = generateOperationId();
+      assert.throws(() => raw.prepare(`INSERT INTO deliveries
+        (message_id,recipient,operation_id,materialized,presented,acknowledged,created_at_ms)
+        VALUES (?,'a',?,0,0,0,1)`).run(generateMessageId(missingOperation, 0), missingOperation), /FOREIGN KEY constraint failed/);
+    });
+    const reopened = new Store(join(dir, "runtime.sqlite"), 5, { society: "phase2" });
+    try {
+      assert.equal(reopened.getAgent("a")?.desired, "enabled");
+      assert.equal(reopened.getUsage(usage)?.reservedUnits, 1);
+      assert.equal(reopened.getDelivery(message, "a")?.materialized, 1);
+      assert.equal(reopened.getOperationById(sent.operation)?.state, "succeeded");
+    } finally { reopened.close(); }
+  } finally { if (!closed) store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("T04: frame reconstruction across arbitrary byte splits", () => {
-  const p = new FrameParser(FRAME_LIMIT);
   const a = frameOf({ v: 1, id: "1", method: "status.get", params: {} });
-  const b = frameOf({
-    v: 1,
-    id: "2",
-    method: "operation.get",
-    params: { key: "k" },
-  });
+  const b = frameOf({ v: 1, id: "2", method: "operation.get", params: { key: "k" } });
   const all = Buffer.concat([a, b]);
-  // split every possible 1-byte boundary across the combined stream
-  for (let cut = 1; cut < all.length - 1; cut++) {
-    const p2 = new FrameParser(FRAME_LIMIT);
-    const got = [
-      ...p2.feed(all.subarray(0, cut)),
-      ...p2.feed(all.subarray(cut)),
-    ];
+  for (let cut = 1; cut < all.length; cut++) {
+    const parser = new FrameParser(FRAME_LIMIT);
+    const got = [...parser.feed(all.subarray(0, cut)), ...parser.feed(all.subarray(cut))];
     assert.equal(got.length, 2);
-    assert.equal((got[0]!.raw as { id: string }).id, "1");
-    assert.equal((got[1]!.raw as { id: string }).id, "2");
+    assert.equal(got[0]!.raw.id, "1");
+    assert.equal(got[1]!.raw.id, "2");
   }
-  // UTF-8 split mid-multibyte
-  const c = frameOf({
-    v: 1,
-    id: "3",
-    method: "mail.send",
-    params: { body: "안녕하세요" },
-  });
-  const p3 = new FrameParser(FRAME_LIMIT);
-  const mid = 4 + 5; // inside the multibyte body
-  const got = [...p3.feed(c.subarray(0, mid)), ...p3.feed(c.subarray(mid))];
-  assert.equal(got.length, 1);
-  assert.equal(
-    (got[0]!.raw as { params: { body: string } }).params.body,
-    "안녕하세요",
-  );
+  const c = frameOf({ v: 1, id: "3", method: "mail.send", params: { body: "안녕하세요" } });
+  for (let cut = 1; cut < c.length; cut++) {
+    const parser = new FrameParser(FRAME_LIMIT);
+    const got = [...parser.feed(c.subarray(0, cut)), ...parser.feed(c.subarray(cut))];
+    assert.equal(got.length, 1);
+    assert.deepEqual(got[0]!.raw.params, { body: "안녕하세요" });
+  }
 });
 
 test("T05: malicious frames are rejected pre-accept with bounded effect", () => {
-  const p = new FrameParser(64);
-  // oversize length
-  assert.throws(
-    () =>
-      p.feed(Buffer.concat([Buffer.from([0, 0, 0, 100]), Buffer.alloc(100)])),
-    (e: unknown) => e instanceof FrameError && e.code === "FRAME_TOO_LARGE",
-  );
-  // invalid UTF-8 bytes
-  const bad = Buffer.from([0, 0, 0, 2, 0xff, 0xfe]);
-  const p2 = new FrameParser(64);
-  assert.throws(
-    () => p2.feed(bad),
-    (e: unknown) => e instanceof FrameError && e.code === "INVALID_REQUEST",
-  );
-  // duplicate JSON key
+  assert.throws(() => new FrameParser(64).feed(Buffer.concat([Buffer.from([0, 0, 0, 100]), Buffer.alloc(100)])),
+    (error: unknown) => error instanceof FrameError && error.code === "FRAME_TOO_LARGE");
+  assert.throws(() => new FrameParser(64).feed(Buffer.from([0, 0, 0, 2, 0xff, 0xfe])),
+    (error: unknown) => error instanceof FrameError && error.code === "INVALID_REQUEST");
   assert.equal(findDuplicateKey('{"a":1,"a":2}'), "a");
   assert.equal(findDuplicateKey('{"a":{"b":1,"b":2}}'), "b");
   assert.equal(findDuplicateKey('{"a":[1,2],"b":{"c":3}}'), null);
   assert.equal(findDuplicateKey(String.raw`{"a":1,"\\u0061":2}`), null);
-  for (const text of [
-    '{"a":1,"a":2}', String.raw`{"a":1,"\u0061":2}`,
-    String.raw`{"nested":{"a\"b":1,"a\u0022b":2}}`,
-    String.raw`{"😀":1,"\ud83d\ude00":2}`,
-  ]) {
-    const dupBody = Buffer.from(text);
-    const dup = Buffer.alloc(4 + dupBody.length);
-    dup.writeUInt32BE(dupBody.length, 0);
-    dup.set(dupBody, 4);
-    assert.throws(() => new FrameParser(256).feed(dup), /duplicate JSON key/, text);
-  }
-  // non-object root
-  const arr = Buffer.concat([Buffer.from([0, 0, 0, 3]), Buffer.from("[1]")]);
-  const p4 = new FrameParser(64);
-  assert.throws(() => p4.feed(arr), /root must be a JSON object/);
-  // NaN literal is invalid JSON
-  const nan = Buffer.concat([
-    Buffer.from([0, 0, 0, 6]),
-    Buffer.from('{"a":N}'),
-  ]);
-  const p5 = new FrameParser(64);
-  assert.throws(() => p5.feed(nan), /non-finite literal|malformed JSON/);
-  for (const text of ['{"value":1e999}', '{"value":9007199254740992}']) {
-    const body = Buffer.from(text);
-    const length = Buffer.alloc(4);
-    length.writeUInt32BE(body.length);
-    assert.throws(() => new FrameParser(256).feed(Buffer.concat([length, body])), /non-finite number or unsafe integer/);
-  }
+  for (const text of ['{"a":1,"a":2}', String.raw`{"a":1,"\u0061":2}`,
+    String.raw`{"nested":{"a\"b":1,"a\u0022b":2}}`, String.raw`{"😀":1,"\ud83d\ude00":2}`])
+    assert.throws(() => new FrameParser(256).feed(rawFrame(text)), /duplicate JSON key/, text);
+  assert.throws(() => new FrameParser(64).feed(rawFrame("[1]")), /root must be a JSON object/);
+  assert.throws(() => new FrameParser(64).feed(rawFrame('{"a":NaN}')), /non-finite literal|malformed JSON/);
+  for (const text of ['{"value":1e999}', '{"value":9007199254740992}'])
+    assert.throws(() => new FrameParser(256).feed(rawFrame(text)), /non-finite number or unsafe integer/);
 });
 
 test("P1-9: NaN/Infinity as string values are accepted; invalid numeric literals rejected", () => {
-  // IPC-001: only invalid JSON numeric literals are rejected by JSON.parse;
-  // a substring check must not reject legitimate string values.
-  const mk = (body: string): Buffer => {
-    const payload = JSON.stringify({ body });
-    const buf = Buffer.alloc(4 + Buffer.byteLength(payload));
-    buf.writeUInt32BE(Buffer.byteLength(payload), 0);
-    buf.write(payload, 4, "utf8");
-    return buf;
-  };
-  const p = new FrameParser(256);
-  const f = p.feed(mk("Infinity is a concept and NaN is a number"));
-  assert.equal(f.length, 1);
-  assert.equal(
-    (f[0]!.raw as { body: string }).body,
-    "Infinity is a concept and NaN is a number",
-  );
-  const p2 = new FrameParser(256);
-  const f2 = p2.feed(mk("NaN"));
-  assert.equal(f2.length, 1);
-  assert.equal((f2[0]!.raw as { body: string }).body, "NaN");
-  // a real invalid numeric literal (bare NaN) is still rejected by JSON.parse
-  const nan = Buffer.concat([
-    Buffer.from([0, 0, 0, 6]),
-    Buffer.from('{"a":NaN}'),
-  ]);
-  const p3 = new FrameParser(64);
-  assert.throws(() => p3.feed(nan), /malformed JSON|non-finite/);
-  const inf = Buffer.concat([
-    Buffer.from([0, 0, 0, 12]),
-    Buffer.from('{"a":Infinity}'),
-  ]);
-  const p4 = new FrameParser(64);
-  assert.throws(() => p4.feed(inf), /malformed JSON|non-finite/);
-});
-
-test("T07: same actor/key/payload converges to one operation with identical receipts (unique constraint)", () => {
-  const { store, dir } = freshStore();
-  insertAgentTx(store, "a");
-  const opId = generateOperationId();
-  const plan = validMailPlan(opId);
-  const payload = JSON.stringify({
-    to: ["b"],
-    subject: "s",
-    kind: "message",
-    body: "x",
-  });
-  for (let i = 0; i < 20; i++) {
-    try {
-      store.transaction((t) =>
-        store.insertOperation({
-          id: opId,
-          actor: "a",
-          requestKey: "k",
-          requestHash: "h",
-          kind: "mail.send",
-          payloadJson: payload,
-          planJson: JSON.stringify(plan),
-        }),
-      );
-    } catch (e) {
-      assert.ok(e instanceof StoreError && e.code === "REQUEST_KEY_REUSED");
-      break;
-    }
+  for (const body of ["Infinity is a concept and NaN is a number", "NaN"]) {
+    const frames = new FrameParser(256).feed(frameOf({ body }));
+    assert.equal(frames.length, 1);
+    assert.equal(frames[0]!.raw.body, body);
   }
-  const ops = store.transaction((t) => store.getOperation("a", "k"));
-  assert.ok(ops);
-  assert.equal(ops.id, opId);
-  seal(store, dir);
+  for (const text of ['{"a":NaN}', '{"a":Infinity}'])
+    assert.throws(() => new FrameParser(64).feed(rawFrame(text)), /malformed JSON|non-finite/);
 });
 
-test("T08: same key, different payload -> REQUEST_KEY_REUSED", () => {
+test("T07: same actor/key/payload converges to one operation with identical receipts (unique constraint)", async () => {
   const { store, dir } = freshStore();
-  insertAgentTx(store, "a");
-  const firstId = generateOperationId();
-  store.transaction((t) =>
-    store.insertOperation({
-      id: firstId,
-      actor: "a",
-      requestKey: "k",
-      requestHash: "h1",
-      kind: "mail.send",
-      payloadJson: "{}",
-      planJson: JSON.stringify(validMailPlan(firstId)),
-    }),
-  );
-  const secondId = generateOperationId();
-  assert.throws(
-    () =>
-      store.transaction((t) =>
-        store.insertOperation({
-          id: secondId,
-          actor: "a",
-          requestKey: "k",
-          requestHash: "h2",
-          kind: "mail.send",
-          payloadJson: "{}",
-          planJson: JSON.stringify(validMailPlan(secondId)),
-        }),
-      ),
-    (e: unknown) => e instanceof StoreError && e.code === "REQUEST_KEY_REUSED",
-  );
-  seal(store, dir);
+  try {
+    insertAgentTx(store, "a");
+    const { mail, auth } = mailFixture(store, dir);
+    const input = { to: ["a"], subject: "s", kind: "message" as const, body: "x" };
+    const first = await mail.send(auth, "k", input);
+    assert.equal(first.state, "succeeded");
+    for (let i = 1; i < 20; i++) assert.deepEqual(await mail.send(auth, "k", input), first);
+    assert.equal(store.getOperation("a", "k")?.id, first.operation);
+    assert.equal(store.deliveriesForOperation(first.operation).length, 1);
+    assert.equal(store.pendingDeliveries("a").length, 1);
+  } finally { seal(store, dir); }
 });
 
-test("T10: different keys are distinct operations; no semantic dedup", () => {
+test("T08: same key, different payload -> REQUEST_KEY_REUSED", async () => {
   const { store, dir } = freshStore();
-  insertAgentTx(store, "a");
-  const mk = (k: string) => {
-    const opId = generateOperationId();
-    return store.transaction((t) =>
-      store.insertOperation({
-        id: opId,
-        actor: "a",
-        requestKey: k,
-        requestHash: "h",
-        kind: "mail.send",
-        payloadJson: "{}",
-        planJson: JSON.stringify(validMailPlan(opId)),
-      }),
-    );
-  };
-  mk("k1");
-  mk("k2");
-  assert.equal(
-    store.transaction((t) => store.getOperation("a", "k1"))!.requestKey,
-    "k1",
-  );
-  assert.equal(
-    store.transaction((t) => store.getOperation("a", "k2"))!.requestKey,
-    "k2",
-  );
-  seal(store, dir);
+  try {
+    insertAgentTx(store, "a");
+    const { mail, auth } = mailFixture(store, dir);
+    const input = { to: ["a"], subject: "s", kind: "message" as const, body: "first" };
+    const first = await mail.send(auth, "k", input);
+    const before = store.getOperationById(first.operation);
+    await assert.rejects(mail.send(auth, "k", { ...input, body: "second" }), { code: "REQUEST_KEY_REUSED" });
+    assert.deepEqual(store.getOperationById(first.operation), before);
+    assert.equal(store.deliveriesForOperation(first.operation).length, 1);
+  } finally { seal(store, dir); }
+});
+
+test("T10: different keys are distinct operations; no semantic dedup", async () => {
+  const { store, dir } = freshStore();
+  try {
+    insertAgentTx(store, "a");
+    const { mail, auth } = mailFixture(store, dir);
+    const input = { to: ["a"], subject: "same", kind: "message" as const, body: "same bytes" };
+    const first = await mail.send(auth, "k1", input);
+    const second = await mail.send(auth, "k2", input);
+    assert.notEqual(first.operation, second.operation);
+    assert.equal(store.getOperation("a", "k1")?.requestKey, "k1");
+    assert.equal(store.getOperation("a", "k2")?.requestKey, "k2");
+    assert.equal(store.pendingDeliveries("a").length, 2);
+  } finally { seal(store, dir); }
 });
 
 test("hash: canonical key sorting, set dedupe, stability, stream folding", () => {
-  const h1 = requestHash("mail.send", {
-    to: sortedUnique(["b", "a", "b"]),
-    subject: "S",
-    body: "x",
-  } as never);
-  const h2 = requestHash("mail.send", {
-    subject: "S",
-    body: "x",
-    to: sortedUnique(["a", "b"]),
-  } as never);
+  const h1 = requestHash("mail.send", { to: sortedUnique(["b", "a", "b"]), subject: "S", kind: "message", body: "x" });
+  const h2 = requestHash("mail.send", { subject: "S", kind: "message", body: "x", to: sortedUnique(["a", "b"]) });
   assert.equal(h1, h2);
   assert.equal(h1.length, 64);
-  const h3 = requestHash("mail.send", {
-    body: " x ",
-    subject: "S ",
-    to: [],
-  } as never); // no trimming
-  const h4 = requestHash("mail.send", {
-    body: "x",
-    subject: "S",
-    to: [],
-  } as never);
-  assert.notEqual(h3, h4);
-  const withStream = requestHash(
-    "git.submit",
-    {},
-    { bytes: 100, sha256: "c".repeat(64) },
-  );
-  assert.notEqual(withStream, requestHash("git.submit", {}));
+  assert.notEqual(requestHash("mail.send", { body: " x ", subject: "S ", kind: "message", to: [] }),
+    requestHash("mail.send", { body: "x", subject: "S", kind: "message", to: [] }));
+  // Legacy explicit stream hash domain, not a claim that {} is a valid submit DTO.
+  assert.notEqual(requestHash("git.submit", {}, { bytes: 100, sha256: "c".repeat(64) }), requestHash("git.submit", {}));
   assert.equal(canonicalJson({ b: 1, a: [2, 1] }), '{"a":[2,1],"b":1}');
-  assert.equal(
-    sha256Hex("abc"),
-    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-  );
+  assert.equal(sha256Hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 });
 
 test("ids: grammar, reserved names, message ids, wire paths", () => {
   assert.ok(isValidActorName("a"));
   assert.ok(isValidActorName("agent-2"));
-  assert.ok(!isValidActorName("Agent"));
-  assert.ok(!isValidActorName("principal"));
-  assert.ok(!isValidActorName("commons"));
-  assert.ok(!isValidActorName("topic-x"));
-  assert.ok(!isValidActorName("a".repeat(33)));
+  for (const name of ["Agent", "principal", "commons", "topic-x", "a".repeat(33)]) assert.ok(!isValidActorName(name));
   assert.ok(isValidRequestKey("k"));
-  assert.ok(isValidRequestKey("a.b_c-d".repeat(13))); // 12*13=... within 96? 'a.b_c-d' is 7 chars *13=91
+  assert.ok(isValidRequestKey("a.b_c-d".repeat(13)));
   assert.ok(!isValidRequestKey(""));
   assert.ok(!isValidRequestKey("x".repeat(97)));
   assert.ok(isValidFullOid("a".repeat(40)));
   assert.ok(isValidFullOid("b".repeat(64)));
   assert.ok(!isValidFullOid("A".repeat(40)));
-  const op = generateOperationId();
-  const m = generateMessageId(op, 0);
-  assert.equal(parseMessageId(m)!.operationId, op);
-  assert.equal(parseMessageId(m)!.ordinal, 0);
+  const operation = generateOperationId();
+  const message = generateMessageId(operation, 0);
+  assert.equal(parseMessageId(message)!.operationId, operation);
+  assert.equal(parseMessageId(message)!.ordinal, 0);
   assert.equal(parseMessageId("m-x-3"), null);
   assert.ok(generateBatchId().startsWith("b-"));
   assert.ok(isValidWirePath("a/b.txt"));
-  assert.ok(!isValidWirePath("../etc"));
-  assert.ok(!isValidWirePath("/abs"));
-  assert.ok(!isValidWirePath("a/../b"));
-  assert.ok(!isValidWirePath("a\0b"));
+  for (const path of ["../etc", "/abs", "a/../b", "a\0b"]) assert.ok(!isValidWirePath(path));
 });
 
-test("store: batch link cross-row invariant (DB-008/BATCH-001)", () => {
+test("store: batch link cross-row invariant (DB-008/BATCH-001)", async () => {
   const { store, dir } = freshStore();
-  insertAgentTx(store, "a");
-  insertAgentTx(store, "b");
-  const opId = generateOperationId();
-  const msgA = generateMessageId(opId, 0);
-  const msgB = generateMessageId(opId, 1);
-  store.transaction((t) => {
-    store.insertOperation({
-      id: opId,
-      actor: "a",
-      requestKey: "k",
-      requestHash: "h",
-      kind: "mail.send",
-      payloadJson: "{}",
-      planJson: JSON.stringify(validMailPlan(opId)),
+  try {
+    insertAgentTx(store, "a"); insertAgentTx(store, "b");
+    const { mail, auth } = mailFixture(store, dir);
+    const broadcast = await mail.send(auth, "broadcast", { to: ["a", "b"], subject: "both", kind: "message", body: "broadcast" });
+    const direct = await mail.send(auth, "direct", { to: ["b"], subject: "b only", kind: "message", body: "direct" });
+    const first = store.getOperationById(broadcast.operation);
+    const second = store.getOperationById(direct.operation);
+    assert.ok(first?.kind === "mail.send" && second?.kind === "mail.send");
+    const msgA = first.plan.message.id;
+    const msgB = second.plan.message.id;
+    assert.equal(store.getDelivery(msgA, "a")?.materialized, 1);
+    assert.equal(store.getDelivery(msgA, "b")?.materialized, 1);
+    assert.equal(store.getDelivery(msgB, "a"), null);
+    const batch = generateBatchId();
+    store.transaction(tx => {
+      tx.insertPreparedBatch({ id: batch, agent: "a", incarnation: 1, messageIds: [msgA], sessionPath: null });
+      tx.linkDeliveriesToBatch(batch, [msgA]);
     });
-    // msgA broadcast to a and b; msgB only to b
-    store.insertDeliveries([
-      { messageId: msgA, recipient: "a", operationId: opId },
-      { messageId: msgA, recipient: "b", operationId: opId },
-      { messageId: msgB, recipient: "b", operationId: opId },
-    ]);
-  });
-  const bId = generateBatchId();
-  store.transaction((t) =>
-    store.insertPreparedBatch({
-      id: bId,
-      agent: "a",
-      incarnation: 1,
-      messageIds: [msgA],
-      sessionPath: null,
-    }),
-  );
-  // linking a broadcast message to a's batch is legal (a has a delivery)
-  store.transaction((t) => store.linkDeliveriesToBatch(bId, [msgA]));
-  // a batch for agent a cannot claim a message with no delivery for a
-  const b2 = generateBatchId();
-  store.transaction((t) =>
-    store.insertPreparedBatch({
-      id: b2,
-      agent: "a",
-      incarnation: 1,
-      messageIds: [msgB],
-      sessionPath: null,
-    }),
-  );
-  assert.throws(
-    () => store.transaction((t) => store.linkDeliveriesToBatch(b2, [msgB])),
-    (e: unknown) => e instanceof StoreError && e.code === "BATCH_CONFLICT",
-  );
-  // BATCH-001: an ID already claimed by one prepared batch cannot be copied
-  const b3 = generateBatchId();
-  store.transaction((t) =>
-    store.insertPreparedBatch({
-      id: b3,
-      agent: "a",
-      incarnation: 1,
-      messageIds: [msgA],
-      sessionPath: null,
-    }),
-  );
-  assert.throws(
-    () => store.transaction((t) => store.linkDeliveriesToBatch(b3, [msgA])),
-    (e: unknown) => e instanceof StoreError && e.code === "BATCH_CONFLICT",
-  );
-  seal(store, dir);
+    assert.equal(store.getDelivery(msgA, "a")?.batchId, batch);
+    for (const message of [msgB, msgA]) {
+      const rejectedBatch = generateBatchId();
+      assert.throws(() => store.transaction(tx => {
+        tx.insertPreparedBatch({ id: rejectedBatch, agent: "a", incarnation: 1, messageIds: [message], sessionPath: null });
+        tx.linkDeliveriesToBatch(rejectedBatch, [message]);
+      }), (error: unknown) => error instanceof StoreError && error.code === "BATCH_CONFLICT");
+      assert.equal(store.getBatch(rejectedBatch), null, "failed exact-set link rolls back its whole acceptance");
+    }
+    assert.equal(store.getDelivery(msgA, "a")?.batchId, batch);
+    assert.equal(store.getDelivery(msgA, "b")?.batchId, null);
+  } finally { seal(store, dir); }
 });
 
 test("ids + hash demo: complete request hash for mail.send", () => {
-  const body = "문의드립니다\n";
-  const to = sortedUnique(["topic/auth", "b"]);
-  const h = requestHash("mail.send", {
-    to,
-    subject: "S",
-    kind: "message",
-    body,
-  } as never);
-  assert.match(h, /^[0-9a-f]{64}$/);
+  const hash = requestHash("mail.send", { to: sortedUnique(["topic/auth", "b"]), subject: "S", kind: "message", body: "문의드립니다\n" });
+  assert.match(hash, /^[0-9a-f]{64}$/);
 });
