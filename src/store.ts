@@ -12,6 +12,8 @@ import { LedgerReader } from "./storage/ledger-reader.js";
 import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
 import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput, type UsageReservation } from "./storage/transitions.js";
 import { OperationTransitions, type NewOperation } from "./storage/operation-transitions.js";
+import { OperationJournal } from "./storage/operation-journal.js";
+export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./ids.js";
 import { StoreError } from "./domain/errors.js";
@@ -22,9 +24,6 @@ export type { Transaction, StoreReads, StoreWrites } from "./storage/transaction
 
 export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v1.sql", import.meta.url));
 export type OperationRow = DecodedOperation;
-export function reused(actor: Actor, key: RequestKey): StoreError {
-  return new StoreError("REQUEST_KEY_REUSED", `request key ${key} (actor ${actor}) already used with a different payload`);
-}
 export function isBusyError(error: unknown): boolean {
   return error instanceof Error && /busy|locked/i.test(error.message) && !(error instanceof StoreError);
 }
@@ -37,7 +36,7 @@ export class Store {
   private readonly db: DatabaseSync;
   private readonly reader: LedgerReader;
   private readonly transitions: LedgerTransitions;
-  private readonly operations: OperationTransitions;
+  private readonly journal: OperationJournal;
   private readonly transactions = new TransactionScope(this);
   private repositoryIdentity: RepositoryIdentity | null;
   constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null) {
@@ -51,7 +50,9 @@ export class Store {
     this.migrate();
     this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
     this.transitions = new LedgerTransitions(this.db, this.reader, () => this.requireTx());
-    this.operations = new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation));
+    this.journal = new OperationJournal(this.reader,
+      new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation)),
+      this.transactions);
   }
   bindRepositoryIdentity(identity: RepositoryIdentity): void {
     if (!isValidSocietyName(identity.society)) throw new StoreError("STORE_CORRUPT", "invalid repository society identity");
@@ -146,30 +147,16 @@ export class Store {
   }
   subscribers(topic: string): string[] { return this.reader.subscriptions(topic).map(row => row.agent); }
   allSubscriptions(): SubscriptionRow[] { return this.reader.subscriptions(); }
-  insertOperation(operation: NewOperation): void { this.operations.insert(operation); }
+  insertOperation(operation: NewOperation): void { this.journal.insert(operation); }
   claimKey(actor: Actor, key: RequestKey, hash: string): "retry" | "reused" | "absent" {
-    const existing = this.getOperation(actor, key);
-    return existing === null ? "absent" : existing.requestHash === hash ? "retry" : "reused";
+    return this.journal.classifyKey(actor, key, hash);
   }
-  claimOperation(operation: NewOperation): "inserted" | "retry" {
-    this.requireTx();
-    const before = this.claimKey(operation.actor, operation.requestKey, operation.requestHash);
-    if (before === "retry") return "retry";
-    if (before === "reused") throw reused(operation.actor, operation.requestKey);
-    try { this.insertOperation(operation); return "inserted"; }
-    catch (error) {
-      if (error instanceof StoreError && error.code === "REQUEST_KEY_REUSED") {
-        if (this.claimKey(operation.actor, operation.requestKey, operation.requestHash) === "retry") return "retry";
-        throw reused(operation.actor, operation.requestKey);
-      }
-      throw error;
-    }
-  }
+  claimOperation(operation: NewOperation): "inserted" | "retry" { return this.journal.accept(operation); }
   acceptOperation(operation: Parameters<Store["insertOperation"]>[0]): "inserted" | "retry" { return this.claimOperation(operation); }
-  getOperation(actor: Actor, key: RequestKey): OperationRow | null { return this.reader.operation(actor, key); }
-  getOperationById(id: OperationId): OperationRow | null { return this.reader.operationById(id); }
+  getOperation(actor: Actor, key: RequestKey): OperationRow | null { return this.journal.get(actor, key); }
+  getOperationById(id: OperationId): OperationRow | null { return this.journal.getById(id); }
   findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
-  recoverableOperations(): OperationId[] { return this.reader.recoverableIds(); }
+  recoverableOperations(): OperationId[] { return this.journal.recoverableIds(); }
   /** CTX-006: a prepared tree or current symlink is not a completed GOAL.
    * This filtered identity projection is followed by the full relational decoder.
    * No new index, table, receipt variant or schema migration is introduced.
@@ -191,10 +178,10 @@ export class Store {
       throw new StoreError("STORE_CORRUPT", "completed context projection differs from its decoded row");
     return operation;
   }
-  updateOperationPlanJson(id: OperationId, planJson: string): void { this.operations.updatePlan(id, planJson); }
-  setOperationSucceeded(id: OperationId, resultJson: string): void { this.operations.succeed(id, resultJson); }
-  setOperationFailed(id: OperationId, code: ErrorCode): void { this.operations.fail(id, code); }
-  setOperationUnknown(id: OperationId): void { this.operations.unknown(id); }
+  updateOperationPlanJson(id: OperationId, planJson: string): void { this.journal.prepare(id, planJson); }
+  setOperationSucceeded(id: OperationId, resultJson: string): void { this.journal.succeed(id, resultJson); }
+  setOperationFailed(id: OperationId, code: ErrorCode): void { this.journal.fail(id, code); }
+  setOperationUnknown(id: OperationId): void { this.journal.markUnknown(id); }
   insertDeliveries(deliveries: DeliveryIdentity[]): void { this.transitions.insertDeliveries(deliveries); }
   markMaterialized(message: MessageId, recipient: Actor): void { this.transitions.markMaterialized(message, recipient); }
   markAcknowledged(message: MessageId, recipient: Actor): void { this.transitions.markAcknowledged(message, recipient); }
