@@ -8,9 +8,11 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "inventory": "node scripts/loc.mjs --inventory-only",
+    "check:inventory": "node scripts/production-inventory.mjs",
     "check:package": "node scripts/check-package.mjs",
     "check:transactions": "node scripts/transaction-check.mjs",
-    "check:architecture": "node scripts/architecture-check.mjs && npm run check:transactions",
+    "check:architecture": "npm run check:inventory && node scripts/architecture-check.mjs && npm run check:transactions",
     "test": "npm run build && node --test --test-concurrency=1 dist/test/*.test.js test/*.test.mjs",
     "verify:lane": "node scripts/verify-lane.mjs",
     "verify:fast": "node scripts/verify-lane.mjs fast",
