@@ -1,4 +1,6 @@
-import type { AuthContext, MessageId, Receipt } from "../../implementation/contracts.js";
+import type { AuthContext } from "../../implementation/contracts/runtime.js";
+import type { MessageId } from "../../implementation/contracts/identity.js";
+import type { Receipt } from "../../implementation/contracts/durable.js";
 import { Store, reused } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { assertActorIdentity, assertCurrentActor } from "../authority.js";

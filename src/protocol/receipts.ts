@@ -1,5 +1,5 @@
 /** DB-005/009, IPC-008: one receipt projection, with no durable writes. */
-import type { Receipt } from "../../implementation/contracts.js";
+import type { Receipt } from "../../implementation/contracts/durable.js";
 import { StoreError, terminalFailure, type CliExitCode } from "../domain/errors.js";
 import type { DecodedOperation } from "../storage/operation-codec.js";
 import { decodeReceipt } from "./receipt-codec.js";

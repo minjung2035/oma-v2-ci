@@ -1,6 +1,8 @@
 // AUTH-001..003/CREATE-002: identity facts are not a reusable effect permission.
 // Durable capabilities and the live lease must both grant a conditional action.
-import type { AuthContext, Capability, ResolvedAgentSpec } from "../implementation/contracts.js";
+import type { AuthContext } from "../implementation/contracts/runtime.js";
+import type { Capability } from "../implementation/contracts/identity.js";
+import type { ResolvedAgentSpec } from "../implementation/contracts/host.js";
 import type { StoreReads, AgentRow } from "./store.js";
 import { StoreError } from "./domain/errors.js";
 import { decodeAgentSpec } from "./storage/rows.js";
