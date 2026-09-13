@@ -1,108 +1,290 @@
-# OMA v2 — 현재 인계
+# OMA v2 — 안정성 보존형 아키텍처 작업 인수인계
 
-이 문서는 다음 작업자가 **현재 어디서 재개해야 하는지**만 기록한다. 장기 유지보수 원칙은 [`MAINTENANCE.md`](MAINTENANCE.md), 문서 권위와 historical/generated 구분은 [`implementation/README.md`](implementation/README.md)를 따른다.
+이 문서는 `refactor/safety-preserving-architecture` 브랜치에서 진행 중인 **안정성 보존형 아키텍처 개선 작업의 현재 재개점**을 기록한다. 장기 유지보수 원칙은 [`MAINTENANCE.md`](MAINTENANCE.md), 상위 계약은 [`architecture.md`](architecture.md)와 [`implementation-spec.md`](implementation-spec.md), 이번 작업의 원안은 [`docs/proposals/2026-09-13-safety-preserving-architecture.md`](docs/proposals/2026-09-13-safety-preserving-architecture.md)를 따른다.
 
-과거 R00–R40 카드, R37/R39 종료 기록, C01–C07 후속 상세와 commit 목록을 이 파일에 다시 복사하지 않는다. 필요한 경우 아래 historical record를 따라간다.
+이 문서는 구현 존재, focused 검증, full-project 검증, release proof를 구분한다. 다음 작업자는 문서의 SHA를 현재 HEAD라고 가정하지 말고 **작업 시작 즉시 branch/PR HEAD를 다시 조회**해야 한다.
 
-## 1. 현재 판정
+## 1. 현재 브랜치와 범위
 
-**현재 source에는 C01–C07 감사에서 확인된 replay/fixture/owner/inventory-tooling 보완이 반영되어 있지만, 전체 실행 적합성과 release compliance는 아직 인증되지 않았다.**
+- 작업 브랜치: `refactor/safety-preserving-architecture`
+- 최초 기준 master: `e2afe9ab050d87705451cd127c458ad216aa52d4`
+- 이 인계 문서 작성 직전 HEAD: `09ca186c1450d7c045b6bc6d5b1232021bf6029f`
+- PR: `#2`, Draft 유지
+- 이 HEAD 기준 PR 누적: 23 commits / 136 changed files
+- 사용자 요청 범위: 제안서의 **P7까지 구현 완료**
+- P8 persisted-format evolution, P9 VM power-cut/fuzz maturity는 이번 요청 범위 밖
+- 원 제안서는 `docs/proposals/`에 보존되어 있으며 refactor 편의를 위해 수정하지 않는다.
 
-현재 상세 검증 상태는 [`implementation/validation.md`](implementation/validation.md)가 기준이다. 특히 다음을 과장하지 않는다.
+Master에는 자동 병합하지 않는다. Full pinned/native 검증 없이 PR을 release-ready로 간주하지 않는다.
 
-- source/test/tooling이 존재한다고 실행 PASS가 되는 것은 아니다.
-- 과거 `DONE` marker는 재개 지점이지 correctness/release 증거가 아니다.
-- 과거 test count, LOC, source pin, raw log를 현재 source 결과로 재사용하지 않는다.
-- OPEN SPIKE는 helper/test가 있다는 이유로 닫지 않는다.
+## 2. 반드시 보존할 안전성 불변식
 
-이 문서를 읽는 즉시 현재 `master` HEAD를 다시 조회한다. 문서 자신의 commit SHA를 current HEAD로 적지 않는다.
+이번 작업의 목적은 구조를 예쁘게 만드는 것이 아니라 기존 safety semantics를 유지하면서 ownership과 검증 가능성을 높이는 것이다. 아래 항목은 refactor 편의를 위해 약화하면 안 된다.
 
-## 2. 작업 시작 전 읽기 순서
+- broker는 하나이고 SQLite writer/transaction owner도 하나다.
+- accepted operation intent와 accepted plan/result relation은 durable evidence다.
+- accepted v1 bytes를 현재 state/path에 맞춰 rewrite하지 않는다.
+- `unknown`은 absence나 success가 아니며 임의로 승격하지 않는다.
+- normal path와 recovery policy를 generic workflow engine 하나로 합치지 않는다.
+- authority/admission/incarnation/cgroup fencing은 effect 직전까지 현재 값을 다시 확인한다.
+- immutable evidence publication과 derived-file replacement는 다른 API/의미를 유지한다.
+- 외부 effect는 bounded해야 하며 effect ordering을 바꾸는 refactor를 하지 않는다.
+- OPEN SPIKE/gate는 test/helper가 생겼다는 이유만으로 닫지 않는다.
+- P8 전에는 schema v1 또는 persisted plan v1의 silent migration/rewrite를 하지 않는다.
 
-1. [`architecture.md`](architecture.md)
-2. [`implementation-spec.md`](implementation-spec.md)
-3. [`implementation/physical-ordering.md`](implementation/physical-ordering.md)
-4. [`implementation/contracts.ts`](implementation/contracts.ts), [`implementation/schema-v1.sql`](implementation/schema-v1.sql)
-5. [`implementation/compliance.md`](implementation/compliance.md), [`implementation/spikes.md`](implementation/spikes.md), [`implementation/integration-policy.md`](implementation/integration-policy.md), [`implementation/test-matrix.md`](implementation/test-matrix.md)
-6. [`MAINTENANCE.md`](MAINTENANCE.md)
-7. 이 파일과 [`validation.md`](validation.md), [`implementation/validation.md`](implementation/validation.md)
-8. 관련 production source/test
+특히 lifecycle replay에서 historical operation의 `desired`, `previousIncarnation`, operation identity를 현재 target에 맞춰 고치면 안 된다.
 
-Historical 문서는 current source를 이해하기 위한 보조 자료이지 상위 계약이 아니다.
+## 3. 단계별 현재 상태
 
-## 3. 현재 남은 우선 작업
+| 단계 | 상태 | 현재 구현 / 근거 | 남은 일 |
+| --- | --- | --- | --- |
+| P0 | **BLOCKED / 부분 focused 검증만 존재** | Node 22.16.0, local TS 5.8.3 기반 focused evidence | repo pin TS 5.9.3, 전체 inventory/typecheck/build/package/architecture/test/native lanes |
+| P1 | **구현 완료** | operation-kind magic count 제거, broker composition 정리, shared public validation + live recheck | full-current-source P0에서 재확인 |
+| P2 | **대부분 반영, closure 미완료** | physical contract owners, compatibility facade, module-ports cycle 제거, protocol/storage/domain/일부 coordinator import migration | 현재 전체 graph 기준 잔여 facade/direct import와 owner migration 확인 |
+| P2.5 | **반영 완료** | validated ledger output에서 opaque/branded identity 보존 | wire/string surface까지 무리하게 brand 확장하지 않음 |
+| P3 | **대부분 완료** | `OperationJournal`, Store integration, scoped operation API, recovery exhaustiveness, 일부 coordinator migration | 남은 coordinator flat Store 소비 여부를 P5 graph에서 측정 후 최소 이전 |
+| P4 | **대부분 완료** | operations/agents/subscriptions/deliveries/batches/usage logical read/write facets, 동일 SQLite connection/writer 유지 | 필요한 consumer migration만 수행; Store 물리 분할 금지 |
+| P5 | **실질 미완료** | 기존 narrow owner checker만 존재 | 실제 import graph 측정 → coarse dependency DAG 확정 → checker enforcement |
+| P6 | **구현 및 focused oracle 존재** | independent ledger/files/mail/Git/context integrity, offline/live admin path, `scripts/check-state.mjs` | full P0 및 실제 positive systemd/cgroup 환경 검증은 별도 |
+| P7 | **미완료** | 기존 durability tests는 있으나 제안서의 deterministic VFS-like fault seam/matrix는 없음 | low-level fault seam + restart/integrity/reconcile convergence matrix |
 
-### A. C05 — production inventory/LOC/hash freshness
+현재 구현 진척을 숫자로 표현하면 사용자 요청 범위(P1~P7 구현)를 기준으로 대략 70%대 중반이지만, 이는 일정 추정일 뿐 correctness metric이 아니다.
 
-현재 validation 기록상 `production-files.txt`, `production-loc.json`, `production-loc-hashes.json`은 **STALE**이다. 소스 목록이나 LOC/hash를 사람이 최신 값처럼 직접 고치지 않는다.
+## 4. 완료된 주요 구현
 
-재검증 시작 순서:
+### P1 — semantic entropy 제거
+
+- architecture checker가 고정 operation count `11`에 의존하지 않고 closed kind set과 registry의 정확한 일치를 검사한다.
+- broker composition에서 Git을 Lifecycle보다 먼저 구성하고 nullable/late-bound context ownership을 제거했다.
+- PublicDispatcher validation owner를 공유하지만 preflight 결과를 authority token처럼 저장하지 않는다.
+- body 수신 이후 dispatch에서 current actor/capability/admission/incarnation 등 live condition을 다시 검사한다.
+
+P1 당시 focused fixture는 25 PASS였다. 이 수치는 당시 source에 결합된 evidence이며 현재 전체 suite PASS를 뜻하지 않는다.
+
+### P2 — contract owner 분리와 import narrowing
+
+`implementation/contracts.ts`의 개념 owner를 물리적으로 분리했다. 현재 주요 owner는 다음과 같다.
+
+- `implementation/contracts/identity.ts`
+- `errors.ts`
+- `public-wire.ts`
+- `internal-wire.ts`
+- `durable.ts`
+- `runtime.ts`
+- `host.ts`
+- `values.ts`
+- `module-contracts.ts`
+
+`implementation/contracts.ts`는 compatibility/spec facade로 남는다. `src/module-ports.ts`는 이 facade를 통해 순환하지 않고 precise owner를 직접 본다. Wire/durable migration은 golden/equivalence 및 actual SQLite characterization과 함께 진행했다.
+
+관련 문서:
+
+- [`docs/architecture-improvement/p2-module-ports.md`](docs/architecture-improvement/p2-module-ports.md)
+- [`docs/architecture-improvement/p2-protocol-imports.md`](docs/architecture-improvement/p2-protocol-imports.md)
+- [`docs/architecture-improvement/p2-durable-imports.md`](docs/architecture-improvement/p2-durable-imports.md)
+- [`docs/architecture-improvement/p2-domain-imports.md`](docs/architecture-improvement/p2-domain-imports.md)
+- [`docs/architecture-improvement/p2-coordinator-imports.md`](docs/architecture-improvement/p2-coordinator-imports.md)
+
+P2 closure를 문서만 보고 선언하지 말고 P5에서 **현재 실제 import graph**를 다시 측정한다.
+
+### P2.5 — internal opaque identity
+
+기존 `src/domain/identifiers.ts`의 brand/parser를 재사용하고, validated ledger decode output에서 이미 검증된 operation/actor/request/message/batch identity를 보존한다. Wire v1과 arbitrary string/path/profile까지 nominal type을 확장하지 않는다.
+
+관련 문서: [`docs/architecture-improvement/p25-identities.md`](docs/architecture-improvement/p25-identities.md).
+
+### P3 — explicit OperationJournal와 recovery exhaustiveness
+
+`src/storage/operation-journal.ts`가 기존 `LedgerReader`, `OperationTransitions`, `TransactionScope`를 조합한다. 새 SQL owner, 새 DB connection, generic workflow engine, effect callback registry를 만들지 않았다.
+
+Journal은 operation identity/key classification, accept/settlement/recoverable boundary를 모으지만 terminal immutability와 SQL transition 자체는 기존 owner에 남긴다.
+
+Recovery 쪽은 Git/Reconcile/startup의 operation-kind 분기를 closed set에 대해 exhaustive하게 만들었다. 새로운 kind가 추가되면 각 recovery owner가 명시적으로 판단해야 한다.
+
+관련 문서:
+
+- [`docs/architecture-improvement/p3-journal.md`](docs/architecture-improvement/p3-journal.md)
+- [`docs/architecture-improvement/p3-store-integration.md`](docs/architecture-improvement/p3-store-integration.md)
+- [`docs/architecture-improvement/p3-recovery.md`](docs/architecture-improvement/p3-recovery.md)
+- [`docs/architecture-improvement/p3-coordinator-facets.md`](docs/architecture-improvement/p3-coordinator-facets.md)
+
+RegistryOperations와 ordinary mail recovery는 scoped journal/store facets로 이전됐다. 해당 coordinator + 기존 SQLite transition focused run은 16 PASS였다.
+
+### P4 — logical Store facets, single physical writer
+
+`src/storage/facets.ts`와 Store에 다음 logical facet을 두었다.
+
+- operations
+- agents
+- subscriptions
+- deliveries
+- batches
+- usage
+
+읽기 facet은 immutable facade이며 write facet은 root synchronous transaction capability 안에서만 유효하다. escaped write function이나 async continuation이 이후 transaction 권한을 빌릴 수 없도록 기존 `TransactionScope` semantics를 유지한다.
+
+중요: **`DatabaseSync`와 physical writer ownership은 `src/store.ts`에 남아 있다.** P4는 six repositories/DB connections로 쪼개는 작업이 아니다.
+
+관련 문서: [`docs/architecture-improvement/p4-facets.md`](docs/architecture-improvement/p4-facets.md). 해당 focused run은 21 PASS였다.
+
+### P6 — independent read-only integrity engine
+
+현재 HEAD의 가장 큰 완료 단위다. 다음이 존재한다.
+
+- `src/diagnostics/ledger.ts`
+- `src/diagnostics/integrity.ts`
+- `src/diagnostics/files.ts`
+- `src/diagnostics/mail.ts`
+- `scripts/diagnostic-observers.mjs`
+- `scripts/check-state.mjs`
+
+관리자 경로 예:
 
 ```sh
-npm run inventory
-npm run check:inventory
+node scripts/check-state.mjs --state /absolute/state/root --society NAME --mode offline --quiesced
+node scripts/check-state.mjs --state /absolute/state/root --society NAME --mode live
 ```
 
-그 뒤 full LOC/hash가 필요하면 pinned cloc 계약에 따라:
+원칙:
 
-```sh
-node scripts/loc.mjs
-```
+- reconcile/repair/materialize를 호출하지 않는다.
+- DB를 physical observation 전후에 다시 읽고 변화가 있으면 atomic consistency를 주장하지 않고 UNKNOWN으로 둔다.
+- output은 bounded issue ID 중심이며 raw mail body/credential/unbounded stderr를 내보내지 않는다.
+- mail object hash/size/header relation, archive/inbox relation, published Git ref, context snapshot/current, manifest/tree bytes, selected unit observation을 독립적으로 확인한다.
+- pending gap과 corruption을 구분하며 unaccepted orphan을 임의 삭제하지 않는다.
 
-을 실제 실행하고 결과를 current source에 결합한다.
+P6 구현 과정에서 native process stdin을 string으로 받은 뒤 `Buffer.byteLength` 관찰보다 늦게 encode하던 별도 bug가 드러나 `aeeafd9b...`에서 수정됐다. 이 수정은 P6 observer를 위해 native process owner를 복제하는 대신 기존 process owner를 고친 것이다.
 
-### B. C06 — full execution evidence
+현재 P6 focused serial run은 **54 PASS, 0 fail/cancelled/skipped/todo**다. 여기에는 diagnostic 31, 기존 coordinator/SQLite 16, stdin regression 3, import migration 4가 포함된다. 실제 temporary SQLite/filesystem/Git repository와 standalone admin command를 사용했다.
 
-다음은 current validation 기준 **NOT_RUN**이다.
+단, 이 결과는 **repo pin TypeScript 5.9.3 full-project P0가 아니다.** 실제 positive systemd/cgroup proof도 아니다.
 
-- typecheck/build/package
-- architecture/transaction gate
-- fast/durable/property/kernel/crash/stress/all verification lane
-- installed entrypoint/package closure
-- current-source trace/report/compliance generation
-- performance/latency/RSS/FD 측정
+관련 문서: [`docs/architecture-improvement/p6-ledger.md`](docs/architecture-improvement/p6-ledger.md), [`docs/architecture-improvement/p6-physical.md`](docs/architecture-improvement/p6-physical.md).
 
-작성된 test나 lane 연결을 PASS로 부르지 않는다.
+## 5. 지금부터의 작업 순서
 
-### C. fixture/coverage 전역 상태
+### 5.1 먼저 P5 — 실제 dependency lattice를 측정하고 고정한다
 
-C03에서 확인된 phase2/phase4 fixture는 보완되었지만 다른 legacy phase/audit fixture 전체가 strict decoder와 current invariant를 만족하는지는 전수 검증되지 않았다.
+제안서는 미리 예쁜 layer를 정한 뒤 코드를 강제로 맞추는 것을 금지한다. 반드시 **현재 HEAD의 import graph 측정이 먼저**다.
 
-C07의 actual lifecycle sequence source가 존재해도 실행/축소 결과와 kernel/crash 증거는 별도다.
+권장 순서:
 
-### D. OPEN gate
+1. `src/**`와 필요한 `implementation/contracts/**`의 static import/export edge를 실제로 수집한다.
+2. type-only와 runtime edge를 둘 다 보되, runtime dependency direction을 별도로 확인한다.
+3. SCC/cycle, high fan-in/fan-out, facade direct import, Store flat-consumer edge를 보고 semantic owner를 분류한다.
+4. 현재 graph가 허용하는 최소 coarse DAG를 문서화한다.
+5. 기존 `scripts/architecture-check.mjs`의 세밀한 owner rule은 유지하고 그 위에 coarse direction gate를 추가한다.
+6. broad wildcard exception을 만들지 않는다. 필요한 예외는 exact edge와 이유를 적는다.
+7. negative fixture에서 forbidden reverse edge를 하나 삽입하면 checker가 실패하는지 확인한다.
+8. 같은 graph extractor 결과를 evidence JSON과 checker가 공유하게 하여 문서와 enforcement가 따로 drift하지 않게 한다.
 
-`implementation/spikes.md`의 상태를 source helper만으로 갱신하지 않는다. 특히 다음 실제 evidence가 없으면 OPEN/BLOCKED를 유지한다.
-
-- S-01 / S-01-CANDIDATE kernel/resource/isolation 경계
-- S-02 Principal attach/private boundary
-- S-03 trusted Pi session/batch completion evidence
-- S-04 real provider codec/accounting
-- S-05/S-06 hostile import/crash/power-loss/backup 경계
-- S-08/S-10 tiered authority/floor/challenge
-- S-11 strict clean-room
-- S-09 quality/cost/latency evaluation
-
-## 4. C01/C02 lifecycle replay에서 유지해야 하는 의미
-
-과거 nonterminal start/stop replay는 accepted plan과 현재 target의 관계가 맞지 않으면 새로운 unit effect를 발행해서는 안 된다.
-
-특히:
+제안서의 개념적 출발점은 다음이지만 실제 graph로 조정해야 한다.
 
 ```text
-accepted plan.desired
-accepted plan.previousIncarnation
+L0 fundamental / pure definitions
+  ↓
+L1 codecs / storage primitives / process primitives / protocol mechanisms
+  ↓
+L2 subsystem facts + observations
+  ↓
+L3 Mail / Git / Lifecycle / Units / Inference workflows
+  ↓
+L4 Reconcile / Broker / Runner orchestration
+  ↓
+L5 entry / CLI / extension
 ```
 
-을 현재 target에 맞춰 rewrite하지 않는다. Old stop operation이 더 새로운 incarnation을 stop 대상으로 선택하지 않게 한다. Old start operation이 그 이후의 stopped intent를 덮고 새 start effect를 발행하지 않게 한다.
+P5 중 `domain/` 파일을 이름만 보고 대량 이동하지 않는다. 먼저 owner와 dependency direction을 고정한다.
 
-Normal path와 recovery를 하나의 generic 재실행 함수로 합치지 않는다. 공유할 것은 frozen intent/current-state relation과 observation primitive이며 decision policy는 별개로 유지한다.
+P5 완료 기준은 적어도 다음이다.
 
-관련 상세 역사: [`implementation/conformance-followup.md`](implementation/conformance-followup.md).
+- current source graph evidence 존재
+- coarse DAG가 current code에서 설명 가능
+- checker가 reverse edge/cycle를 실제로 거절
+- 기존 narrow owner rule 유지
+- direct compatibility-facade import 정책 명시
+- no runtime semantic change / no wire/schema change
 
-## 5. 검증을 다시 시작할 때의 권장 순서
+### 5.2 P2/P3/P4 잔여 migration은 P5 결과로만 최소 수행
 
-`package.json`의 scripts를 현재 entry로 사용한다.
+P5 측정에서 발견되는 다음 항목만 처리한다.
+
+- production의 잔여 direct `implementation/contracts.ts` import
+- coordinator가 굳이 flat Store API를 잡고 있는 edge
+- concept owner를 우회하는 compatibility import
+
+단, 모든 caller를 facet으로 바꾸기 위한 기계적 migration은 하지 않는다. 새 interface를 모든 class에 만들거나 generic Repository/Service/Controller 계층을 도입하지 않는다.
+
+### 5.3 마지막 큰 구현 단위 P7 — deterministic durable-FS fault boundary
+
+P7 seam은 **low-level durability primitive에만 둔다.** 후보 owner는 다음이다.
+
+- `src/storage/durable-fs.ts`
+- `src/storage/immutable-file.ts`
+- `src/storage/context-stream.ts`
+- `src/storage/batch-view.ts`
+
+workflow coordinator, Mail/Git/Lifecycle constructor 전체에 `FsPort`/`FaultFs`를 전달하지 않는다.
+
+Fault taxonomy는 최소 다음 세 의미를 구분해야 한다.
+
+```text
+BEFORE             syscall/effect 전 실패
+AFTER_VISIBLE      외부에서 보일 수 있는 effect 직후 실패
+AMBIGUOUS          effect 여부를 호출자가 단정할 수 없는 observation
+```
+
+필수 deterministic point 예:
+
+- file create 전/후
+- write 중/후
+- file fsync
+- link/rename 직후
+- destination validation 전/후
+- parent directory fsync
+- owned temp unlink
+- second directory fsync
+
+가능하면 global mutable injector보다 **명시적이고 좁은 test seam**을 사용한다. Production default path는 기존 syscall ordering을 그대로 사용해야 한다.
+
+각 fault point의 oracle은 다음 순서를 자동화한다.
+
+```text
+accepted operation 준비
+→ targeted low-level effect
+→ deterministic fault
+→ restart-equivalent 재개
+→ read-only integrity
+→ reconcile
+→ read-only integrity again
+→ reconcile 반복
+→ convergence 확인
+```
+
+반드시 확인할 결과:
+
+- false success 없음
+- immutable accepted/evidence bytes 변경 없음
+- duplicate physical effect 없음
+- unknown이 arbitrary success로 승격되지 않음
+- 같은 operation identity 유지
+- owned temporary만 cleanup
+- post-visible failure를 absence로 오판하지 않음
+- repeated reconcile이 같은 terminal/unknown 상태로 수렴
+
+P7은 real VM power-cut proof가 아니다. SIGKILL/VM power loss 확대는 P9 범위다.
+
+## 6. P0 / 전체 검증 상태
+
+현재 local focused environment:
+
+- Node `22.16.0`
+- TypeScript `5.8.3`
+- repo pin은 TypeScript `5.9.3`
+
+이 차이 때문에 지금까지의 strict semantic closure compile을 **repo pinned full typecheck PASS**라고 부르면 안 된다.
+
+현재도 반드시 별도로 실행해야 하는 P0/full verification:
 
 ```sh
 npm run inventory
@@ -112,68 +294,92 @@ npm run build
 npm run check:package
 npm run check:architecture
 npm test
-npm run verify:fast -- --out <new-dir>
-npm run verify:durable -- --out <new-dir>
-npm run verify:property -- --out <new-dir>
-npm run verify:kernel -- --out <new-dir>
-npm run verify:crash -- --out <new-dir>
-npm run verify:stress -- --out <new-dir>
-npm run verify:all -- --out <new-dir>
+npm run verify:fast -- --out <fresh-dir>
+npm run verify:durable -- --out <fresh-dir>
+npm run verify:property -- --out <fresh-dir>
+npm run verify:kernel -- --out <fresh-dir>
+npm run verify:crash -- --out <fresh-dir>
+npm run verify:stress -- --out <fresh-dir>
+npm run verify:all -- --out <fresh-dir>
 node scripts/loc.mjs
 ```
 
-각 verification run은 기존 artifact directory를 덮지 않고 새 output directory를 사용한다. 환경 미지원/skip/oracle 미도달을 전체 PASS로 바꾸지 않는다.
+이전 환경에서는 locked dependency 설치/전체 clone 및 GitHub Actions runner 실행이 안정적으로 확보되지 않았다. 따라서 `NOT_RUN/BLOCKED`를 failure와 혼동하지 말고, 반대로 focused PASS를 full PASS로 승격하지 않는다.
 
-## 6. 이번 이후의 bug-fix 원칙
+Production inventory/LOC/hash generated file은 사람이 green으로 맞추지 않는다. generator를 실행하고 fresh source에 결합된 결과만 인정한다.
 
-새 bug를 만나면 [`MAINTENANCE.md`](MAINTENANCE.md)의 절차를 따른다.
+## 7. 증거와 문서 읽기 순서
 
-요약하면:
+다음 작업자는 아래 순서로 읽으면 된다.
 
-```text
-current HEAD에서 재현
-→ Fact / Relation / Phase 정리
-→ 직접 원인과 bug class 식별
-→ authoritative owner 확인
-→ regression/invariant oracle
-→ 최소 안전 수정
-→ 같은 class의 다른 구현 static audit
-→ relevant lane 실행
-→ fresh evidence와 HANDOFF 갱신
-```
+1. [`docs/proposals/2026-09-13-safety-preserving-architecture.md`](docs/proposals/2026-09-13-safety-preserving-architecture.md)
+2. 이 `HANDOFF.md`
+3. [`docs/architecture-improvement/progress.md`](docs/architecture-improvement/progress.md) — 일부 상태 문구는 후속 P6 커밋보다 오래됐을 수 있으므로 HEAD와 함께 해석
+4. P2 문서들
+5. [`docs/architecture-improvement/p25-identities.md`](docs/architecture-improvement/p25-identities.md)
+6. P3 journal/store/recovery/coordinator 문서들
+7. [`docs/architecture-improvement/p4-facets.md`](docs/architecture-improvement/p4-facets.md)
+8. [`docs/architecture-improvement/p6-ledger.md`](docs/architecture-improvement/p6-ledger.md)
+9. [`docs/architecture-improvement/p6-physical.md`](docs/architecture-improvement/p6-physical.md)
+10. 각 문서가 가리키는 `docs/architecture-improvement/evidence/*`
+11. `MAINTENANCE.md`, `implementation/validation.md`, `implementation/spikes.md`
 
-같은 key의 historical operation을 현재 state에 맞춰 고치는 방식, unknown을 absence/success로 바꾸는 방식, accepted plan/hash/frozen bytes를 rewrite하는 방식은 사용하지 않는다.
+Evidence 파일은 해당 source/tool/environment에 결합된 historical execution record다. 이후 source가 바뀌면 새 evidence를 생성한다.
 
-## 7. 문서 역할
+## 8. 주요 milestone commit
 
-### 현재 작업에 사용
+아래 SHA는 탐색용 anchor다. 작업 시작 시 branch history에서 다시 확인한다.
 
-- [`MAINTENANCE.md`](MAINTENANCE.md) — 장기 유지보수 원칙
-- [`implementation/README.md`](implementation/README.md) — 문서 지도
-- 이 `HANDOFF.md` — 현재 재개점
-- [`validation.md`](validation.md) — 검증 색인
-- [`implementation/validation.md`](implementation/validation.md) — 상세 current verification status
+- `da73fea...` — 원 제안서 보존
+- `2fff630...` — P1 operation-kind closure
+- `b4d153d...` — P1 broker composition
+- `cbe25a0...` — P1 public validation/live recheck
+- `566e74c...` — durable contract import narrowing + actual SQLite characterization
+- `138aca4...` — domain pure-value/identity dependency narrowing
+- `21aebb7...` — P2.5 validated ledger identity brands
+- P3/P4 연속 커밋 — OperationJournal, Store integration, facets, recovery exhaustiveness
+- `32f8f2f...` — registry/mail recovery scoped facet consumers
+- `77ac4c7...` — independent read-only ledger integrity
+- `aeeafd9...` — native process stdin encoding fix
+- `09ca186...` — independent physical publication integrity + admin observer
 
-### Historical detail
+커밋 메시지와 docs/evidence를 우선하고 SHA prefix만으로 의미를 추정하지 않는다.
 
-- [`implementation/conformance-followup.md`](implementation/conformance-followup.md) — C01–C07 후속 상세
-- [`implementation/refactoring-closure.md`](implementation/refactoring-closure.md) — R37–R39 구조개편 종료 기록
-- [`implementation/adversarial-review.md`](implementation/adversarial-review.md) — 특정 source/evidence 기준 generated audit ledger
-- `implementation/evidence/*` — 당시 source/environment에 결합된 raw evidence
+## 9. 커밋/작업 규율
 
-Historical 문서의 결론을 현재 HEAD에 적용하려면 owner/call path를 다시 찾고 재현 또는 fresh evidence로 확인한다.
+남은 작업도 구현 단위로 나눠 커밋한다.
 
-## 8. 변경하지 않은 상위 surface
+권장 단위:
 
-이 문서 정리는 다음을 변경하지 않는다.
+1. `arch: measure current dependency graph`
+2. `arch: enforce measured dependency lattice`
+3. 필요한 경우 `refactor: finish dependency-directed consumer migration`
+4. `test(storage): add deterministic durable-fs fault seams`
+5. `test(recovery): verify fault/restart/integrity convergence`
+6. `docs: close P7 implementation status and refresh handoff`
 
-- architecture 철학
-- implementation-spec MUST/MUST NOT
-- wire v1 method/error/receipt surface
-- DB entity/schema 의미
-- physical ordering
-- OPEN SPIKE 상태
-- systemd unit set
-- integration/tier policy
+각 구현 커밋에는 가능한 범위의 regression/negative oracle과 진행 문서를 함께 남긴다. 검증 결과에는 정확한 command, source SHA/digest, Node/TS version, PASS/FAIL/SKIP/NOT_RUN을 기록한다.
 
-현재 상태는 **source hardening은 진행됐지만 full execution verification과 release proof가 남아 있는 상태**다.
+## 10. 하지 말아야 할 것
+
+- microservice로 분할
+- generic Repository/Service/Controller 계층 도입
+- 모든 class에 interface를 만드는 작업
+- operation kind를 generic workflow callback registry로 치환
+- Store를 여러 SQLite writer/connection으로 분할
+- current state에 맞춰 v1 accepted plan/result rewrite
+- `unknown`을 retry 편의를 위해 success/absence로 변경
+- recovery가 normal handler를 그대로 다시 호출하도록 통합
+- integrity checker가 reconcile/repair를 호출
+- P7 fault injector를 모든 workflow constructor까지 전파
+- broad architecture-checker exception으로 P5를 통과
+- test 추가만으로 OPEN SPIKE를 닫음
+- P8/P9를 이번 P7 작업에 섞음
+
+## 11. 다음 작업자가 바로 시작할 위치
+
+첫 실작업은 **P5 import graph 측정**이다. 아직 dependency lattice를 코드에 쓰지 말고, 현재 branch의 source graph를 먼저 수집한다.
+
+P5 결과를 기준으로 최소 migration과 checker를 고정한 뒤, **P7 low-level durability fault seam과 recovery convergence matrix**로 간다. P6 integrity engine은 P7의 oracle로 재사용하되 recovery 구현을 검사기 안에서 호출하지 않는다. 테스트 orchestration에서만 `integrity → reconcile → integrity` 순서를 구성한다.
+
+P5/P7 구현이 끝나도 마지막으로 남는 것은 full pinned P0/native proof다. 그것이 없으면 구현 완료와 release-ready를 구분해서 보고한다.
