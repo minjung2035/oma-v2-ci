@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 import ts from "typescript";
 
 const facade = "implementation/contracts.ts";
@@ -85,6 +86,84 @@ export function migrateContractImports(text, file, owners) {
   let result = text;
   for (const edit of edits.sort((a, b) => b.start - a.start)) result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
   return { text: result, edits: edits.length };
+}
+
+/** Deterministic snapshot of a subsystem's type-only contract dependencies.
+ *
+ * Migrating a facade import to its owning module must preserve this snapshot:
+ * the body hash is computed with every contract-binding declaration replaced by
+ * a canonical marker, and inline import types normalized the same way, so the
+ * dependency direction changes while the bound names, aliases and non-import
+ * tokens stay identical. With `requireNarrow` the facade itself and a binding
+ * taken from the wrong owner are rejected.
+ */
+export function contractImportSnapshot(file, text, owners, options = {}) {
+  file = slash(file);
+  const requireNarrow = options.requireNarrow === true;
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const bindings = [], inline = [], edits = [];
+  const canonical = name => {
+    const owner = owners.get(name);
+    if (!owner) throw new Error(`${file}: unknown contract export ${name}`);
+    return owner.name;
+  };
+  const checkNarrow = (target, names) => {
+    if (!requireNarrow) return;
+    if (target === facade) throw new Error(`${file}: facade type import must be narrowed to its owner`);
+    for (const name of names) {
+      const owner = owners.get(name);
+      if (owner && owner.file !== target) throw new Error(`${file}: ${name} is not owned by ${target}`);
+    }
+  };
+  const visit = node => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text.startsWith(".")) {
+      const clause = ts.isImportDeclaration(node) ? node.importClause : undefined;
+      const clauseElements = clause && clause.namedBindings && ts.isNamedImports(clause.namedBindings) ? clause.namedBindings.elements
+        : !clause && ts.isExportDeclaration(node) && !node.exportClause ? null
+        : node.exportClause && ts.isNamedExports(node.exportClause) ? node.exportClause.elements : null;
+      const isTypeOnly = ts.isImportDeclaration(node) ? clause?.isTypeOnly === true : node.isTypeOnly === true;
+      const target = targetOf(file, node.moduleSpecifier.text);
+      // Only declarations that target the facade or a contract owner are
+      // contract dependencies; a production module may export a same-named type.
+      const contractTarget = target === facade || target.startsWith("implementation/contracts/");
+      if (requireNarrow && contractTarget && clauseElements &&
+        clauseElements.some(item => owners.has(item.propertyName?.text ?? item.name.text)) && !isTypeOnly)
+        throw new Error(`${file}: contract types must stay type-only dependencies`);
+      if (contractTarget && clauseElements && clauseElements.length > 0 && isTypeOnly &&
+        clauseElements.every(item => owners.has(item.propertyName?.text ?? item.name.text))) {
+        checkNarrow(target, clauseElements.map(item => item.propertyName?.text ?? item.name.text));
+        const locals = [];
+        for (const item of clauseElements) {
+          const imported = item.propertyName?.text ?? item.name.text;
+          bindings.push([canonical(imported), item.name.text]);
+          locals.push(item.name.text);
+        }
+        const keyword = ts.isImportDeclaration(node) ? "import type" : "export type";
+        edits.push({ start: node.getStart(source), end: node.end,
+          text: `${keyword} { ${locals.sort().join(", ")} } from "@contract";` });
+        return;
+      }
+    }
+    if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal) &&
+      node.argument.literal.text.startsWith(".")) {
+      let qualifier = node.qualifier;
+      while (qualifier && ts.isQualifiedName(qualifier)) qualifier = qualifier.left;
+      const inlineTarget = targetOf(file, node.argument.literal.text);
+      if (qualifier && ts.isIdentifier(qualifier) && owners.has(qualifier.text) &&
+        (inlineTarget === facade || inlineTarget.startsWith("implementation/contracts/"))) {
+        const target = inlineTarget;
+        checkNarrow(target, [qualifier.text]);
+        inline.push([canonical(qualifier.text), qualifier.text]);
+        edits.push({ start: node.argument.literal.getStart(source), end: node.argument.literal.end, text: '"@contract"' });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  let body = text;
+  for (const edit of edits.sort((a, b) => b.start - a.start)) body = body.slice(0, edit.start) + edit.text + body.slice(edit.end);
+  return { bodySha256: createHash("sha256").update(body).digest("hex"), bindings, inline };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

@@ -1,11 +1,53 @@
 {
   "schema": 1,
-  "sourceCommit": "cbe25a050772da336a95a01c9e81cdd5414468c1",
+  "sourceCommit": "c8be44cf16cee8954075b4c36801d474779e930e",
+  "note": "Regenerated for the current source revision; the snapshot pins dependency direction, bindings, aliases and non-import tokens.",
   "files": {
     "src/module-ports.ts": {
-      "sourceBlob": "e2259e91ad49c62477997c1cbc387df808b8dc0e",
-      "bodySha256": "e86c1941ca6328181022eca066c84d4e4178b16554d7f300e09c888f5867f9fe",
-      "bindings": [["Actor","Actor"],["AgentStatus","AgentStatus"],["OperationId","OperationId"],["PreparedBatch","PreparedBatch"],["Receipt","Receipt"],["RequestKey","RequestKey"],["ResourceLimits","ResourceLimits"],["RunLease","RunLease"],["SandboxPlan","SandboxPlan"],["UnitObservation","UnitObservation"]],
+      "sourceBlob": "607778c2570989d966b74b018c71bfff09685722",
+      "bodySha256": "ee066d84cdbfe432757295c2f7b1f53cafe2a4ebe951b8bfb606d61c51d1d8a3",
+      "bindings": [
+        [
+          "Actor",
+          "Actor"
+        ],
+        [
+          "OperationId",
+          "OperationId"
+        ],
+        [
+          "RequestKey",
+          "RequestKey"
+        ],
+        [
+          "AgentStatus",
+          "AgentStatus"
+        ],
+        [
+          "PreparedBatch",
+          "PreparedBatch"
+        ],
+        [
+          "RunLease",
+          "RunLease"
+        ],
+        [
+          "SandboxPlan",
+          "SandboxPlan"
+        ],
+        [
+          "UnitObservation",
+          "UnitObservation"
+        ],
+        [
+          "Receipt",
+          "Receipt"
+        ],
+        [
+          "ResourceLimits",
+          "ResourceLimits"
+        ]
+      ],
       "inline": []
     }
   }
