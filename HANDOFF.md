@@ -1,76 +1,179 @@
-# OMA v2 — 코드 이행 감사 C01–C07 후속 인계
+# OMA v2 — 현재 인계
 
-## 0. 현재 결론
+이 문서는 다음 작업자가 **현재 어디서 재개해야 하는지**만 기록한다. 장기 유지보수 원칙은 [`MAINTENANCE.md`](MAINTENANCE.md), 문서 권위와 historical/generated 구분은 [`implementation/README.md`](implementation/README.md)를 따른다.
 
-사용자가 첨부한 `01_CODE_CONFORMANCE_REPORT.md`와 `02_CARD_CONFORMANCE.md`를 기준으로 확인된 source 반례와 통합 불일치를 다시 대조하고 수정했다. **코드·시험·검사기 수정은 master에 반영했지만, 원본 41개 카드의 완전한 이행·검증을 승인하지 않는다.**
+과거 R00–R40 카드, R37/R39 종료 기록, C01–C07 후속 상세와 commit 목록을 이 파일에 다시 복사하지 않는다. 필요한 경우 아래 historical record를 따라간다.
 
-C01/C02의 old action replay fence, 확인한 C03 phase2/phase4 정상 fixture, C04 actual owner 정책, C07 actual lifecycle sequence를 수정·추가했다. C05는 inventory 생성/검사 도구를 보강했으나 실제 generated list/LOC/hash는 여전히 STALE다. C06의 전체 실행 및 성능·설치·새 source-bound evidence는 NOT_RUN이다. 다른 legacy fixture 전체와 모든 AST/runtime 경로는 이번에 전수 감사하지 않았다.
+## 1. 현재 판정
 
-현재 상세 기준은 [C01–C07 후속 기록](implementation/conformance-followup.md)과 [검증 상태](implementation/validation.md)다. 기존 41개 카드 marker, R37/R39 상세 commit 및 이전 인계는 [감사 기준 SHA의 HANDOFF](https://github.com/minjung2035/oma-v2/blob/2a00fa20dae8f68d8f489401ba821c16d3c35fc4/HANDOFF.md)에 보존했다. 과거 DONE은 재개 위치이며 이번 finding의 해소 또는 runtime PASS를 뜻하지 않는다.
+**현재 source에는 C01–C07 감사에서 확인된 replay/fixture/owner/inventory-tooling 보완이 반영되어 있지만, 전체 실행 적합성과 release compliance는 아직 인증되지 않았다.**
 
-## 1. source 기준과 작업 방식
+현재 상세 검증 상태는 [`implementation/validation.md`](implementation/validation.md)가 기준이다. 특히 다음을 과장하지 않는다.
 
-- 저장소/브랜치: `minjung2035/oma-v2`, 기존 `master`.
-- 첨부 감사 및 이번 수정 시작 SHA: `2a00fa20dae8f68d8f489401ba821c16d3c35fc4`.
-- 원본 계획 분석 SHA: `5b4ffe1238af00aac4a569a5c4d7d9e71092dea0`.
-- 마지막 source/test 변경 확인 commit: `b9c7267d7b9764fd6f2608b22d32f4e11a1be751`.
-- 최종 인계 commit: 이 파일을 갱신한 R39 DONE_WITH_BLOCKED_SUBSTEPS commit. 자기 SHA를 예측하지 않는다.
-- 저장소 읽기/쓰기/commit은 GitHub plugin으로 수행했다. 로컬 checkout 편집, branch/PR 생성, history rewind 또는 실제 운영 DB/Git/unit 조작은 하지 않았다.
+- source/test/tooling이 존재한다고 실행 PASS가 되는 것은 아니다.
+- 과거 `DONE` marker는 재개 지점이지 correctness/release 증거가 아니다.
+- 과거 test count, LOC, source pin, raw log를 현재 source 결과로 재사용하지 않는다.
+- OPEN SPIKE는 helper/test가 있다는 이유로 닫지 않는다.
 
-R00은 계속 NO_CODE_CHANGE다. 기존 카드 순서를 다시 계산하거나 R01부터 재시작하지 않았다. 보고서가 지목한 미충족 경계를 중심으로 작업했다.
+이 문서를 읽는 즉시 현재 `master` HEAD를 다시 조회한다. 문서 자신의 commit SHA를 current HEAD로 적지 않는다.
 
-## 2. finding별 재개 상태
+## 2. 작업 시작 전 읽기 순서
 
-| finding | 수정한 범위 | 미완료 또는 미확인 |
-|---|---|---|
-| C01 / R25 | accepted desired/previousIncarnation과 현재 target의 exact 관계를 before-effect에서 검사. 최신 stopped 의도를 old start가 덮지 않음 | 실제 회귀 실행 및 native start/stop 경합 |
-| C02 / R25/R16 | stop은 frozen epoch만 사용. 현재 enabled incarnation 2에 old epoch 1 stop을 재발행하지 않음 | kernel/cgroup 증거. 역사적 효과를 증명할 수 없는 요청은 unknown으로 보존 |
-| C03 / R32 | phase4 canonical seed/auth/hash/epoch/cleanup, phase2 actual Mail/Store/batch 정상 fixture 이관 | 다른 legacy phase/audit 전역 이관, expanded 실행 개수·도달성 비교 |
-| C04 / R34 | exact protocol transport 및 named process owner 정책. Units와 CLI 중복 native spawn 제거. forbidden neighbor/type-only 대조군 | 전체 compiler/AST/SCC gate 실행. 미검토 finding이 없다고 단정하지 않음 |
-| C05 / R38 | recursive inventory와 stale-list gate, inventory-only/full-cloc 분리 | actual production-files/LOC/hash 재생성과 installed closure. 현재 산출물은 STALE |
-| C06 / R35/R37/R39 | 새 필수 oracle의 기존 lane 연결과 명시적 검증 상태 | typecheck/build/full lanes/native/package/performance/source-bound proof NOT_RUN |
-| C07 / R36 | actual public dispatch → lifecycle → actions를 호출하는 seeded retry corpus/sequence와 minimizer | 실행·축소 결과, actual kernel/SIGKILL과는 별도 범위 |
+1. [`architecture.md`](architecture.md)
+2. [`implementation-spec.md`](implementation-spec.md)
+3. [`implementation/physical-ordering.md`](implementation/physical-ordering.md)
+4. [`implementation/contracts.ts`](implementation/contracts.ts), [`implementation/schema-v1.sql`](implementation/schema-v1.sql)
+5. [`implementation/compliance.md`](implementation/compliance.md), [`implementation/spikes.md`](implementation/spikes.md), [`implementation/integration-policy.md`](implementation/integration-policy.md), [`implementation/test-matrix.md`](implementation/test-matrix.md)
+6. [`MAINTENANCE.md`](MAINTENANCE.md)
+7. 이 파일과 [`validation.md`](validation.md), [`implementation/validation.md`](implementation/validation.md)
+8. 관련 production source/test
 
-normal/recovery를 무조건 같은 재실행 함수로 합치지 않았다. 공통화한 것은 frozen intent/current state 관계 검사다. terminal plan/result bytes, 현재 권한 검사, 원래 key를 보존한다. target desired나 accepted plan을 최신 상태로 고쳐 false success를 만들지 않는다.
+Historical 문서는 current source를 이해하기 위한 보조 자료이지 상위 계약이 아니다.
 
-## 3. 시험 범위
+## 3. 현재 남은 우선 작업
 
-`test/r25-action-replay.test.ts`는 pending/unknown × normal/recovery에서 desired 단독, incarnation 단독, 둘 다 변경된 경우를 구분한다. C02의 정확한 조합인 old stop epoch 1 / current enabled epoch 2 / controlled active unit도 포함한다. unchanged 대조군, terminal replay bytes, stale/revoked caller, GOAL, provisioning/retired 및 unknown death를 함께 둔다.
+### A. C05 — production inventory/LOC/hash freshness
 
-`test/r36-lifecycle-sequences.test.ts`는 실패한 실제 action 접수 뒤 새 start/stop 의도를 실제 dispatcher로 실행한다. 새 epoch 발급만 명시적인 외부 runner event로 표현하며 start/stop을 DB write로 대체하지 않는다. 현재 enabled 새 epoch를 유지하는 C02 corpus와 동일 desired의 epoch 변경 대조군을 별도로 보존한다. 입력 seed·scenarioRevision·PRNG와 실패 축소 artifact는 실제 test 실행 시 기록한다.
+현재 validation 기록상 `production-files.txt`, `production-loc.json`, `production-loc-hashes.json`은 **STALE**이다. 소스 목록이나 LOC/hash를 사람이 최신 값처럼 직접 고치지 않는다.
 
-두 시험 모두 actual Store/codec/authority/lifecycle를 사용하지만 **Units는 명시적인 포트 대역**이다. 이것을 actual authenticated Unix socket, systemd start/stop, cgroup death 또는 SIGKILL evidence로 보고하지 않는다.
+재검증 시작 순서:
 
-phase2/phase4의 기존 시험 제목과 핵심 음성 조건은 유지하는 방향으로 수정했다. production decoder를 완화하거나 기존 kernel/crash lane을 삭제하지 않았다. 전체 실행 개수 보존과 모든 negative oracle 도달성을 확인한 것은 아니다.
+```sh
+npm run inventory
+npm run check:inventory
+```
 
-## 4. commit 색인
+그 뒤 full LOC/hash가 필요하면 pinned cloc 계약에 따라:
 
-주요 source/test/tooling commit 17개는 [후속 기록 §8](implementation/conformance-followup.md)에 있다. 이후의 추가 변경은 다음과 같다.
+```sh
+node scripts/loc.mjs
+```
 
-| commit | 내용 |
-|---|---|
-| `8bfc9aca7b1e22780cb9f3666ebe72bc1580165a` | C01–C07 source/evidence 상태 및 주요 commit 기록 |
-| `29b5ee3ff75c38434bd55cce2cd922d951b1f3a0` | 현재 validation과 기존 VAL 규범 보존 |
-| `c2371902ddba59c13f11b0a0cdbafdab8eb1151f` | root validation 색인 갱신 |
-| `c0ae67851ae00faaaeb0395c0dae540b042c31a3` | exact enabled-new-incarnation C02 및 독립 조건 회귀 보강 |
-| `b9c7267d7b9764fd6f2608b22d32f4e11a1be751` | actual lifecycle sequence의 exact C02 corpus 보강 |
-| 이 파일의 commit | R39 후속 인계 종료 및 미충족 범위 기록 |
+을 실제 실행하고 결과를 current source에 결합한다.
 
-## 5. 실제 재검증의 시작점
+### B. C06 — full execution evidence
 
-현재 `production-files.txt`는 옛 source list다. 실제 source root에서 `npm run inventory`를 실행해 생성하고 `npm run check:inventory`로 대조해야 한다. 새 생성 모드는 목록만 쓰고 LOC/hash를 측정했다고 주장하지 않는다. full `node scripts/loc.mjs`는 cloc 2.08과 기존 systemd filter를 요구한다. 이전 목록·LOC/hash를 직접 고쳐 새 측정처럼 표시하지 않는다.
+다음은 current validation 기준 **NOT_RUN**이다.
 
-그 뒤 pinned TypeScript/lockfile 및 실제 Node/native 지원을 확인하여 typecheck → build → package → architecture/transactions → 해당 verification lane을 실행한다. lane마다 `--out <존재하지 않는 새 디렉터리>`가 필요하다. 전체 명령 예시는 후속 기록 §7에 있다. runtime failure를 product/setup/environment/미도달 oracle로 구분하고 skip/todo/삭제로 PASS를 만들지 않는다.
+- typecheck/build/package
+- architecture/transaction gate
+- fast/durable/property/kernel/crash/stress/all verification lane
+- installed entrypoint/package closure
+- current-source trace/report/compliance generation
+- performance/latency/RSS/FD 측정
 
-이 순서는 이번에 실행했다는 뜻이 아니다. 현재 `check:inventory`는 stale list를 거절하도록 연결돼 있으며, 그 실패를 우회하여 architecture가 통과했다고 기록하지 않는다.
+작성된 test나 lane 연결을 PASS로 부르지 않는다.
 
-## 6. 유지한 제한과 위험
+### C. fixture/coverage 전역 상태
 
-- typecheck/build/test/package/architecture/transaction gate, 모든 verification lane, LOC/trace/report generator: NOT_RUN.
-- C05 generated source inventory/LOC/pins: STALE, 실제 재생성 필요.
-- 전역 normal fixture 이관과 전체 source compliance: 미확인. 일부 수정이 전체 해소의 증거가 아님.
-- OPEN kernel/Pi/provider/S-03/S-04/S-01-CANDIDATE 및 tiered/clean-room gate 유지. 유료 provider, host reboot, VM power cut 미실행.
-- wire v1, 기존 methods/errors, schema/DDL, accepted identity, fixed service 이름을 변경하지 않음. 새로운 daemon/queue/approval workflow를 만들지 않음.
-- 과거 raw logs와 source pins는 역사적 증거로 보존. 이번 source에 재결합하지 않음.
+C03에서 확인된 phase2/phase4 fixture는 보완되었지만 다른 legacy phase/audit fixture 전체가 strict decoder와 current invariant를 만족하는지는 전수 검증되지 않았다.
 
-최종 상태는 **확인된 코드 불일치에 대한 수정 및 회귀 작성 + 명시적으로 남은 C05/C06·전역 미검증 범위**다. 실행 검증된 배포본 또는 감사 전체 승인으로 취급하지 않는다.
+C07의 actual lifecycle sequence source가 존재해도 실행/축소 결과와 kernel/crash 증거는 별도다.
+
+### D. OPEN gate
+
+`implementation/spikes.md`의 상태를 source helper만으로 갱신하지 않는다. 특히 다음 실제 evidence가 없으면 OPEN/BLOCKED를 유지한다.
+
+- S-01 / S-01-CANDIDATE kernel/resource/isolation 경계
+- S-02 Principal attach/private boundary
+- S-03 trusted Pi session/batch completion evidence
+- S-04 real provider codec/accounting
+- S-05/S-06 hostile import/crash/power-loss/backup 경계
+- S-08/S-10 tiered authority/floor/challenge
+- S-11 strict clean-room
+- S-09 quality/cost/latency evaluation
+
+## 4. C01/C02 lifecycle replay에서 유지해야 하는 의미
+
+과거 nonterminal start/stop replay는 accepted plan과 현재 target의 관계가 맞지 않으면 새로운 unit effect를 발행해서는 안 된다.
+
+특히:
+
+```text
+accepted plan.desired
+accepted plan.previousIncarnation
+```
+
+을 현재 target에 맞춰 rewrite하지 않는다. Old stop operation이 더 새로운 incarnation을 stop 대상으로 선택하지 않게 한다. Old start operation이 그 이후의 stopped intent를 덮고 새 start effect를 발행하지 않게 한다.
+
+Normal path와 recovery를 하나의 generic 재실행 함수로 합치지 않는다. 공유할 것은 frozen intent/current-state relation과 observation primitive이며 decision policy는 별개로 유지한다.
+
+관련 상세 역사: [`implementation/conformance-followup.md`](implementation/conformance-followup.md).
+
+## 5. 검증을 다시 시작할 때의 권장 순서
+
+`package.json`의 scripts를 현재 entry로 사용한다.
+
+```sh
+npm run inventory
+npm run check:inventory
+npm run typecheck
+npm run build
+npm run check:package
+npm run check:architecture
+npm test
+npm run verify:fast -- --out <new-dir>
+npm run verify:durable -- --out <new-dir>
+npm run verify:property -- --out <new-dir>
+npm run verify:kernel -- --out <new-dir>
+npm run verify:crash -- --out <new-dir>
+npm run verify:stress -- --out <new-dir>
+npm run verify:all -- --out <new-dir>
+node scripts/loc.mjs
+```
+
+각 verification run은 기존 artifact directory를 덮지 않고 새 output directory를 사용한다. 환경 미지원/skip/oracle 미도달을 전체 PASS로 바꾸지 않는다.
+
+## 6. 이번 이후의 bug-fix 원칙
+
+새 bug를 만나면 [`MAINTENANCE.md`](MAINTENANCE.md)의 절차를 따른다.
+
+요약하면:
+
+```text
+current HEAD에서 재현
+→ Fact / Relation / Phase 정리
+→ 직접 원인과 bug class 식별
+→ authoritative owner 확인
+→ regression/invariant oracle
+→ 최소 안전 수정
+→ 같은 class의 다른 구현 static audit
+→ relevant lane 실행
+→ fresh evidence와 HANDOFF 갱신
+```
+
+같은 key의 historical operation을 현재 state에 맞춰 고치는 방식, unknown을 absence/success로 바꾸는 방식, accepted plan/hash/frozen bytes를 rewrite하는 방식은 사용하지 않는다.
+
+## 7. 문서 역할
+
+### 현재 작업에 사용
+
+- [`MAINTENANCE.md`](MAINTENANCE.md) — 장기 유지보수 원칙
+- [`implementation/README.md`](implementation/README.md) — 문서 지도
+- 이 `HANDOFF.md` — 현재 재개점
+- [`validation.md`](validation.md) — 검증 색인
+- [`implementation/validation.md`](implementation/validation.md) — 상세 current verification status
+
+### Historical detail
+
+- [`implementation/conformance-followup.md`](implementation/conformance-followup.md) — C01–C07 후속 상세
+- [`implementation/refactoring-closure.md`](implementation/refactoring-closure.md) — R37–R39 구조개편 종료 기록
+- [`implementation/adversarial-review.md`](implementation/adversarial-review.md) — 특정 source/evidence 기준 generated audit ledger
+- `implementation/evidence/*` — 당시 source/environment에 결합된 raw evidence
+
+Historical 문서의 결론을 현재 HEAD에 적용하려면 owner/call path를 다시 찾고 재현 또는 fresh evidence로 확인한다.
+
+## 8. 변경하지 않은 상위 surface
+
+이 문서 정리는 다음을 변경하지 않는다.
+
+- architecture 철학
+- implementation-spec MUST/MUST NOT
+- wire v1 method/error/receipt surface
+- DB entity/schema 의미
+- physical ordering
+- OPEN SPIKE 상태
+- systemd unit set
+- integration/tier policy
+
+현재 상태는 **source hardening은 진행됐지만 full execution verification과 release proof가 남아 있는 상태**다.
