@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Actor } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { StoreError, classifyError } from "./domain/errors.js";
+import { assertNever } from "./domain/exhaustive.js";
 import { observeStoreFailure } from "./domain/admission.js";
 import { runGitText, GIT_ENV } from "./process/policies.js";
 import { PreparationExecutor } from "./process/preparation.js";
@@ -59,11 +60,18 @@ export class ReconcileModule {
       for (const id of snapshot) {
         const operation = this.store.getOperationById(id);
         if (!operation || (operation.state !== "pending" && operation.state !== "unknown")) continue;
-        if (operation.kind === "mail.send" || operation.kind === "agent.continue") {
-          try { await reconcileMailOperation(this.store, this.mail, id); }
-          catch (error) { this.retainRecoveryFailure(error); }
-        } else if (["agent.create", "agent.start", "agent.stop", "git.submit", "git.integrate", "context.publish"].includes(operation.kind)) {
-          await this.recover(operation, allowActivation);
+        switch (operation.kind) {
+          case "mail.send": case "agent.continue":
+            try { await reconcileMailOperation(this.store, this.mail, id); }
+            catch (error) { this.retainRecoveryFailure(error); }
+            break;
+          case "agent.create": case "agent.start": case "agent.stop":
+          case "git.submit": case "git.integrate": case "context.publish":
+            await this.recover(operation, allowActivation); break;
+          // These operations commit their complete effect within a single DB T.
+          // Preserve startup's lack of a physical replay for a nonterminal row.
+          case "mail.ack": case "route.follow": case "route.unfollow": break;
+          default: assertNever(operation);
         }
       }
     } catch (error) { observeStoreFailure(this.store, error); throw error; }
@@ -77,7 +85,9 @@ export class ReconcileModule {
       case "git.submit": case "git.integrate": case "context.publish":
         if (!this.git) throw new StoreError("UNSUPPORTED_PROFILE", "Git recovery owner unavailable");
         await this.git.reconcile(operation.id); return;
-      default: throw new StoreError("SPIKE_UNRESOLVED", "operation has no safe physical recovery handler");
+      case "mail.ack": case "route.follow": case "route.unfollow":
+        throw new StoreError("SPIKE_UNRESOLVED", "operation has no safe physical recovery handler");
+      default: assertNever(operation.kind);
     }
   }
   private retainRecoveryFailure(error: unknown): void {

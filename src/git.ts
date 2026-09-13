@@ -4,6 +4,7 @@ import type { AuthContext, ContextEntry, Oid, Receipt } from "../implementation/
 import { Store } from "./store.js";
 import type { OperationOf } from "./storage/operation-codec.js";
 import { StoreError } from "./domain/errors.js";
+import { assertNever } from "./domain/exhaustive.js";
 import { MailModule } from "./mail.js";
 import { isValidFullOid } from "./ids.js";
 import type { GitObservation, RefAfterCas } from "./git/observe.js";
@@ -155,7 +156,10 @@ export class GitModule {
         case "git.integrate": await this.integrationCoordinator.reconcile(operation); return;
         case "context.publish": await this.reconcileContext(operation); return;
         case "git.submit": await this.submissionCoordinator.reconcile(operation); return;
-        default: return;
+        case "mail.send": case "agent.continue": case "mail.ack":
+        case "route.follow": case "route.unfollow":
+        case "agent.create": case "agent.start": case "agent.stop": return;
+        default: assertNever(operation);
       }
     });
   }
