@@ -5,18 +5,19 @@ import { Seeded, PRNG_REVISION, integerParameter, minimizeSequence, replayMetada
 
 interface Scenario {
   kind: ActionKind;
-  later: "unchanged" | "opposite-intent" | "new-epoch";
+  later: "unchanged" | "opposite-intent" | "new-epoch" | "new-enabled-epoch";
   entry: "normal" | "recovery";
 }
 const corpus: readonly Scenario[] = [
   { kind: "agent.start", later: "opposite-intent", entry: "normal" },
-  { kind: "agent.stop", later: "new-epoch", entry: "normal" },
+  { kind: "agent.stop", later: "new-enabled-epoch", entry: "normal" },
+  { kind: "agent.stop", later: "new-epoch", entry: "recovery" },
   { kind: "agent.start", later: "unchanged", entry: "recovery" },
   { kind: "agent.stop", later: "unchanged", entry: "normal" },
 ];
 function generate(seed: number, count: number): Scenario[] {
   const random = new Seeded(seed);
-  const changes = ["unchanged", "opposite-intent", "new-epoch"] as const;
+  const changes = ["unchanged", "opposite-intent", "new-epoch", "new-enabled-epoch"] as const;
   return Array.from({ length: count }, () => ({
     kind: random.index(2) === 0 ? "agent.start" : "agent.stop",
     later: changes[random.index(changes.length)]!,
@@ -47,18 +48,19 @@ async function replay(sequence: readonly Scenario[]): Promise<void> {
         await f.dispatch(opposite, "new-intent");
         assert.equal(f.store.getOperation("manager", "new-intent")?.state, "succeeded", "LIFECYCLE_REPLAY_NEW_INTENT");
         expectedDesired = opposite === "agent.start" ? "enabled" : "stopped";
-      } else if (scenario.later === "new-epoch") {
+      } else if (scenario.later === "new-epoch" || scenario.later === "new-enabled-epoch") {
         await f.dispatch("agent.start", "new-run-start");
         assert.equal(f.store.getOperation("manager", "new-run-start")?.state, "succeeded");
         // Explicit external event, never the implementation of start/stop itself.
         f.store.transaction(tx => tx.updateAgent({ name: "a", incarnation: 2 }));
         expectedEpoch = 2;
         expectedDesired = "enabled";
-        if (scenario.kind === "agent.stop") {
+        if (scenario.later === "new-epoch" && scenario.kind === "agent.stop") {
           await f.dispatch("agent.stop", "new-run-stop");
           assert.equal(f.store.getOperation("manager", "new-run-stop")?.state, "succeeded");
           expectedDesired = "stopped";
         }
+        if (scenario.later === "new-enabled-epoch") assert.equal(f.units.active, true, "C02 latest run must remain alive");
       }
       assert.equal(f.store.getAgent("a")?.desired, expectedDesired);
       assert.equal(f.store.getAgent("a")?.incarnation, expectedEpoch);
@@ -104,7 +106,7 @@ for (const seed of [selectedSeed, 0, 1, 0xffffffff]) {
         catch (error) { return (error instanceof Error ? error.message.split("\n")[0] : String(error)) === signature; }
       }, 32);
       t.diagnostic(`replay artifact: ${recordExplorationFailure("model", {
-        ...replayMetadata(seed, { actions: count, driver: "actual-lifecycle-public-dispatch" }), sequence, reduced, signature,
+        ...replayMetadata(seed, { actions: count, driver: "actual-lifecycle-public-dispatch", scenarioRevision: "v2" }), sequence, reduced, signature,
       })}`);
       throw original;
     }
