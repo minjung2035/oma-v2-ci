@@ -2,8 +2,8 @@
 // Same-key replay never rebuilds from current HEAD or mutable source files.
 import { readFileSync, existsSync, readdirSync, statSync, lstatSync, openSync, closeSync, fstatSync, constants } from "node:fs";
 import { basename, join } from "node:path";
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { runGitText } from "./process/policies.js";
 import { callActor } from "./cli/transport.js";
 import { RequestCache, CacheError, type CachedRequest, type FreezeInput } from "./request-cache.js";
 import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4, parseMessageId, parseMessageFileId } from "./ids.js";
@@ -19,14 +19,6 @@ import { requestIntentConflict, explicitFullOid } from "./cli/request-intent.js"
 import { decodeReceipt, decodeFailure } from "./protocol/receipt-codec.js";
 import { receiptLines, receiptExit, isRequestNotFound } from "./protocol/receipts.js";
 
-const cliGitEnv: NodeJS.ProcessEnv = {
-  HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
-  GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
-  GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1", GIT_CONFIG_COUNT: "3",
-  GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "/dev/null",
-  GIT_CONFIG_KEY_1: "core.fsync", GIT_CONFIG_VALUE_1: "all",
-  GIT_CONFIG_KEY_2: "core.fsyncMethod", GIT_CONFIG_VALUE_2: "fsync",
-};
 const HOME = process.env.HOME ?? "/tmp";
 const cache = new RequestCache(HOME);
 function fail(message: string, code: CliExitCode): never { console.error(`oma: ${message}`); process.exit(code); }
@@ -196,8 +188,8 @@ function multiOpt(args: string[], name: string): string[] {
 }
 function resolveOid(revision: string): string {
   if (FULL_OID_RE.test(revision)) return revision;
-  const result = spawnSync("/usr/bin/git", ["rev-parse", "--verify", `${revision}^{commit}`], { cwd: process.cwd(), env: cliGitEnv, encoding: "utf8" });
-  const oid = (result.stdout ?? "").trim();
+  const result = runGitText(["rev-parse", "--verify", `${revision}^{commit}`], { cwd: process.cwd() });
+  const oid = result.stdout.trim();
   if (result.status !== 0 || !FULL_OID_RE.test(oid)) fail(`cannot resolve ${revision} to a commit`, 2);
   return oid;
 }
@@ -272,9 +264,9 @@ async function cmdAgent(args: string[]): Promise<void> {
   } else usage();
 }
 function git(cwd: string, args: string[]): string {
-  const result = spawnSync("/usr/bin/git", args, { cwd, env: cliGitEnv, encoding: "utf8" });
-  if (result.status !== 0) fail(`git ${args[0] ?? "?"}: ${(result.stderr ?? "").slice(0, 200)}`, 2);
-  return (result.stdout ?? "").trim();
+  const result = runGitText(args, { cwd });
+  if (result.status !== 0) fail(`git ${args[0] ?? "?"}: ${result.stderr.slice(0, 200)}`, 2);
+  return result.stdout.trim();
 }
 async function cmdSubmit(args: string[]): Promise<void> {
   const revision = args[0]; if (!revision) usage();
@@ -284,8 +276,11 @@ async function cmdSubmit(args: string[]): Promise<void> {
     const subject = opt(args, "--subject") ?? "Re: submit"; const body = readBody(opt(args, "--file")); const paths = multiOpt(args, "--path");
     const exportRef = exportRefForRequestKey(key);
     git(cwd, ["update-ref", exportRef, candidate]);
-    const parent = spawnSync("/usr/bin/git", ["rev-parse", "--verify", "-q", `${candidate}^`], { cwd, env: cliGitEnv, encoding: "utf8" });
-    const prerequisites: string[] = parent.status === 0 && parent.stdout.trim() ? [parent.stdout.trim()] : [];
+    // Explicit parent manifest: an unavailable command is never an empty root.
+    const ancestry = git(cwd, ["rev-list", "--parents", "-n", "1", candidate]).split(" ");
+    if (ancestry[0] !== candidate || ancestry.some(oid => !FULL_OID_RE.test(oid) || oid.length !== candidate.length))
+      fail("cannot observe the frozen candidate's parent identities", 3);
+    const prerequisites: string[] = ancestry[1] === undefined ? [] : [ancestry[1]];
     const bundleTmp = join("/tmp", `oma-submit-${key}.bundle`);
     git(cwd, ["bundle", "create", bundleTmp, exportRef, ...(prerequisites.length > 0 ? [`^${prerequisites[0]}`] : [])]);
     const content = readFileSync(bundleTmp);
