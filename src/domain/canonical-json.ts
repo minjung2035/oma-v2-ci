@@ -86,5 +86,8 @@ export function canonicalJson(value: unknown): string {
 }
 
 export function sha256Hex(bytes: string | Uint8Array): string {
-  return createHash("sha256").update(bytes, "utf8").digest("hex");
+  const hash = createHash("sha256");
+  if (typeof bytes === "string") hash.update(bytes, "utf8");
+  else hash.update(bytes);
+  return hash.digest("hex");
 }
