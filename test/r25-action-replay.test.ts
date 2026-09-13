@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { lifecycleReplayFixture } from "./fixtures/lifecycle-replay.js";
+import { makeValidAgent } from "./fixtures/spec.js";
 
 for (const kind of ["agent.start", "agent.stop"] as const) {
   for (const state of ["pending", "unknown"] as const) {
@@ -53,9 +54,9 @@ for (const kind of ["agent.start", "agent.stop"] as const) {
       const stale = await f.dispatch(kind, "unauthorized");
       assert.match(JSON.stringify(stale), /STALE_RUN/);
       assert.deepEqual(f.units.effects, []);
-      f.auth.incarnation = 2;
       f.capabilities.clear();
-      const revoked = await f.dispatch(kind, "unauthorized");
+      const revoked = await f.dispatcher.dispatch({ ...f.auth, incarnation: 2 },
+        { v: 1, id: "revoked", method: kind, request: "unauthorized", params: { agent: "a" } }, null);
       assert.match(JSON.stringify(revoked), /CAPABILITY_DENIED/);
       assert.deepEqual(f.units.effects, []);
       assert.equal(f.store.getOperationById(prior.id)?.planJson, prior.planJson);
@@ -70,11 +71,12 @@ test("R25: no GOAL, provisioning, retired and unknown death retain their own rej
     assert.match(JSON.stringify(await f.dispatch("agent.start", "no-goal")), /GOAL_REQUIRED/);
     assert.equal(f.store.getOperation("manager", "no-goal"), null);
     f.controls.hasGoal = true;
-    f.store.transaction(tx => tx.updateAgent({ name: "a", desired: "provisioning" }));
-    assert.match(JSON.stringify(await f.dispatch("agent.start", "provisioning")), /AGENT_NOT_READY/);
-    f.store.transaction(tx => tx.updateAgent({ name: "a", desired: "retired" }));
-    assert.match(JSON.stringify(await f.dispatch("agent.stop", "retired")), /AGENT_RETIRED/);
-    f.store.transaction(tx => tx.updateAgent({ name: "a", desired: "enabled" }));
+    f.store.transaction(tx => {
+      tx.insertAgent(makeValidAgent("notready", { desired: "provisioning", createdBy: "manager" }));
+      tx.insertAgent(makeValidAgent("retired", { desired: "retired", createdBy: "manager" }));
+    });
+    assert.throws(() => f.lifecycle.start(f.auth, "notready", "provisioning"), { code: "AGENT_NOT_READY" });
+    assert.throws(() => f.lifecycle.stop(f.auth, "retired", "retired"), { code: "AGENT_RETIRED" });
     f.units.deathKnown = false;
     assert.match(JSON.stringify(await f.dispatch("agent.start", "unknown-death")), /RUN_TERMINATION_UNKNOWN/);
     assert.equal(f.store.getOperation("manager", "unknown-death"), null);
