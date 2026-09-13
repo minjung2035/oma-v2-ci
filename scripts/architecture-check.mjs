@@ -367,16 +367,21 @@ export function analyzeProgram(program, { rootDir = process.cwd(), policy = DEFA
     const plan = canonicalDeclaration("OperationPlan", "implementation/contracts.ts");
     const registry = canonicalDeclaration("OPERATION_CODECS");
     const kinds = new Set();
+    let closedPlan = Boolean(plan);
     if (plan) {
       const type = checker.getTypeAtLocation(plan);
       for (const member of type.isUnion() ? type.types : [type]) {
         const kind = checker.getPropertyOfType(member, "kind");
-        if (!kind) continue;
+        if (!kind) { closedPlan = false; continue; }
         const kindType = checker.getTypeOfSymbolAtLocation(kind, plan);
-        for (const value of kindType.isUnion() ? kindType.types : [kindType]) if (value.isStringLiteral()) kinds.add(value.value);
+        for (const value of kindType.isUnion() ? kindType.types : [kindType]) {
+          if (value.isStringLiteral()) kinds.add(value.value);
+          else closedPlan = false;
+        }
       }
     }
-    if (kinds.size !== 11 || !registry) report("operation-exhaustiveness", registry ?? plan ?? fallback, "Exactly 11 operation kinds need a closed OPERATION_CODECS registry");
+    if (!closedPlan || kinds.size === 0 || !registry)
+      report("operation-exhaustiveness", registry ?? plan ?? fallback, "A nonempty closed OperationPlan kind set and OPERATION_CODECS registry are required");
     if (registry) {
       const entries = checker.getPropertiesOfType(checker.getTypeAtLocation(registry));
       if (JSON.stringify(entries.map(entry => entry.name).sort()) !== JSON.stringify([...kinds].sort()))

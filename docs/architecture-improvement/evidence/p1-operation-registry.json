@@ -1,0 +1,17 @@
+{
+  "scope": "isolated real-checker fixtures; not full repository verification",
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "repositoryPinnedTypescript": "5.9.3",
+  "pinnedToolchainVerified": false,
+  "baseCommit": "e2afe9ab050d87705451cd127c458ad216aa52d4",
+  "baseCheckerGitBlob": "73de36e5b93c59fb9f4eb1be5d81f565f40eddaf",
+  "unchangedOwnerPolicyGitBlob": "16ce722965bd64a8b9e33fd542b76612bb365712",
+  "modifiedCheckerGitBlob": "04097f55bfa1b73ed7ed1102b1cf22193f4848bd",
+  "modifiedCheckerSha256": "12b6cbd4929b7d31b53e5970b9ad17b1562f5128ba27411bed6b3f6c4d63008c",
+  "testSha256": "bbfdce4e65a0b34e06faeb90f7e1778b48882e5341f439c989985f0e6d3b47cd",
+  "command": "node --test --test-concurrency=1 --test-reporter=tap test/operation-registry-policy.test.mjs",
+  "before": { "tests": 8, "pass": 5, "fail": 3, "skipped": 0, "rawTapSha256": "d68b3b22f17d1342345fd62398a729c3110763c095b7ccacc3a7bc0ed39da33c" },
+  "after": { "tests": 8, "pass": 8, "fail": 0, "skipped": 0, "rawTapSha256": "146b90e2bcace99a769c429553fba23a71af62c8a871bf592c5745b6103bd7f1" },
+  "fullBaseline": "BLOCKED / NOT_RUN"
+}
