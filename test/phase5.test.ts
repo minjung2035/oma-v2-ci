@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { connect } from "node:net";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
-import { resolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
+import { resolvedSpec, ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
@@ -116,13 +116,12 @@ function seed(store: Store, specs: Array<[string, string, string]>): void {
     for (const [name, role, desired] of specs) {
       store.insertAgent({
         name,
-        specHash: "h",
+        ...storedSpec(ALL_CAPS, "p", name),
         role: role as "resident" | "principal",
         desired: desired as never,
         incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -702,7 +701,7 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     const child = spawn(withSys[0]!, withSys.slice(1), {
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const pi = new PiRpcClient(child);
+    const pi = new PiRpcClient(child, { frameBytes: 262144, idleStreamSeconds: 30, receiptWaitSeconds: 30 });
     const events: Array<{
       type: string;
       message?: { role?: string; customType?: string; stopReason?: string };

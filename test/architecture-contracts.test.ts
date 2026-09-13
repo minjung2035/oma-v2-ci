@@ -119,7 +119,7 @@ test("pure boundaries, runtime test dependencies, dynamic imports, and raw effec
   rejects("subprocess-owner", { "src/bad.ts": `import {spawnSync} from "node:child_process"; export {spawnSync};` });
   const positive = fixture({
     "src/store.ts": `import {DatabaseSync} from "node:sqlite"; export {DatabaseSync};`,
-    "src/process/command-runner.ts": `import {spawnSync} from "node:child_process"; export {spawnSync};`,
+    "src/process/run.ts": `import {spawnSync} from "node:child_process"; export {spawnSync};`,
   });
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
@@ -140,7 +140,7 @@ test("transaction analysis follows local call aliases and rejects filesystem and
     ${store} function helper() {write("/tmp/not-executed", "data");} const alias = helper; store.transaction(() => alias());` });
   rejects("transaction-await", { "src/bad.ts": `${store} store.transaction(async () => {await Promise.resolve();});` });
   rejects("transaction-thenable", { "src/bad.ts": `${store} const helper = () => Promise.resolve(1); store.transaction(() => helper());` });
-  const positive = fixture({ "src/good.ts": `${store} function pure(value: number) {return value + 1;} store.transaction(() => pure(1));` });
+  const positive = fixture({ "src/domain/good.ts": `${store} function pure(value: number) {return value + 1;} store.transaction(() => pure(1));` });
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
 
@@ -150,8 +150,9 @@ test("runtime SCCs are rejected while type-only cycles do not form runtime edges
     "src/b.ts": `import {a} from "./a.js"; export const b = () => a;`,
   });
   const positive = fixture({
-    "src/a.ts": `import type {B} from "./b.js"; export interface A {b: B}`,
-    "src/b.ts": `import type {A} from "./a.js"; export interface B {a: A}`,
+    // A type-only cycle inside one measured layer is not a runtime coupling.
+    "src/domain/a.ts": `import type {B} from "./b.js"; export interface A {b: B}`,
+    "src/domain/b.ts": `import type {A} from "./a.js"; export interface B {a: A}`,
   });
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });

@@ -55,7 +55,9 @@ export async function runJournal(argv: readonly string[], maxBytes: number): Pro
     timeoutMs: 30000, stdoutBytes: maxBytes, stderrBytes: 16 * 1024 });
   if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "journalctl timed out");
   if (result.kind === "output-limited" && result.stdoutTruncated && !result.stderrTruncated) return { bytes: result.stdout, truncated: true };
-  if (result.kind !== "exited" || result.exitCode !== 0) throw new StoreError("INTERNAL_ERROR", `journalctl outcome is ${result.kind}`);
+  if (result.kind !== "exited" || result.exitCode !== 0)
+    throw new StoreError("INTERNAL_ERROR", `journalctl outcome is ${result.kind}` +
+      (result.stderr.byteLength === 0 ? "" : `: ${result.stderr.toString("utf8").slice(0, 300)}`));
   return { bytes: result.stdout, truncated: false };
 }
 /** Explicitly interactive, host-user command policy. No shell concatenation.

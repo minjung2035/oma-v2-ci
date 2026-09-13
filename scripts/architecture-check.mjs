@@ -6,6 +6,8 @@ import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { resolveExportDeclaration } from "./contract-surface.mjs";
 import { DEFAULT_POLICY, pureBoundaryViolation } from "./architecture-owners.mjs";
+import { EVIDENCE_PATH, collectDependencyGraph, dependencyEvidence, graphFromProgram } from "./dependency-graph.mjs";
+import { cycleFindings, latticeFindings } from "./dependency-lattice.mjs";
 export { DEFAULT_POLICY } from "./architecture-owners.mjs";
 
 const slash = value => value.split(path.sep).join("/");
@@ -309,7 +311,8 @@ export function analyzeProgram(program, { rootDir = process.cwd(), policy = DEFA
         report("persisted-plan-cast", node, "Persisted JSON must go through the plan decoder and relation checks");
       if (ts.isVariableDeclaration(node) && containsPlanType(node.type) && node.initializer && comesFromJsonParse(checker, node.initializer))
         report("persisted-plan-cast", node, "A type annotation does not decode persisted JSON");
-      if (node.kind === ts.SyntaxKind.RegularExpressionLiteral && file !== policy.identifierOwner && idPatterns.has(node.text))
+      if (node.kind === ts.SyntaxKind.RegularExpressionLiteral && file !== policy.identifierOwner &&
+        idPatterns.has(node.text) && !policy.identifierMirrors?.[file])
         report("duplicate-id-schema", node, "Executable identifier grammar duplicates the canonical owner");
       if (ts.isArrayLiteralExpression(node)) {
         const values = node.elements.filter(ts.isStringLiteralLike).map(value => value.text);
@@ -354,6 +357,30 @@ export function analyzeProgram(program, { rootDir = process.cwd(), policy = DEFA
     });
   }
   for (const group of stronglyConnected(graph)) report("runtime-import-cycle", sourceByFile.get(group[0]), `Runtime import SCC: ${group.join(" -> ")}`);
+
+  // P5: the measured dependency lattice. Runtime edges may only point into the
+  // same or a more fundamental layer. Type-only references are erased at runtime
+  // and are evidence, but they may not form an import cycle.
+  const programGraph = graphFromProgram(program, { rootDir: root });
+  const production = new Set(programGraph.files.filter(file => file.startsWith("src/") || file.startsWith("implementation/")));
+  const latticeEdges = programGraph.edges.filter(edge => production.has(edge.from) && production.has(edge.to) && edge.included);
+  const anchor = sources[0] ?? program.getSourceFiles()[0];
+  for (const finding of latticeFindings(latticeEdges, [...production].sort()))
+    report(finding.rule, sourceByFile.get(finding.file) ?? anchor, finding.reason);
+  const unionAdjacency = new Map([...production].sort().map(file => [file, new Set()]));
+  const productionRuntime = new Map([...production].sort().map(file => [file, new Set()]));
+  const runtimeSelfLoop = new Set();
+  for (const edge of latticeEdges) {
+    unionAdjacency.get(edge.from).add(edge.to);
+    if (edge.kind === "runtime") { productionRuntime.get(edge.from).add(edge.to); if (edge.from === edge.to) runtimeSelfLoop.add(edge.from); }
+  }
+  const runtimeGroups = new Set(stronglyConnected(productionRuntime)
+    .filter(group => group.length > 1 || runtimeSelfLoop.has(group[0])).map(group => group.join("\0")));
+  const unionGroups = stronglyConnected(unionAdjacency)
+    .filter(group => group.length > 1 || unionAdjacency.get(group[0]).has(group[0]))
+    .filter(group => !runtimeGroups.has(group.join("\0")));
+  for (const finding of cycleFindings(unionGroups))
+    report(finding.rule, sourceByFile.get(finding.file) ?? anchor, finding.reason);
 
   if (checkContracts && sources.length) {
     const fallback = sources[0];
@@ -422,9 +449,23 @@ export function applyExactBaseline(findings, baseline = []) {
   return active;
 }
 
+/** The checked-in lattice evidence is generated, never hand-written. It is
+ * compared by the same extractor, so a documented lattice cannot outlive the
+ * source it describes. */
+function evidenceFreshnessFindings(root) {
+  const target = path.join(root, EVIDENCE_PATH);
+  if (!fs.existsSync(path.join(root, "docs/architecture-improvement"))) return [];
+  const current = dependencyEvidence(collectDependencyGraph({ rootDir: root }));
+  const recorded = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
+  if (recorded === JSON.stringify(current, null, 1) + "\n") return [];
+  return [{ rule: "dependency-evidence-stale", file: EVIDENCE_PATH, line: 1, column: 1,
+    sourceHash: digest(recorded), snippetHash: digest(JSON.stringify(current)),
+    reason: "P5 lattice evidence differs from the current import graph; run npm run evidence:graph" }];
+}
+
 export function runArchitectureCheck(rootDir = process.cwd(), baseline = []) {
   const root = path.resolve(rootDir), program = createArchitectureProgram(root);
-  const findings = analyzeProgram(program, { rootDir: root });
+  const findings = [...analyzeProgram(program, { rootDir: root }), ...evidenceFreshnessFindings(root)];
   const compiler = ts.getPreEmitDiagnostics(program).filter(item => item.category === ts.DiagnosticCategory.Error);
   const manifestPath = path.join(root, "production-files.txt");
   const manifest = fs.readFileSync(manifestPath, "utf8").split(/\r?\n/).filter(Boolean);

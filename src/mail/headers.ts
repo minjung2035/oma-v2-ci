@@ -134,10 +134,17 @@ export function parseEmlHeaders(input: string | Uint8Array, limits: HeaderReadLi
   if (headers["content-disposition"] !== undefined && headers["content-disposition"].toLowerCase() !== "inline") return invalid("unsupported content disposition");
   const kind = headers["x-oma-kind"] ?? null;
   if (kind !== null && !isMailKind(kind)) return invalid("unsupported mail kind");
-  const revision = headers["x-oma-context"] ?? null;
+  // RFC 5322 folding splits long values across continuation lines. Every value
+  // this module validates is unfolded first, including the OMA metadata emitted
+  // by buildEml, so an accepted original can always be read back.
+  const unfolded = (name: string): string | null => {
+    const value = headers[name];
+    return value === undefined ? null : unfold(value).trim();
+  };
+  const revision = unfolded("x-oma-context");
   if (revision !== null && !isValidFullOid(revision)) return invalid("invalid context OID");
-  const approval = { repo: headers["x-oma-approval-repo"] ?? null, targetRef: headers["x-oma-approval-target"] ?? null,
-    expectedBase: headers["x-oma-approval-base"] ?? null, candidate: headers["x-oma-approval-candidate"] ?? null,
+  const approval = { repo: unfolded("x-oma-approval-repo"), targetRef: unfolded("x-oma-approval-target"),
+    expectedBase: unfolded("x-oma-approval-base"), candidate: unfolded("x-oma-approval-candidate"),
     policyRevision: headers["x-oma-approval-policy"] === undefined ? null : policyWords(headers["x-oma-approval-policy"]) };
   const hasApproval = Object.values(approval).some(value => value !== null);
   if (hasApproval && (kind !== "approval_required" || exactCandidateCheck(approval) !== null)) return invalid("inconsistent approval identity");

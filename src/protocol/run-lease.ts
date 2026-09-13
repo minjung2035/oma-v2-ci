@@ -24,7 +24,7 @@ export function decodeRunLease(value: unknown, expected: { actor: string; runRoo
     throw new StoreError("AUTH_FAILED", "runner lease actor, incarnation or endpoint differs from trusted context");
   const lease = Object.freeze({ actor: expected.actor, incarnation: row.incarnation, socketHostPath: row.socketHostPath as string });
   scopes.set(lease, expected.runRoot);
-  return lease as ValidatedRunLease;
+  return lease as unknown as ValidatedRunLease;
 }
 export function assertValidatedRunLease(value: RunLease, runRoot?: string): asserts value is ValidatedRunLease {
   if (value === null || typeof value !== "object" || !scopes.has(value) || (runRoot !== undefined && scopes.get(value) !== runRoot))

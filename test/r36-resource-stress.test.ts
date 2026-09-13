@@ -11,7 +11,8 @@ import { SharedPeerPin } from "../src/broker/peer-pin.js";
 import { peerPidFd, peerPidAlive } from "../src/leaf.js";
 import { encodeFrame } from "../src/frame.js";
 import { sha256Hex } from "../src/hash.js";
-import { OperationRecovery } from "../src/reconcile/operations.js";
+import { OperationRecovery, type RecoveryRow } from "../src/reconcile/operations.js";
+import { parseOperationId } from "../src/domain/identifiers.js";
 import { runProcess } from "../src/process/run.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
 import { Seeded, integerParameter, replayMetadata, recordExplorationFailure } from "./model/reproducible.js";
@@ -139,7 +140,8 @@ test("R36 stress bounded executor timeout drains owned pipes without asserting d
 
 test("R36 stress no-progress recovery coalesces callers and respects the existing receipt backoff", async () => {
   let now = 0, attempts = 0;
-  const row = { id: "00000000-0000-4000-8000-000000000001", kind: "mail.send" as const, state: "unknown" as const };
+  const row: RecoveryRow = { id: parseOperationId("op-00000000-0000-4000-8000-000000000001")!,
+    kind: "mail.send", state: "unknown" };
   const recovery = new OperationRecovery({ snapshot: () => [row.id], read: () => row,
     recover: async () => { attempts++; }, failure: error => { throw error; }, clock: () => now, budgetSeconds: limits.receiptWaitSeconds });
   for (let cycle = 0; cycle < 64; cycle++) {
