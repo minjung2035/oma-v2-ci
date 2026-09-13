@@ -76,6 +76,11 @@ export class ContextRepository {
     const observed = this.observer.ref(this.paths.contextGit, "refs/heads/main");
     return observed.kind === "absent" ? null : present(observed, "context main");
   }
+  /** Read-only observation for callers that must not create the repository. */
+  observedObjectFormat(): "sha1" | "sha256" | null {
+    if (!this.exists()) return null;
+    return present(this.observer.objectFormat(this.paths.contextGit), "context object format");
+  }
   private async initialize(): Promise<"sha1" | "sha256"> {
     if (!this.exists()) {
       ensureDurableDirectory(this.paths.contextGit);

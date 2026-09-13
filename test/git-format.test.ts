@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, renameSync } from "node:fs";
+import { mkdtempSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Store } from "../src/store.js";
 import { sha256Hex } from "../src/hash.js";
 import { gitFixture, gitAuth, gitCommand, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
+import { removeTree } from "./fixtures/cleanup.js";
 
 for (const format of ["sha1", "sha256"] as const) {
   test(`ID-003: ${format} rejects mismatched full OIDs before acceptance or stream consumption`, async () => {
@@ -57,7 +58,7 @@ for (const format of ["sha1", "sha256"] as const) {
       assert.equal(gitCommand(root, ["--git-dir", join(root, "repos/context.git"), "rev-parse", `${second.result.revision}^`]), first.result.revision);
       const staging = ["a", "b"].map(actor => JSON.parse(store.getOperation(actor, "shared-context-key")!.planJson).stagingPath);
       assert.notEqual(staging[0], staging[1]);
-    } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { store.close(); removeTree(root); }
   });
 }
 
@@ -88,6 +89,6 @@ for (const format of ["sha1", "sha256"] as const) {
       await git.reconcile(accepted.id);
       assert.equal(store.getOperation("a", "uncertain")!.id, accepted.id);
       assert.equal(store.getOperation("a", "uncertain")!.state, "succeeded");
-    } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { store.close(); removeTree(root); }
   });
 }

@@ -62,6 +62,7 @@ export class GitModule {
     this.contextRepository = new ContextRepository(paths, this.observations);
     this.contextCoordinator = new ContextCoordinator(paths, store, mail, {
       current: () => this.currentContext(),
+      observedObjectFormat: () => this.contextRepository.observedObjectFormat(),
       prepareCandidate: (tree, entries, expected) => this.prepareContextCandidate(tree, entries, expected),
       ensureCandidate: operation => this.contextRepository.ensureCandidate(operation),
       compareAndSwap: (base, candidate) => this.casRef(paths.contextGit, "refs/heads/main", candidate, base),

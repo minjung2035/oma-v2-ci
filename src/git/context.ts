@@ -23,6 +23,9 @@ export type ContextInput = PublicMethods["context.publish"]["params"];
 export interface ContextEffects {
   /** null is observed absence only; unknown/corrupt observations throw. */
   current(): Oid | null;
+  /** Read-only repository fact. null when no repository exists yet, so a first
+   * publication is never rejected for a format it cannot have observed. */
+  observedObjectFormat(): "sha1" | "sha256" | null;
   prepareCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid | Promise<Oid>;
   ensureCandidate(operation: OperationOf<"context.publish">): void;
   compareAndSwap(base: Oid | null, candidate: Oid): RefAfterCas;
@@ -90,6 +93,13 @@ export class ContextCoordinator {
     if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
     this.requireWriterSlot();
+    // ID-003: a wire OID must match this repository's object format before any
+    // base comparison, so a wrong-format locator is an input error rather than a
+    // conflict. No repository yet means there is no observed format to compare.
+    const format = this.effects.observedObjectFormat();
+    if (format !== null && request.expected !== null &&
+      (!isValidFullOid(request.expected) || request.expected.length !== (format === "sha1" ? 40 : 64)))
+      throw new StoreError("INVALID_OID", "context base has the wrong repository object format");
     if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
     const id = generateOperationId(); const messageId = generateMessageId(id, 0);
     const tree = await prepareContextStream(this.paths.stateRoot, id, request.entries, request.content, bytes);
