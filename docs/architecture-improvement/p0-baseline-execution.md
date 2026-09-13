@@ -28,7 +28,7 @@
 | `npm run check:architecture` | **FAIL 5건** | **PASS 0건** | 아래 §3 |
 | `npm test` | **FAIL** | **PARTIAL** | 135 file 중 120 PASS / 15 FAIL / 1 timeout, §4 |
 | `npm run verify:*` lane | NOT_RUN | NOT_RUN | §5 |
-| `node scripts/loc.mjs` | NOT_RUN | **FAIL (gate)** | 12,343 code lines > A-009 10,000 review 조건 |
+| `node scripts/loc.mjs` | NOT_RUN | **FAIL (gate)** | 12,351 code lines > A-009 10,000 review 조건 |
 
 `npm run check:architecture`의 5건은 master에서도 존재하던 latent 실패였다(master에서 103건). 상세는 §3.
 
@@ -75,15 +75,13 @@
 | RFC 5322 folded header를 parser가 unfold하지 않음 | 64-hex context OID(sha256 repo)를 가진 mail은 `buildEml`이 header를 folding하므로 **OMA가 자기 accepted mail을 다시 읽지 못했다**. context notification materialize/reconcile가 `STORE_CORRUPT`로 실패하고 crash-lane T57/T66/T39 시나리오가 진행 불가 | `parseEmlHeaders`의 `X-OMA-Context`·approval metadata 검증 전에 unfold 적용. `test/mail-header-leaf.test.ts`에 round-trip 회귀 oracle 추가 |
 | (tooling) SCC false PASS | P5 측정이 cycle 0으로 잘못 보고 | Tarjan 구현 수정 후 재측정 |
 
-### 4.3 잔여 실패 (미완료로 기록)
+### 4.3 잔여 실패 — 해소
 
-이번 라운드에서 남은 실패를 대부분 해소했다. 현재 **phase4 18/18**, **phase5 12/13**이며 나머지는 아래 하나다.
+이전 라운드에서 남아 있던 15 FAIL + 1 timeout을 전부 해소했다. 현재 각 파일 기준으로 `phase3 11/11`, `phase4 18/18`, `phase5 13/13`, `phase7 11/11`, `phase8 3/3`, `crash-boundaries 46/46`, `audit 13/13`, `audit2 2/2`, `host-entry 2/2`, `r36-resource-stress 3/3`, `context-security 2/2`, `context-manifest-boundary 4/4`, `cli 1/1`, `contract-import-migrations 3/3`다.
 
-| file / test | 관측된 원인 | 분류 |
-| --- | --- | --- |
-| `phase5` — "deliver smoke: sandboxed Pi ..." | sandbox argv는 이제 정상 구성되고(루트 mountpoint·state root 기반 경로·decode된 lease), 같은 profile로 harness 밖에서 직접 실행하면 `message_start{role:"custom",customType:"oma-mail"}` 전달이 확인된다. harness 안에서는 child가 stdout/stderr를 전혀 내지 않아(=`spawn="" stderr=""`) 원인 미확정 | 조사 필요 |
+마지막으로 남았던 `phase5` smoke의 원인은 **harness가 bwrap에 ro-bind할 host control socket을 만들지 않은 것**이었다. bwrap은 exec 이전에 `Can't find source path .../control.sock`로 exit 1했고, evidence promise가 `exit`에서 resolve되어 assert가 stderr flush 전에 실행되면서 `stderr=""`로 보였다. fixture가 실제 listening socket을 만들고, promise를 `close`에서 resolve하며, 실패 메시지에 exit code/signal을 포함하도록 고쳤다.
 
-해소된 항목과 원인(요약): harness의 directory fence checkpoint가 entry 생성 전에 발화하던 문제, `create-object`/`boot-object`가 intent 이전 경계라는 사실, 비동기 preparation spawn 미관측, copy 경계가 사라진 `copyFileSync` 패치를 쓰던 문제, 경계 없는 `OMA_STOP=""`, `sun_path` 경계 길이, unit template 기대값, spec hash 없는 agent row, request hash/payload 불일치, delivery 집합 불일치 주입 경로, read-only tree cleanup, context base OID 검증 순서, `systemd-analyze`의 unit 의존성 해석, 동시 create의 orphan object, RunRegistry 형태 변경, view limits 미설정, host.reconcile 응답 schema, status result schema, P2 snapshot helper 부재.
+해소된 항목과 원인(요약): harness의 directory fence checkpoint가 entry 생성 전에 발화하던 문제, `create-object`/`boot-object`가 intent 이전 경계라는 사실, 비동기 preparation spawn 미관측, copy 경계가 사라진 `copyFileSync` 패치를 쓰던 문제, 경계 없는 `OMA_STOP=""`, `sun_path` 경계 길이, unit template 기대값, spec hash 없는 agent row, request hash/payload 불일치, delivery 집합 불일치 주입 경로, read-only tree cleanup, context base OID 검증 순서, `systemd-analyze`의 unit 의존성 해석, 동시 create의 orphan object(FS-007), RunRegistry 형태 변경, view limits 미설정, host.reconcile 응답 schema, status result schema, P2 snapshot helper 부재, actor identity 미seed, runner lease endpoint identity, socket listener baseline(Node 내부 `end` listener), broker singleton 소유 경계, sandbox rootfs mountpoint, host control socket.
 
 #### 4.4 이번 라운드에서 고친 production surface
 
@@ -97,5 +95,5 @@
 
 - `npm run verify:fast|durable|property|kernel|crash|stress|all` lane: NOT_RUN. (개별 test file 실행은 했지만 lane runner의 evidence/skip 정책 평가는 실행하지 않았다.)
 - VM power-cut, ENOSPC, read-only remount, backup/restore: NOT_RUN (환경 없음).
-- `node scripts/loc.mjs`: 실행했다. 결과는 TOTAL production LOC **12,343 code lines**(P8 이후 재측정)로 A-008/A-009의 architecture review 조건(10,000 초과)에 걸린다. 이 수치는 release gate FAIL로 기록한다.
+- `node scripts/loc.mjs`: 실행했다. 결과는 TOTAL production LOC **12,351 code lines**(P8 이후 재측정)로 A-008/A-009의 architecture review 조건(10,000 초과)에 걸린다. 이 수치는 release gate FAIL로 기록한다.
 - `npm run verify:powercut`: 로컬에서는 guard가 `UNSUPPORTED_PROFILE`로 거부한다(disposable VM 아님). 실제 실행은 NOT_RUN이다.

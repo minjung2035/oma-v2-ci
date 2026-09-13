@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.057664155960083,
+  "elapsed_seconds"    : 0.0556201934814453,
   "n_files"            : 146,
-  "n_lines"            : 13667,
-  "files_per_second"   : 2531.90214213949,
-  "lines_per_second"   : 237010.319017948,
+  "n_lines"            : 13689,
+  "files_per_second"   : 2624.94592092178,
+  "lines_per_second"   : 246115.648708892,
   "report_file"        : "production-loc.json"},
 "src/cli.ts" :{
   "blank": 1,
@@ -44,8 +44,8 @@
   "language": "TypeScript"},
 "src/git/context-repository.ts" :{
   "blank": 4,
-  "comment": 8,
-  "code": 217,
+  "comment": 9,
+  "code": 221,
   "language": "TypeScript"},
 "src/git/integration.ts" :{
   "blank": 5,
@@ -94,7 +94,7 @@
   "language": "TypeScript"},
 "src/reconcile.ts" :{
   "blank": 1,
-  "comment": 9,
+  "comment": 11,
   "code": 177,
   "language": "TypeScript"},
 "src/durable.ts" :{
@@ -117,20 +117,20 @@
   "comment": 6,
   "code": 165,
   "language": "TypeScript"},
+"src/git/context.ts" :{
+  "blank": 5,
+  "comment": 17,
+  "code": 164,
+  "language": "TypeScript"},
 "src/diagnostics/files.ts" :{
   "blank": 2,
   "comment": 5,
   "code": 159,
   "language": "TypeScript"},
-"src/git/context.ts" :{
-  "blank": 5,
-  "comment": 8,
-  "code": 159,
-  "language": "TypeScript"},
 "src/git.ts" :{
   "blank": 2,
   "comment": 9,
-  "code": 158,
+  "code": 159,
   "language": "TypeScript"},
 "src/diagnostics/integrity.ts" :{
   "blank": 1,
@@ -244,8 +244,8 @@
   "language": "TypeScript"},
 "src/domain/context-policy.ts" :{
   "blank": 8,
-  "comment": 8,
-  "code": 97,
+  "comment": 10,
+  "code": 96,
   "language": "TypeScript"},
 "src/git/quarantine.ts" :{
   "blank": 2,
@@ -253,9 +253,9 @@
   "code": 95,
   "language": "TypeScript"},
 "src/domain/persisted-formats.ts" :{
-  "blank": 11,
-  "comment": 25,
-  "code": 93,
+  "blank": 10,
+  "comment": 26,
+  "code": 92,
   "language": "TypeScript"},
 "src/sandbox.ts" :{
   "blank": 3,
@@ -738,7 +738,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 447,
-  "comment": 877,
-  "code": 12343,
+  "blank": 446,
+  "comment": 892,
+  "code": 12351,
   "nFiles": 146} }
