@@ -38,6 +38,10 @@ node --test --test-concurrency=1 dist/test/durable-fault-matrix.test.js dist/tes
 
 변경하지 않은 normative surface: wire method, DB schema(version 1), persisted v1 plan/result bytes, OPEN SPIKE 상태, physical effect ordering.
 
+## 0-B. 변경 기록 (ORDER-002)
+
+이번 작업 단위의 변경 requirement, LOC 전후, 수행 tests, 남은 SPIKE, schema/method/state/service 변경 유무, 물리 순서 변경 근거는 [docs/architecture-improvement/change-record.md](docs/architecture-improvement/change-record.md)에 있다. schema/method/state/service 변경은 없음이다.
+
 ## 1. 현재 브랜치와 범위
 
 - 작업 브랜치: `refactor/safety-preserving-architecture`

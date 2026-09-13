@@ -311,9 +311,17 @@ export function analyzeProgram(program, { rootDir = process.cwd(), policy = DEFA
         report("persisted-plan-cast", node, "Persisted JSON must go through the plan decoder and relation checks");
       if (ts.isVariableDeclaration(node) && containsPlanType(node.type) && node.initializer && comesFromJsonParse(checker, node.initializer))
         report("persisted-plan-cast", node, "A type annotation does not decode persisted JSON");
-      if (node.kind === ts.SyntaxKind.RegularExpressionLiteral && file !== policy.identifierOwner &&
-        idPatterns.has(node.text) && !policy.identifierMirrors?.[file])
-        report("duplicate-id-schema", node, "Executable identifier grammar duplicates the canonical owner");
+      if (node.kind === ts.SyntaxKind.RegularExpressionLiteral && file !== policy.identifierOwner) {
+        const mirror = policy.identifierMirrors?.[file];
+        if (idPatterns.has(node.text)) {
+          // A declared mirror may restate the owner's grammar verbatim; any other
+          // file duplicating it is a second schema owner.
+          if (!mirror) report("duplicate-id-schema", node, "Executable identifier grammar duplicates the canonical owner");
+        } else if (mirror && /(?:^|[^A-Za-z0-9_])(?:op-|m-|b-)/.test(node.text)) {
+          // The exemption is conditional: a mirror may not ship its own id grammar.
+          report("duplicate-id-schema", node, `Mirrored identifier grammar must match ${policy.identifierOwner} verbatim`);
+        }
+      }
       if (ts.isArrayLiteralExpression(node)) {
         const values = node.elements.filter(ts.isStringLiteralLike).map(value => value.text);
         const parent = strip(node.parent);

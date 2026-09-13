@@ -92,6 +92,20 @@ test("executable capability, method, identifier, resource and limit schema copie
     "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/;`,
     "src/bad.ts": `const name = /^[a-z]{1,8}$/;`,
   });
+  // The declared mirror exemption is conditional: the same grammar verbatim is
+  // allowed, a divergent id grammar in the mirror is not.
+  const accepts = (files: Record<string, string>): void => {
+    const output = fixture(files, false);
+    assert.equal(output.status, 0, JSON.stringify(output.findings));
+  };
+  accepts({
+    "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/; export const OP_RE = /^op-[0-9a-f]{8}$/;`,
+    "src/pi-extension.ts": `const NAME = /^[a-z]{1,8}$/;`,
+  });
+  rejects("duplicate-id-schema", {
+    "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/; export const OP_RE = /^op-[0-9a-f]{8}$/;`,
+    "src/pi-extension.ts": `const NAME = /^[a-z]{1,8}$/; const WEAK = /^op-[0-9a-f]{2}$/;`,
+  });
   const contracts = `export interface ResourceLimits {cpu: number; memory: number; tasks: number}
     export interface ProtocolLimits {frame: number; body: number; files: number}`;
   rejects("duplicate-resource-schema", {

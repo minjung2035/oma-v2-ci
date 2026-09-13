@@ -2,7 +2,7 @@
  * At most one entry descriptor and one source chunk are active. No whole-input
  * chunks array, concatenation, newline conversion or durable sidecar is used.
  */
-import { constants, openSync, closeSync, writeFileSync, fchmodSync, fsyncSync, fstatSync, lstatSync, unlinkSync } from "node:fs";
+import { constants, openSync, closeSync, writeFileSync, fchmodSync, fsyncSync, fstatSync, lstatSync, readdirSync, rmdirSync, unlinkSync } from "node:fs";
 import { createHash, type Hash } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { BlobDescriptor, ContextEntry } from "../../implementation/contracts.js";
@@ -11,6 +11,31 @@ import { contextEntriesCheck, ContextTextValidator } from "../domain/context-pol
 import { contextStagingPathAt } from "./paths.js";
 import { assertDirectory } from "./directory.js";
 import { ensureDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
+
+/** Discard the staging tree this call prepared but never accepted.
+ *
+ * Precondition: `operationId` is the id of the current, not-yet-accepted call,
+ * so the staging directory was created by that preparation and belongs to no
+ * accepted operation. A directory that already exists is therefore not another
+ * owner's work; a non-regular entry means the layout is not the one this module
+ * writes, and the discard refuses instead of removing someone else's file.
+ */
+export function discardContextPreparation(stateRoot: string, operationId: string): void {
+  const staging = contextStagingPathAt(stateRoot, operationId);
+  if (!lstatSync(staging, { throwIfNoEntry: false })) return;
+  const walk = (directory: string): boolean => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) { walk(path); rmdirSync(path); continue; }
+      if (!entry.isFile()) throw new StoreError("STORE_CORRUPT", `context staging holds a non-regular entry: ${entry.name}`);
+      unlinkSync(path);
+    }
+    return true;
+  };
+  walk(staging);
+  rmdirSync(staging);
+  fsyncDir(dirname(staging));
+}
 
 interface OwnedFile { path: string; dev: number; ino: number }
 interface EntryWriter { entry: Readonly<ContextEntry>; fd: number | null; remaining: number; hash: Hash; text: ContextTextValidator }

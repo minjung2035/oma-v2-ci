@@ -28,3 +28,16 @@ export function corruptValueForTest<T>(valid: T, field: string, value: unknown):
 export function replaceArtifactBytes(path: string, bytes: string | Uint8Array): void {
   writeFileSync(path, bytes);
 }
+
+/** Raw read of a durable flag. Corruption fixtures are the sanctioned place that
+ * may observe a row without going through the Store's decode path. */
+export function readRawDeliveryFlag(path: string, messageId: string, recipient: string): number {
+  const raw = new DatabaseSync(path);
+  try {
+    const row = raw.prepare("SELECT materialized FROM deliveries WHERE message_id=? AND recipient=?").get(messageId, recipient) as
+      | { materialized: number }
+      | undefined;
+    if (!row) throw new Error("delivery row is missing");
+    return Number(row.materialized);
+  } finally { raw.close(); }
+}

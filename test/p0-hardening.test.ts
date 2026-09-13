@@ -165,13 +165,24 @@ const TEST_LIMITS: ProtocolLimits = {
   receiptWaitSeconds: 30,
 };
 
-test("P0: 20,000 malformed frames close one connection without recursive drain", () => {
+const untilTrue = async (predicate: () => boolean, budgetMs: number): Promise<boolean> => {
+  const deadline = Date.now() + budgetMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  return predicate();
+};
+
+test("P0: 20,000 malformed frames close one connection without recursive drain", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-frames-"));
   try {
     const broker = Object.create(Broker.prototype) as Broker;
     Object.assign(broker, {
       paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo" },
-      limits: TEST_LIMITS,
+      // A short deadline makes the close alarm observable; production uses the
+      // configured stream deadline.
+      limits: { ...TEST_LIMITS, idleStreamSeconds: 0.05 },
       // The connection registry and task set are part of serveFrames' contract.
       connections: new Map(),
       executingTasks: new Set(),
@@ -195,6 +206,8 @@ test("P0: 20,000 malformed frames close one connection without recursive drain",
     assert.equal(socket.paused, true);
     assert.equal(socket.ended, true);
     assert.equal((Reflect.get(broker, "connections") as Map<unknown, unknown>).size, 1);
+    // The paused transport must not be left dangling: the armed alarm closes it.
+    assert.equal(await untilTrue(() => socket.destroyed, 2000), true, "the fatal connection must be closed");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

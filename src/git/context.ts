@@ -12,7 +12,7 @@ import { requestHash } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey, isValidFullOid } from "../ids.js";
 import { mailObjectRelativePath, contextRevisionDisplayPath } from "../domain/derived.js";
 import { contextStagingPathAt } from "../storage/paths.js";
-import { prepareContextStream } from "../storage/context-stream.js";
+import { discardContextPreparation, prepareContextStream } from "../storage/context-stream.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../protocol/receipts.js";
 import { MailModule, buildEml, actorAddress, listAddress, expandAddresses } from "../mail.js";
@@ -105,22 +105,35 @@ export class ContextCoordinator {
     // the current authority before acceptance. Malformed input is therefore not
     // reported as a base conflict.
     const id = generateOperationId(); const messageId = generateMessageId(id, 0);
-    const tree = await prepareContextStream(this.paths.stateRoot, id, request.entries, request.content, bytes, undefined);
-    assertCurrentActor(this.store, auth, "context.publish");
-    if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
-    const candidate = await this.effects.prepareCandidate(tree, request.entries, request.expected);
-    if (!isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
-    assertCurrentActor(this.store, auth, "context.publish");
-    if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed during preparation");
+    // Everything between preparation and acceptance owns the staging tree this
+    // call created. A rejection in that window discards it, so a refused request
+    // leaves no artifact behind; an accepted operation keeps it for recovery.
+    const prepared = async <T>(action: () => T | Promise<T>): Promise<T> => {
+      try { return await action(); }
+      catch (error) { discardContextPreparation(this.paths.stateRoot, id); throw error; }
+    };
+    const tree = await prepared(() => prepareContextStream(this.paths.stateRoot, id, request.entries, request.content, bytes, undefined));
+    const candidate = await prepared(async () => {
+      assertCurrentActor(this.store, auth, "context.publish");
+      if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
+      const preparedCandidate = await this.effects.prepareCandidate(tree, request.entries, request.expected);
+      if (!isValidFullOid(preparedCandidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
+      assertCurrentActor(this.store, auth, "context.publish");
+      if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed during preparation");
+      return preparedCandidate;
+    });
     const address = listAddress("residents", this.paths.society);
-    const eml = await buildEml({ from: actorAddress(auth.actor, this.paths.society), to: [address], replyTo: [address],
+    const eml = await prepared(() => buildEml({ from: actorAddress(auth.actor, this.paths.society), to: [address], replyTo: [address],
       subject: "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
       messageId: `${messageId}@${this.paths.society}.oma.invalid`,
-      body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` });
+      body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` }));
     this.mail.freezeObject(messageId, eml);
     // Canonical observation is outside T. There is no await before the pure
     // current-authority/recipient snapshot and acceptance below.
-    if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance");
+    if (this.effects.current() !== request.expected) {
+      discardContextPreparation(this.paths.stateRoot, id);
+      throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance");
+    }
     const accepted = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth, "context.publish");
       const current = this.store.claimKey(auth.actor, key, hash);

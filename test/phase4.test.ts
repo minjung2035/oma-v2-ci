@@ -564,8 +564,8 @@ setInterval(() => {}, 1000);
     assert.equal(probes.observe.error.code, "SPIKE_UNRESOLVED");
     assert.equal(probes.unknown.error.code, "UNKNOWN_METHOD");
     // A trusted-only method is refused by the channel client before it reaches
-    // the broker; either closed rejection satisfies the boundary under test.
-    assert.ok(["AUTH_FAILED", "UNKNOWN_METHOD"].includes(probes.extension.error.code), JSON.stringify(probes.extension));
+    // the broker; no other code is a closed refusal of this boundary.
+    assert.equal(probes.extension.error.code, "AUTH_FAILED", JSON.stringify(probes.extension));
     assert.equal(env.store.getAgent("dynamic")!.incarnation, 3);
     const oldFd = Reflect.get(broker, "runLeases").get("dynamic").cgroupFd;
     env.units.onRevokeRun!("dynamic");

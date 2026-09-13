@@ -9,7 +9,7 @@ import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 import { overwritePublished, removeTree } from "./fixtures/cleanup.js";
-import { corruptOperationForTest } from "./fixtures/corruption.js";
+import { corruptOperationForTest, readRawDeliveryFlag } from "./fixtures/corruption.js";
 
 for (const gated of [false, true]) {
   test(`MAIL-007/008: ${gated ? "gated" : "ordinary"} publication verifies source, existing destinations and frozen metadata`, async () => {
@@ -55,9 +55,12 @@ for (const gated of [false, true]) {
         await assert.rejects(publish(operation.id),
           (error: unknown) => error instanceof StoreError && ["STORE_CORRUPT", "REF_STATE_UNKNOWN"].includes(error.code));
         if (fault === "plan") {
-          // Corrupt accepted bytes stay unreadable: no delivery state is reported.
+          // Corrupt accepted bytes stay unreadable, and the durable delivery row
+          // is unchanged: the raw read is the only way to observe it, because the
+          // Store API rejects the operation it belongs to.
           assert.throws(() => store.getDelivery(id, "b"),
             (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
+          assert.equal(readRawDeliveryFlag(join(root, "runtime.sqlite"), id, "b"), 0, fault);
         } else assert.equal(store.getDelivery(id, "b")!.materialized, 0, fault);
       } finally { store.close(); removeTree(root); }
     }

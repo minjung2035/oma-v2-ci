@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, linkSync, symlinkSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, writeFileSync, linkSync, symlinkSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -11,6 +11,7 @@ import { sha256Hex } from "../src/hash.js";
 import { contextFileCheck } from "../src/validate.js";
 import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
+import { removeTree } from "./fixtures/cleanup.js";
 
 const cases = [
   { name: "empty", path: "GOAL.md", bytes: Buffer.alloc(0) },
@@ -51,6 +52,41 @@ test("CTX-001: broker-domain rejects unsupported paths and non-text before accep
     assert.equal(contextFileCheck("decisions/a..b.md", Buffer.from("valid 한글\n")), null);
     assert.equal(contextFileCheck("RATIONALE.md", Buffer.alloc(0)), null);
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("CTX-002/FS-003: a rejected context publish leaves no staging artifact", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-context-staging-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  try {
+    seedGit(root);
+    store.transaction(() => store.insertAgent(makeValidAgent("a")));
+    const { git } = gitFixture(root, store);
+    const stagingDir = join(root, "staging");
+    const stagingEntries = () => (existsSync(stagingDir) ? readdirSync(stagingDir).filter(name => name.startsWith("context-")).sort() : []);
+    const publish = (key: string, expected: string | null, files: Array<{ path: string; bytes: Buffer }>) => {
+      const sorted = [...files].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+      const body = Buffer.concat(sorted.map(file => file.bytes));
+      return git.publishContext(gitAuth, key, {
+        expected, entries: sorted.map(file => ({ path: file.path, bytes: file.bytes.length, sha256: sha256Hex(file.bytes) })),
+        content: { bytes: body.length, sha256: sha256Hex(body), mediaType: "application/vnd.oma.context-v1" },
+      }, (async function* () { yield body; })());
+    };
+    const goal = { path: "GOAL.md", bytes: Buffer.from("# shared goal\n") };
+
+    const first = await publish("staging-first", null, [goal]);
+    assert.equal(first.state, "succeeded");
+    const acceptedStaging = stagingEntries();
+    assert.equal(acceptedStaging.length, 1, "an accepted publication keeps its recovery artifact");
+
+    // Stale base and malformed content: the input error is what the caller can
+    // act on, and the refused request leaves nothing behind.
+    await assert.rejects(publish("staging-malformed", null, [{ path: "GOAL.md", bytes: Buffer.alloc(0) }]), { code: "INVALID_REQUEST" });
+    // Stale base with valid content: a conflict, and still no artifact.
+    await assert.rejects(publish("staging-stale", null, [goal]), { code: "CONTEXT_CONFLICT" });
+    assert.deepEqual(stagingEntries(), acceptedStaging, "refused requests add no staging artifact");
+    assert.equal(store.getOperation("a", "staging-malformed"), null);
+    assert.equal(store.getOperation("a", "staging-stale"), null);
+  } finally { store.close(); removeTree(root); }
 });
 
 test("CTX-001: real CLI rejects symlink, hardlink, metadata and binary before connecting", () => {
