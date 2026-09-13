@@ -1,6 +1,6 @@
 /** CTX-001/002: pure context-document policy. No filesystem, Git, defaults, or normalization. */
 import { isValidWirePath } from "./identifiers.js";
-import type { ContextEntry } from "../../implementation/contracts.js";
+import type { ContextEntry } from "../../implementation/contracts/values.js";
 
 /** Traversal may descend into this one directory; file admission is separate. */
 export function isContextDirectoryPath(value: unknown): value is "decisions" { return value === "decisions"; }

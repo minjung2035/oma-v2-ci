@@ -3,7 +3,7 @@
  * rewrites capabilities/resources in the stored spec.
  */
 import { createHash } from "node:crypto";
-import type { ResolvedAgentSpec } from "../../implementation/contracts.js";
+import type { ResolvedAgentSpec } from "../../implementation/contracts/host.js";
 import { canonicalJson } from "./canonical-json.js";
 
 export function resolvedSpecDigest(spec: ResolvedAgentSpec): string {
