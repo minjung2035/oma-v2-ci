@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "unit": "P4 logical facets",
+  "baseHead": "00899e20ec4d971c1c6222d0ad9b4816c8957d46",
+  "environment": {
+    "node": "22.16.0",
+    "typescript": "5.8.3",
+    "nodeTypes": "24.0.4",
+    "sqlite": "3.49.1"
+  },
+  "semanticCompile": {
+    "status": "PASS",
+    "argv": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "--target",
+      "ES2023",
+      "--module",
+      "NodeNext",
+      "--moduleResolution",
+      "NodeNext",
+      "--strict",
+      "--noUncheckedIndexedAccess",
+      "--exactOptionalPropertyTypes",
+      "--skipLibCheck",
+      "--outDir",
+      "dist",
+      "--rootDir",
+      ".",
+      "src/store.ts",
+      "src/storage/operation-journal.ts",
+      "src/storage/durable-fs.ts"
+    ],
+    "scope": "transitive Store/Journal/DurableFs closure, not pinned full repo"
+  },
+  "execution": {
+    "status": "PASS",
+    "tests": 21,
+    "pass": 21,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "log": "p4-facets.tap"
+  },
+  "changedSourceBlobs": {
+    "src/store.ts": "701beeca4ded88240cded0c5f51501c8331e3789",
+    "src/storage/transaction.ts": "a9c944c21b19cd66f7e77a3cda5919c1fa761d13",
+    "src/storage/facets.ts": "1fa3aeaa1d1131fc214b87ec14bb05b0ce9b5e66",
+    "test/store-facets.test.mjs": "b68b51d9d3d12e3dce059ea41d8d6de97f877797"
+  },
+  "unchangedSourceDigests": "p3-integration.json: sourceBlobs (except changedSourceBlobs); schema remains c41780eeefae73be69736af14e015df05f8071e7",
+  "limitations": [
+    "No repository-pinned full package/native execution",
+    "No new SQLite connection or schema ownership change"
+  ]
+}

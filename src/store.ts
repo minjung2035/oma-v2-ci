@@ -13,6 +13,7 @@ import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, t
 import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput, type UsageReservation } from "./storage/transitions.js";
 import { OperationTransitions, type NewOperation } from "./storage/operation-transitions.js";
 import { OperationJournal } from "./storage/operation-journal.js";
+import { readFacets } from "./storage/facets.js";
 export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./ids.js";
@@ -33,6 +34,13 @@ export interface NewAgent {
 }
 const DEFAULT_BUSY_RETRIES = 5;
 export class Store {
+  private readonly readViews = readFacets(this);
+  readonly operations = this.readViews.operations;
+  readonly agents = this.readViews.agents;
+  readonly subscriptions = this.readViews.subscriptions;
+  readonly deliveries = this.readViews.deliveries;
+  readonly batches = this.readViews.batches;
+  readonly usage = this.readViews.usage;
   private readonly db: DatabaseSync;
   private readonly reader: LedgerReader;
   private readonly transitions: LedgerTransitions;
