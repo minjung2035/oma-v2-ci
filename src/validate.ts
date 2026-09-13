@@ -1,7 +1,7 @@
 // MUST [M-003]: runtime schema validation at trust boundaries; unknown fields are
 // rejected; `as SomeType` is never validation. Validators return an error string
 // or null; they do not coerce.
-import type { Json, RequestKey } from "../implementation/contracts.js";
+import type { Json, RequestKey } from "../implementation/contracts/identity.js";
 import { contextEntriesCheck } from "./domain/context-policy.js";
 import { isExportRef, isPublishedRef, isMailObjectRelativePath } from "./domain/derived.js";
 export { contextPathCheck, contextFileCheck } from "./domain/context-policy.js";

@@ -2,7 +2,7 @@
  * absent columns are never filled, persisted JSON is never repaired or rehashed.
  * Cross-row ownership is checked by the Store's bounded relational queries.
  */
-import type { ResolvedAgentSpec } from "../../implementation/contracts.js";
+import type { ResolvedAgentSpec } from "../../implementation/contracts/host.js";
 import { StoreError } from "../domain/errors.js";
 import { resolvedSpecCheck } from "../durable.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";

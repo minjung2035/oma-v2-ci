@@ -1,6 +1,8 @@
 // DB-005/009: synchronous operation writes only. The backend never escapes to workflow callers.
 import type { DatabaseSync } from "node:sqlite";
-import type { Actor, ErrorCode, OperationId, RequestKey, OperationPlan } from "../../implementation/contracts.js";
+import type { Actor, OperationId, RequestKey } from "../../implementation/contracts/identity.js";
+import type { ErrorCode } from "../../implementation/contracts/errors.js";
+import type { OperationPlan } from "../../implementation/contracts/durable.js";
 import { operationResultCheck } from "../validate.js";
 import { operationResultRelationCheck, type OperationPlanContext } from "../durable.js";
 import type { DecodedOperation } from "./operation-codec.js";

@@ -1,7 +1,7 @@
 // MUST [DB-009/M-003]: closed durable shapes and mandatory intrinsic relations.
 // No Store, filesystem reads, current defaults, or physical effects belong here.
 import { isAbsolute } from "node:path";
-import type { MutationMethod, OperationPlan, OperationResult } from "../implementation/contracts.js";
+import type { MutationMethod, OperationPlan, OperationResult } from "../implementation/contracts/durable.js";
 import { capabilityCheck } from "./domain/capabilities.js";
 import { resourceLimitsCheck } from "./domain/resources.js";
 import { resolvedSpecDigest } from "./domain/spec-identity.js";

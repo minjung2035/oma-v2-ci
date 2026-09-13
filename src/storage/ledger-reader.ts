@@ -2,7 +2,7 @@
  * validation are distinct; every lineage rule belongs to LineageSnapshot.
  */
 import type { DatabaseSync } from "node:sqlite";
-import type { MessagePlan } from "../../implementation/contracts.js";
+import type { MessagePlan } from "../../implementation/contracts/durable.js";
 import type { RepositoryIdentity } from "../durable.js";
 import { LineageSnapshot } from "../domain/lineage.js";
 import { decodeOperation, type DecodedOperation, type OperationDecodeContext, type OperationOf } from "./operation-codec.js";

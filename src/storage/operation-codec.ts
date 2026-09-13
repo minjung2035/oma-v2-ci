@@ -1,7 +1,10 @@
 /** DB-009 / M-003: the sole raw-ledger -> workflow boundary. This module reads
  * no files, performs no effects, and never repairs or rewrites stored JSON.
  */
-import type { ErrorCode, Json, MessagePlan, MutationMethod, PublicMethods } from "../../implementation/contracts.js";
+import type { ErrorCode } from "../../implementation/contracts/errors.js";
+import type { Json } from "../../implementation/contracts/identity.js";
+import type { MessagePlan, MutationMethod } from "../../implementation/contracts/durable.js";
+import type { PublicMethods } from "../../implementation/contracts/public-wire.js";
 import {
   operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
   type OperationPlanContext, type PlanFor, type RepositoryIdentity, type ResultFor,
