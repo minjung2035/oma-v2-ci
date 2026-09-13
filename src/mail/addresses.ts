@@ -1,7 +1,7 @@
 /** MAIL-004/005: RFC presentation adapter. These strings never become recipient
  * authority. Membership/existence is supplied by the accepting owner separately.
  */
-import type { Actor, Address } from "../../implementation/contracts.js";
+import type { Actor, Address } from "../../implementation/contracts/identity.js";
 import { isValidActorName, isValidMessageId, isValidSocietyName, isValidTopicName } from "../domain/identifiers.js";
 import { parseRfcMessageId, type RfcMessageId } from "../domain/mail-values.js";
 import { selectReplyTargets } from "./facts.js";
