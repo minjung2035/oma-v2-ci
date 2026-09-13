@@ -35,7 +35,9 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
   let result: NativeSyncResult;
   try {
     result = invoke(spec.executable, [...spec.argv], { env: { ...spec.env }, cwd: spec.cwd,
-      input: spec.input === undefined ? undefined : typeof spec.input === "string" ? spec.input : Buffer.from(spec.input),
+      // The output encoding "buffer" is not a valid Buffer.from string encoding.
+      // Encode stdin first so native spawnSync never applies it to a string.
+      input: spec.input === undefined ? undefined : Buffer.from(spec.input),
       encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: "SIGKILL",
       // Preserve the existing native cap, not the sum of two legacy caps.
       maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: ["pipe", "pipe", "pipe"],
