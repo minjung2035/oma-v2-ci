@@ -1,14 +1,16 @@
 // MUST [DB-001..009]: sole broker writer; synchronous transactions; six entities.
 // No Git/systemd/fsync/await inside transactions (M-004).
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync, lstatSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Actor, MessageId, OperationId, RequestKey } from "../implementation/contracts/identity.js";
 import type { ErrorCode } from "../implementation/contracts/errors.js";
 import type { RepositoryIdentity, OperationPlanContext } from "./durable.js";
 import type { DecodedOperation, OperationOf } from "./storage/operation-codec.js";
 import { LedgerReader } from "./storage/ledger-reader.js";
+import { assertDirectory } from "./storage/directory.js";
+import { LEDGER_TABLES, DIAGNOSTIC_READ_LIMITS, type DiagnosticReadLimits, type DiagnosticSnapshot, type LedgerTable } from "./storage/diagnostic-snapshot.js";
 import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
 import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput, type UsageReservation } from "./storage/transitions.js";
 import { OperationTransitions, type NewOperation } from "./storage/operation-transitions.js";
@@ -32,6 +34,68 @@ export interface NewAgent {
   name: Actor; specHash: string; role: "resident" | "principal"; desired: AgentRow["desired"];
   incarnation: number; profile: string; createdBy: string | null; specJson: string;
 }
+
+/** Administrator-only read connection. No Store construction, migration, WAL
+ * mode change, repair or writer is performed. Quiesce the broker for an offline
+ * DB+filesystem scan; a live SQLite snapshot does not pin filesystem observations.
+ */
+export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticReadLimits = DIAGNOSTIC_READ_LIMITS): DiagnosticSnapshot {
+  for (const value of [limits.maxRows, limits.maxBytes, limits.maxDatabaseBytes])
+    if (!Number.isSafeInteger(value) || value < 1) throw new RangeError("invalid diagnostic read budget");
+  assertDirectory(stateRoot);
+  const path = join(stateRoot, "runtime.sqlite");
+  const before = lstatSync(path);
+  if (!before.isFile() || before.isSymbolicLink())
+    throw new StoreError("STORE_CORRUPT", "diagnostic database is not a regular file");
+  if (before.size > limits.maxDatabaseBytes) throw new StoreError("LIMIT_EXCEEDED", "diagnostic database byte budget exceeded");
+  for (const suffix of ["-wal", "-shm"]) {
+    const sidecar = lstatSync(path + suffix, { throwIfNoEntry: false });
+    if (sidecar && (!sidecar.isFile() || sidecar.isSymbolicLink()))
+      throw new StoreError("STORE_CORRUPT", "diagnostic database sidecar is not a regular file");
+    if (sidecar && sidecar.size > limits.maxDatabaseBytes) throw new StoreError("LIMIT_EXCEEDED", "diagnostic sidecar byte budget exceeded");
+  }
+  const db = new DatabaseSync(path, { readOnly: true, allowExtension: false });
+  let reading = false;
+  try {
+    db.exec("PRAGMA query_only = ON; BEGIN"); reading = true;
+    const version = safeInteger(fullRow(db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
+    if (version !== 1) throw new StoreError("STORE_CORRUPT", "diagnostics require schema version 1; no migration was attempted");
+    const schema = [];
+    for (const row of db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND type IN ('table','view','trigger')").iterate()) {
+      if (schema.length >= LEDGER_TABLES.length) throw new StoreError("STORE_CORRUPT", "unexpected diagnostic database objects");
+      schema.push(row);
+    }
+    if (schema.length !== LEDGER_TABLES.length || schema.some(row => row.type !== "table" || typeof row.name !== "string" ||
+      !LEDGER_TABLES.some(table => table === row.name) || typeof row.sql !== "string" || /CREATE\s+VIRTUAL/i.test(row.sql)))
+      throw new StoreError("STORE_CORRUPT", "diagnostic database entity set differs from v1");
+    let rows = 0, bytes = 0;
+    const tables: Record<LedgerTable, unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [] };
+    for (const table of LEDGER_TABLES) {
+      // Table names come only from the closed constant, never from persisted SQL.
+      for (const row of db.prepare(`SELECT * FROM ${table}`).iterate()) {
+        if (++rows > limits.maxRows) throw new StoreError("LIMIT_EXCEEDED", "diagnostic row budget exceeded");
+        for (const value of Object.values(row)) bytes += typeof value === "string" ? Buffer.byteLength(value) :
+          ArrayBuffer.isView(value) ? value.byteLength : value === null ? 0 : 8;
+        if (bytes > limits.maxBytes) throw new StoreError("LIMIT_EXCEEDED", "diagnostic snapshot byte budget exceeded");
+        tables[table].push(Object.freeze({ ...row }));
+      }
+      Object.freeze(tables[table]);
+    }
+    const integrity = db.prepare("PRAGMA integrity_check(100)").all().map(row => String(row.integrity_check));
+    const foreignKeys: unknown[] = [];
+    for (const row of db.prepare("PRAGMA foreign_key_check").iterate()) {
+      if (foreignKeys.length >= 100) throw new StoreError("LIMIT_EXCEEDED", "diagnostic foreign-key issue budget exceeded");
+      foreignKeys.push(Object.freeze({ ...row }));
+    }
+    const after = lstatSync(path);
+    if (!after.isFile() || after.dev !== before.dev || after.ino !== before.ino)
+      throw new StoreError("BROKER_UNAVAILABLE", "diagnostic database identity changed during observation");
+    return Object.freeze({ schemaVersion: version, tables: Object.freeze(tables), integrity: Object.freeze(integrity), foreignKeys: Object.freeze(foreignKeys) });
+  } finally {
+    try { if (reading) db.exec("ROLLBACK"); } finally { db.close(); }
+  }
+}
+
 const DEFAULT_BUSY_RETRIES = 5;
 export class Store {
   private readonly readViews = readFacets(this);
