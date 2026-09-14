@@ -34,8 +34,9 @@ test("P2 import migration: inline public DTO references resolve to the declared 
   assert.throws(() => contractImportSnapshot(file, after.replace('/values.js', '/public-wire.js'), owners, { requireNarrow: true }));
 });
 
-test("P17 internal ledger/runtime split preserves every pre-split declaration token", () => {
-  const expected = JSON.parse(read("test/fixtures/architecture-surfaces.json")).internalPorts;
+test("P17/P23 internal ports preserve untouched declarations and explicit ownership refinements", () => {
+  const { internalPorts, ownershipRefinement } = JSON.parse(read("test/fixtures/architecture-surfaces.json"));
+  const expected = { ...internalPorts, ...ownershipRefinement };
   const files = ["src/module-ports.ts", "src/ports/ledger.ts", "src/ports/runtime.ts"];
   assert.deepEqual(mergeSurfaces(files.map(file => declarationSurface(read(file), file))), expected);
 });

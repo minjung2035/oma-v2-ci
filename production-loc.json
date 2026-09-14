@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0602419376373291,
+  "elapsed_seconds"    : 0.0583510398864746,
   "n_files"            : 151,
-  "n_lines"            : 14857,
-  "files_per_second"   : 2506.55948201826,
-  "lines_per_second"   : 246622.21340626,
+  "n_lines"            : 14870,
+  "files_per_second"   : 2587.78592967288,
+  "lines_per_second"   : 254836.932279707,
   "report_file"        : "production-loc.json"},
 "src/durable.ts" :{
   "blank": 5,
@@ -197,11 +197,6 @@
   "comment": 1,
   "code": 124,
   "language": "TypeScript"},
-"src/protocol/batch-view.ts" :{
-  "blank": 1,
-  "comment": 4,
-  "code": 124,
-  "language": "TypeScript"},
 "src/storage/context-stream.ts" :{
   "blank": 4,
   "comment": 16,
@@ -211,6 +206,11 @@
   "blank": 3,
   "comment": 9,
   "code": 122,
+  "language": "TypeScript"},
+"src/protocol/batch-view.ts" :{
+  "blank": 1,
+  "comment": 4,
+  "code": 121,
   "language": "TypeScript"},
 "src/git/observe.ts" :{
   "blank": 11,
@@ -368,8 +368,8 @@
   "code": 68,
   "language": "TypeScript"},
 "src/ports/runtime.ts" :{
-  "blank": 6,
-  "comment": 7,
+  "blank": 7,
+  "comment": 8,
   "code": 67,
   "language": "TypeScript"},
 "src/storage/staged-tree.ts" :{
@@ -407,14 +407,14 @@
   "comment": 12,
   "code": 61,
   "language": "TypeScript"},
-"src/git/context-mirror.ts" :{
-  "blank": 1,
-  "comment": 2,
-  "code": 60,
-  "language": "TypeScript"},
 "src/storage/transaction.ts" :{
   "blank": 3,
   "comment": 7,
+  "code": 61,
+  "language": "TypeScript"},
+"src/git/context-mirror.ts" :{
+  "blank": 1,
+  "comment": 2,
   "code": 60,
   "language": "TypeScript"},
 "src/storage/facets.ts" :{
@@ -587,6 +587,11 @@
   "comment": 2,
   "code": 28,
   "language": "TypeScript"},
+"src/entry/module-conformance.ts" :{
+  "blank": 1,
+  "comment": 1,
+  "code": 28,
+  "language": "TypeScript"},
 "src/git/context-publication.ts" :{
   "blank": 3,
   "comment": 6,
@@ -622,14 +627,14 @@
   "comment": 5,
   "code": 23,
   "language": "TypeScript"},
-"src/entry/module-conformance.ts" :{
-  "blank": 1,
-  "comment": 1,
-  "code": 23,
-  "language": "TypeScript"},
 "src/domain/admission.ts" :{
   "blank": 1,
   "comment": 3,
+  "code": 22,
+  "language": "TypeScript"},
+"src/ports/ledger.ts" :{
+  "blank": 3,
+  "comment": 5,
   "code": 22,
   "language": "TypeScript"},
 "implementation/systemd/resident.service.in" :{
@@ -665,11 +670,6 @@
 "src/cli/transport.ts" :{
   "blank": 1,
   "comment": 5,
-  "code": 17,
-  "language": "TypeScript"},
-"src/ports/ledger.ts" :{
-  "blank": 2,
-  "comment": 3,
   "code": 17,
   "language": "TypeScript"},
 "src/broker/logs.ts" :{
@@ -763,7 +763,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 454,
-  "comment": 906,
-  "code": 13497,
+  "blank": 456,
+  "comment": 909,
+  "code": 13505,
   "nFiles": 151} }

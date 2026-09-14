@@ -265,7 +265,7 @@
    "K2-mechanisms -> K2-mechanisms": 1,
    "K3-ledger -> K0-values": 3,
    "K3-ledger -> K1-codecs": 2,
-   "K3-ledger -> K3-ledger": 15
+   "K3-ledger -> K3-ledger": 14
   },
   "crossZoneEdges": [
    {
@@ -1012,6 +1012,13 @@
     },
     {
      "from": "src/entry/module-conformance.ts",
+     "to": "src/ports/ledger.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "src/entry/module-conformance.ts",
      "to": "src/reconcile.ts",
      "classification": "port-conformance",
      "kernelUpward": false,
@@ -1027,6 +1034,20 @@
     {
      "from": "src/entry/module-conformance.ts",
      "to": "src/sandbox.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "src/entry/module-conformance.ts",
+     "to": "src/storage/operation-codec.ts",
+     "classification": "port-conformance",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "src/entry/module-conformance.ts",
+     "to": "src/storage/receipt-projector.ts",
      "classification": "port-conformance",
      "kernelUpward": false,
      "coarseUpward": false
@@ -1075,24 +1096,17 @@
     },
     {
      "from": "src/ports/ledger.ts",
-     "to": "implementation/contracts/identity.ts",
+     "to": "implementation/contracts/errors.ts",
      "classification": "internal-port-contract",
      "kernelUpward": false,
      "coarseUpward": false
     },
     {
      "from": "src/ports/ledger.ts",
-     "to": "src/storage/operation-codec.ts",
+     "to": "implementation/contracts/identity.ts",
      "classification": "internal-port-contract",
      "kernelUpward": false,
-     "coarseUpward": true
-    },
-    {
-     "from": "src/ports/ledger.ts",
-     "to": "src/storage/transaction.ts",
-     "classification": "internal-port-contract",
-     "kernelUpward": false,
-     "coarseUpward": true
+     "coarseUpward": false
     },
     {
      "from": "src/ports/runtime.ts",
@@ -1116,11 +1130,18 @@
      "coarseUpward": false
     },
     {
-     "from": "src/ports/runtime.ts",
-     "to": "src/protocol/batch-view.ts",
+     "from": "src/protocol/batch-view.ts",
+     "to": "src/ports/runtime.ts",
      "classification": "internal-port-contract",
      "kernelUpward": false,
-     "coarseUpward": true
+     "coarseUpward": false
+    },
+    {
+     "from": "src/protocol/batch-view.ts",
+     "to": "src/ports/runtime.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
     },
     {
      "from": "src/protocol/operation-results.ts",
@@ -1139,6 +1160,20 @@
     {
      "from": "src/sandbox.ts",
      "to": "src/ports/runtime.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "src/storage/receipt-projector.ts",
+     "to": "src/ports/ledger.ts",
+     "classification": "internal-port-contract",
+     "kernelUpward": false,
+     "coarseUpward": false
+    },
+    {
+     "from": "src/storage/transaction.ts",
+     "to": "src/ports/ledger.ts",
      "classification": "internal-port-contract",
      "kernelUpward": false,
      "coarseUpward": false
@@ -1263,7 +1298,7 @@
  ],
  "files": 152,
  "runtimeEdges": 554,
- "typeOnlyEdges": 271,
+ "typeOnlyEdges": 274,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 180,
   "L2-facts -> L1-kernel": 27,
@@ -1301,18 +1336,6 @@
   {
    "from": "src/diagnostics/integrity.ts",
    "to": "src/git/observe.ts"
-  },
-  {
-   "from": "src/ports/ledger.ts",
-   "to": "src/storage/operation-codec.ts"
-  },
-  {
-   "from": "src/ports/ledger.ts",
-   "to": "src/storage/transaction.ts"
-  },
-  {
-   "from": "src/ports/runtime.ts",
-   "to": "src/protocol/batch-view.ts"
   }
  ],
  "runtimeCycles": [],

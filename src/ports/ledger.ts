@@ -1,17 +1,25 @@
 /** Internal ledger query/transaction contracts. No runtime implementation. */
 import type { Actor, OperationId, RequestKey } from "../../implementation/contracts/identity.js";
-import type { Receipt } from "../../implementation/contracts/durable.js";
-import type { DecodedOperation as OperationRow } from "../storage/operation-codec.js";
-import type { Transaction } from "../storage/transaction.js";
+import type { Receipt, MutationMethod, OperationResult } from "../../implementation/contracts/durable.js";
+import type { ErrorCode } from "../../implementation/contracts/errors.js";
 
-/** These queries preserve recovery payload/plan/hash/identity evidence. */
+/** Receipt-facing lookup only. Raw rows, JSON audit bytes and decoder brands stay private. */
+export type OperationLookup = { readonly id: OperationId; readonly kind: MutationMethod } & (
+  | { readonly state: "pending" | "unknown"; readonly result: null; readonly errorCode: null }
+  | { readonly state: "succeeded"; readonly result: OperationResult; readonly errorCode: null }
+  | { readonly state: "failed"; readonly result: null; readonly errorCode: ErrorCode }
+);
+export type SynchronousResult<T> = T & (Extract<T, PromiseLike<unknown>> extends never ? unknown : never);
+
+/** Recovery consumers retain the richer validated storage snapshot, not this projection. */
 export interface OperationRowsPort {
-  getOperation(actor: Actor, key: RequestKey): OperationRow | null;
-  getOperationById(id: OperationId): OperationRow | null;
+  getOperation(actor: Actor, key: RequestKey): OperationLookup | null;
+  getOperationById(id: OperationId): OperationLookup | null;
   recoverableOperations(): readonly OperationId[];
 }
 export interface StorePort extends OperationRowsPort {
-  transaction<T>(fn: (tx: Transaction) => T): T;
+  /** No typed write API here; runtime capability enforcement remains with Store. */
+  transaction<T>(fn: () => SynchronousResult<T>): T;
   close(): void;
 }
 
@@ -19,4 +27,4 @@ export interface StorePort extends OperationRowsPort {
 export interface OperationReceiptPort {
   getReceipt(actor: Actor, key: RequestKey): Receipt | null;
 }
-export type ReceiptProjector = (operation: OperationRow) => Receipt;
+export type ReceiptProjector = (operation: OperationLookup) => Receipt;

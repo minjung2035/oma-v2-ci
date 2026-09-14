@@ -24,7 +24,7 @@ import {
   kernelFindings,
   kernelZoneOf,
 } from "../scripts/kernel-zones.mjs";
-import { isInternalPort } from "../scripts/dependency-lattice.mjs";
+import { isInternalPort, contractOwnershipFindings } from "../scripts/dependency-lattice.mjs";
 
 function fixture(files, run, include = ["src/**/*.ts"]) {
   const root = mkdtempSync(join(tmpdir(), "oma-oracle-"));
@@ -411,20 +411,19 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
   );
   const host = ts.createCompilerHost(program.getCompilerOptions());
   const read = host.getSourceFile.bind(host);
-  const original =
-    "getOperation(actor: Actor, key: RequestKey): OperationRow | null;";
-  assert.ok(port.text.includes(original));
+  const portAst = ts.createSourceFile(port.fileName, port.text, ts.ScriptTarget.Latest, true);
+  let returnTypeRange = null;
+  const findOperationLookup = (node) => {
+    if (returnTypeRange === null && (ts.isMethodSignature(node) || ts.isPropertySignature(node)) && node.name?.getText(portAst) === "getOperation" && node.type)
+      returnTypeRange = [node.type.getStart(portAst), node.type.getEnd()];
+    ts.forEachChild(node, findOperationLookup);
+  };
+  findOperationLookup(portAst);
+  assert.ok(returnTypeRange, "StorePort getOperation declaration must be present");
+  const mutatedPort = port.text.slice(0, returnTypeRange[0]) + "never" + port.text.slice(returnTypeRange[1]);
   host.getSourceFile = (file, version, ...rest) =>
     file === port.fileName
-      ? ts.createSourceFile(
-          file,
-          port.text.replace(
-            original,
-            "getOperation(actor: Actor, key: RequestKey): never;",
-          ),
-          version,
-          true,
-        )
+      ? ts.createSourceFile(file, mutatedPort, version, true, ts.ScriptKind.TS)
       : read(file, version, ...rest);
   const mutated = ts.createProgram({
     rootNames: [conformance.fileName],
@@ -591,6 +590,115 @@ test("P17 erased contracts reject runtime values, aliases and re-exports without
     assert.equal(isInternalPort("src/ports-extra/fake.ts"), false);
   });
 });
+test("P23 contract ownership forbids runtime, type, inline-import and re-export edges out of exact L0 contracts", () => {
+  const target = "src/storage/value.ts";
+  const negative = [
+    ["src/ports/runtime.ts", 'import type { Value } from "../storage/value.js"; export interface Port { value: Value; }', "type"],
+    ["src/ports/runtime.ts", 'export type { Value } from "../storage/value.js";', "type"],
+    ["src/ports/runtime.ts", 'export interface Port { value: import("../storage/value.js").Value; }', "type"],
+    ["src/ports/runtime.ts", 'import { value } from "../storage/value.js"; export const leaked = value;', "runtime"],
+    ["src/module-ports.ts", 'export type { Value } from "./storage/value.js";', "type"],
+  ];
+  for (const [file, text, kind] of negative) fixture({ [file]: text, [target]: "export interface Value { value: string; }" }, (root, program) => {
+    const graph = graphFromProgram(program, { rootDir: root });
+    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graph });
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === file && finding.reason.includes(target) && finding.reason.includes(`${kind} edge`)), `${file} ${kind} edge`);
+  });
+  fixture({
+    "implementation/contracts.ts": 'import type { Value } from "../src/storage/value.js"; export interface Root { value: Value; }',
+    [target]: "export interface Value { value: string; }",
+  }, (root, program) => {
+    const graph = graphFromProgram(program, { rootDir: root });
+    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graph });
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "implementation/contracts.ts" && finding.reason.includes(target)), "implementation contracts must not reference storage implementation");
+  }, ["src/**/*.ts", "implementation/contracts.ts"]);
+  fixture({
+    "implementation/contracts.ts": 'export interface Root { leaf: import("./contracts/leaf.js").Leaf; }',
+    "implementation/contracts/leaf.ts": "export interface Leaf { value: string; }",
+  }, (root, program) => {
+    const graph = graphFromProgram(program, { rootDir: root });
+    assert.deepEqual(contractOwnershipFindings(graph.edges), [], "contract-to-contract references remain valid");
+  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+  fixture({
+    "implementation/helper.ts": 'import type { Value } from "../src/storage/value.js"; export type Helper = Value;',
+    [target]: "export interface Value { value: string; }",
+  }, (root, program) => {
+    const graph = graphFromProgram(program, { rootDir: root });
+    assert.deepEqual(contractOwnershipFindings(graph.edges), [], "non-contract implementation files are not broad-prefix exemptions");
+  }, ["src/**/*.ts", "implementation/**/*.ts"]);
+});
+
+test("P23 contract ownership keeps only the exact frozen Transaction compatibility alias", () => {
+  const files = {
+    "implementation/contracts/module-contracts.ts": "export type Transaction = import(\"../../src/store.js\").Transaction;",
+    "implementation/contracts.ts": "export type { Transaction } from \"./contracts/module-contracts.js\";",
+    "src/store.ts": "export interface Transaction { commit(): void; }",
+  };
+  fixture(files, (root, program) => {
+    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
+    assert.deepEqual(findings.filter(finding => finding.rule === "contract-ownership"), []);
+  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+  for (const extra of [
+    'export type Other = import("../../src/store.js").Transaction;',
+    'import type { Transaction as Other } from "../../src/store.js";',
+    'export type { Transaction as Other } from "../../src/store.js";',
+  ]) fixture({ ...files, "implementation/contracts/module-contracts.ts": `${files["implementation/contracts/module-contracts.ts"]} ${extra}` }, (root, program) => {
+    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership"), "an additional same-target reference must not widen the exception");
+  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+  fixture({ ...files, "implementation/contracts/module-contracts.ts": "export type Other = import(\"../../src/store.js\").Transaction;" }, (root, program) => {
+    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership"), "renaming the compatibility alias must not widen the exception");
+  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+});
+test("P23 frozen CFG-005 vocabulary aliases do not exempt new references or internal ports", () => {
+  for (const [file, target, name] of [
+    ["implementation/contracts/host.ts", "src/domain/resources.ts", "ResourceLimits"],
+    ["implementation/contracts/host.ts", "src/domain/limits.ts", "ProtocolLimits"],
+    ["implementation/contracts/identity.ts", "src/domain/capabilities.ts", "Capability"],
+  ]) {
+    const specifier = `../../${target.replace(/\.ts$/, ".js")}`;
+    const alias = `export type ${name} = import("${specifier}").${name};`;
+    for (const extra of ["", ` export type Added = import("${specifier}").${name};`]) fixture({
+      [file]: alias + extra, [target]: `export interface ${name} { value: string; }`,
+    }, (root, program) => {
+      const findings = analyzeProgram(program, { rootDir: root, checkContracts: false }).filter(f => f.rule === "contract-ownership");
+      assert.deepEqual(findings.map(f => f.file), extra ? [file] : [], `${file}: ${name}`);
+    }, ["src/**/*.ts", "implementation/contracts/**/*.ts"]);
+    fixture({
+      [file]: alias, [target]: `export interface ${name} { value: string; }`,
+      "src/ports/runtime.ts": `export type Leaked = import("${specifier}").${name};`,
+    }, (root, program) => {
+      const findings = analyzeProgram(program, { rootDir: root, checkContracts: false });
+      assert.ok(findings.some(f => f.rule === "contract-ownership" && f.file === "src/ports/runtime.ts"));
+    }, ["src/**/*.ts", "implementation/contracts/**/*.ts"]);
+  }
+});
+
+test("P23 contract ports cannot hide the concrete Transaction alias behind the public contracts facade", () => {
+  fixture({
+    "src/ports/runtime.ts": "import type { Transaction } from \"../../implementation/contracts.js\"; export interface Port { transaction: Transaction; }",
+    "implementation/contracts.ts": "export type { Transaction } from \"./contracts/module-contracts.js\";",
+    "implementation/contracts/module-contracts.ts": "export type Transaction = import(\"../../src/store.js\").Transaction;",
+    "src/store.ts": "export interface Transaction { commit(): void; }",
+  }, (root, program) => {
+    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "src/ports/runtime.ts"), "facade-imported Transaction must remain rejected");
+  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+});
+test("P23 hidden compatibility aliases cannot cross the canonical port boundary", () => {
+  fixture({
+    "src/ports/runtime.ts": "import type { HiddenTx } from \"../../implementation/contracts.js\"; export interface Port { transaction: HiddenTx; }",
+    "implementation/contracts.ts": "export type { HiddenTx } from \"./contracts/module-contracts.js\";",
+    "implementation/contracts/module-contracts.ts": "export type Transaction = import(\"../../src/store.js\").Transaction; export type HiddenTx = Transaction;",
+    "src/store.ts": "export interface Transaction { commit(): void; }",
+  }, (root, program) => {
+    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
+    assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "src/ports/runtime.ts"), "hidden aliases must not bypass the compatibility exception");
+  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
+});
+
+
 
 test("P19 type coupling evidence reports structural reasons without approving or forbidding upward types", () => {
   const graph = graphFromProgram(createArchitectureProgram());

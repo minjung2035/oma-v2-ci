@@ -1,5 +1,6 @@
 import type { PreparedBatch } from "../../implementation/contracts/runtime.js";
-import type { ProtocolLimits } from "../../implementation/contracts/host.js";
+import type { BatchViewLimits } from "../ports/runtime.js";
+export type { BatchViewLimits } from "../ports/runtime.js";
 import {
   isValidActorName,
   isValidBatchId,
@@ -10,10 +11,6 @@ import { StoreError } from "../domain/errors.js";
 export type BatchView = Pick<
   PreparedBatch,
   "id" | "agent" | "incarnation" | "deliveryMode" | "notice" | "messageIds"
->;
-export type BatchViewLimits = Pick<
-  ProtocolLimits,
-  "frameBytes" | "batchMaxMessages"
 >;
 export function validBatchViewLimits(
   limits: BatchViewLimits | undefined,

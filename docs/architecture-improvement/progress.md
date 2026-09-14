@@ -1,6 +1,6 @@
 # 아키텍처 개선 — 단계별 진행 색인
 
-후속 정제: P16–P22. 기준 source는 `930053c`, 작업 시작점은 `6b35838`, 브랜치는 `refactor/safety-preserving-architecture`.
+최신 정제는 P23 contract ownership이며 시작점은 `dd7905b`다. P16–P22의 검토 기준 `930053c`와 시작점 `6b35838`은 이전 기록으로 유지한다. 브랜치는 `refactor/safety-preserving-architecture`.
 현재 실행 결과와 release 미검증 범위는 [implementation/validation.md](../../implementation/validation.md), 다음 작업은 [HANDOFF.md](../../HANDOFF.md)를 따른다.
 이 문서는 단계와 보고서를 연결하며 과거 실행 개수·LOC를 현재 결과로 복사하지 않는다.
 
@@ -25,6 +25,7 @@
 | P16 / P18 | consumer-owned agent view, ledger receipt projection, explicit Broker factories | [후속 정제 기록](p16-p22-refinement.md) |
 | P17 / P19 | ledger/runtime erased ports, compatibility facade, report-only type coupling evidence | [후속 정제 기록](p16-p22-refinement.md) |
 | P20 / P21 / P22 | 단일 문서 사실 owner, rule acceptance, 실제 source evolution drill과 response decoder closure | [후속 정제 기록](p16-p22-refinement.md) |
+| P23 | 최소 ledger lookup/synchronous contract, host-owned batch limits, 별도 contract ownership gate | [소유권 정리 기록](p23-contract-ownership.md) |
 
 구현 반영과 실제 host/kernel/provider 인증은 구분한다. P5/P7 구현이나 P10–P15 정제를 미완료로 기록한 이전 일지는 당시 snapshot이다.
 

@@ -20,7 +20,13 @@ import {
   runtimeModuleReference,
 } from "./dependency-graph.mjs";
 export { createArchitectureProgram } from "./dependency-graph.mjs";
-import { cycleFindings, latticeFindings, isInternalPort } from "./dependency-lattice.mjs";
+import {
+  cycleFindings,
+  latticeFindings,
+  contractOwnershipFindings,
+  isContractOwner,
+  isInternalPort,
+} from "./dependency-lattice.mjs";
 import { kernelFindings, kernelExternalViolation } from "./kernel-zones.mjs";
 export { DEFAULT_POLICY } from "./architecture-owners.mjs";
 
@@ -349,6 +355,81 @@ export function analyzeProgram(
   const sourceByFile = new Map(
     sources.map((source) => [relative(root, source.fileName), source]),
   );
+  // Frozen v1 aliases: CFG-005 canonical vocabulary owners and the legacy Transaction facade.
+  // No directory-wide exemption, and no implementation exception on internal ports.
+  const frozenContractAliases = [
+    [
+      "implementation/contracts/module-contracts.ts",
+      "src/store.ts",
+      "../../src/store.js",
+      "Transaction",
+    ],
+    [
+      "implementation/contracts/host.ts",
+      "src/domain/resources.ts",
+      "../../src/domain/resources.js",
+      "ResourceLimits",
+    ],
+    [
+      "implementation/contracts/host.ts",
+      "src/domain/limits.ts",
+      "../../src/domain/limits.js",
+      "ProtocolLimits",
+    ],
+    [
+      "implementation/contracts/identity.ts",
+      "src/domain/capabilities.ts",
+      "../../src/domain/capabilities.js",
+      "Capability",
+    ],
+  ];
+  const isFrozenContractAlias = (finding) => {
+    if (finding.kind !== "type") return false;
+    const allowed = frozenContractAliases.find(
+      ([file, target, specifier]) =>
+        file === finding.file &&
+        target === finding.target &&
+        specifier === finding.specifier,
+    );
+    if (!allowed) return false;
+    const source = sourceByFile.get(finding.file);
+    let matches = 0;
+    let targetReferences = 0;
+    if (source)
+      eachNode(source, (node) => {
+        if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+          if (
+            node.moduleSpecifier &&
+            ts.isStringLiteralLike(node.moduleSpecifier) &&
+            node.moduleSpecifier.text === finding.specifier
+          )
+            targetReferences++;
+          return;
+        }
+        if (!ts.isImportTypeNode(node)) return;
+        const argument = node.argument;
+        if (
+          !ts.isLiteralTypeNode(argument) ||
+          !ts.isStringLiteralLike(argument.literal) ||
+          argument.literal.text !== finding.specifier
+        )
+          return;
+        targetReferences++;
+        const parent = node.parent;
+        if (
+          node.qualifier?.getText(source) === allowed[3] &&
+          !node.isTypeOf &&
+          !node.typeArguments?.length &&
+          ts.isTypeAliasDeclaration(parent) &&
+          parent.name.text === allowed[3] &&
+          !parent.typeParameters?.length &&
+          parent.modifiers?.length === 1 &&
+          parent.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
+        )
+          matches++;
+      });
+    return matches === 1 && targetReferences === 1;
+  };
   const report = (rule, node, reason) => {
     const source = node.getSourceFile();
     const start = node.getStart(source),
@@ -367,17 +448,115 @@ export function analyzeProgram(
       reason,
     });
   };
+  const transactionAliasSymbol = (symbol, seen = new Set()) => {
+    if (!symbol || seen.has(symbol)) return false;
+    seen.add(symbol);
+    if (symbol.flags & ts.SymbolFlags.Alias)
+      return transactionAliasSymbol(checker.getAliasedSymbol(symbol), seen);
+    for (const declaration of symbol.declarations ?? []) {
+      if (!ts.isTypeAliasDeclaration(declaration)) continue;
+      const file = relative(root, declaration.getSourceFile().fileName);
+      if (
+        file === "implementation/contracts/module-contracts.ts" &&
+        declaration.name.text === "Transaction"
+      ) {
+        const type = declaration.type;
+        if (
+          ts.isImportTypeNode(type) &&
+          ts.isLiteralTypeNode(type.argument) &&
+          ts.isStringLiteralLike(type.argument.literal) &&
+          type.argument.literal.text === "../../src/store.js" &&
+          type.qualifier?.getText(declaration.getSourceFile()) === "Transaction"
+        )
+          return true;
+      }
+      if (
+        transactionAliasSymbol(
+          checker.getTypeAtLocation(declaration).aliasSymbol,
+          seen,
+        )
+      )
+        return true;
+      if (ts.isTypeReferenceNode(declaration.type)) {
+        const target = checker.getSymbolAtLocation(declaration.type.typeName);
+        if (transactionAliasSymbol(target, seen)) return true;
+      }
+    }
+    return false;
+  };
+  const isExactTransactionAliasName = (node) => {
+    const parent = node.parent;
+    return (
+      ts.isIdentifier(node) &&
+      ts.isTypeAliasDeclaration(parent) &&
+      parent.name === node &&
+      parent.name.text === "Transaction" &&
+      relative(root, parent.getSourceFile().fileName) ===
+        "implementation/contracts/module-contracts.ts"
+    );
+  };
+  const isExactRootTransactionReExport = (node) => {
+    if (
+      !ts.isIdentifier(node) ||
+      node.text !== "Transaction" ||
+      relative(root, node.getSourceFile().fileName) !==
+        "implementation/contracts.ts"
+    )
+      return false;
+    for (let current = node.parent; current; current = current.parent) {
+      if (ts.isExportDeclaration(current))
+        return (
+          current.isTypeOnly &&
+          current.moduleSpecifier?.text === "./contracts/module-contracts.js"
+        );
+    }
+    return false;
+  };
+  const checkTransactionCompatibilityLeak = (source) => {
+    const file = relative(root, source.fileName);
+    if (!isContractOwner(file)) return;
+    let leak = null;
+    eachNode(source, (node) => {
+      if (
+        leak ||
+        !ts.isIdentifier(node) ||
+        isExactTransactionAliasName(node) ||
+        isExactRootTransactionReExport(node)
+      )
+        return;
+      if (transactionAliasSymbol(checker.getSymbolAtLocation(node)))
+        leak = node;
+    });
+    if (leak)
+      report(
+        "contract-ownership",
+        leak,
+        "Only the frozen module-contracts Transaction compatibility alias may name the concrete Store transaction type",
+      );
+  };
   for (const source of sources) {
     graph.set(relative(root, source.fileName), new Set());
+    checkTransactionCompatibilityLeak(source);
     if (isInternalPort(relative(root, source.fileName))) {
       // P17 contract, not a taste heuristic: this surface must erase completely.
       // Preserve value imports to reject accidental runtime capabilities even if unused.
-      const emitted = ts.transpileModule(source.text, {
-        fileName: source.fileName,
-        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, verbatimModuleSyntax: true, removeComments: true },
-      }).outputText.trim();
+      const emitted = ts
+        .transpileModule(source.text, {
+          fileName: source.fileName,
+          compilerOptions: {
+            target: ts.ScriptTarget.ES2022,
+            module: ts.ModuleKind.ESNext,
+            verbatimModuleSyntax: true,
+            removeComments: true,
+          },
+        })
+        .outputText.trim();
       if (emitted !== "" && emitted !== "export {};")
-        report("internal-port-runtime", source, "Internal port contracts must contain only erased declarations and explicit type imports/exports");
+        report(
+          "internal-port-runtime",
+          source,
+          "Internal port contracts must contain only erased declarations and explicit type imports/exports",
+        );
     }
     eachNode(source, (node) => {
       if (
@@ -778,7 +957,8 @@ export function analyzeProgram(
           const signature = checker.getResolvedSignature(node)?.declaration;
           const storeLike =
             checker.getPropertyOfType(receiver, "claimOperation") ||
-            (signature?.parent && ["Store", "StorePort"].includes(declaredName(signature.parent)));
+            (signature?.parent &&
+              ["Store", "StorePort"].includes(declaredName(signature.parent)));
           if (storeLike) inspectTransaction(node, node.arguments[0]);
         }
       }
@@ -802,6 +982,14 @@ export function analyzeProgram(
       sourceByFile.get(finding.file) ?? anchor,
       finding.reason,
     );
+  for (const finding of contractOwnershipFindings(latticeEdges)) {
+    if (isFrozenContractAlias(finding)) continue;
+    report(
+      finding.rule,
+      sourceByFile.get(finding.file) ?? anchor,
+      finding.reason,
+    );
+  }
   for (const finding of kernelFindings(programGraph))
     report(
       finding.rule,
