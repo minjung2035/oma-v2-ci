@@ -1,24 +1,24 @@
 {
   "schema": 1,
-  "sourceCommit": "6b3583814e1586da1efac06559914ef5556d4ebb",
-  "note": "P17 reviewed declaration-only split of module-ports: the union of original contract bindings/aliases is preserved. sourceBlob records the common pre-split owner. Erasure, implementation conformance and declaration fingerprints are checked independently.",
+  "sourceCommit": "dd7905bd8aef1e005a8279b4a9589f3e1a854d9a",
+  "note": "P23 reviewed internal contract ownership refinement. sourceBlob pins each pre-refinement file; current fingerprints cover minimal lookup/synchronous boundary and host-owned batch limits. Historical P17 declarations and explicit P23 deltas are checked independently in architecture-surfaces.json.",
   "files": {
     "src/module-ports.ts": {
-      "sourceBlob": "286ea80ed93841cf7e4fb8580344702c21744754",
+      "sourceBlob": "2b76bc9ea1b1f563393a1c1da359de2bb771ec60",
       "bodySha256": "4225b586213d25a16dda21e0255dfe543b575736f0f9723b9e3d8d720d17d0df",
       "bindings": [],
       "inline": []
     },
     "src/ports/ledger.ts": {
-      "sourceBlob": "286ea80ed93841cf7e4fb8580344702c21744754",
-      "bodySha256": "95454b7ca120193354698d1399a3f2ecdadaf3f8beb4cea64baf1e288a4b42e4",
-      "bindings": [["Actor", "Actor"], ["OperationId", "OperationId"], ["RequestKey", "RequestKey"], ["Receipt", "Receipt"]],
+      "sourceBlob": "0c2f34caf9345a5c930e539baec308791e98c62c",
+      "bodySha256": "6ef1f4e91a6a816712e0d21dfb7f81842f16f43fda75bffb1ea00224b58280fc",
+      "bindings": [["Actor", "Actor"], ["OperationId", "OperationId"], ["RequestKey", "RequestKey"], ["Receipt", "Receipt"], ["MutationMethod", "MutationMethod"], ["OperationResult", "OperationResult"], ["ErrorCode", "ErrorCode"]],
       "inline": []
     },
     "src/ports/runtime.ts": {
-      "sourceBlob": "286ea80ed93841cf7e4fb8580344702c21744754",
-      "bodySha256": "7c8b722fe66aee0c5cf283d459e121361905e0f88534149d6e82837179e8cf4d",
-      "bindings": [["Actor", "Actor"], ["AgentStatus", "AgentStatus"], ["PreparedBatch", "PreparedBatch"], ["RunLease", "RunLease"], ["SandboxPlan", "SandboxPlan"], ["UnitObservation", "UnitObservation"], ["ResourceLimits", "ResourceLimits"]],
+      "sourceBlob": "ea86557e783f3472372e2072bbea764e6ac0f91d",
+      "bodySha256": "990c10181cd74b92002d2891647f1a14010e1f4ba16c2d94b0555d1df8633c88",
+      "bindings": [["Actor", "Actor"], ["AgentStatus", "AgentStatus"], ["PreparedBatch", "PreparedBatch"], ["RunLease", "RunLease"], ["SandboxPlan", "SandboxPlan"], ["UnitObservation", "UnitObservation"], ["ResourceLimits", "ResourceLimits"], ["ProtocolLimits", "ProtocolLimits"]],
       "inline": []
     }
   }

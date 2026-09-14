@@ -13,10 +13,15 @@ import type { ViewsModule } from "../views.js";
 import type { ReconcileModule } from "../reconcile.js";
 import type { RunnerModule } from "../runner.js";
 import type { SandboxModule } from "../sandbox.js";
+import type { OperationLookup, ReceiptProjector } from "../ports/ledger.js";
+import type { DecodedOperation } from "../storage/operation-codec.js";
+import type { receiptOfOperation } from "../storage/receipt-projector.js";
 
 type Conforms<Port, Implementation extends Port> = Implementation;
 export type ActualModuleConformance = {
   store: Conforms<StorePort, Store>;
+  operationLookup: Conforms<OperationLookup, DecodedOperation>;
+  receiptProjector: Conforms<ReceiptProjector, typeof receiptOfOperation>;
   units: Conforms<SyncUnitsPort, UnitsModule>;
   views: Conforms<DerivedViewsPort, ViewsModule>;
   reconcile: Conforms<ReconcilePort, ReconcileModule>;

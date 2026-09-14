@@ -1,8 +1,10 @@
 /** Internal runtime orchestration contracts, not ledger or implementation owners. */
 import type { Actor } from "../../implementation/contracts/identity.js";
 import type { AgentStatus, PreparedBatch, RunLease, SandboxPlan, UnitObservation } from "../../implementation/contracts/runtime.js";
-import type { ResourceLimits } from "../../implementation/contracts/host.js";
-import type { BatchViewLimits } from "../protocol/batch-view.js";
+import type { ResourceLimits, ProtocolLimits } from "../../implementation/contracts/host.js";
+
+/** Host-configured bounds shared by runtime composition and batch-view decoding. */
+export type BatchViewLimits = Pick<ProtocolLimits, "frameBytes" | "batchMaxMessages">;
 
 /** Low-level blocking effects. The incarnation is mandatory death-proof input. */
 export interface SyncUnitsPort {

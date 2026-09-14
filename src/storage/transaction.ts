@@ -6,6 +6,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { StoreError } from "../domain/errors.js";
 import { assertNewAcceptance, observeStoreFailure } from "../domain/admission.js";
 import type { Store } from "../store.js";
+import type { SynchronousResult } from "../ports/ledger.js";
 import { WRITE_METHODS, writeFacets, type StoreWrites, type WriteFacets } from "./facets.js";
 export type { StoreWrites } from "./facets.js";
 
@@ -17,7 +18,7 @@ export type StoreReads = Pick<Store,
   "preparedBatches" | "pendingBatchesFor" | "getUsage" | "usageRows"
 >;
 export type Transaction = StoreWrites & WriteFacets & { readonly [BRAND]: true };
-export type SyncCallback<T> = (tx: Transaction) => T & (Extract<T, PromiseLike<unknown>> extends never ? unknown : never);
+export type SyncCallback<T> = (tx: Transaction) => SynchronousResult<T>;
 interface Scope { owner: TransactionScope; active: boolean; inserted: Set<string> }
 const current = new AsyncLocalStorage<Scope>();
 

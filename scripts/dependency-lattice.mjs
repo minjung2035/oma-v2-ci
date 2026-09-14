@@ -9,6 +9,24 @@ export function isInternalPort(file) {
   return INTERNAL_PORT_PREFIXES.some(prefix => prefix.endsWith("/") ? file.startsWith(prefix) : file === prefix);
 }
 
+// Contract owners are exact declaration surfaces; do not exempt broad implementation/ prefixes.
+const CONTRACT_OWNER_PREFIXES = Object.freeze(["implementation/contracts/", "implementation/contracts.ts", ...INTERNAL_PORT_PREFIXES]);
+export function isContractOwner(file) {
+  return CONTRACT_OWNER_PREFIXES.some(prefix => prefix.endsWith("/") ? file.startsWith(prefix) : file === prefix);
+}
+export function contractOwnershipFindings(edges) {
+  return edges
+    .filter(edge => edge.included && isContractOwner(edge.from) && !isContractOwner(edge.to))
+    .map(edge => ({
+      rule: "contract-ownership",
+      file: edge.from,
+      target: edge.to,
+      kind: edge.kind,
+      specifier: edge.specifier,
+      reason: `Contract owner ${edge.from} must not directly reference implementation ${edge.to} (${edge.kind} edge)`,
+    }));
+}
+
 const LAYERS = Object.freeze([
   { name: "L0-contracts", prefixes: ["implementation/", ...INTERNAL_PORT_PREFIXES] },
   {

@@ -1,11 +1,11 @@
 # OMA v2 — 현재 인계
 
-현행 정제 범위: P16–P22. 검토 기준은 `930053c`, 작업 시작점은 문서 정리 commit `6b35838`이다.
+현행 정제 범위: P23 contract ownership. 작업 시작점은 P16–P22 commit `dd7905b`다.
 작업 브랜치는 `refactor/safety-preserving-architecture`다. 재개할 때 실제 HEAD와 working tree를 먼저 확인한다.
 
 ## 현재 판정
 
-- P10–P15의 경계를 유지하며 P16–P22 데이터/port 소유권, composition과 evolution 검증을 반영했다.
+- P10–P22 경계를 유지하며 internal port의 implementation type 의존을 최소 contract로 정리했다.
 - 실제 실행 판정·정확한 범위·source pin은 **[현재 검증 상태](implementation/validation.md)** 한 곳에서 확인하고 현재 working tree와 대조한다.
 - 이는 release-ready 선언이 아니다. 실제 환경 검증과 OPEN SPIKE, LOC 승인 조건은 남아 있다.
 - 과거 인계의 “P5/P7 미완료”, “phase5 smoke 실패”, “pinned typecheck 미실행”은 현재 재개 작업이 아니다.
@@ -20,7 +20,7 @@
 - `src/storage/receipt-projector.ts`: validated ledger → wire receipt projection. `ValidatedPlan` 발급은 K3에 유지.
 - `test/architecture-oracles.test.mjs`, `p11-p12-dispatch.test.mjs`, `architecture-evolution.test.mjs`: 독립 oracle과 실제 production 변경 누락 검증.
 
-상세 변경과 근거는 [P16–P22 기록](docs/architecture-improvement/p16-p22-refinement.md), 이전 경계는 [P10–P15 보고서](docs/architecture-improvement/p10-p15-adversarial-review.md), 단계별 탐색은 [진행 색인](docs/architecture-improvement/progress.md)을 따른다.
+최신 변경과 좁은 v1 호환 예외는 [P23 소유권 기록](docs/architecture-improvement/p23-contract-ownership.md), 이전 경계는 [P16–P22 기록](docs/architecture-improvement/p16-p22-refinement.md)과 [P10–P15 보고서](docs/architecture-improvement/p10-p15-adversarial-review.md), 단계별 탐색은 [진행 색인](docs/architecture-improvement/progress.md)을 따른다.
 
 ## 다음 작업
 
@@ -28,6 +28,7 @@
 2. release 검증을 진행한다면 필요한 host/VM/profile을 준비하고 미실행 lane과 실제 환경 evidence를 별도로 수집한다. 구체적인 남은 범위는 [검증 상태](implementation/validation.md#3-남은-검증과-release-게이트)에 있다.
 3. production LOC가 기준을 초과한다. 구조 검토 보고서가 있다는 이유만으로 A-008/A-009 승인을 완료 처리하지 않는다.
 4. 이미 끝난 P5/P7이나 contract migration을 오래된 일지에 따라 다시 구현하지 않는다.
+5. 별도 구조적 필요가 확인되기 전 internal contract 영역의 추가 refactoring은 진행하지 않는다.
 
 기본 재개 확인:
 
