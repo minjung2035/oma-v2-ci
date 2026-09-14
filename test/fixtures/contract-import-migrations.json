@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "sourceCommit": "c8be44cf16cee8954075b4c36801d474779e930e",
-  "note": "Regenerated for the current source revision; the snapshot pins dependency direction, bindings, aliases and non-import tokens.",
+  "note": "P14 reviewed declaration-only ownership move updates module-ports bodySha256; contract bindings and the historical sourceBlob remain unchanged. architecture-oracles.test.mjs independently checks erased runtime output and implementation conformance.",
   "files": {
     "src/module-ports.ts": {
       "sourceBlob": "607778c2570989d966b74b018c71bfff09685722",
-      "bodySha256": "ee066d84cdbfe432757295c2f7b1f53cafe2a4ebe951b8bfb606d61c51d1d8a3",
+      "bodySha256": "4ab0d3099f99899bf0c5b5696c981f4f6b8bd4be441af8a7386bb31427846dd4",
       "bindings": [
         [
           "Actor",

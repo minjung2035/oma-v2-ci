@@ -50,6 +50,7 @@ src/domain/usage-budget.ts
 src/durable.ts
 src/entry/broker.ts
 src/entry/host.ts
+src/entry/module-conformance.ts
 src/entry/runner.ts
 src/frame.ts
 src/git.ts

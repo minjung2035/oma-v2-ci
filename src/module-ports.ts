@@ -18,12 +18,9 @@ import type { Actor, OperationId, RequestKey } from "../implementation/contracts
 import type { AgentStatus, PreparedBatch, RunLease, SandboxPlan, UnitObservation } from "../implementation/contracts/runtime.js";
 import type { Receipt } from "../implementation/contracts/durable.js";
 import type { ResourceLimits } from "../implementation/contracts/host.js";
-import type { Store as StoreImplementation, OperationRow, Transaction } from "./store.js";
-import type { UnitsModule as UnitsImplementation } from "./units.js";
-import type { ViewsModule as ViewsImplementation, UnitObserve } from "./views.js";
-import type { ReconcileModule as ReconcileImplementation } from "./reconcile.js";
-import type { RunnerModule as RunnerImplementation } from "./runner.js";
-import type { SandboxModule as SandboxImplementation, SandboxHost } from "./sandbox.js";
+import type { DecodedOperation as OperationRow } from "./storage/operation-codec.js";
+import type { Transaction } from "./storage/transaction.js";
+import type { BatchViewLimits } from "./protocol/batch-view.js";
 
 /** These queries preserve recovery payload/plan/hash/identity evidence. */
 export interface OperationRowsPort {
@@ -99,14 +96,20 @@ export interface SandboxPort {
   candidate(oid: string, checkProfile: string): SandboxPlan;
 }
 
-// These constraints are checked as part of production typechecking, not only tests.
-// Actual class signatures are independently compared against explicit ports.
-type Conforms<Port, Implementation extends Port> = Implementation;
-export type ActualModuleConformance = {
-  store: Conforms<StorePort, StoreImplementation>;
-  units: Conforms<SyncUnitsPort, UnitsImplementation>;
-  views: Conforms<DerivedViewsPort, ViewsImplementation>;
-  reconcile: Conforms<ReconcilePort, ReconcileImplementation>;
-  runner: Conforms<BoundRunnerPort, RunnerImplementation>;
-  sandbox: Conforms<SandboxPort, SandboxImplementation>;
-};
+/** Observation callback is an internal boundary value, not a Views implementation. */
+export interface UnitObserve {
+  (agent: Actor): { activeState: string; subState: string; result: string; execMainStatus: number } | null;
+}
+
+export interface SandboxHost {
+  rootfs: string;
+  node: string;
+  pi: string;
+  piModeArgs: string[];
+  tmpBytes: number;
+  checkResources: ResourceLimits;
+  /** Host composition roots and existing limits, never new wire/config fields. */
+  stateRoot?: string;
+  runRoot?: string;
+  limits?: BatchViewLimits;
+}

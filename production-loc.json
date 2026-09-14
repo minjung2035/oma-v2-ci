@@ -1,21 +1,36 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0555658340454102,
-  "n_files"            : 146,
-  "n_lines"            : 13732,
-  "files_per_second"   : 2627.51387625504,
-  "lines_per_second"   : 247130.277731056,
+  "elapsed_seconds"    : 0.057560920715332,
+  "n_files"            : 147,
+  "n_lines"            : 14721,
+  "files_per_second"   : 2553.81599483076,
+  "lines_per_second"   : 255746.43033948,
   "report_file"        : "production-loc.json"},
+"src/durable.ts" :{
+  "blank": 5,
+  "comment": 12,
+  "code": 411,
+  "language": "TypeScript"},
+"src/validate.ts" :{
+  "blank": 22,
+  "comment": 19,
+  "code": 387,
+  "language": "TypeScript"},
 "src/cli.ts" :{
   "blank": 1,
   "comment": 5,
   "code": 386,
   "language": "TypeScript"},
+"src/protocol/methods.ts" :{
+  "blank": 6,
+  "comment": 5,
+  "code": 366,
+  "language": "TypeScript"},
 "src/broker.ts" :{
   "blank": 1,
-  "comment": 7,
-  "code": 292,
+  "comment": 6,
+  "code": 328,
   "language": "TypeScript"},
 "src/store.ts" :{
   "blank": 3,
@@ -32,10 +47,10 @@
   "comment": 16,
   "code": 245,
   "language": "TypeScript"},
-"src/validate.ts" :{
-  "blank": 22,
-  "comment": 19,
-  "code": 229,
+"src/broker/internal-dispatcher.ts" :{
+  "blank": 1,
+  "comment": 2,
+  "code": 232,
   "language": "TypeScript"},
 "src/lifecycle/create.ts" :{
   "blank": 7,
@@ -97,11 +112,6 @@
   "comment": 11,
   "code": 177,
   "language": "TypeScript"},
-"src/durable.ts" :{
-  "blank": 5,
-  "comment": 12,
-  "code": 175,
-  "language": "TypeScript"},
 "src/leaf.ts" :{
   "blank": 17,
   "comment": 16,
@@ -122,6 +132,11 @@
   "comment": 6,
   "code": 165,
   "language": "TypeScript"},
+"src/broker/public-dispatcher.ts" :{
+  "blank": 3,
+  "comment": 8,
+  "code": 161,
+  "language": "TypeScript"},
 "src/diagnostics/files.ts" :{
   "blank": 2,
   "comment": 5,
@@ -141,11 +156,6 @@
   "blank": 11,
   "comment": 40,
   "code": 156,
-  "language": "TypeScript"},
-"src/protocol/methods.ts" :{
-  "blank": 6,
-  "comment": 5,
-  "code": 147,
   "language": "TypeScript"},
 "src/rpc-client.ts" :{
   "blank": 3,
@@ -172,11 +182,6 @@
   "comment": 9,
   "code": 131,
   "language": "TypeScript"},
-"src/broker/public-dispatcher.ts" :{
-  "blank": 2,
-  "comment": 6,
-  "code": 129,
-  "language": "TypeScript"},
 "src/runtime/run-registry.ts" :{
   "blank": 4,
   "comment": 5,
@@ -185,6 +190,11 @@
 "src/config.ts" :{
   "blank": 4,
   "comment": 1,
+  "code": 124,
+  "language": "TypeScript"},
+"src/protocol/batch-view.ts" :{
+  "blank": 1,
+  "comment": 4,
   "code": 124,
   "language": "TypeScript"},
 "src/storage/context-stream.ts" :{
@@ -257,11 +267,6 @@
   "comment": 26,
   "code": 92,
   "language": "TypeScript"},
-"src/sandbox.ts" :{
-  "blank": 3,
-  "comment": 7,
-  "code": 92,
-  "language": "TypeScript"},
 "src/broker/peer-authenticator.ts" :{
   "blank": 1,
   "comment": 1,
@@ -287,6 +292,11 @@
   "comment": 4,
   "code": 83,
   "language": "TypeScript"},
+"src/module-ports.ts" :{
+  "blank": 8,
+  "comment": 24,
+  "code": 83,
+  "language": "TypeScript"},
 "src/pi-extension.ts" :{
   "blank": 3,
   "comment": 11,
@@ -296,11 +306,6 @@
   "blank": 2,
   "comment": 12,
   "code": 83,
-  "language": "TypeScript"},
-"src/module-ports.ts" :{
-  "blank": 7,
-  "comment": 24,
-  "code": 81,
   "language": "TypeScript"},
 "src/protocol/response-codec.ts" :{
   "blank": 2,
@@ -317,20 +322,25 @@
   "comment": 2,
   "code": 80,
   "language": "TypeScript"},
+"src/sandbox.ts" :{
+  "blank": 3,
+  "comment": 4,
+  "code": 79,
+  "language": "TypeScript"},
 "src/views.ts" :{
   "blank": 1,
   "comment": 5,
-  "code": 80,
+  "code": 79,
   "language": "TypeScript"},
 "src/mail/serialize.ts" :{
   "blank": 4,
   "comment": 11,
   "code": 78,
   "language": "TypeScript"},
-"src/broker/internal-dispatcher.ts" :{
+"src/protocol/run-lease.ts" :{
   "blank": 1,
-  "comment": 1,
-  "code": 76,
+  "comment": 3,
+  "code": 77,
   "language": "TypeScript"},
 "src/broker/transport-spool.ts" :{
   "blank": 2,
@@ -532,11 +542,6 @@
   "comment": 1,
   "code": 36,
   "language": "TypeScript"},
-"src/protocol/batch-view.ts" :{
-  "blank": 1,
-  "comment": 4,
-  "code": 35,
-  "language": "TypeScript"},
 "src/inference/call.ts" :{
   "blank": 2,
   "comment": 1,
@@ -582,11 +587,6 @@
   "comment": 6,
   "code": 28,
   "language": "TypeScript"},
-"src/protocol/run-lease.ts" :{
-  "blank": 1,
-  "comment": 3,
-  "code": 28,
-  "language": "TypeScript"},
 "src/diagnostics/mail.ts" :{
   "blank": 0,
   "comment": 1,
@@ -610,6 +610,11 @@
 "src/cli/request-intent.ts" :{
   "blank": 4,
   "comment": 5,
+  "code": 23,
+  "language": "TypeScript"},
+"src/entry/module-conformance.ts" :{
+  "blank": 1,
+  "comment": 1,
   "code": 23,
   "language": "TypeScript"},
 "src/domain/admission.ts" :{
@@ -738,7 +743,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 447,
+  "blank": 450,
   "comment": 907,
-  "code": 12378,
-  "nFiles": 146} }
+  "code": 13364,
+  "nFiles": 147} }

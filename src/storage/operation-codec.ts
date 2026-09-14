@@ -9,7 +9,7 @@ import {
   operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
   type OperationPlanContext, type PlanFor, type RepositoryIdentity, type ResultFor,
 } from "../durable.js";
-import { isValidActor, isValidOperationId, isValidRequestKey } from "../ids.js";
+import { isValidActor, isValidOperationId, isValidRequestKey } from "../domain/identifiers.js";
 import type { Actor, OperationId, RequestKey } from "../domain/identifiers.js";
 import { snapshotJson, canonicalJson } from "../domain/canonical-json.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";

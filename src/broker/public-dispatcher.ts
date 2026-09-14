@@ -1,21 +1,53 @@
 // IPC-004/AUTH-003: public preflight and method dispatch; no socket or lease ownership.
-import type { AuthContext, Failure, ProtocolLimits, PublicMethod, Request } from "../../implementation/contracts.js";
-import type { Store } from "../store.js";
-import type { MailModule } from "../mail.js";
-import type { UnitsModule } from "../units.js";
-import type { ViewsModule } from "../views.js";
-import type { LifecycleModule } from "../lifecycle.js";
-import type { GitModule } from "../git.js";
+import type { AuthContext, Failure, ProtocolLimits, PublicMethod, PublicMethods, Request, RequestKey, Actor, AgentCreateInput, Oid, MessageId, MailInput, Receipt, Json, AgentStatus } from "../../implementation/contracts.js";
+import type { AgentRow } from "../storage/rows.js";
+import type { UnitObserve } from "../module-ports.js";
 import { StoreError } from "../domain/errors.js";
+import { assertNever } from "../domain/exhaustive.js";
 import { capabilitiesOf } from "../authority.js";
 import { isValidRequestKey } from "../ids.js";
-import { receiptOfOperation, receiptNotFound } from "../protocol/receipts.js";
+import { receiptNotFound } from "../protocol/receipts.js";
 import { PUBLIC_METHODS, isPublicMethod, decodePublicParams } from "../protocol/methods.js";
 import { errorAnswer, okAnswer } from "./replies.js";
 
+
+type PublicAgent = Pick<AgentRow, "name" | "incarnation" | "desired" | "specJson">;
+export interface PublicStorePort {
+  readonly listAgents: () => readonly { readonly name: Actor }[];
+  readonly getAgent: (actor: Actor) => PublicAgent | null;
+  readonly getReceipt: (actor: Actor, key: RequestKey) => Receipt | null;
+  readonly hasOperation: (actor: Actor, key: RequestKey) => boolean;
+}
+export interface PublicMailPort {
+  readonly send: (auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }) => Promise<Receipt>;
+}
+export interface PublicUnitsPort {
+  readonly observe: (agent: Actor) => NonNullable<ReturnType<UnitObserve>>;
+}
+export interface PublicViewsPort {
+  readonly status: (agent: Actor | undefined, observe: UnitObserve) => AgentStatus[];
+}
+export interface PublicLifecyclePort {
+  readonly create: (auth: AuthContext, input: AgentCreateInput, key: RequestKey) => Promise<Receipt>;
+  readonly start: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt;
+  readonly stop: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt;
+  readonly ack: (auth: AuthContext, message: MessageId, key: RequestKey) => Receipt;
+  readonly follow: (auth: AuthContext, topic: string, subscribe: boolean, key: RequestKey) => Receipt;
+}
+export interface PublicGitPort {
+  readonly knownRefs: () => { main: string; published: string[] };
+  readonly isPublished: (oid: Oid) => boolean;
+  readonly submit: (auth: AuthContext, key: RequestKey, input: PublicMethods["git.submit"]["params"], bytes: AsyncIterable<Uint8Array>) => Promise<Receipt>;
+  readonly integrate: (auth: AuthContext, key: RequestKey, input: { candidate: Oid; expected: Oid }) => Promise<Receipt>;
+  readonly publishContext: (auth: AuthContext, key: RequestKey, input: PublicMethods["context.publish"]["params"], bytes: AsyncIterable<Uint8Array>) => Promise<Receipt>;
+}
 export interface PublicDispatchDependencies {
-  readonly store: Store; readonly mail: MailModule; readonly units: UnitsModule;
-  readonly views: ViewsModule; readonly lifecycle: LifecycleModule; readonly git: GitModule | null;
+  readonly store: PublicStorePort;
+  readonly mail: PublicMailPort;
+  readonly units: PublicUnitsPort;
+  readonly views: PublicViewsPort;
+  readonly lifecycle: PublicLifecyclePort;
+  readonly git: PublicGitPort | null;
   readonly limits: ProtocolLimits;
   isDraining(): boolean;
   assertAdmission(): void;
@@ -23,17 +55,17 @@ export interface PublicDispatchDependencies {
   refreshViews(): void;
   readLogs(agent: string, sinceSeconds: number): Promise<{ text: string; truncated: boolean; observedAtMs: number }>;
 }
-type PublicValidation =
-  | { ok: true; id: string; method: PublicMethod; descriptor: (typeof PUBLIC_METHODS)[PublicMethod]; params: Record<string, unknown> }
-  | { ok: false; id: string; failure: Failure };
+type ValidatedPublicCall = {
+  [M in PublicMethod]: { ok: true; id: string; method: M; descriptor: (typeof PUBLIC_METHODS)[M]; params: PublicMethods[M]["params"] }
+}[PublicMethod];
+type PublicValidation = ValidatedPublicCall | { ok: false; id: string; failure: Failure };
 
 export class PublicDispatcher {
   constructor(private readonly deps: PublicDispatchDependencies) {}
-  private checkParams(method: string, rawParams: unknown): Record<string, unknown> | null {
-    if (!isPublicMethod(method)) return null;
-    return decodePublicParams(method, rawParams, { actorNames: new Set(this.deps.store.listAgents().map(agent => agent.name)), limits: this.deps.limits }) as Record<string, unknown> | null;
+  private checkParams<M extends PublicMethod>(method: M, rawParams: unknown): PublicMethods[M]["params"] | null {
+    return decodePublicParams(method, rawParams, { actorNames: new Set(this.deps.store.listAgents().map(agent => agent.name)), limits: this.deps.limits });
   }
-  private readAuthority(auth: AuthContext): { actor: ReturnType<Store["getAgent"]>; failure: Failure | null } {
+  private readAuthority(auth: AuthContext): { actor: PublicAgent | null; failure: Failure | null } {
     const actor = this.deps.store.getAgent(auth.actor);
     const stale = auth.channel === "actor" && (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled");
     return { actor, failure: stale ? { code: "STALE_RUN", message: "actor incarnation is stale", retry: "never" } : null };
@@ -66,7 +98,8 @@ export class PublicDispatcher {
     if (!params) return fail("INVALID_REQUEST", `invalid params for ${method}`);
     if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
     if (phase === "stream-preflight" || this.deps.isDraining() || descriptor.mode === "mutation") this.deps.assertAdmission();
-    return { ok: true, id, method, descriptor, params };
+    // SAFETY: this method's decoder validated params; TS cannot express that dynamic key/union correlation.
+    return { ok: true, id, method, descriptor, params } as ValidatedPublicCall;
   }
   preflight(auth: AuthContext, envelope: Record<string, unknown>): void {
     const validation = this.validatePublicRequest(auth, envelope, "stream-preflight", true);
@@ -78,6 +111,7 @@ export class PublicDispatcher {
   }
   private async dispatchChecked(auth: AuthContext, request: Request, stream: AsyncIterable<Uint8Array> | null): Promise<object> {
     const { store, mail, units, views, lifecycle, git } = this.deps;
+    // SAFETY: expose only raw envelope fields to validation; this cast grants no schema or authority fact.
     const validation = this.validatePublicRequest(auth, request as unknown as Record<string, unknown>, "dispatch", Boolean(stream));
     if (!validation.ok) return errorAnswer(validation.id, validation.failure);
     const { id, method, descriptor, params } = validation;
@@ -85,46 +119,47 @@ export class PublicDispatcher {
       switch (method) {
         case "status.get": {
           const observe = (agent: string) => { const value = units.observe(agent); return { activeState: value.activeState, subState: value.subState, result: value.result, execMainStatus: value.execMainStatus }; };
-          const agents = views.status((params as { agent?: string }).agent, observe);
+          const agents = views.status(params.agent, observe);
           return okAnswer(id, { observedAtMs: Date.now(), agents });
         }
         case "operation.get": {
-          const operation = store.getOperation(auth.actor, (params as { key: string }).key);
-          return okAnswer(id, operation ? receiptOfOperation(operation) : receiptNotFound);
+          const receipt = store.getReceipt(auth.actor, params.key);
+          return okAnswer(id, receipt ?? receiptNotFound);
         }
         case "mail.send": {
-          const input = params as unknown as import("../../implementation/contracts.js").MailInput;
-          if (input.approvalFor && !store.getOperation(auth.actor, keyOf(request)) && !git?.isPublished(input.approvalFor.candidate)) throw new StoreError("CANDIDATE_NOT_PUBLISHED", "approval request requires a published candidate");
-          return okAnswer(id, await mail.send(auth, keyOf(request), input));
+          if (params.approvalFor) {
+            const hasOperation = store.hasOperation(auth.actor, keyOf(request));
+            if (!hasOperation && !git?.isPublished(params.approvalFor.candidate)) throw new StoreError("CANDIDATE_NOT_PUBLISHED", "approval request requires a published candidate");
+          }
+          return okAnswer(id, await mail.send(auth, keyOf(request), params));
         }
-        case "mail.ack": return okAnswer(id, lifecycle.ack(auth, (params as { message: string }).message, keyOf(request)));
-        case "route.follow": return okAnswer(id, lifecycle.follow(auth, (params as { topic: string }).topic, true, keyOf(request)));
-        case "route.unfollow": return okAnswer(id, lifecycle.follow(auth, (params as { topic: string }).topic, false, keyOf(request)));
-        case "agent.start": return okAnswer(id, lifecycle.start(auth, (params as { agent: string }).agent, keyOf(request)));
-        case "agent.stop": return okAnswer(id, lifecycle.stop(auth, (params as { agent: string }).agent, keyOf(request)));
-        case "agent.create": return okAnswer(id, await lifecycle.create(auth, params as never, keyOf(request)));
-        case "agent.continue": return okAnswer(id, await mail.send(auth, keyOf(request), { to: [auth.actor], subject: "continue", kind: "message", body: (params as { note: string }).note }, { kind: "agent.continue", params: { note: (params as { note: string }).note } }));
+        case "mail.ack": return okAnswer(id, lifecycle.ack(auth, params.message, keyOf(request)));
+        case "route.follow": return okAnswer(id, lifecycle.follow(auth, params.topic, true, keyOf(request)));
+        case "route.unfollow": return okAnswer(id, lifecycle.follow(auth, params.topic, false, keyOf(request)));
+        case "agent.start": return okAnswer(id, lifecycle.start(auth, params.agent, keyOf(request)));
+        case "agent.stop": return okAnswer(id, lifecycle.stop(auth, params.agent, keyOf(request)));
+        case "agent.create": return okAnswer(id, await lifecycle.create(auth, params, keyOf(request)));
+        case "agent.continue": return okAnswer(id, await mail.send(auth, keyOf(request), { to: [auth.actor], subject: "continue", kind: "message", body: params.note }, { kind: "agent.continue", params: { note: params.note } }));
         case "agent.wait": return okAnswer(id, { accepted: true });
         case "git.known": {
           if (!git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
           const refs = git.knownRefs();
-          return okAnswer(id, { hasCandidate: refs.published.includes((params as { candidate: string }).candidate), prerequisites: [...refs.published] });
+          return okAnswer(id, { hasCandidate: refs.published.includes(params.candidate), prerequisites: [...refs.published] });
         }
         case "git.submit": {
           if (!git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
-          return okAnswer(id, await git.submit(auth, keyOf(request), params as never, stream ?? emptyStream()));
+          return okAnswer(id, await git.submit(auth, keyOf(request), params, stream ?? emptyStream()));
         }
         case "git.integrate": {
           if (!git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
-          const input = params as { candidate: string; expected: string };
-          return okAnswer(id, await git.integrate(auth, keyOf(request), { candidate: input.candidate, expected: input.expected }));
+          return okAnswer(id, await git.integrate(auth, keyOf(request), params));
         }
         case "context.publish": {
           if (!git) throw new StoreError("SPIKE_UNRESOLVED", "context module unavailable");
-          return okAnswer(id, await git.publishContext(auth, keyOf(request), params as never, stream ?? emptyStream()));
+          return okAnswer(id, await git.publishContext(auth, keyOf(request), params, stream ?? emptyStream()));
         }
-        case "logs.read": { const input = params as { agent: string; sinceSeconds: number }; return okAnswer(id, await this.deps.readLogs(input.agent, input.sinceSeconds)); }
-        default: return errorAnswer(id, { code: "UNKNOWN_METHOD", message: `unhandled method ${method}`, retry: "never" });
+        case "logs.read": return okAnswer(id, await this.deps.readLogs(params.agent, params.sinceSeconds));
+        default: return assertNever(method);
       }
     } catch (error) { return this.deps.failureAnswer(id, error); }
     finally { if (descriptor.mode === "mutation") this.deps.refreshViews(); }

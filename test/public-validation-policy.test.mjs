@@ -8,12 +8,13 @@ import ts from "typescript";
  * decoder and effect boundaries. This is not a wire-schema or transport proof.
  */
 function fixture(transform = source => source) {
-  const calls = { actors: 0, params: 0, admission: 0, refresh: 0, effects: [] };
+  const calls = { actors: 0, params: 0, operationChecks: 0, admission: 0, refresh: 0, effects: [], order: [] };
   const state = { actor: { name: "resident", incarnation: 1, desired: "enabled", capabilities: new Set(["fixture.submit"]) },
-    rejectParams: false, denyAdmission: false, draining: false, observationError: null };
+    rejectParams: false, throwOnOperationCheck: false, denyAdmission: false, draining: false, observationError: null };
   const auth = { actor: "resident", channel: "actor", incarnation: 1, capabilities: new Set(["fixture.submit"]) };
   class StoreError extends Error { constructor(code, message) { super(message); this.code = code; } }
   const table = {
+    "mail.send": { stream: "none", key: "required", capability: "fixture.submit", mode: "mutation" },
     "git.submit": { stream: "optional-bundle", key: "required", capability: "fixture.submit", mode: "mutation" },
     "context.publish": { stream: "context", key: "required", capability: "fixture.submit", mode: "mutation" },
     "status.get": { stream: "none", key: "forbidden", capability: null, mode: "read" },
@@ -35,6 +36,7 @@ function fixture(transform = source => source) {
   const replies = load("../src/broker/replies.ts", {});
   const { PublicDispatcher } = load("../src/broker/public-dispatcher.ts", {
     "../domain/errors.js": { StoreError },
+    "../domain/exhaustive.js": { assertNever(value) { throw new TypeError(`unhandled closed variant: ${String(value)}`); } },
     "../authority.js": { capabilitiesOf: actor => actor.capabilities },
     "../ids.js": { isValidRequestKey: key => typeof key === "string" && /^key-[0-9]+$/.test(key) },
     "../protocol/receipts.js": { receiptOfOperation: value => value, receiptNotFound: { status: "not-found" } },
@@ -44,9 +46,13 @@ function fixture(transform = source => source) {
   }, transform);
   const effect = async (...args) => { calls.effects.push(args); return { accepted: true }; };
   const deps = {
-    store: { getAgent() { calls.actors++; if (state.observationError) throw state.observationError; return state.actor; }, listAgents: () => state.actor ? [state.actor] : [] },
-    mail: {}, units: {}, views: { status: () => [] }, lifecycle: {}, limits: {},
-    git: { submit: effect, publishContext: effect },
+    store: {
+      getAgent() { calls.actors++; if (state.observationError) throw state.observationError; return state.actor; },
+      listAgents: () => state.actor ? [state.actor] : [],
+      hasOperation() { calls.operationChecks++; calls.order.push("operation"); if (state.throwOnOperationCheck) throw new Error("unexpected operation lookup"); return false; },
+    },
+    mail: { send: effect }, units: {}, views: { status: () => [] }, lifecycle: {}, limits: {},
+    git: { submit: effect, publishContext: effect, isPublished() { calls.order.push("published"); return false; } },
     isDraining: () => state.draining,
     assertAdmission() { calls.admission++; if (state.denyAdmission) throw new StoreError("BROKER_UNAVAILABLE", "admission closed"); },
     failureAnswer: (id, error) => replies.errorAnswer(id, { code: error.code ?? "INTERNAL_ERROR", message: error.message, retry: "never" }),
@@ -154,4 +160,23 @@ test("P1 public validation: bundle-omitted submission without a stream remains v
   const result = await dispatcher.dispatch(auth, request({ params: {} }), null);
   assert.equal(result.ok, true); assert.equal(calls.effects.length, 1);
   assert.equal(calls.actors, 1); assert.equal(calls.admission, 1);
+});
+
+test("P11 public mail.send without approval does not inspect the operation ledger", async () => {
+  const { dispatcher, auth, state, calls } = fixture();
+  state.throwOnOperationCheck = true;
+  const raw = request({ method: "mail.send", params: { to: [], subject: "subject", kind: "message", body: "body" } });
+  const result = await dispatcher.dispatch(auth, raw, null);
+  assert.equal(result.ok, true);
+  assert.equal(calls.operationChecks, 0);
+});
+
+test("P11 public mail.send approval checks the ledger before Git publication", async () => {
+  const { dispatcher, auth, calls } = fixture();
+  const raw = request({ method: "mail.send", params: { to: [], subject: "subject", kind: "message", body: "body", approvalFor: { candidate: "candidate" } } });
+  const result = await dispatcher.dispatch(auth, raw, null);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "CANDIDATE_NOT_PUBLISHED");
+  assert.deepEqual(calls.order, ["operation", "published"]);
+  assert.equal(calls.effects.length, 0);
 });

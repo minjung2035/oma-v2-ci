@@ -18,7 +18,7 @@ import { OperationJournal } from "./storage/operation-journal.js";
 import { readFacets } from "./storage/facets.js";
 export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
-import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./ids.js";
+import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./domain/identifiers.js";
 import { SCHEMA_USER_VERSION_READABLE, SCHEMA_USER_VERSION_WRITTEN } from "./domain/persisted-formats.js";
 import { StoreError } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";

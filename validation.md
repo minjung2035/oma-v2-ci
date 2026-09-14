@@ -26,6 +26,7 @@
 | [`implementation/compliance.md`](implementation/compliance.md) | requirement와 fresh evidence의 release 계약 |
 | [`implementation/test-matrix.md`](implementation/test-matrix.md) | acceptance oracle |
 | [`implementation/spikes.md`](implementation/spikes.md) | OPEN gate와 필요한 실제 검증 |
+| [`docs/architecture-improvement/p10-p15-adversarial-review.md`](docs/architecture-improvement/p10-p15-adversarial-review.md) | P10–P15 dependency/capability 정제와 적대적 검증 기록 |
 
 ## Evidence 상태
 

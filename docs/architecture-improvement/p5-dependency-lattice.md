@@ -1,6 +1,8 @@
 # P5 — 측정된 dependency lattice
 
-이 문서는 제안서 §10(P5)의 결과이자 현재 enforcement의 설명이다. 제안서에 적힌 개념 layer(L0–L5)를 코드에 강제한 것이 아니라, **현재 HEAD의 실제 import graph를 수집한 뒤 그 graph가 허용하는 최소 coarse DAG를 고정**했다. 측정 도구와 checker는 같은 extractor를 공유하므로 문서·evidence·enforcement가 따로 drift할 수 없다.
+> 이 문서의 수치와 extractor 설명은 P5 당시 기록이다. 현재 Program source universe, kernel sub-lattice와 적대적 검증은 [P10–P15 보고서](p10-p15-adversarial-review.md)를 따른다. 현재 수치는 재생성된 evidence JSON이 기준이다.
+
+이 문서는 제안서 §10(P5) 도입 당시의 coarse DAG와 초기 enforcement 기록이다. 같은 edge extractor를 공유하는 것만으로 source universe의 동일성까지 보장되지는 않았으며, 이 gap은 P10에서 production Program closure를 통일하여 수정했다. 아래 수치와 구현 설명은 P5 당시 상태로 읽는다.
 
 ## 1. 측정 방법
 

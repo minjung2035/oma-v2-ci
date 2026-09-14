@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import type { HostConfigV1 } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
-import { isValidActorName, isValidSocietyName, isValidWirePath } from "./ids.js";
+import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
 import { parseJsonObject } from "./frame.js";
 import { isCapability } from "./domain/capabilities.js";
 import { RESOURCE_FIELDS } from "./domain/resources.js";

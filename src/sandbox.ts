@@ -1,30 +1,14 @@
 // SB-001..006: argv composition is NOT kernel resource-enforcement evidence.
 // Only a decoded incarnation socket and this actor's host-owned mount roots enter the plan.
 import { join } from "node:path";
-import type { RunLease, SandboxPlan, ResourceLimits } from "../implementation/contracts.js";
+import type { RunLease, SandboxPlan } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
 import { assertValidatedRunLease, trustedAbsolutePath, type ValidatedRunLease } from "./protocol/run-lease.js";
-import { validBatchViewLimits, type BatchViewLimits } from "./protocol/batch-view.js";
+import { validBatchViewLimits } from "./protocol/batch-view.js";
 import { agentRootPathAt, workspacePathAt, runnerViewPathAt } from "./storage/paths.js";
 
-export interface SandboxHost {
-  rootfs: string;
-  node: string;
-  pi: string;
-  piModeArgs: string[];
-  tmpBytes: number;
-  checkResources: ResourceLimits;
-  /** Resident composition additionally needs the already configured host roots
-   * and existing frame/batch limits. No new HostConfigV1 fields are introduced.
-   */
-  stateRoot?: string;
-  runRoot?: string;
-  limits?: BatchViewLimits;
-}
-export interface ResidentDirectories {
-  workspace: string; home: string; archive: string; selfMail: string;
-  view: string; world: string; projectGit: string;
-}
+import type { SandboxHost, SandboxDirectories as ResidentDirectories } from "./module-ports.js";
+export type { SandboxHost, SandboxDirectories as ResidentDirectories } from "./module-ports.js";
 function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentDirectories): void {
   validateSandboxHost(h);
   if (!trustedAbsolutePath(h.stateRoot) || !trustedAbsolutePath(h.runRoot) || !validBatchViewLimits(h.limits))

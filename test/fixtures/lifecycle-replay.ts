@@ -10,6 +10,7 @@ import { ViewsModule } from "../../src/views.js";
 import { PublicDispatcher } from "../../src/broker/public-dispatcher.js";
 import { errorAnswer } from "../../src/broker/replies.js";
 import { publicFailure } from "../../src/domain/errors.js";
+import { receiptOfOperation } from "../../src/protocol/receipts.js";
 import { generateOperationId } from "../../src/ids.js";
 import { requestHash } from "../../src/hash.js";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./spec.js";
@@ -64,7 +65,12 @@ export function lifecycleReplayFixture() {
   const capabilities = new Set(ALL_CAPS);
   const auth: AuthContext = { actor: "manager", incarnation: 1, role: "resident", channel: "actor", capabilities,
     peer: { pid: process.pid, uid: 1000, gid: 1000, cgroup: null } };
-  const dispatcher = new PublicDispatcher({ store, mail, units, lifecycle, git: null,
+  const publicStore = {
+    listAgents: () => store.listAgents(), getAgent: (actor: string) => store.getAgent(actor),
+    getReceipt: (actor: string, key: string) => { const operation = store.getOperation(actor, key); return operation ? receiptOfOperation(operation) : null; },
+    hasOperation: (actor: string, key: string) => store.getOperation(actor, key) !== null,
+  };
+  const dispatcher = new PublicDispatcher({ store: publicStore, mail, units, lifecycle, git: null,
     views: new ViewsModule(store, root, "replay", "p"), limits,
     isDraining: () => false, assertAdmission() {}, refreshViews() {},
     failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
