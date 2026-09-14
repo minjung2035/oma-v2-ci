@@ -10,7 +10,7 @@ import { ViewsModule } from "../../src/views.js";
 import { PublicDispatcher } from "../../src/broker/public-dispatcher.js";
 import { errorAnswer } from "../../src/broker/replies.js";
 import { publicFailure } from "../../src/domain/errors.js";
-import { receiptOfOperation } from "../../src/protocol/receipts.js";
+import { receiptOfOperation } from "../../src/storage/receipt-projector.js";
 import { generateOperationId } from "../../src/ids.js";
 import { requestHash } from "../../src/hash.js";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./spec.js";

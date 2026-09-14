@@ -11,7 +11,7 @@
 | [현재 검증 상태](../implementation/validation.md) | 마지막 실제 실행, source pin, 미검증 환경·release 게이트 |
 | [검증 명령 색인](../validation.md) | 명령과 lane 안내; 결과 중복 관리 안 함 |
 | [MAINTENANCE](../MAINTENANCE.md) | 장기 수정·리뷰·문서 관리 원칙 |
-| [단계별 진행 색인](architecture-improvement/progress.md) | P0–P15 구현 범위와 보고서 탐색 |
+| [단계별 진행 색인](architecture-improvement/progress.md) | P0–P22 구현 범위와 보고서 탐색 |
 | [implementation 지도](../implementation/README.md) | 규범·현재 metadata·historical 자료 구분 |
 
 ## 규범과 제안
@@ -48,6 +48,7 @@
 | P9 | [power-cut/fuzz](architecture-improvement/p9-powercut-fuzz.md) |
 | P0–P9 종합 | [ORDER-002 변경 기록](architecture-improvement/change-record.md) |
 | P10–P15 | [구조 정제·적대적 검증 보고서](architecture-improvement/p10-p15-adversarial-review.md) |
+| P16–P22 | [데이터·타입 소유권과 evolution 검증](architecture-improvement/p16-p22-refinement.md) |
 
 ## 다른 감사와 generated evidence
 

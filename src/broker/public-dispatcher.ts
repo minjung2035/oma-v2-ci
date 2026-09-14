@@ -1,7 +1,6 @@
 // IPC-004/AUTH-003: public preflight and method dispatch; no socket or lease ownership.
 import type { AuthContext, Failure, ProtocolLimits, PublicMethod, PublicMethods, Request, RequestKey, Actor, AgentCreateInput, Oid, MessageId, MailInput, Receipt, Json, AgentStatus } from "../../implementation/contracts.js";
-import type { AgentRow } from "../storage/rows.js";
-import type { UnitObserve } from "../module-ports.js";
+import type { UnitObserve } from "../ports/runtime.js";
 import { StoreError } from "../domain/errors.js";
 import { assertNever } from "../domain/exhaustive.js";
 import { capabilitiesOf } from "../authority.js";
@@ -11,10 +10,15 @@ import { PUBLIC_METHODS, isPublicMethod, decodePublicParams } from "../protocol/
 import { errorAnswer, okAnswer } from "./replies.js";
 
 
-type PublicAgent = Pick<AgentRow, "name" | "incarnation" | "desired" | "specJson">;
+export interface PublicAgentView {
+  readonly name: Actor;
+  readonly incarnation: number;
+  readonly desired: AgentStatus["desired"];
+  readonly specJson: string;
+}
 export interface PublicStorePort {
   readonly listAgents: () => readonly { readonly name: Actor }[];
-  readonly getAgent: (actor: Actor) => PublicAgent | null;
+  readonly getAgent: (actor: Actor) => PublicAgentView | null;
   readonly getReceipt: (actor: Actor, key: RequestKey) => Receipt | null;
   readonly hasOperation: (actor: Actor, key: RequestKey) => boolean;
 }
@@ -65,7 +69,7 @@ export class PublicDispatcher {
   private checkParams<M extends PublicMethod>(method: M, rawParams: unknown): PublicMethods[M]["params"] | null {
     return decodePublicParams(method, rawParams, { actorNames: new Set(this.deps.store.listAgents().map(agent => agent.name)), limits: this.deps.limits });
   }
-  private readAuthority(auth: AuthContext): { actor: PublicAgent | null; failure: Failure | null } {
+  private readAuthority(auth: AuthContext): { actor: PublicAgentView | null; failure: Failure | null } {
     const actor = this.deps.store.getAgent(auth.actor);
     const stale = auth.channel === "actor" && (actor?.incarnation !== auth.incarnation || actor.desired !== "enabled");
     return { actor, failure: stale ? { code: "STALE_RUN", message: "actor incarnation is stale", retry: "never" } : null };

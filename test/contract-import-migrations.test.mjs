@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { contractOwners, contractImportSnapshot } from "../scripts/contract-imports.mjs";
+import { declarationSurface, mergeSurfaces } from "../scripts/contract-surface.mjs";
 
 const root = new URL("../", import.meta.url);
 const read = file => readFileSync(new URL(file, root), "utf8");
@@ -31,4 +32,10 @@ test("P2 import migration: inline public DTO references resolve to the declared 
   const after = before.replace('contracts.js', 'contracts/values.js');
   assert.deepEqual(contractImportSnapshot(file, after, owners, { requireNarrow: true }), contractImportSnapshot(file, before, owners));
   assert.throws(() => contractImportSnapshot(file, after.replace('/values.js', '/public-wire.js'), owners, { requireNarrow: true }));
+});
+
+test("P17 internal ledger/runtime split preserves every pre-split declaration token", () => {
+  const expected = JSON.parse(read("test/fixtures/architecture-surfaces.json")).internalPorts;
+  const files = ["src/module-ports.ts", "src/ports/ledger.ts", "src/ports/runtime.ts"];
+  assert.deepEqual(mergeSurfaces(files.map(file => declarationSurface(read(file), file))), expected);
 });

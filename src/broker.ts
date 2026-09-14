@@ -12,11 +12,9 @@ import { RpcConnection, NODE_ALARMS } from "./broker/connection.js";
 import { PeerAuthenticator, type BoundPeer } from "./broker/peer-authenticator.js";
 import { PublicDispatcher } from "./broker/public-dispatcher.js";
 import { InternalDispatcher } from "./broker/internal-dispatcher.js";
-import type { PublicStorePort, PublicMailPort, PublicUnitsPort, PublicViewsPort, PublicLifecyclePort, PublicGitPort } from "./broker/public-dispatcher.js";
-import type { InternalStorePort, InternalMailPort, InternalReconcilePort, InternalPeerPort } from "./broker/internal-dispatcher.js";
+import { createPublicDispatchPorts, createInternalDispatchPorts } from "./broker/composition.js";
 import { readUnitLogs } from "./broker/logs.js";
 import { errorAnswer, okAnswer } from "./broker/replies.js";
-import { receiptOfOperation } from "./protocol/receipts.js";
 import { RunRegistry } from "./runtime/run-registry.js";
 import { ProcessLock } from "./runtime/process-lock.js";
 import { settleWithin } from "./runtime/broker-lifetime.js";
@@ -65,47 +63,17 @@ export class Broker {
   ) {
     bindAdmissionGate(store, this.health);
     this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society, error => this.cleanupError(error));
-    const publicStore: PublicStorePort = { listAgents: () => this.store.listAgents(), getAgent: actor => this.store.getAgent(actor),
-      getReceipt: (actor, key) => { const operation = this.store.getOperation(actor, key); return operation ? receiptOfOperation(operation) : null; },
-      hasOperation: (actor, key) => this.store.getOperation(actor, key) !== null,
-    };
-    const publicMail: PublicMailPort = { send: (auth, key, input, context) => mail.send(auth, key, input, context) };
-    const publicUnits: PublicUnitsPort = { observe: agent => this.units.observe(agent) };
-    const publicViews: PublicViewsPort = { status: (agent, observe) => this.views.status(agent, observe) };
-    const publicLifecycle: PublicLifecyclePort = {
-      create: (auth, input, key) => lifecycle.create(auth, input, key),
-      start: (auth, agent, key) => lifecycle.start(auth, agent, key),
-      stop: (auth, agent, key) => lifecycle.stop(auth, agent, key),
-      ack: (auth, message, key) => lifecycle.ack(auth, message, key),
-      follow: (auth, topic, subscribe, key) => lifecycle.follow(auth, topic, subscribe, key),
-    };
-    const publicGit: PublicGitPort | null = git === null ? null : {
-      knownRefs: () => git.knownRefs(), isPublished: oid => git.isPublished(oid),
-      submit: (auth, key, input, bytes) => git.submit(auth, key, input, bytes),
-      integrate: (auth, key, input) => git.integrate(auth, key, input),
-      publishContext: (auth, key, input, bytes) => git.publishContext(auth, key, input, bytes),
-    };
-    this.publicDispatcher = new PublicDispatcher({ store: publicStore, mail: publicMail, units: publicUnits, views: publicViews, lifecycle: publicLifecycle, git: publicGit, limits,
+    const publicPorts = createPublicDispatchPorts(this.store, mail, this.units, this.views, lifecycle, git, limits);
+    this.publicDispatcher = new PublicDispatcher({ ...publicPorts,
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(),
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       readLogs: (agent, sinceSeconds) => this.readLogs(agent, sinceSeconds) });
-    const internalStore: InternalStorePort = {
-      getAgentIdentity: actor => { const agent = this.store.getAgent(actor); return agent ? { incarnation: agent.incarnation } : null; },
-      pendingDeliveryCount: agent => this.store.pendingDeliveries(agent).length,
-      getBatchAgent: id => this.store.getBatch(id)?.agent ?? null,
-      preparedBatchIds: agent => this.store.preparedBatches(agent).map(batch => batch.id),
-    };
-    const internalMail: InternalMailPort = {
-      prepare: auth => mail.prepare(auth), complete: (auth, evidence) => mail.complete(auth, evidence),
-      moveToCur: (agent, ids) => mail.moveToCur(agent, ids), reconcilePending: () => mail.reconcilePending(),
-    };
-    const internalReconcile: InternalReconcilePort | null = reconcile === null ? null : { sweep: () => reconcile.sweep() };
-    const internalPeers: InternalPeerPort = {
+    const internalPorts = createInternalDispatchPorts(this.store, mail, reconcile, paths.stateRoot, {
       requireRunnerUnit: (peer, agent, invocationId) => this.requireRunnerUnit(peer, agent, invocationId),
       requireHostUnit: (peer, kind) => this.requireHostUnit(peer, kind), runnerActor: peer => this.runnerActor(peer),
       runnerAuth: (agent, incarnation, peer) => this.runnerAuth(agent, incarnation, peer),
-    };
-    this.internalDispatcher = new InternalDispatcher({ store: internalStore, mail: internalMail, reconcile: internalReconcile, stateRoot: paths.stateRoot, peers: internalPeers,
+    });
+    this.internalDispatcher = new InternalDispatcher({ ...internalPorts,
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(),
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       openRun: (actor, invocationId) => this.openRun(actor, invocationId) });

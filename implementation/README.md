@@ -71,7 +71,7 @@ Freshness는 `validation.md`의 판정을 따른다. Generated artifact를 사�
 | [`refactoring-closure.md`](refactoring-closure.md) | R37–R39 구조개편 종료 시점 기록 |
 | [`adversarial-review.md`](adversarial-review.md) | 특정 source/evidence에서 생성된 adversarial audit ledger |
 | [`evidence/`](evidence/) | 당시 raw log, source pin, environment/dependency 기록 |
-| [아키텍처 개선 이력](../docs/README.md#아키텍처-변경실행-이력) | P0–P15 단계별 상세 보고서; 현재 재개 지시와 구분 |
+| [아키텍처 개선 이력](../docs/README.md#아키텍처-변경실행-이력) | P0–P22 단계별 상세 보고서; 현재 재개 지시와 구분 |
 
 Historical 문서의 `DONE`, PASS 수, LOC, owner 이름을 현재 HEAD에 그대로 상속하지 않는다. current source에서 owner/call path를 다시 찾고 필요하면 재현하거나 fresh evidence를 만든다.
 

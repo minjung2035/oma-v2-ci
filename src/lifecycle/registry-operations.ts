@@ -6,7 +6,7 @@ import { StoreError } from "../domain/errors.js";
 import { assertActorIdentity, assertCurrentActor } from "../authority.js";
 import { generateOperationId } from "../ids.js";
 import { requestHash } from "../hash.js";
-import { receiptOfOperation } from "../protocol/receipts.js";
+import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { lifecycleReceipt } from "./policy.js";
 
 /** Transaction-only handlers. No filesystem, unit, provider or process effects.

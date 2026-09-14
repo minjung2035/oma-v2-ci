@@ -1,12 +1,12 @@
 # OMA v2 — 현재 인계
 
-문서 정리 기준: `930053c307785106b0a881975cad596c943e8ac1` (2026-09-14).
+현행 정제 범위: P16–P22. 검토 기준은 `930053c`, 작업 시작점은 문서 정리 commit `6b35838`이다.
 작업 브랜치는 `refactor/safety-preserving-architecture`다. 재개할 때 실제 HEAD와 working tree를 먼저 확인한다.
 
 ## 현재 판정
 
-- P10–P15 dependency/capability 정제와 적대적 검증·수정은 완료했다.
-- 최신 전체 테스트와 fast lane은 통과했다. 정확한 실행 범위·개수·source pin은 **[현재 검증 상태](implementation/validation.md)** 한 곳에서 확인한다.
+- P10–P15의 경계를 유지하며 P16–P22 데이터/port 소유권, composition과 evolution 검증을 반영했다.
+- 실제 실행 판정·정확한 범위·source pin은 **[현재 검증 상태](implementation/validation.md)** 한 곳에서 확인하고 현재 working tree와 대조한다.
 - 이는 release-ready 선언이 아니다. 실제 환경 검증과 OPEN SPIKE, LOC 승인 조건은 남아 있다.
 - 과거 인계의 “P5/P7 미완료”, “phase5 smoke 실패”, “pinned typecheck 미실행”은 현재 재개 작업이 아니다.
 
@@ -15,11 +15,12 @@
 - `scripts/dependency-graph.mjs`: production TypeScript Program의 source/edge 공용 owner.
 - `scripts/kernel-zones.mjs`: L1 kernel의 파일별 semantic zone과 방향 정책.
 - `src/broker/public-dispatcher.ts`, `internal-dispatcher.ts`: exhaustive method–params dispatch와 consumer-owned capability.
-- `src/broker.ts`: 필요한 함수만 전달하는 composition projection.
-- `src/module-ports.ts`: 선언만 소유. 실제 class conformance는 `src/entry/module-conformance.ts`에서 검사.
-- `test/architecture-oracles.test.mjs`, `test/p11-p12-dispatch.test.mjs`: 독립 SCC·syntax mutation·실제 handler/capability 음성 대조군.
+- `src/broker/composition.ts`: 필요한 함수·agent view만 새 객체로 전달하며 Broker의 auth/lifetime callback은 유지.
+- `src/ports/ledger.ts`, `runtime.ts`: erased internal contracts. `module-ports.ts`는 호환 facade, class conformance는 `entry/module-conformance.ts`.
+- `src/storage/receipt-projector.ts`: validated ledger → wire receipt projection. `ValidatedPlan` 발급은 K3에 유지.
+- `test/architecture-oracles.test.mjs`, `p11-p12-dispatch.test.mjs`, `architecture-evolution.test.mjs`: 독립 oracle과 실제 production 변경 누락 검증.
 
-상세 변경과 근거는 [P10–P15 보고서](docs/architecture-improvement/p10-p15-adversarial-review.md), 단계별 탐색은 [진행 색인](docs/architecture-improvement/progress.md)을 따른다.
+상세 변경과 근거는 [P16–P22 기록](docs/architecture-improvement/p16-p22-refinement.md), 이전 경계는 [P10–P15 보고서](docs/architecture-improvement/p10-p15-adversarial-review.md), 단계별 탐색은 [진행 색인](docs/architecture-improvement/progress.md)을 따른다.
 
 ## 다음 작업
 

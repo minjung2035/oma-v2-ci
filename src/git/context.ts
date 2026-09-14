@@ -14,7 +14,7 @@ import { mailObjectRelativePath, contextRevisionDisplayPath } from "../domain/de
 import { contextStagingPathAt } from "../storage/paths.js";
 import { discardContextPreparation, prepareContextStream } from "../storage/context-stream.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
-import { receiptOfOperation } from "../protocol/receipts.js";
+import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { MailModule, buildEml, actorAddress, listAddress, expandAddresses } from "../mail.js";
 import { ContextPublicationObserver, type ContextPublicationEvidence } from "./context-publication.js";
 import type { RefAfterCas } from "./observe.js";

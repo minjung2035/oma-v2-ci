@@ -3,7 +3,7 @@
  * Runtime DAG: K3 ledger -> K2 mechanisms -> K1 representations -> K0 values.
  * Same-zone runtime SCCs are still forbidden by the project cycle gate.
  */
-import { layerOf } from "./dependency-lattice.mjs";
+import { layerOf, isInternalPort } from "./dependency-lattice.mjs";
 
 export const KERNEL_ZONES = Object.freeze([
   {
@@ -81,7 +81,6 @@ export const KERNEL_ZONES = Object.freeze([
   {
     name: "K3-ledger",
     files: [
-      "src/module-ports.ts",
       "src/store.ts",
       "src/storage/diagnostic-snapshot.ts",
       "src/storage/facets.ts",
@@ -90,6 +89,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/storage/operation-journal.ts",
       "src/storage/operation-transitions.ts",
       "src/storage/rows.ts",
+      "src/storage/receipt-projector.ts",
       "src/storage/transaction.ts",
       "src/storage/transitions.ts",
     ],
@@ -151,11 +151,24 @@ export function kernelExternalViolation(file, specifier, importedNames = []) {
 
 export function kernelEvidence(graph, cycles) {
   const matrices = { runtime: {}, type: {} },
-    crossZoneEdges = [];
+    crossZoneEdges = [], typeReviewEdges = [];
   for (const edge of graph.edges) {
     if (!edge.included) continue;
     const from = kernelZoneOf(edge.from),
       to = kernelZoneOf(edge.to);
+    const fromLayer = layerOf(edge.from), toLayer = layerOf(edge.to);
+    const kernelUpward = Boolean(from && to && from.index < to.index);
+    const coarseUpward = Boolean(fromLayer && toLayer && fromLayer.index < toLayer.index);
+    const portContract = isInternalPort(edge.from) || isInternalPort(edge.to);
+    const conformance = edge.from === "src/entry/module-conformance.ts";
+    if (edge.kind === "type" && (kernelUpward || coarseUpward || portContract || conformance)) {
+      // Structural context, never a per-edge whitelist or automatic semantic approval.
+      const classification = conformance ? "port-conformance"
+        : edge.from === "src/module-ports.ts" || edge.from.startsWith("implementation/") ? "compatibility-facade"
+        : portContract ? "internal-port-contract"
+        : from && to ? "representation-relation" : "implementation-knowledge-review";
+      typeReviewEdges.push({ from: edge.from, to: edge.to, classification, kernelUpward, coarseUpward });
+    }
     if (!from || !to) continue;
     const key = `${from.name} -> ${to.name}`;
     matrices[edge.kind][key] = (matrices[edge.kind][key] ?? 0) + 1;
@@ -174,6 +187,8 @@ export function kernelEvidence(graph, cycles) {
     runtimeEdgeMatrix: sorted(matrices.runtime),
     typeOnlyEdgeMatrix: sorted(matrices.type),
     crossZoneEdges,
+    internalPortContracts: graph.files.filter(isInternalPort),
+    typeOnlyReview: { mode: "report-only", classificationsAreApproval: false, edges: typeReviewEdges },
     runtimeCycles: cycles.runtime.filter((group) =>
       group.some((file) => kernelZoneOf(file)),
     ),

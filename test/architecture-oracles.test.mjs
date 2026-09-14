@@ -24,6 +24,7 @@ import {
   kernelFindings,
   kernelZoneOf,
 } from "../scripts/kernel-zones.mjs";
+import { isInternalPort } from "../scripts/dependency-lattice.mjs";
 
 function fixture(files, run, include = ["src/**/*.ts"]) {
   const root = mkdtempSync(join(tmpdir(), "oma-oracle-"));
@@ -361,9 +362,8 @@ test("P13 every semantic zone direction, exact membership and pure external capa
 test("P14 declaration-only ports retain pinned implementation conformance outside their owner", () => {
   assert.equal(ts.version, "5.9.3");
   const program = createArchitectureProgram();
-  const port = program
-    .getSourceFiles()
-    .find((source) => source.fileName.endsWith("/src/module-ports.ts"));
+  const ports = program.getSourceFiles().filter(source => isInternalPort(relative(process.cwd(), source.fileName).replaceAll("\\", "/")));
+  const port = ports.find(source => source.fileName.endsWith("/src/ports/ledger.ts"));
   const conformance = program
     .getSourceFiles()
     .find((source) =>
@@ -373,12 +373,10 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
     port && conformance,
     "production Program must check composition conformance",
   );
-  assert.equal(
-    ts
-      .transpileModule(port.text, {
-        compilerOptions: { module: ts.ModuleKind.ESNext, removeComments: true },
-      })
-      .outputText.trim(),
+  for (const declaration of ports) assert.equal(
+    ts.transpileModule(declaration.text, {
+      compilerOptions: { module: ts.ModuleKind.ESNext, removeComments: true },
+    }).outputText.trim(),
     "export {};",
   );
   assert.equal(
@@ -393,7 +391,7 @@ test("P14 declaration-only ports retain pinned implementation conformance outsid
   assert.ok(
     !graph.edges.some(
       (edge) =>
-        edge.from === "src/module-ports.ts" &&
+        isInternalPort(edge.from) &&
         [
           "src/store.ts",
           "src/units.ts",
@@ -566,4 +564,52 @@ test("P15 narrowing Store to its declared port does not hide transaction effects
       );
     },
   );
+});
+
+test("P17 erased contracts reject runtime values, aliases and re-exports without gating type relations", () => {
+  const cases = [
+    ['import type { Fact } from "../storage/operation-codec.js"; export interface Port { read(): Fact; }', false],
+    ['export type { Fact as Alias } from "../storage/operation-codec.js";', false],
+    ['declare const brand: unique symbol; export interface Port { readonly [brand]: true; }', false],
+    ['export const leaked = 1;', true],
+    ['import { make as alias } from "../storage/operation-codec.js"; export const leaked = alias();', true],
+    ['import * as owner from "../storage/operation-codec.js"; export { owner };', true],
+    ['export { make as leak } from "../storage/operation-codec.js";', true],
+    ['import "../storage/operation-codec.js"; export interface Port {}', true],
+    ['export enum RuntimeValue { Leaked }', true],
+    ['export const load = (name: string) => import(name);', true],
+  ];
+  // Exercise both the directory-owned contracts and the exact-file facade.
+  for (const file of ["src/ports/runtime.ts", "src/module-ports.ts"]) for (const [text, rejected] of cases) fixture({
+    [file]: file === "src/module-ports.ts" ? text.replaceAll("../storage/", "./storage/") : text,
+    "src/storage/operation-codec.ts": "export interface Fact { value: number; } export function make() { return 1; }",
+    "src/domain/identifiers.ts": "export const legitimateRuntimeValue = 1;",
+  }, (root, program) => {
+    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false }).filter(f => f.rule === "internal-port-runtime");
+    assert.deepEqual(findings.map(f => f.file), rejected ? [file] : [], text);
+    assert.equal(kernelZoneOf(file), null);
+    assert.equal(isInternalPort("src/ports-extra/fake.ts"), false);
+  });
+});
+
+test("P19 type coupling evidence reports structural reasons without approving or forbidding upward types", () => {
+  const graph = graphFromProgram(createArchitectureProgram());
+  const evidence = dependencyEvidence(graph).kernel;
+  assert.equal(evidence.typeOnlyReview.mode, "report-only");
+  assert.equal(evidence.typeOnlyReview.classificationsAreApproval, false);
+  for (const port of ["src/module-ports.ts", "src/ports/ledger.ts", "src/ports/runtime.ts"])
+    assert.ok(evidence.internalPortContracts.includes(port));
+  const upward = evidence.typeOnlyReview.edges.filter(edge => edge.kernelUpward);
+  assert.ok(upward.some(edge => edge.from === "src/protocol/operation-results.ts" && edge.to === "src/storage/operation-codec.ts" && edge.classification === "representation-relation"));
+  for (const classification of ["compatibility-facade", "port-conformance", "internal-port-contract"])
+    assert.ok(evidence.typeOnlyReview.edges.some(edge => edge.classification === classification), classification);
+  assert.deepEqual(kernelFindings(graph), []);
+  fixture({
+    "src/protocol/receipt-codec.ts": 'import type { Row } from "../storage/rows.js"; export type View = Row;',
+    "src/storage/rows.ts": 'export interface Row { value: string; }',
+  }, (root, program) => {
+    const extra = graphFromProgram(program, { rootDir: root });
+    assert.ok(dependencyEvidence(extra).kernel.typeOnlyReview.edges.some(edge => edge.kernelUpward));
+    assert.deepEqual(kernelFindings(extra), []); // No hidden type-direction gate.
+  });
 });

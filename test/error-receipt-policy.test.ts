@@ -7,10 +7,8 @@ import {
 } from "../src/domain/errors.js";
 import { StoreError as StoreCompatibilityError } from "../src/store.js";
 import { receiptOf as mailReceipt } from "../src/mail.js";
-import {
-  receiptOfOperation, receiptExit, receiptLines, receiptNotFound,
-  isRequestNotFound, type ReceiptOperation,
-} from "../src/protocol/receipts.js";
+import { receiptOfOperation, type ReceiptOperation } from "../src/storage/receipt-projector.js";
+import { receiptExit, receiptLines, receiptNotFound, isRequestNotFound } from "../src/protocol/receipts.js";
 import { receiptOperation } from "./fixtures/receipt-operation.js";
 
 const pending = receiptOperation();

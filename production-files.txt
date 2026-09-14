@@ -9,6 +9,7 @@ implementation/systemd/resident.path.in
 implementation/systemd/resident.service.in
 src/authority.ts
 src/broker.ts
+src/broker/composition.ts
 src/broker/connection.ts
 src/broker/internal-dispatcher.ts
 src/broker/logs.ts
@@ -92,6 +93,8 @@ src/mail/routing.ts
 src/mail/serialize.ts
 src/module-ports.ts
 src/pi-extension.ts
+src/ports/ledger.ts
+src/ports/runtime.ts
 src/process/async.ts
 src/process/command.ts
 src/process/policies.ts
@@ -132,6 +135,7 @@ src/storage/operation-codec.ts
 src/storage/operation-journal.ts
 src/storage/operation-transitions.ts
 src/storage/paths.ts
+src/storage/receipt-projector.ts
 src/storage/rows.ts
 src/storage/staged-tree.ts
 src/storage/submit-spool.ts

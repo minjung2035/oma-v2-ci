@@ -6,9 +6,8 @@ import {
   isPreacceptOnlyFailure, publicFailure,
   type EffectKnowledge, type ErrorPhase, type ObservationKind,
 } from "../src/domain/errors.js";
-import {
-  receiptOfOperation, receiptNotFound, isRequestNotFound, receiptExit, receiptLines,
-} from "../src/protocol/receipts.js";
+import { receiptOfOperation } from "../src/storage/receipt-projector.js";
+import { receiptNotFound, isRequestNotFound, receiptExit, receiptLines } from "../src/protocol/receipts.js";
 import { receiptOperation, receiptOperationId } from "./fixtures/receipt-operation.js";
 
 const phases: readonly ErrorPhase[] = ["preaccept", "accepted", "recovering", "terminal"];

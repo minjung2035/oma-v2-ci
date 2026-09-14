@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "sourceCommit": "6b3583814e1586da1efac06559914ef5556d4ebb",
+  "note": "Internal port declarations are copied from the pre-P17 owner, not learned from the split. Dispatch interface snapshots are reviewed P16/P18 consumer capabilities; updating them requires explicit surface review.",
+  "internalPorts": {
+    "AsyncUnitsOrchestrationPort": { "exported": true, "sha256": "e55687bb3f9df33e0bc0857668bcc25ea48a7c77c8b3dcdedd76cc290481bbdf" },
+    "BoundRunnerPort": { "exported": true, "sha256": "48ab8f4ce002f8de3d18402e410cfdd29fc250cbb91c0c26c46a281fa17a5a2a" },
+    "DerivedViewsPort": { "exported": true, "sha256": "71b78f5e880d81abd0139f3a9aed9135b1c5d5a04a0a3818637ba0be24b588cd" },
+    "OperationReceiptPort": { "exported": true, "sha256": "97d47ab733ec0fbd1821ec31482ae82e6e484d792c3870fa8ea33f824f20f861" },
+    "OperationRowsPort": { "exported": true, "sha256": "4f223fb50f4948db780cd223f5c07d9e112a59dbf19ac8b57e64e1abfe23c789" },
+    "ReceiptProjector": { "exported": true, "sha256": "a17f2fd83f735d75feeb5152f897d393458a7e1aecd1abf928bd9129fd01cfb3" },
+    "ReconcileMetrics": { "exported": true, "sha256": "6bd63dab59ffaf9b253d0b4bc88ec2c834083103b050ad26983f4e6b159a27f7" },
+    "ReconcilePort": { "exported": true, "sha256": "d67d1c04dd5c386a438e02e092bb9914065bcad68d15fa46834c6decd9b6d404" },
+    "SandboxCompositionInput": { "exported": true, "sha256": "8856a687abc1b79930b03c17268fd8b5fdd576dd1dd4e7f79d0b52df0862fcd1" },
+    "SandboxDirectories": { "exported": true, "sha256": "2f393edcee6ab1b5e15cd29c9411c31ec8b5b0094e8b14a0adf9f4e7cb721769" },
+    "SandboxHost": { "exported": true, "sha256": "c74c203911fc0e6b1aae1117997c8cdfabd504bfbf0bc0cf94931f01700fe4de" },
+    "SandboxPort": { "exported": true, "sha256": "9d50983582ce978ad46933abfadf8f700f2692b15682a9c02c0f37ccb5747e79" },
+    "StorePort": { "exported": true, "sha256": "9cef16e042a8f138387f98f31aefef79a63b576c2c3a003505f8b7f4232135fa" },
+    "SyncUnitsPort": { "exported": true, "sha256": "8c595a2774c641f61291967397c286ca38c8cab2a69c49d3deffa5aa3e2d6261" },
+    "UnitObserve": { "exported": true, "sha256": "2aecd3e333a650a6efd3cea92d349fab952184847393844765e3646db231aa95" }
+  },
+  "dispatch": {
+    "src/broker/public-dispatcher.ts": {
+      "PublicAgentView": { "exported": true, "sha256": "179716fe688298b6fe4d7da5be3c72bf9ba656bb2968538c7231ea41271cd0b2" },
+      "PublicStorePort": { "exported": true, "sha256": "20dd961b2dcc6eed5b428c6d85e88e6974f2486c71fa53fa4cf9eb29200ddca6" },
+      "PublicMailPort": { "exported": true, "sha256": "720eb92c82abbf5458b0cff8bf0f7331f9efd3c11185223259d329ea4bded4fe" },
+      "PublicUnitsPort": { "exported": true, "sha256": "3b8fa0ef7c78405fdb392f806da98c6ed95728e9aabaf7d5b683df8a05d39b19" },
+      "PublicViewsPort": { "exported": true, "sha256": "d2e3cd6185e953a7adc76e73a26c0af5fc43b3462fc73d0b70171c729b229e1c" },
+      "PublicLifecyclePort": { "exported": true, "sha256": "44de497b03e4ff3424e2e050653c3175b72fbb0b87f9d64f43d992530bd2a8fa" },
+      "PublicGitPort": { "exported": true, "sha256": "38ba4f6696f46ea9c2b0afe801d5a9569b4eeece7f65d7866124360bc9581835" },
+      "PublicDispatchDependencies": { "exported": true, "sha256": "bd13eb42edd9ce11e382f09a4c6352207f69f25f1d0fb96f08a3ab70ac2e5162" }
+    },
+    "src/broker/internal-dispatcher.ts": {
+      "InternalStorePort": { "exported": true, "sha256": "1762329b0b87a7037b9226fcdc55fa85a61aa9984e7830ee330f2d991f5329cd" },
+      "InternalMailPort": { "exported": true, "sha256": "6eb3bfdc847e9c53ecaf0118492c00ee43c7665c24880aa01a7f92c99da10776" },
+      "InternalReconcilePort": { "exported": true, "sha256": "4e971b058b25e204bfe79c445730a264cdff0bc104c876fa0347b9578f306d96" },
+      "InternalPeerPort": { "exported": true, "sha256": "7bcca8aad63d73494268cc913263c8f6089e02bb0cd56b2a92d095ddc29a0845" },
+      "InternalDispatchDependencies": { "exported": true, "sha256": "77f8bbe9c4a517ccb64dc27620e97f256c7123375eeac1c687202492a563dd3c" }
+    }
+  }
+}

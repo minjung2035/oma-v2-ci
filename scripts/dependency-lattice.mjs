@@ -4,8 +4,13 @@
  * Store/facet type-only relations deliberately retain their authoritative owner.
  * New files outside these prefixes fail rather than escaping the lattice.
  */
+const INTERNAL_PORT_PREFIXES = ["src/ports/", "src/module-ports.ts"];
+export function isInternalPort(file) {
+  return INTERNAL_PORT_PREFIXES.some(prefix => prefix.endsWith("/") ? file.startsWith(prefix) : file === prefix);
+}
+
 const LAYERS = Object.freeze([
-  { name: "L0-contracts", prefixes: ["implementation/"] },
+  { name: "L0-contracts", prefixes: ["implementation/", ...INTERNAL_PORT_PREFIXES] },
   {
     name: "L1-kernel",
     prefixes: [
@@ -13,7 +18,6 @@ const LAYERS = Object.freeze([
       "src/ids.ts",
       "src/hash.ts",
       "src/leaf.ts",
-      "src/module-ports.ts",
       "src/validate.ts",
       "src/frame.ts",
       "src/durable.ts",

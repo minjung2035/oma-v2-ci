@@ -36,7 +36,7 @@ const agentStatus = checkObject({
   activeState: nullable(string), subState: nullable(string), unitResult: nullable(string), execMainStatus: nullable(nonnegative),
   pending: nonnegative, preparedBatches: nonnegative, reason: nullable(string), runnerObservedAtMs: nullable(nonnegative),
 });
-type ReadResultMethod = "agent.wait" | "git.known" | "status.get" | "logs.read";
+type ReadResultMethod = Exclude<PublicMethod, MutationMethod | "operation.get">;
 const checks = {
   "agent.wait": checkObject({ accepted: checkBool() }),
   "git.known": checkObject({ hasCandidate: checkBool(), prerequisites: checkArray(checkOid) }),

@@ -9,8 +9,8 @@ import type { BatchViewLimits } from "./protocol/batch-view.js";
 import { pendingWork } from "./views/pending-work.js";
 export { replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 
-import type { UnitObserve } from "./module-ports.js";
-export type { UnitObserve } from "./module-ports.js";
+import type { UnitObserve } from "./ports/runtime.js";
+export type { UnitObserve } from "./ports/runtime.js";
 /** Internal observation only. D04 does not authorize a new AgentStatus field.
  * Neither this timestamp nor status.get's collection time is runner evidence.
  */

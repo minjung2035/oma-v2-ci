@@ -7,8 +7,8 @@ import { assertValidatedRunLease, trustedAbsolutePath, type ValidatedRunLease } 
 import { validBatchViewLimits } from "./protocol/batch-view.js";
 import { agentRootPathAt, workspacePathAt, runnerViewPathAt } from "./storage/paths.js";
 
-import type { SandboxHost, SandboxDirectories as ResidentDirectories } from "./module-ports.js";
-export type { SandboxHost, SandboxDirectories as ResidentDirectories } from "./module-ports.js";
+import type { SandboxHost, SandboxDirectories as ResidentDirectories } from "./ports/runtime.js";
+export type { SandboxHost, SandboxDirectories as ResidentDirectories } from "./ports/runtime.js";
 function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentDirectories): void {
   validateSandboxHost(h);
   if (!trustedAbsolutePath(h.stateRoot) || !trustedAbsolutePath(h.runRoot) || !validBatchViewLimits(h.limits))

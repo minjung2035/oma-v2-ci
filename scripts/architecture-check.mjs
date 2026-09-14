@@ -20,7 +20,7 @@ import {
   runtimeModuleReference,
 } from "./dependency-graph.mjs";
 export { createArchitectureProgram } from "./dependency-graph.mjs";
-import { cycleFindings, latticeFindings } from "./dependency-lattice.mjs";
+import { cycleFindings, latticeFindings, isInternalPort } from "./dependency-lattice.mjs";
 import { kernelFindings, kernelExternalViolation } from "./kernel-zones.mjs";
 export { DEFAULT_POLICY } from "./architecture-owners.mjs";
 
@@ -369,6 +369,16 @@ export function analyzeProgram(
   };
   for (const source of sources) {
     graph.set(relative(root, source.fileName), new Set());
+    if (isInternalPort(relative(root, source.fileName))) {
+      // P17 contract, not a taste heuristic: this surface must erase completely.
+      // Preserve value imports to reject accidental runtime capabilities even if unused.
+      const emitted = ts.transpileModule(source.text, {
+        fileName: source.fileName,
+        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, verbatimModuleSyntax: true, removeComments: true },
+      }).outputText.trim();
+      if (emitted !== "" && emitted !== "export {};")
+        report("internal-port-runtime", source, "Internal port contracts must contain only erased declarations and explicit type imports/exports");
+    }
     eachNode(source, (node) => {
       if (
         (ts.isVariableDeclaration(node) ||

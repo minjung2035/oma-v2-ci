@@ -9,7 +9,7 @@ import type {
   InternalMethods,
   PreparedBatch,
 } from "../../implementation/contracts.js";
-import type { ReconcileMetrics } from "../module-ports.js";
+import type { ReconcileMetrics } from "../ports/runtime.js";
 import type { BoundPeer } from "./peer-authenticator.js";
 import { StoreError } from "../domain/errors.js";
 import { assertNever } from "../domain/exhaustive.js";

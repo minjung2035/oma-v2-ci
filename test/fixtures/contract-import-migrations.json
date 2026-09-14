@@ -1,53 +1,24 @@
 {
   "schema": 1,
-  "sourceCommit": "c8be44cf16cee8954075b4c36801d474779e930e",
-  "note": "P14 reviewed declaration-only ownership move updates module-ports bodySha256; contract bindings and the historical sourceBlob remain unchanged. architecture-oracles.test.mjs independently checks erased runtime output and implementation conformance.",
+  "sourceCommit": "6b3583814e1586da1efac06559914ef5556d4ebb",
+  "note": "P17 reviewed declaration-only split of module-ports: the union of original contract bindings/aliases is preserved. sourceBlob records the common pre-split owner. Erasure, implementation conformance and declaration fingerprints are checked independently.",
   "files": {
     "src/module-ports.ts": {
-      "sourceBlob": "607778c2570989d966b74b018c71bfff09685722",
-      "bodySha256": "4ab0d3099f99899bf0c5b5696c981f4f6b8bd4be441af8a7386bb31427846dd4",
-      "bindings": [
-        [
-          "Actor",
-          "Actor"
-        ],
-        [
-          "OperationId",
-          "OperationId"
-        ],
-        [
-          "RequestKey",
-          "RequestKey"
-        ],
-        [
-          "AgentStatus",
-          "AgentStatus"
-        ],
-        [
-          "PreparedBatch",
-          "PreparedBatch"
-        ],
-        [
-          "RunLease",
-          "RunLease"
-        ],
-        [
-          "SandboxPlan",
-          "SandboxPlan"
-        ],
-        [
-          "UnitObservation",
-          "UnitObservation"
-        ],
-        [
-          "Receipt",
-          "Receipt"
-        ],
-        [
-          "ResourceLimits",
-          "ResourceLimits"
-        ]
-      ],
+      "sourceBlob": "286ea80ed93841cf7e4fb8580344702c21744754",
+      "bodySha256": "4225b586213d25a16dda21e0255dfe543b575736f0f9723b9e3d8d720d17d0df",
+      "bindings": [],
+      "inline": []
+    },
+    "src/ports/ledger.ts": {
+      "sourceBlob": "286ea80ed93841cf7e4fb8580344702c21744754",
+      "bodySha256": "95454b7ca120193354698d1399a3f2ecdadaf3f8beb4cea64baf1e288a4b42e4",
+      "bindings": [["Actor", "Actor"], ["OperationId", "OperationId"], ["RequestKey", "RequestKey"], ["Receipt", "Receipt"]],
+      "inline": []
+    },
+    "src/ports/runtime.ts": {
+      "sourceBlob": "286ea80ed93841cf7e4fb8580344702c21744754",
+      "bodySha256": "7c8b722fe66aee0c5cf283d459e121361905e0f88534149d6e82837179e8cf4d",
+      "bindings": [["Actor", "Actor"], ["AgentStatus", "AgentStatus"], ["PreparedBatch", "PreparedBatch"], ["RunLease", "RunLease"], ["SandboxPlan", "SandboxPlan"], ["UnitObservation", "UnitObservation"], ["ResourceLimits", "ResourceLimits"]],
       "inline": []
     }
   }

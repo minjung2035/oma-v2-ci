@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.057560920715332,
-  "n_files"            : 147,
-  "n_lines"            : 14721,
-  "files_per_second"   : 2553.81599483076,
-  "lines_per_second"   : 255746.43033948,
+  "elapsed_seconds"    : 0.0602419376373291,
+  "n_files"            : 151,
+  "n_lines"            : 14857,
+  "files_per_second"   : 2506.55948201826,
+  "lines_per_second"   : 246622.21340626,
   "report_file"        : "production-loc.json"},
 "src/durable.ts" :{
   "blank": 5,
@@ -30,7 +30,7 @@
 "src/broker.ts" :{
   "blank": 1,
   "comment": 6,
-  "code": 328,
+  "code": 296,
   "language": "TypeScript"},
 "src/store.ts" :{
   "blank": 3,
@@ -127,15 +127,15 @@
   "comment": 8,
   "code": 170,
   "language": "TypeScript"},
+"src/broker/public-dispatcher.ts" :{
+  "blank": 3,
+  "comment": 8,
+  "code": 165,
+  "language": "TypeScript"},
 "src/git/submit.ts" :{
   "blank": 2,
   "comment": 6,
   "code": 165,
-  "language": "TypeScript"},
-"src/broker/public-dispatcher.ts" :{
-  "blank": 3,
-  "comment": 8,
-  "code": 161,
   "language": "TypeScript"},
 "src/diagnostics/files.ts" :{
   "blank": 2,
@@ -156,6 +156,11 @@
   "blank": 11,
   "comment": 40,
   "code": 156,
+  "language": "TypeScript"},
+"src/broker/composition.ts" :{
+  "blank": 4,
+  "comment": 3,
+  "code": 143,
   "language": "TypeScript"},
 "src/rpc-client.ts" :{
   "blank": 3,
@@ -292,11 +297,6 @@
   "comment": 4,
   "code": 83,
   "language": "TypeScript"},
-"src/module-ports.ts" :{
-  "blank": 8,
-  "comment": 24,
-  "code": 83,
-  "language": "TypeScript"},
 "src/pi-extension.ts" :{
   "blank": 3,
   "comment": 11,
@@ -366,6 +366,11 @@
   "blank": 3,
   "comment": 6,
   "code": 68,
+  "language": "TypeScript"},
+"src/ports/runtime.ts" :{
+  "blank": 6,
+  "comment": 7,
+  "code": 67,
   "language": "TypeScript"},
 "src/storage/staged-tree.ts" :{
   "blank": 3,
@@ -465,11 +470,6 @@
 "src/mail/reconcile.ts" :{
   "blank": 1,
   "comment": 0,
-  "code": 45,
-  "language": "TypeScript"},
-"src/protocol/receipts.ts" :{
-  "blank": 6,
-  "comment": 6,
   "code": 45,
   "language": "TypeScript"},
 "src/config/policy.ts" :{
@@ -577,6 +577,11 @@
   "comment": 1,
   "code": 29,
   "language": "TypeScript"},
+"src/storage/receipt-projector.ts" :{
+  "blank": 2,
+  "comment": 5,
+  "code": 29,
+  "language": "TypeScript"},
 "src/domain/integer-fields.ts" :{
   "blank": 2,
   "comment": 2,
@@ -606,6 +611,11 @@
   "blank": 2,
   "comment": 3,
   "code": 26,
+  "language": "TypeScript"},
+"src/protocol/receipts.ts" :{
+  "blank": 4,
+  "comment": 2,
+  "code": 25,
   "language": "TypeScript"},
 "src/cli/request-intent.ts" :{
   "blank": 4,
@@ -657,6 +667,11 @@
   "comment": 5,
   "code": 17,
   "language": "TypeScript"},
+"src/ports/ledger.ts" :{
+  "blank": 2,
+  "comment": 3,
+  "code": 17,
+  "language": "TypeScript"},
 "src/broker/logs.ts" :{
   "blank": 1,
   "comment": 1,
@@ -664,7 +679,7 @@
   "language": "TypeScript"},
 "src/protocol/operation-results.ts" :{
   "blank": 2,
-  "comment": 5,
+  "comment": 7,
   "code": 16,
   "language": "TypeScript"},
 "src/domain/resources.ts" :{
@@ -722,6 +737,11 @@
   "comment": 1,
   "code": 9,
   "language": "OMA systemd"},
+"src/module-ports.ts" :{
+  "blank": 0,
+  "comment": 7,
+  "code": 8,
+  "language": "TypeScript"},
 "implementation/systemd/principal.path.in" :{
   "blank": 0,
   "comment": 1,
@@ -743,7 +763,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 450,
-  "comment": 907,
-  "code": 13364,
-  "nFiles": 147} }
+  "blank": 454,
+  "comment": 906,
+  "code": 13497,
+  "nFiles": 151} }

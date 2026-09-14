@@ -13,7 +13,7 @@ import { generateOperationId, generateMessageId, isValidRequestKey } from "../id
 import { publishedRefFor, mailObjectRelativePath } from "../domain/derived.js";
 import { prepareSubmitSpool, requireFrozenBundle, type PreparedSubmitSpool } from "../storage/submit-spool.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
-import { receiptOfOperation } from "../protocol/receipts.js";
+import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { submitResult } from "../protocol/operation-results.js";
 import { GitPublicationObserver } from "./publication.js";
 import type { GitObservation } from "./observe.js";

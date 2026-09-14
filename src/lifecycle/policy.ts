@@ -7,7 +7,7 @@ import type { Store } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { LineageSnapshot, assertCreateCapacity } from "../domain/lineage.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
-import { receiptOfOperation } from "../protocol/receipts.js";
+import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { assertCurrentActor, effectiveCapabilitiesOf } from "../authority.js";
 import type { AgentQuota, SpecResolver } from "./contracts.js";
 

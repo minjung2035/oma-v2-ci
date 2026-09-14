@@ -2,6 +2,8 @@
  * fresh argument/config read. Terminal result_json is never rewritten here.
  */
 import type { ResultFor } from "../durable.js";
+// This brand proves ledger/payload/delivery relations, not just persisted shape.
+// Keep its issuing owner in K3; a lower-layer alias must not weaken that proof.
 import type { ValidatedPlan } from "../storage/operation-codec.js";
 
 export function integrationResult(plan: ValidatedPlan<"git.integrate">): ResultFor<"git.integrate"> {

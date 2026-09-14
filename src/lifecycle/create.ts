@@ -4,7 +4,7 @@ import { Store, reused } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { residentUnitsFor } from "../domain/derived.js";
-import { receiptOfOperation } from "../protocol/receipts.js";
+import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { generateOperationId } from "../ids.js";
 import { requestHash } from "../hash.js";
 import { resolvedSpecOf, assertActorIdentity } from "../authority.js";
