@@ -1,4 +1,6 @@
-# 안정성 보존형 아키텍처 개선 — 현재 진행
+# 안정성 보존형 아키텍처 개선 — P1 당시 진행 기록
+
+> Historical snapshot: 아래의 현재/미착수/BLOCKED는 P1 당시 판정이다. 최신 상태는 [현재 진행 색인](progress.md)과 [검증 상태](../../implementation/validation.md)를 따른다.
 
 ## 기준과 범위
 

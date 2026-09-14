@@ -1,5 +1,7 @@
 # ORDER-002 변경 기록 — 안전성 보존형 아키텍처 개선 (P0~P9)
 
+> P0–P9 작업 당시의 historical record다. 본문의 HEAD/현재/미실행은 당시 범위에만 적용된다. 후속 P10–P15와 현재 검증은 [진행 색인](progress.md)을 따른다.
+
 [ORDER-002](../../implementation-spec.md)가 요구하는 항목을 이 작업 단위 하나로 기록한다. 착수 revision `d13310585c412fef3e32db24ba2b42b7b006b1f5`, 기록 시점 revision `HEAD`(아래 커밋 목록의 마지막), 브랜치 `refactor/safety-preserving-architecture`.
 
 ## 1. 변경 requirement IDs

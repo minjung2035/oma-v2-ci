@@ -1,7 +1,7 @@
 # P10–P15 — capability 경계와 architecture checker 적대적 검증
 
 기준: `refactor/safety-preserving-architecture`, 시작 HEAD `133a15c71b282eec447db142921ef1045fd06abb`.
-요구사항: 작업 입력 `temp.md`의 P10–P15. 이 기록은 비규범적 변경/검증 보고서이며
+요구사항: [P10–P15 제안서](../proposals/p10-p15-dependency-capability-refinement.md)(기존 작업 입력 `temp.md`). 이 기록은 비규범적 변경/검증 보고서이며
 `architecture.md`, `implementation-spec.md`, physical ordering, wire/persisted v1 계약을 대체하지 않는다.
 
 ## 1. 적용한 구조
