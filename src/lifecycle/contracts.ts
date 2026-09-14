@@ -1,4 +1,7 @@
-import type { Actor, AgentCreateInput, Capability, HostConfigV1, MessagePlan, OperationPlan, ResolvedAgentSpec } from "../../implementation/contracts.js";
+import type { Actor, Capability } from "../../implementation/contracts/identity.js";
+import type { AgentCreateInput } from "../../implementation/contracts/values.js";
+import type { HostConfigV1, ResolvedAgentSpec } from "../../implementation/contracts/host.js";
+import type { MessagePlan, OperationPlan } from "../../implementation/contracts/durable.js";
 
 export interface LifecyclePaths { stateRoot: string; projectGit: string; society: string; hasGoal(): boolean; activationAllowed?: () => boolean }
 export interface SpecResolver {

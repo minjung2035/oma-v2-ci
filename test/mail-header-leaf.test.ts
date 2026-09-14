@@ -47,6 +47,22 @@ test("pure header runtime closure excludes mail coordinator SQLite transport and
   assert.ok(seen.size >= 3);
 });
 
+test("an accepted original always unfolds back to its frozen OMA metadata", async () => {
+  // Regression: buildEml folds long header values at RFC 5322 boundaries, so a
+  // 64-hex context OID arrives as a continuation line. Every validated value
+  // must be unfolded before the grammar check, or OMA cannot read its own mail.
+  const candidate = "a3".repeat(32);
+  const facts = freezeMessageFacts({ id, society: "demo", sender: "alice", to: ["residents"],
+    kind: "context", contextRevision: candidate,
+    replyHeaders: { replyTo: [], inReplyTo: null, references: [] } });
+  const rendered = await renderFrozenMessage(facts, { subject: "context", body: "GOAL\n" });
+  assert.equal(rendered.headerFacts.omaContext, candidate);
+  const folded = rendered.text.split(/\r?\n/).filter(line => line.startsWith(" ") || line.startsWith("\t"));
+  assert.ok(folded.length > 0, "fixture must exercise a folded header value");
+  const plan = messagePlanFrom(rendered, ["alice"]);
+  assert.equal(plan.contextRevision, candidate);
+});
+
 test("facts freeze one clock value; emission and plan never select another date", async t => {
   let reads = 0;
   t.mock.method(Date, "now", () => { reads++; return 946684800987; });

@@ -60,7 +60,7 @@ test("positive syntax/type-only fixtures do not confuse comments, grants, or cus
     "src/domain/capabilities.ts": capabilityOwner,
     "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/;`,
     "src/store.ts": `export class Store { transaction(callback: () => void) { callback(); } }`,
-    "src/domain/good.ts": `
+    "src/domain/canonical-json.ts": `
       import type {Store} from "../store.js";
       const set = new Set<string>();
       if (!set.has("x")) set.add("x");
@@ -92,6 +92,20 @@ test("executable capability, method, identifier, resource and limit schema copie
     "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/;`,
     "src/bad.ts": `const name = /^[a-z]{1,8}$/;`,
   });
+  // The declared mirror exemption is conditional: the same grammar verbatim is
+  // allowed, a divergent id grammar in the mirror is not.
+  const accepts = (files: Record<string, string>): void => {
+    const output = fixture(files, false);
+    assert.equal(output.status, 0, JSON.stringify(output.findings));
+  };
+  accepts({
+    "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/; export const OP_RE = /^op-[0-9a-f]{8}$/;`,
+    "src/pi-extension.ts": `const NAME = /^[a-z]{1,8}$/;`,
+  });
+  rejects("duplicate-id-schema", {
+    "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/; export const OP_RE = /^op-[0-9a-f]{8}$/;`,
+    "src/pi-extension.ts": `const NAME = /^[a-z]{1,8}$/; const WEAK = /^op-[0-9a-f]{2}$/;`,
+  });
   const contracts = `export interface ResourceLimits {cpu: number; memory: number; tasks: number}
     export interface ProtocolLimits {frame: number; body: number; files: number}`;
   rejects("duplicate-resource-schema", {
@@ -119,7 +133,7 @@ test("pure boundaries, runtime test dependencies, dynamic imports, and raw effec
   rejects("subprocess-owner", { "src/bad.ts": `import {spawnSync} from "node:child_process"; export {spawnSync};` });
   const positive = fixture({
     "src/store.ts": `import {DatabaseSync} from "node:sqlite"; export {DatabaseSync};`,
-    "src/process/command-runner.ts": `import {spawnSync} from "node:child_process"; export {spawnSync};`,
+    "src/process/run.ts": `import {spawnSync} from "node:child_process"; export {spawnSync};`,
   });
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
@@ -140,7 +154,7 @@ test("transaction analysis follows local call aliases and rejects filesystem and
     ${store} function helper() {write("/tmp/not-executed", "data");} const alias = helper; store.transaction(() => alias());` });
   rejects("transaction-await", { "src/bad.ts": `${store} store.transaction(async () => {await Promise.resolve();});` });
   rejects("transaction-thenable", { "src/bad.ts": `${store} const helper = () => Promise.resolve(1); store.transaction(() => helper());` });
-  const positive = fixture({ "src/good.ts": `${store} function pure(value: number) {return value + 1;} store.transaction(() => pure(1));` });
+  const positive = fixture({ "src/domain/canonical-json.ts": `${store} function pure(value: number) {return value + 1;} store.transaction(() => pure(1));` });
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
 
@@ -150,8 +164,9 @@ test("runtime SCCs are rejected while type-only cycles do not form runtime edges
     "src/b.ts": `import {a} from "./a.js"; export const b = () => a;`,
   });
   const positive = fixture({
-    "src/a.ts": `import type {B} from "./b.js"; export interface A {b: B}`,
-    "src/b.ts": `import type {A} from "./a.js"; export interface B {a: A}`,
+    // A type-only cycle inside one measured layer is not a runtime coupling.
+    "src/domain/canonical-json.ts": `import type {B} from "./spec-identity.js"; export interface A {b: B}`,
+    "src/domain/spec-identity.ts": `import type {A} from "./canonical-json.js"; export interface B {a: A}`,
   });
   assert.equal(positive.status, 0, JSON.stringify(positive.findings));
 });
@@ -162,7 +177,7 @@ function registryFixture(missingResult: boolean): Record<string, string> {
     "implementation/contracts.ts": `export type OperationPlan = ${kinds.map(kind => `{kind: "${kind}"}`).join(" | ")};
       export interface PublicMethods {"public.one": {params: {}}} export interface InternalMethods {"internal.one": {params: {}}}`,
     "src/protocol/methods.ts": `export const PUBLIC_METHODS = {"public.one": {}}; export const INTERNAL_METHODS = {"internal.one": {}};`,
-    "src/domain/operations.ts": `export const OPERATION_CODECS = {${kinds.map((kind, index) =>
+    "src/durable.ts": `export const OPERATION_CODECS = {${kinds.map((kind, index) =>
       `"${kind}": {planCheck: (_v: unknown) => null, ${missingResult && index === 0 ? "" : "resultCheck: (_v: unknown) => null,"} relationsCheck: (_v: unknown) => null}`).join(",")}};`,
   };
 }

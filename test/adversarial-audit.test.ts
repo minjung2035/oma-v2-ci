@@ -31,6 +31,7 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { UnitsModule } from "../src/units.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import type { AuthContext, ProtocolLimits } from "../implementation/contracts.js";
+import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 
 const LIMITS: ProtocolLimits = {
   frameBytes: 262144,
@@ -144,10 +145,19 @@ test("AUD-1: unit renderer rejects unsafe values and escapes specifiers", () => 
 test("AUD-2: generated units preserve the fixed cgroup/lifecycle boundary", () => {
   const resident = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8");
   const broker = readFileSync(join(UNIT_TPL_DIR, "broker.service.in"), "utf8");
+  // MUST [UNIT-003]: the reference resident profile is fixed, not caller-selected.
   assert.match(resident, /^KillMode=control-group$/m);
-  assert.match(resident, /^Restart=no$/m);
-  assert.match(resident, /^ProtectSystem=strict$/m);
-  assert.match(resident, /^PrivateNetwork=yes$/m);
+  assert.match(resident, /^Restart=on-failure$/m);
+  assert.match(resident, /^RestartSec=3s$/m);
+  assert.match(resident, /^TimeoutStopSec=10s$/m);
+  assert.match(resident, /^OOMPolicy=kill$/m);
+  assert.match(resident, /^StartLimitBurst=5$/m);
+  assert.match(resident, /^Type=exec$/m);
+  // MUST [UNIT-002]: ExecStart is a fixed renderer template, not caller argv.
+  assert.match(resident, /^ExecStart=@NODE@ @LIBDIR@\/dist\/src\/entry\/runner\.js --society @SOCIETY@ --agent @AGENT@$/m);
+  // Filesystem/network isolation is owned by the sandbox profile (SB-001/SB-002),
+  // not by a systemd property; the unit must not widen it.
+  assert.doesNotMatch(resident, /^(?:AmbientCapabilities|CapabilityBoundingSet|User|Group)=/m);
   assert.match(broker, /^Restart=on-failure$/m);
   assert.match(broker, /^Type=notify$/m);
 });
@@ -255,6 +265,10 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
       () => null,
       mail,
     );
+    // `sun_path` is 108 bytes including the terminator. A run root of exactly 45
+    // bytes keeps the max-length actor name with a short incarnation inside the
+    // limit (99) and pushes the largest safe incarnation outside it (114).
+    const runRoot = join(root, "r".repeat(44 - root.length));
     const broker = new Broker(
       store,
       mail,
@@ -263,7 +277,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
       lifecycle,
       null,
       null,
-      { stateRoot: root, runRoot: join(root, "run"), society: "demo" },
+      { stateRoot: root, runRoot, society: "demo" },
       LIMITS,
     );
     const socketDirectory = Reflect.get(broker, "actorSocketDirectory") as (
@@ -284,33 +298,21 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
 test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-audit-readkey-"));
   try {
+    const spec = {
+      name: "a", from: "a".repeat(40), brief: "b", profile: "p", capabilities: [], modelProfile: "m",
+      resources: { memoryBytes: 1, tasks: 1, cpuQuotaPercent: 1, tmpBytes: 1, workspaceBytes: 1, stagingBytes: 1, checkTimeoutSeconds: 1 },
+    };
     const store = new Store(join(root, "runtime.sqlite"));
     store.transaction(() =>
       store.insertAgent({
         name: "a",
-        specHash: "h",
+        specHash: resolvedSpecDigest(spec),
         role: "resident",
         desired: "enabled",
         incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: JSON.stringify({
-          name: "a",
-          from: "a".repeat(40),
-          brief: "b",
-          profile: "p",
-          capabilities: [],
-          modelProfile: "m",
-          resources: {
-            memoryBytes: 1,
-            tasks: 1,
-            cpuQuotaPercent: 1,
-            tmpBytes: 1,
-            workspaceBytes: 1,
-            stagingBytes: 1,
-            checkTimeoutSeconds: 1,
-          },
-        }),
+        specJson: JSON.stringify(spec),
       }),
     );
     const units = new UnitsModule(

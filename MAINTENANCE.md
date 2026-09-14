@@ -416,9 +416,9 @@ node scripts/loc.mjs
 
 환경이 없어 필수 kernel/systemd lane을 실행하지 못하면 PASS가 아니라 BLOCKED/NOT_RUN이다. 이전 source의 raw log나 숫자를 새 source 결과로 재사용하지 않는다.
 
-## 27. 정적 감사에서 발견한 bug class는 기계적 규칙으로 승격한다
+## 27. 정적 규칙은 계약 위반의 재발을 검증한다
 
-가능하면 한 번 발견한 class를 architecture/static rule로 만든다.
+새 규칙은 규범 위반, authoritative owner의 불일치, 명시적으로 정한 dependency/capability 경계 또는 evidence/source 불일치를 다룰 때 추가한다. naming·취향·추정 설계 냄새만으로 실패시키지 않는다. TypeScript의 closed mapped type, 기존 helper/rule 또는 좁은 회귀 테스트가 같은 오류를 잡으면 먼저 재사용한다.
 
 예:
 
@@ -431,6 +431,18 @@ node scripts/loc.mjs
 - 실제 process/SQLite owner 밖의 raw effect
 
 Static checker도 코드다. Architecture가 이동했으면 broad exception을 추가하지 말고 실제 owner와 음성 대조군에 맞춰 checker를 갱신한다.
+
+규칙 수용 시 함께 남길 최소 증거:
+
+1. 정상 positive fixture.
+2. 직접 위반 negative fixture.
+3. alias/import/간접 호출 등 해당 분석의 우회 negative fixture.
+4. 겉모양은 비슷하지만 허용되어야 하는 false-positive control.
+5. 어떤 기존 계약/semantic owner를 보호하며 naming heuristic이 아닌지 설명.
+
+Runtime DAG와 type coupling은 별도다. Type-only 상향 edge는 먼저 생성 evidence에서 관측하고 실제 의미를 검토한다. 실제 부적절한 coupling이 재현되고, legitimate representation/contract 관계가 분류되며, false-positive control이 준비된 뒤에만 방향 gate를 검토한다. 기존 cross-layer union SCC gate를 없애거나 edge별 whitelist로 우회하지 않는다.
+
+Checker 파일 분리는 책임·source universe·분석 재사용이 분명해질 때만 한다. LOC 목표를 맞추기 위한 분할, TypeScript/기존 helper와 중복되는 parser·registry·evidence 체계는 추가하지 않는다. 현재 수용 사례와 검증 범위는 [P16–P22 기록](docs/architecture-improvement/p16-p22-refinement.md#5-p21-규칙-수용과-checker-범위)을 참고한다.
 
 ## 28. 금지 사항
 
@@ -458,6 +470,7 @@ Static checker도 코드다. Architecture가 이동했으면 broad exception을 
 - **현재 실행 검증 상태**: `implementation/validation.md`; 루트 `validation.md`는 색인.
 - **특정 작업/감사의 상세 기록**: 별도 follow-up/closure 문서. 완료 후 historical record로 보존한다.
 - **generated trace/report/inventory/evidence**: 생성 도구와 source revision에 결합한다. 사람이 새 측정처럼 수동 보정하지 않는다.
+- **파일 수·LOC·dependency edge/SCC 등 계산 가능한 현재 값**: generator artifact를 참조하며 README/HANDOFF/여러 보고서에 반복 기입하지 않는다. 최신 실행 개수도 검증 상태 한 곳에만 기록한다.
 
 Historical record를 현재 지침으로 다시 편집하지 않는다. 새 모델은 historical 문서의 결론을 현재 HEAD에서 검증한 뒤에만 사용한다.
 

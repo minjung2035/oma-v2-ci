@@ -4,7 +4,7 @@ import { StoreError } from "../domain/errors.js";
 import { assertActorIdentity } from "../authority.js";
 import { generateOperationId } from "../ids.js";
 import { requestHash } from "../hash.js";
-import { receiptOfOperation } from "../protocol/receipts.js";
+import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { UnitsModule } from "../units.js";
 import type { LifecyclePaths } from "./contracts.js";
 import { LifecyclePolicy, lifecycleReceipt } from "./policy.js";

@@ -22,6 +22,12 @@ export async function sendWithStop(mail: MailModule, store: Store, auth: AuthCon
   let stopped = false;
   let inboxes = 0;
   const stop = () => { stopped = true; throw new StopSignal(point); };
+  /** A directory fence fsync also runs before its entries are written
+   * (ensureDurableDirectory). A boundary means the entry is already published,
+   * so the condition waits for observable content. */
+  const published = (directory: string): boolean => {
+    try { return fs.readdirSync(directory).length > 0; } catch { return false; }
+  };
   fs.fsyncSync = fd => {
     fsync(fd);
     if (stopped) return;
@@ -29,9 +35,16 @@ export async function sendWithStop(mail: MailModule, store: Store, auth: AuthCon
     const stat = fs.fstatSync(fd);
     if (point === "stage" && stat.isFile() && dirname(path) === stage) stop();
     if (!stat.isDirectory()) return;
-    if ((point === "object" && path === join(root, "objects")) ||
-      (point === "archive" && path === join(root, "archive", "cur"))) stop();
-    if (point.startsWith("inbox-") && path.startsWith(join(root, "inboxes") + "/") && path.endsWith("/new") && ++inboxes === Number(point.slice(6))) stop();
+    if (point === "object" && path === join(root, "objects")) {
+      if (published(path)) stop();
+      return;
+    }
+    if (point === "archive" && path === join(root, "archive", "cur")) {
+      if (published(path)) stop();
+      return;
+    }
+    if (point.startsWith("inbox-") && path.startsWith(join(root, "inboxes") + "/") && path.endsWith("/new") &&
+      published(path) && ++inboxes === Number(point.slice(6))) stop();
   };
   if (point === "accepted") store.transaction = new Proxy(transaction, {
     apply(target, receiver, args) {

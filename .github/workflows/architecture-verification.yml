@@ -1,0 +1,92 @@
+name: Architecture verification evidence
+
+on:
+  push:
+    branches: [refactor/safety-preserving-architecture]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EVIDENCE: /tmp/oma-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Preserve exact input source before running generators
+        run: |
+          mkdir -p "$EVIDENCE"
+          git rev-parse HEAD > "$EVIDENCE/source-head.txt"
+          git archive --format=tar.gz --output="$EVIDENCE/source.tar.gz" HEAD
+          sha256sum "$EVIDENCE/source.tar.gz" > "$EVIDENCE/source.tar.gz.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-source-${{ github.sha }}
+          path: |
+            ${{ env.EVIDENCE }}/source-head.txt
+            ${{ env.EVIDENCE }}/source.tar.gz
+            ${{ env.EVIDENCE }}/source.tar.gz.sha256
+          retention-days: 7
+          if-no-files-found: error
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        id: dependencies
+        continue-on-error: true
+        run: |
+          node --version > "$EVIDENCE/node-version.txt"
+          npm --version > "$EVIDENCE/npm-version.txt"
+          uname -a > "$EVIDENCE/kernel.txt"
+          npm ci > "$EVIDENCE/npm-ci.log" 2>&1
+      - name: Capture baseline and all lane outcomes without hiding failures
+        if: steps.dependencies.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          run_check() {
+            local label="$1"; shift
+            timeout --kill-after=10s 900s "$@" > "$EVIDENCE/$label.log" 2>&1
+            local code=$?
+            printf '%s\t%s\n' "$label" "$code" >> "$EVIDENCE/exit-codes.tsv"
+            if [ "$code" -ne 0 ]; then touch "$EVIDENCE/failed"; fi
+          }
+          # Preserve the stale-inventory observation before generating anything.
+          npm run check:inventory > "$EVIDENCE/inventory-before.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/inventory-before.exit-code"
+          run_check inventory npm run inventory
+          run_check check-inventory npm run check:inventory
+          run_check typecheck npm run typecheck
+          run_check build npm run build
+          run_check check-package npm run check:package
+          run_check check-architecture npm run check:architecture
+          run_check test npm test
+          for lane in fast durable property stress kernel crash all; do
+            run_check "verify-$lane" npm run "verify:$lane" -- --out "$EVIDENCE/$lane"
+          done
+          run_check loc node scripts/loc.mjs
+          cp production-files.txt production-loc.json production-loc-hashes.json "$EVIDENCE/"
+          git diff -- production-files.txt production-loc.json production-loc-hashes.json > "$EVIDENCE/generated-inventory.patch"
+          printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips and timeouts are not PASS. This workflow does not certify OPEN spikes or VM power loss.' > "$EVIDENCE/README.txt"
+      - name: Upload raw evidence even when a check failed
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-verification-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE }}
+          retention-days: 14
+          if-no-files-found: error
+      - name: Propagate unsuccessful verification
+        if: always()
+        env:
+          DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+        run: |
+          test "$DEPENDENCIES_OUTCOME" = success
+          test -f "$EVIDENCE/exit-codes.tsv"
+          test ! -f "$EVIDENCE/failed"

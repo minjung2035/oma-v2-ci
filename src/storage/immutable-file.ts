@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { sha256Hex } from "../domain/canonical-json.js";
 import { StoreError } from "../domain/errors.js";
-import { ensureDurableDirectory, fsyncDir } from "./durable-fs.js";
+import { ensureDurableDirectory, faultAt, fsyncDir, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
 import { assertDirectory } from "./directory.js";
 
 /** Return the exact descriptor whose bytes were checked. Holding this descriptor
@@ -53,36 +53,56 @@ function verifiedFile(path: string, expectedHash?: string): { fd: number; bytes:
  * owned temporary -> parent fsync. A failed post-publication flush is ambiguous,
  * never proof that nothing became visible and never permission to overwrite.
  */
-export function publishImmutableFile(source: string, destination: string, expectedHash?: string): void {
+export function publishImmutableFile(source: string, destination: string, expectedHash?: string, faults?: DurabilityObserver): void {
   const original = verifiedFile(source, expectedHash);
   closeSync(original.fd);
-  ensureDurableDirectory(dirname(destination));
+  ensureDurableDirectory(dirname(destination), 0o755, faults);
   let temporary: string | null = null;
   let ownsTemporary = false;
+  let crashed = false;
   try {
+    faultAt(faults, "publication-link", "before", destination);
     try { linkSync(source, destination); }
     catch (error) {
+      if (isDurabilityFault(error)) throw error;
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "EXDEV") {
         temporary = join(dirname(destination), `.${basename(destination)}.${randomUUID()}.tmp`);
+        faultAt(faults, "file-create", "before", temporary);
         const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
         ownsTemporary = true;
-        try { writeFileSync(fd, original.bytes); fsyncSync(fd); } finally { closeSync(fd); }
+        faultAt(faults, "file-create", "after-visible", temporary);
+        try {
+          faultAt(faults, "file-write", "before", temporary);
+          writeFileSync(fd, original.bytes);
+          faultAt(faults, "file-write", "ambiguous", temporary);
+          faultAt(faults, "file-fsync", "ambiguous", temporary);
+          fsyncSync(fd);
+          faultAt(faults, "file-fsync", "after-visible", temporary);
+        } finally { closeSync(fd); }
         const staged = verifiedFile(temporary, original.hash);
         closeSync(staged.fd);
         try { linkSync(temporary, destination); }
         catch (publicationError) {
+          if (isDurabilityFault(publicationError)) throw publicationError;
           if ((publicationError as NodeJS.ErrnoException).code !== "EEXIST") throw publicationError;
         }
       } else if (code !== "EEXIST") throw error;
     }
+    faultAt(faults, "publication-link", "after-visible", destination);
+    faultAt(faults, "destination-validate", "before", destination);
     const published = verifiedFile(destination, original.hash);
     try { fchmodSync(published.fd, 0o444); fsyncSync(published.fd); } finally { closeSync(published.fd); }
-    fsyncDir(dirname(destination));
+    faultAt(faults, "destination-validate", "after-visible", destination);
+    fsyncDir(dirname(destination), faults);
+  } catch (error) {
+    crashed = isDurabilityFault(error);
+    throw error;
   } finally {
-    if (ownsTemporary && temporary !== null) {
+    if (ownsTemporary && temporary !== null && !crashed) {
       unlinkSync(temporary);
-      fsyncDir(dirname(temporary));
+      faultAt(faults, "temporary-cleanup", "after-visible", temporary);
+      fsyncDir(dirname(temporary), faults);
     }
   }
 }

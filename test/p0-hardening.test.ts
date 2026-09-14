@@ -17,7 +17,7 @@ import { GitModule } from "../src/git.js";
 import { MailModule } from "../src/mail.js";
 import { Store, StoreError } from "../src/store.js";
 import type { AuthContext, ProtocolLimits } from "../implementation/contracts.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 const GIT_ENV = {
   ...process.env,
@@ -44,13 +44,12 @@ test("P0: protected-path observation failure cannot reach main CAS", async (t) =
     store.transaction(() => {
       store.insertAgent({
         name: "a",
-        specHash: "a",
+        ...storedSpec(ALL_CAPS, "p", "a"),
         role: "resident",
+        profile: "p",
         desired: "enabled",
         incarnation: 1,
-        profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", "a"),
       });
     });
     git(work, ["init", "-q", "-b", "main"]);
@@ -120,6 +119,16 @@ class FakeSocket {
     this.writes.push(Buffer.from(value));
     return true;
   }
+  /** Fatal protocol errors close the transport with a final error frame. */
+  ended = false;
+  paused = false;
+  end(value?: Uint8Array): this {
+    this.ended = true;
+    if (value !== undefined) this.writes.push(Buffer.from(value));
+    return this;
+  }
+  pause(): this { this.paused = true; return this; }
+  off(): this { return this; }
   destroy(): this {
     this.destroyed = true;
     return this;
@@ -156,24 +165,49 @@ const TEST_LIMITS: ProtocolLimits = {
   receiptWaitSeconds: 30,
 };
 
-test("P0: 20,000 malformed frames close one connection without recursive drain", () => {
+const untilTrue = async (predicate: () => boolean, budgetMs: number): Promise<boolean> => {
+  const deadline = Date.now() + budgetMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  return predicate();
+};
+
+test("P0: 20,000 malformed frames close one connection without recursive drain", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-p0-frames-"));
   try {
     const broker = Object.create(Broker.prototype) as Broker;
     Object.assign(broker, {
       paths: { stateRoot: root, runRoot: join(root, "run"), society: "demo" },
-      limits: TEST_LIMITS,
+      // A short deadline makes the close alarm observable; production uses the
+      // configured stream deadline.
+      limits: { ...TEST_LIMITS, idleStreamSeconds: 0.05 },
+      // The connection registry and task set are part of serveFrames' contract.
+      connections: new Map(),
+      executingTasks: new Set(),
+      health: { observe: () => undefined },
     });
     const socket = new FakeSocket();
     const serveFrames = Reflect.get(broker, "serveFrames") as (
       sock: FakeSocket,
+      peer: { pid: number; uid: number; gid: number; cgroup: string | null; releaseConnection: () => void },
       handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => unknown,
+      preflight: (raw: Record<string, unknown>) => void,
     ) => void;
-    serveFrames.call(broker, socket, () => assert.fail("malformed input must not dispatch"));
+    const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null, releaseConnection: () => undefined };
+    serveFrames.call(broker, socket, peer, () => assert.fail("malformed input must not dispatch"), () => undefined);
     const malformed = Buffer.from([0, 0, 0, 1, 0x7b]); // one-byte "{" JSON body
     socket.emitData(Buffer.concat(Array.from({ length: 20_000 }, () => malformed)));
-    assert.equal(socket.destroyed, true);
+    // MAINTENANCE §19: after a fatal framing error the connection is poisoned and
+    // closed. One error frame is emitted, the socket stops reading, and the
+    // remaining 19,999 frames never create work or another connection.
     assert.equal(socket.writes.length, 1);
+    assert.equal(socket.paused, true);
+    assert.equal(socket.ended, true);
+    assert.equal((Reflect.get(broker, "connections") as Map<unknown, unknown>).size, 1);
+    // The paused transport must not be left dangling: the armed alarm closes it.
+    assert.equal(await untilTrue(() => socket.destroyed, 2000), true, "the fatal connection must be closed");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

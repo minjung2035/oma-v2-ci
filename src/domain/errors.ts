@@ -1,5 +1,5 @@
 /** ERR-001/002: pure error vocabulary. No Store, filesystem or process dependency. */
-import type { ErrorCode, Failure } from "../../implementation/contracts.js";
+import type { ErrorCode, Failure } from "../../implementation/contracts/errors.js";
 
 export class StoreError extends Error {
   constructor(readonly code: ErrorCode, message: string) {

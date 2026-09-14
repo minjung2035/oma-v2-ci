@@ -21,7 +21,9 @@
     "verify:crash": "node scripts/verify-lane.mjs crash",
     "verify:property": "node scripts/verify-lane.mjs property",
     "verify:stress": "node scripts/verify-lane.mjs stress",
-    "verify:all": "node scripts/verify-lane.mjs all"
+    "verify:all": "node scripts/verify-lane.mjs all",
+    "evidence:graph": "node scripts/dependency-graph.mjs --write-evidence",
+    "verify:powercut": "node scripts/powercut-lane.mjs"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.85.1",

@@ -1,7 +1,9 @@
 /** Structural caller DTO decoding for frozen cache/ledger bytes. Host admission
  * and live actor authority remain separate, stricter checks in the broker.
  */
-import type { MutationMethod, ProtocolLimits, PublicMethods } from "../../implementation/contracts.js";
+import type { MutationMethod } from "../../implementation/contracts/durable.js";
+import type { ProtocolLimits } from "../../implementation/contracts/host.js";
+import type { PublicMethods } from "../../implementation/contracts/public-wire.js";
 import { isValidActorName } from "../domain/identifiers.js";
 import { snapshotJson } from "../domain/canonical-json.js";
 import { decodePublicParams } from "./methods.js";

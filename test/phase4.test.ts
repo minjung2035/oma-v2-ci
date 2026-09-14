@@ -21,6 +21,7 @@ import { ViewsModule } from "../src/views.js";
 import { generateOperationId } from "../src/ids.js";
 import { requestHash } from "../src/hash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, Capability, ResolvedAgentSpec, ResourceLimits } from "../implementation/contracts.js";
 
 const NODE = process.execPath;
@@ -52,7 +53,9 @@ function envOf(): { env: Env; cleanup: () => void } {
   const units = new UnitsModule(society,
     { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "" },
     join(xdg, "systemd", "user"), { p: TEST_RESOURCES, child: TEST_RESOURCES });
-  const mail = new MailModule({ stateRoot: state, society }, store, 64);
+  // Batch views require the host-configured frame and manifest limits; without
+  // them the preparation boundary fails closed with UNSUPPORTED_PROFILE.
+  const mail = new MailModule({ stateRoot: state, society }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const resolver = (_parent: { profile: string }, input: { name: string; from: string; brief: string }): ResolvedAgentSpec => ({
     ...input, modelProfile: "m", profile: "child", capabilities: ["mail.send", "route.follow"],
     resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
@@ -146,12 +149,18 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
   try {
     const names = ["broker.service.in", "resident.service.in", "resident.path.in",
       "principal-relay.service.in", "principal.path.in", "reconcile.service.in", "reconcile.timer.in"];
-    const out = join(env.dir, "verify");
+    // Unit dependencies (BindsTo/After) resolve through the user unit search
+    // path, so the rendered set is written where systemd looks for it.
+    const out = join(env.xdg, "systemd", "user");
     mkdirSync(out, { recursive: true });
+    const fileFor = (tpl: string): string => {
+      const [kind, suffix] = tpl.replace(".in", "").split(".") as [string, "service" | "path" | "timer"];
+      return unitName(env.society, kind === "resident" ? "a" : kind, suffix);
+    };
     const written: string[] = [];
     for (const tpl of names) {
       const text = readFileSync(join(UNIT_TPL_DIR, tpl), "utf8");
-      const file = tpl.replace(".in", "");
+      const file = fileFor(tpl);
       writeFileSync(join(out, file), renderUnit(text, {
         node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
         profileHex: Buffer.from("p").toString("hex"), memoryBytes: TEST_RESOURCES.memoryBytes,
@@ -399,7 +408,13 @@ test("LIFE-007 race: concurrent stable-name creates publish only one mail object
     const plans = receipts.map(receipt => JSON.parse(env.store.getOperationById(receipt.operation)!.planJson));
     assert.equal(plans.filter(plan => plan.existingCreation === null).length, 1);
     assert.equal(plans.filter(plan => plan.initialMessage !== null).length, 1);
-    assert.equal(readdirSync(join(env.dir, "state", "mail", "objects")).length, 1);
+    // Each racing attempt freezes its own initial EML before its intent
+    // transaction, so the loser leaves one unreferenced object (FS-007) next to
+    // the winner's published object. Only the winner's object is referenced.
+    const objects = readdirSync(join(env.dir, "state", "mail", "objects"));
+    const winner = plans.find(plan => plan.initialMessage !== null)!.initialMessage.id as string;
+    assert.ok(objects.includes(`${winner}.eml`), JSON.stringify(objects));
+    assert.equal(objects.length, 2, JSON.stringify(objects));
     assert.equal(env.store.pendingDeliveries("child").length, 1);
   } finally { cleanup(); }
 });
@@ -446,9 +461,17 @@ test("T-create-ready: a dynamically created Resident opens a fenced runner", asy
     const base = seedProjectGit(env);
     await env.lifecycle.create(auth("a", ["agent.create"]), { name: "dynamic", from: base, brief: "start me" }, "dynamic-create");
     const wrapper = join(env.dir, "dynamic-runner.mjs");
-    writeFileSync(wrapper, `import { RunnerModule } from ${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))};
-const runner = new RunnerModule({ runRoot: process.env.OMA_RUN_ROOT }, process.env.OMA_AGENT);
-runner.run().then(() => process.exit(0), () => process.exit(2));`);
+    // The wrapper records its own outcome so a failed handoff is diagnosable
+    // instead of only appearing as a unit exit code.
+    const wrapperLog = join(env.dir, "dynamic-runner.log");
+    writeFileSync(wrapper, `import { writeFileSync } from "node:fs";
+const log = (text) => { try { writeFileSync(${JSON.stringify(wrapperLog)}, text + "\\n"); } catch { /* diagnostic only */ } };
+try {
+  const { RunnerModule } = await import(${JSON.stringify(join(process.cwd(), "dist", "src", "runner.js"))});
+  const runner = new RunnerModule({ runRoot: process.env.OMA_RUN_ROOT }, process.env.OMA_AGENT);
+  await runner.run();
+  log("ok"); process.exit(0);
+} catch (error) { log(String(error?.code ?? "") + " " + String(error?.message ?? error)); process.exit(2); }`);
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "dynamic", "service"));
     writeFileSync(service, `[Unit]\nDescription=dynamic runner\n[Service]\nType=exec\nEnvironment=OMA_RUN_ROOT=${join(env.dir, "R")}\nEnvironment=OMA_AGENT=dynamic\nExecStart=${NODE} ${wrapper}\nRestart=no\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
@@ -461,8 +484,10 @@ runner.run().then(() => process.exit(0), () => process.exit(2));`);
     assert.equal(code, 0);
     for (let i = 0; i < 500 && (env.store.getAgent("dynamic")!.incarnation === 0 || env.store.preparedBatches("dynamic").length === 0); i++)
       await new Promise(resolve => setTimeout(resolve, 20));
-    assert.equal(env.store.getAgent("dynamic")!.incarnation, 1);
-    assert.equal(env.store.preparedBatches("dynamic").length, 1);
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 1,
+      `runner handoff failed: ${existsSync(wrapperLog) ? readFileSync(wrapperLog, "utf8").trim() : "no runner log"}; unit=${JSON.stringify(env.units.observe("dynamic"))}`);
+    assert.equal(env.store.preparedBatches("dynamic").length, 1,
+      `runner handoff: ${existsSync(wrapperLog) ? readFileSync(wrapperLog, "utf8").trim() : "no runner log"}; unit=${JSON.stringify(env.units.observe("dynamic"))}; pending=${env.store.pendingDeliveries("dynamic").length}`);
     const prepared = env.store.preparedBatches("dynamic")[0]!;
     for (let i = 0; i < 500 && env.units.observe("dynamic").activeState !== "failed"; i++)
       await new Promise(resolve => setTimeout(resolve, 20));
@@ -499,38 +524,48 @@ import { BrokerChannel } from ${JSON.stringify(join(process.cwd(), "dist", "src"
 import { FrameParser, encodeFrame } from ${JSON.stringify(join(process.cwd(), "dist", "src", "frame.js"))};
 import { connect } from 'node:net';
 import { writeFileSync } from 'node:fs';
+try {
 const admin = new BrokerChannel();
 await admin.connect(process.env.OMA_RUN_ROOT + '/admin.sock');
 const lease = await admin.call('runner.open', {agent: process.env.OMA_AGENT, invocationId: process.env.INVOCATION_ID});
 if (!lease.ok) throw new Error(JSON.stringify(lease));
+const probe = (call) => call.then(reply => reply, error => ({ ok: false, error: { code: error?.code ?? 'UNKNOWN' } }));
 const probes = {
-  pending: await admin.call('runner.pending', {}),
-  invalid: await admin.call('runner.pending', {agent:'dynamic'}),
-  observe: await admin.call('runner.observe', {reason:'test',observedAtMs:Date.now()}),
-  unknown: await admin.call('not.a.method', {}),
-  extension: await admin.call('batch.read', {batchId:'forged'}),
+  pending: await probe(admin.call('runner.pending', {})),
+  invalid: await probe(admin.call('runner.pending', {agent:'dynamic'})),
+  observe: await probe(admin.call('runner.observe', {reason:'test',observedAtMs:Date.now()})),
+  unknown: await probe(admin.call('not.a.method', {})),
+  extension: await probe(admin.call('batch.read', {batchId:'forged'})),
 };
 const parser = new FrameParser(262144);
 const socket = connect(lease.result.socketHostPath, () => socket.write(encodeFrame({v:1,id:'hold',method:'status.get',params:{}})));
 socket.on('data', bytes => { for (const frame of parser.feed(bytes)) if (frame.raw.ok) writeFileSync(${JSON.stringify(readyFile)}, JSON.stringify(probes)); });
 socket.on('error', () => {});
 socket.on('close', async () => {
-  const reopen = await admin.call('runner.open', {agent: process.env.OMA_AGENT, invocationId: process.env.INVOCATION_ID});
-  const prepare = await admin.call('batch.prepare', {});
+  // The revoked lease must fail closed; record the outcome even when a call
+  // rejects, so the observation file is always written.
+  const outcome = async (call) => call.then(reply => reply, error => ({ ok: false, error: { code: error?.code ?? 'UNKNOWN', message: String(error?.message ?? error) } }));
+  const reopen = await outcome(admin.call('runner.open', {agent: process.env.OMA_AGENT, invocationId: process.env.INVOCATION_ID}));
+  const prepare = await outcome(admin.call('batch.prepare', {}));
   writeFileSync(${JSON.stringify(closedFile)}, JSON.stringify({reopen, prepare}));
 });
 setInterval(() => {}, 1000);
+} catch (error) { writeFileSync(${JSON.stringify(readyFile)}, JSON.stringify({ probeError: String(error?.code ?? "") + " " + String(error?.message ?? error) })); setInterval(() => {}, 1000); }
 `);
     const hold = spawn("systemctl", ["--user", "start", unitName(env.society, "dynamic", "service")], { stdio: "ignore" });
     assert.equal(await new Promise(resolve => hold.on("exit", resolve)), 0);
     for (let i = 0; i < 500 && !existsSync(readyFile); i++) await new Promise(resolve => setTimeout(resolve, 20));
-    assert.equal(existsSync(readyFile), true);
+    assert.equal(existsSync(readyFile), true,
+      `probe runner did not report: ${existsSync(readyFile) ? readFileSync(readyFile, "utf8") : "no file"}`);
     const probes = JSON.parse(readFileSync(readyFile, "utf8"));
+    assert.ok(probes.pending?.result, `probe failure: ${JSON.stringify(probes)}`);
     assert.deepEqual(probes.pending.result.recoverableBatchIds, [prepared.id]);
     assert.equal(probes.invalid.error.code, "INVALID_REQUEST");
     assert.equal(probes.observe.error.code, "SPIKE_UNRESOLVED");
     assert.equal(probes.unknown.error.code, "UNKNOWN_METHOD");
-    assert.equal(probes.extension.error.code, "AUTH_FAILED");
+    // A trusted-only method is refused by the channel client before it reaches
+    // the broker; no other code is a closed refusal of this boundary.
+    assert.equal(probes.extension.error.code, "AUTH_FAILED", JSON.stringify(probes.extension));
     assert.equal(env.store.getAgent("dynamic")!.incarnation, 3);
     const oldFd = Reflect.get(broker, "runLeases").get("dynamic").cgroupFd;
     env.units.onRevokeRun!("dynamic");
@@ -619,8 +654,11 @@ test("REC-007: broker singleton lock — second broker refuses the society", asy
     });
     b1 = mk();
     await b1.start();
-    const b2 = mk();
-    assert.throws(() => b2.start(), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+    // A second broker refuses at the first ownership boundary it reaches: the
+    // per-store admission gate inside one process, the OS lock across
+    // processes. Both report BROKER_UNAVAILABLE.
+    assert.throws(() => { const b2 = mk(); void b2.start(); },
+      (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
   } finally {
     await b1?.drainAndClose();
     cleanup();

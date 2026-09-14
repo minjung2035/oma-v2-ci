@@ -1,0 +1,28 @@
+{
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "proof": "transpiled runtime equality, not semantic typecheck",
+  "files": [
+    {
+      "file": "src/mail/facts.ts",
+      "beforeSha256": "ef7216008eba27f70cbf43bd4a1164d15260f219dc442eba36fbdc5ec10fddb8",
+      "afterSha256": "bdf614df6b018493d880cbfabec2aabb01d8e4ab16db1e173977e6c3233ae8e2",
+      "emittedSha256": "7f22e23e5f6b731dc9f199e5bf67ec97836d8392bbbb3978a5e0b91beeac45d4",
+      "identicalRuntime": true
+    },
+    {
+      "file": "src/mail/addresses.ts",
+      "beforeSha256": "2369e7bbf28eb0c06be8306517a5b2369c6673fa3eecdac5263e8d347277d78c",
+      "afterSha256": "3632e6775095a82afa501dfb1c56b179a2771f8380a6120160bb66434249ad4c",
+      "emittedSha256": "c6a2e69451fdf52e5891799771460d0f7ccbfebb82efdfafcada52e814d05b70",
+      "identicalRuntime": true
+    },
+    {
+      "file": "src/units/observe.ts",
+      "beforeSha256": "904244dc86b9fcbeee83c74228e80f6c879a4739b4113d00d94c27c232cdb766",
+      "afterSha256": "62d4162c4242f17ed73d7a2d1055bd897d53316070ec6bd30433d1e5c4f8e82f",
+      "emittedSha256": "fb266c68b81d2583ee0d9a9384e79818b8c288dcb8e76036206db91fd9eb8e41",
+      "identicalRuntime": true
+    }
+  ]
+}

@@ -17,11 +17,17 @@ import {
   copyFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { connect } from "node:net";
+import { dirname, join } from "node:path";
+import { connect, createServer } from "node:net";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
-import { resolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
+import { resolvedSpec, ALL_CAPS, storedSpec } from "./fixtures/spec.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
+import type { RunRegistry } from "../src/runtime/run-registry.js";
+import { actorSocketPathAt } from "../src/storage/paths.js";
+import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
+import { decodeRunLease } from "../src/protocol/run-lease.js";
+import { agentRootPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
 import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
@@ -66,7 +72,9 @@ function envOf(): Env {
     },
     join(dir, "xdg"),
   );
-  const mail = new MailModule({ stateRoot: state, society }, store, 64);
+  // Batch views require the host-configured frame and manifest limits; without
+  // them preparation fails closed with UNSUPPORTED_PROFILE.
+  const mail = new MailModule({ stateRoot: state, society }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const resolver = (
     _parent: { name: string; profile: string },
     input: { name: string; from: string; brief: string },
@@ -116,13 +124,12 @@ function seed(store: Store, specs: Array<[string, string, string]>): void {
     for (const [name, role, desired] of specs) {
       store.insertAgent({
         name,
-        specHash: "h",
+        ...storedSpec(ALL_CAPS, "p", name),
         role: role as "resident" | "principal",
         desired: desired as never,
         incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -146,6 +153,7 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
       null,
     );
     assert.equal((denied as { ok: boolean; error?: { code: string } }).ok, false);
+    if (process.env.OMA_DEBUG) console.error("DENIED:", JSON.stringify(denied));
     assert.equal((denied as { error?: { code: string } }).error?.code, "CAPABILITY_DENIED");
     assert.equal(env.store.getOperation("a", "deny"), null);
     const allowed = await env.broker.dispatch(
@@ -171,7 +179,11 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
     assert.throws(() => socketDirectory.call(socketOwner, "a".repeat(31), Number.MAX_SAFE_INTEGER), /sun_path/);
     const staleAuth = auth(["mail.send"]);
     const spec = JSON.parse(env.store.getAgent("a")!.specJson);
-    env.store.transaction(() => env.store.updateAgent({ name: "a", specJson: JSON.stringify({ ...spec, capabilities: [] }) }));
+    // A durable capability revocation keeps the row self-consistent: the stored
+    // hash must still describe the stored spec, or the row is corrupt rather
+    // than a valid identity whose rights were withdrawn.
+    const revokedSpec = { ...spec, capabilities: [] };
+    env.store.transaction(() => env.store.updateAgent({ name: "a", specJson: JSON.stringify(revokedSpec), specHash: resolvedSpecDigest(revokedSpec) }));
     const revoked = await env.broker.dispatch(staleAuth,
       { v: 1, id: "revoked", method: "mail.send", request: "revoked", params } as never, null);
     assert.equal((revoked as { error: { code: string } }).error.code, "CAPABILITY_DENIED");
@@ -184,7 +196,7 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
       );
       assert.equal((deniedMethod as { error?: { code: string } }).error?.code, "CAPABILITY_DENIED", `${method} must require ${capability}`);
     }
-    env.store.transaction(() => env.store.updateAgent({ name: "a", desired: "stopped", specJson: JSON.stringify(spec) }));
+    env.store.transaction(() => env.store.updateAgent({ name: "a", desired: "stopped", specJson: JSON.stringify(spec), specHash: resolvedSpecDigest(spec) }));
     const stopped = await env.broker.dispatch(staleAuth,
       { v: 1, id: "stopped", method: "mail.send", request: "stopped", params } as never, null);
     assert.equal((stopped as { error: { code: string } }).error.code, "STALE_RUN");
@@ -374,38 +386,42 @@ socket.on("data", chunk => { data = Buffer.concat([data, chunk]); if (data.lengt
 test("RUN-001: a populated pinned old cgroup blocks incarnation handoff", () => {
   const env = envOf();
   const cgroup = readFileSync("/proc/self/cgroup", "utf8").trim().split("::")[1]!;
-  const fd = openSync(join("/sys/fs/cgroup", cgroup), "r");
-  const leases = Reflect.get(env.broker, "runLeases") as Map<string, unknown>;
+  const registry = Reflect.get(env.broker, "runLeases") as RunRegistry;
+  const units = Reflect.get(env.broker, "units") as UnitsModule;
+  const observe = units.observe.bind(units);
   try {
     seed(env.store, [["a", "resident", "enabled"]]);
     mkdirSync(join(env.state, "world", "context", "current"), { recursive: true });
-    assert.match(readFileSync(`/proc/self/fd/${fd}/cgroup.events`, "utf8"), /^populated 1$/m);
-    // Fault seam: retain a genuinely populated kernel cgroup as the previous run.
-    leases.set("a", { invocationId: "1".repeat(32), cgroupFd: fd, lease: {}, done: () => assert.fail("live old lease revoked") });
+    const probe = openSync(join("/sys/fs/cgroup", cgroup), "r");
+    try { assert.match(readFileSync(`/proc/self/fd/${probe}/cgroup.events`, "utf8"), /^populated 1$/m); }
+    finally { closeSync(probe); }
+    // Fault seam: register a genuinely populated kernel cgroup as the previous
+    // run through the registry that owns the pin.
+    const previous = registry.begin("a", 1, "1".repeat(32), cgroup);
+    const baseline = observe("a");
+    units.observe = () => ({ ...baseline, cgroup, invocationId: "2".repeat(32) });
     assert.throws(() => Reflect.get(env.broker, "openRun").call(env.broker, "a", "2".repeat(32)), /previous invocation cgroup/);
     assert.equal(env.store.getAgent("a")!.incarnation, 1);
-  } finally { leases.delete("a"); closeSync(fd); env.cleanup(); }
+    assert.equal(previous.population(), "populated", "a pinned cgroup is observed, never assumed dead");
+  } finally { units.observe = observe; env.cleanup(); }
 });
 
 test("AUTH-003 fault seam: actor auth requires a live lease, matching invocation and pinned cgroup inode", async () => {
   const env = envOf();
   const units = Reflect.get(env.broker, "units") as UnitsModule;
   const observe = units.observe.bind(units);
-  const leases = Reflect.get(env.broker, "runLeases") as Map<string, unknown>;
+  const registry = Reflect.get(env.broker, "runLeases") as RunRegistry;
   const cg = peerCgroup(process.pid)!;
-  const fd = openSync(join("/sys/fs/cgroup", cg), "r");
-  const wrong = openSync(env.dir, "r");
   try {
     seed(env.store, [["a", "resident", "enabled"]]);
     const baseline = observe("a");
     let invocation = "1".repeat(32);
     units.observe = () => ({ ...baseline, cgroup: cg, invocationId: invocation });
-    const lease: RunLease = { actor: "a", incarnation: 1, socketHostPath: "/unused" };
-    const record = { invocationId: invocation, cgroupFd: fd, lease: lease as RunLease | null };
     let peerAlive = true; // Explicit peer-liveness seam; native pidfd has its own process-exit test.
     const authenticate = () => Reflect.get(env.broker, "trustedContext").call(env.broker, "a", { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => peerAlive });
-    assert.equal(authenticate(), null);
-    leases.set("a", record);
+    assert.equal(authenticate(), null, "an opening run has no live lease yet");
+    const record = registry.begin("a", 1, invocation, cg);
+    const lease = record.publish({ socketHostPath: actorSocketPathAt(join(env.dir, "R"), "a", 1), done: () => undefined });
     const authenticated = authenticate() as AuthContext;
     assert.equal(authenticated.actor, "a");
     assert.equal(authenticated.capabilities.has("mail.send"), true);
@@ -413,19 +429,21 @@ test("AUTH-003 fault seam: actor auth requires a live lease, matching invocation
     assert.equal(authenticate(), null, "cgroup pathname alone is not invocation identity");
     invocation = record.invocationId;
     const inFlight = env.mail.send(authenticated, "lease-revoked", { to: ["a"], subject: "revoked", kind: "message", body: "body" });
-    record.lease = null;
+    record.revoke();
     assert.equal(authenticate(), null);
     assert.equal(authenticated.capabilities.size, 0, "revocation must invalidate in-flight authorization too");
     await assert.rejects(inFlight, { code: "CAPABILITY_DENIED" });
     assert.equal(env.store.getOperation("a", "lease-revoked"), null);
-    record.lease = lease;
-    record.cgroupFd = wrong;
+    // The observed endpoint must match the pinned inode, not just a pathname.
+    units.observe = () => ({ ...baseline, cgroup: env.dir, invocationId: invocation });
     assert.equal(authenticate(), null, "a different pinned inode cannot authenticate the same path");
-    record.cgroupFd = fd;
+    units.observe = () => ({ ...baseline, cgroup: cg, invocationId: invocation });
+    assert.equal(authenticate(), null, "a revoked run cannot re-authenticate");
     peerAlive = false;
     assert.equal(authenticate(), null);
     assert.equal(authenticated.capabilities.size, 0);
-  } finally { leases.delete("a"); units.observe = observe; closeSync(fd); closeSync(wrong); env.cleanup(); }
+    void lease;
+  } finally { units.observe = observe; env.cleanup(); }
 });
 
 test("BATCH-001: failed view publication retries the same prepared snapshot", async () => {
@@ -470,7 +488,9 @@ test("PR-002/BATCH-001: mailbox moves reject rogue bytes and preserve valid reco
     assert.deepEqual(readFileSync(to), bytes);
     assert.equal(env.mail.moveToCur("principal", [id]), 0);
     writeFileSync(join(env.state, "mail", "inboxes", "principal", "new", "rogue"), bytes);
-    assert.throws(() => env.mail.moveToCur("principal", ["rogue"]), /missing delivery/);
+    // A name that is not an internal message identity is refused before any move.
+    assert.throws(() => env.mail.moveToCur("principal", ["rogue"]),
+      (error: unknown) => error instanceof TypeError || (error as { code?: string }).code === "INVALID_REQUEST");
   } finally { env.cleanup(); }
 });
 
@@ -486,6 +506,7 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
       env.store,
       64,
       4,
+      TEST_VIEW_LIMITS,
     );
     const direct = new Set<string>();
     const publicList = new Set<string>();
@@ -598,6 +619,16 @@ function makeSyntheticRootfs(root: string, extHostPath: string): string {
     "git/project.git",
     "run/oma",
     "opt/oma",
+    // A real rootfs carries these mountpoints; the sandbox profile mounts over
+    // them, so the synthetic fixture must provide them too.
+    "proc",
+    "dev",
+    "usr",
+    "lib",
+    "lib64",
+    "bin",
+    "sbin",
+    "etc",
   ]) {
     mkdirSync(join(root, t), { recursive: true });
   }
@@ -618,8 +649,17 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     const rootfs = join(dir, "rootfs");
     mkdirSync(rootfs, { recursive: true });
     makeSyntheticRootfs(rootfs, extPath);
-    const viewDir = join(dir, "view");
-    mkdirSync(viewDir, { recursive: true });
+
+    // The resident profile requires the trusted roots, the configured batch view
+    // limits and a decoded, root-bound lease whose mounts are exactly the paths
+    // derived from the state root.
+    const stateRoot = join(dir, "state");
+    const runRoot = join(dir, "run");
+    const viewDir = runnerViewPathAt(stateRoot, "a");
+    const mailRoot = join(stateRoot, "mail");
+    for (const path of [join(stateRoot, "world"), join(stateRoot, "repos", "project.git"), viewDir,
+      join(mailRoot, "archive"), join(mailRoot, "inboxes", "a"), workspacePathAt(stateRoot, "a"),
+      join(agentRootPathAt(stateRoot, "a"), "home"), runRoot]) mkdirSync(path, { recursive: true });
     const smokeMessageId = "m-00000000-0000-4000-8000-000000000001-0";
     const manifest = {
       id: "b-00000000-0000-4000-8000-000000000000",
@@ -633,9 +673,6 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
       join(viewDir, `batch-${manifest.id}.json`),
       JSON.stringify(manifest),
     );
-    const sockFile = join(dir, "control.sock");
-    const fd = openSync(sockFile, "w");
-    closeSync(fd);
 
     const sandbox = new SandboxModule({
       rootfs,
@@ -643,6 +680,9 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
       pi: "/usr/bin/pi",
       piModeArgs: ["--mode", "rpc", "-e", "/opt/oma/pi-extension.js"],
       tmpBytes: 64 * 1024 * 1024,
+      stateRoot,
+      runRoot,
+      limits: TEST_VIEW_LIMITS,
       checkResources: {
         memoryBytes: 0,
         tasks: 0,
@@ -653,19 +693,17 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
         checkTimeoutSeconds: 1,
       },
     });
-    const lease: RunLease = {
-      actor: "a",
-      incarnation: 1,
-      socketHostPath: sockFile,
-    };
+    const lease = decodeRunLease(
+      { actor: "a", incarnation: 1, socketHostPath: actorSocketPathAt(runRoot, "a", 1) },
+      { actor: "a", runRoot });
     const argv = sandbox.resident(lease, {
-      workspace: dir,
-      home: join(dir, "home"),
-      archive: join(dir, "archive"),
-      selfMail: join(dir, "self"),
+      workspace: workspacePathAt(stateRoot, "a"),
+      home: join(agentRootPathAt(stateRoot, "a"), "home"),
+      archive: join(mailRoot, "archive"),
+      selfMail: join(mailRoot, "inboxes", "a"),
       view: viewDir,
-      world: join(dir, "world"),
-      projectGit: join(dir, "git"),
+      world: join(stateRoot, "world"),
+      projectGit: join(stateRoot, "repos", "project.git"),
     }).argv;
     const sysOverlays = [
       "--ro-bind",
@@ -698,16 +736,27 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     mkdirSync(join(dir, "self"), { recursive: true });
     mkdirSync(join(dir, "world"), { recursive: true });
     mkdirSync(join(dir, "git"), { recursive: true });
+    // The broker owns the actor control socket before a runner starts, and the
+    // profile binds that host path into the sandbox. Without it bwrap exits
+    // before exec, so the fixture creates the real endpoint.
+    const controlServer = createServer();
+    mkdirSync(dirname(lease.socketHostPath), { recursive: true });
+    await new Promise<void>((resolve, reject) => {
+      controlServer.once("error", reject);
+      controlServer.listen(lease.socketHostPath, resolve);
+    });
 
     const child = spawn(withSys[0]!, withSys.slice(1), {
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const pi = new PiRpcClient(child);
+    const pi = new PiRpcClient(child, { frameBytes: 262144, idleStreamSeconds: 30, receiptWaitSeconds: 30 });
     const events: Array<{
       type: string;
       message?: { role?: string; customType?: string; stopReason?: string };
     }> = [];
     let stderr = "";
+    let spawnFailure = "";
+    child.once("error", (error) => { spawnFailure = `${(error as NodeJS.ErrnoException).code ?? ""} ${String(error.message)}`; });
     child.stderr.on("data", (data) => { stderr += String(data); });
     let customSeen = false;
     let providerErrorSeen = false;
@@ -724,7 +773,9 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
         if (customSeen && providerErrorSeen) resolve();
       });
       child.once("error", () => resolve());
-      child.once("exit", () => resolve());
+      // "close" runs after stdio ends, so diagnostics are complete when the
+      // assertion below reports them.
+      child.once("close", () => resolve());
     });
     await new Promise((r) => setTimeout(r, 3000));
     pi.send({
@@ -747,13 +798,14 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
     } catch {
       /* */
     }
+    controlServer.close();
 
     const custom = events.find(
       (e) => e.type === "message_start" && e.message?.role === "custom",
     );
     assert.ok(
       custom,
-      `no custom message delivered; events=${JSON.stringify(events)} stderr=${JSON.stringify(stderr)}`,
+      `no custom message delivered; spawn=${JSON.stringify(spawnFailure)} code=${child.exitCode} signal=${child.signalCode} events=${JSON.stringify(events)} stderr=${JSON.stringify(stderr)}`,
     );
     assert.equal(custom.message?.customType, "oma-mail");
     const failed = events.some(

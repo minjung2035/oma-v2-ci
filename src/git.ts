@@ -4,6 +4,7 @@ import type { AuthContext, ContextEntry, Oid, Receipt } from "../implementation/
 import { Store } from "./store.js";
 import type { OperationOf } from "./storage/operation-codec.js";
 import { StoreError } from "./domain/errors.js";
+import { assertNever } from "./domain/exhaustive.js";
 import { MailModule } from "./mail.js";
 import { isValidFullOid } from "./ids.js";
 import type { GitObservation, RefAfterCas } from "./git/observe.js";
@@ -61,6 +62,7 @@ export class GitModule {
     this.contextRepository = new ContextRepository(paths, this.observations);
     this.contextCoordinator = new ContextCoordinator(paths, store, mail, {
       current: () => this.currentContext(),
+      observedObjectFormat: () => this.contextRepository.observedObjectFormat(),
       prepareCandidate: (tree, entries, expected) => this.prepareContextCandidate(tree, entries, expected),
       ensureCandidate: operation => this.contextRepository.ensureCandidate(operation),
       compareAndSwap: (base, candidate) => this.casRef(paths.contextGit, "refs/heads/main", candidate, base),
@@ -155,7 +157,10 @@ export class GitModule {
         case "git.integrate": await this.integrationCoordinator.reconcile(operation); return;
         case "context.publish": await this.reconcileContext(operation); return;
         case "git.submit": await this.submissionCoordinator.reconcile(operation); return;
-        default: return;
+        case "mail.send": case "agent.continue": case "mail.ack":
+        case "route.follow": case "route.unfollow":
+        case "agent.create": case "agent.start": case "agent.stop": return;
+        default: assertNever(operation);
       }
     });
   }

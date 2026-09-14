@@ -2,7 +2,9 @@
  * Recipients are intentionally separate: membership is frozen by the accepting
  * transaction, not by the pre-render snapshot or a display mailbox address.
  */
-import type { Actor, Address, ExactCandidateIdentity, MailInput, MessageId, MessagePlan, Oid } from "../../implementation/contracts.js";
+import type { Actor, Address, MessageId, Oid } from "../../implementation/contracts/identity.js";
+import type { ExactCandidateIdentity, MailInput } from "../../implementation/contracts/values.js";
+import type { MessagePlan } from "../../implementation/contracts/durable.js";
 import { isValidActor, isValidMessageId, isValidFullOid, isValidSocietyName } from "../domain/identifiers.js";
 import { exactCandidateCheck, headerMessageIdCheck, isLogicalAddress, isMailKind } from "../domain/mail-values.js";
 import { mailObjectRelativePath } from "../domain/derived.js";

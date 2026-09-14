@@ -1,12 +1,16 @@
 /** DB-009 / M-003: the sole raw-ledger -> workflow boundary. This module reads
  * no files, performs no effects, and never repairs or rewrites stored JSON.
  */
-import type { ErrorCode, Json, MessagePlan, MutationMethod, PublicMethods } from "../../implementation/contracts.js";
+import type { ErrorCode } from "../../implementation/contracts/errors.js";
+import type { Json } from "../../implementation/contracts/identity.js";
+import type { MessagePlan, MutationMethod } from "../../implementation/contracts/durable.js";
+import type { PublicMethods } from "../../implementation/contracts/public-wire.js";
 import {
   operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
   type OperationPlanContext, type PlanFor, type RepositoryIdentity, type ResultFor,
 } from "../durable.js";
-import { isValidActor, isValidOperationId, isValidRequestKey } from "../ids.js";
+import { isValidActor, isValidOperationId, isValidRequestKey } from "../domain/identifiers.js";
+import type { Actor, OperationId, RequestKey } from "../domain/identifiers.js";
 import { snapshotJson, canonicalJson } from "../domain/canonical-json.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { requestHash } from "../hash.js";
@@ -33,10 +37,40 @@ export interface RawOperationRecord {
 const PLAN = Symbol("ValidatedOperationPlan");
 const OPERATION = Symbol("DecodedOperation");
 export type ValidatedPlan<K extends MutationMethod> = PlanFor<K> & { readonly [PLAN]: true };
+
+/** P1/P3-1: pure kind -> validator metadata. Every entry binds the same existing
+ * checks this module already called; no new validation, effect, recovery
+ * decision or state is introduced. The `satisfies` below is the compile-time
+ * exhaustiveness gate: a new OperationPlan kind without its codec does not build.
+ */
+export interface OperationCodec {
+  readonly planCheck: (plan: unknown, context: OperationPlanContext) => string | null;
+  readonly resultCheck: (result: unknown) => string | null;
+  readonly relationsCheck: (plan: unknown, result: unknown, context: OperationPlanContext) => string | null;
+}
+const codecFor = (kind: MutationMethod): OperationCodec => Object.freeze({
+  planCheck: (plan: unknown, context: OperationPlanContext) => operationPlanCheck(kind, context)(plan),
+  resultCheck: (result: unknown) => operationResultCheck(kind)(result),
+  relationsCheck: (plan: unknown, result: unknown, context: OperationPlanContext) =>
+    operationResultRelationCheck(kind, plan, result, context),
+});
+export const OPERATION_CODECS = Object.freeze({
+  "mail.send": codecFor("mail.send"),
+  "agent.continue": codecFor("agent.continue"),
+  "mail.ack": codecFor("mail.ack"),
+  "route.follow": codecFor("route.follow"),
+  "route.unfollow": codecFor("route.unfollow"),
+  "agent.create": codecFor("agent.create"),
+  "agent.start": codecFor("agent.start"),
+  "agent.stop": codecFor("agent.stop"),
+  "git.submit": codecFor("git.submit"),
+  "git.integrate": codecFor("git.integrate"),
+  "context.publish": codecFor("context.publish"),
+}) satisfies Record<MutationMethod, OperationCodec>;
 interface IdentityFields {
-  readonly id: string;
-  readonly actor: string;
-  readonly requestKey: string;
+  readonly id: OperationId;
+  readonly actor: Actor;
+  readonly requestKey: RequestKey;
   readonly requestHash: string;
   /** Original bytes are retained for CAS/audit, not for workflow parsing. */
   readonly payloadJson: string;
@@ -179,7 +213,7 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
       const relationContext: OperationPlanContext = {
         operationId: value.id, actor: value.actor, stateRoot: context.stateRoot, repositoryIdentity: context.repositoryIdentity,
       };
-      const invalid = operationPlanCheck(kind, relationContext)(planRaw);
+      const invalid = OPERATION_CODECS[kind].planCheck(planRaw, relationContext);
       if (invalid) corrupt(`operation plan: ${invalid}`);
       // Audited narrowings are confined to this boundary after closed shape and
       // operation-context checks. Workflow code consumes the returned union.
@@ -210,7 +244,8 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
       if (value.state === "succeeded") {
         if (typeof value.result_json !== "string" || value.error_code !== null) corrupt("inconsistent succeeded operation");
         result = json(value.result_json, "operation result");
-        const error = operationResultCheck(kind)(result) ?? operationResultRelationCheck(kind, plan, result, relationContext);
+        const codec = OPERATION_CODECS[kind];
+        const error = codec.resultCheck(result) ?? codec.relationsCheck(plan, result, relationContext);
         if (error) corrupt(`operation result: ${error}`);
       } else if (value.state === "failed") {
         if (value.result_json !== null || !isErrorCode(value.error_code) || isPreacceptOnlyFailure(value.error_code)) corrupt("inconsistent or preaccept-only failed operation");

@@ -11,6 +11,7 @@ import { isValidFullOid } from "../src/ids.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import type { AuthContext } from "../implementation/contracts.js";
 import type { OperationOf } from "../src/storage/operation-codec.js";
+import { removeTree } from "./fixtures/cleanup.js";
 
 const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 async function* once(bytes: Uint8Array): AsyncIterable<Uint8Array> { yield bytes; }
@@ -59,5 +60,5 @@ test("CTX-003/DB-009: T-context-accept already freezes candidate and matching EM
     assert.equal(headers.dateMs, Math.floor(accepted.plan.message.dateMs / 1000) * 1000);
     assert.ok(receipt.result?.kind === "context.publish");
     assert.equal(receipt.result.revision, accepted.plan.candidate);
-  } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+  } finally { store.close(); removeTree(root); }
 });

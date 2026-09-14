@@ -52,10 +52,17 @@ export function runQuarantineCommand(executable: "/usr/bin/git" | "systemd-run",
  */
 export async function runJournal(argv: readonly string[], maxBytes: number): Promise<{ bytes: Buffer; truncated: boolean }> {
   const result = await runProcess({ executable: "journalctl", argv, env: { ...process.env },
-    timeoutMs: 30000, stdoutBytes: maxBytes, stderrBytes: 16 * 1024 });
+    timeoutMs: 30000, stdoutBytes: maxBytes, stderrBytes: 16 * 1024,
+    // Command diagnostics stay bounded but never terminate the read: only the
+    // requested stdout prefix governs this view's success.
+    stderrOverflow: "discard" });
   if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "journalctl timed out");
-  if (result.kind === "output-limited" && result.stdoutTruncated && !result.stderrTruncated) return { bytes: result.stdout, truncated: true };
-  if (result.kind !== "exited" || result.exitCode !== 0) throw new StoreError("INTERNAL_ERROR", `journalctl outcome is ${result.kind}`);
+  // A bounded view may resolve with an explicitly truncated prefix, exactly as
+  // the previous view implementation did. Truncation is never silent.
+  if (result.stdoutTruncated) return { bytes: result.stdout, truncated: true };
+  if (result.kind !== "exited" || result.exitCode !== 0)
+    throw new StoreError("INTERNAL_ERROR", `journalctl outcome is ${result.kind}` +
+      (result.stderr.byteLength === 0 ? "" : `: ${result.stderr.toString("utf8").slice(0, 300)}`));
   return { bytes: result.stdout, truncated: false };
 }
 /** Explicitly interactive, host-user command policy. No shell concatenation.

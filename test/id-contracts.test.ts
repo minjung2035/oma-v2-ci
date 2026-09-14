@@ -72,12 +72,22 @@ test("R28: host and isolated extension preserve six-field schema and independent
   assert.equal(raw.includes("/private/session"), false);
   assert.deepEqual(hostDecode(raw, BATCH, VIEW_LIMITS), valid);
   assert.deepEqual(extensionDecode(raw, BATCH, VIEW_LIMITS), valid);
+  // Ordinal spellings both sides accept decode to the same id on both sides.
+  for (const ordinal of ["0", "01", "1", "007"]) {
+    const text = JSON.stringify({ ...valid, messageIds: [`m-${UUID}-${ordinal}`] });
+    assert.deepEqual(hostDecode(text, BATCH, VIEW_LIMITS), { ...valid, messageIds: [`m-${UUID}-${ordinal}`] }, ordinal);
+    assert.deepEqual(extensionDecode(text, BATCH, VIEW_LIMITS), hostDecode(text, BATCH, VIEW_LIMITS), ordinal);
+  }
   const invalid: unknown[] = [null, [], { ...valid, id: `b-${BAD_VERSION}` }, { ...valid, id: `b-${BAD_VARIANT}` },
     { ...valid, agent: "principal" }, { ...valid, agent: "topic-test" }, { ...valid, agent: "Alice" },
     { ...valid, incarnation: "1" }, { ...valid, incarnation: -1 }, { ...valid, incarnation: Number.MAX_SAFE_INTEGER + 1 },
     { ...valid, deliveryMode: "prompt" }, { ...valid, notice: 1 }, { ...valid, notice: "🙂".repeat(4096) },
     { ...valid, messageIds: [MESSAGE, MESSAGE] }, { ...valid, messageIds: [`m-${BAD_VERSION}-0`] },
     { ...valid, messageIds: [`m-${BAD_VARIANT}-0`] }, { ...valid, messageIds: [`m-${UUID}-9007199254740992`] },
+    // The extension builds its id grammar with `new RegExp` templates, so the
+    // static regex rule cannot compare it; this corpus is the mirror control.
+    { ...valid, messageIds: [`m-${UUID}-+1`] }, { ...valid, messageIds: [`m-${UUID}- 1`] },
+    { ...valid, messageIds: [`m-${UUID}-0e1`] }, { ...valid, messageIds: [`m-${UUID}-1.0`] },
     { ...valid, sessionPath: "/private/session" }, { ...valid, extra: true }];
   for (const value of invalid) {
     const text = JSON.stringify(value);

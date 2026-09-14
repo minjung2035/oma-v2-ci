@@ -30,7 +30,9 @@ if (role === "seed") {
 }
 
 function stopPoint(value: string | undefined): MailStopPoint | undefined {
-  if (value === undefined || value === "stage" || value === "object" || value === "accepted" || value === "archive") return value;
+  // An empty OMA_STOP is the "no stop point" case used by the resend runs.
+  if (value === undefined || value === "") return undefined;
+  if (value === "stage" || value === "object" || value === "accepted" || value === "archive") return value;
   if (/^inbox-[1-9]\d*$/.test(value)) return `inbox-${Number(value.slice(6))}`;
   throw new Error("unknown requested mail fault boundary");
 }

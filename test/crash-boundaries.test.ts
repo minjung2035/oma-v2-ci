@@ -9,9 +9,11 @@ import { Store } from "../src/store.js";
 import { sha256Hex } from "../src/hash.js";
 import { MailModule, publishImmutableFile } from "../src/mail.js";
 import { makeValidAgent } from "./fixtures/spec.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, MailInput } from "../implementation/contracts.js";
 import { gitFixture, gitAuth, seedGit, gitCommand, submitFixture } from "./fixtures/git-crash.js";
 import { lifecycleFixture } from "./fixtures/lifecycle-crash.js";
+import { removeTree } from "./fixtures/cleanup.js";
 
 const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "trusted-runner", capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 const input: MailInput = { to: ["a", "b", "c"], subject: "crash", kind: "message", body: "immutable payload" };
@@ -52,7 +54,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
     let open = true;
     try {
       seedAgents(store);
-      let mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+      let mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
       const batchPoint = point === "prepared" || point === "cur";
       if (batchPoint) await mail.send(auth, "crash-send", input);
       store.close();
@@ -60,7 +62,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
       await killAt(root, point);
       store = new Store(join(root, "runtime.sqlite"));
       open = true;
-      mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+      mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
       const accepted = store.getOperation("a", "crash-send");
       if (point === "stage" || point === "object") {
         assert.equal(accepted, null);
@@ -93,7 +95,7 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
           assert.deepEqual(readFileSync(path), original);
         }
       }
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -116,7 +118,7 @@ test("T23 real cross-filesystem immutable copy rejects corrupt and symlink desti
     rmSync(destination);
     symlinkSync(source, destination);
     assert.throws(() => publishImmutableFile(source, destination), { code: "STORE_CORRUPT" });
-  } finally { rmSync(sourceRoot, { recursive: true, force: true }); rmSync(destinationRoot, { recursive: true, force: true }); }
+  } finally { removeTree(sourceRoot); removeTree(destinationRoot); }
 });
 
 test("T23 real SIGKILL during cross-filesystem copy never publishes a partial destination", async () => {
@@ -132,7 +134,7 @@ test("T23 real SIGKILL during cross-filesystem copy never publishes a partial de
     assert.equal(existsSync(destination), false, "partial copy must remain unpublished");
     publishImmutableFile(source, destination);
     assert.deepEqual(readFileSync(destination), readFileSync(source));
-  } finally { rmSync(sourceRoot, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); }
+  } finally { removeTree(sourceRoot); removeTree(root); }
 });
 
 for (const format of ["sha1", "sha256"] as const) {
@@ -156,7 +158,7 @@ for (const format of ["sha1", "sha256"] as const) {
       assert.equal((await submitFixture(root, git)).state, "succeeded");
       assert.deepEqual(readFileSync(orphan), original, "a new preparation must not delete an unclaimed earlier operation artifact");
       assert.equal(files(join(root, "mail/archive/cur")).length, 1);
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -197,7 +199,9 @@ for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-m
         writeFileSync(ref, "corrupt-ref\n");
         await assert.rejects(git.reconcile(accepted.id), { code: "REF_STATE_UNKNOWN" });
         assert.equal(readFileSync(ref, "utf8"), "corrupt-ref\n", "unknown is not an absent ref");
-        assert.equal(store.getOperationById(accepted.id)!.state, "pending");
+        // A corrupt ref file cannot prove the effect did or did not happen, so
+        // the operation stays explicitly unknown rather than retryable-pending.
+        assert.equal(store.getOperationById(accepted.id)!.state, "unknown");
         rmSync(ref);
       }
       await git.reconcile(accepted.id);
@@ -223,7 +227,7 @@ for (const point of ["submit-accepted", "submit-import", "submit-ref", "submit-m
       }
       if (original) assert.deepEqual(readFileSync(mail.objectPath(plan.message.id)), original);
       assert.equal(files(join(root, "mail/archive/cur")).length, 1, "recovery must not duplicate result mail");
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -246,7 +250,7 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
         store = new Store(join(root, "runtime.sqlite")); open = true;
         assert.equal(store.getOperation("a", "crash-send"), null);
         assert.deepEqual(files(join(root, "mail/archive/cur")), []);
-        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
         assert.equal((await mail.send(auth, "crash-send", input)).state, "succeeded");
       } else {
         assert.equal(outcome.state, "pending");
@@ -254,14 +258,14 @@ for (const point of ["error-stage-before", "error-stage-after", "error-archive-b
         store = new Store(join(root, "runtime.sqlite")); open = true;
         assert.equal(store.getOperation("a", "crash-send")!.id, outcome.operation);
         assert.equal(store.getOperation("a", "crash-send")!.state, "pending");
-        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
+        const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
         await mail.reconcilePending();
         assert.equal(store.getOperation("a", "crash-send")!.state, "succeeded");
         assert.equal(store.getOperation("a", "crash-send")!.id, outcome.operation);
       }
       assert.equal(files(join(root, "mail/archive/cur")).length, 1);
       for (const actor of ["a", "b", "c"]) assert.equal(files(join(root, "mail/inboxes", actor, "new")).length, 1);
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -279,7 +283,7 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
       store = new Store(join(root, "runtime.sqlite")); open = true;
       const fixture = lifecycleFixture(root, store);
       const before = ["child", "peer"].map(name => store.getOperation("principal", `bootstrap-${name}`));
-      if (point === "boot-stage") assert.equal(store.listAgents().length, 0);
+      if (point === "boot-stage" || point === "boot-object") assert.equal(store.listAgents().length, 0);
       else {
         assert.equal(store.listAgents().length, 3, "all bootstrap identities commit together");
         assert.ok(before.every(Boolean));
@@ -300,11 +304,19 @@ for (const point of ["boot-stage", "boot-intent", "boot-object", "boot-workspace
         assert.equal(fixture.units.observe(name).activeState, "inactive");
         assert.equal(files(join(root, "mail/inboxes", name, "new")).length, 1);
       }
-      assert.equal(files(join(root, "mail/objects")).length, 2);
+      // A kill before the bootstrap intent leaves an unreferenced object; FS-007
+      // forbids automatic removal, so it survives as an orphan next to the two
+      // accepted initial messages.
+      const bootObjects = files(join(root, "mail/objects"));
+      assert.equal(bootObjects.length, point === "boot-object" ? 3 : 2, JSON.stringify(bootObjects));
+      for (const name of ["child", "peer"]) {
+        const initial = JSON.parse(store.getOperation("principal", `bootstrap-${name}`)!.planJson).initialMessage.id;
+        assert.ok(bootObjects.includes(`${initial}.eml`), JSON.stringify(bootObjects));
+      }
       assert.equal(files(join(root, "mail/archive/cur")).length, 2);
       await fixture.lifecycle.bootstrap({ ...fixture.config, initialResidents: [] });
       assert.equal(store.listAgents().length, 3);
-    } finally { cleanup(); if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { cleanup(); if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -324,7 +336,9 @@ for (const point of ["create-stage", "create-intent", "create-object", "create-w
       store = new Store(join(root, "runtime.sqlite")); open = true;
       const fixture = lifecycleFixture(root, store);
       const before = store.getOperation("a", "create-child");
-      if (point === "create-stage") {
+      // The initial EML is frozen before the create intent is durable, so both
+      // boundaries leave no accepted operation behind.
+      if (point === "create-stage" || point === "create-object") {
         assert.equal(before, null);
         assert.equal(store.getAgent("child"), null);
         await fixture.lifecycle.create(gitAuth, input, "create-child");
@@ -341,10 +355,16 @@ for (const point of ["create-stage", "create-intent", "create-object", "create-w
       assert.equal(gitCommand(root, ["-C", join(root, "agents/child/workspace"), "rev-parse", "HEAD"]), info.base);
       assert.equal(store.getAgent("child")!.incarnation, 0);
       assert.equal(fixture.units.observe("child").activeState, "inactive");
-      assert.equal(files(join(root, "mail/objects")).length, 1);
+      // A kill after the object freeze but before the intent leaves an
+      // unreferenced object; FS-007 forbids automatic removal, so it survives
+      // next to the accepted initial message.
+      const createObjects = files(join(root, "mail/objects"));
+      const acceptedInitial = JSON.parse(op.planJson).initialMessage.id;
+      assert.ok(createObjects.includes(`${acceptedInitial}.eml`), JSON.stringify(createObjects));
+      assert.equal(createObjects.length, point === "create-object" ? 2 : 1, JSON.stringify(createObjects));
       assert.equal(files(join(root, "mail/archive/cur")).length, 1);
       assert.equal(files(join(root, "mail/inboxes/child/new")).length, 1);
-    } finally { cleanup(); if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { cleanup(); if (open) store.close(); removeTree(root); }
   });
 }
 
@@ -372,6 +392,6 @@ for (const kind of ["symlink", "hardlink"]) {
       assert.equal(gitCommand(root, ["--git-dir", paths.projectGit, "for-each-ref", "--format=%(refname)", "refs/oma/published"]), "");
       assert.equal(files(join(root, "mail/archive/cur")).length, 0);
       assert.equal(sha256Hex(readFileSync(external)), plan.bundle.sha256);
-    } finally { if (open) store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { if (open) store.close(); removeTree(root); }
   });
 }

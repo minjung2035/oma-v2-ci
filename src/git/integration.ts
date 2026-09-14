@@ -8,7 +8,7 @@ import { assertCurrentActor, capabilitiesOf } from "../authority.js";
 import { StoreError, ERROR_METADATA, classifyError, type EffectKnowledge, type ErrorPhase } from "../domain/errors.js";
 import { requestHash } from "../hash.js";
 import { generateOperationId } from "../ids.js";
-import { receiptOfOperation } from "../protocol/receipts.js";
+import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { integrationResult } from "../protocol/operation-results.js";
 import { protectedPathMatches, type ChangedPath, type GitObservation, type RefAfterCas } from "./observe.js";
 import {

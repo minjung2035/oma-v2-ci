@@ -1,5 +1,5 @@
 // MUST [UNIT-005/006]: malformed or incomplete observations never establish success/death.
-import type { UnitObservation } from "../../implementation/contracts.js";
+import type { UnitObservation } from "../../implementation/contracts/runtime.js";
 import type { UnitCommandOutcome } from "./execute.js";
 
 const REQUIRED = ["ActiveState", "SubState", "Result", "ExecMainStatus", "ControlGroup", "InvocationID"] as const;

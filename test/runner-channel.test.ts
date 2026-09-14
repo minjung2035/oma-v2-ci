@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BrokerChannel, RunnerModule } from "../src/runner.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
+import { actorSocketPathAt } from "../src/storage/paths.js";
 
 test("RUN-001: broker EOF, malformed reply and local stop settle all pending calls", { timeout: 5000 }, async () => {
   for (const mode of ["eof", "malformed", "oversize", "stop", "timeout", "success"]) {
@@ -63,7 +64,10 @@ test("SP-003: a prepared runner handoff reports the unresolved adapter, not succ
           const raw = frame.raw;
           assert.ok(raw !== null && typeof raw === "object" && "id" in raw && "method" in raw && typeof raw.method === "string");
           methods.push(raw.method);
-          const result = raw.method === "runner.open" ? { actor: "a", incarnation: 1, socketHostPath: "/unused" }
+          // The lease must be a real endpoint identity for this run root; the
+          // unresolved adapter gate is what the test observes, not a bad lease.
+          const result = raw.method === "runner.open"
+            ? { actor: "a", incarnation: 1, socketHostPath: actorSocketPathAt(dir, "a", 1) }
             : prepared ? { id: "b-00000000-0000-4000-8000-000000000015", agent: "a", incarnation: 1,
               messageIds: ["m-00000000-0000-4000-8000-000000000015-0"], sessionPath: null, deliveryMode: "followUp", notice: "mail", indexPath: "/inbox.md" } : null;
           peer.write(encodeFrame({ v: 1, id: raw.id, ok: true, result }));

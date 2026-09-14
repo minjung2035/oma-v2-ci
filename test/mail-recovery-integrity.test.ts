@@ -19,8 +19,11 @@ import {
   publishImmutableFile,
 } from "../src/mail.js";
 import { Store, StoreError } from "../src/store.js";
+import { mutateRawRowAfterClose } from "./fixtures/corruption.js";
+import { removeTree } from "./fixtures/cleanup.js";
 import { generateMessageId } from "../src/ids.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { requestHash } from "../src/hash.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000071";
 
@@ -44,26 +47,26 @@ async function acceptedMail(
     body: "body",
   });
   mail.freezeObject(messageId, eml);
+  const payload = { to: ["residents"], subject: "recovery integrity", body: "body", kind: "message" };
   store.transaction(() => {
     for (const name of ["alice", "bob"] as const) {
       store.insertAgent({
         name,
-        specHash: name,
+        ...storedSpec(ALL_CAPS, "p", name),
         role: "resident",
+        profile: "p",
         desired: "enabled",
         incarnation: 0,
-        profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
     store.insertOperation({
       id: OP,
       actor: "alice",
       requestKey: "mail-integrity",
-      requestHash: "hash",
+      requestHash: requestHash("mail.send", payload),
       kind: "mail.send",
-      payloadJson: "{}",
+      payloadJson: JSON.stringify(payload),
       planJson: JSON.stringify({
         kind: "mail.send",
         message: {
@@ -97,19 +100,28 @@ async function acceptedMail(
 
 test("DB-005/006: missing delivery from the accepted recipient snapshot fails closed", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-mail-delivery-set-"));
-  const { store, mail } = await acceptedMail(root, ["alice"]);
+  const { store, mail, messageId } = await acceptedMail(root, ["alice", "bob"]);
+  // A complete accepted state is created through the Store; the missing row is
+  // then injected as an explicit boundary violation, because the accept
+  // transaction itself refuses to leave one out.
+  store.close();
+  mutateRawRowAfterClose(join(root, "runtime.sqlite"), (raw) => {
+    raw.exec("PRAGMA foreign_keys=OFF");
+    const removed = raw.prepare("DELETE FROM deliveries WHERE message_id=? AND recipient=?").run(messageId, "bob");
+    assert.equal(Number(removed.changes), 1);
+  });
+  const reopened = new Store(join(root, "runtime.sqlite"));
   try {
-    await assert.rejects(
-      mail.materialize(OP),
-      (error: unknown) =>
-        error instanceof StoreError &&
-        error.code === "STORE_CORRUPT" &&
-        /delivery snapshot mismatch/.test(error.message),
-    );
-    assert.equal(store.getOperationById(OP as never)?.state, "pending");
+    const reopenedMail = new MailModule({ stateRoot: root, society: "demo" }, reopened, 8);
+    await assert.rejects(reopenedMail.materialize(OP as never),
+      (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
+    // The delivery set is part of accepted evidence: the corrupt row stays
+    // unreadable instead of reporting a plausible operation state.
+    assert.throws(() => reopened.getOperationById(OP as never),
+      (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
   } finally {
-    store.close();
-    rmSync(root, { recursive: true, force: true });
+    reopened.close();
+    removeTree(root);
   }
 });
 

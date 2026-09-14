@@ -2,7 +2,7 @@
  * Domain decoders still validate complete requests. Partial CLI projections are
  * deliberately not passed to those complete-request decoders.
  */
-import type { Json } from "../../implementation/contracts.js";
+import type { Json } from "../../implementation/contracts/identity.js";
 import { canonicalJson, sha256Hex, snapshotJson, sortedUnique } from "./canonical-json.js";
 
 const SET_FIELDS: Readonly<Record<string, readonly string[]>> = Object.freeze({

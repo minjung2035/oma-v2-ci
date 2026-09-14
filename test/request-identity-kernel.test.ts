@@ -29,7 +29,7 @@ const legacyVectors: ReadonlyArray<readonly [string, unknown, string]> = [
   ["context.publish", {
     expected: null, entries: [{ path: "GOAL.md", bytes: 1, sha256: "digest" }],
     content: { bytes: 1, sha256: "digest", mediaType: "application/vnd.oma.context-v1" },
-  }, '{"method":"context.publish","params":{"content":{"bytes":1,"mediaType":"application/vnd.oma.context-v1","sha256":"digest"},"entries":[{"bytes":1,"path":"GOAL.md","sha256":"digest"}],"expected":null}'],
+  }, '{"method":"context.publish","params":{"content":{"bytes":1,"mediaType":"application/vnd.oma.context-v1","sha256":"digest"},"entries":[{"bytes":1,"path":"GOAL.md","sha256":"digest"}],"expected":null}}'],
 ];
 
 test("all mutation hash domains retain their literal legacy canonical bytes", () => {

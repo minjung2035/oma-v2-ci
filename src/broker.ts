@@ -12,6 +12,7 @@ import { RpcConnection, NODE_ALARMS } from "./broker/connection.js";
 import { PeerAuthenticator, type BoundPeer } from "./broker/peer-authenticator.js";
 import { PublicDispatcher } from "./broker/public-dispatcher.js";
 import { InternalDispatcher } from "./broker/internal-dispatcher.js";
+import { createPublicDispatchPorts, createInternalDispatchPorts } from "./broker/composition.js";
 import { readUnitLogs } from "./broker/logs.js";
 import { errorAnswer, okAnswer } from "./broker/replies.js";
 import { RunRegistry } from "./runtime/run-registry.js";
@@ -62,15 +63,17 @@ export class Broker {
   ) {
     bindAdmissionGate(store, this.health);
     this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society, error => this.cleanupError(error));
-    this.publicDispatcher = new PublicDispatcher({ store, mail, units, views, lifecycle, git, limits,
+    const publicPorts = createPublicDispatchPorts(this.store, mail, this.units, this.views, lifecycle, git, limits);
+    this.publicDispatcher = new PublicDispatcher({ ...publicPorts,
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(),
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       readLogs: (agent, sinceSeconds) => this.readLogs(agent, sinceSeconds) });
-    this.internalDispatcher = new InternalDispatcher({ store, mail, reconcile, stateRoot: paths.stateRoot,
-      // Forward through named seams used by the real peer/crash harnesses.
-      peers: { requireRunnerUnit: (peer, agent, invocationId) => this.requireRunnerUnit(peer, agent, invocationId),
-        requireHostUnit: (peer, kind) => this.requireHostUnit(peer, kind), runnerActor: peer => this.runnerActor(peer),
-        runnerAuth: (agent, incarnation, peer) => this.runnerAuth(agent, incarnation, peer) },
+    const internalPorts = createInternalDispatchPorts(this.store, mail, reconcile, paths.stateRoot, {
+      requireRunnerUnit: (peer, agent, invocationId) => this.requireRunnerUnit(peer, agent, invocationId),
+      requireHostUnit: (peer, kind) => this.requireHostUnit(peer, kind), runnerActor: peer => this.runnerActor(peer),
+      runnerAuth: (agent, incarnation, peer) => this.runnerAuth(agent, incarnation, peer),
+    });
+    this.internalDispatcher = new InternalDispatcher({ ...internalPorts,
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(),
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       openRun: (actor, invocationId) => this.openRun(actor, invocationId) });

@@ -6,22 +6,17 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { StoreError } from "../domain/errors.js";
 import { assertNewAcceptance, observeStoreFailure } from "../domain/admission.js";
 import type { Store } from "../store.js";
+import { WRITE_METHODS, writeFacets, type StoreWrites, type WriteFacets } from "./facets.js";
+export type { StoreWrites } from "./facets.js";
 
 const BRAND: unique symbol = Symbol("StoreTransaction");
-const WRITE_METHODS = [
-  "insertAgent", "updateAgent", "follow", "unfollow", "insertOperation", "claimOperation", "acceptOperation",
-  "updateOperationPlanJson", "setOperationSucceeded", "setOperationFailed", "setOperationUnknown",
-  "insertDeliveries", "markMaterialized", "markAcknowledged", "insertPreparedBatch", "reassignPreparedBatches",
-  "linkDeliveriesToBatch", "completeBatch", "reserveUsage", "settleUsage",
-] as const;
-export type StoreWrites = Pick<Store, typeof WRITE_METHODS[number]>;
 export type StoreReads = Pick<Store,
   "getAgent" | "listAgents" | "subscribers" | "allSubscriptions" | "claimKey" |
   "getOperation" | "getOperationById" | "findPhysicalCreate" | "recoverableOperations" |
   "getDelivery" | "pendingDeliveries" | "deliveriesForOperation" | "getBatch" |
   "preparedBatches" | "pendingBatchesFor" | "getUsage" | "usageRows"
 >;
-export type Transaction = StoreWrites & { readonly [BRAND]: true };
+export type Transaction = StoreWrites & WriteFacets & { readonly [BRAND]: true };
 export type SyncCallback<T> = (tx: Transaction) => T & (Extract<T, PromiseLike<unknown>> extends never ? unknown : never);
 interface Scope { owner: TransactionScope; active: boolean; inserted: Set<string> }
 const current = new AsyncLocalStorage<Scope>();
@@ -66,7 +61,8 @@ export class TransactionScope {
       if (name === "insertPreparedBatch" || name === "reserveUsage") assertNewAcceptance(this.store);
       return Reflect.apply(this.store[name], this.store, args);
     }]));
-    const tx = Object.freeze({ ...methods, [BRAND]: true }) as Transaction;
+    // Both compatibility methods and facets retain the same captured scope.
+    const tx = Object.freeze({ ...methods, ...writeFacets(methods as StoreWrites), [BRAND]: true }) as Transaction;
     try { return current.run(scope, () => body(tx)); }
     catch (error) { observeStoreFailure(this.store, error); throw error; }
     finally { scope.active = false; scope.inserted.clear(); this.scope = null; }

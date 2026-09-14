@@ -3,7 +3,7 @@
  * bare internal ancestry remains readable; newly emitted Message-ID uses the
  * society-qualified form. Ordered References are never sorted or deduplicated.
  */
-import type { ExactCandidateIdentity, MailInput } from "../../implementation/contracts.js";
+import type { ExactCandidateIdentity, MailInput } from "../../implementation/contracts/values.js";
 import { isValidActorName, isValidFullOid, isValidMessageId, isValidTopicName } from "./identifiers.js";
 
 const KINDS = Object.freeze({

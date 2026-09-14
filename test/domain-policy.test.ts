@@ -72,7 +72,10 @@ test("R02: policy deduplication preserves resolved-spec bytes and does not grant
   const value = JSON.parse(SPEC_BYTES);
   value.resources.tasks = 0;
   const invalid = { ...agent, specJson: JSON.stringify(value) };
-  assert.equal(capabilitiesOf(invalid).size, 0);
+  // MAINTENANCE §10: corruption is not an empty permission set. Both readers
+  // fail closed instead of degrading a corrupt durable spec to "no rights".
+  assert.throws(() => capabilitiesOf(invalid),
+    (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
   assert.throws(() => resolvedSpecOf(invalid),
-    (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE");
+    (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT");
 });

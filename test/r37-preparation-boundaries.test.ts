@@ -13,6 +13,7 @@ import { LifecyclePolicy } from "../src/lifecycle/policy.js";
 import { UnitsModule } from "../src/units.js";
 import { gitFixture, seedGit, gitCommand, gitAuth } from "./fixtures/git-crash.js";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
+import { removeTree } from "./fixtures/cleanup.js";
 
 function deferred() {
   let resolve!: () => void;
@@ -34,7 +35,7 @@ function fixture() {
   const caps = new Set(ALL_CAPS);
   const auth = { ...gitAuth, capabilities: caps };
   return { root, base, store, caps, auth, ...gitFixture(root, store),
-    close() { store.close(); rmSync(root, { recursive: true, force: true }); } };
+    close() { store.close(); removeTree(root); } };
 }
 
 test("R37: submit facade awaits quarantined preparation and retains accepted bundle after live revocation", { timeout: 30000 }, async () => {

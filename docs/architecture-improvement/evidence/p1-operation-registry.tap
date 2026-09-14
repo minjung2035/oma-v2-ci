@@ -1,0 +1,58 @@
+TAP version 13
+# Subtest: P1 operation registry: a matching closed set of 1 kinds is independent of count
+ok 1 - P1 operation registry: a matching closed set of 1 kinds is independent of count
+  ---
+  duration_ms: 861.721604
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: a matching closed set of 2 kinds is independent of count
+ok 2 - P1 operation registry: a matching closed set of 2 kinds is independent of count
+  ---
+  duration_ms: 625.899916
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: a matching closed set of 11 kinds is independent of count
+ok 3 - P1 operation registry: a matching closed set of 11 kinds is independent of count
+  ---
+  duration_ms: 508.573135
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: a matching closed set of 12 kinds is independent of count
+ok 4 - P1 operation registry: a matching closed set of 12 kinds is independent of count
+  ---
+  duration_ms: 424.014602
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: missing and extra keys fail closed
+ok 5 - P1 operation registry: missing and extra keys fail closed
+  ---
+  duration_ms: 1939.703838
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: each codec field must remain callable
+ok 6 - P1 operation registry: each codec field must remain callable
+  ---
+  duration_ms: 2722.107231
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: missing, empty and nonliteral plan domains are not closed sets
+ok 7 - P1 operation registry: missing, empty and nonliteral plan domains are not closed sets
+  ---
+  duration_ms: 3665.80673
+  type: 'test'
+  ...
+# Subtest: P1 operation registry: compiler rejects a new kind without its codec and accepts complete coverage
+ok 8 - P1 operation registry: compiler rejects a new kind without its codec and accepts complete coverage
+  ---
+  duration_ms: 940.055884
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12042.850028

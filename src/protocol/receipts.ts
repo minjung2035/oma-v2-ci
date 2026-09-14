@@ -1,32 +1,6 @@
-/** DB-005/009, IPC-008: one receipt projection, with no durable writes. */
-import type { Receipt } from "../../implementation/contracts.js";
-import { StoreError, terminalFailure, type CliExitCode } from "../domain/errors.js";
-import type { DecodedOperation } from "../storage/operation-codec.js";
-import { decodeReceipt } from "./receipt-codec.js";
-
-/** A receipt is a projection of the Store's relationally decoded snapshot.
- * Original JSON strings remain on that snapshot for audit; they are not parsed
- * a second time, normalized, repaired, or used as an alternate source of facts.
- */
-export type ReceiptOperation = DecodedOperation;
-
-export function receiptOfOperation(operation: ReceiptOperation): Receipt {
-  const raw: Record<string, unknown> = { operation: operation.id, state: operation.state };
-  switch (operation.state) {
-    case "succeeded":
-      raw.result = operation.result;
-      break;
-    case "failed":
-      raw.error = terminalFailure(operation.errorCode);
-      break;
-    case "pending":
-    case "unknown":
-      break;
-  }
-  const decoded = decodeReceipt(raw, { expectedKind: operation.kind });
-  if (!decoded.ok) throw new StoreError("STORE_CORRUPT", `invalid durable receipt: ${decoded.reason}`);
-  return decoded.value;
-}
+/** IPC-008: wire receipt presentation; ledger projection belongs to storage. */
+import type { Receipt } from "../../implementation/contracts/durable.js";
+import type { CliExitCode } from "../domain/errors.js";
 
 /** An absent lookup is not a durable operation or a cacheable receipt. */
 export const receiptNotFound: Receipt = Object.freeze({

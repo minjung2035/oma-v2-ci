@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Json, MessagePlan, MutationMethod, ResolvedAgentSpec } from "../implementation/contracts.js";
-import { decodeOperation, type RawOperationRecord, type OperationDecodeContext } from "../src/storage/operation-codec.js";
+import { decodeOperation, OPERATION_CODECS, type RawOperationRecord, type OperationDecodeContext } from "../src/storage/operation-codec.js";
 import { StoreError } from "../src/domain/errors.js";
 import { requestHash } from "../src/hash.js";
 import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
@@ -81,6 +81,29 @@ function context(fixture: Fixture): OperationDecodeContext {
   } };
 }
 const isCorrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
+
+test("P1 registry: every entry is bound to its own kind, not a neighbouring one", () => {
+  // The registry binds each key to a closure over its kind. If an entry were
+  // pasted from a neighbour, its own plan would still decode here but a foreign
+  // plan would be accepted, so both directions are checked for all eleven kinds.
+  const registryKeys = Object.keys(OPERATION_CODECS).sort();
+  assert.deepEqual(registryKeys, fixtures.map(fixture => fixture.kind).sort());
+  const planContext = (fixture: Fixture) => ({
+    operationId: id as never, actor: "alice" as never, stateRoot, repositoryIdentity: { society: "demo" },
+  });
+  for (const fixture of fixtures) {
+    const ctx = planContext(fixture);
+    assert.equal(OPERATION_CODECS[fixture.kind].planCheck(fixture.plan, ctx), null, `${fixture.kind} rejects its own plan`);
+    for (const other of fixtures) {
+      if (other.kind === fixture.kind) continue;
+      assert.notEqual(OPERATION_CODECS[other.kind].planCheck(fixture.plan, ctx), null,
+        `${other.kind} must not accept a ${fixture.kind} plan`);
+      assert.notEqual(OPERATION_CODECS[other.kind].resultCheck(fixture.result), null,
+        `${other.kind} must not accept a ${fixture.kind} result`);
+    }
+    assert.equal(OPERATION_CODECS[fixture.kind].resultCheck(fixture.result), null, `${fixture.kind} rejects its own result`);
+  }
+});
 
 test("all eleven kinds preserve raw bytes and decode consistent state-specific values", () => {
   assert.equal(new Set(fixtures.map(fixture => fixture.kind)).size, 11);

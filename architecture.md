@@ -257,7 +257,7 @@ oma-demo-reconcile.timer + oma-demo-reconcile.service
 
 agent 생성 시 고정 unit 파일을 쓴다. transient unit 이름에 durable agent identity를 의존하지 않는다. 검증된 slug와 상수 인자로만 unit을 생성한다.
 
-broker service는 `Type=notify`로 시작하여 DB 복구·이전 실행 정리·endpoint 준비 후 READY를 알린다. 기존 실행 정리가 끝나기 전에 새 Resident에 권한을 발급하지 않는다. after 의존성이 이 준비 경계를 기다리게 한다. 실제 unit 초안은 [examples/systemd](examples/systemd/)에 함께 둔다.
+broker service는 `Type=notify`로 시작하여 DB 복구·이전 실행 정리·endpoint 준비 후 READY를 알린다. 기존 실행 정리가 끝나기 전에 새 Resident에 권한을 발급하지 않는다. after 의존성이 이 준비 경계를 기다리게 한다. 실제 unit 초안은 [implementation/systemd](implementation/systemd/)에 함께 둔다.
 
 ### 6.2 Resident service 초안
 

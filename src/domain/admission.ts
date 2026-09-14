@@ -19,7 +19,7 @@ export class AdmissionGate {
 const owners = new WeakMap<object, AdmissionGate>();
 export function bindAdmissionGate(owner: object, gate: AdmissionGate): void {
   const previous = owners.get(owner);
-  if (previous && previous !== gate) throw new StoreError("INTERNAL_ERROR", "Store admission gate already has an owner");
+  if (previous && previous !== gate) throw new StoreError("BROKER_UNAVAILABLE", "another broker already owns this store in this process");
   owners.set(owner, gate);
 }
 export function assertNewAcceptance(owner: object): void { owners.get(owner)?.assertAdmission(); }

@@ -25,7 +25,8 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { GitModule } from "../src/git.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker } from "../src/broker.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
+import { removeTree } from "./fixtures/cleanup.js";
 import { encodeFrame } from "../src/frame.js";
 import { sha256Hex } from "../src/hash.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
@@ -63,13 +64,12 @@ function envOf(): Env {
     ] as const) {
       store.insertAgent({
         name,
-        specHash: "h",
+        ...storedSpec(ALL_CAPS, "p", name),
         role,
         desired: "enabled",
         incarnation: 0,
         profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -162,7 +162,7 @@ function envOf(): Env {
       spawnSync("systemctl", ["--user", "reset-failed", `oma-${society}-*`], {
         env: G,
       });
-      rmSync(dir, { recursive: true, force: true });
+      removeTree(dir);
     },
   };
 }

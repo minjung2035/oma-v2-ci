@@ -1,7 +1,6 @@
 // CTX-006: immutable mirror verification must precede derived-pointer repair.
 import { constants, openSync, closeSync, readdirSync, lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import type { ContextEntry } from "../../implementation/contracts.js";
 import type { GitPaths } from "./paths.js";
 import { assertContextDirectory } from "../storage/context-files.js";
@@ -12,15 +11,21 @@ import { contextRevisionPathAt } from "../storage/paths.js";
 import { sha256Hex } from "../hash.js";
 import { contextFileCheck, contextPathCheck } from "../validate.js";
 import { GIT_ENV } from "../process/policies.js";
-import { GIT_BIN, CANONICAL_PROCESS_LIMITS as PROCESS_LIMITS, gitUncertain } from "./canonical-command.js";
+import { runProcessSync } from "../process/run.js";
+import { GIT_BIN, CANONICAL_PROCESS_LIMITS as PROCESS_LIMITS } from "./canonical-command.js";
+function canonicalGit(argv: readonly string[], input?: Uint8Array) {
+  return runProcessSync({ executable: GIT_BIN, argv, env: GIT_ENV, timeoutMs: PROCESS_LIMITS.timeout,
+    stdoutBytes: PROCESS_LIMITS.maxBuffer, stderrBytes: PROCESS_LIMITS.maxBuffer,
+    ...(input === undefined ? {} : { input }) });
+}
 
 /** No silent reconstruction of a missing/corrupt immutable revision. */
 export function repairContextMirror(paths: Pick<GitPaths, "worldDir" | "contextGit">, revision: string): void {
   const immutable = contextRevisionPathAt(paths.worldDir, revision);
   if (!lstatSync(immutable, { throwIfNoEntry: false })) throw new StoreError("REF_STATE_UNKNOWN", "immutable context revision missing; reconcile accepted intent first");
   assertContextDirectory(immutable);
-  const listing = spawnSync(GIT_BIN, ["--git-dir", paths.contextGit, "ls-tree", "-r", "-z", "--full-tree", revision], { ...PROCESS_LIMITS, env: GIT_ENV });
-  if (gitUncertain(listing) || listing.status !== 0) throw new StoreError("REF_STATE_UNKNOWN", "context canonical tree unavailable");
+  const listing = canonicalGit(["--git-dir", paths.contextGit, "ls-tree", "-r", "-z", "--full-tree", revision]);
+  if (listing.kind !== "exited" || listing.exitCode !== 0) throw new StoreError("REF_STATE_UNKNOWN", "context canonical tree unavailable");
   let tree: string;
   try { tree = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(listing.stdout); }
   catch { throw new StoreError("STORE_CORRUPT", "context canonical tree metadata is malformed UTF-8"); }
@@ -45,9 +50,9 @@ export function repairContextMirror(paths: Pick<GitPaths, "worldDir" | "contextG
       let bytes: Buffer;
       try { bytes = readFileSync(fd); } finally { closeSync(fd); }
       if (contextFileCheck(path, bytes)) throw new StoreError("STORE_CORRUPT", `context mirror policy mismatch ${path}`);
-      const canonical = spawnSync(GIT_BIN, ["--git-dir", paths.contextGit, "hash-object", "--stdin"], { ...PROCESS_LIMITS, input: bytes, env: GIT_ENV, encoding: "utf8" });
-      if (gitUncertain(canonical) || canonical.status !== 0) throw new StoreError("REF_STATE_UNKNOWN", "context mirror object hash unavailable");
-      if (canonical.stdout.trim() !== expected.get(path)) throw new StoreError("STORE_CORRUPT", `context mirror bytes differ from canonical revision: ${path}`);
+      const canonical = canonicalGit(["--git-dir", paths.contextGit, "hash-object", "--stdin"], bytes);
+      if (canonical.kind !== "exited" || canonical.exitCode !== 0) throw new StoreError("REF_STATE_UNKNOWN", "context mirror object hash unavailable");
+      if (canonical.stdout.toString("utf8").trim() !== expected.get(path)) throw new StoreError("STORE_CORRUPT", `context mirror bytes differ from canonical revision: ${path}`);
       seen.add(path); entries.push({ path, bytes: bytes.length, sha256: sha256Hex(bytes) });
     }
   };

@@ -1,0 +1,142 @@
+TAP version 13
+# (node:1011) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: P3 Journal integration: every compatibility transition delegates to its mechanism
+ok 1 - P3 Journal integration: every compatibility transition delegates to its mechanism
+  ---
+  duration_ms: 13.830176
+  type: 'test'
+  ...
+# Subtest: P3 Journal integration: compatibility error export retains its single owner
+ok 2 - P3 Journal integration: compatibility error export retains its single owner
+  ---
+  duration_ms: 0.180091
+  type: 'test'
+  ...
+# (node:1023) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: P3 O1: same key/hash returns the original identity and frozen bytes
+ok 3 - P3 O1: same key/hash returns the original identity and frozen bytes
+  ---
+  duration_ms: 11.415885
+  type: 'test'
+  ...
+# Subtest: P3 O1: reused key rejects a different hash without altering the winner
+ok 4 - P3 O1: reused key rejects a different hash without altering the winner
+  ---
+  duration_ms: 3.926434
+  type: 'test'
+  ...
+# Subtest: P3 O1: accepted plan bytes cannot be rewritten in a later transaction
+ok 5 - P3 O1: accepted plan bytes cannot be rewritten in a later transaction
+  ---
+  duration_ms: 3.554924
+  type: 'test'
+  ...
+# Subtest: P3 O1: preparation may update a new pending plan only in its original transaction
+ok 6 - P3 O1: preparation may update a new pending plan only in its original transaction
+  ---
+  duration_ms: 3.473099
+  type: 'test'
+  ...
+# Subtest: P3 O1: terminal success is byte-idempotent and cannot acquire different result bytes
+ok 7 - P3 O1: terminal success is byte-idempotent and cannot acquire different result bytes
+  ---
+  duration_ms: 5.680791
+  type: 'test'
+  ...
+# Subtest: P3 O1: terminal failure is idempotent but never becomes success
+ok 8 - P3 O1: terminal failure is idempotent but never becomes success
+  ---
+  duration_ms: 4.082479
+  type: 'test'
+  ...
+# Subtest: P3 O1: preaccept-only failure cannot settle accepted intent
+ok 9 - P3 O1: preaccept-only failure cannot settle accepted intent
+  ---
+  duration_ms: 2.895368
+  type: 'test'
+  ...
+# Subtest: P3 O1: explicit unknown is stable until an explicit valid transition
+ok 10 - P3 O1: explicit unknown is stable until an explicit valid transition
+  ---
+  duration_ms: 4.935747
+  type: 'test'
+  ...
+# Subtest: P3 O1: rollback spans operation and other entity writes
+ok 11 - P3 O1: rollback spans operation and other entity writes
+  ---
+  duration_ms: 3.107919
+  type: 'test'
+  ...
+# Subtest: P3 O1: malformed accepted rows fail validation before COMMIT
+ok 12 - P3 O1: malformed accepted rows fail validation before COMMIT
+  ---
+  duration_ms: 2.324447
+  type: 'test'
+  ...
+# Subtest: P3 O1: escaped transaction capability cannot borrow a later transaction
+ok 13 - P3 O1: escaped transaction capability cannot borrow a later transaction
+  ---
+  duration_ms: 2.217246
+  type: 'test'
+  ...
+# Subtest: P3 O1: Promise callbacks are refused and their continuation has no write authority
+ok 14 - P3 O1: Promise callbacks are refused and their continuation has no write authority
+  ---
+  duration_ms: 1.895039
+  type: 'test'
+  ...
+# (node:1035) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: P4 facets: frozen descriptors cover all six entities and compatibility writes exactly once
+ok 15 - P4 facets: frozen descriptors cover all six entities and compatibility writes exactly once
+  ---
+  duration_ms: 2.135312
+  type: 'test'
+  ...
+# Subtest: P4 facets: read views remain live, immutable and contain no write capability
+ok 16 - P4 facets: read views remain live, immutable and contain no write capability
+  ---
+  duration_ms: 15.471223
+  type: 'test'
+  ...
+# Subtest: P4 facets: every escaped write and extracted function refuses a later transaction
+ok 17 - P4 facets: every escaped write and extracted function refuses a later transaction
+  ---
+  duration_ms: 3.218195
+  type: 'test'
+  ...
+# Subtest: P4 facets: operation, agent, subscription and usage writes roll back together
+ok 18 - P4 facets: operation, agent, subscription and usage writes roll back together
+  ---
+  duration_ms: 4.402041
+  type: 'test'
+  ...
+# Subtest: P4 facets: admission blocks new intents but permits explicit existing settlement
+ok 19 - P4 facets: admission blocks new intents but permits explicit existing settlement
+  ---
+  duration_ms: 3.888577
+  type: 'test'
+  ...
+# Subtest: P4 facets: escaped asynchronous continuation never borrows fresh root authority
+ok 20 - P4 facets: escaped asynchronous continuation never borrows fresh root authority
+  ---
+  duration_ms: 2.513112
+  type: 'test'
+  ...
+# Subtest: P4 facets: compile-time method separation and argument types remain enforced
+ok 21 - P4 facets: compile-time method separation and argument types remain enforced
+  ---
+  duration_ms: 1373.714367
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1681.863467

@@ -11,8 +11,9 @@ import { DatabaseSync } from "node:sqlite";
 import { Store, StoreError } from "../src/store.js";
 import { GitModule } from "../src/git.js";
 import { MailModule } from "../src/mail.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import type { AuthContext } from "../implementation/contracts.js";
+import { removeTree } from "./fixtures/cleanup.js";
 
 const sha = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 const actor = (name: string): AuthContext => ({ actor: name, incarnation: 0,
@@ -20,9 +21,9 @@ const actor = (name: string): AuthContext => ({ actor: name, incarnation: 0,
   peer: { pid: process.pid, uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0, cgroup: null } });
 
 function seed(store: Store, name: string): void {
-  store.transaction(() => store.insertAgent({ name, specHash: name,
+  store.transaction(() => store.insertAgent({ name, ...storedSpec(ALL_CAPS, "p", name),
     role: name === "principal" ? "principal" : "resident", desired: "enabled", incarnation: 0,
-    profile: "p", createdBy: null, specJson: resolvedSpec(ALL_CAPS, "p", name) }));
+    profile: "p", createdBy: null }));
 }
 
 for (const scenario of [
@@ -77,7 +78,7 @@ for (const scenario of [
       }
       assert.equal(git(["rev-parse", "refs/oma/published/alice/fixture"]), candidate);
       assert.equal(readFileSync(join(repo, scenario.file), "utf8"), "after\n");
-    } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { store.close(); removeTree(root); }
   });
 }
 
@@ -133,6 +134,6 @@ for (const corrupt of [false, true]) {
         } finally { raw.close(); }
       }
       assert.deepEqual(readFileSync(mail.objectPath(plan.message.id as never)), originalObject);
-    } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+    } finally { store.close(); removeTree(root); }
   });
 }

@@ -29,6 +29,13 @@ export function resolvedSpec(capabilities: readonly Capability[], profile: strin
   return JSON.stringify(makeValidResolvedSpec(name, profile, capabilities));
 }
 
+/** A stored agent row must carry the digest of its own frozen spec. Building the
+ * pair together removes the hand-written hash that decoders now reject. */
+export function storedSpec(capabilities: readonly Capability[], profile: string, name: string): { specJson: string; specHash: string } {
+  const spec = makeValidResolvedSpec(name, profile, capabilities);
+  return { specJson: JSON.stringify(spec), specHash: resolvedSpecDigest(spec) };
+}
+
 export function makeValidAgent(
   name = "alice",
   options: Partial<Pick<NewAgent, "desired" | "incarnation" | "profile" | "createdBy">> & {

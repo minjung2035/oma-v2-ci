@@ -15,13 +15,15 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { Store } from "../src/store.js";
+import { requestHash } from "../src/hash.js";
+import { publishedRefFor } from "../src/domain/derived.js";
 import { MailModule } from "../src/mail.js";
 import { UnitsModule } from "../src/units.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { GitModule, type GitPaths } from "../src/git.js";
 import type { Capability } from "../implementation/contracts.js";
-import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 
 const G = {
@@ -53,13 +55,12 @@ function envOf(withGit: boolean): Env {
     ] as const) {
       store.insertAgent({
         name,
-        specHash: "h",
+        ...storedSpec(ALL_CAPS, "p", name),
         role,
         desired,
         incarnation: 1,
         profile: "p",
         createdBy: null,
-        specJson: resolvedSpec(ALL_CAPS, "p", name),
       });
     }
   });
@@ -268,34 +269,38 @@ test("T68b: reconcile never overwrites a moved published ref; ref==candidate rec
       iter(content),
     );
     assert.equal(receipt.state, "succeeded");
-    // moved ref + a fresh pending op: sweep must not touch it
-    const pubRef = (receipt.result as { publishedRef: string }).publishedRef;
-    sh([
-      "--git-dir",
-      join(env.dir, "state", "repos", "project.git"),
-      "update-ref",
-      pubRef,
-      base,
-    ]);
-    const pendId = "op-reconcile-pend";
+    // A second accepted intent whose own immutable published ref was moved by an
+    // external writer: the sweep must report the conflict, never overwrite it.
+    const pendId = "op-00000000-0000-4000-8000-0000000000f1";
+    const pendMessage = `m-00000000-0000-4000-8000-0000000000f1-0`;
+    const pendRef = publishedRefFor("a", pendId);
+    const pendExport = "refs/oma/export/pend";
+    sh(["--git-dir", join(env.dir, "state", "repos", "project.git"), "update-ref", pendRef, C]);
+    sh(["--git-dir", join(env.dir, "state", "repos", "project.git"), "update-ref", pendRef, base]);
+    const pendPayload = { candidate: C, exportRef: pendExport, prerequisites: [], to: [], subject: "moved", body: "", paths: [] };
     env.store.transaction((_t) => {
       env.store.insertOperation({
         id: pendId,
         actor: "a",
         requestKey: "km",
-        requestHash: "h",
+        requestHash: requestHash("git.submit", pendPayload),
         kind: "git.submit",
-        payloadJson: "{}",
+        payloadJson: JSON.stringify(pendPayload),
         planJson: JSON.stringify({
           kind: "git.submit",
           candidate: C,
-          exportRef: "x",
+          exportRef: pendExport,
           prerequisites: [],
           bundle: null,
-          publishedRef: pubRef,
-          message: null,
+          publishedRef: pendRef,
+          message: {
+            id: pendMessage, objectPath: `mail/objects/${pendMessage}.eml`, sha256: "0".repeat(64), bytes: 1, dateMs: 1,
+            to: ["commons"], recipients: ["a"], kind: "result", contextRevision: null,
+            replyHeaders: { replyTo: ["commons"], inReplyTo: null, references: [] },
+          },
         }),
       });
+      env.store.insertDeliveries([{ messageId: pendMessage, recipient: "a", operationId: pendId }]);
     });
     const res = await env.recon.sweep();
     assert.equal(
@@ -303,19 +308,23 @@ test("T68b: reconcile never overwrites a moved published ref; ref==candidate rec
         "--git-dir",
         join(env.dir, "state", "repos", "project.git"),
         "rev-parse",
-        pubRef,
+        pendRef,
       ]),
       base,
     );
-    assert.equal(
-      env.store.transaction((_t) => env.store.getOperationById(pendId))!.state,
-      "failed",
-    );
-    assert.equal(
-      env.store.transaction((_t) => env.store.getOperationById(pendId))!.errorCode,
-      "PUBLISHED_REF_CONFLICT",
-    );
+    // The recovery observer requires the published ref to be present AND equal
+    // to the accepted candidate; a different value means the publication is not
+    // proven, which is an ambiguous outcome (GitPublicationObserver throws
+    // REF_STATE_UNKNOWN), not a proven conflict.
+    const settled = env.store.transaction((_t) => env.store.getOperationById(pendId))!;
+    assert.equal(settled.state, "unknown", settled.state);
+    assert.equal(settled.errorCode, null);
+    assert.equal(settled.resultJson, null);
     assert.ok(res.examined >= 1);
+    // Repeated reconcile converges without touching the moved ref.
+    await env.recon.sweep();
+    assert.equal(sh(["--git-dir", join(env.dir, "state", "repos", "project.git"), "rev-parse", pendRef]), base);
+    assert.equal(env.store.transaction((_t) => env.store.getOperationById(pendId))!.state, settled.state);
   } finally {
     env.seal();
   }
