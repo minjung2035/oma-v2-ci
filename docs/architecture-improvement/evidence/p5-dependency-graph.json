@@ -125,6 +125,7 @@
   "src/runtime/run-registry.ts",
   "src/sandbox.ts",
   "src/storage/batch-view.ts",
+  "src/storage/contained-fs.ts",
   "src/storage/context-files.ts",
   "src/storage/context-snapshot.ts",
   "src/storage/context-stream.ts",
@@ -217,6 +218,7 @@
      "src/process/run.ts",
      "src/protocol/channel.ts",
      "src/storage/batch-view.ts",
+     "src/storage/contained-fs.ts",
      "src/storage/context-files.ts",
      "src/storage/context-snapshot.ts",
      "src/storage/context-stream.ts",
@@ -248,9 +250,9 @@
    "K0-values -> K0-values": 17,
    "K1-codecs -> K0-values": 40,
    "K1-codecs -> K1-codecs": 15,
-   "K2-mechanisms -> K0-values": 40,
+   "K2-mechanisms -> K0-values": 41,
    "K2-mechanisms -> K1-codecs": 5,
-   "K2-mechanisms -> K2-mechanisms": 20,
+   "K2-mechanisms -> K2-mechanisms": 26,
    "K3-ledger -> K0-values": 19,
    "K3-ledger -> K1-codecs": 9,
    "K3-ledger -> K2-mechanisms": 1,
@@ -601,6 +603,11 @@
    {
     "from": "src/storage/batch-view.ts",
     "to": "src/storage/paths.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/storage/contained-fs.ts",
+    "to": "src/domain/errors.ts",
     "kind": "runtime"
    },
    {
@@ -1238,7 +1245,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 68
+   "files": 69
   },
   {
    "index": 2,
@@ -1296,14 +1303,14 @@
    "files": 10
   }
  ],
- "files": 152,
- "runtimeEdges": 554,
+ "files": 153,
+ "runtimeEdges": 562,
  "typeOnlyEdges": 274,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 180,
+  "L1-kernel -> L1-kernel": 187,
   "L2-facts -> L1-kernel": 27,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 157,
+  "L3-workflow -> L1-kernel": 158,
   "L3-workflow -> L2-facts": 12,
   "L3-workflow -> L3-workflow": 47,
   "L4-orchestration -> L1-kernel": 45,
@@ -1349,7 +1356,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 85,
+  "src/domain/errors.ts": 86,
   "src/domain/identifiers.ts": 30,
   "src/ids.ts": 19,
   "src/storage/paths.ts": 18,
@@ -1357,8 +1364,8 @@
   "src/storage/durable-fs.ts": 17,
   "src/store.ts": 17,
   "src/domain/canonical-json.ts": 14,
-  "src/hash.ts": 14,
   "src/authority.ts": 13,
+  "src/hash.ts": 13,
   "src/process/policies.ts": 10,
   "src/storage/directory.ts": 10,
   "src/storage/receipt-projector.ts": 10,
@@ -1366,36 +1373,36 @@
   "src/validate.ts": 9
  },
  "fanOut": {
-  "src/mail.ts": 26,
+  "src/mail.ts": 27,
   "src/broker.ts": 25,
   "src/entry/broker.ts": 17,
   "src/git.ts": 15,
   "src/cli.ts": 14,
+  "src/git/context-repository.ts": 14,
   "src/store.ts": 14,
-  "src/git/context-repository.ts": 13,
   "src/lifecycle/create.ts": 13,
   "src/reconcile.ts": 13,
   "src/git/context.ts": 12,
   "src/git/submit.ts": 12,
   "src/mail/batches.ts": 11,
   "src/git/context-mirror.ts": 10,
-  "src/mail/materializer.ts": 10,
+  "src/storage/context-snapshot.ts": 10,
   "src/git/integration.ts": 9
  },
  "external": {
   "@earendil-works/pi-coding-agent": 1,
-  "koffi": 1,
+  "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 5,
   "node:crypto": 14,
   "node:fs": 33,
   "node:net": 3,
   "node:os": 1,
-  "node:path": 39,
+  "node:path": 38,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:url": 2,
-  "node:util": 1,
+  "node:util": 2,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1
  },

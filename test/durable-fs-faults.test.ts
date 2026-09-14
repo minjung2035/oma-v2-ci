@@ -90,15 +90,13 @@ test("post-link fsync failure leaves immutable evidence for an idempotent retry"
 test("EXDEV partial destination-side copy never exposes partial canonical bytes", { concurrency: false }, t => {
   fixture((root, source, target, bytes) => {
     scoped(t, () => {
-      t.mock.method(fs, "linkSync", (...[from, to]: Parameters<typeof native.link>) => {
-        if (from === source && to === target) throw Object.assign(new Error("cross filesystem"), { code: "EXDEV" });
-        native.link(from, to);
-      });
       t.mock.method(fs, "writeFileSync", (...[file, data, options]: Parameters<typeof native.write>) => {
         if (typeof file === "number") { native.write(file, Buffer.from("partial")); throw eio(); }
         native.write(file, data, options);
       });
-    }, () => assert.throws(() => publishImmutableFile(source, target, sha256Hex(bytes)), isEio));
+    }, () => assert.throws(() => publishImmutableFile(source, target, sha256Hex(bytes), fault => {
+      if (fault.point === "publication-link" && fault.phase === "before") throw Object.assign(new Error("cross filesystem"), { code: "EXDEV" });
+    }), isEio));
     assert.equal(fs.existsSync(target), false);
     assert.deepEqual(fs.readFileSync(source), bytes);
     assert.deepEqual(fs.readdirSync(root), ["source.eml"]);

@@ -1,5 +1,5 @@
 // MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
-import { mkdirSync, readFileSync, lstatSync, rmSync } from "node:fs";
+import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
 import { Store } from "./store.js";
@@ -12,7 +12,7 @@ import { mailObjectFileName } from "./domain/derived.js";
 import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "./storage/paths.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
-import { publishImmutableFile } from "./storage/immutable-file.js";
+import { publishImmutableFile, readImmutableBytes } from "./storage/immutable-file.js";
 import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { expandAddresses, logicalReplyAddress } from "./mail/routing.js";
@@ -88,10 +88,10 @@ export class MailModule {
       kind: input.kind, contextRevision: input.refs?.find(reference => reference.repo === "context")?.oid ?? null,
       replyHeaders, ...(input.approvalFor === undefined ? {} : { approvalFor: input.approvalFor }),
     }, { subject: input.subject, body: input.body });
-    const staging = join(this.paths.stateRoot, "staging", `send-${key}`); mkdirSync(staging, { recursive: true });
+    const staging = join(this.paths.stateRoot, "staging", `send-${key}`); ensureDirectory(staging);
     const staged = join(staging, mailObjectFileName(messageId)); writeFsynced(staged, eml.text);
     try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256); }
-    finally { rmSync(staged, { force: true }); fsyncDir(staging); }
+    finally { removeOwnedFile(staged); }
     const txClaim = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth, "mail.send");
       const current = this.store.claimKey(auth.actor, key, newHash);
@@ -124,16 +124,14 @@ export class MailModule {
     return messagePlanFrom(eml, [recipient]);
   }
   publishCreateInitial(message: MessagePlan): void {
-    const object = this.objectPath(message.id); const stat = lstatSync(object, { throwIfNoEntry: false });
-    if (!stat?.isFile() || stat.size !== message.bytes || sha256Hex(readFileSync(object)) !== message.sha256)
-      throw new StoreError("STORE_CORRUPT", `create initial object mismatch: ${message.id}`);
+    readImmutableBytes(this.objectPath(message.id), message.sha256, message.bytes);
   }
   freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): void {
-    const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); mkdirSync(stagingDir, { recursive: true });
+    const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); ensureDirectory(stagingDir);
     const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
     writeFsynced(staged, eml.text);
     try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256 ?? sha256Hex(eml.text)); }
-    finally { rmSync(staged, { force: true }); fsyncDir(stagingDir); }
+    finally { removeOwnedFile(staged); }
   }
   async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> { this.materializer.gated(operationId, proof); }
   async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }

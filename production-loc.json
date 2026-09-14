@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0583510398864746,
-  "n_files"            : 151,
-  "n_lines"            : 14870,
-  "files_per_second"   : 2587.78592967288,
-  "lines_per_second"   : 254836.932279707,
+  "elapsed_seconds"    : 0.0589208602905273,
+  "n_files"            : 152,
+  "n_lines"            : 15175,
+  "files_per_second"   : 2579.73151190457,
+  "lines_per_second"   : 257548.85324442,
   "report_file"        : "production-loc.json"},
 "src/durable.ts" :{
   "blank": 5,
@@ -47,6 +47,11 @@
   "comment": 16,
   "code": 245,
   "language": "TypeScript"},
+"src/git/context-repository.ts" :{
+  "blank": 4,
+  "comment": 10,
+  "code": 241,
+  "language": "TypeScript"},
 "src/broker/internal-dispatcher.ts" :{
   "blank": 1,
   "comment": 2,
@@ -56,11 +61,6 @@
   "blank": 7,
   "comment": 8,
   "code": 222,
-  "language": "TypeScript"},
-"src/git/context-repository.ts" :{
-  "blank": 4,
-  "comment": 9,
-  "code": 221,
   "language": "TypeScript"},
 "src/git/integration.ts" :{
   "blank": 5,
@@ -102,6 +102,11 @@
   "comment": 5,
   "code": 183,
   "language": "TypeScript"},
+"src/storage/immutable-file.ts" :{
+  "blank": 2,
+  "comment": 10,
+  "code": 180,
+  "language": "TypeScript"},
 "src/protocol/channel.ts" :{
   "blank": 1,
   "comment": 9,
@@ -135,7 +140,7 @@
 "src/git/submit.ts" :{
   "blank": 2,
   "comment": 6,
-  "code": 165,
+  "code": 163,
   "language": "TypeScript"},
 "src/diagnostics/files.ts" :{
   "blank": 2,
@@ -155,7 +160,7 @@
 "src/storage/durable-fs.ts" :{
   "blank": 11,
   "comment": 40,
-  "code": 156,
+  "code": 151,
   "language": "TypeScript"},
 "src/broker/composition.ts" :{
   "blank": 4,
@@ -170,17 +175,32 @@
 "src/mail.ts" :{
   "blank": 1,
   "comment": 1,
-  "code": 142,
+  "code": 140,
   "language": "TypeScript"},
 "src/mail/headers.ts" :{
   "blank": 4,
   "comment": 14,
   "code": 140,
   "language": "TypeScript"},
+"src/storage/context-stream.ts" :{
+  "blank": 4,
+  "comment": 17,
+  "code": 137,
+  "language": "TypeScript"},
 "src/lifecycle/actions.ts" :{
   "blank": 5,
   "comment": 9,
   "code": 136,
+  "language": "TypeScript"},
+"src/storage/submit-spool.ts" :{
+  "blank": 3,
+  "comment": 12,
+  "code": 136,
+  "language": "TypeScript"},
+"src/storage/contained-fs.ts" :{
+  "blank": 1,
+  "comment": 15,
+  "code": 135,
   "language": "TypeScript"},
 "src/domain/derived.ts" :{
   "blank": 11,
@@ -196,16 +216,6 @@
   "blank": 4,
   "comment": 1,
   "code": 124,
-  "language": "TypeScript"},
-"src/storage/context-stream.ts" :{
-  "blank": 4,
-  "comment": 16,
-  "code": 124,
-  "language": "TypeScript"},
-"src/storage/submit-spool.ts" :{
-  "blank": 3,
-  "comment": 9,
-  "code": 122,
   "language": "TypeScript"},
 "src/protocol/batch-view.ts" :{
   "blank": 1,
@@ -225,17 +235,17 @@
 "src/mail/materializer.ts" :{
   "blank": 2,
   "comment": 3,
-  "code": 114,
+  "code": 110,
+  "language": "TypeScript"},
+"src/process/async.ts" :{
+  "blank": 1,
+  "comment": 14,
+  "code": 109,
   "language": "TypeScript"},
 "src/mail/batches.ts" :{
   "blank": 1,
   "comment": 1,
   "code": 108,
-  "language": "TypeScript"},
-"src/process/async.ts" :{
-  "blank": 1,
-  "comment": 13,
-  "code": 106,
   "language": "TypeScript"},
 "implementation/schema-v1.sql" :{
   "blank": 0,
@@ -264,8 +274,8 @@
   "language": "TypeScript"},
 "src/git/quarantine.ts" :{
   "blank": 2,
-  "comment": 5,
-  "code": 95,
+  "comment": 7,
+  "code": 96,
   "language": "TypeScript"},
 "src/domain/persisted-formats.ts" :{
   "blank": 10,
@@ -282,11 +292,6 @@
   "comment": 4,
   "code": 91,
   "language": "TypeScript"},
-"src/storage/immutable-file.ts" :{
-  "blank": 2,
-  "comment": 16,
-  "code": 90,
-  "language": "TypeScript"},
 "src/mail/facts.ts" :{
   "blank": 5,
   "comment": 8,
@@ -302,14 +307,14 @@
   "comment": 11,
   "code": 83,
   "language": "TypeScript"},
-"src/storage/context-snapshot.ts" :{
-  "blank": 2,
-  "comment": 12,
-  "code": 83,
-  "language": "TypeScript"},
 "src/protocol/response-codec.ts" :{
   "blank": 2,
   "comment": 5,
+  "code": 81,
+  "language": "TypeScript"},
+"src/storage/context-snapshot.ts" :{
+  "blank": 2,
+  "comment": 12,
   "code": 81,
   "language": "TypeScript"},
 "src/lifecycle/workspace.ts" :{
@@ -345,6 +350,11 @@
 "src/broker/transport-spool.ts" :{
   "blank": 2,
   "comment": 2,
+  "code": 76,
+  "language": "TypeScript"},
+"src/storage/directory.ts" :{
+  "blank": 4,
+  "comment": 12,
   "code": 76,
   "language": "TypeScript"},
 "src/storage/paths.ts" :{
@@ -402,11 +412,6 @@
   "comment": 16,
   "code": 62,
   "language": "TypeScript"},
-"src/storage/context-files.ts" :{
-  "blank": 2,
-  "comment": 12,
-  "code": 61,
-  "language": "TypeScript"},
 "src/storage/transaction.ts" :{
   "blank": 3,
   "comment": 7,
@@ -451,6 +456,11 @@
   "blank": 0,
   "comment": 2,
   "code": 52,
+  "language": "TypeScript"},
+"src/storage/context-files.ts" :{
+  "blank": 2,
+  "comment": 9,
+  "code": 50,
   "language": "TypeScript"},
 "src/entry/runner.ts" :{
   "blank": 1,
@@ -501,11 +511,6 @@
   "blank": 0,
   "comment": 4,
   "code": 42,
-  "language": "TypeScript"},
-"src/storage/directory.ts" :{
-  "blank": 3,
-  "comment": 9,
-  "code": 40,
   "language": "TypeScript"},
 "src/units/execute.ts" :{
   "blank": 1,
@@ -763,7 +768,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 456,
-  "comment": 909,
-  "code": 13505,
-  "nFiles": 151} }
+  "blank": 458,
+  "comment": 926,
+  "code": 13791,
+  "nFiles": 152} }

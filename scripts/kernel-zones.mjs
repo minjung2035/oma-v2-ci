@@ -68,6 +68,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/process/run.ts",
       "src/protocol/channel.ts",
       "src/storage/batch-view.ts",
+      "src/storage/contained-fs.ts",
       "src/storage/context-files.ts",
       "src/storage/context-snapshot.ts",
       "src/storage/context-stream.ts",

@@ -1,9 +1,38 @@
 # OMA v2 — 현재 검증 상태
 
-**최신 로컬 전체 테스트와 fast lane은 PASS. 실제 환경 적합성 및 release는 미인증이다.**
-이 파일은 현재 검증 상태의 단일 기록 위치다. 명령 색인은 [루트 validation.md](../validation.md), 재개 작업은 [HANDOFF.md](../HANDOFF.md), 변경 상세는 [P23 기록](../docs/architecture-improvement/p23-contract-ownership.md)을 따른다.
+**P24 현재 source의 전체 테스트와 fast lane은 PASS. 실제 환경 적합성 및 release는 미인증이다.**
+이 파일은 현재 검증 상태의 단일 기록 위치다. 명령 색인은 [루트 validation.md](../validation.md), 재개 작업은 [HANDOFF.md](../HANDOFF.md), 최신 변경·비보장 범위는 [P24 기록](../docs/architecture-improvement/p24-filesystem-containment.md)을 따른다.
 
-## 1. 마지막 전체 실행의 source와 환경
+## 0. 현재 P24 실행
+
+- 실행일: **2026-09-14**. HEAD: **`a9bf98d21f785d6773ebd81b50938951356629d6` + P24 working tree** (`git rev-parse --short HEAD`: `a9bf98d`). 신규 미커밋 파일을 포함했다.
+- 환경: Linux x64, Node **26.7.0**, TypeScript **5.9.3**, cloc **2.08**.
+- 기존 공개/내부 wire·durable 계약, DB schema, package/lock 파일은 변경하지 않았다. P23의 type-only emit 동일성 주장은 이번 runtime 보강에 적용하지 않는다.
+- Full 후 fast를 실행했으며, 결과 기록 직전 **387개 fast source digest**, **152개 production digest**와 manifest hash가 모두 일치했다. 이후 pin 차이는 이 문서의 최종 결과 기록뿐이다. 실행 당시 본문은 `/tmp/oma-fs-final.GTA09Z/validation-before.md`, hash는 fast raw result에 남긴다. 코드·테스트·도구와 VAL 규범 문구는 변경하지 않았다.
+
+| 실제 명령/검사 | 결과 | 범위 |
+|---|---|---|
+| `npm run typecheck` | PASS | project-wide pinned compiler |
+| `npm run build` / `check:package` | PASS | compile/static package; entrypoint 부팅 증거 아님 |
+| `npm run check:architecture` | PASS, 0 findings | inventory, freshness, ownership/kernel/lattice, transaction |
+| `npm test` | **906/906 PASS** | 약 270초; fail/cancelled/skipped/todo 모두 0 |
+| `npm run verify:fast -- --out <new-dir>` | **106/106 PASS** | 새 output, required-name 검사; fail/cancelled/skipped/todo 모두 0 |
+| `node scripts/loc.mjs` | **152 files / 13,791 code LOC** | inventory/LOC/hash 및 dependency graph 재생성 |
+| 새 filesystem 회귀 | **6/6 PASS** | 32개 독립 native-process ABI 검사 포함 |
+| 이전 SIGSEGV 경계 반복 | **20/20 PASS** | 4개 crash boundary를 5회 재실행 |
+
+개발 중 중간 전체 실행은 26건이 실패했다. mount namespace 사이 fd 직접 bind를 기존 bounded private tmpfs의 fd-copy로 교정했고, GDB로 `syscall`의 미전달 인자 슬롯 읽기를 확인한 뒤 사용하지 않는 두 인자를 명시했다. 이 수정 후 위 전체 실행을 새로 수행했다. `/tmp/oma-fs-verify.uxUgNV`와 `oma-fs-final-focus.log`의 중간 결과는 PASS 증거가 아니다.
+
+| Raw artifact | SHA-256 |
+|---|---|
+| `/tmp/oma-fs-final.GTA09Z/full.log` | `9e3bcfa71e6681a1271d637352631dc1d17217ace3d7901eca85117db34e0cf7` |
+| `/tmp/oma-fs-final.GTA09Z/fast/result.json` | `104cddce522ef9565574615c612c2c6ac203db8daf2b48419fbbe6c6557a2aa2` |
+| `/tmp/oma-fs-final.GTA09Z/loc.log` | `696fa5cd6fc739904d9e55a47bcc95b24b2c22c781b7c7d8a8ec972f7b383d6a` |
+| `/tmp/oma-fs-registers-5.log` (원인 진단) | `7e7176b97138ffc0c467c437b13f08cb80bea581464d09490926913f3fab35ef` |
+
+선택한 staging/파일 handoff의 dirfd/bytes 경계만 검증했다. 같은 inode의 내용 변경, process memory, 전체 Git/SQLite VFS, 실제 systemd/provider/VM power-loss 및 release는 검증 범위가 아니다. 기존 OPEN 게이트는 아래 §3대로 유지한다. `/tmp` artifact의 영구 보존은 보장하지 않는다.
+
+## 1. 과거 P23 실행의 source와 환경
 
 - 실행일: **2026-09-14**.
 - 실행 당시 Git HEAD: **`dd7905bd8aef1e005a8279b4a9589f3e1a854d9a` + P23 working-tree 변경**. 미커밋 신규 파일도 실행 source에 포함했다.
@@ -27,7 +56,7 @@
 최초 P23 전체 실행은 **898/899 PASS**였다. 새 gate가 기존 CFG-005 canonical vocabulary alias를 과도하게 거부했으므로, 공개 선언을 바꾸지 않고 정확한 세 alias만 보존하도록 교정했다. 추가 참조/port 직접 참조를 거부하는 fixture를 추가하고 graph·LOC 재생성 후 전체 suite와 fast를 재실행했다. 중간 실패 `/tmp/oma-p23-verified.GlFqCE/full.log`는 최종 PASS가 아니다.
 푸시 직전 `scripts/architecture-check.mjs`, `test/internal-port-contracts.test.mjs`의 source pin 변경을 발견하여 현재 source로 전체 suite와 fast를 다시 실행했다. 위 결과와 raw artifact는 이 재검증을 가리킨다. Production/LOC source digest는 그대로 일치했다.
 
-## 2. Artifact와 freshness
+## 2. 과거 P23 artifact와 freshness
 
 | 자료 | 해석 |
 |---|---|
@@ -50,7 +79,7 @@ Artifact가 없어졌다면 같은 명령을 새 output directory에서 실행�
 
 ## 3. 남은 검증과 release 게이트
 
-- `verify:durable`, `verify:property`, `verify:kernel`, `verify:crash`, `verify:stress`, `verify:all`: 이번 P23 작업에서 **lane 단위 NOT_RUN**. 일부 소속 tests를 `npm test`로 실행한 것과 lane의 environment/required evidence 완료는 다르다.
+- `verify:durable`, `verify:property`, `verify:kernel`, `verify:crash`, `verify:stress`, `verify:all`: 이번 P24 작업에서 **lane 단위 NOT_RUN**. 일부 소속 tests를 `npm test`로 실행한 것과 lane의 environment/required evidence 완료는 다르다.
 - VM power-cut 실제 prepare/reboot/verify, ENOSPC, read-only remount, backup/restore 및 live systemd/cgroup 관측: **NOT_RUN/환경 준비 필요**. 기존 guard/process-crash oracle을 실제 전원단절 proof로 취급하지 않는다.
 - S-01/S-01-CANDIDATE isolation·descendant·resource, S-02 Human Pi attach, S-03 trusted consumption, S-04 provider codec/accounting: 실제 환경 evidence 없이 OPEN을 해제하지 않는다.
 - S-05/S-06 hostile import·kernel containment·crash/backup 경계, S-08/S-10 tiered attestation, S-11 clean-room, S-09 품질·비용·latency: 각 [SPIKE 계약](spikes.md)의 남은 조건을 유지한다. 유료 provider와 host reboot는 이번에 실행하지 않았다.
@@ -59,6 +88,7 @@ Artifact가 없어졌다면 같은 명령을 새 output directory에서 실행�
 
 ## 4. 과거 기록의 위치
 
+- [P23 검증 snapshot](https://github.com/minjung2035/oma-v2/blob/a9bf98d21f785d6773ebd81b50938951356629d6/implementation/validation.md)과 [소유권 기록](../docs/architecture-improvement/p23-contract-ownership.md): §1–2의 이전 source/PASS를 보존하며 현재 P24 결과와 구분한다.
 - [P16–P22 검증 snapshot](https://github.com/minjung2035/oma-v2/blob/dd7905bd8aef1e005a8279b4a9589f3e1a854d9a/implementation/validation.md)과 [정제 기록](../docs/architecture-improvement/p16-p22-refinement.md): 이전 PASS와 당시 source를 보존한다.
 - [P10–P15 검증 snapshot](https://github.com/minjung2035/oma-v2/blob/6b3583814e1586da1efac06559914ef5556d4ebb/implementation/validation.md)과 [당시 실행 보고서](../docs/architecture-improvement/p10-p15-adversarial-review.md): 이번 결과와 구분해 보존한다.
 - [문서 정리 전 검증 snapshot](https://github.com/minjung2035/oma-v2/blob/930053c307785106b0a881975cad596c943e8ac1/implementation/validation.md): C01–C07 source-only 당시 상태.

@@ -7,6 +7,8 @@ export interface AsyncProcessOptions {
   readonly signal?: AbortSignal;
   /** Pinned preparation commands may own a Linux process group, never a systemd scope. */
   readonly processGroup?: boolean;
+  /** Owned file capabilities mapped to child descriptors 3, 4, ...; never pathname reopens. */
+  readonly inheritedFds?: readonly number[];
 }
 export interface ProcessTask {
   readonly result: Promise<ProcessObservation>;
@@ -24,6 +26,8 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   const ownGroup = options.processGroup === true;
   if (ownGroup && process.platform !== "linux") throw new TypeError("owned process-group preparation requires Linux");
   const signal = options.signal;
+  const inheritedFds = [...(options.inheritedFds ?? [])];
+  if (inheritedFds.some(fd => !Number.isInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");
   const started = performance.now();
   let resolveResult!: (value: ProcessObservation) => void;
   let resolveClosed!: () => void;
@@ -36,7 +40,7 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
   let child: ReturnType<typeof spawn>;
   try {
     child = spawn(spec.executable, [...spec.argv], { cwd: spec.cwd, env: { ...spec.env }, shell: false,
-      detached: ownGroup, stdio: ["pipe", "pipe", "pipe"] });
+      detached: ownGroup, stdio: ["pipe", "pipe", "pipe", ...inheritedFds] });
   } catch (error) { resolveResult(empty("spawn-failed", error)); resolveClosed(); return { result, closed, cancel() {} }; }
   const out: Buffer[] = [], err: Buffer[] = [];
   let outBytes = 0, errBytes = 0, outLimited = false, errLimited = false;

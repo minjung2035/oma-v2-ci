@@ -55,7 +55,7 @@ export class GitModule {
     this.submissionCoordinator = new SubmitCoordinator(paths, store, mail, {
       verifyObjectFormat: oids => { this.objectFormat(paths.projectGit, oids); },
       canonicalHas: candidate => this.canonicalHas(candidate),
-      quarantineImport: (path, candidate, exportRef, prerequisites) => this.quarantineImport(path, candidate, exportRef, prerequisites),
+      quarantineImport: (fd, candidate, exportRef, prerequisites) => this.quarantineImport(fd, candidate, exportRef, prerequisites),
       publishRef: (ref, candidate) => this.publishRef(ref, candidate),
       observeRef: ref => this.observations.ref(paths.projectGit, ref),
     }, new GitPublicationObserver(this.observations, paths.projectGit));
@@ -94,8 +94,8 @@ export class GitModule {
     const value = this.observations.commit(this.paths.projectGit, oid);
     return value.kind === "absent" ? false : observed(value, "canonical commit");
   }
-  private quarantineImport(bundlePath: string, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): Promise<void> {
-    return this.quarantine.importBundle(bundlePath, candidate, exportRef, prerequisites);
+  private quarantineImport(bundleFd: number, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): Promise<void> {
+    return this.quarantine.importBundle(bundleFd, candidate, exportRef, prerequisites);
   }
   private publishRef(ref: string, candidate: Oid): void {
     const current = this.observations.ref(this.paths.projectGit, ref);

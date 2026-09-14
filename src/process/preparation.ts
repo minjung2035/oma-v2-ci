@@ -23,14 +23,14 @@ export class PreparationExecutor {
   private active = false;
   private uncertain = false;
   get blocked(): boolean { return this.active || this.uncertain; }
-  async run(source: CommandSpec, signal?: AbortSignal): Promise<ProcessObservation> {
+  async run(source: CommandSpec, signal?: AbortSignal, inheritedFds: readonly number[] = []): Promise<ProcessObservation> {
     const command = snapshotCommand(source);
     if (this.blocked) throw new StoreError("REF_STATE_UNKNOWN", "a prior preparation is active or has an uncertain outcome");
     if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "preparation requires the existing Linux process model");
     if (signal?.aborted) throw new StoreError("CANCELLED_BEFORE_COMMIT", "preparation was cancelled before child creation");
     this.active = true;
     try {
-      const task = startProcess(command, { processGroup: true, ...(signal === undefined ? {} : { signal }) });
+      const task = startProcess(command, { processGroup: true, inheritedFds, ...(signal === undefined ? {} : { signal }) });
       const closure = task.result.then(observation => {
         if (observation.kind !== "exited") uncertainNativePreparation = true;
         return task.closed;

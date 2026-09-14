@@ -1,10 +1,10 @@
-/** Filesystem shape checks only: no artifact authority, ledger access, or
- * openat2/S-06 proof. A hostile concurrent parent replacement still requires a
- * kernel containment primitive; observing parents is not a substitute for it.
+/** Directory traversal uses held descriptors and kernel no-symlink resolution.
+ * These capabilities protect namespace traversal, not same-inode writes or S-06 durability.
  */
-import { lstatSync, mkdirSync } from "node:fs";
-import { isAbsolute, join, parse } from "node:path";
+import { constants, closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, readdirSync, rmdirSync, unlinkSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { StoreError } from "../domain/errors.js";
+import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
 
 function componentsOf(path: string): { root: string; components: string[] } {
   if (!isAbsolute(path) || path.includes("\0"))
@@ -18,13 +18,11 @@ function componentsOf(path: string): { root: string; components: string[] } {
 }
 
 export function assertDirectory(path: string): void {
-  const { root, components } = componentsOf(path);
-  let current = root;
-  for (const component of components) {
-    current = join(current, component);
-    const stat = lstatSync(current, { throwIfNoEntry: false });
-    if (!stat?.isDirectory() || stat.isSymbolicLink())
-      throw new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
+  componentsOf(path);
+  try { closeSync(openDirectory(path)); }
+  catch (error) {
+    if (error instanceof StoreError) throw error;
+    throw new StoreError("STORE_CORRUPT", `directory type mismatch: ${path}`);
   }
 }
 
@@ -38,15 +36,57 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
   const { root, components } = componentsOf(path);
   const created: string[] = [];
   let current = root;
-  for (const component of components) {
-    current = join(current, component);
-    if (!lstatSync(current, { throwIfNoEntry: false })) {
-      try { mkdirSync(current, { mode }); created.push(current); }
+  let parent = openDirectory(root);
+  try {
+    for (const component of components) {
+      current = join(current, component);
+      try { mkdirSync(entryAt(parent, component), { mode }); created.push(current); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+      let child: number;
+      try { child = openBeneath(parent, component, constants.O_RDONLY | constants.O_DIRECTORY); }
+      catch (error) {
+        if (error instanceof StoreError) throw error;
+        throw new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
+      }
+      closeSync(parent); parent = child;
     }
-    const stat = lstatSync(current, { throwIfNoEntry: false });
-    if (!stat?.isDirectory() || stat.isSymbolicLink())
-      throw new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
-  }
-  return created;
+    return created;
+  } finally { closeSync(parent); }
+}
+
+/** Only for caller-owned unaccepted/temporary artifacts. Never collect accepted evidence.
+ * Readdir, chmod and removal stay under held directories; links are not traversed.
+ */
+export function removeOwnedTree(path: string): void {
+  let parent: number;
+  try { parent = openDirectory(dirname(path)); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+  try {
+    if (!lstatSync(entryAt(parent, basename(path)), { throwIfNoEntry: false })) return;
+    const walk = (directory: number): void => {
+      fchmodSync(directory, 0o700);
+      for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
+        const entry = entryAt(directory, name); const stat = lstatSync(entry);
+        if (stat.isDirectory()) {
+          const child = openBeneath(directory, name, constants.O_RDONLY | constants.O_DIRECTORY);
+          try { walk(child); } finally { closeSync(child); }
+          rmdirSync(entry);
+        } else if (stat.isFile()) unlinkSync(entry);
+        else throw new StoreError("STORE_CORRUPT", "owned staging holds a non-regular entry");
+      }
+      fsyncSync(directory);
+    };
+    const root = openBeneath(parent, basename(path), constants.O_RDONLY | constants.O_DIRECTORY);
+    try { walk(root); } finally { closeSync(root); }
+    rmdirSync(entryAt(parent, basename(path))); fsyncSync(parent);
+  } finally { closeSync(parent); }
+}
+/** Remove a caller-owned leaf without traversing a replaced parent. */
+export function removeOwnedFile(path: string): void {
+  const parent = openDirectory(dirname(path));
+  try {
+    try { unlinkSync(entryAt(parent, basename(path))); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    fsyncSync(parent);
+  } finally { closeSync(parent); }
 }

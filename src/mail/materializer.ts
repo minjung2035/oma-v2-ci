@@ -1,10 +1,9 @@
-import { lstatSync, readFileSync } from "node:fs";
+import { lstatSync } from "node:fs";
 import type { Address, MessagePlan } from "../../implementation/contracts.js";
 import { Store, type DeliveryRow, type OperationRow } from "../store.js";
 import { StoreError } from "../domain/errors.js";
-import { sha256Hex } from "../hash.js";
 import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "../storage/paths.js";
-import { publishImmutableFile } from "../storage/immutable-file.js";
+import { publishImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
 import { parseDisplayedAddress } from "./addresses.js";
 import { parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
 import { consumeSubmissionPublication, type SubmissionPublicationEvidence } from "../git/publication.js";
@@ -29,10 +28,7 @@ export class MailMaterializer {
   constructor(private readonly store: Store, private readonly stateRoot: string, private readonly society: string) {}
   headers(message: MessagePlan): ParsedEmlHeaders {
     const path = mailObjectPathAt(this.stateRoot, message.id);
-    const stat = lstatSync(path, { throwIfNoEntry: false });
-    if (!stat?.isFile() || stat.size !== message.bytes) throw new StoreError("STORE_CORRUPT", `mail object size/type mismatch: ${message.id}`);
-    const bytes = readFileSync(path);
-    if (sha256Hex(bytes) !== message.sha256) throw new StoreError("STORE_CORRUPT", `mail object hash mismatch: ${message.id}`);
+    const bytes = readImmutableBytes(path, message.sha256, message.bytes);
     let headers: ParsedEmlHeaders;
     try { headers = parseEmlHeaders(bytes, { maxHeaderBytes: message.bytes }); }
     catch { throw new StoreError("STORE_CORRUPT", `unsupported or corrupt accepted mail headers: ${message.id}`); }

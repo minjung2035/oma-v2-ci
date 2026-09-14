@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { assertDirectory, ensureDirectory } from "./directory.js";
+import { entryAt, openBeneath, openDirectory, openRegularBeneath } from "./contained-fs.js";
 
 /** P7 durability fault seam. It is confined to these leaf primitives and their
  * one publication caller; no workflow constructor carries it and production
@@ -48,13 +49,8 @@ export function faultAt(observer: DurabilityObserver | undefined, point: Durabil
 export const isDurabilityFault = (error: unknown): error is DurabilityFaultError => error instanceof DurabilityFaultError;
 
 export function fsyncDir(directory: string, faults?: DurabilityObserver): void {
-  assertDirectory(directory);
-  const observed = lstatSync(directory);
-  const fd = openSync(directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  const fd = openDirectory(directory);
   try {
-    const current = fstatSync(fd);
-    if (!current.isDirectory() || current.dev !== observed.dev || current.ino !== observed.ino)
-      throw new StoreError("STORE_CORRUPT", `directory changed before fsync: ${directory}`);
     faultAt(faults, "directory-fsync", "ambiguous", directory);
     fsyncSync(fd);
     faultAt(faults, "directory-fsync", "after-visible", directory);
@@ -77,15 +73,11 @@ export function ensureDurableDirectory(directory: string, mode = 0o755, faults?:
 }
 
 export function fsyncFile(path: string, faults?: DurabilityObserver): void {
-  assertDirectory(dirname(path));
-  const observed = lstatSync(path);
-  if (!observed.isFile() || observed.isSymbolicLink())
-    throw new StoreError("STORE_CORRUPT", `non-regular file: ${path}`);
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  const parent = openDirectory(dirname(path));
+  let fd: number;
+  try { fd = openRegularBeneath(parent, basename(path)); }
+  finally { closeSync(parent); }
   try {
-    const current = fstatSync(fd);
-    if (!current.isFile() || current.dev !== observed.dev || current.ino !== observed.ino)
-      throw new StoreError("STORE_CORRUPT", `file changed before fsync: ${path}`);
     faultAt(faults, "file-fsync", "ambiguous", path);
     fsyncSync(fd);
     faultAt(faults, "file-fsync", "after-visible", path);
@@ -117,20 +109,32 @@ function cleanupAfterFailure(path: string, failure: unknown, faults?: Durability
  * caller owns the staging name and its later unlink/parent flush. No accepted
  * evidence is collected and no existing name is removed on an EEXIST failure.
  */
-export function writeExclusiveFsyncedFile(path: string, bytes: string | Uint8Array, mode = 0o600, faults?: DurabilityObserver): void {
-  assertDirectory(dirname(path));
-  faultAt(faults, "file-create", "before", path);
-  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
-  faultAt(faults, "file-create", "after-visible", path);
+export function writeExclusiveFsyncedFile(path: string, bytes: string | Uint8Array, mode = 0o600, faults?: DurabilityObserver, use?: (fd: number) => void): void {
+  const parent = openDirectory(dirname(path));
+  let fd: number | undefined;
   try {
+    faultAt(faults, "file-create", "before", path);
+    fd = openBeneath(parent, basename(path), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+    faultAt(faults, "file-create", "after-visible", path);
     faultAt(faults, "file-write", "before", path);
     writeFileSync(fd, bytes);
     faultAt(faults, "file-write", "ambiguous", path);
+    use?.(fd);
     faultAt(faults, "file-fsync", "ambiguous", path);
     fsyncSync(fd);
     faultAt(faults, "file-fsync", "after-visible", path);
-  } catch (error) { cleanupAfterFailure(path, error, faults); }
-  finally { closeSync(fd); }
+  } catch (error) {
+    if (fd === undefined || isDurabilityFault(error)) throw error;
+    try {
+      unlinkSync(entryAt(parent, basename(path)));
+      faultAt(faults, "temporary-cleanup", "after-visible", path);
+      fsyncSync(parent);
+    } catch (cleanup) { throw new AggregateError([error, cleanup], "filesystem effect and owned cleanup failed"); }
+    throw error;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    closeSync(parent);
+  }
 }
 
 /** Derived-only replacement: exclusive temporary -> file fsync -> close ->
@@ -174,34 +178,25 @@ export type TreeFlushPolicy = "regular-files" | "context-single-link" | "workspa
  * Workspace symlinks are never followed: their containing directory is flushed.
  * Current pointers use their separate parent-only publication primitive.
  */
-export function fsyncTree(root: string, policy: TreeFlushPolicy = "regular-files", faults?: DurabilityObserver): void {
-  assertDirectory(root);
-  const walk = (path: string): void => {
-    const observed = lstatSync(path);
-    if (!observed.isDirectory()) throw new StoreError("STORE_CORRUPT", "invalid fsync tree directory");
-    const directory = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    try {
-      const opened = fstatSync(directory);
-      if (!opened.isDirectory() || opened.dev !== observed.dev || opened.ino !== observed.ino)
-        throw new StoreError("STORE_CORRUPT", "fsync tree directory changed before open");
-      const pinned = `/proc/self/fd/${directory}`;
-      for (const name of readdirSync(pinned)) {
-        const child = join(pinned, name);
-        const entry = lstatSync(child);
-        if (entry.isDirectory()) { walk(child); continue; }
-        if (entry.isSymbolicLink() && policy === "workspace-links") continue;
-        if (!entry.isFile()) throw new StoreError("STORE_CORRUPT", `unsupported fsync tree entry: ${name}`);
-        const file = openSync(child, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-        try {
-          const current = fstatSync(file);
-          if (!current.isFile() || current.dev !== entry.dev || current.ino !== entry.ino ||
-            (policy === "context-single-link" && current.nlink !== 1))
-            throw new StoreError("STORE_CORRUPT", `fsync tree identity/link mismatch: ${name}`);
-          fsyncSync(file);
-        } finally { closeSync(file); }
-      }
-      fsyncSync(directory);
-    } finally { closeSync(directory); }
+export function fsyncTree(root: string | number, policy: TreeFlushPolicy = "regular-files", faults?: DurabilityObserver): void {
+  const walk = (directory: number): void => {
+    for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
+      const entry = lstatSync(entryAt(directory, name));
+      if (entry.isSymbolicLink() && policy === "workspace-links") continue;
+      const child = entry.isDirectory()
+        ? openBeneath(directory, name, constants.O_RDONLY | constants.O_DIRECTORY)
+        : openRegularBeneath(directory, name);
+      try {
+        const current = fstatSync(child);
+        if (current.dev !== entry.dev || current.ino !== entry.ino ||
+          (!entry.isDirectory() && (!current.isFile() || (policy === "context-single-link" && current.nlink !== 1))))
+          throw new StoreError("STORE_CORRUPT", `fsync tree identity/link mismatch: ${name}`);
+        if (entry.isDirectory()) walk(child); else fsyncSync(child);
+      } finally { closeSync(child); }
+    }
+    fsyncSync(directory);
   };
-  walk(root);
+  const directory = typeof root === "string" ? openDirectory(root) : root;
+  try { walk(directory); }
+  finally { if (typeof root === "string") closeSync(directory); }
 }
