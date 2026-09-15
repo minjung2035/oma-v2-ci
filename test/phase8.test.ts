@@ -26,6 +26,8 @@ import type { Capability } from "../implementation/contracts.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 
+import { requireSystemdTestManager } from "./fixtures/systemd.js";
+requireSystemdTestManager();
 const G = {
   ...process.env,
   GIT_CONFIG_NOSYSTEM: "1",
@@ -45,6 +47,7 @@ interface Env {
 
 function envOf(withGit: boolean): Env {
   const dir = mkdtempSync(join(tmpdir(), "oma-t8-"));
+  const society = `p8${createHash("sha256").update(dir).digest("hex").slice(0, 20)}`;
   mkdirSync(join(dir, "state", "repos"), { recursive: true });
   const store = new Store(join(dir, "state", "runtime.sqlite"));
   store.transaction((_t) => {
@@ -65,17 +68,17 @@ function envOf(withGit: boolean): Env {
     }
   });
   const mail = new MailModule(
-    { stateRoot: join(dir, "state"), society: "demo" },
+    { stateRoot: join(dir, "state"), society },
     store,
     64,
   );
   const units = new UnitsModule(
-    "demo",
+    society,
     {
       node: process.execPath,
       libdir: "/l",
       state: join(dir, "state"),
-      society: "demo",
+      society,
       agent: "",
     },
     join(dir, "xdg"),
@@ -87,7 +90,7 @@ function envOf(withGit: boolean): Env {
       projectGit: join(dir, "state", "repos", "project.git"),
       contextGit: join(dir, "state", "repos", "context.git"),
       worldDir: join(dir, "state", "world"),
-      society: "demo",
+      society,
       quarantineTmpBytes: 64 * 1024 * 1024,
       quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
       checkTimeoutSeconds: 30,
@@ -100,8 +103,9 @@ function envOf(withGit: boolean): Env {
     {
       stateRoot: join(dir, "state"),
       projectGit: join(dir, "state", "repos", "project.git"),
-      society: "demo",
+      society,
       hasGoal: () => false,
+      activationAllowed: () => true,
     },
     (_parent, input) => ({
       ...input,
@@ -113,6 +117,7 @@ function envOf(withGit: boolean): Env {
     mail,
   );
   const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
+    activationAllowed: () => true,
     projectGit: join(dir, "state", "repos", "project.git"),
     hasGoal: () => false,
   });

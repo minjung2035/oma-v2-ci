@@ -29,7 +29,7 @@ function validConfig() {
     workspaceBytes: 1024, stagingBytes: 1024, checkTimeoutSeconds: 1 };
   return {
     schemaVersion: 1, society: "demo",
-    installation: { node: "/usr/bin/node", libdir: "/usr/lib/oma", rootfs: "/srv/rootfs", deploymentDigest: "d" },
+    installation: { node: "/usr/bin/node", libdir: "/usr/lib/oma", rootfs: "/srv/rootfs", deploymentDigest: "a".repeat(64) },
     modelProfiles: { m: { provider: "p", model: "m", credentialRef: "c", codecRevision: "c1", pricingRevision: "p1",
       maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "m", capabilities: ["mail.send"], delegable: [], childProfile: null, resources } },

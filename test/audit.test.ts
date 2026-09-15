@@ -9,6 +9,7 @@
 //          startup failure -> exit 1 with no READY and no serving
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   mkdtempSync,
   rmSync,
@@ -29,6 +30,7 @@ import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { GitModule } from "../src/git.js";
+import { deploymentDigest } from "../src/runtime/deployment-manifest.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { Broker } from "../src/broker.js";
 import { loadConfig, resolveChildSpec } from "../src/config.js";
@@ -37,6 +39,12 @@ import { sendWithStop } from "./fixtures/mail-faults.js";
 import { unitName } from "../src/units.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 
+import {
+  cleanupOwnedSystemdUnits,
+  requireSystemdTestManager,
+} from "./fixtures/systemd.js";
+import { requireSubmitConvergence } from "./fixtures/verification-oracles.js";
+requireSystemdTestManager();
 const G = {
   ...process.env,
   GIT_CONFIG_NOSYSTEM: "1",
@@ -205,6 +213,7 @@ interface BrokerEnv {
   society: string;
   store: Store;
   broker: Broker;
+  git: GitModule;
   cleanup: () => void;
 }
 
@@ -234,7 +243,15 @@ function brokerEnv(): BrokerEnv {
   ): ResolvedAgentSpec => ({
     ...input,
     modelProfile: "m",
-    resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576, workspaceBytes: 1048576, stagingBytes: 1048576, checkTimeoutSeconds: 30 },
+    resources: {
+      memoryBytes: 3221225472,
+      tasks: 128,
+      cpuQuotaPercent: 200,
+      tmpBytes: 1048576,
+      workspaceBytes: 1048576,
+      stagingBytes: 1048576,
+      checkTimeoutSeconds: 30,
+    },
     profile: "child",
     capabilities: ["mail.send", "route.follow", "git.submit"],
   });
@@ -246,6 +263,7 @@ function brokerEnv(): BrokerEnv {
       projectGit: join(state, "repos", "project.git"),
       society,
       hasGoal: () => false,
+      activationAllowed: () => true,
     },
     resolver,
     mail,
@@ -259,7 +277,11 @@ function brokerEnv(): BrokerEnv {
       worldDir: join(state, "world"),
       society,
       quarantineTmpBytes: 64 * 1024 * 1024,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
+      quarantineResources: {
+        cpuSeconds: 30,
+        memoryBytes: 512 * 1024 * 1024,
+        tasks: 4096,
+      },
       checkTimeoutSeconds: 30,
     },
     store,
@@ -267,6 +289,7 @@ function brokerEnv(): BrokerEnv {
     null,
   );
   const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
+    activationAllowed: () => true,
     projectGit: join(state, "repos", "project.git"),
   });
   const broker = new Broker(store, mail, units, views, lifecycle, git, recon, {
@@ -283,12 +306,14 @@ function brokerEnv(): BrokerEnv {
     society,
     store,
     broker,
+    git,
     cleanup: () => {
       try {
         broker.drainAndClose();
       } catch {
         /* store may already be closed */
       }
+      cleanupOwnedSystemdUnits(dir, society);
       rmSync(dir, { recursive: true, force: true });
     },
   };
@@ -375,10 +400,7 @@ test("B1/IPC-009: framed runner channel rejects host methods", async () => {
     });
     assert.equal(replies.length, 1);
     assert.equal(replies[0]!.ok, false);
-    assert.equal(
-      (replies[0]!.error as { code: string }).code,
-      "AUTH_FAILED",
-    );
+    assert.equal((replies[0]!.error as { code: string }).code, "AUTH_FAILED");
     // unknown method -> framed error answer, still parsable by a FrameParser client
     const err = await framedCall(join(env.runRoot, "admin.sock"), {
       v: 1,
@@ -569,15 +591,9 @@ main().catch((e) => {
 });
 `;
 
-test("C1: two concurrent git.submit uploads over the real actor channel — connection-local streams, no cross-consumption", async (t) => {
-  // skip cleanly when the user manager is unavailable
-  const probe = spawnSync("systemctl", ["--user", "is-system-running"], {
-    encoding: "utf8",
-  });
-  if (probe.status !== 0 && !/running|degraded/.test(probe.stdout)) {
-    t.skip("no systemd user manager");
-    return;
-  }
+test("C1: two concurrent git.submit uploads over the real actor channel — connection-local streams, no cross-consumption", {
+  timeout: 60000,
+}, async () => {
   const env = brokerEnv();
   const society = env.society;
   try {
@@ -589,7 +605,6 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
       ] as const) {
         if (!env.store.getAgent(name)) {
           env.store.insertAgent({
-
             name,
 
             ...storedSpec(ALL_CAPS, "p", name),
@@ -603,7 +618,6 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
             profile: "p",
 
             createdBy: null,
-
           });
         }
       }
@@ -696,20 +710,73 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
       Array.isArray(resB),
       `agent b helper output is not a reply array: ${outB}`,
     );
-    const repliesA = resA as Array<{
+    type SubmitReply = {
+      id?: string;
       ok?: boolean;
-      result?: { operation: string; result?: { publishedRef?: string } };
+      result?: { operation: string; state: string };
       error?: { code: string };
-    }>;
-    const repliesB = resB as Array<{
-      ok?: boolean;
-      result?: { operation: string; result?: { publishedRef?: string } };
-      error?: { code: string };
-    }>;
-    const subA = repliesA.find((r) => r.result?.result?.publishedRef);
-    const subB = repliesB.find((r) => r.result?.result?.publishedRef);
-    assert.ok(subA, `a submit failed: ${JSON.stringify(resA)}`);
-    assert.ok(subB, `b submit failed: ${JSON.stringify(resB)}`);
+    };
+    const repliesA = resA as SubmitReply[];
+    const repliesB = resB as SubmitReply[];
+    const publishedRefs: string[] = [];
+    // Concurrent preparation can leave accepted work pending/unknown. Require
+    // its original receipt/intent, then run a bounded test-case recovery sweep.
+    for (const [actor, replies, candidate] of [
+      ["a", repliesA, candA],
+      ["b", repliesB, candB],
+    ] as const) {
+      assert.ok(
+        Array.isArray(replies),
+        `${actor} driver: ${JSON.stringify(replies)}`,
+      );
+      const reply = replies.find((value) => value.id === "sub");
+      assert.ok(reply, `${actor} returned no correlated response`);
+      const accepted = env.store.getOperation(actor, `audit-${actor}`);
+      assert.ok(
+        accepted?.kind === "git.submit",
+        `${actor} has no accepted submit`,
+      );
+      assert.equal(accepted.plan.candidate, candidate.candidate);
+      if (reply.ok === true) {
+        assert.equal(reply.result?.operation, accepted.id);
+        assert.ok(
+          ["pending", "unknown", "succeeded"].includes(
+            reply.result?.state ?? "",
+          ),
+        );
+      } else {
+        assert.equal(reply.ok, false);
+        assert.equal(
+          reply.error?.code,
+          "REF_STATE_UNKNOWN",
+          "unexpected concurrent submit rejection",
+        );
+      }
+      const settled = await requireSubmitConvergence(
+        accepted.id,
+        () => env.store.getOperation(actor, `audit-${actor}`),
+        (id) => env.git.reconcile(id),
+      );
+      assert.ok(settled.kind === "git.submit");
+      const message = settled.plan.message;
+      assert.equal(
+        createHash("sha256")
+          .update(readFileSync(join(env.state, message.objectPath)))
+          .digest("hex"),
+        message.sha256,
+      );
+      assert.deepEqual(
+        env.store
+          .deliveriesForOperation(settled.id)
+          .map((row) => [row.recipient, row.messageId, row.materialized]),
+        [["b", message.id, 1]],
+        "result mail must converge exactly once with publication",
+      );
+      publishedRefs.push(settled.plan.publishedRef);
+    }
+    const [refA, refB] = publishedRefs;
+    assert.ok(refA && refB);
+    assert.notEqual(refA, refB);
     // streams were never cross-consumed: each ref points at ITS OWN candidate
     const sh = (args: string[]): string => {
       const r = spawnSync("git", args, { env: G, encoding: "utf8" });
@@ -721,7 +788,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
         "--git-dir",
         join(env.state, "repos", "project.git"),
         "rev-parse",
-        subA.result!.result!.publishedRef!,
+        refA,
       ]),
       candA.candidate,
     );
@@ -730,19 +797,11 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
         "--git-dir",
         join(env.state, "repos", "project.git"),
         "rev-parse",
-        subB.result!.result!.publishedRef!,
+        refB,
       ]),
       candB.candidate,
     );
-    assert.notEqual(
-      subA.result!.result!.publishedRef,
-      subB.result!.result!.publishedRef,
-    );
   } finally {
-    spawnSync("systemctl", ["--user", "stop", `oma-${society}-*`], { env: G });
-    spawnSync("systemctl", ["--user", "reset-failed", `oma-${society}-*`], {
-      env: G,
-    });
     env.cleanup();
   }
 });
@@ -762,7 +821,7 @@ function minimalConfig(society: string): Record<string, unknown> {
       // root, where dist/ and implementation/ live side by side.
       libdir: process.cwd(),
       rootfs: "/",
-      deploymentDigest: "audit",
+      deploymentDigest: deploymentDigest(process.cwd()),
     },
     modelProfiles: {
       md: {
@@ -854,8 +913,15 @@ test("CFG-001/IPC-001: configuration and frames share strict JSON decoding", () 
     invalidUtf8[invalidUtf8.indexOf("none")] = 0xff;
     const invalid = [
       Buffer.from(json.slice(0, -1) + ',"soci\\u0065ty":"strict"}'),
-      Buffer.from(json.replace('"provider":"none"', '"provider":"none","provider":"none"')),
-      Buffer.from(json.replace('"codecRevision":"none"', '"codecRevision":"\\ud800"')),
+      Buffer.from(
+        json.replace(
+          '"provider":"none"',
+          '"provider":"none","provider":"none"',
+        ),
+      ),
+      Buffer.from(
+        json.replace('"codecRevision":"none"', '"codecRevision":"\\ud800"'),
+      ),
       Buffer.from(json.replace('"md":', '"\\ud800":')),
       Buffer.from(json.replace('"societyAgents":8', '"societyAgents":1e999')),
       invalidUtf8,
@@ -863,12 +929,21 @@ test("CFG-001/IPC-001: configuration and frames share strict JSON decoding", () 
     for (const body of invalid) {
       writeFileSync(path, body);
       assert.throws(() => loadConfig(path), /config unreadable/);
-      const header = Buffer.alloc(4); header.writeUInt32BE(body.length);
-      assert.throws(() => new FrameParser(body.length).feed(Buffer.concat([header, body])), { code: "INVALID_REQUEST" });
+      const header = Buffer.alloc(4);
+      header.writeUInt32BE(body.length);
+      assert.throws(
+        () => new FrameParser(body.length).feed(Buffer.concat([header, body])),
+        { code: "INVALID_REQUEST" },
+      );
     }
-    writeFileSync(path, json.replace('"policyRevision":"1"', '"policyRevision":"정책😀"'));
+    writeFileSync(
+      path,
+      json.replace('"policyRevision":"1"', '"policyRevision":"정책😀"'),
+    );
     assert.equal(loadConfig(path).integration.policyRevision, "정책😀");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("CREATE-002: child capabilities use the authenticated parent's effective set", () => {
@@ -876,18 +951,33 @@ test("CREATE-002: child capabilities use the authenticated parent's effective se
   try {
     const society = `au${Date.now().toString(36)}`;
     const raw = minimalConfig(society);
-    const profiles = raw.agentProfiles as Record<string, Record<string, unknown>>;
+    const profiles = raw.agentProfiles as Record<
+      string,
+      Record<string, unknown>
+    >;
     const parentProfile = profiles.p!;
     parentProfile.childProfile = "child";
     parentProfile.delegable = ["mail.send"];
-    profiles.child = { ...parentProfile, capabilities: ["mail.send", "git.submit"], childProfile: null };
+    profiles.child = {
+      ...parentProfile,
+      capabilities: ["mail.send", "git.submit"],
+      childProfile: null,
+    };
     const configPath = join(dir, "config.json");
     writeFileSync(configPath, JSON.stringify(raw), "utf8");
     const cfg = loadConfig(configPath);
     const input = { name: "child-a", from: "0".repeat(40), brief: "brief" };
-    const limited = resolveChildSpec(cfg, { name: "a", profile: "p", capabilities: ["git.submit"] }, input);
+    const limited = resolveChildSpec(
+      cfg,
+      { name: "a", profile: "p", capabilities: ["git.submit"] },
+      input,
+    );
     assert.deepEqual(limited?.spec.capabilities, []);
-    const granted = resolveChildSpec(cfg, { name: "a", profile: "p", capabilities: ["mail.send", "git.submit"] }, input);
+    const granted = resolveChildSpec(
+      cfg,
+      { name: "a", profile: "p", capabilities: ["mail.send", "git.submit"] },
+      input,
+    );
     assert.deepEqual(granted?.spec.capabilities, ["mail.send"]);
     assert.equal(cfg.modelProfiles["constructor"], undefined);
     assert.equal(cfg.agentProfiles["toString"], undefined);
@@ -899,7 +989,6 @@ test("CREATE-002: child capabilities use the authenticated parent's effective se
   }
 });
 
-
 test("LIFE-009 entry: fresh broker seeds once and restart ignores population edits", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-bootstrap-entry-"));
   const society = `bs${Date.now().toString(36)}`;
@@ -910,19 +999,45 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
   mkdirSync(join(state, "repos"), { recursive: true });
   mkdirSync(root);
   const git = (args: string[], cwd = root) => {
-    const result = spawnSync("/usr/bin/git", args, { cwd, env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" }, encoding: "utf8" });
+    const result = spawnSync("/usr/bin/git", args, {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_NOSYSTEM: "1",
+      },
+      encoding: "utf8",
+    });
     assert.equal(result.status, 0, result.stderr);
     return result.stdout.trim();
   };
   const run = async () => {
-    const child = spawn(process.execPath, [join(process.cwd(), "dist", "src", "entry", "broker.js"), "--society", society], {
-      env: { ...process.env, XDG_DATA_HOME: data, XDG_CONFIG_HOME: xdg,
-        XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, NOTIFY_SOCKET: "" },
-      stdio: ["ignore", "ignore", "pipe"],
-    });
+    const child = spawn(
+      process.execPath,
+      [
+        join(process.cwd(), "dist", "src", "entry", "broker.js"),
+        "--society",
+        society,
+      ],
+      {
+        env: {
+          ...process.env,
+          XDG_DATA_HOME: data,
+          XDG_CONFIG_HOME: xdg,
+          XDG_RUNTIME_DIR:
+            process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`,
+          NOTIFY_SOCKET: "",
+        },
+        stdio: ["ignore", "ignore", "pipe"],
+      },
+    );
     let output = "";
-    child.stderr!.on("data", (bytes) => { output += bytes.toString(); });
-    const exited = new Promise<void>((resolve) => child.on("close", () => resolve()));
+    child.stderr!.on("data", (bytes) => {
+      output += bytes.toString();
+    });
+    const exited = new Promise<void>((resolve) =>
+      child.on("close", () => resolve()),
+    );
     try {
       // Without a NOTIFY_SOCKET the entry reports the same readiness boundary in
       // its foreground wording; both lines mean startup completed.
@@ -930,23 +1045,50 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
       for (let i = 0; i < 500 && !ready() && child.exitCode === null; i++)
         await new Promise((resolve) => setTimeout(resolve, 20));
       assert.match(output, /broker (ready|listening)/);
-    } finally { child.kill("SIGTERM"); await exited; }
+    } finally {
+      child.kill("SIGTERM");
+      await exited;
+    }
   };
   try {
     git(["init", "-q", "-b", "main"]);
     writeFileSync(join(root, "base.txt"), "base\n");
     git(["add", "."]);
-    git(["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "base"]);
+    git([
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@example.invalid",
+      "commit",
+      "-qm",
+      "base",
+    ]);
     const base = git(["rev-parse", "HEAD"]);
     git(["clone", "-q", "--bare", root, join(state, "repos", "project.git")]);
     const cfg = minimalConfig(society);
-    cfg.initialResidents = [{ name: "child", profile: "child", brief: "initial" }];
-    writeFileSync(join(state, "config.json"), JSON.stringify({ ...cfg, society: `${society}x` }));
+    cfg.initialResidents = [
+      { name: "child", profile: "child", brief: "initial" },
+    ];
+    writeFileSync(
+      join(state, "config.json"),
+      JSON.stringify({ ...cfg, society: `${society}x` }),
+    );
     for (const name of ["broker", "runner"]) {
       const args = name === "runner" ? ["--agent", "child"] : [];
-      const rejected = spawnSync(process.execPath, [join(process.cwd(), "dist", "src", "entry", `${name}.js`), "--society", society, ...args], {
-        env: { ...process.env, XDG_DATA_HOME: data, XDG_CONFIG_HOME: xdg }, encoding: "utf8", timeout: 3000,
-      });
+      const rejected = spawnSync(
+        process.execPath,
+        [
+          join(process.cwd(), "dist", "src", "entry", `${name}.js`),
+          "--society",
+          society,
+          ...args,
+        ],
+        {
+          env: { ...process.env, XDG_DATA_HOME: data, XDG_CONFIG_HOME: xdg },
+          encoding: "utf8",
+          timeout: 3000,
+        },
+      );
       assert.equal(rejected.status, name === "broker" ? 1 : 4, rejected.stderr);
       assert.match(rejected.stderr, /config society does not match/);
       assert.equal(existsSync(join(state, "runtime.sqlite")), false);
@@ -956,7 +1098,10 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     const start = readFileSync(join(state, "world", "START.md"), "utf8");
     assert.match(start, /--subject/);
     assert.match(start, /QUESTION.*MINIMUM CONTEXT.*UNCERTAINTY/);
-    assert.match(readFileSync(join(state, "world", "agents.tsv"), "utf8"), /child\tresident\tenabled\tchild/);
+    assert.match(
+      readFileSync(join(state, "world", "agents.tsv"), "utf8"),
+      /child\tresident\tenabled\tchild/,
+    );
     let store = new Store(join(state, "runtime.sqlite"));
     // Reading a create/bootstrap plan needs the trusted repository identity,
     // exactly like the broker composition binds it on its own connection.
@@ -966,8 +1111,13 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     assert.equal(store.pendingDeliveries("child").length, 1);
     assert.equal(store.getAgent("child")!.incarnation, 0);
     store.close();
-    assert.equal(git(["rev-parse", "HEAD"], join(state, "agents", "child", "workspace")), base);
-    cfg.initialResidents = [{ name: "another", profile: "child", brief: "do not reseed" }];
+    assert.equal(
+      git(["rev-parse", "HEAD"], join(state, "agents", "child", "workspace")),
+      base,
+    );
+    cfg.initialResidents = [
+      { name: "another", profile: "child", brief: "do not reseed" },
+    ];
     writeFileSync(join(state, "config.json"), JSON.stringify(cfg));
     await run();
     store = new Store(join(state, "runtime.sqlite"));
@@ -977,26 +1127,24 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     assert.equal(store.pendingDeliveries("child").length, 1);
     store.close();
   } finally {
-    const names = ["child.service", "child.path", "principal.path", "principal-relay.service"].map((name) => `oma-${society}-${name}`);
-    spawnSync("systemctl", ["--user", "stop", ...names], { stdio: "ignore" });
-    spawnSync("systemctl", ["--user", "disable", ...names], { stdio: "ignore" });
+    cleanupOwnedSystemdUnits(dir, society);
     rmSync(dir, { recursive: true, force: true });
-    rmSync(join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "oma", society), { recursive: true, force: true });
-    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+    rmSync(
+      join(
+        process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`,
+        "oma",
+        society,
+      ),
+      { recursive: true, force: true },
+    );
   }
 });
 
 test("D1: READY=1 arrives after startup recovery (recovered mail op observable), never before", async (t) => {
-  const probe = spawnSync("systemctl", ["--user", "is-system-running"], {
-    encoding: "utf8",
-  });
-  if (probe.status !== 0 && !/running|degraded/.test(probe.stdout)) {
-    t.skip("no systemd user manager");
-    return;
-  }
   const dir = mkdtempSync(join(tmpdir(), "oma-audit-d1-"));
   const society = `au${Date.now().toString(36)}`;
-  const runRoot = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`;
+  const runRoot =
+    process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`;
   let child: ReturnType<typeof spawn> | undefined;
   let notifyRelay: ReturnType<typeof spawn> | undefined;
   try {
@@ -1022,7 +1170,6 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
         ["b", "resident"],
       ] as const) {
         store.insertAgent({
-
           name,
 
           ...storedSpec(ALL_CAPS, "p", name),
@@ -1036,12 +1183,32 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
           profile: "p",
 
           createdBy: null,
-
         });
       }
     });
     const mail = new MailModule({ stateRoot, society }, store, 64);
-    await assert.rejects(sendWithStop(mail, store, { actor: "a", incarnation: 0, role: "resident", channel: "actor", capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } }, "k1", { to: ["b"], subject: "pending", kind: "message", body: "recover me" }, "accepted"));
+    await assert.rejects(
+      sendWithStop(
+        mail,
+        store,
+        {
+          actor: "a",
+          incarnation: 0,
+          role: "resident",
+          channel: "actor",
+          capabilities: new Set(ALL_CAPS),
+          peer: {
+            pid: process.pid,
+            uid: process.getuid!(),
+            gid: process.getgid!(),
+            cgroup: null,
+          },
+        },
+        "k1",
+        { to: ["b"], subject: "pending", kind: "message", body: "recover me" },
+        "accepted",
+      ),
+    );
     const recoveryId = store.getOperation("a", "k1")!.id;
     store.close();
     // sd_notify listener: node dgram cannot create AF_UNIX datagram sockets in
@@ -1079,10 +1246,14 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
       },
     );
     let stderr = "";
-    child.stderr!.on("data", (d) => { stderr += String(d); });
-    const gotReady = await waitForReady(notifyLog, 20000).catch((error: unknown) => {
-      throw new Error(`${String(error)}; broker stderr: ${stderr}`);
+    child.stderr!.on("data", (d) => {
+      stderr += String(d);
     });
+    const gotReady = await waitForReady(notifyLog, 20000).catch(
+      (error: unknown) => {
+        throw new Error(`${String(error)}; broker stderr: ${stderr}`);
+      },
+    );
     assert.match(gotReady, /READY=1/);
     // at READY time the admin socket must already exist (start before READY)
     assert.equal(existsSync(join(runRoot, "oma", society, "admin.sock")), true);
@@ -1114,7 +1285,8 @@ test("D1: READY=1 arrives after startup recovery (recovered mail op observable),
 test("D2: startup recovery failure -> no READY, exit 1, nothing served", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oma-audit-d2-"));
   const society = `au${Date.now().toString(36)}`;
-  const runRoot = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`;
+  const runRoot =
+    process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`;
   const children: ReturnType<typeof spawn>[] = [];
   try {
     const xdgData = join(dir, "data");
@@ -1143,7 +1315,12 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
       });
       // Valid accepted plan, but its immutable object is deliberately absent.
       // Recovery must fail on the missing object, never on plan-shape corruption.
-      const missingPayload = { to: ["a"], subject: "absent", body: "object", kind: "message" };
+      const missingPayload = {
+        to: ["a"],
+        subject: "absent",
+        body: "object",
+        kind: "message",
+      };
       store.insertOperation({
         id: missingOp,
         actor: "a",
@@ -1206,7 +1383,9 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
     );
     children.push(child);
     let stderr = "";
-    child.stderr.on("data", (bytes) => { stderr += String(bytes); });
+    child.stderr.on("data", (bytes) => {
+      stderr += String(bytes);
+    });
     child.stdout.resume();
     const exitCode = await new Promise<number | null>((resolve) => {
       const t = setTimeout(() => {

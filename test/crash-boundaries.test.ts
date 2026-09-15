@@ -15,6 +15,8 @@ import { gitFixture, gitAuth, seedGit, gitCommand, submitFixture } from "./fixtu
 import { lifecycleFixture } from "./fixtures/lifecycle-crash.js";
 import { removeTree } from "./fixtures/cleanup.js";
 
+import { requireSystemdTestManager } from "./fixtures/systemd.js";
+requireSystemdTestManager();
 const auth: AuthContext = { actor: "a", incarnation: 1, role: "resident", channel: "trusted-runner", capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
 const input: MailInput = { to: ["a", "b", "c"], subject: "crash", kind: "message", body: "immutable payload" };
 const files = (path: string) => existsSync(path) ? readdirSync(path) : [];

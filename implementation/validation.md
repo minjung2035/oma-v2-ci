@@ -1,9 +1,37 @@
 # OMA v2 — 현재 검증 상태
 
-**P24 현재 source의 전체 테스트와 fast lane은 PASS. 실제 환경 적합성 및 release는 미인증이다.**
-이 파일은 현재 검증 상태의 단일 기록 위치다. 명령 색인은 [루트 validation.md](../validation.md), 재개 작업은 [HANDOFF.md](../HANDOFF.md), 최신 변경·비보장 범위는 [P24 기록](../docs/architecture-improvement/p24-filesystem-containment.md)을 따른다.
+**P24 감사 후속: local·fast·durable 검증 PASS. 실제 systemd/storage quota/provider/power-loss 및 release는 미인증이다.**
+이 파일은 현재 검증 상태의 단일 기록 위치다. 명령 색인은 [루트 validation.md](../validation.md), 재개 작업은 [HANDOFF.md](../HANDOFF.md), 최신 변경·비보장 범위는 [P24 감사 후속](../docs/architecture-improvement/p24-remediation.md)과 [filesystem containment](../docs/architecture-improvement/p24-filesystem-containment.md)을 따른다.
 
-## 0. 현재 P24 실행
+## 0. 현재 P24 감사 후속
+
+- 기준 HEAD: **`48d3f4081522d54c73b5be131a124e24db8eae7d` + working tree** (`git rev-parse --short HEAD`: `48d3f40`). 실행일: **2026-09-14**.
+- 환경: Linux x64, Node **26.7.0**, TypeScript **5.9.3**, cloc **2.08**. 신규 미커밋 파일도 검증 source에 포함했다.
+- default `npm test`는 user-systemd mixed 파일 7개를 제외한 **local suite**다. 과거 906개 전체 suite와 직접 비교하거나 systemd/provider 검증으로 확대하지 않는다.
+- fast → local → durable 순서로 실행했다. 결과 기록 직전 fast/durable 각각 **399개 source digest**, **152개 production digest**와 manifest hash가 전부 일치했다. 이후 유일한 source pin 차이는 이 파일의 결과 기록 갱신이다. 실행 당시 본문은 `/tmp/oma-p24-complete.gmIVEe/validation-before.md`에 보존했다.
+
+| 실제 명령/검사 | 결과 | 범위 |
+|---|---|---|
+| `npm run typecheck` | PASS | project-wide pinned compiler |
+| `npm run build` / `check:package` | PASS | compile/static package; 지원된 READY 부팅 증거 아님 |
+| `npm run check:architecture` | PASS, 0 findings | inventory, graph freshness, ownership/kernel/lattice, transaction |
+| `npm test` | **840/840 PASS** | 142개 local test files, 약 124초 |
+| `npm run verify:fast -- --out <new-dir>` | **124/124 PASS** | P24 owner guards, V01/V02/V04/V05와 required-name 검사 포함 |
+| `npm run verify:durable -- --out <new-dir>` | **103/103 PASS** | P01–P07 gate/mail/Git 회귀와 기존 durable 경계 |
+| `node scripts/loc.mjs` | **152 files / 13,902 code LOC** | inventory/LOC/hash 재생성; budget/release 승인 아님 |
+
+세 test 실행 모두 fail/cancelled/skipped/todo는 **0**이다. Source-freeze 전 초기 828/833 실패, 통합 중 컴파일 오류, qualification runner 이관 중 839/840 실패는 모두 중간 결과다. 수정 후 위 명령을 새 디렉터리에서 다시 실행했다. 이전 `/tmp/oma-p24-frozen.qNI3AI/` 및 `/tmp/oma-p24-verified.WZhRiu/` 실행은 최종 PASS 증거가 아니다.
+
+| Raw artifact | SHA-256 |
+|---|---|
+| `/tmp/oma-p24-complete.gmIVEe/local.log` | `ec6643b815464197b0e3f259e42e852d68ce1633ecf4eeaf1b54b75f9978f25e` |
+| `/tmp/oma-p24-complete.gmIVEe/fast/result.json` | `9d74c486d298100f6737b5efa1aabfead82fae9cf8179546b546d052624235d6` |
+| `/tmp/oma-p24-complete.gmIVEe/durable/result.json` | `d5e8f2169760b5af1ea4d2cec262e2e33147325db6ebfcfe0e2ccc3006d9071e` |
+| `/tmp/oma-p24-complete.gmIVEe/loc.log` | `a7fca6e05004d8388df487979bb4135d69a2339e4715cf6bc89ce68590922210` |
+
+실제 manager/provider/powercut은 **NOT_RUN**이다. 지원된 storage quota profile이 없어 실제 broker는 `SPIKE_UNRESOLVED`로 시작을 거부한다. Kernel/all은 새 build의 실제 quota gate를 별도 guarded process에서 관측한 후 BLOCKED/NOT_RUN으로 남으며, 기존 positive READY 요구는 삭제하지 않았다. 이번에 실행한 해당 정책 시험은 소유 임시 fixture를 사용했고 live manager에 접촉하지 않았다. `/tmp` artifact의 영구 보존은 보장하지 않는다.
+
+## 0a. 과거 P24 filesystem containment 실행
 
 - 실행일: **2026-09-14**. HEAD: **`a9bf98d21f785d6773ebd81b50938951356629d6` + P24 working tree** (`git rev-parse --short HEAD`: `a9bf98d`). 신규 미커밋 파일을 포함했다.
 - 환경: Linux x64, Node **26.7.0**, TypeScript **5.9.3**, cloc **2.08**.
@@ -79,7 +107,7 @@ Artifact가 없어졌다면 같은 명령을 새 output directory에서 실행�
 
 ## 3. 남은 검증과 release 게이트
 
-- `verify:durable`, `verify:property`, `verify:kernel`, `verify:crash`, `verify:stress`, `verify:all`: 이번 P24 작업에서 **lane 단위 NOT_RUN**. 일부 소속 tests를 `npm test`로 실행한 것과 lane의 environment/required evidence 완료는 다르다.
+- `verify:property`, `verify:kernel`, `verify:crash`, `verify:stress`, `verify:all`: 이번 P24 감사 후속에서 **실제 lane 단위 NOT_RUN**. 일부 소속 tests를 `npm test`로 실행하거나 guarded 임시 fixture에서 BLOCKED 판정을 검사한 것과 실제 lane의 environment/required evidence 완료는 다르다. Fast/durable 실행은 §0에 기록했다.
 - VM power-cut 실제 prepare/reboot/verify, ENOSPC, read-only remount, backup/restore 및 live systemd/cgroup 관측: **NOT_RUN/환경 준비 필요**. 기존 guard/process-crash oracle을 실제 전원단절 proof로 취급하지 않는다.
 - S-01/S-01-CANDIDATE isolation·descendant·resource, S-02 Human Pi attach, S-03 trusted consumption, S-04 provider codec/accounting: 실제 환경 evidence 없이 OPEN을 해제하지 않는다.
 - S-05/S-06 hostile import·kernel containment·crash/backup 경계, S-08/S-10 tiered attestation, S-11 clean-room, S-09 품질·비용·latency: 각 [SPIKE 계약](spikes.md)의 남은 조건을 유지한다. 유료 provider와 host reboot는 이번에 실행하지 않았다.

@@ -1,6 +1,6 @@
 // MUST [S-01]: minimal native leaf for SO_PEERCRED, sd_notify and the
 // process-lifetime REC-007 advisory lock through koffi FFI.
-import { closeSync, fstatSync, openSync } from "node:fs";
+import { closeSync, openSync } from "node:fs";
 import { load } from "koffi";
 import { endianness } from "node:os";
 
@@ -126,76 +126,12 @@ export function sdNotifyReady(notifySocket: string): boolean {
   }
 }
 
-const heldLocks = new Map<string, number>();
-
-function lockKey(fd: number): string | null {
-  try {
-    const st = fstatSync(fd, { bigint: true });
-    return `${st.dev}:${st.ino}`;
-  } catch {
-    return null;
-  }
-}
-
-function flockExclusive(fd: number): boolean {
-  const LOCK_EX = 2;
-  const LOCK_NB = 4;
-  try {
-    return lib().flock(fd, LOCK_EX | LOCK_NB) === 0;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * MUST [REC-007]: acquire the society lock before runtime.sqlite is opened.
- * The owning fd is retained by this module until explicit shutdown/process exit.
- */
-export function acquireProcessLock(path: string): boolean {
-  let fd: number;
-  try {
-    fd = openSync(path, "w", 0o600);
-  } catch {
-    return false;
-  }
-  if (!flockExclusive(fd)) {
-    closeSync(fd);
-    return false;
-  }
-  const key = lockKey(fd);
-  if (!key) {
-    closeSync(fd);
-    return false;
-  }
-  const previous = heldLocks.get(key);
-  if (previous !== undefined) {
-    closeSync(fd);
-    return true;
-  }
-  heldLocks.set(key, fd);
-  return true;
-}
-
-/**
- * MUST [REC-007]: Broker.start may open the same inode after the entrypoint has
- * already acquired it. Treat that as the same process-lifetime lock; unrelated
- * inodes/processes still go through the real non-blocking flock syscall.
- */
+/** The caller owns the locked descriptor. ProcessLock is the sole lifetime owner;
+ * a second open, even in this process, must acquire its own nonblocking lock. */
 export function tryFlock(fd: number): boolean {
-  const key = lockKey(fd);
-  if (key && heldLocks.has(key)) return true;
-  return flockExclusive(fd);
-}
-
-export function releaseProcessLocks(): void {
-  for (const fd of heldLocks.values()) {
-    try {
-      closeSync(fd);
-    } catch {
-      /* process shutdown */
-    }
-  }
-  heldLocks.clear();
+  const LOCK_EX = 2; const LOCK_NB = 4;
+  try { return lib().flock(fd, LOCK_EX | LOCK_NB) === 0; }
+  catch { return false; }
 }
 
 export function hasNativeLeaf(): boolean {

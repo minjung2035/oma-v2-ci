@@ -1,3 +1,4 @@
+
 // Second focused runtime-correctness audit (P0-1/2/3 + P1-7/8): real socket
 // E2E through the cgroup-authenticated actor channel. A systemd user unit runs
 // a raw-socket driver (encodeFrame/FrameParser) so we can exercise pipelining,
@@ -30,6 +31,9 @@ import { Broker } from "../src/broker.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 import { ALL_CAPS, resolvedSpec, storedSpec } from "./fixtures/spec.js";
 
+import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
+import { requireBoundedRejection } from "./fixtures/verification-oracles.js";
+requireSystemdTestManager();
 const G = {
   ...process.env,
   GIT_CONFIG_NOSYSTEM: "1",
@@ -103,6 +107,7 @@ function envOf(): Env {
       projectGit: join(state, "repos", "project.git"),
       society,
       hasGoal: () => true,
+      activationAllowed: () => true,
     },
     resolver,
     mail,
@@ -124,6 +129,7 @@ function envOf(): Env {
     { policyRevision: "audit", protectedPaths: ["x.txt"], checks: [] },
   );
   const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
+    activationAllowed: () => true,
     projectGit: join(state, "repos", "project.git"),
   });
   const broker = new Broker(store, mail, units, views, lifecycle, git, recon, {
@@ -160,12 +166,7 @@ function envOf(): Env {
       } catch {
         /* already closed */
       }
-      spawnSync("systemctl", ["--user", "stop", `oma-${society}-*`], {
-        env: G,
-      });
-      spawnSync("systemctl", ["--user", "reset-failed", `oma-${society}-*`], {
-        env: G,
-      });
+      cleanupOwnedSystemdUnits(dir, society);
       rmSync(dir, { recursive: true, force: true });
     },
   };
@@ -350,13 +351,6 @@ main().catch((e) => { try { writeFileSync(process.env.OMA_OUT, JSON.stringify({ 
 `;
 
 test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema, status filter", async (t) => {
-  const probe = spawnSync("systemctl", ["--user", "is-system-running"], {
-    encoding: "utf8",
-  });
-  if (probe.status !== 0 && !/running|degraded/.test(probe.stdout)) {
-    t.skip("no systemd user manager");
-    return;
-  }
   const env = envOf();
   const society = env.society;
   try {
@@ -438,7 +432,8 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       // P0-D exact over-delivery boundaries (N+1, N+2, N+3) stay preaccept.
       {
         name: "excess-1",
-        expect: 0,
+        expect: 1,
+        timeoutMs: 8000,
         closeAfterMs: 300,
         events: [
           { t: "frame", frame: submitMeta("excess-1", Buffer.from("abcd")) },
@@ -447,7 +442,8 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       },
       {
         name: "excess-2",
-        expect: 0,
+        expect: 1,
+        timeoutMs: 8000,
         closeAfterMs: 300,
         events: [
           { t: "frame", frame: submitMeta("excess-2", Buffer.from("abcd")) },
@@ -456,7 +452,8 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       },
       {
         name: "excess-3",
-        expect: 0,
+        expect: 1,
+        timeoutMs: 8000,
         closeAfterMs: 300,
         events: [
           { t: "frame", frame: submitMeta("excess-3", Buffer.from("abcd")) },
@@ -500,7 +497,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       // P0-2 short stream + EOF (close right after) -> STREAM_INVALID, no mutation
       {
         name: "short",
-        expect: 0,
+        expect: 1,
         timeoutMs: 8000,
         closeAfterMs: 300,
         events: [
@@ -537,6 +534,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       {
         name: "excess-garbage",
         expect: 1,
+        timeoutMs: 8000,
         events: [
           {
             t: "frame",
@@ -877,32 +875,25 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
       `exact submit: ${JSON.stringify(byName("exact")?.replies)}`,
     );
 
-    // P0-2 short+EOF: STREAM_INVALID, no success
-    const short = byName("short");
-    assert.ok(
-      short?.replies?.length === 0 ||
-        short?.replies?.some((r) => r.error?.code === "STREAM_INVALID"),
-      `short stream: ${JSON.stringify(short?.replies)}`,
-    );
+    // Half-close keeps the client's read side open: silence is not rejection.
+    requireBoundedRejection(byName("short"), "STREAM_INVALID", "short");
+    assert.equal(env.store.getOperation("a", "short"), null, "short must remain preaccept");
 
     for (const name of ["excess-1", "excess-2", "excess-3"] as const) {
       const result = byName(name);
-      assert.ok(result?.replies?.length === 0 || result?.replies?.some((r) => r.error?.code === "STREAM_INVALID") || result?.timeout, `${name}: ${JSON.stringify(result)}`);
+      requireBoundedRejection(result, "STREAM_INVALID", name);
       assert.equal(env.store.getOperation("a", name), null, `${name} must remain preaccept`);
     }
     const mismatch = byName("hash-mismatch");
-    assert.equal(mismatch?.replies?.[0]?.error?.code, "STREAM_INVALID");
+    requireBoundedRejection(mismatch, "STREAM_INVALID", "hash-mismatch");
     assert.equal(env.store.getOperation("a", "hash-mismatch"), null);
     const timeout = byName("stream-timeout");
-    assert.equal(timeout?.replies?.[0]?.error?.code, "STREAM_INVALID");
+    requireBoundedRejection(timeout, "STREAM_INVALID", "stream-timeout");
     assert.equal(env.store.getOperation("a", "stream-timeout"), null);
 
     // P0-2 excess garbage: STREAM_INVALID, mutation must NOT succeed
     const eg = byName("excess-garbage");
-    assert.ok(
-      eg?.replies?.[0]?.error?.code === "STREAM_INVALID" || eg?.timeout,
-      `excess garbage should be STREAM_INVALID: ${JSON.stringify(eg?.replies)}`,
-    );
+    requireBoundedRejection(eg, "STREAM_INVALID", "eg");
     const egOp = env.store.transaction((_t) =>
       env.store.getOperation("a", "excess-garbage"),
     );
@@ -1010,11 +1001,6 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
 });
 
 test("P0-C: concurrent request-key races converge on one actor-socket effect", async (t) => {
-  const probe = spawnSync("systemctl", ["--user", "is-system-running"], { encoding: "utf8" });
-  if (probe.status !== 0 && !/running|degraded/.test(probe.stdout)) {
-    t.skip("no systemd user manager");
-    return;
-  }
   const env = envOf();
   try {
     const mail = (id: string, key: string, body: string) => ({

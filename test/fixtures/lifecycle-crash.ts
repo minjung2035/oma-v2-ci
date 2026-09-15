@@ -1,7 +1,7 @@
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./systemd.js";
 import { LifecycleModule } from "../../src/lifecycle.js";
-import { UnitsModule, unitName } from "../../src/units.js";
+import { UnitsModule } from "../../src/units.js";
 import { MailModule } from "../../src/mail.js";
 import { Store } from "../../src/store.js";
 import { sha256Hex } from "../../src/hash.js";
@@ -9,6 +9,7 @@ import { ALL_CAPS, makeValidResolvedSpec } from "./spec.js";
 import { TEST_VIEW_LIMITS } from "./limits.js";
 
 export function lifecycleFixture(root: string, store: Store) {
+  requireSystemdTestManager();
   const society = `bc${sha256Hex(root).slice(0, 20)}`;
   const frozen = makeValidResolvedSpec("child");
   const units = new UnitsModule(society, {
@@ -17,17 +18,13 @@ export function lifecycleFixture(root: string, store: Store) {
   const mail = new MailModule({ stateRoot: root, society }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const lifecycle = new LifecycleModule(store, units, {
     stateRoot: root, projectGit: join(root, "repos/project.git"), society, hasGoal: () => false,
+    activationAllowed: () => true,
   }, (_parent, input) => ({ ...frozen, ...input }), mail);
   const config: Parameters<LifecycleModule["bootstrap"]>[0] = {
     principalProfile: "p", initialResidents: [{ name: "child", profile: "p", brief: "first" }, { name: "peer", profile: "p", brief: "second" }],
     modelProfiles: { md: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none", pricingRevision: "none", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "md", capabilities: [...ALL_CAPS], delegable: [...ALL_CAPS], childProfile: "p", resources: frozen.resources } },
   };
-  const cleanup = () => {
-    const names = ["child", "peer"].flatMap(actor => [unitName(society, actor, "service"), unitName(society, actor, "path")]);
-    const limits = { encoding: "utf8", timeout: 30000, maxBuffer: 1024 * 1024, killSignal: "SIGKILL" } as const;
-    for (const name of names) spawnSync("systemctl", ["--user", "disable", "--now", name], limits);
-    spawnSync("systemctl", ["--user", "daemon-reload"], limits);
-  };
+  const cleanup = () => cleanupOwnedSystemdUnits(root, society);
   return { society, units, mail, lifecycle, config, cleanup };
 }

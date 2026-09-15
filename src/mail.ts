@@ -8,7 +8,6 @@ import { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js"
 export { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js";
 import { assertCurrentActor } from "./authority.js";
 import { generateMessageId, generateOperationId, parseMessageId } from "./ids.js";
-import { mailObjectFileName } from "./domain/derived.js";
 import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "./storage/paths.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
@@ -88,10 +87,7 @@ export class MailModule {
       kind: input.kind, contextRevision: input.refs?.find(reference => reference.repo === "context")?.oid ?? null,
       replyHeaders, ...(input.approvalFor === undefined ? {} : { approvalFor: input.approvalFor }),
     }, { subject: input.subject, body: input.body });
-    const staging = join(this.paths.stateRoot, "staging", `send-${key}`); ensureDirectory(staging);
-    const staged = join(staging, mailObjectFileName(messageId)); writeFsynced(staged, eml.text);
-    try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256); }
-    finally { removeOwnedFile(staged); }
+    this.freezeObject(messageId, eml);
     const txClaim = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth, "mail.send");
       const current = this.store.claimKey(auth.actor, key, newHash);

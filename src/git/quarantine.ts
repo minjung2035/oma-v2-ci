@@ -54,7 +54,8 @@ const SCRIPT = [
   "$git --git-dir=\"$repo\" fsck --strict --no-reflogs >/dev/null 2>&1 || fail_bundle",
   "for prerequisite in \"$@\"; do $git --git-dir=\"$repo\" cat-file -e \"$prerequisite^{commit}\" >/dev/null 2>&1 || fail_prereq; done",
   "mount -o remount,bind,rw \"$root/project\" || fail_spike",
-  "$git --git-dir=\"$root/project\" fetch -q -f --no-tags \"$repo\" +refs/oma/input:refs/oma/input >/dev/null 2>&1 || fail_internal",
+  // Import objects only. The coordinator owns the later immutable published ref.
+  "$git --git-dir=\"$root/project\" fetch -q --no-tags --no-write-fetch-head --no-auto-maintenance --refmap= \"$repo\" refs/oma/input >/dev/null 2>&1 || fail_internal",
   "printf '%s\\n' \"$input\"",
 ].join("\n");
 

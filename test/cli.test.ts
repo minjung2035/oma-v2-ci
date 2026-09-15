@@ -31,6 +31,8 @@ import { encodeFrame } from "../src/frame.js";
 import { sha256Hex } from "../src/hash.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 
+import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
+requireSystemdTestManager();
 const G = {
   ...process.env,
   GIT_CONFIG_NOSYSTEM: "1",
@@ -114,6 +116,7 @@ function envOf(): Env {
       projectGit: join(state, "repos", "project.git"),
       society,
       hasGoal: () => false,
+      activationAllowed: () => true,
     },
     resolver,
     mail,
@@ -135,6 +138,7 @@ function envOf(): Env {
     null,
   );
   const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
+    activationAllowed: () => true,
     projectGit: join(state, "repos", "project.git"),
   });
   const broker = new Broker(store, mail, units, views, lifecycle, git, recon, {
@@ -156,12 +160,7 @@ function envOf(): Env {
       } catch {
         /* already closed */
       }
-      spawnSync("systemctl", ["--user", "stop", `oma-${society}-*`], {
-        env: G,
-      });
-      spawnSync("systemctl", ["--user", "reset-failed", `oma-${society}-*`], {
-        env: G,
-      });
+      cleanupOwnedSystemdUnits(dir, society);
       removeTree(dir);
     },
   };
@@ -271,13 +270,6 @@ process.exit(0);
 `;
 
 test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submit (real unit, real sockets)", async (t) => {
-  const probe = spawnSync("systemctl", ["--user", "is-system-running"], {
-    encoding: "utf8",
-  });
-  if (probe.status !== 0 && !/running|degraded/.test(probe.stdout)) {
-    t.skip("no systemd user manager");
-    return;
-  }
   const env = envOf();
   const society = env.society;
   try {

@@ -76,7 +76,7 @@ function configFixture() {
   return {
     schemaVersion: 1,
     society: "example",
-    installation: { node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/opt/rootfs", deploymentDigest: "test" },
+    installation: { node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/opt/rootfs", deploymentDigest: "a".repeat(64) },
     modelProfiles: { model: { provider: "test", model: "test", credentialRef: "test", codecRevision: "test",
       pricingRevision: "test", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
     agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null,

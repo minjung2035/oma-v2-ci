@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { performance } from "node:perf_hooks";
 import type { OperationRow } from "../store.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, errorCodeOf } from "../domain/errors.js";
 import type { RecoveryCounts } from "../mail/reconcile.js";
 
 export type ReconcileOutcome =
@@ -71,7 +71,7 @@ export class OperationRecovery {
         let reason: string | null = null;
         try { await this.dependencies.recover(before); }
         catch (error) {
-          reason = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
+          reason = errorCodeOf(error);
           try { this.dependencies.failure(error); }
           catch (fatal) {
             outcomes.push({ id, state: "corrupt", reason, nextAction: "close-mutation-gate" }); throw fatal;

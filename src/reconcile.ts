@@ -2,7 +2,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Actor } from "../implementation/contracts.js";
 import { Store } from "./store.js";
-import { StoreError, classifyError } from "./domain/errors.js";
+import { StoreError, classifyError, errorCodeOf } from "./domain/errors.js";
 import { assertNever } from "./domain/exhaustive.js";
 import { observeStoreFailure } from "./domain/admission.js";
 import { runGitText, GIT_ENV } from "./process/policies.js";
@@ -16,7 +16,7 @@ import { LifecycleModule } from "./lifecycle.js";
 import { pendingWork } from "./views/pending-work.js";
 
 export interface ReconcilePaths {
-  projectGit: string; hasGoal?: () => boolean; activationAllowed?: () => boolean;
+  projectGit: string; hasGoal?: () => boolean; activationAllowed(): boolean;
   /** Existing host receiptWaitSeconds; not a new configuration/wire field. */
   sweepBudgetSeconds?: number;
 }
@@ -31,13 +31,15 @@ export class ReconcileModule {
   private diagnostics: readonly UnitRecoveryDiagnostic[] = [];
   constructor(private readonly store: Store, private readonly mail: MailModule, private readonly git: GitModule | null,
     private readonly units: UnitsModule, private readonly lifecycle: LifecycleModule, private readonly paths: ReconcilePaths) {
+    if (typeof paths.activationAllowed !== "function")
+      throw new StoreError("UNSUPPORTED_PROFILE", "recovery requires an explicit activation gate");
     this.operations = new OperationRecovery({ snapshot: () => store.recoverableOperations(), read: id => store.getOperationById(id),
       recover: operation => this.recover(operation, true), failure: error => this.retainRecoveryFailure(error),
       ...(paths.sweepBudgetSeconds === undefined ? {} : { budgetSeconds: paths.sweepBudgetSeconds }) });
   }
   get operationOutcomes() { return this.operations.lastOutcomes; }
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
-  private activation(allowed = true): boolean { return allowed && (this.paths.activationAllowed?.() ?? true); }
+  private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true; }
   private quiesceResidents(): void {
     for (const agent of this.store.listAgents()) {
       if (agent.role !== "resident") continue;
@@ -91,7 +93,7 @@ export class ReconcileModule {
     }
   }
   private retainRecoveryFailure(error: unknown): void {
-    const code = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
+    const code = errorCodeOf(error);
     const policy = classifyError({ code, phase: "recovering", effectKnowledge: "possible",
       observationKind: code === "STORE_CORRUPT" || code === "STREAM_INVALID" ? "corrupt" : "unavailable" });
     if (policy.blockScope === "store") {
@@ -100,6 +102,7 @@ export class ReconcileModule {
       const failure = new StoreError(policy.code, error instanceof StoreError ? error.message : "recovery observation is corrupt");
       observeStoreFailure(this.store, failure); throw failure;
     }
+    console.error(JSON.stringify({ event: "reconcile.operation", code: policy.code }));
   }
   /** Deliberately not async: all concurrent callers receive the identical Promise. */
   sweep(): Promise<RecoveryCounts> {

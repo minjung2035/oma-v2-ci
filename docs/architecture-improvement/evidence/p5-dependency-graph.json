@@ -23,7 +23,6 @@
   "src/broker/transport-spool.ts",
   "src/cli.ts",
   "src/cli/cache-codec.ts",
-  "src/cli/cache-flow.ts",
   "src/cli/request-intent.ts",
   "src/cli/transport.ts",
   "src/config.ts",
@@ -121,6 +120,7 @@
   "src/runner.ts",
   "src/runtime/assets.ts",
   "src/runtime/broker-lifetime.ts",
+  "src/runtime/deployment-manifest.ts",
   "src/runtime/process-lock.ts",
   "src/runtime/run-registry.ts",
   "src/sandbox.ts",
@@ -247,10 +247,10 @@
    }
   ],
   "runtimeEdgeMatrix": {
-   "K0-values -> K0-values": 17,
+   "K0-values -> K0-values": 18,
    "K1-codecs -> K0-values": 40,
    "K1-codecs -> K1-codecs": 15,
-   "K2-mechanisms -> K0-values": 41,
+   "K2-mechanisms -> K0-values": 42,
    "K2-mechanisms -> K1-codecs": 5,
    "K2-mechanisms -> K2-mechanisms": 26,
    "K3-ledger -> K0-values": 19,
@@ -288,6 +288,11 @@
    {
     "from": "src/config.ts",
     "to": "src/domain/child-policy.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config.ts",
+    "to": "src/domain/deployment.ts",
     "kind": "runtime"
    },
    {
@@ -1288,7 +1293,7 @@
     "src/runner.ts",
     "src/sandbox.ts"
    ],
-   "files": 17
+   "files": 18
   },
   {
    "index": 5,
@@ -1300,27 +1305,27 @@
     "src/pi-extension.ts",
     "src/rpc-client.ts"
    ],
-   "files": 10
+   "files": 9
   }
  ],
  "files": 153,
- "runtimeEdges": 562,
- "typeOnlyEdges": 274,
+ "runtimeEdges": 567,
+ "typeOnlyEdges": 273,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 187,
+  "L1-kernel -> L1-kernel": 189,
   "L2-facts -> L1-kernel": 27,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 158,
+  "L3-workflow -> L1-kernel": 159,
   "L3-workflow -> L2-facts": 12,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 45,
+  "L4-orchestration -> L1-kernel": 48,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 18,
-  "L5-entry -> L1-kernel": 29,
-  "L5-entry -> L2-facts": 4,
+  "L5-entry -> L1-kernel": 28,
+  "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
-  "L5-entry -> L4-orchestration": 6,
+  "L5-entry -> L4-orchestration": 7,
   "L5-entry -> L5-entry": 2
  },
  "upwardTypeOnlyEdges": [
@@ -1356,26 +1361,26 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 86,
+  "src/domain/errors.ts": 89,
   "src/domain/identifiers.ts": 30,
   "src/ids.ts": 19,
   "src/storage/paths.ts": 18,
-  "src/domain/derived.ts": 17,
   "src/storage/durable-fs.ts": 17,
   "src/store.ts": 17,
-  "src/domain/canonical-json.ts": 14,
+  "src/domain/derived.ts": 16,
   "src/authority.ts": 13,
-  "src/hash.ts": 13,
+  "src/domain/canonical-json.ts": 13,
+  "src/hash.ts": 12,
   "src/process/policies.ts": 10,
   "src/storage/directory.ts": 10,
   "src/storage/receipt-projector.ts": 10,
   "src/domain/context-policy.ts": 9,
-  "src/validate.ts": 9
+  "src/storage/contained-fs.ts": 9
  },
  "fanOut": {
-  "src/mail.ts": 27,
+  "src/mail.ts": 26,
   "src/broker.ts": 25,
-  "src/entry/broker.ts": 17,
+  "src/entry/broker.ts": 19,
   "src/git.ts": 15,
   "src/cli.ts": 14,
   "src/git/context-repository.ts": 14,
@@ -1394,11 +1399,11 @@
   "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 5,
-  "node:crypto": 14,
+  "node:crypto": 15,
   "node:fs": 33,
   "node:net": 3,
   "node:os": 1,
-  "node:path": 38,
+  "node:path": 39,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:url": 2,

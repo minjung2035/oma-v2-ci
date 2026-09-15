@@ -26,7 +26,7 @@ for (const method of ["mail.send", "git.submit", "git.integrate", "context.publi
       // uses the same immutable society identity; no real unit is installed.
       const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "" });
       const lifecycle = new LifecycleModule(store, units,
-        { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false },
+        { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
         (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
       const auth = { ...gitAuth, capabilities: new Set(ALL_CAPS) };
       const key = `${method}-race`;

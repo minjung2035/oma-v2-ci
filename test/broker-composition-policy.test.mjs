@@ -18,8 +18,8 @@ async function compose() {
   const executable = compiled.replace("void main().catch", "main().catch");
   const calls = [], paths = [], observation = { value: true, error: null };
   let constructorGoal;
-  const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs" },
-    integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
+  const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
+    quota: { storageBytes: 1024 }, integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
   const modules = {
     "node:path": path,
     "node:fs": { mkdirSync() {} },
@@ -58,7 +58,10 @@ async function compose() {
       async shutdown() { calls.push("shutdown"); }
       async start(phases) { await phases.recover(); await phases.listen(); await phases.notify(); await phases.activate(); }
     } },
-    "../runtime/assets.js": { assertRuntimeAssets() {}, runtimeAssets: () => ({}) },
+    // Deliberately controlled qualification gates: this is wiring proof, not a supported deployment profile.
+    "../runtime/assets.js": { assertHostDirectoryLayout() {}, assertRuntimeAssets() {}, runtimeAssets: () => ({}) },
+    "../runtime/deployment-manifest.js": { assertDeploymentDigest() { calls.push("digest"); } },
+    "../domain/resources.js": { assertStorageQuotaSupported() { calls.push("storage-quota"); } },
     "../authority.js": { resolvedSpecOf: value => value },
     "../domain/errors.js": { StoreError: class extends Error {} },
     "../ids.js": { isValidSocietyName: value => value === "fixture" },
@@ -98,4 +101,6 @@ test("P1 composition root: startup still wires recovery before listen, notify an
   const { calls } = await compose();
   assert.deepEqual(calls.slice(calls.indexOf("recover")), ["recover", "bootstrap", "listen", "notify", "activate", "refresh"]);
   assert.equal(calls.filter(value => value === "Store").length, 1);
+  assert.ok(calls.indexOf("digest") < calls.indexOf("storage-quota"));
+  assert.ok(calls.indexOf("storage-quota") < calls.indexOf("Store"));
 });

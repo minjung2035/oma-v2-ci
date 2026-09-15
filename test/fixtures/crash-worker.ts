@@ -34,7 +34,7 @@ const fsync = fs.fsyncSync;
 fs.fsyncSync = fd => {
   if (inTransaction) throw new Error("M-004: fsync inside Store.transaction callback");
   const path = fs.readlinkSync(`/proc/self/fd/${fd}`);
-  const faultTarget = point.startsWith("error-stage-") ? path.includes("/staging/") && path.endsWith(".eml")
+  const faultTarget = point.startsWith("error-stage-") ? path.startsWith(join(root, "staging/mail-objects") + "/")
     : /^error-(archive|recovery)-/.test(point) && path === join(root, "mail/archive/cur");
   const fail = () => { throw Object.assign(new Error(`injected ${point}`), { code: point.endsWith("before") ? "ENOSPC" : "EIO" }); };
   if (faultTarget && point.endsWith("before")) fail();
@@ -45,7 +45,7 @@ fs.fsyncSync = fd => {
   const populated = (directory: string): boolean => {
     try { return fs.readdirSync(directory).length > 0; } catch { return false; }
   };
-  if (point === "stage" && path.includes("/staging/") && path.endsWith(".eml")) checkpoint();
+  if (point === "stage" && path.startsWith(join(root, "staging/mail-objects") + "/")) checkpoint();
   if (point === "object" && path === join(root, "mail", "objects") && populated(path)) checkpoint();
   if (point === "submit-stage" && path.endsWith("/upload.bundle") && path.startsWith(join(root, "staging") + "/")) checkpoint();
   if (point === "ctx-snapshot" && /\/world\/context\/revisions\/[0-9a-f]{40,64}$/.test(path) && populated(path)) checkpoint();

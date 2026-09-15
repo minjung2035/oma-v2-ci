@@ -3,7 +3,7 @@ import type { AgentCreateInput } from "../../implementation/contracts/values.js"
 import type { HostConfigV1, ResolvedAgentSpec } from "../../implementation/contracts/host.js";
 import type { MessagePlan, OperationPlan } from "../../implementation/contracts/durable.js";
 
-export interface LifecyclePaths { stateRoot: string; projectGit: string; society: string; hasGoal(): boolean; activationAllowed?: () => boolean }
+export interface LifecyclePaths { stateRoot: string; projectGit: string; society: string; hasGoal(): boolean; activationAllowed(): boolean }
 export interface SpecResolver {
   (parent: { name: Actor; profile: string; role: "resident" | "principal"; desired: string; capabilities: readonly Capability[] }, input: AgentCreateInput): ResolvedAgentSpec | null;
   refresh?: () => void;

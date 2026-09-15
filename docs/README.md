@@ -50,6 +50,7 @@
 | P10–P15 | [구조 정제·적대적 검증 보고서](architecture-improvement/p10-p15-adversarial-review.md) |
 | P16–P22 | [데이터·타입 소유권과 evolution 검증](architecture-improvement/p16-p22-refinement.md) |
 | P23 | [Internal contract ownership 정리](architecture-improvement/p23-contract-ownership.md) |
+| P24 | [Filesystem containment](architecture-improvement/p24-filesystem-containment.md) · [감사 후속·deployment codec](architecture-improvement/p24-remediation.md) |
 
 ## 다른 감사와 generated evidence
 

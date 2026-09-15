@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0589208602905273,
+  "elapsed_seconds"    : 0.0602109432220459,
   "n_files"            : 152,
-  "n_lines"            : 15175,
-  "files_per_second"   : 2579.73151190457,
-  "lines_per_second"   : 257548.85324442,
+  "n_lines"            : 15293,
+  "files_per_second"   : 2524.45804476861,
+  "lines_per_second"   : 253990.374201621,
   "report_file"        : "production-loc.json"},
 "src/durable.ts" :{
   "blank": 5,
@@ -35,7 +35,7 @@
 "src/store.ts" :{
   "blank": 3,
   "comment": 13,
-  "code": 272,
+  "code": 276,
   "language": "TypeScript"},
 "src/broker/connection.ts" :{
   "blank": 1,
@@ -77,6 +77,11 @@
   "comment": 19,
   "code": 194,
   "language": "TypeScript"},
+"src/storage/immutable-file.ts" :{
+  "blank": 4,
+  "comment": 12,
+  "code": 191,
+  "language": "TypeScript"},
 "src/diagnostics/ledger.ts" :{
   "blank": 2,
   "comment": 5,
@@ -102,25 +107,15 @@
   "comment": 5,
   "code": 183,
   "language": "TypeScript"},
-"src/storage/immutable-file.ts" :{
-  "blank": 2,
-  "comment": 10,
+"src/reconcile.ts" :{
+  "blank": 1,
+  "comment": 11,
   "code": 180,
   "language": "TypeScript"},
 "src/protocol/channel.ts" :{
   "blank": 1,
   "comment": 9,
   "code": 179,
-  "language": "TypeScript"},
-"src/reconcile.ts" :{
-  "blank": 1,
-  "comment": 11,
-  "code": 177,
-  "language": "TypeScript"},
-"src/leaf.ts" :{
-  "blank": 17,
-  "comment": 16,
-  "code": 175,
   "language": "TypeScript"},
 "src/git/context.ts" :{
   "blank": 5,
@@ -162,6 +157,11 @@
   "comment": 40,
   "code": 151,
   "language": "TypeScript"},
+"src/runtime/deployment-manifest.ts" :{
+  "blank": 3,
+  "comment": 4,
+  "code": 144,
+  "language": "TypeScript"},
 "src/broker/composition.ts" :{
   "blank": 4,
   "comment": 3,
@@ -171,11 +171,6 @@
   "blank": 3,
   "comment": 13,
   "code": 143,
-  "language": "TypeScript"},
-"src/mail.ts" :{
-  "blank": 1,
-  "comment": 1,
-  "code": 140,
   "language": "TypeScript"},
 "src/mail/headers.ts" :{
   "blank": 4,
@@ -190,6 +185,11 @@
 "src/lifecycle/actions.ts" :{
   "blank": 5,
   "comment": 9,
+  "code": 136,
+  "language": "TypeScript"},
+"src/mail.ts" :{
+  "blank": 1,
+  "comment": 1,
   "code": 136,
   "language": "TypeScript"},
 "src/storage/submit-spool.ts" :{
@@ -215,6 +215,16 @@
 "src/config.ts" :{
   "blank": 4,
   "comment": 1,
+  "code": 126,
+  "language": "TypeScript"},
+"src/entry/broker.ts" :{
+  "blank": 1,
+  "comment": 2,
+  "code": 125,
+  "language": "TypeScript"},
+"src/leaf.ts" :{
+  "blank": 12,
+  "comment": 8,
   "code": 124,
   "language": "TypeScript"},
 "src/protocol/batch-view.ts" :{
@@ -222,15 +232,20 @@
   "comment": 4,
   "code": 121,
   "language": "TypeScript"},
+"src/domain/errors.ts" :{
+  "blank": 5,
+  "comment": 11,
+  "code": 118,
+  "language": "TypeScript"},
 "src/git/observe.ts" :{
   "blank": 11,
   "comment": 10,
   "code": 118,
   "language": "TypeScript"},
-"src/entry/broker.ts" :{
+"src/mail/batches.ts" :{
   "blank": 1,
   "comment": 2,
-  "code": 114,
+  "code": 112,
   "language": "TypeScript"},
 "src/mail/materializer.ts" :{
   "blank": 2,
@@ -242,21 +257,11 @@
   "comment": 14,
   "code": 109,
   "language": "TypeScript"},
-"src/mail/batches.ts" :{
-  "blank": 1,
-  "comment": 1,
-  "code": 108,
-  "language": "TypeScript"},
 "implementation/schema-v1.sql" :{
   "blank": 0,
   "comment": 4,
   "code": 104,
   "language": "SQL"},
-"src/domain/errors.ts" :{
-  "blank": 4,
-  "comment": 7,
-  "code": 102,
-  "language": "TypeScript"},
 "src/git/integration-policy.ts" :{
   "blank": 6,
   "comment": 7,
@@ -274,7 +279,7 @@
   "language": "TypeScript"},
 "src/git/quarantine.ts" :{
   "blank": 2,
-  "comment": 7,
+  "comment": 8,
   "code": 96,
   "language": "TypeScript"},
 "src/domain/persisted-formats.ts" :{
@@ -402,11 +407,6 @@
   "comment": 11,
   "code": 64,
   "language": "TypeScript"},
-"src/cli/cache-flow.ts" :{
-  "blank": 5,
-  "comment": 2,
-  "code": 63,
-  "language": "TypeScript"},
 "src/domain/request-identity.ts" :{
   "blank": 7,
   "comment": 16,
@@ -436,6 +436,11 @@
   "blank": 5,
   "comment": 1,
   "code": 57,
+  "language": "TypeScript"},
+"src/mail/reconcile.ts" :{
+  "blank": 0,
+  "comment": 1,
+  "code": 53,
   "language": "TypeScript"},
 "src/process/run.ts" :{
   "blank": 1,
@@ -472,14 +477,14 @@
   "comment": 4,
   "code": 46,
   "language": "TypeScript"},
+"src/runtime/assets.ts" :{
+  "blank": 2,
+  "comment": 6,
+  "code": 46,
+  "language": "TypeScript"},
 "src/domain/usage-budget.ts" :{
   "blank": 1,
   "comment": 2,
-  "code": 45,
-  "language": "TypeScript"},
-"src/mail/reconcile.ts" :{
-  "blank": 1,
-  "comment": 0,
   "code": 45,
   "language": "TypeScript"},
 "src/config/policy.ts" :{
@@ -542,6 +547,11 @@
   "comment": 4,
   "code": 36,
   "language": "TypeScript"},
+"src/lifecycle.ts" :{
+  "blank": 1,
+  "comment": 2,
+  "code": 36,
+  "language": "TypeScript"},
 "src/mail/routing.ts" :{
   "blank": 1,
   "comment": 1,
@@ -556,16 +566,6 @@
   "blank": 3,
   "comment": 7,
   "code": 34,
-  "language": "TypeScript"},
-"src/lifecycle.ts" :{
-  "blank": 1,
-  "comment": 2,
-  "code": 33,
-  "language": "TypeScript"},
-"src/runtime/assets.ts" :{
-  "blank": 1,
-  "comment": 4,
-  "code": 32,
   "language": "TypeScript"},
 "src/domain/child-policy.ts" :{
   "blank": 2,
@@ -647,6 +647,11 @@
   "comment": 1,
   "code": 21,
   "language": "OMA systemd"},
+"src/domain/resources.ts" :{
+  "blank": 4,
+  "comment": 4,
+  "code": 21,
+  "language": "TypeScript"},
 "src/domain/limits.ts" :{
   "blank": 3,
   "comment": 1,
@@ -687,15 +692,15 @@
   "comment": 7,
   "code": 16,
   "language": "TypeScript"},
-"src/domain/resources.ts" :{
-  "blank": 3,
-  "comment": 1,
-  "code": 15,
-  "language": "TypeScript"},
 "src/lifecycle/contracts.ts" :{
   "blank": 1,
   "comment": 1,
   "code": 15,
+  "language": "TypeScript"},
+"src/domain/deployment.ts" :{
+  "blank": 1,
+  "comment": 5,
+  "code": 14,
   "language": "TypeScript"},
 "src/git/paths.ts" :{
   "blank": 0,
@@ -717,11 +722,6 @@
   "comment": 1,
   "code": 11,
   "language": "OMA systemd"},
-"src/domain/deployment.ts" :{
-  "blank": 0,
-  "comment": 4,
-  "code": 11,
-  "language": "TypeScript"},
 "src/domain/spec-identity.ts" :{
   "blank": 1,
   "comment": 4,
@@ -768,7 +768,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 458,
-  "comment": 926,
-  "code": 13791,
+  "blank": 456,
+  "comment": 935,
+  "code": 13902,
   "nFiles": 152} }

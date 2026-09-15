@@ -7,7 +7,7 @@ import { ledgerFixture } from "./helpers/ledger-fixture.mjs";
 import { RegistryOperations } from "../dist/src/lifecycle/registry-operations.js";
 import { reconcileMailOperation } from "../dist/src/mail/reconcile.js";
 import { generateOperationId, generateMessageId } from "../dist/src/ids.js";
-import { requestHash } from "../dist/src/hash.js";
+import { requestHash, sha256Hex } from "../dist/src/hash.js";
 import { AdmissionGate, bindAdmissionGate } from "../dist/src/domain/admission.js";
 const code = expected => error => error?.code === expected;
 const auth = () => ({ actor: "alice", role: "resident", incarnation: 0, channel: "actor",
@@ -15,7 +15,7 @@ const auth = () => ({ actor: "alice", role: "resident", incarnation: 0, channel:
 function mail(store) {
   const id = generateOperationId(), message = generateMessageId(id, 0);
   const payload = { to: ["alice"], subject: "fixture", body: "x", kind: "message" };
-  const plan = { kind: "mail.send", message: { id: message, objectPath: `mail/objects/${message}.eml`, sha256: "a".repeat(64), bytes: 1, dateMs: Date.now(),
+  const plan = { kind: "mail.send", message: { id: message, objectPath: `mail/objects/${message}.eml`, sha256: sha256Hex("x"), bytes: 1, dateMs: Date.now(),
     to: ["alice"], recipients: ["alice"], kind: "message", contextRevision: null,
     replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } } };
   store.transaction(tx => {

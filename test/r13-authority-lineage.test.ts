@@ -109,7 +109,7 @@ test("R13: current guards re-read lease revocation, incarnation and desired stat
 
 function config(): HostConfigV1 {
   return {
-    schemaVersion: 1, society: "demo", installation: { node: "/node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "fixture" },
+    schemaVersion: 1, society: "demo", installation: { node: "/node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
     modelProfiles: { md: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none", pricingRevision: "v1", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
     agentProfiles: { p: { modelProfile: "md", capabilities: ["agent.create", "mail.send"], delegable: ["mail.send"], childProfile: "p", resources: { ...TEST_RESOURCES } } },
     principalProfile: "p", initialResidents: [],

@@ -223,7 +223,7 @@ export class CreateCoordinator {
     const current = this.store.getAgent(plan.spec.name)!;
     const desired = current.desired;
     if (desired === "enabled" && this.paths.hasGoal()) {
-      if (!allowActivation || this.paths.activationAllowed?.() === false) return lifecycleReceipt(this.store, id);
+      if (!allowActivation || this.paths.activationAllowed() !== true) return lifecycleReceipt(this.store, id);
       // No await between current identity/stop/activation checks and start.
       this.units.start(plan.spec.name, false);
     }

@@ -77,22 +77,37 @@ function checkedBytes(
 function openImmutable(directory: number, name: string): number {
   return openRegularBeneath(directory, name);
 }
-/** Consumers parse these checked bytes, never reopen the checked pathname. */
-export function readImmutableBytes(
-  path: string,
-  expectedHash: string,
-  expectedBytes: number,
-): Buffer {
+export type ImmutableObservation =
+  | { readonly kind: "present"; readonly bytes: Buffer }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unavailable" | "corrupt"; readonly error: unknown };
+
+/** Absence is evidence only on ENOENT, never on an inaccessible observer. */
+export function observeImmutableFile(path: string, expectedHash: string, expectedBytes: number): ImmutableObservation {
   let parent: number | undefined;
   try {
     parent = openDirectory(dirname(path));
     const fd = openImmutable(parent, basename(path));
-    try { return checkedBytes(fd, expectedHash, expectedBytes).bytes; }
+    try { return { kind: "present", bytes: checkedBytes(fd, expectedHash, expectedBytes).bytes }; }
     finally { closeSync(fd); }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new StoreError("STORE_CORRUPT", "immutable file is missing");
-    throw error;
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") return { kind: "absent" };
+    return { kind: error instanceof StoreError && error.code === "STORE_CORRUPT" ? "corrupt" : "unavailable", error };
   } finally { if (parent !== undefined) closeSync(parent); }
+}
+
+/** Consumers parse these checked bytes, never reopen the checked pathname.
+ * For accepted immutable evidence, proven absence is corruption. */
+export function readImmutableBytes(path: string, expectedHash: string, expectedBytes: number): Buffer {
+  const observed = observeImmutableFile(path, expectedHash, expectedBytes);
+  switch (observed.kind) {
+    case "present": return observed.bytes;
+    case "absent": throw new StoreError("STORE_CORRUPT", "immutable file is missing");
+    case "corrupt": throw observed.error;
+    case "unavailable":
+      if (observed.error instanceof StoreError) throw observed.error;
+      throw new StoreError("BROKER_UNAVAILABLE", "immutable file observation is unavailable", { cause: observed.error });
+  }
 }
 
 /** Same name/bytes = idempotent; different bytes/type = corruption. Source
