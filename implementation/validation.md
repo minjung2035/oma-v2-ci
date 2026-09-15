@@ -1,9 +1,39 @@
 # OMA v2 — 현재 검증 상태
 
-**P24 감사 후속: local·fast·durable 검증 PASS. 실제 systemd/storage quota/provider/power-loss 및 release는 미인증이다.**
-이 파일은 현재 검증 상태의 단일 기록 위치다. 명령 색인은 [루트 validation.md](../validation.md), 재개 작업은 [HANDOFF.md](../HANDOFF.md), 최신 변경·비보장 범위는 [P24 감사 후속](../docs/architecture-improvement/p24-remediation.md)과 [filesystem containment](../docs/architecture-improvement/p24-filesystem-containment.md)을 따른다.
+**F1–F4 감사 후속: local·fast·durable 검증 PASS. 실제 systemd/storage quota/provider/power-loss 및 release는 미인증이다.**
+이 파일은 현재 검증 상태의 단일 기록 위치다. 명령 색인은 [루트 validation.md](../validation.md), 재개 작업은 [HANDOFF.md](../HANDOFF.md), 최신 변경·비보장 범위는 [F1–F4 후속 수정](../docs/architecture-improvement/f1-f4-remediation.md)을 따른다.
 
-## 0. 현재 P24 감사 후속
+## 0. 현재 F1–F4 감사 후속
+
+- 기준 HEAD: **`d2524ebbac2a8efd03a41a0023358ab40f8a036c` + working tree** (`git rev-parse --short HEAD`: `d2524eb`). 실행일: **2026-09-15**.
+- 보고서의 master `9b4ea8f611262b60518767490bc5d3c8a3a41075`와 구분한다. 신규 미커밋 파일도 검증 source에 포함했다.
+- 환경: Linux x64, Node **26.7.0**, TypeScript **5.9.3**, cloc **2.08**.
+- local → fast → durable 순서로 실행했다. 결과 기록 직전 두 lane의 **404개 source digest**, **153개 production digest** 및 manifest hash를 현재 파일과 대조해 모두 일치함을 확인했다. 이후 변경은 이 파일의 결과 기록뿐이다. 실행 당시 본문은 `/tmp/oma-f1-f4-push.A5hVJj/validation-before.md`에 보존했다.
+
+| 실제 명령/검사 | 결과 | 범위 |
+|---|---|---|
+| `npm run typecheck` | PASS | pinned compiler, project-wide |
+| `npm run build` / `check:package` | PASS | 각 test/lane의 fresh build 및 static package; READY 증거 아님 |
+| `npm run check:architecture` | PASS, 0 findings | inventory, graph freshness, ownership/kernel/lattice, transaction |
+| `npm test` | **865/865 PASS** | 146개 guarded local files, 약 128초 |
+| `npm run verify:fast -- --out <new-dir>` | **151/151 PASS** | F2–F4 및 host-config 회귀와 required-name 검사 |
+| `npm run verify:durable -- --out <new-dir>` | **105/105 PASS** | F1 reply/admission 회귀와 기존 durable 경계 |
+| `node scripts/loc.mjs` | **153 files / 13,990 code LOC** | inventory/LOC/hash 재생성; release 승인 아님 |
+
+세 test 실행의 fail/cancelled/skipped/todo는 모두 **0**이다. 첫 통합 local은 **849/865**였다. 기존 PublicValidation VM fixture의 명시적 dependency 목록에 새 log codec이 빠져 16개가 실패했다. 실제 codec을 추가하고 기존 assertion/closed whitelist를 유지한 뒤 전체를 새 디렉터리에서 재실행했다. `/tmp/oma-f1-f4-verify.VRiI9p/local.log`는 중간 실패이며 최종 PASS 증거가 아니다.
+
+푸시 전 `src/protocol/log-response.ts`, `test/f1-reply-boundary.test.ts`, `test/f3-log-frame.test.ts`, `test/f4-cli-frame.test.ts`의 포맷 변경을 발견했다. 이전 compiled output과 emitted syntax가 같음을 확인했지만 byte-bound evidence를 재사용하지 않고 graph/LOC 및 local·fast·durable을 모두 새로 실행했다. 위 결과는 이 재검증을 가리키며, `/tmp/oma-f1-f4-final.g7jdbZ/`의 포맷 변경 전 결과와 구분한다.
+
+| Raw artifact | SHA-256 |
+|---|---|
+| `/tmp/oma-f1-f4-push.A5hVJj/local.log` | `30f3fdc45dce0f48a96b52405ff1d3f8e3d12df608d9c5d73a3bcfd056826542` |
+| `/tmp/oma-f1-f4-push.A5hVJj/fast/result.json` | `dd4b284545ef7f0933865e6dc821ef11598463637e73b3b16a8d2d0e39a2e5c2` |
+| `/tmp/oma-f1-f4-push.A5hVJj/durable/result.json` | `94936abe4bf5ff380987ce6172d827e7a039efe7d3f9c5334a9f2cf3abcca765` |
+| `/tmp/oma-f1-f4-push.A5hVJj/loc.log` | `204bb1240d85b8a03222070717982cf43b86514b17b7519dc8691354ae4faa87` |
+
+Default local suite는 `audit`, `audit2`, `cli`, `phase4`, `phase5`, `phase8`, `crash-boundaries`의 systemd-required 7개 파일을 **NOT_RUN**으로 명시한다. 실제 manager/provider/powercut 및 release는 **NOT_RUN/미인증**이다. quota `SPIKE_UNRESOLVED`, positive READY 요구, OPEN SPIKE와 LOC 승인 게이트는 유지한다. 이번 owned local socket/Store/command fixtures는 실제 배포 인증이 아니다. `/tmp` artifact의 영구 보존은 보장하지 않는다.
+
+## 0a. 과거 P24 감사 후속
 
 - 기준 HEAD: **`48d3f4081522d54c73b5be131a124e24db8eae7d` + working tree** (`git rev-parse --short HEAD`: `48d3f40`). 실행일: **2026-09-14**.
 - 환경: Linux x64, Node **26.7.0**, TypeScript **5.9.3**, cloc **2.08**. 신규 미커밋 파일도 검증 source에 포함했다.
@@ -31,7 +61,7 @@
 
 실제 manager/provider/powercut은 **NOT_RUN**이다. 지원된 storage quota profile이 없어 실제 broker는 `SPIKE_UNRESOLVED`로 시작을 거부한다. Kernel/all은 새 build의 실제 quota gate를 별도 guarded process에서 관측한 후 BLOCKED/NOT_RUN으로 남으며, 기존 positive READY 요구는 삭제하지 않았다. 이번에 실행한 해당 정책 시험은 소유 임시 fixture를 사용했고 live manager에 접촉하지 않았다. `/tmp` artifact의 영구 보존은 보장하지 않는다.
 
-## 0a. 과거 P24 filesystem containment 실행
+## 0b. 과거 P24 filesystem containment 실행
 
 - 실행일: **2026-09-14**. HEAD: **`a9bf98d21f785d6773ebd81b50938951356629d6` + P24 working tree** (`git rev-parse --short HEAD`: `a9bf98d`). 신규 미커밋 파일을 포함했다.
 - 환경: Linux x64, Node **26.7.0**, TypeScript **5.9.3**, cloc **2.08**.
@@ -107,7 +137,7 @@ Artifact가 없어졌다면 같은 명령을 새 output directory에서 실행�
 
 ## 3. 남은 검증과 release 게이트
 
-- `verify:property`, `verify:kernel`, `verify:crash`, `verify:stress`, `verify:all`: 이번 P24 감사 후속에서 **실제 lane 단위 NOT_RUN**. 일부 소속 tests를 `npm test`로 실행하거나 guarded 임시 fixture에서 BLOCKED 판정을 검사한 것과 실제 lane의 environment/required evidence 완료는 다르다. Fast/durable 실행은 §0에 기록했다.
+- `verify:property`, `verify:kernel`, `verify:crash`, `verify:stress`, `verify:all`: 이번 F1–F4 후속에서 **실제 lane 단위 NOT_RUN**. 일부 소속 tests를 `npm test`로 실행하거나 guarded 임시 fixture에서 BLOCKED 판정을 검사한 것과 실제 lane의 environment/required evidence 완료는 다르다. Fast/durable 실행은 §0에 기록한다.
 - VM power-cut 실제 prepare/reboot/verify, ENOSPC, read-only remount, backup/restore 및 live systemd/cgroup 관측: **NOT_RUN/환경 준비 필요**. 기존 guard/process-crash oracle을 실제 전원단절 proof로 취급하지 않는다.
 - S-01/S-01-CANDIDATE isolation·descendant·resource, S-02 Human Pi attach, S-03 trusted consumption, S-04 provider codec/accounting: 실제 환경 evidence 없이 OPEN을 해제하지 않는다.
 - S-05/S-06 hostile import·kernel containment·crash/backup 경계, S-08/S-10 tiered attestation, S-11 clean-room, S-09 품질·비용·latency: 각 [SPIKE 계약](spikes.md)의 남은 조건을 유지한다. 유료 provider와 host reboot는 이번에 실행하지 않았다.

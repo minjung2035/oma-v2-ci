@@ -46,6 +46,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/protocol/batch-view.ts",
       "src/protocol/byte-queue.ts",
       "src/protocol/jsonl.ts",
+      "src/protocol/log-response.ts",
       "src/protocol/methods.ts",
       "src/protocol/operation-results.ts",
       "src/protocol/receipt-codec.ts",

@@ -1,26 +1,26 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0602109432220459,
-  "n_files"            : 152,
-  "n_lines"            : 15293,
-  "files_per_second"   : 2524.45804476861,
-  "lines_per_second"   : 253990.374201621,
+  "elapsed_seconds"    : 0.0601749420166016,
+  "n_files"            : 153,
+  "n_lines"            : 15388,
+  "files_per_second"   : 2542.58657960633,
+  "lines_per_second"   : 255721.06069923,
   "report_file"        : "production-loc.json"},
 "src/durable.ts" :{
   "blank": 5,
   "comment": 12,
   "code": 411,
   "language": "TypeScript"},
+"src/cli.ts" :{
+  "blank": 1,
+  "comment": 5,
+  "code": 388,
+  "language": "TypeScript"},
 "src/validate.ts" :{
   "blank": 22,
   "comment": 19,
   "code": 387,
-  "language": "TypeScript"},
-"src/cli.ts" :{
-  "blank": 1,
-  "comment": 5,
-  "code": 386,
   "language": "TypeScript"},
 "src/protocol/methods.ts" :{
   "blank": 6,
@@ -130,7 +130,7 @@
 "src/broker/public-dispatcher.ts" :{
   "blank": 3,
   "comment": 8,
-  "code": 165,
+  "code": 166,
   "language": "TypeScript"},
 "src/git/submit.ts" :{
   "blank": 2,
@@ -156,6 +156,11 @@
   "blank": 11,
   "comment": 40,
   "code": 151,
+  "language": "TypeScript"},
+"src/mail.ts" :{
+  "blank": 1,
+  "comment": 3,
+  "code": 144,
   "language": "TypeScript"},
 "src/runtime/deployment-manifest.ts" :{
   "blank": 3,
@@ -187,11 +192,6 @@
   "comment": 9,
   "code": 136,
   "language": "TypeScript"},
-"src/mail.ts" :{
-  "blank": 1,
-  "comment": 1,
-  "code": 136,
-  "language": "TypeScript"},
 "src/storage/submit-spool.ts" :{
   "blank": 3,
   "comment": 12,
@@ -207,15 +207,15 @@
   "comment": 9,
   "code": 131,
   "language": "TypeScript"},
+"src/config.ts" :{
+  "blank": 4,
+  "comment": 1,
+  "code": 128,
+  "language": "TypeScript"},
 "src/runtime/run-registry.ts" :{
   "blank": 4,
   "comment": 5,
   "code": 128,
-  "language": "TypeScript"},
-"src/config.ts" :{
-  "blank": 4,
-  "comment": 1,
-  "code": 126,
   "language": "TypeScript"},
 "src/entry/broker.ts" :{
   "blank": 1,
@@ -395,6 +395,11 @@
 "src/inference/slots.ts" :{
   "blank": 2,
   "comment": 5,
+  "code": 66,
+  "language": "TypeScript"},
+"src/protocol/log-response.ts" :{
+  "blank": 1,
+  "comment": 4,
   "code": 66,
   "language": "TypeScript"},
 "src/cli/cache-codec.ts" :{
@@ -632,6 +637,11 @@
   "comment": 5,
   "code": 23,
   "language": "TypeScript"},
+"src/cli/transport.ts" :{
+  "blank": 1,
+  "comment": 5,
+  "code": 22,
+  "language": "TypeScript"},
 "src/domain/admission.ts" :{
   "blank": 1,
   "comment": 3,
@@ -651,6 +661,11 @@
   "blank": 4,
   "comment": 4,
   "code": 21,
+  "language": "TypeScript"},
+"src/broker/logs.ts" :{
+  "blank": 1,
+  "comment": 1,
+  "code": 20,
   "language": "TypeScript"},
 "src/domain/limits.ts" :{
   "blank": 3,
@@ -677,16 +692,6 @@
   "comment": 1,
   "code": 17,
   "language": "OMA systemd"},
-"src/cli/transport.ts" :{
-  "blank": 1,
-  "comment": 5,
-  "code": 17,
-  "language": "TypeScript"},
-"src/broker/logs.ts" :{
-  "blank": 1,
-  "comment": 1,
-  "code": 16,
-  "language": "TypeScript"},
 "src/protocol/operation-results.ts" :{
   "blank": 2,
   "comment": 7,
@@ -768,7 +773,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 456,
-  "comment": 935,
-  "code": 13902,
-  "nFiles": 152} }
+  "blank": 457,
+  "comment": 941,
+  "code": 13990,
+  "nFiles": 153} }

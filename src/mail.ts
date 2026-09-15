@@ -56,14 +56,7 @@ export class MailModule {
     if (claim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
     let parent: ParsedEmlHeaders | null = null;
-    if (input.replyToMessage) {
-      const parsed = parseMessageId(input.replyToMessage);
-      const operation = parsed && this.store.getOperationById(parsed.operationId);
-      if (!operation) throw new StoreError("INVALID_REQUEST", `reply target ${input.replyToMessage} is not accepted`);
-      const message = operationMessage(operation);
-      if (message.id !== input.replyToMessage) throw new StoreError("INVALID_REQUEST", `reply target ${input.replyToMessage} unknown`);
-      parent = this.materializer.headers(message);
-    }
+    if (input.replyToMessage) parent = this.replyHeaders(input.replyToMessage);
     const targetAddresses: Address[] = [...input.to];
     if (targetAddresses.length === 0) {
       const inherited = parent ? parent.replyTo ?? (parent.from ? [parent.from] : []) : ["commons" as Address];
@@ -109,6 +102,23 @@ export class MailModule {
     const finalOp = this.store.getOperation(auth.actor, key);
     if (!finalOp) throw new StoreError("STORE_CORRUPT", "accepted mail operation missing");
     return receiptOf(finalOp);
+  }
+  /** MAIL-005: a caller-selected operation is not yet evidence of message ownership.
+   * Store decoding and accepted-byte validation retain their corruption semantics. */
+  private replyHeaders(id: MessageId): ParsedEmlHeaders {
+    const parsed = parseMessageId(id);
+    const operation = parsed && this.store.getOperationById(parsed.operationId);
+    if (!operation) throw new StoreError("INVALID_REQUEST", "reply target is not accepted");
+    switch (operation.kind) {
+      case "mail.send": case "agent.continue": case "git.submit": case "context.publish": break;
+      case "agent.create":
+        if (operation.plan.initialMessage !== null) break;
+        throw new StoreError("INVALID_REQUEST", "reply target owns no separate message");
+      default: throw new StoreError("INVALID_REQUEST", "reply target owns no message");
+    }
+    const message = operationMessage(operation);
+    if (message.id !== id) throw new StoreError("INVALID_REQUEST", "reply target message is unknown");
+    return this.materializer.headers(message);
   }
   async freezeCreateInitial(auth: AuthContext, operationId: string, recipient: Actor, brief: string): Promise<MessagePlan> {
     const messageId = generateMessageId(operationId, 0);

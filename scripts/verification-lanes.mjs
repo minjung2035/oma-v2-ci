@@ -28,6 +28,10 @@ export const lanes = Object.freeze({
       "systemd-cleanup.test.js",
       "verification-oracles.test.js",
       "p24-owner-guards.test.js",
+      "f2-cli-request.test.js",
+      "f3-log-frame.test.js",
+      "f4-cli-frame.test.js",
+      "protocol-method-descriptors.test.js",
     ],
     sourceFiles: [
       "test/systemd-test-policy.test.mjs",
@@ -44,6 +48,9 @@ export const lanes = Object.freeze({
       "test/p11-p12-dispatch.test.mjs",
     ],
     requiredNames: [
+      "F2:",
+      "F3:",
+      "F4:",
       "V01",
       "V02",
       "V03-S1",
@@ -91,9 +98,11 @@ export const lanes = Object.freeze({
       "p24-deployment-gates.test.js",
       "p24-mail-boundaries.test.js",
       "p24-git-import.test.js",
+      "f1-reply-boundary.test.js",
     ],
     sourceFiles: [],
     requiredNames: [
+      "F1:",
       "R30",
       "R31",
       "R37",
