@@ -34,7 +34,7 @@ const fsync = fs.fsyncSync;
 fs.fsyncSync = fd => {
   if (inTransaction) throw new Error("M-004: fsync inside Store.transaction callback");
   const path = fs.readlinkSync(`/proc/self/fd/${fd}`);
-  const faultTarget = point.startsWith("error-stage-") ? path.includes("/staging/") && path.endsWith(".eml")
+  const faultTarget = point.startsWith("error-stage-") ? path.startsWith(join(root, "staging/mail-objects") + "/")
     : /^error-(archive|recovery)-/.test(point) && path === join(root, "mail/archive/cur");
   const fail = () => { throw Object.assign(new Error(`injected ${point}`), { code: point.endsWith("before") ? "ENOSPC" : "EIO" }); };
   if (faultTarget && point.endsWith("before")) fail();
@@ -45,7 +45,7 @@ fs.fsyncSync = fd => {
   const populated = (directory: string): boolean => {
     try { return fs.readdirSync(directory).length > 0; } catch { return false; }
   };
-  if (point === "stage" && path.includes("/staging/") && path.endsWith(".eml")) checkpoint();
+  if (point === "stage" && path.startsWith(join(root, "staging/mail-objects") + "/")) checkpoint();
   if (point === "object" && path === join(root, "mail", "objects") && populated(path)) checkpoint();
   if (point === "submit-stage" && path.endsWith("/upload.bundle") && path.startsWith(join(root, "staging") + "/")) checkpoint();
   if (point === "ctx-snapshot" && /\/world\/context\/revisions\/[0-9a-f]{40,64}$/.test(path) && populated(path)) checkpoint();
@@ -54,15 +54,19 @@ fs.fsyncSync = fd => {
   if (point === "boot-stage" && (path.includes("/staging/mail-objects/") || (path.includes("/staging/") && path.endsWith(".eml")))) checkpoint();
   if (point === "boot-object" && path === join(root, "mail/objects") && populated(path)) checkpoint();
 };
-const link = fs.linkSync;
-fs.linkSync = (source, destination) => {
-  link(source, destination); const path = String(destination);
-  if (point === "archive" && path.includes("/archive/cur/")) checkpoint();
-  if (point === "boot-mail" && path.includes("/archive/cur/")) checkpoint();
-  if (["submit-mail", "ctx-mail"].includes(point) && path.includes("/archive/cur/")) checkpoint();
-  if (point === "inbox-a" && path.includes("/inboxes/a/new/")) checkpoint();
-  if (point === "inbox-b" && path.includes("/inboxes/b/new/")) checkpoint();
-};
+// Publication now uses linkat on a held source fd. Observe the first target-fd
+// stat after that link, still before destination validation/fsync, not obsolete fs.linkSync.
+const fstat = fs.fstatSync;
+let linkCheckpoint = false;
+fs.fstatSync = ((...args: Parameters<typeof fstat>) => {
+  const result = Reflect.apply(fstat, fs, args);
+  const path = fs.readlinkSync(`/proc/self/fd/${args[0]}`);
+  const matches = (["archive", "boot-mail", "submit-mail", "ctx-mail"].includes(point) && path.includes("/archive/cur/")) ||
+    (point === "inbox-a" && path.includes("/inboxes/a/new/")) ||
+    (point === "inbox-b" && path.includes("/inboxes/b/new/"));
+  if (matches && !linkCheckpoint) { linkCheckpoint = true; checkpoint(); }
+  return result;
+}) as typeof fs.fstatSync;
 const rename = fs.renameSync;
 fs.renameSync = (source, destination) => {
   rename(source, destination);

@@ -42,6 +42,8 @@ import type {
   RunLease,
 } from "../implementation/contracts.js";
 
+import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
+requireSystemdTestManager();
 interface Env {
   dir: string;
   state: string;
@@ -93,6 +95,7 @@ function envOf(): Env {
       projectGit: join(state, "repos", "project.git"),
       society,
       hasGoal: () => true,
+      activationAllowed: () => true,
     },
     resolver,
     mail,
@@ -114,6 +117,7 @@ function envOf(): Env {
     broker,
     cleanup: () => {
       broker.drainAndClose();
+      cleanupOwnedSystemdUnits(dir, society);
       rmSync(dir, { recursive: true, force: true });
     },
   };

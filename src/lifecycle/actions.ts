@@ -34,7 +34,7 @@ export class LifecycleActions {
         throw new StoreError("STORE_CORRUPT", "start replay differs from accepted identity");
       if (!this.currentIntent(prior.plan)) return this.unconfirmed(prior.id);
     }
-    if (this.paths.activationAllowed?.() === false)
+    if (this.paths.activationAllowed() !== true)
       throw new StoreError("AGENT_NOT_READY", "broker recovery has not enabled activation");
     const observed = this.units.observe(agent);
     const alreadyRunning = target.desired === "enabled" && ["active", "activating"].includes(observed.activeState);
@@ -112,7 +112,7 @@ export class LifecycleActions {
     if (!this.currentIntent(plan)) { this.unconfirmed(id); return; }
     try {
       if (plan.kind === "agent.start") {
-        if (!allowActivation || this.paths.activationAllowed?.() === false || !this.paths.hasGoal()) return;
+        if (!allowActivation || this.paths.activationAllowed() !== true || !this.paths.hasGoal()) return;
         const observed = this.units.observe(plan.agent);
         if (!["active", "activating"].includes(observed.activeState)) {
           if (!this.units.confirmDead(plan.agent, plan.previousIncarnation)) { this.unconfirmed(id); return; }

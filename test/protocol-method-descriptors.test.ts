@@ -9,6 +9,7 @@ import {
 } from "../src/protocol/methods.js";
 import { loadConfig } from "../src/config.js";
 import { RESOURCE_FIELDS } from "../src/domain/resources.js";
+import { MIN_LOG_FRAME_BYTES } from "../src/protocol/log-response.js";
 
 // Both directions matter: a table cannot omit a union member or add a wire method.
 type Equal<A, B> = [A] extends [B] ? [B] extends [A] ? true : false : false;
@@ -76,7 +77,7 @@ function configFixture() {
   return {
     schemaVersion: 1,
     society: "example",
-    installation: { node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/opt/rootfs", deploymentDigest: "test" },
+    installation: { node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/opt/rootfs", deploymentDigest: "a".repeat(64) },
     modelProfiles: { model: { provider: "test", model: "test", credentialRef: "test", codecRevision: "test",
       pricingRevision: "test", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
     agentProfiles: { resident: { modelProfile: "model", capabilities: [], delegable: [], childProfile: null,
@@ -105,4 +106,18 @@ test("integration rejects unknown keys and initial residents reject a repeated n
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("F3: host configuration rejects frame limits without room for the minimal log response", () => {
+  const directory = mkdtempSync(join(tmpdir(), "oma-log-config-"));
+  const path = join(directory, "host.json");
+  try {
+    const config = configFixture();
+    for (const frameBytes of [MIN_LOG_FRAME_BYTES - 1, 0x100000000]) {
+      writeFileSync(path, JSON.stringify({ ...config, limits: { ...limits, frameBytes } }));
+      assert.throws(() => loadConfig(path), /limits\.frameBytes/);
+    }
+    writeFileSync(path, JSON.stringify({ ...config, limits: { ...limits, frameBytes: MIN_LOG_FRAME_BYTES } }));
+    assert.equal(loadConfig(path).limits.frameBytes, MIN_LOG_FRAME_BYTES);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

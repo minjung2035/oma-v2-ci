@@ -261,7 +261,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
     const lifecycle = new LifecycleModule(
       store,
       units,
-      { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true },
+      { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
       () => null,
       mail,
     );
@@ -325,7 +325,7 @@ test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods
     const lifecycle = new LifecycleModule(
       store,
       units,
-      { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true },
+      { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
       () => null,
       mail,
     );

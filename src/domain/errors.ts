@@ -2,11 +2,32 @@
 import type { ErrorCode, Failure } from "../../implementation/contracts/errors.js";
 
 export class StoreError extends Error {
-  constructor(readonly code: ErrorCode, message: string) {
-    super(message);
+  constructor(readonly code: ErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "StoreError";
   }
 }
+/** Normalize native storage exhaustion without interpreting operation phase.
+ * SQLite's primary result code 13 is SQLITE_FULL (extended codes retain it). */
+export function normalizeStorageFailure(error: unknown): unknown {
+  if (error instanceof StoreError || error === null || typeof error !== "object") return error;
+  // Owned-temporary cleanup can also fail. Preserve the primary effect's meaning
+  // and retain the whole aggregate as cause; a secondary ENOSPC cannot erase corruption.
+  const primary: unknown = error instanceof AggregateError ? error.errors[0] : error;
+  if (primary instanceof StoreError) return new StoreError(primary.code, primary.message, { cause: error });
+  if (primary === null || typeof primary !== "object") return error;
+  const code = "code" in primary ? primary.code : undefined;
+  const sqliteFull = code === "ERR_SQLITE_ERROR" && "errcode" in primary &&
+    typeof primary.errcode === "number" && Number.isInteger(primary.errcode) && (primary.errcode & 0xff) === 13;
+  if (code === "ENOSPC" || code === "EDQUOT" || code === "SQLITE_FULL" || sqliteFull)
+    return new StoreError("STORAGE_FULL", "durable storage is exhausted", { cause: error });
+  return error;
+}
+export function errorCodeOf(error: unknown): ErrorCode {
+  const normalized = normalizeStorageFailure(error);
+  return normalized instanceof StoreError ? normalized.code : "INTERNAL_ERROR";
+}
+
 export type MutationBlockScope = "none" | "operation" | "run" | "repository" | "store";
 type Category = "input" | "authority" | "conflict" | "resource" | "transient" | "integrity" | "ambiguous" | "unsupported" | "internal";
 interface ErrorMetadata {
@@ -96,7 +117,7 @@ export function terminalFailure(code: ErrorCode): Failure { return { code, messa
 
 /** Sanitize exceptions. Without admission evidence, do not invent acceptance or absence. */
 export function publicFailure(error: unknown, context?: Omit<ErrorContext, "code">): Failure {
-  const code = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
+  const code = errorCodeOf(error);
   const metadata = ERROR_METADATA[code];
   const fallback: Omit<ErrorContext, "code"> = {
     phase: "preaccept", effectKnowledge: "none",

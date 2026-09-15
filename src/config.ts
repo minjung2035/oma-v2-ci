@@ -8,6 +8,8 @@ import { isCapability } from "./domain/capabilities.js";
 import { RESOURCE_FIELDS } from "./domain/resources.js";
 import { PROTOCOL_LIMIT_FIELDS } from "./domain/limits.js";
 import type { IntegerField } from "./domain/integer-fields.js";
+import { isDeploymentDigest } from "./domain/deployment.js";
+import { isLogResponseFrameLimit } from "./protocol/log-response.js";
 export { resolveChildSpec } from "./domain/child-policy.js";
 
 function err(message: string): never { throw new StoreError("INVALID_REQUEST", `config: ${message}`); }
@@ -52,6 +54,7 @@ export function loadConfig(path: string): HostConfigV1 {
   const libdir = needString(installation.libdir, "installation.libdir");
   const rootfs = needString(installation.rootfs, "installation.rootfs");
   const deploymentDigest = needString(installation.deploymentDigest, "installation.deploymentDigest");
+  if (!isDeploymentDigest(deploymentDigest)) err("installation.deploymentDigest must be a lowercase SHA-256 digest");
 
   const modelProfiles = needRecord(cfg.modelProfiles, "modelProfiles");
   for (const [name, value] of Object.entries(modelProfiles)) {
@@ -115,6 +118,7 @@ export function loadConfig(path: string): HostConfigV1 {
   }
   const limits = needRecord(cfg.limits, "limits");
   needIntegerFields(limits, PROTOCOL_LIMIT_FIELDS, "limits");
+  if (!isLogResponseFrameLimit(limits.frameBytes)) err("limits.frameBytes must support a complete log response and uint32 framing");
   const featureKeys = ["notmuch", "reflinkSeed", "formalApproval", "egress"];
   const features = closedRecord(cfg.features, featureKeys, "features");
   for (const key of featureKeys) if (features[key] !== false) err(`features.${key} must be false in Core v1 default build`);

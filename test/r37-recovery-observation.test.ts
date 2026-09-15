@@ -49,7 +49,7 @@ for (const change of ["none", "stop", "incarnation", "shutdown", "unknown"] as c
       const mail = new MailModule({ stateRoot: root, society: "crash" }, store, 64);
       const pending = await mail.send({ ...gitAuth, capabilities: new Set(ALL_CAPS) }, "pending-work", { to: ["a"], subject: "work", kind: "message", body: "work" });
       assert.equal(pending.state, "succeeded");
-      const paths = { stateRoot: root, projectGit: join(root, "unused.git"), society: "crash", hasGoal: () => true };
+      const paths = { stateRoot: root, projectGit: join(root, "unused.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true };
       const lifecycle = new LifecycleModule(store, units, paths,
         (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
       const reconcile = new ReconcileModule(store, mail, null, units, lifecycle,

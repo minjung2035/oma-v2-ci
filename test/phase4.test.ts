@@ -1,7 +1,7 @@
 // Phase 4 acceptance: units render/verify, real systemd user lifecycle
 // (start-limit, cgroup death, stop-with-incoming-mail), capability escape,
-// broker singleton lock. Tests use an isolated XDG_CONFIG_HOME and their own
-// oma-<society>-* units, fully cleaned up afterwards (TEST-001).
+// broker singleton lock. XDG_CONFIG_HOME alone does not isolate a live manager.
+// These opt-in tests require a disposable user and verify exact owned-unit cleanup.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -24,6 +24,8 @@ import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, Capability, ResolvedAgentSpec, ResourceLimits } from "../implementation/contracts.js";
 
+import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
+requireSystemdTestManager();
 const NODE = process.execPath;
 const TEST_RESOURCES: ResourceLimits = {
   memoryBytes: 512 * 1024 * 1024, tasks: 64, cpuQuotaPercent: 100,
@@ -64,17 +66,14 @@ function envOf(): { env: Env; cleanup: () => void } {
   const lifecycle = new LifecycleModule(store, units, {
     stateRoot: state, projectGit: join(state, "repos", "project.git"), society,
     hasGoal: () => existsSync(join(state, "world", "context", "current")),
+    activationAllowed: () => true,
   }, resolver, mail);
   const views = new ViewsModule(store, state, society, "p");
   return {
     env: { dir, xdg, society, store, units, mail, lifecycle, views },
     cleanup: () => {
-      const options = { stdio: "ignore", timeout: 30000, maxBuffer: 1048576, killSignal: "SIGKILL" } as const;
       try {
-        spawnSync("systemctl", ["--user", "stop", `oma-${society}-*`], options);
-        spawnSync("systemctl", ["--user", "disable", `oma-${society}-*`], options);
-        spawnSync("systemctl", ["--user", "reset-failed", `oma-${society}-*`], options);
-        spawnSync("systemctl", ["--user", "daemon-reload"], options);
+        cleanupOwnedSystemdUnits(dir, society);
         try { store.close(); } catch { /* awaited broker drain already closed it */ }
         rmSync(dir, { recursive: true, force: true });
       } finally {
@@ -333,7 +332,7 @@ test("SEQ-002: unknown old-run death stops startup before mail reconciliation", 
     Reflect.set(env.units, "confirmDead", () => false);
     Reflect.set(env.units, "stop", () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "injected unknown death"); });
     Reflect.set(env.mail, "reconcilePending", () => assert.fail("mail reconciled before death proof"));
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git") });
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), activationAllowed: () => true });
     await assert.rejects(reconcile.startup(false), /injected unknown death/);
   } finally { cleanup(); }
 });
@@ -364,7 +363,7 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
     mkdirSync(goal, { recursive: true });
     const start = env.units.start.bind(env.units);
     Reflect.set(env.units, "start", () => assert.fail("activation before broker READY"));
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git") });
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), activationAllowed: () => true });
     await reconcile.startup(false);
     assert.equal(env.store.getOperationById(op.id)!.state, "pending");
     assert.equal(env.store.getAgent("child")!.desired, "enabled");
@@ -439,6 +438,7 @@ test("CREATE-003: resolved child policy is rechecked at T-create-intent", async 
     let resolutions = 0;
     const lifecycle = new LifecycleModule(env.store, env.units, {
       stateRoot: join(env.dir, "state"), projectGit: join(env.dir, "state", "repos", "project.git"), society: env.society, hasGoal: () => false,
+      activationAllowed: () => true,
     }, (_parent, input) => ({
       ...input, modelProfile: "m",
       resources: { memoryBytes: 3221225472, tasks: 128, cpuQuotaPercent: 200, tmpBytes: 1048576,
@@ -496,6 +496,7 @@ try {
     assert.equal(env.store.pendingDeliveries("dynamic").length, 0);
     assert.equal(readdirSync(join(env.dir, "state", "mail", "inboxes", "dynamic", "new")).length, 0);
     const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
+      activationAllowed: () => true,
       projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true,
     });
     await reconcile.sweep();
@@ -633,6 +634,7 @@ test("T41/CTX-006: pre-GOAL create stays logically enabled but cannot activate u
     writeFileSync(service, `[Unit]\nDescription=t41 child\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
+      activationAllowed: () => true,
       projectGit: join(env.dir, "state", "repos", "project.git"),
       hasGoal: () => existsSync(join(env.dir, "state", "world", "context", "current")),
     });

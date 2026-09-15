@@ -14,7 +14,9 @@ import { loadConfig } from "../config.js";
 import { createChildSpecResolver } from "../config/policy.js";
 import { ProcessLock } from "../runtime/process-lock.js";
 import { BrokerLifetime } from "../runtime/broker-lifetime.js";
-import { assertRuntimeAssets, runtimeAssets } from "../runtime/assets.js";
+import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout } from "../runtime/assets.js";
+import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
+import { assertStorageQuotaSupported } from "../domain/resources.js";
 import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
@@ -29,6 +31,7 @@ const stateRoot = join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/t
 const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
 const configPath = configIdx >= 0 && args[configIdx + 1] !== undefined ? args[configIdx + 1]! : join(stateRoot, "config.json");
 async function main(): Promise<void> {
+  assertHostDirectoryLayout(runRoot, true);
   mkdirSync(runRoot, { recursive: true });
   const lock = ProcessLock.acquire(join(runRoot, "broker.lock"));
   let graceSeconds: number | null = null;
@@ -49,8 +52,13 @@ async function main(): Promise<void> {
   try {
     const cfg = loadConfig(configPath);
     if (cfg.society !== society) throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
+    assertHostDirectoryLayout(stateRoot, true);
+    assertHostDirectoryLayout(cfg.installation.libdir);
+    assertHostDirectoryLayout(cfg.installation.rootfs);
     // No schema search, path flattening or cross-installation fallback.
     assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH, systemd: UNIT_TPL_DIR });
+    assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
+    assertStorageQuotaSupported(cfg.quota.storageBytes);
     graceSeconds = cfg.limits.receiptWaitSeconds;
     const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
     assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
@@ -111,7 +119,10 @@ async function main(): Promise<void> {
       activate: async () => { await reconcile.sweep(); views.refreshWorld(); },
     });
   } catch (error) {
-    console.error("broker startup failed:", error instanceof Error ? error.message : String(error)); await stop(1);
+    console.error("broker startup failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error)); await stop(1);
   }
 }
-void main().catch(error => { console.error("broker initialization failed:", error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
+void main().catch(error => {
+  console.error("broker initialization failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

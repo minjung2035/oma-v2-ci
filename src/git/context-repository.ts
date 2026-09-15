@@ -1,7 +1,7 @@
 /** CTX-003/004: canonical object and filesystem mechanisms. This owner never
  * chooses a new request, changes an accepted plan, or authorizes a main writer.
  */
-import { mkdirSync, lstatSync, chmodSync, readlinkSync } from "node:fs";
+import { constants, closeSync, fchmodSync, mkdirSync, lstatSync, readlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ContextEntry, Oid } from "../../implementation/contracts.js";
 import type { OperationOf, ValidatedPlan } from "../storage/operation-codec.js";
@@ -12,7 +12,8 @@ import { isValidFullOid } from "../ids.js";
 import { sha256Hex } from "../hash.js";
 import { readContextEntry, assertContextDirectory } from "../storage/context-files.js";
 import { contextStagingPathAt, contextRevisionPathAt } from "../storage/paths.js";
-import { ensureDurableDirectory, fsyncDir, fsyncTree, fsyncFile, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
+import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
+import { entryAt, openBeneath, openDirectory } from "../storage/contained-fs.js";
 import { publishContextRevision, verifyContextRevision } from "../storage/context-snapshot.js";
 import { runProcessSync, type ProcessObservation } from "../process/run.js";
 import { PreparationExecutor, requirePreparedSuccess } from "../process/preparation.js";
@@ -94,8 +95,8 @@ export class ContextRepository {
       throw new StoreError("STORE_CORRUPT", `context file does not match frozen intent: ${entry.path}`);
     const path = join(root, entry.path);
     ensureDurableDirectory(dirname(path), 0o700);
-    writeExclusiveFsyncedFile(path, bytes, 0o644);
-    chmodSync(path, 0o644); fsyncFile(path); fsyncDir(dirname(path));
+    writeExclusiveFsyncedFile(path, bytes, 0o644, undefined, fd => fchmodSync(fd, 0o644));
+    fsyncDir(dirname(path));
   }
   private importCandidate(work: string, candidate: Oid): void {
     assertContextDirectory(work); assertContextDirectory(join(work, ".git"));
@@ -113,27 +114,45 @@ export class ContextRepository {
     const entries = Object.freeze(source.map(entry => Object.freeze({ ...entry })));
     if (this.preparing || this.preparation.blocked) throw new StoreError("REF_STATE_UNKNOWN", "context preparation is active or uncertain");
     this.preparing = true;
+    let treeFd: number | undefined; let workFd: number | undefined;
     try {
-      assertContextDirectory(tree);
-      for (const entry of entries) readContextEntry(tree, entry);
+      treeFd = openDirectory(tree);
+      for (const entry of entries) readContextEntry(treeFd, entry);
       const format = await this.initialize();
       if (expected !== null && (!isValidFullOid(expected) || expected.length !== (format === "sha1" ? 40 : 64)))
         throw new StoreError("INVALID_OID", "context base has the wrong repository object format");
       const staging = dirname(tree); const work = join(staging, "commit-work");
-      mkdirSync(work, { mode: 0o700 }); fsyncDir(staging);
-      await this.prepareSuccess(["-C", work, "init", "-q", `--object-format=${format}`]);
+      const stagingFd = openDirectory(staging);
+      try {
+        mkdirSync(entryAt(stagingFd, "commit-work"), { mode: 0o700 });
+        workFd = openBeneath(stagingFd, "commit-work", constants.O_RDONLY | constants.O_DIRECTORY);
+      } finally { closeSync(stagingFd); }
+      fsyncDir(staging);
+      const directory = workFd;
+      const run = (argv: readonly string[], input?: Uint8Array) => this.preparation.run({
+        executable: "/usr/bin/git", argv: ["-C", "/proc/self/fd/3", ...argv], env: CONTEXT_ENV,
+        ...(input === undefined ? {} : { input }), timeoutMs: 120000, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024,
+      }, undefined, [directory]);
+      const success = async (argv: readonly string[], input?: Uint8Array) => requirePreparedSuccess(await run(argv, input), "context preparation");
+      await success(["init", "-q", `--object-format=${format}`]);
       if (expected !== null) {
-        await this.prepareSuccess(["-C", work, "fetch", "--no-tags", this.paths.contextGit, expected]);
-        await this.prepareSuccess(["-C", work, "update-ref", "HEAD", expected]);
+        await success(["fetch", "--no-tags", this.paths.contextGit, expected]);
+        await success(["update-ref", "HEAD", expected]);
       }
-      await this.prepareSuccess(["-C", work, "read-tree", "--empty"]);
-      for (const entry of entries) this.writeEntry(work, entry, readContextEntry(tree, entry));
-      await this.prepareSuccess(["-C", work, "add", "-f", "-A"]);
-      const committed = await this.prepareCommand(["-C", work, "commit", "-q", "--no-gpg-sign", "-m", "context"]);
+      await success(["read-tree", "--empty"]);
+      for (const entry of entries) {
+        const bytes = readContextEntry(treeFd, entry);
+        this.writeEntry(work, entry, bytes);
+        // Git consumes checked bytes on stdin, never reopens a checked worktree file.
+        const oid = oneLine(await success(["hash-object", "-w", "--stdin"], bytes));
+        if (!isValidFullOid(oid) || oid.length !== (format === "sha1" ? 40 : 64)) throw new StoreError("STORE_CORRUPT", "invalid context blob identity");
+        await success(["update-index", "--add", "--cacheinfo", `100644,${oid},${entry.path}`]);
+      }
+      const committed = await run(["commit", "-q", "--no-gpg-sign", "-m", "context"]);
       if (committed.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", "context candidate creation is uncertain");
       if (committed.exitCode !== 0) {
         if (expected === null) throw new StoreError("REF_STATE_UNKNOWN", "initial context commit was not created");
-        await this.prepareSuccess(["-C", work, "diff", "--cached", "--quiet", expected]);
+        await success(["diff", "--cached", "--quiet", expected]);
       }
       const candidate = present(this.observer.ref(join(work, ".git"), "HEAD"), "prepared context candidate");
       fsyncTree(work, "context-single-link"); fsyncDir(staging); fsyncDir(dirname(staging));
@@ -144,6 +163,8 @@ export class ContextRepository {
       this.verifyCandidate(candidate, entries, expected);
       return candidate;
     } finally {
+      if (workFd !== undefined) closeSync(workFd);
+      if (treeFd !== undefined) closeSync(treeFd);
       this.preparing = false;
       // No cleanup here: uncertain native children/staging need recovery proof.
     }

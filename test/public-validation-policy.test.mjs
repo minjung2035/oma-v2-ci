@@ -27,13 +27,14 @@ function fixture(transform = source => source) {
     }, reportDiagnostics: true });
     assert.deepEqual(compiled.diagnostics, []);
     const exports = {};
-    new Script(compiled.outputText, { filename: file }).runInNewContext({ exports, require(name) {
+    new Script(compiled.outputText, { filename: file }).runInNewContext({ exports, Buffer, require(name) {
       assert.ok(Object.hasOwn(dependencies, name), `uncontrolled dependency: ${name}`);
       return dependencies[name];
     } });
     return exports;
   }
   const replies = load("../src/broker/replies.ts", {});
+  const logResponse = load("../src/protocol/log-response.ts", { "../domain/errors.js": { StoreError } });
   const { PublicDispatcher } = load("../src/broker/public-dispatcher.ts", {
     "../domain/errors.js": { StoreError },
     "../domain/exhaustive.js": { assertNever(value) { throw new TypeError(`unhandled closed variant: ${String(value)}`); } },
@@ -42,6 +43,7 @@ function fixture(transform = source => source) {
     "../protocol/receipts.js": { receiptOfOperation: value => value, receiptNotFound: { status: "not-found" } },
     "../protocol/methods.js": { PUBLIC_METHODS: table, isPublicMethod: method => Object.hasOwn(table, method),
       decodePublicParams(_method, params) { calls.params++; return state.rejectParams || !params || typeof params !== "object" ? null : params; } },
+    "../protocol/log-response.js": logResponse,
     "./replies.js": replies,
   }, transform);
   const effect = async (...args) => { calls.effects.push(args); return { accepted: true }; };

@@ -11,7 +11,7 @@ import { StoreError, ERROR_METADATA, classifyError, type EffectKnowledge } from 
 import { requestHash, canonicalRequestParams } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey } from "../ids.js";
 import { publishedRefFor, mailObjectRelativePath } from "../domain/derived.js";
-import { prepareSubmitSpool, requireFrozenBundle, type PreparedSubmitSpool } from "../storage/submit-spool.js";
+import { prepareSubmitSpool, requireFrozenBundle, withFrozenBundle, type PreparedSubmitSpool } from "../storage/submit-spool.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { submitResult } from "../protocol/operation-results.js";
@@ -25,7 +25,7 @@ export interface SubmitInput {
 export interface SubmitEffects {
   verifyObjectFormat(oids: readonly string[]): void;
   canonicalHas(candidate: Oid): boolean;
-  quarantineImport(path: string, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): void | Promise<void>;
+  quarantineImport(fd: number, candidate: Oid, exportRef: string, prerequisites: readonly Oid[]): void | Promise<void>;
   publishRef(ref: string, candidate: Oid): void;
   observeRef(ref: string): GitObservation<string>;
 }
@@ -136,8 +136,7 @@ export class SubmitCoordinator {
     const plan = operation.plan; let knowledge: EffectKnowledge = "none";
     try {
       if (plan.bundle) {
-        requireFrozenBundle(plan.bundle);
-        await this.effects.quarantineImport(plan.bundle.path, plan.candidate, plan.exportRef, plan.prerequisites);
+        await withFrozenBundle(plan.bundle, fd => this.effects.quarantineImport(fd, plan.candidate, plan.exportRef, plan.prerequisites));
         requireFrozenBundle(plan.bundle); // asynchronous preparation did not authorize replacing the accepted input
       } else if (!this.effects.canonicalHas(plan.candidate)) throw new StoreError("PREREQUISITE_MISSING", "no bundle and candidate unknown to the broker");
       this.publicationAuthority(operation.actor, auth);
@@ -158,8 +157,7 @@ export class SubmitCoordinator {
         if (current.value !== plan.candidate) { this.store.transaction(tx => tx.setOperationUnknown(operation.id)); return; }
       } else if (current.kind === "absent") {
         if (plan.bundle) {
-          requireFrozenBundle(plan.bundle);
-          await this.effects.quarantineImport(plan.bundle.path, plan.candidate, plan.exportRef, plan.prerequisites);
+          await withFrozenBundle(plan.bundle, fd => this.effects.quarantineImport(fd, plan.candidate, plan.exportRef, plan.prerequisites));
           requireFrozenBundle(plan.bundle);
         } else if (!this.effects.canonicalHas(plan.candidate)) throw new StoreError("REF_STATE_UNKNOWN", "accepted candidate is unavailable in canonical objects");
         const fresh = this.effects.observeRef(plan.publishedRef);

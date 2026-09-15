@@ -20,7 +20,6 @@ src/broker/replies.ts
 src/broker/transport-spool.ts
 src/cli.ts
 src/cli/cache-codec.ts
-src/cli/cache-flow.ts
 src/cli/request-intent.ts
 src/cli/transport.ts
 src/config.ts
@@ -104,6 +103,7 @@ src/protocol/batch-view.ts
 src/protocol/byte-queue.ts
 src/protocol/channel.ts
 src/protocol/jsonl.ts
+src/protocol/log-response.ts
 src/protocol/methods.ts
 src/protocol/operation-results.ts
 src/protocol/receipt-codec.ts
@@ -118,10 +118,12 @@ src/rpc-client.ts
 src/runner.ts
 src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
+src/runtime/deployment-manifest.ts
 src/runtime/process-lock.ts
 src/runtime/run-registry.ts
 src/sandbox.ts
 src/storage/batch-view.ts
+src/storage/contained-fs.ts
 src/storage/context-files.ts
 src/storage/context-snapshot.ts
 src/storage/context-stream.ts

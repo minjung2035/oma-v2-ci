@@ -8,6 +8,7 @@ import { isValidRequestKey } from "../ids.js";
 import { receiptNotFound } from "../protocol/receipts.js";
 import { PUBLIC_METHODS, isPublicMethod, decodePublicParams } from "../protocol/methods.js";
 import { errorAnswer, okAnswer } from "./replies.js";
+import { boundedLogResponse } from "../protocol/log-response.js";
 
 
 export interface PublicAgentView {
@@ -162,7 +163,7 @@ export class PublicDispatcher {
           if (!git) throw new StoreError("SPIKE_UNRESOLVED", "context module unavailable");
           return okAnswer(id, await git.publishContext(auth, keyOf(request), params, stream ?? emptyStream()));
         }
-        case "logs.read": return okAnswer(id, await this.deps.readLogs(params.agent, params.sinceSeconds));
+        case "logs.read": return boundedLogResponse(id, await this.deps.readLogs(params.agent, params.sinceSeconds), this.deps.limits.frameBytes);
         default: return assertNever(method);
       }
     } catch (error) { return this.deps.failureAnswer(id, error); }

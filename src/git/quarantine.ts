@@ -25,9 +25,12 @@ const SCRIPT = [
   "trap cleanup EXIT",
   "mount --bind \"$project\" \"$root/project\" || fail_spike",
   "mount -o remount,bind,ro \"$root/project\" || fail_spike",
-  "mount --bind \"$bundle\" \"$root/bundle/input.bundle\" || fail_spike",
-  "mount -o remount,bind,ro \"$root/bundle/input.bundle\" || fail_spike",
   "mount -t tmpfs -o size=\"$tmp_bytes\" tmpfs \"$root/quarantine\" || fail_spike",
+  // Read the inherited checked descriptor into the existing bounded private tmpfs.
+  // A descriptor from the parent mount namespace is not a portable bind-mount source.
+  "cat \"$bundle\" > \"$root/quarantine/input.bundle\" || fail_spike",
+  "mount --bind \"$root/quarantine/input.bundle\" \"$root/bundle/input.bundle\" || fail_spike",
+  "mount -o remount,bind,ro \"$root/bundle/input.bundle\" || fail_spike",
   "mkdir -p \"$root/quarantine/tmp\"",
   "export TMPDIR=\"$root/quarantine/tmp\"",
   "mkdir -p \"$root/hooks\"",
@@ -51,14 +54,15 @@ const SCRIPT = [
   "$git --git-dir=\"$repo\" fsck --strict --no-reflogs >/dev/null 2>&1 || fail_bundle",
   "for prerequisite in \"$@\"; do $git --git-dir=\"$repo\" cat-file -e \"$prerequisite^{commit}\" >/dev/null 2>&1 || fail_prereq; done",
   "mount -o remount,bind,rw \"$root/project\" || fail_spike",
-  "$git --git-dir=\"$root/project\" fetch -q -f --no-tags \"$repo\" +refs/oma/input:refs/oma/input >/dev/null 2>&1 || fail_internal",
+  // Import objects only. The coordinator owns the later immutable published ref.
+  "$git --git-dir=\"$root/project\" fetch -q --no-tags --no-write-fetch-head --no-auto-maintenance --refmap= \"$repo\" refs/oma/input >/dev/null 2>&1 || fail_internal",
   "printf '%s\\n' \"$input\"",
 ].join("\n");
 
 export class QuarantineImporter {
   private readonly executor = new PreparationExecutor();
   constructor(private readonly paths: GitPaths, private readonly canonicalHas: (candidate: string) => boolean) {}
-  async importBundle(bundlePath: string, candidate: string, exportRef: string, prerequisites: readonly string[]): Promise<void> {
+  async importBundle(bundleFd: number, candidate: string, exportRef: string, prerequisites: readonly string[]): Promise<void> {
     const limits = this.paths.quarantineResources;
     if (!limits || ![limits.cpuSeconds, limits.memoryBytes, limits.tasks, this.paths.quarantineTmpBytes, this.paths.checkTimeoutSeconds]
       .every(value => Number.isSafeInteger(value) && value > 0))
@@ -79,8 +83,8 @@ export class QuarantineImporter {
         "GIT_CONFIG_VALUE_0=/dev/null", "GIT_CONFIG_VALUE_1=all", "GIT_CONFIG_VALUE_2=fsync",
         "/usr/bin/unshare", "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork",
         "--kill-child=SIGKILL", "--forward-signals", "--mount-proc", "/bin/sh", "-c", SCRIPT, "oma-quarantine",
-        bundlePath, this.paths.projectGit, candidate, exportRef, String(this.paths.quarantineTmpBytes), root, ...prerequisites,
-      ], env: GIT_ENV, timeoutMs: Math.max(1000, timeoutMs), stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 });
+        "/proc/self/fd/3", this.paths.projectGit, candidate, exportRef, String(this.paths.quarantineTmpBytes), root, ...prerequisites,
+      ], env: GIT_ENV, timeoutMs: Math.max(1000, timeoutMs), stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 }, undefined, [bundleFd]);
       if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", `quarantine import outcome is ${result.kind}`);
       settledNamespaceCommand = true;
       let stdout: string; let stderr: string;

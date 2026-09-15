@@ -153,6 +153,8 @@ function positional(args: string[], optionNames: string[]): string[] {
 }
 function keyOf(args: string[]): string | null {
   const key = opt(args, "--request");
+  if (args.includes("--request") && key === null) fail("--request requires a value", 2);
+  if (args.indexOf("--request") !== args.lastIndexOf("--request")) fail("--request must be specified once", 2);
   if (key !== null && !isValidRequestKey(key)) fail(`invalid request key ${key}`, 2);
   return key;
 }

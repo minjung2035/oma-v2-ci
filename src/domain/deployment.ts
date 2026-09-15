@@ -13,3 +13,8 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
     "principal-relay.service.in": "host", "reconcile.service.in": "host" } as const),
   runtimeDependencies: Object.freeze(["koffi", "nodemailer"] as const),
 });
+
+/** CFG-001: digest syntax is pinned; byte verification belongs to runtime assets. */
+export function isDeploymentDigest(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}

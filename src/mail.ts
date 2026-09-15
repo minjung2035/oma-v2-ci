@@ -1,5 +1,5 @@
 // MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
-import { mkdirSync, readFileSync, lstatSync, rmSync } from "node:fs";
+import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
 import { Store } from "./store.js";
@@ -8,11 +8,10 @@ import { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js"
 export { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js";
 import { assertCurrentActor } from "./authority.js";
 import { generateMessageId, generateOperationId, parseMessageId } from "./ids.js";
-import { mailObjectFileName } from "./domain/derived.js";
 import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "./storage/paths.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
-import { publishImmutableFile } from "./storage/immutable-file.js";
+import { publishImmutableFile, readImmutableBytes } from "./storage/immutable-file.js";
 import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { expandAddresses, logicalReplyAddress } from "./mail/routing.js";
@@ -57,14 +56,7 @@ export class MailModule {
     if (claim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
     let parent: ParsedEmlHeaders | null = null;
-    if (input.replyToMessage) {
-      const parsed = parseMessageId(input.replyToMessage);
-      const operation = parsed && this.store.getOperationById(parsed.operationId);
-      if (!operation) throw new StoreError("INVALID_REQUEST", `reply target ${input.replyToMessage} is not accepted`);
-      const message = operationMessage(operation);
-      if (message.id !== input.replyToMessage) throw new StoreError("INVALID_REQUEST", `reply target ${input.replyToMessage} unknown`);
-      parent = this.materializer.headers(message);
-    }
+    if (input.replyToMessage) parent = this.replyHeaders(input.replyToMessage);
     const targetAddresses: Address[] = [...input.to];
     if (targetAddresses.length === 0) {
       const inherited = parent ? parent.replyTo ?? (parent.from ? [parent.from] : []) : ["commons" as Address];
@@ -88,10 +80,7 @@ export class MailModule {
       kind: input.kind, contextRevision: input.refs?.find(reference => reference.repo === "context")?.oid ?? null,
       replyHeaders, ...(input.approvalFor === undefined ? {} : { approvalFor: input.approvalFor }),
     }, { subject: input.subject, body: input.body });
-    const staging = join(this.paths.stateRoot, "staging", `send-${key}`); mkdirSync(staging, { recursive: true });
-    const staged = join(staging, mailObjectFileName(messageId)); writeFsynced(staged, eml.text);
-    try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256); }
-    finally { rmSync(staged, { force: true }); fsyncDir(staging); }
+    this.freezeObject(messageId, eml);
     const txClaim = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth, "mail.send");
       const current = this.store.claimKey(auth.actor, key, newHash);
@@ -114,6 +103,23 @@ export class MailModule {
     if (!finalOp) throw new StoreError("STORE_CORRUPT", "accepted mail operation missing");
     return receiptOf(finalOp);
   }
+  /** MAIL-005: a caller-selected operation is not yet evidence of message ownership.
+   * Store decoding and accepted-byte validation retain their corruption semantics. */
+  private replyHeaders(id: MessageId): ParsedEmlHeaders {
+    const parsed = parseMessageId(id);
+    const operation = parsed && this.store.getOperationById(parsed.operationId);
+    if (!operation) throw new StoreError("INVALID_REQUEST", "reply target is not accepted");
+    switch (operation.kind) {
+      case "mail.send": case "agent.continue": case "git.submit": case "context.publish": break;
+      case "agent.create":
+        if (operation.plan.initialMessage !== null) break;
+        throw new StoreError("INVALID_REQUEST", "reply target owns no separate message");
+      default: throw new StoreError("INVALID_REQUEST", "reply target owns no message");
+    }
+    const message = operationMessage(operation);
+    if (message.id !== id) throw new StoreError("INVALID_REQUEST", "reply target message is unknown");
+    return this.materializer.headers(message);
+  }
   async freezeCreateInitial(auth: AuthContext, operationId: string, recipient: Actor, brief: string): Promise<MessagePlan> {
     const messageId = generateMessageId(operationId, 0);
     const eml = await buildFrozenMessage({ id: messageId, sender: auth.actor, society: this.paths.society,
@@ -124,16 +130,14 @@ export class MailModule {
     return messagePlanFrom(eml, [recipient]);
   }
   publishCreateInitial(message: MessagePlan): void {
-    const object = this.objectPath(message.id); const stat = lstatSync(object, { throwIfNoEntry: false });
-    if (!stat?.isFile() || stat.size !== message.bytes || sha256Hex(readFileSync(object)) !== message.sha256)
-      throw new StoreError("STORE_CORRUPT", `create initial object mismatch: ${message.id}`);
+    readImmutableBytes(this.objectPath(message.id), message.sha256, message.bytes);
   }
   freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): void {
-    const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); mkdirSync(stagingDir, { recursive: true });
+    const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); ensureDirectory(stagingDir);
     const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
     writeFsynced(staged, eml.text);
     try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256 ?? sha256Hex(eml.text)); }
-    finally { rmSync(staged, { force: true }); fsyncDir(stagingDir); }
+    finally { removeOwnedFile(staged); }
   }
   async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> { this.materializer.gated(operationId, proof); }
   async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }

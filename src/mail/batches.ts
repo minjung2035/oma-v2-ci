@@ -1,13 +1,13 @@
-import { mkdirSync, existsSync, readFileSync, unlinkSync, renameSync, lstatSync } from "node:fs";
+import { unlinkSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Actor, AuthContext, BoundaryEvidence, MessageId, PreparedBatch } from "../../implementation/contracts.js";
 import { Store, type DeliveryRow } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { generateBatchId } from "../ids.js";
-import { sha256Hex } from "../hash.js";
 import { mailArchiveDisplayPath, contextRevisionDisplayPath } from "../domain/derived.js";
 import { mailObjectPathAt, mailInboxPathAt } from "../storage/paths.js";
-import { fsyncDir } from "../storage/durable-fs.js";
+import { ensureDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
+import { observeImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
 import { publishBatchView } from "../storage/batch-view.js";
 import { encodeBatchView, type BatchViewLimits } from "../protocol/batch-view.js";
 import { MailMaterializer, operationMessage } from "./materializer.js";
@@ -83,16 +83,21 @@ export class BatchCoordinator {
       const delivery = this.store.getDelivery(id, agent);
       if (!delivery) throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
       const message = this.messagePlan(delivery); const object = mailObjectPathAt(this.stateRoot, id);
-      for (const path of [object, from, to]) {
-        const stat = lstatSync(path, { throwIfNoEntry: false }); if (path !== object && !stat) continue;
-        if (!stat?.isFile() || sha256Hex(readFileSync(path)) !== message.sha256)
-          throw new StoreError("STORE_CORRUPT", `mail integrity mismatch: ${path}`);
-      }
-      if (existsSync(from)) {
-        mkdirSync(dirname(to), { recursive: true });
-        if (existsSync(to)) unlinkSync(from); else renameSync(from, to);
+      readImmutableBytes(object, message.sha256, message.bytes);
+      const observe = (path: string): boolean => {
+        const result = observeImmutableFile(path, message.sha256, message.bytes);
+        if (result.kind === "corrupt") throw result.error;
+        if (result.kind === "unavailable")
+          throw new StoreError("BROKER_UNAVAILABLE", "mailbox observation is unavailable", { cause: result.error });
+        return result.kind === "present";
+      };
+      const fresh = observe(from); const current = observe(to);
+      if (fresh) {
+        // Persist cur's name in the mailbox parent BEFORE removing the new link.
+        ensureDurableDirectory(dirname(to));
+        if (current) unlinkSync(from); else renameSync(from, to);
         count++;
-      } else if (!existsSync(to)) throw new StoreError("STORE_CORRUPT", `missing mailbox delivery ${id}/${agent}`);
+      } else if (!current) throw new StoreError("STORE_CORRUPT", `missing mailbox delivery ${id}/${agent}`);
       fsyncDir(dirname(from)); fsyncDir(dirname(to));
     }
     return count;

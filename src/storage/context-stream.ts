@@ -2,14 +2,15 @@
  * At most one entry descriptor and one source chunk are active. No whole-input
  * chunks array, concatenation, newline conversion or durable sidecar is used.
  */
-import { constants, openSync, closeSync, writeFileSync, fchmodSync, fsyncSync, fstatSync, lstatSync, readdirSync, rmdirSync, unlinkSync } from "node:fs";
+import { constants, closeSync, mkdirSync, writeFileSync, fchmodSync, fsyncSync, fstatSync, lstatSync, unlinkSync } from "node:fs";
 import { createHash, type Hash } from "node:crypto";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { BlobDescriptor, ContextEntry } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { contextEntriesCheck, ContextTextValidator } from "../domain/context-policy.js";
 import { contextStagingPathAt } from "./paths.js";
-import { assertDirectory } from "./directory.js";
+import { assertDirectory, removeOwnedTree } from "./directory.js";
+import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
 import { ensureDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
 
 /** Discard the staging tree this call prepared but never accepted.
@@ -22,19 +23,7 @@ import { ensureDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault
  */
 export function discardContextPreparation(stateRoot: string, operationId: string): void {
   const staging = contextStagingPathAt(stateRoot, operationId);
-  if (!lstatSync(staging, { throwIfNoEntry: false })) return;
-  const walk = (directory: string): boolean => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) { walk(path); rmdirSync(path); continue; }
-      if (!entry.isFile()) throw new StoreError("STORE_CORRUPT", `context staging holds a non-regular entry: ${entry.name}`);
-      unlinkSync(path);
-    }
-    return true;
-  };
-  walk(staging);
-  rmdirSync(staging);
-  fsyncDir(dirname(staging));
+  removeOwnedTree(staging);
 }
 
 interface OwnedFile { path: string; dev: number; ino: number }
@@ -52,6 +41,7 @@ export async function prepareContextStream(
   const staging = contextStagingPathAt(stateRoot, operationId);
   const tree = join(staging, "tree");
   ensureDurableDirectory(tree, 0o700, faults); assertDirectory(tree);
+  const treeFd = openDirectory(tree);
   const owned: OwnedFile[] = [];
   const state: { active: EntryWriter | null; index: number } = { active: null, index: 0 };
   let received = 0;
@@ -61,11 +51,22 @@ export async function prepareContextStream(
     const entry = entries[state.index];
     if (!entry) return;
     const path = join(tree, entry.path);
-    ensureDurableDirectory(dirname(path), 0o700, faults);
-    faultAt(faults, "file-create", "before", path);
-    const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-    faultAt(faults, "file-create", "after-visible", path);
+    // The context grammar permits only root files and decisions/<name>.
+    let directory = treeFd;
+    let name = entry.path;
+    if (entry.path.startsWith("decisions/")) {
+      try { mkdirSync(entryAt(treeFd, "decisions"), { mode: 0o700 }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+      directory = openBeneath(treeFd, "decisions", constants.O_RDONLY | constants.O_DIRECTORY);
+      name = entry.path.slice("decisions/".length);
+    }
+    let fd: number;
+    try {
+      faultAt(faults, "file-create", "before", path);
+      fd = openBeneath(directory, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    } finally { if (directory !== treeFd) closeSync(directory); }
     state.active = { entry, fd, remaining: entry.bytes, hash: createHash("sha256"), text: new ContextTextValidator(entry.path) };
+    faultAt(faults, "file-create", "after-visible", path);
     // Register FD ownership before fstat so even an observation failure closes it.
     const stat = fstatSync(fd);
     owned.push({ path, dev: stat.dev, ino: stat.ino });
@@ -117,7 +118,12 @@ export async function prepareContextStream(
     if (received !== content.bytes || state.index !== entries.length || state.active !== null)
       throw new StoreError("STREAM_INVALID", "EOF before all declared context bytes");
     if (aggregate.digest("hex") !== content.sha256) throw new StoreError("STREAM_INVALID", "context aggregate digest mismatch");
-    fsyncTree(tree, "context-single-link", faults); fsyncDir(staging, faults); fsyncDir(dirname(staging), faults);
+    fsyncTree(treeFd, "context-single-link", faults); fsyncDir(staging, faults); fsyncDir(dirname(staging), faults);
+    const named = openDirectory(tree);
+    try {
+      const current = fstatSync(named); const pinned = fstatSync(treeFd);
+      if (current.dev !== pinned.dev || current.ino !== pinned.ino) throw new StoreError("STORE_CORRUPT", "context staging root changed identity");
+    } finally { closeSync(named); }
     return tree;
   } catch (error) {
     if (isDurabilityFault(error)) throw error; // crash simulation: no owned cleanup
@@ -131,14 +137,22 @@ export async function prepareContextStream(
     // exclusively created here, never another owner's replacement or a subtree.
     for (const file of [...owned].reverse()) {
       try {
-        const current = lstatSync(file.path, { throwIfNoEntry: false });
-        if (!current) continue;
-        if (!current.isFile() || current.dev !== file.dev || current.ino !== file.ino)
-          throw new StoreError("STORE_CORRUPT", "owned context preparation changed identity during cleanup");
-        unlinkSync(file.path); fsyncDir(dirname(file.path), faults);
+        const relative = file.path.slice(tree.length + 1);
+        const parent = dirname(relative) === "." ? treeFd : openBeneath(treeFd, dirname(relative), constants.O_RDONLY | constants.O_DIRECTORY);
+        try {
+          const name = entryAt(parent, basename(relative));
+          const current = lstatSync(name, { throwIfNoEntry: false });
+          if (!current) continue;
+          if (!current.isFile() || current.dev !== file.dev || current.ino !== file.ino)
+            throw new StoreError("STORE_CORRUPT", "owned context preparation changed identity during cleanup");
+          unlinkSync(name); fsyncSync(parent);
+        } finally { if (parent !== treeFd) closeSync(parent); }
       } catch (failure) { failures.push(failure); }
     }
     if (failures.length > 1) throw new AggregateError(failures, "context preparation and owned cleanup failed");
     throw error;
+  } finally {
+    if (state.active?.fd !== null && state.active?.fd !== undefined) closeSync(state.active.fd);
+    closeSync(treeFd);
   }
 }

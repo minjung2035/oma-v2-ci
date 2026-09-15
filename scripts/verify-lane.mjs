@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { arch, platform, release } from "node:os";
 import ts from "typescript";
 import { lanes, evaluateExecution } from "./verification-lanes.mjs";
@@ -22,10 +23,11 @@ for (const key of ["PATH", "HOME", "LANG", "LC_ALL", "TZ", "XDG_RUNTIME_DIR", "X
   if (process.env[key] !== undefined) environment[key] = process.env[key];
 const inheritedKeys = Object.keys(environment);
 Object.assign(environment, exploration.env, { OMA_TEST_ARTIFACT_DIR: join(output, "exploration") });
-const report = { schema: 1, lane: name, status: "SETUP_FAILED", execution: "NOT_RUN", proof: lane.proof,
+const report = { schema: 1, lane: name, status: "BLOCKED", execution: "NOT_RUN", proof: lane.proof,
   startedAt: new Date().toISOString(), concurrency: 1, environment: { node: process.version, platform: platform(), arch: arch(), kernel: release(), uid: process.getuid?.() ?? null,
     inheritedKeys, paidProviderCredentialsInherited: false },
   exploration: { parameters: exploration.parameters, artifacts: "exploration", defaults: "declared and reported by each test; not inferred measurements" },
+  declaredTestFiles: lane.files, requiredNames: lane.requiredNames, entryQualification: null,
   commands: [], selectedFiles: [], sourceDigests: {}, sourceTestCallSites: [], runtime: null,
   limitations: ["S-03/S-04 feature completion remains BLOCKED", "VM power loss NOT_RUN", "host reboot and paid provider calls are outside this runner", "raw test failure does not identify product-vs-environment cause"] };
 function filesUnder(path) {
@@ -61,6 +63,8 @@ function requirePreflight(executable, argv) {
   return result.stdout.trim();
 }
 try {
+  if (lane.environment === "systemd" && process.env.OMA_TEST_SYSTEMD !== "1")
+    throw new Error("systemd lane requires explicit OMA_TEST_SYSTEMD=1 and a disposable test user");
   // @types/node is not a runtime support matrix. Probe the actual required API.
   const sqlite = await import("node:sqlite");
   if (typeof sqlite.DatabaseSync !== "function") throw new Error("required runtime SQLite API is unavailable");
@@ -70,12 +74,12 @@ try {
     report.environment.git = requirePreflight("git", ["--version"]);
     if (!existsSync("/dev/shm")) throw new Error("cross-filesystem test mount missing");
   }
-  if (lane.environment === "systemd") {
-    report.environment.systemd = requirePreflight("systemctl", ["--user", "show", "--property=Version", "--value"]);
-    report.environment.bubblewrap = requirePreflight("bwrap", ["--version"]);
-    report.environment.python = requirePreflight("python3", ["--version"]);
-    if (!existsSync("/proc/self/fd") || !existsSync("/sys/fs/cgroup/cgroup.controllers")) throw new Error("required proc/cgroup v2 observations unavailable");
-  }
+  report.status = "SETUP_FAILED";
+  // Build and qualification probes cannot access a manager, even for entry lanes.
+  environment.OMA_TEST_SYSTEMD = "0";
+  environment.NODE_OPTIONS = `--import=${new URL("./local-test-guard.mjs", import.meta.url).href}`;
+  if (lane.environment !== "systemd")
+    environment.DBUS_SESSION_BUS_ADDRESS = "unix:path=/nonexistent/oma-local-tests-no-user-bus";
   const roots = ["src", "test", "scripts", "implementation", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "architecture.md", "implementation-spec.md"];
   for (const path of roots.flatMap(name => filesUnder(join(root, name))).sort()) {
     const rel = relative(root, path); const bytes = readFileSync(path);
@@ -96,6 +100,29 @@ try {
   report.environment.sourceHeadStatus = report.environment.sourceHead ? "OBSERVED" : "NOT_AVAILABLE";
   const build = await command("npm", ["run", "build"], "build", 600);
   if (build.code !== 0 || build.signal) { report.status = "BUILD_FAILED"; throw new Error("build failed; test execution did not begin"); }
+  if (lane.entryStorageBytes !== undefined) {
+    const module = "dist/src/domain/resources.js";
+    const moduleSha256 = createHash("sha256").update(readFileSync(join(root, module))).digest("hex");
+    const probe = await command(process.execPath, [fileURLToPath(new URL("./probe-entry-qualification.mjs", import.meta.url)), root, String(lane.entryStorageBytes)], "entry-qualification", 30);
+    report.entryQualification = { storageBytes: lane.entryStorageBytes, module, moduleSha256, exitCode: probe.code, signal: probe.signal };
+    if (probe.code === 78 && probe.signal === null && !probe.timedOut && !probe.error) {
+      report.status = "BLOCKED";
+      throw new Error("S-01 storage quota qualification is OPEN: fresh production gate returned SPIKE_UNRESOLVED");
+    }
+    if (probe.code !== 0 || probe.signal || probe.timedOut || probe.error) {
+      report.status = "PRECHECK_FAILED"; throw new Error("fresh production qualification probe failed; see entry-qualification logs");
+    }
+  }
+  if (lane.environment === "systemd") {
+    report.status = "BLOCKED";
+    environment.OMA_TEST_SYSTEMD = "1";
+    delete environment.NODE_OPTIONS;
+    report.environment.systemd = requirePreflight("systemctl", ["--user", "show", "--property=Version", "--value"]);
+    report.environment.bubblewrap = requirePreflight("bwrap", ["--version"]);
+    report.environment.python = requirePreflight("python3", ["--version"]);
+    if (!existsSync("/proc/self/fd") || !existsSync("/sys/fs/cgroup/cgroup.controllers")) throw new Error("required proc/cgroup v2 observations unavailable");
+    report.status = "SETUP_FAILED";
+  }
   if (name === "fast" || name === "all") {
     for (const script of ["typecheck", "check:architecture"]) {
       const check = await command("npm", ["run", script], script.replace(":", "-"), 600);
@@ -107,7 +134,12 @@ try {
   for (const file of selected) if (!compiled.includes(file)) throw new Error(`required test file missing: ${file}`);
   const sourceNames = readdirSync(join(root, "test")).filter(file => file.endsWith(".test.ts")).map(file => file.replace(/\.ts$/, ".js")).sort();
   if (JSON.stringify(compiled) !== JSON.stringify(sourceNames)) throw new Error("compiled/source test inventories differ; clean rebuild required");
-  report.selectedFiles = [...selected.map(file => `dist/test/${file}`), ...lane.sourceFiles];
+  const sourceTests = name === "all"
+    ? readdirSync(join(root, "test")).filter(file => file.endsWith(".test.mjs")).sort().map(file => `test/${file}`)
+    : lane.sourceFiles;
+  // Preserve explicitly required MJS entries even when all discovers additional
+  // files; a deleted required test must fail, not disappear from the inventory.
+  report.selectedFiles = [...selected.map(file => `dist/test/${file}`), ...new Set([...lane.sourceFiles, ...sourceTests])];
   for (const file of report.selectedFiles) if (!lstatSync(join(root, file)).isFile()) throw new Error(`test entry is not a file: ${file}`);
   const baselinePath = valueOf("--baseline");
   const baseline = baselinePath ? JSON.parse(readFileSync(resolve(baselinePath), "utf8")) : null;

@@ -1,14 +1,15 @@
 // FS/IPC: transport .wire copies and workflow upload.bundle names have different
 // owners. No accepted name is unlinked by connection cleanup or a failed retry.
 import {
-  constants, openSync, closeSync, writeFileSync, readSync, fstatSync, lstatSync,
+  constants, closeSync, writeFileSync, readSync, fstatSync, lstatSync,
   fchmodSync, fsyncSync, unlinkSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { dirname } from "node:path";
+import { basename, dirname } from "node:path";
 import type { BlobDescriptor } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
-import { assertDirectory } from "./directory.js";
+import { entryAt, openBeneath, openDirectory, openRegularBeneath } from "./contained-fs.js";
+import { removeOwnedFile } from "./directory.js";
 import { ensureDurableDirectory, fsyncDir } from "./durable-fs.js";
 import { submitStagingPathAt, submitBundlePathAt } from "./paths.js";
 
@@ -20,10 +21,6 @@ export type BundleObservation =
   | { readonly kind: "unavailable"; readonly reason: string };
 function code(error: unknown): string | null {
   return error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : null;
-}
-function removeOwnedFile(path: string): void {
-  try { unlinkSync(path); } catch (error) { if (code(error) !== "ENOENT") throw error; }
-  fsyncDir(dirname(path));
 }
 export class PreparedSubmitSpool {
   private owner: "preaccept" | "accepted" | "released" = "preaccept";
@@ -60,7 +57,10 @@ export async function prepareSubmitSpool(
   }
   const path = submitBundlePathAt(stateRoot, operationId);
   // No name is owned if exclusive creation fails; never delete an existing file.
-  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  const parent = openDirectory(staging);
+  let fd: number;
+  try { fd = openBeneath(parent, basename(path), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
+  catch (error) { closeSync(parent); throw error; }
   try {
     try {
       const hash = createHash("sha256"); let total = 0;
@@ -73,58 +73,75 @@ export async function prepareSubmitSpool(
         throw new StoreError("STREAM_INVALID", "bundle bytes or digest do not match the descriptor");
       fchmodSync(fd, 0o444);
       fsyncSync(fd);
+      const current = lstatSync(entryAt(parent, basename(path))); const pinned = fstatSync(fd);
+      if (!current.isFile() || current.dev !== pinned.dev || current.ino !== pinned.ino)
+        throw new StoreError("STORE_CORRUPT", "prepared bundle name changed identity");
     } finally { closeSync(fd); }
-    fsyncDir(staging); fsyncDir(dirname(staging));
+    fsyncSync(parent); fsyncDir(dirname(staging));
   } catch (error) {
-    try { removeOwnedFile(path); }
+    try { unlinkSync(entryAt(parent, basename(path))); fsyncSync(parent); }
     catch (cleanup) { throw new AggregateError([error, cleanup], "bundle preparation and owned cleanup failed"); }
     throw error;
-  }
+  } finally { closeSync(parent); }
   return new PreparedSubmitSpool(Object.freeze({ path, ...frozenDescriptor }));
 }
 
-/** Read-time trust boundary: all bytes are hashed through one no-follow fd.
- * An I/O failure is not absence; a replacement, extra link or changed digest is
- * corruption. This does not claim to implement native openat2/S-06 traversal.
+/** Read-time trust boundary: hash one contained single-link descriptor and keep
+ * it through the handoff. A same-UID in-place writer is not stopped by fd pinning.
+ * An I/O failure is not absence, and none of this closes S-06.
  */
-export function observeFrozenBundle(bundle: FrozenBundle): BundleObservation {
-  let fd: number | null = null;
-  let outcome: BundleObservation = { kind: "unavailable", reason: "bundle was not observed" };
+function openVerifiedBundle(bundle: FrozenBundle): number {
+  const parent = openDirectory(dirname(bundle.path));
+  let fd: number | undefined;
   try {
-    assertDirectory(dirname(bundle.path));
-    const named = lstatSync(bundle.path);
-    if (!named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.size !== bundle.bytes)
-      return { kind: "corrupt", reason: "bundle type, link count or length changed" };
-    fd = openSync(bundle.path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const named = lstatSync(entryAt(parent, basename(bundle.path)));
+    if (!named.isFile() || named.nlink !== 1 || named.size !== bundle.bytes)
+      throw new StoreError("STORE_CORRUPT", "bundle type, link count or length changed");
+    fd = openRegularBeneath(parent, basename(bundle.path));
     const before = fstatSync(fd);
     if (!before.isFile() || before.nlink !== 1 || before.dev !== named.dev || before.ino !== named.ino || before.size !== bundle.bytes)
-      return { kind: "corrupt", reason: "bundle identity changed before open" };
+      throw new StoreError("STORE_CORRUPT", "bundle identity changed before open");
     const hash = createHash("sha256"); const buffer = Buffer.alloc(64 * 1024);
     let total = 0;
     while (true) {
-      const read = readSync(fd, buffer, 0, Math.min(buffer.length, bundle.bytes - total + 1), null);
+      const read = readSync(fd, buffer, 0, Math.min(buffer.length, bundle.bytes - total + 1), total);
       if (read === 0) break;
       total += read;
-      if (total > bundle.bytes) return { kind: "corrupt", reason: "bundle grew while being read" };
+      if (total > bundle.bytes) throw new StoreError("STORE_CORRUPT", "bundle grew while being read");
       hash.update(buffer.subarray(0, read));
     }
-    const after = fstatSync(fd); const currentName = lstatSync(bundle.path);
+    const after = fstatSync(fd); const currentName = lstatSync(entryAt(parent, basename(bundle.path)));
     if (total !== bundle.bytes || hash.digest("hex") !== bundle.sha256 ||
-        after.nlink !== 1 || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs ||
-        currentName.dev !== before.dev || currentName.ino !== before.ino || !currentName.isFile())
-      return { kind: "corrupt", reason: "accepted bundle bytes or identity changed" };
-    outcome = { kind: "present" };
+      after.nlink !== 1 || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs ||
+      currentName.dev !== before.dev || currentName.ino !== before.ino || !currentName.isFile())
+      throw new StoreError("STORE_CORRUPT", "accepted bundle bytes or identity changed");
+    return fd;
   } catch (error) {
-    if (code(error) === "ENOENT") outcome = { kind: "absent" };
-    else if (error instanceof StoreError && error.code === "STORE_CORRUPT" || code(error) === "ELOOP")
-      outcome = { kind: "corrupt", reason: "unsafe bundle path or link" };
-    else outcome = { kind: "unavailable", reason: `bundle observation failed${code(error) ? ` (${code(error)})` : ""}` };
-  } finally {
-    if (fd !== null) {
-      try { closeSync(fd); } catch { outcome = { kind: "unavailable", reason: "bundle descriptor close failed" }; }
-    }
+    if (fd !== undefined) closeSync(fd);
+    throw error;
+  } finally { closeSync(parent); }
+}
+export function observeFrozenBundle(bundle: FrozenBundle): BundleObservation {
+  try { closeSync(openVerifiedBundle(bundle)); return { kind: "present" }; }
+  catch (error) {
+    if (code(error) === "ENOENT") return { kind: "absent" };
+    if (error instanceof StoreError && error.code === "STORE_CORRUPT" || code(error) === "ELOOP")
+      return { kind: "corrupt", reason: "unsafe bundle path, bytes or identity" };
+    return { kind: "unavailable", reason: `bundle observation failed${code(error) ? ` (${code(error)})` : ""}` };
   }
-  return outcome;
+}
+/** The descriptor stays owned until the asynchronous consumer has received it.
+ * A spawned consumer must inherit this fd; it must not use bundle.path instead.
+ */
+export async function withFrozenBundle(bundle: FrozenBundle, consume: (fd: number) => void | Promise<void>): Promise<void> {
+  let fd: number;
+  try { fd = openVerifiedBundle(bundle); }
+  catch (error) {
+    if (error instanceof StoreError) throw error;
+    if (code(error) === "ENOENT") throw new StoreError("STORE_CORRUPT", "accepted bundle is missing");
+    throw new StoreError("REF_STATE_UNKNOWN", "accepted bundle could not be opened for handoff");
+  }
+  try { await consume(fd); } finally { closeSync(fd); }
 }
 export function requireFrozenBundle(bundle: FrozenBundle): void {
   const observation = observeFrozenBundle(bundle);

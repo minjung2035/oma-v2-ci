@@ -16,7 +16,7 @@ export async function sendWithStop(mail: MailModule, store: Store, auth: AuthCon
   if (!point) return mail.send(auth, key, input);
   const probeId = messageIdForOperation("op-00000000-0000-4000-8000-000000000001", 0);
   const root = dirname(dirname(mail.objectPath(probeId)));
-  const stage = join(dirname(root), "staging", `send-${key}`);
+  const stage = join(dirname(root), "staging", "mail-objects");
   const fsync = fs.fsyncSync;
   const transaction = store.transaction;
   let stopped = false;

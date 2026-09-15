@@ -113,7 +113,7 @@ for (const change of ["none", "revoke", "main"] as const) {
 
 test("R37: creation awaits a real private workspace before unit publication and rechecks the live lease", { skip: process.platform !== "linux", timeout: 30000 }, async () => {
   const f = fixture(); const entered = deferred(); const release = deferred();
-  const paths = { stateRoot: f.root, projectGit: f.paths.projectGit, society: "crash", hasGoal: () => false };
+  const paths = { stateRoot: f.root, projectGit: f.paths.projectGit, society: "crash", hasGoal: () => false, activationAllowed: () => true };
   const workspace = new WorkspaceCoordinator(paths); const original = workspace.ensure.bind(workspace);
   workspace.ensure = async plan => { await original(plan); entered.resolve(); await release.promise; };
   const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "" }, join(f.root, "units"));

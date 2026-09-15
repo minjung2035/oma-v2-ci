@@ -1,14 +1,12 @@
-/** CTX-001..004 / DB-009: physical checks complement, never replace, the
- * operation decoder. A TypeScript brand is not proof about the filesystem.
- * Parent observations are not an openat2/kernel containment proof.
+/** CTX-001..004 / DB-009: physical checks complement the operation decoder.
+ * Read and metadata handoff share one descriptor acquired beneath a pinned root.
  */
-import { constants, openSync, closeSync, fstatSync, lstatSync, readSync } from "node:fs";
-import { join } from "node:path";
+import { closeSync, fstatSync, readSync } from "node:fs";
 import type { ContextEntry } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { sha256Hex } from "../hash.js";
 import { contextPathCheck, contextFileCheck } from "../domain/context-policy.js";
-import { assertDirectory as assertContextDirectory } from "./directory.js";
+import { openDirectory, openRegularBeneath } from "./contained-fs.js";
 export { assertDirectory as assertContextDirectory } from "./directory.js";
 export { ensureDurableDirectory as ensureContextDirectory } from "./durable-fs.js";
 
@@ -34,35 +32,22 @@ function readFrozenLength(fd: number, length: number, path: string): Buffer {
 /** Check the descriptor again at the effect boundary; never follow a leaf link
  * and hash the bytes read from the same opened single-link regular descriptor.
  */
-export function readContextEntry(root: string, entry: ContextEntry): Buffer {
+export function readContextEntry(root: string | number, entry: ContextEntry, use?: (fd: number) => void): Buffer {
   const invalid = contextPathCheck(entry.path);
   if (invalid || !Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || !/^[0-9a-f]{64}$/.test(entry.sha256))
     throw new StoreError("STORE_CORRUPT", invalid ?? "invalid frozen context descriptor");
-  assertContextDirectory(root);
-  const components = entry.path.split("/");
-  let parent = root;
-  for (const component of components.slice(0, -1)) {
-    parent = join(parent, component);
-    assertContextDirectory(parent);
-  }
-  const path = join(root, entry.path);
-  const observed = lstatSync(path, { throwIfNoEntry: false });
-  if (!observed?.isFile() || observed.isSymbolicLink() || observed.nlink !== 1 || observed.size !== entry.bytes)
-    throw new StoreError("STORE_CORRUPT", `context source type/link/size mismatch: ${entry.path}`);
+  const parent = typeof root === "string" ? openDirectory(root) : root;
   let fd: number;
-  try {
-    // O_NONBLOCK prevents a replacement FIFO from hanging before fstat can
-    // reject its type. It does not change reads from regular files.
-    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  } catch (error) {
+  try { fd = openRegularBeneath(parent, entry.path); }
+  catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ELOOP" || code === "ENOENT" || code === "ENOTDIR")
       throw new StoreError("STORE_CORRUPT", `context source changed before open: ${entry.path}`);
     throw error;
-  }
+  } finally { if (typeof root === "string") closeSync(parent); }
   try {
     const before = fstatSync(fd);
-    if (!before.isFile() || before.nlink !== 1 || before.dev !== observed.dev || before.ino !== observed.ino || before.size !== entry.bytes)
+    if (!before.isFile() || before.nlink !== 1 || before.size !== entry.bytes)
       throw new StoreError("STORE_CORRUPT", `context source identity changed: ${entry.path}`);
     const bytes = readFrozenLength(fd, entry.bytes, entry.path);
     const after = fstatSync(fd);
@@ -70,6 +55,7 @@ export function readContextEntry(root: string, entry: ContextEntry): Buffer {
       throw new StoreError("STORE_CORRUPT", `context source bytes changed: ${entry.path}`);
     const contentError = contextFileCheck(entry.path, bytes);
     if (contentError) throw new StoreError("STORE_CORRUPT", `${entry.path}: ${contentError}`);
+    use?.(fd);
     return bytes;
   } finally { closeSync(fd); }
 }

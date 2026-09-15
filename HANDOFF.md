@@ -1,16 +1,18 @@
 # OMA v2 — 현재 인계
 
-현행 정제 범위: P23 contract ownership. 작업 시작점은 P16–P22 commit `dd7905b`다.
+현행 범위: F1–F4 reply 입력·request identity·log/CLI frame 경계 수정. 기준 HEAD는 `d2524ebbac2a8efd03a41a0023358ab40f8a036c`다.
 작업 브랜치는 `refactor/safety-preserving-architecture`다. 재개할 때 실제 HEAD와 working tree를 먼저 확인한다.
 
 ## 현재 판정
 
-- P10–P22 경계를 유지하며 internal port의 implementation type 의존을 최소 contract로 정리했다.
+- P10–P23 구조·계약 경계를 유지하며 선택한 staging/파일 handoff에 openat2/dirfd와 검증 fd 전달을 적용했다. 전체 same-UID filesystem/SQLite VFS 방어를 완료했다는 뜻은 아니다.
+- F1의 입력 오류와 실제 `STORE_CORRUPT` 차단을 분리했다. F2의 누락된 request 값은 준비 전 거절하고, F3의 log frame 예산과 F4의 host/CLI 공통 한도를 적용했다.
 - 실제 실행 판정·정확한 범위·source pin은 **[현재 검증 상태](implementation/validation.md)** 한 곳에서 확인하고 현재 working tree와 대조한다.
 - 이는 release-ready 선언이 아니다. 실제 환경 검증과 OPEN SPIKE, LOC 승인 조건은 남아 있다.
+- 지원된 storage quota profile이 없어 실제 broker는 `SPIKE_UNRESOLVED`로 시작을 거부한다. 임의의 allow flag로 열지 않는다. default `npm test`의 local PASS와 명시적 systemd lane을 구분한다.
 - 과거 인계의 “P5/P7 미완료”, “phase5 smoke 실패”, “pinned typecheck 미실행”은 현재 재개 작업이 아니다.
 
-## 이번에 고정한 경계
+## 유지하는 구조 경계
 
 - `scripts/dependency-graph.mjs`: production TypeScript Program의 source/edge 공용 owner.
 - `scripts/kernel-zones.mjs`: L1 kernel의 파일별 semantic zone과 방향 정책.
@@ -20,7 +22,9 @@
 - `src/storage/receipt-projector.ts`: validated ledger → wire receipt projection. `ValidatedPlan` 발급은 K3에 유지.
 - `test/architecture-oracles.test.mjs`, `p11-p12-dispatch.test.mjs`, `architecture-evolution.test.mjs`: 독립 oracle과 실제 production 변경 누락 검증.
 
-최신 변경과 좁은 v1 호환 예외는 [P23 소유권 기록](docs/architecture-improvement/p23-contract-ownership.md), 이전 경계는 [P16–P22 기록](docs/architecture-improvement/p16-p22-refinement.md)과 [P10–P15 보고서](docs/architecture-improvement/p10-p15-adversarial-review.md), 단계별 탐색은 [진행 색인](docs/architecture-improvement/progress.md)을 따른다.
+F1–F4의 계약 해석·테스트·비보장 범위는 [후속 수정 기록](docs/architecture-improvement/f1-f4-remediation.md)에 있다. sandbox 밖 CLI도 비기본 host와 같은 `OMA_FRAME_BYTES`를 전달해야 한다.
+
+앞선 deployment digest codec·비보장 범위는 [P24 감사 후속](docs/architecture-improvement/p24-remediation.md)과 [filesystem 기록](docs/architecture-improvement/p24-filesystem-containment.md), 기존 소유권과 좁은 v1 호환 예외는 [P23 기록](docs/architecture-improvement/p23-contract-ownership.md)을 따른다. 이전 경계는 [P16–P22 기록](docs/architecture-improvement/p16-p22-refinement.md)과 [P10–P15 보고서](docs/architecture-improvement/p10-p15-adversarial-review.md), 단계별 탐색은 [진행 색인](docs/architecture-improvement/progress.md)에 있다.
 
 ## 다음 작업
 

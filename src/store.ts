@@ -20,7 +20,7 @@ export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./domain/identifiers.js";
 import { SCHEMA_USER_VERSION_READABLE, SCHEMA_USER_VERSION_WRITTEN } from "./domain/persisted-formats.js";
-import { StoreError } from "./domain/errors.js";
+import { StoreError, normalizeStorageFailure } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
 export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
@@ -153,6 +153,8 @@ export class Store {
     try { this.db.exec(ddl); }
     catch (error) {
       try { this.db.exec("ROLLBACK"); } catch { /* no open transaction */ }
+      const normalized = normalizeStorageFailure(error);
+      if (normalized instanceof StoreError) throw normalized;
       throw new StoreError("STORE_CORRUPT", `migration failed: ${(error as Error).message}`);
     }
     if (this.userVersion() !== SCHEMA_USER_VERSION_WRITTEN)
@@ -169,6 +171,8 @@ export class Store {
           if (index < this.busyRetries) continue;
           throw new StoreError("DB_BUSY", "BEGIN IMMEDIATE blocked");
         }
+        const normalized = normalizeStorageFailure(error);
+        if (normalized instanceof StoreError) throw normalized;
         throw new StoreError("STORE_CORRUPT", `BEGIN IMMEDIATE failed: ${(error as Error).message}`);
       }
     }
@@ -189,7 +193,7 @@ export class Store {
       });
     } catch (error) {
       try { this.db.exec("ROLLBACK"); } catch { /* already rolled back */ }
-      throw error;
+      throw normalizeStorageFailure(error);
     } finally { this.transitions.reset(); }
   }
   get inTransaction(): boolean { return this.transactions.active; }
