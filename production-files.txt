@@ -30,6 +30,9 @@ src/cli/commands/send.ts
 src/cli/commands/status.ts
 src/cli/commands/submit.ts
 src/cli/effects.ts
+src/cli/effects/context.ts
+src/cli/effects/mail.ts
+src/cli/effects/submit.ts
 src/cli/exit.ts
 src/cli/request-intent.ts
 src/cli/request-service.ts
