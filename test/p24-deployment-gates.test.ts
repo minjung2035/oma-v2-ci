@@ -24,6 +24,7 @@ import {
 } from "../src/runtime/deployment-manifest.js";
 import { assertHostDirectoryLayout } from "../src/runtime/assets.js";
 import { assertStorageQuotaSupported } from "../src/domain/resources.js";
+import { assertStorageQuotaAdmission } from "../src/storage/quota.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
 
@@ -144,7 +145,7 @@ test("P02: canonical deployment manifest pins every selected byte independent of
   }
 });
 
-test("P01/P02: installed broker refuses mismatch and unqualified storage BEFORE SQLite or unit effects", () => {
+test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit effects", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-deployment-entry-"));
   try {
     for (const path of [
@@ -195,7 +196,6 @@ test("P01/P02: installed broker refuses mismatch and unqualified storage BEFORE 
       lock.close();
       return result.stderr;
     };
-    assert.match(run(), /SPIKE_UNRESOLVED.*S-01 filesystem storage quota/);
     const asset = join(root, "dist/src/mail/facts.js");
     const bytes = readFileSync(asset);
     writeFileSync(
@@ -234,13 +234,16 @@ test("P05: symlinked host ancestors are explicitly unsupported, not store corrup
   }
 });
 
-test("P01: no positive storage quota silently enables an unqualified production profile", () => {
-  for (const cap of [1, 1024, Number.MAX_SAFE_INTEGER])
-    assert.throws(() => assertStorageQuotaSupported(cap), {
-      code: "SPIKE_UNRESOLVED",
-    });
+test("P01: positive storage quota admits an observed owned tree and rejects overflow", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-storage-quota-"));
+  try {
+    writeFileSync(join(root, "payload"), Buffer.alloc(4096));
+    assert.doesNotThrow(() => assertStorageQuotaAdmission(root, 1024 * 1024));
+    assert.throws(() => assertStorageQuotaAdmission(root, 1), { code: "QUOTA_EXCEEDED" });
+    assert.throws(() => assertStorageQuotaAdmission(root, 1024 * 1024, 1024 * 1024), { code: "QUOTA_EXCEEDED" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
   for (const cap of [0, -1, Infinity, NaN])
-    assert.throws(() => assertStorageQuotaSupported(cap), {
-      code: "UNSUPPORTED_PROFILE",
-    });
+    assert.throws(() => assertStorageQuotaSupported(cap), { code: "UNSUPPORTED_PROFILE" });
 });

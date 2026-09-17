@@ -275,7 +275,7 @@ export class Store {
   reassignPreparedBatches(agent: Actor, incarnation: number): void { this.transitions.reassignPreparedBatches(agent, incarnation); }
   linkDeliveriesToBatch(batchId: string, messages: MessageId[]): void { this.transitions.linkDeliveriesToBatch(batchId, messages); }
   pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation === incarnation); }
-  completeBatch(batchId: string, messages: MessageId[], agent: Actor, incarnation?: number): void { this.transitions.completeBatch(batchId, messages, agent, incarnation); }
+  completeBatch(batchId: string, messages: MessageId[], agent: Actor, incarnation: number, sessionPath: string): void { this.transitions.completeBatch(batchId, messages, agent, incarnation, sessionPath); }
   reserveUsage(usage: UsageReservation): void { this.transitions.reserveUsage(usage); }
   usageRows(): UsageRow[] { return this.reader.usages(); }
   getUsage(id: string): UsageRow | null { return this.reader.usage(id); }

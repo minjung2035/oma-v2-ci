@@ -30,7 +30,7 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **결정**: systemd+bwrap+sqlite(내장)+git substrate는 사용 가능. SO_PEERCRED와 sd_notify는 **최소 native leaf(koffi FFI)로 충족**. TS 경계는 `sandbox.ts`/`units.ts`/`auth`에 이 leaf를 격리한다.
 
-**아직 OPEN (후속 단계 필요)**: 실제 broker+runner를 통한 actor-listener 인증 강제, PID 재사용 stress, READY 전 요청 거절, 저장소 quota 강제(파일시스템 수준), full FD enumeration. 이들은 runtime 구현 단계(phase 2+)에서 재실행한다.
+**현재 기본 runtime 판정**: broker는 시작과 모든 public/internal admission에서 owned state tree의 실제 allocated/logical bytes를 관측하고, streamed request는 선언 bytes를 먼저 예약해 `quota.storageBytes` 초과를 `QUOTA_EXCEEDED`로 거절한다. trusted Pi extension은 write/edit 전에 role의 `workspaceBytes`를 별도로 집행한다. 따라서 이전의 unconditional S-01 `SPIKE_UNRESOLVED` 시작 차단은 제거한다. 같은 UID의 외부 host writer·filesystem kernel project quota와 full FD/PID stress는 release-hardening 범위로 남으며 기본 기능의 시작 차단으로 사용하지 않는다.
 
 ### S-01-CANDIDATE — candidate resource execution primitive
 
@@ -63,9 +63,11 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **결정**: 확장 command + custom message + deliverAs 경로는 pi 0.85.1에서 동작. 준비된 batch를 읽어 steer/followUp으로 안내하는 `pi-extension.ts` adapter 계약의 기반 확보.
 
-**아직 OPEN**: 두 tool 실행 중 steer의 tool-result 보존, batch prepare/completed 귀속 경계, 동시 prepared batch 수, session-boundary 증거(session flush/fsync), 모델의 session JSON 변조 대응 — 이는 runner+Pi adapter 구현(phase 5)과 실provider(S-04)에서 재검증.
+**후속 검증 필요**: 기본 followUp completion 경계는 아래와 같이 구현했지만, 두 tool 실행 중 steer의 tool-result 보존, 동시 prepared/두 번째 batch 귀속, 전체 kill-point matrix는 S-03 전체 판정을 위해 남아 있다.
 
-**현재 runtime gate (2026-09-10)**: sandboxed Pi custom-message 전달과 provider 오류 시 presented 미확정은 test suite에서 확인했다. 그러나 adapter revision/receipt semantics가 production validation에 pin되지 않았으므로 `batch.complete`가 성공적으로 presented를 commit했다고 해석하지 않는다. 이 gate가 닫히기 전 smoke test는 delivery plumbing 검증일 뿐 batch completion 증명이 아니다.
+**현재 runtime 상태 (기본 production followUp)**: `PiAdapter`가 prepared batch ID를 RPC command로 전달하고, trusted core extension은 terminal `stop`의 `agent_settled` handler에서 `oma-delivery-boundary` session entry를 append한 뒤 작은 boundary notification을 낸다. Runner는 Pi 종료 뒤 host-private receipt를 exclusive write+fsync하고, broker는 exact adapter revision/batch manifest/incarnation/session root/receipt path를 재검증한 뒤 같은 transaction에서 `batches.session_path`, completed, presented를 기록한다. Receipt가 먼저 durable해진 crash는 다음 run에서 같은 batch ID로 complete를 재시도한다. Fake owned RPC child + receipt negative/replay tests와 실제 연결된 Pi provider에서 이 좁은 경로를 확인했으며, production Runner/Mail의 별도 `SPIKE_UNRESOLVED` gate는 두지 않는다.
+
+**여전히 OPEN인 S-03 범위**: 두 tool 실행 중 `steer`, 동시 두 번째 batch, 각 kill point와 writable-session 공격 전체 matrix는 아직 미실행이다. 기본 activation/followUp completion을 사용할 수 있다는 판정만 고정하며 S-03 전체, storage/systemd 또는 release qualification 통과로 확대하지 않는다.
 
 **MUST [SP-03-T]** tool 두 개가 실행 중인 Pi에 direct 질문을 넣고, 두 tool 결과가 모두 보존된 다음 inference에 custom notice가 포함되는지 확인한다. 별도 public followUp도 넣는다. 첫 batch가 끝나기 전에 두 번째 질문, context update, stop/abort, UI reconnect를 주입한다. batch prepare 전/후, cur 이동 후, custom notice 전/후, tool effect 후, agent_end 직전/직후, session 저장 전/후, DB complete 전/후에 kill한다.
 
@@ -77,7 +79,7 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **SPIKE [S-04]** pinned Pi의 model/provider registration과 streaming data codec, abort/error/finish event mapping, provider input/output/cache/reasoning token 회계, request 최대비용 upper bound를 검증한다. 특정 model 이름만으로 가격이나 context limit을 추정하지 않는다.
 
-**S-04 상태 (2026-09-07)**: 실험 미실행 — 격리 프로파일에 provider credential/model profile이 없어 실제 stream codec/usage 상한을 시험할 수 없다 (`Unknown provider: unknown`로 확인). → **OPEN, credential 부재**. mock provider 기반 concurrent reservation/lineage 경계 테스트(T48-T51)는 phase 6(inference module)에서 실행 가능하며 그때 기록한다. provider relay를 임의 URL proxy로 구현하지 않는다 (SP-04-A).
+**S-04 기능 프로필 기록**: 별도 provider relay나 새 credential store를 만들지 않고 host-side Pi RPC와 pinned OMA adapter revision이 현재 `~/.pi/agent`의 연결을 사용하도록 선택했다. `npm run test:functional-pi`의 실제 실행은 요청 `pi/current`를 `openai-codex/gpt-5.6-luna`로 해석했고, `oma_mail_read` tool 1회 성공, terminal `stop`, session persist와 durable batch presented=1을 확인했다. 이 성공 1건은 resident 기본 대화 경로의 provider 연결 증거일 뿐, Pi executable artifact pin, 가격/usage upper bound·429/5xx·취소/중간 끊김 codec을 확정하지 않는다. 따라서 inference accounting을 포함한 S-04 전체는 OPEN이다.
 
 **현재 runtime 상태 (2026-09-10)**: T48–T51 mock provider/usage semantics는 `npm test`에서 통과한다. 이는 실제 provider codec, 가격 upper bound, provider cancellation 과금 의미를 확정하지 않는다. 실제 provider pin과 raw stream evidence 전까지 S-04는 OPEN이다.
 

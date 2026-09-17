@@ -26,10 +26,11 @@ import { GitModule } from "./git.js";
 import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
 import { resolvedSpecOf } from "./authority.js";
+import { assertStorageQuotaAdmission } from "./storage/quota.js";
 export { boundedLogOutput } from "./broker/logs.js";
 export { peerCgroup } from "./broker/peer-authenticator.js";
 
-export interface BrokerPaths { stateRoot: string; runRoot: string; society: string; hasGoal?: () => boolean }
+export interface BrokerPaths { stateRoot: string; runRoot: string; society: string; hasGoal?: () => boolean; storageBytes?: number }
 const DEFAULT_LIMITS: ProtocolLimits = {
   frameBytes: 256 * 1024, mailBodyBytes: 256 * 1024, subjectBytes: 512, addresses: 64,
   replyReferences: 64, contextFiles: 256, contextBytes: 8 * 1024 * 1024,
@@ -50,6 +51,7 @@ export class Broker {
   private starting: Promise<void> | null = null;
   private closing: Promise<void> | null = null;
   private readonly runLeases = new RunRegistry();
+  private storageReservations = 0;
   private readonly health = new AdmissionGate();
   private readonly peers: PeerAuthenticator;
   private readonly publicDispatcher: PublicDispatcher;
@@ -205,10 +207,20 @@ export class Broker {
     handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
     preflight: (raw: Record<string, unknown>) => void,
   ): void {
+    let releaseReservation = (): void => {};
     const connection = new RpcConnection({ socket, peer, limits: this.limits, stagingRoot: join(this.paths.stateRoot, "staging"),
-      handle: async (raw, body) => { try { return await handle(raw, body); } catch (error) { this.health.observe(error); throw error; } },
-      preflight: raw => { try { preflight(raw); } catch (error) { this.health.observe(error); throw error; } },
-      onClosed: () => this.connections.delete(socket), onCleanupError: error => this.cleanupError(error),
+      handle: async (raw, body) => {
+        releaseReservation();
+        try { return await handle(raw, body); } catch (error) { this.health.observe(error); throw error; }
+      },
+      preflight: raw => {
+        try {
+          preflight(raw);
+          releaseReservation();
+          releaseReservation = this.reserveStorage(this.streamReservationBytes(raw));
+        } catch (error) { this.health.observe(error); throw error; }
+      },
+      onClosed: () => { releaseReservation(); this.connections.delete(socket); }, onCleanupError: error => this.cleanupError(error),
       onTask: task => {
         this.executingTasks.add(task);
         void task.then(() => this.executingTasks.delete(task), error => { this.health.observe(error); this.executingTasks.delete(task); });
@@ -230,11 +242,38 @@ export class Broker {
   static errorAnswer(id: string, error: { code: string; message: string; retry: "never" | "same-key" | "after-repair" }): object { return errorAnswer(id, error); }
   static okAnswer(id: string, result: unknown): object { return okAnswer(id, result); }
   private failureAnswer(id: string, error: unknown): object { this.health.observe(error); return Broker.errorAnswer(id, publicFailure(error)); }
-  private preflightPublicStream(auth: AuthContext, envelope: Record<string, unknown>): void { this.publicDispatcher.preflight(auth, envelope); }
+  private assertStorageAdmission(reserveBytes = 0): void {
+    if (this.paths.storageBytes !== undefined)
+      assertStorageQuotaAdmission(this.paths.stateRoot, this.paths.storageBytes, reserveBytes);
+  }
+  private streamReservationBytes(envelope: Record<string, unknown>): number {
+    const params = envelope.params;
+    const record = params && typeof params === "object" && !Array.isArray(params) ? params as Record<string, unknown> : null;
+    const descriptor = record?.bundle ?? record?.content;
+    if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return 0;
+    const bytes = (descriptor as Record<string, unknown>).bytes;
+    return typeof bytes === "number" && Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : 0;
+  }
+  private reserveStorage(bytes: number): () => void {
+    const total = this.storageReservations + bytes;
+    if (!Number.isSafeInteger(total)) throw new StoreError("QUOTA_EXCEEDED", "storage reservations exceed the supported range");
+    this.assertStorageAdmission(total);
+    this.storageReservations = total;
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      this.storageReservations -= bytes;
+    };
+  }
+  private preflightPublicStream(auth: AuthContext, envelope: Record<string, unknown>): void {
+    this.publicDispatcher.preflight(auth, envelope);
+  }
   private readLogs(agent: string, sinceSeconds: number): Promise<{ text: string; truncated: boolean; observedAtMs: number }> {
     return readUnitLogs(this.paths.society, agent, sinceSeconds, this.limits.logBytes);
   }
   async dispatch(auth: AuthContext, request: Request, stream: AsyncIterable<Uint8Array> | null): Promise<object> {
+    this.assertStorageAdmission();
     return this.publicDispatcher.dispatch(auth, request, stream);
   }
   private requireRunnerUnit(peer: BoundPeer, agent: Actor, invocationId?: string): void { this.peers.requireRunnerUnit(peer, agent, invocationId); }
@@ -246,6 +285,7 @@ export class Broker {
     return auth;
   }
   private dispatchInternal(raw: Record<string, unknown>, peer: BoundPeer, stream: AsyncIterable<Uint8Array> | null, channel: "runner" | "host"): Promise<object> {
+    this.assertStorageAdmission();
     return this.internalDispatcher.dispatch(raw, peer, stream, channel);
   }
   private openRun(actor: Actor, invocationId: string): RunLease {

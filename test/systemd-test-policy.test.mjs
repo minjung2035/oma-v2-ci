@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   mkdtempSync,
@@ -84,7 +83,7 @@ test("V04 local guard rejects manager commands before execution but allows ordin
   assert.equal(result.signal, null);
 });
 
-test("V04 S-01 block uses freshly built production code, never a stale artifact or duplicated allow flag", () => {
+test("V04 S-01 qualification uses freshly built production code", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-qualification-lane-"));
   const guard = new URL("../scripts/local-test-guard.mjs", import.meta.url).href;
   try {
@@ -105,25 +104,14 @@ test("V04 S-01 block uses freshly built production code, never a stale artifact 
         const result = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
         writeFileSync('dist/src/domain/' + name + '.js', result.outputText);
       }`);
-    for (const lane of ["kernel", "all"]) {
-      writeFileSync(join(root, "dist/src/domain/resources.js"), 'throw new Error("stale artifact used");');
-      const out = join(root, lane);
-      const result = spawnSync(process.execPath, [fileURLToPath(new URL("../scripts/verify-lane.mjs", import.meta.url)), lane, "--out", out], {
-        cwd: root, env: { ...process.env, OMA_TEST_SYSTEMD: "1", NODE_OPTIONS: `--import=${guard}` },
-        encoding: "utf8", timeout: 20000,
-      });
-      assert.equal(result.status, 1, result.stderr);
-      const report = JSON.parse(readFileSync(join(out, "result.json"), "utf8"));
-      assert.equal(report.status, "BLOCKED"); assert.equal(report.execution, "NOT_RUN");
-      assert.match(report.failure, /fresh production gate returned SPIKE_UNRESOLVED/);
-      assert.deepEqual(report.commands.map(command => [command.label, command.code]), [["build", 0], ["entry-qualification", 78]]);
-      assert.equal(report.entryQualification.exitCode, 78);
-      assert.equal(report.entryQualification.moduleSha256, createHash("sha256").update(readFileSync(join(root, "dist/src/domain/resources.js"))).digest("hex"));
-      assert.equal(report.sourceDigests["src/domain/resources.ts"], createHash("sha256").update(readFileSync(new URL("../src/domain/resources.ts", import.meta.url))).digest("hex"));
-      assert.equal(report.runtime, null);
-      assert.ok(report.requiredNames.includes("LIFE-009 entry:"));
-      assert.ok(report.requiredNames.includes("D1: READY=1"));
-    }
+    writeFileSync(join(root, "dist/src/domain/resources.js"), 'throw new Error("stale artifact used");');
+    const build = spawnSync("npm", ["run", "build"], { cwd: root, env: { ...process.env, NODE_OPTIONS: `--import=${guard}` }, encoding: "utf8", timeout: 20000 });
+    assert.equal(build.status, 0, build.stderr);
+    const probe = spawnSync(process.execPath, [fileURLToPath(new URL("../scripts/probe-entry-qualification.mjs", import.meta.url)), root, "1048576"], {
+      cwd: root, env: { ...process.env, NODE_OPTIONS: `--import=${guard}` }, encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(probe.status, 0, probe.stderr);
+    assert.notEqual(readFileSync(join(root, "dist/src/domain/resources.js"), "utf8"), 'throw new Error("stale artifact used");');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -132,6 +120,6 @@ test("V04 P24 owner and durable regressions remain required lane coverage", () =
   for (const name of ["V03-S1", "V03-S2", "V03-S3", "P08:", "A02:"]) assert.ok(lanes.fast.requiredNames.includes(name));
   for (const file of ["p24-deployment-gates.test.js", "p24-mail-boundaries.test.js", "p24-git-import.test.js"])
     assert.ok(lanes.durable.files.includes(file));
-  for (const name of ["P01:", "P01/P02:", "P02:", "P03:", "P04:", "P05:", "P06:", "P07: sha1", "P07: sha256"])
+  for (const name of ["P01:", "P02:", "P03:", "P04:", "P05:", "P06:", "P07: sha1", "P07: sha256"])
     assert.ok(lanes.durable.requiredNames.includes(name));
 });

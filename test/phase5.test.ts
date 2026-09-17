@@ -27,7 +27,7 @@ import type { RunRegistry } from "../src/runtime/run-registry.js";
 import { actorSocketPathAt } from "../src/storage/paths.js";
 import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
-import { agentRootPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
+import { agentRootPathAt, runnerReceiptPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
 import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
@@ -35,6 +35,7 @@ import { Broker, peerCgroup } from "../src/broker.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
 import { SandboxModule, candidateArgv } from "../src/sandbox.js";
 import { PiRpcClient } from "../src/rpc-client.js";
+import { PI_ADAPTER_REVISION, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
 import type {
   AuthContext,
   Capability,
@@ -552,8 +553,15 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
     await assert.rejects(mail.complete(auth("a", []), {
       batchId: batch.id, incarnation: batch.incarnation, sessionPath: "/tmp/untrusted",
       adapterRevision: "unverified", receiptPath: "/tmp/untrusted",
-    }), (error: unknown) => error instanceof Error && "code" in error && error.code === "SPIKE_UNRESOLVED");
+    }), (error: unknown) => error instanceof Error && "code" in error && error.code === "SESSION_BOUNDARY_UNCONFIRMED");
     assert.equal(env.store.getDelivery(batch.messageIds[0]!, "a")!.presented, 0);
+    const sessions = runnerSessionDirPathAt(env.state, "a"); mkdirSync(sessions, { recursive: true });
+    const sessionPath = join(sessions, "settled.jsonl"); writeFileSync(sessionPath, '{"type":"session","version":3}\n');
+    const trusted = publishDeliveryReceipt(env.state, batch, { batchId: batch.id, incarnation: batch.incarnation,
+      sessionPath, entryId: "0123abcd", adapterRevision: PI_ADAPTER_REVISION }, TEST_VIEW_LIMITS.frameBytes);
+    await mail.complete(auth("a", []), { batchId: batch.id, incarnation: batch.incarnation, sessionPath: trusted.sessionPath,
+      adapterRevision: PI_ADAPTER_REVISION, receiptPath: runnerReceiptPathAt(env.state, "a", batch.id) });
+    assert.equal(env.store.getDelivery(batch.messageIds[0]!, "a")!.presented, 1);
   } finally {
     env.cleanup();
   }

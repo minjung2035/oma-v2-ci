@@ -562,7 +562,7 @@ setInterval(() => {}, 1000);
     assert.ok(probes.pending?.result, `probe failure: ${JSON.stringify(probes)}`);
     assert.deepEqual(probes.pending.result.recoverableBatchIds, [prepared.id]);
     assert.equal(probes.invalid.error.code, "INVALID_REQUEST");
-    assert.equal(probes.observe.error.code, "SPIKE_UNRESOLVED");
+    assert.deepEqual(probes.observe.result, { accepted: true });
     assert.equal(probes.unknown.error.code, "UNKNOWN_METHOD");
     // A trusted-only method is refused by the channel client before it reaches
     // the broker; no other code is a closed refusal of this boundary.

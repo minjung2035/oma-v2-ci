@@ -1,6 +1,8 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+export type { ChildProcessWithoutNullStreams };
 import { performance } from "node:perf_hooks";
 import { snapshotCommand, processErrorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
+import { StoreError } from "../domain/errors.js";
 
 export interface AsyncProcessOptions {
   /** Host/coordinator cancellation only. Connection close must not cancel accepted work. */
@@ -121,4 +123,23 @@ export function startProcess(source: CommandSpec, options: AsyncProcessOptions =
 }
 export function runProcess(spec: CommandSpec, options: AsyncProcessOptions = {}): Promise<ProcessObservation> {
   return startProcess(spec, options).result;
+}
+
+function validDirectSpawn(executable: string, argv: readonly string[], cwd: string, env: Readonly<Record<string, string>>): void {
+  if (!executable.startsWith("/") || executable.includes("\0") || !cwd.startsWith("/") || cwd.includes("\0") ||
+      argv.some(value => typeof value !== "string" || value.includes("\0")))
+    throw new StoreError("UNSUPPORTED_PROFILE", "owned child requires absolute NUL-free paths and direct argv");
+  for (const [key, value] of Object.entries(env))
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0"))
+      throw new StoreError("UNSUPPORTED_PROFILE", "owned child environment is invalid");
+}
+export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: string, env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
+  validDirectSpawn(executable, argv, cwd, env);
+  return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+}
+export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
+  if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)
+    throw new StoreError("UNSUPPORTED_PROFILE", "sandbox spawn requires direct pinned bubblewrap argv");
+  validDirectSpawn("/usr/bin/bwrap", argv.slice(1), "/", env);
+  return spawn("/usr/bin/bwrap", argv.slice(1), { env: { ...env }, shell: false, stdio: ["pipe", "pipe", "pipe"] });
 }

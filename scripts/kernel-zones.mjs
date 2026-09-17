@@ -61,6 +61,7 @@ export const KERNEL_ZONES = Object.freeze([
     files: [
       "src/config.ts",
       "src/config/policy.ts",
+      "src/config/operations.ts",
       "src/ids.ts",
       "src/leaf.ts",
       "src/process/async.ts",
@@ -75,6 +76,8 @@ export const KERNEL_ZONES = Object.freeze([
       "src/storage/context-stream.ts",
       "src/storage/directory.ts",
       "src/storage/durable-fs.ts",
+      "src/storage/delivery-receipt.ts",
+      "src/storage/quota.ts",
       "src/storage/immutable-file.ts",
       "src/storage/staged-tree.ts",
       "src/storage/submit-spool.ts",

@@ -41,7 +41,7 @@ test("MAIL-003: approval identity is emitted as broker metadata", async () => {
   const eml = await buildEml({
     from: "a@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [],
     subject: "review", body: "not an approval", kind: "approval_required",
-    contextRevision: null, inReplyTo: null, references: [], messageId: "test@demo.oma.invalid",
+    contextRevision: null, inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid",
     approvalFor: identity,
   });
   const decoded = JSON.parse(execFileSync("python3", ["-c",

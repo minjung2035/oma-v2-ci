@@ -109,7 +109,7 @@ test("R10: normal restart, independent acknowledgement and unknown reservations 
       store.transaction(() => store.settleUsage(USAGE, "unknown", null, null));
       assert.equal(store.getUsage(USAGE)?.reservedUnits, 1);
       assert.equal(store.getUsage(USAGE)?.reportedUnits, null);
-      store.transaction(() => store.completeBatch(BATCH, [MESSAGE], "alice"));
+      store.transaction(() => store.completeBatch(BATCH, [MESSAGE], "alice", 1, "/session/alice"));
       assert.equal(store.getBatch(BATCH)?.state, "completed");
       assert.equal(store.getDelivery(MESSAGE, "alice")?.presented, 1);
     } finally { store.close(); }

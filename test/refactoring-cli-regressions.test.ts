@@ -77,7 +77,8 @@ async function withPeer(home: string, args: string[], receipt: Receipt): Promise
         assert.ok(record(request)); assert.equal(typeof request.id, "string");
         assert.ok(typeof request.method === "string"); assert.ok(record(request.params));
         answered = true; methods.push(request.method); params.push(request.params);
-        socket.end(encodeFrame({ v: 1, id: request.id, ok: true, result: receipt }));
+        const result = request.method === "git.known" ? { hasCandidate: false, prerequisites: [] } : receipt;
+        socket.end(encodeFrame({ v: 1, id: request.id, ok: true, result }));
       } catch (error) { errors.push(error); socket.destroy(); }
     });
     socket.on("error", error => errors.push(error));
@@ -216,10 +217,11 @@ test("R01 CLI-002: maximum 96-character request key derives a valid export ref",
     git(["-c", "user.name=R01", "-c", "user.email=r01@example.invalid", "commit", "-qm", "fixture"]);
     const candidate = git(["rev-parse", "HEAD"]); const receipt: Receipt = { operation: OP, state: "pending" };
     const result = await withPeer(home, ["submit", "HEAD", "--request", key], receipt);
-    assert.equal(result.code, 0, result.stderr); assert.deepEqual(result.methods, ["git.submit"]);
-    assert.equal(result.params[0]?.candidate, candidate);
-    assert.match(String(result.params[0]?.exportRef), /^refs\/oma\/export\/[A-Za-z0-9._-]{1,96}$/);
-  } finally { rmSync(home, { recursive: true, force: true }); rmSync(join(tmpdir(), `oma-submit-${key}.bundle`), { force: true }); }
+    assert.equal(result.code, 0, result.stderr); assert.deepEqual(result.methods, ["git.known", "git.submit"]);
+    assert.deepEqual(result.params[0], { candidate });
+    assert.equal(result.params[1]?.candidate, candidate);
+    assert.match(String(result.params[1]?.exportRef), /^refs\/oma\/export\/[A-Za-z0-9._-]{1,96}$/);
+  } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
 test("R01 IPC-008: corrupt cached JSON is never indistinguishable from absence", () => {

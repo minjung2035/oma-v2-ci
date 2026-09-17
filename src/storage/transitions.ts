@@ -140,18 +140,22 @@ export class LedgerTransitions {
     this.touchedBatches.add(id);
     this.read.batch(id);
   }
-  completeBatch(id: string, messages: readonly string[], agent: string, expectedIncarnation?: number): void {
+  completeBatch(id: string, messages: readonly string[], agent: string, expectedIncarnation: number, sessionPath: string): void {
     this.requireLive();
     const batch = this.read.batch(id);
     if (!batch || batch.agent !== agent) conflict("batch owner does not match");
     equalManifest(batch.messageIdsJson, messages);
-    if (expectedIncarnation !== undefined && batch.incarnation !== expectedIncarnation) conflict("batch completion incarnation differs");
-    if (batch.state === "completed") return; // Exact replay keeps all first fact timestamps.
+    if (batch.incarnation !== expectedIncarnation) conflict("batch completion incarnation differs");
+    if (batch.state === "completed") {
+      if (batch.sessionPath !== sessionPath) conflict("completed batch session differs");
+      return; // Exact replay keeps all first fact timestamps.
+    }
+    if (batch.sessionPath !== null && batch.sessionPath !== sessionPath) conflict("prepared batch session differs");
     if (this.read.agent(agent)?.incarnation !== batch.incarnation) conflict("batch completion incarnation is stale");
     const at = this.now();
-    changedExactlyOne(this.db.prepare(`UPDATE batches SET state='completed', completed_at_ms=?
-      WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL`)
-      .run(at, id, agent, batch.incarnation), "batch completion");
+    changedExactlyOne(this.db.prepare(`UPDATE batches SET state='completed', completed_at_ms=?, session_path=?
+      WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL AND (session_path IS NULL OR session_path=?)`)
+      .run(at, sessionPath, id, agent, batch.incarnation, sessionPath), "batch completion");
     for (const message of messages) {
       changedExactlyOne(this.db.prepare(`UPDATE deliveries SET presented=1, presented_at_ms=?
         WHERE message_id=? AND recipient=? AND batch_id=? AND materialized=1 AND presented=0 AND presented_at_ms IS NULL

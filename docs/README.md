@@ -52,6 +52,8 @@
 | P23 | [Internal contract ownership 정리](architecture-improvement/p23-contract-ownership.md) |
 | P24 | [Filesystem containment](architecture-improvement/p24-filesystem-containment.md) · [감사 후속·deployment codec](architecture-improvement/p24-remediation.md) |
 | F1–F4 감사 후속 | [Reply 입력·request identity·log/CLI frame](architecture-improvement/f1-f4-remediation.md) |
+| 5c94e59 감사 후속 | [EML 수락 경계·CLI bundle/본문/reply](architecture-improvement/audit-eml-cli-remediation.md) |
+| 운영 설정 | [역할별 모델·extension·프롬프트 분리](../operations/README.md) |
 
 ## 다른 감사와 generated evidence
 

@@ -1,18 +1,19 @@
 // MUST [CLI-001..003]/[IPC-004..008]: model-facing CLI; freeze before transport.
 // Same-key replay never rebuilds from current HEAD or mutable source files.
-import { readFileSync, existsSync, readdirSync, statSync, lstatSync, openSync, closeSync, fstatSync, constants } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync, lstatSync, openSync, closeSync, fstatSync, mkdtempSync, rmSync, constants } from "node:fs";
 import { basename, join } from "node:path";
+import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { runGitText } from "./process/policies.js";
 import { callActor } from "./cli/transport.js";
 import { RequestCache, CacheError, type CachedRequest, type FreezeInput } from "./request-cache.js";
 import { isValidRequestKey, isValidTopicName, FULL_OID_RE, uuidV4, parseMessageId, parseMessageFileId } from "./ids.js";
 import { exportRefForRequestKey } from "./domain/derived.js";
-import { errorExit, type CliExitCode } from "./domain/errors.js";
-import type { Json, MutationMethod, PublicMethod, Receipt } from "../implementation/contracts.js";
+import { StoreError, errorExit, type CliExitCode } from "./domain/errors.js";
+import type { Json, MutationMethod, PublicMethod, PublicMethods, Receipt } from "../implementation/contracts.js";
 import { exactCandidateCheck, isMailKind } from "./domain/mail-values.js";
 import { contextFileCheck } from "./domain/context-policy.js";
-import { parseEmlHeaders } from "./mail/headers.js";
+import { decodeSubject, parseEmlHeaders } from "./mail/headers.js";
 import { snapshotJson } from "./domain/canonical-json.js";
 import { requestParamsEqual } from "./domain/request-identity.js";
 import { requestIntentConflict, explicitFullOid } from "./cli/request-intent.js";
@@ -161,7 +162,7 @@ function keyOf(args: string[]): string | null {
 function readBody(path: string | null): string {
   if (path === null) return "";
   if (!existsSync(path)) fail(`file not found: ${path}`, 2);
-  try { return new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(path)); }
+  try { return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(path)).replace(/\r\n/g, "\n"); }
   catch { return fail(`cannot read UTF-8 text file: ${path}`, 2); }
 }
 function randKey(): string { return `cli-${uuidV4()}`; }
@@ -214,14 +215,19 @@ async function cmdSend(args: string[]): Promise<void> {
     const params: Record<string, unknown> = { to, subject: subject ?? "Re", kind: kindRaw, body: readBody(opt(args, "--file")) };
     if (reply) {
       let id: string | undefined;
-      try { id = parseEmlHeaders(readBody(reply)).messageId?.split("@", 1)[0]; }
+      try {
+        const source = readFileSync(reply);
+        const headers = parseEmlHeaders(source, { maxHeaderBytes: source.byteLength });
+        id = headers.messageId?.split("@", 1)[0];
+        if (subject === null) params.subject = `Re: ${decodeSubject(headers.subject)}`;
+      }
       catch { fail("reply file has invalid OMA headers", 2); }
       if (!id || !parseMessageId(id)) fail("reply file has no valid Message-ID", 2);
       params.replyToMessage = id;
     }
     if (approvalFor) params.approvalFor = approvalFor;
     return { method: "mail.send", params };
-  }, () => ({ to, subject: subject ?? "Re", kind: kindRaw, ...(approvalFor ? { approvalFor } : {}) }));
+  }, () => ({ to, ...(subject === null ? {} : { subject }), kind: kindRaw, ...(approvalFor ? { approvalFor } : {}) }));
 }
 function parseMessageArg(value: string): string {
   const id = value.startsWith("m-") ? value : basename(value).replace(/:2,$/, "");
@@ -270,27 +276,56 @@ function git(cwd: string, args: string[]): string {
   if (result.status !== 0) fail(`git ${args[0] ?? "?"}: ${result.stderr.slice(0, 200)}`, 2);
   return result.stdout.trim();
 }
+/** GIT-004: only an observed local ancestor advertised by the broker is usable. */
+function submitPrerequisites(cwd: string, candidate: string, known: readonly string[]): string[] {
+  for (const oid of new Set(known)) {
+    if (oid === candidate || oid.length !== candidate.length) continue;
+    const local = runGitText(["rev-parse", "--verify", "--quiet", `${oid}^{commit}`], { cwd });
+    if (local.status === 1) continue;
+    if (local.status !== 0 || local.stdout.trim() !== oid) throw new StoreError("INVALID_OID", "cannot observe advertised prerequisite locally");
+    const ancestry = runGitText(["merge-base", "--is-ancestor", oid, candidate], { cwd });
+    if (ancestry.status === 0) return [oid];
+    if (ancestry.status !== 1) throw new StoreError("REF_STATE_UNKNOWN", "cannot observe candidate ancestry");
+  }
+  return [];
+}
+/** The random 0700 directory owns the Git output; no key-derived shared path.
+ * Throw rather than process.exit inside this scope so every settled error cleans up. */
+function submitBundle(cwd: string, exportRef: string, prerequisites: readonly string[]): Buffer {
+  const directory = mkdtempSync(join(tmpdir(), "oma-submit-"));
+  try {
+    const path = join(directory, "candidate.bundle");
+    const result = runGitText(["bundle", "create", path, exportRef, ...prerequisites.map(oid => `^${oid}`)], { cwd });
+    if (result.status !== 0) throw new StoreError("INVALID_REQUEST", `git bundle: ${result.stderr.slice(0, 200)}`);
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || stat.nlink !== 1) throw new StoreError("INVALID_REQUEST", "bundle output is not an owned regular file");
+      return readFileSync(fd);
+    } finally { closeSync(fd); }
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+}
 async function cmdSubmit(args: string[]): Promise<void> {
   const revision = args[0]; if (!revision) usage();
   const key = keyOf(args) ?? randKey();
-  await effect("git.submit", key, () => {
+  await effect("git.submit", key, async () => {
     const cwd = process.cwd(); const candidate = resolveOid(revision); const to = multiOpt(args, "--to");
     const subject = opt(args, "--subject") ?? "Re: submit"; const body = readBody(opt(args, "--file")); const paths = multiOpt(args, "--path");
     const exportRef = exportRefForRequestKey(key);
+    const reply = (await call("git.known", { candidate }))[0];
+    if (!reply?.ok) finishFailure(reply, "git.known: ");
+    // callActor already decoded this method's closed result before returning it.
+    const known = reply.result as PublicMethods["git.known"]["result"];
+    const prerequisites = known.hasCandidate ? [] : submitPrerequisites(cwd, candidate, known.prerequisites);
     git(cwd, ["update-ref", exportRef, candidate]);
-    // Explicit parent manifest: an unavailable command is never an empty root.
-    const ancestry = git(cwd, ["rev-list", "--parents", "-n", "1", candidate]).split(" ");
-    if (ancestry[0] !== candidate || ancestry.some(oid => !FULL_OID_RE.test(oid) || oid.length !== candidate.length))
-      fail("cannot observe the frozen candidate's parent identities", 3);
-    const prerequisites: string[] = ancestry[1] === undefined ? [] : [ancestry[1]];
-    const bundleTmp = join("/tmp", `oma-submit-${key}.bundle`);
-    git(cwd, ["bundle", "create", bundleTmp, exportRef, ...(prerequisites.length > 0 ? [`^${prerequisites[0]}`] : [])]);
-    const content = readFileSync(bundleTmp);
     const params: Record<string, unknown> = {
       candidate, exportRef, prerequisites, to: to.length > 0 ? to : ["commons"], subject, body, paths,
-      bundle: { bytes: content.length, sha256: sha256Hex(content), mediaType: "application/x-git-bundle" },
     };
-    return { method: "git.submit", params, digest: { bytes: content.length, sha256: sha256Hex(content) }, stream: content };
+    if (known.hasCandidate) return { method: "git.submit", params };
+    const content = submitBundle(cwd, exportRef, prerequisites);
+    const digest = { bytes: content.length, sha256: sha256Hex(content) };
+    params.bundle = { ...digest, mediaType: "application/x-git-bundle" };
+    return { method: "git.submit", params, digest, stream: content };
   }, () => {
     const to = multiOpt(args, "--to");
     return { to: to.length > 0 ? to : ["commons"], subject: opt(args, "--subject") ?? "Re: submit", paths: multiOpt(args, "--path"), ...explicitFullOid("candidate", revision) };

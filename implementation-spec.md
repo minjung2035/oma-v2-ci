@@ -97,6 +97,8 @@
 
 **MUST [CFG-005]** `contracts.ts`의 `HostConfigV1`을 기본 profile의 폐쇄된 설정 schema로 사용한다. 숫자는 유한한 non-negative safe integer이고 slot/size/timeout은 양수다. Principal reserve는 total을 초과하지 않는다. quota는 Core v1 society 수명 누계이며 자동 월별 reset을 추가하지 않는다. 금액 단위·가격 codec은 host deployment manifest에 고정한다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. config 교체 시 새로운 policy revision을 필수로 지정하고 outstanding integrate가 이를 재검사한다.
 
+운영 파일 분리는 별도 authoring 입력 `kind: "oma-operations-v1"`로 제공할 수 있다. host가 명시한 파일만 읽어 기존 폐쇄형 `HostConfigV1`으로 조합·검증하며, role별 prompt/extension metadata는 wire·ledger schema나 실행 권한을 확장하지 않는다. 변경은 재시작 시 새 snapshot으로 읽고 기존 accepted evidence는 다시 쓰지 않는다. 추가 extension 실행에는 기존 PI/deployment 검증 게이트가 그대로 적용된다. 파일 형식과 제한은 [운영 설정 안내](operations/README.md)를 따른다.
+
 **MUST [CFG-003]** wire resource 기본값은 frame 256 KiB, mail body 256 KiB, subject 512 UTF-8 bytes, logical address 64개, reply reference 64개, context 파일 256개/합계 8 MiB, bundle 256 MiB, logs 1 MiB, accepted connection당 미완료 control request 1개다. host는 명시적으로 낮추거나 높일 수 있고 모든 endpoint에서 같은 값으로 검증한다. 이 값은 전용 preview 기능이나 본문의 자동 절단 규칙이 아니다. 초과 입력은 접수 전에 거절하고 파일/Git 사용을 안내한다.
 
 **MUST [CFG-004]** 프로토콜 timeout 기본값은 frame/stream 무진행 30초, control receipt 기다림 30초다. 결과를 기다리다 timeout이면 해당 effect는 실패로 간주하지 않는다. 대규모 작업은 pending receipt 후 같은 key로 조회한다. inference timeout/output cap/가격 bound는 provider profile에 필수로 둔다.
@@ -276,7 +278,7 @@
 
 **MUST [BATCH-004]** prepared batch 복구 시 원래 message IDs와 session을 유지한다. 이전 run 사망 확인과 현재 incarnation fencing 후 transaction에서 소유만 바꾼다. 성공 agent_end 및 `S-03`의 trusted session-boundary 증거가 확인된 batch만 completed/presented로 만든다. 오류·abort·timeout·모델의 '완료했습니다'는 증거가 아니다.
 
-**MUST [BATCH-006]** S-03 adapter revision·receipt 의미·flush/ownership 검증 결과가 release validation record에 pin되기 전 production batch.complete는 SPIKE_UNRESOLVED를 반환하고 batch/deliveries presented를 commit하지 않는다. BoundaryEvidence 타입이나 adapterRevision 문자열이 존재한다는 사실은 gate 통과가 아니다. 테스트용 mock completion을 production에 주입하거나 환경 변수로 우회하지 않는다. gate 미해결 상태의 반복 재안내로 유료 inference를 소모하는 경로도 지원 profile로 활성화하지 않는다.
+**MUST [BATCH-006]** 기본 followUp 경로의 production batch.complete는 validation record에 pin된 `oma-pi-rpc-v1@0.85.1` receipt만 허용한다. trusted runner가 소유한 정확한 state-root receipt path, batch ID/incarnation/message manifest, adapter revision, runner session root와 durable session file이 모두 일치해야 completed/presented를 같은 transaction에서 commit한다. 타입이나 문자열만 맞춘 evidence, model writable 경로, mock completion, 환경 변수 우회는 거절한다. 이 qualification은 진행 중 steer/concurrency 또는 전체 S-03 kill matrix를 통과했다는 뜻이 아니다.
 
 **MUST [BATCH-005]** session 경계 증거가 불충분하면 같은 batch ID로 재안내할 수 있다. 같은 mail을 다시 안내했다는 사실을 표시하고 기존 operation receipt와 workspace를 대조하게 한다. 이전 shell/tool을 자동 replay하지 않는다. Pi 사고과정·tool cursor·reasoning snapshot용 state를 추가하지 않는다.
 
@@ -296,7 +298,7 @@ pi.sendMessage(
 );
 ```
 
-**MUST [PI-003]** Resident direct/question/reply/context는 현재 tool group 결과를 모두 보존한 다음 LLM 호출 전에 steer, 일반 public list는 followUp, Principal normal mail은 followUp 정책을 유지한다. tool 취소/누락으로 steer를 흉내내지 않는다. `S-03` 미통과 버전을 production으로 지원하지 않는다.
+**MUST [PI-003]** 현재 qualified 기본 profile은 activation 때 준비된 batch를 followUp으로 전달하고 terminal boundary까지 완료한다. 이미 진행 중인 tool group 사이에 도착한 direct/question/reply/context를 끼워 넣는 steer profile은 도구 결과 보존·취소·동시 batch 귀속이 검증될 때까지 지원한다고 주장하지 않는다. 새 mail 때문에 준비된 batch의 ID나 mode를 바꾸지 않는다.
 
 **MUST [RUN-001]** activation은 unit/invocation 확인 → 이전 run 사망 확인 → incarnation 발급 → pending/prepared 회수 → sandbox/Pi resume → batch 안내 → 정상 Pi loop → boundary commit → pending 재검사 → 필요 시 다음 loop 또는 exit 0 순서다. 최초 GOAL 전에는 inference를 시작하지 않는다.
 

@@ -16,7 +16,7 @@ import { ProcessLock } from "../runtime/process-lock.js";
 import { BrokerLifetime } from "../runtime/broker-lifetime.js";
 import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
-import { assertStorageQuotaSupported } from "../domain/resources.js";
+import { assertStorageQuotaAdmission } from "../storage/quota.js";
 import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
@@ -58,7 +58,7 @@ async function main(): Promise<void> {
     // No schema search, path flattening or cross-installation fallback.
     assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH, systemd: UNIT_TPL_DIR });
     assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
-    assertStorageQuotaSupported(cfg.quota.storageBytes);
+    assertStorageQuotaAdmission(stateRoot, cfg.quota.storageBytes);
     graceSeconds = cfg.limits.receiptWaitSeconds;
     const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
     assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
@@ -92,7 +92,7 @@ async function main(): Promise<void> {
       projectGit: join(stateRoot, "repos", "project.git"), hasGoal, activationAllowed: () => lifetime.permitsActivation,
       sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
     });
-    const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile, { stateRoot, runRoot, society, hasGoal }, cfg.limits, lock);
+    const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile, { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes }, cfg.limits, lock);
     lifetime.attach(broker);
     const validateStoredProfiles = () => {
       for (const agent of store.listAgents()) {

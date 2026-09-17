@@ -29,7 +29,7 @@ const report = { schema: 1, lane: name, status: "BLOCKED", execution: "NOT_RUN",
   exploration: { parameters: exploration.parameters, artifacts: "exploration", defaults: "declared and reported by each test; not inferred measurements" },
   declaredTestFiles: lane.files, requiredNames: lane.requiredNames, entryQualification: null,
   commands: [], selectedFiles: [], sourceDigests: {}, sourceTestCallSites: [], runtime: null,
-  limitations: ["S-03/S-04 feature completion remains BLOCKED", "VM power loss NOT_RUN", "host reboot and paid provider calls are outside this runner", "raw test failure does not identify product-vs-environment cause"] };
+  limitations: ["S-03 steer/concurrency and S-04 accounting remain unqualified", "VM power loss NOT_RUN", "host reboot and paid provider calls are outside this runner", "raw test failure does not identify product-vs-environment cause"] };
 function filesUnder(path) {
   if (!existsSync(path)) return [];
   const stat = lstatSync(path);

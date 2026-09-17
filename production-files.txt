@@ -23,6 +23,7 @@ src/cli/cache-codec.ts
 src/cli/request-intent.ts
 src/cli/transport.ts
 src/config.ts
+src/config/operations.ts
 src/config/policy.ts
 src/diagnostics/files.ts
 src/diagnostics/integrity.ts
@@ -119,6 +120,8 @@ src/runner.ts
 src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
 src/runtime/deployment-manifest.ts
+src/runtime/pi-adapter.ts
+src/runtime/pi-rpc.ts
 src/runtime/process-lock.ts
 src/runtime/run-registry.ts
 src/sandbox.ts
@@ -127,6 +130,7 @@ src/storage/contained-fs.ts
 src/storage/context-files.ts
 src/storage/context-snapshot.ts
 src/storage/context-stream.ts
+src/storage/delivery-receipt.ts
 src/storage/diagnostic-snapshot.ts
 src/storage/directory.ts
 src/storage/durable-fs.ts
@@ -137,6 +141,7 @@ src/storage/operation-codec.ts
 src/storage/operation-journal.ts
 src/storage/operation-transitions.ts
 src/storage/paths.ts
+src/storage/quota.ts
 src/storage/receipt-projector.ts
 src/storage/rows.ts
 src/storage/staged-tree.ts

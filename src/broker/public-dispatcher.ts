@@ -149,7 +149,15 @@ export class PublicDispatcher {
         case "git.known": {
           if (!git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
           const refs = git.knownRefs();
-          return okAnswer(id, { hasCandidate: refs.published.includes(params.candidate), prerequisites: [...refs.published] });
+          const known = [...new Set([refs.main, ...refs.published])];
+          const result = { hasCandidate: known.includes(params.candidate), prerequisites: [] as Oid[] };
+          let bytes = Buffer.byteLength(JSON.stringify(okAnswer(id, result)));
+          for (const oid of known) {
+            const extra = Buffer.byteLength(JSON.stringify(oid)) + (result.prerequisites.length ? 1 : 0);
+            if (bytes + extra > this.deps.limits.frameBytes) break;
+            result.prerequisites.push(oid); bytes += extra;
+          }
+          return okAnswer(id, result);
         }
         case "git.submit": {
           if (!git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");

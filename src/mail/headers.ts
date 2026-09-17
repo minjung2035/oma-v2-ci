@@ -19,7 +19,7 @@ export interface ParsedEmlHeaders {
 }
 export interface HeaderReadLimits { readonly maxHeaderBytes: number }
 const DEFAULT_HEADER_LIMIT = 256 * 1024;
-const MAX_LINE_BYTES = 998;
+export const MAX_HEADER_LINE_BYTES = 998;
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const allowed = new Set([
   "from", "to", "reply-to", "subject", "date", "message-id", "in-reply-to", "references",
@@ -52,24 +52,34 @@ function headerBlock(input: string | Uint8Array, limit: number): string {
   try { return utf8.decode(input.subarray(0, end)); } catch { return invalid("header is not UTF-8"); }
 }
 
-function policyWords(value: string): string {
+function headerWords(value: string, allowQuotedPrintable = false): string {
   const source = unfold(value);
-  const pattern = /=\?UTF-8\?B\?([A-Za-z0-9+/]*={0,2})\?=/gi;
+  const pattern = /=\?UTF-8\?([BQ])\?([^?\s]*)\?=/gi;
   let output = ""; let last = 0; let previousEncoded = false;
   for (const match of source.matchAll(pattern)) {
     const index = match.index ?? 0;
     const gap = source.slice(last, index);
-    if (gap.includes("=?")) return invalid("unsupported policy encoded word");
+    if (gap.includes("=?")) return invalid("unsupported encoded word");
     if (!(previousEncoded && /^\s*$/.test(gap))) output += gap;
-    const encoded = match[1]!;
-    const bytes = Buffer.from(encoded, "base64");
-    if (!encoded || encoded.length % 4 !== 0 || bytes.toString("base64") !== encoded) return invalid("malformed policy Base64");
-    try { output += utf8.decode(bytes); } catch { return invalid("malformed policy UTF-8"); }
+    const encoded = match[2]!; let bytes: Buffer;
+    if (match[1]!.toUpperCase() === "B") {
+      bytes = Buffer.from(encoded, "base64");
+      if (!encoded || encoded.length % 4 !== 0 || bytes.toString("base64") !== encoded) return invalid("malformed Base64 word");
+    } else {
+      if (!allowQuotedPrintable || !encoded || /[^\x21-\x7e]|=(?![0-9a-f]{2})/i.test(encoded)) return invalid("unsupported Q word");
+      bytes = Buffer.from(encoded.replace(/_/g, " ").replace(/=([0-9a-f]{2})/gi, (_word, hex: string) => String.fromCharCode(parseInt(hex, 16))), "latin1");
+    }
+    try { output += utf8.decode(bytes); } catch { return invalid("malformed encoded UTF-8"); }
     last = index + match[0].length; previousEncoded = true;
   }
   const tail = source.slice(last);
-  if (tail.includes("=?")) return invalid("unsupported policy encoded word");
+  if (tail.includes("=?")) return invalid("unsupported encoded word");
   return output + tail;
+}
+/** Decode the pinned writer's UTF-8 words once for reply composition. The raw
+ * parser projection stays unchanged for existing durable/header consumers. */
+export function decodeSubject(value: string | null): string {
+  return headerWords(unfold(value ?? "").trim(), true);
 }
 function singleId(value: string | undefined): string | null {
   if (value === undefined) return null;
@@ -116,7 +126,7 @@ export function parseEmlHeaders(input: string | Uint8Array, limits: HeaderReadLi
   for (const raw of block.split("\n")) {
     const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
     if (line === "") continue;
-    if (Buffer.byteLength(line, "utf8") > MAX_LINE_BYTES || /[\x00-\x08\x0b-\x1f\x7f]/.test(line)) return invalid("invalid line length/control character");
+    if (Buffer.byteLength(line, "utf8") > MAX_HEADER_LINE_BYTES || /[\x00-\x08\x0b-\x1f\x7f]/.test(line)) return invalid("invalid line length/control character");
     if (/^[ \t]/.test(line)) {
       if (current === null) return invalid("orphan folded line");
       headers[current] = `${headers[current]}\n${line.trim()}`;
@@ -145,7 +155,7 @@ export function parseEmlHeaders(input: string | Uint8Array, limits: HeaderReadLi
   if (revision !== null && !isValidFullOid(revision)) return invalid("invalid context OID");
   const approval = { repo: unfolded("x-oma-approval-repo"), targetRef: unfolded("x-oma-approval-target"),
     expectedBase: unfolded("x-oma-approval-base"), candidate: unfolded("x-oma-approval-candidate"),
-    policyRevision: headers["x-oma-approval-policy"] === undefined ? null : policyWords(headers["x-oma-approval-policy"]) };
+    policyRevision: headers["x-oma-approval-policy"] === undefined ? null : headerWords(headers["x-oma-approval-policy"]) };
   const hasApproval = Object.values(approval).some(value => value !== null);
   if (hasApproval && (kind !== "approval_required" || exactCandidateCheck(approval) !== null)) return invalid("inconsistent approval identity");
   if (kind === "approval_required" && !hasApproval) return invalid("missing approval identity");

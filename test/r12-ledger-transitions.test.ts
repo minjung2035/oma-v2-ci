@@ -74,10 +74,10 @@ test("R12: links and completion reject different owner, incarnation, missing/ext
   const store = fixture(t); batch(store);
   for (const values of [[], [MESSAGE, EXTRA], [MESSAGE, MESSAGE]]) {
     assert.throws(() => store.transaction(tx => tx.linkDeliveriesToBatch(BATCH, values)), matches("BATCH_CONFLICT"));
-    assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, values, "alice", 1)), matches("BATCH_CONFLICT"));
+    assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, values, "alice", 1, "/session/alice")), matches("BATCH_CONFLICT"));
   }
-  assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "bob", 1)), matches("BATCH_CONFLICT"));
-  assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 2)), matches("BATCH_CONFLICT"));
+  assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "bob", 1, "/session/bob")), matches("BATCH_CONFLICT"));
+  assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 2, "/session/alice")), matches("BATCH_CONFLICT"));
   assert.throws(() => store.transaction(tx => tx.insertPreparedBatch({ id: BATCH, agent: "bob", incarnation: 1, messageIds: [MESSAGE], sessionPath: null })), matches("BATCH_CONFLICT"));
   store.transaction(tx => tx.linkDeliveriesToBatch(BATCH, [MESSAGE]));
   assert.equal(store.getDelivery(MESSAGE, "alice")?.presented, 0);
@@ -88,14 +88,14 @@ test("R12: the current incarnation owns transitions; completed replay preserves 
   store.transaction(tx => { tx.updateAgent({ name: "alice", incarnation: 2 }); tx.reassignPreparedBatches("alice", 2); });
   assert.equal(store.getBatch(BATCH)?.incarnation, 2);
   assert.throws(() => store.transaction(tx => tx.reassignPreparedBatches("alice", 1)), matches("BATCH_CONFLICT"));
-  assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 1)), matches("BATCH_CONFLICT"));
+  assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 1, "/session/alice")), matches("BATCH_CONFLICT"));
   // This is the low-level DB contract, not production S-03 completion authority.
-  store.transaction(tx => { tx.markAcknowledged(MESSAGE, "alice"); tx.completeBatch(BATCH, [MESSAGE], "alice", 2); });
+  store.transaction(tx => { tx.markAcknowledged(MESSAGE, "alice"); tx.completeBatch(BATCH, [MESSAGE], "alice", 2, "/session/alice"); });
   const beforeBatch = store.getBatch(BATCH); const beforeDelivery = store.getDelivery(MESSAGE, "alice");
   await delay(10);
   store.transaction(tx => {
     tx.markMaterialized(MESSAGE, "alice"); tx.markAcknowledged(MESSAGE, "alice");
-    tx.completeBatch(BATCH, [MESSAGE], "alice", 2);
+    tx.completeBatch(BATCH, [MESSAGE], "alice", 2, "/session/alice");
   });
   assert.deepEqual(store.getBatch(BATCH), beforeBatch);
   assert.deepEqual(store.getDelivery(MESSAGE, "alice"), beforeDelivery);

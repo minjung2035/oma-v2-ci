@@ -4,7 +4,7 @@
  */
 import { join } from "node:path";
 import {
-  agentRootFor, workspaceFor, runnerViewFor, batchViewFor,
+  agentRootFor, workspaceFor, runnerViewFor, batchViewFor, runnerReceiptFor, runnerSessionDirFor,
   mailObjectRelativePath, mailArchiveRelativePath, mailInboxRelativePath,
   submitStagingFor, submitBundleFor, contextStagingFor, contextRevisionFor,
   actorSocketDirectoryFor, actorSocketFor,
@@ -21,6 +21,12 @@ export function runnerViewPathAt(stateRoot: string, actor: string): string {
 }
 export function batchViewPathAt(stateRoot: string, actor: string, batchId: string): string {
   return join(stateRoot, batchViewFor(actor, batchId));
+}
+export function runnerReceiptPathAt(stateRoot: string, actor: string, batchId: string): string {
+  return join(stateRoot, runnerReceiptFor(actor, batchId));
+}
+export function runnerSessionDirPathAt(stateRoot: string, actor: string): string {
+  return join(stateRoot, runnerSessionDirFor(actor));
 }
 export function mailObjectPathAt(stateRoot: string, messageId: string): string {
   return join(stateRoot, mailObjectRelativePath(messageId));

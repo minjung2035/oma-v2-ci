@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JsonlReader, type PiEvent } from "../src/protocol/jsonl.js";
@@ -14,6 +14,8 @@ import { SandboxModule, type SandboxHost } from "../src/sandbox.js";
 import { StoreError } from "../src/domain/errors.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
 
+import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "../src/storage/delivery-receipt.js";
 const limits = { frameBytes: 4096, idleStreamSeconds: 1, receiptWaitSeconds: 1 };
 const errorCode = (expected: string) => (error: unknown) => error instanceof StoreError && error.code === expected;
 
@@ -137,4 +139,46 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.throws(() => sandbox.resident(lease, { ...dirs, workspace: workspacePathAt(stateRoot, "bob") }), errorCode("AUTH_FAILED"));
   assert.throws(() => sandbox.resident(value, dirs), errorCode("AUTH_FAILED"));
   assert.throws(() => sandbox.candidate("a".repeat(40), "checks"), errorCode("SPIKE_UNRESOLVED"));
+});
+
+test("R28: Pi adapter accepts only a settled pinned boundary from its owned RPC child", { timeout: 10000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-r28-pi-"));
+  try {
+    const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "view"].map(name => {
+      const path = join(root, name); mkdirSync(path, { recursive: true }); return [name, path];
+    })) as Record<string, string>;
+    const core = join(root, "extension.js"); const cli = join(root, "cli.js");
+    writeFileSync(core, "export default function() {}\n"); writeFileSync(cli, "\n");
+    const command = join(root, "fake-pi");
+    writeFileSync(command, `#!/usr/bin/env node
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const args = process.argv.slice(2);
+const sessionDir = args[args.indexOf("--session-dir") + 1]; mkdirSync(sessionDir, { recursive: true });
+const sessionPath = join(sessionDir, "owned.jsonl"); writeFileSync(sessionPath, '{"type":"session","version":3}\\n');
+process.stdin.setEncoding("utf8"); let pending = "";
+process.stdin.on("data", chunk => { pending += chunk; const lines = pending.split("\\n"); pending = lines.pop();
+  for (const line of lines) { if (!line) continue; const request = JSON.parse(line);
+    process.stdout.write(JSON.stringify({ type: "response", id: request.id, command: "prompt", success: true }) + "\\n");
+    process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", stopReason: "stop" } }) + "\\n");
+    const batchId = request.message.split(" ").at(-1);
+    const evidence = { adapterRevision: ${JSON.stringify(PI_ADAPTER_REVISION)}, batchId, incarnation: 1, sessionPath, entryId: "0123abcd" };
+    process.stdout.write(JSON.stringify({ type: "extension_ui_request", id: "notice", method: "notify", message: ${JSON.stringify(PI_BOUNDARY_PREFIX)} + JSON.stringify(evidence) }) + "\\n");
+    process.stdout.write(JSON.stringify({ type: "agent_settled" }) + "\\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+    chmodSync(command, 0o700);
+    const batch = { id: "b-00000000-0000-4000-8000-000000000001", agent: "alice", incarnation: 1,
+      messageIds: ["m-00000000-0000-4000-8000-000000000001-0"], sessionPath: null, deliveryMode: "followUp" as const,
+      notice: "mail", indexPath: "/inbox.md" as const };
+    const adapter = new PiAdapter({ actor: "alice", society: "demo", profile: { provider: "pi", model: "current", prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
+      limits: { frameBytes: 65536, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024 },
+      paths: { piCommand: command, coreExtension: core, cli, workspace: dirs.workspace!, sessionDir: dirs.sessions!,
+        agentHome: dirs.home!, mailArchive: dirs.archive!, batchView: dirs.view!, socket: join(root, "control.sock") } });
+    const boundary = await adapter.deliver(batch);
+    assert.deepEqual(boundary, { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: 1,
+      sessionPath: join(dirs.sessions!, "owned.jsonl"), entryId: "0123abcd" });
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

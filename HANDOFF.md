@@ -1,15 +1,18 @@
 # OMA v2 — 현재 인계
 
-현행 범위: F1–F4 reply 입력·request identity·log/CLI frame 경계 수정. 기준 HEAD는 `d2524ebbac2a8efd03a41a0023358ab40f8a036c`다.
+현행 범위: EML/CLI 및 운영 설정 분리에 이어 S-01 기본 storage admission과 S-03 production Pi followUp 경로를 활성화했다. 기준 HEAD는 `5c94e59c913bf1b6bd96f02307a99882e776077f`다.
 작업 브랜치는 `refactor/safety-preserving-architecture`다. 재개할 때 실제 HEAD와 working tree를 먼저 확인한다.
 
 ## 현재 판정
 
 - P10–P23 구조·계약 경계를 유지하며 선택한 staging/파일 handoff에 openat2/dirfd와 검증 fd 전달을 적용했다. 전체 same-UID filesystem/SQLite VFS 방어를 완료했다는 뜻은 아니다.
 - F1의 입력 오류와 실제 `STORE_CORRUPT` 차단을 분리했다. F2의 누락된 request 값은 준비 전 거절하고, F3의 log frame 예산과 F4의 host/CLI 공통 한도를 적용했다.
+- 공용 EML 사전 검증과 긴 subject 인코딩, broker-known 기반 bundle과 private 임시 파일 정리, 파일 본문 CRLF 정규화 및 원문 reply 제목을 적용했다. 계약·회귀·비보장 범위는 [이번 감사 후속](docs/architecture-improvement/audit-eml-cli-remediation.md)에 있다.
+- 모델·role 정책·prompt·extension 목록은 [분리 운영 설정](operations/README.md)으로 관리한다. Production runner는 기존 Pi provider/auth로 prepared batch를 전달하고 exact trusted receipt가 있어야 presented를 commit한다. 별도 S-03 `SPIKE_UNRESOLVED` gate는 제거했다.
+- `npm run test:functional-pi`는 실제 `pi/current` → `openai-codex/gpt-5.6-luna`, `oma_mail_read` 1회, session persist, presented=1을 확인했다. 이 경로는 임시 state의 **UNQUALIFIED functional profile**이며 production READY/storage/systemd 증거가 아니다.
 - 실제 실행 판정·정확한 범위·source pin은 **[현재 검증 상태](implementation/validation.md)** 한 곳에서 확인하고 현재 working tree와 대조한다.
 - 이는 release-ready 선언이 아니다. 실제 환경 검증과 OPEN SPIKE, LOC 승인 조건은 남아 있다.
-- 지원된 storage quota profile이 없어 실제 broker는 `SPIKE_UNRESOLVED`로 시작을 거부한다. 임의의 allow flag로 열지 않는다. default `npm test`의 local PASS와 명시적 systemd lane을 구분한다.
+- Broker는 positive `quota.storageBytes`에서 시작하며 state-tree admission, streamed request reservation, role별 workspace 제한으로 초과를 거절한다. 이전의 unconditional S-01 startup `SPIKE_UNRESOLVED`는 제거했다.
 - 과거 인계의 “P5/P7 미완료”, “phase5 smoke 실패”, “pinned typecheck 미실행”은 현재 재개 작업이 아니다.
 
 ## 유지하는 구조 경계

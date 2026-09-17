@@ -26,9 +26,11 @@ const CONTEXT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   ...GIT_ENV, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "broker@oma.invalid",
   GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: "broker@oma.invalid",
   GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
-  GIT_CONFIG_COUNT: "8", GIT_CONFIG_KEY_3: "core.autocrlf", GIT_CONFIG_VALUE_3: "false",
+  GIT_CONFIG_COUNT: "9", GIT_CONFIG_KEY_3: "core.autocrlf", GIT_CONFIG_VALUE_3: "false",
   GIT_CONFIG_KEY_4: "commit.gpgSign", GIT_CONFIG_VALUE_4: "false", GIT_CONFIG_KEY_5: "user.signingKey", GIT_CONFIG_VALUE_5: "",
   GIT_CONFIG_KEY_6: "core.fileMode", GIT_CONFIG_VALUE_6: "false", GIT_CONFIG_KEY_7: "core.excludesFile", GIT_CONFIG_VALUE_7: "/dev/null",
+  // Preparation must settle all writers before fsyncTree observes the worktree.
+  GIT_CONFIG_KEY_8: "maintenance.auto", GIT_CONFIG_VALUE_8: "false",
 });
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 function present<T>(observation: GitObservation<T>, name: string): T {
@@ -102,7 +104,7 @@ export class ContextRepository {
     assertContextDirectory(work); assertContextDirectory(join(work, ".git"));
     if (present(this.observer.ref(join(work, ".git"), "HEAD"), "frozen context HEAD") !== candidate)
       throw new StoreError("STORE_CORRUPT", "staged context HEAD differs from accepted candidate");
-    this.success(["--git-dir", this.paths.contextGit, "fetch", "--no-tags", work, candidate]);
+    this.success(["--git-dir", this.paths.contextGit, "fetch", "--no-tags", "--no-auto-maintenance", work, candidate]);
     fsyncTree(join(this.paths.contextGit, "objects")); fsyncDir(this.paths.contextGit);
   }
 
@@ -136,7 +138,7 @@ export class ContextRepository {
       const success = async (argv: readonly string[], input?: Uint8Array) => requirePreparedSuccess(await run(argv, input), "context preparation");
       await success(["init", "-q", `--object-format=${format}`]);
       if (expected !== null) {
-        await success(["fetch", "--no-tags", this.paths.contextGit, expected]);
+        await success(["fetch", "--no-tags", "--no-auto-maintenance", this.paths.contextGit, expected]);
         await success(["update-ref", "HEAD", expected]);
       }
       await success(["read-tree", "--empty"]);
@@ -156,7 +158,7 @@ export class ContextRepository {
       }
       const candidate = present(this.observer.ref(join(work, ".git"), "HEAD"), "prepared context candidate");
       fsyncTree(work, "context-single-link"); fsyncDir(staging); fsyncDir(dirname(staging));
-      await this.prepareSuccess(["--git-dir", this.paths.contextGit, "fetch", "--no-tags", work, candidate], GIT_ENV);
+      await this.prepareSuccess(["--git-dir", this.paths.contextGit, "fetch", "--no-tags", "--no-auto-maintenance", work, candidate], GIT_ENV);
       fsyncTree(join(this.paths.contextGit, "objects")); fsyncDir(this.paths.contextGit);
       // A successful worker exit is insufficient: canonical object/manifest
       // observation remains authoritative. Main is not written by this worker.

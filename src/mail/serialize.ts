@@ -10,7 +10,7 @@ import { exactCandidateCheck } from "../domain/mail-values.js";
 import { sha256Hex } from "../domain/canonical-json.js";
 import { actorAddress, displayAddress, rfcMessageIdFor } from "./addresses.js";
 import { freezeMessageDate, freezeMessageFacts, type FrozenMessageFacts, type MessageFactsInput, type RenderedMessage } from "./facts.js";
-import { parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
+import { MAX_HEADER_LINE_BYTES, parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
 
 /** Compatibility input for callers testing the pre-refactor serializer. These
  * are RFC presentation values, not MessagePlan logical routing/authority.
@@ -36,13 +36,17 @@ export async function buildEml(p: EmlParams): Promise<EmlEmission> {
   assertNoCrlf(p.subject, "subject");
   for (const header of [p.from, ...p.to, ...p.replyTo, p.messageId, ...(p.inReplyTo ? [p.inReplyTo] : []), ...p.references]) assertNoCrlf(header, "header");
   const dateMs = freezeMessageDate(p.dateMs);
+  // An unbroken ASCII subject cannot be folded between words. RFC 2047 words
+  // preserve its value while giving the pinned MIME writer legal fold points.
+  const encodedSubject = Buffer.byteLength(p.subject, "utf8") + "Subject: ".length > MAX_HEADER_LINE_BYTES;
   const transporter = createTransport({ streamTransport: true, buffer: true, newline: "\r\n" });
   const info = await transporter.sendMail({
     from: p.from, to: p.to.join(", "), replyTo: p.replyTo.length > 0 ? p.replyTo.join(", ") : undefined,
-    subject: p.subject, text: p.body, messageId: `<${p.messageId}>`,
+    subject: encodedSubject ? undefined : p.subject, text: p.body, messageId: `<${p.messageId}>`,
     ...(p.inReplyTo ? { inReplyTo: `<${p.inReplyTo}>` } : {}),
     ...(p.references.length > 0 ? { references: p.references.map(reference => `<${reference}>`) } : {}),
     date: new Date(dateMs), headers: {
+      ...(encodedSubject ? { Subject: { prepared: true, foldLines: true, value: encodeWord(p.subject, "B", 52) } } : {}),
       "X-OMA-Kind": p.kind, ...(p.contextRevision ? { "X-OMA-Context": p.contextRevision } : {}),
       ...(p.approvalFor ? {
         "X-OMA-Approval-Repo": p.approvalFor.repo, "X-OMA-Approval-Target": p.approvalFor.targetRef,
@@ -56,6 +60,9 @@ export async function buildEml(p: EmlParams): Promise<EmlEmission> {
   const sha256 = sha256Hex(raw);
   const text = raw.toString("utf8");
   if (!Buffer.from(text, "utf8").equals(raw)) throw new StoreError("INTERNAL_ERROR", "MIME adapter emitted unsupported non-UTF-8 bytes");
+  // Every fresh caller, including submit/context, must reject unreadable mail
+  // before it can become accepted immutable evidence. Recovery remains strict.
+  parseEmlHeaders(text, { maxHeaderBytes: raw.byteLength });
   return { text, bytes: raw.byteLength, sha256, dateMs };
 }
 

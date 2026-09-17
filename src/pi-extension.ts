@@ -1,97 +1,532 @@
-// PI-002/BATCH-002: one compiled trusted extension file, no host runtime imports.
-// A custom message is a view, NOT session consumption or S-03 completion proof.
+// Compiled trusted Pi extension. It imports no OMA runtime module so a reviewed
+// single-file build can be mounted into either the resident sandbox or host RPC mode.
+import {
+  constants,
+  closeSync,
+  existsSync,
+  fstatSync,
+  mkdtempSync,
+  openSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
+import { Type } from "typebox";
 
-export interface BatchView {
-  id: string; agent: string; incarnation: number; deliveryMode: "steer" | "followUp";
-  notice: string; messageIds: string[];
+const UUID_V4 =
+  "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+const BATCH = new RegExp(`^b-${UUID_V4}$`);
+const MESSAGE = new RegExp(`^m-${UUID_V4}-([0-9]+)$`);
+const ACTOR = /^[a-z][a-z0-9-]{0,31}$/;
+const RESERVED = new Set([
+  "principal",
+  "commons",
+  "residents",
+  "topic",
+  "broker",
+  "principal-relay",
+  "reconcile",
+]);
+export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.85.1";
+export const PI_BOUNDARY_PREFIX = "OMA_PI_BOUNDARY_V1 ";
+interface BatchManifest {
+  id: string;
+  agent: string;
+  incarnation: number;
+  deliveryMode: "steer" | "followUp";
+  notice: string;
+  messageIds: string[];
 }
-export interface BatchViewLimits { frameBytes: number; batchMaxMessages: number }
-const UUID_V4 = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
-const BATCH_ID = new RegExp(`^b-${UUID_V4}$`);
-const MESSAGE_ID = new RegExp(`^m-${UUID_V4}-(\\d+)$`);
-const ACTOR_NAME = /^[a-z][a-z0-9-]{0,31}$/;
-const RESERVED_ACTORS = new Set(["principal", "commons", "residents", "topic", "broker", "principal-relay", "reconcile"]);
-function isValidBatchActor(name: string): boolean {
-  return ACTOR_NAME.test(name) && !RESERVED_ACTORS.has(name) && !name.startsWith("topic-");
+interface ViewLimits {
+  frameBytes: number;
+  batchMaxMessages: number;
 }
-function isValidMessageId(id: string): boolean {
-  const match = MESSAGE_ID.exec(id);
-  return match !== null && Number.isSafeInteger(Number(match[1])) && Number(match[1]) >= 0;
+function exactObject(
+  value: unknown,
+  keys: readonly string[],
+): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.hasOwn(value, key))
+  );
 }
-function validLimits(value: BatchViewLimits | undefined): value is BatchViewLimits {
-  return value !== undefined && Number.isSafeInteger(value.frameBytes) && value.frameBytes > 0 &&
-    Number.isSafeInteger(value.batchMaxMessages) && value.batchMaxMessages > 0;
+function validMessageId(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const match = MESSAGE.exec(value);
+  return match !== null && Number.isSafeInteger(Number(match[1]));
 }
-/** No generated source: the equivalent host owner is protocol/batch-view.ts.
- * test/id-contracts.test.ts and test/r28-adapter-boundaries.test.ts pin the
- * independent identity, schema and UTF-8 byte decisions of both implementations.
- */
-export function decodeBatchViewText(raw: string, batchId: string, limits: BatchViewLimits): BatchView | null {
-  if (!validLimits(limits) || !BATCH_ID.test(batchId) || Buffer.byteLength(raw) > limits.frameBytes) return null;
+function validLimits(limits: ViewLimits): boolean {
+  return (
+    Number.isSafeInteger(limits.frameBytes) &&
+    limits.frameBytes > 0 &&
+    Number.isSafeInteger(limits.batchMaxMessages) &&
+    limits.batchMaxMessages > 0
+  );
+}
+function decodeManifest(
+  value: unknown,
+  expected: string,
+  limits: ViewLimits,
+): BatchManifest | null {
+  const keys = [
+    "id",
+    "agent",
+    "incarnation",
+    "deliveryMode",
+    "notice",
+    "messageIds",
+  ];
+  if (
+    !validLimits(limits) ||
+    !exactObject(value, keys) ||
+    value.id !== expected ||
+    !BATCH.test(value.id as string) ||
+    typeof value.agent !== "string" ||
+    !ACTOR.test(value.agent) ||
+    RESERVED.has(value.agent) ||
+    value.agent.startsWith("topic-") ||
+    !Number.isSafeInteger(value.incarnation) ||
+    (value.incarnation as number) < 0 ||
+    (value.deliveryMode !== "steer" && value.deliveryMode !== "followUp") ||
+    typeof value.notice !== "string" ||
+    Buffer.byteLength(value.notice) > limits.frameBytes ||
+    !Array.isArray(value.messageIds) ||
+    value.messageIds.length > limits.batchMaxMessages ||
+    value.messageIds.some((id) => !validMessageId(id)) ||
+    new Set(value.messageIds).size !== value.messageIds.length
+  )
+    return null;
+  return {
+    id: value.id as string,
+    agent: value.agent,
+    incarnation: value.incarnation as number,
+    deliveryMode: value.deliveryMode,
+    notice: value.notice,
+    messageIds: [...value.messageIds] as string[],
+  };
+}
+export function decodeBatchViewText(
+  text: string,
+  expected: string,
+  limits: ViewLimits,
+): BatchManifest | null {
+  if (!validLimits(limits) || Buffer.byteLength(text) > limits.frameBytes)
+    return null;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const value = parsed as Record<string, unknown>;
-    const keys = ["id", "agent", "incarnation", "deliveryMode", "notice", "messageIds"];
-    if (Object.keys(value).length !== keys.length || Object.keys(value).some(key => !keys.includes(key)) ||
-      value.id !== batchId || typeof value.agent !== "string" || !isValidBatchActor(value.agent) ||
-      typeof value.incarnation !== "number" || !Number.isSafeInteger(value.incarnation) || value.incarnation < 0 ||
-      (value.deliveryMode !== "steer" && value.deliveryMode !== "followUp") || typeof value.notice !== "string" ||
-      Buffer.byteLength(value.notice) > limits.frameBytes || !Array.isArray(value.messageIds) || value.messageIds.length > limits.batchMaxMessages ||
-      value.messageIds.some(id => typeof id !== "string" || !isValidMessageId(id)) || new Set(value.messageIds).size !== value.messageIds.length) return null;
-    return { id: value.id, agent: value.agent, incarnation: value.incarnation, deliveryMode: value.deliveryMode,
-      notice: value.notice, messageIds: [...value.messageIds] as string[] };
-  } catch { return null; }
+    return decodeManifest(JSON.parse(text), expected, limits);
+  } catch {
+    return null;
+  }
 }
-function environmentLimits(): BatchViewLimits | undefined {
-  const source = process.env.OMA_FRAME_BYTES ?? "";
-  const count = process.env.OMA_BATCH_MAX_MESSAGES ?? "";
-  if (!/^[1-9][0-9]*$/.test(source) || !/^[1-9][0-9]*$/.test(count)) return undefined;
-  const limits = { frameBytes: Number(source), batchMaxMessages: Number(count) };
-  return validLimits(limits) ? limits : undefined;
-}
-
-export default function (pi: ExtensionAPI): void {
-  pi.registerCommand("oma-deliver", {
-    description: "Deliver an OMA notification batch (trusted broker view)",
-    handler: async (args: string, ctx) => {
-      const batchId = args.trim().split(/\s+/)[0] ?? "";
-      if (!BATCH_ID.test(batchId)) { ctx.ui.notify("oma-deliver: invalid batch id", "error"); return; }
-      const batch = readBatchView(batchId);
-      if (!batch) { ctx.ui.notify("oma-deliver: batch view unavailable, invalid or over limit", "error"); return; }
-      await pi.sendMessage({ customType: "oma-mail", content: batch.notice, display: true,
-        details: { batchId: batch.id, messageIds: batch.messageIds } }, { triggerTurn: true, deliverAs: batch.deliveryMode });
-      // No batch.complete request, receiptPath, tool event or agent_end attestation.
-    },
-  });
-}
-
-/** Reads at most the configured source bound plus one overflow-detection byte.
- * The FD pins the opened regular file; a symlink/FIFO/device is never consumed.
- * Production limits are supplied by the trusted sandbox plan's clear environment.
- */
-export function readBatchView(batchId: string, viewDir = "/run/oma-view", configured?: BatchViewLimits): BatchView | null {
-  const limits = configured ?? environmentLimits();
-  if (!validLimits(limits) || !BATCH_ID.test(batchId) || !viewDir.startsWith("/") || viewDir.includes("\0") ||
-    viewDir.split("/").some(part => part === "." || part === "..")) return null;
+export function readBatchView(
+  batchId: string,
+  root: string,
+  limits: ViewLimits,
+): BatchManifest | null {
+  if (!BATCH.test(batchId) || !validLimits(limits)) return null;
+  const path = join(root, `batch-${batchId}.json`);
   let fd: number | undefined;
   try {
-    fd = openSync(`${viewDir}/batch-${batchId}.json`, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    fd = openSync(
+      path,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
     const before = fstatSync(fd);
-    if (!before.isFile() || !Number.isSafeInteger(before.size) || before.size < 1 || before.size > limits.frameBytes) return null;
-    const buffer = Buffer.alloc(before.size + 1);
+    if (!before.isFile() || before.size > limits.frameBytes) return null;
+    const bytes = Buffer.alloc(before.size + 1);
     let total = 0;
-    while (total < buffer.length) {
-      const count = readSync(fd, buffer, total, buffer.length - total, total);
+    while (total < bytes.length) {
+      const count = readSync(fd, bytes, total, bytes.length - total, total);
       if (count === 0) break;
       total += count;
     }
     const after = fstatSync(fd);
-    if (total !== before.size || after.size !== before.size || after.dev !== before.dev || after.ino !== before.ino ||
-      after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) return null;
-    return decodeBatchViewText(new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, total)), batchId, limits);
-  } catch { return null; }
-  finally { if (fd !== undefined) closeSync(fd); }
+    if (
+      total !== before.size ||
+      after.dev !== before.dev ||
+      after.ino !== before.ino ||
+      after.size !== before.size ||
+      after.mtimeMs !== before.mtimeMs ||
+      after.ctimeMs !== before.ctimeMs
+    )
+      return null;
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(
+      bytes.subarray(0, total),
+    );
+    return decodeBatchViewText(text, batchId, limits);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+function integerEnv(name: string): number | null {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+function inside(root: string, path: string): boolean {
+  const offset = relative(root, path);
+  return (
+    offset === "" ||
+    (offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset))
+  );
+}
+function allowedWorkspacePath(root: string, input: unknown): boolean {
+  if (typeof input !== "string" || input.includes("\0")) return false;
+  const target = resolve(root, input);
+  if (!inside(root, target)) return false;
+  let existing = target;
+  while (!existsSync(existing)) {
+    const parent = dirname(existing);
+    if (parent === existing) return false;
+    existing = parent;
+  }
+  try {
+    return inside(root, realpathSync(existing));
+  } catch {
+    return false;
+  }
+}
+function workspaceUsage(root: string, stopAfter: number): number {
+  const pending = [root];
+  const files = new Set<string>();
+  let total = 0;
+  while (pending.length > 0) {
+    const path = pending.pop()!;
+    let stat: ReturnType<typeof lstatSync>;
+    try { stat = lstatSync(path); } catch { continue; }
+    if (stat.isFile()) {
+      const identity = `${stat.dev}:${stat.ino}`;
+      if (files.has(identity)) continue;
+      files.add(identity);
+      total += stat.size;
+    } else if (stat.isSymbolicLink()) total += stat.size;
+    if (total > stopAfter) return total;
+    if (!stat.isDirectory()) continue;
+    try { for (const name of readdirSync(path)) pending.push(join(path, name)); } catch { return stopAfter + 1; }
+  }
+  return total;
+}
+
+function workspaceWriteFits(root: string, tool: string, input: Record<string, unknown>, maximum: number): boolean {
+  if (tool !== "write" && tool !== "edit") return true;
+  const path = typeof input.path === "string" ? resolve(root, input.path) : null;
+  if (!path) return false;
+  let growth = 0;
+  if (tool === "write") {
+    if (typeof input.content !== "string") return false;
+    growth = Buffer.byteLength(input.content);
+    try { const current = lstatSync(path); if (current.isFile()) growth = Math.max(0, growth - current.size); } catch { /* new file */ }
+  } else {
+    if (typeof input.newText !== "string") return false;
+    growth = Buffer.byteLength(input.newText);
+  }
+  return growth <= maximum && workspaceUsage(root, maximum - growth) <= maximum - growth;
+}
+function mailId(value: string): string | null {
+  if (validMessageId(value)) return value;
+  const prefix = "/mail/archive/cur/";
+  const suffix = value.endsWith(":2,")
+    ? ":2,"
+    : value.endsWith(":2")
+      ? ":2"
+      : null;
+  if (!value.startsWith(prefix) || suffix === null) return null;
+  const candidate = value.slice(prefix.length, -suffix.length);
+  return validMessageId(candidate) ? candidate : null;
+}
+function readBoundedMail(
+  root: string,
+  value: string,
+  maximum: number,
+): { id: string; text: string } {
+  const id = mailId(value);
+  if (!id) throw new Error("expected a message id or canonical archive path");
+  const path = join(root, `${id}:2,`);
+  let fd: number | undefined;
+  try {
+    fd = openSync(
+      path,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.size > maximum)
+      throw new Error("mail is not a bounded regular file");
+    return {
+      id,
+      text: new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(fd)),
+    };
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+function textResult(text: string, details: Record<string, unknown> = {}) {
+  return { content: [{ type: "text" as const, text }], details };
+}
+async function runCli(
+  pi: ExtensionAPI,
+  cli: string,
+  cwd: string,
+  home: string,
+  socket: string,
+  args: string[],
+  signal?: AbortSignal,
+): Promise<string> {
+  const command = [
+    "-i",
+    `HOME=${home}`,
+    `OMA_SOCKET=${socket}`,
+    `PATH=${process.env.PATH ?? "/usr/bin:/bin"}`,
+    "LANG=C.UTF-8",
+    process.execPath,
+    cli,
+    ...args,
+  ];
+  const result = await pi.exec(
+    "/usr/bin/env",
+    command,
+    signal ? { cwd, signal } : { cwd },
+  );
+  if (result.code !== 0)
+    throw new Error(
+      (result.stderr || result.stdout || `CLI exited ${result.code}`)
+        .trim()
+        .slice(0, 2000),
+    );
+  return result.stdout.trim();
+}
+function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
+  const cli = process.env.OMA_CLI_PATH;
+  const home = process.env.OMA_AGENT_HOME;
+  const archive = process.env.OMA_MAIL_ARCHIVE;
+  const socket = process.env.OMA_SOCKET;
+  const maximum = integerEnv("OMA_MAIL_BYTES") ?? 1024 * 1024;
+  if (
+    !cli ||
+    !home ||
+    !archive ||
+    !socket ||
+    !isAbsolute(cli) ||
+    !isAbsolute(home) ||
+    !isAbsolute(archive) ||
+    !isAbsolute(socket)
+  )
+    return;
+  pi.registerTool({
+    name: "oma_mail_read",
+    label: "Read OMA mail",
+    description:
+      "Read one immutable OMA mail message by message id or canonical /mail/archive/cur path.",
+    promptSnippet: "Read OMA mail using the path from the delivery notice.",
+    parameters: Type.Object({
+      messageId: Type.String({
+        description: "Message id or canonical archive path from the notice",
+      }),
+    }),
+    async execute(_id, params) {
+      const mail = readBoundedMail(archive, params.messageId, maximum);
+      return textResult(mail.text, { messageId: mail.id });
+    },
+  });
+  pi.registerTool({
+    name: "oma_mail_send",
+    label: "Send OMA mail",
+    description: "Send durable mail to agents or public addresses.",
+    promptSnippet: "Send collaboration results through durable OMA mail.",
+    parameters: Type.Object({
+      to: Type.Array(Type.String(), { minItems: 1, maxItems: 32 }),
+      subject: Type.String({ maxLength: 998 }),
+      body: Type.String(),
+      kind: Type.Optional(
+        Type.Union([
+          Type.Literal("message"),
+          Type.Literal("question"),
+          Type.Literal("result"),
+          Type.Literal("alert"),
+          Type.Literal("critical"),
+        ]),
+      ),
+      replyTo: Type.Optional(Type.String()),
+      request: Type.Optional(Type.String()),
+    }),
+    async execute(_id, params, signal) {
+      const temporary = mkdtempSync(join(home, "oma-tool-"));
+      const body = join(temporary, "body.txt");
+      try {
+        writeFileSync(body, params.body, { mode: 0o600 });
+        const key = params.request ?? `pi-${crypto.randomUUID()}`;
+        const args = [
+          "send",
+          ...params.to,
+          "--subject",
+          params.subject,
+          "--file",
+          body,
+          "--kind",
+          params.kind ?? "message",
+          "--request",
+          key,
+        ];
+        if (params.replyTo) args.push("--reply", params.replyTo);
+        return textResult(
+          await runCli(pi, cli, cwd, home, socket, args, signal),
+          { request: key },
+        );
+      } finally {
+        rmSync(temporary, { recursive: true, force: true });
+      }
+    },
+  });
+  pi.registerTool({
+    name: "oma_mail_ack",
+    label: "Acknowledge OMA mail",
+    description: "Durably acknowledge one OMA message.",
+    parameters: Type.Object({
+      messageId: Type.String(),
+      request: Type.Optional(Type.String()),
+    }),
+    async execute(_id, params, signal) {
+      const key = params.request ?? `pi-${crypto.randomUUID()}`;
+      return textResult(
+        await runCli(
+          pi,
+          cli,
+          cwd,
+          home,
+          socket,
+          ["ack", params.messageId, "--request", key],
+          signal,
+        ),
+        { request: key },
+      );
+    },
+  });
+  pi.registerTool({
+    name: "oma_status",
+    label: "OMA status",
+    description: "Read society or agent status.",
+    parameters: Type.Object({ agent: Type.Optional(Type.String()) }),
+    async execute(_id, params, signal) {
+      return textResult(
+        await runCli(
+          pi,
+          cli,
+          cwd,
+          home,
+          socket,
+          params.agent ? ["status", params.agent] : ["status"],
+          signal,
+        ),
+      );
+    },
+  });
+}
+
+export default function extension(pi: ExtensionAPI) {
+  const root = process.env.OMA_BATCH_VIEW ?? "/run/oma-view";
+  const frameBytes = integerEnv("OMA_FRAME_BYTES");
+  const batchMaxMessages = integerEnv("OMA_BATCH_MAX_MESSAGES");
+  const workspaceBytes = integerEnv("OMA_WORKSPACE_BYTES");
+  const workspace = realpathSync(process.cwd());
+  let pending: BatchManifest | null = null;
+  let terminalStop: string | null = null;
+  registerOmaTools(pi, workspace);
+  pi.on("tool_call", (event) => {
+    if (event.toolName === "bash" || event.toolName === "powershell")
+      return {
+        block: true,
+        reason: "shell tools are disabled for OMA residents",
+      };
+    if (
+      !["read", "write", "edit", "grep", "find", "ls"].includes(event.toolName)
+    )
+      return undefined;
+    const input = event.input as Record<string, unknown>;
+    const path = input.path ?? ".";
+    if (!allowedWorkspacePath(workspace, path))
+      return { block: true, reason: "tool path is outside the agent workspace" };
+    if ((event.toolName === "write" || event.toolName === "edit") &&
+        (!workspaceBytes || !workspaceWriteFits(workspace, event.toolName, input, workspaceBytes)))
+      return { block: true, reason: "agent workspace quota would be exceeded" };
+    return undefined;
+  });
+  pi.on("message_end", (event) => {
+    // SAFETY: Pi's typed message_end contract supplies the discriminated AgentMessage union.
+    const message = event.message;
+    if (pending && message?.role === "assistant")
+      terminalStop = message.stopReason ?? null;
+  });
+  pi.registerCommand("oma-deliver", {
+    description: "Deliver one broker-prepared immutable mail batch",
+    handler: async (args, ctx) => {
+      if (pending || frameBytes === null || batchMaxMessages === null) {
+        ctx.ui.notify("OMA delivery adapter is unavailable or busy", "error");
+        return;
+      }
+      const batch = readBatchView(args.trim(), root, {
+        frameBytes,
+        batchMaxMessages,
+      });
+      if (!batch) {
+        ctx.ui.notify("Invalid or unavailable OMA batch", "error");
+        return;
+      }
+      pending = batch;
+      terminalStop = null;
+      await pi.sendMessage(
+        {
+          customType: "oma-mail",
+          content: batch.notice,
+          display: true,
+          details: {
+            batchId: batch.id,
+            incarnation: batch.incarnation,
+            messageIds: batch.messageIds,
+          },
+        },
+        { triggerTurn: true, deliverAs: batch.deliveryMode },
+      );
+    },
+  });
+  pi.on("agent_settled", async (_event, ctx) => {
+    const batch = pending;
+    if (!batch || terminalStop !== "stop") return;
+    const sessionPath = ctx.sessionManager.getSessionFile();
+    if (!sessionPath || !isAbsolute(sessionPath)) return;
+    pi.appendEntry("oma-delivery-boundary", {
+      adapterRevision: PI_ADAPTER_REVISION,
+      batchId: batch.id,
+      incarnation: batch.incarnation,
+      messageIds: batch.messageIds,
+      sessionPath,
+    });
+    const leaf = ctx.sessionManager.getLeafEntry();
+    if (
+      !leaf ||
+      leaf.type !== "custom" ||
+      leaf.customType !== "oma-delivery-boundary"
+    )
+      return;
+    ctx.ui.notify(
+      `${PI_BOUNDARY_PREFIX}${JSON.stringify({
+        adapterRevision: PI_ADAPTER_REVISION,
+        batchId: batch.id,
+        incarnation: batch.incarnation,
+        sessionPath,
+        entryId: leaf.id,
+      })}`,
+      "info",
+    );
+    pending = null;
+    terminalStop = null;
+  });
 }

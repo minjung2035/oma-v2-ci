@@ -5,11 +5,12 @@ import { Store, type DeliveryRow } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { generateBatchId } from "../ids.js";
 import { mailArchiveDisplayPath, contextRevisionDisplayPath } from "../domain/derived.js";
-import { mailObjectPathAt, mailInboxPathAt } from "../storage/paths.js";
+import { mailObjectPathAt, mailInboxPathAt, runnerReceiptPathAt } from "../storage/paths.js";
 import { ensureDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
 import { observeImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
 import { publishBatchView } from "../storage/batch-view.js";
 import { encodeBatchView, type BatchViewLimits } from "../protocol/batch-view.js";
+import { PI_ADAPTER_REVISION, readDeliveryReceipt } from "../storage/delivery-receipt.js";
 import { MailMaterializer, operationMessage } from "./materializer.js";
 import { selectBatch } from "./batch-policy.js";
 
@@ -73,7 +74,16 @@ export class BatchCoordinator {
     if (!batch) throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
     if (batch.agent !== auth.actor || auth.incarnation !== evidence.incarnation || batch.incarnation !== evidence.incarnation)
       throw new StoreError("BATCH_CONFLICT", "batch ownership mismatch");
-    throw new StoreError("SPIKE_UNRESOLVED", "S-03 trusted Pi session-boundary evidence is not implemented");
+    if (!this.limits || evidence.adapterRevision !== PI_ADAPTER_REVISION ||
+        evidence.receiptPath !== runnerReceiptPathAt(this.stateRoot, auth.actor, batch.id))
+      throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "batch completion does not identify the pinned trusted receipt");
+    const ids: unknown = JSON.parse(batch.messageIdsJson);
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== "string")) throw new StoreError("STORE_CORRUPT", "invalid decoded batch manifest");
+    const prepared = batchOf({ id: batch.id, incarnation: batch.incarnation, messageIds: ids as string[], sessionPath: batch.sessionPath }, auth.actor);
+    const receipt = readDeliveryReceipt(this.stateRoot, prepared, this.limits.frameBytes);
+    if (receipt.sessionPath !== evidence.sessionPath)
+      throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "receipt and completion session paths differ");
+    this.store.transaction(tx => tx.completeBatch(batch.id, prepared.messageIds, auth.actor, batch.incarnation, receipt.sessionPath));
   }
   moveToCur(agent: Actor, ids: readonly MessageId[]): number {
     let count = 0;

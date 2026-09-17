@@ -73,6 +73,7 @@ type ValidatedInternalCall = {
   };
 }[keyof InternalMethods];
 export class InternalDispatcher {
+  private readonly observations = new Map<Actor, Readonly<{ reason: string; toolName?: string; observedAtMs: number }>>();
   constructor(private readonly deps: InternalDispatchDependencies) {}
   async dispatch(
     raw: Record<string, unknown>,
@@ -160,10 +161,12 @@ export class InternalDispatcher {
             store.getAgentIdentity(agent)!.incarnation,
             peer,
           );
-          throw new StoreError(
-            "SPIKE_UNRESOLVED",
-            "S-03 observation adapter is not pinned",
-          );
+          this.observations.set(agent, Object.freeze({
+            reason: dispatchParams.reason,
+            ...(dispatchParams.toolName === undefined ? {} : { toolName: dispatchParams.toolName }),
+            observedAtMs: dispatchParams.observedAtMs,
+          }));
+          return okAnswer(id, { accepted: true });
         }
         case "batch.prepare": {
           const agent = peers.runnerActor(peer);

@@ -26,6 +26,7 @@
   "src/cli/request-intent.ts",
   "src/cli/transport.ts",
   "src/config.ts",
+  "src/config/operations.ts",
   "src/config/policy.ts",
   "src/diagnostics/files.ts",
   "src/diagnostics/integrity.ts",
@@ -122,6 +123,8 @@
   "src/runtime/assets.ts",
   "src/runtime/broker-lifetime.ts",
   "src/runtime/deployment-manifest.ts",
+  "src/runtime/pi-adapter.ts",
+  "src/runtime/pi-rpc.ts",
   "src/runtime/process-lock.ts",
   "src/runtime/run-registry.ts",
   "src/sandbox.ts",
@@ -130,6 +133,7 @@
   "src/storage/context-files.ts",
   "src/storage/context-snapshot.ts",
   "src/storage/context-stream.ts",
+  "src/storage/delivery-receipt.ts",
   "src/storage/diagnostic-snapshot.ts",
   "src/storage/directory.ts",
   "src/storage/durable-fs.ts",
@@ -140,6 +144,7 @@
   "src/storage/operation-journal.ts",
   "src/storage/operation-transitions.ts",
   "src/storage/paths.ts",
+  "src/storage/quota.ts",
   "src/storage/receipt-projector.ts",
   "src/storage/rows.ts",
   "src/storage/staged-tree.ts",
@@ -211,6 +216,7 @@
     "name": "K2-mechanisms",
     "files": [
      "src/config.ts",
+     "src/config/operations.ts",
      "src/config/policy.ts",
      "src/ids.ts",
      "src/leaf.ts",
@@ -224,9 +230,11 @@
      "src/storage/context-files.ts",
      "src/storage/context-snapshot.ts",
      "src/storage/context-stream.ts",
+     "src/storage/delivery-receipt.ts",
      "src/storage/directory.ts",
      "src/storage/durable-fs.ts",
      "src/storage/immutable-file.ts",
+     "src/storage/quota.ts",
      "src/storage/staged-tree.ts",
      "src/storage/submit-spool.ts"
     ]
@@ -252,9 +260,9 @@
    "K0-values -> K0-values": 18,
    "K1-codecs -> K0-values": 41,
    "K1-codecs -> K1-codecs": 15,
-   "K2-mechanisms -> K0-values": 42,
-   "K2-mechanisms -> K1-codecs": 6,
-   "K2-mechanisms -> K2-mechanisms": 26,
+   "K2-mechanisms -> K0-values": 51,
+   "K2-mechanisms -> K1-codecs": 7,
+   "K2-mechanisms -> K2-mechanisms": 28,
    "K3-ledger -> K0-values": 19,
    "K3-ledger -> K1-codecs": 9,
    "K3-ledger -> K2-mechanisms": 1,
@@ -319,11 +327,6 @@
    },
    {
     "from": "src/config.ts",
-    "to": "src/frame.ts",
-    "kind": "runtime"
-   },
-   {
-    "from": "src/config.ts",
     "to": "src/protocol/log-response.ts",
     "kind": "runtime"
    },
@@ -331,6 +334,26 @@
     "from": "src/config.ts",
     "to": "src/domain/integer-fields.ts",
     "kind": "type"
+   },
+   {
+    "from": "src/config/operations.ts",
+    "to": "src/domain/deployment.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config/operations.ts",
+    "to": "src/domain/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config/operations.ts",
+    "to": "src/domain/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config/operations.ts",
+    "to": "src/frame.ts",
+    "kind": "runtime"
    },
    {
     "from": "src/config/policy.ts",
@@ -445,6 +468,11 @@
    {
     "from": "src/mail/headers.ts",
     "to": "src/domain/mail-values.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/process/async.ts",
+    "to": "src/domain/errors.ts",
     "kind": "runtime"
    },
    {
@@ -678,6 +706,26 @@
     "kind": "runtime"
    },
    {
+    "from": "src/storage/delivery-receipt.ts",
+    "to": "src/domain/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/storage/delivery-receipt.ts",
+    "to": "src/domain/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/storage/delivery-receipt.ts",
+    "to": "src/frame.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/storage/delivery-receipt.ts",
+    "to": "src/storage/paths.ts",
+    "kind": "runtime"
+   },
+   {
     "from": "src/storage/directory.ts",
     "to": "src/domain/errors.ts",
     "kind": "runtime"
@@ -780,6 +828,16 @@
    {
     "from": "src/storage/operation-transitions.ts",
     "to": "src/validate.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/storage/quota.ts",
+    "to": "src/domain/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/storage/quota.ts",
+    "to": "src/domain/resources.ts",
     "kind": "runtime"
    },
    {
@@ -1262,7 +1320,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 70
+   "files": 73
   },
   {
    "index": 2,
@@ -1305,7 +1363,7 @@
     "src/runner.ts",
     "src/sandbox.ts"
    ],
-   "files": 18
+   "files": 20
   },
   {
    "index": 5,
@@ -1320,24 +1378,24 @@
    "files": 9
   }
  ],
- "files": 154,
- "runtimeEdges": 571,
- "typeOnlyEdges": 274,
+ "files": 159,
+ "runtimeEdges": 595,
+ "typeOnlyEdges": 279,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 191,
+  "L1-kernel -> L1-kernel": 203,
   "L2-facts -> L1-kernel": 27,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 159,
+  "L3-workflow -> L1-kernel": 160,
   "L3-workflow -> L2-facts": 12,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 49,
+  "L4-orchestration -> L1-kernel": 58,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
-  "L4-orchestration -> L4-orchestration": 18,
-  "L5-entry -> L1-kernel": 29,
+  "L4-orchestration -> L4-orchestration": 20,
+  "L5-entry -> L1-kernel": 28,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
-  "L5-entry -> L4-orchestration": 7,
+  "L5-entry -> L4-orchestration": 8,
   "L5-entry -> L5-entry": 2
  },
  "upwardTypeOnlyEdges": [
@@ -1373,11 +1431,11 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 90,
-  "src/domain/identifiers.ts": 30,
+  "src/domain/errors.ts": 95,
+  "src/domain/identifiers.ts": 32,
+  "src/storage/paths.ts": 20,
   "src/ids.ts": 19,
-  "src/storage/paths.ts": 18,
-  "src/storage/durable-fs.ts": 17,
+  "src/storage/durable-fs.ts": 19,
   "src/store.ts": 17,
   "src/domain/derived.ts": 16,
   "src/authority.ts": 13,
@@ -1390,8 +1448,8 @@
   "src/storage/contained-fs.ts": 9
  },
  "fanOut": {
+  "src/broker.ts": 26,
   "src/mail.ts": 26,
-  "src/broker.ts": 25,
   "src/entry/broker.ts": 19,
   "src/git.ts": 15,
   "src/cli.ts": 14,
@@ -1401,7 +1459,7 @@
   "src/reconcile.ts": 13,
   "src/git/context.ts": 12,
   "src/git/submit.ts": 12,
-  "src/mail/batches.ts": 11,
+  "src/mail/batches.ts": 12,
   "src/git/context-mirror.ts": 10,
   "src/storage/context-snapshot.ts": 10,
   "src/config.ts": 9
@@ -1410,19 +1468,20 @@
   "@earendil-works/pi-coding-agent": 1,
   "koffi": 2,
   "node:async_hooks": 3,
-  "node:child_process": 5,
-  "node:crypto": 15,
-  "node:fs": 33,
+  "node:child_process": 3,
+  "node:crypto": 16,
+  "node:fs": 36,
   "node:net": 3,
-  "node:os": 1,
-  "node:path": 39,
+  "node:os": 2,
+  "node:path": 44,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:string_decoder": 1,
   "node:url": 2,
   "node:util": 2,
   "nodemailer": 1,
-  "nodemailer/lib/mime-funcs": 1
+  "nodemailer/lib/mime-funcs": 1,
+  "typebox": 1
  },
  "unresolved": []
 }

@@ -1,0 +1,13 @@
+title = "OMA gitleaks policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated content digests and vendored upstream cryptographic test fixtures are not credentials"
+paths = [
+  '''^production-loc-hashes\.json$''',
+  '''^reference/codex/codex-rs/Cargo\.lock$''',
+  '''^reference/codex/codex-rs/agent-identity/src/lib\.rs$''',
+  '''^reference/codex/codex-rs/app-server/tests/suite/v2/connection_handling_websocket\.rs$''',
+]

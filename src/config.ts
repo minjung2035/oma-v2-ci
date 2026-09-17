@@ -1,9 +1,8 @@
 // MUST [CFG-001/002/005]: closed host configuration, no unlimited defaults.
-import { readFileSync } from "node:fs";
+import { readConfigurationSource } from "./config/operations.js";
 import type { HostConfigV1 } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
-import { parseJsonObject } from "./frame.js";
 import { isCapability } from "./domain/capabilities.js";
 import { RESOURCE_FIELDS } from "./domain/resources.js";
 import { PROTOCOL_LIMIT_FIELDS } from "./domain/limits.js";
@@ -41,10 +40,14 @@ function needIntegerFields(record: Record<string, unknown>, fields: Readonly<Rec
   for (const key of Object.keys(fields)) needInt(record[key], `${what}.${key}`, fields[key]!.minInclusive);
 }
 
-export function loadConfig(path: string): HostConfigV1 {
-  let raw: unknown;
-  try { raw = parseJsonObject(readFileSync(path)).raw; }
-  catch (error) { throw new StoreError("INVALID_REQUEST", `config unreadable: ${(error as Error).message}`); }
+/** Resolve the optional split authoring format once at process startup. */
+export function loadConfiguration(path: string) {
+  const source = readConfigurationSource(path);
+  return Object.freeze({ config: validateConfig(source.host), roles: source.roles });
+}
+export function loadConfig(path: string): HostConfigV1 { return loadConfiguration(path).config; }
+
+function validateConfig(raw: unknown): HostConfigV1 {
   const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits", "features"], "root");
   if (cfg.schemaVersion !== 1) err("schemaVersion must be 1");
   const society = needString(cfg.society, "society");

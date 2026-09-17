@@ -75,6 +75,12 @@ export function batchViewFileName(batchId: string): string {
 export function batchViewFor(actor: string, batchId: string): string {
   return `${runnerViewFor(actor)}/${batchViewFileName(batchId)}`;
 }
+export function runnerReceiptFor(actor: string, batchId: string): string {
+  return `${agentRootFor(actor)}/runner/receipts/${batchViewFileName(batchId)}`;
+}
+export function runnerSessionDirFor(actor: string): string {
+  return `${agentRootFor(actor)}/runner/sessions`;
+}
 
 export function mailObjectFileName(messageId: string): string {
   return `${required(messageId, parseMessageFileId, "message id")}.eml`;

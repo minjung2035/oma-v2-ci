@@ -51,7 +51,7 @@ test("RUN-001: broker EOF, malformed reply and local stop settle all pending cal
   }
 });
 
-test("SP-003: a prepared runner handoff reports the unresolved adapter, not successful consumption", async () => {
+test("RUN-001: a prepared handoff requires an explicitly configured Pi adapter", async () => {
   for (const prepared of [false, true]) {
     const dir = mkdtempSync(join(tmpdir(), "oma-run-gate-"));
     const methods: string[] = [];
@@ -64,8 +64,7 @@ test("SP-003: a prepared runner handoff reports the unresolved adapter, not succ
           const raw = frame.raw;
           assert.ok(raw !== null && typeof raw === "object" && "id" in raw && "method" in raw && typeof raw.method === "string");
           methods.push(raw.method);
-          // The lease must be a real endpoint identity for this run root; the
-          // unresolved adapter gate is what the test observes, not a bad lease.
+          // The lease is valid; this fixture intentionally omits Pi adapter paths.
           const result = raw.method === "runner.open"
             ? { actor: "a", incarnation: 1, socketHostPath: actorSocketPathAt(dir, "a", 1) }
             : prepared ? { id: "b-00000000-0000-4000-8000-000000000015", agent: "a", incarnation: 1,
@@ -77,7 +76,7 @@ test("SP-003: a prepared runner handoff reports the unresolved adapter, not succ
     const runner = new RunnerModule({ runRoot: dir }, "a");
     try {
       await new Promise<void>(resolve => server.listen(join(dir, "admin.sock"), resolve));
-      if (prepared) await assert.rejects(runner.run(), { code: "SPIKE_UNRESOLVED" });
+      if (prepared) await assert.rejects(runner.run(), { code: "UNSUPPORTED_PROFILE" });
       else assert.equal(await runner.run(), 0);
       assert.deepEqual(methods, ["runner.open", "batch.prepare"]);
     } finally {
