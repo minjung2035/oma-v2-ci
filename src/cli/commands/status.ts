@@ -1,6 +1,5 @@
-import { finishFailure, succeed } from "../exit.js";
 import { call } from "../transport.js";
-import { fail } from "../exit.js";
+import { fail, finishFailure, succeed } from "../exit.js";
 
 export async function runStatusCommand(args: string[]): Promise<never> {
   const agent = args[0];

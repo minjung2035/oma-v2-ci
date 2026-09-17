@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "goal": "Remove contract-to-implementation reverse dependencies without changing v1 wire or persisted shapes.",
+  "targetFrozenContractAliases": 0,
+  "currentFrozenContractAliases": 4,
+  "order": [
+    "capability",
+    "resource-limits",
+    "protocol-limits",
+    "transaction-port"
+  ],
+  "items": {
+    "capability": {
+      "status": "planned",
+      "contract": "implementation/contracts/identity.ts",
+      "implementation": "src/domain/capabilities.ts",
+      "symbol": "Capability",
+      "strategy": "Move the closed literal union to the contract owner; make the runtime CAPABILITIES vocabulary satisfy that contract while retaining runtime validation in src/domain/capabilities.ts.",
+      "acceptance": [
+        "implementation/contracts/identity.ts has no ../../src/domain/capabilities.js reference",
+        "CAPABILITIES remains the runtime vocabulary/validator owner",
+        "no new compatibility alias is added"
+      ]
+    },
+    "resource-limits": {
+      "status": "planned",
+      "contract": "implementation/contracts/host.ts",
+      "implementation": "src/domain/resources.ts",
+      "symbol": "ResourceLimits",
+      "strategy": "Declare the structural ResourceLimits contract in host.ts. Keep RESOURCE_FIELDS and validation runtime-owned, with the descriptor checked against every contract key.",
+      "acceptance": [
+        "implementation/contracts/host.ts has no ../../src/domain/resources.js reference",
+        "RESOURCE_FIELDS remains the executable range/unit owner",
+        "contract and runtime descriptor keys are compile-time exhaustive"
+      ]
+    },
+    "protocol-limits": {
+      "status": "planned",
+      "contract": "implementation/contracts/host.ts",
+      "implementation": "src/domain/limits.ts",
+      "symbol": "ProtocolLimits",
+      "strategy": "Declare the structural ProtocolLimits contract in host.ts. Keep PROTOCOL_LIMIT_FIELDS and validation runtime-owned, with the descriptor checked against every contract key.",
+      "acceptance": [
+        "implementation/contracts/host.ts has no ../../src/domain/limits.js reference",
+        "PROTOCOL_LIMIT_FIELDS remains the executable range/unit owner",
+        "contract and runtime descriptor keys are compile-time exhaustive"
+      ]
+    },
+    "transaction-port": {
+      "status": "planned-last",
+      "contract": "implementation/contracts/module-contracts.ts",
+      "implementation": "src/store.ts",
+      "symbol": "Transaction",
+      "strategy": "Replace the concrete Store Transaction alias with a contract-owned transaction port covering only methods consumed across module boundaries; make src/store.ts structurally conform. Do this last because it has the widest internal surface.",
+      "acceptance": [
+        "implementation/contracts/module-contracts.ts has no ../../src/store.js Transaction reference",
+        "the contract exposes no sqlite or concrete storage implementation type",
+        "module conformance proves the Store transaction implementation satisfies the port"
+      ]
+    }
+  },
+  "guardrails": [
+    "Do not move runtime validators/defaults/effectful descriptors into implementation/contracts.",
+    "Do not change public wire fields, durable JSON, error codes, or crash ordering as part of this cleanup.",
+    "Do not replace one reverse dependency with another src/* type import from contracts."
+  ]
+}

@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { parseMessageFileId, parseMessageId } from "../../ids.js";
+import { parseMessageFileId } from "../../ids.js";
 import { exactCandidateCheck, isMailKind } from "../../domain/mail-values.js";
-import { decodeSubject, parseEmlHeaders } from "../../mail/headers.js";
 import { keyOf, opt, positional } from "../arguments.js";
 import { readBody } from "../effects.js";
+import { prepareReplyEffects } from "../effects/mail.js";
 import { fail, usage } from "../exit.js";
 import { effect, randKey } from "../request-service.js";
 
@@ -63,17 +62,9 @@ export function runSendCommand(args: string[]): Promise<never> {
         body: readBody(opt(args, "--file")),
       };
       if (reply) {
-        let id: string | undefined;
-        try {
-          const source = readFileSync(reply);
-          const headers = parseEmlHeaders(source, { maxHeaderBytes: source.byteLength });
-          id = headers.messageId?.split("@", 1)[0];
-          if (subject === null) params.subject = `Re: ${decodeSubject(headers.subject)}`;
-        } catch {
-          fail("reply file has invalid OMA headers", 2);
-        }
-        if (!id || !parseMessageId(id)) fail("reply file has no valid Message-ID", 2);
-        params.replyToMessage = id;
+        const prepared = prepareReplyEffects(reply, subject === null);
+        if (subject === null) params.subject = prepared.inheritedSubject!;
+        params.replyToMessage = prepared.replyToMessage;
       }
       if (approvalFor) params.approvalFor = approvalFor;
       return { method: "mail.send", params };
