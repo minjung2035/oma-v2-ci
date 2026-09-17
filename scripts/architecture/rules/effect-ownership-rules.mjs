@@ -11,14 +11,17 @@ const RAW_EFFECT_MODULES = new Set([
   "child_process",
 ]);
 const isEffectPreparation = file => file === "src/cli/effects.ts" || file.startsWith("src/cli/effects/");
+const isTransportDiscovery = (file, specifier) =>
+  file === "src/cli/transport.ts" && (specifier === "node:fs" || specifier === "fs");
 
 export function effectOwnershipFindings(root) {
   const findings = [];
   for (const file of filesUnder(root, "src/cli")) {
     const source = sourceOf(root, file);
     for (const { specifier } of importSpecifiers(source)) {
-      if ((RAW_EFFECT_MODULES.has(specifier) || specifier.includes("/process/")) && !isEffectPreparation(file))
-        findings.push(finding("cli-effect-owner", file, `${specifier} belongs in src/cli/effects*`));
+      const rawEffect = RAW_EFFECT_MODULES.has(specifier) || specifier.includes("/process/");
+      if (rawEffect && !isEffectPreparation(file) && !isTransportDiscovery(file, specifier))
+        findings.push(finding("cli-effect-owner", file, `${specifier} belongs in src/cli/effects* or its dedicated transport owner`));
       if (specifier.endsWith("/request-cache.js") && file !== "src/cli/request-service.ts")
         findings.push(finding("cli-request-cache-owner", file, "RequestCache belongs to src/cli/request-service.ts"));
       if (specifier.endsWith("/protocol/channel.js") && file !== "src/cli/transport.ts")
