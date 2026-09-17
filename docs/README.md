@@ -1,78 +1,47 @@
-# 문서 전체 색인
+# 문서 구조
 
-현재 상태·규범·제안·과거 실행 기록을 구분한다. 기록 속 “현재”, PASS 수, LOC와 source SHA는 **그 문서의 작성/실행 시점**을 뜻하며 최신 결과를 대신하지 않는다.
+현재 문서는 **규범**, **현재 작업 상태**, **machine-readable implementation metadata**만 active tree에 둔다. 특정 phase의 완료 보고서, 과거 PASS/LOC, 일회성 audit/closure, 원 제안서는 current guidance와 섞지 않고 Git history에서 조회한다.
 
-## 현재 읽을 문서
+## 현재 문서
 
 | 문서 | 역할 |
 |---|---|
-| [프로젝트 README](../README.md) | 저장소 진입점 |
-| [HANDOFF](../HANDOFF.md) | 현재 재개점과 다음 작업 |
-| [현재 검증 상태](../implementation/validation.md) | 마지막 실제 실행, source pin, 미검증 환경·release 게이트 |
-| [검증 명령 색인](../validation.md) | 명령과 lane 안내; 결과 중복 관리 안 함 |
-| [MAINTENANCE](../MAINTENANCE.md) | 장기 수정·리뷰·문서 관리 원칙 |
-| [단계별 진행 색인](architecture-improvement/progress.md) | P0–P23 구현 범위와 보고서 탐색 |
-| [implementation 지도](../implementation/README.md) | 규범·현재 metadata·historical 자료 구분 |
+| [README](../README.md) | 저장소 진입점 |
+| [MAINTENANCE](../MAINTENANCE.md) | AI/사람 공통 수정·리뷰 규율 |
+| [architecture](../architecture.md) | 최상위 architecture source of truth |
+| [implementation spec](../implementation-spec.md) | 구현 MUST/MUST NOT 계약 |
+| [implementation map](../implementation/README.md) | active implementation 계약과 machine-readable owner/evidence 지도 |
+| [HANDOFF](../HANDOFF.md) | 현재 브랜치에서 다음 작업자가 알아야 할 최소 상태 |
+| [validation](../implementation/validation.md) | current verification status와 실행 명령 |
+| [operations](../operations/README.md) | 역할별 model/prompt/extension 설정 |
 
-## 규범과 제안
+충돌 시 README나 HANDOFF가 architecture/spec 의미를 덮어쓰지 않는다. Point-in-time 실행 결과는 validation 한 곳에만 기록한다.
 
-최상위 계약은 [architecture.md](../architecture.md)와 [implementation-spec.md](../implementation-spec.md)다.
-[Physical ordering](../implementation/physical-ordering.md), [compliance](../implementation/compliance.md),
-[OPEN SPIKE](../implementation/spikes.md), [integration policy](../implementation/integration-policy.md),
-[test matrix](../implementation/test-matrix.md), [LOC/build budget](../implementation/loc-budget.md),
-[contract owner 안내](../implementation/contracts/README.md), [systemd templates](../implementation/systemd/README.md)는 구현 계약과 함께 읽는다.
+## implementation/의 원칙
 
-아래 제안서는 검토 당시 원문이며 상위 계약을 대체하지 않는다.
+`implementation/`에는 다음만 둔다.
 
-- [P0–P9 안정성 보존형 아키텍처 제안](proposals/2026-09-13-safety-preserving-architecture.md)
-- [P10–P15 dependency/capability 정제 제안](proposals/p10-p15-dependency-capability-refinement.md) — 기존 `temp.md`를 내용 변경 없이 이동
+- architecture/spec을 구체화하는 현재 계약 문서
+- schema/contracts/systemd deployment surface
+- `source-owners.json`, `mutation-owners.json` 같은 machine-readable locator
+- contract migration/review decision처럼 현재 작업에 직접 쓰이는 machine-readable plan
+- 현재 source에 결합된 generated inventory/evidence
 
-## 아키텍처 변경·실행 이력
+완료된 audit narrative나 phase별 closure를 새 파일로 누적하지 않는다. 작업 결과가 장기 규율이면 MAINTENANCE에, 현재 재개점이면 HANDOFF에, 실제 실행이면 validation에 반영한다.
 
-**아래 보고서는 해당 단계의 source-bound 기록이다. 현재 재개 지시서가 아니다.**
-현재 검증 판정은 위 단일 기록 위치를 사용하고, 과거 실패/미착수를 현재 TODO로 그대로 옮기지 않는다.
+## 과거 기록
 
-| 단계 | 기록 |
-|---|---|
-| 초기 결정·baseline | [baseline](architecture-improvement/baseline.md) · [P0/P1 결정](architecture-improvement/decisions-p0-p1-1.md) · [P0 pinned 실행](architecture-improvement/p0-baseline-execution.md) |
-| P0 회귀 | [hash overload](architecture-improvement/p0-hash-overload.md) · [stdin encoding](architecture-improvement/p0-stdin-encoding.md) |
-| P1 | [당시 진행표](architecture-improvement/p1-progress-history.md) · [composition](architecture-improvement/p1-composition.md) · [validation](architecture-improvement/p1-validation.md) |
-| P2 이관 | [module ports](architecture-improvement/p2-module-ports.md) · [protocol](architecture-improvement/p2-protocol-imports.md) · [durable](architecture-improvement/p2-durable-imports.md) · [domain](architecture-improvement/p2-domain-imports.md) · [coordinator](architecture-improvement/p2-coordinator-imports.md) |
-| P2–P7 / P2.5 | [당시 진행표](architecture-improvement/p2-p7-progress.md) · [opaque identity](architecture-improvement/p25-identities.md) |
-| P3 | [journal](architecture-improvement/p3-journal.md) · [Store integration](architecture-improvement/p3-store-integration.md) · [recovery](architecture-improvement/p3-recovery.md) · [coordinator facets](architecture-improvement/p3-coordinator-facets.md) |
-| P4 | [logical facets](architecture-improvement/p4-facets.md) |
-| P5 | [초기 lattice](architecture-improvement/p5-dependency-lattice.md) |
-| P6 | [ledger integrity](architecture-improvement/p6-ledger.md) · [physical integrity](architecture-improvement/p6-physical.md) · [pinned 검증](architecture-improvement/p6-verification.md) |
-| P7 | [durability faults](architecture-improvement/p7-durability-faults.md) |
-| P8 | [persisted formats](architecture-improvement/p8-persisted-formats.md) |
-| P9 | [power-cut/fuzz](architecture-improvement/p9-powercut-fuzz.md) |
-| P0–P9 종합 | [ORDER-002 변경 기록](architecture-improvement/change-record.md) |
-| P10–P15 | [구조 정제·적대적 검증 보고서](architecture-improvement/p10-p15-adversarial-review.md) |
-| P16–P22 | [데이터·타입 소유권과 evolution 검증](architecture-improvement/p16-p22-refinement.md) |
-| P23 | [Internal contract ownership 정리](architecture-improvement/p23-contract-ownership.md) |
-| P24 | [Filesystem containment](architecture-improvement/p24-filesystem-containment.md) · [감사 후속·deployment codec](architecture-improvement/p24-remediation.md) |
-| F1–F4 감사 후속 | [Reply 입력·request identity·log/CLI frame](architecture-improvement/f1-f4-remediation.md) |
-| 5c94e59 감사 후속 | [EML 수락 경계·CLI bundle/본문/reply](architecture-improvement/audit-eml-cli-remediation.md) |
-| 운영 설정 | [역할별 모델·extension·프롬프트 분리](../operations/README.md) |
+정리 전 phase별 문서, 제안서, audit/closure, 장문의 검증 이력은 [archive.md](archive.md)에서 정리 직전 Git snapshot으로 조회한다. Historical 문서의 `current`, `DONE`, PASS 수, LOC, TODO를 현재 HEAD의 사실로 재사용하지 않는다.
 
-## 다른 감사와 generated evidence
+## 새 문서를 추가할 때
 
-- [C01–C07 후속 기록](../implementation/conformance-followup.md)
-- [R37–R39 closure](../implementation/refactoring-closure.md)
-- [Generated adversarial ledger](../implementation/adversarial-review.md)
-- [기존 implementation evidence](../implementation/evidence/)
-- [단계별 architecture evidence](architecture-improvement/evidence/)
-- [재생성되는 dependency graph](architecture-improvement/evidence/p5-dependency-graph.json)
+새 문서가 필요한지는 다음 순서로 판단한다.
 
-Generated artifact는 실행 도구와 source에 결합한다. 특히 dependency graph JSON은 같은 경로에 재생성되므로
-과거 보고서의 당시 graph가 필요하면 그 revision의 Git snapshot을 확인한다. raw evidence를 사람이 현재 값처럼 고치지 않는다.
+1. 기존 architecture/spec의 의미인가 → 기존 owner 문서를 수정한다.
+2. 반복 적용되는 작업 규율인가 → `MAINTENANCE.md`.
+3. 다음 작업자가 바로 알아야 할 현재 상태인가 → `HANDOFF.md`.
+4. 실제 실행 결과인가 → `implementation/validation.md`.
+5. mutation/source ownership인가 → JSON map을 갱신한다.
+6. 특정 작업의 일회성 상세인가 → commit/PR 설명과 Git history에 남기고 current tree에 closure 문서를 추가하지 않는다.
 
-## 문서 정리 시 보존한 snapshot
-
-중복된 인계/상태 본문은 Git history에 보존하고 현재 문서는 역할에 맞게 정리했다.
-
-- [기존 HANDOFF](https://github.com/minjung2035/oma-v2/blob/930053c307785106b0a881975cad596c943e8ac1/HANDOFF.md)
-- [기존 verification status](https://github.com/minjung2035/oma-v2/blob/930053c307785106b0a881975cad596c943e8ac1/implementation/validation.md)
-- [기존 progress](https://github.com/minjung2035/oma-v2/blob/930053c307785106b0a881975cad596c943e8ac1/docs/architecture-improvement/progress.md)
-
-오프라인에서도 `git show 930053c:<path>`로 원문을 확인할 수 있다. 규범의 의미나 과거 실행 사실을 삭제·수정한 것으로 해석하지 않는다.
+이 규칙의 목적은 문서 수 자체를 줄이는 것이 아니라, AI가 “현재 사실”을 찾을 때 과거 snapshot을 읽지 않게 하는 것이다.

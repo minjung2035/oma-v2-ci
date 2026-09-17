@@ -442,7 +442,7 @@ Static checker도 코드다. Architecture가 이동했으면 broad exception을 
 
 Runtime DAG와 type coupling은 별도다. Type-only 상향 edge는 먼저 생성 evidence에서 관측하고 실제 의미를 검토한다. 실제 부적절한 coupling이 재현되고, legitimate representation/contract 관계가 분류되며, false-positive control이 준비된 뒤에만 방향 gate를 검토한다. 기존 cross-layer union SCC gate를 없애거나 edge별 whitelist로 우회하지 않는다.
 
-Checker 파일 분리는 책임·source universe·분석 재사용이 분명해질 때만 한다. LOC 목표를 맞추기 위한 분할, TypeScript/기존 helper와 중복되는 parser·registry·evidence 체계는 추가하지 않는다. 현재 수용 사례와 검증 범위는 [P16–P22 기록](docs/architecture-improvement/p16-p22-refinement.md#5-p21-규칙-수용과-checker-범위)을 참고한다.
+Checker 파일 분리는 책임·source universe·분석 재사용이 분명해질 때만 한다. LOC 목표를 맞추기 위한 분할, TypeScript/기존 helper와 중복되는 parser·registry·evidence 체계는 추가하지 않는다. 현재 수용 사례는 `test/architecture-rule-modules.test.mjs`와 `test/architecture-oracles.test.mjs`의 positive/negative/false-positive fixture를 기준으로 확인한다.
 
 ## 28. 금지 사항
 
@@ -467,12 +467,12 @@ Checker 파일 분리는 책임·source universe·분석 재사용이 분명해�
 - **영구 규범/architecture 의미**: 기존 architecture/spec 문서. 의도적 설계 변경일 때만 수정한다.
 - **장기 유지보수 원칙**: `MAINTENANCE.md`.
 - **현재 재개 위치와 남은 작업**: `HANDOFF.md`.
-- **현재 실행 검증 상태**: `implementation/validation.md`; 루트 `validation.md`는 색인.
-- **특정 작업/감사의 상세 기록**: 별도 follow-up/closure 문서. 완료 후 historical record로 보존한다.
+- **현재 실행 검증 상태와 명령**: `implementation/validation.md`.
+- **특정 작업/감사의 일회성 상세**: commit/PR 설명과 Git history에 남긴다. 완료된 follow-up/closure 문서를 current tree에 계속 누적하지 않는다.
 - **generated trace/report/inventory/evidence**: 생성 도구와 source revision에 결합한다. 사람이 새 측정처럼 수동 보정하지 않는다.
 - **파일 수·LOC·dependency edge/SCC 등 계산 가능한 현재 값**: generator artifact를 참조하며 README/HANDOFF/여러 보고서에 반복 기입하지 않는다. 최신 실행 개수도 검증 상태 한 곳에만 기록한다.
 
-Historical record를 현재 지침으로 다시 편집하지 않는다. 새 모델은 historical 문서의 결론을 현재 HEAD에서 검증한 뒤에만 사용한다.
+Historical record는 current tree에 누적하지 않는다. 필요하면 `docs/archive.md`가 가리키는 Git snapshot에서 조회하고, 그 결론은 현재 HEAD에서 재검증한 뒤에만 사용한다.
 
 ## 30. 인계 작성 템플릿
 

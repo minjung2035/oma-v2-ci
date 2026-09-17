@@ -1,109 +1,64 @@
-# implementation 문서 지도
+# implementation/ — 현재 구현 계약과 locator
 
-이 파일은 `implementation/` 문서를 권위와 수명주기로 구분하는 비규범적 색인이다. 새 규범을 정의하지 않는다. 충돌 시 `architecture.md`와 `implementation-spec.md`를 포함한 상위 계약이 우선한다.
+이 디렉터리는 historical 작업 일지가 아니라 **현재 구현을 수정·검증할 때 직접 쓰는 계약과 machine-readable metadata**를 둔다. 최상위 의미는 [architecture.md](../architecture.md)와 [implementation-spec.md](../implementation-spec.md)가 우선한다.
 
-프로젝트 시작점은 [루트 README](../README.md), 제안서·단계별 보고서를 포함한 전체 색인은 [docs/README.md](../docs/README.md)에 있다.
+## 기본 읽기 순서
 
-## 읽기 순서
+새 작업은 다음 정도만 읽고 시작한다.
 
-새 작업자는 먼저 [`../MAINTENANCE.md`](../MAINTENANCE.md)를 읽고 다음 순서를 따른다.
+1. [MAINTENANCE.md](../MAINTENANCE.md)
+2. [architecture.md](../architecture.md)
+3. [implementation-spec.md](../implementation-spec.md)
+4. 이 문서에서 작업 종류에 맞는 implementation owner
+5. [HANDOFF.md](../HANDOFF.md)와 [validation.md](validation.md)
 
-1. [`../architecture.md`](../architecture.md)
-2. [`../implementation-spec.md`](../implementation-spec.md)
-3. [`physical-ordering.md`](physical-ordering.md)
-4. [`contracts.ts`](contracts.ts), [`schema-v1.sql`](schema-v1.sql)
-5. [`compliance.md`](compliance.md), [`spikes.md`](spikes.md), [`integration-policy.md`](integration-policy.md), [`test-matrix.md`](test-matrix.md), [`loc-budget.md`](loc-budget.md)
-6. [`../HANDOFF.md`](../HANDOFF.md)
-7. [`../validation.md`](../validation.md), [`validation.md`](validation.md)
-8. 관련 production source와 test
+과거 phase/audit 보고서를 먼저 읽지 않는다.
 
-과거 작업 기록은 이 순서를 대신하지 않는다.
-
-## A. 규범/계약 문서
-
-일반 bug fix나 문서 정리에서 임의로 고치지 않는다.
+## 현재 계약 문서
 
 | 문서 | 역할 |
 |---|---|
-| [`../architecture.md`](../architecture.md) | 최상위 architecture source of truth |
-| [`../implementation-spec.md`](../implementation-spec.md) | 구현 MUST/MUST NOT 계약 |
-| [`physical-ordering.md`](physical-ordering.md) | canonical physical ordering |
-| [`contracts.ts`](contracts.ts) · [owner 안내](contracts/README.md) | wire/type declaration |
-| [`schema-v1.sql`](schema-v1.sql) | durable schema |
-| [`compliance.md`](compliance.md) | requirement→owner→entrypoint→test→evidence 계약 |
-| [`spikes.md`](spikes.md) | OPEN implementation gates와 필요한 evidence |
-| [`integration-policy.md`](integration-policy.md) | integration/tier policy 계약 |
-| [`test-matrix.md`](test-matrix.md) | acceptance/evaluation oracle 목록 |
-| [`loc-budget.md`](loc-budget.md) | LOC/build 측정 계약 |
-| [`systemd/README.md`](systemd/README.md) 및 templates | 고정 deployment surface |
+| [physical-ordering.md](physical-ordering.md) | durable/physical effect의 canonical ordering |
+| [compliance.md](compliance.md) | requirement → owner → executable evidence 계약 |
+| [spikes.md](spikes.md) | OPEN qualification/spike 조건 |
+| [integration-policy.md](integration-policy.md) | base/tiered integration policy 계약 |
+| [test-matrix.md](test-matrix.md) | acceptance oracle T01–T90 |
+| [loc-budget.md](loc-budget.md) | production LOC/inventory 측정 계약 |
+| [validation.md](validation.md) | 현재 verification 상태와 실행 명령 |
+| [contracts/README.md](contracts/README.md) | contract owner 경계 |
+| [systemd/README.md](systemd/README.md) | deployment template surface |
 
-규범 변경이 필요하면 maintenance 문서에서 의미를 덮어쓰지 말고 별도 architecture/spec 변경으로 처리한다.
+`contracts.ts`, `contracts/`, `schema-v1.sql`, `systemd/*.in`은 문서가 아니라 실제 contract/deployment surface다.
 
-## B. 현재 유지보수/재개 문서
+## AI 작업용 machine-readable map
 
-| 문서 | 역할 |
+| 파일 | 먼저 볼 때 |
 |---|---|
-| [`../MAINTENANCE.md`](../MAINTENANCE.md) | 장기 bug-fix/refactor/evidence 원칙 |
-| [`../HANDOFF.md`](../HANDOFF.md) | 현재 재개점, 남은 BLOCKED/NOT_RUN/UNVERIFIED |
-| [`../validation.md`](../validation.md) | 검증 문서·명령 색인. 현재 결과표를 중복 관리하지 않음 |
-| [`validation.md`](validation.md) | 실제 수행/미실행과 current verification 상태의 단일 기록 |
+| [mutation-owners.json](mutation-owners.json) | durable mutation 추가/수정, 관련 runtime/test owner 찾기 |
+| [source-owners.json](source-owners.json) | requirement별 production owner/call path 찾기 |
+| [contract-direction-plan.json](contract-direction-plan.json) | contract → implementation 역의존 제거 |
+| [broker-lifecycle-review.json](broker-lifecycle-review.json) | broker lifecycle 추가 분리 여부 판단 |
+| [traceability.json](traceability.json) | normative clause fingerprint/evidence inventory |
 
-`HANDOFF.md`에는 장문의 작업 일지와 과거 commit 목록을 계속 누적하지 않는다.
+mutation 작업은 다음 명령으로 change surface부터 확인한다.
 
-## C. 현재 metadata / generated artifact
-
-| 파일 | 해석 |
-|---|---|
-| `source-owners.json` | 검토된 owner/call-path locator. 실행 proof가 아님 |
-| `traceability.json` | requirement/trace inventory. current proof로 자동 승격 금지 |
-| `../production-files.txt` | generated production inventory. 재생성 전 stale일 수 있음 |
-| `../production-loc.json`, `../production-loc-hashes.json` | source-bound generated 측정. 다른 revision에 재사용 금지 |
-
-Freshness는 `validation.md`의 판정을 따른다. Generated artifact를 사람이 고쳐 새 실행처럼 보이게 만들지 않는다.
-
-## D. Historical record
-
-다음 문서는 중요한 역사 자료지만 현재 지침이 아니다.
-
-| 문서 | 기록 |
-|---|---|
-| [`conformance-followup.md`](conformance-followup.md) | C01–C07 코드 이행 감사 후속 변경 |
-| [`refactoring-closure.md`](refactoring-closure.md) | R37–R39 구조개편 종료 시점 기록 |
-| [`adversarial-review.md`](adversarial-review.md) | 특정 source/evidence에서 생성된 adversarial audit ledger |
-| [`evidence/`](evidence/) | 당시 raw log, source pin, environment/dependency 기록 |
-| [아키텍처 개선 이력](../docs/README.md#아키텍처-변경실행-이력) | P0–P22 단계별 상세 보고서; 현재 재개 지시와 구분 |
-
-Historical 문서의 `DONE`, PASS 수, LOC, owner 이름을 현재 HEAD에 그대로 상속하지 않는다. current source에서 owner/call path를 다시 찾고 필요하면 재현하거나 fresh evidence를 만든다.
-
-## 새 정보 기록 위치
-
-- 반복 적용되는 장기 원칙 → `../MAINTENANCE.md`
-- 다음 작업자가 알아야 하는 현재 상태 → `../HANDOFF.md`
-- 실제 실행 검증 → `validation.md`와 fresh evidence output
-- 특정 감사/대형 작업의 상세 → 별도 follow-up/closure 문서; 종료 후 historical 취급
-- architecture/spec 의미 변경 → 상위 규범 변경 절차
-
-## Historical finding 사용 절차
-
-```text
-historical claim
-  -> 당시 source SHA 확인
-  -> current HEAD에서 owner/call path 재탐색
-  -> 현재도 재현되는지 확인
-  -> current bug / already-fixed / stale-doc / OPEN-gate로 분류
+```sh
+npm run mutation:locality -- git.submit
 ```
 
-과거 finding을 현재 todo list처럼 기계적으로 실행하지 않는다. 반대로 과거 수정 marker만 보고 동일 bug class가 사라졌다고 가정하지도 않는다.
+`durable.ts`, `validate.ts`, `protocol/methods.ts` 같은 중앙 registry는 파일 크기만으로 분해하지 않는다. map의 `path + symbol`을 사용해 필요한 section만 읽는다.
 
-## 현재 상태를 읽는 단일 경로
+## Generated/current evidence
 
-처음에는 아래 네 파일만 보면 된다.
+- `../production-files.txt`, `../production-loc.json`, `../production-loc-hashes.json`: production inventory/LOC source-bound artifact.
+- `evidence/dependency-graph.json`: architecture Program dependency evidence. import/source graph 변경 후 `npm run evidence:graph`로 재생성한다.
+- `adversarial-review.md`: `scripts/adversarial-report.mjs`가 필요할 때 생성하는 point-in-time report다. checked-in current guidance로 취급하지 않는다.
+- verification lane output과 raw logs는 [validation.md](validation.md)의 source/date/status와 함께 해석한다.
 
-```text
-MAINTENANCE.md
-HANDOFF.md
-validation.md
-implementation/validation.md
-```
+Generated artifact는 사람이 최신 실행처럼 수동 보정하지 않는다.
 
-필요한 경우에만 historical record와 raw evidence를 따라간다.
+## Historical 문서
+
+완료된 P0–P24 기록, proposal, C01–C07 follow-up, R37–R39 closure, 과거 adversarial report/raw evidence, 장문의 verification 누적 기록은 current tree에 두지 않는다. [docs/archive.md](../docs/archive.md)의 정리 직전 snapshot에서 조회한다.
+
+새 audit가 끝났다고 `followup-2.md`, `closure-final.md` 같은 파일을 계속 추가하지 않는다. 지속되는 규율은 MAINTENANCE, 현재 상태는 HANDOFF, 실행 결과는 validation, owner 정보는 JSON map에 반영한다.

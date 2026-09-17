@@ -487,7 +487,7 @@ test("P15 persisted evidence identity fails before rule evaluation and exact bas
     {
       "src/entry/example.ts":
         "const s = new Set(); if (s.add(1)) throw new Error();",
-      "docs/architecture-improvement/evidence/p5-dependency-graph.json":
+      "implementation/evidence/dependency-graph.json":
         JSON.stringify({ sourceFiles: [] }),
     },
     (root, program) => {

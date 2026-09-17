@@ -1,1 +1,0 @@
-0/258 clauses pass structural evidence checks; 258 unresolved; 0 stale/extra rows.
