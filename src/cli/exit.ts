@@ -1,0 +1,50 @@
+import type { Receipt } from "../../implementation/contracts.js";
+import { errorExit, type CliExitCode } from "../domain/errors.js";
+import { decodeFailure } from "../protocol/receipt-codec.js";
+import { receiptExit, receiptLines } from "../protocol/receipts.js";
+
+export function fail(message: string, code: CliExitCode): never {
+  console.error(`oma: ${message}`);
+  process.exit(code);
+}
+
+export function usage(): never {
+  console.error([
+    "usage:",
+    "  oma send <address...> --subject S --file P [--kind K] [--reply P] [--request K]",
+    "  approval_required: send principal --kind approval_required --candidate C --expect B --policy-revision R --subject S --file P",
+    "  kinds: message/question/result/alert/context/approval_required/critical (mail is not approval authority)",
+    "  oma ack <mail-path-or-id> [--request K]",
+    "  oma follow <topic> [--request K] | oma unfollow <topic> [--request K]",
+    "  oma agent create <name> --from <revision> --file <brief> [--request K]",
+    "  oma agent start <name> [--request K] | oma agent stop <name> [--request K]",
+    "  oma agent continue --note <text> [--request K]",
+    "  oma agent wait",
+    "  oma submit <revision> [--to <address> ...] [--subject S] [--file summary] [--path repo-path ...] [--request K]",
+    "  oma integrate <published-full-oid> --expect <full-oid> [--request K]",
+    "  oma context publish <dir> --expect <oid-or-none> [--request K]",
+    "  oma status [agent]",
+    "  oma logs <agent> --since <duration>",
+  ].join("\n"));
+  process.exit(2);
+}
+
+export function finishFailure(reply: { error?: unknown } | undefined, prefix = ""): never {
+  const decoded = decodeFailure(reply?.error);
+  if (!decoded.ok) fail(`${prefix}invalid broker failure: ${decoded.reason}`, 3);
+  fail(`${prefix}${decoded.value.code}: ${decoded.value.message}`, errorExit(decoded.value.code));
+}
+
+export function finishReceipt(receipt: Receipt, key: string): never {
+  for (const line of receiptLines(receipt, key)) console.log(line);
+  process.exit(receiptExit(receipt));
+}
+
+export function succeed(): never {
+  process.exit(0);
+}
+
+export function fatal(error: unknown): never {
+  console.error(`oma: ${(error as Error).message}`);
+  process.exit(3);
+}

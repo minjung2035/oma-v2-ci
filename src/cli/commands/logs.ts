@@ -1,0 +1,30 @@
+import { opt } from "../arguments.js";
+import { fail, finishFailure, succeed, usage } from "../exit.js";
+import { call } from "../transport.js";
+
+function parseDuration(duration: string): number {
+  const match = /^(\d+)([smhd])$/.exec(duration);
+  if (!match) fail(`invalid --since ${duration} (positive integer + s/m/h/d)`, 2);
+  const value = Number(match[1]);
+  if (!Number.isSafeInteger(value) || value <= 0) fail(`invalid --since ${duration}`, 2);
+  const multiplier: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+  return value * multiplier[match[2]!]!;
+}
+
+export async function runLogsCommand(args: string[]): Promise<never> {
+  const agent = args[0];
+  const since = opt(args, "--since");
+  if (!agent || !since) usage();
+  let replies;
+  try {
+    replies = await call("logs.read", { agent, sinceSeconds: parseDuration(since) });
+  } catch {
+    fail("broker unreachable", 3);
+  }
+  const reply = replies[0];
+  if (!reply?.ok) finishFailure(reply, "logs: ");
+  const result = reply.result as { text: string; truncated: boolean };
+  console.log(result.text);
+  if (result.truncated) console.error("(truncated)");
+  return succeed();
+}
