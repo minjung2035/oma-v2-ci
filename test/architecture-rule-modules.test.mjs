@@ -121,8 +121,9 @@ test("architecture contract-direction rule rejects a new unplanned implementatio
   "implementation/contract-direction-plan.json": directionPlan(),
 }, root => assert.ok(contractDirectionFindings(root).some(value => value.rule === "contract-direction"))));
 
-test("architecture effect ownership rule accepts dedicated CLI effect/exit owners", () => withFixture({
+test("architecture effect ownership rule accepts dedicated effect, transport and exit owners", () => withFixture({
   "src/cli/effects.ts": `import { readFileSync } from "node:fs"; export const read = readFileSync;`,
+  "src/cli/transport.ts": `import { existsSync } from "node:fs"; export const probe = existsSync;`,
   "src/cli/exit.ts": `export const stop = () => process.exit(2);`,
 }, root => assert.deepEqual(effectOwnershipFindings(root), [])));
 
