@@ -1202,7 +1202,7 @@ spike에서 Pi의 특정 기능이 부족하면 adapter를 고친다. 정확한 
 - 두 후보가 같은 expected main을 갱신하려 할 때 두 번째 Git CAS의 실패: 확인.
 - 3명 중 2명에게만 전달한 상태에서 누락된 1명만 보충하고, 이미 cur로 이동한 메일을 중복 배달하지 않는 로컬 파일 조합: 확인.
 
-이는 사용할 primitive의 조합 검증이다. Pi+broker+systemd의 전체 runtime, 실제 process crash/전원 장애, provider 연결, notmuch의 운영 동작을 구현·검증했다는 뜻은 아니다. 결과와 한계는 [검증 기록](validation.md)에 따로 남겼다.
+이는 사용할 primitive의 조합 검증이다. Pi+broker+systemd의 전체 runtime, 실제 process crash/전원 장애, provider 연결, notmuch의 운영 동작을 구현·검증했다는 뜻은 아니다. 결과와 한계는 [검증 기록](implementation/validation.md)에 따로 남겼다.
 
 ## 22. 프로토타입에서 유지·수정한 선택
 
