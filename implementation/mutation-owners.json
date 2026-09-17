@@ -84,7 +84,9 @@
         ]
       },
       "cli": [
-        { "path": "src/cli/commands/send.ts", "symbol": "runSendCommand" }
+        { "path": "src/cli/commands/send.ts", "symbol": "runSendCommand" },
+        { "path": "src/cli/effects.ts", "symbol": "readBody" },
+        { "path": "src/cli/effects/mail.ts", "symbol": "prepareReplyEffects" }
       ],
       "tests": [
         { "path": "test/mail-recovery-integrity.test.ts", "symbol": "mail send recovery/integrity" },
@@ -174,7 +176,7 @@
         { "path": "src/lifecycle/create.ts", "symbol": "CreateCoordinator.create" }
       ],
       "persistence": [
-        { "path": "src/lifecycle/registry-operations.ts", "symbol": "agent registry transitions" },
+        { "path": "src/lifecycle/create.ts", "symbol": "CreateCoordinator.create acceptance transaction" },
         { "path": "src/storage/operation-journal.ts", "symbol": "accepted operation journal" }
       ],
       "recovery": {
@@ -184,7 +186,8 @@
         ]
       },
       "cli": [
-        { "path": "src/cli/commands/agent.ts", "symbol": "runAgentCommand/create" }
+        { "path": "src/cli/commands/agent.ts", "symbol": "runAgentCommand/create" },
+        { "path": "src/cli/effects.ts", "symbol": "resolveOid + readBody" }
       ],
       "tests": [
         { "path": "test/r25-lifecycle-owners.test.ts", "symbol": "lifecycle owner boundary" },
@@ -197,7 +200,7 @@
         { "path": "src/lifecycle/actions.ts", "symbol": "LifecycleActions.start" }
       ],
       "persistence": [
-        { "path": "src/lifecycle/registry-operations.ts", "symbol": "agent registry transitions" },
+        { "path": "src/lifecycle/actions.ts", "symbol": "LifecycleActions.start acceptance transaction" },
         { "path": "src/storage/operation-journal.ts", "symbol": "accepted operation journal" }
       ],
       "recovery": {
@@ -220,7 +223,7 @@
         { "path": "src/lifecycle/actions.ts", "symbol": "LifecycleActions.stop" }
       ],
       "persistence": [
-        { "path": "src/lifecycle/registry-operations.ts", "symbol": "agent registry transitions" },
+        { "path": "src/lifecycle/actions.ts", "symbol": "LifecycleActions.stop acceptance transaction" },
         { "path": "src/storage/operation-journal.ts", "symbol": "accepted operation journal" }
       ],
       "recovery": {
@@ -253,7 +256,9 @@
         ]
       },
       "cli": [
-        { "path": "src/cli/commands/submit.ts", "symbol": "runSubmitCommand" }
+        { "path": "src/cli/commands/submit.ts", "symbol": "runSubmitCommand" },
+        { "path": "src/cli/effects.ts", "symbol": "resolveOid + readBody + sha256Hex" },
+        { "path": "src/cli/effects/submit.ts", "symbol": "prepareSubmitEffects" }
       ],
       "tests": [
         { "path": "test/r20-submit-wiring.test.ts", "symbol": "submit orchestration wiring" },
@@ -302,7 +307,8 @@
         ]
       },
       "cli": [
-        { "path": "src/cli/commands/context.ts", "symbol": "runContextCommand" }
+        { "path": "src/cli/commands/context.ts", "symbol": "runContextCommand" },
+        { "path": "src/cli/effects/context.ts", "symbol": "prepareContextEffects" }
       ],
       "tests": [
         { "path": "test/r21-context-workflow.test.ts", "symbol": "context workflow" },
