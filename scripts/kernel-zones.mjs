@@ -11,6 +11,7 @@ export const KERNEL_ZONES = Object.freeze([
     files: [
       "src/domain/admission.ts",
       "src/domain/canonical-json.ts",
+      "src/config/defaults.ts",
       "src/domain/capabilities.ts",
       "src/domain/child-policy.ts",
       "src/domain/context-policy.ts",

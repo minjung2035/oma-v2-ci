@@ -45,6 +45,12 @@ OMA를 Pi 확장이 아니라 단일 제품으로 제시하는 표면을 추가�
 
 범위는 config 로드와 spawn 사이의 창뿐이다. 검증 후 Pi가 파일을 여는 사이의 same-UID 경합은 막지 못하고 deployment manifest digest를 대신하지도 않는다.
 
+## 설정 없이 실행
+
+`oma`를 프로젝트 디렉터리에서 그냥 실행하면 된다. 초기화 명령도, 손으로 쓴 `HostConfigV1`도 없다. society는 디렉터리에서 유도하고 설정은 `src/config/defaults.ts`가 만들어 파일로 남긴다.
+
+로그인·모델 선택은 동봉 엔진의 기존 흐름을 쓴다. OMA가 인증·모델 관리 표면을 따로 만들지 않는다. 한때 사용자의 `~/.pi`에서 credential을 상속하게 만들었다가 되돌렸다 — 개인 상태를 건드리고 "Pi 없이도 동작한다"는 전제를 깨기 때문이다.
+
 ## Pi 엔진 동봉
 
 OMA가 Pi를 함께 배포하고 자기 것만 실행한다. 사용자가 Pi를 따로 설치할 필요가 없고, 이미 설치해 둔 Pi가 있어도 섞이지 않는다. Pi는 수정하지 않으므로 LOC 계산 대상이 아니다(TUI-018).
@@ -55,11 +61,11 @@ OMA가 Pi를 함께 배포하고 자기 것만 실행한다. 사용자가 Pi를 
 
 ## 현재 검증 상태
 
-수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 995/995 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
+수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 997/997 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
 
 TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unverified**다. 실제 Pi provider 연결과 TTY raw mode는 관측하지 않았으므로 COMP-004의 `proven`이 아니다.
 
-**A-008 LOC gate가 열려 있다.** 189 files / 18,088 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
+**A-008 LOC gate가 열려 있다.** 190 files / 18,208 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
 
 ## 다음에 할 일
 

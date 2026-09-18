@@ -41,6 +41,7 @@
   "src/cli/request-service.ts",
   "src/cli/transport.ts",
   "src/config.ts",
+  "src/config/defaults.ts",
   "src/config/operations.ts",
   "src/config/policy.ts",
   "src/diagnostics/files.ts",
@@ -196,6 +197,7 @@
    {
     "name": "K0-values",
     "files": [
+     "src/config/defaults.ts",
      "src/domain/admission.ts",
      "src/domain/canonical-json.ts",
      "src/domain/capabilities.ts",
@@ -289,7 +291,7 @@
    }
   ],
   "runtimeEdgeMatrix": {
-   "K0-values -> K0-values": 19,
+   "K0-values -> K0-values": 20,
    "K1-codecs -> K0-values": 41,
    "K1-codecs -> K1-codecs": 15,
    "K2-mechanisms -> K0-values": 52,
@@ -1329,7 +1331,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 74
+   "files": 75
   },
   {
    "index": 2,
@@ -1388,11 +1390,11 @@
    "files": 37
   }
  ],
- "files": 190,
- "runtimeEdges": 697,
- "typeOnlyEdges": 293,
+ "files": 191,
+ "runtimeEdges": 700,
+ "typeOnlyEdges": 294,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 205,
+  "L1-kernel -> L1-kernel": 206,
   "L2-facts -> L1-kernel": 27,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 160,
@@ -1402,10 +1404,10 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 22,
-  "L5-entry -> L1-kernel": 55,
+  "L5-entry -> L1-kernel": 56,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
-  "L5-entry -> L4-orchestration": 13,
+  "L5-entry -> L4-orchestration": 14,
   "L5-entry -> L5-entry": 65
  },
  "upwardTypeOnlyEdges": [
@@ -1425,7 +1427,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 103,
+  "src/domain/errors.ts": 104,
   "src/domain/identifiers.ts": 32,
   "src/ids.ts": 27,
   "src/storage/durable-fs.ts": 21,
@@ -1445,7 +1447,7 @@
   "src/broker.ts": 26,
   "src/mail.ts": 26,
   "src/entry/broker.ts": 19,
-  "src/entry/oma.ts": 16,
+  "src/entry/oma.ts": 18,
   "src/git.ts": 15,
   "src/git/context-repository.ts": 14,
   "src/store.ts": 14,
@@ -1464,14 +1466,14 @@
   "node:async_hooks": 3,
   "node:child_process": 3,
   "node:crypto": 19,
-  "node:fs": 46,
+  "node:fs": 47,
   "node:net": 3,
   "node:os": 2,
   "node:path": 52,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:string_decoder": 1,
-  "node:url": 3,
+  "node:url": 4,
   "node:util": 2,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,

@@ -4,6 +4,20 @@
 
 ## 현재 source 판정
 
+### 2026-09-19 — 설정 없이 바로 실행
+
+`oma`를 빈 프로젝트 디렉터리에서 실행하면 초기화 명령도 손으로 쓴 설정도 없이 시작한다.
+
+- society 이름이 없으면 실행 디렉터리에서 유도한다. 체크아웃이 다르면 society도 다르다.
+- 설정이 없으면 `src/config/defaults.ts`가 보수적인 설정을 만들어 **파일로 기록한 뒤** 계속한다. 생성값은 전부 bounded하고 Control Panel에서 보이고 고칠 수 있으므로 CFG-002의 "무제한·검사 없음·비싼 모델로 채우지 않는다"를 우회하지 않는다. Resident에 `code.integrate`를 기본으로 주지 않고 `initialResidents`는 비운다.
+- 로그인·모델 선택은 동봉 엔진이 이미 가진 흐름을 쓴다. 기본 model profile은 `provider=pi, model=current`이며 OMA는 provider나 credential을 스스로 주장하지 않는다. schema가 닫혀 있어 채워야 하는 나머지 model 필드는 placeholder이고 그 사실을 소스에 적었다. 실제 usage bound는 S-04가 계속 소유한다.
+
+**중간에 바로잡은 설계.** 처음에는 사용자의 `~/.pi/agent/`에서 `auth.json`·`models*.json`을 symlink로 상속하게 만들었다. 이는 두 가지로 틀렸다. 사용자의 개인 상태에 손을 대고, 사용자가 Pi를 설치했는지에 따라 동작이 갈려 "Pi 없이도 동작한다"는 전제를 깬다. 되돌렸고, 동봉 엔진은 OMA 소유 agent 디렉터리 안에서만 자기 흐름으로 인증한다. `pi-runtime.ts`와 `entry/oma.ts`에 `homedir`·`.pi` 참조가 없음을 T106이 고정한다.
+
+관측: 빈 디렉터리 `demo-app`에서 인자 없이 실행 → society `demo-app` 생성, `config.json` 자동 생성, agent 디렉터리는 비어 있고(엔진이 스스로 채움) 사용자 `~/.pi` 참조 0건, 종료 코드 0.
+
+검증: `npm test` **997/997 PASS**, `check:architecture` 0 findings, `node scripts/loc.mjs` **190 files / 18,208 code LOC**. `src/config/defaults.ts`는 kernel zone **K0-values**로 분류했다(contracts와 errors만 의존하는 순수 값 생산자).
+
 ### 2026-09-19 — Pi 엔진 동봉: 별도 설치 불필요, 사용자 Pi와 공존
 
 OMA가 Pi 엔진을 함께 배포하고 자기 것만 실행한다. Pi는 **수정하지 않고** 동봉한다.
@@ -176,7 +190,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **189 files / 18,088 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **190 files / 18,208 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

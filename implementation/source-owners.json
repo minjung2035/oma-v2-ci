@@ -416,17 +416,20 @@
     "requirements": [
       "TUI-016",
       "TUI-017",
-      "TUI-018"
+      "TUI-018",
+      "TUI-019"
     ],
     "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
+      "src/config/defaults.ts#defaultHostConfig",
       "src/runtime/pi-runtime.ts#resolvePiRuntime",
       "src/tui/session.ts#PrincipalSession.start"
     ],
     "negativeTests": [
-      "test/pi-runtime.test.ts#T105"
+      "test/pi-runtime.test.ts#T105",
+      "test/pi-runtime.test.ts#T106"
     ]
   }
 ]

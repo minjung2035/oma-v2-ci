@@ -2,8 +2,8 @@
   {
     "requirement": "N-001",
     "source": "implementation-spec.md",
-    "digest": "fea0e67b3faea5fa448f6a8c3fc1192bf9d94c28332a91428224873a76cafce6",
-    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `b64baeb187dbec529972caa7c3dfd74c7abb9a0b0575ababa368cc6519a36fbf`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
+    "digest": "3614bebfc2f300a60dfac6c2bb693e579563ad76bce744adc85630310a7ae807",
+    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `47cdf6dd6fd6644a28bca7f11638127ac53131b18387ec307ab17909e91f86fb`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2945,26 +2945,70 @@
     "normativeText": "**MUST [TUI-016; arch §23.11]** OMA는 Pi 엔진을 함께 배포하고, 실행할 엔진을 이 설치본이 가져온 것으로만 해석한다. `PATH` 탐색과 `/usr/bin/pi` 같은 대체 경로 fallback을 두지 않는다. 엔진이 없는 설치본은 `UNSUPPORTED_PROFILE`로 실패하며, 어떤 Pi가 실행됐는지 불확실한 상태로 진행하지 않는다. 운영자의 명시적 pin은 허용하되 절대 경로여야 하고 존재하지 않으면 거절한다. 엔진 entry는 동봉 패키지가 선언한 `bin`에서 읽고 저장소가 경로를 추측하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/config/defaults.ts#defaultHostConfig",
+      "src/runtime/pi-runtime.ts#resolvePiRuntime",
+      "src/tui/session.ts#PrincipalSession.start"
+    ],
+    "negativeTests": [
+      "test/pi-runtime.test.ts#T105",
+      "test/pi-runtime.test.ts#T106"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "TUI-017",
     "source": "implementation-spec.md",
-    "digest": "fb36c13be4d875d2416c9e2225f2eddca0ebb9d4eb7255d732e30cf6f80baa81",
-    "normativeText": "**MUST [TUI-017]** 실행하는 엔진에는 OMA가 소유한 agent 디렉터리를 지정한다. 지정하지 않으면 엔진이 사용자의 `~/.pi` 설정·extension·session을 공유하므로, 사용자가 별도로 설치한 Pi와 상태가 섞인다. 이 디렉터리는 society state root 아래에 두어 backup/restore와 삭제가 나머지 OMA 상태와 같은 경계에서 다뤄지게 한다. 사용자의 Pi 설정을 읽거나 쓰지 않는다.",
+    "digest": "58b48016d6a3129b087dc81f5b66593dbc3c54ac3daffb414da4e835e382d8c7",
+    "normativeText": "**MUST [TUI-017]** 실행하는 엔진에는 OMA가 소유한 agent 디렉터리를 지정한다. 지정하지 않으면 엔진이 사용자의 `~/.pi` 설정·extension·session을 공유하므로, 사용자가 별도로 설치한 Pi와 상태가 섞인다. 이 디렉터리는 society state root 아래에 두어 backup/restore와 삭제가 나머지 OMA 상태와 같은 경계에서 다뤄지게 한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/config/defaults.ts#defaultHostConfig",
+      "src/runtime/pi-runtime.ts#resolvePiRuntime",
+      "src/tui/session.ts#PrincipalSession.start"
+    ],
+    "negativeTests": [
+      "test/pi-runtime.test.ts#T105",
+      "test/pi-runtime.test.ts#T106"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-019",
+    "source": "implementation-spec.md",
+    "digest": "ef50e4737a95c8285af461e8ae53d4bad0589df8c09c44a094cdddc8759f0f3b",
+    "normativeText": "**MUST [TUI-019]** 설정 파일 없이 동작한다. 초기화 명령을 요구하거나 사용자가 `HostConfigV1`을 작성하게 만들지 않는다. society 이름이 없으면 실행 디렉터리에서 유도하고, 설정이 없으면 실제 설정 파일을 만든 뒤 계속한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/config/defaults.ts#defaultHostConfig",
+      "src/runtime/pi-runtime.ts#resolvePiRuntime",
+      "src/tui/session.ts#PrincipalSession.start"
+    ],
+    "negativeTests": [
+      "test/pi-runtime.test.ts#T105",
+      "test/pi-runtime.test.ts#T106"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "TUI-018",
@@ -2973,12 +3017,22 @@
     "normativeText": "**MUST NOT [TUI-018]** 동봉한 엔진을 수정해 제품 동작을 만든다. OMA의 동작은 신뢰된 core extension이 소유한다. 수정하지 않은 동봉 엔진은 upstream 의존이므로 A-008/A-009의 production LOC 계산 대상이 아니며, 엔진을 수정하는 순간 LOC-003에 따라 계산 대상이 되고 A-008 기준을 다시 검토해야 한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/config/defaults.ts#defaultHostConfig",
+      "src/runtime/pi-runtime.ts#resolvePiRuntime",
+      "src/tui/session.ts#PrincipalSession.start"
+    ],
+    "negativeTests": [
+      "test/pi-runtime.test.ts#T105",
+      "test/pi-runtime.test.ts#T106"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "TUI-015",

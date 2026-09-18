@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { StoreError } from "../src/domain/errors.js";
@@ -9,6 +9,11 @@ import {
   piAgentDir, piIsolationEnv, resolvePiRuntime,
 } from "../src/runtime/pi-runtime.js";
 import { sessionArgv, sessionEnv } from "../src/tui/session.js";
+import {
+  DEFAULT_MODEL_PROFILE, DEFAULT_PRINCIPAL_PROFILE, DEFAULT_RESIDENT_PROFILE,
+  defaultHostConfig, societyFromDirectory,
+} from "../src/config/defaults.js";
+import { readSettings } from "../src/tui/sources/settings.js";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 
@@ -125,4 +130,56 @@ test("the engine entry precedes Pi's own flags on the command line", () => {
   assert.equal(argv[0], runtime.bundle, "the bundle is argv[0] for Node");
   assert.equal(argv[1], "--mode");
   assert.equal(argv[2], "rpc");
+});
+
+test("T106/TUI-019: running in a bare project needs no setup command and no hand-written config", () => {
+  const root = scratch("oma-zeroconf-");
+  try {
+    const config = defaultHostConfig({
+      society: societyFromDirectory("/home/someone/My Project"),
+      node: process.execPath, libdir: root, rootfs: "/", deploymentDigest: "a".repeat(64),
+    });
+    // The society follows the project directory, so two checkouts stay apart.
+    assert.equal(config.society, "my-project");
+    assert.equal(societyFromDirectory("/x/2024-notes"), "notes");
+    assert.equal(societyFromDirectory("/"), "workspace");
+
+    const path = join(root, "config.json");
+    writeFileSync(path, JSON.stringify(config, null, 2));
+    // The generated file must satisfy the real closed validator, not a relaxed one.
+    const loaded = readSettings(path).config;
+
+    // Model and credentials stay the engine's own flow: OMA claims neither.
+    const model = loaded.modelProfiles[DEFAULT_MODEL_PROFILE]!;
+    assert.equal(model.provider, "pi");
+    assert.equal(model.model, "current");
+
+    // CFG-002: nothing unlimited, and integration stays an explicit empty set.
+    assert.ok(loaded.quota.societyAgents > 0 && Number.isFinite(loaded.quota.societyAgents));
+    assert.ok(loaded.quota.storageBytes > 0 && Number.isFinite(loaded.quota.storageBytes));
+    assert.deepEqual(loaded.integration.checks, []);
+    assert.deepEqual(loaded.integration.protectedPaths, []);
+
+    // A Resident does not get canonical main by default.
+    assert.ok(!loaded.agentProfiles[DEFAULT_RESIDENT_PROFILE]!.capabilities.includes("code.integrate"));
+    assert.ok(!loaded.agentProfiles[DEFAULT_PRINCIPAL_PROFILE]!.capabilities.includes("code.integrate"));
+    // No Residents are started before anyone asks for one.
+    assert.deepEqual(loaded.initialResidents, []);
+
+    // Every generated value is reachable from the Control Panel.
+    const fields = readSettings(path).fields.map(field => field.id);
+    for (const id of ["principal-model", "worker-model", "worker-limit"])
+      assert.ok(fields.includes(id), `${id} must be editable`);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T106/TUI-017: the engine's state stays under OMA and never names the user's Pi", () => {
+  const source = readFileSync(new URL("../../src/runtime/pi-runtime.ts", import.meta.url), "utf8");
+  // OMA must not reach into a user's Pi installation for credentials or models.
+  assert.doesNotMatch(source, /homedir|\.pi[/"']/);
+  const entry = readFileSync(new URL("../../src/entry/oma.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(entry, /homedir|\.pi[/"']/);
+  // Behaviour must not depend on whether the user installed Pi at all.
+  const runtime = resolvePiRuntime({ stateRoot: "/s" });
+  assert.ok(runtime.agentDir.startsWith("/s"));
 });

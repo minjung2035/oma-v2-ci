@@ -4,7 +4,9 @@
  * model-facing CLI in the Resident rootfs (src/cli.ts) and shares no argv
  * parser, capability or socket with it. Nothing here is mounted into a sandbox.
  */
-import { join } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadConfiguration } from "../config.js";
 import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
 import { isValidSocietyName } from "../ids.js";
@@ -20,12 +22,33 @@ import { PrincipalSession } from "../tui/session.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
-import { commitField, readSettings, type Settings } from "../tui/sources/settings.js";
+import { commitField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
+import { defaultHostConfig, societyFromDirectory } from "../config/defaults.js";
+import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import type { ExtensionRow, MailRow } from "../tui/model.js";
 
 function usage(): never {
-  process.stderr.write("usage: oma --society <name> [--config <path>]\n");
+  process.stderr.write("usage: oma [--society <name>] [--config <path>]\n");
   process.exit(4);
+}
+
+/** First run in a project: write a real, bounded configuration rather than
+ * asking the user to compose one or to run a setup command. Every value is
+ * visible in the Control Panel and editable there (CFG-002, arch §23.6).
+ */
+function ensureConfiguration(configPath: string, society: string, stateRoot: string): Settings {
+  try { return readSettings(configPath); }
+  catch (error) {
+    if (existsSync(configPath)) throw error;
+    const libdir = fileURLToPath(new URL("../../../", import.meta.url));
+    mkdirSync(dirname(configPath), { recursive: true, mode: 0o700 });
+    writeSettings(configPath, defaultHostConfig({
+      society, node: process.execPath, libdir, rootfs: "/",
+      deploymentDigest: deploymentDigest(libdir),
+    }));
+    void stateRoot;
+    return readSettings(configPath);
+  }
 }
 
 function argOf(args: readonly string[], flag: string): string | undefined {
@@ -36,14 +59,16 @@ function argOf(args: readonly string[], flag: string): string | undefined {
 
 async function main(argv: readonly string[]): Promise<void> {
   if (argv.includes("--help") || argv.includes("-h")) usage();
-  const society = argOf(argv, "--society");
-  if (society === undefined || !isValidSocietyName(society)) usage();
+  // No society given: derive one from the project directory, so running `oma`
+  // in a checkout just works and two checkouts stay separate.
+  const society = argOf(argv, "--society") ?? societyFromDirectory(process.cwd());
+  if (!isValidSocietyName(society)) usage();
   const stateRoot = join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/tmp", ".local", "share"), "oma", society);
   const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
   const configPath = argOf(argv, "--config") ?? join(stateRoot, "config.json");
 
   let settings: Settings;
-  try { settings = readSettings(configPath); }
+  try { settings = ensureConfiguration(configPath, society, stateRoot); }
   catch (error) { fail(`설정을 읽을 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
   if (settings.config.society !== society)
     fail("설정의 society가 요청한 society와 다릅니다", 4);

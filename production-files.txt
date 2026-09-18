@@ -38,6 +38,7 @@ src/cli/request-intent.ts
 src/cli/request-service.ts
 src/cli/transport.ts
 src/config.ts
+src/config/defaults.ts
 src/config/operations.ts
 src/config/policy.ts
 src/diagnostics/files.ts

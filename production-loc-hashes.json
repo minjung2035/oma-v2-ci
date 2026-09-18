@@ -1,6 +1,6 @@
 {
   "cloc": "2.08",
-  "manifest": "01d473329a302269c3cece3e2caeebe142cdc8b12c5e62bfb1a422829aa66d3b",
+  "manifest": "9ba2e319161a7ef771b9e33f77ec1f8033d612cd070eca222d61811933e21c18",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -163,6 +163,10 @@
       "sha256": "34ced95436deb843686b2dd5bb3e92b4109d526f38ce13a680d3e8217c546d37"
     },
     {
+      "path": "src/config/defaults.ts",
+      "sha256": "ca91dcc59c4583102ef3f26e3a7ff7331d549a43abe003ca7a9f628a315dfa98"
+    },
+    {
       "path": "src/config/operations.ts",
       "sha256": "9e1bde4e208a144346551bdd1d6a218d6e01f5fa80681921d4e84398a7fed8c9"
     },
@@ -284,7 +288,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "a50531cf9c59a1abde46982dfd4e796481eb6690f9c2fd801281f3a56e19894f"
+      "sha256": "b6bae5bb031632a106d94cd37e07773badfbd72be9f7f513858b3807266ec46b"
     },
     {
       "path": "src/entry/runner.ts",
