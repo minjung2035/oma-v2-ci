@@ -1,30 +1,53 @@
 # OMA v2 — 현재 인계
 
-작업 브랜치는 `refactor/safety-preserving-architecture`다. 검토 기준 HEAD는 `fd58193ebe38022f175d260735711e315f02e8d8`이며, working tree에는 최근 CLI refactor에 맞춘 회귀 test 수정과 재생성 evidence가 있다.
+작업 브랜치는 `refactor/safety-preserving-architecture`다. 기준 HEAD는 `15da3eb`이며, working tree에는 제품 표면(TUI) 규범과 그 구현이 함께 있다.
 
 ## 현재 판정
 
-현재 우선순위는 새 architecture를 추가하는 것이 아니라 **AI가 기존 설계를 적은 문맥으로 안전하게 수정할 수 있게 하는 것**이다.
+OMA를 Pi 확장이 아니라 단일 제품으로 제시하는 표면을 추가했다. 사용자 진입점은 `oma` 하나이고, 대화 화면에서 `Ctrl+X`로 Dashboard / Config / Mail을 연다.
 
-최근 code-changing 작업에서 다음을 반영했다.
+규범은 architecture.md **§23**과 implementation-spec.md **§19 (TUI-001–015)**가 소유한다. architecture 기준본 hash는 `ef6c97d4…`이며 N-001에 반영했다.
 
-- CLI entrypoint를 얇게 만들고 command, argument parsing, request freeze/replay, transport, exit, local effect preparation을 분리했다.
-- durable mutation별 owner/change surface를 `implementation/mutation-owners.json`에 machine-readable하게 기록했다.
-- `npm run mutation:locality -- <mutation>`으로 central registry symbol, runtime owner, direct tests, unique file surface를 조회할 수 있다.
-- architecture checker에 import / transaction / ownership / schema duplication / contract direction / effect ownership rule module을 추가했다.
-- contract → implementation 역의존 4개를 0으로 줄이기 위한 순서를 `implementation/contract-direction-plan.json`에 고정했다.
-- broker lifecycle 추가 분리는 locality가 실제로 좋아지는 증거가 생길 때까지 보류했다. 기준은 `implementation/broker-lifecycle-review.json`에 있다.
-- `src/durable.ts`, `src/validate.ts`, `src/protocol/methods.ts`는 중앙 registry 성격을 유지하며 무조건 분해하지 않는다.
+이번 변경에서 실제 architecture가 바뀐 것은 하나다. **Principal Pi session의 소유권**이 "실행 중인 Human session에 attach"에서 "OMA TUI가 `pi --mode rpc`를 직접 실행"으로 옮겨갔다. 나머지는 기존 경계의 구체화다.
+
+구현한 것은 다음과 같다.
+
+- `src/entry/oma.ts` — host 제품 entrypoint. Resident rootfs의 동명 CLI와 argv 파서·권한·소켓을 공유하지 않는다.
+- `src/tui/` — 13개 파일. `model.ts`(상태기계)·`render.ts`(표시)·`keys.ts`(입력)는 순수 모듈이고, 파일/소켓/터미널/프로세스 owner는 각각 하나씩만 둔다.
+- 다섯 화면 전부 동작한다. 대화, Dashboard, Config, Mail(목록+상세), Extensions.
+- 설정은 확정 즉시 `config.json`에 원자적으로 기록하고 policy revision을 갱신한다. 각 항목이 **언제 적용되는지**를 화면에 함께 표시한다.
+
+기존 모듈 변경은 `src/domain/deployment.ts`와 `src/runtime/assets.ts`의 tui entry 등록 두 곳뿐이다. `scripts/dependency-lattice.mjs`에는 예외가 아니라 `src/tui/`를 **L5-entry** layer로 선언했다.
 
 ## 현재 검증 상태
 
-최근 10개 commit 검토와 fresh local verification을 분리 worktree에서 수행했다. 발견한 1건은 production 결함이 아니라 CLI mail-header leaf owner 이동 후 남은 stale regression assertion이었고, 실제 owner인 `src/cli/effects/mail.ts`를 검사하도록 수정했다.
+수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 962/962 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
 
-명령과 수치, 환경 한계는 [implementation/validation.md](implementation/validation.md)가 소유한다. 기본 local suite는 현재 PASS지만 live systemd/kernel/provider/VM qualification으로 확대해 해석하지 않는다.
+TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unverified**다. 실제 Pi provider 연결과 TTY raw mode는 관측하지 않았으므로 COMP-004의 `proven`이 아니다.
 
-GitHub Actions/CI는 이번 작업 범위에서 수정하거나 qualification 근거로 사용하지 않았다.
+**A-008 LOC gate가 열려 있다.** 186 files / 17,395 code LOC로 10,000행 기준을 넘는다. TUI가 1,374줄을 더했다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
 
-다음 code 변경 전에도 최소한 다음 로컬 루프를 실행한다.
+## 다음에 할 일
+
+TUI에서 아직 닫히지 않은 의존성은 하나로 좁혀져 있다.
+
+**`principal.attach` credential handshake가 미구현이다**(IPC-011, S-02). 그래서 TUI는 broker의 `status.get`을 호출할 수 없고 Dashboard의 Active/Pending/Status는 항상 `unknown`으로 표시된다. 호출 경로 자체는 `src/tui/transport.ts`에 있으므로 endpoint가 생기면 바로 동작한다.
+
+S-02는 이제 "실행 불가 환경"이 아니라 **OPEN이되 실행 가능**이다. OMA가 session을 소유하므로 검증 대상이 배포 안에 존재한다. 통과 기준(SP-02-T/A)은 그대로이며, PR-004의 model-facing tool 제한은 새 entrypoint가 그대로 진다.
+
+session 경계를 넘지 않는 Principal model per-request 전환은 TUI-005가 명시적으로 범위 밖에 둔다. 하려면 `src/inference.ts`의 frozen authority 검사를 함께 개정해야 하며, 호출 경로 없이 API만 먼저 만들지 않는다.
+
+## 작업할 때 먼저 볼 것
+
+mutation을 수정한다면 검색부터 하지 말고 다음으로 시작한다.
+
+```sh
+npm run mutation:locality -- git.submit
+```
+
+contract cleanup은 `implementation/contract-direction-plan.json`의 순서를 따른다. broker lifecycle은 `implementation/broker-lifecycle-review.json`의 split trigger가 실제로 충족될 때만 추가 추출한다.
+
+code 변경 전 최소 루프는 다음과 같다.
 
 ```sh
 npm run typecheck
@@ -32,28 +55,16 @@ npm run check:architecture
 npm test
 ```
 
-dependency/import surface가 바뀌었다면 `npm run evidence:graph`로 current evidence를 재생성한 뒤 architecture gate를 다시 실행한다.
-
-## 작업할 때 먼저 볼 것
-
-mutation을 수정한다면 검색부터 하지 말고 다음 순서로 시작한다.
-
-```sh
-npm run mutation:locality -- git.submit
-```
-
-그 결과가 가리키는 `implementation/mutation-owners.json`의 symbol/path를 읽고 필요한 owner만 연다. 중앙 registry 전체를 임의로 분해하지 않는다.
-
-contract cleanup을 진행한다면 `implementation/contract-direction-plan.json`의 순서를 따른다. broker lifecycle은 `implementation/broker-lifecycle-review.json`의 split trigger가 실제로 충족될 때만 추가 추출한다.
+dependency/import surface가 바뀌었다면 `npm run evidence:graph`로 재생성한 뒤 architecture gate를 다시 실행한다. production source가 늘거나 줄면 `npm run inventory`와 `node scripts/loc.mjs`도 함께 돌린다.
 
 ## 문서 규율
 
-현재 문서 지도는 [docs/README.md](docs/README.md) 하나에서 시작한다. 과거 P0–P24, proposal, audit/closure, 누적 verification log는 active tree에서 제거했으며 [docs/archive.md](docs/archive.md)의 정리 직전 Git snapshot에서 조회한다.
+현재 문서 지도는 [docs/README.md](docs/README.md) 하나에서 시작한다. 과거 P0–P24, proposal, audit/closure, 누적 verification log는 [docs/archive.md](docs/archive.md)의 Git snapshot에서 조회한다.
 
-장문의 commit 목록, 과거 test count, 당시 LOC를 HANDOFF에 다시 누적하지 않는다. 영구 규율은 `MAINTENANCE.md`, 실행 결과는 `implementation/validation.md`, architecture 의미는 `architecture.md` / `implementation-spec.md`가 각각 소유한다.
+장문의 commit 목록, 과거 test count, 당시 LOC를 HANDOFF에 누적하지 않는다. 영구 규율은 `MAINTENANCE.md`, 실행 결과는 `implementation/validation.md`, architecture 의미는 `architecture.md` / `implementation-spec.md`가 각각 소유한다.
 
-## 변경하지 않는 기본 계약
+## 변경하지 않은 계약
 
-단일 broker/SQLite writer, synchronous transaction, immutable accepted v1 evidence, explicit unknown, normal/recovery 판단 분리, effect 직전 current authority/incarnation 재검증, bounded effect를 유지한다.
+단일 broker/SQLite writer, 동기 transaction, 여섯 durable entity, immutable accepted v1 evidence, explicit unknown, normal/recovery 판단 분리, effect 직전 current authority/incarnation 재검증, bounded effect를 유지한다.
 
-문서 정리나 refactor 편의를 이유로 wire/DB/persisted v1 의미 또는 OPEN release gate를 바꾸지 않는다.
+TUI는 새 daemon·durable entity·effect queue·socket method·model-facing subcommand가 아니다. public/internal method key set은 그대로이며 `test/tui-boundary.test.ts`가 이를 고정한다. 제품 표면을 이유로 wire/DB/persisted v1 의미 또는 OPEN release gate를 바꾸지 않는다.

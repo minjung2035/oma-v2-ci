@@ -67,6 +67,7 @@ src/durable.ts
 src/entry/broker.ts
 src/entry/host.ts
 src/entry/module-conformance.ts
+src/entry/oma.ts
 src/entry/runner.ts
 src/frame.ts
 src/git.ts
@@ -164,6 +165,18 @@ src/storage/submit-spool.ts
 src/storage/transaction.ts
 src/storage/transitions.ts
 src/store.ts
+src/tui/app.ts
+src/tui/dashboard.ts
+src/tui/exit.ts
+src/tui/keys.ts
+src/tui/model.ts
+src/tui/render.ts
+src/tui/screen.ts
+src/tui/session.ts
+src/tui/sources/extensions.ts
+src/tui/sources/mail.ts
+src/tui/sources/settings.ts
+src/tui/transport.ts
 src/units.ts
 src/units/execute.ts
 src/units/observe.ts

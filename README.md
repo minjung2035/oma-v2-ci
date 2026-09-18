@@ -2,6 +2,18 @@
 
 Principal과 Resident가 Unix 메일링 리스트·Git을 통해 협업하는 orchestration runtime이다. 단일 broker/SQLite writer, durable operation intent, immutable evidence, explicit unknown, crash recovery를 핵심 경계로 유지한다.
 
+## 실행
+
+사용자 진입점은 `oma` 하나다. Pi는 내부 실행 엔진이며 사용자가 Pi 명령 체계를 알 필요는 없다.
+
+```sh
+oma --society <name>
+```
+
+대화 화면이 기본이고 `Ctrl+X`로 Dashboard / Config / Mail 관리 화면을 연다. 설정은 값을 확정하는 즉시 저장되며 각 항목이 언제 적용되는지 화면에 표시한다. 자세한 계약은 [architecture.md](architecture.md) §23과 [implementation-spec.md](implementation-spec.md) §19에 있다.
+
+`oma`라는 이름은 두 곳에서 쓰인다. host에 설치되는 위 실행 파일은 사람이 쓰는 TUI이고, Resident sandbox 안의 동명 실행 파일은 모델이 쓰는 `send`/`submit`/`agent`/`status` CLI다. 서로 다른 바이너리이며 argv 파서·권한·소켓을 공유하지 않는다.
+
 ## 문서 읽기 순서
 
 | 목적 | 문서 |

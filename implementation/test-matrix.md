@@ -90,6 +90,21 @@
 | T76 / OPT-APPROVAL | profile 활성 fixture → tuple 변경/중복 actor/자식/위조/revoke → S-08 policy 정확 평가; 기본 build엔 commands/table 없음 |
 | T77 / INF,S-09 | 사전 고정 evaluation corpus → 3조건 반복 → 품질/비용/Principal tokens/전체 tokens/latency 각각 결과, 미달 숨김 없음 |
 
+## 제품 표면 acceptance (TUI)
+
+**MUST [TEST-008]** 아래 행은 [spec §19](../implementation-spec.md)의 TUI 요구에 대한 수용 계약이다. T78–T90은 tiered 확장이 예약한 대역이므로 제품 표면은 T91부터 사용한다. 이 행들은 TUI가 포함된 build에서 필수이며, 화면 렌더링 스냅샷 비교만으로 oracle을 대체하지 않는다.
+
+| ID / 요구 | Given → When → Then |
+|---|---|
+| T91 / TUI-002,003 | host TUI와 Resident CLI가 모두 설치된 배포 → sandbox 안에서 TUI 실행 파일·소켓·설정 접근, `oma --help` 출력 검사 → 접근 0건, 도움말에 TUI/Control Panel 문자열 0건, 두 진입점의 argv 파서가 서로 import되지 않음 |
+| T92 / TUI-004 | TUI 기동 → Pi 실행 인자 관찰, Pi built-in 대화 표면 탐색 → `--mode rpc`로만 실행, 사용자 입력이 Pi built-in command로 해석되는 경로 0건, TUI 종료 후 Principal identity 보존 |
+| T93 / TUI-005,009 | model profile 2개와 Resident 1명이 있는 host 설정 → Principal/Worker model 전환 → 해당 agentProfile의 modelProfile 참조만 바뀌고 다른 profile·quota·initialResidents 불변; 선언되지 않은 model 이름은 `UNSUPPORTED_PROFILE` |
+| T94 / TUI-005,007 | 설정 변경 저장 → 기록된 config 관찰 → policy revision이 새 값으로 갱신되고 같은 내용에는 같은 revision이 나오며, 변경 전 파일은 그대로 남지 않음 |
+| T95 / TUI-006 | 모델 선택·읽음 상태·UI 위치 변경 후 broker 재시작 → schema/파일 inventory 검사 → 여섯 entity 외 durable 상태 0건, config에 기록한 선택만 복원, 나머지는 원본에서 재구성 |
+| T96 / TUI-007,008,009 | 각 Config 항목 변경 → 변경 직후 관찰 → 표시한 적용 시점과 실제 반영 시점 일치; `Initial workers` 변경 후 재시작에 agent 자동 생성·삭제 0건; 기존 Resident의 modelProfile 참조 불변; config 본문 변경 시 policy revision 갱신 |
+| T97 / TUI-010 | libdir 밖 경로·심볼릭 링크·변조된 extension 파일, core extension 해제 시도 → Extensions 화면 조작 → 모두 거절, 기록한 SHA-256과 실행 직전 값 불일치 시 기동 차단, 모델이 목록·선택에 영향 0건 |
+| T98 / TUI-011,012 | delivery flag fixture와 broker 미연결 상태 → Mail/Dashboard 표시 → unread는 기존 flag에서 파생하고 새 저장 0건, ACK가 승인·완료 의미로 표시되지 않음, unknown/disconnected가 running·0으로 표시되지 않고 관측 시각 표시 |
+
 **MUST [TEST-003]** default core에서 T01–T74 및 T77을 적용하고, T75/T76은 해당 optional 활성 시 필수다. S-03 등 미결정 gate 때문에 test oracle의 version-specific 부분을 완성할 수 없으면 test를 skip해서 release 통과로 계산하지 않는다.
 
 **MUST [TEST-004]** T18–T22/T27/T30/T39/T57/T58/T63/T66은 최소 각 지정 경계에서 process kill을 실행한다. assertion은 externally visible accepted receipt, DB rows, file hashes, Git OIDs, actual cgroup, Pi captured event sequence를 사용한다. '함수를 호출했다'는 mock assertion만으로 crash test 통과를 선언하지 않는다.

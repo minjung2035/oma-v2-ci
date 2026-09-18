@@ -8,7 +8,9 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   schema: "implementation/schema-v1.sql",
   systemd: "implementation/systemd",
   extension: "dist/src/pi-extension.js",
-  entries: Object.freeze({ broker: "dist/src/entry/broker.js", runner: "dist/src/entry/runner.js", host: "dist/src/entry/host.js" }),
+  // TUI-002: `tui` is the host product entrypoint a Human runs. It has no
+  // systemd unit, so it is absent from templateEntries by design.
+  entries: Object.freeze({ broker: "dist/src/entry/broker.js", runner: "dist/src/entry/runner.js", host: "dist/src/entry/host.js", tui: "dist/src/entry/oma.js" }),
   templateEntries: Object.freeze({ "broker.service.in": "broker", "resident.service.in": "runner",
     "principal-relay.service.in": "host", "reconcile.service.in": "host" } as const),
   runtimeDependencies: Object.freeze(["koffi", "nodemailer"] as const),

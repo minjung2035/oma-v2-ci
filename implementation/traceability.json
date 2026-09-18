@@ -2,10 +2,10 @@
   {
     "requirement": "N-001",
     "source": "implementation-spec.md",
-    "digest": "ae328810d57ac9a59abc45a7e8a50297f6660c5524fe475239b8557ccee56584",
-    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
-    "applicability": "build",
-    "rationale": "Release/source/testing contract; runtime suite success alone does not establish this obligation.",
+    "digest": "dd33ddfa9f15b58771fc8deb261862a3ec9186bdd46c3166f78f8b60237f28d3",
+    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `ef6c97d4e1e398f05c6e0ad59e535c0c285f0ffd3c61c4cbf0860920b5128e50`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
     "entrypoint": null,
     "callPath": [],
@@ -259,19 +259,20 @@
     "applicability": "runtime",
     "rationale": "Reviewed lifecycle create/bootstrap acceptance and Git/context transaction paths. Removed initial-object fsync from create/bootstrap transactions. Crash worker rejects fsync/subprocess execution inside transaction callbacks and checks staged context fsync before acceptance. This is selected-path instrumentation, not exhaustive static proof or provider-boundary coverage.",
     "owner": "src/store.ts#Store.transaction",
-    "entrypoint": "src/entry/broker.ts",
+    "entrypoint": "src/entry/broker.ts#main",
     "callPath": [
-      "src/entry/broker.ts",
-      "src/broker.ts#Broker.dispatch",
-      "src/lifecycle.ts#LifecycleModule.create",
+      "src/entry/broker.ts#main",
+      "src/broker.ts#Broker",
       "src/store.ts#Store.transaction"
     ],
     "negativeTests": [
-      "test/crash-boundaries.test.ts#T39/M-004 primitive SIGKILL at create-intent: one child and one initial mail",
-      "test/crash-boundaries.test.ts#T57/T58/T63/T66 primitive SIGKILL at ctx-accepted (sha256): exact ref and fixed receipt recovery"
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/compliance.test.ts#COMP-005/006"
     ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "ID-001",
@@ -420,27 +421,24 @@
     "normativeText": "**MUST [AUTH-003]** per-incarnation pathname listener에 actor를 고정하고 SO_PEERCRED 및 실제 systemd cgroup을 검증한다. 같은 UID, payload actor, 환경 변수, unit처럼 보이는 문자열은 증명이 아니다. 이전 incarnation 연결을 닫고 이후 요청을 `STALE_RUN`으로 거절한다. 실행 인증과 이미 접수된 broker-owned effect의 복구를 구분한다.",
     "applicability": "runtime",
     "rationale": "Reviewed per-incarnation listener -> SO_PEERCRED/SO_PEERPIDFD -> trustedContext -> dispatch, and acceptance after async preparation. Actor auth requires a live pinned peer, live lease, matching observed invocation and pinned cgroup dev/inode; revoke invalidates in-flight capabilities. Real cgroup-authenticated CLI, native connector-exit/inherited-socket tests, FD cleanup and explicit cgroup fault seams pass. PID-wrap stress and the full S-01 hostile-process corpus remain open; selected-path tests are not whole-clause proof.",
-    "owner": "src/broker.ts#Broker.trustedContext",
-    "entrypoint": "src/entry/broker.ts",
+    "owner": "src/authority.ts#assertCurrentActor",
+    "entrypoint": "src/broker.ts#Broker",
     "callPath": [
-      "src/entry/broker.ts",
-      "src/broker.ts#Broker.openRun",
-      "src/broker.ts#Broker.listenActor",
-      "src/broker.ts#Broker.handleActor",
-      "src/broker.ts#Broker.bindPeer",
-      "src/broker.ts#Broker.trustedContext",
-      "src/broker.ts#Broker.dispatch",
+      "src/broker.ts#Broker",
+      "src/git.ts#GitModule",
+      "src/git/submit.ts#SubmitCoordinator",
+      "src/git/context.ts#ContextCoordinator",
+      "src/lifecycle/create.ts#CreateCoordinator",
       "src/authority.ts#assertCurrentActor"
     ],
     "negativeTests": [
-      "test/peer-pid.test.ts#AUTH-003 native: peer pidfd detects connector death while an inherited socket stays open",
-      "test/peer-pid.test.ts#AUTH-003 native binding seam: closing sockets releases pidfds and cannot revive old bindings",
-      "test/phase5.test.ts#AUTH-003 fault seam: actor auth requires a live lease, matching invocation and pinned cgroup inode",
-      "test/acceptance-auth.test.ts#AUTH-003: mail.send rechecks authority after asynchronous preparation before acceptance",
-      "test/cli.test.ts#CLI acceptance: freeze cache, same-key semantics, recovery, streamed submit (real unit, real sockets)"
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/r37-recovery-observation.test.ts#R37"
     ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "FS-001; arch §4",
@@ -1067,20 +1065,14 @@
   {
     "requirement": "BATCH-006",
     "source": "implementation-spec.md",
-    "digest": "33bc9b2cb5f170ca6ac27b4eb9326800d5487cf77d3f90f70b30be5c6ce0e92f",
-    "normativeText": "**MUST [BATCH-006]** S-03 adapter revision·receipt 의미·flush/ownership 검증 결과가 release validation record에 pin되기 전 production batch.complete는 SPIKE_UNRESOLVED를 반환하고 batch/deliveries presented를 commit하지 않는다. BoundaryEvidence 타입이나 adapterRevision 문자열이 존재한다는 사실은 gate 통과가 아니다. 테스트용 mock completion을 production에 주입하거나 환경 변수로 우회하지 않는다. gate 미해결 상태의 반복 재안내로 유료 inference를 소모하는 경로도 지원 profile로 활성화하지 않는다.",
-    "applicability": "runtime",
-    "rationale": "Owner and focused tests inspected; full clause/kill/adapter proof remains unverified. See runtime-tests.log and validation.md.",
-    "owner": "src/mail.ts#complete",
-    "entrypoint": "src/entry/broker.ts",
-    "callPath": [
-      "src/entry/broker.ts",
-      "src/broker.ts",
-      "src/mail.ts#complete"
-    ],
-    "negativeTests": [
-      "test/phase5.test.ts#T31-neg"
-    ],
+    "digest": "faa2c1a26d2d8a0129ae30ae9f001474ab263f2a583c05af317ba651db87b9cd",
+    "normativeText": "**MUST [BATCH-006]** 기본 followUp 경로의 production batch.complete는 validation record에 pin된 `oma-pi-rpc-v1@0.85.1` receipt만 허용한다. trusted runner가 소유한 정확한 state-root receipt path, batch ID/incarnation/message manifest, adapter revision, runner session root와 durable session file이 모두 일치해야 completed/presented를 같은 transaction에서 commit한다. 타입이나 문자열만 맞춘 evidence, model writable 경로, mock completion, 환경 변수 우회는 거절한다. 이 qualification은 진행 중 steer/concurrency 또는 전체 S-03 kill matrix를 통과했다는 뜻이 아니다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
     "evidence": null,
     "status": "unverified"
   },
@@ -1129,10 +1121,10 @@
   {
     "requirement": "PI-003",
     "source": "implementation-spec.md",
-    "digest": "d2b0880ed8266424acd4c9f60df2b1d787f40843851f8a88c8437326b596c31d",
-    "normativeText": "**MUST [PI-003]** Resident direct/question/reply/context는 현재 tool group 결과를 모두 보존한 다음 LLM 호출 전에 steer, 일반 public list는 followUp, Principal normal mail은 followUp 정책을 유지한다. tool 취소/누락으로 steer를 흉내내지 않는다. `S-03` 미통과 버전을 production으로 지원하지 않는다.",
-    "applicability": "runtime",
-    "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
+    "digest": "f29d59d60c536193f8f251cc9d3bf34c160c1b160862157b50ab6addad255367",
+    "normativeText": "**MUST [PI-003]** 현재 qualified 기본 profile은 activation 때 준비된 batch를 followUp으로 전달하고 terminal boundary까지 완료한다. 이미 진행 중인 tool group 사이에 도착한 direct/question/reply/context를 끼워 넣는 steer profile은 도구 결과 보존·취소·동시 batch 귀속이 검증될 때까지 지원한다고 주장하지 않는다. 새 mail 때문에 준비된 batch의 ID나 mode를 바꾸지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
     "entrypoint": null,
     "callPath": [],
@@ -1433,12 +1425,21 @@
     "normativeText": "**MUST [INT-003]** project main mutation은 repo별 메모리 mutex와 pending integrate operation 검사로 직렬화한다. 먼저 T-integrate-intent, 그 뒤 검사·Git CAS, 마지막 T-integrate-done다. crash 후 unresolved integrate가 있으면 새로운 main writer를 시작하지 않는다. CAS 바로 전에 main/policy/capability/stop intent를 재검사한다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/git/integration.ts#IntegrationCoordinator",
+    "entrypoint": "src/git.ts#GitModule.integrate",
+    "callPath": [
+      "src/git.ts#GitModule.integrate",
+      "src/git/integration.ts#IntegrationCoordinator",
+      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/crash-boundaries.test.ts#T63",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "INT-004",
@@ -1550,12 +1551,23 @@
     "normativeText": "**MUST [CTX-003]** context.git의 canonical ref는 `refs/heads/main`으로 고정한다. 기존 revision을 parent로 한 commit을 broker trusted identity로 생성하고 op plan에 candidate C를 영속화한다. 첫 publish expected=null은 ref absent를 뜻한다. `git update-ref refs/heads/main C B` 또는 첫 생성의 zero-OID CAS를 사용한다. CAS 실패는 CONTEXT_CONFLICT+actual revision이다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/git/context.ts#ContextCoordinator",
+    "entrypoint": "src/git.ts#GitModule.publishContext",
+    "callPath": [
+      "src/git.ts#GitModule.publishContext",
+      "src/git/context.ts#ContextCoordinator",
+      "src/git/context-repository.ts#ContextRepository",
+      "src/git/context-publication.ts#ContextPublicationObserver",
+      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T66"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "CTX-004",
@@ -1564,12 +1576,23 @@
     "normativeText": "**MUST [CTX-004]** context CAS 뒤 `world/context/revisions/C`를 immutable 완성·fsync하고 relative current symlink를 atomic 교체한 뒤 고정 residents notification을 공개한다. crash 후 ref==C이면 missing snapshot/symlink/mail을 보충한다. 다음 context mutation 전에 미완료 publication을 대조한다. ref==B이면 현재 조건으로 재시도하고 제3 OID면 unknown으로 멈춘다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/git/context.ts#ContextCoordinator",
+    "entrypoint": "src/git.ts#GitModule.publishContext",
+    "callPath": [
+      "src/git.ts#GitModule.publishContext",
+      "src/git/context.ts#ContextCoordinator",
+      "src/git/context-repository.ts#ContextRepository",
+      "src/git/context-publication.ts#ContextPublicationObserver",
+      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T66"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "CTX-005",
@@ -1592,12 +1615,23 @@
     "normativeText": "**MUST [CTX-006]** 첫 context publication이 끝나기 전 Resident는 생성만 가능하고 path 활성화/inference를 하지 않는다. 첫 성공 후 enabled Residents의 path를 활성화하고 notification으로 시작한다. 새 Resident는 생성 당시 최신 context와 brief만 받고 부모 전체 session이나 과거 commons backlog를 복사하지 않는다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/git/context.ts#ContextCoordinator",
+    "entrypoint": "src/git.ts#GitModule.publishContext",
+    "callPath": [
+      "src/git.ts#GitModule.publishContext",
+      "src/git/context.ts#ContextCoordinator",
+      "src/git/context-repository.ts#ContextRepository",
+      "src/git/context-publication.ts#ContextPublicationObserver",
+      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T66"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "UNIT-001; arch §§6,15",
@@ -1654,18 +1688,22 @@
     "normativeText": "**MUST [UNIT-007]** systemctl effect 성공은 subprocess spawn이 아니라 정상 exit status와 해당 effect의 후속 actual observation으로 판정한다. nonzero/timeout/signal/malformed 결과를 성공으로 바꾸지 않는다. daemon-reload는 정상 exit와 대상 unit의 LoadState=loaded 및 렌더링한 설정 일치, enable/disable은 unit-file 상태, path start/stop은 path 실제 상태, service stop은 inactive와 cgroup 후손 사망을 확인한다. 관측 실패는 succeeded가 아니며 accepted op는 실제 효과를 대조한다. 짧게 실행 후 정상 종료한 Resident start는 동일 InvocationID의 정상 종료와 pending 재검사를 허용하되 전혀 시작 안 된 inactive와 구분한다. 정확한 systemd property/binding 증거는 S-01/S-06에 pin한다.",
     "applicability": "runtime",
     "rationale": "Owner and focused tests inspected; full clause/kill/adapter proof remains unverified. See runtime-tests.log and validation.md.",
-    "owner": "src/units.ts#start",
-    "entrypoint": "src/entry/broker.ts",
+    "owner": "src/units.ts#UnitsModule",
+    "entrypoint": "src/lifecycle/create.ts#CreateCoordinator",
     "callPath": [
-      "src/entry/broker.ts",
-      "src/broker.ts",
-      "src/units.ts#start"
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/lifecycle/create-publication.ts#CreationPublicationObserver",
+      "src/units.ts#UnitsModule",
+      "src/units/execute.ts#executeUnitCommand"
     ],
     "negativeTests": [
-      "test/runtime-contracts.test.ts#UNIT-007"
+      "test/phase4.test.ts#UNIT",
+      "test/r37-preparation-boundaries.test.ts#R37"
     ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "UNIT-004",
@@ -1764,18 +1802,22 @@
     "normativeText": "**MUST [LIFE-008]** initialResidents는 최초 bootstrap seed만 지정하며 runtime registry가 아니다. ready 이후 모든 actor의 identity/profile/capabilities/modelProfile/resources/from/parent는 agents의 검증된 resolved spec 및 created_by에서 가져온다. `ResolvedAgentSpec`은 생성 시 선택한 host profile의 modelProfile 참조와 ResourceLimits 전체를 포함하고 spec_hash에 포함한다. runner/unit renderer/authenticator는 `initialResidents.find()`나 seed 부재 시 default profile을 사용하지 않는다. 호스트의 현재 credential/가격/명시적 권한 폐기 정책은 계속 적용하되 persisted 권한·자원 상한을 조용히 확대하지 않는다. 저장된 profile/model 참조를 현재 배포가 지원하지 못하면 UNSUPPORTED_PROFILE로 차단하고 임의 대체하지 않는다. DB column name/profile과 spec의 대응 값이 다르면 STORE_CORRUPT다. 부모는 created_by가 원본이며 새 parent registry를 만들지 않는다.",
     "applicability": "runtime",
     "rationale": "Owner and focused tests inspected; full clause/kill/adapter proof remains unverified. See runtime-tests.log and validation.md.",
-    "owner": "src/authority.ts#resolvedSpecOf",
-    "entrypoint": "src/entry/broker.ts",
+    "owner": "src/lifecycle/create.ts#CreateCoordinator",
+    "entrypoint": "src/lifecycle.ts#LifecycleModule",
     "callPath": [
-      "src/entry/broker.ts",
-      "src/broker.ts",
-      "src/authority.ts#resolvedSpecOf"
+      "src/lifecycle.ts#LifecycleModule",
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/lifecycle/workspace.ts#WorkspaceCoordinator",
+      "src/lifecycle/create-publication.ts#CreationPublicationObserver"
     ],
     "negativeTests": [
-      "test/runtime-contracts.test.ts#LIFE-008"
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T39"
     ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "LIFE-009",
@@ -1818,18 +1860,22 @@
     "normativeText": "**MUST [LIFE-007]** 같은 이름/spec에 다른 request key로 create가 오면 기존 create operation에 연결한 `existingCreation` plan을 만들고 clone/unit/mail을 추가 생성하지 않는다. 새 key의 operation은 기존 provisioning 결과를 대조해 같은 agent 결과로 끝낸다. 이는 create 한 종류의 stable-name dedup이며 범용 dependency/workflow graph가 아니다. provisioning actor에 대한 model start/stop은 AGENT_NOT_READY로 거절한다. already enabled이며 현재 cgroup이 정상인 agent.start는 idempotent no-op이고 incarnation을 증가시키지 않는다.",
     "applicability": "runtime",
     "rationale": "Owner and focused tests inspected; full clause/kill/adapter proof remains unverified. See runtime-tests.log and validation.md.",
-    "owner": "src/lifecycle.ts#create",
-    "entrypoint": "src/entry/broker.ts",
+    "owner": "src/lifecycle/create.ts#CreateCoordinator",
+    "entrypoint": "src/lifecycle.ts#LifecycleModule",
     "callPath": [
-      "src/entry/broker.ts",
-      "src/broker.ts",
-      "src/lifecycle.ts#create"
+      "src/lifecycle.ts#LifecycleModule",
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/lifecycle/workspace.ts#WorkspaceCoordinator",
+      "src/lifecycle/create-publication.ts#CreationPublicationObserver"
     ],
     "negativeTests": [
-      "test/phase4.test.ts#LIFE-007 race"
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T39"
     ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "LIFE-002",
@@ -2128,12 +2174,12 @@
     "status": "unverified"
   },
   {
-    "requirement": "CLI-001; arch §§9,14",
+    "requirement": "CLI-001; arch §§9,14,23.2",
     "source": "implementation-spec.md",
-    "digest": "bbd64d352bc842cc304a4d98a41410a41dea116638fcfb6d28192c785c9a0abf",
-    "normativeText": "**MUST [CLI-001; arch §§9,14]** base model-facing command allowlist는 다음과 같다. tiered의 추가 authority 문법은 S-08/S-10 gate이며 현재 허용된 것으로 추정하지 않는다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력한다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.",
-    "applicability": "runtime",
-    "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
+    "digest": "ccfd348904e54ea5c7fd3a43750132468ccdb70d0ef683e0317b0df82999ee54",
+    "normativeText": "**MUST [CLI-001; arch §§9,14,23.2]** base model-facing command allowlist는 다음과 같다. 이 표는 Resident rootfs 안의 `oma` 실행 파일만 규정하며, host의 동명 TUI 실행 파일은 TUI-002가 별도로 규정한다. tiered의 추가 authority 문법은 S-08/S-10 gate이며 현재 허용된 것으로 추정하지 않는다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력하며 TUI나 Control Panel을 노출하지 않는다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
     "entrypoint": null,
     "callPath": [],
@@ -2246,12 +2292,21 @@
     "normativeText": "**MUST [ERR-002]** failed는 effect가 발생하지 않았거나 문서화한 terminal 실패가 확정된 경우다. 일부 공개 ref/mail이 생긴 뒤의 일시 장애는 pending으로 남긴다. unknown은 시스템이 effect 여부를 증명할 수 없을 때 사용한다. network timeout을 UNKNOWN Git ref로 단정하지 않고 broker가 실제 ref를 대조한다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/domain/errors.ts#classifyError",
+    "entrypoint": "src/git/submit.ts#SubmitCoordinator",
+    "callPath": [
+      "src/git/submit.ts#SubmitCoordinator",
+      "src/domain/errors.ts#classifyError",
+      "src/protocol/receipts.ts#receiptOfOperation"
+    ],
+    "negativeTests": [
+      "test/r37-async-process.test.ts#R37",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "REC-001; arch §§17–19",
@@ -2288,12 +2343,23 @@
     "normativeText": "**MUST [REC-002]** reconcile timer는 reference 5초, AccuracySec=1초이며 모델을 호출하지 않는다. 한 sweep의 filesystem/provider 장애가 나머지 독립 mailbox 점검을 영구 막지 않도록 bounded work를 수행한다. 동시에 두 sweep을 실행하지 않고 이미 실행 중이면 기존 sweep에 합류/skip한다. no-progress retry는 로그와 next timer로 제한하고 tight loop를 만들지 않는다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/reconcile.ts#ReconcileModule",
+    "entrypoint": "src/broker.ts#Broker",
+    "callPath": [
+      "src/broker.ts#Broker",
+      "src/reconcile.ts#ReconcileModule",
+      "src/reconcile/operations.ts#OperationRecovery",
+      "src/process/preparation.ts#PreparationExecutor"
+    ],
+    "negativeTests": [
+      "test/r29-reconcile-accounting.test.ts#R29",
+      "test/r37-recovery-observation.test.ts#R37",
+      "test/r37-shutdown-observation.test.ts#R37"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "REC-003",
@@ -2302,12 +2368,23 @@
     "normativeText": "**MUST [REC-003]** 각 crash 지점의 복구는 [test matrix](implementation/test-matrix.md)의 oracle을 만족해야 한다. shutdown에서 새 mutation acceptance를 중단하고 진행 중 DB transaction을 마친 뒤 fd를 닫는다. 강제 kill을 피할 수 있다고 가정하지 않는다. SQLite commit과 Git ref update를 한 atomic transaction이라고 기술하지 않는다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/reconcile.ts#ReconcileModule",
+    "entrypoint": "src/broker.ts#Broker",
+    "callPath": [
+      "src/broker.ts#Broker",
+      "src/reconcile.ts#ReconcileModule",
+      "src/reconcile/operations.ts#OperationRecovery",
+      "src/process/preparation.ts#PreparationExecutor"
+    ],
+    "negativeTests": [
+      "test/r29-reconcile-accounting.test.ts#R29",
+      "test/r37-recovery-observation.test.ts#R37",
+      "test/r37-shutdown-observation.test.ts#R37"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "REC-004",
@@ -2526,6 +2603,348 @@
     "normativeText": "**MUST [NEG-005]** 구현자가 모호함을 발견하면 관련 requirement/source 절, 충돌하는 두 해석, 최소 재현/실험, 차단 범위를 적어 SPIKE에 추가한다. 그 과정 자체가 새 runtime entity나 workflow를 만들 권한은 아니다. 충분히 확정된 나머지 계약은 계속 구현한다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
+    "evidence": null,
+    "status": "unverified"
+  },
+  {
+    "requirement": "TUI-001; arch §23.1",
+    "source": "implementation-spec.md",
+    "digest": "67f9cbf77c50a3670ea459d5e5d18387be04529cadec115ad1c7323b88d3ffea",
+    "normativeText": "**MUST [TUI-001; arch §23.1]** OMA의 공개 UX와 명령 namespace는 OMA가 소유하고 Pi는 내부 실행 엔진이다. Pi command를 이름만 바꾼 wrapper를 만들지 않는다. 이 절은 새 durable entity, 새 daemon, 새 effect queue, 새 socket method, 새 model-facing subcommand를 도입하지 않으며 A-006/A-007의 제한을 그대로 받는다. TUI가 표시하는 모든 값은 기존 관측 경로에서, TUI가 일으키는 모든 변경은 기존 mutation 또는 host config 경계에서 나온다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/entry/oma.ts#main",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T91",
+      "test/tui-boundary.test.ts#T95"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-002; arch §23.2",
+    "source": "implementation-spec.md",
+    "digest": "098941d75179148244bce24ec98c541c7f1a06319a3d24f77005727cfe460007",
+    "normativeText": "**MUST [TUI-002; arch §23.2]** `oma`는 두 개의 서로 다른 실행 파일이다. host 설치 PATH의 것은 Human TUI이고, Resident rootfs 안의 것은 CLI-001의 model-facing CLI다. 두 실행 파일은 argv 파서, capability, 연결 소켓, 설정 접근을 공유하지 않는다. 공유 가능한 것은 frame codec과 transport처럼 부작용과 권한이 없는 leaf뿐이다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/entry/oma.ts#main",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T91",
+      "test/tui-boundary.test.ts#T95"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-003",
+    "source": "implementation-spec.md",
+    "digest": "7dd0f23a7b662fa9ad91f3c0b1b13b8c5a058ddd78920b18b9325fa1ef85f460",
+    "normativeText": "**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. Resident의 `--help`, 도움말 텍스트, 오류 메시지에서 TUI나 Control Panel을 발견할 수 없어야 한다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/entry/oma.ts#main",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T91",
+      "test/tui-boundary.test.ts#T95"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-004; arch §23.3",
+    "source": "implementation-spec.md",
+    "digest": "3a57acc9d8a642ceadd11b173d5e6ed77cc807bebc924f2666974ace192e716a",
+    "normativeText": "**MUST [TUI-004; arch §23.3]** Principal Pi session은 OMA TUI가 소유하며 `pi --mode rpc`로 실행한다. Pi의 대화형 모드나 built-in UI를 사용하지 않는다. PR-001의 단일 attach, PR-003의 private context 보존, PR-004의 model-facing tool 제한은 이 entrypoint가 그대로 진다. Principal의 논리 identity는 bootstrap 때 만들고 TUI 실행 여부와 독립적으로 유지한다. TUI 종료는 새 Principal 생성의 trigger가 아니다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/session.ts#sessionArgv",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/session.ts#PrincipalSession.start",
+      "src/tui/session.ts#sessionArgv"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T92",
+      "test/tui-boundary.test.ts#T92"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-005",
+    "source": "implementation-spec.md",
+    "digest": "f25d9ccc52c1a9650ddaefc9d161a88dee06a776599526c77e29ae788799f24a",
+    "normativeText": "**MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfigV1`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/sources/settings.ts#applyField",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/settings.ts#applyField",
+      "src/tui/sources/settings.ts#writeSettings"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T93",
+      "test/tui-sources.test.ts#T94",
+      "test/tui-sources.test.ts#T96"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-006",
+    "source": "implementation-spec.md",
+    "digest": "343b105b487149ddd231a92446baaa000523348293829c72258d41931cc4d660",
+    "normativeText": "**MUST NOT [TUI-006]** 현재 model 선택, 읽음 상태, UI 위치, 최근 화면 같은 TUI 상태를 여섯 durable entity에 추가하거나 새 표·컬럼·sidecar 파일로 저장한다. 재시작 후에도 유지되어야 하는 선택은 host config의 해당 필드로 표현하고, 그 외 UI 상태는 A-007의 메모리 전용 runtime 상태로 두며 crash 후 원본에서 재구성한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/model.ts#step",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T95"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-007; arch §23.6",
+    "source": "implementation-spec.md",
+    "digest": "50e07b9776898987e4feef3585b5f24bc78e9625199b2055260663b8fb2b37fc",
+    "normativeText": "**MUST [TUI-007; arch §23.6]** 값 확정 시 저장하고 별도 Save 단계나 dirty state를 두지 않는다. 편집 중 Esc는 확정 전 값으로 되돌린다. 화면은 각 항목의 **적용 시점**을 함께 표시한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/sources/settings.ts#applyField",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/settings.ts#applyField",
+      "src/tui/sources/settings.ts#writeSettings"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T93",
+      "test/tui-sources.test.ts#T94",
+      "test/tui-sources.test.ts#T96"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-008",
+    "source": "implementation-spec.md",
+    "digest": "8b211eaadc0d71550af723a7f9beaa377ed4af654d69c37de671bf86892812e9",
+    "normativeText": "**MUST [TUI-008]** `initialResidents`에 대응하는 항목은 bootstrap seed로만 표시하고 실행 중 society의 Resident 수를 바꾸는 값으로 제시하지 않는다. LIFE-009에 따라 값 변경이 다음 재시작에 agent를 자동 생성·삭제·중지하지 않는다. 현재 Resident를 늘리거나 줄이는 조작은 설정 항목이 아니라 명시적 lifecycle 행위로 분리해 표시한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/sources/settings.ts#applyField",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/settings.ts#applyField",
+      "src/tui/sources/settings.ts#writeSettings"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T93",
+      "test/tui-sources.test.ts#T94",
+      "test/tui-sources.test.ts#T96"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-009",
+    "source": "implementation-spec.md",
+    "digest": "2a25589b7c39703a600b534e6aaac868134f3c9710391257b54288adfe579f32",
+    "normativeText": "**MUST [TUI-009]** 이미 생성된 Resident의 `ResolvedAgentSpec.modelProfile` 참조는 LIFE-008에 따라 고정이다. 설정 화면은 참조가 가리키는 profile의 내용만 바꾸고 참조 자체를 바꾸지 않는다. 저장된 참조를 현재 배포가 해석하지 못하면 `UNSUPPORTED_PROFILE`로 차단하고 임의 profile로 대체하지 않는다. config 본문이 바뀌면 CFG-005의 policy revision을 새 값으로 갱신한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/sources/settings.ts#applyField",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/settings.ts#applyField",
+      "src/tui/sources/settings.ts#writeSettings"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T93",
+      "test/tui-sources.test.ts#T94",
+      "test/tui-sources.test.ts#T96"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-010; arch §23.7",
+    "source": "implementation-spec.md",
+    "digest": "d86a634ff0c3b21f11a89f5d9759b4cc800dc6c784bf31f6e015e100eae39217",
+    "normativeText": "**MUST [TUI-010; arch §23.7]** Extensions 화면의 목록 출처는 host가 `installation.libdir` 아래에 이미 배치한 파일뿐이다. 임의 경로 입력, 자동 탐색, 네트워크 설치를 허용하지 않는다. core OMA extension은 항상 첫 항목으로 고정하고 해제할 수 없다. 선택한 항목의 SHA-256을 기록하고 실행 직전에 다시 확인한다. 추가 extension은 Pi host process와 동일 권한의 trusted deployment code이며 model tool로 취급하지 않는다. 이 화면은 host 전용이고 모델·workspace·mail 내용이 목록·선택·적용에 영향을 주지 못한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/sources/extensions.ts#toggleExtension",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/extensions.ts#readExtensions",
+      "src/tui/sources/extensions.ts#toggleExtension"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T97",
+      "test/tui-model.test.ts#T97"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-011; arch §23.8",
+    "source": "implementation-spec.md",
+    "digest": "595ed18e6108da1104dfc8daf37530ed2968ad4e3c9ad27f4fe7addc967ee538",
+    "normativeText": "**MUST [TUI-011; arch §23.8]** Mail 화면의 읽지 않음 표시는 기존 `deliveries` flag에서 파생한 값이며 새 durable 상태가 아니다. ACK 조작은 MAIL-009의 의미만 갖는다. UI 문구가 `presented=understood`, `ack=approved`, `ack=읽음 완료`를 암시해서는 안 된다(NEG-002). 기본 대상은 Principal 수신 메일이며 commons/topic을 Principal prompt에 자동 주입하지 않는 A-003은 그대로 유지한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/sources/mail.ts#readMailbox",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/mail.ts#readMailbox"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T98",
+      "test/tui-boundary.test.ts#T95"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-012; arch §23.5",
+    "source": "implementation-spec.md",
+    "digest": "20425850793329e35199961f80edf67153050e33e2e2f5e6d4293e66e11ef6d2",
+    "normativeText": "**MUST [TUI-012; arch §23.5]** Dashboard의 모든 수치는 VIEW-002의 관측 규칙을 따른다. 관측 시각을 함께 보유하고, unknown이나 disconnected를 running·0·성공으로 바꾸지 않는다. INF-004의 불확정 비용은 확정분과 구분해 표시하며 하나의 합계나 백분율로 뭉개지 않는다. broker에 연결하지 못하면 cached 값임과 관측 시각을 표시한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/dashboard.ts#dashboardLines",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/transport.ts#TuiTransport.status",
+      "src/tui/dashboard.ts#dashboardLines"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T98"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-013; arch §23.9",
+    "source": "implementation-spec.md",
+    "digest": "ca2e86c8143daf195c5051727203b48a9a12cb295f816075fa596db8eabe47b4",
+    "normativeText": "**MUST [TUI-013; arch §23.9]** 제품 UI는 Resident를 `worker`로 표시할 수 있으나 wire, DB, persisted 표현에는 사용하지 않는다. 표시 용어와 규범 용어의 대응은 한 곳에서 정의하고 계층마다 다시 만들지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/render.ts#render",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/render.ts#render"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T95"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-014; arch §23.10",
+    "source": "implementation-spec.md",
+    "digest": "019a76601f7f59f32a9d14af2c65869dec095c6795323083ef2095fdc0758c6a",
+    "normativeText": "**MUST [TUI-014; arch §23.10]** Pi의 built-in command와 UI가 사용자 표면에 노출되지 않게 한다. 이는 사후 필터가 아니라 RPC-only 실행으로 달성한다. 오류 메시지, 도움말, 표시 경로에서 Pi 고유 명령 체계를 정상 사용 경로로 안내하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/session.ts#sessionArgv",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/session.ts#PrincipalSession.start",
+      "src/tui/session.ts#sessionArgv"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T92",
+      "test/tui-boundary.test.ts#T92"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TUI-015",
+    "source": "implementation-spec.md",
+    "digest": "540fb4c6171fda671f15a763421f3c4a9fe31782b35a86eb4c478acbf7f64e96",
+    "normativeText": "**MUST [TUI-015]** TUI는 릴리스 gate의 예외가 아니다. 이 절의 요구도 TRACE-002에 따라 단일 production owner, 실제 entrypoint에서의 call path, negative executable test, 현재 revision의 실행 증거를 갖는다. TUI 소스는 A-008/A-009의 production LOC 측정 대상이며 별도 budget으로 분리하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
     "entrypoint": null,
     "callPath": [],
@@ -3072,12 +3491,21 @@
     "normativeText": "**MUST [SEQ-003]** lock 전 허용 작업은 argv/path 문법 검사와 lock 획득에 필요한 trusted runtime directory mkdir/open뿐이다. state root 초기화, SQLite constructor/open, migration, Git/systemd effect, reconciliation을 import/constructor의 side effect로 실행하지 않는다. DB 연결 factory는 lock 획득 이후에만 호출한다. 동시 두 broker 시험에서 loser가 DB-open seam에 도달하지 않았음을 검증한다.",
     "applicability": "runtime",
     "rationale": "Applies to the implemented or required runtime boundary, including forbidden paths; no exemption inferred from an OPEN gate.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "src/runtime/broker-lifetime.ts#BrokerLifetime",
+    "entrypoint": "src/entry/broker.ts#main",
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/runtime/broker-lifetime.ts#BrokerLifetime",
+      "src/runtime/broker-lifetime.ts#settleWithin",
+      "src/process/preparation.ts#preparationShutdownBarrier"
+    ],
+    "negativeTests": [
+      "test/r37-shutdown-observation.test.ts#R37"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "SEQ-004",
@@ -3156,12 +3584,22 @@
     "normativeText": "**MUST [COMP-005]** release checker는 source inventory의 적용 runtime 요구 수와 trace 수를 대조한다. 누락/분류 없음/실제 owner 없음/현재 revision 불일치/negative test 없음/OPEN SPIKE를 proven 처리한 행이 하나라도 있으면 release gate 실패다. not_applicable은 해당 feature를 실제로 enable할 수 없다는 config/API 거절 시험이 있어야 한다. CI 로그 이름이 requirement 이름과 같다는 것만으로 coverage를 인정하지 않는다.",
     "applicability": "build",
     "rationale": "Release/source/testing contract; runtime suite success alone does not establish this obligation.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "scripts/traceability.mjs#applyOwnerLinks",
+    "entrypoint": "scripts/compliance.mjs#loadTraceInventory",
+    "callPath": [
+      "scripts/compliance.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#applyOwnerLinks",
+      "scripts/traceability.mjs#indexTrace"
+    ],
+    "negativeTests": [
+      "test/compliance.test.ts#COMP-005/006",
+      "test/traceability-policy.test.mjs#R39"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "COMP-006",
@@ -3170,12 +3608,22 @@
     "normativeText": "**MUST [COMP-006]** spec/production owner/entrypoint/dependency/adapter가 바뀌면 영향받은 evidence는 stale이며 다시 실행한다. README에 '완료'라고 적거나 DTO field를 추가해 증거 상태를 올리지 않는다. test-only backdoor·success fallback·mock receipt가 production dependency closure에 있으면 gate 실패다. source line 수 또는 test 개수 자체는 준수 증거가 아니다.",
     "applicability": "build",
     "rationale": "Evidence remains explicitly unverified and content-pinned. Removed the production MailStopPoint/StopSignal/stopAfter API and broker special-case; crash boundaries now use test-only fsync/transaction interception in test/fixtures/mail-faults.ts. Native kill/recovery regressions and runtime export/field assertions cover that removal. Static import closure does not establish absence of every semantic backdoor or certify all evidence freshness obligations.",
-    "owner": null,
-    "entrypoint": null,
-    "callPath": [],
-    "negativeTests": [],
+    "owner": "scripts/traceability.mjs#applyOwnerLinks",
+    "entrypoint": "scripts/compliance.mjs#loadTraceInventory",
+    "callPath": [
+      "scripts/compliance.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#applyOwnerLinks",
+      "scripts/traceability.mjs#indexTrace"
+    ],
+    "negativeTests": [
+      "test/compliance.test.ts#COMP-005/006",
+      "test/traceability-policy.test.mjs#R39"
+    ],
     "evidence": null,
-    "status": "unverified"
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "COMP-007",
@@ -3352,6 +3800,27 @@
     "normativeText": "**MUST [TEST-006]** T01–T77은 normative acceptance contract다. 현재 `npm test`의 총 test 수가 77과 다르더라도 이 표의 행을 삭제하거나 다른 의미로 재분류하지 않는다.",
     "applicability": "build",
     "rationale": "Release/source/testing contract; runtime suite success alone does not establish this obligation.",
+    "owner": "scripts/traceability.mjs#inventoryAcceptance",
+    "entrypoint": "scripts/adversarial-report.mjs#inventoryAcceptance",
+    "callPath": [
+      "scripts/adversarial-report.mjs#inventoryAcceptance",
+      "scripts/traceability.mjs#inventoryAcceptance"
+    ],
+    "negativeTests": [
+      "test/traceability-policy.test.mjs#R39"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TEST-007",
+    "source": "implementation/test-matrix.md",
+    "digest": "e31dc3ad28118aa44bb7e5659493c51345c20944c62483cb5dd9bf80490afb8a",
+    "normativeText": "**MUST [TEST-007]** runtime suite의 test 개수와 PASS/FAIL 수치는 [validation.md](validation.md)에만 기록한다. suite 총 개수는 T01–T77 acceptance coverage와 동일하지 않으며, 보조 회귀 test의 통과는 대응하는 acceptance 행의 미실행 oracle을 자동으로 충족하지 않는다. 과거 test count를 현재 source의 결과로 재사용하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
     "entrypoint": null,
     "callPath": [],
@@ -3360,10 +3829,10 @@
     "status": "unverified"
   },
   {
-    "requirement": "TEST-007",
+    "requirement": "TEST-008",
     "source": "implementation/test-matrix.md",
-    "digest": "e31dc3ad28118aa44bb7e5659493c51345c20944c62483cb5dd9bf80490afb8a",
-    "normativeText": "**MUST [TEST-007]** runtime suite의 test 개수와 PASS/FAIL 수치는 [validation.md](validation.md)에만 기록한다. suite 총 개수는 T01–T77 acceptance coverage와 동일하지 않으며, 보조 회귀 test의 통과는 대응하는 acceptance 행의 미실행 oracle을 자동으로 충족하지 않는다. 과거 test count를 현재 source의 결과로 재사용하지 않는다.",
+    "digest": "a6fb211a42acca0cce40b4f3362fe8c352d33ad573f5883323bfaf3d4b7ac0e7",
+    "normativeText": "**MUST [TEST-008]** 아래 행은 [spec §19](../implementation-spec.md)의 TUI 요구에 대한 수용 계약이다. T78–T90은 tiered 확장이 예약한 대역이므로 제품 표면은 T91부터 사용한다. 이 행들은 TUI가 포함된 build에서 필수이며, 화면 렌더링 스냅샷 비교만으로 oracle을 대체하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -3688,6 +4157,34 @@
     "normativeText": "**MUST [SP-09-A]** 값은 task별·반복별로 남기고 목표 미달도 공개한다. production runtime correctness gate와 '성능 목표 달성' 주장을 구분한다. S-09 gate는 평가 protocol과 결과 제출을 필수로 요구하며, 미달 결과를 성공으로 바꿀 권한은 없다. 성능 목표를 release acceptance로 삼을 정확한 threshold는 사용자 합의 전까지 미정이다.",
     "applicability": "build",
     "rationale": "Release/source/testing contract; runtime suite success alone does not establish this obligation.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
+    "evidence": null,
+    "status": "unverified"
+  },
+  {
+    "requirement": "SP-10-A",
+    "source": "implementation/spikes.md",
+    "digest": "544ebb11c72a6af94c483d30479b76bda8318bfcd9452bebfd663c6e9b828bb2",
+    "normativeText": "**MUST [SP-10-A]** S-10이 닫히기 전 tiered integration을 활성화하지 않는다. challenge 또는 floor를 process-local cache, caller boolean, 자연어 mail, 임의 DB column으로 대체하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
+    "evidence": null,
+    "status": "unverified"
+  },
+  {
+    "requirement": "SP-11-A",
+    "source": "implementation/spikes.md",
+    "digest": "cc52f2f8736e8ecf9fc7fdce0d99412262ef33bb334ca1385704282df119f75b",
+    "normativeText": "**MUST [SP-11-A]** S-11을 선택하지 않은 base/tiered profile에 verifier state/API를 추가하지 않는다. 선택하는 profile은 fresh verifier가 기존 writable session이나 caller-supplied verdict를 authority로 받아들이지 못함을 증명해야 한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
     "entrypoint": null,
     "callPath": [],

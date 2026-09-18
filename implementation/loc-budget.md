@@ -23,10 +23,14 @@ cloc --list-file=production-files.txt --by-file --skip-uniqueness \
 
 **MUST [LOC-008]** 재현 fixture는 [tests/loc-fixtures](tests/loc-fixtures)에 있다. 해당 디렉터리에서 `cloc --list-file=files.txt --by-file --skip-uniqueness --read-lang-def=../../cloc-systemd.lang --json`을 실행하면 4개 파일의 SUM.code=7이어야 한다. 이 수치는 production LOC가 아니다.
 
-## R39 현재 측정 상태 — 비규범적 기록
+## 현재 측정 상태 — 비규범적 기록
 
-리팩터링 후 현재 production LOC와 증감량은 **NOT_RUN / 미측정**이다. 기존 `production-files.txt`, `production-loc.json`, `production-loc-hashes.json`은 이전 source snapshot의 생성 산출물이며 현재 수치로 재사용하지 않는다. 과거 9,774 code lines와 non-empty physical line 수는 각각 당시 기록일 뿐, 지금 10,000행 gate 미만이라는 근거가 아니다.
+현재 수치는 [validation.md](validation.md)가 소유한다. 이 절에 수치를 중복 기입하지 않는다.
 
-`scripts/loc.mjs`는 선언된 `production-manifest.json` 범위를 실제로 순회하고 pinned cloc로 산출물을 생성하는 경로로 유지했다. 이 GitHub-only 작업에서는 해당 스크립트와 LOC fixture를 실행하지 않았고 파일 목록·합계·내용 hash를 손으로 재작성하지 않았다. 새 `src/process/*`, `src/git/*`, `src/lifecycle/*`, `src/units/*`를 옛 flat-file 목록에서 누락한 상태로 수치를 계산해서는 안 된다.
+이전 판의 "현재 LOC는 NOT_RUN / 미측정"이라는 서술은 stale이었다. `scripts/loc.mjs`가 실행되어 `production-loc.json`에 source-bound 결과가 있으며, 그 값은 LOC-001의 10,000행 architecture review gate를 넘는다. 과거 9,774 code lines와 non-empty physical line 기록은 당시 snapshot일 뿐 현재 판정의 근거가 아니다.
+
+`scripts/loc.mjs`는 선언된 `production-manifest.json` 범위를 실제로 순회하고 pinned cloc로 산출물을 생성하는 경로로 유지한다. 파일 목록·합계·내용 hash를 사람이 새 측정처럼 손으로 재작성하지 않는다. `src/process/*`, `src/git/*`, `src/lifecycle/*`, `src/units/*`를 옛 flat-file 목록에서 누락한 상태로 수치를 계산해서는 안 된다.
+
+TUI 및 제품 표면 source도 TUI-015에 따라 같은 manifest와 같은 budget으로 계산한다. 제품 표면이라는 이유로 별도 manifest를 만들어 Core 수치에서 제외하지 않는다.
 
 새 compliance 검사는 실제 source/test/tool closure를 함께 확인하여 stale generated inventory만으로 누락된 dependency를 정당화하지 못하게 한다. 이는 production LOC의 tests 제외 정책을 바꾼 것이 아니다. proof source closure와 LOC 집계 대상은 서로 다른 집합이다. 실제 재측정에서 budget을 넘으면 위 review gate를 그대로 적용한다.

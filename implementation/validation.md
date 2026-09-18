@@ -4,6 +4,43 @@
 
 ## 현재 source 판정
 
+### 2026-09-18 — 제품 표면(TUI) 구현
+
+- 브랜치/기준 HEAD: `refactor/safety-preserving-architecture` / `15da3eb`. working tree에 규범 추가와 TUI 구현이 함께 있다.
+- 새 production source: `src/entry/oma.ts`와 `src/tui/**` 13개 파일. 기존 모듈 변경은 `src/domain/deployment.ts`(tui entry 등록)와 `src/runtime/assets.ts`(동일 entry) 두 곳뿐이다.
+- `npm run typecheck`, `npm run build`, `npm run check:package`: PASS. package 산출물에 `tui: dist/src/entry/oma.js`가 포함된다.
+- `npm run check:architecture`: PASS, 0 findings. `src/tui/`는 `scripts/dependency-lattice.mjs`의 **L5-entry**로 분류했다. 예외를 추가한 것이 아니라 layer를 선언했으며, 아래 layer는 TUI를 import하지 않는다.
+- `npm test`: **962/962 PASS**, fail/cancelled/skipped/todo=0, 실행 시간 172,773 ms. 신규 45건은 `test/tui-model.test.ts`(15), `test/tui-sources.test.ts`(13), `test/tui-app.test.ts`(10), `test/tui-boundary.test.ts`(7)다.
+- `node scripts/loc.mjs`: **186 files / 17,395 code LOC**. 직전 16,021에서 1,374 증가했고 전량이 제품 표면이다. A-008 review 요구는 계속 유지된다.
+- `node scripts/compliance.mjs --inventory`: 276 clauses. TUI-001–014는 `source-owners.json`에 owner/entrypoint/callPath/negativeTests를 연결했고 상태는 **unverified**다. TUI-015는 build scope라 owner가 없다.
+
+#### 실제 entrypoint 실행 관측
+
+격리 임시 state root에서 `node dist/src/entry/oma.js --society demo --config <path>`를 직접 실행하고 키 입력을 stdin으로 주입해 다음을 관측했다. TTY가 아니므로 raw mode는 적용되지 않았고 80x24 기본값으로 렌더링했다.
+
+- 대화 화면, Dashboard, Config, Mail 목록, Mail 상세, Extensions 다섯 화면이 모두 렌더링되고 `Ctrl+X`/방향키/Enter/Esc 경로가 동작한다. 종료 코드 0.
+- Config에서 Principal model을 바꾸자 `config.json`의 `agentProfiles.principal.modelProfile`이 `strong`→`cheap`으로 기록되고 `integration.policyRevision`이 `rev-initial`→`rev-8800fa24…`로 갱신됐다. 화면에는 `Principal model = cheap · 저장됨 · 다음 세션부터`가 표시됐다.
+- broker가 없는 환경이라 Dashboard의 Active/Pending/Status는 `unknown (principal 실행 endpoint 없음; <시각> 관측)`으로 표시됐고 0이나 Ready로 바뀌지 않았다.
+
+이 관측은 production entrypoint가 실제로 동작함을 보인 것이지 COMP-004의 `proven`이 아니다. 실제 Pi provider 연결, TTY raw mode, `principal.attach`를 통한 broker 관측은 포함하지 않았다.
+
+#### 구현하지 않은 범위
+
+- `principal.attach` credential handshake는 여전히 미구현이다(IPC-011, S-02). 따라서 TUI는 broker의 `status.get`을 아직 호출할 수 없고 Dashboard의 broker 유래 값은 항상 unknown이다. 이 경로는 `src/tui/transport.ts`에 구현돼 있어 endpoint가 생기면 동작한다.
+- session 경계를 넘지 않는 Principal model per-request 전환은 TUI-005가 명시적으로 범위 밖으로 둔다.
+
+### 2026-09-18 — architecture §23 / spec §19 (제품 표면·TUI) 규범 추가
+
+- 브랜치/기준 HEAD: `refactor/safety-preserving-architecture` / `15da3eb`. working tree에 아래 문서 변경이 있다.
+- 변경 범위는 **문서 전용**이다. `src/` 및 `test/`의 production/test source는 바꾸지 않았다.
+- `npm run typecheck`: PASS. `npm run check:architecture`: PASS, 0 findings(inventory/rule module/gate/transaction 전부).
+- `npm test`: **917/917 PASS**, fail/cancelled/skipped/todo=0, 실행 시간 172,378 ms.
+- `node scripts/compliance.mjs --inventory`: 276 clauses. 신규 TUI-001–015 및 TEST-008 총 16건이 `unverified`로 등재됐다. 구현 전이므로 owner/callPath/negativeTests는 비어 있는 것이 정상이다.
+- `node scripts/loc.mjs`는 이번에 재실행하지 않았다. source 변경이 없으므로 아래 수치를 그대로 인용하며, TUI 구현이 시작되면 재측정한다.
+- architecture.md 기준본 hash가 `177e60f7…`에서 `fe70eda0…`로 바뀌었고 N-001에 반영했다. 이전 pin과의 차이는 링크 수정 2줄과 신규 §23이며 둘 다 검토했다.
+
+### 이전 판정 (`fd58193`)
+
 - 브랜치/기준 HEAD: `refactor/safety-preserving-architecture` / `fd58193` (`2026-09-18`).
 - 검토 범위: 최근 10개 commit `4259159..fd58193`의 CLI locality 분리, mutation ownership map, modular architecture rules, transport ownership test, current 문서 정리.
 - HEAD를 repository 외부의 분리 worktree에 checkout하고 dependency 파일만 복제하여 main tree의 `dist`나 이전 PASS를 재사용하지 않았다.
@@ -62,6 +99,12 @@ npm run verify:all -- --out <new-dir>
 ```
 
 필요한 systemd/kernel/provider/VM 환경이 없으면 PASS가 아니라 `BLOCKED` 또는 `NOT_RUN`으로 기록한다. 일반 개발 host의 SIGKILL/process fixture를 VM power-loss proof로 취급하지 않는다.
+
+## A-008 LOC gate — 현재 OPEN
+
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **186 files / 17,395 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+
+이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
 ## 남아 있는 release gate
 

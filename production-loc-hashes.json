@@ -1,6 +1,6 @@
 {
   "cloc": "2.08",
-  "manifest": "c9048d39f5b5340c54f26ee88cbfce8af3dc6e7be7fd796399c70ec1bfc03365",
+  "manifest": "307e1df86a8d40e812de3a9cc67a7801049c1fff8a5c422766932b981d238f97",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -208,7 +208,7 @@
     },
     {
       "path": "src/domain/deployment.ts",
-      "sha256": "867d7d437f3b210ce0582ba6e0edec29ea3325454799bea8c6a780fa3663cfbe"
+      "sha256": "196f04aa6c56a57b8c7e3d336a9973b4688c637a9dd472d7a5d29504f360bba7"
     },
     {
       "path": "src/domain/derived.ts",
@@ -277,6 +277,10 @@
     {
       "path": "src/entry/module-conformance.ts",
       "sha256": "d71b8b0312dd7ec7328c7ba507f5597706c8d0870b2e86cee6d03bf8e8e68840"
+    },
+    {
+      "path": "src/entry/oma.ts",
+      "sha256": "f649cf6a3a2af6e3b7afe12c2604cac33e7d8ae4eafb164244c28556a4ea5822"
     },
     {
       "path": "src/entry/runner.ts",
@@ -540,7 +544,7 @@
     },
     {
       "path": "src/runtime/assets.ts",
-      "sha256": "e76b69a50d5a5a25b7647e541c4e8e962270759458ed0aef2c4aebb48d0e1307"
+      "sha256": "0955fd7472afa11161119e0d66dd5d1f5172eabf46db6f60d413b387cf2c4b3e"
     },
     {
       "path": "src/runtime/broker-lifetime.ts",
@@ -665,6 +669,54 @@
     {
       "path": "src/store.ts",
       "sha256": "fa039425da5364d069150fa98d71f2c42e3009fee99db6be7174bb22bd49fbd3"
+    },
+    {
+      "path": "src/tui/app.ts",
+      "sha256": "52233e277fb4500282a63e9a6cdbdb62309908ec1ba59eb65d878de60b4c028b"
+    },
+    {
+      "path": "src/tui/dashboard.ts",
+      "sha256": "767367286b7d1a5dcaa106a6d3af6aa4c3c363aa844b163ae68557a855d55213"
+    },
+    {
+      "path": "src/tui/exit.ts",
+      "sha256": "fc6887f4b8d3c5be83d37f71e7cb04fd913bbf01526aa4c7ad319c24f96087c6"
+    },
+    {
+      "path": "src/tui/keys.ts",
+      "sha256": "2fff374562fee9ab809829c8abb1594d2fce8e730389f07509bffaf8ce4874b4"
+    },
+    {
+      "path": "src/tui/model.ts",
+      "sha256": "59d0e461dcb963fccd880a7f5528baf5ada36526e14fc5553488b95cf09917d1"
+    },
+    {
+      "path": "src/tui/render.ts",
+      "sha256": "dd6e4855bcaa294eb6122a4578ef00247db9f90efca70b91e6322ef2011d7e9e"
+    },
+    {
+      "path": "src/tui/screen.ts",
+      "sha256": "c3beb4fc980b6921fe1ebaac978b32d9513374de1cf7fbcc0801d6db65adfa1f"
+    },
+    {
+      "path": "src/tui/session.ts",
+      "sha256": "b5dd93bb779b64d0177fa337a4ffb59ee6e1923ce7614f237b34b31b02c231b5"
+    },
+    {
+      "path": "src/tui/sources/extensions.ts",
+      "sha256": "89e57f1c12c8b7c9a4381d89d9d39166456100cb96195297dbbdce2c47c09293"
+    },
+    {
+      "path": "src/tui/sources/mail.ts",
+      "sha256": "3bcbd7f275a469996a201c69c5e780c7aea02bc7436eaf83a567c8daf60b2090"
+    },
+    {
+      "path": "src/tui/sources/settings.ts",
+      "sha256": "9da687f5599e63b000c4cc98271251da6ddb94cc122786dada1cf5a745e4000a"
+    },
+    {
+      "path": "src/tui/transport.ts",
+      "sha256": "406ce120b7b6d45c52cc096e821bc3cef356f5452b15e40a255d6c4075a94a4d"
     },
     {
       "path": "src/units.ts",

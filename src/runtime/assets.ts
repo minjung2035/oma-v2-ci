@@ -13,7 +13,8 @@ export function runtimeAssets(root: string): RuntimeAssets {
     throw new StoreError("UNSUPPORTED_PROFILE", "installation root must be a normalized absolute directory");
   return Object.freeze({ root, schema: join(root, DEPLOYMENT_LAYOUT.schema), systemd: join(root, DEPLOYMENT_LAYOUT.systemd),
     contract: join(root, DEPLOYMENT_LAYOUT.contract), extension: join(root, DEPLOYMENT_LAYOUT.extension),
-    entries: Object.freeze({ broker: join(root, DEPLOYMENT_LAYOUT.entries.broker), runner: join(root, DEPLOYMENT_LAYOUT.entries.runner), host: join(root, DEPLOYMENT_LAYOUT.entries.host) }) });
+    entries: Object.freeze({ broker: join(root, DEPLOYMENT_LAYOUT.entries.broker), runner: join(root, DEPLOYMENT_LAYOUT.entries.runner),
+      host: join(root, DEPLOYMENT_LAYOUT.entries.host), tui: join(root, DEPLOYMENT_LAYOUT.entries.tui) }) });
 }
 /** Module-relative legacy exports are checked, never searched through fallback
  * directories. A wrong LIBDIR cannot silently combine two installations.

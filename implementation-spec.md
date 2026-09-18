@@ -2,7 +2,9 @@
 
 문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `ef6c97d4e1e398f05c6e0ad59e535c0c285f0ffd3c61c4cbf0860920b5128e50`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+
+이전 기준본은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이었다. 그 이후의 차이는 두 가지이며 둘 다 검토했다. 첫째는 `examples/systemd`와 `validation.md`를 현재 경로로 고치는 링크 수정 2줄이고 의미 변경이 없다. 둘째는 2026-09-18에 추가한 architecture §23(제품 표면과 TUI)이며 아래 §19의 TUI 요구가 그 구현 계약이다.
 
 **MUST [N-006]** 2026-09-09 승인된 변경은 목표 `tiered` profile의 integration policy다. [정책 확장 계약](implementation/integration-policy.md)은 이 spec의 일부이며 기존 `base` substrate와 tiered의 완료 범위를 구분한다. 충돌한 기존 선택 approval 서술은 아래 INT/APP와 확장 계약으로 대체한다. S-08/S-10 전 base schema/IPC만 구현한 상태를 tiered production 지원으로 표시하지 않는다.
 
@@ -483,7 +485,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 ## 14. model-facing CLI와 파생 view
 
-**MUST [CLI-001; arch §§9,14]** base model-facing command allowlist는 다음과 같다. tiered의 추가 authority 문법은 S-08/S-10 gate이며 현재 허용된 것으로 추정하지 않는다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력한다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.
+**MUST [CLI-001; arch §§9,14,23.2]** base model-facing command allowlist는 다음과 같다. 이 표는 Resident rootfs 안의 `oma` 실행 파일만 규정하며, host의 동명 TUI 실행 파일은 TUI-002가 별도로 규정한다. tiered의 추가 authority 문법은 S-08/S-10 gate이며 현재 허용된 것으로 추정하지 않는다. JSON wire method가 존재해도 새 subcommand를 자동 생성하지 않는다. `--help`는 현재 사용 가능한 명령만 출력하며 TUI나 Control Panel을 노출하지 않는다. Linux의 cat/head/tail/rg/find/git을 대체하는 preview/query language를 만들지 않는다.
 
 | command | 의미·기본값 |
 |---|---|
@@ -602,6 +604,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 | §§13–14 auth/usage/DB | AUTH, INF, DB, IPC; S-01/02/04 |
 | §§15–19 recovery/isolation | LIFE, SB, REC, ERR; S-06 |
 | §§20–22 implementation/evaluation | ORDER, TRACE, test matrix; S-09 |
+| §23 제품 표면/TUI | TUI; CLI-001 분리, PR-001/004, INF-001, CFG-005; S-02 |
 
 **MUST NOT [NEG-001]** LLM이 sender·thread·ref·mail ID를 join하여 runtime 상태를 복원하게 한다. broker/view가 바로 읽고 실행할 경로를 제공한다. 내부 ID는 debug/명시적 retry에만 필요한 만큼 노출한다.
 
@@ -612,3 +615,44 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 **MUST NOT [NEG-004]** 정확한 turn 재현, 자동 tool replay, 의미적 mail dedup, private peer mail, multi-host failover, external push/deploy, 자동 GC를 Core v1의 숨은 부가 기능으로 넣는다. 필요한 경우 상위 architecture에 별도 요구로 제안하고 이 계약 범위 밖으로 표시한다.
 
 **MUST [NEG-005]** 구현자가 모호함을 발견하면 관련 requirement/source 절, 충돌하는 두 해석, 최소 재현/실험, 차단 범위를 적어 SPIKE에 추가한다. 그 과정 자체가 새 runtime entity나 workflow를 만들 권한은 아니다. 충분히 확정된 나머지 계약은 계속 구현한다.
+
+## 19. 제품 표면과 TUI
+
+**MUST [TUI-001; arch §23.1]** OMA의 공개 UX와 명령 namespace는 OMA가 소유하고 Pi는 내부 실행 엔진이다. Pi command를 이름만 바꾼 wrapper를 만들지 않는다. 이 절은 새 durable entity, 새 daemon, 새 effect queue, 새 socket method, 새 model-facing subcommand를 도입하지 않으며 A-006/A-007의 제한을 그대로 받는다. TUI가 표시하는 모든 값은 기존 관측 경로에서, TUI가 일으키는 모든 변경은 기존 mutation 또는 host config 경계에서 나온다.
+
+**MUST [TUI-002; arch §23.2]** `oma`는 두 개의 서로 다른 실행 파일이다. host 설치 PATH의 것은 Human TUI이고, Resident rootfs 안의 것은 CLI-001의 model-facing CLI다. 두 실행 파일은 argv 파서, capability, 연결 소켓, 설정 접근을 공유하지 않는다. 공유 가능한 것은 frame codec과 transport처럼 부작용과 권한이 없는 leaf뿐이다.
+
+**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. Resident의 `--help`, 도움말 텍스트, 오류 메시지에서 TUI나 Control Panel을 발견할 수 없어야 한다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.
+
+**MUST [TUI-004; arch §23.3]** Principal Pi session은 OMA TUI가 소유하며 `pi --mode rpc`로 실행한다. Pi의 대화형 모드나 built-in UI를 사용하지 않는다. PR-001의 단일 attach, PR-003의 private context 보존, PR-004의 model-facing tool 제한은 이 entrypoint가 그대로 진다. Principal의 논리 identity는 bootstrap 때 만들고 TUI 실행 여부와 독립적으로 유지한다. TUI 종료는 새 Principal 생성의 trigger가 아니다.
+
+**MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfigV1`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.
+
+session 경계를 넘지 않는 per-request 전환은 Principal inference가 broker relay를 실제로 경유할 때만 의미가 있다. 그 경로는 `principal.attach` credential handshake(IPC-011, S-02)와 `src/inference.ts`의 frozen authority 검사 개정을 함께 요구하므로 현재 구현하지 않는다. 호출 경로 없이 선택 API만 추가해 구현된 것처럼 표시하지 않는다(TRACE-002). 전환이 예산을 넘기면 기존 INF-002/003의 예약 검사가 그대로 거절한다.
+
+**MUST NOT [TUI-006]** 현재 model 선택, 읽음 상태, UI 위치, 최근 화면 같은 TUI 상태를 여섯 durable entity에 추가하거나 새 표·컬럼·sidecar 파일로 저장한다. 재시작 후에도 유지되어야 하는 선택은 host config의 해당 필드로 표현하고, 그 외 UI 상태는 A-007의 메모리 전용 runtime 상태로 두며 crash 후 원본에서 재구성한다.
+
+**MUST [TUI-007; arch §23.6]** 값 확정 시 저장하고 별도 Save 단계나 dirty state를 두지 않는다. 편집 중 Esc는 확정 전 값으로 되돌린다. 화면은 각 항목의 **적용 시점**을 함께 표시한다.
+
+| 변경 대상 | MUST 반영 시점 | 근거 |
+|---|---|---|
+| Resident 수 증감 | 즉시 | LIFE-001/003/004의 기존 mutation |
+| role의 model profile 내용 | 다음 runner activation | runner가 activation마다 config snapshot을 읽음 |
+| Principal model | 다음 Principal session | TUI-005 |
+| slot 수, quota cap, pricing, protected path, check argv | broker 재시작 | broker가 시작 시 config를 고정 |
+
+**MUST [TUI-008]** `initialResidents`에 대응하는 항목은 bootstrap seed로만 표시하고 실행 중 society의 Resident 수를 바꾸는 값으로 제시하지 않는다. LIFE-009에 따라 값 변경이 다음 재시작에 agent를 자동 생성·삭제·중지하지 않는다. 현재 Resident를 늘리거나 줄이는 조작은 설정 항목이 아니라 명시적 lifecycle 행위로 분리해 표시한다.
+
+**MUST [TUI-009]** 이미 생성된 Resident의 `ResolvedAgentSpec.modelProfile` 참조는 LIFE-008에 따라 고정이다. 설정 화면은 참조가 가리키는 profile의 내용만 바꾸고 참조 자체를 바꾸지 않는다. 저장된 참조를 현재 배포가 해석하지 못하면 `UNSUPPORTED_PROFILE`로 차단하고 임의 profile로 대체하지 않는다. config 본문이 바뀌면 CFG-005의 policy revision을 새 값으로 갱신한다.
+
+**MUST [TUI-010; arch §23.7]** Extensions 화면의 목록 출처는 host가 `installation.libdir` 아래에 이미 배치한 파일뿐이다. 임의 경로 입력, 자동 탐색, 네트워크 설치를 허용하지 않는다. core OMA extension은 항상 첫 항목으로 고정하고 해제할 수 없다. 선택한 항목의 SHA-256을 기록하고 실행 직전에 다시 확인한다. 추가 extension은 Pi host process와 동일 권한의 trusted deployment code이며 model tool로 취급하지 않는다. 이 화면은 host 전용이고 모델·workspace·mail 내용이 목록·선택·적용에 영향을 주지 못한다.
+
+**MUST [TUI-011; arch §23.8]** Mail 화면의 읽지 않음 표시는 기존 `deliveries` flag에서 파생한 값이며 새 durable 상태가 아니다. ACK 조작은 MAIL-009의 의미만 갖는다. UI 문구가 `presented=understood`, `ack=approved`, `ack=읽음 완료`를 암시해서는 안 된다(NEG-002). 기본 대상은 Principal 수신 메일이며 commons/topic을 Principal prompt에 자동 주입하지 않는 A-003은 그대로 유지한다.
+
+**MUST [TUI-012; arch §23.5]** Dashboard의 모든 수치는 VIEW-002의 관측 규칙을 따른다. 관측 시각을 함께 보유하고, unknown이나 disconnected를 running·0·성공으로 바꾸지 않는다. INF-004의 불확정 비용은 확정분과 구분해 표시하며 하나의 합계나 백분율로 뭉개지 않는다. broker에 연결하지 못하면 cached 값임과 관측 시각을 표시한다.
+
+**MUST [TUI-013; arch §23.9]** 제품 UI는 Resident를 `worker`로 표시할 수 있으나 wire, DB, persisted 표현에는 사용하지 않는다. 표시 용어와 규범 용어의 대응은 한 곳에서 정의하고 계층마다 다시 만들지 않는다.
+
+**MUST [TUI-014; arch §23.10]** Pi의 built-in command와 UI가 사용자 표면에 노출되지 않게 한다. 이는 사후 필터가 아니라 RPC-only 실행으로 달성한다. 오류 메시지, 도움말, 표시 경로에서 Pi 고유 명령 체계를 정상 사용 경로로 안내하지 않는다.
+
+**MUST [TUI-015]** TUI는 릴리스 gate의 예외가 아니다. 이 절의 요구도 TRACE-002에 따라 단일 production owner, 실제 entrypoint에서의 call path, negative executable test, 현재 revision의 실행 증거를 갖는다. TUI 소스는 A-008/A-009의 production LOC 측정 대상이며 별도 budget으로 분리하지 않는다.

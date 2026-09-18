@@ -1,90 +1,344 @@
 [
   {
     "source": "implementation-spec.md",
-    "requirements": ["M-004"],
+    "requirements": [
+      "M-004"
+    ],
     "owner": "src/store.ts#Store.transaction",
     "entrypoint": "src/entry/broker.ts#main",
-    "callPath": ["src/entry/broker.ts#main", "src/broker.ts#Broker", "src/store.ts#Store.transaction"],
-    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/compliance.test.ts#COMP-005/006"]
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/broker.ts#Broker",
+      "src/store.ts#Store.transaction"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/compliance.test.ts#COMP-005/006"
+    ]
   },
   {
     "source": "implementation-spec.md",
-    "requirements": ["AUTH-003"],
+    "requirements": [
+      "AUTH-003"
+    ],
     "owner": "src/authority.ts#assertCurrentActor",
     "entrypoint": "src/broker.ts#Broker",
-    "callPath": ["src/broker.ts#Broker", "src/git.ts#GitModule", "src/git/submit.ts#SubmitCoordinator", "src/git/context.ts#ContextCoordinator", "src/lifecycle/create.ts#CreateCoordinator", "src/authority.ts#assertCurrentActor"],
-    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/r37-recovery-observation.test.ts#R37"]
+    "callPath": [
+      "src/broker.ts#Broker",
+      "src/git.ts#GitModule",
+      "src/git/submit.ts#SubmitCoordinator",
+      "src/git/context.ts#ContextCoordinator",
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/authority.ts#assertCurrentActor"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/r37-recovery-observation.test.ts#R37"
+    ]
   },
   {
     "source": "implementation-spec.md",
-    "requirements": ["INT-003"],
+    "requirements": [
+      "INT-003"
+    ],
     "owner": "src/git/integration.ts#IntegrationCoordinator",
     "entrypoint": "src/git.ts#GitModule.integrate",
-    "callPath": ["src/git.ts#GitModule.integrate", "src/git/integration.ts#IntegrationCoordinator", "src/git/canonical-command.ts#compareAndSwapCanonicalRef"],
-    "negativeTests": ["test/crash-boundaries.test.ts#T63", "test/r37-preparation-boundaries.test.ts#R37"]
+    "callPath": [
+      "src/git.ts#GitModule.integrate",
+      "src/git/integration.ts#IntegrationCoordinator",
+      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/crash-boundaries.test.ts#T63",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
   },
   {
     "source": "implementation-spec.md",
-    "requirements": ["REC-002", "REC-003"],
+    "requirements": [
+      "REC-002",
+      "REC-003"
+    ],
     "owner": "src/reconcile.ts#ReconcileModule",
     "entrypoint": "src/broker.ts#Broker",
-    "callPath": ["src/broker.ts#Broker", "src/reconcile.ts#ReconcileModule", "src/reconcile/operations.ts#OperationRecovery", "src/process/preparation.ts#PreparationExecutor"],
-    "negativeTests": ["test/r29-reconcile-accounting.test.ts#R29", "test/r37-recovery-observation.test.ts#R37", "test/r37-shutdown-observation.test.ts#R37"]
+    "callPath": [
+      "src/broker.ts#Broker",
+      "src/reconcile.ts#ReconcileModule",
+      "src/reconcile/operations.ts#OperationRecovery",
+      "src/process/preparation.ts#PreparationExecutor"
+    ],
+    "negativeTests": [
+      "test/r29-reconcile-accounting.test.ts#R29",
+      "test/r37-recovery-observation.test.ts#R37",
+      "test/r37-shutdown-observation.test.ts#R37"
+    ]
   },
   {
     "source": "implementation-spec.md",
-    "requirements": ["UNIT-007"],
+    "requirements": [
+      "UNIT-007"
+    ],
     "owner": "src/units.ts#UnitsModule",
     "entrypoint": "src/lifecycle/create.ts#CreateCoordinator",
-    "callPath": ["src/lifecycle/create.ts#CreateCoordinator", "src/lifecycle/create-publication.ts#CreationPublicationObserver", "src/units.ts#UnitsModule", "src/units/execute.ts#executeUnitCommand"],
-    "negativeTests": ["test/phase4.test.ts#UNIT", "test/r37-preparation-boundaries.test.ts#R37"]
+    "callPath": [
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/lifecycle/create-publication.ts#CreationPublicationObserver",
+      "src/units.ts#UnitsModule",
+      "src/units/execute.ts#executeUnitCommand"
+    ],
+    "negativeTests": [
+      "test/phase4.test.ts#UNIT",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
   },
   {
     "source": "implementation-spec.md",
-    "requirements": ["CTX-003", "CTX-004", "CTX-006"],
+    "requirements": [
+      "CTX-003",
+      "CTX-004",
+      "CTX-006"
+    ],
     "owner": "src/git/context.ts#ContextCoordinator",
     "entrypoint": "src/git.ts#GitModule.publishContext",
-    "callPath": ["src/git.ts#GitModule.publishContext", "src/git/context.ts#ContextCoordinator", "src/git/context-repository.ts#ContextRepository", "src/git/context-publication.ts#ContextPublicationObserver", "src/git/canonical-command.ts#compareAndSwapCanonicalRef"],
-    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/crash-boundaries.test.ts#T66"]
+    "callPath": [
+      "src/git.ts#GitModule.publishContext",
+      "src/git/context.ts#ContextCoordinator",
+      "src/git/context-repository.ts#ContextRepository",
+      "src/git/context-publication.ts#ContextPublicationObserver",
+      "src/git/canonical-command.ts#compareAndSwapCanonicalRef"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T66"
+    ]
   },
   {
     "source": "implementation-spec.md",
-    "requirements": ["LIFE-007", "LIFE-008"],
+    "requirements": [
+      "LIFE-007",
+      "LIFE-008"
+    ],
     "owner": "src/lifecycle/create.ts#CreateCoordinator",
     "entrypoint": "src/lifecycle.ts#LifecycleModule",
-    "callPath": ["src/lifecycle.ts#LifecycleModule", "src/lifecycle/create.ts#CreateCoordinator", "src/lifecycle/workspace.ts#WorkspaceCoordinator", "src/lifecycle/create-publication.ts#CreationPublicationObserver"],
-    "negativeTests": ["test/r37-preparation-boundaries.test.ts#R37", "test/crash-boundaries.test.ts#T39"]
+    "callPath": [
+      "src/lifecycle.ts#LifecycleModule",
+      "src/lifecycle/create.ts#CreateCoordinator",
+      "src/lifecycle/workspace.ts#WorkspaceCoordinator",
+      "src/lifecycle/create-publication.ts#CreationPublicationObserver"
+    ],
+    "negativeTests": [
+      "test/r37-preparation-boundaries.test.ts#R37",
+      "test/crash-boundaries.test.ts#T39"
+    ]
   },
   {
     "source": "implementation-spec.md",
-    "requirements": ["ERR-002"],
+    "requirements": [
+      "ERR-002"
+    ],
     "owner": "src/domain/errors.ts#classifyError",
     "entrypoint": "src/git/submit.ts#SubmitCoordinator",
-    "callPath": ["src/git/submit.ts#SubmitCoordinator", "src/domain/errors.ts#classifyError", "src/protocol/receipts.ts#receiptOfOperation"],
-    "negativeTests": ["test/r37-async-process.test.ts#R37", "test/r37-preparation-boundaries.test.ts#R37"]
+    "callPath": [
+      "src/git/submit.ts#SubmitCoordinator",
+      "src/domain/errors.ts#classifyError",
+      "src/protocol/receipts.ts#receiptOfOperation"
+    ],
+    "negativeTests": [
+      "test/r37-async-process.test.ts#R37",
+      "test/r37-preparation-boundaries.test.ts#R37"
+    ]
   },
   {
     "source": "implementation/physical-ordering.md",
-    "requirements": ["SEQ-003"],
+    "requirements": [
+      "SEQ-003"
+    ],
     "owner": "src/runtime/broker-lifetime.ts#BrokerLifetime",
     "entrypoint": "src/entry/broker.ts#main",
-    "callPath": ["src/entry/broker.ts#main", "src/runtime/broker-lifetime.ts#BrokerLifetime", "src/runtime/broker-lifetime.ts#settleWithin", "src/process/preparation.ts#preparationShutdownBarrier"],
-    "negativeTests": ["test/r37-shutdown-observation.test.ts#R37"]
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/runtime/broker-lifetime.ts#BrokerLifetime",
+      "src/runtime/broker-lifetime.ts#settleWithin",
+      "src/process/preparation.ts#preparationShutdownBarrier"
+    ],
+    "negativeTests": [
+      "test/r37-shutdown-observation.test.ts#R37"
+    ]
   },
   {
     "source": "implementation/compliance.md",
-    "requirements": ["COMP-005", "COMP-006"],
+    "requirements": [
+      "COMP-005",
+      "COMP-006"
+    ],
     "owner": "scripts/traceability.mjs#applyOwnerLinks",
     "entrypoint": "scripts/compliance.mjs#loadTraceInventory",
-    "callPath": ["scripts/compliance.mjs#loadTraceInventory", "scripts/traceability.mjs#loadTraceInventory", "scripts/traceability.mjs#applyOwnerLinks", "scripts/traceability.mjs#indexTrace"],
-    "negativeTests": ["test/compliance.test.ts#COMP-005/006", "test/traceability-policy.test.mjs#R39"]
+    "callPath": [
+      "scripts/compliance.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#loadTraceInventory",
+      "scripts/traceability.mjs#applyOwnerLinks",
+      "scripts/traceability.mjs#indexTrace"
+    ],
+    "negativeTests": [
+      "test/compliance.test.ts#COMP-005/006",
+      "test/traceability-policy.test.mjs#R39"
+    ]
   },
   {
     "source": "implementation/test-matrix.md",
-    "requirements": ["TEST-006"],
+    "requirements": [
+      "TEST-006"
+    ],
     "owner": "scripts/traceability.mjs#inventoryAcceptance",
     "entrypoint": "scripts/adversarial-report.mjs#inventoryAcceptance",
-    "callPath": ["scripts/adversarial-report.mjs#inventoryAcceptance", "scripts/traceability.mjs#inventoryAcceptance"],
-    "negativeTests": ["test/traceability-policy.test.mjs#R39"]
+    "callPath": [
+      "scripts/adversarial-report.mjs#inventoryAcceptance",
+      "scripts/traceability.mjs#inventoryAcceptance"
+    ],
+    "negativeTests": [
+      "test/traceability-policy.test.mjs#R39"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-001",
+      "TUI-002",
+      "TUI-003"
+    ],
+    "owner": "src/entry/oma.ts#main",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T91",
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-004",
+      "TUI-014"
+    ],
+    "owner": "src/tui/session.ts#sessionArgv",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/session.ts#PrincipalSession.start",
+      "src/tui/session.ts#sessionArgv"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T92",
+      "test/tui-boundary.test.ts#T92"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-005",
+      "TUI-007",
+      "TUI-008",
+      "TUI-009"
+    ],
+    "owner": "src/tui/sources/settings.ts#applyField",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/settings.ts#applyField",
+      "src/tui/sources/settings.ts#writeSettings"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T93",
+      "test/tui-sources.test.ts#T94",
+      "test/tui-sources.test.ts#T96"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-006"
+    ],
+    "owner": "src/tui/model.ts#step",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-010"
+    ],
+    "owner": "src/tui/sources/extensions.ts#toggleExtension",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/extensions.ts#readExtensions",
+      "src/tui/sources/extensions.ts#toggleExtension"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T97",
+      "test/tui-model.test.ts#T97"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-011"
+    ],
+    "owner": "src/tui/sources/mail.ts#readMailbox",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/sources/mail.ts#readMailbox"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T98",
+      "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-012"
+    ],
+    "owner": "src/tui/dashboard.ts#dashboardLines",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/transport.ts#TuiTransport.status",
+      "src/tui/dashboard.ts#dashboardLines"
+    ],
+    "negativeTests": [
+      "test/tui-sources.test.ts#T98"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-013"
+    ],
+    "owner": "src/tui/render.ts#render",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/render.ts#render"
+    ],
+    "negativeTests": [
+      "test/tui-boundary.test.ts#T95"
+    ]
   }
 ]

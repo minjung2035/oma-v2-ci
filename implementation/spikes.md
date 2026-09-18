@@ -46,6 +46,10 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **S-02 상태 (2026-09-07)**: 실험 미실행 — 기존 interactive Human Pi session에 attach하는 경로는 사용자 host의 실제 Pi 환경을 건드리지 않아야 하며(작업 지시: 격리 검증 환경 요구), attach 대상이 될 Human session이 격리 환경에 존재하지 않는다. → **OPEN, 실행 불가 환경**. phase 5(principal-relay/extension attach)에서 격리 Human session을 구축할 수 있는지 재평가한다. UID-only/무격리 fallback은 만들지 않는다 (SP-03).
 
+**S-02 범위 재평가 (2026-09-18)**: architecture §23.3과 TUI-004가 Principal session의 소유권을 바꿨다. OMA TUI가 `pi --mode rpc`를 직접 실행하므로 attach 대상이 되는 session이 OMA 배포 안에 존재한다. 따라서 "실행 불가 환경"이라는 차단 사유는 해소되며, S-02는 **OPEN이되 실행 가능**으로 바뀐다.
+
+바뀌지 않는 것은 통과 기준이다. SP-02-T/SP-02-A의 tool override, credential 비노출, duplicate attach, UI 종료/재연결, commons 자동 주입 0건은 그대로 요구한다. 검증 대상이 "사용자가 띄운 Pi"에서 "OMA가 띄운 Pi"로 바뀌었을 뿐이며, 소유권이 OMA에 있다는 사실이 PR-004의 model-facing tool 제한을 면제하지 않는다. TUI가 존재한다는 것만으로 S-02를 닫지 않는다.
+
 **MUST [SP-02-T]** 기본 shell/read/write/edit, alias, 추가 extension tool, subtool, custom provider hook, 경로 traversal/symlink를 각각 실행한다. model에게 attach credential·session 파일 읽기를 요청해 거절을 확인한다. duplicate attach와 UI 종료/재연결을 반복하고 commons 100개와 principal 질문 1개를 보낸다.
 
 **MUST [SP-02-A]** Human history는 기존 session에 유지되고 commons 자동 주입은 0건, principal 질문은 동일 session에만 전달되어야 한다. UI 부재 동안 Astra 호출은 0건이다. tool 하나라도 host로 우회하면 profile 출시를 막는다. 별도 SOTA worker 생성으로 우회하지 않는다.

@@ -1223,3 +1223,178 @@ spike에서 Pi의 특정 기능이 부족하면 adapter를 고친다. 정확한 
 | exact turn 복원 | 제외. batch와 부작용 대조, Pi 정상 session 재사용 |
 
 구현자가 추측해서 채워야 할 핵심 경로를 줄이는 것이 이 문서의 목적이다. 상세한 파일·호출·복구 계약은 구현자용이며, 모델에게는 9절의 작은 작업 표면을 제공한다.
+
+## 23. OMA 제품 표면과 TUI
+
+이 절은 2026-09-18에 추가한 architecture 변경이다. 앞 절이 정한 durable 경계·권한·복구 의미는 바꾸지 않는다. 바뀌는 것은 **Human이 OMA를 사용하는 방식**과 **Principal Pi session의 소유권** 두 가지다.
+
+### 23.1 제품 경계
+
+OMA는 Pi 위에 얹은 확장이 아니라 하나의 제품으로 제시한다. Pi는 내부 실행 엔진이고 공개 UX와 명령 namespace는 OMA가 소유한다.
+
+```text
+Human
+ └─ oma (TUI)
+     ├─ OMA Control Panel
+     ├─ OMA runtime (broker · store · mail · git · units)
+     ├─ host가 배치한 role별 extensions
+     └─ Pi engine (RPC mode)
+```
+
+Pi의 기능을 이름만 바꿔 노출하지 않는다. `pi config → oma config` 같은 기계적 wrapper를 만들지 않고, OMA UX에 실제로 필요한 기능만 골라 OMA 방식으로 다시 제공한다. 사용자가 별도로 upstream Pi를 설치한 경우는 OMA와 별개 프로그램으로 취급하며 OS 수준에서 차단하지 않는다.
+
+### 23.2 두 개의 `oma`
+
+`oma`라는 이름은 두 곳에서 쓰이며 **서로 다른 실행 파일**이다. 이름을 통일하는 것이 제품 목표이므로 개명하지 않고 바이너리를 분리한다.
+
+| 위치 | 사용자 | 표면 |
+|---|---|---|
+| host 설치 PATH의 `oma` | Human | TUI. 대화 화면과 Control Panel |
+| Resident rootfs 안의 `oma` | 모델 | §9.1의 send / submit / agent / status 등 |
+
+두 진입점은 argv 파서·권한·연결 소켓을 공유하지 않는다. host TUI 코드는 sandbox rootfs에 넣지 않고 §16의 mount 목록에도 추가하지 않는다. 공유 가능한 것은 frame codec과 transport 같은 부작용 없는 leaf뿐이다. 모델이 `oma`의 도움말을 읽어도 TUI나 Control Panel을 발견할 수 없어야 한다.
+
+### 23.3 Principal session의 소유권
+
+기존 §8.1은 Principal을 **이미 실행 중인 Human Pi session에 attach**하는 구조로 정했다. 이 절은 그것을 **OMA TUI가 Pi RPC session을 직접 소유**하는 구조로 바꾼다.
+
+```text
+이전:  Human이 pi를 실행 → OMA extension이 그 session에 attach
+현재:  Human이 oma를 실행 → OMA가 pi --mode rpc를 띄우고 TUI를 그린다
+```
+
+바뀌지 않는 것은 다음과 같다. Principal의 논리 identity는 bootstrap 때 한 번 만들고 UI 연결과 독립적으로 유지한다. Human 대화 history와 private memory는 여전히 `principal/private` 아래의 session에 남으며 공개 archive에 넣지 않는다. commons/topic은 여전히 Principal에 자동 주입하지 않는다. §16의 요구, 즉 model-facing shell/read/write/edit를 sandbox-backed 구현으로 교체하는 책임은 이 새 entrypoint가 그대로 진다.
+
+이 변경의 부수 효과로 S-02가 실행 가능해진다. 기존에는 검증 대상인 격리된 Human Pi session을 만들 수 없어 spike가 환경 부재로 막혀 있었다. OMA가 session을 소유하면 그 session이 곧 검증 대상이다.
+
+Principal의 model은 host가 허용한 model profile 집합 안에서 선택할 수 있다. 이는 §13.3의 경계를 넓히지 않는다. 금지 대상은 caller가 임의 provider URL·header·key·가격을 지정하는 것이며, host가 설정한 profile 사이의 선택은 원래 허용된 동작이다.
+
+선택은 host authority를 고쳐 쓰는 것이므로 **다음 Principal session부터** 적용하고 진행 중인 session의 model을 바꾸지 않는다. session 경계를 넘지 않는 per-request 전환은 Principal inference가 실제로 broker relay를 경유할 때만 성립하며, 그 경로는 attach credential과 frozen authority 검사의 개정을 함께 요구한다. 그때까지 선택 API만 먼저 만들어 구현된 것처럼 두지 않는다. 더 비싼 profile로의 전환은 예산 확대이므로 기존 quota 검사가 그대로 적용된다.
+
+### 23.4 TUI 구조와 조작
+
+기본 화면은 일반 코딩 에이전트와 같은 대화 중심이다. 관리 기능을 대화 UI 안에 계속 추가하지 않는다.
+
+```text
+┌──────────────────────────────────────────┐
+│            conversation                  │
+├──────────────────────────────────────────┤
+│ > prompt                                 │
+└──────────────────────────────────────────┘
+```
+
+관리 화면은 `Ctrl+X`로 여닫는 Control Panel 하나로 모은다. 카테고리는 셋뿐이다.
+
+```text
+Dashboard | Config | Mail
+```
+
+조작은 BIOS 형태의 keyboard navigation이다. 좌우로 카테고리, 상하로 항목을 옮기고 Enter로 선택·값 변경·하위 화면 진입, Esc로 이전 화면이다. 기본 UI depth는 0이며 Mail과 Extensions만 상세 화면을 갖는다. 마우스 중심 UI, command palette, 설정 검색, 다단계 메뉴를 만들지 않는다.
+
+별도 Save 단계나 dirty state를 만들지 않는다. 확정된 값이 곧 저장된 값이다. 편집 중 Esc는 변경 전 값으로 되돌린다.
+
+### 23.5 Dashboard
+
+현재 상태를 빠르게 확인하는 화면이며 상세 관리 화면으로 들어가지 않는다.
+
+```text
+DASHBOARD
+
+Usage            34%
+Workers          4 / 8
+Active           4
+Mail             2 unread
+Model            <principal model>
+Status           Ready
+```
+
+표시값은 §17의 관측 규칙을 그대로 따른다. 각 수치는 관측 시각을 가지며, unknown이나 disconnected를 running이나 0으로 바꾸지 않는다. 비용이 확정되지 않은 inference는 unknown으로 남기므로 usage 요약도 확정분과 미확정분을 뭉개지 않는다. daemon에 연결하지 못하면 cached 값과 관측 시각을 함께 표시한다.
+
+### 23.6 Config와 적용 시점
+
+Config는 자주 조정하는 항목만 노출한다. protocol limit, broker 내부 설정, DB 설정 같은 저수준 항목은 넣지 않는다.
+
+```text
+CONFIG
+
+Principal model          ...
+Worker model             ...
+Worker limit             8
+Initial workers          3
+Worker profile           default
+Extensions               >
+```
+
+저장은 값 확정 즉시 수행하되, **적용 시점은 항목마다 다르며 UI가 그것을 표시한다.** 사용자가 바뀌지 않은 이유를 추측하게 두지 않는다.
+
+| 변경 대상 | 반영 시점 |
+|---|---|
+| Resident 수 증감 | 즉시. 기존 create/start/stop 경로 |
+| role의 model profile 내용 | 다음 runner activation. workspace와 session은 유지 |
+| Principal model | 다음 inference 요청 |
+| slot 수, quota cap, pricing, protected path, check 명령 | broker 재시작 |
+
+`Initial workers`는 최초 bootstrap seed이며 실행 중인 society의 Resident 수를 바꾸지 않는다. 값을 바꿔도 다음 재시작에 agent가 자동 생성되거나 삭제되지 않는다. 지금 Resident를 늘리고 줄이는 것은 설정이 아니라 명시적인 lifecycle 행위다. UI는 이 둘을 같은 줄로 보이게 하지 않는다.
+
+이미 만들어진 Resident의 model profile **참조**는 생성 시 고정된 resolved spec의 일부다. 참조가 가리키는 profile의 내용을 바꾸는 것은 허용되지만, 참조 자체를 바꾸는 것은 identity 변경이므로 설정 화면에서 수행하지 않는다.
+
+config 본문이 바뀌면 policy revision을 새 값으로 갱신한다. 기존 accepted plan은 보존되고 outstanding integrate만 새 policy와 다시 대조한다.
+
+### 23.7 Extensions
+
+Extensions는 Config에서 한 단계 들어가는 예외적인 하위 화면이며 role별 적용 여부만 관리한다.
+
+```text
+EXTENSIONS
+
+                       Principal   Workers
+
+oma-core                  [x]         [x]
+subagents                 [x]         [x]
+browser                   [x]         [ ]
+review                    [ ]         [x]
+```
+
+이 화면은 **설치 UI가 아니다.** 목록의 출처는 host가 설치 디렉터리에 이미 배치한 파일뿐이며 임의 경로 추가와 자동 탐색을 허용하지 않는다. 추가 extension은 Pi host process와 같은 권한을 갖는 trusted deployment code이므로 model tool처럼 취급하지 않는다. 핵심 OMA extension은 항상 첫 항목으로 고정하며 해제할 수 없다. 켜진 항목의 SHA-256은 기록하고 실행 직전에 다시 확인한다.
+
+이 화면은 host 전용이다. 모델이나 workspace의 내용이 목록·선택·적용에 영향을 주지 못한다.
+
+extension이 제공하는 tool·hook·agent 기능은 활용하되, extension이 자체 command·shortcut·설정 UI를 제품 표면에 그대로 노출할지는 OMA가 결정한다. 사용자는 extension을 여러 개 설치했다는 사실이 아니라 OMA의 기능이 늘었다고 느껴야 한다.
+
+### 23.8 Mail
+
+Mail은 멀티에이전트 활동을 Human이 확인하는 주 surface다. 초기 버전은 Principal 앞으로 온 메일의 inbox 중심이다.
+
+```text
+MAIL
+
+> worker-a   question    API 선택 필요
+  worker-b   result      구현 완료
+  worker-c   alert       테스트 실패
+```
+
+본문을 읽어야 하므로 상세 화면을 허용한다. 읽지 않음 표시는 **새 durable 상태가 아니라 기존 delivery 사실에서 파생**한다. §14.1의 여섯 표에 unread 컬럼이나 별도 표를 추가하지 않는다.
+
+ACK는 §5.4의 의미를 유지한다. 읽음·이해·동의·작업 완료가 아니라 수신자가 명시적으로 확인 의사를 보냈다는 사실뿐이다. UI 문구가 이 의미를 바꾸지 않는다.
+
+복잡한 메일 클라이언트로 발전시키지 않는다. 필요해지면 Unread / All / Sent 정도만 추가한다.
+
+### 23.9 Worker 노출 원칙
+
+초기 버전에는 Workers 탭을 만들지 않는다. Resident 상세 상태, incarnation, batch, 생성 계통을 항상 노출하지 않는다. 사용자는 주로 Principal과 상호작용하고, Resident 활동에서 사람이 알아야 할 내용은 Dashboard 요약과 Mail의 question/result/alert로 전달한다.
+
+제품 UI는 Resident를 `worker`로 부를 수 있다. 이는 표시 용어이며 wire·DB·persisted 표현에는 사용하지 않는다. 두 이름의 대응은 한 곳에서 정의하고 계층마다 다시 만들지 않는다.
+
+디버깅 목적의 상세 정보가 필요해지면 일반 UI가 아니라 별도 developer surface로 추가한다.
+
+### 23.10 Pi surface 은닉
+
+Pi의 built-in command나 UI가 OMA TUI 위로 직접 노출되지 않게 한다. 이는 사후에 가리는 작업이 아니라 **Pi를 RPC mode로만 실행한다**는 구현 제약으로 달성한다. `--mode rpc`에서는 OMA가 중계하지 않는 한 Pi의 대화형 표면이 존재하지 않는다.
+
+해당 기능이 OMA에 필요하면 Control Panel이나 OMA 자체 명령으로 대체한다. 한 제품 안에 Pi UI와 OMA UI가 동시에 존재해서는 안 된다. 오류 메시지·도움말·경로 표기도 OMA 기준으로 맞춘다.
+
+### 23.11 이 변경이 바꾸지 않는 것
+
+단일 broker와 SQLite writer, 동기 transaction, 여섯 durable entity, immutable accepted evidence, explicit unknown, normal과 recovery의 분리, effect 직전 authority 재확인, bounded effect를 그대로 유지한다.
+
+TUI는 새 daemon·durable entity·effect queue·model-facing subcommand가 아니다. 읽기와 표시는 기존 관측 경로를 쓰고, 변경은 기존 mutation과 host config 경계를 쓴다. 제품 표면을 위해 wire·DB·persisted v1 의미를 바꾸지 않는다.

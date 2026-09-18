@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0682098865509033,
-  "n_files"            : 173,
-  "n_lines"            : 17478,
-  "files_per_second"   : 2536.28922063804,
-  "lines_per_second"   : 256238.514441108,
+  "elapsed_seconds"    : 0.0767819881439209,
+  "n_files"            : 186,
+  "n_lines"            : 19158,
+  "files_per_second"   : 2422.4431340767,
+  "lines_per_second"   : 249511.6428099,
   "report_file"        : "production-loc.json"},
 "src/pi-extension.ts" :{
   "blank": 3,
@@ -57,6 +57,11 @@
   "comment": 16,
   "code": 245,
   "language": "TypeScript"},
+"src/tui/model.ts" :{
+  "blank": 28,
+  "comment": 25,
+  "code": 245,
+  "language": "TypeScript"},
 "src/git/context-repository.ts" :{
   "blank": 4,
   "comment": 11,
@@ -81,6 +86,11 @@
   "blank": 5,
   "comment": 5,
   "code": 205,
+  "language": "TypeScript"},
+"src/tui/render.ts" :{
+  "blank": 16,
+  "comment": 11,
+  "code": 197,
   "language": "TypeScript"},
 "src/units.ts" :{
   "blank": 16,
@@ -232,6 +242,11 @@
   "comment": 15,
   "code": 135,
   "language": "TypeScript"},
+"src/tui/sources/extensions.ts" :{
+  "blank": 11,
+  "comment": 14,
+  "code": 131,
+  "language": "TypeScript"},
 "src/config.ts" :{
   "blank": 5,
   "comment": 2,
@@ -252,6 +267,11 @@
   "comment": 2,
   "code": 125,
   "language": "TypeScript"},
+"src/entry/oma.ts" :{
+  "blank": 14,
+  "comment": 8,
+  "code": 124,
+  "language": "TypeScript"},
 "src/leaf.ts" :{
   "blank": 12,
   "comment": 8,
@@ -267,6 +287,16 @@
   "comment": 4,
   "code": 121,
   "language": "TypeScript"},
+"src/tui/app.ts" :{
+  "blank": 16,
+  "comment": 16,
+  "code": 120,
+  "language": "TypeScript"},
+"src/tui/sources/settings.ts" :{
+  "blank": 12,
+  "comment": 26,
+  "code": 119,
+  "language": "TypeScript"},
 "src/domain/errors.ts" :{
   "blank": 5,
   "comment": 11,
@@ -280,6 +310,11 @@
 "src/mail/materializer.ts" :{
   "blank": 2,
   "comment": 3,
+  "code": 110,
+  "language": "TypeScript"},
+"src/tui/session.ts" :{
+  "blank": 12,
+  "comment": 13,
   "code": 110,
   "language": "TypeScript"},
 "implementation/schema-v1.sql" :{
@@ -315,6 +350,11 @@
 "src/domain/persisted-formats.ts" :{
   "blank": 10,
   "comment": 26,
+  "code": 92,
+  "language": "TypeScript"},
+"src/tui/sources/mail.ts" :{
+  "blank": 12,
+  "comment": 11,
   "code": 92,
   "language": "TypeScript"},
 "src/broker/peer-authenticator.ts" :{
@@ -396,6 +436,11 @@
   "blank": 4,
   "comment": 12,
   "code": 76,
+  "language": "TypeScript"},
+"src/tui/keys.ts" :{
+  "blank": 4,
+  "comment": 8,
+  "code": 75,
   "language": "TypeScript"},
 "src/storage/operation-transitions.ts" :{
   "blank": 1,
@@ -527,24 +572,39 @@
   "comment": 9,
   "code": 50,
   "language": "TypeScript"},
+"src/tui/screen.ts" :{
+  "blank": 3,
+  "comment": 7,
+  "code": 50,
+  "language": "TypeScript"},
 "src/cli/transport.ts" :{
   "blank": 4,
   "comment": 5,
   "code": 49,
+  "language": "TypeScript"},
+"src/runtime/assets.ts" :{
+  "blank": 2,
+  "comment": 6,
+  "code": 47,
   "language": "TypeScript"},
 "src/lifecycle/create-publication.ts" :{
   "blank": 3,
   "comment": 4,
   "code": 46,
   "language": "TypeScript"},
-"src/runtime/assets.ts" :{
-  "blank": 2,
-  "comment": 6,
-  "code": 46,
-  "language": "TypeScript"},
 "src/domain/usage-budget.ts" :{
   "blank": 1,
   "comment": 2,
+  "code": 45,
+  "language": "TypeScript"},
+"src/tui/dashboard.ts" :{
+  "blank": 6,
+  "comment": 9,
+  "code": 45,
+  "language": "TypeScript"},
+"src/tui/transport.ts" :{
+  "blank": 5,
+  "comment": 9,
   "code": 45,
   "language": "TypeScript"},
 "src/cli/exit.ts" :{
@@ -757,6 +817,11 @@
   "comment": 3,
   "code": 20,
   "language": "TypeScript"},
+"src/tui/exit.ts" :{
+  "blank": 4,
+  "comment": 4,
+  "code": 20,
+  "language": "TypeScript"},
 "src/domain/capabilities.ts" :{
   "blank": 4,
   "comment": 2,
@@ -799,7 +864,7 @@
   "language": "TypeScript"},
 "src/domain/deployment.ts" :{
   "blank": 1,
-  "comment": 5,
+  "comment": 7,
   "code": 14,
   "language": "TypeScript"},
 "src/git/paths.ts" :{
@@ -873,7 +938,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 509,
-  "comment": 948,
-  "code": 16021,
-  "nFiles": 173} }
+  "blank": 652,
+  "comment": 1111,
+  "code": 17395,
+  "nFiles": 186} }

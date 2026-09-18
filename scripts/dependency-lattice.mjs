@@ -94,6 +94,9 @@ const LAYERS = Object.freeze([
       "src/entry/",
       "src/cli/",
       "src/cli.ts",
+      // The product surface is an entry surface, like the model-facing CLI: it
+      // consumes lower layers and nothing below it imports the TUI.
+      "src/tui/",
       "src/pi-extension.ts",
       "src/rpc-client.ts",
     ],
