@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0740911960601807,
-  "n_files"            : 188,
-  "n_lines"            : 19924,
-  "files_per_second"   : 2537.41348496111,
-  "lines_per_second"   : 268911.841884921,
+  "elapsed_seconds"    : 0.0754950046539307,
+  "n_files"            : 189,
+  "n_lines"            : 20111,
+  "files_per_second"   : 2503.47689713216,
+  "lines_per_second"   : 266388.486128173,
   "report_file"        : "production-loc.json"},
 "src/pi-extension.ts" :{
   "blank": 9,
@@ -34,8 +34,8 @@
   "language": "TypeScript"},
 "src/runtime/pi-adapter.ts" :{
   "blank": 1,
-  "comment": 8,
-  "code": 315,
+  "comment": 13,
+  "code": 320,
   "language": "TypeScript"},
 "src/store.ts" :{
   "blank": 3,
@@ -112,6 +112,11 @@
   "comment": 19,
   "code": 194,
   "language": "TypeScript"},
+"src/runner.ts" :{
+  "blank": 0,
+  "comment": 6,
+  "code": 194,
+  "language": "TypeScript"},
 "src/storage/immutable-file.ts" :{
   "blank": 4,
   "comment": 12,
@@ -125,11 +130,6 @@
 "src/diagnostics/ledger.ts" :{
   "blank": 2,
   "comment": 5,
-  "code": 190,
-  "language": "TypeScript"},
-"src/runner.ts" :{
-  "blank": 0,
-  "comment": 4,
   "code": 190,
   "language": "TypeScript"},
 "src/inference.ts" :{
@@ -237,6 +237,11 @@
   "comment": 17,
   "code": 137,
   "language": "TypeScript"},
+"src/entry/oma.ts" :{
+  "blank": 14,
+  "comment": 13,
+  "code": 136,
+  "language": "TypeScript"},
 "src/lifecycle/actions.ts" :{
   "blank": 5,
   "comment": 9,
@@ -257,10 +262,10 @@
   "comment": 19,
   "code": 134,
   "language": "TypeScript"},
-"src/entry/oma.ts" :{
-  "blank": 14,
-  "comment": 10,
-  "code": 130,
+"src/tui/session.ts" :{
+  "blank": 13,
+  "comment": 26,
+  "code": 132,
   "language": "TypeScript"},
 "src/config.ts" :{
   "blank": 5,
@@ -301,11 +306,6 @@
   "blank": 16,
   "comment": 16,
   "code": 120,
-  "language": "TypeScript"},
-"src/tui/session.ts" :{
-  "blank": 13,
-  "comment": 24,
-  "code": 119,
   "language": "TypeScript"},
 "src/domain/errors.ts" :{
   "blank": 5,
@@ -376,6 +376,11 @@
   "blank": 5,
   "comment": 8,
   "code": 89,
+  "language": "TypeScript"},
+"src/runtime/pi-runtime.ts" :{
+  "blank": 10,
+  "comment": 41,
+  "code": 86,
   "language": "TypeScript"},
 "src/domain/canonical-json.ts" :{
   "blank": 6,
@@ -497,6 +502,11 @@
   "comment": 11,
   "code": 64,
   "language": "TypeScript"},
+"src/entry/runner.ts" :{
+  "blank": 1,
+  "comment": 4,
+  "code": 63,
+  "language": "TypeScript"},
 "src/cli/effects/context.ts" :{
   "blank": 4,
   "comment": 1,
@@ -536,11 +546,6 @@
   "blank": 5,
   "comment": 1,
   "code": 57,
-  "language": "TypeScript"},
-"src/entry/runner.ts" :{
-  "blank": 1,
-  "comment": 2,
-  "code": 55,
   "language": "TypeScript"},
 "src/mail/reconcile.ts" :{
   "blank": 0,
@@ -948,7 +953,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 699,
-  "comment": 1259,
-  "code": 17966,
-  "nFiles": 188} }
+  "blank": 709,
+  "comment": 1314,
+  "code": 18088,
+  "nFiles": 189} }

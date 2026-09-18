@@ -2,7 +2,7 @@
 
 문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `031e72cdacf798710c1b73b7ff68f87d20f192e7d0be7d0df89868a7dac34b59`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `b64baeb187dbec529972caa7c3dfd74c7abb9a0b0575ababa368cc6519a36fbf`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
 
 이전 기준본은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이었다. 그 이후의 차이는 두 가지이며 둘 다 검토했다. 첫째는 `examples/systemd`와 `validation.md`를 현재 경로로 고치는 링크 수정 2줄이고 의미 변경이 없다. 둘째는 2026-09-18에 추가한 architecture §23(제품 표면과 TUI)이며 아래 §19의 TUI 요구가 그 구현 계약이다.
 
@@ -605,7 +605,8 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 | §§15–19 recovery/isolation | LIFE, SB, REC, ERR; S-06 |
 | §§20–22 implementation/evaluation | ORDER, TRACE, test matrix; S-09 |
 | §23 제품 표면/TUI | TUI; CLI-001 분리, PR-001/004, INF-001, CFG-005; S-02 |
-| §23.12 tool 표면 투영 | TSP; PI-001, CFG-005, SB-003 |
+| §23.11 엔진 동봉/공존 | TUI-016/017; PI-001, A-008 |
+| §23.13 tool 표면 투영 | TSP; PI-001, CFG-005, SB-003 |
 
 **MUST NOT [NEG-001]** LLM이 sender·thread·ref·mail ID를 join하여 runtime 상태를 복원하게 한다. broker/view가 바로 읽고 실행할 경로를 제공한다. 내부 ID는 debug/명시적 retry에만 필요한 만큼 노출한다.
 
@@ -655,6 +656,12 @@ session 경계를 넘지 않는 per-request 전환은 Principal inference가 bro
 **MUST [TUI-013; arch §23.9]** 제품 UI는 Resident를 `worker`로 표시할 수 있으나 wire, DB, persisted 표현에는 사용하지 않는다. 표시 용어와 규범 용어의 대응은 한 곳에서 정의하고 계층마다 다시 만들지 않는다.
 
 **MUST [TUI-014; arch §23.10]** Pi의 built-in command와 UI가 사용자 표면에 노출되지 않게 한다. 이는 사후 필터가 아니라 RPC-only 실행으로 달성한다. 오류 메시지, 도움말, 표시 경로에서 Pi 고유 명령 체계를 정상 사용 경로로 안내하지 않는다.
+
+**MUST [TUI-016; arch §23.11]** OMA는 Pi 엔진을 함께 배포하고, 실행할 엔진을 이 설치본이 가져온 것으로만 해석한다. `PATH` 탐색과 `/usr/bin/pi` 같은 대체 경로 fallback을 두지 않는다. 엔진이 없는 설치본은 `UNSUPPORTED_PROFILE`로 실패하며, 어떤 Pi가 실행됐는지 불확실한 상태로 진행하지 않는다. 운영자의 명시적 pin은 허용하되 절대 경로여야 하고 존재하지 않으면 거절한다. 엔진 entry는 동봉 패키지가 선언한 `bin`에서 읽고 저장소가 경로를 추측하지 않는다.
+
+**MUST [TUI-017]** 실행하는 엔진에는 OMA가 소유한 agent 디렉터리를 지정한다. 지정하지 않으면 엔진이 사용자의 `~/.pi` 설정·extension·session을 공유하므로, 사용자가 별도로 설치한 Pi와 상태가 섞인다. 이 디렉터리는 society state root 아래에 두어 backup/restore와 삭제가 나머지 OMA 상태와 같은 경계에서 다뤄지게 한다. 사용자의 Pi 설정을 읽거나 쓰지 않는다.
+
+**MUST NOT [TUI-018]** 동봉한 엔진을 수정해 제품 동작을 만든다. OMA의 동작은 신뢰된 core extension이 소유한다. 수정하지 않은 동봉 엔진은 upstream 의존이므로 A-008/A-009의 production LOC 계산 대상이 아니며, 엔진을 수정하는 순간 LOC-003에 따라 계산 대상이 되고 A-008 기준을 다시 검토해야 한다.
 
 **MUST [TUI-015]** TUI는 릴리스 gate의 예외가 아니다. 이 절의 요구도 TRACE-002에 따라 단일 production owner, 실제 entrypoint에서의 call path, negative executable test, 현재 revision의 실행 증거를 갖는다. TUI 소스는 A-008/A-009의 production LOC 측정 대상이며 별도 budget으로 분리하지 않는다.
 

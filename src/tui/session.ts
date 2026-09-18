@@ -8,9 +8,14 @@
 import { spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/async.js";
 import { PiRpcClient, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
+import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
 
 export interface SessionPaths {
   readonly piCommand: string;
+  /** Arguments preceding Pi's own flags, e.g. the vendored bundle entry. */
+  readonly piArgs?: readonly string[] | undefined;
+  /** OMA-owned agent directory, isolating this engine from the user's own Pi. */
+  readonly piAgentDir?: string | undefined;
   readonly coreExtension: string;
   readonly sessionDir: string;
   readonly workspace: string;
@@ -63,10 +68,15 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
 /** TSP-005: the Principal role's projection reaches its Pi process the same way
  * a Resident's does. Kept separate so the wiring is testable without spawning.
  */
-export function sessionEnv(base: Readonly<Record<string, string>>, profile: SessionProfile): Record<string, string> {
+export function sessionEnv(
+  base: Readonly<Record<string, string>>,
+  profile: SessionProfile,
+  paths?: Pick<SessionPaths, "piAgentDir">,
+): Record<string, string> {
   return {
     ...base,
     ...(profile.toolSurface === undefined ? {} : { OMA_TOOL_SURFACE: profile.toolSurface }),
+    ...(paths?.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: paths.piAgentDir }),
   };
 }
 
@@ -135,7 +145,12 @@ export class PrincipalSession {
     // TUI-010: the digests recorded for this role are checked again here, at the
     // last moment before the file is handed to Pi.
     assertExtensionIntegrity(profile.extensions);
-    const child = spawnOwnedRpc(paths.piCommand, sessionArgv(paths, profile), paths.workspace, sessionEnv(env, profile));
+    const child = spawnOwnedRpc(
+      paths.piCommand,
+      [...(paths.piArgs ?? []), ...sessionArgv(paths, profile)],
+      paths.workspace,
+      sessionEnv(env, profile, paths),
+    );
     return new PrincipalSession(child, limits, sink);
   }
 

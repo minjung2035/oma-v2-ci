@@ -68,6 +68,16 @@ Core extension은 shell/powershell tool을 거절하고 built-in file tool을 ag
 
 Broker는 `quota.storageBytes`가 유효하면 시작하고, 시작 및 각 public/internal admission에서 owned state tree 사용량을 관측한다. streamed body의 선언 bytes와 role별 workspace write/edit도 사전 제한한다. 따라서 S-01/S-03의 unconditional `SPIKE_UNRESOLVED` 차단은 없다. 실제 systemd/READY, 외부 same-UID writer에 대한 kernel filesystem quota, S-03 steer·concurrency·전체 kill matrix와 S-04 가격·usage/error/cancel codec은 별도 release-hardening 범위다.
 
+## Pi 엔진
+
+OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi를 찾지 않으며, 엔진이 없는 설치본은 대체 경로로 물러서지 않고 `UNSUPPORTED_PROFILE`로 실패한다. 엔진 entry는 동봉 패키지가 선언한 `bin`에서 읽는다.
+
+엔진에는 `PI_CODING_AGENT_DIR`로 society state root 아래의 OMA 소유 디렉터리를 지정한다. 지정하지 않으면 엔진이 운영자 계정의 `~/.pi` 설정·extension·session을 공유하므로, 별도로 설치한 Pi와 상태가 섞인다. 이 디렉터리는 backup/restore 범위에 포함된다.
+
+운영자가 다른 엔진을 써야 하면 `OMA_PI_COMMAND`에 절대 경로를 지정한다. 의도적 이탈이며 존재하지 않는 경로는 거절한다. 이 경우 실행되는 엔진의 신뢰·버전 확인은 운영자 책임이다.
+
+동봉 엔진은 수정하지 않는다. 제품 동작은 신뢰된 core extension이 소유한다.
+
 ## Role별 tool 표면 투영
 
 각 role 파일은 선택적으로 `toolSurface` 블록을 가질 수 있다. extension을 켜는 것과 그 extension의 tool을 모델에게 어떻게 보일지를 분리하는 설정이며, 새 권한 종류나 wire/DB schema를 만들지 않는다.

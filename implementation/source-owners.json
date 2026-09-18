@@ -410,5 +410,23 @@
       "test/tool-surface.test.ts#T102",
       "test/tool-surface.test.ts#T103"
     ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-016",
+      "TUI-017",
+      "TUI-018"
+    ],
+    "owner": "src/runtime/pi-runtime.ts#resolvePiRuntime",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/runtime/pi-runtime.ts#resolvePiRuntime",
+      "src/tui/session.ts#PrincipalSession.start"
+    ],
+    "negativeTests": [
+      "test/pi-runtime.test.ts#T105"
+    ]
   }
 ]

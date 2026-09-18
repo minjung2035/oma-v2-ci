@@ -1393,13 +1393,25 @@ Pi의 built-in command나 UI가 OMA TUI 위로 직접 노출되지 않게 한다
 
 해당 기능이 OMA에 필요하면 Control Panel이나 OMA 자체 명령으로 대체한다. 한 제품 안에 Pi UI와 OMA UI가 동시에 존재해서는 안 된다. 오류 메시지·도움말·경로 표기도 OMA 기준으로 맞춘다.
 
-### 23.11 이 변경이 바꾸지 않는 것
+### 23.11 엔진 동봉과 사용자 Pi와의 공존
+
+OMA는 Pi 엔진을 **함께 배포하고 소유한다**. 사용자가 Pi를 따로 설치하지 않아도 동작해야 하고, 이미 설치해 둔 Pi가 있다면 그것을 건드리지 않아야 한다. 두 요구는 같은 규칙에서 나온다.
+
+**PATH에서 Pi를 찾지 않는다.** 이 설치본이 함께 가져온 엔진만 실행한다. 엔진이 없는 설치본은 `/usr/bin/pi` 같은 대체 경로로 물러서지 않고 명시적으로 실패한다. 어떤 Pi가 실행됐는지 모르는 상태가 조용히 성립하지 않게 하기 위해서다.
+
+**엔진에는 OMA가 소유한 agent 디렉터리를 준다.** Pi는 기본적으로 `~/.pi` 아래에서 설정·extension·session을 읽는데, 그대로 두면 OMA와 사용자의 Pi가 같은 상태를 공유한다. OMA는 자기 state root 아래의 디렉터리를 지정해 둘을 분리한다. 사용자의 Pi 설정은 읽지도 쓰지도 않는다.
+
+Pi는 **수정하지 않고** 동봉한다. OMA의 동작은 신뢰된 core extension에 있으며, 엔진 자체를 고쳐서 제품 동작을 만들지 않는다. 따라서 동봉한 엔진은 수정하지 않은 upstream 의존이며 production LOC 예산의 계산 대상이 아니다. 엔진을 고치기 시작하면 그 순간부터 계산 대상이 된다.
+
+운영자는 명시적으로 다른 엔진을 pin할 수 있다. 이는 의도적인 이탈이며 절대 경로여야 하고 존재하지 않으면 거절한다. pin하지 않은 기본 경로는 항상 동봉 엔진이다.
+
+### 23.12 이 변경이 바꾸지 않는 것
 
 단일 broker와 SQLite writer, 동기 transaction, 여섯 durable entity, immutable accepted evidence, explicit unknown, normal과 recovery의 분리, effect 직전 authority 재확인, bounded effect를 그대로 유지한다.
 
 TUI는 새 daemon·durable entity·effect queue·model-facing subcommand가 아니다. 읽기와 표시는 기존 관측 경로를 쓰고, 변경은 기존 mutation과 host config 경계를 쓴다. 제품 표면을 위해 wire·DB·persisted v1 의미를 바꾸지 않는다.
 
-### 23.12 Extension tool 표면 투영
+### 23.13 Extension tool 표면 투영
 
 Role에 extension을 더할수록 모델이 한 번에 보는 tool 목록이 길어진다. §9.1의 "작은 작업 표면"과 §23.7의 "Extensions provide capabilities. OMA owns the UI."를 유지하려면, **어떤 extension을 켤지와 그 extension의 tool을 모델에게 어떻게 보일지**를 분리해야 한다.
 

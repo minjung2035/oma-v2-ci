@@ -13,6 +13,7 @@ import {
   type DeliveryBoundary,
 } from "../storage/delivery-receipt.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
+import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { PiRpcClient, type PiEvent } from "./pi-rpc.js";
 
 export interface PiAdapterProfile {
@@ -29,6 +30,12 @@ export interface PiAdapterProfile {
 }
 export interface PiAdapterPaths {
   readonly piCommand: string;
+  /** Arguments preceding Pi's own flags, e.g. the vendored bundle entry when
+   * the engine is run through Node. Empty for a host-pinned executable. */
+  readonly piArgs?: readonly string[] | undefined;
+  /** OMA-owned agent directory. Keeps this engine's configuration, extensions
+   * and sessions separate from any Pi the user installed. */
+  readonly piAgentDir?: string | undefined;
   readonly coreExtension: string;
   readonly cli: string;
   readonly workspace: string;
@@ -150,6 +157,7 @@ function childEnvironment(options: PiAdapterOptions): Record<string, string> {
     OMA_MAIL_ARCHIVE: options.paths.mailArchive,
     OMA_AGENT_HOME: options.paths.agentHome,
     OMA_CLI_PATH: options.paths.cli,
+    ...(options.paths.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: options.paths.piAgentDir }),
     ...(options.profile.toolSurface === undefined
       ? {}
       : { OMA_TOOL_SURFACE: options.profile.toolSurface }),
@@ -194,6 +202,8 @@ export class PiAdapter {
       throw failure("UNSUPPORTED_PROFILE", "Pi workspace quota is unavailable");
     for (const path of [
       options.paths.piCommand,
+      // The vendored engine entry is an asset too, not just an argument.
+      ...(options.paths.piArgs ?? []),
       options.paths.coreExtension,
       options.paths.cli,
       options.paths.workspace,
@@ -224,7 +234,7 @@ export class PiAdapter {
     assertExtensionIntegrity(this.options.profile.extensions);
     const child = spawnOwnedRpc(
       this.options.paths.piCommand,
-      argv(this.options),
+      [...(this.options.paths.piArgs ?? []), ...argv(this.options)],
       this.options.paths.workspace,
       childEnvironment(this.options),
     );

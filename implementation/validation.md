@@ -4,6 +4,26 @@
 
 ## 현재 source 판정
 
+### 2026-09-19 — Pi 엔진 동봉: 별도 설치 불필요, 사용자 Pi와 공존
+
+OMA가 Pi 엔진을 함께 배포하고 자기 것만 실행한다. Pi는 **수정하지 않고** 동봉한다.
+
+- `@earendil-works/pi-coding-agent`를 devDependencies에서 **dependencies로 옮겼다.** `npm install`이 엔진을 함께 가져오므로 사용자가 Pi를 따로 설치할 필요가 없다.
+- `src/runtime/pi-runtime.ts`가 해석의 단일 owner다. `PATH`를 보지 않고 `/usr/bin/pi` fallback도 없다. 엔진이 없으면 `UNSUPPORTED_PROFILE`로 실패한다. entry는 동봉 패키지의 `bin.pi`에서 읽는다. Pi의 `exports` 맵이 `./package.json`을 노출하지 않아 module resolver가 실패하므로, `node_modules` 체인을 직접 걸어 manifest를 읽고 `name`이 일치할 때만 채택한다.
+- 엔진에는 `PI_CODING_AGENT_DIR`로 `<stateRoot>/pi`를 지정한다. 지정하지 않으면 엔진이 사용자의 `~/.pi`를 공유하므로, 이것이 공존의 핵심이다. Resident(`pi-adapter`)와 Principal(`tui/session`) 양쪽에 적용했다.
+- 운영자는 `OMA_PI_COMMAND`로 다른 엔진을 pin할 수 있다. 절대 경로여야 하고 부재 시 거절한다.
+
+**실제 관측.** 이 개발 머신에는 사용자 Pi가 `/usr/bin/pi → /usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js`로 설치돼 있다. 그럼에도 OMA는 `/usr/bin/node <저장소>/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js`를 실행하고 `PI_CODING_AGENT_DIR=<stateRoot>/pi`를 넘긴다. 임시 state root로 `oma`를 기동했을 때 세션이 계속 살아 있었고(제한 시간까지), OMA 소유 agent 디렉터리가 생성됐으며 시작 실패 메시지는 0건이었다. 즉 **사용자 Pi가 있어도 자기 복사본을 쓰고, 설정도 섞이지 않는다.**
+
+**LOC.** 동봉 엔진은 수정하지 않은 upstream 의존이므로 LOC-003에 따라 production 계산 대상이 아니다. 엔진을 수정하기 시작하면 계산 대상이 되고 A-008 기준을 다시 검토해야 한다는 것을 TUI-018에 명시했다.
+
+규범: architecture **§23.11**, spec **TUI-016/017/018**, test-matrix **T105**. 기준본 hash는 `b64baeb1…`로 갱신했다.
+
+검증: `npm test` **995/995 PASS**(신규 8건 `test/pi-runtime.test.ts`), `check:architecture` 0 findings, `node scripts/loc.mjs` **189 files / 18,088 code LOC**.
+
+미검증: sandbox(Resident) 경로의 rootfs 안 엔진 bind는 `SandboxHost`가 아직 외부 공급이라 이번 범위 밖이다. node/git까지 포함한 OS별 배포본도 별도 작업이다.
+
+
 ### 2026-09-19 — extension digest를 spawn 직전에 재검증
 
 미구현 상태였던 MUST를 구현했다. `operations/README`는 "runner entry는 시작 직전에 기록된 SHA-256을 다시 확인한 뒤 core 및 role extension을 Pi에 `-e` 전달한다"고, TUI-010은 "선택한 항목의 SHA-256을 기록하고 실행 직전에 다시 확인한다"고 요구하지만, **재검증 코드가 어디에도 없었다**. digest는 config 로드 때 한 번 계산된 뒤 `src/runner.ts`에서 `.path`만 남기고 버려졌고, Principal 경로도 같았다.
@@ -156,7 +176,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **188 files / 17,966 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **189 files / 18,088 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

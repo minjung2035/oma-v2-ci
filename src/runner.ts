@@ -40,6 +40,10 @@ export interface RunnerPaths {
   readonly stateRoot?: string;
   readonly society?: string;
   readonly piCommand?: string;
+  /** Arguments preceding Pi's own flags, e.g. the vendored bundle entry. */
+  readonly piArgs?: readonly string[];
+  /** OMA-owned Pi agent directory; keeps the engine off the user's ~/.pi. */
+  readonly piAgentDir?: string;
   readonly coreExtension?: string;
   readonly cli?: string;
 }
@@ -99,7 +103,7 @@ export class RunnerModule {
     return batch;
   }
   private adapter(batch: PreparedBatch): PiAdapter {
-    const { stateRoot, society, piCommand, coreExtension, cli } = this.paths;
+    const { stateRoot, society, piCommand, piArgs, piAgentDir, coreExtension, cli } = this.paths;
     if (
       !this.lease ||
       !this.limits ||
@@ -138,6 +142,8 @@ export class RunnerModule {
       },
       paths: {
         piCommand,
+        ...(piArgs === undefined ? {} : { piArgs }),
+        ...(piAgentDir === undefined ? {} : { piAgentDir }),
         coreExtension,
         cli,
         workspace: workspacePathAt(stateRoot, this.agent),

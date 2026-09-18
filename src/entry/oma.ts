@@ -10,6 +10,8 @@ import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
 import { isValidSocietyName } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import { resolvePiRuntime } from "../runtime/pi-runtime.js";
+import { ensureDirectory } from "../storage/directory.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
 import { codeFor, fail } from "../tui/exit.js";
 import { openTerminal } from "../tui/screen.js";
@@ -105,7 +107,13 @@ async function main(argv: readonly string[]): Promise<void> {
   terminal.onResize(() => app.draw());
   terminal.onKeys(chunk => app.feed(chunk));
 
-  const piCommand = process.env.OMA_PI_COMMAND ?? "/usr/bin/pi";
+  // OMA runs the engine it shipped with; it never resolves Pi from PATH, and it
+  // gives that engine its own agent directory so a Pi the user installed keeps
+  // its configuration, extensions and sessions to itself.
+  const piRuntime = resolvePiRuntime({
+    stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
+  });
+  ensureDirectory(piRuntime.agentDir, 0o700);
   const coreExtension = join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension);
   const principalProfile = settings.config.agentProfiles[settings.config.principalProfile];
   const modelName = principalProfile?.modelProfile ?? "";
@@ -119,7 +127,8 @@ async function main(argv: readonly string[]): Promise<void> {
   try {
     if (!model) throw new StoreError("UNSUPPORTED_PROFILE", `principal model profile ${modelName} is not declared`);
     session = PrincipalSession.start(
-      { piCommand, coreExtension, sessionDir: join(stateRoot, "principal", "private", "sessions"),
+      { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
+        coreExtension, sessionDir: join(stateRoot, "principal", "private", "sessions"),
         workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private") },
       { society, provider: model.provider, model: model.model, extensions: roleExtensions,
         ...(roleSurface === null ? {} : { toolSurface: encodeToolSurfacePlan(roleSurface) }) },

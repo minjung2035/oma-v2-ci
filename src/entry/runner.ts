@@ -5,6 +5,8 @@ import { RunnerModule } from "../runner.js";
 import { loadConfiguration } from "../config.js";
 import { isValidActorName, isValidSocietyName } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
+import { resolvePiRuntime } from "../runtime/pi-runtime.js";
+import { ensureDirectory } from "../storage/directory.js";
 
 function usage(): never {
   console.error("usage: runner.js --society <name> --agent <name> [--config <path>]");
@@ -35,8 +37,16 @@ const modelName = agentProfile.modelProfile;
 const profile = Object.freeze({ name: profileName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
   workspaceBytes: agentProfile.resources.workspaceBytes,
   ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}) });
+// OMA runs the engine it shipped with, never one found on PATH, and points it
+// at an agent directory OMA owns so a Pi the user installed stays untouched.
+const piRuntime = resolvePiRuntime({
+  stateRoot, libdir: cfg.installation.libdir, override: process.env.OMA_PI_COMMAND,
+});
+ensureDirectory(piRuntime.agentDir, 0o700);
 const runner = new RunnerModule({ runRoot, stateRoot, society,
-  piCommand: process.env.OMA_PI_COMMAND ?? "/usr/bin/pi",
+  piCommand: piRuntime.executable,
+  piArgs: piRuntime.args,
+  piAgentDir: piRuntime.agentDir,
   coreExtension: join(cfg.installation.libdir, "dist/src/pi-extension.js"),
   cli: join(cfg.installation.libdir, "dist/src/cli.js") }, agent, cfg.limits, profile);
 let stopping = false;
