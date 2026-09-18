@@ -1,6 +1,6 @@
 # OMA v2 — 현재 인계
 
-작업 브랜치는 `refactor/safety-preserving-architecture`다. 문서 정리 직전의 최신 code-changing HEAD는 `11b3ae1eedbfd381d14e14a62a32d5afe41b875e`다.
+작업 브랜치는 `refactor/safety-preserving-architecture`다. 검토 기준 HEAD는 `fd58193ebe38022f175d260735711e315f02e8d8`이며, working tree에는 최근 CLI refactor에 맞춘 회귀 test 수정과 재생성 evidence가 있다.
 
 ## 현재 판정
 
@@ -18,11 +18,13 @@
 
 ## 현재 검증 상태
 
-위 code-changing 작업 이후의 fresh `typecheck / architecture check / test` 실행 결과는 현재 기록되어 있지 않다. 따라서 이전 snapshot의 PASS를 현재 source에 상속하지 않는다. 정확한 상태와 명령은 [implementation/validation.md](implementation/validation.md)를 따른다.
+최근 10개 commit 검토와 fresh local verification을 분리 worktree에서 수행했다. 발견한 1건은 production 결함이 아니라 CLI mail-header leaf owner 이동 후 남은 stale regression assertion이었고, 실제 owner인 `src/cli/effects/mail.ts`를 검사하도록 수정했다.
+
+명령과 수치, 환경 한계는 [implementation/validation.md](implementation/validation.md)가 소유한다. 기본 local suite는 현재 PASS지만 live systemd/kernel/provider/VM qualification으로 확대해 해석하지 않는다.
 
 GitHub Actions/CI는 이번 작업 범위에서 수정하거나 qualification 근거로 사용하지 않았다.
 
-새 code 작업 전에 최소한 다음 로컬 루프를 먼저 실행한다.
+다음 code 변경 전에도 최소한 다음 로컬 루프를 실행한다.
 
 ```sh
 npm run typecheck

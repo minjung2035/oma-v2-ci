@@ -22,8 +22,23 @@
   "src/broker/replies.ts",
   "src/broker/transport-spool.ts",
   "src/cli.ts",
+  "src/cli/arguments.ts",
   "src/cli/cache-codec.ts",
+  "src/cli/commands/agent.ts",
+  "src/cli/commands/context.ts",
+  "src/cli/commands/integrate.ts",
+  "src/cli/commands/logs.ts",
+  "src/cli/commands/routes.ts",
+  "src/cli/commands/send.ts",
+  "src/cli/commands/status.ts",
+  "src/cli/commands/submit.ts",
+  "src/cli/effects.ts",
+  "src/cli/effects/context.ts",
+  "src/cli/effects/mail.ts",
+  "src/cli/effects/submit.ts",
+  "src/cli/exit.ts",
   "src/cli/request-intent.ts",
+  "src/cli/request-service.ts",
   "src/cli/transport.ts",
   "src/config.ts",
   "src/config/operations.ts",
@@ -1375,12 +1390,12 @@
     "src/pi-extension.ts",
     "src/rpc-client.ts"
    ],
-   "files": 9
+   "files": 24
   }
  ],
- "files": 159,
- "runtimeEdges": 595,
- "typeOnlyEdges": 279,
+ "files": 174,
+ "runtimeEdges": 656,
+ "typeOnlyEdges": 282,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 203,
   "L2-facts -> L1-kernel": 27,
@@ -1392,11 +1407,11 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 20,
-  "L5-entry -> L1-kernel": 28,
+  "L5-entry -> L1-kernel": 39,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
   "L5-entry -> L4-orchestration": 8,
-  "L5-entry -> L5-entry": 2
+  "L5-entry -> L5-entry": 52
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1431,28 +1446,27 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 95,
+  "src/domain/errors.ts": 96,
   "src/domain/identifiers.ts": 32,
+  "src/ids.ts": 26,
   "src/storage/paths.ts": 20,
-  "src/ids.ts": 19,
   "src/storage/durable-fs.ts": 19,
   "src/store.ts": 17,
+  "src/cli/exit.ts": 16,
   "src/domain/derived.ts": 16,
   "src/authority.ts": 13,
   "src/domain/canonical-json.ts": 13,
   "src/hash.ts": 12,
-  "src/process/policies.ts": 10,
+  "src/process/policies.ts": 11,
   "src/storage/directory.ts": 10,
   "src/storage/receipt-projector.ts": 10,
-  "src/domain/context-policy.ts": 9,
-  "src/storage/contained-fs.ts": 9
+  "src/domain/context-policy.ts": 9
  },
  "fanOut": {
   "src/broker.ts": 26,
   "src/mail.ts": 26,
   "src/entry/broker.ts": 19,
   "src/git.ts": 15,
-  "src/cli.ts": 14,
   "src/git/context-repository.ts": 14,
   "src/store.ts": 14,
   "src/lifecycle/create.ts": 13,
@@ -1462,7 +1476,8 @@
   "src/mail/batches.ts": 12,
   "src/git/context-mirror.ts": 10,
   "src/storage/context-snapshot.ts": 10,
-  "src/config.ts": 9
+  "src/cli.ts": 9,
+  "src/cli/request-service.ts": 9
  },
  "external": {
   "@earendil-works/pi-coding-agent": 1,
@@ -1470,10 +1485,10 @@
   "node:async_hooks": 3,
   "node:child_process": 3,
   "node:crypto": 16,
-  "node:fs": 36,
+  "node:fs": 40,
   "node:net": 3,
   "node:os": 2,
-  "node:path": 44,
+  "node:path": 46,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:string_decoder": 1,

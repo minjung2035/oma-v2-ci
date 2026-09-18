@@ -4,14 +4,16 @@
 
 ## 현재 source 판정
 
-- 브랜치: `refactor/safety-preserving-architecture`
-- 문서 정리 직전 최신 code-changing commit: `11b3ae1eedbfd381d14e14a62a32d5afe41b875e`
-- 최근 AI-first refactor 범위: CLI locality 분리, mutation ownership/locality map, modular architecture rules, contract-direction cleanup plan, broker lifecycle split review.
-- 위 code-changing 범위에 대한 fresh local `typecheck / check:architecture / npm test / verification lane` 결과는 이 문서에 기록되어 있지 않다.
-- 따라서 이전 2026-09-17 및 그 이전 snapshot의 PASS/test count/LOC는 **historical**이며 current source proof가 아니다.
-- GitHub Actions/CI는 현재 qualification 근거로 사용하지 않는다.
+- 브랜치/기준 HEAD: `refactor/safety-preserving-architecture` / `fd58193` (`2026-09-18`).
+- 검토 범위: 최근 10개 commit `4259159..fd58193`의 CLI locality 분리, mutation ownership map, modular architecture rules, transport ownership test, current 문서 정리.
+- HEAD를 repository 외부의 분리 worktree에 checkout하고 dependency 파일만 복제하여 main tree의 `dist`나 이전 PASS를 재사용하지 않았다.
+- `npm run inventory`, `check:inventory`, `typecheck`, `build`, `check:package`, `evidence:graph`, `check:architecture`: PASS. Architecture rule/module 및 기존 gate 모두 0 findings.
+- 최초 `npm test`는 CLI header import owner가 `src/cli/effects/mail.ts`로 이동했는데 `test/mail-header-leaf.test.ts`가 이전 `src/cli.ts` import를 고정해 1건 실패했다. 현재 test를 실제 leaf owner에 맞게 수정했다.
+- 수정 후 `npm test`: **917/917 PASS**, fail/cancelled/skipped/todo=0, 실행 시간 166,141 ms.
+- `node scripts/loc.mjs`: **173 files / 16,021 code LOC**. A-008 architecture review 요구는 유지한다.
+- GitHub Actions/CI와 live systemd/kernel/provider/VM lane은 이번 결과에 포함하지 않았다.
 
-현재 상태는 **UNVERIFIED / local verification NOT_RUN**으로 취급한다. 문서-only cleanup은 이 판정을 올리지 않는다.
+현재 source의 기본 local verification은 **PASS**다. 이 판정은 local test/build 정합성만 뜻하며 systemd/kernel/provider/power-loss qualification 또는 release certification이 아니다.
 
 ## 기본 재검증
 

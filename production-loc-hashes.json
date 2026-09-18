@@ -1,6 +1,6 @@
 {
   "cloc": "2.08",
-  "manifest": "8bc42d8710cbdc2f30bbbc0fe5a5e47220fb4ef561f802fe5313aff59a1b8234",
+  "manifest": "c9048d39f5b5340c54f26ee88cbfce8af3dc6e7be7fd796399c70ec1bfc03365",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -84,19 +84,79 @@
     },
     {
       "path": "src/cli.ts",
-      "sha256": "be456aee2daf440ca74b926c761079ae0e30f21d7274b034c64f14b62d9360d3"
+      "sha256": "f837383f38aefcd2388ceb1b5679b074df234b358df0d2d7eedf4b332a66f341"
+    },
+    {
+      "path": "src/cli/arguments.ts",
+      "sha256": "ed47b04a638e12afb1b176e1da4486e68b83cd3dfffad5708bf03a0b1631ab6c"
     },
     {
       "path": "src/cli/cache-codec.ts",
       "sha256": "374c4c93642b5cd34e4c6698a669eb61ccc82880da4a2291729df3953496c2a3"
     },
     {
+      "path": "src/cli/commands/agent.ts",
+      "sha256": "d7e8cad28c14a59fe3dcffe3ec87d863d2867694609aecf5d4e492e1306fad66"
+    },
+    {
+      "path": "src/cli/commands/context.ts",
+      "sha256": "19e44c98494eaf77bf3e04d639d23fb9d983b364db43fa5b3cf5f86f4437835d"
+    },
+    {
+      "path": "src/cli/commands/integrate.ts",
+      "sha256": "b689d82345cd4f88abb21bb8a79391419e3118b4a65427276d3b45ce30b1a302"
+    },
+    {
+      "path": "src/cli/commands/logs.ts",
+      "sha256": "9c3341a3d53deac85734df565039e28b762522852adc27f014d9433fcd9bbe78"
+    },
+    {
+      "path": "src/cli/commands/routes.ts",
+      "sha256": "79580e8a4270e2a2e1258042f73a290c9ad02a3b132123d44f41f38278d63431"
+    },
+    {
+      "path": "src/cli/commands/send.ts",
+      "sha256": "be1e337377a575d010ad756dfacccc4f278b621ba4053fa05d4c53f6cfb3ae2f"
+    },
+    {
+      "path": "src/cli/commands/status.ts",
+      "sha256": "a83f3ef1eea8af6a0b3f029cb0c125c22fa25c19e31650016aae2337389db59a"
+    },
+    {
+      "path": "src/cli/commands/submit.ts",
+      "sha256": "d5dd8d32d3c89ba1808d0173ef262e25f1f5d90685c9796fc18203705e413e70"
+    },
+    {
+      "path": "src/cli/effects.ts",
+      "sha256": "dd08d39fe877ca70c2fabfa79bc47d7459099a5c2315fb91601eff85417a1f26"
+    },
+    {
+      "path": "src/cli/effects/context.ts",
+      "sha256": "56be2946399cb3f581b62a008f5ec9a4079a4c78df77fd9bf8ec1a21b3726f86"
+    },
+    {
+      "path": "src/cli/effects/mail.ts",
+      "sha256": "8d98bc3aa75cf080159db7cc37206e33b8b8942b4075db24553585e72b97fda0"
+    },
+    {
+      "path": "src/cli/effects/submit.ts",
+      "sha256": "75e5fb1697350268dc9c3a59c5bafe3582b3600738c248735ad797bcdd98faec"
+    },
+    {
+      "path": "src/cli/exit.ts",
+      "sha256": "fae15ca3f76f43b1247fe053fe784d29d5a1b5ce9a3157b6cf1838a6a6a8d5d5"
+    },
+    {
       "path": "src/cli/request-intent.ts",
       "sha256": "3afb8a13532f37b1918c17ef8aa74eb547a22029f3d989190f2fa4c13fa167f5"
     },
     {
+      "path": "src/cli/request-service.ts",
+      "sha256": "681c42e4f50328711c8d5185d4a11542fd50196a59d122173aeeef9c24a40a6b"
+    },
+    {
       "path": "src/cli/transport.ts",
-      "sha256": "0440969c621957488cd04a8e8c8c9b93592ad24944cc90b572185555a579a14f"
+      "sha256": "c4e57c848242b7830b7ba64aa6e894712c1716ca7c1545fd8ab22abd6726dc3e"
     },
     {
       "path": "src/config.ts",
@@ -576,7 +636,7 @@
     },
     {
       "path": "src/storage/quota.ts",
-      "sha256": "3af74b107eb4c6eb201191e89162884600793bc701afa0b663e1be73e1ecdb35"
+      "sha256": "e35542edc5787e1be67e44f3f4568e8ee250703787d0c99cf3b0a5548a09f657"
     },
     {
       "path": "src/storage/receipt-projector.ts",
