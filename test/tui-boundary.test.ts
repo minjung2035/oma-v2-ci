@@ -73,8 +73,11 @@ test("T91/TUI-002: the host TUI and the model-facing CLI share no argv parser or
 
 test("T91/TUI-003: no sandbox mount or Resident surface exposes the product entrypoint", () => {
   for (const file of ["src/sandbox.ts", "src/runner.ts", "src/runtime/pi-adapter.ts"]) {
-    const text = readFileSync(resolve(root, file), "utf8");
-    assert.doesNotMatch(text, /tui|entry\/oma/i, `${file} must not reference the product surface`);
+    // A reference is a module path, not a requirement ID quoted in a comment.
+    const text = readFileSync(resolve(root, file), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    assert.doesNotMatch(text, /["'][^"']*(?:\/tui\/|entry\/oma)[^"']*["']/i,
+      `${file} must not reference the product surface`);
   }
   // The model-facing help text must not advertise the Control Panel.
   const usage = readFileSync(resolve(root, "src/cli/exit.ts"), "utf8");

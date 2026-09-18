@@ -12,6 +12,7 @@ import {
   PI_BOUNDARY_PREFIX,
   type DeliveryBoundary,
 } from "../storage/delivery-receipt.js";
+import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
 import { PiRpcClient, type PiEvent } from "./pi-rpc.js";
 
 export interface PiAdapterProfile {
@@ -19,7 +20,9 @@ export interface PiAdapterProfile {
   readonly model: string;
   readonly prompt: string;
   readonly workspaceBytes: number;
-  readonly extensions: readonly string[];
+  /** Recorded at configuration load and re-verified immediately before spawn.
+   * The digest travels with the path so the check cannot be skipped here. */
+  readonly extensions: readonly VerifiedExtension[];
   /** TSP-005: the validated projection for this role, or null to show every
    * registered tool. The adapter forwards it; it never computes one. */
   readonly toolSurface?: string | undefined;
@@ -170,8 +173,10 @@ function argv(options: PiAdapterOptions): string[] {
     "-e",
     options.paths.coreExtension,
   ];
-  for (const extension of options.profile.extensions)
-    args.push("-e", extension);
+  // The core extension is already first; the recorded list may also contain it
+  // so that its digest is verified, but it is never passed twice.
+  for (const extension of verifiedPaths(options.profile.extensions))
+    if (extension !== options.paths.coreExtension) args.push("-e", extension);
   if (
     !(options.profile.provider === "pi" && options.profile.model === "current")
   )
@@ -214,6 +219,9 @@ export class PiAdapter {
         "SESSION_BOUNDARY_UNCONFIRMED",
         "prepared batch belongs to another actor",
       );
+    // operations/README + TUI-010: the recorded digests are checked again here,
+    // at the last moment before the file is handed to Pi.
+    assertExtensionIntegrity(this.options.profile.extensions);
     const child = spawnOwnedRpc(
       this.options.paths.piCommand,
       argv(this.options),

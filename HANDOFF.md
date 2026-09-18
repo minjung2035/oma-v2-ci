@@ -39,13 +39,19 @@ OMA를 Pi 확장이 아니라 단일 제품으로 제시하는 표면을 추가�
 - sandbox 쪽 `src/pi-extension.ts`는 검증된 plan에 대한 집합 연산만 한다. group을 여는 것은 활성화이지 실행이 아니며, 다른 extension의 handler를 대신 호출하는 경로는 없다.
 - 설정은 operations role 파일의 선택적 `toolSurface` 블록이다. `HostConfigV1`·wire·ledger·DB entity를 확장하지 않는다.
 
+## Extension digest 재검증
+
+`operations/README`와 TUI-010이 요구하던 "spawn 직전 SHA-256 재확인"이 미구현이었다. digest가 config 로드 후 버려지고 있었다. `src/runtime/extension-integrity.ts`를 단일 owner로 두고 Resident·Principal 양쪽 spawn 경로에서 재검증하며, 불일치·삭제·정규 파일 아님을 모두 기동 거절한다.
+
+범위는 config 로드와 spawn 사이의 창뿐이다. 검증 후 Pi가 파일을 여는 사이의 same-UID 경합은 막지 못하고 deployment manifest digest를 대신하지도 않는다.
+
 ## 현재 검증 상태
 
-수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 984/984 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
+수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 987/987 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
 
 TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unverified**다. 실제 Pi provider 연결과 TTY raw mode는 관측하지 않았으므로 COMP-004의 `proven`이 아니다.
 
-**A-008 LOC gate가 열려 있다.** 187 files / 17,920 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
+**A-008 LOC gate가 열려 있다.** 188 files / 17,966 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
 
 ## 다음에 할 일
 

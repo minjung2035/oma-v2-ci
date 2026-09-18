@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0730230808258057,
-  "n_files"            : 187,
-  "n_lines"            : 19838,
-  "files_per_second"   : 2560.83416209298,
-  "lines_per_second"   : 271667.529987169,
+  "elapsed_seconds"    : 0.0740911960601807,
+  "n_files"            : 188,
+  "n_lines"            : 19924,
+  "files_per_second"   : 2537.41348496111,
+  "lines_per_second"   : 268911.841884921,
   "report_file"        : "production-loc.json"},
 "src/pi-extension.ts" :{
   "blank": 9,
@@ -34,8 +34,8 @@
   "language": "TypeScript"},
 "src/runtime/pi-adapter.ts" :{
   "blank": 1,
-  "comment": 2,
-  "code": 313,
+  "comment": 8,
+  "code": 315,
   "language": "TypeScript"},
 "src/store.ts" :{
   "blank": 3,
@@ -112,11 +112,6 @@
   "comment": 19,
   "code": 194,
   "language": "TypeScript"},
-"src/runner.ts" :{
-  "blank": 0,
-  "comment": 2,
-  "code": 191,
-  "language": "TypeScript"},
 "src/storage/immutable-file.ts" :{
   "blank": 4,
   "comment": 12,
@@ -130,6 +125,11 @@
 "src/diagnostics/ledger.ts" :{
   "blank": 2,
   "comment": 5,
+  "code": 190,
+  "language": "TypeScript"},
+"src/runner.ts" :{
+  "blank": 0,
+  "comment": 4,
   "code": 190,
   "language": "TypeScript"},
 "src/inference.ts" :{
@@ -260,7 +260,7 @@
 "src/entry/oma.ts" :{
   "blank": 14,
   "comment": 10,
-  "code": 131,
+  "code": 130,
   "language": "TypeScript"},
 "src/config.ts" :{
   "blank": 5,
@@ -302,6 +302,11 @@
   "comment": 16,
   "code": 120,
   "language": "TypeScript"},
+"src/tui/session.ts" :{
+  "blank": 13,
+  "comment": 24,
+  "code": 119,
+  "language": "TypeScript"},
 "src/domain/errors.ts" :{
   "blank": 5,
   "comment": 11,
@@ -311,11 +316,6 @@
   "blank": 11,
   "comment": 10,
   "code": 118,
-  "language": "TypeScript"},
-"src/tui/session.ts" :{
-  "blank": 13,
-  "comment": 20,
-  "code": 117,
   "language": "TypeScript"},
 "src/mail/materializer.ts" :{
   "blank": 2,
@@ -615,6 +615,11 @@
 "src/cli/exit.ts" :{
   "blank": 6,
   "comment": 0,
+  "code": 44,
+  "language": "TypeScript"},
+"src/runtime/extension-integrity.ts" :{
+  "blank": 5,
+  "comment": 23,
   "code": 44,
   "language": "TypeScript"},
 "src/config/policy.ts" :{
@@ -943,7 +948,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 694,
-  "comment": 1224,
-  "code": 17920,
-  "nFiles": 187} }
+  "blank": 699,
+  "comment": 1259,
+  "code": 17966,
+  "nFiles": 188} }

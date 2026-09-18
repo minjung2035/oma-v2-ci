@@ -15,8 +15,9 @@ import {
   PRINCIPAL_MODEL, WORKER_LIMIT, WORKER_MODEL,
   commitField, layoutOf, readSettings,
 } from "../src/tui/sources/settings.js";
-import { sessionEnv } from "../src/tui/session.js";
+import { sessionArgv, sessionEnv } from "../src/tui/session.js";
 import { registerToolSurface } from "../src/pi-extension.js";
+import { assertExtensionIntegrity, verifiedPaths } from "../src/runtime/extension-integrity.js";
 
 const CORE = DEPLOYMENT_LAYOUT.extension;
 const digest = (text: string): string => createHash("sha256").update(text).digest("hex");
@@ -250,4 +251,66 @@ test("an unknown settings field is refused before anything is written", () => {
       error instanceof StoreError && error.code === "INVALID_REQUEST");
     assert.equal(readFileSync(join(root, "host.json"), "utf8"), before);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a recorded extension digest is re-checked and a changed file refuses the start", () => {
+  const root = scratch("oma-integrity-");
+  try {
+    const file = join(root, "review.js");
+    writeFileSync(file, "export {};\n");
+    const recorded = digest(readFileSync(file, "utf8"));
+    assertExtensionIntegrity([{ path: file, sha256: recorded }]);
+
+    // Same path, different bytes after the digest was recorded.
+    writeFileSync(file, "export const evil = 1;\n");
+    assert.throws(() => assertExtensionIntegrity([{ path: file, sha256: recorded }]), (error: unknown) =>
+      error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /changed after it was recorded/.test(error.message));
+
+    // A file that disappeared is refused, not skipped.
+    rmSync(file);
+    assert.throws(() => assertExtensionIntegrity([{ path: file, sha256: recorded }]), (error: unknown) =>
+      error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /unreadable now/.test(error.message));
+
+    // A directory at the recorded path is not a regular file.
+    mkdirSync(file);
+    assert.throws(() => assertExtensionIntegrity([{ path: file, sha256: recorded }]), (error: unknown) =>
+      error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE");
+
+    // A malformed recorded digest is refused before anything is hashed.
+    assert.throws(() => assertExtensionIntegrity([{ path: file, sha256: "nope" }]), (error: unknown) =>
+      error instanceof StoreError && /not a SHA-256/.test(error.message));
+    assert.deepEqual(verifiedPaths([{ path: "/a.js", sha256: recorded }, { path: "/b.js", sha256: recorded }]), ["/a.js", "/b.js"]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("the digest recorded at configuration load survives to the spawn boundary", () => {
+  const root = scratch("oma-integrity-flow-");
+  try {
+    const index = bundle(root);
+    const recorded = readConfigurationSource(index).roles["principal"]!.extensions;
+    assert.ok(recorded.length > 0, "the loader records at least the core extension");
+    for (const extension of recorded) assert.match(extension.sha256, /^[0-9a-f]{64}$/);
+
+    // The pairs the entrypoint forwards must keep both fields, not just the path.
+    const forwarded = recorded.map(extension => ({ path: extension.path, sha256: extension.sha256 }));
+    assertExtensionIntegrity(forwarded);
+
+    // The spawn paths are exactly the recorded ones, in the recorded order.
+    assert.deepEqual(verifiedPaths(forwarded), recorded.map(extension => extension.path));
+
+    // Tampering with the installed file after load refuses the start.
+    writeFileSync(forwarded[0]!.path, "export const tampered = 1;\n");
+    assert.throws(() => assertExtensionIntegrity(forwarded), (error: unknown) =>
+      error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("the spawn paths never pass the core extension twice", () => {
+  const paths = { piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" };
+  const argv = sessionArgv(paths, {
+    society: "demo", provider: "pi", model: "current",
+    extensions: [{ path: "/lib/core.js", sha256: "0".repeat(64) }, { path: "/lib/review.js", sha256: "1".repeat(64) }],
+  });
+  assert.equal(argv.filter(entry => entry === "/lib/core.js").length, 1);
+  assert.ok(argv.includes("/lib/review.js"));
 });

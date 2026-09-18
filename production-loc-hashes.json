@@ -1,6 +1,6 @@
 {
   "cloc": "2.08",
-  "manifest": "6a7097055e44397f3686d49c9f48469545c0c8a2847757f6a03ae57345f99730",
+  "manifest": "7c5b0c38c0b23c3f86a37062668de7b85352df095968e1a8380dd1372db21f36",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -284,7 +284,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "54a3790390d530894b44e51db04fb243b54519fd2e10c742b9483b5477325d6e"
+      "sha256": "2da4ffd537afb891eb7ee5ba1d286a21da6d41d15a62558d4600c4451dd8bbf3"
     },
     {
       "path": "src/entry/runner.ts",
@@ -544,7 +544,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "089e83db440e844fdb4620869b403db74c0c90fa7781035dfbe982e7d3bc4d60"
+      "sha256": "1cdbfd1cdd728df88b8b1096a493c579f21def02788c96cf5806ae6292dbd7b8"
     },
     {
       "path": "src/runtime/assets.ts",
@@ -559,8 +559,12 @@
       "sha256": "2031e34195a76d655448d893e8222928d4b12d34229da64a54ccab33bf0f12b3"
     },
     {
+      "path": "src/runtime/extension-integrity.ts",
+      "sha256": "f941811c1fb505e6b62c946ef3b067729150d386268dc1b3868b74145c1ced1a"
+    },
+    {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "c145873ac78747a255a23d7bbe5ea602fdf3fcf0e199fca6763047a713930aa1"
+      "sha256": "7bc01f94655fb0c2901cdafb726e0db04d7c88cb33896d20f4925e567358acb4"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -704,7 +708,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "f3b91d935b7084e7714e6f1bb95c7806e8fda186bca5839af6946c3645f9b750"
+      "sha256": "84728fec967db371318d0d072d24a26554611ab50a3c98b92c0b558ea4fb2aad"
     },
     {
       "path": "src/tui/sources/extensions.ts",

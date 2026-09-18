@@ -4,6 +4,19 @@
 
 ## 현재 source 판정
 
+### 2026-09-19 — extension digest를 spawn 직전에 재검증
+
+미구현 상태였던 MUST를 구현했다. `operations/README`는 "runner entry는 시작 직전에 기록된 SHA-256을 다시 확인한 뒤 core 및 role extension을 Pi에 `-e` 전달한다"고, TUI-010은 "선택한 항목의 SHA-256을 기록하고 실행 직전에 다시 확인한다"고 요구하지만, **재검증 코드가 어디에도 없었다**. digest는 config 로드 때 한 번 계산된 뒤 `src/runner.ts`에서 `.path`만 남기고 버려졌고, Principal 경로도 같았다.
+
+- `src/runtime/extension-integrity.ts`가 단일 owner다. 기록된 `{path, sha256}`를 spawn 직전에 다시 해싱해 비교하고, 불일치·삭제·정규 파일 아님·형식이 틀린 digest를 모두 `UNSUPPORTED_PROFILE`로 기동 거절한다. "그 extension만 빼고 계속"하는 경로는 없다. role의 tool 표면은 host가 승인한 것의 일부이기 때문이다.
+- 파일은 한 번 열어 그 descriptor에서 해싱한다. stat과 read 사이에 경로가 바뀌어도 원본으로 해싱되지 않는다.
+- Resident 경로(`runner.ts` → `pi-adapter.ts`)와 Principal 경로(`entry/oma.ts` → `tui/session.ts`) 양쪽 모두에 적용했다. core extension도 기록 목록에 포함해 검증하되 argv에는 두 번 전달하지 않는다.
+
+**범위는 정직하게 좁다.** 이것은 config 로드와 spawn 사이의 창을 닫을 뿐이다. 검증 직후 Pi가 파일을 여는 사이에 같은 UID가 파일을 바꾸는 경합은 막지 못하며, deployment manifest digest나 Pi executable 승인을 대신하지도 않는다. 자산 식별이지 containment가 아니다. `operations/README`가 이미 같은 한계를 적고 있다.
+
+검증: `npm test` **987/987 PASS**, `check:architecture` 0 findings, `node scripts/loc.mjs` **188 files / 17,966 code LOC**. T104를 test-matrix에 추가했고 회귀 3건이 `test/tui-integration-defects.test.ts`에 있다. 경계 test 2건의 assertion을 정정했는데, 주석의 요구사항 ID(`TUI-010`)를 경로 참조로 오인하는 false positive였다. 완화가 아니라 실제 참조 구문만 보도록 좁힌 것이다.
+
+
 ### 2026-09-19 — refactor 종료: contract 역의존 0, 통합 결함 4건 수정
 
 **Contract 역의존 제거 (완료).** `contract-direction-plan.json`의 네 alias를 모두 없앴고 `currentFrozenContractAliases`는 0이다.
@@ -143,7 +156,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **187 files / 17,920 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **188 files / 17,966 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

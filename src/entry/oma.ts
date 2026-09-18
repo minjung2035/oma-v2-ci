@@ -114,8 +114,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // extensions and tool surface come from the configuration, not from defaults.
   const principalRole = loadConfiguration(configPath).roles[settings.config.principalProfile];
   const roleExtensions = (principalRole?.extensions ?? [])
-    .map(extension => extension.path)
-    .filter(extension => extension !== coreExtension);
+    .map(extension => ({ path: extension.path, sha256: extension.sha256 }));
   const roleSurface = principalRole?.toolSurface ?? null;
   try {
     if (!model) throw new StoreError("UNSUPPORTED_PROFILE", `principal model profile ${modelName} is not declared`);

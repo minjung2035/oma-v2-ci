@@ -293,7 +293,8 @@ test("TUI-012: the newest incarnation endpoint is preferred and a missing one is
 test("T92/TUI-004,014: the Principal session runs Pi in RPC mode with discovery switched off", () => {
   const argv = sessionArgv(
     { piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
-    { society: "demo", provider: "pi", model: "current", extensions: ["/lib/core.js", "/lib/review.js"] },
+    { society: "demo", provider: "pi", model: "current",
+      extensions: [{ path: "/lib/core.js", sha256: "0".repeat(64) }, { path: "/lib/review.js", sha256: "1".repeat(64) }] },
   );
   assert.equal(argv[0], "--mode");
   assert.equal(argv[1], "rpc");

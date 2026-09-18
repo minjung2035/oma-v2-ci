@@ -137,6 +137,7 @@ src/runner.ts
 src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
 src/runtime/deployment-manifest.ts
+src/runtime/extension-integrity.ts
 src/runtime/pi-adapter.ts
 src/runtime/pi-rpc.ts
 src/runtime/process-lock.ts

@@ -128,9 +128,10 @@ export class RunnerModule {
         model: this.profile.model.model,
         prompt: this.profile.settings?.prompt ?? "",
         workspaceBytes: this.profile.workspaceBytes!,
+        // The recorded {path, sha256} pairs travel intact to the spawn site,
+        // including the core extension so its digest is re-checked too.
         extensions: (this.profile.settings?.extensions ?? [])
-          .map((extension) => extension.path)
-          .filter((extension) => extension !== coreExtension),
+          .map((extension) => ({ path: extension.path, sha256: extension.sha256 })),
         ...(this.profile.settings?.toolSurface
           ? { toolSurface: encodeToolSurfacePlan(this.profile.settings.toolSurface) }
           : {}),

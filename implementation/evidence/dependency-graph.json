@@ -140,6 +140,7 @@
   "src/runtime/assets.ts",
   "src/runtime/broker-lifetime.ts",
   "src/runtime/deployment-manifest.ts",
+  "src/runtime/extension-integrity.ts",
   "src/runtime/pi-adapter.ts",
   "src/runtime/pi-rpc.ts",
   "src/runtime/process-lock.ts",
@@ -1370,7 +1371,7 @@
     "src/runner.ts",
     "src/sandbox.ts"
    ],
-   "files": 20
+   "files": 21
   },
   {
    "index": 5,
@@ -1386,8 +1387,8 @@
    "files": 37
   }
  ],
- "files": 188,
- "runtimeEdges": 687,
+ "files": 189,
+ "runtimeEdges": 690,
  "typeOnlyEdges": 293,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 205,
@@ -1396,14 +1397,14 @@
   "L3-workflow -> L1-kernel": 160,
   "L3-workflow -> L2-facts": 12,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 59,
+  "L4-orchestration -> L1-kernel": 60,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
-  "L4-orchestration -> L4-orchestration": 20,
+  "L4-orchestration -> L4-orchestration": 21,
   "L5-entry -> L1-kernel": 53,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
-  "L5-entry -> L4-orchestration": 9,
+  "L5-entry -> L4-orchestration": 10,
   "L5-entry -> L5-entry": 65
  },
  "upwardTypeOnlyEdges": [
@@ -1423,7 +1424,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 101,
+  "src/domain/errors.ts": 102,
   "src/domain/identifiers.ts": 32,
   "src/ids.ts": 27,
   "src/storage/durable-fs.ts": 21,
@@ -1461,8 +1462,8 @@
   "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 3,
-  "node:crypto": 18,
-  "node:fs": 44,
+  "node:crypto": 19,
+  "node:fs": 45,
   "node:net": 3,
   "node:os": 2,
   "node:path": 51,

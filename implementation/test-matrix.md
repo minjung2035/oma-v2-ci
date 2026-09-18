@@ -115,6 +115,7 @@
 | T100 / TSP-002,004 | role 파일의 투영 선언과 잘못된 선언 → config 로드 → 정상은 검증된 plan으로 보존, cycle·미지 필드는 로드 시점에 `INVALID_REQUEST`; plan은 전송 인코딩을 왕복해도 동일 |
 | T101 / TSP-005,008 | defaultMode DIRECT/DISABLED와 등록된 tool 집합 → 초기 활성 계산 → disabled/grouped 비활성, root group 활성, 미지정 tool은 defaultMode를 따름, OMA 소유 tool은 disabled 지정에도 유지 |
 | T102 / TSP-006 | 활성 집합과 group 직계 자식 → group 열기 반복 → 합집합만 증가하고 재실행이 무변화; 다른 extension이 활성화한 tool 제거 0건 |
+| T104 / TUI-010 | 기록된 `{path, sha256}`를 가진 role → spawn 직전 재검증 → 내용이 바뀐 파일·사라진 파일·정규 파일 아닌 경로·형식이 틀린 digest는 모두 기동 거절; 일치하면 기록된 순서 그대로 `-e` 전달하고 core는 두 번 전달하지 않음 |
 | T103 / TSP-006,007,010 | 손상·형식 불일치 plan과 core extension source → 적용 및 정적 검사 → OMA 소유 tool만 남기고 fail closed; 투영 경로에 자식 handler 실행·동적 import·require 0건 |
 
 **MUST [TEST-003]** default core에서 T01–T74 및 T77을 적용하고, T75/T76은 해당 optional 활성 시 필수다. S-03 등 미결정 gate 때문에 test oracle의 version-specific 부분을 완성할 수 없으면 test를 skip해서 release 통과로 계산하지 않는다.

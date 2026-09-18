@@ -7,6 +7,7 @@
  */
 import { spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/async.js";
 import { PiRpcClient, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
+import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 
 export interface SessionPaths {
   readonly piCommand: string;
@@ -20,9 +21,11 @@ export interface SessionProfile {
   readonly society: string;
   readonly provider: string;
   readonly model: string;
-  /** Absolute paths of the Principal role's extensions, host-verified before
-   * start. The core extension is always passed first and is not repeated here. */
-  readonly extensions: readonly string[];
+  /** The Principal role's recorded extensions. The digest travels with the path
+   * so it can be re-checked immediately before spawn, exactly as the Resident
+   * path does. The core extension may appear here for verification; argv never
+   * passes it twice. */
+  readonly extensions: readonly VerifiedExtension[];
   /** TSP-005: the Principal role's validated tool surface plan, encoded for the
    * core extension. Absent means the role shows every registered tool. */
   readonly toolSurface?: string | undefined;
@@ -50,7 +53,7 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
     "--name", `oma-${profile.society}-principal`,
     "-e", paths.coreExtension,
   ];
-  for (const extension of profile.extensions)
+  for (const extension of verifiedPaths(profile.extensions))
     if (extension !== paths.coreExtension) args.push("-e", extension);
   if (!(profile.provider === "pi" && profile.model === "current"))
     args.push("--model", `${profile.provider}/${profile.model}`);
@@ -129,6 +132,9 @@ export class PrincipalSession {
   }
 
   static start(paths: SessionPaths, profile: SessionProfile, limits: PiRpcLimits, env: Readonly<Record<string, string>>, sink: SessionSink): PrincipalSession {
+    // TUI-010: the digests recorded for this role are checked again here, at the
+    // last moment before the file is handed to Pi.
+    assertExtensionIntegrity(profile.extensions);
     const child = spawnOwnedRpc(paths.piCommand, sessionArgv(paths, profile), paths.workspace, sessionEnv(env, profile));
     return new PrincipalSession(child, limits, sink);
   }
