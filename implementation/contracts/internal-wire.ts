@@ -39,14 +39,4 @@ export type InternalResponse<M extends keyof InternalMethods = keyof InternalMet
 
 export type Notification = { v: 1; event: 'mail_available' | 'run_revoked' };
 
-export interface InferenceStart {
-  v: 1; stream: 'inference'; request: string; profile: string;
-  codecRevision: string; payload: BlobDescriptor;
-  // SPIKE [S-04]: Payload media type/schema needs a verified Pi provider codec;
-  // Only application/vnd.oma.provider-v1 is permitted here; no arbitrary HTTP.
-}
 
-export interface InferenceEvent {
-  v: 1; request: string; sequence: number;
-  event: 'data' | 'end' | 'error'; data?: Json; error?: Failure;
-}

@@ -6,7 +6,6 @@ import { join } from "node:path";
 import type { AuthContext, Capability, HostConfigV1 } from "../implementation/contracts.js";
 import { Store, StoreError } from "../src/store.js";
 import { LineageSnapshot, assertCreateCapacity } from "../src/domain/lineage.js";
-import { sumUsage, permitsReservation } from "../src/domain/usage-budget.js";
 import { assertActorIdentity, assertCurrentActor, currentAuthorityGuard, capabilitiesOf } from "../src/authority.js";
 import { createChildSpecResolver } from "../src/config/policy.js";
 import { resolveChildSpec } from "../src/domain/child-policy.js";
@@ -45,27 +44,6 @@ test("R13: deep and wide trees have no invented depth or argument-count policy",
   assert.equal(wide.descendants("root", false).length, 10000);
   assert.equal(wide.isDescendant("root", "root"), false);
   assert.equal(wide.isDescendant("root", "root", true), true);
-});
-
-test("R13: every resident desired state counts; budgets include all ancestors and unknown commitments", () => {
-  const rows = [makeValidAgent("principal"), makeValidAgent("alice", { createdBy: "principal" }),
-    makeValidAgent("bob", { createdBy: "alice", desired: "stopped" }),
-    makeValidAgent("carol", { createdBy: "alice", desired: "retired" }),
-    makeValidAgent("dave", { createdBy: "bob", desired: "provisioning" })];
-  const graph = new LineageSnapshot(rows);
-  assert.throws(() => assertCreateCapacity(graph, "bob", { societyAgents: 4, lineageAgents: 100 }), code("QUOTA_EXCEEDED"));
-  assert.throws(() => assertCreateCapacity(graph, "bob", { societyAgents: 5, lineageAgents: 3 }), code("QUOTA_EXCEEDED"));
-  assert.doesNotThrow(() => assertCreateCapacity(graph, "bob", { societyAgents: 5, lineageAgents: 4 }));
-  const usage = [
-    { actor: "alice", outcome: "completed" as const, reservedUnits: 10, reportedUnits: 2 },
-    { actor: "bob", outcome: "unknown" as const, reservedUnits: 4, reportedUnits: null },
-    { actor: "principal", outcome: "reserved" as const, reservedUnits: 1, reportedUnits: null },
-  ];
-  assert.equal(sumUsage(graph, usage, "alice"), 6);
-  assert.equal(sumUsage(graph, usage, null), 7);
-  assert.equal(sumUsage(graph, usage, null, true), 6);
-  assert.equal(permitsReservation(graph, usage, { societyUnits: 20, principalReservedUnits: 2, lineageUnits: 7 }, "dave", 1, false), false,
-    "creating a fresh grandchild cannot erase the principal ancestor's commitment");
 });
 
 test("R13: two candidates cannot consume the same final society slot", async () => {

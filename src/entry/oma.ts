@@ -149,6 +149,7 @@ async function main(argv: readonly string[]): Promise<void> {
   const roleExtensions = (principalRole?.extensions ?? [])
     .map(extension => ({ path: extension.path, sha256: extension.sha256 }));
   const roleSurface = principalRole?.toolSurface ?? null;
+  const rolePrompt = principalRole?.prompt ?? "";
   try {
     if (!model) throw new StoreError("UNSUPPORTED_PROFILE", `principal model profile ${modelName} is not declared`);
     session = PrincipalSession.start(
@@ -156,6 +157,7 @@ async function main(argv: readonly string[]): Promise<void> {
         coreExtension, sessionDir: join(stateRoot, "principal", "private", "sessions"),
         workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private") },
       { society, provider: model.provider, model: model.model, extensions: roleExtensions,
+        ...(rolePrompt.length > 0 ? { prompt: rolePrompt } : {}),
         ...(roleSurface === null ? {} : { toolSurface: encodeToolSurfacePlan(roleSurface) }) },
       limitsOf(settings.config.limits),
       { HOME: join(stateRoot, "principal", "private"), PATH: "/usr/bin:/bin" },

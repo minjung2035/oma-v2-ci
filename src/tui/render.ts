@@ -6,47 +6,39 @@ import {
   CATEGORIES, categoryOf, cursorOf,
   type ConfigField, type PanelData, type State, type ApplyScope,
 } from "./model.js";
+import { PANEL_BOUNDS } from "./limits.js";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
-/** Terminal cells, not code units. Korean labels are double width, so a naive
- * length would misalign every column in the panel.
+/** Measurement comes from the engine's terminal library, layout does not.
+ *
+ * `visibleWidth` is grapheme-aware, so it gets ZWJ emoji, skin-tone sequences
+ * and combining marks right where a hand-rolled code-point table silently
+ * misaligns every column that follows. That is pure arithmetic and is worth
+ * sharing.
+ *
+ * Fitting and wrapping stay here. The engine's versions carry its own
+ * presentation choices, including ANSI styling it emits around a cut, and this
+ * product owns its layout. Borrowing the arithmetic must not import a design.
  */
-export function cellWidth(text: string): number {
-  let width = 0;
-  for (const character of text) {
-    const code = character.codePointAt(0)!;
-    if (code < 0x20 || (code >= 0x7f && code < 0xa0)) continue;
-    width += isWide(code) ? 2 : 1;
-  }
-  return width;
-}
+export const cellWidth = visibleWidth;
 
-function isWide(code: number): boolean {
-  return (
-    (code >= 0x1100 && code <= 0x115f) ||
-    (code >= 0x2e80 && code <= 0x303e) ||
-    (code >= 0x3041 && code <= 0x33ff) ||
-    (code >= 0x3400 && code <= 0x4dbf) ||
-    (code >= 0x4e00 && code <= 0x9fff) ||
-    (code >= 0xa000 && code <= 0xa4cf) ||
-    (code >= 0xac00 && code <= 0xd7a3) ||
-    (code >= 0xf900 && code <= 0xfaff) ||
-    (code >= 0xfe30 && code <= 0xfe6f) ||
-    (code >= 0xff00 && code <= 0xff60) ||
-    (code >= 0xffe0 && code <= 0xffe6) ||
-    (code >= 0x1f300 && code <= 0x1f64f) ||
-    (code >= 0x20000 && code <= 0x3fffd)
-  );
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** Iterating graphemes rather than code points is what keeps a cut from
+ * splitting an emoji sequence in half. */
+function clusters(text: string): string[] {
+  return [...graphemes.segment(text)].map(entry => entry.segment);
 }
 
 export function fit(text: string, width: number): string {
   if (width <= 0) return "";
   let out = "";
   let used = 0;
-  for (const character of text) {
-    const size = cellWidth(character);
+  for (const cluster of clusters(text)) {
+    const size = cellWidth(cluster);
     if (size === 0) continue;
     if (used + size > width) return out;
-    out += character;
+    out += cluster;
     used += size;
   }
   return out;
@@ -61,15 +53,17 @@ export function wrap(text: string, width: number): string[] {
   if (width <= 0) return [];
   const lines: string[] = [];
   for (const paragraph of text.split("\n")) {
-    let rest = paragraph;
-    if (rest.length === 0) { lines.push(""); continue; }
-    while (cellWidth(rest) > width) {
-      const head = fit(rest, width);
-      if (head.length === 0) break;
-      lines.push(head);
-      rest = rest.slice(head.length);
+    if (paragraph.length === 0) { lines.push(""); continue; }
+    let line = "";
+    let used = 0;
+    for (const cluster of clusters(paragraph)) {
+      const size = cellWidth(cluster);
+      if (size === 0) continue;
+      if (used + size > width) { lines.push(line); line = ""; used = 0; }
+      line += cluster;
+      used += size;
     }
-    lines.push(rest);
+    lines.push(line);
   }
   return lines;
 }
@@ -141,7 +135,8 @@ function rowsFor(input: ViewInput): string[] {
   const { state, data, columns } = input;
   const category = categoryOf(state);
   const selected = cursorOf(state, data);
-  const labelWidth = Math.max(10, Math.min(28, Math.floor(columns / 2)));
+  const labelWidth = Math.max(PANEL_BOUNDS.minLabelColumn.value,
+    Math.min(PANEL_BOUNDS.labelColumn.value, Math.floor(columns / 2)));
   if (category === "dashboard") {
     // Label column follows the longest real label so a long unknown reason is
     // not clipped by padding that nothing uses.
@@ -151,7 +146,7 @@ function rowsFor(input: ViewInput): string[] {
   if (category === "config")
     return data.config.map((field, index) => {
       const marker = index === selected ? ">" : " ";
-      const value = pad(fieldValue(field, state), 24);
+      const value = pad(fieldValue(field, state), PANEL_BOUNDS.valueColumn.value);
       const scope = field.kind === "link" ? "" : applyLabel(field.apply);
       return `${marker} ${pad(field.label, labelWidth)}${value}${scope}`;
     });
@@ -159,7 +154,7 @@ function rowsFor(input: ViewInput): string[] {
   return data.mail.map((row, index) => {
     const marker = index === selected ? ">" : " ";
     const flag = row.unread ? "●" : " ";
-    return `${marker}${flag} ${pad(row.from, 14)}${pad(row.kind, 12)}${row.subject}`;
+    return `${marker}${flag} ${pad(row.from, PANEL_BOUNDS.senderColumn.value)}${pad(row.kind, PANEL_BOUNDS.kindColumn.value)}${row.subject}`;
   });
 }
 
@@ -173,7 +168,8 @@ function extensionsScreen(input: ViewInput): string[] {
   // still leaves room for both role columns.
   const longest = data.extensions.reduce((width, extension) =>
     Math.max(width, cellWidth(labelOf(extension.id, extension.locked))), 0);
-  const nameWidth = Math.max(12, Math.min(longest + 2, Math.max(12, columns - 26)));
+  const nameWidth = Math.max(PANEL_BOUNDS.minNameColumn.value,
+    Math.min(longest + 2, Math.max(PANEL_BOUNDS.minNameColumn.value, columns - PANEL_BOUNDS.roleColumns.value)));
   const lines = ["EXTENSIONS", "", `  ${pad("", nameWidth)}Principal   Workers`, ""];
   data.extensions.forEach((extension, index) => {
     const marker = index === row ? ">" : " ";

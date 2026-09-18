@@ -431,5 +431,21 @@
       "test/pi-runtime.test.ts#T105",
       "test/pi-runtime.test.ts#T106"
     ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-020"
+    ],
+    "owner": "src/tui/render.ts#cellWidth",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/render.ts#cellWidth"
+    ],
+    "negativeTests": [
+      "test/surface-consistency.test.ts#T107"
+    ]
   }
 ]

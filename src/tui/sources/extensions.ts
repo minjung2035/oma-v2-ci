@@ -13,6 +13,7 @@ import { StoreError } from "../../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../../domain/deployment.js";
 import { replaceDerivedFile } from "../../storage/durable-fs.js";
 import type { ExtensionRow } from "../model.js";
+import { READ_BOUNDS } from "../limits.js";
 
 export const CORE_EXTENSION = DEPLOYMENT_LAYOUT.extension;
 
@@ -49,7 +50,7 @@ function readJson(path: string): Record<string, unknown> {
 function scanLibdir(libdir: string): readonly string[] {
   const found: string[] = [];
   const walk = (directory: string, depth: number): void => {
-    if (depth > 3) return;
+    if (depth > READ_BOUNDS.extensionScanDepth.value) return;
     let entries: readonly string[];
     try { entries = readdirSync(directory); } catch { return; }
     for (const entry of entries) {
@@ -153,7 +154,8 @@ export function toggleExtension(context: ExtensionContext, id: string, role: "pr
     throw new StoreError("INVALID_REQUEST", `extension 파일을 읽을 수 없습니다: ${id}`);
   const available = context.rows.map(row => row.id);
   const entries = nextEntries(target.extensions, available, id, enabled);
-  if (entries.length > 16) throw new StoreError("LIMIT_EXCEEDED", "role당 extension은 최대 16개입니다");
+  if (entries.length > READ_BOUNDS.roleExtensions.value)
+    throw new StoreError("LIMIT_EXCEEDED", `role당 extension은 최대 ${READ_BOUNDS.roleExtensions.value}개입니다`);
   // Re-read immediately before writing so a field this screen does not model
   // cannot be lost to a stale in-memory copy.
   let current: Record<string, unknown>;

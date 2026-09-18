@@ -3,6 +3,8 @@
  * Restoring the terminal is unconditional: a crash must not leave the user
  * without an echo.
  */
+import { TERMINAL_BOUNDS } from "./limits.js";
+
 export interface Terminal {
   readonly columns: number;
   readonly rows: number;
@@ -34,8 +36,8 @@ export function openTerminal(streams: TerminalStreams): Terminal {
   input.resume();
   output.write(ALT_ON + CURSOR_OFF + CLEAR);
   const terminal: Terminal = {
-    get columns() { return Math.max(20, output.columns ?? 80); },
-    get rows() { return Math.max(6, output.rows ?? 24); },
+    get columns() { return Math.max(TERMINAL_BOUNDS.minColumns.value, output.columns ?? TERMINAL_BOUNDS.assumedColumns.value); },
+    get rows() { return Math.max(TERMINAL_BOUNDS.minRows.value, output.rows ?? TERMINAL_BOUNDS.assumedRows.value); },
     draw(lines) {
       // Redraw only when something changed, so an idle TUI does not stream
       // escape sequences at the terminal.

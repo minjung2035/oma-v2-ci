@@ -16,7 +16,7 @@ oma
 
 Pi를 따로 설치할 필요는 없다. OMA는 자기 Pi 엔진을 함께 배포하고 그것만 실행하며, `PATH`의 Pi를 찾지 않는다. 사용자가 이미 Pi를 쓰고 있어도 서로 간섭하지 않는다. OMA가 띄우는 엔진은 자기 복사본이고, 설정·extension·session도 society state root 아래의 별도 디렉터리를 쓰기 때문에 사용자의 `~/.pi`를 읽지도 쓰지도 않는다.
 
-대화 화면이 기본이고 `Ctrl+X`로 Dashboard / Config / Mail 관리 화면을 연다. 설정은 값을 확정하는 즉시 저장되며 각 항목이 언제 적용되는지 화면에 표시한다. 자세한 계약은 [architecture.md](architecture.md) §23과 [implementation-spec.md](implementation-spec.md) §19에 있다.
+대화 화면이 기본이고 `Ctrl+X`로 Dashboard / Config / Mail 관리 화면을 연다. 설정은 값을 확정하는 즉시 저장되며 각 항목이 언제 적용되는지 화면에 표시한다. 자세한 계약은 [architecture.md](architecture.md) §23과 [implementation-spec.md](implementation-spec.md) §18에 있다.
 
 `oma`라는 이름은 두 곳에서 쓰인다. host에 설치되는 위 실행 파일은 사람이 쓰는 TUI이고, Resident sandbox 안의 동명 실행 파일은 모델이 쓰는 `send`/`submit`/`agent`/`status` CLI다. 서로 다른 바이너리이며 argv 파서·권한·소켓을 공유하지 않는다.
 
@@ -24,6 +24,7 @@ Pi를 따로 설치할 필요는 없다. OMA는 자기 Pi 엔진을 함께 배�
 
 | 목적 | 문서 |
 |---|---|
+| 무엇을 만들고 있는지 | [PRODUCT.md](PRODUCT.md) |
 | 수정 전에 지켜야 할 작업 규율 | [MAINTENANCE.md](MAINTENANCE.md) |
 | 최상위 아키텍처 계약 | [architecture.md](architecture.md) |
 | 구현 MUST/MUST NOT 계약 | [implementation-spec.md](implementation-spec.md) |

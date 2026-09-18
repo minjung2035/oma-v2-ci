@@ -8,6 +8,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { MailRow } from "../model.js";
+import { READ_BOUNDS } from "../limits.js";
 
 export interface MailboxPaths {
   readonly newDir: string;
@@ -19,7 +20,7 @@ export function principalMailbox(stateRoot: string): MailboxPaths {
   return Object.freeze({ newDir: join(base, "new"), curDir: join(base, "cur") });
 }
 
-const HEADER_LIMIT = 64 * 1024;
+const HEADER_LIMIT = READ_BOUNDS.mailHeaderBytes.value;
 
 function decodeWord(text: string): string {
   return text.replace(/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g, (whole, charset: string, encoding: string, payload: string) => {
@@ -110,6 +111,6 @@ export function unreadCount(paths: MailboxPaths): number {
   return listDir(paths.newDir).length;
 }
 
-export function readBody(path: string, limit = 256 * 1024): string | null {
+export function readBody(path: string, limit = READ_BOUNDS.mailBodyBytes.value): string | null {
   try { return parseMessage(readFileSync(path, "utf8").slice(0, limit)).body; } catch { return null; }
 }

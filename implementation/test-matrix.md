@@ -90,9 +90,16 @@
 | T76 / OPT-APPROVAL | profile 활성 fixture → tuple 변경/중복 actor/자식/위조/revoke → S-08 policy 정확 평가; 기본 build엔 commands/table 없음 |
 | T77 / INF,S-09 | 사전 고정 evaluation corpus → 3조건 반복 → 품질/비용/Principal tokens/전체 tokens/latency 각각 결과, 미달 숨김 없음 |
 
-## 제품 표면 acceptance (TUI)
+## 제품 표면 acceptance
 
-**MUST [TEST-008]** 아래 행은 [spec §19](../implementation-spec.md)의 TUI 요구에 대한 수용 계약이다. T78–T90은 tiered 확장이 예약한 대역이므로 제품 표면은 T91부터 사용한다. 이 행들은 TUI가 포함된 build에서 필수이며, 화면 렌더링 스냅샷 비교만으로 oracle을 대체하지 않는다.
+**MUST [TEST-008]** 아래 행은 [spec §18](../implementation-spec.md)의 제품 표면 요구와 [§19](../implementation-spec.md)의 tool 표면 투영 요구에 대한 수용 계약이다. T01–T77은 Core, T78–T90은 tiered 확장이 예약한 대역이므로 제품 표면은 **T91부터** 사용한다. 화면 렌더링 스냅샷 비교로 oracle을 대체하지 않는다.
+
+| 대역 | 범위 |
+|---|---|
+| T91–T98 | TUI 경계·화면·설정 쓰기 |
+| T99–T103 | Extension tool 표면 투영 |
+| T104–T106 | extension digest 재검증, 엔진 동봉, 설정 없는 기동 |
+| T107–T108 | 엔진 프리미티브 소유 경계, spawn 경로 대칭 |
 
 | ID / 요구 | Given → When → Then |
 |---|---|
@@ -104,21 +111,16 @@
 | T96 / TUI-007,008,009 | 각 Config 항목 변경 → 변경 직후 관찰 → 표시한 적용 시점과 실제 반영 시점 일치; `Initial workers` 변경 후 재시작에 agent 자동 생성·삭제 0건; 기존 Resident의 modelProfile 참조 불변; config 본문 변경 시 policy revision 갱신 |
 | T97 / TUI-010 | libdir 밖 경로·심볼릭 링크·변조된 extension 파일, core extension 해제 시도 → Extensions 화면 조작 → 모두 거절, 기록한 SHA-256과 실행 직전 값 불일치 시 기동 차단, 모델이 목록·선택에 영향 0건 |
 | T98 / TUI-011,012 | delivery flag fixture와 broker 미연결 상태 → Mail/Dashboard 표시 → unread는 기존 flag에서 파생하고 새 저장 0건, ACK가 승인·완료 의미로 표시되지 않음, unknown/disconnected가 running·0으로 표시되지 않고 관측 시각 표시 |
-
-## Extension tool 표면 투영 acceptance
-
-**MUST [TEST-009]** 아래 행은 [spec §20](../implementation-spec.md)의 TSP 요구에 대한 수용 계약이다. 투영을 선언한 role이 있는 build에서 필수다.
-
-| ID / 요구 | Given → When → Then |
-|---|---|
 | T99 / TSP-001,003 | 중첩 group·cycle·자기참조·중복 group·중복 소속·disabled member·direct와 grouped 동시 지정·이름 충돌·한도 초과 선언 → 투영 계산 → 정상 선언만 평탄화되고 나머지는 전부 거절; root는 명시값 또는 아무도 중첩하지 않은 group |
 | T100 / TSP-002,004 | role 파일의 투영 선언과 잘못된 선언 → config 로드 → 정상은 검증된 plan으로 보존, cycle·미지 필드는 로드 시점에 `INVALID_REQUEST`; plan은 전송 인코딩을 왕복해도 동일 |
 | T101 / TSP-005,008 | defaultMode DIRECT/DISABLED와 등록된 tool 집합 → 초기 활성 계산 → disabled/grouped 비활성, root group 활성, 미지정 tool은 defaultMode를 따름, OMA 소유 tool은 disabled 지정에도 유지 |
 | T102 / TSP-006 | 활성 집합과 group 직계 자식 → group 열기 반복 → 합집합만 증가하고 재실행이 무변화; 다른 extension이 활성화한 tool 제거 0건 |
-| T106 / TUI-017,019 | 설정 없는 빈 프로젝트 디렉터리 → `oma` 실행 → 초기화 명령 없이 society를 디렉터리에서 유도하고 실제 설정 파일 생성; 생성값은 bounded하고 Control Panel에서 수정 가능; Resident에 `code.integrate` 없음; 사용자 `~/.pi` 참조 0건 |
-| T105 / TUI-016,017,018 | Pi가 설치된 host와 엔진 없는 설치본 → OMA 기동 → 항상 동봉 엔진만 실행하고 `PATH`/`/usr/bin/pi`로 물러서지 않음; 엔진 없으면 `UNSUPPORTED_PROFILE`; 상대 경로·부재 pin 거절; 엔진에 OMA 소유 agent 디렉터리 지정, 사용자 `~/.pi` 접근 0건 |
-| T104 / TUI-010 | 기록된 `{path, sha256}`를 가진 role → spawn 직전 재검증 → 내용이 바뀐 파일·사라진 파일·정규 파일 아닌 경로·형식이 틀린 digest는 모두 기동 거절; 일치하면 기록된 순서 그대로 `-e` 전달하고 core는 두 번 전달하지 않음 |
 | T103 / TSP-006,007,010 | 손상·형식 불일치 plan과 core extension source → 적용 및 정적 검사 → OMA 소유 tool만 남기고 fail closed; 투영 경로에 자식 handler 실행·동적 import·require 0건 |
+| T104 / TUI-010 | 기록된 `{path, sha256}`를 가진 role → spawn 직전 재검증 → 내용이 바뀐 파일·사라진 파일·정규 파일 아닌 경로·형식이 틀린 digest는 모두 기동 거절; 일치하면 기록된 순서 그대로 `-e` 전달하고 core는 두 번 전달하지 않음 |
+| T105 / TUI-016,017,018 | Pi가 설치된 host와 엔진 없는 설치본 → OMA 기동 → 항상 동봉 엔진만 실행하고 `PATH`/`/usr/bin/pi`로 물러서지 않음; 엔진 없으면 `UNSUPPORTED_PROFILE`; 상대 경로·부재 pin 거절; 엔진에 OMA 소유 agent 디렉터리 지정, 사용자 `~/.pi` 접근 0건 |
+| T107 / TUI-020 | 제품 표면 source 전체 → 정적 검사 → 엔진 프리미티브 import는 선언된 소유자에서만 일어나고, 엔진의 절단·줄바꿈·화면 제어는 들여오지 않음; 선언되지 않은 bound·bare Error·비exhaustive closed union 0건 |
+| T108 / TUI-004,017 | Resident와 Principal의 spawn 경로 → 각각이 엔진에 넘기는 값 비교 → extensions(digest 포함)·projection·role prompt·agent 디렉터리가 양쪽 동일; prompt 없는 role은 빈 flag를 넣지 않음 |
+| T106 / TUI-017,019 | 설정 없는 빈 프로젝트 디렉터리 → `oma` 실행 → 초기화 명령 없이 society를 디렉터리에서 유도하고 실제 설정 파일 생성; 생성값은 bounded하고 Control Panel에서 수정 가능; Resident에 `code.integrate` 없음; 사용자 `~/.pi` 참조 0건 |
 
 **MUST [TEST-003]** default core에서 T01–T74 및 T77을 적용하고, T75/T76은 해당 optional 활성 시 필수다. S-03 등 미결정 gate 때문에 test oracle의 version-specific 부분을 완성할 수 없으면 test를 skip해서 release 통과로 계산하지 않는다.
 

@@ -34,6 +34,10 @@ export interface SessionProfile {
   /** TSP-005: the Principal role's validated tool surface plan, encoded for the
    * core extension. Absent means the role shows every registered tool. */
   readonly toolSurface?: string | undefined;
+  /** The role's prompt, appended exactly as the Resident path appends it. A
+   * Principal that silently ran without its role prompt would behave unlike the
+   * configuration the operator wrote. */
+  readonly prompt?: string | undefined;
 }
 
 export interface SessionSink {
@@ -62,6 +66,8 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
     if (extension !== paths.coreExtension) args.push("-e", extension);
   if (!(profile.provider === "pi" && profile.model === "current"))
     args.push("--model", `${profile.provider}/${profile.model}`);
+  if (profile.prompt !== undefined && profile.prompt.length > 0)
+    args.push("--append-system-prompt", profile.prompt);
   return Object.freeze(args);
 }
 

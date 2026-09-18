@@ -7,15 +7,27 @@
 | 문서 | 역할 |
 |---|---|
 | [README](../README.md) | 저장소 진입점 |
+| [PRODUCT](../PRODUCT.md) | 무엇을 만들고 있는지와 그 이유. 규범이 아니라 의도 |
 | [MAINTENANCE](../MAINTENANCE.md) | AI/사람 공통 수정·리뷰 규율 |
 | [architecture](../architecture.md) | 최상위 architecture source of truth |
 | [implementation spec](../implementation-spec.md) | 구현 MUST/MUST NOT 계약 |
 | [implementation map](../implementation/README.md) | active implementation 계약과 machine-readable owner/evidence 지도 |
 | [HANDOFF](../HANDOFF.md) | 현재 브랜치에서 다음 작업자가 알아야 할 최소 상태 |
 | [validation](../implementation/validation.md) | current verification status와 실행 명령 |
-| [operations](../operations/README.md) | 역할별 model/prompt/extension 설정 |
+| [operations](../operations/README.md) | 역할별 model/prompt/extension 설정, 엔진 정책, tool 표면 투영 |
 
-충돌 시 README나 HANDOFF가 architecture/spec 의미를 덮어쓰지 않는다. Point-in-time 실행 결과는 validation 한 곳에만 기록한다.
+## 문서가 다루는 범위
+
+| 주제 | architecture | spec | acceptance |
+|---|---|---|---|
+| Core runtime | §§1–22 | §§1–17, §20 | T01–T77 |
+| tiered integration | §§12.5–12.8 | [integration-policy](../implementation/integration-policy.md) | T78–T90 |
+| 제품 표면·엔진 | §23.1–23.9, §§23.11–23.13 | §18 | T91–T98, T104–T106 |
+| tool 표면 투영 | §23.10 | §19 | T99–T103 |
+
+번호가 바뀌면 이 표부터 고친다. 절 번호를 본문 여러 곳에 중복 기입하지 않는다.
+
+PRODUCT는 의도를 소유하고 규범을 소유하지 않는다. 충돌 시 architecture/spec이 우선하며, PRODUCT와 규범이 어긋나면 둘 중 어느 쪽이 틀렸는지를 먼저 판단한다. 충돌 시 README나 HANDOFF가 architecture/spec 의미를 덮어쓰지 않는다. Point-in-time 실행 결과는 validation 한 곳에만 기록한다.
 
 ## implementation/의 원칙
 

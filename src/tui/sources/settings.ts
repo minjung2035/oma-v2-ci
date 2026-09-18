@@ -13,6 +13,7 @@ import { StoreError } from "../../domain/errors.js";
 import { loadConfig } from "../../config.js";
 import { replaceDerivedFile } from "../../storage/durable-fs.js";
 import type { ConfigField } from "../model.js";
+import { CONFIG_BOUNDS } from "../limits.js";
 
 export const PRINCIPAL_MODEL = "principal-model";
 export const WORKER_MODEL = "worker-model";
@@ -70,9 +71,9 @@ export function fieldsOf(config: HostConfigV1, workerProfile: string): readonly 
     Object.freeze({ kind: "choice" as const, id: WORKER_MODEL, label: "Worker model",
       value: workerModel, options: models, apply: "next-activation" as const }),
     Object.freeze({ kind: "number" as const, id: WORKER_LIMIT, label: "Worker limit",
-      value: config.quota.societyAgents, min: 1, max: 4096, apply: "restart" as const }),
+      value: config.quota.societyAgents, min: 1, max: CONFIG_BOUNDS.maxWorkerLimit.value, apply: "restart" as const }),
     Object.freeze({ kind: "number" as const, id: INITIAL_WORKERS, label: "Initial workers",
-      value: config.initialResidents.length, min: 0, max: 64, apply: "bootstrap-only" as const }),
+      value: config.initialResidents.length, min: 0, max: CONFIG_BOUNDS.maxInitialWorkers.value, apply: "bootstrap-only" as const }),
     Object.freeze({ kind: "choice" as const, id: WORKER_PROFILE, label: "Worker profile",
       value: workerProfile, options: residentProfiles(config), apply: "next-activation" as const }),
     Object.freeze({ kind: "link" as const, id: EXTENSIONS, label: "Extensions" }),
@@ -153,7 +154,7 @@ function withSeedCount(config: HostConfigV1, count: number, profile: string): Ho
   const grown = [...current];
   let ordinal = 1;
   while (grown.length < count) {
-    if (ordinal > 4096) throw new StoreError("INVALID_REQUEST", "no free bootstrap seed name");
+    if (ordinal > CONFIG_BOUNDS.seedNameAttempts.value) throw new StoreError("INVALID_REQUEST", "no free bootstrap seed name");
     const name = `worker-${ordinal}`;
     ordinal += 1;
     if (used.has(name)) continue;
@@ -239,11 +240,36 @@ function roleFileOf(layout: Extract<ConfigLayout, { kind: "operations" }>, profi
 
 function patchRoleModel(layout: Extract<ConfigLayout, { kind: "operations" }>, profile: string, model: string): void {
   patchFile(roleFileOf(layout, profile), current => {
-    const agentProfile = current.agentProfile;
-    if (agentProfile === null || typeof agentProfile !== "object" || Array.isArray(agentProfile))
-      throw new StoreError("STORE_CORRUPT", `role "${profile}" has no agentProfile object`);
-    return { ...current, agentProfile: { ...(agentProfile as Record<string, unknown>), modelProfile: model } };
+    return { ...current, agentProfile: { ...requireObject(current.agentProfile, `role "${profile}" agentProfile`), modelProfile: model } };
   });
+}
+
+/** Where each field actually lives in a split bundle. Declared once so the
+ * routing cannot drift from the transform above; adding a field without a
+ * placement fails to compile.
+ */
+type FieldPlacement =
+  | { readonly at: "role"; readonly profile: (settings: Settings) => string }
+  | { readonly at: "host"; readonly patch: (current: Record<string, unknown>, applied: HostConfigV1, value: string | number) => Record<string, unknown> };
+
+const PLACEMENT: Readonly<Record<string, FieldPlacement>> = Object.freeze({
+  [PRINCIPAL_MODEL]: { at: "role", profile: settings => settings.config.principalProfile },
+  [WORKER_MODEL]: { at: "role", profile: settings => settings.workerProfile },
+  [WORKER_LIMIT]: {
+    at: "host",
+    patch: (current, _applied, value) => ({
+      ...current,
+      quota: { ...requireObject(current.quota, "quota"), societyAgents: value },
+    }),
+  },
+  [INITIAL_WORKERS]: { at: "host", patch: (current, applied) => ({ ...current, initialResidents: applied.initialResidents }) },
+  [WORKER_PROFILE]: { at: "host", patch: (current, applied) => ({ ...current, initialResidents: applied.initialResidents }) },
+});
+
+function requireObject(value: unknown, what: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new StoreError("STORE_CORRUPT", `host file has no ${what} object`);
+  return value as Record<string, unknown>;
 }
 
 /** Writes one confirmed Config value to whichever file actually owns it, then
@@ -258,32 +284,13 @@ export function commitField(settings: Settings, field: string, value: string | n
     return;
   }
   const layout = settings.layout;
-  switch (field) {
-    case PRINCIPAL_MODEL:
-      patchRoleModel(layout, settings.config.principalProfile, String(value));
-      break;
-    case WORKER_MODEL:
-      patchRoleModel(layout, settings.workerProfile, String(value));
-      break;
-    case WORKER_LIMIT:
-      patchFile(layout.host, current => {
-        const quota = current.quota;
-        if (quota === null || typeof quota !== "object" || Array.isArray(quota))
-          throw new StoreError("STORE_CORRUPT", "host file has no quota object");
-        return { ...current, quota: { ...(quota as Record<string, unknown>), societyAgents: value } };
-      });
-      break;
-    case INITIAL_WORKERS:
-    case WORKER_PROFILE:
-      patchFile(layout.host, current => ({ ...current, initialResidents: applied.initialResidents }));
-      break;
-    default:
-      throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
-  }
-  patchFile(layout.host, current => {
-    const integration = current.integration;
-    if (integration === null || typeof integration !== "object" || Array.isArray(integration))
-      throw new StoreError("STORE_CORRUPT", "host file has no integration object");
-    return { ...current, integration: { ...(integration as Record<string, unknown>), policyRevision: revision } };
-  });
+  const placement = PLACEMENT[field];
+  if (placement === undefined)
+    throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
+  if (placement.at === "role") patchRoleModel(layout, placement.profile(settings), String(value));
+  else patchFile(layout.host, current => placement.patch(current, applied, value));
+  patchFile(layout.host, current => ({
+    ...current,
+    integration: { ...requireObject(current.integration, "integration"), policyRevision: revision },
+  }));
 }

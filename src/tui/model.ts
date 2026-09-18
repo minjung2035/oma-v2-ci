@@ -7,6 +7,7 @@
  * and no separate save step here.
  */
 import type { Key } from "./keys.js";
+import { PANEL_BOUNDS } from "./limits.js";
 
 export type Category = "dashboard" | "config" | "mail";
 export const CATEGORIES: readonly Category[] = Object.freeze(["dashboard", "config", "mail"]);
@@ -192,7 +193,7 @@ function stepEdit(state: State, data: PanelData, key: Key): Step {
   }
   if (key.kind === "backspace")
     return { state: { ...state, edit: { kind: "number", field: edit.field, draft: edit.draft.slice(0, -1) } }, effects: [] };
-  if (key.kind === "char" && /^\d$/.test(key.value) && edit.draft.length < 9)
+  if (key.kind === "char" && /^\d$/.test(key.value) && edit.draft.length < PANEL_BOUNDS.numberDraftDigits.value)
     return { state: { ...state, edit: { kind: "number", field: edit.field, draft: edit.draft + key.value } }, effects: [] };
   return { state, effects: [] };
 }

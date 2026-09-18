@@ -1,7 +1,16 @@
-/** TUI-002: terminal key decoding only. This leaf owns no I/O, no process
- * state and no product policy; it turns bytes into the closed key vocabulary
- * that arch §23.4 fixes for Control Panel navigation.
+/** TUI-002: terminal key decoding.
+ *
+ * Splitting a read into tokens is this module's job, because only the product
+ * knows that an unrecognised escape report must be swallowed rather than typed
+ * into the prompt. Naming each token is the engine's job: `parseKey` already
+ * covers the control and navigation vocabulary, including sequences this
+ * product does not itself enumerate, so there is no second key table here.
+ *
+ * The typed `Key` union stays OMA's, because the pure state machine is written
+ * against it and a string id would push that decision into every caller.
  */
+import { parseKey } from "@earendil-works/pi-tui";
+
 export type Key =
   | { readonly kind: "char"; readonly value: string }
   | { readonly kind: "enter" }
@@ -15,25 +24,28 @@ export type Key =
   | { readonly kind: "interrupt" }
   | { readonly kind: "eof" };
 
-const CTRL_C = 0x03;
-const CTRL_D = 0x04;
-const CTRL_X = 0x18;
-const ESC = 0x1b;
-const LF = 0x0a;
-const CR = 0x0d;
-const DEL = 0x7f;
-const BACKSPACE = 0x08;
-
-const ARROWS: Readonly<Record<string, Key>> = Object.freeze({
-  A: { kind: "up" },
-  B: { kind: "down" },
-  C: { kind: "right" },
-  D: { kind: "left" },
+/** The engine's key ids this surface acts on. Anything else is deliberately
+ * ignored rather than guessed at.
+ */
+const ACTIONS: Readonly<Record<string, Key>> = Object.freeze({
+  up: { kind: "up" },
+  down: { kind: "down" },
+  left: { kind: "left" },
+  right: { kind: "right" },
+  enter: { kind: "enter" },
+  return: { kind: "enter" },
+  escape: { kind: "escape" },
+  esc: { kind: "escape" },
+  backspace: { kind: "backspace" },
+  "ctrl+x": { kind: "panel" },
+  "ctrl+c": { kind: "interrupt" },
+  "ctrl+d": { kind: "eof" },
 });
 
-/** A CSI sequence that is not one of the four arrows is consumed and dropped
- * rather than surfacing as text. Unknown terminal reports must not be typed
- * into the prompt.
+const ESC = 0x1b;
+
+/** A CSI sequence this product does not act on is consumed whole and dropped.
+ * Terminal reports must never reach the prompt as text.
  */
 function csiLength(bytes: Uint8Array, start: number): number {
   let index = start + 2;
@@ -45,6 +57,11 @@ function csiLength(bytes: Uint8Array, start: number): number {
   return 0;
 }
 
+function actionOf(token: string): Key | undefined {
+  const id = parseKey(token);
+  return id === undefined ? undefined : ACTIONS[id];
+}
+
 export function decodeKeys(chunk: Uint8Array): Key[] {
   const keys: Key[] = [];
   const decoder = new TextDecoder("utf-8", { fatal: false });
@@ -52,9 +69,13 @@ export function decodeKeys(chunk: Uint8Array): Key[] {
   let text: number[] = [];
   const flush = (): void => {
     if (text.length === 0) return;
-    const decoded = decoder.decode(Uint8Array.from(text));
-    for (const value of decoded) if (value >= " ") keys.push({ kind: "char", value });
+    for (const value of decoder.decode(Uint8Array.from(text)))
+      if (value >= " ") keys.push({ kind: "char", value });
     text = [];
+  };
+  const push = (token: string): void => {
+    const action = actionOf(token);
+    if (action) keys.push(action);
   };
   while (index < chunk.length) {
     const byte = chunk[index]!;
@@ -63,22 +84,20 @@ export function decodeKeys(chunk: Uint8Array): Key[] {
       if (index + 1 < chunk.length && chunk[index + 1] === 0x5b) {
         const length = csiLength(chunk, index);
         if (length === 0) return keys;
-        const final = String.fromCharCode(chunk[index + length - 1]!);
-        const arrow = length === 3 ? ARROWS[final] : undefined;
-        if (arrow) keys.push(arrow);
+        push(decoder.decode(chunk.subarray(index, index + length)));
         index += length;
         continue;
       }
-      keys.push({ kind: "escape" });
+      push(String.fromCharCode(ESC));
       index += 1;
       continue;
     }
-    if (byte === CTRL_X) { flush(); keys.push({ kind: "panel" }); index += 1; continue; }
-    if (byte === CTRL_C) { flush(); keys.push({ kind: "interrupt" }); index += 1; continue; }
-    if (byte === CTRL_D) { flush(); keys.push({ kind: "eof" }); index += 1; continue; }
-    if (byte === CR || byte === LF) { flush(); keys.push({ kind: "enter" }); index += 1; continue; }
-    if (byte === DEL || byte === BACKSPACE) { flush(); keys.push({ kind: "backspace" }); index += 1; continue; }
-    if (byte < 0x20) { flush(); index += 1; continue; }
+    if (byte < 0x20 || byte === 0x7f) {
+      flush();
+      push(String.fromCharCode(byte));
+      index += 1;
+      continue;
+    }
     text.push(byte);
     index += 1;
   }

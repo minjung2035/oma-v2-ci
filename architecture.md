@@ -809,22 +809,24 @@ method는 mail.send, mail.ack, route.follow, agent.create/start/stop, git.submit
 
 ### 13.3 inference의 실제 선
 
+inference는 **동봉 엔진이 소유한다.** OMA는 provider relay를 두지 않는다.
+
 ```text
-Pi의 OMA provider adapter
- → actor 전용 inference stream
- → broker가 incarnation/model/quota 확인
- → provider credential을 붙여 실제 API 요청
- → streaming events를 Pi로 전달
- → usage 및 취소 결과 기록
+Pi 엔진 (OMA가 동봉·실행)
+ → 엔진 자신의 credential/model 해석
+ → provider 요청
+ → 결과를 RPC로 OMA에 전달
 ```
 
-Resident에는 provider key가 없다. 모든 도구 실행은 sandbox 안에서 이뤄진다. 사용 가능한 외부 network는 Human이 설정한 proxy/cache profile로 제한한다.
+초기 설계는 broker가 credential을 붙여 provider에 직접 요청하는 relay였다. 실제로는 엔진이 그 일을 이미 하고 있었고, relay를 따로 만들지 않기로 선택했다. 엔진을 동봉하는 지금 구조에서 relay를 다시 만드는 것은 credential store·model catalogue·가격표·재시도를 두 벌 갖는 일이다.
 
-Principal의 inference도 기본적으로 같은 OMA provider adapter를 사용해 예산과 usage를 관측한다. private Human context는 provider 요청에 필요한 범위로 통과하지만 mail archive나 공개 journal에 저장하지 않는다. Principal의 도구와 Human UI 연결을 별개로 보호하는 이유다.
+바뀌지 않는 것은 다음이다. Resident에게는 provider key가 없다. 모든 도구 실행은 sandbox 안에서 이뤄진다. 사용 가능한 외부 network는 Human이 설정한 proxy/cache profile로 제한한다. Human private context는 provider 요청에 필요한 범위로 통과하지만 mail archive나 공개 journal에 저장하지 않는다.
 
-전역 budget과 생성 계통 quota를 함께 확인한다. Resident가 동료를 만들어 비용 한도를 새로 받지 못한다. inference slot은 단순 FIFO/round-robin으로 배분하며 업무 내용으로 중요도를 추론하지 않는다. Principal용 slot/budget reserve를 설정해 cheap-model 폭주 때문에 고급 판단이 영구 대기하지 않게 한다.
+엔진의 상태는 §23.3의 OMA 소유 agent 디렉터리에 있으므로, 사용자가 개인적으로 쓰는 엔진과 자격 증명·세션이 섞이지 않는다.
 
-제공자 연결이 끊겨 비용 발생 여부가 불명확하면 usage를 unknown으로 남기고 예약액을 보수적으로 처리한다. inference까지 exactly-once라고 약속하지 않는다. 새 추론을 했다는 이유로 이전 shell/tool 효과를 자동 replay하지 않는다.
+**대가를 명시한다.** OMA는 이제 multi-agent 비용 상한을 스스로 집행하지 않는다. 전역 budget과 생성 계통 quota를 broker가 예약·정산하던 설계는 사라졌고, 실제 과금 경계는 엔진과 provider 설정이 소유한다. 사회가 커질 때 비용을 OMA가 막아 준다고 말할 수 없다. 이것을 다시 OMA 계약으로 가져오려면 relay를 실제로 구현하는 별도 architecture 결정이 필요하다.
+
+inference까지 exactly-once라고 약속하지 않는다. 새 추론을 했다는 이유로 이전 shell/tool 효과를 자동 replay하지 않는다.
 
 ## 14. SQLite와 request idempotency의 범위
 
@@ -1230,6 +1232,7 @@ spike에서 Pi의 특정 기능이 부족하면 adapter를 고친다. 정확한 
 
 ### 23.1 제품 경계
 
+
 OMA는 Pi 위에 얹은 확장이 아니라 하나의 제품으로 제시한다. Pi는 내부 실행 엔진이고 공개 UX와 명령 namespace는 OMA가 소유한다.
 
 ```text
@@ -1245,6 +1248,7 @@ Pi의 기능을 이름만 바꿔 노출하지 않는다. `pi config → oma conf
 
 ### 23.2 두 개의 `oma`
 
+
 `oma`라는 이름은 두 곳에서 쓰이며 **서로 다른 실행 파일**이다. 이름을 통일하는 것이 제품 목표이므로 개명하지 않고 바이너리를 분리한다.
 
 | 위치 | 사용자 | 표면 |
@@ -1254,7 +1258,27 @@ Pi의 기능을 이름만 바꿔 노출하지 않는다. `pi config → oma conf
 
 두 진입점은 argv 파서·권한·연결 소켓을 공유하지 않는다. host TUI 코드는 sandbox rootfs에 넣지 않고 §16의 mount 목록에도 추가하지 않는다. 공유 가능한 것은 frame codec과 transport 같은 부작용 없는 leaf뿐이다. 모델이 `oma`의 도움말을 읽어도 TUI나 Control Panel을 발견할 수 없어야 한다.
 
-### 23.3 Principal session의 소유권
+### 23.3 엔진 동봉과 사용자 Pi와의 공존
+
+
+OMA는 Pi 엔진을 **함께 배포하고 소유한다**. 사용자가 Pi를 따로 설치하지 않아도 동작해야 하고, 이미 설치해 둔 Pi가 있다면 그것을 건드리지 않아야 한다. 두 요구는 같은 규칙에서 나온다.
+
+**PATH에서 Pi를 찾지 않는다.** 이 설치본이 함께 가져온 엔진만 실행한다. 엔진이 없는 설치본은 `/usr/bin/pi` 같은 대체 경로로 물러서지 않고 명시적으로 실패한다. 어떤 Pi가 실행됐는지 모르는 상태가 조용히 성립하지 않게 하기 위해서다.
+
+**엔진에는 OMA가 소유한 agent 디렉터리를 준다.** Pi는 기본적으로 `~/.pi` 아래에서 설정·extension·session을 읽는데, 그대로 두면 OMA와 사용자의 Pi가 같은 상태를 공유한다.
+
+OMA는 자기 state root 아래의 디렉터리를 지정해 둘을 분리한다. 동봉 엔진의 상태는 전부 그 안에 있고 사용자의 Pi 상태는 읽지도 쓰지도 않는다. 사용자가 Pi를 설치했는지 여부에 따라 동작이 달라지지 않는다.
+
+자격 증명과 모델 선택은 **동봉 엔진이 이미 갖고 있는 기능**이다. OMA가 그것을 자기 설정으로 다시 만들지 않는다. 사용자는 제품 안에서 한 번 설정하고, 그 결과는 이 디렉터리에 남는다.
+
+**설정 파일 없이 동작한다.** 초기화 명령을 요구하지 않는다. society 이름은 실행 디렉터리에서 유도하고, 설정이 없으면 보수적인 값으로 실제 설정 파일을 만든 뒤 계속한다. 그 값은 임의로 무제한이 되지 않으며 전부 Control Panel에서 보이고 고칠 수 있다. 프로젝트마다 사용자가 준비 작업을 하게 만들지 않는 것이 목적이다.
+
+Pi는 **수정하지 않고** 동봉한다. OMA의 동작은 신뢰된 core extension에 있으며, 엔진 자체를 고쳐서 제품 동작을 만들지 않는다. 따라서 동봉한 엔진은 수정하지 않은 upstream 의존이며 production LOC 예산의 계산 대상이 아니다. 엔진을 고치기 시작하면 그 순간부터 계산 대상이 된다.
+
+운영자는 명시적으로 다른 엔진을 pin할 수 있다. 이는 의도적인 이탈이며 절대 경로여야 하고 존재하지 않으면 거절한다. pin하지 않은 기본 경로는 항상 동봉 엔진이다.
+
+### 23.4 Principal session의 소유권
+
 
 기존 §8.1은 Principal을 **이미 실행 중인 Human Pi session에 attach**하는 구조로 정했다. 이 절은 그것을 **OMA TUI가 Pi RPC session을 직접 소유**하는 구조로 바꾼다.
 
@@ -1271,7 +1295,15 @@ Principal의 model은 host가 허용한 model profile 집합 안에서 선택할
 
 선택은 host authority를 고쳐 쓰는 것이므로 **다음 Principal session부터** 적용하고 진행 중인 session의 model을 바꾸지 않는다. session 경계를 넘지 않는 per-request 전환은 Principal inference가 실제로 broker relay를 경유할 때만 성립하며, 그 경로는 attach credential과 frozen authority 검사의 개정을 함께 요구한다. 그때까지 선택 API만 먼저 만들어 구현된 것처럼 두지 않는다. 더 비싼 profile로의 전환은 예산 확대이므로 기존 quota 검사가 그대로 적용된다.
 
-### 23.4 TUI 구조와 조작
+### 23.5 Pi surface 은닉
+
+
+Pi의 built-in command나 UI가 OMA TUI 위로 직접 노출되지 않게 한다. 이는 사후에 가리는 작업이 아니라 **Pi를 RPC mode로만 실행한다**는 구현 제약으로 달성한다. `--mode rpc`에서는 OMA가 중계하지 않는 한 Pi의 대화형 표면이 존재하지 않는다.
+
+해당 기능이 OMA에 필요하면 Control Panel이나 OMA 자체 명령으로 대체한다. 한 제품 안에 Pi UI와 OMA UI가 동시에 존재해서는 안 된다. 오류 메시지·도움말·경로 표기도 OMA 기준으로 맞춘다.
+
+### 23.6 TUI 구조와 조작
+
 
 기본 화면은 일반 코딩 에이전트와 같은 대화 중심이다. 관리 기능을 대화 UI 안에 계속 추가하지 않는다.
 
@@ -1293,7 +1325,8 @@ Dashboard | Config | Mail
 
 별도 Save 단계나 dirty state를 만들지 않는다. 확정된 값이 곧 저장된 값이다. 편집 중 Esc는 변경 전 값으로 되돌린다.
 
-### 23.5 Dashboard
+### 23.7 Dashboard
+
 
 현재 상태를 빠르게 확인하는 화면이며 상세 관리 화면으로 들어가지 않는다.
 
@@ -1310,7 +1343,8 @@ Status           Ready
 
 표시값은 §17의 관측 규칙을 그대로 따른다. 각 수치는 관측 시각을 가지며, unknown이나 disconnected를 running이나 0으로 바꾸지 않는다. 비용이 확정되지 않은 inference는 unknown으로 남기므로 usage 요약도 확정분과 미확정분을 뭉개지 않는다. daemon에 연결하지 못하면 cached 값과 관측 시각을 함께 표시한다.
 
-### 23.6 Config와 적용 시점
+### 23.8 Config와 적용 시점
+
 
 Config는 자주 조정하는 항목만 노출한다. protocol limit, broker 내부 설정, DB 설정 같은 저수준 항목은 넣지 않는다.
 
@@ -1340,7 +1374,8 @@ Extensions               >
 
 config 본문이 바뀌면 policy revision을 새 값으로 갱신한다. 기존 accepted plan은 보존되고 outstanding integrate만 새 policy와 다시 대조한다.
 
-### 23.7 Extensions
+### 23.9 Extensions
+
 
 Extensions는 Config에서 한 단계 들어가는 예외적인 하위 화면이며 role별 적용 여부만 관리한다.
 
@@ -1361,63 +1396,8 @@ review                    [ ]         [x]
 
 extension이 제공하는 tool·hook·agent 기능은 활용하되, extension이 자체 command·shortcut·설정 UI를 제품 표면에 그대로 노출할지는 OMA가 결정한다. 사용자는 extension을 여러 개 설치했다는 사실이 아니라 OMA의 기능이 늘었다고 느껴야 한다.
 
-### 23.8 Mail
+### 23.10 Extension tool 표면 투영
 
-Mail은 멀티에이전트 활동을 Human이 확인하는 주 surface다. 초기 버전은 Principal 앞으로 온 메일의 inbox 중심이다.
-
-```text
-MAIL
-
-> worker-a   question    API 선택 필요
-  worker-b   result      구현 완료
-  worker-c   alert       테스트 실패
-```
-
-본문을 읽어야 하므로 상세 화면을 허용한다. 읽지 않음 표시는 **새 durable 상태가 아니라 기존 delivery 사실에서 파생**한다. §14.1의 여섯 표에 unread 컬럼이나 별도 표를 추가하지 않는다.
-
-ACK는 §5.4의 의미를 유지한다. 읽음·이해·동의·작업 완료가 아니라 수신자가 명시적으로 확인 의사를 보냈다는 사실뿐이다. UI 문구가 이 의미를 바꾸지 않는다.
-
-복잡한 메일 클라이언트로 발전시키지 않는다. 필요해지면 Unread / All / Sent 정도만 추가한다.
-
-### 23.9 Worker 노출 원칙
-
-초기 버전에는 Workers 탭을 만들지 않는다. Resident 상세 상태, incarnation, batch, 생성 계통을 항상 노출하지 않는다. 사용자는 주로 Principal과 상호작용하고, Resident 활동에서 사람이 알아야 할 내용은 Dashboard 요약과 Mail의 question/result/alert로 전달한다.
-
-제품 UI는 Resident를 `worker`로 부를 수 있다. 이는 표시 용어이며 wire·DB·persisted 표현에는 사용하지 않는다. 두 이름의 대응은 한 곳에서 정의하고 계층마다 다시 만들지 않는다.
-
-디버깅 목적의 상세 정보가 필요해지면 일반 UI가 아니라 별도 developer surface로 추가한다.
-
-### 23.10 Pi surface 은닉
-
-Pi의 built-in command나 UI가 OMA TUI 위로 직접 노출되지 않게 한다. 이는 사후에 가리는 작업이 아니라 **Pi를 RPC mode로만 실행한다**는 구현 제약으로 달성한다. `--mode rpc`에서는 OMA가 중계하지 않는 한 Pi의 대화형 표면이 존재하지 않는다.
-
-해당 기능이 OMA에 필요하면 Control Panel이나 OMA 자체 명령으로 대체한다. 한 제품 안에 Pi UI와 OMA UI가 동시에 존재해서는 안 된다. 오류 메시지·도움말·경로 표기도 OMA 기준으로 맞춘다.
-
-### 23.11 엔진 동봉과 사용자 Pi와의 공존
-
-OMA는 Pi 엔진을 **함께 배포하고 소유한다**. 사용자가 Pi를 따로 설치하지 않아도 동작해야 하고, 이미 설치해 둔 Pi가 있다면 그것을 건드리지 않아야 한다. 두 요구는 같은 규칙에서 나온다.
-
-**PATH에서 Pi를 찾지 않는다.** 이 설치본이 함께 가져온 엔진만 실행한다. 엔진이 없는 설치본은 `/usr/bin/pi` 같은 대체 경로로 물러서지 않고 명시적으로 실패한다. 어떤 Pi가 실행됐는지 모르는 상태가 조용히 성립하지 않게 하기 위해서다.
-
-**엔진에는 OMA가 소유한 agent 디렉터리를 준다.** Pi는 기본적으로 `~/.pi` 아래에서 설정·extension·session을 읽는데, 그대로 두면 OMA와 사용자의 Pi가 같은 상태를 공유한다.
-
-OMA는 자기 state root 아래의 디렉터리를 지정해 둘을 분리한다. 동봉 엔진의 상태는 전부 그 안에 있고 사용자의 Pi 상태는 읽지도 쓰지도 않는다. 사용자가 Pi를 설치했는지 여부에 따라 동작이 달라지지 않는다.
-
-자격 증명과 모델 선택은 **동봉 엔진이 이미 갖고 있는 기능**이다. OMA가 그것을 자기 설정으로 다시 만들지 않는다. 사용자는 제품 안에서 한 번 설정하고, 그 결과는 이 디렉터리에 남는다.
-
-**설정 파일 없이 동작한다.** 초기화 명령을 요구하지 않는다. society 이름은 실행 디렉터리에서 유도하고, 설정이 없으면 보수적인 값으로 실제 설정 파일을 만든 뒤 계속한다. 그 값은 임의로 무제한이 되지 않으며 전부 Control Panel에서 보이고 고칠 수 있다. 프로젝트마다 사용자가 준비 작업을 하게 만들지 않는 것이 목적이다.
-
-Pi는 **수정하지 않고** 동봉한다. OMA의 동작은 신뢰된 core extension에 있으며, 엔진 자체를 고쳐서 제품 동작을 만들지 않는다. 따라서 동봉한 엔진은 수정하지 않은 upstream 의존이며 production LOC 예산의 계산 대상이 아니다. 엔진을 고치기 시작하면 그 순간부터 계산 대상이 된다.
-
-운영자는 명시적으로 다른 엔진을 pin할 수 있다. 이는 의도적인 이탈이며 절대 경로여야 하고 존재하지 않으면 거절한다. pin하지 않은 기본 경로는 항상 동봉 엔진이다.
-
-### 23.12 이 변경이 바꾸지 않는 것
-
-단일 broker와 SQLite writer, 동기 transaction, 여섯 durable entity, immutable accepted evidence, explicit unknown, normal과 recovery의 분리, effect 직전 authority 재확인, bounded effect를 그대로 유지한다.
-
-TUI는 새 daemon·durable entity·effect queue·model-facing subcommand가 아니다. 읽기와 표시는 기존 관측 경로를 쓰고, 변경은 기존 mutation과 host config 경계를 쓴다. 제품 표면을 위해 wire·DB·persisted v1 의미를 바꾸지 않는다.
-
-### 23.13 Extension tool 표면 투영
 
 Role에 extension을 더할수록 모델이 한 번에 보는 tool 목록이 길어진다. §9.1의 "작은 작업 표면"과 §23.7의 "Extensions provide capabilities. OMA owns the UI."를 유지하려면, **어떤 extension을 켤지와 그 extension의 tool을 모델에게 어떻게 보일지**를 분리해야 한다.
 
@@ -1436,3 +1416,59 @@ Group은 tool과 다른 group을 명시적으로 지목하는 DAG다. 처음에�
 투영 선언은 §23.7의 role 파일에 둔다. host가 소유하는 설정이며 모델·workspace·mail 내용이 이를 바꿀 수 없다. cycle, 중복, 알 수 없는 참조, 한도 초과는 설정을 읽는 시점에 거절하고 sandbox 안으로 넘기지 않는다. 투영을 읽을 수 없으면 DISABLED로 의도한 tool이 드러나는 쪽이 아니라 OMA 자신의 mail/status tool만 남기는 쪽으로 닫는다.
 
 투영은 권한 경계가 아니다. §16의 mount·FD·network 제한과 §13.1의 capability가 실제 권한을 정하며, 표면에서 감춘다는 것이 그 tool이 안전해졌다는 뜻이 아니다. 감출 수 있다는 이유로 위험한 tool을 role에 추가하지 않는다.
+
+### 23.11 Mail
+
+
+Mail은 멀티에이전트 활동을 Human이 확인하는 주 surface다. 초기 버전은 Principal 앞으로 온 메일의 inbox 중심이다.
+
+```text
+MAIL
+
+> worker-a   question    API 선택 필요
+  worker-b   result      구현 완료
+  worker-c   alert       테스트 실패
+```
+
+본문을 읽어야 하므로 상세 화면을 허용한다. 읽지 않음 표시는 **새 durable 상태가 아니라 기존 delivery 사실에서 파생**한다. §14.1의 여섯 표에 unread 컬럼이나 별도 표를 추가하지 않는다.
+
+ACK는 §5.4의 의미를 유지한다. 읽음·이해·동의·작업 완료가 아니라 수신자가 명시적으로 확인 의사를 보냈다는 사실뿐이다. UI 문구가 이 의미를 바꾸지 않는다.
+
+복잡한 메일 클라이언트로 발전시키지 않는다. 필요해지면 Unread / All / Sent 정도만 추가한다.
+
+### 23.12 Worker 노출 원칙
+
+
+초기 버전에는 Workers 탭을 만들지 않는다. Resident 상세 상태, incarnation, batch, 생성 계통을 항상 노출하지 않는다. 사용자는 주로 Principal과 상호작용하고, Resident 활동에서 사람이 알아야 할 내용은 Dashboard 요약과 Mail의 question/result/alert로 전달한다.
+
+제품 UI는 Resident를 `worker`로 부를 수 있다. 이는 표시 용어이며 wire·DB·persisted 표현에는 사용하지 않는다. 두 이름의 대응은 한 곳에서 정의하고 계층마다 다시 만들지 않는다.
+
+디버깅 목적의 상세 정보가 필요해지면 일반 UI가 아니라 별도 developer surface로 추가한다.
+
+### 23.13 엔진에서 빌려오는 것과 빌려오지 않는 것
+
+엔진을 동봉한다는 것은 엔진이 이미 푼 문제를 다시 풀지 않는다는 뜻이다. 동시에 엔진의 제품 판단까지 들여오지 않는다는 뜻이기도 하다. 경계는 **산술은 빌리고 표현은 소유한다**이다.
+
+| 빌려오는 것 | 왜 |
+|---|---|
+| 자격 증명·모델 해석·provider 호출·과금 | 엔진이 이미 소유한다(§13.3) |
+| 터미널 폭 측정 | grapheme 단위 계산이며 직접 만든 표는 ZWJ 이모지·결합 문자에서 틀린다 |
+| 키 식별 | 제품이 열거하지 않는 시퀀스까지 엔진 어휘가 덮는다 |
+
+| 소유하는 것 | 왜 |
+|---|---|
+| 레이아웃·절단·줄바꿈 | 엔진의 것은 자기 ANSI 스타일을 함께 넣는다. 화면은 제품의 판단이다 |
+| 입력 청크 분할 | 인식하지 않는 터미널 보고는 prompt에 들어가지 않고 버려져야 한다 |
+| IPC frame의 JSON 정책 | duplicate key·NaN·unknown field 거절은 OMA 계약이다(IPC-001) |
+| 경로 봉쇄 | 커널 수준 봉쇄이며 문자열 경로 계산과 보증이 다르다 |
+
+빌려온 프리미티브마다 **소유자를 한 곳**에 두고 그 목록을 테스트가 고정한다. 두 번째 사용처가 생기면 목록을 고쳐야 한다.
+
+엔진의 byte framing과 유닉스 소켓 클라이언트는 형식이 같지만 가져오지 않는다. 그 위에 얹힌 OMA의 정책 계층이 어차피 남고, 설치 표면을 늘리는 것이 §23.1의 "한 번에 설치"와 상충하기 때문이다. 이것은 중복을 허용한 판단이며 근거를 여기 남긴다.
+
+### 23.14 이 변경이 바꾸지 않는 것
+
+
+단일 broker와 SQLite writer, 동기 transaction, 여섯 durable entity, immutable accepted evidence, explicit unknown, normal과 recovery의 분리, effect 직전 authority 재확인, bounded effect를 그대로 유지한다.
+
+TUI는 새 daemon·durable entity·effect queue·model-facing subcommand가 아니다. 읽기와 표시는 기존 관측 경로를 쓰고, 변경은 기존 mutation과 host config 경계를 쓴다. 제품 표면을 위해 wire·DB·persisted v1 의미를 바꾸지 않는다.

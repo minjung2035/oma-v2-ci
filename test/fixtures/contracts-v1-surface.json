@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "sourceCommit": "9de9ad0188e1886ffc5d7344d86af5497dd0a8e4",
-  "sourceBlob": "f9e1e703d77a8fc920ca7db5f4a5b8f3c2009c6e",
-  "declarationCount": 67,
+  "sourceCommit": "42e6e8d",
+  "sourceBlob": "64f7098868b3149fc3a6101d75e8edf78bea1e9c",
+  "declarationCount": 64,
   "exportedNames": [
     "Actor",
     "Address",
@@ -26,9 +26,6 @@
     "GitModule",
     "GitReference",
     "HostConfigV1",
-    "InferenceEvent",
-    "InferenceModule",
-    "InferenceStart",
     "InternalMethods",
     "InternalRequest",
     "InternalResponse",
@@ -71,5 +68,5 @@
     "UnitsModule",
     "ViewsModule"
   ],
-  "declarationsSha256": "093f55ebf078bde8fa420997b310512927beacbbf0feaa621a4c9df23a2fa425"
+  "declarationsSha256": "0d20fbb4fe2eb525e99efb96ca5de82d23986c3bdc5cb4f44d222c49bbafe3c9"
 }

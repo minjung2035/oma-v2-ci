@@ -64,7 +64,6 @@ src/domain/request-identity.ts
 src/domain/resources.ts
 src/domain/spec-identity.ts
 src/domain/tool-surface.ts
-src/domain/usage-budget.ts
 src/durable.ts
 src/entry/broker.ts
 src/entry/host.ts
@@ -87,9 +86,6 @@ src/git/quarantine.ts
 src/git/submit.ts
 src/hash.ts
 src/ids.ts
-src/inference.ts
-src/inference/call.ts
-src/inference/slots.ts
 src/leaf.ts
 src/lifecycle.ts
 src/lifecycle/actions.ts
@@ -173,6 +169,7 @@ src/tui/app.ts
 src/tui/dashboard.ts
 src/tui/exit.ts
 src/tui/keys.ts
+src/tui/limits.ts
 src/tui/model.ts
 src/tui/render.ts
 src/tui/screen.ts

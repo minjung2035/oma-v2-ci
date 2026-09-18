@@ -79,9 +79,11 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **MUST [SP-03-D]** 통과 결과로 PiAdapter의 실제 import/signature, prepared batch 동시성, 클래스 분리, completion receipt 필드/flush 순서, FIFO와 fairness의 적용 시점을 확정한다. 여섯 entity와 prepared/completed 의미 안에서 증명이 안 되면 상위 architecture 검토로 올린다. 임의로 `active/queued/thinking/reviewing` state, notice event log, cognitive checkpoint를 추가하지 않는다. 모든 busy mail을 agent_end까지 미루는 타협도 조용히 확정하지 않는다.
 
-## S-04 — Pi provider codec / usage upper bound
+## S-04 — 엔진 provider 연결 (범위 축소)
 
-**SPIKE [S-04]** pinned Pi의 model/provider registration과 streaming data codec, abort/error/finish event mapping, provider input/output/cache/reasoning token 회계, request 최대비용 upper bound를 검증한다. 특정 model 이름만으로 가격이나 context limit을 추정하지 않는다.
+**S-04 범위 재정의 (2026-09-19)**: INF-001이 inference 소유권을 동봉 엔진으로 확정하면서, OMA가 provider codec·가격 upper bound·usage 회계를 직접 구현할 이유가 사라졌다. 이 spike가 gate하던 relay는 존재하지 않는다. 남는 것은 엔진 연결이 실제로 동작하는지이며, 그것은 아래 기록의 functional 확인으로 충분하다. 비용 상한을 OMA 계약으로 되돌리려면 relay 구현이라는 별도 architecture 결정이 선행되어야 하고, 그때 이 spike를 원래 범위로 되살린다.
+
+**SPIKE [S-04, 축소됨]** pinned Pi의 model/provider registration과 streaming data codec, abort/error/finish event mapping, provider input/output/cache/reasoning token 회계, request 최대비용 upper bound를 검증한다. 특정 model 이름만으로 가격이나 context limit을 추정하지 않는다.
 
 **S-04 기능 프로필 기록**: 별도 provider relay나 새 credential store를 만들지 않고 host-side Pi RPC와 pinned OMA adapter revision이 현재 `~/.pi/agent`의 연결을 사용하도록 선택했다. `npm run test:functional-pi`의 실제 실행은 요청 `pi/current`를 `openai-codex/gpt-5.6-luna`로 해석했고, `oma_mail_read` tool 1회 성공, terminal `stop`, session persist와 durable batch presented=1을 확인했다. 이 성공 1건은 resident 기본 대화 경로의 provider 연결 증거일 뿐, Pi executable artifact pin, 가격/usage upper bound·429/5xx·취소/중간 끊김 codec을 확정하지 않는다. 따라서 inference accounting을 포함한 S-04 전체는 OPEN이다.
 

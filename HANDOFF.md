@@ -2,6 +2,10 @@
 
 작업 브랜치는 `refactor/safety-preserving-architecture`다. 제품 표면(TUI)은 `ee5d12b`에 있고, tool 표면 투영은 그 위에 얹혔다.
 
+## 이 제품이 무엇인지
+
+[PRODUCT.md](PRODUCT.md)가 의도를 소유한다. 한 줄로: **Pi를 의존성으로 삼는 새로운 코딩 에이전트**이며, `npm install` 뒤에 `oma` 한 번으로 바로 쓸 수 있어야 한다. 규범이 아니므로 충돌 시 architecture/spec이 우선한다.
+
 ## 현재 판정
 
 **구조 개선 작업은 종료했다.** 남은 아키텍처 부채였던 contract 역의존이 0이 됐고, 이후로는 소규모 기능과 TUI 변경만 수행한다.
@@ -15,7 +19,7 @@
 
 OMA를 Pi 확장이 아니라 단일 제품으로 제시하는 표면을 추가했다. 사용자 진입점은 `oma` 하나이고, 대화 화면에서 `Ctrl+X`로 Dashboard / Config / Mail을 연다.
 
-규범은 architecture.md **§23**과 implementation-spec.md **§19 (TUI-001–015)**가 소유한다. architecture 기준본 hash는 `031e72cd…`이며 N-001에 반영했다.
+규범은 architecture.md **§23**과 implementation-spec.md **§18 (TUI-001–019)**가 소유한다. architecture 기준본 hash는 `7588b31e…`이며 N-001에 반영했다.
 
 이번 변경에서 실제 architecture가 바뀐 것은 하나다. **Principal Pi session의 소유권**이 "실행 중인 Human session에 attach"에서 "OMA TUI가 `pi --mode rpc`를 직접 실행"으로 옮겨갔다. 나머지는 기존 경계의 구체화다.
 
@@ -34,7 +38,7 @@ OMA를 Pi 확장이 아니라 단일 제품으로 제시하는 표면을 추가�
 
 이식하지 않은 것이 중요하다. 원본의 자식 extension 로더·host facade·registry capture·자식 handler 직접 실행은 전부 뺐다. OMA는 이미 operations 계약과 Pi의 `-e`로 extension을 로드하므로 그 계층이 불필요하고, 그대로 가져왔다면 PI-001과 TUI-010의 자동 탐색·임의 경로 금지를 위반했을 것이다. 원본 1,367 LOC 중 실제로 필요한 것은 검증·평탄화와 집합 산술뿐이었고 증가량은 368 LOC다.
 
-- 규범: architecture.md **§23.12**, spec **§20 (TSP-001–010)**, test-matrix **T99–T103**.
+- 규범: architecture.md **§23.10**, spec **§19 (TSP-001–010)**, test-matrix **T99–T103**.
 - 검증·평탄화의 단일 owner는 `src/domain/tool-surface.ts`다. cycle·중복 소속·미지 참조·한도는 **config 로드 시점에** 거절하고 sandbox로 넘기지 않는다.
 - sandbox 쪽 `src/pi-extension.ts`는 검증된 plan에 대한 집합 연산만 한다. group을 여는 것은 활성화이지 실행이 아니며, 다른 extension의 handler를 대신 호출하는 경로는 없다.
 - 설정은 operations role 파일의 선택적 `toolSurface` 블록이다. `HostConfigV1`·wire·ledger·DB entity를 확장하지 않는다.
@@ -61,11 +65,11 @@ OMA가 Pi를 함께 배포하고 자기 것만 실행한다. 사용자가 Pi를 
 
 ## 현재 검증 상태
 
-수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 997/997 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
+수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 978/978 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
 
 TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unverified**다. 실제 Pi provider 연결과 TTY raw mode는 관측하지 않았으므로 COMP-004의 `proven`이 아니다.
 
-**A-008 LOC gate가 열려 있다.** 190 files / 18,208 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
+**A-008 LOC gate가 열려 있다.** 187 files / 17,931 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
 
 ## 다음에 할 일
 

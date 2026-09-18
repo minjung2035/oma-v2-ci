@@ -1,7 +1,6 @@
 /** TS-001: module-contracts contract owner. Declarations only; wire/persisted v1 unchanged. */
 import type { Receipt } from "./durable.js";
 import type { Actor, OperationId, RequestKey } from "./identity.js";
-import type { InferenceEvent, InferenceStart } from "./internal-wire.js";
 import type { PublicMethod, PublicMethods, Request, Response } from "./public-wire.js";
 import type { AuthContext, BoundaryEvidence, PreparedBatch } from "./runtime.js";
 import type { MailInput } from "./values.js";
@@ -43,11 +42,6 @@ export interface PiAdapter {
   close(): Promise<void>;
 }
 
-export interface InferenceModule {
-  open(auth: AuthContext, input: InferenceStart, payload: AsyncIterable<Uint8Array>): AsyncIterable<InferenceEvent>;
-  cancel(auth: AuthContext, request: string): Promise<void>;
-  fence(actor: Actor, incarnation: number): Promise<void>;
-}
 
 export type ViewsModule = import('../../src/module-ports.js').DerivedViewsPort;
 

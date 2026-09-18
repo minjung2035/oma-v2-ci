@@ -2,9 +2,9 @@
 
 문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `47cdf6dd6fd6644a28bca7f11638127ac53131b18387ec307ab17909e91f86fb`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `7588b31e7518ded1d439f604400ca0984cccd30936428e00eac03b6032f29fab`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
 
-이전 기준본은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이었다. 그 이후의 차이는 두 가지이며 둘 다 검토했다. 첫째는 `examples/systemd`와 `validation.md`를 현재 경로로 고치는 링크 수정 2줄이고 의미 변경이 없다. 둘째는 2026-09-18에 추가한 architecture §23(제품 표면과 TUI)이며 아래 §19의 TUI 요구가 그 구현 계약이다.
+이전 기준본은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이었다. 그 이후의 차이는 두 가지이며 둘 다 검토했다. 첫째는 `examples/systemd`와 `validation.md`를 현재 경로로 고치는 링크 수정 2줄이고 의미 변경이 없다. 둘째는 2026-09-18에 추가한 architecture §23(제품 표면과 TUI)이며 아래 §18의 TUI 요구가 그 구현 계약이다.
 
 **MUST [N-006]** 2026-09-09 승인된 변경은 목표 `tiered` profile의 integration policy다. [정책 확장 계약](implementation/integration-policy.md)은 이 spec의 일부이며 기존 `base` substrate와 tiered의 완료 범위를 구분한다. 충돌한 기존 선택 approval 서술은 아래 INT/APP와 확장 계약으로 대체한다. S-08/S-10 전 base schema/IPC만 구현한 상태를 tiered production 지원으로 표시하지 않는다.
 
@@ -74,7 +74,6 @@
 | `pi-extension.ts` | custom notice, provider adapter, trusted command, Principal attach | Pi SDK, 제한된 channels | host secret을 model tool에 전달 |
 | `git.ts` | bundle quarantine, publish, 검사, main/context CAS | store, sandbox, mail | 자동 merge/rebase, workflow review |
 | `sandbox.ts` | rootfs/mount/namespace/FD/argv 조합 | host config, bwrap adapter | 업무별 보안 수준 자기선언 |
-| `inference.ts` | identity, quota reservation, slot, provider stream | store, credential adapter | 사용자 대화 archive, tool replay |
 | `reconcile.ts` | pending 효과와 실제 파일/ref/unit 대조 | 각 물리 모듈 | 범용 event replay, 모델 호출 |
 | `views.ts` | START/inbox/agents/topics/status, 제한된 logs | 읽기 store, filesystem, units | 새 원본·새 workflow |
 | `approval.ts` | tiered의 deterministic tier/정확한 tuple attestation 평가; base 비활성 | S-08/S-10 gated schema, auth, mail, git | 자연어 승인 추출·업무 scheduler |
@@ -469,19 +468,21 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 ## 13. inference·quota·취소
 
-**MUST [INF-001; arch §13.3]** Resident와 Principal inference는 기본적으로 broker relay를 거친다. adapter는 host 설정 model profile만 선택하고 caller가 arbitrary provider URL/header/key/model 가격을 지정하지 못한다. credentials는 host broker만 읽는다. Human/private prompt body는 공개 mail/journal/operations/usage.details에 기록하지 않는다.
+**MUST [INF-001; arch §13.3]** inference는 **동봉 엔진이 소유한다.** OMA는 provider relay, credential store, model catalogue, 가격표, 재시도 정책을 따로 구현하지 않는다. 엔진이 이미 갖고 있는 흐름을 그대로 쓰며, 그 상태는 TUI-017의 OMA 소유 agent 디렉터리 안에 있다.
 
-**MUST [INF-002]** inference queue는 메모리 FIFO이고 의미 기반 priority를 만들지 않는다. host는 전체 slot 수와 Principal reserved slot/budget을 필수 지정한다. 일반 Resident는 Principal reserve를 소비하지 못한다. lineage chain은 agents.created_by를 따라 계산하고 cycle은 corruption으로 거절한다. subtree 생성으로 비용 cap을 초기화하지 않는다.
+이 조항은 이전 판을 대체한다. 이전 판은 broker가 credential을 붙여 provider에 직접 요청하는 relay를 요구했다. S-04에서 그 relay를 만들지 않고 엔진 연결을 쓰기로 선택했고, relay 구현은 호출 경로 없이 남아 있었다. 문서와 코드가 어긋난 상태를 유지하는 것보다 실제 선택을 규범으로 확정하는 쪽을 택한다.
 
-**MUST [INF-003]** 실제 provider 전송 직전에 T-usage-reserve를 commit한다. 예약 상한은 pinned pricing revision과 input/output limit으로 계산하며 provider별 upper bound 검증은 S-04다. society와 각 ancestor 계통의 committed+reserved+unknown 비용 합계를 동시에 확인한다. 단순 read-then-write 두 transaction으로 초과 예약을 허용하지 않는다.
+**MUST [INF-002]** 모델·provider 선택은 host가 선언한 model profile 이름으로만 지정한다. caller가 arbitrary provider URL, header, key, 가격을 지정하지 못한다는 제약은 그대로다. 엔진이 profile을 해석하며 OMA는 그 해석을 다시 구현하지 않는다.
 
-**MUST [INF-004]** 성공 시 provider token detail과 reported integer units로 settle한다. provider 요청을 전혀 보내지 않았다는 확실한 증거가 있는 취소만 reported=0/cancelled로 정산한다. 전송 후 timeout/연결 종료/강제 kill로 과금이 불명확하면 unknown으로 남기고 reservation을 보수적으로 차감한다. 결과가 불명확한 inference를 자동 재전송하지 않는다.
+**MUST [INF-003]** Human private prompt body를 공개 mail, journal, operations, usage 필드에 기록하지 않는다. 이 금지는 relay 유무와 무관하게 유지된다.
 
-**MUST [INF-005]** 같은 inference request ID를 다시 받으면 기존 outcome을 알려 주고 provider를 재호출하지 않는다. 토큰 stream 전체를 durable 재생 queue에 저장하지 않는다. 메모리 waiter는 broker crash 시 사라지고, outstanding usage reserved는 과금 여부를 확인할 수 없으면 unknown으로 바꾼다. 새 inference가 필요하면 Pi가 새 request ID를 만든다.
+**MUST NOT [INF-004]** 결과가 불명확한 inference를 자동 재전송한다. 취소가 과금 취소를 보장한다고 가정하지 않는다. 엔진이 보고하지 않은 비용을 0으로 간주하지 않는다.
 
-**MUST [INF-006]** stop/run revoke는 대기 요청을 제거하고 active stream을 취소한다. provider cancellation이 과금 취소를 보장한다고 가정하지 않는다. provider usage에 없는 cached/reasoning token을 임의로 0으로 간주하지 않는다. details_json은 숫자 usage/provider request ID/pricing codec revision만 포함한다.
+**MUST [INF-005]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. `quota`의 unit 관련 필드는 host가 선언하는 운영 의도로 남지만, 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.
 
-**MUST [INF-007]** performance 검증은 Astra 단독, cheap society 단독, Principal+society의 동일 task/tool 접근/성공 기준으로 수행한다. 품질·결함·Principal input/output tokens·전체 tokens·전체 비용·latency를 각각 기록한다. Principal tokens 감소만으로 전체 비용/품질 우위를 주장하지 않는다. 자동 평가 threshold는 S-09에서 합의한다.
+`usage` 표와 여섯 durable entity는 DB-001 그대로 유지한다. persisted v1 schema를 이 변경으로 바꾸지 않는다. 그 표에 쓰는 주체가 없다는 사실은 [validation](implementation/validation.md)에 기록한다.
+
+**MUST [INF-006]** performance 검증은 Astra 단독, cheap society 단독, Principal+society의 동일 task/tool 접근/성공 기준으로 수행한다. 품질·결함·Principal 및 전체 tokens·비용·latency를 각각 기록한다. Principal tokens 감소만으로 전체 비용/품질 우위를 주장하지 않는다. 자동 평가 threshold는 S-09에서 합의한다.
 
 ## 14. model-facing CLI와 파생 view
 
@@ -584,41 +585,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 **MUST [ORDER-004]** performance가 목표에 미달하면 수치를 보고하고 모델/profile/배치 resource 설정을 평가한다. Principal의 필수 판단 경로 삭제·숨은 자동 요약 agent·task scheduler 추가로 평가를 통과시키지 않는다. 구조 변경은 별도 architecture 판단이다.
 
-## 18. architecture 추적 및 최종 금지 확인
-
-**MUST [TRACE-002]** 모든 적용 runtime MUST/MUST NOT은 release 시 requirement→단일 authoritative production owner→실제 entrypoint/call path→negative executable test→현재 source revision의 실행 evidence를 갖는다. 타입/enum/comment/helper/mock만 존재하면 implemented/proven이 아니다. [compliance 계약](implementation/compliance.md)의 파일을 release 산출물로 유지하며 runtime durable state로 만들지 않는다.
-
-**MUST [TRACE-003]** spec 위반이 기존 requirement에 이미 금지돼 있으면 동의어 requirement를 더 만들기보다 production-path negative test와 trace를 연결한다. 계약·기계 검증과 production 통과 증거를 분리하고 누락은 unverified/blocked로 표시한다. source/spec/adapter 변경 뒤 옛 evidence를 자동 재사용하지 않는다.
-
-**MUST [REC-008]** bootstrap/create/start/stop/batch/check의 canonical 순서는 [physical-ordering.md](implementation/physical-ordering.md)를 따른다. constructor/import에서 DB open 또는 외부 effect를 실행하지 않는다. lock 확보 전 SQLite migration/reconcile을 시작하는 숨은 호출 경로를 금지한다.
-
-**MUST [TRACE-001]** 다음 mapping으로 상위 규범 보존을 review한다. 추가 필드·검사·순서는 물리 경계 상세화이며, 새로운 철학/업무 protocol을 도입하는 근거가 아니다.
-
-| architecture | 이 계약 |
-|---|---|
-| §§1–2 stack/topology | A, M, UNIT, SB |
-| §§3–5 주소/파일/배달 | ID, FS, MAIL, DB, IPC |
-| §§6–7 lifecycle/Pi | UNIT, LIFE, RUN, PI, BATCH; S-01/03 |
-| §§8–9 Principal/attention | PR, CTX, CLI, VIEW |
-| §§10–12 Git/review | GIT, INT, APP, 확장 TIER/PUB/CHAL/VERIFY; S-05/08/10/11 |
-| §§13–14 auth/usage/DB | AUTH, INF, DB, IPC; S-01/02/04 |
-| §§15–19 recovery/isolation | LIFE, SB, REC, ERR; S-06 |
-| §§20–22 implementation/evaluation | ORDER, TRACE, test matrix; S-09 |
-| §23 제품 표면/TUI | TUI; CLI-001 분리, PR-001/004, INF-001, CFG-005; S-02 |
-| §23.11 엔진 동봉/공존 | TUI-016/017; PI-001, A-008 |
-| §23.13 tool 표면 투영 | TSP; PI-001, CFG-005, SB-003 |
-
-**MUST NOT [NEG-001]** LLM이 sender·thread·ref·mail ID를 join하여 runtime 상태를 복원하게 한다. broker/view가 바로 읽고 실행할 경로를 제공한다. 내부 ID는 debug/명시적 retry에만 필요한 만큼 노출한다.
-
-**MUST NOT [NEG-002]** `presented=understood`, `ack=approved`, `submit=merged`, `agent_end=task_done`, `principal=Human`, `more_agents=independent_reviews`, `timeout=failed`, `same_OID=same_request` 등식을 구현한다.
-
-**MUST NOT [NEG-003]** role label을 업무 ownership lock으로 사용한다. file ownership board·focus lease·작업 수락 단계·모든 변경 mandatory review workflow를 만들지 않는다. 사회의 조정은 공개 mail/상호 요청/Git evidence이고 runtime은 권한 및 물리 조건만 강제한다.
-
-**MUST NOT [NEG-004]** 정확한 turn 재현, 자동 tool replay, 의미적 mail dedup, private peer mail, multi-host failover, external push/deploy, 자동 GC를 Core v1의 숨은 부가 기능으로 넣는다. 필요한 경우 상위 architecture에 별도 요구로 제안하고 이 계약 범위 밖으로 표시한다.
-
-**MUST [NEG-005]** 구현자가 모호함을 발견하면 관련 requirement/source 절, 충돌하는 두 해석, 최소 재현/실험, 차단 범위를 적어 SPIKE에 추가한다. 그 과정 자체가 새 runtime entity나 workflow를 만들 권한은 아니다. 충분히 확정된 나머지 계약은 계속 구현한다.
-
-## 19. 제품 표면과 TUI
+## 18. 제품 표면과 TUI
 
 **MUST [TUI-001; arch §23.1]** OMA의 공개 UX와 명령 namespace는 OMA가 소유하고 Pi는 내부 실행 엔진이다. Pi command를 이름만 바꾼 wrapper를 만들지 않는다. 이 절은 새 durable entity, 새 daemon, 새 effect queue, 새 socket method, 새 model-facing subcommand를 도입하지 않으며 A-006/A-007의 제한을 그대로 받는다. TUI가 표시하는 모든 값은 기존 관측 경로에서, TUI가 일으키는 모든 변경은 기존 mutation 또는 host config 경계에서 나온다.
 
@@ -667,11 +634,15 @@ session 경계를 넘지 않는 per-request 전환은 Principal inference가 bro
 
 자격 증명·모델 선택·그 기억은 **동봉 엔진이 이미 갖고 있는 흐름**이므로 OMA가 다시 만들지 않는다. 기본 model profile은 엔진의 현재 연결로 해석되는 값이며 OMA는 provider나 credential을 스스로 주장하지 않는다. 남는 것은 society·role capability·multi-agent 예산처럼 엔진에 개념이 없는 OMA 고유 영역이고, 여기에 보수적인 값을 쓴다. 생성값은 bounded하고 디스크에 기록되며 Control Panel에서 수정 가능해야 한다. Resident에게 `code.integrate`를 기본으로 주지 않는다.
 
+**MUST [TUI-020; arch §23.13]** 엔진이 이미 소유한 산술·프로토콜 프리미티브를 다시 구현하지 않는다. 빌려오는 프리미티브마다 소유 모듈을 하나로 두고 그 목록을 실행 가능한 검사로 고정한다. 동시에 엔진의 레이아웃·절단·스타일링을 제품 화면에 들여오지 않는다. 표현은 제품이 소유한다.
+
+중복을 남기기로 판단한 경우는 근거를 규범에 남긴다. 현재 남긴 것은 byte framing과 유닉스 소켓 클라이언트이며, 이유는 그 위의 OMA 정책 계층이 어차피 존재하고 설치 표면을 늘리지 않기 위해서다.
+
 **MUST NOT [TUI-018]** 동봉한 엔진을 수정해 제품 동작을 만든다. OMA의 동작은 신뢰된 core extension이 소유한다. 수정하지 않은 동봉 엔진은 upstream 의존이므로 A-008/A-009의 production LOC 계산 대상이 아니며, 엔진을 수정하는 순간 LOC-003에 따라 계산 대상이 되고 A-008 기준을 다시 검토해야 한다.
 
 **MUST [TUI-015]** TUI는 릴리스 gate의 예외가 아니다. 이 절의 요구도 TRACE-002에 따라 단일 production owner, 실제 entrypoint에서의 call path, negative executable test, 현재 revision의 실행 증거를 갖는다. TUI 소스는 A-008/A-009의 production LOC 측정 대상이며 별도 budget으로 분리하지 않는다.
 
-## 20. Extension tool 표면 투영
+## 19. Extension tool 표면 투영
 
 **MUST [TSP-001; arch §23.12]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.
 
@@ -692,3 +663,37 @@ session 경계를 넘지 않는 per-request 전환은 Principal inference가 bro
 **MUST NOT [TSP-009]** 투영을 권한 경계로 표시한다. 실제 권한은 §12의 sandbox mount/FD/network와 AUTH-001의 capability가 정한다. 표면에서 감췄다는 이유로 위험한 tool을 role extension에 추가하거나, PI-001의 신뢰 경계·operations의 SHA-256 재검증을 완화하지 않는다.
 
 **MUST NOT [TSP-010]** 투영을 위해 extension을 동적으로 로드한다. role extension의 로딩과 검증은 기존 operations 계약과 Pi의 `-e` 경로가 소유한다. 임의 경로 import, cwd 기반 설정 탐색, 자동 탐색을 추가하지 않는다. 투영은 이미 등록된 tool의 표면만 다룬다.
+
+## 20. architecture 추적 및 최종 금지 확인
+
+**MUST [TRACE-002]** 모든 적용 runtime MUST/MUST NOT은 release 시 requirement→단일 authoritative production owner→실제 entrypoint/call path→negative executable test→현재 source revision의 실행 evidence를 갖는다. 타입/enum/comment/helper/mock만 존재하면 implemented/proven이 아니다. [compliance 계약](implementation/compliance.md)의 파일을 release 산출물로 유지하며 runtime durable state로 만들지 않는다.
+
+**MUST [TRACE-003]** spec 위반이 기존 requirement에 이미 금지돼 있으면 동의어 requirement를 더 만들기보다 production-path negative test와 trace를 연결한다. 계약·기계 검증과 production 통과 증거를 분리하고 누락은 unverified/blocked로 표시한다. source/spec/adapter 변경 뒤 옛 evidence를 자동 재사용하지 않는다.
+
+**MUST [REC-008]** bootstrap/create/start/stop/batch/check의 canonical 순서는 [physical-ordering.md](implementation/physical-ordering.md)를 따른다. constructor/import에서 DB open 또는 외부 effect를 실행하지 않는다. lock 확보 전 SQLite migration/reconcile을 시작하는 숨은 호출 경로를 금지한다.
+
+**MUST [TRACE-001]** 다음 mapping으로 상위 규범 보존을 review한다. 추가 필드·검사·순서는 물리 경계 상세화이며, 새로운 철학/업무 protocol을 도입하는 근거가 아니다.
+
+| architecture | 이 계약 |
+|---|---|
+| §§1–2 stack/topology | A, M, UNIT, SB |
+| §§3–5 주소/파일/배달 | ID, FS, MAIL, DB, IPC |
+| §§6–7 lifecycle/Pi | UNIT, LIFE, RUN, PI, BATCH; S-01/03 |
+| §§8–9 Principal/attention | PR, CTX, CLI, VIEW |
+| §§10–12 Git/review | GIT, INT, APP, 확장 TIER/PUB/CHAL/VERIFY; S-05/08/10/11 |
+| §§13–14 auth/usage/DB | AUTH, INF, DB, IPC; S-01/02 |
+| §§15–19 recovery/isolation | LIFE, SB, REC, ERR; S-06 |
+| §§20–22 implementation/evaluation | ORDER, TRACE, test matrix; S-09 |
+| §23 제품 표면/TUI (§18) | TUI; CLI-001 분리, PR-001/004, INF-001, CFG-005; S-02 |
+| §23.3 엔진 동봉/공존 (§18) | TUI-016/017; PI-001, A-008 |
+| §23.10 tool 표면 투영 (§19) | TSP; PI-001, CFG-005, SB-003 |
+
+**MUST NOT [NEG-001]** LLM이 sender·thread·ref·mail ID를 join하여 runtime 상태를 복원하게 한다. broker/view가 바로 읽고 실행할 경로를 제공한다. 내부 ID는 debug/명시적 retry에만 필요한 만큼 노출한다.
+
+**MUST NOT [NEG-002]** `presented=understood`, `ack=approved`, `submit=merged`, `agent_end=task_done`, `principal=Human`, `more_agents=independent_reviews`, `timeout=failed`, `same_OID=same_request` 등식을 구현한다.
+
+**MUST NOT [NEG-003]** role label을 업무 ownership lock으로 사용한다. file ownership board·focus lease·작업 수락 단계·모든 변경 mandatory review workflow를 만들지 않는다. 사회의 조정은 공개 mail/상호 요청/Git evidence이고 runtime은 권한 및 물리 조건만 강제한다.
+
+**MUST NOT [NEG-004]** 정확한 turn 재현, 자동 tool replay, 의미적 mail dedup, private peer mail, multi-host failover, external push/deploy, 자동 GC를 Core v1의 숨은 부가 기능으로 넣는다. 필요한 경우 상위 architecture에 별도 요구로 제안하고 이 계약 범위 밖으로 표시한다.
+
+**MUST [NEG-005]** 구현자가 모호함을 발견하면 관련 requirement/source 절, 충돌하는 두 해석, 최소 재현/실험, 차단 범위를 적어 SPIKE에 추가한다. 그 과정 자체가 새 runtime entity나 workflow를 만들 권한은 아니다. 충분히 확정된 나머지 계약은 계속 구현한다.

@@ -13,7 +13,14 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   entries: Object.freeze({ broker: "dist/src/entry/broker.js", runner: "dist/src/entry/runner.js", host: "dist/src/entry/host.js", tui: "dist/src/entry/oma.js" }),
   templateEntries: Object.freeze({ "broker.service.in": "broker", "resident.service.in": "runner",
     "principal-relay.service.in": "host", "reconcile.service.in": "host" } as const),
-  runtimeDependencies: Object.freeze(["koffi", "nodemailer"] as const),
+  // The engine and its terminal measurement library ship with the product, so
+  // they are pinned like any other runtime dependency (TUI-016).
+  runtimeDependencies: Object.freeze([
+    "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-tui",
+    "koffi",
+    "nodemailer",
+  ] as const),
 });
 
 /** CFG-001: digest syntax is pinned; byte verification belongs to runtime assets. */

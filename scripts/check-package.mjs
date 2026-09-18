@@ -29,24 +29,32 @@ export async function checkPackage(rootInput) {
   const versions = {};
   for (const name of layout.runtimeDependencies) {
     if (!Object.hasOwn(packageJson.dependencies ?? {}, name)) throw new Error(`undeclared runtime dependency: ${name}`);
-    const resolved = require.resolve(name);
-    let directory = dirname(resolved); let found = null;
-    for (;;) {
-      const rel = relative(root, directory);
-      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`dependency resolved outside installation: ${name}`);
-      const manifest = join(directory, "package.json");
+    // A package may publish an exports map without a CJS main, which makes
+    // require.resolve fail even though it is installed. Locate the manifest by
+    // walking the installation's node_modules instead; the name and version are
+    // still verified against the lockfile below, so this resolves differently
+    // without checking less.
+    let found = null;
+    for (let directory = root; ; ) {
+      const manifest = join(directory, "node_modules", name, "package.json");
       if (lstatSync(manifest, { throwIfNoEntry: false })?.isFile()) {
+        const rel = relative(root, dirname(manifest));
+        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`dependency resolved outside installation: ${name}`);
         const value = JSON.parse(readFileSync(manifest, "utf8"));
         if (value.name === name) { found = value; break; }
       }
-      const parent = dirname(directory); if (parent === directory || directory === root) break; directory = parent;
+      const parent = dirname(directory); if (parent === directory) break; directory = parent;
     }
     const expected = lock.packages?.[`node_modules/${name}`]?.version;
     if (!found || typeof expected !== "string" || found.version !== expected) throw new Error(`installed/lock version mismatch: ${name}`);
     versions[name] = { installed: found.version, locked: expected, declaredRange: packageJson.dependencies[name] };
-    // Requiring the native boundary catches a missing Koffi binary. It does not
+    // Loading the native boundary catches a missing Koffi binary. It does not
     // attest pidfd, SO_PEERPIDFD, cgroups, user namespaces or deploymentDigest.
-    require(name);
+    // Packages without a CJS entry are verified by manifest and lockfile only.
+    try { require(name); }
+    catch (error) {
+      if (error?.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED" && error?.code !== "ERR_REQUIRE_ESM") throw error;
+    }
   }
   function compiledFiles(path) {
     const stat = lstatSync(path);

@@ -314,3 +314,40 @@ test("the spawn paths never pass the core extension twice", () => {
   assert.equal(argv.filter(entry => entry === "/lib/core.js").length, 1);
   assert.ok(argv.includes("/lib/review.js"));
 });
+
+test("the Principal and Resident spawn seams carry the same role contract", () => {
+  const root = scratch("oma-seam-");
+  try {
+    const index = bundle(root);
+    const role = readConfigurationSource(index).roles["principal"]!;
+
+    // Whatever the Resident path forwards, the Principal path must forward too:
+    // extensions with digests, the projection, and the role prompt.
+    const argv = sessionArgv(
+      { piCommand: "/usr/bin/node", piArgs: ["/lib/cli.js"], coreExtension: "/lib/core.js",
+        sessionDir: "/s", workspace: "/w", home: "/h", piAgentDir: "/state/pi" },
+      {
+        society: "demo", provider: "pi", model: "current",
+        extensions: role.extensions.map(e => ({ path: e.path, sha256: e.sha256 })),
+        prompt: "role prompt",
+        toolSurface: encodeToolSurfacePlan(role.toolSurface!),
+      },
+    );
+    assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], "role prompt",
+      "the Principal must run with its role prompt, as a Resident does");
+
+    const env = sessionEnv({ HOME: "/h" }, {
+      society: "demo", provider: "pi", model: "current", extensions: [],
+      toolSurface: encodeToolSurfacePlan(role.toolSurface!),
+    }, { piAgentDir: "/state/pi" });
+    assert.ok(env.OMA_TOOL_SURFACE, "the projection reaches the engine");
+    assert.equal(env.PI_CODING_AGENT_DIR, "/state/pi", "the engine stays in OMA's directory");
+
+    // A role without a prompt must not push an empty flag.
+    const bare = sessionArgv(
+      { piCommand: "/usr/bin/node", piArgs: [], coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
+      { society: "demo", provider: "pi", model: "current", extensions: [] },
+    );
+    assert.ok(!bare.includes("--append-system-prompt"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

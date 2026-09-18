@@ -1,12 +1,18 @@
 # Contract owners — P2
 
-`../contracts.ts` remains the compatibility/spec facade. It now exports 66 public
-type names over 67 declarations (including the private request envelope). Wire
+`../contracts.ts` remains the compatibility/spec facade. It now exports 63 public
+type names over 64 declarations (including the private request envelope). Wire
 method sets, field optionality, v1 persisted plans and closed error/config
 vocabularies are unchanged. These files are normative declarations, not new
 services.
 
-**Reviewed contract change, 2026-09-19.** The four frozen reverse dependencies
+**Reviewed contract change, 2026-09-19 (inference).** `InferenceModule`,
+`InferenceStart` and `InferenceEvent` were removed. INF-001 now places inference
+with the bundled engine, so OMA declares no relay port and no provider stream
+DTOs. The `usage` table and the six durable entities are unchanged; only the
+relay's own surface went away.
+
+**Reviewed contract change, 2026-09-19 (direction).** The four frozen reverse dependencies
 recorded in `../contract-direction-plan.json` were removed. `Capability`,
 `ResourceLimits` and `ProtocolLimits` are now declared here, and the runtime
 descriptors in `src/domain/` are bound to them by compile-time exhaustiveness

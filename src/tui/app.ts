@@ -6,12 +6,14 @@
  * this module so the whole flow is testable without a terminal.
  */
 import { decodeKeys, type Key } from "./keys.js";
+import { assertNever } from "../domain/exhaustive.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
   type Effect, type ExtensionRow, type MailRow, type PanelData, type State,
 } from "./model.js";
 import { applyLabel, render } from "./render.js";
 import type { ConfigField } from "./model.js";
+import { CONVERSATION_BOUNDS } from "./limits.js";
 import type { Terminal } from "./screen.js";
 
 export interface AppPorts {
@@ -61,7 +63,8 @@ export class TuiApp {
 
   line(text: string): void {
     this.transcript.push(text);
-    if (this.transcript.length > 500) this.transcript = this.transcript.slice(-500);
+    const keep = CONVERSATION_BOUNDS.transcriptLines.value;
+    if (this.transcript.length > keep) this.transcript = this.transcript.slice(-keep);
     this.draw();
   }
 
@@ -110,6 +113,9 @@ export class TuiApp {
         case "quit":
           this.ports.quit();
           return;
+        default:
+          // Closed effect union: a new variant must be handled, not ignored.
+          return assertNever(effect);
       }
     } catch (error) {
       // A rejected write must state that nothing was saved rather than leaving
