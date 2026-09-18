@@ -4,6 +4,15 @@
 
 ## 현재 판정
 
+**구조 개선 작업은 종료했다.** 남은 아키텍처 부채였던 contract 역의존이 0이 됐고, 이후로는 소규모 기능과 TUI 변경만 수행한다.
+
+- `contract-direction-plan.json`의 네 alias가 모두 사라졌다. `Capability`/`ResourceLimits`/`ProtocolLimits`는 contract가 선언하고 runtime descriptor가 양방향 compile-time 검사로 묶인다. `Transaction`은 소비자가 없어 port로 대체하지 않고 제거했다.
+- Architecture checker의 죽은 `frozenContractAliases` allowlist만 제거했다. `contractOwnershipFindings`는 rule module과 중복이 아니라 상호보완(`type-import-cycle`을 추가로 잡음)이라 유지한다.
+- Mutation fan-out 구조와 `pi-extension.ts`는 의도적으로 그대로 둔다. LOC 감소 목적의 분해는 하지 않는다.
+
+앞으로의 변경 원칙은 다음과 같다. TUI 변경은 `tui/model`·`render`·`app`·`sources` 안에서 끝낸다. 디자인 변경을 이유로 protocol·durable state·broker·storage 계약을 건드리지 않는다. 변경 범위가 실제로 줄어들지 않는 새 abstraction은 만들지 않는다.
+
+
 OMA를 Pi 확장이 아니라 단일 제품으로 제시하는 표면을 추가했다. 사용자 진입점은 `oma` 하나이고, 대화 화면에서 `Ctrl+X`로 Dashboard / Config / Mail을 연다.
 
 규범은 architecture.md **§23**과 implementation-spec.md **§19 (TUI-001–015)**가 소유한다. architecture 기준본 hash는 `031e72cd…`이며 N-001에 반영했다.
@@ -32,11 +41,11 @@ OMA를 Pi 확장이 아니라 단일 제품으로 제시하는 표면을 추가�
 
 ## 현재 검증 상태
 
-수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 975/975 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
+수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 984/984 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
 
 TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unverified**다. 실제 Pi provider 연결과 TTY raw mode는 관측하지 않았으므로 COMP-004의 `proven`이 아니다.
 
-**A-008 LOC gate가 열려 있다.** 187 files / 17,763 code LOC로 10,000행 기준을 넘는다. TUI가 1,374줄, tool 표면 투영이 368줄을 더했다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
+**A-008 LOC gate가 열려 있다.** 187 files / 17,920 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
 
 ## 다음에 할 일
 

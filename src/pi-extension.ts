@@ -637,16 +637,22 @@ export function expandedActiveTools(
   return { next: [...active].sort(), revealed };
 }
 
-function registerToolSurface(pi: ExtensionAPI, always: readonly string[]): void {
+export function registerToolSurface(pi: ExtensionAPI, always: readonly string[]): void {
   const parsed = parseSurfacePlan(process.env.OMA_TOOL_SURFACE);
   if (parsed.state === "absent") return;
-  const apply = (names: readonly string[]): void => {
-    try { pi.setActiveTools([...names]); } catch { /* host refused; leave the surface untouched */ }
+  // TSP-007: the projection is a containment decision, so a host that refuses
+  // the change leaves the surface in an unproven state. Failing loudly is the
+  // only outcome that cannot silently expose a tool meant to be disabled.
+  const apply = (names: readonly string[], phase: string): void => {
+    try { pi.setActiveTools([...names]); }
+    catch (error) {
+      throw new Error(`OMA tool surface ${phase} could not be applied: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
   if (parsed.state === "malformed") {
     // Fail closed: an unreadable projection must not expose a tool the host
     // meant to disable. Only OMA's own trusted tools stay active.
-    apply(always);
+    apply(always, `fallback (${parsed.reason})`);
     return;
   }
   const plan = parsed.plan;
@@ -659,10 +665,15 @@ function registerToolSurface(pi: ExtensionAPI, always: readonly string[]): void 
       parameters: Type.Object({}),
       executionMode: "sequential",
       async execute() {
-        let active: string[] = [];
-        try { active = [...pi.getActiveTools()]; } catch { active = []; }
+        // An unreadable active set must not be treated as empty: that would
+        // deactivate every tool the session already had.
+        let active: readonly string[];
+        try { active = [...pi.getActiveTools()]; }
+        catch (error) {
+          throw new Error(`OMA tool surface could not read the active tools: ${error instanceof Error ? error.message : String(error)}`);
+        }
         const { next, revealed } = expandedActiveTools(active, group.children);
-        apply(next);
+        apply(next, `group "${group.name}"`);
         const text = revealed.length === 0
           ? `${group.name}: already enabled (${group.children.join(", ")})`
           : `${group.name}: enabled ${revealed.length} (${revealed.join(", ")})`;
@@ -671,9 +682,12 @@ function registerToolSurface(pi: ExtensionAPI, always: readonly string[]): void 
     });
   }
   const project = (): void => {
-    let registered: string[] = [];
-    try { registered = pi.getAllTools().map((tool) => tool.name); } catch { return; }
-    apply(initialActiveTools(plan, registered, always));
+    let registered: string[];
+    try { registered = pi.getAllTools().map((tool) => tool.name); }
+    catch (error) {
+      throw new Error(`OMA tool surface could not read the registered tools: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    apply(initialActiveTools(plan, registered, always), "projection");
   };
   pi.on("session_start", () => { project(); });
   project();

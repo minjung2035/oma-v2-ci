@@ -1016,27 +1016,6 @@
    "classificationsAreApproval": false,
    "edges": [
     {
-     "from": "implementation/contracts/host.ts",
-     "to": "src/domain/limits.ts",
-     "classification": "compatibility-facade",
-     "kernelUpward": false,
-     "coarseUpward": true
-    },
-    {
-     "from": "implementation/contracts/host.ts",
-     "to": "src/domain/resources.ts",
-     "classification": "compatibility-facade",
-     "kernelUpward": false,
-     "coarseUpward": true
-    },
-    {
-     "from": "implementation/contracts/identity.ts",
-     "to": "src/domain/capabilities.ts",
-     "classification": "compatibility-facade",
-     "kernelUpward": false,
-     "coarseUpward": true
-    },
-    {
      "from": "implementation/contracts/module-contracts.ts",
      "to": "src/module-ports.ts",
      "classification": "compatibility-facade",
@@ -1091,13 +1070,6 @@
      "classification": "compatibility-facade",
      "kernelUpward": false,
      "coarseUpward": false
-    },
-    {
-     "from": "implementation/contracts/module-contracts.ts",
-     "to": "src/store.ts",
-     "classification": "compatibility-facade",
-     "kernelUpward": false,
-     "coarseUpward": true
     },
     {
      "from": "src/broker/internal-dispatcher.ts",
@@ -1415,8 +1387,8 @@
   }
  ],
  "files": 188,
- "runtimeEdges": 686,
- "typeOnlyEdges": 294,
+ "runtimeEdges": 687,
+ "typeOnlyEdges": 293,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 205,
   "L2-facts -> L1-kernel": 27,
@@ -1428,29 +1400,13 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 20,
-  "L5-entry -> L1-kernel": 52,
+  "L5-entry -> L1-kernel": 53,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
   "L5-entry -> L4-orchestration": 9,
   "L5-entry -> L5-entry": 65
  },
  "upwardTypeOnlyEdges": [
-  {
-   "from": "implementation/contracts/host.ts",
-   "to": "src/domain/limits.ts"
-  },
-  {
-   "from": "implementation/contracts/host.ts",
-   "to": "src/domain/resources.ts"
-  },
-  {
-   "from": "implementation/contracts/identity.ts",
-   "to": "src/domain/capabilities.ts"
-  },
-  {
-   "from": "implementation/contracts/module-contracts.ts",
-   "to": "src/store.ts"
-  },
   {
    "from": "src/diagnostics/integrity.ts",
    "to": "src/git/observe.ts"
@@ -1488,9 +1444,9 @@
   "src/mail.ts": 26,
   "src/entry/broker.ts": 19,
   "src/git.ts": 15,
+  "src/entry/oma.ts": 14,
   "src/git/context-repository.ts": 14,
   "src/store.ts": 14,
-  "src/entry/oma.ts": 13,
   "src/lifecycle/create.ts": 13,
   "src/reconcile.ts": 13,
   "src/git/context.ts": 12,
@@ -1506,10 +1462,10 @@
   "node:async_hooks": 3,
   "node:child_process": 3,
   "node:crypto": 18,
-  "node:fs": 43,
+  "node:fs": 44,
   "node:net": 3,
   "node:os": 2,
-  "node:path": 50,
+  "node:path": 51,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:string_decoder": 1,

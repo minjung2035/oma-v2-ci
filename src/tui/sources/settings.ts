@@ -6,6 +6,8 @@
  * It never invents a model, a quota or a profile that the host did not declare.
  */
 import { createHash } from "node:crypto";
+import { readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, normalize, relative } from "node:path";
 import type { HostConfigV1 } from "../../../implementation/contracts.js";
 import { StoreError } from "../../domain/errors.js";
 import { loadConfig } from "../../config.js";
@@ -19,8 +21,22 @@ export const INITIAL_WORKERS = "initial-workers";
 export const WORKER_PROFILE = "worker-profile";
 export const EXTENSIONS = "extensions";
 
+/** The authored layout behind the composed config. A split bundle keeps role
+ * files and host.json as the real owners, so a Config edit must patch those
+ * rather than flattening the bundle into its index (CFG-005, operations).
+ */
+export type ConfigLayout =
+  | { readonly kind: "inline"; readonly path: string }
+  | {
+      readonly kind: "operations";
+      readonly index: string;
+      readonly host: string;
+      readonly roles: Readonly<Record<string, string>>;
+    };
+
 export interface Settings {
   readonly path: string;
+  readonly layout: ConfigLayout;
   readonly config: HostConfigV1;
   readonly workerProfile: string;
   readonly fields: readonly ConfigField[];
@@ -63,13 +79,54 @@ export function fieldsOf(config: HostConfigV1, workerProfile: string): readonly 
   ]);
 }
 
-export function settingsOf(path: string, config: HostConfigV1): Settings {
+function readJsonObject(path: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+    throw new StoreError("INVALID_REQUEST", `${path} must contain a JSON object`);
+  return parsed as Record<string, unknown>;
+}
+
+/** Relative references inside a bundle stay inside it: the same containment the
+ * operations loader enforces, repeated here because this module writes.
+ */
+function bundlePath(root: string, value: unknown, what: string): string {
+  if (typeof value !== "string" || value.length === 0 || isAbsolute(value))
+    throw new StoreError("INVALID_REQUEST", `${what} must be a relative path`);
+  const resolved = normalize(join(root, value));
+  const inside = relative(root, resolved);
+  if (inside.startsWith("..") || isAbsolute(inside))
+    throw new StoreError("INVALID_REQUEST", `${what} escapes the configuration bundle`);
+  return resolved;
+}
+
+export function layoutOf(path: string): ConfigLayout {
+  let index: string;
+  let source: Record<string, unknown>;
+  try { index = realpathSync(path); source = readJsonObject(index); }
+  catch { return Object.freeze({ kind: "inline" as const, path }); }
+  if (source.kind !== "oma-operations-v1") return Object.freeze({ kind: "inline" as const, path: index });
+  const root = dirname(index);
+  const declared = source.roles;
+  if (declared === null || typeof declared !== "object" || Array.isArray(declared))
+    throw new StoreError("INVALID_REQUEST", "operations config roles must be an object");
+  const roles: Record<string, string> = {};
+  for (const [name, file] of Object.entries(declared as Record<string, unknown>))
+    roles[name] = bundlePath(root, file, `roles.${name}`);
+  return Object.freeze({
+    kind: "operations" as const,
+    index,
+    host: bundlePath(root, source.host, "host"),
+    roles: Object.freeze(roles),
+  });
+}
+
+export function settingsOf(path: string, config: HostConfigV1, layout: ConfigLayout = { kind: "inline", path }): Settings {
   const workerProfile = workerProfileOf(config);
-  return Object.freeze({ path, config, workerProfile, fields: fieldsOf(config, workerProfile) });
+  return Object.freeze({ path, layout, config, workerProfile, fields: fieldsOf(config, workerProfile) });
 }
 
 export function readSettings(path: string): Settings {
-  return settingsOf(path, loadConfig(path));
+  return settingsOf(path, loadConfig(path), layoutOf(path));
 }
 
 /** CFG-005: a config replacement must carry a new policy revision. Deriving it
@@ -149,9 +206,84 @@ export function applyField(settings: Settings, field: string, value: string | nu
 /** FS-002/CFG-001: host authority is replaced atomically, never edited in place.
  * The written bytes are revalidated by the caller's next read; this function
  * does not report success for a file it could not render.
+ *
+ * Only for an inline `config.json`. A split bundle must be patched at its real
+ * owners instead, which `commitField` does.
  */
 export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 {
   const revised: HostConfigV1 = { ...config, integration: { ...config.integration, policyRevision: revisionFor(config) } };
   replaceDerivedFile(path, `${JSON.stringify(revised, null, 2)}\n`, 0o600);
   return revised;
+}
+
+function writeJsonObject(path: string, body: Record<string, unknown>): void {
+  replaceDerivedFile(path, `${JSON.stringify(body, null, 2)}\n`, 0o600);
+}
+
+/** Merges into the file as authored, so fields this screen does not model —
+ * role `toolSurface`, prompts, anything a later host adds — survive the edit.
+ */
+function patchFile(path: string, patch: (current: Record<string, unknown>) => Record<string, unknown>): void {
+  let current: Record<string, unknown>;
+  try { current = readJsonObject(path); }
+  catch { throw new StoreError("STORE_CORRUPT", `configuration file became unreadable: ${path}`); }
+  writeJsonObject(path, patch(current));
+}
+
+function roleFileOf(layout: Extract<ConfigLayout, { kind: "operations" }>, profile: string): string {
+  const path = layout.roles[profile];
+  if (path === undefined)
+    throw new StoreError("UNSUPPORTED_PROFILE", `the configuration bundle has no role file for "${profile}"`);
+  return path;
+}
+
+function patchRoleModel(layout: Extract<ConfigLayout, { kind: "operations" }>, profile: string, model: string): void {
+  patchFile(roleFileOf(layout, profile), current => {
+    const agentProfile = current.agentProfile;
+    if (agentProfile === null || typeof agentProfile !== "object" || Array.isArray(agentProfile))
+      throw new StoreError("STORE_CORRUPT", `role "${profile}" has no agentProfile object`);
+    return { ...current, agentProfile: { ...(agentProfile as Record<string, unknown>), modelProfile: model } };
+  });
+}
+
+/** Writes one confirmed Config value to whichever file actually owns it, then
+ * records the new policy revision (CFG-005). The composed config is validated
+ * first, so an unknown model or profile is refused before anything is written.
+ */
+export function commitField(settings: Settings, field: string, value: string | number): void {
+  const applied = applyField(settings, field, value);
+  const revision = revisionFor(applied);
+  if (settings.layout.kind === "inline") {
+    writeSettings(settings.layout.path, applied);
+    return;
+  }
+  const layout = settings.layout;
+  switch (field) {
+    case PRINCIPAL_MODEL:
+      patchRoleModel(layout, settings.config.principalProfile, String(value));
+      break;
+    case WORKER_MODEL:
+      patchRoleModel(layout, settings.workerProfile, String(value));
+      break;
+    case WORKER_LIMIT:
+      patchFile(layout.host, current => {
+        const quota = current.quota;
+        if (quota === null || typeof quota !== "object" || Array.isArray(quota))
+          throw new StoreError("STORE_CORRUPT", "host file has no quota object");
+        return { ...current, quota: { ...(quota as Record<string, unknown>), societyAgents: value } };
+      });
+      break;
+    case INITIAL_WORKERS:
+    case WORKER_PROFILE:
+      patchFile(layout.host, current => ({ ...current, initialResidents: applied.initialResidents }));
+      break;
+    default:
+      throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
+  }
+  patchFile(layout.host, current => {
+    const integration = current.integration;
+    if (integration === null || typeof integration !== "object" || Array.isArray(integration))
+      throw new StoreError("STORE_CORRUPT", "host file has no integration object");
+    return { ...current, integration: { ...(integration as Record<string, unknown>), policyRevision: revision } };
+  });
 }

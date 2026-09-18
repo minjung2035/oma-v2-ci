@@ -4,6 +4,33 @@
 
 ## 현재 source 판정
 
+### 2026-09-19 — refactor 종료: contract 역의존 0, 통합 결함 4건 수정
+
+**Contract 역의존 제거 (완료).** `contract-direction-plan.json`의 네 alias를 모두 없앴고 `currentFrozenContractAliases`는 0이다.
+
+- `Capability`, `ResourceLimits`, `ProtocolLimits`는 이제 contract owner가 선언하고, `src/domain/`의 runtime descriptor가 **양방향 compile-time exhaustiveness**로 그 선언에 묶인다. 한쪽에만 항목을 추가하면 gate가 아니라 build가 실패한다.
+- `Transaction`은 port로 대체하지 않고 **제거**했다. `StorePort.transaction`의 콜백은 인자가 없고 `src/`와 port 어느 쪽도 contract의 `Transaction`을 소비하지 않아, port를 만들면 호출자 없는 abstraction이 된다. 계획의 전략과 다르며 그 근거를 plan JSON의 `completed`에 기록했다.
+- Contract 선언 표면은 68 → 67, facade export는 67 → 66이다. 실제로 바뀐 선언이 위 네 개뿐임을 HEAD 대비 declaration diff로 확인한 뒤 golden fixture를 갱신했고, 근거는 `implementation/contracts/README.md`에 남겼다.
+
+**Architecture checker 정리 (범위 축소).** 계획은 "rules/로 이전된 검사를 architecture-check.mjs에서 제거"였으나, 음성 fixture로 실증한 결과 두 구현은 **이전이 아니라 상호보완**이다. 같은 위반에 대해 rule module은 `contract-direction` 하나를, legacy는 `contract-ownership`에 더해 `type-import-cycle`까지 보고한다. 따라서 `contractOwnershipFindings`는 유지하고, 실제로 죽은 코드인 `frozenContractAliases` allowlist(2,445자)만 제거했다. CLI/mutation 규칙에는 애초에 중복이 없었다.
+
+**통합 결함 4건 수정.**
+
+1. Extensions 화면이 role 파일의 optional `toolSurface`를 지울 수 있었다. `toggleExtension`이 세 필드만 다시 썼기 때문이다. 이제 쓰기 직전에 파일을 다시 읽어 `extensions`만 교체하고 나머지 필드를 보존한다.
+2. Principal TUI 세션에 role extension과 `toolSurface`가 적용되지 않았다. `entry/oma.ts`가 `extensions: []`를 넘기고 있었다. 이제 Principal role의 extension 목록과 검증된 projection을 `OMA_TOOL_SURFACE`로 전달한다.
+3. Config 화면이 split operations bundle을 파괴할 수 있었다. `writeSettings`가 index 파일에 flat `HostConfigV1`을 덮어썼다. 새 `commitField`가 형식을 판별해 각 필드를 실제 owner 파일(role 파일 또는 host.json)에 patch하고 policy revision을 갱신한다. bundle 밖으로 나가는 상대 경로는 거절한다.
+4. Tool surface의 fail-closed가 느슨했다. `setActiveTools` 실패를 `catch {}`로 삼키고, `getActiveTools` 실패를 빈 배열로 취급해 **모든 tool을 비활성화할 수 있었다**. 이제 세 경로 모두 명시적으로 실패한다.
+
+**검증.**
+
+- `npm run typecheck`, `npm run build`, `npm run check:package`: PASS.
+- `npm run check:architecture`: PASS, 0 findings.
+- `npm test`: **984/984 PASS**, fail/skipped/todo=0. 신규 9건은 `test/tui-integration-defects.test.ts`이며 수정 전이라면 모두 실패한다. P23 오라클 2건은 "frozen alias 예외 유지"에서 **"어떤 예외도 없다"**는 더 강한 오라클로 교체했다.
+- `node scripts/loc.mjs`: **187 files / 17,920 code LOC**. A-008 review 요구는 유지된다.
+
+미검증 범위는 그대로다. TSP-005–008은 실제 Pi 프로세스 관측이 없어 `unverified`이고, S-02의 `principal.attach`도 미구현이다. 결함 4의 수정은 fail-closed 경로를 단위 검증한 것이지 live Pi에서 확인한 것이 아니다.
+
+
 ### 2026-09-18 — Extension tool 표면 투영 (pi-proxy 설계 재구현)
 
 - 별도 저장소 `pi-proxy-`(pi-tool-surface-proxy)의 설계를 **코드 이식 없이** OMA 계약으로 재구현했다. 이식하지 않은 것은 자식 extension 로더, host facade, registry capture, 자식 handler 직접 실행 경로다. OMA는 이미 operations 계약과 Pi의 `-e`로 extension을 로드하므로 그 계층이 필요 없고, 그대로 가져왔다면 PI-001/TUI-010의 자동 탐색·임의 경로 금지를 위반했을 것이다.
@@ -116,7 +143,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **187 files / 17,763 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **187 files / 17,920 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

@@ -355,81 +355,6 @@ export function analyzeProgram(
   const sourceByFile = new Map(
     sources.map((source) => [relative(root, source.fileName), source]),
   );
-  // Frozen v1 aliases: CFG-005 canonical vocabulary owners and the legacy Transaction facade.
-  // No directory-wide exemption, and no implementation exception on internal ports.
-  const frozenContractAliases = [
-    [
-      "implementation/contracts/module-contracts.ts",
-      "src/store.ts",
-      "../../src/store.js",
-      "Transaction",
-    ],
-    [
-      "implementation/contracts/host.ts",
-      "src/domain/resources.ts",
-      "../../src/domain/resources.js",
-      "ResourceLimits",
-    ],
-    [
-      "implementation/contracts/host.ts",
-      "src/domain/limits.ts",
-      "../../src/domain/limits.js",
-      "ProtocolLimits",
-    ],
-    [
-      "implementation/contracts/identity.ts",
-      "src/domain/capabilities.ts",
-      "../../src/domain/capabilities.js",
-      "Capability",
-    ],
-  ];
-  const isFrozenContractAlias = (finding) => {
-    if (finding.kind !== "type") return false;
-    const allowed = frozenContractAliases.find(
-      ([file, target, specifier]) =>
-        file === finding.file &&
-        target === finding.target &&
-        specifier === finding.specifier,
-    );
-    if (!allowed) return false;
-    const source = sourceByFile.get(finding.file);
-    let matches = 0;
-    let targetReferences = 0;
-    if (source)
-      eachNode(source, (node) => {
-        if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-          if (
-            node.moduleSpecifier &&
-            ts.isStringLiteralLike(node.moduleSpecifier) &&
-            node.moduleSpecifier.text === finding.specifier
-          )
-            targetReferences++;
-          return;
-        }
-        if (!ts.isImportTypeNode(node)) return;
-        const argument = node.argument;
-        if (
-          !ts.isLiteralTypeNode(argument) ||
-          !ts.isStringLiteralLike(argument.literal) ||
-          argument.literal.text !== finding.specifier
-        )
-          return;
-        targetReferences++;
-        const parent = node.parent;
-        if (
-          node.qualifier?.getText(source) === allowed[3] &&
-          !node.isTypeOf &&
-          !node.typeArguments?.length &&
-          ts.isTypeAliasDeclaration(parent) &&
-          parent.name.text === allowed[3] &&
-          !parent.typeParameters?.length &&
-          parent.modifiers?.length === 1 &&
-          parent.modifiers[0].kind === ts.SyntaxKind.ExportKeyword
-        )
-          matches++;
-      });
-    return matches === 1 && targetReferences === 1;
-  };
   const report = (rule, node, reason) => {
     const source = node.getSourceFile();
     const start = node.getStart(source),
@@ -982,14 +907,14 @@ export function analyzeProgram(
       sourceByFile.get(finding.file) ?? anchor,
       finding.reason,
     );
-  for (const finding of contractOwnershipFindings(latticeEdges)) {
-    if (isFrozenContractAlias(finding)) continue;
+  // Contract -> implementation references are now zero; the plan-driven rule
+  // module owns the allowlist, so no exemption is applied here.
+  for (const finding of contractOwnershipFindings(latticeEdges))
     report(
       finding.rule,
       sourceByFile.get(finding.file) ?? anchor,
       finding.reason,
     );
-  }
   for (const finding of kernelFindings(programGraph))
     report(
       finding.rule,

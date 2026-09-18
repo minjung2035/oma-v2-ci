@@ -8,12 +8,35 @@ export interface ResolvedAgentSpec extends Pick<AgentCreateInput, 'name' | 'from
   modelProfile: string; resources: ResourceLimits;
 }
 
-/** MUST [CFG-005]: Canonical field descriptors own names, ranges and units.
- * These aliases are erased; contracts.ts has no runtime import or defaults.
+/** MUST [CFG-005]: the contract declares the field names; the canonical runtime
+ * descriptors (src/domain/resources.ts, src/domain/limits.ts) own ranges, units
+ * and validation and are checked against these keys at compile time. Every value
+ * is a non-negative safe integer verified at runtime, never by a cast.
  */
-export type ResourceLimits = import('../../src/domain/resources.js').ResourceLimits;
+export interface ResourceLimits {
+  memoryBytes: number;
+  tasks: number;
+  cpuQuotaPercent: number;
+  tmpBytes: number;
+  workspaceBytes: number;
+  stagingBytes: number;
+  checkTimeoutSeconds: number;
+}
 
-export type ProtocolLimits = import('../../src/domain/limits.js').ProtocolLimits;
+export interface ProtocolLimits {
+  frameBytes: number;
+  mailBodyBytes: number;
+  subjectBytes: number;
+  addresses: number;
+  replyReferences: number;
+  contextFiles: number;
+  contextBytes: number;
+  bundleBytes: number;
+  logBytes: number;
+  batchMaxMessages: number;
+  idleStreamSeconds: number;
+  receiptWaitSeconds: number;
+}
 
 export interface ModelProfile {
   provider: string; model: string; credentialRef: string; codecRevision: string;

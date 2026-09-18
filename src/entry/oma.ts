@@ -6,6 +6,7 @@
  */
 import { join } from "node:path";
 import { loadConfiguration } from "../config.js";
+import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
 import { isValidSocietyName } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
@@ -17,7 +18,7 @@ import { PrincipalSession } from "../tui/session.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
-import { applyField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
+import { commitField, readSettings, type Settings } from "../tui/sources/settings.js";
 import type { ExtensionRow, MailRow } from "../tui/model.js";
 
 function usage(): never {
@@ -70,7 +71,7 @@ async function main(argv: readonly string[]): Promise<void> {
     extensions: (): readonly ExtensionRow[] => extensionContext.rows,
     body: (path: string) => (path.length === 0 ? null : readBody(path)),
     setField: (field, value) => {
-      writeSettings(configPath, applyField(settings, field, value));
+      commitField(settings, field, value);
       reload();
     },
     setExtension: (id, role, enabled) => {
@@ -109,12 +110,20 @@ async function main(argv: readonly string[]): Promise<void> {
   const principalProfile = settings.config.agentProfiles[settings.config.principalProfile];
   const modelName = principalProfile?.modelProfile ?? "";
   const model = settings.config.modelProfiles[modelName];
+  // The Principal runs under the same role contract as a Resident: its own
+  // extensions and tool surface come from the configuration, not from defaults.
+  const principalRole = loadConfiguration(configPath).roles[settings.config.principalProfile];
+  const roleExtensions = (principalRole?.extensions ?? [])
+    .map(extension => extension.path)
+    .filter(extension => extension !== coreExtension);
+  const roleSurface = principalRole?.toolSurface ?? null;
   try {
     if (!model) throw new StoreError("UNSUPPORTED_PROFILE", `principal model profile ${modelName} is not declared`);
     session = PrincipalSession.start(
       { piCommand, coreExtension, sessionDir: join(stateRoot, "principal", "private", "sessions"),
         workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private") },
-      { society, provider: model.provider, model: model.model, extensions: [] },
+      { society, provider: model.provider, model: model.model, extensions: roleExtensions,
+        ...(roleSurface === null ? {} : { toolSurface: encodeToolSurfacePlan(roleSurface) }) },
       limitsOf(settings.config.limits),
       { HOME: join(stateRoot, "principal", "private"), PATH: "/usr/bin:/bin" },
       {

@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "implementation/contracts.ts",
-      "sha256": "a15fdcbe3b4f061683f5e0705b21204e766ba6e7b7770d602727445aba49a354"
+      "sha256": "be9828f8adb05244d630816d84a81425876b46c8a3c47221d16cb3a84d0de39c"
     },
     {
       "path": "implementation/schema-v1.sql",
@@ -196,7 +196,7 @@
     },
     {
       "path": "src/domain/capabilities.ts",
-      "sha256": "7d903d06459a6aae1e169498a97bc8409b11e02cf94a059c594b9193f1413d2e"
+      "sha256": "6d7cbf061067dfed9d330a012ec6408c78f2e2005b6e78464c53c9d5b3ac1a37"
     },
     {
       "path": "src/domain/child-policy.ts",
@@ -232,7 +232,7 @@
     },
     {
       "path": "src/domain/limits.ts",
-      "sha256": "5d634434e1fb7ae520a3d6ddb7443fc87c0bb594750915347b5702cc045c6e57"
+      "sha256": "edd8ab9b4be5dd927fdf1c75a6b5425dc91687a1a503016a3489b76df82716d7"
     },
     {
       "path": "src/domain/lineage.ts",
@@ -252,7 +252,7 @@
     },
     {
       "path": "src/domain/resources.ts",
-      "sha256": "110e579a7e7fa40248d270b2cfa0a4eedb7bedffa7e07ad31562c60b2c5fe1a3"
+      "sha256": "123ecc19ea394ad573f7b6a6e3993748e730665b7046b93511f4aba1ffc73a63"
     },
     {
       "path": "src/domain/spec-identity.ts",
@@ -284,7 +284,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "f649cf6a3a2af6e3b7afe12c2604cac33e7d8ae4eafb164244c28556a4ea5822"
+      "sha256": "54a3790390d530894b44e51db04fb243b54519fd2e10c742b9483b5477325d6e"
     },
     {
       "path": "src/entry/runner.ts",
@@ -448,7 +448,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "e26956ae883b55c79b157cf7a7fef86f85a4a34be67c73a81e29428f7d84fd93"
+      "sha256": "071601e2753b53ad2836c751d39e0aec391432979214abc8735914da5a06e6cd"
     },
     {
       "path": "src/ports/ledger.ts",
@@ -704,11 +704,11 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "b5dd93bb779b64d0177fa337a4ffb59ee6e1923ce7614f237b34b31b02c231b5"
+      "sha256": "f3b91d935b7084e7714e6f1bb95c7806e8fda186bca5839af6946c3645f9b750"
     },
     {
       "path": "src/tui/sources/extensions.ts",
-      "sha256": "89e57f1c12c8b7c9a4381d89d9d39166456100cb96195297dbbdce2c47c09293"
+      "sha256": "8a7f538a223f678c6194b40b6780e1627dafa065340226150ccc8aba4f424a55"
     },
     {
       "path": "src/tui/sources/mail.ts",
@@ -716,7 +716,7 @@
     },
     {
       "path": "src/tui/sources/settings.ts",
-      "sha256": "9da687f5599e63b000c4cc98271251da6ddb94cc122786dada1cf5a745e4000a"
+      "sha256": "72c6ee4d74e067934031f65228236858c6c3319ee110a23ba36c63572b2d7ab0"
     },
     {
       "path": "src/tui/transport.ts",

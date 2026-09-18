@@ -14,7 +14,6 @@ export type Store = import('../../src/module-ports.js').StorePort;
 
 export type OperationReceiptPort = import('../../src/module-ports.js').OperationReceiptPort;
 
-export type Transaction = import('../../src/store.js').Transaction;
 
 export interface MailModule {
   send(auth: AuthContext, key: RequestKey, input: MailInput): Promise<Receipt>;

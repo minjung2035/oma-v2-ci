@@ -20,7 +20,12 @@ export interface SessionProfile {
   readonly society: string;
   readonly provider: string;
   readonly model: string;
+  /** Absolute paths of the Principal role's extensions, host-verified before
+   * start. The core extension is always passed first and is not repeated here. */
   readonly extensions: readonly string[];
+  /** TSP-005: the Principal role's validated tool surface plan, encoded for the
+   * core extension. Absent means the role shows every registered tool. */
+  readonly toolSurface?: string | undefined;
 }
 
 export interface SessionSink {
@@ -50,6 +55,16 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
   if (!(profile.provider === "pi" && profile.model === "current"))
     args.push("--model", `${profile.provider}/${profile.model}`);
   return Object.freeze(args);
+}
+
+/** TSP-005: the Principal role's projection reaches its Pi process the same way
+ * a Resident's does. Kept separate so the wiring is testable without spawning.
+ */
+export function sessionEnv(base: Readonly<Record<string, string>>, profile: SessionProfile): Record<string, string> {
+  return {
+    ...base,
+    ...(profile.toolSurface === undefined ? {} : { OMA_TOOL_SURFACE: profile.toolSurface }),
+  };
 }
 
 function textOf(message: unknown): string {
@@ -114,7 +129,7 @@ export class PrincipalSession {
   }
 
   static start(paths: SessionPaths, profile: SessionProfile, limits: PiRpcLimits, env: Readonly<Record<string, string>>, sink: SessionSink): PrincipalSession {
-    const child = spawnOwnedRpc(paths.piCommand, sessionArgv(paths, profile), paths.workspace, env);
+    const child = spawnOwnedRpc(paths.piCommand, sessionArgv(paths, profile), paths.workspace, sessionEnv(env, profile));
     return new PrincipalSession(child, limits, sink);
   }
 

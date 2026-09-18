@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, relative } from "node:path";
 import ts from "typescript";
+const root = new URL("../", import.meta.url);
 import {
   analyzeProgram,
   runtimeImportClosure,
@@ -628,50 +629,64 @@ test("P23 contract ownership forbids runtime, type, inline-import and re-export 
   }, ["src/**/*.ts", "implementation/**/*.ts"]);
 });
 
-test("P23 contract ownership keeps only the exact frozen Transaction compatibility alias", () => {
-  const files = {
-    "implementation/contracts/module-contracts.ts": "export type Transaction = import(\"../../src/store.js\").Transaction;",
-    "implementation/contracts.ts": "export type { Transaction } from \"./contracts/module-contracts.js\";",
-    "src/store.ts": "export interface Transaction { commit(): void; }",
-  };
-  fixture(files, (root, program) => {
-    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
-    assert.deepEqual(findings.filter(finding => finding.rule === "contract-ownership"), []);
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
-  for (const extra of [
-    'export type Other = import("../../src/store.js").Transaction;',
-    'import type { Transaction as Other } from "../../src/store.js";',
-    'export type { Transaction as Other } from "../../src/store.js";',
-  ]) fixture({ ...files, "implementation/contracts/module-contracts.ts": `${files["implementation/contracts/module-contracts.ts"]} ${extra}` }, (root, program) => {
-    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
-    assert.ok(findings.some(finding => finding.rule === "contract-ownership"), "an additional same-target reference must not widen the exception");
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
-  fixture({ ...files, "implementation/contracts/module-contracts.ts": "export type Other = import(\"../../src/store.js\").Transaction;" }, (root, program) => {
-    const findings = analyzeProgram(program, { rootDir: root, checkContracts: false, programGraph: graphFromProgram(program, { rootDir: root }) });
-    assert.ok(findings.some(finding => finding.rule === "contract-ownership"), "renaming the compatibility alias must not widen the exception");
-  }, ["src/**/*.ts", "implementation/contracts.ts", "implementation/contracts/**/*.ts"]);
-});
-test("P23 frozen CFG-005 vocabulary aliases do not exempt new references or internal ports", () => {
+test("P23 contract ownership exempts no contract -> implementation reference", () => {
+  // The four frozen v1 aliases were migrated to contract-owned declarations, so
+  // the allowlist is gone. Each former alias must now be reported, including
+  // when it hides behind a rename or the public facade.
   for (const [file, target, name] of [
+    ["implementation/contracts/module-contracts.ts", "src/store.ts", "Transaction"],
     ["implementation/contracts/host.ts", "src/domain/resources.ts", "ResourceLimits"],
     ["implementation/contracts/host.ts", "src/domain/limits.ts", "ProtocolLimits"],
     ["implementation/contracts/identity.ts", "src/domain/capabilities.ts", "Capability"],
   ]) {
     const specifier = `../../${target.replace(/\.ts$/, ".js")}`;
-    const alias = `export type ${name} = import("${specifier}").${name};`;
-    for (const extra of ["", ` export type Added = import("${specifier}").${name};`]) fixture({
-      [file]: alias + extra, [target]: `export interface ${name} { value: string; }`,
-    }, (root, program) => {
-      const findings = analyzeProgram(program, { rootDir: root, checkContracts: false }).filter(f => f.rule === "contract-ownership");
-      assert.deepEqual(findings.map(f => f.file), extra ? [file] : [], `${file}: ${name}`);
+    const declaration = `export interface ${name} { value: string; }`;
+    for (const reference of [
+      `export type ${name} = import("${specifier}").${name};`,
+      `export type Renamed = import("${specifier}").${name};`,
+      `import type { ${name} } from "${specifier}"; export type Held = ${name};`,
+    ]) fixture({ [file]: reference, [target]: declaration }, (root, program) => {
+      const findings = analyzeProgram(program, { rootDir: root, checkContracts: false })
+        .filter(finding => finding.rule === "contract-ownership");
+      assert.deepEqual(findings.map(finding => finding.file), [file], `${file}: ${name}`);
     }, ["src/**/*.ts", "implementation/contracts/**/*.ts"]);
+    // An internal port may not launder the same reference either.
     fixture({
-      [file]: alias, [target]: `export interface ${name} { value: string; }`,
+      [target]: declaration,
       "src/ports/runtime.ts": `export type Leaked = import("${specifier}").${name};`,
     }, (root, program) => {
       const findings = analyzeProgram(program, { rootDir: root, checkContracts: false });
-      assert.ok(findings.some(f => f.rule === "contract-ownership" && f.file === "src/ports/runtime.ts"));
+      assert.ok(findings.some(finding => finding.rule === "contract-ownership" && finding.file === "src/ports/runtime.ts"));
     }, ["src/**/*.ts", "implementation/contracts/**/*.ts"]);
+  }
+});
+
+test("P23 the migrated vocabulary owners keep a two-way compile-time binding", () => {
+  // The contract now declares the closed set and the runtime descriptor must
+  // satisfy it. Dropping either side has to fail the build, not the gate.
+  const read = file => readFileSync(new URL(file, root), "utf8");
+  // A reference is an import specifier, not a mention in prose.
+  const referencesImplementation = source =>
+    /(?:import\s*\(\s*|from\s*)['"][^'"]*\.\.\/\.\.\/src\/[^'"]*['"]/.test(source);
+  assert.match(read("implementation/contracts/identity.ts"), /export type Capability =\s*\n?\s*\| 'mail\.send'/);
+  const withoutComments = file => read(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  for (const file of ["implementation/contracts/identity.ts", "implementation/contracts/host.ts"])
+    assert.ok(!referencesImplementation(withoutComments(file)), `${file} must not reference implementation`);
+  // module-contracts.ts may still name the erased internal port owners, which
+  // are contracts themselves, but never a concrete storage implementation.
+  const ports = withoutComments("implementation/contracts/module-contracts.ts")
+    .match(/['"][^'"]*\.\.\/\.\.\/src\/[^'"]*['"]/g) ?? [];
+  for (const reference of ports)
+    assert.match(reference, /src\/(module-ports|ports\/)/, `unexpected implementation reference ${reference}`);
+  for (const [file, contractType] of [
+    ["src/domain/capabilities.ts", "Capability"],
+    ["src/domain/resources.ts", "ResourceLimits"],
+    ["src/domain/limits.ts", "ProtocolLimits"],
+  ]) {
+    const source = read(file);
+    assert.match(source, /implementation\/contracts\//, `${file} must bind to the contract owner`);
+    assert.match(source, /\[Missing\w+\] extends \[never\]/, `${file} must assert exhaustiveness`);
+    assert.ok(source.includes(contractType), `${file} must name ${contractType}`);
   }
 });
 

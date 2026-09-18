@@ -19,9 +19,11 @@ export const CORE_EXTENSION = DEPLOYMENT_LAYOUT.extension;
 export interface RoleFile {
   readonly name: string;
   readonly path: string;
-  readonly agentProfile: unknown;
   readonly extensions: readonly string[];
-  readonly promptFile: unknown;
+  /** Every other field of the authored role file, preserved verbatim. Toggling
+   * an extension must not silently drop an optional block such as toolSurface.
+   */
+  readonly rest: Readonly<Record<string, unknown>>;
 }
 
 export interface ExtensionContext {
@@ -111,8 +113,9 @@ export function readExtensions(configPath: string, principalProfile: string, wor
     const entries = role.extensions;
     if (!Array.isArray(entries) || entries.some(entry => typeof entry !== "string"))
       return unmanaged(`role ${name}의 extensions 형식이 올바르지 않습니다`);
-    roles.push(Object.freeze({ name, path, agentProfile: role.agentProfile,
-      extensions: Object.freeze(entries as string[]), promptFile: role.promptFile }));
+    const { extensions: _authored, ...rest } = role;
+    roles.push(Object.freeze({ name, path,
+      extensions: Object.freeze(entries as string[]), rest: Object.freeze(rest) }));
   }
   const principal = roles.find(role => role.name === principalProfile) ?? null;
   const worker = roles.find(role => role.name === workerProfile) ?? null;
@@ -151,6 +154,11 @@ export function toggleExtension(context: ExtensionContext, id: string, role: "pr
   const available = context.rows.map(row => row.id);
   const entries = nextEntries(target.extensions, available, id, enabled);
   if (entries.length > 16) throw new StoreError("LIMIT_EXCEEDED", "role당 extension은 최대 16개입니다");
-  const body = { agentProfile: target.agentProfile, extensions: entries, promptFile: target.promptFile };
+  // Re-read immediately before writing so a field this screen does not model
+  // cannot be lost to a stale in-memory copy.
+  let current: Record<string, unknown>;
+  try { current = readJson(target.path); }
+  catch { throw new StoreError("STORE_CORRUPT", "role file became unreadable between read and write"); }
+  const body = { ...current, extensions: entries };
   replaceDerivedFile(target.path, `${JSON.stringify(body, null, 2)}\n`, 0o600);
 }

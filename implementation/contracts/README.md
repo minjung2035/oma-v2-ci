@@ -1,9 +1,20 @@
 # Contract owners — P2
 
-`../contracts.ts` remains the compatibility/spec facade. Its 67 public type names,
-68 original declarations (including the private request envelope), wire method
-sets, field optionality, v1 persisted plans and closed error/config vocabularies
-are unchanged. These files are normative declarations, not new services.
+`../contracts.ts` remains the compatibility/spec facade. It now exports 66 public
+type names over 67 declarations (including the private request envelope). Wire
+method sets, field optionality, v1 persisted plans and closed error/config
+vocabularies are unchanged. These files are normative declarations, not new
+services.
+
+**Reviewed contract change, 2026-09-19.** The four frozen reverse dependencies
+recorded in `../contract-direction-plan.json` were removed. `Capability`,
+`ResourceLimits` and `ProtocolLimits` are now declared here, and the runtime
+descriptors in `src/domain/` are bound to them by compile-time exhaustiveness
+checks in both directions. The `Transaction` alias was deleted rather than
+replaced by a port: `StorePort.transaction` takes a zero-argument callback and
+nothing consumed the contract's `Transaction`, so a port would have been an
+abstraction with no caller. The golden surface below was regenerated for exactly
+these four declarations and nothing else.
 
 Dependency direction (arrows mean imports):
 
@@ -14,8 +25,8 @@ durable        -> host, values, identity, errors
 host           -> values, identity
 runtime        -> identity
 errors, values -> identity
-identity       -> canonical capability owner (type only)
-host           -> canonical resource/limit owners (type only)
+identity       -> owns the closed capability vocabulary
+host           -> owns the resource/protocol limit field names
 module-contracts -> leaf contracts + existing module ports
 compatibility facade -> the nine owners (type-only re-exports)
 ```
