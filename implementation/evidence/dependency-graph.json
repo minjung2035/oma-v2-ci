@@ -65,6 +65,7 @@
   "src/domain/request-identity.ts",
   "src/domain/resources.ts",
   "src/domain/spec-identity.ts",
+  "src/domain/tool-surface.ts",
   "src/domain/usage-budget.ts",
   "src/durable.ts",
   "src/entry/broker.ts",
@@ -210,6 +211,7 @@
      "src/domain/request-identity.ts",
      "src/domain/resources.ts",
      "src/domain/spec-identity.ts",
+     "src/domain/tool-surface.ts",
      "src/domain/usage-budget.ts",
      "src/hash.ts",
      "src/process/command.ts",
@@ -285,10 +287,10 @@
    }
   ],
   "runtimeEdgeMatrix": {
-   "K0-values -> K0-values": 18,
+   "K0-values -> K0-values": 19,
    "K1-codecs -> K0-values": 41,
    "K1-codecs -> K1-codecs": 15,
-   "K2-mechanisms -> K0-values": 51,
+   "K2-mechanisms -> K0-values": 52,
    "K2-mechanisms -> K1-codecs": 7,
    "K2-mechanisms -> K2-mechanisms": 28,
    "K3-ledger -> K0-values": 19,
@@ -376,6 +378,11 @@
    {
     "from": "src/config/operations.ts",
     "to": "src/domain/identifiers.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config/operations.ts",
+    "to": "src/domain/tool-surface.ts",
     "kind": "runtime"
    },
    {
@@ -1348,7 +1355,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 73
+   "files": 74
   },
   {
    "index": 2,
@@ -1407,17 +1414,17 @@
    "files": 37
   }
  ],
- "files": 187,
- "runtimeEdges": 683,
+ "files": 188,
+ "runtimeEdges": 686,
  "typeOnlyEdges": 294,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 203,
+  "L1-kernel -> L1-kernel": 205,
   "L2-facts -> L1-kernel": 27,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 160,
   "L3-workflow -> L2-facts": 12,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 58,
+  "L4-orchestration -> L1-kernel": 59,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 20,
@@ -1460,7 +1467,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 100,
+  "src/domain/errors.ts": 101,
   "src/domain/identifiers.ts": 32,
   "src/ids.ts": 27,
   "src/storage/durable-fs.ts": 21,

@@ -340,5 +340,75 @@
     "negativeTests": [
       "test/tui-boundary.test.ts#T95"
     ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TSP-001",
+      "TSP-003",
+      "TSP-004"
+    ],
+    "owner": "src/domain/tool-surface.ts#planToolSurface",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource",
+      "src/domain/tool-surface.ts#planToolSurface"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T99",
+      "test/tool-surface.test.ts#T100"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TSP-002",
+      "TSP-010"
+    ],
+    "owner": "src/config/operations.ts#readConfigurationSource",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T100",
+      "test/tool-surface.test.ts#T103"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TSP-005",
+      "TSP-008"
+    ],
+    "owner": "src/pi-extension.ts#initialActiveTools",
+    "entrypoint": "src/pi-extension.ts#extension",
+    "callPath": [
+      "src/pi-extension.ts#extension",
+      "src/pi-extension.ts#initialActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T101"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TSP-006",
+      "TSP-007"
+    ],
+    "owner": "src/pi-extension.ts#expandedActiveTools",
+    "entrypoint": "src/pi-extension.ts#extension",
+    "callPath": [
+      "src/pi-extension.ts#extension",
+      "src/pi-extension.ts#parseSurfacePlan",
+      "src/pi-extension.ts#expandedActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T102",
+      "test/tool-surface.test.ts#T103"
+    ]
   }
 ]

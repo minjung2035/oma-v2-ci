@@ -20,6 +20,9 @@ export interface PiAdapterProfile {
   readonly prompt: string;
   readonly workspaceBytes: number;
   readonly extensions: readonly string[];
+  /** TSP-005: the validated projection for this role, or null to show every
+   * registered tool. The adapter forwards it; it never computes one. */
+  readonly toolSurface?: string | undefined;
 }
 export interface PiAdapterPaths {
   readonly piCommand: string;
@@ -144,6 +147,9 @@ function childEnvironment(options: PiAdapterOptions): Record<string, string> {
     OMA_MAIL_ARCHIVE: options.paths.mailArchive,
     OMA_AGENT_HOME: options.paths.agentHome,
     OMA_CLI_PATH: options.paths.cli,
+    ...(options.profile.toolSurface === undefined
+      ? {}
+      : { OMA_TOOL_SURFACE: options.profile.toolSurface }),
   });
 }
 function argv(options: PiAdapterOptions): string[] {

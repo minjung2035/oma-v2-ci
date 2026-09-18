@@ -4,9 +4,23 @@
 
 ## 현재 source 판정
 
+### 2026-09-18 — Extension tool 표면 투영 (pi-proxy 설계 재구현)
+
+- 별도 저장소 `pi-proxy-`(pi-tool-surface-proxy)의 설계를 **코드 이식 없이** OMA 계약으로 재구현했다. 이식하지 않은 것은 자식 extension 로더, host facade, registry capture, 자식 handler 직접 실행 경로다. OMA는 이미 operations 계약과 Pi의 `-e`로 extension을 로드하므로 그 계층이 필요 없고, 그대로 가져왔다면 PI-001/TUI-010의 자동 탐색·임의 경로 금지를 위반했을 것이다.
+- 원본 1,367 LOC 중 실제로 필요한 것은 **검증·평탄화 + 집합 산술**뿐이었다. 결과는 `src/domain/tool-surface.ts` 1개 파일과 `src/pi-extension.ts`의 추가분이며 증가량은 368 code LOC다.
+- 규범: architecture.md **§23.12**, implementation-spec.md **§20 (TSP-001–010)**, test-matrix **T99–T103**. 기준본 hash는 `031e72cd…`로 갱신했다.
+- 소유권 분리: cycle/중복/미지 참조/한도 검증은 host 쪽 `src/domain/tool-surface.ts`가 단일 owner이고, sandbox 쪽 `src/pi-extension.ts`는 검증된 plan에 대한 집합 연산만 한다. `pi-extension.ts`가 OMA runtime 모듈을 import하지 않는 기존 불변식을 유지했다.
+- Pi 0.85.1이 `getActiveTools`/`getAllTools`/`setActiveTools`를 실제로 노출함을 `node_modules`의 타입 선언에서 확인했다. 활성화 기반 투영은 pinned Pi에서 구현 가능하다.
+- 설정은 operations role 파일의 선택적 `toolSurface` 블록이다. CFG-005가 허용하는 role별 metadata 범위이며 `HostConfigV1`·wire·ledger·DB entity를 확장하지 않는다.
+- `npm test`: **975/975 PASS**, fail/skipped/todo=0. 신규 13건은 `test/tool-surface.test.ts`다.
+- `npm run check:architecture`: PASS, 0 findings. `src/domain/tool-surface.ts`는 kernel zone **K0-values**로 분류했다.
+- `node scripts/loc.mjs`: **187 files / 17,763 code LOC**. A-008 review 요구는 계속 유지된다.
+
+미검증 범위: 실제 Pi 프로세스에서 group facade를 호출해 `setActiveTools`가 반영되는 것은 관측하지 않았다. 활성화 산술과 fail-closed 동작은 단위 검증만 했으므로 TSP-005–008의 trace는 `unverified`다.
+
 ### 2026-09-18 — 제품 표면(TUI) 구현
 
-- 브랜치/기준 HEAD: `refactor/safety-preserving-architecture` / `15da3eb`. working tree에 규범 추가와 TUI 구현이 함께 있다.
+- 브랜치/기준 HEAD: `refactor/safety-preserving-architecture` / `ee5d12b`. 이 판정 시점의 규범 추가와 TUI 구현은 그 commit에 들어 있다.
 - 새 production source: `src/entry/oma.ts`와 `src/tui/**` 13개 파일. 기존 모듈 변경은 `src/domain/deployment.ts`(tui entry 등록)와 `src/runtime/assets.ts`(동일 entry) 두 곳뿐이다.
 - `npm run typecheck`, `npm run build`, `npm run check:package`: PASS. package 산출물에 `tui: dist/src/entry/oma.js`가 포함된다.
 - `npm run check:architecture`: PASS, 0 findings. `src/tui/`는 `scripts/dependency-lattice.mjs`의 **L5-entry**로 분류했다. 예외를 추가한 것이 아니라 layer를 선언했으며, 아래 layer는 TUI를 import하지 않는다.
@@ -31,7 +45,7 @@
 
 ### 2026-09-18 — architecture §23 / spec §19 (제품 표면·TUI) 규범 추가
 
-- 브랜치/기준 HEAD: `refactor/safety-preserving-architecture` / `15da3eb`. working tree에 아래 문서 변경이 있다.
+- 브랜치/기준 HEAD: `refactor/safety-preserving-architecture` / `15da3eb`. 당시 working tree의 문서 변경이며 이후 `ee5d12b`에 포함됐다.
 - 변경 범위는 **문서 전용**이다. `src/` 및 `test/`의 production/test source는 바꾸지 않았다.
 - `npm run typecheck`: PASS. `npm run check:architecture`: PASS, 0 findings(inventory/rule module/gate/transaction 전부).
 - `npm test`: **917/917 PASS**, fail/cancelled/skipped/todo=0, 실행 시간 172,378 ms.
@@ -102,7 +116,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **186 files / 17,395 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **187 files / 17,763 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

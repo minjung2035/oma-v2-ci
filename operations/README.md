@@ -42,7 +42,7 @@ new-operations/
 }
 ```
 
-각 role 파일은 정확히 다음 세 필드를 가진다:
+각 role 파일은 다음 세 필드를 필수로 가지며, 선택 필드는 아래 "Role별 tool 표면 투영"의 `toolSurface` 하나뿐이다. 그 밖의 필드는 거절한다.
 
 - `agentProfile`: 기존 host 설정의 동일 프로필 객체. `modelProfile`로 `models.json`의 모델을 선택한다. capabilities/delegable/childProfile/resources는 기존 필수 계약을 유지한다.
 - `extensions`: 설치 `installation.libdir` 아래의 상대 JS/TS 파일 목록. 첫 항목은 항상 `dist/src/pi-extension.js`이며 생략·중복·자동 탐색은 허용하지 않는다. 예: `["dist/src/pi-extension.js", "extensions/verifier.js"]`.
@@ -67,3 +67,35 @@ new-operations/
 Core extension은 shell/powershell tool을 거절하고 built-in file tool을 agent workspace 안으로 제한하며 OMA mail read/send/ack/status만 고정 argv로 노출한다. Pi project extension/skill/prompt/context 자동 탐색은 끈다. 추가 role extension은 이 제한 밖의 trusted code가 될 수 있으므로 운영자가 별도 검토해야 한다.
 
 Broker는 `quota.storageBytes`가 유효하면 시작하고, 시작 및 각 public/internal admission에서 owned state tree 사용량을 관측한다. streamed body의 선언 bytes와 role별 workspace write/edit도 사전 제한한다. 따라서 S-01/S-03의 unconditional `SPIKE_UNRESOLVED` 차단은 없다. 실제 systemd/READY, 외부 same-UID writer에 대한 kernel filesystem quota, S-03 steer·concurrency·전체 kill matrix와 S-04 가격·usage/error/cancel codec은 별도 release-hardening 범위다.
+
+## Role별 tool 표면 투영
+
+각 role 파일은 선택적으로 `toolSurface` 블록을 가질 수 있다. extension을 켜는 것과 그 extension의 tool을 모델에게 어떻게 보일지를 분리하는 설정이며, 새 권한 종류나 wire/DB schema를 만들지 않는다.
+
+```json
+{
+  "agentProfile": { "...": "기존과 동일" },
+  "extensions": ["dist/src/pi-extension.js", "extensions/browser.js"],
+  "promptFile": "prompts/resident.md",
+  "toolSurface": {
+    "defaultMode": "DISABLED",
+    "direct": ["read", "grep"],
+    "disabled": ["dangerous_tool"],
+    "groups": [
+      { "name": "web", "description": "웹 조회 도구", "members": [{ "tool": "fetch" }, { "group": "browser" }] },
+      { "name": "browser", "description": "브라우저 제어", "members": [{ "tool": "click" }, { "tool": "screenshot" }] }
+    ],
+    "roots": ["web"]
+  }
+}
+```
+
+- `defaultMode`는 `DIRECT` 또는 `DISABLED`이며 생략하면 `DIRECT`다. 여기 이름이 없는 tool이 따르는 기본값이다.
+- `direct`는 처음부터 보이는 tool, `disabled`는 등록되어 있어도 활성화하지 않는 tool이다.
+- `groups`의 member는 `{"tool": ...}` 또는 `{"group": ...}`의 명시 참조뿐이다. 접두사나 패턴 매칭은 없다.
+- `roots`를 생략하면 아무도 중첩하지 않은 group이 진입점이 된다.
+- 모델이 group을 열면 **직계 자식만** 추가로 활성화된다. 열기는 활성화이지 실행이 아니며, 드러난 tool은 Pi가 자기 pipeline으로 직접 실행한다.
+
+cycle, 중복 소속, 알 수 없는 참조, 한도 초과(group 32개, group당 member 16개, 깊이 4)는 **설정을 읽는 시점에** 거절한다. 블록을 생략하면 해당 role은 등록된 tool을 그대로 보여준다.
+
+이 설정은 표면 표현만 바꾼다. 실제 권한은 sandbox mount/FD/network와 capability가 정하므로, 표면에서 감출 수 있다는 이유로 위험한 extension을 role에 추가하지 않는다. extension 파일 자체의 신뢰·SHA-256 재검증 요구는 그대로 적용된다.

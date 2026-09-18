@@ -7,6 +7,7 @@ import type {
   ProtocolLimits,
 } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
+import { encodeToolSurfacePlan } from "./domain/tool-surface.js";
 import { BrokerChannel, type ChannelLimits } from "./protocol/channel.js";
 import {
   observeDeliveryReceipt,
@@ -130,6 +131,9 @@ export class RunnerModule {
         extensions: (this.profile.settings?.extensions ?? [])
           .map((extension) => extension.path)
           .filter((extension) => extension !== coreExtension),
+        ...(this.profile.settings?.toolSurface
+          ? { toolSurface: encodeToolSurfacePlan(this.profile.settings.toolSurface) }
+          : {}),
       },
       paths: {
         piCommand,

@@ -2,7 +2,7 @@
 
 문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `ef6c97d4e1e398f05c6e0ad59e535c0c285f0ffd3c61c4cbf0860920b5128e50`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `031e72cdacf798710c1b73b7ff68f87d20f192e7d0be7d0df89868a7dac34b59`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
 
 이전 기준본은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이었다. 그 이후의 차이는 두 가지이며 둘 다 검토했다. 첫째는 `examples/systemd`와 `validation.md`를 현재 경로로 고치는 링크 수정 2줄이고 의미 변경이 없다. 둘째는 2026-09-18에 추가한 architecture §23(제품 표면과 TUI)이며 아래 §19의 TUI 요구가 그 구현 계약이다.
 
@@ -605,6 +605,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 | §§15–19 recovery/isolation | LIFE, SB, REC, ERR; S-06 |
 | §§20–22 implementation/evaluation | ORDER, TRACE, test matrix; S-09 |
 | §23 제품 표면/TUI | TUI; CLI-001 분리, PR-001/004, INF-001, CFG-005; S-02 |
+| §23.12 tool 표면 투영 | TSP; PI-001, CFG-005, SB-003 |
 
 **MUST NOT [NEG-001]** LLM이 sender·thread·ref·mail ID를 join하여 runtime 상태를 복원하게 한다. broker/view가 바로 읽고 실행할 경로를 제공한다. 내부 ID는 debug/명시적 retry에만 필요한 만큼 노출한다.
 
@@ -656,3 +657,25 @@ session 경계를 넘지 않는 per-request 전환은 Principal inference가 bro
 **MUST [TUI-014; arch §23.10]** Pi의 built-in command와 UI가 사용자 표면에 노출되지 않게 한다. 이는 사후 필터가 아니라 RPC-only 실행으로 달성한다. 오류 메시지, 도움말, 표시 경로에서 Pi 고유 명령 체계를 정상 사용 경로로 안내하지 않는다.
 
 **MUST [TUI-015]** TUI는 릴리스 gate의 예외가 아니다. 이 절의 요구도 TRACE-002에 따라 단일 production owner, 실제 entrypoint에서의 call path, negative executable test, 현재 revision의 실행 증거를 갖는다. TUI 소스는 A-008/A-009의 production LOC 측정 대상이며 별도 budget으로 분리하지 않는다.
+
+## 20. Extension tool 표면 투영
+
+**MUST [TSP-001; arch §23.12]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.
+
+**MUST [TSP-002]** 투영 선언은 [operations 설정](operations/README.md)의 role 파일에 둔다. 기존 닫힌 `HostConfigV1`, wire schema, ledger schema, DB entity를 확장하지 않는다. 선언은 **설정을 읽는 시점에** 검증하고, 위반은 `INVALID_REQUEST`로 config 로드를 실패시킨다. 검증되지 않은 선언을 sandbox로 전달하지 않는다.
+
+**MUST [TSP-003]** 투영은 bounded다. group 32개, group당 member 16개, 중첩 깊이 4, 선언 이름 총 512개, group description 512 bytes를 기본 상한으로 하며 host는 더 낮출 수 있다. 상한 초과는 접수 전에 거절한다.
+
+**MUST [TSP-004]** 검증과 평탄화의 단일 owner는 `src/domain/tool-surface.ts`다. group 해석·cycle 검출·root 유도를 sandbox 안이나 다른 계층에서 다시 구현하지 않는다. sandbox로 전달되는 것은 이미 검증된 평탄한 plan이다.
+
+**MUST [TSP-005]** 활성 tool 집합은 다음 산술로 정한다. `disabled`는 항상 비활성, `grouped`는 소속 group을 열기 전까지 비활성, `direct`는 활성, 그 외 등록된 tool은 `defaultMode`를 따르며, root group은 활성으로 시작한다. `defaultMode`는 `DIRECT`와 `DISABLED`만 허용한다. role이 투영을 선언하지 않으면 등록된 tool을 그대로 보여준다.
+
+**MUST [TSP-006]** group을 여는 것은 **활성화이며 실행이 아니다**. 직계 자식만 기존 활성 집합에 합집합으로 더하고, 같은 group을 다시 열어도 결과가 같아야 한다. 다른 extension이 활성화한 tool을 제거하지 않는다. OMA가 다른 extension의 tool handler를 대신 호출하거나 인자를 재해석하는 경로를 만들지 않는다. 드러난 tool은 Pi의 기존 pipeline이 실행하므로 tool_call/tool_result, 권한·safety 훅, 원본 schema, 실행 모드가 보존된다.
+
+**MUST [TSP-007]** sandbox가 받은 plan을 읽을 수 없거나 형식이 맞지 않으면 fail closed한다. 모르는 값은 무시하고 진행하는 것이 아니라 OMA 자신이 등록한 tool만 남긴다. 투영 적용 실패가 `DISABLED`로 의도한 tool을 노출시키는 결과로 이어져서는 안 된다.
+
+**MUST [TSP-008]** 투영은 OMA가 등록한 mail/status tool을 제거하지 못한다. role 선언이 그 이름을 disabled로 지정해도 활성 상태를 유지한다. 투영이 agent를 자기 협업 수단 없이 남기지 않는다.
+
+**MUST NOT [TSP-009]** 투영을 권한 경계로 표시한다. 실제 권한은 §12의 sandbox mount/FD/network와 AUTH-001의 capability가 정한다. 표면에서 감췄다는 이유로 위험한 tool을 role extension에 추가하거나, PI-001의 신뢰 경계·operations의 SHA-256 재검증을 완화하지 않는다.
+
+**MUST NOT [TSP-010]** 투영을 위해 extension을 동적으로 로드한다. role extension의 로딩과 검증은 기존 operations 계약과 Pi의 `-e` 경로가 소유한다. 임의 경로 import, cwd 기반 설정 탐색, 자동 탐색을 추가하지 않는다. 투영은 이미 등록된 tool의 표면만 다룬다.

@@ -14,10 +14,21 @@ import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { ACTOR_NAME_RE } from "../domain/identifiers.js";
 import { parseJsonObject } from "../frame.js";
+import {
+  planToolSurface,
+  type GroupMemberRef,
+  type GroupSpec,
+  type ToolSurfaceConfig,
+  type ToolSurfacePlan,
+} from "../domain/tool-surface.js";
 
 export interface RoleSettings {
   readonly prompt: string;
   readonly extensions: readonly Readonly<{ path: string; sha256: string }>[];
+  /** TSP-002: validated at load. null means the role shows every registered
+   * tool, which is the behaviour of a role that declares nothing.
+   */
+  readonly toolSurface: ToolSurfacePlan | null;
 }
 export interface ConfigurationSource {
   readonly host: unknown;
@@ -40,6 +51,24 @@ function closed(
   if (
     Object.keys(object).length !== keys.length ||
     keys.some((key) => !Object.hasOwn(object, key))
+  )
+    return invalid(`${name} has missing or unknown fields`);
+  return object;
+}
+/** Still closed: every required key must be present and only the named optional
+ * keys may additionally appear. An unknown field is rejected as before.
+ */
+function closedWithOptional(
+  value: unknown,
+  required: readonly string[],
+  optional: readonly string[],
+  name: string,
+): Record<string, unknown> {
+  const object = record(value, name);
+  const allowed = new Set([...required, ...optional]);
+  if (
+    required.some((key) => !Object.hasOwn(object, key)) ||
+    Object.keys(object).some((key) => !allowed.has(key))
   )
     return invalid(`${name} has missing or unknown fields`);
   return object;
@@ -131,7 +160,61 @@ function roleSettings(
     fatal: true,
     ignoreBOM: true,
   }).decode(bytes(localPath(root, role.promptFile)));
-  return Object.freeze({ prompt, extensions: Object.freeze(extensions) });
+  return Object.freeze({
+    prompt,
+    extensions: Object.freeze(extensions),
+    toolSurface: toolSurfaceOf(role.toolSurface),
+  });
+}
+function stringList(value: unknown, name: string): readonly string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string"))
+    return invalid(`${name} must be an array of strings`);
+  return value as readonly string[];
+}
+/** Shape-checks the authored block, then hands the meaning to the single
+ * canonical validator in src/domain/tool-surface.ts. Cycles, duplicates and
+ * unknown references are that validator's decision, not this parser's.
+ */
+function toolSurfaceOf(value: unknown): ToolSurfacePlan | null {
+  if (value === undefined || value === null) return null;
+  const block = closedWithOptional(
+    value,
+    [],
+    ["defaultMode", "direct", "disabled", "groups", "roots"],
+    "toolSurface",
+  );
+  const declaredMode = block.defaultMode ?? "DIRECT";
+  if (declaredMode !== "DIRECT" && declaredMode !== "DISABLED")
+    return invalid("toolSurface.defaultMode must be DIRECT or DISABLED");
+  const rawGroups = block.groups === undefined ? [] : block.groups;
+  if (!Array.isArray(rawGroups)) return invalid("toolSurface.groups must be an array");
+  const groups: GroupSpec[] = rawGroups.map((entry, index) => {
+    const group = closed(entry, ["name", "description", "members"], `toolSurface.groups[${index}]`);
+    if (typeof group.name !== "string" || typeof group.description !== "string")
+      return invalid(`toolSurface.groups[${index}] name and description must be strings`);
+    if (!Array.isArray(group.members))
+      return invalid(`toolSurface.groups[${index}].members must be an array`);
+    const members: GroupMemberRef[] = group.members.map((member, position) => {
+      const entryRecord = record(member, `toolSurface.groups[${index}].members[${position}]`);
+      const keys = Object.keys(entryRecord);
+      if (keys.length !== 1 || (keys[0] !== "tool" && keys[0] !== "group"))
+        return invalid(`toolSurface.groups[${index}].members[${position}] must be {tool} or {group}`);
+      const target = entryRecord[keys[0]!];
+      if (typeof target !== "string")
+        return invalid(`toolSurface.groups[${index}].members[${position}] target must be a string`);
+      return keys[0] === "tool" ? { tool: target } : { group: target };
+    });
+    return { name: group.name, description: group.description, members };
+  });
+  const config: ToolSurfaceConfig = {
+    defaultMode: declaredMode,
+    direct: stringList(block.direct, "toolSurface.direct"),
+    disabled: stringList(block.disabled, "toolSurface.disabled"),
+    groups,
+    roots: stringList(block.roots, "toolSurface.roots"),
+  };
+  return planToolSurface(config);
 }
 export function readConfigurationSource(path: string): ConfigurationSource {
   try {
@@ -166,9 +249,10 @@ export function readConfigurationSource(path: string): ConfigurationSource {
     for (const [name, file] of Object.entries(files)) {
       if (!ACTOR_NAME_RE.test(name))
         return invalid("invalid role profile name");
-      const role = closed(
+      const role = closedWithOptional(
         json(localPath(root, file)),
         ["agentProfile", "extensions", "promptFile"],
+        ["toolSurface"],
         `role ${name}`,
       );
       profiles[name] = role.agentProfile;

@@ -1398,3 +1398,23 @@ Pi의 built-in command나 UI가 OMA TUI 위로 직접 노출되지 않게 한다
 단일 broker와 SQLite writer, 동기 transaction, 여섯 durable entity, immutable accepted evidence, explicit unknown, normal과 recovery의 분리, effect 직전 authority 재확인, bounded effect를 그대로 유지한다.
 
 TUI는 새 daemon·durable entity·effect queue·model-facing subcommand가 아니다. 읽기와 표시는 기존 관측 경로를 쓰고, 변경은 기존 mutation과 host config 경계를 쓴다. 제품 표면을 위해 wire·DB·persisted v1 의미를 바꾸지 않는다.
+
+### 23.12 Extension tool 표면 투영
+
+Role에 extension을 더할수록 모델이 한 번에 보는 tool 목록이 길어진다. §9.1의 "작은 작업 표면"과 §23.7의 "Extensions provide capabilities. OMA owns the UI."를 유지하려면, **어떤 extension을 켤지와 그 extension의 tool을 모델에게 어떻게 보일지**를 분리해야 한다.
+
+Role은 자기 tool 표면을 세 가지로 투영한다.
+
+| 모드 | 의미 |
+|---|---|
+| DIRECT | 처음부터 보인다 |
+| DISABLED | 등록되어 있어도 활성화하지 않는다. 어떤 경로로도 호출되지 않는다 |
+| GROUPED | 소속 group을 열기 전까지 보이지 않는다 |
+
+Group은 tool과 다른 group을 명시적으로 지목하는 DAG다. 처음에는 root group과 DIRECT tool만 활성이며, 모델이 group을 열면 **직계 자식만** 추가로 활성화된다. 자식 수와 무관하게 초기 표면 크기가 일정하다는 것이 이 구조의 목적이다.
+
+투영은 표현만 바꾸고 호출 의미를 바꾸지 않는다. group을 여는 것은 **활성화**이지 실행이 아니다. 드러난 tool은 Pi가 자기 pipeline으로 직접 실행하므로 tool_call/tool_result, 권한·safety 훅, 원본 schema, 실행 모드가 그대로 보존된다. OMA가 다른 extension의 handler를 대신 호출하는 경로는 만들지 않는다.
+
+투영 선언은 §23.7의 role 파일에 둔다. host가 소유하는 설정이며 모델·workspace·mail 내용이 이를 바꿀 수 없다. cycle, 중복, 알 수 없는 참조, 한도 초과는 설정을 읽는 시점에 거절하고 sandbox 안으로 넘기지 않는다. 투영을 읽을 수 없으면 DISABLED로 의도한 tool이 드러나는 쪽이 아니라 OMA 자신의 mail/status tool만 남기는 쪽으로 닫는다.
+
+투영은 권한 경계가 아니다. §16의 mount·FD·network 제한과 §13.1의 capability가 실제 권한을 정하며, 표면에서 감춘다는 것이 그 tool이 안전해졌다는 뜻이 아니다. 감출 수 있다는 이유로 위험한 tool을 role에 추가하지 않는다.

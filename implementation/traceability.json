@@ -2,8 +2,8 @@
   {
     "requirement": "N-001",
     "source": "implementation-spec.md",
-    "digest": "dd33ddfa9f15b58771fc8deb261862a3ec9186bdd46c3166f78f8b60237f28d3",
-    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `ef6c97d4e1e398f05c6e0ad59e535c0c285f0ffd3c61c4cbf0860920b5128e50`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
+    "digest": "f0326987ac0dfdac16ab4e1790090947cc911de664e3e390357f4998e0927b34",
+    "normativeText": "**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `031e72cdacf798710c1b73b7ff68f87d20f192e7d0be7d0df89868a7dac34b59`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2953,6 +2953,221 @@
     "status": "unverified"
   },
   {
+    "requirement": "TSP-001; arch §23.12",
+    "source": "implementation-spec.md",
+    "digest": "1f453025fee12e2ab9003be89a502c81aaef39559b47f7721a77885926527b09",
+    "normativeText": "**MUST [TSP-001; arch §23.12]** role의 tool 표면 투영은 `DIRECT`/`DISABLED`/`GROUPED` 세 모드와 group DAG로 닫는다. group member는 `{tool}` 또는 `{group}`의 명시 참조뿐이며 접두사·정규식·의미 기반 매칭을 도입하지 않는다. 다음은 모두 거절한다: 중복 group 이름, 자기 참조, cycle, 알 수 없는 group/root 참조, 한 tool의 중복 소속, disabled tool의 group 소속, 같은 tool의 direct/grouped 동시 지정, group 이름과 tool selector 충돌, 이름 문법 위반.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/domain/tool-surface.ts#planToolSurface",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource",
+      "src/domain/tool-surface.ts#planToolSurface"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T99",
+      "test/tool-surface.test.ts#T100"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TSP-002",
+    "source": "implementation-spec.md",
+    "digest": "6f4f4b748719935403060edc0016cd3b84f4b47c9b0c15659946245d94f34152",
+    "normativeText": "**MUST [TSP-002]** 투영 선언은 [operations 설정](operations/README.md)의 role 파일에 둔다. 기존 닫힌 `HostConfigV1`, wire schema, ledger schema, DB entity를 확장하지 않는다. 선언은 **설정을 읽는 시점에** 검증하고, 위반은 `INVALID_REQUEST`로 config 로드를 실패시킨다. 검증되지 않은 선언을 sandbox로 전달하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/config/operations.ts#readConfigurationSource",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T100",
+      "test/tool-surface.test.ts#T103"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TSP-003",
+    "source": "implementation-spec.md",
+    "digest": "77f30d2e5ae1bdcb2f7f7141c3a5e2d348cc15ae40a6f2b2b7eed80cdd5ecad5",
+    "normativeText": "**MUST [TSP-003]** 투영은 bounded다. group 32개, group당 member 16개, 중첩 깊이 4, 선언 이름 총 512개, group description 512 bytes를 기본 상한으로 하며 host는 더 낮출 수 있다. 상한 초과는 접수 전에 거절한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/domain/tool-surface.ts#planToolSurface",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource",
+      "src/domain/tool-surface.ts#planToolSurface"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T99",
+      "test/tool-surface.test.ts#T100"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TSP-004",
+    "source": "implementation-spec.md",
+    "digest": "38886632526f9266a734a7fa101d9a966dbb53690e0253cb6575c52bbaed1340",
+    "normativeText": "**MUST [TSP-004]** 검증과 평탄화의 단일 owner는 `src/domain/tool-surface.ts`다. group 해석·cycle 검출·root 유도를 sandbox 안이나 다른 계층에서 다시 구현하지 않는다. sandbox로 전달되는 것은 이미 검증된 평탄한 plan이다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/domain/tool-surface.ts#planToolSurface",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource",
+      "src/domain/tool-surface.ts#planToolSurface"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T99",
+      "test/tool-surface.test.ts#T100"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TSP-005",
+    "source": "implementation-spec.md",
+    "digest": "8ccbfd63f4fd98a8cf2da1c3a2524389b997e12023608616d41bc5e4fb0fb236",
+    "normativeText": "**MUST [TSP-005]** 활성 tool 집합은 다음 산술로 정한다. `disabled`는 항상 비활성, `grouped`는 소속 group을 열기 전까지 비활성, `direct`는 활성, 그 외 등록된 tool은 `defaultMode`를 따르며, root group은 활성으로 시작한다. `defaultMode`는 `DIRECT`와 `DISABLED`만 허용한다. role이 투영을 선언하지 않으면 등록된 tool을 그대로 보여준다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/pi-extension.ts#initialActiveTools",
+    "entrypoint": "src/pi-extension.ts#extension",
+    "callPath": [
+      "src/pi-extension.ts#extension",
+      "src/pi-extension.ts#initialActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T101"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TSP-006",
+    "source": "implementation-spec.md",
+    "digest": "ff181e422d2263eb51122e46bf9fcc8b69b7feea4e11c5d9320c947c681e3315",
+    "normativeText": "**MUST [TSP-006]** group을 여는 것은 **활성화이며 실행이 아니다**. 직계 자식만 기존 활성 집합에 합집합으로 더하고, 같은 group을 다시 열어도 결과가 같아야 한다. 다른 extension이 활성화한 tool을 제거하지 않는다. OMA가 다른 extension의 tool handler를 대신 호출하거나 인자를 재해석하는 경로를 만들지 않는다. 드러난 tool은 Pi의 기존 pipeline이 실행하므로 tool_call/tool_result, 권한·safety 훅, 원본 schema, 실행 모드가 보존된다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/pi-extension.ts#expandedActiveTools",
+    "entrypoint": "src/pi-extension.ts#extension",
+    "callPath": [
+      "src/pi-extension.ts#extension",
+      "src/pi-extension.ts#parseSurfacePlan",
+      "src/pi-extension.ts#expandedActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T102",
+      "test/tool-surface.test.ts#T103"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TSP-007",
+    "source": "implementation-spec.md",
+    "digest": "8c3431447f953a60d931355a61320026d794a4a5d0dae737199e7f8e8d3fafb6",
+    "normativeText": "**MUST [TSP-007]** sandbox가 받은 plan을 읽을 수 없거나 형식이 맞지 않으면 fail closed한다. 모르는 값은 무시하고 진행하는 것이 아니라 OMA 자신이 등록한 tool만 남긴다. 투영 적용 실패가 `DISABLED`로 의도한 tool을 노출시키는 결과로 이어져서는 안 된다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/pi-extension.ts#expandedActiveTools",
+    "entrypoint": "src/pi-extension.ts#extension",
+    "callPath": [
+      "src/pi-extension.ts#extension",
+      "src/pi-extension.ts#parseSurfacePlan",
+      "src/pi-extension.ts#expandedActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T102",
+      "test/tool-surface.test.ts#T103"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TSP-008",
+    "source": "implementation-spec.md",
+    "digest": "8dcd592b436038c11f72e4e136c5f9eac2a5d0292e732af21209b4db2895311b",
+    "normativeText": "**MUST [TSP-008]** 투영은 OMA가 등록한 mail/status tool을 제거하지 못한다. role 선언이 그 이름을 disabled로 지정해도 활성 상태를 유지한다. 투영이 agent를 자기 협업 수단 없이 남기지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/pi-extension.ts#initialActiveTools",
+    "entrypoint": "src/pi-extension.ts#extension",
+    "callPath": [
+      "src/pi-extension.ts#extension",
+      "src/pi-extension.ts#initialActiveTools"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T101"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
+    "requirement": "TSP-009",
+    "source": "implementation-spec.md",
+    "digest": "7931644cb7b177d6b33d8933ba53c5455c2a86adeb5c27c5f5245cd8c1fc890f",
+    "normativeText": "**MUST NOT [TSP-009]** 투영을 권한 경계로 표시한다. 실제 권한은 §12의 sandbox mount/FD/network와 AUTH-001의 capability가 정한다. 표면에서 감췄다는 이유로 위험한 tool을 role extension에 추가하거나, PI-001의 신뢰 경계·operations의 SHA-256 재검증을 완화하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
+    "evidence": null,
+    "status": "unverified"
+  },
+  {
+    "requirement": "TSP-010",
+    "source": "implementation-spec.md",
+    "digest": "f468f6419a0782460aadd70f96475c6185239c0a2718ad40e9019c61fda71932",
+    "normativeText": "**MUST NOT [TSP-010]** 투영을 위해 extension을 동적으로 로드한다. role extension의 로딩과 검증은 기존 operations 계약과 Pi의 `-e` 경로가 소유한다. 임의 경로 import, cwd 기반 설정 탐색, 자동 탐색을 추가하지 않는다. 투영은 이미 등록된 tool의 표면만 다룬다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/config/operations.ts#readConfigurationSource",
+    "entrypoint": "src/entry/runner.ts#main",
+    "callPath": [
+      "src/entry/runner.ts#main",
+      "src/config/operations.ts#readConfigurationSource"
+    ],
+    "negativeTests": [
+      "test/tool-surface.test.ts#T100",
+      "test/tool-surface.test.ts#T103"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
+  },
+  {
     "requirement": "POL-001",
     "source": "implementation/integration-policy.md",
     "digest": "5cc143c620322fe0f515e53c1d784f4030a07373f992f5e17eef00f748b922b7",
@@ -3833,6 +4048,20 @@
     "source": "implementation/test-matrix.md",
     "digest": "a6fb211a42acca0cce40b4f3362fe8c352d33ad573f5883323bfaf3d4b7ac0e7",
     "normativeText": "**MUST [TEST-008]** 아래 행은 [spec §19](../implementation-spec.md)의 TUI 요구에 대한 수용 계약이다. T78–T90은 tiered 확장이 예약한 대역이므로 제품 표면은 T91부터 사용한다. 이 행들은 TUI가 포함된 build에서 필수이며, 화면 렌더링 스냅샷 비교만으로 oracle을 대체하지 않는다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": null,
+    "entrypoint": null,
+    "callPath": [],
+    "negativeTests": [],
+    "evidence": null,
+    "status": "unverified"
+  },
+  {
+    "requirement": "TEST-009",
+    "source": "implementation/test-matrix.md",
+    "digest": "ffe1a0fcbb9ab7b3189b9588e5449e59059fb9811b77ffe701683da61c450d08",
+    "normativeText": "**MUST [TEST-009]** 아래 행은 [spec §20](../implementation-spec.md)의 TSP 요구에 대한 수용 계약이다. 투영을 선언한 role이 있는 build에서 필수다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

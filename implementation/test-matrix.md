@@ -105,6 +105,18 @@
 | T97 / TUI-010 | libdir 밖 경로·심볼릭 링크·변조된 extension 파일, core extension 해제 시도 → Extensions 화면 조작 → 모두 거절, 기록한 SHA-256과 실행 직전 값 불일치 시 기동 차단, 모델이 목록·선택에 영향 0건 |
 | T98 / TUI-011,012 | delivery flag fixture와 broker 미연결 상태 → Mail/Dashboard 표시 → unread는 기존 flag에서 파생하고 새 저장 0건, ACK가 승인·완료 의미로 표시되지 않음, unknown/disconnected가 running·0으로 표시되지 않고 관측 시각 표시 |
 
+## Extension tool 표면 투영 acceptance
+
+**MUST [TEST-009]** 아래 행은 [spec §20](../implementation-spec.md)의 TSP 요구에 대한 수용 계약이다. 투영을 선언한 role이 있는 build에서 필수다.
+
+| ID / 요구 | Given → When → Then |
+|---|---|
+| T99 / TSP-001,003 | 중첩 group·cycle·자기참조·중복 group·중복 소속·disabled member·direct와 grouped 동시 지정·이름 충돌·한도 초과 선언 → 투영 계산 → 정상 선언만 평탄화되고 나머지는 전부 거절; root는 명시값 또는 아무도 중첩하지 않은 group |
+| T100 / TSP-002,004 | role 파일의 투영 선언과 잘못된 선언 → config 로드 → 정상은 검증된 plan으로 보존, cycle·미지 필드는 로드 시점에 `INVALID_REQUEST`; plan은 전송 인코딩을 왕복해도 동일 |
+| T101 / TSP-005,008 | defaultMode DIRECT/DISABLED와 등록된 tool 집합 → 초기 활성 계산 → disabled/grouped 비활성, root group 활성, 미지정 tool은 defaultMode를 따름, OMA 소유 tool은 disabled 지정에도 유지 |
+| T102 / TSP-006 | 활성 집합과 group 직계 자식 → group 열기 반복 → 합집합만 증가하고 재실행이 무변화; 다른 extension이 활성화한 tool 제거 0건 |
+| T103 / TSP-006,007,010 | 손상·형식 불일치 plan과 core extension source → 적용 및 정적 검사 → OMA 소유 tool만 남기고 fail closed; 투영 경로에 자식 handler 실행·동적 import·require 0건 |
+
 **MUST [TEST-003]** default core에서 T01–T74 및 T77을 적용하고, T75/T76은 해당 optional 활성 시 필수다. S-03 등 미결정 gate 때문에 test oracle의 version-specific 부분을 완성할 수 없으면 test를 skip해서 release 통과로 계산하지 않는다.
 
 **MUST [TEST-004]** T18–T22/T27/T30/T39/T57/T58/T63/T66은 최소 각 지정 경계에서 process kill을 실행한다. assertion은 externally visible accepted receipt, DB rows, file hashes, Git OIDs, actual cgroup, Pi captured event sequence를 사용한다. '함수를 호출했다'는 mock assertion만으로 crash test 통과를 선언하지 않는다.
