@@ -28,7 +28,8 @@
     "verify:stress": "node scripts/verify-lane.mjs stress",
     "verify:all": "node scripts/verify-lane.mjs all",
     "evidence:graph": "node scripts/dependency-graph.mjs --write-evidence",
-    "verify:powercut": "node scripts/powercut-lane.mjs"
+    "verify:powercut": "node scripts/powercut-lane.mjs",
+    "test:functional-surface": "npm run build && node scripts/functional-surface.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

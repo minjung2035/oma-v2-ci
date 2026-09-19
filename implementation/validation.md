@@ -14,8 +14,8 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **992/992 PASS**, fail/cancelled/skipped/todo=0 |
-| `node scripts/loc.mjs` | **187 files / 17,947 code LOC** |
+| `npm test` | **996/996 PASS**, fail/cancelled/skipped/todo=0 |
+| `node scripts/loc.mjs` | **187 files / 17,946 code LOC** |
 
 ### 현재 범위
 
@@ -24,6 +24,18 @@
 - **제품 표면(TUI)** — `oma` 단일 진입점, 대화 화면과 `Ctrl+X` Control Panel(Dashboard/Config/Mail). 규범은 architecture §23, spec의 TUI 요구, test-matrix T91–T106.
 - **Extension tool 표면 투영** — role별 DIRECT/DISABLED/GROUPED 투영. 규범은 architecture §23.10, spec의 TSP 요구, test-matrix T99–T103.
 - **엔진 동봉** — Pi를 함께 배포하고 자기 것만 실행하며, 설정 파일 없이 기동한다. 규범은 architecture §23.3, spec의 TUI-016–019, test-matrix T105–T106.
+
+### 실제 프로세스 경계 검증에서 찾은 결함
+
+단위 테스트는 산술만 고정한다. 실제 엔진·실제 pty·실제 SIGKILL을 붙이자 단위 테스트가 잡을 수 없는 결함 1건이 나왔다.
+
+- **투영이 설정된 role에서 core extension이 로드에 실패했다.** `registerToolSurface`가 로드 시점에 `pi.getAllTools()`를 호출했는데 엔진은 "Action methods cannot be called during extension loading"으로 거절한다. 결과는 extension 전체 로드 실패였다. 등록은 로드 시점에, 투영은 `session_start`에 하도록 고쳤다. 모델 턴보다 먼저이므로 봉쇄 의미는 유지된다. 단위 테스트도 이 계약(로드는 성공, 투영은 session_start)을 반영하도록 고쳤다.
+
+`npm run test:functional-surface`는 동봉 엔진을 RPC로 띄우고 **엔진 자신에게** 활성 tool을 물어 확인한다. 관측: 등록 11개 중 활성은 `read`(DIRECT), `oma_group_probe`(root facade), OMA 소유 4개이며 `write`(DISABLED)·`grep`(GROUPED)·`edit`/`find`/`ls`(defaultMode)는 비활성이다. group 열기는 모델 턴이 필요해 provider 없는 이 프로필에서는 관측하지 못했고 skip으로 보고한다.
+
+TTY는 `script`로 실제 pty를 띄워 raw mode 취득·복원과 크기 보고를 확인한다. 설정 쓰기는 쓰기 전후 각 경계에서 실제 SIGKILL을 걸고, 남은 파일이 항상 loader를 통과하며 임시 파일이 남지 않음을 확인한다.
+
+관측 extension은 `test/fixtures/surface-probe-extension.ts`이며 test 전용이다. production 의존 closure에 들어가지 않고 tool을 등록하지 않는다(TEST-002).
 
 ### 적대적·결합 검증에서 찾은 결함
 

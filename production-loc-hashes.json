@@ -436,7 +436,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "071601e2753b53ad2836c751d39e0aec391432979214abc8735914da5a06e6cd"
+      "sha256": "7b70e5c0017d63c89cb6e991c08760237d64e7f46cd73a2350d9e75820fc83d8"
     },
     {
       "path": "src/ports/ledger.ts",

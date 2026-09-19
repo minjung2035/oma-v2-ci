@@ -178,20 +178,24 @@ interface FakeHost {
   on(event: string, handler: () => void): void;
 }
 
-function fakeHost(overrides: Partial<FakeHost> = {}): FakeHost & { active: string[]; registered: string[] } {
+function fakeHost(overrides: Partial<FakeHost> = {}): FakeHost & { active: string[]; registered: string[]; start(): void } {
   const state = { active: ["read", "fetch", "danger"], registered: [] as string[] };
+  const handlers: Array<() => void> = [];
   const host = {
     ...state,
     setActiveTools(names: string[]) { state.active = [...names]; },
     getActiveTools() { return [...state.active]; },
     getAllTools() { return ["read", "fetch", "danger", "oma_mail_read"].map(name => ({ name })); },
     registerTool(tool: unknown) { state.registered.push((tool as { name: string }).name); },
-    on() { /* session_start is exercised directly */ },
+    // The engine rejects action methods during extension loading, so the
+    // projection runs from this handler, not from registration.
+    on(event: string, handler: () => void) { if (event === "session_start") handlers.push(handler); },
+    start() { for (const handler of handlers) handler(); },
     ...overrides,
   };
   Object.defineProperty(host, "active", { get: () => state.active });
   Object.defineProperty(host, "registered", { get: () => state.registered });
-  return host as FakeHost & { active: string[]; registered: string[] };
+  return host as FakeHost & { active: string[]; registered: string[]; start(): void };
 }
 
 test("the tool surface fails closed when the host refuses to apply it", () => {
@@ -203,20 +207,22 @@ test("the tool surface fails closed when the host refuses to apply it", () => {
   try {
     process.env.OMA_TOOL_SURFACE = plan;
     const refusing = fakeHost({ setActiveTools() { throw new Error("host refused"); } });
-    assert.throws(
-      () => registerToolSurface(refusing as never, ["oma_mail_read"]),
-      /could not be applied/,
-      "a refused projection must not be swallowed",
-    );
+    // Loading must succeed: an extension that throws while loading never loads.
+    assert.doesNotThrow(() => registerToolSurface(refusing as never, ["oma_mail_read"]));
+    assert.throws(() => refusing.start(), /could not be applied/,
+      "a refused projection must not be swallowed");
 
     // A malformed plan must also fail loudly rather than leaving the surface as is.
     process.env.OMA_TOOL_SURFACE = "{not json";
-    assert.throws(() => registerToolSurface(refusing as never, ["oma_mail_read"]), /could not be applied/);
+    const malformed = fakeHost({ setActiveTools() { throw new Error("host refused"); } });
+    registerToolSurface(malformed as never, ["oma_mail_read"]);
+    assert.throws(() => malformed.start(), /could not be applied/);
 
     // An unreadable active set must never be treated as empty.
     process.env.OMA_TOOL_SURFACE = plan;
     const blind = fakeHost({ getAllTools() { throw new Error("no registry"); } });
-    assert.throws(() => registerToolSurface(blind as never, ["oma_mail_read"]), /could not read the registered tools/);
+    registerToolSurface(blind as never, ["oma_mail_read"]);
+    assert.throws(() => blind.start(), /could not read the registered tools/);
   } finally {
     if (previous === undefined) delete process.env.OMA_TOOL_SURFACE;
     else process.env.OMA_TOOL_SURFACE = previous;
@@ -232,7 +238,9 @@ test("the tool surface applies the projection when the host accepts it", () => {
     });
     const host = fakeHost();
     registerToolSurface(host as never, ["oma_mail_read"]);
-    assert.deepEqual(host.registered, ["web"], "one facade per group");
+    assert.deepEqual(host.registered, ["web"], "facades register while loading");
+    assert.deepEqual(host.active, ["read", "fetch", "danger"], "loading must not touch the active set");
+    host.start();
     assert.deepEqual(host.active, ["oma_mail_read", "read", "web"]);
     assert.ok(!host.active.includes("danger"));
     assert.ok(!host.active.includes("fetch"));

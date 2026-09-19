@@ -101,6 +101,7 @@
 | T104–T106 | extension digest 재검증, 엔진 동봉, 설정 없는 기동 |
 | T107–T108 | 엔진 프리미티브 소유 경계, spawn 경로 대칭 |
 | T109–T110 | 제품 표면의 적대적 입력, core 결합 |
+| T111–T113 | 실제 프로세스 경계: SIGKILL, TTY, 엔진 투영 |
 
 | ID / 요구 | Given → When → Then |
 |---|---|
@@ -119,6 +120,9 @@
 | T103 / TSP-006,007,010 | 손상·형식 불일치 plan과 core extension source → 적용 및 정적 검사 → OMA 소유 tool만 남기고 fail closed; 투영 경로에 자식 handler 실행·동적 import·require 0건 |
 | T104 / TUI-010 | 기록된 `{path, sha256}`를 가진 role → spawn 직전 재검증 → 내용이 바뀐 파일·사라진 파일·정규 파일 아닌 경로·형식이 틀린 digest는 모두 기동 거절; 일치하면 기록된 순서 그대로 `-e` 전달하고 core는 두 번 전달하지 않음 |
 | T105 / TUI-016,017,018 | Pi가 설치된 host와 엔진 없는 설치본 → OMA 기동 → 항상 동봉 엔진만 실행하고 `PATH`/`/usr/bin/pi`로 물러서지 않음; 엔진 없으면 `UNSUPPORTED_PROFILE`; 상대 경로·부재 pin 거절; 엔진에 OMA 소유 agent 디렉터리 지정, 사용자 `~/.pi` 접근 0건 |
+| T111 / TUI-007 | 설정 쓰기 전후 각 경계에서 실제 SIGKILL → 재시작 → `config.json`은 항상 이전 값 또는 새 값으로 loader를 통과하고, 부분 기록·잔존 임시 파일 0건 |
+| T112 / TUI-002 | 실제 pseudo-terminal → 기동·종료 → raw mode를 취하고 반드시 되돌리며, 실제 터미널 크기를 보고하고, pty로 들어온 바이트가 panel 어휘로 도착; 파이프에서는 raw mode를 시도하지 않음 |
+| T113 / TSP-005,006 | 동봉 엔진을 RPC로 기동하고 투영을 넘김 → 엔진 자신에게 활성 tool을 질의 → DISABLED 비활성, GROUPED는 group 열기 전 비활성, root facade 활성, OMA 소유 tool 유지. 이 검사는 `npm run test:functional-surface`이며 release qualification이 아니다 |
 | T109 / TUI-010,019, TSP-003 | bundle 밖 참조·손상된 host/role 파일·퇴화한 터미널 크기·이름 문법 위반·비정상 mail 항목·libdir 밖 extension id → 각 경로 → 전부 명시적으로 거절되거나 안전하게 표시되고, 손상된 파일을 추측으로 덮어쓰지 않으며, 어떤 화면도 주어진 폭을 넘지 않음 |
 | T110 / TUI-019, TSP-002 | 생성된 설정과 role 투영 → core의 닫힌 validator와 loader → 그대로 통과하고, capability·resource·limit이 core 어휘 안에 있으며, 자식 capability가 부모 delegable을 넘지 않고, 제품 표면이 method 집합을 넓히지 않음 |
 | T107 / TUI-020 | 제품 표면 source 전체 → 정적 검사 → 엔진 프리미티브 import는 선언된 소유자에서만 일어나고, 엔진의 절단·줄바꿈·화면 제어는 들여오지 않음; 선언되지 않은 bound·bare Error·비exhaustive closed union 0건 |

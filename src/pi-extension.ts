@@ -650,9 +650,11 @@ export function registerToolSurface(pi: ExtensionAPI, always: readonly string[])
     }
   };
   if (parsed.state === "malformed") {
-    // Fail closed: an unreadable projection must not expose a tool the host
-    // meant to disable. Only OMA's own trusted tools stay active.
-    apply(always, `fallback (${parsed.reason})`);
+    // Fail closed, but not during load: the engine rejects action methods while
+    // extensions are still loading, and throwing here would stop the trusted
+    // extension from loading at all. The surface is narrowed at session start,
+    // before the model can call anything.
+    pi.on("session_start", () => { apply(always, `fallback (${parsed.reason})`); });
     return;
   }
   const plan = parsed.plan;
@@ -689,6 +691,8 @@ export function registerToolSurface(pi: ExtensionAPI, always: readonly string[])
     }
     apply(initialActiveTools(plan, registered, always), "projection");
   };
+  // Registering tools is allowed while loading; reading or setting the active
+  // set is not. The projection therefore happens only at session start, which
+  // still precedes any model turn.
   pi.on("session_start", () => { project(); });
-  project();
 }

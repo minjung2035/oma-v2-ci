@@ -65,11 +65,11 @@ OMA가 Pi를 함께 배포하고 자기 것만 실행한다. 사용자가 Pi를 
 
 ## 현재 검증 상태
 
-수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 992/992 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
+수치와 명령은 [implementation/validation.md](implementation/validation.md)가 소유한다. `npm test` 996/996 PASS, `check:architecture` 0 findings, 실제 entrypoint를 임시 state root에서 직접 실행해 다섯 화면과 설정 쓰기를 관측했다.
 
 TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unverified**다. 실제 Pi provider 연결과 TTY raw mode는 관측하지 않았으므로 COMP-004의 `proven`이 아니다.
 
-**A-008 LOC gate가 열려 있다.** 187 files / 17,947 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
+**A-008 LOC gate가 열려 있다.** 187 files / 17,946 code LOC로 10,000행 기준을 넘는다. 기록만 하고 진행하기로 했으며 review는 별도 작업이다.
 
 ## 다음에 할 일
 
