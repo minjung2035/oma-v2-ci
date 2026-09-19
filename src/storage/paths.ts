@@ -4,7 +4,7 @@
  */
 import { join } from "node:path";
 import {
-  agentRootFor, workspaceFor, runnerViewFor, batchViewFor, runnerReceiptFor, runnerSessionDirFor,
+  agentRootFor, workspaceFor, runnerViewFor, batchViewFor, runnerReceiptFor, runnerSessionDirFor, sessionDirFor,
   mailObjectRelativePath, mailArchiveRelativePath, mailInboxRelativePath,
   submitStagingFor, submitBundleFor, contextStagingFor, contextRevisionFor,
   actorSocketDirectoryFor, actorSocketFor,
@@ -27,6 +27,10 @@ export function runnerReceiptPathAt(stateRoot: string, actor: string, batchId: s
 }
 export function runnerSessionDirPathAt(stateRoot: string, actor: string): string {
   return join(stateRoot, runnerSessionDirFor(actor));
+}
+/** Where this agent's engine keeps its session (PR-003 for the Principal). */
+export function sessionDirPathAt(stateRoot: string, actor: string): string {
+  return join(stateRoot, sessionDirFor(actor));
 }
 export function mailObjectPathAt(stateRoot: string, messageId: string): string {
   return join(stateRoot, mailObjectRelativePath(messageId));

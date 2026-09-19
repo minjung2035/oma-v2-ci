@@ -26,9 +26,11 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 import { BrokerChannel } from "../src/protocol/channel.js";
 import { credentialMatches, isPrincipalCredential, sessionHandleMatches } from "../src/protocol/principal-credential.js";
+import { StoreError } from "../src/domain/errors.js";
 import { encodeHostMessage } from "../src/protocol/host-channel.js";
-import { newSessionHandle, principalEnvironment, principalSessionDir } from "../src/tui/session.js";
+import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir } from "../src/tui/session.js";
 import { provisionSociety } from "../src/runtime/provision.js";
+import { processIdentity, type ProcessIdentity } from "../src/broker/process-ancestry.js";
 import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "../src/runtime/principal-delivery.js";
 import type { PiEvent } from "../src/runtime/pi-rpc.js";
 
@@ -54,7 +56,8 @@ const PROBE = join(process.cwd(), "test/fixtures/cli-probe.mjs");
  * supervision channel would carry is recorded, and a session is registered
  * the way the real channel delivers one. */
 class HostChannel implements PrincipalHostChannel {
-  readonly hostPid = process.pid;
+  readonly host: ProcessIdentity;
+  closed = false;
   readonly grants: { credential: string; sessionHandle: string }[] = [];
   refusals = 0;
   ready = (): void => {
@@ -63,10 +66,13 @@ class HostChannel implements PrincipalHostChannel {
   };
   readonly readyWith: { principal: boolean; host: boolean }[] = [];
   private readonly listeners: ((sessionHandle: string, pid: number) => void)[] = [];
-  constructor(private readonly runRoot: string) {}
+  constructor(private readonly runRoot: string, host?: ProcessIdentity) {
+    this.host = host ?? processIdentity(process.pid)!;
+  }
   grant = (credential: string, sessionHandle: string): void => { this.grants.push({ credential, sessionHandle }); };
   refuse = (): void => { this.refusals += 1; };
   onSession = (listener: (sessionHandle: string, pid: number) => void): void => { this.listeners.push(listener); };
+  close = (): void => { this.closed = true; };
   register(sessionHandle: string, pid: number): { credential: string; sessionHandle: string } | null {
     const before = this.grants.length;
     for (const listener of this.listeners) listener(sessionHandle, pid);
@@ -82,7 +88,7 @@ interface Society {
   readonly host: HostChannel | null;
 }
 
-async function startSociety(prefix: string, supervised = true): Promise<Society> {
+async function startSociety(prefix: string, supervised = true, host?: HostChannel): Promise<Society> {
   const root = mkdtempSync(join(tmpdir(), prefix));
   const runRoot = join(root, "run");
   // Provisioned exactly as the product provisions it before starting a broker.
@@ -102,11 +108,11 @@ async function startSociety(prefix: string, supervised = true): Promise<Society>
   const lifecycle = new LifecycleModule(store, units,
     { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     () => null, mail);
-  const host = supervised ? new HostChannel(runRoot) : null;
+  const channel = supervised ? host ?? new HostChannel(runRoot) : null;
   const broker = new Broker(store, mail, units, views, lifecycle, null, null,
-    { stateRoot: root, runRoot, society: "demo", hasGoal: () => true }, LIMITS, undefined, host ?? undefined);
+    { stateRoot: root, runRoot, society: "demo", hasGoal: () => true }, LIMITS, undefined, channel ?? undefined);
   await broker.start();
-  return { broker, store, root, runRoot, host };
+  return { broker, store, root, runRoot, host: channel };
 }
 
 async function stopSociety(society: Society): Promise<void> {
@@ -429,11 +435,20 @@ function wasPresented(society: Society): boolean {
 
 /** The engine as the delivery owner sees a live session. */
 function sessionOf(engine: Engine): DeliverySession {
+  // Mirrors PrincipalSession's reservation: the claim is taken synchronously,
+  // before anything is written, and given back when a delivery ends unsettled.
+  let owner: "human" | "delivery" | null = null;
+  engine.onEvent(event => { if (event.type === "agent_settled") owner = null; });
   return {
     get running() { return engine.running; },
-    get busy() { return engine.busy; },
+    get busy() { return owner !== null; },
     onEvent: listener => engine.onEvent(event => listener(event as unknown as PiEvent)),
-    deliver: async batchId => { engine.send({ op: "prompt", id: batchId, message: `/oma-deliver ${batchId}` }); },
+    deliver: async batchId => {
+      if (owner !== null) throw new StoreError("BATCH_CONFLICT", "the principal session is already running a turn");
+      owner = "delivery";
+      engine.send({ op: "prompt", id: batchId, message: `/oma-deliver ${batchId}` });
+    },
+    release: () => { if (owner === "delivery") owner = null; },
   };
 }
 
@@ -533,7 +548,7 @@ test("T114 / PR-002: nothing the model runs can mark its own mail delivered", as
 test("T114 / PR-002: delivery waits for an idle session rather than landing inside a Human's turn", async () => {
   const calls: string[] = [];
   const delivery = new PrincipalDelivery(
-    { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); } },
+    { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); }, release: () => { calls.push("release"); } },
     { prepare: async () => { calls.push("prepare"); return null; }, complete: async () => { calls.push("complete"); } },
     { stateRoot: "/nonexistent", frameBytes: LIMITS.frameBytes, acceptMs: 1000, retryAfterMs: 1000 },
   );
@@ -569,4 +584,161 @@ test("T114: provisioning creates the directories the Principal's engine and its 
     assert.equal(statSync(join(root, "principal", "private")).mode & 0o777, 0o700);
     assert.equal(provisionSociety(root).created.length, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+/** The real PrincipalSession, driven without an engine: the transport is a
+ * stand-in that records what was written, so the ownership rules can be tested
+ * exactly as the product applies them. */
+function reservedSession(): {
+  readonly session: PrincipalSession;
+  readonly sent: Record<string, unknown>[];
+  readonly settle: () => void;
+} {
+  const sent: Record<string, unknown>[] = [];
+  let emit: (event: PiEvent) => void = () => {};
+  const session = Object.create(PrincipalSession.prototype) as PrincipalSession;
+  const state = session as unknown as {
+    rpc: { send: (message: Record<string, unknown>) => Promise<void>; onEvent: (listener: (event: PiEvent) => void) => () => void };
+    sink: { onLine: () => void; onBusy: () => void; onEnd: () => void };
+    owner: "human" | "delivery" | null; queuedHuman: number; closed: boolean; sequence: number;
+  };
+  state.rpc = {
+    send: async message => { sent.push(message); },
+    onEvent: listener => { emit = listener; return () => {}; },
+  };
+  state.sink = { onLine: () => {}, onBusy: () => {}, onEnd: () => {} };
+  state.owner = null; state.queuedHuman = 0; state.closed = false; state.sequence = 0;
+  // The real event projection decides when the session is released.
+  const settle = (): void => {
+    const projected = state as unknown as { owner: "human" | "delivery" | null; queuedHuman: number };
+    if (projected.queuedHuman > 0) { projected.queuedHuman -= 1; projected.owner = "human"; }
+    else projected.owner = null;
+  };
+  void emit;
+  return { session, sent, settle };
+}
+
+test("T114 / PR-002: a Human prompt claims the session before it is written, so delivery cannot slip in", async () => {
+  const { session, sent } = reservedSession();
+  assert.equal(session.busy, false);
+  // The moment the Human's prompt is submitted the session is claimed --
+  // without waiting for the engine to report a turn. Between those two points
+  // a delivery used to see an idle session and put its command in the same
+  // queue, which is the mixed attribution S-03 has not settled.
+  const submitted = session.submit("what is the plan?");
+  assert.equal(session.busy, true, "the session was still idle after a prompt was submitted");
+  await submitted;
+  await assert.rejects(session.deliver("b-00000000-0000-4000-8000-000000000000"),
+    (error: unknown) => error instanceof StoreError && error.code === "BATCH_CONFLICT");
+  assert.equal(sent.length, 1, "a delivery was written into a session the Human had claimed");
+});
+
+test("T114 / PR-002: a delivery claims the session, and the Human is queued rather than refused or interleaved", async () => {
+  const { session, sent, settle } = reservedSession();
+  await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  assert.equal(session.busy, true);
+  // The Human is never made to wait for mail: the prompt goes to the engine,
+  // queued behind the delivery's turn so that turn keeps its own boundary.
+  await session.submit("meanwhile, about the release");
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1]!.streamingBehavior, "followUp");
+  // The session stays claimed while the queued prompt is still to run, so a
+  // second delivery does not start between the two turns.
+  settle();
+  assert.equal(session.busy, true, "the session was released while a Human prompt was still queued");
+  await assert.rejects(session.deliver("b-00000000-0000-4000-8000-000000000001"));
+  settle();
+  assert.equal(session.busy, false);
+  await session.deliver("b-00000000-0000-4000-8000-000000000001");
+  assert.equal(sent.length, 3);
+  assert.equal(sent[2]!.streamingBehavior, undefined);
+});
+
+test("T114 / PR-002: a delivery the engine never answers gives the session back", async () => {
+  // The engine accepts nothing and reports nothing -- no turn starts, so no
+  // turn settles, and the session is never released by an event. Without the
+  // owner giving its claim back here, the Human and every later batch would be
+  // locked out of a session that is in fact idle.
+  const claims: string[] = [];
+  let claimed = false;
+  const session: DeliverySession = {
+    running: true,
+    get busy() { return claimed; },
+    onEvent: () => () => {},
+    deliver: async () => { claimed = true; claims.push("deliver"); },
+    release: () => { claimed = false; claims.push("release"); },
+  };
+  const batch = {
+    id: "b-00000000-0000-4000-8000-000000000000", agent: "principal" as const, incarnation: 0,
+    messageIds: [], deliveryMode: "followUp" as const, notice: "", sessionPath: null, indexPath: "/inbox.md" as const,
+  };
+  let now = 1_000;
+  const delivery = new PrincipalDelivery(session, {
+    prepare: async () => batch, complete: async () => { claims.push("complete"); },
+  }, { stateRoot: "/nonexistent", frameBytes: LIMITS.frameBytes, acceptMs: 10, retryAfterMs: 1000, now: () => (now += 20) });
+  const outcome = await delivery.tick();
+  assert.equal(outcome.kind, "failed");
+  assert.match((outcome as { reason: string }).reason, /accept/);
+  assert.deepEqual(claims, ["deliver", "release"], "the session was left claimed by a delivery nobody answered");
+  assert.equal(session.busy, false);
+});
+
+test("T114 / PR-002: the extension is ready for the next batch however a turn ended", async () => {
+  // The engine reports a session path that is not absolute, so the extension
+  // cannot name a boundary however the turn ends. The batch stays prepared in
+  // the broker; what is tested here is that this engine still accepts the next
+  // delivery of it. A long-lived Principal session that held the batch after
+  // an unreported boundary would refuse every later one.
+  await withEngine("oma-principal-pending-release-", async (society, engine) => {
+    assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "s", body: "b", kind: "message" })).ok);
+    const delivery = new PrincipalDelivery(sessionOf(engine), principalHostBroker(society.runRoot, LIMITS), {
+      stateRoot: society.root, frameBytes: LIMITS.frameBytes, acceptMs: 10_000, retryAfterMs: 0,
+    });
+    for (const attempt of [1, 2]) {
+      // Presented again on the second attempt: the extension released its claim.
+      const presented = engine.next(event => event.type === "custom_message", 10_000);
+      const outcome = delivery.tick();
+      await presented;
+      engine.send({ op: "turn", stopReason: "stop" });
+      assert.equal((await outcome).kind, "failed", `attempt ${attempt} was not the expected unreported boundary`);
+      await engine.idle();
+    }
+  }, { OMA_TEST_SESSION_FILE: "relative/session.jsonl" });
+});
+
+test("T114: the Principal's session stays in its own private space", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-principal-private-"));
+  try {
+    provisionSociety(root);
+    // PR-003: the Human's history is not kept beside other agents' runner
+    // artifacts, and the receipt validator asks the same owner where it is.
+    assert.equal(principalSessionDir(root), join(root, "principal", "private", "sessions"));
+    assert.ok(existsSync(principalSessionDir(root)));
+    assert.equal(existsSync(join(root, "agents", "principal", "runner", "sessions")), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T114: the host is answered on its identity, not on a number another process may hold", async () => {
+  // The same pid, a different process: a pid is reused, and everything else in
+  // this repo pins identity rather than trusting a number. A caller whose start
+  // time is not the registered host's is refused delivery.
+  const impostor = new HostChannel("/nonexistent/run", { pid: process.pid, startTime: "1" });
+  const society = await startSociety("oma-principal-hostpin-", true, impostor);
+  try {
+    const client = channel();
+    try {
+      await client.connect(join(society.runRoot, "principal-host.sock"));
+      assert.equal(await failureOf(client.call("batch.prepare", {})), "AUTH_FAILED");
+    } finally { client.close(); }
+  } finally { await stopSociety(society); }
+});
+
+test("T114: stopping the broker releases the supervision channel it was given", async () => {
+  const society = await startSociety("oma-principal-channel-close-");
+  assert.equal(society.host!.closed, false);
+  await society.broker.drainAndClose();
+  // A broker told to stop on its own must not stay alive holding a descriptor
+  // whose other end is a host that is still running.
+  assert.equal(society.host!.closed, true, "the broker kept the supervision channel after it stopped");
+  rmSync(society.root, { recursive: true, force: true });
 });

@@ -19,6 +19,7 @@ import {
 import { CLI_CREDENTIAL_FD_ENV as CLI_READS } from "../src/cli/transport.js";
 import {
   CLI_CREDENTIAL_FD_ENV as EXTENSION_SETS, PRINCIPAL_CHANNEL_ENV, PRINCIPAL_CHANNEL_FD, PrincipalChannel, registerOmaTools,
+  runCliProcess,
 } from "../src/pi-extension.js";
 
 const CREDENTIAL = "c".repeat(64);
@@ -238,4 +239,22 @@ test("T114: reading mail never returns more than its bound, even while the file 
   assert.ok(refused > 0, "no read was refused while the file changed under it");
   assert.ok(peak > maximum, `the writer never took the file past the bound (peak ${peak}); the race was not exercised`);
   process.stderr.write(`# bounded read: ${successes} within the bound, ${refused} refused, ${raced} caught mid-read\n`);
+});
+
+test("T114: the CLI's output cap counts bytes, not decoded characters", async () => {
+  // A UTF-8 character is up to four bytes, so a cap on decoded string length
+  // would hold several times the bytes it claims. The child writes far more
+  // than the cap in three-byte characters; the owner must stop it at the
+  // declared bound.
+  const cap = 1024 * 1024;
+  const flood = `
+    const chunk = "가".repeat(64 * 1024);
+    for (let i = 0; i < 64; i++) process.stdout.write(chunk);
+  `;
+  const result = await runCliProcess({
+    node: process.execPath, cli: "--input-type=module", args: ["-e", flood],
+    cwd: process.cwd(), env: { PATH: "/usr/bin:/bin" }, grant: null, timeoutMs: 30_000,
+  });
+  assert.ok(Buffer.byteLength(result.stdout) <= cap,
+    `the CLI's output kept ${Buffer.byteLength(result.stdout)} bytes past a ${cap}-byte cap`);
 });

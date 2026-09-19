@@ -1191,8 +1191,8 @@
   {
     "requirement": "PR-002",
     "source": "implementation-spec.md",
-    "digest": "347e44f0bc9375524989e10bc9a7b2cbcbb3f2de739041fd92d070a26d530949",
-    "normativeText": "**MUST [PR-002]** principal-relay는 mailbox new 항목마다 deliveries의 durable 수신 기록과 원문을 확인하고 모두 cur로 이동한다. 기존 질문/batch가 pending이어도 새 항목을 계속 인수한다. UI가 없으면 batch를 새로 prepare하지 않는다. UI reconnect 시 host가 pending을 조회하여 제한된 batch를 인수하고, trusted extension이 그것을 session에 custom message로 제시한다. batch 준비와 완료는 host endpoint에서 그 broker를 시작한 host에게만 서빙하므로 model이 실행하는 어떤 것도 자기 mail을 전달된 것으로 표시할 수 없다. 전달은 session이 idle일 때만 하며, 실행 중인 turn 안에서의 boundary 귀속(S-03)에 의존하지 않는다. boundary 없이 끝난 turn의 batch는 prepared로 남아 back-off 뒤 다시 전달된다. relay는 Pi model call을 하지 않는다.",
+    "digest": "3f0bbd948bc09c64b602565330f42b63fa22331be3a6c0d20d2f529055bfc072",
+    "normativeText": "**MUST [PR-002]** principal-relay는 mailbox new 항목마다 deliveries의 durable 수신 기록과 원문을 확인하고 모두 cur로 이동한다. 기존 질문/batch가 pending이어도 새 항목을 계속 인수한다. UI가 없으면 batch를 새로 prepare하지 않는다. UI reconnect 시 host가 pending을 조회하여 제한된 batch를 인수하고, trusted extension이 그것을 session에 custom message로 제시한다. batch 준비와 완료는 host endpoint에서 그 broker를 시작한 host에게만 서빙하므로 model이 실행하는 어떤 것도 자기 mail을 전달된 것으로 표시할 수 없다. 전달은 session이 idle일 때만 하며, 실행 중인 turn 안에서의 boundary 귀속(S-03)에 의존하지 않는다. idle 관측과 turn 시작은 한 단계여야 한다: session의 소유권은 engine이 turn_start를 보고하기 전에, 무엇을 쓰기 전에 동기적으로 예약하며, Human prompt와 delivery가 같은 소유권을 쓴다. Human은 mail 때문에 기다리지 않는다 — 이미 turn이 돌고 있으면 prompt는 engine이 그 turn 뒤에 이어 실행하도록 큐에 넣고, session은 큐에 든 Human prompt가 모두 끝날 때까지 Human의 것으로 남는다. settle되지 않고 끝난 delivery는 예약을 돌려준다. boundary 없이 끝난 turn의 batch는 prepared로 남아 back-off 뒤 다시 전달된다. relay는 Pi model call을 하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

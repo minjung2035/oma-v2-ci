@@ -15,7 +15,7 @@ import {
   ensureDurableDirectory,
   writeExclusiveFsyncedFile,
 } from "./durable-fs.js";
-import { runnerReceiptPathAt, runnerSessionDirPathAt } from "./paths.js";
+import { runnerReceiptPathAt, sessionDirPathAt } from "./paths.js";
 
 export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.85.1";
 export const PI_BOUNDARY_PREFIX = "OMA_PI_BOUNDARY_V1 ";
@@ -90,7 +90,7 @@ function validSessionPath(
     return false;
   let fd: number | undefined;
   try {
-    const root = realpathSync(runnerSessionDirPathAt(stateRoot, actor));
+    const root = realpathSync(sessionDirPathAt(stateRoot, actor));
     const actual = realpathSync(value);
     const offset = relative(root, actual);
     fd = openSync(

@@ -51,6 +51,10 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
       stdio: run.grant === null ? ["ignore", "pipe", "pipe"] : ["ignore", "pipe", "pipe", "pipe"],
     });
     let stdout = ""; let stderr = "";
+    // Counted as bytes, not as decoded string length: a UTF-8 character is up
+    // to four bytes, so a string-length cap would keep several times the
+    // declared bound.
+    let stdoutBytes = 0; let stderrBytes = 0;
     let settled = false;
     const finish = (code: number): void => {
       if (settled) return;
@@ -69,12 +73,12 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
     timer.unref();
     if (run.signal?.aborted) terminate();
     else run.signal?.addEventListener("abort", abort, { once: true });
-    const collect = (append: (text: string) => void, current: () => string) => (chunk: Buffer) => {
-      if (current().length + chunk.length > OUTPUT_BYTES) { terminate(); return; }
-      append(chunk.toString("utf8"));
+    const collect = (append: (text: string, bytes: number) => void, current: () => number) => (chunk: Buffer) => {
+      if (current() + chunk.byteLength > OUTPUT_BYTES) { terminate(); return; }
+      append(chunk.toString("utf8"), chunk.byteLength);
     };
-    child.stdout?.on("data", collect(text => { stdout += text; }, () => stdout));
-    child.stderr?.on("data", collect(text => { stderr += text; }, () => stderr));
+    child.stdout?.on("data", collect((text, bytes) => { stdout += text; stdoutBytes += bytes; }, () => stdoutBytes));
+    child.stderr?.on("data", collect((text, bytes) => { stderr += text; stderrBytes += bytes; }, () => stderrBytes));
     if (run.grant !== null) {
       const channel = child.stdio[CREDENTIAL_FD] as unknown as Socket | null;
       if (!channel) { terminate(); finish(1); return; }

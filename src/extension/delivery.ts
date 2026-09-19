@@ -60,43 +60,46 @@ export function registerDelivery(pi: ExtensionAPI): void {
   pi.on("agent_settled", async (_event, ctx) => {
     const batch = pending;
     if (!batch) return;
-    // A turn that ended any other way produced no boundary. The batch stays
-    // prepared in the broker and will be delivered again, so this engine must
-    // be ready to accept it: a Resident's engine is discarded after a failed
-    // batch, but the Principal's is the Human's long-lived session, and
-    // keeping the failed batch pending here would refuse every later one.
-    if (terminalStop !== "stop") {
-      pending = null;
-      terminalStop = null;
-      return;
-    }
-    const sessionPath = ctx.sessionManager.getSessionFile();
-    if (!sessionPath || !isAbsolute(sessionPath)) return;
-    pi.appendEntry("oma-delivery-boundary", {
-      adapterRevision: PI_ADAPTER_REVISION,
-      batchId: batch.id,
-      incarnation: batch.incarnation,
-      messageIds: batch.messageIds,
-      sessionPath,
-    });
-    const leaf = ctx.sessionManager.getLeafEntry();
-    if (
-      !leaf ||
-      leaf.type !== "custom" ||
-      leaf.customType !== "oma-delivery-boundary"
-    )
-      return;
-    ctx.ui.notify(
-      `${PI_BOUNDARY_PREFIX}${JSON.stringify({
+    // Whatever happens below, this engine is ready for the next batch when the
+    // turn is over. A Resident's engine is discarded after a batch; the
+    // Principal's is the Human's long-lived session, so a batch left pending
+    // here -- because the turn failed, because the session file was not where
+    // it should be, because the entry did not land -- would refuse every later
+    // delivery for as long as the Human keeps the session open. The batch
+    // itself stays prepared in the broker and is delivered again; only this
+    // engine's claim on it is released.
+    try {
+      // A turn that ended any other way produced no boundary.
+      if (terminalStop !== "stop") return;
+      const sessionPath = ctx.sessionManager.getSessionFile();
+      if (!sessionPath || !isAbsolute(sessionPath)) return;
+      pi.appendEntry("oma-delivery-boundary", {
         adapterRevision: PI_ADAPTER_REVISION,
         batchId: batch.id,
         incarnation: batch.incarnation,
+        messageIds: batch.messageIds,
         sessionPath,
-        entryId: leaf.id,
-      })}`,
-      "info",
-    );
-    pending = null;
-    terminalStop = null;
+      });
+      const leaf = ctx.sessionManager.getLeafEntry();
+      if (
+        !leaf ||
+        leaf.type !== "custom" ||
+        leaf.customType !== "oma-delivery-boundary"
+      )
+        return;
+      ctx.ui.notify(
+        `${PI_BOUNDARY_PREFIX}${JSON.stringify({
+          adapterRevision: PI_ADAPTER_REVISION,
+          batchId: batch.id,
+          incarnation: batch.incarnation,
+          sessionPath,
+          entryId: leaf.id,
+        })}`,
+        "info",
+      );
+    } finally {
+      pending = null;
+      terminalStop = null;
+    }
   });
 }

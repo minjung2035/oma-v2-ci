@@ -17,6 +17,7 @@ import { openTerminal } from "../tui/screen.js";
 import { dashboardData } from "../tui/dashboard.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile } from "../tui/session.js";
 import { PrincipalDelivery, principalHostBroker } from "../runtime/principal-delivery.js";
+import type { PiEvent } from "../runtime/pi-rpc.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
@@ -223,7 +224,14 @@ async function main(argv: readonly string[]): Promise<void> {
 
   // PR-002: pending mail reaches the Principal while this product runs, one
   // bounded batch at a time, whenever the session is idle.
-  const delivery = session === null ? null : new PrincipalDelivery(session,
+  const deliverySession = session === null ? null : {
+    get running() { return session?.running ?? false; },
+    get busy() { return session?.busy ?? true; },
+    onEvent: (listener: (event: PiEvent) => void) => session!.onEvent(listener),
+    deliver: (batchId: string) => session!.deliver(batchId),
+    release: () => { session?.release("delivery"); },
+  };
+  const delivery = deliverySession === null ? null : new PrincipalDelivery(deliverySession,
     principalHostBroker(runRoot, settings.config.limits), {
       stateRoot, frameBytes: settings.config.limits.frameBytes,
       acceptMs: settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,

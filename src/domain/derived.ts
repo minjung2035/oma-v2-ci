@@ -81,6 +81,19 @@ export function runnerReceiptFor(actor: string, batchId: string): string {
 export function runnerSessionDirFor(actor: string): string {
   return `${agentRootFor(actor)}/runner/sessions`;
 }
+/** Where an agent's engine keeps its session.
+ *
+ * PR-003 keeps the Principal's Human history and private memory under
+ * `principal/private`, so its session does not live beside the runner
+ * artifacts every other agent's does. A delivery receipt names a session file
+ * (PR-002) and is checked against this, so both paths are decided here rather
+ * than in whichever module happens to need one.
+ */
+export function sessionDirFor(actor: string): string {
+  return required(actor, parseActor, "actor") === "principal"
+    ? "principal/private/sessions"
+    : runnerSessionDirFor(actor);
+}
 
 export function mailObjectFileName(messageId: string): string {
   return `${required(messageId, parseMessageFileId, "message id")}.eml`;

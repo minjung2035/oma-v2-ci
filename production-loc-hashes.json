@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "4a8bd565cc7de5eeb73d60eb21218a4589afc2e9110d2d987918563bba5d27ca",
-  "report": "e997b13c7f592bc267620420ff195fdba030957f89e3e44624bcb44c73840c99",
+  "report": "0d4e55f754d71acf3e69ea449bcfa9ebd5663eeea727fad66408c2ff7612fa3e",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "acb61638c289443f23ef77cea616cc561326100c4a003b109f73fbc1dca4c4ef"
+      "sha256": "89ed5effd5f6beba358205c988398b1584b6a9dc5dd64cacc4b0384623f39b9b"
     },
     {
       "path": "src/broker/composition.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "e66fdd14b69295a1ff36f59632667d49d700ecd2134a87478d2cbcdbc8cc441e"
+      "sha256": "2788c81b6b60d57389a4e76465f0df3d159388ab6ff901bc32722ebf9cebf871"
     },
     {
       "path": "src/broker/process-ancestry.ts",
@@ -225,7 +225,7 @@
     },
     {
       "path": "src/domain/derived.ts",
-      "sha256": "e18e87b1a2a71c8766c35e51de82d74e74d611952351aa1a6d9e77b87e39c228"
+      "sha256": "e2525ad30f551691ed65e36fa2557b3ef0fa1f51c5bca4ffbf382b91c24f9952"
     },
     {
       "path": "src/domain/errors.ts",
@@ -293,7 +293,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "8a80c32204a1bc4d3d4790da03ebe65b20cdd825b0f9cd10a1f9232de43d877b"
+      "sha256": "46335b02cb75f9aac62c25d54cf3b69e26b3e19b278c65dce53a5417ec3b01b8"
     },
     {
       "path": "src/entry/runner.ts",
@@ -305,11 +305,11 @@
     },
     {
       "path": "src/extension/cli-process.ts",
-      "sha256": "8dd319519185e523a99f0ed8fbd198b24c1bef53cc3a96c03a8a7ca4f6508a34"
+      "sha256": "c84c1794d03a162a35e1124a06e14ec84649491ec528e7577750f62230e4501b"
     },
     {
       "path": "src/extension/delivery.ts",
-      "sha256": "ce8f2ee1565a072477868f7e8b87271c691f9d74d00a240b1f0dec20043698f2"
+      "sha256": "2060b496ce8136f95755639465776584253dd257485a777f7c6baf785860a2dd"
     },
     {
       "path": "src/extension/inference-bridge.ts",
@@ -637,7 +637,7 @@
     },
     {
       "path": "src/runtime/principal-delivery.ts",
-      "sha256": "a3f2474d8e41ec27c2c5e4a3e6f9160e2e034cc7bcc3f86ff5a9406e71fd64f2"
+      "sha256": "40c73d8fb2fd08bf47368514c6d37515095279ed52892a21f0a40d1f1582fc6d"
     },
     {
       "path": "src/runtime/process-lock.ts",
@@ -645,7 +645,7 @@
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "b262de13234d3b337b4adadf198997eef4ed0fef2a682d69042e65c84e586729"
+      "sha256": "49fae27d26b2d1b1d69371426acdf5bf82143243f4c785503776a697f00e8a4d"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
@@ -657,7 +657,7 @@
     },
     {
       "path": "src/runtime/supervision-channel.ts",
-      "sha256": "6a0eff730824f32bb73ee6a8627dd2693fa5009a5c65a1dd136c129778e0856c"
+      "sha256": "a5bf088dec551e44f67e2760ae62bf8d2fff209d3bb34210f1a9467e96d9c289"
     },
     {
       "path": "src/sandbox.ts",
@@ -685,7 +685,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "fefc6a43d661036f771b17a4f812aef96058e0959420a1699817a650a25e9130"
+      "sha256": "3d4748ced236cc597f8ea15cd7564aae8cd267b716bef426fabdbf8dbf011b78"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
@@ -725,7 +725,7 @@
     },
     {
       "path": "src/storage/paths.ts",
-      "sha256": "5787e96cdf149ed8578695bff503422b7c1ed97f2ccc7afcc193e9bb72bef600"
+      "sha256": "012d2de4a5b0458b799a908f90f212e6875d14b7542c7a4a537dfe975b294e95"
     },
     {
       "path": "src/storage/quota.ts",
@@ -789,7 +789,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "63d950b2e6093334041ca18cb2bda01ee2e489a20c4f2dd5e9ca75a32a194e37"
+      "sha256": "b702df03322d72064106d8d7bd88dadb6415e55c7884c5ae72838c501df64638"
     },
     {
       "path": "src/tui/sources/extensions.ts",

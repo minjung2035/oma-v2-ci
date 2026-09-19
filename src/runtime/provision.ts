@@ -38,10 +38,9 @@ const OWNED_DIRECTORIES: readonly string[] = Object.freeze([
   // directory that does not exist, so it is provisioned like the rest of the
   // tree rather than left for the first run to discover (TUI-004).
   join("principal", "private"),
-  // Where the Principal's engine keeps its session (PR-003): the per-actor
-  // session directory every agent has, so a delivery receipt names a session
-  // the broker locates exactly as it locates a Resident's (PR-002).
-  join("agents", "principal", "runner", "sessions"),
+  // Where the Principal's engine keeps its session: inside its own private
+  // space (PR-003), not beside the runner artifacts of other agents.
+  join("principal", "private", "sessions"),
 ]);
 
 export interface ProvisionReport {

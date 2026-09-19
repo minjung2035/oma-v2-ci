@@ -30,9 +30,14 @@ import type { PiEvent } from "./pi-rpc.js";
 /** What the delivery needs from the live session. */
 export interface DeliverySession {
   readonly running: boolean;
+  /** True while any turn is owned, by the Human or by a delivery. */
   readonly busy: boolean;
   onEvent(listener: (event: PiEvent) => void): () => void;
+  /** Claims the session and asks the extension to present the batch. Throws
+   * `BATCH_CONFLICT` if the session was claimed in the meantime. */
   deliver(batchId: string): Promise<void>;
+  /** Gives the claim back when a delivery ends without a settled turn. */
+  release(): void;
 }
 
 /** The broker's two delivery methods, as the host calls them. */
@@ -110,6 +115,10 @@ export class PrincipalDelivery {
         this.failedAt.delete(batch.id);
         return { kind: "delivered", batchId: batch.id, messages: batch.messageIds.length };
       } catch (error) {
+        // Losing the race for the session is not a failed delivery: the batch
+        // stays prepared and the next tick takes it, with no back-off.
+        if (error instanceof StoreError && error.code === "BATCH_CONFLICT")
+          return { kind: "deferred", reason: "the principal session was claimed first" };
         this.failedAt.set(batch.id, (this.options.now ?? Date.now)());
         return { kind: "failed", batchId: batch.id, reason: error instanceof Error ? error.message : String(error) };
       }
@@ -135,11 +144,12 @@ export class PrincipalDelivery {
           ["error", "aborted"].includes(String((message as Record<string, unknown>).stopReason)))
           providerFailed = true;
       }
-      if (event.type === "agent_settled") settled = true;
+      if (event.type === "agent_settled") { settled = true; everSettled = true; }
       const decoded = boundaryOf(event, batch);
       if (decoded) boundary = decoded;
       wake();
     });
+    let everSettled = false;
     try {
       await this.session.deliver(batch.id);
       const acceptBy = (this.options.now ?? Date.now)() + this.options.acceptMs;
@@ -168,6 +178,11 @@ export class PrincipalDelivery {
         adapterRevision: PI_ADAPTER_REVISION,
         receiptPath: runnerReceiptPathAt(this.options.stateRoot, batch.agent, batch.id),
       });
-    } finally { unsubscribe(); }
+    } finally {
+      unsubscribe();
+      // A delivery that ended without a settled turn still holds the session;
+      // give it back so the Human and the next batch are not locked out.
+      if (!everSettled) this.session.release();
+    }
   }
 }

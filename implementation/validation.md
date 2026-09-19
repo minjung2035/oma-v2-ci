@@ -4,7 +4,7 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 기준 HEAD `7249eb7`(작업 트리 포함), 실행일 2026-09-19. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 기준 HEAD `80fedd1`(작업 트리 포함), 실행일 2026-09-19. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
 ### 실행 결과
 
@@ -14,10 +14,10 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1084/1084 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1092/1092 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
-| `node scripts/loc.mjs` | **215 files / 19,941 code LOC** |
+| `node scripts/loc.mjs` | **215 files / 19,999 code LOC** |
 
 ### 현재 범위
 
@@ -230,6 +230,30 @@ Principal session 디렉터리는 receipt가 다른 agent와 같은 방식으로
 `SOURCE_BOUND`라 하지 않는다. CI는 cloc 2.08 릴리스를 digest로 고정해 설치하고, 재측정을 필수로 하며, 재생성한 값이 커밋과 다르면 
 실패한다. CI에 cloc 설치 단계가 아예 없어 `loc` 단계가 항상 실패하던 문제도 이것으로 닫혔다.
 
+### Principal 제품 경로: 네 번째 감사에서 닫은 것
+
+**idle 관측과 turn 시작이 원자적이지 않았다.** delivery는 session이 idle일 때만 시작해 S-03의 미결 질문에 기대지 않겠다는 것이 
+핵심 안전 주장이었는데, `busy`는 engine이 `turn_start`를 보고해야 켜졌다. Human이 prompt를 보낸 직후부터 engine이 그것을 보고할 
+때까지 session은 idle로 보였고, 그 사이에 delivery가 같은 queue에 자기 명령을 넣을 수 있었다. 이제 session 소유권을 무엇을 쓰기 
+전에 동기적으로 예약하고, Human prompt와 delivery가 같은 소유권을 쓴다. Human은 mail 때문에 기다리지 않는다: 이미 turn이 돌고 
+있으면 prompt를 engine이 그 turn 뒤에 실행하도록 큐에 넣고, 큐에 든 Human prompt가 남아 있는 동안 session은 Human의 것으로 남아 
+두 turn 사이에 delivery가 끼어들지 않는다. settle되지 않고 끝난 delivery는 예약을 돌려준다.
+
+**PR-003의 저장 경계를 어겼다.** 직전 커밋은 receipt 검증을 Resident와 통일하려고 Principal session을 
+`agents/principal/runner/sessions`로 옮겼는데, PR-003은 Human 기록을 `principal/private`에 두라고 규정한다. 경로 소유자를 
+`sessionDirFor(actor)` 하나로 만들어 Principal은 `principal/private/sessions`를 쓰고 receipt 검증도 같은 소유자에게 묻는다. 
+규범을 지키면서 receipt도 검증된다.
+
+**확장이 일부 실패 경로에서 batch를 계속 붙잡았다.** session 경로가 없거나 entry가 기대와 다르면 `pending`을 비우지 않아서, 
+오래 사는 Principal session이 이후 모든 전달을 거절했다. 이제 turn이 어떻게 끝나든 확장의 claim은 풀린다. batch 자체는 broker에 
+prepared로 남아 다시 전달된다.
+
+**host identity가 pid 숫자였다.** Resident와 engine은 pid 재사용을 명시적으로 막는데 host만 숫자 비교였다. 이제 시작 시각까지 
+고정한 identity로 답한다. **supervision socket도 broker가 소유한다**: broker만 따로 멈춰도 descriptor를 붙잡고 남지 않는다.
+
+**CLI 출력 상한이 바이트가 아니었다.** 디코드한 문자열 길이로 세고 있어서 3바이트 문자 위주 출력이면 선언한 1 MiB보다 훨씬 
+많이 쥐었다. 문자로 세는 구현으로 되돌리면 1,048,576바이트 상한에 3,141,759바이트를 쥔다.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 Principal이 society에 요청할 수 없다.** Principal endpoint는 supervision channel이 
@@ -298,7 +322,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **215 files / 19,941 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **215 files / 19,999 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

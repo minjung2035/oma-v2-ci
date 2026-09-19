@@ -12,7 +12,7 @@ import { spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/a
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
-import { runnerSessionDirPathAt, runnerViewPathAt } from "../storage/paths.js";
+import { runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
 import { PiRpcClient, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
@@ -74,12 +74,12 @@ export interface PrincipalPaths {
  * and an old one names a session that no longer exists. */
 export function newSessionHandle(): string { return randomBytes(16).toString("hex"); }
 
-/** Where the Principal's engine keeps its session. It is the per-actor session
- * directory every agent has, so a delivery receipt names a session the broker
- * can locate exactly as it locates a Resident's. It is host-private: no
- * Resident mounts another agent's root. */
+/** Where the Principal's engine keeps its session: under its own private
+ * space, as PR-003 requires. The delivery receipt's validator asks the same
+ * owner for this path, so keeping the Human's history private did not have to
+ * be traded for a receipt the broker can check. */
 export function principalSessionDir(stateRoot: string): string {
-  return runnerSessionDirPathAt(stateRoot, "principal");
+  return sessionDirPathAt(stateRoot, "principal");
 }
 
 /** The environment the engine is started with.
@@ -230,7 +230,19 @@ export class PrincipalSession {
   private readonly channel: Socket;
   private sequence = 0;
   private closed = false;
-  private turning = false;
+  /** Who owns the turn the engine is running, or null when it runs none.
+   *
+   * Observing "not busy" and starting a turn have to be one step. The engine
+   * only reports `turn_start` after it has read the prompt, so a delivery that
+   * looked at an event-driven flag could see an idle session between the
+   * Human's prompt being written and that report, and put its own command into
+   * the same queue -- which is exactly the mixed attribution S-03 has not
+   * settled. Ownership is taken here, synchronously, before anything is
+   * written, so there is no window between the check and the claim. */
+  private owner: "human" | "delivery" | null = null;
+  /** Human turns the engine has queued behind the running one. The session
+   * stays the Human's until they have all run. */
+  private queuedHuman = 0;
 
   private constructor(private readonly child: ChildProcessWithoutNullStreams, limits: PiRpcLimits, private readonly sink: SessionSink) {
     this.rpc = new PiRpcClient(child, limits);
@@ -239,8 +251,12 @@ export class PrincipalSession {
     this.channel = child.stdio[HOST_CHANNEL_FD] as unknown as Socket;
     this.channel.on("error", () => {});
     this.rpc.onEvent(event => {
-      if (event.type === "turn_start") this.turning = true;
-      if (event.type === "agent_settled") this.turning = false;
+      // A settled turn releases the session, unless the engine is already
+      // holding Human prompts behind it.
+      if (event.type === "agent_settled") {
+        if (this.queuedHuman > 0) { this.queuedHuman -= 1; this.owner = "human"; }
+        else this.owner = null;
+      }
       const projected = projectEvent(event);
       if (projected.line !== undefined) this.sink.onLine(projected.line);
       if (projected.busy !== undefined) this.sink.onBusy(projected.busy);
@@ -274,9 +290,9 @@ export class PrincipalSession {
    * before it accepts the engine as the Principal. */
   get pid(): number | null { return this.closed ? null : this.child.pid ?? null; }
 
-  /** True while a turn is running. Delivery waits for this to clear so that a
+  /** True while a turn is owned. Delivery waits for this to clear so that a
    * batch's boundary is never confused with the end of a Human's turn. */
-  get busy(): boolean { return this.turning; }
+  get busy(): boolean { return this.owner !== null; }
 
   /** Hands the engine its credential on the private socket. A new one simply
    * replaces the previous one; the old broker that minted it is gone. */
@@ -294,14 +310,40 @@ export class PrincipalSession {
    * batch's own. */
   async deliver(batchId: string): Promise<void> {
     if (this.closed) throw new StoreError("PRINCIPAL_DISCONNECTED", "the principal session has ended");
-    await this.rpc.send({ id: batchId, type: "prompt", message: `/oma-deliver ${batchId}` });
+    // Claimed before the command is written, and given back if it cannot be.
+    if (this.owner !== null)
+      throw new StoreError("BATCH_CONFLICT", "the principal session is already running a turn");
+    this.owner = "delivery";
+    try { await this.rpc.send({ id: batchId, type: "prompt", message: `/oma-deliver ${batchId}` }); }
+    catch (error) { this.release("delivery"); throw error; }
   }
 
+  /** Gives the session back if this owner still holds it. A turn that never
+   * settles would otherwise keep it forever. */
+  release(owner: "human" | "delivery"): void {
+    if (this.owner === owner) this.owner = null;
+  }
+
+  /** The Human is never made to wait for mail. When a turn is already running,
+   * the prompt is queued by the engine behind it rather than refused or
+   * interleaved: the running turn keeps its own boundary, and the session
+   * stays claimed until the queued prompts have run. */
   async submit(text: string): Promise<void> {
     if (this.closed) { this.sink.onEnd("세션이 종료되어 전송할 수 없습니다."); return; }
     this.sequence += 1;
     this.sink.onBusy(true);
-    await this.rpc.send({ id: `oma-tui-${this.sequence}`, type: "prompt", message: text });
+    const running = this.owner !== null;
+    if (running) this.queuedHuman += 1; else this.owner = "human";
+    try {
+      await this.rpc.send({
+        id: `oma-tui-${this.sequence}`, type: "prompt", message: text,
+        ...(running ? { streamingBehavior: "followUp" } : {}),
+      });
+    } catch (error) {
+      if (running) this.queuedHuman = Math.max(0, this.queuedHuman - 1);
+      else this.release("human");
+      throw error;
+    }
   }
 
   close(): void {

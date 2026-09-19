@@ -40,8 +40,10 @@ import { descendsFrom, parentOf, processIdentity, type ProcessIdentity } from ".
 /** The supervision channel as the broker sees it. Present only when a host
  * started this broker; its absence means no Principal endpoint is opened. */
 export interface PrincipalHostChannel {
-  /** The process at the other end of the channel. */
-  readonly hostPid: number;
+  /** The process at the other end of the channel, pinned by its start time as
+   * well as its number: a pid alone is reused, and the delivery endpoint is
+   * answered on identity, not on a number that may have been handed on. */
+  readonly host: ProcessIdentity;
   /** Tells the host both endpoints are listening. */
   readonly ready: () => void;
   /** Gives the host the credential for the session it registered. */
@@ -50,6 +52,8 @@ export interface PrincipalHostChannel {
   readonly refuse: () => void;
   /** Delivers each session the host registers. */
   readonly onSession: (listener: (sessionHandle: string, pid: number) => void) => void;
+  /** Releases the channel. The broker owns it for its lifetime. */
+  readonly close: () => void;
 }
 
 /** Ports shared by both endpoints: the broker's connection machinery. */
@@ -85,6 +89,15 @@ interface RegisteredSession {
   readonly credential: string;
 }
 
+/** Whether this peer is the host itself. The pid is compared against the
+ * identity the channel pinned, so a process that merely inherited the number
+ * after the host died is not mistaken for it. */
+function isHost(peer: BoundPeer, host: ProcessIdentity): boolean {
+  if (peer.pid !== host.pid || !peer.alive()) return false;
+  const observed = processIdentity(peer.pid);
+  return observed !== null && observed.startTime === host.startTime;
+}
+
 /** Serves one connection whose first frames decide what it is. Shared by both
  * endpoints so the peer binding and failure handling are written once. */
 function serveConnection(
@@ -117,7 +130,7 @@ export class PrincipalEndpoint {
   private open = true;
 
   constructor(private readonly channel: PrincipalHostChannel, private readonly ports: PrincipalEndpointPorts) {
-    if (!Number.isSafeInteger(channel.hostPid) || channel.hostPid <= 1)
+    if (!Number.isSafeInteger(channel.host.pid) || channel.host.pid <= 1)
       throw new StoreError("UNSUPPORTED_PROFILE", "the principal host channel has no host process");
     channel.onSession((sessionHandle, pid) => {
       // A refused registration is answered, never left for the host to time
@@ -136,7 +149,7 @@ export class PrincipalEndpoint {
     if (!this.open) return;
     if (!isPrincipalSessionHandle(sessionHandle))
       throw new StoreError("INVALID_REQUEST", "the registered principal session handle is malformed");
-    if (parentOf(pid) !== this.channel.hostPid)
+    if (parentOf(pid) !== this.channel.host.pid)
       throw new StoreError("AUTH_FAILED", "the registered engine is not a child of the host");
     const engine = processIdentity(pid);
     if (engine === null) throw new StoreError("AUTH_FAILED", "the registered engine is not running");
@@ -224,7 +237,7 @@ export class PrincipalHostEndpoint {
 
   private async dispatch(raw: Record<string, unknown>, peer: BoundPeer): Promise<object> {
     const id = typeof raw.id === "string" ? raw.id : "x";
-    if (peer.pid !== this.channel.hostPid || !peer.alive())
+    if (!isHost(peer, this.channel.host))
       throw new StoreError("AUTH_FAILED", "only the host that started this broker may deliver to the principal");
     const auth = this.ports.principalContext(peer);
     if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to deliver to");

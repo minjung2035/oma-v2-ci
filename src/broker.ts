@@ -416,6 +416,9 @@ export class Broker {
     // during this run can attach to a later one.
     this.principalEndpoint?.close();
     this.principalHostEndpoint?.close();
+    // The supervision channel is this broker's for its lifetime: a broker told
+    // to stop on its own must not stay alive holding a descriptor.
+    try { this.principalHost?.close(); } catch (error) { this.cleanupError(error); }
     this.principalEndpoint = null;
     this.principalHostEndpoint = null;
     this.principalServer = null;

@@ -17,6 +17,7 @@
 import { fstatSync } from "node:fs";
 import { Socket } from "node:net";
 import { peerCred } from "../leaf.js";
+import { processIdentity } from "../broker/process-ancestry.js";
 import { HostChannelReader, encodeHostMessage } from "../protocol/host-channel.js";
 import type { PrincipalHostChannel } from "../broker/principal-endpoint.js";
 
@@ -36,9 +37,16 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
   try { kind = fstatSync(options.fd); }
   catch { log("a host channel is declared but none is attached; no principal endpoint is opened"); return undefined; }
   if (!kind.isSocket()) { log("the host channel is not a socket; no principal endpoint is opened"); return undefined; }
-  const host = peerCred(options.fd);
-  if (host === null || host.uid !== (process.getuid?.() ?? -1)) {
+  const credentials = peerCred(options.fd);
+  if (credentials === null || credentials.uid !== (process.getuid?.() ?? -1)) {
     log("the host channel's peer is not this user; no principal endpoint is opened");
+    return undefined;
+  }
+  // Pinned with its start time: the pid on its own is reused, and this identity
+  // is what the delivery endpoint answers to.
+  const host = processIdentity(credentials.pid);
+  if (host === null) {
+    log("the host channel's peer is not running; no principal endpoint is opened");
     return undefined;
   }
 
@@ -66,7 +74,7 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
     socket.write(text);
   };
   return Object.freeze({
-    hostPid: host.pid,
+    host,
     ready: () => send(encodeHostMessage({ kind: "ready" })),
     grant: (credential: string, sessionHandle: string) =>
       send(encodeHostMessage({ kind: "credential", credential, sessionHandle })),
@@ -75,5 +83,9 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
       listeners.push(listener);
       for (const message of queued.splice(0)) listener(message.sessionHandle, message.pid);
     },
+    // The broker owns this descriptor for its lifetime; closing it is part of
+    // stopping, so a broker told to stop on its own does not keep running for
+    // a channel nobody is reading.
+    close: () => { gone = true; socket.destroy(); },
   });
 }
