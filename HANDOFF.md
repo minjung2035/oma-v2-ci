@@ -75,11 +75,11 @@ TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unveri
 
 TUI에서 아직 닫히지 않은 의존성은 하나로 좁혀져 있다.
 
-**`principal.attach` credential handshake는 구현되었고 실제 tool 경로로 검증됐다**(IPC-011, PR-001). host가 broker를 시작하기 전에 session handle을 등록하고, broker는 등록이 있을 때만 endpoint를 열며, credential은 등록한 host만 가진 descriptor로 한 번 간다(파일 없음). model-facing CLI가 매 연결의 첫 frame으로 제시하고, trusted extension의 `cliEnvironment()`가 `env -i` 너머로 그것을 전달한다. 세 곳이 다시 어긋나면 `principal-session-env` 규칙이 architecture gate를 실패시킨다. Dashboard는 별개로 host-private status view(TUI-021)를 읽는다.
+**Principal 권한과 mail 전달은 실제 프로세스 구조로 구현·검증됐다**(IPC-011, PR-001, PR-002, LIFE-006). host가 broker에 넘긴 socketpair가 host 식별, engine 등록, credential 전달, 생존 신호를 모두 맡는다. credential은 파일·환경·명령행 어디에도 없고 socketpair로만 이동하며, attach는 등록된 engine의 자손에게만 허용된다. host가 죽으면 broker가 스스로 멈추고, broker가 재시작되면 engine은 새 credential을 받는다. Principal에게 온 mail은 idle session에 전달되고 receipt와 함께 완료되며, 준비·완료는 host만 할 수 있다. 세 곳의 환경 배선과 secret의 무환경은 `principal-session-env`/`principal-secret-env` 규칙이 architecture gate에서 강제한다.
 
-**다음 작업은 PR-002의 후반부다**: pending을 Principal에게 실제로 전달하는 경로. 자세한 범위와 왜 절반만 지으면 안 되는지는 [validation.md](implementation/validation.md)의 "남은 것"에 적었다.
+**다음 작업**: S-02의 model 주도 기준(도구로 credential을 읽으려는 시도 등)과 S-03(turn 안의 boundary 귀속)은 실제 모델이 도는 환경을 요구한다. 범위는 [validation.md](implementation/validation.md)의 "남은 것"에 적었다.
 
-S-02는 여전히 **OPEN**이다. handshake와 duplicate attach 거절은 닫혔지만, SP-02-T/A의 model-facing tool override와 credential 비노출 기준은 실제 모델이 도는 환경을 요구한다. PR-004의 제한은 새 entrypoint가 그대로 진다.
+S-02는 여전히 **OPEN**이다. handshake, duplicate attach 거절, credential 비노출의 host 쪽 경로는 닫혔지만, SP-02-T/A의 model 주도 기준은 실제 모델이 도는 환경을 요구한다. PR-004의 제한은 새 entrypoint가 그대로 진다.
 
 session 경계를 넘지 않는 Principal model per-request 전환은 TUI-005가 명시적으로 범위 밖에 둔다. 하려면 `src/inference.ts`의 frozen authority 검사를 함께 개정해야 하며, 호출 경로 없이 API만 먼저 만들지 않는다.
 

@@ -1,17 +1,14 @@
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { join } from "node:path";
-import { fstatSync, mkdirSync, writeSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { Store, SCHEMA_PATH } from "../store.js";
 import { MailModule } from "../mail.js";
 import { UnitsModule, UNIT_TPL_DIR } from "../units.js";
 import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "../lifecycle.js";
-import { Broker, type PrincipalSessionRegistration } from "../broker.js";
-import { PRINCIPAL_SESSION_ENV, isPrincipalSessionHandle } from "../protocol/principal-credential.js";
-
-/** The write end the supervising host attached when it started this process.
- * Descriptor 0-2 are the ordinary streams; this is the next one. */
-const PRINCIPAL_CREDENTIAL_FD = 3;
+import { Broker } from "../broker.js";
+import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD } from "../protocol/host-channel.js";
+import { openSupervisionChannel } from "../runtime/supervision-channel.js";
 import { GitModule } from "../git.js";
 import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "../git/integration-policy.js";
 import { ReconcileModule } from "../reconcile.js";
@@ -54,6 +51,17 @@ async function main(): Promise<void> {
     return stopping;
   };
   process.once("SIGTERM", () => { void stop(0); }); process.once("SIGINT", () => { void stop(0); });
+  // LIFE-006/PR-001: a broker started by the product holds a supervision
+  // channel from it. Opened before anything slow, so a host that dies during
+  // recovery still takes this broker with it; a broker started any other way
+  // has no channel, opens no Principal endpoint, and runs as before.
+  const principalHost = process.env[HOST_CHANNEL_ENV] === String(HOST_CHANNEL_FD)
+    ? openSupervisionChannel({
+      fd: HOST_CHANNEL_FD,
+      onHostGone: reason => { console.error(`${reason}; the broker stops with it`); void stop(0); },
+      log: line => { console.error(line); },
+    })
+    : undefined;
   try {
     const cfg = loadConfig(configPath);
     if (cfg.society !== society) throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
@@ -97,12 +105,12 @@ async function main(): Promise<void> {
       projectGit: join(stateRoot, "repos", "project.git"), hasGoal, activationAllowed: () => lifetime.permitsActivation,
       sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
     });
-    // PR-001: only a host that registered a session before this process started
-    // gets a Principal endpoint, and its credential leaves on the descriptor
-    // that host holds -- never through a file or this process's own output.
+    // PR-001: only the host that started this process gets a Principal
+    // endpoint, and credentials leave only on the channel that host holds --
+    // never through a file, an environment or this process's own output.
     const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile,
       { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes }, cfg.limits, lock,
-      registeredPrincipalSession());
+      principalHost);
     lifetime.attach(broker);
     const validateStoredProfiles = () => {
       for (const agent of store.listAgents()) {
@@ -132,42 +140,6 @@ async function main(): Promise<void> {
     console.error("broker startup failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error)); await stop(1);
   }
 }
-/** The session the host registered, if this broker was started by one.
- *
- * A broker started any other way -- by systemd, or by hand -- registers no
- * session, opens no Principal endpoint, and publishes no credential. That is
- * the truthful outcome: there is no host process to hand a credential to.
- */
-function registeredPrincipalSession(): PrincipalSessionRegistration | undefined {
-  const sessionHandle = process.env[PRINCIPAL_SESSION_ENV];
-  if (!isPrincipalSessionHandle(sessionHandle)) return undefined;
-  // The channel has to be the pipe a supervising host attached, and nothing
-  // else. A stale registration inherited by a broker started another way would
-  // otherwise write a credential into whatever descriptor 3 happens to be --
-  // a log, a journal, someone else's file. No channel, no endpoint.
-  let channel: ReturnType<typeof fstatSync>;
-  try { channel = fstatSync(PRINCIPAL_CREDENTIAL_FD); }
-  catch {
-    console.error("a principal session is registered but no host channel is attached; no principal endpoint is opened");
-    return undefined;
-  }
-  if (!channel.isFIFO() && !channel.isSocket()) {
-    console.error("the principal credential channel is not a pipe; no principal endpoint is opened");
-    return undefined;
-  }
-  return {
-    sessionHandle,
-    publish: credential => {
-      try { writeSync(PRINCIPAL_CREDENTIAL_FD, `${credential}\n`); }
-      catch (error) {
-        // The host asked for a session and cannot be given one. Say so rather
-        // than leave it waiting on a channel that will never answer.
-        console.error("principal credential channel unavailable:", error instanceof Error ? error.message : String(error));
-      }
-    },
-  };
-}
-
 void main().catch(error => {
   console.error("broker initialization failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error));
   process.exitCode = 1;

@@ -184,82 +184,89 @@ test("settings-placement-owner, closed-switch and module-port-import", () => {
     findings => assert.ok(has(findings, "module-port-import")));
 });
 
-test("principal-session-env: the session environment survives producer, forwarder and consumer", () => {
+test("principal-session-env and principal-secret-env: the environment survives every hop, and the secret has none", () => {
   const producer = (extra = "") => `
-import { PRINCIPAL_CREDENTIAL_ENV } from "../protocol/principal-credential.js";
-export function principalEnvironment(paths, profile, limits, session) {
+export function principalEnvironment(paths, profile, limits) {
   return {
     HOME: "/h",
     OMA_SOCKET: "/s",
     OMA_FRAME_BYTES: "1",
-    OMA_PRINCIPAL_SESSION: session.sessionHandle,
     ${extra}
-    ...(session.credential === null ? {} : { [PRINCIPAL_CREDENTIAL_ENV]: session.credential }),
   };
 }`;
   const consumer = `
-import { PRINCIPAL_CREDENTIAL_ENV } from "../protocol/principal-credential.js";
+export const CLI_CREDENTIAL_FD_ENV = "OMA_PRINCIPAL_CREDENTIAL_FD";
 export function socketPath() {
   // Only a caller given no endpoint reaches these, so they are not requirements.
   return process.env.OMA_SOCKET ?? \`/run/\${process.env.OMA_SOCIETY}/\${process.env.OMA_ACTOR}\`;
 }
+function presentedGrant() { return process.env[CLI_CREDENTIAL_FD_ENV]; }
 export async function callActor() {
   const frame = process.env.OMA_FRAME_BYTES;
-  const credential = process.env[PRINCIPAL_CREDENTIAL_ENV];
-  const handle = process.env.OMA_PRINCIPAL_SESSION;
-  return [frame, credential, handle];
+  return [frame, presentedGrant()];
 }`;
-  const constants = 'export const PRINCIPAL_CREDENTIAL_ENV = "OMA_PRINCIPAL_CREDENTIAL";';
-  const forwarder = names => `
-const PRINCIPAL_CREDENTIAL = "OMA_PRINCIPAL_CREDENTIAL";
-const PRINCIPAL_SESSION = "OMA_PRINCIPAL_SESSION";
+  // The two forwarders, shaped as the real ones are: the environment copied
+  // from the engine, and the process owner adding the credential descriptor.
+  const tools = copied => `
 const FRAME_BYTES = "OMA_FRAME_BYTES";
 export function cliEnvironment(home, socket) {
-  const entries = [\`HOME=\${home}\`, \`OMA_SOCKET=\${socket}\`, "LANG=C.UTF-8"];
-  for (const name of [${names}]) {
+  const environment = { HOME: home, OMA_SOCKET: socket, LANG: "C.UTF-8" };
+  for (const name of [${copied}]) {
     const value = process.env[name];
-    if (value !== undefined) entries.push(\`\${name}=\${value}\`);
+    if (value !== undefined) environment[name] = value;
   }
-  return entries;
+  return environment;
 }`;
-  const tree = (forwardList, producerExtra = "") => ({
+  const owner = setsFd => `
+export const CLI_CREDENTIAL_FD_ENV = "OMA_PRINCIPAL_CREDENTIAL_FD";
+export function runCliProcess(run) {
+  const env = { ...run.env };
+  ${setsFd ? "if (run.grant !== null) env[CLI_CREDENTIAL_FD_ENV] = \"3\";" : ""}
+  return env;
+}`;
+  const tree = ({ copied = "FRAME_BYTES", setsFd = true, producerExtra = "" } = {}) => ({
     "src/tui/session.ts": producer(producerExtra),
     "src/cli/transport.ts": consumer,
-    "src/protocol/principal-credential.ts": constants,
-    "src/extension/mail-tools.ts": forwarder(forwardList),
+    "src/extension/mail-tools.ts": tools(copied),
+    "src/extension/cli-process.ts": owner(setsFd),
   });
 
-  // Accept: every name the CLI reads at call time is forwarded, and every
-  // forwarded name is one the host actually sets.
-  withTree(tree("FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION"),
-    findings => clean(findings, "principal-session-env"));
+  // Accept: everything the CLI reads at call time is put there by one of the
+  // two forwarders, and everything copied from the engine is set by the host.
+  withTree(tree(), findings => clean(findings, "principal-session-env", "principal-secret-env"));
 
-  // Reject: the exact defect this rule exists for -- the tools rebuild the
-  // environment without the credential, so every OMA tool fails to attach
-  // while nothing in the producer or the consumer looks wrong.
-  withTree(tree("FRAME_BYTES"), findings => {
-    assert.ok(has(findings, "principal-session-env"));
-    assert.ok(findings.some(value => value.reason.includes("OMA_PRINCIPAL_CREDENTIAL")));
-    assert.ok(findings.some(value => value.reason.includes("OMA_PRINCIPAL_SESSION")));
+  // Reject: the process owner forgets the credential descriptor -- the CLI
+  // would never attach, and nothing else in the tree would look wrong.
+  withTree(tree({ setsFd: false }), findings => {
+    assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_PRINCIPAL_CREDENTIAL_FD")));
+  });
+  // Reject: the tools stop copying the frame bound the CLI reads.
+  withTree(tree({ copied: "" }), findings => {
+    assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_FRAME_BYTES")));
+  });
+  // Reject: the tools copy a name from the engine that the host never sets.
+  withTree({ ...tree(), "src/extension/mail-tools.ts": tools("FRAME_BYTES, \"OMA_NEVER_SET\"") }, findings => {
+    assert.ok(findings.some(value => value.rule === "principal-session-env" && value.reason.includes("OMA_NEVER_SET")));
   });
 
-  // Reject the other direction: a name forwarded to the CLI that the Principal's
-  // environment never sets is a requirement nobody meets.
-  withTree({
-    ...tree("FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION"),
-    "src/extension/mail-tools.ts": `${forwarder("FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION")}
-const UNSET = "OMA_NEVER_SET";
-export function alsoForwards() { return [\`\${UNSET}=x\`]; }`,
-  }, findings => clean(findings, "principal-session-env"));
+  // Reject: the credential or the session handle given an environment name,
+  // anywhere in the source -- as a key the host sets, or a name a reader reads.
+  withTree(tree({ producerExtra: 'OMA_PRINCIPAL_CREDENTIAL: "x",' }), findings => {
+    assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/tui/session.ts"));
+  });
+  withTree({ ...tree(), "src/cli/extra.ts": 'export const read = () => process.env["OMA_PRINCIPAL_SESSION"];' }, findings => {
+    assert.ok(findings.some(value => value.rule === "principal-secret-env" && value.file === "src/cli/extra.ts"));
+  });
 
-  // Near miss: names the consumer reads only to derive an endpoint when it was
-  // given none are not requirements of a caller that was given one.
-  withTree(tree("FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION"), findings => {
+  // Near miss: the descriptor's name shares the prefix and is not a secret.
+  withTree(tree(), findings => assert.ok(!findings.some(value => value.rule === "principal-secret-env")));
+  // Near miss: names the consumer reads only to derive an endpoint are not
+  // requirements of a caller that was given one.
+  withTree(tree(), findings => {
     for (const value of findings.filter(entry => entry.rule === "principal-session-env"))
       assert.doesNotMatch(value.reason, /OMA_ACTOR|OMA_SOCIETY/);
   });
-
-  // Near miss: an unrelated tree without these files is not a violation.
+  // Near miss: a tree without these files is not a violation.
   withTree({ "src/tui/session.ts": "export const a = 1;" },
-    findings => clean(findings, "principal-session-env"));
+    findings => clean(findings, "principal-session-env", "principal-secret-env"));
 });

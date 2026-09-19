@@ -34,6 +34,8 @@ if (args.includes("--inventory-only")) {
   // These hashes bind actual measured sources; inventory-only never creates them.
   writeFileSync(join(root, "production-loc-hashes.json"), JSON.stringify({
     cloc: version, manifest: hash(files.join("\n") + "\n"),
+    // The report these hashes were measured with, so neither can change alone.
+    report: hash(readFileSync(join(root, "production-loc.json"))),
     files: files.map(file => ({ path: file, sha256: hash(readFileSync(join(root, file))) })),
   }, null, 2) + "\n");
   console.log("TOTAL production LOC (code lines):", report.SUM.code);

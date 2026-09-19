@@ -77,9 +77,11 @@ function decodeManifest(
     value.id !== expected ||
     !BATCH.test(value.id as string) ||
     typeof value.agent !== "string" ||
-    !ACTOR.test(value.agent) ||
-    RESERVED.has(value.agent) ||
-    value.agent.startsWith("topic-") ||
+    // Mirrors isValidActor: the Principal, or a Resident name.
+    (value.agent !== "principal" &&
+      (!ACTOR.test(value.agent) ||
+        RESERVED.has(value.agent) ||
+        value.agent.startsWith("topic-"))) ||
     !Number.isSafeInteger(value.incarnation) ||
     (value.incarnation as number) < 0 ||
     (value.deliveryMode !== "steer" && value.deliveryMode !== "followUp") ||

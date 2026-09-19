@@ -59,7 +59,17 @@ export function registerDelivery(pi: ExtensionAPI): void {
   });
   pi.on("agent_settled", async (_event, ctx) => {
     const batch = pending;
-    if (!batch || terminalStop !== "stop") return;
+    if (!batch) return;
+    // A turn that ended any other way produced no boundary. The batch stays
+    // prepared in the broker and will be delivered again, so this engine must
+    // be ready to accept it: a Resident's engine is discarded after a failed
+    // batch, but the Principal's is the Human's long-lived session, and
+    // keeping the failed batch pending here would refuse every later one.
+    if (terminalStop !== "stop") {
+      pending = null;
+      terminalStop = null;
+      return;
+    }
     const sessionPath = ctx.sessionManager.getSessionFile();
     if (!sessionPath || !isAbsolute(sessionPath)) return;
     pi.appendEntry("oma-delivery-boundary", {

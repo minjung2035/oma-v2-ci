@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
-import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent } from "../scripts/production-inventory.mjs";
+import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent, measureWithCloc } from "../scripts/production-inventory.mjs";
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-inventory-"));
@@ -71,65 +71,137 @@ test("R38: the measured artifacts are bound to the source they were taken from",
     const files = writeProductionInventory(f.root);
     const hashOf = bytes => createHash("sha256").update(bytes).digest("hex");
     const rows = list => Object.fromEntries(list.map(file => [file, { code: 3, blank: 1, comment: 2 }]));
+    // The report, then the hashes that name it -- the order loc.mjs writes them.
     const measure = (list = files, overrides = {}) => {
-      f.put("production-loc-hashes.json", JSON.stringify({
-        cloc: "2.08", manifest: hashOf(`${list.join("\n")}\n`),
-        files: list.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
-        ...(overrides.hashes ?? {}),
-      }));
       f.put("production-loc.json", JSON.stringify({
         header: { n_files: list.length, cloc_version: "2.08", ...(overrides.header ?? {}) },
         ...rows(list),
         SUM: { code: 3 * list.length, blank: list.length, comment: 2 * list.length, nFiles: list.length, ...(overrides.sum ?? {}) },
       }));
+      f.put("production-loc-hashes.json", JSON.stringify({
+        cloc: "2.08", manifest: hashOf(`${list.join("\n")}\n`),
+        report: hashOf(readFileSync(join(f.root, "production-loc.json"))),
+        files: list.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
+        ...(overrides.hashes ?? {}),
+      }));
     };
-    // Positive: records taken from exactly this source, whose total is the sum
-    // of its own rows, are current.
-    measure();
-    assert.deepEqual(assertMeasurementCurrent(f.root), { files: files.length, code: 3 * files.length });
+    // A stand-in for the pinned tool, returning what these fixture rows claim.
+    const agrees = () => ({ ...rows(writeProductionInventory(f.root)), SUM: { code: 3 * files.length } });
+    const check = (options = { measure: agrees }) => assertMeasurementCurrent(f.root, undefined, options);
 
-    // A file whose bytes changed after measurement. The file list is unchanged,
-    // so only this check can see it -- and this is the drift that let a LOC
-    // figure from an older commit be read as the current one.
+    // Positive: re-measured and equal is the only thing called source-bound.
+    measure();
+    assert.deepEqual(check(), { files: files.length, code: 3 * files.length, status: "SOURCE_BOUND" });
+    // Without the tool the answer is not a pass dressed up as one.
+    assert.equal(check({ measure: () => null }).status, "CONSISTENT_NOT_REMEASURED");
+
+    // The audit's attack: counts rewritten everywhere, total adjusted to match,
+    // hashes regenerated beside them. Every internal check agrees; only
+    // measuring the source again shows the numbers are not the source's.
+    const forged = files.map(file => [file, { code: 900, blank: 0, comment: 0 }]);
+    f.put("production-loc.json", JSON.stringify({
+      header: { n_files: files.length, cloc_version: "2.08" }, ...Object.fromEntries(forged),
+      SUM: { code: 900 * files.length, blank: 0, comment: 0, nFiles: files.length },
+    }));
+    f.put("production-loc-hashes.json", JSON.stringify({
+      cloc: "2.08", manifest: hashOf(`${files.join("\n")}\n`),
+      report: hashOf(readFileSync(join(f.root, "production-loc.json"))),
+      files: files.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
+    }));
+    assert.throws(() => check(), /does not match a fresh measurement/);
+    // ...and without re-measuring, that forgery is exactly what cannot be
+    // detected, which is why that case is never reported as bound.
+    assert.equal(check({ measure: () => null }).status, "CONSISTENT_NOT_REMEASURED");
+
+    // The report edited on its own, hashes untouched.
+    measure();
+    const edited = JSON.parse(readFileSync(join(f.root, "production-loc.json"), "utf8"));
+    edited.header.elapsed_seconds = 1;
+    f.put("production-loc.json", JSON.stringify(edited));
+    assert.throws(() => check(), /not the report its hashes were recorded with/);
+
+    // A file whose bytes changed after measurement.
+    measure();
     f.put("src/process/async.ts", "export const changed = 1;\n");
-    assert.throws(() => assertMeasurementCurrent(f.root), /stale production-loc-hashes\.json/);
+    assert.throws(() => check(), /stale production-loc-hashes\.json/);
     measure();
-    assert.doesNotThrow(() => assertMeasurementCurrent(f.root));
+    assert.doesNotThrow(() => check());
 
-    // A total that is not the sum of the rows. Every row is present and the
-    // header counts them, so membership checks alone see nothing wrong -- and
-    // the total is the number the LOC release gate is judged on.
+    // A total that is not the sum of the rows.
     measure(files, { sum: { code: 1 } });
-    assert.throws(() => assertMeasurementCurrent(f.root), /SUM disagrees with its own rows/);
+    assert.throws(() => check(), /SUM disagrees with its own rows/);
     measure(files, { sum: { nFiles: files.length + 1 } });
-    assert.throws(() => assertMeasurementCurrent(f.root), /SUM disagrees with its own rows/);
+    assert.throws(() => check(), /SUM disagrees with its own rows/);
 
-    // A report with no total at all is not a measurement this gate passes on.
+    // A report with no total at all.
     measure();
     const counted = JSON.parse(readFileSync(join(f.root, "production-loc.json"), "utf8"));
     delete counted.SUM;
     f.put("production-loc.json", JSON.stringify(counted));
-    assert.throws(() => assertMeasurementCurrent(f.root), /no SUM/);
+    assert.throws(() => check(), /no SUM/);
 
-    // Counts and hashes taken by different tools are two observations, not one.
+    // Counts and hashes taken by different tools.
     measure(files, { header: { cloc_version: "2.09" } });
-    assert.throws(() => assertMeasurementCurrent(f.root), /different runs/);
+    assert.throws(() => check(), /different runs/);
 
-    // A row for a file the manifest does not contain inflates the total from
-    // outside the measured set.
+    // A row outside the manifest inflating the total.
     measure();
     const inflated = JSON.parse(readFileSync(join(f.root, "production-loc.json"), "utf8"));
     inflated["src/not-production.ts"] = { code: 900, blank: 0, comment: 0 };
     f.put("production-loc.json", JSON.stringify(inflated));
-    assert.throws(() => assertMeasurementCurrent(f.root), /outside the manifest/);
+    assert.throws(() => check(), /outside the manifest/);
 
-    // A new production file that the records never saw.
+    // A new production file the records never saw.
     measure();
     f.put("src/process/added.ts");
-    assert.throws(() => assertMeasurementCurrent(f.root), /different file list/);
-    writeProductionInventory(f.root);
-    assert.throws(() => assertMeasurementCurrent(f.root), /different file list/);
-    measure(writeProductionInventory(f.root));
-    assert.doesNotThrow(() => assertMeasurementCurrent(f.root));
+    assert.throws(() => check(), /different file list/);
   } finally { f.close(); }
+});
+
+test("R38: the pinned tool re-measures real source and catches a forged count", () => {
+  // Not a stand-in: the real cloc on real files. A dev host or CI runner without
+  // the pinned version fails here rather than skipping -- a gate that silently
+  // could not measure is the thing this test exists to rule out.
+  const f = fixture();
+  try {
+    // The real language definition, so the systemd templates are counted the
+    // way the production run counts them.
+    f.put("implementation/cloc-systemd.lang", readFileSync(new URL("../implementation/cloc-systemd.lang", import.meta.url)));
+    f.put("src/process/async.ts", "// a comment\nexport const a = 1;\n\nexport const b = 2;\n");
+    const files = writeProductionInventory(f.root);
+    const cloc = measureWithCloc(f.root, files);
+    assert.ok(cloc !== null, "cloc 2.08 is not installed; this gate cannot bind LOC to the source");
+    assert.deepEqual({ code: cloc["src/process/async.ts"].code, comment: cloc["src/process/async.ts"].comment },
+      { code: 2, comment: 1 });
+    const hashOf = bytes => createHash("sha256").update(bytes).digest("hex");
+    const write = report => {
+      f.put("production-loc.json", JSON.stringify(report));
+      f.put("production-loc-hashes.json", JSON.stringify({
+        cloc: "2.08", manifest: hashOf(`${files.join("\n")}\n`),
+        report: hashOf(readFileSync(join(f.root, "production-loc.json"))),
+        files: files.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
+      }));
+    };
+    write({ ...cloc, header: { ...cloc.header, n_files: files.length } });
+    assert.equal(assertMeasurementCurrent(f.root).status, "SOURCE_BOUND");
+    // One count off by one, the total adjusted to keep every sum consistent.
+    const forged = JSON.parse(JSON.stringify(cloc));
+    forged["src/process/async.ts"].code += 1;
+    forged.SUM.code += 1;
+    write({ ...forged, header: { ...forged.header, n_files: files.length } });
+    assert.throws(() => assertMeasurementCurrent(f.root), /does not match a fresh measurement/);
+  } finally { f.close(); }
+});
+
+test("R38: the figures the validation record quotes are the ones the artifact holds", () => {
+  // A record that says one number while the artifact says another is how a
+  // reader ends up judging A-008 on a figure from an earlier commit.
+  const record = readFileSync(new URL("../implementation/validation.md", import.meta.url), "utf8");
+  const report = JSON.parse(readFileSync(new URL("../production-loc.json", import.meta.url), "utf8"));
+  const quoted = [...record.matchAll(/(\d+) files \/ ([\d,]+) code LOC/g)]
+    .map(([, files, code]) => ({ files: Number(files), code: Number(code.replaceAll(",", "")) }));
+  assert.ok(quoted.length > 0, "the validation record quotes no LOC figure at all");
+  for (const figure of quoted)
+    assert.deepEqual(figure, { files: report.SUM.nFiles, code: report.SUM.code },
+      `validation.md quotes ${figure.files} files / ${figure.code} LOC; the artifact holds ${report.SUM.nFiles} / ${report.SUM.code}`);
 });

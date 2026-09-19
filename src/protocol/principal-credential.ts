@@ -10,27 +10,22 @@
  *
  * The secret is never derived from anything — not the society, not a path, not
  * the clock — so knowing the deployment tells an attacker nothing, and it dies
- * with the broker, so a copy taken from an old run authorises nothing. It is
- * never written to a file: PR-001 asks for a host-only channel, and a file at a
- * derivable path under the run directory is not one — it is readable by every
- * process of this user, which is exactly the class of caller the Principal's
- * authority must not admit. It travels instead on a descriptor only the host
- * that started the broker holds, and from there into the trusted extension's
- * environment, never into a sandbox and never onto a model-facing surface
- * (INF-007).
+ * with the broker, so a copy taken from an old run authorises nothing. It has
+ * no file and no environment name: a file at a derivable path and an
+ * environment entry are both readable by every process of this user, which is
+ * exactly the class of caller the Principal's authority must not admit. It
+ * travels only on private sockets (src/protocol/host-channel.ts) and lives only
+ * in memory, never in a sandbox and never on a model-facing surface (INF-007).
  *
- * The credential alone does not decide who the Principal is. The host names the
- * session before the broker starts, so the broker knows which handle to expect
- * rather than recording whichever one arrives first.
+ * The credential alone does not decide who the Principal is. The broker also
+ * requires the connecting process to descend from the engine the host
+ * registered, so a process that learned the credential some other way is still
+ * refused.
  *
  * This module is a codec: it decides what a credential looks like and where it
  * lives, and takes no filesystem capability of its own.
  */
 
-/** The environment entry the host sets for the session it owns. */
-export const PRINCIPAL_CREDENTIAL_ENV = "OMA_PRINCIPAL_CREDENTIAL";
-/** The session this environment belongs to, as the host registered it. */
-export const PRINCIPAL_SESSION_ENV = "OMA_PRINCIPAL_SESSION";
 /** Bytes of randomness behind a credential, as hex digits. */
 export const PRINCIPAL_CREDENTIAL_HEX = 64;
 /** Hex digits of a session handle. Shorter than a credential because it names a

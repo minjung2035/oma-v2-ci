@@ -10,7 +10,9 @@ import { join } from "node:path";
 import type { ProtocolLimits } from "../../implementation/contracts.js";
 import { spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/async.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
-import { PRINCIPAL_CREDENTIAL_ENV } from "../protocol/principal-credential.js";
+import type { Socket } from "node:net";
+import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
+import { runnerSessionDirPathAt, runnerViewPathAt } from "../storage/paths.js";
 import { PiRpcClient, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
@@ -67,25 +69,32 @@ export interface PrincipalPaths {
   readonly libdir: string;
 }
 
-export interface PrincipalCredential {
-  /** This broker run's secret, or null when no broker published one. Without it
-   * the engine still starts and the CLI still refuses every request, which is
-   * the truthful outcome of a society with no broker. */
-  readonly credential: string | null;
-  /** Names this session for the broker, so a society keeps one Principal. */
-  readonly sessionHandle: string;
-}
-
 /** A fresh handle per started session. It identifies the session, not the user
  * and not the society, so nothing about the deployment can be derived from it
  * and an old one names a session that no longer exists. */
 export function newSessionHandle(): string { return randomBytes(16).toString("hex"); }
 
+/** Where the Principal's engine keeps its session. It is the per-actor session
+ * directory every agent has, so a delivery receipt names a session the broker
+ * can locate exactly as it locates a Resident's. It is host-private: no
+ * Resident mounts another agent's root. */
+export function principalSessionDir(stateRoot: string): string {
+  return runnerSessionDirPathAt(stateRoot, "principal");
+}
+
+/** The environment the engine is started with.
+ *
+ * Nothing secret is in it. /proc/<pid>/environ is readable by any process of
+ * this user, so the Principal's credential never enters an environment: it
+ * reaches the engine on a private socket after the engine is running
+ * (`OMA_HOST_CHANNEL` only names that descriptor). What is here is what the
+ * trusted extension needs before it will register OMA's tools, allow a write,
+ * or accept a delivery.
+ */
 export function principalEnvironment(
   paths: PrincipalPaths,
   profile: SessionProfile,
-  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes">,
-  session: PrincipalCredential,
+  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages">,
 ): Record<string, string> {
   const home = join(paths.stateRoot, "principal", "private");
   return {
@@ -100,11 +109,11 @@ export function principalEnvironment(
     OMA_FRAME_BYTES: String(limits.frameBytes),
     OMA_MAIL_BYTES: String(limits.mailBodyBytes),
     OMA_WORKSPACE_BYTES: String(profile.workspaceBytes),
-    OMA_PRINCIPAL_SESSION: session.sessionHandle,
-    // Deliberately absent: the batch view and its message bound. No runner
-    // prepares batches for the Principal, so the delivery command stays
-    // unavailable rather than being made to look wired (TRACE-002).
-    ...(session.credential === null ? {} : { [PRINCIPAL_CREDENTIAL_ENV]: session.credential }),
+    // PR-002: where the broker publishes the Principal's prepared batches, and
+    // how large one may be. The host delivers them; the extension reads them.
+    OMA_BATCH_VIEW: runnerViewPathAt(paths.stateRoot, "principal"),
+    OMA_BATCH_MAX_MESSAGES: String(limits.batchMaxMessages),
+    [HOST_CHANNEL_ENV]: String(HOST_CHANNEL_FD),
   };
 }
 
@@ -218,12 +227,20 @@ export function projectEvent(event: PiEvent): { readonly line?: string; readonly
 
 export class PrincipalSession {
   private readonly rpc: PiRpcClient;
+  private readonly channel: Socket;
   private sequence = 0;
   private closed = false;
+  private turning = false;
 
-  private constructor(child: ChildProcessWithoutNullStreams, limits: PiRpcLimits, private readonly sink: SessionSink) {
+  private constructor(private readonly child: ChildProcessWithoutNullStreams, limits: PiRpcLimits, private readonly sink: SessionSink) {
     this.rpc = new PiRpcClient(child, limits);
+    // The private socket the credential travels on. Kept open for the life of
+    // the session so a restarted broker's credential can replace the old one.
+    this.channel = child.stdio[HOST_CHANNEL_FD] as unknown as Socket;
+    this.channel.on("error", () => {});
     this.rpc.onEvent(event => {
+      if (event.type === "turn_start") this.turning = true;
+      if (event.type === "agent_settled") this.turning = false;
       const projected = projectEvent(event);
       if (projected.line !== undefined) this.sink.onLine(projected.line);
       if (projected.busy !== undefined) this.sink.onBusy(projected.busy);
@@ -246,11 +263,39 @@ export class PrincipalSession {
       [...(paths.piArgs ?? []), ...sessionArgv(paths, profile)],
       paths.workspace,
       sessionEnv(env, profile, paths),
+      true,
     );
     return new PrincipalSession(child, limits, sink);
   }
 
   get running(): boolean { return !this.closed; }
+
+  /** The engine's pid, which the broker checks is this process's own child
+   * before it accepts the engine as the Principal. */
+  get pid(): number | null { return this.closed ? null : this.child.pid ?? null; }
+
+  /** True while a turn is running. Delivery waits for this to clear so that a
+   * batch's boundary is never confused with the end of a Human's turn. */
+  get busy(): boolean { return this.turning; }
+
+  /** Hands the engine its credential on the private socket. A new one simply
+   * replaces the previous one; the old broker that minted it is gone. */
+  grant(credential: string, sessionHandle: string): void {
+    if (this.closed || this.channel.destroyed) return;
+    this.channel.write(encodeHostMessage({ kind: "credential", credential, sessionHandle }));
+  }
+
+  /** Every event the engine emits, for the delivery owner. */
+  onEvent(listener: (event: PiEvent) => void): () => void { return this.rpc.onEvent(listener); }
+
+  /** PR-002: asks the trusted extension to present a prepared batch. A
+   * slash command reaches the extension even mid-turn; the delivery owner
+   * still waits for an idle session so the boundary it observes is this
+   * batch's own. */
+  async deliver(batchId: string): Promise<void> {
+    if (this.closed) throw new StoreError("PRINCIPAL_DISCONNECTED", "the principal session has ended");
+    await this.rpc.send({ id: batchId, type: "prompt", message: `/oma-deliver ${batchId}` });
+  }
 
   async submit(text: string): Promise<void> {
     if (this.closed) { this.sink.onEnd("세션이 종료되어 전송할 수 없습니다."); return; }

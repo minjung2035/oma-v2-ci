@@ -1,36 +1,59 @@
-/** PR-001: the Principal session's endpoint, and the only thing that decides
- * who the Principal is.
+/** PR-001/PR-002: the Principal session's two endpoints, and the only code that
+ * decides who the Principal is.
  *
  * A Resident is authorised by the systemd scope it runs in. The Principal has
- * none — the product starts its engine itself, in the Human's terminal — so
- * this stands in for that scope: a secret minted for this broker run and
- * handed to the host that registered the session, and the handle that host
- * named before the broker existed. Neither alone is enough, and neither is
- * recorded from whoever arrives first.
+ * none -- the product starts its engine itself, in the Human's terminal -- so
+ * these stand in for that scope:
  *
- * It lives apart from the broker because it is a distinct authority decision,
- * not another line in the broker's dispatch. The broker owns the sockets and
- * the connection machinery, which reach here as ports; nothing in this file
- * reads a store, a unit or a file.
+ *  - The host that started this broker is known by the peer at the other end
+ *    of the supervision channel it opened at spawn. Nothing else can be that
+ *    process, so the host needs no secret to be recognised.
+ *  - The host names the engine it started and the broker checks that the
+ *    engine really is the host's own child. A credential is minted for that
+ *    engine and goes back to the host on the same channel; it is never
+ *    written to a file or an environment.
+ *  - A model-facing connection is the Principal only if it presents that
+ *    credential and the session's handle, AND the connecting process descends
+ *    from the registered engine. The credential alone is not enough: a process
+ *    that learned it but was not started by the engine is still refused.
+ *
+ * Delivery (PR-002) is the host's, never the model's: the runner methods that
+ * prepare and complete a batch are served for the Principal only on the host
+ * endpoint, so nothing the model can run is able to mark its own mail
+ * delivered.
+ *
+ * The broker owns the sockets and the connection machinery, which reach here as
+ * ports; nothing in this file reads a store, a unit or a file except /proc.
  */
 import { randomBytes } from "node:crypto";
 import type { Socket } from "node:net";
-import type { AuthContext, Request } from "../../implementation/contracts.js";
+import type { AuthContext, BoundaryEvidence, PreparedBatch, Request } from "../../implementation/contracts.js";
 import { StoreError, publicFailure } from "../domain/errors.js";
 import { INTERNAL_METHODS } from "../protocol/methods.js";
-import { PRINCIPAL_CREDENTIAL_HEX, credentialMatches, isPrincipalSessionHandle, sessionHandleMatches } from "../protocol/principal-credential.js";
+import {
+  PRINCIPAL_CREDENTIAL_HEX, credentialMatches, isPrincipalSessionHandle, sessionHandleMatches,
+} from "../protocol/principal-credential.js";
 import { okAnswer } from "./replies.js";
 import type { BoundPeer } from "./peer-authenticator.js";
+import { descendsFrom, parentOf, processIdentity, type ProcessIdentity } from "./process-ancestry.js";
 
-/** The session a host registered before this broker started. `publish` is that
- * host's own channel; it is called once the endpoint is listening, so a host
- * holding the credential can rely on the endpoint being there. */
-export interface PrincipalSessionRegistration {
-  readonly sessionHandle: string;
-  readonly publish: (credential: string) => void;
+/** The supervision channel as the broker sees it. Present only when a host
+ * started this broker; its absence means no Principal endpoint is opened. */
+export interface PrincipalHostChannel {
+  /** The process at the other end of the channel. */
+  readonly hostPid: number;
+  /** Tells the host both endpoints are listening. */
+  readonly ready: () => void;
+  /** Gives the host the credential for the session it registered. */
+  readonly grant: (credential: string, sessionHandle: string) => void;
+  /** Tells the host the engine it named was not accepted. */
+  readonly refuse: () => void;
+  /** Delivers each session the host registers. */
+  readonly onSession: (listener: (sessionHandle: string, pid: number) => void) => void;
 }
 
-export interface PrincipalEndpointPorts {
+/** Ports shared by both endpoints: the broker's connection machinery. */
+interface ConnectionPorts {
   readonly isDraining: () => boolean;
   readonly bindPeer: (socket: Socket) => BoundPeer | null;
   /** The live authority of the `principal` row, re-derived on every read. */
@@ -41,70 +64,112 @@ export interface PrincipalEndpointPorts {
     handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
     preflight: (raw: Record<string, unknown>) => void,
   ) => void;
-  readonly dispatch: (auth: AuthContext, request: Request, stream: AsyncIterable<Uint8Array> | null) => Promise<object>;
-  readonly preflight: (auth: AuthContext, raw: Record<string, unknown>) => void;
   readonly fail: (socket: Socket, failure: ReturnType<typeof publicFailure>) => void;
   readonly observe: (error: unknown) => void;
   readonly cleanupError: (error: unknown) => void;
 }
 
+export interface PrincipalEndpointPorts extends ConnectionPorts {
+  readonly dispatch: (auth: AuthContext, request: Request, stream: AsyncIterable<Uint8Array> | null) => Promise<object>;
+  readonly preflight: (auth: AuthContext, raw: Record<string, unknown>) => void;
+}
+
+export interface PrincipalHostEndpointPorts extends ConnectionPorts {
+  readonly prepare: (auth: AuthContext) => Promise<PreparedBatch | null>;
+  readonly complete: (auth: AuthContext, evidence: BoundaryEvidence) => Promise<void>;
+}
+
+interface RegisteredSession {
+  readonly sessionHandle: string;
+  readonly engine: ProcessIdentity;
+  readonly credential: string;
+}
+
+/** Serves one connection whose first frames decide what it is. Shared by both
+ * endpoints so the peer binding and failure handling are written once. */
+function serveConnection(
+  ports: ConnectionPorts, socket: Socket, open: () => boolean,
+  admit: (peer: BoundPeer) => { handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>;
+    preflight: (raw: Record<string, unknown>) => void },
+): void {
+  let peer: BoundPeer | null = null;
+  let transferred = false;
+  try {
+    if (ports.isDraining() || !open()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining");
+    peer = ports.bindPeer(socket);
+    if (!peer || peer.uid !== (process.getuid?.() ?? -1))
+      throw new StoreError("AUTH_FAILED", "invalid principal peer credentials");
+    const served = admit(peer);
+    ports.serveFrames(socket, peer, served.handle, served.preflight);
+    transferred = true;
+  } catch (error) {
+    ports.observe(error);
+    ports.fail(socket, publicFailure(error));
+  } finally {
+    if (!transferred) {
+      try { peer?.releaseConnection(); } catch (error) { ports.cleanupError(error); }
+    }
+  }
+}
+
 export class PrincipalEndpoint {
-  /** Minted per run and written nowhere. A copy taken from an earlier run names
-   * a secret this broker never had. */
-  private readonly secret = randomBytes(PRINCIPAL_CREDENTIAL_HEX / 2).toString("hex");
+  private session: RegisteredSession | null = null;
   private open = true;
 
-  constructor(
-    private readonly registration: PrincipalSessionRegistration,
-    private readonly ports: PrincipalEndpointPorts,
-  ) {
-    if (!isPrincipalSessionHandle(registration.sessionHandle))
-      throw new StoreError("UNSUPPORTED_PROFILE", "the registered principal session handle is malformed");
+  constructor(private readonly channel: PrincipalHostChannel, private readonly ports: PrincipalEndpointPorts) {
+    if (!Number.isSafeInteger(channel.hostPid) || channel.hostPid <= 1)
+      throw new StoreError("UNSUPPORTED_PROFILE", "the principal host channel has no host process");
+    channel.onSession((sessionHandle, pid) => {
+      // A refused registration is answered, never left for the host to time
+      // out on; the previous session, if any, is gone either way.
+      try { this.register(sessionHandle, pid); }
+      catch (error) { this.session = null; ports.observe(error); channel.refuse(); }
+    });
   }
 
-  /** Called once the endpoint is listening, never before. */
-  publish(): void { if (this.open) this.registration.publish(this.secret); }
+  /** A session the host registered. The engine must be the host's own child:
+   * the host cannot make an arbitrary process the Principal by naming it. A
+   * new registration replaces the old one and mints a new credential, so an
+   * engine the host restarted is not left holding a credential that still
+   * works for the process it replaced. */
+  register(sessionHandle: string, pid: number): void {
+    if (!this.open) return;
+    if (!isPrincipalSessionHandle(sessionHandle))
+      throw new StoreError("INVALID_REQUEST", "the registered principal session handle is malformed");
+    if (parentOf(pid) !== this.channel.hostPid)
+      throw new StoreError("AUTH_FAILED", "the registered engine is not a child of the host");
+    const engine = processIdentity(pid);
+    if (engine === null) throw new StoreError("AUTH_FAILED", "the registered engine is not running");
+    const credential = randomBytes(PRINCIPAL_CREDENTIAL_HEX / 2).toString("hex");
+    this.session = Object.freeze({ sessionHandle, engine, credential });
+    this.channel.grant(credential, sessionHandle);
+  }
 
   /** The credential stops existing with the broker that minted it. */
-  close(): void { this.open = false; }
+  close(): void { this.open = false; this.session = null; }
 
-  /** A connection is nobody until it attaches, and every request before that is
-   * refused. Attaching is the ordinary first frame of the connection, so the
-   * endpoint adds no separate channel for it. */
   serve(socket: Socket): void {
-    let peer: BoundPeer | null = null;
-    let transferred = false;
-    try {
-      if (this.ports.isDraining() || !this.open) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining");
-      peer = this.ports.bindPeer(socket);
-      if (!peer || peer.uid !== (process.getuid?.() ?? -1))
-        throw new StoreError("AUTH_FAILED", "invalid principal peer credentials");
-      const credentials = peer;
+    serveConnection(this.ports, socket, () => this.open, peer => {
       let auth: AuthContext | null = null;
-      this.ports.serveFrames(socket, peer, async (raw, stream) => {
-        if (auth === null) {
-          const attached = this.attach(raw, credentials);
-          auth = attached.auth;
-          return attached.answer;
-        }
-        if (raw.method === "principal.detach") {
-          auth = null;
-          return okAnswer(typeof raw.id === "string" ? raw.id : "x", {});
-        }
-        return this.ports.dispatch(auth, raw as Request, stream);
-      }, raw => {
-        if (auth === null) throw new StoreError("AUTH_FAILED", "the principal session is not attached");
-        this.ports.preflight(auth, raw);
-      });
-      transferred = true;
-    } catch (error) {
-      this.ports.observe(error);
-      this.ports.fail(socket, publicFailure(error));
-    } finally {
-      if (!transferred) {
-        try { peer?.releaseConnection(); } catch (error) { this.ports.cleanupError(error); }
-      }
-    }
+      return {
+        handle: async (raw, stream) => {
+          if (auth === null) {
+            const attached = this.attach(raw, peer);
+            auth = attached.auth;
+            return attached.answer;
+          }
+          if (raw.method === "principal.detach") {
+            auth = null;
+            return okAnswer(typeof raw.id === "string" ? raw.id : "x", {});
+          }
+          return this.ports.dispatch(auth, raw as Request, stream);
+        },
+        preflight: raw => {
+          if (auth === null) throw new StoreError("AUTH_FAILED", "the principal session is not attached");
+          this.ports.preflight(auth, raw);
+        },
+      };
+    });
   }
 
   /** The attach frame. Its shape and parameters come from the protocol
@@ -116,15 +181,65 @@ export class PrincipalEndpoint {
     if (INTERNAL_METHODS["principal.attach"].paramsCheck(raw.params) !== null)
       throw new StoreError("INVALID_REQUEST", "invalid principal attach parameters");
     const params = raw.params as { sessionHandle: string; credential: string };
-    if (!this.open || !credentialMatches(params.credential, this.secret))
+    const session = this.session;
+    if (!this.open || session === null)
+      throw new StoreError("AUTH_FAILED", "no principal session is registered");
+    if (!credentialMatches(params.credential, session.credential))
       throw new StoreError("AUTH_FAILED", "principal attach credential is not this broker's");
-    // The society has one Principal, and which one was decided by the host
-    // before this broker started. A caller naming another session is a
-    // conflict, not a failed authentication: the two recover differently.
-    if (!sessionHandleMatches(params.sessionHandle, this.registration.sessionHandle))
+    // The society has one Principal, and which one was decided by the host. A
+    // caller naming another session is a conflict, not a failed
+    // authentication: the two recover differently.
+    if (!sessionHandleMatches(params.sessionHandle, session.sessionHandle))
       throw new StoreError("ATTACH_CONFLICT", "another principal session owns this society");
+    // The credential is necessary, not sufficient: the connecting process must
+    // have been started by the registered engine.
+    if (!descendsFrom(peer.pid, session.engine) || !peer.alive())
+      throw new StoreError("AUTH_FAILED", "the connecting process was not started by the principal engine");
     const auth = this.ports.principalContext(peer);
     if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to attach to");
     return { auth, answer: okAnswer(id, { actor: "principal", incarnation: auth.incarnation }) };
+  }
+}
+
+/** PR-002: the host's endpoint for delivering mail to the Principal. It serves
+ * exactly the runner's two delivery methods, with their registered shapes, for
+ * the Principal actor, to exactly one process: the host at the other end of
+ * the supervision channel. */
+export class PrincipalHostEndpoint {
+  private open = true;
+
+  constructor(private readonly channel: PrincipalHostChannel, private readonly ports: PrincipalHostEndpointPorts) {}
+
+  close(): void { this.open = false; }
+
+  serve(socket: Socket): void {
+    // The refusal of a non-host is the answer to its request, not a reply sent
+    // before it asked: a caller must be able to tell "you are not the host"
+    // from a broken connection.
+    serveConnection(this.ports, socket, () => this.open, peer => ({
+      handle: async raw => this.dispatch(raw, peer),
+      preflight: () => { throw new StoreError("INVALID_REQUEST", "principal delivery accepts no raw stream bodies"); },
+    }));
+  }
+
+  private async dispatch(raw: Record<string, unknown>, peer: BoundPeer): Promise<object> {
+    const id = typeof raw.id === "string" ? raw.id : "x";
+    if (peer.pid !== this.channel.hostPid || !peer.alive())
+      throw new StoreError("AUTH_FAILED", "only the host that started this broker may deliver to the principal");
+    const auth = this.ports.principalContext(peer);
+    if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to deliver to");
+    switch (raw.method) {
+      case "batch.prepare":
+        if (INTERNAL_METHODS["batch.prepare"].paramsCheck(raw.params) !== null)
+          throw new StoreError("INVALID_REQUEST", "invalid batch.prepare parameters");
+        return okAnswer(id, await this.ports.prepare(auth));
+      case "batch.complete":
+        if (INTERNAL_METHODS["batch.complete"].paramsCheck(raw.params) !== null)
+          throw new StoreError("INVALID_REQUEST", "invalid batch.complete parameters");
+        await this.ports.complete(auth, raw.params as BoundaryEvidence);
+        return okAnswer(id, { completed: true });
+      default:
+        throw new StoreError("AUTH_FAILED", `method ${String(raw.method)} is not served on the principal host endpoint`);
+    }
   }
 }

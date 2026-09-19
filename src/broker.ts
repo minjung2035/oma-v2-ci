@@ -26,7 +26,7 @@ import { GitModule } from "./git.js";
 import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
 import { STATUS_REFRESH_MS, statusViewPath } from "./protocol/status-view.js";
-import { PrincipalEndpoint, type PrincipalSessionRegistration } from "./broker/principal-endpoint.js";
+import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalHostChannel } from "./broker/principal-endpoint.js";
 import { resolvedSpecOf } from "./authority.js";
 import { assertStorageQuotaAdmission } from "./storage/quota.js";
 export { boundedLogOutput } from "./broker/logs.js";
@@ -34,10 +34,10 @@ export { peerCgroup } from "./broker/peer-authenticator.js";
 
 export interface BrokerPaths { stateRoot: string; runRoot: string; society: string; hasGoal?: () => boolean; storageBytes?: number }
 
-/** PR-001: a broker nobody registered a session with opens no Principal
- * endpoint at all, so there is nothing for an unregistered caller to attach
- * to. The contract itself lives with the endpoint that enforces it. */
-export type { PrincipalSessionRegistration } from "./broker/principal-endpoint.js";
+/** PR-001: a broker no host started opens no Principal endpoint at all, so
+ * there is nothing for an unregistered caller to attach to. The contract
+ * itself lives with the endpoints that enforce it. */
+export type { PrincipalHostChannel } from "./broker/principal-endpoint.js";
 const DEFAULT_LIMITS: ProtocolLimits = {
   frameBytes: 256 * 1024, mailBodyBytes: 256 * 1024, subjectBytes: 512, addresses: 64,
   replyReferences: 64, contextFiles: 256, contextBytes: 8 * 1024 * 1024,
@@ -48,7 +48,10 @@ export class Broker {
   private adminServer: Server | null = null;
   private hostServer: Server | null = null;
   private principalServer: Server | null = null;
+  private principalHostServer: Server | null = null;
   private principalEndpoint: PrincipalEndpoint | null = null;
+  private principalHostEndpoint: PrincipalHostEndpoint | null = null;
+  private readonly mail: MailModule;
 
   private readonly actorServers = new Set<Server>();
   private readonly connections = new Map<Socket, RpcConnection>();
@@ -73,8 +76,9 @@ export class Broker {
     git: GitModule | null, reconcile: ReconcileModule | null,
     private readonly paths: BrokerPaths, private readonly limits: ProtocolLimits = DEFAULT_LIMITS,
     private readonly processLock?: ProcessLock,
-    private readonly principalSession?: PrincipalSessionRegistration,
+    private readonly principalHost?: PrincipalHostChannel,
   ) {
+    this.mail = mail;
     bindAdmissionGate(store, this.health);
     this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society, error => this.cleanupError(error));
     const publicPorts = createPublicDispatchPorts(this.store, mail, this.units, this.views, lifecycle, git, limits);
@@ -105,11 +109,15 @@ export class Broker {
     this.views.refreshWorld();
     this.adminServer = this.listenInternal(join(this.paths.runRoot, "admin.sock"), "runner");
     this.hostServer = this.listenInternal(join(this.paths.runRoot, "host.sock"), "host");
-    this.principalServer = this.principalSession === undefined
-      ? null : this.listenPrincipal(join(this.paths.runRoot, "principal.sock"));
+    if (this.principalHost !== undefined) this.listenPrincipal(this.principalHost);
+    const principalListeners = [this.principalServer, this.principalHostServer]
+      .filter((server): server is Server => server !== null).map(server => this.listeners.get(server)!);
     this.starting = Promise.all([this.listeners.get(this.adminServer)!, this.listeners.get(this.hostServer)!,
-      ...(this.principalServer === null ? [] : [this.listeners.get(this.principalServer)!])]).then(() => {
+      ...principalListeners]).then(() => {
       this.health.assertAdmission(); this.running = true;
+      // Only now: a host told "ready" can register its session and expect both
+      // endpoints to be there.
+      this.principalHost?.ready();
       this.publishStatus();
       this.statusTimer = setInterval(() => { this.publishStatus(); }, STATUS_REFRESH_MS);
       this.statusTimer.unref();
@@ -145,29 +153,45 @@ export class Broker {
    * through. It is a public actor endpoint like a Resident's, with one
    * difference: the connection is nobody until it presents this run's
    * credential, and every request before that is refused. */
-  /** PR-001: opened only for a host that registered a session, and owned by
-   * the endpoint rather than by this file: who the Principal is is one
-   * authority decision, not another branch of the broker's dispatch. */
-  private listenPrincipal(path: string): Server {
-    const endpoint = new PrincipalEndpoint(this.principalSession!, {
+  /** PR-001/PR-002: opened only for a host that started this broker, and owned
+   * by the endpoints rather than by this file: who the Principal is, and who
+   * may deliver to it, are authority decisions, not branches of dispatch. */
+  private listenPrincipal(channel: PrincipalHostChannel): void {
+    const connection = {
       isDraining: () => this.draining,
-      bindPeer: socket => this.bindPeer(socket),
-      principalContext: peer => this.peers.principalContext(peer),
-      serveFrames: (socket, peer, handle, preflight) => this.serveFrames(socket, peer, handle, preflight),
+      bindPeer: (socket: Socket) => this.bindPeer(socket),
+      principalContext: (peer: BoundPeer) => this.peers.principalContext(peer),
+      serveFrames: (socket: Socket, peer: BoundPeer,
+        handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
+        preflight: (raw: Record<string, unknown>) => void) => this.serveFrames(socket, peer, handle, preflight),
+      fail: (socket: Socket, failure: Failure) => this.fail(socket, failure),
+      observe: (error: unknown) => this.health.observe(error),
+      cleanupError: (error: unknown) => this.cleanupError(error),
+    };
+    const endpoint = new PrincipalEndpoint(channel, { ...connection,
       dispatch: (auth, request, stream) => this.dispatch(auth, request, stream),
       preflight: (auth, raw) => this.preflightPublicStream(auth, raw),
-      fail: (socket, failure) => this.fail(socket, failure),
-      observe: error => this.health.observe(error),
-      cleanupError: error => this.cleanupError(error),
+    });
+    const hostEndpoint = new PrincipalHostEndpoint(channel, { ...connection,
+      prepare: auth => { this.assertStorageAdmission(); return this.mail.prepare(auth); },
+      complete: async (auth, evidence) => {
+        this.assertStorageAdmission();
+        await this.mail.complete(auth, evidence);
+        this.refreshViews();
+      },
     });
     this.principalEndpoint = endpoint;
+    this.principalHostEndpoint = hostEndpoint;
+    this.principalServer = this.listenOn(join(this.paths.runRoot, "principal.sock"), socket => endpoint.serve(socket));
+    this.principalHostServer = this.listenOn(join(this.paths.runRoot, "principal-host.sock"), socket => hostEndpoint.serve(socket));
+  }
+  private listenOn(path: string, serve: (socket: Socket) => void): Server {
     if (existsSync(path)) unlinkSync(path);
     const server = createServer({ allowHalfOpen: true }, socket => {
       if (this.draining) { socket.destroy(); return; }
-      endpoint.serve(socket);
+      serve(socket);
     });
     this.listen(server, path);
-    void this.listeners.get(server)!.then(() => { endpoint.publish(); }, () => {});
     return server;
   }
   private refreshViews(): void {
@@ -391,8 +415,11 @@ export class Broker {
     // The credential dies with the broker that minted it, so nothing observed
     // during this run can attach to a later one.
     this.principalEndpoint?.close();
+    this.principalHostEndpoint?.close();
     this.principalEndpoint = null;
+    this.principalHostEndpoint = null;
     this.principalServer = null;
+    this.principalHostServer = null;
     for (const connection of this.connections.values()) connection.close();
     for (const record of this.runLeases.values()) { try { record.revoke(); } catch (error) { this.cleanupError(error); } }
     for (const server of [...this.listeners.keys()]) this.closeListener(server);

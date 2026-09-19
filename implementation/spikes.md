@@ -50,7 +50,7 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **S-02 부분 확정 (2026-09-19)**: IPC-011이 미루고 있던 것은 "남이 띄운 Pi session에 어떻게 붙는가"였다. OMA가 session을 직접 기동하므로 그 질문 자체가 사라졌고, credential 발급·교환 handshake는 IPC-011에서 확정했다. broker가 run마다 credential을 만들어 run directory에만 게시하고, host가 자신이 띄운 session에만 넘기며, attach 이전 요청과 두 번째 session의 attach를 거절하는 경로는 `test/principal-endpoint.test.ts`(T114)에서 실제 socket과 실제 CLI로 검증한다. 외부 session attach는 여전히 범위 밖이다.
 
-바뀌지 않는 것은 통과 기준이다. SP-02-T/SP-02-A의 tool override, credential 비노출, UI 종료/재연결, commons 자동 주입 0건은 그대로 요구하며, 이 중 duplicate attach 거절만 T114로 충족된다. 나머지는 실제 모델이 도는 환경을 요구하므로 S-02는 OPEN이다. 검증 대상이 "사용자가 띄운 Pi"에서 "OMA가 띄운 Pi"로 바뀌었을 뿐이며, 소유권이 OMA에 있다는 사실이 PR-004의 model-facing tool 제한을 면제하지 않는다. TUI가 존재한다는 것만으로 S-02를 닫지 않는다.
+바뀌지 않는 것은 통과 기준이다. SP-02-T/SP-02-A의 tool override, credential 비노출, UI 종료/재연결, commons 자동 주입 0건은 그대로 요구하며, 이 중 duplicate attach 거절과, credential 비노출 가운데 host 쪽 경로(파일·환경·명령행·`/proc` 재열기 없음, 비자손 프로세스의 attach 거절)는 T114가 실제 프로세스로 검증한다. model이 도구로 credential을 읽으려 하는 시험과 나머지 기준은 실제 모델이 도는 환경을 요구하므로 S-02는 OPEN이다. 검증 대상이 "사용자가 띄운 Pi"에서 "OMA가 띄운 Pi"로 바뀌었을 뿐이며, 소유권이 OMA에 있다는 사실이 PR-004의 model-facing tool 제한을 면제하지 않는다. TUI가 존재한다는 것만으로 S-02를 닫지 않는다.
 
 **MUST [SP-02-T]** 기본 shell/read/write/edit, alias, 추가 extension tool, subtool, custom provider hook, 경로 traversal/symlink를 각각 실행한다. model에게 attach credential·session 파일 읽기를 요청해 거절을 확인한다. duplicate attach와 UI 종료/재연결을 반복하고 commons 100개와 principal 질문 1개를 보낸다.
 

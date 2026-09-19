@@ -43,6 +43,16 @@ jobs:
           package-manager-cache: false
       - name: Install the sandbox the containment tests need
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - name: Install the pinned line counter
+        # The LOC gate re-measures the source and compares every count, so the
+        # exact counting tool is part of the evidence. The distribution package
+        # is a different version and counts differently; the release script is
+        # pinned by digest instead.
+        run: |
+          curl -fsSL -o /tmp/cloc-2.08.pl https://github.com/AlDanial/cloc/releases/download/v2.08/cloc-2.08.pl
+          echo "0a551a86c7785880bcaa0fdfe6107c064abfbebc7cc26b7eaeac423fe2c0d49e  /tmp/cloc-2.08.pl" | sha256sum -c -
+          sudo install -m 0755 /tmp/cloc-2.08.pl /usr/local/bin/cloc
+          test "$(cloc --version)" = "2.08"
       - name: Install locked dependencies
         id: dependencies
         continue-on-error: true
@@ -69,7 +79,9 @@ jobs:
           # A stale inventory is a failure of this commit, not a note: the
           # generators run afterwards, so without this the regenerated files
           # would hide the very state the check observed.
-          npm run check:inventory > "$EVIDENCE/inventory-before.log" 2>&1
+          # Re-measures with the pinned cloc: this is the step that shows the
+          # committed LOC is the source's, before anything regenerates it.
+          OMA_REQUIRE_MEASUREMENT=1 npm run check:inventory > "$EVIDENCE/inventory-before.log" 2>&1
           inventory_before=$?
           printf '%s\n' "$inventory_before" > "$EVIDENCE/inventory-before.exit-code"
           printf '%s\t%s\n' inventory-before "$inventory_before" >> "$EVIDENCE/exit-codes.tsv"
@@ -99,6 +111,20 @@ jobs:
           printf '%s\n' 'kernel, crash and all are systemd lanes. They require a disposable user with a systemd user manager and bubblewrap, which a hosted runner does not provide, and verify-lane.mjs refuses them without OMA_TEST_SYSTEMD=1. They were NOT_RUN here and this workflow certifies nothing about them.' > "$EVIDENCE/systemd-lanes.txt"
           cp production-files.txt production-loc.json production-loc-hashes.json "$EVIDENCE/"
           git diff -- production-files.txt production-loc.json production-loc-hashes.json > "$EVIDENCE/generated-inventory.patch"
+          # A fresh measurement that differs from what was committed means the
+          # committed figures were not this commit's. Recording the patch is not
+          # enough; the difference itself fails the run. Only the counts and the
+          # hashes are compared -- cloc's timing fields change on every run.
+          if ! node -e '
+            const fs = require("node:fs"), { execFileSync } = require("node:child_process");
+            const committed = JSON.parse(execFileSync("git", ["show", "HEAD:production-loc.json"], { encoding: "utf8" }));
+            const fresh = JSON.parse(fs.readFileSync("production-loc.json", "utf8"));
+            const strip = r => Object.fromEntries(Object.entries(r).filter(([k]) => k !== "header"));
+            process.exit(JSON.stringify(strip(committed)) === JSON.stringify(strip(fresh)) ? 0 : 1);
+          '; then
+            printf '%s\t%s\n' generated-inventory-diff 1 >> "$EVIDENCE/exit-codes.tsv"
+            touch "$EVIDENCE/failed"
+          fi
           printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips, NOT_RUN and timeouts are not PASS. This workflow runs the node and git-fs lanes only; it does not certify the systemd lanes, OPEN spikes or VM power loss.' > "$EVIDENCE/README.txt"
       - name: Upload raw evidence even when a check failed
         if: always()

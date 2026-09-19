@@ -133,9 +133,16 @@ function validDirectSpawn(executable: string, argv: readonly string[], cwd: stri
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0"))
       throw new StoreError("UNSUPPORTED_PROFILE", "owned child environment is invalid");
 }
-export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: string, env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
+/** `channel` adds descriptor 3: a socketpair only this parent holds. It is a
+ * socket rather than a pipe on purpose -- another process of the same user
+ * can reopen an inherited pipe through /proc/<pid>/fd, but not a socket -- so
+ * it can carry a value that must reach this one child and nobody else. */
+export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: string,
+  env: Readonly<Record<string, string>>, channel = false): ChildProcessWithoutNullStreams {
   validDirectSpawn(executable, argv, cwd, env);
-  return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+  const stdio: "pipe"[] = ["pipe", "pipe", "pipe"];
+  if (channel) stdio.push("pipe");
+  return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio }) as ChildProcessWithoutNullStreams;
 }
 /** A long-lived service this process owns, such as the society's broker.
  *
@@ -144,9 +151,11 @@ export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: 
  * stderr stays open because it is the service's operational channel, and a
  * service that failed silently is indistinguishable from one that is idle.
  */
-/** A supervised service child. `extraPipe` gives it one additional write end at
- * descriptor 3: a channel only this parent holds, for a value that must not be
- * published anywhere a third process could read it. */
+/** A supervised service child. `extraPipe` gives it descriptor 3: a socketpair
+ * only this parent holds. It is the service's supervision channel -- the
+ * service learns this parent's identity from it and treats its closing as this
+ * parent's death -- and, being a socket, it cannot be reopened by another
+ * process through /proc/<pid>/fd the way an inherited pipe can. */
 export function spawnSupervisedService(executable: string, argv: readonly string[],
   env: Readonly<Record<string, string>>, extraPipe = false): ChildProcess {
   validDirectSpawn(executable, argv, "/", env);

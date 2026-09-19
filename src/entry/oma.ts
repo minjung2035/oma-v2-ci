@@ -15,7 +15,8 @@ import { TuiApp, type AppPorts } from "../tui/app.js";
 import { codeFor, fail } from "../tui/exit.js";
 import { openTerminal } from "../tui/screen.js";
 import { dashboardData } from "../tui/dashboard.js";
-import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionProfile } from "../tui/session.js";
+import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile } from "../tui/session.js";
+import { PrincipalDelivery, principalHostBroker } from "../runtime/principal-delivery.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
@@ -136,54 +137,55 @@ async function main(argv: readonly string[]): Promise<void> {
     process.exit(code);
   };
 
-  process.on("uncaughtException", error => { terminal.restore(); process.stderr.write(`oma: ${String(error)}\n`); process.exit(3); });
+  // A crash still stops the broker this process started. The broker would stop
+  // itself anyway when this process's end of the supervision channel closes;
+  // stopping it here just does not make it wait to notice.
+  process.on("uncaughtException", error => {
+    broker?.stop();
+    terminal.restore();
+    process.stderr.write(`oma: ${String(error)}\n`);
+    process.exit(3);
+  });
   process.on("SIGINT", () => shutdown(0));
   process.on("SIGTERM", () => shutdown(0));
   terminal.onResize(() => app.draw());
   terminal.onKeys(chunk => app.feed(chunk));
 
   // One command starts the society. A broker another `oma` already owns is left
-  // alone, and a broker this process started is stopped when it exits. It
-  // starts before the engine because the engine's authority comes from the
-  // credential the running broker publishes: a session started first would hold
-  // no authority and could not be given one afterwards.
-  const sessionHandle = newSessionHandle();
+  // alone and gives this process no Principal authority; a broker this process
+  // started is supervised: restarted if it ends unexpectedly, and stopped when
+  // this process exits -- or, if this process is killed, by itself when the
+  // supervision channel closes.
   broker = await superviseBroker({
     node: process.execPath, libdir: settings.config.installation.libdir,
-    society, runRoot, configPath, sessionHandle,
+    society, runRoot, configPath,
     onEvent: line => { app.line(`broker: ${line}`); app.draw(); },
   });
   if (broker.state.kind === "unavailable")
     app.line(`broker를 시작하지 못했습니다: ${broker.state.reason}. Dashboard 관측값은 unknown으로 남습니다.`);
+  else if (broker.state.kind === "already-running")
+    app.line("이 society의 broker는 다른 프로세스가 소유하고 있어 Principal은 요청을 보낼 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다.");
 
   // OMA runs the engine it shipped with; it never resolves Pi from PATH, and it
   // gives that engine its own agent directory so a Pi the user installed keeps
-  // its configuration, extensions and sessions to itself.
+  // its configuration, extensions and sessions to itself. The engine starts now,
+  // without authority: its credential reaches it later, on a private socket,
+  // whenever a broker this process started is ready -- so a slow broker delays
+  // the Principal's society requests, not the Principal itself.
   const piRuntime = resolvePiRuntime({
     stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
   });
   ensureDirectory(piRuntime.agentDir, 0o700);
   const coreExtension = join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension);
-  // Waiting for the credential is what makes the broker's endpoint ready before
-  // the engine that will use it exists; a process already started cannot be
-  // given an environment afterwards.
-  const credential = await broker.credential;
-  if (credential === null)
-    app.line(broker.state.kind === "already-running"
-      ? "이 society의 broker는 다른 프로세스가 소유하고 있어 Principal은 요청을 보낼 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다."
-      : "broker가 없어 Principal은 사회에 요청을 보낼 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다.");
   try {
     const profile = principalSessionProfile(configPath, society);
     session = PrincipalSession.start(
       { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
-        coreExtension, sessionDir: join(stateRoot, "principal", "private", "sessions"),
+        coreExtension, sessionDir: principalSessionDir(stateRoot),
         workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private") },
       profile,
       limitsOf(settings.config.limits),
-      principalEnvironment(
-        { stateRoot, runRoot, libdir: settings.config.installation.libdir },
-        profile, settings.config.limits, { credential, sessionHandle },
-      ),
+      principalEnvironment({ stateRoot, runRoot, libdir: settings.config.installation.libdir }, profile, settings.config.limits),
       {
         onLine: line => app.line(line),
         onBusy: busy => app.setBusy(busy),
@@ -204,8 +206,48 @@ async function main(argv: readonly string[]): Promise<void> {
     app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
   }
 
+  // PR-001/LIFE-006: each time a broker of this process's becomes ready -- at
+  // start, and again after it is restarted -- the engine is named to it and
+  // receives the credential it mints. A restarted broker's credential replaces
+  // the old one in the engine, so the Principal reconnects without the Human
+  // doing anything.
+  const sessionHandle = newSessionHandle();
+  const supervisor = broker;
+  const register = async (): Promise<void> => {
+    const pid = session?.pid ?? null;
+    if (pid === null) return;
+    const credential = await supervisor.register(sessionHandle, pid);
+    if (credential === null) { app.line("broker가 Principal 세션을 받아들이지 않았습니다. 요청은 보낼 수 없습니다."); app.draw(); return; }
+    session?.grant(credential, sessionHandle);
+  };
+
+  // PR-002: pending mail reaches the Principal while this product runs, one
+  // bounded batch at a time, whenever the session is idle.
+  const delivery = session === null ? null : new PrincipalDelivery(session,
+    principalHostBroker(runRoot, settings.config.limits), {
+      stateRoot, frameBytes: settings.config.limits.frameBytes,
+      acceptMs: settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,
+    });
+  let brokerReady = false;
+  const deliver = (): void => {
+    if (delivery === null || !brokerReady) return;
+    void delivery.tick().then(outcome => {
+      if (outcome.kind === "delivered") { app.line(`[메일] ${outcome.messages}통을 Principal에게 전달했습니다.`); app.refresh(); app.draw(); }
+      else if (outcome.kind === "failed") { app.line(`[메일] 전달하지 못했습니다: ${outcome.reason}`); app.draw(); }
+    }, (error: unknown) => {
+      app.line(`[메일] 전달 중 오류: ${error instanceof Error ? error.message : String(error)}`);
+      app.draw();
+    });
+  };
+  session?.onEvent(event => { if (event.type === "agent_settled") deliver(); });
+  supervisor.onReady(() => {
+    brokerReady = true;
+    void register().then(deliver);
+  });
+
   const poll = setInterval(() => {
     void transport.status().then(next => { observation = next; app.refresh(); app.draw(); });
+    deliver();
   }, 5000);
   poll.unref();
   observation = await transport.status();

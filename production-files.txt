@@ -16,6 +16,7 @@ src/broker/logs.ts
 src/broker/peer-authenticator.ts
 src/broker/peer-pin.ts
 src/broker/principal-endpoint.ts
+src/broker/process-ancestry.ts
 src/broker/public-dispatcher.ts
 src/broker/replies.ts
 src/broker/transport-spool.ts
@@ -72,9 +73,11 @@ src/entry/module-conformance.ts
 src/entry/oma.ts
 src/entry/runner.ts
 src/extension/batch-view.ts
+src/extension/cli-process.ts
 src/extension/delivery.ts
 src/extension/inference-bridge.ts
 src/extension/mail-tools.ts
+src/extension/principal-channel.ts
 src/extension/shared.ts
 src/extension/tool-surface.ts
 src/extension/workspace-guard.ts
@@ -125,6 +128,7 @@ src/process/run.ts
 src/protocol/batch-view.ts
 src/protocol/byte-queue.ts
 src/protocol/channel.ts
+src/protocol/host-channel.ts
 src/protocol/jsonl.ts
 src/protocol/log-response.ts
 src/protocol/methods.ts
@@ -152,10 +156,12 @@ src/runtime/pi-adapter.ts
 src/runtime/pi-rpc.ts
 src/runtime/pi-runtime.ts
 src/runtime/pi-spawn-plan.ts
+src/runtime/principal-delivery.ts
 src/runtime/process-lock.ts
 src/runtime/provision.ts
 src/runtime/resident-rootfs.ts
 src/runtime/run-registry.ts
+src/runtime/supervision-channel.ts
 src/sandbox.ts
 src/storage/batch-view.ts
 src/storage/contained-fs.ts

@@ -1,10 +1,10 @@
 /** CLI transport policy only. Freeze/query/resend and exit codes remain in
  * the CLI request service, not in the role-neutral protocol channel.
  */
-import { existsSync } from "node:fs";
+import { existsSync, fstatSync, readSync } from "node:fs";
 import type { PublicMethod } from "../../implementation/contracts.js";
 import { BrokerChannel, type RpcReply } from "../protocol/channel.js";
-import { PRINCIPAL_CREDENTIAL_ENV, isPrincipalCredential } from "../protocol/principal-credential.js";
+import { HOST_CHANNEL_FD, HOST_CHANNEL_LINE_BYTES, decodeHostMessage } from "../protocol/host-channel.js";
 import { StoreError } from "../domain/errors.js";
 import { isLogResponseFrameLimit } from "../protocol/log-response.js";
 import { fail } from "./exit.js";
@@ -34,11 +34,13 @@ export async function callActor(
   const frameBytes = configured === undefined ? 256 * 1024 : Number(configured);
   if ((configured !== undefined && !/^[0-9]+$/.test(configured)) || !isLogResponseFrameLimit(frameBytes))
     throw new StoreError("INVALID_REQUEST", "OMA_FRAME_BYTES must be decimal bytes supporting log responses and uint32 framing");
+  // Read once, before connecting: the descriptor holds one message.
+  const grant = presentedGrant();
   const channel = new BrokerChannel({ frameBytes, idleStreamSeconds: 60, receiptWaitSeconds: 60 });
   const timer = setTimeout(() => channel.close(new StoreError("BROKER_UNAVAILABLE", "broker did not answer before the CLI deadline")), CLI_DEADLINE_MS);
   try {
     await channel.connect(path);
-    await attachPrincipalSession(channel);
+    await attachPrincipalSession(channel, grant);
     const result = await channel.call(method, params, {
       ...(request === undefined ? {} : { request }),
       ...(streamBytes === undefined ? {} : { streamBytes }),
@@ -50,22 +52,65 @@ export async function callActor(
   }
 }
 
-/** TUI-004: the Principal's endpoint admits nobody until the connection proves
- * it belongs to the session the host started.
+/** Where the trusted extension puts a Principal credential for this process,
+ * named in the environment only as a descriptor number. */
+export const CLI_CREDENTIAL_FD_ENV = "OMA_PRINCIPAL_CREDENTIAL_FD";
+/** How long the credential may take to arrive on its descriptor. */
+const CREDENTIAL_WAIT_MS = 5000;
+
+/** The credential the extension handed this process, or null when it handed
+ * none -- a Resident's CLI, or a caller that is not a Principal tool.
  *
- * Only the Principal's environment carries the credential — a Resident's does
- * not, and neither does a Resident's sandbox — so for every other caller this
- * is a no-op and the connection goes straight to its request. The handle names
- * which session is connecting, so the broker can hold a society to one attached
- * Principal instead of letting a second one share the first's authority.
- */
-async function attachPrincipalSession(channel: BrokerChannel): Promise<void> {
-  const credential = process.env[PRINCIPAL_CREDENTIAL_ENV];
-  if (credential === undefined) return;
-  const sessionHandle = process.env.OMA_PRINCIPAL_SESSION;
-  if (!isPrincipalCredential(credential) || sessionHandle === undefined || sessionHandle.length === 0)
-    throw new StoreError("AUTH_FAILED", "the principal session credential is not usable");
-  await channel.call("principal.attach", { sessionHandle, credential });
+ * It arrives on a socket this process inherited, never in the environment or
+ * the command line: both are readable by other processes of this user. The
+ * descriptor must be a socket, the message must be the one credential line,
+ * and anything else is refused rather than guessed at. */
+function presentedGrant(): { credential: string; sessionHandle: string } | null {
+  const declared = process.env[CLI_CREDENTIAL_FD_ENV];
+  if (declared === undefined) return null;
+  if (declared !== String(HOST_CHANNEL_FD))
+    throw new StoreError("AUTH_FAILED", "the principal credential descriptor is not the one this CLI reads");
+  let kind;
+  try { kind = fstatSync(HOST_CHANNEL_FD); }
+  catch { throw new StoreError("AUTH_FAILED", "the principal credential descriptor is not open"); }
+  if (!kind.isSocket()) throw new StoreError("AUTH_FAILED", "the principal credential descriptor is not a private socket");
+  const buffer = Buffer.alloc(HOST_CHANNEL_LINE_BYTES + 2);
+  let filled = 0;
+  // The extension writes the line and closes its end as soon as it starts this
+  // process, so the wait is short; a descriptor that never delivers is a
+  // failure, not something to spin on.
+  const deadline = Date.now() + CREDENTIAL_WAIT_MS;
+  const pause = new Int32Array(new SharedArrayBuffer(4));
+  for (;;) {
+    let count: number;
+    try { count = readSync(HOST_CHANNEL_FD, buffer, filled, buffer.length - filled, null); }
+    catch (error) {
+      if ((error as { code?: string }).code !== "EAGAIN")
+        throw new StoreError("AUTH_FAILED", "the principal credential could not be read");
+      if (Date.now() > deadline) throw new StoreError("AUTH_FAILED", "the principal credential did not arrive");
+      Atomics.wait(pause, 0, 0, 5);
+      continue;
+    }
+    if (count === 0) break;
+    filled += count;
+    if (filled >= buffer.length) throw new StoreError("AUTH_FAILED", "the principal credential message is too long");
+  }
+  const text = buffer.subarray(0, filled).toString("latin1");
+  const message = text.endsWith("\n") ? decodeHostMessage(text.slice(0, -1)) : null;
+  if (message === null || message.kind !== "credential")
+    throw new StoreError("AUTH_FAILED", "the principal credential message is malformed");
+  return { credential: message.credential, sessionHandle: message.sessionHandle };
+}
+
+/** TUI-004: the Principal's endpoint admits nobody until the connection proves
+ * it belongs to the session the host started. For every other caller there is
+ * no credential and this is a no-op. The broker additionally checks that this
+ * process descends from the Principal's engine, so a credential alone would
+ * not make any other process the Principal. */
+async function attachPrincipalSession(channel: BrokerChannel, grant: { credential: string; sessionHandle: string } | null): Promise<void> {
+  if (grant === null) return;
+  const reply = await channel.call("principal.attach", { sessionHandle: grant.sessionHandle, credential: grant.credential });
+  if (!reply.ok) throw new StoreError(reply.error.code, reply.error.message);
 }
 
 export function call(

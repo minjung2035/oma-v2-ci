@@ -4,11 +4,13 @@
  * access. Everything that changes state goes through the model-facing CLI with
  * a fixed argv, so the broker's request identity and receipts apply.
  */
-import { closeSync, constants, fstatSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, mkdtempSync, openSync, readSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { validMessageId } from "./batch-view.js";
+import { runCliProcess } from "./cli-process.js";
+import { PrincipalChannel } from "./principal-channel.js";
 import { integerEnv, textResult } from "./shared.js";
 
 /** TSP-008: tools OMA itself owns. A role projection may reorder or group the
@@ -45,70 +47,88 @@ function readBoundedMail(
       path,
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
-    const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.size > maximum)
-      throw new Error("mail is not a bounded regular file");
-    return {
-      id,
-      text: new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(fd)),
-    };
+    return { id, text: new TextDecoder("utf-8", { fatal: true }).decode(boundedBytes(fd, maximum)) };
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
 }
-/** Names this extension mirrors rather than imports. It loads inside a sandbox
- * with no OMA module on its path (PI-001), so the protocol's own constants
- * cannot be read here; a test holds the two spellings together. */
-const PRINCIPAL_CREDENTIAL = "OMA_PRINCIPAL_CREDENTIAL";
-const PRINCIPAL_SESSION = "OMA_PRINCIPAL_SESSION";
+
+/** Reads exactly the file that was measured, and no more than the bound.
+ *
+ * Checking the size and then reading "the whole file" is two observations: a
+ * file that grows in between is read past its bound, because the read never
+ * saw the limit. Read-only mode does not prevent that for a process of the
+ * same user, so the count is fixed at the measured size, one more byte proves
+ * nothing was appended, and the identity is compared again afterwards. This is
+ * the same discipline the core applies to its immutable files; the extension
+ * cannot import that code (PI-001), so it states it here.
+ */
+function boundedBytes(fd: number, maximum: number): Buffer {
+  const before = fstatSync(fd);
+  if (!before.isFile() || !Number.isSafeInteger(before.size) || before.size < 0 || before.size > maximum)
+    throw new Error("mail is not a bounded regular file");
+  const bytes = Buffer.allocUnsafe(before.size);
+  let filled = 0;
+  while (filled < before.size) {
+    const count = readSync(fd, bytes, filled, before.size - filled, filled);
+    if (count === 0) throw new Error("mail was truncated while it was read");
+    filled += count;
+  }
+  if (readSync(fd, Buffer.allocUnsafe(1), 0, 1, before.size) !== 0)
+    throw new Error("mail grew while it was read");
+  const after = fstatSync(fd);
+  if (after.ino !== before.ino || after.dev !== before.dev || after.size !== before.size ||
+    after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs)
+    throw new Error("mail changed while it was read");
+  return bytes;
+}
+/** Mirrors the frame-limit name the CLI reads. The extension cannot import
+ * OMA's modules (PI-001); a rule holds the names this file forwards to the
+ * names the CLI reads. */
 const FRAME_BYTES = "OMA_FRAME_BYTES";
 
 /** The environment the model-facing CLI is started with.
  *
- * It is built rather than inherited: `env -i` means only what is listed here
- * reaches the CLI, so anything the caller's own environment happens to hold —
- * a provider key, a session path — cannot travel with it. That also means an
- * entry left out of this list is an entry the CLI does not have, which is how
- * the Principal's credential went missing: the environment was assembled for a
- * Resident, which has none. Each entry below is passed only when this process
- * actually has it, so a Resident's command is unchanged.
+ * It is built, never inherited, so anything else in the engine's environment
+ * -- a provider key, a session path -- cannot travel with it. Nothing secret
+ * is in it: a Principal credential goes to the CLI on its own private
+ * descriptor (see cli-process.ts), because an environment is readable by any
+ * process of this user through /proc/<pid>/environ.
  */
-export function cliEnvironment(home: string, socket: string): string[] {
-  const entries = [
-    `HOME=${home}`,
-    `OMA_SOCKET=${socket}`,
-    `PATH=${process.env.PATH ?? "/usr/bin:/bin"}`,
-    "LANG=C.UTF-8",
-  ];
+export function cliEnvironment(home: string, socket: string): Record<string, string> {
+  const environment: Record<string, string> = {
+    HOME: home,
+    OMA_SOCKET: socket,
+    PATH: process.env.PATH ?? "/usr/bin:/bin",
+    LANG: "C.UTF-8",
+  };
   // The frame bound the broker was configured with. Without it the CLI falls
   // back to its own default, which is not necessarily this society's.
-  for (const name of [FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION]) {
+  for (const name of [FRAME_BYTES]) {
     const value = process.env[name];
-    if (value !== undefined && value.length > 0) entries.push(`${name}=${value}`);
+    if (value !== undefined && value.length > 0) environment[name] = value;
   }
-  return entries;
+  return environment;
 }
 
+/** How long one CLI call may take before it is stopped. The CLI enforces its
+ * own shorter deadline; this bounds a child that stopped answering at all. */
+const CLI_TIMEOUT_MS = 120_000;
+
 async function runCli(
-  pi: ExtensionAPI,
   cli: string,
   cwd: string,
-  environment: readonly string[],
+  environment: Readonly<Record<string, string>>,
+  channel: PrincipalChannel,
   args: string[],
   signal?: AbortSignal,
 ): Promise<string> {
-  const command = [
-    "-i",
-    ...environment,
-    process.execPath,
-    cli,
-    ...args,
-  ];
-  const result = await pi.exec(
-    "/usr/bin/env",
-    command,
-    signal ? { cwd, signal } : { cwd },
-  );
+  const result = await runCliProcess({
+    node: process.execPath, cli, args, cwd, env: environment,
+    // Read at each call: a restarted broker replaces the credential.
+    grant: channel.current(),
+    signal, timeoutMs: CLI_TIMEOUT_MS,
+  });
   if (result.code !== 0)
     throw new Error(
       (result.stderr || result.stdout || `CLI exited ${result.code}`)
@@ -117,7 +137,7 @@ async function runCli(
     );
   return result.stdout.trim();
 }
-export function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
+export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: PrincipalChannel = PrincipalChannel.detached()): void {
   const cli = process.env.OMA_CLI_PATH;
   const home = process.env.OMA_AGENT_HOME;
   const archive = process.env.OMA_MAIL_ARCHIVE;
@@ -195,7 +215,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
         ];
         if (params.replyTo) args.push("--reply", params.replyTo);
         return textResult(
-          await runCli(pi, cli, cwd, environment, args, signal),
+          await runCli(cli, cwd, environment, channel, args, signal),
           { request: key },
         );
       } finally {
@@ -215,10 +235,10 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
       const key = params.request ?? `pi-${crypto.randomUUID()}`;
       return textResult(
         await runCli(
-          pi,
           cli,
           cwd,
           environment,
+          channel,
           ["ack", params.messageId, "--request", key],
           signal,
         ),
@@ -234,10 +254,10 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
     async execute(_id, params, signal) {
       return textResult(
         await runCli(
-          pi,
           cli,
           cwd,
           environment,
+          channel,
           params.agent ? ["status", params.agent] : ["status"],
           signal,
         ),

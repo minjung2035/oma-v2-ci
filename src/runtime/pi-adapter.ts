@@ -46,7 +46,11 @@ function deadline(
     },
   };
 }
-function boundaryOf(
+/** The trusted extension's boundary notice for this batch, or null. The one
+ * decoder for it: the Resident adapter and the Principal's delivery both read
+ * the engine's notice through this, so neither can accept what the other
+ * would refuse. */
+export function boundaryOf(
   event: PiEvent,
   batch: PreparedBatch,
 ): DeliveryBoundary | null {

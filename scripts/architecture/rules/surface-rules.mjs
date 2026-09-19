@@ -342,18 +342,27 @@ function ownerShapeRules(root, findings) {
   }
 }
 
-// The three places the Principal's session environment passes through. They
-// broke apart once already: the host produced the credential, the CLI required
-// it, and the tools in between rebuilt the environment from a list that never
-// mentioned it, so every OMA tool failed authentication while every test passed.
+// The places the Principal's session environment passes through. They broke
+// apart once already: the host produced the credential, the CLI required it,
+// and the tools in between rebuilt the environment from a list that never
+// mentioned it, so every OMA tool failed authentication while every test
+// passed.
 const ENV_PRODUCER = "src/tui/session.ts";
 const ENV_PRODUCER_FUNCTION = "principalEnvironment";
-const ENV_FORWARDER = "src/extension/mail-tools.ts";
-const ENV_FORWARDER_FUNCTION = "cliEnvironment";
+// Everything the tools put in the CLI's environment: the list copied from the
+// engine's own environment, and what the process owner adds itself.
+const ENV_FORWARDERS = Object.freeze([
+  { file: "src/extension/mail-tools.ts", fn: "cliEnvironment" },
+  { file: "src/extension/cli-process.ts", fn: "runCliProcess" },
+]);
 const ENV_CONSUMER = "src/cli/transport.ts";
 // `socketPath` reads names only to derive an endpoint when none was given; a
 // caller that was given one never reaches them, so they are not requirements.
 const ENV_CONSUMER_DERIVATION = "socketPath";
+// PR-001: the credential and the session handle have no environment name at
+// all. An environment is readable by any process of this user through
+// /proc/<pid>/environ, so a name for either is a path to leaking it.
+const SECRET_ENV_NAMES = Object.freeze(new Set(["OMA_PRINCIPAL_CREDENTIAL", "OMA_PRINCIPAL_SESSION"]));
 
 /** Top-level `const NAME = "value"` in a file, including the ones it imports
  * from elsewhere in the tree, so a name held in a shared constant reads the
@@ -390,31 +399,62 @@ function functionBody(source, name) {
 }
 
 const OMA_NAME = /^OMA_[A-Z0-9_]+$/;
+const isProcessEnv = value =>
+  ts.isPropertyAccessExpression(value) && value.name.text === "env" &&
+  ts.isIdentifier(value.expression) && value.expression.text === "process";
 
-/** Names the forwarder writes into the environment it builds, whether spelled
- * as an assignment template or held in a constant. */
+/** Names the forwarders put into the CLI's environment, and the subset they
+ * copy from the engine's own environment (which the host must therefore set). */
 function forwardedNames(root) {
-  if (!exists(root, ENV_FORWARDER)) return null;
-  const body = functionBody(sourceOf(root, ENV_FORWARDER), ENV_FORWARDER_FUNCTION);
-  if (!body) return null;
-  const constants = stringConstants(root, ENV_FORWARDER);
-  const names = new Set();
-  eachNode(body, node => {
-    if (ts.isTemplateExpression(node)) {
-      const head = node.head.text;
-      if (head.endsWith("=")) names.add(head.slice(0, -1));
-    }
-    if (ts.isStringLiteralLike(node)) {
-      const equals = node.text.indexOf("=");
-      if (equals > 0) names.add(node.text.slice(0, equals));
-      else if (OMA_NAME.test(node.text)) names.add(node.text);
-    }
-    if (ts.isIdentifier(node) && constants.has(node.text)) {
-      const value = constants.get(node.text);
-      if (OMA_NAME.test(value)) names.add(value);
-    }
-  });
-  return names;
+  const forwarded = new Set();
+  const copied = new Set();
+  let found = false;
+  for (const { file, fn } of ENV_FORWARDERS) {
+    if (!exists(root, file)) continue;
+    const body = functionBody(sourceOf(root, file), fn);
+    if (!body) continue;
+    found = true;
+    const constants = stringConstants(root, file);
+    const resolve = node =>
+      ts.isStringLiteralLike(node) ? node.text
+        : ts.isIdentifier(node) && constants.has(node.text) ? constants.get(node.text) : null;
+    eachNode(body, node => {
+      // { NAME: value }
+      if (ts.isPropertyAssignment(node) && ts.isObjectLiteralExpression(node.parent)) {
+        const key = node.name;
+        const name = ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text
+          : ts.isComputedPropertyName(key) ? resolve(key.expression) : null;
+        if (name) forwarded.add(name);
+      }
+      // environment[NAME] = value
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+          ts.isElementAccessExpression(node.left) && !isProcessEnv(node.left.expression)) {
+        const name = resolve(node.left.argumentExpression);
+        if (name) forwarded.add(name);
+      }
+      // `NAME=${value}`
+      if (ts.isTemplateExpression(node) && node.head.text.endsWith("=")) forwarded.add(node.head.text.slice(0, -1));
+      // for (const name of [A, B]) { ... process.env[name] ... }: copied names
+      if (ts.isForOfStatement(node) && ts.isArrayLiteralExpression(node.expression) &&
+          ts.isVariableDeclarationList(node.initializer)) {
+        const variable = node.initializer.declarations[0]?.name;
+        let readsEnv = false;
+        eachNode(node.statement, inner => {
+          if (ts.isElementAccessExpression(inner) && isProcessEnv(inner.expression) &&
+              ts.isIdentifier(inner.argumentExpression) && variable && ts.isIdentifier(variable) &&
+              inner.argumentExpression.text === variable.text) readsEnv = true;
+        });
+        if (readsEnv) for (const element of node.expression.elements) {
+          const name = resolve(element);
+          if (name) { copied.add(name); forwarded.add(name); }
+        }
+      }
+      // process.env.NAME / process.env[NAME] read directly: copied names
+      if (ts.isPropertyAccessExpression(node) && isProcessEnv(node.expression) && OMA_NAME.test(node.name.text))
+        copied.add(node.name.text);
+    });
+  }
+  return found ? { forwarded, copied } : null;
 }
 
 /** Names the consumer reads from its own environment, outside the branch that
@@ -429,12 +469,9 @@ function consumedNames(root) {
   const names = new Set();
   eachNode(source, node => {
     if (derived.has(node)) return;
-    const isEnv = value =>
-      ts.isPropertyAccessExpression(value) && value.name.text === "env" &&
-      ts.isIdentifier(value.expression) && value.expression.text === "process";
-    if (ts.isPropertyAccessExpression(node) && isEnv(node.expression) && OMA_NAME.test(node.name.text))
+    if (ts.isPropertyAccessExpression(node) && isProcessEnv(node.expression) && OMA_NAME.test(node.name.text))
       names.add(node.name.text);
-    if (ts.isElementAccessExpression(node) && isEnv(node.expression)) {
+    if (ts.isElementAccessExpression(node) && isProcessEnv(node.expression)) {
       const argument = node.argumentExpression;
       if (ts.isStringLiteralLike(argument) && OMA_NAME.test(argument.text)) names.add(argument.text);
       if (ts.isIdentifier(argument) && constants.has(argument.text)) {
@@ -469,27 +506,39 @@ function producedNames(root) {
   return names;
 }
 
-/** PR-001/TUI-004: the session environment survives every hop.
+/** PR-001/TUI-004: the session environment survives every hop, and the secret
+ * never enters one.
  *
- * `env -i` means the tools' command carries exactly what they list, so a name
- * the CLI needs and the tools do not forward is a silent authentication
- * failure, and a name the tools forward that the host never sets is a
- * requirement nobody meets. Both are checked here rather than left to whoever
- * remembers to change three files together.
+ * The tools build the CLI's environment from nothing, so a name the CLI needs
+ * and the tools do not put there is a silent failure; a name the tools copy
+ * from the engine that the host never sets is a requirement nobody meets; and
+ * a credential given an environment name is a credential any process of this
+ * user can read.
  */
 function principalSessionEnvRules(root, findings) {
-  const forwarded = forwardedNames(root);
+  // Every spelling: a string, an object key, a property read. A rule that only
+  // looked at strings would miss `{ OMA_PRINCIPAL_CREDENTIAL: value }`.
+  for (const file of filesUnder(root, "src")) {
+    const named = new Set();
+    eachNode(sourceOf(root, file), node => {
+      if ((ts.isStringLiteralLike(node) || ts.isIdentifier(node)) && SECRET_ENV_NAMES.has(node.text)) named.add(node.text);
+    });
+    for (const text of named)
+      findings.push(finding("principal-secret-env", file,
+        `names ${text}; the Principal's credential and session handle have no environment name`));
+  }
+  const forwarder = forwardedNames(root);
   const consumed = consumedNames(root);
   const produced = producedNames(root);
-  if (forwarded === null || consumed === null || produced === null) return;
+  if (forwarder === null || consumed === null || produced === null) return;
   for (const name of consumed)
-    if (!forwarded.has(name))
-      findings.push(finding("principal-session-env", ENV_FORWARDER,
-        `the model-facing CLI reads ${name}, but the command the tools build does not carry it`));
-  for (const name of forwarded)
+    if (!forwarder.forwarded.has(name))
+      findings.push(finding("principal-session-env", ENV_FORWARDERS[0].file,
+        `the model-facing CLI reads ${name}, but the environment the tools build does not carry it`));
+  for (const name of forwarder.copied)
     if (OMA_NAME.test(name) && !produced.has(name))
       findings.push(finding("principal-session-env", ENV_PRODUCER,
-        `${name} is forwarded to the CLI, but the Principal's session environment never sets it`));
+        `${name} is copied to the CLI from the engine's environment, but the Principal's session environment never sets it`));
 }
 
 export function surfaceRuleFindings(root) {

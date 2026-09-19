@@ -7,10 +7,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { createServer } from "node:net";
 import { provisionSociety } from "../src/runtime/provision.js";
 import { brokerListening, superviseBroker } from "../src/runtime/broker-supervisor.js";
@@ -169,68 +170,255 @@ test("T115 provisioning builds the trusted rootfs Residents are confined to", ()
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 the product waits for the credential rather than reading past a starting broker", async () => {
+/** Writes a stand-in broker at `<root>/lib/dist/src/entry/broker.js`. It speaks
+ * the real supervision channel on descriptor 3 through the real codec, and its
+ * behaviour is chosen by `script`, which runs with `channel` (a Socket),
+ * `send(message)`, `reader(onMessage)` and `runs` (how many times this broker
+ * has been started, counted in a file) in scope. */
+function standInBroker(root: string, script: string): string {
+  const libdir = join(root, "lib");
+  const entry = join(libdir, "dist", "src", "entry");
+  mkdirSync(entry, { recursive: true });
+  const codec = pathToFileURL(join(process.cwd(), "dist/src/protocol/host-channel.js")).href;
+  writeFileSync(join(entry, "broker.js"), `
+    import { Socket } from "node:net";
+    import { appendFileSync, readFileSync } from "node:fs";
+    import { HostChannelReader, encodeHostMessage } from ${JSON.stringify(codec)};
+    const counter = ${JSON.stringify(join(root, "runs"))};
+    appendFileSync(counter, "x");
+    const runs = readFileSync(counter, "utf8").length;
+    const channel = new Socket({ fd: 3, readable: true, writable: true });
+    const send = message => channel.write(encodeHostMessage(message));
+    const reader = onMessage => { const r = new HostChannelReader(onMessage, () => process.exit(9)); channel.on("data", chunk => r.push(chunk)); };
+    channel.on("close", () => process.exit(0));
+    ${script}
+  `);
+  return libdir;
+}
+
+function supervise(root: string, libdir: string, extra: Record<string, unknown> = {}) {
+  const events: string[] = [];
+  return {
+    events,
+    handle: superviseBroker({
+      node: process.execPath, libdir, society: "probe", runRoot: root,
+      configPath: join(root, "config.json"), onEvent: line => { events.push(line); }, ...extra,
+    }),
+  };
+}
+
+const readyOnce = (handle: { onReady(listener: () => void): void }): Promise<number> =>
+  new Promise(resolve => { const started = Date.now(); handle.onReady(() => resolve(Date.now() - started)); });
+
+test("T115 readiness is the broker saying its endpoints listen, not a pid appearing", async () => {
   const root = scratch();
   try {
-    // A stand-in broker that takes a while to reach the point where it would
-    // publish. The real one does the same: it recovers, bootstraps and only
-    // then listens, so a host that read immediately after the spawn returned
-    // would always see nothing and start an engine that can never be given
-    // authority afterwards.
-    const entry = join(root, "lib", "dist", "src", "entry");
-    mkdirSync(entry, { recursive: true });
-    writeFileSync(join(entry, "broker.js"),
-      "import { writeSync } from 'node:fs';\n" +
-      "setTimeout(() => { writeSync(3, 'b'.repeat(64) + '\\n'); setTimeout(() => {}, 1000); }, 300);\n");
-    const started = Date.now();
-    const handle = await superviseBroker({
-      node: process.execPath, libdir: join(root, "lib"), society: "probe",
-      runRoot: root, configPath: join(root, "config.json"),
-      sessionHandle: "a".repeat(32), readyTimeoutMs: 5000,
-    });
+    // The real broker recovers and bootstraps before it listens; a host that
+    // treated the spawn as readiness would register an engine with nothing.
+    const libdir = standInBroker(root, "setTimeout(() => send({ kind: 'ready' }), 300); setInterval(() => {}, 1000);");
+    const { handle } = supervise(root, libdir);
+    const broker = await handle;
     try {
-      const credential = await handle.credential;
-      assert.equal(credential, "b".repeat(64));
-      assert.ok(Date.now() - started >= 250, "the credential was not actually waited for");
-    } finally { handle.stop(); }
+      assert.equal(broker.state.kind, "started");
+      // Before it says so, a registration has nobody to ask.
+      assert.equal(await broker.register("a".repeat(32), process.pid), null);
+      const waited = await readyOnce(broker);
+      assert.ok(waited >= 200, `readiness was reported after ${waited}ms, before the broker said so`);
+    } finally { broker.stop(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a broker that never publishes ends the wait with an absence, not a hang", async () => {
+test("T115 a registration returns the credential the broker minted for that engine", async () => {
   const root = scratch();
   try {
-    // A child that starts and says nothing on the channel. The product must
-    // reach its terminal with a Principal that has no authority, and say so,
-    // instead of holding the screen until someone kills it.
-    const entry = join(root, "lib", "dist", "src", "entry");
-    mkdirSync(entry, { recursive: true });
-    writeFileSync(join(entry, "broker.js"), "setTimeout(() => {}, 10000);\n");
-    const handle = await superviseBroker({
-      node: process.execPath, libdir: join(root, "lib"), society: "probe",
-      runRoot: root, configPath: join(root, "config.json"),
-      sessionHandle: "a".repeat(32), readyTimeoutMs: 400,
-    });
-    try { assert.equal(await handle.credential, null); }
-    finally { handle.stop(); }
+    const libdir = standInBroker(root, `
+      send({ kind: "ready" });
+      reader(message => {
+        if (message.kind !== "session") process.exit(8);
+        send({ kind: "credential", credential: "c".repeat(64), sessionHandle: message.sessionHandle });
+      });
+      setInterval(() => {}, 1000);`);
+    const broker = await supervise(root, libdir).handle;
+    try {
+      await readyOnce(broker);
+      assert.equal(await broker.register("d".repeat(32), 4242), "c".repeat(64));
+    } finally { broker.stop(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 a broker this host did not start hands out no credential", async () => {
+test("T115 a refused registration is answered at once, not left to time out", async () => {
+  const root = scratch();
+  try {
+    const libdir = standInBroker(root, `
+      send({ kind: "ready" });
+      reader(() => send({ kind: "refused" }));
+      setInterval(() => {}, 1000);`);
+    const { handle, events } = supervise(root, libdir, { registerTimeoutMs: 20_000 });
+    const broker = await handle;
+    try {
+      await readyOnce(broker);
+      const started = Date.now();
+      assert.equal(await broker.register("d".repeat(32), 4242), null);
+      assert.ok(Date.now() - started < 5000, "a refusal waited for the timeout");
+      assert.ok(events.some(line => /refused/.test(line)));
+    } finally { broker.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a broker that never answers a registration yields an absence within the bound", async () => {
+  const root = scratch();
+  try {
+    const libdir = standInBroker(root, "send({ kind: 'ready' }); setInterval(() => {}, 1000);");
+    const broker = await supervise(root, libdir, { registerTimeoutMs: 300 }).handle;
+    try {
+      await readyOnce(broker);
+      assert.equal(await broker.register("d".repeat(32), 4242), null);
+    } finally { broker.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a broker this host did not start gives it no readiness and no credential", async () => {
   const root = scratch();
   try {
     const server = createServer(socket => { socket.destroy(); });
     await new Promise<void>(resolve => { server.listen(join(root, "admin.sock"), () => { resolve(); }); });
     try {
-      const handle = await superviseBroker({
-        node: process.execPath, libdir: root, society: "probe",
-        runRoot: root, configPath: join(root, "config.json"), sessionHandle: "a".repeat(32),
-      });
-      assert.equal(handle.state.kind, "already-running");
-      // Another process owns that broker and registered its own session with
-      // it. This host has no claim on the Principal and is given nothing.
-      assert.equal(await handle.credential, null);
+      const broker = await supervise(root, root).handle;
+      assert.equal(broker.state.kind, "already-running");
+      let ready = false;
+      broker.onReady(() => { ready = true; });
+      assert.equal(await broker.register("d".repeat(32), 4242), null);
+      assert.equal(ready, false);
     } finally {
       await new Promise<void>(resolve => { server.close(() => { resolve(); }); });
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a broker that ends unexpectedly is restarted, and the engine is registered with the new one", async () => {
+  const root = scratch();
+  try {
+    // The first broker dies a moment after it is ready; the second one stays.
+    // Each mints its own credential, so the host can tell them apart.
+    const libdir = standInBroker(root, `
+      send({ kind: "ready" });
+      reader(message => send({ kind: "credential", credential: String(runs).repeat(64).slice(0, 64), sessionHandle: message.sessionHandle }));
+      if (runs === 1) setTimeout(() => process.exit(1), 200);
+      setInterval(() => {}, 1000);`);
+    const { handle, events } = supervise(root, libdir);
+    const broker = await handle;
+    try {
+      const credentials: (string | null)[] = [];
+      const second = new Promise<void>(resolve => {
+        let seen = 0;
+        broker.onReady(() => {
+          seen += 1;
+          void broker.register("d".repeat(32), 4242).then(credential => {
+            credentials.push(credential);
+            if (seen === 2) resolve();
+          });
+        });
+      });
+      await second;
+      assert.deepEqual(credentials, ["1".repeat(64), "2".repeat(64)]);
+      assert.ok(events.some(line => /restarted/.test(line)), events.join(" | "));
+    } finally { broker.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a broker that cannot stay up is reported and not restarted forever", async () => {
+  const root = scratch();
+  try {
+    const libdir = standInBroker(root, "process.exit(1);");
+    const { handle, events } = supervise(root, libdir, { maxRestarts: 2, restartWindowMs: 60_000 });
+    const broker = await handle;
+    try {
+      const deadline = Date.now() + 10_000;
+      while (!events.some(line => /not restarting/.test(line)) && Date.now() < deadline)
+        await new Promise(resolve => setTimeout(resolve, 50));
+      assert.ok(events.some(line => /not restarting/.test(line)), events.join(" | "));
+      const runs = readFileSync(join(root, "runs"), "utf8").length;
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      // The first start and two restarts, and then nothing more.
+      assert.equal(runs, 3);
+      assert.equal(readFileSync(join(root, "runs"), "utf8").length, 3);
+    } finally { broker.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 stopping the supervisor stops its broker and does not restart it", async () => {
+  const root = scratch();
+  try {
+    const libdir = standInBroker(root, "send({ kind: 'ready' }); process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000);");
+    const { handle, events } = supervise(root, libdir);
+    const broker = await handle;
+    await readyOnce(broker);
+    broker.stop();
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    assert.equal(readFileSync(join(root, "runs"), "utf8").length, 1);
+    assert.ok(!events.some(line => /restarted/.test(line)));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 the audit's orphan -- a host killed outright takes its broker with it", async () => {
+  const root = scratch();
+  // The broker side runs only the real supervision channel -- no other handle on
+  // descriptor 3 that could end the process for a different reason and make
+  // this pass without proving anything. Its exit reason is recorded, so the
+  // test can tell "the host went away" from any other ending.
+  const libdir = join(root, "lib");
+  const entry = join(libdir, "dist", "src", "entry");
+  mkdirSync(entry, { recursive: true });
+  const supervision = pathToFileURL(join(process.cwd(), "dist/src/runtime/supervision-channel.js")).href;
+  const reasonFile = join(root, "exit-reason");
+  writeFileSync(join(entry, "broker.js"), `
+    import { writeFileSync } from "node:fs";
+    const { openSupervisionChannel } = await import(${JSON.stringify(supervision)});
+    const host = openSupervisionChannel({ fd: 3, onHostGone: reason => {
+      writeFileSync(${JSON.stringify(reasonFile)}, reason);
+      process.exit(0);
+    } });
+    if (!host) { writeFileSync(${JSON.stringify(reasonFile)}, "no channel"); process.exit(7); }
+    host.ready();
+    setInterval(() => {}, 1000);
+  `);
+  // The host is a real separate process running the real supervisor, so it can
+  // be killed with SIGKILL -- no handler, no cleanup, exactly the case a crash
+  // handler cannot cover.
+  const supervisor = pathToFileURL(join(process.cwd(), "dist/src/runtime/broker-supervisor.js")).href;
+  const host = spawn(process.execPath, ["--input-type=module", "-e", `
+    const { superviseBroker } = await import(${JSON.stringify(supervisor)});
+    const broker = await superviseBroker({ node: process.execPath, libdir: ${JSON.stringify(libdir)}, society: "probe",
+      runRoot: ${JSON.stringify(root)}, configPath: ${JSON.stringify(join(root, "config.json"))}, maxRestarts: 0 });
+    broker.onReady(() => process.stdout.write(String(broker.state.pid) + "\\n"));
+    setInterval(() => {}, 1000);
+  `], { stdio: ["ignore", "pipe", "inherit"] });
+  const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  let brokerPid = 0;
+  try {
+    brokerPid = await new Promise<number>((resolve, reject) => {
+      let out = "";
+      const timer = setTimeout(() => reject(new Error("the broker never became ready")), 10_000);
+      host.stdout!.on("data", chunk => {
+        out += String(chunk);
+        if (out.includes("\n")) { clearTimeout(timer); resolve(Number(out.trim())); }
+      });
+      host.once("exit", () => { clearTimeout(timer); reject(new Error("the host ended before its broker was ready")); });
+    });
+    // Alive, and still alive a moment later: the broker is not ending on its own.
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.ok(alive(brokerPid), "the broker ended before its host did");
+    assert.equal(existsSync(reasonFile), false, "the broker recorded an ending before its host died");
+
+    host.kill("SIGKILL");
+    const deadline = Date.now() + 5000;
+    while (alive(brokerPid) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+    assert.equal(alive(brokerPid), false, "the broker outlived the host that was killed");
+    // And it ended because the host went away, not for some other reason.
+    assert.match(readFileSync(reasonFile, "utf8"), /host/);
+  } finally {
+    if (host.exitCode === null && host.signalCode === null) host.kill("SIGKILL");
+    if (brokerPid > 0 && alive(brokerPid)) process.kill(brokerPid, "SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
 });

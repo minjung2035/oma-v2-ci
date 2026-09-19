@@ -1,6 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "6bef72aea9d1ba17f2adcdea8a10b6733b18947b74440199e92149f545362155",
+  "manifest": "4a8bd565cc7de5eeb73d60eb21218a4589afc2e9110d2d987918563bba5d27ca",
+  "report": "e997b13c7f592bc267620420ff195fdba030957f89e3e44624bcb44c73840c99",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -44,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "cc2904457e7d897a23127abab0c4e8ebc446f8ae33b9bc5ef62f2b51410f9ba0"
+      "sha256": "acb61638c289443f23ef77cea616cc561326100c4a003b109f73fbc1dca4c4ef"
     },
     {
       "path": "src/broker/composition.ts",
@@ -72,7 +73,11 @@
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "ef60648e3d14f73f44ebd0ed8a7226fd4c0a032d5f8459a23887131c76177043"
+      "sha256": "e66fdd14b69295a1ff36f59632667d49d700ecd2134a87478d2cbcdbc8cc441e"
+    },
+    {
+      "path": "src/broker/process-ancestry.ts",
+      "sha256": "571c856d72291b9d9aefed773ac5304723bd719125fdb44fc723240a4f81e0c0"
     },
     {
       "path": "src/broker/public-dispatcher.ts",
@@ -160,7 +165,7 @@
     },
     {
       "path": "src/cli/transport.ts",
-      "sha256": "de8813e829a5961878bd813c94df977549d2299ebe28e16d5a4c42d88d17274d"
+      "sha256": "13bdc3f87867647092eba65da5394af1c021fa07f9b80e300afb16a9d38062cd"
     },
     {
       "path": "src/config.ts",
@@ -276,7 +281,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "468d54a3ca23dee2fcb0ad985537cad8101e55b000a8ea66faaa5f8dfe4e3693"
+      "sha256": "00252dd3a0eb94fa317b958316195a73df4ec48ca91cd9db8f9c1517f0475061"
     },
     {
       "path": "src/entry/host.ts",
@@ -288,7 +293,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "00b5e5920238ec80f16221dacb3bae9e286e2f426214260b3e886e8412882f33"
+      "sha256": "8a80c32204a1bc4d3d4790da03ebe65b20cdd825b0f9cd10a1f9232de43d877b"
     },
     {
       "path": "src/entry/runner.ts",
@@ -296,11 +301,15 @@
     },
     {
       "path": "src/extension/batch-view.ts",
-      "sha256": "5ffc0267fe54d0a6e8c8a77eb2eb420cbb068d87b3368148a3d4e15dc02e986e"
+      "sha256": "225e5aa0d709a73e64bca326f29f630fd0cf9fd88736465ea8c1053df39b59aa"
+    },
+    {
+      "path": "src/extension/cli-process.ts",
+      "sha256": "8dd319519185e523a99f0ed8fbd198b24c1bef53cc3a96c03a8a7ca4f6508a34"
     },
     {
       "path": "src/extension/delivery.ts",
-      "sha256": "eddd69431a12b2e198fd1073562a0c9285310555bad99ae952ffb3b7befe43f9"
+      "sha256": "ce8f2ee1565a072477868f7e8b87271c691f9d74d00a240b1f0dec20043698f2"
     },
     {
       "path": "src/extension/inference-bridge.ts",
@@ -308,7 +317,11 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "0618bbcdd938cc2a8f720a13ad27ee1f165cd82b244ea6200fcc3d979521e4b8"
+      "sha256": "e3c75903510d4ccba3f75763a3bdc605b07ccca7c5d80b9c5dfee268cadccedd"
+    },
+    {
+      "path": "src/extension/principal-channel.ts",
+      "sha256": "2b05177e98208395abb93a1eb6fcfc6a3af937a4dfa079418aa53ecda6ab353f"
     },
     {
       "path": "src/extension/shared.ts",
@@ -468,7 +481,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "b60aaf6166e3ce9e976689a2fdb7310d13ee45b1b9bc95ac30d260a833ffa3c7"
+      "sha256": "ecc738d7f10c023994f86d5aeda31f3d8b4bdd7993dcb25db323594c2456bf7f"
     },
     {
       "path": "src/ports/ledger.ts",
@@ -480,7 +493,7 @@
     },
     {
       "path": "src/process/async.ts",
-      "sha256": "503df907ae047672ad698a40fa84ba0b33e7516462363c04331d04b31dcf22bf"
+      "sha256": "38ecdbcd11a25954087f4ad55157cb59d17494c2d163fb214a04c070a7b7ec61"
     },
     {
       "path": "src/process/command.ts",
@@ -500,7 +513,7 @@
     },
     {
       "path": "src/protocol/batch-view.ts",
-      "sha256": "4404d40ba94db6bf39e19c866d55d9a7a6232bee9cb9a7b5d7a8dc1e05657e47"
+      "sha256": "3c9ed42d2db878a204dfa45e122bec347e8a437664dd19886bee4ff9ba9ca8f0"
     },
     {
       "path": "src/protocol/byte-queue.ts",
@@ -509,6 +522,10 @@
     {
       "path": "src/protocol/channel.ts",
       "sha256": "ee8cf3c2aeeed039a24d23e37defed957a0b8848f1cdcfaf8a6aa87577566486"
+    },
+    {
+      "path": "src/protocol/host-channel.ts",
+      "sha256": "7173e0c981661c456d974fdbc027d5817430d1cbee385f1fb9370b37e9ea5d3e"
     },
     {
       "path": "src/protocol/jsonl.ts",
@@ -528,7 +545,7 @@
     },
     {
       "path": "src/protocol/principal-credential.ts",
-      "sha256": "17729b6603fafdec27ae1539d9b478522de77c3b569e5e893eed0fca898a52f2"
+      "sha256": "bc2890b281786611f43b9b5ca5f13bdfaa9ddd2705989cb2424bcd5f7e3c1a6c"
     },
     {
       "path": "src/protocol/receipt-codec.ts",
@@ -584,7 +601,7 @@
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
-      "sha256": "10a76586a20d904083c0f5692bab4564c006ffc9099da2bb006d78da7157916b"
+      "sha256": "64d3428c9f77211552189529942a1ea9fc3ad6737b3b305c1c7d500621836234"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -604,7 +621,7 @@
     },
     {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "5dfa7db47fd7913cb45b567a5a1058887096859d52077c873a4deca483f76ec5"
+      "sha256": "9a1366219aa858840f540dd7706f909570b6277b1e67a035dbdd59aa50dc70fe"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -619,12 +636,16 @@
       "sha256": "596f35cf86f2aca9cfc13bcc5ccae55426b2913eb49e0a1e51e37edc2d5dfd49"
     },
     {
+      "path": "src/runtime/principal-delivery.ts",
+      "sha256": "a3f2474d8e41ec27c2c5e4a3e6f9160e2e034cc7bcc3f86ff5a9406e71fd64f2"
+    },
+    {
       "path": "src/runtime/process-lock.ts",
       "sha256": "250285d5e0275dadb76085a5df060dfacb74355e657600feccae0d53b95f1972"
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "47551d5119941bbcfccace1660755a5cb2e6209e0db6cff9283920458858a0ab"
+      "sha256": "b262de13234d3b337b4adadf198997eef4ed0fef2a682d69042e65c84e586729"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
@@ -633,6 +654,10 @@
     {
       "path": "src/runtime/run-registry.ts",
       "sha256": "cac27d4182ea9b4ed4f666bbe56c673efa887573624fac8cdf58d286b514194a"
+    },
+    {
+      "path": "src/runtime/supervision-channel.ts",
+      "sha256": "6a0eff730824f32bb73ee6a8627dd2693fa5009a5c65a1dd136c129778e0856c"
     },
     {
       "path": "src/sandbox.ts",
@@ -764,7 +789,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "54f17ac6e8572f80211d6d411715a6998f51903b04872815d09a057556b529f7"
+      "sha256": "63d950b2e6093334041ca18cb2bda01ee2e489a20c4f2dd5e9ca75a32a194e37"
     },
     {
       "path": "src/tui/sources/extensions.ts",

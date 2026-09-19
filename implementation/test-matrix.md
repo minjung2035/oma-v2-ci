@@ -102,7 +102,7 @@
 | T107–T108 | 엔진 프리미티브 소유 경계, spawn 경로 대칭 |
 | T109–T110 | 제품 표면의 적대적 입력, core 결합 |
 | T111–T113 | 실제 프로세스 경계: SIGKILL, TTY, 엔진 투영 |
-| T114–T119 | Principal endpoint와 실제 tool 경로, 제품 표면의 bounded 읽기, CI lane·측정 증거의 정직성, 진입점 배선 |
+| T114–T119 | Principal 권한·credential 경계와 실제 tool·delivery 경로, 감독·재시작·orphan, 제품 표면의 bounded 읽기, CI lane·측정 증거의 정직성, 진입점 배선 |
 
 | ID / 요구 | Given → When → Then |
 |---|---|
@@ -128,13 +128,13 @@
 | T110 / TUI-019, TSP-002 | 생성된 설정과 role 투영 → core의 닫힌 validator와 loader → 그대로 통과하고, capability·resource·limit이 core 어휘 안에 있으며, 자식 capability가 부모 delegable을 넘지 않고, 제품 표면이 method 집합을 넓히지 않음 |
 | T107 / TUI-020 | 제품 표면 source 전체 → 정적 검사 → 엔진 프리미티브 import는 선언된 소유자에서만 일어나고, 엔진의 절단·줄바꿈·화면 제어는 들여오지 않음; 선언되지 않은 bound·bare Error·비exhaustive closed union 0건 |
 | T108 / TUI-004,017 | Resident와 Principal의 spawn 경로 → 각각이 엔진에 넘기는 값 비교 → extensions(digest 포함)·projection·role prompt·agent 디렉터리가 양쪽 동일; prompt 없는 role은 빈 flag를 넣지 않음 |
-| T114 / TUI-004, AUTH-003, IPC-011, PR-001 | 실제 broker와 **실제 trusted extension이 등록한 tool** → attach 없는 요청·위조 credential은 `AUTH_FAILED`, 등록되지 않은 session handle은 `ATTACH_CONFLICT`, 등록된 session만 public method 응답. `oma_status`/`oma_mail_send`/`oma_mail_read`/`oma_mail_ack` 네 개가 모두 `env -i` 경로를 지나 동작하고, 환경에서 각 필수 항목을 하나씩 빼면 등록이 사라지거나 호출이 거절된다. credential은 어떤 파일에도 기록되지 않고, 이전 run의 credential은 아무 권한도 주지 않으며, 등록이 없는 broker는 endpoint 자체를 열지 않는다 |
-| T115 / TUI-002, PR-001 | 늦게 publish하는 broker, 전혀 publish하지 않는 broker, 이미 다른 host가 소유한 broker → `superviseBroker` → 첫 번째는 credential을 실제로 기다려서 받고, 나머지 둘은 무한정 붙잡지 않고 부재로 끝난다 |
+| T114 / TUI-004, AUTH-003, IPC-011, PR-001, PR-002 | 실제 broker와, 실제 trusted extension을 로드하고 host의 socketpair를 받은 stand-in engine, 그 engine이 띄우는 실제 CLI → host의 자식이 아닌 engine 등록은 거절, credential은 어떤 파일·engine 환경·CLI 환경에도 없고 socket으로만 도착하며 `/proc`으로 다시 열 수 없다. 올바른 credential·handle을 가진 비자손 프로세스의 attach는 `AUTH_FAILED`, 다른 handle은 `ATTACH_CONFLICT`, 재등록과 broker 교체 뒤의 이전 credential은 무효. OMA tool 네 개가 engine에서 동작하고, Principal에게 온 mail은 idle session에 전달돼 receipt와 함께 완료되며, boundary 없이 끝난 turn은 back-off 뒤 재전달된다. engine의 자식이나 model 쪽 연결은 batch를 준비·완료할 수 없다 |
+| T115 / TUI-002, PR-001, LIFE-006 | supervisor와 channel을 말하는 stand-in broker → 준비 신호 전에는 등록 불가, 등록은 broker가 만든 credential을 돌려주고 거절은 즉시 응답, 응답 없는 broker는 한도 안에서 부재, 다른 host의 broker는 준비·credential 없음, 예기치 않게 끝난 broker는 재시작돼 새 credential로 재등록되고 재시작은 한도가 있다. 실제 supervisor를 돌리는 host 프로세스를 SIGKILL하면 실제 supervision channel을 쓰는 broker가 host 부재를 이유로 스스로 끝난다 |
 | T115 / TUI-011 | 심볼릭 링크·디렉터리·헤더 한도를 넘는 메시지가 섞인 Maildir → Mail 화면 읽기 → 링크는 따라가지 않고 파일 전체를 버퍼링하지 않으며, unread 수와 목록의 unread 행 수가 같고, 정렬은 파일 이름이 아니라 도착 시각을 따른다 |
 | T116 / VAL-002 | CI workflow 원문과 lane 정의 → 정적 대조 → 어떤 lane도 자기 예산보다 먼저 죽지 않고, job 시계도 포함한 check들의 합보다 먼저 울리지 않으며, runner가 제공하지 않는 systemd lane은 NOT_RUN으로 기록되고, 봉인 시험이 필요로 하는 도구는 설치되며, 생성기 이전에 관측한 stale inventory가 실패로 남는다 |
 | T118 / TUI-021 | broker가 실제로 기록한 status view와 제품의 reader → 같은 파일을 양쪽에 통과 → writer의 출력이 reader에 그대로 받아들여지고, 선언한 한도를 넘는 view나 링크는 메모리에 올리지 않고 거절하며, 소유자만 읽을 수 있다 |
-| T119 / TUI-002, PR-001 | 실제 `src/entry/oma.ts`를 통제된 모듈 경계에서 실행 → broker 등록·credential 대기·engine 기동의 순서와 값 관찰 → session handle이 broker보다 먼저 존재하고, engine은 credential이 도착한 뒤에만 시작하며, engine이 받는 환경은 `principalEnvironment`가 만든 그것이고, broker가 없거나 남의 것이면 이유가 화면에 남는다 |
-| T117 / R35, A-008 | skip·todo·cancelled가 섞인 실행 요약과 rows/SUM/cloc version이 어긋난 측정 산출물 → 정적 대조 → 실행하지 않은 test가 하나라도 있으면 suite는 통과가 아니고, 총계가 자기 rows의 합이 아니거나 두 산출물이 다른 측정 실행에서 나왔으면 inventory gate가 거절한다 |
+| T119 / TUI-002, PR-001, PR-002, LIFE-006 | 실제 `src/entry/oma.ts`를 통제된 모듈 경계에서 실행 → engine은 broker를 기다리지 않고 owner가 만든 환경(secret 없음)으로 시작하고, broker가 준비될 때마다 같은 handle로 등록돼 새 credential을 받으며, 거절·남의 broker·시작 실패는 화면에 이유가 남고, 크래시는 broker를 멈추고, delivery는 broker 준비 뒤와 turn이 끝날 때마다 돈다 |
+| T117 / R35, A-008 | skip·todo·cancelled가 섞인 실행 요약, 그리고 행·SUM·cloc 버전이 서로 맞지만 숫자는 위조된 측정 산출물 → 대조와 고정 버전 cloc 재측정 → 실행하지 않은 test가 하나라도 있으면 suite는 통과가 아니고, 재측정 값과 다른 LOC는 거절되며, 재측정하지 못한 결과는 `SOURCE_BOUND`로 부르지 않고, validation 기록이 인용하는 수치는 산출물과 같다 |
 | T106 / TUI-017,019 | 설정 없는 빈 프로젝트 디렉터리 → `oma` 실행 → 초기화 명령 없이 society를 디렉터리에서 유도하고 실제 설정 파일 생성; 생성값은 bounded하고 Control Panel에서 수정 가능; Resident에 `code.integrate` 없음; 사용자 `~/.pi` 참조 0건 |
 
 **MUST [TEST-003]** default core에서 T01–T74 및 T77을 적용하고, T75/T76은 해당 optional 활성 시 필수다. S-03 등 미결정 gate 때문에 test oracle의 version-specific 부분을 완성할 수 없으면 test를 skip해서 release 통과로 계산하지 않는다.

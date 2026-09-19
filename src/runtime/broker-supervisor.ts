@@ -1,22 +1,28 @@
-/** TUI-002: the product starts its own society.
+/** TUI-002/LIFE-006: the product starts, owns and keeps its own society.
  *
  * `oma` is one command, so the broker cannot be something the user starts
- * separately. This owns that child: it declines to start a second broker when
- * one is already listening, and it stops the one it started when the product
- * exits. A broker it did not start is never stopped — another `oma` owns it.
+ * separately. This owns that child:
+ *
+ *  - It declines to start a second broker when one is already listening. A
+ *    broker it did not start is never stopped and never supervised -- another
+ *    `oma` owns it -- and it hands this process no Principal authority.
+ *  - It holds the broker's supervision channel. The broker says on it when its
+ *    endpoints are listening, which is the only readiness signal worth
+ *    waiting for; a pid appearing is not one. The same channel carries the
+ *    Principal engine's registration and credential, and its closing is how
+ *    the broker learns this process died, however it died.
+ *  - When a broker it started ends unexpectedly it starts another, and tells
+ *    its listener each time one becomes ready, so the Principal is registered
+ *    with the new broker and receives the new credential. Restarts are bounded:
+ *    a broker that cannot stay up is reported, not restarted forever.
  *
  * The singleton guarantee is not here: the broker takes an exclusive lock on
- * its own run root and refuses to run twice. This only avoids the pointless
- * spawn, and reports the outcome rather than assuming either way.
+ * its own run root and refuses to run twice.
  */
-import { connect } from "node:net";
+import { connect, type Socket } from "node:net";
 import { join } from "node:path";
 import { spawnSupervisedService, type ChildProcess } from "../process/async.js";
-import { PRINCIPAL_SESSION_ENV, isPrincipalCredential } from "../protocol/principal-credential.js";
-
-/** Where the broker writes its credential. Descriptors 0-2 are the ordinary
- * streams; this parent attaches one more. */
-const PRINCIPAL_CREDENTIAL_FD = 3;
+import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HostChannelReader, encodeHostMessage } from "../protocol/host-channel.js";
 
 export type BrokerState =
   | { readonly kind: "already-running" }
@@ -25,14 +31,15 @@ export type BrokerState =
 
 export interface BrokerHandle {
   readonly state: BrokerState;
-  /** PR-001: the credential this broker minted for the session that was
-   * registered with it, or null when there is none to have — the broker was
-   * already running and belongs to another host, it failed to start, or it
-   * ended before publishing. Awaiting it is also the readiness barrier: the
-   * broker publishes only once its Principal endpoint is listening, so a
-   * credential in hand means the endpoint is there. */
-  readonly credential: Promise<string | null>;
-  /** Stops only a broker this handle started. */
+  /** Called each time a broker this handle started reports its endpoints are
+   * listening: at first start and after every restart. Never called for a
+   * broker this handle did not start. */
+  onReady(listener: () => void): void;
+  /** Names the engine this process started for the Principal and returns the
+   * credential the current broker minted for it, or null when there is no
+   * broker of this process's to ask, or it refused. */
+  register(sessionHandle: string, pid: number): Promise<string | null>;
+  /** Stops only a broker this handle started, and stops restarting it. */
   stop(): void;
 }
 
@@ -55,98 +62,153 @@ export interface SuperviseOptions {
   readonly society: string;
   readonly runRoot: string;
   readonly configPath: string;
-  /** The session this host will run, named before the broker starts so the
-   * broker knows which one to expect rather than recording whichever attaches
-   * first. Omitted, no Principal endpoint is opened at all. */
-  readonly sessionHandle?: string;
-  /** How long to wait for the credential before giving up on it. A broker that
-   * is still starting has not failed, but the product cannot hold its terminal
-   * indefinitely for one. */
-  readonly readyTimeoutMs?: number;
   /** Receives one line whenever the child says something or ends. */
   readonly onEvent?: (line: string) => void;
+  /** Restart policy: at most this many unexpected ends within the window. */
+  readonly maxRestarts?: number;
+  readonly restartWindowMs?: number;
+  /** How long a registration may wait for the broker's answer. */
+  readonly registerTimeoutMs?: number;
+}
+
+interface Generation {
+  readonly child: ChildProcess;
+  readonly channel: Socket;
+  ready: boolean;
+  /** The registration awaiting the broker's answer, if any. */
+  answer: ((credential: string | null) => void) | null;
 }
 
 export async function superviseBroker(options: SuperviseOptions): Promise<BrokerHandle> {
-  const none = Promise.resolve<string | null>(null);
   if (await brokerListening(options.runRoot))
-    return { state: { kind: "already-running" }, credential: none, stop: () => {} };
-
-  let child: ChildProcess;
-  try {
-    // The broker derives its own state and run roots from the environment, so
-    // it is handed this process's environment rather than a reduced one.
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
-    if (options.sessionHandle !== undefined) env[PRINCIPAL_SESSION_ENV] = options.sessionHandle;
-    child = spawnSupervisedService(options.node, [join(options.libdir, "dist/src/entry/broker.js"),
-      "--society", options.society, "--config", options.configPath], env,
-      options.sessionHandle !== undefined);
-  } catch (error) {
-    return {
-      state: { kind: "unavailable", reason: error instanceof Error ? error.message : String(error) },
-      credential: none, stop: () => {},
-    };
-  }
+    return { state: { kind: "already-running" }, onReady: () => {}, register: async () => null, stop: () => {} };
 
   const say = options.onEvent ?? (() => {});
-  let ended = false;
-  // The broker's stderr is its operational channel. Losing it would turn a
-  // refused start into an unexplained absence of status.
-  child.stderr?.setEncoding("utf8");
-  child.stderr?.on("data", chunk => {
-    for (const line of String(chunk).split("\n")) if (line.trim().length > 0) say(line.trim());
-  });
-  child.once("exit", (code, signal) => {
-    ended = true;
-    // An expected stop during shutdown still reports, because a broker that
-    // died on its own and one the product stopped look identical afterwards.
-    say(`broker ended (${signal ?? `code ${code ?? "unknown"}`})`);
-  });
-  child.once("error", error => { ended = true; say(`broker failed: ${error.message}`); });
+  const readyListeners: (() => void)[] = [];
+  const maxRestarts = options.maxRestarts ?? 5;
+  const windowMs = options.restartWindowMs ?? 60_000;
+  const restarts: number[] = [];
+  let stopping = false;
+  let current: Generation | null = null;
+
+  const start = (): Generation | string => {
+    let child: ChildProcess;
+    try {
+      // The broker derives its own state and run roots from the environment, so
+      // it is handed this process's environment rather than a reduced one. The
+      // channel marker names a descriptor; nothing secret is ever put here.
+      const env: Record<string, string> = {};
+      for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
+      env[HOST_CHANNEL_ENV] = String(HOST_CHANNEL_FD);
+      child = spawnSupervisedService(options.node, [join(options.libdir, "dist/src/entry/broker.js"),
+        "--society", options.society, "--config", options.configPath], env, true);
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    const channel = child.stdio[HOST_CHANNEL_FD];
+    if (child.pid === undefined || !channel || !("write" in channel)) {
+      child.kill("SIGKILL");
+      return "the broker process did not start";
+    }
+    const generation: Generation = { child, channel: channel as Socket, ready: false, answer: null };
+    const reader = new HostChannelReader(message => {
+      if (current !== generation) return;
+      switch (message.kind) {
+        case "ready":
+          generation.ready = true;
+          for (const listener of readyListeners) listener();
+          return;
+        case "credential":
+          generation.answer?.(message.credential);
+          generation.answer = null;
+          return;
+        case "refused":
+          say("broker refused the principal engine");
+          generation.answer?.(null);
+          generation.answer = null;
+          return;
+        case "session":
+          // Only a host sends this. A broker that does is not the one we
+          // started, or not behaving as one; it is not trusted further.
+          say("broker sent a message only a host sends; stopping it");
+          child.kill("SIGTERM");
+          return;
+      }
+    }, reason => { say(`broker channel broken: ${reason}`); child.kill("SIGTERM"); });
+    generation.channel.on("data", chunk => reader.push(chunk as Buffer));
+    generation.channel.on("error", () => {});
+    // The broker's stderr is its operational channel. Losing it would turn a
+    // refused start into an unexplained absence of status.
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", chunk => {
+      for (const line of String(chunk).split("\n")) if (line.trim().length > 0) say(line.trim());
+    });
+    child.once("error", error => { say(`broker failed: ${error.message}`); });
+    child.once("exit", (code, signal) => {
+      generation.answer?.(null);
+      generation.answer = null;
+      say(`broker ended (${signal ?? `code ${code ?? "unknown"}`})`);
+      if (current !== generation || stopping) return;
+      current = null;
+      const now = Date.now();
+      while (restarts.length > 0 && now - restarts[0]! > windowMs) restarts.shift();
+      if (restarts.length >= maxRestarts) {
+        say(`broker ended ${restarts.length} times within ${Math.round(windowMs / 1000)}s; not restarting it`);
+        return;
+      }
+      restarts.push(now);
+      // Doubling back-off within the window, so a broker that fails at once
+      // does not spin; the first restart is quick because most ends are not.
+      const delay = Math.min(250 * 2 ** (restarts.length - 1), 8000);
+      setTimeout(() => {
+        if (stopping) return;
+        const next = start();
+        if (typeof next === "string") { say(`broker could not be restarted: ${next}`); return; }
+        current = next;
+        say("broker restarted");
+      }, delay).unref?.();
+    });
+    return generation;
+  };
+
+  const first = start();
+  if (typeof first === "string")
+    return { state: { kind: "unavailable", reason: first }, onReady: () => {}, register: async () => null, stop: () => {} };
+  current = first;
 
   return {
-    state: child.pid === undefined
-      ? { kind: "unavailable", reason: "the broker process did not start" }
-      : { kind: "started", pid: child.pid },
-    credential: options.sessionHandle === undefined ? none : publishedCredential(child, options.readyTimeoutMs ?? 30000),
-    stop: () => { if (!ended) child.kill("SIGTERM"); },
+    state: { kind: "started", pid: first.child.pid! },
+    onReady(listener) {
+      readyListeners.push(listener);
+      if (current?.ready) listener();
+    },
+    register(sessionHandle, pid) {
+      const generation = current;
+      if (generation === null || !generation.ready || stopping) return Promise.resolve(null);
+      if (generation.answer !== null) generation.answer(null);
+      return new Promise<string | null>(resolve => {
+        const timer = setTimeout(() => {
+          if (generation.answer === settle) generation.answer = null;
+          say("broker did not answer the principal registration");
+          resolve(null);
+        }, options.registerTimeoutMs ?? 10_000);
+        timer.unref?.();
+        const settle = (credential: string | null): void => { clearTimeout(timer); resolve(credential); };
+        generation.answer = settle;
+        try { generation.channel.write(encodeHostMessage({ kind: "session", sessionHandle, pid })); }
+        catch (error) {
+          generation.answer = null;
+          settle(null);
+          say(`principal registration could not be sent: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      });
+    },
+    stop() {
+      stopping = true;
+      const generation = current;
+      current = null;
+      if (generation !== null && generation.child.exitCode === null && generation.child.signalCode === null)
+        generation.child.kill("SIGTERM");
+    },
   };
-}
-
-/** Reads the one line the broker writes on the channel this parent holds.
- *
- * Nothing else is ever sent on it, so a line that is not a credential means the
- * channel is not what this expects and is refused rather than passed on. The
- * child exiting, or never answering, resolves to absence: the product then runs
- * a Principal with no society authority and says so, which is what actually
- * happened.
- */
-function publishedCredential(child: ChildProcess, timeoutMs: number): Promise<string | null> {
-  const channel = child.stdio[PRINCIPAL_CREDENTIAL_FD];
-  if (!channel || !("setEncoding" in channel)) return Promise.resolve(null);
-  return new Promise<string | null>(resolve => {
-    let text = "";
-    let settled = false;
-    const finish = (value: string | null): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(value);
-    };
-    const timer = setTimeout(() => finish(null), timeoutMs);
-    timer.unref?.();
-    channel.setEncoding("utf8");
-    channel.on("data", chunk => {
-      text += String(chunk);
-      if (Buffer.byteLength(text) > 4096) { finish(null); return; }
-      const end = text.indexOf("\n");
-      if (end < 0) return;
-      const line = text.slice(0, end).trim();
-      finish(isPrincipalCredential(line) ? line : null);
-    });
-    channel.once("error", () => finish(null));
-    channel.once("end", () => finish(null));
-    child.once("exit", () => finish(null));
-  });
 }

@@ -4,7 +4,7 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 기준 HEAD `1b801f8`(작업 트리 포함), 실행일 2026-09-19. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 기준 HEAD `7249eb7`(작업 트리 포함), 실행일 2026-09-19. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
 ### 실행 결과
 
@@ -14,10 +14,10 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1038/1038 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1084/1084 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
-| `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` |
-| `node scripts/loc.mjs` | **208 files / 19,163 code LOC** |
+| `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
+| `node scripts/loc.mjs` | **215 files / 19,941 code LOC** |
 
 ### 현재 범위
 
@@ -188,27 +188,60 @@ unavailable로 남는다(TRACE-002). 이것은 아래 "남은 것"의 PR-002 항
 - **LOC/hash 증거가 source에 묶여 있지 않았다.** 파일 목록은 최신인데 측정 기록은 21개 적은 집합의 것이었고, `src/pi-extension.ts`가 33줄인데 657 code LOC로 적혀 있었다. `check:inventory`가 이제 기록된 sha256을 현재 바이트와 대조하므로 같은 드리프트는 발생 즉시 실패한다.
 - **peer 신원이 Node 비공개 필드에 의존한다.** 없앨 수는 없지만(공개 API가 없다) `src/leaf.ts`로 옮겨 다른 비공개 primitive와 함께 한곳에서 이름을 갖게 했고, 실제 accepted socket에서 `SO_PEERCRED`가 이 프로세스를 가리키는지 검사한다.
 
+### Principal 제품 경로: 세 번째 감사에서 닫은 것
+
+**credential이 여전히 같은 UID의 프로세스에 노출돼 있었다.** 두 번째 수정은 파일을 없앴지만 credential을 engine의 초기 환경에 넣었다. 
+이 host(Yama scope 1)에서 실측하면 같은 UID의 비조상 프로세스는 `/proc/<pid>/environ`을 **읽을 수 있고**, 상속된 pipe를 
+`/proc/<pid>/fd/N`으로 **다시 열 수 있으며**, `/proc/<pid>/mem`은 읽지 못하고, 상속된 socket은 다시 열지 못한다(ENXIO). 
+그래서 secret은 environment에서 완전히 빼고 socketpair로만 옮기며 메모리에만 둔다: broker→host는 spawn 때 연 socketpair, 
+host→engine도 socketpair, 확장→CLI도 CLI의 descriptor 3 socketpair다. engine의 `exec`은 stdin을 닫고 추가 descriptor를 넘기지 
+못하므로 확장이 CLI를 직접 띄우고(`src/extension/cli-process.ts`, 새 subprocess owner), 환경은 상속 없이 명시한 것만 준다.
+
+secret을 숨기는 것만으로는 부족하므로 attach에 **조상 검사**를 더했다. 연결한 프로세스가 등록된 engine의 자손이어야 하며, 
+engine은 pid와 시작 시각으로 고정한다. engine 자체도 host의 자식이어야 등록된다. 비자손 프로세스가 engine의 자손이 되려면 
+engine을 ptrace해야 하고 Yama scope ≥1은 이를 거부한다. scope 0 host에서는 어떤 user-space 검사도 같은 UID의 두 프로세스를 
+구별하지 못하며, 이는 host의 성질로 적어 둔다. T114의 "감사의 공격" 시험이 올바른 credential과 handle을 가진 비자손 프로세스를 
+실제로 거절하고, 조상 검사를 끄면 그 시험이 실패하는 것을 확인했다.
+
+**TUI가 비정상 종료하면 broker가 남았다.** host가 broker에 넘긴 socketpair가 곧 생존 신호다. host가 어떻게 죽든 커널이 descriptor를 
+닫으므로 broker는 그것을 보고 스스로 멈춘다. T115가 실제 supervisor를 돌리는 host 프로세스를 SIGKILL해서 broker가 "host 부재"를 
+이유로 끝나는 것을 확인한다. 이 시험의 첫 버전은 stand-in이 다른 이유로 먼저 종료해 **잘못된 이유로 통과**하고 있었다. 종료 이유를 
+파일로 남기게 고쳤고, 종료 감지를 끄면 시험이 실패하는 것을 확인했다.
+
+**broker 사망·재시작 뒤 복구가 없었다.** supervisor는 준비 신호("endpoint가 listening")를 기다리며 pid 등장을 준비로 보지 않는다. 
+engine은 broker를 기다리지 않고 먼저 뜨고, broker가 준비될 때마다 같은 handle로 재등록되어 새 credential을 받는다. broker가 
+예기치 않게 끝나면 한도 안에서 재시작한다. 이전 credential은 무효다.
+
+**PR-002를 구현했다.** host가 idle한 session에 대해 `batch.prepare`를 호출하고, 확장이 batch를 custom message로 제시하고, turn이 
+`stop`으로 끝나면 확장이 boundary를 알리고, host가 receipt를 쓰고 `batch.complete`를 호출한다. 준비와 완료는 host endpoint에서 host 
+pid에게만 서빙되므로 model 쪽에서는 완료할 수 없다. 구현 중 두 가지를 더 찾았다. core의 batch view 코덱이 수신자를 Resident 이름으로만 
+허용해 Principal에게는 batch를 만들 수 없었고(코덱과 확장 미러를 함께 고쳤다), 확장의 delivery 핸들러는 오류로 끝난 turn의 batch를 
+영원히 pending으로 붙잡아 오래 사는 Principal session에서 이후 전달을 모두 막았다(고쳤고, 되살리면 T114의 재시도 시험이 실패한다). 
+Principal session 디렉터리는 receipt가 다른 agent와 같은 방식으로 찾을 수 있도록 `agents/principal/runner/sessions`로 옮겼다. 
+출시 전이라 기존 `principal/private/sessions`의 대화 기록은 옮기지 않는다.
+
+**`oma_mail_read`의 bounded read가 TOCTOU였다.** 크기 확인 뒤 파일 전체를 읽었다. 이제 측정한 크기만큼만 읽고, 한 바이트를 더 읽어 
+성장 여부를 보고, 식별자를 다시 비교한다. 시험은 writer가 파일을 한도 위아래로 계속 오가게 하면서 읽는다. 옛 구현으로 되돌리면 
+5번 모두 한도 4096바이트를 넘는 4416–4864바이트를 돌려준다. 이 시험도 첫 버전은 writer가 시작하기 전에 읽기가 끝나 아무것도 
+검증하지 않았고, 두 번째 버전은 writer가 잘못된 오프셋에 써서 한도를 넘지 않았다. 둘 다 역검증의 **실패 사유**를 보고 찾았다.
+
+**LOC `SOURCE_BOUND`가 값 자체를 묶지 않았다.** hash 기록이 이제 report의 digest를 담아 report만 따로 고칠 수 없고, `check:inventory`는 
+고정 버전 cloc(2.08)이 있으면 source를 다시 측정해 모든 값을 비교한다. 재측정하지 못하면 `CONSISTENT_NOT_REMEASURED`로 부르고 
+`SOURCE_BOUND`라 하지 않는다. CI는 cloc 2.08 릴리스를 digest로 고정해 설치하고, 재측정을 필수로 하며, 재생성한 값이 커밋과 다르면 
+실패한다. CI에 cloc 설치 단계가 아예 없어 `loc` 단계가 항상 실패하던 문제도 이것으로 닫혔다.
+
 ### 남은 것
 
-- **PR-002의 후반부가 미구현이다.** `host.principalRelay`는 new→cur 이동과 pending 집계까지 하고, 그 앞부분은 규범대로 
-  동작한다. 구현되지 않은 것은 "UI reconnect 시 extension이 pending을 조회하여 제한된 batch를 인수한다"는 절이다. 이것은 
-  숨겨진 결함이 아니라 아직 짓지 않은 기능이며, 절반만 지으면 안 된다: `BatchCoordinator.prepare()`는 actor에 일반적이라 
-  Principal에도 그대로 쓸 수 있지만, `complete()`는 runner가 쓰는 receipt(`runnerReceiptPathAt`)와 adapter의 boundary 
-  evidence를 요구하고 `batch.complete`는 runner channel에서 cgroup으로 인증한다. 따라서 prepare만 열면 완료되지 않는 
-  prepared batch가 남아 이후 준비를 막는다. 필요한 것은 Resident의 delivery pipeline을 TUI가 소유한 session에 대해 
-  다시 거는 일 전체다: batch view 기록, `/oma-deliver` 발행, RPC 스트림에서 boundary notice 수신, receipt 기록, 
-  principal channel의 완료 경로. 여기에는 Human이 turn 도중 터미널을 닫았을 때 prepared batch를 어떻게 다루는지라는 
-  설계 질문이 남아 있고, spec은 그것을 S-03/S-06에 묶어 두었다.
-- **broker를 `oma`가 시작하지 않은 배포에서는 Principal이 society에 요청할 수 없다.** endpoint는 등록된 session이 있을 때만
-  열리고, 등록은 broker를 시작하는 host만 할 수 있다. systemd unit이 broker를 띄운 프로필이나 이미 다른 `oma`가 소유한
-  society에서는 Principal engine이 authority 없이 시작하며 화면이 그 이유를 말한다. Dashboard·Mail·Config는 그대로
-  동작한다. TUI-002가 "한 명령이 society를 시작한다"고 정한 경로에서는 이 조건이 발생하지 않는다.
-- **broker 재시작 시 credential rotation은 없다.** 실행 중인 Principal engine의 환경은 나중에 바꿀 수 없으므로, broker가 
-  재시작하면 그 session은 `oma`를 다시 띄울 때까지 society에 요청할 수 없다. 이전 run의 credential이 아무 권한도 주지 
-  않는다는 것은 `T114`가 검사한다. LIFE-006이 요구하는 재연결은 PR-002의 delivery 경로와 같은 작업으로 다룬다.
+- **broker를 `oma`가 시작하지 않은 배포에서는 Principal이 society에 요청할 수 없다.** Principal endpoint는 supervision channel이 
+  있을 때만 열린다. systemd unit이 broker를 띄운 프로필이나 이미 다른 `oma`가 소유한 society에서는 Principal engine이 authority 없이 
+  시작하며 화면이 그 이유를 말한다. Dashboard·Mail·Config는 그대로 동작한다. TUI-002가 정한 "한 명령" 경로에서는 발생하지 않는다.
+- **Yama ptrace scope 0 host**에서는 같은 UID의 프로세스가 engine을 trace할 수 있으므로 Principal 권한 경계가 성립하지 않는다.
+- **S-03**: 실행 중인 turn 안에서의 delivery boundary 귀속은 여전히 미결이다. Principal delivery는 idle session에만 전달해 이 질문에 
+  의존하지 않는다. 따라서 Human이 긴 turn을 진행하는 동안에는 전달이 그 turn이 끝날 때까지 기다린다.
 - TUI/TSP requirement의 trace 상태는 `unverified`다. owner/callPath/negative test는 연결돼 있으나 compliance 기록 절차를 거치지 않았다.
 - **비용 상한**: relay가 chokepoint를 되돌려주지만 stream을 해석하지 않으므로 비용 상한은 여전히 OMA 계약이 아니다(`INF-005`).
-- 봉인은 host에 `bwrap`과 `/usr`이 있어야 한다. 없는 host에서 T117은 이유를 적고 skip되며, 제품은 `installation.rootfs`를 `/`로 두는 비봉인 선언으로만 돌 수 있다.
+- 봉인은 host에 `bwrap`과 `/usr`이 있어야 한다. 없는 host에서 T117은 이유를 적고 skip되며 — 이제 skip은 `npm test` 실패다 — 
+  제품은 `installation.rootfs`를 `/`로 두는 비봉인 선언으로만 돌 수 있다.
 - node/git을 포함한 OS별 배포본은 별도 작업이다.
 
 ### A-008 LOC gate — OPEN
@@ -265,7 +298,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **208 files / 19,163 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **215 files / 19,941 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

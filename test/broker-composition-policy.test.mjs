@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fstatSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { Script } from "node:vm";
 import { spawn } from "node:child_process";
@@ -19,15 +19,13 @@ async function compose(environment) {
   // Retain the already-existing main promise instead of discarding it with void.
   const executable = compiled.replace("void main().catch", "main().catch");
   const calls = [], paths = [], observation = { value: true, error: null };
+  let supervision = null;
   let constructorGoal;
   const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
     quota: { storageBytes: 1024 }, integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
   const modules = {
     "node:path": path,
-    // The real fstatSync: the entry asks what descriptor 3 actually is before
-    // it will register a session, and a stub that simply lacked the function
-    // would make this pass for the wrong reason.
-    "node:fs": { mkdirSync() {}, fstatSync, writeSync() {} },
+    "node:fs": { mkdirSync() {} },
     "../store.js": { SCHEMA_PATH: "schema", Store: class {
       constructor() { calls.push("Store"); } close() {} listAgents() { return []; } getAgent() { return null; }
     } },
@@ -50,8 +48,8 @@ async function compose(environment) {
       async sweep() { calls.push("activate"); }
     } },
     "../broker.js": { Broker: class {
-      constructor(_store, _mail, _units, _views, _lifecycle, _git, _reconcile, options, _limits, _lock, principalSession) {
-        calls.push("Broker"); paths.push({ ...options, principalSession });
+      constructor(_store, _mail, _units, _views, _lifecycle, _git, _reconcile, options, _limits, _lock, principalHost) {
+        calls.push("Broker"); paths.push({ ...options, principalHost });
       }
       async start() { calls.push("listen"); } notifyReady() { calls.push("notify"); return true; }
     } },
@@ -72,10 +70,12 @@ async function compose(environment) {
     "../authority.js": { resolvedSpecOf: value => value },
     "../domain/errors.js": { StoreError: class extends Error {} },
     "../ids.js": { isValidSocietyName: value => value === "fixture" },
-    "../protocol/principal-credential.js": {
-      PRINCIPAL_SESSION_ENV: "OMA_PRINCIPAL_SESSION",
-      isPrincipalSessionHandle: value => typeof value === "string" && /^[0-9a-f]{32}$/.test(value),
-    },
+    "../protocol/host-channel.js": { HOST_CHANNEL_ENV: "OMA_HOST_CHANNEL", HOST_CHANNEL_FD: 3 },
+    "../runtime/supervision-channel.js": { openSupervisionChannel: options => {
+      calls.push(`supervision:${options.fd}`);
+      supervision = options;
+      return { hostPid: 4242, ready() {}, grant() {}, refuse() {}, onSession() {} };
+    } },
   };
   const process = { argv: ["node", "broker", "--society", "fixture"], env: { ...(environment ?? {}) }, exitCode: 0, once() {},
     exit(code) { throw new Error(`unexpected process.exit(${code})`); } };
@@ -86,7 +86,7 @@ async function compose(environment) {
     },
   });
   assert.equal(process.exitCode, 0, "entrypoint must complete without the startup failure path");
-  return { calls, paths, observation, constructorGoal };
+  return { calls, paths, observation, constructorGoal, supervision };
 }
 
 test("P1 composition root: Git exists when Lifecycle receives its context reader", async () => {
@@ -116,27 +116,32 @@ test("P1 composition root: startup still wires recovery before listen, notify an
   assert.ok(calls.indexOf("storage-quota") < calls.indexOf("Store"));
 });
 
-test("P1 composition root: a Principal endpoint exists only for a host that registered a session", async () => {
-  // PR-001. The registration is what the broker is given, so this is the one
-  // place that decides whether an endpoint exists at all -- a broker started by
-  // systemd or by hand has no host to hand a credential to, and opening an
-  // endpoint for nobody would be a surface with no legitimate caller.
-  const unregistered = await compose();
-  assert.equal(unregistered.paths.at(-1).principalSession, undefined);
+test("P1 composition root: only a broker the product started has a Principal endpoint", async () => {
+  // PR-001: a broker started by systemd or by hand has no host to register a
+  // session with, and opens nothing a stranger could attach to.
+  const unsupervised = await compose();
+  assert.equal(unsupervised.paths.at(-1).principalHost, undefined);
+  assert.ok(!unsupervised.calls.some(call => call.startsWith("supervision:")));
+  // A marker that names another descriptor is not this product's channel.
+  const wrong = await compose({ OMA_HOST_CHANNEL: "4" });
+  assert.equal(wrong.paths.at(-1).principalHost, undefined);
 
-  // A handle that is not one is not a registration: a malformed value must not
-  // become an endpoint that accepts whatever spelling arrives.
-  for (const bad of ["", "nothex", "a".repeat(31), "A".repeat(32), "a".repeat(64)])
-    assert.equal((await compose({ OMA_PRINCIPAL_SESSION: bad })).paths.at(-1).principalSession, undefined);
+  const supervised = await compose({ OMA_HOST_CHANNEL: "3" });
+  assert.ok(supervised.calls.includes("supervision:3"));
+  assert.equal(supervised.paths.at(-1).principalHost.hostPid, 4242);
+  // The channel is opened before anything slow, so a host that dies during
+  // recovery still takes this broker with it.
+  assert.ok(supervised.calls.indexOf("supervision:3") < supervised.calls.indexOf("Store"));
+});
 
-  // A well-formed handle with no host channel attached is refused too. This
-  // process is that case: its descriptor 3 is not a pipe a supervising host
-  // opened. A registration inherited by a broker started another way would
-  // otherwise write a credential into whatever that descriptor happens to be.
-  assert.equal((await compose({ OMA_PRINCIPAL_SESSION: "a".repeat(32) })).paths.at(-1).principalSession, undefined);
-  // The positive branch needs a real supervising parent, so it is proved where
-  // one exists: society-bringup spawns a child over that channel and reads the
-  // credential back, and principal-endpoint drives the registration directly.
+test("P1 composition root: the host going away stops the broker", async () => {
+  // LIFE-006: the audit's orphan. However the host ended, its descriptor
+  // closes, and the broker hears it through the channel and shuts down.
+  const { calls, supervision } = await compose({ OMA_HOST_CHANNEL: "3" });
+  assert.ok(!calls.includes("shutdown"));
+  supervision.onHostGone("the host is gone");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(calls.includes("shutdown"), "the broker did not stop when its host went away");
 });
 
 test("P1 composition root: the host's credential channel is the kind of descriptor the broker requires", async () => {

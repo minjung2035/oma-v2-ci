@@ -6,6 +6,9 @@ export const subprocessResponsibilities = Object.freeze({
   "src/process/async.ts": "bounded asynchronous child and pipe lifecycle mechanism",
   "src/process/policies.ts": "explicit host editor with inherited terminal I/O via runProcessSync",
   "src/rpc-client.ts": "long-lived Pi JSONL session with bounded framing, writes, drain and close",
+  // PI-001: the trusted extension cannot import src/process, and the engine's
+  // exec cannot pass a private descriptor, so the extension owns this one child.
+  "src/extension/cli-process.ts": "model-facing CLI child with an explicit environment and a private credential socket",
 });
 export const DEFAULT_POLICY = Object.freeze({
   capabilityOwner: "src/domain/capabilities.ts",
@@ -23,6 +26,7 @@ export const DEFAULT_POLICY = Object.freeze({
   // identifier grammars.
   identifierMirrors: Object.freeze({
     "src/extension/batch-view.ts": "trusted Pi extension mirroring the batch-view identity grammar",
+    "src/extension/principal-channel.ts": "trusted Pi extension mirroring the host channel's credential line",
   }),
   // The framed transport is intentionally I/O, unlike the codecs next to it.
   // This does not allow fs, process, SQLite, Store or entrypoint imports here.

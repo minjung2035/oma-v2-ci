@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { lstatSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { lstatSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -56,6 +58,29 @@ export function assertProductionInventory(root = process.cwd()) {
 }
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
+/** The pinned measuring tool. A different version counts differently, so any
+ * other version is treated as no tool at all rather than as a second opinion. */
+export const CLOC_VERSION = "2.08";
+
+/** Measures the given files with the pinned cloc, or returns null when that
+ * tool is not on this host. Null is an answer the caller must report as such:
+ * a report that was not re-measured is not a measured report. */
+export function measureWithCloc(root, files, cloc = "cloc") {
+  let version;
+  try { version = execFileSync(cloc, ["--version"], { encoding: "utf8" }).trim(); }
+  catch { return null; }
+  if (version !== CLOC_VERSION) return null;
+  const scratch = mkdtempSync(join(tmpdir(), "oma-cloc-"));
+  try {
+    const list = join(scratch, "files.txt");
+    const out = join(scratch, "loc.json");
+    writeFileSync(list, `${files.join("\n")}\n`);
+    execFileSync(cloc, [`--list-file=${list}`, "--by-file", "--skip-uniqueness",
+      "--read-lang-def=implementation/cloc-systemd.lang", "--json", `--out=${out}`], { cwd: root, stdio: "ignore" });
+    return JSON.parse(readFileSync(out, "utf8"));
+  } finally { rmSync(scratch, { recursive: true, force: true }); }
+}
+
 /** The measured artifacts must describe the source that is here now.
  *
  * The file list on its own cannot catch this: it stayed current while the LOC
@@ -64,7 +89,7 @@ const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
  * records to the bytes they were taken from makes the drift a failure at the
  * moment it happens, and costs one hash per file rather than another cloc run.
  */
-export function assertMeasurementCurrent(root = process.cwd(), files = collectProductionFiles(root)) {
+export function assertMeasurementCurrent(root = process.cwd(), files = collectProductionFiles(root), options = {}) {
   const records = JSON.parse(readFileSync(join(root, "production-loc-hashes.json"), "utf8"));
   if (records.manifest !== sha256(`${files.join("\n")}\n`))
     throw new Error("production-loc-hashes.json was taken from a different file list; regenerate with node scripts/loc.mjs");
@@ -107,7 +132,20 @@ export function assertMeasurementCurrent(root = process.cwd(), files = collectPr
   if (records.cloc !== counted.header?.cloc_version)
     throw new Error(`production-loc.json (cloc ${counted.header?.cloc_version}) and its hashes (cloc ${records.cloc}) ` +
       "are from different runs; regenerate with node scripts/loc.mjs");
-  return { files: files.length, code: sum.code };
+  // The hashes name the exact report they were written beside, so the report
+  // cannot be edited on its own: changing a count means changing this digest.
+  if (records.report !== sha256(readFileSync(join(root, "production-loc.json"))))
+    throw new Error("production-loc.json is not the report its hashes were recorded with; regenerate with node scripts/loc.mjs");
+  // Everything above holds for a report whose numbers were typed in by hand,
+  // provided they add up. Only measuring the source again shows the numbers are
+  // the source's. That needs the pinned tool; without it the result says so.
+  const fresh = options.measure === undefined ? measureWithCloc(root, files) : options.measure(root, files);
+  if (fresh === null) return { files: files.length, code: sum.code, status: "CONSISTENT_NOT_REMEASURED" };
+  const drifted = files.filter(file => ["code", "comment", "blank"].some(field => fresh[file]?.[field] !== counted[file][field]));
+  if (drifted.length || fresh.SUM?.code !== sum.code)
+    throw new Error(`production-loc.json does not match a fresh measurement of the source; ` +
+      `differs for [${drifted.join(", ")}]; regenerate with node scripts/loc.mjs`);
+  return { files: files.length, code: sum.code, status: "SOURCE_BOUND" };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
@@ -120,7 +158,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     // the measured artifacts, so `--write` can never mark them current.
     const measured = write ? null : assertMeasurementCurrent(process.cwd(), files);
     console.log(JSON.stringify({ status: write ? "SOURCE_LIST_GENERATED" : "SOURCE_LIST_CURRENT", files: files.length,
-      loc: measured === null ? "NOT_MEASURED" : "SOURCE_BOUND", codeLines: measured?.code ?? null, runtimeProof: false }));
+      loc: measured === null ? "NOT_MEASURED" : measured.status, codeLines: measured?.code ?? null, runtimeProof: false }));
+    // A gate that could not re-measure has not bound the numbers to the source.
+    // Say so in the exit status, not only in the text, so CI cannot read it as a pass.
+    if (measured !== null && measured.status !== "SOURCE_BOUND" && process.env.OMA_REQUIRE_MEASUREMENT === "1")
+      throw new Error("the pinned cloc is required here and was not available");
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

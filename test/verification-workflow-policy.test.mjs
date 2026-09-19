@@ -72,6 +72,33 @@ test("T116: the runner installs what the containment tests need rather than skip
   assert.match(workflow, /apt-get install -y bubblewrap/);
 });
 
+test("T116: the line counter is the pinned release, verified before it runs", () => {
+  // The LOC gate compares every count against a fresh measurement, so the tool
+  // doing the measuring is evidence too. A distribution package of another
+  // version, or an unverified download, would make that comparison meaningless.
+  assert.match(workflow, /cloc\/releases\/download\/v2\.08\/cloc-2\.08\.pl/);
+  assert.match(workflow, /[0-9a-f]{64}  \/tmp\/cloc-2\.08\.pl" \| sha256sum -c -/);
+  const install = workflow.indexOf("sha256sum -c -");
+  assert.ok(install > 0 && install < workflow.indexOf("install -m 0755 /tmp/cloc-2.08.pl"),
+    "the tool is installed before its digest is checked");
+  assert.ok(workflow.indexOf("Install the pinned line counter") < workflow.indexOf("check:inventory"),
+    "the inventory is checked before the tool it needs is installed");
+});
+
+test("T116: the pre-generation inventory check must re-measure, not merely agree with itself", () => {
+  // Without the pinned tool the check can only report consistency, and CI is
+  // the one place that must not accept that as a pass.
+  assert.match(workflow, /OMA_REQUIRE_MEASUREMENT=1 npm run check:inventory > "\$EVIDENCE\/inventory-before\.log"/);
+});
+
+test("T116: a fresh measurement that differs from the commit fails the run", () => {
+  // Recording the difference as an artifact and passing anyway would let a
+  // commit carry figures from another commit indefinitely.
+  const section = workflow.slice(workflow.indexOf("generated-inventory.patch"));
+  assert.match(section, /git", \["show", "HEAD:production-loc\.json"\]/);
+  assert.match(section, /touch "\$EVIDENCE\/failed"/);
+});
+
 test("T116: a stale inventory observed before the generators run fails the workflow", () => {
   // The generators rewrite the very files the pre-check looked at, so an
   // observation that only lands in a log would be erased by the next step.
