@@ -5,10 +5,12 @@ import {
   INITIAL, categoryOf, cursorOf, step,
   type ConfigField, type Effect, type PanelData, type State,
 } from "../src/tui/model.js";
-import { cellWidth, fit, render } from "../src/tui/render.js";
+import { render } from "../src/tui/view/index.js";
+import { cellWidth, fit } from "../src/tui/view/text.js";
+import { unknownDashboard } from "./fixtures/dashboard.js";
 
 const data: PanelData = Object.freeze({
-  dashboard: Object.freeze([{ label: "Status", value: "unknown (broker 미연결)" }]),
+  dashboard: unknownDashboard(),
   config: Object.freeze<ConfigField[]>([
     { kind: "choice", id: "principal-model", label: "Principal model", value: "fast", options: ["cheap", "fast"], apply: "next-session" },
     { kind: "number", id: "worker-limit", label: "Worker limit", value: 8, min: 1, max: 64, apply: "restart" },
@@ -165,7 +167,7 @@ test("rendering keeps every line inside the terminal width for wide characters",
   assert.equal(fit("가가가", 5), "가가");
   const open = step(INITIAL, KEY.panel, data).state;
   for (const columns of [24, 40, 80]) {
-    const lines = render({ state: open, data, transcript: [], body: null, notice: null, columns, rows: 12 });
+    const lines = render({ state: open, data, transcript: [], body: null, notice: null, busy: false, columns, rows: 12 });
     assert.equal(lines.length, 12);
     for (const line of lines) assert.ok(cellWidth(line) <= columns, `line exceeded ${columns}: ${line}`);
   }
@@ -174,7 +176,7 @@ test("rendering keeps every line inside the terminal width for wide characters",
 test("TUI-007: the panel always shows when a setting takes effect", () => {
   const open = step(INITIAL, KEY.panel, data).state;
   const config = step(open, KEY.right, data).state;
-  const text = render({ state: config, data, transcript: [], body: null, notice: null, columns: 100, rows: 14 }).join("\n");
+  const text = render({ state: config, data, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 14 }).join("\n");
   assert.match(text, /다음 세션부터/);
   assert.match(text, /재시작 후/);
 });

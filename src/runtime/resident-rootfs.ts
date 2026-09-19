@@ -16,6 +16,7 @@
 import { lstatSync, mkdirSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
+import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "../sandbox.js";
 
 export interface SystemLayout {
@@ -87,6 +88,21 @@ function ensureLink(path: string, target: string): void {
   }
   mkdirSync(dirname(path), { recursive: true, mode: 0o755 });
   symlinkSync(target, path);
+}
+
+/** TUI-003: which of the product surface's installed files exist, so the mount
+ * plan can hide them. A link is refused: hiding the link would leave its
+ * target, and the installation has no reason to contain one. */
+export function productSurfaceMasks(libdir: string): readonly { path: string; kind: "dir" | "file" }[] {
+  const masks: { path: string; kind: "dir" | "file" }[] = [];
+  for (const path of DEPLOYMENT_LAYOUT.productSurface) {
+    const found = kind(join(libdir, path));
+    if (found === "absent") continue;
+    if (found === "link")
+      throw new StoreError("UNSUPPORTED_PROFILE", `installed product path ${path} is a link`);
+    masks.push({ path, kind: found });
+  }
+  return Object.freeze(masks);
 }
 
 /** Creates or repairs the skeleton at `rootfs` for the given host layout. */

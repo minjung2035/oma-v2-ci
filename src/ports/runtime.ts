@@ -82,6 +82,10 @@ export interface SandboxHost {
   libdir: string;
   /** Host path of the pinned Node, mounted read-only as a single file. */
   node: string;
+  /** TUI-003: installation paths hidden inside the sandbox, relative to
+   * `libdir`: a directory is covered by an empty read-only tmpfs, a file by
+   * `/dev/null`. Only paths that exist are listed; bwrap needs a target. */
+  hidden?: readonly { readonly path: string; readonly kind: "dir" | "file" }[];
   /** Operating-system paths mounted read-only at the same path, so a rootfs of
    * empty mount targets can still run programs. Absent when the rootfs carries
    * its own. Only `SYSTEM_BIND_CANDIDATES` are accepted. */

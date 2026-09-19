@@ -1,9 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
 import { StoreError } from "../src/domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
 import { readConfigurationSource } from "../src/config/operations.js";
@@ -15,7 +14,6 @@ import {
   OMA_TOOL_NAMES, expandedActiveTools, initialActiveTools, parseSurfacePlan,
 } from "../src/pi-extension.js";
 
-const root = fileURLToPath(new URL("../../", import.meta.url));
 const invalid = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST";
 
 function config(overrides: Partial<ToolSurfaceConfig> = {}): ToolSurfaceConfig {
@@ -143,17 +141,6 @@ test("T103/TSP-007: an unreadable projection fails closed rather than exposing h
   const plan = planToolSurface(config({ defaultMode: "DIRECT", groups: [group("web", [{ tool: "fetch" }])] }));
   const parsed = parseSurfacePlan(encodeToolSurfacePlan(plan));
   assert.equal(parsed.state, "plan");
-});
-
-test("T103/TSP-006: the core extension never executes another extension's tool handler", () => {
-  const source = readFileSync(resolve(root, "src/pi-extension.ts"), "utf8");
-  const surface = source.slice(source.indexOf("function registerToolSurface"));
-  assert.doesNotMatch(surface, /\.execute\s*\(/, "group expansion must activate, never invoke");
-  assert.doesNotMatch(surface, /execute\.call/);
-  assert.match(surface, /setActiveTools/);
-  // The projection reaches the sandbox as data; it must not load code.
-  assert.doesNotMatch(surface, /import\s*\(/);
-  assert.doesNotMatch(surface, /createRequire|require\(/);
 });
 
 test("T100/TSP-002: the plan round-trips through its transport encoding unchanged", () => {

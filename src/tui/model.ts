@@ -7,7 +7,7 @@
  * and no separate save step here.
  */
 import type { Key } from "./keys.js";
-import { PANEL_BOUNDS } from "./limits.js";
+import { CONFIG_BOUNDS } from "./limits.js";
 
 export type Category = "dashboard" | "config" | "mail";
 export const CATEGORIES: readonly Category[] = Object.freeze(["dashboard", "config", "mail"]);
@@ -49,10 +49,31 @@ export interface MailRow {
   readonly id: string; readonly from: string; readonly kind: string;
   readonly subject: string; readonly unread: boolean; readonly path: string;
 }
-export interface DashboardLine { readonly label: string; readonly value: string }
+/** TUI-012: what the Dashboard knows, as data. How it is worded belongs to the
+ * view. An unobserved status carries its reason and time rather than a guess.
+ */
+export interface DashboardData {
+  readonly status:
+    | { readonly kind: "observed"; readonly observedAtMs: number; readonly ready: number; readonly active: number; readonly pending: number }
+    | { readonly kind: "unknown"; readonly observedAtMs: number; readonly reason: string };
+  /** Seed population from configuration; not a running count. */
+  readonly configuredWorkers: number;
+  readonly workerLimit: number;
+  readonly unread: number;
+  readonly principalModel: string;
+  /** The rootfs Residents are confined to, or null when none is declared. */
+  readonly rootfs: string | null;
+}
+
+/** What the notice line reports. The view words it. */
+export type Notice =
+  | { readonly kind: "saved"; readonly label: string; readonly value: string; readonly apply: ApplyScope | null }
+  | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
+  | { readonly kind: "save-failed"; readonly message: string }
+  | { readonly kind: "text"; readonly text: string };
 
 export interface PanelData {
-  readonly dashboard: readonly DashboardLine[];
+  readonly dashboard: DashboardData;
   readonly config: readonly ConfigField[];
   readonly extensions: readonly ExtensionRow[];
   readonly mail: readonly MailRow[];
@@ -105,7 +126,8 @@ export function categoryOf(state: State): Category {
 }
 
 function itemCount(data: PanelData, category: Category): number {
-  if (category === "dashboard") return data.dashboard.length;
+  // The Dashboard is read, not navigated: it has no selectable rows.
+  if (category === "dashboard") return 0;
   if (category === "config") return data.config.length;
   return data.mail.length;
 }
@@ -193,7 +215,7 @@ function stepEdit(state: State, data: PanelData, key: Key): Step {
   }
   if (key.kind === "backspace")
     return { state: { ...state, edit: { kind: "number", field: edit.field, draft: edit.draft.slice(0, -1) } }, effects: [] };
-  if (key.kind === "char" && /^\d$/.test(key.value) && edit.draft.length < PANEL_BOUNDS.numberDraftDigits.value)
+  if (key.kind === "char" && /^\d$/.test(key.value) && edit.draft.length < CONFIG_BOUNDS.numberDraftDigits.value)
     return { state: { ...state, edit: { kind: "number", field: edit.field, draft: edit.draft + key.value } }, effects: [] };
   return { state, effects: [] };
 }

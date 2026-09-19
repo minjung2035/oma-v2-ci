@@ -993,7 +993,7 @@ allowed IPC: 자기 actor socket
 closed: 나머지 상속 FD, systemd bus, host sockets, 엔진 agent directory
 ```
 
-엔진은 rootfs가 아니라 OMA 설치 디렉터리에서 온다. OMA를 갱신할 때 rootfs를 다시 만들지 않기 위해서다. host 운영체제의 `/usr`을 RO로 겹치는 것은 `SB-001`이 금지한 host `/`·`/home` bind가 아니다. 그 안에는 프로그램과 라이브러리가 있고, 사용자의 파일·state root·credential은 없다. 실제 bwrap 실행으로 이를 확인한다 — 안에서 state root, 엔진 credential 파일, host home이 보이지 않고, `/`는 쓰기 불가이며, 외부 연결은 `ENETUNREACH`다.
+엔진은 rootfs가 아니라 OMA 설치 디렉터리에서 온다. OMA를 갱신할 때 rootfs를 다시 만들지 않기 위해서다. 설치 디렉터리에는 host 제품(TUI)도 들어 있으므로, 배포 layout이 선언한 그 경로들은 Resident 안에서 가린다 — 디렉터리는 빈 읽기 전용 tmpfs로, 파일은 `/dev/null`로(`TUI-003`). host 운영체제의 `/usr`을 RO로 겹치는 것은 `SB-001`이 금지한 host `/`·`/home` bind가 아니다. 그 안에는 프로그램과 라이브러리가 있고, 사용자의 파일·state root·credential은 없다. 실제 bwrap 실행으로 이를 확인한다 — 안에서 state root, 엔진 credential 파일, host home이 보이지 않고, `/`는 쓰기 불가이며, 외부 연결은 `ENETUNREACH`다.
 
 ### 16.1 봉인된 Resident의 provider 경로
 
@@ -1355,6 +1355,8 @@ Dashboard | Config | Mail
 조작은 BIOS 형태의 keyboard navigation이다. 좌우로 카테고리, 상하로 항목을 옮기고 Enter로 선택·값 변경·하위 화면 진입, Esc로 이전 화면이다. 기본 UI depth는 0이며 Mail과 Extensions만 상세 화면을 갖는다. 마우스 중심 UI, command palette, 설정 검색, 다단계 메뉴를 만들지 않는다.
 
 별도 Save 단계나 dirty state를 만들지 않는다. 확정된 값이 곧 저장된 값이다. 편집 중 Esc는 변경 전 값으로 되돌린다.
+
+화면이 어떻게 보이는지는 `src/tui/view/` 한 곳이 소유한다. 상태 기계(`model.ts`), 데이터 원천(`sources/`), broker 관측(`transport.ts`)은 보이는 방식을 결정하지 않고 구조화된 값을 넘긴다 — Dashboard는 문장 대신 관측 상태와 수치를, 알림은 문장 대신 무슨 일이 있었는지를. 그래서 레이아웃을 갈아엎는 일은 `view/`를 바꾸는 일이고 나머지는 그대로다. 그 경계는 architecture checker가 지킨다(`tui-view-boundary`): view는 I/O를 하지 않고 model의 데이터만 보며, view 밖에서는 `app.ts`만 `view/index.ts`를 통해 그린다. 엔진의 폭 측정은 `view/text.ts` 하나만 빌린다.
 
 ### 23.7 Dashboard
 

@@ -73,6 +73,13 @@
   "src/entry/module-conformance.ts",
   "src/entry/oma.ts",
   "src/entry/runner.ts",
+  "src/extension/batch-view.ts",
+  "src/extension/delivery.ts",
+  "src/extension/inference-bridge.ts",
+  "src/extension/mail-tools.ts",
+  "src/extension/shared.ts",
+  "src/extension/tool-surface.ts",
+  "src/extension/workspace-guard.ts",
   "src/frame.ts",
   "src/git.ts",
   "src/git/canonical-command.ts",
@@ -145,6 +152,7 @@
   "src/runtime/pi-adapter.ts",
   "src/runtime/pi-rpc.ts",
   "src/runtime/pi-runtime.ts",
+  "src/runtime/pi-spawn-plan.ts",
   "src/runtime/process-lock.ts",
   "src/runtime/provision.ts",
   "src/runtime/resident-rootfs.ts",
@@ -180,13 +188,19 @@
   "src/tui/keys.ts",
   "src/tui/limits.ts",
   "src/tui/model.ts",
-  "src/tui/render.ts",
   "src/tui/screen.ts",
   "src/tui/session.ts",
   "src/tui/sources/extensions.ts",
   "src/tui/sources/mail.ts",
   "src/tui/sources/settings.ts",
   "src/tui/transport.ts",
+  "src/tui/view/dashboard.ts",
+  "src/tui/view/index.ts",
+  "src/tui/view/labels.ts",
+  "src/tui/view/layout.ts",
+  "src/tui/view/notice.ts",
+  "src/tui/view/screens.ts",
+  "src/tui/view/text.ts",
   "src/units.ts",
   "src/units/execute.ts",
   "src/units/observe.ts",
@@ -1377,7 +1391,7 @@
     "src/runner.ts",
     "src/sandbox.ts"
    ],
-   "files": 27
+   "files": 28
   },
   {
    "index": 5,
@@ -1388,14 +1402,15 @@
     "src/cli.ts",
     "src/tui/",
     "src/pi-extension.ts",
+    "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 38
+   "files": 51
   }
  ],
- "files": 194,
- "runtimeEdges": 716,
- "typeOnlyEdges": 293,
+ "files": 208,
+ "runtimeEdges": 744,
+ "typeOnlyEdges": 297,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 204,
   "L2-facts -> L1-kernel": 27,
@@ -1403,15 +1418,15 @@
   "L3-workflow -> L1-kernel": 156,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 44,
-  "L4-orchestration -> L1-kernel": 70,
+  "L4-orchestration -> L1-kernel": 71,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
-  "L4-orchestration -> L4-orchestration": 28,
-  "L5-entry -> L1-kernel": 57,
+  "L4-orchestration -> L4-orchestration": 31,
+  "L5-entry -> L1-kernel": 58,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
   "L5-entry -> L4-orchestration": 17,
-  "L5-entry -> L5-entry": 72
+  "L5-entry -> L5-entry": 95
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1449,33 +1464,33 @@
  "fanOut": {
   "src/broker.ts": 27,
   "src/mail.ts": 26,
-  "src/entry/oma.ts": 20,
   "src/entry/broker.ts": 19,
+  "src/entry/oma.ts": 17,
   "src/git.ts": 15,
   "src/git/context-repository.ts": 14,
   "src/store.ts": 14,
   "src/lifecycle/create.ts": 13,
   "src/reconcile.ts": 13,
+  "src/runner.ts": 13,
   "src/git/context.ts": 12,
   "src/git/submit.ts": 12,
   "src/mail/batches.ts": 12,
-  "src/runner.ts": 12,
   "src/git/context-mirror.ts": 10,
-  "src/storage/context-snapshot.ts": 10
+  "src/pi-extension.ts": 10
  },
  "external": {
-  "@earendil-works/pi-coding-agent": 2,
+  "@earendil-works/pi-coding-agent": 7,
   "@earendil-works/pi-tui": 2,
   "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 3,
   "node:crypto": 20,
-  "node:fs": 51,
+  "node:fs": 54,
   "node:http": 1,
   "node:https": 1,
   "node:net": 5,
   "node:os": 2,
-  "node:path": 56,
+  "node:path": 60,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,
@@ -1484,7 +1499,7 @@
   "node:util": 2,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,
-  "typebox": 1
+  "typebox": 2
  },
  "unresolved": []
 }

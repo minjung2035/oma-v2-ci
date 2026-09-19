@@ -98,6 +98,9 @@ const LAYERS = Object.freeze([
       // consumes lower layers and nothing below it imports the TUI.
       "src/tui/",
       "src/pi-extension.ts",
+      // The trusted extension's parts; the entry above composes them and the
+      // extension-closure rule keeps them free of OMA runtime imports.
+      "src/extension/",
       "src/rpc-client.ts",
     ],
   },

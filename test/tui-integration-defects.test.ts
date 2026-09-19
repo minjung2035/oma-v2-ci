@@ -15,7 +15,8 @@ import {
   PRINCIPAL_MODEL, WORKER_LIMIT, WORKER_MODEL,
   commitField, layoutOf, readSettings,
 } from "../src/tui/sources/settings.js";
-import { sessionArgv, sessionEnv } from "../src/tui/session.js";
+import { principalSessionProfile, sessionArgv, sessionEnv } from "../src/tui/session.js";
+import { loadConfiguration } from "../src/config.js";
 import { registerToolSurface } from "../src/pi-extension.js";
 import { assertExtensionIntegrity, verifiedPaths } from "../src/runtime/extension-integrity.js";
 
@@ -161,13 +162,20 @@ test("the Principal session carries its role's projection into the Pi process", 
   assert.ok(!("OMA_TOOL_SURFACE" in without), "a role without a projection sets no variable");
 });
 
-test("the entrypoint gives the Principal session its role extensions and projection", () => {
-  const source = readFileSync(new URL("../../src/entry/oma.ts", import.meta.url), "utf8");
-  // The Principal must not be started with a hardcoded empty extension list.
-  assert.doesNotMatch(source, /extensions:\s*\[\]/);
-  assert.match(source, /loadConfiguration\(configPath\)/, "role settings must be read");
-  assert.match(source, /roleExtensions/);
-  assert.match(source, /encodeToolSurfacePlan/);
+test("the Principal session is built from its role, not from defaults", () => {
+  // Behaviour, not text: a regex over the entrypoint used to stand in for this.
+  const root = scratch("oma-principal-profile-");
+  try {
+    const configPath = bundle(root);
+    const configuration = loadConfiguration(configPath);
+    const role = configuration.roles[configuration.config.principalProfile]!;
+    const profile = principalSessionProfile(configPath, "demo");
+    assert.equal(`${profile.provider}/${profile.model}`, "p/strong", "the Principal runs its own role's model");
+    assert.deepEqual(profile.extensions, role.extensions.map(extension => ({ path: extension.path, sha256: extension.sha256 })),
+      "the Principal runs its role's extensions, digests included");
+    assert.ok(profile.extensions.length > 0, "a role with extensions must not start with an empty list");
+    assert.equal(profile.toolSurface, encodeToolSurfacePlan(role.toolSurface!), "the role's projection travels to the engine");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 interface FakeHost {

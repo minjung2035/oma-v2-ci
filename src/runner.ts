@@ -9,9 +9,10 @@ import type {
 } from "../implementation/contracts.js";
 import { dirname } from "node:path";
 import { confinedPath, type ResidentDirectories } from "./sandbox.js";
-import type { PiConfinement, PiInference } from "./runtime/pi-adapter.js";
+import type { PiConfinement, PiInference } from "./runtime/pi-spawn-plan.js";
 import { InferenceRelay } from "./runtime/inference-relay.js";
 import { placeholderFor, resolveEngineAuth } from "./runtime/engine-auth.js";
+import { productSurfaceMasks } from "./runtime/resident-rootfs.js";
 import { StoreError } from "./domain/errors.js";
 import { encodeToolSurfacePlan } from "./domain/tool-surface.js";
 import { BrokerChannel, type ChannelLimits } from "./protocol/channel.js";
@@ -241,6 +242,7 @@ export class RunnerModule {
         libdir: declared.libdir,
         node: declared.node,
         systemBinds: declared.systemBinds,
+        hidden: productSurfaceMasks(declared.libdir),
         pi: confinedPath(declared.libdir, directories, entry),
         // The adapter replaces this with the engine flags it composes.
         piModeArgs: [],

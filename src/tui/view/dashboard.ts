@@ -1,0 +1,41 @@
+/** TUI-012: the Dashboard's rows, worded from structured data.
+ *
+ * Every value is either something observed or an explicit unknown carrying why
+ * and when. Nothing here turns a missing observation into "ready", "0" or
+ * "inactive" (arch §23.5, MAINTENANCE §10).
+ */
+import type { DashboardData } from "../model.js";
+
+export interface DashboardRow { readonly label: string; readonly value: string }
+
+function clock(observedAtMs: number): string {
+  const time = new Date(observedAtMs);
+  const two = (value: number): string => String(value).padStart(2, "0");
+  return `${two(time.getHours())}:${two(time.getMinutes())}:${two(time.getSeconds())}`;
+}
+
+export function dashboardRows(data: DashboardData): readonly DashboardRow[] {
+  const rows: DashboardRow[] = [];
+  const seen = data.status;
+  if (seen.kind === "observed") {
+    rows.push({ label: "Workers", value: `${seen.ready} / ${data.workerLimit}` });
+    rows.push({ label: "Active", value: String(seen.active) });
+    rows.push({ label: "Pending", value: `${seen.pending} (${clock(seen.observedAtMs)} 관측)` });
+    rows.push({ label: "Status", value: `observed (${clock(seen.observedAtMs)})` });
+  } else {
+    const unknown = `unknown (${seen.reason}; ${clock(seen.observedAtMs)} 관측)`;
+    // A configured seed count is not a running count; it is labelled as config.
+    rows.push({ label: "Workers", value: `${data.configuredWorkers} configured / ${data.workerLimit} limit` });
+    rows.push({ label: "Active", value: unknown });
+    rows.push({ label: "Pending", value: unknown });
+    rows.push({ label: "Status", value: unknown });
+  }
+  rows.push({ label: "Mail", value: `${data.unread} unread` });
+  rows.push({ label: "Model", value: data.principalModel });
+  // Whether a Resident is confined changes what OMA can promise about it.
+  rows.push({ label: "Sandbox", value: data.rootfs === null ? "비봉인 (신뢰 rootfs 미선언)" : `봉인 (${data.rootfs})` });
+  // The engine owns inference and never reports spend to OMA (INF-001), so a
+  // usage figure here would be invented.
+  rows.push({ label: "Usage", value: "unknown (엔진이 소유)" });
+  return Object.freeze(rows);
+}

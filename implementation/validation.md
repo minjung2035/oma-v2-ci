@@ -92,6 +92,31 @@ TTY는 `script`로 실제 pty를 띄워 raw mode 취득·복원과 크기 보고
 
 확인에 쓴 society의 systemd unit·runRoot·state는 모두 되돌렸다.
 
+### 구조 정리: 책임 분리와 regex 검사의 이전
+
+외부 품질 검토가 지적한 세 곳과 TUI 레이아웃 교체 준비를 처리했다. core는 건드리지 않았다.
+
+- **`pi-extension.ts` → `src/extension/`.** 739줄 한 파일에 섞여 있던 batch view codec, workspace guard, mail tool, inference bridge, delivery boundary, tool surface를 파일로 나눴다. `pi-extension.ts`는 조립만 하는 32줄 entry다. "OMA runtime을 import하지 않는다"는 보장은 한 파일이라는 사실이 아니라 `extension-closure` 규칙이 지킨다. 등록 순서는 그대로다.
+- **`pi-adapter.ts` → `pi-spawn-plan.ts` + `pi-adapter.ts`.** 엔진을 어떻게 띄울지(argv·환경·봉인)는 프로세스 없이 계산되는 데이터로, delivery 생명주기(spawn·RPC·boundary 대기)는 I/O로 나눴다.
+- **TUI view 계층.** 보이는 방식은 `src/tui/view/`가 전부 소유한다. Dashboard는 미리 만든 문장 대신 `DashboardData`(관측 상태·수치)를, 알림은 `Notice`(무슨 일이 있었는지)를 넘기고 view가 문장으로 만든다. 레이아웃 교체는 `view/`만 바꾸는 일이다.
+- **source-regex 검사 → `surface-rules.mjs`(AST).** 19개 규칙을 positive/negative/false-positive fixture 10묶음과 함께 옮겼다. 대신 지운 regex 테스트는 규칙과 짝이 맞는 것만 지웠다.
+
+**AST로 옮기자 regex가 못 보던 것이 드러났다.**
+
+| 발견 | 원인 | 조치 |
+|---|---|---|
+| **host TUI 코드가 Resident 안에서 읽혔다** (`TUI-003` 위반) | 지난 변경이 설치 디렉터리 전체를 `/opt/oma`로 bind했고, 예전 regex 테스트는 파일 세 개의 문자열만 봤다. `resident-product-surface` 규칙이 `deployment.ts`의 경로 문자열을 잡으면서 드러났다 | 배포 layout이 product surface 경로를 선언하고 mount 계획이 가린다. 실제 bwrap에서 `dist/src/tui`가 비어 보이고, `oma.js`는 열리지 않으며, 가린 자리에 쓰기가 안 되고, 엔진과 extension은 그대로 동작함을 확인했다(T117) |
+| `settings.ts`의 `.slice(0, 32)` | regex가 template literal을 통째로 지워 그 안의 코드를 못 봤다 | `CONFIG_BOUNDS.revisionDigestHex`로 선언 |
+| hex·octal 리터럴 오탐 | TS AST의 `NumericLiteral.text`는 10진수로 정규화된다 | 규칙이 원문 표기(`getText()`)로 판단 |
+| type-only import 경로를 문자열로 오인 | module specifier도 문자열 리터럴이다 | 문자열 규칙에서 specifier 제외. fixture가 잡았다 |
+
+**의도적으로 지운 것**
+
+- `"the engine is never modified, only consumed"`: 문자열을 지운 뒤 `node_modules`를 찾았으므로 식별자 이름밖에 맞출 수 없는 공허한 검사였다. 엔진 불변은 배포 digest 검사가 지킨다.
+- `"removing the relay left no orphan"`: `Inference*` 선언이 다시 생기면 P2 계약 golden pin이 먼저 실패한다. 중복이었다.
+- `mail-header-leaf`의 "`cli/effects/mail.ts`가 `mail/headers.js`를 import해야 한다" 양성 pin: 배선을 고정할 뿐 경계를 지키지 않는다. 경계(전체 mail 모듈 import 금지)는 `module-port-import`가 지킨다.
+- entrypoint에 `roleExtensions`가 쓰였는지 보던 regex: Principal profile 조립을 `principalSessionProfile()`로 꺼내 역할의 모델·extension·digest·projection이 그대로 넘어가는지 행동으로 검사한다.
+
 ### 남은 것
 
 - TUI/TSP requirement의 trace 상태는 `unverified`다. owner/callPath/negative test는 연결돼 있으나 compliance 기록 절차를 거치지 않았다.

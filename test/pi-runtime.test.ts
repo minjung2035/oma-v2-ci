@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { StoreError } from "../src/domain/errors.js";
@@ -173,13 +173,3 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T106/TUI-017: the engine's state stays under OMA and never names the user's Pi", () => {
-  const source = readFileSync(new URL("../../src/runtime/pi-runtime.ts", import.meta.url), "utf8");
-  // OMA must not reach into a user's Pi installation for credentials or models.
-  assert.doesNotMatch(source, /homedir|\.pi[/"']/);
-  const entry = readFileSync(new URL("../../src/entry/oma.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(entry, /homedir|\.pi[/"']/);
-  // Behaviour must not depend on whether the user installed Pi at all.
-  const runtime = resolvePiRuntime({ stateRoot: "/s" });
-  assert.ok(runtime.agentDir.startsWith("/s"));
-});

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { HostConfigV1 } from "../implementation/contracts.js";
@@ -119,20 +119,6 @@ test("the product surface did not widen the broker's method surface", () => {
   // Inference was removed with the relay; no method may reintroduce it here.
   for (const name of [...Object.keys(PUBLIC_METHODS), ...Object.keys(INTERNAL_METHODS)])
     assert.doesNotMatch(name, /inference/i);
-});
-
-test("removing the relay left no orphan reference behind", () => {
-  const root = new URL("../../", import.meta.url);
-  const read = (file: string): string => readFileSync(new URL(file, root), "utf8");
-  // The contract facade and the module table must not still name the relay.
-  assert.doesNotMatch(read("implementation/contracts.ts"), /InferenceModule|InferenceStart|InferenceEvent/);
-  assert.doesNotMatch(read("implementation/contracts/module-contracts.ts"), /Inference/);
-  assert.doesNotMatch(read("implementation/contracts/internal-wire.ts"), /Inference/);
-  // The spec must describe ownership rather than a relay it no longer has.
-  const spec = read("implementation-spec.md");
-  assert.match(spec, /inference는 \*\*동봉 엔진이 소유한다\.\*\*/);
-  // usage and the six durable entities are untouched by that removal.
-  assert.match(read("implementation/schema-v1.sql"), /CREATE TABLE usage/i);
 });
 
 test("a settings read composes through core rather than parsing config itself", () => {

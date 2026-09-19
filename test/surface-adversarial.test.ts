@@ -7,7 +7,8 @@ import { StoreError } from "../src/domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
 import { SURFACE_LIMITS, planToolSurface, type ToolSurfaceConfig } from "../src/domain/tool-surface.js";
 import { INITIAL, step, type PanelData } from "../src/tui/model.js";
-import { render } from "../src/tui/render.js";
+import { render } from "../src/tui/view/index.js";
+import { unknownDashboard } from "./fixtures/dashboard.js";
 import { WORKER_LIMIT, commitField, layoutOf, readSettings } from "../src/tui/sources/settings.js";
 import { readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
 import { parseMessage, principalMailbox, readBody, readMailbox } from "../src/tui/sources/mail.js";
@@ -82,7 +83,7 @@ test("a role file that becomes unreadable between read and write is not half-wri
 
 test("the panel renders at degenerate terminal sizes without exceeding them", () => {
   const data: PanelData = Object.freeze({
-    dashboard: Object.freeze([{ label: "Status", value: "unknown (아주 긴 이유 문자열입니다 ".repeat(4) + ")" }]),
+    dashboard: unknownDashboard("아주 긴 이유 문자열입니다 ".repeat(4)),
     config: Object.freeze([]), extensions: Object.freeze([]),
     mail: Object.freeze([{ id: "m", from: "worker-a", kind: "question", subject: "제목".repeat(60), unread: true, path: "/tmp/m" }]),
   });
@@ -90,14 +91,14 @@ test("the panel renders at degenerate terminal sizes without exceeding them", ()
   for (const [columns, rows] of [[1, 1], [2, 2], [8, 3], [20, 6], [200, 60]] as const) {
     for (const category of [0, 1, 2]) {
       const view = { ...state, category };
-      const lines = render({ state: view, data, transcript: ["긴 줄 ".repeat(50)], body: null, notice: "알림", columns, rows });
+      const lines = render({ state: view, data, transcript: ["긴 줄 ".repeat(50)], body: null, notice: { kind: "text", text: "알림" }, busy: true, columns, rows });
       assert.equal(lines.length, rows, `${columns}x${rows} must produce exactly ${rows} lines`);
       for (const line of lines)
         assert.ok([...line].length <= columns * 2, `${columns}x${rows} produced an oversized line`);
     }
   }
   state = step(state, { kind: "enter" }, data).state;
-  assert.doesNotThrow(() => render({ state, data, transcript: [], body: "본문", notice: null, columns: 0, rows: 0 }));
+  assert.doesNotThrow(() => render({ state, data, transcript: [], body: "본문", notice: null, busy: false, columns: 0, rows: 0 }));
 });
 
 test("a tool surface declaration cannot smuggle an oversized or malformed name", () => {

@@ -18,7 +18,7 @@ import { provisionSociety, residentRootfsPath } from "../src/runtime/provision.j
 import { InferenceRelay } from "../src/runtime/inference-relay.js";
 import { placeholderFor } from "../src/runtime/engine-auth.js";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
-import { hostSystemLayout } from "../src/runtime/resident-rootfs.js";
+import { hostSystemLayout, productSurfaceMasks } from "../src/runtime/resident-rootfs.js";
 import { resolvePiRuntime } from "../src/runtime/pi-runtime.js";
 import { spawnSandboxed } from "../src/process/async.js";
 import { PiRpcClient } from "../src/runtime/pi-rpc.js";
@@ -92,7 +92,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       confinement: {
         host: {
           rootfs: residentRootfsPath(stateRoot), libdir: root,
-          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds,
+          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
           pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
           tmpBytes: 64 * 1024 * 1024,
           checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
@@ -230,7 +230,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
       confinement: {
         host: {
           rootfs: residentRootfsPath(stateRoot), libdir: root,
-          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds,
+          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
           pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
           tmpBytes: 64 * 1024 * 1024,
           checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
@@ -266,6 +266,89 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
   } finally {
     rpc?.close();
     child?.kill("SIGKILL");
+    await new Promise<void>(resolve => { if (control) control.close(() => { resolve(); }); else resolve(); });
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+test("T117 the host product's code cannot be read inside a Resident (TUI-003)", {
+  skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
+  timeout: 60000,
+}, async () => {
+  // The installation is mounted into every Resident, and it contains the host
+  // product. This runs the production mount plan with a probe in place of the
+  // engine, so what it sees is exactly what an engine would see.
+  const work = mkdtempSync(join(tmpdir(), "oma-live-hide-"));
+  let control: Server | null = null;
+  try {
+    const stateRoot = join(work, "s");
+    const runRoot = join(work, "r");
+    provisionSociety(stateRoot);
+    const actor = "alice";
+    const directories: ResidentDirectories = {
+      workspace: workspacePathAt(stateRoot, actor),
+      home: join(agentRootPathAt(stateRoot, actor), "home"),
+      archive: join(stateRoot, "mail", "archive"),
+      selfMail: join(stateRoot, "mail", "inboxes", actor),
+      view: runnerViewPathAt(stateRoot, actor),
+      world: join(stateRoot, "world"),
+      projectGit: join(stateRoot, "repos", "project.git"),
+      sessions: runnerSessionDirPathAt(stateRoot, actor),
+    };
+    for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
+    const leaseSocket = actorSocketPathAt(runRoot, actor, 1);
+    mkdirSync(dirname(leaseSocket), { recursive: true });
+    control = createServer(socket => { socket.destroy(); });
+    await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
+    const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
+    const runtime = resolvePiRuntime({ stateRoot, libdir: root });
+    const masks = productSurfaceMasks(root);
+    assert.ok(masks.some(mask => mask.path === "dist/src/tui"), "the built product surface should exist to hide");
+    const adapter = new PiAdapter({
+      actor, society: "live",
+      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096 },
+      profile: { provider: "pi", model: "current", prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      paths: {
+        piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
+        coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
+        workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
+        mailArchive: join(directories.archive, "cur"), batchView: directories.view, socket: leaseSocket,
+      },
+      confinement: {
+        host: {
+          rootfs: residentRootfsPath(stateRoot), libdir: root,
+          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: masks,
+          pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
+          tmpBytes: 64 * 1024 * 1024,
+          checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
+            workspaceBytes: 1 << 24, stagingBytes: 1 << 24, checkTimeoutSeconds: 30 },
+          stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
+        },
+        lease, directories,
+      },
+    });
+    const plan = adapter.spawnPlan();
+    const separator = plan.args.lastIndexOf("--");
+    const probe = spawnSync(plan.command, [...plan.args.slice(0, separator + 1), "/opt/oma-node/node", "-e", `
+      const fs = require("fs");
+      const read = p => { try { return fs.readFileSync(p, "utf8").length; } catch (e) { return e.code; } };
+      const list = p => { try { return fs.readdirSync(p); } catch (e) { return e.code; } };
+      const write = p => { try { fs.writeFileSync(p, "x"); return "written"; } catch (e) { return e.code; } };
+      console.log(JSON.stringify({
+        tuiDir: list("/opt/oma/dist/src/tui"), tuiSource: list("/opt/oma/src/tui"),
+        entry: read("/opt/oma/dist/src/entry/oma.js"), entrySource: read("/opt/oma/src/entry/oma.ts"),
+        writeIntoMask: write("/opt/oma/dist/src/tui/planted.js"),
+        extension: read("/opt/oma/dist/src/pi-extension.js") }));`], { encoding: "utf8", timeout: 30000 });
+    assert.equal(probe.status, 0, probe.stderr);
+    const seen = JSON.parse(probe.stdout.trim()) as Record<string, unknown>;
+    assert.deepEqual(seen.tuiDir, [], "the built product surface is readable inside");
+    assert.deepEqual(seen.tuiSource, [], "the product surface's source is readable inside");
+    assert.equal(typeof seen.entry, "string", "the product entrypoint is readable inside");
+    assert.equal(typeof seen.entrySource, "string", "the product entrypoint's source is readable inside");
+    assert.notEqual(seen.writeIntoMask, "written", "the mask must not become writable space");
+    // What the Resident needs is still there.
+    assert.equal(typeof seen.extension, "number", "hiding the product must not hide the trusted extension");
+  } finally {
     await new Promise<void>(resolve => { if (control) control.close(() => { resolve(); }); else resolve(); });
     rmSync(work, { recursive: true, force: true });
   }

@@ -136,7 +136,7 @@ export function readSettings(path: string): Settings {
  */
 export function revisionFor(config: HostConfigV1): string {
   const withoutRevision = { ...config, integration: { ...config.integration, policyRevision: "" } };
-  return `rev-${createHash("sha256").update(JSON.stringify(withoutRevision)).digest("hex").slice(0, 32)}`;
+  return `rev-${createHash("sha256").update(JSON.stringify(withoutRevision)).digest("hex").slice(0, CONFIG_BOUNDS.revisionDigestHex.value)}`;
 }
 
 function assertKnown(present: boolean, message: string): void {

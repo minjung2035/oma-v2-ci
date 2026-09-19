@@ -16,12 +16,13 @@ export const DEFAULT_POLICY = Object.freeze({
   identityOwner: "src/domain/request-identity.ts",
   sqliteOwners: Object.freeze(["src/store.ts"]),
   subprocessOwners: Object.freeze(Object.keys(subprocessResponsibilities)),
-  // PI-002: the compiled trusted extension is one self-contained file that cannot
-  // import host runtime at all. Its identity grammar is an exact single-file mirror,
-  // and the equivalence of both decoders is pinned by test/id-contracts.test.ts.
-  // This is not a general permission to restate identifier grammars.
+  // PI-001/002: the trusted extension cannot import host runtime at all (the
+  // extension-closure rule holds that), so its batch-view identity grammar is an
+  // exact mirror, and the equivalence of both decoders is pinned by
+  // test/id-contracts.test.ts. This is not a general permission to restate
+  // identifier grammars.
   identifierMirrors: Object.freeze({
-    "src/pi-extension.ts": "self-contained compiled Pi extension mirroring the batch-view identity grammar",
+    "src/extension/batch-view.ts": "trusted Pi extension mirroring the batch-view identity grammar",
   }),
   // The framed transport is intentionally I/O, unlike the codecs next to it.
   // This does not allow fs, process, SQLite, Store or entrypoint imports here.

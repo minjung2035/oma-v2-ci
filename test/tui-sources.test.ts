@@ -13,7 +13,12 @@ import {
 } from "../src/tui/sources/settings.js";
 import { CORE_EXTENSION, nextEntries, readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
 import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/tui/sources/mail.js";
-import { dashboardLines } from "../src/tui/dashboard.js";
+import { dashboardData, type DashboardInput } from "../src/tui/dashboard.js";
+import { dashboardRows } from "../src/tui/view/dashboard.js";
+
+/** Observation to words: the data layer interprets, the view words it. These
+ * tests hold the whole chain, so a regression in either layer shows here. */
+const dashboardLines = (input: DashboardInput) => dashboardRows(dashboardData(input));
 import { TuiTransport } from "../src/tui/transport.js";
 import { STATUS_STALE_MS, encodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
 import { sessionArgv } from "../src/tui/session.js";

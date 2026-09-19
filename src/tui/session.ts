@@ -9,6 +9,9 @@ import { spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/a
 import { PiRpcClient, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
+import { loadConfiguration } from "../config.js";
+import { StoreError } from "../domain/errors.js";
+import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
 
 export interface SessionPaths {
   readonly piCommand: string;
@@ -49,6 +52,25 @@ export interface SessionSink {
 /** Mirrors the Resident adapter's discovery blocking. A flag removed here would
  * let a Pi surface reach the product UI (TUI-014).
  */
+/** TUI-004: the Principal runs under the same role contract as a Resident —
+ * its model, extensions, prompt and tool surface come from its role in the
+ * configuration, never from defaults. An undeclared model is refused. */
+export function principalSessionProfile(configPath: string, society: string): SessionProfile {
+  const configuration = loadConfiguration(configPath);
+  const config = configuration.config;
+  const modelName = config.agentProfiles[config.principalProfile]?.modelProfile ?? "";
+  const model = config.modelProfiles[modelName];
+  if (!model) throw new StoreError("UNSUPPORTED_PROFILE", `principal model profile ${modelName} is not declared`);
+  const role = configuration.roles[config.principalProfile];
+  const prompt = role?.prompt ?? "";
+  return {
+    society, provider: model.provider, model: model.model,
+    extensions: (role?.extensions ?? []).map(extension => ({ path: extension.path, sha256: extension.sha256 })),
+    ...(prompt.length > 0 ? { prompt } : {}),
+    ...(role?.toolSurface ? { toolSurface: encodeToolSurfacePlan(role.toolSurface) } : {}),
+  };
+}
+
 export function sessionArgv(paths: SessionPaths, profile: SessionProfile): readonly string[] {
   const args = [
     "--mode", "rpc",

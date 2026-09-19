@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { TuiApp, type AppPorts } from "../src/tui/app.js";
 import { decodeKeys } from "../src/tui/keys.js";
 import { StoreError } from "../src/domain/errors.js";
-import type { ConfigField, DashboardLine, ExtensionRow, MailRow } from "../src/tui/model.js";
+import type { ConfigField, ExtensionRow, MailRow } from "../src/tui/model.js";
+import { unknownDashboard } from "./fixtures/dashboard.js";
 import type { Terminal } from "../src/tui/screen.js";
 
 const ESC = String.fromCharCode(27);
@@ -46,7 +47,7 @@ function harness(overrides: Partial<AppPorts> = {}): Harness {
     { kind: "choice", id: "worker-model", label: "Worker model", value: model, options: ["cheap", "fast"], apply: "next-activation" },
     { kind: "link", id: "extensions", label: "Extensions" },
   ];
-  const dashboard = (): readonly DashboardLine[] => [{ label: "Status", value: "unknown (broker 미연결)" }];
+  const dashboard = () => unknownDashboard();
   const extensions = (): readonly ExtensionRow[] => [
     { id: "dist/src/pi-extension.js", principal: true, workers: true, locked: true },
     { id: "extensions/review.js", principal: false, workers: false, locked: false },

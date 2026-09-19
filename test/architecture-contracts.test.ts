@@ -100,11 +100,11 @@ test("executable capability, method, identifier, resource and limit schema copie
   };
   accepts({
     "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/; export const OP_RE = /^op-[0-9a-f]{8}$/;`,
-    "src/pi-extension.ts": `const NAME = /^[a-z]{1,8}$/;`,
+    "src/extension/batch-view.ts": `const NAME = /^[a-z]{1,8}$/;`,
   });
   rejects("duplicate-id-schema", {
     "src/domain/identifiers.ts": `export const NAME_RE = /^[a-z]{1,8}$/; export const OP_RE = /^op-[0-9a-f]{8}$/;`,
-    "src/pi-extension.ts": `const NAME = /^[a-z]{1,8}$/; const WEAK = /^op-[0-9a-f]{2}$/;`,
+    "src/extension/batch-view.ts": `const NAME = /^[a-z]{1,8}$/; const WEAK = /^op-[0-9a-f]{2}$/;`,
   });
   const contracts = `export interface ResourceLimits {cpu: number; memory: number; tasks: number}
     export interface ProtocolLimits {frame: number; body: number; files: number}`;

@@ -6,8 +6,9 @@
  * bound a screen relies on is named here, so what the UI will and will not grow
  * to is readable in one place and testable without rendering anything.
  *
- * These are presentation bounds. They never relax a wire, durable or quota
- * limit, and nothing here is authority.
+ * They never relax a wire, durable or quota limit, and nothing here is
+ * authority. Column widths are layout and live with the view
+ * (`view/layout.ts`), so a layout rewrite does not touch this file.
  */
 
 export interface SurfaceBound {
@@ -16,7 +17,7 @@ export interface SurfaceBound {
   readonly why: string;
 }
 
-const bound = (value: number, unit: SurfaceBound["unit"], why: string): SurfaceBound =>
+export const bound = (value: number, unit: SurfaceBound["unit"], why: string): SurfaceBound =>
   Object.freeze({ value, unit, why });
 
 export const TERMINAL_BOUNDS = Object.freeze({
@@ -30,18 +31,9 @@ export const CONVERSATION_BOUNDS = Object.freeze({
   transcriptLines: bound(500, "lines", "a long session must not grow without limit"),
 });
 
-export const PANEL_BOUNDS = Object.freeze({
-  labelColumn: bound(28, "cells", "widest Config label the screen shows"),
-  minLabelColumn: bound(10, "cells", "keeps a label readable on a narrow terminal"),
-  valueColumn: bound(24, "cells", "leaves room for the apply-scope note beside a value"),
-  senderColumn: bound(14, "cells", "Mail sender column"),
-  kindColumn: bound(12, "cells", "Mail kind column"),
-  roleColumns: bound(26, "cells", "Extensions reserves this for both role columns"),
-  minNameColumn: bound(12, "cells", "keeps an extension id readable on a narrow terminal"),
-  numberDraftDigits: bound(9, "count", "a settings number never needs more digits"),
-});
-
 export const CONFIG_BOUNDS = Object.freeze({
+  numberDraftDigits: bound(9, "count", "a settings number never needs more digits"),
+  revisionDigestHex: bound(32, "count", "hex digits of the content digest a policy revision carries"),
   maxWorkerLimit: bound(4096, "count", "an editable cap the quota validator still has to accept"),
   maxInitialWorkers: bound(64, "count", "bootstrap seeds a population, not a fleet"),
   seedNameAttempts: bound(4096, "count", "bounds the search for a free seed name"),
@@ -58,7 +50,6 @@ export const READ_BOUNDS = Object.freeze({
 export const SURFACE_BOUNDS = Object.freeze({
   ...TERMINAL_BOUNDS,
   ...CONVERSATION_BOUNDS,
-  ...PANEL_BOUNDS,
   ...CONFIG_BOUNDS,
   ...READ_BOUNDS,
 });

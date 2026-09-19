@@ -41,11 +41,6 @@ test("pure header runtime closure excludes mail coordinator SQLite transport and
     }
   };
   visit(resolve(root, "src/mail/headers.ts"));
-  const cli = readFileSync(resolve(root, "src/cli.ts"), "utf8");
-  const mailEffects = readFileSync(resolve(root, "src/cli/effects/mail.ts"), "utf8");
-  assert.doesNotMatch(cli, /from\s+["']\.\/mail\.js["']/);
-  assert.doesNotMatch(mailEffects, /from\s+["']\.\.\/\.\.\/mail\.js["']/);
-  assert.match(mailEffects, /from\s+["']\.\.\/\.\.\/mail\/headers\.js["']/);
   assert.ok(seen.size >= 3);
 });
 

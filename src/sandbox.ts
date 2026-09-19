@@ -83,6 +83,10 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     "--proc", "/proc", "--dev", "/dev",
     "--size", String(h.tmpBytes), "--tmpfs", "/tmp",
     "--ro-bind", h.libdir, RESIDENT_PATHS.libdir,
+    ...(h.hidden ?? []).flatMap(({ path, kind }) => {
+      const target = `${RESIDENT_PATHS.libdir}/${path}`;
+      return kind === "dir" ? ["--tmpfs", target, "--remount-ro", target] : ["--ro-bind", "/dev/null", target];
+    }),
     "--bind", dirs.workspace, RESIDENT_PATHS.workspace, "--bind", dirs.home, RESIDENT_PATHS.home,
     "--bind", dirs.sessions, RESIDENT_PATHS.sessions,
     "--ro-bind", dirs.archive, RESIDENT_PATHS.archive, "--ro-bind", dirs.selfMail, RESIDENT_PATHS.selfMail,
@@ -147,6 +151,11 @@ export function validateSandboxHost(h: SandboxHost): void {
   if (!trustedAbsolutePath(h.rootfs) || !trustedAbsolutePath(h.libdir) ||
     !trustedAbsolutePath(h.node) || !trustedAbsolutePath(h.pi))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox host paths must be normalized non-root absolute paths");
+  if (h.hidden !== undefined && (!Array.isArray(h.hidden) || h.hidden.some(entry =>
+    typeof entry?.path !== "string" || entry.path.length === 0 || entry.path.startsWith("/") ||
+    entry.path.split("/").some((part: string) => part === "" || part === "." || part === "..") ||
+    (entry.kind !== "dir" && entry.kind !== "file"))))
+    throw new StoreError("UNSUPPORTED_PROFILE", "hidden installation paths must be plain relative paths");
   if (h.systemBinds !== undefined && (!Array.isArray(h.systemBinds) ||
     h.systemBinds.some(path => !SYSTEM_BIND_CANDIDATES.includes(path))))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox system mounts must be operating-system paths only");

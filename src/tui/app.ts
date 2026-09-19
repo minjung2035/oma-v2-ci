@@ -9,16 +9,16 @@ import { decodeKeys, type Key } from "./keys.js";
 import { assertNever } from "../domain/exhaustive.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
-  type Effect, type ExtensionRow, type MailRow, type PanelData, type State,
+  type DashboardData, type Effect, type ExtensionRow, type MailRow, type Notice, type PanelData, type State,
 } from "./model.js";
-import { applyLabel, render } from "./render.js";
+import { render } from "./view/index.js";
 import type { ConfigField } from "./model.js";
 import { CONVERSATION_BOUNDS } from "./limits.js";
 import type { Terminal } from "./screen.js";
 
 export interface AppPorts {
   readonly configFields: () => readonly ConfigField[];
-  readonly dashboard: () => PanelData["dashboard"];
+  readonly dashboard: () => DashboardData;
   readonly mail: () => readonly MailRow[];
   readonly extensions: () => readonly ExtensionRow[];
   readonly body: (path: string) => string | null;
@@ -29,8 +29,11 @@ export interface AppPorts {
 }
 
 const EMPTY: PanelData = Object.freeze({
-  dashboard: Object.freeze([]), config: Object.freeze([]),
-  extensions: Object.freeze([]), mail: Object.freeze([]),
+  dashboard: Object.freeze({
+    status: Object.freeze({ kind: "unknown" as const, observedAtMs: 0, reason: "아직 관측하지 않음" }),
+    configuredWorkers: 0, workerLimit: 0, unread: 0, principalModel: "unknown", rootfs: null,
+  }),
+  config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]),
 });
 
 function messageOf(error: unknown): string {
@@ -41,7 +44,7 @@ export class TuiApp {
   private state: State = INITIAL;
   private data: PanelData = EMPTY;
   private transcript: string[] = [];
-  private notice: string | null = null;
+  private notice: Notice | null = null;
   private busy = false;
 
   constructor(private readonly ports: AppPorts, private readonly terminal: Terminal) {}
@@ -74,7 +77,7 @@ export class TuiApp {
     this.draw();
   }
 
-  note(text: string | null): void { this.notice = text; this.draw(); }
+  note(text: string | null): void { this.notice = text === null ? null : { kind: "text", text }; this.draw(); }
 
   feed(chunk: Uint8Array): void {
     for (const key of decodeKeys(chunk)) this.key(key);
@@ -103,7 +106,7 @@ export class TuiApp {
         case "set-extension":
           this.ports.setExtension(effect.id, effect.role, effect.enabled);
           this.refresh();
-          this.notice = `${effect.id} · ${effect.role === "principal" ? "Principal" : "Workers"} ${effect.enabled ? "사용" : "해제"} · 저장됨`;
+          this.notice = { kind: "extension", id: effect.id, role: effect.role, enabled: effect.enabled };
           return;
         case "submit-prompt":
           this.notice = null;
@@ -120,7 +123,7 @@ export class TuiApp {
     } catch (error) {
       // A rejected write must state that nothing was saved rather than leaving
       // the previous value looking like it changed.
-      this.notice = `저장하지 못했습니다: ${messageOf(error)}`;
+      this.notice = { kind: "save-failed", message: messageOf(error) };
       this.refresh();
     }
   }
@@ -128,11 +131,12 @@ export class TuiApp {
   /** Arch §23.6: a confirmed value is a saved value, and the message states
    * when it actually takes effect.
    */
-  private saved(field: string, value: string): string {
+  private saved(field: string, value: string): Notice {
     const declared = this.data.config.find(entry => entry.id === field);
-    const scope = declared && declared.kind !== "link" ? ` · ${applyLabel(declared.apply)}` : "";
-    const label = declared?.label ?? field;
-    return `${label} = ${value} · 저장됨${scope}`;
+    return {
+      kind: "saved", label: declared?.label ?? field, value,
+      apply: declared && declared.kind !== "link" ? declared.apply : null,
+    };
   }
 
   draw(): void {
@@ -140,13 +144,10 @@ export class TuiApp {
     const body = detail.kind === "mail"
       ? this.ports.body(this.data.mail[detail.row]?.path ?? "")
       : null;
-    const status = this.busy ? "· 응답 생성 중" : "";
-    const notice = this.notice === null
-      ? (status.length > 0 ? status : null)
-      : `${this.notice}${status.length > 0 ? ` ${status}` : ""}`;
     this.terminal.draw(render({
       state: this.state, data: this.data, transcript: this.transcript,
-      body, notice, columns: this.terminal.columns, rows: this.terminal.rows,
+      body, notice: this.notice, busy: this.busy,
+      columns: this.terminal.columns, rows: this.terminal.rows,
     }));
   }
 

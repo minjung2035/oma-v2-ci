@@ -448,6 +448,8 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
   --proc /proc --dev /dev
   --size <tmpBytes> --tmpfs /tmp
   --ro-bind <libdir> /opt/oma
+  <--tmpfs /opt/oma/<dir> --remount-ro /opt/oma/<dir> | --ro-bind /dev/null /opt/oma/<file>
+     for each installed product-surface path (TUI-003)>
   --bind <ownWorkspace> /workspace
   --bind <ownHome> /home/agent
   --bind <ownRunnerSessionDir> /run/oma-sessions
@@ -630,7 +632,7 @@ relay는 자리표시자를 header 값과 request path에서만 진짜 key로 �
 
 **MUST [TUI-002; arch §23.2]** `oma`는 두 개의 서로 다른 실행 파일이다. host 설치 PATH의 것은 Human TUI이고, Resident rootfs 안의 것은 CLI-001의 model-facing CLI다. 두 실행 파일은 argv 파서, capability, 연결 소켓, 설정 접근을 공유하지 않는다. 공유 가능한 것은 frame codec과 transport처럼 부작용과 권한이 없는 leaf뿐이다.
 
-**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. Resident의 `--help`, 도움말 텍스트, 오류 메시지에서 TUI나 Control Panel을 발견할 수 없어야 한다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.
+**MUST NOT [TUI-003]** host TUI의 실행 파일·소스·설정·소켓을 §12의 sandbox mount 목록에 추가한다. 설치 디렉터리를 통째로 mount하는 경우(`SB-002`) 배포 layout이 선언한 product surface 경로(`dist/src/tui`, `dist/src/entry/oma.js`와 그 원본)는 같은 mount 계획 안에서 가려야 하며, 가린 자리는 쓰기 가능한 공간이 되어서도 안 된다. Resident의 `--help`, 도움말 텍스트, 오류 메시지에서 TUI나 Control Panel을 발견할 수 없어야 한다. 모델이 host TUI가 여는 어떤 endpoint에도 연결할 수 없어야 한다.
 
 **MUST [TUI-004; arch §23.3]** Principal Pi session은 OMA TUI가 소유하며 `pi --mode rpc`로 실행한다. Pi의 대화형 모드나 built-in UI를 사용하지 않는다. PR-001의 단일 attach, PR-003의 private context 보존, PR-004의 model-facing tool 제한은 이 entrypoint가 그대로 진다. Principal의 논리 identity는 bootstrap 때 만들고 TUI 실행 여부와 독립적으로 유지한다. TUI 종료는 새 Principal 생성의 trigger가 아니다.
 
