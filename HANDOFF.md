@@ -75,9 +75,9 @@ TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unveri
 
 TUI에서 아직 닫히지 않은 의존성은 하나로 좁혀져 있다.
 
-**`principal.attach` credential handshake가 미구현이다**(IPC-011, S-02). 그래서 TUI는 broker의 `status.get`을 호출할 수 없고 Dashboard의 Active/Pending/Status는 항상 `unknown`으로 표시된다. 호출 경로 자체는 `src/tui/transport.ts`에 있으므로 endpoint가 생기면 바로 동작한다.
+**`principal.attach` credential handshake는 구현되었다**(IPC-011). broker가 run마다 credential을 `<runRoot>/principal.cred`에 0600으로 게시하고, `oma`가 자신이 띄운 Principal session의 환경에만 넘기며, model-facing CLI가 매 연결의 첫 frame으로 제시한다. Dashboard는 별개로 host-private status view(TUI-021)를 읽으므로 이 handshake에 의존하지 않는다.
 
-S-02는 이제 "실행 불가 환경"이 아니라 **OPEN이되 실행 가능**이다. OMA가 session을 소유하므로 검증 대상이 배포 안에 존재한다. 통과 기준(SP-02-T/A)은 그대로이며, PR-004의 model-facing tool 제한은 새 entrypoint가 그대로 진다.
+S-02는 여전히 **OPEN**이다. handshake와 duplicate attach 거절은 닫혔지만, SP-02-T/A의 model-facing tool override와 credential 비노출 기준은 실제 모델이 도는 환경을 요구한다. PR-004의 제한은 새 entrypoint가 그대로 진다.
 
 session 경계를 넘지 않는 Principal model per-request 전환은 TUI-005가 명시적으로 범위 밖에 둔다. 하려면 `src/inference.ts`의 frozen authority 검사를 함께 개정해야 하며, 호출 경로 없이 API만 먼저 만들지 않는다.
 

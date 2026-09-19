@@ -5,7 +5,7 @@
  * cur, and stores no read state. "Unread" is the Maildir position the broker
  * already owns, not a new durable flag.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { MailRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
@@ -71,46 +71,88 @@ function addressName(value: string | undefined): string {
   return local.length > 0 ? local : address;
 }
 
+/** Reads at most `limit` bytes of a regular file without following a link.
+ *
+ * A mailbox is a directory of files other processes create, so the read is
+ * bounded at the syscall — never a whole file sliced afterwards — and a symlink
+ * is refused rather than followed: a corrupted Maildir must not be able to put
+ * the contents of a host file on this screen. The time the message arrived is
+ * taken from the same descriptor, so what is read and what it is ordered by
+ * come from one observation of one file.
+ */
+function readBounded(path: string, limit: number): { text: string; deliveredAtMs: number } | null {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) return null;
+    const wanted = Math.min(limit, stat.size);
+    const buffer = Buffer.allocUnsafe(wanted);
+    let filled = 0;
+    while (filled < wanted) {
+      const count = readSync(fd, buffer, filled, wanted - filled, null);
+      if (count === 0) break;
+      filled += count;
+    }
+    return { text: buffer.subarray(0, filled).toString("utf8"), deliveredAtMs: stat.mtimeMs };
+  } catch { return null; }
+  finally { if (fd !== undefined) closeSync(fd); }
+}
+
 function listDir(path: string): readonly string[] {
   try { return readdirSync(path).sort(); } catch { return []; }
 }
 
-function rowFrom(path: string, name: string, unread: boolean): MailRow | null {
-  let text: string;
-  try {
-    const stat = statSync(path);
-    if (!stat.isFile()) return null;
-    text = readFileSync(path, "utf8").slice(0, HEADER_LIMIT);
-  } catch { return null; }
-  const { headers } = parseMessage(text);
-  return Object.freeze({
-    id: name,
-    from: addressName(headers["from"]),
-    kind: headers["x-oma-kind"] ?? "message",
-    subject: headers["subject"] ?? "(제목 없음)",
-    unread,
-    path,
-  });
+/** One derivation of a mailbox directory's rows, so the list and the unread
+ * count can never disagree about what counts as a message (a directory, a
+ * symlink or an unreadable entry is a message in neither). */
+function rowsIn(directory: string, unread: boolean): readonly { row: MailRow; deliveredAtMs: number }[] {
+  const rows: { row: MailRow; deliveredAtMs: number }[] = [];
+  for (const name of listDir(directory)) {
+    const path = join(directory, name);
+    const read = readBounded(path, HEADER_LIMIT);
+    if (read === null) continue;
+    const { headers } = parseMessage(read.text);
+    rows.push({
+      deliveredAtMs: read.deliveredAtMs,
+      row: Object.freeze({
+        id: name,
+        from: addressName(headers["from"]),
+        kind: headers["x-oma-kind"] ?? "message",
+        subject: headers["subject"] ?? "(제목 없음)",
+        unread,
+        path,
+      }),
+    });
+  }
+  return rows;
 }
 
-/** Newest first: the mailbox is a list to scan, not a queue to drain. */
+/** Most recently delivered first, within unread and then read.
+ *
+ * A message id carries a random UUID, so the file name says nothing about when
+ * the message arrived; the Maildir file's own modification time does, and that
+ * is what orders the list. Entries that arrived in the same millisecond keep a
+ * stable order by name so the screen does not reshuffle between refreshes.
+ */
+function byArrival(rows: readonly { row: MailRow; deliveredAtMs: number }[]): readonly MailRow[] {
+  return [...rows]
+    .sort((left, right) => right.deliveredAtMs - left.deliveredAtMs || left.row.id.localeCompare(right.row.id))
+    .map(entry => entry.row);
+}
+
 export function readMailbox(paths: MailboxPaths): readonly MailRow[] {
-  const rows: MailRow[] = [];
-  for (const name of listDir(paths.newDir)) {
-    const row = rowFrom(join(paths.newDir, name), name, true);
-    if (row) rows.push(row);
-  }
-  for (const name of listDir(paths.curDir)) {
-    const row = rowFrom(join(paths.curDir, name), name, false);
-    if (row) rows.push(row);
-  }
-  return Object.freeze(rows.reverse());
+  return Object.freeze([
+    ...byArrival(rowsIn(paths.newDir, true)),
+    ...byArrival(rowsIn(paths.curDir, false)),
+  ]);
 }
 
 export function unreadCount(paths: MailboxPaths): number {
-  return listDir(paths.newDir).length;
+  return rowsIn(paths.newDir, true).length;
 }
 
 export function readBody(path: string, limit = READ_BOUNDS.mailBodyBytes.value): string | null {
-  try { return parseMessage(readFileSync(path, "utf8").slice(0, limit)).body; } catch { return null; }
+  const read = readBounded(path, limit);
+  return read === null ? null : parseMessage(read.text).body;
 }

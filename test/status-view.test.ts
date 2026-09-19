@@ -6,12 +6,13 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store.js";
 import { ViewsModule } from "../src/views.js";
 import { decodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
+import { TuiTransport } from "../src/tui/transport.js";
 
 test("T118 what the broker publishes is what the Dashboard accepts, and only its owner can read it", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-status-view-"));
@@ -37,4 +38,24 @@ test("T118 what the broker publishes is what the Dashboard accepts, and only its
     store.close();
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("T118: an oversized or linked status view is refused, not read into memory", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-status-bounds-"));
+  try {
+    const path = statusViewPath(root);
+    // Larger than the declared bound. Reading it whole and checking afterwards
+    // would cost the memory the file claims before the refusal.
+    writeFileSync(path, "x".repeat(4096));
+    const observation = await new TuiTransport(root, "demo", 1024).status();
+    assert.equal(observation.kind, "unknown");
+    assert.match((observation as { reason: string }).reason, /너무 큼/);
+
+    // A link where the view should be is refused rather than followed.
+    rmSync(path);
+    symlinkSync("/etc/passwd", path);
+    const linked = await new TuiTransport(root, "demo", 1024 * 1024).status();
+    assert.equal(linked.kind, "unknown");
+    assert.match((linked as { reason: string }).reason, /읽지 못함/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

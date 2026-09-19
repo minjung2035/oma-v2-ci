@@ -4,7 +4,7 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 기준 HEAD `42e6e8d`, 실행일 2026-09-19. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 기준 HEAD `1b801f8`(작업 트리 포함), 실행일 2026-09-19. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
 ### 실행 결과
 
@@ -14,8 +14,10 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **996/996 PASS**, fail/cancelled/skipped/todo=0 |
-| `node scripts/loc.mjs` | **187 files / 17,946 code LOC** |
+| `npm test` | **1038/1038 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm run test:functional-surface` | PASS (release qualification 아님) |
+| `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` |
+| `node scripts/loc.mjs` | **208 files / 19,163 code LOC** |
 
 ### 현재 범위
 
@@ -117,6 +119,29 @@ TTY는 `script`로 실제 pty를 띄워 raw mode 취득·복원과 크기 보고
 - `mail-header-leaf`의 "`cli/effects/mail.ts`가 `mail/headers.js`를 import해야 한다" 양성 pin: 배선을 고정할 뿐 경계를 지키지 않는다. 경계(전체 mail 모듈 import 금지)는 `module-port-import`가 지킨다.
 - entrypoint에 `roleExtensions`가 쓰였는지 보던 regex: Principal profile 조립을 `principalSessionProfile()`로 꺼내 역할의 모델·extension·digest·projection이 그대로 넘어가는지 행동으로 검사한다.
 
+### Principal 제품 경로를 닫은 것
+
+감사에서 P1으로 지적된 세 가지는 같은 하나의 구멍이었다. `oma`가 Principal engine에 `HOME`/`PATH`만 넘겨서 trusted extension이 OMA tool을 아예 등록하지 않았고(`OMA_CLI_PATH`/`OMA_AGENT_HOME`/`OMA_MAIL_ARCHIVE`/`OMA_SOCKET` 부재), `OMA_WORKSPACE_BYTES`가 없어 write/edit이 전부 차단됐으며, engine의 cwd가 될 `principal/private`를 아무도 만들지 않았고, 무엇보다 Principal이 broker에 자기를 증명할 방법이 없었다. Principal에는 systemd scope가 없어 Resident를 인가하는 cgroup·run lease 검사가 성립하지 않는다.
+
+architecture §23.5가 이미 답을 정해두고 있었다. broker가 run마다 private connection credential을 만들고, host가 자신이 띄운 session에만 넘기고, model 도구에는 제한된 principal actor endpoint만 노출한다. IPC-011이 이 handshake를 미뤄둔 이유는 "남이 띄운 Pi session에 붙는 법"이 미정이었기 때문인데, TUI-004에서 OMA가 session을 직접 기동하게 되면서 그 질문이 사라졌으므로 handshake를 확정했다.
+
+- broker는 시작 시 32바이트 난수를 `<runRoot>/principal.cred`에 0600으로 게시하고 `<runRoot>/principal.sock`을 연다. credential은 파생값이 아니며 broker가 멈추면 메모리와 디스크에서 함께 사라진다.
+- 그 endpoint의 연결은 `principal.attach`가 성공하기 전까지 아무도 아니다. 다른 session handle의 두 번째 attach는 거절되므로 society는 Principal 하나를 유지한다(architecture §8.4).
+- model-facing CLI는 환경에 credential이 있을 때만 매 연결의 첫 frame으로 그것을 제시한다. Resident의 환경에도 sandbox에도 credential은 없으므로 다른 호출자에게는 아무 변화가 없다.
+- `T114`는 이것을 실제 socket과 실제 `dist/src/cli.js` 프로세스로 검사한다: attach 없는 요청·위조 credential·두 번째 session은 `AUTH_FAILED`로 끝나고 연결이 닫히며, 이 run의 credential만 `status.get`을 받는다.
+
+batch view는 일부러 넘기지 않는다. Principal을 위해 batch를 준비하는 runner가 없으므로 delivery command는 unavailable로 남는다(TRACE-002).
+
+### 같은 감사에서 함께 고친 것
+
+- **Mail 화면과 status view의 bounded read가 bounded가 아니었다.** `readFileSync(...).slice(0, LIMIT)`는 파일 전체를 먼저 메모리에 올린다. 이제 `O_NOFOLLOW`로 열어 `fstat`으로 정규 파일임을 확인하고 한도만큼만 읽는다. 링크는 따라가지 않으므로 손상된 Maildir이 host 파일 내용을 화면에 올릴 수 없다. 이전 adversarial test는 링크를 따라가는 동작을 정상으로 취급하고 있었고, 그 단언을 거절 단언으로 바꿨다. `TuiTransport`도 같은 방식으로 고쳤다.
+- **unread 수와 목록이 어긋날 수 있었다.** `unreadCount`는 `new/`의 모든 항목을 세고 `readMailbox`는 비파일을 버렸다. 이제 둘 다 같은 행 도출을 쓴다.
+- **"Newest first"가 사실이 아니었다.** message id는 무작위 UUID를 담으므로 파일 이름 순서는 시각과 무관하다. 정렬 기준을 Maildir 파일의 mtime으로 바꾸고, unread를 먼저 보이게 했다.
+- **relay의 경로 검사가 철자 목록이었다.** `..`/`%2e%2e`만 막고 `%2e.`·`.%2e`는 통과했다. 이제 선언된 endpoint에 이어 붙인 뒤 URL parser로 canonical form을 만들고 그 결과가 endpoint 안인지 검사하므로 철자 목록이 필요 없다. encoded separator(`%2f`/`%5c`)는 canonicalisation이 보존하고 provider가 해석할 수 있으므로 따로 거절한다.
+- **CI workflow가 green이 될 수 없었다.** 모든 명령을 900초에 죽이면서 3600/7200초 예산의 lane을 호출했고, hosted runner에 없는 systemd lane을 실행했으며, 생성기 이전에 관측한 stale inventory를 기록만 하고 넘어갔다. 이제 lane마다 자기 예산보다 큰 ceiling을 주고, systemd lane은 NOT_RUN으로 기록하며, stale inventory는 실패다. `T116`이 workflow 원문과 lane 정의를 정적으로 대조한다.
+- **LOC/hash 증거가 source에 묶여 있지 않았다.** 파일 목록은 최신인데 측정 기록은 21개 적은 집합의 것이었고, `src/pi-extension.ts`가 33줄인데 657 code LOC로 적혀 있었다. `check:inventory`가 이제 기록된 sha256을 현재 바이트와 대조하므로 같은 드리프트는 발생 즉시 실패한다.
+- **peer 신원이 Node 비공개 필드에 의존한다.** 없앨 수는 없지만(공개 API가 없다) `src/leaf.ts`로 옮겨 다른 비공개 primitive와 함께 한곳에서 이름을 갖게 했고, 실제 accepted socket에서 `SO_PEERCRED`가 이 프로세스를 가리키는지 검사한다.
+
 ### 남은 것
 
 - TUI/TSP requirement의 trace 상태는 `unverified`다. owner/callPath/negative test는 연결돼 있으나 compliance 기록 절차를 거치지 않았다.
@@ -178,7 +203,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **190 files / 18,208 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **208 files / 19,163 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

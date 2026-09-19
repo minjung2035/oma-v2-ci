@@ -11,7 +11,7 @@ permissions:
 jobs:
   baseline:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 150
     env:
       EVIDENCE: /tmp/oma-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -50,30 +50,50 @@ jobs:
         shell: bash
         run: |
           set +e
+          # Each check gets a wall-clock ceiling above the one the check itself
+          # enforces, so the outer kill can only ever fire on a hang -- never on
+          # a lane that is still inside its own budget and would have reported.
           run_check() {
-            local label="$1"; shift
-            timeout --kill-after=10s 900s "$@" > "$EVIDENCE/$label.log" 2>&1
+            local label="$1"; local seconds="$2"; shift 2
+            timeout --kill-after=10s "${seconds}s" "$@" > "$EVIDENCE/$label.log" 2>&1
             local code=$?
             printf '%s\t%s\n' "$label" "$code" >> "$EVIDENCE/exit-codes.tsv"
             if [ "$code" -ne 0 ]; then touch "$EVIDENCE/failed"; fi
           }
-          # Preserve the stale-inventory observation before generating anything.
+          # A stale inventory is a failure of this commit, not a note: the
+          # generators run afterwards, so without this the regenerated files
+          # would hide the very state the check observed.
           npm run check:inventory > "$EVIDENCE/inventory-before.log" 2>&1
-          printf '%s\n' "$?" > "$EVIDENCE/inventory-before.exit-code"
-          run_check inventory npm run inventory
-          run_check check-inventory npm run check:inventory
-          run_check typecheck npm run typecheck
-          run_check build npm run build
-          run_check check-package npm run check:package
-          run_check check-architecture npm run check:architecture
-          run_check test npm test
-          for lane in fast durable property stress kernel crash all; do
-            run_check "verify-$lane" npm run "verify:$lane" -- --out "$EVIDENCE/$lane"
+          inventory_before=$?
+          printf '%s\n' "$inventory_before" > "$EVIDENCE/inventory-before.exit-code"
+          printf '%s\t%s\n' inventory-before "$inventory_before" >> "$EVIDENCE/exit-codes.tsv"
+          if [ "$inventory_before" -ne 0 ]; then touch "$EVIDENCE/failed"; fi
+          # Measure before checking: the inventory check now verifies the LOC
+          # and hash records against the source they claim to describe, and
+          # `npm run inventory` deliberately writes only the file list.
+          run_check loc 900 node scripts/loc.mjs
+          run_check check-inventory 900 npm run check:inventory
+          run_check typecheck 900 npm run typecheck
+          run_check build 900 npm run build
+          run_check check-package 900 npm run check:package
+          run_check check-architecture 900 npm run check:architecture
+          run_check test 1800 npm test
+          # Only the lanes whose environment this runner actually provides. A
+          # hosted runner has no systemd user manager and no bubblewrap, so the
+          # systemd lanes cannot run here; they are recorded as NOT_RUN with the
+          # reason rather than executed to a failure that says nothing, and a
+          # lane that did not run is never counted as a pass.
+          run_check verify-fast 900 npm run verify:fast -- --out "$EVIDENCE/fast"
+          run_check verify-durable 1500 npm run verify:durable -- --out "$EVIDENCE/durable"
+          run_check verify-property 900 npm run verify:property -- --out "$EVIDENCE/property"
+          run_check verify-stress 900 npm run verify:stress -- --out "$EVIDENCE/stress"
+          for lane in kernel crash all; do
+            printf '%s\tNOT_RUN\n' "verify-$lane" >> "$EVIDENCE/exit-codes.tsv"
           done
-          run_check loc node scripts/loc.mjs
+          printf '%s\n' 'kernel, crash and all are systemd lanes. They require a disposable user with a systemd user manager and bubblewrap, which a hosted runner does not provide, and verify-lane.mjs refuses them without OMA_TEST_SYSTEMD=1. They were NOT_RUN here and this workflow certifies nothing about them.' > "$EVIDENCE/systemd-lanes.txt"
           cp production-files.txt production-loc.json production-loc-hashes.json "$EVIDENCE/"
           git diff -- production-files.txt production-loc.json production-loc-hashes.json > "$EVIDENCE/generated-inventory.patch"
-          printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips and timeouts are not PASS. This workflow does not certify OPEN spikes or VM power loss.' > "$EVIDENCE/README.txt"
+          printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips, NOT_RUN and timeouts are not PASS. This workflow runs the node and git-fs lanes only; it does not certify the systemd lanes, OPEN spikes or VM power loss.' > "$EVIDENCE/README.txt"
       - name: Upload raw evidence even when a check failed
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

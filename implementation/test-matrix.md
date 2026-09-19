@@ -102,6 +102,7 @@
 | T107–T108 | 엔진 프리미티브 소유 경계, spawn 경로 대칭 |
 | T109–T110 | 제품 표면의 적대적 입력, core 결합 |
 | T111–T113 | 실제 프로세스 경계: SIGKILL, TTY, 엔진 투영 |
+| T114–T116 | Principal endpoint, 제품 표면의 bounded 읽기, CI lane 정직성 |
 
 | ID / 요구 | Given → When → Then |
 |---|---|
@@ -127,6 +128,9 @@
 | T110 / TUI-019, TSP-002 | 생성된 설정과 role 투영 → core의 닫힌 validator와 loader → 그대로 통과하고, capability·resource·limit이 core 어휘 안에 있으며, 자식 capability가 부모 delegable을 넘지 않고, 제품 표면이 method 집합을 넓히지 않음 |
 | T107 / TUI-020 | 제품 표면 source 전체 → 정적 검사 → 엔진 프리미티브 import는 선언된 소유자에서만 일어나고, 엔진의 절단·줄바꿈·화면 제어는 들여오지 않음; 선언되지 않은 bound·bare Error·비exhaustive closed union 0건 |
 | T108 / TUI-004,017 | Resident와 Principal의 spawn 경로 → 각각이 엔진에 넘기는 값 비교 → extensions(digest 포함)·projection·role prompt·agent 디렉터리가 양쪽 동일; prompt 없는 role은 빈 flag를 넣지 않음 |
+| T114 / TUI-004, AUTH-003, IPC-011 | 실제 broker와 실제 model-facing CLI → attach 없는 요청, 위조 credential, 이 run의 credential, 다른 session handle의 두 번째 attach → 앞의 셋은 `AUTH_FAILED`로 거절되고 연결이 끝나며, 이 run의 credential만 principal actor로 인정되어 public method가 응답한다. broker가 멈추면 credential 파일이 사라지고, Principal engine 환경에는 extension이 요구하는 모든 값이 있으며 batch view는 없다 |
+| T115 / TUI-011 | 심볼릭 링크·디렉터리·헤더 한도를 넘는 메시지가 섞인 Maildir → Mail 화면 읽기 → 링크는 따라가지 않고 파일 전체를 버퍼링하지 않으며, unread 수와 목록의 unread 행 수가 같고, 정렬은 파일 이름이 아니라 도착 시각을 따른다 |
+| T116 / VAL-002 | CI workflow 원문과 lane 정의 → 정적 대조 → 어떤 lane도 자기 예산보다 먼저 죽지 않고, runner가 제공하지 않는 systemd lane은 실행 대신 NOT_RUN으로 기록되며, 생성기 이전에 관측한 stale inventory가 실패로 남는다 |
 | T106 / TUI-017,019 | 설정 없는 빈 프로젝트 디렉터리 → `oma` 실행 → 초기화 명령 없이 society를 디렉터리에서 유도하고 실제 설정 파일 생성; 생성값은 bounded하고 Control Panel에서 수정 가능; Resident에 `code.integrate` 없음; 사용자 `~/.pi` 참조 0건 |
 
 **MUST [TEST-003]** default core에서 T01–T74 및 T77을 적용하고, T75/T76은 해당 optional 활성 시 필수다. S-03 등 미결정 gate 때문에 test oracle의 version-specific 부분을 완성할 수 없으면 test를 skip해서 release 통과로 계산하지 않는다.

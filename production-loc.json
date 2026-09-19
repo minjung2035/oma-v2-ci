@@ -1,16 +1,16 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.076024055480957,
-  "n_files"            : 187,
-  "n_lines"            : 20058,
-  "files_per_second"   : 2459.74775769284,
-  "lines_per_second"   : 263837.542908037,
+  "elapsed_seconds"    : 0.0845980644226074,
+  "n_files"            : 208,
+  "n_lines"            : 21972,
+  "files_per_second"   : 2458.6850942705,
+  "lines_per_second"   : 259722.254285151,
   "report_file"        : "production-loc.json"},
-"src/pi-extension.ts" :{
-  "blank": 9,
-  "comment": 32,
-  "code": 657,
+"src/broker.ts" :{
+  "blank": 1,
+  "comment": 28,
+  "code": 418,
   "language": "TypeScript"},
 "src/durable.ts" :{
   "blank": 5,
@@ -27,25 +27,25 @@
   "comment": 5,
   "code": 366,
   "language": "TypeScript"},
-"src/broker.ts" :{
-  "blank": 1,
-  "comment": 6,
-  "code": 336,
-  "language": "TypeScript"},
-"src/runtime/pi-adapter.ts" :{
-  "blank": 1,
-  "comment": 13,
-  "code": 320,
-  "language": "TypeScript"},
 "src/store.ts" :{
   "blank": 3,
   "comment": 13,
   "code": 276,
   "language": "TypeScript"},
+"src/runner.ts" :{
+  "blank": 0,
+  "comment": 32,
+  "code": 273,
+  "language": "TypeScript"},
 "src/runtime/pi-rpc.ts" :{
   "blank": 2,
   "comment": 10,
   "code": 270,
+  "language": "TypeScript"},
+"src/tui/model.ts" :{
+  "blank": 29,
+  "comment": 32,
+  "code": 260,
   "language": "TypeScript"},
 "src/config/operations.ts" :{
   "blank": 1,
@@ -57,10 +57,10 @@
   "comment": 8,
   "code": 256,
   "language": "TypeScript"},
-"src/tui/model.ts" :{
-  "blank": 28,
-  "comment": 25,
-  "code": 246,
+"src/runtime/inference-relay.ts" :{
+  "blank": 29,
+  "comment": 63,
+  "code": 251,
   "language": "TypeScript"},
 "src/storage/operation-codec.ts" :{
   "blank": 3,
@@ -92,10 +92,25 @@
   "comment": 0,
   "code": 221,
   "language": "TypeScript"},
+"src/runtime/pi-adapter.ts" :{
+  "blank": 1,
+  "comment": 11,
+  "code": 220,
+  "language": "TypeScript"},
+"src/extension/mail-tools.ts" :{
+  "blank": 1,
+  "comment": 8,
+  "code": 207,
+  "language": "TypeScript"},
 "src/git/integration.ts" :{
   "blank": 5,
   "comment": 5,
   "code": 205,
+  "language": "TypeScript"},
+"src/tui/session.ts" :{
+  "blank": 18,
+  "comment": 54,
+  "code": 195,
   "language": "TypeScript"},
 "src/units.ts" :{
   "blank": 16,
@@ -105,11 +120,6 @@
 "src/request-cache.ts" :{
   "blank": 16,
   "comment": 19,
-  "code": 194,
-  "language": "TypeScript"},
-"src/runner.ts" :{
-  "blank": 0,
-  "comment": 6,
   "code": 194,
   "language": "TypeScript"},
 "src/storage/immutable-file.ts" :{
@@ -137,11 +147,6 @@
   "comment": 5,
   "code": 183,
   "language": "TypeScript"},
-"src/tui/render.ts" :{
-  "blank": 17,
-  "comment": 21,
-  "code": 182,
-  "language": "TypeScript"},
 "src/reconcile.ts" :{
   "blank": 1,
   "comment": 11,
@@ -155,6 +160,11 @@
 "src/broker/public-dispatcher.ts" :{
   "blank": 3,
   "comment": 8,
+  "code": 174,
+  "language": "TypeScript"},
+"src/entry/oma.ts" :{
+  "blank": 18,
+  "comment": 36,
   "code": 174,
   "language": "TypeScript"},
 "src/git/context.ts" :{
@@ -187,14 +197,14 @@
   "comment": 9,
   "code": 159,
   "language": "TypeScript"},
+"src/runtime/pi-spawn-plan.ts" :{
+  "blank": 8,
+  "comment": 49,
+  "code": 159,
+  "language": "TypeScript"},
 "src/diagnostics/integrity.ts" :{
   "blank": 1,
   "comment": 4,
-  "code": 156,
-  "language": "TypeScript"},
-"src/entry/oma.ts" :{
-  "blank": 15,
-  "comment": 19,
   "code": 156,
   "language": "TypeScript"},
 "src/tui/sources/extensions.ts" :{
@@ -211,6 +221,11 @@
   "blank": 11,
   "comment": 40,
   "code": 151,
+  "language": "TypeScript"},
+"src/extension/batch-view.ts" :{
+  "blank": 1,
+  "comment": 6,
+  "code": 150,
   "language": "TypeScript"},
 "src/mail/headers.ts" :{
   "blank": 4,
@@ -232,6 +247,11 @@
   "comment": 3,
   "code": 143,
   "language": "TypeScript"},
+"src/tui/view/screens.ts" :{
+  "blank": 11,
+  "comment": 13,
+  "code": 140,
+  "language": "TypeScript"},
 "src/domain/derived.ts" :{
   "blank": 11,
   "comment": 9,
@@ -247,6 +267,11 @@
   "comment": 9,
   "code": 136,
   "language": "TypeScript"},
+"src/sandbox.ts" :{
+  "blank": 8,
+  "comment": 36,
+  "code": 136,
+  "language": "TypeScript"},
 "src/storage/submit-spool.ts" :{
   "blank": 3,
   "comment": 12,
@@ -257,19 +282,19 @@
   "comment": 15,
   "code": 135,
   "language": "TypeScript"},
-"src/tui/session.ts" :{
+"src/process/async.ts" :{
+  "blank": 2,
+  "comment": 21,
+  "code": 134,
+  "language": "TypeScript"},
+"src/leaf.ts" :{
   "blank": 13,
-  "comment": 29,
-  "code": 135,
+  "comment": 13,
+  "code": 131,
   "language": "TypeScript"},
 "src/config.ts" :{
   "blank": 5,
   "comment": 2,
-  "code": 129,
-  "language": "TypeScript"},
-"src/process/async.ts" :{
-  "blank": 2,
-  "comment": 14,
   "code": 129,
   "language": "TypeScript"},
 "src/runtime/run-registry.ts" :{
@@ -277,20 +302,20 @@
   "comment": 5,
   "code": 128,
   "language": "TypeScript"},
-"src/entry/broker.ts" :{
-  "blank": 1,
-  "comment": 2,
-  "code": 125,
+"src/extension/tool-surface.ts" :{
+  "blank": 6,
+  "comment": 27,
+  "code": 127,
   "language": "TypeScript"},
 "src/tui/app.ts" :{
   "blank": 16,
   "comment": 17,
-  "code": 125,
+  "code": 126,
   "language": "TypeScript"},
-"src/leaf.ts" :{
-  "blank": 12,
-  "comment": 8,
-  "code": 124,
+"src/entry/broker.ts" :{
+  "blank": 1,
+  "comment": 2,
+  "code": 125,
   "language": "TypeScript"},
 "src/mail/batches.ts" :{
   "blank": 1,
@@ -312,16 +337,31 @@
   "comment": 10,
   "code": 118,
   "language": "TypeScript"},
+"src/tui/sources/mail.ts" :{
+  "blank": 14,
+  "comment": 29,
+  "code": 115,
+  "language": "TypeScript"},
 "src/mail/materializer.ts" :{
   "blank": 2,
   "comment": 3,
   "code": 110,
+  "language": "TypeScript"},
+"src/broker/peer-authenticator.ts" :{
+  "blank": 1,
+  "comment": 13,
+  "code": 106,
   "language": "TypeScript"},
 "implementation/schema-v1.sql" :{
   "blank": 0,
   "comment": 4,
   "code": 104,
   "language": "SQL"},
+"src/runtime/provision.ts" :{
+  "blank": 11,
+  "comment": 48,
+  "code": 103,
+  "language": "TypeScript"},
 "src/config/defaults.ts" :{
   "blank": 6,
   "comment": 28,
@@ -352,20 +392,15 @@
   "comment": 8,
   "code": 96,
   "language": "TypeScript"},
-"src/tui/sources/mail.ts" :{
-  "blank": 12,
-  "comment": 11,
+"src/runtime/resident-rootfs.ts" :{
+  "blank": 8,
+  "comment": 27,
   "code": 93,
   "language": "TypeScript"},
 "src/domain/persisted-formats.ts" :{
   "blank": 10,
   "comment": 26,
   "code": 92,
-  "language": "TypeScript"},
-"src/broker/peer-authenticator.ts" :{
-  "blank": 1,
-  "comment": 1,
-  "code": 91,
   "language": "TypeScript"},
 "src/reconcile/operations.ts" :{
   "blank": 2,
@@ -377,10 +412,20 @@
   "comment": 8,
   "code": 89,
   "language": "TypeScript"},
+"src/runtime/engine-auth.ts" :{
+  "blank": 5,
+  "comment": 28,
+  "code": 88,
+  "language": "TypeScript"},
 "src/runtime/pi-runtime.ts" :{
   "blank": 10,
   "comment": 41,
   "code": 86,
+  "language": "TypeScript"},
+"src/views.ts" :{
+  "blank": 1,
+  "comment": 13,
+  "code": 85,
   "language": "TypeScript"},
 "src/domain/canonical-json.ts" :{
   "blank": 6,
@@ -391,6 +436,11 @@
   "blank": 6,
   "comment": 17,
   "code": 83,
+  "language": "TypeScript"},
+"src/extension/delivery.ts" :{
+  "blank": 2,
+  "comment": 8,
+  "code": 82,
   "language": "TypeScript"},
 "src/mail/serialize.ts" :{
   "blank": 4,
@@ -412,6 +462,11 @@
   "comment": 5,
   "code": 81,
   "language": "TypeScript"},
+"src/extension/workspace-guard.ts" :{
+  "blank": 4,
+  "comment": 6,
+  "code": 80,
+  "language": "TypeScript"},
 "src/lifecycle/workspace.ts" :{
   "blank": 1,
   "comment": 5,
@@ -422,20 +477,15 @@
   "comment": 2,
   "code": 80,
   "language": "TypeScript"},
-"src/sandbox.ts" :{
-  "blank": 3,
-  "comment": 4,
-  "code": 79,
-  "language": "TypeScript"},
-"src/views.ts" :{
-  "blank": 1,
-  "comment": 5,
-  "code": 79,
-  "language": "TypeScript"},
 "src/storage/quota.ts" :{
   "blank": 3,
   "comment": 2,
   "code": 78,
+  "language": "TypeScript"},
+"src/entry/runner.ts" :{
+  "blank": 1,
+  "comment": 10,
+  "code": 77,
   "language": "TypeScript"},
 "src/protocol/run-lease.ts" :{
   "blank": 1,
@@ -462,6 +512,11 @@
   "comment": 4,
   "code": 71,
   "language": "TypeScript"},
+"src/ports/runtime.ts" :{
+  "blank": 7,
+  "comment": 24,
+  "code": 71,
+  "language": "TypeScript"},
 "src/cli/effects/submit.ts" :{
   "blank": 5,
   "comment": 4,
@@ -471,11 +526,6 @@
   "blank": 3,
   "comment": 6,
   "code": 68,
-  "language": "TypeScript"},
-"src/ports/runtime.ts" :{
-  "blank": 7,
-  "comment": 8,
-  "code": 67,
   "language": "TypeScript"},
 "src/storage/staged-tree.ts" :{
   "blank": 3,
@@ -497,11 +547,6 @@
   "comment": 11,
   "code": 64,
   "language": "TypeScript"},
-"src/entry/runner.ts" :{
-  "blank": 1,
-  "comment": 4,
-  "code": 63,
-  "language": "TypeScript"},
 "src/cli/effects/context.ts" :{
   "blank": 4,
   "comment": 1,
@@ -512,6 +557,11 @@
   "comment": 16,
   "code": 62,
   "language": "TypeScript"},
+"src/runtime/broker-supervisor.ts" :{
+  "blank": 8,
+  "comment": 22,
+  "code": 61,
+  "language": "TypeScript"},
 "src/storage/transaction.ts" :{
   "blank": 3,
   "comment": 7,
@@ -521,6 +571,11 @@
   "blank": 1,
   "comment": 2,
   "code": 60,
+  "language": "TypeScript"},
+"src/cli/transport.ts" :{
+  "blank": 5,
+  "comment": 14,
+  "code": 59,
   "language": "TypeScript"},
 "src/storage/facets.ts" :{
   "blank": 5,
@@ -572,20 +627,25 @@
   "comment": 7,
   "code": 51,
   "language": "TypeScript"},
+"src/tui/transport.ts" :{
+  "blank": 5,
+  "comment": 17,
+  "code": 51,
+  "language": "TypeScript"},
 "src/cli/commands/submit.ts" :{
   "blank": 1,
   "comment": 1,
+  "code": 50,
+  "language": "TypeScript"},
+"src/protocol/status-view.ts" :{
+  "blank": 8,
+  "comment": 14,
   "code": 50,
   "language": "TypeScript"},
 "src/storage/context-files.ts" :{
   "blank": 2,
   "comment": 9,
   "code": 50,
-  "language": "TypeScript"},
-"src/cli/transport.ts" :{
-  "blank": 4,
-  "comment": 5,
-  "code": 49,
   "language": "TypeScript"},
 "src/runtime/assets.ts" :{
   "blank": 2,
@@ -597,16 +657,6 @@
   "comment": 4,
   "code": 46,
   "language": "TypeScript"},
-"src/tui/dashboard.ts" :{
-  "blank": 6,
-  "comment": 9,
-  "code": 45,
-  "language": "TypeScript"},
-"src/tui/transport.ts" :{
-  "blank": 5,
-  "comment": 9,
-  "code": 45,
-  "language": "TypeScript"},
 "src/cli/exit.ts" :{
   "blank": 6,
   "comment": 0,
@@ -615,11 +665,6 @@
 "src/runtime/extension-integrity.ts" :{
   "blank": 5,
   "comment": 23,
-  "code": 44,
-  "language": "TypeScript"},
-"src/tui/limits.ts" :{
-  "blank": 8,
-  "comment": 12,
   "code": 44,
   "language": "TypeScript"},
 "src/config/policy.ts" :{
@@ -646,6 +691,11 @@
   "blank": 0,
   "comment": 4,
   "code": 42,
+  "language": "TypeScript"},
+"src/tui/view/text.ts" :{
+  "blank": 6,
+  "comment": 16,
+  "code": 41,
   "language": "TypeScript"},
 "src/units/execute.ts" :{
   "blank": 1,
@@ -702,10 +752,20 @@
   "comment": 0,
   "code": 35,
   "language": "TypeScript"},
+"src/tui/limits.ts" :{
+  "blank": 7,
+  "comment": 13,
+  "code": 35,
+  "language": "TypeScript"},
 "src/mail/addresses.ts" :{
   "blank": 3,
   "comment": 7,
   "code": 34,
+  "language": "TypeScript"},
+"src/tui/dashboard.ts" :{
+  "blank": 4,
+  "comment": 9,
+  "code": 33,
   "language": "TypeScript"},
 "src/domain/child-policy.ts" :{
   "blank": 2,
@@ -757,6 +817,11 @@
   "comment": 6,
   "code": 28,
   "language": "TypeScript"},
+"src/tui/view/dashboard.ts" :{
+  "blank": 3,
+  "comment": 10,
+  "code": 28,
+  "language": "TypeScript"},
 "src/diagnostics/mail.ts" :{
   "blank": 0,
   "comment": 1,
@@ -787,6 +852,11 @@
   "comment": 9,
   "code": 25,
   "language": "TypeScript"},
+"src/extension/inference-bridge.ts" :{
+  "blank": 1,
+  "comment": 17,
+  "code": 25,
+  "language": "TypeScript"},
 "src/protocol/receipts.ts" :{
   "blank": 4,
   "comment": 2,
@@ -795,6 +865,11 @@
 "src/cli/effects/mail.ts" :{
   "blank": 2,
   "comment": 1,
+  "code": 24,
+  "language": "TypeScript"},
+"src/tui/view/notice.ts" :{
+  "blank": 2,
+  "comment": 5,
   "code": 24,
   "language": "TypeScript"},
 "src/cli/request-intent.ts" :{
@@ -807,6 +882,11 @@
   "comment": 3,
   "code": 22,
   "language": "TypeScript"},
+"src/pi-extension.ts" :{
+  "blank": 2,
+  "comment": 8,
+  "code": 22,
+  "language": "TypeScript"},
 "src/ports/ledger.ts" :{
   "blank": 3,
   "comment": 5,
@@ -817,6 +897,11 @@
   "comment": 1,
   "code": 21,
   "language": "OMA systemd"},
+"src/domain/deployment.ts" :{
+  "blank": 1,
+  "comment": 15,
+  "code": 21,
+  "language": "TypeScript"},
 "src/broker/logs.ts" :{
   "blank": 1,
   "comment": 1,
@@ -832,11 +917,6 @@
   "comment": 4,
   "code": 20,
   "language": "TypeScript"},
-"src/domain/deployment.ts" :{
-  "blank": 1,
-  "comment": 9,
-  "code": 19,
-  "language": "TypeScript"},
 "src/storage/diagnostic-snapshot.ts" :{
   "blank": 0,
   "comment": 2,
@@ -847,6 +927,11 @@
   "comment": 1,
   "code": 17,
   "language": "OMA systemd"},
+"src/protocol/principal-credential.ts" :{
+  "blank": 5,
+  "comment": 31,
+  "code": 17,
+  "language": "TypeScript"},
 "src/cli/commands/integrate.ts" :{
   "blank": 1,
   "comment": 0,
@@ -902,6 +987,11 @@
   "comment": 6,
   "code": 10,
   "language": "TypeScript"},
+"src/tui/view/layout.ts" :{
+  "blank": 1,
+  "comment": 2,
+  "code": 10,
+  "language": "TypeScript"},
 "implementation/contracts.ts" :{
   "blank": 0,
   "comment": 4,
@@ -912,6 +1002,11 @@
   "comment": 1,
   "code": 9,
   "language": "OMA systemd"},
+"src/tui/view/labels.ts" :{
+  "blank": 2,
+  "comment": 1,
+  "code": 9,
+  "language": "TypeScript"},
 "src/module-ports.ts" :{
   "blank": 0,
   "comment": 7,
@@ -927,6 +1022,11 @@
   "comment": 1,
   "code": 7,
   "language": "OMA systemd"},
+"src/extension/shared.ts" :{
+  "blank": 1,
+  "comment": 2,
+  "code": 7,
+  "language": "TypeScript"},
 "src/broker/replies.ts" :{
   "blank": 0,
   "comment": 1,
@@ -942,8 +1042,13 @@
   "comment": 1,
   "code": 3,
   "language": "TypeScript"},
+"src/tui/view/index.ts" :{
+  "blank": 0,
+  "comment": 2,
+  "code": 1,
+  "language": "TypeScript"},
 "SUM": {
-  "blank": 725,
-  "comment": 1387,
-  "code": 17946,
-  "nFiles": 187} }
+  "blank": 839,
+  "comment": 1970,
+  "code": 19163,
+  "nFiles": 208} }

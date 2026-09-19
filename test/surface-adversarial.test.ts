@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { StoreError } from "../src/domain/errors.js";
@@ -11,7 +11,8 @@ import { render } from "../src/tui/view/index.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 import { WORKER_LIMIT, commitField, layoutOf, readSettings } from "../src/tui/sources/settings.js";
 import { readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
-import { parseMessage, principalMailbox, readBody, readMailbox } from "../src/tui/sources/mail.js";
+import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/tui/sources/mail.js";
+import { READ_BOUNDS } from "../src/tui/limits.js";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 const corrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
@@ -134,10 +135,12 @@ test("mail reading survives malformed, empty and non-file entries", () => {
     symlinkSync("/etc/passwd", join(box.curDir, "a-symlink"));
 
     const rows = readMailbox(box);
-    // Nothing throws, a directory is not a message, and a symlink's target is
-    // read as a message body only if it parses -- it is never followed to gain
-    // a path outside the mailbox listing.
+    // Nothing throws, a directory is not a message, and a symlink is refused
+    // rather than followed: a corrupted Maildir must not be able to put the
+    // contents of a host file on this screen.
     assert.ok(!rows.some(row => row.id === "a-directory"));
+    assert.ok(!rows.some(row => row.id === "a-symlink"), "a symlink was read as a message");
+    assert.equal(readBody(join(box.curDir, "a-symlink")), null, "a symlink's target was read");
     for (const row of rows) {
       assert.equal(typeof row.subject, "string");
       assert.equal(typeof row.from, "string");
@@ -145,6 +148,9 @@ test("mail reading survives malformed, empty and non-file entries", () => {
     }
     assert.doesNotThrow(() => readBody(join(box.newDir, "binary")));
     assert.equal(readBody(join(box.newDir, "a-directory")), null);
+    // The count on the Dashboard and the list on the Mail screen are derived
+    // the same way, so a directory cannot be counted as unread mail.
+    assert.equal(unreadCount(box), rows.filter(row => row.unread).length);
     // A header block with no body is not an error.
     assert.equal(parseMessage("From: a@b\n").body, "");
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -182,5 +188,46 @@ test("a settings write refuses a value the closed config schema would reject", (
     assert.throws(() => commitField(readSettings(index), WORKER_LIMIT, 4), (error: unknown) =>
       error instanceof StoreError);
     void corrupt;
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115/TUI-011: the Mail screen reads bounded, refuses links, and orders by arrival", () => {
+  const root = scratch("oma-adv-mailbounds-");
+  try {
+    const box = principalMailbox(root);
+    mkdirSync(box.newDir, { recursive: true });
+    mkdirSync(box.curDir, { recursive: true });
+    // A message far larger than the header bound. Reading it whole and slicing
+    // afterwards would put all of it in memory; the bound is at the read.
+    const huge = join(box.newDir, "huge");
+    const filler = "x".repeat(1024);
+    writeFileSync(huge, `Subject: big\n\n${filler.repeat(4 * 1024)}`);
+    assert.ok(statSync(huge).size > READ_BOUNDS.mailHeaderBytes.value);
+    const before = process.memoryUsage().arrayBuffers;
+    const rows = readMailbox(box);
+    assert.ok(rows.some(row => row.subject === "big"));
+    // The body reader has its own bound and honours it exactly.
+    const body = readBody(huge, 32)!;
+    assert.ok(body.length <= 32, `body read past its bound: ${body.length}`);
+    assert.ok(process.memoryUsage().arrayBuffers - before < statSync(huge).size,
+      "the whole file was buffered to show a header");
+
+    // Arrival order, not file name order: message ids carry a random UUID, so
+    // sorting by name would put messages in an order that means nothing.
+    const older = join(box.newDir, "zzz-older");
+    const newer = join(box.newDir, "aaa-newer");
+    writeFileSync(older, "Subject: older\n\nbody");
+    writeFileSync(newer, "Subject: newer\n\nbody");
+    utimesSync(older, new Date(1_000_000), new Date(1_000_000));
+    utimesSync(newer, new Date(2_000_000), new Date(2_000_000));
+    const ordered = readMailbox(box).filter(row => row.subject === "older" || row.subject === "newer");
+    assert.deepEqual(ordered.map(row => row.subject), ["newer", "older"]);
+
+    // Unread before read, so the screen leads with what has not been seen.
+    writeFileSync(join(box.curDir, "read-one"), "Subject: read\n\nbody");
+    const all = readMailbox(box);
+    const firstRead = all.findIndex(row => !row.unread);
+    assert.ok(all.slice(0, firstRead).every(row => row.unread));
+    assert.ok(all.slice(firstRead).every(row => !row.unread));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

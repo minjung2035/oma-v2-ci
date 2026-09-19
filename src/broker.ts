@@ -1,6 +1,7 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: authenticated transport and lifetime handoff.
 import { createServer, type Socket, type Server } from "node:net";
-import { mkdirSync, unlinkSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, unlinkSync, existsSync, rmSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import type { Actor, AuthContext, Failure, ProtocolLimits, Request, RunLease } from "../implementation/contracts.js";
 import { Store } from "./store.js";
@@ -26,6 +27,8 @@ import { GitModule } from "./git.js";
 import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
 import { STATUS_REFRESH_MS, statusViewPath } from "./protocol/status-view.js";
+import { PRINCIPAL_CREDENTIAL_HEX, credentialMatches, principalCredentialPath } from "./protocol/principal-credential.js";
+import { INTERNAL_METHODS } from "./protocol/methods.js";
 import { resolvedSpecOf } from "./authority.js";
 import { assertStorageQuotaAdmission } from "./storage/quota.js";
 export { boundedLogOutput } from "./broker/logs.js";
@@ -41,6 +44,15 @@ const DEFAULT_LIMITS: ProtocolLimits = {
 export class Broker {
   private adminServer: Server | null = null;
   private hostServer: Server | null = null;
+  private principalServer: Server | null = null;
+  /** Minted at start, published only under the run directory, and forgotten
+   * when this broker stops: a credential from an earlier run authorises
+   * nothing. */
+  private principalCredential: string | null = null;
+  /** The session handle of the first attach this run admitted. A society has
+   * one Principal (architecture §8.4); a second session presenting a different
+   * handle is refused rather than quietly sharing the first one's authority. */
+  private principalSessionHandle: string | null = null;
   private readonly actorServers = new Set<Server>();
   private readonly connections = new Map<Socket, RpcConnection>();
   private readonly executingTasks = new Set<Promise<void>>();
@@ -95,7 +107,9 @@ export class Broker {
     this.views.refreshWorld();
     this.adminServer = this.listenInternal(join(this.paths.runRoot, "admin.sock"), "runner");
     this.hostServer = this.listenInternal(join(this.paths.runRoot, "host.sock"), "host");
-    this.starting = Promise.all([this.listeners.get(this.adminServer)!, this.listeners.get(this.hostServer)!]).then(() => {
+    this.principalServer = this.listenPrincipal(join(this.paths.runRoot, "principal.sock"));
+    this.starting = Promise.all([this.listeners.get(this.adminServer)!, this.listeners.get(this.hostServer)!,
+      this.listeners.get(this.principalServer)!]).then(() => {
       this.health.assertAdmission(); this.running = true;
       this.publishStatus();
       this.statusTimer = setInterval(() => { this.publishStatus(); }, STATUS_REFRESH_MS);
@@ -127,6 +141,68 @@ export class Broker {
       this.handleInternal(socket, channel);
     });
     this.listen(server, path); return server;
+  }
+  /** TUI-004: the endpoint the product's own Pi session reaches the society
+   * through. It is a public actor endpoint like a Resident's, with one
+   * difference: the connection is nobody until it presents this run's
+   * credential, and every request before that is refused. */
+  private listenPrincipal(path: string): Server {
+    // A credential is minted per run, so a file left by a crashed broker never
+    // authorises a connection to this one.
+    this.principalCredential = randomBytes(PRINCIPAL_CREDENTIAL_HEX / 2).toString("hex");
+    const credentialPath = principalCredentialPath(this.paths.runRoot);
+    if (existsSync(credentialPath)) unlinkSync(credentialPath);
+    writeFileSync(credentialPath, `${this.principalCredential}\n`, { mode: 0o600 });
+    if (existsSync(path)) unlinkSync(path);
+    const server = createServer({ allowHalfOpen: true }, socket => {
+      if (this.draining) { socket.destroy(); return; }
+      this.handlePrincipal(socket);
+    });
+    this.listen(server, path); return server;
+  }
+  /** The attach frame. Shape and parameters come from the protocol registry, so
+   * this cannot drift from the declared contract, and a failure says only that
+   * the attach failed. */
+  private attachPrincipal(raw: Record<string, unknown>, peer: BoundPeer): { auth: AuthContext; answer: object } {
+    const id = typeof raw.id === "string" ? raw.id : "x";
+    if (raw.method !== "principal.attach")
+      throw new StoreError("AUTH_FAILED", "the principal session must attach before any other request");
+    if (INTERNAL_METHODS["principal.attach"].paramsCheck(raw.params) !== null)
+      throw new StoreError("INVALID_REQUEST", "invalid principal attach parameters");
+    const params = raw.params as { sessionHandle: string; credential: string };
+    const expected = this.principalCredential;
+    if (expected === null || !credentialMatches(params.credential, expected))
+      throw new StoreError("AUTH_FAILED", "principal attach credential is not this broker's");
+    if (this.principalSessionHandle !== null && this.principalSessionHandle !== params.sessionHandle)
+      throw new StoreError("AUTH_FAILED", "another principal session is already attached to this society");
+    const auth = this.peers.principalContext(peer);
+    if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to attach to");
+    this.principalSessionHandle = params.sessionHandle;
+    return { auth, answer: okAnswer(id, { actor: "principal", incarnation: auth.incarnation }) };
+  }
+  private handlePrincipal(socket: Socket): void {
+    let peer: BoundPeer | null = null; let transferred = false;
+    try {
+      if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining");
+      peer = this.bindPeer(socket);
+      if (!peer || peer.uid !== (process.getuid?.() ?? -1)) throw new StoreError("AUTH_FAILED", "invalid principal peer credentials");
+      const credentials = peer;
+      let auth: AuthContext | null = null;
+      this.serveFrames(socket, peer, async (raw, stream) => {
+        if (auth === null) {
+          const attached = this.attachPrincipal(raw, credentials);
+          auth = attached.auth;
+          return attached.answer;
+        }
+        if (raw.method === "principal.detach") { auth = null; return okAnswer(typeof raw.id === "string" ? raw.id : "x", {}); }
+        return this.dispatch(auth, raw as Request, stream);
+      }, raw => {
+        if (auth === null) throw new StoreError("AUTH_FAILED", "the principal session is not attached");
+        this.preflightPublicStream(auth, raw);
+      });
+      transferred = true;
+    } catch (error) { this.health.observe(error); this.fail(socket, publicFailure(error)); }
+    finally { if (!transferred) { try { peer?.releaseConnection(); } catch (error) { this.cleanupError(error); } } }
   }
   private refreshViews(): void {
     try { this.views.refreshWorld(); }
@@ -346,6 +422,12 @@ export class Broker {
     // Absence is the truthful status of a broker that is going away; an old
     // file left behind would read as a broker that is merely quiet.
     try { rmSync(statusViewPath(this.paths.stateRoot), { force: true }); } catch (error) { this.cleanupError(error); }
+    // The credential dies with the broker that minted it, in memory and on
+    // disk, so nothing left behind can attach to a later run.
+    this.principalCredential = null;
+    this.principalSessionHandle = null;
+    this.principalServer = null;
+    try { rmSync(principalCredentialPath(this.paths.runRoot), { force: true }); } catch (error) { this.cleanupError(error); }
     for (const connection of this.connections.values()) connection.close();
     for (const record of this.runLeases.values()) { try { record.revoke(); } catch (error) { this.cleanupError(error); } }
     for (const server of [...this.listeners.keys()]) this.closeListener(server);

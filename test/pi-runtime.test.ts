@@ -110,12 +110,12 @@ test("the engine is pointed at an OMA-owned agent directory, never the user's", 
 
 test("the Principal session carries the isolation variable to the engine", () => {
   const env = sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, {
-    society: "demo", provider: "pi", model: "current", extensions: [],
+    society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
   }, { piAgentDir: "/var/lib/oma/demo/pi" });
   assert.equal(env[PI_AGENT_DIR_ENV], "/var/lib/oma/demo/pi");
   assert.equal(env.HOME, "/h");
   const without = sessionEnv({ HOME: "/h" }, {
-    society: "demo", provider: "pi", model: "current", extensions: [],
+    society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
   });
   assert.ok(!(PI_AGENT_DIR_ENV in without));
 });
@@ -125,7 +125,7 @@ test("the engine entry precedes Pi's own flags on the command line", () => {
   const argv = [...runtime.args, ...sessionArgv(
     { piCommand: runtime.executable, piArgs: runtime.args, coreExtension: "/lib/core.js",
       sessionDir: "/s", workspace: "/w", home: "/h" },
-    { society: "demo", provider: "pi", model: "current", extensions: [] },
+    { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] },
   )];
   assert.equal(argv[0], runtime.bundle, "the bundle is argv[0] for Node");
   assert.equal(argv[1], "--mode");

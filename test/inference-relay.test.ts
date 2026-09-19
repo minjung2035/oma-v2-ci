@@ -149,7 +149,17 @@ test("T114 the relay refuses a path that leaves the declared provider endpoint",
     { origin: `${provider.origin}/v1`, headers: { authorization: "Bearer real-secret" } },
     { concurrent: 4, timeoutMs: 5000 });
   try {
-    for (const path of ["/../admin", "/v1/..%2F..%2Fadmin", "//evil.example.com/v1"]) {
+    // Every spelling of the parent segment, not a list of the ones someone
+    // thought of: the relay canonicalises first and then checks, so `..`,
+    // `%2e%2e`, `%2e.` and `.%2e` are all refused by the same test, and an
+    // encoded separator -- which canonicalisation keeps but a provider may
+    // decode -- is refused outright.
+    const refused = [
+      "/../admin", "/v1/..%2F..%2Fadmin", "//evil.example.com/v1",
+      "/%2e%2e/admin", "/%2E%2E/admin", "/%2e./admin", "/.%2e/admin",
+      "/a/../../admin", "/a%2f..%2fadmin", "/messages%5c..%5cadmin",
+    ];
+    for (const path of refused) {
       const answer = await throughBridge(socket.path, path, "{}");
       assert.equal(answer.status, 403, `${path} must be refused`);
     }
@@ -157,7 +167,12 @@ test("T114 the relay refuses a path that leaves the declared provider endpoint",
     const allowed = await throughBridge(socket.path, "/messages", "{}");
     assert.equal(allowed.status, 200);
     assert.equal(provider.seen[0]!.path, "/v1/messages", "the declared prefix is kept");
-    assert.equal(relay.observe().refused, 3);
+    // A relative segment that stays inside the declared endpoint is normalised
+    // rather than refused: the invariant is the destination, not the spelling.
+    const normalised = await throughBridge(socket.path, "/deep/../messages", "{}");
+    assert.equal(normalised.status, 200);
+    assert.equal(provider.seen[1]!.path, "/v1/messages");
+    assert.equal(relay.observe().refused, refused.length);
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 

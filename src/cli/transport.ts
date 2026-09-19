@@ -4,6 +4,7 @@
 import { existsSync } from "node:fs";
 import type { PublicMethod } from "../../implementation/contracts.js";
 import { BrokerChannel, type RpcReply } from "../protocol/channel.js";
+import { PRINCIPAL_CREDENTIAL_ENV, isPrincipalCredential } from "../protocol/principal-credential.js";
 import { StoreError } from "../domain/errors.js";
 import { isLogResponseFrameLimit } from "../protocol/log-response.js";
 import { fail } from "./exit.js";
@@ -37,6 +38,7 @@ export async function callActor(
   const timer = setTimeout(() => channel.close(new StoreError("BROKER_UNAVAILABLE", "broker did not answer before the CLI deadline")), CLI_DEADLINE_MS);
   try {
     await channel.connect(path);
+    await attachPrincipalSession(channel);
     const result = await channel.call(method, params, {
       ...(request === undefined ? {} : { request }),
       ...(streamBytes === undefined ? {} : { streamBytes }),
@@ -46,6 +48,24 @@ export async function callActor(
     clearTimeout(timer);
     channel.close();
   }
+}
+
+/** TUI-004: the Principal's endpoint admits nobody until the connection proves
+ * it belongs to the session the host started.
+ *
+ * Only the Principal's environment carries the credential — a Resident's does
+ * not, and neither does a Resident's sandbox — so for every other caller this
+ * is a no-op and the connection goes straight to its request. The handle names
+ * which session is connecting, so the broker can hold a society to one attached
+ * Principal instead of letting a second one share the first's authority.
+ */
+async function attachPrincipalSession(channel: BrokerChannel): Promise<void> {
+  const credential = process.env[PRINCIPAL_CREDENTIAL_ENV];
+  if (credential === undefined) return;
+  const sessionHandle = process.env.OMA_PRINCIPAL_SESSION;
+  if (!isPrincipalCredential(credential) || sessionHandle === undefined || sessionHandle.length === 0)
+    throw new StoreError("AUTH_FAILED", "the principal session credential is not usable");
+  await channel.call("principal.attach", { sessionHandle, credential });
 }
 
 export function call(

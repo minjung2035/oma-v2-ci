@@ -51,6 +51,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/protocol/jsonl.ts",
       "src/protocol/log-response.ts",
       "src/protocol/methods.ts",
+      "src/protocol/principal-credential.ts",
       "src/protocol/operation-results.ts",
       "src/protocol/receipt-codec.ts",
       "src/protocol/receipts.ts",

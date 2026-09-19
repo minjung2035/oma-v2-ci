@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -53,14 +54,45 @@ export function assertProductionInventory(root = process.cwd()) {
   }
   return current;
 }
+const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+
+/** The measured artifacts must describe the source that is here now.
+ *
+ * The file list on its own cannot catch this: it stayed current while the LOC
+ * and hash records described a set of files 21 smaller, so a reader checking
+ * the inventory saw a pass and a LOC figure from another commit. Binding the
+ * records to the bytes they were taken from makes the drift a failure at the
+ * moment it happens, and costs one hash per file rather than another cloc run.
+ */
+export function assertMeasurementCurrent(root = process.cwd(), files = collectProductionFiles(root)) {
+  const records = JSON.parse(readFileSync(join(root, "production-loc-hashes.json"), "utf8"));
+  if (records.manifest !== sha256(`${files.join("\n")}\n`))
+    throw new Error("production-loc-hashes.json was taken from a different file list; regenerate with node scripts/loc.mjs");
+  const measured = new Map((records.files ?? []).map(entry => [entry.path, entry.sha256]));
+  const changed = files.filter(file => measured.get(file) !== sha256(readFileSync(join(root, file))));
+  const dropped = [...measured.keys()].filter(file => !files.includes(file));
+  if (changed.length || dropped.length)
+    throw new Error(`stale production-loc-hashes.json; changed=[${changed.join(", ")}]; removed=[${dropped.join(", ")}]; ` +
+      "regenerate with node scripts/loc.mjs");
+  const counted = JSON.parse(readFileSync(join(root, "production-loc.json"), "utf8"));
+  const missing = files.filter(file => counted[file] === undefined);
+  if (missing.length || counted.header?.n_files !== files.length)
+    throw new Error(`stale production-loc.json; counted ${counted.header?.n_files} of ${files.length} files; ` +
+      `missing=[${missing.join(", ")}]; regenerate with node scripts/loc.mjs`);
+  return files.length;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const args = process.argv.slice(2);
     if (args.some(value => value !== "--write")) throw new Error("usage: production-inventory.mjs [--write]");
     const write = args.includes("--write");
     const files = write ? writeProductionInventory() : assertProductionInventory();
+    // Writing the list is deliberately not a measurement; only the check reads
+    // the measured artifacts, so `--write` can never mark them current.
+    const loc = write ? "NOT_MEASURED" : (assertMeasurementCurrent(process.cwd(), files), "SOURCE_BOUND");
     console.log(JSON.stringify({ status: write ? "SOURCE_LIST_GENERATED" : "SOURCE_LIST_CURRENT", files: files.length,
-      loc: "NOT_MEASURED", runtimeProof: false }));
+      loc, runtimeProof: false }));
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

@@ -128,6 +128,7 @@ src/protocol/jsonl.ts
 src/protocol/log-response.ts
 src/protocol/methods.ts
 src/protocol/operation-results.ts
+src/protocol/principal-credential.ts
 src/protocol/receipt-codec.ts
 src/protocol/receipts.ts
 src/protocol/request-codec.ts

@@ -85,16 +85,33 @@ function parsedOrigin(origin: string): URL {
   return url;
 }
 
+/** The origin a request is resolved against to canonicalise it. Nothing is sent
+ * here; it exists so the URL parser applies a server's own dot-segment removal
+ * and the result can be compared with the declared endpoint. */
+const CANONICAL_ORIGIN = "https://relay.invalid";
+
 /** Joins the declared origin's path with the request's, refusing anything that
  * could climb out of it. The destination is the host's decision, so a request
- * path is only ever allowed to extend it. */
+ * path is only ever allowed to extend it.
+ *
+ * Checking the request's spelling is not enough: `..`, `%2e%2e`, `%2e.` and
+ * `.%2e` all name the parent segment, and a list of spellings is a list that
+ * will be incomplete. The joined path is canonicalised first and the check is
+ * made on the canonical form, so any spelling that resolves out of the declared
+ * endpoint is refused by the same test. An encoded separator is refused
+ * outright: canonicalisation keeps it encoded, the provider may not, and then
+ * the two ends would disagree about which path was authorised.
+ */
 function targetPath(base: string, requestPath: string | undefined): string {
   if (requestPath === undefined || !requestPath.startsWith("/")) return "";
-  // A relative segment or an encoded one must not be able to re-root the path.
-  const lowered = requestPath.toLowerCase();
-  if (requestPath.includes("..") || lowered.includes("%2e%2e") || requestPath.includes("//")) return "";
+  if (/%2f|%5c/i.test(requestPath) || requestPath.includes("\\") || requestPath.includes("//")) return "";
   const prefix = base.endsWith("/") ? base.slice(0, -1) : base;
-  return `${prefix}${requestPath}`;
+  let resolved: URL;
+  try { resolved = new URL(`${prefix}${requestPath}`, CANONICAL_ORIGIN); }
+  catch { return ""; }
+  if (resolved.origin !== CANONICAL_ORIGIN || resolved.hash.length > 0) return "";
+  if (prefix.length > 0 && resolved.pathname !== prefix && !resolved.pathname.startsWith(`${prefix}/`)) return "";
+  return `${resolved.pathname}${resolved.search}`;
 }
 
 export class InferenceRelay {

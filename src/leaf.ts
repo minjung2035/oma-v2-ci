@@ -134,6 +134,19 @@ export function tryFlock(fd: number): boolean {
   catch { return false; }
 }
 
+/** Node publishes no accessor for an accepted socket's file descriptor, and
+ * SO_PEERCRED needs one. That dependency on a runtime internal is named here,
+ * beside the other primitives this process cannot get from public API, so a
+ * Node release that removes `_handle` fails in one place with one message
+ * instead of surfacing as an authentication failure somewhere else. */
+export function socketDescriptor(socket: unknown): number | null {
+  if (socket === null || typeof socket !== "object") return null;
+  const handle = (socket as { _handle?: { fd?: unknown } })._handle;
+  if (handle === null || typeof handle !== "object") return null;
+  const fd = (handle as { fd?: unknown }).fd;
+  return typeof fd === "number" && Number.isInteger(fd) && fd >= 0 ? fd : null;
+}
+
 export function hasNativeLeaf(): boolean {
   try {
     lib();

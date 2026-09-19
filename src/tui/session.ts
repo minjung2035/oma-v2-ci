@@ -5,7 +5,12 @@
  * argv, so there is nothing to hide afterwards. Peer content is never dressed
  * as a Human turn; this module only relays what the user typed here.
  */
+import { randomBytes } from "node:crypto";
+import { join } from "node:path";
+import type { ProtocolLimits } from "../../implementation/contracts.js";
 import { spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/async.js";
+import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import { PRINCIPAL_CREDENTIAL_ENV } from "../protocol/principal-credential.js";
 import { PiRpcClient, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
@@ -41,6 +46,66 @@ export interface SessionProfile {
    * Principal that silently ran without its role prompt would behave unlike the
    * configuration the operator wrote. */
   readonly prompt?: string | undefined;
+  /** The role's workspace quota. The trusted extension refuses every write and
+   * edit until it knows one, so a Principal started without it could not write
+   * in its own private space. */
+  readonly workspaceBytes: number;
+}
+
+/** Everything the Principal's engine is told about the society it belongs to.
+ *
+ * A Resident gets this from the runner, translated through its mount table. The
+ * Principal is not confined and has no runner, so the product assembles it
+ * here — and it has to be assembled: the trusted extension registers OMA's mail
+ * and status tools only when it is complete, and refuses writes without the
+ * quota, so a session started with a bare `HOME` and `PATH` is an engine that
+ * can neither reach the society nor write a file (TUI-004).
+ */
+export interface PrincipalPaths {
+  readonly stateRoot: string;
+  readonly runRoot: string;
+  readonly libdir: string;
+}
+
+export interface PrincipalCredential {
+  /** This broker run's secret, or null when no broker published one. Without it
+   * the engine still starts and the CLI still refuses every request, which is
+   * the truthful outcome of a society with no broker. */
+  readonly credential: string | null;
+  /** Names this session for the broker, so a society keeps one Principal. */
+  readonly sessionHandle: string;
+}
+
+/** A fresh handle per started session. It identifies the session, not the user
+ * and not the society, so nothing about the deployment can be derived from it
+ * and an old one names a session that no longer exists. */
+export function newSessionHandle(): string { return randomBytes(16).toString("hex"); }
+
+export function principalEnvironment(
+  paths: PrincipalPaths,
+  profile: SessionProfile,
+  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes">,
+  session: PrincipalCredential,
+): Record<string, string> {
+  const home = join(paths.stateRoot, "principal", "private");
+  return {
+    HOME: home,
+    PATH: "/usr/bin:/bin",
+    OMA_ACTOR: "principal",
+    OMA_SOCIETY: profile.society,
+    OMA_SOCKET: join(paths.runRoot, "principal.sock"),
+    OMA_AGENT_HOME: home,
+    OMA_MAIL_ARCHIVE: join(paths.stateRoot, "mail", "archive", "cur"),
+    OMA_CLI_PATH: join(paths.libdir, DEPLOYMENT_LAYOUT.cli),
+    OMA_FRAME_BYTES: String(limits.frameBytes),
+    OMA_MAIL_BYTES: String(limits.mailBodyBytes),
+    OMA_WORKSPACE_BYTES: String(profile.workspaceBytes),
+    OMA_PRINCIPAL_SESSION: session.sessionHandle,
+    // Deliberately absent: the batch view and its message bound. No runner
+    // prepares batches for the Principal, so the delivery command stays
+    // unavailable rather than being made to look wired (TRACE-002).
+    ...(session.credential === null ? {} : { [PRINCIPAL_CREDENTIAL_ENV]: session.credential }),
+  };
 }
 
 export interface SessionSink {
@@ -63,8 +128,11 @@ export function principalSessionProfile(configPath: string, society: string): Se
   if (!model) throw new StoreError("UNSUPPORTED_PROFILE", `principal model profile ${modelName} is not declared`);
   const role = configuration.roles[config.principalProfile];
   const prompt = role?.prompt ?? "";
+  const workspaceBytes = config.agentProfiles[config.principalProfile]?.resources.workspaceBytes;
+  if (!Number.isSafeInteger(workspaceBytes) || (workspaceBytes ?? 0) <= 0)
+    throw new StoreError("UNSUPPORTED_PROFILE", "the principal role declares no workspace quota");
   return {
-    society, provider: model.provider, model: model.model,
+    society, provider: model.provider, model: model.model, workspaceBytes: workspaceBytes!,
     extensions: (role?.extensions ?? []).map(extension => ({ path: extension.path, sha256: extension.sha256 })),
     ...(prompt.length > 0 ? { prompt } : {}),
     ...(role?.toolSurface ? { toolSurface: encodeToolSurfacePlan(role.toolSurface) } : {}),

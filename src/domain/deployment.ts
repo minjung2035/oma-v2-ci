@@ -8,6 +8,10 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   schema: "implementation/schema-v1.sql",
   systemd: "implementation/systemd",
   extension: "dist/src/pi-extension.js",
+  // The model-facing command surface, as an installed path. Every agent that
+  // has OMA tools runs this same file; naming it once keeps the Principal's
+  // and a Resident's engine pointed at one binary.
+  cli: "dist/src/cli.js",
   // TUI-002: `tui` is the host product entrypoint a Human runs. It has no
   // systemd unit, so it is absent from templateEntries by design.
   entries: Object.freeze({ broker: "dist/src/entry/broker.js", runner: "dist/src/entry/runner.js", host: "dist/src/entry/host.js", tui: "dist/src/entry/oma.js" }),

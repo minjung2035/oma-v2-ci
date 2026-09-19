@@ -152,12 +152,12 @@ test("the Principal session carries its role's projection into the Pi process", 
   const plan = readConfigurationSource(bundle(scratch("oma-defect-env-"))).roles["principal"]!.toolSurface!;
   const encoded = encodeToolSurfacePlan(plan);
   const withSurface = sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, {
-    society: "demo", provider: "pi", model: "current", extensions: [], toolSurface: encoded,
+    society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [], toolSurface: encoded,
   });
   assert.equal(withSurface.OMA_TOOL_SURFACE, encoded);
   assert.equal(withSurface.HOME, "/h");
   const without = sessionEnv({ HOME: "/h", PATH: "/usr/bin" }, {
-    society: "demo", provider: "pi", model: "current", extensions: [],
+    society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
   });
   assert.ok(!("OMA_TOOL_SURFACE" in without), "a role without a projection sets no variable");
 });
@@ -324,7 +324,7 @@ test("the digest recorded at configuration load survives to the spawn boundary",
 test("the spawn paths never pass the core extension twice", () => {
   const paths = { piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" };
   const argv = sessionArgv(paths, {
-    society: "demo", provider: "pi", model: "current",
+    society: "demo", provider: "pi", model: "current", workspaceBytes: 1024,
     extensions: [{ path: "/lib/core.js", sha256: "0".repeat(64) }, { path: "/lib/review.js", sha256: "1".repeat(64) }],
   });
   assert.equal(argv.filter(entry => entry === "/lib/core.js").length, 1);
@@ -343,7 +343,7 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
       { piCommand: "/usr/bin/node", piArgs: ["/lib/cli.js"], coreExtension: "/lib/core.js",
         sessionDir: "/s", workspace: "/w", home: "/h", piAgentDir: "/state/pi" },
       {
-        society: "demo", provider: "pi", model: "current",
+        society: "demo", provider: "pi", model: "current", workspaceBytes: 1024,
         extensions: role.extensions.map(e => ({ path: e.path, sha256: e.sha256 })),
         prompt: "role prompt",
         toolSurface: encodeToolSurfacePlan(role.toolSurface!),
@@ -353,7 +353,7 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
       "the Principal must run with its role prompt, as a Resident does");
 
     const env = sessionEnv({ HOME: "/h" }, {
-      society: "demo", provider: "pi", model: "current", extensions: [],
+      society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
       toolSurface: encodeToolSurfacePlan(role.toolSurface!),
     }, { piAgentDir: "/state/pi" });
     assert.ok(env.OMA_TOOL_SURFACE, "the projection reaches the engine");
@@ -362,7 +362,7 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
     // A role without a prompt must not push an empty flag.
     const bare = sessionArgv(
       { piCommand: "/usr/bin/node", piArgs: [], coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
-      { society: "demo", provider: "pi", model: "current", extensions: [] },
+      { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] },
     );
     assert.ok(!bare.includes("--append-system-prompt"));
   } finally { rmSync(root, { recursive: true, force: true }); }

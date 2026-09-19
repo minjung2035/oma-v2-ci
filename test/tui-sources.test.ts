@@ -361,7 +361,7 @@ test("TUI-021: a malformed or foreign status view is unknown, not partially show
 test("T92/TUI-004,014: the Principal session runs Pi in RPC mode with discovery switched off", () => {
   const argv = sessionArgv(
     { piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
-    { society: "demo", provider: "pi", model: "current",
+    { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024,
       extensions: [{ path: "/lib/core.js", sha256: "0".repeat(64) }, { path: "/lib/review.js", sha256: "1".repeat(64) }] },
   );
   assert.equal(argv[0], "--mode");
@@ -377,7 +377,7 @@ test("T92/TUI-004,014: the Principal session runs Pi in RPC mode with discovery 
 
   const pinned = sessionArgv(
     { piCommand: "/usr/bin/pi", coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
-    { society: "demo", provider: "openai-codex", model: "gpt", extensions: [] },
+    { society: "demo", provider: "openai-codex", model: "gpt", workspaceBytes: 1024, extensions: [] },
   );
   assert.equal(pinned[pinned.indexOf("--model") + 1], "openai-codex/gpt");
 });

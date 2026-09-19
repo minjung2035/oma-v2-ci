@@ -232,7 +232,7 @@
 
 **MUST [IPC-009]** trusted-only method는 actor endpoint에서 dispatch하지 않는다. runner.open/batch.prepare/batch.complete/observe는 runner channel, Principal attach/detach는 보호된 extension channel, host.principalRelay/reconcile은 host channel만 사용한다. batch.read는 trusted OMA extension helper에만 제공한다. 일반 `oma` CLI에 내부 method 호출 escape hatch를 넣지 않는다.
 
-**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 실제 credential 발급·교환 handshake는 S-02를 통과하기 전 구현을 확정하지 않는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.
+**MUST [IPC-011]** internal channel도 동일한 bounded frame/error 형식을 사용하며 `InternalRequest`/`InternalResponse`로 제한한다. runner.open은 검증된 unit invocation에만 lease를 반환하고, batch.complete의 성공 응답은 DB complete commit 뒤에만 보낸다. runner.observe는 메모리 관측값이며 durable row를 추가하지 않는다. principal.attach의 credential 발급·교환 handshake는 OMA가 소유해 직접 기동한 session에 한해 확정한다. broker는 run마다 새 credential을 만들어 run directory 안에만 0600으로 게시하고, 그 credential을 제시한 연결만 principal actor로 인정하며, attach 이전의 모든 요청과 다른 session handle의 두 번째 attach를 거절한다. credential은 broker가 멈추면 메모리와 디스크에서 함께 사라지고, trusted extension의 환경에만 전달하며 sandbox에는 넣지 않는다. 사용자가 따로 띄운 외부 Pi session에 attach하는 경로는 여전히 확정하지 않으며 S-02의 model-facing tool 통과 기준도 그대로 남는다. host relay/reconcile 응답은 실제 처리된 개수를 반환하고 timeout은 작업 성공으로 꾸미지 않는다. 대량 Principal backlog에서 oneshot timeout/start-limit 반복이 발생하지 않는 처리량·자원 조건은 S-06 필수 시험이다.
 
 **MUST [IPC-012]** InternalMethods의 key set은 exhaustive socket surface다. 내부 helper는 분리할 수 있지만 batch.stage 등 새 socket method/phase를 추가하지 않는다. batch.prepare는 transaction뿐 아니라 BATCH-001의 rename/fsync/view publish까지 소유한다. post-transaction 실패를 별도 stage RPC로 모델/runner가 수습하게 하지 않는다. unknown method는 side effect 전에 UNKNOWN_METHOD다.
 
@@ -638,7 +638,7 @@ relay는 자리표시자를 header 값과 request path에서만 진짜 key로 �
 
 **MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfigV1`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.
 
-session 경계를 넘지 않는 per-request 전환은 Principal inference가 broker relay를 실제로 경유할 때만 의미가 있다. 그 경로는 `principal.attach` credential handshake(IPC-011, S-02)와 `src/inference.ts`의 frozen authority 검사 개정을 함께 요구하므로 현재 구현하지 않는다. 호출 경로 없이 선택 API만 추가해 구현된 것처럼 표시하지 않는다(TRACE-002). 전환이 예산을 넘기면 기존 INF-002/003의 예약 검사가 그대로 거절한다.
+session 경계를 넘지 않는 per-request 전환은 Principal inference가 broker relay를 실제로 경유할 때만 의미가 있다. `principal.attach` handshake는 IPC-011로 확정되었으나 그 경로는 Principal inference의 relay 경유와 `src/inference.ts`의 frozen authority 검사 개정을 함께 요구하므로 현재 구현하지 않는다. 호출 경로 없이 선택 API만 추가해 구현된 것처럼 표시하지 않는다(TRACE-002). 전환이 예산을 넘기면 기존 INF-002/003의 예약 검사가 그대로 거절한다.
 
 **MUST NOT [TUI-006]** 현재 model 선택, 읽음 상태, UI 위치, 최근 화면 같은 TUI 상태를 여섯 durable entity에 추가하거나 새 표·컬럼·sidecar 파일로 저장한다. 재시작 후에도 유지되어야 하는 선택은 host config의 해당 필드로 표현하고, 그 외 UI 상태는 A-007의 메모리 전용 runtime 상태로 두며 crash 후 원본에서 재구성한다.
 

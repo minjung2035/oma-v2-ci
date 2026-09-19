@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { collectProductionFiles, writeProductionInventory, assertProductionInventory } from "../scripts/production-inventory.mjs";
+import { createHash } from "node:crypto";
+import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent } from "../scripts/production-inventory.mjs";
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-inventory-"));
@@ -61,5 +62,52 @@ test("R38 C05: equal bytes in distinct source files are counted, symlink sources
     assert.ok(files.includes("src/duplicate-b.ts"));
     symlinkSync("duplicate-a.ts", join(f.root, "src/link.ts"));
     assert.throws(() => collectProductionFiles(f.root), /symlink/);
+  } finally { f.close(); }
+});
+
+test("R38: the measured artifacts are bound to the source they were taken from", () => {
+  const f = fixture();
+  try {
+    const files = writeProductionInventory(f.root);
+    const hashOf = bytes => createHash("sha256").update(bytes).digest("hex");
+    const measure = () => {
+      f.put("production-loc-hashes.json", JSON.stringify({
+        cloc: "2.08", manifest: hashOf(`${files.join("\n")}\n`),
+        files: files.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
+      }));
+      f.put("production-loc.json", JSON.stringify({
+        header: { n_files: files.length },
+        ...Object.fromEntries(files.map(file => [file, { code: 1, blank: 0, comment: 0 }])),
+      }));
+    };
+    // Positive: records taken from exactly this source are current.
+    measure();
+    assert.equal(assertMeasurementCurrent(f.root), files.length);
+
+    // A file whose bytes changed after measurement. The file list is unchanged,
+    // so only this check can see it -- and this is the drift that let a LOC
+    // figure from an older commit be read as the current one.
+    f.put("src/process/async.ts", "export const changed = 1;\n");
+    assert.throws(() => assertMeasurementCurrent(f.root), /stale production-loc-hashes\.json/);
+    measure();
+    assert.equal(assertMeasurementCurrent(f.root), files.length);
+
+    // A new production file that the records never saw.
+    f.put("src/process/added.ts");
+    assert.throws(() => assertMeasurementCurrent(f.root), /different file list/);
+    writeProductionInventory(f.root);
+    assert.throws(() => assertMeasurementCurrent(f.root), /different file list/);
+
+    // Counts that describe fewer files than the manifest holds.
+    const grown = writeProductionInventory(f.root);
+    f.put("production-loc-hashes.json", JSON.stringify({
+      cloc: "2.08", manifest: hashOf(`${grown.join("\n")}\n`),
+      files: grown.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
+    }));
+    f.put("production-loc.json", JSON.stringify({
+      header: { n_files: grown.length - 1 },
+      ...Object.fromEntries(grown.map(file => [file, { code: 1, blank: 0, comment: 0 }])),
+    }));
+    assert.throws(() => assertMeasurementCurrent(f.root), /stale production-loc\.json/);
   } finally { f.close(); }
 });

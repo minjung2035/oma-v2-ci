@@ -9,6 +9,7 @@ import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
 import { hostSystemLayout } from "../runtime/resident-rootfs.js";
+import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 
 function usage(): never {
   console.error("usage: runner.js --society <name> --agent <name> [--config <path>]");
@@ -66,7 +67,7 @@ const runner = new RunnerModule({ runRoot, stateRoot, society,
   piArgs: piRuntime.args,
   piAgentDir: piRuntime.agentDir,
   coreExtension: join(cfg.installation.libdir, "dist/src/pi-extension.js"),
-  cli: join(cfg.installation.libdir, "dist/src/cli.js"),
+  cli: join(cfg.installation.libdir, DEPLOYMENT_LAYOUT.cli),
   ...(confinement === undefined ? {} : { confinement }) }, agent, cfg.limits, profile);
 let stopping = false;
 const stop = (): void => {

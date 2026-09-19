@@ -8,7 +8,7 @@ import { unitName } from "../units.js";
 import type { RunRegistry } from "../runtime/run-registry.js";
 import { StoreError } from "../domain/errors.js";
 import { capabilitiesOf } from "../authority.js";
-import { peerCred, peerPidFd, peerPidAlive, type PeerCred } from "../leaf.js";
+import { peerCred, peerPidFd, peerPidAlive, socketDescriptor, type PeerCred } from "../leaf.js";
 import { SharedPeerPin, type ConnectionPeerPin } from "./peer-pin.js";
 
 export type BoundPeer = PeerCred & ConnectionPeerPin;
@@ -21,8 +21,8 @@ export function peerCgroup(pid: number): string | null {
   } catch { return null; }
 }
 function socketFd(socket: Socket): number {
-  const fd = (socket as unknown as { _handle?: { fd?: number } })._handle?.fd;
-  if (typeof fd !== "number" || fd < 0) throw new StoreError("AUTH_FAILED", "no socket fd");
+  const fd = socketDescriptor(socket);
+  if (fd === null) throw new StoreError("AUTH_FAILED", "no socket fd");
   return fd;
 }
 export class PeerAuthenticator {
@@ -59,6 +59,33 @@ export class PeerAuthenticator {
     return { actor, incarnation: agent.incarnation, role: agent.role, channel,
       get capabilities() { return currentCapabilities(); },
       peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid, cgroup: peerGroup } };
+  }
+  /** AUTH-003 / architecture §23.5: the Principal's live authority.
+   *
+   * A Resident is authorised by the systemd scope it runs in. The Principal has
+   * none — the product starts its engine itself, in the Human's terminal — so
+   * the cgroup and run-lease checks a Resident passes could only ever fail
+   * here, and lowering them to "same user" would make every desktop process of
+   * this user the Principal. The broker's own per-run credential stands in for
+   * the scope, and is checked by the caller before this is reached; everything
+   * else is unchanged, including re-deriving the capabilities on every read so
+   * that a row edited mid-connection takes effect at once rather than leaving a
+   * copied grant behind.
+   */
+  principalContext(credentials: BoundPeer): AuthContext | null {
+    const agent = this.store.getAgent("principal");
+    if (!agent || agent.role !== "principal" || agent.desired !== "enabled") return null;
+    if (credentials.uid !== (process.getuid?.() ?? -1) || !credentials.alive()) return null;
+    const currentCapabilities = (): ReadonlySet<Capability> => {
+      if (!credentials.alive()) return new Set<Capability>();
+      const current = this.store.getAgent("principal");
+      if (!current || current.desired !== "enabled" || current.role !== agent.role ||
+        current.specHash !== agent.specHash || current.incarnation !== agent.incarnation) return new Set<Capability>();
+      return capabilitiesOf(current);
+    };
+    return { actor: "principal", incarnation: agent.incarnation, role: agent.role, channel: "actor",
+      get capabilities() { return currentCapabilities(); },
+      peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid, cgroup: null } };
   }
   requireRunnerUnit(peer: BoundPeer, agent: Actor, invocationId?: string): void {
     const unit = unitName(this.society, agent, "service");

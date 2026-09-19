@@ -788,7 +788,7 @@ fresh verifier는 고정 Critic 직책이나 approval vote가 아니다. 필요�
 
 SO_PEERCRED의 PID/UID/GID와 host가 관측한 systemd cgroup을 대조한다. PID 재사용이나 namespace 때문에 확인이 불명확하면 요청을 거절하며 payload의 actor 이름으로 대체하지 않는다. admin endpoint와 runner의 내부 제어 FD는 모델 sandbox에 넘기지 않는다. [Unix socket peer credentials](https://man7.org/linux/man-pages/man7/unix.7.html)
 
-위 cgroup 매핑은 systemd가 시작한 Residents에 적용한다. 이미 실행 중인 Principal Pi는 host-only attach 경로에서 session 연결을 등록하고 별도의 비공개 connection credential을 받는다. 이 credential은 extension에만 전달하며 모델 도구 sandbox에는 넣지 않는다. Principal 도구에는 제한된 principal actor endpoint만 노출한다. Principal 권한을 일반 desktop process의 UID나 'interactive' 문자열만으로 판정하지 않는다.
+위 cgroup 매핑은 systemd가 시작한 Residents에 적용한다. Principal Pi에는 unit이 없으므로 cgroup 검사가 성립하지 않는다. §23.3/TUI-004에 따라 host product가 그 session을 직접 기동하며, broker는 run마다 새 connection credential을 만들어 run directory 안에만 0600으로 게시하고 host는 그것을 자신이 띄운 session에만 넘긴다. credential은 broker와 함께 사라지므로 이전 run의 사본은 아무 권한도 주지 않고, attach 이전의 요청과 다른 session의 두 번째 attach는 거절한다. 이 credential은 extension에만 전달하며 모델 도구 sandbox에는 넣지 않는다. Principal 도구에는 제한된 principal actor endpoint만 노출한다. Principal 권한을 일반 desktop process의 UID나 'interactive' 문자열만으로 판정하지 않는다.
 
 프로토타입처럼 model에게 user D-Bus socket을 주고 systemctl을 마음대로 쓰게 하지 않는다. 그 socket은 OMA 외 프로그램 실행 권한까지 노출할 수 있다. systemctl/journalctl 직접 사용은 host 운영자 경로다. 모델의 lifecycle 요청은 broker가 OMA unit 이름만 지정해서 실행한다. bubblewrap 문서도 노출한 bus가 sandbox 경계를 넓힐 수 있음을 설명한다. [bubblewrap 보안 범위](https://github.com/containers/bubblewrap)
 

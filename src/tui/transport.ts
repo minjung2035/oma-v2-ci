@@ -9,7 +9,7 @@
  * society, or older than a few refresh intervals — becomes an explicit unknown
  * carrying the reason and the time, never a synthesized "ready" or zero.
  */
-import { readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import type { AgentStatus, ProtocolLimits } from "../../implementation/contracts.js";
 import type { ChannelLimits } from "../protocol/channel.js";
 import { STATUS_STALE_MS, decodeStatusView, statusViewPath } from "../protocol/status-view.js";
@@ -31,21 +31,36 @@ export class TuiTransport {
     private readonly now: () => number = Date.now,
   ) {}
 
+  /** Reads the view without following a link and without ever holding more than
+   * the declared bound, so an oversized or replaced file costs a refusal rather
+   * than the memory it claims. Its size is checked on the open descriptor, so
+   * the file that is measured is the file that is read. */
+  private read(path: string): { text: string } | { reason: string } {
+    let fd: number | undefined;
+    try {
+      fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      const stat = fstatSync(fd);
+      if (!stat.isFile()) return { reason: "status view가 정규 파일이 아님" };
+      if (stat.size > this.maxBytes) return { reason: "status view가 너무 큼" };
+      const buffer = Buffer.allocUnsafe(stat.size);
+      let filled = 0;
+      while (filled < stat.size) {
+        const count = readSync(fd, buffer, filled, stat.size - filled, null);
+        if (count === 0) break;
+        filled += count;
+      }
+      return { text: buffer.subarray(0, filled).toString("utf8") };
+    } catch (error) {
+      return { reason: (error as { code?: string }).code === "ENOENT" ? "broker 관측 없음" : "status view를 읽지 못함" };
+    } finally { if (fd !== undefined) closeSync(fd); }
+  }
+
   status(): Promise<Observation> {
     const checkedAtMs = this.now();
-    let text: string;
-    try {
-      const bytes = readFileSync(statusViewPath(this.stateRoot));
-      if (bytes.byteLength > this.maxBytes)
-        return Promise.resolve({ kind: "unknown", reason: "status view가 너무 큼", observedAtMs: checkedAtMs });
-      text = bytes.toString("utf8");
-    } catch (error) {
-      const missing = (error as { code?: string }).code === "ENOENT";
-      return Promise.resolve({
-        kind: "unknown", observedAtMs: checkedAtMs,
-        reason: missing ? "broker 관측 없음" : "status view를 읽지 못함",
-      });
-    }
+    const read = this.read(statusViewPath(this.stateRoot));
+    if ("reason" in read)
+      return Promise.resolve({ kind: "unknown", reason: read.reason, observedAtMs: checkedAtMs });
+    const text = read.text;
     const decoded = decodeStatusView(text, this.society);
     if (decoded.kind === "invalid")
       return Promise.resolve({ kind: "unknown", reason: decoded.reason, observedAtMs: checkedAtMs });

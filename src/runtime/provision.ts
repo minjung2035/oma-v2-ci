@@ -33,6 +33,12 @@ const OWNED_DIRECTORIES: readonly string[] = Object.freeze([
   join("mail", "archive", "new"),
   join("mail", "archive", "cur"),
   join("mail", "archive", "tmp"),
+  // The Principal's own private space. The product starts an engine whose
+  // working directory is this path, and a process cannot be started in a
+  // directory that does not exist, so it is provisioned like the rest of the
+  // tree rather than left for the first run to discover (TUI-004).
+  join("principal", "private"),
+  join("principal", "private", "sessions"),
 ]);
 
 export interface ProvisionReport {

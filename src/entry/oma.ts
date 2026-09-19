@@ -4,7 +4,7 @@
  * model-facing CLI in the Resident rootfs (src/cli.ts) and shares no argv
  * parser, capability or socket with it. Nothing here is mounted into a sandbox.
  */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isValidSocietyName } from "../ids.js";
@@ -15,7 +15,8 @@ import { TuiApp, type AppPorts } from "../tui/app.js";
 import { codeFor, fail } from "../tui/exit.js";
 import { openTerminal } from "../tui/screen.js";
 import { dashboardData } from "../tui/dashboard.js";
-import { PrincipalSession, principalSessionProfile } from "../tui/session.js";
+import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionProfile } from "../tui/session.js";
+import { principalCredentialPath, isPrincipalCredential } from "../protocol/principal-credential.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
@@ -49,6 +50,20 @@ function ensureConfiguration(configPath: string, society: string, stateRoot: str
     }));
     return readSettings(configPath);
   }
+}
+
+/** The credential the running broker published for this run, or null.
+ *
+ * Null is a real answer and is shown as one: there is no broker, or the file is
+ * not a credential, so the Principal starts without society authority instead of
+ * starting with a value that would fail at the first request for a reason the
+ * user could not see. */
+function runningBrokerCredential(runRoot: string): string | null {
+  let text: string;
+  try { text = readFileSync(principalCredentialPath(runRoot), "utf8"); }
+  catch { return null; }
+  const value = text.trim();
+  return isPrincipalCredential(value) ? value : null;
 }
 
 function argOf(args: readonly string[], flag: string): string | undefined {
@@ -142,6 +157,19 @@ async function main(argv: readonly string[]): Promise<void> {
   terminal.onResize(() => app.draw());
   terminal.onKeys(chunk => app.feed(chunk));
 
+  // One command starts the society. A broker another `oma` already owns is left
+  // alone, and a broker this process started is stopped when it exits. It
+  // starts before the engine because the engine's authority comes from the
+  // credential the running broker publishes: a session started first would hold
+  // no authority and could not be given one afterwards.
+  broker = await superviseBroker({
+    node: process.execPath, libdir: settings.config.installation.libdir,
+    society, runRoot, configPath,
+    onEvent: line => { app.line(`broker: ${line}`); app.draw(); },
+  });
+  if (broker.state.kind === "unavailable")
+    app.line(`broker를 시작하지 못했습니다: ${broker.state.reason}. Dashboard 관측값은 unknown으로 남습니다.`);
+
   // OMA runs the engine it shipped with; it never resolves Pi from PATH, and it
   // gives that engine its own agent directory so a Pi the user installed keeps
   // its configuration, extensions and sessions to itself.
@@ -150,14 +178,21 @@ async function main(argv: readonly string[]): Promise<void> {
   });
   ensureDirectory(piRuntime.agentDir, 0o700);
   const coreExtension = join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension);
+  const credential = runningBrokerCredential(runRoot);
+  if (credential === null)
+    app.line("broker가 없어 Principal은 사회에 요청을 보낼 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다.");
   try {
+    const profile = principalSessionProfile(configPath, society);
     session = PrincipalSession.start(
       { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
         coreExtension, sessionDir: join(stateRoot, "principal", "private", "sessions"),
         workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private") },
-      principalSessionProfile(configPath, society),
+      profile,
       limitsOf(settings.config.limits),
-      { HOME: join(stateRoot, "principal", "private"), PATH: "/usr/bin:/bin" },
+      principalEnvironment(
+        { stateRoot, runRoot, libdir: settings.config.installation.libdir },
+        profile, settings.config.limits, { credential, sessionHandle: newSessionHandle() },
+      ),
       {
         onLine: line => app.line(line),
         onBusy: busy => app.setBusy(busy),
@@ -177,16 +212,6 @@ async function main(argv: readonly string[]): Promise<void> {
     app.line(`Pi 세션을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
     app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
   }
-
-  // One command starts the society. A broker another `oma` already owns is left
-  // alone, and a broker this process started is stopped when it exits.
-  broker = await superviseBroker({
-    node: process.execPath, libdir: settings.config.installation.libdir,
-    society, runRoot, configPath,
-    onEvent: line => { app.line(`broker: ${line}`); app.draw(); },
-  });
-  if (broker.state.kind === "unavailable")
-    app.line(`broker를 시작하지 못했습니다: ${broker.state.reason}. Dashboard 관측값은 unknown으로 남습니다.`);
 
   const poll = setInterval(() => {
     void transport.status().then(next => { observation = next; app.refresh(); app.draw(); });
