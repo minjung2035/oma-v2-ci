@@ -252,7 +252,11 @@ export class PrincipalHostEndpoint {
         await this.ports.complete(auth, raw.params as BoundaryEvidence);
         return okAnswer(id, { completed: true });
       default:
-        throw new StoreError("AUTH_FAILED", `method ${String(raw.method)} is not served on the principal host endpoint`);
+        // The host is already known by this point, so a method this endpoint
+        // does not serve is a method-surface answer, not an authentication
+        // one (IPC-012). The two are not interchangeable here: error class
+        // decides what a caller may retry.
+        throw new StoreError("UNKNOWN_METHOD", `method ${String(raw.method)} is not served on the principal host endpoint`);
     }
   }
 }

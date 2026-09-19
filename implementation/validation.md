@@ -4,7 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 기준 HEAD `80fedd1`(작업 트리 포함), 실행일 2026-09-19. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `c553730`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+
+실행한 source: executed source digest `a124d304d21813ff205cd98f53d1e5e75e931b1517badf5a741ed6d3a633477d` (465 files). `src`·`test`·`scripts` 아래 모든 파일과 `implementation/contracts.ts`의 경로와 내용을 경로 순으로 해시한 값이다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 바이트를 돌렸는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. source가 바뀌었는데 다시 돌려 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -14,10 +16,10 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1100/1100 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1110/1110 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
-| `node scripts/loc.mjs` | **215 files / 20,019 code LOC** |
+| `node scripts/loc.mjs` | **215 files / 20,080 code LOC** |
 
 ### 현재 범위
 
@@ -301,11 +303,46 @@ boundary가 있으면 도중의 실패는 판정을 바꾸지 않는다. R28의 
 negative test가 비어 있었다. 둘 다 채웠다. TRACE-002가 요구하는 나머지(현재 revision의 실행 증거)는 다른 requirement와 마찬가지로 
 compliance 기록 절차를 거치지 않았으므로 상태는 `unverified` 그대로다.
 
+### 제품 표면: 여섯 번째 감사에서 닫은 것
+
+**사람이 입력한 것이 제품이 쥐는 양을 정했다.** `limits.ts`는 화면이 무엇까지 커지는지를 한 곳에서 읽게 하는 파일인데, 정작
+사용자가 직접 넣는 가장 큰 두 가지 — 작성 중인 prompt와, 다섯 번째 수정으로 host가 들고 있게 된 대기 prompt — 에만 상한이 없었다.
+둘 다 선언한다(`promptBytes` 16 KiB, `waitingPrompts` 16). prompt는 문자 수가 아니라 UTF-8 source bytes를 세고, 현재
+`frameBytes`가 더 작거나 quote/backslash가 JSON에서 escape되면 request id와 command envelope까지 직렬화한 실제 Pi command가
+frame 안에 드는 더 작은 지점에서 멈춘다. 붙여넣기도 같은 key 경로를 거치고, 대기 queue가 차면 조용히 버리지 않고 거절해 알린다.
+붙여넣기 하나가 화면 갱신 횟수까지 정하던 것도 같이 고쳤다 — `feed`는 chunk 하나에 frame 하나를 그린다. 문자 수 한도로
+되돌리면 한국어 입력에서 "the prompt grew past its declared UTF-8 byte bound"로, envelope 검사를 빼면 JSON escape 경계에서 실패한다.
+
+**500줄 상한이 모든 기록 생산자에게 적용되지 않았다.** Human prompt의 echo만 `line()`을 거치지 않고 직접 배열에 넣고 있어서,
+긴 run 동안 — 사람이 평소보다 많이 입력하는 바로 그때 — 아무도 다시 잘라 주지 않았다. 기록에 줄을 넣는 경로를 하나로 만들었다.
+되돌리면 "the transcript held 700 lines past a bound of 500"으로 실패한다.
+
+**전송조차 못 한 prompt가 화면을 영원히 busy로 남겼다.** `submit()`이 예약 **전에** `onBusy(true)`를 찍고, 해제는 event 경로에서만
+`false`가 되었다. frame보다 큰 prompt는 한 바이트도 쓰이지 않고 `FRAME_TOO_LARGE`로 거절되므로 어떤 run도 시작·종료하지 않고,
+claim은 돌아오는데 그 보고는 돌아오지 않았다. 이제 소유권 이동 자체가 busy 보고를 소유한다. 옛 구현으로 되돌리면 화면은
+`[true]`만 듣고 끝난다 — 세션은 비어 있는데 "응답 생성 중"이 남는다.
+
+**host endpoint의 unknown method가 `AUTH_FAILED`였다.** 그 지점에서 host identity는 이미 확인된 뒤이므로, 서빙하지 않는 method는
+인증 실패가 아니라 method surface 실패다(IPC-012). 이 repo는 error class로 재시도 가능성을 판정하므로 문구 문제가 아니다.
+`UNKNOWN_METHOD`로 고쳤고, 실제 protocol method 두 개(내부 `runner.open`, 공개 `status.get`)로 확인한다.
+
+**두 번째 `oma`가 authority 없는 engine을 또 띄웠다.** broker를 다른 프로세스가 소유하면 이 프로세스에는 principal host endpoint와
+credential이 없다. 다른 `oma`가 이미 Principal session을 돌리는 경우든 broker만 별도 service로 실행 중인 경우든, 여기서 뜬 engine은
+society에 요청하지도 못하면서 같은 `principal/private`와 같은 session 기록의 두 번째 writer가 된다. 이제 그 경우 engine을 시작하지
+않고 같은 상태를 보는 Control Panel로 남으며 화면이 이유를 적는다.
+되돌리면 "a second Principal engine was started for a society this process does not own"으로 실패한다.
+
+**검증 기록이 실행한 source에 묶여 있지 않았다.** 기준 HEAD 줄이 두 커밋 전(`80fedd1`)에 멈춰 있었고, 애초에 commit 이름은 어느
+revision을 뜻했는지만 말하지 어떤 바이트를 돌렸는지는 말하지 않는다. 기준 HEAD를 고치고, 그와 별개로 **executed source digest**를
+기록한다 — `src`·`test`·`scripts` 아래 모든 파일과 `implementation/contracts.ts`의 경로와 내용을 경로 순으로 해시한 값이다(`scripts/source-digest.mjs`, 생성된
+목록이 아니라 실제 순회이고 symlink는 거절한다). `R38`이 이 값을 새로 계산해 대조하므로, source를 바꾸고 다시 돌려 다시 적지
+않으면 실패한다. 값을 한 글자만 바꿔도 "the validation record names a source digest that is not this tree's"로 실패한다.
+
 ### 남은 것
 
-- **broker를 `oma`가 시작하지 않은 배포에서는 Principal이 society에 요청할 수 없다.** Principal endpoint는 supervision channel이 
-  있을 때만 열린다. systemd unit이 broker를 띄운 프로필이나 이미 다른 `oma`가 소유한 society에서는 Principal engine이 authority 없이 
-  시작하며 화면이 그 이유를 말한다. Dashboard·Mail·Config는 그대로 동작한다. TUI-002가 정한 "한 명령" 경로에서는 발생하지 않는다.
+- **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
+  channel이 있을 때만 열린다. systemd unit이나 다른 `oma`가 broker를 소유한 society에서는 authority 없는 두 번째 engine을 시작하지
+  않고 Control Panel로 남는다. Dashboard·Mail·Config는 그대로 동작하지만 대화는 broker를 소유한 `oma`에서 이어가야 한다.
 - **Yama ptrace scope 0 host**에서는 같은 UID의 프로세스가 engine을 trace할 수 있으므로 Principal 권한 경계가 성립하지 않는다.
 - **S-03**: 실행 중인 turn 안에서의 delivery boundary 귀속은 여전히 미결이다. Principal delivery는 idle session에만 전달해 이 질문에 
   의존하지 않는다. 따라서 Human이 긴 turn을 진행하는 동안에는 전달이 그 turn이 끝날 때까지 기다린다.
@@ -369,7 +406,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **215 files / 20,019 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **215 files / 20,080 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

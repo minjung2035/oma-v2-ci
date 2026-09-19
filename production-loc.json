@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0870809555053711,
+  "elapsed_seconds"    : 0.0841271877288818,
   "n_files"            : 215,
-  "n_lines"            : 23347,
-  "files_per_second"   : 2468.96693717077,
-  "lines_per_second"   : 268106.842242446,
+  "n_lines"            : 23461,
+  "files_per_second"   : 2555.65419223194,
+  "lines_per_second"   : 278875.362809086,
   "report_file"        : "production-loc.json"},
 "src/broker.ts" :{
   "blank": 3,
@@ -42,10 +42,15 @@
   "comment": 10,
   "code": 270,
   "language": "TypeScript"},
+"src/tui/session.ts" :{
+  "blank": 29,
+  "comment": 131,
+  "code": 265,
+  "language": "TypeScript"},
 "src/tui/model.ts" :{
   "blank": 29,
-  "comment": 32,
-  "code": 260,
+  "comment": 36,
+  "code": 262,
   "language": "TypeScript"},
 "src/config/operations.ts" :{
   "blank": 1,
@@ -56,11 +61,6 @@
   "blank": 1,
   "comment": 8,
   "code": 256,
-  "language": "TypeScript"},
-"src/tui/session.ts" :{
-  "blank": 28,
-  "comment": 122,
-  "code": 252,
   "language": "TypeScript"},
 "src/runtime/inference-relay.ts" :{
   "blank": 29,
@@ -109,8 +109,8 @@
   "language": "TypeScript"},
 "src/entry/oma.ts" :{
   "blank": 19,
-  "comment": 43,
-  "code": 207,
+  "comment": 49,
+  "code": 214,
   "language": "TypeScript"},
 "src/git/integration.ts" :{
   "blank": 5,
@@ -164,7 +164,7 @@
   "language": "TypeScript"},
 "src/broker/principal-endpoint.ts" :{
   "blank": 18,
-  "comment": 66,
+  "comment": 70,
   "code": 174,
   "language": "TypeScript"},
 "src/broker/public-dispatcher.ts" :{
@@ -307,6 +307,11 @@
   "comment": 15,
   "code": 135,
   "language": "TypeScript"},
+"src/tui/app.ts" :{
+  "blank": 18,
+  "comment": 26,
+  "code": 134,
+  "language": "TypeScript"},
 "src/leaf.ts" :{
   "blank": 13,
   "comment": 13,
@@ -326,11 +331,6 @@
   "blank": 6,
   "comment": 27,
   "code": 127,
-  "language": "TypeScript"},
-"src/tui/app.ts" :{
-  "blank": 16,
-  "comment": 17,
-  "code": 126,
   "language": "TypeScript"},
 "src/mail/batches.ts" :{
   "blank": 1,
@@ -562,6 +562,11 @@
   "comment": 4,
   "code": 66,
   "language": "TypeScript"},
+"src/tui/limits.ts" :{
+  "blank": 12,
+  "comment": 26,
+  "code": 66,
+  "language": "TypeScript"},
 "src/extension/cli-process.ts" :{
   "blank": 4,
   "comment": 22,
@@ -785,11 +790,6 @@
 "src/cli/commands/context.ts" :{
   "blank": 1,
   "comment": 0,
-  "code": 35,
-  "language": "TypeScript"},
-"src/tui/limits.ts" :{
-  "blank": 7,
-  "comment": 13,
   "code": 35,
   "language": "TypeScript"},
 "src/mail/addresses.ts" :{
@@ -1083,7 +1083,7 @@
   "code": 1,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 919,
-  "comment": 2409,
-  "code": 20019,
+  "blank": 927,
+  "comment": 2454,
+  "code": 20080,
   "nFiles": 215} }

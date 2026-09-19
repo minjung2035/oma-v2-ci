@@ -14,6 +14,8 @@ import { readExtensions, toggleExtension } from "../src/tui/sources/extensions.j
 import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/tui/sources/mail.js";
 import { READ_BOUNDS } from "../src/tui/limits.js";
 
+const FRAME_BYTES = 262144;
+
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 const corrupt = (error: unknown): boolean => error instanceof StoreError && error.code === "STORE_CORRUPT";
 const invalid = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST";
@@ -88,7 +90,7 @@ test("the panel renders at degenerate terminal sizes without exceeding them", ()
     config: Object.freeze([]), extensions: Object.freeze([]),
     mail: Object.freeze([{ id: "m", from: "worker-a", kind: "question", subject: "제목".repeat(60), unread: true, path: "/tmp/m" }]),
   });
-  let state = step(INITIAL, { kind: "panel" }, data).state;
+  let state = step(INITIAL, { kind: "panel" }, data, FRAME_BYTES).state;
   for (const [columns, rows] of [[1, 1], [2, 2], [8, 3], [20, 6], [200, 60]] as const) {
     for (const category of [0, 1, 2]) {
       const view = { ...state, category };
@@ -98,7 +100,7 @@ test("the panel renders at degenerate terminal sizes without exceeding them", ()
         assert.ok([...line].length <= columns * 2, `${columns}x${rows} produced an oversized line`);
     }
   }
-  state = step(state, { kind: "enter" }, data).state;
+  state = step(state, { kind: "enter" }, data, FRAME_BYTES).state;
   assert.doesNotThrow(() => render({ state, data, transcript: [], body: "본문", notice: null, busy: false, columns: 0, rows: 0 }));
 });
 

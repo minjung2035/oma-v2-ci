@@ -195,10 +195,19 @@ test("T119: a refused registration is said on the screen and grants nothing", as
   assert.ok(lines.some(line => /받아들이지 않았습니다/.test(line)), lines.join(" | "));
 });
 
-test("T119: a society whose broker this host does not own is said on the screen", async () => {
-  const { lines, broker } = await run({ brokerState: { kind: "already-running" } });
+test("T119: a society whose broker this host does not own gets a Control Panel, not a second engine", async () => {
+  // This process has no principal host endpoint or credential from that
+  // broker, whether its owner is another `oma` or a standalone service. A
+  // second engine here would have no authority to reach the society and would
+  // still be a second writer of the same private workspace and session history.
+  const { lines, broker, calls, started, deliveries } = await run({ brokerState: { kind: "already-running" } });
   assert.equal(broker.registrations.length, 0);
+  assert.equal(started, null, "a second Principal engine was started for a society this process does not own");
+  assert.equal(calls.includes("PrincipalSession.start"), false);
+  assert.equal(calls.includes("PrincipalDelivery"), false, "a delivery owner was built with no session to deliver into");
+  assert.deepEqual(deliveries, []);
   assert.ok(lines.some(line => /다른 프로세스가 소유/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /Dashboard, Config, Mail/.test(line)), lines.join(" | "));
 });
 
 test("T119: a broker that fails to start does not stop the product or hide why", async () => {

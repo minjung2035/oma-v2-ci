@@ -75,7 +75,11 @@ TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unveri
 
 TUI에서 아직 닫히지 않은 의존성은 하나로 좁혀져 있다.
 
-**Principal 권한과 mail 전달은 실제 프로세스 구조로 구현·검증됐다**(IPC-011, PR-001, PR-002, LIFE-006). host가 broker에 넘긴 socketpair가 host 식별, engine 등록, credential 전달, 생존 신호를 모두 맡는다. credential은 파일·환경·명령행 어디에도 없고 socketpair로만 이동하며, attach는 등록된 engine의 자손에게만 허용된다. host가 죽으면 broker가 스스로 멈추고, broker가 재시작되면 engine은 새 credential을 받는다. Principal에게 온 mail은 다른 소유자가 없는 session에 전달되고 receipt와 함께 완료되며, 준비·완료는 host만 할 수 있다. session 소유권의 단위는 engine의 agent run이다 — Pi는 queue에 든 continuation까지 소진한 뒤 run마다 `agent_settled`를 한 번 내므로, 예약 중에 들어온 Human prompt는 engine의 follow-up queue가 아니라 host가 순서대로 들고 있다가 run이 끝나는 그 단계에서 쓴다. 세 곳의 환경 배선과 secret의 무환경은 `principal-session-env`/`principal-secret-env`가, `streamingBehavior`를 쓰지 않는다는 규칙은 `principal-turn-owner`가 architecture gate에서 강제한다.
+**Principal 권한과 mail 전달은 실제 프로세스 구조로 구현·검증됐다**(IPC-011, PR-001, PR-002, LIFE-006). host가 broker에 넘긴 socketpair가 host 식별, engine 등록, credential 전달, 생존 신호를 모두 맡는다. credential은 파일·환경·명령행 어디에도 없고 socketpair로만 이동하며, attach는 등록된 engine의 자손에게만 허용된다. host가 죽으면 broker가 스스로 멈추고, broker가 재시작되면 engine은 새 credential을 받는다. Principal에게 온 mail은 다른 소유자가 없는 session에 전달되고 receipt와 함께 완료되며, 준비·완료는 host만 할 수 있다. session 소유권의 단위는 engine의 agent run이다 — Pi는 queue에 든 continuation까지 소진한 뒤 run마다 `agent_settled`를 한 번 내므로, 예약 중에 들어온 Human prompt는 engine의 follow-up queue가 아니라 host가 순서대로 들고 있다가 run이 끝나는 그 단계에서 쓴다. 세 곳의 환경 배선과 secret의 무환경은 `principal-session-env`/`principal-secret-env`가, `streamingBehavior`를 쓰지 않는다는 규칙은 `principal-turn-owner`가 architecture gate에서 강제한다. society당 engine은 하나다 — broker를 다른 프로세스가 소유한 society에서는 engine을 시작하지 않고 Control Panel로 남는다.
+
+**제품 표면이 커지는 한계는 `src/tui/limits.ts` 한 곳에 선언한다.** 대화 기록은 최근 500줄, 작성 중인 prompt는 최대 16 KiB UTF-8이면서 현재 Pi frame의 JSON envelope 안에 드는 크기, host가 들고 있는 대기 prompt는 16개다. 문자 수나 JSON 전 source 길이로 wire byte 한도를 대신하지 않으며, 기록에 줄을 넣는 경로는 하나다. session이 일하는 중인지에 대한 보고는 소유권 이동 자체가 소유한다.
+
+**검증 기록은 실행한 source에 묶여 있다.** `implementation/validation.md`가 적는 executed source digest는 `src`·`test`·`scripts` 아래 모든 파일과 `implementation/contracts.ts`의 내용을 해시한 값이고 `R38`이 새로 계산해 대조하므로, source를 바꾸면 다시 돌려 다시 적어야 한다.
 
 **다음 작업**: S-02의 model 주도 기준(도구로 credential을 읽으려는 시도 등)과 S-03(turn 안의 boundary 귀속)은 실제 모델이 도는 환경을 요구한다. 범위는 [validation.md](implementation/validation.md)의 "남은 것"에 적었다.
 

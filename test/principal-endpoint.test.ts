@@ -29,6 +29,7 @@ import { credentialMatches, isPrincipalCredential, sessionHandleMatches } from "
 import { StoreError } from "../src/domain/errors.js";
 import { encodeHostMessage } from "../src/protocol/host-channel.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir } from "../src/tui/session.js";
+import { CONVERSATION_BOUNDS } from "../src/tui/limits.js";
 import { provisionSociety } from "../src/runtime/provision.js";
 import { processIdentity, type ProcessIdentity } from "../src/broker/process-ancestry.js";
 import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "../src/runtime/principal-delivery.js";
@@ -592,27 +593,29 @@ test("T114: provisioning creates the directories the Principal's engine and its 
  * events go through the session's own handler -- the one the constructor
  * installs -- so the ownership rules are exercised exactly as the product
  * applies them and not as a test re-states them. */
-function reservedSession(): {
+function reservedSession(refuse?: () => Error): {
   readonly session: PrincipalSession;
   readonly sent: Record<string, unknown>[];
   readonly lines: string[];
+  readonly busy: boolean[];
   readonly emit: (event: PiEvent) => void;
 } {
   const sent: Record<string, unknown>[] = [];
   const lines: string[] = [];
+  const busy: boolean[] = [];
   const session = Object.create(PrincipalSession.prototype) as PrincipalSession;
   const state = session as unknown as {
     rpc: { send: (message: Record<string, unknown>) => Promise<void> };
     sink: { onLine: (line: string) => void; onBusy: (busy: boolean) => void; onEnd: (reason: string) => void };
     owner: "human" | "delivery" | null; waiting: string[]; unanswered: unknown;
-    closed: boolean; sequence: number;
+    closed: boolean; sequence: number; frameBytes: number;
     observe: (event: PiEvent) => void;
   };
-  state.rpc = { send: async message => { sent.push(message); } };
-  state.sink = { onLine: line => lines.push(line), onBusy: () => {}, onEnd: () => {} };
+  state.rpc = { send: async message => { if (refuse) throw refuse(); sent.push(message); } };
+  state.sink = { onLine: line => lines.push(line), onBusy: value => busy.push(value), onEnd: () => {} };
   state.owner = null; state.waiting = []; state.unanswered = null;
-  state.closed = false; state.sequence = 0;
-  return { session, sent, lines, emit: event => { state.observe(event); } };
+  state.closed = false; state.sequence = 0; state.frameBytes = LIMITS.frameBytes;
+  return { session, sent, lines, busy, emit: event => { state.observe(event); } };
 }
 
 /** Pi answers a prompt command at preflight, before the run it starts. */
@@ -729,6 +732,58 @@ test("T114 / PR-002: a response for a prompt the session has moved on from chang
   emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "stale" });
   assert.equal(session.busy, true, "a stale response released a delivery's claim");
   assert.equal(lines.length, 0, lines.join(" | "));
+});
+
+test("T114 / PR-002: a prompt the transport cannot carry stops the screen saying the session is busy", async () => {
+  // A prompt larger than the configured frame is rejected before a byte is
+  // written -- no run starts, and nothing will ever settle to say the session
+  // is free again. If the claim comes back but the report of it does not, the
+  // screen shows "생성 중" over a session that is doing nothing at all.
+  const { session, lines, busy } = reservedSession(() => new StoreError("FRAME_TOO_LARGE", "Pi command exceeds the configured frame bound"));
+  await assert.rejects(session.submit("x".repeat(64)),
+    (error: unknown) => error instanceof StoreError && error.code === "FRAME_TOO_LARGE");
+  assert.equal(session.busy, false);
+  assert.deepEqual(busy, [true, false], `the screen was told ${JSON.stringify(busy)}`);
+  assert.deepEqual(lines, []);
+});
+
+test("T114 / PR-002: the busy report comes from the ownership itself, at every move of it", async () => {
+  const { session, busy, emit } = reservedSession();
+  await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  assert.deepEqual(busy, [true]);
+  // A prompt that only waits does not move the ownership, so it says nothing
+  // new; the screen is already showing a session at work.
+  await session.submit("meanwhile");
+  assert.deepEqual(busy, [true]);
+  // The delivery's run ends and the waiting prompt takes the session in the
+  // same step: the screen is never told the session went idle in between.
+  emit({ type: "agent_settled" });
+  assert.deepEqual(busy, [true, true]);
+  emit({ type: "agent_settled" });
+  assert.deepEqual(busy, [true, true, false]);
+});
+
+test("T120 / TUI-023: the host never retains a Human prompt beyond its UTF-8 frame admission", async () => {
+  const { session, sent, busy } = reservedSession();
+  const state = session as unknown as { frameBytes: number };
+  state.frameBytes = 96;
+  await assert.rejects(session.submit("가".repeat(12)),
+    (error: unknown) => error instanceof StoreError && error.code === "LIMIT_EXCEEDED");
+  assert.equal(session.busy, false, "a rejected prompt claimed the session");
+  assert.deepEqual(busy, [], "a rejected prompt changed the screen's busy state");
+  assert.deepEqual(sent, [], "an oversized prompt reached the Pi transport");
+});
+
+test("T120 / TUI-023: only so many prompts wait, and the Human is told which one was not taken", async () => {
+  // The Human can keep typing through a run they cannot interrupt, so the
+  // length of that run would otherwise decide how much this process holds.
+  const { session, sent } = reservedSession();
+  await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  const bound = CONVERSATION_BOUNDS.waitingPrompts.value;
+  for (let index = 0; index < bound; index += 1) await session.submit(`prompt ${index}`);
+  await assert.rejects(session.submit("one too many"),
+    (error: unknown) => error instanceof StoreError && error.code === "LIMIT_EXCEEDED");
+  assert.equal(sent.length, 1, "a waiting prompt reached the engine");
 });
 
 /** A stand-in session for the delivery owner: it records the claim and lets
@@ -884,6 +939,31 @@ test("T114: the host is answered on its identity, not on a number another proces
     try {
       await client.connect(join(society.runRoot, "principal-host.sock"));
       assert.equal(await failureOf(client.call("batch.prepare", {})), "AUTH_FAILED");
+    } finally { client.close(); }
+  } finally { await stopSociety(society); }
+});
+
+test("T114 / IPC-012: a method the host endpoint does not serve is an unknown method, not a refused host", async () => {
+  // The host is already known by this point, so answering AUTH_FAILED would
+  // tell a caller its identity was rejected when in fact its identity was
+  // accepted and the method does not exist. Error class is what decides
+  // whether a caller may retry, so the two are not interchangeable.
+  const society = await startSociety("oma-principal-unknown-method-");
+  try {
+    // Real protocol methods this endpoint does not serve: one internal, one
+    // public. A refused request ends its connection, so each gets its own.
+    for (const method of ["runner.open", "status.get"] as const) {
+      const client = channel();
+      try {
+        await client.connect(join(society.runRoot, "principal-host.sock"));
+        assert.equal(await failureOf(client.call(method, {})), "UNKNOWN_METHOD", method);
+      } finally { client.close(); }
+    }
+    // What it does serve still works on a connection of its own.
+    const client = channel();
+    try {
+      await client.connect(join(society.runRoot, "principal-host.sock"));
+      assert.equal((await client.call("batch.prepare", {})).ok, true);
     } finally { client.close(); }
   } finally { await stopSociety(society); }
 });

@@ -47,7 +47,7 @@ export class TuiApp {
   private notice: Notice | null = null;
   private busy = false;
 
-  constructor(private readonly ports: AppPorts, private readonly terminal: Terminal) {}
+  constructor(private readonly ports: AppPorts, private readonly terminal: Terminal, private readonly frameBytes: number) {}
 
   /** Re-reads every source. Called at start, after an effect and on demand;
    * the UI never keeps a value that a port no longer reports.
@@ -63,12 +63,23 @@ export class TuiApp {
 
   get snapshot(): State { return this.state; }
   get panel(): PanelData { return this.data; }
+  /** What the conversation currently holds, so the declared line bound can be
+   * checked as a fact rather than inferred from a rendered frame. */
+  get lines(): readonly string[] { return this.transcript; }
 
   line(text: string): void {
+    this.append(text);
+    this.draw();
+  }
+
+  /** The one way a line enters the transcript. Every producer goes through it,
+   * so the declared line bound holds for all of them -- a producer that pushed
+   * its own line would be a second owner of how far the transcript grows, and
+   * the Human's own prompts were exactly that. */
+  private append(text: string): void {
     this.transcript.push(text);
     const keep = CONVERSATION_BOUNDS.transcriptLines.value;
     if (this.transcript.length > keep) this.transcript = this.transcript.slice(-keep);
-    this.draw();
   }
 
   setBusy(busy: boolean): void {
@@ -80,14 +91,22 @@ export class TuiApp {
   note(text: string | null): void { this.notice = text === null ? null : { kind: "text", text }; this.draw(); }
 
   feed(chunk: Uint8Array): void {
-    for (const key of decodeKeys(chunk)) this.key(key);
+    // One frame for the whole chunk. A paste arrives here as one chunk of many
+    // keys, and drawing per key would make the work the terminal does grow with
+    // what was pasted rather than with what is shown.
+    for (const key of decodeKeys(chunk)) this.apply(key);
+    this.draw();
   }
 
   key(key: Key): void {
-    const result = step(this.state, key, this.data);
+    this.apply(key);
+    this.draw();
+  }
+
+  private apply(key: Key): void {
+    const result = step(this.state, key, this.data, this.frameBytes);
     this.state = result.state;
     for (const effect of result.effects) this.run(effect);
-    this.draw();
   }
 
   private run(effect: Effect): void {
@@ -110,7 +129,7 @@ export class TuiApp {
           return;
         case "submit-prompt":
           this.notice = null;
-          this.transcript.push(`> ${effect.text}`);
+          this.append(`> ${effect.text}`);
           this.ports.submitPrompt(effect.text);
           return;
         case "quit":

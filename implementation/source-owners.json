@@ -221,7 +221,20 @@
   {
     "source": "implementation-spec.md",
     "requirements": [
-      "TUI-004",
+      "TUI-004"
+    ],
+    "owner": "src/entry/oma.ts#main",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main"
+    ],
+    "negativeTests": [
+      "test/oma-composition-policy.test.mjs#T119"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
       "TUI-014"
     ],
     "owner": "src/tui/session.ts#sessionArgv",
@@ -339,6 +352,25 @@
     ],
     "negativeTests": [
       "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-023"
+    ],
+    "owner": "src/tui/limits.ts#humanPromptFitsFrame",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step",
+      "src/tui/limits.ts#humanPromptFitsFrame",
+      "src/tui/session.ts#PrincipalSession.submit"
+    ],
+    "negativeTests": [
+      "test/tui-app.test.ts#T120",
+      "test/principal-endpoint.test.ts#T120"
     ]
   },
   {

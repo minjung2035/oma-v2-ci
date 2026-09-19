@@ -29,7 +29,56 @@ export const TERMINAL_BOUNDS = Object.freeze({
 
 export const CONVERSATION_BOUNDS = Object.freeze({
   transcriptLines: bound(500, "lines", "a long session must not grow without limit"),
+  // The two largest things a Human can put into this process. A prompt is
+  // composed one key at a time and a paste arrives as keys too, so without a
+  // ceiling one paste decides how much memory the screen holds; and a prompt
+  // typed while the engine is running waits here rather than in the engine, so
+  // without a ceiling a long run decides how many of them accumulate.
+  promptBytes: bound(16 * 1024, "bytes", "one Human prompt before its Pi command envelope"),
+  waitingPrompts: bound(16, "count", "prompts already typed that the running turn has not reached yet"),
 });
+
+/** Human request ids are decimal safe integers, so this is the largest command
+ * envelope a prompt can acquire during one session. The byte admission below
+ * and the sender both use this convention; neither has to guess how much of
+ * the configured frame the other will consume. */
+export function humanPromptRequestId(sequence: number): string {
+  if (!Number.isSafeInteger(sequence) || sequence < 1)
+    throw new RangeError("Human prompt sequence must be a positive safe integer");
+  return `oma-tui-${sequence}`;
+}
+
+const LARGEST_HUMAN_PROMPT_ID = humanPromptRequestId(Number.MAX_SAFE_INTEGER);
+const EMPTY_HUMAN_PROMPT_FRAME_BYTES = Buffer.byteLength(JSON.stringify({
+  id: LARGEST_HUMAN_PROMPT_ID,
+  type: "prompt",
+  message: "",
+}), "utf8");
+
+/** A raw UTF-8 ceiling strictly inside the configured Pi frame. JSON escaping
+ * can consume more than one wire byte per input byte, so fitting this ceiling
+ * is necessary but not sufficient; `humanPromptFitsFrame` checks the exact
+ * serialized command as the second gate. */
+export function humanPromptByteLimit(frameBytes: number): number {
+  if (!Number.isSafeInteger(frameBytes) || frameBytes <= 0) return 0;
+  return Math.max(0, Math.min(
+    CONVERSATION_BOUNDS.promptBytes.value,
+    frameBytes - EMPTY_HUMAN_PROMPT_FRAME_BYTES,
+  ));
+}
+
+export function humanPromptFrameBytes(message: string): number {
+  return Buffer.byteLength(JSON.stringify({
+    id: LARGEST_HUMAN_PROMPT_ID,
+    type: "prompt",
+    message,
+  }), "utf8");
+}
+
+export function humanPromptFitsFrame(message: string, frameBytes: number): boolean {
+  return Buffer.byteLength(message, "utf8") <= humanPromptByteLimit(frameBytes) &&
+    humanPromptFrameBytes(message) <= frameBytes;
+}
 
 export const CONFIG_BOUNDS = Object.freeze({
   numberDraftDigits: bound(9, "count", "a settings number never needs more digits"),

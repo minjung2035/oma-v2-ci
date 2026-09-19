@@ -19,6 +19,7 @@ import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
 import { loadConfiguration } from "../config.js";
 import { StoreError } from "../domain/errors.js";
 import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
+import { CONVERSATION_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
 
 export interface SessionPaths {
   readonly piCommand: string;
@@ -229,6 +230,7 @@ export class PrincipalSession {
   private readonly channel: Socket;
   private sequence = 0;
   private closed = false;
+  private readonly frameBytes: number;
   /** Who owns the agent run the engine is performing, or null when it performs
    * none.
    *
@@ -250,6 +252,11 @@ export class PrincipalSession {
    * that run would cover the Human's turn as well. Held here, every run has
    * exactly one owner and one boundary. */
   private readonly waiting: string[] = [];
+  /** How many may wait. The Human can type while a run they cannot interrupt
+   * is going, so without a ceiling the length of that run decides how much is
+   * held here. A prompt over the ceiling is refused and said, not dropped
+   * quietly. */
+  private static readonly WAITING = CONVERSATION_BOUNDS.waitingPrompts.value;
   /** The prompt whose acceptance the engine has not answered yet. Pi answers a
    * `prompt` command at preflight, before the run, and a rejection -- no model,
    * no key, a compaction in progress -- is the only notice that the message was
@@ -258,6 +265,7 @@ export class PrincipalSession {
   private unanswered: { readonly id: string; readonly role: "human" | "delivery" } | null = null;
 
   private constructor(private readonly child: ChildProcessWithoutNullStreams, limits: PiRpcLimits, private readonly sink: SessionSink) {
+    this.frameBytes = limits.frameBytes;
     this.rpc = new PiRpcClient(child, limits);
     // The private socket the credential travels on. Kept open for the life of
     // the session so a restarted broker's credential can replace the old one.
@@ -307,17 +315,25 @@ export class PrincipalSession {
     if (event.type === "agent_settled") this.free();
     const projected = projectEvent(event);
     if (projected.line !== undefined) this.sink.onLine(projected.line);
+  }
+
+  /** Every move of the session's ownership goes through here, and every report
+   * of whether it is busy comes out of here. Two owners of that answer -- a
+   * caller announcing "busy" before it claims, an event announcing "idle"
+   * after it releases -- is how the screen ends up saying the engine is
+   * working on a session that is in fact free. */
+  private own(next: "human" | "delivery" | null): void {
+    this.owner = next;
     this.sink.onBusy(this.busy);
   }
 
   /** The run is over. A Human prompt that was waiting takes the session here,
    * synchronously, so nothing can start between the two steps. */
   private free(): void {
-    this.owner = null;
     this.unanswered = null;
     const next = this.waiting.shift();
-    if (next === undefined) return;
-    this.owner = "human";
+    if (next === undefined) { this.own(null); return; }
+    this.own("human");
     void this.sendPrompt(this.nextRequestId(), next, "human").catch((error: unknown) => {
       // The Human is told which of their prompts was not sent; the rest still
       // go, in order, rather than disappearing with it.
@@ -328,7 +344,7 @@ export class PrincipalSession {
 
   private nextRequestId(): string {
     this.sequence += 1;
-    return `oma-tui-${this.sequence}`;
+    return humanPromptRequestId(this.sequence);
   }
 
   /** Writes one prompt and remembers that the engine has yet to accept it. */
@@ -368,7 +384,7 @@ export class PrincipalSession {
     // Claimed before the command is written, and given back if it cannot be.
     if (this.busy)
       throw new StoreError("BATCH_CONFLICT", "the principal session is already spoken for");
-    this.owner = "delivery";
+    this.own("delivery");
     try { await this.sendPrompt(batchId, `/oma-deliver ${batchId}`, "delivery"); }
     catch (error) { this.release("delivery"); throw error; }
   }
@@ -387,9 +403,16 @@ export class PrincipalSession {
    * already going, so that run keeps its own boundary. */
   async submit(text: string): Promise<void> {
     if (this.closed) { this.sink.onEnd("세션이 종료되어 전송할 수 없습니다."); return; }
-    this.sink.onBusy(true);
-    if (this.busy) { this.waiting.push(text); return; }
-    this.owner = "human";
+    if (!humanPromptFitsFrame(text, this.frameBytes))
+      throw new StoreError("LIMIT_EXCEEDED", "입력이 이 세션의 UTF-8 prompt 한도를 넘습니다.");
+    if (this.busy) {
+      if (this.waiting.length >= PrincipalSession.WAITING)
+        throw new StoreError("LIMIT_EXCEEDED",
+          `${PrincipalSession.WAITING}개까지만 대기시킬 수 있습니다. 진행 중인 응답이 끝난 뒤 다시 보내 주세요.`);
+      this.waiting.push(text);
+      return;
+    }
+    this.own("human");
     try { await this.sendPrompt(this.nextRequestId(), text, "human"); }
     catch (error) { this.release("human"); throw error; }
   }

@@ -5,6 +5,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent, measureWithCloc } from "../scripts/production-inventory.mjs";
+import { EXECUTED_SOURCE_ROOTS, executedSourceDigest } from "../scripts/source-digest.mjs";
+import { fileURLToPath } from "node:url";
+
+const REPO = fileURLToPath(new URL("..", import.meta.url));
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oma-inventory-"));
@@ -191,6 +195,30 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
     write({ ...forged, header: { ...forged.header, n_files: files.length } });
     assert.throws(() => assertMeasurementCurrent(f.root), /does not match a fresh measurement/);
   } finally { f.close(); }
+});
+
+test("R38: the executed source closure includes the shared production contract", () => {
+  // This TypeScript file is compiled into every build even though it lives
+  // outside src/. Omitting it would let an executable contract change keep an
+  // earlier run's digest and results looking current.
+  assert.deepEqual(EXECUTED_SOURCE_ROOTS, [
+    "src", "test", "scripts", "implementation/contracts.ts",
+  ]);
+});
+
+test("R38: the validation record names the source that was run, by its bytes", () => {
+  // The record calls itself the single owner of current verification status.
+  // A commit name in it says which revision was meant; it does not say which
+  // bytes were run, and a line left behind by an earlier commit reads exactly
+  // like a current one. The digest is the bytes, so a source change that is
+  // not re-run and re-recorded fails here instead of leaving an earlier tree's
+  // figures looking current.
+  const record = readFileSync(new URL("../implementation/validation.md", import.meta.url), "utf8");
+  const quoted = [...record.matchAll(/executed source digest `([0-9a-f]{64})` \((\d+) files\)/g)]
+    .map(([, value, files]) => ({ digest: value, files: Number(files) }));
+  assert.equal(quoted.length, 1, "the validation record names no executed source digest, or more than one");
+  assert.deepEqual(quoted[0], executedSourceDigest(REPO),
+    "the validation record names a source digest that is not this tree's");
 });
 
 test("R38: the figures the validation record quotes are the ones the artifact holds", () => {

@@ -6,6 +6,7 @@ import { StoreError } from "../src/domain/errors.js";
 import type { ConfigField, ExtensionRow, MailRow } from "../src/tui/model.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 import type { Terminal } from "../src/tui/screen.js";
+import { CONVERSATION_BOUNDS, humanPromptByteLimit, humanPromptFrameBytes } from "../src/tui/limits.js";
 
 const ESC = String.fromCharCode(27);
 const CTRL_X = Buffer.from([0x18]);
@@ -37,7 +38,7 @@ interface Harness {
   last(): string;
 }
 
-function harness(overrides: Partial<AppPorts> = {}): Harness {
+function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harness {
   const writes: { field: string; value: string | number }[] = [];
   const toggles: { id: string; role: string; enabled: boolean }[] = [];
   const prompts: string[] = [];
@@ -68,7 +69,7 @@ function harness(overrides: Partial<AppPorts> = {}): Harness {
     ...overrides,
   };
   const terminal = fakeTerminal();
-  const app = new TuiApp(ports, terminal);
+  const app = new TuiApp(ports, terminal, frameBytes);
   app.refresh();
   app.draw();
   return {
@@ -152,6 +153,49 @@ test("the transcript is bounded so a long session cannot grow without limit", ()
   assert.ok(frame.length > 0);
   assert.doesNotMatch(frame, /line 0\b/);
   assert.match(frame, /line 699/);
+});
+
+test("the declared transcript bound holds for the Human's own prompts too", () => {
+  // The Human's prompt is echoed by a different code path from every other
+  // line. A path that pushed its own line would be a second owner of how far
+  // the transcript grows, and while a long run is going -- exactly when the
+  // Human types more than usual -- nothing else appends to trim it back.
+  const h = harness();
+  const keep = CONVERSATION_BOUNDS.transcriptLines.value;
+  for (let index = 0; index < keep + 200; index += 1) {
+    h.app.feed(Buffer.from(`p${index}`));
+    h.app.feed(ENTER);
+  }
+  assert.equal(h.prompts.length, keep + 200);
+  assert.ok(h.app.lines.length <= keep, `the transcript held ${h.app.lines.length} lines past a bound of ${keep}`);
+  assert.equal(h.app.lines.at(-1), `> p${keep + 199}`);
+});
+
+test("T120 / TUI-023: a prompt stops growing at its UTF-8 byte bound rather than letting one paste decide", () => {
+  const h = harness();
+  const cap = CONVERSATION_BOUNDS.promptBytes.value;
+  // A paste arrives as keys, so this is the same path a paste takes. Korean
+  // text makes a character-count limit visibly insufficient.
+  const input = "가".repeat(Math.ceil(cap / 3) + 500);
+  h.app.feed(Buffer.from(input));
+  assert.equal(Buffer.byteLength(h.app.snapshot.prompt, "utf8"), Math.floor(cap / 3) * 3,
+    "the prompt grew past its declared UTF-8 byte bound");
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, ["가".repeat(Math.floor(cap / 3))]);
+});
+
+test("T120 / TUI-023: prompt admission includes JSON escaping and the configured Pi frame", () => {
+  const frameBytes = 96;
+  const h = harness({}, frameBytes);
+  h.app.feed(Buffer.from("\\".repeat(100)));
+  const prompt = h.app.snapshot.prompt;
+  assert.ok(Buffer.byteLength(prompt, "utf8") <= humanPromptByteLimit(frameBytes));
+  assert.ok(humanPromptFrameBytes(prompt) <= frameBytes,
+    `the serialized prompt used ${humanPromptFrameBytes(prompt)} bytes of a ${frameBytes}-byte frame`);
+  assert.ok(humanPromptFrameBytes(`${prompt}\\`) > frameBytes,
+    "the fixture did not reach the JSON-escaping boundary");
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, [prompt]);
 });
 
 test("Ctrl+C unwinds edit, then detail, then the panel before it quits", () => {

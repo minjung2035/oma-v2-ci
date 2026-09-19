@@ -7,7 +7,7 @@
  * and no separate save step here.
  */
 import type { Key } from "./keys.js";
-import { CONFIG_BOUNDS } from "./limits.js";
+import { CONFIG_BOUNDS, humanPromptFitsFrame } from "./limits.js";
 
 export type Category = "dashboard" | "config" | "mail";
 export const CATEGORIES: readonly Category[] = Object.freeze(["dashboard", "config", "mail"]);
@@ -285,10 +285,16 @@ function stepPanelRoot(state: State, data: PanelData, key: Key): Step {
   }
 }
 
-function stepConversation(state: State, key: Key): Step {
+function stepConversation(state: State, key: Key, frameBytes: number): Step {
   switch (key.kind) {
     case "char":
-      return { state: { ...state, prompt: state.prompt + key.value }, effects: [] };
+      // A paste arrives as keys, so this is where one arrives too. Admission
+      // is by UTF-8 bytes and by the exact JSON command size: character counts
+      // miss both multibyte text and the extra wire bytes for quotes and
+      // backslashes.
+      const candidate = state.prompt + key.value;
+      if (!humanPromptFitsFrame(candidate, frameBytes)) return { state, effects: [] };
+      return { state: { ...state, prompt: candidate }, effects: [] };
     case "backspace":
       return { state: { ...state, prompt: state.prompt.slice(0, -1) }, effects: [] };
     case "enter": {
@@ -304,7 +310,7 @@ function stepConversation(state: State, key: Key): Step {
   }
 }
 
-export function step(state: State, key: Key, data: PanelData): Step {
+export function step(state: State, key: Key, data: PanelData, frameBytes: number): Step {
   if (key.kind === "panel")
     return { state: state.open ? closed(state) : { ...state, open: true }, effects: [] };
   if (key.kind === "interrupt") {
@@ -313,7 +319,7 @@ export function step(state: State, key: Key, data: PanelData): Step {
     if (state.open) return { state: closed(state), effects: [] };
     return { state: { ...state, quit: true }, effects: [{ kind: "quit" }] };
   }
-  if (!state.open) return stepConversation(state, key);
+  if (!state.open) return stepConversation(state, key, frameBytes);
   if (state.edit.kind !== "none") return stepEdit(state, data, key);
   if (state.detail.kind === "extensions") return stepExtensions(state, data, key, state.detail);
   if (state.detail.kind === "mail") return stepMailDetail(state, data, key, state.detail);

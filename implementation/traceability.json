@@ -1203,8 +1203,8 @@
   {
     "requirement": "PR-002",
     "source": "implementation-spec.md",
-    "digest": "0614a454e27478989c81a8caddae29e5e962ce68e000f6e7bad6a4f11a6fd1c8",
-    "normativeText": "**MUST [PR-002]** principal-relay는 mailbox new 항목마다 deliveries의 durable 수신 기록과 원문을 확인하고 모두 cur로 이동한다. 기존 질문/batch가 pending이어도 새 항목을 계속 인수한다. UI가 없으면 batch를 새로 prepare하지 않는다. UI reconnect 시 host가 pending을 조회하여 제한된 batch를 인수하고, trusted extension이 그것을 session에 custom message로 제시한다. batch 준비와 완료는 host endpoint에서 그 broker를 시작한 host에게만 서빙하므로 model이 실행하는 어떤 것도 자기 mail을 전달된 것으로 표시할 수 없다. 전달은 session이 idle일 때만 하며, 실행 중인 turn 안에서의 boundary 귀속(S-03)에 의존하지 않는다. idle 관측과 run 시작은 한 단계여야 한다: session의 소유권은 engine이 turn_start를 보고하기 전에, 무엇을 쓰기 전에 동기적으로 예약하며, Human prompt와 delivery가 같은 소유권을 쓴다. 소유권의 단위는 engine의 agent run이다. Pi는 queue에 든 continuation까지 모두 소진한 뒤 run마다 `agent_settled`를 한 번 보내므로, prompt 하나에 settle 하나를 기대해서는 안 된다. Human은 mail 때문에 기다리지 않고 다시 입력할 필요도 없다 — session이 이미 예약돼 있으면 prompt는 host가 순서대로 들고 있다가 run이 끝나는 그 단계에서 곧바로 쓴다. engine 자신의 follow-up queue에는 넣지 않는다: 그렇게 넣은 prompt는 진행 중인 delivery의 run 안에서 실행되고, 그 run에 대해 extension이 기록하는 boundary가 Human의 turn까지 덮게 된다. engine이 prompt를 수락 전에 거절하면 어떤 run도 시작·종료하지 않으므로, 그 응답을 읽어 예약을 돌려주고 사용자에게 알린다. settle되지 않고 끝난 delivery도 예약을 돌려준다. delivery의 실패는 assistant message 하나가 아니라 run이 settle될 때 판정한다 — Pi는 retry와 compaction으로 실패한 message 뒤에도 같은 run을 계속하기 때문이다. boundary 없이 끝난 turn의 batch는 prepared로 남아 back-off 뒤 다시 전달된다. relay는 Pi model call을 하지 않는다.",
+    "digest": "a0de492fb06e8c6ad3b1a8e4a40c35c53ecc59a3d0e4825874f3f45f83e1dd68",
+    "normativeText": "**MUST [PR-002]** principal-relay는 mailbox new 항목마다 deliveries의 durable 수신 기록과 원문을 확인하고 모두 cur로 이동한다. 기존 질문/batch가 pending이어도 새 항목을 계속 인수한다. UI가 없으면 batch를 새로 prepare하지 않는다. UI reconnect 시 host가 pending을 조회하여 제한된 batch를 인수하고, trusted extension이 그것을 session에 custom message로 제시한다. batch 준비와 완료는 host endpoint에서 그 broker를 시작한 host에게만 서빙하므로 model이 실행하는 어떤 것도 자기 mail을 전달된 것으로 표시할 수 없다. 전달은 session이 idle일 때만 하며, 실행 중인 turn 안에서의 boundary 귀속(S-03)에 의존하지 않는다. idle 관측과 run 시작은 한 단계여야 한다: session의 소유권은 engine이 turn_start를 보고하기 전에, 무엇을 쓰기 전에 동기적으로 예약하며, Human prompt와 delivery가 같은 소유권을 쓴다. 소유권의 단위는 engine의 agent run이다. Pi는 queue에 든 continuation까지 모두 소진한 뒤 run마다 `agent_settled`를 한 번 보내므로, prompt 하나에 settle 하나를 기대해서는 안 된다. Human은 mail 때문에 기다리지 않고 다시 입력할 필요도 없다 — session이 이미 예약돼 있으면 prompt는 host가 순서대로 들고 있다가 run이 끝나는 그 단계에서 곧바로 쓴다. engine 자신의 follow-up queue에는 넣지 않는다: 그렇게 넣은 prompt는 진행 중인 delivery의 run 안에서 실행되고, 그 run에 대해 extension이 기록하는 boundary가 Human의 turn까지 덮게 된다. engine이 prompt를 수락 전에 거절하면 어떤 run도 시작·종료하지 않으므로, 그 응답을 읽어 예약을 돌려주고 사용자에게 알린다. host가 들고 있는 대기 prompt의 수에는 선언된 상한이 있고, 상한을 넘은 prompt는 조용히 버리지 않고 거절해 알린다. session이 일하는 중인지에 대한 보고는 소유권 이동 자체가 소유한다 — 예약 전에 busy를 먼저 알리거나 일부 해제 경로만 idle을 알리는 구현은 금지한다. settle되지 않고 끝난 delivery도 예약을 돌려준다. delivery의 실패는 assistant message 하나가 아니라 run이 settle될 때 판정한다 — Pi는 retry와 compaction으로 실패한 message 뒤에도 같은 run을 계속하기 때문이다. boundary 없이 끝난 turn의 batch는 prepared로 남아 back-off 뒤 다시 전달된다. relay는 Pi model call을 하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "src/runtime/principal-delivery.ts#PrincipalDelivery",
@@ -2629,20 +2629,17 @@
   {
     "requirement": "TUI-004; arch §23.3",
     "source": "implementation-spec.md",
-    "digest": "3a57acc9d8a642ceadd11b173d5e6ed77cc807bebc924f2666974ace192e716a",
-    "normativeText": "**MUST [TUI-004; arch §23.3]** Principal Pi session은 OMA TUI가 소유하며 `pi --mode rpc`로 실행한다. Pi의 대화형 모드나 built-in UI를 사용하지 않는다. PR-001의 단일 attach, PR-003의 private context 보존, PR-004의 model-facing tool 제한은 이 entrypoint가 그대로 진다. Principal의 논리 identity는 bootstrap 때 만들고 TUI 실행 여부와 독립적으로 유지한다. TUI 종료는 새 Principal 생성의 trigger가 아니다.",
+    "digest": "4c4250504f36b8816e3f20827c2ea4aa6f2a1cfe03e8673dbcadc4088e9986d9",
+    "normativeText": "**MUST [TUI-004; arch §23.3]** Principal Pi session은 OMA TUI가 소유하며 `pi --mode rpc`로 실행한다. Pi의 대화형 모드나 built-in UI를 사용하지 않는다. PR-001의 단일 attach, PR-003의 private context 보존, PR-004의 model-facing tool 제한은 이 entrypoint가 그대로 진다. Principal의 논리 identity는 bootstrap 때 만들고 TUI 실행 여부와 독립적으로 유지한다. TUI 종료는 새 Principal 생성의 trigger가 아니다. society당 engine은 하나다: broker를 이미 다른 프로세스가 소유한 society에서는 새 engine을 시작하지 않는다. 이 프로세스에는 principal host endpoint와 credential이 없어 그 engine은 society에 요청할 authority가 없으면서 같은 private workspace와 같은 session 기록의 두 번째 writer가 되기 때문이며, 그 경우 제품은 같은 상태를 보는 Control Panel로 남고 그 이유를 화면에 적는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
-    "owner": "src/tui/session.ts#sessionArgv",
+    "owner": "src/entry/oma.ts#main",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
-      "src/entry/oma.ts#main",
-      "src/tui/session.ts#PrincipalSession.start",
-      "src/tui/session.ts#sessionArgv"
+      "src/entry/oma.ts#main"
     ],
     "negativeTests": [
-      "test/tui-sources.test.ts#T92",
-      "test/tui-boundary.test.ts#T92"
+      "test/oma-composition-policy.test.mjs#T119"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2992,6 +2989,31 @@
     "negativeTests": [],
     "evidence": null,
     "status": "unverified"
+  },
+  {
+    "requirement": "TUI-023; arch §23.6",
+    "source": "implementation-spec.md",
+    "digest": "b0c14071bef051ed414380bde495897b7c061b29866fd5ae0b470c661455f56f",
+    "normativeText": "**MUST [TUI-023; arch §23.6]** 대화 표면의 메모리 입력은 선언된 한도를 가진다. transcript는 최근 500줄만 보유하고 모든 생산자가 하나의 append 경로를 사용한다. 작성 중인 Human prompt는 최대 16 KiB의 UTF-8 source bytes만 보유하며, 현재 `frameBytes`가 더 작으면 완전한 Pi prompt command의 JSON envelope까지 직렬화한 크기가 그 frame 안에 드는 더 작은 값까지만 받는다. 문자 수로 byte 한도를 대신하거나 JSON escaping 비용을 누락하지 않는다. 붙여넣기도 같은 경계를 거치고 초과 부분에서 더 자라지 않는다. 실행 중인 run을 기다리는 Human prompt는 host에서 최대 16개만 보유하며, 초과 입력은 조용히 버리지 않고 접수 전에 거절한다.",
+    "applicability": "unclassified",
+    "rationale": "Requires production-path review; no inference from test names.",
+    "owner": "src/tui/limits.ts#humanPromptFitsFrame",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/model.ts#step",
+      "src/tui/limits.ts#humanPromptFitsFrame",
+      "src/tui/session.ts#PrincipalSession.submit"
+    ],
+    "negativeTests": [
+      "test/tui-app.test.ts#T120",
+      "test/principal-endpoint.test.ts#T120"
+    ],
+    "evidence": null,
+    "status": "unverified",
+    "verification": "NOT_RUN",
+    "invalidationReason": "authoritative owner, entrypoint, call path or negative-test locator changed"
   },
   {
     "requirement": "TUI-022",

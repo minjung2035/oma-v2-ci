@@ -9,6 +9,8 @@ import { render } from "../src/tui/view/index.js";
 import { cellWidth, fit } from "../src/tui/view/text.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 
+const FRAME_BYTES = 262144;
+
 const data: PanelData = Object.freeze({
   dashboard: unknownDashboard(),
   config: Object.freeze<ConfigField[]>([
@@ -42,7 +44,7 @@ function drive(start: State, keys: readonly Key[]): { state: State; effects: Eff
   let state = start;
   const effects: Effect[] = [];
   for (const key of keys) {
-    const result = step(state, key, data);
+    const result = step(state, key, data, FRAME_BYTES);
     state = result.state;
     effects.push(...result.effects);
   }
@@ -51,15 +53,15 @@ function drive(start: State, keys: readonly Key[]): { state: State; effects: Eff
 
 test("T92/arch 23.4: Ctrl+X opens and closes the Control Panel from the conversation", () => {
   assert.equal(INITIAL.open, false);
-  const opened = step(INITIAL, KEY.panel, data).state;
+  const opened = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   assert.equal(opened.open, true);
   assert.equal(categoryOf(opened), "dashboard");
-  const closed = step(opened, KEY.panel, data).state;
+  const closed = step(opened, KEY.panel, data, FRAME_BYTES).state;
   assert.equal(closed.open, false);
 });
 
 test("arch 23.4: left and right move across exactly the three categories", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   assert.equal(categoryOf(drive(open, [KEY.right]).state), "config");
   assert.equal(categoryOf(drive(open, [KEY.right, KEY.right]).state), "mail");
   assert.equal(categoryOf(drive(open, [KEY.right, KEY.right, KEY.right]).state), "dashboard");
@@ -67,7 +69,7 @@ test("arch 23.4: left and right move across exactly the three categories", () =>
 });
 
 test("arch 23.4: item cursor never leaves the current category's range", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const top = drive(open, [KEY.right, KEY.up, KEY.up, KEY.up]).state;
   assert.equal(cursorOf(top, data), 0);
   const bottom = drive(open, [KEY.right, KEY.down, KEY.down, KEY.down, KEY.down]).state;
@@ -75,26 +77,26 @@ test("arch 23.4: item cursor never leaves the current category's range", () => {
 });
 
 test("T96/TUI-007: a confirmed choice saves immediately with no separate save step", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const { effects } = drive(open, [KEY.right, KEY.enter, KEY.up, KEY.enter]);
   assert.deepEqual(effects, [{ kind: "set-choice", field: "principal-model", value: "cheap" }]);
 });
 
 test("TUI-007: Esc during an edit reverts and emits no effect", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const { state, effects } = drive(open, [KEY.right, KEY.enter, KEY.up, KEY.escape]);
   assert.deepEqual(effects, []);
   assert.equal(state.edit.kind, "none");
 });
 
 test("TUI-007: confirming the unchanged value produces no write", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const { effects } = drive(open, [KEY.right, KEY.enter, KEY.enter]);
   assert.deepEqual(effects, []);
 });
 
 test("TUI-007: a number edit commits only a digit string inside the declared range", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const start = [KEY.right, KEY.down, KEY.enter] as const;
   const committed = drive(open, [...start, KEY.backspace, KEY.char("1"), KEY.char("2"), KEY.enter]);
   assert.deepEqual(committed.effects, [{ kind: "set-number", field: "worker-limit", value: 12 }]);
@@ -106,14 +108,14 @@ test("TUI-007: a number edit commits only a digit string inside the declared ran
 });
 
 test("arch 23.4: only Extensions and Mail open a detail screen", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   assert.equal(drive(open, [KEY.enter]).state.detail.kind, "none");
   assert.equal(drive(open, [KEY.right, KEY.down, KEY.down, KEY.enter]).state.detail.kind, "extensions");
   assert.equal(drive(open, [KEY.right, KEY.right, KEY.enter]).state.detail.kind, "mail");
 });
 
 test("T97/TUI-010: the locked core extension cannot be toggled, other rows can", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const toExtensions = [KEY.right, KEY.down, KEY.down, KEY.enter] as const;
   assert.deepEqual(drive(open, [...toExtensions, KEY.enter]).effects, []);
   assert.deepEqual(drive(open, [...toExtensions, KEY.down, KEY.enter]).effects,
@@ -123,30 +125,30 @@ test("T97/TUI-010: the locked core extension cannot be toggled, other rows can",
 });
 
 test("arch 23.4: Esc leaves a detail screen before it closes the panel", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const inDetail = drive(open, [KEY.right, KEY.down, KEY.down, KEY.enter]).state;
-  const back = step(inDetail, KEY.escape, data).state;
+  const back = step(inDetail, KEY.escape, data, FRAME_BYTES).state;
   assert.equal(back.detail.kind, "none");
   assert.equal(back.open, true);
-  assert.equal(step(back, KEY.escape, data).state.open, false);
+  assert.equal(step(back, KEY.escape, data, FRAME_BYTES).state.open, false);
 });
 
 test("conversation keys build a prompt and submit it exactly once", () => {
   const typed = drive(INITIAL, [KEY.char("h"), KEY.char("i"), KEY.char("!"), KEY.backspace]);
   assert.equal(typed.state.prompt, "hi");
-  const submitted = step(typed.state, KEY.enter, data);
+  const submitted = step(typed.state, KEY.enter, data, FRAME_BYTES);
   assert.deepEqual(submitted.effects, [{ kind: "submit-prompt", text: "hi" }]);
   assert.equal(submitted.state.prompt, "");
-  assert.deepEqual(step(submitted.state, KEY.enter, data).effects, []);
+  assert.deepEqual(step(submitted.state, KEY.enter, data, FRAME_BYTES).effects, []);
 });
 
 test("cursors stay valid when the underlying data shrinks to empty", () => {
   const empty: PanelData = { ...data, mail: Object.freeze([]), config: Object.freeze([]) };
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const onMail = drive(open, [KEY.right, KEY.right, KEY.down]).state;
   assert.equal(cursorOf(onMail, empty, "mail"), 0);
-  assert.deepEqual(step(onMail, KEY.enter, empty).effects, []);
-  assert.equal(step(onMail, KEY.enter, empty).state.detail.kind, "none");
+  assert.deepEqual(step(onMail, KEY.enter, empty, FRAME_BYTES).effects, []);
+  assert.equal(step(onMail, KEY.enter, empty, FRAME_BYTES).state.detail.kind, "none");
 });
 
 test("key decoding maps arrows, Ctrl+X and text without leaking escape sequences", () => {
@@ -165,7 +167,7 @@ test("rendering keeps every line inside the terminal width for wide characters",
   assert.equal(cellWidth("가"), 2);
   assert.equal(cellWidth("a"), 1);
   assert.equal(fit("가가가", 5), "가가");
-  const open = step(INITIAL, KEY.panel, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   for (const columns of [24, 40, 80]) {
     const lines = render({ state: open, data, transcript: [], body: null, notice: null, busy: false, columns, rows: 12 });
     assert.equal(lines.length, 12);
@@ -174,8 +176,8 @@ test("rendering keeps every line inside the terminal width for wide characters",
 });
 
 test("TUI-007: the panel always shows when a setting takes effect", () => {
-  const open = step(INITIAL, KEY.panel, data).state;
-  const config = step(open, KEY.right, data).state;
+  const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
+  const config = step(open, KEY.right, data, FRAME_BYTES).state;
   const text = render({ state: config, data, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 14 }).join("\n");
   assert.match(text, /다음 세션부터/);
   assert.match(text, /재시작 후/);

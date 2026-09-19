@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "4a8bd565cc7de5eeb73d60eb21218a4589afc2e9110d2d987918563bba5d27ca",
-  "report": "c916df6ba4d3c234e81a8985f41e0953a4544230b5ef1b2f78bdc57cc94c36ed",
+  "report": "17c6d66be043db01910611ae66a7a140f80b9eddf7d74d64a61a972bac98b74e",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "2788c81b6b60d57389a4e76465f0df3d159388ab6ff901bc32722ebf9cebf871"
+      "sha256": "e5a25cb206f8cb7e6a9c5804f2a74229fe3a9718aed077398e02f124d6d65fdf"
     },
     {
       "path": "src/broker/process-ancestry.ts",
@@ -293,7 +293,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "46335b02cb75f9aac62c25d54cf3b69e26b3e19b278c65dce53a5417ec3b01b8"
+      "sha256": "7d98f7e4dcbb134a4f026b80eeac05f837d67da697c4c86d39d1916d449ba0d6"
     },
     {
       "path": "src/entry/runner.ts",
@@ -761,7 +761,7 @@
     },
     {
       "path": "src/tui/app.ts",
-      "sha256": "0c2ba048ccb9ab1f36f038ab58b9cdd974bae6c08b5fbf82818893e1797c2817"
+      "sha256": "c2f37184161b2e6bb3e5084cf5d00f734f475e06b802c33f8e0a9f7f43d91404"
     },
     {
       "path": "src/tui/dashboard.ts",
@@ -777,11 +777,11 @@
     },
     {
       "path": "src/tui/limits.ts",
-      "sha256": "98cbf59072d3b0bb0eef65344406e600eac0aca4e10094f6686e18d0fedf1c6a"
+      "sha256": "759f5e2a4488cb6094e90bc7ac9659151224ee958d338f49c4856355de6d16c0"
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "ba440d131a47026553e41b2b11e3b95f49bb335acf178c4fb6059c5f2a84c79c"
+      "sha256": "746b4572faa4ee24440bf897f6a4d2de6ef8046ba100b54ccfdeea6adad8ffa6"
     },
     {
       "path": "src/tui/screen.ts",
@@ -789,7 +789,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "b654cd12ae9b0333a966596559a59829066a605451ceb3f511da488bd8b22b1a"
+      "sha256": "17266ad25b31cf93fdf14b2c512dd0a32fea23fbf19d70301f3639907a8ae7cc"
     },
     {
       "path": "src/tui/sources/extensions.ts",

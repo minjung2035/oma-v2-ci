@@ -1419,7 +1419,7 @@
   }
  ],
  "files": 216,
- "runtimeEdges": 773,
+ "runtimeEdges": 774,
  "typeOnlyEdges": 306,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 205,
@@ -1436,7 +1436,7 @@
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
   "L5-entry -> L4-orchestration": 19,
-  "L5-entry -> L5-entry": 100
+  "L5-entry -> L5-entry": 101
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1486,7 +1486,7 @@
   "src/git/context.ts": 12,
   "src/git/submit.ts": 12,
   "src/mail/batches.ts": 12,
-  "src/git/context-mirror.ts": 10
+  "src/tui/session.ts": 11
  },
  "external": {
   "@earendil-works/pi-coding-agent": 7,

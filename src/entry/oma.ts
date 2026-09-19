@@ -124,7 +124,7 @@ async function main(argv: readonly string[]): Promise<void> {
     quit: () => { shutdown(0); },
   };
 
-  const app = new TuiApp(ports, terminal);
+  const app = new TuiApp(ports, terminal, settings.config.limits.frameBytes);
   app.refresh();
 
   let broker: BrokerHandle | null = null;
@@ -165,7 +165,7 @@ async function main(argv: readonly string[]): Promise<void> {
   if (broker.state.kind === "unavailable")
     app.line(`broker를 시작하지 못했습니다: ${broker.state.reason}. Dashboard 관측값은 unknown으로 남습니다.`);
   else if (broker.state.kind === "already-running")
-    app.line("이 society의 broker는 다른 프로세스가 소유하고 있어 Principal은 요청을 보낼 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다.");
+    app.line("이 society의 broker는 다른 프로세스가 소유하고 있어, 여기서는 권한 있는 대화 세션을 열 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다.");
 
   // OMA runs the engine it shipped with; it never resolves Pi from PATH, and it
   // gives that engine its own agent directory so a Pi the user installed keeps
@@ -173,16 +173,16 @@ async function main(argv: readonly string[]): Promise<void> {
   // without authority: its credential reaches it later, on a private socket,
   // whenever a broker this process started is ready -- so a slow broker delays
   // the Principal's society requests, not the Principal itself.
-  const piRuntime = resolvePiRuntime({
-    stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
-  });
-  ensureDirectory(piRuntime.agentDir, 0o700);
-  const coreExtension = join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension);
-  try {
+  const startEngine = (): PrincipalSession => {
+    const piRuntime = resolvePiRuntime({
+      stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
+    });
+    ensureDirectory(piRuntime.agentDir, 0o700);
     const profile = principalSessionProfile(configPath, society);
-    session = PrincipalSession.start(
+    const started = PrincipalSession.start(
       { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
-        coreExtension, sessionDir: principalSessionDir(stateRoot),
+        coreExtension: join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension),
+        sessionDir: principalSessionDir(stateRoot),
         workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private") },
       profile,
       limitsOf(settings.config.limits),
@@ -200,11 +200,24 @@ async function main(argv: readonly string[]): Promise<void> {
       app.line("이 프로젝트의 커밋된 HEAD로 society를 시작했습니다. 커밋되지 않은 변경은 포함되지 않습니다.");
     else if (provisioned.seedSource === "empty")
       app.line(`빈 저장소로 society를 시작했습니다${provisioned.seedNote ? ` (${provisioned.seedNote})` : ""}.`);
-  } catch (error) {
-    // The Control Panel stays usable without a session: the product must still
-    // show status and settings when Pi cannot start.
-    app.line(`Pi 세션을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+    return started;
+  };
+  // One engine per society. A broker this process does not own gives it no
+  // principal host endpoint or credential, whether the owner is another `oma`
+  // or a standalone service. Starting an engine here would still make it a
+  // second writer of the same private workspace and session history, but one
+  // with no authority to reach the society. This process is a Control Panel
+  // over that state instead.
+  if (broker.state.kind === "already-running") {
     app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
+  } else {
+    try { session = startEngine(); }
+    catch (error) {
+      // The Control Panel stays usable without a session: the product must
+      // still show status and settings when Pi cannot start.
+      app.line(`Pi 세션을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+      app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
+    }
   }
 
   // PR-001/LIFE-006: each time a broker of this process's becomes ready -- at
