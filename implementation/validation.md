@@ -14,8 +14,8 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **978/978 PASS**, fail/cancelled/skipped/todo=0 |
-| `node scripts/loc.mjs` | **187 files / 17,931 code LOC** |
+| `npm test` | **992/992 PASS**, fail/cancelled/skipped/todo=0 |
+| `node scripts/loc.mjs` | **187 files / 17,947 code LOC** |
 
 ### 현재 범위
 
@@ -24,6 +24,16 @@
 - **제품 표면(TUI)** — `oma` 단일 진입점, 대화 화면과 `Ctrl+X` Control Panel(Dashboard/Config/Mail). 규범은 architecture §23, spec의 TUI 요구, test-matrix T91–T106.
 - **Extension tool 표면 투영** — role별 DIRECT/DISABLED/GROUPED 투영. 규범은 architecture §23.10, spec의 TSP 요구, test-matrix T99–T103.
 - **엔진 동봉** — Pi를 함께 배포하고 자기 것만 실행하며, 설정 파일 없이 기동한다. 규범은 architecture §23.3, spec의 TUI-016–019, test-matrix T105–T106.
+
+### 적대적·결합 검증에서 찾은 결함
+
+`test/surface-adversarial.test.ts`와 `test/surface-core-coupling.test.ts`를 추가하면서 실제 결함 1건을 발견하고 고쳤다.
+
+- **Extensions 화면이 설치 디렉터리 밖 경로를 role 파일에 쓸 수 있었다.** `toggleExtension`이 caller가 준 id를 봉쇄 검사 없이 받아, `../outside.js` 같은 값이 role 파일에 기록됐다. 다음 시작에서 loader가 거절하므로 설정이 깨진 채 발견되는 형태였다. TUI-010의 "임의 경로 추가 금지"를 owner가 직접 집행하도록 고쳤고, 목록 생성과 toggle 양쪽에 realpath 기반 봉쇄를 적용했다.
+
+나머지 적대적 경로는 이미 올바르게 동작했다: bundle 밖 참조 거절, 손상된 host/role 파일을 추측으로 덮어쓰지 않음, 퇴화한 터미널 크기(1x1까지)에서 폭 초과 없음, 이름 문법·description 한도 집행, 비정상 mail 항목(디렉터리·심볼릭 링크·바이너리·빈 파일)에서 예외 없이 표시.
+
+결합 검증은 생성된 설정이 core의 닫힌 validator를 그대로 통과하고, capability·resource·limit이 core 어휘 안에 있으며, 자식 capability가 부모 delegable을 넘지 않고, 제품 표면이 method 집합을 넓히지 않았음을 고정한다.
 
 ### 엔진과의 중복 정리
 

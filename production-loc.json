@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0748209953308105,
+  "elapsed_seconds"    : 0.0782928466796875,
   "n_files"            : 187,
-  "n_lines"            : 20030,
-  "files_per_second"   : 2499.29848130469,
-  "lines_per_second"   : 267705.607382529,
+  "n_lines"            : 20054,
+  "files_per_second"   : 2388.46852465406,
+  "lines_per_second"   : 256140.897290976,
   "report_file"        : "production-loc.json"},
 "src/pi-extension.ts" :{
   "blank": 9,
@@ -197,6 +197,11 @@
   "comment": 19,
   "code": 156,
   "language": "TypeScript"},
+"src/tui/sources/extensions.ts" :{
+  "blank": 12,
+  "comment": 26,
+  "code": 152,
+  "language": "TypeScript"},
 "src/cli/request-service.ts" :{
   "blank": 8,
   "comment": 4,
@@ -245,11 +250,6 @@
 "src/storage/submit-spool.ts" :{
   "blank": 3,
   "comment": 12,
-  "code": 136,
-  "language": "TypeScript"},
-"src/tui/sources/extensions.ts" :{
-  "blank": 11,
-  "comment": 19,
   "code": 136,
   "language": "TypeScript"},
 "src/storage/contained-fs.ts" :{
@@ -943,7 +943,7 @@
   "code": 3,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 724,
-  "comment": 1375,
-  "code": 17931,
+  "blank": 725,
+  "comment": 1382,
+  "code": 17947,
   "nFiles": 187} }

@@ -708,7 +708,7 @@
     },
     {
       "path": "src/tui/sources/extensions.ts",
-      "sha256": "abeafdc83c600bf954106a2727c7b82eb0a819495d8853835d03611c93cb23eb"
+      "sha256": "c30af033b42e13bf2a9873b4860658a50dcae6bb8570900e0801351dc6e1727e"
     },
     {
       "path": "src/tui/sources/mail.ts",

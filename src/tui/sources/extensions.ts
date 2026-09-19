@@ -61,6 +61,7 @@ function scanLibdir(libdir: string): readonly string[] {
       if (!stat.isFile() || !/\.(?:js|mjs|ts)$/.test(entry)) continue;
       const rel = relative(libdir, full);
       if (rel.startsWith("..") || isAbsolute(rel)) continue;
+      if (containedEntry(libdir, rel) === null) continue;
       found.push(rel);
     }
   };
@@ -68,8 +69,27 @@ function scanLibdir(libdir: string): readonly string[] {
   return found.sort();
 }
 
+/** TUI-010: an entry names a file the host placed under libdir. A relative
+ * reference that climbs out, an absolute path or a symlink whose target leaves
+ * the installation is not an extension this screen may select, whatever the
+ * caller passes.
+ */
+export function containedEntry(libdir: string, entry: string): string | null {
+  if (entry.length === 0 || isAbsolute(entry) || entry.includes("\0")) return null;
+  const target = join(libdir, entry);
+  const inside = (path: string): boolean => {
+    const rel = relative(libdir, path);
+    return rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel);
+  };
+  if (!inside(target)) return null;
+  try { if (!inside(realpathSync(target))) return null; } catch { return null; }
+  return target;
+}
+
 export function digestOf(libdir: string, entry: string): string | null {
-  try { return createHash("sha256").update(readFileSync(join(libdir, entry))).digest("hex"); } catch { return null; }
+  const path = containedEntry(libdir, entry);
+  if (path === null) return null;
+  try { return createHash("sha256").update(readFileSync(path)).digest("hex"); } catch { return null; }
 }
 
 function rowsOf(available: readonly string[], principal: RoleFile | null, worker: RoleFile | null): readonly ExtensionRow[] {
@@ -150,6 +170,10 @@ export function toggleExtension(context: ExtensionContext, id: string, role: "pr
   if (name === null) throw new StoreError("UNSUPPORTED_PROFILE", `대상 role 파일이 없습니다: ${role}`);
   const target = context.roles.find(entry => entry.name === name);
   if (!target) throw new StoreError("STORE_CORRUPT", "role file disappeared between read and write");
+  // Containment is checked for every toggle, not only when enabling: an entry
+  // that escapes the installation must never reach the role file at all.
+  if (containedEntry(context.libdir, id) === null)
+    throw new StoreError("INVALID_REQUEST", `설치 디렉터리 밖의 extension은 선택할 수 없습니다: ${id}`);
   if (enabled && digestOf(context.libdir, id) === null)
     throw new StoreError("INVALID_REQUEST", `extension 파일을 읽을 수 없습니다: ${id}`);
   const available = context.rows.map(row => row.id);
