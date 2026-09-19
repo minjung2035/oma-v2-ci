@@ -7,6 +7,8 @@ import { isValidActorName, isValidSocietyName } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
+import { realpathSync } from "node:fs";
+import { hostSystemLayout } from "../runtime/resident-rootfs.js";
 
 function usage(): never {
   console.error("usage: runner.js --society <name> --agent <name> [--config <path>]");
@@ -51,7 +53,9 @@ ensureDirectory(piRuntime.agentDir, 0o700);
 const confinement = cfg.installation.rootfs === "/" ? undefined : {
   rootfs: cfg.installation.rootfs,
   libdir: cfg.installation.libdir,
-  node: cfg.installation.node,
+  // Bound as a single file, so resolve a symlinked Node to the real binary.
+  node: realpathSync(cfg.installation.node),
+  systemBinds: hostSystemLayout().binds,
   tmpBytes: agentProfile.resources.tmpBytes,
   checkResources: agentProfile.resources,
 };

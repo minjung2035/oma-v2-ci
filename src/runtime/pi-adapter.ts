@@ -26,10 +26,18 @@ export interface PiConfinement {
   readonly lease: ValidatedRunLease;
   /** Host mount roots, checked against the actor's trusted roots by the builder. */
   readonly directories: ResidentDirectories;
-  /** INF-005/006: the relay's host socket and the provider it stands in for.
-   * Absent means the confined engine has no provider path at all, which is a
-   * runnable state — the Resident simply cannot infer — and not a silent one. */
-  readonly inference?: { readonly socketHostPath: string; readonly provider: string } | undefined;
+  /** INF-005/006/008: the relay's host socket, the provider and model it
+   * stands in for, and the placeholder key the engine inside is given. */
+  readonly inference?: PiInference | undefined;
+}
+export interface PiInference {
+  readonly socketHostPath: string;
+  readonly provider: string;
+  /** The concrete model. A confined engine has no settings of its own, so
+   * "whatever the engine would pick" is resolved on the host and named here. */
+  readonly model: string;
+  /** Same shape as the real key, swapped back by the relay on the way out. */
+  readonly placeholder: string;
 }
 
 export interface PiAdapterProfile {
@@ -231,7 +239,11 @@ function argv(options: PiAdapterOptions, inside: PathView = path => path): strin
   // on the host path, before translation, because that is what was verified.
   for (const extension of verifiedPaths(options.profile.extensions))
     if (extension !== options.paths.coreExtension) args.push("-e", inside(extension));
-  if (
+  // A confined engine resolves nothing on its own: the host named the model
+  // when it resolved the credential, and that is the model it runs.
+  const relay = options.confinement?.inference;
+  if (relay !== undefined) args.push("--model", `${relay.provider}/${relay.model}`);
+  else if (
     !(options.profile.provider === "pi" && options.profile.model === "current")
   )
     args.push(
@@ -296,6 +308,7 @@ export class PiAdapter {
         OMA_INFERENCE_SOCKET: RESIDENT_PATHS.inference,
         OMA_INFERENCE_PROVIDER: relay.provider,
         OMA_INFERENCE_PORT: String(RESIDENT_INFERENCE_PORT),
+        OMA_INFERENCE_KEY: relay.placeholder,
       }),
     };
     const plan = residentArgv(host, confinement.lease, confinement.directories,

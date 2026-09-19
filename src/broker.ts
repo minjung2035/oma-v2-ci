@@ -1,6 +1,6 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: authenticated transport and lifetime handoff.
 import { createServer, type Socket, type Server } from "node:net";
-import { mkdirSync, unlinkSync, existsSync } from "node:fs";
+import { mkdirSync, unlinkSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Actor, AuthContext, Failure, ProtocolLimits, Request, RunLease } from "../implementation/contracts.js";
 import { Store } from "./store.js";
@@ -25,6 +25,7 @@ import { LifecycleModule } from "./lifecycle.js";
 import { GitModule } from "./git.js";
 import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
+import { STATUS_REFRESH_MS, statusViewPath } from "./protocol/status-view.js";
 import { resolvedSpecOf } from "./authority.js";
 import { assertStorageQuotaAdmission } from "./storage/quota.js";
 export { boundedLogOutput } from "./broker/logs.js";
@@ -48,6 +49,7 @@ export class Broker {
   private standaloneLock: ProcessLock | null = null;
   private running = false;
   private draining = false;
+  private statusTimer: ReturnType<typeof setInterval> | null = null;
   private starting: Promise<void> | null = null;
   private closing: Promise<void> | null = null;
   private readonly runLeases = new RunRegistry();
@@ -95,6 +97,9 @@ export class Broker {
     this.hostServer = this.listenInternal(join(this.paths.runRoot, "host.sock"), "host");
     this.starting = Promise.all([this.listeners.get(this.adminServer)!, this.listeners.get(this.hostServer)!]).then(() => {
       this.health.assertAdmission(); this.running = true;
+      this.publishStatus();
+      this.statusTimer = setInterval(() => { this.publishStatus(); }, STATUS_REFRESH_MS);
+      this.statusTimer.unref();
     });
     // Legacy non-awaiting callers cannot create an unhandled rejection. The
     // authoritative start Promise still rejects and production must await it.
@@ -126,6 +131,19 @@ export class Broker {
   private refreshViews(): void {
     try { this.views.refreshWorld(); }
     catch (error) { this.health.observe(error); console.error("world view refresh failed:", error instanceof Error ? error.message : String(error)); }
+    this.publishStatus();
+  }
+  /** TUI-021: unit state changes without a broker transaction, so the status
+   * view is also republished on a timer. A failure here is reported and left:
+   * the view is derived, and a stale one is visibly stale to its reader. */
+  private publishStatus(): void {
+    if (this.draining) return;
+    try {
+      this.views.publishStatus(agent => {
+        const value = this.units.observe(agent);
+        return { activeState: value.activeState, subState: value.subState, result: value.result, execMainStatus: value.execMainStatus };
+      });
+    } catch (error) { console.error("status view publish failed:", error instanceof Error ? error.message : String(error)); }
   }
   private actorSocketDirectory(actor: Actor, incarnation: number): string {
     const dir = actorSocketDirectoryAt(this.paths.runRoot, actor, incarnation);
@@ -324,6 +342,10 @@ export class Broker {
   closeAdmission(): void {
     if (this.draining) return;
     this.draining = true; this.running = false; this.health.close();
+    if (this.statusTimer !== null) { clearInterval(this.statusTimer); this.statusTimer = null; }
+    // Absence is the truthful status of a broker that is going away; an old
+    // file left behind would read as a broker that is merely quiet.
+    try { rmSync(statusViewPath(this.paths.stateRoot), { force: true }); } catch (error) { this.cleanupError(error); }
     for (const connection of this.connections.values()) connection.close();
     for (const record of this.runLeases.values()) { try { record.revoke(); } catch (error) { this.cleanupError(error); } }
     for (const server of [...this.listeners.keys()]) this.closeListener(server);

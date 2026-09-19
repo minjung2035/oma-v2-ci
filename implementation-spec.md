@@ -436,11 +436,15 @@ pi.sendMessage(
 
 **MUST [SB-001; arch §16]** baseline은 trusted rootfs RO, user/mount/PID/IPC/network/UTS/cgroup namespace 분리, cap drop, private proc/dev, new session, die-with-parent다. rootfs에는 pinned Node/Pi/Git/shell/rg/library와 empty mount targets만 둔다. host `/` 또는 `/home` 전체를 bind하지 않는다.
 
+**MUST [SB-007; arch §16]** 기본 rootfs는 OMA가 society state root 아래에 만든다. 내용은 빈 mount target과 agent만을 이름으로 갖는 생성된 `/etc/passwd`·`/etc/group`뿐이며 host `/etc`에서 복사하지 않는다. 프로그램과 라이브러리(`SB-001`의 Node/Git/shell/rg/library)는 host 운영체제의 것을 RO bind로 겹쳐 제공하고, 그 대상은 `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc/alternatives`, `/etc/ld.so.cache`로 닫힌다. 이 목록 밖의 host 경로 — `/`, `/home`, state root, runtime directory — 는 받아들이지 않는다. host가 merged-`/usr`로 둔 최상위 link는 rootfs 안에 같은 모양으로 재현하되 `/usr` 밖을 가리키는 link는 따라가지 않는다. Node는 실제 binary 한 파일만 고정 경로에 RO bind한다. rootfs 생성은 idempotent하며, 예상 밖의 항목은 지우지 않고 거절한다.
+
 **MUST [SB-002]** Resident argv builder는 다음 의미의 배열을 생성한다. 옵션 지원 여부와 identity 매핑은 S-01로 검증한다. rootfs 안 mount target은 배포 때 생성하고 actor가 수정하지 못한다. `/tmp` reference cap은 512 MiB이고 host가 더 제한할 수 있다.
 
 ```text
 bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
   --ro-bind <rootfs> /
+  <--ro-bind <osPath> <osPath> for each SB-007 system path the host has>
+  --ro-bind <realNodeBinary> /opt/oma-node/node
   --proc /proc --dev /dev
   --size <tmpBytes> --tmpfs /tmp
   --ro-bind <libdir> /opt/oma
@@ -457,7 +461,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
   --clearenv --setenv HOME /home/agent
   --setenv PATH <trusted-rootfs-PATH>
   <--setenv OMA_* for each core-extension input, then the four the builder owns>
-  --chdir /workspace -- <rootfs node> /opt/oma/<engine entry> --mode rpc <verified-extension-options>
+  --chdir /workspace -- /opt/oma-node/node /opt/oma/<engine entry> --mode rpc <verified-extension-options>
 ```
 
 `/opt/oma`는 OMA 설치 디렉터리의 RO mount다. 동봉 엔진·trusted core extension·model-facing CLI·role extension이 모두 그 아래 있으므로, OMA를 갱신할 때 rootfs를 다시 만들지 않는다. rootfs는 pinned Node/Git/shell/rg/library와 빈 mount target만 갖는다.
@@ -470,7 +474,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 **MUST [SB-002-D]** 엔진의 agent directory(provider credential 보관처)는 Resident mount 계획에 넣지 않는다(PR-004). 따라서 봉인된 Resident는 credential이 없고 `--unshare-all`로 network도 없다. 이 조합에서 Resident는 provider에 도달하지 못한다. `INF-001`이 inference를 엔진에 넘긴 뒤 그 경로를 이어줄 relay가 없기 때문이며, 이 사실을 숨기고 credential이나 network를 조용히 열지 않는다. architecture §16에 비용과 선택지를 적는다.
 
-**MUST [SB-002-E]** `installation.rootfs`가 `/`이면 신뢰 rootfs가 선언되지 않은 것이다(SB-001이 host `/` bind를 금지하므로 `/`는 rootfs가 될 수 없다). 그 배포에서 Resident는 봉인 없이 host에서 실행되며, runner는 시작할 때 그 사실을 한 줄로 보고한다. 봉인 부재를 기본값처럼 조용히 넘기지 않는다.
+**MUST [SB-002-E]** 설정 없이 시작한 society의 `installation.rootfs`는 `SB-007`의 생성된 rootfs다. 즉 기본은 봉인이다. 운영자가 `installation.rootfs`를 `/`로 명시하면 신뢰 rootfs가 없다는 선언이다(SB-001이 host `/` bind를 금지하므로 `/`는 rootfs가 될 수 없다). 그 배포에서 Resident는 봉인 없이 host에서 실행되며, runner는 시작할 때 그 사실을 한 줄로 보고하고 Dashboard가 같은 사실을 보인다. 봉인 부재를 기본값처럼 조용히 넘기지 않는다.
 
 **MUST [SB-003]** stdin/stdout/stderr와 명시적으로 검증한 RPC pipe 외 상속 FD를 닫는다. runner admin FD, provider socket, host credential FD, systemd bus, SSH agent, desktop socket을 전달하지 않는다. OMA actor socket에는 자기 limited API만 존재한다. 다른 actor endpoint는 mount하지 않는다. rootfs의 기존 symlink/mount target이 다른 host path를 노출하지 않는지 검사한다.
 
@@ -496,6 +500,12 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 - relay는 OMA가 다시 갖는 유일한 chokepoint다. 요청 수·동시성·취소를 관측하고 제한할 수 있으나, 보고되지 않은 비용을 0으로 간주하지 않는다.
 
 **MUST [INF-006]** relay의 sandbox 쪽 끝은 bind-mount된 unix socket이며, network namespace는 계속 `--unshare-all`이다. trusted core extension이 sandbox 안에서 loopback listener를 열어 그 socket으로 넘기고, 엔진에는 그 loopback을 가리키는 provider를 등록한다. host와 sandbox 사이에 새 network 경로·CA·TLS 가로채기를 만들지 않으며, provider와의 TLS는 host쪽 relay가 소유한다.
+
+**MUST [INF-008]** relay가 쓰는 credential은 **엔진이 해석한다.** runner는 동봉 엔진의 공개 SDK로 OMA 소유 agent directory에서 provider를 해석해 origin·key·추가 header를 얻고, 그 값은 한 delivery 동안만 relay에 있다. OMA는 엔진의 저장 형식을 읽지 않고, 해석 결과를 저장하지 않는다. `pi`/`current`는 엔진 설정의 기본 provider/model로 해석하며, 기본이 없거나 credential이 없으면 추측하지 않고 `UNSUPPORTED_PROFILE`로 거절한다.
+
+sandbox에는 진짜 key와 **같은 모양의 자리표시자**를 준다. provider 코드는 key를 읽는다 — Codex는 OAuth token의 claim에서 계정을 찾고 Anthropic은 key의 접두사로 header 방식을 고른다. 그래서 서명된 token은 header와 claim을 유지하고 서명만 바꾸며, 접두사가 있는 key는 종류를 나타내는 짧은 접두사를 유지하고 나머지를 같은 문자 종류로 바꾼다. 자리표시자는 비밀을 포함하지 않고, 비밀에 포함되지도 않으며, 엔진이 환경 참조나 명령으로 해석할 모양(`$`, `!`, `${`)을 갖지 않는다.
+
+relay는 자리표시자를 header 값과 request path에서만 진짜 key로 바꾼다. body는 model의 내용이지 credential 자리가 아니므로 읽지도 바꾸지도 않는다. 자리표시자를 담지 않은 caller의 인증 header는 버린다. WebSocket upgrade는 handshake에서 한 번 같은 규칙으로 고쳐 쓴 뒤 양방향 바이트로 나른다.
 
 **MUST NOT [INF-007]** 엔진의 agent directory를 Resident mount 계획에 넣지 않는다. sandbox 안에 진짜 credential을 두는 어떤 형태도 — agent별 복사본, society 공용 read-only mount, 환경 변수 — `PR-004` 위반이다. sandbox 안의 provider 설정에 들어가는 key는 relay가 교체할 자리표시자다.
 
@@ -666,6 +676,10 @@ session 경계를 넘지 않는 per-request 전환은 Principal inference가 bro
 **MUST [TUI-020; arch §23.13]** 엔진이 이미 소유한 산술·프로토콜 프리미티브를 다시 구현하지 않는다. 빌려오는 프리미티브마다 소유 모듈을 하나로 두고 그 목록을 실행 가능한 검사로 고정한다. 동시에 엔진의 레이아웃·절단·스타일링을 제품 화면에 들여오지 않는다. 표현은 제품이 소유한다.
 
 중복을 남기기로 판단한 경우는 근거를 규범에 남긴다. 현재 남긴 것은 byte framing과 유닉스 소켓 클라이언트이며, 이유는 그 위의 OMA 정책 계층이 어차피 존재하고 설치 표면을 늘리지 않기 위해서다.
+
+**MUST [TUI-021]** Dashboard의 broker 유래 값은 broker가 게시하는 **host 전용 status view**에서 읽는다. `status.get`은 agent unit 안의 호출자에게만 답하고 사람이 띄운 터미널은 어떤 unit 안에도 없으므로, 그 method를 부르거나 TUI 전용 socket method를 추가하지 않는다(`IPC-012`). view는 state root 바로 아래의 `0600` 파일이며 `world/`에 두지 않는다. broker는 view를 갱신 시점마다와 짧은 주기로 다시 쓰고, 멈출 때 지운다. view는 관측 시각을 담는 파생물이지 기록이 아니다. 읽는 쪽은 없음·손상·다른 society·주기의 몇 배를 넘은 오래됨을 모두 이유와 시각이 붙은 `unknown`으로 보이고, 부분만 보이거나 0으로 바꾸지 않는다. 형식·경로·주기는 한 모듈이 소유한다.
+
+**MUST [TUI-022]** `oma`는 society를 실행 디렉터리에서 유도하므로 그 society는 그 프로젝트를 다룬다. canonical `main`은 첫 시작에서 프로젝트의 **커밋된 `HEAD`**로 시작한다. 가져오는 것은 clone이 가져오는 커밋 이력뿐이며 커밋되지 않은 변경과 추적되지 않는 파일은 가져오지 않는다. 가져오기는 trusted Git 환경(hook 없음, 사용자·시스템 설정 없음)에서 하며, 첫 시작 이후에는 디렉터리의 새 커밋이 canonical 이력을 움직이지 않는다 — 그 뒤 canonical 저장소는 OMA의 integration으로만 움직인다. 저장소가 아니거나 커밋이 없는 디렉터리는 빈 root commit으로 시작하고, 어느 쪽이었는지를 사용자에게 한 번 말한다.
 
 **MUST NOT [TUI-018]** 동봉한 엔진을 수정해 제품 동작을 만든다. OMA의 동작은 신뢰된 core extension이 소유한다. 수정하지 않은 동봉 엔진은 upstream 의존이므로 A-008/A-009의 production LOC 계산 대상이 아니며, 엔진을 수정하는 순간 LOC-003에 따라 계산 대상이 되고 A-008 기준을 다시 검토해야 한다.
 

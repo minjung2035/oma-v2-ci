@@ -7,8 +7,11 @@ import type {
   ProtocolLimits,
   ResourceLimits,
 } from "../implementation/contracts.js";
+import { dirname } from "node:path";
 import { confinedPath, type ResidentDirectories } from "./sandbox.js";
-import type { PiConfinement } from "./runtime/pi-adapter.js";
+import type { PiConfinement, PiInference } from "./runtime/pi-adapter.js";
+import { InferenceRelay } from "./runtime/inference-relay.js";
+import { placeholderFor, resolveEngineAuth } from "./runtime/engine-auth.js";
 import { StoreError } from "./domain/errors.js";
 import { encodeToolSurfacePlan } from "./domain/tool-surface.js";
 import { BrokerChannel, type ChannelLimits } from "./protocol/channel.js";
@@ -50,8 +53,10 @@ export interface RunnerConfinement {
   readonly rootfs: string;
   /** Host path of the OMA installation, mounted read-only inside. */
   readonly libdir: string;
-  /** Pinned Node as the confined process sees it, inside the rootfs. */
+  /** Host path of the pinned Node, bound read-only into the sandbox. */
   readonly node: string;
+  /** Operating-system paths bound read-only over the rootfs (SB-001). */
+  readonly systemBinds: readonly string[];
   readonly tmpBytes: number;
   readonly checkResources: ResourceLimits;
 }
@@ -124,7 +129,29 @@ export class RunnerModule {
       );
     return batch;
   }
-  private adapter(batch: PreparedBatch): PiAdapter {
+  /** INF-005/008: a confined delivery's provider path. The engine resolves the
+   * credential from its own agent directory, the relay holds it for this one
+   * delivery, and the sandbox is given only a placeholder of the same shape.
+   * Unconfined runs need none of this: the engine reads its agent directory
+   * directly. */
+  private async openRelay(): Promise<{ inference: PiInference; relay: InferenceRelay } | undefined> {
+    if (this.paths.confinement === undefined) return undefined;
+    const { piAgentDir } = this.paths;
+    if (!this.lease || !this.limits || !this.profile || !piAgentDir)
+      throw new StoreError("UNSUPPORTED_PROFILE", "confined inference configuration is incomplete");
+    const auth = await resolveEngineAuth(piAgentDir, this.profile.model.provider, this.profile.model.model);
+    const placeholder = placeholderFor(auth.apiKey);
+    // Beside the lease socket: the same per-incarnation directory, so a stale
+    // run's relay cannot be reached by the next incarnation.
+    const socketHostPath = join(dirname(this.lease.socketHostPath), "inference.sock");
+    if (Buffer.byteLength(socketHostPath) > 107)
+      throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path exceeds Linux sun_path");
+    const relay = await InferenceRelay.open(socketHostPath,
+      { origin: auth.origin, headers: auth.headers, substitute: { placeholder, secret: auth.apiKey } },
+      { concurrent: 4, timeoutMs: this.limits.idleStreamSeconds * 1000 });
+    return { relay, inference: { socketHostPath, provider: auth.provider, model: auth.model, placeholder } };
+  }
+  private adapter(batch: PreparedBatch, inference?: PiInference): PiAdapter {
     const { stateRoot, society, piCommand, piArgs, piAgentDir, coreExtension, cli } = this.paths;
     if (
       !this.lease ||
@@ -157,7 +184,7 @@ export class RunnerModule {
       projectGit: join(stateRoot, "repos", "project.git"),
       sessions: sessionDir,
     };
-    const confinement = this.confinement(directories, piArgs);
+    const confinement = this.confinement(directories, piArgs, inference);
     return new PiAdapter({
       actor: this.agent,
       society,
@@ -198,6 +225,7 @@ export class RunnerModule {
   private confinement(
     directories: ResidentDirectories,
     piArgs: readonly string[] | undefined,
+    inference: PiInference | undefined,
   ): PiConfinement | undefined {
     const declared = this.paths.confinement;
     if (declared === undefined || !this.lease || !this.limits) return undefined;
@@ -212,6 +240,7 @@ export class RunnerModule {
         rootfs: declared.rootfs,
         libdir: declared.libdir,
         node: declared.node,
+        systemBinds: declared.systemBinds,
         pi: confinedPath(declared.libdir, directories, entry),
         // The adapter replaces this with the engine flags it composes.
         piModeArgs: [],
@@ -223,6 +252,7 @@ export class RunnerModule {
       },
       lease: this.lease,
       directories,
+      ...(inference === undefined ? {} : { inference }),
     };
   }
   private async consume(batch: PreparedBatch): Promise<void> {
@@ -238,7 +268,10 @@ export class RunnerModule {
       this.limits.frameBytes,
     );
     if (!receipt) {
-      const boundary = await this.adapter(batch).deliver(batch);
+      const opened = await this.openRelay();
+      let boundary;
+      try { boundary = await this.adapter(batch, opened?.inference).deliver(batch); }
+      finally { await opened?.relay.close(); }
       receipt = publishDeliveryReceipt(
         stateRoot,
         batch,

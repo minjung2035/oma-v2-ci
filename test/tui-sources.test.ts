@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import type { HostConfigV1 } from "../implementation/contracts.js";
+import type { AgentStatus, HostConfigV1 } from "../implementation/contracts.js";
 import { StoreError } from "../src/domain/errors.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
 import {
@@ -14,7 +14,8 @@ import {
 import { CORE_EXTENSION, nextEntries, readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
 import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/tui/sources/mail.js";
 import { dashboardLines } from "../src/tui/dashboard.js";
-import { principalSocket } from "../src/tui/transport.js";
+import { TuiTransport } from "../src/tui/transport.js";
+import { STATUS_STALE_MS, encodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
 import { sessionArgv } from "../src/tui/session.js";
 
 function digest(text: string): string { return createHash("sha256").update(text).digest("hex"); }
@@ -300,14 +301,55 @@ test("TUI-012/SB-002-E: the Dashboard says whether Residents are confined", () =
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("TUI-012: the newest incarnation endpoint is preferred and a missing one is not invented", () => {
-  const root = scratch("oma-tui-sock-");
+test("TUI-021: the Dashboard reads the broker's status view and never invents one", async () => {
+  const root = scratch("oma-tui-view-");
   try {
-    assert.equal(principalSocket(root), null);
-    mkdirSync(join(root, "actors", "principal", "2"), { recursive: true });
-    mkdirSync(join(root, "actors", "principal", "10"), { recursive: true });
-    mkdirSync(join(root, "actors", "principal", "not-a-number"), { recursive: true });
-    assert.equal(principalSocket(root), join(root, "actors", "principal", "10", "control.sock"));
+    let clock = Date.UTC(2026, 8, 19, 12, 0, 0);
+    const transport = new TuiTransport(root, "demo", 65536, () => clock);
+    // No broker has published anything: unknown, with the reason.
+    const absent = await transport.status();
+    assert.equal(absent.kind, "unknown");
+    assert.match((absent as { reason: string }).reason, /broker 관측 없음/);
+
+    const row: AgentStatus = { agent: "a", desired: "enabled", activeState: "active", subState: "running",
+      unitResult: "success", execMainStatus: 0, pending: 2, preparedBatches: 0, reason: null, runnerObservedAtMs: null };
+    writeFileSync(statusViewPath(root), encodeStatusView("demo", { observedAtMs: clock, agents: [row] }));
+    const fresh = await transport.status();
+    assert.equal(fresh.kind, "observed");
+    assert.equal((fresh as { statuses: readonly unknown[] }).statuses.length, 1);
+
+    // A broker that stopped publishing is not a quiet broker.
+    clock += STATUS_STALE_MS + 1;
+    const stale = await transport.status();
+    assert.equal(stale.kind, "unknown");
+    assert.match((stale as { reason: string }).reason, /멈춤/);
+    // The last real observation time is kept so the screen can show its age.
+    assert.equal(stale.observedAtMs, clock - STATUS_STALE_MS - 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("TUI-021: a malformed or foreign status view is unknown, not partially shown", async () => {
+  const root = scratch("oma-tui-view-bad-");
+  try {
+    const now = Date.UTC(2026, 8, 19);
+    const transport = new TuiTransport(root, "demo", 65536, () => now);
+    const good: AgentStatus = { agent: "a", desired: "enabled", activeState: null, subState: null, unitResult: null,
+      execMainStatus: null, pending: 0, preparedBatches: 0, reason: null, runnerObservedAtMs: null };
+    for (const [label, body] of [
+      ["not json", "{"],
+      ["other society", encodeStatusView("other", { observedAtMs: now, agents: [good] })],
+      ["negative pending", encodeStatusView("demo", { observedAtMs: now, agents: [{ ...good, pending: -1 }] })],
+      ["unknown schema", JSON.stringify({ schema: 2, society: "demo", observedAtMs: now, agents: [] })],
+      ["unknown desired state", JSON.stringify({ schema: 1, society: "demo", observedAtMs: now, agents: [{ ...good, desired: "ready" }] })],
+      ["no time", JSON.stringify({ schema: 1, society: "demo", agents: [] })],
+    ] as const) {
+      writeFileSync(statusViewPath(root), body);
+      const observed = await transport.status();
+      assert.equal(observed.kind, "unknown", `${label} was shown as observed`);
+    }
+    // Oversized: larger than one frame is not a view the broker wrote.
+    writeFileSync(statusViewPath(root), " ".repeat(70000));
+    assert.equal((await transport.status()).kind, "unknown");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

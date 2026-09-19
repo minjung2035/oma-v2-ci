@@ -17,7 +17,16 @@ export const RESIDENT_PATHS = Object.freeze({
   /** INF-006: the relay's host end. The confined engine reaches a provider
    * through this socket, so the network namespace stays unshared. */
   inference: "/run/oma/inference.sock",
+  /** The pinned Node, bound as a single file so the rootfs need not carry it. */
+  node: "/opt/oma-node/node",
 });
+
+/** SB-001: the only host paths a Resident may see besides its own mounts. They
+ * are the operating system's programs and libraries — never `/`, `/home`, a
+ * state root or a runtime directory — and each is mounted read-only. */
+export const SYSTEM_BIND_CANDIDATES: readonly string[] = Object.freeze([
+  "/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc/alternatives", "/etc/ld.so.cache",
+]);
 
 /** Loopback port the core extension serves inside the sandbox, forwarding to
  * the relay socket. A constant is safe because the network namespace is
@@ -68,7 +77,10 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path is not a trusted absolute path");
   const limits = h.limits!;
   return ["bwrap", "--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
-    "--ro-bind", h.rootfs, "/", "--proc", "/proc", "--dev", "/dev",
+    "--ro-bind", h.rootfs, "/",
+    ...(h.systemBinds ?? []).flatMap(path => ["--ro-bind", path, path]),
+    "--ro-bind", h.node, RESIDENT_PATHS.node,
+    "--proc", "/proc", "--dev", "/dev",
     "--size", String(h.tmpBytes), "--tmpfs", "/tmp",
     "--ro-bind", h.libdir, RESIDENT_PATHS.libdir,
     "--bind", dirs.workspace, RESIDENT_PATHS.workspace, "--bind", dirs.home, RESIDENT_PATHS.home,
@@ -85,7 +97,7 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     "--setenv", "OMA_FRAME_BYTES", String(limits.frameBytes),
     "--setenv", "OMA_BATCH_MAX_MESSAGES", String(limits.batchMaxMessages),
     "--setenv", "OMA_ACTOR", lease.actor, "--setenv", "OMA_INCARNATION", String(lease.incarnation),
-    "--chdir", RESIDENT_PATHS.workspace, "--", h.node, h.pi, ...h.piModeArgs];
+    "--chdir", RESIDENT_PATHS.workspace, "--", RESIDENT_PATHS.node, h.pi, ...h.piModeArgs];
 }
 
 /** Translates a host path into the path the confined process sees, using the
@@ -103,7 +115,10 @@ export function confinedPath(libdir: string, dirs: ResidentDirectories, hostPath
     [dirs.view, RESIDENT_PATHS.view], [dirs.world, RESIDENT_PATHS.world],
     [dirs.projectGit, RESIDENT_PATHS.projectGit],
   ];
-  for (const [host, inside] of mounts) {
+  for (const [root, inside] of mounts) {
+    // A root may be written with a trailing separator (the installation path
+    // `oma` records is); the comparison must not depend on that spelling.
+    const host = root.length > 1 && root.endsWith("/") ? root.slice(0, -1) : root;
     if (hostPath === host) return inside;
     // The separator is required, so `/state/agents/ab` never matches `/state/agents/a`.
     if (hostPath.startsWith(`${host}/`)) return `${inside}${hostPath.slice(host.length)}`;
@@ -132,6 +147,9 @@ export function validateSandboxHost(h: SandboxHost): void {
   if (!trustedAbsolutePath(h.rootfs) || !trustedAbsolutePath(h.libdir) ||
     !trustedAbsolutePath(h.node) || !trustedAbsolutePath(h.pi))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox host paths must be normalized non-root absolute paths");
+  if (h.systemBinds !== undefined && (!Array.isArray(h.systemBinds) ||
+    h.systemBinds.some(path => !SYSTEM_BIND_CANDIDATES.includes(path))))
+    throw new StoreError("UNSUPPORTED_PROFILE", "sandbox system mounts must be operating-system paths only");
   if (!Number.isSafeInteger(h.tmpBytes) || h.tmpBytes <= 0 || !Array.isArray(h.piModeArgs) ||
     h.piModeArgs.some(value => typeof value !== "string" || value.includes("\0")))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox temporary bound or Pi argv is invalid");

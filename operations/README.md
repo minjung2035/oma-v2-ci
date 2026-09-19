@@ -70,12 +70,23 @@ Broker는 `quota.storageBytes`가 유효하면 시작하고, 시작 및 각 publ
 
 ## 봉인된 Resident의 provider 경로
 
-`installation.rootfs`가 신뢰 rootfs를 가리키면 Resident는 bwrap 안에서 실행된다. 그 안에는 provider credential도 network도 없다(`PR-004`, `SB-004`). 엔진은 host의 relay socket을 통해 provider에 닿는다(`INF-005`/`INF-006`).
+Resident는 기본으로 bwrap 안에서 실행된다. 설정 없이 시작한 society의 `installation.rootfs`는 OMA가 state root 아래에 만든 rootfs이며(`SB-007`), 빈 mount target 위에 host 운영체제의 `/usr` 등을 RO로 겹친다. 그 안에는 provider credential도 network도 없다(`PR-004`, `SB-004`). 엔진은 host의 relay socket을 통해 provider에 닿는다(`INF-005`/`INF-006`).
+
+- credential은 runner가 동봉 엔진으로 OMA 소유 agent directory에서 해석하고 한 delivery 동안만 relay에 둔다(`INF-008`). 로그인은 `oma` 대화 화면에서 엔진 자체 흐름으로 한 번 한다.
+- sandbox의 엔진은 진짜 key와 같은 모양의 자리표시자를 받고, relay가 나가는 길에 header와 path에서만 진짜 key로 바꾼다.
 
 - relay는 stream을 해석하지 않는다. 헤더에 진짜 credential을 끼우고 바이트를 그대로 넘긴다. 가격·token·재시도는 계속 엔진의 것이다.
 - 목적지는 model profile이 선언한 provider endpoint 하나다. 그 경로를 벗어나는 요청은 provider에 닿기 전에 거절된다.
 - sandbox 안의 provider 설정에 들어가는 key는 자리표시자다. 운영자가 sandbox 안에서 `/login`을 실행하면 진짜 토큰이 sandbox 안에 쓰여 이 모델이 무너진다. 하지 않는다.
-- `installation.rootfs`가 `/`이면 신뢰 rootfs가 없다는 선언이며 Resident는 봉인 없이 host에서 실행된다. runner가 시작할 때 그 사실을 stderr로 보고하고 TUI Dashboard의 `Sandbox` 줄에도 나온다.
+- `installation.rootfs`를 `/`로 명시하면 신뢰 rootfs가 없다는 선언이며 Resident는 봉인 없이 host에서 실행된다. runner가 시작할 때 그 사실을 stderr로 보고하고 TUI Dashboard의 `Sandbox` 줄에도 나온다. bwrap이 없는 host에서만 이렇게 둔다.
+
+## Dashboard 관측
+
+broker는 `status.get`과 같은 답을 state root의 `status.json`(`0600`)으로 게시하고 5초마다 다시 쓰며 멈출 때 지운다(`TUI-021`). TUI는 이 파일을 읽는다. 20초 넘게 갱신되지 않은 파일은 오래된 값으로 보이지 않고 `unknown`과 마지막 관측 시각으로 보인다.
+
+## 첫 시작
+
+`oma`를 처음 실행한 디렉터리가 git 저장소면 그 커밋된 `HEAD`로 canonical `main`을 시작한다(`TUI-022`). 커밋되지 않은 변경은 가져오지 않으며, 이후 그 디렉터리의 새 커밋은 society 이력을 움직이지 않는다.
 
 ## Pi 엔진
 

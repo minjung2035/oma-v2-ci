@@ -24,7 +24,7 @@ import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sou
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
 import { commitField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
 import { defaultHostConfig, societyFromDirectory } from "../config/defaults.js";
-import { provisionSociety } from "../config/provision.js";
+import { provisionSociety, residentRootfsPath, type ProvisionReport } from "../runtime/provision.js";
 import { superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import type { ExtensionRow, MailRow } from "../tui/model.js";
@@ -44,11 +44,12 @@ function ensureConfiguration(configPath: string, society: string, stateRoot: str
     if (existsSync(configPath)) throw error;
     const libdir = fileURLToPath(new URL("../../../", import.meta.url));
     mkdirSync(dirname(configPath), { recursive: true, mode: 0o700 });
+    // Residents are confined from the first run: the rootfs is the one OMA
+    // builds under the state root, not the host's `/` (SB-001).
     writeSettings(configPath, defaultHostConfig({
-      society, node: process.execPath, libdir, rootfs: "/",
+      society, node: process.execPath, libdir, rootfs: residentRootfsPath(stateRoot),
       deploymentDigest: deploymentDigest(libdir),
     }));
-    void stateRoot;
     return readSettings(configPath);
   }
 }
@@ -79,11 +80,12 @@ async function main(argv: readonly string[]): Promise<void> {
   // broker opens a ledger and reads a canonical repository at startup. This is
   // idempotent, so it runs every time rather than being a setup command the
   // user has to remember (TUI-002).
-  try { provisionSociety(stateRoot); }
+  let provisioned: ProvisionReport;
+  try { provisioned = provisionSociety(stateRoot, { projectDir: process.cwd() }); }
   catch (error) { fail(`society를 준비하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
 
   const mailbox = principalMailbox(stateRoot);
-  const transport = new TuiTransport(runRoot, limitsOf(settings.config.limits));
+  const transport = new TuiTransport(stateRoot, society, settings.config.limits.frameBytes);
   let observation: Observation = { kind: "unknown", reason: "아직 관측하지 않음", observedAtMs: Date.now() };
   let extensionContext = readExtensions(configPath, settings.config.principalProfile, settings.workerProfile);
 
@@ -179,6 +181,12 @@ async function main(argv: readonly string[]): Promise<void> {
       },
     );
     app.line(`OMA · society ${society}. Ctrl+X 로 관리 화면을 엽니다.`);
+    // Said once, on the start that decided it, so the user knows what the
+    // society is working on.
+    if (provisioned.seedSource === "project")
+      app.line("이 프로젝트의 커밋된 HEAD로 society를 시작했습니다. 커밋되지 않은 변경은 포함되지 않습니다.");
+    else if (provisioned.seedSource === "empty")
+      app.line(`빈 저장소로 society를 시작했습니다${provisioned.seedNote ? ` (${provisioned.seedNote})` : ""}.`);
   } catch (error) {
     // The Control Panel stays usable without a session: the product must still
     // show status and settings when Pi cannot start.

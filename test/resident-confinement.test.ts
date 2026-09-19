@@ -71,7 +71,10 @@ function fixture(): Fixture {
       stateRoot, runRoot, limits: { frameBytes: LIMITS.frameBytes, batchMaxMessages: LIMITS.batchMaxMessages },
     },
     lease, directories: dirs,
-    inference: { socketHostPath: join(root, "run", "inference.sock"), provider: "anthropic" },
+    inference: {
+      socketHostPath: join(root, "run", "inference.sock"), provider: "anthropic",
+      model: "claude-test", placeholder: "sk-ant-api03-PLACEHOLDERplaceholder0000",
+    },
   };
   const adapterPaths = {
     piCommand: paths.piCommand, piArgs: [paths.piEntry], piAgentDir: paths.piAgentDir,
@@ -119,7 +122,10 @@ test("T113 a confined Resident is spawned through the mount plan, not directly",
     const separator = plan.args.lastIndexOf("--");
     assert.ok(separator > 0);
     assert.deepEqual(plan.args.slice(separator + 1, separator + 3),
-      ["/usr/bin/node", `${RESIDENT_PATHS.libdir}/engine/cli.js`]);
+      [RESIDENT_PATHS.node, `${RESIDENT_PATHS.libdir}/engine/cli.js`]);
+    // The host Node is bound as one file; the host path itself is not run.
+    const nodeAt = plan.args.indexOf(RESIDENT_PATHS.node);
+    assert.deepEqual(plan.args.slice(nodeAt - 2, nodeAt + 1), ["--ro-bind", "/usr/bin/node", RESIDENT_PATHS.node]);
     assert.ok(plan.args.slice(separator).includes("--mode"));
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
@@ -173,6 +179,10 @@ test("T113 the confined engine reaches a provider through the relay, not the net
     assert.equal(setenv("OMA_INFERENCE_SOCKET"), RESIDENT_PATHS.inference);
     assert.equal(setenv("OMA_INFERENCE_PROVIDER"), "anthropic");
     assert.equal(setenv("OMA_INFERENCE_PORT"), String(RESIDENT_INFERENCE_PORT));
+    assert.equal(setenv("OMA_INFERENCE_KEY"), "sk-ant-api03-PLACEHOLDERplaceholder0000");
+    // The confined engine has no settings, so the host names the model.
+    const engineArgs = plan.args.slice(plan.args.lastIndexOf("--") + 1);
+    assert.equal(engineArgs[engineArgs.indexOf("--model") + 1], "anthropic/claude-test");
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -215,6 +225,8 @@ test("T113 a file outside every mount is refused rather than handed over", () =>
     assert.throws(() => confinedPath(f.libdir, f.dirs, `${f.libdir}-other/x.js`),
       (error: unknown) => (error as { code?: string }).code === "AUTH_FAILED");
     assert.equal(confinedPath(f.libdir, f.dirs, join(f.libdir, "a", "b.js")), `${RESIDENT_PATHS.libdir}/a/b.js`);
+    // The installation path `oma` records ends in a separator; it must still match.
+    assert.equal(confinedPath(`${f.libdir}/`, f.dirs, join(f.libdir, "a", "b.js")), `${RESIDENT_PATHS.libdir}/a/b.js`);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 

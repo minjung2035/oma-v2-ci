@@ -67,17 +67,36 @@ TTY는 `script`로 실제 pty를 띄워 raw mode 취득·복원과 크기 보고
 
 이 관측은 production entrypoint가 동작함을 보인 것이지 COMP-004의 `proven`이 아니다. 실제 Pi provider 연결, TTY raw mode, broker `status.get` 왕복은 포함하지 않았다.
 
-### 미검증으로 남은 것
+### 제품 경로를 끝까지 연결한 것
 
-- **Dashboard가 `unknown`인 진짜 이유는 attach가 아니다.** 앞선 기록은 `principal.attach` handshake 미구현(IPC-011, S-02) 탓으로 적었으나 그것은 틀렸다. `TuiTransport`는 attach를 쓰지 않고 principal actor socket에서 공개 `status.get`을 부른다. 그 socket이 없는 이유는 **`oma`가 broker를 띄우지 않기 때문**이다. `principal.attach`는 Human의 기존 Pi session을 붙이는 다른 기능이고 S-02 gate 그대로다.
-- **society bring-up 구현했다.** 기본 설정으로 broker를 직접 실행해 나온 실패 셋 — state tree 부재로 SQLite 열기 실패, `repos/project.git` 부재로 `canonical repository health observation failed`, bare repo만으로는 `bootstrap requires a host-pinned canonical main` — 을 `provisionSociety()`가 모두 해소한다. `oma`가 시작할 때마다 idempotent하게 실행하고, 이미 있는 것은 건드리지 않는다. canonical `main`은 **빈 root commit**으로 심는다. 사용자의 작업 트리를 OMA canonical 저장소로 복사하는 것은 별개의 큰 결정이라 첫 실행에서 조용히 하지 않는다.
-- **`oma`가 broker를 띄운다.** `superviseBroker()`가 admin endpoint를 먼저 확인해 다른 `oma`가 이미 소유한 broker는 건드리지 않고, 자기가 띄운 broker만 종료 시 정지한다. 단일성 보장은 broker 자신의 배타 lock이 소유하며 이 코드는 무의미한 spawn만 피한다.
-- **실제 확인**: 빈 디렉터리에서 `oma`를 실행해 state tree가 생기고 broker가 떠서 `runRoot`에 `admin.sock`/`host.sock`/`broker.lock`이 나타나는 것을 다른 프로세스에서 관측했다. 확인에 쓴 society의 systemd unit과 runRoot는 되돌렸다.
-- **그래도 Dashboard의 broker 유래 값은 `unknown`으로 남는다. 원인은 bring-up이 아니다.** `status.get`은 `channel: "actor"`이고 권한이 `current-actor`다. broker는 호출자의 cgroup이 해당 agent의 systemd service cgroup 안에 있는지로 신원을 확인한다(`peer-authenticator.requireRunnerUnit`/`context`). 터미널에서 띄운 TUI는 어떤 unit 안에도 없으므로 actor 신원이 없고, actor socket 자체도 `runner.open`으로 lease가 발급될 때만 열린다. 즉 **사람이 실행한 TUI가 읽을 권한을 가진 broker endpoint가 현재 하나도 없다.** 해결은 TUI에 unit 신원을 주거나(예: Principal scope 안에서 실행) 관측 경로를 바꾸는 것인데, 둘 다 `IPC-012`가 닿는 architecture 결정이라 여기서 임의로 정하지 않았다. 그 사이 화면은 `unknown`에 이유와 시각을 함께 적는다.
-- TUI/TSP requirement의 trace 상태는 `unverified`다. owner/callPath/negative test는 연결돼 있으나 실제 경계 실행 증거가 없다.
-- **Resident 봉인은 배선됐고 규범도 확정했다.** `SandboxHost`는 더 이상 외부 공급이 아니다. runner가 설정에서 구성하고 adapter가 mount 계획으로 엔진을 띄운다(T113 7건). `PR-004`와 `SB-004`가 함께 막던 provider 경로는 byte relay로 확정했다(`INF-005`, architecture §16.1).
-- **relay는 실동작을 확인했다(T114 5건).** 실제 unix socket과 실제 TLS provider를 상대로 돌렸고 stub이 없다. 확인한 것: 바이트가 그대로 건너가고 host credential이 붙는다, sandbox가 보낸 `authorization`/`x-api-key`는 버려지고 진짜 것을 덮어쓰지 못한다, 선언한 endpoint를 벗어나는 경로(`..`, 인코딩된 `..`, `//host`)는 403이고 provider에 닿지 않는다, 응답하지 않는 provider는 504로 보고되고 **재전송되지 않는다**(`INF-004`), 동시성 한도를 넘으면 큐잉 대신 503, plain-HTTP origin과 CRLF가 든 header 값은 열기 전에 거절된다.
-- **아직 호출자가 없는 한 조각: credential 인계.** relay는 `{origin, headers}`를 받아야 하고 그 값은 엔진이 host에서 해석한 것이다(`ctx.modelRegistry.getProviderAuth`). 그 인계는 Principal → broker 경로를 요구하는데 broker가 아직 뜨지 않으므로(아래 society bring-up) 연결하지 않았다. 없는 값을 설정 파일에 새로 받거나 credential store를 만들어 우회하지 않는다(`INF-001`, `INF-007`). 따라서 `InferenceRelay`는 test에서만 실행되며, production 호출 경로는 bring-up과 같은 작업에서 붙인다.
+앞선 기록은 세 가지를 "호출자가 없다" 또는 "architecture 결정이 필요하다"로 남겼는데, 셋 모두 결정할 것이 아니라 찾지 않은 것이었다. 각각 실제 실행으로 닫았다.
+
+- **Resident는 기본으로 봉인된다(`SB-007`, `SB-002-E`).** 설정 없이 시작하면 rootfs가 `/`였기 때문에 제품 기본 상태의 워커는 봉인 없이 돌았다. 이제 `provisionSociety()`가 state root 아래에 rootfs를 만든다 — 빈 mount target, agent만 이름으로 갖는 생성된 `/etc/passwd`·`/etc/group`, host 운영체제의 `/usr` 등 닫힌 목록의 RO bind, 실제 Node binary 한 파일. 기본 설정의 `installation.rootfs`가 이 경로다. 실행 중 드러난 결함 하나: `oma`가 기록하는 설치 경로는 `/`로 끝나고 mount 번역이 그 표기에 의존해 아무것도 맞추지 못했다. 표기와 무관하게 비교하도록 고쳤다.
+- **relay는 production 경로에 붙었다(`INF-008`).** 앞선 기록은 credential 인계에 Principal → broker 경로가 필요하다고 적었으나 틀렸다. runner가 동봉 엔진의 공개 SDK로 OMA 소유 agent directory에서 직접 해석한다. 한 delivery 동안 relay를 열고, 끝나면 닫는다. sandbox는 진짜 key와 같은 모양의 자리표시자를 받는다 — Codex provider가 token claim에서 계정을 읽고 WebSocket을 먼저 시도한다는 것을 엔진 코드에서 확인해 자리표시자의 모양 보존과 upgrade 터널을 넣었다.
+- **Dashboard는 관측값을 보인다(`TUI-021`).** 앞선 기록은 "사람이 띄운 TUI가 읽을 권한을 가진 endpoint가 없어 `IPC-012`가 닿는 결정이 필요하다"고 적었다. socket method를 늘릴 필요가 없었다. broker가 `status.get`과 같은 답을 host 전용 `0600` view로 게시하고, 갱신 시점과 5초 주기로 다시 쓰고, 멈출 때 지운다. TUI는 그 파일을 읽고 없음·손상·다른 society·20초 넘은 오래됨을 이유와 시각이 붙은 `unknown`으로 보인다.
+- **society는 프로젝트를 다룬다(`TUI-022`).** canonical `main`을 빈 commit으로 심던 것을 첫 시작에서 프로젝트의 커밋된 `HEAD`로 시작하게 했다. 커밋되지 않은 변경과 추적되지 않는 파일은 가져오지 않고, 이후 디렉터리의 새 커밋이 canonical 이력을 움직이지 않는다.
+
+**실제로 실행해 확인한 것** (stub 없음)
+
+| 확인 | 방법 |
+|---|---|
+| 실제 bwrap 안의 동봉 엔진이 자리표시자만 갖고, relay를 거쳐 진짜 key로 provider에 도달 | T117, 생성된 rootfs + production mount 계획 + TLS stand-in |
+| 봉인 안에서 state root·엔진 credential 파일·host home 불가시, `/` 쓰기 불가, 외부 연결 `ENETUNREACH`, 신원은 `agent` | T117 escape probe |
+| 봉인 안에서 trusted extension 로드, mail이 `role: custom`으로 전달, provider 없으면 오류로 종료 | T117 delivery smoke (systemd lane의 수동 mount 덧대기 smoke를 대체) |
+| 봉인 없이 실제 엔진 → bridge → relay → provider, `?beta=true` 같은 엔진 자체 query 보존 | T116 |
+| 자리표시자 치환이 header와 path에만, body는 그대로; WebSocket upgrade 양방향 | T114 |
+| broker가 쓴 view를 TUI reader가 그대로 수용, `0600` | T118 |
+| broker 실행 중 view 존재, 5초 주기 재게시(+5007ms), 정지 시 제거 | 실제 broker 실행 |
+| 빈 프로젝트에서 `oma` 실행 → 생성된 rootfs가 설정에 기록, broker 기동, Dashboard `observed` | 실제 `oma` 실행 |
+| 프로젝트 `HEAD` = canonical `main`, dirty·untracked 제외, 두 번째 시작에 재가져오기 없음 | T115 + 실제 저장소 |
+
+확인에 쓴 society의 systemd unit·runRoot·state는 모두 되돌렸다.
+
+### 남은 것
+
+- TUI/TSP requirement의 trace 상태는 `unverified`다. owner/callPath/negative test는 연결돼 있으나 compliance 기록 절차를 거치지 않았다.
+- **비용 상한**: relay가 chokepoint를 되돌려주지만 stream을 해석하지 않으므로 비용 상한은 여전히 OMA 계약이 아니다(`INF-005`).
+- 봉인은 host에 `bwrap`과 `/usr`이 있어야 한다. 없는 host에서 T117은 이유를 적고 skip되며, 제품은 `installation.rootfs`를 `/`로 두는 비봉인 선언으로만 돌 수 있다.
 - node/git을 포함한 OS별 배포본은 별도 작업이다.
 
 ### A-008 LOC gate — OPEN

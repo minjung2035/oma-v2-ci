@@ -80,8 +80,12 @@ export interface SandboxHost {
    * the vendored engine, the trusted core extension and the model-facing CLI,
    * so the rootfs itself does not have to be rebuilt when OMA is updated. */
   libdir: string;
-  /** Pinned Node, as the confined process sees it. */
+  /** Host path of the pinned Node, mounted read-only as a single file. */
   node: string;
+  /** Operating-system paths mounted read-only at the same path, so a rootfs of
+   * empty mount targets can still run programs. Absent when the rootfs carries
+   * its own. Only `SYSTEM_BIND_CANDIDATES` are accepted. */
+  systemBinds?: readonly string[];
   /** Engine entry, as the confined process sees it. */
   pi: string;
   piModeArgs: string[];

@@ -41,7 +41,6 @@ src/config.ts
 src/config/defaults.ts
 src/config/operations.ts
 src/config/policy.ts
-src/config/provision.ts
 src/diagnostics/files.ts
 src/diagnostics/integrity.ts
 src/diagnostics/ledger.ts
@@ -127,6 +126,7 @@ src/protocol/receipts.ts
 src/protocol/request-codec.ts
 src/protocol/response-codec.ts
 src/protocol/run-lease.ts
+src/protocol/status-view.ts
 src/reconcile.ts
 src/reconcile/operations.ts
 src/request-cache.ts
@@ -136,12 +136,15 @@ src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
 src/runtime/broker-supervisor.ts
 src/runtime/deployment-manifest.ts
+src/runtime/engine-auth.ts
 src/runtime/extension-integrity.ts
 src/runtime/inference-relay.ts
 src/runtime/pi-adapter.ts
 src/runtime/pi-rpc.ts
 src/runtime/pi-runtime.ts
 src/runtime/process-lock.ts
+src/runtime/provision.ts
+src/runtime/resident-rootfs.ts
 src/runtime/run-registry.ts
 src/sandbox.ts
 src/storage/batch-view.ts

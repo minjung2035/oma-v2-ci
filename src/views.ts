@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Actor, AgentStatus, PreparedBatch } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
+import { encodeStatusView, statusViewPath } from "./protocol/status-view.js";
 import { publishBatchView } from "./storage/batch-view.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
 import { pendingWork } from "./views/pending-work.js";
@@ -61,6 +62,19 @@ export class ViewsModule {
     ].join("\n");
   }
   publishInbox(batch: PreparedBatch): void { publishBatchView(this.stateRoot, batch, this.viewLimits); }
+  /** TUI-021: the status the Human's own terminal reads.
+   *
+   * `status.get` answers only a caller inside an agent's unit, and a terminal
+   * the Human launched is inside none, so the broker publishes the same answer
+   * as a file only this user can read. It is a derived view, not a record: it
+   * carries the moment it was observed, and a reader treats an old one as
+   * unknown rather than current.
+   */
+  publishStatus(observe: UnitObserve): void {
+    const observedAtMs = Date.now();
+    const agents = this.status(undefined, observe);
+    writeAtomic(statusViewPath(this.stateRoot), encodeStatusView(this.society, { observedAtMs, agents }), 0o600);
+  }
   status(agent?: Actor, observe: UnitObserve = () => null): AgentStatus[] {
     const rows = agent ? [this.store.getAgent(agent)].filter((value): value is NonNullable<typeof value> => value !== null) : this.store.listAgents();
     const observations: StatusUnitObservation[] = [];

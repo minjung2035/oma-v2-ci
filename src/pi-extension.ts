@@ -456,8 +456,9 @@ function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
 function startInferenceBridge(pi: ExtensionAPI): void {
   const socket = process.env.OMA_INFERENCE_SOCKET;
   const provider = process.env.OMA_INFERENCE_PROVIDER;
+  const placeholder = process.env.OMA_INFERENCE_KEY;
   const port = integerEnv("OMA_INFERENCE_PORT");
-  if (!socket || !provider || port === null || !isAbsolute(socket)) return;
+  if (!socket || !provider || !placeholder || port === null || !isAbsolute(socket)) return;
   const server = createServer(client => {
     const upstream = connect(socket);
     const drop = (): void => { client.destroy(); upstream.destroy(); };
@@ -473,7 +474,9 @@ function startInferenceBridge(pi: ExtensionAPI): void {
   });
   server.unref();
   server.listen(port, "127.0.0.1");
-  pi.registerProvider(provider, { baseUrl: `http://127.0.0.1:${port}` });
+  // The key is a placeholder shaped like the real one; the host relay swaps it
+  // back on the way out, so nothing inside ever holds the credential.
+  pi.registerProvider(provider, { baseUrl: `http://127.0.0.1:${port}`, apiKey: placeholder });
 }
 
 export default function extension(pi: ExtensionAPI) {
