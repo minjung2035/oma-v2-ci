@@ -56,21 +56,50 @@ function readBoundedMail(
     if (fd !== undefined) closeSync(fd);
   }
 }
+/** Names this extension mirrors rather than imports. It loads inside a sandbox
+ * with no OMA module on its path (PI-001), so the protocol's own constants
+ * cannot be read here; a test holds the two spellings together. */
+const PRINCIPAL_CREDENTIAL = "OMA_PRINCIPAL_CREDENTIAL";
+const PRINCIPAL_SESSION = "OMA_PRINCIPAL_SESSION";
+const FRAME_BYTES = "OMA_FRAME_BYTES";
+
+/** The environment the model-facing CLI is started with.
+ *
+ * It is built rather than inherited: `env -i` means only what is listed here
+ * reaches the CLI, so anything the caller's own environment happens to hold —
+ * a provider key, a session path — cannot travel with it. That also means an
+ * entry left out of this list is an entry the CLI does not have, which is how
+ * the Principal's credential went missing: the environment was assembled for a
+ * Resident, which has none. Each entry below is passed only when this process
+ * actually has it, so a Resident's command is unchanged.
+ */
+export function cliEnvironment(home: string, socket: string): string[] {
+  const entries = [
+    `HOME=${home}`,
+    `OMA_SOCKET=${socket}`,
+    `PATH=${process.env.PATH ?? "/usr/bin:/bin"}`,
+    "LANG=C.UTF-8",
+  ];
+  // The frame bound the broker was configured with. Without it the CLI falls
+  // back to its own default, which is not necessarily this society's.
+  for (const name of [FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION]) {
+    const value = process.env[name];
+    if (value !== undefined && value.length > 0) entries.push(`${name}=${value}`);
+  }
+  return entries;
+}
+
 async function runCli(
   pi: ExtensionAPI,
   cli: string,
   cwd: string,
-  home: string,
-  socket: string,
+  environment: readonly string[],
   args: string[],
   signal?: AbortSignal,
 ): Promise<string> {
   const command = [
     "-i",
-    `HOME=${home}`,
-    `OMA_SOCKET=${socket}`,
-    `PATH=${process.env.PATH ?? "/usr/bin:/bin"}`,
-    "LANG=C.UTF-8",
+    ...environment,
     process.execPath,
     cli,
     ...args,
@@ -105,6 +134,10 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
     !isAbsolute(socket)
   )
     return;
+  // Read once, here, where every other value this extension needs is read. A
+  // command assembled later from whatever the environment happens to hold then
+  // would not be the environment the engine was started with.
+  const environment = cliEnvironment(home, socket);
   pi.registerTool({
     name: "oma_mail_read",
     label: "Read OMA mail",
@@ -162,7 +195,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
         ];
         if (params.replyTo) args.push("--reply", params.replyTo);
         return textResult(
-          await runCli(pi, cli, cwd, home, socket, args, signal),
+          await runCli(pi, cli, cwd, environment, args, signal),
           { request: key },
         );
       } finally {
@@ -185,8 +218,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
           pi,
           cli,
           cwd,
-          home,
-          socket,
+          environment,
           ["ack", params.messageId, "--request", key],
           signal,
         ),
@@ -205,8 +237,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string): void {
           pi,
           cli,
           cwd,
-          home,
-          socket,
+          environment,
           params.agent ? ["status", params.agent] : ["status"],
           signal,
         ),

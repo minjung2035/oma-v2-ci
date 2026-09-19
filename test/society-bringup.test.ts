@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -166,5 +166,71 @@ test("T115 provisioning builds the trusted rootfs Residents are confined to", ()
     assert.equal(readdirSync(join(rootfs, "etc")).filter(name => !["passwd", "group", "ld.so.cache", "alternatives"].includes(name)).length, 0);
     // Rebuilding is harmless.
     provisionSociety(state);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 the product waits for the credential rather than reading past a starting broker", async () => {
+  const root = scratch();
+  try {
+    // A stand-in broker that takes a while to reach the point where it would
+    // publish. The real one does the same: it recovers, bootstraps and only
+    // then listens, so a host that read immediately after the spawn returned
+    // would always see nothing and start an engine that can never be given
+    // authority afterwards.
+    const entry = join(root, "lib", "dist", "src", "entry");
+    mkdirSync(entry, { recursive: true });
+    writeFileSync(join(entry, "broker.js"),
+      "import { writeSync } from 'node:fs';\n" +
+      "setTimeout(() => { writeSync(3, 'b'.repeat(64) + '\\n'); setTimeout(() => {}, 1000); }, 300);\n");
+    const started = Date.now();
+    const handle = await superviseBroker({
+      node: process.execPath, libdir: join(root, "lib"), society: "probe",
+      runRoot: root, configPath: join(root, "config.json"),
+      sessionHandle: "a".repeat(32), readyTimeoutMs: 5000,
+    });
+    try {
+      const credential = await handle.credential;
+      assert.equal(credential, "b".repeat(64));
+      assert.ok(Date.now() - started >= 250, "the credential was not actually waited for");
+    } finally { handle.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a broker that never publishes ends the wait with an absence, not a hang", async () => {
+  const root = scratch();
+  try {
+    // A child that starts and says nothing on the channel. The product must
+    // reach its terminal with a Principal that has no authority, and say so,
+    // instead of holding the screen until someone kills it.
+    const entry = join(root, "lib", "dist", "src", "entry");
+    mkdirSync(entry, { recursive: true });
+    writeFileSync(join(entry, "broker.js"), "setTimeout(() => {}, 10000);\n");
+    const handle = await superviseBroker({
+      node: process.execPath, libdir: join(root, "lib"), society: "probe",
+      runRoot: root, configPath: join(root, "config.json"),
+      sessionHandle: "a".repeat(32), readyTimeoutMs: 400,
+    });
+    try { assert.equal(await handle.credential, null); }
+    finally { handle.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a broker this host did not start hands out no credential", async () => {
+  const root = scratch();
+  try {
+    const server = createServer(socket => { socket.destroy(); });
+    await new Promise<void>(resolve => { server.listen(join(root, "admin.sock"), () => { resolve(); }); });
+    try {
+      const handle = await superviseBroker({
+        node: process.execPath, libdir: root, society: "probe",
+        runRoot: root, configPath: join(root, "config.json"), sessionHandle: "a".repeat(32),
+      });
+      assert.equal(handle.state.kind, "already-running");
+      // Another process owns that broker and registered its own session with
+      // it. This host has no claim on the Principal and is given nothing.
+      assert.equal(await handle.credential, null);
+    } finally {
+      await new Promise<void>(resolve => { server.close(() => { resolve(); }); });
+    }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

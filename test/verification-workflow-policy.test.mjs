@@ -56,6 +56,22 @@ test("T116: the workflow runs only the lanes this runner's environment provides"
   }
 });
 
+test("T116: the job clock cannot fire before the checks it contains", () => {
+  // Every check runs in sequence, so the job needs at least their sum. Without
+  // this the per-check ceilings mean nothing: the outer clock kills the run
+  // first and the evidence blames a check that was still inside its budget.
+  const budget = checks().reduce((total, entry) => total + entry.seconds, 0);
+  const job = Number(/timeout-minutes: (\d+)/.exec(workflow)?.[1] ?? 0);
+  assert.ok(job * 60 >= budget,
+    `the job stops at ${job} minutes but its checks may take ${Math.ceil(budget / 60)}`);
+});
+
+test("T116: the runner installs what the containment tests need rather than skipping them", () => {
+  // Without bubblewrap the sandbox tests skip, the suite still exits zero, and
+  // the run records a pass for work that never happened.
+  assert.match(workflow, /apt-get install -y bubblewrap/);
+});
+
 test("T116: a stale inventory observed before the generators run fails the workflow", () => {
   // The generators rewrite the very files the pre-check looked at, so an
   // observation that only lands in a log would be erased by the next step.

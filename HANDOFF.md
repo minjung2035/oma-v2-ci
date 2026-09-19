@@ -75,7 +75,9 @@ TUI-001–014는 owner/callPath/negative test가 연결됐고 상태는 **unveri
 
 TUI에서 아직 닫히지 않은 의존성은 하나로 좁혀져 있다.
 
-**`principal.attach` credential handshake는 구현되었다**(IPC-011). broker가 run마다 credential을 `<runRoot>/principal.cred`에 0600으로 게시하고, `oma`가 자신이 띄운 Principal session의 환경에만 넘기며, model-facing CLI가 매 연결의 첫 frame으로 제시한다. Dashboard는 별개로 host-private status view(TUI-021)를 읽으므로 이 handshake에 의존하지 않는다.
+**`principal.attach` credential handshake는 구현되었고 실제 tool 경로로 검증됐다**(IPC-011, PR-001). host가 broker를 시작하기 전에 session handle을 등록하고, broker는 등록이 있을 때만 endpoint를 열며, credential은 등록한 host만 가진 descriptor로 한 번 간다(파일 없음). model-facing CLI가 매 연결의 첫 frame으로 제시하고, trusted extension의 `cliEnvironment()`가 `env -i` 너머로 그것을 전달한다. 세 곳이 다시 어긋나면 `principal-session-env` 규칙이 architecture gate를 실패시킨다. Dashboard는 별개로 host-private status view(TUI-021)를 읽는다.
+
+**다음 작업은 PR-002의 후반부다**: pending을 Principal에게 실제로 전달하는 경로. 자세한 범위와 왜 절반만 지으면 안 되는지는 [validation.md](implementation/validation.md)의 "남은 것"에 적었다.
 
 S-02는 여전히 **OPEN**이다. handshake와 duplicate attach 거절은 닫혔지만, SP-02-T/A의 model-facing tool override와 credential 비노출 기준은 실제 모델이 도는 환경을 요구한다. PR-004의 제한은 새 entrypoint가 그대로 진다.
 

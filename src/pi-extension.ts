@@ -16,7 +16,7 @@ import { registerToolSurface } from "./extension/tool-surface.js";
 import { guardWorkspaceTools } from "./extension/workspace-guard.js";
 
 export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
-export { OMA_TOOL_NAMES } from "./extension/mail-tools.js";
+export { OMA_TOOL_NAMES, cliEnvironment, registerOmaTools } from "./extension/mail-tools.js";
 export { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "./extension/delivery.js";
 export {
   expandedActiveTools, initialActiveTools, parseSurfacePlan, registerToolSurface,

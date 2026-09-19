@@ -1,17 +1,12 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0845980644226074,
-  "n_files"            : 208,
-  "n_lines"            : 21972,
-  "files_per_second"   : 2458.6850942705,
-  "lines_per_second"   : 259722.254285151,
+  "elapsed_seconds"    : 0.0853018760681152,
+  "n_files"            : 209,
+  "n_lines"            : 22226,
+  "files_per_second"   : 2450.12196253585,
+  "lines_per_second"   : 260556.989183357,
   "report_file"        : "production-loc.json"},
-"src/broker.ts" :{
-  "blank": 1,
-  "comment": 28,
-  "code": 418,
-  "language": "TypeScript"},
 "src/durable.ts" :{
   "blank": 5,
   "comment": 12,
@@ -21,6 +16,11 @@
   "blank": 22,
   "comment": 19,
   "code": 387,
+  "language": "TypeScript"},
+"src/broker.ts" :{
+  "blank": 3,
+  "comment": 23,
+  "code": 386,
   "language": "TypeScript"},
 "src/protocol/methods.ts" :{
   "blank": 6,
@@ -98,9 +98,9 @@
   "code": 220,
   "language": "TypeScript"},
 "src/extension/mail-tools.ts" :{
-  "blank": 1,
-  "comment": 8,
-  "code": 207,
+  "blank": 3,
+  "comment": 26,
+  "code": 218,
   "language": "TypeScript"},
 "src/git/integration.ts" :{
   "blank": 5,
@@ -162,11 +162,6 @@
   "comment": 8,
   "code": 174,
   "language": "TypeScript"},
-"src/entry/oma.ts" :{
-  "blank": 18,
-  "comment": 36,
-  "code": 174,
-  "language": "TypeScript"},
 "src/git/context.ts" :{
   "blank": 5,
   "comment": 20,
@@ -176,6 +171,11 @@
   "blank": 9,
   "comment": 8,
   "code": 170,
+  "language": "TypeScript"},
+"src/entry/oma.ts" :{
+  "blank": 17,
+  "comment": 33,
+  "code": 169,
   "language": "TypeScript"},
 "src/domain/tool-surface.ts" :{
   "blank": 22,
@@ -206,6 +206,11 @@
   "blank": 1,
   "comment": 4,
   "code": 156,
+  "language": "TypeScript"},
+"src/entry/broker.ts" :{
+  "blank": 3,
+  "comment": 19,
+  "code": 152,
   "language": "TypeScript"},
 "src/tui/sources/extensions.ts" :{
   "blank": 12,
@@ -267,6 +272,11 @@
   "comment": 9,
   "code": 136,
   "language": "TypeScript"},
+"src/process/async.ts" :{
+  "blank": 2,
+  "comment": 24,
+  "code": 136,
+  "language": "TypeScript"},
 "src/sandbox.ts" :{
   "blank": 8,
   "comment": 36,
@@ -281,11 +291,6 @@
   "blank": 1,
   "comment": 15,
   "code": 135,
-  "language": "TypeScript"},
-"src/process/async.ts" :{
-  "blank": 2,
-  "comment": 21,
-  "code": 134,
   "language": "TypeScript"},
 "src/leaf.ts" :{
   "blank": 13,
@@ -311,11 +316,6 @@
   "blank": 16,
   "comment": 17,
   "code": 126,
-  "language": "TypeScript"},
-"src/entry/broker.ts" :{
-  "blank": 1,
-  "comment": 2,
-  "code": 125,
   "language": "TypeScript"},
 "src/mail/batches.ts" :{
   "blank": 1,
@@ -377,6 +377,11 @@
   "comment": 5,
   "code": 100,
   "language": "TypeScript"},
+"src/runtime/broker-supervisor.ts" :{
+  "blank": 10,
+  "comment": 44,
+  "code": 98,
+  "language": "TypeScript"},
 "src/cli/commands/send.ts" :{
   "blank": 3,
   "comment": 0,
@@ -401,6 +406,11 @@
   "blank": 10,
   "comment": 26,
   "code": 92,
+  "language": "TypeScript"},
+"src/broker/principal-endpoint.ts" :{
+  "blank": 8,
+  "comment": 31,
+  "code": 91,
   "language": "TypeScript"},
 "src/reconcile/operations.ts" :{
   "blank": 2,
@@ -556,11 +566,6 @@
   "blank": 7,
   "comment": 16,
   "code": 62,
-  "language": "TypeScript"},
-"src/runtime/broker-supervisor.ts" :{
-  "blank": 8,
-  "comment": 22,
-  "code": 61,
   "language": "TypeScript"},
 "src/storage/transaction.ts" :{
   "blank": 3,
@@ -842,6 +847,11 @@
   "comment": 4,
   "code": 26,
   "language": "TypeScript"},
+"src/protocol/principal-credential.ts" :{
+  "blank": 7,
+  "comment": 45,
+  "code": 26,
+  "language": "TypeScript"},
 "src/protocol/request-codec.ts" :{
   "blank": 2,
   "comment": 3,
@@ -927,11 +937,6 @@
   "comment": 1,
   "code": 17,
   "language": "OMA systemd"},
-"src/protocol/principal-credential.ts" :{
-  "blank": 5,
-  "comment": 31,
-  "code": 17,
-  "language": "TypeScript"},
 "src/cli/commands/integrate.ts" :{
   "blank": 1,
   "comment": 0,
@@ -1048,7 +1053,7 @@
   "code": 1,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 839,
-  "comment": 1970,
-  "code": 19163,
-  "nFiles": 208} }
+  "blank": 856,
+  "comment": 2067,
+  "code": 19303,
+  "nFiles": 209} }

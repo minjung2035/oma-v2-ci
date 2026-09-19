@@ -183,3 +183,83 @@ test("settings-placement-owner, closed-switch and module-port-import", () => {
   withTree({ "src/cli.ts": 'import { m } from "./mail.js";', "src/mail.ts": "export const m = 1;" },
     findings => assert.ok(has(findings, "module-port-import")));
 });
+
+test("principal-session-env: the session environment survives producer, forwarder and consumer", () => {
+  const producer = (extra = "") => `
+import { PRINCIPAL_CREDENTIAL_ENV } from "../protocol/principal-credential.js";
+export function principalEnvironment(paths, profile, limits, session) {
+  return {
+    HOME: "/h",
+    OMA_SOCKET: "/s",
+    OMA_FRAME_BYTES: "1",
+    OMA_PRINCIPAL_SESSION: session.sessionHandle,
+    ${extra}
+    ...(session.credential === null ? {} : { [PRINCIPAL_CREDENTIAL_ENV]: session.credential }),
+  };
+}`;
+  const consumer = `
+import { PRINCIPAL_CREDENTIAL_ENV } from "../protocol/principal-credential.js";
+export function socketPath() {
+  // Only a caller given no endpoint reaches these, so they are not requirements.
+  return process.env.OMA_SOCKET ?? \`/run/\${process.env.OMA_SOCIETY}/\${process.env.OMA_ACTOR}\`;
+}
+export async function callActor() {
+  const frame = process.env.OMA_FRAME_BYTES;
+  const credential = process.env[PRINCIPAL_CREDENTIAL_ENV];
+  const handle = process.env.OMA_PRINCIPAL_SESSION;
+  return [frame, credential, handle];
+}`;
+  const constants = 'export const PRINCIPAL_CREDENTIAL_ENV = "OMA_PRINCIPAL_CREDENTIAL";';
+  const forwarder = names => `
+const PRINCIPAL_CREDENTIAL = "OMA_PRINCIPAL_CREDENTIAL";
+const PRINCIPAL_SESSION = "OMA_PRINCIPAL_SESSION";
+const FRAME_BYTES = "OMA_FRAME_BYTES";
+export function cliEnvironment(home, socket) {
+  const entries = [\`HOME=\${home}\`, \`OMA_SOCKET=\${socket}\`, "LANG=C.UTF-8"];
+  for (const name of [${names}]) {
+    const value = process.env[name];
+    if (value !== undefined) entries.push(\`\${name}=\${value}\`);
+  }
+  return entries;
+}`;
+  const tree = (forwardList, producerExtra = "") => ({
+    "src/tui/session.ts": producer(producerExtra),
+    "src/cli/transport.ts": consumer,
+    "src/protocol/principal-credential.ts": constants,
+    "src/extension/mail-tools.ts": forwarder(forwardList),
+  });
+
+  // Accept: every name the CLI reads at call time is forwarded, and every
+  // forwarded name is one the host actually sets.
+  withTree(tree("FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION"),
+    findings => clean(findings, "principal-session-env"));
+
+  // Reject: the exact defect this rule exists for -- the tools rebuild the
+  // environment without the credential, so every OMA tool fails to attach
+  // while nothing in the producer or the consumer looks wrong.
+  withTree(tree("FRAME_BYTES"), findings => {
+    assert.ok(has(findings, "principal-session-env"));
+    assert.ok(findings.some(value => value.reason.includes("OMA_PRINCIPAL_CREDENTIAL")));
+    assert.ok(findings.some(value => value.reason.includes("OMA_PRINCIPAL_SESSION")));
+  });
+
+  // Reject the other direction: a name forwarded to the CLI that the Principal's
+  // environment never sets is a requirement nobody meets.
+  withTree({
+    ...tree("FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION"),
+    "src/extension/mail-tools.ts": `${forwarder("FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION")}
+const UNSET = "OMA_NEVER_SET";
+export function alsoForwards() { return [\`\${UNSET}=x\`]; }`,
+  }, findings => clean(findings, "principal-session-env"));
+
+  // Near miss: names the consumer reads only to derive an endpoint when it was
+  // given none are not requirements of a caller that was given one.
+  withTree(tree("FRAME_BYTES, PRINCIPAL_CREDENTIAL, PRINCIPAL_SESSION"), findings => {
+    for (const value of findings.filter(entry => entry.rule === "principal-session-env"))
+      assert.doesNotMatch(value.reason, /OMA_ACTOR|OMA_SOCIETY/);
+  });
+
+  // Near miss: an unrelated tree without these files is not a violation.
+  withTree({ "src/tui/session.ts": "export const a = 1;" },
+    findings => clean(findings, "principal-session-env"));
+});

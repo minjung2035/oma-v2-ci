@@ -70,19 +70,23 @@ test("R38: the measured artifacts are bound to the source they were taken from",
   try {
     const files = writeProductionInventory(f.root);
     const hashOf = bytes => createHash("sha256").update(bytes).digest("hex");
-    const measure = () => {
+    const rows = list => Object.fromEntries(list.map(file => [file, { code: 3, blank: 1, comment: 2 }]));
+    const measure = (list = files, overrides = {}) => {
       f.put("production-loc-hashes.json", JSON.stringify({
-        cloc: "2.08", manifest: hashOf(`${files.join("\n")}\n`),
-        files: files.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
+        cloc: "2.08", manifest: hashOf(`${list.join("\n")}\n`),
+        files: list.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
+        ...(overrides.hashes ?? {}),
       }));
       f.put("production-loc.json", JSON.stringify({
-        header: { n_files: files.length },
-        ...Object.fromEntries(files.map(file => [file, { code: 1, blank: 0, comment: 0 }])),
+        header: { n_files: list.length, cloc_version: "2.08", ...(overrides.header ?? {}) },
+        ...rows(list),
+        SUM: { code: 3 * list.length, blank: list.length, comment: 2 * list.length, nFiles: list.length, ...(overrides.sum ?? {}) },
       }));
     };
-    // Positive: records taken from exactly this source are current.
+    // Positive: records taken from exactly this source, whose total is the sum
+    // of its own rows, are current.
     measure();
-    assert.equal(assertMeasurementCurrent(f.root), files.length);
+    assert.deepEqual(assertMeasurementCurrent(f.root), { files: files.length, code: 3 * files.length });
 
     // A file whose bytes changed after measurement. The file list is unchanged,
     // so only this check can see it -- and this is the drift that let a LOC
@@ -90,24 +94,42 @@ test("R38: the measured artifacts are bound to the source they were taken from",
     f.put("src/process/async.ts", "export const changed = 1;\n");
     assert.throws(() => assertMeasurementCurrent(f.root), /stale production-loc-hashes\.json/);
     measure();
-    assert.equal(assertMeasurementCurrent(f.root), files.length);
+    assert.doesNotThrow(() => assertMeasurementCurrent(f.root));
+
+    // A total that is not the sum of the rows. Every row is present and the
+    // header counts them, so membership checks alone see nothing wrong -- and
+    // the total is the number the LOC release gate is judged on.
+    measure(files, { sum: { code: 1 } });
+    assert.throws(() => assertMeasurementCurrent(f.root), /SUM disagrees with its own rows/);
+    measure(files, { sum: { nFiles: files.length + 1 } });
+    assert.throws(() => assertMeasurementCurrent(f.root), /SUM disagrees with its own rows/);
+
+    // A report with no total at all is not a measurement this gate passes on.
+    measure();
+    const counted = JSON.parse(readFileSync(join(f.root, "production-loc.json"), "utf8"));
+    delete counted.SUM;
+    f.put("production-loc.json", JSON.stringify(counted));
+    assert.throws(() => assertMeasurementCurrent(f.root), /no SUM/);
+
+    // Counts and hashes taken by different tools are two observations, not one.
+    measure(files, { header: { cloc_version: "2.09" } });
+    assert.throws(() => assertMeasurementCurrent(f.root), /different runs/);
+
+    // A row for a file the manifest does not contain inflates the total from
+    // outside the measured set.
+    measure();
+    const inflated = JSON.parse(readFileSync(join(f.root, "production-loc.json"), "utf8"));
+    inflated["src/not-production.ts"] = { code: 900, blank: 0, comment: 0 };
+    f.put("production-loc.json", JSON.stringify(inflated));
+    assert.throws(() => assertMeasurementCurrent(f.root), /outside the manifest/);
 
     // A new production file that the records never saw.
+    measure();
     f.put("src/process/added.ts");
     assert.throws(() => assertMeasurementCurrent(f.root), /different file list/);
     writeProductionInventory(f.root);
     assert.throws(() => assertMeasurementCurrent(f.root), /different file list/);
-
-    // Counts that describe fewer files than the manifest holds.
-    const grown = writeProductionInventory(f.root);
-    f.put("production-loc-hashes.json", JSON.stringify({
-      cloc: "2.08", manifest: hashOf(`${grown.join("\n")}\n`),
-      files: grown.map(file => ({ path: file, sha256: hashOf(readFileSync(join(f.root, file))) })),
-    }));
-    f.put("production-loc.json", JSON.stringify({
-      header: { n_files: grown.length - 1 },
-      ...Object.fromEntries(grown.map(file => [file, { code: 1, blank: 0, comment: 0 }])),
-    }));
-    assert.throws(() => assertMeasurementCurrent(f.root), /stale production-loc\.json/);
+    measure(writeProductionInventory(f.root));
+    assert.doesNotThrow(() => assertMeasurementCurrent(f.root));
   } finally { f.close(); }
 });

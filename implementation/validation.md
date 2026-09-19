@@ -119,7 +119,7 @@ TTY는 `script`로 실제 pty를 띄워 raw mode 취득·복원과 크기 보고
 - `mail-header-leaf`의 "`cli/effects/mail.ts`가 `mail/headers.js`를 import해야 한다" 양성 pin: 배선을 고정할 뿐 경계를 지키지 않는다. 경계(전체 mail 모듈 import 금지)는 `module-port-import`가 지킨다.
 - entrypoint에 `roleExtensions`가 쓰였는지 보던 regex: Principal profile 조립을 `principalSessionProfile()`로 꺼내 역할의 모델·extension·digest·projection이 그대로 넘어가는지 행동으로 검사한다.
 
-### Principal 제품 경로를 닫은 것
+### Principal 제품 경로: 두 번째 감사에서 드러난 것
 
 감사에서 P1으로 지적된 세 가지는 같은 하나의 구멍이었다. `oma`가 Principal engine에 `HOME`/`PATH`만 넘겨서 trusted extension이 OMA tool을 아예 등록하지 않았고(`OMA_CLI_PATH`/`OMA_AGENT_HOME`/`OMA_MAIL_ARCHIVE`/`OMA_SOCKET` 부재), `OMA_WORKSPACE_BYTES`가 없어 write/edit이 전부 차단됐으며, engine의 cwd가 될 `principal/private`를 아무도 만들지 않았고, 무엇보다 Principal이 broker에 자기를 증명할 방법이 없었다. Principal에는 systemd scope가 없어 Resident를 인가하는 cgroup·run lease 검사가 성립하지 않는다.
 
@@ -128,12 +128,58 @@ architecture §23.5가 이미 답을 정해두고 있었다. broker가 run마다
 - broker는 시작 시 32바이트 난수를 `<runRoot>/principal.cred`에 0600으로 게시하고 `<runRoot>/principal.sock`을 연다. credential은 파생값이 아니며 broker가 멈추면 메모리와 디스크에서 함께 사라진다.
 - 그 endpoint의 연결은 `principal.attach`가 성공하기 전까지 아무도 아니다. 다른 session handle의 두 번째 attach는 거절되므로 society는 Principal 하나를 유지한다(architecture §8.4).
 - model-facing CLI는 환경에 credential이 있을 때만 매 연결의 첫 frame으로 그것을 제시한다. Resident의 환경에도 sandbox에도 credential은 없으므로 다른 호출자에게는 아무 변화가 없다.
-- `T114`는 이것을 실제 socket과 실제 `dist/src/cli.js` 프로세스로 검사한다: attach 없는 요청·위조 credential·두 번째 session은 `AUTH_FAILED`로 끝나고 연결이 닫히며, 이 run의 credential만 `status.get`을 받는다.
+- `T114`가 이것을 검사한다.
 
-batch view는 일부러 넘기지 않는다. Principal을 위해 batch를 준비하는 runner가 없으므로 delivery command는 unavailable로 남는다(TRACE-002).
+**첫 수정은 실제 제품 경로에서 동작하지 않았다.** 두 번째 감사가 정확히 짚었다. 호스트가 credential을 engine 환경에 넣어도, 
+model이 실제로 쓰는 tool은 `src/extension/mail-tools.ts`에서 `/usr/bin/env -i`로 환경을 **다시 만든다**. 그 목록에 credential과 
+session handle이 없었으므로 `oma_status`·`oma_mail_send`·`oma_mail_ack`는 전부 attach 없이 요청을 보내 `AUTH_FAILED`로 끝났다. 
+당시 테스트가 이것을 놓친 이유는 결함이 아니라 **oracle의 seam**이다: 테스트가 CLI를 직접 spawn하면서 credential을 손으로 넣었기 
+때문에, 그 사이의 `env -i` 한 단계를 건너뛰었다. 지금은 실제 `registerOmaTools`가 등록한 tool을 구동하고 engine의 `exec`만 
+대역으로 두되 그 대역이 진짜로 프로세스를 띄운다. 결함을 되살려 두 test가 모두 실패하는 것을 확인했다.
+
+같은 이유로 세 곳(생산자 `principalEnvironment`, 전달자 `cliEnvironment`, 소비자 `cli/transport.ts`)을 정적 규칙 
+`principal-session-env`로 묶었다. CLI가 호출 시점에 읽는 이름이 전달 목록에 없거나, 전달하는 이름을 host가 설정하지 않으면 
+architecture gate가 실패한다. 테스트를 더 쓰는 것보다 이쪽이 재발을 막는다.
+
+그리고 **진입점 자체를 실행하는 테스트가 없었다**. 두 번 다 부품은 전부 검사돼 있었고 그것들을 잇는 파일만 검사되지 않았다. 
+`T119`가 실제 `src/entry/oma.ts`를 통제된 모듈 경계에서 실행해 순서와 값을 본다. 두 결함을 각각 되살려 이 테스트가 
+실패하는 것을 확인했다: credential을 기다리지 않게 바꾸면 순서 단언이 깨지고, 환경을 손으로 조립하게 바꾸면 세 단언이 깨진다.
+
+`cliEnvironment`의 읽기 시점도 옮겼다. 등록 시점에 읽는 다른 값들과 달리 이것만 호출 시점에 `process.env`를 읽고 있었는데, 
+engine이 시작된 환경과 나중의 환경이 다를 수 있다는 점에서 같은 종류의 균열이다. 이제 `registerOmaTools`에서 한 번 캡처한다.
+
+**credential 전달 경로도 바꿨다.** 첫 수정은 `<runRoot>/principal.cred`에 0600으로 게시했는데, 0600은 다른 UID를 막는 권한이지 
+같은 UID의 다른 프로세스를 막는 권한이 아니다. 그 프로세스야말로 `peer-authenticator`의 주석이 배제하겠다고 적은 대상이고, 
+게다가 host가 session handle을 미리 알리지 않았으므로 먼저 attach한 쪽이 Principal이 되는 구조였다. 지금은 host가 broker를 
+시작하기 전에 handle을 등록하고, broker는 등록이 있을 때만 endpoint를 열며, credential은 등록한 host만 가진 descriptor로 
+한 번 간다. 파일은 없다. 등록이 없는 broker(예: systemd가 띄운 것)는 endpoint 자체를 열지 않는다.
+
+**startup ordering도 실제로는 보장되지 않았다.** broker를 먼저 spawn하도록 고쳤지만 `superviseBroker`는 pid가 생기면 곧바로 
+반환했고, credential은 그 뒤 recover/bootstrap을 지나 `broker.start()` 안에서야 생긴다. 지금은 credential을 그 descriptor로 
+기다리는 것이 곧 readiness barrier다: endpoint가 listening된 뒤에만 publish하므로, credential을 받았다는 것이 endpoint가 
+있다는 뜻이다. 늦게 publish하는 broker, 전혀 publish하지 않는 broker, 다른 host가 소유한 broker 세 경우를 `T115`가 검사한다.
+
+credential 채널에는 두 가지를 더 걸었다. broker는 descriptor 3이 실제로 파이프일 때만 session을 등록한다 — 다른 방식으로 
+시작된 broker가 낡은 `OMA_PRINCIPAL_SESSION`을 물려받았을 때 credential을 로그나 남의 파일에 쓰는 일을 막는다. session 
+handle 비교도 credential과 같은 고정 길이 비교로 바꿨다. handle은 권한을 주지 않지만, credential을 이미 쥔 호출자에게는 
+handle이 남은 전부이므로 사실상 비밀의 나머지 절반이다.
+
+`ATTACH_CONFLICT`도 계약대로 돌려준다. PR-001이 두 번째 attach를 conflict로 규정했고 오류 어휘에도 따로 있는데 구현은 
+`AUTH_FAILED`였다. 두 오류의 복구 정책이 다르다.
+
+batch view는 여전히 일부러 넘기지 않는다. Principal을 위해 batch를 준비하는 runner가 없으므로 delivery command는 
+unavailable로 남는다(TRACE-002). 이것은 아래 "남은 것"의 PR-002 항목이다.
 
 ### 같은 감사에서 함께 고친 것
 
+- **`npm test`가 skip을 통과로 읽었다.** Node의 test runner는 skip이 있어도 exit 0이므로, bubblewrap 없는 호스트에서 봉인 
+  시험 4개가 skip돼도 통과로 보였다. 이제 실행 요약을 읽어 skip·todo·cancelled가 하나라도 있으면 실패한다(R35가 lane에 
+  적용하던 규칙과 같다). 실제 skip을 하나 넣어 suite가 exit 1로 끝나고 그 test 이름을 출력하는 것을 확인했고, CI runner에는 
+  bubblewrap을 설치해 애초에 skip되지 않게 했다.
+- **`SOURCE_BOUND`가 LOC 수치를 검증하지 않았다.** 파일 집합과 해시만 확인하고, A-008이 판정하는 총계는 보지 않았다. 이제 
+  `SUM`이 자기 rows의 합인지, 두 산출물이 같은 cloc 실행에서 나왔는지, manifest 밖 파일이 총계를 부풀리지 않는지 확인한다.
+- **workflow job 시계가 자기 check 합보다 짧았다.** ceiling 합이 190분인데 job은 150분이었다. 210분으로 올렸고 `T116`이 
+  둘의 관계를 검사한다.
 - **Mail 화면과 status view의 bounded read가 bounded가 아니었다.** `readFileSync(...).slice(0, LIMIT)`는 파일 전체를 먼저 메모리에 올린다. 이제 `O_NOFOLLOW`로 열어 `fstat`으로 정규 파일임을 확인하고 한도만큼만 읽는다. 링크는 따라가지 않으므로 손상된 Maildir이 host 파일 내용을 화면에 올릴 수 없다. 이전 adversarial test는 링크를 따라가는 동작을 정상으로 취급하고 있었고, 그 단언을 거절 단언으로 바꿨다. `TuiTransport`도 같은 방식으로 고쳤다.
 - **unread 수와 목록이 어긋날 수 있었다.** `unreadCount`는 `new/`의 모든 항목을 세고 `readMailbox`는 비파일을 버렸다. 이제 둘 다 같은 행 도출을 쓴다.
 - **"Newest first"가 사실이 아니었다.** message id는 무작위 UUID를 담으므로 파일 이름 순서는 시각과 무관하다. 정렬 기준을 Maildir 파일의 mtime으로 바꾸고, unread를 먼저 보이게 했다.
@@ -144,6 +190,22 @@ batch view는 일부러 넘기지 않는다. Principal을 위해 batch를 준비
 
 ### 남은 것
 
+- **PR-002의 후반부가 미구현이다.** `host.principalRelay`는 new→cur 이동과 pending 집계까지 하고, 그 앞부분은 규범대로 
+  동작한다. 구현되지 않은 것은 "UI reconnect 시 extension이 pending을 조회하여 제한된 batch를 인수한다"는 절이다. 이것은 
+  숨겨진 결함이 아니라 아직 짓지 않은 기능이며, 절반만 지으면 안 된다: `BatchCoordinator.prepare()`는 actor에 일반적이라 
+  Principal에도 그대로 쓸 수 있지만, `complete()`는 runner가 쓰는 receipt(`runnerReceiptPathAt`)와 adapter의 boundary 
+  evidence를 요구하고 `batch.complete`는 runner channel에서 cgroup으로 인증한다. 따라서 prepare만 열면 완료되지 않는 
+  prepared batch가 남아 이후 준비를 막는다. 필요한 것은 Resident의 delivery pipeline을 TUI가 소유한 session에 대해 
+  다시 거는 일 전체다: batch view 기록, `/oma-deliver` 발행, RPC 스트림에서 boundary notice 수신, receipt 기록, 
+  principal channel의 완료 경로. 여기에는 Human이 turn 도중 터미널을 닫았을 때 prepared batch를 어떻게 다루는지라는 
+  설계 질문이 남아 있고, spec은 그것을 S-03/S-06에 묶어 두었다.
+- **broker를 `oma`가 시작하지 않은 배포에서는 Principal이 society에 요청할 수 없다.** endpoint는 등록된 session이 있을 때만
+  열리고, 등록은 broker를 시작하는 host만 할 수 있다. systemd unit이 broker를 띄운 프로필이나 이미 다른 `oma`가 소유한
+  society에서는 Principal engine이 authority 없이 시작하며 화면이 그 이유를 말한다. Dashboard·Mail·Config는 그대로
+  동작한다. TUI-002가 "한 명령이 society를 시작한다"고 정한 경로에서는 이 조건이 발생하지 않는다.
+- **broker 재시작 시 credential rotation은 없다.** 실행 중인 Principal engine의 환경은 나중에 바꿀 수 없으므로, broker가 
+  재시작하면 그 session은 `oma`를 다시 띄울 때까지 society에 요청할 수 없다. 이전 run의 credential이 아무 권한도 주지 
+  않는다는 것은 `T114`가 검사한다. LIFE-006이 요구하는 재연결은 PR-002의 delivery 경로와 같은 작업으로 다룬다.
 - TUI/TSP requirement의 trace 상태는 `unverified`다. owner/callPath/negative test는 연결돼 있으나 compliance 기록 절차를 거치지 않았다.
 - **비용 상한**: relay가 chokepoint를 되돌려주지만 stream을 해석하지 않으므로 비용 상한은 여전히 OMA 계약이 아니다(`INF-005`).
 - 봉인은 host에 `bwrap`과 `/usr`이 있어야 한다. 없는 host에서 T117은 이유를 적고 skip되며, 제품은 `installation.rootfs`를 `/`로 두는 비봉인 선언으로만 돌 수 있다.

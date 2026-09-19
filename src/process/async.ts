@@ -144,10 +144,15 @@ export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: 
  * stderr stays open because it is the service's operational channel, and a
  * service that failed silently is indistinguishable from one that is idle.
  */
+/** A supervised service child. `extraPipe` gives it one additional write end at
+ * descriptor 3: a channel only this parent holds, for a value that must not be
+ * published anywhere a third process could read it. */
 export function spawnSupervisedService(executable: string, argv: readonly string[],
-  env: Readonly<Record<string, string>>): ChildProcess {
+  env: Readonly<Record<string, string>>, extraPipe = false): ChildProcess {
   validDirectSpawn(executable, argv, "/", env);
-  return spawn(executable, [...argv], { env: { ...env }, shell: false, stdio: ["ignore", "ignore", "pipe"] });
+  const stdio: ("ignore" | "pipe")[] = ["ignore", "ignore", "pipe"];
+  if (extraPipe) stdio.push("pipe");
+  return spawn(executable, [...argv], { env: { ...env }, shell: false, stdio });
 }
 export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
   if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)

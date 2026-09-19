@@ -79,7 +79,35 @@ export function assertMeasurementCurrent(root = process.cwd(), files = collectPr
   if (missing.length || counted.header?.n_files !== files.length)
     throw new Error(`stale production-loc.json; counted ${counted.header?.n_files} of ${files.length} files; ` +
       `missing=[${missing.join(", ")}]; regenerate with node scripts/loc.mjs`);
-  return files.length;
+  // The number A-008 is judged on is the total, so the total is checked too:
+  // every row present and a header that counts them is not the same as a total
+  // that is the sum of those rows. A report whose SUM disagrees with its own
+  // rows, or that has no SUM, is not a measurement this gate will pass on.
+  const rows = Object.entries(counted).filter(([key]) => key !== "header" && key !== "SUM");
+  const extra = rows.map(([key]) => key).filter(file => !files.includes(file));
+  if (extra.length) throw new Error(`production-loc.json counts files outside the manifest: [${extra.join(", ")}]`);
+  const sum = counted.SUM;
+  if (!sum || typeof sum.code !== "number" || typeof sum.nFiles !== "number")
+    throw new Error("production-loc.json has no SUM; regenerate with node scripts/loc.mjs");
+  const totals = { code: 0, comment: 0, blank: 0 };
+  for (const [file, row] of rows) {
+    for (const field of ["code", "comment", "blank"]) {
+      if (typeof row[field] !== "number" || !Number.isFinite(row[field]) || row[field] < 0)
+        throw new Error(`production-loc.json has no ${field} count for ${file}`);
+      totals[field] += row[field];
+    }
+  }
+  if (sum.nFiles !== files.length || sum.code !== totals.code ||
+      sum.comment !== totals.comment || sum.blank !== totals.blank)
+    throw new Error(`production-loc.json SUM disagrees with its own rows ` +
+      `(SUM.code ${sum.code} vs ${totals.code}, SUM.nFiles ${sum.nFiles} vs ${files.length}); ` +
+      "regenerate with node scripts/loc.mjs");
+  // Both artifacts must come from the same measuring run; a count taken by one
+  // cloc and hashes taken beside another is two observations, not one.
+  if (records.cloc !== counted.header?.cloc_version)
+    throw new Error(`production-loc.json (cloc ${counted.header?.cloc_version}) and its hashes (cloc ${records.cloc}) ` +
+      "are from different runs; regenerate with node scripts/loc.mjs");
+  return { files: files.length, code: sum.code };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
@@ -90,9 +118,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const files = write ? writeProductionInventory() : assertProductionInventory();
     // Writing the list is deliberately not a measurement; only the check reads
     // the measured artifacts, so `--write` can never mark them current.
-    const loc = write ? "NOT_MEASURED" : (assertMeasurementCurrent(process.cwd(), files), "SOURCE_BOUND");
+    const measured = write ? null : assertMeasurementCurrent(process.cwd(), files);
     console.log(JSON.stringify({ status: write ? "SOURCE_LIST_GENERATED" : "SOURCE_LIST_CURRENT", files: files.length,
-      loc, runtimeProof: false }));
+      loc: measured === null ? "NOT_MEASURED" : "SOURCE_BOUND", codeLines: measured?.code ?? null, runtimeProof: false }));
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

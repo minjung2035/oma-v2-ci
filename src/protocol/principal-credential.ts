@@ -11,29 +11,41 @@
  * The secret is never derived from anything — not the society, not a path, not
  * the clock — so knowing the deployment tells an attacker nothing, and it dies
  * with the broker, so a copy taken from an old run authorises nothing. It is
- * given only to the trusted extension's environment, never into a sandbox and
- * never onto a model-facing surface (INF-007).
+ * never written to a file: PR-001 asks for a host-only channel, and a file at a
+ * derivable path under the run directory is not one — it is readable by every
+ * process of this user, which is exactly the class of caller the Principal's
+ * authority must not admit. It travels instead on a descriptor only the host
+ * that started the broker holds, and from there into the trusted extension's
+ * environment, never into a sandbox and never onto a model-facing surface
+ * (INF-007).
+ *
+ * The credential alone does not decide who the Principal is. The host names the
+ * session before the broker starts, so the broker knows which handle to expect
+ * rather than recording whichever one arrives first.
  *
  * This module is a codec: it decides what a credential looks like and where it
  * lives, and takes no filesystem capability of its own.
  */
 
-export const PRINCIPAL_CREDENTIAL_FILE = "principal.cred";
 /** The environment entry the host sets for the session it owns. */
 export const PRINCIPAL_CREDENTIAL_ENV = "OMA_PRINCIPAL_CREDENTIAL";
+/** The session this environment belongs to, as the host registered it. */
+export const PRINCIPAL_SESSION_ENV = "OMA_PRINCIPAL_SESSION";
 /** Bytes of randomness behind a credential, as hex digits. */
 export const PRINCIPAL_CREDENTIAL_HEX = 64;
+/** Hex digits of a session handle. Shorter than a credential because it names a
+ * session rather than authorising one. */
+export const PRINCIPAL_SESSION_HEX = 32;
 
 const CREDENTIAL = /^[0-9a-f]{64}$/;
-
-/** Inside the run directory, which is the user's alone and is never mounted
- * into a sandbox. Pure, like the rest of this module. */
-export function principalCredentialPath(runRoot: string): string {
-  return runRoot.endsWith("/") ? `${runRoot}${PRINCIPAL_CREDENTIAL_FILE}` : `${runRoot}/${PRINCIPAL_CREDENTIAL_FILE}`;
-}
+const SESSION = /^[0-9a-f]{32}$/;
 
 export function isPrincipalCredential(value: unknown): value is string {
   return typeof value === "string" && CREDENTIAL.test(value);
+}
+
+export function isPrincipalSessionHandle(value: unknown): value is string {
+  return typeof value === "string" && SESSION.test(value);
 }
 
 /** Compares two credentials without returning early on the first difference.
@@ -46,8 +58,21 @@ export function isPrincipalCredential(value: unknown): value is string {
  */
 export function credentialMatches(presented: unknown, expected: string): boolean {
   if (!isPrincipalCredential(presented) || !isPrincipalCredential(expected)) return false;
+  return sameFixedString(presented, expected, PRINCIPAL_CREDENTIAL_HEX);
+}
+
+/** The handle is compared the same way. It names a session rather than
+ * authorising one, but a caller that already holds the credential needs only
+ * the handle, so it is the second half of the secret and gets the same
+ * treatment. */
+export function sessionHandleMatches(presented: unknown, expected: string): boolean {
+  if (!isPrincipalSessionHandle(presented) || !isPrincipalSessionHandle(expected)) return false;
+  return sameFixedString(presented, expected, PRINCIPAL_SESSION_HEX);
+}
+
+function sameFixedString(left: string, right: string, length: number): boolean {
   let difference = 0;
-  for (let index = 0; index < PRINCIPAL_CREDENTIAL_HEX; index += 1)
-    difference |= presented.charCodeAt(index) ^ expected.charCodeAt(index);
+  for (let index = 0; index < length; index += 1)
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
   return difference === 0;
 }

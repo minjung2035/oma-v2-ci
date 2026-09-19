@@ -11,7 +11,11 @@ permissions:
 jobs:
   baseline:
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    # Above the sum of the per-check ceilings below, so the job clock can only
+    # fire after every check has had the time it was given -- otherwise a check
+    # still running inside its own budget would be killed by the outer one and
+    # the evidence would say "timeout" about work that was proceeding.
+    timeout-minutes: 210
     env:
       EVIDENCE: /tmp/oma-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -37,6 +41,8 @@ jobs:
         with:
           node-version: '26'
           package-manager-cache: false
+      - name: Install the sandbox the containment tests need
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
       - name: Install locked dependencies
         id: dependencies
         continue-on-error: true

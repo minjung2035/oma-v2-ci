@@ -4,7 +4,7 @@
  * model-facing CLI in the Resident rootfs (src/cli.ts) and shares no argv
  * parser, capability or socket with it. Nothing here is mounted into a sandbox.
  */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isValidSocietyName } from "../ids.js";
@@ -16,7 +16,6 @@ import { codeFor, fail } from "../tui/exit.js";
 import { openTerminal } from "../tui/screen.js";
 import { dashboardData } from "../tui/dashboard.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionProfile } from "../tui/session.js";
-import { principalCredentialPath, isPrincipalCredential } from "../protocol/principal-credential.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
@@ -50,20 +49,6 @@ function ensureConfiguration(configPath: string, society: string, stateRoot: str
     }));
     return readSettings(configPath);
   }
-}
-
-/** The credential the running broker published for this run, or null.
- *
- * Null is a real answer and is shown as one: there is no broker, or the file is
- * not a credential, so the Principal starts without society authority instead of
- * starting with a value that would fail at the first request for a reason the
- * user could not see. */
-function runningBrokerCredential(runRoot: string): string | null {
-  let text: string;
-  try { text = readFileSync(principalCredentialPath(runRoot), "utf8"); }
-  catch { return null; }
-  const value = text.trim();
-  return isPrincipalCredential(value) ? value : null;
 }
 
 function argOf(args: readonly string[], flag: string): string | undefined {
@@ -162,9 +147,10 @@ async function main(argv: readonly string[]): Promise<void> {
   // starts before the engine because the engine's authority comes from the
   // credential the running broker publishes: a session started first would hold
   // no authority and could not be given one afterwards.
+  const sessionHandle = newSessionHandle();
   broker = await superviseBroker({
     node: process.execPath, libdir: settings.config.installation.libdir,
-    society, runRoot, configPath,
+    society, runRoot, configPath, sessionHandle,
     onEvent: line => { app.line(`broker: ${line}`); app.draw(); },
   });
   if (broker.state.kind === "unavailable")
@@ -178,9 +164,14 @@ async function main(argv: readonly string[]): Promise<void> {
   });
   ensureDirectory(piRuntime.agentDir, 0o700);
   const coreExtension = join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension);
-  const credential = runningBrokerCredential(runRoot);
+  // Waiting for the credential is what makes the broker's endpoint ready before
+  // the engine that will use it exists; a process already started cannot be
+  // given an environment afterwards.
+  const credential = await broker.credential;
   if (credential === null)
-    app.line("broker가 없어 Principal은 사회에 요청을 보낼 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다.");
+    app.line(broker.state.kind === "already-running"
+      ? "이 society의 broker는 다른 프로세스가 소유하고 있어 Principal은 요청을 보낼 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다."
+      : "broker가 없어 Principal은 사회에 요청을 보낼 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다.");
   try {
     const profile = principalSessionProfile(configPath, society);
     session = PrincipalSession.start(
@@ -191,7 +182,7 @@ async function main(argv: readonly string[]): Promise<void> {
       limitsOf(settings.config.limits),
       principalEnvironment(
         { stateRoot, runRoot, libdir: settings.config.installation.libdir },
-        profile, settings.config.limits, { credential, sessionHandle: newSessionHandle() },
+        profile, settings.config.limits, { credential, sessionHandle },
       ),
       {
         onLine: line => app.line(line),

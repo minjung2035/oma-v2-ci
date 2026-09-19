@@ -9,6 +9,30 @@ export const systemdTestFiles = Object.freeze([
   "phase8.test.js",
   "crash-boundaries.test.js",
 ]);
+/** Tests a run reported but did not execute.
+ *
+ * A Node test run exits zero when tests skip, so the exit code alone cannot
+ * tell a suite that proved everything from one that quietly proved less --
+ * four sandbox tests skipping on a host without bubblewrap looks exactly like
+ * a pass. A summary that does not report these counts at all is treated the
+ * same way: an unreadable result is not a passing one.
+ */
+export function unrunTests(summary) {
+  const unrun = [];
+  for (const field of ["skipped", "todo", "cancelled"]) {
+    const line = new RegExp(`^# ${field} (\\d+)$`, "m").exec(summary ?? "");
+    if (line === null) unrun.push(`${field}: not reported`);
+    else if (Number(line[1]) > 0) unrun.push(`${field}: ${line[1]}`);
+  }
+  return unrun;
+}
+
+/** The individual tests a run marked as not executed, for a report that names
+ * them instead of only counting them. */
+export function unrunDirectives(summary) {
+  return (summary ?? "").split("\n").filter(line => / # (SKIP|TODO)\b/.test(line)).map(line => line.trim());
+}
+
 export function localTestFiles(compiled) {
   for (const required of systemdTestFiles)
     if (!compiled.includes(required))

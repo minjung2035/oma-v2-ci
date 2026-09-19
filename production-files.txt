@@ -15,6 +15,7 @@ src/broker/internal-dispatcher.ts
 src/broker/logs.ts
 src/broker/peer-authenticator.ts
 src/broker/peer-pin.ts
+src/broker/principal-endpoint.ts
 src/broker/public-dispatcher.ts
 src/broker/replies.ts
 src/broker/transport-spool.ts

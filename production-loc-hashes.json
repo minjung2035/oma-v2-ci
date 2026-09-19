@@ -1,6 +1,6 @@
 {
   "cloc": "2.08",
-  "manifest": "94a717224b1524bec73805336e63ebed7b1296539800741536988f90a0b1207a",
+  "manifest": "6bef72aea9d1ba17f2adcdea8a10b6733b18947b74440199e92149f545362155",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -44,7 +44,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "88b13e4d30af38a12645390cc64b89d37b4a104a1fdbd680cce5b08e802a8871"
+      "sha256": "cc2904457e7d897a23127abab0c4e8ebc446f8ae33b9bc5ef62f2b51410f9ba0"
     },
     {
       "path": "src/broker/composition.ts",
@@ -69,6 +69,10 @@
     {
       "path": "src/broker/peer-pin.ts",
       "sha256": "abbe6d424d7b7feb066146269c7edef3386e1ad7d47484951b2db24905acf056"
+    },
+    {
+      "path": "src/broker/principal-endpoint.ts",
+      "sha256": "ef60648e3d14f73f44ebd0ed8a7226fd4c0a032d5f8459a23887131c76177043"
     },
     {
       "path": "src/broker/public-dispatcher.ts",
@@ -272,7 +276,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "1297ab83bb9ab22a6b3a17a6106fbbee25e32cf36b209db9edbe2f5bc84cc58e"
+      "sha256": "468d54a3ca23dee2fcb0ad985537cad8101e55b000a8ea66faaa5f8dfe4e3693"
     },
     {
       "path": "src/entry/host.ts",
@@ -284,7 +288,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "f3768e7da78843ed4934b9852373cc787f63c07decbec9e2a0465dac01e07335"
+      "sha256": "00b5e5920238ec80f16221dacb3bae9e286e2f426214260b3e886e8412882f33"
     },
     {
       "path": "src/entry/runner.ts",
@@ -304,7 +308,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "bac41d0b93738b9295068559e2d986dfab514e2fc448bf9806437118034c1b6a"
+      "sha256": "0618bbcdd938cc2a8f720a13ad27ee1f165cd82b244ea6200fcc3d979521e4b8"
     },
     {
       "path": "src/extension/shared.ts",
@@ -464,7 +468,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "220d873d6f3d3dd10da41bb9806b649fd2df783734848bc0de0d4af772879718"
+      "sha256": "b60aaf6166e3ce9e976689a2fdb7310d13ee45b1b9bc95ac30d260a833ffa3c7"
     },
     {
       "path": "src/ports/ledger.ts",
@@ -476,7 +480,7 @@
     },
     {
       "path": "src/process/async.ts",
-      "sha256": "e1e7e45289f923da508663321ed2c1ed394576b6988a346a81cb9dd8096a2e42"
+      "sha256": "503df907ae047672ad698a40fa84ba0b33e7516462363c04331d04b31dcf22bf"
     },
     {
       "path": "src/process/command.ts",
@@ -524,7 +528,7 @@
     },
     {
       "path": "src/protocol/principal-credential.ts",
-      "sha256": "4018096d5d18dd60243dcae6b98f546b31c78318a2ab684420b2e68e7f07ee34"
+      "sha256": "17729b6603fafdec27ae1539d9b478522de77c3b569e5e893eed0fca898a52f2"
     },
     {
       "path": "src/protocol/receipt-codec.ts",
@@ -580,7 +584,7 @@
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
-      "sha256": "fa8527ab5a2eab3bec73b3e6d730e5e0dffc29c38f0667e2725cdb1ecbdafe59"
+      "sha256": "10a76586a20d904083c0f5692bab4564c006ffc9099da2bb006d78da7157916b"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
