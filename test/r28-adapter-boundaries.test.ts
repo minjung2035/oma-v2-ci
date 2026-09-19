@@ -142,7 +142,12 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.throws(() => sandbox.candidate("a".repeat(40), "checks"), errorCode("SPIKE_UNRESOLVED"));
 });
 
-test("R28: Pi adapter accepts only a settled pinned boundary from its owned RPC child", { timeout: 10000 }, async () => {
+// The run is the unit, not the message. Pi retries a retryable assistant
+// failure and compacts before continuing the same run, so a delivery that gave
+// up at the first failed message would report a provider failure for a batch
+// the engine went on to deliver. Both shapes must end at the same boundary.
+for (const retried of [false, true]) {
+test(`R28: Pi adapter accepts only a settled pinned boundary from its owned RPC child${retried ? ", including one the run reached after a failed message" : ""}`, { timeout: 10000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r28-pi-"));
   try {
     const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "view"].map(name => {
@@ -161,6 +166,7 @@ process.stdin.setEncoding("utf8"); let pending = "";
 process.stdin.on("data", chunk => { pending += chunk; const lines = pending.split("\\n"); pending = lines.pop();
   for (const line of lines) { if (!line) continue; const request = JSON.parse(line);
     process.stdout.write(JSON.stringify({ type: "response", id: request.id, command: "prompt", success: true }) + "\\n");
+    ${retried ? 'process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", stopReason: "error" } }) + "\\n");' : ""}
     process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", stopReason: "stop" } }) + "\\n");
     const batchId = request.message.split(" ").at(-1);
     const evidence = { adapterRevision: ${JSON.stringify(PI_ADAPTER_REVISION)}, batchId, incarnation: 1, sessionPath, entryId: "0123abcd" };
@@ -183,3 +189,4 @@ process.on("SIGTERM", () => process.exit(0));
       sessionPath: join(dirs.sessions!, "owned.jsonl"), entryId: "0123abcd" });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+}

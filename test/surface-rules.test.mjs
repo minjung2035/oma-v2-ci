@@ -184,6 +184,30 @@ test("settings-placement-owner, closed-switch and module-port-import", () => {
     findings => assert.ok(has(findings, "module-port-import")));
 });
 
+test("principal-turn-owner: the host never asks the engine to fold a prompt into a run already going", () => {
+  // Accept: a prompt written with nothing else in the message.
+  withTree({
+    "src/tui/session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text });',
+  }, findings => clean(findings, "principal-turn-owner"));
+  // Near miss: the batch's own delivery mode is a different thing with the
+  // same vocabulary, and it is the broker's fixed policy, not a turn joining
+  // another owner's run.
+  withTree({
+    "src/mail/batches.ts": 'export const batch = { deliveryMode: "followUp", notice: "mail" };',
+    "src/protocol/batch-view.ts": 'export const ok = (mode: string) => mode === "steer" || mode === "followUp";',
+  }, findings => clean(findings, "principal-turn-owner"));
+  // Reject, in each spelling the option can be written.
+  withTree({
+    "src/tui/session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text, streamingBehavior: "followUp" });',
+  }, findings => assert.ok(findings.some(value => value.rule === "principal-turn-owner" && value.file === "src/tui/session.ts")));
+  withTree({
+    "src/tui/session.ts": 'export const send = (text: string) => ({ type: "prompt", message: text, ["streamingBehavior"]: "steer" });',
+  }, findings => assert.ok(has(findings, "principal-turn-owner")));
+  withTree({
+    "src/runtime/pi-adapter.ts": 'export const key = "streamingBehavior";',
+  }, findings => assert.ok(has(findings, "principal-turn-owner")));
+});
+
 test("principal-session-env and principal-secret-env: the environment survives every hop, and the secret has none", () => {
   const producer = (extra = "") => `
 export function principalEnvironment(paths, profile, limits) {

@@ -202,11 +202,10 @@ function textOf(message: unknown): string {
 }
 
 /** Pure event projection so transcript behaviour is testable without spawning
- * a real Pi process.
+ * a real Pi process. What is running is not decided here: the session owns
+ * that, and this only turns an event into the line the transcript shows.
  */
-export function projectEvent(event: PiEvent): { readonly line?: string; readonly busy?: boolean } {
-  if (event.type === "turn_start") return { busy: true };
-  if (event.type === "agent_settled") return { busy: false };
+export function projectEvent(event: PiEvent): { readonly line?: string } {
   if (event.type === "message_end") {
     const message = event.message;
     if (message === null || typeof message !== "object" || Array.isArray(message)) return {};
@@ -216,7 +215,7 @@ export function projectEvent(event: PiEvent): { readonly line?: string; readonly
     if (role === "assistant") {
       const stop = String(record.stopReason ?? "");
       if (stop === "error" || stop === "aborted")
-        return { busy: false, line: `⚠ 응답이 ${stop} 상태로 끝났습니다.` };
+        return { line: `⚠ 응답이 ${stop} 상태로 끝났습니다.` };
       return text.length > 0 ? { line: text } : {};
     }
     if (role === "custom" && text.length > 0) return { line: `[알림] ${text}` };
@@ -230,19 +229,33 @@ export class PrincipalSession {
   private readonly channel: Socket;
   private sequence = 0;
   private closed = false;
-  /** Who owns the turn the engine is running, or null when it runs none.
+  /** Who owns the agent run the engine is performing, or null when it performs
+   * none.
    *
-   * Observing "not busy" and starting a turn have to be one step. The engine
+   * Observing "not running" and starting a run have to be one step. The engine
    * only reports `turn_start` after it has read the prompt, so a delivery that
    * looked at an event-driven flag could see an idle session between the
    * Human's prompt being written and that report, and put its own command into
-   * the same queue -- which is exactly the mixed attribution S-03 has not
+   * the same run -- which is exactly the mixed attribution S-03 has not
    * settled. Ownership is taken here, synchronously, before anything is
    * written, so there is no window between the check and the claim. */
   private owner: "human" | "delivery" | null = null;
-  /** Human turns the engine has queued behind the running one. The session
-   * stays the Human's until they have all run. */
-  private queuedHuman = 0;
+  /** Human prompts waiting for the session, in the order they were typed.
+   *
+   * They wait here and not in the engine's own follow-up queue. Pi drains that
+   * queue inside the run it is already performing and reports one
+   * `agent_settled` for the whole run, however many messages it drained. A
+   * prompt left there while a delivery was running would therefore become part
+   * of the delivery's run, and the boundary the trusted extension records for
+   * that run would cover the Human's turn as well. Held here, every run has
+   * exactly one owner and one boundary. */
+  private readonly waiting: string[] = [];
+  /** The prompt whose acceptance the engine has not answered yet. Pi answers a
+   * `prompt` command at preflight, before the run, and a rejection -- no model,
+   * no key, a compaction in progress -- is the only notice that the message was
+   * never accepted and that no run will start or settle for it. At most one is
+   * outstanding, because a prompt is only ever written to an idle engine. */
+  private unanswered: { readonly id: string; readonly role: "human" | "delivery" } | null = null;
 
   private constructor(private readonly child: ChildProcessWithoutNullStreams, limits: PiRpcLimits, private readonly sink: SessionSink) {
     this.rpc = new PiRpcClient(child, limits);
@@ -250,17 +263,7 @@ export class PrincipalSession {
     // the session so a restarted broker's credential can replace the old one.
     this.channel = child.stdio[HOST_CHANNEL_FD] as unknown as Socket;
     this.channel.on("error", () => {});
-    this.rpc.onEvent(event => {
-      // A settled turn releases the session, unless the engine is already
-      // holding Human prompts behind it.
-      if (event.type === "agent_settled") {
-        if (this.queuedHuman > 0) { this.queuedHuman -= 1; this.owner = "human"; }
-        else this.owner = null;
-      }
-      const projected = projectEvent(event);
-      if (projected.line !== undefined) this.sink.onLine(projected.line);
-      if (projected.busy !== undefined) this.sink.onBusy(projected.busy);
-    });
+    this.rpc.onEvent(event => this.observe(event));
     void this.rpc.completion.then(result => {
       this.closed = true;
       this.sink.onBusy(false);
@@ -284,14 +287,67 @@ export class PrincipalSession {
     return new PrincipalSession(child, limits, sink);
   }
 
+  /** The one place the session's state moves in answer to the engine. */
+  private observe(event: PiEvent): void {
+    if (event.type === "response" && event.command === "prompt" &&
+      this.unanswered !== null && event.id === this.unanswered.id) {
+      const { role } = this.unanswered;
+      this.unanswered = null;
+      if (event.success !== true) {
+        // Refused before acceptance: no run starts and none settles, so the
+        // claim has to be given back here or the session would stay the
+        // refused prompt's for the rest of its life -- and the Human would
+        // never learn that what they typed was not taken.
+        this.sink.onLine(`⚠ 엔진이 입력을 받아들이지 않았습니다: ${typeof event.error === "string" && event.error.length > 0 ? event.error : "사유를 알 수 없습니다"}`);
+        this.release(role);
+      }
+    }
+    // Pi settles a whole run, retries and queued continuations included, not
+    // one prompt. One of these ends whatever this session was running.
+    if (event.type === "agent_settled") this.free();
+    const projected = projectEvent(event);
+    if (projected.line !== undefined) this.sink.onLine(projected.line);
+    this.sink.onBusy(this.busy);
+  }
+
+  /** The run is over. A Human prompt that was waiting takes the session here,
+   * synchronously, so nothing can start between the two steps. */
+  private free(): void {
+    this.owner = null;
+    this.unanswered = null;
+    const next = this.waiting.shift();
+    if (next === undefined) return;
+    this.owner = "human";
+    void this.sendPrompt(this.nextRequestId(), next, "human").catch((error: unknown) => {
+      // The Human is told which of their prompts was not sent; the rest still
+      // go, in order, rather than disappearing with it.
+      this.sink.onLine(`⚠ 입력을 전송하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+      this.release("human");
+    });
+  }
+
+  private nextRequestId(): string {
+    this.sequence += 1;
+    return `oma-tui-${this.sequence}`;
+  }
+
+  /** Writes one prompt and remembers that the engine has yet to accept it. */
+  private async sendPrompt(id: string, message: string, role: "human" | "delivery"): Promise<void> {
+    this.unanswered = { id, role };
+    try { await this.rpc.send({ id, type: "prompt", message }); }
+    catch (error) { this.unanswered = null; throw error; }
+  }
+
   get running(): boolean { return !this.closed; }
 
   /** The engine's pid, which the broker checks is this process's own child
    * before it accepts the engine as the Principal. */
   get pid(): number | null { return this.closed ? null : this.child.pid ?? null; }
 
-  /** True while a turn is owned. Delivery waits for this to clear so that a
-   * batch's boundary is never confused with the end of a Human's turn. */
+  /** True while the session is spoken for. A Human prompt that arrives while it
+   * is takes the session the moment the run ends, in the same step that ends
+   * it, so this never reads false with one still waiting. Delivery waits for
+   * it to clear so a batch's boundary is never confused with a Human's turn. */
   get busy(): boolean { return this.owner !== null; }
 
   /** Hands the engine its credential on the private socket. A new one simply
@@ -304,46 +360,38 @@ export class PrincipalSession {
   /** Every event the engine emits, for the delivery owner. */
   onEvent(listener: (event: PiEvent) => void): () => void { return this.rpc.onEvent(listener); }
 
-  /** PR-002: asks the trusted extension to present a prepared batch. A
-   * slash command reaches the extension even mid-turn; the delivery owner
-   * still waits for an idle session so the boundary it observes is this
-   * batch's own. */
+  /** PR-002: asks the trusted extension to present a prepared batch. The
+   * session is claimed first, so the run this starts is the batch's alone and
+   * the boundary the extension reports for it belongs to no one else. */
   async deliver(batchId: string): Promise<void> {
     if (this.closed) throw new StoreError("PRINCIPAL_DISCONNECTED", "the principal session has ended");
     // Claimed before the command is written, and given back if it cannot be.
-    if (this.owner !== null)
-      throw new StoreError("BATCH_CONFLICT", "the principal session is already running a turn");
+    if (this.busy)
+      throw new StoreError("BATCH_CONFLICT", "the principal session is already spoken for");
     this.owner = "delivery";
-    try { await this.rpc.send({ id: batchId, type: "prompt", message: `/oma-deliver ${batchId}` }); }
+    try { await this.sendPrompt(batchId, `/oma-deliver ${batchId}`, "delivery"); }
     catch (error) { this.release("delivery"); throw error; }
   }
 
-  /** Gives the session back if this owner still holds it. A turn that never
-   * settles would otherwise keep it forever. */
+  /** Gives the session back if this owner still holds it, and lets whatever
+   * the Human has waiting take it. A run that never settles -- a delivery
+   * nobody answered, a prompt the engine refused -- would otherwise keep the
+   * session for good. */
   release(owner: "human" | "delivery"): void {
-    if (this.owner === owner) this.owner = null;
+    if (this.owner === owner) this.free();
   }
 
-  /** The Human is never made to wait for mail. When a turn is already running,
-   * the prompt is queued by the engine behind it rather than refused or
-   * interleaved: the running turn keeps its own boundary, and the session
-   * stays claimed until the queued prompts have run. */
+  /** The Human is never made to wait for mail, and never has to retype. A
+   * prompt typed while the session is spoken for waits here in order and is
+   * written the moment the session is free; it is never folded into the run
+   * already going, so that run keeps its own boundary. */
   async submit(text: string): Promise<void> {
     if (this.closed) { this.sink.onEnd("세션이 종료되어 전송할 수 없습니다."); return; }
-    this.sequence += 1;
     this.sink.onBusy(true);
-    const running = this.owner !== null;
-    if (running) this.queuedHuman += 1; else this.owner = "human";
-    try {
-      await this.rpc.send({
-        id: `oma-tui-${this.sequence}`, type: "prompt", message: text,
-        ...(running ? { streamingBehavior: "followUp" } : {}),
-      });
-    } catch (error) {
-      if (running) this.queuedHuman = Math.max(0, this.queuedHuman - 1);
-      else this.release("human");
-      throw error;
-    }
+    if (this.busy) { this.waiting.push(text); return; }
+    this.owner = "human";
+    try { await this.sendPrompt(this.nextRequestId(), text, "human"); }
+    catch (error) { this.release("human"); throw error; }
   }
 
   close(): void {

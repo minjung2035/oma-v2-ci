@@ -447,5 +447,46 @@
     "negativeTests": [
       "test/surface-consistency.test.ts#T107"
     ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "PR-002"
+    ],
+    "owner": "src/runtime/principal-delivery.ts#PrincipalDelivery",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/session.ts#PrincipalSession",
+      "src/runtime/principal-delivery.ts#PrincipalDelivery",
+      "src/runtime/principal-delivery.ts#principalHostBroker",
+      "src/broker/principal-endpoint.ts#PrincipalHostEndpoint",
+      "src/extension/delivery.ts#registerDelivery",
+      "src/storage/delivery-receipt.ts#publishDeliveryReceipt"
+    ],
+    "negativeTests": [
+      "test/principal-endpoint.test.ts#T114",
+      "test/oma-composition-policy.test.mjs#T119"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "IPC-011"
+    ],
+    "owner": "src/broker/principal-endpoint.ts#PrincipalEndpoint",
+    "entrypoint": "src/entry/broker.ts#main",
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/broker.ts#Broker",
+      "src/broker/principal-endpoint.ts#PrincipalEndpoint",
+      "src/runtime/supervision-channel.ts#openSupervisionChannel",
+      "src/protocol/host-channel.ts#HostChannelReader",
+      "src/broker/process-ancestry.ts#descendsFrom"
+    ],
+    "negativeTests": [
+      "test/principal-endpoint.test.ts#T114",
+      "test/principal-channel.test.ts#T114"
+    ]
   }
 ]

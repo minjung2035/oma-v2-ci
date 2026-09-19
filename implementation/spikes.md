@@ -67,6 +67,8 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 3. provider 미설정 격리 프로파일에서 assistant turn은 `Unknown provider: unknown`, `stopReason:'error'`로 종료 — 모델 없는 프로브의 기대 동작이다. provider 해석은 동봉 엔진이 소유하므로(INF-001) OMA 쪽 gate는 없다.
 4. RPC 계약(rpc.md) 확인: `steer` = 실행 중 assistant turn의 tool call들을 마친 뒤 다음 LLM 호출 전에 전달; `followUp` = agent 종료 후 전달; `set_steering_mode`(all/one-at-a-time) 존재. S-03의 steer/followUp 경로가 pinned Pi에 존재함을 실증.
 
+5. **run과 settle의 단위 (2026-09-20, 동봉 pi 0.85.1 원문 확인)**: `docs/rpc.md`는 `agent_end`를 "retry, compaction 또는 queued continuation이 뒤따를 수 있는 한 번의 낮은 수준 agent run 완료"로, `agent_settled`를 "full session-level run이 settle되어 자동 retry·compaction retry·queued follow-up이 남지 않은 시점"으로 구분한다. 구현(`dist/core/agent-session.js`)의 `_runAgentPrompt`는 `agent.prompt()` 뒤에 queue가 빌 때까지 `agent.continue()`를 돌리고 `finally`에서 `_emitAgentSettled()`를 한 번 호출한다. `prompt`의 `streamingBehavior`는 `isStreaming`일 때만 해석되고, 아니면 무시되어 새 run이 시작된다. → **queue에 든 prompt 수와 `agent_settled` 수는 같지 않다.** Principal session 소유권의 단위를 turn이 아니라 run으로 잡고, 대기 중인 Human prompt를 engine queue가 아니라 host에서 들고 있는 근거다.
+
 **결정**: 확장 command + custom message + deliverAs 경로는 pi 0.85.1에서 동작. 준비된 batch를 읽어 steer/followUp으로 안내하는 `pi-extension.ts` adapter 계약의 기반 확보.
 
 **후속 검증 필요**: 기본 followUp completion 경계는 아래와 같이 구현했지만, 두 tool 실행 중 steer의 tool-result 보존, 동시 prepared/두 번째 batch 귀속, 전체 kill-point matrix는 S-03 전체 판정을 위해 남아 있다.

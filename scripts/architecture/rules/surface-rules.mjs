@@ -541,6 +541,28 @@ function principalSessionEnvRules(root, findings) {
         `${name} is copied to the CLI from the engine's environment, but the Principal's session environment never sets it`));
 }
 
+/** PR-002: the host writes a prompt only into an engine that is running
+ * nothing.
+ *
+ * Pi's `streamingBehavior` exists to put a message into a run that is already
+ * going. OMA does not: a run belongs to one owner -- a Human prompt or a mail
+ * delivery -- and the trusted extension records one boundary per run, so a
+ * second owner's message inside a run makes that boundary cover both. The
+ * Human's prompts wait in the host instead. Naming the option in the product
+ * is therefore the mistake itself, whatever the value.
+ */
+function principalTurnOwnerRules(root, findings) {
+  for (const file of filesUnder(root, "src")) {
+    let named = false;
+    eachNode(sourceOf(root, file), node => {
+      if ((ts.isStringLiteralLike(node) || ts.isIdentifier(node)) && node.text === "streamingBehavior") named = true;
+    });
+    if (named)
+      findings.push(finding("principal-turn-owner", file,
+        "names streamingBehavior; OMA writes a prompt only into an engine running nothing, so a run has one owner and one boundary"));
+  }
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
   extensionRules(root, findings);
@@ -553,5 +575,6 @@ export function surfaceRuleFindings(root) {
   userPiRules(root, findings);
   ownerShapeRules(root, findings);
   principalSessionEnvRules(root, findings);
+  principalTurnOwnerRules(root, findings);
   return findings;
 }

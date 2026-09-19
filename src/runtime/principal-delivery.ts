@@ -12,8 +12,9 @@
  *   complete -> the broker marks the batch delivered
  *
  * Two rules keep this honest. It prepares only while the product runs (PR-002:
- * no UI, no new batch), and it delivers only while the session is idle, so the
- * boundary it observes is the batch's own turn and not the end of a Human's;
+ * no UI, no new batch), and it delivers only into a session nothing else is
+ * spoken for, so the agent run it observes is the batch's alone -- the Human's
+ * prompts wait in the host until it is over rather than joining it;
  * attributing a boundary inside a turn already running is S-03's open
  * question, and this does not rely on an answer to it. And delivery is the
  * host's alone: the broker serves these two methods for the Principal only to
@@ -30,7 +31,8 @@ import type { PiEvent } from "./pi-rpc.js";
 /** What the delivery needs from the live session. */
 export interface DeliverySession {
   readonly running: boolean;
-  /** True while any turn is owned, by the Human or by a delivery. */
+  /** True while the session is spoken for -- by the run in progress, or by a
+   * Human prompt already typed and waiting for it. */
   readonly busy: boolean;
   onEvent(listener: (event: PiEvent) => void): () => void;
   /** Claims the session and asks the extension to present the batch. Throws
@@ -128,7 +130,7 @@ export class PrincipalDelivery {
   private async deliverOne(batch: PreparedBatch): Promise<void> {
     let accepted: boolean | null = null;
     let settled = false;
-    let providerFailed = false;
+    let lastStop = "";
     let ended = false;
     let boundary: ReturnType<typeof boundaryOf> = null;
     let wake: () => void = () => {};
@@ -138,11 +140,14 @@ export class PrincipalDelivery {
       if (event.type === "response" && event.id === batch.id && event.command === "prompt")
         accepted = event.success === true;
       if (event.type === "message_end") {
+        // Remembered, not acted on. A failed assistant message is not the end
+        // of the run: Pi retries a retryable one and compacts before
+        // continuing, so only the last one before the run settles says how the
+        // delivery actually ended.
         const message = event.message;
         if (message && typeof message === "object" && !Array.isArray(message) &&
-          (message as Record<string, unknown>).role === "assistant" &&
-          ["error", "aborted"].includes(String((message as Record<string, unknown>).stopReason)))
-          providerFailed = true;
+          (message as Record<string, unknown>).role === "assistant")
+          lastStop = String((message as Record<string, unknown>).stopReason ?? "");
       }
       if (event.type === "agent_settled") { settled = true; everSettled = true; }
       const decoded = boundaryOf(event, batch);
@@ -159,9 +164,12 @@ export class PrincipalDelivery {
       for (;;) {
         if (!this.session.running) { ended = true; break; }
         if (accepted === false) throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the engine refused the delivery command");
-        if (providerFailed) throw new StoreError("PROVIDER_FAILED", "the principal's provider failed while delivering mail");
-        if (settled && boundary !== null) break;
-        if (settled && accepted === true) throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the turn settled without a delivery boundary");
+        if (settled) {
+          if (boundary !== null) break;
+          if (["error", "aborted"].includes(lastStop))
+            throw new StoreError("PROVIDER_FAILED", "the principal's provider failed while delivering mail");
+          if (accepted === true) throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the turn settled without a delivery boundary");
+        }
         const waitMs = accepted === null ? Math.max(0, acceptBy - (this.options.now ?? Date.now)()) : 1000;
         if (accepted === null && waitMs === 0)
           throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the engine did not accept the delivery command in time");

@@ -14,10 +14,10 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1092/1092 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1100/1100 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
-| `node scripts/loc.mjs` | **215 files / 19,999 code LOC** |
+| `node scripts/loc.mjs` | **215 files / 20,019 code LOC** |
 
 ### 현재 범위
 
@@ -235,9 +235,8 @@ Principal session 디렉터리는 receipt가 다른 agent와 같은 방식으로
 **idle 관측과 turn 시작이 원자적이지 않았다.** delivery는 session이 idle일 때만 시작해 S-03의 미결 질문에 기대지 않겠다는 것이 
 핵심 안전 주장이었는데, `busy`는 engine이 `turn_start`를 보고해야 켜졌다. Human이 prompt를 보낸 직후부터 engine이 그것을 보고할 
 때까지 session은 idle로 보였고, 그 사이에 delivery가 같은 queue에 자기 명령을 넣을 수 있었다. 이제 session 소유권을 무엇을 쓰기 
-전에 동기적으로 예약하고, Human prompt와 delivery가 같은 소유권을 쓴다. Human은 mail 때문에 기다리지 않는다: 이미 turn이 돌고 
-있으면 prompt를 engine이 그 turn 뒤에 실행하도록 큐에 넣고, 큐에 든 Human prompt가 남아 있는 동안 session은 Human의 것으로 남아 
-두 turn 사이에 delivery가 끼어들지 않는다. settle되지 않고 끝난 delivery는 예약을 돌려준다.
+전에 동기적으로 예약하고, Human prompt와 delivery가 같은 소유권을 쓴다. settle되지 않고 끝난 delivery는 예약을 돌려준다. 
+예약 자체는 옳았지만 이때 정한 **대기 방식**은 Pi의 계약을 잘못 읽은 것이었고, 다섯 번째 감사에서 고쳤다(바로 아래).
 
 **PR-003의 저장 경계를 어겼다.** 직전 커밋은 receipt 검증을 Resident와 통일하려고 Principal session을 
 `agents/principal/runner/sessions`로 옮겼는데, PR-003은 Human 기록을 `principal/private`에 두라고 규정한다. 경로 소유자를 
@@ -253,6 +252,54 @@ prepared로 남아 다시 전달된다.
 
 **CLI 출력 상한이 바이트가 아니었다.** 디코드한 문자열 길이로 세고 있어서 3바이트 문자 위주 출력이면 선언한 1 MiB보다 훨씬 
 많이 쥐었다. 문자로 세는 구현으로 되돌리면 1,048,576바이트 상한에 3,141,759바이트를 쥔다.
+
+### Principal 제품 경로: 다섯 번째 감사에서 닫은 것
+
+**`agent_settled`를 prompt 하나당 하나로 읽었다.** 네 번째 수정은 turn이 돌고 있을 때 Human prompt를 engine의 follow-up queue에 
+넣고(`streamingBehavior: "followUp"`) 대기 중인 prompt 수만큼 `agent_settled`를 세었다. 동봉한 Pi 0.85.1의 계약은 그렇지 않다. 
+`docs/rpc.md`는 `agent_settled`를 "full session-level run이 settle된 뒤"로 정의하고, `agent_end`만 "retry·compaction·queued 
+continuation이 뒤따를 수 있는" 한 번의 낮은 수준 run으로 구분한다. 구현(`dist/core/agent-session.js`의 `_runAgentPrompt`)도 
+`agent.prompt()` 뒤에 queue가 빌 때까지 `agent.continue()`를 돌리고 `finally`에서 `agent_settled`를 **한 번** 낸다. 그래서 
+queue에 든 prompt가 몇 개든 settle은 하나였고, 세어 둔 나머지만큼 소유권이 영원히 Human에게 남아 이후 delivery가 모두 
+`deferred`가 되었다. 더 나쁘게는, queue에 든 Human turn이 delivery와 **같은 run** 안에서 실행되므로 확장이 그 run에 대해 기록하는 
+boundary가 Human의 turn까지 덮었다 — "idle session에 넣었으니 boundary는 delivery 자신의 것"이라는 PR-002의 안전 주장이 
+성립하지 않았다.
+
+이제 소유권의 단위를 engine의 agent run으로 못박았다. session이 예약돼 있는 동안 들어온 Human prompt는 engine이 아니라 host가 
+순서대로 들고 있다가, run이 끝나는 바로 그 단계에서 — 소유권을 동기적으로 다시 잡으면서 — 자기 prompt로 쓴다. `streamingBehavior`는 
+제품 어디에도 쓰지 않으며, 그것을 이름으로라도 쓰면 architecture rule `principal-turn-owner`가 실패한다(accept·reject·near-miss 
+fixture 포함). 그래서 run 하나에는 소유자도 boundary도 하나뿐이고, Human은 기다리지도 다시 입력하지도 않는다.
+
+역검증: prompt를 engine queue로 되돌리면 "the Human's prompt was written into the delivery's own run"으로, settle 때 쓰지 않게 
+하면 "the Human's prompt was never written after the delivery settled"로 실패한다. 세 개를 대기시키고 run을 세 번 돌리는 시험은 
+각 prompt가 순서대로 정확히 한 번씩 쓰이고 마지막 settle에서 session이 풀리는 것을 본다.
+
+**engine이 거절한 prompt를 아무도 읽지 않았다.** `PiRpcClient.send()`는 stdin에 JSON을 쓴 것까지만 기다린다. Pi는 `prompt`를 
+preflight에서 답하고, 모델이 없거나 compaction 중이면 `success:false`로 **수락 전에** 거절한다. 그 경우 run이 시작되지도 
+끝나지도 않으므로 예약은 영원히 남고 사용자는 입력이 사라진 것을 알 방법이 없었다. 이제 session이 자기 request id의 응답을 
+확인해 거절이면 예약을 돌려주고 화면에 사유를 적는다. 대기 중이던 Human prompt가 있으면 그것이 이어서 실행된다. 응답 확인을 
+끄면 "a refused prompt left the session claimed"로 실패한다.
+
+**delivery가 실패한 assistant message 하나로 포기했다.** `message_end`는 `agent_settled`보다 앞선다. Pi는 retry 가능한 실패를 
+다시 시도하고 compaction 뒤 같은 run을 이어가므로, 첫 실패 message에서 claim을 돌려주면 아직 streaming 중인 engine에 대해 
+session이 비었다고 말하는 셈이었다. 이제 마지막 assistant stop reason만 기억하고 run이 settle될 때 판정한다. 되돌리면 "the 
+delivery gave up on a failed message before the run had settled"로 실패한다.
+
+**같은 오독이 Resident 경로에도 있었다.** 감사는 Principal만 지적했지만 `PiAdapter`도 첫 실패 assistant message에서 
+`providerFailed`를 세우고 즉시 깨어났다. Resident는 batch마다 engine을 새로 띄우므로 소유권 문제는 없지만, Pi가 retry로 
+이어서 끝낸 run의 batch를 실패로 보고하는 것은 같다. 여기도 마지막 stop reason만 기억하고 run이 settle될 때 판정하며, 
+boundary가 있으면 도중의 실패는 판정을 바꾸지 않는다. R28의 fake Pi를 실패 message를 한 번 낸 뒤 이어서 끝내는 형태로도 
+돌리도록 두 경우 모두 시험한다. 수정을 되돌리면 그 시험이 실제로 전달된 batch를 거절한다 —
+`SESSION_BOUNDARY_UNCONFIRMED`: 실패 message에서 깨어나는 바람에 boundary가 도착하기 전에 증거를 판정한다.
+
+**T119의 oracle이 폐기된 경로를 성공 조건으로 두고 있었다.** entry 배선 시험의 stand-in이 `principal/private/sessions`로 되돌린 
+뒤에도 `agents/principal/runner/sessions`를 돌려주고 그 값을 단언했다. 경로 규칙을 시험이 따로 적어 두면 두 번째 소유자가 생긴다. 
+이제 stand-in은 소유자가 답했다는 표시만 돌려주고, 시험은 entry가 그 값을 그대로 넘겼는지만 본다 — entry가 경로를 스스로 적으면 
+"the entry decided the session directory itself"로 실패한다. 실제 경로가 무엇인지는 소유자를 시험하는 T114가 단언한다.
+
+**PR-002와 IPC-011에 authoritative owner가 없었다.** 구현은 있는데 `source-owners.json`에 링크가 없어 owner·entrypoint·callPath·
+negative test가 비어 있었다. 둘 다 채웠다. TRACE-002가 요구하는 나머지(현재 revision의 실행 증거)는 다른 requirement와 마찬가지로 
+compliance 기록 절차를 거치지 않았으므로 상태는 `unverified` 그대로다.
 
 ### 남은 것
 
@@ -322,7 +369,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **215 files / 19,999 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **215 files / 20,019 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

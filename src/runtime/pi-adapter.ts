@@ -143,7 +143,8 @@ export class PiAdapter {
     const rpc = new PiRpcClient(child, this.options.limits);
     let accepted = false;
     let settled = false;
-    let providerFailed = false;
+    let lastStop = "";
+    const providerFailed = (): boolean => ["error", "aborted"].includes(lastStop);
     let boundary: DeliveryBoundary | null = null;
     let wake!: () => void;
     const changed = new Promise<void>((resolve) => {
@@ -157,22 +158,26 @@ export class PiAdapter {
       )
         accepted = event.success === true;
       if (event.type === "message_end") {
+        // Remembered, not acted on. Pi retries a retryable failure and
+        // compacts before continuing the same run, so one failed assistant
+        // message is not the end of it; only the last one before the run
+        // settles says how the delivery ended.
         const message = event.message;
         if (
           message &&
           typeof message === "object" &&
           !Array.isArray(message) &&
-          (message as Record<string, unknown>).role === "assistant" &&
-          ["error", "aborted"].includes(
-            String((message as Record<string, unknown>).stopReason),
-          )
+          (message as Record<string, unknown>).role === "assistant"
         )
-          providerFailed = true;
+          lastStop = String(
+            (message as Record<string, unknown>).stopReason ?? "",
+          );
       }
       if (event.type === "agent_settled") settled = true;
       const decoded = boundaryOf(event, batch);
       if (decoded) boundary = decoded;
-      if ((accepted && settled && boundary) || providerFailed) wake();
+      if ((accepted && settled && boundary) || (settled && providerFailed()))
+        wake();
     });
     const deliveryDeadline = deadline(
       this.options.limits.idleStreamSeconds * 1000,
@@ -200,7 +205,7 @@ export class PiAdapter {
         }),
       ]);
       deliveryDeadline.cancel();
-      if (providerFailed)
+      if (!boundary && providerFailed())
         throw failure(
           "PROVIDER_FAILED",
           "Pi provider failed before the batch reached a settled boundary",

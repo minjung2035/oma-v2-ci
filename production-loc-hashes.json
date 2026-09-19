@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "4a8bd565cc7de5eeb73d60eb21218a4589afc2e9110d2d987918563bba5d27ca",
-  "report": "0d4e55f754d71acf3e69ea449bcfa9ebd5663eeea727fad66408c2ff7612fa3e",
+  "report": "c916df6ba4d3c234e81a8985f41e0953a4544230b5ef1b2f78bdc57cc94c36ed",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -621,7 +621,7 @@
     },
     {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "9a1366219aa858840f540dd7706f909570b6277b1e67a035dbdd59aa50dc70fe"
+      "sha256": "662307d3ed19682384e852d3e43c7cb9fd204b10b6117700bcefbd4e54f52b68"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -637,7 +637,7 @@
     },
     {
       "path": "src/runtime/principal-delivery.ts",
-      "sha256": "40c73d8fb2fd08bf47368514c6d37515095279ed52892a21f0a40d1f1582fc6d"
+      "sha256": "d15e9cfc22d9574ec8e5ba53dbdb6e24dc116f51666bfc66ea687eccf10df744"
     },
     {
       "path": "src/runtime/process-lock.ts",
@@ -789,7 +789,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "b702df03322d72064106d8d7bd88dadb6415e55c7884c5ae72838c501df64638"
+      "sha256": "b654cd12ae9b0333a966596559a59829066a605451ceb3f511da488bd8b22b1a"
     },
     {
       "path": "src/tui/sources/extensions.ts",

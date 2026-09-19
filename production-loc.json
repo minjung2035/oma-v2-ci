@@ -1,11 +1,11 @@
 {"header" : {
   "cloc_url"           : "github.com/AlDanial/cloc",
   "cloc_version"       : "2.08",
-  "elapsed_seconds"    : 0.0882680416107178,
+  "elapsed_seconds"    : 0.0870809555053711,
   "n_files"            : 215,
-  "n_lines"            : 23286,
-  "files_per_second"   : 2435.7626619632,
-  "lines_per_second"   : 263810.089983604,
+  "n_lines"            : 23347,
+  "files_per_second"   : 2468.96693717077,
+  "lines_per_second"   : 268106.842242446,
   "report_file"        : "production-loc.json"},
 "src/broker.ts" :{
   "blank": 3,
@@ -57,6 +57,11 @@
   "comment": 8,
   "code": 256,
   "language": "TypeScript"},
+"src/tui/session.ts" :{
+  "blank": 28,
+  "comment": 122,
+  "code": 252,
+  "language": "TypeScript"},
 "src/runtime/inference-relay.ts" :{
   "blank": 29,
   "comment": 63,
@@ -77,11 +82,6 @@
   "comment": 2,
   "code": 235,
   "language": "TypeScript"},
-"src/tui/session.ts" :{
-  "blank": 24,
-  "comment": 95,
-  "code": 235,
-  "language": "TypeScript"},
 "src/extension/mail-tools.ts" :{
   "blank": 5,
   "comment": 37,
@@ -97,15 +97,15 @@
   "comment": 8,
   "code": 222,
   "language": "TypeScript"},
+"src/runtime/pi-adapter.ts" :{
+  "blank": 1,
+  "comment": 19,
+  "code": 221,
+  "language": "TypeScript"},
 "src/storage/delivery-receipt.ts" :{
   "blank": 1,
   "comment": 0,
   "code": 221,
-  "language": "TypeScript"},
-"src/runtime/pi-adapter.ts" :{
-  "blank": 1,
-  "comment": 15,
-  "code": 220,
   "language": "TypeScript"},
 "src/entry/oma.ts" :{
   "blank": 19,
@@ -297,15 +297,15 @@
   "comment": 12,
   "code": 136,
   "language": "TypeScript"},
+"src/runtime/principal-delivery.ts" :{
+  "blank": 9,
+  "comment": 52,
+  "code": 135,
+  "language": "TypeScript"},
 "src/storage/contained-fs.ts" :{
   "blank": 1,
   "comment": 15,
   "code": 135,
-  "language": "TypeScript"},
-"src/runtime/principal-delivery.ts" :{
-  "blank": 9,
-  "comment": 46,
-  "code": 133,
   "language": "TypeScript"},
 "src/leaf.ts" :{
   "blank": 13,
@@ -1083,7 +1083,7 @@
   "code": 1,
   "language": "TypeScript"},
 "SUM": {
-  "blank": 915,
-  "comment": 2372,
-  "code": 19999,
+  "blank": 919,
+  "comment": 2409,
+  "code": 20019,
   "nFiles": 215} }

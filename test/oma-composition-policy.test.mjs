@@ -13,6 +13,7 @@ import { Script } from "node:vm";
 import ts from "typescript";
 
 const SESSION_ENVIRONMENT = { OMA_MARKER: "built by principalEnvironment" };
+const SESSION_DIR_FROM_OWNER = "answered-by-principalSessionDir";
 
 /** A supervised broker the test drives: it becomes ready when told, answers
  * registrations with the next credential in `credentials`, and records every
@@ -80,7 +81,13 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../tui/dashboard.js": { dashboardData: () => ({}) },
     "../tui/session.js": {
       newSessionHandle: () => "h".repeat(32),
-      principalSessionDir: root => `${root}/agents/principal/runner/sessions`,
+      // The entry must take the session directory from its owner and pass it
+      // through untouched. A path spelled out here would be a second, silent
+      // owner of PR-003's rule -- and was: it still named the location the
+      // owner had already moved away from, so this test went on asserting the
+      // very layout the product had stopped using. What the owner actually
+      // answers is asserted where the owner is tested.
+      principalSessionDir: root => { calls.push("principalSessionDir"); return `${root}/${SESSION_DIR_FROM_OWNER}`; },
       principalEnvironment: (...args) => {
         calls.push(`principalEnvironment/${args.length}`);
         return { ...SESSION_ENVIRONMENT };
@@ -159,7 +166,8 @@ test("T119: the engine starts at once, with the environment its owner builds and
   assert.ok(calls.includes("principalEnvironment/3"));
   assert.deepEqual(started.environment, SESSION_ENVIRONMENT);
   assert.match(started.paths.workspace, /principal\/private$/);
-  assert.match(started.paths.sessionDir, /agents\/principal\/runner\/sessions$/);
+  assert.ok(calls.includes("principalSessionDir"), "the entry decided the session directory itself");
+  assert.equal(started.paths.sessionDir, `/state/oma/fixture/${SESSION_DIR_FROM_OWNER}`);
   const order = name => calls.indexOf(name);
   assert.ok(order("provisionSociety") < order("superviseBroker"));
 });

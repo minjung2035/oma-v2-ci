@@ -586,37 +586,38 @@ test("T114: provisioning creates the directories the Principal's engine and its 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-/** The real PrincipalSession, driven without an engine: the transport is a
- * stand-in that records what was written, so the ownership rules can be tested
- * exactly as the product applies them. */
+/** The real PrincipalSession, driven without an engine.
+ *
+ * The transport is a stand-in that records what was written, and the engine's
+ * events go through the session's own handler -- the one the constructor
+ * installs -- so the ownership rules are exercised exactly as the product
+ * applies them and not as a test re-states them. */
 function reservedSession(): {
   readonly session: PrincipalSession;
   readonly sent: Record<string, unknown>[];
-  readonly settle: () => void;
+  readonly lines: string[];
+  readonly emit: (event: PiEvent) => void;
 } {
   const sent: Record<string, unknown>[] = [];
-  let emit: (event: PiEvent) => void = () => {};
+  const lines: string[] = [];
   const session = Object.create(PrincipalSession.prototype) as PrincipalSession;
   const state = session as unknown as {
-    rpc: { send: (message: Record<string, unknown>) => Promise<void>; onEvent: (listener: (event: PiEvent) => void) => () => void };
-    sink: { onLine: () => void; onBusy: () => void; onEnd: () => void };
-    owner: "human" | "delivery" | null; queuedHuman: number; closed: boolean; sequence: number;
+    rpc: { send: (message: Record<string, unknown>) => Promise<void> };
+    sink: { onLine: (line: string) => void; onBusy: (busy: boolean) => void; onEnd: (reason: string) => void };
+    owner: "human" | "delivery" | null; waiting: string[]; unanswered: unknown;
+    closed: boolean; sequence: number;
+    observe: (event: PiEvent) => void;
   };
-  state.rpc = {
-    send: async message => { sent.push(message); },
-    onEvent: listener => { emit = listener; return () => {}; },
-  };
-  state.sink = { onLine: () => {}, onBusy: () => {}, onEnd: () => {} };
-  state.owner = null; state.queuedHuman = 0; state.closed = false; state.sequence = 0;
-  // The real event projection decides when the session is released.
-  const settle = (): void => {
-    const projected = state as unknown as { owner: "human" | "delivery" | null; queuedHuman: number };
-    if (projected.queuedHuman > 0) { projected.queuedHuman -= 1; projected.owner = "human"; }
-    else projected.owner = null;
-  };
-  void emit;
-  return { session, sent, settle };
+  state.rpc = { send: async message => { sent.push(message); } };
+  state.sink = { onLine: line => lines.push(line), onBusy: () => {}, onEnd: () => {} };
+  state.owner = null; state.waiting = []; state.unanswered = null;
+  state.closed = false; state.sequence = 0;
+  return { session, sent, lines, emit: event => { state.observe(event); } };
 }
+
+/** Pi answers a prompt command at preflight, before the run it starts. */
+const accept = (id: string): PiEvent => ({ type: "response", id, command: "prompt", success: true });
+const settled: PiEvent = { type: "agent_settled" };
 
 test("T114 / PR-002: a Human prompt claims the session before it is written, so delivery cannot slip in", async () => {
   const { session, sent } = reservedSession();
@@ -624,7 +625,7 @@ test("T114 / PR-002: a Human prompt claims the session before it is written, so 
   // The moment the Human's prompt is submitted the session is claimed --
   // without waiting for the engine to report a turn. Between those two points
   // a delivery used to see an idle session and put its command in the same
-  // queue, which is the mixed attribution S-03 has not settled.
+  // run, which is the mixed attribution S-03 has not settled.
   const submitted = session.submit("what is the plan?");
   assert.equal(session.busy, true, "the session was still idle after a prompt was submitted");
   await submitted;
@@ -633,25 +634,179 @@ test("T114 / PR-002: a Human prompt claims the session before it is written, so 
   assert.equal(sent.length, 1, "a delivery was written into a session the Human had claimed");
 });
 
-test("T114 / PR-002: a delivery claims the session, and the Human is queued rather than refused or interleaved", async () => {
-  const { session, sent, settle } = reservedSession();
+test("T114 / PR-002: a Human prompt typed during a delivery waits in the host and is not folded into the delivery's run", async () => {
+  const { session, sent, emit } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  emit(accept("b-00000000-0000-4000-8000-000000000000"));
   assert.equal(session.busy, true);
-  // The Human is never made to wait for mail: the prompt goes to the engine,
-  // queued behind the delivery's turn so that turn keeps its own boundary.
+
+  // The Human is never made to wait for mail, and never has to retype -- but
+  // the prompt does not reach the engine yet. Pi drains its own follow-up
+  // queue inside the run it is already performing and reports one
+  // `agent_settled` for the whole of it, so a prompt queued there would have
+  // run inside the delivery's run and the boundary the extension records for
+  // that run would have covered the Human's turn too.
   await session.submit("meanwhile, about the release");
-  assert.equal(sent.length, 2);
-  assert.equal(sent[1]!.streamingBehavior, "followUp");
-  // The session stays claimed while the queued prompt is still to run, so a
-  // second delivery does not start between the two turns.
-  settle();
-  assert.equal(session.busy, true, "the session was released while a Human prompt was still queued");
-  await assert.rejects(session.deliver("b-00000000-0000-4000-8000-000000000001"));
-  settle();
-  assert.equal(session.busy, false);
+  assert.equal(sent.length, 1, "the Human's prompt was written into the delivery's own run");
+
+  // The delivery's run ends. That one settle ends the whole run, and the
+  // Human's prompt is written now -- as a prompt of its own, with no
+  // streaming behaviour, because the engine is idle again.
+  emit(settled);
+  assert.equal(sent.length, 2, "the Human's prompt was never written after the delivery settled");
+  assert.deepEqual(sent[1], { id: "oma-tui-1", type: "prompt", message: "meanwhile, about the release" });
+  // And the session is the Human's until that prompt's own run settles.
+  assert.equal(session.busy, true, "the session was released while the Human's prompt was still running");
+  await assert.rejects(session.deliver("b-00000000-0000-4000-8000-000000000001"),
+    (error: unknown) => error instanceof StoreError && error.code === "BATCH_CONFLICT");
+
+  emit(accept("oma-tui-1"));
+  emit(settled);
+  assert.equal(session.busy, false, "one settle did not end the Human's run");
   await session.deliver("b-00000000-0000-4000-8000-000000000001");
   assert.equal(sent.length, 3);
-  assert.equal(sent[2]!.streamingBehavior, undefined);
+});
+
+test("T114 / PR-002: every prompt typed while the session was spoken for runs, once each, in order", async () => {
+  // The defect this pins: counting settles per queued prompt. Pi emits one
+  // `agent_settled` per run however many messages that run drained, so a
+  // session that expected one settle per queued prompt would keep a claim
+  // nobody ever gave back and defer every later delivery for good.
+  const { session, sent, emit } = reservedSession();
+  await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  for (const text of ["first", "second", "third"]) await session.submit(text);
+  assert.equal(sent.length, 1, "prompts reached the engine while the delivery owned the session");
+
+  const written: string[] = [];
+  for (let run = 0; run < 3; run += 1) {
+    emit(settled);
+    const last = sent.at(-1)!;
+    written.push(String(last.message));
+    emit(accept(String(last.id)));
+    assert.equal(session.busy, true, `the session was free with ${2 - run} prompts still waiting`);
+  }
+  emit(settled);
+  assert.equal(session.busy, false, "the session never came back after its Human prompts had run");
+  assert.deepEqual(written, ["first", "second", "third"]);
+  assert.equal(sent.length, 4, "a prompt was written more than once");
+  assert.deepEqual(sent.map(message => message.id), ["b-00000000-0000-4000-8000-000000000000", "oma-tui-1", "oma-tui-2", "oma-tui-3"]);
+});
+
+test("T114 / PR-002: a prompt the engine refuses gives the session back and is said on the screen", async () => {
+  // Pi answers `prompt` at preflight and refuses before acceptance -- no model,
+  // no key, a compaction in progress. No run starts, so no run settles: without
+  // reading that answer the session would stay claimed for the rest of its
+  // life and the Human would never learn their input was not taken.
+  const { session, sent, lines, emit } = reservedSession();
+  await session.submit("hello");
+  assert.equal(session.busy, true);
+  emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "no model selected" });
+  assert.equal(session.busy, false, "a refused prompt left the session claimed");
+  assert.ok(lines.some(line => line.includes("no model selected")), lines.join(" | "));
+  // And the session works afterwards.
+  await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  assert.equal(sent.length, 2);
+});
+
+test("T114 / PR-002: a refused delivery command gives the session back and lets the waiting Human through", async () => {
+  const { session, sent, emit } = reservedSession();
+  await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  await session.submit("while that runs");
+  emit({ type: "response", id: "b-00000000-0000-4000-8000-000000000000", command: "prompt", success: false, error: "busy" });
+  assert.equal(sent.length, 2, "the Human's waiting prompt was dropped with the refused delivery");
+  assert.equal(sent[1]!.message, "while that runs");
+  assert.equal(session.busy, true);
+});
+
+test("T114 / PR-002: a response for a prompt the session has moved on from changes nothing", async () => {
+  const { session, sent, lines, emit } = reservedSession();
+  await session.submit("hello");
+  emit(settled);
+  assert.equal(session.busy, false);
+  // A late refusal for the prompt whose run already ended must not take a
+  // claim away from whatever owns the session now.
+  await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "stale" });
+  assert.equal(session.busy, true, "a stale response released a delivery's claim");
+  assert.equal(lines.length, 0, lines.join(" | "));
+});
+
+/** A stand-in session for the delivery owner: it records the claim and lets
+ * the test emit exactly the events an engine would. */
+function stubSession(): {
+  readonly session: DeliverySession;
+  readonly claims: string[];
+  readonly emit: (event: PiEvent) => void;
+} {
+  const claims: string[] = [];
+  const listeners = new Set<(event: PiEvent) => void>();
+  let claimed = false;
+  return {
+    claims,
+    emit: event => { for (const listener of [...listeners]) listener(event); },
+    session: {
+      running: true,
+      get busy() { return claimed; },
+      onEvent: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+      deliver: async () => { claimed = true; claims.push("deliver"); },
+      release: () => { claimed = false; claims.push("release"); },
+    },
+  };
+}
+
+const ONE_BATCH = {
+  id: "b-00000000-0000-4000-8000-000000000000", agent: "principal" as const, incarnation: 0,
+  messageIds: [], deliveryMode: "followUp" as const, notice: "", sessionPath: null, indexPath: "/inbox.md" as const,
+};
+
+function failedMessage(stopReason: string): PiEvent {
+  return { type: "message_end", message: { role: "assistant", stopReason, content: [] } };
+}
+
+test("T114 / PR-002: a failed assistant message does not end the delivery -- the run settling does", async () => {
+  // `message_end` comes before `agent_settled`, and Pi retries a retryable
+  // failure and compacts before continuing. Giving the session back at the
+  // first failed message would release a claim on a run Pi is still
+  // performing, and the next thing written would be refused by an engine that
+  // is in fact streaming.
+  const { session, claims, emit } = stubSession();
+  const delivery = new PrincipalDelivery(session,
+    { prepare: async () => ONE_BATCH, complete: async () => {} },
+    { stateRoot: "/nonexistent", frameBytes: LIMITS.frameBytes, acceptMs: 60_000, retryAfterMs: 1000 });
+  const outcome = delivery.tick();
+  let finished = false;
+  void outcome.then(() => { finished = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  emit({ type: "response", id: ONE_BATCH.id, command: "prompt", success: true });
+  emit(failedMessage("error"));
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(finished, false, "the delivery gave up on a failed message before the run had settled");
+  assert.deepEqual(claims, ["deliver"], "the session was released while the engine was still running");
+
+  // Pi retried and this run ended in a terminal stop; the failure is over.
+  // With no boundary the batch is still not delivered, but the reason is the
+  // missing boundary -- not the provider.
+  emit(failedMessage("stop"));
+  emit({ type: "agent_settled" });
+  const result = await outcome;
+  assert.equal(result.kind, "failed");
+  assert.match((result as { reason: string }).reason, /without a delivery boundary/);
+  assert.deepEqual(claims, ["deliver"], "the delivery released a claim the settled run had already given back");
+});
+
+test("T114 / PR-002: a run that settles on a failed assistant message is reported as the provider failing", async () => {
+  const { session, emit } = stubSession();
+  const delivery = new PrincipalDelivery(session,
+    { prepare: async () => ONE_BATCH, complete: async () => {} },
+    { stateRoot: "/nonexistent", frameBytes: LIMITS.frameBytes, acceptMs: 60_000, retryAfterMs: 1000 });
+  const outcome = delivery.tick();
+  await new Promise(resolve => setImmediate(resolve));
+  emit({ type: "response", id: ONE_BATCH.id, command: "prompt", success: true });
+  emit(failedMessage("error"));
+  emit({ type: "agent_settled" });
+  const result = await outcome;
+  assert.equal(result.kind, "failed");
+  assert.match((result as { reason: string }).reason, /provider failed/);
 });
 
 test("T114 / PR-002: a delivery the engine never answers gives the session back", async () => {
