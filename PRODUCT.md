@@ -89,8 +89,9 @@ tool이 많아지면 모델이 보는 표면이 넓어지므로, role별로 DIRE
 
 정직하게 적는다. 아래는 제품 목표에 포함되지만 현재 충족되지 않았다.
 
-- **Resident sandbox 안의 엔진 연결** — 워커를 실제로 돌리는 경로가 아직 배선되지 않았다.
-- **broker 관측** — `principal.attach` 미구현이라 Dashboard의 Active/Pending/Status가 항상 `unknown`이다.
+- **봉인된 Resident의 provider 연결** — sandbox 배선과 relay는 됐고 실제 소켓·실제 TLS provider로 확인했다. 남은 것은 credential 인계 한 조각이며, 그 경로가 broker를 지나므로 아래 bring-up과 같은 작업이다. 신뢰 rootfs를 선언하지 않은 배포는 여전히 비봉인이고, 그 상태는 Dashboard의 `Sandbox` 줄과 runner 시작 로그에 그대로 나온다.
+- **Dashboard의 broker 유래 값** — society bring-up은 됐고 `oma` 한 번으로 broker가 뜬다. 그런데 `status.get`의 권한이 cgroup 기반 actor 신원이라, 터미널에서 띄운 TUI가 읽을 권한을 가진 endpoint가 없다. TUI에 unit 신원을 주거나 관측 경로를 바꾸는 architecture 결정이 필요하다. 그때까지 Active/Pending/Status는 이유와 시각이 붙은 `unknown`이다.
+- **워커 실행** — canonical `main`은 빈 commit으로 심는다. 사용자의 코드를 society의 canonical 저장소로 가져오는 것은 별개 결정이고 아직 하지 않는다. GOAL이 없으면 활성화도 없으므로 워커는 아직 돌지 않는다.
 - **비용 상한** — inference를 엔진에 위임하면서 OMA가 multi-agent 예산을 집행하지 않는다. 되돌리려면 relay 구현이라는 별도 결정이 필요하다.
 - **단일 설치 아티팩트** — 현재는 npm 패키지다. node·git·bwrap은 여전히 호스트에 있어야 한다.
 - **release gate** — production LOC가 architecture review 기준을 넘어 열려 있다.

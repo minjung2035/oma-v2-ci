@@ -981,14 +981,39 @@ bubblewrap은 필요한 파일만 노출하는 Linux 실행 환경을 만든다.
 실제 launcher는 관리자가 준비한 trusted rootfs를 RO로 bind하고 다음을 추가한다.
 
 ```text
-RO rootfs: Pi, Git, shell, rg, runtime libraries
-RW binds: 자기 workspace, 자기 home
+RO rootfs: Node, Git, shell, rg, runtime libraries
+RO bind: OMA 설치 디렉터리 (동봉 엔진, core extension, model-facing CLI, role extension)
+RW binds: 자기 workspace, 자기 home, 자기 session 디렉터리
 RO binds: 공개 mail, 자기 mail, world, 공유 Git
 RW tmpfs: /tmp (size 제한)
 private: PID, mount, IPC, network namespace
 allowed IPC: 자기 actor socket
-closed: 나머지 상속 FD, systemd bus, host sockets
+closed: 나머지 상속 FD, systemd bus, host sockets, 엔진 agent directory
 ```
+
+엔진은 rootfs가 아니라 OMA 설치 디렉터리에서 온다. OMA를 갱신할 때 rootfs를 다시 만들지 않기 위해서다. rootfs가 제공하는 것은 Node와 기본 도구뿐이다.
+
+### 16.1 봉인된 Resident는 아직 provider에 도달하지 못한다
+
+두 규범이 각각은 옳고 함께는 막힌다. `PR-004`는 provider credential을 model-facing sandbox에 mount하지 못하게 하고, `SB-004`의 private network는 egress를 막는다. 원래 그 사이를 잇던 것은 broker relay였고 `INF-001`이 inference 소유권을 동봉 엔진에 넘기면서 relay를 없앴다. 그래서 지금 봉인된 Resident 안의 엔진은 credential도 network도 없이 기동한다.
+
+이것을 조용히 우회하지 않는다. mount 계획에 credential을 끼워 넣거나 network를 열어 두고 문서를 그대로 두는 쪽이 훨씬 나쁘다. 검토한 선택지는 셋이었다.
+
+1. **byte relay** — credential을 sandbox 밖에 두고 바이트만 통과시킨다.
+2. **봉인된 Resident에 egress와 per-agent credential 허용** — 파일 시스템 봉인은 유지하되 `SB-004`/`PR-004`를 실질적으로 약화한다.
+3. **Resident를 봉인하지 않음** — 배선 이전의 상태.
+
+**1번으로 확정했다(`INF-005`).** 결정적인 이유는 로그인이다. 2번은 워커마다 credential을 요구하고, 그 해법은 워커별 로그인(설치 후 즉시 사용이 깨진다) 아니면 society 토큰을 감시자 없이 도는 모든 워커에 물리는 것(진짜 토큰이 N개 모델 옆에 놓인다)뿐이다. 1번은 Principal에서 한 번 로그인하면 워커가 그대로 돈다.
+
+처음에 1번의 비용을 "provider codec·가격·재시도를 다시 소유하는 것"으로 적었는데 그것은 틀렸다. 엔진 문서(`custom-provider.md`, `containerization.md`)가 이미 sandbox용 패턴을 정의한다 — 안에는 자리표시자를 주고 밖에서 egress 시점에 진짜 credential로 바꾼다. relay는 stream을 해석하지 않으므로 codec·가격·재시도는 계속 엔진의 것이고, 정리한 중복이 되살아나지 않는다.
+
+network도 새 호스트 의존성 없이 닫힌다. `--unshare-all`을 그대로 두고 relay의 unix socket을 bind-mount하면, trusted core extension이 sandbox 안에서 loopback listener를 열어 그 socket으로 넘긴다. 엔진에는 그 loopback을 가리키는 provider를 등록한다. pasta/slirp4netns, veth, 로컬 CA, TLS 가로채기가 모두 필요 없다. provider와의 TLS는 host쪽 relay가 소유한다.
+
+Principal은 엔진의 공개 API로 credential을 얻는다 — `ctx.modelRegistry.getProviderAuth(id)`가 resolved key·header·base URL을 준다. 엔진의 저장 포맷을 읽지 않는다.
+
+되찾는 것: relay가 OMA의 유일한 chokepoint이므로 요청 수·동시성·취소를 관측하고 제한할 수 있다. 되찾지 못하는 것: 비용 상한. 그것은 stream 해석을 요구하고, 그 결정은 내리지 않았다.
+
+신뢰 rootfs를 선언하지 않은 배포는 여전히 3번 상태이며(`SB-002-E`), Dashboard의 `Sandbox` 줄과 runner 시작 로그가 그 사실을 말한다.
 
 `--new-session`으로 terminal 경계를 분리한다. `/proc`는 private PID namespace의 proc을 사용한다. CLI가 host admin socket을 이름으로 알아도 mount와 namespace 때문에 접근할 수 없어야 한다. rootfs와 설정은 모델이 수정하지 못한다.
 

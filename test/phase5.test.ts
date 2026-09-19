@@ -688,6 +688,7 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
 
     const sandbox = new SandboxModule({
       rootfs,
+      libdir: "/opt/oma",
       node: "/usr/bin/node",
       pi: "/usr/bin/pi",
       piModeArgs: ["--mode", "rpc", "-e", "/opt/oma/pi-extension.js"],
@@ -716,6 +717,7 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
       view: viewDir,
       world: join(stateRoot, "world"),
       projectGit: join(stateRoot, "repos", "project.git"),
+      sessions: runnerSessionDirPathAt(stateRoot, "a"),
     }).argv;
     const sysOverlays = [
       "--ro-bind",
@@ -832,6 +834,7 @@ test("deliver smoke: sandboxed Pi loads the trusted extension; custom message ro
 test("SB-005-negative: candidate argv rejects empty commands and keeps tmp cap", () => {
   const host = {
     rootfs: "/trusted/rootfs",
+    libdir: "/opt/oma",
     node: "/usr/bin/node",
     pi: "/usr/bin/pi",
     piModeArgs: [],

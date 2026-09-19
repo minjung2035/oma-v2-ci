@@ -42,7 +42,8 @@ export interface ModelProfile {
   provider: string; model: string; credentialRef: string; codecRevision: string;
   pricingRevision: string; maxInputTokens: number; maxOutputTokens: number;
   inferenceTimeoutSeconds: number;
-  // SPIKE [S-04]: Price formula/upper-bound codec is pinned deployment data.
+  // The engine owns provider selection and pricing (INF-001); these fields are
+  // deployment-declared names it resolves, not a price formula OMA evaluates.
 }
 
 export interface AgentProfile {

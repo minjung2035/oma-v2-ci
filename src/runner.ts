@@ -5,7 +5,10 @@ import type {
   ModelProfile,
   PreparedBatch,
   ProtocolLimits,
+  ResourceLimits,
 } from "../implementation/contracts.js";
+import { confinedPath, type ResidentDirectories } from "./sandbox.js";
+import type { PiConfinement } from "./runtime/pi-adapter.js";
 import { StoreError } from "./domain/errors.js";
 import { encodeToolSurfacePlan } from "./domain/tool-surface.js";
 import { BrokerChannel, type ChannelLimits } from "./protocol/channel.js";
@@ -35,6 +38,23 @@ export interface RunnerProfile {
   readonly settings?: RoleSettings;
   readonly workspaceBytes?: number;
 }
+/** What the deployment declared about confining Residents.
+ *
+ * Its absence is a decision, not a default: SB-001 wants a trusted rootfs
+ * holding pinned tools and empty mount targets, and an installation that has
+ * none cannot confine. The runner reports that state rather than letting the
+ * engine start on the host unremarked.
+ */
+export interface RunnerConfinement {
+  /** Host path of the trusted rootfs, mounted read-only at `/`. */
+  readonly rootfs: string;
+  /** Host path of the OMA installation, mounted read-only inside. */
+  readonly libdir: string;
+  /** Pinned Node as the confined process sees it, inside the rootfs. */
+  readonly node: string;
+  readonly tmpBytes: number;
+  readonly checkResources: ResourceLimits;
+}
 export interface RunnerPaths {
   readonly runRoot: string;
   readonly stateRoot?: string;
@@ -46,6 +66,8 @@ export interface RunnerPaths {
   readonly piAgentDir?: string;
   readonly coreExtension?: string;
   readonly cli?: string;
+  /** Absent means Residents run unconfined; see RunnerConfinement. */
+  readonly confinement?: RunnerConfinement;
 }
 export class RunnerModule {
   private readonly channel: BrokerChannel;
@@ -123,6 +145,19 @@ export class RunnerModule {
     const root = agentRootPathAt(stateRoot, this.agent);
     const sessionDir = runnerSessionDirPathAt(stateRoot, this.agent);
     ensureDurableDirectory(sessionDir, 0o700);
+    // Host mount roots. The builder checks each one against this actor's
+    // trusted root, so a mistake here is refused rather than mounted.
+    const directories: ResidentDirectories = {
+      workspace: workspacePathAt(stateRoot, this.agent),
+      home: join(root, "home"),
+      archive: join(stateRoot, "mail", "archive"),
+      selfMail: join(stateRoot, "mail", "inboxes", this.agent),
+      view: runnerViewPathAt(stateRoot, this.agent),
+      world: join(stateRoot, "world"),
+      projectGit: join(stateRoot, "repos", "project.git"),
+      sessions: sessionDir,
+    };
+    const confinement = this.confinement(directories, piArgs);
     return new PiAdapter({
       actor: this.agent,
       society,
@@ -150,10 +185,45 @@ export class RunnerModule {
         sessionDir,
         agentHome: join(root, "home"),
         mailArchive: join(stateRoot, "mail", "archive", "cur"),
-        batchView: runnerViewPathAt(stateRoot, this.agent),
+        batchView: directories.view,
         socket: this.lease.socketHostPath,
       },
+      ...(confinement === undefined ? {} : { confinement }),
     });
+  }
+  /** Builds the mount plan input, or reports that the deployment declared none.
+   * The engine entry is translated here because composition owns where files
+   * are; the adapter only decides how the engine is started.
+   */
+  private confinement(
+    directories: ResidentDirectories,
+    piArgs: readonly string[] | undefined,
+  ): PiConfinement | undefined {
+    const declared = this.paths.confinement;
+    if (declared === undefined || !this.lease || !this.limits) return undefined;
+    const entry = piArgs?.[0];
+    if (entry === undefined)
+      throw new StoreError(
+        "UNSUPPORTED_PROFILE",
+        "a confined Resident runs the shipped engine entry, and this profile declared none",
+      );
+    return {
+      host: {
+        rootfs: declared.rootfs,
+        libdir: declared.libdir,
+        node: declared.node,
+        pi: confinedPath(declared.libdir, directories, entry),
+        // The adapter replaces this with the engine flags it composes.
+        piModeArgs: [],
+        tmpBytes: declared.tmpBytes,
+        checkResources: declared.checkResources,
+        stateRoot: this.paths.stateRoot!,
+        runRoot: this.paths.runRoot,
+        limits: this.limits,
+      },
+      lease: this.lease,
+      directories,
+    };
   }
   private async consume(batch: PreparedBatch): Promise<void> {
     const stateRoot = this.paths.stateRoot;

@@ -49,7 +49,10 @@ TTY는 `script`로 실제 pty를 띄워 raw mode 취득·복원과 크기 보고
 
 ### 엔진과의 중복 정리
 
-- **inference relay 제거.** `INF-001`이 broker relay를 요구했지만 S-04는 relay를 만들지 않기로 기록했고, 코드에는 호출 경로 없는 355줄이 남아 있었다. 규범을 실제 선택으로 확정하고 `src/inference*`·`domain/usage-budget.ts`를 제거했다. 대가로 OMA는 multi-agent 비용 상한을 집행하지 않으며 그 사실을 §13.3에 적었다. `usage` 표와 여섯 durable entity는 그대로 두었다.
+- **inference relay 제거.** `INF-001`이 broker relay를 요구했지만 relay는 만들어지지 않았고, 코드에는 호출 경로 없는 355줄이 남아 있었다. 규범을 실제 선택으로 확정하고 `src/inference*`·`domain/usage-budget.ts`를 제거했다. 대가로 OMA는 multi-agent 비용 상한을 집행하지 않으며 그 사실을 §13.3에 적었다. `usage` 표와 여섯 durable entity는 그대로 두었다.
+- **provider spike(S-04) 제거.** 그 spike는 OMA가 직접 만들 provider codec·가격 upper bound·usage 회계를 gate했는데, `INF-001`이 그 셋을 모두 엔진에 넘기면서 gate할 구현이 남지 않았다. 존재하지 않는 구현을 OPEN gate로 들고 있는 것은 중복이자 허위 미해결이라 판단해 `spikes.md`에서 삭제하고 spec·contract·보고 script의 참조를 정리했다. spike가 담고 있던 사실 중 유효한 것은 아래 한 줄이며, 되살릴 조건은 §13.3에 적었다.
+  - 별도 relay나 새 credential store 없이 host-side Pi RPC를 쓰는 경로에서 `npm run test:functional-pi`는 요청 `pi/current`를 `openai-codex/gpt-5.6-luna`로 해석했고, `oma_mail_read` 1회 성공·terminal `stop`·session persist·durable batch presented=1을 확인했다. 이 1건은 resident 기본 대화 경로가 엔진 연결로 동작한다는 증거일 뿐, 가격·429/5xx·취소 codec에 대해서는 아무것도 말하지 않는다. 그것들은 이제 OMA의 계약이 아니다.
+- **acceptance 행은 그대로 둔다.** `TEST-006`이 T01–T77 행의 삭제·재분류를 금지하므로 T48–T51(quota reserve/provider settle)은 표에 남는다. 다만 이 행들을 discharge할 OMA 경로가 없다는 사실을 `adversarial-report`의 gate 문구에 적었다.
 - **터미널 폭 측정**을 엔진의 grapheme 기반 계산으로 교체했다. 직접 만든 표는 12개 표본 중 4개(ZWJ 가족, 결합 문자, 넓은 이모지, 피부색 시퀀스)에서 틀렸다.
 - **키 식별**을 엔진 어휘로 위임했다. 청크 분할은 제품이 계속 소유한다.
 - **남긴 중복**: byte framing과 유닉스 소켓 클라이언트. 그 위의 OMA 정책 계층이 어차피 남고 설치 표면을 늘리지 않기 위한 판단이며 근거를 §23.13과 TUI-020에 남겼다.
@@ -66,9 +69,15 @@ TTY는 `script`로 실제 pty를 띄워 raw mode 취득·복원과 크기 보고
 
 ### 미검증으로 남은 것
 
-- `principal.attach` credential handshake 미구현(IPC-011, S-02). Dashboard의 broker 유래 값은 항상 `unknown`이다.
+- **Dashboard가 `unknown`인 진짜 이유는 attach가 아니다.** 앞선 기록은 `principal.attach` handshake 미구현(IPC-011, S-02) 탓으로 적었으나 그것은 틀렸다. `TuiTransport`는 attach를 쓰지 않고 principal actor socket에서 공개 `status.get`을 부른다. 그 socket이 없는 이유는 **`oma`가 broker를 띄우지 않기 때문**이다. `principal.attach`는 Human의 기존 Pi session을 붙이는 다른 기능이고 S-02 gate 그대로다.
+- **society bring-up 구현했다.** 기본 설정으로 broker를 직접 실행해 나온 실패 셋 — state tree 부재로 SQLite 열기 실패, `repos/project.git` 부재로 `canonical repository health observation failed`, bare repo만으로는 `bootstrap requires a host-pinned canonical main` — 을 `provisionSociety()`가 모두 해소한다. `oma`가 시작할 때마다 idempotent하게 실행하고, 이미 있는 것은 건드리지 않는다. canonical `main`은 **빈 root commit**으로 심는다. 사용자의 작업 트리를 OMA canonical 저장소로 복사하는 것은 별개의 큰 결정이라 첫 실행에서 조용히 하지 않는다.
+- **`oma`가 broker를 띄운다.** `superviseBroker()`가 admin endpoint를 먼저 확인해 다른 `oma`가 이미 소유한 broker는 건드리지 않고, 자기가 띄운 broker만 종료 시 정지한다. 단일성 보장은 broker 자신의 배타 lock이 소유하며 이 코드는 무의미한 spawn만 피한다.
+- **실제 확인**: 빈 디렉터리에서 `oma`를 실행해 state tree가 생기고 broker가 떠서 `runRoot`에 `admin.sock`/`host.sock`/`broker.lock`이 나타나는 것을 다른 프로세스에서 관측했다. 확인에 쓴 society의 systemd unit과 runRoot는 되돌렸다.
+- **그래도 Dashboard의 broker 유래 값은 `unknown`으로 남는다. 원인은 bring-up이 아니다.** `status.get`은 `channel: "actor"`이고 권한이 `current-actor`다. broker는 호출자의 cgroup이 해당 agent의 systemd service cgroup 안에 있는지로 신원을 확인한다(`peer-authenticator.requireRunnerUnit`/`context`). 터미널에서 띄운 TUI는 어떤 unit 안에도 없으므로 actor 신원이 없고, actor socket 자체도 `runner.open`으로 lease가 발급될 때만 열린다. 즉 **사람이 실행한 TUI가 읽을 권한을 가진 broker endpoint가 현재 하나도 없다.** 해결은 TUI에 unit 신원을 주거나(예: Principal scope 안에서 실행) 관측 경로를 바꾸는 것인데, 둘 다 `IPC-012`가 닿는 architecture 결정이라 여기서 임의로 정하지 않았다. 그 사이 화면은 `unknown`에 이유와 시각을 함께 적는다.
 - TUI/TSP requirement의 trace 상태는 `unverified`다. owner/callPath/negative test는 연결돼 있으나 실제 경계 실행 증거가 없다.
-- Resident sandbox rootfs 안에서의 엔진 bind는 `SandboxHost`가 외부 공급이라 범위 밖이다.
+- **Resident 봉인은 배선됐고 규범도 확정했다.** `SandboxHost`는 더 이상 외부 공급이 아니다. runner가 설정에서 구성하고 adapter가 mount 계획으로 엔진을 띄운다(T113 7건). `PR-004`와 `SB-004`가 함께 막던 provider 경로는 byte relay로 확정했다(`INF-005`, architecture §16.1).
+- **relay는 실동작을 확인했다(T114 5건).** 실제 unix socket과 실제 TLS provider를 상대로 돌렸고 stub이 없다. 확인한 것: 바이트가 그대로 건너가고 host credential이 붙는다, sandbox가 보낸 `authorization`/`x-api-key`는 버려지고 진짜 것을 덮어쓰지 못한다, 선언한 endpoint를 벗어나는 경로(`..`, 인코딩된 `..`, `//host`)는 403이고 provider에 닿지 않는다, 응답하지 않는 provider는 504로 보고되고 **재전송되지 않는다**(`INF-004`), 동시성 한도를 넘으면 큐잉 대신 503, plain-HTTP origin과 CRLF가 든 header 값은 열기 전에 거절된다.
+- **아직 호출자가 없는 한 조각: credential 인계.** relay는 `{origin, headers}`를 받아야 하고 그 값은 엔진이 host에서 해석한 것이다(`ctx.modelRegistry.getProviderAuth`). 그 인계는 Principal → broker 경로를 요구하는데 broker가 아직 뜨지 않으므로(아래 society bring-up) 연결하지 않았다. 없는 값을 설정 파일에 새로 받거나 credential store를 만들어 우회하지 않는다(`INF-001`, `INF-007`). 따라서 `InferenceRelay`는 test에서만 실행되며, production 호출 경로는 bring-up과 같은 작업에서 붙인다.
 - node/git을 포함한 OS별 배포본은 별도 작업이다.
 
 ### A-008 LOC gate — OPEN

@@ -9,7 +9,7 @@ import { JsonlReader, type PiEvent } from "../src/protocol/jsonl.js";
 import { PiRpcClient } from "../src/rpc-client.js";
 import { readBatchView } from "../src/pi-extension.js";
 import { decodeRunLease, assertValidatedRunLease } from "../src/protocol/run-lease.js";
-import { actorSocketPathAt, agentRootPathAt, workspacePathAt, runnerViewPathAt } from "../src/storage/paths.js";
+import { actorSocketPathAt, agentRootPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
 import { SandboxModule, type SandboxHost } from "../src/sandbox.js";
 import { StoreError } from "../src/domain/errors.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
@@ -125,13 +125,14 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.throws(() => assertValidatedRunLease({ ...lease }), errorCode("AUTH_FAILED"));
   assert.throws(() => decodeRunLease({ ...value, incarnation: 1 }, { actor: "alice", runRoot }), errorCode("AUTH_FAILED"));
   assert.throws(() => decodeRunLease(value, { actor: "bob", runRoot }), errorCode("AUTH_FAILED"));
-  const host: SandboxHost = { rootfs: "/opt/oma/rootfs", node: "/usr/bin/node", pi: "/opt/pi/cli.js",
+  const host: SandboxHost = { rootfs: "/opt/oma/rootfs", libdir: "/opt/oma/lib", node: "/usr/bin/node", pi: "/opt/oma/lib/pi/cli.js",
     piModeArgs: ["--mode", "rpc"], tmpBytes: TEST_RESOURCES.tmpBytes, checkResources: TEST_RESOURCES,
     stateRoot, runRoot, limits: { frameBytes: 4096, batchMaxMessages: 24 } };
   const sandbox = new SandboxModule(host);
   const dirs = { workspace: workspacePathAt(stateRoot, "alice"), home: join(agentRootPathAt(stateRoot, "alice"), "home"),
     archive: join(stateRoot, "mail/archive"), selfMail: join(stateRoot, "mail/inboxes/alice"),
-    view: runnerViewPathAt(stateRoot, "alice"), world: join(stateRoot, "world"), projectGit: join(stateRoot, "repos/project.git") };
+    view: runnerViewPathAt(stateRoot, "alice"), world: join(stateRoot, "world"), projectGit: join(stateRoot, "repos/project.git"),
+    sessions: runnerSessionDirPathAt(stateRoot, "alice") };
   const plan = sandbox.resident(lease, dirs);
   assert.deepEqual(plan.inheritedFds, [0, 1, 2]); assert.deepEqual(plan.env, {});
   assert.ok(plan.argv.includes("--unshare-all")); assert.ok(plan.argv.includes("--clearenv"));

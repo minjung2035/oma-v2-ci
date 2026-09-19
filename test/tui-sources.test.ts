@@ -279,6 +279,27 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("TUI-012/SB-002-E: the Dashboard says whether Residents are confined", () => {
+  const root = scratch("oma-tui-sandbox-");
+  try {
+    const cfg = config(root);
+    const line = (installation: { rootfs: string }): string => {
+      const lines = dashboardLines({
+        config: { ...cfg, installation: { ...cfg.installation, ...installation } },
+        principalModel: "strong", unread: 0,
+        observation: { kind: "unknown", reason: "x", observedAtMs: Date.UTC(2026, 8, 18) },
+      });
+      return new Map(lines.map(entry => [entry.label, entry.value])).get("Sandbox")!;
+    };
+    // `/` is not a rootfs: SB-001 forbids binding the host root, so the value
+    // means none was declared. The user has to be able to read that.
+    assert.match(line({ rootfs: "/" }), /비봉인/);
+    const confined = line({ rootfs: "/opt/oma/rootfs" });
+    assert.doesNotMatch(confined, /비봉인/);
+    assert.match(confined, /\/opt\/oma\/rootfs/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("TUI-012: the newest incarnation endpoint is preferred and a missing one is not invented", () => {
   const root = scratch("oma-tui-sock-");
   try {

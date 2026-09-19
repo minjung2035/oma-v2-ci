@@ -44,6 +44,7 @@
   "src/config/defaults.ts",
   "src/config/operations.ts",
   "src/config/policy.ts",
+  "src/config/provision.ts",
   "src/diagnostics/files.ts",
   "src/diagnostics/integrity.ts",
   "src/diagnostics/ledger.ts",
@@ -136,8 +137,10 @@
   "src/runner.ts",
   "src/runtime/assets.ts",
   "src/runtime/broker-lifetime.ts",
+  "src/runtime/broker-supervisor.ts",
   "src/runtime/deployment-manifest.ts",
   "src/runtime/extension-integrity.ts",
+  "src/runtime/inference-relay.ts",
   "src/runtime/pi-adapter.ts",
   "src/runtime/pi-rpc.ts",
   "src/runtime/pi-runtime.ts",
@@ -248,6 +251,7 @@
      "src/config.ts",
      "src/config/operations.ts",
      "src/config/policy.ts",
+     "src/config/provision.ts",
      "src/ids.ts",
      "src/leaf.ts",
      "src/process/async.ts",
@@ -290,9 +294,9 @@
    "K0-values -> K0-values": 18,
    "K1-codecs -> K0-values": 41,
    "K1-codecs -> K1-codecs": 15,
-   "K2-mechanisms -> K0-values": 52,
+   "K2-mechanisms -> K0-values": 53,
    "K2-mechanisms -> K1-codecs": 7,
-   "K2-mechanisms -> K2-mechanisms": 28,
+   "K2-mechanisms -> K2-mechanisms": 30,
    "K3-ledger -> K0-values": 19,
    "K3-ledger -> K1-codecs": 9,
    "K3-ledger -> K2-mechanisms": 1,
@@ -402,6 +406,11 @@
    },
    {
     "from": "src/config/policy.ts",
+    "to": "src/domain/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/config/provision.ts",
     "to": "src/domain/errors.ts",
     "kind": "runtime"
    },
@@ -1327,7 +1336,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 74
+   "files": 75
   },
   {
    "index": 2,
@@ -1370,7 +1379,7 @@
     "src/runner.ts",
     "src/sandbox.ts"
    ],
-   "files": 22
+   "files": 24
   },
   {
    "index": 5,
@@ -1386,24 +1395,24 @@
    "files": 38
   }
  ],
- "files": 188,
- "runtimeEdges": 697,
- "typeOnlyEdges": 289,
+ "files": 191,
+ "runtimeEdges": 707,
+ "typeOnlyEdges": 291,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 204,
+  "L1-kernel -> L1-kernel": 207,
   "L2-facts -> L1-kernel": 27,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 155,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 44,
-  "L4-orchestration -> L1-kernel": 61,
+  "L4-orchestration -> L1-kernel": 64,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
-  "L4-orchestration -> L4-orchestration": 22,
-  "L5-entry -> L1-kernel": 57,
+  "L4-orchestration -> L4-orchestration": 24,
+  "L5-entry -> L1-kernel": 58,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
-  "L5-entry -> L4-orchestration": 14,
+  "L5-entry -> L4-orchestration": 15,
   "L5-entry -> L5-entry": 72
  },
  "upwardTypeOnlyEdges": [
@@ -1423,10 +1432,10 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 101,
+  "src/domain/errors.ts": 103,
   "src/domain/identifiers.ts": 32,
   "src/ids.ts": 27,
-  "src/storage/durable-fs.ts": 21,
+  "src/storage/durable-fs.ts": 22,
   "src/storage/paths.ts": 20,
   "src/cli/exit.ts": 16,
   "src/domain/derived.ts": 16,
@@ -1434,16 +1443,16 @@
   "src/domain/canonical-json.ts": 13,
   "src/authority.ts": 12,
   "src/hash.ts": 12,
+  "src/process/policies.ts": 12,
   "src/storage/directory.ts": 12,
-  "src/process/policies.ts": 11,
   "src/storage/receipt-projector.ts": 10,
   "src/domain/context-policy.ts": 9
  },
  "fanOut": {
   "src/broker.ts": 26,
   "src/mail.ts": 26,
+  "src/entry/oma.ts": 20,
   "src/entry/broker.ts": 19,
-  "src/entry/oma.ts": 18,
   "src/git.ts": 15,
   "src/git/context-repository.ts": 14,
   "src/store.ts": 14,
@@ -1453,8 +1462,8 @@
   "src/git/submit.ts": 12,
   "src/mail/batches.ts": 12,
   "src/git/context-mirror.ts": 10,
-  "src/storage/context-snapshot.ts": 10,
-  "src/cli.ts": 9
+  "src/runner.ts": 10,
+  "src/storage/context-snapshot.ts": 10
  },
  "external": {
   "@earendil-works/pi-coding-agent": 1,
@@ -1463,10 +1472,12 @@
   "node:async_hooks": 3,
   "node:child_process": 3,
   "node:crypto": 19,
-  "node:fs": 47,
-  "node:net": 3,
+  "node:fs": 49,
+  "node:http": 1,
+  "node:https": 1,
+  "node:net": 5,
   "node:os": 2,
-  "node:path": 52,
+  "node:path": 54,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:string_decoder": 1,

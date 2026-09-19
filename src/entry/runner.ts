@@ -43,12 +43,27 @@ const piRuntime = resolvePiRuntime({
   stateRoot, libdir: cfg.installation.libdir, override: process.env.OMA_PI_COMMAND,
 });
 ensureDirectory(piRuntime.agentDir, 0o700);
+// SB-001 wants a trusted rootfs holding pinned tools and empty mount targets.
+// `installation.rootfs` names it; the value `/` means the deployment declared
+// none, because binding the host root is exactly what SB-001 forbids. That is a
+// real difference in what OMA can promise, so it is said once, out loud, rather
+// than inferred later from an absent bwrap process.
+const confinement = cfg.installation.rootfs === "/" ? undefined : {
+  rootfs: cfg.installation.rootfs,
+  libdir: cfg.installation.libdir,
+  node: cfg.installation.node,
+  tmpBytes: agentProfile.resources.tmpBytes,
+  checkResources: agentProfile.resources,
+};
+if (confinement === undefined)
+  console.error(`runner ${agent}: no trusted rootfs is declared; the engine runs unconfined on this host`);
 const runner = new RunnerModule({ runRoot, stateRoot, society,
   piCommand: piRuntime.executable,
   piArgs: piRuntime.args,
   piAgentDir: piRuntime.agentDir,
   coreExtension: join(cfg.installation.libdir, "dist/src/pi-extension.js"),
-  cli: join(cfg.installation.libdir, "dist/src/cli.js") }, agent, cfg.limits, profile);
+  cli: join(cfg.installation.libdir, "dist/src/cli.js"),
+  ...(confinement === undefined ? {} : { confinement }) }, agent, cfg.limits, profile);
 let stopping = false;
 const stop = (): void => {
   if (stopping) return;

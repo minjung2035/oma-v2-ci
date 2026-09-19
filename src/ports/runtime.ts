@@ -52,13 +52,16 @@ export interface SandboxDirectories {
   view: string;
   world: string;
   projectGit: string;
+  /** Writable session store for the confined engine. SB-006 already treats its
+   * contents as model-origin data; the mount makes that explicit. */
+  sessions: string;
 }
 export interface SandboxCompositionInput {
   readonly host: SandboxHost;
   readonly directories: SandboxDirectories;
 }
 export interface SandboxPort {
-  resident(lease: RunLease, directories: SandboxDirectories): SandboxPlan;
+  resident(lease: RunLease, directories: SandboxDirectories, env?: Readonly<Record<string, string>>): SandboxPlan;
   /** S01-CANDIDATE remains gated; this declaration does not attest to execution. */
   candidate(oid: string, checkProfile: string): SandboxPlan;
 }
@@ -69,8 +72,17 @@ export interface UnitObserve {
 }
 
 export interface SandboxHost {
+  /** Host path of the trusted rootfs, mounted read-only at `/`. Never `/` or
+   * `/home`: SB-001 requires a rootfs holding only pinned tools and empty
+   * mount targets. */
   rootfs: string;
+  /** Host path of the OMA installation, mounted read-only inside. It carries
+   * the vendored engine, the trusted core extension and the model-facing CLI,
+   * so the rootfs itself does not have to be rebuilt when OMA is updated. */
+  libdir: string;
+  /** Pinned Node, as the confined process sees it. */
   node: string;
+  /** Engine entry, as the confined process sees it. */
   pi: string;
   piModeArgs: string[];
   tmpBytes: number;

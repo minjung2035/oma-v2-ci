@@ -24,6 +24,8 @@ import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sou
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
 import { commitField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
 import { defaultHostConfig, societyFromDirectory } from "../config/defaults.js";
+import { provisionSociety } from "../config/provision.js";
+import { superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import type { ExtensionRow, MailRow } from "../tui/model.js";
 
@@ -73,6 +75,13 @@ async function main(argv: readonly string[]): Promise<void> {
   if (settings.config.society !== society)
     fail("설정의 society가 요청한 society와 다릅니다", 4);
 
+  // The society's state tree has to exist before anything can observe it: the
+  // broker opens a ledger and reads a canonical repository at startup. This is
+  // idempotent, so it runs every time rather than being a setup command the
+  // user has to remember (TUI-002).
+  try { provisionSociety(stateRoot); }
+  catch (error) { fail(`society를 준비하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+
   const mailbox = principalMailbox(stateRoot);
   const transport = new TuiTransport(runRoot, limitsOf(settings.config.limits));
   let observation: Observation = { kind: "unknown", reason: "아직 관측하지 않음", observedAtMs: Date.now() };
@@ -117,11 +126,13 @@ async function main(argv: readonly string[]): Promise<void> {
   const app = new TuiApp(ports, terminal);
   app.refresh();
 
+  let broker: BrokerHandle | null = null;
   let finished = false;
   const shutdown = (code: number): void => {
     if (finished) return;
     finished = true;
     session?.close();
+    broker?.stop();
     terminal.restore();
     process.exit(code);
   };
@@ -174,6 +185,16 @@ async function main(argv: readonly string[]): Promise<void> {
     app.line(`Pi 세션을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
     app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
   }
+
+  // One command starts the society. A broker another `oma` already owns is left
+  // alone, and a broker this process started is stopped when it exits.
+  broker = await superviseBroker({
+    node: process.execPath, libdir: settings.config.installation.libdir,
+    society, runRoot, configPath,
+    onEvent: line => { app.line(`broker: ${line}`); app.draw(); },
+  });
+  if (broker.state.kind === "unavailable")
+    app.line(`broker를 시작하지 못했습니다: ${broker.state.reason}. Dashboard 관측값은 unknown으로 남습니다.`);
 
   const poll = setInterval(() => {
     void transport.status().then(next => { observation = next; app.refresh(); app.draw(); });

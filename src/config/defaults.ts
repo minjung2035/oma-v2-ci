@@ -80,8 +80,8 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
       // "pi/current" means the engine picks the connection, so OMA states no
       // provider or credential of its own. The remaining fields exist only
       // because the schema is closed; they are placeholders, not a pricing or
-      // context claim, and S-04 still owns real usage bounds. Nothing reads
-      // them on this path today.
+      // context claim. Real usage bounds belong to the engine, and nothing
+      // reads these on this path today.
       [DEFAULT_MODEL_PROFILE]: {
         provider: "pi",
         model: "current",

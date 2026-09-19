@@ -1,5 +1,5 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-export type { ChildProcessWithoutNullStreams };
+import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
+export type { ChildProcess, ChildProcessWithoutNullStreams };
 import { performance } from "node:perf_hooks";
 import { snapshotCommand, processErrorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
 import { StoreError } from "../domain/errors.js";
@@ -136,6 +136,18 @@ function validDirectSpawn(executable: string, argv: readonly string[], cwd: stri
 export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: string, env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
   validDirectSpawn(executable, argv, cwd, env);
   return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+}
+/** A long-lived service this process owns, such as the society's broker.
+ *
+ * stdin is closed and stdout discarded: a supervised service shares the
+ * product's terminal, and anything it wrote there would corrupt the screen.
+ * stderr stays open because it is the service's operational channel, and a
+ * service that failed silently is indistinguishable from one that is idle.
+ */
+export function spawnSupervisedService(executable: string, argv: readonly string[],
+  env: Readonly<Record<string, string>>): ChildProcess {
+  validDirectSpawn(executable, argv, "/", env);
+  return spawn(executable, [...argv], { env: { ...env }, shell: false, stdio: ["ignore", "ignore", "pipe"] });
 }
 export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
   if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)

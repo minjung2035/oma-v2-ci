@@ -50,10 +50,10 @@ const lines = [
 for (const row of rows) lines.push(`| ${cell(row.source)} | ${cell(row.requirement)} | ${cell(row.applicability)} | ${cell(row.status)} | ${cell(row.owner)} | ${cell(row.entrypoint)} | ${cell(row.callPath?.join(" → ") || null)} | ${cell(row.negativeTests?.join("; ") || null)} | ${row.evidence ? "Recorded claim; run compliance for current source validation" : "UNVERIFIED / fresh execution NOT_RUN"} |`);
 const gates = new Map();
 for (const [ids, reason] of [
-  [[28,29,30,31,33,34,35,41], "S-03/S-04: actual Pi consumption/provider lifecycle proof required"],
+  [[28,29,30,31,33,34,35,41], "S-03: actual Pi consumption/lifecycle proof required"],
   [[43,44,47,52], "S-02: isolated existing Human Pi attach/security proof required"],
   [[45,46], "S-01: actual Pi/FD/PID-reuse/storage-cap proof required"],
-  [[48,49,50,51], "S-04: production provider codec/inference proof required"],
+  [[48,49,50,51], "INF-001 assigns inference to the engine; OMA implements no relay, so these rows have no OMA path to discharge"],
   [[72], "S-06: separate authorized VM power-loss proof; SIGKILL is insufficient"],
   [[76], "S-08/S-10: attestation/floor contracts OPEN; base is not tiered"],
   [[77], "S-09: fixed evaluation corpus and real multi-condition results required"],

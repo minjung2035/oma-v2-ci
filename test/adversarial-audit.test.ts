@@ -166,6 +166,7 @@ test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
   const argv = candidateArgv(
     {
       rootfs: "/rootfs",
+      libdir: "/opt/oma",
       node: "/usr/bin/node",
       pi: "/usr/bin/pi",
       piModeArgs: [],

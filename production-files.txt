@@ -41,6 +41,7 @@ src/config.ts
 src/config/defaults.ts
 src/config/operations.ts
 src/config/policy.ts
+src/config/provision.ts
 src/diagnostics/files.ts
 src/diagnostics/integrity.ts
 src/diagnostics/ledger.ts
@@ -133,8 +134,10 @@ src/rpc-client.ts
 src/runner.ts
 src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
+src/runtime/broker-supervisor.ts
 src/runtime/deployment-manifest.ts
 src/runtime/extension-integrity.ts
+src/runtime/inference-relay.ts
 src/runtime/pi-adapter.ts
 src/runtime/pi-rpc.ts
 src/runtime/pi-runtime.ts

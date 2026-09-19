@@ -238,7 +238,6 @@
 
 **MUST [IPC-010]** `mail_available`는 데이터 없는 힌트이며 durable queue가 아니다. 힌트 수신·재연결·안전한 Pi 경계·idle 직전에 pending 원본을 다시 읽는다. 유실 시 path/timer가 복구한다. sequence gap 복원용 새 event log를 만들지 않는다.
 
-**SPIKE [S-04]** inference start/data의 provider-specific payload schema와 Pi event mapping은 고정 Pi/provider adapter 검증 산출물로 확정한다. 공개 control methods는 이미 고정됐으나 inference DTO placeholder를 arbitrary HTTP forwarding으로 구현해서는 안 된다.
 
 ## 7. 메일·주소·batch의 실행 절차
 
@@ -317,7 +316,7 @@ pi.sendMessage(
 
 **MUST [PR-004]** Principal host Pi의 모든 model-facing shell/read/write/edit 및 동적으로 등록된 tool 경로를 sandbox-backed 구현으로 제한한다. extension attach credential·Human 원본 session·provider credential을 model tool sandbox에 mount하지 않는다. trusted extension은 session 접근이 필요하지만 model에게 그 권한을 위임하지 않는다.
 
-**SPIKE [S-02,S-03,S-04]** Pi hook/command/tool replacement/provider API·session flush의 정확한 import와 signature는 pinned SDK로 실행 검증 후 작성한다. 비슷해 보이는 SDK 함수명이나 `appendEntry` 호출만으로 fsync를 보장한다고 추측하지 않는다.
+**SPIKE [S-02,S-03]** Pi hook/command/tool replacement·session flush의 정확한 import와 signature는 pinned SDK로 실행 검증 후 작성한다. provider API는 엔진이 소유하므로(INF-001) OMA가 확정할 signature가 없다. 비슷해 보이는 SDK 함수명이나 `appendEntry` 호출만으로 fsync를 보장한다고 추측하지 않는다.
 
 ## 9. Git command 계약
 
@@ -444,8 +443,10 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
   --ro-bind <rootfs> /
   --proc /proc --dev /dev
   --size <tmpBytes> --tmpfs /tmp
+  --ro-bind <libdir> /opt/oma
   --bind <ownWorkspace> /workspace
   --bind <ownHome> /home/agent
+  --bind <ownRunnerSessionDir> /run/oma-sessions
   --ro-bind <archive> /mail/archive
   --ro-bind <ownMailbox> /mail/self
   --ro-bind <ownRunnerViewDir> /run/oma-view
@@ -455,8 +456,21 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
   --symlink /run/oma-view/inbox.md /inbox.md
   --clearenv --setenv HOME /home/agent
   --setenv PATH <trusted-rootfs-PATH>
-  --chdir /workspace -- <pinned-pi-command> --mode rpc <verified-extension-options>
+  <--setenv OMA_* for each core-extension input, then the four the builder owns>
+  --chdir /workspace -- <rootfs node> /opt/oma/<engine entry> --mode rpc <verified-extension-options>
 ```
+
+`/opt/oma`는 OMA 설치 디렉터리의 RO mount다. 동봉 엔진·trusted core extension·model-facing CLI·role extension이 모두 그 아래 있으므로, OMA를 갱신할 때 rootfs를 다시 만들지 않는다. rootfs는 pinned Node/Git/shell/rg/library와 빈 mount target만 갖는다.
+
+`/run/oma-sessions`는 엔진이 session을 쓰는 유일한 경로다. SB-006이 이미 그 내용을 model-origin data로 규정하므로 mount를 명시한다.
+
+`--clearenv`가 환경 전체를 지우므로 trusted core extension이 읽는 `OMA_*`는 이 배열에 없으면 sandbox 안에 없다. builder는 caller가 준 이름/값을 검증하고(이름 문법, NUL 금지), `OMA_FRAME_BYTES`/`OMA_BATCH_MAX_MESSAGES`/`OMA_ACTOR`/`OMA_INCARNATION`를 마지막에 스스로 설정해 caller가 검증된 lease의 actor를 덮어쓰지 못하게 한다. host 환경은 상속하지 않는다.
+
+**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다.
+
+**MUST [SB-002-D]** 엔진의 agent directory(provider credential 보관처)는 Resident mount 계획에 넣지 않는다(PR-004). 따라서 봉인된 Resident는 credential이 없고 `--unshare-all`로 network도 없다. 이 조합에서 Resident는 provider에 도달하지 못한다. `INF-001`이 inference를 엔진에 넘긴 뒤 그 경로를 이어줄 relay가 없기 때문이며, 이 사실을 숨기고 credential이나 network를 조용히 열지 않는다. architecture §16에 비용과 선택지를 적는다.
+
+**MUST [SB-002-E]** `installation.rootfs`가 `/`이면 신뢰 rootfs가 선언되지 않은 것이다(SB-001이 host `/` bind를 금지하므로 `/`는 rootfs가 될 수 없다). 그 배포에서 Resident는 봉인 없이 host에서 실행되며, runner는 시작할 때 그 사실을 한 줄로 보고한다. 봉인 부재를 기본값처럼 조용히 넘기지 않는다.
 
 **MUST [SB-003]** stdin/stdout/stderr와 명시적으로 검증한 RPC pipe 외 상속 FD를 닫는다. runner admin FD, provider socket, host credential FD, systemd bus, SSH agent, desktop socket을 전달하지 않는다. OMA actor socket에는 자기 limited API만 존재한다. 다른 actor endpoint는 mount하지 않는다. rootfs의 기존 symlink/mount target이 다른 host path를 노출하지 않는지 검사한다.
 
@@ -470,7 +484,22 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 **MUST [INF-001; arch §13.3]** inference는 **동봉 엔진이 소유한다.** OMA는 provider relay, credential store, model catalogue, 가격표, 재시도 정책을 따로 구현하지 않는다. 엔진이 이미 갖고 있는 흐름을 그대로 쓰며, 그 상태는 TUI-017의 OMA 소유 agent 디렉터리 안에 있다.
 
-이 조항은 이전 판을 대체한다. 이전 판은 broker가 credential을 붙여 provider에 직접 요청하는 relay를 요구했다. S-04에서 그 relay를 만들지 않고 엔진 연결을 쓰기로 선택했고, relay 구현은 호출 경로 없이 남아 있었다. 문서와 코드가 어긋난 상태를 유지하는 것보다 실제 선택을 규범으로 확정하는 쪽을 택한다.
+이 조항은 이전 판을 대체한다. 이전 판은 broker가 credential을 붙여 provider에 직접 요청하는 relay를 요구했다. 그 relay는 만들어지지 않았고 구현은 호출 경로 없이 남아 있었다. 문서와 코드가 어긋난 상태를 유지하는 것보다 실제 선택을 규범으로 확정하는 쪽을 택한다. 이 선택으로 provider codec·가격 upper bound·usage 회계를 gate하던 spike는 OMA의 대상이 아니게 되어 제거했다.
+
+**MUST [INF-005; arch §16.1]** 봉인된 Resident의 provider 접근은 **byte relay**를 통한다. 이는 위 조항의 예외가 아니라 그 전제를 지키기 위한 transport다.
+
+봉인된 Resident는 `PR-004`로 credential이 없고 `SB-004`로 network가 없다. 엔진이 inference를 소유하려면 그 둘 중 하나를 열어야 하는데, 여는 대신 credential을 sandbox 밖에 두고 바이트만 통과시킨다.
+
+- host의 relay는 요청을 provider로 **해석 없이 전달**하고 헤더에만 진짜 credential을 끼운다. stream을 parse하지 않고, 응답을 재구성하지 않으며, 가격·token·context를 계산하지 않는다. 그 셋은 계속 엔진의 것이다.
+- 목적지는 host가 선언한 model profile이 정한 provider endpoint뿐이다. caller가 URL·header·key를 고르지 못한다는 `INF-002`는 그대로다. 임의 URL proxy를 만들지 않는다.
+- `INF-004`는 그대로다. relay는 결과가 불명확한 요청을 스스로 재전송하지 않는다.
+- relay는 OMA가 다시 갖는 유일한 chokepoint다. 요청 수·동시성·취소를 관측하고 제한할 수 있으나, 보고되지 않은 비용을 0으로 간주하지 않는다.
+
+**MUST [INF-006]** relay의 sandbox 쪽 끝은 bind-mount된 unix socket이며, network namespace는 계속 `--unshare-all`이다. trusted core extension이 sandbox 안에서 loopback listener를 열어 그 socket으로 넘기고, 엔진에는 그 loopback을 가리키는 provider를 등록한다. host와 sandbox 사이에 새 network 경로·CA·TLS 가로채기를 만들지 않으며, provider와의 TLS는 host쪽 relay가 소유한다.
+
+**MUST NOT [INF-007]** 엔진의 agent directory를 Resident mount 계획에 넣지 않는다. sandbox 안에 진짜 credential을 두는 어떤 형태도 — agent별 복사본, society 공용 read-only mount, 환경 변수 — `PR-004` 위반이다. sandbox 안의 provider 설정에 들어가는 key는 relay가 교체할 자리표시자다.
+
+비용 상한을 OMA 계약으로 되돌리려면 relay가 stream을 해석해야 하고, 그것은 codec 소유를 다시 가져오는 별도 architecture 결정이다. 이 조항은 그 결정을 내리지 않는다.
 
 **MUST [INF-002]** 모델·provider 선택은 host가 선언한 model profile 이름으로만 지정한다. caller가 arbitrary provider URL, header, key, 가격을 지정하지 못한다는 제약은 그대로다. 엔진이 profile을 해석하며 OMA는 그 해석을 다시 구현하지 않는다.
 

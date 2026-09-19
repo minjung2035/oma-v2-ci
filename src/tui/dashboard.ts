@@ -53,8 +53,15 @@ export function dashboardLines(input: DashboardInput): readonly DashboardLine[] 
     lines.push({ label: "Status", value: unknown(observation) });
   }
   lines.push({ label: "Mail", value: `${input.unread} unread` });
+  // Whether a Resident is confined changes what OMA can promise about it, so it
+  // is a dashboard line rather than something only a runner log mentions.
+  // `/` means no trusted rootfs was declared, because SB-001 forbids binding the
+  // host root; anything else is the rootfs Residents are confined to.
+  lines.push({ label: "Sandbox", value: config.installation.rootfs === "/"
+    ? "비봉인 (신뢰 rootfs 미선언)" : `봉인 (${config.installation.rootfs})` });
   lines.push({ label: "Model", value: input.principalModel });
-  // S-04 keeps per-request cost bounds open, so no usage percentage is shown.
-  lines.push({ label: "Usage", value: "unknown (S-04 가격 codec 미확정)" });
+  // The engine owns inference and never reports spend to OMA (INF-001), so a
+  // usage percentage here would be invented. Unknown is said, not guessed.
+  lines.push({ label: "Usage", value: "unknown (엔진이 소유)" });
   return Object.freeze(lines);
 }

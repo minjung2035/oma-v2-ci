@@ -15,6 +15,22 @@ import {
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { PiRpcClient, type PiEvent } from "./pi-rpc.js";
+import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
+import type { ValidatedRunLease } from "../protocol/run-lease.js";
+
+/** Everything the adapter needs to run the engine inside the Resident sandbox.
+ * Its absence is the unconfined profile, which the runner states explicitly. */
+export interface PiConfinement {
+  /** `libdir` is a host path; `node` and `pi` are paths inside the sandbox. */
+  readonly host: SandboxHost;
+  readonly lease: ValidatedRunLease;
+  /** Host mount roots, checked against the actor's trusted roots by the builder. */
+  readonly directories: ResidentDirectories;
+  /** INF-005/006: the relay's host socket and the provider it stands in for.
+   * Absent means the confined engine has no provider path at all, which is a
+   * runnable state — the Resident simply cannot infer — and not a silent one. */
+  readonly inference?: { readonly socketHostPath: string; readonly provider: string } | undefined;
+}
 
 export interface PiAdapterProfile {
   readonly provider: string;
@@ -58,6 +74,12 @@ export interface PiAdapterOptions {
     | "batchMaxMessages"
     | "mailBodyBytes"
   >;
+  /** When present the engine runs confined. `paths` stays host-side so the file
+   * checks and digest verification below still read the real files; the argv
+   * and environment handed to the engine are translated through the mount
+   * table, so there is one authority for where a file is and one for what the
+   * engine is told. */
+  readonly confinement?: PiConfinement | undefined;
 }
 function failure(
   code:
@@ -134,6 +156,43 @@ function boundaryOf(
     entryId: value.entryId,
   };
 }
+/** Maps a host path to the path the engine is told. Identity when the engine
+ * runs on the host; the mount translation when it runs confined. */
+type PathView = (hostPath: string) => string;
+
+function pathView(options: PiAdapterOptions): PathView {
+  const confinement = options.confinement;
+  if (confinement === undefined) return path => path;
+  return path =>
+    // The lease socket is bind-mounted at a fixed path rather than under one of
+    // the directory roots, so it is the one entry the table cannot resolve.
+    path === confinement.lease.socketHostPath
+      ? RESIDENT_PATHS.socket
+      : confinedPath(confinement.host.libdir, confinement.directories, path);
+}
+
+/** The entries the trusted core extension reads. Nothing else is OMA's to set. */
+function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<string, string> {
+  return {
+    OMA_ACTOR: options.actor,
+    OMA_SOCIETY: options.society,
+    OMA_SOCKET: inside(options.paths.socket),
+    OMA_BATCH_VIEW: inside(options.paths.batchView),
+    OMA_FRAME_BYTES: String(options.limits.frameBytes),
+    OMA_BATCH_MAX_MESSAGES: String(options.limits.batchMaxMessages),
+    OMA_MAIL_BYTES: String(options.limits.mailBodyBytes),
+    OMA_WORKSPACE_BYTES: String(options.profile.workspaceBytes),
+    OMA_MAIL_ARCHIVE: inside(options.paths.mailArchive),
+    OMA_AGENT_HOME: inside(options.paths.agentHome),
+    OMA_CLI_PATH: inside(options.paths.cli),
+    ...(options.profile.toolSurface === undefined
+      ? {}
+      : { OMA_TOOL_SURFACE: options.profile.toolSurface }),
+  };
+}
+
+/** Environment for an engine spawned directly on the host. The confined spawn
+ * does not use this: `--clearenv` means its environment is its argv. */
 function childEnvironment(options: PiAdapterOptions): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env))
@@ -145,25 +204,11 @@ function childEnvironment(options: PiAdapterOptions): Record<string, string> {
     "PI_SESSION_REASON",
   ] as const)
     delete env[key];
-  return Object.assign(env, {
-    OMA_ACTOR: options.actor,
-    OMA_SOCIETY: options.society,
-    OMA_SOCKET: options.paths.socket,
-    OMA_BATCH_VIEW: options.paths.batchView,
-    OMA_FRAME_BYTES: String(options.limits.frameBytes),
-    OMA_BATCH_MAX_MESSAGES: String(options.limits.batchMaxMessages),
-    OMA_MAIL_BYTES: String(options.limits.mailBodyBytes),
-    OMA_WORKSPACE_BYTES: String(options.profile.workspaceBytes),
-    OMA_MAIL_ARCHIVE: options.paths.mailArchive,
-    OMA_AGENT_HOME: options.paths.agentHome,
-    OMA_CLI_PATH: options.paths.cli,
+  return Object.assign(env, omaEnvironment(options, path => path), {
     ...(options.paths.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: options.paths.piAgentDir }),
-    ...(options.profile.toolSurface === undefined
-      ? {}
-      : { OMA_TOOL_SURFACE: options.profile.toolSurface }),
   });
 }
-function argv(options: PiAdapterOptions): string[] {
+function argv(options: PiAdapterOptions, inside: PathView = path => path): string[] {
   const args = [
     "--mode",
     "rpc",
@@ -175,16 +220,17 @@ function argv(options: PiAdapterOptions): string[] {
     "--exclude-tools",
     "bash,powershell",
     "--session-dir",
-    options.paths.sessionDir,
+    inside(options.paths.sessionDir),
     "--name",
     `oma-${options.society}-${options.actor}`,
     "-e",
-    options.paths.coreExtension,
+    inside(options.paths.coreExtension),
   ];
   // The core extension is already first; the recorded list may also contain it
-  // so that its digest is verified, but it is never passed twice.
+  // so that its digest is verified, but it is never passed twice. Comparison is
+  // on the host path, before translation, because that is what was verified.
   for (const extension of verifiedPaths(options.profile.extensions))
-    if (extension !== options.paths.coreExtension) args.push("-e", extension);
+    if (extension !== options.paths.coreExtension) args.push("-e", inside(extension));
   if (
     !(options.profile.provider === "pi" && options.profile.model === "current")
   )
@@ -223,6 +269,39 @@ export class PiAdapter {
       }
     }
   }
+  /** How the engine will be started. Public because how a Resident is confined
+   * is a property callers and operators need to be able to read, and because a
+   * plan that can only be observed by running it cannot be checked.
+   */
+  spawnPlan(): { command: string; args: string[]; cwd: string; env: Record<string, string> } {
+    const confinement = this.options.confinement;
+    if (confinement === undefined)
+      return {
+        command: this.options.paths.piCommand,
+        args: [...(this.options.paths.piArgs ?? []), ...argv(this.options)],
+        cwd: this.options.paths.workspace,
+        env: childEnvironment(this.options),
+      };
+    const inside = pathView(this.options);
+    // `residentArgv` appends `node pi <piModeArgs>` itself, so the engine flags
+    // travel as the host's Pi arguments and the entry is `host.pi`.
+    const host = { ...confinement.host, piModeArgs: argv(this.options, inside) };
+    // The engine's own agent directory holds provider credentials, so PR-004
+    // keeps it out of this mount plan (INF-007). The engine reaches a provider
+    // through the relay socket instead, and the credential stays on the host.
+    const relay = confinement.inference;
+    const environment = {
+      ...omaEnvironment(this.options, inside),
+      ...(relay === undefined ? {} : {
+        OMA_INFERENCE_SOCKET: RESIDENT_PATHS.inference,
+        OMA_INFERENCE_PROVIDER: relay.provider,
+        OMA_INFERENCE_PORT: String(RESIDENT_INFERENCE_PORT),
+      }),
+    };
+    const plan = residentArgv(host, confinement.lease, confinement.directories,
+      environment, relay?.socketHostPath);
+    return { command: plan[0]!, args: plan.slice(1), cwd: this.options.paths.workspace, env: {} };
+  }
   async deliver(batch: PreparedBatch): Promise<DeliveryBoundary> {
     if (batch.agent !== this.options.actor)
       throw failure(
@@ -232,12 +311,8 @@ export class PiAdapter {
     // operations/README + TUI-010: the recorded digests are checked again here,
     // at the last moment before the file is handed to Pi.
     assertExtensionIntegrity(this.options.profile.extensions);
-    const child = spawnOwnedRpc(
-      this.options.paths.piCommand,
-      [...(this.options.paths.piArgs ?? []), ...argv(this.options)],
-      this.options.paths.workspace,
-      childEnvironment(this.options),
-    );
+    const spawn = this.spawnPlan();
+    const child = spawnOwnedRpc(spawn.command, spawn.args, spawn.cwd, spawn.env);
     const rpc = new PiRpcClient(child, this.options.limits);
     let accepted = false;
     let settled = false;

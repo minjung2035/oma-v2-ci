@@ -66,7 +66,16 @@ new-operations/
 
 Core extension은 shell/powershell tool을 거절하고 built-in file tool을 agent workspace 안으로 제한하며 OMA mail read/send/ack/status만 고정 argv로 노출한다. Pi project extension/skill/prompt/context 자동 탐색은 끈다. 추가 role extension은 이 제한 밖의 trusted code가 될 수 있으므로 운영자가 별도 검토해야 한다.
 
-Broker는 `quota.storageBytes`가 유효하면 시작하고, 시작 및 각 public/internal admission에서 owned state tree 사용량을 관측한다. streamed body의 선언 bytes와 role별 workspace write/edit도 사전 제한한다. 따라서 S-01/S-03의 unconditional `SPIKE_UNRESOLVED` 차단은 없다. 실제 systemd/READY, 외부 same-UID writer에 대한 kernel filesystem quota, S-03 steer·concurrency·전체 kill matrix와 S-04 가격·usage/error/cancel codec은 별도 release-hardening 범위다.
+Broker는 `quota.storageBytes`가 유효하면 시작하고, 시작 및 각 public/internal admission에서 owned state tree 사용량을 관측한다. streamed body의 선언 bytes와 role별 workspace write/edit도 사전 제한한다. 따라서 S-01/S-03의 unconditional `SPIKE_UNRESOLVED` 차단은 없다. 실제 systemd/READY, 외부 same-UID writer에 대한 kernel filesystem quota, S-03 steer·concurrency·전체 kill matrix는 별도 release-hardening 범위다. 가격·usage·error/cancel codec은 동봉 엔진이 소유하므로(INF-001) OMA의 hardening 범위가 아니며, OMA는 비용 상한을 집행하지 않는다.
+
+## 봉인된 Resident의 provider 경로
+
+`installation.rootfs`가 신뢰 rootfs를 가리키면 Resident는 bwrap 안에서 실행된다. 그 안에는 provider credential도 network도 없다(`PR-004`, `SB-004`). 엔진은 host의 relay socket을 통해 provider에 닿는다(`INF-005`/`INF-006`).
+
+- relay는 stream을 해석하지 않는다. 헤더에 진짜 credential을 끼우고 바이트를 그대로 넘긴다. 가격·token·재시도는 계속 엔진의 것이다.
+- 목적지는 model profile이 선언한 provider endpoint 하나다. 그 경로를 벗어나는 요청은 provider에 닿기 전에 거절된다.
+- sandbox 안의 provider 설정에 들어가는 key는 자리표시자다. 운영자가 sandbox 안에서 `/login`을 실행하면 진짜 토큰이 sandbox 안에 쓰여 이 모델이 무너진다. 하지 않는다.
+- `installation.rootfs`가 `/`이면 신뢰 rootfs가 없다는 선언이며 Resident는 봉인 없이 host에서 실행된다. runner가 시작할 때 그 사실을 stderr로 보고하고 TUI Dashboard의 `Sandbox` 줄에도 나온다.
 
 ## Pi 엔진
 

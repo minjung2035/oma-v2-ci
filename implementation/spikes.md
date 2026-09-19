@@ -62,7 +62,7 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 1. **extension command 실행**: RPC prompt `{"type":"prompt","message":"/oma-deliver b-123"}` → 등록한 `oma-deliver` handler 실행, `ctx.ui.notify('oma-deliver executed for b-123')` 수신.
 2. **custom message + triggerTurn + deliverAs=steer**: handler의 `pi.sendMessage({customType:'oma-mail', content, display:true, details:{batchId}}, {triggerTurn:true, deliverAs:'steer'})` → `turn_start` 후 `message_start{role:'custom',customType:'oma-mail',...}`로 스트림 전달. → **peer content가 Human role로 위장되지 않음**(role='custom' 확증).
-3. provider 미설정 격리 프로파일에서 assistant turn은 `Unknown provider: unknown`, `stopReason:'error'`로 종료 — 모델 없는 프로브의 기대 동작이며 S-04(provider codec)가 별도 gate임을 재확인.
+3. provider 미설정 격리 프로파일에서 assistant turn은 `Unknown provider: unknown`, `stopReason:'error'`로 종료 — 모델 없는 프로브의 기대 동작이다. provider 해석은 동봉 엔진이 소유하므로(INF-001) OMA 쪽 gate는 없다.
 4. RPC 계약(rpc.md) 확인: `steer` = 실행 중 assistant turn의 tool call들을 마친 뒤 다음 LLM 호출 전에 전달; `followUp` = agent 종료 후 전달; `set_steering_mode`(all/one-at-a-time) 존재. S-03의 steer/followUp 경로가 pinned Pi에 존재함을 실증.
 
 **결정**: 확장 command + custom message + deliverAs 경로는 pi 0.85.1에서 동작. 준비된 batch를 읽어 steer/followUp으로 안내하는 `pi-extension.ts` adapter 계약의 기반 확보.
@@ -78,20 +78,6 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 **MUST [SP-03-A]** 각 notice의 immutable message ID snapshot과 정상 boundary 귀속을 증명하고, 미확정은 동일 ID로 재안내한다. tool result 유실·자동 tool replay·미완료 mail 영구 누락은 0건이어야 한다. 모델이 writable session JSON을 바꿔 trusted completion을 위조하지 못해야 한다. 오래된 incarnation의 complete는 거절해야 한다.
 
 **MUST [SP-03-D]** 통과 결과로 PiAdapter의 실제 import/signature, prepared batch 동시성, 클래스 분리, completion receipt 필드/flush 순서, FIFO와 fairness의 적용 시점을 확정한다. 여섯 entity와 prepared/completed 의미 안에서 증명이 안 되면 상위 architecture 검토로 올린다. 임의로 `active/queued/thinking/reviewing` state, notice event log, cognitive checkpoint를 추가하지 않는다. 모든 busy mail을 agent_end까지 미루는 타협도 조용히 확정하지 않는다.
-
-## S-04 — 엔진 provider 연결 (범위 축소)
-
-**S-04 범위 재정의 (2026-09-19)**: INF-001이 inference 소유권을 동봉 엔진으로 확정하면서, OMA가 provider codec·가격 upper bound·usage 회계를 직접 구현할 이유가 사라졌다. 이 spike가 gate하던 relay는 존재하지 않는다. 남는 것은 엔진 연결이 실제로 동작하는지이며, 그것은 아래 기록의 functional 확인으로 충분하다. 비용 상한을 OMA 계약으로 되돌리려면 relay 구현이라는 별도 architecture 결정이 선행되어야 하고, 그때 이 spike를 원래 범위로 되살린다.
-
-**SPIKE [S-04, 축소됨]** pinned Pi의 model/provider registration과 streaming data codec, abort/error/finish event mapping, provider input/output/cache/reasoning token 회계, request 최대비용 upper bound를 검증한다. 특정 model 이름만으로 가격이나 context limit을 추정하지 않는다.
-
-**S-04 기능 프로필 기록**: 별도 provider relay나 새 credential store를 만들지 않고 host-side Pi RPC와 pinned OMA adapter revision이 현재 `~/.pi/agent`의 연결을 사용하도록 선택했다. `npm run test:functional-pi`의 실제 실행은 요청 `pi/current`를 `openai-codex/gpt-5.6-luna`로 해석했고, `oma_mail_read` tool 1회 성공, terminal `stop`, session persist와 durable batch presented=1을 확인했다. 이 성공 1건은 resident 기본 대화 경로의 provider 연결 증거일 뿐, Pi executable artifact pin, 가격/usage upper bound·429/5xx·취소/중간 끊김 codec을 확정하지 않는다. 따라서 inference accounting을 포함한 S-04 전체는 OPEN이다.
-
-**현재 runtime 상태 (2026-09-10)**: T48–T51 mock provider/usage semantics는 `npm test`에서 통과한다. 이는 실제 provider codec, 가격 upper bound, provider cancellation 과금 의미를 확정하지 않는다. 실제 provider pin과 raw stream evidence 전까지 S-04는 OPEN이다.
-
-**MUST [SP-04-T]** 실제 허용된 cheap/Principal profile에서 stream 성공·429·5xx·중간 끊김·초기 연결 실패·취소·provider가 응답 직전 broker kill을 시험한다. mock provider로 concurrent reservation/lineage/reserve 경계를 대량 검사하고 실제 provider로 codec 호환을 확인한다. raw Human payload가 journal/mail/DB에 없는지 검색한다.
-
-**MUST [SP-04-A]** 정확한 request/event schema와 codec revision이 확정되고 Pi tool loop가 정상 작동해야 한다. uncertain charge는 unknown reservation으로 남고 새 request 자동 replay는 없어야 한다. 최대 과금 bound를 증명할 수 없는 profile은 quota enforced production profile로 지원하지 않는다. provider relay를 임의 URL proxy로 만들지 않는다.
 
 ## S-05 — hostile bundle / canonical object import
 
