@@ -34,7 +34,7 @@
  */
 import { connect, type Socket } from "node:net";
 import { join } from "node:path";
-import { spawnSupervisedService, type ChildProcess } from "../process/async.js";
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnSupervisedService, type ChildProcess } from "../process/async.js";
 import { SOCIETY_OWNED_EXIT } from "./process-lock.js";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HostChannelReader, encodeHostMessage } from "../protocol/host-channel.js";
 
@@ -179,6 +179,11 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       const env: Record<string, string> = {};
       for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
       env[HOST_CHANNEL_ENV] = String(HOST_CHANNEL_FD);
+      // The broker is told which descriptor its society lease is on, on the
+      // same rule as every other fenced child: a process that must decide
+      // whether it owns the society should read that from the product rather
+      // than infer it from how it happened to be started.
+      if (options.fence !== undefined) env[SOCIETY_FENCE_ENV] = String(SOCIETY_FENCE_FD);
       child = spawnSupervisedService(options.node, [join(options.libdir, "dist/src/entry/broker.js"),
         "--society", options.society, "--config", options.configPath], env, true, options.fence);
     } catch (error) {

@@ -8,7 +8,7 @@
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import type { ProtocolLimits } from "../../implementation/contracts.js";
-import { spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/async.js";
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/async.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
@@ -196,12 +196,20 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
 export function sessionEnv(
   base: Readonly<Record<string, string>>,
   profile: SessionProfile,
-  paths?: Pick<SessionPaths, "piAgentDir">,
+  paths?: Pick<SessionPaths, "piAgentDir" | "fence">,
 ): Record<string, string> {
   return {
     ...base,
     ...(profile.toolSurface === undefined ? {} : { OMA_TOOL_SURFACE: profile.toolSurface }),
     ...(paths?.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: paths.piAgentDir }),
+    // REC-007: the engine is told which of its descriptors is the society
+    // lease, because the engine starts children of its own -- the model-facing
+    // CLI, which writes this society's private state -- and a child started
+    // without the lease can outlive it. The number is the child's view of the
+    // descriptor, not this process's, and it names a descriptor rather than
+    // carrying a secret: a process that does not already hold it gains nothing
+    // by reading it in /proc.
+    ...(paths?.fence === undefined ? {} : { [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) }),
   };
 }
 

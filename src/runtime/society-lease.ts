@@ -11,43 +11,66 @@
  * gap, takes the society and starts a second engine on it: two writers of one
  * private workspace and one session history.
  *
- * So ownership is not derived from the broker any more. The host takes this
- * lease itself, before it writes anything or starts anything, and holds it for
- * its whole life.
+ * So ownership is not derived from the broker. The host takes this lease
+ * itself, before it writes anything or starts anything, and holds it for its
+ * whole life.
  *
- * That alone still had a hole, and it is the one this module now closes. A
- * lease released by running code can only promise the order in which this
- * process made its calls, and `close()` on a child is a signal, not a death:
- * the host could send SIGKILL, release the lease, and be replaced by a second
- * `oma` whose engine starts while the first engine is still running. A host
- * that is itself SIGKILLed runs no code at all, and the kernel drops its lock
- * the instant it dies -- with its engine still alive.
+ * That alone still had a hole: a lease released by running code can only
+ * promise the order in which this process made its calls, and `close()` on a
+ * child is a signal, not a death. The lease is therefore not a lock a process
+ * holds. It is a lock an open file description holds, and every process
+ * started because of the lease inherits a descriptor onto that same
+ * description. It is released only when the last of them closes, so the
+ * society cannot pass to another host until the engine, the broker and
+ * everything they started are gone -- whether this process released it
+ * politely, crashed, or was killed outright. The fence is the kernel's, not
+ * this code's, which is what makes it true on the paths where this code never
+ * runs.
  *
- * The lease is therefore not a lock a process holds. It is a lock an open file
- * description holds, and every process started because of the lease inherits a
- * descriptor onto that same description. flock releases only when the last of
- * them closes, so the society cannot pass to another host until the engine,
- * the broker and everything they started are gone -- whether this process
- * released it politely, crashed, or was killed outright. The fence is the
- * kernel's, not this code's, which is what makes it true on the paths where
- * this code never runs.
+ * And the name the lease is taken under is not a pathname any more. A flock on
+ * a file names the lock by an inode, but a caller names the file by a path,
+ * and at the same UID any process can unlink or rename that path and create a
+ * new file in its place: the old holder keeps the old inode's lock, the
+ * newcomer takes the new inode's, and one society has two owners that cannot
+ * see each other. Re-checking the path against the pinned inode after
+ * acquisition only narrows that window, because the check and the use are
+ * still two steps. FS-005 has already said a boundary cannot be claimed from a
+ * file mode at the same UID, and this is the same lesson about the namespace
+ * rather than the mode: the abstract AF_UNIX namespace has no directory entry
+ * to replace, so there is nothing for an adversary to rename, unlink or point
+ * at another object with a symlink.
+ *
+ * The name identifies the society's state tree, not its run directory. The
+ * state tree is the thing that must not have two writers -- the private
+ * workspace, the session history, the mailbox -- and a lease named after the
+ * run root gave two hosts with one XDG_DATA_HOME and two XDG_RUNTIME_DIRs two
+ * leases over one of them.
  *
  * The broker keeps its own lock. That one answers a different question -- may
  * this process be the society's single SQLite writer -- and still refuses a
  * broker started by hand. This answers "may this process run the society's one
  * engine", and only a host asks it.
  */
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { ProcessLock } from "./process-lock.js";
+import { createHash } from "node:crypto";
+import { closeSync } from "node:fs";
+import { abstractNameHolder, holdAbstractName } from "../leaf.js";
+import { assertHostDirectoryLayout } from "./assets.js";
+import { StoreError } from "../domain/errors.js";
 
-/** The lease file, in the run root: ownership is a fact about this boot, not
- * something a stale file in the state tree can claim after a reboot. */
-export const SOCIETY_LEASE_FILE = "society.lease";
+/** The abstract-namespace prefix every society lease is taken under. The rest
+ * of the name is a digest, so a state path is not published to every process
+ * on the machine that can list sockets. */
+const SOCIETY_LEASE_PREFIX = "\0oma.society.";
+
+/** How many times an acquisition may be re-attempted when the name is taken
+ * and then let go before its holder could be named. Bounded, because "the
+ * holder keeps changing" is an answer too, and it is not "free". */
+const ACQUIRE_ATTEMPTS = 3;
 
 export interface SocietyLease {
-  /** The lease file this host holds. */
-  readonly path: string;
+  /** The abstract-namespace name this host holds. It exists nowhere in the
+   * filesystem: that is the point. */
+  readonly name: string;
   /** The descriptor every process this lease pays for must inherit.
    *
    * Passing it to a child is not an optimisation and not a convenience: it is
@@ -64,24 +87,58 @@ export interface SocietyLease {
   release(): void;
 }
 
+/** The name a society's lease is taken under, from the state tree it protects.
+ *
+ * The path is checked before it is used, not after: an `oma` pointed at a
+ * relative, denormalized or symlinked state root would otherwise take a lease
+ * under one name and write the society somewhere else, and the lease it holds
+ * would be proof of owning a society nobody else is using. The UID is part of
+ * the digest because the abstract namespace is shared by every user of the
+ * machine, so two users with the same state path must not collide there. */
+export function societyLeaseName(stateRoot: string): string {
+  assertHostDirectoryLayout(stateRoot, true);
+  const uid = process.geteuid?.() ?? -1;
+  return SOCIETY_LEASE_PREFIX + createHash("sha256").update(`${uid}\n${stateRoot}`).digest("hex");
+}
+
 /** Takes the society for this process, or answers null when another process
  * holds it -- which now includes a process whose host is already gone but
  * whose engine is not. Every other failure throws: "someone else owns this"
- * and "this could not be locked at all" are different answers, and a caller
- * that starts an engine on the first must not be handed the second. */
-export function tryHoldSociety(runRoot: string): SocietyLease | null {
-  mkdirSync(runRoot, { recursive: true, mode: 0o700 });
-  const lock = ProcessLock.tryAcquire(join(runRoot, SOCIETY_LEASE_FILE));
-  if (lock === null) return null;
-  const fence = lock.descriptor;
+ * and "this could not be evaluated at all" are different answers, and a caller
+ * that starts an engine on the first must not be handed the second.
+ *
+ * Nothing is created here. Taking the society is not a write, and an `oma`
+ * that does not own the society must not have left a directory behind to prove
+ * it tried. */
+export function tryHoldSociety(stateRoot: string): SocietyLease | null {
+  const name = societyLeaseName(stateRoot);
+  for (let attempt = 0; attempt < ACQUIRE_ATTEMPTS; attempt += 1) {
+    const held = holdAbstractName(name);
+    if (held.kind === "held") return leaseOf(name, held.fd);
+    if (held.kind === "failed")
+      throw new StoreError("BROKER_UNAVAILABLE", `society 임대를 평가할 수 없습니다 (errno ${held.errno})`);
+    const holder = abstractNameHolder(name);
+    // A holder of another user is not another `oma` of this Human's: this
+    // process cannot tell whether the society is owned, and must not answer as
+    // if it had.
+    if (holder.kind === "peer" && holder.cred.uid !== (process.geteuid?.() ?? holder.cred.uid))
+      throw new StoreError("BROKER_UNAVAILABLE", "다른 사용자의 프로세스가 이 society의 임대 이름을 쥐고 있습니다");
+    if (holder.kind !== "none") return null;
+    // The holder let go between the refusal and the question. Ask again rather
+    // than report an owner that no longer exists.
+  }
+  throw new StoreError("BROKER_UNAVAILABLE", "society 임대의 소유자가 계속 바뀌어 확정할 수 없습니다");
+}
+
+function leaseOf(name: string, fence: number): SocietyLease {
   let released = false;
   return {
-    path: lock.path,
+    name,
     fence,
     release(): void {
       if (released) return;
       released = true;
-      lock.close();
+      try { closeSync(fence); } catch { /* the lease is going away either way */ }
     },
   };
 }

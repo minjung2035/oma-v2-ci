@@ -9,6 +9,7 @@ import {
   piAgentDir, piIsolationEnv, resolvePiRuntime,
 } from "../src/runtime/pi-runtime.js";
 import { sessionArgv, sessionEnv } from "../src/tui/session.js";
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../src/process/async.js";
 import {
   DEFAULT_MODEL_PROFILE, DEFAULT_PRINCIPAL_PROFILE, DEFAULT_RESIDENT_PROFILE,
   defaultHostConfig, societyFromDirectory,
@@ -118,6 +119,28 @@ test("the Principal session carries the isolation variable to the engine", () =>
     society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
   });
   assert.ok(!(PI_AGENT_DIR_ENV in without));
+});
+
+test("REC-007: the Principal session tells the engine which descriptor its society lease is on", () => {
+  // The engine inherits the lease whether or not it is told, but it starts the
+  // model-facing CLI -- a writer of this society's private state that survives
+  // signals sent to the engine -- and it can only pass the lease on to a
+  // descriptor it can name. Inferring the number from how it was spawned is
+  // not available to it: the trusted extension inside it cannot see the host's
+  // spawn flags. So the number is declared, and an fd number grants nothing to
+  // anyone who was not handed the descriptor.
+  const profile = { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] };
+  const fenced = sessionEnv({ HOME: "/h" }, profile, { piAgentDir: "/p", fence: 41 });
+  assert.equal(fenced[SOCIETY_FENCE_ENV], String(SOCIETY_FENCE_FD),
+    "the engine was told a descriptor other than the one the host places the lease on");
+  // Not the host's own number for it: what the engine has is the slot it was
+  // handed, and saying otherwise would send it to a descriptor of its own.
+  assert.notEqual(fenced[SOCIETY_FENCE_ENV], "41");
+  // A session started with no fence declares none, so a Pi run by hand outside
+  // a society is not told to pass on a lease it does not have.
+  const unfenced = sessionEnv({ HOME: "/h" }, profile, { piAgentDir: "/p" });
+  assert.ok(!(SOCIETY_FENCE_ENV in unfenced), "a session with no lease claimed one");
+  assert.ok(!(SOCIETY_FENCE_ENV in sessionEnv({ HOME: "/h" }, profile)));
 });
 
 test("the engine entry precedes Pi's own flags on the command line", () => {

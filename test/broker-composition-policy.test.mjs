@@ -14,7 +14,8 @@ import ts from "typescript";
  * and a stand-in that does would run the rest of a function the product ended. */
 class Exited extends Error {}
 
-async function compose(environment, { lockHeld = true } = {}) {
+async function compose(environment, { lockHeld = true, leaseHeld = true, fence = "socket",
+  starts = lockHeld && leaseHeld } = {}) {
   const source = readFileSync(new URL("../src/entry/broker.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -29,7 +30,14 @@ async function compose(environment, { lockHeld = true } = {}) {
     quota: { storageBytes: 1024 }, integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
   const modules = {
     "node:path": path,
-    "node:fs": { mkdirSync() {} },
+    "node:fs": { mkdirSync() {},
+      // The fence is a descriptor, so the only honest question about it is
+      // what the kernel says that descriptor is.
+      fstatSync(fd) {
+        calls.push(`fstat:${fd}`);
+        if (fence === "closed") { const error = new Error("EBADF"); error.code = "EBADF"; throw error; }
+        return { isSocket: () => fence === "socket" };
+      } },
     "../store.js": { SCHEMA_PATH: "schema", Store: class {
       constructor() { calls.push("Store"); } close() {} listAgents() { return []; } getAgent() { return null; }
     } },
@@ -63,7 +71,7 @@ async function compose(environment, { lockHeld = true } = {}) {
     "../runtime/process-lock.js": {
       SOCIETY_OWNED_EXIT: 6,
       ProcessLock: {
-        tryAcquire: () => { calls.push("lock"); return lockHeld ? {} : null; },
+        tryAcquire: () => { calls.push("lock"); return lockHeld ? { close() { calls.push("unlock"); } } : null; },
         // Taking the lock in a way that cannot tell "someone else owns this"
         // from "this could not be locked" is the defect itself: the host reads
         // ownership off the status, and a throw here is a startup failure,
@@ -71,6 +79,11 @@ async function compose(environment, { lockHeld = true } = {}) {
         acquire: () => { throw new Error("the composition root must distinguish ownership from failure"); },
       },
     },
+    "../process/async.js": { SOCIETY_FENCE_ENV: "OMA_SOCIETY_FENCE_FD", SOCIETY_FENCE_FD: 4 },
+    "../runtime/society-lease.js": { tryHoldSociety: () => {
+      calls.push("lease");
+      return leaseHeld ? { name: "\0oma.society.fixture", fence: 4, release() { calls.push("release"); } } : null;
+    } },
     "../runtime/broker-lifetime.js": { BrokerLifetime: class {
       permitsActivation = true;
       retainStore() {} attach() {}
@@ -99,11 +112,11 @@ async function compose(environment, { lockHeld = true } = {}) {
       return modules[name];
     },
   });
-  if (lockHeld) {
+  if (starts) {
     assert.deepEqual(exits, [], "the entrypoint ended the process on a society it does own");
     assert.equal(process.exitCode, 0, "entrypoint must complete without the startup failure path");
   }
-  return { calls, paths, observation, constructorGoal, supervision, exits };
+  return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode };
 }
 
 test("P1 composition root: Git exists when Lifecycle receives its context reader", async () => {
@@ -194,4 +207,62 @@ test("P1 composition root: a society that already has an owner ends with its own
   assert.deepEqual(exits, [6], `the entrypoint ended with ${JSON.stringify(exits)} instead of the ownership status`);
   for (const opened of ["config", "Store", "Broker", "listen", "recover"])
     assert.equal(calls.includes(opened), false, `${opened} ran for a society this process does not own`);
+});
+
+test("P1 composition root: a broker the product did not start takes the society lease itself", async () => {
+  // REC-007. `broker.lock` answers "may this process be the single SQLite
+  // writer". It never answered "may anything act on this society at all", so a
+  // systemd or hand-started broker left that name free and an `oma` took it,
+  // wrote the configuration and repaired the rootfs underneath a running
+  // broker. This broker now answers the same question the host does.
+  const held = await compose();
+  const order = name => held.calls.indexOf(name);
+  assert.ok(order("lease") >= 0, "the entrypoint never took the society lease");
+  assert.ok(order("lock") < order("lease"), "the society lease was taken before this broker knew it was the writer");
+  for (const after of ["config", "Store", "Broker", "listen", "recover"])
+    assert.ok(order("lease") < order(after), `${after} happened before the society lease`);
+
+  const refused = await compose(undefined, { leaseHeld: false });
+  assert.deepEqual(refused.exits, [6], `a society an oma owns ended with ${JSON.stringify(refused.exits)} instead of the ownership status`);
+  for (const opened of ["config", "Store", "Broker", "listen", "recover"])
+    assert.equal(refused.calls.includes(opened), false, `${opened} ran on a society an oma already owns`);
+  // The writer lock is given back on the way out: refusing to own the society
+  // must not leave this society's singleton held by a process that stopped.
+  assert.ok(refused.calls.includes("unlock"), "a refused broker kept the society's writer lock");
+});
+
+test("P1 composition root: a broker the product started inherits the lease and never takes the name twice", async () => {
+  // The host holds this society's lease and hands the descriptor down. Taking
+  // the name again would be this broker asking its own host for permission --
+  // and being refused, because the name is held by the description it is
+  // already holding.
+  const supervised = await compose({ OMA_SOCIETY_FENCE_FD: "4" });
+  assert.ok(supervised.calls.includes("fstat:4"), "the declared fence was never examined");
+  assert.equal(supervised.calls.includes("lease"), false, "the product's own broker raced its host for the society name");
+  assert.ok(supervised.calls.includes("listen"), "a fenced broker did not start");
+
+  // Even where the name could not be taken at all: the lease it inherited is
+  // its host's, and its host's ownership is the one that counts.
+  const owned = await compose({ OMA_SOCIETY_FENCE_FD: "4" }, { leaseHeld: false, starts: true });
+  assert.deepEqual(owned.exits, []);
+  assert.equal(owned.calls.includes("lease"), false);
+  assert.ok(owned.calls.includes("listen"));
+});
+
+test("P1 composition root: a fence declaration that cannot be honoured is a startup failure, not ownership", async () => {
+  // Starting anyway is the unfenced writer the declaration existed to prevent,
+  // and reporting it as ownership would stop the host from restarting a broker
+  // that merely fell over.
+  const cases = [
+    [{ OMA_SOCIETY_FENCE_FD: "5" }, {}, "a descriptor this product does not place the lease on"],
+    [{ OMA_SOCIETY_FENCE_FD: "4" }, { fence: "closed" }, "a descriptor that is not open"],
+    [{ OMA_SOCIETY_FENCE_FD: "4" }, { fence: "file" }, "a descriptor that is not the lease"],
+  ];
+  for (const [environment, options, reason] of cases) {
+    const result = await compose(environment, { ...options, starts: false });
+    assert.deepEqual(result.exits, [], `${reason} was reported as ownership`);
+    assert.equal(result.exitCode, 1, `${reason} did not fail startup`);
+    for (const opened of ["lease", "config", "Store", "Broker", "listen"])
+      assert.equal(result.calls.includes(opened), false, `${opened} ran for ${reason}`);
+  }
 });

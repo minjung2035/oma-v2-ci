@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 219,
-    "n_lines": 24912,
+    "n_lines": 25271,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -32,14 +32,20 @@
   },
   "src/tui/session.ts": {
     "blank": 31,
-    "comment": 164,
-    "code": 284,
+    "comment": 171,
+    "code": 285,
     "language": "TypeScript"
   },
   "src/tui/model.ts": {
     "blank": 30,
     "comment": 38,
     "code": 280,
+    "language": "TypeScript"
+  },
+  "src/entry/oma.ts": {
+    "blank": 24,
+    "comment": 134,
+    "code": 276,
     "language": "TypeScript"
   },
   "src/store.ts": {
@@ -58,12 +64,6 @@
     "blank": 2,
     "comment": 10,
     "code": 270,
-    "language": "TypeScript"
-  },
-  "src/entry/oma.ts": {
-    "blank": 22,
-    "comment": 108,
-    "code": 268,
     "language": "TypeScript"
   },
   "src/config/operations.ts": {
@@ -146,8 +146,14 @@
   },
   "src/runtime/broker-supervisor.ts": {
     "blank": 12,
-    "comment": 100,
-    "code": 209,
+    "comment": 104,
+    "code": 210,
+    "language": "TypeScript"
+  },
+  "src/leaf.ts": {
+    "blank": 20,
+    "comment": 43,
+    "code": 207,
     "language": "TypeScript"
   },
   "src/git/integration.ts": {
@@ -246,6 +252,12 @@
     "code": 163,
     "language": "TypeScript"
   },
+  "src/entry/broker.ts": {
+    "blank": 3,
+    "comment": 37,
+    "code": 162,
+    "language": "TypeScript"
+  },
   "src/diagnostics/files.ts": {
     "blank": 2,
     "comment": 5,
@@ -268,6 +280,12 @@
     "blank": 1,
     "comment": 4,
     "code": 156,
+    "language": "TypeScript"
+  },
+  "src/process/async.ts": {
+    "blank": 4,
+    "comment": 61,
+    "code": 152,
     "language": "TypeScript"
   },
   "src/tui/sources/extensions.ts": {
@@ -330,18 +348,6 @@
     "code": 142,
     "language": "TypeScript"
   },
-  "src/entry/broker.ts": {
-    "blank": 1,
-    "comment": 14,
-    "code": 141,
-    "language": "TypeScript"
-  },
-  "src/process/async.ts": {
-    "blank": 2,
-    "comment": 38,
-    "code": 141,
-    "language": "TypeScript"
-  },
   "src/storage/context-stream.ts": {
     "blank": 4,
     "comment": 17,
@@ -382,12 +388,6 @@
     "blank": 12,
     "comment": 96,
     "code": 134,
-    "language": "TypeScript"
-  },
-  "src/leaf.ts": {
-    "blank": 13,
-    "comment": 13,
-    "code": 131,
     "language": "TypeScript"
   },
   "src/config.ts": {
@@ -522,6 +522,12 @@
     "code": 89,
     "language": "TypeScript"
   },
+  "src/extension/cli-process.ts": {
+    "blank": 6,
+    "comment": 51,
+    "code": 88,
+    "language": "TypeScript"
+  },
   "src/runtime/engine-auth.ts": {
     "blank": 5,
     "comment": 28,
@@ -614,7 +620,7 @@
   },
   "src/runtime/host-tenure.ts": {
     "blank": 17,
-    "comment": 71,
+    "comment": 75,
     "code": 77,
     "language": "TypeScript"
   },
@@ -682,12 +688,6 @@
     "blank": 1,
     "comment": 4,
     "code": 66,
-    "language": "TypeScript"
-  },
-  "src/extension/cli-process.ts": {
-    "blank": 4,
-    "comment": 22,
-    "code": 65,
     "language": "TypeScript"
   },
   "src/cli/cache-codec.ts": {
@@ -879,6 +879,12 @@
   "src/process/preparation.ts": {
     "blank": 2,
     "comment": 7,
+    "code": 43,
+    "language": "TypeScript"
+  },
+  "src/runtime/society-lease.ts": {
+    "blank": 6,
+    "comment": 95,
     "code": 43,
     "language": "TypeScript"
   },
@@ -1104,12 +1110,6 @@
     "code": 25,
     "language": "TypeScript"
   },
-  "src/runtime/society-lease.ts": {
-    "blank": 3,
-    "comment": 59,
-    "code": 25,
-    "language": "TypeScript"
-  },
   "src/cli/effects/mail.ts": {
     "blank": 2,
     "comment": 1,
@@ -1321,9 +1321,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1005,
-    "comment": 3157,
-    "code": 20750,
+    "blank": 1023,
+    "comment": 3339,
+    "code": 20909,
     "nFiles": 219
   }
 }

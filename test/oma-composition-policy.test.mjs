@@ -79,7 +79,8 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 }
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
-  disowned = null, leased = true, repairFails = false, engineExits = true } = {}) {
+  disowned = null, leased = true, repairFails = false, engineExits = true,
+  brokerAlreadyListening = false, untrustedRunRoot = false } = {}) {
   const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -115,6 +116,16 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "node:fs": { existsSync: () => true, mkdirSync() {} },
     "node:url": { fileURLToPath: () => "/lib/" },
     "../ids.js": { isValidSocietyName: () => true },
+    // The path checks are the product's own; what this harness controls is
+    // only whether they pass, because what is under test here is when the
+    // entry asks -- before it takes the society, and before it writes.
+    "../runtime/assets.js": {
+      assertHostDirectoryLayout: (root, allowMissing) => {
+        calls.push(`assertHostDirectoryLayout:${root}`);
+        assert.equal(allowMissing, true, "the run root was required to exist before it had been made");
+        if (untrustedRunRoot) throw new StoreError("INVALID_ARGUMENT", "host directory ancestors must be real directories, not symlinks");
+      },
+    },
     "../domain/deployment.js": { DEPLOYMENT_LAYOUT: { extension: "dist/src/pi-extension.js", cli: "dist/src/cli.js" } },
     "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi" }) },
     "../storage/directory.js": { ensureDirectory() {} },
@@ -207,16 +218,25 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../runtime/host-tenure.js": loadSource("src/runtime/host-tenure.ts", {
       "../domain/errors.js": { StoreError },
       "./society-lease.js": {
-        tryHoldSociety: runRoot => {
+        tryHoldSociety: stateRoot => {
           calls.push("tryHoldSociety");
-          assert.equal(runRoot, "/run/oma/fixture", "the lease was not taken on this society's run root");
+          // The state tree, not the run directory: the tree is the thing that
+          // must not have two writers, and a run directory is per-boot and
+          // replaceable, so two run directories over one tree used to be two
+          // societies as far as the lease could tell.
+          assert.equal(stateRoot, "/state/oma/fixture", "the lease was not taken on this society's state tree");
           if (!lease.holds) return null;
-          return { path: `${runRoot}/society.lease`, fence: FENCE,
+          return { name: `\0oma.society.${"a".repeat(64)}`, fence: FENCE,
             release() { calls.push("lease.release"); lease.releases += 1; lease.holds = false; } };
         },
       },
     }),
     "../runtime/broker-supervisor.js": {
+      brokerListening: async runRoot => {
+        calls.push("brokerListening");
+        assert.equal(runRoot, "/run/oma/fixture", "the standing broker was looked for somewhere else");
+        return brokerAlreadyListening;
+      },
       superviseBroker: async options => {
         calls.push("superviseBroker");
         assert.equal("sessionHandle" in options, false, "a session handle was put where the broker's environment could carry it");
@@ -515,6 +535,75 @@ test("T119 / REC-007: a process that cannot take the society lease writes nothin
   // The lease is taken before anything is written, not after.
   assert.ok(calls.indexOf("tryHoldSociety") < calls.indexOf("readSettings"),
     `the configuration was read before ownership was decided: ${calls.join(" ")}`);
+});
+
+test("T119 / REC-007: a broker that is already listening is found before this process writes anything", async () => {
+  // A standalone broker -- a systemd unit, an operator's own, or one outliving
+  // the `oma` that started it -- owns the writing of this society, and it
+  // takes no society lease to say so: it holds its own `broker.lock` and
+  // nothing else. So a new `oma` could take a free lease and believe it owned
+  // the society. That belief used to last until `superviseBroker` probed the
+  // admin port, which happens after the configuration is written and after the
+  // society has been provisioned and repaired -- a repair that rewrites
+  // `/etc/passwd`, `/etc/group` and symlinks inside a rootfs the standing
+  // broker may be building sandboxes from right now. The probe is the first
+  // thing asked after ownership, so standing down costs nothing.
+  const society = await run({ brokerAlreadyListening: true });
+  const { calls, lines } = society;
+  const order = name => calls.indexOf(name);
+  assert.ok(calls.includes("brokerListening"), "the standing broker was never looked for");
+  assert.ok(order("tryHoldSociety") < order("brokerListening"),
+    `the probe ran before ownership was decided: ${calls.join(" ")}`);
+  assert.equal(calls.includes("writeSettings"), false, "this process wrote configuration for a society another broker is serving");
+  assert.equal(calls.includes("provisionSociety"), false, "this process wrote into a state tree another broker is serving");
+  assert.equal(calls.includes("repairSociety"), false, "this process corrected a rootfs another broker is building sandboxes from");
+  assert.equal(calls.includes("superviseBroker"), false, "a second broker was started for one society");
+  assert.equal(calls.includes("PrincipalSession.start"), false);
+  // Standing down gives the society back. Holding a lease over a society this
+  // process has refused to act on would keep the next `oma` out for nothing.
+  assert.equal(society.lease.releases, 1, "the society was refused and kept at the same time");
+  assert.ok(lines.some(line => /broker가 이미 실행 중입니다/.test(line)), lines.join(" | "));
+});
+
+test("T119 / REC-007 negative control: with no broker listening, the same run provisions and repairs", async () => {
+  // Without this, the test above would pass for a build that never provisions
+  // at all. The only difference between the two runs is the probe's answer.
+  const society = await run({ brokerAlreadyListening: false });
+  assert.ok(society.calls.includes("brokerListening"));
+  assert.ok(society.calls.includes("provisionSociety"),
+    "the control did not reproduce the ordinary path, so the refusal above proves nothing");
+  assert.ok(society.calls.includes("repairSociety"));
+  assert.ok(society.calls.includes("superviseBroker"));
+  assert.equal(society.lease.releases, 0);
+});
+
+test("VAL-002 / FS-005: the run root is judged before the society is taken, not after it is written", async () => {
+  // `assertHostDirectoryLayout` used to run inside the lease, after the run
+  // root had already been created with `mkdirSync`, so an `oma` pointed at a
+  // symlinked or denormalized run root made the directory, took the society,
+  // wrote its configuration and repaired its rootfs before the check it was
+  // subject to ever ran. A path this process cannot vouch for now stops it
+  // before it owns anything.
+  const society = await run({ untrustedRunRoot: true });
+  const { calls } = society;
+  assert.ok(calls.some(name => name === "assertHostDirectoryLayout:/run/oma/fixture"),
+    `the run root was never judged: ${calls.join(" ")}`);
+  assert.equal(calls.includes("tryHoldSociety"), false,
+    "the society was taken on the strength of a path this process cannot vouch for");
+  assert.equal(calls.includes("readSettings"), false);
+  assert.equal(calls.includes("provisionSociety"), false);
+  assert.equal(calls.includes("superviseBroker"), false);
+  assert.ok(calls.some(name => /^exit:/.test(name)), calls.join(" "));
+});
+
+test("VAL-002 negative control: a run root the product can vouch for is judged and then used", async () => {
+  const society = await run();
+  const order = name => society.calls.indexOf(name);
+  assert.ok(order("assertHostDirectoryLayout:/run/oma/fixture") >= 0);
+  assert.ok(order("assertHostDirectoryLayout:/run/oma/fixture") < order("tryHoldSociety"),
+    `the control did not reproduce the ordering under test: ${society.calls.join(" ")}`);
+  assert.ok(order("tryHoldSociety") >= 0,
+    "the control did not reproduce the ordinary path, so the refusal above proves nothing");
 });
 
 test("T119 / REC-007: the rootfs is put right before anything can run on it", async () => {

@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, fstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,6 +16,8 @@ import { createServer } from "node:net";
 import { provisionSociety, repairSociety } from "../src/runtime/provision.js";
 import { brokerListening, superviseBroker } from "../src/runtime/broker-supervisor.js";
 import { ProcessLock, SOCIETY_OWNED_EXIT } from "../src/runtime/process-lock.js";
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../src/process/async.js";
+import { tryHoldSociety } from "../src/runtime/society-lease.js";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-bringup-"));
 const git = (gitDir: string, argv: readonly string[]): string =>
@@ -519,6 +521,115 @@ test("T115 a broker that only fails to start is restarted, not disowned", async 
       assert.match(String(disowned), /could not stay running/);
     } finally { broker.stop(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T119/REC-007 the broker the product starts is handed the society lease and told which descriptor it is on", async () => {
+  // Without the telling, the broker cannot know its host owns the society, so
+  // it would ask for the lease itself -- and be refused by the very host that
+  // started it. The descriptor and the declaration are one fact, and this is
+  // the product's own supervisor handing both to a real child.
+  const root = scratch();
+  const stateRoot = join(root, "state");
+  const lease = tryHoldSociety(stateRoot);
+  assert.ok(lease, "the test could not take the society lease it needs to hold");
+  const held = statSync(root) && fstatSync(lease.fence, { bigint: true });
+  try {
+    const entry = join(root, "lib", "dist", "src", "entry");
+    mkdirSync(entry, { recursive: true });
+    const report = join(root, "broker-env.json");
+    // A stand-in only for the broker's body; the descriptor it is handed and
+    // the environment it is handed are the product's, not the test's.
+    writeFileSync(join(entry, "broker.js"), [
+      'const { fstatSync, writeFileSync, renameSync } = require("node:fs");',
+      'let fence = "none";',
+      `try { const s = fstatSync(${SOCIETY_FENCE_FD}, { bigint: true }); fence = s.dev + ":" + s.ino; }`,
+      ' catch (error) { fence = "none:" + error.code; }',
+      `const body = JSON.stringify({ declared: process.env.${SOCIETY_FENCE_ENV} ?? null, fence });`,
+      `writeFileSync(${JSON.stringify(report)} + ".tmp", body);`,
+      `renameSync(${JSON.stringify(report)} + ".tmp", ${JSON.stringify(report)});`,
+    ].join("\n"));
+    const handle = await superviseBroker({
+      node: process.execPath, libdir: join(root, "lib"), society: "probe",
+      runRoot: root, configPath: join(root, "config.json"), fence: lease.fence,
+    });
+    try {
+      const deadline = Date.now() + 20_000;
+      while (!existsSync(report)) {
+        if (Date.now() >= deadline) throw new Error("the broker the supervisor started never reported");
+        await new Promise<void>(resolve => { setTimeout(resolve, 20).unref(); });
+      }
+      const answer = JSON.parse(readFileSync(report, "utf8")) as { declared: string | null; fence: string };
+      assert.equal(answer.declared, String(SOCIETY_FENCE_FD),
+        "the broker was handed the lease without being told which descriptor it is on");
+      assert.equal(answer.fence, `${held.dev}:${held.ino}`,
+        `descriptor ${SOCIETY_FENCE_FD} in the broker was not this society's lease`);
+    } finally { handle.stop(); }
+  } finally {
+    lease.release();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("T119/REC-007 a broker started outside the product answers to the society lease, and one started by it does not take it twice", () => {
+  // The other half of the audit's third finding. The host now asks whether a
+  // broker is already listening before it writes anything, but that question
+  // and the writes that follow it are two steps: a broker started between them
+  // would still come up underneath an `oma` that was already provisioning. So
+  // the broker answers the same question from its own side.
+  //
+  // The production entry, on the production path, with a real lease held by
+  // this test standing in for the `oma` that holds it.
+  const root = scratch();
+  const society = `lease${Date.now().toString(36)}`;
+  const stateRoot = join(root, "data", "oma", society);
+  const lease = tryHoldSociety(stateRoot);
+  assert.ok(lease, "the test could not take the society lease it needs to hold");
+  const run = (fenced: boolean): { status: number | null; stderr: string } => {
+    const env: Record<string, string> = {
+      ...process.env as Record<string, string>,
+      XDG_RUNTIME_DIR: join(root, "run"), XDG_DATA_HOME: join(root, "data"), NOTIFY_SOCKET: "",
+    };
+    if (fenced) env[SOCIETY_FENCE_ENV] = String(SOCIETY_FENCE_FD);
+    const stdio: ("ignore" | "pipe" | number)[] = ["ignore", "pipe", "pipe"];
+    if (fenced) { stdio.push("ignore"); stdio.push(lease.fence); }
+    const result = spawnSync(process.execPath,
+      [join(process.cwd(), "dist", "src", "entry", "broker.js"), "--society", society],
+      { env, stdio, encoding: "utf8", timeout: 20_000 });
+    return { status: result.status, stderr: result.stderr ?? "" };
+  };
+  try {
+    // A broker nobody handed the lease to takes it, and cannot.
+    const outside = run(false);
+    assert.equal(outside.status, SOCIETY_OWNED_EXIT, outside.stderr);
+    assert.match(outside.stderr, /already owns this society/);
+    // It got no further than ownership: the society an `oma` owns is untouched.
+    assert.equal(existsSync(join(stateRoot, "runtime.sqlite")), false);
+    assert.doesNotMatch(outside.stderr, /startup failed/);
+
+    // The lease is still this test's -- refusing did not take it, and did not
+    // release it either.
+    assert.equal(tryHoldSociety(stateRoot), null, "the refused broker disturbed the society lease");
+
+    // The product's own broker is handed that same lease and must not ask for
+    // it again: the name is already held, by the very description it holds.
+    // Getting past ownership to its own startup failure is what proves it.
+    const ours = run(true);
+    assert.notEqual(ours.status, SOCIETY_OWNED_EXIT,
+      `a broker holding its host's lease reported the society as owned: ${ours.stderr}`);
+    assert.match(ours.stderr, /startup failed/);
+
+    // The control: with no lease held at all, the unfenced entry gets past
+    // ownership too. Without this, the refusal above would pass for a build
+    // that refuses every broker.
+    lease.release();
+    const free = run(false);
+    assert.notEqual(free.status, SOCIETY_OWNED_EXIT,
+      `a broker refused a society nobody owned: ${free.stderr}`);
+    assert.match(free.stderr, /startup failed/);
+  } finally {
+    lease.release();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("T115 the real broker entry refuses to be the second owner of a society, and says which it is", async () => {

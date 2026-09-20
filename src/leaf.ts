@@ -1,7 +1,7 @@
 // MUST [S-01]: minimal native leaf for SO_PEERCRED, sd_notify and the
-// process-lifetime REC-007 advisory lock through koffi FFI.
+// REC-007 society lease through koffi FFI.
 import { closeSync, openSync } from "node:fs";
-import { load } from "koffi";
+import { errno, load } from "koffi";
 import { endianness } from "node:os";
 
 const NATIVE_LE = endianness() === "LE";
@@ -25,6 +25,8 @@ let cached: {
   send: (fd: number, buf: Buffer, len: number, flags: number) => number;
   flock: (fd: number, op: number) => number;
   poll: (fds: ArrayBuffer, count: number, timeout: number) => number;
+  bind: (fd: number, addr: Buffer, len: number) => number;
+  listen: (fd: number, backlog: number) => number;
 } | null = null;
 
 function lib(): typeof cached extends null
@@ -45,6 +47,8 @@ function lib(): typeof cached extends null
       ),
       flock: libc.func("int flock(int fd, int operation)"),
       poll: libc.func("int poll(void *fds, unsigned long nfds, int timeout)"),
+      bind: libc.func("int bind(int fd, const void *addr, unsigned int len)"),
+      listen: libc.func("int listen(int fd, int backlog)"),
     };
   }
   return cached;
@@ -132,6 +136,115 @@ export function tryFlock(fd: number): boolean {
   const LOCK_EX = 2; const LOCK_NB = 4;
   try { return lib().flock(fd, LOCK_EX | LOCK_NB) === 0; }
   catch { return false; }
+}
+
+const SOCK_STREAM = 1;
+const SOCK_CLOEXEC = 0o2000000;
+const SOCK_NONBLOCK = 0o4000;
+const EADDRINUSE = 98;
+const ECONNREFUSED = 111;
+const ENOENT = 2;
+
+/** An attempt to take a name in the abstract AF_UNIX namespace. "Taken" and
+ * "failed" are different answers and must not be collapsed: the first says
+ * another process holds the name, the second says this process could not find
+ * out anything at all. */
+export type AbstractHold =
+  | { readonly kind: "held"; readonly fd: number }
+  | { readonly kind: "taken" }
+  | { readonly kind: "failed"; readonly errno: number };
+
+/** Who holds an abstract name, as far as this process can tell. */
+export type AbstractHolder =
+  | { readonly kind: "none" }
+  | { readonly kind: "peer"; readonly cred: PeerCred }
+  | { readonly kind: "unknown" };
+
+/** A `struct sockaddr_un` for a name in the abstract namespace: a leading NUL
+ * and then the name, with the length passed exactly, since trailing NULs in
+ * `sun_path` would otherwise become part of the name. */
+function abstractAddress(name: string): { addr: Buffer; length: number } | null {
+  if (!name.startsWith("\0") || name.length < 2) return null;
+  const bytes = Buffer.byteLength(name, "utf8");
+  if (bytes > 108) return null;
+  const addr = Buffer.alloc(110);
+  new DataView(addr.buffer, addr.byteOffset, addr.byteLength).setUint16(0, AF_UNIX, NATIVE_LE);
+  Buffer.from(name, "utf8").copy(addr, 2);
+  return { addr, length: 2 + bytes };
+}
+
+function drop(fd: number): void {
+  try { closeSync(fd); } catch { /* the descriptor is going away either way */ }
+}
+
+/** MUST [REC-007]: takes a name in the abstract AF_UNIX namespace, held for
+ * exactly as long as an open file description on the returned descriptor
+ * exists -- this process's, and every descriptor a child inherited from it.
+ *
+ * Why the society's own lock is named here and not by a pathname: a lock named
+ * by a pathname is only as exclusive as that pathname, and a process of the
+ * same user can unlink or rename it and create a new file in its place. The
+ * old holders keep the old inode's lock and a newcomer takes the new inode's,
+ * so one society has two owners and neither can tell. An abstract name has no
+ * directory entry, so there is nothing to unlink, rename, or point elsewhere
+ * with a symlink; the kernel refuses a second bind with EADDRINUSE while the
+ * socket lives, and frees the name when its last descriptor closes -- whether
+ * the holder released it, crashed, or was killed outright. File modes could
+ * never have carried this: FS-005 says a boundary cannot be claimed from a
+ * mode at the same UID. */
+export function holdAbstractName(name: string): AbstractHold {
+  const address = abstractAddress(name);
+  if (address === null) return { kind: "failed", errno: 0 };
+  let fd = -1;
+  try {
+    const native = lib();
+    fd = native.socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd < 0) return { kind: "failed", errno: errno() };
+    if (native.bind(fd, address.addr, address.length) !== 0) {
+      const code = errno();
+      drop(fd); fd = -1;
+      return code === EADDRINUSE ? { kind: "taken" } : { kind: "failed", errno: code };
+    }
+    // Listening is not about accepting connections; nothing is ever accepted
+    // here. It is what lets the next process ask who holds the name instead of
+    // guessing from a refusal.
+    if (native.listen(fd, 64) !== 0) {
+      const code = errno();
+      drop(fd); fd = -1;
+      return { kind: "failed", errno: code };
+    }
+    const held = fd;
+    fd = -1;
+    return { kind: "held", fd: held };
+  } catch {
+    if (fd >= 0) drop(fd);
+    return { kind: "failed", errno: 0 };
+  }
+}
+
+/** Asks who holds an abstract name by connecting to it and reading the
+ * listener's credentials. The probe socket is non-blocking, so a holder whose
+ * backlog is full answers "somebody, cannot say who" rather than blocking this
+ * process; only a refusal or a missing name is read as nobody. */
+export function abstractNameHolder(name: string): AbstractHolder {
+  const address = abstractAddress(name);
+  if (address === null) return { kind: "unknown" };
+  let fd = -1;
+  try {
+    const native = lib();
+    fd = native.socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+    if (fd < 0) return { kind: "unknown" };
+    if (native.connect(fd, address.addr, address.length) !== 0) {
+      const code = errno();
+      return code === ECONNREFUSED || code === ENOENT ? { kind: "none" } : { kind: "unknown" };
+    }
+    const cred = peerCred(fd);
+    return cred === null ? { kind: "unknown" } : { kind: "peer", cred };
+  } catch {
+    return { kind: "unknown" };
+  } finally {
+    if (fd >= 0) drop(fd);
+  }
 }
 
 /** Node publishes no accessor for an accepted socket's file descriptor, and

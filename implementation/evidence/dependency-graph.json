@@ -1423,7 +1423,7 @@
   }
  ],
  "files": 220,
- "runtimeEdges": 786,
+ "runtimeEdges": 791,
  "typeOnlyEdges": 308,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 205,
@@ -1432,14 +1432,14 @@
   "L3-workflow -> L1-kernel": 156,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 44,
-  "L4-orchestration -> L1-kernel": 82,
+  "L4-orchestration -> L1-kernel": 84,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 39,
-  "L5-entry -> L1-kernel": 66,
+  "L5-entry -> L1-kernel": 67,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
-  "L5-entry -> L4-orchestration": 20,
+  "L5-entry -> L4-orchestration": 22,
   "L5-entry -> L5-entry": 106
  },
  "upwardTypeOnlyEdges": [
@@ -1459,7 +1459,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 109,
+  "src/domain/errors.ts": 110,
   "src/domain/identifiers.ts": 32,
   "src/ids.ts": 27,
   "src/storage/durable-fs.ts": 22,
@@ -1478,8 +1478,8 @@
  "fanOut": {
   "src/broker.ts": 28,
   "src/mail.ts": 26,
-  "src/entry/broker.ts": 21,
-  "src/entry/oma.ts": 20,
+  "src/entry/broker.ts": 23,
+  "src/entry/oma.ts": 21,
   "src/git.ts": 15,
   "src/git/context-repository.ts": 14,
   "src/store.ts": 14,
@@ -1498,13 +1498,13 @@
   "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 4,
-  "node:crypto": 23,
-  "node:fs": 58,
+  "node:crypto": 24,
+  "node:fs": 59,
   "node:http": 1,
   "node:https": 1,
   "node:net": 10,
   "node:os": 2,
-  "node:path": 62,
+  "node:path": 61,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

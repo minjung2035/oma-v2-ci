@@ -133,23 +133,43 @@ function validDirectSpawn(executable: string, argv: readonly string[], cwd: stri
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0"))
       throw new StoreError("UNSUPPORTED_PROFILE", "owned child environment is invalid");
 }
+/** The slot the private channel takes in every fenced child of this product,
+ * and the slot the society lease takes.
+ *
+ * They are fixed numbers rather than "whichever slot came next". A child that
+ * starts a child of its own has to hand the fence down -- an engine that runs
+ * the model-facing CLI is a real writer of the society's private state, and a
+ * CLI still running after its engine is gone is exactly the second writer the
+ * lease exists to prevent -- and it can only pass on a descriptor it can name.
+ * A slot that moved depending on whether a channel had been requested could be
+ * named only by a child that already knew how its own parent had been spawned.
+ *
+ * So the fence is always descriptor 4, the channel slot below it is held open
+ * (as `ignore`) when there is no channel, and the number is declared to the
+ * child in `SOCIETY_FENCE_ENV`. Declaring it is safe in a way that declaring
+ * the credential would not be: a descriptor number grants nothing to a process
+ * that does not already hold the descriptor, and a process that holds it
+ * already holds the society open whether or not it knows what it is. */
+export const CHANNEL_FD = 3;
+export const SOCIETY_FENCE_FD = 4;
+/** Names the fence descriptor to a child that must pass it on. */
+export const SOCIETY_FENCE_ENV = "OMA_SOCIETY_FENCE_FD";
+
 /** `channel` adds descriptor 3: a socketpair only this parent holds. It is a
  * socket rather than a pipe on purpose -- another process of the same user
  * can reopen an inherited pipe through /proc/<pid>/fd, but not a socket -- so
  * it can carry a value that must reach this one child and nobody else.
  *
- * `fence` adds a descriptor the child never reads and never needs to know
- * about: the society lease. It is inherited so that the lock the lease lives
- * on stays held until this child is gone, which is how "the society does not
- * change hands while this engine runs" survives a parent that is killed
- * outright and runs no teardown at all. */
+ * `fence` adds descriptor 4: the society lease. The child never reads it. It
+ * is inherited so that the lock the lease lives on stays held until this child
+ * is gone, which is how "the society does not change hands while this engine
+ * runs" survives a parent that is killed outright and runs no teardown at
+ * all. */
 export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: string,
   env: Readonly<Record<string, string>>, channel = false, fence?: number): ChildProcessWithoutNullStreams {
   validDirectSpawn(executable, argv, cwd, env);
-  const stdio: ("pipe" | number)[] = ["pipe", "pipe", "pipe"];
-  if (channel) stdio.push("pipe");
-  if (fence !== undefined) stdio.push(fence);
-  return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio }) as ChildProcessWithoutNullStreams;
+  return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false,
+    stdio: fencedStdio(["pipe", "pipe", "pipe"], channel ? "pipe" : "ignore", fence) }) as ChildProcessWithoutNullStreams;
 }
 /** A long-lived service this process owns, such as the society's broker.
  *
@@ -168,10 +188,26 @@ export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: 
 export function spawnSupervisedService(executable: string, argv: readonly string[],
   env: Readonly<Record<string, string>>, extraPipe = false, fence?: number): ChildProcess {
   validDirectSpawn(executable, argv, "/", env);
-  const stdio: ("ignore" | "pipe" | number)[] = ["ignore", "ignore", "pipe"];
-  if (extraPipe) stdio.push("pipe");
-  if (fence !== undefined) stdio.push(fence);
-  return spawn(executable, [...argv], { env: { ...env }, shell: false, stdio });
+  return spawn(executable, [...argv], { env: { ...env }, shell: false,
+    stdio: fencedStdio(["ignore", "ignore", "pipe"], extraPipe ? "pipe" : "ignore", fence) });
+}
+
+/** Lays out a fenced child's descriptors so that the channel is always slot
+ * `CHANNEL_FD` and the fence always slot `SOCIETY_FENCE_FD`. An unfenced child
+ * gets neither slot: holding one open for nothing would make `ignore` at slot
+ * 4 indistinguishable from a fence, and a child that read the environment
+ * would pass the wrong descriptor down. */
+function fencedStdio(base: readonly ("ignore" | "pipe")[], channel: "ignore" | "pipe",
+  fence: number | undefined): ("ignore" | "pipe" | number)[] {
+  const stdio: ("ignore" | "pipe" | number)[] = [...base];
+  if (fence === undefined) {
+    if (channel === "pipe") stdio.push(channel);
+    return stdio;
+  }
+  while (stdio.length < CHANNEL_FD) stdio.push("ignore");
+  stdio.push(channel);
+  stdio.push(fence);
+  return stdio;
 }
 export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
   if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)

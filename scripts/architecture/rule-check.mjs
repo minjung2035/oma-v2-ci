@@ -7,6 +7,7 @@ import { schemaDuplicationFindings } from "./rules/schema-duplication-rules.mjs"
 import { contractDirectionFindings } from "./rules/contract-direction-rules.mjs";
 import { effectOwnershipFindings } from "./rules/effect-ownership-rules.mjs";
 import { surfaceRuleFindings } from "./rules/surface-rules.mjs";
+import { fenceRuleFindings } from "./rules/fence-rules.mjs";
 
 export const ARCHITECTURE_RULES = Object.freeze([
   ["imports", importRuleFindings],
@@ -16,6 +17,7 @@ export const ARCHITECTURE_RULES = Object.freeze([
   ["contract-direction", contractDirectionFindings],
   ["effect-ownership", effectOwnershipFindings],
   ["surface", surfaceRuleFindings],
+  ["fence", fenceRuleFindings],
 ]);
 
 export function runArchitectureRuleCheck(root = process.cwd()) {

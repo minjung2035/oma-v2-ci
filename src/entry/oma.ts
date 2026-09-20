@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { isValidSocietyName } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import { assertHostDirectoryLayout } from "../runtime/assets.js";
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
@@ -25,7 +26,7 @@ import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
 import { commitField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
 import { defaultHostConfig, societyFromDirectory } from "../config/defaults.js";
 import { provisionSociety, repairSociety, residentRootfsPath, type ProvisionReport } from "../runtime/provision.js";
-import { superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
+import { brokerListening, superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
 import { HostTenure } from "../runtime/host-tenure.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import type { ExtensionRow, MailRow } from "../tui/model.js";
@@ -80,9 +81,44 @@ async function main(argv: readonly string[]): Promise<void> {
   // A refusal here also covers the case no earlier design could: an `oma` that
   // is already gone but whose engine is still running holds the society until
   // that engine exits, because the engine inherited the lease.
+  //
+  // The paths the answer is derived from are checked before they are used, not
+  // after. An `oma` pointed at a relative, denormalized or symlinked run root
+  // would otherwise take the society, write its configuration, provision it and
+  // repair it -- a repair that edits `/etc/passwd`, `/etc/group` and symlinks
+  // inside the rootfs -- and only discover afterwards that the place it was
+  // told to work in is not the place it checked. The state root is checked by
+  // the lease itself, because that is where the name it takes comes from
+  // (VAL-002, FS-005).
+  try { assertHostDirectoryLayout(runRoot, true); }
+  catch (error) { fail(`society의 실행 디렉터리를 신뢰할 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+
   let tenure: HostTenure | null;
-  try { tenure = HostTenure.take(runRoot); }
+  try { tenure = HostTenure.take(stateRoot); }
   catch (error) { fail(`society 소유권을 확인하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+
+  // A broker that is already listening owns the writing of this society, no
+  // matter who started it -- a systemd unit, an operator by hand, or an `oma`
+  // whose host is gone. This question used to be asked inside `superviseBroker`,
+  // which runs after the configuration has been written and after the society
+  // has been provisioned and repaired: this process would have modified files
+  // inside a rootfs another broker was already serving Residents from, and only
+  // then stood down. It is asked here instead, before anything is written, so
+  // standing down costs nothing and changes nothing.
+  //
+  // The lease is given up with it. Holding a society this process has refused
+  // to act on would keep the next `oma` out for no reason.
+  //
+  // The question is asked whether or not this process got the lease. A broker
+  // started outside the product now takes the society lease itself, so a
+  // refused lease is often that broker rather than another `oma`, and a
+  // refusal that names the wrong thing sends the Human to look for the wrong
+  // process.
+  let ownershipRefusal = "다른 oma가 이 society의 소유권을 쥐고 있습니다";
+  if (await brokerListening(runRoot)) {
+    if (tenure !== null) { await tenure.end(); tenure = null; }
+    ownershipRefusal = "이 society의 broker가 이미 실행 중입니다";
+  }
 
   let settings: Settings;
   try { settings = tenure === null ? readSettings(configPath) : ensureConfiguration(configPath, society, stateRoot); }
@@ -370,7 +406,7 @@ async function main(argv: readonly string[]): Promise<void> {
   if (broker === null) {
     // No tenure, so no broker was ever started and nothing was written. The
     // product is a Control Panel over state another `oma` owns.
-    await disown("다른 oma가 이 society의 소유권을 쥐고 있습니다");
+    await disown(ownershipRefusal);
   } else {
     broker.onReady(() => {
       if (disowned || tenure === null) return;

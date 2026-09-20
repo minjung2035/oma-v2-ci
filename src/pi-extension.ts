@@ -19,7 +19,7 @@ import { guardWorkspaceTools } from "./extension/workspace-guard.js";
 export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
 export { OMA_TOOL_NAMES, cliEnvironment, registerOmaTools } from "./extension/mail-tools.js";
 export { PrincipalChannel, PRINCIPAL_CHANNEL_ENV, PRINCIPAL_CHANNEL_FD } from "./extension/principal-channel.js";
-export { CLI_CREDENTIAL_FD_ENV, runCliProcess } from "./extension/cli-process.js";
+export { CLI_CREDENTIAL_FD_ENV, SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, runCliProcess } from "./extension/cli-process.js";
 export { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "./extension/delivery.js";
 export {
   expandedActiveTools, initialActiveTools, parseSurfacePlan, registerToolSurface,

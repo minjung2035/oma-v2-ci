@@ -45,9 +45,13 @@ export class HostTenure {
   /** Takes the society, or answers null when another `oma` -- or an engine or
    * broker outliving one -- still holds it. Throws when the lease could not be
    * evaluated at all, which is not the same answer and must not be read as
-   * one. */
-  static take(runRoot: string, graceMs: number = ENGINE_EXIT_GRACE_MS): HostTenure | null {
-    const lease = tryHoldSociety(runRoot);
+   * one.
+   *
+   * The society is named by the state tree it owns, not by the run directory
+   * it is coordinated through: the tree is the thing that must not have two
+   * writers, and a run directory is per-boot, per-session and replaceable. */
+  static take(stateRoot: string, graceMs: number = ENGINE_EXIT_GRACE_MS): HostTenure | null {
+    const lease = tryHoldSociety(stateRoot);
     return lease === null ? null : new HostTenure(lease, graceMs);
   }
 

@@ -18,10 +18,14 @@ import { tryHoldSociety } from "../src/runtime/society-lease.js";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-tenure-"));
 
-/** flock conflicts between two open file descriptions even inside one process,
- * so this really does answer "could another `oma` take the society now". */
-const takeable = (runRoot: string): boolean => {
-  const other = tryHoldSociety(runRoot);
+/** An abstract socket name is held by an open file description, and a second
+ * bind of a held name is refused inside one process exactly as it is between
+ * two, so this really does answer "could another `oma` take the society now".
+ *
+ * It is asked of the state tree, not of a run directory: the tree is what must
+ * not have two writers. */
+const takeable = (stateRoot: string): boolean => {
+  const other = tryHoldSociety(stateRoot);
   if (other === null) return false;
   other.release();
   return true;
@@ -60,7 +64,10 @@ test("T119 the fence is a live descriptor while the tenure holds, and unreadable
     // Not a token or an index: a descriptor the kernel will let a child
     // inherit. If this stopped being true, every child would be started
     // without the fence and nothing else in the test suite would notice.
-    assert.ok(fstatSync(held.fence).isFile());
+    // A socket, because the lease is a bound name in the abstract namespace
+    // and not a file: a file would be named by a path, and a path of this
+    // user's can be replaced under a holder that is still holding it.
+    assert.ok(fstatSync(held.fence).isSocket());
     assert.equal(held.held, true);
     await held.end();
     assert.equal(held.held, false);

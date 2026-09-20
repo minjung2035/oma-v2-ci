@@ -10,6 +10,34 @@ export const subprocessResponsibilities = Object.freeze({
   // exec cannot pass a private descriptor, so the extension owns this one child.
   "src/extension/cli-process.ts": "model-facing CLI child with an explicit environment and a private credential socket",
 });
+/** REC-007: the places that start a child without handing it the society
+ * lease, and why each one may. An entry is a claim that this child cannot be a
+ * writer of the society outliving the society's ownership -- not a note that
+ * the fence has not been wired up yet. The fence rule fails when one of these
+ * stops being true, in either direction.
+ */
+export const fenceExemptSpawnOwners = Object.freeze({
+  // The bounded command mechanism. Its descriptors are the caller's to choose
+  // (`inheritedFds`), and its only caller runs systemctl, which writes units
+  // rather than this society's state.
+  "src/process/async.ts#startProcess":
+    "bounded command whose inherited descriptors are the caller's; not a society writer",
+  // SB-001: a confined Resident. The fence is deliberately not handed across
+  // the sandbox boundary: the lease is a listening socket, and a process
+  // inside the confinement holding it could answer the probe that names the
+  // society's owner. A Resident that outlives its broker is bounded by the
+  // sandbox's own lifetime and by the runner's supervision, not by this lease,
+  // and closing that gap properly needs a descendant-death boundary the kernel
+  // enforces (a cgroup), not a wider fence.
+  "src/process/async.ts#spawnSandboxed":
+    "bubblewrap confinement boundary; a listening lease inside a sandbox would be answerable from inside it",
+  "src/runtime/pi-adapter.ts#deliver":
+    "Resident engine started through the confinement boundary above",
+  // The Human's editor, run synchronously with the terminal attached: the call
+  // does not return until the child has exited, so it cannot outlive anything.
+  "src/process/policies.ts#runHostEditor":
+    "synchronous child with an inherited terminal; the call returns only after it exits",
+});
 export const DEFAULT_POLICY = Object.freeze({
   capabilityOwner: "src/domain/capabilities.ts",
   resourceOwner: "src/domain/resources.ts",
@@ -27,6 +55,7 @@ export const DEFAULT_POLICY = Object.freeze({
   identifierMirrors: Object.freeze({
     "src/extension/batch-view.ts": "trusted Pi extension mirroring the batch-view identity grammar",
     "src/extension/principal-channel.ts": "trusted Pi extension mirroring the host channel's credential line",
+    "src/extension/cli-process.ts": "trusted Pi extension mirroring the credential and society-lease descriptor numbers",
   }),
   // The framed transport is intentionally I/O, unlike the codecs next to it.
   // This does not allow fs, process, SQLite, Store or entrypoint imports here.

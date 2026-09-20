@@ -9,6 +9,8 @@ import { ownershipRuleFindings } from "../scripts/architecture/rules/ownership-r
 import { schemaDuplicationFindings } from "../scripts/architecture/rules/schema-duplication-rules.mjs";
 import { contractDirectionFindings } from "../scripts/architecture/rules/contract-direction-rules.mjs";
 import { effectOwnershipFindings } from "../scripts/architecture/rules/effect-ownership-rules.mjs";
+import { fenceRuleFindings } from "../scripts/architecture/rules/fence-rules.mjs";
+import { fenceExemptSpawnOwners } from "../scripts/architecture-owners.mjs";
 
 function fixture(files) {
   const root = mkdtempSync(join(tmpdir(), "oma-architecture-rule-"));
@@ -134,3 +136,69 @@ test("architecture effect ownership rule rejects raw I/O and exit outside owners
   assert.ok(findings.some(value => value.rule === "cli-effect-owner"));
   assert.ok(findings.some(value => value.rule === "cli-exit-owner"));
 }));
+
+/** REC-007: the rule that has to catch the next unfenced child.
+ *
+ * The society lease reached the broker and the engine and not the CLI the
+ * engine starts, and nothing failed -- because "did this spawn get the fence"
+ * was a question only a reviewer asked. These hold the rule to both directions
+ * of it: a child started without the lease and without a written reason fails,
+ * and a written reason for a spawn that no longer exists fails too, so the
+ * exemption list cannot quietly become a list of places nobody checked.
+ */
+const fenceFindings = (root, rule) => fenceRuleFindings(root).filter(value => value.rule === rule);
+
+test("architecture fence rule accepts a child started with the society lease", () => withFixture({
+  "src/extension/cli-process.ts": `import { spawn } from "node:child_process";
+export function runCliProcess(run: CliRun, fence: number | null) {
+  return spawn(run.node, run.args, { env: run.env, stdio: childStdio(fence) });
+}`,
+}, root => assert.deepEqual(fenceFindings(root, "fence-propagation"), [])));
+
+test("architecture fence rule rejects a child started without the society lease", () => withFixture({
+  "src/extension/cli-process.ts": `import { spawn } from "node:child_process";
+export function runCliProcess(run: CliRun) {
+  return spawn(run.node, run.args, { env: run.env, stdio: ["ignore", "pipe", "pipe"] });
+}`,
+}, root => {
+  const found = fenceFindings(root, "fence-propagation");
+  assert.equal(found.length, 1, JSON.stringify(found));
+  assert.match(found[0].reason, /src\/extension\/cli-process\.ts#runCliProcess/);
+}));
+
+test("architecture fence rule names the enclosing function, not whatever declaration encloses the call", () => withFixture({
+  // The first version of this rule walked up to any variable declaration, so
+  // `const child = spawn(...)` was reported as a site called `child` -- and an
+  // exemption written for the real function would then never be claimed. An
+  // exemption that cannot be matched to the spawn it excuses is worse than no
+  // exemption: it reads as a decision that was made and is not in force.
+  "src/runtime/resident.ts": `export async function startResident(options: Options) {
+  const child = spawnSandboxed(options.command, options.args, options.env);
+  return child;
+}`,
+}, root => {
+  const found = fenceFindings(root, "fence-propagation");
+  assert.equal(found.length, 1, JSON.stringify(found));
+  assert.match(found[0].reason, /src\/runtime\/resident\.ts#startResident/);
+}));
+
+test("architecture fence rule rejects a written exemption for a spawn that is not there", () => withFixture({
+  "src/process/async.ts": "export const nothing = 1;",
+}, root => {
+  const stale = fenceFindings(root, "fence-exemption-stale").map(value => value.reason);
+  for (const site of Object.keys(fenceExemptSpawnOwners))
+    assert.ok(stale.some(reason => reason.includes(site)),
+      `${site} is exempted from the fence and nothing noticed that it does not exist: ${stale.join(" | ")}`);
+}));
+
+test("architecture fence rule rejects an exemption for a spawn that now passes the fence", () => {
+  const site = Object.keys(fenceExemptSpawnOwners)[0];
+  const [file, name] = site.split("#");
+  return withFixture({
+    [file]: `import { spawn } from "node:child_process";
+export function ${name}(fence: number) { return spawn("/bin/true", [], { stdio: [0, 1, 2, fence] }); }`,
+  }, root => {
+    const stale = fenceFindings(root, "fence-exemption-stale").map(value => value.reason);
+    assert.ok(stale.some(reason => reason.includes(`${site} passes a fence`)), stale.join(" | "));
+  });
+});

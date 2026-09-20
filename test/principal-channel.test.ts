@@ -17,9 +17,10 @@ import {
   type HostChannelMessage,
 } from "../src/protocol/host-channel.js";
 import { CLI_CREDENTIAL_FD_ENV as CLI_READS } from "../src/cli/transport.js";
+import { CHANNEL_FD as SPAWN_CHANNEL_FD, SOCIETY_FENCE_ENV as HOST_DECLARES, SOCIETY_FENCE_FD as HOST_PLACES } from "../src/process/async.js";
 import {
   CLI_CREDENTIAL_FD_ENV as EXTENSION_SETS, PRINCIPAL_CHANNEL_ENV, PRINCIPAL_CHANNEL_FD, PrincipalChannel, registerOmaTools,
-  runCliProcess,
+  SOCIETY_FENCE_ENV as EXTENSION_READS, SOCIETY_FENCE_FD as EXTENSION_PLACES, runCliProcess,
 } from "../src/pi-extension.js";
 
 const CREDENTIAL = "c".repeat(64);
@@ -53,8 +54,22 @@ const CORPUS: readonly string[] = [
 test("T114: the extension's channel names are the protocol's", () => {
   assert.equal(PRINCIPAL_CHANNEL_ENV, HOST_CHANNEL_ENV);
   assert.equal(PRINCIPAL_CHANNEL_FD, HOST_CHANNEL_FD);
+  // The slot the spawn helpers lay out the channel on is the slot the protocol
+  // says the channel is. They are separate constants because the spawn helper
+  // may not import the protocol, and a drift between them would move the
+  // credential out from under the reader waiting for it.
+  assert.equal(SPAWN_CHANNEL_FD, HOST_CHANNEL_FD);
   // The descriptor the extension names for the CLI is the one the CLI reads.
   assert.equal(EXTENSION_SETS, CLI_READS);
+  // And the society lease: the extension may not import OMA's process module,
+  // so it mirrors the name and the number the host places the lease on. A
+  // mirror that drifted would be the worst of both -- the host would hand the
+  // engine a fence the extension looked for somewhere else, and the CLI would
+  // start unfenced while every fence test in the suite went on passing.
+  assert.equal(EXTENSION_READS, HOST_DECLARES);
+  assert.equal(EXTENSION_PLACES, HOST_PLACES);
+  // Nothing may share the credential's descriptor with the lease.
+  assert.notEqual(EXTENSION_PLACES, PRINCIPAL_CHANNEL_FD);
 });
 
 test("T114: the extension accepts exactly the credential lines the protocol decodes", () => {

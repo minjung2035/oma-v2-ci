@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "331b6209eb0fe08d85b63f7881500cf9f0d2c8f952ad0a86b56e39599a0fe1c5",
-  "report": "79fce220d56d90227ebea211f5f118c6559b812389097ebc44480bd2861c5750",
+  "report": "b8a7a4eb0cfc369ac2d57e53294ce347af89f0341dc9b5093a2deab7e0ea64ae",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -281,7 +281,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "3620d0b21fe88cf79bb517de291acc5a417a45f6718e4d59a544c1edf933f6ec"
+      "sha256": "e4d58879bc71efc8a352d65bac9d06623337d2b68f144b31d38484a83dfdde1d"
     },
     {
       "path": "src/entry/host.ts",
@@ -293,7 +293,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "fc6190d7ac473df2d33be4f258af84865f800d10337f26104f874849355ee20a"
+      "sha256": "0f4273b1a2c3c0328897f42e2dd560ee2931ffae395e6a01ad0f812bf3866dab"
     },
     {
       "path": "src/entry/runner.ts",
@@ -305,7 +305,7 @@
     },
     {
       "path": "src/extension/cli-process.ts",
-      "sha256": "c84c1794d03a162a35e1124a06e14ec84649491ec528e7577750f62230e4501b"
+      "sha256": "dbab751e2c138ab5a984b5911e2a9089870bf9b21807933805b18de9b4292d68"
     },
     {
       "path": "src/extension/delivery.ts",
@@ -401,7 +401,7 @@
     },
     {
       "path": "src/leaf.ts",
-      "sha256": "42b4ba7cd1bdc236a95b8bf5b23b78b4813ab3b97cfe784f863cfe4b4d59c9a2"
+      "sha256": "3257255b9985cf268778cfd6ae096ec1308ec7ce17a0a390d31ba6245141125d"
     },
     {
       "path": "src/lifecycle.ts",
@@ -481,7 +481,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "ecc738d7f10c023994f86d5aeda31f3d8b4bdd7993dcb25db323594c2456bf7f"
+      "sha256": "11deff254215a971f97eb1f8e39aeb3a7f59601677d83a0eaa6bc9c36746cf55"
     },
     {
       "path": "src/ports/ledger.ts",
@@ -493,7 +493,7 @@
     },
     {
       "path": "src/process/async.ts",
-      "sha256": "5940a6b4e098e7d905e043e0a040bb3809cc590dec2e5b9f82ab65cd33688011"
+      "sha256": "e31449d377aa2fc35704ab5fc73ae095b782f89d40571414eea8aa8fec1b4ead"
     },
     {
       "path": "src/process/command.ts",
@@ -601,7 +601,7 @@
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
-      "sha256": "d3c9d90b601f0d80355930743b491442b6785d1c80bc945bd357c652dc58dbd3"
+      "sha256": "02514a938d8b2f7362ee51eca33254cdf0629ee0d41303183804cf7accf7a91e"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -617,7 +617,7 @@
     },
     {
       "path": "src/runtime/host-tenure.ts",
-      "sha256": "fb8dd07d0513d3e9747e05d1c23ebb4afd1a432ef6b0e58f7145507d09bafe6a"
+      "sha256": "494101aafece59715888a874e4df84b5c9f5bc47764d084d724dd61a02f18b9a"
     },
     {
       "path": "src/runtime/inference-relay.ts",
@@ -661,7 +661,7 @@
     },
     {
       "path": "src/runtime/society-lease.ts",
-      "sha256": "8589758f34b8bd097b7bae4bef24752b7b07e4d03c0003f3aac324f52c0fe60e"
+      "sha256": "6fd4b6e246559b58b09774e45968387570a6e6f416a4b63335f254ca85cbabb5"
     },
     {
       "path": "src/runtime/supervision-channel.ts",
@@ -801,7 +801,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "7d562c6e1666e8c1c0b9dad4339232861d0af051a2db55eabb2d1661cd8e9ac9"
+      "sha256": "b7564097677b79b46ada376f431e8a8b718f1c0f7e2802398910713591be7d6e"
     },
     {
       "path": "src/tui/sources/extensions.ts",

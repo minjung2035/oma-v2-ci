@@ -4,9 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `51759fd`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `9a01800`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `fbe2a32fb1e77c6f0126fc1c25114ef6b521a52d3404b1f239a7f2a7f7158463` (527 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `6e0b090d86ab3dcd2924d3ddfa3ff8d942d8a3cbdebd03bb0233339856921b7a` (528 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -16,7 +16,7 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1190/1190 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1209/1209 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
 | `npm run verify:fast` | PASS, EXECUTED |
@@ -24,8 +24,8 @@
 | `npm run verify:property` | PASS, EXECUTED |
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
-| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다 |
-| `node scripts/loc.mjs` | **219 files / 20,750 code LOC** |
+| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다. 열두 번째 감사는 같은 사실을 run #70까지로 인용한다(브랜치 누적 성공 0 / 실패 70) |
+| `node scripts/loc.mjs` | **219 files / 20,909 code LOC** |
 
 ### 현재 범위
 
@@ -631,6 +631,85 @@ society가 넘어가지 않는 것까지 실제 프로세스로 관측)을 새�
 정전·강제 재부팅은 관측하지 않았다(커널 동작에 대한 추론이다). `HostTenure` 시험의 engine은 Pi가 아니라 stand-in이며, Pi 자체는
 동봉본을 그대로 쓰고 수정하지 않는다. CI는 이 세션에서 인증이 없어 확인하지 않았다.
 
+### Principal 제품 경로: 열두 번째 감사에서 닫은 것
+
+감사는 fence 자체가 아니라 **fence가 닿는 범위**를 쟁점으로 삼았고, 그 지적은 맞았다. 네 건을 감사가 매긴 우선순위 그대로 닫았다.
+
+**fence가 실제 모델 대면 CLI까지 닿지 않았다(P0 ①).** `runCliProcess`는 자식에게 fd 0–2(credential이 있으면 3까지)만 주고 lease를
+주지 않았다. 그 CLI는 society의 reader가 아니라 **writer**다 — agent home이 `<stateRoot>/principal/private`이고 request cache를 그
+아래에 쓴다. engine에 보낸 신호는 engine의 자식에게 가지 않으므로, 모델이 `oma_mail_send`를 부른 직후 host와 engine을 SIGKILL하면
+CLI는 자기 timeout(120초) 내내 살아서 쓰고, 그 사이 새 `oma`가 society를 가져간다. 정확히 lease가 막으려던 두 writer다. 이제 확장은
+자기 환경의 `OMA_SOCIETY_FENCE_FD`를 읽어 그 descriptor를 자식의 fd 4에 놓고, 자식에게도 같은 이름으로 그 번호를 알린다. 선언이
+있는데 descriptor가 없거나 lease의 종류가 아니면 **자식을 시작하지 않고 실패한다** — 선언을 무시하고 시작하는 것은 그 선언이 막으려던
+상태 그 자체이기 때문이다.
+
+**pathname으로 이름 붙인 lease는 대체될 수 있었다(P0 ②).** flock은 inode를 잠그지만 호출자는 경로로 파일을 고른다. 같은 UID의 어떤
+프로세스든 그 경로를 `unlink`/`rename`하고 새 파일을 그 자리에 만들 수 있다 — 기존 소유자는 옛 inode의 lock을 계속 쥐고, 새 `oma`는
+정식 경로에 있는 새 inode를 잠그며, 한 society에 서로를 보지 못하는 두 소유자가 생긴다. 취득 뒤에 inode를 다시 확인하는 것은 창을
+좁힐 뿐 검사와 사용이 여전히 두 단계다. 감사의 요구대로 패치가 아니라 **설계를 바꿨다**: lease는 abstract AF_UNIX namespace의 이름
+`\0oma.society.<sha256(uid + state root)>`이고, 파일시스템에 아무것도 만들지 않는다. 지울 directory entry가 없으니 바꿔치기할 대상이
+없고, 두 번째 `bind`는 커널이 `EADDRINUSE`로 거절하며, 이름은 마지막 descriptor가 닫힐 때 — SIGKILL 포함 — 풀린다. FS-005가 "같은
+UID에서 file mode로 경계를 주장할 수 없다"고 말한 것을 mode가 아니라 **이름공간**에 적용한 것이다. 이름을 run root가 아니라 state
+tree에서 뽑은 것도 같은 회에 고쳤다: 하나의 `XDG_DATA_HOME`을 두 `XDG_RUNTIME_DIR`에서 열면 lease가 둘이 됐다.
+
+**standalone broker와 host tenure가 합의하지 않았다(P1 ③).** systemd unit이나 손으로 띄운 broker는 `broker.lock`만 쥔다. 그래서 새
+`oma`는 비어 있는 lease를 받아 설정을 쓰고, society를 provision하고, **repair까지** 한 다음 — repair는 `/etc/passwd`·`/etc/group`과
+rootfs 안 symlink를 고친다 — `superviseBroker`의 admin probe에서야 남의 broker를 발견했다. 이제 그 질문을 **아무것도 쓰기 전에**
+묻는다. 이미 듣고 있는 broker가 있으면 lease까지 돌려주고 Control Panel로 남는다: 행동하지 않기로 한 society를 쥐고 다음 `oma`를
+막을 이유가 없다.
+
+그러나 묻는 쪽만 고치는 것은 여전히 검사와 사용이 두 단계다 — probe와 첫 쓰기 사이에 올라오는 broker는 막지 못한다. 같은 자리에서
+두 번 나온 결함이므로 이번에는 **broker 쪽에서도 같은 질문에 답하게** 했다. 제품이 시작하지 않은 broker는 `broker.lock` 외에
+society lease를 **자기가** 잡고, 잡지 못하면 SQLite 파일 하나 만들지 않고 소유 status로 끝난다. 제품이 시작한 broker는 그
+descriptor를 fd 4로 물려받았으므로 다시 잡지 않는다 — 다시 잡으려 하면 자기 host에게 `EADDRINUSE`로 거절당한다. 자기가 어느
+쪽인지는 supervisor가 환경에 넣어 준 `OMA_SOCIETY_FENCE_FD` 선언으로 알고, 그 선언이 가리키는 descriptor가 없거나 lease의 종류가
+아니면 시작하지 않는다. 이로써 "이 society에 손을 대도 되는가"는 host와 broker 양쪽에서 같은 커널 객체 하나에 묻는 질문이 되고,
+`broker.lock`은 그 옆에서 원래의 다른 질문 — 이 프로세스가 유일한 SQLite writer가 되어도 되는가 — 에만 답한다.
+
+**run root 신뢰 판정이 lease 취득 뒤였다(P1 ④).** `tryHoldSociety`가 `mkdirSync(runRoot)`를 먼저 하고 lease를 열었으므로, 상대
+경로·비정규화 경로·symlink된 run root를 가리킨 `oma`는 그 디렉터리를 만들고 society를 가져가고 설정을 쓴 뒤에야 자신이 받은 검사에
+닿았다. 이제 경로에 대한 판단이 lease보다 **앞**에 끝난다. state root는 lease 이름이 거기서 나오므로 lease 자신이 검사한다.
+
+**fence 전파를 사람이 묻지 않게 했다.** 같은 자리에서 반복되는 결함이므로 검토가 아니라 구조로 막았다:
+`scripts/architecture/rules/fence-rules.mjs`가 `src/` 안의 모든 spawn 지점을 훑어, fence를 넘기거나 `fenceExemptSpawnOwners`에 이유를
+적어 두거나 둘 중 하나를 강제한다. 사라진 spawn에 대한 면제와, 이제 fence를 넘기는데도 남아 있는 면제는 **둘 다 gate 실패**다 —
+면제가 파일 안에서 조용히 낡지 않는다.
+
+**역검증**: 결함을 하나씩 소스에 되돌린 사본(`src/`·`test/`·`scripts/`만 동기화한 sandbox)에서 시험을 돌렸다.
+
+| 되돌린 결함 | 실패해야 하는 시험 | 결과 |
+|---|---|---|
+| `runCliProcess`에서 fence 전달·선언 제거(감사가 발견한 원본 형태) | T119/REC-007 engine이 시작한 모델 대면 CLI가 society를 들고, host·engine이 죽은 뒤에도 유지한다 / 선언한 fence가 없으면 CLI를 unfenced로 시작하지 않는다 | 실패함(2/17). 같은 되돌림을 architecture gate도 **단독으로** 잡았다: `fence-propagation`, `src/extension/cli-process.ts#runCliProcess` 1 finding |
+| lease를 `<stateRoot>/society.lease` flock으로 되돌림 | T119/FS-005 society를 잡는 것은 아무것도 쓰지 않고, 파일시스템의 어떤 것도 lease가 아니다 | 실패함(3/17) — 의도한 FS-005 1건과, lease의 종류가 바뀌자 fence 검사가 그것을 lease로 인정하지 않아 함께 실패한 CLI 시험 2건 |
+| broker 진입점에서 lease 취득 제거(감사가 지적한 원본 형태: `broker.lock`만 쥠) | T119/REC-007 제품 밖에서 시작한 broker는 `oma`가 쥔 society에서 소유 status로 끝나고 아무것도 쓰지 않는다 / P1 composition root의 lease 관련 3건 | 실패함(1/26 + 3/11) |
+| supervisor가 `OMA_SOCIETY_FENCE_FD` 선언을 넣지 않게 되돌림 | T119/REC-007 제품이 시작한 broker는 lease descriptor를 fd 4로 받고 그 번호를 환경에서 듣는다 | 실패함(1/26) — 정확히 그 시험 하나. 합성 시험은 supervisor를 보지 않으므로 여기서는 11/11 통과이고, 그것이 두 시험이 서로 다른 경계를 고정한다는 뜻이다 |
+| standing broker probe를 provision/repair 뒤로 옮김 | T119/REC-007 이미 듣고 있는 broker는 이 프로세스가 무엇을 쓰기 전에 발견된다 | 실패함(2/22) |
+| run root 판정을 lease 취득 뒤로 옮김 | VAL-002/FS-005 run root는 society를 잡기 전에 판정된다 | 실패함(2/22) |
+
+마지막 두 행은 대조군도 함께 실패한다. 그것이 옳은 동작이다: 두 대조군이 고정하는 것이 결과가 아니라 **순서**이기 때문이다. broker
+대조군의 첫 단언은 "probe가 일어났다"이고(되돌림이 probe 자체를 없앴다), run root 대조군의 단언은
+`assertHostDirectoryLayout < tryHoldSociety`다(되돌림이 뒤집은 바로 그 부등호다). 첫 두 행의 대조군 — fence를 선언하지 않은 engine —
+은 반대로 **그대로 통과한다**: 그 시험이 고정하는 것이 "fence가 없으면 society가 즉시 넘어간다"는 결함 쪽 사실이므로, 결함을 되돌린
+트리에서 통과하는 것이 정의상 맞다.
+
+첫 행의 시험은 stand-in이 아니라 실제 세 프로세스 사슬(host → engine → CLI)로 관측했다. CLI는 자기 fd 4를 `fstat`해 dev:ino로
+스스로 답하고, host와 engine을 SIGKILL한 뒤에도 society가 500ms 동안 넘어가지 않는 것과, CLI를 죽인 뒤에는 넘어가는 것까지 같은
+시험 안에서 관측한다.
+
+**관측하지 못한 것**:
+
+- **봉쇄된 Resident(`spawnSandboxed`/bwrap, `pi-adapter#deliver`)는 fence를 받지 않는다.** 일부러 그렇게 뒀다. lease는 듣고 있는
+  이름이므로 봉쇄 안에 descriptor를 넣으면 봉쇄 안에서 그 이름에 답할 수 있게 된다. 정직한 해법은 fence가 아니라 커널이 집행하는
+  자손 종료 경계(cgroup)이고, 그것은 이 회차에서 하지 않았다. 지금 상태는 `architecture.md`와 `implementation-spec.md`에 예외로
+  적혀 있으며 **닫히지 않았다**.
+- `verify:kernel`/`verify:crash`는 이 세션에서도 BLOCKED, NOT_RUN이다(`OMA_TEST_SYSTEMD=1`인 disposable user 환경 아님).
+  `crash-boundaries`가 내는 `BLOCKED` 는 PASS가 아니다.
+- 현재 SHA에 묶인 CI PASS는 없다. 감사가 인용한 run #70까지 이 브랜치의 성공은 0이며, 이 세션도 `gh` 인증이 없어 직접 확인하지
+  않았다.
+- **N-001 pin이 낡아 있다(이번 작업과 무관한 기존 상태).** `implementation-spec.md`의 N-001은 `architecture.md`의 SHA-256을
+  `7588b31e…`로 고정하고 있으나 HEAD의 `architecture.md`는 이미 `1df3c11…`이었다. 이 pin을 기계적으로 검사하는 gate가 없다. 이번에
+  값을 조용히 덮어쓰지 않았다 — 덮어쓰면 일어나지 않은 검토가 일어난 것처럼 기록된다. 별도 작업으로 남긴다.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
@@ -699,7 +778,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **219 files / 20,750 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **219 files / 20,909 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
