@@ -181,6 +181,7 @@ src/storage/operation-codec.ts
 src/storage/operation-journal.ts
 src/storage/operation-transitions.ts
 src/storage/paths.ts
+src/storage/preaccept-artifact.ts
 src/storage/quota.ts
 src/storage/receipt-projector.ts
 src/storage/rows.ts

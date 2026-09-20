@@ -10,6 +10,7 @@ import type { BlobDescriptor } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { entryAt, openBeneath, openDirectory, openRegularBeneath } from "./contained-fs.js";
 import { removeOwnedFile } from "./directory.js";
+import type { PreacceptOwner } from "./preaccept-artifact.js";
 import { ensureDurableDirectory, fsyncDir } from "./durable-fs.js";
 import { submitStagingPathAt, submitBundlePathAt } from "./paths.js";
 
@@ -22,7 +23,7 @@ export type BundleObservation =
 function code(error: unknown): string | null {
   return error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : null;
 }
-export class PreparedSubmitSpool {
+export class PreparedSubmitSpool implements PreacceptOwner {
   private owner: "preaccept" | "accepted" | "released" = "preaccept";
   constructor(readonly bundle: FrozenBundle | null) {}
   /** Called on durable acceptance or uncertainty about whether T committed. */

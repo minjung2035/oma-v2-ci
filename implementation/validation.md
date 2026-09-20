@@ -4,9 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `9a01800`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `dc982eb`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `6e0b090d86ab3dcd2924d3ddfa3ff8d942d8a3cbdebd03bb0233339856921b7a` (528 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `6e862f0d07b6c1fbafc1c1f35f857ee81af4f7676b116be940c1d7ffa3eaf60b` (530 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -16,7 +16,7 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1209/1209 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1223/1223 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
 | `npm run verify:fast` | PASS, EXECUTED |
@@ -24,8 +24,8 @@
 | `npm run verify:property` | PASS, EXECUTED |
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
-| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다. 열두 번째 감사는 같은 사실을 run #70까지로 인용한다(브랜치 누적 성공 0 / 실패 70) |
-| `node scripts/loc.mjs` | **219 files / 20,909 code LOC** |
+| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다. 열두 번째 감사는 같은 사실을 run #70까지로 인용한다(브랜치 누적 성공 0 / 실패 70). 열세 번째 감사의 지적대로 workflow의 **결박 방식**은 이번에 고쳤다 — master와 pull request가 검증에 연결되고, evidence는 CI가 만든 merge commit이 아니라 제안된 head commit 이름으로 보관되며, 아무것도 측정하기 전에 checkout된 tree가 그 commit임을 확인한다. 그러나 그것은 **앞으로 생길 run이 무엇을 말할 수 있는지**를 바꾼 것이고, 이 행의 값은 바꾸지 않는다: 이 세션은 여전히 성공한 run을 하나도 관측하지 않았다 |
+| `node scripts/loc.mjs` | **220 files / 21,013 code LOC** |
 
 ### 현재 범위
 
@@ -710,6 +710,69 @@ descriptor를 fd 4로 물려받았으므로 다시 잡지 않는다 — 다시 �
   `7588b31e…`로 고정하고 있으나 HEAD의 `architecture.md`는 이미 `1df3c11…`이었다. 이 pin을 기계적으로 검사하는 gate가 없다. 이번에
   값을 조용히 덮어쓰지 않았다 — 덮어쓰면 일어나지 않은 검토가 일어난 것처럼 기록된다. 별도 작업으로 남긴다.
 
+### 접수 전 artifact 소유권과 CI provenance: 열세 번째 감사에서 닫은 것
+
+감사는 83/100을 매기고 우선순위를 명시했다. 그 순서 그대로 ①과 ②를 닫았고, ③은 **닫지 않았다**(아래 '관측하지 못한 것').
+
+**접수되지 않은 게시물의 주인이 아무도 아니었다(①).** `mail.send`·`git.submit`·`agent.create`·`context.publish`는 모두 접수
+transaction보다 **먼저** immutable object를 `mail/objects/<id>.eml`에 게시한다. 그런데 `claimKey → journal.classifyKey`는 순수한
+읽기이므로(`src/store.ts:232`), 같은 actor/key를 동시에 요청한 두 호출은 둘 다 `absent`를 보고 `await buildFrozenMessage(...)`를
+지나 **각자 다른 messageId를 고정**할 수 있다. transaction에서 진 쪽(`"retry"`), 그 안에서 거부된 쪽, T 안에서 던져진 쪽, 그리고
+`agent.create`가 linked로 흡수되어 initial message를 이름으로 갖지 않게 된 쪽은 자기가 만든 inode를 그대로 남겼다. 남은 orphan은
+`src/diagnostics/integrity.ts:86`이 `unknown`으로 분류하므로 — "Preaccept orphans are not silently repaired" — corruption 기반
+oracle에는 보이지도 않았다.
+
+감사가 제안한 방향이 이 코드베이스의 기존 구조와 같았으므로 그대로 **일반화**했다. `PreparedSubmitSpool`은 이미 "접수 전에 게시된
+것을 접수 여부로 정산하는" 상태 기계였다. 그것을 `src/storage/preaccept-artifact.ts`의 `PreacceptOwner`로 끌어올리고,
+`freezeObject`가 `void`가 아니라 `PreacceptArtifact`를 돌려주게 했다. 소유 조건은 단 하나 — 그 artifact를 이름으로 가진 operation이
+ledger에 접수되었는가 — 이고, 네 coordinator가 전부 같은 질문(`settleByAcceptance`)에 답한다. 정산은 게시 시점의 dev/ino와 지금 그
+이름이 가리키는 inode가 같을 때만 unlink하므로 교체된 이름이나 남의 artifact는 건드리지 않고, 두 번 불러도 같다. **DB를 읽을 수
+없어 접수 여부를 알 수 없으면 보존한다 — 불확실성은 삭제 권한이 아니다.** 반대로 preparation artifact는 의도의 기록이므로 연결이
+끊겨도 남긴다. 이 구분이 `src/git/context.ts`의 주석에 그대로 적혀 있다.
+
+고친 쪽은 orphan을 **만들지 않는** 쪽이지 검사기가 orphan을 **못 본 척하는** 쪽이 아니다. `integrity.ts:86`의 `unknown` 분류는
+그대로 두었고, PRE-4가 세 가지 실패 형태를 모두 일으킨 뒤 `OBJECT_DIRECTORY_UNOWNED`가 0건이고 판정이 `PASS`임을 관측한다.
+
+감사가 "staging만 보고 `mail/objects`는 보지 않는다"고 지적한 기존 P06도 같은 회에 보강했다: 여섯 개의 알려진 request key에서
+접수된 operation이 이름으로 가진 object 집합을 뽑아 디렉터리와 정확히 대조한다.
+
+**CI가 한 branch만 보고, 자기가 잰 tree가 아닌 SHA로 증거를 보관했다(②).** workflow는
+`push: [refactor/safety-preserving-architecture]`에만 연결돼 있었으므로 master의 바이트도, master를 바꾸자는 제안도 CI가 한 번도
+관측하지 않았다. 그대로 `pull_request`를 붙이면 더 나쁜 상태가 된다: pull request에서 `github.sha`는 CI가 만들어 낸 merge commit이고
+`actions/checkout`의 기본값도 그 merge ref이므로, 증거가 **어떤 repository에도 남지 않는 SHA**에 묶인다. 그래서 검증 대상을
+`github.event.pull_request.head.sha || github.sha`로 한 번만 정하고, checkout·artifact 이름·최종 gate가 모두 그 값을 쓰며,
+**무엇을 재기 전에** checkout된 tree가 정말 그 commit인지 `git rev-parse HEAD`와 대조한다. 그 뒤 생성기가 입력을 다시 쓰기 전에
+local gate와 같은 closure(`verificationInputDigest`)로 "어떤 바이트가 돌았는지"를 기록하고, binding을 잃은 run은 성공을 보고할 수
+없다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 바이트를 쟀는지는 말하지 않는다 — 이 digest가 그 자리를 메운다.
+
+**역검증**: 결함을 하나씩 소스에 되돌린 사본(`src/`·`test/`·`scripts/`·`.github/`만 동기화한 sandbox)에서 시험을 돌렸다.
+
+| 되돌린 결함 | 실패해야 하는 시험 | 결과 |
+|---|---|---|
+| `mail.send`가 정산·retain을 하지 않던 원래 형태 | PRE-1 동시 같은 key / PRE-2 같은 actor·key를 다투는 다른 method / PRE-3 freeze 직후 주입한 transaction 실패 / PRE-4 그 실패들 뒤 inspection에 UNKNOWN 없음 | 실패함(4/8) — 정확히 그 네 건 |
+| `agent.create`가 linked·retry 경로에서 정산하지 않던 원래 형태 | PRE-5 실제 `LifecycleModule.create()`의 linked 경로는 initial message를 이름으로 갖지 않으므로 object를 소유하지 않는다 | 실패함(1/8) — 정확히 그 한 건 |
+| `git.submit`이 spool만 정산하고, `context.publish`는 전혀 정산하지 않던 원래 형태 | PRE-8 진 `git.submit` / 충돌한 `context.publish` / `git.submit`과 `mail.send`의 실제 같은 key 경쟁 | 실패함(1/8) — 정확히 그 한 건 |
+| workflow를 원래 형태로 되돌림(통합 branch만, `github.sha`로 보관, tree 대조 없음, digest 기록 없음) | T116 master/pull request 연결 / merge commit이 아닌 head commit 검증 / 측정 전 tree 대조 / 생성기 이전 digest 기록 / commit 이름으로 보관 / binding 잃은 run은 성공 불가 | 실패함(6/15) — 기존 T116 9건은 그대로 통과했다. 되돌림이 새 성질에만 닿았다는 뜻이다 |
+
+첫 시도의 PRE-2는 되돌린 트리에서도 **통과했다**. 원인은 시험 쪽이었다: `mail.send`는 transaction 이전에도 `claimKey`를 부르므로
+첫 send가 이미 끝난 뒤의 두 번째 호출은 `freezeObject`에 닿기 전에 `REQUEST_KEY_REUSED`로 끝난다 — 순차 호출로는 경쟁 자체가
+일어나지 않는다. 실제 동시 경쟁(`Promise.allSettled`로 둘 다 pre-check를 통과시킨 뒤 transaction에서 갈리게)으로 다시 쓴 뒤에야
+되돌림에 물렸다. 통과하는 대조군은 증거가 아니라 시험의 결함이라는 것을 그 자리에서 확인한 셈이다.
+
+워크플로 쪽은 정적 대조만으로는 부족하므로, 새로 넣은 두 step과 최종 gate를 YAML에서 뽑아 **실제로 실행**했다: 올바른 SHA에서
+binding·digest 기록·최종 gate가 모두 성공하고, 틀린 SHA에서는 binding이 거절하며, 다른 commit 이름이 적힌 provenance와 provenance가
+없는 evidence는 최종 gate가 각각 거절한다.
+
+**관측하지 못한 것**:
+
+- **③은 닫지 않았다.** 감사가 세 번째로 든 same-UID FS/S-06 — `src/storage/transport-spool.ts:28,30,54`,
+  `src/storage/staged-tree.ts:45,55`, `src/storage/durable-fs.ts:149,161` 이 여전히 pathname 기반인 것 — 과 실제
+  systemd/quota/power-cut lane은 이 회차에서 손대지 않았다. 감사 자신이 ①②보다 뒤에 두었고, 현재의 `SPIKE_UNRESOLVED` fail-closed
+  broker 동작은 감사도 "오히려 올바른 현 상태"라고 적었다. **닫힌 것으로 세지 않는다.**
+- **CI의 새 결박은 이 tree 안에서만 관측했다.** 위 표의 마지막 행과 실제 실행은 workflow 원문과 그 step들의 동작에 대한 것이고,
+  GitHub에서 돈 run에 대한 것이 아니다. 이 세션은 여전히 `gh` 인증이 없고, 현재 SHA에 묶인 성공 run은 없다.
+- `verify:kernel`/`verify:crash`는 이 세션에서도 BLOCKED, NOT_RUN이다.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
@@ -778,7 +841,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **219 files / 20,909 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,013 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

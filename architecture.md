@@ -225,6 +225,8 @@ CLI request key 로컬 기록
 
 objects는 비공개여서 DB 접수 전 내용이 archive에 먼저 보이지 않는다. hardlink는 같은 filesystem에서 쓰고 원문과 모든 link를 agent에게 RO로 제공한다. 하나라도 RW 경로가 있으면 공유 inode 변경이 가능하므로 허용하지 않는다. 다른 filesystem이면 임시 복사 후 atomic publish한다.
 
+게시가 접수보다 앞서므로 **접수되지 않은 게시물의 주인은 아무도 아니다**. 같은 key를 동시에 요청한 두 호출은 둘 다 `claimKey`에서 `absent`를 보고 각자 다른 messageId를 고정할 수 있고, transaction에서 진 쪽, 거부된 쪽, linked로 흡수되어 그 message를 이름으로 갖지 않게 된 쪽은 자기가 만든 inode를 남긴다. 그래서 `freezeObject`는 void가 아니라 **pre-accept artifact**를 돌려주고, 소유 조건은 단 하나 — 그 artifact를 이름으로 가진 operation이 ledger에 접수되었는가 — 다. `mail.send`, `git.submit`, `agent.create`, `context.publish`는 모두 이 한 질문(`settleByAcceptance`)으로 정산한다. 정산은 자기가 게시한 dev/ino와 지금 그 이름이 가리키는 inode가 같을 때만 unlink하므로 교체된 이름이나 남의 artifact는 건드리지 않고, 두 번 불러도 같다. DB를 읽을 수 없어 접수 여부를 알 수 없으면 삭제하지 않고 보존한다 — 불확실성은 삭제 권한이 아니다. bundle spool(`PreparedSubmitSpool`)도 접수 전에 게시된 같은 종류의 물건이라 같은 interface(`PreacceptOwner`)를 구현하고 같은 질문으로 정산된다. 반대로 preparation artifact는 의도의 기록이므로 연결이 끊겨도 남긴다.
+
 ### 5.3 방송 도중 죽으면
 
 DB에 snapshot `[a,b,c]`, a/b delivered, c pending이 남는다. 재시작하면 c만 배달한다. 파일 게시 뒤 DB 완료 전에 죽었으면 new 또는 cur의 고정 ID를 확인해 완료 기록만 보충한다. mailbox rename은 broker/runner만 하므로 확인 경로는 고정된다.

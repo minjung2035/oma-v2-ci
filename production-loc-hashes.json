@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "331b6209eb0fe08d85b63f7881500cf9f0d2c8f952ad0a86b56e39599a0fe1c5",
-  "report": "b8a7a4eb0cfc369ac2d57e53294ce347af89f0341dc9b5093a2deab7e0ea64ae",
+  "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
+  "report": "d2176d01432e51361b6a8fcf30e59309b2b85b0fe741d219b5501ec02afa504b",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -361,7 +361,7 @@
     },
     {
       "path": "src/git/context.ts",
-      "sha256": "b5706eeabd8854bfa40a26b59c2d97bc0dec1da134f64055d5f36967351e5c30"
+      "sha256": "be363a3ab4e0915e647b5f6e378a14b232dcd73284bd6b210017810378080e3e"
     },
     {
       "path": "src/git/integration-policy.ts",
@@ -389,7 +389,7 @@
     },
     {
       "path": "src/git/submit.ts",
-      "sha256": "98e19a677c3fde49245b242ec8ccb8120eee1269f8192d57203e49b629bebd9c"
+      "sha256": "03dbfa8b0d173a8fe1d1cb2b7c8f91636314ebdfbd2d8ccb00531606187720db"
     },
     {
       "path": "src/hash.ts",
@@ -421,7 +421,7 @@
     },
     {
       "path": "src/lifecycle/create.ts",
-      "sha256": "cd99770c16ea4296984eac8524878226735a6988bbb14d82e95e653c1efe1bce"
+      "sha256": "590ac92ef6c89396f0c7aa9a514505ebfabd4484b5aa05abd2ba8ab65f2b7bd5"
     },
     {
       "path": "src/lifecycle/policy.ts",
@@ -437,7 +437,7 @@
     },
     {
       "path": "src/mail.ts",
-      "sha256": "1139b0bf77fafd0bc2f89e1cd3cec1d5cb217149319de3d379a0595d0bf5678c"
+      "sha256": "1dffc949c907e75b2e11e4fd86c280e63202f1e308f01e2bdfa69d295b003ac1"
     },
     {
       "path": "src/mail/addresses.ts",
@@ -736,6 +736,10 @@
       "sha256": "012d2de4a5b0458b799a908f90f212e6875d14b7542c7a4a537dfe975b294e95"
     },
     {
+      "path": "src/storage/preaccept-artifact.ts",
+      "sha256": "3d3c7444501882281d973367e4f004606e316f022c34894f2afdcb4fb593b5db"
+    },
+    {
       "path": "src/storage/quota.ts",
       "sha256": "e35542edc5787e1be67e44f3f4568e8ee250703787d0c99cf3b0a5548a09f657"
     },
@@ -753,7 +757,7 @@
     },
     {
       "path": "src/storage/submit-spool.ts",
-      "sha256": "31df623235bf4ec1f6877c3115892098feb4f6315a080aa0f9b81b8707374345"
+      "sha256": "a9fbab396552ade6af3a05d7f720795358a549078dcc14cddc2470f71c7cf6db"
     },
     {
       "path": "src/storage/transaction.ts",

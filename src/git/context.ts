@@ -15,6 +15,7 @@ import { contextStagingPathAt } from "../storage/paths.js";
 import { discardContextPreparation, prepareContextStream } from "../storage/context-stream.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
+import { settleByAcceptance } from "../storage/preaccept-artifact.js";
 import { MailModule, buildEml, actorAddress, listAddress, expandAddresses } from "../mail.js";
 import { ContextPublicationObserver, type ContextPublicationEvidence } from "./context-publication.js";
 import type { RefAfterCas } from "./observe.js";
@@ -127,14 +128,16 @@ export class ContextCoordinator {
       subject: "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
       messageId: `${messageId}@${this.paths.society}.oma.invalid`,
       body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` }));
-    this.mail.freezeObject(messageId, eml);
+    const artifact = this.mail.freezeObject(messageId, eml);
+    const settle = () => settleByAcceptance([artifact], () => this.store.getOperationById(id) !== null);
     // Canonical observation is outside T. There is no await before the pure
     // current-authority/recipient snapshot and acceptance below.
     if (this.effects.current() !== request.expected) {
-      discardContextPreparation(this.paths.stateRoot, id);
+      discardContextPreparation(this.paths.stateRoot, id); settle();
       throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance");
     }
-    const accepted = this.store.transaction(tx => {
+    let accepted: "inserted" | "retry";
+    try { accepted = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth, "context.publish");
       const current = this.store.claimKey(auth.actor, key, hash);
       if (current === "retry") return "retry" as const;
@@ -151,9 +154,12 @@ export class ContextCoordinator {
         kind: "context.publish", payloadJson: JSON.stringify(request), planJson: JSON.stringify(plan) });
       if (result !== "retry") tx.insertDeliveries(recipients.map(recipient => ({ messageId, recipient, operationId: id })));
       return result;
-    });
+    }); } catch (error) { settle(); throw error; }
     // Preparation artifacts are retained: connection close cannot remove intent.
-    if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    // The frozen mail object is not preparation: nothing names it unless this
+    // operation was accepted, so a loser removes exactly the inode it published.
+    if (accepted === "retry") { settle(); return receiptOfOperation(this.store.getOperation(auth.actor, key)!); }
+    artifact.retainForOperation();
     const operation = this.operation(id);
     let knowledge: EffectKnowledge = "none";
     try {

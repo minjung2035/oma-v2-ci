@@ -121,7 +121,7 @@ function fixture() {
       const original = generateOperationId();
       const linked = generateOperationId();
       const spec = makeValidResolvedSpec("bob");
-      const message = await mail.freezeCreateInitial(
+      const { message } = await mail.freezeCreateInitial(
         auth,
         original,
         "bob",

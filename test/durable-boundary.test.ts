@@ -184,7 +184,7 @@ test("DB-009: create initial EML is an immutable object before acceptance", asyn
   const auth: AuthContext = { actor: "alice", incarnation: 0, role: "resident", channel: "actor", capabilities: new Set(["agent.create"]),
     peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
   try {
-    const message = await mail.freezeCreateInitial(auth, CREATE_OP, "bob", "frozen brief");
+    const { message } = await mail.freezeCreateInitial(auth, CREATE_OP, "bob", "frozen brief");
     const object = mail.objectPath(message.id);
     assert.equal(existsSync(object), true);
     const bytes = readFileSync(object);

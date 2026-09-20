@@ -84,6 +84,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/storage/delivery-receipt.ts",
       "src/storage/quota.ts",
       "src/storage/immutable-file.ts",
+      "src/storage/preaccept-artifact.ts",
       "src/storage/staged-tree.ts",
       "src/storage/submit-spool.ts",
     ],

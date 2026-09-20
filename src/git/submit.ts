@@ -12,6 +12,7 @@ import { requestHash, canonicalRequestParams } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey } from "../ids.js";
 import { publishedRefFor, mailObjectRelativePath } from "../domain/derived.js";
 import { prepareSubmitSpool, requireFrozenBundle, withFrozenBundle, type PreparedSubmitSpool } from "../storage/submit-spool.js";
+import { settleByAcceptance, type PreacceptArtifact } from "../storage/preaccept-artifact.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { submitResult } from "../protocol/operation-results.js";
@@ -64,10 +65,10 @@ export class SubmitCoordinator {
     if (failure.terminal === "unknown") this.store.transaction(tx => tx.setOperationUnknown(id));
     throw new StoreError(failure.code, error instanceof StoreError ? error.message : "submit effect or observation failed");
   }
-  private cleanPreaccept(spool: PreparedSubmitSpool, operationId: string): void {
-    let accepted: boolean | null = null;
-    try { accepted = this.store.getOperationById(operationId) !== null; } catch { /* DB uncertainty cannot authorize deletion. */ }
-    if (accepted === false) spool.discardUnaccepted(); else spool.retainForOperation();
+  /** The bundle spool and the frozen mail object are the same kind of thing:
+   * artifacts published before acceptance. One question settles both. */
+  private cleanPreaccept(spool: PreparedSubmitSpool, artifact: PreacceptArtifact | null, operationId: string): void {
+    settleByAcceptance([spool, artifact], () => this.store.getOperationById(operationId) !== null);
   }
   async submit(auth: AuthContext, key: string, input: SubmitInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     assertCurrentActor(this.store, auth, "git.submit");
@@ -86,12 +87,13 @@ export class SubmitCoordinator {
     const id = generateOperationId(); const messageId = generateMessageId(id, 0);
     const spool = await prepareSubmitSpool(this.paths.stateRoot, id, request.bundle, bytes);
     let committed = false;
+    let artifact: PreacceptArtifact | null = null;
     try {
       const logicalTo = [...new Set(request.to.length ? request.to : ["commons"])].sort() as Address[];
       const display = expandAddresses(this.store, logicalTo, this.paths.society).displayTo;
       const publishedRef = publishedRefFor(auth.actor, id);
       const eml = await this.resultEml(auth.actor, request, display, publishedRef, messageId);
-      this.mail.freezeObject(messageId, eml);
+      artifact = this.mail.freezeObject(messageId, eml);
       const claimResult = this.store.transaction(tx => {
         assertCurrentActor(this.store, auth, "git.submit");
         const current = this.store.claimKey(auth.actor, key, hash);
@@ -108,13 +110,13 @@ export class SubmitCoordinator {
         if (result !== "retry") tx.insertDeliveries(recipients.map(recipient => ({ messageId, recipient, operationId: id })));
         return result;
       });
-      if (claimResult === "retry") { this.cleanPreaccept(spool, id); return receiptOfOperation(this.store.getOperation(auth.actor, key)!); }
-      committed = true; spool.retainForOperation();
+      if (claimResult === "retry") { this.cleanPreaccept(spool, artifact, id); return receiptOfOperation(this.store.getOperation(auth.actor, key)!); }
+      committed = true; spool.retainForOperation(); artifact.retainForOperation();
       await this.exclusive(id, () => this.executeAccepted(this.operation(id), auth));
       return receiptOfOperation(this.operation(id));
     } catch (error) {
       if (!committed) {
-        try { this.cleanPreaccept(spool, id); }
+        try { this.cleanPreaccept(spool, artifact, id); }
         catch (cleanup) { throw new AggregateError([error, cleanup], "submit admission and owned cleanup failed"); }
       }
       throw error;

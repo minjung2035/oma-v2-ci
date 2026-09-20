@@ -1,8 +1,13 @@
 name: Architecture verification evidence
 
+# Every branch that can become master is verified before it does: the
+# integration branch on push, master itself after the merge, and the proposal
+# while it is still a proposal.
 on:
   push:
-    branches: [refactor/safety-preserving-architecture]
+    branches: [master, refactor/safety-preserving-architecture]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 permissions:
@@ -18,29 +23,61 @@ jobs:
     timeout-minutes: 210
     env:
       EVIDENCE: /tmp/oma-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+      # The one commit this run is about. On a pull request `github.sha` names a
+      # merge commit this workflow invented, which exists in no repository
+      # afterwards -- evidence filed under it could never be checked against a
+      # tree again. The head commit is the thing under test, so it is the thing
+      # the evidence is named by, and the binding step below refuses to continue
+      # if the checkout produced anything else.
+      VERIFIED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Preserve exact input source before running generators
+      - name: Bind this run to the exact commit it verifies
         run: |
           mkdir -p "$EVIDENCE"
+          head="$(git rev-parse HEAD)"
+          # A result recorded under a SHA that did not produce it is worse than
+          # no result. Nothing is measured until the tree is that commit.
+          test "$head" = "$VERIFIED_SHA"
           git rev-parse HEAD > "$EVIDENCE/source-head.txt"
-          git archive --format=tar.gz --output="$EVIDENCE/source.tar.gz" HEAD
+          git archive --format=tar.gz --output="$EVIDENCE/source.tar.gz" "$head"
           sha256sum "$EVIDENCE/source.tar.gz" > "$EVIDENCE/source.tar.gz.sha256"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: oma-source-${{ github.sha }}
-          path: |
-            ${{ env.EVIDENCE }}/source-head.txt
-            ${{ env.EVIDENCE }}/source.tar.gz
-            ${{ env.EVIDENCE }}/source.tar.gz.sha256
-          retention-days: 7
-          if-no-files-found: error
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '26'
           package-manager-cache: false
+      - name: Record which bytes of that commit were verified
+        # A commit name says which revision was meant; it does not say which
+        # bytes ran. This is the same closure the local R38 gate compares
+        # against `implementation/validation.md`, taken before any generator
+        # rewrites an input, so the evidence and the record answer to one
+        # number -- and that number is filed under one commit.
+        run: |
+          node --input-type=module -e '
+            const source = await import("./scripts/source-digest.mjs");
+            const measured = source.verificationInputDigest(".");
+            process.stdout.write(`files\t${measured.files}\ndigest\t${measured.digest}\n`);
+          ' > "$EVIDENCE/verification-input-digest.tsv"
+          {
+            printf 'commit\t%s\n' "$VERIFIED_SHA"
+            printf 'event\t%s\n' "$GITHUB_EVENT_NAME"
+            printf 'ref\t%s\n' "$GITHUB_REF"
+            printf 'run\t%s/%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            cat "$EVIDENCE/verification-input-digest.tsv"
+          } > "$EVIDENCE/provenance.tsv"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: oma-source-${{ env.VERIFIED_SHA }}
+          path: |
+            ${{ env.EVIDENCE }}/source-head.txt
+            ${{ env.EVIDENCE }}/source.tar.gz
+            ${{ env.EVIDENCE }}/source.tar.gz.sha256
+            ${{ env.EVIDENCE }}/provenance.tsv
+          retention-days: 7
+          if-no-files-found: error
       - name: Install the sandbox the containment tests need
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
       - name: Install the pinned line counter
@@ -130,7 +167,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: oma-verification-${{ github.sha }}-${{ github.run_attempt }}
+          name: oma-verification-${{ env.VERIFIED_SHA }}-${{ github.run_attempt }}
           path: ${{ env.EVIDENCE }}
           retention-days: 14
           if-no-files-found: error
@@ -140,5 +177,9 @@ jobs:
           DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
         run: |
           test "$DEPENDENCIES_OUTCOME" = success
+          # Unbound evidence is not evidence: a run that lost the commit it was
+          # measuring cannot report a pass about one.
+          test -f "$EVIDENCE/provenance.tsv"
+          grep -qxF "$(printf 'commit\t%s' "$VERIFIED_SHA")" "$EVIDENCE/provenance.tsv"
           test -f "$EVIDENCE/exit-codes.tsv"
           test ! -f "$EVIDENCE/failed"

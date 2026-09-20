@@ -10,6 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { lanes } from "../scripts/verification-lanes.mjs";
+import { verificationInputDigest } from "../scripts/source-digest.mjs";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/architecture-verification.yml", import.meta.url), "utf8");
@@ -18,6 +19,30 @@ const workflow = readFileSync(
 function checks() {
   return [...workflow.matchAll(/^\s*run_check (\S+) (\d+) (.*)$/gm)]
     .map(([, label, seconds, command]) => ({ label, seconds: Number(seconds), command }));
+}
+
+/** The trigger block, from `on:` to the next top-level key. */
+function triggerBlock() {
+  const rest = workflow.slice(workflow.indexOf("\non:\n") + 1);
+  return rest.slice(0, rest.search(/^permissions:/m));
+}
+
+/** The branches one event is wired to, or null when the event is not wired. */
+function branchesFor(event) {
+  const block = triggerBlock();
+  const at = block.indexOf(`  ${event}:\n`);
+  if (at < 0) return null;
+  const list = /^ {4}branches: \[([^\]]*)\]$/m.exec(block.slice(at));
+  return list === null ? null : list[1].split(",").map(entry => entry.trim());
+}
+
+/** One `- name:`-headed step's text. */
+function step(name) {
+  const at = workflow.indexOf(`- name: ${name}`);
+  assert.ok(at > 0, `the workflow has no step named ${name}`);
+  const rest = workflow.slice(at + 1);
+  const end = rest.search(/^ {6}- (?:name|uses):/m);
+  return end < 0 ? rest : rest.slice(0, end);
 }
 
 /** The lanes the workflow explicitly records as not run, from the loop that
@@ -112,4 +137,80 @@ test("T116: the evidence README never counts a lane that did not run as a pass",
   const readme = workflow.match(/Exit codes and lane result\.json files are authoritative\.[^']*/)?.[0] ?? "";
   for (const word of ["SETUP_FAILED", "skips", "NOT_RUN", "timeouts"])
     assert.ok(readme.includes(word), `the README does not exclude ${word}`);
+});
+
+test("T116: every branch that can become master is verified before it does", () => {
+  // Verifying only the integration branch means master's own bytes, and every
+  // proposal to change them, are never observed by CI at all.
+  const pushed = branchesFor("push");
+  assert.ok(pushed?.includes("master"), "a push to master runs no verification");
+  assert.ok(pushed?.includes("refactor/safety-preserving-architecture"),
+    "the integration branch lost its verification");
+  assert.ok(branchesFor("pull_request")?.includes("master"),
+    "a proposal to change master is never verified as a proposal");
+});
+
+test("T116: the run verifies the commit under test, not the merge commit CI invented", () => {
+  // On a pull request `github.sha` names a merge commit this workflow made up.
+  // It exists in no repository after the run, so a tree checked out from it --
+  // and any evidence filed under it -- can never be compared with a commit
+  // again. The head commit is the thing being proposed, so it is the thing
+  // that must be checked out.
+  const claimed = /VERIFIED_SHA: (\$\{\{ [^}]*\}\})/.exec(workflow);
+  assert.ok(claimed, "the workflow names no commit it claims to verify");
+  assert.equal(claimed[1], "${{ github.event.pull_request.head.sha || github.sha }}");
+  const checkout = workflow.slice(workflow.indexOf("actions/checkout@"));
+  const ref = /^ {10}ref: (.*)$/m.exec(checkout.slice(0, checkout.search(/^ {6}- name:/m)));
+  assert.ok(ref, "the checkout takes the event's default ref, which on a pull request is the merge commit");
+  assert.equal(ref[1].trim(), claimed[1],
+    "the checkout and the claimed commit are chosen independently, so they can disagree");
+});
+
+test("T116: nothing is measured until the tree is the commit the evidence names", () => {
+  const bind = step("Bind this run to the exact commit it verifies");
+  assert.match(bind, /head="\$\(git rev-parse HEAD\)"/);
+  assert.match(bind, /test "\$head" = "\$VERIFIED_SHA"/,
+    "the run records results without ever confirming which commit produced them");
+  // A result recorded under a SHA that did not produce it is worse than none,
+  // so the comparison has to come before anything that produces a result.
+  const bound = workflow.indexOf('test "$head" = "$VERIFIED_SHA"');
+  for (const measurement of ["npm ci", "run_check", "check:inventory"])
+    assert.ok(bound > 0 && bound < workflow.indexOf(measurement),
+      `${measurement} runs before the run knows which commit it is measuring`);
+});
+
+test("T116: the evidence says which bytes of that commit ran, taken before the generators", () => {
+  // A commit name says which revision was meant, not which bytes were
+  // measured; the generators below rewrite inputs, so a digest taken later
+  // would describe a tree that no commit ever held.
+  const record = step("Record which bytes of that commit were verified");
+  assert.match(record, /scripts\/source-digest\.mjs/);
+  assert.match(record, /verificationInputDigest\("\."\)/);
+  assert.equal(typeof verificationInputDigest, "function",
+    "the workflow calls an export the local gate no longer has");
+  assert.match(record, /printf 'commit\\t%s\\n' "\$VERIFIED_SHA"/,
+    "the recorded bytes are not filed under the commit they came from");
+  const taken = workflow.indexOf("verification-input-digest.tsv");
+  for (const generator of ["npm ci", "run_check loc", "check:inventory"])
+    assert.ok(taken > 0 && taken < workflow.indexOf(generator),
+      `${generator} may rewrite an input before the digest is taken`);
+});
+
+test("T116: evidence is filed under the commit that produced it", () => {
+  const names = [...workflow.matchAll(/^ {10}name: (oma-.*)$/gm)].map(([, name]) => name.trim());
+  assert.ok(names.length >= 2, "the workflow uploads fewer artifacts than it has evidence");
+  for (const name of names) {
+    assert.match(name, /\$\{\{ env\.VERIFIED_SHA \}\}/, `${name} is not filed under the verified commit`);
+    assert.doesNotMatch(name, /github\.sha/,
+      `${name} is filed under the merge commit, which no tree can be checked against`);
+  }
+});
+
+test("T116: a run that lost its binding cannot report success", () => {
+  // Unbound evidence is not evidence: a green result that names no commit is
+  // exactly the reading error this whole file exists to prevent.
+  const propagate = step("Propagate unsuccessful verification");
+  assert.match(propagate, /test -f "\$EVIDENCE\/provenance\.tsv"/);
+  assert.match(propagate, /grep -qxF "\$\(printf 'commit\\t%s' "\$VERIFIED_SHA"\)" "\$EVIDENCE\/provenance\.tsv"/,
+    "the final gate accepts provenance that names another commit");
 });

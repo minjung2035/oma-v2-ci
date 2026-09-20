@@ -12,6 +12,7 @@ import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "./storage/
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
 import { publishImmutableFile, readImmutableBytes } from "./storage/immutable-file.js";
+import { publishedArtifact, settleByAcceptance, type PreacceptArtifact, type PreacceptOwner } from "./storage/preaccept-artifact.js";
 import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { expandAddresses, logicalReplyAddress } from "./mail/routing.js";
@@ -25,6 +26,8 @@ export type { RouteResult } from "./mail/routing.js";
 export { batchOf, batchNotice } from "./mail/batches.js";
 export { fsyncDir, replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 export { publishImmutableFile } from "./storage/immutable-file.js";
+export { PreacceptArtifact, publishedArtifact, settleByAcceptance } from "./storage/preaccept-artifact.js";
+export type { PreacceptOwner } from "./storage/preaccept-artifact.js";
 export { publishBatchView } from "./storage/batch-view.js";
 export { buildEml } from "./mail/serialize.js";
 export type { EmlParams } from "./mail/serialize.js";
@@ -80,8 +83,9 @@ export class MailModule {
       kind: input.kind, contextRevision: input.refs?.find(reference => reference.repo === "context")?.oid ?? null,
       replyHeaders, ...(input.approvalFor === undefined ? {} : { approvalFor: input.approvalFor }),
     }, { subject: input.subject, body: input.body });
-    this.freezeObject(messageId, eml);
-    const txClaim = this.store.transaction(tx => {
+    const artifact = this.freezeObject(messageId, eml);
+    let txClaim: "inserted" | "retry";
+    try { txClaim = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth, "mail.send");
       const current = this.store.claimKey(auth.actor, key, newHash);
       if (current === "retry") return "retry" as const;
@@ -92,8 +96,12 @@ export class MailModule {
         kind: operationKind, payloadJson: JSON.stringify(requestParams), planJson: JSON.stringify(plan) });
       if (accepted === "inserted") tx.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
       return accepted;
-    });
-    if (txClaim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
+    }); } catch (error) { this.settlePreaccept(opId, [artifact]); throw error; }
+    if (txClaim === "retry") {
+      this.settlePreaccept(opId, [artifact]);
+      return receiptOf(this.store.getOperation(auth.actor, key)!);
+    }
+    artifact.retainForOperation();
     const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId) };
     let materializedAll = true;
     try { await this.materialize(opId); }
@@ -120,24 +128,34 @@ export class MailModule {
     if (message.id !== id) throw new StoreError("INVALID_REQUEST", "reply target message is unknown");
     return this.materializer.headers(message);
   }
-  async freezeCreateInitial(auth: AuthContext, operationId: string, recipient: Actor, brief: string): Promise<MessagePlan> {
+  async freezeCreateInitial(auth: AuthContext, operationId: string, recipient: Actor, brief: string): Promise<{ message: MessagePlan; artifact: PreacceptArtifact }> {
     const messageId = generateMessageId(operationId, 0);
     const eml = await buildFrozenMessage({ id: messageId, sender: auth.actor, society: this.paths.society,
       to: [recipient], kind: "message", contextRevision: null,
       replyHeaders: { replyTo: [auth.actor], inReplyTo: null, references: [] },
     }, { subject: "initial brief", body: brief });
-    this.freezeObject(messageId, eml);
-    return messagePlanFrom(eml, [recipient]);
+    const artifact = this.freezeObject(messageId, eml);
+    return { message: messagePlanFrom(eml, [recipient]), artifact };
   }
   publishCreateInitial(message: MessagePlan): void {
     readImmutableBytes(this.objectPath(message.id), message.sha256, message.bytes);
   }
-  freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): void {
+  /** The published object is owned by nobody until the acceptance transaction
+   * that names it commits. The caller settles the returned artifact on every
+   * exit from that window. */
+  freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): PreacceptArtifact {
     const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); ensureDirectory(stagingDir);
     const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
     writeFsynced(staged, eml.text);
-    try { publishImmutableFile(staged, this.objectPath(messageId), eml.sha256 ?? sha256Hex(eml.text)); }
+    const destination = this.objectPath(messageId);
+    try { publishImmutableFile(staged, destination, eml.sha256 ?? sha256Hex(eml.text)); }
     finally { removeOwnedFile(staged); }
+    return publishedArtifact(destination);
+  }
+  /** Settles pre-accept owners against this journal: the operation that would
+   * name them either exists or nothing owns them. */
+  settlePreaccept(operationId: string, owners: readonly (PreacceptOwner | null)[]): void {
+    settleByAcceptance(owners, () => this.store.getOperationById(operationId) !== null);
   }
   async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> { this.materializer.gated(operationId, proof); }
   async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }

@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 219,
-    "n_lines": 25271,
+    "n_files": 220,
+    "n_lines": 25419,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -96,6 +96,12 @@
     "code": 242,
     "language": "TypeScript"
   },
+  "src/lifecycle/create.ts": {
+    "blank": 8,
+    "comment": 12,
+    "code": 238,
+    "language": "TypeScript"
+  },
   "src/broker/internal-dispatcher.ts": {
     "blank": 1,
     "comment": 2,
@@ -112,12 +118,6 @@
     "blank": 24,
     "comment": 47,
     "code": 225,
-    "language": "TypeScript"
-  },
-  "src/lifecycle/create.ts": {
-    "blank": 7,
-    "comment": 8,
-    "code": 222,
     "language": "TypeScript"
   },
   "src/runtime/pi-adapter.ts": {
@@ -216,15 +216,15 @@
     "code": 179,
     "language": "TypeScript"
   },
+  "src/git/context.ts": {
+    "blank": 5,
+    "comment": 22,
+    "code": 178,
+    "language": "TypeScript"
+  },
   "src/broker/public-dispatcher.ts": {
     "blank": 3,
     "comment": 8,
-    "code": 174,
-    "language": "TypeScript"
-  },
-  "src/git/context.ts": {
-    "blank": 5,
-    "comment": 20,
     "code": 174,
     "language": "TypeScript"
   },
@@ -248,7 +248,7 @@
   },
   "src/git/submit.ts": {
     "blank": 2,
-    "comment": 6,
+    "comment": 8,
     "code": 163,
     "language": "TypeScript"
   },
@@ -274,6 +274,12 @@
     "blank": 8,
     "comment": 49,
     "code": 159,
+    "language": "TypeScript"
+  },
+  "src/mail.ts": {
+    "blank": 1,
+    "comment": 8,
+    "code": 157,
     "language": "TypeScript"
   },
   "src/diagnostics/integrity.ts": {
@@ -318,12 +324,6 @@
     "code": 148,
     "language": "TypeScript"
   },
-  "src/mail.ts": {
-    "blank": 1,
-    "comment": 3,
-    "code": 144,
-    "language": "TypeScript"
-  },
   "src/runtime/deployment-manifest.ts": {
     "blank": 3,
     "comment": 4,
@@ -354,6 +354,12 @@
     "code": 137,
     "language": "TypeScript"
   },
+  "src/storage/submit-spool.ts": {
+    "blank": 3,
+    "comment": 12,
+    "code": 137,
+    "language": "TypeScript"
+  },
   "src/lifecycle/actions.ts": {
     "blank": 5,
     "comment": 9,
@@ -363,12 +369,6 @@
   "src/sandbox.ts": {
     "blank": 8,
     "comment": 36,
-    "code": 136,
-    "language": "TypeScript"
-  },
-  "src/storage/submit-spool.ts": {
-    "blank": 3,
-    "comment": 12,
     "code": 136,
     "language": "TypeScript"
   },
@@ -663,6 +663,12 @@
   "src/protocol/host-channel.ts": {
     "blank": 8,
     "comment": 26,
+    "code": 70,
+    "language": "TypeScript"
+  },
+  "src/storage/preaccept-artifact.ts": {
+    "blank": 7,
+    "comment": 23,
     "code": 70,
     "language": "TypeScript"
   },
@@ -1321,9 +1327,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1023,
-    "comment": 3339,
-    "code": 20909,
-    "nFiles": 219
+    "blank": 1031,
+    "comment": 3375,
+    "code": 21013,
+    "nFiles": 220
   }
 }
