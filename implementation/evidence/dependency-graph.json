@@ -164,6 +164,7 @@
   "src/runtime/provision.ts",
   "src/runtime/resident-rootfs.ts",
   "src/runtime/run-registry.ts",
+  "src/runtime/society-lease.ts",
   "src/runtime/supervision-channel.ts",
   "src/sandbox.ts",
   "src/storage/batch-view.ts",
@@ -1403,7 +1404,7 @@
     "src/runner.ts",
     "src/sandbox.ts"
    ],
-   "files": 32
+   "files": 33
   },
   {
    "index": 5,
@@ -1420,8 +1421,8 @@
    "files": 55
   }
  ],
- "files": 218,
- "runtimeEdges": 781,
+ "files": 219,
+ "runtimeEdges": 783,
  "typeOnlyEdges": 308,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 205,
@@ -1433,11 +1434,11 @@
   "L4-orchestration -> L1-kernel": 81,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
-  "L4-orchestration -> L4-orchestration": 37,
+  "L4-orchestration -> L4-orchestration": 38,
   "L5-entry -> L1-kernel": 65,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
-  "L5-entry -> L4-orchestration": 19,
+  "L5-entry -> L4-orchestration": 20,
   "L5-entry -> L5-entry": 106
  },
  "upwardTypeOnlyEdges": [
@@ -1477,7 +1478,7 @@
   "src/broker.ts": 28,
   "src/mail.ts": 26,
   "src/entry/broker.ts": 21,
-  "src/entry/oma.ts": 18,
+  "src/entry/oma.ts": 19,
   "src/git.ts": 15,
   "src/git/context-repository.ts": 14,
   "src/store.ts": 14,
@@ -1496,13 +1497,13 @@
   "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 4,
-  "node:crypto": 22,
-  "node:fs": 57,
+  "node:crypto": 23,
+  "node:fs": 58,
   "node:http": 1,
   "node:https": 1,
   "node:net": 10,
   "node:os": 2,
-  "node:path": 61,
+  "node:path": 62,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

@@ -8,12 +8,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "node:net";
-import { provisionSociety } from "../src/runtime/provision.js";
+import { provisionSociety, repairSociety } from "../src/runtime/provision.js";
 import { brokerListening, superviseBroker } from "../src/runtime/broker-supervisor.js";
 import { ProcessLock, SOCIETY_OWNED_EXIT } from "../src/runtime/process-lock.js";
 
@@ -193,22 +193,132 @@ test("T115 REC-007: a second provisioning leaves the tree it finds byte for byte
       assert.equal(after.ctimeNs, before[index]!.ctimeNs, `${path} was touched`);
     });
 
-    // Idempotent is "no write", not "never writes": content that is not what
-    // this start generates is still corrected, because a rootfs claiming the
-    // agent is root is worse than a rewrite.
+    // This test used to assert the opposite of the line above it: that a
+    // tampered identity file IS corrected by provisioning. Both cannot be
+    // true. "A wrong rootfs is worth fixing" and "a process that does not own
+    // the society writes nothing into it" are two policies, and provisioning
+    // runs before ownership is decided, so it only gets the second one.
+    // Correcting is a separate pass with its own authority (`repairSociety`).
     const passwd = join(rootfs, "etc", "passwd");
-    writeFileSync(passwd, "agent:x:0:0:tampered:/:/bin/sh\n");
-    provisionSociety(state);
-    assert.match(readFileSync(passwd, "utf8"), /^agent:x:\d+:\d+:agent:/);
+    const tampered = "agent:x:0:0:tampered:/:/bin/sh\n";
+    writeFileSync(passwd, tampered);
+    const stamp = statSync(passwd, { bigint: true });
+    const report = provisionSociety(state);
+    assert.equal(readFileSync(passwd, "utf8"), tampered, "provisioning overwrote state it does not own");
+    const untouched = statSync(passwd, { bigint: true });
+    assert.equal(untouched.ino, stamp.ino, "the tampered file was replaced");
+    assert.equal(untouched.mtimeNs, stamp.mtimeNs, "the tampered file was rewritten");
+    assert.equal(untouched.ctimeNs, stamp.ctimeNs, "the tampered file was touched");
+    // Silence would be the real defect: leaving it alone is only acceptable
+    // because the owner is told exactly what is still wrong.
+    assert.deepEqual([...report.pendingRepairs], [passwd]);
 
     // And a generated file that cannot be read is not "different" -- it is a
     // rootfs entry provisioning cannot account for, so it refuses rather than
-    // overwriting whatever is there.
+    // treating it as something to report or overwrite.
     if (process.getuid?.() !== 0) {
       chmodSync(passwd, 0o000);
       assert.throws(() => { provisionSociety(state); }, /cannot be read/);
+      assert.throws(() => { repairSociety(state); }, /cannot be read/);
       chmodSync(passwd, 0o644);
     }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 REC-007: the owner's repair pass is what puts a wrong rootfs back", () => {
+  const root = scratch();
+  try {
+    const state = join(root, "state");
+    provisionSociety(state);
+    const rootfs = join(state, "rootfs");
+    const passwd = join(rootfs, "etc", "passwd");
+    const group = join(rootfs, "etc", "group");
+    const inbox = join(rootfs, "inbox.md");
+
+    // Nothing to do on a tree that is already right, and saying so costs no
+    // write: a repair pass that rewrites correct files is the same defect
+    // provisioning was cured of.
+    const before = [passwd, group].map(path => statSync(path, { bigint: true }));
+    assert.deepEqual([...repairSociety(state)], []);
+    [passwd, group].forEach((path, index) => {
+      const after = statSync(path, { bigint: true });
+      assert.equal(after.ino, before[index]!.ino, `${path} was replaced by a repair with nothing to repair`);
+      assert.equal(after.mtimeNs, before[index]!.mtimeNs, `${path} was rewritten by a repair with nothing to repair`);
+    });
+
+    // A file whose content is wrong, and a link pointing somewhere else: both
+    // are corrected, and both are named.
+    writeFileSync(passwd, "agent:x:0:0:tampered:/:/bin/sh\n");
+    rmSync(inbox, { force: true });
+    symlinkSync("/etc/shadow", inbox);
+    const corrected = [...repairSociety(state)].sort();
+    assert.deepEqual(corrected, [inbox, passwd].sort());
+    assert.match(readFileSync(passwd, "utf8"), /^agent:x:\d+:\d+:agent:/);
+    assert.equal(readlinkSync(inbox), "/run/oma-view/inbox.md");
+    // And the society is clean afterwards: the next provisioning has nothing
+    // left to defer.
+    assert.deepEqual([...provisionSociety(state).pendingRepairs], []);
+    assert.deepEqual([...repairSociety(state)], []);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 REC-007: two first starts racing on one state root both survive it", async () => {
+  // The rule "the loser adopts what the winner made" was applied to the
+  // canonical ref and not to the repository itself: both processes saw no
+  // `project.git`, both ran `git init --bare` into that exact path, and the
+  // loser got `File exists` or a config-lock collision, which provisioning
+  // reported as a corrupt store. Creating a repository is now a build
+  // somewhere else followed by a rename, which either wins or finds the
+  // winner's repository already in place.
+  //
+  // This runs two real processes, because the defect only exists between
+  // processes: the previous cycle's evidence said in as many words that it had
+  // never been observed, and a single-process test cannot observe it.
+  const root = scratch();
+  try {
+    const state = join(root, "state");
+    const gate = join(root, "go");
+    const script = join(root, "race.mjs");
+    const entry = pathToFileURL(join(process.cwd(), "dist/src/runtime/provision.js")).href;
+    writeFileSync(script, `
+      import { existsSync } from "node:fs";
+      import { provisionSociety } from ${JSON.stringify(entry)};
+      // Both processes are released by one file appearing, so they are inside
+      // the same few milliseconds rather than merely both started.
+      while (!existsSync(${JSON.stringify(gate)})) {}
+      try {
+        const report = provisionSociety(${JSON.stringify(state)});
+        process.stdout.write(JSON.stringify({ ok: true, seeded: report.seeded }));
+      } catch (error) {
+        process.stdout.write(JSON.stringify({ ok: false, message: String(error && error.message) }));
+      }
+    `);
+    const settled = [0, 1].map(() => {
+      const child = spawn(process.execPath, [script], { stdio: ["ignore", "pipe", "inherit"] });
+      let text = "";
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", chunk => { text += chunk as string; });
+      return new Promise<{ code: number; text: string }>(resolve => {
+        child.once("exit", code => { resolve({ code: code ?? -1, text }); });
+      });
+    });
+    writeFileSync(gate, "");
+    const results = await Promise.all(settled);
+    for (const result of results)
+      assert.equal(result.code, 0, `a racing start crashed (${result.code}): ${result.text}`);
+    const reports = results.map(result => JSON.parse(result.text || "{}") as { ok: boolean; seeded?: boolean; message?: string });
+    for (const report of reports)
+      assert.equal(report.ok, true, `a racing start failed: ${report.message}`);
+    // Exactly one of them seeded the canonical history; the other adopted it.
+    assert.equal(reports.filter(report => report.seeded === true).length, 1,
+      `the canonical main was seeded by ${reports.filter(r => r.seeded === true).length} of 2: ${JSON.stringify(reports)}`);
+    // One repository, healthy, with one `main` -- and nothing half-built left
+    // in the society's state tree.
+    const projectGit = join(state, "repos", "project.git");
+    git(projectGit, ["fsck", "--strict", "--no-reflogs"]);
+    assert.match(git(projectGit, ["rev-parse", "refs/heads/main^{commit}"]), /^[0-9a-f]{40}$/);
+    assert.deepEqual(readdirSync(join(state, "repos")).filter(name => name.includes(".staging.")), [],
+      "a half-built repository was left in the society's state tree");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

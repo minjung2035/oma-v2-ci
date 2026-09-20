@@ -15,18 +15,25 @@
  * that is not a repository, or one with no commit yet, starts from an empty
  * root commit, and the report says which happened.
  *
- * This runs before anything knows which process will own the society: the
- * broker cannot start against a tree that is not there, so provisioning cannot
- * wait for the broker to prove ownership. That is only safe because of the
- * rule above, taken literally -- a start that turns out not to own the society
- * must leave the tree exactly as it found it, so every step here either
- * creates something absent or does nothing at all. Where two starts can race
- * to create the same thing, the loser adopts what the winner made rather than
- * failing: a society has one canonical `main`, and which of two simultaneous
- * starts wrote it is not a distinction worth having.
+ * REC-007: this only ever creates. Correcting something that is there and
+ * wrong is a write over state that may belong to another process's society, so
+ * it is a separate pass -- `repairSociety` -- which the product runs only once
+ * it holds the society lease. What this finds and cannot create is reported,
+ * not fixed.
+ *
+ * Where two starts can race to create the same thing, the loser adopts what
+ * the winner made rather than failing: a society has one canonical `main`, and
+ * which of two simultaneous starts wrote it is not a distinction worth having.
+ * That has to hold for the repository itself and not only for its refs. `git
+ * init` into the final path is several writes -- make the directory, copy the
+ * templates, write the config -- and a second start can see the first one's
+ * half-built tree, or land its templates on top of it. So a repository is
+ * built under a name nothing else can be using and moved into place in one
+ * step.
  */
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { runGitText } from "../process/policies.js";
 import { ensureDurableDirectory } from "../storage/durable-fs.js";
@@ -62,6 +69,10 @@ export interface ProvisionReport {
   readonly seedSource: "project" | "empty" | null;
   /** Why a project directory was not used, when it was offered and not used. */
   readonly seedNote: string | null;
+  /** Rootfs entries that exist, are not what OMA generates, and were left
+   * exactly as they are because correcting them is a write this pass is not
+   * entitled to make. `repairSociety` is what puts them back. */
+  readonly pendingRepairs: readonly string[];
 }
 
 export interface ProvisionOptions {
@@ -86,15 +97,40 @@ function git(argv: readonly string[], gitDir?: string): string {
   return result.stdout.trim();
 }
 
-/** A bare repository on `main`, created only if the path is absent. An existing
- * path is left exactly as it is: a repository that is present but broken is a
- * condition for the operator to see, not one to overwrite. */
+/** A bare repository on `main`, created only if the path is absent, and never
+ * visible half-built. An existing path is left exactly as it is: a repository
+ * that is present but broken is a condition for the operator to see, not one
+ * to overwrite -- and a repository another start is creating right now is not
+ * a failure either, so a lost race adopts what the winner made.
+ *
+ * The staging name is dot-prefixed and carries this process's identity, so no
+ * two starts can pick the same one and nothing walking `repos/` mistakes it
+ * for a society repository. `rename` onto a directory that already has the
+ * winner's repository in it is refused by the kernel, which is exactly the
+ * signal that this start lost. */
 function ensureBareRepository(path: string, format = "sha1"): boolean {
   if (existsSync(path)) return false;
   if (format !== "sha1" && format !== "sha256")
     throw new StoreError("UNSUPPORTED_PROFILE", `the project uses an unsupported object format ${format}`);
-  git(["init", "--quiet", "--bare", "--initial-branch=main", `--object-format=${format}`, path]);
-  return true;
+  const parent = dirname(path);
+  mkdirSync(parent, { recursive: true, mode: 0o700 });
+  const staging = join(parent, `.${basename(path)}.staging.${randomBytes(8).toString("hex")}`);
+  try {
+    git(["init", "--quiet", "--bare", "--initial-branch=main", `--object-format=${format}`, staging]);
+    try { renameSync(staging, path); }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      // The winner's repository is already there. Anything else is a real
+      // failure and is not quietly read as "someone else did it".
+      if (code !== "ENOTEMPTY" && code !== "EEXIST" && code !== "ENOTDIR") throw error;
+      return false;
+    }
+    return true;
+  } finally {
+    // Nothing is left behind on either path: after a successful rename there
+    // is no staging directory to remove, and after a lost race there is.
+    rmSync(staging, { recursive: true, force: true });
+  }
 }
 
 /** The canonical `main` the broker requires. The commit is empty and its
@@ -150,8 +186,10 @@ function seedEmptyRoot(projectGit: string): boolean {
     `society provisioning could not create the canonical main: ${created.stderr.trim().slice(0, 200)}`);
 }
 
-/** Brings a society's state tree to the point where the broker will start.
- * Safe to call on every run; it reports what it had to create. */
+/** Brings a society's state tree to the point where the broker will start, by
+ * creating what is absent and nothing else. Safe to call on every run and safe
+ * to lose a race with another start; it reports what it had to create, and
+ * what it found wrong and deliberately did not touch. */
 export function provisionSociety(stateRoot: string, options: ProvisionOptions = {}): ProvisionReport {
   const created: string[] = [];
   for (const relative of [".", ...OWNED_DIRECTORIES]) {
@@ -183,7 +221,22 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   const seedNote = project !== null && "note" in project && seeded ? project.note : null;
   // Confinement on by default: the rootfs is built here rather than being a
   // thing the user must assemble before Residents can be sandboxed.
-  prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
-    process.getuid?.() ?? 0, process.getgid?.() ?? 0);
-  return Object.freeze({ created: Object.freeze(created), seeded, seedSource, seedNote });
+  const rootfs = prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
+    process.getuid?.() ?? 0, process.getgid?.() ?? 0, "create");
+  return Object.freeze({
+    created: Object.freeze(created), seeded, seedSource, seedNote,
+    pendingRepairs: rootfs.deferred,
+  });
+}
+
+/** Puts back the generated rootfs entries `provisionSociety` found wrong and
+ * left alone, and answers which ones it corrected.
+ *
+ * This writes over state that exists, so the product calls it only once it
+ * holds the society lease. Keeping it out of `provisionSociety` is what lets
+ * both rules be true at once: a rootfs that lies about who the agent is gets
+ * corrected, and a process that does not own the society corrects nothing. */
+export function repairSociety(stateRoot: string): readonly string[] {
+  return prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
+    process.getuid?.() ?? 0, process.getgid?.() ?? 0, "repair").corrected;
 }

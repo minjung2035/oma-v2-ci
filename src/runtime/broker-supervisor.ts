@@ -16,15 +16,21 @@
  *    with the new broker and receives the new credential. Restarts are bounded:
  *    a broker that cannot stay up is reported, not restarted forever.
  *
- * The singleton guarantee is not here: the broker takes an exclusive lock on
- * its own run root and refuses to run twice. That is exactly why a spawn is
- * not ownership. Spawning says a process started; it does not say the process
- * got the lock, and between the probe above and the lock in the child another
- * `oma` can take it. So this handle reports two things and the product acts on
- * those, never on the spawn: `onReady`, which the broker sends only after it
- * holds the lock, and `onDisowned`, which says this process will not own the
- * society at all. A child that exits with the ownership status is disowned and
- * never restarted -- restarting it would only lose the race again.
+ * The singleton guarantee is not here, and it is not the broker's lock either.
+ * The broker's lock answers "may this process be the society's single SQLite
+ * writer", and it dies with the broker, so it cannot answer "may this `oma`
+ * run the society's one engine" -- every restart gap would be a gap in that
+ * answer. The host holds a lease of its own for that (`society-lease.ts`).
+ *
+ * What this handle reports is whether the host's own broker is working, and
+ * the product acts on those reports rather than on the spawn: `onReady`, which
+ * the broker sends only after it holds its lock, and `onDisowned`, which says
+ * this process will not get a working broker for the society at all. A child
+ * that exits with the ownership status is disowned and never restarted --
+ * restarting it would only lose the same race again. `onDisowned` is a
+ * teardown signal, not a notice: the host gives up the society lease when it
+ * arrives, so everything the host ran on the strength of that lease must be
+ * stopped by then.
  */
 import { connect, type Socket } from "node:net";
 import { join } from "node:path";

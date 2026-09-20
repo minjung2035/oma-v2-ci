@@ -47,7 +47,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 }
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
-  disowned = null } = {}) {
+  disowned = null, leased = true } = {}) {
   const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -61,6 +61,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   const grants = [];
   const handlers = {};
   const deliveries = [];
+  const lease = { holds: leased, releases: 0 };
   let started = null;
   let sessionListener = null;
   const broker = brokerStandIn(brokerState, credentials, disowned);
@@ -108,13 +109,18 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       PrincipalSession: class {
         static start(paths, profile, limits, environment) {
           calls.push("PrincipalSession.start");
-          started = { paths, profile, limits, environment };
-          return {
+          // The engine the entry is holding, not a snapshot of its arguments:
+          // whether it is still running when ownership ends is the whole
+          // question TUI-004 asks here.
+          started = {
+            paths, profile, limits, environment, closes: 0,
             pid: 777, busy: false, running: true,
             grant(credential, sessionHandle) { grants.push({ credential, sessionHandle }); },
             onEvent(listener) { sessionListener = listener; return () => {}; },
-            deliver: async () => {}, close() {}, submit: async () => {},
+            deliver: async () => {}, submit: async () => {},
+            close() { calls.push("PrincipalSession.close"); started.closes += 1; started.running = false; },
           };
+          return started;
         }
       },
     },
@@ -131,11 +137,28 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     },
     "../tui/sources/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], unreadCount: () => 0 },
     "../tui/sources/extensions.js": { readExtensions: () => ({ rows: [] }), toggleExtension() {} },
-    "../tui/sources/settings.js": { commitField() {}, readSettings: () => settings, writeSettings() {} },
+    "../tui/sources/settings.js": {
+      commitField() {},
+      readSettings: () => { calls.push("readSettings"); return settings; },
+      writeSettings() { calls.push("writeSettings"); },
+    },
     "../config/defaults.js": { defaultHostConfig: () => ({}), societyFromDirectory: () => "fixture" },
     "../runtime/provision.js": {
-      provisionSociety: () => { calls.push("provisionSociety"); return { created: [], seeded: false, seedSource: null, seedNote: null }; },
+      provisionSociety: () => {
+        calls.push("provisionSociety");
+        return { created: [], seeded: false, seedSource: null, seedNote: null, pendingRepairs: ["/state/rootfs/etc/passwd"] };
+      },
+      repairSociety: () => { calls.push("repairSociety"); return ["/state/rootfs/etc/passwd"]; },
       residentRootfsPath: () => "/state/rootfs",
+    },
+    "../runtime/society-lease.js": {
+      tryHoldSociety: runRoot => {
+        calls.push("tryHoldSociety");
+        assert.equal(runRoot, "/run/oma/fixture", "the lease was not taken on this society's run root");
+        if (!lease.holds) return null;
+        return { path: `${runRoot}/society.lease`,
+          release() { calls.push("lease.release"); lease.releases += 1; lease.holds = false; } };
+      },
     },
     "../runtime/broker-supervisor.js": {
       superviseBroker: async options => {
@@ -166,7 +189,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   // `started` is read through an accessor, not copied out here: what this
   // suite now asks is when the engine starts, and a value snapshotted at
   // return would answer "never" for every test that fires readiness later.
-  return { calls, lines, grants, handlers, deliveries, broker: broker.record, settle,
+  return { calls, lines, grants, handlers, deliveries, broker: broker.record, settle, lease,
     get started() { return started; },
     fireEvent: event => sessionListener?.(event) };
 }
@@ -278,19 +301,99 @@ test("T119: a broker that could not be started leaves a Control Panel, not an un
   assert.ok(lines.some(line => /Dashboard, Config, Mail/.test(line)), lines.join(" | "));
 });
 
-test("T119: a broker lost after it was ready leaves the engine it already started alone", async () => {
-  // Disowning after readiness -- restarts exhausted -- is not a reason to tear
-  // down a session the Human is in the middle of. It says so, and stops
-  // starting anything new.
+test("T119: a society this process stops owning loses the engine that ownership paid for", async () => {
+  // This used to say the opposite: disowning after readiness left the session
+  // alone, so as not to interrupt the Human. That was the second-engine defect
+  // in slow motion. The broker's lock dies with the broker, so restarts
+  // running out means the society is free; the next `oma` takes it and starts
+  // its own engine, and the one still running here becomes the second writer
+  // of one private workspace and one session history. The lease is what the
+  // engine exists for, so giving the lease up and ending the engine are one
+  // act -- and the engine ends first.
   const society = await run();
   society.broker.fireReady();
   await society.settle();
-  assert.ok(society.started, "the engine was not started when the broker became ready");
+  const live = society.started;
+  assert.ok(live, "the engine was not started when the broker became ready");
+  assert.equal(society.lease.releases, 0, "the society was given up while its engine was running");
+
   society.broker.fireDisowned("the broker could not stay running");
   await society.settle();
   assert.equal(society.calls.filter(name => name === "PrincipalSession.start").length, 1);
-  assert.ok(society.started, "a session the Human was using was torn down");
+  assert.equal(live.closes, 1, "the engine outlived the ownership it was started for");
+  assert.equal(society.lease.releases, 1, "the society was kept after this process stopped owning it");
+  const closedAt = society.calls.indexOf("PrincipalSession.close");
+  const releasedAt = society.calls.indexOf("lease.release");
+  assert.ok(closedAt >= 0 && releasedAt >= 0 && closedAt < releasedAt,
+    `the lease was released before the engine ended: ${society.calls.join(" ")}`);
   assert.ok(society.lines.some(line => /could not stay running/.test(line)), society.lines.join(" | "));
+  assert.ok(society.lines.some(line => /Pi 세션을 닫았습니다/.test(line)), society.lines.join(" | "));
+
+  // And nothing starts again behind it: a stray readiness after the society is
+  // gone must not build a second engine on state this process no longer owns.
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.calls.filter(name => name === "PrincipalSession.start").length, 1,
+    "an engine was started after this process gave the society up");
+});
+
+test("T119 / REC-007: a process that cannot take the society lease writes nothing and starts no broker", async () => {
+  // Ownership is decided before the first write, not after a broker is
+  // spawned. A process that does not hold the lease provisions nothing,
+  // repairs nothing, writes no configuration and spawns no broker: every one
+  // of those is a write into, or a claim on, a society that is someone else's.
+  const society = await run({ leased: false });
+  const { calls, lines } = society;
+  assert.ok(calls.includes("tryHoldSociety"), "the lease was never asked for");
+  assert.equal(calls.includes("provisionSociety"), false, "a non-owner wrote into the society's state tree");
+  assert.equal(calls.includes("repairSociety"), false, "a non-owner corrected state it does not own");
+  assert.equal(calls.includes("writeSettings"), false, "a non-owner created the society's configuration");
+  assert.equal(calls.includes("superviseBroker"), false, "a non-owner started a broker for a society it does not own");
+  assert.equal(calls.includes("PrincipalSession.start"), false);
+  assert.equal(calls.includes("PrincipalDelivery"), false);
+  assert.equal(society.started, null);
+  assert.equal(society.broker.registrations.length, 0);
+  assert.equal(society.lease.releases, 0, "a lease this process never held was released");
+  assert.ok(lines.some(line => /소유하지 않습니다/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /Dashboard, Config, Mail/.test(line)), lines.join(" | "));
+  // The lease is taken before anything is written, not after.
+  assert.ok(calls.indexOf("tryHoldSociety") < calls.indexOf("readSettings"),
+    `the configuration was read before ownership was decided: ${calls.join(" ")}`);
+});
+
+test("T119 / REC-007: the rootfs is put right only once this process owns the society", async () => {
+  // Provisioning creates what is absent, which is safe for anyone. Correcting
+  // an entry that exists and is wrong is a write over live state, so it waits
+  // for ownership -- the lease, and this process's own broker holding the
+  // society lock.
+  const society = await run();
+  assert.ok(society.calls.includes("provisionSociety"));
+  assert.equal(society.calls.includes("repairSociety"), false,
+    "existing rootfs state was rewritten before this process was proved to own the society");
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.calls.filter(name => name === "repairSociety").length, 1);
+  const order = name => society.calls.indexOf(name);
+  assert.ok(order("tryHoldSociety") < order("provisionSociety"));
+  assert.ok(order("provisionSociety") < order("repairSociety"));
+  assert.ok(order("repairSociety") < order("PrincipalSession.start"),
+    "the engine started before the rootfs it runs residents on was put right");
+  assert.ok(society.lines.some(line => /etc\/passwd/.test(line)), society.lines.join(" | "));
+
+  // Only once, however many times a restarted broker becomes ready.
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.calls.filter(name => name === "repairSociety").length, 1);
+});
+
+test("T119: quitting gives the society back", async () => {
+  const society = await run();
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.lease.releases, 0);
+  society.handlers.SIGTERM();
+  assert.equal(society.lease.releases, 1, "the society lease outlived the process that held it");
+  assert.ok(society.calls.includes("exit:0"));
 });
 
 test("T119: a crash stops the broker this process started", async () => {

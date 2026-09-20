@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "fdf2ec5810e595ad67dc6cf61fbadcbbede7f7c808761740638bb674c9913b3d",
-  "report": "9bd3c61349f9b3ac81af5ade510f852d2eed4304ce21bf90161e6a79787ca070",
+  "manifest": "62fa48afc265103ef0e253ca92b80d1a6e27471be0d05bc22026579b9b770310",
+  "report": "236fb16b8e954c470680706d99033b861565003f34d941272edec819345452b8",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "f6afe25f2871cbca941c6625845e86ef56f1ec7624d1cdc6d5cf3a535809d993"
+      "sha256": "49ae65ac75ed8f9bd8c18dea520d41bbafbd20e0d38730e7ad7f2013320df305"
     },
     {
       "path": "src/broker/process-ancestry.ts",
@@ -293,7 +293,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "8b3fde89d7a45fc3cdc4ec40f6e95090783c7866231498165b4dff9bf9338fb0"
+      "sha256": "41308a693282412a3072b11e39275e6473ca5efe00bac336f8107fe0cbf18c93"
     },
     {
       "path": "src/entry/runner.ts",
@@ -601,7 +601,7 @@
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
-      "sha256": "67efbcfd10d8dfcc7fed90da1fc5f37dc952c08859514945e2fd7d3edc36dc7f"
+      "sha256": "567778cbca2ddbc7118ef92ca6dda193eca31b7a868fdb1c1fc773171d436d64"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -645,15 +645,19 @@
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "a04c8e18e34ab8c1b4fe23d87f6dbca70c367cc065d1ecbb1a9c2b1fc0bcdcf4"
+      "sha256": "a6f7c8c501304e166930498205feae4f1f157d181ce8edbcd3431019fb70eef1"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
-      "sha256": "1afd882a3daa47b25422c6edd5edb4b086a8c153d42638ca93c4e9062f4874b8"
+      "sha256": "4285b9a0ca76dd9af15fb1d029cad395f9a2bf07035897f13f036d25ca400524"
     },
     {
       "path": "src/runtime/run-registry.ts",
       "sha256": "cac27d4182ea9b4ed4f666bbe56c673efa887573624fac8cdf58d286b514194a"
+    },
+    {
+      "path": "src/runtime/society-lease.ts",
+      "sha256": "bdfde234eaf9fdd22df1c349758e3176228a24210f336e1a66457e01f7066c19"
     },
     {
       "path": "src/runtime/supervision-channel.ts",

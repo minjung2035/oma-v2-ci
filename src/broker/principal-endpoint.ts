@@ -17,6 +17,12 @@
  *    from the registered engine. The credential alone is not enough: a process
  *    that learned it but was not started by the engine is still refused.
  *
+ * None of that is decided once and remembered. Both halves of the answer --
+ * which registration is current, and whether the caller still descends from
+ * the engine that registration named -- are re-derived on every request and
+ * every preflight, because both can stop being true without the connection
+ * doing anything: the host can re-register, and the engine can die.
+ *
  * Delivery (PR-002) is the host's, never the model's: the runner methods that
  * prepare and complete a batch are served for the Principal only on the host
  * endpoint, so nothing the model can run is able to mark its own mail
@@ -216,6 +222,25 @@ export class PrincipalEndpoint {
         const session = this.session;
         if (attachedTo === null || !this.open || session === null || session.generation !== attachedTo)
           throw new StoreError("AUTH_FAILED", "the principal session this connection attached to is no longer registered");
+        // Descent from the registered engine is not a fact about the past.
+        // Checked once at attach, it answers "was this process started by the
+        // engine", never "is the engine still the Principal's". An engine that
+        // ends leaves its children running and reparented, so a connection
+        // opened while it ran would go on acting for a Principal that stopped
+        // existing -- the generation is untouched, because nothing
+        // re-registered. It is re-derived from /proc here, on every request
+        // and every preflight, exactly like the registration.
+        if (!peer.alive() || !descendsFrom(peer.pid, session.engine)) {
+          // The engine itself may be what is gone, in which case no connection
+          // of this session is the Principal's any more. Authority is taken
+          // from all of them at once rather than one refusal at a time, so a
+          // connection that never asks again is not left attached. It is taken
+          // after this refusal is written: the caller is told why it lost
+          // authority instead of finding a closed socket.
+          if (processIdentity(session.engine.pid)?.startTime !== session.engine.startTime)
+            setImmediate(() => { if (this.session === session) this.retire(); });
+          throw new StoreError("AUTH_FAILED", "the principal engine this connection was started by is no longer registered");
+        }
         const auth = this.ports.principalContext(peer);
         if (auth === null) throw new StoreError("AUTH_FAILED", "no live principal to act for");
         return auth;

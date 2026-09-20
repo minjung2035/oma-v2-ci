@@ -14,10 +14,17 @@
  * means something other than OMA put it there.
  *
  * Idempotent means no write at all, not a write that happens to land the same
- * bytes. This runs on every `oma` start, before anything knows which process
- * owns the society, so a start that loses that race must leave the tree byte
- * for byte as it found it -- including inode identity and timestamps, which a
- * rewrite of identical content destroys.
+ * bytes: the inode and the timestamps are what a concurrent owner, and a
+ * program reading inside the sandbox, actually observe.
+ *
+ * Creating what is absent and correcting what is wrong are two policies, not
+ * one, and they need different authority. Creating is safe for anyone: the
+ * entry did not exist, so nothing that exists is disturbed, and two starts
+ * racing to create the same thing agree on the result. Correcting is a write
+ * over state that may belong to another process's society, and REC-007 says a
+ * process that does not own the society does not make one. So the pass is
+ * named: `"create"` leaves anything that exists but differs alone and reports
+ * it, and `"repair"` -- which only an owner runs -- puts it back.
  */
 import { lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -63,6 +70,10 @@ export function hostSystemLayout(root = "/"): SystemLayout {
   return Object.freeze({ binds: Object.freeze(binds), links: Object.freeze(links) });
 }
 
+/** Which pass this is. `"create"` may only bring absent entries into
+ * existence; `"repair"` may also correct an entry that is there and wrong. */
+export type RootfsPass = "create" | "repair";
+
 function ensureDirectory(path: string): void {
   const found = kind(path);
   if (found === "dir") return;
@@ -71,7 +82,7 @@ function ensureDirectory(path: string): void {
   mkdirSync(path, { recursive: true, mode: 0o755 });
 }
 
-function ensureFile(path: string, content = ""): void {
+function ensureFile(path: string, pass: Pass, content = ""): void {
   const found = kind(path);
   if (found === "file") {
     // Generated content is written only when what is there is not already it.
@@ -79,8 +90,10 @@ function ensureFile(path: string, content = ""): void {
     // file every time the product starts, which is the one thing this module
     // says it does not do to something that exists. An empty content means the
     // file is a mount target and its contents are not this module's business.
-    if (content.length > 0 && readExisting(path) !== content)
-      writeFileSync(path, content, { mode: 0o644 });
+    if (content.length === 0 || readExisting(path) === content) return;
+    if (pass.mode === "create") { pass.differing.push(path); return; }
+    writeFileSync(path, content, { mode: 0o644 });
+    pass.corrected.push(path);
     return;
   }
   if (found !== "absent")
@@ -100,17 +113,40 @@ function readExisting(path: string): string {
   }
 }
 
-function ensureLink(path: string, target: string): void {
+function ensureLink(path: string, target: string, pass: Pass): void {
   const found = kind(path);
   if (found === "link") {
     if (readlinkSync(path) === target) return;
+    if (pass.mode === "create") { pass.differing.push(path); return; }
     // Only a symlink is ever removed here, and only to point it back.
     unlinkSync(path);
-  } else if (found !== "absent") {
-    throw new StoreError("STORE_CORRUPT", `rootfs entry ${path} is not the expected link`);
+    mkdirSync(dirname(path), { recursive: true, mode: 0o755 });
+    symlinkSync(target, path);
+    pass.corrected.push(path);
+    return;
   }
+  if (found !== "absent")
+    throw new StoreError("STORE_CORRUPT", `rootfs entry ${path} is not the expected link`);
   mkdirSync(dirname(path), { recursive: true, mode: 0o755 });
   symlinkSync(target, path);
+}
+
+interface Pass {
+  readonly mode: RootfsPass;
+  /** Entries that exist, differ from what this module generates, and were left
+   * alone because this pass may not correct them. */
+  readonly differing: string[];
+  /** Entries this pass put back. */
+  readonly corrected: string[];
+}
+
+/** What a pass found it could not leave as it is. */
+export interface RootfsOutcome {
+  /** Entries a `"create"` pass left alone because correcting them is a write
+   * over existing state; empty after a `"repair"` pass. */
+  readonly deferred: readonly string[];
+  /** Entries a `"repair"` pass put back; empty after a `"create"` pass. */
+  readonly corrected: readonly string[];
 }
 
 /** TUI-003: which of the product surface's installed files exist, so the mount
@@ -128,8 +164,16 @@ export function productSurfaceMasks(libdir: string): readonly { path: string; ki
   return Object.freeze(masks);
 }
 
-/** Creates or repairs the skeleton at `rootfs` for the given host layout. */
-export function prepareResidentRootfs(rootfs: string, layout: SystemLayout, uid: number, gid: number): void {
+/** Brings the skeleton at `rootfs` up for the given host layout.
+ *
+ * A `"create"` pass makes everything that is absent and reports -- rather than
+ * corrects -- every generated entry that is there and differs, so it is safe
+ * to run before this process is known to own the society. A `"repair"` pass
+ * also corrects those, and only an owner runs one. */
+export function prepareResidentRootfs(
+  rootfs: string, layout: SystemLayout, uid: number, gid: number, mode: RootfsPass = "create",
+): RootfsOutcome {
+  const pass: Pass = { mode, differing: [], corrected: [] };
   ensureDirectory(rootfs);
   const inside = (path: string): string => join(rootfs, path);
   for (const path of ["/proc", "/dev", "/tmp", "/etc", dirname(RESIDENT_PATHS.node),
@@ -138,14 +182,15 @@ export function prepareResidentRootfs(rootfs: string, layout: SystemLayout, uid:
     RESIDENT_PATHS.libdir])
     ensureDirectory(inside(path));
   for (const path of [RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference])
-    ensureFile(inside(path));
+    ensureFile(inside(path), pass);
   for (const path of layout.binds)
-    if (kind(path) === "file") ensureFile(inside(path));
+    if (kind(path) === "file") ensureFile(inside(path), pass);
     else ensureDirectory(inside(path));
-  for (const link of layout.links) ensureLink(inside(link.path), link.target);
+  for (const link of layout.links) ensureLink(inside(link.path), link.target, pass);
   // bwrap cannot create this on a read-only root; it must already be there.
-  ensureLink(inside("/inbox.md"), `${RESIDENT_PATHS.view}/inbox.md`);
+  ensureLink(inside("/inbox.md"), `${RESIDENT_PATHS.view}/inbox.md`, pass);
   // Programs that ask who they are get an answer that names only the agent.
-  ensureFile(inside("/etc/passwd"), `agent:x:${uid}:${gid}:agent:${RESIDENT_PATHS.home}:/bin/sh\n`);
-  ensureFile(inside("/etc/group"), `agent:x:${gid}:\n`);
+  ensureFile(inside("/etc/passwd"), pass, `agent:x:${uid}:${gid}:agent:${RESIDENT_PATHS.home}:/bin/sh\n`);
+  ensureFile(inside("/etc/group"), pass, `agent:x:${gid}:\n`);
+  return Object.freeze({ deferred: Object.freeze([...pass.differing]), corrected: Object.freeze([...pass.corrected]) });
 }

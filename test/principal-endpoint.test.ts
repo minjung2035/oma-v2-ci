@@ -1088,7 +1088,12 @@ class Bench {
   private capture: ((handle: Held["raw"], preflight: Held["check"]) => void) | null = null;
   private sequence = 0;
 
-  constructor(readonly engine: number) {
+  /** `peer` is the process at the other end of a connection. It defaults to
+   * the engine itself, which is what the tests about registration need; the
+   * tests about the engine's death need a real descendant of it, because the
+   * question there is what happens to a process the engine started once the
+   * engine is gone. */
+  constructor(readonly engine: number, readonly peerPid = engine) {
     const uid = process.getuid?.() ?? -1;
     const gid = process.getgid?.() ?? -1;
     const channel: PrincipalHostChannel = {
@@ -1099,10 +1104,13 @@ class Bench {
       onSession: listener => { this.deliver = listener; },
       close: () => {},
     };
-    const peer = { pid: engine, uid, gid, alive: () => true,
+    // Liveness is the peer's own, as the real authenticator answers it: a
+    // descendant that outlives its engine is alive, and must be refused for
+    // the reason it is actually refused for.
+    const peer = { pid: peerPid, uid, gid, alive: () => processIdentity(peerPid) !== null,
       retainForExecution: () => () => {}, releaseConnection: () => {} } as BoundPeer;
     const context = (): AuthContext => ({ actor: "principal", incarnation: 1, role: "principal",
-      channel: "actor", capabilities: new Set(), peer: { pid: engine, uid, gid, cgroup: null } });
+      channel: "actor", capabilities: new Set(), peer: { pid: peerPid, uid, gid, cgroup: null } });
     const ports: PrincipalEndpointPorts = {
       isDraining: () => false,
       bindPeer: () => peer,
@@ -1284,6 +1292,87 @@ test("T114: detaching gives up authority rather than parking it for later", asyn
     assert.equal(await codeOf(held.call("principal.attach",
       { sessionHandle: handle, credential: bench.grants[0]!.credential })), "AUTH_FAILED");
     await attachAndUse(bench, held, handle);
+  });
+});
+
+/** An engine of this test's own with a child of its own, so both the descent
+ * walk and the engine's death are real events in `/proc` rather than stubs.
+ * `kill` ends the engine and resolves once it has been reaped -- a zombie
+ * still has a `/proc` entry with the same start time, so a test that did not
+ * wait for the reap would be asserting against a process that is, as far as
+ * the kernel is concerned, still there. */
+async function withEngineAndChild(
+  run: (engine: number, child: number, killEngine: () => Promise<void>) => Promise<void>,
+): Promise<void> {
+  // The engine is a script on disk rather than a `-e` argument: the child it
+  // has to start is itself a `-e` argument, and nesting the two is a quoting
+  // trap, not a test of anything.
+  const scratchRoot = mkdtempSync(join(tmpdir(), "oma-engine-death-"));
+  const script = join(scratchRoot, "engine.mjs");
+  writeFileSync(script, [
+    'import { spawn } from "node:child_process";',
+    'const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 60000)"], { stdio: "ignore" });',
+    'process.stdout.write(`${child.pid}\n`);',
+    "setInterval(() => {}, 60000);",
+  ].join("\n"));
+  const engine = spawn(process.execPath, [script], { stdio: ["ignore", "pipe", "inherit"] });
+  let childPid = 0;
+  try {
+    childPid = await new Promise<number>((resolve, reject) => {
+      const timer = setTimeout(() => { reject(new Error("the stand-in engine never named its child")); }, 20000);
+      engine.stdout!.setEncoding("utf8");
+      engine.stdout!.once("data", (chunk: string) => { clearTimeout(timer); resolve(Number(chunk.trim())); });
+    });
+    assert.ok(Number.isSafeInteger(childPid) && childPid > 1);
+    const reaped = new Promise<void>(resolve => { engine.once("exit", () => { resolve(); }); });
+    await run(engine.pid!, childPid, async () => { engine.kill("SIGKILL"); await reaped; });
+  } finally {
+    engine.kill("SIGKILL");
+    if (childPid > 1) { try { process.kill(childPid, "SIGKILL"); } catch { /* already gone */ } }
+    rmSync(scratchRoot, { recursive: true, force: true });
+  }
+}
+
+test("T114 / AUTH-003: an engine that dies takes the authority of the processes it started with it", async () => {
+  // Descent was checked once, at attach, and the answer was kept for the life
+  // of the connection. So a process the engine started went on acting as the
+  // Principal after the engine was gone: nothing re-registered, so the
+  // generation was unchanged; the process was still alive, so its peer was
+  // still valid; and the only thing that had changed -- that its ancestor no
+  // longer existed -- was never looked at again. The connection outlived the
+  // engine whose authority it was borrowing.
+  await withEngineAndChild(async (enginePid, childPid, killEngine) => {
+    const bench = new Bench(enginePid, childPid);
+    const handle = newSessionHandle();
+    bench.register(handle);
+    const held = bench.open();
+    const idle = bench.open();
+    await attachAndUse(bench, held, handle);
+    const served = bench.dispatched.length;
+
+    await killEngine();
+    // Nothing told the endpoint. No re-registration, no close, no detach: the
+    // only event is that a process outside it stopped existing.
+    assert.equal(bench.grants.length, 1, "something re-registered the session");
+    assert.equal(bench.refused.length, 0);
+
+    assert.equal(await codeOf(held.call("status.get")), "AUTH_FAILED");
+    assert.equal(bench.dispatched.length, served, "an orphaned connection reached dispatch");
+    assert.throws(() => held.preflight("context.put"), /no longer registered/);
+    assert.equal(bench.preflighted.length, 0, "an orphaned connection reached preflight");
+
+    // And the refusal is not once per connection: the session itself is gone,
+    // so every connection attached under it loses authority at the same
+    // instant -- after the refusal is written, so the caller is told why
+    // rather than finding a closed socket.
+    await new Promise<void>(resolve => { setImmediate(() => { resolve(); }); });
+    assert.equal(held.socket.destroyed, true, "the orphaned connection was left open and attached");
+    assert.equal(idle.socket.destroyed, false, "a connection that never attached was destroyed");
+
+    // Nothing can attach under the dead engine's session either, credential or
+    // not: the session is not there to attach to.
+    assert.equal(await codeOf(idle.call("principal.attach",
+      { sessionHandle: handle, credential: bench.grants[0]!.credential })), "AUTH_FAILED");
   });
 });
 

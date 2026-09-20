@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 217,
-    "n_lines": 24332,
+    "n_files": 218,
+    "n_lines": 24590,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -58,6 +58,12 @@
     "blank": 2,
     "comment": 10,
     "code": 270,
+    "language": "TypeScript"
+  },
+  "src/entry/oma.ts": {
+    "blank": 22,
+    "comment": 82,
+    "code": 261,
     "language": "TypeScript"
   },
   "src/config/operations.ts": {
@@ -132,10 +138,10 @@
     "code": 221,
     "language": "TypeScript"
   },
-  "src/entry/oma.ts": {
+  "src/broker/principal-endpoint.ts": {
     "blank": 19,
-    "comment": 57,
-    "code": 220,
+    "comment": 120,
+    "code": 207,
     "language": "TypeScript"
   },
   "src/git/integration.ts": {
@@ -146,14 +152,8 @@
   },
   "src/runtime/broker-supervisor.ts": {
     "blank": 12,
-    "comment": 79,
+    "comment": 85,
     "code": 203,
-    "language": "TypeScript"
-  },
-  "src/broker/principal-endpoint.ts": {
-    "blank": 19,
-    "comment": 100,
-    "code": 202,
     "language": "TypeScript"
   },
   "src/units.ts": {
@@ -378,6 +378,12 @@
     "code": 135,
     "language": "TypeScript"
   },
+  "src/runtime/provision.ts": {
+    "blank": 12,
+    "comment": 96,
+    "code": 134,
+    "language": "TypeScript"
+  },
   "src/leaf.ts": {
     "blank": 13,
     "comment": 13,
@@ -408,6 +414,12 @@
     "code": 122,
     "language": "TypeScript"
   },
+  "src/runtime/resident-rootfs.ts": {
+    "blank": 12,
+    "comment": 62,
+    "code": 122,
+    "language": "TypeScript"
+  },
   "src/protocol/batch-view.ts": {
     "blank": 1,
     "comment": 7,
@@ -430,12 +442,6 @@
     "blank": 14,
     "comment": 29,
     "code": 115,
-    "language": "TypeScript"
-  },
-  "src/runtime/provision.ts": {
-    "blank": 11,
-    "comment": 66,
-    "code": 112,
     "language": "TypeScript"
   },
   "src/mail/materializer.ts": {
@@ -466,12 +472,6 @@
     "blank": 6,
     "comment": 7,
     "code": 102,
-    "language": "TypeScript"
-  },
-  "src/runtime/resident-rootfs.ts": {
-    "blank": 9,
-    "comment": 41,
-    "code": 101,
     "language": "TypeScript"
   },
   "src/domain/identifiers.ts": {
@@ -1128,6 +1128,12 @@
     "code": 22,
     "language": "TypeScript"
   },
+  "src/runtime/society-lease.ts": {
+    "blank": 3,
+    "comment": 35,
+    "code": 22,
+    "language": "TypeScript"
+  },
   "implementation/systemd/resident.service.in": {
     "blank": 0,
     "comment": 1,
@@ -1309,9 +1315,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 976,
-    "comment": 2835,
-    "code": 20521,
-    "nFiles": 217
+    "blank": 986,
+    "comment": 2972,
+    "code": 20632,
+    "nFiles": 218
   }
 }
