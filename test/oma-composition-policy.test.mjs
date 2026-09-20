@@ -12,6 +12,35 @@ import * as path from "node:path";
 import { Script } from "node:vm";
 import ts from "typescript";
 
+/** A production module compiled and run with its own controlled boundary.
+ *
+ * The tenure is not stood in for. It is the object that now answers every
+ * "may I" the entry used to answer with a flag of its own, so a stand-in here
+ * would test the stand-in's rules and not the product's. Its one real
+ * dependency -- the lease -- is what the test controls instead. */
+function loadSource(relative, deps) {
+  const compiled = ts.transpileModule(readFileSync(new URL(`../${relative}`, import.meta.url), "utf8"),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const module_ = { exports: {} };
+  new Script(compiled, { filename: relative }).runInNewContext({
+    exports: module_.exports, module: module_, setTimeout, clearTimeout, Promise,
+    require(name) {
+      assert.ok(Object.hasOwn(deps, name), `uncontrolled dependency in ${relative}: ${name}`);
+      return deps[name];
+    },
+  });
+  return module_.exports;
+}
+
+class StoreError extends Error {
+  constructor(code, message) { super(message); this.code = code; }
+}
+
+/** The descriptor the lease lives on. Everything this process starts because
+ * of the lease must be handed it, so that the society cannot change hands
+ * while any of them can still write to it. */
+const FENCE = 41;
+
 const SESSION_ENVIRONMENT = { OMA_MARKER: "built by principalEnvironment" };
 const SESSION_DIR_FROM_OWNER = "answered-by-principalSessionDir";
 
@@ -20,10 +49,12 @@ const SESSION_DIR_FROM_OWNER = "answered-by-principalSessionDir";
  * call. */
 function brokerStandIn(state, credentials, disownedReason = null) {
   const readyListeners = [];
+  const lostListeners = [];
   const disownedListeners = [];
   const record = {
     registrations: [], stops: 0,
     fireReady: () => { for (const listener of readyListeners) listener(); },
+    fireLost: () => { for (const listener of lostListeners) listener(); },
     fireDisowned: reason => { for (const listener of disownedListeners) listener(reason); },
   };
   return {
@@ -31,6 +62,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
     handle: {
       state,
       onReady(listener) { readyListeners.push(listener); },
+      onLost(listener) { lostListeners.push(listener); },
       // The real handle calls a listener at once when ownership is already
       // settled against this process, so a listener added later cannot miss it.
       onDisowned(listener) {
@@ -47,7 +79,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 }
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
-  disowned = null, leased = true } = {}) {
+  disowned = null, leased = true, repairFails = false, engineExits = true } = {}) {
   const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -63,6 +95,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   const deliveries = [];
   const lease = { holds: leased, releases: 0 };
   let started = null;
+  let capturedPorts = null;
   let sessionListener = null;
   const broker = brokerStandIn(brokerState, credentials, disowned);
   const settings = {
@@ -86,7 +119,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi" }) },
     "../storage/directory.js": { ensureDirectory() {} },
     "../tui/app.js": { TuiApp: class {
-      constructor() { calls.push("TuiApp"); }
+      constructor(ports) { calls.push("TuiApp"); capturedPorts = ports; }
       refresh() {} draw() {} line(text) { lines.push(text); } setBusy() {} note() {}
     } },
     "../tui/exit.js": { codeFor: () => 1, fail: reason => { throw new Error(`fail: ${reason}`); } },
@@ -112,13 +145,26 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
           // The engine the entry is holding, not a snapshot of its arguments:
           // whether it is still running when ownership ends is the whole
           // question TUI-004 asks here.
+          let confirmDeath = () => {};
           started = {
             paths, profile, limits, environment, closes: 0,
             pid: 777, busy: false, running: true,
+            // The operating system's answer, not this process's request. A
+            // teardown that treated `close()` as the death could give the
+            // society away while the engine it paid for was still running.
+            exited: new Promise(resolve => { confirmDeath = resolve; }),
+            confirmDeath: () => { confirmDeath(); },
             grant(credential, sessionHandle) { grants.push({ credential, sessionHandle }); },
             onEvent(listener) { sessionListener = listener; return () => {}; },
             deliver: async () => {}, submit: async () => {},
-            close() { calls.push("PrincipalSession.close"); started.closes += 1; started.running = false; },
+            close() {
+              calls.push("PrincipalSession.close"); started.closes += 1; started.running = false;
+              // A real engine's exit is reported by the operating system on a
+              // later turn, never inside the call that asked it to stop.
+              // Resolving it here would make a teardown that never waited
+              // indistinguishable from one that did.
+              if (engineExits) setImmediate(() => { calls.push("PrincipalSession.exited"); confirmDeath(); });
+            },
           };
           return started;
         }
@@ -148,22 +194,34 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         calls.push("provisionSociety");
         return { created: [], seeded: false, seedSource: null, seedNote: null, pendingRepairs: ["/state/rootfs/etc/passwd"] };
       },
-      repairSociety: () => { calls.push("repairSociety"); return ["/state/rootfs/etc/passwd"]; },
+      repairSociety: () => {
+        calls.push("repairSociety");
+        if (repairFails) throw new Error("rootfs entry could not be corrected");
+        return ["/state/rootfs/etc/passwd"];
+      },
       residentRootfsPath: () => "/state/rootfs",
     },
-    "../runtime/society-lease.js": {
-      tryHoldSociety: runRoot => {
-        calls.push("tryHoldSociety");
-        assert.equal(runRoot, "/run/oma/fixture", "the lease was not taken on this society's run root");
-        if (!lease.holds) return null;
-        return { path: `${runRoot}/society.lease`,
-          release() { calls.push("lease.release"); lease.releases += 1; lease.holds = false; } };
+    "../domain/errors.js": { StoreError },
+    // The real tenure over a controlled lease: what the entry may do, and when,
+    // is the thing under test here.
+    "../runtime/host-tenure.js": loadSource("src/runtime/host-tenure.ts", {
+      "../domain/errors.js": { StoreError },
+      "./society-lease.js": {
+        tryHoldSociety: runRoot => {
+          calls.push("tryHoldSociety");
+          assert.equal(runRoot, "/run/oma/fixture", "the lease was not taken on this society's run root");
+          if (!lease.holds) return null;
+          return { path: `${runRoot}/society.lease`, fence: FENCE,
+            release() { calls.push("lease.release"); lease.releases += 1; lease.holds = false; } };
+        },
       },
-    },
+    }),
     "../runtime/broker-supervisor.js": {
       superviseBroker: async options => {
         calls.push("superviseBroker");
         assert.equal("sessionHandle" in options, false, "a session handle was put where the broker's environment could carry it");
+        // A broker without the fence can outlive the lease it writes under.
+        assert.equal(options.fence, FENCE, "the broker was started without the society lease descriptor");
         return broker.handle;
       },
     },
@@ -185,12 +243,26 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     },
   });
   await completion;
-  const settle = () => new Promise(resolve => setImmediate(resolve));
+  // Two turns, because a teardown now waits for the engine's exit before it
+  // gives the society up: one turn would observe the middle of it.
+  const settle = async () => {
+    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setImmediate(resolve));
+  };
   // `started` is read through an accessor, not copied out here: what this
   // suite now asks is when the engine starts, and a value snapshotted at
   // return would answer "never" for every test that fires readiness later.
-  return { calls, lines, grants, handlers, deliveries, broker: broker.record, settle, lease,
+  /** Waits for something the entry does across several turns -- a teardown
+   * that waits for the engine's exit takes more turns than a settle. Bounded,
+   * so a claim that never becomes true fails as a test rather than a hang. */
+  const until = async (done, ms = 10_000) => {
+    const deadline = Date.now() + ms;
+    while (!done() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+    if (!done()) throw new Error(`waited ${ms}ms for something that never happened: ${calls.join(" ")}`);
+  };
+  return { calls, lines, grants, handlers, deliveries, broker: broker.record, settle, lease, until,
     get started() { return started; },
+    get ports() { return capturedPorts; },
     fireEvent: event => sessionListener?.(event) };
 }
 
@@ -261,12 +333,96 @@ test("T119: each time a broker becomes ready the engine is registered and given 
   assert.ok(run1.grants.every(entry => entry.sessionHandle === "h".repeat(32)));
 });
 
-test("T119: a refused registration is said on the screen and grants nothing", async () => {
-  const { broker, grants, lines, settle } = await run({ credentials: [] });
-  broker.fireReady();
-  await settle();
-  assert.equal(grants.length, 0);
-  assert.ok(lines.some(line => /받아들이지 않았습니다/.test(line)), lines.join(" | "));
+test("T119 / PR-002: a refused registration grants nothing and delivers nothing", async () => {
+  // The refusal used to print a line and resolve like any other outcome, and
+  // the delivery chained after the registration ran regardless -- so mail was
+  // pushed into an engine the broker had just declined to accept as the
+  // Principal. Saying it on the screen is not the fix; not being allowed to
+  // deliver is.
+  const society = await run({ credentials: [] });
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.grants.length, 0);
+  assert.ok(society.lines.some(line => /받아들이지 않았습니다/.test(line)), society.lines.join(" | "));
+  assert.deepEqual(society.deliveries, [], "mail was delivered into an engine no broker accepted");
+
+  // And no later occasion re-opens it either: a settled turn and the product's
+  // own poll both go through the same gate.
+  society.fireEvent({ type: "agent_settled" });
+  await society.settle();
+  assert.deepEqual(society.deliveries, [], "a settled turn delivered without a registration");
+});
+
+test("T119 / PR-002: delivery closes when the broker that authorised it ends, and reopens only on a new registration", async () => {
+  // The credential is minted by one broker and dies with it. Delivery used to
+  // be gated on "a broker was ready once", which stayed true across the whole
+  // restart -- back-off included -- so the product kept pushing work under
+  // authority that no longer existed.
+  const society = await run();
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.deliveries.length, 1);
+
+  society.broker.fireLost();
+  society.fireEvent({ type: "agent_settled" });
+  await society.settle();
+  assert.equal(society.deliveries.length, 1, "delivery continued after the broker that authorised it ended");
+
+  // A restarted broker is ready again -- and that alone is still not enough:
+  // the window between readiness and the new credential is not deliverable.
+  society.broker.fireReady();
+  assert.equal(society.deliveries.length, 1, "delivery ran on readiness, before the new registration was answered");
+  await society.settle();
+  assert.deepEqual(society.grants.map(entry => entry.credential), ["1".repeat(64), "2".repeat(64)]);
+  assert.equal(society.deliveries.length, 2, "delivery did not resume once the engine was registered again");
+});
+
+test("T119 / REC-007: a Control Panel over someone else's society cannot write to it", async () => {
+  // The architecture calls a process without the lease a read-only Control
+  // Panel, and startup enforced that -- but the panels themselves still called
+  // the real write paths, so a second `oma` could edit a running society's
+  // policy files while its owner was using them. The check belongs at the
+  // write, because that is the only place that knows a write is about to
+  // happen.
+  const society = await run({ leased: false });
+  const ports = society.ports;
+  assert.ok(ports, "the product built no panels at all");
+  assert.throws(() => ports.setField("limits.frameBytes", 1024), /소유/,
+    "a non-owner changed the running owner's configuration");
+  assert.throws(() => ports.setExtension("ext", "principal", true), /소유/,
+    "a non-owner changed the running owner's extensions");
+  assert.equal(society.calls.includes("writeSettings"), false);
+  // Reading is exactly what it is for, and still works.
+  assert.deepEqual(ports.configFields(), []);
+  assert.deepEqual(ports.mail(), []);
+});
+
+test("T119 / REC-007: an owner that has given the society back stops being able to write to it", async () => {
+  // Read-only is not a fact about how this process started. It is a fact about
+  // whether it owns the society right now, and it stops owning it the moment
+  // the broker says so.
+  const society = await run();
+  society.broker.fireReady();
+  await society.settle();
+  society.ports.setField("limits.frameBytes", 1024);
+
+  society.broker.fireDisowned("the broker could not stay running");
+  await society.settle();
+  assert.throws(() => society.ports.setField("limits.frameBytes", 2048), /소유/,
+    "a process wrote to a society it had already given back");
+  assert.throws(() => society.ports.setExtension("ext", "principal", true), /소유/);
+});
+
+test("T119 / REC-007: everything started on the strength of the lease inherits it", async () => {
+  // A child that does not hold the lease's descriptor can outlive the lease,
+  // and then the society changes hands while a process that can still write to
+  // it is running. This is the only part of the fence that this process can be
+  // held to; the kernel enforces the rest.
+  const society = await run();
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.started.paths.fence, FENCE,
+    "the engine was started without the society lease descriptor");
 });
 
 test("T119: a society whose broker this host does not own gets a Control Panel, not a second engine", async () => {
@@ -361,46 +517,98 @@ test("T119 / REC-007: a process that cannot take the society lease writes nothin
     `the configuration was read before ownership was decided: ${calls.join(" ")}`);
 });
 
-test("T119 / REC-007: the rootfs is put right only once this process owns the society", async () => {
-  // Provisioning creates what is absent, which is safe for anyone. Correcting
-  // an entry that exists and is wrong is a write over live state, so it waits
-  // for ownership -- the lease, and this process's own broker holding the
-  // society lock.
+test("T119 / REC-007: the rootfs is put right before anything can run on it", async () => {
+  // Provisioning creates what is absent; correcting an entry that exists and
+  // is wrong is a write over live state, so it waits for ownership. It used to
+  // wait for the broker's readiness as well, which put it in a race it could
+  // only lose: the broker reconciles as soon as it is listening and starts
+  // enabled Residents with pending work, in another process, with nothing
+  // acknowledging between the two. A sandbox could therefore be built on the
+  // very entry this repair was about to correct. Nothing the broker does can
+  // be ordered against this from here, so the repair finishes before the
+  // broker exists.
   const society = await run();
-  assert.ok(society.calls.includes("provisionSociety"));
-  assert.equal(society.calls.includes("repairSociety"), false,
-    "existing rootfs state was rewritten before this process was proved to own the society");
-  society.broker.fireReady();
-  await society.settle();
-  assert.equal(society.calls.filter(name => name === "repairSociety").length, 1);
   const order = name => society.calls.indexOf(name);
+  assert.equal(society.calls.filter(name => name === "repairSociety").length, 1);
   assert.ok(order("tryHoldSociety") < order("provisionSociety"));
   assert.ok(order("provisionSociety") < order("repairSociety"));
-  assert.ok(order("repairSociety") < order("PrincipalSession.start"),
-    "the engine started before the rootfs it runs residents on was put right");
+  assert.ok(order("repairSociety") < order("superviseBroker"),
+    `a broker was started before the rootfs it activates residents on was put right: ${society.calls.join(" ")}`);
   assert.ok(society.lines.some(line => /etc\/passwd/.test(line)), society.lines.join(" | "));
 
   // Only once, however many times a restarted broker becomes ready.
   society.broker.fireReady();
   await society.settle();
+  society.broker.fireReady();
+  await society.settle();
   assert.equal(society.calls.filter(name => name === "repairSociety").length, 1);
 });
 
-test("T119: quitting gives the society back", async () => {
+test("T119 / REC-007: a rootfs that could not be put right starts no broker and no engine", async () => {
+  // The previous behaviour wrote the failure to the screen and carried on, so
+  // "the rootfs is as the product intends" and "the product could not tell"
+  // looked the same from the outside -- and Residents ran either way.
+  const society = await run({ repairFails: true });
+  assert.ok(society.calls.includes("repairSociety"));
+  assert.equal(society.calls.includes("superviseBroker"), false,
+    "a broker was started over a rootfs the product could not vouch for");
+  assert.equal(society.calls.includes("PrincipalSession.start"), false);
+  assert.equal(society.started, null);
+  assert.ok(society.calls.some(name => /^exit:/.test(name)), society.calls.join(" "));
+});
+
+test("T119: quitting gives the society back, and only once the engine is really gone", async () => {
   const society = await run();
   society.broker.fireReady();
   await society.settle();
   assert.equal(society.lease.releases, 0);
   society.handlers.SIGTERM();
+  await society.until(() => society.calls.includes("exit:0"));
   assert.equal(society.lease.releases, 1, "the society lease outlived the process that held it");
+  // Not "close was called first" -- that was the old, weaker claim. The engine
+  // reported its exit, and the lease was given up after that report.
+  const order = name => society.calls.indexOf(name);
+  assert.ok(order("PrincipalSession.exited") >= 0 && order("PrincipalSession.exited") < order("lease.release"),
+    `the society was given up before the engine's exit was observed: ${society.calls.join(" ")}`);
   assert.ok(society.calls.includes("exit:0"));
 });
 
-test("T119: a crash stops the broker this process started", async () => {
-  const { handlers, broker, calls } = await run();
-  handlers.uncaughtException(new Error("boom"));
-  assert.equal(broker.stops, 1, "the broker was left running when the product crashed");
-  assert.ok(calls.includes("exit:3"));
+test("T119: an engine that will not die does not keep the product from quitting", async () => {
+  // Waiting is bounded because quitting has to finish. Bounding it is only
+  // safe because the engine inherited the lease's descriptor: the release
+  // below hands the society to nobody until the engine is actually gone, so
+  // the bound decides how long quitting takes and not how long the invariant
+  // holds.
+  const society = await run({ engineExits: false });
+  society.broker.fireReady();
+  await society.settle();
+  assert.ok(society.started);
+  society.handlers.SIGTERM();
+  const deadline = Date.now() + 30000;
+  while (!society.calls.includes("exit:0") && Date.now() < deadline)
+    await new Promise(resolve => setTimeout(resolve, 20));
+  assert.ok(society.calls.includes("exit:0"), `quitting never finished: ${society.calls.join(" ")}`);
+  assert.equal(society.started.closes, 1, "the engine was not asked to stop");
+  assert.equal(society.lease.releases, 1);
+});
+
+test("T119: a crash stops the broker and the engine this process started", async () => {
+  // The crash path used to skip the engine entirely: it stopped the broker,
+  // released the lease and exited, leaving a Principal engine running on a
+  // society the next `oma` was now free to take. It cannot wait for the engine
+  // here -- the next statement is the exit -- so it ends it and lets the
+  // kernel hold the society until the engine is gone.
+  const society = await run();
+  society.broker.fireReady();
+  await society.settle();
+  assert.ok(society.started);
+  society.handlers.uncaughtException(new Error("boom"));
+  // Synchronous on purpose: the crash path's next statement is the exit, so
+  // anything it deferred would never run.
+  assert.equal(society.broker.stops, 1, "the broker was left running when the product crashed");
+  assert.equal(society.started.closes, 1, "the engine outlived the process that owned it");
+  assert.equal(society.lease.releases, 1);
+  assert.ok(society.calls.includes("exit:3"));
 });
 
 test("T119 / PR-002: delivery runs only once a broker is ready, and again as each turn settles", async () => {

@@ -89,6 +89,10 @@ export interface PrincipalEndpointPorts extends ConnectionPorts {
 export interface PrincipalHostEndpointPorts extends ConnectionPorts {
   readonly prepare: (auth: AuthContext) => Promise<PreparedBatch | null>;
   readonly complete: (auth: AuthContext, evidence: BoundaryEvidence) => Promise<void>;
+  /** The engine this broker currently holds a Principal registration for, or
+   * null when it holds none. Read on every request, because a registration is
+   * retired by events this endpoint never sees. */
+  readonly registeredEngine: () => number | null;
 }
 
 interface RegisteredSession {
@@ -204,6 +208,28 @@ export class PrincipalEndpoint {
     this.registrations += 1;
     this.session = Object.freeze({ sessionHandle, engine, credential, generation: this.registrations });
     this.channel.grant(credential, sessionHandle);
+  }
+
+  /** The engine of the current registration, or null when there is none. The
+   * host delivery endpoint asks this before it prepares anything: being the
+   * host is not being a Principal.
+   *
+   * "There is none" includes a registration whose engine has since died. The
+   * record outlives the process -- nothing tells this broker that a pid it
+   * accepted has stopped existing -- so the pid alone would answer "yes" for
+   * an engine that is gone, and the host would go on preparing mail for it and
+   * recording boundaries against it. Identity is re-derived here for the same
+   * reason it is re-derived on every model-facing request (AUTH-003), and a
+   * registration found dead is retired rather than merely refused, so the
+   * connections attached under it lose authority at the same instant. */
+  get registeredEngine(): number | null {
+    const session = this.session;
+    if (session === null) return null;
+    if (processIdentity(session.engine.pid)?.startTime !== session.engine.startTime) {
+      setImmediate(() => { if (this.session === session) this.retire(); });
+      return null;
+    }
+    return session.engine.pid;
   }
 
   /** The credential stops existing with the broker that minted it. */
@@ -323,24 +349,33 @@ export class PrincipalHostEndpoint {
     const id = typeof raw.id === "string" ? raw.id : "x";
     if (!isHost(peer, this.channel.host))
       throw new StoreError("AUTH_FAILED", "only the host that started this broker may deliver to the principal");
+    const method = raw.method;
+    // The host is already known by this point, so a method this endpoint does
+    // not serve is a method-surface answer, not an authentication one
+    // (IPC-012). The two are not interchangeable here: error class decides
+    // what a caller may retry. It is also settled before anything about the
+    // Principal, because whether a method exists does not depend on whether a
+    // session is registered.
+    if (method !== "batch.prepare" && method !== "batch.complete")
+      throw new StoreError("UNKNOWN_METHOD", `method ${String(method)} is not served on the principal host endpoint`);
+    // Being the host is not being a Principal. Delivery puts the society's mail
+    // into an engine and records a boundary against it, and only a registration
+    // this broker made says which engine that is and that this broker accepted
+    // it. Without one there is nothing to deliver to, however sure the host is
+    // that it has an engine: a refused or not-yet-answered registration used to
+    // be indistinguishable here from an accepted one.
+    if (this.ports.registeredEngine() === null)
+      throw new StoreError("AUTH_FAILED", "no principal session is registered with this broker");
     const auth = this.ports.principalContext(peer);
     if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to deliver to");
-    switch (raw.method) {
-      case "batch.prepare":
-        if (INTERNAL_METHODS["batch.prepare"].paramsCheck(raw.params) !== null)
-          throw new StoreError("INVALID_REQUEST", "invalid batch.prepare parameters");
-        return okAnswer(id, await this.ports.prepare(auth));
-      case "batch.complete":
-        if (INTERNAL_METHODS["batch.complete"].paramsCheck(raw.params) !== null)
-          throw new StoreError("INVALID_REQUEST", "invalid batch.complete parameters");
-        await this.ports.complete(auth, raw.params as BoundaryEvidence);
-        return okAnswer(id, { completed: true });
-      default:
-        // The host is already known by this point, so a method this endpoint
-        // does not serve is a method-surface answer, not an authentication
-        // one (IPC-012). The two are not interchangeable here: error class
-        // decides what a caller may retry.
-        throw new StoreError("UNKNOWN_METHOD", `method ${String(raw.method)} is not served on the principal host endpoint`);
+    if (method === "batch.prepare") {
+      if (INTERNAL_METHODS["batch.prepare"].paramsCheck(raw.params) !== null)
+        throw new StoreError("INVALID_REQUEST", "invalid batch.prepare parameters");
+      return okAnswer(id, await this.ports.prepare(auth));
     }
+    if (INTERNAL_METHODS["batch.complete"].paramsCheck(raw.params) !== null)
+      throw new StoreError("INVALID_REQUEST", "invalid batch.complete parameters");
+    await this.ports.complete(auth, raw.params as BoundaryEvidence);
+    return okAnswer(id, { completed: true });
   }
 }

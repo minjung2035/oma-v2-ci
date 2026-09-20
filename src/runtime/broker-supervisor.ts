@@ -55,6 +55,15 @@ export interface BrokerHandle {
    * in a society -- starting the Principal engine above all -- belongs here and
    * nowhere else. */
   onReady(listener: () => void): void;
+  /** Called whenever a broker this handle started ends, before anything is
+   * decided about restarting it.
+   *
+   * Everything a ready broker authorised stops being true here. The Principal
+   * registration above all: the credential was minted by that broker and dies
+   * with it, so a product that kept delivering between this and the next
+   * `onReady` would be pushing work into an engine no live broker has accepted
+   * as the Principal. */
+  onLost(listener: () => void): void;
   /** Called once, when this process is known not to own the society's broker:
    * another one was already listening, none could be started, the child
    * reported the society already has an owner, or restarts ran out. Called at
@@ -87,6 +96,10 @@ export interface SuperviseOptions {
   readonly society: string;
   readonly runRoot: string;
   readonly configPath: string;
+  /** The society lease descriptor, inherited by the broker so that the society
+   * cannot pass to another host while a process that can still write to it is
+   * alive (REC-007). */
+  readonly fence?: number | undefined;
   /** Receives one line whenever the child says something or ends. */
   readonly onEvent?: (line: string) => void;
   /** Restart policy: at most this many unexpected ends within the window. */
@@ -113,6 +126,7 @@ function disownedHandle(state: BrokerState, reason: string): BrokerHandle {
   return {
     state,
     onReady: () => {},
+    onLost: () => {},
     onDisowned: listener => { listener(reason); },
     register: async () => null,
     stop: () => {},
@@ -125,6 +139,7 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
 
   const say = options.onEvent ?? (() => {});
   const readyListeners: (() => void)[] = [];
+  const lostListeners: (() => void)[] = [];
   const disownedListeners: ((reason: string) => void)[] = [];
   let disowned: string | null = null;
   /** Said once and never taken back: ownership is not something this process
@@ -165,7 +180,7 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
       env[HOST_CHANNEL_ENV] = String(HOST_CHANNEL_FD);
       child = spawnSupervisedService(options.node, [join(options.libdir, "dist/src/entry/broker.js"),
-        "--society", options.society, "--config", options.configPath], env, true);
+        "--society", options.society, "--config", options.configPath], env, true, options.fence);
     } catch (error) {
       return error instanceof Error ? error.message : String(error);
     }
@@ -209,6 +224,11 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
     child.once("exit", (code, signal) => {
       generation.pending?.settle(null);
       generation.pending = null;
+      // Said for every generation this handle started, including the one being
+      // stopped on the way out, and said before any restart decision: whatever
+      // this broker authorised is no longer authorised as of now, not as of
+      // whenever a replacement turns out to be possible.
+      if (generation.ready) { generation.ready = false; for (const listener of lostListeners) listener(); }
       say(`broker ended (${signal ?? `code ${code ?? "unknown"}`})`);
       if (current !== generation || stopping) return;
       current = null;
@@ -258,6 +278,7 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       readyListeners.push(listener);
       if (current?.ready) listener();
     },
+    onLost(listener) { lostListeners.push(listener); },
     onDisowned(listener) {
       disownedListeners.push(listener);
       if (disowned !== null) listener(disowned);

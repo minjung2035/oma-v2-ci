@@ -179,6 +179,7 @@ export class Broker {
         await this.mail.complete(auth, evidence);
         this.refreshViews();
       },
+      registeredEngine: () => endpoint.registeredEngine,
     });
     this.principalEndpoint = endpoint;
     this.principalHostEndpoint = hostEndpoint;

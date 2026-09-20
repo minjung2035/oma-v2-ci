@@ -151,6 +151,7 @@ src/runtime/broker-supervisor.ts
 src/runtime/deployment-manifest.ts
 src/runtime/engine-auth.ts
 src/runtime/extension-integrity.ts
+src/runtime/host-tenure.ts
 src/runtime/inference-relay.ts
 src/runtime/pi-adapter.ts
 src/runtime/pi-rpc.ts

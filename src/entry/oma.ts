@@ -8,6 +8,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isValidSocietyName } from "../ids.js";
+import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
@@ -25,7 +26,7 @@ import { commitField, readSettings, writeSettings, type Settings } from "../tui/
 import { defaultHostConfig, societyFromDirectory } from "../config/defaults.js";
 import { provisionSociety, repairSociety, residentRootfsPath, type ProvisionReport } from "../runtime/provision.js";
 import { superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
-import { tryHoldSociety, type SocietyLease } from "../runtime/society-lease.js";
+import { HostTenure } from "../runtime/host-tenure.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import type { ExtensionRow, MailRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
@@ -73,37 +74,50 @@ async function main(argv: readonly string[]): Promise<void> {
 
   // TUI-004/REC-007: before a byte of this society's state is written and
   // before any broker is started, this process either owns the society or it
-  // does not. Ownership is this lease and nothing else -- not a spawned pid,
+  // does not. Ownership is this tenure and nothing else -- not a spawned pid,
   // not a broker that happens to be up, and not a lock that dies with a child,
   // which left a gap at every broker restart for a second `oma` to walk into.
-  // It is taken once and held for as long as this process runs.
-  let lease: SocietyLease | null;
-  try { lease = tryHoldSociety(runRoot); }
+  // A refusal here also covers the case no earlier design could: an `oma` that
+  // is already gone but whose engine is still running holds the society until
+  // that engine exits, because the engine inherited the lease.
+  let tenure: HostTenure | null;
+  try { tenure = HostTenure.take(runRoot); }
   catch (error) { fail(`society 소유권을 확인하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
 
   let settings: Settings;
-  try { settings = lease === null ? readSettings(configPath) : ensureConfiguration(configPath, society, stateRoot); }
+  try { settings = tenure === null ? readSettings(configPath) : ensureConfiguration(configPath, society, stateRoot); }
   catch (error) {
     // A process that does not own the society writes nothing into it, so it
     // does not create the configuration it is missing either.
-    if (lease === null && !existsSync(configPath))
+    if (tenure === null && !existsSync(configPath))
       fail("다른 oma가 이 society를 소유하고 있고 설정은 아직 만들어지지 않았습니다. 잠시 후 다시 실행하세요.", 4);
     fail(`설정을 읽을 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error));
   }
   if (settings.config.society !== society)
     fail("설정의 society가 요청한 society와 다릅니다", 4);
 
-  // The society's state tree has to exist before anything can observe it: the
-  // broker opens a ledger and reads a canonical repository at startup. It is
-  // idempotent, so it runs on every start rather than being a setup command
-  // the user has to remember (TUI-002) -- and only on an owner's start,
-  // because REC-007 does not let a process that will not own the society write
-  // into its state at all. It creates what is absent and corrects nothing;
-  // correcting waits for `repairSociety` below.
+  // REC-007: the society's tree is made to exist and then made right, and both
+  // finish before anything can act on it.
+  //
+  // This used to run after the broker said it was ready, which put a repair
+  // the product performs in one process in a race with Resident activation
+  // the broker performs in another: the broker's reconciliation starts enabled
+  // Residents with pending work as soon as it is listening, and a rootfs entry
+  // that was tampered with could still be wrong when a sandbox was built on
+  // it. Nothing acknowledges between the two processes, so the only ordering
+  // that can be relied on is the one that happens before the broker exists.
+  //
+  // A repair that fails is fatal here. Continuing would run Residents on a
+  // rootfs the product has said it cannot vouch for, and the previous
+  // behaviour -- writing the failure to the screen and carrying on -- made
+  // that outcome indistinguishable from a healthy start.
   let provisioned: ProvisionReport | null = null;
-  if (lease !== null) {
+  let corrected: readonly string[] = [];
+  if (tenure !== null) {
     try { provisioned = provisionSociety(stateRoot, { projectDir: process.cwd() }); }
     catch (error) { fail(`society를 준비하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+    try { corrected = repairSociety(stateRoot); }
+    catch (error) { fail(`rootfs를 고치지 못해 society를 시작하지 않았습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
   }
 
   const mailbox = principalMailbox(stateRoot);
@@ -119,6 +133,21 @@ async function main(argv: readonly string[]): Promise<void> {
   const terminal = openTerminal({ input: process.stdin, output: process.stdout });
   let session: PrincipalSession | null = null;
 
+  /** Every write this product performs on behalf of the Human passes here.
+   *
+   * A process without the tenure is a Control Panel over a society another
+   * `oma` owns: it may read that society's configuration and mail, and it may
+   * not change them. That was stated in the architecture and enforced only at
+   * startup, so the panels themselves still called the real write paths -- two
+   * `oma` processes could edit one running society's policy files at the same
+   * time. The check belongs at the write, which is the only place that knows a
+   * write is about to happen. */
+  const owning = (what: string): HostTenure => {
+    if (tenure === null) throw new StoreError("BROKER_UNAVAILABLE", `다른 oma가 이 society를 소유하고 있어 ${what}을(를) 바꿀 수 없습니다`);
+    tenure.assertOwned(what);
+    return tenure;
+  };
+
   const ports: AppPorts = {
     configFields: () => settings.fields,
     dashboard: () => dashboardData({
@@ -131,10 +160,12 @@ async function main(argv: readonly string[]): Promise<void> {
     extensions: (): readonly ExtensionRow[] => extensionContext.rows,
     body: (path: string) => (path.length === 0 ? null : readBody(path)),
     setField: (field, value) => {
+      owning("설정");
       commitField(settings, field, value);
       reload();
     },
     setExtension: (id, role, enabled) => {
+      owning("확장");
       toggleExtension(extensionContext, id, role, enabled);
       reload();
     },
@@ -142,36 +173,42 @@ async function main(argv: readonly string[]): Promise<void> {
       if (session === null) return { kind: "refused", reason: "Pi 세션이 없습니다." };
       return session.submit(text);
     },
-    quit: () => { shutdown(0); },
+    quit: () => { void shutdown(0); },
   };
 
   const app = new TuiApp(ports, terminal, settings.config.limits.frameBytes);
   app.refresh();
+  for (const path of corrected) app.line(`rootfs 항목을 기대값으로 되돌렸습니다: ${path}`);
 
   let broker: BrokerHandle | null = null;
   let finished = false;
-  const shutdown = (code: number): void => {
+  const shutdown = async (code: number): Promise<void> => {
     if (finished) return;
     finished = true;
-    session?.close();
+    // The tenure closes the engine and waits for the operating system to say
+    // it is gone before the lease is given up. Order alone was never enough:
+    // `close()` on a child is a signal, and the next `oma` could start its own
+    // engine while this one was still running.
+    if (tenure !== null) await tenure.end();
+    session = null;
     broker?.stop();
-    lease?.release();
     terminal.restore();
     process.exit(code);
   };
 
-  // A crash still stops the broker this process started. The broker would stop
-  // itself anyway when this process's end of the supervision channel closes;
-  // stopping it here just does not make it wait to notice.
+  // A crash still stops the broker this process started, and still ends the
+  // engine. It cannot wait for the engine to die -- the next statement is the
+  // exit -- and it does not have to: the engine holds the lease's descriptor,
+  // so the society stays this dying process's until the engine is really gone.
   process.on("uncaughtException", error => {
+    tenure?.abandon();
     broker?.stop();
-    lease?.release();
     terminal.restore();
     process.stderr.write(`oma: ${String(error)}\n`);
     process.exit(3);
   });
-  process.on("SIGINT", () => shutdown(0));
-  process.on("SIGTERM", () => shutdown(0));
+  process.on("SIGINT", () => { void shutdown(0); });
+  process.on("SIGTERM", () => { void shutdown(0); });
   terminal.onResize(() => app.draw());
   terminal.onKeys(chunk => app.feed(chunk));
 
@@ -179,17 +216,18 @@ async function main(argv: readonly string[]): Promise<void> {
   // alone and gives this process no Principal authority; a broker this process
   // started is supervised: restarted if it ends unexpectedly, and stopped when
   // this process exits -- or, if this process is killed, by itself when the
-  // supervision channel closes.
-  broker = lease === null ? null : await superviseBroker({
+  // supervision channel closes. It inherits the lease so that a broker still
+  // able to write to the society keeps the society from changing hands.
+  broker = tenure === null ? null : await superviseBroker({
     node: process.execPath, libdir: settings.config.installation.libdir,
-    society, runRoot, configPath,
+    society, runRoot, configPath, fence: tenure.fence,
     onEvent: line => { app.line(`broker: ${line}`); app.draw(); },
   });
   // OMA runs the engine it shipped with; it never resolves Pi from PATH, and it
   // gives that engine its own agent directory so a Pi the user installed keeps
   // its configuration, extensions and sessions to itself. It starts without
   // authority: the credential reaches it later, on a private socket.
-  const startEngine = (): PrincipalSession => {
+  const startEngine = (owner: HostTenure): PrincipalSession => {
     const piRuntime = resolvePiRuntime({
       stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
     });
@@ -199,14 +237,15 @@ async function main(argv: readonly string[]): Promise<void> {
       { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
         coreExtension: join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension),
         sessionDir: principalSessionDir(stateRoot),
-        workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private") },
+        workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private"),
+        fence: owner.fence },
       profile,
       limitsOf(settings.config.limits),
       principalEnvironment({ stateRoot, runRoot, libdir: settings.config.installation.libdir }, profile, settings.config.limits),
       {
         onLine: line => app.line(line),
         onBusy: busy => app.setBusy(busy),
-        onEnd: reason => { session = null; app.line(reason); },
+        onEnd: reason => { session = null; owner.engineEnded(); app.line(reason); },
         onPromptFailed: (text, reason) => app.returnPrompt(text, reason),
       },
     );
@@ -224,24 +263,34 @@ async function main(argv: readonly string[]): Promise<void> {
   // receives the credential it mints. A restarted broker's credential replaces
   // the old one in the engine, so the Principal reconnects without the Human
   // doing anything.
+  //
+  // The registration is not a formality that precedes delivery in program
+  // order; it is what makes delivery permissible at all, so its outcome is
+  // recorded on the tenure and delivery asks the tenure. A refusal used to
+  // print a line and resolve, and the delivery chained after it ran anyway.
   const sessionHandle = newSessionHandle();
   const register = async (): Promise<void> => {
     const pid = session?.pid ?? null;
-    if (pid === null || broker === null) return;
+    if (pid === null || broker === null || tenure === null) return;
     const credential = await broker.register(sessionHandle, pid);
-    if (credential === null) { app.line("broker가 Principal 세션을 받아들이지 않았습니다. 요청은 보낼 수 없습니다."); app.draw(); return; }
+    if (credential === null) {
+      tenure.principalUnregistered();
+      app.line("broker가 Principal 세션을 받아들이지 않았습니다. 요청은 보낼 수 없습니다.");
+      app.draw();
+      return;
+    }
     session?.grant(credential, sessionHandle);
+    tenure.principalRegistered();
   };
 
   // PR-002: pending mail reaches the Principal while this product runs, one
   // bounded batch at a time, whenever the session is idle. Built with the
   // engine, because there is nothing to deliver into before one exists.
   let delivery: PrincipalDelivery | null = null;
-  let brokerReady = false;
   /** Said once and never taken back, exactly as the supervisor says it. */
   let disowned = false;
   const deliver = (): void => {
-    if (delivery === null || !brokerReady) return;
+    if (delivery === null || tenure === null || !tenure.deliverable) return;
     void delivery.tick().then(outcome => {
       if (outcome.kind === "delivered") { app.line(`[메일] ${outcome.messages}통을 Principal에게 전달했습니다.`); app.refresh(); app.draw(); }
       else if (outcome.kind === "failed") { app.line(`[메일] 전달하지 못했습니다: ${outcome.reason}`); app.draw(); }
@@ -264,10 +313,11 @@ async function main(argv: readonly string[]): Promise<void> {
   // merely "not already-running" has never been proof of anything.
   let engineStarted = false;
   const startSessionOnce = (): void => {
-    if (engineStarted || disowned) return;
+    if (engineStarted || disowned || tenure === null) return;
     engineStarted = true;
+    const owner = tenure;
     let live: PrincipalSession;
-    try { live = startEngine(); }
+    try { live = startEngine(owner); }
     catch (error) {
       // The Control Panel stays usable without a session: the product must
       // still show status and settings when Pi cannot start.
@@ -277,6 +327,7 @@ async function main(argv: readonly string[]): Promise<void> {
       return;
     }
     session = live;
+    owner.adopt(live);
     delivery = new PrincipalDelivery({
       get running() { return live.running; },
       get busy() { return live.busy; },
@@ -290,63 +341,45 @@ async function main(argv: readonly string[]): Promise<void> {
     live.onEvent(event => { if (event.type === "agent_settled") deliver(); });
   };
 
-  // REC-007: putting back a generated rootfs entry that is there and wrong is
-  // a write over existing state, so it is not part of bringing the tree into
-  // existence. It runs here, where this process holds the society lease and
-  // its own broker has confirmed it holds the society lock -- and nowhere a
-  // process that will not own the society can reach.
-  let repaired = false;
-  const repairOnce = (): void => {
-    if (repaired) return;
-    repaired = true;
-    try {
-      for (const path of repairSociety(stateRoot))
-        app.line(`rootfs 항목을 기대값으로 되돌렸습니다: ${path}`);
-    } catch (error) {
-      app.line(`rootfs를 고치지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
   // A society this process will not own, or has stopped owning: another `oma`
   // holds it, or no broker of this process's could be kept running.
   //
   // This is a teardown, not a message. Everything that existed because this
-  // process owned the society ends here, and it ends before the lease is given
-  // up -- the instant the lease is released another `oma` may take the society
-  // and start its own engine, and two engines on one society are two writers
-  // of one private workspace and one session history. Leaving "the session the
-  // Human was using" alive across that boundary is the same invariant
-  // violation as starting a second engine; it just takes longer to notice.
-  const disown = (reason: string): void => {
+  // process owned the society ends here, and the lease is given up only once
+  // the engine is actually gone -- the instant the society is free another
+  // `oma` may take it and start its own engine, and two engines on one society
+  // are two writers of one private workspace and one session history. Leaving
+  // "the session the Human was using" alive across that boundary is the same
+  // invariant violation as starting a second engine; it just takes longer to
+  // notice.
+  const disown = async (reason: string): Promise<void> => {
     if (disowned) return;
     disowned = true;
-    brokerReady = false;
     delivery = null;
-    const live = session;
+    const had = session !== null;
+    if (tenure !== null) await tenure.end();
+    tenure = null;
     session = null;
-    try { live?.close(); } catch { /* the engine is ending either way */ }
-    lease?.release();
-    lease = null;
     app.line(`이 society의 broker를 이 프로세스가 소유하지 않습니다: ${reason}.`);
-    app.line(live === null
-      ? "권한 있는 대화 세션은 열 수 없습니다. Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다."
-      : "소유권을 잃어 Pi 세션을 닫았습니다. Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
+    app.line(had
+      ? "소유권을 잃어 Pi 세션을 닫았습니다. Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다."
+      : "권한 있는 대화 세션은 열 수 없습니다. Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
     app.draw();
   };
 
   if (broker === null) {
-    // No lease, so no broker was ever started and nothing was written. The
+    // No tenure, so no broker was ever started and nothing was written. The
     // product is a Control Panel over state another `oma` owns.
-    disown("다른 oma가 이 society의 소유권을 쥐고 있습니다");
+    await disown("다른 oma가 이 society의 소유권을 쥐고 있습니다");
   } else {
     broker.onReady(() => {
-      if (disowned) return;
-      brokerReady = true;
-      repairOnce();
+      if (disowned || tenure === null) return;
+      tenure.brokerReady();
       startSessionOnce();
       void register().then(deliver);
     });
-    broker.onDisowned(disown);
+    broker.onLost(() => { tenure?.brokerLost(); });
+    broker.onDisowned(reason => { void disown(reason); });
   }
 
   const poll = setInterval(() => {

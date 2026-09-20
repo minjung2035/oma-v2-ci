@@ -35,6 +35,20 @@ export class ProcessLock {
       return new ProcessLock(fd, target, stat.dev, stat.ino);
     } catch (error) { closeSync(fd); throw error; }
   }
+  /** The open descriptor the lock lives on.
+   *
+   * flock belongs to an open file description, not to a process and not to a
+   * pathname, and a descriptor a child inherits refers to the same description
+   * -- so the lock is released only when the last of those descriptors closes.
+   * Handing this number to a child therefore makes the child's life part of
+   * the lock's life, which is the only way a process that cannot run code at
+   * its own death (SIGKILL, a power cut) can still keep a promise about what
+   * must be dead before the lock passes on.
+   */
+  get descriptor(): number {
+    if (this.closed) throw new StoreError("BROKER_UNAVAILABLE", "process lock is closed");
+    return this.fd;
+  }
   assertHeld(path: string): void {
     if (this.closed || resolve(path) !== this.path) throw new StoreError("BROKER_UNAVAILABLE", "process lock is closed or belongs to another society");
     const current = statSync(this.path, { bigint: true });

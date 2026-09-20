@@ -32,6 +32,11 @@ export interface SessionPaths {
   readonly sessionDir: string;
   readonly workspace: string;
   readonly home: string;
+  /** The society lease descriptor, inherited by the engine so that the society
+   * cannot change hands while this engine is alive -- including when the host
+   * is killed and runs no teardown (REC-007). Absent only where no lease
+   * exists, which is every path that must not start an engine at all. */
+  readonly fence?: number | undefined;
 }
 
 export interface SessionProfile {
@@ -282,8 +287,18 @@ export class PrincipalSession {
    * outstanding, because a prompt is only ever written to an idle engine. */
   private unanswered: { readonly id: string; readonly role: "human" | "delivery"; readonly text: string } | null = null;
 
+  /** Resolves when the operating system has reaped the engine, not when this
+   * process asked it to stop. `close()` sends a signal; a teardown that took
+   * the signal for the death could release the society while the engine it
+   * paid for was still running. */
+  readonly exited: Promise<void>;
+
   private constructor(private readonly child: ChildProcessWithoutNullStreams, limits: PiRpcLimits, private readonly sink: SessionSink) {
     this.frameBytes = limits.frameBytes;
+    this.exited = new Promise<void>(resolve => {
+      if (child.exitCode !== null || child.signalCode !== null) { resolve(); return; }
+      child.once("exit", () => { resolve(); });
+    });
     this.rpc = new PiRpcClient(child, limits);
     // The private socket the credential travels on. Kept open for the life of
     // the session so a restarted broker's credential can replace the old one.
@@ -309,6 +324,7 @@ export class PrincipalSession {
       paths.workspace,
       sessionEnv(env, profile, paths),
       true,
+      paths.fence,
     );
     return new PrincipalSession(child, limits, sink);
   }

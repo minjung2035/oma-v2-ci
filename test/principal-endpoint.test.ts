@@ -1047,12 +1047,95 @@ test("T114 / IPC-012: a method the host endpoint does not serve is an unknown me
         assert.equal(await failureOf(client.call(method, {})), "UNKNOWN_METHOD", method);
       } finally { client.close(); }
     }
-    // What it does serve still works on a connection of its own.
-    const client = channel();
+    // What it does serve still works on a connection of its own -- once this
+    // host has a registered Principal to deliver to, which is a separate
+    // question from whether the method exists.
+    await withRegisteredEngine(society, async () => {
+      const client = channel();
+      try {
+        await client.connect(join(society.runRoot, "principal-host.sock"));
+        assert.equal((await client.call("batch.prepare", {})).ok, true);
+      } finally { client.close(); }
+    });
+  } finally { await stopSociety(society); }
+});
+
+/** Registers a real child of this process as the Principal engine, the way the
+ * host does over the supervision channel, for the body of `run`. */
+async function withRegisteredEngine(society: Society, run: (enginePid: number) => Promise<void>): Promise<void> {
+  const engine = spawn(process.execPath, ["-e", "setInterval(() => {}, 60_000);"], { stdio: "ignore" });
+  try {
+    await new Promise<void>(resolve => { engine.once("spawn", () => resolve()); });
+    const granted = society.host!.register(newSessionHandle(), engine.pid!);
+    assert.ok(granted, "the broker refused a registration this test depends on");
+    await run(engine.pid!);
+  } finally { engine.kill("SIGKILL"); }
+}
+
+test("T114 / PR-002: the host is served delivery only while this broker holds a registration for its engine", async () => {
+  // The defect this closes: the host endpoint checked who was calling and
+  // nothing else, so a host whose registration had been refused -- or had not
+  // been answered yet -- was served `batch.prepare` exactly like a host with a
+  // live Principal. Mail was then prepared, and a boundary recorded, against a
+  // session that did not exist.
+  const society = await startSociety("oma-principal-unregistered-");
+  try {
+    const before = channel();
     try {
-      await client.connect(join(society.runRoot, "principal-host.sock"));
-      assert.equal((await client.call("batch.prepare", {})).ok, true);
-    } finally { client.close(); }
+      await before.connect(join(society.runRoot, "principal-host.sock"));
+      assert.equal(await failureOf(before.call("batch.prepare", {})), "AUTH_FAILED",
+        "delivery was prepared for a host with no registered Principal");
+    } finally { before.close(); }
+
+    const complete = channel();
+    try {
+      await complete.connect(join(society.runRoot, "principal-host.sock"));
+      // The other half of the pair. Completing a boundary with no registration
+      // would write evidence about a session this broker never accepted.
+      assert.equal(await failureOf(complete.call("batch.complete",
+        { boundary: { sessionFile: "/tmp/x.jsonl", offset: 0 } })), "AUTH_FAILED");
+    } finally { complete.close(); }
+
+    // The negative control, on the same broker and the same socket: restore
+    // the one missing fact and the very same call is served. Without this the
+    // test above would also pass if delivery were refused for some unrelated
+    // reason -- a broken socket, a wrong method, a draining broker.
+    await withRegisteredEngine(society, async () => {
+      const after = channel();
+      try {
+        await after.connect(join(society.runRoot, "principal-host.sock"));
+        assert.equal((await after.call("batch.prepare", {})).ok, true,
+          "the control did not reproduce: delivery was refused even with a registration");
+      } finally { after.close(); }
+    });
+  } finally { await stopSociety(society); }
+});
+
+test("T114 / PR-002: a registration that ends closes delivery again, without anything telling the endpoint", async () => {
+  // A registration is retired by events the delivery endpoint never sees: the
+  // engine dies, or the host registers another one and the first is dropped.
+  // The endpoint therefore asks on every request rather than remembering an
+  // answer, and this is what that difference looks like from outside.
+  const society = await startSociety("oma-principal-registration-ends-");
+  try {
+    const engine = spawn(process.execPath, ["-e", "setInterval(() => {}, 60_000);"], { stdio: "ignore" });
+    await new Promise<void>(resolve => { engine.once("spawn", () => resolve()); });
+    assert.ok(society.host!.register(newSessionHandle(), engine.pid!));
+    const served = channel();
+    try {
+      await served.connect(join(society.runRoot, "principal-host.sock"));
+      assert.equal((await served.call("batch.prepare", {})).ok, true);
+    } finally { served.close(); }
+
+    // The engine is gone. Nothing re-registers, nothing closes, nothing tells
+    // the broker: the only event is that a process stopped existing.
+    await new Promise<void>(resolve => { engine.once("exit", () => resolve()); engine.kill("SIGKILL"); });
+    const refused = channel();
+    try {
+      await refused.connect(join(society.runRoot, "principal-host.sock"));
+      assert.equal(await failureOf(refused.call("batch.prepare", {})), "AUTH_FAILED",
+        "delivery stayed open to an engine that no longer exists");
+    } finally { refused.close(); }
   } finally { await stopSociety(society); }
 });
 

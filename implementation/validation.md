@@ -6,7 +6,7 @@
 
 브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `51759fd`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `2cddf49fe0bd1315cc18730d6cc126bd2a029bc94393178efb1aa8a676488bdd` (525 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `fbe2a32fb1e77c6f0126fc1c25114ef6b521a52d3404b1f239a7f2a7f7158463` (527 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -16,7 +16,7 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1161/1161 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1190/1190 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
 | `npm run verify:fast` | PASS, EXECUTED |
@@ -24,8 +24,8 @@
 | `npm run verify:property` | PASS, EXECUTED |
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
-| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 68개는 전부 실패이며, 가장 최근 run #68(`35497604199`)은 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션은 `gh` 인증이 없어 직접 재확인하지 않았다 |
-| `node scripts/loc.mjs` | **218 files / 20,632 code LOC** |
+| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다 |
+| `node scripts/loc.mjs` | **219 files / 20,750 code LOC** |
 
 ### 현재 범위
 
@@ -562,6 +562,75 @@ SIGKILL하고 **reap까지 기다려서**(좀비는 `/proc`에 같은 시작 시
 실제 별도 프로세스다. `oma` 진입점 전체의 경쟁은 여전히 통제된 모듈 경계에서만 관측했다. engine 사망 시험의 stand-in engine은 Pi가
 아니라 자식을 낳는 Node 프로세스다. CI 사실은 감사 보고에서 인용한 것이며 이 세션은 `gh` 인증이 없어 직접 재확인하지 않았다.
 
+### Principal 제품 경로: 열한 번째 감사에서 닫은 것
+
+외부 적대적 감사가 HEAD `3792782`를 FAIL로 판정하며 결함 5건을 지목했다. 코드에 관한 네 건은 모두 소스에서 사실로 확인했다 —
+오탐은 없었다. 감사가 정한 우선순위(lease를 실제 process-death fence로 → registration-before-delivery → repair-before-broker →
+non-owner UI write 차단)를 그대로 따랐고, 앞선 두 감사가 이미 **같은 자리**(소유를 무엇으로 아는가)를 지적했으므로 이번에도 패치가
+아니라 구조를 바꿨다.
+
+**lease가 process-death fence가 아니었다(P0).** 열 번째 감사에서 소유를 broker에서 host로 옮겼지만, lease를 놓는 것은 여전히
+**이 프로세스가 실행하는 코드**였다. `close()`는 신호이지 죽음이 아니므로, host가 SIGKILL을 보내고 lease를 놓은 직후 두 번째 `oma`가
+들어와 자기 engine을 시작할 수 있었고, host 자신이 SIGKILL되면 커널이 그 즉시 lock을 떨어뜨리는데 engine은 그대로 살아 있었다.
+호출 순서를 고쳐서는 닫을 수 없는 구멍이다 — 코드가 아예 돌지 않는 경로가 문제이기 때문이다.
+
+그래서 lease를 **프로세스가 드는 lock이 아니라 open file description이 드는 lock**으로 바꿨다. flock은 프로세스가 아니라 열린 파일
+기술(description)에 붙고, 자식이 물려받은 descriptor는 같은 description을 가리키므로, lock은 그 descriptor **마지막 하나가 닫힐 때**
+풀린다. lease 덕분에 시작되는 모든 자식(broker, engine, 그리고 그들이 시작한 것들)에게 그 descriptor를 물려주면, "engine과 그 자손이
+모두 죽기 전에는 society가 넘어가지 않는다"가 **커널이 지키는 사실**이 된다 — 이 코드가 한 줄도 돌지 않는 SIGKILL·정전에서도.
+따름정리로, 놓는 것은 **늦을 수는 있어도 이를 수는 없다**: 기다리지 못한 teardown은 두 engine이 아니라 커널을 기다리는 것으로 퇴화한다.
+
+**소유가 흩어진 플래그로 표현돼 있었다.** `lease`, `session`, `brokerReady`, `disowned`가 따로 있었고 그 사이의 불변식은 진입점
+문장 순서에 살았다. 세 번의 감사가 같은 부류의 결함을 서로 다른 자리에서 찾아낸 이유가 그것이라, 플래그를 없애고
+**`HostTenure`**(`src/runtime/host-tenure.ts`) 하나로 합쳤다. 이 프로세스가 society를 소유하는 동안 정확히 그만큼 존재하는 객체이고,
+소유가 주는 모든 권한을 이 객체에 **묻는다**: fence(무엇을 물려줘야 하는가), `deliverable`(지금 전달해도 되는가),
+`assertOwned`(이 쓰기가 허용되는가), `end`(무엇이 죽은 뒤에 놓는가). 부팅 순서도 이 객체를 중심으로 고정했다 —
+**lease 취득 → provision → repair 성공 → broker spawn → engine 등록**.
+
+**등록이 거절됐거나 미정인데 delivery가 돌았다(P1).** 전달은 "broker가 준비됐다"만 보고 있었고, 그것은 credential이 engine에
+도달했다는 뜻이 아니다. 이제 `principalRegistered`는 `brokerLive`와 **별개의 항**이고, broker가 다시 준비될 때마다 먼저 닫힌다
+(재시작한 broker는 이전 broker가 준 등록을 상속하지 않는다). 전달 조건은 네 항 전부 — tenure, 살아 있는 broker, 현재 등록,
+engine — 이며 하나라도 거두면 닫힌다. broker 쪽 host endpoint도 같은 질문을 스스로 한다: host 신원은 **필요하지만 충분하지 않고**,
+이 broker가 그 host의 engine에 대한 등록을 쥐고 있어야 하며, 등록의 유효성은 매 요청마다 pid와 시작 시각으로 다시 계산한다.
+(이 재계산은 이번에 새로 쓴 시험이 찾아낸 결함이다 — 처음 구현은 기록된 pid를 그대로 믿었다.)
+
+**rootfs 수리와 Resident 활성화 사이에 happens-before가 없었다(P1).** 수리는 broker 준비 뒤에 돌았고, broker는 듣기 시작하자마자
+할 일이 있는 Resident를 활성화한다. 두 프로세스 사이에 확인 절차가 없으므로 의지할 수 있는 순서는 broker가 **존재하기 전**의 순서뿐이다.
+수리를 broker spawn 앞으로 옮기고, 수리 실패를 치명적으로 만들었다 — 보증할 수 없다고 말한 rootfs 위에서 Resident를 돌리는 것과
+건강한 시작을 구분할 수 없게 만드는 것이 이전 동작이었다.
+
+**소유하지 않은 Control Panel이 read-only가 아니었다(P1).** `setField`/`setExtension`이 소유를 묻지 않아, 두 `oma` 프로세스가 한
+society의 정책 파일을 동시에 고칠 수 있었다. 검사를 **쓰기 지점**으로 옮겼다(`owning()`) — 쓰기가 일어난다는 것을 아는 유일한 자리다.
+
+**CI 증거(P2).** 감사의 구조적 지적을 받아들인다: 커밋 내부에 그 커밋 자신의 SHA에 대한 CI 결과를 적는 것은 항상 한 SHA 뒤처지며
+자기충족적이다. 이 세션에도 `gh` 인증이 없어 실행 사실을 직접 확인하지 못했다. 따라서 이 문서가 증거로 내세우는 것은 CI 행이 아니라
+아래의 **되돌린 결함 표**다 — 트리 안에서 재현 가능하고, 외부 상태에 의존하지 않는다.
+
+**역검증**: 결함을 하나씩 소스에 되돌린 사본(`src/`·`test/`만 동기화한 sandbox)에서 시험을 돌려, **정확히 그 시험만** 실패하는 것으로
+확인했다.
+
+| 되돌린 결함 | 실패해야 하는 시험 | 결과 |
+|---|---|---|
+| `HostTenure.end()`에서 engine 종료 대기 제거 | REC-007 lease는 멈추라고 말한 뒤가 아니라 engine이 사라진 뒤에 놓인다 / T119 종료는 engine이 실제로 거두어진 뒤에 society를 돌려준다 | 실패함(tenure 2/13, composition 1/18) |
+| 두 spawn helper에서 `stdio.push(fence)` 제거 | T119/REC-007 owned RPC 자식과 supervised service가 lease를 들고 시작한다(채널 변형 포함) | 실패함(4/13) |
+| `deliverable`에서 `principalLive` 항 제거 | PR-002 네 항 전부 / 거절된 등록은 열지 않는다 / 재시작한 broker는 등록을 상속하지 않는다 + T119/PR-002 거절된 등록은 아무것도 전달하지 않는다 | 실패함(tenure 3/13, composition 1/18) |
+| 수리를 broker spawn 뒤로 옮기고 실패를 비치명적으로 되돌림 | T119/REC-007 rootfs는 그 위에서 무엇이 돌기 전에 바로잡힌다 / 바로잡지 못하면 broker도 engine도 시작하지 않는다 | 실패함(2/18) |
+| `setField`/`setExtension`의 소유 확인 제거 | T119/REC-007 남의 society 위의 Control Panel은 쓰지 못한다 / 소유를 돌려준 화면도 같다 | 실패함(2/18) |
+| host endpoint의 등록 gate 제거 | T114/PR-002 등록을 쥐고 있는 동안에만 delivery가 제공된다 / 끝난 등록은 delivery를 다시 닫는다 | 실패함(2/45) |
+| `registeredEngine`의 pid·시작 시각 재확인 제거 | T114/PR-002 끝난 등록은 아무도 알려 주지 않아도 delivery를 닫는다 | 실패함(1/45) |
+
+두 번째 행은 이번 세션에서 **처음에는 아무 시험도 실패하지 않았다** — fence를 `oma.ts` 경계에서만 확인하고 있었고, helper가 그것을
+실제로 자식에게 건네는지는 아무도 묻지 않았다. 그 자리를 메우는 시험(자식이 스스로 `fstat`으로 답하고, 부모가 자기 몫을 놓은 뒤에도
+society가 넘어가지 않는 것까지 실제 프로세스로 관측)을 새로 쓴 뒤에야 위의 결과가 됐다. 대조군 — fence 인자를 뺀 같은 helper —
+은 같은 자리에 lease가 아닌 descriptor가 오고 society가 즉시 넘어가는 것을 보여, 앞의 네 시험이 "자식이 우연히 죽지 않았다"가 아니라
+"자식이 lease를 들고 있다"를 증거하고 있음을 고정한다.
+
+**관측하지 못한 것**: fence의 커널 보증은 실제 프로세스로 관측했다(host SIGKILL, engine 생존 중 1초 동안의 거절, 손자 프로세스만
+남은 경우, 제품의 두 spawn helper). 그러나 그 실제 프로세스들은 `tryHoldSociety`와 spawn helper를 직접 부르는 별도 Node 프로세스이지
+**실제 `oma` 진입점**이 아니다 — 진입점 전체의 배선은 여전히 통제된 모듈 경계(`node:vm`, 닫힌 `require` 지도)에서만 관측했다.
+정전·강제 재부팅은 관측하지 않았다(커널 동작에 대한 추론이다). `HostTenure` 시험의 engine은 Pi가 아니라 stand-in이며, Pi 자체는
+동봉본을 그대로 쓰고 수정하지 않는다. CI는 이 세션에서 인증이 없어 확인하지 않았다.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
@@ -630,7 +699,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **218 files / 20,632 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **219 files / 20,750 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

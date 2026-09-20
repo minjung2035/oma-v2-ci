@@ -136,12 +136,19 @@ function validDirectSpawn(executable: string, argv: readonly string[], cwd: stri
 /** `channel` adds descriptor 3: a socketpair only this parent holds. It is a
  * socket rather than a pipe on purpose -- another process of the same user
  * can reopen an inherited pipe through /proc/<pid>/fd, but not a socket -- so
- * it can carry a value that must reach this one child and nobody else. */
+ * it can carry a value that must reach this one child and nobody else.
+ *
+ * `fence` adds a descriptor the child never reads and never needs to know
+ * about: the society lease. It is inherited so that the lock the lease lives
+ * on stays held until this child is gone, which is how "the society does not
+ * change hands while this engine runs" survives a parent that is killed
+ * outright and runs no teardown at all. */
 export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: string,
-  env: Readonly<Record<string, string>>, channel = false): ChildProcessWithoutNullStreams {
+  env: Readonly<Record<string, string>>, channel = false, fence?: number): ChildProcessWithoutNullStreams {
   validDirectSpawn(executable, argv, cwd, env);
-  const stdio: "pipe"[] = ["pipe", "pipe", "pipe"];
+  const stdio: ("pipe" | number)[] = ["pipe", "pipe", "pipe"];
   if (channel) stdio.push("pipe");
+  if (fence !== undefined) stdio.push(fence);
   return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio }) as ChildProcessWithoutNullStreams;
 }
 /** A long-lived service this process owns, such as the society's broker.
@@ -155,12 +162,15 @@ export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: 
  * only this parent holds. It is the service's supervision channel -- the
  * service learns this parent's identity from it and treats its closing as this
  * parent's death -- and, being a socket, it cannot be reopened by another
- * process through /proc/<pid>/fd the way an inherited pipe can. */
+ * process through /proc/<pid>/fd the way an inherited pipe can. `fence` gives
+ * it the society lease descriptor, so the society cannot pass to another host
+ * while this service is still able to write to it. */
 export function spawnSupervisedService(executable: string, argv: readonly string[],
-  env: Readonly<Record<string, string>>, extraPipe = false): ChildProcess {
+  env: Readonly<Record<string, string>>, extraPipe = false, fence?: number): ChildProcess {
   validDirectSpawn(executable, argv, "/", env);
-  const stdio: ("ignore" | "pipe")[] = ["ignore", "ignore", "pipe"];
+  const stdio: ("ignore" | "pipe" | number)[] = ["ignore", "ignore", "pipe"];
   if (extraPipe) stdio.push("pipe");
+  if (fence !== undefined) stdio.push(fence);
   return spawn(executable, [...argv], { env: { ...env }, shell: false, stdio });
 }
 export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
