@@ -5,7 +5,7 @@
  * ports, and redraws. Ports keep the file, socket and process owners out of
  * this module so the whole flow is testable without a terminal.
  */
-import { decodeKeys, type Key } from "./keys.js";
+import { KeyDecoder, type Key } from "./keys.js";
 import { assertNever } from "../domain/exhaustive.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
@@ -13,7 +13,7 @@ import {
 } from "./model.js";
 import { render } from "./view/index.js";
 import type { ConfigField } from "./model.js";
-import { CONVERSATION_BOUNDS } from "./limits.js";
+import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS } from "./limits.js";
 import type { Terminal } from "./screen.js";
 
 export interface AppPorts {
@@ -46,6 +46,8 @@ export class TuiApp {
   private transcript: string[] = [];
   private notice: Notice | null = null;
   private busy = false;
+  private readonly keys = new KeyDecoder();
+  private escapeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly ports: AppPorts, private readonly terminal: Terminal, private readonly frameBytes: number) {}
 
@@ -91,10 +93,20 @@ export class TuiApp {
   note(text: string | null): void { this.notice = text === null ? null : { kind: "text", text }; this.draw(); }
 
   feed(chunk: Uint8Array): void {
-    // One frame for the whole chunk. A paste arrives here as one chunk of many
-    // keys, and drawing per key would make the work the terminal does grow with
-    // what was pasted rather than with what is shown.
-    for (const key of decodeKeys(chunk)) this.apply(key);
+    // One decoder lives as long as the app: terminal reads are neither UTF-8
+    // nor escape-sequence boundaries. A lone Escape is the one ambiguous
+    // prefix, so it gets a short delay in which a following CSI byte can arrive.
+    if (this.escapeTimer !== null) clearTimeout(this.escapeTimer);
+    this.escapeTimer = null;
+    for (const key of this.keys.push(chunk)) this.apply(key);
+    if (this.keys.hasPendingEscape) {
+      this.escapeTimer = setTimeout(() => {
+        this.escapeTimer = null;
+        for (const key of this.keys.flushEscape()) this.apply(key);
+        this.draw();
+      }, TERMINAL_BOUNDS.escapeDelayMs.value);
+      this.escapeTimer.unref();
+    }
     this.draw();
   }
 
@@ -131,6 +143,10 @@ export class TuiApp {
           this.notice = null;
           this.append(`> ${effect.text}`);
           this.ports.submitPrompt(effect.text);
+          return;
+        case "prompt-limit":
+          if (effect.active) this.notice = { kind: "prompt-limit" };
+          else if (this.notice?.kind === "prompt-limit") this.notice = null;
           return;
         case "quit":
           this.ports.quit();

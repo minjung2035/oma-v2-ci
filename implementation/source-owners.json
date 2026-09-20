@@ -203,7 +203,6 @@
     "source": "implementation-spec.md",
     "requirements": [
       "TUI-001",
-      "TUI-002",
       "TUI-003"
     ],
     "owner": "src/entry/oma.ts#main",
@@ -216,6 +215,24 @@
     "negativeTests": [
       "test/tui-boundary.test.ts#T91",
       "test/tui-boundary.test.ts#T95"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "TUI-002"
+    ],
+    "owner": "src/tui/keys.ts#KeyDecoder",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/app.ts#TuiApp",
+      "src/tui/keys.ts#KeyDecoder",
+      "src/tui/model.ts#step"
+    ],
+    "negativeTests": [
+      "test/tui-app.test.ts#TUI-002",
+      "test/tui-model.test.ts#key decoding"
     ]
   },
   {
@@ -359,12 +376,13 @@
     "requirements": [
       "TUI-023"
     ],
-    "owner": "src/tui/limits.ts#humanPromptFitsFrame",
+    "owner": "src/tui/prompt.ts#appendPrompt",
     "entrypoint": "src/entry/oma.ts#main",
     "callPath": [
       "src/entry/oma.ts#main",
       "src/tui/app.ts#TuiApp",
       "src/tui/model.ts#step",
+      "src/tui/prompt.ts#appendPrompt",
       "src/tui/limits.ts#humanPromptFitsFrame",
       "src/tui/session.ts#PrincipalSession.submit"
     ],

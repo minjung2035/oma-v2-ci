@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "4a8bd565cc7de5eeb73d60eb21218a4589afc2e9110d2d987918563bba5d27ca",
-  "report": "17c6d66be043db01910611ae66a7a140f80b9eddf7d74d64a61a972bac98b74e",
+  "manifest": "a15c1ed52fb3cab57e93ccf1fc2a40763a442ba065ab91972722b9ec8b3c64aa",
+  "report": "edf80c195b137813f00f19026da73abb3b94c79f023f09cb00fd7b2efd5b26e4",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -761,7 +761,7 @@
     },
     {
       "path": "src/tui/app.ts",
-      "sha256": "c2f37184161b2e6bb3e5084cf5d00f734f475e06b802c33f8e0a9f7f43d91404"
+      "sha256": "f6cdac4027fae4744273a3b1ec83d5bc1a15b78b08c9ff0a03d7fec7637253fa"
     },
     {
       "path": "src/tui/dashboard.ts",
@@ -773,15 +773,19 @@
     },
     {
       "path": "src/tui/keys.ts",
-      "sha256": "f965ea0e8804e21798894549de73e61892714b2a62bdc285dc5a67d4127df3ca"
+      "sha256": "28bfbcf2ab9b6d3b39c3064f606ebb90976972dd10072bad8219a027c44aeeb0"
     },
     {
       "path": "src/tui/limits.ts",
-      "sha256": "759f5e2a4488cb6094e90bc7ac9659151224ee958d338f49c4856355de6d16c0"
+      "sha256": "cb54a0a7b21b6071d550126726c34d548aff85afd32bc9c62b5116a459391ded"
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "746b4572faa4ee24440bf897f6a4d2de6ef8046ba100b54ccfdeea6adad8ffa6"
+      "sha256": "903f8d6dc70c139e4e2115fea2a138dbea075a4f52e324caad055a7bcba3d0a2"
+    },
+    {
+      "path": "src/tui/prompt.ts",
+      "sha256": "76c688b9c5aaf9653e431e3af95bf808079eaae5cadd44d9acfc4968c5f1be17"
     },
     {
       "path": "src/tui/screen.ts",
@@ -825,11 +829,11 @@
     },
     {
       "path": "src/tui/view/notice.ts",
-      "sha256": "fe0d1b70d290eaac511ef0302da8872da7aa3172ec1ecc2dad23f2fa640cf497"
+      "sha256": "fae2a0156e9796900bad89dda550b05ed797605492e17d039564008890783943"
     },
     {
       "path": "src/tui/view/screens.ts",
-      "sha256": "f9213f61379d0d7bd3cd8315f3796f47a64a80f9a4c41af2ead8c21d3f25dec9"
+      "sha256": "9066f7d366a08239f496af7b5442bc52eb83ecf9d35222703bc3eec7386222f8"
     },
     {
       "path": "src/tui/view/text.ts",

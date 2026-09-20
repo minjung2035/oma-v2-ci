@@ -1336,7 +1336,7 @@ Pi의 built-in command나 UI가 OMA TUI 위로 직접 노출되지 않게 한다
 ### 23.6 TUI 구조와 조작
 
 
-기본 화면은 일반 코딩 에이전트와 같은 대화 중심이다. 관리 기능을 대화 UI 안에 계속 추가하지 않는다. 화면이 무엇까지 커지는지는 한 곳에 선언한다: 대화 기록은 최근 500줄, 작성 중인 Human prompt는 최대 16 KiB의 UTF-8 source bytes이면서 완전한 Pi prompt JSON command가 현재 frame 안에 드는 범위, engine이 실행 중일 때 host가 들고 있는 prompt는 16개다. 문자 수로 byte 한도를 대신하거나 JSON escaping 비용을 누락하지 않고, 기록에 줄을 넣는 경로는 하나다. 사람이 입력하거나 붙여넣은 것이 제품이 쥐는 양을 정하지 않는다.
+기본 화면은 일반 코딩 에이전트와 같은 대화 중심이다. 관리 기능을 대화 UI 안에 계속 추가하지 않는다. 화면이 무엇까지 커지는지는 한 곳에 선언한다: 대화 기록은 최근 500줄, 작성 중인 Human prompt는 최대 16 KiB의 UTF-8 source bytes이면서 완전한 Pi prompt JSON command가 현재 frame 안에 드는 범위, engine이 실행 중일 때 host가 들고 있는 prompt는 16개다. 문자 수로 byte 한도를 대신하거나 JSON escaping 비용을 누락하지 않고, 기록에 줄을 넣는 경로는 하나다. 사람이 입력하거나 붙여넣은 것이 제품이 쥐는 양을 정하지 않는다. UTF-8 code point와 terminal ESC/CSI report는 stdin read 경계와 무관하게 한 stream decoder가 완성하며, 불완전한 report는 작은 선언 한도 안에서만 보유한다. Backspace는 UTF-16 code unit이 아니라 사용자에게 보이는 grapheme 하나를 지운다. 입력이 prompt 또는 frame 한도를 한 번이라도 넘으면 보관된 bounded prefix를 완전한 요청으로 제출하지 않고 화면에 입력 한도 초과를 표시한다. Backspace로 편집해 초과 상태를 해제한 뒤에만 다시 제출할 수 있다.
 
 ```text
 ┌──────────────────────────────────────────┐

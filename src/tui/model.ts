@@ -7,7 +7,9 @@
  * and no separate save step here.
  */
 import type { Key } from "./keys.js";
-import { CONFIG_BOUNDS, humanPromptFitsFrame } from "./limits.js";
+import { CONFIG_BOUNDS } from "./limits.js";
+import { EMPTY_PROMPT, appendPrompt, erasePrompt, submitPrompt, type PromptDraft, type PromptTransition } from "./prompt.js";
+import { assertNever } from "../domain/exhaustive.js";
 
 export type Category = "dashboard" | "config" | "mail";
 export const CATEGORIES: readonly Category[] = Object.freeze(["dashboard", "config", "mail"]);
@@ -70,6 +72,7 @@ export type Notice =
   | { readonly kind: "saved"; readonly label: string; readonly value: string; readonly apply: ApplyScope | null }
   | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "save-failed"; readonly message: string }
+  | { readonly kind: "prompt-limit" }
   | { readonly kind: "text"; readonly text: string };
 
 export interface PanelData {
@@ -95,7 +98,7 @@ export interface State {
   readonly cursor: Readonly<Record<Category, number>>;
   readonly detail: Detail;
   readonly edit: Edit;
-  readonly prompt: string;
+  readonly prompt: PromptDraft;
   readonly quit: boolean;
 }
 
@@ -104,6 +107,7 @@ export type Effect =
   | { readonly kind: "set-number"; readonly field: string; readonly value: number }
   | { readonly kind: "set-extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "submit-prompt"; readonly text: string }
+  | { readonly kind: "prompt-limit"; readonly active: boolean }
   | { readonly kind: "quit" };
 
 export interface Step { readonly state: State; readonly effects: readonly Effect[] }
@@ -114,7 +118,7 @@ export const INITIAL: State = Object.freeze({
   cursor: Object.freeze({ dashboard: 0, config: 0, mail: 0 }),
   detail: Object.freeze({ kind: "none" as const }),
   edit: Object.freeze({ kind: "none" as const }),
-  prompt: "",
+  prompt: EMPTY_PROMPT,
   quit: false,
 });
 
@@ -285,25 +289,32 @@ function stepPanelRoot(state: State, data: PanelData, key: Key): Step {
   }
 }
 
+function conversationTransition(state: State, result: PromptTransition): Step {
+  const next = { ...state, prompt: result.draft };
+  switch (result.kind) {
+    case "none":
+      return { state: next, effects: [] };
+    case "show-limit":
+      return { state: next, effects: [{ kind: "prompt-limit", active: true }] };
+    case "clear-limit":
+      return { state: next, effects: [{ kind: "prompt-limit", active: false }] };
+    case "submit":
+      return { state: next, effects: [{ kind: "submit-prompt", text: result.text }] };
+    default:
+      return assertNever(result);
+  }
+}
+
 function stepConversation(state: State, key: Key, frameBytes: number): Step {
   switch (key.kind) {
     case "char":
-      // A paste arrives as keys, so this is where one arrives too. Admission
-      // is by UTF-8 bytes and by the exact JSON command size: character counts
-      // miss both multibyte text and the extra wire bytes for quotes and
-      // backslashes.
-      const candidate = state.prompt + key.value;
-      if (!humanPromptFitsFrame(candidate, frameBytes)) return { state, effects: [] };
-      return { state: { ...state, prompt: candidate }, effects: [] };
+      return conversationTransition(state, appendPrompt(state.prompt, key.value, frameBytes));
     case "backspace":
-      return { state: { ...state, prompt: state.prompt.slice(0, -1) }, effects: [] };
-    case "enter": {
-      const text = state.prompt.trim();
-      if (text.length === 0) return { state: { ...state, prompt: "" }, effects: [] };
-      return { state: { ...state, prompt: "" }, effects: [{ kind: "submit-prompt", text }] };
-    }
+      return conversationTransition(state, erasePrompt(state.prompt));
+    case "enter":
+      return conversationTransition(state, submitPrompt(state.prompt));
     case "eof":
-      if (state.prompt.length > 0) return { state, effects: [] };
+      if (state.prompt.text.length > 0 || state.prompt.overflow) return { state, effects: [] };
       return { state: { ...state, quit: true }, effects: [{ kind: "quit" }] };
     default:
       return { state, effects: [] };

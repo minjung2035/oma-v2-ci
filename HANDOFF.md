@@ -79,7 +79,7 @@ TUI에서 아직 닫히지 않은 의존성은 하나로 좁혀져 있다.
 
 **제품 표면이 커지는 한계는 `src/tui/limits.ts` 한 곳에 선언한다.** 대화 기록은 최근 500줄, 작성 중인 prompt는 최대 16 KiB UTF-8이면서 현재 Pi frame의 JSON envelope 안에 드는 크기, host가 들고 있는 대기 prompt는 16개다. 문자 수나 JSON 전 source 길이로 wire byte 한도를 대신하지 않으며, 기록에 줄을 넣는 경로는 하나다. session이 일하는 중인지에 대한 보고는 소유권 이동 자체가 소유한다.
 
-**검증 기록은 실행한 source에 묶여 있다.** `implementation/validation.md`가 적는 executed source digest는 `src`·`test`·`scripts` 아래 모든 파일과 `implementation/contracts.ts`의 내용을 해시한 값이고 `R38`이 새로 계산해 대조하므로, source를 바꾸면 다시 돌려 다시 적어야 한다.
+**검증 기록은 판정을 결정하는 입력에 묶여 있다.** `implementation/validation.md`가 적는 verification input digest는 실행 source·tests·scripts뿐 아니라 package/compiler 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow를 해시한다. 기록 파일 자체는 digest field만 정규화하고 나머지를 포함하며 `R38`이 새로 계산해 대조하므로, 어떤 검증 입력이든 바꾸면 다시 돌려 다시 적어야 한다.
 
 **다음 작업**: S-02의 model 주도 기준(도구로 credential을 읽으려는 시도 등)과 S-03(turn 안의 boundary 귀속)은 실제 모델이 도는 환경을 요구한다. 범위는 [validation.md](implementation/validation.md)의 "남은 것"에 적었다.
 

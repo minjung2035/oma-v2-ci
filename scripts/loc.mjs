@@ -22,6 +22,15 @@ if (args.includes("--inventory-only")) {
   execFileSync("cloc", ["--list-file=production-files.txt", "--by-file", "--skip-uniqueness",
     "--read-lang-def=implementation/cloc-systemd.lang", "--json", "--out=production-loc.json"], { cwd: root });
   const report = JSON.parse(readFileSync(join(root, "production-loc.json"), "utf8"));
+  // cloc's elapsed/rate fields differ on every run and are not measurements.
+  // Remove them before the report is hashed so the same source and tool produce
+  // the same verification input rather than an artifact tied to wall-clock noise.
+  if (report.header) {
+    delete report.header.elapsed_seconds;
+    delete report.header.files_per_second;
+    delete report.header.lines_per_second;
+  }
+  writeFileSync(join(root, "production-loc.json"), JSON.stringify(report, null, 2) + "\n");
   let sum = 0;
   for (const file of files) {
     const row = report[file] ?? report[`./${file}`];

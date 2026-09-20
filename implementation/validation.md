@@ -4,9 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `c553730`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `e0e5567`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-실행한 source: executed source digest `a124d304d21813ff205cd98f53d1e5e75e931b1517badf5a741ed6d3a633477d` (465 files). `src`·`test`·`scripts` 아래 모든 파일과 `implementation/contracts.ts`의 경로와 내용을 경로 순으로 해시한 값이다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 바이트를 돌렸는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. source가 바뀌었는데 다시 돌려 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `e5bb25a8e263ed2f16fa7900459be670fe6b8135c408796acd542c388c2622b8` (521 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -16,10 +16,16 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1110/1110 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1114/1114 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
-| `node scripts/loc.mjs` | **215 files / 20,080 code LOC** |
+| `npm run verify:fast` | PASS, EXECUTED |
+| `npm run verify:durable` | PASS, EXECUTED |
+| `npm run verify:property` | PASS, EXECUTED |
+| `npm run verify:stress` | PASS, EXECUTED |
+| `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
+| GitHub Actions current-SHA | NOT_OBSERVED (push 전이며, 이 세션의 `gh` 인증 없음) |
+| `node scripts/loc.mjs` | **216 files / 20,192 code LOC** |
 
 ### 현재 범위
 
@@ -332,11 +338,13 @@ society에 요청하지도 못하면서 같은 `principal/private`와 같은 ses
 않고 같은 상태를 보는 Control Panel로 남으며 화면이 이유를 적는다.
 되돌리면 "a second Principal engine was started for a society this process does not own"으로 실패한다.
 
-**검증 기록이 실행한 source에 묶여 있지 않았다.** 기준 HEAD 줄이 두 커밋 전(`80fedd1`)에 멈춰 있었고, 애초에 commit 이름은 어느
-revision을 뜻했는지만 말하지 어떤 바이트를 돌렸는지는 말하지 않는다. 기준 HEAD를 고치고, 그와 별개로 **executed source digest**를
-기록한다 — `src`·`test`·`scripts` 아래 모든 파일과 `implementation/contracts.ts`의 경로와 내용을 경로 순으로 해시한 값이다(`scripts/source-digest.mjs`, 생성된
-목록이 아니라 실제 순회이고 symlink는 거절한다). `R38`이 이 값을 새로 계산해 대조하므로, source를 바꾸고 다시 돌려 다시 적지
-않으면 실패한다. 값을 한 글자만 바꿔도 "the validation record names a source digest that is not this tree's"로 실패한다.
+**검증 기록이 판정을 결정하는 입력에 묶여 있지 않았다.** commit 이름은 어느 revision을 뜻했는지만 말하지 어떤 working-tree
+바이트를 돌렸는지는 말하지 않는다. 실행 source만 해시해도 `package.json`의 test script, TypeScript strict 옵션, production manifest,
+owner/trace/spec 또는 workflow가 바뀐 사실을 놓친다. 그래서 **verification input digest**를 기록한다 — 실행 source·tests·scripts뿐
+아니라 로컬 gate를 결정하는 package/compiler 설정, production/LOC 입력, implementation 계약·owner·trace·systemd·문서, CI workflow를
+실제 순회해 포함한다(`scripts/source-digest.mjs`; symlink 거절). 기록 파일 자체는 이 digest field만 정규화해 self-reference를 끊고
+나머지는 포함한다. 대표 입력 mutation과 새 implementation 파일 추가가 digest를 바꾸며 runtime output은 바꾸지 않는다는 `R38`을
+추가했다. 다시 실행해 다시 적지 않으면 "the validation record names verification inputs that are not this tree's"로 실패한다.
 
 ### 남은 것
 
@@ -406,7 +414,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **215 files / 20,080 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **216 files / 20,192 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

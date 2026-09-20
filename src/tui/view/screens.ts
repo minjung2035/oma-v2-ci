@@ -60,7 +60,7 @@ function conversation(input: ViewInput, notice: string | null): string[] {
   for (const line of visible) lines.push(line);
   lines.push("─".repeat(Math.max(0, columns)));
   if (notice !== null) lines.push(fit(notice, columns));
-  lines.push(fit(`> ${state.prompt}`, columns));
+  lines.push(fit(`> ${state.prompt.text}`, columns));
   lines.push(fit("Ctrl+X 관리 화면 · Ctrl+C 종료", columns));
   return frame(lines, rows, columns);
 }

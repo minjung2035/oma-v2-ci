@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { collectProductionFiles, writeProductionInventory, assertProductionInventory, assertMeasurementCurrent, measureWithCloc } from "../scripts/production-inventory.mjs";
-import { EXECUTED_SOURCE_ROOTS, executedSourceDigest } from "../scripts/source-digest.mjs";
+import { VERIFICATION_INPUT_ROOTS, VERIFICATION_OUTPUT_EXCLUSIONS, verificationInputDigest, verificationInputFiles } from "../scripts/source-digest.mjs";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
@@ -197,28 +197,76 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
   } finally { f.close(); }
 });
 
-test("R38: the executed source closure includes the shared production contract", () => {
-  // This TypeScript file is compiled into every build even though it lives
-  // outside src/. Omitting it would let an executable contract change keep an
-  // earlier run's digest and results looking current.
-  assert.deepEqual(EXECUTED_SOURCE_ROOTS, [
-    "src", "test", "scripts", "implementation/contracts.ts",
+test("R38: the verification closure includes every class of local gate input", () => {
+  assert.deepEqual(VERIFICATION_INPUT_ROOTS, [
+    "src", "test", "scripts", "implementation", ".github/workflows",
+    "architecture.md", "implementation-spec.md", "package.json", "package-lock.json",
+    "tsconfig.json", "tsconfig.build.json", "production-manifest.json", "production-files.txt",
+    "production-loc.json", "production-loc-hashes.json",
   ]);
+  assert.deepEqual(VERIFICATION_OUTPUT_EXCLUSIONS, [
+    "implementation/evidence/runtime-tests.log", "implementation/adversarial-review.md",
+  ]);
+  const files = verificationInputFiles(REPO);
+  for (const required of [
+    "src/tui/keys.ts", "test/tui-app.test.ts", "scripts/test-local.mjs",
+    "implementation/contracts.ts", "implementation/schema-v1.sql",
+    "implementation/systemd/resident.service.in", "implementation/cloc-systemd.lang",
+    "implementation/source-owners.json", "implementation/traceability.json",
+    "implementation/validation.md", "implementation/evidence/dependency-graph.json",
+    "implementation/tests/contracts.type-test.ts", "architecture.md", "implementation-spec.md",
+    "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json",
+    "production-manifest.json", "production-files.txt", "production-loc.json",
+    "production-loc-hashes.json", ".github/workflows/architecture-verification.yml",
+  ]) assert.ok(files.includes(required), required);
+  assert.equal(files.includes("implementation/evidence/runtime-tests.log"), false);
+  assert.equal(files.includes("implementation/adversarial-review.md"), false);
 });
 
-test("R38: the validation record names the source that was run, by its bytes", () => {
-  // The record calls itself the single owner of current verification status.
-  // A commit name in it says which revision was meant; it does not say which
-  // bytes were run, and a line left behind by an earlier commit reads exactly
-  // like a current one. The digest is the bytes, so a source change that is
-  // not re-run and re-recorded fails here instead of leaving an earlier tree's
-  // figures looking current.
+test("R38: package, compiler, owner, spec and workflow changes all change the verification digest", () => {
+  const f = fixture();
+  try {
+    for (const root of VERIFICATION_INPUT_ROOTS) {
+      if (["src", "test", "scripts", "implementation", ".github/workflows"].includes(root))
+        f.put(`${root}/fixture.ts`);
+      else f.put(root, `${root}\n`);
+    }
+    for (const file of [
+      "implementation/source-owners.json", "implementation/validation.md",
+      "implementation/evidence/dependency-graph.json", "implementation/systemd/resident.service.in",
+      ".github/workflows/architecture-verification.yml",
+    ]) f.put(file, `${file}\n`);
+    const before = verificationInputDigest(f.root);
+    for (const file of ["package.json", "tsconfig.json", "implementation/source-owners.json", "implementation-spec.md", ".github/workflows/architecture-verification.yml"]) {
+      const original = readFileSync(join(f.root, file));
+      f.put(file, Buffer.concat([original, Buffer.from("changed\n")]));
+      assert.notDeepEqual(verificationInputDigest(f.root), before, file);
+      f.put(file, original);
+      assert.deepEqual(verificationInputDigest(f.root), before, `${file} did not restore`);
+    }
+    const validation = readFileSync(join(f.root, "implementation/validation.md"), "utf8");
+    f.put("implementation/validation.md", validation.replace("implementation/validation.md", "changed validation input"));
+    assert.notDeepEqual(verificationInputDigest(f.root), before);
+    f.put("implementation/validation.md", "verification input digest `" + "f".repeat(64) + "` (999 files)\n");
+    const selfA = verificationInputDigest(f.root);
+    f.put("implementation/validation.md", "verification input digest `" + "0".repeat(64) + "` (1 files)\n");
+    assert.deepEqual(verificationInputDigest(f.root), selfA, "the recorded digest field must be normalized");
+    const outputBefore = verificationInputDigest(f.root);
+    f.put("implementation/evidence/runtime-tests.log", "new runtime output\n");
+    f.put("implementation/adversarial-review.md", "generated report changed\n");
+    assert.deepEqual(verificationInputDigest(f.root), outputBefore, "verification outputs entered their own input digest");
+    f.put("implementation/new-gate-input.json", "new input\n");
+    assert.notDeepEqual(verificationInputDigest(f.root), outputBefore, "a new implementation input was omitted");
+  } finally { f.close(); }
+});
+
+test("R38: the validation record names the verification inputs that were run, by their bytes", () => {
   const record = readFileSync(new URL("../implementation/validation.md", import.meta.url), "utf8");
-  const quoted = [...record.matchAll(/executed source digest `([0-9a-f]{64})` \((\d+) files\)/g)]
+  const quoted = [...record.matchAll(/verification input digest `([0-9a-f]{64})` \((\d+) files\)/g)]
     .map(([, value, files]) => ({ digest: value, files: Number(files) }));
-  assert.equal(quoted.length, 1, "the validation record names no executed source digest, or more than one");
-  assert.deepEqual(quoted[0], executedSourceDigest(REPO),
-    "the validation record names a source digest that is not this tree's");
+  assert.equal(quoted.length, 1, "the validation record names no verification input digest, or more than one");
+  assert.deepEqual(quoted[0], verificationInputDigest(REPO),
+    "the validation record names verification inputs that are not this tree's");
 });
 
 test("R38: the figures the validation record quotes are the ones the artifact holds", () => {

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { evaluateExecution, validateCrashObservation, lanes, unrunDirectives, unrunTests } from "../scripts/verification-lanes.mjs";
 const healthy = ["TAP version 13", "1..2", "ok 1 - critical oracle", "ok 2 - second oracle", "# tests 2", "# pass 2", "# fail 0", "# cancelled 0", "# skipped 0", "# todo 0", ""].join("\n");
 const evaluate = tap => evaluateExecution({ exitCode: 0, tap, requiredNames: ["critical oracle"], baselineNames: ["critical oracle", "second oracle"] });
@@ -26,6 +27,16 @@ test("R35 death evidence requires reached boundary, SIGKILL and restart independ
   assert.ok(lanes.crash.proof.includes("not an entrypoint-crash"));
   assert.ok(lanes.crash.proof.includes("VM-power-loss"));
   assert.equal(lanes.kernel.environment, "systemd");
+});
+
+test("R35 every verification lane names a current test source", () => {
+  for (const [laneName, lane] of Object.entries(lanes)) {
+    if (lane.files !== "all")
+      for (const file of lane.files)
+        assert.ok(existsSync(new URL(file.replace(/\.js$/, ".ts"), import.meta.url)), `${laneName}: ${file}`);
+    for (const file of lane.sourceFiles)
+      assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${laneName}: ${file}`);
+  }
 });
 
 test("R35 the local suite's own summary is read the same way a lane's is", () => {

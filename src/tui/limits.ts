@@ -25,6 +25,8 @@ export const TERMINAL_BOUNDS = Object.freeze({
   minRows: bound(6, "lines", "conversation, divider, prompt and hint need this many"),
   assumedColumns: bound(80, "cells", "used when the stream reports no width"),
   assumedRows: bound(24, "lines", "used when the stream reports no height"),
+  escapeSequenceBytes: bound(64, "bytes", "an incomplete terminal report must not grow without limit"),
+  escapeDelayMs: bound(50, "count", "milliseconds allowed to distinguish a lone Escape key from a split terminal report"),
 });
 
 export const CONVERSATION_BOUNDS = Object.freeze({

@@ -193,6 +193,7 @@ src/tui/exit.ts
 src/tui/keys.ts
 src/tui/limits.ts
 src/tui/model.ts
+src/tui/prompt.ts
 src/tui/screen.ts
 src/tui/session.ts
 src/tui/sources/extensions.ts

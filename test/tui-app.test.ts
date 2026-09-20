@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TuiApp, type AppPorts } from "../src/tui/app.js";
-import { decodeKeys } from "../src/tui/keys.js";
+import { decodeKeys, KeyDecoder } from "../src/tui/keys.js";
 import { StoreError } from "../src/domain/errors.js";
 import type { ConfigField, ExtensionRow, MailRow } from "../src/tui/model.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
@@ -128,13 +128,14 @@ test("arch 23.4: the Control Panel overlays the conversation and Ctrl+X returns 
   assert.match(h.last(), /작업 중/);
 });
 
-test("TUI-011: the Mail detail shows the message body and Esc returns to the list", () => {
+test("TUI-011: the Mail detail shows the message body and Esc returns to the list", async () => {
   const h = harness();
   for (const chunk of [CTRL_X, RIGHT, RIGHT, ENTER]) h.app.feed(chunk);
   const detail = h.last();
   assert.match(detail, /From: worker-a/);
   assert.match(detail, /본문/);
   h.app.feed(Buffer.from(ESC));
+  await new Promise(resolve => setTimeout(resolve, 70));
   assert.match(h.last(), /API 선택 필요/);
 });
 
@@ -171,31 +172,39 @@ test("the declared transcript bound holds for the Human's own prompts too", () =
   assert.equal(h.app.lines.at(-1), `> p${keep + 199}`);
 });
 
-test("T120 / TUI-023: a prompt stops growing at its UTF-8 byte bound rather than letting one paste decide", () => {
+test("T120 / TUI-023: an oversized paste is rejected as a whole instead of submitting its prefix", () => {
   const h = harness();
   const cap = CONVERSATION_BOUNDS.promptBytes.value;
-  // A paste arrives as keys, so this is the same path a paste takes. Korean
-  // text makes a character-count limit visibly insufficient.
   const input = "가".repeat(Math.ceil(cap / 3) + 500);
   h.app.feed(Buffer.from(input));
-  assert.equal(Buffer.byteLength(h.app.snapshot.prompt, "utf8"), Math.floor(cap / 3) * 3,
-    "the prompt grew past its declared UTF-8 byte bound");
+  assert.equal(Buffer.byteLength(h.app.snapshot.prompt.text, "utf8"), Math.floor(cap / 3) * 3,
+    "the retained draft grew past its declared UTF-8 byte bound");
+  assert.equal(h.app.snapshot.prompt.overflow, true);
+  assert.match(h.last(), /입력 한도 초과/);
   h.app.feed(ENTER);
-  assert.deepEqual(h.prompts, ["가".repeat(Math.floor(cap / 3))]);
+  assert.deepEqual(h.prompts, [], "a bounded prefix must not impersonate the complete paste");
+  assert.match(h.last(), /전송하지 않습니다/);
+
+  h.app.key({ kind: "backspace" });
+  assert.equal(h.app.snapshot.prompt.overflow, false);
+  assert.doesNotMatch(h.last(), /입력 한도 초과/);
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, ["가".repeat(Math.floor(cap / 3) - 1)]);
 });
 
-test("T120 / TUI-023: prompt admission includes JSON escaping and the configured Pi frame", () => {
+test("T120 / TUI-023: JSON escaping overflow rejects the whole prompt", () => {
   const frameBytes = 96;
   const h = harness({}, frameBytes);
   h.app.feed(Buffer.from("\\".repeat(100)));
-  const prompt = h.app.snapshot.prompt;
+  const prompt = h.app.snapshot.prompt.text;
   assert.ok(Buffer.byteLength(prompt, "utf8") <= humanPromptByteLimit(frameBytes));
   assert.ok(humanPromptFrameBytes(prompt) <= frameBytes,
-    `the serialized prompt used ${humanPromptFrameBytes(prompt)} bytes of a ${frameBytes}-byte frame`);
+    `the retained prompt used ${humanPromptFrameBytes(prompt)} bytes of a ${frameBytes}-byte frame`);
   assert.ok(humanPromptFrameBytes(`${prompt}\\`) > frameBytes,
     "the fixture did not reach the JSON-escaping boundary");
+  assert.equal(h.app.snapshot.prompt.overflow, true);
   h.app.feed(ENTER);
-  assert.deepEqual(h.prompts, [prompt]);
+  assert.deepEqual(h.prompts, []);
 });
 
 test("Ctrl+C unwinds edit, then detail, then the panel before it quits", () => {
@@ -212,11 +221,45 @@ test("Ctrl+C unwinds edit, then detail, then the panel before it quits", () => {
   assert.deepEqual(h.quits, [1]);
 });
 
-test("decoded input reaches the app as whole keys even when a sequence is split", () => {
+test("TUI-002: UTF-8 and CSI tokens survive every terminal read boundary", () => {
+  const korean = Buffer.from("가");
+  for (let split = 1; split < korean.length; split += 1) {
+    const decoder = new KeyDecoder();
+    assert.deepEqual(decoder.push(korean.subarray(0, split)), []);
+    assert.deepEqual(decoder.push(korean.subarray(split)), [{ kind: "char", value: "가" }]);
+  }
+
+  const csi = Buffer.from(`${ESC}[C`);
+  for (let split = 1; split < csi.length; split += 1) {
+    const decoder = new KeyDecoder();
+    assert.deepEqual([
+      ...decoder.push(csi.subarray(0, split)),
+      ...decoder.push(csi.subarray(split)),
+    ], [{ kind: "right" }], `split at byte ${split}`);
+  }
+
   const h = harness();
   h.app.feed(CTRL_X);
-  // A single read carrying two arrows must move twice, not once.
-  h.app.feed(Buffer.from(`${ESC}[C${ESC}[C`));
-  assert.equal(h.app.snapshot.category, 2);
-  assert.deepEqual(decodeKeys(Buffer.from(`${ESC}[C${ESC}[C`)), [{ kind: "right" }, { kind: "right" }]);
+  h.app.feed(Buffer.from(ESC));
+  h.app.feed(Buffer.from("["));
+  h.app.feed(Buffer.from("C"));
+  assert.equal(h.app.snapshot.category, 1);
+  assert.equal(h.app.snapshot.prompt.text, "", "the CSI final byte leaked into the prompt");
+});
+
+test("TUI-002: malformed and overlong terminal reports stay bounded and never become prompt text", () => {
+  const decoder = new KeyDecoder();
+  const prefix = Buffer.from(`${ESC}[`);
+  assert.deepEqual(decoder.push(prefix), []);
+  for (let index = 0; index < 10_000; index += 1)
+    assert.deepEqual(decoder.push(Buffer.from("1")), []);
+  assert.deepEqual(decoder.push(Buffer.from("~safe")), [
+    { kind: "char", value: "s" }, { kind: "char", value: "a" },
+    { kind: "char", value: "f" }, { kind: "char", value: "e" },
+  ]);
+  assert.deepEqual(decoder.finish(), []);
+
+  const unknown = new KeyDecoder();
+  assert.deepEqual(unknown.push(Buffer.from(`${ESC}[200`)), []);
+  assert.deepEqual(unknown.push(Buffer.from("~x")), [{ kind: "char", value: "x" }]);
 });

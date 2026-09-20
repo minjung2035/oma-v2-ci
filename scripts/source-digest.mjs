@@ -1,35 +1,92 @@
-// The identity of the source a verification run covered.
+// The identity of every authored or generated input whose bytes determine the
+// local verification result.
 //
-// A record that names a commit says which revision was meant; it does not say
-// which bytes were run, and a stale line in it is indistinguishable from a
-// current one. This digest is the bytes: every file under the executed source
-// roots, by path and content, in path order. Recording it beside a run's
-// results makes the two verifiable together -- a source change that is not
-// re-run and re-recorded fails, instead of leaving figures from an earlier
-// tree looking current.
+// A commit says which revision was intended; it does not say which working-tree
+// bytes were measured. Hashing only executable source is also insufficient:
+// package scripts choose the gates, TypeScript options choose what they mean,
+// normative/owner inventories choose what must be proven, and the production
+// manifests and LOC records choose what A-008 reports.
 //
+// `implementation/validation.md` is both a normative input and the output that
+// records this digest. Its one digest field is normalized before hashing to
+// break that self-reference; every other byte remains an input. Runtime logs
+// and the generated adversarial report are outputs. The generated dependency
+// graph is included because the architecture gate reads and compares its bytes.
 // Importing this module measures nothing and writes nothing.
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { digest, sourceFiles } from "./traceability.mjs";
 
-/** What a run executes: production and test sources, their shared contract,
- * and the tools that run them. Documents are fingerprinted clause by clause in
- * the trace inventory and are not repeated here. */
-export const EXECUTED_SOURCE_ROOTS = Object.freeze([
-  "src", "test", "scripts", "implementation/contracts.ts",
+export const VERIFICATION_INPUT_ROOTS = Object.freeze([
+  "src",
+  "test",
+  "scripts",
+  "implementation",
+  ".github/workflows",
+  "architecture.md",
+  "implementation-spec.md",
+  "package.json",
+  "package-lock.json",
+  "tsconfig.json",
+  "tsconfig.build.json",
+  "production-manifest.json",
+  "production-files.txt",
+  "production-loc.json",
+  "production-loc-hashes.json",
 ]);
 
-/** The digest of the executed source, with the file count it covers.
- *
- * Real traversal, not a generated manifest: a file added and never listed would
- * otherwise leave the digest unchanged. `sourceFiles` refuses symlinks, so the
- * set cannot be widened or narrowed by a link.
+export const VERIFICATION_OUTPUT_EXCLUSIONS = Object.freeze([
+  "implementation/evidence/runtime-tests.log",
+  "implementation/adversarial-review.md",
+]);
+const EXCLUDED = new Set(VERIFICATION_OUTPUT_EXCLUSIONS);
+const VALIDATION_DIGEST = /verification input digest `[0-9a-f]{64}` \(\d+ files\)/g;
+
+function verificationBytes(root, file) {
+  const bytes = readFileSync(join(root, file));
+  if (file !== "implementation/validation.md") return bytes;
+  return Buffer.from(bytes.toString("utf8").replace(
+    VALIDATION_DIGEST,
+    "verification input digest `<self>` (<files> files)",
+  ));
+}
+
+function implementationFiles(root) {
+  const relative = "implementation";
+  const path = join(root, relative);
+  const stat = lstatSync(path);
+  if (stat.isSymbolicLink() || !stat.isDirectory())
+    throw new Error("implementation verification root must be a directory, not a symlink");
+  // `sourceFiles(root, "implementation")` intentionally omits evidence for the
+  // compliance checker. Verification has a different closure: descend from
+  // each child so the dependency graph is included, then remove only named
+  // outputs. A new implementation input is included without editing this list.
+  return readdirSync(path).sort()
+    .flatMap(name => sourceFiles(root, `${relative}/${name}`))
+    .filter(file => !EXCLUDED.has(file));
+}
+
+/** Real traversal, not a generated manifest: adding an input beneath a root
+ * changes the closure without editing another list. `sourceFiles` rejects
+ * symlinks, and duplicate paths are rejected instead of counted twice.
  */
-export function executedSourceDigest(root = ".") {
-  const files = EXECUTED_SOURCE_ROOTS.flatMap(directory => sourceFiles(root, directory)).sort();
+export function verificationInputFiles(root = ".") {
+  const files = VERIFICATION_INPUT_ROOTS
+    .flatMap(relative => relative === "implementation"
+      ? implementationFiles(root)
+      : sourceFiles(root, relative))
+    .filter(file => !EXCLUDED.has(file))
+    .sort();
+  if (new Set(files).size !== files.length)
+    throw new Error("duplicate verification input path");
+  return files;
+}
+
+export function verificationInputDigest(root = ".") {
+  const files = verificationInputFiles(root);
   const hash = createHash("sha256");
-  for (const file of files) hash.update(`${file} ${digest(readFileSync(join(root, file)))}\n`);
+  for (const file of files)
+    hash.update(`${file} ${digest(verificationBytes(root, file))}\n`);
   return { files: files.length, digest: hash.digest("hex") };
 }

@@ -135,11 +135,20 @@ test("arch 23.4: Esc leaves a detail screen before it closes the panel", () => {
 
 test("conversation keys build a prompt and submit it exactly once", () => {
   const typed = drive(INITIAL, [KEY.char("h"), KEY.char("i"), KEY.char("!"), KEY.backspace]);
-  assert.equal(typed.state.prompt, "hi");
+  assert.equal(typed.state.prompt.text, "hi");
   const submitted = step(typed.state, KEY.enter, data, FRAME_BYTES);
   assert.deepEqual(submitted.effects, [{ kind: "submit-prompt", text: "hi" }]);
-  assert.equal(submitted.state.prompt, "");
+  assert.equal(submitted.state.prompt.text, "");
   assert.deepEqual(step(submitted.state, KEY.enter, data, FRAME_BYTES).effects, []);
+});
+
+test("conversation Backspace removes one grapheme without leaving broken Unicode", () => {
+  for (const value of ["😀", "e\u0301", "👨‍👩‍👧‍👦"]) {
+    const typed = drive(INITIAL, [KEY.char("a"), ...[...value].map(KEY.char)]);
+    const erased = step(typed.state, KEY.backspace, data, FRAME_BYTES).state;
+    assert.equal(erased.prompt.text, "a", `did not remove one grapheme: ${value}`);
+    assert.equal(erased.prompt.text.includes("\uFFFD"), false);
+  }
 });
 
 test("cursors stay valid when the underlying data shrinks to empty", () => {

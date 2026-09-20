@@ -196,6 +196,7 @@
   "src/tui/keys.ts",
   "src/tui/limits.ts",
   "src/tui/model.ts",
+  "src/tui/prompt.ts",
   "src/tui/screen.ts",
   "src/tui/session.ts",
   "src/tui/sources/extensions.ts",
@@ -1415,11 +1416,11 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 53
+   "files": 54
   }
  ],
- "files": 216,
- "runtimeEdges": 774,
+ "files": 217,
+ "runtimeEdges": 778,
  "typeOnlyEdges": 306,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 205,
@@ -1432,11 +1433,11 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 36,
-  "L5-entry -> L1-kernel": 64,
+  "L5-entry -> L1-kernel": 65,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
   "L5-entry -> L4-orchestration": 19,
-  "L5-entry -> L5-entry": 101
+  "L5-entry -> L5-entry": 104
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1469,7 +1470,7 @@
   "src/process/policies.ts": 12,
   "src/storage/directory.ts": 12,
   "src/storage/receipt-projector.ts": 10,
-  "src/domain/context-policy.ts": 9
+  "src/tui/limits.ts": 10
  },
  "fanOut": {
   "src/broker.ts": 28,
