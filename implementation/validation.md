@@ -4,9 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `6c3c869`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `8df5ac8`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `a896186d6952254302e5bb7eec815d7d1d96fd80d55336c4504dd52056f5734c` (521 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `9947c83916905bb705e524d101e4b24f780c3c9b89d67bddfb0caacc4fcf8800` (521 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -337,6 +337,20 @@ credential이 없다. 다른 `oma`가 이미 Principal session을 돌리는 경�
 society에 요청하지도 못하면서 같은 `principal/private`와 같은 session 기록의 두 번째 writer가 된다. 이제 그 경우 engine을 시작하지
 않고 같은 상태를 보는 Control Panel로 남으며 화면이 이유를 적는다.
 되돌리면 "a second Principal engine was started for a society this process does not own"으로 실패한다.
+
+**터미널 read를 key 경계로 취급했다.** UTF-8 code point와 CSI가 read 사이에서 나뉘면 문자가 깨지거나 escape tail이 prompt로
+들어갔다. app 수명의 `KeyDecoder`가 두 종류의 partial state를 이어받고, 미완료 report는 64 bytes까지만 보유한 뒤 final byte까지
+discard한다. 한국어와 CSI의 모든 byte split, 10,000-byte report, unknown report로 확인했다. app이 chunk마다 decoder를 새로 만들게
+되돌리면 split oracle이 실패한다.
+
+**Backspace와 초과 prompt가 Human의 요청 경계를 보존하지 않았다.** UTF-16 code unit 삭제는 supplementary·combining·ZWJ grapheme을
+손상했고, 한도를 넘은 paste는 보관된 prefix를 완전한 요청처럼 제출했다. `PromptDraft`가 text와 overflow를 함께 소유하고 grapheme
+단위 편집·admission·submission을 한 state machine으로 처리한다. overflow 상태의 Enter는 submit 0회이며 notice를 남기고, Backspace로
+상태를 해제한 뒤에만 제출한다. `slice(0, -1)` 또는 prefix submit을 복원하면 각각 Unicode와 whole-prompt oracle이 실패한다.
+
+**fast verification lane이 이미 삭제된 R27 test를 요구했다.** 그 lane은 모든 precheck를 통과한 뒤 test 실행 전에 `SETUP_FAILED`가
+되어 실제로는 한 번도 PASS할 수 없었다. 삭제된 제품 기능의 test/name requirement를 lane에서 제거하고, 모든 lane의 선언이 현재 test
+source를 가리키는지 검증하는 inventory regression을 추가했다.
 
 **검증 기록이 판정을 결정하는 입력에 묶여 있지 않았다.** commit 이름은 어느 revision을 뜻했는지만 말하지 어떤 working-tree
 바이트를 돌렸는지는 말하지 않는다. 실행 source만 해시해도 `package.json`의 test script, TypeScript strict 옵션, production manifest,
