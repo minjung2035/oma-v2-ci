@@ -18,12 +18,22 @@ function worded(notice: Notice): string {
       // value looking like it changed.
       return `저장하지 못했습니다: ${notice.message}`;
     case "send-failed":
-      // Nothing was sent and the text is still in the prompt, so the message
-      // says both: a bare failure would leave the Human unsure whether to
-      // retype it.
-      return `전송하지 못했습니다: ${notice.message} · 입력은 그대로 남겨 두었습니다.`;
+      // Nothing was sent, and the message says where the text went: a bare
+      // failure would leave the Human unsure whether to retype it. Where the
+      // text went comes before why it failed, because this line is cut to the
+      // screen's width and the cause is the only part of it the engine can
+      // make arbitrarily long. Cut, the Human loses the reason but keeps the
+      // recovery; the other order loses the recovery.
+      return notice.kept === "draft"
+        ? `전송하지 못했습니다 · 입력은 그대로 있습니다: ${notice.message}`
+        : `전송하지 못했습니다 · 대화에 남겨 두었습니다: ${notice.message}`;
     case "prompt-limit":
-      return "입력 한도 초과 · 전송하지 않습니다. Backspace로 줄여 주세요.";
+      // The way out differs by cause, so the wording does. Telling the Human
+      // to press Backspace after a refused paste would have them delete their
+      // own last character to recover from a paste that added none.
+      return notice.cause === "paste"
+        ? "붙여넣기 한도 초과 · 아무것도 입력되지 않았습니다. 계속 입력하거나 나눠서 붙여넣어 주세요."
+        : "입력 한도 초과 · 전송하지 않습니다. Backspace로 줄여 주세요.";
     case "text":
       return notice.text;
     default:

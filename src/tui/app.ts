@@ -94,6 +94,26 @@ export class TuiApp {
 
   note(text: string | null): void { this.notice = text === null ? null : { kind: "text", text }; this.draw(); }
 
+  /** A prompt the session took but could not deliver, named and given back.
+   *
+   * A prompt that waited for a running turn was echoed as sent when it was
+   * taken, so a later failure has to say which one it was: `⚠ 전송하지
+   * 못했습니다` under three echoed prompts names none of them. The text is
+   * written into the conversation as not sent -- the transcript owns its own
+   * bounds, and a long prompt is stored as several lines rather than cut -- and
+   * is put back into the draft when the draft is empty, so the usual case
+   * needs no retyping at all. A draft with something in it is the Human's and
+   * is not overwritten; the conversation still holds the text to copy from.
+   */
+  returnPrompt(text: string, reason: string): void {
+    this.append(`✗ 보내지 못한 입력: ${text.replace(/\n/g, "\n  ")}`);
+    const draft = this.state.prompt;
+    const empty = draft.text.length === 0 && draft.overflow === null;
+    if (empty) this.state = { ...this.state, prompt: returnedPrompt(text) };
+    this.notice = { kind: "send-failed", message: reason, kept: empty ? "draft" : "conversation" };
+    this.draw();
+  }
+
   feed(chunk: Uint8Array): void {
     // One decoder lives as long as the app: terminal reads are neither UTF-8,
     // escape-sequence nor paste boundaries. Whatever the decoder has started
@@ -154,7 +174,7 @@ export class TuiApp {
           const outcome = this.ports.submitPrompt(effect.text);
           if (outcome.kind === "refused") {
             this.state = { ...this.state, prompt: returnedPrompt(effect.text) };
-            this.notice = { kind: "send-failed", message: outcome.reason };
+            this.notice = { kind: "send-failed", message: outcome.reason, kept: "draft" };
             return;
           }
           this.notice = null;
@@ -164,7 +184,7 @@ export class TuiApp {
           return;
         }
         case "prompt-limit":
-          if (effect.active) this.notice = { kind: "prompt-limit" };
+          if (effect.active) this.notice = { kind: "prompt-limit", cause: effect.cause };
           else if (this.notice?.kind === "prompt-limit") this.notice = null;
           return;
         case "quit":

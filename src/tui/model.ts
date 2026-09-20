@@ -8,7 +8,7 @@
  */
 import type { Key } from "./keys.js";
 import { CONFIG_BOUNDS } from "./limits.js";
-import { EMPTY_PROMPT, appendPrompt, erasePrompt, pastePrompt, submitPrompt, type PromptDraft, type PromptTransition } from "./prompt.js";
+import { EMPTY_PROMPT, appendPrompt, erasePrompt, pastePrompt, submitPrompt, type PromptDraft, type PromptOverflow, type PromptTransition } from "./prompt.js";
 import { assertNever } from "../domain/exhaustive.js";
 
 export type Category = "dashboard" | "config" | "mail";
@@ -72,8 +72,11 @@ export type Notice =
   | { readonly kind: "saved"; readonly label: string; readonly value: string; readonly apply: ApplyScope | null }
   | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "save-failed"; readonly message: string }
-  | { readonly kind: "send-failed"; readonly message: string }
-  | { readonly kind: "prompt-limit" }
+  /** `kept` says where the text that was not sent now is, because a message
+   * that says neither leaves the Human unsure whether to retype it. */
+  | { readonly kind: "send-failed"; readonly message: string; readonly kept: "draft" | "conversation" }
+  /** Why the draft refused, because the way out of each cause differs. */
+  | { readonly kind: "prompt-limit"; readonly cause: PromptOverflow }
   | { readonly kind: "text"; readonly text: string };
 
 export interface PanelData {
@@ -108,7 +111,8 @@ export type Effect =
   | { readonly kind: "set-number"; readonly field: string; readonly value: number }
   | { readonly kind: "set-extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "submit-prompt"; readonly text: string }
-  | { readonly kind: "prompt-limit"; readonly active: boolean }
+  | { readonly kind: "prompt-limit"; readonly active: true; readonly cause: PromptOverflow }
+  | { readonly kind: "prompt-limit"; readonly active: false }
   | { readonly kind: "quit" };
 
 export interface Step { readonly state: State; readonly effects: readonly Effect[] }
@@ -296,7 +300,7 @@ function conversationTransition(state: State, result: PromptTransition): Step {
     case "none":
       return { state: next, effects: [] };
     case "show-limit":
-      return { state: next, effects: [{ kind: "prompt-limit", active: true }] };
+      return { state: next, effects: [{ kind: "prompt-limit", active: true, cause: result.cause }] };
     case "clear-limit":
       return { state: next, effects: [{ kind: "prompt-limit", active: false }] };
     case "submit":
@@ -320,7 +324,7 @@ function stepConversation(state: State, key: Key, frameBytes: number): Step {
     case "enter":
       return conversationTransition(state, submitPrompt(state.prompt));
     case "eof":
-      if (state.prompt.text.length > 0 || state.prompt.overflow) return { state, effects: [] };
+      if (state.prompt.text.length > 0 || state.prompt.overflow !== null) return { state, effects: [] };
       return { state: { ...state, quit: true }, effects: [{ kind: "quit" }] };
     default:
       return { state, effects: [] };

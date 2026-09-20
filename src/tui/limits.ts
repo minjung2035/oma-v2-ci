@@ -27,8 +27,10 @@ export const TERMINAL_BOUNDS = Object.freeze({
   assumedRows: bound(24, "lines", "used when the stream reports no height"),
   escapeSequenceBytes: bound(64, "bytes", "an incomplete terminal report must not grow without limit"),
   escapeDelayMs: bound(50, "count", "milliseconds allowed to distinguish a lone Escape key from a split terminal report"),
+  textDelayMs: bound(50, "count", "milliseconds allowed for the rest of a UTF-8 code point split across terminal reads"),
   pasteBytes: bound(16 * 1024, "bytes", "one bracketed paste the decoder assembles; a report that does not end within it is broken input, not a paste"),
   pasteIdleMs: bound(1000, "count", "milliseconds a started paste may stall before the decoder stops waiting for its end marker"),
+  pasteBurstMs: bound(50, "count", "milliseconds after a paste ends during which an Enter is the paste's own newline rather than a submission no Human pressed"),
 });
 
 export const CONVERSATION_BOUNDS = Object.freeze({

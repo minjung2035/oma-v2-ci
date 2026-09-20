@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "fdf2ec5810e595ad67dc6cf61fbadcbbede7f7c808761740638bb674c9913b3d",
-  "report": "a3f9bff297a2667efbef8dc48334759d5963140afea2b3f5a2810b189d97419c",
+  "report": "e1d44ad8f9789b71bfc9b5f85d1002791371f366a53d2d0c269afb7540fec7a2",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -293,7 +293,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "01d8368acfc7566ee802d3a86af8e4a3ce56369d05fb3816281363e61b078bf7"
+      "sha256": "9fee0b253b9fd2929e57b650926fe9ac7ea015311ef91268919e9a016ed22133"
     },
     {
       "path": "src/entry/runner.ts",
@@ -761,7 +761,7 @@
     },
     {
       "path": "src/tui/app.ts",
-      "sha256": "260ac5f61a65d4925e97dd9b47dab623423122f8a04bc4ca4156f75ed9d8a50a"
+      "sha256": "6d3460fabfc897b6a41ce2940a714bed1ce5f3e53bd5e7857742340a1b11b68e"
     },
     {
       "path": "src/tui/dashboard.ts",
@@ -773,19 +773,19 @@
     },
     {
       "path": "src/tui/keys.ts",
-      "sha256": "6877f10fb5bccdcbd3e34bef3a6795e0b14312674fd2ebc6e1f3863ff879e9de"
+      "sha256": "b00cff2554d09fd63a49441c01c74a7cfb56263697a37dfadb561449702d60fc"
     },
     {
       "path": "src/tui/limits.ts",
-      "sha256": "9bce0ae604d058ec8fba8e0dfbb3da233d96c7fdb8a597c9d3b7c7df81d36cf8"
+      "sha256": "83f1ca34c40df39c005bff93ecef6c07ddcd2f11d97c638fecf6f9f7d1dacb5c"
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "84d75b936cd5702469f36be4ed6551cad7f48a788fa3ff99e2b98f616cfef686"
+      "sha256": "a3da39b9fe9a0774ea7da8d9f4e0c85a754b7aba3dc234dbad8c000cb1b220c9"
     },
     {
       "path": "src/tui/prompt.ts",
-      "sha256": "de9a58473b52cdb6035e688a3885f2c2279a9a0aae72e128d9cb25f323fbc8e5"
+      "sha256": "8cffd45edd7e4dc219246e70b632bc13d732d6fad256e2d7ab87fbeac42ef04b"
     },
     {
       "path": "src/tui/screen.ts",
@@ -793,7 +793,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "2eeecb106d6cff842ec8fa78952310bc3cc6531f16fcef9f008bfb28668dc83e"
+      "sha256": "32d607dc8d8258d8dd7adb28f66a8b960bc19c20ec13c3e11ca95f5de11d66f5"
     },
     {
       "path": "src/tui/sources/extensions.ts",
@@ -833,7 +833,7 @@
     },
     {
       "path": "src/tui/view/notice.ts",
-      "sha256": "a6241343de6a00add168fc67986e97db2f430a7b1f489d429ca27d4d2b7e55ff"
+      "sha256": "ae7a2dafe16ff1581d1e7b5d3cf740d3a0c6a65f4fe6a1e56d155c33dc7188de"
     },
     {
       "path": "src/tui/view/screens.ts",

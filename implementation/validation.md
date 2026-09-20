@@ -6,7 +6,7 @@
 
 브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `07226da`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `c67653e59af4f9c923867df9574ffe3d83c5a778f1b7a5a08e1fcdcd63673a58` (523 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `a48974d965b3ced0c5fb84c6f6ccac6e5b7d787c3776b08b5acadb30b0d59c8f` (523 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -25,7 +25,7 @@
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
 | GitHub Actions current-SHA | NOT_OBSERVED (push 완료, 이 세션의 `gh` 인증 없음) |
-| `node scripts/loc.mjs` | **217 files / 20,342 code LOC** |
+| `node scripts/loc.mjs` | **217 files / 20,412 code LOC** |
 
 ### 현재 범위
 
@@ -396,6 +396,53 @@ Backspace로 초과 상태를 푼 뒤 타이핑이 정상으로 이어지는 것
 하나로 도착하는 것, SIGINT/SIGTERM/uncaughtException 경로가 모두 같은 복원을 거치는 것. **관측하지 못한 것**: paste가 매우 클 때의
 peak memory(최종 보유량만 관측했고 그 사실을 시험 주석에 적었다), bracketed paste를 지원하지 않는 terminal에서의 동작.
 
+### 제품 표면: 여덟 번째 감사에서 닫은 것
+
+**전송하지 못한 prompt가 어느 것인지 말하지 못했다.** run이 도는 동안 typed된 prompt는 host의 대기열에 들어가면서 그 자리에서
+`> text`로 화면에 그려진다 — 사람이 보기에는 이미 수락된 것이다. 그런데 나중에 그 write가 실패하면 화면에 남는 것은
+`⚠ 입력을 전송하지 못했습니다: ...` 한 줄뿐이었고, 대기하던 셋 중 무엇이 사라졌는지도, 다시 칠 원문도 남지 않았다. 수락을 동기로
+답하게 만든 일곱 번째 수정과 같은 이유로, 실패 보고도 **이름이 있어야 한다**. `SessionSink`에 `onPromptFailed(text, reason)`을
+두어 실패한 prompt가 자기 원문과 함께 돌아오고, 표면은 그것을 transcript에 `✗ 보내지 못한 입력: ...`으로 보존한 뒤 draft가 비어
+있으면 draft로 복원하며, 알림은 그 원문이 지금 어디에 있는지를 말한다. 사람이 그 사이에 다른 것을 치고 있었다면 draft는 건드리지
+않는다 — 되돌려 주는 일이 지금 쓰는 것을 덮어쓰면 그것은 복구가 아니라 두 번째 손실이다. 실패 사유는 문장이 아니라 원인만
+전달한다: 표면이 문장을 소유하고, `전송하지 못했습니다`를 두 겹으로 붙이면 "어디에 남았는지"가 화면 폭 밖으로 밀려난다(그 절단을
+실제로 한 번 만들었고, 시험이 그 꼬리를 보고 잡았다). 같은 절단이 두 번 나오지 않도록 알림의 순서도 바꿨다 — 그 줄은 화면 폭으로
+잘리고 길이를 engine이 정하는 부분은 사유뿐이므로, **어디에 남았는지를 사유보다 앞에** 둔다. 잘리면 사람은 사유를 잃고 복구 방법을
+남기며, 반대 순서는 그 반대다. 역검증은 4,000자짜리 사유로 실패를 보고해도 `입력은 그대로 있습니다`가 화면에 남고 어떤 줄도 폭을
+넘지 않는 것을 본다. 역검증은 대기열 `first`/`second`/`third` 중 `second`의 write만 실패시켜,
+실패 보고가 `second`를 그 원문과 함께 지목하고 `third`가 그대로 이어서 나가는 것을 본다.
+
+**bracketed paste의 안전이 terminal 구현에만 기대고 있었다.** DEC 2004는 terminal이 지키는 약속이다. clipboard가 스스로
+`ESC[201~`를 담고 있고 terminal이 그것을 그대로 흘리면, OMA는 그 지점에서 paste가 끝났다고 믿고 뒤따르는 개행을 사람이 누른
+Enter로 읽는다 — 사람이 읽지도 않은 텍스트가 제출되는, 일곱 번째 수정이 막으려던 바로 그 실패가 주입으로 되살아난다. 그래서 그
+약속에만 기대지 않는다. 첫째, 끝 표시 뒤 **같은 read에 남은 byte는 key가 아니라 그 paste의 내용으로 흡수한다**(그 read가 또 다른
+끝 표시를 반쯤 맞춘 채로 끝나면 그 byte들도 content로 되돌려 준다 — paste는 이 read에서 닫히므로 매칭을 마저 할 다음 read가 없고,
+버리면 clipboard의 텍스트가 조용히 사라진다. 이것은 이 수정 자체를 적대적으로 다시 읽다가 찾았고, 되돌림을 없애면 시험이
+`abcd[2` 대신 `abcd`를 보고 실패한다). 둘째, paste가 끝난
+뒤 선언된 burst(`pasteBurstMs`) 안에 도착한 Enter는 제출이 아니라 그 paste의 개행으로 읽는다 — 사람은 그 구간 안에 Enter를 누를 수
+없고, clipboard를 재생하는 terminal은 언제나 그 안에 있다. 대가는 그 구간에 실제로 누른 Enter가 한 번 텍스트가 되는 것이며, 그것은
+지연이지 제출이 아니다. 시간이 판정에 들어오므로 decoder의 clock을 주입 가능하게 만들어 시험이 경쟁 대신 사실을 진술한다. 역검증은
+burst가 지난 뒤의 같은 byte가 다시 `{kind:"enter"}`가 되는 것을 함께 본다 — 규칙이 만료되지 않고 Enter를 죽이면 그것도 실패다.
+
+**문서가 약속한 deadline이 분할 UTF-8에는 실제로 없었다.** 일곱 번째 수정은 "시작해 놓고 끝나지 않은 모든 token에 deadline"이라고
+적었지만, `pendingDelayMs`는 paste와 ESC/CSI만 보았다. 반쪽 code point를 들고 있는 상태는 `TextDecoder` 내부에만 있어서 decoder가
+스스로 관측할 수 없었기 때문이다. 이제 마지막 code point 길이만큼의 text byte를 따로 기억해 "지금 반쪽을 들고 있는가"를 decoder가
+답하고, 그 상태에도 단일 deadline이 붙는다. 포기할 때는 U+FFFD로 바꿔 prompt에 넣지 않고 기다리던 decode state와 함께 버린다 —
+아무도 누르지 않은 문자를 engine에 보내는 일이기 때문이며, terminal이 만들어 보낸 U+FFFD도 같은 이유로 key가 아니다. 시험은
+`ED 95`에서 deadline이 선언되는 것, `9C`가 오면 `한`이 되는 것, 오지 않으면 아무 문자도 남기지 않고 다음 byte가 자기 key가 되는
+것을 본다.
+
+**거절된 paste에서 빠져나오는 길이 사람의 글자를 지웠다.** 한도를 넘은 paste는 draft에 아무것도 더하지 않는다. 그런데 초과 상태는
+원인을 들고 있지 않았고, 화면은 언제나 "Backspace로 줄여 주세요"라고 안내했으며, Backspace는 언제나 grapheme 하나를 지웠다 —
+`hello`를 쳐 둔 사람이 큰 paste를 거절당한 뒤 안내대로 Backspace를 누르면 `hell`이 되었다. paste가 넣지도 않은 글자를 대신 낸
+것이다. 그래서 `PromptDraft.overflow`를 boolean에서 **원인**(`"typed" | "paste"`)으로 바꿨다. 타이핑이 넘긴 것이면 draft에 사람의
+글자가 있으니 Backspace가 줄이고, 거절된 paste면 첫 편집이 글자 대신 상태만 해제하며, 알림 문구도 원인별로 갈린다. 역검증은 같은
+시험 안에서 타이핑으로 만든 초과가 여전히 Backspace로 한 글자 줄어드는 것을 함께 본다 — 두 경로를 한 규칙으로 되돌리면 둘 중
+하나가 반드시 깨진다.
+
+**관측하지 못한 것**: 실제 terminal이 clipboard 안의 `ESC[201~`를 어떤 형태로 흘리는지(위 두 방어는 주입한 byte와 주입한 clock으로
+관측했고, 실제 terminal·clipboard 조합으로는 관측하지 않았다), bracketed paste를 지원하지 않는 terminal에서의 동작.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
@@ -464,7 +511,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **217 files / 20,342 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **217 files / 20,412 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

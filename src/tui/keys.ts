@@ -49,6 +49,9 @@ const ACTIONS: Readonly<Record<string, Key>> = Object.freeze({
 
 const ESC = 0x1b;
 const CSI = 0x5b;
+/** The most bytes one UTF-8 code point takes, which is how far back the
+ * decoder has to look to know whether it is holding half of one. */
+const UTF8_MAX_BYTES = 4;
 /** Bracketed paste (DEC 2004). The terminal brackets pasted text with these,
  * which is the only way a stream of bytes says "this arrived at once" rather
  * than "this was typed": without it every newline in a paste is an Enter, and
@@ -75,7 +78,11 @@ function actionOf(token: string): Key | undefined {
 
 function chars(text: string, keys: Key[]): void {
   for (const value of text)
-    if (value >= " ") keys.push({ kind: "char", value });
+    // U+FFFD is what `TextDecoder` returns for bytes that are not text: a code
+    // point the terminal cut in half, or a sequence that was never UTF-8. It
+    // is not a key anyone pressed, so it is dropped rather than typed into the
+    // prompt and sent to the engine as a character the Human never entered.
+    if (value >= " " && value !== "�") keys.push({ kind: "char", value });
 }
 
 function isCsiFinal(byte: number): boolean {
@@ -88,14 +95,27 @@ function isCsiFinal(byte: number): boolean {
  * `escape` retains an incomplete ESC/CSI token. An overlong CSI enters a
  * discard state until its final byte, so hostile terminal input cannot grow
  * memory or leak the tail of a report into the prompt.
+ *
+ * The clock is injected so the post-paste burst below is a fact tests can
+ * state rather than a race they have to win.
  */
 export class KeyDecoder {
   private decoder = new TextDecoder("utf-8", { fatal: false });
+  /** The last few text bytes, so "the decoder is holding half a code point" is
+   * something this class can answer. `TextDecoder` keeps that state privately
+   * and reports it only by emitting U+FFFD, which is too late to be a
+   * deadline. */
+  private tail: number[] = [];
   private escape: number[] | null = null;
   private discardingCsi = false;
   /** An assembling paste: its bytes, whether it has already passed its bound,
-   * and how much of the end marker has matched so far. */
-  private paste: { readonly bytes: number[]; truncated: boolean; matched: number } | null = null;
+   * how much of the end marker has matched so far, and whether its end marker
+   * has already arrived in this read. */
+  private paste: { readonly bytes: number[]; truncated: boolean; matched: number; ended: boolean } | null = null;
+  /** When the last paste ended, for the burst rule in `afterPaste`. */
+  private pasteEndedAtMs: number | null = null;
+
+  constructor(private readonly now: () => number = Date.now) {}
 
   /** How long the stream owner should wait for the rest of what this decoder
    * has started, or null when nothing is pending.
@@ -103,11 +123,14 @@ export class KeyDecoder {
    * Every unfinished token gets one, not just the lone Escape. An incomplete
    * report with no deadline is not merely stuck: the next real keystroke is a
    * byte in the CSI final range, so the decoder consumed the Human's next key
-   * as the end of a report that never came.
+   * as the end of a report that never came. A half-delivered code point is the
+   * same shape of bug -- the next byte is read as its continuation -- so it
+   * gets a deadline too.
    */
   get pendingDelayMs(): number | null {
     if (this.paste !== null) return TERMINAL_BOUNDS.pasteIdleMs.value;
     if (this.escape !== null || this.discardingCsi) return TERMINAL_BOUNDS.escapeDelayMs.value;
+    if (this.incompleteText) return TERMINAL_BOUNDS.textDelayMs.value;
     return null;
   }
 
@@ -115,8 +138,10 @@ export class KeyDecoder {
     const keys: Key[] = [];
     let textStart = 0;
     const flushText = (end: number, final: boolean): void => {
-      chars(this.decoder.decode(chunk.subarray(textStart, end), { stream: !final }), keys);
-      if (final) this.decoder = new TextDecoder("utf-8", { fatal: false });
+      const region = chunk.subarray(textStart, end);
+      chars(this.decoder.decode(region, { stream: !final }), keys);
+      if (final) this.resetText();
+      else this.remember(region);
     };
 
     let index = 0;
@@ -131,7 +156,21 @@ export class KeyDecoder {
           this.paste.matched += 1;
           index += 1;
           textStart = index;
-          if (this.paste.matched === PASTE_END.length) keys.push(this.endPaste());
+          if (this.paste.matched === PASTE_END.length) {
+            // The paste is over, but this read is not. Whatever the terminal
+            // put after the end marker in the same read stays content of this
+            // paste rather than becoming keys, and the paste key is emitted at
+            // the end of the read. Bracketed paste is the terminal's promise
+            // that pasted bytes are not keystrokes; a terminal that passes a
+            // clipboard's own `ESC[201~` through unchanged breaks it, and
+            // without this the newline behind that marker would submit the
+            // text in front of it as a prompt the Human never pressed Enter
+            // for. The cost is that a key genuinely typed within the same read
+            // as a paste joins the draft as text instead of acting -- which is
+            // a delay, not a submission.
+            this.paste.ended = true;
+            this.paste.matched = 0;
+          }
           continue;
         }
         if (this.paste.matched > 0) {
@@ -173,7 +212,7 @@ export class KeyDecoder {
           const token = new TextDecoder().decode(Uint8Array.from(this.escape));
           this.escape = null;
           if (token === PASTE_START) {
-            this.paste = { bytes: [], truncated: false, matched: 0 };
+            this.paste = { bytes: [], truncated: false, matched: 0, ended: false };
             continue;
           }
           const action = actionOf(token);
@@ -191,7 +230,7 @@ export class KeyDecoder {
           this.escape = [ESC];
         } else {
           const action = actionOf(String.fromCharCode(byte));
-          if (action) keys.push(action);
+          if (action) keys.push(this.afterPaste(action));
         }
         index += 1;
         textStart = index;
@@ -200,7 +239,61 @@ export class KeyDecoder {
       index += 1;
     }
     flushText(chunk.length, false);
+    // Emitted here rather than where the marker matched, so one read that
+    // contains a paste contains nothing but that paste. Bytes that were part
+    // way through matching another end marker when the read ran out were
+    // content after all -- the paste closes here, so there is no later read to
+    // finish that match in -- and they are given back rather than dropped.
+    if (this.paste !== null && this.paste.ended) {
+      for (let position = 0; position < this.paste.matched; position += 1)
+        this.addPasteByte(PASTE_END.charCodeAt(position));
+      keys.push(this.endPaste());
+    }
     return keys;
+  }
+
+  /** Keeps the last code point's worth of text bytes. */
+  private remember(region: Uint8Array): void {
+    for (const byte of region) {
+      this.tail.push(byte);
+      if (this.tail.length > UTF8_MAX_BYTES) this.tail.shift();
+    }
+  }
+
+  private resetText(): void {
+    this.decoder = new TextDecoder("utf-8", { fatal: false });
+    this.tail = [];
+  }
+
+  /** Whether the text the decoder holds ends in the middle of a code point.
+   *
+   * Read backwards from the last text byte: continuation bytes are skipped,
+   * and the first byte that is not one says how many bytes its code point
+   * takes. More than have arrived means the terminal has not finished it.
+   */
+  private get incompleteText(): boolean {
+    for (let back = 0; back < this.tail.length; back += 1) {
+      const byte = this.tail[this.tail.length - 1 - back]!;
+      if ((byte & 0xc0) === 0x80) continue;
+      const expected = byte < 0x80 ? 1 : byte < 0xe0 ? 2 : byte < 0xf0 ? 3 : UTF8_MAX_BYTES;
+      return expected > back + 1;
+    }
+    return false;
+  }
+
+  /** Defence in depth for a clipboard that carries its own paste end marker.
+   *
+   * Absorbing the rest of the read covers the injected marker and the newline
+   * behind it arriving together. This covers them arriving in consecutive
+   * reads: for the declared burst after a paste ends, an Enter is taken as the
+   * newline it was in the clipboard rather than as a submission. A Human
+   * cannot press Enter within that burst; a terminal replaying clipboard bytes
+   * always does.
+   */
+  private afterPaste(action: Key): Key {
+    if (action.kind !== "enter" || this.pasteEndedAtMs === null) return action;
+    if (this.now() - this.pasteEndedAtMs >= TERMINAL_BOUNDS.pasteBurstMs.value) return action;
+    return { kind: "char", value: "\n" };
   }
 
   private addPasteByte(byte: number): void {
@@ -216,6 +309,7 @@ export class KeyDecoder {
   private endPaste(): Key {
     const paste = this.paste;
     this.paste = null;
+    this.pasteEndedAtMs = this.now();
     if (paste === null || paste.truncated) return { kind: "paste", value: "", truncated: true };
     return { kind: "paste", value: pastedText(paste.bytes), truncated: false };
   }
@@ -235,6 +329,11 @@ export class KeyDecoder {
     // whole paste, which is the failure the paste bound exists to prevent, so
     // it ends as a rejected paste rather than a shorter one.
     if (this.paste !== null) { this.paste.truncated = true; return [this.endPaste()]; }
+    // Half a code point is not a character. It is dropped with the decoder
+    // state that was waiting for the rest of it, so the next byte begins what
+    // it says it begins instead of completing a code point the terminal
+    // abandoned -- and no U+FFFD is invented in its place.
+    if (this.incompleteText) this.resetText();
     if (this.discardingCsi) { this.discardingCsi = false; return []; }
     if (this.escape === null) return [];
     const lone = this.escape.length === 1;
@@ -250,11 +349,12 @@ export class KeyDecoder {
   finish(): Key[] {
     const keys: Key[] = [];
     chars(this.decoder.decode(), keys);
-    this.decoder = new TextDecoder("utf-8", { fatal: false });
+    this.resetText();
     keys.push(...this.flushPending());
     this.escape = null;
     this.discardingCsi = false;
     this.paste = null;
+    this.pasteEndedAtMs = null;
     return keys;
   }
 }

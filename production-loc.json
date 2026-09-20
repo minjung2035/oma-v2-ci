@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 217,
-    "n_lines": 23915,
+    "n_lines": 24100,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -32,8 +32,14 @@
   },
   "src/tui/model.ts": {
     "blank": 30,
-    "comment": 35,
-    "code": 279,
+    "comment": 38,
+    "code": 280,
+    "language": "TypeScript"
+  },
+  "src/tui/session.ts": {
+    "blank": 30,
+    "comment": 156,
+    "code": 277,
     "language": "TypeScript"
   },
   "src/store.ts": {
@@ -46,12 +52,6 @@
     "blank": 0,
     "comment": 32,
     "code": 273,
-    "language": "TypeScript"
-  },
-  "src/tui/session.ts": {
-    "blank": 29,
-    "comment": 141,
-    "code": 271,
     "language": "TypeScript"
   },
   "src/runtime/pi-rpc.ts": {
@@ -126,10 +126,16 @@
     "code": 221,
     "language": "TypeScript"
   },
+  "src/tui/keys.ts": {
+    "blank": 25,
+    "comment": 122,
+    "code": 221,
+    "language": "TypeScript"
+  },
   "src/entry/oma.ts": {
     "blank": 19,
     "comment": 49,
-    "code": 213,
+    "code": 214,
     "language": "TypeScript"
   },
   "src/git/integration.ts": {
@@ -192,12 +198,6 @@
     "code": 179,
     "language": "TypeScript"
   },
-  "src/tui/keys.ts": {
-    "blank": 20,
-    "comment": 69,
-    "code": 179,
-    "language": "TypeScript"
-  },
   "src/broker/principal-endpoint.ts": {
     "blank": 18,
     "comment": 70,
@@ -220,6 +220,12 @@
     "blank": 9,
     "comment": 8,
     "code": 170,
+    "language": "TypeScript"
+  },
+  "src/tui/app.ts": {
+    "blank": 19,
+    "comment": 49,
+    "code": 165,
     "language": "TypeScript"
   },
   "src/domain/tool-surface.ts": {
@@ -256,12 +262,6 @@
     "blank": 8,
     "comment": 49,
     "code": 159,
-    "language": "TypeScript"
-  },
-  "src/tui/app.ts": {
-    "blank": 18,
-    "comment": 38,
-    "code": 157,
     "language": "TypeScript"
   },
   "src/diagnostics/integrity.ts": {
@@ -624,16 +624,16 @@
     "code": 76,
     "language": "TypeScript"
   },
+  "src/tui/limits.ts": {
+    "blank": 12,
+    "comment": 32,
+    "code": 74,
+    "language": "TypeScript"
+  },
   "src/storage/operation-transitions.ts": {
     "blank": 1,
     "comment": 1,
     "code": 73,
-    "language": "TypeScript"
-  },
-  "src/tui/limits.ts": {
-    "blank": 12,
-    "comment": 32,
-    "code": 72,
     "language": "TypeScript"
   },
   "src/domain/lineage.ts": {
@@ -792,6 +792,12 @@
     "code": 52,
     "language": "TypeScript"
   },
+  "src/tui/prompt.ts": {
+    "blank": 11,
+    "comment": 42,
+    "code": 51,
+    "language": "TypeScript"
+  },
   "src/tui/transport.ts": {
     "blank": 5,
     "comment": 17,
@@ -832,12 +838,6 @@
     "blank": 8,
     "comment": 31,
     "code": 46,
-    "language": "TypeScript"
-  },
-  "src/tui/prompt.ts": {
-    "blank": 10,
-    "comment": 23,
-    "code": 45,
     "language": "TypeScript"
   },
   "src/cli/exit.ts": {
@@ -972,6 +972,12 @@
     "code": 33,
     "language": "TypeScript"
   },
+  "src/tui/view/notice.ts": {
+    "blank": 2,
+    "comment": 14,
+    "code": 32,
+    "language": "TypeScript"
+  },
   "src/domain/child-policy.ts": {
     "blank": 2,
     "comment": 1,
@@ -1035,12 +1041,6 @@
   "src/tui/view/dashboard.ts": {
     "blank": 3,
     "comment": 10,
-    "code": 28,
-    "language": "TypeScript"
-  },
-  "src/tui/view/notice.ts": {
-    "blank": 2,
-    "comment": 8,
     "code": 28,
     "language": "TypeScript"
   },
@@ -1309,9 +1309,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 963,
-    "comment": 2610,
-    "code": 20342,
+    "blank": 971,
+    "comment": 2717,
+    "code": 20412,
     "nFiles": 217
   }
 }

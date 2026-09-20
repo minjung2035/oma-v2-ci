@@ -593,29 +593,42 @@ test("T114: provisioning creates the directories the Principal's engine and its 
  * events go through the session's own handler -- the one the constructor
  * installs -- so the ownership rules are exercised exactly as the product
  * applies them and not as a test re-states them. */
-function reservedSession(refuse?: () => Error): {
+function reservedSession(refuse?: (message: Record<string, unknown>) => Error | null): {
   readonly session: PrincipalSession;
   readonly sent: Record<string, unknown>[];
   readonly lines: string[];
   readonly busy: boolean[];
+  /** Prompts the session took and could not deliver, with the text it held. */
+  readonly failed: { text: string; reason: string }[];
   readonly emit: (event: PiEvent) => void;
 } {
   const sent: Record<string, unknown>[] = [];
   const lines: string[] = [];
   const busy: boolean[] = [];
+  const failed: { text: string; reason: string }[] = [];
   const session = Object.create(PrincipalSession.prototype) as PrincipalSession;
   const state = session as unknown as {
     rpc: { send: (message: Record<string, unknown>) => Promise<void> };
-    sink: { onLine: (line: string) => void; onBusy: (busy: boolean) => void; onEnd: (reason: string) => void };
+    sink: {
+      onLine: (line: string) => void; onBusy: (busy: boolean) => void; onEnd: (reason: string) => void;
+      onPromptFailed: (text: string, reason: string) => void;
+    };
     owner: "human" | "delivery" | null; waiting: string[]; unanswered: unknown;
     closed: boolean; sequence: number; frameBytes: number;
     observe: (event: PiEvent) => void;
   };
-  state.rpc = { send: async message => { if (refuse) throw refuse(); sent.push(message); } };
-  state.sink = { onLine: line => lines.push(line), onBusy: value => busy.push(value), onEnd: () => {} };
+  state.rpc = { send: async message => {
+    const error = refuse?.(message) ?? null;
+    if (error !== null) throw error;
+    sent.push(message);
+  } };
+  state.sink = {
+    onLine: line => lines.push(line), onBusy: value => busy.push(value), onEnd: () => {},
+    onPromptFailed: (text, reason) => { failed.push({ text, reason }); },
+  };
   state.owner = null; state.waiting = []; state.unanswered = null;
   state.closed = false; state.sequence = 0; state.frameBytes = LIMITS.frameBytes;
-  return { session, sent, lines, busy, emit: event => { state.observe(event); } };
+  return { session, sent, lines, busy, failed, emit: event => { state.observe(event); } };
 }
 
 /** Pi answers a prompt command at preflight, before the run it starts. */
@@ -701,12 +714,16 @@ test("T114 / PR-002: a prompt the engine refuses gives the session back and is s
   // no key, a compaction in progress. No run starts, so no run settles: without
   // reading that answer the session would stay claimed for the rest of its
   // life and the Human would never learn their input was not taken.
-  const { session, sent, lines, emit } = reservedSession();
+  const { session, sent, failed, emit } = reservedSession();
   session.submit("hello");
   assert.equal(session.busy, true);
   emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "no model selected" });
   assert.equal(session.busy, false, "a refused prompt left the session claimed");
-  assert.ok(lines.some(line => line.includes("no model selected")), lines.join(" | "));
+  // Named, with its text: the Human was already told this prompt was taken, so
+  // "a prompt was refused" would leave them unable to tell which and with
+  // nothing to resend.
+  assert.deepEqual(failed.map(entry => entry.text), ["hello"]);
+  assert.ok(failed[0]!.reason.includes("no model selected"), failed[0]!.reason);
   // And the session works afterwards.
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
   assert.equal(sent.length, 2);
@@ -743,12 +760,55 @@ test("T114 / PR-002: a prompt the transport cannot carry stops the screen saying
   // Admission is answered in the call; the write is not, and cannot be. A
   // transport that fails after the prompt was admitted is reported where every
   // other failed write is -- on the screen -- and the claim comes back with it.
-  const { session, lines, busy } = reservedSession(() => new StoreError("FRAME_TOO_LARGE", "Pi command exceeds the configured frame bound"));
+  const { session, failed, busy } = reservedSession(() => new StoreError("FRAME_TOO_LARGE", "Pi command exceeds the configured frame bound"));
   assert.deepEqual(session.submit("x".repeat(64)), { kind: "accepted" });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(session.busy, false);
   assert.deepEqual(busy, [true, false], `the screen was told ${JSON.stringify(busy)}`);
-  assert.ok(lines.some(line => line.includes("전송하지 못했습니다")), lines.join(" | "));
+  assert.deepEqual(failed.map(entry => entry.text), ["x".repeat(64)],
+    "the failure did not carry the prompt it was about");
+  assert.equal(failed[0]!.reason, "Pi command exceeds the configured frame bound",
+    "the cause is carried bare, so the surface can say where the text went without being cut off");
+});
+
+test("T114 / PR-002: the waiting prompt that could not be sent is named, and the rest still go", async () => {
+  // The defect this pins: three prompts typed while the engine was busy are
+  // all echoed as taken, one of their writes later fails, and the screen says
+  // only that "the input" could not be sent. Which one? What did it say? The
+  // Human could not tell, and had nothing left to resend it from.
+  const { session, sent, failed, emit } = reservedSession(
+    message => (message.message === "second" ? new StoreError("PRINCIPAL_DISCONNECTED", "socket closed") : null));
+  await session.deliver("b-00000000-0000-4000-8000-000000000000");
+  for (const text of ["first", "second", "third"]) assert.deepEqual(session.submit(text), { kind: "accepted" });
+
+  emit(settled);
+  assert.equal(String(sent.at(-1)!.message), "first");
+  emit(accept(String(sent.at(-1)!.id)));
+  emit(settled);
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(failed, [{ text: "second", reason: "socket closed" }],
+    "the failure did not say which of the waiting prompts it was about");
+  assert.deepEqual(sent.map(message => String(message.message)),
+    ["/oma-deliver b-00000000-0000-4000-8000-000000000000", "first", "third"],
+    "a prompt behind the failed one was lost with it");
+  assert.equal(session.busy, true, "the session was left free while the prompt behind the failure ran");
+  emit(accept(String(sent.at(-1)!.id)));
+  emit(settled);
+  assert.equal(session.busy, false);
+
+  // Negative control: with the same queue and no failing write, nothing is
+  // named, because nothing was lost.
+  const clean = reservedSession();
+  await clean.session.deliver("b-00000000-0000-4000-8000-000000000000");
+  for (const text of ["first", "second", "third"]) clean.session.submit(text);
+  for (let run = 0; run < 3; run += 1) {
+    clean.emit(settled);
+    clean.emit(accept(String(clean.sent.at(-1)!.id)));
+  }
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(clean.failed, []);
+  assert.deepEqual(clean.sent.map(message => String(message.message)).slice(1), ["first", "second", "third"]);
 });
 
 test("T114 / PR-002: the busy report comes from the ownership itself, at every move of it", async () => {

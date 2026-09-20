@@ -123,6 +123,19 @@ export interface SessionSink {
   readonly onLine: (line: string) => void;
   readonly onBusy: (busy: boolean) => void;
   readonly onEnd: (reason: string) => void;
+  /** One named prompt did not reach the engine, with the text it was.
+   *
+   * `reason` is the bare cause, not a sentence: the surface says what failed
+   * and where the text went, and a second copy of "could not be sent" here
+   * would push that answer off a narrow screen.
+   *
+   * A prompt typed while a run was going is echoed as sent the moment the
+   * session takes it, because that is when the Human is told it was taken. If
+   * the write behind it later fails, saying only that "a prompt" failed leaves
+   * the Human holding three echoed prompts and no way to tell which of them
+   * the Principal never got -- and nothing to resend it from. The text comes
+   * back with the failure so the surface can give it back. */
+  readonly onPromptFailed: (text: string, reason: string) => void;
 }
 
 /** Mirrors the Resident adapter's discovery blocking. A flag removed here would
@@ -185,6 +198,10 @@ export function sessionEnv(
     ...(profile.toolSurface === undefined ? {} : { OMA_TOOL_SURFACE: profile.toolSurface }),
     ...(paths?.piAgentDir === undefined ? {} : { [PI_AGENT_DIR_ENV]: paths.piAgentDir }),
   };
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function textOf(message: unknown): string {
@@ -263,7 +280,7 @@ export class PrincipalSession {
    * no key, a compaction in progress -- is the only notice that the message was
    * never accepted and that no run will start or settle for it. At most one is
    * outstanding, because a prompt is only ever written to an idle engine. */
-  private unanswered: { readonly id: string; readonly role: "human" | "delivery" } | null = null;
+  private unanswered: { readonly id: string; readonly role: "human" | "delivery"; readonly text: string } | null = null;
 
   private constructor(private readonly child: ChildProcessWithoutNullStreams, limits: PiRpcLimits, private readonly sink: SessionSink) {
     this.frameBytes = limits.frameBytes;
@@ -300,14 +317,18 @@ export class PrincipalSession {
   private observe(event: PiEvent): void {
     if (event.type === "response" && event.command === "prompt" &&
       this.unanswered !== null && event.id === this.unanswered.id) {
-      const { role } = this.unanswered;
+      const { role, text } = this.unanswered;
       this.unanswered = null;
       if (event.success !== true) {
         // Refused before acceptance: no run starts and none settles, so the
         // claim has to be given back here or the session would stay the
         // refused prompt's for the rest of its life -- and the Human would
         // never learn that what they typed was not taken.
-        this.sink.onLine(`⚠ 엔진이 입력을 받아들이지 않았습니다: ${typeof event.error === "string" && event.error.length > 0 ? event.error : "사유를 알 수 없습니다"}`);
+        const detail = typeof event.error === "string" && event.error.length > 0 ? event.error : "사유를 알 수 없습니다";
+        // A Human prompt is named and handed back; a delivery command is the
+        // product's own text and there is nothing to give back.
+        if (role === "human") this.sink.onPromptFailed(text, `엔진이 받지 않았습니다: ${detail}`);
+        else this.sink.onLine(`⚠ 엔진이 입력을 받아들이지 않았습니다: ${detail}`);
         this.release(role);
       }
     }
@@ -336,9 +357,10 @@ export class PrincipalSession {
     if (next === undefined) { this.own(null); return; }
     this.own("human");
     void this.sendPrompt(this.nextRequestId(), next, "human").catch((error: unknown) => {
-      // The Human is told which of their prompts was not sent; the rest still
-      // go, in order, rather than disappearing with it.
-      this.sink.onLine(`⚠ 입력을 전송하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+      // The Human is told which of their prompts was not sent, with its text,
+      // so it can be given back; the rest still go, in order, rather than
+      // disappearing with it.
+      this.sink.onPromptFailed(next, messageOf(error));
       this.release("human");
     });
   }
@@ -350,7 +372,7 @@ export class PrincipalSession {
 
   /** Writes one prompt and remembers that the engine has yet to accept it. */
   private async sendPrompt(id: string, message: string, role: "human" | "delivery"): Promise<void> {
-    this.unanswered = { id, role };
+    this.unanswered = { id, role, text: message };
     try { await this.rpc.send({ id, type: "prompt", message }); }
     catch (error) { this.unanswered = null; throw error; }
   }
@@ -427,7 +449,7 @@ export class PrincipalSession {
     }
     this.own("human");
     void this.sendPrompt(this.nextRequestId(), text, "human").catch((error: unknown) => {
-      this.sink.onLine(`⚠ 입력을 전송하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+      this.sink.onPromptFailed(text, messageOf(error));
       this.release("human");
     });
     return { kind: "accepted" };

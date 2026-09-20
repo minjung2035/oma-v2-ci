@@ -16,6 +16,10 @@ const UP = Buffer.from(`${ESC}[A`);
 const ENTER = Buffer.from("\n");
 /** What a terminal in bracketed-paste mode actually sends. */
 const paste = (text: string): Buffer => Buffer.from(`${ESC}[200~${text}${ESC}[201~`);
+/** Wait out the window in which an Enter is the newline of the paste that just
+ * ended (arch §23.6), so that a test's Enter is one a Human pressed. */
+const afterPasteBurst = (): Promise<void> =>
+  new Promise(resolve => { setTimeout(resolve, TERMINAL_BOUNDS.pasteBurstMs.value + 20); });
 
 function fakeTerminal(): Terminal & { frames: string[][] } {
   const frames: string[][] = [];
@@ -189,14 +193,15 @@ test("T120 / TUI-023: an oversized paste is rejected as a whole instead of submi
   h.app.feed(Buffer.from(input));
   assert.equal(Buffer.byteLength(h.app.snapshot.prompt.text, "utf8"), Math.floor(cap / 3) * 3,
     "the retained draft grew past its declared UTF-8 byte bound");
-  assert.equal(h.app.snapshot.prompt.overflow, true);
+  assert.equal(h.app.snapshot.prompt.overflow, "typed",
+    "bytes without the terminal's brackets arrive as typing, and say so");
   assert.match(h.last(), /입력 한도 초과/);
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, [], "a bounded prefix must not impersonate the complete paste");
   assert.match(h.last(), /전송하지 않습니다/);
 
   h.app.key({ kind: "backspace" });
-  assert.equal(h.app.snapshot.prompt.overflow, false);
+  assert.equal(h.app.snapshot.prompt.overflow, null);
   assert.doesNotMatch(h.last(), /입력 한도 초과/);
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, ["가".repeat(Math.floor(cap / 3) - 1)]);
@@ -212,7 +217,7 @@ test("T120 / TUI-023: JSON escaping overflow rejects the whole prompt", () => {
     `the retained prompt used ${humanPromptFrameBytes(prompt)} bytes of a ${frameBytes}-byte frame`);
   assert.ok(humanPromptFrameBytes(`${prompt}\\`) > frameBytes,
     "the fixture did not reach the JSON-escaping boundary");
-  assert.equal(h.app.snapshot.prompt.overflow, true);
+  assert.equal(h.app.snapshot.prompt.overflow, "typed");
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, []);
 });
@@ -274,13 +279,14 @@ test("TUI-002: malformed and overlong terminal reports stay bounded and never be
   assert.deepEqual(unknown.push(Buffer.from("~x")), [{ kind: "char", value: "x" }]);
 });
 
-test("TUI-002/023: a pasted block is one prompt boundary, not one prompt per line", () => {
+test("TUI-002/023: a pasted block is one prompt boundary, not one prompt per line", async () => {
   // The failure this holds down: a paste whose second line the Human has not
   // read yet is submitted because its first newline looked like Enter.
   const h = harness();
   h.app.feed(paste("rm -rf build\nmake all"));
   assert.deepEqual(h.prompts, [], "a paste is an edit of the draft, never a submission");
   assert.equal(h.app.snapshot.prompt.text, "rm -rf build\nmake all");
+  await afterPasteBurst();
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, ["rm -rf build\nmake all"]);
   assert.deepEqual(h.app.lines, ["> rm -rf build", "  make all"],
@@ -330,11 +336,13 @@ test("T120 / TUI-023: a paste over the decoder's bound is refused whole, never a
   const h = harness();
   h.app.feed(paste(big));
   assert.equal(h.app.snapshot.prompt.text, "");
-  assert.equal(h.app.snapshot.prompt.overflow, true);
-  assert.match(h.last(), /입력 한도 초과/);
+  assert.equal(h.app.snapshot.prompt.overflow, "paste");
+  assert.match(h.last(), /붙여넣기 한도 초과/);
+  assert.match(h.last(), /아무것도 입력되지 않았습니다/);
+  assert.doesNotMatch(h.last(), /Backspace/,
+    "a paste that added nothing must not be answered by deleting what the Human typed");
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, []);
-  assert.match(h.last(), /전송하지 않습니다/);
 });
 
 test("TUI-002: a paste the terminal never ended is rejected whole, and the keyboard lives on", async () => {
@@ -350,15 +358,14 @@ test("TUI-002: a paste the terminal never ended is rejected whole, and the keybo
   assert.equal(h.app.snapshot.prompt.text, "", "an unfinished paste is not delivered in pieces");
   await new Promise(resolve => setTimeout(resolve, TERMINAL_BOUNDS.pasteIdleMs.value + 50));
   assert.equal(h.app.snapshot.prompt.text, "", "the fragment reached the draft after the deadline");
-  assert.equal(h.app.snapshot.prompt.overflow, true);
-  assert.match(h.last(), /입력 한도 초과/);
-  assert.match(h.last(), /Backspace/);
+  assert.equal(h.app.snapshot.prompt.overflow, "paste");
+  assert.match(h.last(), /붙여넣기 한도 초과/);
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, [], "a fragment must not be submittable as the paste");
 
   // The stated way out works, and typing resumes.
   h.app.key({ kind: "backspace" });
-  assert.equal(h.app.snapshot.prompt.overflow, false);
+  assert.equal(h.app.snapshot.prompt.overflow, null);
   h.app.feed(Buffer.from("x"));
   assert.equal(h.app.snapshot.prompt.text, "x", "the keyboard died with an unfinished paste");
 });
@@ -416,7 +423,7 @@ test("TUI-013: produced control bytes are drawn as text, never as terminal instr
   assert.match(frame, /before\[2Jafter/);
 });
 
-test("TUI-013: a pasted multi-line draft is drawn whole and never pushes the hint off screen", () => {
+test("TUI-013: a pasted multi-line draft is drawn whole and never pushes the hint off screen", async () => {
   const h = harness();
   h.app.feed(paste("one\ntwo\nthree"));
   const lines = h.terminal.frames.at(-1)!;
@@ -436,7 +443,189 @@ test("TUI-013: a pasted multi-line draft is drawn whole and never pushes the hin
   assert.ok(frame.some(line => line.includes("l39")));
   assert.match(frame.at(-1)!, /Ctrl\+X/);
   assert.ok(frame.some(line => line.startsWith("─")));
+  await afterPasteBurst();
   long.app.feed(ENTER);
   assert.equal(long.prompts.length, 1);
   assert.equal(long.prompts[0]!.split("\n").length, 40);
+});
+
+test("T120 / TUI-023: recovery from a refused paste never spends a character the Human typed", async () => {
+  // The failure this holds down: the paste added nothing, the screen said
+  // "press Backspace", and Backspace deleted the Human's own last character --
+  // so recovering from a rejected paste silently edited text it never touched.
+  const h = harness();
+  h.app.feed(Buffer.from("hello"));
+  h.app.feed(paste("a".repeat(TERMINAL_BOUNDS.pasteBytes.value + 1)));
+  assert.equal(h.app.snapshot.prompt.text, "hello", "a refused paste must not touch the draft");
+  assert.equal(h.app.snapshot.prompt.overflow, "paste");
+  assert.match(h.last(), /붙여넣기 한도 초과/);
+  assert.doesNotMatch(h.last(), /Backspace/, "the way out named a key that deletes the Human's text");
+
+  h.app.key({ kind: "backspace" });
+  assert.equal(h.app.snapshot.prompt.text, "hello",
+    "the first edit after a refused paste deleted a character the paste never added");
+  assert.equal(h.app.snapshot.prompt.overflow, null);
+  await afterPasteBurst();
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, ["hello"]);
+
+  // Typing on is a way out too, and it does not have to be Backspace.
+  const typing = harness();
+  typing.app.feed(Buffer.from("hello"));
+  typing.app.feed(paste("a".repeat(TERMINAL_BOUNDS.pasteBytes.value + 1)));
+  typing.app.feed(Buffer.from("!"));
+  assert.equal(typing.app.snapshot.prompt.text, "hello!");
+  assert.equal(typing.app.snapshot.prompt.overflow, null);
+
+  // Negative control: an overflow the Human typed still shortens on Backspace,
+  // because there the last character is one they entered.
+  const typed = harness({}, 96);
+  typed.app.feed(Buffer.from("\\".repeat(100)));
+  assert.equal(typed.app.snapshot.prompt.overflow, "typed");
+  assert.match(typed.last(), /Backspace/);
+  const before = typed.app.snapshot.prompt.text;
+  typed.app.key({ kind: "backspace" });
+  assert.equal(typed.app.snapshot.prompt.text, before.slice(0, -1),
+    "the control did not reproduce the behaviour this test distinguishes");
+});
+
+test("TUI-002: an Enter arriving in the burst after a paste is that paste's newline, not a submission", () => {
+  // Defence in depth for a clipboard carrying `ESC[201~`: when the terminal
+  // delivers the injected newline in the read after the paste, it is taken as
+  // text rather than as an Enter no Human pressed.
+  let nowMs = 1000;
+  const decoder = new KeyDecoder(() => nowMs);
+  assert.deepEqual(decoder.push(paste("rm -rf /")),
+    [{ kind: "paste", value: "rm -rf /", truncated: false }]);
+
+  nowMs += TERMINAL_BOUNDS.pasteBurstMs.value - 1;
+  assert.deepEqual(decoder.push(Buffer.from("\n")), [{ kind: "char", value: "\n" }],
+    "a newline inside the burst submitted the prompt");
+
+  // Negative control: past the burst the same byte is the Human's Enter, so
+  // the rule expires instead of disabling the key.
+  nowMs += TERMINAL_BOUNDS.pasteBurstMs.value;
+  assert.deepEqual(decoder.push(Buffer.from("\n")), [{ kind: "enter" }]);
+
+  // And with no paste behind it, an Enter is an Enter from the first byte.
+  const fresh = new KeyDecoder(() => nowMs);
+  assert.deepEqual(fresh.push(Buffer.from("\n")), [{ kind: "enter" }]);
+});
+
+test("TUI-002: a clipboard carrying its own end marker cannot submit the text in front of it", async () => {
+  // One read: `ESC[201~` from inside the clipboard, then a newline, then the
+  // terminal's real end marker. Nothing after the first marker may act.
+  const h = harness();
+  h.app.feed(Buffer.from(`${ESC}[200~send this${ESC}[201~\nrm -rf /${ESC}[201~`));
+  assert.deepEqual(h.prompts, [], "an injected end marker submitted the text in front of it");
+  assert.equal(h.app.snapshot.prompt.text, "send this\nrm -rf /",
+    "the bytes behind the injected marker are that paste's content");
+  await afterPasteBurst();
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, ["send this\nrm -rf /"], "the Human's own Enter still submits");
+
+  // The same clipboard split so the injected newline arrives in the next read:
+  // there the burst rule, not the read boundary, is what holds it down.
+  const split = harness();
+  split.app.feed(Buffer.from(`${ESC}[200~send this${ESC}[201~`));
+  split.app.feed(Buffer.from("\nrm -rf /"));
+  assert.deepEqual(split.prompts, []);
+  assert.equal(split.app.snapshot.prompt.text, "send this\nrm -rf /");
+
+  // A read that runs out part way through yet another injected marker. Those
+  // bytes are content, and the paste closes with this read, so there is no
+  // later read to finish the match in: dropping them would silently eat
+  // clipboard text. `ESC` is stripped from pasted text the way every control
+  // byte is; `[2` is not.
+  const partial = harness();
+  partial.app.feed(Buffer.from(`${ESC}[200~ab${ESC}[201~cd${ESC}[2`));
+  assert.deepEqual(partial.prompts, []);
+  assert.equal(partial.app.snapshot.prompt.text, "abcd[2",
+    "bytes part way through a second end marker vanished at the read boundary");
+});
+
+test("TUI-002: a code point the terminal split across reads has a deadline, and never becomes U+FFFD", async () => {
+  // "한" is ED 95 9C. Held after two bytes, the decoder must say how long it
+  // waits -- the spec promised a deadline for every unfinished token.
+  const decoder = new KeyDecoder();
+  assert.deepEqual(decoder.push(Buffer.from([0xed, 0x95])), []);
+  assert.equal(decoder.pendingDelayMs, TERMINAL_BOUNDS.textDelayMs.value,
+    "a half-delivered code point waited with no deadline at all");
+  assert.deepEqual(decoder.push(Buffer.from([0x9c])), [{ kind: "char", value: "한" }]);
+  assert.equal(decoder.pendingDelayMs, null, "a completed code point kept its deadline");
+
+  // Abandoned, it is dropped rather than typed as a replacement character, and
+  // the next byte begins what it says it begins.
+  const abandoned = new KeyDecoder();
+  abandoned.push(Buffer.from([0xed, 0x95]));
+  assert.deepEqual(abandoned.flushPending(), [],
+    "the abandoned bytes reached the prompt as a character nobody typed");
+  assert.equal(abandoned.pendingDelayMs, null);
+  assert.deepEqual(abandoned.push(Buffer.from("a")), [{ kind: "char", value: "a" }]);
+
+  // Bytes that were never UTF-8 are dropped the same way.
+  const invalid = new KeyDecoder();
+  assert.deepEqual(invalid.push(Buffer.from([0xff, 0xfe])), []);
+  assert.deepEqual(invalid.push(Buffer.from("ok")), [
+    { kind: "char", value: "o" }, { kind: "char", value: "k" },
+  ]);
+
+  // End to end: the app's own deadline fires and the draft stays clean.
+  const h = harness();
+  h.app.feed(Buffer.from([0xed, 0x95]));
+  assert.equal(h.app.snapshot.prompt.text, "");
+  await new Promise(resolve => setTimeout(resolve, TERMINAL_BOUNDS.textDelayMs.value + 30));
+  assert.equal(h.app.snapshot.prompt.text, "", "half a code point reached the draft");
+  h.app.feed(Buffer.from("a"));
+  assert.equal(h.app.snapshot.prompt.text, "a", "the keyboard died with a split code point");
+});
+
+test("T114 / TUI-023: a prompt that was never delivered is named, and given back when it can be", () => {
+  // The failure this holds down: three prompts waiting behind a busy engine,
+  // one of them fails to send, and the Human is told only that "the input"
+  // could not be sent -- neither which one nor what it said.
+  const h = harness();
+  h.app.feed(Buffer.from("첫 번째"));
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, ["첫 번째"]);
+
+  h.app.returnPrompt("첫 번째", "socket closed");
+  assert.ok(h.app.lines.some(line => line.includes("보내지 못한 입력: 첫 번째")),
+    "the transcript does not say which prompt was lost, or what it said");
+  assert.equal(h.app.snapshot.prompt.text, "첫 번째",
+    "an empty draft is where a failed prompt belongs, ready to send again");
+  assert.match(h.last(), /전송하지 못했습니다/);
+  assert.match(h.last(), /socket closed/);
+  // "Do I have to retype it?" is the part the Human acts on, and the notice
+  // line is cut to the screen's width, so matching it here is also the guard
+  // against the wording growing past that bound.
+  assert.match(h.last(), /입력은 그대로 있습니다/);
+
+  // The cause is the one part of that line the engine controls the length of.
+  // A failure reported with a wall of text must not cost the Human the answer
+  // to that question -- the cause is what gets cut, not the recovery.
+  const long = harness();
+  long.app.returnPrompt("짧은 입력", "x".repeat(4000));
+  assert.match(long.last(), /입력은 그대로 있습니다/,
+    "a long failure reason pushed the recovery off the screen");
+  assert.equal(long.app.snapshot.prompt.text, "짧은 입력");
+  assert.ok(long.terminal.frames[long.terminal.frames.length - 1]!.every(line => [...line].length <= 100),
+    "the notice grew past the screen instead of being cut to it");
+});
+
+test("T114 / TUI-023: a failed prompt never overwrites what the Human is typing", () => {
+  const h = harness();
+  h.app.feed(Buffer.from("지금 쓰는 중"));
+  h.app.returnPrompt("보내지 못한 것", "socket closed");
+  assert.equal(h.app.snapshot.prompt.text, "지금 쓰는 중",
+    "returning a failed prompt destroyed the draft the Human was in the middle of");
+  assert.ok(h.app.lines.some(line => line.includes("보내지 못한 것")),
+    "the text that was not sent is nowhere the Human can copy it from");
+  assert.match(h.last(), /대화에 남겨 두었습니다/);
+
+  // The kept text is recoverable in full, newlines and all.
+  const multi = harness();
+  multi.app.feed(Buffer.from("x"));
+  multi.app.returnPrompt("one\ntwo", "socket closed");
+  assert.deepEqual(multi.app.lines, ["✗ 보내지 못한 입력: one", "  two"]);
 });

@@ -190,6 +190,7 @@ async function main(argv: readonly string[]): Promise<void> {
         onLine: line => app.line(line),
         onBusy: busy => app.setBusy(busy),
         onEnd: reason => { session = null; app.line(reason); },
+        onPromptFailed: (text, reason) => app.returnPrompt(text, reason),
       },
     );
     app.line(`OMA · society ${society}. Ctrl+X 로 관리 화면을 엽니다.`);
