@@ -4,9 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `8df5ac8`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `07226da`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `9947c83916905bb705e524d101e4b24f780c3c9b89d67bddfb0caacc4fcf8800` (521 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `c67653e59af4f9c923867df9574ffe3d83c5a778f1b7a5a08e1fcdcd63673a58` (523 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -16,7 +16,7 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1114/1114 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1128/1128 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
 | `npm run verify:fast` | PASS, EXECUTED |
@@ -25,7 +25,7 @@
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
 | GitHub Actions current-SHA | NOT_OBSERVED (push 완료, 이 세션의 `gh` 인증 없음) |
-| `node scripts/loc.mjs` | **216 files / 20,192 code LOC** |
+| `node scripts/loc.mjs` | **217 files / 20,342 code LOC** |
 
 ### 현재 범위
 
@@ -360,6 +360,42 @@ owner/trace/spec 또는 workflow가 바뀐 사실을 놓친다. 그래서 **veri
 나머지는 포함한다. 대표 입력 mutation과 새 implementation 파일 추가가 digest를 바꾸며 runtime output은 바꾸지 않는다는 `R38`을
 추가했다. 다시 실행해 다시 적지 않으면 "the validation record names verification inputs that are not this tree's"로 실패한다.
 
+### 제품 표면: 일곱 번째 감사와 전체 적대적 검증에서 닫은 것
+
+**transcript의 500이 줄이 아니라 append 횟수였다.** 기록에 들어가는 경로는 하나였지만, 그 하나가 세던 것은 "몇 번 넣었는가"였다.
+모델의 한 응답은 한 번의 append이고 수천 줄일 수 있으므로, 500 entry는 수백만 줄과 같은 말이었다. 반대로 줄만 세는 것도 한도가
+아니다 — 한 줄이 megabyte일 수 있다. 그래서 대화가 무엇을 쥐는지를 한 state machine이 소유하게 했다(`src/tui/transcript.ts`):
+줄 자르기, 줄당 1 KiB, 전체 256 KiB, 최근 500 논리 줄을 모두 그 안에서 집행하고, 자르기는 UTF-8 code point 경계에서 수행해
+저장된 줄이 깨진 byte로 끝나지 않으며 grapheme은 가능한 한 쪼개지 않는다. 역검증은 같은 입력에 대해 약한 규칙이 실패하는 것을
+함께 본다 — append를 세면 2000줄짜리 한 번을 1 entry로 들고 있고, byte 한도 없이 줄만 세면 512 KiB를 들고 있다.
+
+**붙여넣기의 개행이 전부 Enter였다.** 여섯 번째 수정은 붙여넣기를 같은 key 경로에 태웠지만, 그 경로에서 `\n`은 제출이다. 사람이
+여러 줄을 붙여넣으면 마지막 줄을 읽기도 전에 앞줄들이 차례로 Principal에게 갔다 — `rm -rf build`가 사람이 Enter를 누르기 전에
+제출되는 형태다. 이제 terminal의 bracketed paste(DEC 2004)를 화면 취득 때 켜고 반납 때 끄며, `ESC[200~`…`ESC[201~` 사이를 한
+입력 경계로 받는다. paste는 제출이 아니라 draft 편집이고, 내용의 C0/C1은 텍스트로 소독하며, 한도를 넘은 paste는 prefix를 남기지
+않고 통째로 거절한다. 브래킷을 벗기면 그 시험이 `["rm -rf build"]`가 먼저 제출되는 것을 보고 실패한다.
+
+**끝나지 않은 것에 deadline이 없었다.** 미완 CSI를 들고 있는 decoder는 멈춰 있는 것이 아니라, 사람이 다음에 누르는 키를 그
+report의 마지막 byte로 삼켜 버린다. 이제 decoder가 "무엇을 기다리는지"를 알기에 스스로 delay를 말하고, 시작해 놓고 끝나지 않은
+모든 token(분할 UTF-8, 미완 ESC/CSI, 열린 paste, 한도 초과로 버리는 중인 report)에 단일 deadline이 걸린다. deadline을 없애면
+`ESC[` 뒤에 친 `C`가 `{kind:"right"}`가 아니라 그 CSI의 final byte로 사라지는 것을 시험이 본다.
+
+**거절된 prompt가 보낸 것처럼 화면에 남았다.** echo를 먼저 그리고 거절을 나중에 알리면, 사람이 보기에 그 줄은 Principal이 이미
+들고 일하는 prompt와 구별되지 않고 다시 칠 원문도 남지 않는다. 다섯 번째 수정이 "not running을 관측하는 것과 run을 시작하는 것은
+한 단계"라고 정한 것과 같은 이유로, 수락 관측과 화면 표시도 한 단계여야 한다. `submitPrompt` port가 수락 여부를 그 호출에서
+답하고, transcript에는 수락된 것만 들어가며, 거절이면 원문 그대로 draft로 돌아가고 사유를 알린다. 비동기 보고로 되돌리면
+"a refused prompt was echoed into the transcript"로 실패한다.
+
+**적대적 검증에서 찾은 실결함: 미완 paste가 조각으로 전달됐다.** 위 수정을 넣은 뒤 스스로 경계를 밀어 보다가, terminal이
+`ESC[201~`을 보내지 않은 채 입력이 끊기면 `flushPending()`이 그때까지 모은 내용을 **정상 paste로** draft에 넣는 것을 발견했다.
+주석은 "rejected paste rather than partially delivered"라고 적혀 있었고 코드는 그 반대였다 — paste bound가 막으려던 바로 그 실패,
+즉 전체처럼 읽히는 조각이 prompt에 남는 일이다. 끝나지 않은 paste는 truncated로 종료하도록 고쳤다. 시험은 조각이 거절되고
+Backspace로 초과 상태를 푼 뒤 타이핑이 정상으로 이어지는 것까지 본다.
+
+**관측한 것**: 실제 pty에 `ESC[?2004h`가 기동 직후 나가고 `ESC[?2004l`가 복원 시 나가는 것, pty로 보낸 두 줄 paste가 `"a\nb"`
+하나로 도착하는 것, SIGINT/SIGTERM/uncaughtException 경로가 모두 같은 복원을 거치는 것. **관측하지 못한 것**: paste가 매우 클 때의
+peak memory(최종 보유량만 관측했고 그 사실을 시험 주석에 적었다), bracketed paste를 지원하지 않는 terminal에서의 동작.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
@@ -428,7 +464,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **216 files / 20,192 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **217 files / 20,342 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

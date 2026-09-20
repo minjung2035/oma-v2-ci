@@ -8,7 +8,7 @@
  */
 import type { Key } from "./keys.js";
 import { CONFIG_BOUNDS } from "./limits.js";
-import { EMPTY_PROMPT, appendPrompt, erasePrompt, submitPrompt, type PromptDraft, type PromptTransition } from "./prompt.js";
+import { EMPTY_PROMPT, appendPrompt, erasePrompt, pastePrompt, submitPrompt, type PromptDraft, type PromptTransition } from "./prompt.js";
 import { assertNever } from "../domain/exhaustive.js";
 
 export type Category = "dashboard" | "config" | "mail";
@@ -72,6 +72,7 @@ export type Notice =
   | { readonly kind: "saved"; readonly label: string; readonly value: string; readonly apply: ApplyScope | null }
   | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "save-failed"; readonly message: string }
+  | { readonly kind: "send-failed"; readonly message: string }
   | { readonly kind: "prompt-limit" }
   | { readonly kind: "text"; readonly text: string };
 
@@ -309,6 +310,11 @@ function stepConversation(state: State, key: Key, frameBytes: number): Step {
   switch (key.kind) {
     case "char":
       return conversationTransition(state, appendPrompt(state.prompt, key.value, frameBytes));
+    case "paste":
+      // One paste is one edit of the draft, never a submission: the Human sees
+      // what arrived and presses Enter, rather than a pasted newline sending a
+      // line they have not read yet.
+      return conversationTransition(state, pastePrompt(state.prompt, key.value, key.truncated, frameBytes));
     case "backspace":
       return conversationTransition(state, erasePrompt(state.prompt));
     case "enter":

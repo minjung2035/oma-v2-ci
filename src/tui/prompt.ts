@@ -18,6 +18,18 @@ export type PromptTransition =
   | { readonly kind: "clear-limit"; readonly draft: PromptDraft }
   | { readonly kind: "submit"; readonly draft: PromptDraft; readonly text: string };
 
+/** What the session did with a submitted prompt, answered in the same step it
+ * was submitted.
+ *
+ * The transcript shows what was accepted, so acceptance cannot be something
+ * the screen learns later: a prompt echoed first and refused afterwards reads
+ * exactly like a prompt the Principal is working on, and the Human has no way
+ * to tell those apart -- nor anything left to retype from.
+ */
+export type PromptOutcome =
+  | { readonly kind: "accepted" }
+  | { readonly kind: "refused"; readonly reason: string };
+
 export const EMPTY_PROMPT: PromptDraft = Object.freeze({ text: "", overflow: false });
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
@@ -37,6 +49,24 @@ export function appendPrompt(draft: PromptDraft, value: string, frameBytes: numb
 export function erasePrompt(draft: PromptDraft): PromptTransition {
   const next = { text: withoutLastGrapheme(draft.text), overflow: false };
   return { kind: draft.overflow ? "clear-limit" : "none", draft: next };
+}
+
+/** One bracketed paste, admitted whole or not at all.
+ *
+ * A paste is one thing the Human did, so it is one admission decision. The
+ * same is true of a paste the terminal never finished or that passed the
+ * decoder's bound: what is left of it is a fragment nobody chose to send.
+ */
+export function pastePrompt(draft: PromptDraft, value: string, truncated: boolean, frameBytes: number): PromptTransition {
+  if (draft.overflow) return { kind: "none", draft };
+  if (truncated) return { kind: "show-limit", draft: { text: draft.text, overflow: true } };
+  return appendPrompt(draft, value, frameBytes);
+}
+
+/** A refused prompt returns to the draft it was submitted from, so nothing the
+ * Human typed is lost to a session that would not take it. */
+export function returnedPrompt(text: string): PromptDraft {
+  return { text, overflow: false };
 }
 
 export function submitPrompt(draft: PromptDraft): PromptTransition {

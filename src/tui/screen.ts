@@ -21,6 +21,13 @@ const CURSOR_OFF = `${ESC}[?25l`;
 const CURSOR_ON = `${ESC}[?25h`;
 const HOME = `${ESC}[H`;
 const CLEAR = `${ESC}[2J`;
+/** DEC 2004. Without it the terminal sends a paste as if it had been typed,
+ * so every newline in it is an Enter and one paste is submitted as several
+ * prompts. It is turned off with the alternate screen: a terminal left in this
+ * mode after OMA exits would bracket pastes at a shell that does not read
+ * them. */
+const PASTE_ON = `${ESC}[?2004h`;
+const PASTE_OFF = `${ESC}[?2004l`;
 const NEWLINE = `${String.fromCharCode(13)}${String.fromCharCode(10)}`;
 
 export interface TerminalStreams {
@@ -34,7 +41,7 @@ export function openTerminal(streams: TerminalStreams): Terminal {
   let previous: readonly string[] = [];
   if (input.isTTY) input.setRawMode(true);
   input.resume();
-  output.write(ALT_ON + CURSOR_OFF + CLEAR);
+  output.write(ALT_ON + CURSOR_OFF + PASTE_ON + CLEAR);
   const terminal: Terminal = {
     get columns() { return Math.max(TERMINAL_BOUNDS.minColumns.value, output.columns ?? TERMINAL_BOUNDS.assumedColumns.value); },
     get rows() { return Math.max(TERMINAL_BOUNDS.minRows.value, output.rows ?? TERMINAL_BOUNDS.assumedRows.value); },
@@ -55,7 +62,7 @@ export function openTerminal(streams: TerminalStreams): Terminal {
       previous = [];
       try { if (input.isTTY) input.setRawMode(false); } catch { /* terminal already gone */ }
       input.pause();
-      output.write(CURSOR_ON + ALT_OFF);
+      output.write(PASTE_OFF + CURSOR_ON + ALT_OFF);
     },
   };
   return terminal;

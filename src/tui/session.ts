@@ -20,6 +20,7 @@ import { loadConfiguration } from "../config.js";
 import { StoreError } from "../domain/errors.js";
 import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
 import { CONVERSATION_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
+import type { PromptOutcome } from "./prompt.js";
 
 export interface SessionPaths {
   readonly piCommand: string;
@@ -400,21 +401,36 @@ export class PrincipalSession {
   /** The Human is never made to wait for mail, and never has to retype. A
    * prompt typed while the session is spoken for waits here in order and is
    * written the moment the session is free; it is never folded into the run
-   * already going, so that run keeps its own boundary. */
-  async submit(text: string): Promise<void> {
-    if (this.closed) { this.sink.onEnd("세션이 종료되어 전송할 수 없습니다."); return; }
+   * already going, so that run keeps its own boundary.
+   *
+   * Whether this session took the prompt is answered here, synchronously, for
+   * the same reason ownership is claimed synchronously: the screen shows what
+   * was accepted, and an answer that arrives after the screen has drawn is an
+   * answer about a prompt the Human has already been told was sent. Everything
+   * that decides acceptance -- closed, over the frame, no room left to wait --
+   * is known in this call. What cannot be known here is whether the write
+   * itself will succeed; that failure is reported into the transcript the same
+   * way a failed write from the waiting queue is.
+   */
+  submit(text: string): PromptOutcome {
+    if (this.closed) {
+      this.sink.onEnd("세션이 종료되어 전송할 수 없습니다.");
+      return { kind: "refused", reason: "세션이 종료되었습니다." };
+    }
     if (!humanPromptFitsFrame(text, this.frameBytes))
-      throw new StoreError("LIMIT_EXCEEDED", "입력이 이 세션의 UTF-8 prompt 한도를 넘습니다.");
+      return { kind: "refused", reason: "입력이 이 세션의 UTF-8 prompt 한도를 넘습니다." };
     if (this.busy) {
       if (this.waiting.length >= PrincipalSession.WAITING)
-        throw new StoreError("LIMIT_EXCEEDED",
-          `${PrincipalSession.WAITING}개까지만 대기시킬 수 있습니다. 진행 중인 응답이 끝난 뒤 다시 보내 주세요.`);
+        return { kind: "refused", reason: `${PrincipalSession.WAITING}개까지만 대기시킬 수 있습니다. 진행 중인 응답이 끝난 뒤 다시 보내 주세요.` };
       this.waiting.push(text);
-      return;
+      return { kind: "accepted" };
     }
     this.own("human");
-    try { await this.sendPrompt(this.nextRequestId(), text, "human"); }
-    catch (error) { this.release("human"); throw error; }
+    void this.sendPrompt(this.nextRequestId(), text, "human").catch((error: unknown) => {
+      this.sink.onLine(`⚠ 입력을 전송하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+      this.release("human");
+    });
+    return { kind: "accepted" };
   }
 
   close(): void {

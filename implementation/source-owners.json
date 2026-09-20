@@ -228,11 +228,13 @@
       "src/entry/oma.ts#main",
       "src/tui/app.ts#TuiApp",
       "src/tui/keys.ts#KeyDecoder",
+      "src/tui/screen.ts#openTerminal",
       "src/tui/model.ts#step"
     ],
     "negativeTests": [
       "test/tui-app.test.ts#TUI-002",
-      "test/tui-model.test.ts#key decoding"
+      "test/tui-model.test.ts#key decoding",
+      "test/surface-process.test.ts#T112"
     ]
   },
   {
@@ -383,11 +385,13 @@
       "src/tui/app.ts#TuiApp",
       "src/tui/model.ts#step",
       "src/tui/prompt.ts#appendPrompt",
+      "src/tui/transcript.ts#Transcript",
       "src/tui/limits.ts#humanPromptFitsFrame",
       "src/tui/session.ts#PrincipalSession.submit"
     ],
     "negativeTests": [
       "test/tui-app.test.ts#T120",
+      "test/tui-transcript.test.ts#T120",
       "test/principal-endpoint.test.ts#T120"
     ]
   },

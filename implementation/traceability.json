@@ -2583,8 +2583,8 @@
   {
     "requirement": "TUI-002; arch §23.2",
     "source": "implementation-spec.md",
-    "digest": "291c76a320d3c783cdb9e740b7e85333016ebde77253651a69fd1e76c27881c8",
-    "normativeText": "**MUST [TUI-002; arch §23.2]** `oma`는 두 개의 서로 다른 실행 파일이다. host 설치 PATH의 것은 Human TUI이고, Resident rootfs 안의 것은 CLI-001의 model-facing CLI다. 두 실행 파일은 argv 파서, capability, 연결 소켓, 설정 접근을 공유하지 않는다. 공유 가능한 것은 frame codec과 transport처럼 부작용과 권한이 없는 leaf뿐이다. Human TUI의 terminal decoder는 stdin read를 key 경계로 가정하지 않고 같은 stream에서 분할된 UTF-8 code point와 ESC/CSI report를 다음 read까지 이어서 완성한다. incomplete report의 보유량은 선언된 작은 한도를 가지며 unknown report는 prompt 문자로 누출하지 않는다. 대화 Backspace는 UTF-16 code unit이 아니라 grapheme cluster 하나를 지운다.",
+    "digest": "23653c7984a7de976e185f2ce3ba082ccbecae3f25ce7c92cdad7b564d1205b9",
+    "normativeText": "**MUST [TUI-002; arch §23.2]** `oma`는 두 개의 서로 다른 실행 파일이다. host 설치 PATH의 것은 Human TUI이고, Resident rootfs 안의 것은 CLI-001의 model-facing CLI다. 두 실행 파일은 argv 파서, capability, 연결 소켓, 설정 접근을 공유하지 않는다. 공유 가능한 것은 frame codec과 transport처럼 부작용과 권한이 없는 leaf뿐이다. Human TUI의 terminal decoder는 stdin read를 key 경계로 가정하지 않고 같은 stream에서 분할된 UTF-8 code point와 ESC/CSI report를 다음 read까지 이어서 완성한다. incomplete report의 보유량은 선언된 작은 한도를 가지며 unknown report는 prompt 문자로 누출하지 않는다. 시작하고 끝나지 않은 모든 token(분할 UTF-8, 미완 ESC/CSI, 열린 paste)은 선언된 deadline을 가지며, deadline이 지나면 보유분을 포기한다. deadline이 없으면 Human이 다음에 누르는 key가 미완 report의 마지막 byte로 소비되어 사라진다. TUI는 terminal의 bracketed paste(DEC 2004)를 화면 취득 시 켜고 반납 시 끄며, 한 paste를 개행마다의 Enter가 아니라 하나의 입력 경계로 받는다. paste는 제출이 아니라 draft 편집이며, 한도를 넘었거나 terminal이 끝내지 않은 paste는 남은 prefix를 전달하지 않고 전체를 거절한다. 대화 Backspace는 UTF-16 code unit이 아니라 grapheme cluster 하나를 지운다. 표시 경로는 C0/C1 제어 byte를 terminal 명령이 아니라 텍스트로 다룬다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "src/tui/keys.ts#KeyDecoder",
@@ -2593,11 +2593,13 @@
       "src/entry/oma.ts#main",
       "src/tui/app.ts#TuiApp",
       "src/tui/keys.ts#KeyDecoder",
+      "src/tui/screen.ts#openTerminal",
       "src/tui/model.ts#step"
     ],
     "negativeTests": [
       "test/tui-app.test.ts#TUI-002",
-      "test/tui-model.test.ts#key decoding"
+      "test/tui-model.test.ts#key decoding",
+      "test/surface-process.test.ts#T112"
     ],
     "evidence": null,
     "status": "unverified",
@@ -2994,8 +2996,8 @@
   {
     "requirement": "TUI-023; arch §23.6",
     "source": "implementation-spec.md",
-    "digest": "06ef747da134fdb43fba00ab66b31d805a6fff554d866d6053574ee234df3dee",
-    "normativeText": "**MUST [TUI-023; arch §23.6]** 대화 표면의 메모리 입력은 선언된 한도를 가진다. transcript는 최근 500줄만 보유하고 모든 생산자가 하나의 append 경로를 사용한다. 작성 중인 Human prompt는 최대 16 KiB의 UTF-8 source bytes만 보유하며, 현재 `frameBytes`가 더 작으면 완전한 Pi prompt command의 JSON envelope까지 직렬화한 크기가 그 frame 안에 드는 더 작은 값까지만 받는다. 문자 수로 byte 한도를 대신하거나 JSON escaping 비용을 누락하지 않는다. 붙여넣기도 같은 경계를 거치고 초과 부분에서 더 자라지 않는다. 어느 부분이든 한도를 넘은 입력은 보관한 bounded prefix를 정상 prompt로 가장해 제출하지 않고 **전체 prompt를 제출하지 않으며** 화면에 `입력 한도 초과`를 표시한다. Human이 Backspace로 편집해 초과 상태를 해제한 뒤에만 제출할 수 있다. 실행 중인 run을 기다리는 Human prompt는 host에서 최대 16개만 보유하며, 초과 입력은 조용히 버리지 않고 접수 전에 거절한다.",
+    "digest": "f46763c6b5fd523008f51beb80b4a7744003b92caafd5e4bf1dba1a8cbad60a0",
+    "normativeText": "**MUST [TUI-023; arch §23.6]** 대화 표면의 메모리 입력은 선언된 한도를 가진다. transcript는 최근 500 논리 줄, 전체 256 KiB, 한 줄당 1 KiB의 세 한도를 동시에 만족하는 범위만 보유하고 모든 생산자가 하나의 append 경로를 사용한다. 보유량의 단위는 append 호출 수가 아니라 줄과 byte이며, 한 번의 append가 몇 줄이든 그 줄들이 줄 한도에 계산된다. 줄 자르기는 UTF-8 code point 경계에서 수행해 저장된 줄이 깨진 byte로 끝나지 않는다. 작성 중인 Human prompt는 최대 16 KiB의 UTF-8 source bytes만 보유하며, 현재 `frameBytes`가 더 작으면 완전한 Pi prompt command의 JSON envelope까지 직렬화한 크기가 그 frame 안에 드는 더 작은 값까지만 받는다. 문자 수로 byte 한도를 대신하거나 JSON escaping 비용을 누락하지 않는다. 붙여넣기도 같은 경계를 거치고 초과 부분에서 더 자라지 않는다. 어느 부분이든 한도를 넘은 입력은 보관한 bounded prefix를 정상 prompt로 가장해 제출하지 않고 **전체 prompt를 제출하지 않으며** 화면에 `입력 한도 초과`를 표시한다. Human이 Backspace로 편집해 초과 상태를 해제한 뒤에만 제출할 수 있다. 실행 중인 run을 기다리는 Human prompt는 host에서 최대 16개만 보유하며, 초과 입력은 조용히 버리지 않고 접수 전에 거절한다. session이 prompt를 수락했는지는 제출과 같은 step에서 동기적으로 답하며, transcript에는 수락된 prompt만 들어간다. 거절된 prompt는 화면에 보낸 것처럼 남기지 않고 원문 그대로 draft로 되돌리며 거절 사유를 표시한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "src/tui/prompt.ts#appendPrompt",
@@ -3005,11 +3007,13 @@
       "src/tui/app.ts#TuiApp",
       "src/tui/model.ts#step",
       "src/tui/prompt.ts#appendPrompt",
+      "src/tui/transcript.ts#Transcript",
       "src/tui/limits.ts#humanPromptFitsFrame",
       "src/tui/session.ts#PrincipalSession.submit"
     ],
     "negativeTests": [
       "test/tui-app.test.ts#T120",
+      "test/tui-transcript.test.ts#T120",
       "test/principal-endpoint.test.ts#T120"
     ],
     "evidence": null,

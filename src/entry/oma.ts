@@ -27,6 +27,7 @@ import { provisionSociety, residentRootfsPath, type ProvisionReport } from "../r
 import { superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import type { ExtensionRow, MailRow } from "../tui/model.js";
+import type { PromptOutcome } from "../tui/prompt.js";
 
 function usage(): never {
   process.stderr.write("usage: oma [--society <name>] [--config <path>]\n");
@@ -115,11 +116,9 @@ async function main(argv: readonly string[]): Promise<void> {
       toggleExtension(extensionContext, id, role, enabled);
       reload();
     },
-    submitPrompt: (text: string) => {
-      if (session === null) { app.note("Pi 세션이 없어 전송할 수 없습니다."); return; }
-      void session.submit(text).catch((error: unknown) => {
-        app.note(`전송 실패: ${error instanceof Error ? error.message : String(error)}`);
-      });
+    submitPrompt: (text: string): PromptOutcome => {
+      if (session === null) return { kind: "refused", reason: "Pi 세션이 없습니다." };
+      return session.submit(text);
     },
     quit: () => { shutdown(0); },
   };

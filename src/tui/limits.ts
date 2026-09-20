@@ -27,10 +27,20 @@ export const TERMINAL_BOUNDS = Object.freeze({
   assumedRows: bound(24, "lines", "used when the stream reports no height"),
   escapeSequenceBytes: bound(64, "bytes", "an incomplete terminal report must not grow without limit"),
   escapeDelayMs: bound(50, "count", "milliseconds allowed to distinguish a lone Escape key from a split terminal report"),
+  pasteBytes: bound(16 * 1024, "bytes", "one bracketed paste the decoder assembles; a report that does not end within it is broken input, not a paste"),
+  pasteIdleMs: bound(1000, "count", "milliseconds a started paste may stall before the decoder stops waiting for its end marker"),
 });
 
 export const CONVERSATION_BOUNDS = Object.freeze({
+  // Three bounds, because one of them alone is not a bound. A produced line is
+  // whatever the engine wrote, newlines included: counting produced entries
+  // would let one reply hold thousands of displayed lines, and counting lines
+  // alone would let one line hold megabytes. The transcript therefore stores
+  // logical lines, each within a byte bound, and holds a bounded number and a
+  // bounded total of them.
   transcriptLines: bound(500, "lines", "a long session must not grow without limit"),
+  transcriptBytes: bound(256 * 1024, "bytes", "how much conversation the screen keeps, whatever the length of one produced line"),
+  transcriptLineBytes: bound(1024, "bytes", "one stored transcript line; a longer produced line is stored as several"),
   // The two largest things a Human can put into this process. A prompt is
   // composed one key at a time and a paste arrives as keys too, so without a
   // ceiling one paste decides how much memory the screen holds; and a prompt

@@ -1336,7 +1336,11 @@ Pi의 built-in command나 UI가 OMA TUI 위로 직접 노출되지 않게 한다
 ### 23.6 TUI 구조와 조작
 
 
-기본 화면은 일반 코딩 에이전트와 같은 대화 중심이다. 관리 기능을 대화 UI 안에 계속 추가하지 않는다. 화면이 무엇까지 커지는지는 한 곳에 선언한다: 대화 기록은 최근 500줄, 작성 중인 Human prompt는 최대 16 KiB의 UTF-8 source bytes이면서 완전한 Pi prompt JSON command가 현재 frame 안에 드는 범위, engine이 실행 중일 때 host가 들고 있는 prompt는 16개다. 문자 수로 byte 한도를 대신하거나 JSON escaping 비용을 누락하지 않고, 기록에 줄을 넣는 경로는 하나다. 사람이 입력하거나 붙여넣은 것이 제품이 쥐는 양을 정하지 않는다. UTF-8 code point와 terminal ESC/CSI report는 stdin read 경계와 무관하게 한 stream decoder가 완성하며, 불완전한 report는 작은 선언 한도 안에서만 보유한다. Backspace는 UTF-16 code unit이 아니라 사용자에게 보이는 grapheme 하나를 지운다. 입력이 prompt 또는 frame 한도를 한 번이라도 넘으면 보관된 bounded prefix를 완전한 요청으로 제출하지 않고 화면에 입력 한도 초과를 표시한다. Backspace로 편집해 초과 상태를 해제한 뒤에만 다시 제출할 수 있다.
+기본 화면은 일반 코딩 에이전트와 같은 대화 중심이다. 관리 기능을 대화 UI 안에 계속 추가하지 않는다. 화면이 무엇까지 커지는지는 한 곳에 선언한다: 대화 기록은 최근 500 논리 줄이면서 전체 256 KiB, 그 안의 한 줄은 1 KiB, 작성 중인 Human prompt는 최대 16 KiB의 UTF-8 source bytes이면서 완전한 Pi prompt JSON command가 현재 frame 안에 드는 범위, engine이 실행 중일 때 host가 들고 있는 prompt는 16개다. 기록의 단위는 append 횟수가 아니라 줄이다: 한 번의 append가 모델이 쓴 수천 줄일 수 있으므로 append를 세는 것은 한도가 아니고, 줄만 세는 것도 한 줄이 megabyte가 될 수 있어 한도가 아니다. 그래서 줄로 자르는 일, 한 줄의 byte 한도, 전체 byte 한도를 한 state machine(`tui/transcript.ts`)이 소유하고, 기록에 줄을 넣는 경로는 그 하나다. 문자 수로 byte 한도를 대신하거나 JSON escaping 비용을 누락하지 않는다. 사람이 입력하거나 붙여넣은 것이 제품이 쥐는 양을 정하지 않는다.
+
+UTF-8 code point, terminal ESC/CSI report, bracketed paste는 stdin read 경계와 무관하게 한 stream decoder가 완성하며, 불완전한 report는 작은 선언 한도 안에서만 보유한다. 시작해 놓고 끝나지 않은 것에는 모두 deadline이 있다: deadline이 없는 미완 report는 멈춰 있는 것이 아니라 사람이 다음에 누르는 키를 그 report의 마지막 byte로 삼켜 버린다. 터미널의 bracketed paste(DEC 2004)를 켜서 붙여넣기를 하나의 입력 경계로 받는다. 그것이 없으면 paste 안의 개행이 전부 Enter가 되어, 사람이 아직 읽지도 않은 줄이 먼저 제출된다. paste는 제출이 아니라 draft 편집이고, 한도를 넘었거나 터미널이 끝내지 않은 paste는 남은 조각을 넘기지 않고 통째로 거절한다. Backspace는 UTF-16 code unit이 아니라 사용자에게 보이는 grapheme 하나를 지운다. 입력이 prompt 또는 frame 한도를 한 번이라도 넘으면 보관된 bounded prefix를 완전한 요청으로 제출하지 않고 화면에 입력 한도 초과를 표시한다. Backspace로 편집해 초과 상태를 해제한 뒤에만 다시 제출할 수 있다.
+
+제출을 수락했는지는 session이 그 자리에서 답하고, 기록에는 수락된 것만 남는다. 먼저 `> text`로 그려 놓고 나중에 거절을 알리면 사람이 보기에는 Principal이 이미 들고 일하는 prompt와 구별되지 않고, 다시 칠 원문도 남지 않는다. 거절된 prompt는 draft로 돌아가고 왜 못 보냈는지를 알림 한 줄로 말한다. 화면에 그릴 때 C0/C1 제어 byte는 터미널 명령이 아니라 텍스트로 다룬다: 모델이나 메일이 쓴 escape sequence가 커서를 움직이거나 화면을 지우지 못한다.
 
 ```text
 ┌──────────────────────────────────────────┐

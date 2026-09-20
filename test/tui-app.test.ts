@@ -6,7 +6,7 @@ import { StoreError } from "../src/domain/errors.js";
 import type { ConfigField, ExtensionRow, MailRow } from "../src/tui/model.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 import type { Terminal } from "../src/tui/screen.js";
-import { CONVERSATION_BOUNDS, humanPromptByteLimit, humanPromptFrameBytes } from "../src/tui/limits.js";
+import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptByteLimit, humanPromptFrameBytes } from "../src/tui/limits.js";
 
 const ESC = String.fromCharCode(27);
 const CTRL_X = Buffer.from([0x18]);
@@ -14,6 +14,8 @@ const RIGHT = Buffer.from(`${ESC}[C`);
 const DOWN = Buffer.from(`${ESC}[B`);
 const UP = Buffer.from(`${ESC}[A`);
 const ENTER = Buffer.from("\n");
+/** What a terminal in bracketed-paste mode actually sends. */
+const paste = (text: string): Buffer => Buffer.from(`${ESC}[200~${text}${ESC}[201~`);
 
 function fakeTerminal(): Terminal & { frames: string[][] } {
   const frames: string[][] = [];
@@ -35,6 +37,9 @@ interface Harness {
   readonly toggles: { id: string; role: string; enabled: boolean }[];
   readonly prompts: string[];
   readonly quits: number[];
+  /** Make the session refuse the next prompts, or accept them again. A refusal
+   * is the session's answer, not a thrown error, so tests drive it here. */
+  refuse(reason: string | null): void;
   last(): string;
 }
 
@@ -43,6 +48,7 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
   const toggles: { id: string; role: string; enabled: boolean }[] = [];
   const prompts: string[] = [];
   const quits: number[] = [];
+  let refusal: string | null = null;
   let model = "fast";
   const config = (): readonly ConfigField[] => [
     { kind: "choice", id: "worker-model", label: "Worker model", value: model, options: ["cheap", "fast"], apply: "next-activation" },
@@ -64,7 +70,10 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
     body: () => "본문",
     setField: (field, value) => { writes.push({ field, value }); if (field === "worker-model") model = String(value); },
     setExtension: (id, role, enabled) => { toggles.push({ id, role, enabled }); },
-    submitPrompt: text => { prompts.push(text); },
+    submitPrompt: text => {
+      prompts.push(text);
+      return refusal === null ? { kind: "accepted" } : { kind: "refused", reason: refusal };
+    },
     quit: () => { quits.push(1); },
     ...overrides,
   };
@@ -74,6 +83,7 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
   app.draw();
   return {
     app, terminal, writes, toggles, prompts, quits,
+    refuse: reason => { refusal = reason; },
     last: () => (terminal.frames[terminal.frames.length - 1] ?? []).join("\n"),
   };
 }
@@ -260,6 +270,173 @@ test("TUI-002: malformed and overlong terminal reports stay bounded and never be
   assert.deepEqual(decoder.finish(), []);
 
   const unknown = new KeyDecoder();
-  assert.deepEqual(unknown.push(Buffer.from(`${ESC}[200`)), []);
+  assert.deepEqual(unknown.push(Buffer.from(`${ESC}[199`)), []);
   assert.deepEqual(unknown.push(Buffer.from("~x")), [{ kind: "char", value: "x" }]);
+});
+
+test("TUI-002/023: a pasted block is one prompt boundary, not one prompt per line", () => {
+  // The failure this holds down: a paste whose second line the Human has not
+  // read yet is submitted because its first newline looked like Enter.
+  const h = harness();
+  h.app.feed(paste("rm -rf build\nmake all"));
+  assert.deepEqual(h.prompts, [], "a paste is an edit of the draft, never a submission");
+  assert.equal(h.app.snapshot.prompt.text, "rm -rf build\nmake all");
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, ["rm -rf build\nmake all"]);
+  assert.deepEqual(h.app.lines, ["> rm -rf build", "  make all"],
+    "the echo must read as the one thing that was sent");
+
+  // Negative control: the same bytes without the terminal's brackets are
+  // keystrokes, and the first line goes on its own.
+  const typed = harness();
+  typed.app.feed(Buffer.from("rm -rf build\nmake all"));
+  assert.deepEqual(typed.prompts, ["rm -rf build"],
+    "the control did not reproduce the defect this test exists for");
+});
+
+test("TUI-002: a paste survives every terminal read boundary it can be split at", () => {
+  const bytes = paste("한 줄\n두 번째 줄\tvalue");
+  for (let split = 1; split < bytes.length; split += 1) {
+    const decoder = new KeyDecoder();
+    const keys = [...decoder.push(bytes.subarray(0, split)), ...decoder.push(bytes.subarray(split))];
+    assert.deepEqual(keys, [{ kind: "paste", value: "한 줄\n두 번째 줄\tvalue", truncated: false }],
+      `split at byte ${split}`);
+  }
+});
+
+test("TUI-002: pasted text carries line breaks and tabs, and no terminal instructions", () => {
+  const decoder = new KeyDecoder();
+  const keys = decoder.push(Buffer.from(
+    `${ESC}[200~a\r\nb\rc\td${ESC}[Ae${ESC}[201~`));
+  // The escape byte is removed rather than interpreted: what a paste contains
+  // is text, so an arrow-key report inside one is not an arrow key and its
+  // remaining characters are not hidden either.
+  assert.deepEqual(keys, [{ kind: "paste", value: "a\nb\nc\td[Ae", truncated: false }]);
+  assert.equal(keys[0] && "value" in keys[0] ? keys[0].value.includes(ESC) : true, false,
+    "a paste must not carry an escape byte into the prompt");
+
+  // A partial end marker inside the paste is content, not an end.
+  const partial = new KeyDecoder();
+  assert.deepEqual(partial.push(Buffer.from(`${ESC}[200~x${ESC}[201y${ESC}[201~`)),
+    [{ kind: "paste", value: "x[201y", truncated: false }]);
+});
+
+test("T120 / TUI-023: a paste over the decoder's bound is refused whole, never as its prefix", () => {
+  const oversized = new KeyDecoder();
+  const big = "a".repeat(TERMINAL_BOUNDS.pasteBytes.value + 1);
+  assert.deepEqual(oversized.push(paste(big)), [{ kind: "paste", value: "", truncated: true }],
+    "a bounded prefix must not impersonate the paste");
+
+  const h = harness();
+  h.app.feed(paste(big));
+  assert.equal(h.app.snapshot.prompt.text, "");
+  assert.equal(h.app.snapshot.prompt.overflow, true);
+  assert.match(h.last(), /입력 한도 초과/);
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, []);
+  assert.match(h.last(), /전송하지 않습니다/);
+});
+
+test("TUI-002: a paste the terminal never ended is rejected whole, and the keyboard lives on", async () => {
+  const decoder = new KeyDecoder();
+  decoder.push(Buffer.from(`${ESC}[200~hello`));
+  assert.equal(decoder.pendingDelayMs, TERMINAL_BOUNDS.pasteIdleMs.value,
+    "an assembling paste must declare how long its owner waits");
+  assert.deepEqual(decoder.flushPending(), [{ kind: "paste", value: "", truncated: true }],
+    "what arrived of an unfinished paste is a fragment, not a shorter paste");
+
+  const h = harness();
+  h.app.feed(Buffer.from(`${ESC}[200~hello`));
+  assert.equal(h.app.snapshot.prompt.text, "", "an unfinished paste is not delivered in pieces");
+  await new Promise(resolve => setTimeout(resolve, TERMINAL_BOUNDS.pasteIdleMs.value + 50));
+  assert.equal(h.app.snapshot.prompt.text, "", "the fragment reached the draft after the deadline");
+  assert.equal(h.app.snapshot.prompt.overflow, true);
+  assert.match(h.last(), /입력 한도 초과/);
+  assert.match(h.last(), /Backspace/);
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, [], "a fragment must not be submittable as the paste");
+
+  // The stated way out works, and typing resumes.
+  h.app.key({ kind: "backspace" });
+  assert.equal(h.app.snapshot.prompt.overflow, false);
+  h.app.feed(Buffer.from("x"));
+  assert.equal(h.app.snapshot.prompt.text, "x", "the keyboard died with an unfinished paste");
+});
+
+test("TUI-002: an unfinished terminal report gives up instead of eating the next key", async () => {
+  const h = harness();
+  h.app.feed(Buffer.from(`${ESC}[`));
+  assert.equal(h.app.snapshot.prompt.text, "");
+  await new Promise(resolve => setTimeout(resolve, TERMINAL_BOUNDS.escapeDelayMs.value + 30));
+  h.app.feed(Buffer.from("C"));
+  assert.equal(h.app.snapshot.prompt.text, "C", "the next key was consumed as a CSI final byte");
+
+  // Negative control: with no deadline the same bytes are one report, and the
+  // Human's keystroke is gone.
+  const decoder = new KeyDecoder();
+  decoder.push(Buffer.from(`${ESC}[`));
+  assert.deepEqual(decoder.push(Buffer.from("C")), [{ kind: "right" }],
+    "the control did not reproduce the defect this test exists for");
+
+  // An overlong report is in a different state and needs the same deadline.
+  const overlong = new KeyDecoder();
+  overlong.push(Buffer.from(`${ESC}[${"1".repeat(TERMINAL_BOUNDS.escapeSequenceBytes.value * 2)}`));
+  assert.equal(overlong.pendingDelayMs, TERMINAL_BOUNDS.escapeDelayMs.value);
+  assert.deepEqual(overlong.flushPending(), []);
+  assert.deepEqual(overlong.push(Buffer.from("C")), [{ kind: "char", value: "C" }]);
+});
+
+test("arch 23.3: a prompt the session refused is not echoed as sent and comes back to the draft", () => {
+  const h = harness();
+  h.refuse("대기열이 가득 찼습니다.");
+  h.app.feed(Buffer.from("안녕"));
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, ["안녕"]);
+  assert.equal(h.app.snapshot.prompt.text, "안녕", "a refusal must not cost the Human the text");
+  assert.deepEqual(h.app.lines, [], "a refused prompt must not read as one the Principal has");
+  assert.match(h.last(), /전송하지 못했습니다/);
+  assert.match(h.last(), /대기열이 가득 찼습니다/);
+
+  // Contrast: the same keystrokes, accepted, are echoed exactly once.
+  h.refuse(null);
+  h.app.feed(ENTER);
+  assert.deepEqual(h.prompts, ["안녕", "안녕"]);
+  assert.deepEqual(h.app.lines, ["> 안녕"]);
+  assert.doesNotMatch(h.last(), /전송하지 못했습니다/);
+});
+
+test("TUI-013: produced control bytes are drawn as text, never as terminal instructions", () => {
+  const h = harness();
+  h.app.line(`before${ESC}[2Jafter\u0007\ttab`);
+  assert.ok(h.app.lines[0]?.includes(ESC), "the transcript keeps what was produced");
+  const frame = h.last();
+  assert.doesNotMatch(frame, /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/,
+    "a control byte reached the terminal");
+  assert.equal(frame.includes("\t"), false, "a tab reached the terminal");
+  assert.match(frame, /before\[2Jafter/);
+});
+
+test("TUI-013: a pasted multi-line draft is drawn whole and never pushes the hint off screen", () => {
+  const h = harness();
+  h.app.feed(paste("one\ntwo\nthree"));
+  const lines = h.terminal.frames.at(-1)!;
+  assert.equal(lines.length, 16);
+  assert.ok(lines.some(line => line.startsWith("> one")));
+  assert.ok(lines.some(line => line.trimStart().startsWith("two")));
+  assert.ok(lines.some(line => line.trimStart().startsWith("three")));
+  assert.match(lines.at(-1)!, /Ctrl\+X/);
+  assert.ok(lines.some(line => line.startsWith("─")));
+
+  // A draft longer than the screen shows its end -- where the next character
+  // lands -- and leaves the conversation, divider and hint standing.
+  const long = harness();
+  long.app.feed(paste(Array.from({ length: 40 }, (_, index) => `l${index}`).join("\n")));
+  const frame = long.terminal.frames.at(-1)!;
+  assert.equal(frame.length, 16);
+  assert.ok(frame.some(line => line.includes("l39")));
+  assert.match(frame.at(-1)!, /Ctrl\+X/);
+  assert.ok(frame.some(line => line.startsWith("─")));
+  long.app.feed(ENTER);
+  assert.equal(long.prompts.length, 1);
+  assert.equal(long.prompts[0]!.split("\n").length, 40);
 });

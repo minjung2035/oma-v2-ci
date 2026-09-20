@@ -17,6 +17,11 @@ function worded(notice: Notice): string {
       // A rejected write says nothing was saved rather than leaving the old
       // value looking like it changed.
       return `저장하지 못했습니다: ${notice.message}`;
+    case "send-failed":
+      // Nothing was sent and the text is still in the prompt, so the message
+      // says both: a bare failure would leave the Human unsure whether to
+      // retype it.
+      return `전송하지 못했습니다: ${notice.message} · 입력은 그대로 남겨 두었습니다.`;
     case "prompt-limit":
       return "입력 한도 초과 · 전송하지 않습니다. Backspace로 줄여 주세요.";
     case "text":

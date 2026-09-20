@@ -13,7 +13,8 @@ import {
 } from "./model.js";
 import { render } from "./view/index.js";
 import type { ConfigField } from "./model.js";
-import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS } from "./limits.js";
+import { Transcript } from "./transcript.js";
+import { returnedPrompt, type PromptOutcome } from "./prompt.js";
 import type { Terminal } from "./screen.js";
 
 export interface AppPorts {
@@ -24,7 +25,10 @@ export interface AppPorts {
   readonly body: (path: string) => string | null;
   readonly setField: (field: string, value: string | number) => void;
   readonly setExtension: (id: string, role: "principal" | "workers", enabled: boolean) => void;
-  readonly submitPrompt: (text: string) => void;
+  /** Answers, in this call, whether the session took the prompt. A port that
+   * reported acceptance later could only report it into a transcript that had
+   * already shown the prompt as sent. */
+  readonly submitPrompt: (text: string) => PromptOutcome;
   readonly quit: () => void;
 }
 
@@ -43,11 +47,11 @@ function messageOf(error: unknown): string {
 export class TuiApp {
   private state: State = INITIAL;
   private data: PanelData = EMPTY;
-  private transcript: string[] = [];
+  private readonly transcript = new Transcript();
   private notice: Notice | null = null;
   private busy = false;
   private readonly keys = new KeyDecoder();
-  private escapeTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly ports: AppPorts, private readonly terminal: Terminal, private readonly frameBytes: number) {}
 
@@ -65,23 +69,21 @@ export class TuiApp {
 
   get snapshot(): State { return this.state; }
   get panel(): PanelData { return this.data; }
-  /** What the conversation currently holds, so the declared line bound can be
-   * checked as a fact rather than inferred from a rendered frame. */
-  get lines(): readonly string[] { return this.transcript; }
+  /** What the conversation currently holds, so the declared bounds can be
+   * checked as facts rather than inferred from a rendered frame. */
+  get lines(): readonly string[] { return this.transcript.lines; }
+  get heldBytes(): number { return this.transcript.heldBytes; }
 
   line(text: string): void {
     this.append(text);
     this.draw();
   }
 
-  /** The one way a line enters the transcript. Every producer goes through it,
-   * so the declared line bound holds for all of them -- a producer that pushed
-   * its own line would be a second owner of how far the transcript grows, and
-   * the Human's own prompts were exactly that. */
+  /** The one way anything enters the transcript. Every producer goes through
+   * it, and the transcript -- not this file -- owns what one produced line
+   * costs: a reply is one call here and any number of displayed lines. */
   private append(text: string): void {
-    this.transcript.push(text);
-    const keep = CONVERSATION_BOUNDS.transcriptLines.value;
-    if (this.transcript.length > keep) this.transcript = this.transcript.slice(-keep);
+    this.transcript.append(text);
   }
 
   setBusy(busy: boolean): void {
@@ -93,19 +95,23 @@ export class TuiApp {
   note(text: string | null): void { this.notice = text === null ? null : { kind: "text", text }; this.draw(); }
 
   feed(chunk: Uint8Array): void {
-    // One decoder lives as long as the app: terminal reads are neither UTF-8
-    // nor escape-sequence boundaries. A lone Escape is the one ambiguous
-    // prefix, so it gets a short delay in which a following CSI byte can arrive.
-    if (this.escapeTimer !== null) clearTimeout(this.escapeTimer);
-    this.escapeTimer = null;
+    // One decoder lives as long as the app: terminal reads are neither UTF-8,
+    // escape-sequence nor paste boundaries. Whatever the decoder has started
+    // and not finished gets exactly one deadline -- the decoder says how long,
+    // because it is the one that knows what it is waiting for -- after which
+    // it gives up rather than reading the Human's next key as the missing end
+    // of a terminal's unfinished report.
+    if (this.pendingTimer !== null) clearTimeout(this.pendingTimer);
+    this.pendingTimer = null;
     for (const key of this.keys.push(chunk)) this.apply(key);
-    if (this.keys.hasPendingEscape) {
-      this.escapeTimer = setTimeout(() => {
-        this.escapeTimer = null;
-        for (const key of this.keys.flushEscape()) this.apply(key);
+    const delay = this.keys.pendingDelayMs;
+    if (delay !== null) {
+      this.pendingTimer = setTimeout(() => {
+        this.pendingTimer = null;
+        for (const key of this.keys.flushPending()) this.apply(key);
         this.draw();
-      }, TERMINAL_BOUNDS.escapeDelayMs.value);
-      this.escapeTimer.unref();
+      }, delay);
+      this.pendingTimer.unref();
     }
     this.draw();
   }
@@ -139,11 +145,24 @@ export class TuiApp {
           this.refresh();
           this.notice = { kind: "extension", id: effect.id, role: effect.role, enabled: effect.enabled };
           return;
-        case "submit-prompt":
+        case "submit-prompt": {
+          // Taking the prompt and showing it are one step. The session answers
+          // here whether it took it, so the transcript holds what was sent and
+          // nothing else; a refusal gives the text back to the draft, where
+          // the Human can fix or resend it rather than retype it from a line
+          // that reads as though the Principal already has it.
+          const outcome = this.ports.submitPrompt(effect.text);
+          if (outcome.kind === "refused") {
+            this.state = { ...this.state, prompt: returnedPrompt(effect.text) };
+            this.notice = { kind: "send-failed", message: outcome.reason };
+            return;
+          }
           this.notice = null;
-          this.append(`> ${effect.text}`);
-          this.ports.submitPrompt(effect.text);
+          // A pasted prompt is several lines; the continuation is indented so
+          // the echo reads as the one thing that was sent.
+          this.append(`> ${effect.text.replace(/\n/g, "\n  ")}`);
           return;
+        }
         case "prompt-limit":
           if (effect.active) this.notice = { kind: "prompt-limit" };
           else if (this.notice?.kind === "prompt-limit") this.notice = null;
@@ -180,7 +199,7 @@ export class TuiApp {
       ? this.ports.body(this.data.mail[detail.row]?.path ?? "")
       : null;
     this.terminal.draw(render({
-      state: this.state, data: this.data, transcript: this.transcript,
+      state: this.state, data: this.data, transcript: this.transcript.lines,
       body, notice: this.notice, busy: this.busy,
       columns: this.terminal.columns, rows: this.terminal.rows,
     }));

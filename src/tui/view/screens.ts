@@ -50,7 +50,13 @@ function frame(lines: string[], rows: number, columns: number): string[] {
 
 function conversation(input: ViewInput, notice: string | null): string[] {
   const { columns, rows, transcript, state } = input;
-  const reserved = notice === null ? 3 : 4;
+  // A pasted draft is many lines, so the prompt is not one row. It takes at
+  // most half the screen, showing its end -- where the next character lands --
+  // so one paste can never push the conversation off the screen entirely.
+  const draft = wrap(`> ${state.prompt.text.replace(/\n/g, "\n  ")}`, columns);
+  const promptRows = Math.min(Math.max(draft.length, 1), Math.max(1, Math.floor(rows / 2)));
+  const prompt = draft.slice(Math.max(0, draft.length - promptRows));
+  const reserved = (notice === null ? 3 : 4) + promptRows - 1;
   const height = Math.max(1, rows - reserved);
   const wrapped: string[] = [];
   for (const entry of transcript) for (const line of wrap(entry, columns)) wrapped.push(line);
@@ -60,7 +66,7 @@ function conversation(input: ViewInput, notice: string | null): string[] {
   for (const line of visible) lines.push(line);
   lines.push("─".repeat(Math.max(0, columns)));
   if (notice !== null) lines.push(fit(notice, columns));
-  lines.push(fit(`> ${state.prompt.text}`, columns));
+  for (const line of prompt) lines.push(fit(line, columns));
   lines.push(fit("Ctrl+X 관리 화면 · Ctrl+C 종료", columns));
   return frame(lines, rows, columns);
 }

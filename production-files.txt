@@ -199,6 +199,7 @@ src/tui/session.ts
 src/tui/sources/extensions.ts
 src/tui/sources/mail.ts
 src/tui/sources/settings.ts
+src/tui/transcript.ts
 src/tui/transport.ts
 src/tui/view/dashboard.ts
 src/tui/view/index.ts

@@ -72,14 +72,21 @@ test("T112 the terminal owner takes and restores raw mode on a real TTY", () => 
   assert.ok(report, `probe produced no report: ${run.stdout}`);
   const observed = JSON.parse(report[1]!) as {
     isTTY: boolean; rawEnabled: boolean; rawRestored: boolean;
-    columns: number; rows: number; keys: string[];
+    columns: number; rows: number; keys: string[]; pasted: string[];
+    pasteOn: boolean; pasteOff: boolean;
   };
   assert.equal(observed.isTTY, true, "the probe must run under a real terminal");
   assert.equal(observed.rawEnabled, true, "raw mode must be taken so keys arrive unbuffered");
   assert.equal(observed.rawRestored, true, "raw mode must be released again, even on an abrupt end");
   assert.ok(observed.columns > 0 && observed.rows > 0, "a real terminal reports a size");
-  // The keys the probe typed arrive as the panel's vocabulary, through a pty.
-  assert.deepEqual(observed.keys, ["panel", "right", "escape"]);
+  // The keys the probe typed arrive as the panel's vocabulary, through a pty,
+  // and a pasted block arrives as one key rather than as its keystrokes.
+  assert.deepEqual(observed.keys, ["panel", "right", "paste", "escape"]);
+  assert.deepEqual(observed.pasted, ["a\nb"], "a paste through a real terminal must stay one input");
+  // Asking for bracketed paste is what makes that true, so the owner must take
+  // the mode at the device and give it back with the rest.
+  assert.equal(observed.pasteOn, true, "bracketed paste mode was never requested");
+  assert.equal(observed.pasteOff, true, "bracketed paste mode was left on after restore");
 });
 
 test("T112 a non-TTY stream never attempts raw mode", () => {
@@ -93,4 +100,12 @@ test("T112 a non-TTY stream never attempts raw mode", () => {
   terminal.restore();
   assert.equal(rawCalls, 0, "a pipe has no raw mode to take");
   assert.ok(written.length > 0);
+  // Every terminal mode the owner takes is given back, in the reverse order:
+  // a stream left in bracketed paste mode makes the next program's input
+  // arrive wrapped in markers it never asked for.
+  const stream = written.join("");
+  const ESC = String.fromCharCode(27);
+  assert.ok(stream.includes(`${ESC}[?2004h`), "bracketed paste mode was never requested");
+  assert.ok(stream.indexOf(`${ESC}[?2004l`) > stream.indexOf(`${ESC}[?2004h`),
+    "bracketed paste mode was not released after it was taken");
 });

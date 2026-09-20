@@ -629,9 +629,10 @@ test("T114 / PR-002: a Human prompt claims the session before it is written, so 
   // without waiting for the engine to report a turn. Between those two points
   // a delivery used to see an idle session and put its command in the same
   // run, which is the mixed attribution S-03 has not settled.
-  const submitted = session.submit("what is the plan?");
+  // And the answer comes back in this call: the screen shows what was taken,
+  // so acceptance cannot be something it is told after it has drawn.
+  assert.deepEqual(session.submit("what is the plan?"), { kind: "accepted" });
   assert.equal(session.busy, true, "the session was still idle after a prompt was submitted");
-  await submitted;
   await assert.rejects(session.deliver("b-00000000-0000-4000-8000-000000000000"),
     (error: unknown) => error instanceof StoreError && error.code === "BATCH_CONFLICT");
   assert.equal(sent.length, 1, "a delivery was written into a session the Human had claimed");
@@ -649,7 +650,7 @@ test("T114 / PR-002: a Human prompt typed during a delivery waits in the host an
   // `agent_settled` for the whole of it, so a prompt queued there would have
   // run inside the delivery's run and the boundary the extension records for
   // that run would have covered the Human's turn too.
-  await session.submit("meanwhile, about the release");
+  assert.deepEqual(session.submit("meanwhile, about the release"), { kind: "accepted" });
   assert.equal(sent.length, 1, "the Human's prompt was written into the delivery's own run");
 
   // The delivery's run ends. That one settle ends the whole run, and the
@@ -677,7 +678,7 @@ test("T114 / PR-002: every prompt typed while the session was spoken for runs, o
   // nobody ever gave back and defer every later delivery for good.
   const { session, sent, emit } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
-  for (const text of ["first", "second", "third"]) await session.submit(text);
+  for (const text of ["first", "second", "third"]) assert.deepEqual(session.submit(text), { kind: "accepted" });
   assert.equal(sent.length, 1, "prompts reached the engine while the delivery owned the session");
 
   const written: string[] = [];
@@ -701,7 +702,7 @@ test("T114 / PR-002: a prompt the engine refuses gives the session back and is s
   // reading that answer the session would stay claimed for the rest of its
   // life and the Human would never learn their input was not taken.
   const { session, sent, lines, emit } = reservedSession();
-  await session.submit("hello");
+  session.submit("hello");
   assert.equal(session.busy, true);
   emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "no model selected" });
   assert.equal(session.busy, false, "a refused prompt left the session claimed");
@@ -714,7 +715,7 @@ test("T114 / PR-002: a prompt the engine refuses gives the session back and is s
 test("T114 / PR-002: a refused delivery command gives the session back and lets the waiting Human through", async () => {
   const { session, sent, emit } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
-  await session.submit("while that runs");
+  session.submit("while that runs");
   emit({ type: "response", id: "b-00000000-0000-4000-8000-000000000000", command: "prompt", success: false, error: "busy" });
   assert.equal(sent.length, 2, "the Human's waiting prompt was dropped with the refused delivery");
   assert.equal(sent[1]!.message, "while that runs");
@@ -723,7 +724,7 @@ test("T114 / PR-002: a refused delivery command gives the session back and lets 
 
 test("T114 / PR-002: a response for a prompt the session has moved on from changes nothing", async () => {
   const { session, sent, lines, emit } = reservedSession();
-  await session.submit("hello");
+  session.submit("hello");
   emit(settled);
   assert.equal(session.busy, false);
   // A late refusal for the prompt whose run already ended must not take a
@@ -739,12 +740,15 @@ test("T114 / PR-002: a prompt the transport cannot carry stops the screen saying
   // written -- no run starts, and nothing will ever settle to say the session
   // is free again. If the claim comes back but the report of it does not, the
   // screen shows "생성 중" over a session that is doing nothing at all.
+  // Admission is answered in the call; the write is not, and cannot be. A
+  // transport that fails after the prompt was admitted is reported where every
+  // other failed write is -- on the screen -- and the claim comes back with it.
   const { session, lines, busy } = reservedSession(() => new StoreError("FRAME_TOO_LARGE", "Pi command exceeds the configured frame bound"));
-  await assert.rejects(session.submit("x".repeat(64)),
-    (error: unknown) => error instanceof StoreError && error.code === "FRAME_TOO_LARGE");
+  assert.deepEqual(session.submit("x".repeat(64)), { kind: "accepted" });
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(session.busy, false);
   assert.deepEqual(busy, [true, false], `the screen was told ${JSON.stringify(busy)}`);
-  assert.deepEqual(lines, []);
+  assert.ok(lines.some(line => line.includes("전송하지 못했습니다")), lines.join(" | "));
 });
 
 test("T114 / PR-002: the busy report comes from the ownership itself, at every move of it", async () => {
@@ -753,7 +757,7 @@ test("T114 / PR-002: the busy report comes from the ownership itself, at every m
   assert.deepEqual(busy, [true]);
   // A prompt that only waits does not move the ownership, so it says nothing
   // new; the screen is already showing a session at work.
-  await session.submit("meanwhile");
+  session.submit("meanwhile");
   assert.deepEqual(busy, [true]);
   // The delivery's run ends and the waiting prompt takes the session in the
   // same step: the screen is never told the session went idle in between.
@@ -767,8 +771,9 @@ test("T120 / TUI-023: the host never retains a Human prompt beyond its UTF-8 fra
   const { session, sent, busy } = reservedSession();
   const state = session as unknown as { frameBytes: number };
   state.frameBytes = 96;
-  await assert.rejects(session.submit("가".repeat(12)),
-    (error: unknown) => error instanceof StoreError && error.code === "LIMIT_EXCEEDED");
+  const refused = session.submit("가".repeat(12));
+  assert.equal(refused.kind, "refused");
+  assert.match(refused.kind === "refused" ? refused.reason : "", /한도/);
   assert.equal(session.busy, false, "a rejected prompt claimed the session");
   assert.deepEqual(busy, [], "a rejected prompt changed the screen's busy state");
   assert.deepEqual(sent, [], "an oversized prompt reached the Pi transport");
@@ -780,9 +785,11 @@ test("T120 / TUI-023: only so many prompts wait, and the Human is told which one
   const { session, sent } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
   const bound = CONVERSATION_BOUNDS.waitingPrompts.value;
-  for (let index = 0; index < bound; index += 1) await session.submit(`prompt ${index}`);
-  await assert.rejects(session.submit("one too many"),
-    (error: unknown) => error instanceof StoreError && error.code === "LIMIT_EXCEEDED");
+  for (let index = 0; index < bound; index += 1)
+    assert.deepEqual(session.submit(`prompt ${index}`), { kind: "accepted" }, `prompt ${index} was not taken`);
+  const refused = session.submit("one too many");
+  assert.equal(refused.kind, "refused", "a prompt past the waiting bound was taken anyway");
+  assert.match(refused.kind === "refused" ? refused.reason : "", new RegExp(String(bound)));
   assert.equal(sent.length, 1, "a waiting prompt reached the engine");
 });
 

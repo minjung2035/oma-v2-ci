@@ -18,6 +18,25 @@ export const cellWidth = visibleWidth;
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
+/** A tab as spaces, because a tab written to a terminal moves to the
+ * terminal's next tab stop, which this module cannot see: the cell arithmetic
+ * every other line is padded by would then disagree with the screen from that
+ * column on. */
+const TAB = "    ";
+
+/** What may be written to a cell.
+ *
+ * Control bytes never reach the terminal: an escape sequence in produced text
+ * or in a paste would be read by the terminal as an instruction -- move the
+ * cursor, change colour, start a paste -- and this product owns its frame.
+ * That used to hold only because such bytes measure zero cells and a
+ * zero-width cluster is skipped below, which is an accident of the width
+ * function rather than a rule anyone stated. It is stated here.
+ */
+export function displayable(text: string): string {
+  return text.replace(/\t/g, TAB).replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
+}
+
 /** Iterating graphemes rather than code points is what keeps a cut from
  * splitting an emoji sequence in half. */
 function clusters(text: string): string[] {
@@ -28,7 +47,7 @@ export function fit(text: string, width: number): string {
   if (width <= 0) return "";
   let out = "";
   let used = 0;
-  for (const cluster of clusters(text)) {
+  for (const cluster of clusters(displayable(text))) {
     const size = cellWidth(cluster);
     if (size === 0) continue;
     if (used + size > width) return out;
@@ -46,7 +65,10 @@ export function pad(text: string, width: number): string {
 export function wrap(text: string, width: number): string[] {
   if (width <= 0) return [];
   const lines: string[] = [];
-  for (const paragraph of text.split("\n")) {
+  // Line breaks are read before control bytes are dropped: a produced line
+  // that contains them is several lines, not one line with them removed.
+  for (const raw of text.split("\n")) {
+    const paragraph = displayable(raw);
     if (paragraph.length === 0) { lines.push(""); continue; }
     let line = "";
     let used = 0;

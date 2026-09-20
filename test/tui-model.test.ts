@@ -168,7 +168,10 @@ test("key decoding maps arrows, Ctrl+X and text without leaking escape sequences
   assert.deepEqual(decodeKeys(Buffer.from([0x03])), [{ kind: "interrupt" }]);
   assert.deepEqual(decodeKeys(Buffer.from(`${esc}`)), [{ kind: "escape" }]);
   // An unknown CSI report is consumed, never typed into the prompt.
-  assert.deepEqual(decodeKeys(Buffer.from(`${esc}[200~`)), []);
+  assert.deepEqual(decodeKeys(Buffer.from(`${esc}[199~`)), []);
+  // A bracketed paste is one key, not the keystrokes its bytes resemble.
+  assert.deepEqual(decodeKeys(Buffer.from(`${esc}[200~ab${esc}[201~`)),
+    [{ kind: "paste", value: "ab", truncated: false }]);
   assert.deepEqual(decodeKeys(Buffer.from("가a")), [{ kind: "char", value: "가" }, { kind: "char", value: "a" }]);
 });
 
