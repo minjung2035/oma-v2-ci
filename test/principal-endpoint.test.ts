@@ -16,8 +16,10 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { Socket } from "node:net";
-import type { ProtocolLimits, ResolvedAgentSpec } from "../implementation/contracts.js";
+import type { AuthContext, ProtocolLimits, Request, ResolvedAgentSpec } from "../implementation/contracts.js";
 import { Broker, type PrincipalHostChannel } from "../src/broker.js";
+import { PrincipalEndpoint, type PrincipalEndpointPorts } from "../src/broker/principal-endpoint.js";
+import type { BoundPeer } from "../src/broker/peer-authenticator.js";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
 import { UnitsModule } from "../src/units.js";
@@ -71,7 +73,14 @@ class HostChannel implements PrincipalHostChannel {
     this.host = host ?? processIdentity(process.pid)!;
   }
   grant = (credential: string, sessionHandle: string): void => { this.grants.push({ credential, sessionHandle }); };
-  refuse = (): void => { this.refusals += 1; };
+  readonly refused: string[] = [];
+  /** The real channel encodes the refusal, so a handle its grammar cannot
+   * carry throws rather than being sent. This stand-in fails the same way: a
+   * refusal that cannot name its registration must not be silently accepted. */
+  refuse = (sessionHandle: string): void => {
+    encodeHostMessage({ kind: "refused", sessionHandle });
+    this.refusals += 1; this.refused.push(sessionHandle);
+  };
   onSession = (listener: (sessionHandle: string, pid: number) => void): void => { this.listeners.push(listener); };
   close = (): void => { this.closed = true; };
   register(sessionHandle: string, pid: number): { credential: string; sessionHandle: string } | null {
@@ -260,14 +269,26 @@ test("T114: the broker accepts only the host's own child as the Principal's engi
   try {
     // The test runner is this process's parent, not its child: naming it must
     // not make it the Principal.
-    assert.equal(society.host!.register(newSessionHandle(), process.ppid), null);
+    const first = newSessionHandle();
+    assert.equal(society.host!.register(first, process.ppid), null);
     assert.equal(society.host!.refusals, 1);
+    // The refusal names the registration it answers. A refusal that named
+    // nothing would settle whichever registration happened to be waiting.
+    assert.deepEqual(society.host!.refused, [first]);
     // Nor this process itself.
-    assert.equal(society.host!.register(newSessionHandle(), process.pid), null);
+    const second = newSessionHandle();
+    assert.equal(society.host!.register(second, process.pid), null);
     assert.equal(society.host!.refusals, 2);
-    // A malformed handle is refused before anything is minted.
+    assert.deepEqual(society.host!.refused, [first, second]);
+    // A malformed handle is refused before anything is minted. It cannot be
+    // named back either, so the endpoint observes that rather than sending a
+    // refusal for a handle the channel's grammar cannot carry -- and stays
+    // usable afterwards.
     assert.equal(society.host!.register("nothex", process.pid), null);
     assert.equal(society.host!.grants.length, 0);
+    assert.deepEqual(society.host!.refused, [first, second]);
+    assert.equal(society.host!.register(newSessionHandle(), process.ppid), null);
+    assert.equal(society.host!.refusals, 3);
   } finally { await stopSociety(society); }
 });
 
@@ -1043,4 +1064,248 @@ test("T114: stopping the broker releases the supervision channel it was given", 
   // whose other end is a host that is still running.
   assert.equal(society.host!.closed, true, "the broker kept the supervision channel after it stopped");
   rmSync(society.root, { recursive: true, force: true });
+});
+
+/** The endpoint driven through its ports alone, with a real process standing
+ * in for the engine.
+ *
+ * The broker-level tests above watch connections from outside, and every
+ * process allowed to attach is a descendant of the engine -- a child of a
+ * child of this one. That is the wrong vantage point for the question here.
+ * It is not "who may attach?" but "what happens to a connection that already
+ * attached, at the instant it stops being the Principal's?", and answering it
+ * means holding that connection open across the event.
+ */
+class Bench {
+  readonly grants: { credential: string; sessionHandle: string }[] = [];
+  readonly refused: string[] = [];
+  readonly observed: string[] = [];
+  readonly dispatched: string[] = [];
+  readonly preflighted: string[] = [];
+  readonly failed: string[] = [];
+  readonly endpoint: PrincipalEndpoint;
+  private deliver: ((sessionHandle: string, pid: number) => void) | null = null;
+  private capture: ((handle: Held["raw"], preflight: Held["check"]) => void) | null = null;
+  private sequence = 0;
+
+  constructor(readonly engine: number) {
+    const uid = process.getuid?.() ?? -1;
+    const gid = process.getgid?.() ?? -1;
+    const channel: PrincipalHostChannel = {
+      host: processIdentity(process.pid)!,
+      ready: () => {},
+      grant: (credential, sessionHandle) => { this.grants.push({ credential, sessionHandle }); },
+      refuse: sessionHandle => { this.refused.push(sessionHandle); },
+      onSession: listener => { this.deliver = listener; },
+      close: () => {},
+    };
+    const peer = { pid: engine, uid, gid, alive: () => true,
+      retainForExecution: () => () => {}, releaseConnection: () => {} } as BoundPeer;
+    const context = (): AuthContext => ({ actor: "principal", incarnation: 1, role: "principal",
+      channel: "actor", capabilities: new Set(), peer: { pid: engine, uid, gid, cgroup: null } });
+    const ports: PrincipalEndpointPorts = {
+      isDraining: () => false,
+      bindPeer: () => peer,
+      principalContext: () => context(),
+      serveFrames: (_socket, _peer, handle, preflight) => { this.capture?.(handle, preflight); },
+      fail: (_socket, failure) => { this.failed.push(failure.code); },
+      observe: error => { this.observed.push(error instanceof StoreError ? error.code : String(error)); },
+      cleanupError: error => { this.observed.push(`cleanup: ${String(error)}`); },
+      dispatch: async (_auth, request: Request) => {
+        this.dispatched.push(request.method);
+        return { v: 1, id: request.id, ok: true, result: {} };
+      },
+      preflight: (_auth, raw) => { this.preflighted.push(String(raw.method)); },
+    };
+    this.endpoint = new PrincipalEndpoint(channel, ports);
+  }
+
+  /** A session as the host would register it: through the channel listener,
+   * never by calling `register` directly, so the refusal path is the real one. */
+  register(sessionHandle: string, pid = this.engine): void { this.deliver!(sessionHandle, pid); }
+
+  /** One connection, held open for as long as the test wants it. */
+  open(): Held {
+    let raw: Held["raw"] | null = null;
+    let check: Held["check"] | null = null;
+    this.capture = (handle, preflight) => { raw = handle; check = preflight; };
+    const socket = { destroyed: false, destroy(): void { this.destroyed = true; }, once(): void {} };
+    this.endpoint.serve(socket as unknown as Socket);
+    this.capture = null;
+    const handle = raw as Held["raw"] | null;
+    const preflight = check as Held["check"] | null;
+    assert.ok(handle && preflight, "the endpoint did not serve the connection");
+    return {
+      socket, raw: handle, check: preflight,
+      call: (method, params = {}) => handle({ v: 1, id: `r${++this.sequence}`, method, params }, null),
+      preflight: method => { preflight({ v: 1, id: "p", method, params: {} }); },
+    };
+  }
+}
+
+interface Held {
+  readonly socket: { destroyed: boolean };
+  readonly raw: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>;
+  readonly check: (raw: Record<string, unknown>) => void;
+  readonly call: (method: string, params?: Record<string, unknown>) => Promise<object>;
+  readonly preflight: (method: string) => void;
+}
+
+/** The code a refused call carries. The endpoint throws below the envelope, so
+ * the code is read off the error rather than a reply. */
+async function codeOf(call: Promise<unknown>): Promise<string> {
+  try {
+    const reply = await call;
+    if (reply !== null && typeof reply === "object" && (reply as { ok?: unknown }).ok === false)
+      return (reply as { error: { code: string } }).error.code;
+    return "no failure";
+  } catch (error) { return error instanceof StoreError ? error.code : String(error); }
+}
+
+/** A process of this test's own, so the endpoint's `/proc` checks are answered
+ * by a real parent-child relation rather than a stub. */
+async function withEngineProcess(run: (bench: Bench) => Promise<void>): Promise<void> {
+  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 60_000);"], { stdio: "ignore" });
+  try {
+    await new Promise<void>(resolve => { child.once("spawn", () => resolve()); });
+    await run(new Bench(child.pid!));
+  } finally { child.kill("SIGKILL"); }
+}
+
+/** Attaches `held` under the latest grant and proves it is serving. */
+async function attachAndUse(bench: Bench, held: Held, sessionHandle: string): Promise<void> {
+  const grant = bench.grants.at(-1)!;
+  const attached = await held.call("principal.attach", { sessionHandle, credential: grant.credential });
+  assert.equal((attached as { ok: boolean }).ok, true, "the connection did not attach");
+  const before = bench.dispatched.length;
+  assert.equal((await held.call("status.get") as { ok: boolean }).ok, true);
+  assert.equal(bench.dispatched.length, before + 1, "the attached connection was not served");
+}
+
+test("T114: re-registering the session revokes the connections the old one already had", async () => {
+  await withEngineProcess(async bench => {
+    const handle = newSessionHandle();
+    bench.register(handle);
+    const held = bench.open();
+    await attachAndUse(bench, held, handle);
+    const served = bench.dispatched.length;
+
+    // The host registers the engine again. The connection is not told, is not
+    // asked anything, and does nothing: this is the whole event.
+    bench.register(handle);
+    assert.equal(bench.grants.length, 2);
+    assert.notEqual(bench.grants[1]!.credential, bench.grants[0]!.credential);
+
+    // It is not the Principal any more. Removing the generation binding in
+    // `PrincipalEndpoint` -- authorising on what the connection was handed at
+    // attach -- makes exactly this line pass a request through.
+    assert.equal(await codeOf(held.call("status.get")), "AUTH_FAILED");
+    assert.equal(bench.dispatched.length, served, "a revoked connection reached dispatch");
+    // The other way in is preflight, which never reaches dispatch at all.
+    assert.equal(bench.preflighted.length, 0);
+    assert.throws(() => held.preflight("context.put"), /no longer registered/);
+    assert.equal(bench.preflighted.length, 0, "a revoked connection reached preflight");
+    // And it is not left open to keep trying.
+    assert.equal(held.socket.destroyed, true, "the revoked connection was left open");
+
+    // The new session is serving, so this is revocation and not a dead endpoint.
+    const fresh = bench.open();
+    await attachAndUse(bench, fresh, handle);
+    // The replaced credential does not work on a connection of its own either.
+    const stale = bench.open();
+    assert.equal(await codeOf(stale.call("principal.attach",
+      { sessionHandle: handle, credential: bench.grants[0]!.credential })), "AUTH_FAILED");
+  });
+});
+
+test("T114: a registration the broker refuses leaves no attached Principal behind", async () => {
+  await withEngineProcess(async bench => {
+    const handle = newSessionHandle();
+    bench.register(handle);
+    const held = bench.open();
+    await attachAndUse(bench, held, handle);
+    const served = bench.dispatched.length;
+
+    // The host names a process that is not its child. Nothing is minted -- and
+    // the session that was registered is gone all the same, because the host
+    // has said the engine it had is not the engine it has.
+    const refusedHandle = newSessionHandle();
+    bench.register(refusedHandle, process.ppid);
+    assert.equal(bench.grants.length, 1, "a refused registration minted a credential");
+    assert.deepEqual(bench.refused, [refusedHandle]);
+    assert.deepEqual(bench.observed, ["AUTH_FAILED"]);
+
+    assert.equal(await codeOf(held.call("status.get")), "AUTH_FAILED");
+    assert.equal(bench.dispatched.length, served, "a connection survived a refused registration");
+    assert.equal(held.socket.destroyed, true);
+    // Nothing can attach at all while there is no session.
+    const late = bench.open();
+    assert.equal(await codeOf(late.call("principal.attach",
+      { sessionHandle: handle, credential: bench.grants[0]!.credential })), "AUTH_FAILED");
+  });
+});
+
+test("T114: closing the endpoint revokes the connections that are already attached", async () => {
+  await withEngineProcess(async bench => {
+    const handle = newSessionHandle();
+    bench.register(handle);
+    const held = bench.open();
+    await attachAndUse(bench, held, handle);
+    const served = bench.dispatched.length;
+
+    bench.endpoint.close();
+    assert.equal(await codeOf(held.call("status.get")), "AUTH_FAILED");
+    assert.equal(bench.dispatched.length, served, "a closed endpoint served a request");
+    assert.equal(held.socket.destroyed, true);
+    // A closed endpoint registers nothing, so a host that keeps talking to it
+    // cannot bring a session back.
+    bench.register(newSessionHandle());
+    assert.equal(bench.grants.length, 1);
+  });
+});
+
+test("T114: detaching gives up authority rather than parking it for later", async () => {
+  await withEngineProcess(async bench => {
+    const handle = newSessionHandle();
+    bench.register(handle);
+    const held = bench.open();
+    await attachAndUse(bench, held, handle);
+    const served = bench.dispatched.length;
+
+    assert.equal((await held.call("principal.detach") as { ok: boolean }).ok, true);
+    // A detached connection is back to being a connection: the next frame must
+    // be an attach, and a request is refused rather than served.
+    assert.equal(await codeOf(held.call("status.get")), "AUTH_FAILED");
+    assert.equal(bench.dispatched.length, served);
+    // It is no longer held for revocation either -- there is nothing to revoke.
+    bench.register(handle);
+    assert.equal(held.socket.destroyed, false, "a detached connection was destroyed");
+    // It may attach again, but only with what the current session was granted.
+    assert.equal(await codeOf(held.call("principal.attach",
+      { sessionHandle: handle, credential: bench.grants[0]!.credential })), "AUTH_FAILED");
+    await attachAndUse(bench, held, handle);
+  });
+});
+
+test("T114: revocation reaches every attached connection, and only attached ones", async () => {
+  await withEngineProcess(async bench => {
+    const handle = newSessionHandle();
+    bench.register(handle);
+    const first = bench.open();
+    const second = bench.open();
+    await attachAndUse(bench, first, handle);
+    await attachAndUse(bench, second, handle);
+    // A connection that never attached is not the endpoint's to destroy: it
+    // holds no authority to take away.
+    const idle = bench.open();
+
+    bench.register(handle);
+    assert.equal(first.socket.destroyed, true);
+    assert.equal(second.socket.destroyed, true);
+    assert.equal(idle.socket.destroyed, false, "an unattached connection was destroyed");
+    assert.equal(await codeOf(first.call("status.get")), "AUTH_FAILED");
+    assert.equal(await codeOf(second.call("status.get")), "AUTH_FAILED");
+    // The idle one can still attach -- with the current credential.
+    await attachAndUse(bench, idle, handle);
+  });
 });

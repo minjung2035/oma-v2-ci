@@ -161,17 +161,10 @@ async function main(argv: readonly string[]): Promise<void> {
     society, runRoot, configPath,
     onEvent: line => { app.line(`broker: ${line}`); app.draw(); },
   });
-  if (broker.state.kind === "unavailable")
-    app.line(`broker를 시작하지 못했습니다: ${broker.state.reason}. Dashboard 관측값은 unknown으로 남습니다.`);
-  else if (broker.state.kind === "already-running")
-    app.line("이 society의 broker는 다른 프로세스가 소유하고 있어, 여기서는 권한 있는 대화 세션을 열 수 없습니다. 메일·설정 화면은 그대로 사용할 수 있습니다.");
-
   // OMA runs the engine it shipped with; it never resolves Pi from PATH, and it
   // gives that engine its own agent directory so a Pi the user installed keeps
-  // its configuration, extensions and sessions to itself. The engine starts now,
-  // without authority: its credential reaches it later, on a private socket,
-  // whenever a broker this process started is ready -- so a slow broker delays
-  // the Principal's society requests, not the Principal itself.
+  // its configuration, extensions and sessions to itself. It starts without
+  // authority: the credential reaches it later, on a private socket.
   const startEngine = (): PrincipalSession => {
     const piRuntime = resolvePiRuntime({
       stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
@@ -202,24 +195,6 @@ async function main(argv: readonly string[]): Promise<void> {
       app.line(`빈 저장소로 society를 시작했습니다${provisioned.seedNote ? ` (${provisioned.seedNote})` : ""}.`);
     return started;
   };
-  // One engine per society. A broker this process does not own gives it no
-  // principal host endpoint or credential, whether the owner is another `oma`
-  // or a standalone service. Starting an engine here would still make it a
-  // second writer of the same private workspace and session history, but one
-  // with no authority to reach the society. This process is a Control Panel
-  // over that state instead.
-  if (broker.state.kind === "already-running") {
-    app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
-  } else {
-    try { session = startEngine(); }
-    catch (error) {
-      // The Control Panel stays usable without a session: the product must
-      // still show status and settings when Pi cannot start.
-      app.line(`Pi 세션을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
-      app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
-    }
-  }
-
   // PR-001/LIFE-006: each time a broker of this process's becomes ready -- at
   // start, and again after it is restarted -- the engine is named to it and
   // receives the credential it mints. A restarted broker's credential replaces
@@ -236,19 +211,9 @@ async function main(argv: readonly string[]): Promise<void> {
   };
 
   // PR-002: pending mail reaches the Principal while this product runs, one
-  // bounded batch at a time, whenever the session is idle.
-  const deliverySession = session === null ? null : {
-    get running() { return session?.running ?? false; },
-    get busy() { return session?.busy ?? true; },
-    onEvent: (listener: (event: PiEvent) => void) => session!.onEvent(listener),
-    deliver: (batchId: string) => session!.deliver(batchId),
-    release: () => { session?.release("delivery"); },
-  };
-  const delivery = deliverySession === null ? null : new PrincipalDelivery(deliverySession,
-    principalHostBroker(runRoot, settings.config.limits), {
-      stateRoot, frameBytes: settings.config.limits.frameBytes,
-      acceptMs: settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,
-    });
+  // bounded batch at a time, whenever the session is idle. Built with the
+  // engine, because there is nothing to deliver into before one exists.
+  let delivery: PrincipalDelivery | null = null;
   let brokerReady = false;
   const deliver = (): void => {
     if (delivery === null || !brokerReady) return;
@@ -260,10 +225,59 @@ async function main(argv: readonly string[]): Promise<void> {
       app.draw();
     });
   };
-  session?.onEvent(event => { if (event.type === "agent_settled") deliver(); });
+
+  // One engine per society, and this is the only place one is started.
+  //
+  // A spawned broker is not an owned society. The supervisor probes, spawns and
+  // hands back a pid, and between that probe and the lock the child takes,
+  // another `oma` can take the society; the loser's broker exits and the
+  // product that started it would have had a second engine on one society, a
+  // second writer of the same private workspace and session history. So the
+  // engine waits for the one fact that settles ownership: a broker of this
+  // process's saying it is ready, which it says only after it holds the society
+  // lock. Nothing branches on `broker.state` to decide this -- a state that is
+  // merely "not already-running" has never been proof of anything.
+  let engineStarted = false;
+  const startSessionOnce = (): void => {
+    if (engineStarted) return;
+    engineStarted = true;
+    let live: PrincipalSession;
+    try { live = startEngine(); }
+    catch (error) {
+      // The Control Panel stays usable without a session: the product must
+      // still show status and settings when Pi cannot start.
+      app.line(`Pi 세션을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+      app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
+      app.draw();
+      return;
+    }
+    session = live;
+    delivery = new PrincipalDelivery({
+      get running() { return live.running; },
+      get busy() { return live.busy; },
+      onEvent: (listener: (event: PiEvent) => void) => live.onEvent(listener),
+      deliver: (batchId: string) => live.deliver(batchId),
+      release: () => { live.release("delivery"); },
+    }, principalHostBroker(runRoot, settings.config.limits), {
+      stateRoot, frameBytes: settings.config.limits.frameBytes,
+      acceptMs: settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,
+    });
+    live.onEvent(event => { if (event.type === "agent_settled") deliver(); });
+  };
+
   supervisor.onReady(() => {
     brokerReady = true;
+    startSessionOnce();
     void register().then(deliver);
+  });
+  // A society this process will not own: another `oma` holds it, or no broker
+  // of this process's could be kept running. No engine is started, no
+  // credential is ever minted for one, and the product is a Control Panel over
+  // the state it can still read.
+  supervisor.onDisowned(reason => {
+    app.line(`이 society의 broker를 이 프로세스가 소유하지 않습니다: ${reason}.`);
+    app.line("권한 있는 대화 세션은 열 수 없습니다. Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
+    app.draw();
   });
 
   const poll = setInterval(() => {

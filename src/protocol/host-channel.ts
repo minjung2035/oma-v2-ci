@@ -25,15 +25,19 @@ export const HOST_CHANNEL_LINE_BYTES = 128;
 
 export type HostChannelMessage =
   | { readonly kind: "ready" }
-  /** The broker would not accept the engine the host named. */
-  | { readonly kind: "refused" }
+  /** The broker would not accept the engine the host named. It names the
+   * registration it refuses: an answer that names nothing can be taken for the
+   * answer to whatever registration happens to be waiting when it lands. */
+  | { readonly kind: "refused"; readonly sessionHandle: string }
   | { readonly kind: "session"; readonly sessionHandle: string; readonly pid: number }
   | { readonly kind: "credential"; readonly credential: string; readonly sessionHandle: string };
 
 export function encodeHostMessage(message: HostChannelMessage): string {
   switch (message.kind) {
     case "ready": return "ready\n";
-    case "refused": return "refused\n";
+    case "refused":
+      if (!isPrincipalSessionHandle(message.sessionHandle)) throw new TypeError("invalid refusal");
+      return `refused ${message.sessionHandle}\n`;
     case "session":
       if (!isPrincipalSessionHandle(message.sessionHandle) || !Number.isSafeInteger(message.pid) || message.pid <= 1)
         throw new TypeError("invalid session registration");
@@ -45,12 +49,14 @@ export function encodeHostMessage(message: HostChannelMessage): string {
   }
 }
 
+const REFUSED = /^refused ([0-9a-f]{32})$/;
 const SESSION = /^session ([0-9a-f]{32}) ([1-9][0-9]{0,9})$/;
 const CREDENTIAL = /^credential ([0-9a-f]{64}) ([0-9a-f]{32})$/;
 
 export function decodeHostMessage(line: string): HostChannelMessage | null {
   if (line === "ready") return { kind: "ready" };
-  if (line === "refused") return { kind: "refused" };
+  const refused = REFUSED.exec(line);
+  if (refused !== null) return { kind: "refused", sessionHandle: refused[1]! };
   const session = SESSION.exec(line);
   if (session !== null) {
     const pid = Number(session[2]);

@@ -78,7 +78,7 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
     ready: () => send(encodeHostMessage({ kind: "ready" })),
     grant: (credential: string, sessionHandle: string) =>
       send(encodeHostMessage({ kind: "credential", credential, sessionHandle })),
-    refuse: () => send(encodeHostMessage({ kind: "refused" })),
+    refuse: (sessionHandle: string) => send(encodeHostMessage({ kind: "refused", sessionHandle })),
     onSession: (listener: (sessionHandle: string, pid: number) => void) => {
       listeners.push(listener);
       for (const message of queued.splice(0)) listener(message.sessionHandle, message.pid);

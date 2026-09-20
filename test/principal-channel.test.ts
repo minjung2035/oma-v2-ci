@@ -30,7 +30,7 @@ const HANDLE = "d".repeat(32);
 const CORPUS: readonly string[] = [
   `credential ${CREDENTIAL} ${HANDLE}`,
   `credential ${"0".repeat(64)} ${"f".repeat(32)}`,
-  "ready", "refused", `session ${HANDLE} 4242`,
+  "ready", `refused ${HANDLE}`, `session ${HANDLE} 4242`,
   `credential ${CREDENTIAL.toUpperCase()} ${HANDLE}`,
   `credential ${CREDENTIAL.slice(1)} ${HANDLE}`,
   `credential ${CREDENTIAL}a ${HANDLE}`,
@@ -43,6 +43,11 @@ const CORPUS: readonly string[] = [
   `CREDENTIAL ${CREDENTIAL} ${HANDLE}`,
   "", "readyx", "session x 1", `session ${HANDLE} 0`, `session ${HANDLE} 1`, `session ${HANDLE} -5`,
   `session ${HANDLE} 99999999999`,
+  // A refusal that names nothing, or names something that is not a handle, is
+  // not a message: it could otherwise be read as the answer to whatever
+  // registration happened to be waiting when it landed.
+  "refused", "refused ", `refused ${HANDLE.slice(1)}`, `refused ${HANDLE}a`, `refused ${HANDLE.toUpperCase()}`,
+  `refused ${HANDLE} ${HANDLE}`,
 ];
 
 test("T114: the extension's channel names are the protocol's", () => {
@@ -67,7 +72,7 @@ test("T114: the extension accepts exactly the credential lines the protocol deco
 
 test("T114: the protocol round-trips what it encodes and refuses what it cannot", () => {
   const messages: HostChannelMessage[] = [
-    { kind: "ready" }, { kind: "refused" },
+    { kind: "ready" }, { kind: "refused", sessionHandle: HANDLE },
     { kind: "session", sessionHandle: HANDLE, pid: 4242 },
     { kind: "credential", credential: CREDENTIAL, sessionHandle: HANDLE },
   ];
@@ -79,6 +84,7 @@ test("T114: the protocol round-trips what it encodes and refuses what it cannot"
   for (const bad of [
     { kind: "session", sessionHandle: "x", pid: 4242 }, { kind: "session", sessionHandle: HANDLE, pid: 1 },
     { kind: "credential", credential: "x", sessionHandle: HANDLE }, { kind: "credential", credential: CREDENTIAL, sessionHandle: "x" },
+    { kind: "refused", sessionHandle: "x" }, { kind: "refused", sessionHandle: "" },
   ] as HostChannelMessage[])
     assert.throws(() => encodeHostMessage(bad), TypeError);
 });
@@ -88,7 +94,7 @@ test("T114: a reader splits, joins and stops at the first thing that is not a me
   let broken: string | null = null;
   const reader = new HostChannelReader(message => seen.push(message), reason => { broken = reason; });
   // One message split across chunks, then two in one chunk.
-  reader.push("rea"); reader.push("dy\nrefused\nready\n");
+  reader.push("rea"); reader.push(`dy\nrefused ${HANDLE}\nready\n`);
   assert.deepEqual(seen.map(message => message.kind), ["ready", "refused", "ready"]);
   assert.equal(broken, null);
   // A byte outside the grammar breaks the channel, and nothing after is taken.

@@ -17,11 +17,19 @@
  *    a broker that cannot stay up is reported, not restarted forever.
  *
  * The singleton guarantee is not here: the broker takes an exclusive lock on
- * its own run root and refuses to run twice.
+ * its own run root and refuses to run twice. That is exactly why a spawn is
+ * not ownership. Spawning says a process started; it does not say the process
+ * got the lock, and between the probe above and the lock in the child another
+ * `oma` can take it. So this handle reports two things and the product acts on
+ * those, never on the spawn: `onReady`, which the broker sends only after it
+ * holds the lock, and `onDisowned`, which says this process will not own the
+ * society at all. A child that exits with the ownership status is disowned and
+ * never restarted -- restarting it would only lose the race again.
  */
 import { connect, type Socket } from "node:net";
 import { join } from "node:path";
 import { spawnSupervisedService, type ChildProcess } from "../process/async.js";
+import { SOCIETY_OWNED_EXIT } from "./process-lock.js";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HostChannelReader, encodeHostMessage } from "../protocol/host-channel.js";
 
 export type BrokerState =
@@ -33,8 +41,19 @@ export interface BrokerHandle {
   readonly state: BrokerState;
   /** Called each time a broker this handle started reports its endpoints are
    * listening: at first start and after every restart. Never called for a
-   * broker this handle did not start. */
+   * broker this handle did not start.
+   *
+   * This is the only proof of ownership the product has. The broker takes the
+   * society lock before it can say this, so a ready broker is this process's
+   * broker and no other process holds one. Anything that must not happen twice
+   * in a society -- starting the Principal engine above all -- belongs here and
+   * nowhere else. */
   onReady(listener: () => void): void;
+  /** Called once, when this process is known not to own the society's broker:
+   * another one was already listening, none could be started, the child
+   * reported the society already has an owner, or restarts ran out. Called at
+   * once if that is already known when the listener is added. */
+  onDisowned(listener: (reason: string) => void): void;
   /** Names the engine this process started for the Principal and returns the
    * credential the current broker minted for it, or null when there is no
    * broker of this process's to ask, or it refused. */
@@ -75,21 +94,60 @@ interface Generation {
   readonly child: ChildProcess;
   readonly channel: Socket;
   ready: boolean;
-  /** The registration awaiting the broker's answer, if any. */
-  answer: ((credential: string | null) => void) | null;
+  /** The registration awaiting the broker's answer, if any, and the session it
+   * is waiting for. The answer is correlated against that handle: an answer to
+   * a registration this process is no longer waiting for -- a late one from a
+   * session since replaced -- must not settle the one that is. */
+  pending: { readonly sessionHandle: string; readonly settle: (credential: string | null) => void } | null;
+}
+
+/** A handle for a society this process does not own. It supervises nothing and
+ * never becomes ready, so nothing gated on readiness can run behind it. */
+function disownedHandle(state: BrokerState, reason: string): BrokerHandle {
+  return {
+    state,
+    onReady: () => {},
+    onDisowned: listener => { listener(reason); },
+    register: async () => null,
+    stop: () => {},
+  };
 }
 
 export async function superviseBroker(options: SuperviseOptions): Promise<BrokerHandle> {
   if (await brokerListening(options.runRoot))
-    return { state: { kind: "already-running" }, onReady: () => {}, register: async () => null, stop: () => {} };
+    return disownedHandle({ kind: "already-running" }, "another oma already owns this society");
 
   const say = options.onEvent ?? (() => {});
   const readyListeners: (() => void)[] = [];
+  const disownedListeners: ((reason: string) => void)[] = [];
+  let disowned: string | null = null;
+  /** Said once and never taken back: ownership is not something this process
+   * regains by trying again. */
+  const disown = (reason: string): void => {
+    if (disowned !== null) return;
+    disowned = reason;
+    for (const listener of disownedListeners) listener(reason);
+  };
   const maxRestarts = options.maxRestarts ?? 5;
   const windowMs = options.restartWindowMs ?? 60_000;
   const restarts: number[] = [];
   let stopping = false;
   let current: Generation | null = null;
+
+  /** Settles the registration this answer is for, and only that one. An answer
+   * that names a session nothing is waiting for is a late answer to a
+   * registration already superseded or timed out; it is reported and dropped,
+   * never applied to whatever happens to be pending. */
+  const settlePending = (generation: Generation, sessionHandle: string, credential: string | null): void => {
+    const pending = generation.pending;
+    if (pending === null) { say("broker answered a principal registration nothing is waiting for"); return; }
+    if (pending.sessionHandle !== sessionHandle) {
+      say("broker answered a principal session this process is not waiting for; ignoring it");
+      return;
+    }
+    generation.pending = null;
+    pending.settle(credential);
+  };
 
   const start = (): Generation | string => {
     let child: ChildProcess;
@@ -110,7 +168,7 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       child.kill("SIGKILL");
       return "the broker process did not start";
     }
-    const generation: Generation = { child, channel: channel as Socket, ready: false, answer: null };
+    const generation: Generation = { child, channel: channel as Socket, ready: false, pending: null };
     const reader = new HostChannelReader(message => {
       if (current !== generation) return;
       switch (message.kind) {
@@ -119,13 +177,11 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
           for (const listener of readyListeners) listener();
           return;
         case "credential":
-          generation.answer?.(message.credential);
-          generation.answer = null;
+          settlePending(generation, message.sessionHandle, message.credential);
           return;
         case "refused":
           say("broker refused the principal engine");
-          generation.answer?.(null);
-          generation.answer = null;
+          settlePending(generation, message.sessionHandle, null);
           return;
         case "session":
           // Only a host sends this. A broker that does is not the one we
@@ -145,15 +201,23 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
     });
     child.once("error", error => { say(`broker failed: ${error.message}`); });
     child.once("exit", (code, signal) => {
-      generation.answer?.(null);
-      generation.answer = null;
+      generation.pending?.settle(null);
+      generation.pending = null;
       say(`broker ended (${signal ?? `code ${code ?? "unknown"}`})`);
       if (current !== generation || stopping) return;
       current = null;
+      // The child lost the race for the society lock. Another process owns the
+      // society; a restart would only lose it again, and in the meantime this
+      // process must not behave as an owner.
+      if (signal === null && code === SOCIETY_OWNED_EXIT) {
+        disown("another oma took this society while this one was starting");
+        return;
+      }
       const now = Date.now();
       while (restarts.length > 0 && now - restarts[0]! > windowMs) restarts.shift();
       if (restarts.length >= maxRestarts) {
         say(`broker ended ${restarts.length} times within ${Math.round(windowMs / 1000)}s; not restarting it`);
+        disown("the broker could not stay running");
         return;
       }
       restarts.push(now);
@@ -163,7 +227,11 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       setTimeout(() => {
         if (stopping) return;
         const next = start();
-        if (typeof next === "string") { say(`broker could not be restarted: ${next}`); return; }
+        if (typeof next === "string") {
+          say(`broker could not be restarted: ${next}`);
+          disown(`the broker could not be restarted: ${next}`);
+          return;
+        }
         current = next;
         say("broker restarted");
       }, delay).unref?.();
@@ -173,31 +241,43 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
 
   const first = start();
   if (typeof first === "string")
-    return { state: { kind: "unavailable", reason: first }, onReady: () => {}, register: async () => null, stop: () => {} };
+    return disownedHandle({ kind: "unavailable", reason: first }, `the broker could not be started: ${first}`);
   current = first;
 
   return {
+    // A pid, not a claim of ownership: the child has started, and whether it
+    // owns the society is answered later, by onReady or onDisowned.
     state: { kind: "started", pid: first.child.pid! },
     onReady(listener) {
       readyListeners.push(listener);
       if (current?.ready) listener();
     },
+    onDisowned(listener) {
+      disownedListeners.push(listener);
+      if (disowned !== null) listener(disowned);
+    },
     register(sessionHandle, pid) {
       const generation = current;
       if (generation === null || !generation.ready || stopping) return Promise.resolve(null);
-      if (generation.answer !== null) generation.answer(null);
+      // A registration still waiting is superseded, not left to be settled by
+      // the answer to this one.
+      if (generation.pending !== null) {
+        const superseded = generation.pending;
+        generation.pending = null;
+        superseded.settle(null);
+      }
       return new Promise<string | null>(resolve => {
         const timer = setTimeout(() => {
-          if (generation.answer === settle) generation.answer = null;
+          if (generation.pending?.settle === settle) generation.pending = null;
           say("broker did not answer the principal registration");
           resolve(null);
         }, options.registerTimeoutMs ?? 10_000);
         timer.unref?.();
         const settle = (credential: string | null): void => { clearTimeout(timer); resolve(credential); };
-        generation.answer = settle;
+        generation.pending = { sessionHandle, settle };
         try { generation.channel.write(encodeHostMessage({ kind: "session", sessionHandle, pid })); }
         catch (error) {
-          generation.answer = null;
+          generation.pending = null;
           settle(null);
           say(`principal registration could not be sent: ${error instanceof Error ? error.message : String(error)}`);
         }

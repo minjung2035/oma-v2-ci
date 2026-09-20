@@ -7,14 +7,15 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "node:net";
 import { provisionSociety } from "../src/runtime/provision.js";
 import { brokerListening, superviseBroker } from "../src/runtime/broker-supervisor.js";
+import { ProcessLock, SOCIETY_OWNED_EXIT } from "../src/runtime/process-lock.js";
 
 const scratch = (): string => mkdtempSync(join(tmpdir(), "oma-bringup-"));
 const git = (gitDir: string, argv: readonly string[]): string =>
@@ -170,6 +171,47 @@ test("T115 provisioning builds the trusted rootfs Residents are confined to", ()
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("T115 REC-007: a second provisioning leaves the tree it finds byte for byte, inode for inode", () => {
+  const root = scratch();
+  try {
+    const state = join(root, "state");
+    provisionSociety(state);
+    const rootfs = join(state, "rootfs");
+    // Provisioning runs on every `oma` start, before anything knows which
+    // process owns the society. A start that loses that race must leave what it
+    // found untouched -- and "the same bytes written again" is not untouched:
+    // the inode and the timestamps are what a concurrent owner, and a program
+    // reading inside the sandbox, actually observe.
+    const watched = ["etc/passwd", "etc/group", "opt/oma-node/node", "run/oma/control.sock", "run/oma/inference.sock"]
+      .map(name => join(rootfs, name));
+    const before = watched.map(path => statSync(path, { bigint: true }));
+    provisionSociety(state);
+    watched.forEach((path, index) => {
+      const after = statSync(path, { bigint: true });
+      assert.equal(after.ino, before[index]!.ino, `${path} was replaced`);
+      assert.equal(after.mtimeNs, before[index]!.mtimeNs, `${path} was rewritten`);
+      assert.equal(after.ctimeNs, before[index]!.ctimeNs, `${path} was touched`);
+    });
+
+    // Idempotent is "no write", not "never writes": content that is not what
+    // this start generates is still corrected, because a rootfs claiming the
+    // agent is root is worse than a rewrite.
+    const passwd = join(rootfs, "etc", "passwd");
+    writeFileSync(passwd, "agent:x:0:0:tampered:/:/bin/sh\n");
+    provisionSociety(state);
+    assert.match(readFileSync(passwd, "utf8"), /^agent:x:\d+:\d+:agent:/);
+
+    // And a generated file that cannot be read is not "different" -- it is a
+    // rootfs entry provisioning cannot account for, so it refuses rather than
+    // overwriting whatever is there.
+    if (process.getuid?.() !== 0) {
+      chmodSync(passwd, 0o000);
+      assert.throws(() => { provisionSociety(state); }, /cannot be read/);
+      chmodSync(passwd, 0o644);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 /** Writes a stand-in broker at `<root>/lib/dist/src/entry/broker.js`. It speaks
  * the real supervision channel on descriptor 3 through the real codec, and its
  * behaviour is chosen by `script`, which runs with `channel` (a Socket),
@@ -251,7 +293,7 @@ test("T115 a refused registration is answered at once, not left to time out", as
   try {
     const libdir = standInBroker(root, `
       send({ kind: "ready" });
-      reader(() => send({ kind: "refused" }));
+      reader(message => send({ kind: "refused", sessionHandle: message.sessionHandle }));
       setInterval(() => {}, 1000);`);
     const { handle, events } = supervise(root, libdir, { registerTimeoutMs: 20_000 });
     const broker = await handle;
@@ -263,6 +305,151 @@ test("T115 a refused registration is answered at once, not left to time out", as
       assert.ok(events.some(line => /refused/.test(line)));
     } finally { broker.stop(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 an answer that names another session does not settle the registration waiting", async () => {
+  const root = scratch();
+  try {
+    // A broker that answers with a handle nobody asked about. This is what a
+    // late answer looks like: the engine it was minted for is gone, another
+    // has registered, and the reply arrives afterwards. Taken as the answer to
+    // whatever happens to be pending, it hands one engine's session to
+    // another.
+    const libdir = standInBroker(root, `
+      send({ kind: "ready" });
+      reader(() => send({ kind: "credential", credential: "c".repeat(64), sessionHandle: "f".repeat(32) }));
+      setInterval(() => {}, 1000);`);
+    const { handle, events } = supervise(root, libdir, { registerTimeoutMs: 700 });
+    const broker = await handle;
+    try {
+      await readyOnce(broker);
+      // Removing the correlation in `Generation.pending` makes this return the
+      // credential meant for a session this process never registered.
+      assert.equal(await broker.register("d".repeat(32), 4242), null,
+        "a credential minted for another session was taken as this one's");
+      assert.ok(events.some(line => /not waiting for/.test(line)), events.join(" | "));
+    } finally { broker.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a refusal that names another session does not refuse the registration waiting", async () => {
+  const root = scratch();
+  try {
+    const libdir = standInBroker(root, `
+      send({ kind: "ready" });
+      reader(message => {
+        // The refusal of an earlier session arrives first, then the answer to
+        // this one. Only the second may settle it.
+        send({ kind: "refused", sessionHandle: "f".repeat(32) });
+        setTimeout(() => send({ kind: "credential", credential: "e".repeat(64), sessionHandle: message.sessionHandle }), 100);
+      });
+      setInterval(() => {}, 1000);`);
+    const { handle, events } = supervise(root, libdir, { registerTimeoutMs: 5000 });
+    const broker = await handle;
+    try {
+      await readyOnce(broker);
+      assert.equal(await broker.register("d".repeat(32), 4242), "e".repeat(64),
+        "a refusal for another session was applied to this registration");
+      assert.ok(events.some(line => /not waiting for/.test(line)), events.join(" | "));
+    } finally { broker.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a broker that says the society already has an owner disowns the host, and is not restarted", async () => {
+  const root = scratch();
+  try {
+    // Exactly what `src/entry/broker.ts` does when it loses the race for the
+    // society lock. A restart would only lose it again, and in the meantime
+    // this process must not behave as an owner.
+    const libdir = standInBroker(root, `process.exit(${SOCIETY_OWNED_EXIT});`);
+    const { handle, events } = supervise(root, libdir);
+    const broker = await handle;
+    try {
+      // The spawn still reports a pid: what it does not report is ownership.
+      assert.equal(broker.state.kind, "started");
+      const reason = await new Promise<string>(resolve => { broker.onDisowned(resolve); });
+      assert.match(reason, /took this society/);
+      let ready = false;
+      broker.onReady(() => { ready = true; });
+      // A listener added after the fact still hears it: ownership is not an
+      // event a late listener can miss.
+      const late = await new Promise<string>(resolve => { broker.onDisowned(resolve); });
+      assert.equal(late, reason);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      assert.equal(readFileSync(join(root, "runs"), "utf8").length, 1, "a disowned broker was restarted");
+      assert.equal(ready, false, "a disowned broker was reported ready");
+      assert.equal(await broker.register("d".repeat(32), 4242), null);
+      assert.ok(!events.some(line => /restarted/.test(line)), events.join(" | "));
+    } finally { broker.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 a broker that only fails to start is restarted, not disowned", async () => {
+  const root = scratch();
+  try {
+    // The negative control for the status above: any other ending is a broker
+    // that fell over, which is restartable. Reading the two as the same thing
+    // in either direction is the defect.
+    const libdir = standInBroker(root, "process.exit(1);");
+    const { handle } = supervise(root, libdir, { maxRestarts: 1, restartWindowMs: 60_000 });
+    const broker = await handle;
+    try {
+      let disowned: string | null = null;
+      broker.onDisowned(reason => { disowned = reason; });
+      // Counted from the file the stand-in appends to; it does not exist until
+      // the first child has run.
+      const runs = (): number => existsSync(join(root, "runs")) ? readFileSync(join(root, "runs"), "utf8").length : 0;
+      const deadline = Date.now() + 5000;
+      while (runs() < 2 && Date.now() < deadline)
+        await new Promise(resolve => setTimeout(resolve, 50));
+      assert.ok(runs() >= 2, "a broker that fell over was not restarted");
+      // It is disowned only once the restarts run out, and for that reason.
+      while (disowned === null && Date.now() < deadline)
+        await new Promise(resolve => setTimeout(resolve, 50));
+      assert.match(String(disowned), /could not stay running/);
+    } finally { broker.stop(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T115 the real broker entry refuses to be the second owner of a society, and says which it is", async () => {
+  // Not a stand-in: the production entry, on the production path. The lock is
+  // taken here first, exactly as a broker another `oma` started would hold it.
+  const root = scratch();
+  const society = `own${Date.now().toString(36)}`;
+  const runRoot = join(root, "run", "oma", society);
+  mkdirSync(runRoot, { recursive: true });
+  const held = ProcessLock.tryAcquire(join(runRoot, "broker.lock"));
+  assert.ok(held, "the test could not take the society lock it needs to hold");
+  const run = (): { status: number | null; stderr: string } => {
+    const result = spawnSync(process.execPath,
+      [join(process.cwd(), "dist", "src", "entry", "broker.js"), "--society", society],
+      { env: { ...process.env, XDG_RUNTIME_DIR: join(root, "run"), XDG_DATA_HOME: join(root, "data"), NOTIFY_SOCKET: "" },
+        encoding: "utf8", timeout: 20_000 });
+    return { status: result.status, stderr: result.stderr ?? "" };
+  };
+  try {
+    const second = run();
+    assert.equal(second.status, SOCIETY_OWNED_EXIT, second.stderr);
+    assert.match(second.stderr, /already owns this society/);
+    // It got no further: ownership is decided before configuration, SQLite or
+    // recovery, so a second `oma` cannot touch the first's state at all.
+    assert.equal(existsSync(join(root, "data", "oma", society, "runtime.sqlite")), false);
+    assert.doesNotMatch(second.stderr, /startup failed/);
+    // The lock is still this test's.
+    held.assertHeld(join(runRoot, "broker.lock"));
+
+    // The control: with the lock free, the same entry gets past it and fails
+    // for its own reasons with its own status. "Someone else owns this" and "I
+    // could not start" must not be the same answer.
+    held.close();
+    const alone = run();
+    assert.notEqual(alone.status, SOCIETY_OWNED_EXIT,
+      "a broker that could take the lock still reported the society as owned");
+    assert.match(alone.stderr, /startup failed/);
+  } finally {
+    held.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("T115 a broker that never answers a registration yields an absence within the bound", async () => {

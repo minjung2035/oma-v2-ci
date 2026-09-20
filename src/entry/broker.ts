@@ -14,7 +14,7 @@ import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupported
 import { ReconcileModule } from "../reconcile.js";
 import { loadConfig } from "../config.js";
 import { createChildSpecResolver } from "../config/policy.js";
-import { ProcessLock } from "../runtime/process-lock.js";
+import { ProcessLock, SOCIETY_OWNED_EXIT } from "../runtime/process-lock.js";
 import { BrokerLifetime } from "../runtime/broker-lifetime.js";
 import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
@@ -35,7 +35,17 @@ const configPath = configIdx >= 0 && args[configIdx + 1] !== undefined ? args[co
 async function main(): Promise<void> {
   assertHostDirectoryLayout(runRoot, true);
   mkdirSync(runRoot, { recursive: true });
-  const lock = ProcessLock.acquire(join(runRoot, "broker.lock"));
+  // The lock is the society's singleton, and it is taken before configuration,
+  // SQLite or recovery. A broker that does not get it says so with a status of
+  // its own rather than the generic startup failure: the host reads ownership
+  // off this, and "someone else owns the society" must not look like "the
+  // broker fell over", which is restartable.
+  const held = ProcessLock.tryAcquire(join(runRoot, "broker.lock"));
+  if (held === null) {
+    console.error("another broker already owns this society; this one does not start");
+    process.exit(SOCIETY_OWNED_EXIT);
+  }
+  const lock = held;
   let graceSeconds: number | null = null;
   const lifetime = new BrokerLifetime(lock, () => {
     if (graceSeconds === null) throw new StoreError("INTERNAL_ERROR", "runtime grace requested before host limits were loaded");

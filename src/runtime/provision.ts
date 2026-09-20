@@ -14,6 +14,16 @@
  * canonical repository moves only through OMA's own integration. A directory
  * that is not a repository, or one with no commit yet, starts from an empty
  * root commit, and the report says which happened.
+ *
+ * This runs before anything knows which process will own the society: the
+ * broker cannot start against a tree that is not there, so provisioning cannot
+ * wait for the broker to prove ownership. That is only safe because of the
+ * rule above, taken literally -- a start that turns out not to own the society
+ * must leave the tree exactly as it found it, so every step here either
+ * creates something absent or does nothing at all. Where two starts can race
+ * to create the same thing, the loser adopts what the winner made rather than
+ * failing: a society has one canonical `main`, and which of two simultaneous
+ * starts wrote it is not a distinction worth having.
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -98,18 +108,23 @@ function hasCanonicalMain(projectGit: string): boolean {
 /** Seeds `main` from the project's committed history. The fetch runs under the
  * trusted Git environment: no hooks, no user or system configuration, and
  * `upload-pack` ignores command-running settings in repository configuration. */
-function seedFromProject(projectGit: string, projectDir: string, oid: string): void {
+function seedFromProject(projectGit: string, projectDir: string, oid: string): boolean {
   const fetched = runGitText(["fetch", "--no-tags", "--quiet", projectDir, `${oid}:refs/heads/main`],
     { gitDir: projectGit, timeout: 10 * 60 * 1000 });
-  if (fetched.status !== 0)
+  if (fetched.status !== 0) {
+    // A concurrent start that seeded first leaves a `main` this fetch cannot
+    // move. That is the other start's canonical history, not a failure.
+    if (hasCanonicalMain(projectGit)) return false;
     throw new StoreError("STORE_CORRUPT",
       `society provisioning could not import the project's history: ${fetched.stderr.trim().slice(0, 200)}`);
+  }
   const landed = runGitText(["rev-parse", "--verify", "refs/heads/main^{commit}"], { gitDir: projectGit });
-  if (landed.status !== 0 || landed.stdout.trim() !== oid)
+  if (landed.status !== 0)
     throw new StoreError("STORE_CORRUPT", "the imported canonical main is not the project's HEAD");
+  return landed.stdout.trim() === oid;
 }
 
-function seedEmptyRoot(projectGit: string): void {
+function seedEmptyRoot(projectGit: string): boolean {
   const tree = git(["hash-object", "-t", "tree", "-w", "--stdin"], projectGit);
   const identity = [
     "-c", "user.name=OMA", "-c", "user.email=oma@localhost",
@@ -125,8 +140,14 @@ function seedEmptyRoot(projectGit: string): void {
   if (commit.status !== 0 || commit.stdout.trim().length === 0)
     throw new StoreError("STORE_CORRUPT", "society provisioning could not create the canonical root commit");
   // Created only from nothing: the old value must be absent, so a concurrent
-  // provisioner that won the race is not overwritten.
-  git(["update-ref", "--create-reflog", "refs/heads/main", commit.stdout.trim(), ""], projectGit);
+  // provisioner that won the race is not overwritten -- and losing it is not a
+  // failure, because what the winner created is the same canonical root.
+  const created = runGitText(["update-ref", "--create-reflog", "refs/heads/main", commit.stdout.trim(), ""],
+    { gitDir: projectGit });
+  if (created.status === 0) return true;
+  if (hasCanonicalMain(projectGit)) return false;
+  throw new StoreError("STORE_CORRUPT",
+    `society provisioning could not create the canonical main: ${created.stderr.trim().slice(0, 200)}`);
 }
 
 /** Brings a society's state tree to the point where the broker will start.
@@ -151,8 +172,12 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   if (ensureBareRepository(join(stateRoot, "repos", "context.git"))) created.push(join("repos", "context.git"));
   let seedSource: ProvisionReport["seedSource"] = null;
   if (!hasCanonicalMain(projectGit)) {
-    if (project !== null && "oid" in project) { seedFromProject(projectGit, options.projectDir!, project.oid); seedSource = "project"; }
-    else { seedEmptyRoot(projectGit); seedSource = "empty"; }
+    // Reported only by the start that actually seeded. A start that lost the
+    // race created nothing and says so, so the product does not tell the user
+    // it started a society that was already there.
+    if (project !== null && "oid" in project) {
+      if (seedFromProject(projectGit, options.projectDir!, project.oid)) seedSource = "project";
+    } else if (seedEmptyRoot(projectGit)) seedSource = "empty";
   }
   const seeded = seedSource !== null;
   const seedNote = project !== null && "note" in project && seeded ? project.note : null;

@@ -18,14 +18,25 @@ const SESSION_DIR_FROM_OWNER = "answered-by-principalSessionDir";
 /** A supervised broker the test drives: it becomes ready when told, answers
  * registrations with the next credential in `credentials`, and records every
  * call. */
-function brokerStandIn(state, credentials) {
+function brokerStandIn(state, credentials, disownedReason = null) {
   const readyListeners = [];
-  const record = { registrations: [], stops: 0, fireReady: () => { for (const listener of readyListeners) listener(); } };
+  const disownedListeners = [];
+  const record = {
+    registrations: [], stops: 0,
+    fireReady: () => { for (const listener of readyListeners) listener(); },
+    fireDisowned: reason => { for (const listener of disownedListeners) listener(reason); },
+  };
   return {
     record,
     handle: {
       state,
       onReady(listener) { readyListeners.push(listener); },
+      // The real handle calls a listener at once when ownership is already
+      // settled against this process, so a listener added later cannot miss it.
+      onDisowned(listener) {
+        disownedListeners.push(listener);
+        if (disownedReason !== null) listener(disownedReason);
+      },
       async register(sessionHandle, pid) {
         record.registrations.push({ sessionHandle, pid });
         return credentials.shift() ?? null;
@@ -35,7 +46,8 @@ function brokerStandIn(state, credentials) {
   };
 }
 
-async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)] } = {}) {
+async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
+  disowned = null } = {}) {
   const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -51,7 +63,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   const deliveries = [];
   let started = null;
   let sessionListener = null;
-  const broker = brokerStandIn(brokerState, credentials);
+  const broker = brokerStandIn(brokerState, credentials, disowned);
   const settings = {
     config: {
       society: "fixture",
@@ -151,16 +163,31 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   });
   await completion;
   const settle = () => new Promise(resolve => setImmediate(resolve));
-  return { calls, lines, grants, handlers, deliveries, broker: broker.record, started, settle,
+  // `started` is read through an accessor, not copied out here: what this
+  // suite now asks is when the engine starts, and a value snapshotted at
+  // return would answer "never" for every test that fires readiness later.
+  return { calls, lines, grants, handlers, deliveries, broker: broker.record, settle,
+    get started() { return started; },
     fireEvent: event => sessionListener?.(event) };
 }
 
-test("T119: the engine starts at once, with the environment its owner builds and no secret in it", async () => {
-  const { calls, started, grants } = await run();
-  // The engine does not wait for the broker: a slow broker delays the
-  // Principal's society requests, not the Principal.
+test("T119: the engine starts when this process is proved to own the society, not when a broker is spawned", async () => {
+  const society = await run();
+  // A spawned broker is a pid, not an owned society: between the supervisor's
+  // probe and the lock the child takes, another `oma` can take it. Starting the
+  // engine here is starting a second Principal on one society.
+  assert.equal(society.calls.includes("PrincipalSession.start"), false,
+    "an engine was started on a spawn, before any broker said it holds the society");
+  assert.equal(society.started, null);
+  assert.equal(society.calls.includes("PrincipalDelivery"), false,
+    "a delivery owner was built with no session to deliver into");
+
+  // Readiness is the broker saying it holds the society lock, and it is the
+  // only thing the engine waits for.
+  society.broker.fireReady();
+  await society.settle();
+  const { calls, started, grants } = society;
   assert.ok(calls.includes("PrincipalSession.start"));
-  assert.equal(grants.length, 0, "a credential was handed over before any broker was ready");
   // The environment is exactly what principalEnvironment returned -- three
   // arguments, no credential parameter to pass one through.
   assert.ok(calls.includes("principalEnvironment/3"));
@@ -168,12 +195,36 @@ test("T119: the engine starts at once, with the environment its owner builds and
   assert.match(started.paths.workspace, /principal\/private$/);
   assert.ok(calls.includes("principalSessionDir"), "the entry decided the session directory itself");
   assert.equal(started.paths.sessionDir, `/state/oma/fixture/${SESSION_DIR_FROM_OWNER}`);
+  // The credential travels only after the engine exists, and only into it.
+  assert.deepEqual(grants, [{ credential: "1".repeat(64), sessionHandle: "h".repeat(32) }]);
   const order = name => calls.indexOf(name);
   assert.ok(order("provisionSociety") < order("superviseBroker"));
+  assert.ok(order("superviseBroker") < order("PrincipalSession.start"));
+});
+
+test("T119: however many brokers become ready, the society gets one engine", async () => {
+  const society = await run();
+  society.broker.fireReady();
+  await society.settle();
+  const first = society.started;
+  assert.ok(first, "the engine was not started when the broker became ready");
+  // A restarted broker becomes ready again. A second engine here would be a
+  // second writer of the same private workspace and session history.
+  society.broker.fireReady();
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.calls.filter(name => name === "PrincipalSession.start").length, 1,
+    "a restarted broker started a second engine");
+  assert.equal(society.calls.filter(name => name === "PrincipalDelivery").length, 1);
+  assert.equal(society.started, first, "the engine was replaced rather than kept");
+  // Each readiness still registers the engine again: the credential is the new
+  // broker's, and the engine that must be told is the one already running.
+  assert.equal(society.broker.registrations.length, 3);
 });
 
 test("T119: each time a broker becomes ready the engine is registered and given its credential", async () => {
   const run1 = await run();
+  assert.equal(run1.broker.registrations.length, 0, "an engine was registered before any broker was ready");
   run1.broker.fireReady();
   await run1.settle();
   assert.deepEqual(run1.broker.registrations, [{ sessionHandle: "h".repeat(32), pid: 777 }]);
@@ -200,20 +251,46 @@ test("T119: a society whose broker this host does not own gets a Control Panel, 
   // broker, whether its owner is another `oma` or a standalone service. A
   // second engine here would have no authority to reach the society and would
   // still be a second writer of the same private workspace and session history.
-  const { lines, broker, calls, started, deliveries } = await run({ brokerState: { kind: "already-running" } });
+  const { lines, broker, calls, started, deliveries } = await run({
+    brokerState: { kind: "already-running" }, disowned: "another oma already owns this society" });
   assert.equal(broker.registrations.length, 0);
   assert.equal(started, null, "a second Principal engine was started for a society this process does not own");
   assert.equal(calls.includes("PrincipalSession.start"), false);
   assert.equal(calls.includes("PrincipalDelivery"), false, "a delivery owner was built with no session to deliver into");
   assert.deepEqual(deliveries, []);
-  assert.ok(lines.some(line => /다른 프로세스가 소유/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /소유하지 않습니다/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /already owns this society/.test(line)), lines.join(" | "));
   assert.ok(lines.some(line => /Dashboard, Config, Mail/.test(line)), lines.join(" | "));
 });
 
-test("T119: a broker that fails to start does not stop the product or hide why", async () => {
-  const { started, lines } = await run({ brokerState: { kind: "unavailable", reason: "no entry" } });
-  assert.ok(started, "the engine was not started");
+test("T119: a broker that could not be started leaves a Control Panel, not an unauthorised engine", async () => {
+  // The old wiring read "not already-running" as permission to start the
+  // engine, so this state -- no broker at all -- started a Principal that
+  // could reach no society and still owned the private workspace. The state is
+  // not what decides it; being told this process does not own the society is.
+  const { started, calls, lines, broker } = await run({
+    brokerState: { kind: "unavailable", reason: "no entry" },
+    disowned: "the broker could not be started: no entry" });
+  assert.equal(started, null, "an engine was started for a society with no broker of this process's");
+  assert.equal(calls.includes("PrincipalSession.start"), false);
+  assert.equal(broker.registrations.length, 0);
   assert.ok(lines.some(line => /no entry/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /Dashboard, Config, Mail/.test(line)), lines.join(" | "));
+});
+
+test("T119: a broker lost after it was ready leaves the engine it already started alone", async () => {
+  // Disowning after readiness -- restarts exhausted -- is not a reason to tear
+  // down a session the Human is in the middle of. It says so, and stops
+  // starting anything new.
+  const society = await run();
+  society.broker.fireReady();
+  await society.settle();
+  assert.ok(society.started, "the engine was not started when the broker became ready");
+  society.broker.fireDisowned("the broker could not stay running");
+  await society.settle();
+  assert.equal(society.calls.filter(name => name === "PrincipalSession.start").length, 1);
+  assert.ok(society.started, "a session the Human was using was torn down");
+  assert.ok(society.lines.some(line => /could not stay running/.test(line)), society.lines.join(" | "));
 });
 
 test("T119: a crash stops the broker this process started", async () => {
@@ -225,14 +302,16 @@ test("T119: a crash stops the broker this process started", async () => {
 
 test("T119 / PR-002: delivery runs only once a broker is ready, and again as each turn settles", async () => {
   const { calls, deliveries, broker, settle, fireEvent } = await run();
-  assert.ok(calls.includes("PrincipalDelivery"));
-  // Before the broker is ready there is nothing to prepare from.
+  // Before the broker is ready there is no session, so there is nothing to
+  // deliver into and nothing to prepare from.
+  assert.equal(calls.includes("PrincipalDelivery"), false);
   fireEvent({ type: "agent_settled" });
   await settle();
   assert.equal(deliveries.length, 0, "delivery was attempted with no broker ready");
   broker.fireReady();
   await settle();
   await settle();
+  assert.ok(calls.includes("PrincipalDelivery"));
   assert.equal(deliveries.length, 1, "delivery did not run when the broker became ready");
   fireEvent({ type: "agent_settled" });
   await settle();

@@ -10,7 +10,11 @@ import ts from "typescript";
 /** Run the actual entrypoint with controlled module boundaries, without host I/O.
  * This checks composition and phase wiring, not real systemd/recovery behavior.
  */
-async function compose(environment) {
+/** Thrown by the stand-in `process.exit`, because the real one never returns
+ * and a stand-in that does would run the rest of a function the product ended. */
+class Exited extends Error {}
+
+async function compose(environment, { lockHeld = true } = {}) {
   const source = readFileSync(new URL("../src/entry/broker.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -18,7 +22,7 @@ async function compose(environment) {
   assert.equal(compiled.split("void main().catch").length, 2, "retain the single main invocation");
   // Retain the already-existing main promise instead of discarding it with void.
   const executable = compiled.replace("void main().catch", "main().catch");
-  const calls = [], paths = [], observation = { value: true, error: null };
+  const calls = [], paths = [], exits = [], observation = { value: true, error: null };
   let supervision = null;
   let constructorGoal;
   const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
@@ -54,9 +58,19 @@ async function compose(environment) {
       async start() { calls.push("listen"); } notifyReady() { calls.push("notify"); return true; }
     } },
     "../git/integration-policy.js": { integrationPolicyFromConfig: value => value, snapshotIntegrationPolicy: value => value, assertSupportedIntegration() {} },
-    "../config.js": { loadConfig: () => config },
+    "../config.js": { loadConfig: () => { calls.push("config"); return config; } },
     "../config/policy.js": { createChildSpecResolver: () => () => ({}) },
-    "../runtime/process-lock.js": { ProcessLock: { acquire: () => ({}) } },
+    "../runtime/process-lock.js": {
+      SOCIETY_OWNED_EXIT: 6,
+      ProcessLock: {
+        tryAcquire: () => { calls.push("lock"); return lockHeld ? {} : null; },
+        // Taking the lock in a way that cannot tell "someone else owns this"
+        // from "this could not be locked" is the defect itself: the host reads
+        // ownership off the status, and a throw here is a startup failure,
+        // which is restartable. Any return to `acquire` fails every test below.
+        acquire: () => { throw new Error("the composition root must distinguish ownership from failure"); },
+      },
+    },
     "../runtime/broker-lifetime.js": { BrokerLifetime: class {
       permitsActivation = true;
       retainStore() {} attach() {}
@@ -78,15 +92,18 @@ async function compose(environment) {
     } },
   };
   const process = { argv: ["node", "broker", "--society", "fixture"], env: { ...(environment ?? {}) }, exitCode: 0, once() {},
-    exit(code) { throw new Error(`unexpected process.exit(${code})`); } };
+    exit(code) { exits.push(code); throw new Exited(`exit(${code})`); } };
   await new Script(executable, { filename: "broker-composition.cjs" }).runInNewContext({
     exports: {}, process, console: { error() {} }, require(name) {
       assert.ok(Object.hasOwn(modules, name), `uncontrolled dependency: ${name}`);
       return modules[name];
     },
   });
-  assert.equal(process.exitCode, 0, "entrypoint must complete without the startup failure path");
-  return { calls, paths, observation, constructorGoal, supervision };
+  if (lockHeld) {
+    assert.deepEqual(exits, [], "the entrypoint ended the process on a society it does own");
+    assert.equal(process.exitCode, 0, "entrypoint must complete without the startup failure path");
+  }
+  return { calls, paths, observation, constructorGoal, supervision, exits };
 }
 
 test("P1 composition root: Git exists when Lifecycle receives its context reader", async () => {
@@ -157,4 +174,24 @@ test("P1 composition root: the host's credential channel is the kind of descript
   // accepts either. What it must never accept is a regular file or a terminal:
   // those are where an inherited registration would spill a credential.
   assert.deepEqual(JSON.parse(answer), { pipe: true, file: false, tty: false });
+});
+
+test("P1 composition root: the society lock is taken before anything is opened", async () => {
+  // REC-007. Config, SQLite and recovery all touch state the owner owns, so
+  // none of them may run before this process knows it is the owner.
+  const { calls } = await compose();
+  const order = name => calls.indexOf(name);
+  assert.ok(order("lock") >= 0, "the entrypoint never took the society lock");
+  for (const after of ["config", "Store", "Broker", "listen"])
+    assert.ok(order("lock") < order(after), `${after} happened before the society lock`);
+});
+
+test("P1 composition root: a society that already has an owner ends with its own status, opening nothing", async () => {
+  // The host tells ownership from failure by this status alone: "another oma
+  // owns this" must not be restarted, and "I fell over" must be. A generic
+  // startup failure here makes the second indistinguishable from the first.
+  const { calls, exits } = await compose(undefined, { lockHeld: false });
+  assert.deepEqual(exits, [6], `the entrypoint ended with ${JSON.stringify(exits)} instead of the ownership status`);
+  for (const opened of ["config", "Store", "Broker", "listen", "recover"])
+    assert.equal(calls.includes(opened), false, `${opened} ran for a society this process does not own`);
 });

@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "fdf2ec5810e595ad67dc6cf61fbadcbbede7f7c808761740638bb674c9913b3d",
-  "report": "e1d44ad8f9789b71bfc9b5f85d1002791371f366a53d2d0c269afb7540fec7a2",
+  "report": "9bd3c61349f9b3ac81af5ade510f852d2eed4304ce21bf90161e6a79787ca070",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "e5a25cb206f8cb7e6a9c5804f2a74229fe3a9718aed077398e02f124d6d65fdf"
+      "sha256": "f6afe25f2871cbca941c6625845e86ef56f1ec7624d1cdc6d5cf3a535809d993"
     },
     {
       "path": "src/broker/process-ancestry.ts",
@@ -281,7 +281,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "00252dd3a0eb94fa317b958316195a73df4ec48ca91cd9db8f9c1517f0475061"
+      "sha256": "3620d0b21fe88cf79bb517de291acc5a417a45f6718e4d59a544c1edf933f6ec"
     },
     {
       "path": "src/entry/host.ts",
@@ -293,7 +293,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "9fee0b253b9fd2929e57b650926fe9ac7ea015311ef91268919e9a016ed22133"
+      "sha256": "8b3fde89d7a45fc3cdc4ec40f6e95090783c7866231498165b4dff9bf9338fb0"
     },
     {
       "path": "src/entry/runner.ts",
@@ -525,7 +525,7 @@
     },
     {
       "path": "src/protocol/host-channel.ts",
-      "sha256": "7173e0c981661c456d974fdbc027d5817430d1cbee385f1fb9370b37e9ea5d3e"
+      "sha256": "15f567cb580ff172d615fa1422c4c1802a5dc4055f4cecdb1bd1d4f39d0b27e9"
     },
     {
       "path": "src/protocol/jsonl.ts",
@@ -601,7 +601,7 @@
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
-      "sha256": "64d3428c9f77211552189529942a1ea9fc3ad6737b3b305c1c7d500621836234"
+      "sha256": "67efbcfd10d8dfcc7fed90da1fc5f37dc952c08859514945e2fd7d3edc36dc7f"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -641,15 +641,15 @@
     },
     {
       "path": "src/runtime/process-lock.ts",
-      "sha256": "250285d5e0275dadb76085a5df060dfacb74355e657600feccae0d53b95f1972"
+      "sha256": "b0926f878b647d3c0e34989d133bbbd5c8c211f47d35380bc481c6cc49ef8c62"
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "49fae27d26b2d1b1d69371426acdf5bf82143243f4c785503776a697f00e8a4d"
+      "sha256": "a04c8e18e34ab8c1b4fe23d87f6dbca70c367cc065d1ecbb1a9c2b1fc0bcdcf4"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
-      "sha256": "59f52b37d938f6293f34f2b7cb8058d7b70407d3d0c56e62ee25771a321dc83a"
+      "sha256": "1afd882a3daa47b25422c6edd5edb4b086a8c153d42638ca93c4e9062f4874b8"
     },
     {
       "path": "src/runtime/run-registry.ts",
@@ -657,7 +657,7 @@
     },
     {
       "path": "src/runtime/supervision-channel.ts",
-      "sha256": "a5bf088dec551e44f67e2760ae62bf8d2fff209d3bb34210f1a9467e96d9c289"
+      "sha256": "ba0e2c0e89ade0f29904a0c7c4a746980e96f572ec8445945229b138ac7c4b9b"
     },
     {
       "path": "src/sandbox.ts",

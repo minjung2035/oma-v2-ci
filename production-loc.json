@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 217,
-    "n_lines": 24100,
+    "n_lines": 24332,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -134,14 +134,26 @@
   },
   "src/entry/oma.ts": {
     "blank": 19,
-    "comment": 49,
-    "code": 214,
+    "comment": 57,
+    "code": 220,
     "language": "TypeScript"
   },
   "src/git/integration.ts": {
     "blank": 5,
     "comment": 5,
     "code": 205,
+    "language": "TypeScript"
+  },
+  "src/runtime/broker-supervisor.ts": {
+    "blank": 12,
+    "comment": 79,
+    "code": 203,
+    "language": "TypeScript"
+  },
+  "src/broker/principal-endpoint.ts": {
+    "blank": 19,
+    "comment": 100,
+    "code": 202,
     "language": "TypeScript"
   },
   "src/units.ts": {
@@ -198,12 +210,6 @@
     "code": 179,
     "language": "TypeScript"
   },
-  "src/broker/principal-endpoint.ts": {
-    "blank": 18,
-    "comment": 70,
-    "code": 174,
-    "language": "TypeScript"
-  },
   "src/broker/public-dispatcher.ts": {
     "blank": 3,
     "comment": 8,
@@ -238,12 +244,6 @@
     "blank": 2,
     "comment": 6,
     "code": 163,
-    "language": "TypeScript"
-  },
-  "src/runtime/broker-supervisor.ts": {
-    "blank": 10,
-    "comment": 44,
-    "code": 160,
     "language": "TypeScript"
   },
   "src/diagnostics/files.ts": {
@@ -330,6 +330,12 @@
     "code": 142,
     "language": "TypeScript"
   },
+  "src/entry/broker.ts": {
+    "blank": 1,
+    "comment": 14,
+    "code": 141,
+    "language": "TypeScript"
+  },
   "src/process/async.ts": {
     "blank": 2,
     "comment": 30,
@@ -340,12 +346,6 @@
     "blank": 4,
     "comment": 17,
     "code": 137,
-    "language": "TypeScript"
-  },
-  "src/entry/broker.ts": {
-    "blank": 1,
-    "comment": 9,
-    "code": 136,
     "language": "TypeScript"
   },
   "src/lifecycle/actions.ts": {
@@ -432,6 +432,12 @@
     "code": 115,
     "language": "TypeScript"
   },
+  "src/runtime/provision.ts": {
+    "blank": 11,
+    "comment": 66,
+    "code": 112,
+    "language": "TypeScript"
+  },
   "src/mail/materializer.ts": {
     "blank": 2,
     "comment": 3,
@@ -450,12 +456,6 @@
     "code": 104,
     "language": "SQL"
   },
-  "src/runtime/provision.ts": {
-    "blank": 11,
-    "comment": 50,
-    "code": 103,
-    "language": "TypeScript"
-  },
   "src/config/defaults.ts": {
     "blank": 6,
     "comment": 28,
@@ -466,6 +466,12 @@
     "blank": 6,
     "comment": 7,
     "code": 102,
+    "language": "TypeScript"
+  },
+  "src/runtime/resident-rootfs.ts": {
+    "blank": 9,
+    "comment": 41,
+    "code": 101,
     "language": "TypeScript"
   },
   "src/domain/identifiers.ts": {
@@ -490,12 +496,6 @@
     "blank": 2,
     "comment": 8,
     "code": 96,
-    "language": "TypeScript"
-  },
-  "src/runtime/resident-rootfs.ts": {
-    "blank": 8,
-    "comment": 27,
-    "code": 93,
     "language": "TypeScript"
   },
   "src/cli/transport.ts": {
@@ -648,6 +648,12 @@
     "code": 71,
     "language": "TypeScript"
   },
+  "src/protocol/host-channel.ts": {
+    "blank": 8,
+    "comment": 26,
+    "code": 70,
+    "language": "TypeScript"
+  },
   "src/cli/effects/submit.ts": {
     "blank": 5,
     "comment": 4,
@@ -664,12 +670,6 @@
     "blank": 3,
     "comment": 19,
     "code": 67,
-    "language": "TypeScript"
-  },
-  "src/protocol/host-channel.ts": {
-    "blank": 8,
-    "comment": 24,
-    "code": 66,
     "language": "TypeScript"
   },
   "src/protocol/log-response.ts": {
@@ -954,6 +954,12 @@
     "code": 36,
     "language": "TypeScript"
   },
+  "src/runtime/process-lock.ts": {
+    "blank": 2,
+    "comment": 11,
+    "code": 36,
+    "language": "TypeScript"
+  },
   "src/cli/commands/context.ts": {
     "blank": 1,
     "comment": 0,
@@ -981,12 +987,6 @@
   "src/domain/child-policy.ts": {
     "blank": 2,
     "comment": 1,
-    "code": 30,
-    "language": "TypeScript"
-  },
-  "src/runtime/process-lock.ts": {
-    "blank": 1,
-    "comment": 3,
     "code": 30,
     "language": "TypeScript"
   },
@@ -1309,9 +1309,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 971,
-    "comment": 2717,
-    "code": 20412,
+    "blank": 976,
+    "comment": 2835,
+    "code": 20521,
     "nFiles": 217
   }
 }

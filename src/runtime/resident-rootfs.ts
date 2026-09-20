@@ -12,8 +12,14 @@
  * corrects a symlink that points elsewhere, and refuses — rather than deletes —
  * anything else it does not expect, because a mount target with content in it
  * means something other than OMA put it there.
+ *
+ * Idempotent means no write at all, not a write that happens to land the same
+ * bytes. This runs on every `oma` start, before anything knows which process
+ * owns the society, so a start that loses that race must leave the tree byte
+ * for byte as it found it -- including inode identity and timestamps, which a
+ * rewrite of identical content destroys.
  */
-import { lstatSync, mkdirSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
@@ -68,13 +74,30 @@ function ensureDirectory(path: string): void {
 function ensureFile(path: string, content = ""): void {
   const found = kind(path);
   if (found === "file") {
-    if (content.length > 0) writeFileSync(path, content, { mode: 0o644 });
+    // Generated content is written only when what is there is not already it.
+    // A write that reproduces the same bytes is still a write: it replaces the
+    // file every time the product starts, which is the one thing this module
+    // says it does not do to something that exists. An empty content means the
+    // file is a mount target and its contents are not this module's business.
+    if (content.length > 0 && readExisting(path) !== content)
+      writeFileSync(path, content, { mode: 0o644 });
     return;
   }
   if (found !== "absent")
     throw new StoreError("STORE_CORRUPT", `rootfs mount target ${path} is not a file`);
   mkdirSync(dirname(path), { recursive: true, mode: 0o755 });
   writeFileSync(path, content, { mode: 0o644 });
+}
+
+/** What is in a generated file now. Unreadable is not "different": it is a
+ * rootfs entry this module cannot account for, and rewriting it would be the
+ * silent overwrite this module refuses elsewhere. */
+function readExisting(path: string): string {
+  try { return readFileSync(path, "utf8"); }
+  catch (error) {
+    throw new StoreError("STORE_CORRUPT",
+      `rootfs identity file ${path} cannot be read: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function ensureLink(path: string, target: string): void {

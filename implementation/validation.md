@@ -4,9 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `07226da`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `611c07a`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `a48974d965b3ced0c5fb84c6f6ccac6e5b7d787c3776b08b5acadb30b0d59c8f` (523 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `5fb78901c7af3718363111ce414860582459c579f3b3fedace22e6c2f72c8f5d` (523 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -16,7 +16,7 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1128/1128 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1150/1150 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
 | `npm run verify:fast` | PASS, EXECUTED |
@@ -24,8 +24,8 @@
 | `npm run verify:property` | PASS, EXECUTED |
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
-| GitHub Actions current-SHA | NOT_OBSERVED (push 완료, 이 세션의 `gh` 인증 없음) |
-| `node scripts/loc.mjs` | **217 files / 20,412 code LOC** |
+| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 67개는 전부 실패이며, 가장 최근 run #67(`35493909077`)은 `baseline` job이 step 0개로 끝났다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션은 `gh` 인증이 없어 직접 재확인하지 않았다 |
+| `node scripts/loc.mjs` | **217 files / 20,521 code LOC** |
 
 ### 현재 범위
 
@@ -443,6 +443,66 @@ burst가 지난 뒤의 같은 byte가 다시 `{kind:"enter"}`가 되는 것을 �
 **관측하지 못한 것**: 실제 terminal이 clipboard 안의 `ESC[201~`를 어떤 형태로 흘리는지(위 두 방어는 주입한 byte와 주입한 clock으로
 관측했고, 실제 terminal·clipboard 조합으로는 관측하지 않았다), bracketed paste를 지원하지 않는 terminal에서의 동작.
 
+### Principal 제품 경로: 아홉 번째 감사에서 닫은 것
+
+외부 적대적 감사가 HEAD `611c07a`를 FAIL로 판정하며 결함 5건을 지목했다. 다섯 건 모두 소스에서 사실로 확인했고 — 오탐은 없었다 —
+같은 자리에서 반복되는 결함이라 판단한 둘은 패치가 아니라 **구조**를 바꿨다.
+
+**attach 때 받은 권한을 연결이 끝날 때까지 다시 쓰고 있었다(P0).** `principal.attach`는 성공 시 `AuthContext`를 한 번 만들어
+연결 closure에 담아 두었고, 그 뒤의 모든 요청이 그 값으로 판정됐다. engine A가 attach한 뒤 engine B가 재등록해도 A의 연결은 그대로
+살아 있었다 — 규범(IPC-011)이 "재등록은 이전 credential을 무효로 한다"고 적은 것과 정반대로, 이미 들어와 있는 연결에는 무효화가
+닿지 않았다. 새 credential을 막는 것만으로 권한을 회수했다고 부른 것이 결함의 뿌리였다. 그래서 권한을 **값이 아니라 binding**으로
+바꿨다: 연결은 attach할 때 등록 **세대 번호**에 묶이고, 모든 요청과 preflight가 "지금 등록된 세대가 아직 그 번호인가"를 다시 묻는다.
+재등록·broker 교체·endpoint 종료는 세대를 올리고 그 자리에서 이전 세대의 socket을 파괴한다. 역검증: 실제 자식 프로세스를 engine으로
+세우고 그 연결을 연 채 재등록하면 다음 요청이 `AUTH_FAILED`가 되며, 세대 비교를 지우면 그 요청이 통과해 시험이 실패한다.
+
+**두 engine을 막는 것이 lock이 아니라 connect probe였다(P0, TOCTOU).** host는 admin socket에 연결해 보고 실패하면 broker를
+spawn한 뒤 `{kind:"started"}`를 돌려주었고, `oma.ts`는 state가 `already-running`만 아니면 engine을 시작했다 — `unavailable`,
+즉 broker가 아예 없는 경우까지 포함해서. probe와 자식이 lock을 잡는 시점 사이에 다른 `oma`가 먼저 lock을 잡으면 두 프로세스가 같은
+private workspace와 같은 session 기록의 writer가 된다. 구조 원칙을 하나 세워 닫았다 — **spawn한 pid는 소유가 아니다.** 소유의
+증거는 broker가 society lock을 쥔 뒤에만 보내는 `ready` 하나뿐이고, 그 보완물로 `onDisowned`를 두었다. 제품의 어떤 코드도
+`broker.state`를 보고 engine을 시작할지 판단하지 않는다. 자식 쪽도 바꿨다: broker는 config·SQLite·복구보다 먼저 lock을 시도하고,
+얻지 못하면 `SOCIETY_OWNED_EXIT`(6)으로 끝난다 — "이미 주인이 있다"와 "내가 못 떴다"는 host가 반대로 다뤄야 하는 사실이므로
+(앞은 소유 포기, 뒤는 재시작) 같은 status로 말할 수 없다. 역검증 셋: 실제 `dist/src/entry/broker.js`를 lock을 쥔 프로세스 옆에서
+띄우면 status 6과 그 이유를 stderr로 내고 `runtime.sqlite`를 만들지 않으며(lock을 놓아 주면 같은 실행이 다른 status가 된다),
+status 6으로 끝난 자식은 재시작되지 않고 소유 포기가 되며, 준비 신호 전에 engine을 시작하면 composition 시험이 실패한다.
+
+**등록 응답에 상관관계가 없었다(P1).** supervisor의 `pending`은 session handle 없는 callback 하나였다. engine A의 등록이 시간
+초과로 버려진 뒤 A에 대한 broker의 늦은 답이 도착하면, 그 답이 그때 기다리고 있던 engine B의 promise를 해결했다 — B가 A의 credential을
+받는다. 이제 `pending`이 자기 `sessionHandle`을 들고 있고, 응답은 그 handle과 대조된 뒤에만 해결된다. 어긋난 답은 이유와 함께
+버린다. 같은 이유로 supervision channel의 `refused`도 handle을 싣도록 문법을 넓혔다 — 거절만 이름이 없으면 같은 혼선이 거절 쪽으로
+남기 때문이다. 역검증: stand-in broker가 다른 handle로 답하면 등록은 부재로 끝나고 이유가 남으며, 대조를 지우면 그 답이 현재 등록을
+해결해 실패한다.
+
+**소유가 정해지기 전에 있는 파일을 다시 썼다(P2).** `provisionSociety()`는 모든 `oma` 시작에서, 즉 누가 society를 소유하는지 알기
+전에 돌면서 이미 있는 `/etc/passwd`·`/etc/group`을 `writeFileSync`로 덮어썼다. 내용이 같아도 쓰기는 쓰기다 — inode와 timestamp가
+바뀌고, 경쟁에서 진 프로세스가 소유자의 트리를 건드린 것이 된다. 감사가 제안한 "소유 확정 뒤에 provisioning"은 순환이라 택하지 않았다
+(broker는 트리가 없으면 시작할 수 없고, 소유는 broker가 확정한다). 대신 **멱등을 "같은 바이트를 다시 쓴다"가 아니라 "쓰지 않는다"로**
+정의했다: 생성 파일은 현재 내용이 생성값과 다를 때만 쓰고, 읽을 수 없는 생성 파일은 "다르다"가 아니라 설명할 수 없는 항목이므로
+덮어쓰지 않고 거절한다. 역검증: 두 번째 provisioning 뒤 inode·mtime·ctime이 모두 그대로이며, 무조건 쓰기로 되돌리면 실패한다.
+내용이 위조된 identity 파일은 여전히 교정되는 것도 같은 시험이 함께 본다.
+
+**검증 기록이 자기 산출물과 맞지 않았다(P1).** `611c07a`의 commit message는 `npm test 1135/1135`를 적었는데 이 파일은 여전히
+`1128/1128`이었고, LOC 인용값도 산출물과 어긋났으며, CI는 `NOT_OBSERVED`로만 적혀 있어 "아직 안 봤다"처럼 읽혔다. 실제로는 이
+브랜치에서 확인된 run 67개가 전부 실패이고 가장 최근 run의 `baseline` job은 step 0개로 끝났다. 위 실행 결과 표를 이번 실행의 실제
+값으로 갱신하고, CI 행을 `NOT_OBSERVED`에서 **FAIL**로 바꿔 현재 SHA에 묶인 성공 run이 없다는 사실을 적었다. A-008(10,000행) 초과와
+kernel/crash lane의 `BLOCKED, NOT_RUN`은 그대로 열려 있다.
+
+**이번 수정 전체의 역검증**은 결함을 하나씩 소스에 되돌린 사본에서 시험을 돌려, **정확히 그 시험만** 실패하는 것으로 확인했다.
+
+| 되돌린 결함 | 실패해야 하는 시험 | 결과 |
+|---|---|---|
+| 세대 binding 제거(attach 때 권한 고정) | T114 재등록이 이미 attach된 연결을 끊는다 | 실패함 |
+| broker entry가 소유와 실패를 같은 status로 말함 | T115 실제 entry가 두 번째 주인이 되기를 거절한다 | 실패함 |
+| host가 소유 status에 재시작으로 반응 | T115 소유 status는 재시작이 아니라 소유 포기다 | 실패함 |
+| spawn 직후 engine 시작 | T119 engine은 소유가 증명된 뒤에만 시작한다 | 실패함 |
+| 등록 응답의 handle 대조 제거 | T115 다른 session을 지목한 답은 현재 등록을 해결하지 않는다 | 실패함 |
+| 생성 파일 무조건 쓰기 | T115 두 번째 provisioning은 inode·timestamp를 보존한다 | 실패함 |
+
+**관측하지 못한 것**: 두 `oma` 프로세스를 실제로 동시에 띄워 lock 경쟁을 재현한 것은 아니다. 실제 `dist/src/entry/broker.js`를
+lock을 쥔 프로세스 옆에서 띄워 진 쪽의 동작만 production 경로로 관측했고, 이긴 쪽과 진 쪽이 같은 순간에 갈리는 지점은 관측하지
+않았다. CI 사실은 감사 보고를 인용한 것이며 이 세션에서 `gh`로 재확인하지 않았다.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
@@ -511,7 +571,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **217 files / 20,412 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **217 files / 20,521 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
