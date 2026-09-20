@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "6dd46b33dc2e73630cc3fb690275332bd799686d6a57e28563ae80b3934a6876",
+  "report": "eb1d720122e15b0fe2106601890114e196089ab2d07b888b4f7a891846b13201",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -177,7 +177,7 @@
     },
     {
       "path": "src/config/operations.ts",
-      "sha256": "9e1bde4e208a144346551bdd1d6a218d6e01f5fa80681921d4e84398a7fed8c9"
+      "sha256": "840979dffbc9cc736987ab3b14225385a5c09c3749dbcfbd30ee7a882938adc1"
     },
     {
       "path": "src/config/policy.ts",
@@ -809,7 +809,7 @@
     },
     {
       "path": "src/tui/sources/extensions.ts",
-      "sha256": "c30af033b42e13bf2a9873b4860658a50dcae6bb8570900e0801351dc6e1727e"
+      "sha256": "84f7556e481cee5c9bb51bf742c40df5a19758e45dd418aaa08b0d46875e0d75"
     },
     {
       "path": "src/tui/sources/mail.ts",
@@ -817,7 +817,7 @@
     },
     {
       "path": "src/tui/sources/settings.ts",
-      "sha256": "151caf619aa350355755cf09f13c1b9825162988283b1bae501a6967ed970123"
+      "sha256": "f8b8d38552ccaff75688da9d63eee8707999cabf1b21451e8aa54321d8d42af9"
     },
     {
       "path": "src/tui/transcript.ts",

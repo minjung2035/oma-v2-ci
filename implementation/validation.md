@@ -6,7 +6,7 @@
 
 브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `f1f18bd`, 실행일 2026-09-21. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `72b0f9414bda384d427ee07fcd9c388a8de0fbf2c8b16be3d5dc60d0a7f35576` (533 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `077f690200999863b79ed9c34daedf09921f3582d5ad8c32541c96f55192cd5d` (534 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -16,7 +16,7 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1245/1245 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1249/1249 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
 | `npm run verify:fast` | PASS, EXECUTED |
@@ -25,7 +25,7 @@
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
 | GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다. 열두 번째 감사는 같은 사실을 run #70까지로 인용하고(브랜치 누적 성공 0 / 실패 70), 열네 번째 감사는 성공 0 / 실패 72로 인용하며 `f1f18bd`의 run은 어떤 step도 돌기 전에 끝났고 `master`와 개발 브랜치가 둘 다 `protected: false`라고 적는다. 열세 번째 감사의 지적대로 workflow의 **결박 방식**은 이번에 고쳤다 — master와 pull request가 검증에 연결되고, evidence는 CI가 만든 merge commit이 아니라 제안된 head commit 이름으로 보관되며, 아무것도 측정하기 전에 checkout된 tree가 그 commit임을 확인한다. 그러나 그것은 **앞으로 생길 run이 무엇을 말할 수 있는지**를 바꾼 것이고, 이 행의 값은 바꾸지 않는다: 이 세션은 여전히 성공한 run을 하나도 관측하지 않았다 |
-| `node scripts/loc.mjs` | **220 files / 21,145 code LOC** |
+| `node scripts/loc.mjs` | **220 files / 21,140 code LOC** |
 
 ### 현재 범위
 
@@ -866,6 +866,64 @@ succeeded↔failed는 `contradiction`, 같은 terminal의 반복도 `stale` — 
 - **fence descriptor 상수가 두 곳에 선언돼 있다** — `src/process/async.ts:153-156`과 `src/extension/cli-process.ts:40-41`. 지금은
   값이 같지만 이것을 기계적으로 대조하는 gate가 없다. 이번 회차에서 손대지 않았고 drift 위험으로 남긴다.
 
+### 설정 bundle의 소유권과 tool surface 전송의 총체성: TUI/Tool Surface 정합성 개선안 R1
+
+감사와 별개로 "TUI와 extension은 Core가 이미 판정한 의미를 소비하고, 스스로 같은 의미를 다시 판정하지 않는다"는 개선안을 받았다.
+이 tree에서 열네 번 반복된 결함이 전부 **하나의 사실에 owner가 둘이고 약한 쪽이 write를 쥐고 있다**는 같은 모양이었으므로 방향은
+맞다고 판단했다. 다만 근거 없이 구조를 옮기지는 않기로 하고, 각 항목에 대해 **실제로 재현되는 결함이 있는지 먼저 확인**했다.
+이번 회차에서 닫은 것은 우선순위 R1(P1, P2)이고 P3–P6은 닫지 않았다(아래 '하지 않은 것').
+
+**bundle이 무엇을 담고 있는지를 세 곳이 각자 답했고, 그중 규칙이 없는 쪽이 write를 쥐고 있었다(P1).** `oma-operations-v1`
+manifest를 읽는 코드가 `src/config/operations.ts`, `src/tui/sources/settings.ts`, `src/tui/sources/extensions.ts` 세 곳에 있었다.
+loader의 규칙은 강하다 — 참조는 정규화된 상대 경로여야 하고, bundle root 안에서 해석돼야 하며, symlink를 통과해서는 안 된다.
+Config 화면의 것은 그보다 약했고, Extensions 화면의 것은 `join(root, String(file))` 한 줄로 containment가 **아예 없었다**. 그리고
+그 화면이 role 파일에 **쓴다**.
+
+고치기 전에 probe로 재현했다. `roles.resident`를 `"../OUTSIDE.json"`으로 적은 bundle에서 loader는 거부했지만
+(`roles.resident escapes the configuration bundle`), `readExtensions`는 role 경로로 `/tmp/oma-probe-.../OUTSIDE.json`을 돌려줬고
+`toggleExtension`은 그 파일을 **bundle 바깥에서 덮어썼다**. 제품이 절대 load하지 않을 설정이 TUI에게는 편집 가능한 설정이었던
+셈이다.
+
+그래서 화면의 규칙을 조이는 대신 **질문의 주인을 옮겼다**. `configurationLayout(path)`가 "이 bundle은 무엇을 담고 있는가"의
+유일한 답이 되고(`ConfigurationLayout`), `readConfigurationSource`도 그것을 소비한다 — manifest를 두 번 걷지 않는다. 두 화면은
+자기 parser를 잃었고 `layout.roles`가 준 경로에만 쓴다. loader가 거부하는 bundle은 편집 대상이 아니라 **보고 대상**이 된다
+(`editable: false`). 증명도 실행 하나에 기대지 않는다. `test/config-bundle-owner.test.mjs`의 네 번째 시험은 두 화면의 **소스에
+`"oma-operations-v1"` 문자열이 없을 것**을 요구한다 — 형식을 부를 수 없는 화면은 형식을 다시 해석할 수 없다.
+
+**tool surface 전송은 owner가 이미 하나였고, 틀린 것은 증명 쪽이었다(P2).** `encodeToolSurfacePlan`은 `src/domain/tool-surface.ts`
+하나뿐이고 `src/runner.ts`, `src/tui/session.ts`, `scripts/functional-surface.mjs`가 모두 그것을 부른다. decode도
+`src/extension/tool-surface.ts` 하나뿐이다. 그래서 P2에는 옮길 소유권이 없었다. 대신 **감사가 지목한 그 불일치가 시험 안에
+있었다**: `T100/TSP-002: the plan round-trips through its transport encoding unchanged`라는 이름의 시험이 실제로는 일곱 필드 중
+`defaultMode`, `roots`, 그리고 group의 `children` 세 가지만 확인하고 있었다. `direct`, `disabled`, `grouped`, group의 `name`과
+`description`은 전송 중에 사라져도 이 시험이 아무 말도 하지 않았다. 이름은 전체를 주장하는데 술어는 일부를 본다.
+
+술어를 이름에 맞췄다. plan의 모든 필드가 비어 있지 않은 값을 갖도록 만든 뒤 encode→decode 결과 전체를 한 번에 비교하고,
+전송된 JSON의 key 집합이 plan의 key 집합과 같을 것을 요구하고, **encoder가 쓰는 모든 필드를 하나씩 지워가며 decoder가 전부
+`malformed`로 거부하는지** 확인한다. decoder가 없어도 받아주는 필드는 sandbox가 그것 없이 동작하는 필드이고, encoder가 조용히
+보내지 않게 되어도 아무도 모르는 필드다.
+
+되돌린 결함과 그때 실패해야 하는 시험:
+
+| 되돌린 결함 | 실패해야 하는 시험 | 결과 |
+|---|---|---|
+| Extensions 화면이 다시 bundle 경로를 스스로 조립(containment 없음) | CFG-005 탈출·symlink 2건 | 실패함(2건) |
+| 화면 소스에 `"oma-operations-v1"`를 되돌려 놓음 | CFG-005 source gate | 실패함(1건) |
+| encoder가 `disabled` 필드를 전송하지 않음 | T100 round-trip, T103 fail-closed | 실패함(2건) |
+| decoder가 `grouped` 누락을 받아들임 | T100 round-trip | 실패함(1건) |
+
+소유권을 옮기면서 기존 시험 두 건을 고쳤고, 둘 다 제품이 아니라 시험 쪽의 문제였다. `surface-adversarial`의 거절 검사는
+화면이 내던 옛 문구(`relative path`)를 정규식으로 보고 있었으므로 loader의 문구로 바꿨다 — 거절 자체는 전후 모두 일어난다.
+`tui-sources`의 T97 fixture는 manifest가 이름만 대고 파일은 만들지 않은 `models.json`을 갖고 있었다. 화면이 loader의 규칙을
+쓰기 시작하면서 manifest가 부르는 모든 참조가 해석돼야 하므로 그 bundle은 이제 편집 대상이 아니다. 제품이 시작할 수 없는
+bundle이었다는 뜻이고, fixture가 존재하는 파일을 부르도록 고쳤다.
+
+**하지 않은 것**: 개선안의 P3(환경변수를 `PrincipalLaunchPlan`으로), P4(`PrincipalSession` ownership을 `RunState` union으로),
+P5(`PanelReadPorts`/`SocietyWriteCapability` 분리), P6(`updateValidatedDocument`). 각각 probe로 확인한 결과 **재현되는 결함을
+찾지 못했다**. 특히 P3에서 환경을 조립하는 두 곳(`src/tui/session.ts`의 `sessionEnv`, `src/runtime/pi-spawn-plan.ts`의
+`omaEnvironment`)은 같은 사실의 두 owner가 아니라 **서로 다른 두 사실**이었다 — 전자는 host에서 뜨는 Principal engine의 환경,
+후자는 `--clearenv` 아래 confined Resident의 환경이고 겹치는 항목은 `OMA_TOOL_SURFACE` 하나다. 재현되는 결함 없이 구조를 옮기는
+것은 이 기록이 반복해서 경계해 온 종류의 변경이므로 남겨 둔다.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
@@ -934,7 +992,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,145 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,140 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

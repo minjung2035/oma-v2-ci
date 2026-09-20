@@ -144,17 +144,45 @@ test("T103/TSP-007: an unreadable projection fails closed rather than exposing h
 });
 
 test("T100/TSP-002: the plan round-trips through its transport encoding unchanged", () => {
+  // The claim is the whole plan, so it is checked as the whole plan. This test
+  // used to name three of the seven fields, which is a weaker predicate than
+  // its own title: `direct`, `disabled`, `grouped` and the group names could
+  // have been dropped in transit and nothing here would have said so.
   const plan = planToolSurface(config({
     defaultMode: "DIRECT", direct: ["read"], disabled: ["danger"],
     groups: [group("web", [{ tool: "fetch" }, { group: "browser" }]), group("browser", [{ tool: "click" }])],
   }));
-  const parsed = parseSurfacePlan(encodeToolSurfacePlan(plan));
+  for (const [field, value] of Object.entries(plan))
+    assert.ok(Array.isArray(value) ? value.length > 0 : value !== undefined,
+      `${field} is empty here, so this plan cannot witness that it survives`);
+
+  const encoded = encodeToolSurfacePlan(plan);
+  assert.deepEqual(Object.keys(JSON.parse(encoded)).sort(), Object.keys(plan).sort(),
+    "the transport carries exactly the fields the plan has");
+  const parsed = parseSurfacePlan(encoded);
   assert.equal(parsed.state, "plan");
   if (parsed.state !== "plan") return;
-  assert.equal(parsed.plan.defaultMode, plan.defaultMode);
-  assert.deepEqual(parsed.plan.roots, plan.roots);
-  assert.deepEqual(parsed.plan.groups.map(entry => entry.children), plan.groups.map(entry => entry.children));
-  assert.equal(encodeToolSurfacePlan(plan), encodeToolSurfacePlan(plan), "encoding is stable");
+  const { version, ...carried } = plan;
+  assert.equal(version, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(parsed.plan)), JSON.parse(JSON.stringify(carried)),
+    "a field of the plan did not survive the transport");
+  assert.equal(encodeToolSurfacePlan(plan), encoded, "encoding is stable");
+
+  // The far end must validate every field the near end writes. A field the
+  // decoder accepts as missing is a field the sandbox would run without, and
+  // the encoder is free to stop sending it without anything noticing.
+  for (const field of Object.keys(JSON.parse(encoded) as Record<string, unknown>)) {
+    const partial = JSON.parse(encoded) as Record<string, unknown>;
+    delete partial[field];
+    assert.equal(parseSurfacePlan(JSON.stringify(partial)).state, "malformed",
+      `a projection missing ${field} was accepted`);
+  }
+  for (const field of ["name", "description", "children"]) {
+    const partial = JSON.parse(encoded) as { groups: Record<string, unknown>[] };
+    delete partial.groups[0]![field];
+    assert.equal(parseSurfacePlan(JSON.stringify(partial)).state, "malformed",
+      `a group missing ${field} was accepted`);
+  }
 });
 
 test("T100/TSP-002: a role file may declare a projection, and a bad one fails at config load", () => {

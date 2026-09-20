@@ -8,12 +8,12 @@ import type { HostConfigV1 } from "../implementation/contracts.js";
 import { StoreError } from "../src/domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
-import { readConfigurationSource } from "../src/config/operations.js";
+import { configurationLayout as layoutOf, readConfigurationSource } from "../src/config/operations.js";
 import { encodeToolSurfacePlan } from "../src/domain/tool-surface.js";
 import { readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
 import {
   PRINCIPAL_MODEL, WORKER_LIMIT, WORKER_MODEL,
-  commitField, layoutOf, readSettings,
+  commitField, readSettings,
 } from "../src/tui/sources/settings.js";
 import { principalSessionProfile, sessionArgv, sessionEnv } from "../src/tui/session.js";
 import { loadConfiguration } from "../src/config.js";

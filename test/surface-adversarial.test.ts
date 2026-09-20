@@ -9,7 +9,10 @@ import { SURFACE_LIMITS, planToolSurface, type ToolSurfaceConfig } from "../src/
 import { INITIAL, step, type PanelData } from "../src/tui/model.js";
 import { render } from "../src/tui/view/index.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
-import { WORKER_LIMIT, commitField, layoutOf, readSettings } from "../src/tui/sources/settings.js";
+import { WORKER_LIMIT, commitField, readSettings } from "../src/tui/sources/settings.js";
+// Containment is the loader's rule, so it is asked of the loader. The screen
+// consuming it is proved in `test/config-bundle-owner.test.mjs`.
+import { configurationLayout as layoutOf } from "../src/config/operations.js";
 import { readExtensions, toggleExtension } from "../src/tui/sources/extensions.js";
 import { parseMessage, principalMailbox, readBody, readMailbox, unreadCount } from "../src/tui/sources/mail.js";
 import { READ_BOUNDS } from "../src/tui/limits.js";
@@ -45,7 +48,7 @@ test("a bundle reference that escapes the bundle directory is refused", () => {
     for (const host of ["../outside.json", "/etc/passwd", "sub/../../outside.json"]) {
       const index = bundle(root, { host });
       assert.throws(() => layoutOf(index), (error: unknown) =>
-        error instanceof StoreError && /relative path|escapes/.test(error.message),
+        error instanceof StoreError && /normalized relative file path|escapes its root/.test(error.message),
         `host reference ${host} must be refused`);
     }
     for (const roles of [{ resident: "../role.json" }, { resident: "/tmp/role.json" }]) {

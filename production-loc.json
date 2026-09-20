@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 25728,
+    "n_lines": 25741,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -28,6 +28,12 @@
     "blank": 6,
     "comment": 5,
     "code": 366,
+    "language": "TypeScript"
+  },
+  "src/config/operations.ts": {
+    "blank": 1,
+    "comment": 26,
+    "code": 293,
     "language": "TypeScript"
   },
   "src/tui/session.ts": {
@@ -64,12 +70,6 @@
     "blank": 2,
     "comment": 10,
     "code": 270,
-    "language": "TypeScript"
-  },
-  "src/config/operations.ts": {
-    "blank": 1,
-    "comment": 12,
-    "code": 259,
     "language": "TypeScript"
   },
   "src/broker/connection.ts": {
@@ -117,12 +117,6 @@
   "src/extension/mail-tools.ts": {
     "blank": 5,
     "comment": 37,
-    "code": 225,
-    "language": "TypeScript"
-  },
-  "src/tui/sources/settings.ts": {
-    "blank": 24,
-    "comment": 47,
     "code": 225,
     "language": "TypeScript"
   },
@@ -190,6 +184,12 @@
     "blank": 2,
     "comment": 5,
     "code": 190,
+    "language": "TypeScript"
+  },
+  "src/tui/sources/settings.ts": {
+    "blank": 22,
+    "comment": 48,
+    "code": 189,
     "language": "TypeScript"
   },
   "src/frame.ts": {
@@ -294,12 +294,6 @@
     "code": 152,
     "language": "TypeScript"
   },
-  "src/tui/sources/extensions.ts": {
-    "blank": 12,
-    "comment": 26,
-    "code": 152,
-    "language": "TypeScript"
-  },
   "src/cli/request-service.ts": {
     "blank": 8,
     "comment": 4,
@@ -310,6 +304,12 @@
     "blank": 1,
     "comment": 7,
     "code": 151,
+    "language": "TypeScript"
+  },
+  "src/tui/sources/extensions.ts": {
+    "blank": 12,
+    "comment": 31,
+    "code": 149,
     "language": "TypeScript"
   },
   "src/entry/broker.ts": {
@@ -1327,9 +1327,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1047,
-    "comment": 3536,
-    "code": 21145,
+    "blank": 1045,
+    "comment": 3556,
+    "code": 21140,
     "nFiles": 220
   }
 }

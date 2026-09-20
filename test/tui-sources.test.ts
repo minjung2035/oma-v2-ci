@@ -150,6 +150,7 @@ test("T97/TUI-010: the core extension stays first and selection is confined to l
     writeFileSync(join(libdir, "extensions", "review.js"), "export {};\n");
     writeFileSync(join(libdir, "extensions", "browser.js"), "export {};\n");
     writeFileSync(join(root, "host.json"), JSON.stringify({ installation: { libdir } }));
+    writeFileSync(join(root, "models.json"), JSON.stringify({}));
     writeFileSync(join(root, "principal.json"), JSON.stringify({ agentProfile: {}, extensions: [CORE_EXTENSION], promptFile: "p.md" }));
     writeFileSync(join(root, "resident.json"), JSON.stringify({ agentProfile: {}, extensions: [CORE_EXTENSION, "extensions/review.js"], promptFile: "p.md" }));
     writeFileSync(join(root, "index.json"), JSON.stringify({

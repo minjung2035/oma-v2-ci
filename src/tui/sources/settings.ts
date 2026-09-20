@@ -6,11 +6,11 @@
  * It never invents a model, a quota or a profile that the host did not declare.
  */
 import { createHash } from "node:crypto";
-import { readFileSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, normalize, relative } from "node:path";
+import { readFileSync } from "node:fs";
 import type { HostConfigV1 } from "../../../implementation/contracts.js";
 import { StoreError } from "../../domain/errors.js";
 import { loadConfig } from "../../config.js";
+import { configurationLayout, type ConfigurationLayout } from "../../config/operations.js";
 import { replaceDerivedFile } from "../../storage/durable-fs.js";
 import type { ConfigField } from "../model.js";
 import { CONFIG_BOUNDS } from "../limits.js";
@@ -25,15 +25,12 @@ export const EXTENSIONS = "extensions";
 /** The authored layout behind the composed config. A split bundle keeps role
  * files and host.json as the real owners, so a Config edit must patch those
  * rather than flattening the bundle into its index (CFG-005, operations).
+ *
+ * The layout itself is the loader's answer, not this screen's. This module used
+ * to walk the manifest a second time with a weaker containment rule; what a
+ * bundle contains has one owner, and a screen that writes must ask it.
  */
-export type ConfigLayout =
-  | { readonly kind: "inline"; readonly path: string }
-  | {
-      readonly kind: "operations";
-      readonly index: string;
-      readonly host: string;
-      readonly roles: Readonly<Record<string, string>>;
-    };
+export type ConfigLayout = ConfigurationLayout;
 
 export interface Settings {
   readonly path: string;
@@ -87,47 +84,13 @@ function readJsonObject(path: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-/** Relative references inside a bundle stay inside it: the same containment the
- * operations loader enforces, repeated here because this module writes.
- */
-function bundlePath(root: string, value: unknown, what: string): string {
-  if (typeof value !== "string" || value.length === 0 || isAbsolute(value))
-    throw new StoreError("INVALID_REQUEST", `${what} must be a relative path`);
-  const resolved = normalize(join(root, value));
-  const inside = relative(root, resolved);
-  if (inside.startsWith("..") || isAbsolute(inside))
-    throw new StoreError("INVALID_REQUEST", `${what} escapes the configuration bundle`);
-  return resolved;
-}
-
-export function layoutOf(path: string): ConfigLayout {
-  let index: string;
-  let source: Record<string, unknown>;
-  try { index = realpathSync(path); source = readJsonObject(index); }
-  catch { return Object.freeze({ kind: "inline" as const, path }); }
-  if (source.kind !== "oma-operations-v1") return Object.freeze({ kind: "inline" as const, path: index });
-  const root = dirname(index);
-  const declared = source.roles;
-  if (declared === null || typeof declared !== "object" || Array.isArray(declared))
-    throw new StoreError("INVALID_REQUEST", "operations config roles must be an object");
-  const roles: Record<string, string> = {};
-  for (const [name, file] of Object.entries(declared as Record<string, unknown>))
-    roles[name] = bundlePath(root, file, `roles.${name}`);
-  return Object.freeze({
-    kind: "operations" as const,
-    index,
-    host: bundlePath(root, source.host, "host"),
-    roles: Object.freeze(roles),
-  });
-}
-
 export function settingsOf(path: string, config: HostConfigV1, layout: ConfigLayout = { kind: "inline", path }): Settings {
   const workerProfile = workerProfileOf(config);
   return Object.freeze({ path, layout, config, workerProfile, fields: fieldsOf(config, workerProfile) });
 }
 
 export function readSettings(path: string): Settings {
-  return settingsOf(path, loadConfig(path), layoutOf(path));
+  return settingsOf(path, loadConfig(path), configurationLayout(path));
 }
 
 /** CFG-005: a config replacement must carry a new policy revision. Deriving it

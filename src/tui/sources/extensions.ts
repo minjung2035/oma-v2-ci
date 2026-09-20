@@ -8,10 +8,11 @@
  */
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../../domain/deployment.js";
 import { replaceDerivedFile } from "../../storage/durable-fs.js";
+import { configurationLayout, type ConfigurationLayout } from "../../config/operations.js";
 import type { ExtensionRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
 
@@ -108,27 +109,28 @@ const unmanaged = (reason: string): ExtensionContext => Object.freeze({
 });
 
 export function readExtensions(configPath: string, principalProfile: string, workerProfile: string): ExtensionContext {
-  let location: string;
-  let source: Record<string, unknown>;
-  try { location = realpathSync(configPath); source = readJson(location); }
-  catch { return unmanaged("설정을 읽을 수 없습니다"); }
-  if (source.kind !== "oma-operations-v1")
+  // What the bundle contains is the loader's answer. This screen writes to the
+  // paths it gets back, so composing them here would be a second containment
+  // rule -- and the one this screen used to carry had none at all, which let a
+  // `roles` entry of `../x.json` be rewritten outside the bundle being edited.
+  // A bundle the loader refuses is not editable; it is reported.
+  let layout: ConfigurationLayout;
+  try { layout = configurationLayout(configPath); }
+  catch (error) {
+    return unmanaged(error instanceof StoreError ? `설정을 읽을 수 없습니다: ${error.message}` : "설정을 읽을 수 없습니다");
+  }
+  if (layout.kind !== "operations")
     return unmanaged("인라인 config.json은 role별 extension을 갖지 않습니다");
-  const root = dirname(location);
-  const files = source.roles;
-  if (files === null || typeof files !== "object" || Array.isArray(files))
-    return unmanaged("roles 목록이 없습니다");
   let libdir: string;
   try {
-    const host = readJson(join(root, String(source.host)));
+    const host = readJson(layout.host);
     const installation = host.installation as Record<string, unknown> | undefined;
     const declared = installation?.libdir;
     if (typeof declared !== "string" || !isAbsolute(declared)) return unmanaged("installation.libdir이 절대 경로가 아닙니다");
     libdir = declared;
   } catch { return unmanaged("host 파일을 읽을 수 없습니다"); }
   const roles: RoleFile[] = [];
-  for (const [name, file] of Object.entries(files as Record<string, unknown>)) {
-    const path = join(root, String(file));
+  for (const [name, path] of Object.entries(layout.roles)) {
     let role: Record<string, unknown>;
     try { role = readJson(path); } catch { return unmanaged(`role 파일을 읽을 수 없습니다: ${name}`); }
     const entries = role.extensions;
