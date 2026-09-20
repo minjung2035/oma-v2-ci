@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 25419,
+    "n_lines": 25728,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -78,6 +78,12 @@
     "code": 256,
     "language": "TypeScript"
   },
+  "src/leaf.ts": {
+    "blank": 25,
+    "comment": 75,
+    "code": 252,
+    "language": "TypeScript"
+  },
   "src/runtime/inference-relay.ts": {
     "blank": 29,
     "comment": 63,
@@ -120,6 +126,12 @@
     "code": 225,
     "language": "TypeScript"
   },
+  "src/request-cache.ts": {
+    "blank": 18,
+    "comment": 41,
+    "code": 224,
+    "language": "TypeScript"
+  },
   "src/runtime/pi-adapter.ts": {
     "blank": 1,
     "comment": 19,
@@ -150,12 +162,6 @@
     "code": 210,
     "language": "TypeScript"
   },
-  "src/leaf.ts": {
-    "blank": 20,
-    "comment": 43,
-    "code": 207,
-    "language": "TypeScript"
-  },
   "src/git/integration.ts": {
     "blank": 5,
     "comment": 5,
@@ -166,12 +172,6 @@
     "blank": 16,
     "comment": 6,
     "code": 195,
-    "language": "TypeScript"
-  },
-  "src/request-cache.ts": {
-    "blank": 16,
-    "comment": 19,
-    "code": 194,
     "language": "TypeScript"
   },
   "src/storage/immutable-file.ts": {
@@ -252,12 +252,6 @@
     "code": 163,
     "language": "TypeScript"
   },
-  "src/entry/broker.ts": {
-    "blank": 3,
-    "comment": 37,
-    "code": 162,
-    "language": "TypeScript"
-  },
   "src/diagnostics/files.ts": {
     "blank": 2,
     "comment": 5,
@@ -288,6 +282,12 @@
     "code": 156,
     "language": "TypeScript"
   },
+  "src/storage/durable-fs.ts": {
+    "blank": 12,
+    "comment": 56,
+    "code": 156,
+    "language": "TypeScript"
+  },
   "src/process/async.ts": {
     "blank": 4,
     "comment": 61,
@@ -312,10 +312,10 @@
     "code": 151,
     "language": "TypeScript"
   },
-  "src/storage/durable-fs.ts": {
-    "blank": 11,
-    "comment": 40,
-    "code": 151,
+  "src/entry/broker.ts": {
+    "blank": 3,
+    "comment": 36,
+    "code": 148,
     "language": "TypeScript"
   },
   "src/mail/headers.ts": {
@@ -327,6 +327,12 @@
   "src/runtime/deployment-manifest.ts": {
     "blank": 3,
     "comment": 4,
+    "code": 144,
+    "language": "TypeScript"
+  },
+  "src/storage/contained-fs.ts": {
+    "blank": 2,
+    "comment": 38,
     "code": 144,
     "language": "TypeScript"
   },
@@ -375,12 +381,6 @@
   "src/runtime/principal-delivery.ts": {
     "blank": 9,
     "comment": 52,
-    "code": 135,
-    "language": "TypeScript"
-  },
-  "src/storage/contained-fs.ts": {
-    "blank": 1,
-    "comment": 15,
     "code": 135,
     "language": "TypeScript"
   },
@@ -534,6 +534,12 @@
     "code": 88,
     "language": "TypeScript"
   },
+  "src/protocol/receipt-codec.ts": {
+    "blank": 8,
+    "comment": 18,
+    "code": 87,
+    "language": "TypeScript"
+  },
   "src/extension/delivery.ts": {
     "blank": 2,
     "comment": 17,
@@ -564,6 +570,12 @@
     "code": 83,
     "language": "TypeScript"
   },
+  "src/runtime/society-lease.ts": {
+    "blank": 10,
+    "comment": 136,
+    "code": 82,
+    "language": "TypeScript"
+  },
   "src/mail/serialize.ts": {
     "blank": 4,
     "comment": 15,
@@ -591,12 +603,6 @@
   "src/lifecycle/workspace.ts": {
     "blank": 1,
     "comment": 5,
-    "code": 80,
-    "language": "TypeScript"
-  },
-  "src/protocol/receipt-codec.ts": {
-    "blank": 5,
-    "comment": 2,
     "code": 80,
     "language": "TypeScript"
   },
@@ -634,6 +640,12 @@
     "blank": 4,
     "comment": 12,
     "code": 76,
+    "language": "TypeScript"
+  },
+  "src/storage/staged-tree.ts": {
+    "blank": 3,
+    "comment": 27,
+    "code": 75,
     "language": "TypeScript"
   },
   "src/tui/limits.ts": {
@@ -682,12 +694,6 @@
     "blank": 3,
     "comment": 6,
     "code": 68,
-    "language": "TypeScript"
-  },
-  "src/storage/staged-tree.ts": {
-    "blank": 3,
-    "comment": 19,
-    "code": 67,
     "language": "TypeScript"
   },
   "src/protocol/log-response.ts": {
@@ -888,9 +894,9 @@
     "code": 43,
     "language": "TypeScript"
   },
-  "src/runtime/society-lease.ts": {
-    "blank": 6,
-    "comment": 95,
+  "src/runtime/process-lock.ts": {
+    "blank": 2,
+    "comment": 25,
     "code": 43,
     "language": "TypeScript"
   },
@@ -904,12 +910,6 @@
     "blank": 0,
     "comment": 4,
     "code": 42,
-    "language": "TypeScript"
-  },
-  "src/runtime/process-lock.ts": {
-    "blank": 2,
-    "comment": 21,
-    "code": 40,
     "language": "TypeScript"
   },
   "src/units/execute.ts": {
@@ -1327,9 +1327,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1031,
-    "comment": 3375,
-    "code": 21013,
+    "blank": 1047,
+    "comment": 3536,
+    "code": 21145,
     "nFiles": 220
   }
 }

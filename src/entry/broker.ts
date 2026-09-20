@@ -1,6 +1,6 @@
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { join } from "node:path";
-import { fstatSync, mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { Store, SCHEMA_PATH } from "../store.js";
 import { MailModule } from "../mail.js";
 import { UnitsModule, UNIT_TPL_DIR } from "../units.js";
@@ -15,8 +15,7 @@ import { ReconcileModule } from "../reconcile.js";
 import { loadConfig } from "../config.js";
 import { createChildSpecResolver } from "../config/policy.js";
 import { ProcessLock, SOCIETY_OWNED_EXIT } from "../runtime/process-lock.js";
-import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../process/async.js";
-import { tryHoldSociety } from "../runtime/society-lease.js";
+import { claimSocietyFence } from "../runtime/society-lease.js";
 import { BrokerLifetime } from "../runtime/broker-lifetime.js";
 import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
@@ -27,24 +26,6 @@ import { isValidSocietyName } from "../ids.js";
 
 function usage(): never { console.error("usage: broker.js --society <name> [--config <path>]"); process.exit(4); }
 
-/** Whether this broker was started by the `oma` that owns the society, which
- * is true exactly when it was handed that society's lease.
- *
- * A declaration that cannot be honoured is a startup failure rather than a
- * shrug: a broker that was told it holds the society but does not would go on
- * to serve a society whose ownership nothing is holding. */
-function inheritedSocietyFence(): boolean {
-  const declared = process.env[SOCIETY_FENCE_ENV];
-  if (declared === undefined) return false;
-  if (declared !== String(SOCIETY_FENCE_FD))
-    throw new StoreError("INTERNAL_ERROR", `${SOCIETY_FENCE_ENV} names descriptor ${declared}, which is not where this product places the society lease`);
-  let kind;
-  try { kind = fstatSync(SOCIETY_FENCE_FD); }
-  catch { throw new StoreError("INTERNAL_ERROR", `${SOCIETY_FENCE_ENV} names descriptor ${SOCIETY_FENCE_FD}, which is not open`); }
-  if (!kind.isSocket())
-    throw new StoreError("INTERNAL_ERROR", `${SOCIETY_FENCE_ENV} names descriptor ${SOCIETY_FENCE_FD}, which is not the society lease`);
-  return true;
-}
 const args = process.argv.slice(2);
 const societyIdx = args.indexOf("--society"); const configIdx = args.indexOf("--config");
 if (societyIdx < 0 || args[societyIdx + 1] === undefined) usage();
@@ -83,11 +64,15 @@ async function main(): Promise<void> {
   // the one that counts. A broker started any other way speaks for itself, so
   // it takes the lease, and a society an `oma` already owns refuses it.
   //
+  // A descriptor declared as the lease but holding something else is a startup
+  // failure, not a reason to fall back to taking the lease: the fallback is
+  // what a forged declaration wanted. It would leave a broker serving a
+  // society whose ownership nothing holds, having announced that it did.
+  //
   // Nothing releases the lease. The kernel does, when the last descriptor onto
   // it closes, which is the only release that can never come too early.
-  const fenced = inheritedSocietyFence();
-  const lease = fenced ? null : tryHoldSociety(stateRoot);
-  if (!fenced && lease === null) {
+  const claim = claimSocietyFence(stateRoot);
+  if (claim.kind === "elsewhere") {
     console.error("an oma already owns this society; this broker does not start");
     lock.close();
     process.exit(SOCIETY_OWNED_EXIT);

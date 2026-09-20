@@ -3,6 +3,7 @@
  * No lstat/open fallback when openat2 containment is unavailable.
  */
 import { constants, closeSync, fstatSync, openSync } from "node:fs";
+import { basename, dirname } from "node:path";
 import { getSystemErrorName } from "node:util";
 import { load, errno } from "koffi";
 import { StoreError } from "../domain/errors.js";
@@ -148,4 +149,36 @@ export function linkDescriptor(
   checked(
     syscalls().link(-100, `/proc/self/fd/${source}`, directory, name, 0x400),
   ); // AT_SYMLINK_FOLLOW
+}
+
+/** Do something to a name, inside the directory that holds it, having resolved
+ * that directory exactly once.
+ *
+ * Every filesystem defect this product has had at the same UID is the same two
+ * lines: resolve a path, decide what it is, then perform the effect on the path
+ * again. The second resolution is a fresh walk through a namespace any process
+ * of this user can rearrange in between, so the thing that was checked and the
+ * thing that was written are the same object only when nobody tried. It is not
+ * a window that can be narrowed by checking again afterwards, because the check
+ * and the use are still two walks.
+ *
+ * `openDirectory` resolves the parent in the kernel with no symlink followed at
+ * any component, and the returned descriptor names that directory's inode for
+ * as long as it is open -- renaming, unlinking or replacing the path afterwards
+ * does not move it. `entryAt` then addresses one entry through that descriptor.
+ * So the rule this primitive exists to make cheap is: resolve the parent once,
+ * and never say the pathname again.
+ *
+ * The body is given the parent and the leaf name and nothing else, so a caller
+ * that wanted to re-resolve the path would have to go and fetch it; that is the
+ * whole point of the shape. The descriptor is closed on the way out, so the
+ * body must not keep it.
+ */
+export function withinDirectory<T>(path: string, body: (parent: number, name: string) => T): T {
+  const leaf = basename(path);
+  if (leaf === "" || leaf === "." || leaf === "..")
+    throw new StoreError("STORE_CORRUPT", `path has no entry to act on: ${path}`);
+  const parent = openDirectory(dirname(path));
+  try { return body(parent, leaf); }
+  finally { closeSync(parent); }
 }

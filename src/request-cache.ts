@@ -1,19 +1,22 @@
 // MUST [FS-003]/[IPC-006/008]: private model-mutable preaccept cache.
 // This is neither a durable effect ledger nor broker/session authority.
 import {
-  mkdirSync, readFileSync, writeFileSync, openSync, fsyncSync,
+  readFileSync, writeFileSync, openSync, fsyncSync,
   closeSync, linkSync, unlinkSync, fstatSync, lstatSync, constants,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Receipt, RequestKey } from "../implementation/contracts.js";
 import { isValidRequestKey } from "./domain/identifiers.js";
 import { requestParamsEqual } from "./domain/request-identity.js";
 import { sha256Hex } from "./domain/canonical-json.js";
 import { parseJsonObject } from "./frame.js";
-import { decodeReceipt } from "./protocol/receipt-codec.js";
+import { decodeReceipt, receiptSupersession } from "./protocol/receipt-codec.js";
 import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./cli/cache-codec.js";
-import { fsyncDir, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
+import { fsyncDir, fsyncHeldDir, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
+import { entryAt, openBeneath, withinDirectory } from "./storage/contained-fs.js";
+import { ensureDirectory } from "./storage/directory.js";
+import { lockFileDescriptor } from "./leaf.js";
 
 export type { CachedRequest, StreamDigest } from "./cli/cache-codec.js";
 export type FreezeInput = Omit<CachedRequest, "lastReceipt">;
@@ -26,6 +29,11 @@ export type CacheRead = FileObservation<CachedRequest>;
 export type BodyRead = FileObservation<Uint8Array>;
 export type FreezeResult = { readonly kind: "created" | "existing"; readonly value: CachedRequest };
 export type CacheReader = (path: string, expectedBytes?: number) => FileObservation<Uint8Array>;
+
+/** How long a competing process may hold one request key's receipt lock
+ * before this one reports the cache unavailable rather than waiting further. */
+const RECEIPT_LOCK_ATTEMPTS = 200;
+const RECEIPT_LOCK_PAUSE_MS = 5;
 
 export class CacheError extends Error {
   constructor(readonly code: "INVALID_REQUEST" | "REQUEST_KEY_REUSED" | "CACHE_CORRUPT" | "CACHE_UNAVAILABLE", message: string) {
@@ -75,32 +83,41 @@ export const readCacheFile: CacheReader = (path, expectedBytes) => {
  * Initial cache publication owns this descriptor and its unlink separately from
  * immutable mail and from the receipt-only derived replacement API.
  */
-function prepareTemp(target: string, data: string | Uint8Array): string {
-  const temp = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`);
-  const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+function prepareTemp(parent: number, name: string, data: string | Uint8Array): string {
+  const temp = `.${name}.${randomUUID()}.tmp`;
+  const fd = openBeneath(parent, temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   try { writeFileSync(fd, data); fsyncSync(fd); }
   catch (error) {
-    try { unlinkSync(temp); fsyncDir(dirname(temp)); } catch { /* cleanup only; retain the write error */ }
+    try { unlinkSync(entryAt(parent, temp)); fsyncSync(parent); } catch { /* cleanup only; retain the write error */ }
     throw error;
   } finally { closeSync(fd); }
   return temp;
 }
 
-/** File fsync -> no-replace hardlink -> directory fsync. Existing bytes are never overwritten. */
+/** File fsync -> no-replace hardlink -> directory fsync. Existing bytes are never overwritten.
+ *
+ * Every name here is addressed through the one descriptor the cache directory
+ * was resolved into. The temporary used to be created, linked and unlinked by
+ * pathname after the directory had been made, which at this UID is three more
+ * chances for a component of that path to be something else than the one that
+ * was checked.
+ */
 function publishNoReplace(target: string, data: string | Uint8Array): "created" | "existing" {
-  const temp = prepareTemp(target, data);
-  let result: "created" | "existing" = "created";
-  try {
-    try { linkSync(temp, target); }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      result = "existing";
+  return withinDirectory(target, (parent, name) => {
+    const temp = prepareTemp(parent, name, data);
+    let result: "created" | "existing" = "created";
+    try {
+      try { linkSync(entryAt(parent, temp), entryAt(parent, name)); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        result = "existing";
+      }
+    } finally {
+      unlinkSync(entryAt(parent, temp));
+      fsyncHeldDir(parent, dirname(target));
     }
-  } finally {
-    unlinkSync(temp);
-    fsyncDir(dirname(target));
-  }
-  return result;
+    return result;
+  });
 }
 
 function sameIdentity(left: CachedRequest, right: CachedRequest): boolean {
@@ -191,7 +208,7 @@ export class RequestCache {
         throw new CacheError("INVALID_REQUEST", "fresh body does not match frozen digest");
     } else if (body !== undefined) throw new CacheError("INVALID_REQUEST", "request without a descriptor cannot freeze a body");
     try {
-      mkdirSync(this.dir(), { recursive: true, mode: 0o700 });
+      ensureDirectory(this.dir(), 0o700);
       if (request.digest && body !== undefined) {
         const published = publishNoReplace(this.bodyPath(request.key), body);
         if (published === "existing") {
@@ -214,16 +231,53 @@ export class RequestCache {
     }
   }
 
-  /** Only this API changes lastReceipt; callers cannot supply replacement identity fields. */
+  /** Serialises one request key's read-modify-write against other processes.
+   *
+   * The metadata file is replaced by rename, so a lock taken on it would be a
+   * lock on an inode the next writer replaces; the lock is its own name, and
+   * it is held for one read and one rename. A holder still there after the
+   * bounded wait is not making progress, and a cache that hangs the Human's
+   * terminal is worse than one that says it is unavailable. */
+  private withReceiptLock<T>(key: RequestKey, body: () => T): T {
+    const path = `${this.path(key).replace(/\.json$/, "")}.lock`;
+    ensureDirectory(this.dir(), 0o700);
+    const fd = withinDirectory(path, (parent, name) =>
+      openBeneath(parent, name, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW, 0o600));
+    const pause = new Int32Array(new SharedArrayBuffer(4));
+    try {
+      for (let attempt = 0; attempt < RECEIPT_LOCK_ATTEMPTS; attempt += 1) {
+        const lock = lockFileDescriptor(fd);
+        if (lock.kind === "held") return body();
+        if (lock.kind === "failed")
+          throw new CacheError("CACHE_UNAVAILABLE", `receipt lock could not be evaluated (errno ${lock.errno})`);
+        Atomics.wait(pause, 0, 0, RECEIPT_LOCK_PAUSE_MS);
+      }
+      throw new CacheError("CACHE_UNAVAILABLE", "another process still holds this request's receipt lock");
+    } finally { closeSync(fd); }
+  }
+
+  /** Only this API changes lastReceipt; callers cannot supply replacement identity fields.
+   *
+   * The read and the write are one critical section. Reading outside it would
+   * make the ordering below an opinion about a value that may already have
+   * been replaced, which is the lost update it exists to prevent. */
   updateReceipt(key: RequestKey, receipt: unknown): CachedRequest {
-    const frozen = requirePresent(this.read(key), "receipt update metadata");
-    const decoded = decodeReceipt(receipt, { expectedKind: frozen.method });
-    if (!decoded.ok) throw new CacheError("CACHE_CORRUPT", `invalid receipt observation: ${decoded.reason}`);
-    if (frozen.lastReceipt !== null && frozen.lastReceipt.operation !== decoded.value.operation)
-      throw new CacheError("CACHE_CORRUPT", "receipt operation differs from the previous observation");
-    const updated: CachedRequest = { ...frozen, lastReceipt: decoded.value };
-    try { replaceReceiptFile(this.path(key), JSON.stringify(updated)); }
-    catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt update failed: ${messageOf(error)}`); }
-    return updated;
+    return this.withReceiptLock(key, () => {
+      const frozen = requirePresent(this.read(key), "receipt update metadata");
+      const decoded = decodeReceipt(receipt, { expectedKind: frozen.method });
+      if (!decoded.ok) throw new CacheError("CACHE_CORRUPT", `invalid receipt observation: ${decoded.reason}`);
+      if (frozen.lastReceipt !== null && frozen.lastReceipt.operation !== decoded.value.operation)
+        throw new CacheError("CACHE_CORRUPT", "receipt operation differs from the previous observation");
+      const order = receiptSupersession(frozen.lastReceipt, decoded.value);
+      if (order === "contradiction")
+        throw new CacheError("CACHE_CORRUPT", "one operation cannot both succeed and fail");
+      // A settled observation is kept: this one is older news, and rewriting
+      // it would be the regression the ordering exists to refuse.
+      if (order === "stale") return frozen;
+      const updated: CachedRequest = { ...frozen, lastReceipt: decoded.value };
+      try { replaceReceiptFile(this.path(key), JSON.stringify(updated)); }
+      catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt update failed: ${messageOf(error)}`); }
+      return updated;
+    });
   }
 }

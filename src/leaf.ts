@@ -27,6 +27,7 @@ let cached: {
   poll: (fds: ArrayBuffer, count: number, timeout: number) => number;
   bind: (fd: number, addr: Buffer, len: number) => number;
   listen: (fd: number, backlog: number) => number;
+  getsockname: (fd: number, addr: ArrayBuffer, len: Uint32Array) => number;
 } | null = null;
 
 function lib(): typeof cached extends null
@@ -49,6 +50,7 @@ function lib(): typeof cached extends null
       poll: libc.func("int poll(void *fds, unsigned long nfds, int timeout)"),
       bind: libc.func("int bind(int fd, const void *addr, unsigned int len)"),
       listen: libc.func("int listen(int fd, int backlog)"),
+      getsockname: libc.func("int getsockname(int fd, void *addr, unsigned int *len)"),
     };
   }
   return cached;
@@ -130,12 +132,36 @@ export function sdNotifyReady(notifySocket: string): boolean {
   }
 }
 
-/** The caller owns the locked descriptor. ProcessLock is the sole lifetime owner;
- * a second open, even in this process, must acquire its own nonblocking lock. */
-export function tryFlock(fd: number): boolean {
+/** Taking a lock has three answers, not two, and the missing one is the
+ * dangerous one: this process has it, another process has it, or this process
+ * could not find out. `flock` says "another process has it" with EWOULDBLOCK
+ * and nothing else; EINTR, ENOLCK and a filesystem that cannot lock at all are
+ * failures of the attempt. A caller that reads them as ownership refuses to
+ * start, and says the society is owned, for a reason that has nothing to do
+ * with who owns the society.
+ *
+ * This is the same vocabulary `holdAbstractName` answers in, deliberately:
+ * both are "take the society's singleton", and a product with two vocabularies
+ * for one question ends up with the weaker one at the call site that matters.
+ *
+ * The caller owns the locked descriptor. ProcessLock is the sole lifetime
+ * owner; a second open, even in this process, must acquire its own lock. */
+export type FileLock =
+  | { readonly kind: "held" }
+  | { readonly kind: "contended" }
+  | { readonly kind: "failed"; readonly errno: number };
+
+/** EAGAIN and EWOULDBLOCK are the same value on Linux, which is the only
+ * platform this product locks on. */
+const EWOULDBLOCK = 11;
+
+export function lockFileDescriptor(fd: number): FileLock {
   const LOCK_EX = 2; const LOCK_NB = 4;
-  try { return lib().flock(fd, LOCK_EX | LOCK_NB) === 0; }
-  catch { return false; }
+  try {
+    if (lib().flock(fd, LOCK_EX | LOCK_NB) === 0) return { kind: "held" };
+    const code = errno();
+    return code === EWOULDBLOCK ? { kind: "contended" } : { kind: "failed", errno: code };
+  } catch { return { kind: "failed", errno: 0 }; }
 }
 
 const SOCK_STREAM = 1;
@@ -245,6 +271,62 @@ export function abstractNameHolder(name: string): AbstractHolder {
   } finally {
     if (fd >= 0) drop(fd);
   }
+}
+
+/** Which abstract name a descriptor holds, asked of the kernel rather than
+ * inferred from the descriptor's shape.
+ *
+ * `holdAbstractName` produces exactly one shape: a socket bound to an abstract
+ * name and listening on it. "Is it a socket" is therefore not a weaker version
+ * of this question, it is a different question with a different answer -- any
+ * socketpair passes it -- and the difference is the whole of the evidence. The
+ * kernel refuses a second bind to a live name, so a descriptor that answers
+ * with a name IS the holder of that name; nothing else about the process that
+ * presents it has to be trusted.
+ */
+export type AbstractBinding =
+  | { readonly kind: "holding"; readonly name: string }
+  | { readonly kind: "other"; readonly why: string }
+  | { readonly kind: "unreadable"; readonly errno: number };
+
+const SO_ACCEPTCONN = 30; // Linux
+const ENOTSOCK = 88; // Linux
+
+export function abstractNameHeld(fd: number): AbstractBinding {
+  if (!Number.isInteger(fd) || fd < 0) return { kind: "unreadable", errno: 0 };
+  try {
+    const native = lib();
+    const addr = new ArrayBuffer(110);
+    const length = new Uint32Array([110]);
+    if (native.getsockname(fd, addr, length) !== 0) {
+      const code = errno();
+      // ENOTSOCK is an answer, not a failure to obtain one: this descriptor is
+      // definitely not a lease. Reporting it as "could not be established"
+      // would put a regular file in the same class as a descriptor the kernel
+      // could not be asked about, and a caller that must distinguish "not the
+      // lease" from "unknown" would be told the wrong one of the two.
+      return code === ENOTSOCK
+        ? { kind: "other", why: "descriptor is not a socket" }
+        : { kind: "unreadable", errno: code };
+    }
+    const size = length[0] ?? 0;
+    if (size < 2 || size > 110) return { kind: "unreadable", errno: 0 };
+    if (new DataView(addr).getUint16(0, NATIVE_LE) !== AF_UNIX)
+      return { kind: "other", why: "descriptor is not a unix socket" };
+    // A socketpair, and any socket that only ever connected, is bound to no
+    // name: the kernel answers with the family and nothing after it.
+    if (size <= 2) return { kind: "other", why: "socket holds no name" };
+    const bytes = new Uint8Array(addr);
+    if (bytes[2] !== 0)
+      return { kind: "other", why: "socket is bound to a pathname, which any process of this user can replace" };
+    const accepting = new ArrayBuffer(4);
+    const acceptingLength = new Uint32Array([4]);
+    if (native.getsockopt(fd, SOL_SOCKET, SO_ACCEPTCONN, accepting, acceptingLength) !== 0)
+      return { kind: "unreadable", errno: errno() };
+    if (new DataView(accepting).getInt32(0, NATIVE_LE) !== 1)
+      return { kind: "other", why: "socket is bound but not listening, so nothing can ask who holds it" };
+    return { kind: "holding", name: Buffer.from(bytes.subarray(2, size)).toString("utf8") };
+  } catch { return { kind: "unreadable", errno: 0 }; }
 }
 
 /** Node publishes no accessor for an accepted socket's file descriptor, and

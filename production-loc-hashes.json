@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "d2176d01432e51361b6a8fcf30e59309b2b85b0fe741d219b5501ec02afa504b",
+  "report": "6dd46b33dc2e73630cc3fb690275332bd799686d6a57e28563ae80b3934a6876",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -281,7 +281,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "e4d58879bc71efc8a352d65bac9d06623337d2b68f144b31d38484a83dfdde1d"
+      "sha256": "766e41bd33b8d05181121e5f328d1b22cdca5be750276467143ba425bb7c2ee3"
     },
     {
       "path": "src/entry/host.ts",
@@ -401,7 +401,7 @@
     },
     {
       "path": "src/leaf.ts",
-      "sha256": "3257255b9985cf268778cfd6ae096ec1308ec7ce17a0a390d31ba6245141125d"
+      "sha256": "9032ea81c5631ca2ec3d64f923b6e9b5dcf64f2167a8fe5a1fd0943ba90f2f18"
     },
     {
       "path": "src/lifecycle.ts",
@@ -549,7 +549,7 @@
     },
     {
       "path": "src/protocol/receipt-codec.ts",
-      "sha256": "489741a1c84bc541132d332c0606b724b889205d4e02cab3826667d3f3ad0826"
+      "sha256": "9c73577c386052671990b81975382594c439f119389acc07b00f2d17df0bfd46"
     },
     {
       "path": "src/protocol/receipts.ts",
@@ -581,7 +581,7 @@
     },
     {
       "path": "src/request-cache.ts",
-      "sha256": "f586450bed85bf661c41372de995e914ce7cdb3e411495957d36e13a44763c36"
+      "sha256": "ba7e339890e5b5d22e7795d9c16963f22019d2b5e5b80f229d18c817668815eb"
     },
     {
       "path": "src/rpc-client.ts",
@@ -645,7 +645,7 @@
     },
     {
       "path": "src/runtime/process-lock.ts",
-      "sha256": "4995fb5696ecbcc00e12d8cefc8cacd29c7dac1600aa36258d73f3e514c75440"
+      "sha256": "d52413df666cdb553d71d03d396737c4075487ec22252f88868430315f3c9ece"
     },
     {
       "path": "src/runtime/provision.ts",
@@ -661,7 +661,7 @@
     },
     {
       "path": "src/runtime/society-lease.ts",
-      "sha256": "6fd4b6e246559b58b09774e45968387570a6e6f416a4b63335f254ca85cbabb5"
+      "sha256": "cd825bd8d55369da132306345acf2658c3dcec3f65441ebc615e9c3d62ace533"
     },
     {
       "path": "src/runtime/supervision-channel.ts",
@@ -677,7 +677,7 @@
     },
     {
       "path": "src/storage/contained-fs.ts",
-      "sha256": "f55b120c7d3a2cc7bbb9f9ec81fbd031b3de3ceb8fd8c0578cbd1c9f948ac2ea"
+      "sha256": "976cac8e86027fcba332688231923efcdb9d5811697ec0e5baf51c89b4330da6"
     },
     {
       "path": "src/storage/context-files.ts",
@@ -705,7 +705,7 @@
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "98483325cfa8004020c9016369aa3388653da59be1a2f6f695e6724a22341f5d"
+      "sha256": "2128ef10644c6add4c263d901884ff3f389296697f8e48b2c40c271e18e7ec48"
     },
     {
       "path": "src/storage/facets.ts",
@@ -753,7 +753,7 @@
     },
     {
       "path": "src/storage/staged-tree.ts",
-      "sha256": "3dabb0819856ea838666d0e63d08c15d52e976ae1390b9620e4dd1428d99f941"
+      "sha256": "4a4ac0c14a0c6126c039ca79805c93980ce065777f24c23710d3f1e1e049b51d"
     },
     {
       "path": "src/storage/submit-spool.ts",

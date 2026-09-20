@@ -179,6 +179,8 @@ DB, 다른 agent의 RW tree, host home, provider secret, systemd user bus를 mou
 
 동적으로 교체되는 inbox.md를 파일 단위로 bind mount하지 않는다. 그러면 atomic rename 뒤에도 sandbox가 옛 inode를 볼 수 있다. **부모 디렉터리를 mount하고 그 안의 파일을 교체**한다. world와 mailbox도 같은 이유로 안정된 부모 디렉터리를 mount한다. model에는 내부 경로 대신 `/inbox.md`만 알려준다.
 
+state tree 안의 모든 변경은 **부모 디렉터리를 한 번만 해석하고, 그 뒤로 경로를 다시 말하지 않는다**. 경로를 해석해 무엇인지 확인한 다음 같은 경로에 효과를 가하는 두 줄은 서로 다른 두 번의 namespace 탐색이고, 같은 UID의 어떤 프로세스든 그 사이에 component 하나를 갈아치울 수 있으므로 확인한 대상과 쓴 대상이 같다는 보장은 "아무도 시도하지 않았을 때"뿐이다. 나중에 다시 확인해도 창이 좁아질 뿐 닫히지 않는다 — 확인과 사용은 여전히 두 번의 탐색이다. 그래서 부모는 `openat2(RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS)`로 한 번 열고, 그 descriptor가 가리키는 inode를 상대로만 이름을 짓는다. 열린 descriptor는 그 디렉터리를 이름이 아니라 inode로 붙잡으므로 이후 그 경로를 rename·unlink·교체해도 움직이지 않는다. 이 규칙은 주석이 아니라 primitive다: `withinDirectory(path, (parent, name) => ...)`는 본문에 부모 descriptor와 leaf 이름만 넘기므로 경로를 다시 해석하려면 따로 가져와야 하고, 그것이 이 모양의 목적이다. FS-005가 "같은 UID에서 파일 mode로 경계를 주장할 수 없다"고 말한 것과 같은 교훈을 mode가 아니라 namespace에 적용한 것이며, society lease가 pathname을 버리고 abstract namespace로 간 이유와도 같다.
+
 원본은 명확히 구분한다. 본문/header는 eml, 수신·접수·배달은 SQLite, 코드/문서는 Git, process 생존은 systemd, model session은 Pi 파일이다. index·목록·inbox.md는 파생 데이터다. 불일치는 broker가 대조하고 모델에게 join을 맡기지 않는다.
 
 ## 5. 메일의 저장·배달·복구

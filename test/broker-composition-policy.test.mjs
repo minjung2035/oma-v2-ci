@@ -14,8 +14,8 @@ import ts from "typescript";
  * and a stand-in that does would run the rest of a function the product ended. */
 class Exited extends Error {}
 
-async function compose(environment, { lockHeld = true, leaseHeld = true, fence = "socket",
-  starts = lockHeld && leaseHeld } = {}) {
+async function compose(environment, { lockHeld = true, claim = "taken",
+  starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" } = {}) {
   const source = readFileSync(new URL("../src/entry/broker.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -30,14 +30,7 @@ async function compose(environment, { lockHeld = true, leaseHeld = true, fence =
     quota: { storageBytes: 1024 }, integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
   const modules = {
     "node:path": path,
-    "node:fs": { mkdirSync() {},
-      // The fence is a descriptor, so the only honest question about it is
-      // what the kernel says that descriptor is.
-      fstatSync(fd) {
-        calls.push(`fstat:${fd}`);
-        if (fence === "closed") { const error = new Error("EBADF"); error.code = "EBADF"; throw error; }
-        return { isSocket: () => fence === "socket" };
-      } },
+    "node:fs": { mkdirSync() {} },
     "../store.js": { SCHEMA_PATH: "schema", Store: class {
       constructor() { calls.push("Store"); } close() {} listAgents() { return []; } getAgent() { return null; }
     } },
@@ -80,9 +73,18 @@ async function compose(environment, { lockHeld = true, leaseHeld = true, fence =
       },
     },
     "../process/async.js": { SOCIETY_FENCE_ENV: "OMA_SOCIETY_FENCE_FD", SOCIETY_FENCE_FD: 4 },
-    "../runtime/society-lease.js": { tryHoldSociety: () => {
-      calls.push("lease");
-      return leaseHeld ? { name: "\0oma.society.fixture", fence: 4, release() { calls.push("release"); } } : null;
+    // One object answers "may this process act for this society", and the
+    // entrypoint's job is to ask it and obey. Which descriptor is really the
+    // lease is that object's question, not this one's -- see
+    // `test/society-lease-identity.test.mjs`, which asks it against the kernel.
+    "../runtime/society-lease.js": { claimSocietyFence: () => {
+      calls.push("claim");
+      switch (claim) {
+        case "inherited": return { kind: "inherited" };
+        case "elsewhere": return { kind: "elsewhere" };
+        case "unhonourable": throw new Error("descriptor 4 is not this society's lease");
+        default: return { kind: "taken", lease: { name: "\0oma.society.fixture", fence: 4, release() { calls.push("release"); } } };
+      }
     } },
     "../runtime/broker-lifetime.js": { BrokerLifetime: class {
       permitsActivation = true;
@@ -217,12 +219,12 @@ test("P1 composition root: a broker the product did not start takes the society 
   // broker. This broker now answers the same question the host does.
   const held = await compose();
   const order = name => held.calls.indexOf(name);
-  assert.ok(order("lease") >= 0, "the entrypoint never took the society lease");
-  assert.ok(order("lock") < order("lease"), "the society lease was taken before this broker knew it was the writer");
+  assert.ok(order("claim") >= 0, "the entrypoint never asked who owns the society");
+  assert.ok(order("lock") < order("claim"), "the society lease was taken before this broker knew it was the writer");
   for (const after of ["config", "Store", "Broker", "listen", "recover"])
-    assert.ok(order("lease") < order(after), `${after} happened before the society lease`);
+    assert.ok(order("claim") < order(after), `${after} happened before the society lease`);
 
-  const refused = await compose(undefined, { leaseHeld: false });
+  const refused = await compose(undefined, { claim: "elsewhere" });
   assert.deepEqual(refused.exits, [6], `a society an oma owns ended with ${JSON.stringify(refused.exits)} instead of the ownership status`);
   for (const opened of ["config", "Store", "Broker", "listen", "recover"])
     assert.equal(refused.calls.includes(opened), false, `${opened} ran on a society an oma already owns`);
@@ -236,33 +238,37 @@ test("P1 composition root: a broker the product started inherits the lease and n
   // the name again would be this broker asking its own host for permission --
   // and being refused, because the name is held by the description it is
   // already holding.
-  const supervised = await compose({ OMA_SOCIETY_FENCE_FD: "4" });
-  assert.ok(supervised.calls.includes("fstat:4"), "the declared fence was never examined");
-  assert.equal(supervised.calls.includes("lease"), false, "the product's own broker raced its host for the society name");
+  const supervised = await compose({ OMA_SOCIETY_FENCE_FD: "4" }, { claim: "inherited" });
+  assert.equal(supervised.calls.filter(entry => entry === "claim").length, 1,
+    "the entrypoint asked about ownership more than once, or not at all");
   assert.ok(supervised.calls.includes("listen"), "a fenced broker did not start");
+  assert.deepEqual(supervised.exits, []);
 
-  // Even where the name could not be taken at all: the lease it inherited is
-  // its host's, and its host's ownership is the one that counts.
-  const owned = await compose({ OMA_SOCIETY_FENCE_FD: "4" }, { leaseHeld: false, starts: true });
-  assert.deepEqual(owned.exits, []);
-  assert.equal(owned.calls.includes("lease"), false);
-  assert.ok(owned.calls.includes("listen"));
+  // And it cannot take the name even in principle: the entrypoint has no way
+  // to reach the acquisition at all. The composition above would still pass if
+  // this file merely happened not to call it, so the rule is read off the
+  // source rather than off one run of it -- which is what kept this check from
+  // drifting back into a predicate the entrypoint owns.
+  const source = readFileSync(new URL("../src/entry/broker.ts", import.meta.url), "utf8");
+  for (const forbidden of ["tryHoldSociety", "inheritedFence", "SOCIETY_FENCE_FD", "fstatSync"])
+    assert.equal(source.includes(forbidden), false,
+      `the entrypoint names ${forbidden}: deciding what a lease is belongs to the module that takes it`);
 });
 
 test("P1 composition root: a fence declaration that cannot be honoured is a startup failure, not ownership", async () => {
   // Starting anyway is the unfenced writer the declaration existed to prevent,
   // and reporting it as ownership would stop the host from restarting a broker
   // that merely fell over.
-  const cases = [
-    [{ OMA_SOCIETY_FENCE_FD: "5" }, {}, "a descriptor this product does not place the lease on"],
-    [{ OMA_SOCIETY_FENCE_FD: "4" }, { fence: "closed" }, "a descriptor that is not open"],
-    [{ OMA_SOCIETY_FENCE_FD: "4" }, { fence: "file" }, "a descriptor that is not the lease"],
-  ];
-  for (const [environment, options, reason] of cases) {
-    const result = await compose(environment, { ...options, starts: false });
-    assert.deepEqual(result.exits, [], `${reason} was reported as ownership`);
-    assert.equal(result.exitCode, 1, `${reason} did not fail startup`);
-    for (const opened of ["lease", "config", "Store", "Broker", "listen"])
-      assert.equal(result.calls.includes(opened), false, `${opened} ran for ${reason}`);
-  }
+  //
+  // Which declarations cannot be honoured -- a descriptor this product does not
+  // place the lease on, one that is not open, one holding another society's
+  // lease, one that is not a socket at all -- is decided by the module that
+  // takes the lease, and `test/society-lease-identity.test.mjs` asks the kernel
+  // about each of them. What belongs here is only that the entrypoint treats
+  // that refusal as a failure to start rather than as an answer about ownership.
+  const result = await compose({ OMA_SOCIETY_FENCE_FD: "4" }, { claim: "unhonourable" });
+  assert.deepEqual(result.exits, [], "a fence that could not be honoured was reported as ownership");
+  assert.equal(result.exitCode, 1, "a fence that could not be honoured did not fail startup");
+  for (const opened of ["config", "Store", "Broker", "listen"])
+    assert.equal(result.calls.includes(opened), false, `${opened} ran for a fence that could not be honoured`);
 });

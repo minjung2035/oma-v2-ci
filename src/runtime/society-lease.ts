@@ -53,7 +53,8 @@
  */
 import { createHash } from "node:crypto";
 import { closeSync } from "node:fs";
-import { abstractNameHolder, holdAbstractName } from "../leaf.js";
+import { abstractNameHeld, abstractNameHolder, holdAbstractName } from "../leaf.js";
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../process/async.js";
 import { assertHostDirectoryLayout } from "./assets.js";
 import { StoreError } from "../domain/errors.js";
 
@@ -141,4 +142,87 @@ function leaseOf(name: string, fence: number): SocietyLease {
       try { closeSync(fence); } catch { /* the lease is going away either way */ }
     },
   };
+}
+
+/** What allows this process to act for a society, and how it came by it.
+ *
+ * Recognising an inherited lease used to be a predicate written at the
+ * entrypoint: read the declared descriptor, `fstat` it, accept it if it is a
+ * socket. That is the shape of defect four consecutive audits found in this
+ * area, each time in a different place -- the comment states the property the
+ * design needs ("exactly the lease the host that owns this society handed
+ * down") and the code next to it tests something weaker that happens to be
+ * true of the real thing. A socketpair is a socket. Descriptor 4 of a process
+ * started by hand, with any AF_UNIX socket on it and one environment variable
+ * set, was accepted as proof of owning a society another `oma` was holding,
+ * and the broker then skipped taking the lease at all.
+ *
+ * So the predicate does not live at the call site any more, and it is not a
+ * predicate about shape. The module that decides what name a society's lease
+ * is taken under is the only module that decides whether a descriptor is that
+ * lease, and it decides it by asking the kernel which name the descriptor
+ * holds. Both directions -- taking the lease and recognising an inherited one
+ * -- now come from `societyLeaseName`, so the two cannot drift apart: a change
+ * to the name changes the recogniser in the same expression.
+ */
+export type InheritedFence =
+  | { readonly kind: "society" }
+  | { readonly kind: "other-society"; readonly name: string }
+  | { readonly kind: "not-a-lease"; readonly why: string }
+  | { readonly kind: "unreadable"; readonly errno: number };
+
+/** Whether a descriptor is this state tree's lease.
+ *
+ * The kernel allows one holder of an abstract name at a time, so a descriptor
+ * that holds this society's name is this society's lease -- there is no second
+ * one to confuse it with, and no claim by the presenting process is consulted.
+ */
+export function inheritedFence(descriptor: number, stateRoot: string): InheritedFence {
+  const expected = societyLeaseName(stateRoot);
+  const held = abstractNameHeld(descriptor);
+  if (held.kind === "unreadable") return held;
+  if (held.kind === "other") return { kind: "not-a-lease", why: held.why };
+  if (held.name === expected) return { kind: "society" };
+  // A lease of some society, but not this one. Passing society A's lease to a
+  // broker for society B would otherwise let B serve a society nothing holds
+  // -- and B's own lease would stay free for a second `oma` to take.
+  return held.name.startsWith(SOCIETY_LEASE_PREFIX)
+    ? { kind: "other-society", name: held.name }
+    : { kind: "not-a-lease", why: "descriptor holds an abstract name this product did not take" };
+}
+
+/** How this process is authorised to serve a society: it was handed the lease
+ * by the `oma` that owns it, it took the lease itself, or another `oma` has
+ * it. Every other outcome throws, because "someone else owns this society" and
+ * "this could not be established" are different answers and only the first is
+ * a reason to exit quietly. */
+export type SocietyFence =
+  | { readonly kind: "inherited" }
+  | { readonly kind: "taken"; readonly lease: SocietyLease }
+  | { readonly kind: "elsewhere" };
+
+/** The one question a process asks before it serves a society.
+ *
+ * A declaration that cannot be honoured is a startup failure rather than a
+ * shrug: a process that was told it holds the society but does not would go on
+ * to serve a society whose ownership nothing is holding.
+ */
+export function claimSocietyFence(stateRoot: string): SocietyFence {
+  const declared = process.env[SOCIETY_FENCE_ENV];
+  if (declared === undefined) {
+    const lease = tryHoldSociety(stateRoot);
+    return lease === null ? { kind: "elsewhere" } : { kind: "taken", lease };
+  }
+  if (declared !== String(SOCIETY_FENCE_FD))
+    throw new StoreError("INTERNAL_ERROR", `${SOCIETY_FENCE_ENV} names descriptor ${declared}, which is not where this product places the society lease`);
+  const fence = inheritedFence(SOCIETY_FENCE_FD, stateRoot);
+  switch (fence.kind) {
+    case "society": return { kind: "inherited" };
+    case "other-society":
+      throw new StoreError("INTERNAL_ERROR", `descriptor ${SOCIETY_FENCE_FD} holds the lease of another society, not this one`);
+    case "not-a-lease":
+      throw new StoreError("INTERNAL_ERROR", `descriptor ${SOCIETY_FENCE_FD} is not this society's lease: ${fence.why}`);
+    case "unreadable":
+      throw new StoreError("INTERNAL_ERROR", `descriptor ${SOCIETY_FENCE_FD} could not be identified as the society lease (errno ${fence.errno})`);
+  }
 }

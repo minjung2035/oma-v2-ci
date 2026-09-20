@@ -4,9 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `dc982eb`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `f1f18bd`, 실행일 2026-09-21. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `6e862f0d07b6c1fbafc1c1f35f857ee81af4f7676b116be940c1d7ffa3eaf60b` (530 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `72b0f9414bda384d427ee07fcd9c388a8de0fbf2c8b16be3d5dc60d0a7f35576` (533 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -16,7 +16,7 @@
 | `npm run build` | PASS |
 | `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
 | `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1223/1223 PASS**, fail/cancelled/skipped/todo=0 |
+| `npm test` | **1245/1245 PASS**, fail/cancelled/skipped/todo=0 |
 | `npm run test:functional-surface` | PASS (release qualification 아님) |
 | `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
 | `npm run verify:fast` | PASS, EXECUTED |
@@ -24,8 +24,8 @@
 | `npm run verify:property` | PASS, EXECUTED |
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
-| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다. 열두 번째 감사는 같은 사실을 run #70까지로 인용한다(브랜치 누적 성공 0 / 실패 70). 열세 번째 감사의 지적대로 workflow의 **결박 방식**은 이번에 고쳤다 — master와 pull request가 검증에 연결되고, evidence는 CI가 만든 merge commit이 아니라 제안된 head commit 이름으로 보관되며, 아무것도 측정하기 전에 checkout된 tree가 그 commit임을 확인한다. 그러나 그것은 **앞으로 생길 run이 무엇을 말할 수 있는지**를 바꾼 것이고, 이 행의 값은 바꾸지 않는다: 이 세션은 여전히 성공한 run을 하나도 관측하지 않았다 |
-| `node scripts/loc.mjs` | **220 files / 21,013 code LOC** |
+| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다. 열두 번째 감사는 같은 사실을 run #70까지로 인용하고(브랜치 누적 성공 0 / 실패 70), 열네 번째 감사는 성공 0 / 실패 72로 인용하며 `f1f18bd`의 run은 어떤 step도 돌기 전에 끝났고 `master`와 개발 브랜치가 둘 다 `protected: false`라고 적는다. 열세 번째 감사의 지적대로 workflow의 **결박 방식**은 이번에 고쳤다 — master와 pull request가 검증에 연결되고, evidence는 CI가 만든 merge commit이 아니라 제안된 head commit 이름으로 보관되며, 아무것도 측정하기 전에 checkout된 tree가 그 commit임을 확인한다. 그러나 그것은 **앞으로 생길 run이 무엇을 말할 수 있는지**를 바꾼 것이고, 이 행의 값은 바꾸지 않는다: 이 세션은 여전히 성공한 run을 하나도 관측하지 않았다 |
+| `node scripts/loc.mjs` | **220 files / 21,145 code LOC** |
 
 ### 현재 범위
 
@@ -773,6 +773,99 @@ binding·digest 기록·최종 gate가 모두 성공하고, 틀린 SHA에서는 
   GitHub에서 돈 run에 대한 것이 아니다. 이 세션은 여전히 `gh` 인증이 없고, 현재 SHA에 묶인 성공 run은 없다.
 - `verify:kernel`/`verify:crash`는 이 세션에서도 BLOCKED, NOT_RUN이다.
 
+### society lease의 신원과 receipt의 순서: 열네 번째 감사에서 닫은 것
+
+감사는 코드품질 84/100, release confidence 58/100을 매기고 순서를 명시했다 — ① lease FD identity 검증 → ② 그 exploit을
+process-level regression으로 고정 → ③ RequestCache CAS/monotonic receipt → ④ flock errno 분리 → ⑤ S-06 dirfd mutation 정리 →
+⑥ CI green + branch protection. ①–⑤를 그 순서대로 닫았고 ⑥은 **닫지 못했다**(아래 '관측하지 못한 것').
+
+**아무 socket이나 society lease로 통했다(①, HIGH).** `inheritedFence`는 선언된 descriptor를 `fstat`해서 socket이면 lease로
+받아들였다. socketpair도 socket이다. 그래서 손으로 띄운 아무 프로세스나 descriptor 4에 아무 AF_UNIX socket을 얹고 환경변수
+하나(`OMA_SOCIETY_FENCE_FD=4`)를 선언하면, 다른 `oma`가 이미 쥐고 있는 society를 소유한다는 증명으로 통했다 — 그리고 broker는
+그 선언을 믿고 **lease를 아예 잡지 않았다**. 소유자가 둘이 되는 것보다 나쁜 결과다: 소유를 아무도 쥐지 않은 채 소유했다고
+announce한 상태가 된다.
+
+`fstat`이 답할 수 있는 것은 **모양**이고 필요한 것은 **신원**이었다. 감사가 "proof claim ↔ implementation predicate 불일치"라고
+부른 바로 그 형태다 — 주석은 강한 성질을 주장하는데 oracle은 약한 술어를 본다. 그래서 술어를 조금 더 조이지 않고 **질문을
+바꿨다**: 이 descriptor는 *어떤 이름*을 쥐고 있는가. society lease는 abstract AF_UNIX namespace의 이름
+(`"\0oma.society." + sha256(uid\nstateRoot)`)이고 커널은 한 open file description에게만 그 이름을 준다. 그러므로 **이름을 쥐고
+있다는 것이 곧 소유한다는 것**이며, 그 descriptor를 내민 프로세스의 주장은 하나도 믿을 필요가 없다.
+`abstractNameHeld(fd)`(`src/leaf.ts:294`)가 그 하나의 oracle이고 `holding | other | unreadable` 세 답만 낸다. "평가하지 못했다"를
+"남의 것이다"나 "괜찮다"로 접는 순간 둘 다 소유를 아무도 쥐지 않은 society 위에 engine을 띄우므로, 세 번째 답은 접지 않는다.
+
+그리고 **판정의 주인을 하나로 옮겼다.** 예전에는 "무엇이 lease인가"를 entrypoint가 스스로 정했다. 지금은
+`claimSocietyFence(stateRoot)` 하나가 `inherited | taken | elsewhere`를 돌려주고 entrypoint는 그것을 묻고 따르기만 한다
+(`src/entry/broker.ts:74`). 감사가 "다음 적대적 감사의 핵심 타깃"으로 지목한 그 불일치 형태를 이 tree에서 한 건 더 찾아 같은
+방식으로 닫았다: `test/broker-composition-policy.test.mjs`는 제품이 더 이상 수행하지 않는 `fstat`+`isSocket()` 검사를 증명하고
+있었다. 네 가지 모양 판정(제품이 lease를 두지 않는 descriptor, 열려 있지 않은 descriptor, 남의 society의 lease, socket이 아닌
+것)을 의미의 주인인 `test/society-lease-identity.test.mjs`로 옮겨 **커널에게** 묻게 하고, 조립 증명에는 "entrypoint가 그 거절을
+소유 판정이 아니라 기동 실패로 다룬다"만 남겼다. 거기에 **source gate**를 붙였다 — entrypoint는
+`tryHoldSociety`·`inheritedFence`·`SOCIETY_FENCE_FD`·`fstatSync`를 이름으로도 부르지 못한다. 한 번의 실행이 그 규칙을 우연히
+지키는 것과 그 규칙에 닿을 길이 아예 없는 것은 다르고, 이 술어가 entrypoint로 흘러들어간 것이 애초의 결함이었다.
+
+**그 exploit을 프로세스 경계에서 고정했다(②).** 감사가 요구한 시험 그대로다 — society A의 유효한 lease FD를 society B의 broker에
+넘겨도 B가 거부한다. 진짜 `execve`를 건너서 묻는다: descriptor를 새 프로세스로 상속시키는 것이 이 성질이 참이어야 하는 유일한
+자리이기 때문이다. **대조군의 대조군**을 같이 둔다 — 같은 descriptor를 그것이 정말 lease인 society에 대해서는 받아들여야 한다.
+그러지 않으면 제품이 전부 거절해도 이 시험은 통과한다.
+
+**정산된 receipt가 나중의 덜 확정된 관측에 덮였다(③, MEDIUM).** `RequestCache`는 읽고·판단하고·쓰는 세 단계를 각각 따로 했으므로
+두 프로세스가 같은 key를 다투면 `failed`로 정산된 receipt 위에 `pending`이 앉을 수 있었다. 두 가지를 동시에 넣었다.
+`receiptSupersession(previous, observed)`이 **순서**의 유일한 주인이고 — terminal 뒤의 non-terminal은 `stale`,
+succeeded↔failed는 `contradiction`, 같은 terminal의 반복도 `stale` — `withReceiptLock(key, body)`가 읽기와 쓰기를 **하나의 임계
+구역**으로 묶는다. 잠글 수 없으면 `CACHE_UNAVAILABLE`로 실패한다: 잠그지 못한 채 진행하는 것이 애초의 결함이었다.
+
+**`flock` 실패가 전부 "남이 소유"로 접혔다(④, LOW–MEDIUM).** 경쟁인 것은 `EWOULDBLOCK` 하나뿐이고 `EBADF`는 평가 실패다.
+`held | contended | failed` 세 답으로 분리했다. 판정하지 못한 것을 소유로 보고하면 host는 재시작 가능한 고장과 정당한 소유를
+구별할 수 없다.
+
+**검증한 parent를 버리고 pathname을 다시 해석했다(⑤).** 감사가 S-06이라고 부른 same-UID FS namespace 경쟁이다. 결함의 모양은 늘
+같았다 — 경로를 풀고, 검사하고, **그 경로로 다시** 효과를 낸다. 같은 UID의 아무 프로세스나 그 사이에 namespace를 바꿀 수 있으므로
+두 번의 walk가 같은 객체에 닿는다는 보장이 없다. 같은 자리에서 반복해서 나온 결함이므로 술어를 늘리는 대신 구조를 바꿨다:
+`openat2(RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS)`로 연 **parent dirfd**를 쥔 채 `withinDirectory(path, (parent, name) => …)` 안에서
+효과까지 끝낸다. 검사한 디렉터리와 쓰는 디렉터리가 같은 객체임을 커널이 보증하므로, 그 사이에 넣을 창 자체가 없다.
+
+**이 저장소의 S-06은 이것이 아니다.** `implementation/spikes.md:110-120`의 S-06은 durability/systemd/전원 차단 qualification이고
+상태는 여전히 **OPEN(환경 부재)** 이다. 감사는 같은 이름을 same-UID FS 경쟁에 썼다. 코드로 닫을 수 있는 쪽은 닫았고 환경이 있어야
+닫히는 쪽은 닫지 않았다 — 이름이 같다고 함께 닫힌 것으로 세지 않는다.
+
+**역검증**: 결함을 하나씩 `dist/`에 — 조립 증명은 build 산출물이 아니라 원문을 transpile하므로 `src/entry/broker.ts` 한 파일에도
+— 되돌려 시험을 돌렸다. harness는 매 회 원본을 그대로 복구하고 마지막에 `git diff --stat`으로 tree가 되돌아왔음을 확인한다.
+
+| 되돌린 결함 | 실패해야 하는 시험 | 결과 |
+|---|---|---|
+| `inheritedFence`가 socket이면 무엇이든 lease로 받던 원래 형태 | AUTH-003 신원 검사 전부(모양이 같은 nameless socket, pathname socket, 남의 society, `execve` 건넌 regression) | 실패함(6건) |
+| `ENOTSOCK`을 다시 `unreadable`로 접음 | "일반 파일은 lease가 아니다" — 확정된 거절이 평가 실패로 보고되는지 | 실패함(1건) |
+| `receiptSupersession`이 언제나 `supersedes` | REC-007 순서 3건(경쟁 시험 포함) | 실패함(3건) |
+| `withReceiptLock`이 그냥 `body()` | 경쟁 중인 잠금 시험 | 실패함(1건) |
+| `flock` 실패를 전부 `contended`로 | LOC-003 세 답 분리 | 실패함(1건) |
+| pathname 기반 `rename`/`lstat` 형태 복귀 | S-06/FS-005 held-parent 4건 | 실패함(4건) |
+| entrypoint가 `elsewhere`를 무시 | P1 조립: 남이 소유한 society에서는 기동하지 않는다 | 실패함(1건) |
+| 소유 판정을 entrypoint 안으로 되돌림 | P1 조립 8건(source gate 포함) | 실패함(8건) |
+
+대조군으로 동작하지 않은 것은 없다.
+
+한 가지는 정확히 적어야 한다. `withReceiptLock`을 되돌렸을 때 **결정적으로** 실패하는 것은 경쟁 잠금 시험 한 건이고, 같은 파일의
+경쟁 시험 — 여러 프로세스가 같은 key들을 동시에 걸어 정산된 receipt가 덮이는지 보는 것 — 은 **stress**다: 단독으로 돌리면 8/8
+실패하지만 대조군 8개를 이어 돌린 회차에서는 물리지 않았다. 확률적으로 재현하는 시험을 결정적 증거로 세지 않는다.
+
+그 경쟁 시험 자체도 네 번 고쳐 썼다. 경쟁자가 하나뿐이면 정산하는 쪽의 읽기-쓰기 창 안에 들어가는지가 스케줄링 운이고,
+`pending` 위의 `pending`은 이미 `stale`이라 첫 pass 뒤로는 아무것도 쓰지 않으며, 끝 신호를 먼저 확인하는 경쟁자는 한 번도 쓰지
+않을 수 있다. 경쟁자 셋이 `pending`/`unknown`을 번갈아 쓰며 정산이 끝날 때까지 돌게 하고 나서야 결함에 물렸다. **통과하는
+대조군은 증거가 아니라 시험의 결함**이라는 것을 이 회차에서도 그대로 확인했다.
+
+**관측하지 못한 것**:
+
+- **⑥ CI green과 branch protection은 닫지 못했다.** 감사는 이 브랜치의 성공 run 0 / 실패 72, `f1f18bd`의 run은 어떤 step도 돌기
+  전에 끝났고 `master`와 개발 브랜치가 둘 다 `protected: false`라고 적는다. 이 세션은 `gh` 인증이 없어 직접 확인하지 않았고 push
+  뒤의 run을 관측할 수단도 없다. 위 PASS 행들은 전부 로컬 관측이다.
+- **`verify:fast`는 이 기록을 고치기 전 실행에서 FAIL이었다.** 실패한 두 건은 `R38` 자기참조 검사 — 이 파일이 인용하는 수치와
+  digest가 낡았다는 것 — 뿐이었고 다른 실패는 없었다(204 tests / 202 pass / 2 fail). 이 기록을 고친 뒤 다시 실행한 결과를 위
+  표에 적었다.
+- **저장소의 S-06(durability/systemd/전원 차단)은 여전히 OPEN**이고 `verify:kernel`/`verify:crash`는 BLOCKED, NOT_RUN이다.
+  환경 gate이지 코드 gate가 아니다.
+- **fence descriptor 상수가 두 곳에 선언돼 있다** — `src/process/async.ts:153-156`과 `src/extension/cli-process.ts:40-41`. 지금은
+  값이 같지만 이것을 기계적으로 대조하는 gate가 없다. 이번 회차에서 손대지 않았고 drift 위험으로 남긴다.
+
 ### 남은 것
 
 - **broker를 `oma`가 시작하지 않은 배포에서는 이 프로세스가 Principal 대화 세션을 열지 않는다.** Principal endpoint는 supervision
@@ -841,7 +934,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,013 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,145 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

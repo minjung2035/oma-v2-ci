@@ -1,6 +1,6 @@
 import { closeSync, constants, fstatSync, openSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { tryFlock } from "../leaf.js";
+import { lockFileDescriptor } from "../leaf.js";
 import { StoreError } from "../domain/errors.js";
 
 /** The exit status a process uses to say "the society already has an owner",
@@ -29,7 +29,14 @@ export class ProcessLock {
     const target = resolve(path);
     const fd = openSync(target, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW, 0o600);
     try {
-      if (!tryFlock(fd)) { closeSync(fd); return null; }
+      const lock = lockFileDescriptor(fd);
+      // Only contention means "another process owns this". A lock that could
+      // not be evaluated -- EINTR, ENOLCK, a filesystem with no locking -- is
+      // an environment failure, and reporting it as ownership makes the
+      // product exit saying the society has another owner when it has none.
+      if (lock.kind === "contended") { closeSync(fd); return null; }
+      if (lock.kind === "failed")
+        throw new StoreError("BROKER_UNAVAILABLE", `process lock could not be evaluated (errno ${lock.errno})`);
       const stat = fstatSync(fd, { bigint: true });
       if (!stat.isFile() || stat.nlink !== 1n) throw new StoreError("BROKER_UNAVAILABLE", "process lock is not an exclusively named regular file");
       return new ProcessLock(fd, target, stat.dev, stat.ino);
