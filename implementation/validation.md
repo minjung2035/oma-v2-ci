@@ -4,9 +4,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `e0e5567`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `6c3c869`, 실행일 2026-09-20. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
 
-검증 입력: verification input digest `e5bb25a8e263ed2f16fa7900459be670fe6b8135c408796acd542c388c2622b8` (521 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `a896186d6952254302e5bb7eec815d7d1d96fd80d55336c4504dd52056f5734c` (521 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
@@ -24,7 +24,7 @@
 | `npm run verify:property` | PASS, EXECUTED |
 | `npm run verify:stress` | PASS, EXECUTED |
 | `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
-| GitHub Actions current-SHA | NOT_OBSERVED (push 전이며, 이 세션의 `gh` 인증 없음) |
+| GitHub Actions current-SHA | NOT_OBSERVED (push 완료, 이 세션의 `gh` 인증 없음) |
 | `node scripts/loc.mjs` | **216 files / 20,192 code LOC** |
 
 ### 현재 범위
