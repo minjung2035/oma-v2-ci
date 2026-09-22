@@ -123,6 +123,7 @@ export const lanes = Object.freeze({
   durable: {
     files: [
       "checkpoint-driver.test.js",
+      "store-open.test.js",
       "durable-boundary.test.js",
       "mail-integrity.test.js",
       "mail-recovery-integrity.test.js",
@@ -146,6 +147,8 @@ export const lanes = Object.freeze({
     sourceFiles: [],
     requiredNames: [
       "V02B:",
+      "V04A:",
+      "V04B:",
       "EML admission:",
       "CLI submit: incremental sha256",
       "CLI submit: self-contained sha256",
@@ -277,6 +280,8 @@ export const lanes = Object.freeze({
       "V02A:",
       "V02B:",
       "V02C:",
+      "V04A:",
+      "V04B:",
       "S-06/FS-005:",
       "AUTH-003: a broker handed society A's lease",
       "REC-007: a settled receipt survives",

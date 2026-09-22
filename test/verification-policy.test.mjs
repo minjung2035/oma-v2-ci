@@ -76,3 +76,13 @@ test("V02C: stable consistency IDs and real fixture/checkpoint cases belong to e
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 Store opening oracles are required by durable and all lanes", () => {
+  assert.ok(lanes.durable.files.includes("store-open.test.js"));
+  assert.equal(lanes.all.files, "all");
+  for (const id of ["V04A:", "V04B:"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});

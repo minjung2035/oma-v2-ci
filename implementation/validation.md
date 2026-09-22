@@ -4,27 +4,33 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP02 검증 트리의 부모 `2448a9d`, 실행일 2026-09-22. WP02는 test/tooling C0이며 production runtime·v1 DDL·wire·receipt·live 권한을 바꾸지 않았다. 실제 local SIGKILL checkpoint와 별도 관측 process는 추가했지만 systemd/kernel/전원손실 qualification과 다르다. WP01 결과는 외부 WP01 handoff의 과거 source에만 결박된다.
+브랜치 `refactor/safety-preserving-architecture`, WP04 검증 트리의 부모 `396b857`, 실행일 2026-09-22. WP04는 Store opening의 C1 수정이다. compatibility preflight를 writer setup보다 앞에 두고 생성자 실패 handle/cause 소유를 정리했다. v1 DDL·wire·receipt·live 권한·기존 transaction/row 검증은 유지한다. 경계와 예외는 [store-opening.md](store-opening.md)에 있다. WP00–WP02 결과는 각 외부 handoff의 과거 source에만 결박되며 WP03은 disposable-user topology 환경 때문에 BLOCKED 상태다.
 
-검증 입력: verification input digest `629ef634e81c0f082fac78301f1e3712e5d769f9c1769802367f41d116e2b391` (545 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `d7c311171a0ad43e72f4d78e415e0efc58d4748e7d2f3b49848a45dea0799e96` (547 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름만으로 working-tree 검증을 주장하지 않는다. metadata 변경 뒤에도 전체 검증을 다시 실행해야 하며 digest만 갱신한 것은 재검증이 아니다.
 
 ### 실행 결과
 
-| 검사 | WP02 결과 / 범위 |
+| 검사 | WP04 결과 / 범위 |
 |---|---|
-| `npm run typecheck` / `build` / `check:package` | PASS: fast lane prechecks 및 npm test build에서 실제 실행. 최종 record 재실행은 `wp02-fast-final` / `wp02-local-final` |
-| `npm run check:architecture` / `check:inventory` | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, 0 findings. generator 미실행; fast lane에서 실행 |
-| `npm test` | PASS, 1281/1281, fail/cancelled/skipped/todo=0 (`wp02-local-initial`). record metadata 갱신 뒤 `wp02-local-final`로 동일 executable bytes 전체 재검증 |
-| `verify:fast` / `verify:durable` / `verify:property` | PASS / EXECUTED: 각각 225 / 141 / 30 tests, 모두 fail/cancelled/skipped/todo=0. `wp02-*-lane-initial`, 최종 record 재실행 `wp02-*-lane-final`; 서로 중복되는 case를 합산해 새 coverage로 주장하지 않음 |
-| V02A | 기존 incomplete fixture는 actual loadConfiguration의 root.schemaVersion 오류로 red; 수정 후 focused 25 pass. inline/split quota/resource/model corruption 거절 |
-| V02B | 실제 direct-child SIGKILL + fresh FS/SQLite/Git observer 12 pass (`wp02-matrix-first`). missing/wrong/timeout/throw-only/lying message 음성 대조군 포함. systemd나 power-loss 증거 아님 |
-| V02C | 독립 SQL/Mail replay/unit-effect oracle 3 pass, 실제 fixture engine prompt counter 통과. 원본 fixture를 격리 worktree에 복원하면 full-loader assertion 실패; 수정된 실제 caller는 통과 |
-| stable IDs / nonexecution | V01A/B, V02A/B/C를 실제 lane에 등록. 누락 전 red / 등록 후 green; 기존 skip/todo/cancel/exit/signal 거절 유지 |
-| stress / dedicated functional Pi/provider/PTY | NOT_RUN for WP02; 선택된 fixture case 결과와 전용 lane qualification은 별개 |
-| kernel / systemd crash | BLOCKED / NOT_RUN: disposable user-systemd 환경 미확보. 기존 혼합 파일 exclusion/opt-in 유지 |
-| powercut / successful current-SHA CI | NOT_RUN / 미확보; 승인 없는 VM 전원 차단, push/PR/merge 없음 |
+| `npm run typecheck` / `build` / `check:package` | PASS: 실제 fast prechecks/build 및 `wp04-package-initial`, metadata 결박 `wp04-fast-final`/`package-final`/`local-final`. 보존 formatting source의 최종 결박은 `wp04-fast-final-r2`, `wp04-package-final-r2`, `wp04-local-final-r2` |
+| `check:architecture` / `check:inventory` | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, 0 findings. production 변경마다 stale 검출 뒤 pinned generator 실행. A-008 review/release gate는 여전히 OPEN |
+| `npm test` | PASS, 1314/1314, fail/cancelled/skipped/todo=0 (`wp04-local-initial`, `wp04-local-final`). 보존 formatting source의 동일 전체 재실행은 `wp04-local-final-r2` 조건 |
+| `verify:fast` / `verify:durable` / `verify:property` | PASS / EXECUTED: 226 / 173 / 30 tests, 모두 fail/cancelled/skipped/todo=0 (`wp04-*-initial`, `wp04-*-final`; fast initial 성공 record는 `wp04-fast-initial-r2`). 보존 formatting source의 최종 결박은 `wp04-*-final-r2`; 중복 scope를 합산해 추가 coverage로 주장하지 않음 |
+| initial metadata failure | 첫 fast는 225 pass / 1 fail: R38이 오래된 LOC 인용을 검출 (`wp04-fast-initial`). 인용 수정 후 위 전체 검증을 실행했으며 gate를 약화하지 않음 |
+| 보존된 formatting | 최종 검증 뒤 8개 TypeScript test/fixture가 formatter 형태로 변경됨. `wp04-format-ast-equivalence`가 commit `396b857`과 TypeScript AST digest 일치를 확인했다. JS emit byte 비교 시 emitter가 source 줄바꿈/후행 쉼표를 보존해 달라지는 음성 결과(`wp04-format-equivalence`, exit 1)는 의미 동등성 증거로 사용하지 않음. 변경 바이트를 보존하고 전체 final-r2를 다시 실행 |
+| V04A / V04B | actual Store/native handle/FS 관측 32/32 (`wp04-03-focused`, `wp04-restored-green`), 관련 regression 76/76 (`wp04-04-related`). 해당 raw input에만 결박 |
+| negative / restoration controls | original Store 복원: 32 중 29 fail / 3 pass (`wp04-original-control-red`); 수정 복원 후 32 pass. cleanup 없는 중간 source: 15 fail / 17 pass (`wp04-03-owner-control-red`). 모두 skip/todo/cancelled=0 |
+| input / oracle 보완 | agent를 누락한 positive fixture는 FK 오류로 거절되어 고침. busy 연결의 POSIX lock 때문에 SQLite가 native FD close를 지연함을 확인하고 handle·독립 process lock·최종 FD baseline을 함께 검증. 이 실패를 production 결함이나 PASS로 바꾸어 기록하지 않음 |
+| native 환경 | Linux x64, UID 1000, Node 26.7.0 / SQLite 3.53.4. SQLite source ID는 `wp04-native-environment.log`; 다른 backend/VFS 자동 qualification 아님 |
+| lane / nonexecution policy | registration 전 red, 후 7/7 (`wp04-lane-policy-green`). skip/todo/cancel/exit/signal/setup/timeout 거절 보존; static policy 검사는 실제 Store 실행과 구분 |
+| stress / dedicated functional Pi/provider/PTY | NOT_RUN for WP04; controlled local fixture와 실제 provider/persistence/installed-runtime qualification은 별개 |
+| kernel / systemd crash | BLOCKED / NOT_RUN: 승인된 disposable user-systemd 환경 미확보. 기존 혼합 파일 exclusion/opt-in 유지 |
+| read-only filesystem | 별도 소유 fixture의 bwrap RO mount에서 EROFS를 직접 관측하고 actual Store writer setup 거절·native handle/FD 정리·DB 보존 확인: 1/1 (`wp04-readonly-mount-initial`, `wp04-readonly-mount-final`; 보존 formatting 결박 `wp04-readonly-mount-final-r2`). dist/node_modules를 빌린 좁은 mount 검증이며 systemd/installed-runtime 증거 아님 |
+| powercut / successful current-SHA CI | NOT_RUN / 미확보. 직접 자식 SIGKILL이나 RO mount가 전원손실·CI 증거는 아님; 승인 없는 운영 변경이나 push/PR/merge 없음 |
 
-원본 argv·시각·exit·input-before/after·log SHA-256은 `/tmp/oma-consistency-evidence-Vc66uK/wp02-*.json`과 같은 이름 `.log`에 있다. lane 원본은 `wp02-*-lane*/result.json` 및 tests stdout/stderr를 확인한다. Stable case/source map은 `test/fixtures/README.md`; 최종 WP02 handoff/review/task result는 같은 외부 evidence root에 결박한다. 위 소작업 결과는 각 raw record의 입력에 한정되며 최종 source 결과로 자동 승격하지 않는다.
+원본 argv·시각·exit·input-before/after·log SHA-256은 `/tmp/oma-consistency-evidence-Vc66uK/wp04-*.json`과 같은 이름 `.log`에 있다. 소작업 01–03은 main working bytes를 보존하며 별도 worktree에서 각 snapshot을 실제 검증했고 `wp04-*-stage.json`의 tested tree와 commit tree를 일치시켰다. 따라서 commit 명령 record의 main working digest를 snapshot 검증 digest로 혼동하지 않는다. 과거 소작업 결과를 현재 metadata source의 전체 PASS로 자동 승격하지 않는다.
+
+현재 보존 source의 최종 PASS 조건은 `wp04-fast-final-r2`, `wp04-durable-final-r2`, `wp04-property-final-r2`, `wp04-package-final-r2`, `wp04-local-final-r2`, `wp04-readonly-mount-final-r2` 원본이 모두 위 digest와 일치하고 실제 종료 코드 0 및 해당 비실행 수 0을 기록하는 것이다. 조건을 충족하는 원본 없이 이 표를 새 source의 PASS로 사용하지 않는다. `wp04-*-lane-final-r2/result.json`은 각 lane의 실제 실행을 별도로 보존한다.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -995,7 +1001,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,140 code LOC**이며 A-008의 10,000행 기준을 넘는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 이 판정은 기록만 하고 기능 작업을 중단하지 않기로 했으며, review 자체는 별도 작업으로 분리한다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,199 code LOC**이며 A-008의 10,000행 기준을 넘는다. WP04 production 변경 뒤 산출물을 다시 측정한 값이며, 이 값의 갱신은 기존 architecture review/release gate를 닫지 않는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 기능 작업은 계속하되 review 자체는 별도 작업으로 남긴다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

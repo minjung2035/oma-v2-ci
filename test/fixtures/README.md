@@ -1,4 +1,4 @@
-# Fixture layers — WP02
+# Fixture layers and verification scopes
 
 A fixture's name does not enlarge its verified boundary. Independent expected
 values must not be computed by the production planner under test.
@@ -63,6 +63,9 @@ VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 - `observeLedger(path)` uses a separate read-only SQLite connection and explicit
   SQL to observe committed agent/operation/batch/delivery relations, not Store
   projections or production planner output. Use only finite, owned fixture DBs.
+  A read-only SQL connection can still create/update WAL/SHM; it is not a
+  side-effect-free filesystem observer for compatibility-refusal tests. V04A uses
+  `observeFile` without opening SQLite to compare the rejected artifact inventory.
 - `ObservedUnits.effects` records controlled requests, not real systemd effects.
 - `Engine.events` in the Principal endpoint fixture records actual stand-in
   engine IPC responses; the delivery test counts prompt responses across a later
@@ -88,6 +91,8 @@ VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 | V02B | `checkpoint-driver.test.ts` V02B cases | durable, all; real local direct-child SIGKILL and fresh FS/SQLite/Git observer, not systemd/VM |
 | V02C | `effect-observation.test.ts` raw SQL/Mail replay and controlled unit cases; `verification-policy.test.mjs` lane-ID rejection | property (effects), fast (policy), all; independent literal/physical oracles |
 | V02C negative restoration | original incomplete bundle fixture plus exact full-loader assertion in disposable worktree; corrected main-tree positive control | external source-bound WP02 raw logs, not a new CI pass |
+| V04A | `store-open.test.ts` named V04A unsupported-version, sidecar, alias, corrupt-header and supported-v1 cases | durable, all; actual Store/native SQLite plus independent artifact identities/bytes; closed/quiescent startup scope |
+| V04B | `store-open.test.ts` named V04B new/v1 PRAGMA, migration, reader-composition, cleanup-cause, permission and lock cases | durable, all; native handle closure and independent writer-lock observation, not manager or read-only-mount qualification |
 
 `npm test` includes all these local cases; it still excludes the original mixed
 systemd files. Actual lane execution is separate and must be recorded as such.

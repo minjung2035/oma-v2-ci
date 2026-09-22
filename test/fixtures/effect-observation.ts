@@ -10,8 +10,11 @@ export function observeFile(path: string) {
   if (!stat.isFile()) throw new Error(`expected regular fixture file: ${path}`);
   const bytes = readFileSync(path);
   return {
-    dev: String(stat.dev), ino: String(stat.ino), links: String(stat.nlink),
-    bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"),
+    dev: String(stat.dev),
+    ino: String(stat.ino),
+    links: String(stat.nlink),
+    bytes: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
     mode: Number(stat.mode & 0o777n),
   };
 }
@@ -22,10 +25,26 @@ export function observeLedger(path: string) {
   const db = new DatabaseSync(path, { readOnly: true });
   try {
     return {
-      agents: db.prepare("SELECT name, incarnation, desired FROM agents ORDER BY name").all(),
-      operations: db.prepare("SELECT id, actor, request_key, state, plan_json FROM operations ORDER BY id").all(),
-      batches: db.prepare("SELECT id, agent, incarnation, message_ids_json, state, session_path FROM batches ORDER BY id").all(),
-      deliveries: db.prepare("SELECT message_id, recipient, operation_id, materialized, batch_id, presented, acknowledged FROM deliveries ORDER BY message_id, recipient").all(),
+      agents: db
+        .prepare("SELECT name, incarnation, desired FROM agents ORDER BY name")
+        .all(),
+      operations: db
+        .prepare(
+          "SELECT id, actor, request_key, state, plan_json FROM operations ORDER BY id",
+        )
+        .all(),
+      batches: db
+        .prepare(
+          "SELECT id, agent, incarnation, message_ids_json, state, session_path FROM batches ORDER BY id",
+        )
+        .all(),
+      deliveries: db
+        .prepare(
+          "SELECT message_id, recipient, operation_id, materialized, batch_id, presented, acknowledged FROM deliveries ORDER BY message_id, recipient",
+        )
+        .all(),
     };
-  } finally { db.close(); }
+  } finally {
+    db.close();
+  }
 }
