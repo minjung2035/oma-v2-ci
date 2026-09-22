@@ -14,19 +14,6 @@ import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
 import { ensureDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
 import type { PreacceptOwner } from "./preaccept-artifact.js";
 
-/** Discard the staging tree this call prepared but never accepted.
- *
- * Precondition: `operationId` is the id of the current, not-yet-accepted call,
- * so the staging directory was created by that preparation and belongs to no
- * accepted operation. A directory that already exists is therefore not another
- * owner's work; a non-regular entry means the layout is not the one this module
- * writes, and the discard refuses instead of removing someone else's file.
- */
-export function discardContextPreparation(stateRoot: string, operationId: string): void {
-  const staging = contextStagingPathAt(stateRoot, operationId);
-  removeOwnedTree(staging);
-}
-
 /** The staging root one preparation created exclusively, pinned at creation.
  * Until acceptance it belongs to that preparation alone; acceptance hands it to
  * the operation whose plan names it. Discard removes it only while the name

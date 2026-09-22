@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "49185eeded5342cde85144d9760c8a4f428169d857cea2ef4f2f4ee9e1910e14",
+  "report": "ead3c62d9f5bdbd1c85d8f112a6b86a5bcdb18aa64842f992c7ae8bc6521d170",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -341,7 +341,7 @@
     },
     {
       "path": "src/git.ts",
-      "sha256": "37f4cdf09c3cd0c92b39f5f534f992acb8fe792b4d18bf5b38e862ae2a6575b5"
+      "sha256": "de0b0cf6b384866110670ef698c56fd8f00a0f5f4318bffbda3f62b83b62f9c2"
     },
     {
       "path": "src/git/canonical-command.ts",
@@ -357,11 +357,11 @@
     },
     {
       "path": "src/git/context-repository.ts",
-      "sha256": "b703830a9965a87f9c201f9a8fdfa70619a54805d74cd4b77e9e4e323b165664"
+      "sha256": "e63d3c68322a790a12f12d41e6ab2096fbbef8ee3247b47346d38ff6165c1f8a"
     },
     {
       "path": "src/git/context.ts",
-      "sha256": "280df71f8097139dece938979740368757a464959090d7a777485db8d214af46"
+      "sha256": "2340b91a946d923fc77199f31b8257447b21ccf7f810c9e682569705a0005ea8"
     },
     {
       "path": "src/git/integration-policy.ts",
@@ -689,7 +689,7 @@
     },
     {
       "path": "src/storage/context-stream.ts",
-      "sha256": "e4c42f4c3b1ea77843b23b46c8d40f399f5b2811db137bee861cf860043a1992"
+      "sha256": "5fc10a366c1329af39b1c7c9d09d6c891ec459a42927718c7f1e72af4874f010"
     },
     {
       "path": "src/storage/delivery-receipt.ts",

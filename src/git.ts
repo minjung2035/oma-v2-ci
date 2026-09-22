@@ -64,6 +64,7 @@ export class GitModule {
       current: () => this.currentContext(),
       observedObjectFormat: () => this.contextRepository.observedObjectFormat(),
       prepareCandidate: (tree, entries, expected) => this.prepareContextCandidate(tree, entries, expected),
+      preparationQuiescent: tree => this.contextRepository.preparationQuiescent(tree),
       ensureCandidate: operation => this.contextRepository.ensureCandidate(operation),
       compareAndSwap: (base, candidate) => this.casRef(paths.contextGit, "refs/heads/main", candidate, base),
       publishSnapshot: (operation, proof) => this.publishContextSnapshot(operation, proof),

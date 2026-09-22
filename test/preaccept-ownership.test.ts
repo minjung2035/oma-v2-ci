@@ -366,3 +366,147 @@ test("V18A: preaccept order is stream, staged tree, candidate, mail object, acce
     assert.deepEqual(events, ["candidate", "mail-object", "acceptance", "canonical", "notification"]);
   } finally { f.close(); }
 });
+
+const unacceptedPoints: ReadonlyArray<{
+  readonly point: string; readonly code: string; readonly expected?: string; readonly entrySha256?: string;
+  readonly arrange?: (t: TestContext, f: ContextOnlyFixture, key: string) => void;
+}> = [
+  // Input errors keep precedence over a stale base: the stream is judged first.
+  { point: "a stream digest failure after staged files exist", code: "STREAM_INVALID", expected: "0".repeat(40), entrySha256: "0".repeat(64) },
+  { point: "a base conflict before candidate preparation", code: "CONTEXT_CONFLICT", expected: "0".repeat(40) },
+  { point: "a candidate failure after its native preparation exited", code: "STORE_CORRUPT",
+    arrange: (t, f) => around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+      await original(...args);
+      throw new StoreError("STORE_CORRUPT", "injected candidate observation failure");
+    }) },
+  { point: "a base conflict after candidate preparation", code: "CONTEXT_CONFLICT",
+    arrange: (t, f) => around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+      const candidate = String(await original(...args));
+      f.moveMain(candidate);
+      return candidate;
+    }) },
+  { point: "an EML construction failure", code: "INTERNAL_ERROR",
+    // Controlled MIME adapter fault inside the production buildEml call.
+    arrange: (t) => { t.mock.method(Object.getPrototypeOf(createTransport({ jsonTransport: true })), "sendMail", async () => {
+      throw new StoreError("INTERNAL_ERROR", "injected MIME adapter failure");
+    }); } },
+  { point: "a mail object freeze failure", code: "STORAGE_FULL",
+    arrange: (t, f) => { t.mock.method(f.mail, "freezeObject", () => {
+      throw new StoreError("STORAGE_FULL", "injected mail object freeze failure");
+    }); } },
+  { point: "a canonical observation failure after the mail object was frozen", code: "REF_STATE_UNKNOWN",
+    arrange: (t, f) => {
+      let frozen = false;
+      around(t, f.mail, "freezeObject", (original, ...args) => { const artifact = original(...args); frozen = true; return artifact; });
+      around(t, f.repository(), "current", (original, ...args) => {
+        if (frozen) throw new StoreError("REF_STATE_UNKNOWN", "injected canonical observation failure");
+        return original(...args);
+      });
+    } },
+  { point: "a base conflict after the mail object was frozen", code: "CONTEXT_CONFLICT",
+    arrange: (t, f) => {
+      let candidate = "";
+      around(t, f.git, "prepareContextCandidate", async (original, ...args) => (candidate = String(await original(...args))));
+      around(t, f.mail, "freezeObject", (original, ...args) => { const artifact = original(...args); f.moveMain(candidate); return artifact; });
+    } },
+  { point: "an acceptance transaction refusal", code: "REQUEST_KEY_REUSED",
+    arrange: (t, f, key) => around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+      const candidate = await original(...args);
+      // Another method accepts this actor/key while the context request is unaccepted.
+      await f.mail.send(gitAuth, key, racingMail);
+      return candidate;
+    }) },
+];
+for (const item of unacceptedPoints) {
+  test(`V18A: ${item.point} removes the unaccepted staged tree and mail object`, async (t) => {
+    const f = contextOnlyFixture();
+    try {
+      const key = "context-preaccept";
+      item.arrange?.(t, f, key);
+      await assert.rejects(f.publish(key, item.expected ?? null, item.entrySha256), { code: item.code });
+      t.mock.restoreAll();
+      assert.deepEqual(contextOperations(f.root), []);
+      assert.deepEqual(contextStaging(f.root), []);
+      assert.deepEqual(objectsOf(f.root), expectedObjects(f.root));
+    } finally { f.close(); }
+  });
+}
+
+test("V18A: a lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them", async (t) => {
+  const f = contextOnlyFixture();
+  try {
+    let frozen = false;
+    around(t, f.mail, "freezeObject", (original, ...args) => { const artifact = original(...args); frozen = true; return artifact; });
+    around(t, f.store, "transaction", (original, ...args) => {
+      const result = original(...args);
+      if (frozen) { frozen = false; throw new StoreError("INTERNAL_ERROR", "injected loss of the acceptance acknowledgement"); }
+      return result;
+    });
+    await assert.rejects(f.publish("context-lost-ack"), { code: "INTERNAL_ERROR" });
+    t.mock.restoreAll();
+    const accepted = f.store.getOperation("a", "context-lost-ack");
+    assert.ok(accepted?.kind === "context.publish");
+    assert.equal(accepted.state, "pending");
+    assert.deepEqual(contextStaging(f.root), [basename(accepted.plan.stagingPath)]);
+    assert.deepEqual(fs.readFileSync(join(accepted.plan.stagingPath, "tree/GOAL.md")), contextGoal);
+    assert.deepEqual(objectsOf(f.root), expectedObjects(f.root));
+    await f.git.reconcile(accepted.id);
+    const settled = f.store.getOperationById(accepted.id);
+    assert.ok(settled?.kind === "context.publish");
+    assert.equal(settled.state, "succeeded");
+    assert.equal(settled.planJson, accepted.planJson);
+    assert.deepEqual(fs.readFileSync(join(f.paths.worldDir, "context/revisions", accepted.plan.candidate, "GOAL.md")), contextGoal);
+    const object = fs.readFileSync(f.mail.objectPath(accepted.plan.message.id));
+    assert.equal(sha256Hex(object), accepted.plan.message.sha256);
+    assert.deepEqual(fs.readFileSync(f.mail.archivePath(accepted.plan.message.id)), object);
+  } finally { f.close(); }
+});
+
+test("V18A: an unavailable acceptance observation after refusal retains the tree and object", async (t) => {
+  const f = contextOnlyFixture();
+  try {
+    const key = "context-unobserved";
+    let refused = false;
+    around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+      const candidate = await original(...args);
+      await f.mail.send(gitAuth, key, racingMail);
+      return candidate;
+    });
+    around(t, f.store, "transaction", (original, ...args) => {
+      try { return original(...args); } catch (error) { refused = true; throw error; }
+    });
+    around(t, f.store, "getOperationById", (original, ...args) => {
+      if (refused) throw new StoreError("STORE_CORRUPT", "injected journal observation failure");
+      return original(...args);
+    });
+    await assert.rejects(f.publish(key), { code: "REQUEST_KEY_REUSED" });
+    t.mock.restoreAll();
+    assert.deepEqual(contextOperations(f.root), []);
+    assert.equal(contextStaging(f.root).length, 1, "an undecidable staged tree is retained");
+    const named = expectedObjects(f.root);
+    assert.equal(objectsOf(f.root).filter((name) => !named.includes(name)).length, 1, "an undecidable mail object is retained");
+  } finally { f.close(); }
+});
+
+test("V18A: native preparation uncertainty retains only the tree that preparation may still use", async (t) => {
+  const f = contextOnlyFixture();
+  try {
+    const executor: unknown = Reflect.get(f.repository(), "preparation");
+    assert.ok(executor instanceof PreparationExecutor);
+    const run = PreparationExecutor.prototype.run;
+    t.mock.method(executor, "run", function (this: PreparationExecutor, ...[spec, signal, fds]: Parameters<PreparationExecutor["run"]>) {
+      // The commit child is one whose exit the executor never observes.
+      const unobserved = spec.argv.includes("commit") ? { ...spec, executable: "/usr/bin/sleep", argv: ["30"], timeoutMs: 100 } : spec;
+      return run.call(this, unobserved, signal, fds);
+    });
+    await assert.rejects(f.publish("context-uncertain"), { code: "REF_STATE_UNKNOWN" });
+    assert.equal(executor.quiescence, "unknown");
+    const retained = contextStaging(f.root);
+    assert.equal(retained.length, 1, "a tree a non-quiescent preparation may use is retained");
+    // A later request is refused before any native work touches its own tree.
+    await assert.rejects(f.publish("context-after-uncertain"), { code: "REF_STATE_UNKNOWN" });
+    assert.deepEqual(contextStaging(f.root), retained);
+    assert.deepEqual(contextOperations(f.root), []);
+    assert.deepEqual(objectsOf(f.root), []);
+  } finally { f.close(); }
+});

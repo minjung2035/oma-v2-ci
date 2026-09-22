@@ -49,6 +49,8 @@ export class ContextRepository {
   private readonly paths: Readonly<Pick<GitPaths, "stateRoot" | "contextGit" | "worldDir">>;
   private readonly preparation = new PreparationExecutor();
   private preparing = false;
+  /** The staged tree whose candidate preparation last started native work. */
+  private preparedTree: string | null = null;
   constructor(paths: Pick<GitPaths, "stateRoot" | "contextGit" | "worldDir">, private readonly observer: GitObserver) {
     this.paths = Object.freeze({ stateRoot: paths.stateRoot, contextGit: paths.contextGit, worldDir: paths.worldDir });
   }
@@ -108,6 +110,12 @@ export class ContextRepository {
     fsyncTree(join(this.paths.contextGit, "objects")); fsyncDir(this.paths.contextGit);
   }
 
+  /** A tree no native preparation started on has no native user. Otherwise the
+   * executor's sticky uncertainty decides: a killed child is not descendant death. */
+  preparationQuiescent(tree: string): boolean {
+    if (tree !== this.preparedTree) return true;
+    return !this.preparing && this.preparation.quiescence === "quiescent";
+  }
   async prepareCandidate(tree: string, source: ContextEntry[], expected: Oid | null): Promise<Oid> {
     const invalid = contextEntriesCheck(source, { requireSorted: true });
     if (invalid) throw new StoreError("STORE_CORRUPT", invalid);
@@ -115,7 +123,7 @@ export class ContextRepository {
     // the manifest while Git is running; file bytes are verified again on use.
     const entries = Object.freeze(source.map(entry => Object.freeze({ ...entry })));
     if (this.preparing || this.preparation.blocked) throw new StoreError("REF_STATE_UNKNOWN", "context preparation is active or uncertain");
-    this.preparing = true;
+    this.preparing = true; this.preparedTree = tree;
     let treeFd: number | undefined; let workFd: number | undefined;
     try {
       treeFd = openDirectory(tree);

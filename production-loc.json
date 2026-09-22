@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 26255,
+    "n_lines": 26257,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -102,16 +102,16 @@
     "code": 251,
     "language": "TypeScript"
   },
+  "src/git/context-repository.ts": {
+    "blank": 4,
+    "comment": 14,
+    "code": 247,
+    "language": "TypeScript"
+  },
   "src/storage/operation-codec.ts": {
     "blank": 3,
     "comment": 16,
     "code": 245,
-    "language": "TypeScript"
-  },
-  "src/git/context-repository.ts": {
-    "blank": 4,
-    "comment": 11,
-    "code": 242,
     "language": "TypeScript"
   },
   "src/lifecycle/create.ts": {
@@ -216,6 +216,12 @@
     "code": 183,
     "language": "TypeScript"
   },
+  "src/git/context.ts": {
+    "blank": 5,
+    "comment": 24,
+    "code": 182,
+    "language": "TypeScript"
+  },
   "src/reconcile.ts": {
     "blank": 1,
     "comment": 11,
@@ -229,15 +235,9 @@
     "language": "TypeScript"
   },
   "src/storage/context-stream.ts": {
-    "blank": 7,
-    "comment": 25,
-    "code": 179,
-    "language": "TypeScript"
-  },
-  "src/git/context.ts": {
-    "blank": 5,
-    "comment": 22,
-    "code": 178,
+    "blank": 6,
+    "comment": 17,
+    "code": 175,
     "language": "TypeScript"
   },
   "src/broker/public-dispatcher.ts": {
@@ -270,15 +270,15 @@
     "code": 163,
     "language": "TypeScript"
   },
-  "src/diagnostics/files.ts": {
-    "blank": 2,
-    "comment": 5,
-    "code": 159,
-    "language": "TypeScript"
-  },
   "src/git.ts": {
     "blank": 2,
     "comment": 9,
+    "code": 160,
+    "language": "TypeScript"
+  },
+  "src/diagnostics/files.ts": {
+    "blank": 2,
+    "comment": 5,
     "code": 159,
     "language": "TypeScript"
   },
@@ -1327,9 +1327,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1073,
-    "comment": 3576,
-    "code": 21606,
+    "blank": 1072,
+    "comment": 3573,
+    "code": 21612,
     "nFiles": 220
   }
 }

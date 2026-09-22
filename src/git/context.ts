@@ -12,10 +12,10 @@ import { requestHash } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey, isValidFullOid } from "../ids.js";
 import { mailObjectRelativePath, contextRevisionDisplayPath } from "../domain/derived.js";
 import { contextStagingPathAt } from "../storage/paths.js";
-import { discardContextPreparation, prepareContextStream } from "../storage/context-stream.js";
+import { prepareContextStream } from "../storage/context-stream.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
-import { settleByAcceptance } from "../storage/preaccept-artifact.js";
+import { PreacceptScope, type PreacceptRegistration } from "../storage/preaccept-artifact.js";
 import { MailModule, buildEml, actorAddress, listAddress, expandAddresses } from "../mail.js";
 import { ContextPublicationObserver, type ContextPublicationEvidence } from "./context-publication.js";
 import type { RefAfterCas } from "./observe.js";
@@ -28,6 +28,8 @@ export interface ContextEffects {
    * publication is never rejected for a format it cannot have observed. */
   observedObjectFormat(): "sha1" | "sha256" | null;
   prepareCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid | Promise<Oid>;
+  /** False while a native preparation that used this tree is not proven quiescent. */
+  preparationQuiescent(tree: string): boolean;
   ensureCandidate(operation: OperationOf<"context.publish">): void;
   compareAndSwap(base: Oid | null, candidate: Oid): RefAfterCas;
   publishSnapshot(operation: OperationOf<"context.publish">, evidence: ContextPublicationEvidence): void;
@@ -44,6 +46,13 @@ export class ContextCoordinator {
     return operation;
   }
   private receipt(id: string): Receipt { return receiptOfOperation(this.operation(id)); }
+  /** Pre-accept ownership follows the accepted plan, not mere row existence. */
+  private preacceptDisposition(id: string, names: (plan: OperationOf<"context.publish">["plan"]) => boolean):
+    ReturnType<PreacceptRegistration["observe"]> {
+    const operation = this.store.getOperationById(id);
+    if (operation === null) return "unaccepted-known";
+    return operation.kind === "context.publish" && names(operation.plan) ? "accepted-referenced" : "accepted-unreferenced";
+  }
   private unknown(id: string): void { this.store.transaction(tx => tx.setOperationUnknown(id)); }
   private requireWriterSlot(exceptId?: string): void {
     for (const id of this.store.recoverableOperations()) {
@@ -106,60 +115,57 @@ export class ContextCoordinator {
     // the current authority before acceptance. Malformed input is therefore not
     // reported as a base conflict.
     const id = generateOperationId(); const messageId = generateMessageId(id, 0);
-    // Everything between preparation and acceptance owns the staging tree this
-    // call created. A rejection in that window discards it, so a refused request
-    // leaves no artifact behind; an accepted operation keeps it for recovery.
-    const prepared = async <T>(action: () => T | Promise<T>): Promise<T> => {
-      try { return await action(); }
-      catch (error) { discardContextPreparation(this.paths.stateRoot, id); throw error; }
-    };
-    const tree = await prepared(() => prepareContextStream(this.paths.stateRoot, id, request.entries, request.content, bytes, undefined));
-    const candidate = await prepared(async () => {
+    const stagingPath = contextStagingPathAt(this.paths.stateRoot, id);
+    // Everything acquired before acceptance is registered with the operation
+    // that would name it, and one settlement decides all of it: a certainly
+    // unaccepted, quiescent resource is removed; one the accepted plan names, or
+    // whose acceptance cannot be observed, is retained for recovery.
+    const scope: PreacceptScope = new PreacceptScope();
+    let accepted: "inserted" | "retry";
+    try {
+      const tree = await prepareContextStream(this.paths.stateRoot, id, request.entries, request.content, bytes, undefined);
+      scope.register({ operationId: id, resource: stagingPath, owner: tree,
+        quiescent: () => this.effects.preparationQuiescent(tree.path),
+        observe: () => this.preacceptDisposition(id, plan => plan.stagingPath === stagingPath) });
       assertCurrentActor(this.store, auth, "context.publish");
       if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
-      const preparedCandidate = await this.effects.prepareCandidate(tree.path, request.entries, request.expected);
-      if (!isValidFullOid(preparedCandidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
+      const candidate = await this.effects.prepareCandidate(tree.path, request.entries, request.expected);
+      if (!isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
       assertCurrentActor(this.store, auth, "context.publish");
       if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed during preparation");
-      return preparedCandidate;
-    });
-    const address = listAddress("residents", this.paths.society);
-    const eml = await prepared(() => buildEml({ from: actorAddress(auth.actor, this.paths.society), to: [address], replyTo: [address],
-      subject: "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
-      messageId: `${messageId}@${this.paths.society}.oma.invalid`,
-      body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` }));
-    const artifact = this.mail.freezeObject(messageId, eml);
-    const settle = () => settleByAcceptance([artifact], () => this.store.getOperationById(id) !== null, id);
-    // Canonical observation is outside T. There is no await before the pure
-    // current-authority/recipient snapshot and acceptance below.
-    if (this.effects.current() !== request.expected) {
-      discardContextPreparation(this.paths.stateRoot, id); settle();
-      throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance");
-    }
-    let accepted: "inserted" | "retry";
-    try { accepted = this.store.transaction(tx => {
-      assertCurrentActor(this.store, auth, "context.publish");
-      const current = this.store.claimKey(auth.actor, key, hash);
-      if (current === "retry") return "retry" as const;
-      if (current === "reused") throw reused(auth.actor, key);
-      this.requireWriterSlot();
-      const recipients = expandAddresses(this.store, ["residents"], this.paths.society).recipients;
-      const plan: PlanFor<"context.publish"> = { kind: "context.publish", base: request.expected, candidate,
-        target: "refs/heads/main", entries: request.entries.map(entry => ({ ...entry })),
-        stagingPath: contextStagingPathAt(this.paths.stateRoot, id),
-        message: { id: messageId, objectPath: mailObjectRelativePath(messageId), sha256: eml.sha256, bytes: eml.bytes,
-          dateMs: eml.dateMs, to: ["residents"] as Address[], recipients, kind: "context", contextRevision: candidate,
-          replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] } } };
-      const result = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash,
-        kind: "context.publish", payloadJson: JSON.stringify(request), planJson: JSON.stringify(plan) });
-      if (result !== "retry") tx.insertDeliveries(recipients.map(recipient => ({ messageId, recipient, operationId: id })));
-      return result;
-    }); } catch (error) { settle(); throw error; }
-    // Preparation artifacts are retained: connection close cannot remove intent.
-    // The frozen mail object is not preparation: nothing names it unless this
-    // operation was accepted, so a loser removes exactly the inode it published.
-    if (accepted === "retry") { settle(); return receiptOfOperation(this.store.getOperation(auth.actor, key)!); }
-    artifact.retainForOperation();
+      const address = listAddress("residents", this.paths.society);
+      const eml = await buildEml({ from: actorAddress(auth.actor, this.paths.society), to: [address], replyTo: [address],
+        subject: "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
+        messageId: `${messageId}@${this.paths.society}.oma.invalid`,
+        body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` });
+      const artifact = this.mail.freezeObject(messageId, eml);
+      scope.register({ operationId: id, resource: artifact.path, owner: artifact,
+        observe: () => this.preacceptDisposition(id, plan => plan.message.id === messageId && plan.message.sha256 === eml.sha256) });
+      // Canonical observation is outside T. There is no await before the pure
+      // current-authority/recipient snapshot and acceptance below.
+      if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance");
+      accepted = this.store.transaction(tx => {
+        assertCurrentActor(this.store, auth, "context.publish");
+        const current = this.store.claimKey(auth.actor, key, hash);
+        if (current === "retry") return "retry" as const;
+        if (current === "reused") throw reused(auth.actor, key);
+        this.requireWriterSlot();
+        const recipients = expandAddresses(this.store, ["residents"], this.paths.society).recipients;
+        const plan: PlanFor<"context.publish"> = { kind: "context.publish", base: request.expected, candidate,
+          target: "refs/heads/main", entries: request.entries.map(entry => ({ ...entry })), stagingPath,
+          message: { id: messageId, objectPath: mailObjectRelativePath(messageId), sha256: eml.sha256, bytes: eml.bytes,
+            dateMs: eml.dateMs, to: ["residents"] as Address[], recipients, kind: "context", contextRevision: candidate,
+            replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] } } };
+        const result = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash,
+          kind: "context.publish", payloadJson: JSON.stringify(request), planJson: JSON.stringify(plan) });
+        if (result !== "retry") tx.insertDeliveries(recipients.map(recipient => ({ messageId, recipient, operationId: id })));
+        return result;
+      });
+    } catch (error) { scope.settleFailure(error); }
+    // Connection close cannot remove accepted intent: the plan names the tree and
+    // object, so they are retained. A same-key loser's plan names nothing of ours.
+    scope.settle();
+    if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
     const operation = this.operation(id);
     let knowledge: EffectKnowledge = "none";
     try {
