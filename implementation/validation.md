@@ -4,28 +4,33 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 검증 대상 작업 트리의 부모 `f1f18bd`, 실행일 2026-09-21. 날짜별 누적 기록은 두지 않는다. 지난 판정은 Git history에서 조회하고, 아래는 현재 tree의 사실만 적는다(MAINTENANCE §29).
+브랜치 `refactor/safety-preserving-architecture`, WP01 검증 트리의 부모 `bfa70f7`, 실행일 2026-09-22. WP00 baseline 이후 WP01은 설계 결정/규범과 검증 시험만 바꿨다. runtime source·v1 DDL·wire·receipt version·live 권한은 바꾸지 않았다. 아래 실행 결과만 이번 source의 관측이며, 하단 기존 검토 맥락은 fresh evidence가 아니다.
 
-검증 입력: verification input digest `077f690200999863b79ed9c34daedf09921f3582d5ad8c32541c96f55192cd5d` (534 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `e45e0fa39a6b3917124610fae74dad4b03371c51418e4e035f3c7decc7253b05` (536 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
-| 검사 | 결과 |
+| 검사 | WP01 결과 / 범위 |
 |---|---|
-| `npm run typecheck` | PASS |
-| `npm run build` | PASS |
-| `npm run check:package` | PASS. entries 4개(broker/runner/host/tui), runtime dependency 4개 pin |
-| `npm run check:architecture` | PASS, 0 findings |
-| `npm test` | **1249/1249 PASS**, fail/cancelled/skipped/todo=0 |
-| `npm run test:functional-surface` | PASS (release qualification 아님) |
-| `npm run check:inventory` | `SOURCE_LIST_CURRENT`, `loc: SOURCE_BOUND` (cloc 2.08로 재측정해 일치) |
-| `npm run verify:fast` | PASS, EXECUTED |
-| `npm run verify:durable` | PASS, EXECUTED |
-| `npm run verify:property` | PASS, EXECUTED |
-| `npm run verify:stress` | PASS, EXECUTED |
-| `npm run verify:kernel` / `verify:crash` | BLOCKED, NOT_RUN (이 세션은 `OMA_TEST_SYSTEMD=1`인 disposable user 환경이 아님) |
-| GitHub Actions current-SHA | **FAIL, 현재 SHA에 묶인 성공 run 없음.** 이 브랜치에서 확인된 run 69개는 전부 실패(성공 0)이며, 가장 최근 run #69(`35501168549`)는 `baseline` job이 step 0개로 끝나고 로그가 `BlobNotFound`였다. 따라서 위 PASS 행들은 전부 로컬 관측이고 CI 관측이 아니다. 이 CI 사실은 적대적 감사 보고에서 온 것이며 이 세션도 `gh` 인증이 없어(`gh auth status`: 로그인 없음) 직접 재확인하지 않았다. **이 행은 구조적으로 언제나 stale이다**: commit 안에 적는 current-SHA CI 결과는 그 commit이 존재하기 전에 관측한 것일 수밖에 없고, 적는 순간 다음 push가 SHA를 바꾼다. 그래서 이 행의 수치는 증거가 아니라 인용이며, 이 자리에서 증거가 될 수 있는 유일한 것은 아래 '되돌린 결함 → 실패한 시험' 표처럼 이 tree에서 실행한 관측이다. CI를 증거로 쓰려면 commit 바깥 — push 뒤의 run 자체 — 에서 읽어야 한다. 열두 번째 감사는 같은 사실을 run #70까지로 인용하고(브랜치 누적 성공 0 / 실패 70), 열네 번째 감사는 성공 0 / 실패 72로 인용하며 `f1f18bd`의 run은 어떤 step도 돌기 전에 끝났고 `master`와 개발 브랜치가 둘 다 `protected: false`라고 적는다. 열세 번째 감사의 지적대로 workflow의 **결박 방식**은 이번에 고쳤다 — master와 pull request가 검증에 연결되고, evidence는 CI가 만든 merge commit이 아니라 제안된 head commit 이름으로 보관되며, 아무것도 측정하기 전에 checkout된 tree가 그 commit임을 확인한다. 그러나 그것은 **앞으로 생길 run이 무엇을 말할 수 있는지**를 바꾼 것이고, 이 행의 값은 바꾸지 않는다: 이 세션은 여전히 성공한 run을 하나도 관측하지 않았다 |
-| `node scripts/loc.mjs` | **220 files / 21,140 code LOC** |
+| `npm run typecheck` | PASS, local compiler; raw `wp01-typecheck` |
+| `npm run build` | PASS, fixed dist; raw `wp01-build` |
+| `npm run check:package` | PASS, static artifact closure; 실제 설치/entry qualification 아님 |
+| `npm run check:architecture` | PASS, 0 findings; raw `wp01-architecture-before`; runtime proof 아님 |
+| `npm run check:inventory` | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND; generator 미실행, production source 불변 |
+| `npm test` | PASS, 1259/1259, fail/cancelled/skipped/todo=0. `wp01-local-initial` 실행 후 record metadata 갱신; 동일 executable bytes의 최종 source-bound 재실행은 `wp01-local-final` |
+| V01A / V01B + contract/wire goldens | LOCAL_VERIFIED. 결정표 누락·규범 불일치 red 후 green; 실제 SQLite DDL와 support guard 검사. runtime 보장 아님 |
+| V01B production guard 음성 대조군 | EXPECTED RED: 격리 worktree에서 unsupported guard를 제거하고 rebuild한 시험은 Missing expected exception으로 실패; 원복/rebuild 후 PASS |
+| dedicated fast/durable/property/stress lanes | NOT_RUN for WP01; WP00/local suite 결과를 lane 실행으로 승격하지 않음 |
+| functional Pi/provider/PTY | NOT_RUN for WP01; 과거 실행을 새 source의 증거로 재사용하지 않음 |
+| kernel / crash | BLOCKED / NOT_RUN: disposable user-systemd 환경 미확보. 환경 플래그를 임의로 켜지 않음 |
+| powercut | NOT_RUN: 실제 VM/storage power loss 미검증 |
+| current-SHA GitHub Actions | NOT_RUN / 미확보; push/PR/merge하지 않았으며 로컬 PASS를 CI로 표시하지 않음 |
+
+원본 argv·시각·exit·input-before/after·log SHA-256은 `/tmp/oma-consistency-evidence-Vc66uK/wp01-*.json`과 같은 이름 `.log`에 있다. WP01 결과 양식·read scope·negative controls는 같은 디렉터리의 `WP01-HANDOFF.md`, `WP01-FILE-REVIEW.md`, `WP01-TASK-RESULT.json`에 연결한다. 아래 record metadata가 바뀌어 생긴 digest도 마지막 gate rerun에 결박하며, 값만 갱신해 새 실행으로 꾸미지 않는다.
+
+## 기존 검토 맥락 — 현재 source 실행 증거 아님
+
+아래는 이전 검토에서 남긴 source/문제 설명이다. 이 절의 PASS·실행·숫자·SPIKE 해결 표현을 WP01 이후 source의 확인으로 사용하지 않는다. 전체 문서/역사적 claim 정리는 WP32의 실제 source 대조 범위이며, 이번에는 검토하지 않은 나머지를 완료했다고 하지 않는다.
 
 ### 현재 범위
 

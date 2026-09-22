@@ -2,11 +2,13 @@
 
 ## Current task
 
-WP00 is complete (C0 baseline only) under `oma-v2-consistency-plan-b25961c/`
-(user-supplied plan, kept untracked and unchanged). Next permitted: WP01 or WP02;
-recommended next: WP01. Follow the dependency graph, not numeric order.
-Only one WP may be active. No runtime/schema/wire/receipt/authority change has
-been made by this execution.
+WP00 and WP01 are complete under `oma-v2-consistency-plan-b25961c/`
+(user-supplied plan, kept untracked and unchanged). **Next permitted: WP02.**
+Follow the selected dependency graph, not numeric order. Only one WP may be active.
+WP01 adopted v1-preserving decisions; their runtime gates are not completed.
+No production runtime/schema/wire/receipt/authority change has been made.
+Current verification owner: `implementation/validation.md`. External per-WP
+handoffs are immutable evidence, not new runtime qualification.
 
 ## WP00.01 — source and environment
 
@@ -88,15 +90,29 @@ WP01 must first read D01–D06 and the current normative contracts. Do not mark
 runtime-dependent ADR claims qualified until their designated environment WP.
 WP00 completion does not imply any of WP01–WP32 or the overall goal is complete.
 
-## Active WP01 — scope declaration
+## WP01.01–05 — adopted decisions and bounded verification
 
-WP01 is now the only active WP. Its predecessor raw evidence was hash-checked.
-New review artifacts will be `implementation/consistency-decisions.md` and
-`test/consistency-decisions.test.mjs`: V01A checks decision coverage against the
-actual normative requirements; V01B exercises the existing unsupported-profile
-guard and retains exact v1 DDL. These are documentation/local-contract checks,
-not delivery, process, systemd or power-loss qualification. Existing golden wire
-tests will be reused. No production runtime owner change is authorized in WP01.
+Intent: lock existing domain facts, relations, transitions and current authority
+before runtime refactors. D01–D06 choices and existing-rule conflict resolutions
+are in `implementation/consistency-decisions.md`, with case/profile/registry
+tables, migration/rollback constraints and a checked topological execution order.
+Existing normative clauses were updated together; actual architecture bytes
+are bound by N-001. D03 still needs WP03's clean disposable-user evidence.
+
+`test/consistency-decisions.test.mjs` first failed on missing/contradictory
+decisions. It retains exact v1 DDL and invokes the production unsupported-profile
+guard. A detached guard-removal control was rebuilt and failed its assertion;
+undo/rebuild restored the positive control. Unchanged contract/wire goldens
+were reused. These are document/local-contract tests, not proof of delivery
+settlement, managed publication, engine persistence or power-loss durability.
+
+Read `/tmp/oma-consistency-evidence-Vc66uK/WP01-HANDOFF.md` and its file review,
+task result, patch and `WP01-evidence.sha256` before WP02. Raw evidence names
+exact argv, exit, source inputs and log hashes. Final local gates were rerun
+after verification-record metadata changed; no prior-source result was promoted.
+No generator or production runtime owner was changed. C2 choices still need
+their specified fixtures; C3 still needs separate approval. Overall plan and
+release/environment qualification remain incomplete.
 
 Execution preference: report each WP's start and end to the user (scope, actual
 verification and remaining gates), then proceed immediately to the next eligible

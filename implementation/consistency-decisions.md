@@ -258,3 +258,41 @@ No wire/DDL/durable codec/type declaration changes are needed by WP01. Existing
 are reused rather than regenerating their goldens. New internal observation/claim
 types in later WPs require runtime validators and effect-time checks; readonly or
 branding alone never supplies authority, linear ownership or filesystem durability.
+
+## WP01.05 — execution and compatibility gates
+
+Use the supplied dependency graph, one active WP at a time. This is the selected
+topological order, not numeric sorting:
+
+```text
+WP00 → WP01 → WP02 → WP03 → WP04 → WP11 → WP17 → WP05 → WP12 → WP18 → WP06 → WP13 → WP19 → WP07 → WP14 → WP16 → WP20 → WP08 → WP15 → WP21 → WP09 → WP22 → WP24 → WP10 → WP25 → WP23 → WP26 → WP27 → WP29 → WP28 → WP31 → WP30 → WP32
+```
+
+After WP01, **WP02 only** is next eligible among the unfinished WPs. It needs
+production-valid fixtures and independent boundary oracles, not runtime changes
+borrowed ahead from WP03/04. Each implementation must first fail a production-linked
+regression; callers that could recreate the defect must be inspected and migrated.
+
+C0 preserves observable behavior; C1 fixes evidenced invalid behavior with error/
+compatibility fixtures. D02 managed generation and D05 binding/bootstrap meanings
+are C2: adopted direction is not completed migration. Reader-first fixtures, writer
+restrictions, backup/reference retention, and uncertain-publication recovery must
+pass in WP13/15/16 before enabling the change. D03 is conditional on actual WP03
+environment evidence, not a dependency cycle. A result that disproves the selected
+design requires an ADR revision and affected-WP review, not implied permission.
+
+C3 stays forbidden: no schema/wire/receipt version, authority enlargement, new
+service or durable entity is approved here. If v1 cannot satisfy an invariant,
+record the counterexample and isolate an explicitly approved migration/dependency
+change; keep the affected work blocked, and continue independent eligible work.
+Runtime gaps are the case matrix's named owner/oracle pairs. In particular WP03
+topology, WP13 retention/recipe/old-reader compatibility, WP22 reserve/exhaustion,
+WP27 engine persistence and WP30 actual crash/power-loss remain **NOT_RUN**.
+
+For a C0/C1 code revert, v1 bytes remain readable but the fixed defect may return.
+A code revert cannot roll back accepted ledger facts, receipts or Git effects.
+After a generation commit, rollback is a new validated pointer update. After
+binding promotion, use only binding-aware writers. Parent-fsync uncertainty is
+never proof that publication did not occur. Final WP32 requires source-bound
+handoffs, all primary-file reviews, actual environment gates and the authorized
+CI/packaging evidence; local static/fixture success does not discharge them.

@@ -32,6 +32,14 @@ function rows(text) {
 const spec = readFileSync(new URL("implementation-spec.md", root), "utf8");
 
 
+test('V01A: execution order names every WP once and preserves late observation dependencies', () => {
+  const section = decisions().split('## WP01.05 — execution and compatibility gates')[1] ?? '';
+  const order = section.split('\n').find(line => line.startsWith('WP00 →'))?.match(/WP\d{2}/g) ?? [];
+  assert.deepEqual([...order].sort(), Array.from({ length: 33 }, (_, index) => `WP${String(index).padStart(2, '0')}`));
+  assert.ok(order.indexOf('WP23') > order.indexOf('WP25'));
+  assert.ok(order.indexOf('WP13') > order.indexOf('WP03'));
+});
+
 test('V01B: change surfaces retain distinct registries and name real existing owners', () => {
   const surfaces = rows(decisions()).filter(row => row[0].startsWith('surface.'));
   assert.deepEqual(surfaces.map(row => row[0]).sort(), [
