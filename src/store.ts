@@ -3,7 +3,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync, lstatSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Actor, MessageId, OperationId, RequestKey } from "../implementation/contracts/identity.js";
 import type { ErrorCode } from "../implementation/contracts/errors.js";
 import type { RepositoryIdentity, OperationPlanContext } from "./durable.js";
@@ -34,6 +34,59 @@ export function isBusyError(error: unknown): boolean {
 export interface NewAgent {
   name: Actor; specHash: string; role: "resident" | "principal"; desired: AgentRow["desired"];
   incarnation: number; profile: string; createdBy: string | null; specJson: string;
+}
+
+/** Existing-file compatibility only. Startup must already own the broker's
+ * single-writer fence; this observation is not a substitute for that authority.
+ * Never ignore a WAL or journal by unconditionally declaring a file immutable.
+ */
+function preflightDatabase(path: string): void {
+  if (path === ":memory:") return;
+  const suffixes = ["", "-wal", "-shm", "-journal"] as const;
+  const identities = (): (string | null)[] => suffixes.map(suffix => {
+    const stat = lstatSync(path + suffix, { bigint: true, throwIfNoEntry: false });
+    if (!stat) return null;
+    if (!stat.isFile()) throw new StoreError("STORE_CORRUPT", "database and sidecars must be regular files");
+    return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+  });
+  const before = identities();
+  if (before[0] === null) {
+    if (before.slice(1).some(identity => identity !== null))
+      throw new StoreError("BROKER_UNAVAILABLE", "database is absent but sidecar evidence remains");
+    return;
+  }
+  if (before[3] !== null)
+    throw new StoreError("BROKER_UNAVAILABLE", "journal recovery cannot precede schema compatibility; evidence preserved");
+  const uri = pathToFileURL(path);
+  uri.searchParams.set("mode", "ro");
+  if (before[1] === null && before[2] === null) {
+    // Under the startup writer fence, absent sidecars mean there is no pending
+    // WAL/journal to ignore. Check the same identities again before writer setup.
+    uri.searchParams.set("immutable", "1");
+  } else {
+    if (before[1] === null || before[2] === null)
+      throw new StoreError("BROKER_UNAVAILABLE", "read-only WAL preflight requires both existing sidecars; evidence preserved");
+    // SQLite's Unix VFS must not create/rebuild its shared-memory index here.
+    uri.searchParams.set("readonly_shm", "1");
+  }
+  const db = new DatabaseSync(uri.href, { readOnly: true, allowExtension: false });
+  let failure: unknown;
+  let failed = false;
+  try {
+    const version = safeInteger(fullRow(db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
+    if (!SCHEMA_USER_VERSION_READABLE.includes(version) && version !== 0)
+      throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
+    if (version === 0 && db.prepare("SELECT 1 FROM sqlite_schema LIMIT 1").get() !== undefined)
+      throw new StoreError("STORE_CORRUPT", "unversioned nonempty database is not a new OMA database");
+  } catch (error) { failed = true; failure = error; }
+  try { db.close(); }
+  catch (closeError) {
+    if (failed) throw new AggregateError([failure, closeError], "schema preflight and close failed");
+    throw closeError;
+  }
+  if (failed) throw failure;
+  if (identities().some((identity, index) => identity !== before[index]))
+    throw new StoreError("BROKER_UNAVAILABLE", "database identity changed during schema preflight; writer setup refused");
 }
 
 /** Administrator-only read connection. No Store construction, migration, WAL
@@ -116,6 +169,7 @@ export class Store {
   constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null) {
     this.repositoryIdentity = null;
     if (identity !== null) this.bindRepositoryIdentity(identity);
+    preflightDatabase(path);
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA foreign_keys = ON");
     this.db.exec("PRAGMA journal_mode = WAL");
