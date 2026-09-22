@@ -2,9 +2,9 @@
 
 문서 상태: **규범 초안 / SPIKE 미해결 / production release 불가**. 작성일: 2026-09-07. 정책 확장 반영: 2026-09-09.
 
-**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, 이 계약의 기준본 SHA-256은 `7588b31e7518ded1d439f604400ca0984cccd30936428e00eac03b6032f29fab`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
+**MUST [N-001]** 구현의 상위 규범은 [architecture.md](architecture.md)이며, WP01 D01–D06 대조 후 이 계약의 기준본 SHA-256은 `ae9b2d026e62f77e0c9ff3f5ca0a3b6efea5b8582f0a6acaf2ecd30b325a5905`이다. 구현 시작 및 release 때 기준본 hash를 확인한다. hash 변경 시 이 계약을 자동 적용하지 않고 차이를 검토한다.
 
-이전 기준본은 `177e60f7660d834873e474eec45d1f4ac17c9f02b48110ec11a5e9442edbd6d6`이었다. 그 이후의 차이는 두 가지이며 둘 다 검토했다. 첫째는 `examples/systemd`와 `validation.md`를 현재 경로로 고치는 링크 수정 2줄이고 의미 변경이 없다. 둘째는 2026-09-18에 추가한 architecture §23(제품 표면과 TUI)이며 아래 §18의 TUI 요구가 그 구현 계약이다.
+이전 기준본 `7588b31e7518ded1d439f604400ca0984cccd30936428e00eac03b6032f29fab`까지의 링크/제품 표면 변경 기록은 Git history에 보존한다. 이번 WP01은 §6 mode별 runtime gate, §7 exact old receipt 정산 순서, §12 no-op과 applied CAS 구별, §23 project binding 및 실제 적용 시점을 [D01–D06 결과](implementation/consistency-decisions.md)와 대조했다. runtime source가 이 변경을 이미 만족한다는 뜻이 아니며 지정 WP의 regression/runtime evidence 전에는 그 차이가 해소되지 않는다.
 
 **MUST [N-006]** 2026-09-09 승인된 변경은 목표 `tiered` profile의 integration policy다. [정책 확장 계약](implementation/integration-policy.md)은 이 spec의 일부이며 기존 `base` substrate와 tiered의 완료 범위를 구분한다. 충돌한 기존 선택 approval 서술은 아래 INT/APP와 확장 계약으로 대체한다. S-08/S-10 전 base schema/IPC만 구현한 상태를 tiered production 지원으로 표시하지 않는다.
 
@@ -96,9 +96,9 @@
 
 **MUST [CFG-002]** 기본 quota 금액·model ID·provider 가격·기능성 검사 명령은 bootstrap 때 Human host 설정으로 필수 제공한다. missing 값을 무제한·검사 없음·가장 비싼 모델로 채우지 않는다. `requiredChecks: []`는 host가 명시적으로 선택한 경우만 허용한다. quota 계산은 최소 화폐 단위 정수이며 JS에서는 safe integer 검사 또는 bigint/decimal string 경계를 사용한다.
 
-**MUST [CFG-005]** `contracts.ts`의 `HostConfigV1`을 기본 profile의 폐쇄된 설정 schema로 사용한다. 숫자는 유한한 non-negative safe integer이고 slot/size/timeout은 양수다. Principal reserve는 total을 초과하지 않는다. quota는 Core v1 society 수명 누계이며 자동 월별 reset을 추가하지 않는다. 금액 단위·가격 codec은 host deployment manifest에 고정한다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. config 교체 시 새로운 policy revision을 필수로 지정하고 outstanding integrate가 이를 재검사한다.
+**MUST [CFG-005]** `contracts.ts`의 `HostConfigV1`을 기본 profile의 폐쇄된 설정 schema로 사용한다. 숫자는 유한한 non-negative safe integer이고 slot/size/timeout은 양수다. Principal reserve는 total을 초과하지 않는다. quota는 Core v1 society 수명 누계이며 자동 월별 reset을 추가하지 않는다. 금액 단위·가격 codec은 host deployment manifest에 고정한다. `protectedPaths`는 glob이 아닌 repository 상대 literal path 또는 `/`로 끝나는 subtree prefix다. diff의 추가/수정/삭제 양쪽 path를 모두 검사한다. D02: 전체 후보를 loader와 동일한 validator로 검사하고 host/model/role/prompt/extension 선택의 의미가 바뀌면 새 policy revision을 지정하여 outstanding integrate가 재검사하게 한다. 비교에서 revision 자체를 제외하고 공백·동일 의미 재저장은 policy 변경으로 만들지 않는다. generation identity와 policy revision은 별개이며 기존 request/spec/check-profile hash recipe는 바꾸지 않는다.
 
-운영 파일 분리는 별도 authoring 입력 `kind: "oma-operations-v1"`로 제공할 수 있다. host가 명시한 파일만 읽어 기존 폐쇄형 `HostConfigV1`으로 조합·검증하며, role별 prompt/extension metadata는 wire·ledger schema나 실행 권한을 확장하지 않는다. 변경은 재시작 시 새 snapshot으로 읽고 기존 accepted evidence는 다시 쓰지 않는다. 추가 extension 실행에는 기존 PI/deployment 검증 게이트가 그대로 적용된다. 파일 형식과 제한은 [운영 설정 안내](operations/README.md)를 따른다.
+운영 파일 분리는 authoring 입력 `kind: "oma-operations-v1"`로 제공한다. host가 명시한 한 manifest snapshot에서 폐쇄형 HostConfigV1과 source layout을 함께 조합·검증한다. 수동 bundle의 다중 파일 동시 편집은 지원하지 않는다. D02의 관리형 편집은 immutable generation을 완성·flush한 뒤 기존 manifest를 마지막에 replace/parent-fsync하며, expected-version 비교부터 publication까지 한 owner가 직렬화한다. outcome-unconfirmed에서는 재관측 전 overwrite/rollback하지 않는다. role prompt는 index-root 기준이고 metadata는 wire·ledger schema나 실행 권한을 확장하지 않는다. 변경은 다음 해당 역할 engine 시작에 새 snapshot으로 읽고 accepted evidence는 다시 쓰지 않는다. old reader 호환·bounded retention·구버전 writer 금지·명시 export는 WP13 gate이며 실제 지원 여부와 수동 형식의 제한은 [운영 설정 안내](operations/README.md)에 구분한다. 추가 extension 실행에는 기존 PI/deployment 검증 gate가 그대로 적용된다.
 
 **MUST [CFG-003]** wire resource 기본값은 frame 256 KiB, mail body 256 KiB, subject 512 UTF-8 bytes, logical address 64개, reply reference 64개, context 파일 256개/합계 8 MiB, bundle 256 MiB, logs 1 MiB, accepted connection당 미완료 control request 1개다. host는 명시적으로 낮추거나 높일 수 있고 모든 endpoint에서 같은 값으로 검증한다. 이 값은 전용 preview 기능이나 본문의 자동 절단 규칙이 아니다. 초과 입력은 접수 전에 거절하고 파일/Git 사용을 안내한다.
 
@@ -121,6 +121,8 @@
 | Host path | 소유·내용·수명 | model mount |
 |---|---|---|
 | `S/config.json` | host authority, atomic replace | 없음 |
+| `S/project-binding.json` | D05의 host-only full canonical project binding; WP16 C2 gate 전 생성하지 않음 | 없음 |
+| `<config-index-root>/.oma-config/generations/<generation>/` | D02의 immutable host/models/roles/prompts; WP13 C2 gate, bounded retention 및 quiescent cleanup | 없음 |
 | `S/runtime.sqlite{,-wal,-shm}` | broker 상태, SQLite 관리 | 없음 |
 | `S/repos/project.git/` | 코드·게시 ref 원본, broker writer | `/git/project.git` RO |
 | `S/repos/context.git/` | 공유 의도 Git 원본 | 없음; snapshot만 공개 |
@@ -199,7 +201,7 @@
 | T-ack | 자기 delivery.acknowledged, op succeeded |
 | T-create-intent | 이름/spec conflict 검사, agents provisioning, parent op+initial message plan |
 | T-create-ready | 필수 clone/unit 확인 뒤 enabled 또는 stopped, initial mail 공개 조건 확정 |
-| T-run-open | 이전 cgroup 사망 확인 뒤 incarnation 증가, recoverable batch 소유 변경 |
+| T-run-open | 이전 cgroup 사망 및 BATCH-004의 old receipt 정산 뒤 incarnation 증가, receipt 부재가 확인된 나머지 prepared batch 소유 변경 |
 | T-stop-intent | desired=stopped 및 stop op pending |
 | T-submit-accept | durable bundle 검증 후 op+고정 result message plan/deliveries |
 | T-integrate-intent | 직렬화된 repo slot 확인, base/candidate/policy pending op |
@@ -276,9 +278,11 @@
 
 **MUST [BATCH-003]** 일반 batch의 최대 message 수는 host resource 설정 `batchMaxMessages`로 고정하며 초기 reference 값은 24다. direct/question/result/context class와 public-list class 양쪽이 있으면 각각 최소 1개를 포함하고, 남은 자리는 두 class를 교대로 oldest `(created_at_ms,message_id)`부터 선택한다. notice 6개도 이 순서를 사용한다. kind만 바꿔 권한·Principal 강제 개입을 얻을 수 없다.
 
-**MUST [BATCH-004]** prepared batch 복구 시 원래 message IDs와 session을 유지한다. 이전 run 사망 확인과 현재 incarnation fencing 후 transaction에서 소유만 바꾼다. 성공 agent_end 및 `S-03`의 trusted session-boundary 증거가 확인된 batch만 completed/presented로 만든다. 오류·abort·timeout·모델의 '완료했습니다'는 증거가 아니다.
+**MUST [BATCH-004]** D01: prepared batch의 원래 ordered message IDs와 session/evidence identity를 유지한다. 이전 run 또는 startup quiescence를 증명한 broker가 기존 durable incarnation과 정확히 일치하는 receipt를 먼저 관측·정산한다. filesystem 관측은 transaction 밖에서 하고 T-batch-complete 안에서 같은 batch/actor/incarnation/ordered manifest/state를 다시 확인한다. 그 뒤 receipt 최종 이름의 부재가 확인된 나머지 prepared만 T-run-open에서 재할당한다. completed batch의 incarnation은 역사적 사실로 남는다. 읽기 불가·손상·legacy incarnation mismatch는 재전달·재할당 근거가 아니며 원본 보존과 명시적 진단/repair 대상이다. live complete의 현재 peer/run fencing은 그대로 유지하고 recovery 권한을 새 RPC나 stale lease로 발급하지 않는다. 오류·abort·timeout·모델의 완료 문구는 boundary 증거가 아니다.
 
 **MUST [BATCH-006]** 기본 followUp 경로의 production batch.complete는 validation record에 pin된 `oma-pi-rpc-v1@0.85.1` receipt만 허용한다. trusted runner가 소유한 정확한 state-root receipt path, batch ID/incarnation/message manifest, adapter revision, runner session root와 durable session file이 모두 일치해야 completed/presented를 같은 transaction에서 commit한다. 타입이나 문자열만 맞춘 evidence, model writable 경로, mock completion, 환경 변수 우회는 거절한다. 이 qualification은 진행 중 steer/concurrency 또는 전체 S-03 kill matrix를 통과했다는 뜻이 아니다.
+
+D01 publication은 private same-filesystem temp에 bounded bytes를 쓰고 file fsync → final name no-replace publication → parent directory fsync 후에만 durable receipt를 반환한다. 기존 final name이면 exact batch 관계를 검증해 최초 유효 receipt 자체를 반환하며, 새 boundary의 sessionPath로 바꿔 complete하지 않는다. 0600 mode를 유지하고 final publication 뒤 fsync 불명에서는 final name을 삭제하지 않는다. 이것이 Pi session 자체의 power-loss flush를 증명하지는 않는다.
 
 **MUST [BATCH-005]** session 경계 증거가 불충분하면 같은 batch ID로 재안내할 수 있다. 같은 mail을 다시 안내했다는 사실을 표시하고 기존 operation receipt와 workspace를 대조하게 한다. 이전 shell/tool을 자동 replay하지 않는다. Pi 사고과정·tool cursor·reasoning snapshot용 state를 추가하지 않는다.
 
@@ -300,7 +304,7 @@ pi.sendMessage(
 
 **MUST [PI-003]** 현재 qualified 기본 profile은 activation 때 준비된 batch를 followUp으로 전달하고 terminal boundary까지 완료한다. 이미 진행 중인 tool group 사이에 도착한 direct/question/reply/context를 끼워 넣는 steer profile은 도구 결과 보존·취소·동시 batch 귀속이 검증될 때까지 지원한다고 주장하지 않는다. 새 mail 때문에 준비된 batch의 ID나 mode를 바꾸지 않는다.
 
-**MUST [RUN-001]** activation은 unit/invocation 확인 → 이전 run 사망 확인 → incarnation 발급 → pending/prepared 회수 → sandbox/Pi resume → batch 안내 → 정상 Pi loop → boundary commit → pending 재검사 → 필요 시 다음 loop 또는 exit 0 순서다. 최초 GOAL 전에는 inference를 시작하지 않는다.
+**MUST [RUN-001]** activation은 unit/invocation 확인 → 이전 run 사망 확인 → BATCH-004의 exact old receipt 정산 → incarnation 발급 및 나머지 receipt-absent prepared 회수 → sandbox/Pi resume → batch 안내 → 정상 Pi loop → boundary commit → pending 재검사 → 필요 시 다음 loop 또는 exit 0 순서다. 최초 GOAL 전에는 inference를 시작하지 않는다.
 
 **MUST [RUN-002]** inference slot이 부족하면 runner는 bounded 메모리 waiter로 기다린다. new를 남겨 둔 채 즉시 exit/restart를 반복하지 않는다. systemd·broker 취소를 받아 즉시 waiter에서 빠져야 한다. idle일 때 mail 유무를 모델에게 주기적으로 묻지 않는다.
 
@@ -308,7 +312,13 @@ pi.sendMessage(
 
 **MUST [PR-001]** Principal logical identity는 bootstrap 때 한 번 만들고 Pi UI attach와 독립적으로 유지한다. 동시에 하나의 attach만 허용하고 두 번째는 ATTACH_CONFLICT다. attach는 host-only channel의 비공개 credential로 인증하며 session handle/path는 모델 payload에서 신뢰하지 않는다. 연결 끊김은 new Principal 생성의 trigger가 아니다.
 
-**MUST [PR-002]** principal-relay는 mailbox new 항목마다 deliveries의 durable 수신 기록과 원문을 확인하고 모두 cur로 이동한다. 기존 질문/batch가 pending이어도 새 항목을 계속 인수한다. UI가 없으면 batch를 새로 prepare하지 않는다. UI reconnect 시 host가 pending을 조회하여 제한된 batch를 인수하고, trusted extension이 그것을 session에 custom message로 제시한다. batch 준비와 완료는 host endpoint에서 그 broker를 시작한 host에게만 서빙하므로 model이 실행하는 어떤 것도 자기 mail을 전달된 것으로 표시할 수 없다. host임은 필요조건이고 충분조건이 아니다: 이 broker가 지금 들고 있는 Principal 등록이 없으면 두 method 모두 거절하며, 등록된 engine이 아직 살아 있는지는 요청마다 pid와 시작 시각으로 다시 확인한다(AUTH-003과 같은 이유다). host쪽에서도 전달의 조건은 broker가 준비되었다는 사실이 아니라 tenure·살아 있는 broker·그 broker가 이 engine에 발급한 등록·살아 있는 engine 넷이 모두 현재인 것이다. 등록이 거절되었거나 아직 답이 오지 않았으면 전달은 한 번도 시도되지 않고, broker가 교체되면 이전 등록은 새 broker에게 상속되지 않는다. 전달은 session이 idle일 때만 하며, 실행 중인 turn 안에서의 boundary 귀속(S-03)에 의존하지 않는다. idle 관측과 run 시작은 한 단계여야 한다: session의 소유권은 engine이 turn_start를 보고하기 전에, 무엇을 쓰기 전에 동기적으로 예약하며, Human prompt와 delivery가 같은 소유권을 쓴다. 소유권의 단위는 engine의 agent run이다. Pi는 queue에 든 continuation까지 모두 소진한 뒤 run마다 `agent_settled`를 한 번 보내므로, prompt 하나에 settle 하나를 기대해서는 안 된다. Human은 mail 때문에 기다리지 않고 다시 입력할 필요도 없다 — session이 이미 예약돼 있으면 prompt는 host가 순서대로 들고 있다가 run이 끝나는 그 단계에서 곧바로 쓴다. engine 자신의 follow-up queue에는 넣지 않는다: 그렇게 넣은 prompt는 진행 중인 delivery의 run 안에서 실행되고, 그 run에 대해 extension이 기록하는 boundary가 Human의 turn까지 덮게 된다. engine이 prompt를 수락 전에 거절하면 어떤 run도 시작·종료하지 않으므로, 그 응답을 읽어 예약을 돌려주고 사용자에게 알린다. host가 들고 있는 대기 prompt의 수에는 선언된 상한이 있고, 상한을 넘은 prompt는 조용히 버리지 않고 거절해 알린다. session이 일하는 중인지에 대한 보고는 소유권 이동 자체가 소유한다 — 예약 전에 busy를 먼저 알리거나 일부 해제 경로만 idle을 알리는 구현은 금지한다. settle되지 않고 끝난 delivery도 예약을 돌려준다. delivery의 실패는 assistant message 하나가 아니라 run이 settle될 때 판정한다 — Pi는 retry와 compaction으로 실패한 message 뒤에도 같은 run을 계속하기 때문이다. boundary 없이 끝난 turn의 batch는 prepared로 남아 back-off 뒤 다시 전달된다. relay는 Pi model call을 하지 않는다.
+**MUST [PR-002]** D01/D06: principal-relay는 mailbox new 항목마다 durable 수신 기록과 원문을 확인하여 모두 cur로 이동한다. 기존 질문/batch가 pending이어도 새 항목의 인수는 계속한다. relay는 모델을 호출하지 않으며 UI가 없으면 새 batch를 prepare하지 않는다. 재연결한 host가 제한된 pending batch를 인수하고 trusted extension이 custom message로 전달한다.
+
+Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 서빙하고 모델 도구에 열지 않는다. host임 외에 현재 Principal 등록과 pid/시작시각으로 확인한 살아 있는 engine을 매 요청 요구한다. host 역시 tenure·살아 있는 broker·그 broker가 이 engine에 발급한 등록·살아 있는 engine 넷이 현재일 때만 전달한다. 등록 거절/응답 대기 중에는 전달하지 않고 이전 broker 등록을 상속하지 않는다. 유효한 기존 receipt 정산은 새 turn이 아니므로 busy와 분리하되 live 등록 계약을 우회하지 않는다. offline 정산은 BATCH-004의 좁은 trusted startup recovery만 사용한다.
+
+새 전달은 idle일 때 session 소유권을 동기적으로 예약한 뒤에만 쓴다. Human prompt도 같은 소유권을 사용한다. 소유권 단위는 prompt가 아닌 engine agent run이며 queue의 continuation까지 소진한 뒤 오는 correlated agent_settled가 정상 종료 경계다. 예약 중 Human prompt는 bounded host queue에 순서대로 보관하고 engine follow-up queue에 섞지 않는다. run 종료 단계에서 다음 Human 입력이 곧바로 소유권을 얻는다. 명시적 수락 전 거절은 예약을 돌려주고 입력과 사유를 사용자에게 알린다. 상한 초과 입력도 조용히 버리지 않고 거절한다. busy 보고는 소유권 이동 자체에서 나온다.
+
+수락 응답 timeout/쓰기 결과 불명만으로 예약을 풀지 않는다. correlated settle, 확정된 미수락 또는 실행 종료 증거 전에는 유지/fence하고 대기 Human 입력을 불명 run에 쓰지 않는다. session 종료 시 미전송 입력은 각각 원문·식별과 함께 반환하고 수락 불명 입력은 자동 replay하지 않는다. retry/compaction 중 실패한 assistant message 하나는 run 실패 증거가 아니다. boundary 없이 확정 종료한 batch는 prepared로 보존하며 BATCH-005의 재안내 정책을 따르되, receipt unreadable/conflicting을 absent로 바꿔 재실행하지 않는다.
 
 **MUST [PR-003]** Principal의 Human context·private memory는 principal/private와 기존 Pi session에 남긴다. context publish는 공유 문서만 전달한다. mailbox urgent alert는 UI 경고일 수 있지만 Human 입력을 위장하거나 현재 깊은 판단을 강제 abort하지 않는다. 모델이 질문에 답하는 데 필요한 peer evidence는 archive/Git에서 선택해서 읽는다.
 
@@ -368,7 +378,7 @@ pi.sendMessage(
 
 **MUST [INT-003]** project main mutation은 repo별 메모리 mutex와 pending integrate operation 검사로 직렬화한다. 먼저 T-integrate-intent, 그 뒤 검사·Git CAS, 마지막 T-integrate-done다. crash 후 unresolved integrate가 있으면 새로운 main writer를 시작하지 않는다. CAS 바로 전에 main/policy/capability/stop intent를 재검사한다.
 
-**MUST [INT-004]** 복구에서 main==candidate는 이미 ref 효과가 발생한 것으로 대조한다. base는 receipt를 완료하고 tiered는 PUB-001/002의 미완료 공개 메일까지 보충한 뒤 succeeded로 완료한다. main==base면 현재 조건을 다시 검사하고 진행하거나 증명된 precommit 실패로 끝낸다. 그 외는 REF_STATE_UNKNOWN으로 unknown을 남기고 해당 repo main write를 차단한다. 외부 수동 main 변경을 새로운 정상 base로 수용하지 않는다. CAS 경쟁 패자는 STALE_BASE와 actual main을 받는다.
+**MUST [INT-004]** D06: 복구에서 base!=candidate이고 main==candidate일 때만 이미 ref 효과가 발생한 것으로 대조한다. base profile은 receipt를 완료하고 tiered는 PUB-001/002의 미완료 공개 메일까지 보충한 뒤 succeeded로 완료하며, 과거 CAS를 현재 권한으로 다시 실행하지 않는다. base==candidate no-op은 ref 일치만으로 final authorization을 증명하지 못하므로 INT-001의 eligibility와 현재 policy/stop/authority를 다시 검사하고 기존 error classification으로 정산한다. non-no-op의 main==base도 현재 조건을 재검사하고 진행하거나 증명된 precommit 실패로 끝낸다. 그 외는 REF_STATE_UNKNOWN으로 unknown을 남기고 해당 repo main write를 차단한다. 외부 수동 main 변경을 새로운 정상 base로 수용하지 않는다. CAS 경쟁 패자는 STALE_BASE와 actual main을 받는다.
 
 **MUST NOT [INT-005]** broker가 rebase/merge/cherry-pick/충돌 해결·자동 재승인·새 candidate 생성을 한다. Resident가 자기 clone에서 새 candidate를 만들고 새 request로 제출한다. Principal만 integrate할 수 있는 gate도 추가하지 않는다.
 
@@ -402,7 +412,7 @@ pi.sendMessage(
 
 **MUST [UNIT-007]** systemctl effect 성공은 subprocess spawn이 아니라 정상 exit status와 해당 effect의 후속 actual observation으로 판정한다. nonzero/timeout/signal/malformed 결과를 성공으로 바꾸지 않는다. daemon-reload는 정상 exit와 대상 unit의 LoadState=loaded 및 렌더링한 설정 일치, enable/disable은 unit-file 상태, path start/stop은 path 실제 상태, service stop은 inactive와 cgroup 후손 사망을 확인한다. 관측 실패는 succeeded가 아니며 accepted op는 실제 효과를 대조한다. 짧게 실행 후 정상 종료한 Resident start는 동일 InvocationID의 정상 종료와 pending 재검사를 허용하되 전혀 시작 안 된 inactive와 구분한다. 정확한 systemd property/binding 증거는 S-01/S-06에 pin한다.
 
-**MUST [UNIT-004]** broker는 Type=notify이며 DB/open-operation 복구, 이전 Resident cgroup 정리, socket/인증 준비가 완료된 뒤에만 READY=1을 보낸다. Resident는 After+BindsTo broker다. Type=exec인 runner의 모든 Pi/shell/test 후손은 동일 cgroup에 남는다. runner 하나의 PID만 종료하고 완료로 응답하지 않는다.
+**MUST [UNIT-004]** D03: systemd-managed broker는 Type=notify이며 DB/open-operation 복구, 이전 Resident cgroup 정리, socket/인증 준비가 완료된 뒤에만 READY=1을 보낸다. 이 mode의 Resident는 After+BindsTo broker를 유지한다. product-owned foreground broker는 IPC-011/REC-007의 private channel·tenure를 유지하며 존재하지 않는 broker.service에 기대거나 별도 broker service를 몰래 기동하지 않는다. 이 mode의 Resident 활성화는 깨끗한 disposable user에서 동등한 revoke/quiescence/startup fencing을 검증하는 WP03 gate 전 지원 완료로 표시하지 않는다. 동등한 lifetime 경계를 제공하지 못하는 조합은 fail closed하고 systemd-managed mode의 BindsTo를 일괄 제거하지 않는다. 두 mode 모두 Type=exec runner의 Pi/shell/test 후손은 같은 cgroup에 남으며 runner 한 PID 종료를 전체 사망으로 응답하지 않는다.
 
 **MUST [UNIT-005]** .path는 inbox/new에 DirectoryNotEmpty를 사용한다. enabled+GOAL 조건이 충족될 때만 enable/start한다. prepared batch만 cur에 남은 경우 reconcile과 startup DB 조회로 service를 시작한다. path 상태만으로 pending을 판단하지 않는다. default.target에 enable된 path가 reboot 때 잘못 켜져도 broker 인증은 stopped/GOAL 없는 실행을 거절하고 reconcile이 path를 중지한다.
 
@@ -653,7 +663,7 @@ session 경계를 넘지 않는 per-request 전환은 Principal inference가 bro
 
 **MUST [TUI-008]** `initialResidents`에 대응하는 항목은 bootstrap seed로만 표시하고 실행 중 society의 Resident 수를 바꾸는 값으로 제시하지 않는다. LIFE-009에 따라 값 변경이 다음 재시작에 agent를 자동 생성·삭제·중지하지 않는다. 현재 Resident를 늘리거나 줄이는 조작은 설정 항목이 아니라 명시적 lifecycle 행위로 분리해 표시한다.
 
-**MUST [TUI-009]** 이미 생성된 Resident의 `ResolvedAgentSpec.modelProfile` 참조는 LIFE-008에 따라 고정이다. 설정 화면은 참조가 가리키는 profile의 내용만 바꾸고 참조 자체를 바꾸지 않는다. 저장된 참조를 현재 배포가 해석하지 못하면 `UNSUPPORTED_PROFILE`로 차단하고 임의 profile로 대체하지 않는다. config 본문이 바뀌면 CFG-005의 policy revision을 새 값으로 갱신한다.
+**MUST [TUI-009]** 이미 생성된 Resident의 `ResolvedAgentSpec.modelProfile` 참조는 LIFE-008에 따라 고정이다. 설정 화면은 참조가 가리키는 profile의 내용만 바꾸고 참조 자체를 바꾸지 않는다. 저장된 참조를 현재 배포가 해석하지 못하면 `UNSUPPORTED_PROFILE`로 차단하고 임의 profile로 대체하지 않는다. config 의미가 바뀌면 CFG-005/D02의 정책에 따라 policy revision을 갱신한다.
 
 **MUST [TUI-010; arch §23.7]** Extensions 화면의 목록 출처는 host가 `installation.libdir` 아래에 이미 배치한 파일뿐이다. 임의 경로 입력, 자동 탐색, 네트워크 설치를 허용하지 않는다. core OMA extension은 항상 첫 항목으로 고정하고 해제할 수 없다. 선택한 항목의 SHA-256을 기록하고 실행 직전에 다시 확인한다. 추가 extension은 Pi host process와 동일 권한의 trusted deployment code이며 model tool로 취급하지 않는다. 이 화면은 host 전용이고 모델·workspace·mail 내용이 목록·선택·적용에 영향을 주지 못한다.
 
@@ -671,7 +681,7 @@ session 경계를 넘지 않는 per-request 전환은 Principal inference가 bro
 
 동봉 엔진의 상태는 전적으로 이 디렉터리에 둔다. 사용자의 Pi 상태를 읽거나 쓰지 않으며, 사용자 Pi 설치 여부에 동작이 달라지지 않는다. 자격 증명·모델 선택은 동봉 엔진이 자기 메커니즘으로 이 디렉터리 안에서 처리하므로 OMA가 별도의 인증·모델 관리 표면을 만들지 않는다.
 
-**MUST [TUI-019]** 설정 파일 없이 동작한다. 초기화 명령을 요구하거나 사용자가 `HostConfigV1`을 작성하게 만들지 않는다. society 이름이 없으면 실행 디렉터리에서 유도하고, 설정이 없으면 실제 설정 파일을 만든 뒤 계속한다.
+**MUST [TUI-019]** 설정 파일 없이 동작한다. 초기화 명령을 요구하거나 사용자가 `HostConfigV1`을 작성하게 만들지 않는다. D05: 새 society의 기본 이름은 canonical absolute Linux project path의 digest와 bounded slug에서 유도하고 전체 경로 binding을 mutation 전에 대조한다. 설정이 없으면 실제 설정을 만든다. 기존 slug-only state를 자동 rename/재바인딩하지 않는다. legacy binding 부재는 명시적 operator 검토 전 쓰기를 막고 mismatch는 --society로도 숨기지 않는다. 새 metadata의 형식·권한·backup·구버전 writer 제한은 [D05 결과](implementation/consistency-decisions.md)의 C2 범위를 따른다.
 
 자격 증명·모델 선택·그 기억은 **동봉 엔진이 이미 갖고 있는 흐름**이므로 OMA가 다시 만들지 않는다. 기본 model profile은 엔진의 현재 연결로 해석되는 값이며 OMA는 provider나 credential을 스스로 주장하지 않는다. 남는 것은 society·role capability·multi-agent 예산처럼 엔진에 개념이 없는 OMA 고유 영역이고, 여기에 보수적인 값을 쓴다. 생성값은 bounded하고 디스크에 기록되며 Control Panel에서 수정 가능해야 한다. Resident에게 `code.integrate`를 기본으로 주지 않는다.
 

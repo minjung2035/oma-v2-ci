@@ -97,3 +97,7 @@ actual normative requirements; V01B exercises the existing unsupported-profile
 guard and retains exact v1 DDL. These are documentation/local-contract checks,
 not delivery, process, systemd or power-loss qualification. Existing golden wire
 tests will be reused. No production runtime owner change is authorized in WP01.
+
+Execution preference: report each WP's start and end to the user (scope, actual
+verification and remaining gates), then proceed immediately to the next eligible
+WP without waiting for confirmation. Goal mode is inactive; do not call goal tools.

@@ -2,6 +2,8 @@
 
 이 문서는 이전 설계를 대체한다. 사용자 제공 새 구조와 추가 프로토타입을 기준으로 **어떤 프로그램이 어떤 프로세스로 실행되고, 어떤 파일과 호출을 통해 연결되는지**를 결정했다. 기존 OMA 저장소 코드는 확인하지 않았다. 아래 OMA 명령·모듈·설정은 구현할 계약이며, 이미 동작하는 제품이라는 뜻은 아니다.
 
+2026-09-22 WP01의 [D01–D06 결정 기록](implementation/consistency-decisions.md)은 delivery 복구 순서, 관리형 config generation, 배포 gate, admission/settlement, 프로젝트 binding과 적용 시점, no-op/unknown의 아래 상세화를 채택한다. 이는 C0–C2 설계 범위이며 runtime 구현·운영 검증 완료가 아니다. DB/wire/receipt version과 live caller 권한은 유지한다. 미구현 차이는 해당 WP의 명시적 gate로 남긴다.
+
 ## 1. 선택한 구조와 철학의 구현 위치
 
 **고성능 Principal 한 세션 + 저비용 Resident 여러 세션 + 공개 메일링 리스트 + 개별 Maildir + 공유 Git remote + systemd 실행 관리**를 사용한다.
@@ -261,7 +263,7 @@ oma-demo-reconcile.timer + oma-demo-reconcile.service
 
 agent 생성 시 고정 unit 파일을 쓴다. transient unit 이름에 durable agent identity를 의존하지 않는다. 검증된 slug와 상수 인자로만 unit을 생성한다.
 
-broker service는 `Type=notify`로 시작하여 DB 복구·이전 실행 정리·endpoint 준비 후 READY를 알린다. 기존 실행 정리가 끝나기 전에 새 Resident에 권한을 발급하지 않는다. after 의존성이 이 준비 경계를 기다리게 한다. 실제 unit 초안은 [implementation/systemd](implementation/systemd/)에 함께 둔다.
+systemd-managed broker service는 `Type=notify`로 시작하여 DB 복구·이전 실행 정리·endpoint 준비 후 READY를 알린다. 기존 실행 정리가 끝나기 전에 새 Resident에 권한을 발급하지 않는다. 이 mode의 After/BindsTo가 실제 준비·수명 경계를 따르게 한다. 제품이 직접 소유한 foreground broker는 §23의 private channel과 tenure를 유지한다. D03/WP03의 깨끗한 disposable user 시험에서 그 mode의 동등한 revoke·Resident quiescence·재시작 fencing을 입증하기 전 multi-agent 지원 완료로 부르지 않는다. 존재하지 않는 broker.service 의존이나 별도 broker의 은밀한 시작으로 우회하지 않으며, 검증되지 않은 조합은 활성화를 거절한다. 아래 unit 초안은 systemd-managed mode용이며 [implementation/systemd](implementation/systemd/)의 mode별 renderer는 실제 시험을 따라야 한다.
 
 ### 6.2 Resident service 초안
 
@@ -376,9 +378,10 @@ Pi RPC의 extension command 실행과 custom message/triggerTurn 기능을 조�
 ### 7.1 activation 알고리즘
 
 ```text
-systemd invocation + agent 상태 확인
- → broker가 incarnation과 제한된 endpoint 발급
- → 이전 미완료 batch 복구
+systemd invocation + agent 상태 및 이전 run 사망 확인
+ → 기존 incarnation의 exact receipt를 먼저 정산 (D01)
+ → receipt 부재가 확인된 나머지 prepared만 incarnation 변경
+ → broker가 새 incarnation과 제한된 endpoint 발급
  → pending metadata를 batch로 영속 기록
  → new에서 cur로 이동
  → Pi session 재개 또는 새 session
@@ -403,7 +406,7 @@ S-03의 trusted receipt/adapter 의미와 저장 경계를 검증 기록에 pin�
 
 mail ID 목록, incarnation, Pi session 경로, prepared/completed receipt만 둔다. 작업 계획·review 단계·미완성 사고를 복구하지 않는다. 이 소량의 상태는 cur 이동 직후 crash에서 알림을 복구하기 위해 필요하다.
 
-새 incarnation이 이전 batch를 복구할 때는 이전 실행 종료를 확인하고 DB transaction에서 batch 소유 incarnation을 새 값으로 바꾼다. 이전 연결의 complete 요청은 거절한다. 이미 실행한 도구가 있는 batch는 operation receipt를 함께 안내하며 도구 명령을 자동 재실행하지 않는다.
+D01: 새 incarnation을 발급하기 전에 broker singleton과 이전 실행/startup quiescence를 확인하고, 기존 incarnation과 exact ordered manifest에 맞는 유효 receipt부터 정산한다. filesystem 관측은 transaction 밖에서, 같은 batch/state의 재검사는 T-batch-complete 안에서 한다. 그 뒤 receipt 최종 이름의 부재가 확인된 나머지 prepared만 T-run-open에서 재할당한다. completed batch의 역사적 incarnation과 최초 유효 receipt는 바꾸지 않는다. 읽기 불가·손상·legacy mismatch는 absent가 아니므로 보존·진단하고 재실행하지 않는다. live complete는 계속 현재 peer/lease를 요구하며 좁은 broker recovery가 과거 peer 권한을 부활시키지 않는다. receipt 부재도 도구 효과 부재는 아니므로 operation receipt 안내를 유지하고 도구 명령을 자동 replay하지 않는다.
 
 ## 8. Principal의 실제 경로
 
@@ -745,9 +748,10 @@ base에서 이 승인은 선택 기능이고, 목표 tiered에서 MEDIUM/HIGH �
 pending operation의 base/candidate를 먼저 영속화하고 ref를 갱신한 뒤 완료한다. 다음 main mutation은 그 operation을 대조하기 전에는 실행하지 않는다.
 
 ```text
-복구 시 main == base       → 조건을 재검사하고 실행 가능
-복구 시 main == candidate  → 효과 완료, receipt 보충
-그 외                     → 외부 변경/불일치, unknown으로 중지
+base == candidate == main  → no-op: 현재 policy/eligibility/stop/authority 재검사 (D06)
+그 외 main == base        → 현재 조건을 재검사하고 실행 가능
+그 외 main == candidate   → 이미 발생한 CAS 효과 정산, receipt 보충
+그 외                    → 외부 변경/불일치, unknown으로 중지
 ```
 
 모든 canonical writer가 이 경계를 통과해야 성립한다. 수동 ref 변경으로 전제를 깨면 자동 복구하지 않는다. cherry-pick의 의미적 동등성과 원래 commit ancestry도 혼동하지 않는다.
@@ -1306,7 +1310,7 @@ OMA는 자기 state root 아래의 디렉터리를 지정해 둘을 분리한다
 
 자격 증명과 모델 선택은 **동봉 엔진이 이미 갖고 있는 기능**이다. OMA가 그것을 자기 설정으로 다시 만들지 않는다. 사용자는 제품 안에서 한 번 설정하고, 그 결과는 이 디렉터리에 남는다.
 
-**설정 파일 없이 동작한다.** 초기화 명령을 요구하지 않는다. society 이름은 실행 디렉터리에서 유도하고, 설정이 없으면 보수적인 값으로 실제 설정 파일을 만든 뒤 계속한다. 그 값은 임의로 무제한이 되지 않으며 전부 Control Panel에서 보이고 고칠 수 있다. 프로젝트마다 사용자가 준비 작업을 하게 만들지 않는 것이 목적이다.
+**새 프로젝트는 설정 파일 없이 동작한다.** 초기화 명령을 요구하지 않는다. D05: 기본 society 이름은 canonical absolute Linux 실행 디렉터리의 SHA-256 prefix와 사람이 읽을 bounded slug로 유도하고, full-path binding을 확인하여 truncation 충돌을 막는다. 설정이 없으면 보수적인 실제 파일을 만들며 값은 Control Panel에서 보이고 고칠 수 있다. 기존 slug-only state를 자동 이동/재바인딩하지 않는다. legacy binding 부재는 operator 검토 전 쓰기 거절, mismatch는 명시 --society에서도 쓰기 거절이다. `S/project-binding.json`의 닫힌 형식·0600 publication·backup·구버전 writer 제한은 [D05](implementation/consistency-decisions.md)를 따른다.
 
 Pi는 **수정하지 않고** 동봉한다. OMA의 동작은 신뢰된 core extension에 있으며, 엔진 자체를 고쳐서 제품 동작을 만들지 않는다. 따라서 동봉한 엔진은 수정하지 않은 upstream 의존이며 production LOC 예산의 계산 대상이 아니다. 엔진을 고치기 시작하면 그 순간부터 계산 대상이 된다.
 
@@ -1404,7 +1408,7 @@ Principal model          ...
 Worker model             ...
 Worker limit             8
 Initial workers          3
-Worker profile           default
+Bootstrap worker profile default
 Extensions               >
 ```
 
@@ -1414,14 +1418,14 @@ Extensions               >
 |---|---|
 | Resident 수 증감 | 즉시. 기존 create/start/stop 경로 |
 | role의 model profile 내용 | 다음 runner activation. workspace와 session은 유지 |
-| Principal model | 다음 inference 요청 |
+| Principal model | 다음 Principal session (TUI-005, D05) |
 | slot 수, quota cap, pricing, protected path, check 명령 | broker 재시작 |
 
 `Initial workers`는 최초 bootstrap seed이며 실행 중인 society의 Resident 수를 바꾸지 않는다. 값을 바꿔도 다음 재시작에 agent가 자동 생성되거나 삭제되지 않는다. 지금 Resident를 늘리고 줄이는 것은 설정이 아니라 명시적인 lifecycle 행위다. UI는 이 둘을 같은 줄로 보이게 하지 않는다.
 
 이미 만들어진 Resident의 model profile **참조**는 생성 시 고정된 resolved spec의 일부다. 참조가 가리키는 profile의 내용을 바꾸는 것은 허용되지만, 참조 자체를 바꾸는 것은 identity 변경이므로 설정 화면에서 수행하지 않는다.
 
-config 본문이 바뀌면 policy revision을 새 값으로 갱신한다. 기존 accepted plan은 보존되고 outstanding integrate만 새 policy와 다시 대조한다.
+D02에 따라 host/model/role/prompt/extension 선택의 의미가 바뀌면 policy revision을 새 값으로 갱신한다. revision 자체를 제외한 의미 비교에서 공백·동일 의미 재저장은 변경으로 보지 않는다. 기존 accepted plan은 보존되고 outstanding integrate가 새 policy와 다시 대조한다. 파일 배치 generation은 policy revision과 별개다. D05의 Bootstrap worker profile은 최초 seed만 바꾸며 seed가 없으면 적용 대상이 없음을 표시하고 편집을 거절한다. childProfile 위임이나 기존 Resident spec을 바꾸는 우회 경로로 사용하지 않는다.
 
 ### 23.9 Extensions
 

@@ -60,6 +60,27 @@ new-operations/
 
 읽기는 파일당 1 MiB, role 최대 64개, role별 extension 최대 16개로 제한된다. 누락·미등록 model·중복 소유·알 수 없는 필드·경로 이탈·참조 파일의 symlink·비정상 파일을 거절한다. host가 지정한 최상위 config 경로의 symlink는 실제 파일 위치로 해석한다. 상대 참조는 `..`, 절대 경로, URL을 허용하지 않는다. 설정 묶음은 host가 관리해야 하며 이 경로 검사가 전체 same-UID 경합 방어 또는 다중 파일 원자적 배포를 보장하지 않는다. 설정을 갱신하는 동안 새 프로세스를 시작하지 않는다.
 
+### 채택된 관리형 편집 방향 — 아직 운영 검증 전
+
+[WP01 D02](../implementation/consistency-decisions.md)는 manual bundle을 그대로 읽되
+관리형 편집을 immutable `.oma-config/generations/<generation>/`과 manifest-last
+commit으로 전환하기로 결정했다. 이것은 위 수동 파일 묶음의 원자성을 소급 주장하지
+않는다. 현재 구현의 writer는 아직 이 보장을 제공하지 않는다(WP11–14).
+
+한 snapshot에서 layout/content를 함께 읽고 전체 후보를 검증한다. writer는 host tenure
+하에서 version 비교부터 publication까지 직렬화한다. 새 파일과 directory chain을 flush한
+뒤 ordinary JSON manifest를 교체하고 parent를 flush해야 성공이다. rename 이후 flush
+실패는 outcome-unconfirmed이며 재관측 전 rollback/자동 overwrite하지 않는다.
+promptFile은 계속 index root 기준이며 extension code는 config generation에 포함하지 않는다.
+finite retention budget, old-reader compatibility 및 새 목적지로의 explicit flat export를
+WP13에서 검증하기 전 관리형 편집을 지원한다고 표시하지 않는다. 승격 뒤 구버전 writer는
+사용하지 않는다. backup에는 index와 generation/prompt closure를 함께 포함한다.
+
+D03의 custom locator/XDG 전달 및 foreground/systemd lifetime 동등성은 WP03의 실제
+disposable user-manager gate다. 이 문서나 TUI 기동 성공만으로 그 gate를 통과하지 않는다.
+D04의 bounded settlement/read/safety 예산 분리는 WP21–23의 구현·ENOSPC 검증 대상이며
+tree scan quota를 kernel hard cap이나 ENOSPC에도 성공하는 보장으로 해석하지 않는다.
+
 ## 현재 실행 제한
 
 로딩 결과는 기존 closed `HostConfigV1`으로 검증되므로 wire/DB/persisted v1 schema를 바꾸지 않는다. Production runner는 profile의 model/provider와 prompt/extension snapshot을 새 RPC session에 전달한다. `provider=pi, model=current`는 `--model`을 생략해 현재 Pi 연결을 사용하며, 그 외 값은 `provider/model`로 Pi에 요청한다. terminal boundary의 pinned durable receipt가 일치해야 batch를 completed/presented로 commit한다.
