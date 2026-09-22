@@ -62,3 +62,17 @@ test("R35 the local suite's own summary is read the same way a lane's is", () =>
   assert.deepEqual(unrunDirectives(withDirective), ["ok 1 - sandbox # SKIP no bubblewrap"]);
   assert.deepEqual(unrunDirectives(summary({})), []);
 });
+
+test("V02C: stable consistency IDs and real fixture/checkpoint cases belong to explicit lanes", () => {
+  assert.ok(lanes.fast.sourceFiles.includes("test/config-bundle-owner.test.mjs"));
+  assert.ok(lanes.fast.sourceFiles.includes("test/consistency-decisions.test.mjs"));
+  assert.ok(lanes.fast.requiredNames.includes("V02A:"));
+  assert.ok(lanes.durable.files.includes("checkpoint-driver.test.js"));
+  assert.ok(lanes.durable.requiredNames.includes("V02B:"));
+  assert.ok(lanes.property.files.includes("effect-observation.test.js"));
+  assert.ok(lanes.property.requiredNames.includes("V02C:"));
+  for (const id of ["V01A:", "V01B:", "V02A:", "V02B:", "V02C:"]) {
+    assert.ok(lanes.all.requiredNames.includes(id), `all lane omits ${id}`);
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});

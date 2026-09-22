@@ -60,6 +60,8 @@ export const lanes = Object.freeze({
       "protocol-method-descriptors.test.js",
     ],
     sourceFiles: [
+      "test/consistency-decisions.test.mjs",
+      "test/config-bundle-owner.test.mjs",
       "test/systemd-test-policy.test.mjs",
       "test/verification-policy.test.mjs",
       "test/exploration-policy.test.mjs",
@@ -77,6 +79,9 @@ export const lanes = Object.freeze({
       "test/receipt-supersession.test.mjs",
     ],
     requiredNames: [
+      "V01A:",
+      "V01B:",
+      "V02A:",
       "S-06/FS-005:",
       "AUTH-003: a broker handed society A's lease",
       "REC-007: a settled receipt survives",
@@ -117,6 +122,7 @@ export const lanes = Object.freeze({
   },
   durable: {
     files: [
+      "checkpoint-driver.test.js",
       "durable-boundary.test.js",
       "mail-integrity.test.js",
       "mail-recovery-integrity.test.js",
@@ -139,6 +145,7 @@ export const lanes = Object.freeze({
     ],
     sourceFiles: [],
     requiredNames: [
+      "V02B:",
       "EML admission:",
       "CLI submit: incremental sha256",
       "CLI submit: self-contained sha256",
@@ -209,6 +216,7 @@ export const lanes = Object.freeze({
   },
   property: {
     files: [
+      "effect-observation.test.js",
       "verification-property.test.js",
       "r36-model.test.js",
       "r36-model-mutations.test.js",
@@ -217,6 +225,7 @@ export const lanes = Object.freeze({
     ],
     sourceFiles: [],
     requiredNames: [
+      "V02C:",
       "R35 property",
       "R36 model seed=",
       "R36 parser corpus",
@@ -245,6 +254,8 @@ export const lanes = Object.freeze({
   all: {
     files: "all",
     sourceFiles: [
+      "test/consistency-decisions.test.mjs",
+      "test/config-bundle-owner.test.mjs",
       "test/verification-policy.test.mjs",
       "test/exploration-policy.test.mjs",
       "test/traceability-policy.test.mjs",
@@ -261,6 +272,11 @@ export const lanes = Object.freeze({
       "test/receipt-supersession.test.mjs",
     ],
     requiredNames: [
+      "V01A:",
+      "V01B:",
+      "V02A:",
+      "V02B:",
+      "V02C:",
       "S-06/FS-005:",
       "AUTH-003: a broker handed society A's lease",
       "REC-007: a settled receipt survives",

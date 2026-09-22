@@ -4,29 +4,27 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP01 검증 트리의 부모 `bfa70f7`, 실행일 2026-09-22. WP00 baseline 이후 WP01은 설계 결정/규범과 검증 시험만 바꿨다. runtime source·v1 DDL·wire·receipt version·live 권한은 바꾸지 않았다. 아래 실행 결과만 이번 source의 관측이며, 하단 기존 검토 맥락은 fresh evidence가 아니다.
+브랜치 `refactor/safety-preserving-architecture`, WP02 검증 트리의 부모 `2448a9d`, 실행일 2026-09-22. WP02는 test/tooling C0이며 production runtime·v1 DDL·wire·receipt·live 권한을 바꾸지 않았다. 실제 local SIGKILL checkpoint와 별도 관측 process는 추가했지만 systemd/kernel/전원손실 qualification과 다르다. WP01 결과는 외부 WP01 handoff의 과거 source에만 결박된다.
 
-검증 입력: verification input digest `e45e0fa39a6b3917124610fae74dad4b03371c51418e4e035f3c7decc7253b05` (536 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
+검증 입력: verification input digest `629ef634e81c0f082fac78301f1e3712e5d769f9c1769802367f41d116e2b391` (545 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름은 어느 revision을 뜻했는지만 말하고 어떤 working-tree 바이트를 검증했는지는 말하지 않으므로, 아래 결과는 이 digest에 묶인다. 입력이 바뀌었는데 다시 실행해 다시 적지 않으면 `R38`이 실패한다.
 
 ### 실행 결과
 
-| 검사 | WP01 결과 / 범위 |
+| 검사 | WP02 결과 / 범위 |
 |---|---|
-| `npm run typecheck` | PASS, local compiler; raw `wp01-typecheck` |
-| `npm run build` | PASS, fixed dist; raw `wp01-build` |
-| `npm run check:package` | PASS, static artifact closure; 실제 설치/entry qualification 아님 |
-| `npm run check:architecture` | PASS, 0 findings; raw `wp01-architecture-before`; runtime proof 아님 |
-| `npm run check:inventory` | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND; generator 미실행, production source 불변 |
-| `npm test` | PASS, 1259/1259, fail/cancelled/skipped/todo=0. `wp01-local-initial` 실행 후 record metadata 갱신; 동일 executable bytes의 최종 source-bound 재실행은 `wp01-local-final` |
-| V01A / V01B + contract/wire goldens | LOCAL_VERIFIED. 결정표 누락·규범 불일치 red 후 green; 실제 SQLite DDL와 support guard 검사. runtime 보장 아님 |
-| V01B production guard 음성 대조군 | EXPECTED RED: 격리 worktree에서 unsupported guard를 제거하고 rebuild한 시험은 Missing expected exception으로 실패; 원복/rebuild 후 PASS |
-| dedicated fast/durable/property/stress lanes | NOT_RUN for WP01; WP00/local suite 결과를 lane 실행으로 승격하지 않음 |
-| functional Pi/provider/PTY | NOT_RUN for WP01; 과거 실행을 새 source의 증거로 재사용하지 않음 |
-| kernel / crash | BLOCKED / NOT_RUN: disposable user-systemd 환경 미확보. 환경 플래그를 임의로 켜지 않음 |
-| powercut | NOT_RUN: 실제 VM/storage power loss 미검증 |
-| current-SHA GitHub Actions | NOT_RUN / 미확보; push/PR/merge하지 않았으며 로컬 PASS를 CI로 표시하지 않음 |
+| `npm run typecheck` / `build` / `check:package` | PASS: fast lane prechecks 및 npm test build에서 실제 실행. 최종 record 재실행은 `wp02-fast-final` / `wp02-local-final` |
+| `npm run check:architecture` / `check:inventory` | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, 0 findings. generator 미실행; fast lane에서 실행 |
+| `npm test` | PASS, 1281/1281, fail/cancelled/skipped/todo=0 (`wp02-local-initial`). record metadata 갱신 뒤 `wp02-local-final`로 동일 executable bytes 전체 재검증 |
+| `verify:fast` / `verify:durable` / `verify:property` | PASS / EXECUTED: 각각 225 / 141 / 30 tests, 모두 fail/cancelled/skipped/todo=0. `wp02-*-lane-initial`, 최종 record 재실행 `wp02-*-lane-final`; 서로 중복되는 case를 합산해 새 coverage로 주장하지 않음 |
+| V02A | 기존 incomplete fixture는 actual loadConfiguration의 root.schemaVersion 오류로 red; 수정 후 focused 25 pass. inline/split quota/resource/model corruption 거절 |
+| V02B | 실제 direct-child SIGKILL + fresh FS/SQLite/Git observer 12 pass (`wp02-matrix-first`). missing/wrong/timeout/throw-only/lying message 음성 대조군 포함. systemd나 power-loss 증거 아님 |
+| V02C | 독립 SQL/Mail replay/unit-effect oracle 3 pass, 실제 fixture engine prompt counter 통과. 원본 fixture를 격리 worktree에 복원하면 full-loader assertion 실패; 수정된 실제 caller는 통과 |
+| stable IDs / nonexecution | V01A/B, V02A/B/C를 실제 lane에 등록. 누락 전 red / 등록 후 green; 기존 skip/todo/cancel/exit/signal 거절 유지 |
+| stress / dedicated functional Pi/provider/PTY | NOT_RUN for WP02; 선택된 fixture case 결과와 전용 lane qualification은 별개 |
+| kernel / systemd crash | BLOCKED / NOT_RUN: disposable user-systemd 환경 미확보. 기존 혼합 파일 exclusion/opt-in 유지 |
+| powercut / successful current-SHA CI | NOT_RUN / 미확보; 승인 없는 VM 전원 차단, push/PR/merge 없음 |
 
-원본 argv·시각·exit·input-before/after·log SHA-256은 `/tmp/oma-consistency-evidence-Vc66uK/wp01-*.json`과 같은 이름 `.log`에 있다. WP01 결과 양식·read scope·negative controls는 같은 디렉터리의 `WP01-HANDOFF.md`, `WP01-FILE-REVIEW.md`, `WP01-TASK-RESULT.json`에 연결한다. 아래 record metadata가 바뀌어 생긴 digest도 마지막 gate rerun에 결박하며, 값만 갱신해 새 실행으로 꾸미지 않는다.
+원본 argv·시각·exit·input-before/after·log SHA-256은 `/tmp/oma-consistency-evidence-Vc66uK/wp02-*.json`과 같은 이름 `.log`에 있다. lane 원본은 `wp02-*-lane*/result.json` 및 tests stdout/stderr를 확인한다. Stable case/source map은 `test/fixtures/README.md`; 최종 WP02 handoff/review/task result는 같은 외부 evidence root에 결박한다. 위 소작업 결과는 각 raw record의 입력에 한정되며 최종 source 결과로 자동 승격하지 않는다.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 

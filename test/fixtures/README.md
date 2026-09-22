@@ -54,6 +54,43 @@ A `DurabilityFaultError` can preserve leaf artifacts by bypassing cleanup, but a
 exception is not process death. `mail-faults.ts` throws through workflow cleanup
 before its harness stops: that is not interchangeable with the immediate-stop
 `crash-worker.ts` instrumentation. SIGKILL plus an observed checkpoint still is not
-VM/storage power loss. WP02.02–05 must finish the independent effect observations,
-bounded reusable checkpoint driver, negative controls, failure matrix and lane
-registration before WP02 is complete. Existing systemd exclusions are unchanged.
+VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
+
+## Effect and checkpoint APIs
+
+- `observeFile(path)` returns physical SHA-256/inode/device/link count/mode.
+  Read errors propagate; unavailable is not absent.
+- `observeLedger(path)` uses a separate read-only SQLite connection and explicit
+  SQL to observe committed agent/operation/batch/delivery relations, not Store
+  projections or production planner output. Use only finite, owned fixture DBs.
+- `ObservedUnits.effects` records controlled requests, not real systemd effects.
+- `Engine.events` in the Principal endpoint fixture records actual stand-in
+  engine IPC responses; the delivery test counts prompt responses across a later
+  tool-reply barrier. It is not real-model persistence proof.
+- `killAtCheckpoint(workerURL, args, point, timeoutMs)` requires the named IPC
+  message and confirmed SIGKILL. Default checkpoint deadline 10s (max 30s),
+  additional reap deadline 2s, stderr cap 32KiB. Only its direct child is killed.
+  If `CheckpointFailure.terminationConfirmed` is false, preserve the fixture root.
+  A message alone does not prove an effect: pair it with a fresh process observer.
+- `failure-matrix.ts` contains independent literal phase/preservation expectations.
+  `checkpoint-worker.ts` uses the production durable leaf seam; existing
+  `crash-worker.ts` supplies local Mail acceptance and Git published-ref cases.
+  `checkpoint-observer.ts` starts separately and reads physical/SQL/Git facts.
+  Diagnostics retain checkpoint pid, observer pid, checksums/inodes, operation
+  identities, message manifests and incarnations in raw test output.
+
+## Stable plan IDs / actual cases
+
+| Plan ID | Actual source / case | Lane / scope |
+|---|---|---|
+| V01A / V01B | `consistency-decisions.test.mjs` named V01A/V01B cases | fast, all; document/contract decisions only |
+| V02A | `operations-config.test.ts` six V02A corruption controls; existing migration case; `config-bundle-owner.test.mjs` loader-before/after editing | fast, all; complete production loader and editor composition |
+| V02B | `checkpoint-driver.test.ts` V02B cases | durable, all; real local direct-child SIGKILL and fresh FS/SQLite/Git observer, not systemd/VM |
+| V02C | `effect-observation.test.ts` raw SQL/Mail replay and controlled unit cases; `verification-policy.test.mjs` lane-ID rejection | property (effects), fast (policy), all; independent literal/physical oracles |
+| V02C negative restoration | original incomplete bundle fixture plus exact full-loader assertion in disposable worktree; corrected main-tree positive control | external source-bound WP02 raw logs, not a new CI pass |
+
+`npm test` includes all these local cases; it still excludes the original mixed
+systemd files. Actual lane execution is separate and must be recorded as such.
+Throw-only, missing/wrong checkpoint, silent timeout and lying-message controls
+do not qualify as successful death/effect observations. Setup/import errors and
+skipped/cancelled/todo results are never treated as product regressions or PASS.

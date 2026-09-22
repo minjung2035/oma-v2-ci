@@ -479,6 +479,7 @@ test("T114 / PR-002: mail to the Principal is delivered into its live session an
     // Mail for the Principal, sent through its own tool.
     assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "for you", body: "delivered?", kind: "message" })).ok);
     assert.equal(wasPresented(society), false);
+    const promptsBefore = engine.events.filter(event => event.type === "response" && event.command === "prompt").length;
 
     const delivery = new PrincipalDelivery(sessionOf(engine), principalHostBroker(society.runRoot, LIMITS), {
       stateRoot: society.root, frameBytes: LIMITS.frameBytes, acceptMs: 10_000, retryAfterMs: 60_000,
@@ -504,6 +505,10 @@ test("T114 / PR-002: mail to the Principal is delivered into its live session an
     assert.ok(session.includes(`"id":"${receipt.entryId}"`), "the receipt names an entry the session does not hold");
     // Nothing else to deliver.
     assert.equal((await delivery.tick()).kind, "idle");
+    // V02C: observe actual stand-in engine responses, not the delivery planner.
+    // A later tool reply fences this child's preceding stdin/events.
+    assert.ok((await engine.tool("oma_status")).ok);
+    assert.equal(engine.events.filter(event => event.type === "response" && event.command === "prompt").length, promptsBefore + 1);
   });
 });
 
