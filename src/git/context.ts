@@ -117,7 +117,7 @@ export class ContextCoordinator {
     const candidate = await prepared(async () => {
       assertCurrentActor(this.store, auth, "context.publish");
       if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed");
-      const preparedCandidate = await this.effects.prepareCandidate(tree, request.entries, request.expected);
+      const preparedCandidate = await this.effects.prepareCandidate(tree.path, request.entries, request.expected);
       if (!isValidFullOid(preparedCandidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
       assertCurrentActor(this.store, auth, "context.publish");
       if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed during preparation");

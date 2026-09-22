@@ -4,11 +4,12 @@
  * rejected request, and a plan that names no message must each leave
  * `mail/objects` holding exactly the objects the journal names.
  */
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
+import { createTransport } from "nodemailer";
 import type { AuthContext } from "../implementation/contracts.js";
 import { Store, readDiagnosticSnapshot } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
@@ -17,7 +18,8 @@ import { inspectIntegrity } from "../src/diagnostics/integrity.js";
 import { NodeIntegrityFiles } from "../src/diagnostics/files.js";
 import { PreacceptArtifact, publishedArtifact } from "../src/storage/preaccept-artifact.js";
 import { generateOperationId } from "../src/ids.js";
-import { requestHash } from "../src/hash.js";
+import { requestHash, sha256Hex } from "../src/hash.js";
+import { PreparationExecutor } from "../src/process/preparation.js";
 import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 import { workspacePathAt } from "../src/storage/paths.js";
 import { residentUnitsFor } from "../src/domain/derived.js";
@@ -26,7 +28,7 @@ import { UnitsModule } from "../src/units.js";
 import { ALL_CAPS, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { makeValidAgent } from "./fixtures/spec.js";
-import { gitAuth, gitFixture, seedGit, submitFixture, contextFixture } from "./fixtures/git-crash.js";
+import { gitAuth, gitCommand, gitFixture, seedGit, submitFixture, contextFixture } from "./fixtures/git-crash.js";
 
 function objectsOf(root: string): string[] {
   return fs.existsSync(join(root, "mail/objects")) ? fs.readdirSync(join(root, "mail/objects")).sort() : [];
@@ -277,4 +279,90 @@ test("PRE-8: a losing git.submit and a conflicting context.publish leave the obj
     assert.deepEqual(objectsOf(root), expectedObjects(root));
     void t;
   } finally { store.close(); removeTree(root); }
+});
+
+/** V18A: context.publish owns a staged tree and a frozen mail object before its
+ * acceptance transaction. Every fallible point settles both by one decision:
+ * certainly unaccepted, quiescent resources are removed; accepted or
+ * undecidable ones are retained for recovery.
+ */
+const contextGoal = Buffer.from("# GOAL\nverify context preaccept ownership\n");
+type Original = (...args: unknown[]) => unknown;
+/** Wrap a member the production path calls by name, including private ones. */
+function around(t: TestContext, owner: object, name: string, wrap: (original: Original, ...args: unknown[]) => unknown): void {
+  const member: unknown = Reflect.get(owner, name);
+  assert.equal(typeof member, "function", `${name} is not a production member`);
+  const original = member as Original;
+  t.mock.method(owner as Record<string, Original>, name, function (this: unknown, ...args: unknown[]) {
+    return wrap((...inner: unknown[]) => original.apply(this, inner), ...args);
+  });
+}
+function contextOnlyFixture() {
+  const root = fs.mkdtempSync(join(tmpdir(), "oma-context-preaccept-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  store.transaction((tx) => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
+  fs.mkdirSync(join(root, "repos"));
+  gitCommand(root, ["init", "--bare", "-q", "--object-format=sha1", join(root, "repos/context.git")]);
+  const { git, mail, paths } = gitFixture(root, store);
+  const publish = (key: string, expected: string | null = null, entrySha256 = sha256Hex(contextGoal),
+    chunks: AsyncIterable<Uint8Array> = (async function* () { yield contextGoal; })()) =>
+    git.publishContext(gitAuth, key, { expected, entries: [{ path: "GOAL.md", bytes: contextGoal.length, sha256: entrySha256 }],
+      content: { bytes: contextGoal.length, sha256: sha256Hex(contextGoal), mediaType: "application/vnd.oma.context-v1" } }, chunks);
+  return {
+    root, store, git, mail, paths, publish,
+    repository: (): object => Reflect.get(git, "contextRepository") as object,
+    moveMain: (oid: string) => { gitCommand(root, ["--git-dir", paths.contextGit, "update-ref", "refs/heads/main", oid]); },
+    close() { store.close(); removeTree(root); },
+  };
+}
+type ContextOnlyFixture = ReturnType<typeof contextOnlyFixture>;
+function contextStaging(root: string): string[] {
+  const staging = join(root, "staging");
+  return fs.existsSync(staging) ? fs.readdirSync(staging).filter((name) => name.startsWith("context-")).sort() : [];
+}
+function contextOperations(root: string): string[] {
+  const rows = readDiagnosticSnapshot(root).tables.operations as readonly { id: string; kind: string }[];
+  return rows.filter((row) => row.kind === "context.publish").map((row) => row.id);
+}
+const racingMail = { to: ["b"], kind: "message" as const, subject: "racing", body: "racing body" };
+
+test("V18A: preaccept order is stream, staged tree, candidate, mail object, acceptance, then canonical effect", async (t) => {
+  const f = contextOnlyFixture();
+  try {
+    const key = "context-order";
+    const events: string[] = [];
+    let streamed = false;
+    const accepted = () => f.store.getOperation("a", key);
+    around(t, f.git, "prepareContextCandidate", async (original, ...args) => {
+      assert.equal(streamed, true, "the whole stream is validated before candidate preparation");
+      assert.deepEqual(fs.readFileSync(join(String(args[0]), "GOAL.md")), contextGoal);
+      assert.equal(accepted(), null);
+      assert.deepEqual(objectsOf(f.root), []);
+      const candidate = await original(...args);
+      events.push("candidate");
+      return candidate;
+    });
+    around(t, f.mail, "freezeObject", (original, ...args) => {
+      assert.equal(accepted(), null);
+      const artifact = original(...args);
+      events.push("mail-object");
+      return artifact;
+    });
+    around(t, f.store, "transaction", (original, ...args) => {
+      const before = accepted();
+      const result = original(...args);
+      if (before === null && accepted() !== null) events.push("acceptance");
+      return result;
+    });
+    around(t, f.git, "casRef", (original, ...args) => {
+      assert.equal(accepted()?.state, "pending");
+      assert.deepEqual(objectsOf(f.root), expectedObjects(f.root));
+      events.push("canonical");
+      return original(...args);
+    });
+    around(t, f.mail, "publishGated", (original, ...args) => { events.push("notification"); return original(...args); });
+    const receipt = await f.publish(key, null, sha256Hex(contextGoal), (async function* () { yield contextGoal; streamed = true; })());
+    assert.equal(receipt.state, "succeeded");
+    assert.deepEqual(events, ["candidate", "mail-object", "acceptance", "canonical", "notification"]);
+  } finally { f.close(); }
 });

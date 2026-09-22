@@ -12,6 +12,7 @@ import { contextStagingPathAt } from "./paths.js";
 import { assertDirectory, removeOwnedTree } from "./directory.js";
 import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
 import { ensureDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
+import type { PreacceptOwner } from "./preaccept-artifact.js";
 
 /** Discard the staging tree this call prepared but never accepted.
  *
@@ -26,13 +27,60 @@ export function discardContextPreparation(stateRoot: string, operationId: string
   removeOwnedTree(staging);
 }
 
+/** The staging root one preparation created exclusively, pinned at creation.
+ * Until acceptance it belongs to that preparation alone; acceptance hands it to
+ * the operation whose plan names it. Discard removes it only while the name
+ * still holds the pinned root.
+ */
+export class PreparedContextTree implements PreacceptOwner {
+  private owner: "preaccept" | "accepted" | "released" = "preaccept";
+  constructor(
+    readonly path: string,
+    private readonly root: string,
+    private readonly identity: Readonly<{ dev: number; ino: number }>,
+  ) {}
+  retainForOperation(): void {
+    if (this.owner === "released") throw new StoreError("INTERNAL_ERROR", "released context tree cannot become accepted");
+    this.owner = "accepted";
+  }
+  discardUnaccepted(): void {
+    if (this.owner !== "preaccept") return;
+    const current = lstatSync(this.root, { throwIfNoEntry: false });
+    if (!current) { this.owner = "released"; return; }
+    if (!current.isDirectory() || current.dev !== this.identity.dev || current.ino !== this.identity.ino)
+      throw new StoreError("REF_STATE_UNKNOWN", "prepared context root identity changed; cleanup is unconfirmed");
+    removeOwnedTree(this.root);
+    this.owner = "released";
+  }
+}
+
+/** An existing root belongs to another operation and is never adopted. */
+function acquireStagingRoot(staging: string, tree: string): PreparedContextTree {
+  const parent = openDirectory(dirname(staging));
+  try {
+    const name = entryAt(parent, basename(staging));
+    mkdirSync(name, { mode: 0o700 });
+    const pinned = lstatSync(name);
+    return new PreparedContextTree(tree, staging, { dev: pinned.dev, ino: pinned.ino });
+  } finally { closeSync(parent); }
+}
+
+/** A failed preparation removes its own root only after every exact file it
+ * created was removed: a replacement it refused to delete keeps the root too. */
+function discardFailedPreparation(prepared: PreparedContextTree, failures: unknown[]): unknown {
+  if (failures.length === 1) {
+    try { prepared.discardUnaccepted(); } catch (failure) { failures.push(failure); }
+  }
+  return failures.length > 1 ? new AggregateError(failures, "context preparation and owned cleanup failed") : failures[0];
+}
+
 interface OwnedFile { path: string; dev: number; ino: number }
 interface EntryWriter { entry: Readonly<ContextEntry>; fd: number | null; remaining: number; hash: Hash; text: ContextTextValidator }
 
 export async function prepareContextStream(
   stateRoot: string, operationId: string, inputEntries: readonly ContextEntry[], inputContent: BlobDescriptor,
   chunks: AsyncIterable<Uint8Array>, faults?: DurabilityObserver,
-): Promise<string> {
+): Promise<PreparedContextTree> {
   const invalid = contextEntriesCheck(inputEntries, { requireSorted: true, contentBytes: inputContent.bytes });
   if (invalid || inputContent.mediaType !== "application/vnd.oma.context-v1" || !/^[0-9a-f]{64}$/.test(inputContent.sha256))
     throw new StoreError("INVALID_REQUEST", invalid ?? "invalid context stream descriptor");
@@ -40,8 +88,14 @@ export async function prepareContextStream(
   const content = Object.freeze({ ...inputContent });
   const staging = contextStagingPathAt(stateRoot, operationId);
   const tree = join(staging, "tree");
-  ensureDurableDirectory(tree, 0o700, faults); assertDirectory(tree);
-  const treeFd = openDirectory(tree);
+  ensureDurableDirectory(dirname(staging), 0o700, faults);
+  const prepared = acquireStagingRoot(staging, tree);
+  let treeFd: number;
+  try { ensureDurableDirectory(tree, 0o700, faults); assertDirectory(tree); treeFd = openDirectory(tree); }
+  catch (error) {
+    if (isDurabilityFault(error)) throw error; // crash simulation: no owned cleanup
+    throw discardFailedPreparation(prepared, [error]);
+  }
   const owned: OwnedFile[] = [];
   const state: { active: EntryWriter | null; index: number } = { active: null, index: 0 };
   let received = 0;
@@ -124,7 +178,7 @@ export async function prepareContextStream(
       const current = fstatSync(named); const pinned = fstatSync(treeFd);
       if (current.dev !== pinned.dev || current.ino !== pinned.ino) throw new StoreError("STORE_CORRUPT", "context staging root changed identity");
     } finally { closeSync(named); }
-    return tree;
+    return prepared;
   } catch (error) {
     if (isDurabilityFault(error)) throw error; // crash simulation: no owned cleanup
     const failures: unknown[] = [error];
@@ -133,8 +187,8 @@ export async function prepareContextStream(
       const fd = active.fd; active.fd = null;
       try { closeSync(fd); } catch (failure) { failures.push(failure); }
     }
-    // No operation has been accepted by this helper. Remove only exact files
-    // exclusively created here, never another owner's replacement or a subtree.
+    // No operation has been accepted by this helper. Remove exact files
+    // exclusively created here first, never another owner's replacement.
     for (const file of [...owned].reverse()) {
       try {
         const relative = file.path.slice(tree.length + 1);
@@ -149,8 +203,7 @@ export async function prepareContextStream(
         } finally { if (parent !== treeFd) closeSync(parent); }
       } catch (failure) { failures.push(failure); }
     }
-    if (failures.length > 1) throw new AggregateError(failures, "context preparation and owned cleanup failed");
-    throw error;
+    throw discardFailedPreparation(prepared, failures);
   } finally {
     if (state.active?.fd !== null && state.active?.fd !== undefined) closeSync(state.active.fd);
     closeSync(treeFd);

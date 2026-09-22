@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, writeFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, writeFileSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -56,11 +56,11 @@ test("R21: file boundaries, zero-byte non-GOAL and UTF-8 splits preserve literal
     for (const width of [1, 2, 3, 7, body.length]) {
       const id = generateOperationId();
       const tree = await prepareContextStream(root, id, entries(), descriptor(), parts(body, width));
-      assert.equal(tree, join(contextStagingPathAt(root, id), "tree"));
+      assert.equal(tree.path, join(contextStagingPathAt(root, id), "tree"));
       for (const file of files) {
-        assert.deepEqual(readFileSync(join(tree, file.path)), file.data);
-        assert.equal(lstatSync(join(tree, file.path)).mode & 0o777, 0o644);
-        assert.equal(lstatSync(join(tree, file.path)).nlink, 1);
+        assert.deepEqual(readFileSync(join(tree.path, file.path)), file.data);
+        assert.equal(lstatSync(join(tree.path, file.path)).mode & 0o777, 0o644);
+        assert.equal(lstatSync(join(tree.path, file.path)).nlink, 1);
       }
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -84,8 +84,9 @@ for (const fault of ["short", "long", "aggregate-hash", "entry-hash", "invalid-t
       });
       for (const file of files) {
         assert.equal(existsSync(join(contextStagingPathAt(root, id), "tree", file.path)), false);
-        assert.deepEqual(readFileSync(join(control, file.path)), file.data);
+        assert.deepEqual(readFileSync(join(control.path, file.path)), file.data);
       }
+      assert.equal(existsSync(contextStagingPathAt(root, id)), false, "a failed preparation removes the root it created");
       assert.equal(readFileSync(sibling, "utf8"), "retained");
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
@@ -100,8 +101,8 @@ test("R21: source mutations after the first await cannot alter frozen metadata",
       yield body;
     }
     const tree = await prepareContextStream(root, generateOperationId(), manifest, content, mutation());
-    assert.deepEqual(readFileSync(join(tree, "GOAL.md")), files[0]!.data);
-    assert.deepEqual(readdirSync(tree).sort(), ["GOAL.md", "RATIONALE.md", "decisions"]);
+    assert.deepEqual(readFileSync(join(tree.path, "GOAL.md")), files[0]!.data);
+    assert.deepEqual(readdirSync(tree.path).sort(), ["GOAL.md", "RATIONALE.md", "decisions"]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -111,6 +112,28 @@ test("R21: an exclusive-path collision cannot delete an earlier operation's froz
     const id = generateOperationId();
     const tree = await prepareContextStream(root, id, entries(), descriptor(), parts(body, 3));
     await assert.rejects(prepareContextStream(root, id, entries(), descriptor(), parts(body, 3)), { code: "EEXIST" });
-    for (const file of files) assert.deepEqual(readFileSync(join(tree, file.path)), file.data);
+    for (const file of files) assert.deepEqual(readFileSync(join(tree.path, file.path)), file.data);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("V18A: a failed preparation keeps its root when a file it created was replaced", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-r21-replaced-"));
+  try {
+    const id = generateOperationId();
+    const goal = join(contextStagingPathAt(root, id), "tree", "GOAL.md");
+    async function* replaced(): AsyncIterable<Uint8Array> {
+      yield body.subarray(0, files[0]!.data.length);
+      // Another writer replaces the finished file this preparation created.
+      writeFileSync(`${goal}.other`, "someone else's file");
+      renameSync(`${goal}.other`, goal);
+      yield Buffer.from([0xff]);
+    }
+    await assert.rejects(prepareContextStream(root, id, entries(), descriptor(), replaced()), (error: unknown) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal((error.errors[0] as { code?: string }).code, "INVALID_REQUEST");
+      assert.ok(error.errors.some(cause => (cause as { code?: string }).code === "STORE_CORRUPT"));
+      return true;
+    });
+    assert.equal(readFileSync(goal, "utf8"), "someone else's file");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

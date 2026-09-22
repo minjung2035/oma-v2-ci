@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "877730c66a33d47e58eb970e0cb1cb52cc0ea03917751b5542f6a34e3ce6f098",
+  "report": "49185eeded5342cde85144d9760c8a4f428169d857cea2ef4f2f4ee9e1910e14",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -361,7 +361,7 @@
     },
     {
       "path": "src/git/context.ts",
-      "sha256": "fcb8bc0c979f965fd392c50948d67c1c75ce48d8e92ba5de6e024eab743f3524"
+      "sha256": "280df71f8097139dece938979740368757a464959090d7a777485db8d214af46"
     },
     {
       "path": "src/git/integration-policy.ts",
@@ -689,7 +689,7 @@
     },
     {
       "path": "src/storage/context-stream.ts",
-      "sha256": "e8647468317adad6a4935aa85bc57741979220fa3f009450044d391d3fe57c3a"
+      "sha256": "e4c42f4c3b1ea77843b23b46c8d40f399f5b2811db137bee861cf860043a1992"
     },
     {
       "path": "src/storage/delivery-receipt.ts",
