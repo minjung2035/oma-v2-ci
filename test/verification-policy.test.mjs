@@ -99,3 +99,12 @@ test("R35 config ownership oracles use their prescribed lanes and stable IDs", (
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 preaccept ownership oracles are required by durable and all lanes", () => {
+  assert.ok(lanes.durable.files.includes("preaccept-scope.test.js"));
+  for (const id of ["V17A:", "V17B:"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});

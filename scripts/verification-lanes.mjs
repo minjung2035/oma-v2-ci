@@ -125,6 +125,7 @@ export const lanes = Object.freeze({
   durable: {
     files: [
       "config-editing.test.js",
+      "preaccept-scope.test.js",
       "checkpoint-driver.test.js",
       "store-open.test.js",
       "durable-boundary.test.js",
@@ -151,6 +152,8 @@ export const lanes = Object.freeze({
     requiredNames: [
       "V02B:",
       "V11A:",
+      "V17A:",
+      "V17B:",
       "V04A:",
       "V04B:",
       "EML admission:",
@@ -289,6 +292,8 @@ export const lanes = Object.freeze({
       "V11A:",
       "V11B:",
       "V11C:",
+      "V17A:",
+      "V17B:",
       "V04A:",
       "V04B:",
       "S-06/FS-005:",
