@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "69383e716f0d2429614592e7fbd2b70869c93f896ee3e19d39db3fa4d75ad277",
+  "report": "0c46f4efc2730e8277a5166433d516a6143c234a5c02fc525545b8cacabfc80b",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -641,7 +641,7 @@
     },
     {
       "path": "src/runtime/principal-delivery.ts",
-      "sha256": "d15e9cfc22d9574ec8e5ba53dbdb6e24dc116f51666bfc66ea687eccf10df744"
+      "sha256": "aa00a69c4d101cd81e10511546afecd35c513d6b0c5d5c4c259fe0209432996e"
     },
     {
       "path": "src/runtime/process-lock.ts",
@@ -693,7 +693,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "3d4748ced236cc597f8ea15cd7564aae8cd267b716bef426fabdbf8dbf011b78"
+      "sha256": "42d8c03ab75a93faf8715b44ac90dcb3276e9385eef7b957e6fd7f61d4f5e52d"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",

@@ -23,7 +23,7 @@
 import type { BoundaryEvidence, PreparedBatch, ProtocolLimits } from "../../implementation/contracts.js";
 import { BrokerChannel } from "../protocol/channel.js";
 import { StoreError } from "../domain/errors.js";
-import { PI_ADAPTER_REVISION, publishDeliveryReceipt } from "../storage/delivery-receipt.js";
+import { publishDeliveryReceipt } from "../storage/delivery-receipt.js";
 import { runnerReceiptPathAt } from "../storage/paths.js";
 import { boundaryOf } from "./pi-adapter.js";
 import type { PiEvent } from "./pi-rpc.js";
@@ -180,10 +180,10 @@ export class PrincipalDelivery {
       const confirmed = boundary!;
       // The receipt is the runner's record of the boundary, written beside the
       // Resident's, and the broker completes the batch only against it.
-      publishDeliveryReceipt(this.options.stateRoot, batch, confirmed, this.options.frameBytes);
+      const receipt = publishDeliveryReceipt(this.options.stateRoot, batch, confirmed, this.options.frameBytes);
       await this.broker.complete({
-        batchId: batch.id, incarnation: batch.incarnation, sessionPath: confirmed.sessionPath,
-        adapterRevision: PI_ADAPTER_REVISION,
+        batchId: batch.id, incarnation: batch.incarnation, sessionPath: receipt.sessionPath,
+        adapterRevision: receipt.adapterRevision,
         receiptPath: runnerReceiptPathAt(this.options.stateRoot, batch.agent, batch.id),
       });
     } finally {

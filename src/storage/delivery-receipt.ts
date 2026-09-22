@@ -2,19 +2,27 @@ import {
   closeSync,
   constants,
   fstatSync,
+  fsyncSync,
   openSync,
   readSync,
   realpathSync,
+  unlinkSync,
+  writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, relative, sep } from "node:path";
+import { randomUUID } from "node:crypto";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { Actor, PreparedBatch } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidBatchId, isValidMessageId } from "../domain/identifiers.js";
 import { parseJsonObject } from "../frame.js";
 import {
   ensureDurableDirectory,
-  writeExclusiveFsyncedFile,
+  faultAt,
+  fsyncHeldDir,
+  isDurabilityFault,
+  type DurabilityObserver,
 } from "./durable-fs.js";
+import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath } from "./contained-fs.js";
 import { runnerReceiptPathAt, sessionDirPathAt } from "./paths.js";
 
 export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.85.1";
@@ -34,39 +42,32 @@ export interface DeliveryReceipt extends DeliveryBoundary {
 function invalid(message: string): never {
   throw new StoreError("BATCH_CONFLICT", `delivery receipt: ${message}`);
 }
+function readBoundedFd(fd: number, maximum: number): Buffer {
+  const before = fstatSync(fd);
+  if (!before.isFile() || before.size < 1 || before.size > maximum || (before.mode & 0o777) !== 0o600)
+    return invalid("file is not a bounded private regular file");
+  const buffer = Buffer.alloc(before.size + 1);
+  let total = 0;
+  while (total < buffer.length) {
+    const count = readSync(fd, buffer, total, buffer.length - total, total);
+    if (count === 0) break;
+    total += count;
+  }
+  const after = fstatSync(fd);
+  if (total !== before.size || after.dev !== before.dev || after.ino !== before.ino ||
+      after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs)
+    return invalid("file changed while being read");
+  return buffer.subarray(0, total);
+}
+
 function readBounded(path: string, maximum: number): Buffer {
   let fd: number | undefined;
   try {
-    fd = openSync(
-      path,
-      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-    );
-    const before = fstatSync(fd);
-    if (!before.isFile() || before.size < 1 || before.size > maximum)
-      return invalid("file is not a bounded regular file");
-    const buffer = Buffer.alloc(before.size + 1);
-    let total = 0;
-    while (total < buffer.length) {
-      const count = readSync(fd, buffer, total, buffer.length - total, total);
-      if (count === 0) break;
-      total += count;
-    }
-    const after = fstatSync(fd);
-    if (
-      total !== before.size ||
-      after.dev !== before.dev ||
-      after.ino !== before.ino ||
-      after.size !== before.size ||
-      after.mtimeMs !== before.mtimeMs ||
-      after.ctimeMs !== before.ctimeMs
-    )
-      return invalid("file changed while being read");
-    return buffer.subarray(0, total);
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    return readBoundedFd(fd, maximum);
   } catch (cause) {
     if (cause instanceof StoreError) throw cause;
-    throw new StoreError("BATCH_CONFLICT", "delivery receipt is unavailable", {
-      cause,
-    });
+    throw new StoreError("BATCH_CONFLICT", "delivery receipt is unavailable", { cause });
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
@@ -201,22 +202,69 @@ export function publishDeliveryReceipt(
   batch: PreparedBatch,
   boundary: DeliveryBoundary,
   maximum: number,
-): DeliveryReceipt {
-  const receipt: DeliveryReceipt = Object.freeze({
+  faults?: DurabilityObserver,
+ ): DeliveryReceipt {
+  const candidate = decodeDeliveryReceipt({
     schemaVersion: 1,
     actor: batch.agent,
-    messageIds: Object.freeze([...batch.messageIds]),
+    messageIds: [...batch.messageIds],
     ...boundary,
-  });
-  const encoded = `${JSON.stringify(receipt)}\n`;
+  }, batch, stateRoot);
+  const encoded = `${JSON.stringify(candidate)}\n`;
   if (Buffer.byteLength(encoded) > maximum)
     return invalid("encoded receipt exceeds the configured frame limit");
   const path = runnerReceiptPathAt(stateRoot, batch.agent, batch.id);
-  ensureDurableDirectory(dirname(path), 0o700);
+  ensureDurableDirectory(dirname(path), 0o700, faults);
+  const parent = openDirectory(dirname(path));
+  const finalName = basename(path);
+  const temporaryName = `.${finalName}.${randomUUID()}.tmp`;
+  const temporaryPath = join(dirname(path), temporaryName);
+  let fd: number | undefined;
+  let temporaryExists = false;
+  let crashed = false;
   try {
-    writeExclusiveFsyncedFile(path, encoded, 0o600);
+    faultAt(faults, "file-create", "before", temporaryPath);
+    fd = openBeneath(parent, temporaryName, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    temporaryExists = true;
+    faultAt(faults, "file-create", "after-visible", temporaryPath);
+    faultAt(faults, "file-write", "before", temporaryPath);
+    writeFileSync(fd, encoded);
+    faultAt(faults, "file-write", "ambiguous", temporaryPath);
+    faultAt(faults, "file-fsync", "ambiguous", temporaryPath);
+    fsyncSync(fd);
+    faultAt(faults, "file-fsync", "after-visible", temporaryPath);
+    decodeDeliveryReceipt(parseJsonObject(readBoundedFd(fd, maximum)).raw, batch, stateRoot);
+    faultAt(faults, "publication-link", "before", path);
+    try { linkDescriptor(fd, parent, finalName); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    faultAt(faults, "publication-link", "after-visible", path);
+    faultAt(faults, "destination-validate", "before", path);
+    const published = openRegularBeneath(parent, finalName);
+    let result: DeliveryReceipt;
+    try { result = decodeDeliveryReceipt(parseJsonObject(readBoundedFd(published, maximum)).raw, batch, stateRoot); }
+    finally { closeSync(published); }
+    faultAt(faults, "destination-validate", "after-visible", path);
+    unlinkSync(entryAt(parent, temporaryName));
+    temporaryExists = false;
+    faultAt(faults, "temporary-cleanup", "after-visible", temporaryPath);
+    fsyncHeldDir(parent, dirname(path), faults);
+    return result;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    crashed = isDurabilityFault(error);
+    if (!crashed && temporaryExists) {
+      try {
+        unlinkSync(entryAt(parent, temporaryName));
+        temporaryExists = false;
+        faultAt(faults, "temporary-cleanup", "after-visible", temporaryPath);
+        fsyncHeldDir(parent, dirname(path), faults);
+      } catch (cleanup) {
+        throw new AggregateError([error, cleanup], "receipt publication and temporary cleanup failed");
+      }
+    }
+    throw error;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    closeSync(parent);
+    void crashed;
   }
-  return readDeliveryReceipt(stateRoot, batch, maximum);
 }

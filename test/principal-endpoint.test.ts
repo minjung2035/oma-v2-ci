@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -35,6 +35,8 @@ import { CONVERSATION_BOUNDS } from "../src/tui/limits.js";
 import { provisionSociety } from "../src/runtime/provision.js";
 import { processIdentity, type ProcessIdentity } from "../src/broker/process-ancestry.js";
 import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "../src/runtime/principal-delivery.js";
+import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
+import { sessionDirPathAt } from "../src/storage/paths.js";
 import type { PiEvent } from "../src/runtime/pi-rpc.js";
 
 const LIMITS: ProtocolLimits = {
@@ -906,6 +908,45 @@ const ONE_BATCH = {
   id: "b-00000000-0000-4000-8000-000000000000", agent: "principal" as const, incarnation: 0,
   messageIds: [], deliveryMode: "followUp" as const, notice: "", sessionPath: null, indexPath: "/inbox.md" as const,
 };
+
+test("V05B: Principal completion uses the first receipt returned by EEXIST publication", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-principal-first-receipt-"));
+  try {
+    const sessions = sessionDirPathAt(root, "principal");
+    mkdirSync(sessions, { recursive: true });
+    const firstSession = join(sessions, "first.jsonl");
+    const laterSession = join(sessions, "later.jsonl");
+    writeFileSync(firstSession, '{"type":"session","version":3}\n');
+    writeFileSync(laterSession, '{"type":"session","version":3}\n');
+    publishDeliveryReceipt(root, ONE_BATCH, {
+      adapterRevision: PI_ADAPTER_REVISION, batchId: ONE_BATCH.id, incarnation: ONE_BATCH.incarnation,
+      sessionPath: firstSession, entryId: "0123abcd",
+    }, LIMITS.frameBytes);
+    const completed: Record<string, unknown>[] = [];
+    const { session, emit } = stubSession();
+    const delivery = new PrincipalDelivery(session, {
+      prepare: async () => ONE_BATCH,
+      complete: async evidence => { completed.push({ ...evidence }); },
+    }, { stateRoot: root, frameBytes: LIMITS.frameBytes, acceptMs: 60_000, retryAfterMs: 0 });
+    const outcome = delivery.tick();
+    await new Promise(resolve => setImmediate(resolve));
+    emit({ type: "response", id: ONE_BATCH.id, command: "prompt", success: true });
+    emit(failedMessage("stop"));
+    emit({
+      type: "extension_ui_request", method: "notify",
+      message: `${PI_BOUNDARY_PREFIX}${JSON.stringify({
+        adapterRevision: PI_ADAPTER_REVISION, batchId: ONE_BATCH.id, incarnation: ONE_BATCH.incarnation,
+        sessionPath: laterSession, entryId: "89abcdef",
+      })}`,
+    } as PiEvent);
+    emit({ type: "agent_settled" });
+    assert.equal((await outcome).kind, "delivered");
+    assert.equal(completed.length, 1);
+    assert.equal(completed[0]!.sessionPath, firstSession);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function failedMessage(stopReason: string): PiEvent {
   return { type: "message_end", message: { role: "assistant", stopReason, content: [] } };
