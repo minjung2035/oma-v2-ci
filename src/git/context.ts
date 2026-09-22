@@ -129,7 +129,7 @@ export class ContextCoordinator {
       messageId: `${messageId}@${this.paths.society}.oma.invalid`,
       body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` }));
     const artifact = this.mail.freezeObject(messageId, eml);
-    const settle = () => settleByAcceptance([artifact], () => this.store.getOperationById(id) !== null);
+    const settle = () => settleByAcceptance([artifact], () => this.store.getOperationById(id) !== null, id);
     // Canonical observation is outside T. There is no await before the pure
     // current-authority/recipient snapshot and acceptance below.
     if (this.effects.current() !== request.expected) {

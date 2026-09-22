@@ -68,7 +68,7 @@ export class SubmitCoordinator {
   /** The bundle spool and the frozen mail object are the same kind of thing:
    * artifacts published before acceptance. One question settles both. */
   private cleanPreaccept(spool: PreparedSubmitSpool, artifact: PreacceptArtifact | null, operationId: string): void {
-    settleByAcceptance([spool, artifact], () => this.store.getOperationById(operationId) !== null);
+    settleByAcceptance([spool, artifact], () => this.store.getOperationById(operationId) !== null, operationId);
   }
   async submit(auth: AuthContext, key: string, input: SubmitInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     assertCurrentActor(this.store, auth, "git.submit");

@@ -155,7 +155,7 @@ export class MailModule {
   /** Settles pre-accept owners against this journal: the operation that would
    * name them either exists or nothing owns them. */
   settlePreaccept(operationId: string, owners: readonly (PreacceptOwner | null)[]): void {
-    settleByAcceptance(owners, () => this.store.getOperationById(operationId) !== null);
+    settleByAcceptance(owners, () => this.store.getOperationById(operationId) !== null, operationId);
   }
   async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> { this.materializer.gated(operationId, proof); }
   async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }

@@ -92,7 +92,7 @@ export class CreateCoordinator {
   /** A frozen initial brief is owned by nobody until the create that names it
    * is accepted; an accepted plan that names no message owns none either. */
   private settlePreaccept(operationId: string, artifact: PreacceptArtifact): void {
-    settleByAcceptance([artifact], () => this.store.getOperationById(operationId) !== null);
+    settleByAcceptance([artifact], () => this.store.getOperationById(operationId) !== null, operationId);
   }
 
   async create(auth: AuthContext, source: AgentCreateInput, key: string): Promise<Receipt> {

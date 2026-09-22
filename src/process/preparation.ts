@@ -23,6 +23,7 @@ export class PreparationExecutor {
   private active = false;
   private uncertain = false;
   get blocked(): boolean { return this.active || this.uncertain; }
+  get quiescence(): "quiescent" | "unknown" { return this.blocked ? "unknown" : "quiescent"; }
   async run(source: CommandSpec, signal?: AbortSignal, inheritedFds: readonly number[] = []): Promise<ProcessObservation> {
     const command = snapshotCommand(source);
     if (this.blocked) throw new StoreError("REF_STATE_UNKNOWN", "a prior preparation is active or has an uncertain outcome");

@@ -15,7 +15,7 @@ import { MailModule } from "../src/mail.js";
 import { StoreError } from "../src/domain/errors.js";
 import { inspectIntegrity } from "../src/diagnostics/integrity.js";
 import { NodeIntegrityFiles } from "../src/diagnostics/files.js";
-import { PreacceptArtifact, publishedArtifact, settleByAcceptance } from "../src/storage/preaccept-artifact.js";
+import { PreacceptArtifact, publishedArtifact } from "../src/storage/preaccept-artifact.js";
 import { generateOperationId } from "../src/ids.js";
 import { requestHash } from "../src/hash.js";
 import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
@@ -207,7 +207,7 @@ test("PRE-6: discard removes only the inode it published, and never a replacemen
     // Someone replaced the name with a different inode: it is not ours to remove.
     fs.unlinkSync(path);
     fs.writeFileSync(path, "second");
-    artifact.discardUnaccepted();
+    assert.throws(() => artifact.discardUnaccepted(), { code: "REF_STATE_UNKNOWN" });
     assert.equal(fs.readFileSync(path, "utf8"), "second");
     // Our own inode is removed exactly once, and a second settle is inert.
     const mine = publishedArtifact(path);
@@ -223,14 +223,22 @@ test("PRE-6: discard removes only the inode it published, and never a replacemen
   } finally { removeTree(root); }
 });
 
-test("PRE-7: retained evidence can never be discarded, and released evidence can never be retained", () => {
+test("PRE-7: retained evidence cannot be discarded and unconfirmed cleanup is retryable", () => {
   const retained = new PreacceptArtifact("/nonexistent/retained.eml", null);
   retained.retainForOperation();
   retained.discardUnaccepted();
   retained.retainForOperation();
-  const released = new PreacceptArtifact("/nonexistent/released.eml", null);
-  released.discardUnaccepted();
-  assert.throws(() => released.retainForOperation(), { code: "INTERNAL_ERROR" });
+  const unavailable = new PreacceptArtifact("/nonexistent/unavailable.eml", null);
+  assert.throws(() => unavailable.discardUnaccepted(), { code: "REF_STATE_UNKNOWN" });
+  unavailable.retainForOperation();
+  const root = fs.mkdtempSync(join(tmpdir(), "oma-preaccept-release-"));
+  try {
+    const path = join(root, "released.eml");
+    fs.writeFileSync(path, "released");
+    const released = publishedArtifact(path);
+    released.discardUnaccepted();
+    assert.throws(() => released.retainForOperation(), { code: "INTERNAL_ERROR" });
+  } finally { removeTree(root); }
 });
 
 test("PRE-8: a losing git.submit and a conflicting context.publish leave the object directory exact", async (t) => {

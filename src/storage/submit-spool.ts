@@ -2,15 +2,14 @@
 // owners. No accepted name is unlinked by connection cleanup or a failed retry.
 import {
   constants, closeSync, writeFileSync, readSync, fstatSync, lstatSync,
-  fchmodSync, fsyncSync, unlinkSync,
+  fchmodSync, fsyncSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { basename, dirname } from "node:path";
 import type { BlobDescriptor } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { entryAt, openBeneath, openDirectory, openRegularBeneath } from "./contained-fs.js";
-import { removeOwnedFile } from "./directory.js";
-import type { PreacceptOwner } from "./preaccept-artifact.js";
+import { PreacceptArtifact, type PreacceptOwner, type PublishedIdentity } from "./preaccept-artifact.js";
 import { ensureDurableDirectory, fsyncDir } from "./durable-fs.js";
 import { submitStagingPathAt, submitBundlePathAt } from "./paths.js";
 
@@ -24,19 +23,14 @@ function code(error: unknown): string | null {
   return error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : null;
 }
 export class PreparedSubmitSpool implements PreacceptOwner {
-  private owner: "preaccept" | "accepted" | "released" = "preaccept";
-  constructor(readonly bundle: FrozenBundle | null) {}
+  private readonly artifact: PreacceptArtifact | null;
+  constructor(readonly bundle: FrozenBundle | null, identity: PublishedIdentity | null = null) {
+    this.artifact = bundle === null ? null : new PreacceptArtifact(bundle.path, identity);
+  }
   /** Called on durable acceptance or uncertainty about whether T committed. */
-  retainForOperation(): void {
-    if (this.owner === "released") throw new StoreError("INTERNAL_ERROR", "released bundle cannot become accepted evidence");
-    this.owner = "accepted";
-  }
+  retainForOperation(): void { this.artifact?.retainForOperation(); }
   /** The caller must first establish that this operation was NOT accepted. */
-  discardUnaccepted(): void {
-    if (this.owner !== "preaccept") return;
-    this.owner = "released";
-    if (this.bundle) removeOwnedFile(this.bundle.path);
-  }
+  discardUnaccepted(): void { this.artifact?.discardUnaccepted(); }
 }
 
 export async function prepareSubmitSpool(
@@ -60,8 +54,18 @@ export async function prepareSubmitSpool(
   // No name is owned if exclusive creation fails; never delete an existing file.
   const parent = openDirectory(staging);
   let fd: number;
+  let identity: PublishedIdentity | null = null;
   try { fd = openBeneath(parent, basename(path), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
   catch (error) { closeSync(parent); throw error; }
+  try {
+    const acquired = fstatSync(fd);
+    if (!acquired.isFile()) throw new StoreError("STORE_CORRUPT", "prepared bundle is not a regular file");
+    identity = { dev: acquired.dev, ino: acquired.ino };
+  } catch (error) {
+    closeSync(fd);
+    closeSync(parent);
+    throw error;
+  }
   try {
     try {
       const hash = createHash("sha256"); let total = 0;
@@ -77,14 +81,19 @@ export async function prepareSubmitSpool(
       const current = lstatSync(entryAt(parent, basename(path))); const pinned = fstatSync(fd);
       if (!current.isFile() || current.dev !== pinned.dev || current.ino !== pinned.ino)
         throw new StoreError("STORE_CORRUPT", "prepared bundle name changed identity");
+      if (identity === null || pinned.dev !== identity.dev || pinned.ino !== identity.ino)
+        throw new StoreError("STORE_CORRUPT", "prepared bundle descriptor changed identity");
     } finally { closeSync(fd); }
     fsyncSync(parent); fsyncDir(dirname(staging));
   } catch (error) {
-    try { unlinkSync(entryAt(parent, basename(path))); fsyncSync(parent); }
-    catch (cleanup) { throw new AggregateError([error, cleanup], "bundle preparation and owned cleanup failed"); }
+    try {
+      if (identity === null) throw new StoreError("REF_STATE_UNKNOWN", "bundle cleanup identity is unavailable");
+      new PreacceptArtifact(path, identity).discardUnaccepted();
+    } catch (cleanup) { throw new AggregateError([error, cleanup], "bundle preparation and owned cleanup failed"); }
     throw error;
   } finally { closeSync(parent); }
-  return new PreparedSubmitSpool(Object.freeze({ path, ...frozenDescriptor }));
+  if (identity === null) throw new StoreError("INTERNAL_ERROR", "prepared bundle identity was not registered");
+  return new PreparedSubmitSpool(Object.freeze({ path, ...frozenDescriptor }), identity);
 }
 
 /** Read-time trust boundary: hash one contained single-link descriptor and keep
