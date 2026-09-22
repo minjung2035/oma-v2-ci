@@ -42,11 +42,14 @@ export interface NewAgent {
  */
 function preflightDatabase(path: string): void {
   if (path === ":memory:") return;
+  if (path.startsWith("file:"))
+    throw new StoreError("STORE_CORRUPT", "Store requires a filesystem path, not a SQLite URI");
   const suffixes = ["", "-wal", "-shm", "-journal"] as const;
   const identities = (): (string | null)[] => suffixes.map(suffix => {
     const stat = lstatSync(path + suffix, { bigint: true, throwIfNoEntry: false });
     if (!stat) return null;
-    if (!stat.isFile()) throw new StoreError("STORE_CORRUPT", "database and sidecars must be regular files");
+    if (!stat.isFile() || stat.nlink !== 1n)
+      throw new StoreError("STORE_CORRUPT", "database and sidecars must be unaliased regular files");
     return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
   });
   const before = identities();
