@@ -4,28 +4,26 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP05 검증 트리의 부모 `bf9ebcf`, 실행일 2026-09-22. WP05는 C1 v1 delivery receipt publication 수정이다. private temp/file fsync/no-replace final/validated first fact/temp cleanup/parent fsync 순서를 actual held-directory primitives로 구현한다. DDL/wire/receipt encoding과 live completion authority는 유지한다.
+브랜치 `refactor/safety-preserving-architecture`, WP12 검증 트리의 부모 `93d5475`, 실행일 2026-09-22. WP12는 C0/C2-reader 준비다. 한 manifest read에서 validated config, roles, authored layout, role sources와 bounded file identities를 하나의 snapshot으로 반환한다. Writer generation 전환은 하지 않았다.
 
-검증 입력: verification input digest `1c04611318459fa1d03b1a09e53455865d0b052a5bb3299b9cbef337856082b3` (553 files). source/tests/scripts/config/manifest/implementation 및 generated measurement/graph를 결박한다. validation digest field만 정규화하며 metadata 변경 뒤 전체 재실행 없이 PASS를 승격하지 않는다.
+검증 입력: verification input digest `88416804b3966485133c68e6ae0a1899b05fddbd124da95540157ae83cf3ab25` (554 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
-| 검사 | WP05 실행 / 대기 범위 |
+| 검사 | WP12 실행 / 대기 범위 |
 |---|---|
-| typecheck/build/package/local | PASS: actual lane prechecks/build, package; local 1340/1340, zero fail/cancelled/skipped/todo (`wp05-local-initial`). metadata 갱신 뒤 final rerun 조건 |
-| architecture/inventory | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, graph refreshed, 0 findings. A-008 OPEN |
-| fast/durable/property | PASS / EXECUTED: 230 / 191 / 33, all fail/cancelled/skipped/todo=0 (`wp05-*-initial`). final metadata source rerun 조건 |
-| V05A/V05B | actual publisher/receipt/Principal/durable-fault related set 61 pass (`wp05-focused-green-r3`), no unrun. 전체 lane 전에는 그 input에만 결박 |
-| ordering | candidate validate → private unpredictable temp 0600 → bounded write → file fsync → no-replace final link → final decode/mode validation → temp unlink → parent fsync |
-| EEXIST | same expected batch의 기존 valid receipt를 authoritative first fact로 반환. conflict는 보존/거절. Principal completion도 반환 receipt를 사용 |
-| uncertainty | final link 이후 parent fsync fault에서 final을 삭제하지 않음. temp-write crash seam은 partial final을 만들지 않음. throw seam은 power-loss proof가 아님 |
-| negative controls | old direct-final publisher red (`wp05-v05ab-red`); parent fsync 제거 red (`wp05-no-parent-fsync-red`); Principal returned-first-fact 무시 mutant red (`wp05-ignore-first-fact-red`) |
-| V05C power loss | BLOCKED / NOT_RUN: 승인된 disposable VM/storage profile 없음. process fault/SIGKILL을 powercut으로 승격하지 않음 |
-| systemd/provider/installed runtime/current-SHA CI | BLOCKED 또는 NOT_RUN; 운영/remote action 없음 |
+| type/build/package/local and lanes | PASS: fast/durable/property 231/194/33, local 1344/1344, package; all fail/cancelled/skipped/todo=0 (`wp12-*-initial`, `wp12-local-initial`). metadata-bound final rerun required |
+| V12A/V12B | one-manifest pointer swap, authored identity/prompt-root and aggregate closure budget cases pass; durable initial PASS. final rerun pending |
+| snapshot | `ConfigurationSnapshot` binds validated config, roles, exact layout, authored roles and unique file identities/hashes. Initial manifest is the snapshot pointer; referenced files are rechecked before return |
+| callers | readSettings reads one snapshot; entry passes the same snapshot to extensions. Session/runner each load one complete activation config. String compatibility facade remains full-snapshot read |
+| manual limitation | referenced file drift fails explicitly; this does not exclude arbitrary same-UID concurrent writers or prove manual multi-file atomicity |
+| managed generations | reader is ready for old/new immutable generations, but WP13 writer/retention/commit is NOT_RUN |
+| negative/lane controls | double manifest read red (`wp12-double-read-red`), role-directory prompt root red (`wp12-role-root-red`), unbounded closure red (`wp12-unbounded-red`), lane registration red/green. disposable source restored |
+| systemd/provider/powercut/CI/A-008 | BLOCKED/NOT_RUN/open as previously recorded |
 
-Raw evidence는 `/tmp/oma-consistency-evidence-Vc66uK/wp05-*`. initial complete 결과 반영과 같은 metadata source final rerun 전에는 전체 PASS가 아니다.
+Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp12-*`. Complete initial and metadata-bound final reruns remain required.
 
-현재 metadata source의 최종 PASS 조건은 `wp05-fast-final`, `wp05-durable-final`, `wp05-property-final`, `wp05-package-final`, `wp05-local-final`이 같은 digest에서 exit 0과 해당 비실행 수 0을 기록하는 것이다.
+Final PASS condition: `wp12-fast-final`, `wp12-durable-final`, `wp12-property-final`, `wp12-package-final`, `wp12-local-final` must bind one digest with exit 0 and zero unrun tests.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -996,7 +994,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,487 code LOC**이며 A-008 기준을 넘는다. WP05 변경 뒤 LOC/hash와 dependency graph를 실제로 재생성했지만 architecture review/release gate는 계속 OPEN이다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,564 code LOC**이며 A-008 기준을 넘는다. WP12 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
