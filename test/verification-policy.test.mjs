@@ -118,3 +118,12 @@ test("R35 delivery receipt publication oracles are required by durable and all l
   }
   assert.equal(lanes.durable.requiredNames.includes("V05C:"), false, "local durable lane must not claim power-loss qualification");
 });
+
+test("R35 configuration snapshot oracles are required by durable and all lanes", () => {
+  assert.ok(lanes.durable.files.includes("config-snapshot.test.js"));
+  for (const id of ["V12A:", "V12B:"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});
