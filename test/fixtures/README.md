@@ -99,6 +99,8 @@ VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 | V17A / V17B | `preaccept-scope.test.ts` named V17A/V17B cases; existing `preaccept-ownership.test.ts` compatibility cases | durable, all; actual ownership scope, inode identity, Store relation and native preparation observation; not crash-recovery memory proof |
 | V05A / V05B | `delivery-receipt-publication.test.ts` named cases plus Principal first-fact case in `principal-endpoint.test.ts` | durable, all; actual held-directory publication, fault seam, private mode and caller return contract; not VM/storage power-loss V05C |
 | V12A / V12B | `config-snapshot.test.ts` named cases | durable, all; actual one-manifest snapshot, authored identities, index-root prompts and aggregate closure budgets; manual-source drift detection is not external-writer exclusion |
+| V18A | `preaccept-ownership.test.ts` named V18A order, nine unaccepted failure points, lost acknowledgement, unavailable observation and native-uncertainty cases; `r21-context-stream.test.ts` V18A replacement case plus strengthened R21 root cleanup | durable, all; actual GitModule/ContextCoordinator, Store, MailModule, Git preparation executor and staged filesystem; injected member faults, not process crash |
+| V18B | `r21-context-workflow.test.ts` named V18B case | durable, all; actual RpcConnection with the broker staging root, same-key retry through a second connection and reconcile from the staged candidate; not broker restart or VM power loss |
 
 `npm test` includes all these local cases; it still excludes the original mixed
 systemd files. Actual lane execution is separate and must be recorded as such.

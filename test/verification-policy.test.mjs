@@ -127,3 +127,13 @@ test("R35 configuration snapshot oracles are required by durable and all lanes",
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 context preaccept ownership oracles are required by durable and all lanes", () => {
+  for (const file of ["preaccept-ownership.test.js", "r21-context-workflow.test.js", "r21-context-stream.test.js"])
+    assert.ok(lanes.durable.files.includes(file));
+  for (const id of ["V18A:", "V18B:"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});
