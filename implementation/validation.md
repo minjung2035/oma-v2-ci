@@ -4,31 +4,28 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP11 검증 트리의 부모 `8ad1649`, 실행일 2026-09-22. WP11은 C0/C1 설정 검증·편집 ownership 수정이다. 파일 I/O와 분리된 canonical validator가 deep immutable candidate를 만들고, 모든 supported settings writer가 전체 후보 검증을 publication보다 먼저 수행한다. HostConfigV1 authoring schema, v1 DDL/wire/receipt/live authority는 바꾸지 않았다. WP03은 disposable-user topology 환경 때문에 계속 BLOCKED다.
+브랜치 `refactor/safety-preserving-architecture`, WP17 검증 트리의 부모 `5215b1a`, 실행일 2026-09-22. WP17은 C0/C1 preaccept ownership scope다. operation/resource identity, reference relation, native quiescence와 cleanup disposition을 등록하고 unknown에서 삭제하지 않는다. 기존 v1 DDL/wire/receipt/live authority와 durable entity는 바꾸지 않았다.
 
-검증 입력: verification input digest `25bf33a3d2db37f029678f0070bf7df91700ed1d89c1fa4a4716979295d242ad` (551 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 generated adversarial report는 출력이라 제외한다. metadata 변경 뒤에는 전체 검증을 다시 실행해야 하며 digest만 갱신한 것은 실행 증거가 아니다.
+검증 입력: verification input digest `750fa9475c91302c584e72d091ad38d22e732bf077718842c76849697d0ddfd5` (552 files). 검증 source/test/script/config/manifest/implementation 문서·generated measurement/graph를 경로 순으로 결박한다. `implementation/validation.md`의 이 digest field만 정규화한다. metadata를 갱신한 뒤에는 전체 검증을 다시 실행해야 하며 hash refresh만으로 PASS를 승격하지 않는다.
 
 ### 실행 결과
 
-| 검사 | WP11 실행 / 대기 범위 |
+| 검사 | WP17 실행 / 대기 범위 |
 |---|---|
-| `npm run typecheck` / `build` / `check:package` | PASS: actual lane prechecks/build와 `wp11-package-initial`. metadata 갱신 뒤 최종 결박은 `wp11-fast-final`, `wp11-package-final`, `wp11-local-final` |
-| `check:architecture` / `check:inventory` | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, 0 findings. production 변경 때 stale hash를 먼저 검출한 뒤 pinned generator 실행. A-008은 OPEN |
-| `npm test` | PASS, 1324/1324, fail/cancelled/skipped/todo=0 (`wp11-local-initial`). metadata 갱신 뒤 동일 executable source 전체를 `wp11-local-final`로 재실행하는 조건 |
-| `verify:fast` / `verify:durable` / `verify:property` | PASS / EXECUTED: 228 / 178 / 33 tests, 모두 fail/cancelled/skipped/todo=0 (`wp11-fast-initial-r2`, `wp11-durable-initial`, `wp11-property-initial`). 최종 결박은 `wp11-*-final`; 겹치는 scope를 합산하지 않음 |
-| initial metadata failure | 첫 fast 실행은 228 중 227 pass / 1 fail: R38이 직전 measured artifact보다 1 낮은 LOC 인용을 검출 (`wp11-fast-initial`). A-008을 유지하며 인용을 artifact와 맞춘 뒤 모든 complete scope를 실행 |
-| V11A | inline/split cross-relation 및 compatibility writer 무변경 cases와 관련 production paths 통과. final focused 묶음은 81/81 (`wp11-final-focused-r2`); 전체 lane 전에는 해당 input에만 결박 |
-| V11B | actual TypeScript compile fixture가 missing descriptor와 `string` widening을 거절하고, runtime null-prototype registry가 display/transform/placement/apply metadata를 닫힌 field union에 연결. current typecheck PASS |
-| V11C | deep immutable validator snapshot, prototype-sensitive own keys, zero-seed no-target, actual Store spec/request/plan identity 보존 cases 통과. 전체 property lane 전에는 focused evidence |
-| negative controls | old writer에서 V11A 실패 (`wp11-v11a-old-writer-red`); shallow snapshot에서 V11C 실패 (`wp11-v11c-shallow-red`); descriptor 삭제는 compiler exit 2 (`wp11-v11b-missing-descriptor-red`). 모두 disposable worktree source identity 기록 |
-| lane policy | 등록 전 red (`wp11-lane-policy-red`), 등록 뒤 green (`wp11-lane-policy-green`). 기존 nonexecution/setup/timeout/signal 거절 유지 |
-| tooling scope | generated `dist/**`와 vendored `reference/**`를 pi-lens diagnostic walk에서 제외. 기존 `.gitleaks.toml` 정책과 일치하며 build/package/verification input을 제외하지 않음. RFC WebSocket sample nonce는 runtime 계산; credential 아님 |
-| managed generations / concurrent edit serialization | NOT_RUN / WP12–WP15 scope. WP11은 arbitrary external same-UID writer, multi-file atomic commit, retention/GC를 증명하지 않음 |
-| systemd/provider/installed-runtime/powercut/current-SHA CI | BLOCKED 또는 NOT_RUN. 승인 없는 manager/provider/VM/remote action 없음 |
+| typecheck / build / package / full local | PASS: actual lane prechecks/build와 `wp17-package-initial`; local 1332/1332, zero fail/cancelled/skipped/todo (`wp17-local-initial`). metadata 갱신 뒤 final rerun 조건 |
+| architecture / inventory | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, 0 findings. actual import 변경 뒤 dependency graph을 재생성. A-008 remains OPEN |
+| fast / durable / property | PASS / EXECUTED: 229 / 185 / 33, 모두 fail/cancelled/skipped/todo=0 (`wp17-*-initial`). final metadata source에서 `wp17-*-final` 재실행 조건 |
+| V17A / V17B | actual PreacceptScope/inode/Store/native preparation 및 기존 preaccept compatibility 묶음 57 pass (`wp17-related-green`), no fail/skip/todo/cancel. 전체 lane 전에는 해당 input에만 결박 |
+| dispositions | unaccepted-known, accepted-referenced, accepted-unreferenced, outcome-unknown, cleanup-unconfirmed을 닫힌 집합으로 기록. unknown/native non-quiescence는 retain |
+| cleanup | 한 cleanup 실패 뒤에도 나머지를 시도하고 primary+cleanup 원인을 aggregate. cleanup-unconfirmed은 same ownership으로 retry 가능; 완료 후 반복 settle은 inert |
+| identity | absent와 unavailable을 구분. replacement inode는 삭제하지 않고 cleanup-unconfirmed; acquired submit spool identity는 다음 fallible 단계 전에 pin |
+| caller migration | 기존 settleByAcceptance facade가 scope를 사용하고 operation identity를 전달. Context/create/submit/mail의 전체 relation-aware migration은 WP18–20에 남김 |
+| negative controls / lane policy | pre-scope suite red (`wp17-v17ab-red`); DB error→false mutant red (`wp17-db-unknown-red`); accepted-row blanket-retain mutant red (`wp17-linked-blanket-red`); lane 등록 전 red/후 green. disposable source identities retained |
+| systemd/provider/installed-runtime/powercut/current-SHA CI | BLOCKED 또는 NOT_RUN; 승인 없는 manager/provider/VM/remote action 없음 |
 
-원본 argv·시각·exit·input-before/after·log SHA-256은 `/tmp/oma-consistency-evidence-Vc66uK/wp11-*.json` 및 같은 이름 `.log`에 있다. WP11.01/.02는 별도 worktree에서 actual source를 검증하고 tree를 stage한 뒤 commit했다; main working bytes와 snapshot 실행을 혼동하지 않는다. 현재 source의 PASS는 이후 initial/full 결과를 반영하고 동일 metadata source에서 final rerun까지 완료해야 한다.
+원본 argv·시각·exit·input-before/after·log hash는 `/tmp/oma-consistency-evidence-Vc66uK/wp17-*.json/.log`에 있다. 최종 PASS는 initial 결과를 이 표에 반영하고 같은 metadata source에서 final rerun까지 완료한 뒤에만 주장한다.
 
-현재 metadata source의 최종 PASS 조건은 `wp11-fast-final`, `wp11-durable-final`, `wp11-property-final`, `wp11-package-final`, `wp11-local-final`이 같은 digest에서 실제 종료 코드 0과 해당 비실행 수 0을 기록하는 것이다. 조건을 충족하는 raw record 없이 위 initial 결과를 새 source의 PASS로 승격하지 않는다.
+현재 metadata source의 최종 PASS 조건은 `wp17-fast-final`, `wp17-durable-final`, `wp17-property-final`, `wp17-package-final`, `wp17-local-final`이 같은 digest에서 exit 0과 해당 비실행 수 0을 기록하는 것이다.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -999,7 +996,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,315 code LOC**이며 A-008의 10,000행 기준을 넘는다. WP11 production 변경 뒤 산출물을 다시 측정한 값이며, 이 값의 갱신은 기존 architecture review/release gate를 닫지 않는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 기능 작업은 계속하되 review 자체는 별도 작업으로 남긴다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,440 code LOC**이며 A-008의 10,000행 기준을 넘는다. WP17 production 변경 뒤 산출물을 다시 측정한 값이며, dependency graph도 actual import 변경 뒤 재생성했다. 이 갱신은 기존 architecture review/release gate를 닫지 않는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
