@@ -97,6 +97,7 @@ VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 | V11B | `config-edit-descriptors.test.ts` plus `config-edit-descriptors.types.ts` | fast, all; runtime own-key registry plus actual TypeScript exhaustiveness fixture |
 | V11C | `config-validation.test.ts` named V11C deep snapshot, zero-seed and frozen Store identity cases | property, all; actual validator/Store/config edit paths, not managed-generation persistence |
 | V17A / V17B | `preaccept-scope.test.ts` named V17A/V17B cases; existing `preaccept-ownership.test.ts` compatibility cases | durable, all; actual ownership scope, inode identity, Store relation and native preparation observation; not crash-recovery memory proof |
+| V05A / V05B | `delivery-receipt-publication.test.ts` named cases plus Principal first-fact case in `principal-endpoint.test.ts` | durable, all; actual held-directory publication, fault seam, private mode and caller return contract; not VM/storage power-loss V05C |
 
 `npm test` includes all these local cases; it still excludes the original mixed
 systemd files. Actual lane execution is separate and must be recorded as such.

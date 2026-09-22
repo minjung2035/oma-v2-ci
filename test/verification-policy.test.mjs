@@ -108,3 +108,13 @@ test("R35 preaccept ownership oracles are required by durable and all lanes", ()
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 delivery receipt publication oracles are required by durable and all lanes", () => {
+  assert.ok(lanes.durable.files.includes("delivery-receipt-publication.test.js"));
+  for (const id of ["V05A:", "V05B:"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+  assert.equal(lanes.durable.requiredNames.includes("V05C:"), false, "local durable lane must not claim power-loss qualification");
+});
