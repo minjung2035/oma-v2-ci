@@ -161,3 +161,11 @@ error. Additional test-only files: `test/fixtures/effect-observation.ts` and
 `test/effect-observation.test.ts`. Existing uncommitted formatting in
 `test/fixtures/configuration.ts` is preserved, not reset. All WP00–WP32 todos
 are now registered with the plan's dependencies; only WP02 remains active.
+
+WP02.03 intent: extract the existing IPC-checkpoint/SIGKILL pattern into a bounded
+test-only driver, preserving the systemd exclusion of the original mixed suite.
+A matching child message plus confirmed SIGKILL is required; timeout/early exit/
+wrong point/throw-only cleanup are failures. Fresh-process physical observation
+is separate from the checkpoint claim. New driver tests and fixtures stay under
+`test/`; reuse `crash-worker.ts` only on local Mail boundaries. No live manager
+or production test-bypass is introduced.
