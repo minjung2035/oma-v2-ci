@@ -93,6 +93,9 @@ VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 | V02C negative restoration | original incomplete bundle fixture plus exact full-loader assertion in disposable worktree; corrected main-tree positive control | external source-bound WP02 raw logs, not a new CI pass |
 | V04A | `store-open.test.ts` named V04A unsupported-version, sidecar, alias, corrupt-header and supported-v1 cases | durable, all; actual Store/native SQLite plus independent artifact identities/bytes; closed/quiescent startup scope |
 | V04B | `store-open.test.ts` named V04B new/v1 PRAGMA, migration, reader-composition, cleanup-cause, permission and lock cases | durable, all; native handle closure and independent writer-lock observation, not manager or read-only-mount qualification |
+| V11A | `config-editing.test.ts` named V11A inline/split and compatibility-writer cases | durable, all; actual production validator/editor and independent authored-file hashes |
+| V11B | `config-edit-descriptors.test.ts` plus `config-edit-descriptors.types.ts` | fast, all; runtime own-key registry plus actual TypeScript exhaustiveness fixture |
+| V11C | `config-validation.test.ts` named V11C deep snapshot, zero-seed and frozen Store identity cases | property, all; actual validator/Store/config edit paths, not managed-generation persistence |
 
 `npm test` includes all these local cases; it still excludes the original mixed
 systemd files. Actual lane execution is separate and must be recorded as such.

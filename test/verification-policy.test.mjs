@@ -86,3 +86,16 @@ test("R35 Store opening oracles are required by durable and all lanes", () => {
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 config ownership oracles use their prescribed lanes and stable IDs", () => {
+  assert.ok(lanes.fast.files.includes("config-edit-descriptors.test.js"));
+  assert.ok(lanes.fast.requiredNames.includes("V11B:"));
+  assert.ok(lanes.durable.files.includes("config-editing.test.js"));
+  assert.ok(lanes.durable.requiredNames.includes("V11A:"));
+  assert.ok(lanes.property.files.includes("config-validation.test.js"));
+  assert.ok(lanes.property.requiredNames.includes("V11C:"));
+  for (const id of ["V11A:", "V11B:", "V11C:"]) {
+    assert.ok(lanes.all.requiredNames.includes(id), `all lane omits ${id}`);
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});

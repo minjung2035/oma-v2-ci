@@ -44,6 +44,7 @@ export function localTestFiles(compiled) {
 export const lanes = Object.freeze({
   fast: {
     files: [
+      "config-edit-descriptors.test.js",
       "domain-identifiers.test.js",
       "domain-policy.test.js",
       "id-contracts.test.js",
@@ -82,6 +83,7 @@ export const lanes = Object.freeze({
       "V01A:",
       "V01B:",
       "V02A:",
+      "V11B:",
       "S-06/FS-005:",
       "AUTH-003: a broker handed society A's lease",
       "REC-007: a settled receipt survives",
@@ -122,6 +124,7 @@ export const lanes = Object.freeze({
   },
   durable: {
     files: [
+      "config-editing.test.js",
       "checkpoint-driver.test.js",
       "store-open.test.js",
       "durable-boundary.test.js",
@@ -147,6 +150,7 @@ export const lanes = Object.freeze({
     sourceFiles: [],
     requiredNames: [
       "V02B:",
+      "V11A:",
       "V04A:",
       "V04B:",
       "EML admission:",
@@ -219,6 +223,7 @@ export const lanes = Object.freeze({
   },
   property: {
     files: [
+      "config-validation.test.js",
       "effect-observation.test.js",
       "verification-property.test.js",
       "r36-model.test.js",
@@ -229,6 +234,7 @@ export const lanes = Object.freeze({
     sourceFiles: [],
     requiredNames: [
       "V02C:",
+      "V11C:",
       "R35 property",
       "R36 model seed=",
       "R36 parser corpus",
@@ -280,6 +286,9 @@ export const lanes = Object.freeze({
       "V02A:",
       "V02B:",
       "V02C:",
+      "V11A:",
+      "V11B:",
+      "V11C:",
       "V04A:",
       "V04B:",
       "S-06/FS-005:",
