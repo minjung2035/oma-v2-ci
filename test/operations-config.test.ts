@@ -1,126 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-} from "node:fs";
+import { writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import type { HostConfigV1 } from "../implementation/contracts.js";
 import { loadConfig, loadConfiguration } from "../src/config.js";
-import { TEST_RESOURCES } from "./fixtures/spec.js";
-
-function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "oma-operations-"));
-  const installation = join(root, "installation");
-  mkdirSync(join(installation, "dist/src"), { recursive: true });
-  writeFileSync(
-    join(installation, "dist/src/pi-extension.js"),
-    "export default function () {}\n",
-  );
-  const model = {
-    provider: "fixture",
-    model: "model-a",
-    credentialRef: "host-reference",
-    codecRevision: "fixture-v1",
-    pricingRevision: "price-v1",
-    maxInputTokens: 1024,
-    maxOutputTokens: 128,
-    inferenceTimeoutSeconds: 30,
-  };
-  const profile = {
-    modelProfile: "standard",
-    capabilities: [],
-    delegable: [],
-    childProfile: null,
-    resources: TEST_RESOURCES,
-  };
-  const config: HostConfigV1 = {
-    schemaVersion: 1,
-    society: "demo",
-    installation: {
-      node: "/usr/bin/node",
-      libdir: installation,
-      rootfs: "/rootfs",
-      deploymentDigest: "a".repeat(64),
-    },
-    modelProfiles: { standard: model, review: { ...model, model: "model-b" } },
-    agentProfiles: {
-      principal: profile,
-      resident: profile,
-      verifier: { ...profile, modelProfile: "review" },
-    },
-    principalProfile: "principal",
-    initialResidents: [{ name: "worker", profile: "resident", brief: "work" }],
-    quota: {
-      societyAgents: 4,
-      lineageAgents: 4,
-      societyUnits: 4,
-      lineageUnits: 4,
-      principalReservedUnits: 1,
-      inferenceSlots: 2,
-      principalReservedSlots: 1,
-      storageBytes: 1048576,
-    },
-    integration: { policyRevision: "test", protectedPaths: [], checks: [] },
-    limits: {
-      frameBytes: 262144,
-      mailBodyBytes: 262144,
-      subjectBytes: 512,
-      addresses: 64,
-      replyReferences: 64,
-      contextFiles: 256,
-      contextBytes: 8388608,
-      bundleBytes: 268435456,
-      logBytes: 1048576,
-      batchMaxMessages: 24,
-      idleStreamSeconds: 60,
-      receiptWaitSeconds: 60,
-    },
-    features: {
-      notmuch: false,
-      reflinkSeed: false,
-      formalApproval: false,
-      egress: false,
-    },
-  };
-  const input = join(root, "legacy.json");
-  writeFileSync(input, JSON.stringify(config));
-  const output = join(root, "operations");
-  const path = join(output, "config.json");
-  const migrate = () =>
-    spawnSync(
-      process.execPath,
-      [resolve("scripts/split-operations-config.mjs"), input, output],
-      { encoding: "utf8", timeout: 10000 },
-    );
-  const result = migrate();
-  assert.equal(result.status, 0, result.stderr);
-  const edit = (file: string, update: (value: Record<string, any>) => void) => {
-    const path = join(output, file);
-    const value = JSON.parse(readFileSync(path, "utf8"));
-    update(value);
-    writeFileSync(path, JSON.stringify(value));
-  };
-  return {
-    root,
-    installation,
-    config,
-    input,
-    output,
-    path,
-    migrate,
-    edit,
-    close() {
-      rmSync(root, { recursive: true, force: true });
-    },
-  };
-}
+import { createCompleteConfigurationFixture as fixture } from "./fixtures/configuration.js";
 
 test("OPS config: migration preserves the closed host contract and does not overwrite input/output", () => {
   const f = fixture();
@@ -314,3 +198,29 @@ test("OPS config: rejects symlinked and oversized prompt assets", () => {
     f.close();
   }
 });
+
+for (const format of ["inline", "operations"] as const) {
+  for (const defect of [
+    { name: "quota", file: "host.json", inline: ["quota"], split: ["quota"], field: "storageBytes", error: /quota\.storageBytes is required/ },
+    { name: "resources", file: "roles/resident.json", inline: ["agentProfiles", "resident", "resources"], split: ["agentProfile", "resources"], field: "memoryBytes", error: /resources\.memoryBytes is required/ },
+    { name: "model relation", file: "roles/resident.json", inline: ["agentProfiles", "resident"], split: ["agentProfile"], field: "modelProfile", error: /modelProfile unknown/ },
+  ]) {
+    test(`V02A: ${format} fixture rejects deliberately missing ${defect.name}`, () => {
+      const f = fixture();
+      try {
+        const source = format === "inline" ? f.input : f.path;
+        const file = format === "inline" ? f.input : join(f.output, defect.file);
+        assert.doesNotThrow(() => loadConfiguration(source), "positive control must load first");
+        const raw = JSON.parse(readFileSync(file, "utf8"));
+        let target = raw;
+        for (const field of format === "inline" ? defect.inline : defect.split) target = target[field];
+        if (defect.field === "modelProfile") target[defect.field] = "not-configured";
+        else delete target[defect.field];
+        // Explicit corruption: do not return this as a normal fixture.
+        writeFileSync(file, JSON.stringify(raw));
+        assert.throws(() => loadConfiguration(source), error =>
+          error instanceof Error && "code" in error && error.code === "INVALID_REQUEST" && defect.error.test(error.message));
+      } finally { f.close(); }
+    });
+  }
+}

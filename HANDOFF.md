@@ -117,3 +117,38 @@ release/environment qualification remain incomplete.
 Execution preference: report each WP's start and end to the user (scope, actual
 verification and remaining gates), then proceed immediately to the next eligible
 WP without waiting for confirmation. Goal mode is inactive; do not call goal tools.
+
+## Active WP02 — fixture / oracle tooling scope
+
+Intent for WP02.01: distinguish shape-valid data from complete configuration,
+live Store/Mail and installed-runtime fixtures. A normal configuration must pass
+the real closed loader before it is returned; explicit corruption happens only
+after that baseline. Local file assets and a fake deployment digest do not prove
+an installed runtime. No production validator or authority is weakened.
+
+WP00/WP01 handoffs and evidence manifests were reread/verified. Current candidate
+Q02 remains: the config-bundle positive control calls only readConfigurationSource
+with incomplete host/model/profile values. Extend that same composition to
+loadConfiguration first; preserve all existing containment cases.
+
+Additional test-only scope: extract the already-complete operations fixture to
+`test/fixtures/configuration.ts`; migrate its two callers, document layer names
+in `test/fixtures/README.md`, and extend existing fixture/verification tests.
+Reuse existing durable seams and process harnesses for subsequent WP02 substeps;
+no production imports from test code, no new global bypass flags.
+
+WP02.01 checkpoint: the old positive fixture failed the real loader with
+`config: root.schemaVersion is required`. The complete fixture was extracted
+from the existing operations tests rather than duplicating config construction;
+both inline and split forms now pass the loader before being returned.
+Existing test names/cases were preserved. Explicit quota/resource/model-relation
+corruption controls reject both formats, and Extensions composition reloads
+before and after writing. No product validator or runtime source changed.
+
+Focused checks, typecheck, build and architecture/inventory passed (`wp02-01-*`
+outside the repository). WP02 is still IN_PROGRESS: effect observation/driver,
+failure matrix, V02C controls and lane/report integration remain. The validation
+record currently binds WP01, not these changed verification inputs; full-suite
+record refresh and final rerun belong to WP02 closure, not an inherited PASS.
+See `/tmp/oma-consistency-evidence-Vc66uK/WP02-RESUME.md` for exact read scopes
+and the reusable existing crash seams to review next.

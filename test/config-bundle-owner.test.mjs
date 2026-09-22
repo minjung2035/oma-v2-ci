@@ -16,42 +16,33 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { DEPLOYMENT_LAYOUT } from "../dist/src/domain/deployment.js";
 import { configurationLayout, readConfigurationSource } from "../dist/src/config/operations.js";
+import { loadConfiguration } from "../dist/src/config.js";
 import { readExtensions, toggleExtension } from "../dist/src/tui/sources/extensions.js";
 import { StoreError } from "../dist/src/domain/errors.js";
+import { createCompleteConfigurationFixture } from "../dist/test/fixtures/configuration.js";
 
-// `toolSurface` is the field this screen does not model: the loader accepts it,
-// the Extensions screen never reads it, and an edit that rewrote the role file
-// from what the screen understands would drop it.
-const ROLE = {
-  agentProfile: { modelProfile: "m" },
-  extensions: [DEPLOYMENT_LAYOUT.extension],
-  promptFile: "prompt.md",
-  toolSurface: { defaultMode: "DIRECT" },
-};
-
-/** A bundle plus a file outside it that nothing in the bundle may reach. */
+/** Start from a validated control; only then deliberately alter the referenced
+ * resident path for containment tests. This does not bless a corrupt candidate. */
 function fixture(roles) {
-  const base = mkdtempSync(join(tmpdir(), "oma-bundle-"));
-  const root = join(base, "bundle");
-  const libdir = join(root, "lib");
-  mkdirSync(join(libdir, "extensions"), { recursive: true });
-  mkdirSync(join(libdir, "dist", "src"), { recursive: true });
-  writeFileSync(join(libdir, DEPLOYMENT_LAYOUT.extension), "export {};\n");
-  writeFileSync(join(libdir, "extensions", "x.js"), "export {};\n");
-  writeFileSync(join(root, "prompt.md"), "");
-  writeFileSync(join(root, "host.json"), JSON.stringify({ installation: { libdir } }));
-  writeFileSync(join(root, "models.json"), JSON.stringify({ m: { provider: "p", model: "m" } }));
-  writeFileSync(join(root, "role.json"), JSON.stringify(ROLE));
-  const outside = join(base, "OUTSIDE.json");
-  writeFileSync(outside, JSON.stringify(ROLE));
-  const index = join(root, "index.json");
-  writeFileSync(index, JSON.stringify({ kind: "oma-operations-v1", host: "host.json", models: "models.json", roles }));
-  return { base, root, index, outside, cleanup: () => rmSync(base, { recursive: true, force: true }) };
+  const complete = createCompleteConfigurationFixture();
+  try {
+    const root = complete.output;
+    mkdirSync(join(complete.installation, "extensions"), { recursive: true });
+    writeFileSync(join(complete.installation, "extensions/x.js"), "export {};\n");
+    const role = JSON.parse(readFileSync(join(root, "roles/resident.json"), "utf8"));
+    // The screen must preserve a valid field that it does not model.
+    role.toolSurface = { defaultMode: "DIRECT" };
+    const outsideBytes = JSON.stringify(role);
+    writeFileSync(join(root, "role.json"), outsideBytes);
+    const outside = join(complete.root, "OUTSIDE.json");
+    writeFileSync(outside, outsideBytes);
+    complete.edit("config.json", value => Object.assign(value.roles, roles));
+    return { root, index: complete.path, outside, outsideBytes, cleanup: complete.close };
+  } catch (error) { complete.close(); throw error; }
 }
 
 test("CFG-005: a role reference that leaves the bundle is refused before anything is written", () => {
@@ -100,14 +91,16 @@ test("CFG-005: a bundle the loader accepts is the bundle the screen edits", () =
   // written in place.
   const f = fixture({ resident: "role.json" });
   try {
+    // V02A: source assembly alone is not the closed HostConfig boundary.
+    assert.doesNotThrow(() => loadConfiguration(f.index));
     const layout = configurationLayout(f.index);
     assert.equal(layout.kind, "operations");
-    assert.deepEqual(Object.keys(layout.roles), ["resident"]);
+    assert.deepEqual(Object.keys(layout.roles), ["principal", "resident", "verifier"]);
     assert.ok(readConfigurationSource(f.index).roles["resident"], "the loader did not accept its own bundle");
 
     const context = readExtensions(f.index, "principal", "resident");
     assert.equal(context.editable, true, `a valid bundle was not editable: ${context.reason}`);
-    assert.deepEqual(context.roles.map(role => role.path), [layout.roles["resident"]],
+    assert.deepEqual(context.roles.map(role => role.path), Object.values(layout.roles),
       "the screen edits a path the owner did not resolve");
 
     toggleExtension(context, "extensions/x.js", "workers", true);
@@ -115,7 +108,8 @@ test("CFG-005: a bundle the loader accepts is the bundle the screen edits", () =
     assert.deepEqual(written.extensions, [DEPLOYMENT_LAYOUT.extension, "extensions/x.js"]);
     assert.deepEqual(written.toolSurface, { defaultMode: "DIRECT" },
       "a field the screen does not model was lost");
-    assert.equal(readFileSync(f.outside, "utf8"), JSON.stringify(ROLE), "the outside file was touched");
+    assert.equal(readFileSync(f.outside, "utf8"), f.outsideBytes, "the outside file was touched");
+    assert.doesNotThrow(() => loadConfiguration(f.index), "the edited candidate must remain loadable");
   } finally { f.cleanup(); }
 });
 
