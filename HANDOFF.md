@@ -5,8 +5,11 @@
 - Branch: `refactor/safety-preserving-architecture`.
 - User plan: `oma-v2-consistency-plan-b25961c/`, unchanged and untracked. Never stage/reset it.
 - WP00, WP01 and WP02 are complete within their documented scopes.
-- Next recommended/eligible WP: **WP03**. WP04/WP11/WP17 are also dependency-eligible;
-  use the selected plan order, not numeric sorting. Only one WP is active at a time.
+- WP03 is **BLOCKED / not complete**: actual clean disposable-user topology
+  preflight refused before manager invocation. Source review is recorded at
+  `/tmp/oma-consistency-evidence-Vc66uK/WP03-BLOCKED-HANDOFF.md`; no runtime changes.
+- Next independent eligible WP: **WP04**, then WP11/WP17 as dependencies permit.
+  WP03-dependent WPs remain blocked. Only one WP is active at a time.
 - Goal mode is inactive. Do not use earlier goal IDs or goal tools.
 - All WP00–WP32 todos are registered with actual dependencies (`metadata.wp`
   identifies the card; todo number is not the WP number).
