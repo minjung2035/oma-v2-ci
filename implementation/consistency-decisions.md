@@ -236,3 +236,25 @@ behavior. Process SIGKILL can test crash reentry but power-loss claims additiona
 require a VM/storage experiment against the final source. S-01-CANDIDATE, S-03
 steer/concurrency and tiered S-08/S-10 remain intentionally unqualified where the
 current product gates them. This plan does not implement those unrelated features.
+
+## WP01.04 — semantic change surfaces, not a universal registry
+
+The paths below identify existing owners to review when implementing the named
+WPs; listing a path does not certify its implementation. Public vocabulary,
+persistent encodings and effect authority stay independent. C2 config metadata
+is host authoring data, not a new operation/message/batch state.
+
+| Surface | Existing owner paths | Allowed semantic input/output change | Must remain unchanged | Owning WP |
+|---|---|---|---|---|
+| surface.public | src/protocol/methods.ts, implementation/contracts/public-wire.ts, implementation/contracts/internal-wire.ts | add internal action-category metadata to existing method decisions; no new RPC | key rules, method names, strict payload/error/correlation and live authentication | WP21, WP26 |
+| surface.durable | src/storage/operation-codec.ts, src/storage/transitions.ts, implementation/contracts/durable.ts, implementation/schema-v1.sql | validated exact evidence selects existing transitions before rollover; ownership scope settles current plans | six entities, user_version=1, state enums, request/spec/receipt bytes; no golden refresh | WP04, WP06, WP07, WP17, WP20, WP24 |
+| surface.editor | src/config.ts, src/config/operations.ts, src/tui/sources/settings.ts, src/tui/sources/extensions.ts | pure full validator plus snapshot/source/version and closed edit descriptors; generation writer owns publication | HostConfigV1 keys, role metadata semantics, index-root prompt references, no implicit delegation change | WP11, WP12, WP13, WP14, WP15, WP16 |
+| surface.resources | src/domain/resources.ts, src/storage/quota.ts | explicit action policy, bounded reservation transfer and diagnostic snapshot; freeze derivation/budgets in WP22 | resource field vocabulary, integer/size validation, no cost accounting or stale cache authorization | WP21, WP22, WP23 |
+| surface.authority | src/broker.ts, src/runtime/principal-delivery.ts, src/tui/session.ts | separate live complete from narrow trusted recovery; single correlated run owner across await | current peer/incarnation checks, single writer, inherited fence and real descendant death | WP03, WP07, WP08, WP09, WP10, WP25 |
+| surface.evidence | implementation/source-owners.json, implementation/mutation-owners.json, production-files.txt, scripts/verification-lanes.mjs | update actual owner/caller/test trace when runtime responsibility moves; include new production sources | generated evidence must be recomputed, not hand merged; no static/runtime proof inflation | WP29, WP30, WP31, WP32 |
+
+No wire/DDL/durable codec/type declaration changes are needed by WP01. Existing
+`contracts-ownership.test.mjs`, `p2-wire-golden.test.mjs` and request-hash fixtures
+are reused rather than regenerating their goldens. New internal observation/claim
+types in later WPs require runtime validators and effect-time checks; readonly or
+branding alone never supplies authority, linear ownership or filesystem durability.

@@ -32,6 +32,19 @@ function rows(text) {
 const spec = readFileSync(new URL("implementation-spec.md", root), "utf8");
 
 
+test('V01B: change surfaces retain distinct registries and name real existing owners', () => {
+  const surfaces = rows(decisions()).filter(row => row[0].startsWith('surface.'));
+  assert.deepEqual(surfaces.map(row => row[0]).sort(), [
+    'surface.authority', 'surface.durable', 'surface.editor', 'surface.evidence',
+    'surface.public', 'surface.resources',
+  ]);
+  for (const row of surfaces) {
+    assert.equal(row.length, 5);
+    for (const path of row[1].split(', ')) assert.ok(existsSync(new URL(path, root)), `real owner: ${path}`);
+    assert.match(row[4], /^WP\d{2}(, WP\d{2})*$/);
+  }
+});
+
 test('V01B: WP01 profile review cannot imply unexecuted runtime qualification', () => {
   const profiles = rows(decisions()).filter(row => row[0].startsWith('profile.'));
   assert.deepEqual(profiles.map(row => row[0]).sort(), [
