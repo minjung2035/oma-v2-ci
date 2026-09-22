@@ -87,3 +87,13 @@ provider call or VM power loss was performed. The user plan checksums still matc
 WP01 must first read D01–D06 and the current normative contracts. Do not mark
 runtime-dependent ADR claims qualified until their designated environment WP.
 WP00 completion does not imply any of WP01–WP32 or the overall goal is complete.
+
+## Active WP01 — scope declaration
+
+WP01 is now the only active WP. Its predecessor raw evidence was hash-checked.
+New review artifacts will be `implementation/consistency-decisions.md` and
+`test/consistency-decisions.test.mjs`: V01A checks decision coverage against the
+actual normative requirements; V01B exercises the existing unsupported-profile
+guard and retains exact v1 DDL. These are documentation/local-contract checks,
+not delivery, process, systemd or power-loss qualification. Existing golden wire
+tests will be reused. No production runtime owner change is authorized in WP01.
