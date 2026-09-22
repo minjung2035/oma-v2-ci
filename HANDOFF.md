@@ -152,3 +152,12 @@ record currently binds WP01, not these changed verification inputs; full-suite
 record refresh and final rerun belong to WP02 closure, not an inherited PASS.
 See `/tmp/oma-consistency-evidence-Vc66uK/WP02-RESUME.md` for exact read scopes
 and the reusable existing crash seams to review next.
+
+WP02.02 intent: observe file hashes/inodes and raw committed SQLite facts from
+test-only code independently of production planners. Reuse existing unit-effect
+and engine-event counters with their narrower proof scopes. Add local Mail replay
+and real configuration replacement controls; never infer absence from an I/O
+error. Additional test-only files: `test/fixtures/effect-observation.ts` and
+`test/effect-observation.test.ts`. Existing uncommitted formatting in
+`test/fixtures/configuration.ts` is preserved, not reset. All WP00–WP32 todos
+are now registered with the plan's dependencies; only WP02 remains active.
