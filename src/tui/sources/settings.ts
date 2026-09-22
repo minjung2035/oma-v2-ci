@@ -9,8 +9,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { HostConfigV1 } from "../../../implementation/contracts.js";
 import { StoreError } from "../../domain/errors.js";
-import { loadConfig, validateConfig, type ValidatedConfigCandidate } from "../../config.js";
-import { configurationLayout, type ConfigurationLayout } from "../../config/operations.js";
+import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../../config.js";
+import type { ConfigurationLayout } from "../../config/operations.js";
 import { replaceDerivedFile } from "../../storage/durable-fs.js";
 import type { ApplyScope, ConfigField } from "../model.js";
 import { CONFIG_BOUNDS } from "../limits.js";
@@ -43,6 +43,7 @@ export type ConfigLayout = ConfigurationLayout;
 
 export interface Settings {
   readonly path: string;
+  readonly snapshot: ConfigurationSnapshot | null;
   readonly layout: ConfigLayout;
   readonly config: HostConfigV1;
   readonly workerProfile: string;
@@ -92,13 +93,19 @@ function readJsonObject(path: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-export function settingsOf(path: string, config: HostConfigV1, layout: ConfigLayout = { kind: "inline", path }): Settings {
+export function settingsOf(
+  path: string,
+  config: HostConfigV1,
+  layout: ConfigLayout = { kind: "inline", path },
+  snapshot: ConfigurationSnapshot | null = null,
+ ): Settings {
   const workerProfile = workerProfileOf(config);
-  return Object.freeze({ path, layout, config, workerProfile, fields: fieldsOf(config, workerProfile) });
+  return Object.freeze({ path, snapshot, layout, config, workerProfile, fields: fieldsOf(config, workerProfile) });
 }
 
 export function readSettings(path: string): Settings {
-  return settingsOf(path, loadConfig(path), configurationLayout(path));
+  const snapshot = loadConfigurationSnapshot(path);
+  return settingsOf(path, snapshot.config, snapshot.layout, snapshot);
 }
 
 /** CFG-005: a config replacement must carry a new policy revision. Deriving it

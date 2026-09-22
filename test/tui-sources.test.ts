@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import type { AgentStatus, HostConfigV1 } from "../implementation/contracts.js";
 import { StoreError } from "../src/domain/errors.js";
 import { TEST_RESOURCES } from "./fixtures/spec.js";
+import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import {
   INITIAL_WORKERS, PRINCIPAL_MODEL, WORKER_LIMIT, WORKER_MODEL, WORKER_PROFILE,
   applyField, fieldsOf, readSettings, revisionFor, settingsOf, writeSettings,
@@ -141,24 +142,17 @@ test("T96/TUI-007: every exposed field declares an apply scope that matches its 
 });
 
 test("T97/TUI-010: the core extension stays first and selection is confined to libdir", () => {
-  const root = scratch("oma-tui-ext-");
+  const fixture = createCompleteConfigurationFixture();
   try {
-    const libdir = join(root, "lib");
-    mkdirSync(join(libdir, "extensions"), { recursive: true });
-    mkdirSync(join(libdir, "dist", "src"), { recursive: true });
-    writeFileSync(join(libdir, DEPLOY_CORE(libdir)), "export {};\n");
-    writeFileSync(join(libdir, "extensions", "review.js"), "export {};\n");
-    writeFileSync(join(libdir, "extensions", "browser.js"), "export {};\n");
-    writeFileSync(join(root, "host.json"), JSON.stringify({ installation: { libdir } }));
-    writeFileSync(join(root, "models.json"), JSON.stringify({}));
-    writeFileSync(join(root, "principal.json"), JSON.stringify({ agentProfile: {}, extensions: [CORE_EXTENSION], promptFile: "p.md" }));
-    writeFileSync(join(root, "resident.json"), JSON.stringify({ agentProfile: {}, extensions: [CORE_EXTENSION, "extensions/review.js"], promptFile: "p.md" }));
-    writeFileSync(join(root, "index.json"), JSON.stringify({
-      kind: "oma-operations-v1", host: "host.json", models: "models.json",
-      roles: { principal: "principal.json", resident: "resident.json" },
-    }));
-
-    const context = readExtensions(join(root, "index.json"), "principal", "resident");
+    const extensionDir = join(fixture.installation, "extensions");
+    mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(join(extensionDir, "review.js"), "export {};\n");
+    writeFileSync(join(extensionDir, "browser.js"), "export {};\n");
+    fixture.edit("roles/resident.json", role => {
+      role.extensions = [CORE_EXTENSION, "extensions/review.js"];
+    });
+    const settings = readSettings(fixture.path);
+    const context = readExtensions(settings.snapshot!, "principal", "resident");
     assert.equal(context.editable, true);
     assert.equal(context.rows[0]!.id, CORE_EXTENSION);
     assert.equal(context.rows[0]!.locked, true);
@@ -168,19 +162,17 @@ test("T97/TUI-010: the core extension stays first and selection is confined to l
     assert.ok(context.rows.some(row => row.id === "extensions/browser.js"), "host-placed file is offered");
 
     toggleExtension(context, "extensions/review.js", "principal", true);
-    const principal = JSON.parse(readFileSync(join(root, "principal.json"), "utf8"));
+    const principalPath = context.roles.find(role => role.name === "principal")!.path;
+    const principal = JSON.parse(readFileSync(principalPath, "utf8"));
     assert.equal(principal.extensions[0], CORE_EXTENSION);
     assert.deepEqual(principal.extensions, [CORE_EXTENSION, "extensions/review.js"]);
 
-    // The core entry cannot be cleared and a file outside libdir cannot be added.
     toggleExtension(context, CORE_EXTENSION, "principal", false);
-    assert.equal(JSON.parse(readFileSync(join(root, "principal.json"), "utf8")).extensions[0], CORE_EXTENSION);
+    assert.equal(JSON.parse(readFileSync(principalPath, "utf8")).extensions[0], CORE_EXTENSION);
     assert.throws(() => toggleExtension(context, "extensions/missing.js", "workers", true), (error: unknown) =>
       error instanceof StoreError && error.code === "INVALID_REQUEST");
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally { fixture.close(); }
 });
-
-function DEPLOY_CORE(_libdir: string): string { return CORE_EXTENSION; }
 
 test("T97/TUI-010: an inline config exposes only the locked core and refuses edits", () => {
   const root = scratch("oma-tui-inline-");

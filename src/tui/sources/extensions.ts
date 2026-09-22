@@ -12,7 +12,7 @@ import { isAbsolute, join, relative } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../../domain/deployment.js";
 import { replaceDerivedFile } from "../../storage/durable-fs.js";
-import { configurationLayout, type ConfigurationLayout } from "../../config/operations.js";
+import { loadConfigurationSnapshot, type ConfigurationSnapshot } from "../../config.js";
 import type { ExtensionRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
 
@@ -108,36 +108,23 @@ const unmanaged = (reason: string): ExtensionContext => Object.freeze({
   reason,
 });
 
-export function readExtensions(configPath: string, principalProfile: string, workerProfile: string): ExtensionContext {
-  // What the bundle contains is the loader's answer. This screen writes to the
-  // paths it gets back, so composing them here would be a second containment
-  // rule -- and the one this screen used to carry had none at all, which let a
-  // `roles` entry of `../x.json` be rewritten outside the bundle being edited.
-  // A bundle the loader refuses is not editable; it is reported.
-  let layout: ConfigurationLayout;
-  try { layout = configurationLayout(configPath); }
+export function readExtensions(source: string | ConfigurationSnapshot, principalProfile: string, workerProfile: string): ExtensionContext {
+  let snapshot: ConfigurationSnapshot;
+  try { snapshot = typeof source === "string" ? loadConfigurationSnapshot(source) : source; }
   catch (error) {
     return unmanaged(error instanceof StoreError ? `설정을 읽을 수 없습니다: ${error.message}` : "설정을 읽을 수 없습니다");
   }
-  if (layout.kind !== "operations")
+  if (snapshot.layout.kind !== "operations")
     return unmanaged("인라인 config.json은 role별 extension을 갖지 않습니다");
-  let libdir: string;
-  try {
-    const host = readJson(layout.host);
-    const installation = host.installation as Record<string, unknown> | undefined;
-    const declared = installation?.libdir;
-    if (typeof declared !== "string" || !isAbsolute(declared)) return unmanaged("installation.libdir이 절대 경로가 아닙니다");
-    libdir = declared;
-  } catch { return unmanaged("host 파일을 읽을 수 없습니다"); }
+  const libdir = snapshot.config.installation.libdir;
   const roles: RoleFile[] = [];
-  for (const [name, path] of Object.entries(layout.roles)) {
-    let role: Record<string, unknown>;
-    try { role = readJson(path); } catch { return unmanaged(`role 파일을 읽을 수 없습니다: ${name}`); }
+  for (const [name, authored] of Object.entries(snapshot.authoredRoles)) {
+    const role = authored.value;
     const entries = role.extensions;
     if (!Array.isArray(entries) || entries.some(entry => typeof entry !== "string"))
       return unmanaged(`role ${name}의 extensions 형식이 올바르지 않습니다`);
     const { extensions: _authored, ...rest } = role;
-    roles.push(Object.freeze({ name, path,
+    roles.push(Object.freeze({ name, path: authored.path,
       extensions: Object.freeze(entries as string[]), rest: Object.freeze(rest) }));
   }
   const principal = roles.find(role => role.name === principalProfile) ?? null;

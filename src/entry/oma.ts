@@ -159,11 +159,11 @@ async function main(argv: readonly string[]): Promise<void> {
   const mailbox = principalMailbox(stateRoot);
   const transport = new TuiTransport(stateRoot, society, settings.config.limits.frameBytes);
   let observation: Observation = { kind: "unknown", reason: "아직 관측하지 않음", observedAtMs: Date.now() };
-  let extensionContext = readExtensions(configPath, settings.config.principalProfile, settings.workerProfile);
+  let extensionContext = readExtensions(settings.snapshot ?? configPath, settings.config.principalProfile, settings.workerProfile);
 
   const reload = (): void => {
     settings = readSettings(configPath);
-    extensionContext = readExtensions(configPath, settings.config.principalProfile, settings.workerProfile);
+    extensionContext = readExtensions(settings.snapshot ?? configPath, settings.config.principalProfile, settings.workerProfile);
   };
 
   const terminal = openTerminal({ input: process.stdin, output: process.stdout });

@@ -1,5 +1,12 @@
 // MUST [CFG-001/002/005]: closed host configuration, no unlimited defaults.
-import { readConfigurationSource } from "./config/operations.js";
+import {
+  readConfigurationSource,
+  type AuthoredRoleSource,
+  type ConfigurationFileIdentity,
+  type ConfigurationLayout,
+  type ConfigurationReadObserver,
+  type RoleSettings,
+} from "./config/operations.js";
 import type { AgentProfile, HostConfigV1, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
@@ -89,10 +96,30 @@ function validatedSnapshot(config: HostConfigV1): ValidatedConfigCandidate {
 }
 
 
-/** Resolve the optional split authoring format once at process startup. */
+export interface ConfigurationSnapshot {
+  readonly config: ValidatedConfigCandidate;
+  readonly roles: Readonly<Record<string, RoleSettings>>;
+  readonly layout: ConfigurationLayout;
+  readonly authoredRoles: Readonly<Record<string, AuthoredRoleSource>>;
+  readonly sourceFiles: readonly ConfigurationFileIdentity[];
+}
+
+/** Resolve and read one complete authored source closure from one manifest read. */
+export function loadConfigurationSnapshot(path: string, observer?: ConfigurationReadObserver): ConfigurationSnapshot {
+  const source = readConfigurationSource(path, observer);
+  return Object.freeze({
+    config: validateConfig(source.host),
+    roles: source.roles,
+    layout: source.layout,
+    authoredRoles: source.authoredRoles,
+    sourceFiles: source.files,
+  });
+}
+
+/** Compatibility facade for callers that do not need authored source identities. */
 export function loadConfiguration(path: string) {
-  const source = readConfigurationSource(path);
-  return Object.freeze({ config: validateConfig(source.host), roles: source.roles });
+  const snapshot = loadConfigurationSnapshot(path);
+  return Object.freeze({ config: snapshot.config, roles: snapshot.roles });
 }
 export function loadConfig(path: string): HostConfigV1 { return loadConfiguration(path).config; }
 

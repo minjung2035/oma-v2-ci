@@ -4,6 +4,8 @@ import {
   closeSync,
   constants,
   fstatSync,
+  lstatSync,
+  type Stats,
   openSync,
   readSync,
   realpathSync,
@@ -30,10 +32,28 @@ export interface RoleSettings {
    */
   readonly toolSurface: ToolSurfacePlan | null;
 }
+export interface ConfigurationFileIdentity {
+  readonly path: string;
+  readonly dev: number;
+  readonly ino: number;
+  readonly bytes: number;
+  readonly mtimeMs: number;
+  readonly ctimeMs: number;
+  readonly sha256: string;
+}
+export interface AuthoredRoleSource {
+  readonly path: string;
+  readonly value: Readonly<Record<string, unknown>>;
+}
 export interface ConfigurationSource {
   readonly host: unknown;
   readonly roles: Readonly<Record<string, RoleSettings>>;
+  readonly layout: ConfigurationLayout;
+  readonly authoredRoles: Readonly<Record<string, AuthoredRoleSource>>;
+  readonly files: readonly ConfigurationFileIdentity[];
 }
+export const CONFIGURATION_SOURCE_LIMITS = Object.freeze({ files: 256, bytes: 8 * 1024 * 1024 });
+export type ConfigurationReadObserver = (event: Readonly<{ phase: "manifest-read"; layout: ConfigurationLayout }>) => void;
 /** Where the files of a configuration actually live, after containment.
  *
  * This is the single answer to "what is inside this bundle". Every reference is
@@ -115,11 +135,37 @@ function localPath(root: string, value: unknown): string {
     return invalid("file path escapes its root or uses a symlink");
   return path;
 }
-function bytes(path: string): Buffer {
-  const fd = openSync(
-    path,
-    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-  );
+class SourceClosure {
+  private readonly identities = new Map<string, ConfigurationFileIdentity>();
+  add(path: string, stat: Stats, content: Buffer): void {
+    const identity = Object.freeze({
+      path, dev: stat.dev, ino: stat.ino, bytes: content.length,
+      mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs,
+      sha256: createHash("sha256").update(content).digest("hex"),
+    });
+    const prior = this.identities.get(path);
+    if (prior && (prior.dev !== identity.dev || prior.ino !== identity.ino || prior.sha256 !== identity.sha256))
+      return invalid("configuration file identity changed within one snapshot");
+    if (!prior) this.identities.set(path, identity);
+    const files = this.identities.size;
+    const total = [...this.identities.values()].reduce((sum, value) => sum + value.bytes, 0);
+    if (files > CONFIGURATION_SOURCE_LIMITS.files || total > CONFIGURATION_SOURCE_LIMITS.bytes)
+      throw new StoreError("LIMIT_EXCEEDED", "configuration source closure exceeds its file or byte budget");
+  }
+  finish(manifestPath: string): readonly ConfigurationFileIdentity[] {
+    for (const identity of this.identities.values()) {
+      if (identity.path === manifestPath) continue; // the initial manifest bytes ARE the snapshot pointer
+      const current = lstatSync(identity.path);
+      if (!current.isFile() || current.dev !== identity.dev || current.ino !== identity.ino ||
+          current.size !== identity.bytes || current.mtimeMs !== identity.mtimeMs || current.ctimeMs !== identity.ctimeMs)
+        return invalid("configuration source changed before snapshot completion");
+    }
+    return Object.freeze([...this.identities.values()]);
+  }
+}
+
+function bytes(path: string, closure?: SourceClosure): Buffer {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = fstatSync(fd);
     if (!before.isFile() || before.size > 1024 * 1024)
@@ -133,25 +179,21 @@ function bytes(path: string): Buffer {
     }
     const value = buffer.subarray(0, count);
     const after = fstatSync(fd);
-    if (
-      value.length !== before.size ||
-      after.size !== before.size ||
-      after.mtimeMs !== before.mtimeMs ||
-      after.ctimeMs !== before.ctimeMs
-    )
+    if (value.length !== before.size || after.dev !== before.dev || after.ino !== before.ino ||
+        after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs)
       return invalid("configuration file changed while being read");
+    closure?.add(path, after, value);
     return value;
-  } finally {
-    closeSync(fd);
-  }
+  } finally { closeSync(fd); }
 }
-function json(path: string): Record<string, unknown> {
-  return parseJsonObject(bytes(path)).raw;
+function json(path: string, closure?: SourceClosure): Record<string, unknown> {
+  return parseJsonObject(bytes(path, closure)).raw;
 }
 function roleSettings(
   root: string,
   libdir: string,
   role: Record<string, unknown>,
+  closure: SourceClosure,
 ): RoleSettings {
   const entries = role.extensions;
   if (
@@ -171,13 +213,13 @@ function roleSettings(
       return invalid("extension must be a local JS/TS file");
     return Object.freeze({
       path,
-      sha256: createHash("sha256").update(bytes(path)).digest("hex"),
+      sha256: createHash("sha256").update(bytes(path, closure)).digest("hex"),
     });
   });
   const prompt = new TextDecoder("utf-8", {
     fatal: true,
     ignoreBOM: true,
-  }).decode(bytes(localPath(root, role.promptFile)));
+  }).decode(bytes(localPath(root, role.promptFile), closure));
   return Object.freeze({
     prompt,
     extensions: Object.freeze(extensions),
@@ -239,12 +281,13 @@ function toolSurfaceOf(value: unknown): ToolSurfacePlan | null {
  * what lets a screen report "this file is corrupt" against the right path
  * rather than silently deciding the bundle was inline and flattening it.
  */
-export function configurationLayout(path: string): ConfigurationLayout {
+interface ResolvedConfigurationLayout { readonly layout: ConfigurationLayout; readonly index: Record<string, unknown> }
+function resolveConfigurationLayout(path: string, closure: SourceClosure): ResolvedConfigurationLayout {
   try {
     const location = realpathSync(path);
-    const source = json(location);
+    const source = json(location, closure);
     if (source.kind !== "oma-operations-v1")
-      return Object.freeze({ kind: "inline" as const, path: location });
+      return { layout: Object.freeze({ kind: "inline" as const, path: location }), index: source };
     const manifest = closed(
       source,
       ["kind", "host", "models", "roles"],
@@ -260,13 +303,14 @@ export function configurationLayout(path: string): ConfigurationLayout {
         return invalid("invalid role profile name");
       roles[name] = localPath(root, file);
     }
-    return Object.freeze({
+    const layout = Object.freeze({
       kind: "operations" as const,
       index: location,
       host: localPath(root, manifest.host),
       models: localPath(root, manifest.models),
       roles: Object.freeze(roles),
     });
+    return { layout, index: source };
   } catch (error) {
     if (error instanceof StoreError) throw error;
     throw new StoreError(
@@ -275,40 +319,51 @@ export function configurationLayout(path: string): ConfigurationLayout {
     );
   }
 }
-export function readConfigurationSource(path: string): ConfigurationSource {
+export function configurationLayout(path: string): ConfigurationLayout {
+  return resolveConfigurationLayout(path, new SourceClosure()).layout;
+}
+export function readConfigurationSource(path: string, observer?: ConfigurationReadObserver): ConfigurationSource {
   try {
-    const layout = configurationLayout(path);
+    const closure = new SourceClosure();
+    const resolved = resolveConfigurationLayout(path, closure);
+    const layout = resolved.layout;
+    observer?.(Object.freeze({ phase: "manifest-read", layout }));
     if (layout.kind === "inline")
-      return { host: json(layout.path), roles: Object.freeze({}) };
+      return {
+        host: resolved.index,
+        roles: Object.freeze({}),
+        layout,
+        authoredRoles: Object.freeze(Object.create(null) as Record<string, AuthoredRoleSource>),
+        files: closure.finish(layout.path),
+      };
     const root = dirname(layout.index);
-    const host = json(layout.host);
-    if (
-      Object.hasOwn(host, "modelProfiles") ||
-      Object.hasOwn(host, "agentProfiles")
-    )
+    const host = json(layout.host, closure);
+    if (Object.hasOwn(host, "modelProfiles") || Object.hasOwn(host, "agentProfiles"))
       return invalid("host file must not duplicate models or role policies");
-    const models = json(layout.models);
+    const models = json(layout.models, closure);
     const installation = record(host.installation, "installation");
-    if (
-      typeof installation.libdir !== "string" ||
-      !isAbsolute(installation.libdir)
-    )
+    if (typeof installation.libdir !== "string" || !isAbsolute(installation.libdir))
       return invalid("installation.libdir must be absolute");
     const profiles: Record<string, unknown> = Object.create(null);
     const roles: Record<string, RoleSettings> = Object.create(null);
+    const authoredRoles: Record<string, AuthoredRoleSource> = Object.create(null);
     for (const [name, file] of Object.entries(layout.roles)) {
       const role = closedWithOptional(
-        json(file),
+        json(file, closure),
         ["agentProfile", "extensions", "promptFile"],
         ["toolSurface"],
         `role ${name}`,
       );
       profiles[name] = role.agentProfile;
-      roles[name] = roleSettings(root, installation.libdir, role);
+      authoredRoles[name] = Object.freeze({ path: file, value: Object.freeze({ ...role }) });
+      roles[name] = roleSettings(root, installation.libdir, role, closure);
     }
     return {
       host: { ...host, modelProfiles: models, agentProfiles: profiles },
       roles: Object.freeze(roles),
+      layout,
+      authoredRoles: Object.freeze(authoredRoles),
+      files: closure.finish(layout.index),
     };
   } catch (error) {
     if (error instanceof StoreError) throw error;
