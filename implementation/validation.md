@@ -4,26 +4,25 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP12 검증 트리의 부모 `93d5475`, 실행일 2026-09-22. WP12는 C0/C2-reader 준비다. 한 manifest read에서 validated config, roles, authored layout, role sources와 bounded file identities를 하나의 snapshot으로 반환한다. Writer generation 전환은 하지 않았다.
+브랜치 `refactor/safety-preserving-architecture`, WP18 검증 트리의 부모 `e164046`, 실행일 2026-09-23. WP18은 C1 context preaccept 소유권 정리다. `context.publish`가 수락 전에 획득한 staged tree와 frozen mail object를 획득 즉시 하나의 `PreacceptScope`에 operation과 accepted plan 참조 관계로 등록하고, 모든 preaccept 실패를 한 번의 정산으로 끝낸다. persisted plan/path/hash recipe, wire, receipt와 schema는 바꾸지 않았다.
 
-검증 입력: verification input digest `88416804b3966485133c68e6ae0a1899b05fddbd124da95540157ae83cf3ab25` (554 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `d73ad96417fc052d8bf0d26f5bdeb383369353274f73a4c5189f8e16de02fff1` (554 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
-| 검사 | WP12 실행 / 대기 범위 |
+| 검사 | WP18 실행 / 대기 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS: fast/durable/property 231/194/33, local 1344/1344, package; all fail/cancelled/skipped/todo=0 (`wp12-*-initial`, `wp12-local-initial`). metadata-bound final rerun required |
-| V12A/V12B | one-manifest pointer swap, authored identity/prompt-root and aggregate closure budget cases pass; durable initial PASS. final rerun pending |
-| snapshot | `ConfigurationSnapshot` binds validated config, roles, exact layout, authored roles and unique file identities/hashes. Initial manifest is the snapshot pointer; referenced files are rechecked before return |
-| callers | readSettings reads one snapshot; entry passes the same snapshot to extensions. Session/runner each load one complete activation config. String compatibility facade remains full-snapshot read |
-| manual limitation | referenced file drift fails explicitly; this does not exclude arbitrary same-UID concurrent writers or prove manual multi-file atomicity |
-| managed generations | reader is ready for old/new immutable generations, but WP13 writer/retention/commit is NOT_RUN |
-| negative/lane controls | double manifest read red (`wp12-double-read-red`), role-directory prompt root red (`wp12-role-root-red`), unbounded closure red (`wp12-unbounded-red`), lane registration red/green. disposable source restored |
+| type/build/package/local and lanes | PASS: fast/durable/property 232/224/33, local 1360/1360, package; all fail/cancelled/skipped/todo=0 (`wp18s2-*-initial-r2`, `wp18s2-local-initial-r2`, `wp18s2-package-initial`). The first fast attempt failed only R38 because this record was stale (`wp18s2-fast-initial`); the first local attempt failed only T117 because the worktree's symlinked `node_modules` is invisible inside the sandbox (`wp18s2-local-initial`). metadata-bound final rerun required |
+| V18A | order stream → staged tree → candidate → mail object → acceptance → canonical effect; nine unaccepted failure points remove tree and object; a lost acceptance acknowledgement and an unavailable acceptance observation retain both; native non-quiescence retains only the tree that preparation used; stream-level root cleanup and replaced-file retention |
+| V18B | a real `RpcConnection` sharing the broker staging root closes after acceptance; tree and object stay exact; a same-key retry through a second connection reads no payload and returns the same operation; reconcile imports the staged candidate after the fetched objects are pruned and converges ref, snapshot and notification with the unchanged plan |
+| ownership | the staging root is created exclusively and pinned at creation. A failure before return removes the exact files it created, then the root; a replaced file keeps both. After return one scope settles tree and object by plan reference. Unknown observation and native non-quiescence retain; nothing is swept by path |
+| negative controls | the final V18A/V18B tests fail 4 cases on the pre-fix commit `97bc737` and on the WP start `af3f6bf` (freeze, post-freeze observation and acceptance-refusal tree leaks; non-quiescent tree deletion). Mutants that keep the failed root, use executor-wide quiescence, drop the quiescence relation, treat an unavailable observation as absence, or let connection close remove context staging each fail. Lane registration red/green. disposable sources restored |
+| not covered | the systemd-only files, including the `crash-boundaries` `ctx-accepted` boundary, are BLOCKED on this host. Process crash, broker restart and VM power loss are NOT_RUN. mail/submit/create scope migration remains WP19/WP20; partial `freezeObject` publication cleanup remains WP20 |
 | systemd/provider/powercut/CI/A-008 | BLOCKED/NOT_RUN/open as previously recorded |
 
-Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp12-*`. Complete initial and metadata-bound final reruns remain required.
+Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp18s2-*`. Earlier `wp18-*` logs are an unreviewed intermediate attempt and support no claim here. Complete initial and metadata-bound final reruns remain required.
 
-Final PASS condition: `wp12-fast-final`, `wp12-durable-final`, `wp12-property-final`, `wp12-package-final`, `wp12-local-final` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `wp18s2-fast-final`, `wp18s2-durable-final`, `wp18s2-property-final`, `wp18s2-package-final`, `wp18s2-local-final` must bind one digest with exit 0 and zero unrun tests.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -994,7 +993,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,564 code LOC**이며 A-008 기준을 넘는다. WP12 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,612 code LOC**이며 A-008 기준을 넘는다. WP18 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
