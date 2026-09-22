@@ -44,3 +44,15 @@ scope review; no baseline generator was run to conceal this discrepancy.
 
 The supplemental artifact map covers tests, scripts, contracts, CI and docs.
 Its `NOT_STARTED`/`NOT_RUN` rows are assignments, not file-review conclusions.
+
+## WP00.03 — unchanged baseline
+
+Intent: inspect committed measurements before install/build, then execute the
+actual package scripts. Do not repair code merely to make the baseline green.
+
+Raw evidence is `wp00-inventory-before`, `wp00-install`, `wp00-typecheck`,
+`wp00-build`, `wp00-package`, `wp00-architecture`, and `wp00-local` (`.json` metadata
+plus `.log` stdout/stderr). Every invocation exited 0; the local suite reported
+zero skipped/todo/cancelled tests. Input digests before and after were unchanged.
+No generator was invoked. See the external WP00 handoff for exact commands and
+scope; this does not refresh old CI/provider/kernel/powercut claims.
