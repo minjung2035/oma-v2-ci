@@ -2,8 +2,9 @@
 
 ## Current task
 
-WP00 is active under `oma-v2-consistency-plan-b25961c/` (user-supplied plan,
-kept untracked and unchanged). Follow its dependency graph, not numeric order.
+WP00 is complete (C0 baseline only) under `oma-v2-consistency-plan-b25961c/`
+(user-supplied plan, kept untracked and unchanged). Next permitted: WP01 or WP02;
+recommended next: WP01. Follow the dependency graph, not numeric order.
 Only one WP may be active. No runtime/schema/wire/receipt/authority change has
 been made by this execution.
 
@@ -65,3 +66,24 @@ all F01–F12, N01–N02, H01–H05 and Q01–Q02 with next oracle owners.
 No product bug has been declared fixed. H hypotheses remain uncertain pending
 their actual environment/decision tests. `WP00-FILE-REVIEW.md` records exact
 read ranges and KEEP/INVESTIGATE reasons, without claiming unread file closure.
+
+## WP00.05 — evidence closure / next step
+
+Intent: keep immutable raw evidence outside verification inputs and prove the
+oracles reject stale input and hidden nonexecution before relying on them.
+
+Read `/tmp/oma-consistency-evidence-Vc66uK/WP00-HANDOFF.md` before WP01/02.
+It fills the plan HANDOFF template with actual argv, exit codes, source binding,
+raw logs, negative-control assertions, restored positive controls and limitations.
+`WP00-evidence.sha256` binds the external artifacts; `wp00-close.json` records
+the ending commit/digest. `wp00.patch` records the documentation-only tree delta.
+
+V00A: an actual input edit and a deliberately omitted input each failed the
+existing source-digest regression in an isolated detached worktree. V00B: a
+mutant accepting skipped tests failed; real kernel/crash dry qualification
+returned BLOCKED/NOT_RUN. Restored originals passed. No manager mutation,
+provider call or VM power loss was performed. The user plan checksums still match.
+
+WP01 must first read D01–D06 and the current normative contracts. Do not mark
+runtime-dependent ADR claims qualified until their designated environment WP.
+WP00 completion does not imply any of WP01–WP32 or the overall goal is complete.
