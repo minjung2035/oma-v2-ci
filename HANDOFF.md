@@ -56,3 +56,12 @@ plus `.log` stdout/stderr). Every invocation exited 0; the local suite reported
 zero skipped/todo/cancelled tests. Input digests before and after were unchanged.
 No generator was invoked. See the external WP00 handoff for exact commands and
 scope; this does not refresh old CI/provider/kernel/powercut claims.
+
+## WP00.04 — findings reclassified
+
+Intent: read current owners and caller paths, separating source-level mismatch
+from reproduced runtime failure. `WP00-findings.md` in the evidence root records
+all F01–F12, N01–N02, H01–H05 and Q01–Q02 with next oracle owners.
+No product bug has been declared fixed. H hypotheses remain uncertain pending
+their actual environment/decision tests. `WP00-FILE-REVIEW.md` records exact
+read ranges and KEEP/INVESTIGATE reasons, without claiming unread file closure.
