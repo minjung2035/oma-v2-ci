@@ -817,7 +817,7 @@
     },
     {
       "path": "src/tui/sources/settings.ts",
-      "sha256": "307867f11abe2cb71641f68acf3f5819153d88488be6fcf1194852e1b40425f3"
+      "sha256": "db85c1a16d22628b32a27a0b177f2cd1bd693dbc329d35133fea41ff4aa289b2"
     },
     {
       "path": "src/tui/transcript.ts",

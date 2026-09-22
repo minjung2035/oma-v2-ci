@@ -145,8 +145,8 @@ export function applyField(settings: Settings, field: string, value: string | nu
 }
 
 /** FS-002/CFG-001: host authority is replaced atomically, never edited in place.
- * The written bytes are revalidated by the caller's next read; this function
- * does not report success for a file it could not render.
+ * The complete candidate is validated before rendering; a later read independently
+ * re-observes the committed bytes.
  *
  * Only for an inline `config.json`. A split bundle must be patched at its real
  * owners instead, which `commitField` does.

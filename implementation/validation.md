@@ -4,33 +4,31 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP04 검증 트리의 부모 `396b857`, 실행일 2026-09-22. WP04는 Store opening의 C1 수정이다. compatibility preflight를 writer setup보다 앞에 두고 생성자 실패 handle/cause 소유를 정리했다. v1 DDL·wire·receipt·live 권한·기존 transaction/row 검증은 유지한다. 경계와 예외는 [store-opening.md](store-opening.md)에 있다. WP00–WP02 결과는 각 외부 handoff의 과거 source에만 결박되며 WP03은 disposable-user topology 환경 때문에 BLOCKED 상태다.
+브랜치 `refactor/safety-preserving-architecture`, WP11 검증 트리의 부모 `8ad1649`, 실행일 2026-09-22. WP11은 C0/C1 설정 검증·편집 ownership 수정이다. 파일 I/O와 분리된 canonical validator가 deep immutable candidate를 만들고, 모든 supported settings writer가 전체 후보 검증을 publication보다 먼저 수행한다. HostConfigV1 authoring schema, v1 DDL/wire/receipt/live authority는 바꾸지 않았다. WP03은 disposable-user topology 환경 때문에 계속 BLOCKED다.
 
-검증 입력: verification input digest `d7c311171a0ad43e72f4d78e415e0efc58d4748e7d2f3b49848a45dea0799e96` (547 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 생성 adversarial report는 판정의 출력이므로 제외한다. commit 이름만으로 working-tree 검증을 주장하지 않는다. metadata 변경 뒤에도 전체 검증을 다시 실행해야 하며 digest만 갱신한 것은 재검증이 아니다.
+검증 입력: verification input digest `25bf33a3d2db37f029678f0070bf7df91700ed1d89c1fa4a4716979295d242ad` (551 files). 로컬 판정을 결정하는 실행 source, tests, scripts, package/TypeScript 설정, production manifest·LOC 산출물, implementation 계약·owner·trace·systemd·architecture 문서와 CI workflow의 경로·내용을 경로 순으로 해시한 값이다. `implementation/validation.md` 자체는 이 한 digest field만 정규화하고 나머지 바이트를 포함한다. runtime log와 generated adversarial report는 출력이라 제외한다. metadata 변경 뒤에는 전체 검증을 다시 실행해야 하며 digest만 갱신한 것은 실행 증거가 아니다.
 
 ### 실행 결과
 
-| 검사 | WP04 결과 / 범위 |
+| 검사 | WP11 실행 / 대기 범위 |
 |---|---|
-| `npm run typecheck` / `build` / `check:package` | PASS: 실제 fast prechecks/build 및 `wp04-package-initial`, metadata 결박 `wp04-fast-final`/`package-final`/`local-final`. 보존 formatting source의 최종 결박은 `wp04-fast-final-r2`, `wp04-package-final-r2`, `wp04-local-final-r2` |
-| `check:architecture` / `check:inventory` | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, 0 findings. production 변경마다 stale 검출 뒤 pinned generator 실행. A-008 review/release gate는 여전히 OPEN |
-| `npm test` | PASS, 1314/1314, fail/cancelled/skipped/todo=0 (`wp04-local-initial`, `wp04-local-final`). 보존 formatting source의 동일 전체 재실행은 `wp04-local-final-r2` 조건 |
-| `verify:fast` / `verify:durable` / `verify:property` | PASS / EXECUTED: 226 / 173 / 30 tests, 모두 fail/cancelled/skipped/todo=0 (`wp04-*-initial`, `wp04-*-final`; fast initial 성공 record는 `wp04-fast-initial-r2`). 보존 formatting source의 최종 결박은 `wp04-*-final-r2`; 중복 scope를 합산해 추가 coverage로 주장하지 않음 |
-| initial metadata failure | 첫 fast는 225 pass / 1 fail: R38이 오래된 LOC 인용을 검출 (`wp04-fast-initial`). 인용 수정 후 위 전체 검증을 실행했으며 gate를 약화하지 않음 |
-| 보존된 formatting | 최종 검증 뒤 8개 TypeScript test/fixture가 formatter 형태로 변경됨. `wp04-format-ast-equivalence`가 commit `396b857`과 TypeScript AST digest 일치를 확인했다. JS emit byte 비교 시 emitter가 source 줄바꿈/후행 쉼표를 보존해 달라지는 음성 결과(`wp04-format-equivalence`, exit 1)는 의미 동등성 증거로 사용하지 않음. 변경 바이트를 보존하고 전체 final-r2를 다시 실행 |
-| V04A / V04B | actual Store/native handle/FS 관측 32/32 (`wp04-03-focused`, `wp04-restored-green`), 관련 regression 76/76 (`wp04-04-related`). 해당 raw input에만 결박 |
-| negative / restoration controls | original Store 복원: 32 중 29 fail / 3 pass (`wp04-original-control-red`); 수정 복원 후 32 pass. cleanup 없는 중간 source: 15 fail / 17 pass (`wp04-03-owner-control-red`). 모두 skip/todo/cancelled=0 |
-| input / oracle 보완 | agent를 누락한 positive fixture는 FK 오류로 거절되어 고침. busy 연결의 POSIX lock 때문에 SQLite가 native FD close를 지연함을 확인하고 handle·독립 process lock·최종 FD baseline을 함께 검증. 이 실패를 production 결함이나 PASS로 바꾸어 기록하지 않음 |
-| native 환경 | Linux x64, UID 1000, Node 26.7.0 / SQLite 3.53.4. SQLite source ID는 `wp04-native-environment.log`; 다른 backend/VFS 자동 qualification 아님 |
-| lane / nonexecution policy | registration 전 red, 후 7/7 (`wp04-lane-policy-green`). skip/todo/cancel/exit/signal/setup/timeout 거절 보존; static policy 검사는 실제 Store 실행과 구분 |
-| stress / dedicated functional Pi/provider/PTY | NOT_RUN for WP04; controlled local fixture와 실제 provider/persistence/installed-runtime qualification은 별개 |
-| kernel / systemd crash | BLOCKED / NOT_RUN: 승인된 disposable user-systemd 환경 미확보. 기존 혼합 파일 exclusion/opt-in 유지 |
-| read-only filesystem | 별도 소유 fixture의 bwrap RO mount에서 EROFS를 직접 관측하고 actual Store writer setup 거절·native handle/FD 정리·DB 보존 확인: 1/1 (`wp04-readonly-mount-initial`, `wp04-readonly-mount-final`; 보존 formatting 결박 `wp04-readonly-mount-final-r2`). dist/node_modules를 빌린 좁은 mount 검증이며 systemd/installed-runtime 증거 아님 |
-| powercut / successful current-SHA CI | NOT_RUN / 미확보. 직접 자식 SIGKILL이나 RO mount가 전원손실·CI 증거는 아님; 승인 없는 운영 변경이나 push/PR/merge 없음 |
+| `npm run typecheck` / `build` / `check:package` | PASS: actual lane prechecks/build와 `wp11-package-initial`. metadata 갱신 뒤 최종 결박은 `wp11-fast-final`, `wp11-package-final`, `wp11-local-final` |
+| `check:architecture` / `check:inventory` | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, 0 findings. production 변경 때 stale hash를 먼저 검출한 뒤 pinned generator 실행. A-008은 OPEN |
+| `npm test` | PASS, 1324/1324, fail/cancelled/skipped/todo=0 (`wp11-local-initial`). metadata 갱신 뒤 동일 executable source 전체를 `wp11-local-final`로 재실행하는 조건 |
+| `verify:fast` / `verify:durable` / `verify:property` | PASS / EXECUTED: 228 / 178 / 33 tests, 모두 fail/cancelled/skipped/todo=0 (`wp11-fast-initial-r2`, `wp11-durable-initial`, `wp11-property-initial`). 최종 결박은 `wp11-*-final`; 겹치는 scope를 합산하지 않음 |
+| initial metadata failure | 첫 fast 실행은 228 중 227 pass / 1 fail: R38이 직전 measured artifact보다 1 낮은 LOC 인용을 검출 (`wp11-fast-initial`). A-008을 유지하며 인용을 artifact와 맞춘 뒤 모든 complete scope를 실행 |
+| V11A | inline/split cross-relation 및 compatibility writer 무변경 cases와 관련 production paths 통과. final focused 묶음은 81/81 (`wp11-final-focused-r2`); 전체 lane 전에는 해당 input에만 결박 |
+| V11B | actual TypeScript compile fixture가 missing descriptor와 `string` widening을 거절하고, runtime null-prototype registry가 display/transform/placement/apply metadata를 닫힌 field union에 연결. current typecheck PASS |
+| V11C | deep immutable validator snapshot, prototype-sensitive own keys, zero-seed no-target, actual Store spec/request/plan identity 보존 cases 통과. 전체 property lane 전에는 focused evidence |
+| negative controls | old writer에서 V11A 실패 (`wp11-v11a-old-writer-red`); shallow snapshot에서 V11C 실패 (`wp11-v11c-shallow-red`); descriptor 삭제는 compiler exit 2 (`wp11-v11b-missing-descriptor-red`). 모두 disposable worktree source identity 기록 |
+| lane policy | 등록 전 red (`wp11-lane-policy-red`), 등록 뒤 green (`wp11-lane-policy-green`). 기존 nonexecution/setup/timeout/signal 거절 유지 |
+| tooling scope | generated `dist/**`와 vendored `reference/**`를 pi-lens diagnostic walk에서 제외. 기존 `.gitleaks.toml` 정책과 일치하며 build/package/verification input을 제외하지 않음. RFC WebSocket sample nonce는 runtime 계산; credential 아님 |
+| managed generations / concurrent edit serialization | NOT_RUN / WP12–WP15 scope. WP11은 arbitrary external same-UID writer, multi-file atomic commit, retention/GC를 증명하지 않음 |
+| systemd/provider/installed-runtime/powercut/current-SHA CI | BLOCKED 또는 NOT_RUN. 승인 없는 manager/provider/VM/remote action 없음 |
 
-원본 argv·시각·exit·input-before/after·log SHA-256은 `/tmp/oma-consistency-evidence-Vc66uK/wp04-*.json`과 같은 이름 `.log`에 있다. 소작업 01–03은 main working bytes를 보존하며 별도 worktree에서 각 snapshot을 실제 검증했고 `wp04-*-stage.json`의 tested tree와 commit tree를 일치시켰다. 따라서 commit 명령 record의 main working digest를 snapshot 검증 digest로 혼동하지 않는다. 과거 소작업 결과를 현재 metadata source의 전체 PASS로 자동 승격하지 않는다.
+원본 argv·시각·exit·input-before/after·log SHA-256은 `/tmp/oma-consistency-evidence-Vc66uK/wp11-*.json` 및 같은 이름 `.log`에 있다. WP11.01/.02는 별도 worktree에서 actual source를 검증하고 tree를 stage한 뒤 commit했다; main working bytes와 snapshot 실행을 혼동하지 않는다. 현재 source의 PASS는 이후 initial/full 결과를 반영하고 동일 metadata source에서 final rerun까지 완료해야 한다.
 
-현재 보존 source의 최종 PASS 조건은 `wp04-fast-final-r2`, `wp04-durable-final-r2`, `wp04-property-final-r2`, `wp04-package-final-r2`, `wp04-local-final-r2`, `wp04-readonly-mount-final-r2` 원본이 모두 위 digest와 일치하고 실제 종료 코드 0 및 해당 비실행 수 0을 기록하는 것이다. 조건을 충족하는 원본 없이 이 표를 새 source의 PASS로 사용하지 않는다. `wp04-*-lane-final-r2/result.json`은 각 lane의 실제 실행을 별도로 보존한다.
+현재 metadata source의 최종 PASS 조건은 `wp11-fast-final`, `wp11-durable-final`, `wp11-property-final`, `wp11-package-final`, `wp11-local-final`이 같은 digest에서 실제 종료 코드 0과 해당 비실행 수 0을 기록하는 것이다. 조건을 충족하는 raw record 없이 위 initial 결과를 새 source의 PASS로 승격하지 않는다.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -1001,7 +999,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,199 code LOC**이며 A-008의 10,000행 기준을 넘는다. WP04 production 변경 뒤 산출물을 다시 측정한 값이며, 이 값의 갱신은 기존 architecture review/release gate를 닫지 않는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 기능 작업은 계속하되 review 자체는 별도 작업으로 남긴다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,315 code LOC**이며 A-008의 10,000행 기준을 넘는다. WP11 production 변경 뒤 산출물을 다시 측정한 값이며, 이 값의 갱신은 기존 architecture review/release gate를 닫지 않는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다. 기능 작업은 계속하되 review 자체는 별도 작업으로 남긴다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
