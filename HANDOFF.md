@@ -2,42 +2,35 @@
 
 ## Current state
 
-- Branch: `refactor/safety-preserving-architecture`.
-- User plan: `oma-v2-consistency-plan-b25961c/`, unchanged and untracked. Never stage/reset/rewrite/delete it.
-- Completed within documented scopes: WP00, WP01, WP02, WP04, WP11, WP17.
-- WP03 remains **BLOCKED / incomplete**: clean disposable-user topology preflight refused before manager invocation. Preserve `/tmp/oma-consistency-evidence-Vc66uK/WP03-BLOCKED-HANDOFF.md` and all original dependency edges.
-- Next selected eligible card: **WP05**. Goal mode is inactive; never reuse old goal IDs/tools.
-- Keep exactly one WP active. Continue without confirmation; record unavailable qualification honestly and proceed with other eligible work.
+- Branch `refactor/safety-preserving-architecture`; user plan `oma-v2-consistency-plan-b25961c/` remains unchanged/untracked and must never be staged/reset.
+- Completed scopes: WP00, WP01, WP02, WP04, WP11, WP17, WP05.
+- WP03 remains BLOCKED/incomplete on an approved disposable-user systemd topology. Preserve its evidence and dependencies.
+- Next selected eligible card: **WP12**, then WP18. Goal mode is inactive. Keep exactly one WP active and continue without confirmation.
+- Evidence root: `/tmp/oma-consistency-evidence-Vc66uK`. `implementation/validation.md` solely owns current count/LOC/PASS tables.
 
-## Evidence discipline
+## WP05 handoff essentials
 
-Evidence root: `/tmp/oma-consistency-evidence-Vc66uK`. Read predecessor handoffs, the card/ADRs, and actual source. Historical resume files are not latest status. `implementation/validation.md` solely owns current counts/LOC/PASS tables; do not duplicate them here.
+Delivery receipt v1 bytes and identity relations are unchanged; publication semantics are now C1-strengthened.
 
-## WP17 handoff essentials
+- Validate encoded candidate and exact batch/session/adapter/entry relations before publication.
+- Create an unpredictable 0600 temporary under one held private parent; bounded write, file fsync, no-replace final link, final decode/mode validation, temp unlink, then parent fsync.
+- Success returns only after final parent flush. Final-link followed by flush uncertainty preserves the final receipt and reports failure/unknown; it never deletes final evidence.
+- A temp-write crash seam leaves no partial final name. Throw/process fault evidence is not VM/storage power-loss V05C.
+- EEXIST validates and returns the first valid receipt. Conflict is preserved and rejected; nothing overwrites or widens mode.
+- Resident runner already used the returned receipt. Principal completion now also uses the publisher's returned first fact rather than the later attempted boundary.
+- Receipt reads require a bounded private 0600 regular file. Existing valid receipts remain compatible.
 
-WP17 adds a narrow preaccept ownership scope, not a generic resource manager or a new durable table.
+V05A/V05B are required in durable/all. Negative controls remove parent fsync and ignore the returned first fact; both fail. Exact evidence is in the external WP05 handoff/task result. V05C remains BLOCKED/NOT_RUN because no approved VM/storage powercut profile exists.
 
-- Registration binds an owning operation identity, a concrete resource identity, its `PreacceptOwner`, the authoritative reference observer, and optional native-quiescence observer.
-- Closed dispositions are `unaccepted-known`, `accepted-referenced`, `accepted-unreferenced`, `outcome-unknown`, and `cleanup-unconfirmed`.
-- Unknown DB/reference/native-descendant quiescence retains evidence. An accepted row alone is not ownership: an accepted-unreferenced artifact is discarded only after that relation is observed.
-- Cleanup attempts continue after one failure. `settleFailure(primary)` preserves the primary cause and aggregates cleanup failures with the full disposition report.
-- Failed cleanup does not mark ownership released. It may retry the same frozen decision; successful repeated settlement is inert and cannot create new ownership.
-- Published-file observation distinguishes known absence from unavailable identity. A replaced inode is never deleted and is reported cleanup-unconfirmed.
-- Submit-spool identity is captured immediately after exclusive open, before streaming/fallible work; preparation failure cleanup uses that inode identity rather than unconditional path deletion.
-- `PreparationExecutor.quiescence` exposes only `quiescent`/`unknown`; non-exit or arbitrary-descendant uncertainty stays sticky and prevents cleanup authorization.
-- Existing `settleByAcceptance` callers now use the scope and pass operation identity. Full relation-aware caller migrations and domain-specific exception handling remain WP18–WP20 as the card requires.
+## Retained WP17/WP11 boundaries
 
-V17A/V17B production-linked cases cover aggregate cleanup, DB/native unknown retention, retry/idempotence, inode replacement, and an actual accepted Store row whose plan does not reference the artifact. Negative controls restore DB-error→false and accepted-row blanket retention; both fail. Exact commands/results live in the WP17 external handoff/task result.
+WP17's five preaccept dispositions, inode identity, native uncertainty retention, aggregate cleanup and idempotent retry remain. Full caller migrations remain WP18–20. WP11's pure deep config validator, exact edit descriptor registry and validate-before-write ordering remain C0/C1; managed generations/serialization remain WP12–15.
 
-## WP11 boundary retained
+## Limits
 
-The canonical pure config validator creates deep immutable candidates; one exact descriptor registry owns editable config field semantics; all supported settings writes validate the whole candidate before publication. This is C0/C1 and does not claim managed-generation atomicity, serialization, or retention. See `/tmp/oma-consistency-evidence-Vc66uK/WP11-HANDOFF.md`.
-
-## Limits still binding
-
-- No operational society, real credential, paid provider, unit installation, VM powercut, push/PR/merge, or branch-protection action was performed.
-- Clean-user systemd/kernel, production-only installation, provider persistence, VM/storage power loss, successful current-SHA CI, and A-008 release review remain unqualified/open.
-- Preserve v1 schema/wire/receipt/live fencing. C2 requires named compatibility/retention/uncertainty fixtures; C3 requires approval.
-- Nine manifest omissions remain WP29; runtime/dev package classification and artifact-only installation remain WP31.
-- Partial/SCOPE_ONLY reviews stay explicit. Types, static checks, assignment, and fixture counts never substitute for unperformed runtime/source review.
-- Overall WP00–WP32 and release qualification remain incomplete.
+- No operational society, real credential/provider, unit install, powercut, push/PR/merge or branch-protection action was performed.
+- Clean-user systemd/kernel, installed runtime/provider persistence, VM/storage power loss, current-SHA CI and A-008 release review remain unqualified/open.
+- Preserve v1 schema/wire/receipt/live fencing. C2 needs named compatibility/retention/uncertainty fixtures; C3 needs approval.
+- Nine manifest omissions remain WP29; runtime/dev dependency classification and artifact-only installation remain WP31.
+- Partial/SCOPE_ONLY reviews remain explicit; static gates/types/counts do not close unperformed source/runtime review.
+- Overall WP00–WP32 execution and release qualification remain incomplete.

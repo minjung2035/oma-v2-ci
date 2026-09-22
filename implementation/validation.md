@@ -4,28 +4,28 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP17 검증 트리의 부모 `5215b1a`, 실행일 2026-09-22. WP17은 C0/C1 preaccept ownership scope다. operation/resource identity, reference relation, native quiescence와 cleanup disposition을 등록하고 unknown에서 삭제하지 않는다. 기존 v1 DDL/wire/receipt/live authority와 durable entity는 바꾸지 않았다.
+브랜치 `refactor/safety-preserving-architecture`, WP05 검증 트리의 부모 `bf9ebcf`, 실행일 2026-09-22. WP05는 C1 v1 delivery receipt publication 수정이다. private temp/file fsync/no-replace final/validated first fact/temp cleanup/parent fsync 순서를 actual held-directory primitives로 구현한다. DDL/wire/receipt encoding과 live completion authority는 유지한다.
 
-검증 입력: verification input digest `750fa9475c91302c584e72d091ad38d22e732bf077718842c76849697d0ddfd5` (552 files). 검증 source/test/script/config/manifest/implementation 문서·generated measurement/graph를 경로 순으로 결박한다. `implementation/validation.md`의 이 digest field만 정규화한다. metadata를 갱신한 뒤에는 전체 검증을 다시 실행해야 하며 hash refresh만으로 PASS를 승격하지 않는다.
+검증 입력: verification input digest `1c04611318459fa1d03b1a09e53455865d0b052a5bb3299b9cbef337856082b3` (553 files). source/tests/scripts/config/manifest/implementation 및 generated measurement/graph를 결박한다. validation digest field만 정규화하며 metadata 변경 뒤 전체 재실행 없이 PASS를 승격하지 않는다.
 
 ### 실행 결과
 
-| 검사 | WP17 실행 / 대기 범위 |
+| 검사 | WP05 실행 / 대기 범위 |
 |---|---|
-| typecheck / build / package / full local | PASS: actual lane prechecks/build와 `wp17-package-initial`; local 1332/1332, zero fail/cancelled/skipped/todo (`wp17-local-initial`). metadata 갱신 뒤 final rerun 조건 |
-| architecture / inventory | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, 0 findings. actual import 변경 뒤 dependency graph을 재생성. A-008 remains OPEN |
-| fast / durable / property | PASS / EXECUTED: 229 / 185 / 33, 모두 fail/cancelled/skipped/todo=0 (`wp17-*-initial`). final metadata source에서 `wp17-*-final` 재실행 조건 |
-| V17A / V17B | actual PreacceptScope/inode/Store/native preparation 및 기존 preaccept compatibility 묶음 57 pass (`wp17-related-green`), no fail/skip/todo/cancel. 전체 lane 전에는 해당 input에만 결박 |
-| dispositions | unaccepted-known, accepted-referenced, accepted-unreferenced, outcome-unknown, cleanup-unconfirmed을 닫힌 집합으로 기록. unknown/native non-quiescence는 retain |
-| cleanup | 한 cleanup 실패 뒤에도 나머지를 시도하고 primary+cleanup 원인을 aggregate. cleanup-unconfirmed은 same ownership으로 retry 가능; 완료 후 반복 settle은 inert |
-| identity | absent와 unavailable을 구분. replacement inode는 삭제하지 않고 cleanup-unconfirmed; acquired submit spool identity는 다음 fallible 단계 전에 pin |
-| caller migration | 기존 settleByAcceptance facade가 scope를 사용하고 operation identity를 전달. Context/create/submit/mail의 전체 relation-aware migration은 WP18–20에 남김 |
-| negative controls / lane policy | pre-scope suite red (`wp17-v17ab-red`); DB error→false mutant red (`wp17-db-unknown-red`); accepted-row blanket-retain mutant red (`wp17-linked-blanket-red`); lane 등록 전 red/후 green. disposable source identities retained |
-| systemd/provider/installed-runtime/powercut/current-SHA CI | BLOCKED 또는 NOT_RUN; 승인 없는 manager/provider/VM/remote action 없음 |
+| typecheck/build/package/local | PASS: actual lane prechecks/build, package; local 1340/1340, zero fail/cancelled/skipped/todo (`wp05-local-initial`). metadata 갱신 뒤 final rerun 조건 |
+| architecture/inventory | PASS, SOURCE_LIST_CURRENT / SOURCE_BOUND, graph refreshed, 0 findings. A-008 OPEN |
+| fast/durable/property | PASS / EXECUTED: 230 / 191 / 33, all fail/cancelled/skipped/todo=0 (`wp05-*-initial`). final metadata source rerun 조건 |
+| V05A/V05B | actual publisher/receipt/Principal/durable-fault related set 61 pass (`wp05-focused-green-r3`), no unrun. 전체 lane 전에는 그 input에만 결박 |
+| ordering | candidate validate → private unpredictable temp 0600 → bounded write → file fsync → no-replace final link → final decode/mode validation → temp unlink → parent fsync |
+| EEXIST | same expected batch의 기존 valid receipt를 authoritative first fact로 반환. conflict는 보존/거절. Principal completion도 반환 receipt를 사용 |
+| uncertainty | final link 이후 parent fsync fault에서 final을 삭제하지 않음. temp-write crash seam은 partial final을 만들지 않음. throw seam은 power-loss proof가 아님 |
+| negative controls | old direct-final publisher red (`wp05-v05ab-red`); parent fsync 제거 red (`wp05-no-parent-fsync-red`); Principal returned-first-fact 무시 mutant red (`wp05-ignore-first-fact-red`) |
+| V05C power loss | BLOCKED / NOT_RUN: 승인된 disposable VM/storage profile 없음. process fault/SIGKILL을 powercut으로 승격하지 않음 |
+| systemd/provider/installed runtime/current-SHA CI | BLOCKED 또는 NOT_RUN; 운영/remote action 없음 |
 
-원본 argv·시각·exit·input-before/after·log hash는 `/tmp/oma-consistency-evidence-Vc66uK/wp17-*.json/.log`에 있다. 최종 PASS는 initial 결과를 이 표에 반영하고 같은 metadata source에서 final rerun까지 완료한 뒤에만 주장한다.
+Raw evidence는 `/tmp/oma-consistency-evidence-Vc66uK/wp05-*`. initial complete 결과 반영과 같은 metadata source final rerun 전에는 전체 PASS가 아니다.
 
-현재 metadata source의 최종 PASS 조건은 `wp17-fast-final`, `wp17-durable-final`, `wp17-property-final`, `wp17-package-final`, `wp17-local-final`이 같은 digest에서 exit 0과 해당 비실행 수 0을 기록하는 것이다.
+현재 metadata source의 최종 PASS 조건은 `wp05-fast-final`, `wp05-durable-final`, `wp05-property-final`, `wp05-package-final`, `wp05-local-final`이 같은 digest에서 exit 0과 해당 비실행 수 0을 기록하는 것이다.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -996,7 +996,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,440 code LOC**이며 A-008의 10,000행 기준을 넘는다. WP17 production 변경 뒤 산출물을 다시 측정한 값이며, dependency graph도 actual import 변경 뒤 재생성했다. 이 갱신은 기존 architecture review/release gate를 닫지 않는다. 따라서 **architecture review가 필수이고 release는 차단 상태**다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,487 code LOC**이며 A-008 기준을 넘는다. WP05 변경 뒤 LOC/hash와 dependency graph를 실제로 재생성했지만 architecture review/release gate는 계속 OPEN이다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
