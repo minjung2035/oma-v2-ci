@@ -31,6 +31,19 @@ function rows(text) {
 }
 const spec = readFileSync(new URL("implementation-spec.md", root), "utf8");
 
+
+test('V01B: WP01 profile review cannot imply unexecuted runtime qualification', () => {
+  const profiles = rows(decisions()).filter(row => row[0].startsWith('profile.'));
+  assert.deepEqual(profiles.map(row => row[0]).sort(), [
+    'profile.confined', 'profile.engine-fixture', 'profile.foreground',
+    'profile.provider', 'profile.systemd-managed', 'profile.unconfined',
+  ]);
+  for (const row of profiles) {
+    assert.equal(row.length, 5);
+    assert.equal(row[3], 'NOT_RUN', 'WP01 is a decision review, not a runtime lane');
+    assert.match(row[4], /^WP\d{2}(, WP\d{2})*$/);
+  }
+});
 test("V01A: every domain names facts, relations, phase and current authority", () => {
   const table = rows(decisions());
   for (const domain of [

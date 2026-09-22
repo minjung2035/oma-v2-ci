@@ -213,3 +213,26 @@ case key is stable so a removed unknown/legacy row fails the completeness review
 | D06.unsupported | unqualified checks/codec/resources remain gated | reject unsupported, preserve rootfs opt-out and no cost cap | WP27, WP31 | V27A, V31B | C0 | INT-007, SB-002-E, INF-001 |
 | D06.power-loss | process crash is not storage power loss | explicit VM/storage gate, retain NOT_RUN without proof | WP05, WP30 | V05C, V30B | C0 | REC-004 |
 | preaccept.acceptance-unknown | DB observation may fail during cleanup | retain exact owned artifacts on uncertain acceptance; attempt all cleanups | WP17 | V17A | C1 | FS-007, DB-009 |
+
+## WP01.03 — profile intent versus actual evidence
+
+This is the immutable **WP01 decision-time snapshot**, not the live release status
+table. Later evidence belongs to its executing WP and final validation record; do
+not relabel this unexecuted review as an executed kernel/provider test. A profile
+can be an intended support contract while its release gate remains open.
+
+| Profile | Intended contract | Required actual oracle / limitation | WP01 execution | Evidence owner |
+|---|---|---|---|---|
+| profile.systemd-managed | fixed services/path/timer, Type=notify readiness, After/BindsTo | disposable user-manager first boot, exact config/XDG, cgroup death and restart | NOT_RUN | WP03, WP25, WP30 |
+| profile.foreground | host-owned broker and one registered Principal; private channel/tenure | no preinstalled broker.service; equivalent revoke/quiescence/fencing or activation rejected | NOT_RUN | WP03, WP10, WP25 |
+| profile.confined | bwrap private network and declared mount/FD closure; engine-owned credentials outside | actual pinned bwrap/cgroup/engine checks, not argv or module import tests | NOT_RUN | WP27, WP30, WP31 |
+| profile.unconfined | explicit rootfs='/' opt-out with visible warning, never silent fallback | actual entry and Dashboard report it; never claim confinement from this profile | NOT_RUN | WP27, WP28, WP31 |
+| profile.engine-fixture | provider-free controlled engine/extension execution | actual bundled engine boundary/tool-event semantics; not provider or disk power-loss evidence | NOT_RUN | WP27, WP30 |
+| profile.provider | host-chosen real provider through engine-owned authentication | separately authorized credential/cost/environment; no invented credential or cost cap | NOT_RUN | WP27, WP30, WP31 |
+
+WP00's local tools/tests and early kernel/crash BLOCKED/NOT_RUN probes establish
+none of these runtime rows. Provider fixtures do not demonstrate actual provider
+behavior. Process SIGKILL can test crash reentry but power-loss claims additionally
+require a VM/storage experiment against the final source. S-01-CANDIDATE, S-03
+steer/concurrency and tiered S-08/S-10 remain intentionally unqualified where the
+current product gates them. This plan does not implement those unrelated features.
