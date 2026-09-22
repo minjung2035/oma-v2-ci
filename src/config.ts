@@ -1,6 +1,6 @@
 // MUST [CFG-001/002/005]: closed host configuration, no unlimited defaults.
 import { readConfigurationSource } from "./config/operations.js";
-import type { HostConfigV1 } from "../implementation/contracts.js";
+import type { AgentProfile, HostConfigV1, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
 import { isCapability } from "./domain/capabilities.js";
@@ -39,6 +39,55 @@ function needIntegerFields(record: Record<string, unknown>, fields: Readonly<Rec
   closedKeys(record, Object.keys(fields), what);
   for (const key of Object.keys(fields)) needInt(record[key], `${what}.${key}`, fields[key]!.minInclusive);
 }
+declare const VALIDATED_CONFIG: unique symbol;
+/** A complete deep snapshot produced only by the canonical runtime validator. */
+export type ValidatedConfigCandidate = HostConfigV1 & { readonly [VALIDATED_CONFIG]: true };
+
+function freezeResources(resources: ResourceLimits): ResourceLimits {
+  return Object.freeze({ ...resources });
+}
+
+function validatedSnapshot(config: HostConfigV1): ValidatedConfigCandidate {
+  const modelProfiles: Record<string, ModelProfile> = Object.create(null);
+  for (const [name, profile] of Object.entries(config.modelProfiles))
+    modelProfiles[name] = Object.freeze({ ...profile });
+  const agentProfiles: Record<string, AgentProfile> = Object.create(null);
+  for (const [name, profile] of Object.entries(config.agentProfiles))
+    agentProfiles[name] = Object.freeze({
+      ...profile,
+      capabilities: Object.freeze([...profile.capabilities]),
+      delegable: Object.freeze([...profile.delegable]),
+      resources: freezeResources(profile.resources),
+    }) as AgentProfile;
+  const checks = config.integration.checks.map(check => {
+    const env = Object.assign(Object.create(null), check.env) as Record<string, string>;
+    return Object.freeze({
+      ...check,
+      argv: Object.freeze([...check.argv]),
+      env: Object.freeze(env),
+      resources: freezeResources(check.resources),
+    });
+  });
+  const snapshot = {
+    ...config,
+    installation: Object.freeze({ ...config.installation }),
+    modelProfiles: Object.freeze(modelProfiles),
+    agentProfiles: Object.freeze(agentProfiles),
+    initialResidents: Object.freeze(config.initialResidents.map(row => Object.freeze({ ...row }))),
+    quota: Object.freeze({ ...config.quota }),
+    integration: Object.freeze({
+      ...config.integration,
+      protectedPaths: Object.freeze([...config.integration.protectedPaths]),
+      checks: Object.freeze(checks),
+    }),
+    limits: Object.freeze({ ...config.limits }),
+    features: Object.freeze({ ...config.features }),
+  };
+  // The brand is type-only; validation, copying and recursive freezing above are
+  // the runtime proof. No caller can construct this type without this boundary.
+  return Object.freeze(snapshot) as unknown as ValidatedConfigCandidate;
+}
+
 
 /** Resolve the optional split authoring format once at process startup. */
 export function loadConfiguration(path: string) {
@@ -47,7 +96,7 @@ export function loadConfiguration(path: string) {
 }
 export function loadConfig(path: string): HostConfigV1 { return loadConfiguration(path).config; }
 
-function validateConfig(raw: unknown): HostConfigV1 {
+export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits", "features"], "root");
   if (cfg.schemaVersion !== 1) err("schemaVersion must be 1");
   const society = needString(cfg.society, "society");
@@ -125,12 +174,12 @@ function validateConfig(raw: unknown): HostConfigV1 {
   const featureKeys = ["notmuch", "reflinkSeed", "formalApproval", "egress"];
   const features = closedRecord(cfg.features, featureKeys, "features");
   for (const key of featureKeys) if (features[key] !== false) err(`features.${key} must be false in Core v1 default build`);
-  return {
+  return validatedSnapshot({
     schemaVersion: 1, society, installation: { node, libdir, rootfs, deploymentDigest },
     modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfigV1["modelProfiles"],
     agentProfiles: Object.assign(Object.create(null), agentProfiles) as HostConfigV1["agentProfiles"],
     principalProfile, initialResidents: initialResidents as HostConfigV1["initialResidents"], quota: quota as HostConfigV1["quota"],
     integration: { policyRevision, protectedPaths: protectedPaths as string[], checks: checks as HostConfigV1["integration"]["checks"] },
     limits: limits as unknown as HostConfigV1["limits"], features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
-  };
+  });
 }
