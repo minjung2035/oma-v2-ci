@@ -9,10 +9,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { HostConfigV1 } from "../../../implementation/contracts.js";
 import { StoreError } from "../../domain/errors.js";
-import { loadConfig } from "../../config.js";
+import { loadConfig, validateConfig, type ValidatedConfigCandidate } from "../../config.js";
 import { configurationLayout, type ConfigurationLayout } from "../../config/operations.js";
 import { replaceDerivedFile } from "../../storage/durable-fs.js";
-import type { ConfigField } from "../model.js";
+import type { ApplyScope, ConfigField } from "../model.js";
 import { CONFIG_BOUNDS } from "../limits.js";
 
 export const PRINCIPAL_MODEL = "principal-model";
@@ -20,6 +20,15 @@ export const WORKER_MODEL = "worker-model";
 export const WORKER_LIMIT = "worker-limit";
 export const INITIAL_WORKERS = "initial-workers";
 export const WORKER_PROFILE = "worker-profile";
+export const EDITABLE_FIELDS = Object.freeze([
+  PRINCIPAL_MODEL,
+  WORKER_MODEL,
+  WORKER_LIMIT,
+  INITIAL_WORKERS,
+  WORKER_PROFILE,
+] as const);
+export type EditableField = (typeof EDITABLE_FIELDS)[number];
+
 export const EXTENSIONS = "extensions";
 
 /** The authored layout behind the composed config. A split bundle keeps role
@@ -42,9 +51,9 @@ export interface Settings {
 
 function workerProfileOf(config: HostConfigV1): string {
   const seeded = config.initialResidents[0]?.profile;
-  if (seeded !== undefined && config.agentProfiles[seeded]) return seeded;
+  if (seeded !== undefined && Object.hasOwn(config.agentProfiles, seeded)) return seeded;
   const child = config.agentProfiles[config.principalProfile]?.childProfile;
-  if (child !== null && child !== undefined && config.agentProfiles[child]) return child;
+  if (child !== null && child !== undefined && Object.hasOwn(config.agentProfiles, child)) return child;
   const other = Object.keys(config.agentProfiles).find(name => name !== config.principalProfile);
   if (other !== undefined) return other;
   return config.principalProfile;
@@ -59,20 +68,19 @@ export function residentProfiles(config: HostConfigV1): readonly string[] {
 }
 
 export function fieldsOf(config: HostConfigV1, workerProfile: string): readonly ConfigField[] {
-  const models = Object.keys(config.modelProfiles).sort();
-  const principalModel = config.agentProfiles[config.principalProfile]?.modelProfile ?? "";
-  const workerModel = config.agentProfiles[workerProfile]?.modelProfile ?? "";
+  const editable = EDITABLE_FIELDS
+    .filter(field => field !== WORKER_PROFILE || config.initialResidents.length > 0)
+    .map(field => {
+      const descriptor = EDITABLE_FIELD_DESCRIPTORS[field];
+      return Object.freeze({
+        id: field,
+        label: descriptor.label,
+        apply: descriptor.apply,
+        ...descriptor.view(config, workerProfile),
+      }) as ConfigField;
+    });
   return Object.freeze([
-    Object.freeze({ kind: "choice" as const, id: PRINCIPAL_MODEL, label: "Principal model",
-      value: principalModel, options: models, apply: "next-session" as const }),
-    Object.freeze({ kind: "choice" as const, id: WORKER_MODEL, label: "Worker model",
-      value: workerModel, options: models, apply: "next-activation" as const }),
-    Object.freeze({ kind: "number" as const, id: WORKER_LIMIT, label: "Worker limit",
-      value: config.quota.societyAgents, min: 1, max: CONFIG_BOUNDS.maxWorkerLimit.value, apply: "restart" as const }),
-    Object.freeze({ kind: "number" as const, id: INITIAL_WORKERS, label: "Initial workers",
-      value: config.initialResidents.length, min: 0, max: CONFIG_BOUNDS.maxInitialWorkers.value, apply: "bootstrap-only" as const }),
-    Object.freeze({ kind: "choice" as const, id: WORKER_PROFILE, label: "Worker profile",
-      value: workerProfile, options: residentProfiles(config), apply: "next-activation" as const }),
+    ...editable,
     Object.freeze({ kind: "link" as const, id: EXTENSIONS, label: "Extensions" }),
   ]);
 }
@@ -131,40 +139,9 @@ function withSeedCount(config: HostConfigV1, count: number, profile: string): Ho
  * so that the transform can be tested against the closed schema directly.
  */
 export function applyField(settings: Settings, field: string, value: string | number): HostConfigV1 {
-  const config = settings.config;
-  switch (field) {
-    case PRINCIPAL_MODEL: {
-      assertKnown(typeof value === "string" && config.modelProfiles[value] !== undefined, "unknown model profile");
-      const profile = config.agentProfiles[config.principalProfile];
-      assertKnown(profile !== undefined, "principal profile is missing from host config");
-      return { ...config, agentProfiles: { ...config.agentProfiles,
-        [config.principalProfile]: { ...profile!, modelProfile: value as string } } };
-    }
-    case WORKER_MODEL: {
-      assertKnown(typeof value === "string" && config.modelProfiles[value] !== undefined, "unknown model profile");
-      const name = settings.workerProfile;
-      const profile = config.agentProfiles[name];
-      assertKnown(profile !== undefined, "worker profile is missing from host config");
-      return { ...config, agentProfiles: { ...config.agentProfiles,
-        [name]: { ...profile!, modelProfile: value as string } } };
-    }
-    case WORKER_PROFILE: {
-      assertKnown(typeof value === "string" && config.agentProfiles[value] !== undefined, "unknown agent profile");
-      // TUI-009: an existing Resident keeps its frozen spec reference. Only the
-      // bootstrap seed, which has not created anything yet, follows this value.
-      return { ...config, initialResidents: config.initialResidents.map(resident => ({ ...resident, profile: value as string })) };
-    }
-    case WORKER_LIMIT: {
-      assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value > 0, "worker limit must be a positive integer");
-      return { ...config, quota: { ...config.quota, societyAgents: value as number } };
-    }
-    case INITIAL_WORKERS: {
-      assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
-      return withSeedCount(config, value as number, settings.workerProfile);
-    }
-    default:
-      throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
-  }
+  if (!Object.hasOwn(EDITABLE_FIELD_DESCRIPTORS, field))
+    throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
+  return EDITABLE_FIELD_DESCRIPTORS[field as EditableField].transform(settings, value);
 }
 
 /** FS-002/CFG-001: host authority is replaced atomically, never edited in place.
@@ -174,10 +151,18 @@ export function applyField(settings: Settings, field: string, value: string | nu
  * Only for an inline `config.json`. A split bundle must be patched at its real
  * owners instead, which `commitField` does.
  */
-export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 {
-  const revised: HostConfigV1 = { ...config, integration: { ...config.integration, policyRevision: revisionFor(config) } };
+function writeValidatedSettings(path: string, candidate: ValidatedConfigCandidate): ValidatedConfigCandidate {
+  const revised = validateConfig({
+    ...candidate,
+    integration: { ...candidate.integration, policyRevision: revisionFor(candidate) },
+  });
   replaceDerivedFile(path, `${JSON.stringify(revised, null, 2)}\n`, 0o600);
   return revised;
+}
+
+/** Compatibility facade: arbitrary HostConfigV1 is never handed to the writer. */
+export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 {
+  return writeValidatedSettings(path, validateConfig(config));
 }
 
 function writeJsonObject(path: string, body: Record<string, unknown>): void {
@@ -215,19 +200,17 @@ type FieldPlacement =
   | { readonly at: "role"; readonly profile: (settings: Settings) => string }
   | { readonly at: "host"; readonly patch: (current: Record<string, unknown>, applied: HostConfigV1, value: string | number) => Record<string, unknown> };
 
-const PLACEMENT: Readonly<Record<string, FieldPlacement>> = Object.freeze({
-  [PRINCIPAL_MODEL]: { at: "role", profile: settings => settings.config.principalProfile },
-  [WORKER_MODEL]: { at: "role", profile: settings => settings.workerProfile },
-  [WORKER_LIMIT]: {
-    at: "host",
-    patch: (current, _applied, value) => ({
-      ...current,
-      quota: { ...requireObject(current.quota, "quota"), societyAgents: value },
-    }),
-  },
-  [INITIAL_WORKERS]: { at: "host", patch: (current, applied) => ({ ...current, initialResidents: applied.initialResidents }) },
-  [WORKER_PROFILE]: { at: "host", patch: (current, applied) => ({ ...current, initialResidents: applied.initialResidents }) },
-});
+type EditableFieldView =
+  | { readonly kind: "choice"; readonly value: string; readonly options: readonly string[] }
+  | { readonly kind: "number"; readonly value: number; readonly min: number; readonly max: number };
+
+export interface EditableFieldDescriptor {
+  readonly label: string;
+  readonly apply: ApplyScope;
+  readonly view: (config: HostConfigV1, workerProfile: string) => EditableFieldView;
+  readonly transform: (settings: Settings, value: string | number) => HostConfigV1;
+  readonly placement: FieldPlacement;
+}
 
 function requireObject(value: unknown, what: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value))
@@ -235,21 +218,116 @@ function requireObject(value: unknown, what: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+const DESCRIPTOR_SOURCE = {
+  [PRINCIPAL_MODEL]: Object.freeze({
+    label: "Principal model",
+    apply: "next-session",
+    view: (config: HostConfigV1) => ({
+      kind: "choice" as const,
+      value: config.agentProfiles[config.principalProfile]?.modelProfile ?? "",
+      options: Object.keys(config.modelProfiles).sort(),
+    }),
+    transform: (settings: Settings, value: string | number) => {
+      const config = settings.config;
+      assertKnown(typeof value === "string" && Object.hasOwn(config.modelProfiles, value), "unknown model profile");
+      const profile = config.agentProfiles[config.principalProfile];
+      assertKnown(profile !== undefined, "principal profile is missing from host config");
+      return { ...config, agentProfiles: { ...config.agentProfiles,
+        [config.principalProfile]: { ...profile!, modelProfile: value as string } } };
+    },
+    placement: { at: "role" as const, profile: (settings: Settings) => settings.config.principalProfile },
+  }),
+  [WORKER_MODEL]: Object.freeze({
+    label: "Worker model",
+    apply: "next-activation",
+    view: (config: HostConfigV1, workerProfile: string) => ({
+      kind: "choice" as const,
+      value: config.agentProfiles[workerProfile]?.modelProfile ?? "",
+      options: Object.keys(config.modelProfiles).sort(),
+    }),
+    transform: (settings: Settings, value: string | number) => {
+      const config = settings.config;
+      assertKnown(typeof value === "string" && Object.hasOwn(config.modelProfiles, value), "unknown model profile");
+      const name = settings.workerProfile;
+      const profile = config.agentProfiles[name];
+      assertKnown(profile !== undefined, "worker profile is missing from host config");
+      return { ...config, agentProfiles: { ...config.agentProfiles,
+        [name]: { ...profile!, modelProfile: value as string } } };
+    },
+    placement: { at: "role" as const, profile: (settings: Settings) => settings.workerProfile },
+  }),
+  [WORKER_LIMIT]: Object.freeze({
+    label: "Worker limit",
+    apply: "restart",
+    view: (config: HostConfigV1) => ({
+      kind: "number" as const, value: config.quota.societyAgents, min: 1, max: CONFIG_BOUNDS.maxWorkerLimit.value,
+    }),
+    transform: (settings: Settings, value: string | number) => {
+      assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value > 0, "worker limit must be a positive integer");
+      return { ...settings.config, quota: { ...settings.config.quota, societyAgents: value as number } };
+    },
+    placement: {
+      at: "host" as const,
+      patch: (current: Record<string, unknown>, _applied: HostConfigV1, value: string | number) => ({
+        ...current, quota: { ...requireObject(current.quota, "quota"), societyAgents: value },
+      }),
+    },
+  }),
+  [INITIAL_WORKERS]: Object.freeze({
+    label: "Initial workers",
+    apply: "bootstrap-only",
+    view: (config: HostConfigV1) => ({
+      kind: "number" as const, value: config.initialResidents.length, min: 0, max: CONFIG_BOUNDS.maxInitialWorkers.value,
+    }),
+    transform: (settings: Settings, value: string | number) => {
+      assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
+      return withSeedCount(settings.config, value as number, settings.workerProfile);
+    },
+    placement: {
+      at: "host" as const,
+      patch: (current: Record<string, unknown>, applied: HostConfigV1) => ({ ...current, initialResidents: applied.initialResidents }),
+    },
+  }),
+  [WORKER_PROFILE]: Object.freeze({
+    label: "Bootstrap worker profile",
+    apply: "bootstrap-only",
+    view: (config: HostConfigV1, workerProfile: string) => ({
+      kind: "choice" as const, value: workerProfile, options: residentProfiles(config),
+    }),
+    transform: (settings: Settings, value: string | number) => {
+      const config = settings.config;
+      assertKnown(config.initialResidents.length > 0, "there are no bootstrap workers to change");
+      assertKnown(typeof value === "string" && Object.hasOwn(config.agentProfiles, value), "unknown agent profile");
+      // Existing Resident specs are immutable; only not-yet-created bootstrap seeds change.
+      return { ...config, initialResidents: config.initialResidents.map(resident => ({ ...resident, profile: value as string })) };
+    },
+    placement: {
+      at: "host" as const,
+      patch: (current: Record<string, unknown>, applied: HostConfigV1) => ({ ...current, initialResidents: applied.initialResidents }),
+    },
+  }),
+} satisfies Readonly<Record<EditableField, EditableFieldDescriptor>>;
+
+const PLACEMENT: Readonly<Record<EditableField, EditableFieldDescriptor>> =
+  Object.freeze(Object.assign(Object.create(null), DESCRIPTOR_SOURCE));
+export const EDITABLE_FIELD_DESCRIPTORS = PLACEMENT;
+
 /** Writes one confirmed Config value to whichever file actually owns it, then
  * records the new policy revision (CFG-005). The composed config is validated
  * first, so an unknown model or profile is refused before anything is written.
  */
 export function commitField(settings: Settings, field: string, value: string | number): void {
-  const applied = applyField(settings, field, value);
+  if (!Object.hasOwn(EDITABLE_FIELD_DESCRIPTORS, field))
+    throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
+  const descriptor = EDITABLE_FIELD_DESCRIPTORS[field as EditableField];
+  const applied = validateConfig(descriptor.transform(settings, value));
   const revision = revisionFor(applied);
   if (settings.layout.kind === "inline") {
-    writeSettings(settings.layout.path, applied);
+    writeValidatedSettings(settings.layout.path, applied);
     return;
   }
   const layout = settings.layout;
-  const placement = PLACEMENT[field];
-  if (placement === undefined)
-    throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
+  const placement = descriptor.placement;
   if (placement.at === "role") patchRoleModel(layout, placement.profile(settings), String(value));
   else patchFile(layout.host, current => placement.patch(current, applied, value));
   patchFile(layout.host, current => ({

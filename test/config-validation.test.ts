@@ -1,7 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import type { HostConfigV1 } from "../implementation/contracts.js";
+import { Store } from "../src/store.js";
+import { makeValidAgent } from "./fixtures/spec.js";
+import { makeValidOperation } from "./fixtures/valid.js";
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
+import {
+  WORKER_MODEL,
+  WORKER_PROFILE,
+  applyField,
+  commitField,
+  readSettings,
+  settingsOf,
+} from "../src/tui/sources/settings.js";
 
 test("V11C: the pure validator returns a deep immutable snapshot with own-key maps", async () => {
   const fixture = createCompleteConfigurationFixture();
@@ -42,6 +54,48 @@ test("V11C: the pure validator returns a deep immutable snapshot with own-key ma
       });
     }, TypeError);
   } finally {
+    fixture.close();
+  }
+});
+
+test("V11C: zero bootstrap seeds expose no editable profile target", () => {
+  const fixture = createCompleteConfigurationFixture();
+  try {
+    const config = { ...fixture.config, initialResidents: [] };
+    const settings = settingsOf(fixture.input, config);
+    assert.equal(settings.fields.some(field => field.id === WORKER_PROFILE), false);
+    assert.throws(() => applyField(settings, WORKER_PROFILE, "resident"), /no bootstrap workers/);
+    assert.throws(() => applyField(settings, "toString", 1), /unknown settings field/);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("V11C: config edits do not rewrite accepted Store identities or frozen specs", () => {
+  const fixture = createCompleteConfigurationFixture();
+  const store = new Store(join(fixture.root, "runtime.sqlite"));
+  try {
+    const agent = makeValidAgent("alice");
+    const operation = makeValidOperation({
+      stateRoot: fixture.root,
+      actor: "alice",
+      requestKey: "v11-frozen",
+    });
+    store.transaction(() => {
+      store.insertAgent(agent);
+      store.insertOperation(operation);
+    });
+    const beforeAgent = store.getAgent("alice")!;
+    const beforeOperation = store.getOperationById(operation.id)!;
+    commitField(readSettings(fixture.input), WORKER_MODEL, "review");
+    const afterAgent = store.getAgent("alice")!;
+    const afterOperation = store.getOperationById(operation.id)!;
+    assert.equal(afterAgent.specHash, beforeAgent.specHash);
+    assert.equal(afterAgent.specJson, beforeAgent.specJson);
+    assert.equal(afterOperation.requestHash, beforeOperation.requestHash);
+    assert.equal(afterOperation.planJson, beforeOperation.planJson);
+  } finally {
+    store.close();
     fixture.close();
   }
 });
