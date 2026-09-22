@@ -174,16 +174,24 @@ export class Store {
     if (identity !== null) this.bindRepositoryIdentity(identity);
     preflightDatabase(path);
     this.db = new DatabaseSync(path);
-    this.db.exec("PRAGMA foreign_keys = ON");
-    this.db.exec("PRAGMA journal_mode = WAL");
-    this.db.exec("PRAGMA synchronous = FULL");
-    this.db.exec("PRAGMA busy_timeout = 5000");
-    this.migrate();
-    this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
-    this.transitions = new LedgerTransitions(this.db, this.reader, () => this.requireTx());
-    this.journal = new OperationJournal(this.reader,
-      new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation)),
-      this.transactions);
+    // Until construction returns, this scope owns the native connection. The
+    // broker lifetime cannot retain a Store whose constructor threw.
+    try {
+      this.db.exec("PRAGMA foreign_keys = ON");
+      this.db.exec("PRAGMA journal_mode = WAL");
+      this.db.exec("PRAGMA synchronous = FULL");
+      this.db.exec("PRAGMA busy_timeout = 5000");
+      this.migrate();
+      this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
+      this.transitions = new LedgerTransitions(this.db, this.reader, () => this.requireTx());
+      this.journal = new OperationJournal(this.reader,
+        new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation)),
+        this.transactions);
+    } catch (error) {
+      try { this.db.close(); }
+      catch (closeError) { throw new AggregateError([error, closeError], "Store initialization and close failed"); }
+      throw error;
+    }
   }
   bindRepositoryIdentity(identity: RepositoryIdentity): void {
     if (!isValidSocietyName(identity.society)) throw new StoreError("STORE_CORRUPT", "invalid repository society identity");
@@ -206,13 +214,17 @@ export class Store {
     if (version !== 0) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
     let ddl: string;
     try { ddl = readFileSync(SCHEMA_PATH, "utf8"); }
-    catch (error) { throw new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`); }
+    catch (error) { throw new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`, { cause: error }); }
     try { this.db.exec(ddl); }
     catch (error) {
-      try { this.db.exec("ROLLBACK"); } catch { /* no open transaction */ }
-      const normalized = normalizeStorageFailure(error);
+      let failure: unknown = error;
+      if (this.db.isTransaction) {
+        try { this.db.exec("ROLLBACK"); }
+        catch (rollbackError) { failure = new AggregateError([error, rollbackError], "migration and rollback failed"); }
+      }
+      const normalized = normalizeStorageFailure(failure);
       if (normalized instanceof StoreError) throw normalized;
-      throw new StoreError("STORE_CORRUPT", `migration failed: ${(error as Error).message}`);
+      throw new StoreError("STORE_CORRUPT", `migration failed: ${(error as Error).message}`, { cause: failure });
     }
     if (this.userVersion() !== SCHEMA_USER_VERSION_WRITTEN)
       throw new StoreError("STORE_CORRUPT", `migration did not set user_version=${SCHEMA_USER_VERSION_WRITTEN}`);
