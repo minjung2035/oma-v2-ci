@@ -124,7 +124,7 @@ test("T114 a WebSocket upgrade is tunnelled with the key swapped, then carried a
       const outgoing = httpRequest({
         host: "127.0.0.1", port: bridged.port, path: "/codex/responses", method: "GET",
         headers: { connection: "Upgrade", upgrade: "websocket", authorization: `Bearer ${placeholder}`,
-          "sec-websocket-version": "13", "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==" },
+          "sec-websocket-version": "13", "sec-websocket-key": Buffer.from("the sample nonce").toString("base64") },
       });
       outgoing.on("upgrade", (response, tunnel) => {
         assert.equal(response.statusCode, 101);
