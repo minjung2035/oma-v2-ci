@@ -29,3 +29,18 @@ usable only with the command, exit status, input digest and raw log together.
 The preceding handoff is historical context in Git, not evidence for this work.
 Current verification claims remain source-bound; do not upgrade any environment
 NOT_RUN/BLOCKED status from local test results.
+
+## WP00.02 — inventory and ownership
+
+Intent: enumerate every tracked file and the compiler-resolved import closure;
+assign review responsibility without claiming source review or runtime coverage.
+The fixed production assignments remain authoritative for their existing paths.
+
+`file-assignments.json` and `wp00-file-assignment.{json,log}` in the evidence root
+map every tracked path to exactly one primary WP. The nine contract modules in
+`implementation/contracts/` are in the compiler closure but outside the fixed
+production manifest. They are explicitly assigned to WP29 for manifest/LOC
+scope review; no baseline generator was run to conceal this discrepancy.
+
+The supplemental artifact map covers tests, scripts, contracts, CI and docs.
+Its `NOT_STARTED`/`NOT_RUN` rows are assignments, not file-review conclusions.
