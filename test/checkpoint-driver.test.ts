@@ -9,6 +9,8 @@ import { Store } from "../src/store.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { CheckpointFailure, killAtCheckpoint } from "./fixtures/checkpoint-driver.js";
 import { observeFile } from "./fixtures/effect-observation.js";
+import { DERIVED_FAILURE_CASES, MAIL_ACCEPTANCE_EXPECTED, GIT_PUBLICATION_EXPECTED } from "./fixtures/failure-matrix.js";
+import { seedGit, gitCommand } from "./fixtures/git-crash.js";
 
 const worker = new URL("./fixtures/checkpoint-worker.js", import.meta.url);
 function freshObservation(root: string) {
@@ -31,16 +33,20 @@ async function fixture(run: (root: string) => Promise<void>) {
   } finally { if (safeToRemove) rmSync(root, { recursive: true, force: true }); }
 }
 
-for (const [point, expected] of [["pre-effect", "old"], ["after-visible", "new"], ["after-durable", "new"]] as const) {
-  test(`V02B: confirmed process death at ${point} has a fresh physical observer`, async () => {
+for (const expected of DERIVED_FAILURE_CASES) {
+  const { point } = expected;
+  test(`V02B: confirmed process death at ${point} has a fresh physical observer`, async t => {
     await fixture(async root => {
       const before = observeFile(join(root, "pointer"));
       const stopped = await killAtCheckpoint(worker, [root, "replace", point], point);
       const observed = freshObservation(root);
+      t.diagnostic(JSON.stringify({ expected, stopped, observed }));
       assert.notEqual(stopped.pid, observed.pid);
-      assert.equal(observed.pointer, expected);
-      assert.deepEqual(Object.keys(observed.files), ["pointer"]);
-      if (point === "pre-effect") assert.deepEqual(observed.files.pointer, before);
+      assert.equal(observed.pointer, expected.pointer);
+      const temporaries = Object.keys(observed.files).filter(name => name.endsWith(".tmp"));
+      assert.equal(temporaries.length, expected.temporaries);
+      assert.equal(Object.keys(observed.files).length, 1 + expected.temporaries);
+      if (expected.sameInode) assert.deepEqual(observed.files.pointer, before);
       else assert.notEqual(observed.files.pointer.ino, before.ino);
     });
   });
@@ -80,24 +86,47 @@ test("V02B: a lying checkpoint message cannot satisfy the independent effect ora
   });
 });
 
-test("V02B: actual Mail acceptance survives commit-before-response in a fresh process", async () => {
+test("V02B: actual Mail acceptance survives commit-before-response in a fresh process", async t => {
   await fixture(async root => {
+    const expected = MAIL_ACCEPTANCE_EXPECTED;
+    const store = new Store(join(root, "runtime.sqlite"));
+    try { store.transaction(tx => { for (const name of expected.recipients) tx.insertAgent(makeValidAgent(name)); }); }
+    finally { store.close(); }
+    const stopped = await killAtCheckpoint(new URL("./fixtures/crash-worker.js", import.meta.url), [root, expected.point], expected.point);
+    const observed = freshObservation(root);
+    t.diagnostic(JSON.stringify({ expected, stopped, observed }));
+    assert.notEqual(stopped.pid, observed.pid);
+    assert.equal(observed.ledger.operations.length, expected.operationCount);
+    const operation = observed.ledger.operations[0];
+    assert.equal(operation.actor, expected.actor);
+    assert.equal(operation.request_key, expected.requestKey);
+    assert.equal(operation.state, expected.state);
+    assert.equal(observed.ledger.deliveries.length, expected.recipients.length);
+    assert.deepEqual(observed.ledger.deliveries.map((row: { recipient: string }) => row.recipient), expected.recipients);
+    assert.equal(observed.mail.objects.length, expected.objectCount);
+    assert.equal(observed.mail["archive/cur"].length, expected.archiveCount);
+    assert.equal(observed.ledger.batches.length, expected.batchCount);
+    assert.deepEqual(observed.ledger.agents.map((row: { incarnation: number }) => row.incarnation), expected.incarnations);
+    const messageIds = new Set(observed.ledger.deliveries.map((row: { message_id: string }) => row.message_id));
+    assert.equal(messageIds.size, 1);
+    for (const delivery of observed.ledger.deliveries) assert.equal(delivery.operation_id, operation.id);
+  });
+});
+
+test("V02B: published Git CAS is observed independently before result mail and response", async t => {
+  await fixture(async root => {
+    const expected = GIT_PUBLICATION_EXPECTED;
     const store = new Store(join(root, "runtime.sqlite"));
     try { store.transaction(tx => { for (const name of ["a", "b", "c"]) tx.insertAgent(makeValidAgent(name)); }); }
     finally { store.close(); }
-    const stopped = await killAtCheckpoint(new URL("./fixtures/crash-worker.js", import.meta.url), [root, "accepted"], "accepted");
+    seedGit(root);
+    const candidate = gitCommand(join(root, "seed"), ["rev-parse", "HEAD"]);
+    const stopped = await killAtCheckpoint(new URL("./fixtures/crash-worker.js", import.meta.url), [root, expected.point], expected.point);
     const observed = freshObservation(root);
-    assert.notEqual(stopped.pid, observed.pid);
-    assert.equal(observed.ledger.operations.length, 1);
-    const operation = observed.ledger.operations[0];
-    assert.equal(operation.actor, "a");
-    assert.equal(operation.request_key, "crash-send");
-    assert.equal(operation.state, "pending");
-    assert.equal(observed.ledger.deliveries.length, 3);
-    assert.deepEqual(observed.ledger.deliveries.map((row: { recipient: string }) => row.recipient), ["a", "b", "c"]);
-    assert.equal(observed.mail.objects.length, 1);
-    assert.deepEqual(observed.mail["archive/cur"], []);
-    assert.deepEqual(observed.ledger.agents.map((row: { incarnation: number }) => row.incarnation), [1, 1, 1]);
-    for (const delivery of observed.ledger.deliveries) assert.equal(delivery.operation_id, operation.id);
+    t.diagnostic(JSON.stringify({ expected, candidate, stopped, observed }));
+    assert.equal(observed.ledger.operations.length, expected.operationCount);
+    assert.equal(observed.publishedRefs.length, expected.publishedRefCount);
+    assert.equal(observed.publishedRefs[0].split(" ")[1], candidate);
+    assert.equal(observed.mail["archive/cur"].length, expected.archiveCount);
   });
 });

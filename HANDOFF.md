@@ -169,3 +169,10 @@ wrong point/throw-only cleanup are failures. Fresh-process physical observation
 is separate from the checkpoint claim. New driver tests and fixtures stay under
 `test/`; reuse `crash-worker.ts` only on local Mail boundaries. No live manager
 or production test-bypass is introduced.
+
+WP02.04 intent: encode the failure specification as independent literal phase/
+preserved-artifact rows, then bind each row to a real seam and fresh process
+observation. Cover owned temporaries, visible versus fsync-returned pointers,
+committed Mail identity/manifest/incarnation, and Git published-ref CAS. Keep
+cleanup-after-throw distinct from missing cleanup after process death. Persist
+raw observation diagnostics in test output, without claiming power-loss proof.
