@@ -176,3 +176,13 @@ test("R35 action category and admission oracles are required by their lanes", ()
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 storage reservation and settlement headroom oracles are required by their lanes", () => {
+  assert.ok(lanes.stress.files.includes("storage-reservation.test.js"));
+  assert.ok(lanes.durable.files.includes("settlement-headroom.test.js"));
+  for (const [lane, id] of [["stress", "V22A:"], ["durable", "V22B:"]]) {
+    assert.ok(lanes[lane].requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});
