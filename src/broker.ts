@@ -29,11 +29,15 @@ import { STATUS_REFRESH_MS, statusViewPath } from "./protocol/status-view.js";
 import { INTERNAL_METHODS } from "./protocol/methods.js";
 import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalHostChannel } from "./broker/principal-endpoint.js";
 import { resolvedSpecOf } from "./authority.js";
-import { assertStorageQuotaAdmission, storageResourceGate } from "./storage/quota.js";
+import { StorageAdmission } from "./storage/quota.js";
 export { boundedLogOutput } from "./broker/logs.js";
 export { peerCgroup } from "./broker/peer-authenticator.js";
 
-export interface BrokerPaths { stateRoot: string; runRoot: string; society: string; hasGoal?: () => boolean; storageBytes?: number }
+export interface BrokerPaths {
+  stateRoot: string; runRoot: string; society: string; hasGoal?: () => boolean; storageBytes?: number;
+  /** The process's storage owner when composition shares it with recovery. */
+  storage?: StorageAdmission;
+}
 
 /** PR-001: a broker no host started opens no Principal endpoint at all, so
  * there is nothing for an unregistered caller to attach to. The contract
@@ -66,8 +70,8 @@ export class Broker {
   private starting: Promise<void> | null = null;
   private closing: Promise<void> | null = null;
   private readonly runLeases = new RunRegistry();
-  private storageReservations = 0;
   private readonly health = new AdmissionGate();
+  private readonly storage: StorageAdmission;
   private readonly admitResource: ResourceGate;
   private readonly peers: PeerAuthenticator;
   private readonly publicDispatcher: PublicDispatcher;
@@ -82,7 +86,8 @@ export class Broker {
   ) {
     this.mail = mail;
     bindAdmissionGate(store, this.health);
-    this.admitResource = storageResourceGate(paths.stateRoot, paths.storageBytes);
+    this.storage = paths.storage ?? new StorageAdmission(paths.stateRoot, paths.storageBytes, limits.frameBytes);
+    this.admitResource = category => this.storage.admit(category);
     this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society, error => this.cleanupError(error));
     const publicPorts = createPublicDispatchPorts(this.store, mail, this.units, this.views, lifecycle, git, limits);
     this.publicDispatcher = new PublicDispatcher({ ...publicPorts,
@@ -176,10 +181,13 @@ export class Broker {
       preflight: (auth, raw) => this.preflightPublicStream(auth, raw),
     });
     const hostEndpoint = new PrincipalHostEndpoint(channel, { ...connection,
-      prepare: auth => { this.admitResource(INTERNAL_METHODS["batch.prepare"].resource); return this.mail.prepare(auth); },
+      prepare: async auth => {
+        const release = this.admitResource(INTERNAL_METHODS["batch.prepare"].resource);
+        try { return await this.mail.prepare(auth); } finally { release(); }
+      },
       complete: async (auth, evidence) => {
-        this.admitResource(INTERNAL_METHODS["batch.complete"].resource);
-        await this.mail.complete(auth, evidence);
+        const release = this.admitResource(INTERNAL_METHODS["batch.complete"].resource);
+        try { await this.mail.complete(auth, evidence); } finally { release(); }
         this.refreshViews();
       },
       registeredEngine: () => endpoint.registeredEngine,
@@ -295,17 +303,20 @@ export class Broker {
     handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
     preflight: (raw: Record<string, unknown>) => void,
   ): void {
+    // A streamed request's reservation covers bytes the tree does not show yet:
+    // first its transport copy, then its accepted copy. It is held until the
+    // execution settles or the connection closes, and released once.
     let releaseReservation = (): void => {};
     const connection = new RpcConnection({ socket, peer, limits: this.limits, stagingRoot: join(this.paths.stateRoot, "staging"),
       handle: async (raw, body) => {
-        releaseReservation();
         try { return await handle(raw, body); } catch (error) { this.health.observe(error); throw error; }
+        finally { releaseReservation(); }
       },
       preflight: raw => {
         try {
           preflight(raw);
           releaseReservation();
-          releaseReservation = this.reserveStorage(this.streamReservationBytes(raw));
+          releaseReservation = this.storage.reserve(this.streamReservationBytes(raw));
         } catch (error) { this.health.observe(error); throw error; }
       },
       onClosed: () => { releaseReservation(); this.connections.delete(socket); }, onCleanupError: error => this.cleanupError(error),
@@ -330,10 +341,6 @@ export class Broker {
   static errorAnswer(id: string, error: { code: string; message: string; retry: "never" | "same-key" | "after-repair" }): object { return errorAnswer(id, error); }
   static okAnswer(id: string, result: unknown): object { return okAnswer(id, result); }
   private failureAnswer(id: string, error: unknown): object { this.health.observe(error); return Broker.errorAnswer(id, publicFailure(error)); }
-  private assertStorageAdmission(reserveBytes = 0): void {
-    if (this.paths.storageBytes !== undefined)
-      assertStorageQuotaAdmission(this.paths.stateRoot, this.paths.storageBytes, reserveBytes);
-  }
   private streamReservationBytes(envelope: Record<string, unknown>): number {
     const params = envelope.params;
     const record = params && typeof params === "object" && !Array.isArray(params) ? params as Record<string, unknown> : null;
@@ -341,18 +348,6 @@ export class Broker {
     if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return 0;
     const bytes = (descriptor as Record<string, unknown>).bytes;
     return typeof bytes === "number" && Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : 0;
-  }
-  private reserveStorage(bytes: number): () => void {
-    const total = this.storageReservations + bytes;
-    if (!Number.isSafeInteger(total)) throw new StoreError("QUOTA_EXCEEDED", "storage reservations exceed the supported range");
-    this.assertStorageAdmission(total);
-    this.storageReservations = total;
-    let active = true;
-    return () => {
-      if (!active) return;
-      active = false;
-      this.storageReservations -= bytes;
-    };
   }
   private preflightPublicStream(auth: AuthContext, envelope: Record<string, unknown>): void {
     this.publicDispatcher.preflight(auth, envelope);

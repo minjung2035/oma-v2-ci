@@ -48,7 +48,7 @@ function fixture() {
   });
   Object.assign(value, {
     starting: false, inFlight: null, mail: {},
-    activation: allowed => allowed, admit: () => undefined,
+    activation: allowed => allowed, admit: () => () => undefined,
     lifecycle: {
       reconcileCreate: async (id, allowed) => { calls.push(["create", id, allowed]); },
       reconcileAction: (id, allowed) => { calls.push(["action", id, allowed]); },

@@ -72,7 +72,7 @@ export function lifecycleReplayFixture() {
   };
   const dispatcher = new PublicDispatcher({ store: publicStore, mail, units, lifecycle, git: null,
     views: new ViewsModule(store, root, "replay", "p"), limits,
-    isDraining: () => false, assertAdmission() {}, admitResource() {}, refreshViews() {},
+    isDraining: () => false, assertAdmission() {}, admitResource: () => () => undefined, refreshViews() {},
     failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
     readLogs: async () => { throw new Error("logs are not part of the action replay fixture"); } });
   return { root, store, units, lifecycle, dispatcher, auth, capabilities, controls,

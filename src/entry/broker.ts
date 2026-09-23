@@ -19,7 +19,7 @@ import { claimSocietyFence } from "../runtime/society-lease.js";
 import { BrokerLifetime } from "../runtime/broker-lifetime.js";
 import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
-import { assertStorageQuotaAdmission, storageResourceGate } from "../storage/quota.js";
+import { StorageAdmission } from "../storage/quota.js";
 import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
@@ -112,7 +112,10 @@ async function main(): Promise<void> {
     // No schema search, path flattening or cross-installation fallback.
     assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH, systemd: UNIT_TPL_DIR });
     assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
-    assertStorageQuotaAdmission(stateRoot, cfg.quota.storageBytes);
+    // D04: over the admission cap startup still enters bounded recovery (new work
+    // is refused per request); only past the settlement headroom does it stop here.
+    const storage = new StorageAdmission(stateRoot, cfg.quota.storageBytes, cfg.limits.frameBytes);
+    storage.admit("settle")();
     graceSeconds = cfg.limits.receiptWaitSeconds;
     const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
     assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
@@ -144,13 +147,13 @@ async function main(): Promise<void> {
       hasGoal, activationAllowed: () => lifetime.permitsActivation }, resolveSpec, mail, cfg.quota);
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
       projectGit: join(stateRoot, "repos", "project.git"), hasGoal, activationAllowed: () => lifetime.permitsActivation,
-      sweepBudgetSeconds: cfg.limits.receiptWaitSeconds, resourceGate: storageResourceGate(stateRoot, cfg.quota.storageBytes),
+      sweepBudgetSeconds: cfg.limits.receiptWaitSeconds, resourceGate: category => storage.admit(category),
     });
     // PR-001: only the host that started this process gets a Principal
     // endpoint, and credentials leave only on the channel that host holds --
     // never through a file, an environment or this process's own output.
     const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile,
-      { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes }, cfg.limits, lock,
+      { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes, storage }, cfg.limits, lock,
       principalHost);
     lifetime.attach(broker);
     const validateStoredProfiles = () => {

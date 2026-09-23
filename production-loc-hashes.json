@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "65b49cc05af18b5b7f1cd280596e1011ea9c840bc8059fb877b1a61a06c27dbb",
+  "report": "4f3df71da18fc45f08022973b4d57f37e92d1ffd8dd5dfbed0732a552811c9f8",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "50063f43888087d756772e66088f414f951450f0b3e9ec046b24534e97a21d36"
+      "sha256": "79338fcbd1721c6d8c2b21abdb1e9227b8b1c975e115e8ecac8d888c9c32436f"
     },
     {
       "path": "src/broker/composition.ts",
@@ -57,7 +57,7 @@
     },
     {
       "path": "src/broker/internal-dispatcher.ts",
-      "sha256": "713950bc0e926e3a893d24ac7af1bd4f28c1b3f9679e2034605cda7efc487986"
+      "sha256": "62a0c2cfe513f4e8d7094b7ce9c0865122ff3e6f9c225484b1a7f7cae53fe305"
     },
     {
       "path": "src/broker/logs.ts",
@@ -81,7 +81,7 @@
     },
     {
       "path": "src/broker/public-dispatcher.ts",
-      "sha256": "b3f3181c7cea2228225a0b165e411337e8f992cf84ec467ecd2c25fe546816c0"
+      "sha256": "8a876dd710a98ee30683eaccbdf8c507d5c608ba0f58451df8fb951f8cc3d714"
     },
     {
       "path": "src/broker/replies.ts",
@@ -201,7 +201,7 @@
     },
     {
       "path": "src/domain/admission.ts",
-      "sha256": "6f207fd3fe792d04a629a250f63de00aaec488377b542d3c1a4bd8f6eada888c"
+      "sha256": "f3d5eec8791a86e127f4fd5048798a37826db835589cc7b51bce8ff5488aa0a5"
     },
     {
       "path": "src/domain/canonical-json.ts",
@@ -281,7 +281,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "340a17cb588aea6e0fb6cc8aef1bfab66b99bc4f3f7f96ec0279893dc0a6dc1a"
+      "sha256": "60f0f3bfac6a61a736708c3bcb7c441621b393b4f88b137a2bffcf98504d8cf5"
     },
     {
       "path": "src/entry/host.ts",
@@ -573,7 +573,7 @@
     },
     {
       "path": "src/reconcile.ts",
-      "sha256": "0a0cee137d96808b9050c86cac88c348bdd64686babc9448100173c3e7e71a52"
+      "sha256": "e6dfb02323dccc28eab516fd056c4ce58c6263b893a6756b3f74d51c0b9ec1e6"
     },
     {
       "path": "src/reconcile/operations.ts",
@@ -741,7 +741,7 @@
     },
     {
       "path": "src/storage/quota.ts",
-      "sha256": "4c3a34cf54f243829252c998f638c962e4b513bf24f86c8b84afd14516b91960"
+      "sha256": "ee822432320781a02e3e0ae3f1a63ae8d1529ebbbba665c5a8920ef05d3412b5"
     },
     {
       "path": "src/storage/receipt-projector.ts",

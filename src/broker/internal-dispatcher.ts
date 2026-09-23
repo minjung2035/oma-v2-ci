@@ -12,7 +12,7 @@ import type {
 import type { ReconcileMetrics } from "../ports/runtime.js";
 import type { BoundPeer } from "./peer-authenticator.js";
 import { StoreError } from "../domain/errors.js";
-import type { ResourceGate } from "../domain/admission.js";
+import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js";
 import { assertNever } from "../domain/exhaustive.js";
 import { INTERNAL_METHODS, isInternalMethod } from "../protocol/methods.js";
 import { errorAnswer, okAnswer } from "./replies.js";
@@ -105,6 +105,7 @@ export class InternalDispatcher {
         retry: "never",
       });
     const params = paramsRaw as Record<string, unknown>;
+    let release: Release = NO_HOLD;
     try {
       if (!isInternalMethod(method))
         throw new StoreError("UNKNOWN_METHOD", `internal ${method}`);
@@ -128,7 +129,7 @@ export class InternalDispatcher {
       )
         this.deps.assertAdmission();
       // A composite recovery pass admits each of its stages itself.
-      if (descriptor.resource !== "staged") this.deps.admitResource(descriptor.resource);
+      release = descriptor.resource === "staged" ? NO_HOLD : this.deps.admitResource(descriptor.resource);
       // SAFETY: params passed this method's descriptor check; retain the correlation erased by dynamic indexing.
       const call = { id, method, params } as ValidatedInternalCall;
       const { method: dispatchMethod, params: dispatchParams } = call;
@@ -224,8 +225,8 @@ export class InternalDispatcher {
           if (reconcile) report = await reconcile.sweep();
           else {
             // Without the recovery owner only ordinary mail is settled.
-            this.deps.admitResource("settle");
-            report = await mail.reconcilePending();
+            const settlement = this.deps.admitResource("settle");
+            try { report = await mail.reconcilePending(); } finally { settlement(); }
           }
           this.deps.refreshViews();
           return okAnswer(id, report);
@@ -242,6 +243,6 @@ export class InternalDispatcher {
       }
     } catch (error) {
       return this.deps.failureAnswer(id, error);
-    }
+    } finally { release(); }
   }
 }

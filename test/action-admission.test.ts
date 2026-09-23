@@ -19,10 +19,11 @@ import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { StoreError, publicFailure } from "../src/domain/errors.js";
-import { storageResourceGate } from "../src/storage/quota.js";
+import { StorageAdmission } from "../src/storage/quota.js";
 import { parseUnitObservation } from "../src/units/observe.js";
 import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
+import { padTree } from "./fixtures/storage-pad.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 import { gitFixture, seedGit, submitFixture } from "./fixtures/git-crash.js";
 
@@ -55,7 +56,10 @@ async function answer(call: Promise<object>): Promise<Answer> {
     return value.ok ? { ok: true, result: value.result } : { ok: false, code: value.error?.code, retry: value.error?.retry };
   } catch (error) { return { ok: false, code: (error as { code?: string }).code, retry: undefined }; }
 }
-function society(t: TestContext, storageBytes: number) {
+/** A fixed configured quota; "over the limit" places the tree past the settlement headroom too. */
+const QUOTA = 1024 * 1024 * 1024;
+const HEADROOM = 256 * 1024;
+function society(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), "oma-admission-"));
   const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
   t.after(() => { try { store.close(); } finally { removeTree(root); } });
@@ -70,21 +74,24 @@ function society(t: TestContext, storageBytes: number) {
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  // The broker composition gives recovery the same storage gate as dispatch.
+  // The broker composition gives recovery the same storage owner as dispatch.
+  const storage = new StorageAdmission(root, QUOTA, HEADROOM);
   const reconcile = new ReconcileModule(store, mail, null, units, lifecycle, { projectGit: join(root, "project.git"),
-    hasGoal: () => true, activationAllowed: () => true, resourceGate: storageResourceGate(root, storageBytes) });
-  const broker = new Broker(store, mail, units, views, lifecycle, null, reconcile, { stateRoot: root, runRoot: join(root, "run"), society: "demo", storageBytes });
+    hasGoal: () => true, activationAllowed: () => true, resourceGate: category => storage.admit(category) });
+  const broker = new Broker(store, mail, units, views, lifecycle, null, reconcile, { stateRoot: root, runRoot: join(root, "run"), society: "demo", storageBytes: QUOTA, storage });
   const internal = (method: string, params: Record<string, unknown>, channel: "runner" | "host") =>
     (Reflect.get(broker, "dispatchInternal") as (raw: object, peer: object, stream: null, channel: string) => Promise<object>)
       .call(broker, { v: 1, id: method, method, params }, { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() }, null, channel);
-  return { root, store, mail, units, broker, reconcile, internal };
+  const overLimit = () => padTree(root, QUOTA + HEADROOM + 1);
+  return { root, store, mail, units, broker, reconcile, internal, overLimit };
 }
 
 test("V21B: over the storage limit reads and accepted same-key lookups answer, new work is refused, a stop proceeds", async t => {
-  const f = society(t, 1);
+  const f = society(t);
   const input: MailInput = { to: ["bob"], subject: "accepted before the limit", kind: "message", body: "frozen" };
   const accepted = await f.mail.send(auth, "accepted", input);
   assert.equal(accepted.state, "succeeded");
+  f.overLimit();
   const call = (request: Record<string, unknown>) => answer(f.broker.dispatch(auth, request as never, null));
 
   const receipt = await call({ v: 1, id: "g", method: "operation.get", params: { key: "accepted" } });
@@ -112,20 +119,21 @@ test("V21B: over the storage limit reads and accepted same-key lookups answer, n
   assert.equal(f.store.getAgent("bob")?.desired, "stopped");
 });
 
-test("V21B: over the storage limit runner reads answer and settlement waits for its reserve", async t => {
-  const f = society(t, 1);
+test("V21B: over the storage limit runner reads answer and settlement past its headroom is refused", async t => {
+  const f = society(t);
+  f.overLimit();
   t.mock.method(f.broker as unknown as Record<string, () => string>, "runnerActor", () => "alice");
   t.mock.method(f.broker as unknown as Record<string, () => AuthContext>, "runnerAuth", () => auth);
   const pending = await answer(f.internal("runner.pending", {}, "runner"));
   assert.deepEqual(pending, { ok: true, result: { pending: 0, recoverableBatchIds: [] } });
   const complete = await answer(f.internal("batch.complete", { batchId: "b-00000000-0000-4000-8000-000000000001", incarnation: 1,
     sessionPath: "/s", adapterRevision: "r", receiptPath: "/r" }, "runner"));
-  // WP22 owns the bounded settlement reserve; until then settlement is not exempt.
+  // Past the bounded settlement headroom, settlement is refused like new work.
   assert.deepEqual(complete, { ok: false, code: "QUOTA_EXCEEDED", retry: "never" });
 });
 
 test("V21B: over the storage limit recovery settles safety stages and holds new effects and settlement", async t => {
-  const f = society(t, 1);
+  const f = society(t);
   t.mock.method(f.broker as unknown as Record<string, () => void>, "requireHostUnit", () => undefined);
   // Accepted mail whose publication was lost: settling it writes derived views.
   await assert.rejects(sendWithStop(f.mail, f.store, auth, "lost", { to: ["carol"], subject: "held", kind: "message", body: "held" }, "accepted"));
@@ -135,10 +143,11 @@ test("V21B: over the storage limit recovery settles safety stages and holds new 
   assert.equal((await f.mail.send(auth, "work", { to: ["carol"], subject: "work", kind: "message", body: "work" })).state, "succeeded");
   f.store.transaction(tx => tx.updateAgent({ name: "bob", desired: "stopped" }));
   f.units.state.set("bob", running);
+  f.overLimit();
   const report = await answer(f.internal("host.reconcile", {}, "host"));
   assert.ok(report.ok, `recovery is staged, not refused as a whole: ${JSON.stringify(report)}`);
   assert.deepEqual(report.result, { examined: 1, repaired: 0, remaining: 1 });
-  assert.equal(f.store.getOperation("alice", "lost")?.state, "pending", "settlement waits for the WP22 reserve");
+  assert.equal(f.store.getOperation("alice", "lost")?.state, "pending", "settlement past its headroom waits");
   assert.deepEqual(f.units.stops, ["bob"], "the safety stop ran");
   assert.deepEqual(f.units.starts, [], "no new activation over the limit");
   const carol = f.reconcile.unitDiagnostics.find(value => value.agent === "carol");
@@ -146,7 +155,7 @@ test("V21B: over the storage limit recovery settles safety stages and holds new 
 });
 
 test("V21B: within the limit the same recovery settles the mail and activates the waiting unit", async t => {
-  const f = society(t, Number.MAX_SAFE_INTEGER);
+  const f = society(t);
   t.mock.method(f.broker as unknown as Record<string, () => void>, "requireHostUnit", () => undefined);
   await assert.rejects(sendWithStop(f.mail, f.store, auth, "lost", { to: ["carol"], subject: "held", kind: "message", body: "held" }, "accepted"));
   const report = await answer(f.internal("host.reconcile", {}, "host"));
@@ -155,7 +164,7 @@ test("V21B: within the limit the same recovery settles the mail and activates th
 });
 
 test("V21B: a mail failure after its acceptance is reported as accepted, never as a refusal", async t => {
-  const f = society(t, Number.MAX_SAFE_INTEGER);
+  const f = society(t);
   const transaction = f.store.transaction.bind(f.store);
   let calls = 0;
   t.mock.method(f.store, "transaction", ((work: Parameters<Store["transaction"]>[0]) => {
@@ -187,7 +196,7 @@ test("V21B: a submit effect failure recorded as unknown is reported for same-key
 });
 
 test("V21B: a startup stop that cannot be confirmed still leaves every other resident stopped", async t => {
-  const f = society(t, Number.MAX_SAFE_INTEGER);
+  const f = society(t);
   for (const agent of ["alice", "bob"]) f.units.state.set(agent, running);
   f.units.stubborn.add("alice");
   await assert.rejects(f.reconcile.startup(false), { code: "RUN_TERMINATION_UNKNOWN" });

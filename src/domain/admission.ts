@@ -19,10 +19,15 @@ export class AdmissionGate {
 /** D04: what a method or recovery stage would consume. Authentication,
  * authority and integrity checks apply to every category alike. */
 export type ResourceCategory = "read" | "admit" | "settle" | "safety-control";
-export type ResourceGate = (category: ResourceCategory) => void;
-/** The logical storage quota refuses new work. Settlement stays under it until
- * WP22 supplies a bounded reserve; reads and safety stops never are. */
-export function storageGated(category: ResourceCategory): boolean { return category === "admit" || category === "settle"; }
+/** Ends one admitted action's hold on shared resources; a second call does nothing. */
+export type Release = () => void;
+export type ResourceGate = (category: ResourceCategory) => Release;
+export const NO_HOLD: Release = () => undefined;
+/** Wraps a release so that repeating it cannot subtract twice. */
+export function releaseOnce(release: () => void): Release {
+  let held = true;
+  return () => { if (!held) return; held = false; release(); };
+}
 const owners = new WeakMap<object, AdmissionGate>();
 export function bindAdmissionGate(owner: object, gate: AdmissionGate): void {
   const previous = owners.get(owner);

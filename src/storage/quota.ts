@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readdirSync, type Stats } from "node:fs";
 import { join } from "node:path";
 import { assertStorageQuotaSupported } from "../domain/resources.js";
 import { StoreError } from "../domain/errors.js";
-import { storageGated, type ResourceGate } from "../domain/admission.js";
+import { NO_HOLD, releaseOnce, type Release, type ResourceCategory } from "../domain/admission.js";
 
 function allocatedBytes(stat: Stats): number {
   const blocks = Number.isSafeInteger(stat.blocks) ? stat.blocks * 512 : 0;
@@ -83,9 +83,56 @@ export function assertStorageQuotaAdmission(
     );
 }
 
-/** D04: one storage gate for dispatch and recovery stages; no quota profile gates nothing. */
-export function storageResourceGate(stateRoot: string, storageBytes: number | undefined): ResourceGate {
-  return category => {
-    if (storageBytes !== undefined && storageGated(category)) assertStorageQuotaAdmission(stateRoot, storageBytes);
-  };
+/** D04/WP22: the one logical storage owner of a broker process. A decision
+ * compares a fresh scan of the owned tree plus every outstanding reservation
+ * with the configured quota; nothing is cached. The scan is not a hard
+ * filesystem quota: same-UID writers outside the broker and SQLite/WAL growth
+ * are observed after the fact, never prevented, and physical exhaustion stays a
+ * separate STORAGE_FULL failure.
+ *
+ * Settlement of already accepted work may pass the quota by a bounded headroom,
+ * taken from the existing protocol frame limit (no new setting), one over-cap
+ * settlement at a time; past the headroom it is refused like new work.
+ */
+export class StorageAdmission {
+  private reserved = 0;
+  private overCapSettlements = 0;
+  constructor(private readonly stateRoot: string, private readonly storageBytes: number | undefined,
+    private readonly settlementHeadroom: number) {
+    if (!Number.isSafeInteger(settlementHeadroom) || settlementHeadroom < 0)
+      throw new StoreError("UNSUPPORTED_PROFILE", "settlement headroom must be a non-negative safe integer");
+  }
+  /** Bytes reserved for requests whose data the tree does not show yet. */
+  get outstanding(): number { return this.reserved; }
+  /** A streamed request reserves its declared bytes from preflight until its
+   * execution settles or its connection closes; the release runs once. */
+  reserve(bytes: number): Release {
+    if (!Number.isSafeInteger(bytes) || bytes < 0)
+      throw new StoreError("UNSUPPORTED_PROFILE", "storage reservation must be a non-negative safe integer");
+    this.check(bytes, 0);
+    this.reserved += bytes;
+    return releaseOnce(() => { this.reserved -= bytes; });
+  }
+  admit(category: ResourceCategory): Release {
+    switch (category) {
+      case "read": case "safety-control": return NO_HOLD;
+      case "admit": this.check(0, 0); return NO_HOLD;
+      case "settle": {
+        try { this.check(0, 0); return NO_HOLD; }
+        catch (error) { if (!(error instanceof StoreError) || error.code !== "QUOTA_EXCEEDED") throw error; }
+        if (this.overCapSettlements > 0)
+          throw new StoreError("QUOTA_EXCEEDED", "the settlement headroom is in use; the settlement waits for it");
+        this.check(0, this.settlementHeadroom);
+        this.overCapSettlements++;
+        return releaseOnce(() => { this.overCapSettlements--; });
+      }
+    }
+  }
+  private check(extra: number, headroom: number): void {
+    if (this.storageBytes === undefined) return;
+    const reserved = this.reserved + extra; const ceiling = this.storageBytes + headroom;
+    if (!Number.isSafeInteger(reserved) || !Number.isSafeInteger(ceiling))
+      throw new StoreError("QUOTA_EXCEEDED", "storage reservations exceed the supported range");
+    assertStorageQuotaAdmission(this.stateRoot, ceiling, reserved);
+  }
 }

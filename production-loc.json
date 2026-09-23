@@ -3,19 +3,19 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 26583,
+    "n_lines": 26640,
     "report_file": "production-loc.json"
-  },
-  "src/broker.ts": {
-    "blank": 3,
-    "comment": 27,
-    "code": 414,
-    "language": "TypeScript"
   },
   "src/durable.ts": {
     "blank": 5,
     "comment": 12,
     "code": 411,
+    "language": "TypeScript"
+  },
+  "src/broker.ts": {
+    "blank": 3,
+    "comment": 31,
+    "code": 405,
     "language": "TypeScript"
   },
   "src/protocol/methods.ts": {
@@ -117,7 +117,7 @@
   "src/broker/internal-dispatcher.ts": {
     "blank": 1,
     "comment": 5,
-    "code": 241,
+    "code": 242,
     "language": "TypeScript"
   },
   "src/lifecycle/create.ts": {
@@ -162,16 +162,16 @@
     "code": 210,
     "language": "TypeScript"
   },
+  "src/reconcile.ts": {
+    "blank": 1,
+    "comment": 17,
+    "code": 207,
+    "language": "TypeScript"
+  },
   "src/git/integration.ts": {
     "blank": 5,
     "comment": 5,
     "code": 205,
-    "language": "TypeScript"
-  },
-  "src/reconcile.ts": {
-    "blank": 1,
-    "comment": 17,
-    "code": 202,
     "language": "TypeScript"
   },
   "src/storage/immutable-file.ts": {
@@ -219,7 +219,7 @@
   "src/broker/public-dispatcher.ts": {
     "blank": 3,
     "comment": 11,
-    "code": 183,
+    "code": 184,
     "language": "TypeScript"
   },
   "src/git/context.ts": {
@@ -332,8 +332,8 @@
   },
   "src/entry/broker.ts": {
     "blank": 3,
-    "comment": 36,
-    "code": 148,
+    "comment": 38,
+    "code": 149,
     "language": "TypeScript"
   },
   "src/mail/headers.ts": {
@@ -447,6 +447,12 @@
   "src/git/observe.ts": {
     "blank": 11,
     "comment": 10,
+    "code": 118,
+    "language": "TypeScript"
+  },
+  "src/storage/quota.ts": {
+    "blank": 4,
+    "comment": 16,
     "code": 118,
     "language": "TypeScript"
   },
@@ -567,12 +573,6 @@
   "src/storage/paths.ts": {
     "blank": 3,
     "comment": 6,
-    "code": 84,
-    "language": "TypeScript"
-  },
-  "src/storage/quota.ts": {
-    "blank": 4,
-    "comment": 3,
     "code": 84,
     "language": "TypeScript"
   },
@@ -1002,6 +1002,12 @@
     "code": 32,
     "language": "TypeScript"
   },
+  "src/domain/admission.ts": {
+    "blank": 1,
+    "comment": 7,
+    "code": 30,
+    "language": "TypeScript"
+  },
   "src/domain/child-policy.ts": {
     "blank": 2,
     "comment": 1,
@@ -1090,12 +1096,6 @@
     "blank": 2,
     "comment": 3,
     "code": 26,
-    "language": "TypeScript"
-  },
-  "src/domain/admission.ts": {
-    "blank": 1,
-    "comment": 7,
-    "code": 25,
     "language": "TypeScript"
   },
   "src/domain/capabilities.ts": {
@@ -1328,8 +1328,8 @@
   },
   "SUM": {
     "blank": 1074,
-    "comment": 3656,
-    "code": 21853,
+    "comment": 3675,
+    "code": 21891,
     "nFiles": 220
   }
 }

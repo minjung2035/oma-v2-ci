@@ -103,6 +103,7 @@ function internalFixture() {
         };
       if (name === "node:path") return { join: (...parts) => parts.join("/") };
       if (name === "../domain/errors.js") return { StoreError };
+      if (name === "../domain/admission.js") return { NO_HOLD: () => undefined };
       if (name === "../domain/exhaustive.js")
         return {
           assertNever(value) {
@@ -153,7 +154,7 @@ function internalFixture() {
     },
     isDraining: () => false,
     assertAdmission() {},
-    admitResource() {},
+    admitResource: () => () => undefined,
     failureAnswer: (id, error) => ({ v: 1, id, ok: false, error }),
     refreshViews() {},
     openRun() {

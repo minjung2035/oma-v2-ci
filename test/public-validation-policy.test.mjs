@@ -38,6 +38,7 @@ function fixture(transform = source => source) {
   const { PublicDispatcher } = load("../src/broker/public-dispatcher.ts", {
     "../domain/errors.js": { StoreError },
     "../domain/exhaustive.js": { assertNever(value) { throw new TypeError(`unhandled closed variant: ${String(value)}`); } },
+    "../domain/admission.js": { NO_HOLD: () => undefined },
     "../authority.js": { capabilitiesOf: actor => actor.capabilities },
     "../ids.js": { isValidRequestKey: key => typeof key === "string" && /^key-[0-9]+$/.test(key) },
     "../protocol/receipts.js": { receiptOfOperation: value => value, receiptNotFound: { status: "not-found" } },
@@ -57,7 +58,7 @@ function fixture(transform = source => source) {
     git: { submit: effect, publishContext: effect, isPublished() { calls.order.push("published"); return false; } },
     isDraining: () => state.draining,
     assertAdmission() { calls.admission++; if (state.denyAdmission) throw new StoreError("BROKER_UNAVAILABLE", "admission closed"); },
-    admitResource() {},
+    admitResource: () => () => undefined,
     failureAnswer: (id, error) => replies.errorAnswer(id, { code: error.code ?? "INTERNAL_ERROR", message: error.message, retry: "never" }),
     refreshViews() { calls.refresh++; },
   };

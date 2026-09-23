@@ -50,7 +50,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
     },
     isDraining: () => false,
     assertAdmission() {},
-    admitResource() {},
+    admitResource: () => () => undefined,
     refreshViews() {},
     readLogs: async () => unused(),
     failureAnswer(_id, error) {

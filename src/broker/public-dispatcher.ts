@@ -3,7 +3,7 @@ import type { AuthContext, Failure, ProtocolLimits, PublicMethod, PublicMethods,
 import type { UnitObserve } from "../ports/runtime.js";
 import { StoreError } from "../domain/errors.js";
 import { assertNever } from "../domain/exhaustive.js";
-import type { ResourceGate } from "../domain/admission.js";
+import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js";
 import { capabilitiesOf } from "../authority.js";
 import { isValidRequestKey } from "../ids.js";
 import { receiptNotFound } from "../protocol/receipts.js";
@@ -64,7 +64,7 @@ export interface PublicDispatchDependencies {
   readLogs(agent: string, sinceSeconds: number): Promise<{ text: string; truncated: boolean; observedAtMs: number }>;
 }
 type ValidatedPublicCall = {
-  [M in PublicMethod]: { ok: true; id: string; method: M; descriptor: (typeof PUBLIC_METHODS)[M]; params: PublicMethods[M]["params"] }
+  [M in PublicMethod]: { ok: true; id: string; method: M; descriptor: (typeof PUBLIC_METHODS)[M]; params: PublicMethods[M]["params"]; release: Release }
 }[PublicMethod];
 type PublicValidation = ValidatedPublicCall | { ok: false; id: string; failure: Failure };
 
@@ -107,8 +107,9 @@ export class PublicDispatcher {
     if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
     if (phase === "stream-preflight" || this.deps.isDraining() || descriptor.mode === "mutation") this.deps.assertAdmission();
     // Resources are judged once the action is known. Stream bytes are reserved by transport.
+    let release: Release = NO_HOLD;
     if (phase === "dispatch") {
-      try { this.deps.admitResource(descriptor.resource); }
+      try { release = this.deps.admitResource(descriptor.resource); }
       catch (error) {
         // An accepted same-key lookup is not new consumption; the ledger is read only when refused.
         if (!(descriptor.key === "required" && isValidRequestKey(envelope.request) &&
@@ -116,7 +117,7 @@ export class PublicDispatcher {
       }
     }
     // SAFETY: this method's decoder validated params; TS cannot express that dynamic key/union correlation.
-    return { ok: true, id, method, descriptor, params } as ValidatedPublicCall;
+    return { ok: true, id, method, descriptor, params, release } as ValidatedPublicCall;
   }
   preflight(auth: AuthContext, envelope: Record<string, unknown>): void {
     const validation = this.validatePublicRequest(auth, envelope, "stream-preflight", true);
@@ -131,7 +132,7 @@ export class PublicDispatcher {
     // SAFETY: expose only raw envelope fields to validation; this cast grants no schema or authority fact.
     const validation = this.validatePublicRequest(auth, request as unknown as Record<string, unknown>, "dispatch", Boolean(stream));
     if (!validation.ok) return errorAnswer(validation.id, validation.failure);
-    const { id, method, descriptor, params } = validation;
+    const { id, method, descriptor, params, release } = validation;
     try {
       switch (method) {
         case "status.get": {
@@ -187,7 +188,7 @@ export class PublicDispatcher {
         default: return assertNever(method);
       }
     } catch (error) { return this.deps.failureAnswer(id, error); }
-    finally { if (descriptor.mode === "mutation") this.deps.refreshViews(); }
+    finally { release(); if (descriptor.mode === "mutation") this.deps.refreshViews(); }
   }
 }
 function emptyStream(): AsyncIterable<Uint8Array> { return (async function* () {})(); }
