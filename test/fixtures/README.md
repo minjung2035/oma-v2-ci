@@ -104,6 +104,7 @@ VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 | V06A | `receipt-observation.test.ts` named V06A runner/live-endpoint decisions and observer cases; `receipt-settlement.test.ts` V06A recovery decisions | durable, all; actual observer, RunnerModule consume (engine and channel replaced by counters), MailModule live completion and recovery settlement over a complete Pi v3 session fixture |
 | V06B local | `receipt-settlement.test.ts` named `V06B local` cases | durable, all; actual InternalDispatcher, PeerAuthenticator, RunRegistry fencing and recovery settlement with controlled cgroup pins and unit observation; the kernel-lane V06B (real systemd/cgroup stale runner) is not claimed |
 | V19A / V19B | `preaccept-ownership.test.ts` named V19A bootstrap and V19B create cases | durable, all; actual LifecycleModule/CreateCoordinator, Store, MailModule and Git workspace with injected freeze/refresh faults and a no-op unit install for the race winner; not systemd activation |
+| V20A / V20B | `mail-submit-scope.test.ts` named V20A mail/submit freeze and retry cases and V20B recovery cases | durable, all; actual MailModule, materializer, reconcile, GitModule submit with a real repository, Store and filesystem; fsync EIO, cleanup EIO and gated ref publication are injected, inbox unavailability is chmod-based; not a process crash or VM power loss |
 
 `npm test` includes all these local cases; it still excludes the original mixed
 systemd files. Actual lane execution is separate and must be recorded as such.

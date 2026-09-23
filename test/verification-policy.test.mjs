@@ -157,3 +157,12 @@ test("R35 create and bootstrap preaccept oracles are required by durable and all
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 mail and submit preaccept oracles are required by durable and all lanes", () => {
+  assert.ok(lanes.durable.files.includes("mail-submit-scope.test.js"));
+  for (const id of ["V20A:", "V20B:"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});
