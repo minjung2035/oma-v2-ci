@@ -206,9 +206,11 @@ export class PreacceptScope {
   }
 }
 
-/** The common pre-accept question: did the journal accept the operation that
- * would own these artifacts? A journal that cannot be read is not evidence of
- * non-acceptance, so uncertainty retains.
+/** Row-existence compatibility facade: did the journal accept the operation
+ * that would own these artifacts? It cannot tell a plan that names an artifact
+ * from one that does not, so no production caller uses it; coordinators
+ * register plan-reference observers with PreacceptScope instead. A journal that
+ * cannot be read is not evidence of non-acceptance, so uncertainty retains.
  */
 export function settleByAcceptance(
   owners: readonly (PreacceptOwner | null)[],

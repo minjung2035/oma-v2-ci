@@ -17,6 +17,7 @@ import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { PreacceptScope, type PreacceptRegistration } from "../storage/preaccept-artifact.js";
 import { MailModule, buildEml, actorAddress, listAddress, expandAddresses } from "../mail.js";
+import { frozenMessageDisposition } from "../mail/materializer.js";
 import { ContextPublicationObserver, type ContextPublicationEvidence } from "./context-publication.js";
 import type { RefAfterCas } from "./observe.js";
 
@@ -140,7 +141,7 @@ export class ContextCoordinator {
         body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` });
       const artifact = this.mail.freezeObject(messageId, eml);
       scope.register({ operationId: id, resource: artifact.path, owner: artifact,
-        observe: () => this.preacceptDisposition(id, plan => plan.message.id === messageId && plan.message.sha256 === eml.sha256) });
+        observe: () => frozenMessageDisposition(this.store, id, { id: messageId, sha256: eml.sha256 }) });
       // Canonical observation is outside T. There is no await before the pure
       // current-authority/recipient snapshot and acceptance below.
       if (this.effects.current() !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance");

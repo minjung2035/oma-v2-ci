@@ -12,12 +12,12 @@ import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "./storage/
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
 import { publishImmutableFile, readImmutableBytes } from "./storage/immutable-file.js";
-import { publishedArtifact, settleByAcceptance, type PreacceptArtifact, type PreacceptOwner } from "./storage/preaccept-artifact.js";
+import { PreacceptArtifact, PreacceptScope, type PublishedIdentity } from "./storage/preaccept-artifact.js";
 import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { expandAddresses, logicalReplyAddress } from "./mail/routing.js";
 import type { ParsedEmlHeaders } from "./mail/headers.js";
-import { MailMaterializer, operationMessage, type PublicationEvidence } from "./mail/materializer.js";
+import { MailMaterializer, frozenMessageDisposition, operationMessage, type PublicationEvidence } from "./mail/materializer.js";
 import { BatchCoordinator, type SettlementOutcome, type SettlementQuiescence } from "./mail/batches.js";
 import { reconcileOrdinaryMail, type RecoveryCounts } from "./mail/reconcile.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
@@ -26,7 +26,7 @@ export type { RouteResult } from "./mail/routing.js";
 export { batchOf, batchNotice } from "./mail/batches.js";
 export { fsyncDir, replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 export { publishImmutableFile } from "./storage/immutable-file.js";
-export { PreacceptArtifact, publishedArtifact, settleByAcceptance } from "./storage/preaccept-artifact.js";
+export { PreacceptArtifact, publishedArtifact } from "./storage/preaccept-artifact.js";
 export type { PreacceptOwner } from "./storage/preaccept-artifact.js";
 export { publishBatchView } from "./storage/batch-view.js";
 export { buildEml } from "./mail/serialize.js";
@@ -83,25 +83,29 @@ export class MailModule {
       kind: input.kind, contextRevision: input.refs?.find(reference => reference.repo === "context")?.oid ?? null,
       replyHeaders, ...(input.approvalFor === undefined ? {} : { approvalFor: input.approvalFor }),
     }, { subject: input.subject, body: input.body });
-    const artifact = this.freezeObject(messageId, eml);
+    // The frozen object is owned by nobody until the plan that names it is
+    // accepted; one settlement decides it and reports a refusal first.
+    const scope: PreacceptScope = new PreacceptScope();
     let txClaim: "inserted" | "retry";
-    try { txClaim = this.store.transaction(tx => {
-      assertCurrentActor(this.store, auth, "mail.send");
-      const current = this.store.claimKey(auth.actor, key, newHash);
-      if (current === "retry") return "retry" as const;
-      if (current === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
-      route.recipients = expandAddresses(this.store, logicalTo, society).recipients;
-      const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients) };
-      const accepted = tx.acceptOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash,
-        kind: operationKind, payloadJson: JSON.stringify(requestParams), planJson: JSON.stringify(plan) });
-      if (accepted === "inserted") tx.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
-      return accepted;
-    }); } catch (error) { this.settlePreaccept(opId, [artifact]); throw error; }
-    if (txClaim === "retry") {
-      this.settlePreaccept(opId, [artifact]);
-      return receiptOf(this.store.getOperation(auth.actor, key)!);
-    }
-    artifact.retainForOperation();
+    try {
+      const artifact = this.freezeObject(messageId, eml);
+      scope.register({ operationId: opId, resource: artifact.path, owner: artifact,
+        observe: () => frozenMessageDisposition(this.store, opId, { id: messageId, sha256: eml.sha256 }) });
+      txClaim = this.store.transaction(tx => {
+        assertCurrentActor(this.store, auth, "mail.send");
+        const current = this.store.claimKey(auth.actor, key, newHash);
+        if (current === "retry") return "retry" as const;
+        if (current === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
+        route.recipients = expandAddresses(this.store, logicalTo, society).recipients;
+        const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients) };
+        const accepted = tx.acceptOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash,
+          kind: operationKind, payloadJson: JSON.stringify(requestParams), planJson: JSON.stringify(plan) });
+        if (accepted === "inserted") tx.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
+        return accepted;
+      });
+    } catch (error) { scope.settleFailure(error); }
+    scope.settle();
+    if (txClaim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
     const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId) };
     let materializedAll = true;
     try { await this.materialize(opId); }
@@ -142,20 +146,24 @@ export class MailModule {
   }
   /** The published object is owned by nobody until the acceptance transaction
    * that names it commits. The caller settles the returned artifact on every
-   * exit from that window. */
+   * exit from that window. Until this returns, the object is this call's: a
+   * failure after its own link removes exactly the inode it linked, and the
+   * first failure stays first. */
   freezeObject(messageId: MessageId, eml: { text: string; sha256?: string }): PreacceptArtifact {
     const stagingDir = join(this.paths.stateRoot, "staging", "mail-objects"); ensureDirectory(stagingDir);
     const staged = join(stagingDir, `${messageId}.${generateOperationId()}.tmp`);
     writeFsynced(staged, eml.text);
     const destination = this.objectPath(messageId);
-    try { publishImmutableFile(staged, destination, eml.sha256 ?? sha256Hex(eml.text)); }
-    finally { removeOwnedFile(staged); }
-    return publishedArtifact(destination);
-  }
-  /** Settles pre-accept owners against this journal: the operation that would
-   * name them either exists or nothing owns them. */
-  settlePreaccept(operationId: string, owners: readonly (PreacceptOwner | null)[]): void {
-    settleByAcceptance(owners, () => this.store.getOperationById(operationId) !== null, operationId);
+    let linked: PublishedIdentity | null = null;
+    const failures: unknown[] = [];
+    try { publishImmutableFile(staged, destination, eml.sha256 ?? sha256Hex(eml.text), undefined, identity => { linked = identity; }); }
+    catch (error) { failures.push(error); }
+    try { removeOwnedFile(staged); } catch (error) { failures.push(error); }
+    // An existing destination this call did not link is not its object.
+    const artifact = new PreacceptArtifact(destination, linked, linked === null);
+    if (failures.length === 0) return artifact;
+    try { artifact.discardUnaccepted(); } catch (error) { failures.push(error); }
+    throw failures.length > 1 ? new AggregateError(failures, "mail object freeze and owned cleanup failed") : failures[0];
   }
   async publishGated(operationId: string, proof?: PublicationEvidence): Promise<void> { this.materializer.gated(operationId, proof); }
   async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }

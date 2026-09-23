@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "a7c673885a2624c661b1483e1db31633fc2c8deba5b8b1b5573ef062e5b1928d",
+  "report": "5d38c31b1079da8fd583fba94277d2850a9698d7fd720679f200836e4b991c47",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -361,7 +361,7 @@
     },
     {
       "path": "src/git/context.ts",
-      "sha256": "2340b91a946d923fc77199f31b8257447b21ccf7f810c9e682569705a0005ea8"
+      "sha256": "f81ecee40e04e173a03323251e496da02db795536ed5e2cfc6da8348de8c5b78"
     },
     {
       "path": "src/git/integration-policy.ts",
@@ -389,7 +389,7 @@
     },
     {
       "path": "src/git/submit.ts",
-      "sha256": "750c1e2d06dff63d2db779c615fe59c9f3890613543fd4c7a3eba3b86d9bd0fa"
+      "sha256": "c9b3844c2a335e0e210622b7ba18aa0e5bbb517ec9a516de1f863d53cdb0f453"
     },
     {
       "path": "src/hash.ts",
@@ -421,7 +421,7 @@
     },
     {
       "path": "src/lifecycle/create.ts",
-      "sha256": "d7712c383c9e1c3ce24d873ea79ab7b3b80ac7c17d7af14f79588cab3ff81e8c"
+      "sha256": "419559616200c04f5e23bd1877ab4b398fc3f08cdfe112f8342438ca0a0077f1"
     },
     {
       "path": "src/lifecycle/policy.ts",
@@ -437,7 +437,7 @@
     },
     {
       "path": "src/mail.ts",
-      "sha256": "ee4a18343d9f10aa30f3905642f2c1be875c011b99107f38fe9c2aee8fd4b440"
+      "sha256": "8d0a95d23b64db519bda8d151fea173c59c7fb6bec943064cdf05b86e565d5a0"
     },
     {
       "path": "src/mail/addresses.ts",
@@ -461,7 +461,7 @@
     },
     {
       "path": "src/mail/materializer.ts",
-      "sha256": "b7d8c3210a73dea7c4ed9d7e9b611ca6a6bb42ed48b3ffc2037301e1c96185f8"
+      "sha256": "c4f602e3f88ed252093c9a73defe2e8546f17fabc1a00937043725b508f4f829"
     },
     {
       "path": "src/mail/reconcile.ts",
@@ -713,7 +713,7 @@
     },
     {
       "path": "src/storage/immutable-file.ts",
-      "sha256": "7e9b115afc2f02824e5d67b7bd7b573610036ab1c033c03ee14183f6fecb19d0"
+      "sha256": "eea6a08ff95ad33954d6771a18df967fa953faf86d65aab7eb0f803d2fb4a04c"
     },
     {
       "path": "src/storage/ledger-reader.ts",
@@ -737,7 +737,7 @@
     },
     {
       "path": "src/storage/preaccept-artifact.ts",
-      "sha256": "286e7e01ffc58d0cbc91565cdef2278d73c9b5d38090680f58afbc83b3e0dc98"
+      "sha256": "3e7d0fa3b54a479d0562dd01822c83d8143d694ca910410e1f2e7814cc5a4fe9"
     },
     {
       "path": "src/storage/quota.ts",

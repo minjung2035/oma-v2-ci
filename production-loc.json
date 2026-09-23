@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 26418,
+    "n_lines": 26451,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -114,15 +114,15 @@
     "code": 245,
     "language": "TypeScript"
   },
-  "src/lifecycle/create.ts": {
-    "blank": 8,
-    "comment": 15,
-    "code": 240,
-    "language": "TypeScript"
-  },
   "src/broker/internal-dispatcher.ts": {
     "blank": 1,
     "comment": 2,
+    "code": 235,
+    "language": "TypeScript"
+  },
+  "src/lifecycle/create.ts": {
+    "blank": 7,
+    "comment": 12,
     "code": 235,
     "language": "TypeScript"
   },
@@ -168,6 +168,12 @@
     "code": 205,
     "language": "TypeScript"
   },
+  "src/storage/immutable-file.ts": {
+    "blank": 4,
+    "comment": 14,
+    "code": 199,
+    "language": "TypeScript"
+  },
   "src/config.ts": {
     "blank": 10,
     "comment": 6,
@@ -178,12 +184,6 @@
     "blank": 16,
     "comment": 6,
     "code": 195,
-    "language": "TypeScript"
-  },
-  "src/storage/immutable-file.ts": {
-    "blank": 4,
-    "comment": 12,
-    "code": 191,
     "language": "TypeScript"
   },
   "src/storage/transitions.ts": {
@@ -206,20 +206,20 @@
   },
   "src/storage/preaccept-artifact.ts": {
     "blank": 19,
-    "comment": 27,
+    "comment": 29,
     "code": 185,
+    "language": "TypeScript"
+  },
+  "src/git/context.ts": {
+    "blank": 5,
+    "comment": 24,
+    "code": 183,
     "language": "TypeScript"
   },
   "src/storage/ledger-reader.ts": {
     "blank": 1,
     "comment": 5,
     "code": 183,
-    "language": "TypeScript"
-  },
-  "src/git/context.ts": {
-    "blank": 5,
-    "comment": 24,
-    "code": 182,
     "language": "TypeScript"
   },
   "src/reconcile.ts": {
@@ -252,6 +252,12 @@
     "code": 170,
     "language": "TypeScript"
   },
+  "src/git/submit.ts": {
+    "blank": 2,
+    "comment": 11,
+    "code": 166,
+    "language": "TypeScript"
+  },
   "src/tui/app.ts": {
     "blank": 19,
     "comment": 49,
@@ -264,9 +270,9 @@
     "code": 163,
     "language": "TypeScript"
   },
-  "src/git/submit.ts": {
-    "blank": 2,
-    "comment": 8,
+  "src/mail.ts": {
+    "blank": 1,
+    "comment": 11,
     "code": 163,
     "language": "TypeScript"
   },
@@ -286,12 +292,6 @@
     "blank": 8,
     "comment": 49,
     "code": 159,
-    "language": "TypeScript"
-  },
-  "src/mail.ts": {
-    "blank": 1,
-    "comment": 8,
-    "code": 158,
     "language": "TypeScript"
   },
   "src/diagnostics/integrity.ts": {
@@ -426,6 +426,12 @@
     "code": 122,
     "language": "TypeScript"
   },
+  "src/mail/materializer.ts": {
+    "blank": 2,
+    "comment": 7,
+    "code": 121,
+    "language": "TypeScript"
+  },
   "src/protocol/batch-view.ts": {
     "blank": 1,
     "comment": 7,
@@ -448,12 +454,6 @@
     "blank": 14,
     "comment": 29,
     "code": 115,
-    "language": "TypeScript"
-  },
-  "src/mail/materializer.ts": {
-    "blank": 2,
-    "comment": 3,
-    "code": 110,
     "language": "TypeScript"
   },
   "src/broker/peer-authenticator.ts": {
@@ -1327,9 +1327,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1073,
-    "comment": 3617,
-    "code": 21728,
+    "blank": 1072,
+    "comment": 3628,
+    "code": 21751,
     "nFiles": 220
   }
 }

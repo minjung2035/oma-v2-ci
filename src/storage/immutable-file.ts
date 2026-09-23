@@ -29,6 +29,7 @@ import {
   openDirectory,
   openRegularBeneath,
 } from "./contained-fs.js";
+import type { PublishedIdentity } from "./preaccept-artifact.js";
 
 function checkedBytes(
   fd: number,
@@ -114,12 +115,15 @@ export function readImmutableBytes(path: string, expectedHash: string, expectedB
  * ownership is not transferred, and accepted evidence is never collected here.
  * The caller still owns source cleanup. Same-inode writes remain outside this
  * namespace guarantee; a readonly mode alone is not a same-UID write boundary.
+ * `linked` hears the inode this call itself put at the destination, before it
+ * is validated or flushed; an existing destination is never reported.
  */
 export function publishImmutableFile(
   source: string,
   destination: string,
   expectedHash?: string,
   faults?: DurabilityObserver,
+  linked?: (identity: PublishedIdentity) => void,
 ): void {
   const sourceParent = openDirectory(dirname(source));
   let sourceFd: number | undefined;
@@ -132,9 +136,14 @@ export function publishImmutableFile(
     const original = checkedBytes(sourceFd, expectedHash);
     ensureDurableDirectory(dirname(destination), 0o755, faults);
     parent = openDirectory(dirname(destination));
+    const report = (fd: number): void => {
+      const stat = fstatSync(fd);
+      linked?.({ dev: stat.dev, ino: stat.ino });
+    };
     try {
       faultAt(faults, "publication-link", "before", destination);
       linkDescriptor(sourceFd, parent, basename(destination));
+      report(sourceFd);
     } catch (error) {
       if (isDurabilityFault(error)) throw error;
       const code = (error as NodeJS.ErrnoException).code;
@@ -162,6 +171,7 @@ export function publishImmutableFile(
         checkedBytes(temporaryFd, original.hash);
         try {
           linkDescriptor(temporaryFd, parent, basename(destination));
+          report(temporaryFd);
         } catch (publicationError) {
           if ((publicationError as NodeJS.ErrnoException).code !== "EEXIST")
             throw publicationError;

@@ -51,9 +51,9 @@ batch SQL settlement. Its physical-cache tests complement the pure ordering tabl
 do not use the production `receiptSupersession` return value as a concurrency oracle.
 
 A `DurabilityFaultError` can preserve leaf artifacts by bypassing cleanup, but an
-exception is not process death. `mail-faults.ts` throws through workflow cleanup
-before its harness stops: that is not interchangeable with the immediate-stop
-`crash-worker.ts` instrumentation. SIGKILL plus an observed checkpoint still is not
+exception is not process death. In-process `mail-faults.ts` callers get a thrown
+`StopSignal` that runs through workflow cleanup; only the child `mail-harness.ts`
+passes `halt` and stops at the checkpoint itself, like `crash-worker.ts`. SIGKILL plus an observed checkpoint still is not
 VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 
 ## Effect and checkpoint APIs

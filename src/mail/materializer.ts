@@ -11,14 +11,29 @@ import { consumeContextPublication, type ContextPublicationEvidence } from "../g
 import { consumeCreationPublication, type CreationPublicationEvidence } from "../lifecycle/create-publication.js";
 
 export type PublicationEvidence = SubmissionPublicationEvidence | ContextPublicationEvidence | CreationPublicationEvidence;
-export function operationMessage(operation: OperationRow): MessagePlan {
+/** The message an accepted plan names, or null for a plan that names none. */
+function namedMessage(operation: OperationRow): MessagePlan | null {
   switch (operation.kind) {
     case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return operation.plan.message;
-    case "agent.create":
-      if (operation.plan.initialMessage !== null) return operation.plan.initialMessage;
-      throw new StoreError("STORE_CORRUPT", "linked create owns no separate initial message");
-    default: throw new StoreError("STORE_CORRUPT", `operation ${operation.kind} owns no message`);
+    case "agent.create": return operation.plan.initialMessage;
+    default: return null;
   }
+}
+/** Pre-accept ownership of a frozen message object follows the accepted plan,
+ * not row existence: only a plan naming this id and sha256 owns it. A linked
+ * create, another message or another kind owns none of it. */
+export function frozenMessageDisposition(store: Pick<Store, "getOperationById">, operationId: string,
+  message: { readonly id: string; readonly sha256: string }): "unaccepted-known" | "accepted-referenced" | "accepted-unreferenced" {
+  const operation = store.getOperationById(operationId);
+  if (operation === null) return "unaccepted-known";
+  const named = namedMessage(operation);
+  return named !== null && named.id === message.id && named.sha256 === message.sha256 ? "accepted-referenced" : "accepted-unreferenced";
+}
+export function operationMessage(operation: OperationRow): MessagePlan {
+  const message = namedMessage(operation);
+  if (message !== null) return message;
+  throw new StoreError("STORE_CORRUPT", operation.kind === "agent.create"
+    ? "linked create owns no separate initial message" : `operation ${operation.kind} owns no message`);
 }
 
 /** Adds physical source/header/hash proof and the sole archive/inbox effect loop

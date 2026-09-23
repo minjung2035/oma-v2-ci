@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { Actor, AgentCreateInput, AuthContext, MessagePlan, Receipt, ResolvedAgentSpec } from "../../implementation/contracts.js";
+import type { Actor, AgentCreateInput, AuthContext, Receipt, ResolvedAgentSpec } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
@@ -10,7 +10,8 @@ import { requestHash } from "../hash.js";
 import { resolvedSpecOf, assertActorIdentity } from "../authority.js";
 import { workspacePathAt, agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
 import { ensureDurableDirectory } from "../storage/durable-fs.js";
-import { PreacceptScope, type PreacceptRegistration } from "../storage/preaccept-artifact.js";
+import { PreacceptScope } from "../storage/preaccept-artifact.js";
+import { frozenMessageDisposition } from "../mail/materializer.js";
 import type { MailModule } from "../mail.js";
 import type { UnitsModule } from "../units.js";
 import type { LifecyclePaths, PhysicalCreatePlan, LinkedCreatePlan, SeedConfig } from "./contracts.js";
@@ -70,7 +71,7 @@ export class CreateCoordinator {
         const spec = resolve(seed.name, seed.profile, seed.brief, from);
         const id = generateOperationId();
         const { message: initialMessage, artifact } = await mail.freezeCreateInitial(auth, id, seed.name, seed.brief);
-        scope.register({ operationId: id, resource: initialMessage.id, owner: artifact, observe: () => this.briefDisposition(id, initialMessage) });
+        scope.register({ operationId: id, resource: initialMessage.id, owner: artifact, observe: () => frozenMessageDisposition(this.store, id, initialMessage) });
         plans.push({ id, plan: { kind: "agent.create", spec, specHash: resolvedSpecDigest(spec), parent: "principal",
           workspacePath: workspacePathAt(this.paths.stateRoot, seed.name), unitNames: residentUnitsFor(this.paths.society, seed.name), initialMessage, existingCreation: null } });
       }
@@ -90,16 +91,6 @@ export class CreateCoordinator {
       });
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
-  }
-
-  /** A frozen initial brief is owned by nobody until the create that names it
-   * is accepted; an accepted plan that names no message, or another one, owns
-   * none of it. */
-  private briefDisposition(id: string, message: MessagePlan): ReturnType<PreacceptRegistration["observe"]> {
-    const operation = this.store.getOperationById(id);
-    if (operation === null) return "unaccepted-known";
-    return operation.kind === "agent.create" && operation.plan.initialMessage?.id === message.id &&
-      operation.plan.initialMessage.sha256 === message.sha256 ? "accepted-referenced" : "accepted-unreferenced";
   }
 
   async create(auth: AuthContext, source: AgentCreateInput, key: string): Promise<Receipt> {
@@ -139,7 +130,7 @@ export class CreateCoordinator {
     let accepted: { outcome: "inserted" | "retry"; linked: string | null };
     try {
       const { message: initialMessage, artifact } = await this.requireMail().freezeCreateInitial(auth, id, input.name, input.brief);
-      scope.register({ operationId: id, resource: initialMessage.id, owner: artifact, observe: () => this.briefDisposition(id, initialMessage) });
+      scope.register({ operationId: id, resource: initialMessage.id, owner: artifact, observe: () => frozenMessageDisposition(this.store, id, initialMessage) });
       revision = this.policy.refresh();
       accepted = this.store.transaction(tx => {
         this.policy.assertRevision(revision);
