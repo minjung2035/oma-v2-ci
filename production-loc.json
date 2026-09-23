@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 26359,
+    "n_lines": 26413,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -291,7 +291,7 @@
   "src/mail.ts": {
     "blank": 1,
     "comment": 8,
-    "code": 157,
+    "code": 158,
     "language": "TypeScript"
   },
   "src/diagnostics/integrity.ts": {
@@ -321,6 +321,12 @@
   "src/extension/batch-view.ts": {
     "blank": 1,
     "comment": 7,
+    "code": 151,
+    "language": "TypeScript"
+  },
+  "src/mail/batches.ts": {
+    "blank": 2,
+    "comment": 14,
     "code": 151,
     "language": "TypeScript"
   },
@@ -378,6 +384,12 @@
     "code": 141,
     "language": "TypeScript"
   },
+  "src/runtime/run-registry.ts": {
+    "blank": 4,
+    "comment": 10,
+    "code": 139,
+    "language": "TypeScript"
+  },
   "src/lifecycle/actions.ts": {
     "blank": 5,
     "comment": 9,
@@ -402,22 +414,10 @@
     "code": 134,
     "language": "TypeScript"
   },
-  "src/runtime/run-registry.ts": {
-    "blank": 4,
-    "comment": 5,
-    "code": 128,
-    "language": "TypeScript"
-  },
   "src/extension/tool-surface.ts": {
     "blank": 6,
     "comment": 27,
     "code": 127,
-    "language": "TypeScript"
-  },
-  "src/mail/batches.ts": {
-    "blank": 1,
-    "comment": 3,
-    "code": 126,
     "language": "TypeScript"
   },
   "src/runtime/resident-rootfs.ts": {
@@ -1327,9 +1327,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1072,
-    "comment": 3598,
-    "code": 21689,
+    "blank": 1073,
+    "comment": 3614,
+    "code": 21726,
     "nFiles": 220
   }
 }

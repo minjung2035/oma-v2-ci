@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Actor, RunLease } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { parseCgroupPopulation } from "../units/observe.js";
+import type { SettlementQuiescence } from "../mail/batches.js";
 
 export interface CgroupIdentity { readonly dev: bigint; readonly ino: bigint }
 export type Population = "empty" | "populated" | "removed" | "unknown";
@@ -126,6 +127,21 @@ export class RunRegistry {
     try { previous?.done(); }
     catch (error) { record.revoke(); throw error; }
     return record;
+  }
+  /** D01/BATCH-004: while `actor`'s next run is opening, `begin` has proven its
+   * previous invocation's cgroup empty or removed (or this broker has run none
+   * since its startup quiesced every unit), and the next run has no endpoint.
+   * That is the only authority to settle the previous incarnation's receipts,
+   * and it ends when the run is published, revoked or replaced. */
+  settlementQuiescence(actor: Actor): SettlementQuiescence {
+    const record = this.records.get(actor);
+    if (!record || record.phase !== "opening")
+      throw new StoreError("STALE_RUN", "no opening run holds receipt settlement authority");
+    const confirm = (): void => {
+      if (this.records.get(actor) !== record || record.phase !== "opening")
+        throw new StoreError("STALE_RUN", "receipt settlement authority ended with its opening run");
+    };
+    return Object.freeze({ actor, incarnation: record.identity.incarnation - 1, confirm });
   }
   close(): void {
     let failed: unknown;

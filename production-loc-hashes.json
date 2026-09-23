@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "c4a40cab483ba073e8da9678a8f731b64e3b19f542a5a074e05e313c89e6430d",
+  "report": "80ec2abbb8cc54aa808347f3f4e055e811565e87b1b02b1efcfa656c6b62b98f",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -437,7 +437,7 @@
     },
     {
       "path": "src/mail.ts",
-      "sha256": "428907befb96f71d77088edb087bd934557dd4c65c4d348209fa8673280e4521"
+      "sha256": "ee4a18343d9f10aa30f3905642f2c1be875c011b99107f38fe9c2aee8fd4b440"
     },
     {
       "path": "src/mail/addresses.ts",
@@ -449,7 +449,7 @@
     },
     {
       "path": "src/mail/batches.ts",
-      "sha256": "c7b9bd7d9fb5a1cb4a7177a38ee01d691fdb083b57691dd55780c758f5cea303"
+      "sha256": "4807221e827b9236e7dbb1420b4af5f258f82413607b4b374dba9bc03dc94e1a"
     },
     {
       "path": "src/mail/facts.ts",
@@ -657,7 +657,7 @@
     },
     {
       "path": "src/runtime/run-registry.ts",
-      "sha256": "cac27d4182ea9b4ed4f666bbe56c673efa887573624fac8cdf58d286b514194a"
+      "sha256": "46e43fd3fa5e4d7648b88b6208548ac93d9eca4d57cfdb9adb197cb9bd0f8969"
     },
     {
       "path": "src/runtime/society-lease.ts",

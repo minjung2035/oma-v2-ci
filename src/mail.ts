@@ -18,7 +18,7 @@ import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { expandAddresses, logicalReplyAddress } from "./mail/routing.js";
 import type { ParsedEmlHeaders } from "./mail/headers.js";
 import { MailMaterializer, operationMessage, type PublicationEvidence } from "./mail/materializer.js";
-import { BatchCoordinator } from "./mail/batches.js";
+import { BatchCoordinator, type SettlementOutcome, type SettlementQuiescence } from "./mail/batches.js";
 import { reconcileOrdinaryMail, type RecoveryCounts } from "./mail/reconcile.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
 export { expandAddresses } from "./mail/routing.js";
@@ -161,6 +161,7 @@ export class MailModule {
   async materialize(operationId: string): Promise<void> { this.materializer.ordinary(operationId); }
   prepare(auth: AuthContext): Promise<PreparedBatch | null> { return this.batches.prepare(auth); }
   complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> { return this.batches.complete(auth, evidence); }
+  settleFromReceipt(quiescence: SettlementQuiescence, batchId: string): SettlementOutcome { return this.batches.settleFromReceipt(quiescence, batchId); }
   moveToCur(agent: Actor, ids: readonly MessageId[]): number { return this.batches.moveToCur(agent, ids); }
   reconcilePending(): Promise<RecoveryCounts> { return reconcileOrdinaryMail(this.store, this); }
 }

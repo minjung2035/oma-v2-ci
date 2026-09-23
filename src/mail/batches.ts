@@ -10,10 +10,28 @@ import { ensureDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
 import { observeImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
 import { publishBatchView } from "../storage/batch-view.js";
 import { encodeBatchView, type BatchViewLimits } from "../protocol/batch-view.js";
-import { PI_ADAPTER_REVISION, readDeliveryReceipt } from "../storage/delivery-receipt.js";
+import {
+  PI_ADAPTER_REVISION, observeDeliveryReceipt, readDeliveryReceipt, type CheckedReceipt, type ReceiptObservation,
+} from "../storage/delivery-receipt.js";
 import type { BatchRow } from "../storage/rows.js";
 import { MailMaterializer, operationMessage } from "./materializer.js";
 import { selectBatch } from "./batch-policy.js";
+
+/** D01/BATCH-004: what a broker-owned settlement must hold. The next run of
+ * `actor` has begun only after its previous invocation's cgroup was proven
+ * empty or removed (or this broker's startup quiesced every unit before
+ * admitting runs), and no endpoint of that next run exists yet, so nothing at
+ * `incarnation` can still act. `confirm` re-checks this immediately before the
+ * ledger transition; it is not a flag that stays true. */
+export interface SettlementQuiescence {
+  readonly actor: Actor;
+  readonly incarnation: number;
+  confirm(): void;
+}
+export type SettlementOutcome =
+  | { readonly kind: "settled"; readonly receipt: CheckedReceipt }
+  | { readonly kind: "completed" }
+  | Exclude<ReceiptObservation, { readonly kind: "verified" }>;
 
 export class BatchCoordinator {
   constructor(private readonly store: Store, private readonly stateRoot: string,
@@ -89,6 +107,25 @@ export class BatchCoordinator {
     if (receipt.sessionPath !== evidence.sessionPath)
       throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "receipt and completion session paths differ");
     this.store.transaction(tx => tx.completeBatch(batch.id, prepared.messageIds, auth.actor, batch.incarnation, receipt.sessionPath));
+  }
+  /** D01/BATCH-004: broker-owned settlement of one prepared batch from its own
+   * exact receipt, before rollover. No RPC reaches this: it prepares no batch,
+   * starts no engine and grants no lease. A completed batch keeps its first
+   * terminal fact; anything but a verified receipt settles nothing. The ledger
+   * transition re-checks batch, actor, incarnation, manifest and state. */
+  settleFromReceipt(quiescence: SettlementQuiescence, batchId: string): SettlementOutcome {
+    if (!this.limits) throw new StoreError("UNSUPPORTED_PROFILE", "receipt settlement requires the configured frame limit");
+    const row = this.store.getBatch(batchId);
+    if (!row) throw new StoreError("BATCH_CONFLICT", `unknown batch ${batchId}`);
+    if (row.agent !== quiescence.actor || row.incarnation !== quiescence.incarnation)
+      throw new StoreError("BATCH_CONFLICT", "settlement authority names another actor or incarnation");
+    if (row.state === "completed") return { kind: "completed" };
+    const snapshot = this.snapshot(row, quiescence.actor);
+    const observed = observeDeliveryReceipt(this.stateRoot, snapshot, this.limits.frameBytes);
+    if (observed.kind !== "verified") return observed;
+    quiescence.confirm();
+    this.store.transaction(tx => tx.completeBatch(row.id, snapshot.messageIds, quiescence.actor, row.incarnation, observed.receipt.sessionPath));
+    return { kind: "settled", receipt: observed.receipt };
   }
   moveToCur(agent: Actor, ids: readonly MessageId[]): number {
     let count = 0;
