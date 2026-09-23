@@ -1,0 +1,33 @@
+{
+  "scope": "PLAN_STRUCTURE_ONLY_NOT_PRODUCT_VERIFICATION",
+  "status": "PASS",
+  "baseline_commit": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
+  "plan_json_sha256": "c1874565ed69b37d3899d8d2d8e3b373b0a9bc46f31017eb05a9587755d49dd8",
+  "counts": {
+    "work_packages": 33,
+    "implementation_substeps": 166,
+    "test_specifications": 73,
+    "production_inventory_paths": 220,
+    "source_references": 71,
+    "markdown_documents": 57,
+    "local_links_checked": 1153
+  },
+  "checks": [
+    "unique IDs",
+    "complete task sections",
+    "consecutive substeps",
+    "valid dependencies",
+    "acyclic graph",
+    "test owner and specification fields",
+    "invariant/source/decision references",
+    "exact production assignment",
+    "pinned source SHA",
+    "no tokenized URLs",
+    "local links and explicit anchors",
+    "paired code fences",
+    "summary counts"
+  ],
+  "product_implementation": "NOT_STARTED",
+  "product_tests": "NOT_RUN",
+  "errors": []
+}
