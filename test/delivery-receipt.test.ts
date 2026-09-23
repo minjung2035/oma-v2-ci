@@ -69,10 +69,11 @@ test("S-03: only the pinned durable Pi boundary receipt completes a prepared bat
       adapterRevision: PI_ADAPTER_REVISION,
       receiptPath: runnerReceiptPathAt(root, "alice", batch.id),
     }),
+    // No receipt exists yet: insufficient evidence, not an ownership conflict.
     (error: unknown) =>
       error instanceof Error &&
       "code" in error &&
-      error.code === "BATCH_CONFLICT",
+      error.code === "SESSION_BOUNDARY_UNCONFIRMED",
   );
   assert.equal(store.getDelivery(batch.messageIds[0]!, "alice")?.presented, 0);
   const sessions = runnerSessionDirPathAt(root, "alice");

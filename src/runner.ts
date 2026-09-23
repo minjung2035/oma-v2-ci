@@ -20,6 +20,8 @@ import {
   observeDeliveryReceipt,
   PI_ADAPTER_REVISION,
   publishDeliveryReceipt,
+  requireVerifiedReceipt,
+  type DeliveryReceipt,
 } from "./storage/delivery-receipt.js";
 import {
   decodeRunLease,
@@ -264,12 +266,15 @@ export class RunnerModule {
         "UNSUPPORTED_PROFILE",
         "runner receipt configuration is incomplete",
       );
-    let receipt = observeDeliveryReceipt(
+    // Only an observed absence lets the batch be presented again; a receipt
+    // that could not be read or does not match is never a new delivery.
+    const observed = observeDeliveryReceipt(
       stateRoot,
       batch,
       this.limits.frameBytes,
     );
-    if (!receipt) {
+    let receipt: DeliveryReceipt;
+    if (observed.kind === "absent") {
       const opened = await this.openRelay();
       let boundary;
       try { boundary = await this.adapter(batch, opened?.inference).deliver(batch); }
@@ -280,7 +285,7 @@ export class RunnerModule {
         boundary,
         this.limits.frameBytes,
       );
-    }
+    } else receipt = requireVerifiedReceipt(observed);
     const response = await this.channel.call("batch.complete", {
       batchId: batch.id,
       incarnation: batch.incarnation,

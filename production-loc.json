@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 26257,
+    "n_lines": 26359,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -36,6 +36,12 @@
     "code": 347,
     "language": "TypeScript"
   },
+  "src/storage/delivery-receipt.ts": {
+    "blank": 2,
+    "comment": 22,
+    "code": 338,
+    "language": "TypeScript"
+  },
   "src/store.ts": {
     "blank": 4,
     "comment": 22,
@@ -62,8 +68,8 @@
   },
   "src/runner.ts": {
     "blank": 0,
-    "comment": 32,
-    "code": 273,
+    "comment": 34,
+    "code": 276,
     "language": "TypeScript"
   },
   "src/runtime/pi-rpc.ts": {
@@ -76,12 +82,6 @@
     "blank": 27,
     "comment": 48,
     "code": 269,
-    "language": "TypeScript"
-  },
-  "src/storage/delivery-receipt.ts": {
-    "blank": 2,
-    "comment": 0,
-    "code": 268,
     "language": "TypeScript"
   },
   "src/broker/connection.ts": {
@@ -416,8 +416,8 @@
   },
   "src/mail/batches.ts": {
     "blank": 1,
-    "comment": 2,
-    "code": 122,
+    "comment": 3,
+    "code": 126,
     "language": "TypeScript"
   },
   "src/runtime/resident-rootfs.ts": {
@@ -1328,8 +1328,8 @@
   },
   "SUM": {
     "blank": 1072,
-    "comment": 3573,
-    "code": 21612,
+    "comment": 3598,
+    "code": 21689,
     "nFiles": 220
   }
 }

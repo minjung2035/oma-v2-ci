@@ -11,6 +11,7 @@ import { observeImmutableFile, readImmutableBytes } from "../storage/immutable-f
 import { publishBatchView } from "../storage/batch-view.js";
 import { encodeBatchView, type BatchViewLimits } from "../protocol/batch-view.js";
 import { PI_ADAPTER_REVISION, readDeliveryReceipt } from "../storage/delivery-receipt.js";
+import type { BatchRow } from "../storage/rows.js";
 import { MailMaterializer, operationMessage } from "./materializer.js";
 import { selectBatch } from "./batch-policy.js";
 
@@ -38,6 +39,12 @@ export class BatchCoordinator {
     }
     if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
     lines.push("전체 목록: /inbox.md"); return lines.join("\n");
+  }
+  /** The expected batch of a receipt comes from the ledger, never a caller. */
+  private snapshot(row: BatchRow, agent: Actor): PreparedBatch {
+    const ids: unknown = JSON.parse(row.messageIdsJson);
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== "string")) throw new StoreError("STORE_CORRUPT", "invalid decoded batch manifest");
+    return batchOf({ id: row.id, incarnation: row.incarnation, messageIds: ids as string[], sessionPath: row.sessionPath }, agent);
   }
   private finishPrepared(batch: PreparedBatch): PreparedBatch {
     // Check the same bytes the extension will consume before changing Maildir views.
@@ -77,9 +84,7 @@ export class BatchCoordinator {
     if (!this.limits || evidence.adapterRevision !== PI_ADAPTER_REVISION ||
         evidence.receiptPath !== runnerReceiptPathAt(this.stateRoot, auth.actor, batch.id))
       throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "batch completion does not identify the pinned trusted receipt");
-    const ids: unknown = JSON.parse(batch.messageIdsJson);
-    if (!Array.isArray(ids) || ids.some(id => typeof id !== "string")) throw new StoreError("STORE_CORRUPT", "invalid decoded batch manifest");
-    const prepared = batchOf({ id: batch.id, incarnation: batch.incarnation, messageIds: ids as string[], sessionPath: batch.sessionPath }, auth.actor);
+    const prepared = this.snapshot(batch, auth.actor);
     const receipt = readDeliveryReceipt(this.stateRoot, prepared, this.limits.frameBytes);
     if (receipt.sessionPath !== evidence.sessionPath)
       throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "receipt and completion session paths differ");

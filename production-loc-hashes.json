@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "ead3c62d9f5bdbd1c85d8f112a6b86a5bcdb18aa64842f992c7ae8bc6521d170",
+  "report": "c4a40cab483ba073e8da9678a8f731b64e3b19f542a5a074e05e313c89e6430d",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -449,7 +449,7 @@
     },
     {
       "path": "src/mail/batches.ts",
-      "sha256": "027bdb99871e0a7cdfe0ee20281e19993252592c4d92f6cb45195798d16df690"
+      "sha256": "c7b9bd7d9fb5a1cb4a7177a38ee01d691fdb083b57691dd55780c758f5cea303"
     },
     {
       "path": "src/mail/facts.ts",
@@ -589,7 +589,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "b536020d4dc6028d1e94c6577847bba0b33fd80799e54d271235b5b69022e7f1"
+      "sha256": "2aa094fbc10de99c9a57c4a2c56f15c4cdc34b230e2c300d292844f3c16f5e37"
     },
     {
       "path": "src/runtime/assets.ts",
@@ -693,7 +693,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "42d8c03ab75a93faf8715b44ac90dcb3276e9385eef7b957e6fd7f61d4f5e52d"
+      "sha256": "9662c846765a6e5b1f0949586333b3bf87e1cc279ca12263c34188c559298cda"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
