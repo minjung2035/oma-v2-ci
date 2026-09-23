@@ -4,25 +4,25 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP20 검증 트리의 부모 `b25a1b7`, 실행일 2026-09-23. WP20은 C1 mail/submit preaccept 소유권 정리다. `freezeObject`는 자기 publication이 destination에 연결한 inode를 기록하고 validation·fsync·staging 정리 실패 시 그 inode만 제거하며, 정리 실패는 원래 실패 뒤에 보고한다. mail.send와 git.submit은 freeze한 object(와 submit spool)를 하나의 `PreacceptScope`에 accepted plan 참조 관계로 등록해 수락 transaction과 함께 정산한다. mail/archive/inbox 형식, plan·receipt 형식, wire와 권한은 바꾸지 않았다.
+브랜치 `refactor/safety-preserving-architecture`, WP21 검증 트리의 부모 `cda45e5`, 실행일 2026-09-23. WP21은 C1 admission 정책 정리다. 모든 public/internal method descriptor가 내부 D04 resource category(read, admit, settle, safety-control; `host.reconcile`은 단계별)를 갖고, logical storage quota는 인증·버전·key·DTO·권한 검사 뒤 admit과 settle에만 적용한다. settle은 WP22의 bounded reserve 전까지 quota를 유지한다. read, safety stop과 이미 수락된 같은 key 조회는 거절하지 않는다. recovery는 단계마다 category로 admit하고, coordinator는 수락 후 실패를 accepted phase로 보고한다. wire field, error code, DB schema와 권한은 바꾸지 않았다.
 
-검증 입력: verification input digest `e60d0c45f2f5947765f626361385d624c9834df40598712f42f87103332e6437` (558 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `dbd1a81141ca2954cee00f91265adad713443339e275c709183442538d1d35fd` (560 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
-| 검사 | WP20 실행 / 대기 범위 |
+| 검사 | WP21 실행 / 대기 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS: fast/durable/property 235/254/33, local 1393/1393, package; all fail/cancelled/skipped/todo=0 (`wp20-*-initial`, `wp20-local-initial`, `wp20-package-initial`). metadata-bound final rerun required |
-| V20A | a mail object whose own fsync fails after its link (validation stage) is removed and nothing is accepted; a refused acceptance whose object cleanup also fails reports the refusal first (AggregateError) and keeps the object; a same-key mail retry after acceptance returns the frozen message, keeps only the accepted object and recovery delivers only the frozen recipients; a same-key submit retry reads no bundle, adds no spool and a gated ref publication happens once across reconcile retries |
-| V20B | recovery rebuilds missing archive/inbox names as links to the unchanged 0444 object; a derived name holding other bytes is STORE_CORRUPT, preserved and the operation stays pending; an existing archive with an unavailable inbox never records success and succeeds once the inbox is available |
-| ownership | an object or spool belongs to an operation only if its accepted plan names the same message (id+sha256) or bundle (path+sha256) — one `frozenMessageDisposition` for mail, submit, context and create; an existing destination this call did not link is never removed. Unknown acceptance observation retains (WP17 scope) |
-| negative controls | on the unchanged production (`3fa409a`) the post-link failure leaves the object and the refused-acceptance cleanup failure hides the refusal. Mutants that skip the linked-inode discard, settle before reporting the refusal, report archive presence as success, re-expand recipients during recovery, re-read the bundle on a same-key retry, treat an accepted row as owning the object (caught by the shared create cases) or skip destination validation (caught by existing AUD-7/MAIL-007) each fail; the submit-spool row-exists mutant survives because a submit operation id is fresh per call, so no reachable accepted row names another bundle. Lane registration red/green. disposable sources restored |
-| not covered | the child mail harness now halts at its checkpoint (SIGSTOP) instead of throwing through cleanup; this is not VM/storage power loss. Submit staging directory residue after a crash, systemd activation and process-crash cases outside the harness are not exercised. `settleByAcceptance` stays as a compatibility facade with no production caller |
+| type/build/package/local and lanes | PASS: fast/durable/property 239/261/33, local 1404/1404, package; all fail/cancelled/skipped/todo=0 (`wp21-*-initial`, `wp21-local-initial`, `wp21-package-initial`). metadata-bound final rerun required |
+| V21A | every public and internal descriptor names one closed category (reads/ephemeral are read, mutations never are, `host.reconcile` is staged); `resourceCategoryOf` refuses unknown and prototype names with UNKNOWN_METHOD; over a one-byte quota a request still gets UNKNOWN_METHOD, UNSUPPORTED_VERSION, INVALID_REQUEST (params or a read key) and STALE_RUN before any storage decision |
+| V21B | over the quota operation.get (present or absent), status.get and runner.pending answer; an accepted same-key mail.send returns its receipt; a new mail.send and agent.start are QUOTA_EXCEEDED with no row; agent.stop proceeds; batch.complete is QUOTA_EXCEEDED (WP22 reserve pending); host.reconcile runs, stops the stopped-but-running unit, holds the pending mail settlement and refuses the new activation (diagnostic QUOTA_EXCEEDED); within the quota the same pass settles and activates. A SQLITE_FULL after mail acceptance answers STORAGE_FULL with retry same-key and a pending row; a submit ref conflict recorded unknown is sanitized for same-key lookup; startup attempts every resident stop before reporting RUN_TERMINATION_UNKNOWN |
+| error precedence | the logical quota is no longer checked before envelope, version, method, key, authority and DTO validation: those errors now precede QUOTA_EXCEEDED, and a quota refusal is an answer frame (retry never) rather than a thrown dispatch error |
+| negative controls | on the unchanged production (`20706e8`) nine of ten cases fail (blanket quota refusal of reads, stop, replay and recovery; post-acceptance failures sanitized as retry never; startup stops skipped after one failure). Mutants that restore an outer quota guard, make recovery ungated, default an unknown method to read, drop the same-key lookup, exempt settlement, gate stops or reads, ignore the accepted phase or stop quiescing at the first failure each fail. Lane registration red/green. disposable sources restored |
+| not covered | the pre-DB startup quota guard remains the named WP22 gap; settlement headroom, stream reservation lifetime and same-key stream retries belong to WP22; real disk exhaustion, systemd and principal endpoint attach/detach gating are not exercised. |
 | systemd/provider/powercut/CI/A-008 | BLOCKED/NOT_RUN/open as previously recorded |
 
-Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp20-*`. Complete initial and metadata-bound final reruns remain required.
+Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp21-*`. Complete initial and metadata-bound final reruns remain required.
 
-Final PASS condition: `wp20-fast-final`, `wp20-durable-final`, `wp20-property-final`, `wp20-package-final`, `wp20-local-final` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `wp21-fast-final`, `wp21-durable-final`, `wp21-property-final`, `wp21-package-final`, `wp21-local-final` must bind one digest with exit 0 and zero unrun tests.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -993,7 +993,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,751 code LOC**이며 A-008 기준을 넘는다. WP20 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,853 code LOC**이며 A-008 기준을 넘는다. WP21 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
