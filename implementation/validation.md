@@ -4,25 +4,25 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP22 검증 트리의 부모 `b315f89`, 실행일 2026-09-23. WP22는 C1 storage accounting 정리다. broker process마다 하나의 `StorageAdmission`이 매 결정마다 owned tree를 새로 관측하고, 아직 tree에 없는 예약을 더한다. streamed request의 예약은 preflight부터 실행 종료나 연결 종료까지 유지되며 한 번만 반납된다. 이미 수락된 일의 정산은 기존 `limits.frameBytes`만큼의 headroom 안에서 한 번에 하나만 quota를 넘을 수 있다. 시작 시에는 같은 판정으로 bounded recovery에 들어간다. 새 설정 field, usage entity, wire, error code, DB schema와 권한은 추가하지 않았다.
+브랜치 `refactor/safety-preserving-architecture`, WP24 검증 트리의 부모 `ab5186a`, 실행일 2026-09-23. WP24는 C1 Git effect evidence 정리다. D06에 따라 no-op integration(`base==candidate`)의 recovery는 main==candidate를 증거로 쓰지 않는다. 대신 현재 policy·eligibility·stop·authority를 다시 확인한 뒤에만 정산한다(execute와 같은 의미). 이미 적용된 non-no-op CAS는 권한이 나중에 바뀌어도 역사적 효과로 정산한다. plan/result byte, ref namespace, wire, code, schema와 권한은 바꾸지 않았다.
 
-검증 입력: verification input digest `1d9dff5b216265347262d42fbb761460bc515e97ad03c34b1cfece2a38bb0243` (564 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `2b2076aae335865b283880adf147f32b957edb1a251402bb781780b788395b08` (565 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
-| 검사 | WP22 실행 / 대기 범위 |
+| 검사 | WP24 실행 / 대기 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS: fast/durable/property/stress 240/266/33/7, local 1413/1413, package; all fail/cancelled/skipped/todo=0 (`wp22-*-initial`, `wp22-local-initial`, `wp22-package-initial`). metadata-bound final rerun required |
-| accounting model | logical usage = fresh allocated/logical tree scan + outstanding reservations. A streamed request reserves its declared bytes (first its transport copy, then its accepted copy), so its own dispatch needs room for both; a non-stream admission and every recovery stage count every other connection's reservation. Nothing is cached. The scan is not a hard filesystem quota: same-UID writers outside the broker and SQLite/WAL growth are seen after the fact |
-| V22A | two real submissions over scripted sockets: while an accepted stream's execution runs, a concurrent mail.send whose tree alone fits but tree plus the reservation does not is QUOTA_EXCEEDED; after settlement a tree exactly at the quota admits; a stream cut mid-body removes its transport copy and reservation; a completed connection closed twice releases once, so a stream one byte too large is refused before spooling; lease units refuse overflow, negative bytes and exhaustion and release idempotently |
-| V22B | at the cap a pending mail settles by recovery within the headroom while new mail and activation are refused; past the headroom settlement is refused, the object is retained and it settles once room exists; one over-cap settlement at a time, unbounded within the cap; a maximal 32-recipient settlement measured file growth within the headroom while SQLite/WAL growth (measured, about 180 KiB on this host) is recorded, not bounded; on a real full tmpfs (user+mount namespace) new mail is STORAGE_FULL with no row and no staged file, and the accepted mail stays pending with its object intact |
-| negative controls | on the unchanged production (`75fa748`) the at-cap settlement, the in-flight reservation visibility and the owner units fail; mutants that release the reservation at handle, ignore reservations in the gate, release twice, allow unlimited or unbounded-concurrency settlement, remove the headroom, skip the overflow check or stop mapping ENOSPC each fail. A mutant that records completion after a failed materialization survives: on the full filesystem no completion record can be written either. Lane registration red/green. disposable sources restored |
-| not covered | kernel/project quota, VM or storage power loss, provider load, fd/task/RSS stress under long concurrency (WP22.05 beyond V22A) and external writer races are not claimed; the workspace byte guard stays a trusted-extension soft cap |
+| type/build/package/local and lanes | PASS: fast/durable/property/stress 241/273/33/7, local 1421/1421, package; all fail/cancelled/skipped/todo=0 (`wp24-*-initial`, `wp24-local-initial`, `wp24-package-initial`). metadata-bound final rerun required |
+| effect order | integrate: admission observations → T-intent → main at base → eligibility → (checks, gated) → base/eligibility/policy/authority/writer re-check → CAS (skipped for no-op) → success T; recovery: main=candidate settles only a non-no-op (historical), main=base repeats every check before CAS, any other main stays unknown. submit: T-intent → import → published-ref CAS (unique per operation) → gated mail → success. context: T-intent → candidate commit (always new) → main CAS → snapshot → gated mail → success |
+| V24A | in real SHA-1 and SHA-256 repositories a third writer that moves main after the policy re-read makes the CAS find the third ref: the operation is unknown, main keeps the third OID across repeated recovery, and the confirmed candidate publication is preserved |
+| V24B | a no-op integration left unknown after acceptance settles after recovery only when nothing changed; after a stop, a policy change or a removed capability it fails with CANCELLED_BEFORE_COMMIT, POLICY_CHANGED or CAPABILITY_DENIED and moves nothing; an applied non-no-op CAS whose success record was lost settles as succeeded after the actor was stopped and the policy changed |
+| negative controls | on the unchanged production (`0f4e026`) the three changed-condition no-op cases settle as succeeded. Mutants that trust main==candidate for a no-op, re-check authority before historical settlement, treat a failed CAS as success or rebuild the CAS from the current main each fail. Lane registration red/green. disposable sources restored |
+| not covered | executable integration checks stay gated (SPIKE_UNRESOLVED) and were not run; context/submit recovery was reviewed, not changed (no no-op shape exists there); kernel isolation of the quarantine importer is not exercised here |
 | systemd/provider/powercut/CI/A-008 | BLOCKED/NOT_RUN/open as previously recorded |
 
-Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp22-*`. Complete initial and metadata-bound final reruns remain required.
+Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp24-*`. Complete initial and metadata-bound final reruns remain required.
 
-Final PASS condition: `wp22-fast-final`, `wp22-durable-final`, `wp22-property-final`, `wp22-stress-final`, `wp22-package-final`, `wp22-local-final` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `wp24-fast-final`, `wp24-durable-final`, `wp24-property-final`, `wp24-stress-final`, `wp24-package-final`, `wp24-local-final` must bind one digest with exit 0 and zero unrun tests.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -993,7 +993,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,891 code LOC**이며 A-008 기준을 넘는다. WP22 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,894 code LOC**이며 A-008 기준을 넘는다. WP24 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
