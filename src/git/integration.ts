@@ -179,11 +179,15 @@ export class IntegrationCoordinator {
   async reconcile(operation: OperationOf<"git.integrate">): Promise<void> {
     if (operation.state !== "pending" && operation.state !== "unknown") return;
     const plan = operation.plan;
+    // D06: a no-op has no CAS whose completion could prove its authorization, so
+    // main == candidate is no evidence; it repeats the current checks below. An
+    // applied non-no-op CAS is history and settles without new authority.
+    const noOp = plan.base === plan.candidate;
     let knowledge: EffectKnowledge = "possible";
     try {
       const main = this.effects.main();
       if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
-      if (main.kind === "present" && main.value === plan.candidate) {
+      if (!noOp && main.kind === "present" && main.value === plan.candidate) {
         knowledge = "applied";
         this.succeed(operation);
         return;
@@ -205,9 +209,11 @@ export class IntegrationCoordinator {
       this.verifyCurrentPolicy(policy);
       this.requireRecoveryAuthority(operation.actor);
       this.requireWriterSlot(operation.id);
-      knowledge = "possible";
-      const after = this.effects.compareAndSwap(plan.base, plan.candidate);
-      if (after.kind !== "candidate") { this.unknown(operation.id); return; }
+      if (!noOp) {
+        knowledge = "possible";
+        const after = this.effects.compareAndSwap(plan.base, plan.candidate);
+        if (after.kind !== "candidate") { this.unknown(operation.id); return; }
+      }
       knowledge = "applied";
       this.succeed(operation);
     } catch (error) { this.rejectAccepted(operation.id, error, "recovering", knowledge); }

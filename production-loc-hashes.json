@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "4f3df71da18fc45f08022973b4d57f37e92d1ffd8dd5dfbed0732a552811c9f8",
+  "report": "7689ebc667d43512e93f8a47cb212fd1ce28d05e4e96213fce64575296c9a877",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -369,7 +369,7 @@
     },
     {
       "path": "src/git/integration.ts",
-      "sha256": "ec472f635d3921e1ba888ad536175ab6c473364cdeaadc2eb1b062a4dc808c9e"
+      "sha256": "a65c5801119844b6c9d184f30b958924ff1d74b3115a7e31b1b424e7495135c8"
     },
     {
       "path": "src/git/observe.ts",

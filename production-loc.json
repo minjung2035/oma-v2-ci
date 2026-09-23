@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 26640,
+    "n_lines": 26646,
     "report_file": "production-loc.json"
   },
   "src/durable.ts": {
@@ -162,16 +162,16 @@
     "code": 210,
     "language": "TypeScript"
   },
+  "src/git/integration.ts": {
+    "blank": 5,
+    "comment": 8,
+    "code": 208,
+    "language": "TypeScript"
+  },
   "src/reconcile.ts": {
     "blank": 1,
     "comment": 17,
     "code": 207,
-    "language": "TypeScript"
-  },
-  "src/git/integration.ts": {
-    "blank": 5,
-    "comment": 5,
-    "code": 205,
     "language": "TypeScript"
   },
   "src/storage/immutable-file.ts": {
@@ -1328,8 +1328,8 @@
   },
   "SUM": {
     "blank": 1074,
-    "comment": 3675,
-    "code": 21891,
+    "comment": 3678,
+    "code": 21894,
     "nFiles": 220
   }
 }
