@@ -186,3 +186,12 @@ test("R35 storage reservation and settlement headroom oracles are required by th
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 Git effect evidence oracles are required by durable and all lanes", () => {
+  assert.ok(lanes.durable.files.includes("git-effect-evidence.test.js"));
+  for (const id of ["V24A:", "V24B:"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});
