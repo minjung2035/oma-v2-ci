@@ -103,6 +103,7 @@ VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 | V18B | `r21-context-workflow.test.ts` named V18B case | durable, all; actual RpcConnection with the broker staging root, same-key retry through a second connection and reconcile from the staged candidate; not broker restart or VM power loss |
 | V06A | `receipt-observation.test.ts` named V06A runner/live-endpoint decisions and observer cases; `receipt-settlement.test.ts` V06A recovery decisions | durable, all; actual observer, RunnerModule consume (engine and channel replaced by counters), MailModule live completion and recovery settlement over a complete Pi v3 session fixture |
 | V06B local | `receipt-settlement.test.ts` named `V06B local` cases | durable, all; actual InternalDispatcher, PeerAuthenticator, RunRegistry fencing and recovery settlement with controlled cgroup pins and unit observation; the kernel-lane V06B (real systemd/cgroup stale runner) is not claimed |
+| V19A / V19B | `preaccept-ownership.test.ts` named V19A bootstrap and V19B create cases | durable, all; actual LifecycleModule/CreateCoordinator, Store, MailModule and Git workspace with injected freeze/refresh faults and a no-op unit install for the race winner; not systemd activation |
 
 `npm test` includes all these local cases; it still excludes the original mixed
 systemd files. Actual lane execution is separate and must be recorded as such.
