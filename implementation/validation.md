@@ -4,25 +4,25 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP21 검증 트리의 부모 `cda45e5`, 실행일 2026-09-23. WP21은 C1 admission 정책 정리다. 모든 public/internal method descriptor가 내부 D04 resource category(read, admit, settle, safety-control; `host.reconcile`은 단계별)를 갖고, logical storage quota는 인증·버전·key·DTO·권한 검사 뒤 admit과 settle에만 적용한다. settle은 WP22의 bounded reserve 전까지 quota를 유지한다. read, safety stop과 이미 수락된 같은 key 조회는 거절하지 않는다. recovery는 단계마다 category로 admit하고, coordinator는 수락 후 실패를 accepted phase로 보고한다. wire field, error code, DB schema와 권한은 바꾸지 않았다.
+브랜치 `refactor/safety-preserving-architecture`, WP22 검증 트리의 부모 `b315f89`, 실행일 2026-09-23. WP22는 C1 storage accounting 정리다. broker process마다 하나의 `StorageAdmission`이 매 결정마다 owned tree를 새로 관측하고, 아직 tree에 없는 예약을 더한다. streamed request의 예약은 preflight부터 실행 종료나 연결 종료까지 유지되며 한 번만 반납된다. 이미 수락된 일의 정산은 기존 `limits.frameBytes`만큼의 headroom 안에서 한 번에 하나만 quota를 넘을 수 있다. 시작 시에는 같은 판정으로 bounded recovery에 들어간다. 새 설정 field, usage entity, wire, error code, DB schema와 권한은 추가하지 않았다.
 
-검증 입력: verification input digest `dbd1a81141ca2954cee00f91265adad713443339e275c709183442538d1d35fd` (560 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `1d9dff5b216265347262d42fbb761460bc515e97ad03c34b1cfece2a38bb0243` (564 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
-| 검사 | WP21 실행 / 대기 범위 |
+| 검사 | WP22 실행 / 대기 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS: fast/durable/property 239/261/33, local 1404/1404, package; all fail/cancelled/skipped/todo=0 (`wp21-*-initial`, `wp21-local-initial`, `wp21-package-initial`). metadata-bound final rerun required |
-| V21A | every public and internal descriptor names one closed category (reads/ephemeral are read, mutations never are, `host.reconcile` is staged); `resourceCategoryOf` refuses unknown and prototype names with UNKNOWN_METHOD; over a one-byte quota a request still gets UNKNOWN_METHOD, UNSUPPORTED_VERSION, INVALID_REQUEST (params or a read key) and STALE_RUN before any storage decision |
-| V21B | over the quota operation.get (present or absent), status.get and runner.pending answer; an accepted same-key mail.send returns its receipt; a new mail.send and agent.start are QUOTA_EXCEEDED with no row; agent.stop proceeds; batch.complete is QUOTA_EXCEEDED (WP22 reserve pending); host.reconcile runs, stops the stopped-but-running unit, holds the pending mail settlement and refuses the new activation (diagnostic QUOTA_EXCEEDED); within the quota the same pass settles and activates. A SQLITE_FULL after mail acceptance answers STORAGE_FULL with retry same-key and a pending row; a submit ref conflict recorded unknown is sanitized for same-key lookup; startup attempts every resident stop before reporting RUN_TERMINATION_UNKNOWN |
-| error precedence | the logical quota is no longer checked before envelope, version, method, key, authority and DTO validation: those errors now precede QUOTA_EXCEEDED, and a quota refusal is an answer frame (retry never) rather than a thrown dispatch error |
-| negative controls | on the unchanged production (`20706e8`) nine of ten cases fail (blanket quota refusal of reads, stop, replay and recovery; post-acceptance failures sanitized as retry never; startup stops skipped after one failure). Mutants that restore an outer quota guard, make recovery ungated, default an unknown method to read, drop the same-key lookup, exempt settlement, gate stops or reads, ignore the accepted phase or stop quiescing at the first failure each fail. Lane registration red/green. disposable sources restored |
-| not covered | the pre-DB startup quota guard remains the named WP22 gap; settlement headroom, stream reservation lifetime and same-key stream retries belong to WP22; real disk exhaustion, systemd and principal endpoint attach/detach gating are not exercised. |
+| type/build/package/local and lanes | PASS: fast/durable/property/stress 240/266/33/7, local 1413/1413, package; all fail/cancelled/skipped/todo=0 (`wp22-*-initial`, `wp22-local-initial`, `wp22-package-initial`). metadata-bound final rerun required |
+| accounting model | logical usage = fresh allocated/logical tree scan + outstanding reservations. A streamed request reserves its declared bytes (first its transport copy, then its accepted copy), so its own dispatch needs room for both; a non-stream admission and every recovery stage count every other connection's reservation. Nothing is cached. The scan is not a hard filesystem quota: same-UID writers outside the broker and SQLite/WAL growth are seen after the fact |
+| V22A | two real submissions over scripted sockets: while an accepted stream's execution runs, a concurrent mail.send whose tree alone fits but tree plus the reservation does not is QUOTA_EXCEEDED; after settlement a tree exactly at the quota admits; a stream cut mid-body removes its transport copy and reservation; a completed connection closed twice releases once, so a stream one byte too large is refused before spooling; lease units refuse overflow, negative bytes and exhaustion and release idempotently |
+| V22B | at the cap a pending mail settles by recovery within the headroom while new mail and activation are refused; past the headroom settlement is refused, the object is retained and it settles once room exists; one over-cap settlement at a time, unbounded within the cap; a maximal 32-recipient settlement measured file growth within the headroom while SQLite/WAL growth (measured, about 180 KiB on this host) is recorded, not bounded; on a real full tmpfs (user+mount namespace) new mail is STORAGE_FULL with no row and no staged file, and the accepted mail stays pending with its object intact |
+| negative controls | on the unchanged production (`75fa748`) the at-cap settlement, the in-flight reservation visibility and the owner units fail; mutants that release the reservation at handle, ignore reservations in the gate, release twice, allow unlimited or unbounded-concurrency settlement, remove the headroom, skip the overflow check or stop mapping ENOSPC each fail. A mutant that records completion after a failed materialization survives: on the full filesystem no completion record can be written either. Lane registration red/green. disposable sources restored |
+| not covered | kernel/project quota, VM or storage power loss, provider load, fd/task/RSS stress under long concurrency (WP22.05 beyond V22A) and external writer races are not claimed; the workspace byte guard stays a trusted-extension soft cap |
 | systemd/provider/powercut/CI/A-008 | BLOCKED/NOT_RUN/open as previously recorded |
 
-Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp21-*`. Complete initial and metadata-bound final reruns remain required.
+Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp22-*`. Complete initial and metadata-bound final reruns remain required.
 
-Final PASS condition: `wp21-fast-final`, `wp21-durable-final`, `wp21-property-final`, `wp21-package-final`, `wp21-local-final` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `wp22-fast-final`, `wp22-durable-final`, `wp22-property-final`, `wp22-stress-final`, `wp22-package-final`, `wp22-local-final` must bind one digest with exit 0 and zero unrun tests.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -993,7 +993,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,853 code LOC**이며 A-008 기준을 넘는다. WP21 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,891 code LOC**이며 A-008 기준을 넘는다. WP22 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
