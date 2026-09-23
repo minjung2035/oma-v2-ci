@@ -4,25 +4,25 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP18 검증 트리의 부모 `e164046`, 실행일 2026-09-23. WP18은 C1 context preaccept 소유권 정리다. `context.publish`가 수락 전에 획득한 staged tree와 frozen mail object를 획득 즉시 하나의 `PreacceptScope`에 operation과 accepted plan 참조 관계로 등록하고, 모든 preaccept 실패를 한 번의 정산으로 끝낸다. persisted plan/path/hash recipe, wire, receipt와 schema는 바꾸지 않았다.
+브랜치 `refactor/safety-preserving-architecture`, WP06 검증 트리의 부모 `1f378ab`, 실행일 2026-09-23. WP06은 C1 delivery evidence 정리다. 영수증 관측을 verified/absent/unavailable/conflicting 네 결과로 닫고, live completion의 peer·lease·incarnation fencing은 그대로 둔 채 broker 소유 recovery 정산 진입점과 run owner의 settlement 권한을 추가했다. receipt v1 bytes, wire, DB schema와 권한 체계는 바꾸지 않았다. rollover 연결은 WP07이다.
 
-검증 입력: verification input digest `d73ad96417fc052d8bf0d26f5bdeb383369353274f73a4c5189f8e16de02fff1` (554 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `f547f2d785abb6468da6043469c8e3dee384ed2d6b35b17441ec5f9b4de49809` (557 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
-| 검사 | WP18 실행 / 대기 범위 |
+| 검사 | WP06 실행 / 대기 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS: fast/durable/property 232/224/33, local 1360/1360, package; all fail/cancelled/skipped/todo=0 (`wp18s2-*-initial-r2`, `wp18s2-local-initial-r2`, `wp18s2-package-initial`). The first fast attempt failed only R38 because this record was stale (`wp18s2-fast-initial`); the first local attempt failed only T117 because the worktree's symlinked `node_modules` is invisible inside the sandbox (`wp18s2-local-initial`). metadata-bound final rerun required |
-| V18A | order stream → staged tree → candidate → mail object → acceptance → canonical effect; nine unaccepted failure points remove tree and object; a lost acceptance acknowledgement and an unavailable acceptance observation retain both; native non-quiescence retains only the tree that preparation used; stream-level root cleanup and replaced-file retention |
-| V18B | a real `RpcConnection` sharing the broker staging root closes after acceptance; tree and object stay exact; a same-key retry through a second connection reads no payload and returns the same operation; reconcile imports the staged candidate after the fetched objects are pruned and converges ref, snapshot and notification with the unchanged plan |
-| ownership | the staging root is created exclusively and pinned at creation. A failure before return removes the exact files it created, then the root; a replaced file keeps both. After return one scope settles tree and object by plan reference. Unknown observation and native non-quiescence retain; nothing is swept by path |
-| negative controls | the final V18A/V18B tests fail 4 cases on the pre-fix commit `97bc737` and on the WP start `af3f6bf` (freeze, post-freeze observation and acceptance-refusal tree leaks; non-quiescent tree deletion). Mutants that keep the failed root, use executor-wide quiescence, drop the quiescence relation, treat an unavailable observation as absence, or let connection close remove context staging each fail. Lane registration red/green. disposable sources restored |
-| not covered | the systemd-only files, including the `crash-boundaries` `ctx-accepted` boundary, are BLOCKED on this host. Process crash, broker restart and VM power loss are NOT_RUN. mail/submit/create scope migration remains WP19/WP20; partial `freezeObject` publication cleanup remains WP20 |
+| type/build/package/local and lanes | PASS: fast/durable/property 233/241/33, local 1378/1378, package; all fail/cancelled/skipped/todo=0 (`wp06-*-initial`, `wp06-local-initial`, `wp06-package-initial`). metadata-bound final rerun required |
+| V06A | runner and live-endpoint decisions: a verified receipt completes with no new delivery; observed absence (receipt or receipt directory under an existing runner root) lets the runner present once and completes nothing; an unreadable receipt or session and a vanished runner root are unavailable (no completion, no delivery); a legacy-incarnation receipt and a missing session are conflicting and preserved. The observer reports problem, errno and expected/claimed identity without session content; recovery settles only verified receipts and keeps a completed batch's first fact |
+| V06B local | the real InternalDispatcher, PeerAuthenticator and RunRegistry refuse a stale runner's live completion (STALE_RUN) and a request field cannot select recovery; broker recovery under the opening run's quiescence settles exactly the named batch, writes no file and runs no engine; the authority ends when the run is published and names one actor and incarnation |
+| ownership | checked receipts are issued only by the decoder and recognised at runtime; live completion and recovery read the expected batch from the ledger and share only decoding, batch equality and the final transition, never authority |
+| negative controls | on the unchanged production (`29d1e64`) five V06A cases fail: absent and unavailable receipts were both reported as BATCH_CONFLICT, and a vanished runner root made the runner deliver again. Mutants that map open failures to absence, accept an earlier incarnation, treat a missing runner root as absence, skip the quiescence re-check, accept a stale live completion, ignore the authority's incarnation or let the authority outlive the opening run each fail. Lane registration red/green. disposable sources restored |
+| not covered | the kernel-lane V06B (real systemd/cgroup stale runner) is BLOCKED on this host and not claimed. Run-open wiring and rollover order are WP07; Principal settlement-before-redelivery is WP08; startup recovery authority is WP07. In-process callers of `settleFromReceipt` are trusted code, not fenced by a token |
 | systemd/provider/powercut/CI/A-008 | BLOCKED/NOT_RUN/open as previously recorded |
 
-Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp18s2-*`. Earlier `wp18-*` logs are an unreviewed intermediate attempt and support no claim here. Complete initial and metadata-bound final reruns remain required.
+Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp06-*`. Complete initial and metadata-bound final reruns remain required.
 
-Final PASS condition: `wp18s2-fast-final`, `wp18s2-durable-final`, `wp18s2-property-final`, `wp18s2-package-final`, `wp18s2-local-final` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `wp06-fast-final`, `wp06-durable-final`, `wp06-property-final`, `wp06-package-final`, `wp06-local-final` must bind one digest with exit 0 and zero unrun tests.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -993,7 +993,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,612 code LOC**이며 A-008 기준을 넘는다. WP18 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,726 code LOC**이며 A-008 기준을 넘는다. WP06 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
