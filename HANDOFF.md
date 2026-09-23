@@ -17,7 +17,7 @@
 - **사용자 변경 보존**: 다음 7개 파일에는 사용자의 formatting-only 수정(HEAD와 AST 동일)이 있다. stage·reset·reformat하지 않는다.
   `test/config-edit-descriptors.test.ts`, `test/config-edit-descriptors.types.ts`, `test/config-editing.test.ts`, `test/config-snapshot.test.ts`, `test/config-validation.test.ts`, `test/delivery-receipt-publication.test.ts`, `test/preaccept-scope.test.ts`.
   이 때문에 WP20 카드가 요구한 `settleByAcceptance` 삭제를 하지 않았다(`test/preaccept-scope.test.ts`가 import한다). 사용자가 이 파일 편집을 허락하면 삭제할 수 있다.
-- **계획 디렉터리**: `oma-v2-consistency-plan-b25961c/`는 untracked로 두고 stage·reset하지 않는다. 확인: `cd oma-v2-consistency-plan-b25961c && sha256sum -c SHA256SUMS.txt`.
+- **계획 디렉터리**: `oma-v2-consistency-plan-b25961c/`는 사용자 지시로 `af28e7c`에서 원본 그대로 커밋되었다(verification input 아님). 내용은 수정하지 않는다. 확인: `cd oma-v2-consistency-plan-b25961c && sha256sum -c SHA256SUMS.txt`.
 - **자동으로 하지 않는 것**: 계획에 없는 schema·wire·receipt version·권한 변경, NOT_RUN/BLOCKED를 PASS로 바꾸는 것, 운영 society 생성, 실제 credential·유료 provider, VM 전원 차단, push·PR·merge·branch 보호 설정.
 - **commit**: 정확한 경로만 `git add`한다(`git add ... 2>/dev/null`: .gitignore 안내가 exit 1을 내지만 stage는 된다). 메시지 끝에 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - **WP 한 개씩**: 선행 handoff와 ADR(`implementation/consistency-decisions.md`)을 먼저 읽는다. 수정 전 production-linked 시험이 red인지 기준 worktree에서 확인하고, 구현한 뒤, 같은 결함을 다른 caller가 다시 만들 수 있는지 검사한다. 주 검토 파일은 실제로 읽고 KEEP/CHANGE 이유를 남긴다.
