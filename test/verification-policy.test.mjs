@@ -137,3 +137,14 @@ test("R35 context preaccept ownership oracles are required by durable and all la
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 receipt observation and settlement oracles are required by durable and all lanes", () => {
+  for (const file of ["receipt-observation.test.js", "receipt-settlement.test.js"])
+    assert.ok(lanes.durable.files.includes(file));
+  for (const id of ["V06A:", "V06B local:"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+  assert.equal(lanes.kernel.requiredNames.includes("V06B:"), false, "the kernel V06B oracle is not claimed by a local test");
+});
