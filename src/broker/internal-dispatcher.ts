@@ -12,6 +12,7 @@ import type {
 import type { ReconcileMetrics } from "../ports/runtime.js";
 import type { BoundPeer } from "./peer-authenticator.js";
 import { StoreError } from "../domain/errors.js";
+import type { ResourceGate } from "../domain/admission.js";
 import { assertNever } from "../domain/exhaustive.js";
 import { INTERNAL_METHODS, isInternalMethod } from "../protocol/methods.js";
 import { errorAnswer, okAnswer } from "./replies.js";
@@ -61,6 +62,8 @@ export interface InternalDispatchDependencies {
   readonly peers: InternalPeerPort;
   isDraining(): boolean;
   assertAdmission(): void;
+  /** D04: refuses what the category would consume beyond the logical limits. */
+  admitResource: ResourceGate;
   failureAnswer(id: string, error: unknown): object;
   refreshViews(): void;
   openRun(actor: Actor, invocationId: string): RunLease;
@@ -124,6 +127,8 @@ export class InternalDispatcher {
         (method !== "runner.pending" && method !== "runner.observe")
       )
         this.deps.assertAdmission();
+      // A composite recovery pass admits each of its stages itself.
+      if (descriptor.resource !== "staged") this.deps.admitResource(descriptor.resource);
       // SAFETY: params passed this method's descriptor check; retain the correlation erased by dynamic indexing.
       const call = { id, method, params } as ValidatedInternalCall;
       const { method: dispatchMethod, params: dispatchParams } = call;
@@ -215,9 +220,13 @@ export class InternalDispatcher {
         }
         case "host.reconcile": {
           peers.requireHostUnit(peer, "reconcile");
-          const report = reconcile
-            ? await reconcile.sweep()
-            : await mail.reconcilePending();
+          let report;
+          if (reconcile) report = await reconcile.sweep();
+          else {
+            // Without the recovery owner only ordinary mail is settled.
+            this.deps.admitResource("settle");
+            report = await mail.reconcilePending();
+          }
           this.deps.refreshViews();
           return okAnswer(id, report);
         }

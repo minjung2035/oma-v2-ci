@@ -30,7 +30,7 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 **결정**: systemd+bwrap+sqlite(내장)+git substrate는 사용 가능. SO_PEERCRED와 sd_notify는 **최소 native leaf(koffi FFI)로 충족**. TS 경계는 `sandbox.ts`/`units.ts`/`auth`에 이 leaf를 격리한다.
 
-**현재 기본 runtime 판정**: broker는 시작과 모든 public/internal admission에서 owned state tree의 실제 allocated/logical bytes를 관측하고, streamed request는 선언 bytes를 먼저 예약해 `quota.storageBytes` 초과를 `QUOTA_EXCEEDED`로 거절한다. trusted Pi extension은 write/edit 전에 role의 `workspaceBytes`를 별도로 집행한다. 따라서 이전의 unconditional S-01 `SPIKE_UNRESOLVED` 시작 차단은 제거한다. 같은 UID의 외부 host writer·filesystem kernel project quota와 full FD/PID stress는 release-hardening 범위로 남으며 기본 기능의 시작 차단으로 사용하지 않는다.
+**현재 기본 runtime 판정**: broker는 시작 시(D04의 WP22 gap)와, method의 인증·버전·DTO·key·권한 검사가 끝난 뒤 내부 descriptor의 resource category가 `admit` 또는 `settle`인 요청·recovery 단계에서 owned state tree의 실제 allocated/logical bytes를 관측해 `quota.storageBytes` 초과를 `QUOTA_EXCEEDED`로 거절한다. `read`·`safety-control`과 같은 key로 이미 수락된 요청의 조회는 이 quota로 거절하지 않으며, `settle`은 WP22의 bounded reserve 전까지 quota를 적용한다. streamed request는 선언 bytes를 먼저 예약한다. trusted Pi extension은 write/edit 전에 role의 `workspaceBytes`를 별도로 집행한다. 따라서 이전의 unconditional S-01 `SPIKE_UNRESOLVED` 시작 차단은 제거한다. 같은 UID의 외부 host writer·filesystem kernel project quota와 full FD/PID stress는 release-hardening 범위로 남으며 기본 기능의 시작 차단으로 사용하지 않는다.
 
 ### S-01-CANDIDATE — candidate resource execution primitive
 

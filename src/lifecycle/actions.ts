@@ -1,6 +1,6 @@
 import type { Actor, AuthContext, OperationResult, Receipt } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, acceptedFailure } from "../domain/errors.js";
 import { assertActorIdentity } from "../authority.js";
 import { generateOperationId } from "../ids.js";
 import { requestHash } from "../hash.js";
@@ -57,11 +57,14 @@ export class LifecycleActions {
     }
     // Synchronous final identity check -> physical action. Neither a new target
     // epoch nor an old plan is rewritten to make this comparison succeed.
-    if (!this.currentIntent({ agent, desired: "enabled", previousIncarnation: target.incarnation })) return this.unconfirmed(id);
-    try { if (!alreadyRunning) this.units.start(agent, true); }
-    catch (error) { return this.unconfirmed(id, error); }
-    this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.start", agent, desired: "enabled", remainingOperations: [] })));
-    return lifecycleReceipt(this.store, id);
+    // The start intent is accepted: a failure from here is reported as accepted.
+    try {
+      if (!this.currentIntent({ agent, desired: "enabled", previousIncarnation: target.incarnation })) return this.unconfirmed(id);
+      try { if (!alreadyRunning) this.units.start(agent, true); }
+      catch (error) { return this.unconfirmed(id, error); }
+      this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.start", agent, desired: "enabled", remainingOperations: [] })));
+      return lifecycleReceipt(this.store, id);
+    } catch (error) { throw acceptedFailure(error); }
   }
 
   stop(auth: AuthContext, agent: Actor, key: string): Receipt {
@@ -94,14 +97,17 @@ export class LifecycleActions {
       });
       if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
     }
-    if (!this.currentIntent({ agent, desired: "stopped", previousIncarnation: incarnation })) return this.unconfirmed(id);
+    // The stop intent is accepted: a failure from here is reported as accepted.
     try {
-      this.units.stop(agent, incarnation);
-      if (!this.units.confirmDead(agent, incarnation)) return this.unconfirmed(id);
-    } catch (error) { return this.unconfirmed(id, error); }
-    const remainingOperations = this.store.recoverableOperations().filter(value => value !== id);
-    this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.stop", agent, desired: "stopped", remainingOperations })));
-    return lifecycleReceipt(this.store, id);
+      if (!this.currentIntent({ agent, desired: "stopped", previousIncarnation: incarnation })) return this.unconfirmed(id);
+      try {
+        this.units.stop(agent, incarnation);
+        if (!this.units.confirmDead(agent, incarnation)) return this.unconfirmed(id);
+      } catch (error) { return this.unconfirmed(id, error); }
+      const remainingOperations = this.store.recoverableOperations().filter(value => value !== id);
+      this.store.transaction(tx => tx.setOperationSucceeded(id, JSON.stringify({ kind: "agent.stop", agent, desired: "stopped", remainingOperations })));
+      return lifecycleReceipt(this.store, id);
+    } catch (error) { throw acceptedFailure(error); }
   }
 
   reconcile(id: string, allowActivation = true): void {

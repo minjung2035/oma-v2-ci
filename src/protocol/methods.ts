@@ -12,6 +12,8 @@ import type { InternalMethods } from "../../implementation/contracts/internal-wi
 import type { MutationMethod } from "../../implementation/contracts/durable.js";
 import type { ProtocolLimits } from "../../implementation/contracts/host.js";
 import { parseBatchId } from "../domain/identifiers.js";
+import { StoreError } from "../domain/errors.js";
+import type { ResourceCategory } from "../domain/admission.js";
 import {
   type Check,
   agentActionParamsCheck,
@@ -64,6 +66,8 @@ type PublicDescriptor<M extends PublicMethod> = {
   readonly channel: "actor";
   readonly result: M extends MutationMethod ? "receipt" : M;
   readonly capability: Capability | null;
+  /** D04 resource category: internal policy metadata, never a wire field. */
+  readonly resource: M extends MutationMethod ? Exclude<ResourceCategory, "read"> : "read";
   readonly authority: readonly AuthorityCheck[];
   readonly paramsCheck: (context: ParamsContext) => Check;
 };
@@ -83,6 +87,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: "mail.send",
+    resource: "admit",
     authority: ["current-actor", "current-capability", "published-candidate"],
     paramsCheck: ({ actorNames, limits }) =>
       mailParamsCheck(actorNames, limits),
@@ -94,6 +99,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: null,
+    resource: "admit",
     authority: ["current-actor", "own-delivery"],
     paramsCheck: fixed(mailAckParamsCheck),
   },
@@ -104,6 +110,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: "route.follow",
+    resource: "admit",
     authority: ["current-actor", "current-capability"],
     paramsCheck: fixed(routeParamsCheck),
   },
@@ -114,6 +121,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: "route.follow",
+    resource: "admit",
     authority: ["current-actor", "current-capability"],
     paramsCheck: fixed(routeParamsCheck),
   },
@@ -124,6 +132,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: "agent.create",
+    resource: "admit",
     authority: ["current-actor", "current-capability", "child-delegation"],
     paramsCheck: fixed(agentCreateParamsCheck),
   },
@@ -134,6 +143,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: null,
+    resource: "admit",
     authority: ["current-actor", "self-or-descendant"],
     paramsCheck: fixed(agentActionParamsCheck),
   },
@@ -144,6 +154,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: null,
+    resource: "safety-control",
     authority: ["current-actor", "self-or-descendant"],
     paramsCheck: fixed(agentActionParamsCheck),
   },
@@ -154,6 +165,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: "mail.send",
+    resource: "admit",
     authority: ["current-actor", "current-capability"],
     paramsCheck: fixed(agentContinueParamsCheck),
   },
@@ -164,6 +176,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "agent.wait",
     capability: null,
+    resource: "read",
     authority: ["current-actor"],
     paramsCheck: fixed(agentWaitParamsCheck),
   },
@@ -174,6 +187,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "git.known",
     capability: null,
+    resource: "read",
     authority: ["current-actor"],
     paramsCheck: fixed(checkObject({ candidate: checkOid })),
   },
@@ -184,6 +198,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: "git.submit",
+    resource: "admit",
     authority: ["current-actor", "current-capability"],
     paramsCheck: ({ actorNames, limits }) =>
       gitSubmitParamsCheck(actorNames, limits),
@@ -195,6 +210,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: "code.integrate",
+    resource: "admit",
     authority: [
       "current-actor",
       "current-capability",
@@ -210,6 +226,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "receipt",
     capability: "context.publish",
+    resource: "admit",
     authority: ["current-actor", "current-capability"],
     paramsCheck: ({ limits }) => contextPublishParamsCheck(limits),
   },
@@ -220,6 +237,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "operation.get",
     capability: null,
+    resource: "read",
     authority: ["current-actor", "own-operation"],
     paramsCheck: fixed(operationGetParamsCheck),
   },
@@ -230,6 +248,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "status.get",
     capability: null,
+    resource: "read",
     authority: ["current-actor"],
     paramsCheck: fixed(statusGetParamsCheck),
   },
@@ -240,6 +259,7 @@ export const PUBLIC_METHODS = {
     channel: "actor",
     result: "logs.read",
     capability: null,
+    resource: "read",
     authority: ["current-actor"],
     paramsCheck: fixed(logsReadParamsCheck),
   },
@@ -265,6 +285,8 @@ interface InternalDescriptor {
   readonly key: "forbidden";
   readonly stream: "none";
   readonly lease: "open" | "current-run" | "principal-session" | "host-unit";
+  /** D04 resource category; a composite recovery pass classifies each stage itself. */
+  readonly resource: ResourceCategory | "staged";
   readonly evidence: "none" | "boundary" | "principal-credential";
   readonly paramsCheck: Check;
 }
@@ -277,6 +299,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "open",
+    resource: "admit",
     evidence: "none",
     paramsCheck: checkObject({
       agent: checkActor,
@@ -288,6 +311,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "current-run",
+    resource: "read",
     evidence: "none",
     paramsCheck: noParams,
   },
@@ -296,6 +320,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "current-run",
+    resource: "admit",
     evidence: "none",
     paramsCheck: noParams,
   },
@@ -304,6 +329,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "principal-session",
+    resource: "read",
     evidence: "none",
     paramsCheck: checkObject({ batchId: batchIdCheck }),
   },
@@ -312,6 +338,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "current-run",
+    resource: "settle",
     evidence: "boundary",
     paramsCheck: checkObject({
       batchId: batchIdCheck,
@@ -326,6 +353,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "current-run",
+    resource: "read",
     evidence: "none",
     paramsCheck: checkObject({
       reason: checkString(),
@@ -338,6 +366,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "principal-session",
+    resource: "read",
     evidence: "principal-credential",
     paramsCheck: checkObject({
       sessionHandle: checkString(),
@@ -349,6 +378,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "principal-session",
+    resource: "safety-control",
     evidence: "none",
     paramsCheck: noParams,
   },
@@ -357,6 +387,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "host-unit",
+    resource: "settle",
     evidence: "none",
     paramsCheck: noParams,
   },
@@ -365,6 +396,7 @@ export const INTERNAL_METHODS = {
     key: "forbidden",
     stream: "none",
     lease: "host-unit",
+    resource: "staged",
     evidence: "none",
     paramsCheck: noParams,
   },
@@ -374,4 +406,11 @@ export function isInternalMethod(
   value: unknown,
 ): value is keyof InternalMethods {
   return typeof value === "string" && Object.hasOwn(INTERNAL_METHODS, value);
+}
+
+/** The one category lookup for a method name; there is no fallback category. */
+export function resourceCategoryOf(method: string): ResourceCategory | "staged" {
+  if (isPublicMethod(method)) return PUBLIC_METHODS[method].resource;
+  if (isInternalMethod(method)) return INTERNAL_METHODS[method].resource;
+  throw new StoreError("UNKNOWN_METHOD", "method has no resource category");
 }

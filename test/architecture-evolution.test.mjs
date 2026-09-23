@@ -157,7 +157,7 @@ test("P22 A: adding a public read method requires DTO, descriptor, handler and r
   changes[methods] = replaceOnce(
     read(methods),
     "export const PUBLIC_METHODS = {",
-    'export const PUBLIC_METHODS = {\n  "probe.read": { mode: "read", key: "forbidden", stream: "none", channel: "actor", result: "probe.read", capability: null, authority: ["current-actor"], paramsCheck: fixed(agentWaitParamsCheck) },',
+    'export const PUBLIC_METHODS = {\n  "probe.read": { mode: "read", key: "forbidden", stream: "none", channel: "actor", result: "probe.read", capability: null, resource: "read", authority: ["current-actor"], paramsCheck: fixed(agentWaitParamsCheck) },',
   );
   assert.ok(
     hasError(errors(programWith(changes)), publicDispatcher, 2345, "never"),

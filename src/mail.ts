@@ -3,7 +3,7 @@ import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
 import { Store } from "./store.js";
-import { StoreError } from "./domain/errors.js";
+import { StoreError, acceptedFailure } from "./domain/errors.js";
 import { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js";
 export { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js";
 import { assertCurrentActor } from "./authority.js";
@@ -106,14 +106,17 @@ export class MailModule {
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
     if (txClaim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
-    const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId) };
-    let materializedAll = true;
-    try { await this.materialize(opId); }
-    catch (error) { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; materializedAll = false; }
-    if (materializedAll) this.store.transaction(tx => tx.setOperationSucceeded(opId, JSON.stringify(result)));
-    const finalOp = this.store.getOperation(auth.actor, key);
-    if (!finalOp) throw new StoreError("STORE_CORRUPT", "accepted mail operation missing");
-    return receiptOf(finalOp);
+    // From here the intent is accepted: a failure is reported as accepted, never as a refusal.
+    try {
+      const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId) };
+      let materializedAll = true;
+      try { await this.materialize(opId); }
+      catch (error) { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; materializedAll = false; }
+      if (materializedAll) this.store.transaction(tx => tx.setOperationSucceeded(opId, JSON.stringify(result)));
+      const finalOp = this.store.getOperation(auth.actor, key);
+      if (!finalOp) throw new StoreError("STORE_CORRUPT", "accepted mail operation missing");
+      return receiptOf(finalOp);
+    } catch (error) { throw acceptedFailure(error); }
   }
   /** MAIL-005: a caller-selected operation is not yet evidence of message ownership.
    * Store decoding and accepted-byte validation retain their corruption semantics. */

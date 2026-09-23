@@ -63,6 +63,7 @@ function dispatcher(text: string, frameBytes: number) {
     limits: { ...limits, frameBytes },
     isDraining: () => false,
     assertAdmission() {},
+    admitResource() {},
     refreshViews() {},
     failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
     readLogs: async () => ({

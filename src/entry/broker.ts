@@ -19,7 +19,7 @@ import { claimSocietyFence } from "../runtime/society-lease.js";
 import { BrokerLifetime } from "../runtime/broker-lifetime.js";
 import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
-import { assertStorageQuotaAdmission } from "../storage/quota.js";
+import { assertStorageQuotaAdmission, storageResourceGate } from "../storage/quota.js";
 import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
       hasGoal, activationAllowed: () => lifetime.permitsActivation }, resolveSpec, mail, cfg.quota);
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
       projectGit: join(stateRoot, "repos", "project.git"), hasGoal, activationAllowed: () => lifetime.permitsActivation,
-      sweepBudgetSeconds: cfg.limits.receiptWaitSeconds,
+      sweepBudgetSeconds: cfg.limits.receiptWaitSeconds, resourceGate: storageResourceGate(stateRoot, cfg.quota.storageBytes),
     });
     // PR-001: only the host that started this process gets a Principal
     // endpoint, and credentials leave only on the channel that host holds --

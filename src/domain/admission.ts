@@ -16,6 +16,13 @@ export class AdmissionGate {
   }
   get state(): "healthy" | "corrupt" | "draining" { return this.corrupt ? "corrupt" : this.draining ? "draining" : "healthy"; }
 }
+/** D04: what a method or recovery stage would consume. Authentication,
+ * authority and integrity checks apply to every category alike. */
+export type ResourceCategory = "read" | "admit" | "settle" | "safety-control";
+export type ResourceGate = (category: ResourceCategory) => void;
+/** The logical storage quota refuses new work. Settlement stays under it until
+ * WP22 supplies a bounded reserve; reads and safety stops never are. */
+export function storageGated(category: ResourceCategory): boolean { return category === "admit" || category === "settle"; }
 const owners = new WeakMap<object, AdmissionGate>();
 export function bindAdmissionGate(owner: object, gate: AdmissionGate): void {
   const previous = owners.get(owner);

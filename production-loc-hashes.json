@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "5d38c31b1079da8fd583fba94277d2850a9698d7fd720679f200836e4b991c47",
+  "report": "65b49cc05af18b5b7f1cd280596e1011ea9c840bc8059fb877b1a61a06c27dbb",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "2777c44dbd3448215b230bef6323f138ae89d779a1a3b2e349a48b28d33f2472"
+      "sha256": "50063f43888087d756772e66088f414f951450f0b3e9ec046b24534e97a21d36"
     },
     {
       "path": "src/broker/composition.ts",
@@ -57,7 +57,7 @@
     },
     {
       "path": "src/broker/internal-dispatcher.ts",
-      "sha256": "cb06d94c83de930ec2f0ed3fdc679c44cbd9fbd02b06467b45f203c25312adf5"
+      "sha256": "713950bc0e926e3a893d24ac7af1bd4f28c1b3f9679e2034605cda7efc487986"
     },
     {
       "path": "src/broker/logs.ts",
@@ -81,7 +81,7 @@
     },
     {
       "path": "src/broker/public-dispatcher.ts",
-      "sha256": "56a1ac9efc1d2016a2d607d310d52a56b50f06a7203b2a58118d035e3d37b9a1"
+      "sha256": "b3f3181c7cea2228225a0b165e411337e8f992cf84ec467ecd2c25fe546816c0"
     },
     {
       "path": "src/broker/replies.ts",
@@ -201,7 +201,7 @@
     },
     {
       "path": "src/domain/admission.ts",
-      "sha256": "3fab697f003ad51cee3abe885e63ef9bcc8daa2ddf8a3abb20e57e3985a6aba1"
+      "sha256": "6f207fd3fe792d04a629a250f63de00aaec488377b542d3c1a4bd8f6eada888c"
     },
     {
       "path": "src/domain/canonical-json.ts",
@@ -229,7 +229,7 @@
     },
     {
       "path": "src/domain/errors.ts",
-      "sha256": "39c2f50afc382f89f2bce482a7ea27ebcc63658cdbdf195b11acb73f6a1038dc"
+      "sha256": "74f99bb1a66915fb788362e1e133188994b7d31995bcea5143eb181327e11812"
     },
     {
       "path": "src/domain/exhaustive.ts",
@@ -281,7 +281,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "766e41bd33b8d05181121e5f328d1b22cdca5be750276467143ba425bb7c2ee3"
+      "sha256": "340a17cb588aea6e0fb6cc8aef1bfab66b99bc4f3f7f96ec0279893dc0a6dc1a"
     },
     {
       "path": "src/entry/host.ts",
@@ -361,7 +361,7 @@
     },
     {
       "path": "src/git/context.ts",
-      "sha256": "f81ecee40e04e173a03323251e496da02db795536ed5e2cfc6da8348de8c5b78"
+      "sha256": "4cc5cfecf354a9e0e8ee9fcbf76ce34b009cf3eabb297eeeb192efe6eb6ce69f"
     },
     {
       "path": "src/git/integration-policy.ts",
@@ -369,7 +369,7 @@
     },
     {
       "path": "src/git/integration.ts",
-      "sha256": "5fc5d11fdf593b0832ea25cdda2a4873b657944eb1428621cb739f895bb813cb"
+      "sha256": "ec472f635d3921e1ba888ad536175ab6c473364cdeaadc2eb1b062a4dc808c9e"
     },
     {
       "path": "src/git/observe.ts",
@@ -389,7 +389,7 @@
     },
     {
       "path": "src/git/submit.ts",
-      "sha256": "c9b3844c2a335e0e210622b7ba18aa0e5bbb517ec9a516de1f863d53cdb0f453"
+      "sha256": "51632a5a8f153fd64e0caf4d8faf26a8d83525983dea7f4670edda3ce7a9d7ae"
     },
     {
       "path": "src/hash.ts",
@@ -409,7 +409,7 @@
     },
     {
       "path": "src/lifecycle/actions.ts",
-      "sha256": "97838fa9713f4d22ffa5b55353ccc3cada8dbcfe6fe584269c30fc8de10f956d"
+      "sha256": "858dfdbae7ca19587e163cbdd1a5651fdf75de6fe8503489bc133ac09a0e1514"
     },
     {
       "path": "src/lifecycle/contracts.ts",
@@ -421,7 +421,7 @@
     },
     {
       "path": "src/lifecycle/create.ts",
-      "sha256": "419559616200c04f5e23bd1877ab4b398fc3f08cdfe112f8342438ca0a0077f1"
+      "sha256": "379f9853d7c7950f2ca53d4e749f32f2633e15bfb1c594e7905c3f40c515abcc"
     },
     {
       "path": "src/lifecycle/policy.ts",
@@ -437,7 +437,7 @@
     },
     {
       "path": "src/mail.ts",
-      "sha256": "8d0a95d23b64db519bda8d151fea173c59c7fb6bec943064cdf05b86e565d5a0"
+      "sha256": "3f4bde0d818c24f4c2c927d6fb941f6535238645013dea661dd22d0bcc142228"
     },
     {
       "path": "src/mail/addresses.ts",
@@ -537,7 +537,7 @@
     },
     {
       "path": "src/protocol/methods.ts",
-      "sha256": "b2a1c64479799733026ce1f1b252610e19621877f0f625b47505a8af3fba04a4"
+      "sha256": "8651d42f8f1a9c7c17349003bef4f56e13eea54df0a7a9506558b9baac97f83e"
     },
     {
       "path": "src/protocol/operation-results.ts",
@@ -573,7 +573,7 @@
     },
     {
       "path": "src/reconcile.ts",
-      "sha256": "75a067898983c380ba66268ac23aab3db3381aa8afb825603007ca56f5c95f91"
+      "sha256": "0a0cee137d96808b9050c86cac88c348bdd64686babc9448100173c3e7e71a52"
     },
     {
       "path": "src/reconcile/operations.ts",
@@ -741,7 +741,7 @@
     },
     {
       "path": "src/storage/quota.ts",
-      "sha256": "e35542edc5787e1be67e44f3f4568e8ee250703787d0c99cf3b0a5548a09f657"
+      "sha256": "4c3a34cf54f243829252c998f638c962e4b513bf24f86c8b84afd14516b91960"
     },
     {
       "path": "src/storage/receipt-projector.ts",

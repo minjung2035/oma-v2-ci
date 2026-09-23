@@ -5,7 +5,7 @@ import type { AuthContext, Receipt, Oid } from "../../implementation/contracts.j
 import { Store, reused } from "../store.js";
 import type { OperationOf } from "../storage/operation-codec.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
-import { StoreError, ERROR_METADATA, classifyError, type EffectKnowledge, type ErrorPhase } from "../domain/errors.js";
+import { StoreError, AcceptedFailure, ERROR_METADATA, classifyError, type EffectKnowledge, type ErrorPhase } from "../domain/errors.js";
 import { requestHash } from "../hash.js";
 import { generateOperationId } from "../ids.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
@@ -120,7 +120,7 @@ export class IntegrationCoordinator {
         category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
     if (policy.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, policy.code));
     else if (policy.terminal === "unknown") this.unknown(id);
-    throw new StoreError(policy.code, error instanceof StoreError ? error.message : "integration observation or settlement failed");
+    throw new AcceptedFailure(policy.code, error instanceof StoreError ? error.message : "integration observation or settlement failed", knowledge);
   }
 
   async execute(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {

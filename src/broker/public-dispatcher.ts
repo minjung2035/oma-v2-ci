@@ -3,6 +3,7 @@ import type { AuthContext, Failure, ProtocolLimits, PublicMethod, PublicMethods,
 import type { UnitObserve } from "../ports/runtime.js";
 import { StoreError } from "../domain/errors.js";
 import { assertNever } from "../domain/exhaustive.js";
+import type { ResourceGate } from "../domain/admission.js";
 import { capabilitiesOf } from "../authority.js";
 import { isValidRequestKey } from "../ids.js";
 import { receiptNotFound } from "../protocol/receipts.js";
@@ -56,6 +57,8 @@ export interface PublicDispatchDependencies {
   readonly limits: ProtocolLimits;
   isDraining(): boolean;
   assertAdmission(): void;
+  /** D04: refuses what the category would consume beyond the logical limits. */
+  admitResource: ResourceGate;
   failureAnswer(id: string, error: unknown): object;
   refreshViews(): void;
   readLogs(agent: string, sinceSeconds: number): Promise<{ text: string; truncated: boolean; observedAtMs: number }>;
@@ -103,6 +106,15 @@ export class PublicDispatcher {
     if (!params) return fail("INVALID_REQUEST", `invalid params for ${method}`);
     if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
     if (phase === "stream-preflight" || this.deps.isDraining() || descriptor.mode === "mutation") this.deps.assertAdmission();
+    // Resources are judged once the action is known. Stream bytes are reserved by transport.
+    if (phase === "dispatch") {
+      try { this.deps.admitResource(descriptor.resource); }
+      catch (error) {
+        // An accepted same-key lookup is not new consumption; the ledger is read only when refused.
+        if (!(descriptor.key === "required" && isValidRequestKey(envelope.request) &&
+          this.deps.store.hasOperation(auth.actor, envelope.request))) throw error;
+      }
+    }
     // SAFETY: this method's decoder validated params; TS cannot express that dynamic key/union correlation.
     return { ok: true, id, method, descriptor, params } as ValidatedPublicCall;
   }

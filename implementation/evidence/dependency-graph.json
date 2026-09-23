@@ -325,9 +325,9 @@
   ],
   "runtimeEdgeMatrix": {
    "K0-values -> K0-values": 18,
-   "K1-codecs -> K0-values": 41,
+   "K1-codecs -> K0-values": 42,
    "K1-codecs -> K1-codecs": 16,
-   "K2-mechanisms -> K0-values": 53,
+   "K2-mechanisms -> K0-values": 54,
    "K2-mechanisms -> K1-codecs": 7,
    "K2-mechanisms -> K2-mechanisms": 31,
    "K3-ledger -> K0-values": 19,
@@ -336,7 +336,7 @@
    "K3-ledger -> K3-ledger": 14
   },
   "typeOnlyEdgeMatrix": {
-   "K1-codecs -> K0-values": 1,
+   "K1-codecs -> K0-values": 2,
    "K1-codecs -> K1-codecs": 1,
    "K1-codecs -> K3-ledger": 1,
    "K2-mechanisms -> K0-values": 2,
@@ -639,8 +639,18 @@
    },
    {
     "from": "src/protocol/methods.ts",
+    "to": "src/domain/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/protocol/methods.ts",
     "to": "src/domain/identifiers.ts",
     "kind": "runtime"
+   },
+   {
+    "from": "src/protocol/methods.ts",
+    "to": "src/domain/admission.ts",
+    "kind": "type"
    },
    {
     "from": "src/protocol/operation-results.ts",
@@ -905,6 +915,11 @@
    {
     "from": "src/storage/preaccept-artifact.ts",
     "to": "src/domain/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/storage/quota.ts",
+    "to": "src/domain/admission.ts",
     "kind": "runtime"
    },
    {
@@ -1430,16 +1445,16 @@
   }
  ],
  "files": 221,
- "runtimeEdges": 807,
- "typeOnlyEdges": 314,
+ "runtimeEdges": 810,
+ "typeOnlyEdges": 317,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 209,
+  "L1-kernel -> L1-kernel": 211,
   "L2-facts -> L1-kernel": 30,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 161,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 85,
+  "L4-orchestration -> L1-kernel": 86,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 39,
@@ -1466,7 +1481,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 111,
+  "src/domain/errors.ts": 112,
   "src/domain/identifiers.ts": 32,
   "src/ids.ts": 27,
   "src/storage/durable-fs.ts": 22,
@@ -1483,7 +1498,7 @@
   "src/storage/receipt-projector.ts": 10
  },
  "fanOut": {
-  "src/broker.ts": 28,
+  "src/broker.ts": 29,
   "src/mail.ts": 28,
   "src/entry/broker.ts": 22,
   "src/entry/oma.ts": 21,

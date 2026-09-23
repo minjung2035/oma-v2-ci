@@ -153,6 +153,7 @@ function internalFixture() {
     },
     isDraining: () => false,
     assertAdmission() {},
+    admitResource() {},
     failureAnswer: (id, error) => ({ v: 1, id, ok: false, error }),
     refreshViews() {},
     openRun() {

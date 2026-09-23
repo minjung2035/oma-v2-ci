@@ -7,7 +7,7 @@ import { Store, reused } from "../store.js";
 import type { OperationOf } from "../storage/operation-codec.js";
 import type { PlanFor } from "../durable.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
-import { StoreError, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
+import { StoreError, AcceptedFailure, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
 import { requestHash } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey, isValidFullOid } from "../ids.js";
 import { mailObjectRelativePath, contextRevisionDisplayPath } from "../domain/derived.js";
@@ -79,7 +79,7 @@ export class ContextCoordinator {
         category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
     if (policy.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, policy.code));
     else if (policy.terminal === "unknown") this.unknown(id);
-    throw new StoreError(policy.code, error instanceof StoreError ? error.message : "context effect or observation failed");
+    throw new AcceptedFailure(policy.code, error instanceof StoreError ? error.message : "context effect or observation failed", knowledge);
   }
   private async materializeAndSettle(operation: OperationOf<"context.publish">): Promise<void> {
     this.effects.publishSnapshot(operation, this.publication.observe(operation));

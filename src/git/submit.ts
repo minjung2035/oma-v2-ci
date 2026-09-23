@@ -7,7 +7,7 @@ import type { OperationOf } from "../storage/operation-codec.js";
 import type { PlanFor } from "../durable.js";
 import { MailModule, buildEml, expandAddresses, defaultReplyTo, defaultLogicalReplyTo, actorAddress } from "../mail.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
-import { StoreError, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
+import { StoreError, AcceptedFailure, acceptedFailure, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
 import { requestHash, canonicalRequestParams } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey } from "../ids.js";
 import { publishedRefFor, mailObjectRelativePath } from "../domain/derived.js";
@@ -64,7 +64,7 @@ export class SubmitCoordinator {
         category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
     if (failure.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, failure.code));
     if (failure.terminal === "unknown") this.store.transaction(tx => tx.setOperationUnknown(id));
-    throw new StoreError(failure.code, error instanceof StoreError ? error.message : "submit effect or observation failed");
+    throw new AcceptedFailure(failure.code, error instanceof StoreError ? error.message : "submit effect or observation failed", knowledge);
   }
   /** The spool belongs to the operation only if its accepted plan names this
    * exact bundle, or names none when none was spooled. */
@@ -125,8 +125,11 @@ export class SubmitCoordinator {
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
     if (claimResult === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
-    await this.exclusive(id, () => this.executeAccepted(this.operation(id), auth));
-    return receiptOfOperation(this.operation(id));
+    // The submission is accepted: a failure from here is reported as accepted.
+    try {
+      await this.exclusive(id, () => this.executeAccepted(this.operation(id), auth));
+      return receiptOfOperation(this.operation(id));
+    } catch (error) { throw acceptedFailure(error); }
   }
   private async resultEml(actor: Actor, input: SubmitInput, displayTo: string[], publishedRef: string, messageId: string) {
     const body = `${input.body}\n\n게시됨: ${publishedRef}\nCommit: ${input.candidate}\n${input.paths.length ? `경로: ${input.paths.join(", ")}\n` : ""}git fetch origin ${publishedRef}; git show FETCH_HEAD\n`;

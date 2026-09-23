@@ -95,7 +95,7 @@ async function compose(environment, { lockHeld = true, claim = "taken",
     // Deliberately controlled qualification gates: this is wiring proof, not a supported deployment profile.
     "../runtime/assets.js": { assertHostDirectoryLayout() {}, assertRuntimeAssets() {}, runtimeAssets: () => ({}) },
     "../runtime/deployment-manifest.js": { assertDeploymentDigest() { calls.push("digest"); } },
-    "../storage/quota.js": { assertStorageQuotaAdmission() { calls.push("storage-quota"); } },
+    "../storage/quota.js": { assertStorageQuotaAdmission() { calls.push("storage-quota"); }, storageResourceGate() { return () => undefined; } },
     "../authority.js": { resolvedSpecOf: value => value },
     "../domain/errors.js": { StoreError: class extends Error {} },
     "../ids.js": { isValidSocietyName: value => value === "fixture" },

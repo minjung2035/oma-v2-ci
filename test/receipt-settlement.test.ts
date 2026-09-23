@@ -102,7 +102,7 @@ function liveEndpoint(f: ReceiptFixture, registry: RunRegistry, invocation: () =
     unitCgroup: () => cgroup } as unknown as UnitsModule;
   const peers = new PeerAuthenticator(f.store, units, registry, "demo", () => undefined);
   const dispatcher = new InternalDispatcher({ ...createInternalDispatchPorts(f.store, f.mail, null, f.root, peers),
-    isDraining: () => false, assertAdmission: () => undefined,
+    isDraining: () => false, assertAdmission: () => undefined, admitResource: () => undefined,
     failureAnswer: (id, error) => ({ v: 1, id, ok: false, error: { code: (error as { code?: string }).code } }),
     refreshViews: () => undefined, openRun: () => { throw new Error("no run is opened here"); } });
   return (params: Record<string, unknown>) =>

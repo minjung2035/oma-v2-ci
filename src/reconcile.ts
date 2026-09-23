@@ -4,7 +4,7 @@ import type { Actor } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { StoreError, classifyError, errorCodeOf } from "./domain/errors.js";
 import { assertNever } from "./domain/exhaustive.js";
-import { observeStoreFailure } from "./domain/admission.js";
+import { observeStoreFailure, type ResourceCategory, type ResourceGate } from "./domain/admission.js";
 import { runGitText, GIT_ENV } from "./process/policies.js";
 import { PreparationExecutor } from "./process/preparation.js";
 import { MailModule } from "./mail.js";
@@ -19,6 +19,19 @@ export interface ReconcilePaths {
   projectGit: string; hasGoal?: () => boolean; activationAllowed(): boolean;
   /** Existing host receiptWaitSeconds; not a new configuration/wire field. */
   sweepBudgetSeconds?: number;
+  /** D04: admits each recovery stage by what it would consume. Absent only in a
+   * profile without a storage quota; the broker composition always passes it. */
+  resourceGate?: ResourceGate;
+}
+/** A recovery stage's category. Git and create recovery may import, CAS, prepare
+ * a workspace or activate, so they are never disguised as settlement. */
+function recoveryCategory(kind: RecoveryRow["kind"]): ResourceCategory {
+  switch (kind) {
+    case "mail.send": case "agent.continue": case "mail.ack": case "route.follow": case "route.unfollow": return "settle";
+    case "agent.stop": return "safety-control";
+    case "agent.create": case "agent.start": case "git.submit": case "git.integrate": case "context.publish": return "admit";
+    default: return assertNever(kind);
+  }
 }
 export interface UnitRecoveryDiagnostic { readonly agent: string; readonly outcome: "observed" | "started" | "stopped" | "unknown"; readonly reason: string | null }
 const sweepScope = new AsyncLocalStorage<ReconcileModule>();
@@ -40,12 +53,24 @@ export class ReconcileModule {
   get operationOutcomes() { return this.operations.lastOutcomes; }
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
   private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true; }
+  private admit(category: ResourceCategory): void { this.paths.resourceGate?.(category); }
+  /** Every resident gets its stop attempt; one unconfirmed death does not skip the rest. */
   private quiesceResidents(): void {
+    const failures: unknown[] = [];
     for (const agent of this.store.listAgents()) {
       if (agent.role !== "resident") continue;
-      if (!this.units.confirmDead(agent.name, agent.incarnation)) this.units.stop(agent.name, agent.incarnation);
-      if (!this.units.confirmDead(agent.name, agent.incarnation)) throw new StoreError("RUN_TERMINATION_UNKNOWN", `startup cannot prove ${agent.name} terminated`);
+      try {
+        this.admit("safety-control");
+        if (!this.units.confirmDead(agent.name, agent.incarnation)) this.units.stop(agent.name, agent.incarnation);
+        if (!this.units.confirmDead(agent.name, agent.incarnation)) throw new StoreError("RUN_TERMINATION_UNKNOWN", `startup cannot prove ${agent.name} terminated`);
+      } catch (error) { failures.push(error); }
     }
+    if (failures.length === 0) return;
+    // Corruption stays the reported fact so it still reaches the sticky fence.
+    const primary = failures.find(error => errorCodeOf(error) === "STORE_CORRUPT") ?? failures[0];
+    if (failures.length === 1) throw primary;
+    throw new StoreError(errorCodeOf(primary), primary instanceof Error ? primary.message : "startup cannot prove every resident terminated",
+      { cause: new AggregateError(failures, "startup cannot prove every resident terminated") });
   }
   async startup(allowActivation = true, prepare?: () => Promise<void>): Promise<void> {
     if (this.starting || this.inFlight) throw new StoreError("BROKER_UNAVAILABLE", "startup cannot share an active recovery pass");
@@ -64,7 +89,7 @@ export class ReconcileModule {
         if (!operation || (operation.state !== "pending" && operation.state !== "unknown")) continue;
         switch (operation.kind) {
           case "mail.send": case "agent.continue":
-            try { await reconcileMailOperation(this.store, this.mail, id); }
+            try { this.admit(recoveryCategory(operation.kind)); await reconcileMailOperation(this.store, this.mail, id); }
             catch (error) { this.retainRecoveryFailure(error); }
             break;
           case "agent.create": case "agent.start": case "agent.stop":
@@ -80,6 +105,7 @@ export class ReconcileModule {
     finally { this.starting = false; }
   }
   private async recover(operation: RecoveryRow, allowed: boolean): Promise<void> {
+    this.admit(recoveryCategory(operation.kind));
     switch (operation.kind) {
       case "mail.send": case "agent.continue": await reconcileMailOperation(this.store, this.mail, operation.id); return;
       case "agent.create": await this.lifecycle.reconcileCreate(operation.id, this.activation(allowed)); return;
@@ -136,6 +162,7 @@ export class ReconcileModule {
           if (current.desired === "stopped") {
             // Do not trust an old async inactive observation as death proof.
             if (!this.units.confirmDead(current.name, current.incarnation)) {
+              this.admit("safety-control");
               this.units.stop(current.name, current.incarnation);
               diagnostics.push({ agent: current.name, outcome: "stopped", reason: null });
             } else diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
@@ -150,6 +177,7 @@ export class ReconcileModule {
               const fresh = this.units.observe(current.name);
               if (["inactive", "dead"].includes(fresh.activeState)) {
                 // Current desired/incarnation/activation check -> start has no await.
+                this.admit("admit");
                 this.units.start(current.name, false);
                 diagnostics.push({ agent: current.name, outcome: "started", reason: null }); continue;
               }

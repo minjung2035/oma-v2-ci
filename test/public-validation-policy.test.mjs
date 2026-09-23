@@ -57,6 +57,7 @@ function fixture(transform = source => source) {
     git: { submit: effect, publishContext: effect, isPublished() { calls.order.push("published"); return false; } },
     isDraining: () => state.draining,
     assertAdmission() { calls.admission++; if (state.denyAdmission) throw new StoreError("BROKER_UNAVAILABLE", "admission closed"); },
+    admitResource() {},
     failureAnswer: (id, error) => replies.errorAnswer(id, { code: error.code ?? "INTERNAL_ERROR", message: error.message, retry: "never" }),
     refreshViews() { calls.refresh++; },
   };

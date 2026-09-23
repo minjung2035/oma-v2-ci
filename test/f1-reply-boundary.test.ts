@@ -86,6 +86,7 @@ function fixture() {
     limits,
     isDraining: () => false,
     assertAdmission: () => gate.assertAdmission(),
+    admitResource: () => undefined,
     refreshViews() {},
     readLogs: async () => unused(),
     failureAnswer: (id, error) => {

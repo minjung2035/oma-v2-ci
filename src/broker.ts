@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { Actor, AuthContext, Failure, ProtocolLimits, Request, RunLease } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { StoreError, publicFailure } from "./domain/errors.js";
-import { AdmissionGate, bindAdmissionGate } from "./domain/admission.js";
+import { AdmissionGate, bindAdmissionGate, type ResourceGate } from "./domain/admission.js";
 import { actorSocketDirectoryAt, actorSocketPathAt } from "./storage/paths.js";
 import { encodeFrame } from "./frame.js";
 import { RpcConnection, NODE_ALARMS } from "./broker/connection.js";
@@ -26,9 +26,10 @@ import { GitModule } from "./git.js";
 import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
 import { STATUS_REFRESH_MS, statusViewPath } from "./protocol/status-view.js";
+import { INTERNAL_METHODS } from "./protocol/methods.js";
 import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalHostChannel } from "./broker/principal-endpoint.js";
 import { resolvedSpecOf } from "./authority.js";
-import { assertStorageQuotaAdmission } from "./storage/quota.js";
+import { assertStorageQuotaAdmission, storageResourceGate } from "./storage/quota.js";
 export { boundedLogOutput } from "./broker/logs.js";
 export { peerCgroup } from "./broker/peer-authenticator.js";
 
@@ -67,6 +68,7 @@ export class Broker {
   private readonly runLeases = new RunRegistry();
   private storageReservations = 0;
   private readonly health = new AdmissionGate();
+  private readonly admitResource: ResourceGate;
   private readonly peers: PeerAuthenticator;
   private readonly publicDispatcher: PublicDispatcher;
   private readonly internalDispatcher: InternalDispatcher;
@@ -80,10 +82,11 @@ export class Broker {
   ) {
     this.mail = mail;
     bindAdmissionGate(store, this.health);
+    this.admitResource = storageResourceGate(paths.stateRoot, paths.storageBytes);
     this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society, error => this.cleanupError(error));
     const publicPorts = createPublicDispatchPorts(this.store, mail, this.units, this.views, lifecycle, git, limits);
     this.publicDispatcher = new PublicDispatcher({ ...publicPorts,
-      isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(),
+      isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(), admitResource: this.admitResource,
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       readLogs: (agent, sinceSeconds) => this.readLogs(agent, sinceSeconds) });
     const internalPorts = createInternalDispatchPorts(this.store, mail, reconcile, paths.stateRoot, {
@@ -92,7 +95,7 @@ export class Broker {
       runnerAuth: (agent, incarnation, peer) => this.runnerAuth(agent, incarnation, peer),
     });
     this.internalDispatcher = new InternalDispatcher({ ...internalPorts,
-      isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(),
+      isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(), admitResource: this.admitResource,
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       openRun: (actor, invocationId) => this.openRun(actor, invocationId) });
   }
@@ -173,9 +176,9 @@ export class Broker {
       preflight: (auth, raw) => this.preflightPublicStream(auth, raw),
     });
     const hostEndpoint = new PrincipalHostEndpoint(channel, { ...connection,
-      prepare: auth => { this.assertStorageAdmission(); return this.mail.prepare(auth); },
+      prepare: auth => { this.admitResource(INTERNAL_METHODS["batch.prepare"].resource); return this.mail.prepare(auth); },
       complete: async (auth, evidence) => {
-        this.assertStorageAdmission();
+        this.admitResource(INTERNAL_METHODS["batch.complete"].resource);
         await this.mail.complete(auth, evidence);
         this.refreshViews();
       },
@@ -358,7 +361,6 @@ export class Broker {
     return readUnitLogs(this.paths.society, agent, sinceSeconds, this.limits.logBytes);
   }
   async dispatch(auth: AuthContext, request: Request, stream: AsyncIterable<Uint8Array> | null): Promise<object> {
-    this.assertStorageAdmission();
     return this.publicDispatcher.dispatch(auth, request, stream);
   }
   private requireRunnerUnit(peer: BoundPeer, agent: Actor, invocationId?: string): void { this.peers.requireRunnerUnit(peer, agent, invocationId); }
@@ -370,7 +372,6 @@ export class Broker {
     return auth;
   }
   private dispatchInternal(raw: Record<string, unknown>, peer: BoundPeer, stream: AsyncIterable<Uint8Array> | null, channel: "runner" | "host"): Promise<object> {
-    this.assertStorageAdmission();
     return this.internalDispatcher.dispatch(raw, peer, stream, channel);
   }
   private openRun(actor: Actor, invocationId: string): RunLease {

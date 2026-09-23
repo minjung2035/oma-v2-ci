@@ -112,18 +112,33 @@ export function classifyError(context: ErrorContext): ErrorPolicy {
   }
   return { ...base, terminal: "failed" };
 }
+/** A coordinator's own statement that its operation committed before this
+ * failure. The code stays the closed public code; no wire field is added. */
+export class AcceptedFailure extends StoreError {
+  constructor(code: ErrorCode, message: string, readonly effectKnowledge: EffectKnowledge, options?: ErrorOptions) {
+    super(code, message, options);
+  }
+}
+export function acceptedFailure(error: unknown, effectKnowledge: EffectKnowledge = "possible"): AcceptedFailure {
+  if (error instanceof AcceptedFailure) return error;
+  const normalized = normalizeStorageFailure(error);
+  return normalized instanceof StoreError
+    ? new AcceptedFailure(normalized.code, normalized.message, effectKnowledge, { cause: error })
+    : new AcceptedFailure("INTERNAL_ERROR", "accepted operation failed", effectKnowledge, { cause: error });
+}
 /** A durable failed receipt is terminal; same-key lookup is never effect replay. */
 export function terminalFailure(code: ErrorCode): Failure { return { code, message: code, retry: "never" }; }
 
-/** Sanitize exceptions. Without admission evidence, do not invent acceptance or absence. */
+/** Sanitize exceptions. Without admission evidence, do not invent acceptance or
+ * absence; a coordinator's AcceptedFailure is that evidence. */
 export function publicFailure(error: unknown, context?: Omit<ErrorContext, "code">): Failure {
   const code = errorCodeOf(error);
   const metadata = ERROR_METADATA[code];
-  const fallback: Omit<ErrorContext, "code"> = {
-    phase: "preaccept", effectKnowledge: "none",
-    observationKind: metadata.category === "integrity" ? "corrupt" :
-      metadata.category === "transient" || metadata.category === "ambiguous" || metadata.category === "internal" ? "unavailable" : "rejected",
-  };
+  const observationKind: ObservationKind = metadata.category === "integrity" ? "corrupt" :
+    metadata.category === "transient" || metadata.category === "ambiguous" || metadata.category === "internal" ? "unavailable" : "rejected";
+  const fallback: Omit<ErrorContext, "code"> = error instanceof AcceptedFailure
+    ? { phase: "accepted", effectKnowledge: error.effectKnowledge, observationKind }
+    : { phase: "preaccept", effectKnowledge: "none", observationKind };
   const policy = classifyError({ ...(context ?? fallback), code });
   const retry = policy.reconcile === "repair" ? "after-repair" :
     policy.lookupSameKey && (policy.reconcile === "observe" || policy.reconcile === "reconcile" || policy.resendFrozen) ? "same-key" : "never";

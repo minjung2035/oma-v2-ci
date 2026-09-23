@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Actor, AgentCreateInput, AuthContext, Receipt, ResolvedAgentSpec } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, acceptedFailure } from "../domain/errors.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { residentUnitsFor } from "../domain/derived.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
@@ -160,8 +160,9 @@ export class CreateCoordinator {
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
     if (accepted.outcome === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
-    if (accepted.linked) return this.settleLinked(id, accepted.linked, input.name);
-    return this.finish(id, true, auth);
+    // The creation is accepted: a failure from here is reported as accepted.
+    try { return accepted.linked ? this.settleLinked(id, accepted.linked, input.name) : await this.finish(id, true, auth); }
+    catch (error) { throw acceptedFailure(error); }
   }
 
   async reconcile(id: string, allowActivation = true): Promise<void> {

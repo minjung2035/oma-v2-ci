@@ -2,6 +2,7 @@ import { existsSync, lstatSync, readdirSync, type Stats } from "node:fs";
 import { join } from "node:path";
 import { assertStorageQuotaSupported } from "../domain/resources.js";
 import { StoreError } from "../domain/errors.js";
+import { storageGated, type ResourceGate } from "../domain/admission.js";
 
 function allocatedBytes(stat: Stats): number {
   const blocks = Number.isSafeInteger(stat.blocks) ? stat.blocks * 512 : 0;
@@ -80,4 +81,11 @@ export function assertStorageQuotaAdmission(
       "QUOTA_EXCEEDED",
       "society storage quota would be exceeded",
     );
+}
+
+/** D04: one storage gate for dispatch and recovery stages; no quota profile gates nothing. */
+export function storageResourceGate(stateRoot: string, storageBytes: number | undefined): ResourceGate {
+  return category => {
+    if (storageBytes !== undefined && storageGated(category)) assertStorageQuotaAdmission(stateRoot, storageBytes);
+  };
 }
