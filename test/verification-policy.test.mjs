@@ -166,3 +166,13 @@ test("R35 mail and submit preaccept oracles are required by durable and all lane
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
 });
+
+test("R35 action category and admission oracles are required by their lanes", () => {
+  assert.ok(lanes.fast.files.includes("method-resource-categories.test.js"));
+  assert.ok(lanes.durable.files.includes("action-admission.test.js"));
+  for (const [lane, id] of [["fast", "V21A:"], ["durable", "V21B:"]]) {
+    assert.ok(lanes[lane].requiredNames.includes(id));
+    assert.ok(lanes.all.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});

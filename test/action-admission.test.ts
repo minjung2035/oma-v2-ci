@@ -19,7 +19,7 @@ import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import { StoreError, publicFailure } from "../src/domain/errors.js";
-import { assertStorageQuotaAdmission } from "../src/storage/quota.js";
+import { storageResourceGate } from "../src/storage/quota.js";
 import { parseUnitObservation } from "../src/units/observe.js";
 import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
@@ -70,10 +70,9 @@ function society(t: TestContext, storageBytes: number) {
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  // The production composition gives recovery the same storage gate as dispatch.
-  const reconcilePaths = { projectGit: join(root, "project.git"), hasGoal: () => true, activationAllowed: () => true,
-    resourceGate: (category: string) => { if (category === "admit" || category === "settle") assertStorageQuotaAdmission(root, storageBytes); } };
-  const reconcile = new ReconcileModule(store, mail, null, units, lifecycle, reconcilePaths);
+  // The broker composition gives recovery the same storage gate as dispatch.
+  const reconcile = new ReconcileModule(store, mail, null, units, lifecycle, { projectGit: join(root, "project.git"),
+    hasGoal: () => true, activationAllowed: () => true, resourceGate: storageResourceGate(root, storageBytes) });
   const broker = new Broker(store, mail, units, views, lifecycle, null, reconcile, { stateRoot: root, runRoot: join(root, "run"), society: "demo", storageBytes });
   const internal = (method: string, params: Record<string, unknown>, channel: "runner" | "host") =>
     (Reflect.get(broker, "dispatchInternal") as (raw: object, peer: object, stream: null, channel: string) => Promise<object>)

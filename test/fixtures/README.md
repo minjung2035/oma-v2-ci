@@ -105,6 +105,8 @@ VM/storage power loss. Existing mixed-suite systemd exclusions are unchanged.
 | V06B local | `receipt-settlement.test.ts` named `V06B local` cases | durable, all; actual InternalDispatcher, PeerAuthenticator, RunRegistry fencing and recovery settlement with controlled cgroup pins and unit observation; the kernel-lane V06B (real systemd/cgroup stale runner) is not claimed |
 | V19A / V19B | `preaccept-ownership.test.ts` named V19A bootstrap and V19B create cases | durable, all; actual LifecycleModule/CreateCoordinator, Store, MailModule and Git workspace with injected freeze/refresh faults and a no-op unit install for the race winner; not systemd activation |
 | V20A / V20B | `mail-submit-scope.test.ts` named V20A mail/submit freeze and retry cases and V20B recovery cases | durable, all; actual MailModule, materializer, reconcile, GitModule submit with a real repository, Store and filesystem; fsync EIO, cleanup EIO and gated ref publication are injected, inbox unavailability is chmod-based; not a process crash or VM power loss |
+| V21A | `method-resource-categories.test.ts` named V21A cases | fast, all; actual descriptors, category lookup and Broker/public dispatcher over a one-byte storage quota; not a wire-schema change |
+| V21B | `action-admission.test.ts` named V21B cases | durable, all; actual Broker, both dispatchers, MailModule, LifecycleModule, ReconcileModule with the production storage gate and GitModule submit; unit control is scripted, faults are an injected SQLITE_FULL and a ref conflict; not systemd, real disk exhaustion or the WP22 settlement reserve |
 
 `npm test` includes all these local cases; it still excludes the original mixed
 systemd files. Actual lane execution is separate and must be recorded as such.
