@@ -4,25 +4,25 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, WP19 검증 트리의 부모 `9824f5c`, 실행일 2026-09-23. WP19는 C1 create/bootstrap preaccept 소유권 정리다. bootstrap은 seed를 하나씩 준비하고, create와 bootstrap 모두 freeze한 초기 brief를 획득 즉시 하나의 `PreacceptScope`에 accepted plan 참조 관계로 등록해 refresh·재해석·수락 transaction까지 한 번에 정산한다. seed 원자성, winner 결정, quota 의미와 plan 형식은 바꾸지 않았다.
+브랜치 `refactor/safety-preserving-architecture`, WP20 검증 트리의 부모 `b25a1b7`, 실행일 2026-09-23. WP20은 C1 mail/submit preaccept 소유권 정리다. `freezeObject`는 자기 publication이 destination에 연결한 inode를 기록하고 validation·fsync·staging 정리 실패 시 그 inode만 제거하며, 정리 실패는 원래 실패 뒤에 보고한다. mail.send와 git.submit은 freeze한 object(와 submit spool)를 하나의 `PreacceptScope`에 accepted plan 참조 관계로 등록해 수락 transaction과 함께 정산한다. mail/archive/inbox 형식, plan·receipt 형식, wire와 권한은 바꾸지 않았다.
 
-검증 입력: verification input digest `c94a1fcb0830d35cb3c14faf6b08e1e0c5fed4a8eed29630c7f2382bd291acb0` (557 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `e60d0c45f2f5947765f626361385d624c9834df40598712f42f87103332e6437` (558 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
-| 검사 | WP19 실행 / 대기 범위 |
+| 검사 | WP20 실행 / 대기 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS: fast/durable/property 234/247/33, local 1385/1385, package; all fail/cancelled/skipped/todo=0 (`wp19-*-initial`, `wp19-local-initial`, `wp19-package-initial`). metadata-bound final rerun required |
-| V19A | a seed whose brief cannot be frozen while another is still freezing, and an unsupported seed profile after an earlier seed started, leave no agent, operation, object or staged brief once every started preparation ends; a registry change during preparation refuses the whole seed set and settles every brief; an accepted seed set retains exactly the briefs its plans name |
-| V19B | a policy refresh failing after the brief was frozen removes that brief and accepts nothing; a same-name, same-spec race has one physical winner, the linked loser names and owns no brief, and only one agent and one delivery exist |
-| ownership | the brief belongs to the operation only if its accepted plan names the same message id and sha256; a linked plan names none. Unknown acceptance observation retains (WP17 scope). Workspace, readiness, initial mail and activation remain post-accept phases |
-| negative controls | on the unchanged production (`ed30e50`) both bootstrap partial-failure cases leave two briefs and the refresh failure leaves one. Mutants that prepare seeds concurrently, refresh outside the scope or treat an accepted row as owning the brief each fail. Lane registration red/green. disposable sources restored |
-| not covered | `MailModule.freezeCreateInitial`/`freezeObject` partial publication before an owner exists and mail/submit scope migration remain WP20. Unit installation and activation are replaced by a no-op in the race case; systemd activation is not exercised |
+| type/build/package/local and lanes | PASS: fast/durable/property 235/254/33, local 1393/1393, package; all fail/cancelled/skipped/todo=0 (`wp20-*-initial`, `wp20-local-initial`, `wp20-package-initial`). metadata-bound final rerun required |
+| V20A | a mail object whose own fsync fails after its link (validation stage) is removed and nothing is accepted; a refused acceptance whose object cleanup also fails reports the refusal first (AggregateError) and keeps the object; a same-key mail retry after acceptance returns the frozen message, keeps only the accepted object and recovery delivers only the frozen recipients; a same-key submit retry reads no bundle, adds no spool and a gated ref publication happens once across reconcile retries |
+| V20B | recovery rebuilds missing archive/inbox names as links to the unchanged 0444 object; a derived name holding other bytes is STORE_CORRUPT, preserved and the operation stays pending; an existing archive with an unavailable inbox never records success and succeeds once the inbox is available |
+| ownership | an object or spool belongs to an operation only if its accepted plan names the same message (id+sha256) or bundle (path+sha256) — one `frozenMessageDisposition` for mail, submit, context and create; an existing destination this call did not link is never removed. Unknown acceptance observation retains (WP17 scope) |
+| negative controls | on the unchanged production (`3fa409a`) the post-link failure leaves the object and the refused-acceptance cleanup failure hides the refusal. Mutants that skip the linked-inode discard, settle before reporting the refusal, report archive presence as success, re-expand recipients during recovery, re-read the bundle on a same-key retry, treat an accepted row as owning the object (caught by the shared create cases) or skip destination validation (caught by existing AUD-7/MAIL-007) each fail; the submit-spool row-exists mutant survives because a submit operation id is fresh per call, so no reachable accepted row names another bundle. Lane registration red/green. disposable sources restored |
+| not covered | the child mail harness now halts at its checkpoint (SIGSTOP) instead of throwing through cleanup; this is not VM/storage power loss. Submit staging directory residue after a crash, systemd activation and process-crash cases outside the harness are not exercised. `settleByAcceptance` stays as a compatibility facade with no production caller |
 | systemd/provider/powercut/CI/A-008 | BLOCKED/NOT_RUN/open as previously recorded |
 
-Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp19-*`. Complete initial and metadata-bound final reruns remain required.
+Raw evidence: `/tmp/oma-consistency-evidence-Vc66uK/wp20-*`. Complete initial and metadata-bound final reruns remain required.
 
-Final PASS condition: `wp19-fast-final`, `wp19-durable-final`, `wp19-property-final`, `wp19-package-final`, `wp19-local-final` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `wp20-fast-final`, `wp20-durable-final`, `wp20-property-final`, `wp20-package-final`, `wp20-local-final` must bind one digest with exit 0 and zero unrun tests.
 
 ## 기존 검토 맥락 — 현재 source 실행 증거 아님
 
@@ -993,7 +993,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,728 code LOC**이며 A-008 기준을 넘는다. WP19 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **220 files / 21,751 code LOC**이며 A-008 기준을 넘는다. WP20 변경 뒤 LOC/hash와 dependency graph를 재생성했지만 review/release gate는 OPEN이다.
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
