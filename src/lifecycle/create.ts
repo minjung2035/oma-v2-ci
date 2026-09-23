@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { Actor, AgentCreateInput, AuthContext, Receipt, ResolvedAgentSpec } from "../../implementation/contracts.js";
+import type { Actor, AgentCreateInput, AuthContext, MessagePlan, Receipt, ResolvedAgentSpec } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
@@ -10,7 +10,7 @@ import { requestHash } from "../hash.js";
 import { resolvedSpecOf, assertActorIdentity } from "../authority.js";
 import { workspacePathAt, agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
 import { ensureDurableDirectory } from "../storage/durable-fs.js";
-import { settleByAcceptance, type PreacceptArtifact } from "../storage/preaccept-artifact.js";
+import { PreacceptScope, type PreacceptRegistration } from "../storage/preaccept-artifact.js";
 import type { MailModule } from "../mail.js";
 import type { UnitsModule } from "../units.js";
 import type { LifecyclePaths, PhysicalCreatePlan, LinkedCreatePlan, SeedConfig } from "./contracts.js";
@@ -61,38 +61,45 @@ export class CreateCoordinator {
     const principal = resolve("principal", config.principalProfile, "Principal", from);
     const auth: AuthContext = { actor: "principal", incarnation: 0, role: "principal", channel: "host",
       capabilities: new Set(principal.capabilities), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
-    const plans = await Promise.all(config.initialResidents.map(async seed => {
-      const spec = resolve(seed.name, seed.profile, seed.brief, from);
-      const id = generateOperationId();
-      const { message: initialMessage, artifact } = await mail.freezeCreateInitial(auth, id, seed.name, seed.brief);
-      const plan: PhysicalCreatePlan = { kind: "agent.create", spec, specHash: resolvedSpecDigest(spec), parent: "principal",
-        workspacePath: workspacePathAt(this.paths.stateRoot, seed.name), unitNames: residentUnitsFor(this.paths.society, seed.name), initialMessage, existingCreation: null };
-      return { id, plan, artifact };
-    }));
-    // All seed intentions and their registry/delivery links become visible together.
-    try { this.store.transaction(tx => {
-      if (this.store.listAgents().length > 0) throw new StoreError("AGENT_CONFLICT", "bootstrap registry changed during preparation");
-      tx.insertAgent({ name: "principal", specHash: resolvedSpecDigest(principal), role: "principal", desired: "enabled",
-        incarnation: 0, profile: principal.profile, createdBy: null, specJson: JSON.stringify(principal) });
-      for (const { id, plan } of plans) {
-        const input = { name: plan.spec.name, from, brief: plan.spec.brief };
-        tx.acceptOperation({ id, actor: "principal", requestKey: `bootstrap-${plan.spec.name}`, requestHash: requestHash("agent.create", input),
-          kind: "agent.create", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
-        tx.insertAgent({ name: plan.spec.name, specHash: plan.specHash, role: "resident", desired: "provisioning", incarnation: 0,
-          profile: plan.spec.profile, createdBy: "principal", specJson: JSON.stringify(plan.spec) });
-        tx.insertDeliveries([{ messageId: plan.initialMessage.id, recipient: plan.spec.name, operationId: id }]);
+    // Seeds are prepared one at a time, so a failure leaves no preparation
+    // running after it; every brief frozen so far settles with the seed set.
+    const scope: PreacceptScope = new PreacceptScope();
+    const plans: { id: string; plan: PhysicalCreatePlan }[] = [];
+    try {
+      for (const seed of config.initialResidents) {
+        const spec = resolve(seed.name, seed.profile, seed.brief, from);
+        const id = generateOperationId();
+        const { message: initialMessage, artifact } = await mail.freezeCreateInitial(auth, id, seed.name, seed.brief);
+        scope.register({ operationId: id, resource: initialMessage.id, owner: artifact, observe: () => this.briefDisposition(id, initialMessage) });
+        plans.push({ id, plan: { kind: "agent.create", spec, specHash: resolvedSpecDigest(spec), parent: "principal",
+          workspacePath: workspacePathAt(this.paths.stateRoot, seed.name), unitNames: residentUnitsFor(this.paths.society, seed.name), initialMessage, existingCreation: null } });
       }
-    }); } catch (error) {
-      for (const { id, artifact } of plans) this.settlePreaccept(id, artifact);
-      throw error;
-    }
-    for (const { artifact } of plans) artifact.retainForOperation();
+      // All seed intentions and their registry/delivery links become visible together.
+      this.store.transaction(tx => {
+        if (this.store.listAgents().length > 0) throw new StoreError("AGENT_CONFLICT", "bootstrap registry changed during preparation");
+        tx.insertAgent({ name: "principal", specHash: resolvedSpecDigest(principal), role: "principal", desired: "enabled",
+          incarnation: 0, profile: principal.profile, createdBy: null, specJson: JSON.stringify(principal) });
+        for (const { id, plan } of plans) {
+          const input = { name: plan.spec.name, from, brief: plan.spec.brief };
+          tx.acceptOperation({ id, actor: "principal", requestKey: `bootstrap-${plan.spec.name}`, requestHash: requestHash("agent.create", input),
+            kind: "agent.create", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
+          tx.insertAgent({ name: plan.spec.name, specHash: plan.specHash, role: "resident", desired: "provisioning", incarnation: 0,
+            profile: plan.spec.profile, createdBy: "principal", specJson: JSON.stringify(plan.spec) });
+          tx.insertDeliveries([{ messageId: plan.initialMessage.id, recipient: plan.spec.name, operationId: id }]);
+        }
+      });
+    } catch (error) { scope.settleFailure(error); }
+    scope.settle();
   }
 
   /** A frozen initial brief is owned by nobody until the create that names it
-   * is accepted; an accepted plan that names no message owns none either. */
-  private settlePreaccept(operationId: string, artifact: PreacceptArtifact): void {
-    settleByAcceptance([artifact], () => this.store.getOperationById(operationId) !== null, operationId);
+   * is accepted; an accepted plan that names no message, or another one, owns
+   * none of it. */
+  private briefDisposition(id: string, message: MessagePlan): ReturnType<PreacceptRegistration["observe"]> {
+    const operation = this.store.getOperationById(id);
+    if (operation === null) return "unaccepted-known";
+    return operation.kind === "agent.create" && operation.plan.initialMessage?.id === message.id &&
+      operation.plan.initialMessage.sha256 === message.sha256 ? "accepted-referenced" : "accepted-unreferenced";
   }
 
   async create(auth: AuthContext, source: AgentCreateInput, key: string): Promise<Receipt> {
@@ -126,45 +133,43 @@ export class CreateCoordinator {
     }
     this.workspace.assertCanonicalBase(input.from);
     const id = generateOperationId();
-    const { message: initialMessage, artifact } = await this.requireMail().freezeCreateInitial(auth, id, input.name, input.brief);
-    revision = this.policy.refresh();
+    // From the frozen brief to acceptance, one settlement decides the brief:
+    // a physical winner's plan names it, a linked plan or a loser does not.
+    const scope: PreacceptScope = new PreacceptScope();
     let accepted: { outcome: "inserted" | "retry"; linked: string | null };
-    try { accepted = this.store.transaction(tx => {
-      this.policy.assertRevision(revision);
-      ({ spec, specHash } = this.policy.resolve(auth, input));
-      const plan: PhysicalCreatePlan = { kind: "agent.create", spec, specHash, parent: auth.actor,
-        workspacePath: workspacePathAt(this.paths.stateRoot, input.name), unitNames: residentUnitsFor(this.paths.society, input.name), initialMessage, existingCreation: null };
-      const raced = this.store.getAgent(input.name);
-      if (raced) {
-        if (raced.specHash !== specHash) throw new StoreError("AGENT_CONFLICT", `name ${input.name} already exists with a different resolved spec`);
-        const original = this.store.findPhysicalCreate(input.name, specHash);
-        if (!original) throw new StoreError("STORE_CORRUPT", `agent ${input.name} has no physical create operation`);
-        const linked: LinkedCreatePlan = { ...plan, initialMessage: null, existingCreation: original.id };
+    try {
+      const { message: initialMessage, artifact } = await this.requireMail().freezeCreateInitial(auth, id, input.name, input.brief);
+      scope.register({ operationId: id, resource: initialMessage.id, owner: artifact, observe: () => this.briefDisposition(id, initialMessage) });
+      revision = this.policy.refresh();
+      accepted = this.store.transaction(tx => {
+        this.policy.assertRevision(revision);
+        ({ spec, specHash } = this.policy.resolve(auth, input));
+        const plan: PhysicalCreatePlan = { kind: "agent.create", spec, specHash, parent: auth.actor,
+          workspacePath: workspacePathAt(this.paths.stateRoot, input.name), unitNames: residentUnitsFor(this.paths.society, input.name), initialMessage, existingCreation: null };
+        const raced = this.store.getAgent(input.name);
+        if (raced) {
+          if (raced.specHash !== specHash) throw new StoreError("AGENT_CONFLICT", `name ${input.name} already exists with a different resolved spec`);
+          const original = this.store.findPhysicalCreate(input.name, specHash);
+          if (!original) throw new StoreError("STORE_CORRUPT", `agent ${input.name} has no physical create operation`);
+          const linked: LinkedCreatePlan = { ...plan, initialMessage: null, existingCreation: original.id };
+          const outcome = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
+            payloadJson: JSON.stringify(input), planJson: JSON.stringify(linked) });
+          return { outcome, linked: original.id };
+        }
         const outcome = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
-          payloadJson: JSON.stringify(input), planJson: JSON.stringify(linked) });
-        return { outcome, linked: original.id };
-      }
-      const outcome = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
-        payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
-      if (outcome === "inserted") {
-        this.policy.enforceQuota(auth.actor);
-        tx.insertAgent({ name: input.name, specHash, role: "resident", desired: "provisioning", incarnation: 0,
-          profile: spec.profile, createdBy: auth.actor, specJson: JSON.stringify(spec) });
-        tx.insertDeliveries([{ messageId: initialMessage.id, recipient: input.name, operationId: id }]);
-      }
-      return { outcome, linked: null };
-    }); } catch (error) { this.settlePreaccept(id, artifact); throw error; }
-    if (accepted.outcome === "retry") {
-      this.settlePreaccept(id, artifact);
-      return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
-    }
-    if (accepted.linked) {
-      // The accepted plan is linked: it names no initial message, so this
-      // operation existing is not ownership of the object we froze.
-      artifact.discardUnaccepted();
-      return this.settleLinked(id, accepted.linked, input.name);
-    }
-    artifact.retainForOperation();
+          payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
+        if (outcome === "inserted") {
+          this.policy.enforceQuota(auth.actor);
+          tx.insertAgent({ name: input.name, specHash, role: "resident", desired: "provisioning", incarnation: 0,
+            profile: spec.profile, createdBy: auth.actor, specJson: JSON.stringify(spec) });
+          tx.insertDeliveries([{ messageId: initialMessage.id, recipient: input.name, operationId: id }]);
+        }
+        return { outcome, linked: null };
+      });
+    } catch (error) { scope.settleFailure(error); }
+    scope.settle();
+    if (accepted.outcome === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (accepted.linked) return this.settleLinked(id, accepted.linked, input.name);
     return this.finish(id, true, auth);
   }
 

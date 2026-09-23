@@ -25,7 +25,7 @@ import { workspacePathAt } from "../src/storage/paths.js";
 import { residentUnitsFor } from "../src/domain/derived.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { UnitsModule } from "../src/units.js";
-import { ALL_CAPS, makeValidResolvedSpec } from "./fixtures/spec.js";
+import { ALL_CAPS, TEST_RESOURCES, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { gitAuth, gitCommand, gitFixture, seedGit, submitFixture, contextFixture } from "./fixtures/git-crash.js";
@@ -510,3 +510,147 @@ test("V18A: native preparation uncertainty retains only the tree that preparatio
     assert.deepEqual(objectsOf(f.root), []);
   } finally { f.close(); }
 });
+
+/** V19A/V19B: create and bootstrap freeze an initial brief before acceptance.
+ * Whatever fails between freezing and the acceptance transaction settles every
+ * brief already frozen, and no preparation keeps running after the failure. */
+type Freeze = MailModule["freezeCreateInitial"];
+function lifecycleOnly(options: { seeded?: boolean } = {}) {
+  const root = fs.mkdtempSync(join(tmpdir(), "oma-create-preaccept-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  seedGit(root);
+  const info = JSON.parse(fs.readFileSync(join(root, "git-fixture.json"), "utf8")) as { base: string };
+  if (options.seeded !== false) store.transaction((tx) => {
+    tx.insertAgent(makeValidAgent("principal", { from: info.base }));
+    for (const name of ["a", "b"]) tx.insertAgent(makeValidAgent(name, { from: info.base, createdBy: "principal" }));
+  });
+  const { mail, paths } = gitFixture(root, store);
+  const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "" });
+  let failRefresh = false;
+  const resolver = Object.assign((_parent: unknown, input: { name: string; from: string; brief: string }) =>
+    makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), {
+    refresh: () => { if (failRefresh) throw new StoreError("UNSUPPORTED_PROFILE", "injected host policy read failure"); },
+    revision: () => "policy-1",
+  });
+  const lifecycle = new LifecycleModule(store, units,
+    { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
+    resolver, mail);
+  const seed = (names: readonly string[], profile = (name: string) => name === "broken" ? "missing" : "p"): Parameters<LifecycleModule["bootstrap"]>[0] => ({
+    principalProfile: "p",
+    initialResidents: names.map(name => ({ name, profile: profile(name), brief: `brief for ${name}` })),
+    modelProfiles: { md: { provider: "none", model: "none", credentialRef: "none", codecRevision: "none", pricingRevision: "none",
+      maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 1 } },
+    agentProfiles: { p: { modelProfile: "md", capabilities: [...ALL_CAPS], delegable: [...ALL_CAPS], childProfile: "p", resources: { ...TEST_RESOURCES } } },
+  });
+  return { root, store, mail, units, lifecycle, info, seed, failRefresh: () => { failRefresh = true; },
+    close() { store.close(); removeTree(root); } };
+}
+/** Counts freezes still running, so a test observes only after every started
+ * preparation has ended, including one a failed caller stopped waiting for. */
+function trackFreezes(t: TestContext, mail: MailModule, behaviour: (recipient: string, original: () => ReturnType<Freeze>) => ReturnType<Freeze>) {
+  const original = mail.freezeCreateInitial.bind(mail);
+  const started: string[] = []; let running = 0;
+  t.mock.method(mail, "freezeCreateInitial", (async (auth, id, recipient, brief) => {
+    started.push(recipient); running++;
+    try { return await behaviour(recipient, () => original(auth, id, recipient, brief)); } finally { running--; }
+  }) as Freeze);
+  return {
+    started,
+    async drained(): Promise<void> {
+      for (let waited = 0; running > 0; waited += 10) {
+        assert.ok(waited < 5000, "a preparation kept running");
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    },
+  };
+}
+const slow = (original: () => ReturnType<Freeze>) => new Promise(resolve => setTimeout(resolve, 150)).then(original);
+function stagedMailObjects(root: string): string[] {
+  const staging = join(root, "staging/mail-objects");
+  return fs.existsSync(staging) ? fs.readdirSync(staging) : [];
+}
+
+const bootstrapFailures: ReadonlyArray<{ readonly point: string; readonly names: readonly string[]; readonly code: string;
+  readonly behaviour: (recipient: string, original: () => ReturnType<Freeze>) => ReturnType<Freeze> }> = [
+  { point: "one seed's brief cannot be frozen while another is still freezing", names: ["first", "second", "third"], code: "STORAGE_FULL",
+    behaviour: (recipient, original) => recipient === "second" ? Promise.reject(new StoreError("STORAGE_FULL", "injected freeze failure"))
+      : recipient === "third" ? slow(original) : original() },
+  { point: "a seed's profile is unsupported after an earlier seed started freezing", names: ["first", "broken", "third"], code: "UNSUPPORTED_PROFILE",
+    behaviour: (_recipient, original) => slow(original) },
+];
+for (const item of bootstrapFailures) {
+  test(`V19A: when ${item.point}, bootstrap accepts nothing and leaves no brief behind`, async (t) => {
+    const f = lifecycleOnly({ seeded: false });
+    try {
+      const freezes = trackFreezes(t, f.mail, item.behaviour);
+      await assert.rejects(f.lifecycle.bootstrap(f.seed(item.names)), { code: item.code });
+      await freezes.drained();
+      assert.deepEqual(f.store.listAgents(), []);
+      assert.deepEqual(readDiagnosticSnapshot(f.root).tables.operations, []);
+      assert.deepEqual(objectsOf(f.root), []);
+      assert.deepEqual(stagedMailObjects(f.root), []);
+    } finally { f.close(); }
+  });
+}
+
+test("V19A: a registry that changes during preparation refuses the whole seed set and settles every brief", async (t) => {
+  const f = lifecycleOnly({ seeded: false });
+  try {
+    trackFreezes(t, f.mail, (recipient, original) => {
+      if (recipient === "third") f.store.transaction((tx) => tx.insertAgent(makeValidAgent("intruder", { from: f.info.base })));
+      return original();
+    });
+    await assert.rejects(f.lifecycle.bootstrap(f.seed(["first", "second", "third"])), { code: "AGENT_CONFLICT" });
+    assert.deepEqual(f.store.listAgents().map(agent => agent.name), ["intruder"]);
+    assert.deepEqual(readDiagnosticSnapshot(f.root).tables.operations, []);
+    assert.deepEqual(objectsOf(f.root), []);
+  } finally { f.close(); }
+});
+
+test("V19A: an accepted seed set retains exactly the briefs its plans name", async (t) => {
+  const f = lifecycleOnly({ seeded: false });
+  try {
+    const freezes = trackFreezes(t, f.mail, (_recipient, original) => original());
+    await f.lifecycle.bootstrap(f.seed(["first", "second", "third"]));
+    assert.deepEqual(freezes.started, ["first", "second", "third"]);
+    assert.deepEqual(f.store.listAgents().map(agent => agent.name).sort(), ["first", "principal", "second", "third"]);
+    assert.equal(objectsOf(f.root).length, 3);
+    assert.deepEqual(objectsOf(f.root), expectedObjects(f.root));
+  } finally { f.close(); }
+});
+
+test("V19B: a policy refresh that fails after the brief was frozen removes that brief", async (t) => {
+  const f = lifecycleOnly();
+  try {
+    trackFreezes(t, f.mail, async (_recipient, original) => { const frozen = await original(); f.failRefresh(); return frozen; });
+    await assert.rejects(f.lifecycle.create(gitAuth, { name: "child", from: f.info.base, brief: "brief" }, "refresh-fails"),
+      { code: "UNSUPPORTED_PROFILE" });
+    assert.equal(f.store.getOperation("a", "refresh-fails"), null);
+    assert.equal(f.store.getAgent("child"), null);
+    assert.deepEqual(objectsOf(f.root), []);
+  } finally { f.close(); }
+});
+
+test("V19B: a same-name, same-spec race has one physical winner and the linked loser owns no brief", async (t) => {
+  const f = lifecycleOnly();
+  try {
+    t.mock.method(f.units, "ensureResident", () => undefined);
+    const input = { name: "shared", from: f.info.base, brief: "one brief" };
+    const bob: AuthContext = { ...gitAuth, actor: "b" };
+    const settled = await Promise.allSettled([f.lifecycle.create(gitAuth, input, "race-a"), f.lifecycle.create(bob, input, "race-b")]);
+    assert.ok(settled.every(result => result.status === "fulfilled"), JSON.stringify(settled));
+    const operations = [f.store.getOperation("a", "race-a"), f.store.getOperation("b", "race-b")];
+    assert.ok(operations.every(operation => operation?.kind === "agent.create"));
+    const plans = operations.map(operation => operation!.kind === "agent.create" ? operation!.plan : null);
+    const physical = plans.filter(plan => plan?.existingCreation === null);
+    const linked = plans.filter(plan => plan?.existingCreation !== null);
+    assert.equal(physical.length, 1);
+    assert.equal(linked.length, 1);
+    assert.equal(linked[0]!.initialMessage, null);
+    assert.equal(f.store.listAgents().filter(agent => agent.name === "shared").length, 1);
+    assert.deepEqual(objectsOf(f.root), expectedObjects(f.root));
+    assert.equal(objectsOf(f.root).length, 1);
+    assert.equal(readDiagnosticSnapshot(f.root).tables.deliveries.filter((row) => (row as { recipient: string }).recipient === "shared").length, 1);
+  } finally { f.close(); }
+});
+
