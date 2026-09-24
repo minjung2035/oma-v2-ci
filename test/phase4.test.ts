@@ -20,6 +20,7 @@ import { Broker, peerCgroup } from "../src/broker.js";
 import { ViewsModule } from "../src/views.js";
 import { generateOperationId } from "../src/ids.js";
 import { requestHash } from "../src/hash.js";
+import { canonicalResourceLimits } from "../src/domain/resources.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, Capability, ResolvedAgentSpec, ResourceLimits } from "../implementation/contracts.js";
@@ -166,7 +167,8 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
         writeFileSync(join(out, file), renderUnit(text, {
           node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
           config: join(env.dir, "config.json"), run: join(env.dir, "run", "oma", env.society), brokerUnit,
-          profileHex: Buffer.from("p").toString("hex"), memoryBytes: TEST_RESOURCES.memoryBytes,
+          profileHex: Buffer.from("p").toString("hex"), resourcesHex: Buffer.from(canonicalResourceLimits(TEST_RESOURCES)).toString("hex"),
+          memoryBytes: TEST_RESOURCES.memoryBytes,
           tasks: TEST_RESOURCES.tasks, cpuQuotaPercent: TEST_RESOURCES.cpuQuotaPercent,
         }));
         written.push(file);
