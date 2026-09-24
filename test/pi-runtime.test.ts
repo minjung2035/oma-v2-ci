@@ -60,11 +60,10 @@ test("a package that is not Pi is never accepted as the engine", () => {
     mkdirSync(pkg, { recursive: true });
     writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "something-else", bin: { pi: "cli.js" } }));
     writeFileSync(join(pkg, "cli.js"), "\n");
-    // Falls through to this repository's own installed engine rather than
-    // trusting a directory that merely has the right name.
-    const runtime = resolvePiRuntime({ stateRoot: join(root, "state"), libdir: root });
-    assert.notEqual(runtime.bundle, join(pkg, "cli.js"));
-    assert.equal(runtime.source, "bundled");
+    // WP31: a directory that merely has the right name is not an engine, and
+    // the installation does not borrow another installation's instead.
+    assert.throws(() => resolvePiRuntime({ stateRoot: join(root, "state"), libdir: root }), (error: unknown) =>
+      error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -89,11 +88,10 @@ test("an operator may pin an engine, and a missing or relative pin is refused", 
 test("an installation without an engine fails closed instead of using a PATH Pi", () => {
   const root = scratch("oma-pi-none-");
   try {
-    // libdir has no engine; resolution must not silently reach for /usr/bin/pi.
-    const runtime = resolvePiRuntime({ stateRoot: join(root, "state"), libdir: root });
-    assert.equal(runtime.source, "bundled");
-    assert.doesNotMatch(runtime.bundle, /^\/usr\/bin\/pi$/);
-    assert.match(runtime.bundle, new RegExp(PI_PACKAGE.replace("/", "\\/")));
+    // libdir has no engine; resolution must reach neither for a Pi on PATH nor
+    // for another installation's engine (WP31) -- it refuses.
+    assert.throws(() => resolvePiRuntime({ stateRoot: join(root, "state"), libdir: root }), (error: unknown) =>
+      error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /does not fall back/.test(error.message));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

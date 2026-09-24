@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { loadConfig, loadConfiguration } from "../src/config.js";
 import { canonicalResourceLimits } from "../src/domain/resources.js";
@@ -142,6 +143,13 @@ for (const [name, file, update] of [
 /** Starts the real runner entry as its unit would, stopping before Pi runs,
  * and reports what it selected. */
 function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string>) {
+  // WP31: a runner uses the engine its installation ships, and no other; the
+  // fixture installation gets this repository's, as a real one has its own.
+  const engine = join(f.installation, "node_modules", "@earendil-works", "pi-coding-agent");
+  if (!existsSync(engine)) {
+    mkdirSync(dirname(engine), { recursive: true });
+    symlinkSync(fileURLToPath(new URL("../../node_modules/@earendil-works/pi-coding-agent", import.meta.url)), engine);
+  }
   const capture = join(f.root, "selected.json");
   const preload = join(f.root, "capture.mjs");
   rmSync(capture, { force: true });
