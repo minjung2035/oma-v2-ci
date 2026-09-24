@@ -156,7 +156,7 @@ test("PRE-5: an accepted linked create names no initial brief, so it owns none o
       for (const name of ["a", "b"]) tx.insertAgent(makeValidAgent(name, { from: info.base, createdBy: "principal" }));
     });
     const { mail, paths } = gitFixture(root, store);
-    const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "" });
+    const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society), brokerUnit: "" });
     const resolve = (name: string, from: string, brief: string) => makeValidResolvedSpec(name, "p", ALL_CAPS, from, brief);
     const lifecycle = new LifecycleModule(store, units,
       { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
@@ -525,7 +525,7 @@ function lifecycleOnly(options: { seeded?: boolean } = {}) {
     for (const name of ["a", "b"]) tx.insertAgent(makeValidAgent(name, { from: info.base, createdBy: "principal" }));
   });
   const { mail, paths } = gitFixture(root, store);
-  const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "" });
+  const units = new UnitsModule(paths.society, { node: process.execPath, libdir: process.cwd(), state: root, society: paths.society, agent: "", config: join(root, "config.json"), run: join(root, "oma", paths.society), brokerUnit: "" });
   let failRefresh = false;
   const resolver = Object.assign((_parent: unknown, input: { name: string; from: string; brief: string }) =>
     makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), {

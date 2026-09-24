@@ -36,6 +36,7 @@ import { connect, type Socket } from "node:net";
 import { join } from "node:path";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnSupervisedService, type ChildProcess } from "../process/async.js";
 import { SOCIETY_OWNED_EXIT } from "./process-lock.js";
+import { launchLocationArgv } from "./assets.js";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HostChannelReader, encodeHostMessage } from "../protocol/host-channel.js";
 
 export type BrokerState =
@@ -94,6 +95,9 @@ export interface SuperviseOptions {
   readonly node: string;
   readonly libdir: string;
   readonly society: string;
+  /** D03: the host's resolved location, handed to the broker whole so that it
+   * and every unit it renders use the same configuration and roots. */
+  readonly stateRoot: string;
   readonly runRoot: string;
   readonly configPath: string;
   /** The society lease descriptor, inherited by the broker so that the society
@@ -173,9 +177,9 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
   const start = (): Generation | string => {
     let child: ChildProcess;
     try {
-      // The broker derives its own state and run roots from the environment, so
-      // it is handed this process's environment rather than a reduced one. The
-      // channel marker names a descriptor; nothing secret is ever put here.
+      // The broker is told this process's location explicitly and is also
+      // handed its environment rather than a reduced one. The channel marker
+      // names a descriptor; nothing secret is ever put here.
       const env: Record<string, string> = {};
       for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
       env[HOST_CHANNEL_ENV] = String(HOST_CHANNEL_FD);
@@ -185,7 +189,7 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       // than infer it from how it happened to be started.
       if (options.fence !== undefined) env[SOCIETY_FENCE_ENV] = String(SOCIETY_FENCE_FD);
       child = spawnSupervisedService(options.node, [join(options.libdir, "dist/src/entry/broker.js"),
-        "--society", options.society, "--config", options.configPath], env, true, options.fence);
+        "--society", options.society, ...launchLocationArgv(options)], env, true, options.fence);
     } catch (error) {
       return error instanceof Error ? error.message : String(error);
     }

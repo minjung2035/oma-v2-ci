@@ -49,8 +49,10 @@ test("PR-002: host entry reports EOF/malformed replies as failure and parses spl
       });
     });
     await new Promise<void>((resolve) => server.listen(join(run, "host.sock"), resolve));
-    const child = spawn(process.execPath, [entry("host"), "reconcile", "--society", "probe"], {
-      env: { ...process.env, XDG_RUNTIME_DIR: dir }, stdio: ["ignore", "pipe", "pipe"],
+    // D03: the unit renders the broker's run root; the manager's environment
+    // is not consulted (it points somewhere else here on purpose).
+    const child = spawn(process.execPath, [entry("host"), "reconcile", "--society", "probe", "--run-root", run], {
+      env: { ...process.env, XDG_RUNTIME_DIR: join(dir, "elsewhere") }, stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
@@ -68,4 +70,18 @@ test("PR-002: host entry reports EOF/malformed replies as failure and parses spl
       rmSync(dir, { recursive: true, force: true });
     }
   }
+});
+
+test("D03: a host unit without the rendered run root is refused, not pointed at the environment's", () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-host-root-"));
+  try {
+    for (const args of [[], ["--run-root", "relative/oma/probe"], ["--run-root", join(dir, "oma", "other")],
+      ["--run-root", join(dir, "oma", "probe"), "--run-root", join(dir, "oma", "probe")]]) {
+      const result = spawnSync(process.execPath, [entry("host"), "reconcile", "--society", "probe", ...args], {
+        env: { ...process.env, XDG_RUNTIME_DIR: dir }, encoding: "utf8", timeout: 3000,
+      });
+      assert.equal(result.status, 4, `${JSON.stringify(args)}: ${result.stderr}`);
+      assert.match(result.stderr, /launch location --run-root/);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

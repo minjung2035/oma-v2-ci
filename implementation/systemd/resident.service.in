@@ -1,14 +1,16 @@
 # MUST [UNIT-001..004]: Resource values are rendered from the broker-resolved host profile.
+# D03: the launch location and the broker dependency are the broker's resolved ones;
+# BROKER_UNIT is empty when no fixed broker unit exists (the product runs the broker).
 [Unit]
 Description=OMA @SOCIETY@ resident @AGENT@
-BindsTo=oma-@SOCIETY@-broker.service
-After=oma-@SOCIETY@-broker.service
+BindsTo=@BROKER_UNIT@
+After=@BROKER_UNIT@
 StartLimitIntervalSec=60s
 StartLimitBurst=5
 [Service]
 Type=exec
 Environment=OMA_PROFILE_HEX=@PROFILE_HEX@
-ExecStart=@NODE@ @LIBDIR@/dist/src/entry/runner.js --society @SOCIETY@ --agent @AGENT@
+ExecStart=@NODE@ @LIBDIR@/dist/src/entry/runner.js --society @SOCIETY@ --agent @AGENT@ --config @CONFIG_ARG@ --state-root @STATE_ARG@ --run-root @RUN_ARG@
 Restart=on-failure
 RestartSec=3s
 KillMode=control-group

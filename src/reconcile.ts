@@ -72,6 +72,10 @@ export class ReconcileModule {
     throw new StoreError(errorCodeOf(primary), primary instanceof Error ? primary.message : "startup cannot prove every resident terminated",
       { cause: new AggregateError(failures, "startup cannot prove every resident terminated") });
   }
+  /** D03: the drain of a broker whose Residents are bound to no unit. The
+   * same per-resident stop and death proof as startup, so a later startup finds
+   * nothing it has to stop. */
+  quiesceForShutdown(): void { this.quiesceResidents(); }
   async startup(allowActivation = true, prepare?: () => Promise<void>): Promise<void> {
     if (this.starting || this.inFlight) throw new StoreError("BROKER_UNAVAILABLE", "startup cannot share an active recovery pass");
     this.starting = true;

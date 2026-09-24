@@ -1,5 +1,5 @@
 import { lstatSync, realpathSync } from "node:fs";
-import { isAbsolute, join, normalize, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { StoreError } from "../domain/errors.js";
 
@@ -52,4 +52,52 @@ export function assertHostDirectoryLayout(path: string, allowMissing = false): v
     if (!stat?.isDirectory())
       throw new StoreError("UNSUPPORTED_PROFILE", "host directory ancestors must be real directories, not symlinks");
   }
+}
+
+/** D03: where one society lives on this host, decided once by the process that
+ * starts it and handed explicitly to everything it launches. A unit-started
+ * process runs in the user manager's environment, which need not be the one the
+ * product was started in, so nothing below the host re-derives these. */
+export interface LaunchLocation {
+  readonly society: string;
+  readonly stateRoot: string;
+  readonly runRoot: string;
+  readonly configPath: string;
+}
+
+/** The host's own derivation: XDG roots from its environment, the config path
+ * the Human named (made absolute against the host's directory) or the state
+ * root's default. Only entrypoints a Human or operator starts call this. */
+export function hostLaunchLocation(society: string, env: NodeJS.ProcessEnv, configPath?: string): LaunchLocation {
+  const stateRoot = join(env.XDG_DATA_HOME ?? join(env.HOME ?? "/tmp", ".local", "share"), "oma", society);
+  const runRoot = join(env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
+  return Object.freeze({ society, stateRoot, runRoot,
+    configPath: configPath === undefined ? join(stateRoot, "config.json") : resolve(configPath) });
+}
+
+export const LAUNCH_LOCATION_FLAGS = Object.freeze({ configPath: "--config", stateRoot: "--state-root", runRoot: "--run-root" } as const);
+
+/** The argv form of a location, exactly what a launched entry must receive. */
+export function launchLocationArgv(location: LaunchLocation): string[] {
+  return [LAUNCH_LOCATION_FLAGS.configPath, location.configPath,
+    LAUNCH_LOCATION_FLAGS.stateRoot, location.stateRoot, LAUNCH_LOCATION_FLAGS.runRoot, location.runRoot];
+}
+
+/** One part of a launched entry's location. It must be given exactly once,
+ * and a root must name this society. There is no environment fallback -- a
+ * missing part is the silent default D03 forbids, so it is refused. */
+export function launchedPath(args: readonly string[], part: keyof typeof LAUNCH_LOCATION_FLAGS, society: string): string {
+  const flag = LAUNCH_LOCATION_FLAGS[part];
+  const at = args.indexOf(flag);
+  const value = at < 0 ? undefined : args[at + 1];
+  if (value === undefined || args.indexOf(flag, at + 1) >= 0 || !isAbsolute(value) || value.includes("\0") || normalize(value) !== value)
+    throw new StoreError("UNSUPPORTED_PROFILE", `launch location ${flag} must be given once as a normalized absolute path`);
+  if (part !== "configPath" && (basename(value) !== society || basename(dirname(value)) !== "oma"))
+    throw new StoreError("UNSUPPORTED_PROFILE", `launch location ${flag} does not name this society`);
+  return value;
+}
+
+export function launchedLocation(args: readonly string[], society: string): LaunchLocation {
+  return Object.freeze({ society, configPath: launchedPath(args, "configPath", society),
+    stateRoot: launchedPath(args, "stateRoot", society), runRoot: launchedPath(args, "runRoot", society) });
 }

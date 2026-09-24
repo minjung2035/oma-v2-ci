@@ -68,7 +68,7 @@ function society(t: TestContext) {
   store.transaction(tx => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
   seedGit(root);
   const { git, mail } = gitFixture(root, store);
-  const units = new UnitsModule("crash", { node: process.execPath, libdir: root, state: root, society: "crash", agent: "" }, join(root, "units"), { p: TEST_RESOURCES });
+  const units = new UnitsModule("crash", { node: process.execPath, libdir: root, state: root, society: "crash", agent: "", config: join(root, "config.json"), run: join(root, "oma", "crash"), brokerUnit: "" }, join(root, "units"), { p: TEST_RESOURCES });
   t.mock.method(units, "observe", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" }));
   const views = new ViewsModule(store, root, "crash", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "repos/project.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true },

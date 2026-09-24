@@ -1,13 +1,13 @@
 # MUST [PR-002,UNIT-001]: Host entry calls the existing broker, not another daemon.
 [Unit]
 Description=OMA @SOCIETY@ Principal mail relay
-Requires=oma-@SOCIETY@-broker.service
-After=oma-@SOCIETY@-broker.service
+Requires=@BROKER_UNIT@
+After=@BROKER_UNIT@
 StartLimitIntervalSec=60s
 StartLimitBurst=5
 [Service]
 Type=oneshot
-ExecStart=@NODE@ @LIBDIR@/dist/src/entry/host.js principal-relay --society @SOCIETY@
+ExecStart=@NODE@ @LIBDIR@/dist/src/entry/host.js principal-relay --society @SOCIETY@ --run-root @RUN_ARG@
 TimeoutStartSec=10s
 UMask=0077
 StandardOutput=journal

@@ -1,9 +1,9 @@
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { join } from "node:path";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { Store, SCHEMA_PATH } from "../store.js";
 import { MailModule } from "../mail.js";
-import { UnitsModule, UNIT_TPL_DIR } from "../units.js";
+import { UnitsModule, UNIT_TPL_DIR, unitName, assertUserManagerReachable } from "../units.js";
 import { ViewsModule } from "../views.js";
 import { LifecycleModule } from "../lifecycle.js";
 import { Broker } from "../broker.js";
@@ -17,23 +17,43 @@ import { createChildSpecResolver } from "../config/policy.js";
 import { ProcessLock, SOCIETY_OWNED_EXIT } from "../runtime/process-lock.js";
 import { claimSocietyFence } from "../runtime/society-lease.js";
 import { BrokerLifetime } from "../runtime/broker-lifetime.js";
-import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout } from "../runtime/assets.js";
+import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout, hostLaunchLocation, launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
 import { StorageAdmission } from "../storage/quota.js";
 import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
 
-function usage(): never { console.error("usage: broker.js --society <name> [--config <path>]"); process.exit(4); }
+function usage(): never {
+  console.error("usage: broker.js --society <name> [--config <path>] [--state-root <dir> --run-root <dir>]"); process.exit(4);
+}
 
 const args = process.argv.slice(2);
 const societyIdx = args.indexOf("--society"); const configIdx = args.indexOf("--config");
 if (societyIdx < 0 || args[societyIdx + 1] === undefined) usage();
 const society = args[societyIdx + 1]!;
 if (!isValidSocietyName(society)) usage();
-const stateRoot = join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/tmp", ".local", "share"), "oma", society);
-const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
-const configPath = configIdx >= 0 && args[configIdx + 1] !== undefined ? args[configIdx + 1]! : join(stateRoot, "config.json");
+// D03: a broker the product started is handed the product's location whole; a
+// broker started any other way is its own host and derives it once, here.
+let location: LaunchLocation;
+try {
+  location = args.includes("--state-root") || args.includes("--run-root")
+    ? launchedLocation(args, society)
+    : hostLaunchLocation(society, process.env, configIdx >= 0 ? args[configIdx + 1] : undefined);
+} catch (error) { console.error(`broker: ${error instanceof Error ? error.message : String(error)}`); usage(); }
+const { stateRoot, runRoot, configPath } = location;
+// D03: the lifetime dependency a Resident may name is the one that exists. Only
+// a broker systemd runs as the society's fixed unit is one a unit can bind to;
+// any other broker outlives no Resident it started, so its drain stops them.
+const brokerUnit = unitName(society, "broker", "service");
+const systemdManaged = process.env[HOST_CHANNEL_ENV] === undefined && ownServiceUnit() === brokerUnit;
+function ownServiceUnit(): string | null {
+  try {
+    const lines = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n");
+    const unified = lines.length === 1 && lines[0]!.startsWith("0::/") ? lines[0]!.slice(3) : null;
+    return unified === null ? null : unified.slice(unified.lastIndexOf("/") + 1);
+  } catch { return null; }
+}
 async function main(): Promise<void> {
   assertHostDirectoryLayout(runRoot, true);
   mkdirSync(runRoot, { recursive: true });
@@ -119,10 +139,12 @@ async function main(): Promise<void> {
     graceSeconds = cfg.limits.receiptWaitSeconds;
     const integrationPolicy = integrationPolicyFromConfig(cfg.integration);
     assertSupportedIntegration(snapshotIntegrationPolicy(integrationPolicy));
+    assertUserManagerReachable();
     const store = new Store(join(stateRoot, "runtime.sqlite"), undefined, { society });
     lifetime.retainStore(() => store.close());
     const mail = new MailModule({ stateRoot, society }, store, cfg.limits.replyReferences, cfg.limits.batchMaxMessages, cfg.limits);
-    const units = new UnitsModule(society, { node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society, agent: "" },
+    const units = new UnitsModule(society, { node: cfg.installation.node, libdir: cfg.installation.libdir, state: stateRoot, society, agent: "",
+      config: configPath, run: runRoot, brokerUnit: systemdManaged ? brokerUnit : "" },
       undefined, Object.fromEntries(Object.entries(cfg.agentProfiles).map(([name, profile]) => [name, profile.resources])),
       agent => store.getAgent(agent)?.incarnation ?? null);
     const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
@@ -153,7 +175,8 @@ async function main(): Promise<void> {
     // endpoint, and credentials leave only on the channel that host holds --
     // never through a file, an environment or this process's own output.
     const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile,
-      { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes, storage }, cfg.limits, lock,
+      { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes, storage,
+        ...(systemdManaged ? {} : { quiesceOnDrain: () => reconcile.quiesceForShutdown() }) }, cfg.limits, lock,
       principalHost);
     lifetime.attach(broker);
     const validateStoredProfiles = () => {

@@ -161,6 +161,11 @@ test("OPS config: runner entry selects the broker-rendered role at startup witho
         "worker",
         "--config",
         f.path,
+        // D03: a unit-started runner is handed the broker's roots explicitly.
+        "--state-root",
+        join(f.root, "data", "oma", "demo"),
+        "--run-root",
+        join(f.root, "run", "oma", "demo"),
       ],
       {
         env: {

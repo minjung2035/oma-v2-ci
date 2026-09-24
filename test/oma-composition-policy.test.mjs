@@ -120,6 +120,12 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     // only whether they pass, because what is under test here is when the
     // entry asks -- before it takes the society, and before it writes.
     "../runtime/assets.js": {
+      // The host decides the location once, from its own environment.
+      hostLaunchLocation: (society, env, configPath) => {
+        calls.push("hostLaunchLocation");
+        return { society, stateRoot: path.join(env.XDG_DATA_HOME, "oma", society), runRoot: path.join(env.XDG_RUNTIME_DIR, "oma", society),
+          configPath: configPath ?? path.join(env.XDG_DATA_HOME, "oma", society, "config.json") };
+      },
       assertHostDirectoryLayout: (root, allowMissing) => {
         calls.push(`assertHostDirectoryLayout:${root}`);
         assert.equal(allowMissing, true, "the run root was required to exist before it had been made");
@@ -242,6 +248,9 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         assert.equal("sessionHandle" in options, false, "a session handle was put where the broker's environment could carry it");
         // A broker without the fence can outlive the lease it writes under.
         assert.equal(options.fence, FENCE, "the broker was started without the society lease descriptor");
+        // D03: the broker is handed the host's whole location, not left to derive it.
+        assert.deepEqual([options.stateRoot, options.runRoot, options.configPath],
+          ["/state/oma/fixture", "/run/oma/fixture", "/state/oma/fixture/config.json"]);
         return broker.handle;
       },
     },

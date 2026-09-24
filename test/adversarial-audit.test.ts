@@ -119,7 +119,7 @@ function auth(actor = "a"): AuthContext {
 // ---------------------------------------------------------------------------
 
 test("AUD-1: unit renderer rejects unsafe values and escapes specifiers", () => {
-  const template = "[Service]\nExecStart=@NODE@ @LIBDIR@ @STATE@ @SOCIETY@ @AGENT@\n";
+  const template = "[Service]\nExecStart=@NODE@ @LIBDIR@ @STATE_ARG@ @SOCIETY@ @AGENT@\n[Path]\nDirectoryNotEmpty=@STATE@/new\n";
   assert.throws(
     () =>
       renderUnit(template, {
@@ -139,7 +139,13 @@ test("AUD-1: unit renderer rejects unsafe values and escapes specifiers", () => 
     agent: "a",
   });
   assert.match(rendered, /oma%%q/);
-  assert.match(rendered, /state\\x20with\\x20space/);
+  // An ExecStart word is C-unescaped by systemd; a path setting is read
+  // verbatim, so the same root is escaped for one and not the other.
+  assert.match(rendered, /^ExecStart=.* \/tmp\/state\\x20with\\x20space /m);
+  assert.match(rendered, /^DirectoryNotEmpty=\/tmp\/state with space\/new$/m);
+  assert.throws(() => renderUnit("DirectoryNotEmpty=@STATE@", {
+    node: "/usr/bin/node", libdir: "/opt/oma", state: " /tmp/leading", society: "demo", agent: "a",
+  }), /cannot be a systemd path setting/);
 });
 
 test("AUD-2: generated units preserve the fixed cgroup/lifecycle boundary", () => {
@@ -154,7 +160,11 @@ test("AUD-2: generated units preserve the fixed cgroup/lifecycle boundary", () =
   assert.match(resident, /^StartLimitBurst=5$/m);
   assert.match(resident, /^Type=exec$/m);
   // MUST [UNIT-002]: ExecStart is a fixed renderer template, not caller argv.
-  assert.match(resident, /^ExecStart=@NODE@ @LIBDIR@\/dist\/src\/entry\/runner\.js --society @SOCIETY@ --agent @AGENT@$/m);
+  // D03: it carries the broker's resolved launch location, never a default.
+  assert.match(resident, /^ExecStart=@NODE@ @LIBDIR@\/dist\/src\/entry\/runner\.js --society @SOCIETY@ --agent @AGENT@ --config @CONFIG_ARG@ --state-root @STATE_ARG@ --run-root @RUN_ARG@$/m);
+  // D03: the only lifetime dependency is the one the broker says exists.
+  assert.match(resident, /^BindsTo=@BROKER_UNIT@$/m);
+  assert.match(resident, /^After=@BROKER_UNIT@$/m);
   // Filesystem/network isolation is owned by the sandbox profile (SB-001/SB-002),
   // not by a systemd property; the unit must not widen it.
   assert.doesNotMatch(resident, /^(?:AmbientCapabilities|CapabilityBoundingSet|User|Group)=/m);
@@ -255,7 +265,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
     const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
     const units = new UnitsModule(
       "demo",
-      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "" },
+      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" },
       root,
     );
     const views = new ViewsModule(store, root, "demo", "p");
@@ -318,7 +328,7 @@ test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods
     );
     const units = new UnitsModule(
       "demo",
-      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "" },
+      { node: process.execPath, libdir: "/opt/oma", state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" },
       root,
     );
     const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);

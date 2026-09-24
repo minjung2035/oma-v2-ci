@@ -10,23 +10,27 @@ import { ensureDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
 import { hostSystemLayout } from "../runtime/resident-rootfs.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 
 function usage(): never {
-  console.error("usage: runner.js --society <name> --agent <name> [--config <path>]");
+  console.error("usage: runner.js --society <name> --agent <name> --config <path> --state-root <dir> --run-root <dir>");
   process.exit(4);
 }
 const args = process.argv.slice(2);
 const societyIdx = args.indexOf("--society");
 const agentIdx = args.indexOf("--agent");
-const configIdx = args.indexOf("--config");
 if (societyIdx < 0 || args[societyIdx + 1] === undefined) usage();
 if (agentIdx < 0 || args[agentIdx + 1] === undefined) usage();
 const society = args[societyIdx + 1]!;
 const agent = args[agentIdx + 1]!;
 if (!isValidSocietyName(society) || !isValidActorName(agent)) usage();
-const stateRoot = join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/tmp", ".local", "share"), "oma", society);
-const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
-const configPath = configIdx >= 0 && args[configIdx + 1] !== undefined ? args[configIdx + 1]! : join(stateRoot, "config.json");
+// D03: the unit carries the broker's resolved location. The user manager's
+// environment is not the product's, so deriving it here again would let this
+// runner read another configuration or serve another run root.
+let location: LaunchLocation;
+try { location = launchedLocation(args, society); }
+catch (error) { console.error(`runner: ${error instanceof Error ? error.message : String(error)}`); usage(); }
+const { stateRoot, runRoot, configPath } = location;
 const configuration = loadConfiguration(configPath);
 const cfg = configuration.config;
 if (cfg.society !== society) { console.error("runner: config society does not match the requested society"); process.exit(4); }

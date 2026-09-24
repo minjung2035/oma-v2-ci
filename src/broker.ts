@@ -37,6 +37,9 @@ export interface BrokerPaths {
   stateRoot: string; runRoot: string; society: string; hasGoal?: () => boolean; storageBytes?: number;
   /** The process's storage owner when composition shares it with recovery. */
   storage?: StorageAdmission;
+  /** D03: a broker no fixed unit binds its Residents to stops them itself on
+   * drain, after every dispatched task settles and before its Store closes. */
+  quiesceOnDrain?: () => void;
 }
 
 /** PR-001: a broker no host started opens no Principal endpoint at all, so
@@ -429,6 +432,10 @@ export class Broker {
     this.closeAdmission();
     this.closing = (async () => {
       await settleWithin([...(this.starting ? [this.starting] : []), ...this.executingTasks, ...this.listenerCloses], this.limits.receiptWaitSeconds);
+      // Stop what nothing else will stop while the incarnations that prove
+      // each death are still readable; a failure is reported, not a reason to
+      // leave the Store and lock held.
+      try { this.paths.quiesceOnDrain?.(); } catch (error) { this.cleanupError(error); }
       // No Store or pinned lease closes before all dispatched task owners settle.
       try { this.runLeases.close(); } catch (error) { this.cleanupError(error); }
       this.actorServers.clear(); this.store.close();

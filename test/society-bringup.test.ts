@@ -74,7 +74,7 @@ test("T115 a broker already listening is left alone rather than started twice", 
       assert.equal(await brokerListening(root), true);
       const handle = await superviseBroker({
         node: process.execPath, libdir: root, society: "probe",
-        runRoot: root, configPath: join(root, "config.json"),
+        stateRoot: root, runRoot: root, configPath: join(root, "config.json"),
       });
       assert.equal(handle.state.kind, "already-running");
       // Stopping must be a no-op: this handle did not start that broker.
@@ -95,7 +95,7 @@ test("T115 an absent broker is reported as absent, not assumed running", async (
     const events: string[] = [];
     const handle = await superviseBroker({
       node: process.execPath, libdir: join(root, "missing"), society: "probe",
-      runRoot: root, configPath: join(root, "config.json"),
+      stateRoot: root, runRoot: root, configPath: join(root, "config.json"),
       onEvent: line => { events.push(line); },
     });
     assert.equal(handle.state.kind, "started", "a spawn attempt is still a started process");
@@ -355,7 +355,7 @@ function supervise(root: string, libdir: string, extra: Record<string, unknown> 
   return {
     events,
     handle: superviseBroker({
-      node: process.execPath, libdir, society: "probe", runRoot: root,
+      node: process.execPath, libdir, society: "probe", stateRoot: root, runRoot: root,
       configPath: join(root, "config.json"), onEvent: line => { events.push(line); }, ...extra,
     }),
   };
@@ -544,13 +544,13 @@ test("T119/REC-007 the broker the product starts is handed the society lease and
       'let fence = "none";',
       `try { const s = fstatSync(${SOCIETY_FENCE_FD}, { bigint: true }); fence = s.dev + ":" + s.ino; }`,
       ' catch (error) { fence = "none:" + error.code; }',
-      `const body = JSON.stringify({ declared: process.env.${SOCIETY_FENCE_ENV} ?? null, fence });`,
+      `const body = JSON.stringify({ declared: process.env.${SOCIETY_FENCE_ENV} ?? null, fence, argv: process.argv.slice(2) });`,
       `writeFileSync(${JSON.stringify(report)} + ".tmp", body);`,
       `renameSync(${JSON.stringify(report)} + ".tmp", ${JSON.stringify(report)});`,
     ].join("\n"));
     const handle = await superviseBroker({
       node: process.execPath, libdir: join(root, "lib"), society: "probe",
-      runRoot: root, configPath: join(root, "config.json"), fence: lease.fence,
+      stateRoot: root, runRoot: root, configPath: join(root, "config.json"), fence: lease.fence,
     });
     try {
       const deadline = Date.now() + 20_000;
@@ -558,7 +558,11 @@ test("T119/REC-007 the broker the product starts is handed the society lease and
         if (Date.now() >= deadline) throw new Error("the broker the supervisor started never reported");
         await new Promise<void>(resolve => { setTimeout(resolve, 20).unref(); });
       }
-      const answer = JSON.parse(readFileSync(report, "utf8")) as { declared: string | null; fence: string };
+      const answer = JSON.parse(readFileSync(report, "utf8")) as { declared: string | null; fence: string; argv: string[] };
+      // D03: the broker is handed the host's whole launch location, so it and
+      // every unit it renders use exactly these, not ones re-derived from env.
+      assert.deepEqual(answer.argv, ["--society", "probe", "--config", join(root, "config.json"),
+        "--state-root", root, "--run-root", root]);
       assert.equal(answer.declared, String(SOCIETY_FENCE_FD),
         "the broker was handed the lease without being told which descriptor it is on");
       assert.equal(answer.fence, `${held.dev}:${held.ino}`,
@@ -797,7 +801,7 @@ test("T115 the audit's orphan -- a host killed outright takes its broker with it
   const host = spawn(process.execPath, ["--input-type=module", "-e", `
     const { superviseBroker } = await import(${JSON.stringify(supervisor)});
     const broker = await superviseBroker({ node: process.execPath, libdir: ${JSON.stringify(libdir)}, society: "probe",
-      runRoot: ${JSON.stringify(root)}, configPath: ${JSON.stringify(join(root, "config.json"))}, maxRestarts: 0 });
+      stateRoot: ${JSON.stringify(root)}, runRoot: ${JSON.stringify(root)}, configPath: ${JSON.stringify(join(root, "config.json"))}, maxRestarts: 0 });
     broker.onReady(() => process.stdout.write(String(broker.state.pid) + "\\n"));
     setInterval(() => {}, 1000);
   `], { stdio: ["ignore", "pipe", "inherit"] });

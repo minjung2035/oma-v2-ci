@@ -13,7 +13,7 @@ export function lifecycleFixture(root: string, store: Store) {
   const society = `bc${sha256Hex(root).slice(0, 20)}`;
   const frozen = makeValidResolvedSpec("child");
   const units = new UnitsModule(society, {
-    node: process.execPath, libdir: process.cwd(), state: root, society, agent: "",
+    node: process.execPath, libdir: process.cwd(), state: root, society, agent: "", config: join(root, "config.json"), run: join(root, "oma", society), brokerUnit: ""
   }, join(root, "units"), { p: frozen.resources });
   const mail = new MailModule({ stateRoot: root, society }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS);
   const lifecycle = new LifecycleModule(store, units, {

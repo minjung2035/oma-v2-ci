@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { isValidSocietyName } from "../ids.js";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
-import { assertHostDirectoryLayout } from "../runtime/assets.js";
+import { assertHostDirectoryLayout, hostLaunchLocation } from "../runtime/assets.js";
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
@@ -69,9 +69,10 @@ async function main(argv: readonly string[]): Promise<void> {
   // in a checkout just works and two checkouts stay separate.
   const society = argOf(argv, "--society") ?? societyFromDirectory(process.cwd());
   if (!isValidSocietyName(society)) usage();
-  const stateRoot = join(process.env.XDG_DATA_HOME ?? join(process.env.HOME ?? "/tmp", ".local", "share"), "oma", society);
-  const runRoot = join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "oma", society);
-  const configPath = argOf(argv, "--config") ?? join(stateRoot, "config.json");
+  // D03: this is where the society's location is decided; everything this
+  // process starts is handed it rather than deriving its own.
+  const location = hostLaunchLocation(society, process.env, argOf(argv, "--config"));
+  const { stateRoot, runRoot, configPath } = location;
 
   // TUI-004/REC-007: before a byte of this society's state is written and
   // before any broker is started, this process either owns the society or it
@@ -256,7 +257,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // able to write to the society keeps the society from changing hands.
   broker = tenure === null ? null : await superviseBroker({
     node: process.execPath, libdir: settings.config.installation.libdir,
-    society, runRoot, configPath, fence: tenure.fence,
+    society, stateRoot, runRoot, configPath, fence: tenure.fence,
     onEvent: line => { app.line(`broker: ${line}`); app.draw(); },
   });
   // OMA runs the engine it shipped with; it never resolves Pi from PATH, and it

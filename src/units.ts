@@ -16,6 +16,28 @@ export const UNIT_TPL_DIR = fileURLToPath(new URL("../../implementation/systemd"
 export const INSTALL_DIR = join(process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? "/tmp", ".config"), "systemd", "user");
 export type IncarnationReader = (agent: Actor) => number | null;
 
+/** The words of a rendered ExecStart as `systemctl show` reports them: the
+ * renderer escapes every separator inside a value, so a space separates words;
+ * the manager has undone C escapes and specifiers, while `$$` stays until the
+ * command is executed (observed on systemd 257). */
+export function renderedExecArgv(rendered: string): string[] | null {
+  const line = /^ExecStart=(.*)$/m.exec(rendered)?.[1];
+  if (line === undefined) return null;
+  return line.split(" ").filter(word => word !== "").map(word =>
+    word.replace(/\\x([0-9a-f]{2})|%%/g, (match, hex: string | undefined) =>
+      hex !== undefined ? String.fromCharCode(parseInt(hex, 16)) : "%"));
+}
+
+/** D03: every unit effect goes through the user manager this process can
+ * reach. A broker whose environment reaches none (a runtime directory that is
+ * not the manager's, no user bus) supports no Resident activation, and says so
+ * before it opens its Store rather than failing mid-recovery. */
+export function assertUserManagerReachable(): void {
+  const outcome = executeUnitCommand("systemctl", ["--user", "show", "--property=Version", "--value"]);
+  if (outcome.kind !== "succeeded" || outcome.stdout.trim() === "")
+    throw new StoreError("UNSUPPORTED_PROFILE", "the systemd user manager is not reachable from this broker's environment");
+}
+
 export class UnitsModule {
   onRevokeRun: ((agent: Actor) => void) | undefined;
   private incarnationOf: IncarnationReader | null;
@@ -59,6 +81,15 @@ export class UnitsModule {
     const fragment = this.run(["show", name, "--property=FragmentPath", "--value"]);
     if (!fragment || realpathSync(fragment) !== realpathSync(target) || this.run(["show", name, "--property=DropInPaths", "--value"]) !== "")
       throw new StoreError("UNSUPPORTED_PROFILE", `unit source differs from rendered contract: ${name}`);
+    // D03/WP03.04: the argv the manager will execute is the rendered one. A
+    // quoting or specifier the manager reads differently would hand a runner a
+    // location the broker never resolved.
+    const exec = renderedExecArgv(rendered);
+    if (exec !== null) {
+      const effective = /(?:^|\s)argv\[\]=(.*?) ; ignore_errors=/.exec(this.run(["show", name, "--property=ExecStart", "--value"]));
+      if (effective?.[1] !== exec.join(" "))
+        throw new StoreError("UNSUPPORTED_PROFILE", `${name} effective ExecStart differs from its rendered argv`);
+    }
     for (const [property, expected] of [["MemoryMax", overrides.memoryBytes], ["TasksMax", overrides.tasks]] as const) {
       if (expected !== undefined && this.run(["show", name, `--property=${property}`, "--value"]) !== String(expected))
         throw new StoreError("UNSUPPORTED_PROFILE", `${name} effective ${property} mismatch`);

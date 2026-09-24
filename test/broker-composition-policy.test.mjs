@@ -14,8 +14,8 @@ import ts from "typescript";
  * and a stand-in that does would run the rest of a function the product ended. */
 class Exited extends Error {}
 
-async function compose(environment, { lockHeld = true, claim = "taken",
-  starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" } = {}) {
+async function compose(environment, { lockHeld = true, claim = "taken", cgroup = "0::/user.slice/app.slice/oma.scope",
+  argv = ["--society", "fixture"], starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" } = {}) {
   const source = readFileSync(new URL("../src/entry/broker.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -26,16 +26,19 @@ async function compose(environment, { lockHeld = true, claim = "taken",
   const calls = [], paths = [], exits = [], observation = { value: true, error: null };
   let supervision = null;
   let constructorGoal;
+  let unitValues = null;
   const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
     quota: { storageBytes: 1024 }, integration: { checks: [] }, limits: { receiptWaitSeconds: 1 }, agentProfiles: {}, modelProfiles: {} };
   const modules = {
     "node:path": path,
-    "node:fs": { mkdirSync() {} },
+    "node:fs": { mkdirSync() {}, readFileSync: file => { assert.equal(file, "/proc/self/cgroup"); return `${cgroup}\n`; } },
     "../store.js": { SCHEMA_PATH: "schema", Store: class {
       constructor() { calls.push("Store"); } close() {} listAgents() { return []; } getAgent() { return null; }
     } },
     "../mail.js": { MailModule: class { constructor() { calls.push("Mail"); } } },
-    "../units.js": { UNIT_TPL_DIR: "units", UnitsModule: class { constructor() { calls.push("Units"); } } },
+    "../units.js": { UNIT_TPL_DIR: "units", unitName: (society, agent, kind) => `oma-${society}-${agent}.${kind}`,
+      assertUserManagerReachable() { calls.push("manager"); },
+      UnitsModule: class { constructor(_society, values) { calls.push("Units"); unitValues = values; } } },
     "../views.js": { ViewsModule: class {
       constructor() { calls.push("Views"); } refreshWorld() { calls.push("refresh"); }
     } },
@@ -93,7 +96,11 @@ async function compose(environment, { lockHeld = true, claim = "taken",
       async start(phases) { await phases.recover(); await phases.listen(); await phases.notify(); await phases.activate(); }
     } },
     // Deliberately controlled qualification gates: this is wiring proof, not a supported deployment profile.
-    "../runtime/assets.js": { assertHostDirectoryLayout() {}, assertRuntimeAssets() {}, runtimeAssets: () => ({}) },
+    "../runtime/assets.js": { assertHostDirectoryLayout() {}, assertRuntimeAssets() {}, runtimeAssets: () => ({}),
+      hostLaunchLocation: (society, _env, configPath) => ({ society, stateRoot: `/data/oma/${society}`, runRoot: `/run/oma/${society}`,
+        configPath: configPath ?? `/data/oma/${society}/config.json` }),
+      launchedLocation: (args, society) => ({ society, configPath: args[args.indexOf("--config") + 1],
+        stateRoot: args[args.indexOf("--state-root") + 1], runRoot: args[args.indexOf("--run-root") + 1] }) },
     "../runtime/deployment-manifest.js": { assertDeploymentDigest() { calls.push("digest"); } },
     "../storage/quota.js": { StorageAdmission: class { admit() { calls.push("storage-quota"); return () => undefined; } reserve() { return () => undefined; } } },
     "../authority.js": { resolvedSpecOf: value => value },
@@ -106,7 +113,7 @@ async function compose(environment, { lockHeld = true, claim = "taken",
       return { hostPid: 4242, ready() {}, grant() {}, refuse() {}, onSession() {} };
     } },
   };
-  const process = { argv: ["node", "broker", "--society", "fixture"], env: { ...(environment ?? {}) }, exitCode: 0, once() {},
+  const process = { argv: ["node", "broker", ...argv], env: { ...(environment ?? {}) }, exitCode: 0, once() {},
     exit(code) { exits.push(code); throw new Exited(`exit(${code})`); } };
   await new Script(executable, { filename: "broker-composition.cjs" }).runInNewContext({
     exports: {}, process, console: { error() {} }, require(name) {
@@ -118,8 +125,34 @@ async function compose(environment, { lockHeld = true, claim = "taken",
     assert.deepEqual(exits, [], "the entrypoint ended the process on a society it does own");
     assert.equal(process.exitCode, 0, "entrypoint must complete without the startup failure path");
   }
-  return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode };
+  return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, unitValues };
 }
+
+test("D03 composition: a broker no fixed unit runs renders unbound Residents at its location and stops them on drain", async () => {
+  const product = await compose({ OMA_HOST_CHANNEL: "3" }, { claim: "inherited", cgroup: "0::/user.slice/user@1.service/app.slice/oma-fixture-broker.service",
+    argv: ["--society", "fixture", "--config", "/c/x.json", "--state-root", "/s/oma/fixture", "--run-root", "/r/oma/fixture"] });
+  // A product child is never the fixed unit, whatever cgroup it happens to be in.
+  assert.equal(product.unitValues.brokerUnit, "");
+  assert.deepEqual([product.unitValues.config, product.unitValues.state, product.unitValues.run], ["/c/x.json", "/s/oma/fixture", "/r/oma/fixture"]);
+  const options = product.paths.find(entry => "principalHost" in entry);
+  assert.equal(typeof options.quiesceOnDrain, "function");
+  assert.equal(options.stateRoot, "/s/oma/fixture");
+  // The manager is asked before the Store is opened.
+  assert.ok(product.calls.indexOf("manager") >= 0 && product.calls.indexOf("manager") < product.calls.indexOf("Store"));
+  const manual = await compose();
+  assert.equal(manual.unitValues.brokerUnit, "");
+  assert.equal(manual.unitValues.config, "/data/oma/fixture/config.json");
+});
+
+test("D03 composition: only a broker running as the society's fixed unit binds its Residents to it", async () => {
+  const managed = await compose(undefined, { cgroup: "0::/user.slice/user@1.service/app.slice/oma-fixture-broker.service" });
+  assert.equal(managed.unitValues.brokerUnit, "oma-fixture-broker.service");
+  assert.equal(managed.paths.find(entry => "principalHost" in entry).quiesceOnDrain, undefined);
+  for (const cgroup of ["0::/user.slice/app.slice/oma-other-broker.service", "12:pids:/x\n0::/y/oma-fixture-broker.service", "garbage"]) {
+    const other = await compose(undefined, { cgroup });
+    assert.equal(other.unitValues.brokerUnit, "", cgroup);
+  }
+});
 
 test("P1 composition root: Git exists when Lifecycle receives its context reader", async () => {
   const result = await compose();

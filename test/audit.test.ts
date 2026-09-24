@@ -232,7 +232,7 @@ function brokerEnv(): BrokerEnv {
       libdir: "/usr/lib/oma",
       state,
       society,
-      agent: "",
+      agent: "", config: join(state, "config.json"), run: join(state, "oma", society), brokerUnit: ""
     },
     join(dir, "xdg"),
   );
@@ -652,7 +652,7 @@ test("C1: two concurrent git.submit uploads over the real actor channel — conn
           `Environment=OMA_BASE=${base}`,
           `Environment=OMA_EXPORT_REF=${envRef(name)}`,
           `Environment=HOME=${env.dir}`,
-          `ExecStart=/usr/bin/node ${helperPath}`,
+          `ExecStart=${process.execPath} ${helperPath}`,
           "[Install]",
           "WantedBy=default.target",
           "",
@@ -877,7 +877,9 @@ function minimalConfig(society: string): Record<string, unknown> {
       principalReservedUnits: 100,
       inferenceSlots: 1,
       principalReservedSlots: 1,
-      storageBytes: 1,
+      // D04/WP22: startup stops only past the settlement headroom, so a fresh
+      // society needs a quota its seeded repository and Store actually fit in.
+      storageBytes: 1024 * 1024 * 1024,
     },
     integration: { policyRevision: "1", protectedPaths: [], checks: [] },
     limits: {
@@ -1074,7 +1076,9 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
       JSON.stringify({ ...cfg, society: `${society}x` }),
     );
     for (const name of ["broker", "runner"]) {
-      const args = name === "runner" ? ["--agent", "child"] : [];
+      // A unit-started runner is handed the broker's location explicitly.
+      const args = name === "runner" ? ["--agent", "child", "--config", join(state, "config.json"),
+        "--state-root", state, "--run-root", join(dir, "run", "oma", society)] : [];
       const rejected = spawnSync(
         process.execPath,
         [
@@ -1398,7 +1402,9 @@ test("D2: startup recovery failure -> no READY, exit 1, nothing served", async (
       });
     });
     assert.equal(exitCode, 1, "broker must exit non-zero on startup failure");
-    assert.match(stderr, new RegExp(`object missing for ${missingMessage}`));
+    // The immutable object is what is absent: the corruption is reported as a
+    // missing file, not as a malformed plan.
+    assert.match(stderr, /STORE_CORRUPT: immutable file is missing/);
     const events = existsSync(notifyLog) ? readFileSync(notifyLog, "utf8") : "";
     assert.equal(events.includes("READY=1"), false, "READY must never be sent");
     assert.equal(

@@ -53,7 +53,7 @@ function envOf(): { env: Env; cleanup: () => void } {
   mkdirSync(state, { recursive: true });
   const store = new Store(join(state, "runtime.sqlite"));
   const units = new UnitsModule(society,
-    { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "" },
+    { node: NODE, libdir: "/usr/lib/oma", state, society, agent: "", config: join(state, "config.json"), run: join(state, "oma", society), brokerUnit: "" },
     join(xdg, "systemd", "user"), { p: TEST_RESOURCES, child: TEST_RESOURCES });
   // Batch views require the host-configured frame and manifest limits; without
   // them the preparation boundary fails closed with UNSUPPORTED_PROFILE.
