@@ -13,7 +13,7 @@ import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
 import { runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
-import { PiRpcClient, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
+import { PiRpcClient, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
 import { loadConfiguration } from "../config.js";
@@ -141,6 +141,10 @@ export interface SessionSink {
    * the Principal never got -- and nothing to resend it from. The text comes
    * back with the failure so the surface can give it back. */
   readonly onPromptFailed: (text: string, reason: string) => void;
+  /** D06/WP09: a Human prompt that was written, but whose acceptance the
+   * engine never answered before the session ended. It is not handed back as
+   * unsent and never resent automatically: the engine may have taken it. */
+  readonly onPromptUnconfirmed?: (text: string, reason: string) => void;
 }
 
 /** Mirrors the Resident adapter's discovery blocking. A flag removed here would
@@ -294,6 +298,8 @@ export class PrincipalSession {
    * never accepted and that no run will start or settle for it. At most one is
    * outstanding, because a prompt is only ever written to an idle engine. */
   private unanswered: { readonly id: string; readonly role: "human" | "delivery"; readonly text: string } | null = null;
+  /** Set once the unsent prompts have been handed back. */
+  private handedBack = false;
 
   /** Resolves when the operating system has reaped the engine, not when this
    * process asked it to stop. `close()` sends a signal; a teardown that took
@@ -315,10 +321,13 @@ export class PrincipalSession {
     this.rpc.onEvent(event => this.observe(event));
     void this.rpc.completion.then(result => {
       this.closed = true;
-      this.sink.onBusy(false);
-      this.sink.onEnd(result.state === "failed"
+      const reason = result.state === "failed"
         ? `세션이 오류로 종료되었습니다: ${result.error instanceof Error ? result.error.message : String(result.error)}`
-        : "세션이 종료되었습니다.");
+        : "세션이 종료되었습니다.";
+      this.handBack(reason);
+      this.owner = null;
+      this.sink.onBusy(false);
+      this.sink.onEnd(reason);
     });
   }
 
@@ -376,17 +385,36 @@ export class PrincipalSession {
   /** The run is over. A Human prompt that was waiting takes the session here,
    * synchronously, so nothing can start between the two steps. */
   private free(): void {
+    if (this.closed) return;
     this.unanswered = null;
     const next = this.waiting.shift();
     if (next === undefined) { this.own(null); return; }
     this.own("human");
-    void this.sendPrompt(this.nextRequestId(), next, "human").catch((error: unknown) => {
-      // The Human is told which of their prompts was not sent, with its text,
-      // so it can be given back; the rest still go, in order, rather than
-      // disappearing with it.
-      this.sink.onPromptFailed(next, messageOf(error));
+    this.write(next);
+  }
+
+  /** Writes one Human prompt the session already belongs to. A prompt refused
+   * before any byte was written is handed back and the next one goes; one
+   * whose write began and failed ended the transport, so the session's end
+   * reports it as unconfirmed rather than unsent (D06). */
+  private write(text: string): void {
+    void this.sendPrompt(this.nextRequestId(), text, "human").catch((error: unknown) => {
+      if (!commandWasNotWritten(error)) return;
+      this.sink.onPromptFailed(text, messageOf(error));
       this.release("human");
     });
+  }
+
+  /** D06/WP09: once, when the session ends or is closed. Waiting prompts were
+   * never written: each goes back, in the order typed. A written prompt the
+   * engine never answered is reported apart and is not resent. */
+  private handBack(reason: string): void {
+    if (this.handedBack) return;
+    this.handedBack = true;
+    const unanswered = this.unanswered;
+    this.unanswered = null;
+    if (unanswered !== null && unanswered.role === "human") this.sink.onPromptUnconfirmed?.(unanswered.text, reason);
+    for (const text of this.waiting.splice(0)) this.sink.onPromptFailed(text, reason);
   }
 
   private nextRequestId(): string {
@@ -398,7 +426,12 @@ export class PrincipalSession {
   private async sendPrompt(id: string, message: string, role: "human" | "delivery"): Promise<void> {
     this.unanswered = { id, role, text: message };
     try { await this.rpc.send({ id, type: "prompt", message }); }
-    catch (error) { this.unanswered = null; throw error; }
+    catch (error) {
+      // Only a command that was provably not written is no longer awaiting an
+      // answer; after a partial write acceptance stays unknown.
+      if (commandWasNotWritten(error) && this.unanswered?.id === id) this.unanswered = null;
+      throw error;
+    }
   }
 
   get running(): boolean { return !this.closed; }
@@ -433,13 +466,20 @@ export class PrincipalSession {
       throw new StoreError("BATCH_CONFLICT", "the principal session is already spoken for");
     this.own("delivery");
     try { await this.sendPrompt(batchId, `/oma-deliver ${batchId}`, "delivery"); }
-    catch (error) { this.release("delivery"); throw error; }
+    catch (error) {
+      // A command that was never written starts no run; any other failure
+      // ended the transport, and the claim ends with the session.
+      if (commandWasNotWritten(error)) this.release("delivery");
+      throw error;
+    }
   }
 
   /** Gives the session back if this owner still holds it, and lets whatever
-   * the Human has waiting take it. A run that never settles -- a delivery
-   * nobody answered, a prompt the engine refused -- would otherwise keep the
-   * session for good. */
+   * the Human has waiting take it. D06/WP09: only for a run that provably did
+   * not start -- a command refused before it was written, or refused by the
+   * engine. An unanswered command is not one: its run may be going, and
+   * handing the session to a waiting Human prompt would put that prompt into
+   * it. Settlement, refusal or the session's end ends that claim. */
   release(owner: "human" | "delivery"): void {
     if (this.owner === owner) this.free();
   }
@@ -472,15 +512,15 @@ export class PrincipalSession {
       return { kind: "accepted" };
     }
     this.own("human");
-    void this.sendPrompt(this.nextRequestId(), text, "human").catch((error: unknown) => {
-      this.sink.onPromptFailed(text, messageOf(error));
-      this.release("human");
-    });
+    this.write(text);
     return { kind: "accepted" };
   }
 
+  /** Quitting hands back what never reached the engine before the transport
+   * closes; the completion that follows finds nothing left to hand back. */
   close(): void {
     if (this.closed) return;
+    this.handBack("세션을 닫았습니다.");
     this.closed = true;
     this.rpc.close();
   }

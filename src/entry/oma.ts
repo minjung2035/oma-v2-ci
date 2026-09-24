@@ -352,10 +352,14 @@ async function main(argv: readonly string[]): Promise<void> {
       limitsOf(settings.config.limits),
       principalEnvironment({ stateRoot, runRoot, libdir: settings.config.installation.libdir }, profile, settings.config.limits),
       {
+        // WP09.03: every callback is this engine's; a late one from an engine
+        // that is no longer the session cannot clear or re-mark its successor.
         onLine: line => app.line(line),
-        onBusy: busy => app.setBusy(busy),
-        onEnd: reason => { session = null; owner.engineEnded(); app.line(reason); },
+        onBusy: busy => { if (session === started) app.setBusy(busy); },
+        onEnd: reason => { if (session === started) session = null; owner.engineEnded(); app.line(reason); },
         onPromptFailed: (text, reason) => app.returnPrompt(text, reason),
+        onPromptUnconfirmed: (_text, reason) =>
+          app.line(`⚠ 보낸 입력을 엔진이 받았는지 확인하지 못했습니다(자동으로 다시 보내지 않음): ${reason}`),
       },
     );
     app.line(`OMA · society ${society}. Ctrl+X 로 관리 화면을 엽니다.`);
@@ -444,7 +448,6 @@ async function main(argv: readonly string[]): Promise<void> {
       get busy() { return live.busy; },
       onEvent: (listener: (event: PiEvent) => void) => live.onEvent(listener),
       deliver: (batchId: string) => live.deliver(batchId),
-      release: () => { live.release("delivery"); },
     }, principalHostBroker(runRoot, settings.config.limits), {
       stateRoot, frameBytes: settings.config.limits.frameBytes,
       acceptMs: settings.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60_000,

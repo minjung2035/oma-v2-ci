@@ -804,3 +804,4 @@ test("WP15.03: a save whose configuration cannot be read back is reported as sav
   assert.equal(limit.value, "?", "the old value was still shown as the configuration");
   assert.match(limit.blocked, /다시 읽지 못함/);
 });
+

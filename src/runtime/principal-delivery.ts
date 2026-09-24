@@ -36,10 +36,11 @@ export interface DeliverySession {
   readonly busy: boolean;
   onEvent(listener: (event: PiEvent) => void): () => void;
   /** Claims the session and asks the extension to present the batch. Throws
-   * `BATCH_CONFLICT` if the session was claimed in the meantime. */
+   * `BATCH_CONFLICT` if the session was claimed in the meantime. The session
+   * itself gives the claim back when the command provably started no run (not
+   * written, or refused by the engine); D06/WP09: nothing else may, because an
+   * unanswered command's run may be going. */
   deliver(batchId: string): Promise<void>;
-  /** Gives the claim back when a delivery ends without a settled turn. */
-  release(): void;
 }
 
 /** The broker's two delivery methods, as the host calls them. */
@@ -198,12 +199,11 @@ export class PrincipalDelivery {
           (message as Record<string, unknown>).role === "assistant")
           lastStop = String((message as Record<string, unknown>).stopReason ?? "");
       }
-      if (event.type === "agent_settled") { settled = true; everSettled = true; }
+      if (event.type === "agent_settled") settled = true;
       const decoded = boundaryOf(event, batch);
       if (decoded) boundary = decoded;
       wake();
     });
-    let everSettled = false;
     try {
       enter("claim");
       await this.session.deliver(batch.id);
@@ -235,10 +235,10 @@ export class PrincipalDelivery {
       enter("receipt");
       return publishDeliveryReceipt(this.options.stateRoot, batch, confirmed, this.options.frameBytes);
     } finally {
+      // D06/WP09: an unanswered or unsettled delivery keeps the session. Its
+      // run may be going; only settlement, the engine's refusal or the
+      // session's end gives the claim back, never this owner's timeout.
       unsubscribe();
-      // A delivery that ended without a settled turn still holds the session;
-      // give it back so the Human and the next batch are not locked out.
-      if (!everSettled) this.session.release();
     }
   }
 }

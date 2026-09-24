@@ -45,7 +45,6 @@ function scene() {
         emit({ type: "agent_settled" } as PiEvent);
       });
     },
-    release: () => { claimed = false; },
   };
   return { root, sessionPath, counts, session, close: () => rmSync(root, { recursive: true, force: true }) };
 }

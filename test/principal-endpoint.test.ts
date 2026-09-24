@@ -37,7 +37,7 @@ import { processIdentity, type ProcessIdentity } from "../src/broker/process-anc
 import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "../src/runtime/principal-delivery.js";
 import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
 import { sessionDirPathAt } from "../src/storage/paths.js";
-import type { PiEvent } from "../src/runtime/pi-rpc.js";
+import { PiRpcClient, commandWasNotWritten, type PiEvent } from "../src/runtime/pi-rpc.js";
 
 const LIMITS: ProtocolLimits = {
   frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64,
@@ -472,7 +472,6 @@ function sessionOf(engine: Engine): DeliverySession {
       owner = "delivery";
       engine.send({ op: "prompt", id: batchId, message: `/oma-deliver ${batchId}` });
     },
-    release: () => { if (owner === "delivery") owner = null; },
   };
 }
 
@@ -579,7 +578,7 @@ test("T114 / PR-002: delivery waits for an idle session rather than landing insi
   try {
     const calls: string[] = [];
     const delivery = new PrincipalDelivery(
-      { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); }, release: () => { calls.push("release"); } },
+      { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); } },
       { prepare: async () => { calls.push("prepare"); return ONE_BATCH; }, complete: async () => { calls.push("complete"); } },
       { stateRoot: root, frameBytes: LIMITS.frameBytes, acceptMs: 1000, retryAfterMs: 1000 },
     );
@@ -602,7 +601,7 @@ test("V08B: a busy or replaced session still settles an already-produced boundar
     const calls: string[] = [];
     const completed: Record<string, unknown>[] = [];
     const delivery = new PrincipalDelivery(
-      { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); }, release: () => { calls.push("release"); } },
+      { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); } },
       { prepare: async () => ONE_BATCH, complete: async evidence => { calls.push("complete"); completed.push({ ...evidence }); } },
       { stateRoot: root, frameBytes: LIMITS.frameBytes, acceptMs: 1000, retryAfterMs: 1000 },
     );
@@ -646,6 +645,21 @@ test("T114: provisioning creates the directories the Principal's engine and its 
  * events go through the session's own handler -- the one the constructor
  * installs -- so the ownership rules are exercised exactly as the product
  * applies them and not as a test re-states them. */
+/** A rejection the real Pi transport makes before writing a byte: an
+ * oversized command, taken from a live client over a real child. Only the
+ * transport can mark a command as not written. */
+async function unwrittenRejection(): Promise<Error> {
+  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: ["pipe", "pipe", "pipe"] });
+  const client = new PiRpcClient(child as never, { ...LIMITS, frameBytes: 64 });
+  try {
+    await client.send({ type: "prompt", message: "x".repeat(128) });
+    throw new Error("an oversized command was written");
+  } catch (error) {
+    assert.ok(commandWasNotWritten(error));
+    return error as Error;
+  } finally { client.close(); child.kill("SIGKILL"); }
+}
+
 function reservedSession(refuse?: (message: Record<string, unknown>) => Error | null): {
   readonly session: PrincipalSession;
   readonly sent: Record<string, unknown>[];
@@ -813,7 +827,8 @@ test("T114 / PR-002: a prompt the transport cannot carry stops the screen saying
   // Admission is answered in the call; the write is not, and cannot be. A
   // transport that fails after the prompt was admitted is reported where every
   // other failed write is -- on the screen -- and the claim comes back with it.
-  const { session, failed, busy } = reservedSession(() => new StoreError("FRAME_TOO_LARGE", "Pi command exceeds the configured frame bound"));
+  const refusal = await unwrittenRejection();
+  const { session, failed, busy } = reservedSession(() => refusal);
   assert.deepEqual(session.submit("x".repeat(64)), { kind: "accepted" });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(session.busy, false);
@@ -824,13 +839,26 @@ test("T114 / PR-002: a prompt the transport cannot carry stops the screen saying
     "the cause is carried bare, so the surface can say where the text went without being cut off");
 });
 
+test("V09B: a write that failed after it began is not handed back as unsent and does not free the session", async () => {
+  // D06: once bytes may have reached the engine, the prompt's acceptance is
+  // unknown. The transport ended with the failure; the session's end reports
+  // it as unconfirmed, and never as a draft to retype and resend.
+  const { session, failed, busy } = reservedSession(() => new StoreError("DEADLINE_EXCEEDED", "Pi stdin write deadline exceeded"));
+  assert.deepEqual(session.submit("maybe taken"), { kind: "accepted" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(failed, [], "a possibly-written prompt was handed back as unsent");
+  assert.equal(session.busy, true, "the claim was given up while the prompt's run may be going");
+  assert.deepEqual(busy, [true]);
+});
+
 test("T114 / PR-002: the waiting prompt that could not be sent is named, and the rest still go", async () => {
   // The defect this pins: three prompts typed while the engine was busy are
   // all echoed as taken, one of their writes later fails, and the screen says
   // only that "the input" could not be sent. Which one? What did it say? The
   // Human could not tell, and had nothing left to resend it from.
+  const refusal = await unwrittenRejection();
   const { session, sent, failed, emit } = reservedSession(
-    message => (message.message === "second" ? new StoreError("PRINCIPAL_DISCONNECTED", "socket closed") : null));
+    message => (message.message === "second" ? refusal : null));
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
   for (const text of ["first", "second", "third"]) assert.deepEqual(session.submit(text), { kind: "accepted" });
 
@@ -840,7 +868,7 @@ test("T114 / PR-002: the waiting prompt that could not be sent is named, and the
   emit(settled);
   await new Promise(resolve => setImmediate(resolve));
 
-  assert.deepEqual(failed, [{ text: "second", reason: "socket closed" }],
+  assert.deepEqual(failed, [{ text: "second", reason: refusal.message }],
     "the failure did not say which of the waiting prompts it was about");
   assert.deepEqual(sent.map(message => String(message.message)),
     ["/oma-deliver b-00000000-0000-4000-8000-000000000000", "first", "third"],
@@ -932,7 +960,6 @@ function stubSession(): {
       get busy() { return claimed; },
       onEvent: listener => { listeners.add(listener); return () => listeners.delete(listener); },
       deliver: async () => { claimed = true; claims.push("deliver"); },
-      release: () => { claimed = false; claims.push("release"); },
     },
   };
 }
@@ -1032,11 +1059,11 @@ test("T114 / PR-002: a run that settles on a failed assistant message is reporte
   assert.match((result as { reason: string }).reason, /provider failed/);
 });
 
-test("T114 / PR-002: a delivery the engine never answers gives the session back", async () => {
-  // The engine accepts nothing and reports nothing -- no turn starts, so no
-  // turn settles, and the session is never released by an event. Without the
-  // owner giving its claim back here, the Human and every later batch would be
-  // locked out of a session that is in fact idle.
+test("T114 / D06: a delivery the engine never answers keeps the session", async () => {
+  // The engine answers nothing. The command was written, so a run may be
+  // going; giving the session back on the owner's timeout would hand the
+  // Human's next prompt into it. Only settlement, the engine's refusal or the
+  // session's end ends the claim (WP09).
   const claims: string[] = [];
   let claimed = false;
   const session: DeliverySession = {
@@ -1044,7 +1071,6 @@ test("T114 / PR-002: a delivery the engine never answers gives the session back"
     get busy() { return claimed; },
     onEvent: () => () => {},
     deliver: async () => { claimed = true; claims.push("deliver"); },
-    release: () => { claimed = false; claims.push("release"); },
   };
   const batch = {
     id: "b-00000000-0000-4000-8000-000000000000", agent: "principal" as const, incarnation: 0,
@@ -1057,8 +1083,8 @@ test("T114 / PR-002: a delivery the engine never answers gives the session back"
   const outcome = await delivery.tick();
   assert.equal(outcome.kind, "failed");
   assert.match((outcome as { reason: string }).reason, /accept/);
-  assert.deepEqual(claims, ["deliver", "release"], "the session was left claimed by a delivery nobody answered");
-  assert.equal(session.busy, false);
+  assert.deepEqual(claims, ["deliver"], "the delivery gave up a claim whose run may be going");
+  assert.equal(session.busy, true);
 });
 
 test("T114 / PR-002: the extension is ready for the next batch however a turn ended", async () => {

@@ -9,10 +9,13 @@ export type PiRpcLimits = Pick<
   ProtocolLimits,
   "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds"
 >;
-interface Timer {
+export interface Timer {
   cancel(): void;
 }
-function alarm(seconds: number, action: () => void): Timer {
+/** WP10.02: the one deadline primitive. Measured on the monotonic clock and
+ * re-armed in native-sized steps, so a budget longer than the platform timer
+ * limit neither fires early nor overflows. Cancel is final. */
+export function alarm(seconds: number, action: () => void): Timer {
   const deadline = performance.now() + seconds * 1000;
   let active = true;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -44,6 +47,15 @@ interface PendingWrite {
 export type PiTransportEnd =
   | { readonly state: "closed" }
   | { readonly state: "failed"; readonly error: unknown };
+
+/** D06/WP09: a command refused before any byte reached the engine. Every
+ * other rejection of `send` happens after the write began and terminates the
+ * transport, so whether the engine read the command is unknown. */
+const UNWRITTEN = new WeakSet<object>();
+function unwritten<T extends object>(error: T): T { UNWRITTEN.add(error); return error; }
+export function commandWasNotWritten(error: unknown): boolean {
+  return typeof error === "object" && error !== null && UNWRITTEN.has(error);
+}
 
 export class PiRpcClient {
   private readonly reader: JsonlReader;
@@ -170,32 +182,32 @@ export class PiRpcClient {
   }
   send(object: Record<string, unknown>): Promise<void> {
     if (this.state !== "open")
-      return Promise.reject(
+      return Promise.reject(unwritten(
         new StoreError("BROKER_UNAVAILABLE", "Pi transport is closed"),
-      );
+      ));
     if (this.pending)
-      return Promise.reject(
+      return Promise.reject(unwritten(
         new StoreError("LIMIT_EXCEEDED", "one Pi command may be pending"),
-      );
+      ));
     let text: string;
     try {
       const value = JSON.stringify(object);
       if (value === undefined) throw new Error("not serializable");
       text = value;
       if (Buffer.byteLength(text) > this.limits.frameBytes)
-        return Promise.reject(
+        return Promise.reject(unwritten(
           new StoreError(
             "FRAME_TOO_LARGE",
             "Pi command exceeds the configured frame bound",
           ),
-        );
+        ));
     } catch {
-      return Promise.reject(
+      return Promise.reject(unwritten(
         new StoreError(
           "INVALID_REQUEST",
           "Pi command is not serializable JSON",
         ),
-      );
+      ));
     }
     return new Promise((resolve, reject) => {
       const pending: PendingWrite = {

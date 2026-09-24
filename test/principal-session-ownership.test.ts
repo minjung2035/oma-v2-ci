@@ -1,0 +1,113 @@
+// V09A/V09B/V09C (WP09, D06): a real PrincipalSession over a scripted engine.
+// Ownership of the engine's run ends only on settlement, refusal or the
+// session's end; unsent Human input comes back once, in order; input whose
+// acceptance is unknown is reported apart and never resent.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PrincipalSession } from "../src/tui/session.js";
+import { PrincipalDelivery } from "../src/runtime/principal-delivery.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
+
+const LIMITS = { frameBytes: TEST_VIEW_LIMITS.frameBytes, idleStreamSeconds: 30, receiptWaitSeconds: 5 };
+const BATCH_ID = "b-00000000-0000-4000-8000-0000000000a9";
+const BATCH = { id: BATCH_ID, agent: "principal", incarnation: 0,
+  messageIds: [], deliveryMode: "followUp", notice: "", sessionPath: null, indexPath: "/inbox.md" } as never;
+
+async function until(what: string, done: () => boolean, ms = 5000): Promise<void> {
+  for (const end = Date.now() + ms; Date.now() < end; await new Promise(resolve => setTimeout(resolve, 5))) if (done()) return;
+  assert.fail(`timed out waiting for ${what}`);
+}
+
+function scripted() {
+  const root = mkdtempSync(join(tmpdir(), "oma-v09-"));
+  const log = join(root, "prompts.log");
+  mkdirSync(join(root, "agents", "principal", "runner", "view"), { recursive: true });
+  const events = { failed: [] as { text: string; reason: string }[], unconfirmed: [] as string[], ends: 0, busy: [] as boolean[] };
+  const session = PrincipalSession.start(
+    { piCommand: process.execPath, piArgs: [join(process.cwd(), "test", "fixtures", "scripted-pi.mjs"), log],
+      coreExtension: "/nonexistent/core.js", sessionDir: root, workspace: root, home: root },
+    { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
+    LIMITS, { PATH: process.env.PATH ?? "/usr/bin:/bin" },
+    {
+      onLine: () => {}, onBusy: busy => events.busy.push(busy), onEnd: () => { events.ends += 1; },
+      onPromptFailed: (text, reason) => events.failed.push({ text, reason }),
+      onPromptUnconfirmed: text => events.unconfirmed.push(text),
+    },
+  );
+  const written = (): string[] => existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : [];
+  const pid = (): number => { const value = session.pid; assert.ok(value); return value!; };
+  return { root, session, events, written, pid,
+    close: async () => { session.close(); await session.exited; rmSync(root, { recursive: true, force: true }); } };
+}
+
+test("V09A: an unanswered delivery keeps the session, so a Human prompt waits instead of joining its run", async () => {
+  const s = scripted();
+  try {
+    let now = 0;
+    // The delivery command is answered by nobody within its accept deadline.
+    const delivery = new PrincipalDelivery({
+      get running() { return s.session.running; }, get busy() { return s.session.busy; },
+      onEvent: listener => s.session.onEvent(listener),
+      deliver: async batchId => { await s.session.deliver(batchId); },
+    }, { prepare: async () => BATCH, complete: async () => {} },
+    { stateRoot: s.root, frameBytes: LIMITS.frameBytes, acceptMs: 30, retryAfterMs: 60_000, now: () => (now += 20) });
+    // Make the stand-in silent for the delivery command by prefixing its text.
+    const deliver = s.session.deliver.bind(s.session);
+    (s.session as unknown as { deliver: (id: string) => Promise<void> }).deliver = id => deliver(`silent:${id}` as never);
+    const outcome = await delivery.tick();
+    assert.equal(outcome.kind, "failed");
+    assert.equal(s.session.busy, true, "an ambiguous accept timeout freed the session");
+    // The Human types meanwhile: the prompt waits, it is not written into the run.
+    assert.deepEqual(s.session.submit("while unsure"), { kind: "accepted" });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.deepEqual(s.written(), [`/oma-deliver silent:${BATCH_ID}`]);
+    // The engine answers late and the run settles: only now does the Human's go.
+    process.kill(s.pid(), "SIGUSR1");
+    await until("the waiting prompt to be written after the late settle", () => s.written().includes("while unsure"));
+    assert.deepEqual(s.events.failed, []);
+  } finally { await s.close(); }
+});
+
+test("V09B: when the engine ends, unsent prompts come back once and in order, and an unanswered one is reported apart", async () => {
+  for (const ending of ["engine-exit", "quit"] as const) {
+    const s = scripted();
+    try {
+      assert.deepEqual(s.session.submit("silent: typed first"), { kind: "accepted" });
+      await until("the first prompt to be written", () => s.written().length === 1);
+      for (const text of ["second", "third", "fourth"]) assert.deepEqual(s.session.submit(text), { kind: "accepted" });
+      if (ending === "engine-exit") process.kill(s.pid(), "SIGKILL");
+      else s.session.close();
+      await until("the session to end", () => s.events.ends === 1 || (ending === "quit" && s.events.failed.length === 3));
+      await s.session.exited;
+      await new Promise(resolve => setTimeout(resolve, 20));
+      assert.deepEqual(s.events.failed.map(entry => entry.text), ["second", "third", "fourth"], ending);
+      assert.deepEqual(s.events.unconfirmed, ["silent: typed first"], `${ending}: the written, unanswered prompt`);
+      assert.deepEqual(s.written(), ["silent: typed first"], `${ending}: something was resent`);
+      // A second ending notice returns nothing again.
+      s.session.close();
+      assert.equal(s.events.failed.length, 3);
+      assert.equal(s.events.unconfirmed.length, 1);
+      assert.equal(s.session.busy, false);
+    } finally { await s.close(); }
+  }
+});
+
+test("V09C: after the session ends, a late settle frees nothing and starts nothing", async () => {
+  const s = scripted();
+  try {
+    assert.deepEqual(s.session.submit("hold: long run"), { kind: "accepted" });
+    await until("the run to start", () => s.written().length === 1);
+    assert.deepEqual(s.session.submit("queued"), { kind: "accepted" });
+    s.session.close();
+    await s.session.exited;
+    // The engine is gone; an event for its run cannot hand the session to the
+    // queued prompt of a session that no longer exists.
+    (s.session as unknown as { observe: (event: unknown) => void }).observe({ type: "agent_settled" });
+    assert.deepEqual(s.written(), ["hold: long run"]);
+    assert.deepEqual(s.events.failed.map(entry => entry.text), ["queued"]);
+    assert.equal(s.session.busy, false);
+  } finally { await s.close(); }
+});
