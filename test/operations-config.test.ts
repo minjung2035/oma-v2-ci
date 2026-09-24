@@ -4,6 +4,7 @@ import { writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadConfig, loadConfiguration } from "../src/config.js";
+import { canonicalResourceLimits } from "../src/domain/resources.js";
 import { createCompleteConfigurationFixture as fixture } from "./fixtures/configuration.js";
 
 test("OPS config: migration preserves the closed host contract and does not overwrite input/output", () => {
@@ -138,52 +139,85 @@ for (const [name, file, update] of [
     }
   });
 }
+/** Starts the real runner entry as its unit would, stopping before Pi runs,
+ * and reports what it selected. */
+function runnerEntry(f: ReturnType<typeof fixture>, env: Record<string, string>) {
+  const capture = join(f.root, "selected.json");
+  const preload = join(f.root, "capture.mjs");
+  rmSync(capture, { force: true });
+  writeFileSync(
+    preload,
+    `import { writeFileSync } from 'node:fs';
+    import { RunnerModule } from ${JSON.stringify(new URL("../src/runner.js", import.meta.url).href)};
+    RunnerModule.prototype.run = async function () {
+      writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ profile: this.profile, confinement: this.paths.confinement ?? null })); return 0; };`,
+  );
+  const run = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      preload,
+      resolve("dist/src/entry/runner.js"),
+      "--society",
+      "demo",
+      "--agent",
+      "worker",
+      "--config",
+      f.path,
+      // D03: a unit-started runner is handed the broker's roots explicitly.
+      "--state-root",
+      join(f.root, "data", "oma", "demo"),
+      "--run-root",
+      join(f.root, "run", "oma", "demo"),
+    ],
+    { env: { ...process.env, ...env }, encoding: "utf8", timeout: 10000 },
+  );
+  const selected = run.status === 0 ? JSON.parse(readFileSync(capture, "utf8")) : null;
+  return { status: run.status, stderr: run.stderr, selected };
+}
+const hex = (text: string): string => Buffer.from(text, "utf8").toString("hex");
+
 test("OPS config: runner entry selects the broker-rendered role at startup without executing Pi", () => {
   const f = fixture();
   try {
-    const capture = join(f.root, "selected.json");
-    const preload = join(f.root, "capture.mjs");
-    writeFileSync(
-      preload,
-      `import { writeFileSync } from 'node:fs';
-      import { RunnerModule } from ${JSON.stringify(new URL("../src/runner.js", import.meta.url).href)};
-      RunnerModule.prototype.run = async function () { writeFileSync(${JSON.stringify(capture)}, JSON.stringify(this.profile)); return 0; };`,
-    );
-    const run = spawnSync(
-      process.execPath,
-      [
-        "--import",
-        preload,
-        resolve("dist/src/entry/runner.js"),
-        "--society",
-        "demo",
-        "--agent",
-        "worker",
-        "--config",
-        f.path,
-        // D03: a unit-started runner is handed the broker's roots explicitly.
-        "--state-root",
-        join(f.root, "data", "oma", "demo"),
-        "--run-root",
-        join(f.root, "run", "oma", "demo"),
-      ],
-      {
-        env: {
-          ...process.env,
-          OMA_PROFILE_HEX: Buffer.from("verifier").toString("hex"),
-        },
-        encoding: "utf8",
-        timeout: 10000,
-      },
-    );
+    const accepted = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
+    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(accepted)) });
     assert.equal(run.status, 0, run.stderr);
-    const selected = JSON.parse(readFileSync(capture, "utf8"));
+    const selected = run.selected.profile;
     assert.equal(selected.name, "verifier");
     assert.equal(selected.model.model, "model-b");
     assert.equal(
       selected.settings.extensions[0].path,
       join(f.installation, "dist/src/pi-extension.js"),
     );
+  } finally {
+    f.close();
+  }
+});
+
+test("WP25.03 / D05: a Resident runs with its accepted resources; the current profile only names its model", () => {
+  const f = fixture();
+  try {
+    const current = loadConfiguration(f.path).config.agentProfiles.verifier!.resources;
+    // Accepted before the profile was edited: other limits than the current ones.
+    const accepted = { ...current, workspaceBytes: current.workspaceBytes + 4096, tmpBytes: current.tmpBytes + 8192,
+      checkTimeoutSeconds: current.checkTimeoutSeconds + 1 };
+    const run = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), OMA_RESOURCES_HEX: hex(canonicalResourceLimits(accepted)) });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.selected.profile.workspaceBytes, accepted.workspaceBytes, "the engine's workspace limit came from the current profile");
+    assert.equal(run.selected.confinement.tmpBytes, accepted.tmpBytes, "the sandbox /tmp came from the current profile");
+    assert.deepEqual(run.selected.confinement.checkResources, accepted);
+    assert.equal(run.selected.profile.model.model, "model-b", "the model is the current profile's");
+    // No accepted spec, or anything but its canonical text, is refused -- never
+    // replaced by the current profile.
+    const { ["workspaceBytes"]: _dropped, ...partial } = accepted;
+    for (const resources of [undefined, "", "zz", hex("{}"), hex(JSON.stringify(partial)),
+      hex(JSON.stringify({ ...accepted, workspaceBytes: 0 })), hex(JSON.stringify({ ...accepted, extra: 1 })),
+      hex(JSON.stringify(Object.fromEntries(Object.entries(accepted).reverse())))]) {
+      const refused = runnerEntry(f, { OMA_PROFILE_HEX: hex("verifier"), ...(resources === undefined ? {} : { OMA_RESOURCES_HEX: resources }) });
+      assert.equal(refused.status, 4, `resources ${resources} were accepted`);
+      assert.match(refused.stderr, /broker-rendered resources/);
+    }
   } finally {
     f.close();
   }

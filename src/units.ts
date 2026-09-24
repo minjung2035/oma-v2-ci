@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Actor, ResourceLimits, UnitObservation } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
+import { canonicalResourceLimits } from "./domain/resources.js";
 import { unitNameFor as unitName } from "./domain/derived.js";
 import { replaceDerivedFile } from "./storage/durable-fs.js";
 import { renderUnit, type RenderValues } from "./units/render.js";
@@ -115,6 +116,7 @@ export class UnitsModule {
       throw new StoreError("UNSUPPORTED_PROFILE", `resident profile missing or unsupported for ${agent}`);
     this.install(unitName(this.society, agent, "service"), "resident.service.in", {
       profileHex: Buffer.from(profile, "utf8").toString("hex"),
+      resourcesHex: Buffer.from(canonicalResourceLimits(resources), "utf8").toString("hex"),
       memoryBytes: resources.memoryBytes, tasks: resources.tasks, cpuQuotaPercent: resources.cpuQuotaPercent,
     });
     this.install(unitName(this.society, agent, "path"), "resident.path.in");

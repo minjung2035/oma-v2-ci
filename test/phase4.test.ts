@@ -729,3 +729,20 @@ test("V25A: start/stop intents accepted for an earlier incarnation cannot act on
     assert.equal(env.units.observe("a").activeState, "inactive");
   } finally { cleanup(); }
 });
+
+test("WP25.03 / D05: a Resident's unit carries its accepted resources, not the current profile's", () => {
+  const { env, cleanup } = envOf();
+  try {
+    // Accepted with other limits than profile "p" now declares.
+    const accepted: ResourceLimits = { ...TEST_RESOURCES, memoryBytes: 256 * 1024 * 1024, tasks: 32, cpuQuotaPercent: 50,
+      tmpBytes: 2 * 1024 * 1024, workspaceBytes: 3 * 1024 * 1024 };
+    env.units.ensureResident("a", "p", accepted);
+    const service = unitName(env.society, "a", "service");
+    const shown = spawnSync("systemctl", ["--user", "show", service, "-p", "Environment", "-p", "MemoryMax", "-p", "TasksMax"], { encoding: "utf8" }).stdout;
+    const carried = /OMA_RESOURCES_HEX=([0-9a-f]+)/.exec(shown)?.[1];
+    assert.ok(carried, `the unit's environment carries no accepted resources: ${shown}`);
+    assert.deepEqual(JSON.parse(Buffer.from(carried!, "hex").toString("utf8")), accepted);
+    assert.match(shown, new RegExp(`^MemoryMax=${accepted.memoryBytes}$`, "m"));
+    assert.match(shown, new RegExp(`^TasksMax=${accepted.tasks}$`, "m"));
+  } finally { cleanup(); }
+});

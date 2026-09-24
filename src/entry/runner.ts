@@ -10,6 +10,7 @@ import { ensureDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
 import { hostSystemLayout } from "../runtime/resident-rootfs.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
+import { parseCanonicalResourceLimits } from "../domain/resources.js";
 import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 
 function usage(): never {
@@ -39,10 +40,16 @@ if (!/^(?:[0-9a-f]{2})+$/.test(profileHex)) { console.error(`runner: missing bro
 const profileName = Buffer.from(profileHex, "hex").toString("utf8");
 if (Buffer.from(profileName, "utf8").toString("hex") !== profileHex) { console.error(`runner: malformed broker-rendered profile for ${agent}`); process.exit(4); }
 if (!cfg.agentProfiles[profileName]) { console.error(`runner: unsupported profile for ${agent}`); process.exit(4); }
+// D05/WP25: resources are the agent's accepted spec, which the broker rendered
+// into the unit when it was created. The current profile names the model only;
+// an edited profile never re-sizes a Resident that was accepted with other limits.
+const resourcesHex = process.env.OMA_RESOURCES_HEX ?? "";
+const resources = /^(?:[0-9a-f]{2})+$/.test(resourcesHex) ? parseCanonicalResourceLimits(Buffer.from(resourcesHex, "hex").toString("utf8")) : null;
+if (resources === null) { console.error(`runner: missing or malformed broker-rendered resources for ${agent}`); process.exit(4); }
 const agentProfile = cfg.agentProfiles[profileName]!;
 const modelName = agentProfile.modelProfile;
 const profile = Object.freeze({ name: profileName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
-  workspaceBytes: agentProfile.resources.workspaceBytes,
+  workspaceBytes: resources.workspaceBytes,
   ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}) });
 // OMA runs the engine it shipped with, never one found on PATH, and points it
 // at an agent directory OMA owns so a Pi the user installed stays untouched.
@@ -61,8 +68,8 @@ const confinement = cfg.installation.rootfs === "/" ? undefined : {
   // Bound as a single file, so resolve a symlinked Node to the real binary.
   node: realpathSync(cfg.installation.node),
   systemBinds: hostSystemLayout().binds,
-  tmpBytes: agentProfile.resources.tmpBytes,
-  checkResources: agentProfile.resources,
+  tmpBytes: resources.tmpBytes,
+  checkResources: resources,
 };
 if (confinement === undefined)
   console.error(`runner ${agent}: no trusted rootfs is declared; the engine runs unconfined on this host`);

@@ -1,4 +1,6 @@
-# MUST [UNIT-001..004]: Resource values are rendered from the broker-resolved host profile.
+# MUST [UNIT-001..004]: Resource values are rendered from the agent's accepted (frozen) spec.
+# D05/WP25: OMA_RESOURCES_HEX carries that whole spec to the runner; only the model
+# is read from the current profile at activation.
 # D03: the launch location and the broker dependency are the broker's resolved ones;
 # BROKER_UNIT is empty when no fixed broker unit exists (the product runs the broker).
 [Unit]
@@ -10,6 +12,7 @@ StartLimitBurst=5
 [Service]
 Type=exec
 Environment=OMA_PROFILE_HEX=@PROFILE_HEX@
+Environment=OMA_RESOURCES_HEX=@RESOURCES_HEX@
 ExecStart=@NODE@ @LIBDIR@/dist/src/entry/runner.js --society @SOCIETY@ --agent @AGENT@ --config @CONFIG_ARG@ --state-root @STATE_ARG@ --run-root @RUN_ARG@
 Restart=on-failure
 RestartSec=3s
