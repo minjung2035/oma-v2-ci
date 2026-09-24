@@ -68,6 +68,9 @@ function argOf(args: readonly string[], flag: string): string | undefined {
   return args[index + 1];
 }
 
+/** Set once the terminal is open: what any failure path must undo. */
+let abandon: (() => void) | null = null;
+
 async function main(argv: readonly string[]): Promise<void> {
   if (argv.includes("--help") || argv.includes("-h")) usage();
   // No society given: derive one from the project directory, so running `oma`
@@ -220,6 +223,8 @@ async function main(argv: readonly string[]): Promise<void> {
   };
 
   const terminal = openTerminal({ input: process.stdin, output: process.stdout });
+  // Until the broker exists, this is all a failure has to undo.
+  abandon = () => { tenure?.abandon(); terminal.restore(); };
   let session: PrincipalSession | null = null;
   /** WP15.05: the model profile the running session was started with. */
   let sessionModel: string | null = null;
@@ -308,10 +313,13 @@ async function main(argv: readonly string[]): Promise<void> {
   // engine. It cannot wait for the engine to die -- the next statement is the
   // exit -- and it does not have to: the engine holds the lease's descriptor,
   // so the society stays this dying process's until the engine is really gone.
-  process.on("uncaughtException", error => {
+  abandon = () => {
     tenure?.abandon();
     broker?.stop();
     terminal.restore();
+  };
+  process.on("uncaughtException", error => {
+    abandon?.();
     process.stderr.write(`oma: ${String(error)}\n`);
     process.exit(3);
   });
@@ -512,6 +520,10 @@ async function main(argv: readonly string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
+  // WP28: a failure after the terminal opened leaves it the way a crash does --
+  // restored, broker stopped, engine ended -- and the reason is written after
+  // the alternate screen is gone, where the Human can still read it.
+  abandon?.();
   process.stderr.write(`oma: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(codeFor(error));
 });

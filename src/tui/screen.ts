@@ -42,6 +42,10 @@ export function openTerminal(streams: TerminalStreams): Terminal {
   if (input.isTTY) input.setRawMode(true);
   input.resume();
   output.write(ALT_ON + CURSOR_OFF + PASTE_ON + CLEAR);
+  // WP28: unconditional means every exit, not only the ones that remember to
+  // call restore(). A TTY write and setRawMode are synchronous, so they still
+  // happen inside an `exit` handler.
+  process.once("exit", () => terminal.restore());
   const terminal: Terminal = {
     get columns() { return Math.max(TERMINAL_BOUNDS.minColumns.value, output.columns ?? TERMINAL_BOUNDS.assumedColumns.value); },
     get rows() { return Math.max(TERMINAL_BOUNDS.minRows.value, output.rows ?? TERMINAL_BOUNDS.assumedRows.value); },
