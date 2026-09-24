@@ -12,7 +12,7 @@
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import type { AgentStatus, ProtocolLimits } from "../../implementation/contracts.js";
 import type { ChannelLimits } from "../protocol/channel.js";
-import { STATUS_STALE_MS, decodeStatusView, statusViewPath } from "../protocol/status-view.js";
+import { STATUS_REFRESH_MS, STATUS_STALE_MS, decodeStatusView, statusViewPath } from "../protocol/status-view.js";
 
 export type Observation =
   | { readonly kind: "observed"; readonly statuses: readonly AgentStatus[]; readonly observedAtMs: number }
@@ -68,6 +68,10 @@ export class TuiTransport {
     if (checkedAtMs - observedAtMs > STATUS_STALE_MS)
       // The last time is carried so the screen can say how old it is.
       return Promise.resolve({ kind: "unknown", reason: "broker 관측이 멈춤", observedAtMs });
+    // A view dated ahead of this clock cannot be aged: after the clock is set
+    // back it would pass as current for as long as the jump. It is not current.
+    if (observedAtMs - checkedAtMs > STATUS_REFRESH_MS)
+      return Promise.resolve({ kind: "unknown", reason: "broker 관측 시각이 이 시계보다 앞섬(시계 변경)", observedAtMs: checkedAtMs });
     return Promise.resolve({ kind: "observed", statuses: agents, observedAtMs });
   }
 }

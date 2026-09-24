@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store.js";
 import { ViewsModule } from "../src/views.js";
-import { decodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
+import { decodeStatusView, encodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
 import { TuiTransport } from "../src/tui/transport.js";
 
 test("T118 what the broker publishes is what the Dashboard accepts, and only its owner can read it", () => {
@@ -57,5 +57,20 @@ test("T118: an oversized or linked status view is refused, not read into memory"
     const linked = await new TuiTransport(root, "demo", 1024 * 1024).status();
     assert.equal(linked.kind, "unknown");
     assert.match((linked as { reason: string }).reason, /읽지 못함/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("T118: a view dated ahead of the reader's clock is unknown, not current", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-status-future-"));
+  try {
+    const now = 1_800_000_000_000;
+    // After the clock is set back an hour, the last view is an hour "ahead".
+    writeFileSync(statusViewPath(root), encodeStatusView("demo", { observedAtMs: now + 3_600_000, agents: [] }));
+    const observation = await new TuiTransport(root, "demo", 1024 * 1024, () => now).status();
+    assert.equal(observation.kind, "unknown", "a future-dated view passed as current");
+    assert.match((observation as { reason: string }).reason, /시계/);
+    // Within one refresh interval of skew it is still an observation.
+    writeFileSync(statusViewPath(root), encodeStatusView("demo", { observedAtMs: now + 1_000, agents: [] }));
+    assert.equal((await new TuiTransport(root, "demo", 1024 * 1024, () => now).status()).kind, "observed");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
