@@ -62,6 +62,11 @@ function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentD
       throw new StoreError("AUTH_FAILED", `resident ${key} mount does not match the trusted actor root`);
 }
 
+/** WP27: the one bubblewrap a confined engine is started through; the same
+ * binary `spawnSandboxed` pins. A plan names it absolutely, because the
+ * owned spawn that delivers a batch accepts no PATH lookup. */
+export const SANDBOX_EXECUTABLE = "/usr/bin/bwrap";
+
 /** Pure lexical recipe. Actual mount/symlink/FD/kernel probes remain S-01 gates.
  *
  * `env` is the engine's whole environment: `--clearenv` drops the host's, so an

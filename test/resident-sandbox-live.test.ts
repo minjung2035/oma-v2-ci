@@ -9,10 +9,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { provisionSociety, residentRootfsPath } from "../src/runtime/provision.js";
 import { InferenceRelay } from "../src/runtime/inference-relay.js";
@@ -124,6 +124,123 @@ test("T117 a confined Resident reaches its provider only through the relay, with
   } finally {
     rpc?.close();
     child?.kill("SIGKILL");
+    await relay?.close();
+    await new Promise<void>(resolve => { if (control) control.close(() => { resolve(); }); else resolve(); });
+    await provider.close();
+    if (previousTls === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTls;
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+/** An Anthropic Messages stream that ends one assistant turn with `end_turn`. */
+function anthropicTurn(text: string): string[] {
+  const event = (name: string, data: object): string => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
+  return [
+    event("message_start", { type: "message_start", message: { id: "msg_v27a", type: "message", role: "assistant", model: "claude-fable-5",
+      content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } } }),
+    event("content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }),
+    event("content_block_delta", { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } }),
+    event("content_block_stop", { type: "content_block_stop", index: 0 }),
+    event("message_delta", { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 1 } }),
+    event("message_stop", { type: "message_stop" }),
+  ];
+}
+
+test("V27A: the bundled engine, on the production plan, delivers a batch to a settled boundary it recorded in its session", {
+  skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
+  timeout: 120000,
+}, async () => {
+  // The whole production delivery: generated rootfs, the adapter's own spawn
+  // plan and deadlines, the trusted core extension, the relay with a
+  // placeholder, and a provider stand-in that answers one turn.
+  const work = mkdtempSync(join(tmpdir(), "oma-v27a-"));
+  const provider = await tlsProvider();
+  provider.reply = { status: 200, chunks: anthropicTurn("read it"), delayMs: 0 };
+  const previousTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  let control: Server | null = null;
+  let relay: InferenceRelay | null = null;
+  try {
+    const stateRoot = join(work, "s");
+    const runRoot = join(work, "r");
+    provisionSociety(stateRoot);
+    const actor = "alice";
+    const directories: ResidentDirectories = {
+      workspace: workspacePathAt(stateRoot, actor),
+      home: join(agentRootPathAt(stateRoot, actor), "home"),
+      archive: join(stateRoot, "mail", "archive"),
+      selfMail: join(stateRoot, "mail", "inboxes", actor),
+      view: runnerViewPathAt(stateRoot, actor),
+      world: join(stateRoot, "world"),
+      projectGit: join(stateRoot, "repos", "project.git"),
+      sessions: runnerSessionDirPathAt(stateRoot, actor),
+    };
+    for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
+    const notice = "새 연락 1건. 전체 목록: /inbox.md\n1. mail m-00000000-0000-4000-8000-0000000000a7-0";
+    const batch = { id: "b-00000000-0000-4000-8000-0000000000a7", agent: actor, incarnation: 1, deliveryMode: "followUp" as const,
+      notice, messageIds: ["m-00000000-0000-4000-8000-0000000000a7-0"], sessionPath: null, indexPath: "/inbox.md" as const };
+    writeFileSync(join(directories.view, `batch-${batch.id}.json`), JSON.stringify({ id: batch.id, agent: actor, incarnation: 1,
+      deliveryMode: batch.deliveryMode, notice, messageIds: batch.messageIds }));
+    const leaseSocket = actorSocketPathAt(runRoot, actor, 1);
+    mkdirSync(dirname(leaseSocket), { recursive: true });
+    control = createServer(socket => { socket.destroy(); });
+    await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
+    const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
+    const secret = "sk-ant-api03-" + "V27a".repeat(10);
+    const placeholder = placeholderFor(secret);
+    const relaySocket = join(dirname(leaseSocket), "inference.sock");
+    relay = await InferenceRelay.open(relaySocket, { origin: provider.origin, headers: {}, substitute: { placeholder, secret } },
+      { concurrent: 4, timeoutMs: 30000 });
+    const runtime = resolvePiRuntime({ stateRoot, libdir: root });
+    const adapter = new PiAdapter({
+      actor, society: "live",
+      limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096 },
+      profile: { provider: "anthropic", model: "claude-fable-5", turnSeconds: 90, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      paths: {
+        piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
+        coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
+        workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
+        mailArchive: join(directories.archive, "cur"), batchView: directories.view, socket: leaseSocket,
+      },
+      confinement: {
+        host: {
+          rootfs: residentRootfsPath(stateRoot), libdir: root,
+          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
+          pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
+          tmpBytes: 64 * 1024 * 1024,
+          checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
+            workspaceBytes: 1 << 24, stagingBytes: 1 << 24, checkTimeoutSeconds: 30 },
+          stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
+        },
+        lease, directories,
+        inference: { socketHostPath: relaySocket, provider: "anthropic", model: "claude-fable-5", placeholder },
+      },
+    });
+    const boundary = await adapter.deliver(batch);
+    assert.equal(boundary.batchId, batch.id);
+    assert.match(boundary.entryId, /^[0-9a-f]{8}$/);
+    // The notification is one fact; the entry in the engine's own session file
+    // is another. Both must name the same thing.
+    const sessions = readdirSync(directories.sessions, { recursive: true }).map(String).filter(name => name.endsWith(".jsonl"));
+    assert.equal(sessions.length, 1, `expected one session file, saw ${JSON.stringify(sessions)}`);
+    assert.equal(basename(sessions[0]!), basename(boundary.sessionPath));
+    const entries = readFileSync(join(directories.sessions, sessions[0]!), "utf8").split("\n").filter(Boolean)
+      .map(line => JSON.parse(line) as { type?: string; id?: string; customType?: string; message?: { role?: string; customType?: string; stopReason?: string } });
+    const at = (found: number, what: string): number => {
+      assert.ok(found >= 0, `the session holds no ${what}: ${JSON.stringify(entries.map(entry => [entry.type, entry.customType, entry.message?.role, entry.message?.customType, entry.message?.stopReason]))}`);
+      return found;
+    };
+    const mail = at(entries.findIndex(entry => entry.type === "custom_message" && entry.customType === "oma-mail"), "presented batch");
+    const answer = at(entries.findIndex(entry => entry.message?.role === "assistant" && entry.message.stopReason === "stop"), "settled assistant turn");
+    const recorded = at(entries.findIndex(entry => entry.type === "custom" && entry.customType === "oma-delivery-boundary"), "boundary entry");
+    assert.ok(mail < answer && answer < recorded, "the session does not read batch, answer, boundary in that order");
+    assert.equal(entries[recorded]!.id, boundary.entryId, "the notified boundary is not the entry the session holds");
+    // The engine reached the provider only through the relay, with the real key.
+    assert.ok(provider.seen.length >= 1);
+    assert.ok(String(provider.seen[0]!.headers["x-api-key"] ?? provider.seen[0]!.headers.authorization).includes(secret));
+    assert.ok(provider.seen[0]!.body.includes("m-00000000-0000-4000-8000-0000000000a7-0"), "the provider was not shown the batch");
+  } finally {
     await relay?.close();
     await new Promise<void>(resolve => { if (control) control.close(() => { resolve(); }); else resolve(); });
     await provider.close();

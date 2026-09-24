@@ -113,7 +113,7 @@ test("T113 a confined Resident is spawned through the mount plan, not directly",
   const f = fixture();
   try {
     const plan = f.adapter.spawnPlan();
-    assert.equal(plan.command, "bwrap");
+    assert.equal(plan.command, "/usr/bin/bwrap");
     for (const flag of ["--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "--clearenv"])
       assert.ok(plan.args.includes(flag), `the plan dropped ${flag}`);
     // `--clearenv` makes the argv the whole environment, so an entry passed

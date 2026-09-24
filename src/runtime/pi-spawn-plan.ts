@@ -9,8 +9,9 @@
 import type { Actor, ProtocolLimits } from "../../implementation/contracts.js";
 import { verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
-import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
+import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
 import type { ValidatedRunLease } from "../protocol/run-lease.js";
+import { StoreError } from "../domain/errors.js";
 
 /** Everything the adapter needs to run the engine inside the Resident sandbox.
  * Its absence is the unconfined profile, which the runner states explicitly. */
@@ -215,5 +216,9 @@ export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
   };
   const plan = residentArgv(host, confinement.lease, confinement.directories,
     environment, relay?.socketHostPath);
-  return { command: plan[0]!, args: plan.slice(1), cwd: options.paths.workspace, env: {} };
+  // WP27: the delivery path starts this plan through the owned spawn, which
+  // takes only an absolute executable; a bare `bwrap` was refused there, so no
+  // confined Resident could ever deliver a batch.
+  if (plan[0] !== "bwrap") throw new StoreError("UNSUPPORTED_PROFILE", "resident sandbox recipe does not start bubblewrap");
+  return { command: SANDBOX_EXECUTABLE, args: plan.slice(1), cwd: options.paths.workspace, env: {} };
 }
