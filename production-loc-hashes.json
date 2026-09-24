@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3c9fb1fa11955caa2c813975246c113092921a3081e7c1d8f63b47bffe0a1651",
-  "report": "dac0de068dd1e4afc22b975cc22a68f4cc1b9b278fd91fa8496456709eb967dd",
+  "report": "6ac9f185716eb6fc622fef445518114a3a1499f02ed7a8bfa14802b5786756b6",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -265,7 +265,7 @@
     },
     {
       "path": "src/domain/request-identity.ts",
-      "sha256": "e15567c0999c5e695feac8148dad1a232f6d8f360ef94afc312fe767769713a3"
+      "sha256": "329819616f885c3ba38d7e4ae861e577c0074bc26a55b8105d6ee206ceab3edc"
     },
     {
       "path": "src/domain/resources.ts",
@@ -545,7 +545,7 @@
     },
     {
       "path": "src/protocol/operation-results.ts",
-      "sha256": "9d475556c571542cf6e2b4a045387ca2851b96849fc1e726114857913584a80b"
+      "sha256": "0c02a74e6ce9cd55fd31a75b84cc48b7dad2618c250b5badb718789085fe622f"
     },
     {
       "path": "src/protocol/principal-credential.ts",
