@@ -101,11 +101,11 @@ function rowsFor(input: ViewInput): string[] {
       return `${marker} ${pad(field.label, labelWidth)}${value}${scope}`;
     });
   if (data.mail.length === 0) return ["  받은 메일이 없습니다."];
-  return data.mail.map((row, index) => {
+  return [fit("  ● Principal 세션에 아직 전달되지 않음 · 여기서 여는 것은 전달·확인이 아닙니다", columns), ...data.mail.map((row, index) => {
     const marker = index === selected ? ">" : " ";
     const flag = row.unread ? "●" : " ";
     return `${marker}${flag} ${pad(row.from, LAYOUT_BOUNDS.senderColumn.value)}${pad(row.kind, LAYOUT_BOUNDS.kindColumn.value)}${row.subject}`;
-  });
+  })];
 }
 
 function extensionsScreen(input: ViewInput, notice: string | null): string[] {

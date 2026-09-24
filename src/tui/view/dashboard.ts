@@ -30,7 +30,10 @@ export function dashboardRows(data: DashboardData): readonly DashboardRow[] {
     rows.push({ label: "Pending", value: unknown });
     rows.push({ label: "Status", value: unknown });
   }
-  rows.push({ label: "Mail", value: `${data.unread} unread` });
+  // WP28: a message stays in `new/` until a batch carrying it is settled with
+  // the Principal's session; that is what this counts. It is not whether the
+  // Human has looked at it, and opening it here changes nothing.
+  rows.push({ label: "Mail", value: `${data.unread}건 Principal 세션에 전달 대기` });
   // WP15.05: configured is not observed. The session's value is what this
   // product started it with, not the engine's own report.
   const model = data.principalModel;
