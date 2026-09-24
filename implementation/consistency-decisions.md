@@ -504,3 +504,63 @@ above. V26C: request and response budgets counted in UTF-8 bytes on the real
 F3/F4 frame bounds and P2 wire golden. Negative controls: 6 mutants, all fail.
 Not covered: the host channel and Principal credential paths end to end (WP28),
 concurrent CLI processes on one key beyond `receipt-supersession.test.mjs`.
+
+## WP27 — engine, extension and relay against the pinned engine
+
+WP27.01 — the engine is pinned by `package-lock.json`: `@earendil-works/pi-coding-agent`,
+`pi-ai` and `pi-agent-core` 0.85.1 (`PI_ADAPTER_REVISION` `oma-pi-rpc-v1@0.85.1`); no
+dependency changed here. What OMA relies on, and where the real engine shows it:
+SDK `ModelRuntime.create` / `ModelRegistry.find` / `getApiKeyAndHeaders` /
+`SettingsManager` (T116, resolution from OMA's own agent directory); RPC mode with
+`--no-approve --no-context-files --no-skills --no-prompt-templates --no-extensions`
+and `-e` for the core extension; extension API `registerCommand`, `sendMessage`
+(custom type, `triggerTurn`, `deliverAs`), `on("message_end")`, `on("agent_settled")`,
+`appendEntry`, `sessionManager.getSessionFile` / `getLeafEntry`, `ui.notify`; RPC events
+`response`, `message_end`, `extension_ui_request` (notify), `agent_settled`. V27A runs
+all of them on the real engine.
+
+V27A (real engine, generated rootfs, the adapter's own confined plan, relay with a
+placeholder, TLS provider stand-in answering one Anthropic turn): `PiAdapter.deliver`
+returns the boundary; the session file reads `custom_message(oma-mail)`, then the
+assistant message with `stop`, then `custom(oma-delivery-boundary)` whose id is the
+notified `entryId`; the provider saw the batch and the real key. Found defect, fixed:
+the confined plan named its executable `bwrap`, and the owned spawn `deliver` uses
+accepts only an absolute executable, so **no confined Resident could deliver a batch**
+(runner line `adapter(...).deliver(batch)` failed with UNSUPPORTED_PROFILE every
+time). T117 had started the plan through `spawnSandboxed`, which pins
+`/usr/bin/bwrap`, and never went through `deliver`. The plan now names
+`SANDBOX_EXECUTABLE` (`/usr/bin/bwrap`), the same binary.
+
+WP27.02 — three facts are kept apart. The extension appended the boundary entry
+(V27A reads it in the session file after the engine closed); the adapter received the
+boundary notification naming that entry; the session data survives an OS crash or
+power loss -- **not proven**: the engine's session writes are not claimed durable
+here, and settlement rests on the runner's durable receipt (D01), not on the session
+file. Power loss stays NOT_RUN (WP30).
+
+WP27.03 — the relay is a byte relay for one delivery: fixed origin from the host's
+profile, the caller's authority headers dropped, the placeholder swapped for the
+key in headers and path only, 4 concurrent requests (beyond is 503, not a queue), an
+idle timeout of the adapter's idle budget, no resend of an unclear request, and the
+answer streamed through as it arrives (new V27B oracle), closed after the delivery.
+It does not read tokens or prices.
+
+WP27.04 — placeholder generation is total. H05 held: a candidate equal to the key
+recursed without bound, so a key whose replaceable part has no letter or digit (a
+token with a `_`/`-` signature, a key of separators, a long punctuation segment)
+crashed with a stack overflow instead of being refused. Now at most 8 candidates,
+then UNSUPPORTED_PROFILE; the shapes providers use still get a same-length
+placeholder that differs from and does not contain the key.
+
+WP27.05 — containment is unchanged and separately evidenced: mount plan and relay
+path (T113), no host view or network and no product code inside (T117), the engine's
+credential directory never mounted, the explicit `rootfs = "/"` opt-out still
+announced as unconfined. Tool surface limits are not OS isolation.
+
+Negative controls: 4 mutants, all fail (unbounded placeholder retry, plan naming
+`bwrap` by PATH, relay buffering the whole answer, a boundary notice naming an entry
+the session does not hold). Not covered: a real provider, provider-side retries and
+long streams (NOT_RUN, no credential), session durability under power loss (WP30),
+the Principal's engine (WP28). The repository defines no separate `engine` lane;
+V27A and the T113/T114/T116/T117 engine and relay oracles run in the durable lane,
+which needs bubblewrap and openssl on the host (a skip there is not a pass).
