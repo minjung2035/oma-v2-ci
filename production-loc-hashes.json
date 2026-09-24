@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3c9fb1fa11955caa2c813975246c113092921a3081e7c1d8f63b47bffe0a1651",
-  "report": "6ac9f185716eb6fc622fef445518114a3a1499f02ed7a8bfa14802b5786756b6",
+  "report": "abc1850e84ae48b35e8e07cf40c5028e8859006d5ceed2f2c0f355550976b26a",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -297,7 +297,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "791bedfc98ef47626ca834c35f14c5e63cae4880653400ac5f1b204722fc8b5c"
+      "sha256": "f3c82fae9454ee27293bb6632d00cc2cb35bbe63de44259d69bbe6e18a2524d5"
     },
     {
       "path": "src/entry/runner.ts",
@@ -637,7 +637,7 @@
     },
     {
       "path": "src/runtime/pi-runtime.ts",
-      "sha256": "494bbca589a642ef45a3122994cd6ad72ea0a0748f24f75f526ef988a9a503da"
+      "sha256": "899082e6900a654044befa3129284fbcc332b99e3d75c4320076fb6a5f17f850"
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
@@ -805,7 +805,7 @@
     },
     {
       "path": "src/tui/screen.ts",
-      "sha256": "3ff12e5e6d092d864761d6156b05c95c5ec6d60bedfbc5db2ab4b15a90138c64"
+      "sha256": "72af46a68fa86a824dcd79c322d233924f507890a11325f7b22c73a62d9e7ff2"
     },
     {
       "path": "src/tui/session.ts",
@@ -833,7 +833,7 @@
     },
     {
       "path": "src/tui/view/dashboard.ts",
-      "sha256": "e8deb5000c536871cfb43d7c3feff77521e8b2d33793b555f2f2bde9868a8261"
+      "sha256": "0e91508c2799e55abdb88611c34d6c0e5c3369f387de3864b9280afc44d276a1"
     },
     {
       "path": "src/tui/view/index.ts",
@@ -853,7 +853,7 @@
     },
     {
       "path": "src/tui/view/screens.ts",
-      "sha256": "7a8625b59cc4bab57cd9819a9433f2cb9ffbaa9824021a471bd764bcf78e4c02"
+      "sha256": "65aca459484ad98287d2d2dfca63fff64e84bbdbb697b3383f7378b93e4b7edc"
     },
     {
       "path": "src/tui/view/text.ts",
