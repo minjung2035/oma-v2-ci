@@ -5,9 +5,8 @@
 ## 1. 현재 상태 (2026-09-24)
 
 - 브랜치 `refactor/safety-preserving-architecture`. push·PR·merge는 이 작업에서 하지 않는다.
-- **WP00–WP32 전부 커밋 완료.** 마지막 통합 검증은 `implementation/validation.md`의 v8(모든 카드 포함). v3–v7은 중간 증거로 `/home/dev/oma-evidence/v3..v7/`에 있다.
-- 판정: **release 미승인**(`implementation/review-ledger.json` + `scripts/review-closure.mjs`): production 파일 139개는 이번 구현에서 줄 단위로 다시 읽지 않았고, powercut·실제 provider·CI는 NOT_RUN이다.
-- 진행 중: 사용자 지시에 따른 전체 카드 재검토와 적대적 검증(아래 7절).
+- **WP00–WP32 전부 커밋 완료, 이어서 재검토와 적대적 검증 완료.** 마지막 통합 검증은 `implementation/validation.md`의 v9. v3–v8은 중간 증거로 `/home/dev/oma-evidence/v3..v8/`에 있다.
+- 판정: **release 미승인**. `node --input-type=module -e 'const m=await import("./scripts/review-closure.mjs"); console.log(m.approval(".", undefined, await m.oracleFindings(".")))'`로 확인한다. 차단 요인은 production 파일 139개 미검토, powercut·실제 provider·CI NOT_RUN(oracle V05C·V30B·V32B)이다.
 - lane 성격: V27A(실제 엔진), V28B(pty), V31A(설치 closure)는 저장소에 `engine`/`pty` lane이 없어 durable lane에서 돈다(bubblewrap·openssl·python3 필요, skip은 PASS 아님).
 
 ## 2. 환경 (이 머신에 한정)
@@ -61,6 +60,7 @@
 | WP31 | `1906cf3`, `7123719`, `f666a0c`, `bf87132` | lockfile이 엔진을 개발 의존성으로 둬 production 설치에서 빠지던 결함 수정(버전 변경 0), 엔진 탐색을 설치 루트로 한정, README 설치 주장 정정, 지원표 | `bin` 없음(C2 결정 보류), 다른 Node·배포판 NOT_RUN |
 | WP30 | `38944fb`, `6da019a`, `094e3b9` | D01 독립 모형을 실제 구성 요소에 교차 실행(V30A), FAULT-MATRIX 대응표, 환경별 판정 | endpoint bind 실패 별도 주입 없음, powercut·provider NOT_RUN |
 | WP32 | `40d339a`, `48e961b`, `736fd15` | review ledger와 승인 판정기(V32A), 불변식 12개 대조표, release 미승인 판정 | 139개 파일 미검토 |
+| 재검토·적대적 | `f11c302`…`dea19b8` | 계획 oracle 73개의 담당·lane 필수 검사(`oracle-map.json`), 이전 카드 guard mutant 30개 중 생존 10개(공백 9·동치 1), 공백 8개에 oracle 추가, actor socket·relay 연결 수 상한, 시계보다 앞선 status view를 unknown으로 | 한 파일 읽기 도중 변경(WP12)은 결정적 재현 불가 |
 
 부수 수정: kernel/crash fixture의 systemd 257 호환(`list-unit-files` 무일치 exit 1, stop 후 disable), `/usr/bin/node` 가정 제거, crash hook의 descriptor 기준 rename 해석, 오래된 kernel 시험 기대값 갱신.
 
@@ -84,6 +84,8 @@
 
 ## 7. 다음에 할 일
 
-1. 전체 카드 재검토: 계획의 oracle 73개가 모두 자기 ID 시험, 실제로 존재하는 다른 시험의 담당(lane에서 필수), 사유 있는 NOT_RUN 중 하나인지 기계로 확인(`implementation/oracle-map.json`, review-closure 확장).
-2. 적대적 검증: 이전 세션 카드(WP04–WP22, WP24)의 핵심 수정 분기를 최소 mutant로 되돌려 oracle이 실패하는지 확인하고, 반례·우회 탐침(권한·경로·자원·crash·표시)을 시도한다. 결함이 나오면 해당 카드 소관으로 고친다.
-3. 결과를 v9로 결박.
+모든 카드와 검증은 끝났다. release 승인에 남은 것:
+
+1. `implementation/review-ledger.json`의 `NOT_REVIEWED` 139개를 실제로 읽고, 읽은 파일은 `implementation/review-notes.json`에 근거 oracle과 함께 적은 뒤 `npm run review:ledger`.
+2. 승인된 VM에서 powercut(V05C·V30B), 승인된 credential로 실제 provider, push 뒤 CI(V32B) — 모두 사용자 승인 필요.
+3. 보류한 결정: `bin`/설치 명령(C2), WP03 이전 Resident unit의 재생성 절차, 전체 `oma` entry의 pty 시험(최상위 catch 정리 순서), rollover 뒤 endpoint bind 실패의 별도 주입.
