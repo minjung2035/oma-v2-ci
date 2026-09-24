@@ -106,6 +106,7 @@ export const READ_BOUNDS = Object.freeze({
   mailHeaderBytes: bound(64 * 1024, "bytes", "headers are read, not whole attachments"),
   mailBodyBytes: bound(256 * 1024, "bytes", "matches the wire mail body limit"),
   extensionScanDepth: bound(3, "count", "installed extensions are not nested deeper"),
+  extensionScanEntries: bound(1024, "count", "directory entries one extension scan examines before it reports a partial list"),
   roleExtensions: bound(16, "count", "the operations contract's per-role maximum"),
 });
 

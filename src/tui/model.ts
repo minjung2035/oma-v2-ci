@@ -43,6 +43,8 @@ export type ConfigField = ChoiceField | NumberField | LinkField;
 export interface ExtensionRow {
   readonly id: string; readonly principal: boolean;
   readonly workers: boolean; readonly locked: boolean;
+  /** WP14: declared by a role but its file is not there; it can only be removed. */
+  readonly missing?: boolean;
 }
 /** TUI-011: `unread` is derived by the caller from existing delivery facts.
  * The model stores no read state of its own.

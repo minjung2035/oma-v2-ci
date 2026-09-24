@@ -195,13 +195,15 @@ test("T97/TUI-010: an inline config exposes only the locked core and refuses edi
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("TUI-010: the written entry list keeps the core first and stays deduplicated", () => {
-  const available = [CORE_EXTENSION, "extensions/a.js", "extensions/b.js"];
-  assert.deepEqual(nextEntries([CORE_EXTENSION], available, "extensions/b.js", true), [CORE_EXTENSION, "extensions/b.js"]);
-  assert.deepEqual(nextEntries([CORE_EXTENSION, "extensions/b.js"], available, "extensions/a.js", true),
-    [CORE_EXTENSION, "extensions/a.js", "extensions/b.js"]);
-  assert.deepEqual(nextEntries([CORE_EXTENSION, "extensions/a.js"], available, "extensions/a.js", false), [CORE_EXTENSION]);
-  assert.deepEqual(nextEntries([CORE_EXTENSION], available, CORE_EXTENSION, false), [CORE_EXTENSION]);
+test("TUI-010/WP14.04: the written entry list keeps the core first, stays deduplicated and keeps the authored order", () => {
+  assert.deepEqual(nextEntries([CORE_EXTENSION], "extensions/b.js", true), [CORE_EXTENSION, "extensions/b.js"]);
+  // Enabling appends; it does not re-sort what the host authored.
+  assert.deepEqual(nextEntries([CORE_EXTENSION, "extensions/b.js"], "extensions/a.js", true),
+    [CORE_EXTENSION, "extensions/b.js", "extensions/a.js"]);
+  assert.deepEqual(nextEntries([CORE_EXTENSION, "extensions/z.js", "extensions/a.js", "extensions/m.js"], "extensions/a.js", false),
+    [CORE_EXTENSION, "extensions/z.js", "extensions/m.js"]);
+  assert.deepEqual(nextEntries([CORE_EXTENSION, "extensions/a.js"], "extensions/a.js", true), [CORE_EXTENSION, "extensions/a.js"]);
+  assert.deepEqual(nextEntries([CORE_EXTENSION], CORE_EXTENSION, false), [CORE_EXTENSION]);
 });
 
 test("T98/TUI-011: unread comes from the mailbox position, and no read state is written", () => {

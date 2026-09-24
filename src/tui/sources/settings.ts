@@ -11,7 +11,7 @@ import { StoreError } from "../../domain/errors.js";
 import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../../config.js";
 import type { ConfigurationLayout } from "../../config/operations.js";
 import { replaceDerivedFile, type DurabilityObserver } from "../../storage/durable-fs.js";
-import { commitManagedGeneration, managedRolesOf, type ManagedLimits, type ManagedCommit, type ManagedEdit } from "../../config/generations.js";
+import { commitManagedGeneration, managedRolesOf, type ManagedLimits, type ManagedCommit, type ManagedEdit, type ManagedSource } from "../../config/generations.js";
 import type { ApplyScope, ConfigField } from "../model.js";
 import { CONFIG_BOUNDS } from "../limits.js";
 
@@ -174,7 +174,7 @@ export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 
  * from (a same-semantic save publishes nothing), validated whole, and handed
  * to the generation writer, which refuses a snapshot that is no longer current.
  */
-export function commitManagedEdit(snapshot: ConfigurationSnapshot, config: HostConfigV1, roles: ManagedEdit["roles"] = {},
+export function commitManagedEdit(snapshot: ManagedSource, config: HostConfigV1, roles: ManagedEdit["roles"] = {},
   faults?: DurabilityObserver, limits?: ManagedLimits): ManagedCommit {
   const before = managedRolesOf(snapshot, {}, snapshot.config);
   const after = managedRolesOf(snapshot, roles, config);

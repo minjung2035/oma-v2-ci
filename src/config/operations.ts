@@ -51,6 +51,10 @@ export interface ConfigurationSource {
   readonly layout: ConfigurationLayout;
   readonly authoredRoles: Readonly<Record<string, AuthoredRoleSource>>;
   readonly files: readonly ConfigurationFileIdentity[];
+  /** "unread" only from `readEditableConfigurationSource`: extension assets
+   * were not dereferenced, so the roles carry no extension digests and the
+   * source is an editing input, never a runnable configuration. */
+  readonly extensionAssets: "read" | "unread";
 }
 export const CONFIGURATION_SOURCE_LIMITS = Object.freeze({ files: 256, bytes: 8 * 1024 * 1024 });
 export type ConfigurationReadObserver = (event: Readonly<{ phase: "manifest-read"; layout: ConfigurationLayout }>) => void;
@@ -189,28 +193,56 @@ function bytes(path: string, closure?: SourceClosure): Buffer {
 function json(path: string, closure?: SourceClosure): Record<string, unknown> {
   return parseJsonObject(bytes(path, closure)).raw;
 }
+/** WP14.01: the one rule for a role's extension list, used by the loader and
+ * by every editor. Pure: it judges the authored strings, never the files. */
+export const EXTENSION_LIST_LIMIT = 16;
+export function extensionListProblem(entries: unknown): string | null {
+  if (!Array.isArray(entries) || entries.length < 1 || entries.length > EXTENSION_LIST_LIMIT ||
+      entries[0] !== DEPLOYMENT_LAYOUT.extension || entries.some(entry => typeof entry !== "string") ||
+      new Set(entries).size !== entries.length)
+    return `extensions must start with the trusted OMA extension, be unique, and contain at most ${EXTENSION_LIST_LIMIT} files`;
+  for (const entry of entries as string[]) { const problem = extensionEntryProblem(entry); if (problem) return problem; }
+  return null;
+}
+/** The shape of one entry: a normalized relative path to a JS/TS file. */
+export function extensionEntryProblem(entry: string): string | null {
+  if (!entry || entry.includes("\0") || entry.includes("\\") || isAbsolute(entry) ||
+      entry.split("/").some(part => !part || part === "." || part === ".."))
+    return "extension entry must be a normalized relative file path";
+  if (!/\.(?:js|mjs|ts)$/.test(entry)) return "extension must be a local JS/TS file";
+  return null;
+}
+export type ExtensionAsset =
+  | { readonly kind: "present"; readonly path: string; readonly sha256: string }
+  | { readonly kind: "missing" }
+  | { readonly kind: "refused"; readonly reason: string };
+/** WP14.01 observation adapter: the file an entry names, judged exactly as
+ * the loader judges it -- inside libdir, reached through no symlink, a
+ * regular file of at most 1 MiB. A missing file is reported as missing, so a
+ * declaration can be removed without opening an asset that is not there. */
+export function observeExtensionAsset(libdir: string, entry: string): ExtensionAsset {
+  const problem = extensionEntryProblem(entry);
+  if (problem) return Object.freeze({ kind: "refused", reason: problem });
+  if (!lstatSync(resolve(libdir, entry), { throwIfNoEntry: false })) return Object.freeze({ kind: "missing" });
+  try {
+    const path = localPath(libdir, entry);
+    return Object.freeze({ kind: "present", path, sha256: createHash("sha256").update(bytes(path)).digest("hex") });
+  } catch (error) {
+    return Object.freeze({ kind: "refused", reason: error instanceof Error ? error.message : String(error) });
+  }
+}
 function roleSettings(
   root: string,
   libdir: string,
   role: Record<string, unknown>,
   closure: SourceClosure,
+  assets: boolean,
 ): RoleSettings {
   const entries = role.extensions;
-  if (
-    !Array.isArray(entries) ||
-    entries.length < 1 ||
-    entries.length > 16 ||
-    entries[0] !== DEPLOYMENT_LAYOUT.extension ||
-    entries.some((entry) => typeof entry !== "string") ||
-    new Set(entries).size !== entries.length
-  )
-    return invalid(
-      "extensions must start with the trusted OMA extension, be unique, and contain at most 16 files",
-    );
-  const extensions = entries.map((entry) => {
+  const listProblem = extensionListProblem(entries);
+  if (listProblem) return invalid(listProblem);
+  const extensions = !assets ? [] : (entries as string[]).map((entry) => {
     const path = localPath(libdir, entry);
-    if (!/\.(?:js|mjs|ts)$/.test(path))
-      return invalid("extension must be a local JS/TS file");
     return Object.freeze({
       path,
       sha256: createHash("sha256").update(bytes(path, closure)).digest("hex"),
@@ -322,7 +354,16 @@ function resolveConfigurationLayout(path: string, closure: SourceClosure): Resol
 export function configurationLayout(path: string): ConfigurationLayout {
   return resolveConfigurationLayout(path, new SourceClosure()).layout;
 }
+/** WP14.03/CONFIG-CONTRACT: the authored source of a bundle whose extension
+ * assets may be missing, for the one limited repair of removing a declared
+ * optional entry. Every other rule of the loader still applies. */
+export function readEditableConfigurationSource(path: string): ConfigurationSource {
+  return readSource(path, undefined, false);
+}
 export function readConfigurationSource(path: string, observer?: ConfigurationReadObserver): ConfigurationSource {
+  return readSource(path, observer, true);
+}
+function readSource(path: string, observer: ConfigurationReadObserver | undefined, assets: boolean): ConfigurationSource {
   try {
     const closure = new SourceClosure();
     const resolved = resolveConfigurationLayout(path, closure);
@@ -335,6 +376,7 @@ export function readConfigurationSource(path: string, observer?: ConfigurationRe
         layout,
         authoredRoles: Object.freeze(Object.create(null) as Record<string, AuthoredRoleSource>),
         files: closure.finish(layout.path),
+        extensionAssets: "read",
       };
     const root = dirname(layout.index);
     const host = json(layout.host, closure);
@@ -356,7 +398,7 @@ export function readConfigurationSource(path: string, observer?: ConfigurationRe
       );
       profiles[name] = role.agentProfile;
       authoredRoles[name] = Object.freeze({ path: file, value: Object.freeze({ ...role }) });
-      roles[name] = roleSettings(root, installation.libdir, role, closure);
+      roles[name] = roleSettings(root, installation.libdir, role, closure, assets);
     }
     return {
       host: { ...host, modelProfiles: models, agentProfiles: profiles },
@@ -364,6 +406,7 @@ export function readConfigurationSource(path: string, observer?: ConfigurationRe
       layout,
       authoredRoles: Object.freeze(authoredRoles),
       files: closure.finish(layout.index),
+      extensionAssets: assets ? "read" : "unread",
     };
   } catch (error) {
     if (error instanceof StoreError) throw error;

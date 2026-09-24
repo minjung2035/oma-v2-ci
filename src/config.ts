@@ -1,6 +1,7 @@
 // MUST [CFG-001/002/005]: closed host configuration, no unlimited defaults.
 import {
   readConfigurationSource,
+  readEditableConfigurationSource,
   type AuthoredRoleSource,
   type ConfigurationFileIdentity,
   type ConfigurationLayout,
@@ -113,6 +114,29 @@ export function loadConfigurationSnapshot(path: string, observer?: Configuration
     layout: source.layout,
     authoredRoles: source.authoredRoles,
     sourceFiles: source.files,
+  });
+}
+
+/** WP14.03: an editing input for a bundle whose declared extension assets may
+ * be missing. The host configuration is validated whole; extension assets are
+ * not dereferenced, so this is never a runnable configuration. */
+export interface EditableConfiguration {
+  readonly config: ValidatedConfigCandidate;
+  readonly roles: Readonly<Record<string, { readonly prompt: string }>>;
+  readonly layout: ConfigurationLayout;
+  readonly authoredRoles: Readonly<Record<string, AuthoredRoleSource>>;
+  readonly sourceFiles: readonly ConfigurationFileIdentity[];
+  readonly extensionAssets: "unread";
+}
+export function loadEditableConfiguration(path: string): EditableConfiguration {
+  const source = readEditableConfigurationSource(path);
+  return Object.freeze({
+    config: validateConfig(source.host),
+    roles: Object.freeze(Object.fromEntries(Object.entries(source.roles).map(([name, role]) => [name, Object.freeze({ prompt: role.prompt })]))),
+    layout: source.layout,
+    authoredRoles: source.authoredRoles,
+    sourceFiles: source.files,
+    extensionAssets: "unread" as const,
   });
 }
 

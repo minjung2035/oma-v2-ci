@@ -40,6 +40,13 @@ export const MANAGED_LIMITS: ManagedLimits = Object.freeze({ generations: 16, by
 const GENERATION_ID = /^g-[0-9a-f]{64}$/;
 const JOURNAL = "committed";
 
+/** What a managed edit is derived from: a runnable snapshot, or the editable
+ * source of WP14's limited repair. Only authored roles, prompts, the source
+ * closure and the validated host configuration are used; whether the result
+ * runs is proven by the full loader before publication. */
+export type ManagedSource = Pick<ConfigurationSnapshot, "config" | "layout" | "authoredRoles" | "sourceFiles"> &
+  { readonly roles: Readonly<Record<string, { readonly prompt: string }>> };
+
 /** A role's authored parts a managed edit may carry forward or replace. */
 export interface ManagedRole {
   readonly agentProfile: unknown;
@@ -113,7 +120,7 @@ export function managedGenerationOf(snapshot: Pick<ConfigurationSnapshot, "layou
 /** The roles a managed edit publishes: the snapshot's authored roles with the
  * candidate's agent profiles and any extension selection the edit replaces.
  * Prompt bytes are the ones the loader decoded (UTF-8, BOM kept). */
-export function managedRolesOf(snapshot: ConfigurationSnapshot, edits: ManagedEdit["roles"] = {},
+export function managedRolesOf(snapshot: ManagedSource, edits: ManagedEdit["roles"] = {},
   config: HostConfigV1 = snapshot.config): Record<string, ManagedRole> {
   const roles: Record<string, ManagedRole> = Object.create(null);
   for (const [name, authored] of Object.entries(snapshot.authoredRoles)) {
@@ -149,7 +156,7 @@ function currentBytes(path: string): Buffer {
 /** CONFIG-CONTRACT expected version: every file of the closure the edit was
  * read from still holds the bytes it held. The whole commit below is one
  * synchronous run, so no other edit of this process interleaves after this. */
-function assertCurrent(snapshot: ConfigurationSnapshot): void {
+function assertCurrent(snapshot: ManagedSource): void {
   for (const identity of snapshot.sourceFiles) {
     let bytes: Buffer;
     try { bytes = currentBytes(identity.path); }
@@ -232,7 +239,7 @@ function assertReproduces(manifest: string, config: HostConfigV1, roles: Readonl
  * manifest last. Success is returned only after the manifest's parent flush;
  * a failure after the rename is reported as unconfirmed and blocks the next
  * edit of this bundle until the flush succeeds. */
-export function commitManagedGeneration(snapshot: ConfigurationSnapshot, edit: ManagedEdit, faults?: DurabilityObserver,
+export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEdit, faults?: DurabilityObserver,
   limits: ManagedLimits = MANAGED_LIMITS): ManagedCommit {
   const layout = snapshot.layout;
   if (layout.kind !== "operations")

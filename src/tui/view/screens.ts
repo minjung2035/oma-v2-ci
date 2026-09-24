@@ -112,11 +112,11 @@ function extensionsScreen(input: ViewInput, notice: string | null): string[] {
   const detail = state.detail;
   const row = detail.kind === "extensions" ? detail.row : 0;
   const column = detail.kind === "extensions" ? detail.column : 0;
-  const labelOf = (id: string, locked: boolean): string => `${id}${locked ? " (고정)" : ""}`;
+  const labelOf = (id: string, locked: boolean, missing = false): string => `${id}${locked ? " (고정)" : ""}${missing ? " (파일 없음)" : ""}`;
   // Width follows the longest real name so an id is not silently clipped, but
   // still leaves room for both role columns.
   const longest = data.extensions.reduce((width, extension) =>
-    Math.max(width, cellWidth(labelOf(extension.id, extension.locked))), 0);
+    Math.max(width, cellWidth(labelOf(extension.id, extension.locked, extension.missing))), 0);
   const nameWidth = Math.max(LAYOUT_BOUNDS.minNameColumn.value,
     Math.min(longest + 2, Math.max(LAYOUT_BOUNDS.minNameColumn.value, columns - LAYOUT_BOUNDS.roleColumns.value)));
   const lines = ["EXTENSIONS", "", `  ${pad("", nameWidth)}Principal   Workers`, ""];
@@ -126,7 +126,7 @@ function extensionsScreen(input: ViewInput, notice: string | null): string[] {
     const workers = `[${extension.workers ? "x" : " "}]`;
     const left = index === row && column === 0 ? `<${principal}>` : ` ${principal} `;
     const right = index === row && column === 1 ? `<${workers}>` : ` ${workers} `;
-    lines.push(`${marker} ${pad(labelOf(extension.id, extension.locked), nameWidth)}${pad(left, 12)}${right}`);
+    lines.push(`${marker} ${pad(labelOf(extension.id, extension.locked, extension.missing), nameWidth)}${pad(left, 12)}${right}`);
   });
   lines.push("");
   if (notice !== null) lines.push(fit(notice, columns));
