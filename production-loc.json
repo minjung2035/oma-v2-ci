@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 221,
-    "n_lines": 27561,
+    "n_lines": 27643,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -50,8 +50,14 @@
   },
   "src/entry/oma.ts": {
     "blank": 25,
-    "comment": 156,
-    "code": 328,
+    "comment": 161,
+    "code": 331,
+    "language": "TypeScript"
+  },
+  "src/tui/session.ts": {
+    "blank": 33,
+    "comment": 187,
+    "code": 307,
     "language": "TypeScript"
   },
   "src/tui/model.ts": {
@@ -60,22 +66,16 @@
     "code": 286,
     "language": "TypeScript"
   },
-  "src/tui/session.ts": {
-    "blank": 31,
-    "comment": 171,
-    "code": 285,
-    "language": "TypeScript"
-  },
   "src/runner.ts": {
     "blank": 0,
     "comment": 34,
-    "code": 276,
+    "code": 277,
     "language": "TypeScript"
   },
   "src/runtime/pi-rpc.ts": {
-    "blank": 2,
-    "comment": 10,
-    "code": 270,
+    "blank": 3,
+    "comment": 16,
+    "code": 275,
     "language": "TypeScript"
   },
   "src/config/generations.ts": {
@@ -152,8 +152,8 @@
   },
   "src/runtime/pi-adapter.ts": {
     "blank": 1,
-    "comment": 19,
-    "code": 221,
+    "comment": 27,
+    "code": 223,
     "language": "TypeScript"
   },
   "src/tui/keys.ts": {
@@ -300,9 +300,9 @@
     "code": 160,
     "language": "TypeScript"
   },
-  "src/runtime/principal-delivery.ts": {
-    "blank": 11,
-    "comment": 73,
+  "src/runtime/pi-spawn-plan.ts": {
+    "blank": 8,
+    "comment": 51,
     "code": 160,
     "language": "TypeScript"
   },
@@ -312,10 +312,10 @@
     "code": 159,
     "language": "TypeScript"
   },
-  "src/runtime/pi-spawn-plan.ts": {
-    "blank": 8,
-    "comment": 49,
-    "code": 159,
+  "src/runtime/principal-delivery.ts": {
+    "blank": 11,
+    "comment": 76,
+    "code": 157,
     "language": "TypeScript"
   },
   "src/diagnostics/integrity.ts": {
@@ -606,6 +606,12 @@
     "code": 81,
     "language": "TypeScript"
   },
+  "src/runtime/host-tenure.ts": {
+    "blank": 18,
+    "comment": 78,
+    "code": 81,
+    "language": "TypeScript"
+  },
   "src/storage/context-snapshot.ts": {
     "blank": 2,
     "comment": 12,
@@ -639,12 +645,6 @@
   "src/protocol/run-lease.ts": {
     "blank": 1,
     "comment": 3,
-    "code": 77,
-    "language": "TypeScript"
-  },
-  "src/runtime/host-tenure.ts": {
-    "blank": 17,
-    "comment": 75,
     "code": 77,
     "language": "TypeScript"
   },
@@ -1333,9 +1333,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1107,
-    "comment": 3944,
-    "code": 22510,
+    "blank": 1111,
+    "comment": 3987,
+    "code": 22545,
     "nFiles": 221
   }
 }

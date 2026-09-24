@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "057a4702adcddd972bd4daae7f6881fe992da9050b18a6efe0b39e4dc0e0eb12",
-  "report": "76b04b96fafaf82a64fe6ed7f63b8020c29bc840cf602537899885d42e982f4d",
+  "report": "1c6c1fa6acaa12e0505abd002e4145f67d8f4390ea986b1871d73090f1e2cbc7",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -297,7 +297,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "d635e8a00526692adc0b17bbb5a9a7bbc2b98ccbd792d073e7d056ddf1f94f29"
+      "sha256": "791bedfc98ef47626ca834c35f14c5e63cae4880653400ac5f1b204722fc8b5c"
     },
     {
       "path": "src/entry/runner.ts",
@@ -593,7 +593,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "2aa094fbc10de99c9a57c4a2c56f15c4cdc34b230e2c300d292844f3c16f5e37"
+      "sha256": "af1052a03f8dcf0144170df8c78dedf524b484c1d296abe29e0f359be05abe45"
     },
     {
       "path": "src/runtime/assets.ts",
@@ -621,7 +621,7 @@
     },
     {
       "path": "src/runtime/host-tenure.ts",
-      "sha256": "494101aafece59715888a874e4df84b5c9f5bc47764d084d724dd61a02f18b9a"
+      "sha256": "c14a32d6ac54bb518394f0ab42ffa9afd529400465ad6e9e3fa87cdd426c5f13"
     },
     {
       "path": "src/runtime/inference-relay.ts",
@@ -629,11 +629,11 @@
     },
     {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "662307d3ed19682384e852d3e43c7cb9fd204b10b6117700bcefbd4e54f52b68"
+      "sha256": "d481474d57a2b14ec9337d00980170f06e647f235a1029f239700048bc738279"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
-      "sha256": "a37b41d90a7c07d27597e7ad4dccb53e0ef86f4636b1bd54d60ff827accb6f32"
+      "sha256": "3e7d0dc9a01f3e319ae76a6f08074e8d694faf014dcd4823aa8039f4144ece4c"
     },
     {
       "path": "src/runtime/pi-runtime.ts",
@@ -641,11 +641,11 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "596f35cf86f2aca9cfc13bcc5ccae55426b2913eb49e0a1e51e37edc2d5dfd49"
+      "sha256": "c6d2ab0186787b180304187957ad2715787ad74e7457d0f04e27e1efb2ca904c"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
-      "sha256": "e449d9057179ea4f4047cba5990ac8a89a52d23183e755dbb1aa9d1146c24119"
+      "sha256": "8554a548abb1a623370a050385ff5cde3260c4f4634562862886c5e9387ad467"
     },
     {
       "path": "src/runtime/process-lock.ts",
@@ -809,7 +809,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "b7564097677b79b46ada376f431e8a8b718f1c0f7e2802398910713591be7d6e"
+      "sha256": "053e1f2b1e00d55e88e00b0928e0a523251dfe924dae2c0c7b117b7e0d028e2f"
     },
     {
       "path": "src/tui/sources/extensions.ts",
