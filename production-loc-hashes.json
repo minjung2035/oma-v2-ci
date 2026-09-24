@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "057a4702adcddd972bd4daae7f6881fe992da9050b18a6efe0b39e4dc0e0eb12",
-  "report": "1c6c1fa6acaa12e0505abd002e4145f67d8f4390ea986b1871d73090f1e2cbc7",
+  "report": "d6c6d234adfd9daa5e6165933f8637034435175380587ca72eb75f92ebd5e7b7",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -37,7 +37,7 @@
     },
     {
       "path": "implementation/systemd/resident.service.in",
-      "sha256": "06401418cbfab864f2b1ed50bb96a49f3fd06e35bc89022f37e72b6e06ce798f"
+      "sha256": "0ba6383247e87ab215e0fcec8d72728202b762a6deaf53b676a6e8651e1bddbd"
     },
     {
       "path": "src/authority.ts",
@@ -269,7 +269,7 @@
     },
     {
       "path": "src/domain/resources.ts",
-      "sha256": "123ecc19ea394ad573f7b6a6e3993748e730665b7046b93511f4aba1ffc73a63"
+      "sha256": "e51c2da2e124816954c2c5b71daef7d5556d50f5f0e20ad37bad47b03b98e94f"
     },
     {
       "path": "src/domain/spec-identity.ts",
@@ -301,7 +301,7 @@
     },
     {
       "path": "src/entry/runner.ts",
-      "sha256": "905e6c1512e9f265f22e30a58d3b599ba76b1ed87129d9c7568ced30cb8688a7"
+      "sha256": "8ccafbba89a07d5668a8794e30ed1847fd0f6503f01de22de72d8d6d93b847c5"
     },
     {
       "path": "src/extension/batch-view.ts",
@@ -861,7 +861,7 @@
     },
     {
       "path": "src/units.ts",
-      "sha256": "c66c13f41530ae454547c8c448b1612e5e0e713c555e93f070a418b80ed640c1"
+      "sha256": "b2f580a98c4f3c76b410bb07ef0706a552cdb3b7cca1288b30f42169d9bc4db0"
     },
     {
       "path": "src/units/execute.ts",
@@ -873,7 +873,7 @@
     },
     {
       "path": "src/units/render.ts",
-      "sha256": "a5b3c04a6f23205d4444a15d0c749eced708fadbe2f86ceabce1f1763799dff5"
+      "sha256": "237e11328547d1578ebd9594d2a2cf5b5a0a125945f5f74f4cd772435fd62f7e"
     },
     {
       "path": "src/validate.ts",
