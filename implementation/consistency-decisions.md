@@ -96,6 +96,14 @@ explicit flat export to a new destination; never automatic flattening/overwrite.
 Backup includes manifest, generation closure and prompts. Rollback is a new validated
 pointer commit, not deletion of history or rewriting accepted specs.
 
+WP13 result (2026-09-24): budgets fixed at 16 committed generations or 256 MiB of
+generation bytes; one generation is bounded by the loader closure (256 files, 8 MiB),
+so a valid bundle's first managed edit always fits. Exhaustion refuses the edit with
+LIMIT_EXCEEDED before any write. Collection runs only at the owner's quiescent start
+(tenure held, no broker) and keeps the current and the previously committed generation.
+Generation identity recipe `oma-config-generation-v1` is pinned by golden vectors.
+Published generations are read-only (0500/0400), so an in-place writer is refused.
+
 ### D03 — NEEDS_RUNTIME_EVIDENCE; WP03 is mandatory
 
 Accept one startup-owned launch location (society, state/run roots, config path,

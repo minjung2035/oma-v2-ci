@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 220,
-    "n_lines": 26799,
+    "n_files": 221,
+    "n_lines": 27105,
     "report_file": "production-loc.json"
   },
   "src/durable.ts": {
@@ -60,16 +60,16 @@
     "code": 280,
     "language": "TypeScript"
   },
+  "src/entry/oma.ts": {
+    "blank": 24,
+    "comment": 141,
+    "code": 279,
+    "language": "TypeScript"
+  },
   "src/runner.ts": {
     "blank": 0,
     "comment": 34,
     "code": 276,
-    "language": "TypeScript"
-  },
-  "src/entry/oma.ts": {
-    "blank": 24,
-    "comment": 136,
-    "code": 275,
     "language": "TypeScript"
   },
   "src/runtime/pi-rpc.ts": {
@@ -78,10 +78,10 @@
     "code": 270,
     "language": "TypeScript"
   },
-  "src/tui/sources/settings.ts": {
-    "blank": 27,
-    "comment": 48,
-    "code": 269,
+  "src/config/generations.ts": {
+    "blank": 19,
+    "comment": 64,
+    "code": 261,
     "language": "TypeScript"
   },
   "src/broker/connection.ts": {
@@ -124,6 +124,12 @@
     "blank": 7,
     "comment": 13,
     "code": 235,
+    "language": "TypeScript"
+  },
+  "src/tui/sources/settings.ts": {
+    "blank": 21,
+    "comment": 49,
+    "code": 233,
     "language": "TypeScript"
   },
   "src/extension/mail-tools.ts": {
@@ -378,12 +384,6 @@
     "code": 142,
     "language": "TypeScript"
   },
-  "src/tui/sources/extensions.ts": {
-    "blank": 12,
-    "comment": 26,
-    "code": 141,
-    "language": "TypeScript"
-  },
   "src/lifecycle/actions.ts": {
     "blank": 5,
     "comment": 11,
@@ -411,6 +411,12 @@
   "src/runtime/provision.ts": {
     "blank": 12,
     "comment": 96,
+    "code": 134,
+    "language": "TypeScript"
+  },
+  "src/tui/sources/extensions.ts": {
+    "blank": 11,
+    "comment": 28,
     "code": 134,
     "language": "TypeScript"
   },
@@ -1327,9 +1333,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1083,
-    "comment": 3734,
-    "code": 21982,
-    "nFiles": 220
+    "blank": 1095,
+    "comment": 3806,
+    "code": 22204,
+    "nFiles": 221
   }
 }

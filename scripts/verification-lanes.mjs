@@ -133,6 +133,7 @@ export const lanes = Object.freeze({
   },
   durable: {
     files: [
+      "config-generations.test.js",
       "config-editing.test.js",
       "preaccept-scope.test.js",
       "delivery-receipt-publication.test.js",
@@ -169,6 +170,10 @@ export const lanes = Object.freeze({
     ],
     sourceFiles: [],
     requiredNames: [
+      "D02 generation identity",
+      "V13A:",
+      "V13B:",
+      "V13C:",
       "V02B:",
       "V11A:",
       "V17A:",

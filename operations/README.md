@@ -60,24 +60,42 @@ new-operations/
 
 읽기는 파일당 1 MiB, role 최대 64개, role별 extension 최대 16개로 제한된다. 누락·미등록 model·중복 소유·알 수 없는 필드·경로 이탈·참조 파일의 symlink·비정상 파일을 거절한다. host가 지정한 최상위 config 경로의 symlink는 실제 파일 위치로 해석한다. 상대 참조는 `..`, 절대 경로, URL을 허용하지 않는다. 설정 묶음은 host가 관리해야 하며 이 경로 검사가 전체 same-UID 경합 방어 또는 다중 파일 원자적 배포를 보장하지 않는다. 설정을 갱신하는 동안 새 프로세스를 시작하지 않는다.
 
-### 채택된 관리형 편집 방향 — 아직 운영 검증 전
+### 관리형 편집 (D02, WP13)
 
-[WP01 D02](../implementation/consistency-decisions.md)는 manual bundle을 그대로 읽되
-관리형 편집을 immutable `.oma-config/generations/<generation>/`과 manifest-last
-commit으로 전환하기로 결정했다. 이것은 위 수동 파일 묶음의 원자성을 소급 주장하지
-않는다. 현재 구현의 writer는 아직 이 보장을 제공하지 않는다(WP11–14).
+제품의 설정 화면과 extension 화면이 분할 bundle을 바꿀 때는 파일을 제자리에서 고치지 않는다.
+한 번의 편집은 index 옆 `.oma-config/generations/<id>/`에 host·models·role·prompt 전체를
+새로 쓰고, 모든 파일과 디렉터리를 flush한 뒤 일반 JSON manifest(`config.json`)를 마지막에
+한 번 교체하고 그 parent를 flush해야 성공으로 보고한다. 읽는 쪽은 manifest를 한 번 읽으므로
+완전한 옛 설정이나 완전한 새 설정만 본다. rename 뒤 flush 실패는 "게시됐지만 영속 불명"으로
+보고되며, 같은 bundle의 다음 편집은 그 flush를 다시 확인한 뒤에만 진행한다.
 
-한 snapshot에서 layout/content를 함께 읽고 전체 후보를 검증한다. writer는 host tenure
-하에서 version 비교부터 publication까지 직렬화한다. 새 파일과 directory chain을 flush한
-뒤 ordinary JSON manifest를 교체하고 parent를 flush해야 성공이다. rename 이후 flush
-실패는 outcome-unconfirmed이며 재관측 전 rollback/자동 overwrite하지 않는다.
-promptFile은 계속 index root 기준이며 extension code는 config generation에 포함하지 않는다.
-finite retention budget, old-reader compatibility 및 새 목적지로의 explicit flat export를
-WP13에서 검증하기 전 관리형 편집을 지원한다고 표시하지 않는다. 승격 뒤 구버전 writer는
-사용하지 않는다. backup에는 index와 generation/prompt closure를 함께 포함한다.
+- **처음 편집**: 수동 bundle의 파일은 그대로 남는다(rollback/export 근거). 여러 profile이 같은
+  role 파일을 가리키면 profile별 사본으로 펼치되 효과는 같아야 게시된다.
+- **충돌**: 화면이 읽은 뒤 manifest나 그 closure의 어떤 파일이라도 바뀌었으면 편집은
+  `POLICY_CHANGED`로 거절되고 아무것도 쓰지 않는다. 다시 읽고 편집한다. 비협조적인 same-UID
+  writer와의 동시 편집은 여전히 지원하지 않는다.
+- **정책 revision**: host·model·role·prompt·extension 선택·tool surface의 의미가 바뀐 편집만
+  `integration.policyRevision`을 바꾼다. 의미가 같은 저장은 아무것도 게시하지 않는다.
+- **구버전 writer 금지**: 게시된 generation 디렉터리는 읽기 전용(0500/0400)이다. 파일을
+  제자리에서 고치는 writer는 파일시스템이 거절한다. 관리형으로 승격한 bundle에는 구버전
+  바이너리의 편집 기능을 쓰지 않는다. 직접 지우려면 먼저 `chmod -R u+w`가 필요하다.
+- **보관 한도**: 게시된 generation 16개 또는 generation 전체 256 MiB를 넘는 편집은
+  `LIMIT_EXCEEDED`로 거절한다. 한 generation은 loader 한도(파일 256개·8 MiB) 안이므로
+  유효한 설정의 첫 편집은 언제나 가능하다. 정리는 `oma`가 society를 소유하고 broker가
+  없는 시작 시점에만 하며, 현재와 직전 generation을 남기고 나머지와 중단된 staging·임시
+  manifest를 지운다. 나이만으로 지우지 않는다. 읽기 한도는 바뀌지 않는다.
+- **export**: `npm run config:export -- <config.json> <새 디렉터리>`는 현재
+  manifest가 가리키는 설정을 새 위치에 평평한 수동 bundle로 쓴다. 입력과 기존 출력은
+  바꾸지 않는다. backup에는 index와 `.oma-config` 전체를 함께 포함한다.
+- **rollback**: 이전 설정으로 돌아가는 것은 검증된 새 generation을 게시하는 일이다. history를
+  지우거나 수락된 spec을 다시 쓰지 않는다.
+- inline `config.json`은 기존처럼 전체 검증 뒤 같은 파일을 durable하게 교체한다.
 
-D03의 custom locator/XDG 전달 및 foreground/systemd lifetime 동등성은 WP03의 실제
-disposable user-manager gate다. 이 문서나 TUI 기동 성공만으로 그 gate를 통과하지 않는다.
+D03(WP03): 제품이 띄운 broker는 config 경로·state root·run root를 Resident unit의 ExecStart에
+그대로 전달하고, 존재하지 않는 broker.service에 Resident를 묶지 않으며 종료할 때 Resident를
+정지한다. user manager의 런타임 디렉터리가 아닌 `XDG_RUNTIME_DIR`로는 시작하지 않는다
+(`UNSUPPORTED_PROFILE`). systemd가 fixed broker unit으로 broker를 실행하는 운영 방식은
+렌더링만 검증됐고 지원한다고 표시하지 않는다.
 D04의 bounded settlement/read/safety 예산 분리는 WP21–23의 구현·ENOSPC 검증 대상이며
 tree scan quota를 kernel hard cap이나 ENOSPC에도 성공하는 보장으로 해석하지 않는다.
 
