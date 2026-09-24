@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 222,
-    "n_lines": 27934,
+    "n_lines": 27953,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -294,15 +294,15 @@
     "code": 163,
     "language": "TypeScript"
   },
+  "src/runtime/pi-spawn-plan.ts": {
+    "blank": 8,
+    "comment": 54,
+    "code": 162,
+    "language": "TypeScript"
+  },
   "src/git.ts": {
     "blank": 2,
     "comment": 9,
-    "code": 160,
-    "language": "TypeScript"
-  },
-  "src/runtime/pi-spawn-plan.ts": {
-    "blank": 8,
-    "comment": 51,
     "code": 160,
     "language": "TypeScript"
   },
@@ -415,9 +415,9 @@
     "language": "TypeScript"
   },
   "src/sandbox.ts": {
-    "blank": 8,
-    "comment": 36,
-    "code": 136,
+    "blank": 9,
+    "comment": 39,
+    "code": 137,
     "language": "TypeScript"
   },
   "src/domain/errors.ts": {
@@ -546,6 +546,12 @@
     "code": 91,
     "language": "TypeScript"
   },
+  "src/runtime/engine-auth.ts": {
+    "blank": 7,
+    "comment": 32,
+    "code": 91,
+    "language": "TypeScript"
+  },
   "src/mail/facts.ts": {
     "blank": 5,
     "comment": 8,
@@ -555,12 +561,6 @@
   "src/extension/cli-process.ts": {
     "blank": 6,
     "comment": 51,
-    "code": 88,
-    "language": "TypeScript"
-  },
-  "src/runtime/engine-auth.ts": {
-    "blank": 5,
-    "comment": 28,
     "code": 88,
     "language": "TypeScript"
   },
@@ -1339,9 +1339,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1124,
-    "comment": 4071,
-    "code": 22739,
+    "blank": 1127,
+    "comment": 4081,
+    "code": 22745,
     "nFiles": 222
   }
 }

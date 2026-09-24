@@ -142,6 +142,10 @@ export const lanes = Object.freeze({
   },
   durable: {
     files: [
+      "inference-relay.test.js",
+      "engine-inference-chain.test.js",
+      "resident-sandbox-live.test.js",
+      "resident-confinement.test.js",
       "cli-receipt-replay.test.js",
       "r14-connection-lifecycle.test.js",
       "r15-channel-generations.test.js",
@@ -189,6 +193,12 @@ export const lanes = Object.freeze({
     ],
     sourceFiles: [],
     requiredNames: [
+      "V27A:",
+      "V27B:",
+      "T113",
+      "T114",
+      "T116",
+      "T117",
       "V26B:",
       "WP26: a receipt the request cache cannot record",
       "actual CLI uses authoritative receipts",

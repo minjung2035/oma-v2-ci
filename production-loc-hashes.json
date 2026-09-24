@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3c9fb1fa11955caa2c813975246c113092921a3081e7c1d8f63b47bffe0a1651",
-  "report": "46cf78f51adc1bac43bd443685a31b1f125d877a7e662fbbec7d65048ea6a870",
+  "report": "dac0de068dd1e4afc22b975cc22a68f4cc1b9b278fd91fa8496456709eb967dd",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -613,7 +613,7 @@
     },
     {
       "path": "src/runtime/engine-auth.ts",
-      "sha256": "7b70da18274972ede35ffa6d9d5982991016fc0abce27e4934d2dd96ba8809df"
+      "sha256": "4afb938ea918f6b2c25a4ad8010570559cd9cde7cf04485276aca1e697cac36b"
     },
     {
       "path": "src/runtime/extension-integrity.ts",
@@ -641,7 +641,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "c6d2ab0186787b180304187957ad2715787ad74e7457d0f04e27e1efb2ca904c"
+      "sha256": "37196d787576e67fab98e33c9207c98621380bb762c6412c2c1de5de265d0755"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -673,7 +673,7 @@
     },
     {
       "path": "src/sandbox.ts",
-      "sha256": "7a16f635a201894766afc498c0405e8bfabc4783f9e0d79307bc2b0dc23fbfc3"
+      "sha256": "e5d294e9d7108c0b9742787a61c825e2f245365e48767a36b8c608b64ab533bd"
     },
     {
       "path": "src/storage/batch-view.ts",
