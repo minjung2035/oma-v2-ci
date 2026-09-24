@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -72,6 +72,25 @@ function bundle(root: string): string {
   return index;
 }
 
+/** D02/WP13: split-bundle edits publish a managed generation; observe them
+ * through the loader, never by reading the authored files that are kept. */
+const authored = (index: string, role: string): Record<string, unknown> =>
+  readConfigurationSource(index).authoredRoles[role]!.value as Record<string, unknown>;
+const hostOf = (index: string): Record<string, unknown> => {
+  const layout = layoutOf(index);
+  assert.equal(layout.kind, "operations");
+  return readJson(layout.kind === "operations" ? layout.host : "");
+};
+const removeTree = (root: string): void => {
+  // Published generations are read-only; the test owns them.
+  const walk = (path: string): void => {
+    try { chmodSync(path, 0o700); } catch { return; }
+    for (const entry of readdirSync(path, { withFileTypes: true })) if (entry.isDirectory()) walk(join(path, entry.name));
+  };
+  walk(root);
+  rmSync(root, { recursive: true, force: true });
+};
+
 test("toggling an extension preserves every other field of the role file", () => {
   const root = scratch("oma-defect-ext-");
   try {
@@ -81,20 +100,20 @@ test("toggling an extension preserves every other field of the role file", () =>
 
     toggleExtension(context, "extensions/review.js", "principal", true);
 
-    const written = readJson(join(root, "principal.json"));
+    const written = authored(index, "principal");
     assert.deepEqual(written.extensions, [CORE, "extensions/review.js"]);
     // The optional projection and the prompt reference must survive the toggle.
     assert.deepEqual(written.toolSurface, SURFACE);
-    assert.equal(written.promptFile, "prompt.md");
+    assert.match(String(written.promptFile), /^\.oma-config\/generations\/g-[0-9a-f]{64}\/prompts\/principal\.md$/);
     assert.ok(written.agentProfile, "agentProfile must remain");
-    // The loader still accepts the file, so the projection is still validated.
+    // The loader still accepts the bundle, so the projection is still validated.
     const roles = readConfigurationSource(index).roles;
     assert.ok(roles["principal"]!.toolSurface, "toolSurface survives a round trip");
     assert.deepEqual(roles["principal"]!.toolSurface!.roots, ["web"]);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally { removeTree(root); }
 });
 
-test("a Config edit patches the split bundle's real owners instead of flattening it", () => {
+test("a Config edit publishes the split bundle as a generation instead of flattening it", () => {
   const root = scratch("oma-defect-cfg-");
   try {
     const index = bundle(root);
@@ -110,32 +129,33 @@ test("a Config edit patches the split bundle's real owners instead of flattening
     assert.ok(manifest.roles, "roles map survives");
     assert.equal(manifest.quota, undefined, "the index must not gain flattened host fields");
 
-    // The change landed in the role file, and its projection is untouched.
-    const principal = readJson(join(root, "principal.json"));
+    // The change is the principal role's, and its projection is untouched.
+    const principal = authored(index, "principal");
     assert.equal((principal.agentProfile as Record<string, unknown>).modelProfile, "cheap");
     assert.deepEqual(principal.toolSurface, SURFACE);
 
     // CFG-005: the policy revision moved with the edit.
-    const host = readJson(join(root, "host.json"));
-    assert.notEqual((host.integration as Record<string, unknown>).policyRevision, "rev-initial");
+    assert.notEqual((hostOf(index).integration as Record<string, unknown>).policyRevision, "rev-initial");
+    // The authored files the bundle was migrated from are kept as they were.
+    assert.equal((readJson(join(root, "principal.json")).agentProfile as Record<string, unknown>).modelProfile, "strong");
 
     // The bundle still loads, so nothing structural was destroyed.
     const reloaded = readSettings(index);
     assert.equal(reloaded.config.agentProfiles["principal"]!.modelProfile, "cheap");
     assert.ok(readConfigurationSource(index).roles["resident"]!.toolSurface);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally { removeTree(root); }
 });
 
-test("a quota edit on a split bundle lands in the host file only", () => {
+test("a quota edit on a split bundle lands in the host configuration only", () => {
   const root = scratch("oma-defect-quota-");
   try {
     const index = bundle(root);
     commitField(readSettings(index), WORKER_LIMIT, 12);
-    const host = readJson(join(root, "host.json"));
-    assert.equal((host.quota as Record<string, unknown>).societyAgents, 12);
+    assert.equal((hostOf(index).quota as Record<string, unknown>).societyAgents, 12);
     assert.equal(readJson(index).kind, "oma-operations-v1");
-    assert.deepEqual(readJson(join(root, "resident.json")).toolSurface, SURFACE);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+    assert.deepEqual(authored(index, "resident").toolSurface, SURFACE);
+    assert.equal((authored(index, "resident").agentProfile as Record<string, unknown>).modelProfile, "cheap");
+  } finally { removeTree(root); }
 });
 
 test("a worker model edit targets the resident role, not the principal", () => {
@@ -143,9 +163,13 @@ test("a worker model edit targets the resident role, not the principal", () => {
   try {
     const index = bundle(root);
     commitField(readSettings(index), WORKER_MODEL, "strong");
-    assert.equal((readJson(join(root, "resident.json")).agentProfile as Record<string, unknown>).modelProfile, "strong");
-    assert.equal((readJson(join(root, "principal.json")).agentProfile as Record<string, unknown>).modelProfile, "strong");
-  } finally { rmSync(root, { recursive: true, force: true }); }
+    assert.equal((authored(index, "resident").agentProfile as Record<string, unknown>).modelProfile, "strong");
+    assert.equal((authored(index, "principal").agentProfile as Record<string, unknown>).modelProfile, "strong");
+    // The principal was already "strong"; switching the worker to "cheap" leaves it so.
+    commitField(readSettings(index), WORKER_MODEL, "cheap");
+    assert.equal((authored(index, "resident").agentProfile as Record<string, unknown>).modelProfile, "cheap");
+    assert.equal((authored(index, "principal").agentProfile as Record<string, unknown>).modelProfile, "strong");
+  } finally { removeTree(root); }
 });
 
 test("the Principal session carries its role's projection into the Pi process", () => {
