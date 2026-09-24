@@ -266,7 +266,8 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
     // A configured seed count must not be presented as a running count.
     assert.match(byLabel.get("Workers")!, /configured/);
     assert.match(byLabel.get("Usage")!, /^unknown/);
-    assert.equal(byLabel.get("Mail"), "2 unread");
+    // WP28: the count is what waits for the Principal's session, not reading.
+    assert.equal(byLabel.get("Mail"), "2건 Principal 세션에 전달 대기");
 
     const observed = dashboardLines({
       config: cfg, principalModel: { configured: "strong", session: null }, unread: 0,
