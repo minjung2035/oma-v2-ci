@@ -808,3 +808,50 @@ NOT_RUN. **Verdict: not release-approved.** What is established: every card's co
 and oracles, local lanes, the disposable-user kernel and crash lanes, the bundled
 engine and a real pty. What is not: 139 files not re-read, power loss, a real
 provider, CI.
+
+## Re-review and adversarial verification (after WP32)
+
+Oracle closure. Every one of the plan's 73 oracles is now a test by its own id, or
+carried by named tests that an executed lane requires (`implementation/oracle-map.json`:
+V00A/V32B by the R38 digest binding, V00B by the R35 evidence policy, V10B by R37
+shutdown, V25B by SEQ-002 and T38, V26A by R14/R15, V29B by V02A and V32A, V30B by
+the crash evidence policy and V07B), or recorded as not run (V05C power loss, V30B
+powercut/provider, V32B CI), which the verdict lists. The check found that SEQ-002,
+T38, the R38 digest tests and the R35 evidence tests ran but no lane required them,
+and that `runtime-contracts` (SEQ-002 stop ordering) ran in no lane at all; they are
+required now.
+
+Mutants for the cards finished in earlier sessions (WP04-WP06, WP11, WP12, WP17-WP22,
+WP24), one minimal reversion of a guard each, run on the disposable account: 30
+mutants, 23 failed their card's oracles at once. The 7 that survived were gaps, not
+equivalents, except one:
+
+| Survivor | Gap | New oracle |
+|---|---|---|
+| WP05 receipt file not fsynced before publication | seams named the flush; nothing watched it | V05A watches `fsyncSync` itself |
+| WP06 unreadable receipt directory read as absent | no test of a directory that cannot be opened | V06A directory EACCES is unavailable |
+| WP06 live completion ignores incarnation / session path | the broker's run check masked the Mail check | V06A binds incarnation and session directly |
+| WP12 one file over 1 MiB | only the aggregate bound was tested | V12B single-file bound |
+| WP12 file changed before snapshot completion | no seam after the manifest | `source-read` observer seam; V12A |
+| WP18 replaced staging root deleted by cleanup | no replacement test | V18A replaced root kept, REF_STATE_UNKNOWN |
+| WP24 recovery CAS losing to a third writer settled | only the live race was tested | V24A race at the last policy reread |
+| WP11 commit without the first validation | -- | equivalent: both writers validate again before writing |
+
+Rerun: 8 of the 9 now fail; the ninth, a change inside one file's read (between the
+read and the second fstat), is a race no seam can place deterministically without
+an intrusive hook in the read path; it stays a code-reviewed guard.
+
+Counterexamples tried against the finished product:
+
+- A Resident flooding its own actor socket: every connection cost the broker a
+  socket and a peer pidfd with no bound (INV10). Fixed: `ACTOR_CONNECTIONS` (16) per
+  actor socket, refused by the kernel listener before a pidfd is taken; V26A shows the
+  flood held and the Resident answered after it (the uncapped listener fails it).
+- Idle connections to the inference relay (WP27 "연결 수"): unbounded. Fixed:
+  `RELAY_CONNECTIONS_PER_REQUEST` × concurrency; V27B (the uncapped relay fails it).
+- A status view dated ahead of the reader's clock (a clock set back): shown as the
+  current observation for as long as the jump (INV11). Fixed: more than one refresh
+  interval ahead is unknown with its reason; T118.
+- Terminal escape bytes in a Resident's mail subject or body, or in engine output:
+  refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
+  controls and zero-width clusters.
