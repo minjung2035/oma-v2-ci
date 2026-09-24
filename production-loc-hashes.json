@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "057a4702adcddd972bd4daae7f6881fe992da9050b18a6efe0b39e4dc0e0eb12",
-  "report": "11fdc0b93850269ac2ee5bfcfec6d44b72edb715733ec915e279d91676e2fc2c",
+  "report": "cbede0b259d0666013b1543dbb0e77f45e0b502f356bc289f926a16dd25504ab",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -169,7 +169,7 @@
     },
     {
       "path": "src/config.ts",
-      "sha256": "5ce40b15a5f8afc0febb4e75bc58238982b896d380f54f80d5c98ba129a4b442"
+      "sha256": "6b53ad03e714d659c3a7278185165b55df08ddaf9fdb7c9d3a38199f28cd2283"
     },
     {
       "path": "src/config/defaults.ts",
@@ -177,11 +177,11 @@
     },
     {
       "path": "src/config/generations.ts",
-      "sha256": "ce6f9e5d5e7cb317c97b61d7f180c2fd4bf5d482f0d2372f0fc5c661f1f89169"
+      "sha256": "68653914d498aede74d5347c7ab606b7aef02d827a180b13738d750879d51498"
     },
     {
       "path": "src/config/operations.ts",
-      "sha256": "a8dd12d3a6a38ed11544ecab66bf5fe5b57a39caf879940fcbbdf090dd6cf743"
+      "sha256": "ea053796836ef69b523f76936fc3c20ea461b70dfc73875e67cabe6efd8004b5"
     },
     {
       "path": "src/config/policy.ts",
@@ -793,11 +793,11 @@
     },
     {
       "path": "src/tui/limits.ts",
-      "sha256": "83f1ca34c40df39c005bff93ecef6c07ddcd2f11d97c638fecf6f9f7d1dacb5c"
+      "sha256": "7839c2f05699eabac5905d63901e65ba37f590c8cb3e14b58cc32c4cd7cf10cc"
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "a3da39b9fe9a0774ea7da8d9f4e0c85a754b7aba3dc234dbad8c000cb1b220c9"
+      "sha256": "3e92f47bdb3d1848f87eba6bf0b5a05c3721a3a9e985e6542243a37d7fe9428d"
     },
     {
       "path": "src/tui/prompt.ts",
@@ -813,7 +813,7 @@
     },
     {
       "path": "src/tui/sources/extensions.ts",
-      "sha256": "04732129e61cef103625220bf2a581db7027519a215d2b56ff8842829bb1c8d7"
+      "sha256": "b593245bf20d692a4d2e16694c8c5f384c3f126d26c014eb82a5c2e0732d157f"
     },
     {
       "path": "src/tui/sources/mail.ts",
@@ -821,7 +821,7 @@
     },
     {
       "path": "src/tui/sources/settings.ts",
-      "sha256": "b8004ad97ff23ecd0a5e48ac6aeb1bd406bcab7f530622d3104461c17fb7e769"
+      "sha256": "2b9c702e9a1e542b82b13587a18197c2c792c8c5a9a238323791e1287012e7ba"
     },
     {
       "path": "src/tui/transcript.ts",
@@ -853,7 +853,7 @@
     },
     {
       "path": "src/tui/view/screens.ts",
-      "sha256": "61710b6abdf84035dd50fbb9a98125a7ea69300af7e4163d5951fcdb191fdbd0"
+      "sha256": "56329b288b5674af471cf37425d19f88fbc246e839cdf6b3acb034a1ee43b36d"
     },
     {
       "path": "src/tui/view/text.ts",

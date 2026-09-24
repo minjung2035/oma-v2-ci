@@ -1452,8 +1452,8 @@
   }
  ],
  "files": 222,
- "runtimeEdges": 821,
- "typeOnlyEdges": 316,
+ "runtimeEdges": 822,
+ "typeOnlyEdges": 317,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 215,
   "L2-facts -> L1-kernel": 30,
@@ -1465,7 +1465,7 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 40,
-  "L5-entry -> L1-kernel": 68,
+  "L5-entry -> L1-kernel": 69,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
   "L5-entry -> L4-orchestration": 24,
@@ -1527,7 +1527,7 @@
   "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 4,
-  "node:crypto": 26,
+  "node:crypto": 25,
   "node:fs": 60,
   "node:http": 1,
   "node:https": 1,
