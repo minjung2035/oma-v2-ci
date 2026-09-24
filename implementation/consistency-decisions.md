@@ -652,3 +652,46 @@ could read before its broker exists. Recorded, not changed.
 Lanes: the repository has no `pty` lane; V28B runs in the durable lane with Python's
 pty module (a skip there is not a pass). Not covered: the whole `oma` entry in a pty
 with a real broker and engine, SIGHUP, and terminal emulator differences.
+
+## WP31 — the installation, its support range and its lockfile
+
+WP31.01 — the support table lives in `operations/README.md` ("지원 범위 (WP31)"): Node
+24.21.0, Debian 13 / Linux 6.12 / cgroup v2, systemd 257.13, util-linux 2.41.5,
+bubblewrap 0.12.0 at `/usr/bin/bwrap`, the 0.85.1 engine packages, koffi 3.2.1,
+nodemailer 10.0.1, typebox 1.3.7, with each host difference and the WP that met it.
+Anything not listed is NOT_RUN, not assumed.
+
+WP31.02/03 — the declared deployment is a built tree used as `installation.libdir`
+(DEPLOYMENT_LAYOUT, checked by `check:package`). `npm pack` ships no `dist`, and the
+package declares no `bin`: the README said `oma` was an installed command, which no
+install step provides. The README now gives the real invocation (`node
+<install>/dist/src/entry/oma.js`) and says no command is put on PATH; adding a
+`bin`/installer is an install-surface (C2) decision not taken here.
+
+V31A: the closure -- `dist`, schema, unit templates, `package.json`, the lockfile
+and the lockfile's production modules -- copied to a fresh prefix passes
+`check:package`, and with every module resolution and file read into the source
+tree refused it resolves its assets, runs its own engine (`--version` 0.85.1), and
+loads the broker, runner, host and CLI entries to their own usage checks. Found and
+fixed: the engine lookup walked every `node_modules` from the installation up to
+`/`, so an installation missing its engine ran another installation's; it now looks
+only in the installation root's own `node_modules` and otherwise refuses
+(UNSUPPORTED_PROFILE). The previous lookup fails V31A.
+
+WP31.05 — found and fixed: on 2026-09-19 `package.json` moved the engine and
+`pi-tui` to `dependencies` but `package-lock.json` kept them as development
+dependencies (dev-flagged with their whole closure), so a production install
+(`npm ci --omit=dev`) left the engine out. The lanes never showed it because they
+copy the development tree's `node_modules`. The lockfile was regenerated offline
+with `--package-lock-only`: 0 version changes, 0 packages added or removed, 160 dev
+flags cleared, root dependency kinds matching `package.json`. V31B checks the root
+kinds and walks the production closure for dev flags (the previous lockfile fails),
+and the package check names a missing unit template, a missing entry and a
+dependency version that is not the locked one.
+
+WP31.04 — launch location and config path reach every unit (WP03), and a Resident
+runs with its accepted resources, not the current generation's (WP25). Old units
+without those are refused and must be recreated; managed config generations are
+not readable by earlier writers. Not covered: other Node versions and
+distributions, an `npm ci --omit=dev` install from the registry (offline here), and
+a systemd-managed broker in operation.

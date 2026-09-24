@@ -176,3 +176,24 @@ OMA는 Pi 엔진을 함께 배포하고 그것만 실행한다. `PATH`에서 Pi�
 cycle, 중복 소속, 알 수 없는 참조, 한도 초과(group 32개, group당 member 16개, 깊이 4)는 **설정을 읽는 시점에** 거절한다. 블록을 생략하면 해당 role은 등록된 tool을 그대로 보여준다.
 
 이 설정은 표면 표현만 바꾼다. 실제 권한은 sandbox mount/FD/network와 capability가 정하므로, 표면에서 감출 수 있다는 이유로 위험한 extension을 role에 추가하지 않는다. extension 파일 자체의 신뢰·SHA-256 재검증 요구는 그대로 적용된다.
+
+## 지원 범위 (WP31)
+
+검증한 조합과 검증하지 않은 것을 구분한다. 적히지 않은 조합은 지원한다고 가정하지 않는다.
+
+| 항목 | 검증한 값 | 근거 / 남은 것 |
+|---|---|---|
+| Node | 24.21.0 (host와 일회용 계정 모두) | `node:sqlite` `DatabaseSync` 사용. `package.json`에 `engines`가 없고 다른 Node는 NOT_RUN |
+| OS / kernel | Debian 13, Linux 6.12.107, cgroup v2 | 제거된 cgroup 디렉터리의 fd는 nlink가 그대로여서 `cgroup.events` 부재로 판정(WP07) |
+| systemd user manager | 257.13 | start limit 도달은 `failed/exit-code`로만 남아 `NRestarts ≥ StartLimitBurst`로 판별(WP25). path 설정은 C escape를 풀지 않음, ExecStart는 풂(WP03) |
+| util-linux | 2.41.5 | `unshare --forward-signals` 없음 → quarantine은 SIGKILL만 사용(`608f6ed`) |
+| bubblewrap | 0.12.0, `/usr/bin/bwrap` 고정 | 봉인 Resident는 이 경로로 시작(WP27). bwrap 없는 host는 `installation.rootfs = "/"`(비봉인)만 가능 |
+| 엔진 | `@earendil-works/pi-coding-agent`·`pi-ai`·`pi-agent-core`·`pi-tui` 0.85.1 | 설치본의 `node_modules`에 있는 것만 사용하고 상위 디렉터리나 PATH의 엔진으로 물러서지 않음(WP31). 실제 provider는 NOT_RUN |
+| native 모듈 | `koffi` 3.2.1 | `check:package`가 로드만 확인. pidfd·SO_PEERPIDFD·cgroup 능력은 kernel lane이 확인 |
+| 기타 런타임 의존성 | `nodemailer` 10.0.1, `typebox` 1.3.7 | lockfile의 production 분류와 `check:package`의 버전 대조 |
+| 설치 방식 | 빌드된 트리를 `installation.libdir`로 사용 | `npm pack`은 `dist`를 싣지 않으므로 npm 패키지는 실행 가능한 산출물이 아니다. `bin`이 없어 `oma` 명령은 생기지 않음 |
+| systemd-managed broker | 렌더와 `systemd-analyze verify`만 | 운영 lifecycle은 NOT_RUN, 지원한다고 표시하지 않음 |
+
+호환성: WP03 이전에 렌더된 Resident unit은 launch location이 없고, WP25 이전 unit은 accepted 자원(`OMA_RESOURCES_HEX`)이 없어 runner가 시작을 거절한다. 기존 unit을 다시 렌더하는 경로는 없으므로 그런 society의 Resident는 다시 만들어야 한다. 관리형 설정 generation(WP13)은 이전 버전 writer가 알지 못하므로, 이전 바이너리로 같은 설정을 편집하지 않는다.
+
+lockfile: 2026-09-19 `package.json`이 엔진과 `pi-tui`를 `dependencies`로 옮겼지만 `package-lock.json`은 둘을 개발 의존성으로 남겨 두어 `npm ci --omit=dev` 설치에서 엔진이 빠졌다. WP31에서 버전 변경 없이(0건) 분류만 맞췄다.
