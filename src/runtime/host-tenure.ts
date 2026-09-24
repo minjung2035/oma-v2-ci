@@ -58,6 +58,7 @@ export class HostTenure {
   private engine: FencedEngine | null = null;
   private over = false;
   private brokerLive = false;
+  private generation = 0;
   private principalLive = false;
 
   private constructor(private readonly lease: SocietyLease, private readonly graceMs: number) {}
@@ -98,15 +99,22 @@ export class HostTenure {
    * A readiness is always a fresh broker: whatever the previous one accepted
    * is not accepted by this one until it is registered again. */
   brokerReady(): void {
+    this.generation += 1;
     this.brokerLive = true;
     this.principalLive = false;
   }
 
   /** A broker of this host's ended. Everything it authorised ends here. */
   brokerLost(): void {
+    this.generation += 1;
     this.brokerLive = false;
     this.principalLive = false;
   }
+
+  /** WP10.04: which broker readiness a registration was asked of. An answer
+   * that arrives after another readiness or loss belongs to a broker that no
+   * longer speaks for this host, and must change nothing. */
+  get brokerGeneration(): number { return this.generation; }
 
   /** The live broker minted a credential for this host's engine and the engine
    * has it. Only this makes delivery possible. */

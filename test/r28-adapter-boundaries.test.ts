@@ -180,7 +180,7 @@ process.on("SIGTERM", () => process.exit(0));
     const batch = { id: "b-00000000-0000-4000-8000-000000000001", agent: "alice", incarnation: 1,
       messageIds: ["m-00000000-0000-4000-8000-000000000001-0"], sessionPath: null, deliveryMode: "followUp" as const,
       notice: "mail", indexPath: "/inbox.md" as const };
-    const adapter = new PiAdapter({ actor: "alice", society: "demo", profile: { provider: "pi", model: "current", prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
+    const adapter = new PiAdapter({ actor: "alice", society: "demo", profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
       limits: { frameBytes: 65536, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024 },
       paths: { piCommand: command, coreExtension: core, cli, workspace: dirs.workspace!, sessionDir: dirs.sessions!,
         agentHome: dirs.home!, mailArchive: dirs.archive!, batchView: dirs.view!, socket: join(root, "control.sock") } });

@@ -13,14 +13,11 @@ import {
   type DeliveryBoundary,
 } from "../storage/delivery-receipt.js";
 import { assertExtensionIntegrity } from "./extension-integrity.js";
-import { PiRpcClient, type PiEvent } from "./pi-rpc.js";
+import { PiRpcClient, alarm, type PiEvent, type Timer } from "./pi-rpc.js";
 import { planPiSpawn, type PiAdapterOptions, type PiSpawnPlan } from "./pi-spawn-plan.js";
 
 function failure(
-  code:
-    | "SESSION_BOUNDARY_UNCONFIRMED"
-    | "PROVIDER_FAILED"
-    | "UNSUPPORTED_PROFILE",
+  code: "SESSION_BOUNDARY_UNCONFIRMED" | "PROVIDER_FAILED" | "UNSUPPORTED_PROFILE" | "DEADLINE_EXCEEDED",
   message: string,
   cause?: unknown,
 ): StoreError {
@@ -30,20 +27,20 @@ function failure(
     cause === undefined ? undefined : { cause },
   );
 }
+/** WP10: a deadline that rejects `promise` once `seconds` pass without
+ * `rearm()`. Built on the monotonic, overflow-safe `alarm`. */
 function deadline(
-  milliseconds: number,
+  seconds: number,
   error: StoreError,
-): { promise: Promise<never>; cancel(): void } {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const promise = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(error), Math.min(0x7fffffff, milliseconds));
-  });
+): { promise: Promise<never>; rearm(): void; cancel(): void } {
+  let fire: (reason: StoreError) => void = () => {};
+  const promise = new Promise<never>((_, reject) => { fire = reject; });
+  promise.catch(() => {});
+  let timer: Timer | null = alarm(seconds, () => fire(error));
   return {
     promise,
-    cancel() {
-      if (timer !== undefined) clearTimeout(timer);
-      timer = undefined;
-    },
+    rearm() { if (timer === null) return; timer.cancel(); timer = alarm(seconds, () => fire(error)); },
+    cancel() { timer?.cancel(); timer = null; },
   };
 }
 /** The trusted extension's boundary notice for this batch, or null. The one
@@ -150,13 +147,29 @@ export class PiAdapter {
     const changed = new Promise<void>((resolve) => {
       wake = resolve;
     });
+    // WP10/D06: four budgets, four meanings. Acceptance of the command
+    // (receiptWaitSeconds), silence between the engine's events
+    // (idleStreamSeconds, re-armed by every event), the whole delivery turn
+    // (the model profile's inferenceTimeoutSeconds) and the close after the
+    // settled boundary (receiptWaitSeconds). A long turn that keeps
+    // producing events is not idle.
+    const acceptDeadline = deadline(this.options.limits.receiptWaitSeconds, failure(
+      "SESSION_BOUNDARY_UNCONFIRMED", "Pi did not accept the delivery command before the acceptance deadline"));
+    const idleDeadline = deadline(this.options.limits.idleStreamSeconds, failure(
+      "DEADLINE_EXCEEDED", "Pi produced no event for the configured idle stream budget"));
+    const turnDeadline = deadline(this.options.profile.turnSeconds, failure(
+      "DEADLINE_EXCEEDED", "the delivery turn exceeded the model's inference timeout"));
     const unsubscribe = rpc.onEvent((event) => {
+      idleDeadline.rearm();
       if (
         event.type === "response" &&
         event.id === batch.id &&
         event.command === "prompt"
-      )
+      ) {
         accepted = event.success === true;
+        acceptDeadline.cancel();
+        if (!accepted) wake();
+      }
       if (event.type === "message_end") {
         // Remembered, not acted on. Pi retries a retryable failure and
         // compacts before continuing the same run, so one failed assistant
@@ -179,13 +192,6 @@ export class PiAdapter {
       if ((accepted && settled && boundary) || (settled && providerFailed()))
         wake();
     });
-    const deliveryDeadline = deadline(
-      this.options.limits.idleStreamSeconds * 1000,
-      failure(
-        "SESSION_BOUNDARY_UNCONFIRMED",
-        "Pi did not produce a trusted settled delivery boundary before the configured deadline",
-      ),
-    );
     let closeDeadline: ReturnType<typeof deadline> | null = null;
     try {
       await rpc.send({
@@ -195,7 +201,9 @@ export class PiAdapter {
       });
       await Promise.race([
         changed,
-        deliveryDeadline.promise,
+        acceptDeadline.promise,
+        idleDeadline.promise,
+        turnDeadline.promise,
         rpc.completion.then((result) => {
           if (result.state === "failed") throw result.error;
           throw failure(
@@ -204,7 +212,9 @@ export class PiAdapter {
           );
         }),
       ]);
-      deliveryDeadline.cancel();
+      acceptDeadline.cancel(); idleDeadline.cancel(); turnDeadline.cancel();
+      if (!accepted)
+        throw failure("SESSION_BOUNDARY_UNCONFIRMED", "Pi refused the delivery command");
       if (!boundary && providerFailed())
         throw failure(
           "PROVIDER_FAILED",
@@ -217,7 +227,7 @@ export class PiAdapter {
         );
       child.kill("SIGTERM");
       closeDeadline = deadline(
-        this.options.limits.receiptWaitSeconds * 1000,
+        this.options.limits.receiptWaitSeconds,
         failure(
           "SESSION_BOUNDARY_UNCONFIRMED",
           "Pi did not close after its settled boundary",
@@ -232,7 +242,7 @@ export class PiAdapter {
         );
       return boundary;
     } finally {
-      deliveryDeadline.cancel();
+      acceptDeadline.cancel(); idleDeadline.cancel(); turnDeadline.cancel();
       closeDeadline?.cancel();
       unsubscribe();
       rpc.close();

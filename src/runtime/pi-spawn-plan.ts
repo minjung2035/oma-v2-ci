@@ -37,6 +37,9 @@ export interface PiInference {
 export interface PiAdapterProfile {
   readonly provider: string;
   readonly model: string;
+  /** WP10/D06: the whole delivery turn's budget -- the model profile's
+   * `inferenceTimeoutSeconds`. Idle, acceptance and drain have their own. */
+  readonly turnSeconds: number;
   readonly prompt: string;
   readonly workspaceBytes: number;
   /** Recorded at configuration load and re-verified immediately before spawn.

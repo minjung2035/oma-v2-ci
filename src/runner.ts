@@ -195,6 +195,7 @@ export class RunnerModule {
       profile: {
         provider: this.profile.model.provider,
         model: this.profile.model.model,
+        turnSeconds: this.profile.model.inferenceTimeoutSeconds,
         prompt: this.profile.settings?.prompt ?? "",
         workspaceBytes: this.profile.workspaceBytes!,
         // The recorded {path, sha256} pairs travel intact to the spawn site,

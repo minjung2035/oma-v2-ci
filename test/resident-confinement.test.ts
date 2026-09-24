@@ -84,7 +84,7 @@ function fixture(): Fixture {
     mailArchive: paths.mailArchive, batchView: dirs.view, socket: paths.socket,
   };
   const profile = {
-    provider: "pi", model: "current", prompt: "",
+    provider: "pi", model: "current", turnSeconds: 600, prompt: "",
     workspaceBytes: RESOURCES.workspaceBytes, extensions: [],
   };
   const adapter = new PiAdapter({
@@ -97,7 +97,7 @@ function unconfinedAdapter(f: Fixture): PiAdapter {
   return new PiAdapter({
     actor: "alice", society: "s", limits: LIMITS,
     profile: {
-      provider: "pi", model: "current", prompt: "",
+      provider: "pi", model: "current", turnSeconds: 600, prompt: "",
       workspaceBytes: RESOURCES.workspaceBytes, extensions: [],
     },
     paths: {

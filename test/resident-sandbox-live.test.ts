@@ -82,7 +82,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096 },
-      profile: { provider: "pi", model: "current", prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
@@ -220,7 +220,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096 },
-      profile: { provider: "pi", model: "current", prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
@@ -307,7 +307,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096 },
-      profile: { provider: "pi", model: "current", prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),

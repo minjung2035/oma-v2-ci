@@ -71,7 +71,8 @@ function brokerStandIn(state, credentials, disownedReason = null) {
       },
       async register(sessionHandle, pid) {
         record.registrations.push({ sessionHandle, pid });
-        return credentials.shift() ?? null;
+        // An entry may be a promise, so a test can answer a registration late.
+        return await (credentials.shift() ?? null);
       },
       stop() { record.stops += 1; },
     },
@@ -805,3 +806,30 @@ test("WP15.03: a save whose configuration cannot be read back is reported as sav
   assert.match(limit.blocked, /다시 읽지 못함/);
 });
 
+test("V10C: a registration answered after its broker was lost or replaced grants nothing to the new one", async () => {
+  let answerA;
+  const late = new Promise(resolve => { answerA = resolve; });
+  const society = await run({ credentials: [late, "2".repeat(64)] });
+  society.broker.fireReady();            // generation A asks
+  await society.settle();
+  society.broker.fireLost();             // A ends before answering
+  society.broker.fireReady();            // generation B asks and is answered
+  await society.until(() => society.grants.length === 1);
+  answerA("1".repeat(64));               // A's answer arrives late
+  await society.settle();
+  await society.settle();
+  assert.deepEqual(society.grants.map(grant => grant.credential), ["2".repeat(64)],
+    "a credential from a lost broker generation reached the engine");
+  // And a late refusal from A would not have revoked B's registration either.
+  let refuseA;
+  const lateRefusal = new Promise(resolve => { refuseA = resolve; });
+  const other = await run({ credentials: [lateRefusal, "3".repeat(64)] });
+  other.broker.fireReady();
+  await other.settle();
+  other.broker.fireLost();
+  other.broker.fireReady();
+  await other.until(() => other.grants.length === 1);
+  refuseA(null);
+  await other.settle();
+  assert.equal(other.lines.some(line => /받아들이지 않았습니다/.test(line)), false, "a late refusal from a lost broker was reported as current");
+});

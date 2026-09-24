@@ -385,7 +385,12 @@ async function main(argv: readonly string[]): Promise<void> {
   const register = async (): Promise<void> => {
     const pid = session?.pid ?? null;
     if (pid === null || broker === null || tenure === null) return;
+    const generation = tenure.brokerGeneration;
     const credential = await broker.register(sessionHandle, pid);
+    // WP10.04: an answer from a broker generation that has since ended or been
+    // replaced grants nothing and revokes nothing; the current generation's
+    // own registration decides.
+    if (tenure.brokerGeneration !== generation) return;
     if (credential === null) {
       tenure.principalUnregistered();
       app.line("broker가 Principal 세션을 받아들이지 않았습니다. 요청은 보낼 수 없습니다.");
