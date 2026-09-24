@@ -1,7 +1,7 @@
 // Isolated primitive crash worker: never imported by production.
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
-import { join, dirname } from "node:path";
+import { basename, join, dirname } from "node:path";
 import { Store } from "../../src/store.js";
 import { MailModule, publishImmutableFile, parseEmlHeaders } from "../../src/mail.js";
 import type { AuthContext, MailInput } from "../../implementation/contracts.js";
@@ -70,9 +70,13 @@ fs.fstatSync = ((...args: Parameters<typeof fstat>) => {
 const rename = fs.renameSync;
 fs.renameSync = (source, destination) => {
   rename(source, destination);
-  if (point === "cur" && String(destination).includes("/inboxes/a/cur/")) checkpoint();
-  if (point === "ctx-link" && String(destination) === join(root, "world/context/current")) checkpoint();
-  if (point === "boot-workspace" && String(destination).endsWith("/workspace")) checkpoint();
+  // Contained publication renames through a held parent descriptor
+  // (/proc/self/fd/<n>/<name>); name the real destination the same way.
+  const named = String(destination);
+  const held = /^\/proc\/self\/fd\/\d+\/[^/]+$/.test(named) ? join(fs.readlinkSync(dirname(named)), basename(named)) : named;
+  if (point === "cur" && held.includes("/inboxes/a/cur/")) checkpoint();
+  if (point === "ctx-link" && held === join(root, "world/context/current")) checkpoint();
+  if (point === "boot-workspace" && held.endsWith("/workspace")) checkpoint();
 };
 const copy = fs.copyFileSync;
 fs.copyFileSync = (source, destination, mode) => {
