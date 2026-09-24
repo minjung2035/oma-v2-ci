@@ -5,11 +5,10 @@
 ## 1. 현재 상태 (2026-09-24)
 
 - 브랜치 `refactor/safety-preserving-architecture`. push·PR·merge는 이 작업에서 하지 않는다.
-- 완료(local + 실제 user-systemd 검증): WP00–WP27, WP29 (WP28·WP31·WP30·WP32 제외 전부).
-- 진행 중: **WP28**, **WP31** — 작업 트리에 수정·시험(V28A/V28B, V31A/V31B, lockfile 재동기화, 엔진 탐색 제한, README·지원표)이 있고 v7 docs commit 뒤에 커밋한다(`git status` 확인).
-- 남은 카드(계획 순서): WP28·WP31(작업 트리) → WP30 → WP32. 모두 끝난 뒤 전체 카드 재검토와 적대적 검증을 한다(사용자 지시).
-- 마지막 통합 검증은 `implementation/validation.md`(v7: WP08·WP15·WP09·WP10·WP25·WP23·WP26·WP27·WP29). v3–v6은 중간 증거로 `/home/dev/oma-evidence/v3..v6/`에 있다.
-- 새 lane 성격: V27A(실제 엔진)와 V28B(pty)는 저장소에 `engine`/`pty` lane이 없어 durable lane에서 돈다(bubblewrap·openssl·python3 필요, skip은 PASS 아님).
+- **WP00–WP32 전부 커밋 완료.** 마지막 통합 검증은 `implementation/validation.md`의 v8(모든 카드 포함). v3–v7은 중간 증거로 `/home/dev/oma-evidence/v3..v7/`에 있다.
+- 판정: **release 미승인**(`implementation/review-ledger.json` + `scripts/review-closure.mjs`): production 파일 139개는 이번 구현에서 줄 단위로 다시 읽지 않았고, powercut·실제 provider·CI는 NOT_RUN이다.
+- 진행 중: 사용자 지시에 따른 전체 카드 재검토와 적대적 검증(아래 7절).
+- lane 성격: V27A(실제 엔진), V28B(pty), V31A(설치 closure)는 저장소에 `engine`/`pty` lane이 없어 durable lane에서 돈다(bubblewrap·openssl·python3 필요, skip은 PASS 아님).
 
 ## 2. 환경 (이 머신에 한정)
 
@@ -58,6 +57,10 @@
 | WP26 | `a09869d`…`437003a` | CLI가 cache에 기록 못 한 영수증도 영수증과 `--request` key를 먼저 보임(무작위 key 유실로 인한 중복 효과 방지), wire 바이트 한도·재전송 규칙 oracle | 동시 CLI 프로세스 범위 |
 | WP27 | `c7d1cbd`…`88d7173` | 격리 Resident가 실제로 배치를 전달하도록 계획이 `/usr/bin/bwrap`을 명시(이전엔 모든 격리 전달 실패), placeholder 생성 총함수화(무한 재귀 제거), relay 스트리밍 oracle, 실제 엔진 0.85.1 전체 전달 V27A | 실제 provider, 세션 내구성(WP30) |
 | WP29 | `76b95fa`…`f4f2bf9` | 보장 종류별 성립 위치 표, exit 소유 규칙이 alias 우회를 잡음, request-hash set-field recipe를 compile-time 닫힌 registry로 | 정적 규칙은 data flow 밖 |
+| WP28 | `7c3c31d`, `f6b8372`, `9b689b9`, `658617c` | 터미널을 연 뒤의 실패도 터미널을 복원하고 이유를 사람 화면에 씀(V28B 실제 pty), 메일 수·●를 "Principal 세션 전달 대기"로(V28A) | 전체 `oma` entry의 pty 실행 없음 |
+| WP31 | `1906cf3`, `7123719`, `f666a0c`, `bf87132` | lockfile이 엔진을 개발 의존성으로 둬 production 설치에서 빠지던 결함 수정(버전 변경 0), 엔진 탐색을 설치 루트로 한정, README 설치 주장 정정, 지원표 | `bin` 없음(C2 결정 보류), 다른 Node·배포판 NOT_RUN |
+| WP30 | `38944fb`, `6da019a`, `094e3b9` | D01 독립 모형을 실제 구성 요소에 교차 실행(V30A), FAULT-MATRIX 대응표, 환경별 판정 | endpoint bind 실패 별도 주입 없음, powercut·provider NOT_RUN |
+| WP32 | `40d339a`, `48e961b`, `736fd15` | review ledger와 승인 판정기(V32A), 불변식 12개 대조표, release 미승인 판정 | 139개 파일 미검토 |
 
 부수 수정: kernel/crash fixture의 systemd 257 호환(`list-unit-files` 무일치 exit 1, stop 후 disable), `/usr/bin/node` 가정 제거, crash hook의 descriptor 기준 rename 해석, 오래된 kernel 시험 기대값 갱신.
 
@@ -81,6 +84,6 @@
 
 ## 7. 다음에 할 일
 
-1. v7 docs commit 뒤 WP28 커밋(작업 트리의 `src/tui/screen.ts`, `src/entry/oma.ts`, `src/tui/view/*`, `test/tui-facts.test.ts`, `test/tui-pty.test.ts`, `test/fixtures/pty-*`, consistency-decisions WP28 절, lane 등록), 이어서 WP31 커밋(`package-lock.json`, `src/runtime/pi-runtime.ts`, `test/deployment-artifact.test.ts`, `test/package-lock-sync.test.ts`, README, operations 지원표).
-2. WP30 → WP32.
-3. 모든 카드 뒤: WP00부터 전체 카드 재검토와 적대적 검증(mutant, 반례, 우회 시도).
+1. 전체 카드 재검토: 계획의 oracle 73개가 모두 자기 ID 시험, 실제로 존재하는 다른 시험의 담당(lane에서 필수), 사유 있는 NOT_RUN 중 하나인지 기계로 확인(`implementation/oracle-map.json`, review-closure 확장).
+2. 적대적 검증: 이전 세션 카드(WP04–WP22, WP24)의 핵심 수정 분기를 최소 mutant로 되돌려 oracle이 실패하는지 확인하고, 반례·우회 탐침(권한·경로·자원·crash·표시)을 시도한다. 결함이 나오면 해당 카드 소관으로 고친다.
+3. 결과를 v9로 결박.
