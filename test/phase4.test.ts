@@ -156,24 +156,29 @@ test("phase4: rendered templates pass systemd-analyze --user verify", () => {
       const [kind, suffix] = tpl.replace(".in", "").split(".") as [string, "service" | "path" | "timer"];
       return unitName(env.society, kind === "resident" ? "a" : kind, suffix);
     };
-    const written: string[] = [];
-    for (const tpl of names) {
-      const text = readFileSync(join(UNIT_TPL_DIR, tpl), "utf8");
-      const file = fileFor(tpl);
-      writeFileSync(join(out, file), renderUnit(text, {
-        node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
-        profileHex: Buffer.from("p").toString("hex"), memoryBytes: TEST_RESOURCES.memoryBytes,
-        tasks: TEST_RESOURCES.tasks, cpuQuotaPercent: TEST_RESOURCES.cpuQuotaPercent,
-      }));
-      written.push(file);
+    // D03: both deployment modes render: bound to the fixed broker unit when
+    // systemd runs it, bound to nothing when the product does.
+    for (const brokerUnit of [unitName(env.society, "broker", "service"), ""]) {
+      const written: string[] = [];
+      for (const tpl of names) {
+        const text = readFileSync(join(UNIT_TPL_DIR, tpl), "utf8");
+        const file = fileFor(tpl);
+        writeFileSync(join(out, file), renderUnit(text, {
+          node: NODE, libdir: process.cwd(), state: join(env.dir, "state"), society: env.society, agent: "a",
+          config: join(env.dir, "config.json"), run: join(env.dir, "run", "oma", env.society), brokerUnit,
+          profileHex: Buffer.from("p").toString("hex"), memoryBytes: TEST_RESOURCES.memoryBytes,
+          tasks: TEST_RESOURCES.tasks, cpuQuotaPercent: TEST_RESOURCES.cpuQuotaPercent,
+        }));
+        written.push(file);
+      }
+      process.env.XDG_CONFIG_HOME = env.xdg;
+      const r = spawnSync("systemd-analyze", ["--user", "verify", ...written.map(file => join(out, file))],
+        { encoding: "utf8", env: { ...process.env }, timeout: 30000, maxBuffer: 1048576, killSignal: "SIGKILL" });
+      assert.equal(r.error, undefined);
+      assert.equal(r.signal, null);
+      assert.equal(r.status, 0, `${brokerUnit || "no broker unit"}: ${r.stderr}`);
+      assert.equal(written.length, 7);
     }
-    process.env.XDG_CONFIG_HOME = env.xdg;
-    const r = spawnSync("systemd-analyze", ["--user", "verify", ...written.map(file => join(out, file))],
-      { encoding: "utf8", env: { ...process.env }, timeout: 30000, maxBuffer: 1048576, killSignal: "SIGKILL" });
-    assert.equal(r.error, undefined);
-    assert.equal(r.signal, null);
-    assert.equal(r.status, 0, r.stderr);
-    assert.equal(written.length, 7);
   } finally { cleanup(); }
 });
 
@@ -408,12 +413,12 @@ test("LIFE-007 race: concurrent stable-name creates publish only one mail object
     assert.equal(plans.filter(plan => plan.existingCreation === null).length, 1);
     assert.equal(plans.filter(plan => plan.initialMessage !== null).length, 1);
     // Each racing attempt freezes its own initial EML before its intent
-    // transaction, so the loser leaves one unreferenced object (FS-007) next to
-    // the winner's published object. Only the winner's object is referenced.
+    // transaction. WP17/WP20: the loser's preaccept scope owns exactly the
+    // object it froze and settles it as not accepted, so only the winner's
+    // published object remains (FS-007 without a leak).
     const objects = readdirSync(join(env.dir, "state", "mail", "objects"));
     const winner = plans.find(plan => plan.initialMessage !== null)!.initialMessage.id as string;
-    assert.ok(objects.includes(`${winner}.eml`), JSON.stringify(objects));
-    assert.equal(objects.length, 2, JSON.stringify(objects));
+    assert.deepEqual(objects, [`${winner}.eml`]);
     assert.equal(env.store.pendingDeliveries("child").length, 1);
   } finally { cleanup(); }
 });

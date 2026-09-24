@@ -480,8 +480,15 @@ test("PR-002/BATCH-001: mailbox moves reject rogue bytes and preserve valid reco
     const bytes = readFileSync(from);
     rmSync(from);
     writeFileSync(from, "forged");
-    assert.throws(() => env.mail.moveToCur("principal", [id]), /integrity mismatch/);
+    // Rogue bytes are refused whether their size already differs or only
+    // their content does.
+    assert.throws(() => env.mail.moveToCur("principal", [id]), /immutable file type or size mismatch/);
     assert.equal(existsSync(to), false);
+    rmSync(from);
+    writeFileSync(from, Buffer.from(bytes).fill(0x78));
+    assert.throws(() => env.mail.moveToCur("principal", [id]), /immutable file hash mismatch/);
+    assert.equal(existsSync(to), false);
+    rmSync(from);
     writeFileSync(from, bytes);
     assert.equal(env.mail.moveToCur("principal", [id]), 1);
     assert.equal(existsSync(from), false);
