@@ -60,6 +60,26 @@ test("T116 a placeholder keeps the shape provider code reads and none of the sec
   assert.throws(() => placeholderFor("short"), (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
 });
 
+test("V27B: a key with nothing to replace is refused at once, never retried without end", () => {
+  const header = Buffer.from('{"alg":"RS256"}').toString("base64url");
+  for (const key of [
+    `${header}.${header}.${"_-".repeat(12)}`,      // a token whose signature has no letter or digit
+    "-".repeat(24),                                 // nothing but separators
+    `sk-${".".repeat(30)}`,                         // a long segment of punctuation
+  ]) {
+    const started = Date.now();
+    assert.throws(() => placeholderFor(key), (error: unknown) => code(error) === "UNSUPPORTED_PROFILE", key);
+    assert.ok(Date.now() - started < 1_000);
+  }
+  // The shapes providers use still get a placeholder that differs and hides the key.
+  for (const key of ["sk-ant-api03-" + "Q7x".repeat(14), `${header}.${header}.${"s1gnature".repeat(6)}`, "k".repeat(40)]) {
+    const stand = placeholderFor(key);
+    assert.notEqual(stand, key);
+    assert.equal(stand.length, key.length);
+    assert.ok(!stand.includes(key) && !key.includes(stand));
+  }
+});
+
 test("T116 the credential is resolved by the engine from OMA's own agent directory", async () => {
   const agentDir = scratch("oma-engine-auth-");
   try {

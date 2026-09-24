@@ -36,39 +36,48 @@ function randomLike(source: string): string {
   return out;
 }
 
-/** A value the sandbox can hold in place of `secret`. It is never equal to the
- * secret and never contains it, so swapping it back is unambiguous. */
-export function placeholderFor(secret: string): string {
-  if (secret.length < 16)
-    throw new StoreError("UNSUPPORTED_PROFILE", "provider key is too short to stand in for safely");
+/** WP27.04: how many candidates a key gets. A candidate differs from the key
+ * unless its replaceable characters happen to come out the same; a key with
+ * nothing replaceable never gets one, and is refused rather than retried. */
+const PLACEHOLDER_ATTEMPTS = 8;
+
+function candidateFor(secret: string): string {
   const parts = secret.split(".");
-  let placeholder: string;
   if (parts.length === 3 && parts.every(part => /^[A-Za-z0-9_-]+$/.test(part))) {
     // A signed token: its header and claims are what provider code reads, and
     // without a valid signature the provider rejects it, so keeping them does
     // not let anything inside authenticate.
-    placeholder = `${parts[0]!}.${parts[1]!}.${randomLike(parts[2]!)}`;
-  } else {
-    // A prefixed key: keep the short leading segments that name its kind and
-    // replace everything from the first long segment on, class for class.
-    const segments = secret.split(/([-_])/);
-    let secretStarted = false;
-    placeholder = segments.map(segment => {
-      if (segment === "-" || segment === "_") return segment;
-      if (!secretStarted && segment.length <= 8) return segment;
-      secretStarted = true;
-      return randomLike(segment);
-    }).join("");
-    // A key made only of short segments keeps nothing recognisable.
-    if (!secretStarted) placeholder = randomLike(secret);
+    return `${parts[0]!}.${parts[1]!}.${randomLike(parts[2]!)}`;
   }
-  // The engine reads a leading `$` or `!` in a configured key as an environment
-  // reference or a command; a placeholder must never be either.
-  if (/^[$!]/.test(placeholder) || placeholder.includes("${"))
-    throw new StoreError("UNSUPPORTED_PROFILE", "provider key has a shape the engine would interpret");
-  if (placeholder === secret || placeholder.includes(secret) || secret.includes(placeholder))
-    return placeholderFor(secret);
-  return placeholder;
+  // A prefixed key: keep the short leading segments that name its kind and
+  // replace everything from the first long segment on, class for class.
+  const segments = secret.split(/([-_])/);
+  let secretStarted = false;
+  const placeholder = segments.map(segment => {
+    if (segment === "-" || segment === "_") return segment;
+    if (!secretStarted && segment.length <= 8) return segment;
+    secretStarted = true;
+    return randomLike(segment);
+  }).join("");
+  // A key made only of short segments keeps nothing recognisable.
+  return secretStarted ? placeholder : randomLike(secret);
+}
+
+/** A value the sandbox can hold in place of `secret`. It is never equal to the
+ * secret and never contains it, so swapping it back is unambiguous. Total: it
+ * returns within PLACEHOLDER_ATTEMPTS candidates or refuses the key. */
+export function placeholderFor(secret: string): string {
+  if (secret.length < 16)
+    throw new StoreError("UNSUPPORTED_PROFILE", "provider key is too short to stand in for safely");
+  for (let attempt = 0; attempt < PLACEHOLDER_ATTEMPTS; attempt += 1) {
+    const placeholder = candidateFor(secret);
+    // The engine reads a leading `$` or `!` in a configured key as an environment
+    // reference or a command; a placeholder must never be either.
+    if (/^[$!]/.test(placeholder) || placeholder.includes("${"))
+      throw new StoreError("UNSUPPORTED_PROFILE", "provider key has a shape the engine would interpret");
+    if (placeholder !== secret && !placeholder.includes(secret) && !secret.includes(placeholder)) return placeholder;
+  }
+  throw new StoreError("UNSUPPORTED_PROFILE", "provider key has too little that can be replaced to stand in for it safely");
 }
 
 export interface EngineAuth {
