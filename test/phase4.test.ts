@@ -21,6 +21,7 @@ import { ViewsModule } from "../src/views.js";
 import { generateOperationId } from "../src/ids.js";
 import { requestHash } from "../src/hash.js";
 import { canonicalResourceLimits } from "../src/domain/resources.js";
+import { StatusRefresh } from "../src/views/status-refresh.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, Capability, ResolvedAgentSpec, ResourceLimits } from "../implementation/contracts.js";
@@ -746,5 +747,45 @@ test("WP25.03 / D05: a Resident's unit carries its accepted resources, not the c
     assert.deepEqual(JSON.parse(Buffer.from(carried!, "hex").toString("utf8")), accepted);
     assert.match(shown, new RegExp(`^MemoryMax=${accepted.memoryBytes}$`, "m"));
     assert.match(shown, new RegExp(`^TasksMax=${accepted.tasks}$`, "m"));
+  } finally { cleanup(); }
+});
+
+test("V23B: a status snapshot is display only; start, stop and death proof observe the unit again", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    seedGov(env);
+    env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
+    env.units.ensureResident("a", "p");
+    const service = unitName(env.society, "a", "service");
+    writeFileSync(join(env.xdg, "systemd", "user", service), `[Unit]\nDescription=v23b run\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+    // One real batched observation of every agent: a is stopped, b has no unit.
+    const refresh = new StatusRefresh(() => env.store.agentNames(), agents => env.units.observeStatus(agents));
+    const snapshot = await refresh.request();
+    assert.equal(snapshot.failure, null);
+    assert.equal(snapshot.units.get("a")?.activeState, "inactive");
+    assert.equal(snapshot.units.get("b")?.activeState, "inactive");
+    const shown = env.views.statusOf(snapshot, "a")[0]!;
+    assert.equal(shown.activeState, "inactive");
+    // After the snapshot the unit really starts.
+    spawnSync("systemctl", ["--user", "start", service], { stdio: "ignore" });
+    assert.equal(env.units.observe("a").activeState, "active");
+    // The display still says what it saw, and when -- it is not current.
+    assert.equal(env.views.statusOf(snapshot, "a")[0]!.activeState, "inactive");
+    assert.ok(snapshot.observedAtMs <= Date.now());
+    // Negative control: taking the cached "inactive" as death proof would
+    // authorize acting on a live run.
+    const cachedDeathProof = (agent: string) => snapshot.units.get(agent)?.activeState === "inactive";
+    assert.equal(cachedDeathProof("a"), true, "the control does not reproduce the cached claim");
+    assert.ok(env.units.cgroupProcs("a").length > 0, "the run the cached view calls inactive is alive");
+    // The effect paths observe again and refuse.
+    assert.equal(env.units.confirmDead("a", 1), false);
+    assert.throws(() => env.lifecycle.start(auth("principal", ["agent.manage.descendants"]), "a", "v23b-start"),
+      (error: unknown) => error instanceof StoreError && error.code === "RUN_TERMINATION_UNKNOWN");
+    assert.equal(env.store.getAgent("a")!.incarnation, 1);
+    // A later refresh sees the change.
+    assert.equal((await refresh.request()).units.get("a")?.activeState, "active");
+    spawnSync("systemctl", ["--user", "stop", service], { stdio: "ignore" });
   } finally { cleanup(); }
 });
