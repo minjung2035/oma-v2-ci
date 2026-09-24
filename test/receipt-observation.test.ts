@@ -219,3 +219,32 @@ test("V06A: conflicting evidence says what differs, and a legacy incarnation is 
     assert.deepEqual([gone.problem, gone.cause], ["session-absent", "ENOENT"]);
   } finally { f.close(); }
 });
+
+test("V06A: a receipt directory that cannot be opened is unavailable, never absent", async () => {
+  assert.notEqual(process.getuid?.(), 0, "permission-based unavailability needs a non-root test user");
+  const f = await preparedFixture();
+  try {
+    published(f);
+    chmodSync(dirname(f.receipt), 0o000);
+    const observed = observe(f);
+    assert.equal(observed.kind, "unavailable", "an unreadable receipt directory was taken as proof of absence");
+    assert.deepEqual([diagnosticOf(observed).problem, diagnosticOf(observed).cause], ["receipt-directory-unavailable", "EACCES"]);
+  } finally { chmodSync(dirname(f.receipt), 0o700); f.close(); }
+});
+
+test("V06A: live completion binds the current run's incarnation and the receipt's session", async () => {
+  const f = await preparedFixture(1);
+  try {
+    const session = published(f);
+    // A current-lease runner presenting evidence from another incarnation.
+    const other = { ...evidenceOf(f.root, f.batch, session), incarnation: 2 };
+    await assert.rejects(f.mail.complete({ ...f.auth, incarnation: 2 }, other), { code: "BATCH_CONFLICT" });
+    await assert.rejects(f.mail.complete(f.auth, other), { code: "BATCH_CONFLICT" });
+    // The right incarnation, a session the receipt does not name.
+    await assert.rejects(f.mail.complete(f.auth, { ...evidenceOf(f.root, f.batch, session), sessionPath: `${session}.other` }),
+      { code: "SESSION_BOUNDARY_UNCONFIRMED" });
+    assert.equal(f.store.getBatch(f.batch.id)?.state, "prepared", "a mismatched completion completed the batch");
+    assert.equal(await liveComplete(f, session), null);
+    assert.equal(f.store.getBatch(f.batch.id)?.state, "completed");
+  } finally { f.close(); }
+});

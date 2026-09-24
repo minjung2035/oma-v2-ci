@@ -138,3 +138,29 @@ test("V24B: an applied non-no-op CAS is settled as history even after stop and p
   assert.equal(f.operation("applied").state, "succeeded", "authority changed afterwards does not undo a proven effect");
   assert.equal(f.main(), f.info.candidate);
 });
+
+test("V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied", async t => {
+  // How many times recovery rereads the policy, so the writer can arrive at the
+  // last reread -- after the still-at-base check, before the CAS.
+  const reads = async (move: boolean): Promise<{ count: number; f: Repository }> => {
+    const f = repository(t);
+    await published(f);
+    loseNextMainObservation(t, f);
+    assert.equal((await f.git.integrate(gitAuth, "recover", { expected: f.info.base, candidate: f.info.candidate })).state, "unknown");
+    t.mock.restoreAll();
+    assert.equal(f.main(), f.info.base, "the live attempt moved main");
+    let count = 0;
+    const other = f.third();
+    f.reader.onRead = () => { count += 1; if (move && count === last) f.move(other); };
+    await f.reconcile(f.operation("recover").id);
+    return { count, f };
+  };
+  let last = Number.POSITIVE_INFINITY;
+  const probe = await reads(false);
+  assert.equal(probe.f.operation("recover").state, "succeeded", "an undisturbed recovery did not apply the CAS");
+  last = probe.count;
+  assert.ok(last >= 2, `recovery read the policy ${last} time(s)`);
+  const { f } = await reads(true);
+  assert.equal(f.operation("recover").state, "unknown", "a CAS that found a third writer was settled");
+  assert.notEqual(f.main(), f.info.candidate);
+});

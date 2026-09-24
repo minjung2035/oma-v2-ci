@@ -39,7 +39,7 @@ test("V12A: one snapshot uses one manifest even when the pointer is replaced aft
     };
     let swaps = 0;
     const snapshot = loadConfigurationSnapshot(fixture.path, event => {
-      assert.equal(event.phase, "manifest-read");
+      if (event.phase !== "manifest-read") return;
       swaps += 1;
       writeFileSync(fixture.path, JSON.stringify(nextManifest));
     });
@@ -85,5 +85,38 @@ test("V12B: aggregate source bytes are bounded even when each referenced file is
     role.extensions = entries;
     writeFileSync(rolePath, JSON.stringify(role));
     assert.throws(() => loadConfigurationSnapshot(fixture.path), { code: "LIMIT_EXCEEDED" });
+  } finally { fixture.close(); }
+});
+
+test("V12B: one configuration file over 1 MiB is refused even though the whole source would fit", () => {
+  const fixture = createCompleteConfigurationFixture();
+  try {
+    const layout = configurationLayout(fixture.path);
+    assert.equal(layout.kind, "operations");
+    if (layout.kind !== "operations") return;
+    // Valid JSON, 1.5 MiB of it, well inside the 8 MiB closure budget.
+    const host = readJson(layout.host);
+    writeFileSync(layout.host, `${JSON.stringify(host)}${" ".repeat(1536 * 1024)}`);
+    assert.throws(() => loadConfigurationSnapshot(fixture.path), { code: "INVALID_REQUEST", message: /at most 1 MiB/ });
+  } finally { fixture.close(); }
+});
+
+test("V12A: a file changed after the snapshot read it, before the snapshot completes, fails the snapshot", () => {
+  const fixture = createCompleteConfigurationFixture();
+  try {
+    const layout = configurationLayout(fixture.path);
+    assert.equal(layout.kind, "operations");
+    if (layout.kind !== "operations") return;
+    const roles = new Set(Object.values(layout.roles));
+    let changed = false;
+    // When a role file is read, the host file -- read earlier -- changes.
+    assert.throws(() => loadConfigurationSnapshot(fixture.path, event => {
+      if (changed || event.phase !== "source-read" || !roles.has(event.path)) return;
+      changed = true;
+      writeFileSync(layout.host, `${readFileSync(layout.host, "utf8")} `);
+    }), { code: "INVALID_REQUEST", message: /changed before snapshot completion/ });
+    assert.equal(changed, true, "the snapshot never read a role file after the host file");
+    // Without interference the same source reads cleanly.
+    assert.equal(loadConfigurationSnapshot(fixture.path).config.society, "demo");
   } finally { fixture.close(); }
 });

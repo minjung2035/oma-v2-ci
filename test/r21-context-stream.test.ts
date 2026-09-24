@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, writeFileSync, readdirSync, renameSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, lstatSync, rmSync, existsSync, writeFileSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import type { BlobDescriptor, ContextEntry } from "../implementation/contracts.js";
 import { generateOperationId } from "../src/ids.js";
 import { ContextTextValidator, contextFileCheck } from "../src/domain/context-policy.js";
-import { prepareContextStream } from "../src/storage/context-stream.js";
+import { PreparedContextTree, prepareContextStream } from "../src/storage/context-stream.js";
 import { contextStagingPathAt } from "../src/storage/paths.js";
 
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
@@ -136,4 +136,20 @@ test("V18A: a failed preparation keeps its root when a file it created was repla
     });
     assert.equal(readFileSync(goal, "utf8"), "someone else's file");
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("V18A: a staging root replaced after preparation is kept, and its cleanup is reported unconfirmed", () => {
+  const base = mkdtempSync(join(tmpdir(), "oma-v18a-root-"));
+  try {
+    const root = join(base, "staging-op");
+    mkdirSync(root, { mode: 0o700 });
+    const pinned = lstatSync(root);
+    const prepared = new PreparedContextTree(join(root, "tree"), root, { dev: pinned.dev, ino: pinned.ino });
+    // Something else now stands where the prepared root was.
+    renameSync(root, join(base, "moved-away"));
+    mkdirSync(root, { mode: 0o700 });
+    writeFileSync(join(root, "not-ours"), "another operation's bytes");
+    assert.throws(() => prepared.discardUnaccepted(), (error: unknown) => (error as { code?: string }).code === "REF_STATE_UNKNOWN");
+    assert.ok(existsSync(join(root, "not-ours")), "cleanup deleted a root it did not create");
+  } finally { rmSync(base, { recursive: true, force: true }); }
 });

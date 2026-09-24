@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import fs, { existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { PreparedBatch } from "../implementation/contracts.js";
@@ -140,4 +141,24 @@ test("V05B: conflicting existing receipt is preserved and never converted to suc
     assert.equal(readFileSync(path, "utf8"), conflicting);
     assert.deepEqual(readdirSync(dirname(path)).sort(), [basename(path)]);
   } finally { f.close(); }
+});
+
+test("V05A: the receipt file itself is flushed before it is published, and its directory after", () => {
+  // The fault seams name where a flush belongs; this watches the flushes
+  // themselves, so a seam that fires without its fsync is caught.
+  const f = fixture();
+  const real = fs.fsyncSync;
+  const flushes: string[] = [];
+  fs.fsyncSync = (fd: number) => { flushes.push(fstatSync(fd).isFile() ? "file" : "directory"); return real(fd); };
+  syncBuiltinESMExports();
+  try {
+    const order: string[] = [];
+    publishWithFaults(f.root, f.batch, f.boundary("0123abcd"), TEST_VIEW_LIMITS.frameBytes, event => {
+      if (event.point === "publication-link" && event.phase === "before") order.push(`link after ${flushes.join(",")}`);
+    });
+    assert.equal(order.length, 1);
+    assert.match(order[0]!, /file/, `nothing flushed the receipt file before publication: ${order[0]}`);
+    const link = order[0]!.replace("link after ", "").split(",").filter(Boolean).length;
+    assert.ok(flushes.slice(link).includes("directory"), `the receipt directory was not flushed after publication: ${flushes.join(",")}`);
+  } finally { fs.fsyncSync = real; syncBuiltinESMExports(); f.close(); }
 });
