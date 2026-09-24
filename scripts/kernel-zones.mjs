@@ -67,6 +67,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/config.ts",
       "src/config/policy.ts",
       "src/config/operations.ts",
+      "src/config/generations.ts",
       "src/ids.ts",
       "src/leaf.ts",
       "src/process/async.ts",
