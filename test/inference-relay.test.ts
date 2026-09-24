@@ -230,3 +230,31 @@ test("T114 a relay is refused rather than opened on an unsafe configuration", as
       (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
   } finally { socket.clean(); }
 });
+
+test("V27B: the relay hands a provider's answer on as it arrives; it never holds the whole response", async () => {
+  const provider = await tlsProvider();
+  provider.reply = { status: 200, chunks: ["first ", "second"], delayMs: 0, gapMs: 1500 };
+  const socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path,
+    { origin: provider.origin, headers: { authorization: "Bearer real-secret" } },
+    { concurrent: 4, timeoutMs: 5000 });
+  const bridged = await bridge(socket.path);
+  try {
+    const started = Date.now();
+    const timing = await new Promise<{ firstMs: number; endMs: number; body: string }>((resolve, reject) => {
+      let firstMs = -1; let body = "";
+      const outgoing = httpRequest({ host: "127.0.0.1", port: bridged.port, path: "/v1/messages", method: "POST",
+        headers: { "content-type": "application/json" } }, response => {
+        response.setEncoding("utf8");
+        response.on("data", chunk => { if (firstMs < 0) firstMs = Date.now() - started; body += chunk; });
+        response.on("end", () => { resolve({ firstMs, endMs: Date.now() - started, body }); });
+      });
+      outgoing.on("error", reject);
+      outgoing.end("{}");
+    });
+    assert.equal(timing.body, "first second");
+    assert.ok(timing.endMs >= 1400, `the provider's gap was not observed (${timing.endMs} ms)`);
+    assert.ok(timing.firstMs < timing.endMs - 1000, `the first bytes waited for the whole answer (${timing.firstMs} of ${timing.endMs} ms)`);
+    assert.deepEqual(relay.observe(), { accepted: 1, refused: 0, failed: 0, inFlight: 0 });
+  } finally { bridged.close(); await relay.close(); await provider.close(); socket.clean(); }
+});

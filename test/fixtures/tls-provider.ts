@@ -20,7 +20,8 @@ export interface SeenRequest {
 export interface TlsProvider {
   readonly origin: string;
   readonly seen: SeenRequest[];
-  reply: { status: number; chunks: string[]; delayMs: number };
+  /** `gapMs` spaces the chunks out, so a reader can tell streaming from buffering. */
+  reply: { status: number; chunks: string[]; delayMs: number; gapMs?: number };
   close(): Promise<void>;
 }
 
@@ -33,7 +34,7 @@ export async function tlsProvider(): Promise<TlsProvider> {
   execFileSync("openssl", ["req", "-new", "-x509", "-key", keyPath, "-out", certPath, "-days", "1",
     "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost"], { stdio: "ignore" });
   const seen: SeenRequest[] = [];
-  const state = { reply: { status: 200, chunks: ["a", "b"], delayMs: 0 } };
+  const state: { reply: TlsProvider["reply"] } = { reply: { status: 200, chunks: ["a", "b"], delayMs: 0 } };
   const server = createServer({ key: readFileSync(keyPath), cert: readFileSync(certPath) }, (request, response) => {
     const record: SeenRequest = { method: request.method, path: request.url, headers: request.headers, body: "", upgrade: false };
     seen.push(record);
@@ -43,8 +44,15 @@ export async function tlsProvider(): Promise<TlsProvider> {
       const send = (): void => {
         const body = state.reply.chunks.join("");
         response.writeHead(state.reply.status, { "content-type": "text/event-stream", "content-length": Buffer.byteLength(body) });
-        for (const piece of state.reply.chunks) response.write(piece);
-        response.end();
+        const gap = state.reply.gapMs ?? 0;
+        const pieces = [...state.reply.chunks];
+        const next = (): void => {
+          const piece = pieces.shift();
+          if (piece === undefined) { response.end(); return; }
+          response.write(piece);
+          if (gap > 0) setTimeout(next, gap).unref(); else next();
+        };
+        next();
       };
       if (state.reply.delayMs > 0) setTimeout(send, state.reply.delayMs).unref();
       else send();
