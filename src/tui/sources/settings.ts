@@ -6,12 +6,12 @@
  * It never invents a model, a quota or a profile that the host did not declare.
  */
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import type { HostConfigV1 } from "../../../implementation/contracts.js";
 import { StoreError } from "../../domain/errors.js";
 import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../../config.js";
 import type { ConfigurationLayout } from "../../config/operations.js";
-import { replaceDerivedFile } from "../../storage/durable-fs.js";
+import { replaceDerivedFile, type DurabilityObserver } from "../../storage/durable-fs.js";
+import { commitManagedGeneration, managedRolesOf, type ManagedLimits, type ManagedCommit, type ManagedEdit } from "../../config/generations.js";
 import type { ApplyScope, ConfigField } from "../model.js";
 import { CONFIG_BOUNDS } from "../limits.js";
 
@@ -31,9 +31,9 @@ export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
 export const EXTENSIONS = "extensions";
 
-/** The authored layout behind the composed config. A split bundle keeps role
- * files and host.json as the real owners, so a Config edit must patch those
- * rather than flattening the bundle into its index (CFG-005, operations).
+/** The authored layout behind the composed config. A split bundle is edited
+ * as a whole managed generation whose manifest is replaced last (D02/WP13),
+ * never patched file by file and never flattened into its index.
  *
  * The layout itself is the loader's answer, not this screen's. This module used
  * to walk the manifest a second time with a weaker containment rule; what a
@@ -86,13 +86,6 @@ export function fieldsOf(config: HostConfigV1, workerProfile: string): readonly 
   ]);
 }
 
-function readJsonObject(path: string): Record<string, unknown> {
-  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
-    throw new StoreError("INVALID_REQUEST", `${path} must contain a JSON object`);
-  return parsed as Record<string, unknown>;
-}
-
 export function settingsOf(
   path: string,
   config: HostConfigV1,
@@ -112,9 +105,13 @@ export function readSettings(path: string): Settings {
  * from the content hash makes the value deterministic and guarantees it only
  * changes when the policy content actually changed.
  */
-export function revisionFor(config: HostConfigV1): string {
+export function revisionFor(config: HostConfigV1, roles?: Readonly<Record<string, unknown>>): string {
   const withoutRevision = { ...config, integration: { ...config.integration, policyRevision: "" } };
-  return `rev-${createHash("sha256").update(JSON.stringify(withoutRevision)).digest("hex").slice(0, CONFIG_BOUNDS.revisionDigestHex.value)}`;
+  const hash = createHash("sha256").update(JSON.stringify(withoutRevision));
+  // D02/CFG-005: in a bundle the roles' prompts, extension selection and tool
+  // surfaces are policy too; an inline config has none, so its value is unchanged.
+  if (roles !== undefined) hash.update("\n").update(JSON.stringify(roles));
+  return `rev-${hash.digest("hex").slice(0, CONFIG_BOUNDS.revisionDigestHex.value)}`;
 }
 
 function assertKnown(present: boolean, message: string): void {
@@ -155,8 +152,8 @@ export function applyField(settings: Settings, field: string, value: string | nu
  * The complete candidate is validated before rendering; a later read independently
  * re-observes the committed bytes.
  *
- * Only for an inline `config.json`. A split bundle must be patched at its real
- * owners instead, which `commitField` does.
+ * Only for an inline `config.json`; a split bundle is published as a managed
+ * generation by `commitManagedEdit`.
  */
 function writeValidatedSettings(path: string, candidate: ValidatedConfigCandidate): ValidatedConfigCandidate {
   const revised = validateConfig({
@@ -172,40 +169,30 @@ export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 
   return writeValidatedSettings(path, validateConfig(config));
 }
 
-function writeJsonObject(path: string, body: Record<string, unknown>): void {
-  replaceDerivedFile(path, `${JSON.stringify(body, null, 2)}\n`, 0o600);
-}
-
-/** Merges into the file as authored, so fields this screen does not model —
- * role `toolSurface`, prompts, anything a later host adds — survive the edit.
+/** D02/WP13: the one writer of a split bundle. The candidate is revised over
+ * its effective config and roles, compared with the snapshot it was derived
+ * from (a same-semantic save publishes nothing), validated whole, and handed
+ * to the generation writer, which refuses a snapshot that is no longer current.
  */
-function patchFile(path: string, patch: (current: Record<string, unknown>) => Record<string, unknown>): void {
-  let current: Record<string, unknown>;
-  try { current = readJsonObject(path); }
-  catch { throw new StoreError("STORE_CORRUPT", `configuration file became unreadable: ${path}`); }
-  writeJsonObject(path, patch(current));
+export function commitManagedEdit(snapshot: ConfigurationSnapshot, config: HostConfigV1, roles: ManagedEdit["roles"] = {},
+  faults?: DurabilityObserver, limits?: ManagedLimits): ManagedCommit {
+  const before = managedRolesOf(snapshot, {}, snapshot.config);
+  const after = managedRolesOf(snapshot, roles, config);
+  const semantic = (value: HostConfigV1, described: Record<string, unknown>) =>
+    JSON.stringify([{ ...value, integration: { ...value.integration, policyRevision: "" } }, described]);
+  if (semantic(config, roleRevisionInput(after)) === semantic(snapshot.config, roleRevisionInput(before)))
+    return Object.freeze({ kind: "unchanged", generation: null });
+  const revised = validateConfig({ ...config,
+    integration: { ...config.integration, policyRevision: revisionFor(config, roleRevisionInput(after)) } });
+  return commitManagedGeneration(snapshot, { config: revised, roles }, faults, limits);
 }
-
-function roleFileOf(layout: Extract<ConfigLayout, { kind: "operations" }>, profile: string): string {
-  const path = layout.roles[profile];
-  if (path === undefined)
-    throw new StoreError("UNSUPPORTED_PROFILE", `the configuration bundle has no role file for "${profile}"`);
-  return path;
+function roleRevisionInput(roles: ReturnType<typeof managedRolesOf>): Record<string, unknown> {
+  return Object.fromEntries(Object.keys(roles).sort().map(name => {
+    const role = roles[name]!;
+    return [name, { extensions: role.extensions, toolSurface: role.toolSurface ?? null,
+      prompt: createHash("sha256").update(role.prompt).digest("hex") }];
+  }));
 }
-
-function patchRoleModel(layout: Extract<ConfigLayout, { kind: "operations" }>, profile: string, model: string): void {
-  patchFile(roleFileOf(layout, profile), current => {
-    return { ...current, agentProfile: { ...requireObject(current.agentProfile, `role "${profile}" agentProfile`), modelProfile: model } };
-  });
-}
-
-/** Where each field actually lives in a split bundle. Declared once so the
- * routing cannot drift from the transform above; adding a field without a
- * placement fails to compile.
- */
-type FieldPlacement =
-  | { readonly at: "role"; readonly profile: (settings: Settings) => string }
-  | { readonly at: "host"; readonly patch: (current: Record<string, unknown>, applied: HostConfigV1, value: string | number) => Record<string, unknown> };
 
 type EditableFieldView =
   | { readonly kind: "choice"; readonly value: string; readonly options: readonly string[] }
@@ -216,13 +203,6 @@ export interface EditableFieldDescriptor {
   readonly apply: ApplyScope;
   readonly view: (config: HostConfigV1, workerProfile: string) => EditableFieldView;
   readonly transform: (settings: Settings, value: string | number) => HostConfigV1;
-  readonly placement: FieldPlacement;
-}
-
-function requireObject(value: unknown, what: string): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value))
-    throw new StoreError("STORE_CORRUPT", `host file has no ${what} object`);
-  return value as Record<string, unknown>;
 }
 
 const DESCRIPTOR_SOURCE = {
@@ -242,7 +222,6 @@ const DESCRIPTOR_SOURCE = {
       return { ...config, agentProfiles: { ...config.agentProfiles,
         [config.principalProfile]: { ...profile!, modelProfile: value as string } } };
     },
-    placement: { at: "role" as const, profile: (settings: Settings) => settings.config.principalProfile },
   }),
   [WORKER_MODEL]: Object.freeze({
     label: "Worker model",
@@ -261,7 +240,6 @@ const DESCRIPTOR_SOURCE = {
       return { ...config, agentProfiles: { ...config.agentProfiles,
         [name]: { ...profile!, modelProfile: value as string } } };
     },
-    placement: { at: "role" as const, profile: (settings: Settings) => settings.workerProfile },
   }),
   [WORKER_LIMIT]: Object.freeze({
     label: "Worker limit",
@@ -273,12 +251,6 @@ const DESCRIPTOR_SOURCE = {
       assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value > 0, "worker limit must be a positive integer");
       return { ...settings.config, quota: { ...settings.config.quota, societyAgents: value as number } };
     },
-    placement: {
-      at: "host" as const,
-      patch: (current: Record<string, unknown>, _applied: HostConfigV1, value: string | number) => ({
-        ...current, quota: { ...requireObject(current.quota, "quota"), societyAgents: value },
-      }),
-    },
   }),
   [INITIAL_WORKERS]: Object.freeze({
     label: "Initial workers",
@@ -289,10 +261,6 @@ const DESCRIPTOR_SOURCE = {
     transform: (settings: Settings, value: string | number) => {
       assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
       return withSeedCount(settings.config, value as number, settings.workerProfile);
-    },
-    placement: {
-      at: "host" as const,
-      patch: (current: Record<string, unknown>, applied: HostConfigV1) => ({ ...current, initialResidents: applied.initialResidents }),
     },
   }),
   [WORKER_PROFILE]: Object.freeze({
@@ -308,10 +276,6 @@ const DESCRIPTOR_SOURCE = {
       // Existing Resident specs are immutable; only not-yet-created bootstrap seeds change.
       return { ...config, initialResidents: config.initialResidents.map(resident => ({ ...resident, profile: value as string })) };
     },
-    placement: {
-      at: "host" as const,
-      patch: (current: Record<string, unknown>, applied: HostConfigV1) => ({ ...current, initialResidents: applied.initialResidents }),
-    },
   }),
 } satisfies Readonly<Record<EditableField, EditableFieldDescriptor>>;
 
@@ -319,26 +283,21 @@ const PLACEMENT: Readonly<Record<EditableField, EditableFieldDescriptor>> =
   Object.freeze(Object.assign(Object.create(null), DESCRIPTOR_SOURCE));
 export const EDITABLE_FIELD_DESCRIPTORS = PLACEMENT;
 
-/** Writes one confirmed Config value to whichever file actually owns it, then
- * records the new policy revision (CFG-005). The composed config is validated
- * first, so an unknown model or profile is refused before anything is written.
+/** Writes one confirmed Config value (CFG-005). The composed config is
+ * validated first, so an unknown model or profile is refused before anything is
+ * written; an inline config is replaced as one file, a split bundle is
+ * published as one managed generation.
  */
 export function commitField(settings: Settings, field: string, value: string | number): void {
   if (!Object.hasOwn(EDITABLE_FIELD_DESCRIPTORS, field))
     throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
   const descriptor = EDITABLE_FIELD_DESCRIPTORS[field as EditableField];
   const applied = validateConfig(descriptor.transform(settings, value));
-  const revision = revisionFor(applied);
   if (settings.layout.kind === "inline") {
     writeValidatedSettings(settings.layout.path, applied);
     return;
   }
-  const layout = settings.layout;
-  const placement = descriptor.placement;
-  if (placement.at === "role") patchRoleModel(layout, placement.profile(settings), String(value));
-  else patchFile(layout.host, current => placement.patch(current, applied, value));
-  patchFile(layout.host, current => ({
-    ...current,
-    integration: { ...requireObject(current.integration, "integration"), policyRevision: revision },
-  }));
+  if (settings.snapshot === null)
+    throw new StoreError("UNSUPPORTED_PROFILE", "a split configuration is edited only from the snapshot it was read as");
+  commitManagedEdit(settings.snapshot, applied);
 }

@@ -161,16 +161,23 @@ test("T97/TUI-010: the core extension stays first and selection is confined to l
     assert.equal(review.workers, true);
     assert.ok(context.rows.some(row => row.id === "extensions/browser.js"), "host-placed file is offered");
 
-    toggleExtension(context, "extensions/review.js", "principal", true);
     const principalPath = context.roles.find(role => role.name === "principal")!.path;
-    const principal = JSON.parse(readFileSync(principalPath, "utf8"));
-    assert.equal(principal.extensions[0], CORE_EXTENSION);
-    assert.deepEqual(principal.extensions, [CORE_EXTENSION, "extensions/review.js"]);
+    const authored = readFileSync(principalPath, "utf8");
+    toggleExtension(context, "extensions/review.js", "principal", true);
+    // D02/WP13: the change is a new managed generation the loader reads; the
+    // manual role file the bundle was migrated from is kept as it was.
+    const extensionsOf = () => readSettings(fixture.path).snapshot!.authoredRoles.principal!.value.extensions as string[];
+    assert.deepEqual(extensionsOf(), [CORE_EXTENSION, "extensions/review.js"]);
+    assert.equal(readFileSync(principalPath, "utf8"), authored);
 
-    toggleExtension(context, CORE_EXTENSION, "principal", false);
-    assert.equal(JSON.parse(readFileSync(principalPath, "utf8")).extensions[0], CORE_EXTENSION);
-    assert.throws(() => toggleExtension(context, "extensions/missing.js", "workers", true), (error: unknown) =>
+    const current = readExtensions(readSettings(fixture.path).snapshot!, "principal", "resident");
+    toggleExtension(current, CORE_EXTENSION, "principal", false);
+    assert.equal(extensionsOf()[0], CORE_EXTENSION);
+    assert.throws(() => toggleExtension(current, "extensions/missing.js", "workers", true), (error: unknown) =>
       error instanceof StoreError && error.code === "INVALID_REQUEST");
+    // The context read before the first toggle is stale now: it is refused.
+    assert.throws(() => toggleExtension(context, "extensions/browser.js", "workers", true), (error: unknown) =>
+      error instanceof StoreError && error.code === "POLICY_CHANGED");
   } finally { fixture.close(); }
 });
 

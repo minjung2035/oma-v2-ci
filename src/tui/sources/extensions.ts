@@ -11,8 +11,8 @@ import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../../domain/deployment.js";
-import { replaceDerivedFile } from "../../storage/durable-fs.js";
 import { loadConfigurationSnapshot, type ConfigurationSnapshot } from "../../config.js";
+import { commitManagedEdit } from "./settings.js";
 import type { ExtensionRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
 
@@ -36,13 +36,8 @@ export interface ExtensionContext {
   readonly roles: readonly RoleFile[];
   readonly rows: readonly ExtensionRow[];
   readonly reason: string | null;
-}
-
-function readJson(path: string): Record<string, unknown> {
-  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
-    throw new StoreError("INVALID_REQUEST", `${path} must contain a JSON object`);
-  return parsed as Record<string, unknown>;
+  /** D02/WP13: the snapshot a toggle is published against as a whole generation. */
+  readonly snapshot: ConfigurationSnapshot | null;
 }
 
 /** Only files the host placed under libdir are candidates. A path that escapes
@@ -105,7 +100,7 @@ function rowsOf(available: readonly string[], principal: RoleFile | null, worker
 const unmanaged = (reason: string): ExtensionContext => Object.freeze({
   editable: false, libdir: "", principalRole: null, workerRole: null, roles: Object.freeze([]),
   rows: Object.freeze([Object.freeze({ id: CORE_EXTENSION, principal: true, workers: true, locked: true })]),
-  reason,
+  reason, snapshot: null,
 });
 
 export function readExtensions(source: string | ConfigurationSnapshot, principalProfile: string, workerProfile: string): ExtensionContext {
@@ -138,6 +133,7 @@ export function readExtensions(source: string | ConfigurationSnapshot, principal
     libdir, principalRole: principal?.name ?? null, workerRole: worker?.name ?? null,
     roles: Object.freeze(roles), rows: rowsOf(available, principal, worker),
     reason: principal === null && worker === null ? "해당 role 파일이 없습니다" : null,
+    snapshot,
   });
 }
 
@@ -169,11 +165,9 @@ export function toggleExtension(context: ExtensionContext, id: string, role: "pr
   const entries = nextEntries(target.extensions, available, id, enabled);
   if (entries.length > READ_BOUNDS.roleExtensions.value)
     throw new StoreError("LIMIT_EXCEEDED", `role당 extension은 최대 ${READ_BOUNDS.roleExtensions.value}개입니다`);
-  // Re-read immediately before writing so a field this screen does not model
-  // cannot be lost to a stale in-memory copy.
-  let current: Record<string, unknown>;
-  try { current = readJson(target.path); }
-  catch { throw new StoreError("STORE_CORRUPT", "role file became unreadable between read and write"); }
-  const body = { ...current, extensions: entries };
-  replaceDerivedFile(target.path, `${JSON.stringify(body, null, 2)}\n`, 0o600);
+  // D02/WP13: published as one generation from the snapshot this screen read;
+  // every other authored field of every role is carried forward, and a bundle
+  // changed since that read is refused rather than overwritten.
+  if (context.snapshot === null) throw new StoreError("UNSUPPORTED_PROFILE", "이 설정은 스냅샷 없이 바꿀 수 없습니다");
+  commitManagedEdit(context.snapshot, context.snapshot.config, { [name]: { extensions: entries } });
 }

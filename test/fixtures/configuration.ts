@@ -124,6 +124,8 @@ export function createCompleteConfigurationFixture() {
       migrate,
       edit,
       close() {
+        // Published managed generations are read-only (D02); the fixture owns them.
+        spawnSync("chmod", ["-R", "u+rwX", root]);
         rmSync(root, { recursive: true, force: true });
       },
     };

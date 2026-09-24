@@ -113,13 +113,14 @@ test("V02A: config editor performs an observable replacement and remains loadabl
       "workers",
       true,
     );
-    const after = observeFile(role);
+    // D02/WP13: the authored role file is preserved; the manifest is the one
+    // replaced file and now names a generation holding the new selection.
+    assert.deepEqual(observeFile(role), before);
+    const manifest = JSON.parse(readFileSync(f.path, "utf8")) as { roles: Record<string, string> };
+    assert.match(manifest.roles.resident!, /^\.oma-config\/generations\/g-[0-9a-f]{64}\/roles\/resident\.json$/);
+    const after = observeFile(join(f.output, manifest.roles.resident!));
     assert.notEqual(after.sha256, before.sha256);
-    assert.notEqual(
-      after.ino,
-      before.ino,
-      "derived replacement must publish a new inode",
-    );
+    assert.notEqual(after.ino, before.ino, "a generation is new bytes at a new inode");
     assert.doesNotThrow(() => loadConfiguration(f.path));
     assert.throws(() => observeFile(join(f.root, "absent")), {
       code: "ENOENT",

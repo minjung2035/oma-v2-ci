@@ -9,6 +9,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "config:split": "npm run build && node scripts/split-operations-config.mjs",
+    "config:export": "npm run build && node scripts/export-operations-config.mjs",
     "inventory": "node scripts/loc.mjs --inventory-only",
     "mutation:locality": "node scripts/mutation-locality.mjs",
     "check:inventory": "node scripts/production-inventory.mjs",

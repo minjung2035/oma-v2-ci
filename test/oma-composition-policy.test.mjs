@@ -255,6 +255,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
     },
     "../runtime/deployment-manifest.js": { deploymentDigest: () => "a".repeat(64) },
+    "../config/generations.js": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
   };
   const process_ = {
     argv: ["node", "oma"], env: { HOME: "/home/user", XDG_DATA_HOME: "/state", XDG_RUNTIME_DIR: "/run" },
@@ -324,6 +325,10 @@ test("T119: the engine starts when this process is proved to own the society, no
   const order = name => calls.indexOf(name);
   assert.ok(order("provisionSociety") < order("superviseBroker"));
   assert.ok(order("superviseBroker") < order("PrincipalSession.start"));
+  // D02/WP13: unused configuration generations are collected only while this
+  // process owns the society and before the broker it starts can read them.
+  assert.ok(order("repairSociety") < order("collectManagedGenerations"));
+  assert.ok(order("collectManagedGenerations") < order("superviseBroker"));
 });
 
 test("T119: however many brokers become ready, the society gets one engine", async () => {
@@ -534,6 +539,7 @@ test("T119 / REC-007: a process that cannot take the society lease writes nothin
   assert.equal(calls.includes("repairSociety"), false, "a non-owner corrected state it does not own");
   assert.equal(calls.includes("writeSettings"), false, "a non-owner created the society's configuration");
   assert.equal(calls.includes("superviseBroker"), false, "a non-owner started a broker for a society it does not own");
+  assert.equal(calls.includes("collectManagedGenerations"), false, "a non-owner collected configuration generations");
   assert.equal(calls.includes("PrincipalSession.start"), false);
   assert.equal(calls.includes("PrincipalDelivery"), false);
   assert.equal(society.started, null);

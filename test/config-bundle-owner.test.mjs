@@ -103,11 +103,14 @@ test("CFG-005: a bundle the loader accepts is the bundle the screen edits", () =
     assert.deepEqual(context.roles.map(role => role.path), Object.values(layout.roles),
       "the screen edits a path the owner did not resolve");
 
+    const authored = readFileSync(join(f.root, "role.json"), "utf8");
     toggleExtension(context, "extensions/x.js", "workers", true);
-    const written = JSON.parse(readFileSync(join(f.root, "role.json"), "utf8"));
+    // D02/WP13: published as a managed generation; the authored file is kept.
+    const written = readConfigurationSource(f.index).authoredRoles["resident"].value;
     assert.deepEqual(written.extensions, [DEPLOYMENT_LAYOUT.extension, "extensions/x.js"]);
     assert.deepEqual(written.toolSurface, { defaultMode: "DIRECT" },
       "a field the screen does not model was lost");
+    assert.equal(readFileSync(join(f.root, "role.json"), "utf8"), authored, "the authored role file was edited in place");
     assert.equal(readFileSync(f.outside, "utf8"), f.outsideBytes, "the outside file was touched");
     assert.doesNotThrow(() => loadConfiguration(f.index), "the edited candidate must remain loadable");
   } finally { f.cleanup(); }

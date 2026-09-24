@@ -24,6 +24,7 @@ import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
 import { commitField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
+import { collectManagedGenerations } from "../config/generations.js";
 import { defaultHostConfig, societyFromDirectory } from "../config/defaults.js";
 import { provisionSociety, repairSociety, residentRootfsPath, type ProvisionReport } from "../runtime/provision.js";
 import { brokerListening, superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
@@ -155,6 +156,14 @@ async function main(argv: readonly string[]): Promise<void> {
     catch (error) { fail(`society를 준비하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
     try { corrected = repairSociety(stateRoot); }
     catch (error) { fail(`rootfs를 고치지 못해 society를 시작하지 않았습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+    // D02/WP13: configuration generations no reader can still use are
+    // collected only here -- this process owns the society, no broker is
+    // listening and nothing it will start has read the configuration yet. The
+    // current and the previously committed generation are kept. A failed
+    // collection only leaves history behind, which a later edit reports.
+    if (settings.snapshot !== null) {
+      try { collectManagedGenerations(settings.snapshot); } catch { /* history kept; the edit budget says so */ }
+    }
   }
 
   const mailbox = principalMailbox(stateRoot);
