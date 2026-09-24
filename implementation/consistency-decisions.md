@@ -764,3 +764,47 @@ WP30.05 — qualification, raw results kept apart:
 | powercut (VM storage loss) | NOT_RUN -- no approved VM; SIGKILL results are not power-loss evidence |
 | real provider | NOT_RUN -- no credential authorized |
 | CI | NOT_RUN -- nothing pushed |
+
+## WP32 — closure, invariants and the verdict
+
+WP32.01 / V32A — `implementation/review-ledger.json` is generated (`npm run
+review:ledger`) from the plan's 220 assignments, git history since `b25961c`,
+the tree's test names and `implementation/review-notes.json`, and checked by
+`scripts/review-closure.mjs` (fast lane). Every current and baseline production
+file has one status: 73 changed with the changing WP's oracles present as tests, 10
+read in full and left unchanged (with the oracles that exercise them), 139 not
+reviewed in this implementation, none removed. **The review is not complete**: the
+139 were assigned by the plan and are covered by the suite, but were not re-read
+line by line here, and they are not marked reviewed. The checker refuses a review
+with no work package, no oracle or an oracle that is not a test, a missing file and
+a hand-edited summary.
+
+WP32.02 — the invariants, where each is defined, owned and shown:
+
+| INV | Owner in this tree | Regression that shows it |
+|---|---|---|
+| INV01 identity vs current authority | incarnation/InvocationID/pin table (WP25), batch incarnation (D01), generation id (D02) | V25A, V07A/B, V30A, V13B |
+| INV02 unknown is not absent/success/dead | receipt observation (D01), `confirmDead`, status snapshot | V06A, V30A, V23A/B, T38 |
+| INV03 terminal facts and frozen intent kept | receipt supersession, CLI freeze, completed batches | V26B, V06B, V30A |
+| INV04 one policy owner per decision | method descriptors, operation codec, request-hash recipe, exit owner | P22, V29A, P1 |
+| INV05 lifetimes and responsibility explicit | connection vs accepted task, run pin, preaccept scope | R14, V25B, V17A |
+| INV06 current authority at the effect | `currentIntent`, `assertCurrentActor`, peer re-check | V25A, V23B, V24B |
+| INV07 atomicity and durability units named | receipt publish + parent fsync, generation + manifest | V05A/B, V13A |
+| INV08 read/admit/settle/repair distinct | resource categories, storage admission | V21B, V22A/B |
+| INV09 a checked value's guarantee is the check's scope | WP29 guarantee table | V29A, P22 |
+| INV10 every I/O, queue and retention bounded | status refresh, relay, frame budgets, placeholder | V23A, V27B, V26C |
+| INV11 observation and display create no authority | status snapshot, TUI facts | V23B, V28A, T118 |
+| INV12 evidence and scope not hidden | review ledger, validation binding, qualification table | V32A, R38 |
+
+WP32.03 — documents: README states the real install and invocation, operations/README
+the support range (WP31); HANDOFF keeps only the resume point. architecture.md,
+implementation-spec.md and physical-ordering.md were not rewritten: no approved
+ADR changed their normative text in this implementation beyond what the owning WPs
+recorded here.
+
+WP32.04/05 — the final source is bound by `implementation/validation.md` (digest
+and lane results); CI has not run (nothing pushed), powercut and a real provider are
+NOT_RUN. **Verdict: not release-approved.** What is established: every card's code
+and oracles, local lanes, the disposable-user kernel and crash lanes, the bundled
+engine and a real pty. What is not: 139 files not re-read, power loss, a real
+provider, CI.
