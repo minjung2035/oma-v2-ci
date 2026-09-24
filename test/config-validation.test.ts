@@ -63,7 +63,9 @@ test("V11C: zero bootstrap seeds expose no editable profile target", () => {
   try {
     const config = { ...fixture.config, initialResidents: [] };
     const settings = settingsOf(fixture.input, config);
-    assert.equal(settings.fields.some(field => field.id === WORKER_PROFILE), false);
+    // D05/WP15: the field is shown blocked with its reason, never offered as a target.
+    const field = settings.fields.find(entry => entry.id === WORKER_PROFILE);
+    assert.ok(field && field.kind !== "link" && typeof field.blocked === "string" && field.blocked.length > 0);
     assert.throws(() => applyField(settings, WORKER_PROFILE, "resident"), /no bootstrap workers/);
     assert.throws(() => applyField(settings, "toString", 1), /unknown settings field/);
   } finally {

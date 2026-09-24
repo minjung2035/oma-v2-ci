@@ -11,6 +11,10 @@ function worded(notice: Notice): string {
       const scope = notice.apply === null ? "" : ` · ${applyLabel(notice.apply)}`;
       return `${notice.label} = ${notice.value} · 저장됨${scope}`;
     }
+    case "unchanged":
+      return `${notice.label} = ${notice.value} · 이미 이 값입니다(저장할 변경 없음)`;
+    case "saved-unread":
+      return `${notice.label} = ${notice.value} · 저장됨 · 설정을 다시 읽지 못해 화면 값은 확인되지 않았습니다: ${notice.reason}`;
     case "extension":
       return `${notice.id} · ${notice.role === "principal" ? "Principal" : "Workers"} ${notice.enabled ? "사용" : "해제"} · 저장됨`;
     case "save-failed":

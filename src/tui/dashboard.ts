@@ -10,7 +10,7 @@ import type { Observation } from "./transport.js";
 
 export interface DashboardInput {
   readonly config: HostConfigV1;
-  readonly principalModel: string;
+  readonly principalModel: DashboardData["principalModel"];
   readonly unread: number;
   readonly observation: Observation;
 }

@@ -23,7 +23,7 @@ import type { PiEvent } from "../runtime/pi-rpc.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
-import { commitField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
+import { bootstrapStateOf, commitField, fieldsOf, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
 import { collectManagedGenerations } from "../config/generations.js";
 import { defaultHostConfig, defaultSocietyFor, societyFromDirectory } from "../config/defaults.js";
 import { sha256Hex } from "../hash.js";
@@ -221,6 +221,10 @@ async function main(argv: readonly string[]): Promise<void> {
 
   const terminal = openTerminal({ input: process.stdin, output: process.stdout });
   let session: PrincipalSession | null = null;
+  /** WP15.05: the model profile the running session was started with. */
+  let sessionModel: string | null = null;
+  /** WP15.03: why the configuration could not be read back after a save. */
+  let settingsUnread: string | null = null;
 
   /** Every write this product performs on behalf of the Human passes here.
    *
@@ -238,10 +242,18 @@ async function main(argv: readonly string[]): Promise<void> {
   };
 
   const ports: AppPorts = {
-    configFields: () => settings.fields,
+    // WP15: fields are judged against the latest observation of the society,
+    // and against nothing while the configuration could not be read back.
+    configFields: () => settingsUnread === null ? fieldsOf(settings.config, settings.workerProfile, bootstrapStateOf(observation))
+      : fieldsOf(settings.config, settings.workerProfile).map(field => field.kind === "link" ? field
+        : Object.freeze({ kind: "choice" as const, id: field.id, label: field.label, value: "?", options: Object.freeze([]),
+          apply: field.apply, blocked: `설정을 다시 읽지 못함: ${settingsUnread}` })),
     dashboard: () => dashboardData({
       config: settings.config,
-      principalModel: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? "unknown",
+      principalModel: {
+        configured: settingsUnread === null ? settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? "unknown" : "unknown",
+        session: session === null ? null : sessionModel,
+      },
       unread: unreadCount(mailbox),
       observation,
     }),
@@ -250,8 +262,15 @@ async function main(argv: readonly string[]): Promise<void> {
     body: (path: string) => (path.length === 0 ? null : readBody(path)),
     setField: (field, value) => {
       owning("설정");
-      commitField(settings, field, value);
-      reload();
+      const committed = commitField(settings, field, value, bootstrapStateOf(observation));
+      // WP15.03: a failed read-back does not undo the commit, and the old
+      // values are not shown as current meanwhile.
+      try { reload(); settingsUnread = null; }
+      catch (error) {
+        settingsUnread = error instanceof Error ? error.message : String(error);
+        return { kind: "saved-unread" as const, reason: settingsUnread };
+      }
+      return committed;
     },
     setExtension: (id, role, enabled) => {
       owning("확장");
@@ -322,6 +341,7 @@ async function main(argv: readonly string[]): Promise<void> {
     });
     ensureDirectory(piRuntime.agentDir, 0o700);
     const profile = principalSessionProfile(configPath, society);
+    sessionModel = settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? null;
     const started = PrincipalSession.start(
       { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
         coreExtension: join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension),

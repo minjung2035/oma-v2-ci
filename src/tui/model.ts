@@ -24,13 +24,17 @@ export type ApplyScope =
   | "restart"
   | "bootstrap-only";
 
+/** WP15: why a field cannot be edited right now, said where the apply time
+ * would be (no target, or a value that would change nothing), or null. */
 export interface ChoiceField {
   readonly kind: "choice"; readonly id: string; readonly label: string;
   readonly value: string; readonly options: readonly string[]; readonly apply: ApplyScope;
+  readonly blocked: string | null;
 }
 export interface NumberField {
   readonly kind: "number"; readonly id: string; readonly label: string;
   readonly value: number; readonly min: number; readonly max: number; readonly apply: ApplyScope;
+  readonly blocked: string | null;
 }
 export interface LinkField {
   readonly kind: "link"; readonly id: string; readonly label: string;
@@ -64,7 +68,10 @@ export interface DashboardData {
   readonly configuredWorkers: number;
   readonly workerLimit: number;
   readonly unread: number;
-  readonly principalModel: string;
+  /** WP15.05: the configured Principal model, and the one the running session
+   * was started with (null when no session runs). Nothing here is the engine's
+   * own report of the model it is using; no pinned API gives that. */
+  readonly principalModel: { readonly configured: string; readonly session: string | null };
   /** The rootfs Residents are confined to, or null when none is declared. */
   readonly rootfs: string | null;
 }
@@ -72,6 +79,11 @@ export interface DashboardData {
 /** What the notice line reports. The view words it. */
 export type Notice =
   | { readonly kind: "saved"; readonly label: string; readonly value: string; readonly apply: ApplyScope | null }
+  /** WP15.03: the confirmed value was already the configuration; nothing was written. */
+  | { readonly kind: "unchanged"; readonly label: string; readonly value: string }
+  /** WP15.03: the value was saved, but re-reading the configuration failed, so
+   * the screen no longer shows it as current. */
+  | { readonly kind: "saved-unread"; readonly label: string; readonly value: string; readonly reason: string }
   | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "save-failed"; readonly message: string }
   /** `kept` says where the text that was not sent now is, because a message
@@ -179,6 +191,9 @@ function fieldById(data: PanelData, id: string): ConfigField | undefined {
 
 function beginEdit(state: State, field: ConfigField): Step {
   if (field.kind === "link") return { state: { ...state, detail: { kind: "extensions", row: 0, column: 0 } }, effects: [] };
+  // WP15: a field with no target or no effect is not edited; the reason is
+  // already on screen where its apply time would be.
+  if (field.blocked !== null) return { state, effects: [] };
   if (field.kind === "choice") {
     const index = Math.max(field.options.indexOf(field.value), 0);
     return { state: { ...state, edit: { kind: "choice", field: field.id, index } }, effects: [] };

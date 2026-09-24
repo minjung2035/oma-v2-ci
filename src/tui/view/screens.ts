@@ -96,7 +96,8 @@ function rowsFor(input: ViewInput): string[] {
     return data.config.map((field, index) => {
       const marker = index === selected ? ">" : " ";
       const value = pad(fieldValue(field, state), LAYOUT_BOUNDS.valueColumn.value);
-      const scope = field.kind === "link" ? "" : applyLabel(field.apply);
+      // WP15: a blocked field says why instead of when it would apply.
+      const scope = field.kind === "link" ? "" : field.blocked !== null ? `(${field.blocked})` : applyLabel(field.apply);
       return `${marker} ${pad(field.label, labelWidth)}${value}${scope}`;
     });
   if (data.mail.length === 0) return ["  받은 메일이 없습니다."];

@@ -80,7 +80,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
   disowned = null, leased = true, repairFails = false, engineExits = true,
-  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh" } = {}) {
+  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false } = {}) {
   const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -201,8 +201,15 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../tui/sources/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], unreadCount: () => 0 },
     "../tui/sources/extensions.js": { readExtensions: () => ({ rows: [] }), toggleExtension() {} },
     "../tui/sources/settings.js": {
-      commitField() {},
-      readSettings: () => { calls.push("readSettings"); return settings; },
+      commitField: (_settings, field) => { calls.push(`commitField:${field}`); return { kind: "saved" }; },
+      bootstrapStateOf: () => "unknown",
+      fieldsOf: () => rereadFails ? [{ kind: "number", id: "worker-limit", label: "Worker limit", value: 8, min: 1, max: 64, apply: "restart", blocked: null },
+        { kind: "link", id: "extensions", label: "Extensions" }] : settings.fields,
+      readSettings: () => {
+        calls.push("readSettings");
+        if (rereadFails && calls.filter(call => call === "readSettings").length > 1) throw new Error("manifest unreadable");
+        return settings;
+      },
       writeSettings() { calls.push("writeSettings"); },
     },
     "../hash.js": { sha256Hex: bytes => { calls.push("sha256Hex"); return "f".repeat(64); } },
@@ -782,4 +789,18 @@ test("D05/WP16: an earlier default-name society of this project is pointed out, 
   for (const effect of ["readSettings", "writeSettings", "provisionSociety", "superviseBroker"])
     assert.equal(calls.includes(effect), false, `${effect} ran instead of pointing at the earlier society`);
   assert.equal(calls.some(call => call.startsWith("publishProjectBinding")), false);
+});
+
+test("WP15.03: a save whose configuration cannot be read back is reported as saved-unread, and no stale value is shown as current", async () => {
+  const society = await run({ rereadFails: true });
+  const ports = society.ports;
+  assert.ok(ports, "the product built no screen ports");
+  const outcome = ports.setField("worker-limit", 9);
+  assert.equal(society.calls.includes("commitField:worker-limit"), true);
+  assert.equal(outcome.kind, "saved-unread");
+  assert.match(outcome.reason, /manifest unreadable/);
+  const fields = ports.configFields();
+  const limit = fields.find(field => field.id === "worker-limit");
+  assert.equal(limit.value, "?", "the old value was still shown as the configuration");
+  assert.match(limit.blocked, /다시 읽지 못함/);
 });

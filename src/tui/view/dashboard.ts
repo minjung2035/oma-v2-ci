@@ -31,7 +31,12 @@ export function dashboardRows(data: DashboardData): readonly DashboardRow[] {
     rows.push({ label: "Status", value: unknown });
   }
   rows.push({ label: "Mail", value: `${data.unread} unread` });
-  rows.push({ label: "Model", value: data.principalModel });
+  // WP15.05: configured is not observed. The session's value is what this
+  // product started it with, not the engine's own report.
+  const model = data.principalModel;
+  rows.push({ label: "Model", value: model.session === null ? `${model.configured} (설정값 · 실행 중인 세션 없음)`
+    : model.session === model.configured ? `${model.configured} (설정값 · 현재 세션도 이 설정으로 시작)`
+    : `${model.configured} (설정값 · 다음 세션부터 · 현재 세션은 ${model.session}로 시작)` });
   // Whether a Resident is confined changes what OMA can promise about it.
   rows.push({ label: "Sandbox", value: data.rootfs === null ? "비봉인 (신뢰 rootfs 미선언)" : `봉인 (${data.rootfs})` });
   // The engine owns inference and never reports spend to OMA (INF-001), so a

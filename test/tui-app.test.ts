@@ -55,7 +55,7 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
   let refusal: string | null = null;
   let model = "fast";
   const config = (): readonly ConfigField[] => [
-    { kind: "choice", id: "worker-model", label: "Worker model", value: model, options: ["cheap", "fast"], apply: "next-activation" },
+    { kind: "choice", id: "worker-model", label: "Worker model", value: model, options: ["cheap", "fast"], apply: "next-activation", blocked: null },
     { kind: "link", id: "extensions", label: "Extensions" },
   ];
   const dashboard = () => unknownDashboard();
@@ -72,7 +72,7 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
     extensions,
     mail,
     body: () => "본문",
-    setField: (field, value) => { writes.push({ field, value }); if (field === "worker-model") model = String(value); },
+    setField: (field, value) => { writes.push({ field, value }); if (field === "worker-model") model = String(value); return { kind: "saved" as const }; },
     setExtension: (id, role, enabled) => { toggles.push({ id, role, enabled }); },
     submitPrompt: text => {
       prompts.push(text);

@@ -23,7 +23,9 @@ export interface AppPorts {
   readonly mail: () => readonly MailRow[];
   readonly extensions: () => readonly ExtensionRow[];
   readonly body: (path: string) => string | null;
-  readonly setField: (field: string, value: string | number) => void;
+  /** WP15.03: what a confirmed value did -- saved, already the value, or
+   * saved while the configuration could not be read back. */
+  readonly setField: (field: string, value: string | number) => SetFieldOutcome;
   readonly setExtension: (id: string, role: "principal" | "workers", enabled: boolean) => void;
   /** Answers, in this call, whether the session took the prompt. A port that
    * reported acceptance later could only report it into a transcript that had
@@ -32,10 +34,14 @@ export interface AppPorts {
   readonly quit: () => void;
 }
 
+export type SetFieldOutcome =
+  | { readonly kind: "saved" } | { readonly kind: "unchanged" }
+  | { readonly kind: "saved-unread"; readonly reason: string };
+
 const EMPTY: PanelData = Object.freeze({
   dashboard: Object.freeze({
     status: Object.freeze({ kind: "unknown" as const, observedAtMs: 0, reason: "아직 관측하지 않음" }),
-    configuredWorkers: 0, workerLimit: 0, unread: 0, principalModel: "unknown", rootfs: null,
+    configuredWorkers: 0, workerLimit: 0, unread: 0, principalModel: Object.freeze({ configured: "unknown", session: null }), rootfs: null,
   }),
   config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]),
 });
@@ -150,16 +156,18 @@ export class TuiApp {
   private run(effect: Effect): void {
     try {
       switch (effect.kind) {
-        case "set-choice":
-          this.ports.setField(effect.field, effect.value);
+        case "set-choice": {
+          const outcome = this.ports.setField(effect.field, effect.value);
           this.refresh();
-          this.notice = this.saved(effect.field, effect.value);
+          this.notice = this.saved(effect.field, effect.value, outcome);
           return;
-        case "set-number":
-          this.ports.setField(effect.field, effect.value);
+        }
+        case "set-number": {
+          const outcome = this.ports.setField(effect.field, effect.value);
           this.refresh();
-          this.notice = this.saved(effect.field, String(effect.value));
+          this.notice = this.saved(effect.field, String(effect.value), outcome);
           return;
+        }
         case "set-extension":
           this.ports.setExtension(effect.id, effect.role, effect.enabled);
           this.refresh();
@@ -205,10 +213,13 @@ export class TuiApp {
   /** Arch §23.6: a confirmed value is a saved value, and the message states
    * when it actually takes effect.
    */
-  private saved(field: string, value: string): Notice {
+  private saved(field: string, value: string, outcome: SetFieldOutcome): Notice {
     const declared = this.data.config.find(entry => entry.id === field);
+    const label = declared?.label ?? field;
+    if (outcome.kind === "unchanged") return { kind: "unchanged", label, value };
+    if (outcome.kind === "saved-unread") return { kind: "saved-unread", label, value, reason: outcome.reason };
     return {
-      kind: "saved", label: declared?.label ?? field, value,
+      kind: "saved", label, value,
       apply: declared && declared.kind !== "link" ? declared.apply : null,
     };
   }

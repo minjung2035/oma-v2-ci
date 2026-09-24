@@ -68,15 +68,25 @@ export function residentProfiles(config: HostConfigV1): readonly string[] {
   return names.length > 0 ? names : [config.principalProfile];
 }
 
-export function fieldsOf(config: HostConfigV1, workerProfile: string): readonly ConfigField[] {
+/** WP15/D05: whether this society's one bootstrap has happened, as observed.
+ * The broker bootstraps only an empty registry, so the Principal row in an
+ * observed status means seeds are no longer read; without an observation it
+ * is unknown, never assumed. */
+export type BootstrapState = "pending" | "done" | "unknown";
+export function bootstrapStateOf(observation: { readonly kind: string; readonly statuses?: readonly { readonly agent: string }[] }): BootstrapState {
+  if (observation.kind !== "observed" || observation.statuses === undefined) return "unknown";
+  return observation.statuses.some(status => status.agent === "principal") ? "done" : "pending";
+}
+
+export function fieldsOf(config: HostConfigV1, workerProfile: string, bootstrap: BootstrapState = "unknown"): readonly ConfigField[] {
   const editable = EDITABLE_FIELDS
-    .filter(field => field !== WORKER_PROFILE || config.initialResidents.length > 0)
     .map(field => {
       const descriptor = EDITABLE_FIELD_DESCRIPTORS[field];
       return Object.freeze({
         id: field,
         label: descriptor.label,
         apply: descriptor.apply,
+        blocked: descriptor.blocked?.(config, bootstrap) ?? null,
         ...descriptor.view(config, workerProfile),
       }) as ConfigField;
     });
@@ -201,9 +211,16 @@ type EditableFieldView =
 export interface EditableFieldDescriptor {
   readonly label: string;
   readonly apply: ApplyScope;
+  /** WP15: why an edit would have no target or no effect now, or null. The
+   * same descriptor owns label, value, apply time and this refusal. */
+  readonly blocked?: (config: HostConfigV1, bootstrap: BootstrapState) => string | null;
   readonly view: (config: HostConfigV1, workerProfile: string) => EditableFieldView;
   readonly transform: (settings: Settings, value: string | number) => HostConfigV1;
 }
+
+/** D05: seeds are read by the first bootstrap only. */
+const seedsBlocked = (_config: HostConfigV1, bootstrap: BootstrapState): string | null =>
+  bootstrap === "done" ? "이미 bootstrap된 society: 기존 worker에 적용되지 않음" : null;
 
 const DESCRIPTOR_SOURCE = {
   [PRINCIPAL_MODEL]: Object.freeze({
@@ -255,6 +272,7 @@ const DESCRIPTOR_SOURCE = {
   [INITIAL_WORKERS]: Object.freeze({
     label: "Initial workers",
     apply: "bootstrap-only",
+    blocked: seedsBlocked,
     view: (config: HostConfigV1) => ({
       kind: "number" as const, value: config.initialResidents.length, min: 0, max: CONFIG_BOUNDS.maxInitialWorkers.value,
     }),
@@ -266,6 +284,9 @@ const DESCRIPTOR_SOURCE = {
   [WORKER_PROFILE]: Object.freeze({
     label: "Bootstrap worker profile",
     apply: "bootstrap-only",
+    // D05: with no seeds there is no target; the selection is not kept anywhere.
+    blocked: (config: HostConfigV1, bootstrap: BootstrapState) => config.initialResidents.length === 0
+      ? "bootstrap worker 없음: Initial workers를 먼저 늘리세요" : seedsBlocked(config, bootstrap),
     view: (config: HostConfigV1, workerProfile: string) => ({
       kind: "choice" as const, value: workerProfile, options: residentProfiles(config),
     }),
@@ -288,16 +309,23 @@ export const EDITABLE_FIELD_DESCRIPTORS = PLACEMENT;
  * written; an inline config is replaced as one file, a split bundle is
  * published as one managed generation.
  */
-export function commitField(settings: Settings, field: string, value: string | number): void {
+export type FieldCommit = { readonly kind: "saved" } | { readonly kind: "unchanged" };
+export function commitField(settings: Settings, field: string, value: string | number, bootstrap: BootstrapState = "unknown"): FieldCommit {
   if (!Object.hasOwn(EDITABLE_FIELD_DESCRIPTORS, field))
     throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
   const descriptor = EDITABLE_FIELD_DESCRIPTORS[field as EditableField];
+  // WP15: the screen does not offer a blocked field; the writer refuses it too.
+  const blocked = descriptor.blocked?.(settings.config, bootstrap) ?? null;
+  if (blocked !== null) throw new StoreError("INVALID_REQUEST", blocked);
   const applied = validateConfig(descriptor.transform(settings, value));
   if (settings.layout.kind === "inline") {
+    const { integration: _before, ...current } = settings.config;
+    const { integration: _after, ...next } = applied;
+    if (JSON.stringify(next) === JSON.stringify(current)) return Object.freeze({ kind: "unchanged" });
     writeValidatedSettings(settings.layout.path, applied);
-    return;
+    return Object.freeze({ kind: "saved" });
   }
   if (settings.snapshot === null)
     throw new StoreError("UNSUPPORTED_PROFILE", "a split configuration is edited only from the snapshot it was read as");
-  commitManagedEdit(settings.snapshot, applied);
+  return Object.freeze({ kind: commitManagedEdit(settings.snapshot, applied).kind === "unchanged" ? "unchanged" : "saved" });
 }

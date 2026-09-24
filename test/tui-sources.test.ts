@@ -255,7 +255,7 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
   try {
     const cfg = config(root);
     const unknownLines = dashboardLines({
-      config: cfg, principalModel: "strong", unread: 2,
+      config: cfg, principalModel: { configured: "strong", session: null }, unread: 2,
       observation: { kind: "unknown", reason: "principal 실행 endpoint 없음", observedAtMs: Date.UTC(2026, 8, 18) },
     });
     const byLabel = new Map(unknownLines.map(line => [line.label, line.value]));
@@ -269,7 +269,7 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
     assert.equal(byLabel.get("Mail"), "2 unread");
 
     const observed = dashboardLines({
-      config: cfg, principalModel: "strong", unread: 0,
+      config: cfg, principalModel: { configured: "strong", session: null }, unread: 0,
       observation: {
         kind: "observed", observedAtMs: Date.UTC(2026, 8, 18),
         statuses: [
@@ -294,7 +294,7 @@ test("TUI-012/SB-002-E: the Dashboard says whether Residents are confined", () =
     const line = (installation: { rootfs: string }): string => {
       const lines = dashboardLines({
         config: { ...cfg, installation: { ...cfg.installation, ...installation } },
-        principalModel: "strong", unread: 0,
+        principalModel: { configured: "strong", session: null }, unread: 0,
         observation: { kind: "unknown", reason: "x", observedAtMs: Date.UTC(2026, 8, 18) },
       });
       return new Map(lines.map(entry => [entry.label, entry.value])).get("Sandbox")!;

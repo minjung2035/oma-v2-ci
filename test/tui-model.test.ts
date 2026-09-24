@@ -14,8 +14,8 @@ const FRAME_BYTES = 262144;
 const data: PanelData = Object.freeze({
   dashboard: unknownDashboard(),
   config: Object.freeze<ConfigField[]>([
-    { kind: "choice", id: "principal-model", label: "Principal model", value: "fast", options: ["cheap", "fast"], apply: "next-session" },
-    { kind: "number", id: "worker-limit", label: "Worker limit", value: 8, min: 1, max: 64, apply: "restart" },
+    { kind: "choice", id: "principal-model", label: "Principal model", value: "fast", options: ["cheap", "fast"], apply: "next-session", blocked: null },
+    { kind: "number", id: "worker-limit", label: "Worker limit", value: 8, min: 1, max: 64, apply: "restart", blocked: null },
     { kind: "link", id: "extensions", label: "Extensions" },
   ]),
   extensions: Object.freeze([
