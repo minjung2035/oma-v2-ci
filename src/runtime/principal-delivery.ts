@@ -23,7 +23,7 @@
 import type { BoundaryEvidence, PreparedBatch, ProtocolLimits } from "../../implementation/contracts.js";
 import { BrokerChannel } from "../protocol/channel.js";
 import { StoreError } from "../domain/errors.js";
-import { publishDeliveryReceipt } from "../storage/delivery-receipt.js";
+import { observeDeliveryReceipt, publishDeliveryReceipt, type CheckedReceipt } from "../storage/delivery-receipt.js";
 import { runnerReceiptPathAt } from "../storage/paths.js";
 import { boundaryOf } from "./pi-adapter.js";
 import type { PiEvent } from "./pi-rpc.js";
@@ -48,11 +48,22 @@ export interface DeliveryBroker {
   complete(evidence: BoundaryEvidence): Promise<void>;
 }
 
+/** D01/WP08: "delivered" means this tick presented the batch to the engine and
+ * completed it; "settled" means the engine had already produced the batch's
+ * boundary and only its completion was retried -- no second presentation.
+ * Neither says every notification reached the Human exactly once. */
 export type DeliveryOutcome =
   | { readonly kind: "idle" }
   | { readonly kind: "delivered"; readonly batchId: string; readonly messages: number }
+  | { readonly kind: "settled"; readonly batchId: string }
   | { readonly kind: "deferred"; readonly reason: string }
-  | { readonly kind: "failed"; readonly batchId: string; readonly reason: string };
+  | { readonly kind: "failed"; readonly batchId: string; readonly phase: DeliveryPhase; readonly reason: string };
+/** Where a delivery stopped (WP08.04): the same error code means different
+ * things in different phases, so the phase decides the handling. */
+export type DeliveryPhase = "evidence" | "claim" | "engine" | "receipt" | "complete";
+/** At most this many batches are remembered as recently failed; a batch leaves
+ * the record when it settles or is delivered. */
+const FAILED_BATCHES = 64;
 
 /** The host's client for the Principal host endpoint. One short connection
  * per call, the same way the model-facing CLI talks to the broker. */
@@ -95,39 +106,77 @@ export class PrincipalDelivery {
     private readonly options: PrincipalDeliveryOptions,
   ) {}
 
-  /** One step: deliver at most one batch. Safe to call from a timer, from a
-   * turn settling and from the broker becoming ready; overlapping calls do
-   * nothing. */
+  /** One step: deliver or settle at most one batch. Safe to call from a timer,
+   * from a turn settling and from the broker becoming ready; overlapping calls
+   * do nothing.
+   *
+   * D01/WP08: the prepared batch's own receipt is examined before anything
+   * else. A verified receipt means the engine already produced this batch's
+   * boundary, so only the completion is retried -- with the first receipt's
+   * session path -- and no second model turn starts, busy session or not.
+   * Unavailable or conflicting evidence delivers nothing and is kept. Only a
+   * proven-absent receipt lets the batch be presented. */
   async tick(): Promise<DeliveryOutcome> {
     if (this.inFlight) return { kind: "deferred", reason: "a delivery is already in flight" };
     if (!this.session.running) return { kind: "deferred", reason: "the principal session has ended" };
-    if (this.session.busy) return { kind: "deferred", reason: "the principal session is in a turn" };
     this.inFlight = true;
+    const at: { phase: DeliveryPhase } = { phase: "evidence" };
+    let batch: PreparedBatch | null = null;
     try {
-      const batch = await this.broker.prepare();
+      batch = await this.broker.prepare();
       if (batch === null) return { kind: "idle" };
       const now = (this.options.now ?? Date.now)();
       const failed = this.failedAt.get(batch.id);
       if (failed !== undefined && now - failed < this.options.retryAfterMs)
         return { kind: "deferred", reason: `batch ${batch.id} failed recently` };
-      // A turn may have started while the batch was being prepared.
-      if (this.session.busy) return { kind: "deferred", reason: "the principal session is in a turn" };
-      try {
-        await this.deliverOne(batch);
+      const evidence = observeDeliveryReceipt(this.options.stateRoot, batch, this.options.frameBytes);
+      if (evidence.kind === "verified") {
+        at.phase = "complete";
+        await this.complete(batch, evidence.receipt);
         this.failedAt.delete(batch.id);
-        return { kind: "delivered", batchId: batch.id, messages: batch.messageIds.length };
-      } catch (error) {
-        // Losing the race for the session is not a failed delivery: the batch
-        // stays prepared and the next tick takes it, with no back-off.
-        if (error instanceof StoreError && error.code === "BATCH_CONFLICT")
-          return { kind: "deferred", reason: "the principal session was claimed first" };
-        this.failedAt.set(batch.id, (this.options.now ?? Date.now)());
-        return { kind: "failed", batchId: batch.id, reason: error instanceof Error ? error.message : String(error) };
+        return { kind: "settled", batchId: batch.id };
       }
+      if (evidence.kind !== "absent")
+        throw new StoreError(evidence.kind === "unavailable" ? "BROKER_UNAVAILABLE" : "BATCH_CONFLICT",
+          `the delivery receipt for batch ${batch.id} is ${evidence.kind}; it is kept and nothing is presented`);
+      // A new presentation needs a session nothing else is speaking for.
+      if (this.session.busy) return { kind: "deferred", reason: "the principal session is in a turn" };
+      const receipt = await this.deliverOne(batch, next => { at.phase = next; });
+      at.phase = "complete";
+      await this.complete(batch, receipt);
+      this.failedAt.delete(batch.id);
+      return { kind: "delivered", batchId: batch.id, messages: batch.messageIds.length };
+    } catch (error) {
+      // Losing the race for the session is not a failed delivery: the batch
+      // stays prepared and the next tick takes it, with no back-off. The same
+      // code in any other phase is a real failure and backs off.
+      if (at.phase === "claim" && error instanceof StoreError && error.code === "BATCH_CONFLICT")
+        return { kind: "deferred", reason: "the principal session was claimed first" };
+      if (batch === null) throw error;
+      this.rememberFailure(batch.id);
+      return { kind: "failed", batchId: batch.id, phase: at.phase, reason: error instanceof Error ? error.message : String(error) };
     } finally { this.inFlight = false; }
   }
 
-  private async deliverOne(batch: PreparedBatch): Promise<void> {
+  private rememberFailure(batchId: string): void {
+    this.failedAt.delete(batchId);
+    this.failedAt.set(batchId, (this.options.now ?? Date.now)());
+    while (this.failedAt.size > FAILED_BATCHES) this.failedAt.delete(this.failedAt.keys().next().value!);
+  }
+
+  /** The broker completes the batch only against its first receipt. */
+  private async complete(batch: PreparedBatch, receipt: CheckedReceipt): Promise<void> {
+    await this.broker.complete({
+      batchId: batch.id, incarnation: batch.incarnation, sessionPath: receipt.sessionPath,
+      adapterRevision: receipt.adapterRevision,
+      receiptPath: runnerReceiptPathAt(this.options.stateRoot, batch.agent, batch.id),
+    });
+  }
+
+  /** Presents the batch and returns the first durable receipt of its
+   * boundary. Completion is the caller's, so a failed completion is retried
+   * from the receipt instead of presenting the batch again. */
+  private async deliverOne(batch: PreparedBatch, enter: (phase: DeliveryPhase) => void): Promise<CheckedReceipt> {
     let accepted: boolean | null = null;
     let settled = false;
     let lastStop = "";
@@ -156,7 +205,9 @@ export class PrincipalDelivery {
     });
     let everSettled = false;
     try {
+      enter("claim");
       await this.session.deliver(batch.id);
+      enter("engine");
       const acceptBy = (this.options.now ?? Date.now)() + this.options.acceptMs;
       // Wait for the engine's answer, then for the turn to settle. There is no
       // deadline on the turn itself: a model thinking about its mail is not a
@@ -179,13 +230,10 @@ export class PrincipalDelivery {
       if (ended) throw new StoreError("PRINCIPAL_DISCONNECTED", "the principal session ended during delivery");
       const confirmed = boundary!;
       // The receipt is the runner's record of the boundary, written beside the
-      // Resident's, and the broker completes the batch only against it.
-      const receipt = publishDeliveryReceipt(this.options.stateRoot, batch, confirmed, this.options.frameBytes);
-      await this.broker.complete({
-        batchId: batch.id, incarnation: batch.incarnation, sessionPath: receipt.sessionPath,
-        adapterRevision: receipt.adapterRevision,
-        receiptPath: runnerReceiptPathAt(this.options.stateRoot, batch.agent, batch.id),
-      });
+      // Resident's. Publication returns the first valid receipt, which is the
+      // one the batch is completed against from now on.
+      enter("receipt");
+      return publishDeliveryReceipt(this.options.stateRoot, batch, confirmed, this.options.frameBytes);
     } finally {
       unsubscribe();
       // A delivery that ended without a settled turn still holds the session;

@@ -575,16 +575,41 @@ test("T114 / PR-002: nothing the model runs can mark its own mail delivered", as
 });
 
 test("T114 / PR-002: delivery waits for an idle session rather than landing inside a Human's turn", async () => {
-  const calls: string[] = [];
-  const delivery = new PrincipalDelivery(
-    { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); }, release: () => { calls.push("release"); } },
-    { prepare: async () => { calls.push("prepare"); return null; }, complete: async () => { calls.push("complete"); } },
-    { stateRoot: "/nonexistent", frameBytes: LIMITS.frameBytes, acceptMs: 1000, retryAfterMs: 1000 },
-  );
-  assert.equal((await delivery.tick()).kind, "deferred");
-  // It does not even prepare: a prepared batch it could not deliver would sit
-  // in the broker for nothing.
-  assert.deepEqual(calls, []);
+  const root = preparedRoot("oma-principal-busy-");
+  try {
+    const calls: string[] = [];
+    const delivery = new PrincipalDelivery(
+      { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); }, release: () => { calls.push("release"); } },
+      { prepare: async () => { calls.push("prepare"); return ONE_BATCH; }, complete: async () => { calls.push("complete"); } },
+      { stateRoot: root, frameBytes: LIMITS.frameBytes, acceptMs: 1000, retryAfterMs: 1000 },
+    );
+    // WP08: the prepared batch's receipt is examined first; with none, a busy
+    // session is never claimed and nothing is presented into the Human's turn.
+    assert.equal((await delivery.tick()).kind, "deferred");
+    assert.deepEqual(calls, ["prepare"]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("V08B: a busy or replaced session still settles an already-produced boundary with its first receipt, starting no turn", async () => {
+  const root = preparedRoot("oma-principal-settle-busy-");
+  try {
+    const sessions = sessionDirPathAt(root, "principal");
+    mkdirSync(sessions, { recursive: true });
+    const oldSession = join(sessions, "old-engine.jsonl");
+    writeFileSync(oldSession, '{"type":"session","version":3}\n');
+    publishDeliveryReceipt(root, ONE_BATCH, { adapterRevision: PI_ADAPTER_REVISION, batchId: ONE_BATCH.id,
+      incarnation: ONE_BATCH.incarnation, sessionPath: oldSession, entryId: "0123abcd" }, LIMITS.frameBytes);
+    const calls: string[] = [];
+    const completed: Record<string, unknown>[] = [];
+    const delivery = new PrincipalDelivery(
+      { running: true, busy: true, onEvent: () => () => {}, deliver: async () => { calls.push("deliver"); }, release: () => { calls.push("release"); } },
+      { prepare: async () => ONE_BATCH, complete: async evidence => { calls.push("complete"); completed.push({ ...evidence }); } },
+      { stateRoot: root, frameBytes: LIMITS.frameBytes, acceptMs: 1000, retryAfterMs: 1000 },
+    );
+    assert.deepEqual(await delivery.tick(), { kind: "settled", batchId: ONE_BATCH.id });
+    assert.deepEqual(calls, ["complete"], "a model turn was started for a batch already delivered");
+    assert.equal(completed[0]!.sessionPath, oldSession, "the completion used another session than the first receipt's");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("T114: the credential comparison is fixed-shape and does not stop early", () => {
@@ -883,6 +908,14 @@ test("T120 / TUI-023: only so many prompts wait, and the Human is told which one
 
 /** A stand-in session for the delivery owner: it records the claim and lets
  * the test emit exactly the events an engine would. */
+/** A state root as the broker's prepare leaves it: the batch view is published
+ * under the Principal's runner root, so a receipt's absence is observable. */
+function preparedRoot(prefix = "oma-principal-delivery-"): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  mkdirSync(join(root, "agents", "principal", "runner", "view"), { recursive: true });
+  return root;
+}
+
 function stubSession(): {
   readonly session: DeliverySession;
   readonly claims: string[];
@@ -910,7 +943,7 @@ const ONE_BATCH = {
 };
 
 test("V05B: Principal completion uses the first receipt returned by EEXIST publication", async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-principal-first-receipt-"));
+  const root = preparedRoot("oma-principal-first-receipt-");
   try {
     const sessions = sessionDirPathAt(root, "principal");
     mkdirSync(sessions, { recursive: true });
@@ -918,10 +951,6 @@ test("V05B: Principal completion uses the first receipt returned by EEXIST publi
     const laterSession = join(sessions, "later.jsonl");
     writeFileSync(firstSession, '{"type":"session","version":3}\n');
     writeFileSync(laterSession, '{"type":"session","version":3}\n');
-    publishDeliveryReceipt(root, ONE_BATCH, {
-      adapterRevision: PI_ADAPTER_REVISION, batchId: ONE_BATCH.id, incarnation: ONE_BATCH.incarnation,
-      sessionPath: firstSession, entryId: "0123abcd",
-    }, LIMITS.frameBytes);
     const completed: Record<string, unknown>[] = [];
     const { session, emit } = stubSession();
     const delivery = new PrincipalDelivery(session, {
@@ -930,6 +959,11 @@ test("V05B: Principal completion uses the first receipt returned by EEXIST publi
     }, { stateRoot: root, frameBytes: LIMITS.frameBytes, acceptMs: 60_000, retryAfterMs: 0 });
     const outcome = delivery.tick();
     await new Promise(resolve => setImmediate(resolve));
+    // The receipt appears first from elsewhere while this delivery runs.
+    publishDeliveryReceipt(root, ONE_BATCH, {
+      adapterRevision: PI_ADAPTER_REVISION, batchId: ONE_BATCH.id, incarnation: ONE_BATCH.incarnation,
+      sessionPath: firstSession, entryId: "0123abcd",
+    }, LIMITS.frameBytes);
     emit({ type: "response", id: ONE_BATCH.id, command: "prompt", success: true });
     emit(failedMessage("stop"));
     emit({
@@ -961,7 +995,7 @@ test("T114 / PR-002: a failed assistant message does not end the delivery -- the
   const { session, claims, emit } = stubSession();
   const delivery = new PrincipalDelivery(session,
     { prepare: async () => ONE_BATCH, complete: async () => {} },
-    { stateRoot: "/nonexistent", frameBytes: LIMITS.frameBytes, acceptMs: 60_000, retryAfterMs: 1000 });
+    { stateRoot: preparedRoot(), frameBytes: LIMITS.frameBytes, acceptMs: 60_000, retryAfterMs: 1000 });
   const outcome = delivery.tick();
   let finished = false;
   void outcome.then(() => { finished = true; });
@@ -987,7 +1021,7 @@ test("T114 / PR-002: a run that settles on a failed assistant message is reporte
   const { session, emit } = stubSession();
   const delivery = new PrincipalDelivery(session,
     { prepare: async () => ONE_BATCH, complete: async () => {} },
-    { stateRoot: "/nonexistent", frameBytes: LIMITS.frameBytes, acceptMs: 60_000, retryAfterMs: 1000 });
+    { stateRoot: preparedRoot(), frameBytes: LIMITS.frameBytes, acceptMs: 60_000, retryAfterMs: 1000 });
   const outcome = delivery.tick();
   await new Promise(resolve => setImmediate(resolve));
   emit({ type: "response", id: ONE_BATCH.id, command: "prompt", success: true });
@@ -1019,7 +1053,7 @@ test("T114 / PR-002: a delivery the engine never answers gives the session back"
   let now = 1_000;
   const delivery = new PrincipalDelivery(session, {
     prepare: async () => batch, complete: async () => { claims.push("complete"); },
-  }, { stateRoot: "/nonexistent", frameBytes: LIMITS.frameBytes, acceptMs: 10, retryAfterMs: 1000, now: () => (now += 20) });
+  }, { stateRoot: preparedRoot(), frameBytes: LIMITS.frameBytes, acceptMs: 10, retryAfterMs: 1000, now: () => (now += 20) });
   const outcome = await delivery.tick();
   assert.equal(outcome.kind, "failed");
   assert.match((outcome as { reason: string }).reason, /accept/);

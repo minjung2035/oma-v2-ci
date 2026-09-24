@@ -381,8 +381,10 @@ async function main(argv: readonly string[]): Promise<void> {
   const deliver = (): void => {
     if (delivery === null || tenure === null || !tenure.deliverable) return;
     void delivery.tick().then(outcome => {
-      if (outcome.kind === "delivered") { app.line(`[메일] ${outcome.messages}통을 Principal에게 전달했습니다.`); app.refresh(); app.draw(); }
-      else if (outcome.kind === "failed") { app.line(`[메일] 전달하지 못했습니다: ${outcome.reason}`); app.draw(); }
+      if (outcome.kind === "delivered") { app.line(`[메일] ${outcome.messages}통을 Principal 세션에 넣었습니다.`); app.refresh(); app.draw(); }
+      // WP08.05: completing an already-presented batch is not a new delivery.
+      else if (outcome.kind === "settled") { app.refresh(); app.draw(); }
+      else if (outcome.kind === "failed") { app.line(`[메일] 전달을 마치지 못했습니다(${outcome.phase}): ${outcome.reason}`); app.draw(); }
     }, (error: unknown) => {
       app.line(`[메일] 전달 중 오류: ${error instanceof Error ? error.message : String(error)}`);
       app.draw();
