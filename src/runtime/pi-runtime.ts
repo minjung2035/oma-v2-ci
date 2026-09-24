@@ -12,7 +12,7 @@
  */
 import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, isAbsolute, join, parse, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { StoreError } from "../domain/errors.js";
 
 export const PI_PACKAGE = "@earendil-works/pi-coding-agent";
@@ -68,36 +68,17 @@ function entryFromPackage(packageJsonPath: string): string | null {
   return regularFile(entry) ? entry : null;
 }
 
-/** Every `node_modules` directory from `from` up to the filesystem root. */
-function nodeModulesChain(from: string): string[] {
-  const roots: string[] = [];
-  let current = from;
-  const stop = parse(current).root;
-  for (;;) {
-    roots.push(join(current, "node_modules"));
-    if (current === stop) break;
-    const next = dirname(current);
-    if (next === current) break;
-    current = next;
-  }
-  return roots;
-}
-
+/** WP31: the engine this installation shipped, and no other. The lookup used
+ * to walk every `node_modules` from the installation up to `/`, like module
+ * resolution does, so an installation missing its engine quietly ran another
+ * installation's (`/opt/node_modules`, a home directory's). Only the
+ * installation root's own `node_modules` counts: the configured `libdir`, or
+ * the root this module was installed in. */
 function bundledEntry(libdir: string | undefined): string | null {
-  const roots: string[] = [];
-  // A deployed tree ships its own engine beside the installed code.
-  if (libdir !== undefined && isAbsolute(libdir)) roots.push(...nodeModulesChain(libdir));
-  roots.push(...nodeModulesChain(dirname(fileURLToPath(import.meta.url))));
-  const seen = new Set<string>();
-  for (const root of roots) {
-    if (seen.has(root)) continue;
-    seen.add(root);
-    const manifest = join(root, PI_PACKAGE, "package.json");
-    if (!regularFile(manifest)) continue;
-    const entry = entryFromPackage(manifest);
-    if (entry !== null) return entry;
-  }
-  return null;
+  const installation = libdir !== undefined && isAbsolute(libdir)
+    ? libdir : resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  const manifest = join(installation, "node_modules", PI_PACKAGE, "package.json");
+  return regularFile(manifest) ? entryFromPackage(manifest) : null;
 }
 
 /** The agent directory OMA gives Pi. It is inside the society's state root, so
