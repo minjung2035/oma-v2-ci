@@ -83,6 +83,7 @@ export const lanes = Object.freeze({
       "test/public-validation-policy.test.mjs",
       "test/architecture-oracles.test.mjs",
       "test/architecture-rule-modules.test.mjs",
+      "test/review-closure.test.mjs",
       "test/architecture-evolution.test.mjs",
       "test/dependency-lattice.test.mjs",
       "test/p11-p12-dispatch.test.mjs",
@@ -92,6 +93,8 @@ export const lanes = Object.freeze({
     ],
     requiredNames: [
       "V29A: the request-hash set-field recipe",
+      "V32A: the committed ledger",
+      "V32A: approval is refused",
       "D03 launched location",
       "D03 resident unit",
       "D03: a host unit without the rendered run root",
