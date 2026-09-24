@@ -3,13 +3,13 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 222,
-    "n_lines": 27964,
+    "n_lines": 27989,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
-    "blank": 3,
-    "comment": 51,
-    "code": 431,
+    "blank": 4,
+    "comment": 57,
+    "code": 433,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -32,8 +32,8 @@
   },
   "src/config/operations.ts": {
     "blank": 2,
-    "comment": 39,
-    "code": 377,
+    "comment": 41,
+    "code": 381,
     "language": "TypeScript"
   },
   "src/storage/delivery-receipt.ts": {
@@ -90,16 +90,16 @@
     "code": 256,
     "language": "TypeScript"
   },
+  "src/runtime/inference-relay.ts": {
+    "blank": 30,
+    "comment": 66,
+    "code": 253,
+    "language": "TypeScript"
+  },
   "src/leaf.ts": {
     "blank": 25,
     "comment": 75,
     "code": 252,
-    "language": "TypeScript"
-  },
-  "src/runtime/inference-relay.ts": {
-    "blank": 29,
-    "comment": 63,
-    "code": 251,
     "language": "TypeScript"
   },
   "src/tui/sources/settings.ts": {
@@ -816,6 +816,12 @@
     "code": 53,
     "language": "TypeScript"
   },
+  "src/tui/transport.ts": {
+    "blank": 5,
+    "comment": 19,
+    "code": 53,
+    "language": "TypeScript"
+  },
   "src/domain/mail-values.ts": {
     "blank": 4,
     "comment": 9,
@@ -837,12 +843,6 @@
   "src/tui/prompt.ts": {
     "blank": 11,
     "comment": 42,
-    "code": 51,
-    "language": "TypeScript"
-  },
-  "src/tui/transport.ts": {
-    "blank": 5,
-    "comment": 17,
     "code": 51,
     "language": "TypeScript"
   },
@@ -1339,9 +1339,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1127,
-    "comment": 4101,
-    "code": 22736,
+    "blank": 1129,
+    "comment": 4114,
+    "code": 22746,
     "nFiles": 222
   }
 }

@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3c9fb1fa11955caa2c813975246c113092921a3081e7c1d8f63b47bffe0a1651",
-  "report": "abc1850e84ae48b35e8e07cf40c5028e8859006d5ceed2f2c0f355550976b26a",
+  "report": "6bd23df8b6455767dc3df2e52e1cc42e8557103fa0e13c350b8025a6aa3a1012",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "dd8ed25c9a8845e957f0392a0588067593ca5b958480a75c526a12d2bc6c5c37"
+      "sha256": "456111784596b25dde71a19d612e7837d3268c16492d5f8a9d30f6e2caa3c61f"
     },
     {
       "path": "src/broker/composition.ts",
@@ -181,7 +181,7 @@
     },
     {
       "path": "src/config/operations.ts",
-      "sha256": "ea053796836ef69b523f76936fc3c20ea461b70dfc73875e67cabe6efd8004b5"
+      "sha256": "9686b3cb0e41fa72c4eb4271b63e7eec61dc28b315cc961f288fef011c433b98"
     },
     {
       "path": "src/config/policy.ts",
@@ -625,7 +625,7 @@
     },
     {
       "path": "src/runtime/inference-relay.ts",
-      "sha256": "7514b92afaf09cb82b8880b206f0327a7093d4dd80ba20572f0c0e76e732b4ae"
+      "sha256": "af8616bb28ce2da02a9f9d86882a3597781ebc36d063c4aded9f5a6b8799f9b4"
     },
     {
       "path": "src/runtime/pi-adapter.ts",
@@ -829,7 +829,7 @@
     },
     {
       "path": "src/tui/transport.ts",
-      "sha256": "c3f85bb99c989e96f03e4ac4f57de6ecb94b60c29b1d39e922d7a98cbb9214d0"
+      "sha256": "c69507ea42cc99b93967ce069940045b7c4fc0bafc5f2da4fc321b6a41788ee4"
     },
     {
       "path": "src/tui/view/dashboard.ts",

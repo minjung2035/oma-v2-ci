@@ -3,8 +3,8 @@
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
   "NOT_REVIEWED": 139,
-  "CHANGED_WITH_ORACLE": 73,
-  "READ_UNCHANGED": 10
+  "CHANGED_WITH_ORACLE": 75,
+  "READ_UNCHANGED": 8
  },
  "lanes": {
   "fast": "PASS",
@@ -114,7 +114,8 @@
     "WP07",
     "WP21",
     "WP22",
-    "WP23"
+    "WP23",
+    "WP26"
    ],
    "oracles": [
     "V03A",
@@ -126,7 +127,10 @@
     "V22A",
     "V22B",
     "V23A",
-    "V23B"
+    "V23B",
+    "V26A",
+    "V26B",
+    "V26C"
    ]
   },
   {
@@ -348,6 +352,7 @@
     "WP26"
    ],
    "oracles": [
+    "V26A",
     "V26B",
     "V26C"
    ]
@@ -367,6 +372,7 @@
     "WP26"
    ],
    "oracles": [
+    "V26A",
     "V26B",
     "V26C"
    ]
@@ -1356,6 +1362,7 @@
     "WP26"
    ],
    "oracles": [
+    "V26A",
     "V26B",
     "V26C"
    ]
@@ -1454,15 +1461,14 @@
   {
    "path": "src/runtime/inference-relay.ts",
    "primary": "WP27",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
     "WP27"
    ],
    "oracles": [
-    "T114",
+    "V27A",
     "V27B"
-   ],
-   "note": "fixed origin, caller authority dropped, placeholder swapped in headers and path, bounded concurrency, no resend, streamed"
+   ]
   },
   {
    "path": "src/runtime/pi-adapter.ts",
@@ -1994,15 +2000,14 @@
   {
    "path": "src/tui/transport.ts",
    "primary": "WP23",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "WP23",
     "WP28"
    ],
    "oracles": [
-    "T118"
-   ],
-   "note": "status view read bounded, no-follow; missing/unreadable/malformed/foreign/stale are unknown with reason"
+    "V28A",
+    "V28B"
+   ]
   },
   {
    "path": "src/tui/view/dashboard.ts",
