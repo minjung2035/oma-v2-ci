@@ -367,3 +367,77 @@ T38 (an unconfirmed stale cgroup blocks start, incarnation unchanged), SEQ-002 i
 phase4 (unknown old-run death stops startup before mail reconciliation), R37
 shutdown (an unknown native outcome keeps Store and lock). Descendant-death proof
 of the engine inside a real Resident remains WP30.
+
+## WP23 — status observation off the event loop, bounded read model
+
+WP23.01 measurement (disposable account, systemd 257, 64 listed agents, 16
+concurrent `status.get` plus 4 `mail.send`; harness `test/status-responsiveness.test.ts`).
+`systemctl --user show` p50: 1 unit 8.5 ms, 8 units 20.8 ms, 32 units 59.8 ms,
+64 units 114.6 ms, 128 units 212.9 ms, i.e. about 6.9 ms + 1.61 ms per unit.
+
+| Measure (real user manager) | Before (`1f6c31e`) | After |
+|---|---|---|
+| longest event-loop stall, status reads | 10 098 ms | 16 ms |
+| longest stall, reads with mutations | 10 143 ms | 38 ms |
+| `status.get` p50 / p95 | 5 558 / 10 097 ms | 267 / 286 ms |
+| slowest `mail.send` in the burst | 639 ms | 48 ms |
+| one `status.get` with 620 pending messages | 3 886 ms stall | 10 ms stall |
+
+Causes: every `status.get`, every mutation's view refresh and the 5 s timer ran one
+synchronous `systemctl show` per agent; the pending counts re-decoded each pending
+delivery's operation, whose decoding re-validates every delivery of that operation
+(quadratic in recipients); request parameter checks decoded every agent row with its
+spec digest to learn which names exist.
+
+Budgets (stated for up to 256 listed agents; the default quota is 8): status reads
+stall the loop < 50 ms; with mutations < 100 ms, which includes each mutation's own
+synchronous Store/fsync work (20-45 ms for `mail.send`, unchanged by WP23); a status
+answer within 2 s (`STATUS_OBSERVATION_BUDGET_MS`), else unknown; at most one
+observation command in flight; one running refresh plus one shared follow-up;
+32 units per `show` (`STATUS_CHUNK`, about 60 ms).
+
+WP23.02 — `StatusRefresh` (`src/views/status-refresh.ts`) is the one owner of display
+observation: `status.get`, the published status view and its timer share it. A caller
+during a refresh gets the single follow-up that starts after it, so an answer never
+predates its question; past the budget a caller gets an unknown snapshot dated when it
+asked, and a hung command is not started again beside itself. `UnitsModule.observeStatus`
+asks one read-only `show` per chunk and binds each block to its unit by `Id`; a
+missing, repeated, foreign or malformed block leaves only that agent unknown.
+
+WP23.03 — display reads are narrowed, full-row reads are kept where effects depend
+on them. `pendingWorkRows` + `pendingWorkByAgent` count every agent's pending work
+from one read: every counted row is decoded, and the relations the counts rest on
+are checked over the whole read (owner exists, no future-incarnation batch, manifest
+equals the exact linked delivery set of the same owner, nothing counted twice); it
+refuses exactly what per-agent `pendingWork` refuses and counts exactly the same
+(seeded equivalence test). It does not re-check each delivery against its
+operation's recipient snapshot; recovery (`reconcile`) keeps `pendingWork`'s full-row
+reads. `agentNames` gives parameter checks and the refresh the existing names,
+each checked as an identity; anything that acts on an agent reads its full row.
+One projection is computed per observation and shared by the answers waiting on it
+and the published view; nothing is cached across observations.
+
+WP23.04 — authority never reads a snapshot. Peer authentication (every capability
+read), `openRun`, `confirmDead`, lifecycle start/stop and reconcile's final checks
+observe the unit synchronously at the moment they act, as before. V23B (kernel): a
+snapshot taken while the unit was stopped keeps saying so, with its time, after the
+unit really starts; `confirmDead` is false and a manager's start is refused with
+`RUN_TERMINATION_UNKNOWN`; the control that takes the cached "inactive" as death
+proof would have authorized acting on the live run.
+
+WP23.05 — an unobserved unit is `null` in every unit field (never "inactive"), the
+registry rows and pending counts are still answered, and `observedAtMs` is the
+observation's start (or the time asked, on timeout). The status view is written after
+the answer, detached; a write failure is logged and changes no request's outcome.
+The terminal's reader already reports a missing, unreadable, malformed, foreign or
+stale view as unknown with its reason (T118), unchanged.
+
+Scope: the `status.get` owner is `src/broker/public-dispatcher.ts` and its ports
+`src/broker/composition.ts`, and the Store facade is `src/store.ts`; they were changed
+beyond the card's candidate list because the status path runs through them. Not
+changed or measured here: the storage admission tree scan (a fresh, correctness-critical
+final check per admitted mutation, D04/WP22), `refreshWorld` on each mutation (4-6 ms
+at 64 agents), and `src/diagnostics/*` (SCOPE_ONLY). Negative controls: 11 mutants,
+10 fail; M6 (the display projection's "counted twice" guard) is equivalent -- the
+primary key, the single batch column and manifest decoding already make a second
+count impossible -- and is kept for parity with `pendingWork`.
