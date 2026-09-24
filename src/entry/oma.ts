@@ -26,6 +26,7 @@ import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
 import { commitField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
 import { collectManagedGenerations } from "../config/generations.js";
 import { defaultHostConfig, defaultSocietyFor, societyFromDirectory } from "../config/defaults.js";
+import { sha256Hex } from "../hash.js";
 import {
   observeProjectBinding, projectBindingDecision, provisionSociety, publishProjectBinding, repairSociety, residentRootfsPath,
   stateRootHasSociety, type ProvisionReport,
@@ -78,7 +79,7 @@ async function main(argv: readonly string[]): Promise<void> {
   try { canonicalProjectPath = realpathSync(process.cwd()); }
   catch (error) { fail(`프로젝트 디렉터리를 확인할 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, 4); }
   const explicitSociety = argOf(argv, "--society");
-  const society = explicitSociety ?? defaultSocietyFor(canonicalProjectPath);
+  const society = explicitSociety ?? defaultSocietyFor(canonicalProjectPath, sha256Hex(canonicalProjectPath));
   const bindRequested = argv.includes("--bind-project");
   if (!isValidSocietyName(society)) usage();
   // D03: this is where the society's location is decided; everything this

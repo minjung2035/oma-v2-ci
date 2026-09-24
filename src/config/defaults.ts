@@ -11,7 +11,6 @@
  * values here rather than a setup command, and all of them are visible and
  * editable in the Control Panel (CFG-002, arch §23.6).
  */
-import { createHash } from "node:crypto";
 import type { HostConfigV1 } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 
@@ -28,17 +27,19 @@ export interface DefaultConfigInput {
 }
 
 /** D05/WP16.01: the default society of a project. `canonicalProjectPath` is
- * the entry's single realpath observation of the project directory; this
- * derivation is pure. Up to 15 ASCII slug characters of the directory name
- * (`project` when none survive), then `-`, then the first 16 hex digits of the
- * SHA-256 of the canonical path: 32 characters at most. Truncation is not
+ * the entry's single realpath observation of the project directory and
+ * `pathSha256` the SHA-256 (lowercase hex) of that path, computed by the entry
+ * adapter; this derivation is pure. Up to 15 ASCII slug characters of the
+ * directory name (`project` when none survive), then `-`, then the first 16
+ * hex digits of the digest: 32 characters at most. Truncation is not
  * collision-proof, so every mutation first compares the full path recorded in
  * the society's project binding.
  */
-export function defaultSocietyFor(canonicalProjectPath: string): string {
+export function defaultSocietyFor(canonicalProjectPath: string, pathSha256: string): string {
+  if (!/^[0-9a-f]{64}$/.test(pathSha256)) throw new StoreError("INVALID_REQUEST", "a project path digest is 64 lowercase hex digits");
   const base = canonicalProjectPath.split("/").filter(Boolean).pop() ?? "";
   const slug = base.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^[^a-z]+/, "").slice(0, 15).replace(/-+$/, "");
-  return `${slug.length > 0 ? slug : "project"}-${createHash("sha256").update(canonicalProjectPath).digest("hex").slice(0, 16)}`;
+  return `${slug.length > 0 ? slug : "project"}-${pathSha256.slice(0, 16)}`;
 }
 
 /** The pre-D05 default: a slug of the directory name alone. Kept only to find

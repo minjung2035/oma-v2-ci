@@ -205,7 +205,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       readSettings: () => { calls.push("readSettings"); return settings; },
       writeSettings() { calls.push("writeSettings"); },
     },
-    "../config/defaults.js": { defaultHostConfig: () => ({}), defaultSocietyFor: path => { calls.push(`defaultSocietyFor:${path}`); return "fixture"; },
+    "../hash.js": { sha256Hex: bytes => { calls.push("sha256Hex"); return "f".repeat(64); } },
+    "../config/defaults.js": { defaultHostConfig: () => ({}), defaultSocietyFor: (path, digest) => { calls.push(`defaultSocietyFor:${path}:${digest.length}`); return "fixture"; },
       societyFromDirectory: () => "old-slug" },
     "../runtime/provision.js": {
       // D05: the binding scenario is controlled; the decision itself is the
@@ -758,7 +759,7 @@ test("D05/WP16: the project is observed once and bound before this process write
   const { calls } = society;
   const order = name => calls.findIndex(call => call === name || call.startsWith(`${name}:`));
   assert.equal(calls.filter(call => call.startsWith("realpath:")).length, 1);
-  assert.ok(calls.includes("defaultSocietyFor:/project"), "the default society is derived from the canonical path");
+  assert.ok(calls.includes("defaultSocietyFor:/project:64"), "the default society is derived from the canonical path and its digest");
   assert.ok(order("tryHoldSociety") < order("observeProjectBinding"));
   assert.ok(calls.includes("publishProjectBinding:/state/oma/fixture:fixture:/project"));
   assert.ok(order("publishProjectBinding") < order("readSettings"), "configuration was read or written before the binding");

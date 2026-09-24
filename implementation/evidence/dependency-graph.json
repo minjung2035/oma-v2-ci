@@ -1452,7 +1452,7 @@
   }
  ],
  "files": 222,
- "runtimeEdges": 823,
+ "runtimeEdges": 824,
  "typeOnlyEdges": 317,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 215,
@@ -1465,7 +1465,7 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 40,
-  "L5-entry -> L1-kernel": 69,
+  "L5-entry -> L1-kernel": 70,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
   "L5-entry -> L4-orchestration": 24,
@@ -1497,9 +1497,9 @@
   "src/domain/derived.ts": 16,
   "src/store.ts": 16,
   "src/domain/canonical-json.ts": 13,
+  "src/hash.ts": 13,
   "src/storage/contained-fs.ts": 13,
   "src/authority.ts": 12,
-  "src/hash.ts": 12,
   "src/process/policies.ts": 12,
   "src/storage/directory.ts": 12,
   "src/storage/receipt-projector.ts": 10
@@ -1507,8 +1507,8 @@
  "fanOut": {
   "src/broker.ts": 29,
   "src/mail.ts": 28,
+  "src/entry/oma.ts": 23,
   "src/entry/broker.ts": 22,
-  "src/entry/oma.ts": 22,
   "src/git.ts": 15,
   "src/lifecycle/create.ts": 15,
   "src/git/context-repository.ts": 14,
@@ -1527,7 +1527,7 @@
   "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 4,
-  "node:crypto": 26,
+  "node:crypto": 25,
   "node:fs": 60,
   "node:http": 1,
   "node:https": 1,
