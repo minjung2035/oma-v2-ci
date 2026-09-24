@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "057a4702adcddd972bd4daae7f6881fe992da9050b18a6efe0b39e4dc0e0eb12",
-  "report": "ff7b8ab53135e3107c72e37e0d0a8d97fd898179878bbfc956596f59d8566158",
+  "report": "11fdc0b93850269ac2ee5bfcfec6d44b72edb715733ec915e279d91676e2fc2c",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "a3bf2076c1a4aef83c69eb813a9851fa92c65aaeb8f69a858509ee88a2caa9d7"
+      "sha256": "de9fb5cfcec9a934b637dbb6d469ab250bce92a7f689731aee96b7cb51fbd062"
     },
     {
       "path": "src/broker/composition.ts",
@@ -661,7 +661,7 @@
     },
     {
       "path": "src/runtime/run-registry.ts",
-      "sha256": "46e43fd3fa5e4d7648b88b6208548ac93d9eca4d57cfdb9adb197cb9bd0f8969"
+      "sha256": "243d7827d1449add126ac77ea8ee3abe575e33e16ad58855686d5b2503fb9b15"
     },
     {
       "path": "src/runtime/society-lease.ts",

@@ -9,6 +9,7 @@ export const systemdTestFiles = Object.freeze([
   "phase8.test.js",
   "crash-boundaries.test.js",
   "launch-topology.test.js",
+  "cgroup-pin.test.js",
 ]);
 /** Tests a run reported but did not execute.
  *
@@ -133,6 +134,7 @@ export const lanes = Object.freeze({
   },
   durable: {
     files: [
+      "rollover-settlement.test.js",
       "config-generations.test.js",
       "config-editing.test.js",
       "preaccept-scope.test.js",
@@ -170,6 +172,8 @@ export const lanes = Object.freeze({
     ],
     sourceFiles: [],
     requiredNames: [
+      "V07A:",
+      "V07B:",
       "D02 generation identity",
       "V13A:",
       "V13B:",
@@ -243,6 +247,7 @@ export const lanes = Object.freeze({
       "P0-1/2/3 + P1-7/8",
       "V03A/V03B product topology",
       "V03B unsupported",
+      "V07B kernel",
     ],
     environment: "systemd",
     timeoutSeconds: 3600,
