@@ -1,0 +1,2180 @@
+{
+ "version": 1,
+ "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
+ "summary": {
+  "NOT_REVIEWED": 139,
+  "CHANGED_WITH_ORACLE": 73,
+  "READ_UNCHANGED": 10
+ },
+ "lanes": {
+  "fast": "PASS",
+  "durable": "PASS",
+  "property": "PASS",
+  "stress": "PASS",
+  "kernel": "PASS",
+  "crash": "PASS",
+  "powercut": "NOT_RUN: no approved VM",
+  "provider": "NOT_RUN: no credential authorized",
+  "ci": "NOT_RUN: nothing pushed"
+ },
+ "files": [
+  {
+   "path": "implementation/contracts.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "implementation/schema-v1.sql",
+   "primary": "WP04",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "implementation/systemd/broker.service.in",
+   "primary": "WP03",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "implementation/systemd/principal-relay.service.in",
+   "primary": "WP03",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B"
+   ]
+  },
+  {
+   "path": "implementation/systemd/principal.path.in",
+   "primary": "WP03",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "implementation/systemd/reconcile.service.in",
+   "primary": "WP03",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B"
+   ]
+  },
+  {
+   "path": "implementation/systemd/reconcile.timer.in",
+   "primary": "WP03",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "implementation/systemd/resident.path.in",
+   "primary": "WP03",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "implementation/systemd/resident.service.in",
+   "primary": "WP03",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03",
+    "WP25"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B",
+    "V25A"
+   ]
+  },
+  {
+   "path": "src/authority.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/broker.ts",
+   "primary": "WP21",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03",
+    "WP07",
+    "WP21",
+    "WP22",
+    "WP23"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B",
+    "V07A",
+    "V07B",
+    "V21A",
+    "V21B",
+    "V22A",
+    "V22B",
+    "V23A",
+    "V23B"
+   ]
+  },
+  {
+   "path": "src/broker/composition.ts",
+   "primary": "WP21",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "V23A",
+    "V23B"
+   ]
+  },
+  {
+   "path": "src/broker/connection.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/broker/internal-dispatcher.ts",
+   "primary": "WP21",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP21",
+    "WP22"
+   ],
+   "oracles": [
+    "V21A",
+    "V21B",
+    "V22A",
+    "V22B"
+   ]
+  },
+  {
+   "path": "src/broker/logs.ts",
+   "primary": "WP23",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/broker/peer-authenticator.ts",
+   "primary": "WP25",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP25"
+   ],
+   "oracles": [
+    "AUTH-003"
+   ],
+   "note": "capabilities re-read at each use against incarnation, InvocationID, peer cgroup and pin"
+  },
+  {
+   "path": "src/broker/peer-pin.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/broker/principal-endpoint.ts",
+   "primary": "WP06",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/broker/process-ancestry.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/broker/public-dispatcher.ts",
+   "primary": "WP21",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP21",
+    "WP22",
+    "WP23"
+   ],
+   "oracles": [
+    "V21A",
+    "V21B",
+    "V22A",
+    "V22B",
+    "V23A",
+    "V23B"
+   ]
+  },
+  {
+   "path": "src/broker/replies.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/broker/transport-spool.ts",
+   "primary": "WP22",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/arguments.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/cache-codec.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/commands/agent.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/commands/context.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/commands/integrate.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/commands/logs.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/commands/routes.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/commands/send.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/commands/status.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/commands/submit.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/effects.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/effects/context.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/effects/mail.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/effects/submit.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/exit.ts",
+   "primary": "WP26",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP26"
+   ],
+   "oracles": [
+    "V26B",
+    "V26C"
+   ]
+  },
+  {
+   "path": "src/cli/request-intent.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/cli/request-service.ts",
+   "primary": "WP26",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP26"
+   ],
+   "oracles": [
+    "V26B",
+    "V26C"
+   ]
+  },
+  {
+   "path": "src/cli/transport.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/config.ts",
+   "primary": "WP11",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP11",
+    "WP12",
+    "WP14"
+   ],
+   "oracles": [
+    "V11A",
+    "V11B",
+    "V11C",
+    "V12A",
+    "V12B",
+    "V14A",
+    "V14B"
+   ]
+  },
+  {
+   "path": "src/config/defaults.ts",
+   "primary": "WP16",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP16"
+   ],
+   "oracles": [
+    "V16A",
+    "V16B"
+   ]
+  },
+  {
+   "path": "src/config/generations.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP13",
+    "WP14"
+   ],
+   "oracles": [
+    "V13A",
+    "V13B",
+    "V13C",
+    "V14A",
+    "V14B"
+   ]
+  },
+  {
+   "path": "src/config/operations.ts",
+   "primary": "WP12",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP12",
+    "WP14"
+   ],
+   "oracles": [
+    "V12A",
+    "V12B",
+    "V14A",
+    "V14B"
+   ]
+  },
+  {
+   "path": "src/config/policy.ts",
+   "primary": "WP19",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/diagnostics/files.ts",
+   "primary": "WP23",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/diagnostics/integrity.ts",
+   "primary": "WP23",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/diagnostics/ledger.ts",
+   "primary": "WP23",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/diagnostics/mail.ts",
+   "primary": "WP23",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/admission.ts",
+   "primary": "WP21",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP21",
+    "WP22"
+   ],
+   "oracles": [
+    "V21A",
+    "V21B",
+    "V22A",
+    "V22B"
+   ]
+  },
+  {
+   "path": "src/domain/canonical-json.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/capabilities.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/child-policy.ts",
+   "primary": "WP19",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/context-policy.ts",
+   "primary": "WP18",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/deployment.ts",
+   "primary": "WP31",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/derived.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/errors.ts",
+   "primary": "WP21",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP21"
+   ],
+   "oracles": [
+    "V21A",
+    "V21B"
+   ]
+  },
+  {
+   "path": "src/domain/exhaustive.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/identifiers.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/integer-fields.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/limits.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/lineage.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/mail-values.ts",
+   "primary": "WP20",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/persisted-formats.ts",
+   "primary": "WP04",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/request-identity.ts",
+   "primary": "WP26",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP29"
+   ],
+   "oracles": [
+    "V29A"
+   ]
+  },
+  {
+   "path": "src/domain/resources.ts",
+   "primary": "WP22",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP25"
+   ],
+   "oracles": [
+    "V25A"
+   ]
+  },
+  {
+   "path": "src/domain/spec-identity.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/domain/tool-surface.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/durable.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/entry/broker.ts",
+   "primary": "WP03",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03",
+    "WP21",
+    "WP22"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B",
+    "V21A",
+    "V21B",
+    "V22A",
+    "V22B"
+   ]
+  },
+  {
+   "path": "src/entry/host.ts",
+   "primary": "WP03",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B"
+   ]
+  },
+  {
+   "path": "src/entry/module-conformance.ts",
+   "primary": "WP31",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/entry/oma.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03",
+    "WP08",
+    "WP09",
+    "WP10",
+    "WP12",
+    "WP13",
+    "WP15",
+    "WP16",
+    "WP28"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B",
+    "V08A",
+    "V08B",
+    "V09A",
+    "V09B",
+    "V09C",
+    "V10A",
+    "V10C",
+    "V12A",
+    "V12B",
+    "V13A",
+    "V13B",
+    "V13C",
+    "V15A",
+    "V15B",
+    "V16A",
+    "V16B",
+    "V28A",
+    "V28B"
+   ]
+  },
+  {
+   "path": "src/entry/runner.ts",
+   "primary": "WP03",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03",
+    "WP25"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B",
+    "V25A"
+   ]
+  },
+  {
+   "path": "src/extension/batch-view.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/extension/cli-process.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/extension/delivery.ts",
+   "primary": "WP27",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP27"
+   ],
+   "oracles": [
+    "V27A"
+   ],
+   "note": "boundary entry appended before the notice, leaf checked; the notice names the entry the session holds"
+  },
+  {
+   "path": "src/extension/inference-bridge.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/extension/mail-tools.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/extension/principal-channel.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/extension/shared.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/extension/tool-surface.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/extension/workspace-guard.ts",
+   "primary": "WP22",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/frame.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git.ts",
+   "primary": "WP24",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP18"
+   ],
+   "oracles": [
+    "V18A",
+    "V18B"
+   ]
+  },
+  {
+   "path": "src/git/canonical-command.ts",
+   "primary": "WP24",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git/context-mirror.ts",
+   "primary": "WP18",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git/context-publication.ts",
+   "primary": "WP18",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git/context-repository.ts",
+   "primary": "WP18",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP18"
+   ],
+   "oracles": [
+    "V18A",
+    "V18B"
+   ]
+  },
+  {
+   "path": "src/git/context.ts",
+   "primary": "WP18",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP17",
+    "WP18",
+    "WP20",
+    "WP21"
+   ],
+   "oracles": [
+    "V17A",
+    "V17B",
+    "V18A",
+    "V18B",
+    "V20A",
+    "V20B",
+    "V21A",
+    "V21B"
+   ]
+  },
+  {
+   "path": "src/git/integration-policy.ts",
+   "primary": "WP24",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git/integration.ts",
+   "primary": "WP24",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP21",
+    "WP24"
+   ],
+   "oracles": [
+    "V21A",
+    "V21B",
+    "V24A",
+    "V24B"
+   ]
+  },
+  {
+   "path": "src/git/observe.ts",
+   "primary": "WP24",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git/paths.ts",
+   "primary": "WP24",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git/publication.ts",
+   "primary": "WP24",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git/quarantine.ts",
+   "primary": "WP24",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/git/submit.ts",
+   "primary": "WP20",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP17",
+    "WP20",
+    "WP21"
+   ],
+   "oracles": [
+    "V17A",
+    "V17B",
+    "V20A",
+    "V20B",
+    "V21A",
+    "V21B"
+   ]
+  },
+  {
+   "path": "src/hash.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/ids.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/leaf.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/lifecycle.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/lifecycle/actions.ts",
+   "primary": "WP25",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP21"
+   ],
+   "oracles": [
+    "V21A",
+    "V21B"
+   ]
+  },
+  {
+   "path": "src/lifecycle/contracts.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/lifecycle/create-publication.ts",
+   "primary": "WP19",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/lifecycle/create.ts",
+   "primary": "WP19",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP17",
+    "WP19",
+    "WP20",
+    "WP21"
+   ],
+   "oracles": [
+    "V17A",
+    "V17B",
+    "V19A",
+    "V19B",
+    "V20A",
+    "V20B",
+    "V21A",
+    "V21B"
+   ]
+  },
+  {
+   "path": "src/lifecycle/policy.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/lifecycle/registry-operations.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/lifecycle/workspace.ts",
+   "primary": "WP19",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/mail.ts",
+   "primary": "WP20",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP06",
+    "WP17",
+    "WP20",
+    "WP21"
+   ],
+   "oracles": [
+    "V06A",
+    "V06B",
+    "V17A",
+    "V17B",
+    "V20A",
+    "V20B",
+    "V21A",
+    "V21B"
+   ]
+  },
+  {
+   "path": "src/mail/addresses.ts",
+   "primary": "WP20",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/mail/batch-policy.ts",
+   "primary": "WP06",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/mail/batches.ts",
+   "primary": "WP06",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP06"
+   ],
+   "oracles": [
+    "V06A",
+    "V06B"
+   ]
+  },
+  {
+   "path": "src/mail/facts.ts",
+   "primary": "WP20",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/mail/headers.ts",
+   "primary": "WP20",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/mail/materializer.ts",
+   "primary": "WP20",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP20"
+   ],
+   "oracles": [
+    "V20A",
+    "V20B"
+   ]
+  },
+  {
+   "path": "src/mail/reconcile.ts",
+   "primary": "WP20",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/mail/routing.ts",
+   "primary": "WP20",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/mail/serialize.ts",
+   "primary": "WP20",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/module-ports.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/pi-extension.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/ports/ledger.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/ports/runtime.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/process/async.ts",
+   "primary": "WP10",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/process/command.ts",
+   "primary": "WP10",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/process/policies.ts",
+   "primary": "WP24",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/process/preparation.ts",
+   "primary": "WP17",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP17"
+   ],
+   "oracles": [
+    "V17A",
+    "V17B"
+   ]
+  },
+  {
+   "path": "src/process/run.ts",
+   "primary": "WP10",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/batch-view.ts",
+   "primary": "WP06",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/byte-queue.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/channel.ts",
+   "primary": "WP26",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP26"
+   ],
+   "oracles": [
+    "V26C",
+    "R15"
+   ],
+   "note": "one request in flight, encoded-byte budgets both ways, deadlines"
+  },
+  {
+   "path": "src/protocol/host-channel.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/jsonl.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/log-response.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/methods.ts",
+   "primary": "WP26",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP21"
+   ],
+   "oracles": [
+    "V21A",
+    "V21B"
+   ]
+  },
+  {
+   "path": "src/protocol/operation-results.ts",
+   "primary": "WP26",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP29"
+   ],
+   "oracles": [
+    "V29A"
+   ]
+  },
+  {
+   "path": "src/protocol/principal-credential.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/receipt-codec.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/receipts.ts",
+   "primary": "WP26",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP26"
+   ],
+   "oracles": [
+    "V26B"
+   ],
+   "note": "REQUEST_NOT_FOUND is distinct from a receipt; exit codes per state"
+  },
+  {
+   "path": "src/protocol/request-codec.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/response-codec.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/run-lease.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/protocol/status-view.ts",
+   "primary": "WP23",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "T118",
+    "V23A"
+   ],
+   "note": "closed view codec; staleness is the reader's decision"
+  },
+  {
+   "path": "src/reconcile.ts",
+   "primary": "WP21",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03",
+    "WP21",
+    "WP22"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B",
+    "V21A",
+    "V21B",
+    "V22A",
+    "V22B"
+   ]
+  },
+  {
+   "path": "src/reconcile/operations.ts",
+   "primary": "WP21",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/request-cache.ts",
+   "primary": "WP26",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP26"
+   ],
+   "oracles": [
+    "V26B",
+    "V26C"
+   ]
+  },
+  {
+   "path": "src/rpc-client.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/runner.ts",
+   "primary": "WP07",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP06",
+    "WP10"
+   ],
+   "oracles": [
+    "V06A",
+    "V06B",
+    "V10A",
+    "V10C"
+   ]
+  },
+  {
+   "path": "src/runtime/assets.ts",
+   "primary": "WP31",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B"
+   ]
+  },
+  {
+   "path": "src/runtime/broker-lifetime.ts",
+   "primary": "WP10",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/runtime/broker-supervisor.ts",
+   "primary": "WP03",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B"
+   ]
+  },
+  {
+   "path": "src/runtime/deployment-manifest.ts",
+   "primary": "WP31",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/runtime/engine-auth.ts",
+   "primary": "WP27",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP27"
+   ],
+   "oracles": [
+    "V27A",
+    "V27B"
+   ]
+  },
+  {
+   "path": "src/runtime/extension-integrity.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/runtime/host-tenure.ts",
+   "primary": "WP09",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP10"
+   ],
+   "oracles": [
+    "V10A",
+    "V10C"
+   ]
+  },
+  {
+   "path": "src/runtime/inference-relay.ts",
+   "primary": "WP27",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP27"
+   ],
+   "oracles": [
+    "T114",
+    "V27B"
+   ],
+   "note": "fixed origin, caller authority dropped, placeholder swapped in headers and path, bounded concurrency, no resend, streamed"
+  },
+  {
+   "path": "src/runtime/pi-adapter.ts",
+   "primary": "WP10",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP10"
+   ],
+   "oracles": [
+    "V10A",
+    "V10C"
+   ]
+  },
+  {
+   "path": "src/runtime/pi-rpc.ts",
+   "primary": "WP10",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP09"
+   ],
+   "oracles": [
+    "V09A",
+    "V09B",
+    "V09C"
+   ]
+  },
+  {
+   "path": "src/runtime/pi-runtime.ts",
+   "primary": "WP31",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP31"
+   ],
+   "oracles": [
+    "V31A",
+    "V31B"
+   ]
+  },
+  {
+   "path": "src/runtime/pi-spawn-plan.ts",
+   "primary": "WP27",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP10",
+    "WP27"
+   ],
+   "oracles": [
+    "V10A",
+    "V10C",
+    "V27A",
+    "V27B"
+   ]
+  },
+  {
+   "path": "src/runtime/principal-delivery.ts",
+   "primary": "WP08",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP05",
+    "WP08",
+    "WP09"
+   ],
+   "oracles": [
+    "V05A",
+    "V05B",
+    "V08A",
+    "V08B",
+    "V09A",
+    "V09B",
+    "V09C"
+   ]
+  },
+  {
+   "path": "src/runtime/process-lock.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/runtime/provision.ts",
+   "primary": "WP16",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP16"
+   ],
+   "oracles": [
+    "V16A",
+    "V16B"
+   ]
+  },
+  {
+   "path": "src/runtime/resident-rootfs.ts",
+   "primary": "WP27",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/runtime/run-registry.ts",
+   "primary": "WP25",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP06",
+    "WP07"
+   ],
+   "oracles": [
+    "V06A",
+    "V06B",
+    "V07A",
+    "V07B"
+   ]
+  },
+  {
+   "path": "src/runtime/society-lease.ts",
+   "primary": "WP25",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/runtime/supervision-channel.ts",
+   "primary": "WP03",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/sandbox.ts",
+   "primary": "WP27",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP27"
+   ],
+   "oracles": [
+    "V27A",
+    "V27B"
+   ]
+  },
+  {
+   "path": "src/storage/batch-view.ts",
+   "primary": "WP06",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/contained-fs.ts",
+   "primary": "WP05",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/context-files.ts",
+   "primary": "WP18",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/context-snapshot.ts",
+   "primary": "WP18",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/context-stream.ts",
+   "primary": "WP18",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP18"
+   ],
+   "oracles": [
+    "V18A",
+    "V18B"
+   ]
+  },
+  {
+   "path": "src/storage/delivery-receipt.ts",
+   "primary": "WP05",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP05",
+    "WP06"
+   ],
+   "oracles": [
+    "V05A",
+    "V05B",
+    "V06A",
+    "V06B"
+   ]
+  },
+  {
+   "path": "src/storage/diagnostic-snapshot.ts",
+   "primary": "WP23",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/directory.ts",
+   "primary": "WP17",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/durable-fs.ts",
+   "primary": "WP05",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/facets.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/immutable-file.ts",
+   "primary": "WP20",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP20"
+   ],
+   "oracles": [
+    "V20A",
+    "V20B"
+   ]
+  },
+  {
+   "path": "src/storage/ledger-reader.ts",
+   "primary": "WP04",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "V23A",
+    "V23B"
+   ]
+  },
+  {
+   "path": "src/storage/operation-codec.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/operation-journal.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/operation-transitions.ts",
+   "primary": "WP29",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/paths.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/preaccept-artifact.ts",
+   "primary": "WP17",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP17",
+    "WP20"
+   ],
+   "oracles": [
+    "V17A",
+    "V17B",
+    "V20A",
+    "V20B"
+   ]
+  },
+  {
+   "path": "src/storage/quota.ts",
+   "primary": "WP22",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP21",
+    "WP22"
+   ],
+   "oracles": [
+    "V21A",
+    "V21B",
+    "V22A",
+    "V22B"
+   ]
+  },
+  {
+   "path": "src/storage/receipt-projector.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/rows.ts",
+   "primary": "WP04",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/staged-tree.ts",
+   "primary": "WP17",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/submit-spool.ts",
+   "primary": "WP20",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP17"
+   ],
+   "oracles": [
+    "V17A",
+    "V17B"
+   ]
+  },
+  {
+   "path": "src/storage/transaction.ts",
+   "primary": "WP04",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/storage/transitions.ts",
+   "primary": "WP06",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/store.ts",
+   "primary": "WP04",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP04",
+    "WP23"
+   ],
+   "oracles": [
+    "V04A",
+    "V04B",
+    "V23A",
+    "V23B"
+   ]
+  },
+  {
+   "path": "src/tui/app.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP15"
+   ],
+   "oracles": [
+    "V15A",
+    "V15B"
+   ]
+  },
+  {
+   "path": "src/tui/dashboard.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP15"
+   ],
+   "oracles": [
+    "V15A",
+    "V15B"
+   ]
+  },
+  {
+   "path": "src/tui/exit.ts",
+   "primary": "WP28",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/tui/keys.ts",
+   "primary": "WP28",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/tui/limits.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP14"
+   ],
+   "oracles": [
+    "V14A",
+    "V14B"
+   ]
+  },
+  {
+   "path": "src/tui/model.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP14",
+    "WP15"
+   ],
+   "oracles": [
+    "V14A",
+    "V14B",
+    "V15A",
+    "V15B"
+   ]
+  },
+  {
+   "path": "src/tui/prompt.ts",
+   "primary": "WP09",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/tui/screen.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP28"
+   ],
+   "oracles": [
+    "V28A",
+    "V28B"
+   ]
+  },
+  {
+   "path": "src/tui/session.ts",
+   "primary": "WP09",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP09"
+   ],
+   "oracles": [
+    "V09A",
+    "V09B",
+    "V09C"
+   ]
+  },
+  {
+   "path": "src/tui/sources/extensions.ts",
+   "primary": "WP14",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP12",
+    "WP13",
+    "WP14"
+   ],
+   "oracles": [
+    "V12A",
+    "V12B",
+    "V13A",
+    "V13B",
+    "V13C",
+    "V14A",
+    "V14B"
+   ]
+  },
+  {
+   "path": "src/tui/sources/mail.ts",
+   "primary": "WP28",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP28"
+   ],
+   "oracles": [
+    "V28A",
+    "T98"
+   ],
+   "note": "bounded no-follow reads; new/ is not yet delivered to the Principal's session; reading writes nothing"
+  },
+  {
+   "path": "src/tui/sources/settings.ts",
+   "primary": "WP15",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP11",
+    "WP12",
+    "WP13",
+    "WP14",
+    "WP15"
+   ],
+   "oracles": [
+    "V11A",
+    "V11B",
+    "V11C",
+    "V12A",
+    "V12B",
+    "V13A",
+    "V13B",
+    "V13C",
+    "V14A",
+    "V14B",
+    "V15A",
+    "V15B"
+   ]
+  },
+  {
+   "path": "src/tui/transcript.ts",
+   "primary": "WP28",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/tui/transport.ts",
+   "primary": "WP23",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP23",
+    "WP28"
+   ],
+   "oracles": [
+    "T118"
+   ],
+   "note": "status view read bounded, no-follow; missing/unreadable/malformed/foreign/stale are unknown with reason"
+  },
+  {
+   "path": "src/tui/view/dashboard.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP15",
+    "WP28"
+   ],
+   "oracles": [
+    "V15A",
+    "V15B",
+    "V28A",
+    "V28B"
+   ]
+  },
+  {
+   "path": "src/tui/view/index.ts",
+   "primary": "WP28",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/tui/view/labels.ts",
+   "primary": "WP28",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/tui/view/layout.ts",
+   "primary": "WP28",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/tui/view/notice.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP15"
+   ],
+   "oracles": [
+    "V15A",
+    "V15B"
+   ]
+  },
+  {
+   "path": "src/tui/view/screens.ts",
+   "primary": "WP28",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP14",
+    "WP15",
+    "WP28"
+   ],
+   "oracles": [
+    "V14A",
+    "V14B",
+    "V15A",
+    "V15B",
+    "V28A",
+    "V28B"
+   ]
+  },
+  {
+   "path": "src/tui/view/text.ts",
+   "primary": "WP28",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/units.ts",
+   "primary": "WP25",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03",
+    "WP23",
+    "WP25"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B",
+    "V23A",
+    "V23B",
+    "V25A"
+   ]
+  },
+  {
+   "path": "src/units/execute.ts",
+   "primary": "WP25",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "R26"
+   ],
+   "note": "sync and async unit commands bounded in time and output; async is show-only"
+  },
+  {
+   "path": "src/units/observe.ts",
+   "primary": "WP25",
+   "status": "READ_UNCHANGED",
+   "by": [
+    "WP23",
+    "WP25"
+   ],
+   "oracles": [
+    "R26"
+   ],
+   "note": "observation parser: missing or malformed properties are unknown, never success"
+  },
+  {
+   "path": "src/units/render.ts",
+   "primary": "WP25",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP03",
+    "WP25"
+   ],
+   "oracles": [
+    "V03A",
+    "V03B",
+    "V25A"
+   ]
+  },
+  {
+   "path": "src/validate.ts",
+   "primary": "WP26",
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": []
+  },
+  {
+   "path": "src/views.ts",
+   "primary": "WP23",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "V23A",
+    "V23B"
+   ]
+  },
+  {
+   "path": "src/views/pending-work.ts",
+   "primary": "WP23",
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "V23A",
+    "V23B"
+   ]
+  },
+  {
+   "path": "src/views/status-refresh.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "WP23"
+   ],
+   "oracles": [
+    "V23A",
+    "V23B"
+   ]
+  }
+ ]
+}
