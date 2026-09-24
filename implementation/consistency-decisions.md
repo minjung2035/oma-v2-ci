@@ -312,3 +312,58 @@ binding promotion, use only binding-aware writers. Parent-fsync uncertainty is
 never proof that publication did not occur. Final WP32 requires source-bound
 handoffs, all primary-file reviews, actual environment gates and the authorized
 CI/packaging evidence; local static/fixture success does not discharge them.
+
+## WP25 — identity, authority and lifetime of a run
+
+WP25.01 table. Each row is one fact the code observes; the right-hand columns say
+what it is **not** evidence of. No row is a substitute for another, and an actor
+string alone is never authority.
+
+| Identity / fact | Proves | Does not prove | Established / checked at |
+|---|---|---|---|
+| actor name | which registry row a request is about | who is asking, or that any run exists | `AuthContext` is built only from a bound peer (`PeerAuthenticator.context`); `assertActorIdentity` rechecks role and incarnation against the row |
+| incarnation | the ledger epoch of the agent's current run | that the run is alive or that an earlier epoch is dead | advanced only by `Broker.openRun`, under `desired=enabled`, after `RunRegistry.begin` proved the previous invocation's cgroup empty/removed and previous receipts settled (D01) |
+| accepted `previousIncarnation` | the epoch an accepted start/stop intent was about | permission to act on a later epoch | frozen in the plan at acceptance; `LifecycleActions.currentIntent` requires desired **and** incarnation equal before every effect (normal, same-key retry, reconcile); otherwise the operation is `unknown`, never rewritten |
+| systemd InvocationID | one activation of the service unit | death of an earlier activation's descendants | `openRun` requires the runner's claimed ID to be the observed one; every capability read re-observes it |
+| cgroup pin (`OwnedRun`) | the kernel cgroup the run was admitted in, held by FD from opening through revoked-awaiting-death | that a signal, exit or socket close ended the run | `population()` reads `cgroup.events` through the pinned FD; `removed` only after events were once seen (Linux 6.12 keeps nlink); read failure is `unknown`, never empty |
+| peer liveness (pidfd, `SharedPeerPin`) | the connected process is alive now | the run's death when it is not; another process of the run may live | rechecked at each capability read together with cgroup membership of the peer |
+| society lease (abstract socket + inherited open file description) | one host owns the society until every inheritor closed it | anything about a single run | taken by the host before any write; released by the kernel with the last descendant |
+| `desired` | management intent | physical state | `stopped` makes `openRun` refuse; stop acceptance commits it before the physical attempt |
+| `confirmDead(agent, incarnation)` | unit inactive/failed, its cgroup empty or removed, stable across two observations, epoch not advanced | anything when an observation is unavailable | `units.ts`; false on every unknown |
+
+Authority, kept distinct (D06): `operation.get` returns the caller's **own**
+receipt to the current actor and needs no management capability. `agent.start` /
+`agent.stop` require current `agent.manage.*` over the target (`requireManage`)
+before anything else, including the replay of a terminal receipt by the same key.
+Broker recovery (`reconcileAction`) has no caller; it acts only when
+`currentIntent` still holds.
+
+WP25.02 — logical stop acceptance (`desired=stopped`, operation pending) is
+separate from physical proof. `UnitsModule.stop` attempts path stop, path disable,
+endpoint revoke, service stop and path verification independently; any failure or
+an unproven death is `RUN_TERMINATION_UNKNOWN`, and the operation stays `unknown`.
+A start refused by the unit's start limit is `START_LIMIT` (systemd 257 reports
+it only through `NRestarts >= StartLimitBurst`); the limit is reset only by an
+explicit manager start, never by reconcile. V25A: an old start/stop intent, by
+reconcile or by same-key retry, leaves the current incarnation's run untouched
+and settles `unknown`; a current stop succeeds and proves death.
+
+WP25.03 — the Resident unit is rendered once, at creation, from the accepted spec:
+MemoryMax/TasksMax/CPUQuota and `OMA_RESOURCES_HEX` (the canonical resource text).
+The runner takes workspace, `/tmp` and check limits from that text and refuses to
+start without it; only the model comes from the current profile at activation
+(D05). Units rendered before WP03 already lack the launch location and are refused
+by the runner; there is no automatic re-rendering of existing Resident units, so a
+society created before this change set needs its Residents recreated (open item for
+the WP31 support table). The Principal is not a unit: its session still reads its
+workspace limit from the current principal profile (`src/tui/session.ts`); whether
+the Principal's accepted spec should bind it is left to WP28's review.
+
+WP25.04 — `revoke` closes authorization and keeps the pin (`revoked-awaiting-death`);
+the pin is released by the next `begin` after it proves the cgroup empty/removed, or
+with the broker. V25B is carried by existing oracles: SEQ-002 (every stop step is
+attempted after a path or revoke failure, and the result is unknown, not success),
+T38 (an unconfirmed stale cgroup blocks start, incarnation unchanged), SEQ-002 in
+phase4 (unknown old-run death stops startup before mail reconciliation), R37
+shutdown (an unknown native outcome keeps Store and lock). Descendant-death proof
+of the engine inside a real Resident remains WP30.
