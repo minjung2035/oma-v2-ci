@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 222,
-    "n_lines": 27912,
+    "n_lines": 27934,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -144,16 +144,16 @@
     "code": 235,
     "language": "TypeScript"
   },
+  "src/request-cache.ts": {
+    "blank": 18,
+    "comment": 41,
+    "code": 227,
+    "language": "TypeScript"
+  },
   "src/extension/mail-tools.ts": {
     "blank": 5,
     "comment": 37,
     "code": 225,
-    "language": "TypeScript"
-  },
-  "src/request-cache.ts": {
-    "blank": 18,
-    "comment": 41,
-    "code": 224,
     "language": "TypeScript"
   },
   "src/runtime/pi-adapter.ts": {
@@ -330,16 +330,16 @@
     "code": 156,
     "language": "TypeScript"
   },
+  "src/cli/request-service.ts": {
+    "blank": 9,
+    "comment": 9,
+    "code": 155,
+    "language": "TypeScript"
+  },
   "src/process/async.ts": {
     "blank": 4,
     "comment": 61,
     "code": 152,
-    "language": "TypeScript"
-  },
-  "src/cli/request-service.ts": {
-    "blank": 8,
-    "comment": 4,
-    "code": 151,
     "language": "TypeScript"
   },
   "src/extension/batch-view.ts": {
@@ -864,6 +864,12 @@
     "code": 50,
     "language": "TypeScript"
   },
+  "src/cli/exit.ts": {
+    "blank": 7,
+    "comment": 3,
+    "code": 49,
+    "language": "TypeScript"
+  },
   "src/lifecycle/create-publication.ts": {
     "blank": 3,
     "comment": 4,
@@ -874,12 +880,6 @@
     "blank": 8,
     "comment": 31,
     "code": 46,
-    "language": "TypeScript"
-  },
-  "src/cli/exit.ts": {
-    "blank": 6,
-    "comment": 0,
-    "code": 44,
     "language": "TypeScript"
   },
   "src/extension/principal-channel.ts": {
@@ -1339,9 +1339,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1122,
-    "comment": 4063,
-    "code": 22727,
+    "blank": 1124,
+    "comment": 4071,
+    "code": 22739,
     "nFiles": 222
   }
 }
