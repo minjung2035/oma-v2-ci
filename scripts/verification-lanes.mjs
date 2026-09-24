@@ -8,6 +8,7 @@ export const systemdTestFiles = Object.freeze([
   "phase5.test.js",
   "phase8.test.js",
   "crash-boundaries.test.js",
+  "launch-topology.test.js",
 ]);
 /** Tests a run reported but did not execute.
  *
@@ -60,6 +61,8 @@ export const lanes = Object.freeze({
       "audit-git-known.test.js",
       "protocol-method-descriptors.test.js",
       "method-resource-categories.test.js",
+      "launch-location.test.js",
+      "host-entry.test.js",
     ],
     sourceFiles: [
       "test/consistency-decisions.test.mjs",
@@ -81,6 +84,9 @@ export const lanes = Object.freeze({
       "test/receipt-supersession.test.mjs",
     ],
     requiredNames: [
+      "D03 launched location",
+      "D03 resident unit",
+      "D03: a host unit without the rendered run root",
       "V01A:",
       "V01B:",
       "V02A:",
@@ -229,6 +235,8 @@ export const lanes = Object.freeze({
       "D1: READY=1",
       "C1: two concurrent git.submit",
       "P0-1/2/3 + P1-7/8",
+      "V03A/V03B product topology",
+      "V03B unsupported",
     ],
     environment: "systemd",
     timeoutSeconds: 3600,

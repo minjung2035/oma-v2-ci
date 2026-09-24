@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 220,
-    "n_lines": 26646,
+    "n_lines": 26775,
     "report_file": "production-loc.json"
   },
   "src/durable.ts": {
@@ -14,8 +14,8 @@
   },
   "src/broker.ts": {
     "blank": 3,
-    "comment": 31,
-    "code": 405,
+    "comment": 36,
+    "code": 407,
     "language": "TypeScript"
   },
   "src/protocol/methods.ts": {
@@ -60,16 +60,16 @@
     "code": 280,
     "language": "TypeScript"
   },
-  "src/entry/oma.ts": {
-    "blank": 24,
-    "comment": 134,
-    "code": 276,
-    "language": "TypeScript"
-  },
   "src/runner.ts": {
     "blank": 0,
     "comment": 34,
     "code": 276,
+    "language": "TypeScript"
+  },
+  "src/entry/oma.ts": {
+    "blank": 24,
+    "comment": 136,
+    "code": 275,
     "language": "TypeScript"
   },
   "src/runtime/pi-rpc.ts": {
@@ -158,8 +158,8 @@
   },
   "src/runtime/broker-supervisor.ts": {
     "blank": 12,
-    "comment": 104,
-    "code": 210,
+    "comment": 106,
+    "code": 212,
     "language": "TypeScript"
   },
   "src/git/integration.ts": {
@@ -170,8 +170,14 @@
   },
   "src/reconcile.ts": {
     "blank": 1,
-    "comment": 17,
-    "code": 207,
+    "comment": 20,
+    "code": 208,
+    "language": "TypeScript"
+  },
+  "src/units.ts": {
+    "blank": 17,
+    "comment": 10,
+    "code": 200,
     "language": "TypeScript"
   },
   "src/storage/immutable-file.ts": {
@@ -184,12 +190,6 @@
     "blank": 10,
     "comment": 6,
     "code": 196,
-    "language": "TypeScript"
-  },
-  "src/units.ts": {
-    "blank": 16,
-    "comment": 6,
-    "code": 195,
     "language": "TypeScript"
   },
   "src/storage/transitions.ts": {
@@ -256,6 +256,12 @@
     "blank": 2,
     "comment": 12,
     "code": 168,
+    "language": "TypeScript"
+  },
+  "src/entry/broker.ts": {
+    "blank": 3,
+    "comment": 43,
+    "code": 167,
     "language": "TypeScript"
   },
   "src/mail.ts": {
@@ -328,12 +334,6 @@
     "blank": 2,
     "comment": 14,
     "code": 151,
-    "language": "TypeScript"
-  },
-  "src/entry/broker.ts": {
-    "blank": 3,
-    "comment": 38,
-    "code": 149,
     "language": "TypeScript"
   },
   "src/mail/headers.ts": {
@@ -620,8 +620,14 @@
   },
   "src/entry/runner.ts": {
     "blank": 1,
-    "comment": 10,
-    "code": 77,
+    "comment": 13,
+    "code": 78,
+    "language": "TypeScript"
+  },
+  "src/runtime/assets.ts": {
+    "blank": 8,
+    "comment": 17,
+    "code": 78,
     "language": "TypeScript"
   },
   "src/protocol/run-lease.ts": {
@@ -810,6 +816,12 @@
     "code": 52,
     "language": "TypeScript"
   },
+  "src/units/render.ts": {
+    "blank": 3,
+    "comment": 9,
+    "code": 52,
+    "language": "TypeScript"
+  },
   "src/tui/prompt.ts": {
     "blank": 11,
     "comment": 42,
@@ -838,12 +850,6 @@
     "blank": 2,
     "comment": 9,
     "code": 50,
-    "language": "TypeScript"
-  },
-  "src/runtime/assets.ts": {
-    "blank": 2,
-    "comment": 6,
-    "code": 47,
     "language": "TypeScript"
   },
   "src/lifecycle/create-publication.ts": {
@@ -924,12 +930,6 @@
     "code": 39,
     "language": "TypeScript"
   },
-  "src/units/render.ts": {
-    "blank": 2,
-    "comment": 1,
-    "code": 39,
-    "language": "TypeScript"
-  },
   "src/views/pending-work.ts": {
     "blank": 2,
     "comment": 7,
@@ -996,6 +996,12 @@
     "code": 33,
     "language": "TypeScript"
   },
+  "src/entry/host.ts": {
+    "blank": 1,
+    "comment": 2,
+    "code": 32,
+    "language": "TypeScript"
+  },
   "src/tui/view/notice.ts": {
     "blank": 2,
     "comment": 14,
@@ -1023,12 +1029,6 @@
   "src/domain/resources.ts": {
     "blank": 4,
     "comment": 5,
-    "code": 29,
-    "language": "TypeScript"
-  },
-  "src/entry/host.ts": {
-    "blank": 1,
-    "comment": 1,
     "code": 29,
     "language": "TypeScript"
   },
@@ -1148,7 +1148,7 @@
   },
   "implementation/systemd/resident.service.in": {
     "blank": 0,
-    "comment": 1,
+    "comment": 3,
     "code": 21,
     "language": "OMA systemd"
   },
@@ -1327,9 +1327,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1074,
-    "comment": 3678,
-    "code": 21894,
+    "blank": 1082,
+    "comment": 3724,
+    "code": 21969,
     "nFiles": 220
   }
 }

@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "69bb0b796515320166705468fab6f10feee93b2c3aa510777576ced168e0c358",
-  "report": "7689ebc667d43512e93f8a47cb212fd1ce28d05e4e96213fce64575296c9a877",
+  "report": "8b56044ce17100dbbf7478d0c780c538ff1bb5fa03a81a223855355a1349b5e6",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -17,7 +17,7 @@
     },
     {
       "path": "implementation/systemd/principal-relay.service.in",
-      "sha256": "74808420ec6b7470685c33c13f537a2990e3c2a68c2acf64b424ebc007925b69"
+      "sha256": "317ba03a3a9f761b2b0d464a2768646d13ebd971fe58785359bd5c932754bfaa"
     },
     {
       "path": "implementation/systemd/principal.path.in",
@@ -25,7 +25,7 @@
     },
     {
       "path": "implementation/systemd/reconcile.service.in",
-      "sha256": "b326add10ed9ccc4a073a73d804cecdeb8cea74272f7fa148178f6b57ff3edda"
+      "sha256": "0156af129f12c85621bcb8bba065239940d27cda6dc2172bfb9dfdcce8628d4d"
     },
     {
       "path": "implementation/systemd/reconcile.timer.in",
@@ -37,7 +37,7 @@
     },
     {
       "path": "implementation/systemd/resident.service.in",
-      "sha256": "996e94a2c7e262dfea9d057dc4dc0c9c23b943a717e6a30ffc3b02ae1af2b1d5"
+      "sha256": "06401418cbfab864f2b1ed50bb96a49f3fd06e35bc89022f37e72b6e06ce798f"
     },
     {
       "path": "src/authority.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "79338fcbd1721c6d8c2b21abdb1e9227b8b1c975e115e8ecac8d888c9c32436f"
+      "sha256": "a3bf2076c1a4aef83c69eb813a9851fa92c65aaeb8f69a858509ee88a2caa9d7"
     },
     {
       "path": "src/broker/composition.ts",
@@ -281,11 +281,11 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "60f0f3bfac6a61a736708c3bcb7c441621b393b4f88b137a2bffcf98504d8cf5"
+      "sha256": "8c00481deb16c41d87ca55bec1721c4d8540a9840fbc5a7598acc5aad2ff05a3"
     },
     {
       "path": "src/entry/host.ts",
-      "sha256": "eef43b299c1c1adc8654cd366c19962de43755c46ae1e0bd2be9a70941683ae7"
+      "sha256": "a1430c6ffccdf53aaa783e4c87f0ae8c62c8eaa47eb74f27c3c484ca8be81a50"
     },
     {
       "path": "src/entry/module-conformance.ts",
@@ -293,11 +293,11 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "54ff9f82e1c629ab124d776f4b1d92797279bcbda23305d4bff5512ccea5a4b7"
+      "sha256": "8ccb5d37556698d11a0d0bab6205c42a9d937a8a778589d7767b04fc72e84417"
     },
     {
       "path": "src/entry/runner.ts",
-      "sha256": "9b6c2fe451ad81a6bc305a960cd1311a88020ec4013a92b77c168d444674e6da"
+      "sha256": "905e6c1512e9f265f22e30a58d3b599ba76b1ed87129d9c7568ced30cb8688a7"
     },
     {
       "path": "src/extension/batch-view.ts",
@@ -573,7 +573,7 @@
     },
     {
       "path": "src/reconcile.ts",
-      "sha256": "e6dfb02323dccc28eab516fd056c4ce58c6263b893a6756b3f74d51c0b9ec1e6"
+      "sha256": "c09e9da4f3df1c6f09a614925fbc7f959c09373eb974b4de9fbbe472fc976cce"
     },
     {
       "path": "src/reconcile/operations.ts",
@@ -593,7 +593,7 @@
     },
     {
       "path": "src/runtime/assets.ts",
-      "sha256": "0955fd7472afa11161119e0d66dd5d1f5172eabf46db6f60d413b387cf2c4b3e"
+      "sha256": "c9a29cb8f13adc38aaa865cf1a41c49291cd495e7503035c372e2eddd07470bc"
     },
     {
       "path": "src/runtime/broker-lifetime.ts",
@@ -601,7 +601,7 @@
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
-      "sha256": "02514a938d8b2f7362ee51eca33254cdf0629ee0d41303183804cf7accf7a91e"
+      "sha256": "ae2a484be1e566dcb25544a9217280f3fa765c46ed4bf45bd7cb0c2e27979864"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -857,7 +857,7 @@
     },
     {
       "path": "src/units.ts",
-      "sha256": "86ae346880955523ab86527e7c6b36d1bdc17b3ffaf95e1cc638cde868851dad"
+      "sha256": "4e26ba03fd09ca9beae710c287f95d8fa000a050dc55083ac67cd2126b5ff1c6"
     },
     {
       "path": "src/units/execute.ts",
@@ -869,7 +869,7 @@
     },
     {
       "path": "src/units/render.ts",
-      "sha256": "e51679953e9494c0ae3b8aeda3cc623a8d8f473bcb9cc5f3946b3c0dc3980223"
+      "sha256": "a5b3c04a6f23205d4444a15d0c749eced708fadbe2f86ceabce1f1763799dff5"
     },
     {
       "path": "src/validate.ts",
