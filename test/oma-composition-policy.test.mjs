@@ -80,7 +80,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
   disowned = null, leased = true, repairFails = false, engineExits = true,
-  brokerAlreadyListening = false, untrustedRunRoot = false } = {}) {
+  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh" } = {}) {
   const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -113,7 +113,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   };
   const modules = {
     "node:path": path,
-    "node:fs": { existsSync: () => true, mkdirSync() {} },
+    "node:fs": { existsSync: () => true, mkdirSync() {}, realpathSync: path => { calls.push(`realpath:${path}`); return "/project"; } },
     "node:url": { fileURLToPath: () => "/lib/" },
     "../ids.js": { isValidSocietyName: () => true },
     // The path checks are the product's own; what this harness controls is
@@ -205,8 +205,25 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       readSettings: () => { calls.push("readSettings"); return settings; },
       writeSettings() { calls.push("writeSettings"); },
     },
-    "../config/defaults.js": { defaultHostConfig: () => ({}), societyFromDirectory: () => "fixture" },
+    "../config/defaults.js": { defaultHostConfig: () => ({}), defaultSocietyFor: path => { calls.push(`defaultSocietyFor:${path}`); return "fixture"; },
+      societyFromDirectory: () => "old-slug" },
     "../runtime/provision.js": {
+      // D05: the binding scenario is controlled; the decision itself is the
+      // product's pure rule, exercised against real files in project-binding.test.
+      observeProjectBinding: root => {
+        calls.push(`observeProjectBinding:${root}`);
+        if (binding === "bound") return { kind: "bound", binding: { kind: "oma-project-binding-v1", society: "fixture", canonicalProjectPath: "/project" } };
+        if (binding === "mismatch") return { kind: "bound", binding: { kind: "oma-project-binding-v1", society: "fixture", canonicalProjectPath: "/elsewhere" } };
+        return { kind: "absent" };
+      },
+      stateRootHasSociety: root => root === "/state/oma/fixture" ? binding === "bound" || binding === "mismatch" : binding === "legacy" && root === "/state/oma/old-slug",
+      projectBindingDecision: input => {
+        calls.push("projectBindingDecision");
+        if (input.observation.kind === "bound")
+          return input.observation.binding.canonicalProjectPath === input.canonicalProjectPath ? { kind: "proceed" } : { kind: "refuse", reason: "another project" };
+        return { kind: "publish" };
+      },
+      publishProjectBinding: (root, value) => { calls.push(`publishProjectBinding:${root}:${value.society}:${value.canonicalProjectPath}`); },
       provisionSociety: () => {
         calls.push("provisionSociety");
         return { created: [], seeded: false, seedSource: null, seedNote: null, pendingRepairs: ["/state/rootfs/etc/passwd"] };
@@ -734,4 +751,34 @@ test("T119 / PR-002: delivery runs only once a broker is ready, and again as eac
   fireEvent({ type: "turn_start" });
   await settle();
   assert.equal(deliveries.length, 2, "delivery ran on an event that does not free the session");
+});
+
+test("D05/WP16: the project is observed once and bound before this process writes anything of the society", async () => {
+  const society = await run();
+  const { calls } = society;
+  const order = name => calls.findIndex(call => call === name || call.startsWith(`${name}:`));
+  assert.equal(calls.filter(call => call.startsWith("realpath:")).length, 1);
+  assert.ok(calls.includes("defaultSocietyFor:/project"), "the default society is derived from the canonical path");
+  assert.ok(order("tryHoldSociety") < order("observeProjectBinding"));
+  assert.ok(calls.includes("publishProjectBinding:/state/oma/fixture:fixture:/project"));
+  assert.ok(order("publishProjectBinding") < order("readSettings"), "configuration was read or written before the binding");
+  assert.ok(order("publishProjectBinding") < order("provisionSociety"));
+});
+
+test("D05/WP16: a society bound to another project is refused before any write, and the lease is given back", async () => {
+  const society = await run({ binding: "mismatch" }).catch(error => ({ error }));
+  const calls = society.calls ?? [];
+  assert.ok(society.error ? /another project/.test(String(society.error)) : calls.some(call => /^exit:/.test(call)));
+  for (const effect of ["readSettings", "writeSettings", "provisionSociety", "repairSociety", "superviseBroker", "collectManagedGenerations"])
+    assert.equal(calls.includes(effect), false, `${effect} ran for a society bound elsewhere`);
+  assert.equal(calls.some(call => call.startsWith("publishProjectBinding")), false);
+});
+
+test("D05/WP16: an earlier default-name society of this project is pointed out, not silently replaced by a new one", async () => {
+  const society = await run({ binding: "legacy" }).catch(error => ({ error }));
+  const calls = society.calls ?? [];
+  assert.ok(society.error ? /old-slug/.test(String(society.error)) : calls.some(call => /^exit:/.test(call)), calls.join(" "));
+  for (const effect of ["readSettings", "writeSettings", "provisionSociety", "superviseBroker"])
+    assert.equal(calls.includes(effect), false, `${effect} ran instead of pointing at the earlier society`);
+  assert.equal(calls.some(call => call.startsWith("publishProjectBinding")), false);
 });

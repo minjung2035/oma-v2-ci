@@ -11,6 +11,7 @@
  * values here rather than a setup command, and all of them are visible and
  * editable in the Control Panel (CFG-002, arch §23.6).
  */
+import { createHash } from "node:crypto";
 import type { HostConfigV1 } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 
@@ -26,8 +27,23 @@ export interface DefaultConfigInput {
   readonly deploymentDigest: string;
 }
 
-/** Derives a society name from a project directory. Two different checkouts get
- * two societies, which is what "run it in a project" means.
+/** D05/WP16.01: the default society of a project. `canonicalProjectPath` is
+ * the entry's single realpath observation of the project directory; this
+ * derivation is pure. Up to 15 ASCII slug characters of the directory name
+ * (`project` when none survive), then `-`, then the first 16 hex digits of the
+ * SHA-256 of the canonical path: 32 characters at most. Truncation is not
+ * collision-proof, so every mutation first compares the full path recorded in
+ * the society's project binding.
+ */
+export function defaultSocietyFor(canonicalProjectPath: string): string {
+  const base = canonicalProjectPath.split("/").filter(Boolean).pop() ?? "";
+  const slug = base.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^[^a-z]+/, "").slice(0, 15).replace(/-+$/, "");
+  return `${slug.length > 0 ? slug : "project"}-${createHash("sha256").update(canonicalProjectPath).digest("hex").slice(0, 16)}`;
+}
+
+/** The pre-D05 default: a slug of the directory name alone. Kept only to find
+ * a society an earlier version created for this project, which is never
+ * renamed or rebound implicitly.
  */
 export function societyFromDirectory(directory: string): string {
   const base = directory.split("/").filter(Boolean).pop() ?? "";

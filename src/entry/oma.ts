@@ -4,7 +4,7 @@
  * model-facing CLI in the Resident rootfs (src/cli.ts) and shares no argv
  * parser, capability or socket with it. Nothing here is mounted into a sandbox.
  */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isValidSocietyName } from "../ids.js";
@@ -25,8 +25,11 @@ import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sou
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
 import { commitField, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
 import { collectManagedGenerations } from "../config/generations.js";
-import { defaultHostConfig, societyFromDirectory } from "../config/defaults.js";
-import { provisionSociety, repairSociety, residentRootfsPath, type ProvisionReport } from "../runtime/provision.js";
+import { defaultHostConfig, defaultSocietyFor, societyFromDirectory } from "../config/defaults.js";
+import {
+  observeProjectBinding, projectBindingDecision, provisionSociety, publishProjectBinding, repairSociety, residentRootfsPath,
+  stateRootHasSociety, type ProvisionReport,
+} from "../runtime/provision.js";
 import { brokerListening, superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
 import { HostTenure } from "../runtime/host-tenure.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
@@ -34,7 +37,7 @@ import type { ExtensionRow, MailRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
 
 function usage(): never {
-  process.stderr.write("usage: oma [--society <name>] [--config <path>]\n");
+  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n");
   process.exit(4);
 }
 
@@ -68,7 +71,15 @@ async function main(argv: readonly string[]): Promise<void> {
   if (argv.includes("--help") || argv.includes("-h")) usage();
   // No society given: derive one from the project directory, so running `oma`
   // in a checkout just works and two checkouts stay separate.
-  const society = argOf(argv, "--society") ?? societyFromDirectory(process.cwd());
+  // D05/WP16.01: the project directory is observed once, here; the identity
+  // derived from it is pure, and it names a society only through the binding
+  // checked below before anything of that society is written.
+  let canonicalProjectPath: string;
+  try { canonicalProjectPath = realpathSync(process.cwd()); }
+  catch (error) { fail(`프로젝트 디렉터리를 확인할 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, 4); }
+  const explicitSociety = argOf(argv, "--society");
+  const society = explicitSociety ?? defaultSocietyFor(canonicalProjectPath);
+  const bindRequested = argv.includes("--bind-project");
   if (!isValidSocietyName(society)) usage();
   // D03: this is where the society's location is decided; everything this
   // process starts is handed it rather than deriving its own.
@@ -120,6 +131,37 @@ async function main(argv: readonly string[]): Promise<void> {
   if (await brokerListening(runRoot)) {
     if (tenure !== null) { await tenure.end(); tenure = null; }
     ownershipRefusal = "이 society의 broker가 이미 실행 중입니다";
+  }
+
+  // D05/WP16.02-03: a society is acted on only for the project it is bound
+  // to, decided before this process writes anything of it. A fresh society is
+  // bound to this project; an existing unbound one only on --bind-project; a
+  // mismatch is refused even with --society. An earlier default name for this
+  // project is never taken over or renamed implicitly.
+  {
+    const observation = observeProjectBinding(stateRoot);
+    const hasSociety = stateRootHasSociety(stateRoot);
+    if (explicitSociety === undefined && !hasSociety && observation.kind === "absent") {
+      const legacy = societyFromDirectory(canonicalProjectPath);
+      if (legacy !== society && isValidSocietyName(legacy) && stateRootHasSociety(join(dirname(stateRoot), legacy))) {
+        if (tenure !== null) await tenure.end();
+        fail(`이 프로젝트 이름으로 만든 이전 society '${legacy}'가 있습니다. 그 society를 계속 쓰려면 이 프로젝트의 것인지 확인한 뒤 \`oma --society ${legacy} --bind-project\`로 실행하세요. 새 society로 시작하지 않았습니다.`, 4);
+      }
+    }
+    const decision = projectBindingDecision({ observation, society, canonicalProjectPath, hasSociety,
+      bindRequested: bindRequested && tenure !== null });
+    if (decision.kind === "refuse" || (decision.kind === "publish" && tenure === null && hasSociety)) {
+      if (tenure !== null) await tenure.end();
+      fail(decision.kind === "refuse" ? `이 society를 이 프로젝트에서 열 수 없습니다: ${decision.reason}` :
+        "이 society에는 프로젝트 바인딩이 없고 다른 oma가 소유하고 있습니다", 4);
+    }
+    if (decision.kind === "publish" && tenure !== null) {
+      try { publishProjectBinding(stateRoot, { society, canonicalProjectPath }); }
+      catch (error) {
+        await tenure.end();
+        fail(`society의 프로젝트 바인딩을 기록하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error));
+      }
+    }
   }
 
   let settings: Settings;

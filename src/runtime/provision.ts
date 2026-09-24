@@ -32,11 +32,12 @@
  * step.
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
+import { isValidSocietyName } from "../domain/identifiers.js";
 import { runGitText } from "../process/policies.js";
-import { ensureDurableDirectory } from "../storage/durable-fs.js";
+import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { hostSystemLayout, prepareResidentRootfs } from "./resident-rootfs.js";
 
 /** The trusted rootfs OMA builds for its Residents (SB-001). */
@@ -80,13 +81,34 @@ export interface ProvisionOptions {
   readonly projectDir?: string;
 }
 
-/** The project's committed `HEAD` and object format, or why there is none. */
+/** The project's committed `HEAD` and object format, or why there is none.
+ * WP16.04: "none" is only a directory that is not a repository or a
+ * repository whose HEAD is unborn. A Git observation that fails any other way
+ * is an error, never a reason to start the society from an empty root. */
 function projectHead(projectDir: string): { oid: string; format: string } | { note: string } {
+  const repository = runGitText(["-C", projectDir, "rev-parse", "--git-dir"]);
+  if (repository.status !== 0) {
+    // Git reports an unreadable `.git` exactly as it reports no repository at
+    // all, so the directory's own `.git` entry decides which one this is.
+    let dotGit;
+    try { dotGit = lstatSync(join(projectDir, ".git"), { throwIfNoEntry: false }); }
+    catch (error) { throw new StoreError("STORE_CORRUPT", `the project directory cannot be observed: ${error instanceof Error ? error.message : String(error)}`); }
+    if (dotGit === undefined && /not a git repository/i.test(repository.stderr)) return { note: "the project directory is not a Git repository" };
+    throw new StoreError("STORE_CORRUPT", `the project repository cannot be observed: ${repository.stderr.trim().slice(0, 200)}`);
+  }
   const head = runGitText(["-C", projectDir, "rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
-  if (head.status !== 0 || head.stdout.trim().length === 0)
-    return { note: "the project directory has no committed HEAD" };
+  if (head.status !== 0 || head.stdout.trim().length === 0) {
+    const unborn = runGitText(["-C", projectDir, "symbolic-ref", "--quiet", "HEAD"]);
+    const branch = unborn.stdout.trim();
+    const ref = branch.length > 0 ? runGitText(["-C", projectDir, "rev-parse", "--verify", "--quiet", branch]) : null;
+    if (head.stderr.trim() === "" && unborn.status === 0 && ref !== null && ref.status !== 0 && ref.stderr.trim() === "")
+      return { note: "the project directory has no committed HEAD" };
+    throw new StoreError("STORE_CORRUPT", `the project's HEAD cannot be observed: ${head.stderr.trim().slice(0, 200) || "not a commit"}`);
+  }
   const format = runGitText(["-C", projectDir, "rev-parse", "--show-object-format"]);
-  return { oid: head.stdout.trim(), format: format.status === 0 ? format.stdout.trim() : "sha1" };
+  if (format.status !== 0 || format.stdout.trim().length === 0)
+    throw new StoreError("STORE_CORRUPT", "the project's object format cannot be observed");
+  return { oid: head.stdout.trim(), format: format.stdout.trim() };
 }
 
 function git(argv: readonly string[], gitDir?: string): string {
@@ -117,7 +139,10 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
   const staging = join(parent, `.${basename(path)}.staging.${randomBytes(8).toString("hex")}`);
   try {
     git(["init", "--quiet", "--bare", "--initial-branch=main", `--object-format=${format}`, staging]);
-    try { renameSync(staging, path); }
+    // WP16.04: everything the final name will expose is durable before it is
+    // exposed, and the name itself is durable before this reports success.
+    fsyncTree(staging);
+    try { renameSync(staging, path); fsyncDir(parent); }
     catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       // The winner's repository is already there. Anything else is a real
@@ -138,7 +163,12 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
  * so provisioning does not depend on, or record, who is running it. */
 function hasCanonicalMain(projectGit: string): boolean {
   const existing = runGitText(["rev-parse", "--verify", "--quiet", "refs/heads/main^{commit}"], { gitDir: projectGit });
-  return existing.status === 0 && existing.stdout.trim().length > 0;
+  if (existing.status === 0 && existing.stdout.trim().length > 0) return true;
+  // WP16.04: `--quiet` answers a missing ref with status 1 and nothing on
+  // stderr. Any other failure is a repository that cannot be read, and treating
+  // it as "no main" would seed a society over state that already exists.
+  if (existing.status === 1 && existing.stderr.trim() === "") return false;
+  throw new StoreError("STORE_CORRUPT", `the canonical repository cannot be observed: ${existing.stderr.trim().slice(0, 200)}`);
 }
 
 /** Seeds `main` from the project's committed history. The fetch runs under the
@@ -239,4 +269,103 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
 export function repairSociety(stateRoot: string): readonly string[] {
   return prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
     process.getuid?.() ?? 0, process.getgid?.() ?? 0, "repair").corrected;
+}
+
+/** D05/WP16.03: the host identity record that binds a society to exactly one
+ * project. Closed fields, at most 4 KiB, 0600 in the 0700 state root,
+ * published through a private temporary, file fsync, no-replace link and
+ * parent fsync before anything else of the society is written. It is host
+ * metadata for quiescent backup/restore -- not a ledger, wire or receipt
+ * record -- and binaries older than it cannot enforce it. */
+export const PROJECT_BINDING = "project-binding.json";
+const BINDING_KIND = "oma-project-binding-v1";
+const BINDING_MAX_BYTES = 4096;
+export interface ProjectBinding {
+  readonly kind: typeof BINDING_KIND;
+  readonly society: string;
+  readonly canonicalProjectPath: string;
+}
+export type ProjectBindingObservation =
+  | { readonly kind: "absent" }
+  | { readonly kind: "bound"; readonly binding: ProjectBinding }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+export function observeProjectBinding(stateRoot: string): ProjectBindingObservation {
+  const path = join(stateRoot, PROJECT_BINDING);
+  let stat;
+  try { stat = lstatSync(path, { throwIfNoEntry: false }); }
+  catch (error) { return { kind: "unreadable", reason: error instanceof Error ? error.message : String(error) }; }
+  if (!stat) return { kind: "absent" };
+  if (!stat.isFile() || stat.size > BINDING_MAX_BYTES) return { kind: "unreadable", reason: "the project binding is not a small regular file" };
+  try {
+    const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("not an object");
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort();
+    if (keys.join(",") !== "canonicalProjectPath,kind,society" || record.kind !== BINDING_KIND ||
+        !isValidSocietyName(record.society) || typeof record.canonicalProjectPath !== "string" ||
+        !record.canonicalProjectPath.startsWith("/"))
+      throw new Error("not an oma-project-binding-v1 record");
+    return { kind: "bound", binding: Object.freeze({ kind: BINDING_KIND, society: record.society,
+      canonicalProjectPath: record.canonicalProjectPath }) };
+  } catch (error) {
+    return { kind: "unreadable", reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** Whether a state root already holds a society (anything but a binding or
+ * its temporaries): such a tree is never bound implicitly. */
+export function stateRootHasSociety(stateRoot: string): boolean {
+  let entries: string[];
+  try { entries = readdirSync(stateRoot); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw new StoreError("STORE_CORRUPT", `the state root cannot be observed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return entries.some(entry => entry !== PROJECT_BINDING && !entry.startsWith(`.${PROJECT_BINDING}.`));
+}
+
+export type ProjectBindingDecision =
+  | { readonly kind: "proceed" }
+  | { readonly kind: "publish" }
+  | { readonly kind: "refuse"; readonly reason: string };
+/** D05: pure. A society is acted on only for the project it is bound to. A
+ * missing binding is written for a new society, or for an existing one only
+ * when the operator explicitly asked (`--bind-project`); a mismatch is refused
+ * even for an explicit --society, and an unreadable binding is refused. */
+export function projectBindingDecision(input: { readonly observation: ProjectBindingObservation; readonly society: string;
+  readonly canonicalProjectPath: string; readonly hasSociety: boolean; readonly bindRequested: boolean }): ProjectBindingDecision {
+  const observed = input.observation;
+  if (observed.kind === "unreadable") return { kind: "refuse", reason: `the society's project binding cannot be read: ${observed.reason}` };
+  if (observed.kind === "bound") {
+    if (observed.binding.society !== input.society)
+      return { kind: "refuse", reason: `the state root is bound to society ${observed.binding.society}, not ${input.society}` };
+    if (observed.binding.canonicalProjectPath !== input.canonicalProjectPath)
+      return { kind: "refuse", reason: `society ${input.society} belongs to the project at ${observed.binding.canonicalProjectPath}` };
+    return { kind: "proceed" };
+  }
+  if (!input.hasSociety || input.bindRequested) return { kind: "publish" };
+  return { kind: "refuse", reason: `society ${input.society} predates project bindings; review which project it belongs to, then run once with --bind-project` };
+}
+
+export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBinding, "kind">): void {
+  ensureDurableDirectory(stateRoot, 0o700);
+  const record: ProjectBinding = { kind: BINDING_KIND, society: binding.society, canonicalProjectPath: binding.canonicalProjectPath };
+  const bytes = `${JSON.stringify(record, null, 2)}\n`;
+  if (Buffer.byteLength(bytes) > BINDING_MAX_BYTES) throw new StoreError("INVALID_REQUEST", "the project path is too long to bind");
+  const final = join(stateRoot, PROJECT_BINDING);
+  const temporary = join(stateRoot, `.${PROJECT_BINDING}.${randomBytes(8).toString("hex")}.tmp`);
+  writeExclusiveFsyncedFile(temporary, bytes, 0o600);
+  try {
+    try { linkSync(temporary, final); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      // Another start bound it first: the same binding is adoption, any other is a refusal.
+      const observed = observeProjectBinding(stateRoot);
+      if (observed.kind !== "bound" || observed.binding.society !== record.society ||
+          observed.binding.canonicalProjectPath !== record.canonicalProjectPath)
+        throw new StoreError("POLICY_CHANGED", "another binding was published for this state root");
+    }
+  } finally { unlinkSync(temporary); }
+  fsyncDir(stateRoot);
 }
