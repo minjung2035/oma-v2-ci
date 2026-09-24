@@ -823,8 +823,8 @@ required now.
 
 Mutants for the cards finished in earlier sessions (WP04-WP06, WP11, WP12, WP17-WP22,
 WP24), one minimal reversion of a guard each, run on the disposable account: 30
-mutants, 23 failed their card's oracles at once. The 7 that survived were gaps, not
-equivalents, except one:
+mutants, 20 failed their card's oracles at once. Of the 10 that survived, 9 were gaps
+and one an equivalent:
 
 | Survivor | Gap | New oracle |
 |---|---|---|
@@ -833,12 +833,13 @@ equivalents, except one:
 | WP06 live completion ignores incarnation / session path | the broker's run check masked the Mail check | V06A binds incarnation and session directly |
 | WP12 one file over 1 MiB | only the aggregate bound was tested | V12B single-file bound |
 | WP12 file changed before snapshot completion | no seam after the manifest | `source-read` observer seam; V12A |
+| WP12 file changed during one file's read | no seam between the read and the second fstat | none (see below) |
 | WP18 replaced staging root deleted by cleanup | no replacement test | V18A replaced root kept, REF_STATE_UNKNOWN |
 | WP24 recovery CAS losing to a third writer settled | only the live race was tested | V24A race at the last policy reread |
 | WP11 commit without the first validation | -- | equivalent: both writers validate again before writing |
 
-Rerun: 8 of the 9 now fail; the ninth, a change inside one file's read (between the
-read and the second fstat), is a race no seam can place deterministically without
+Rerun of the 9 gaps: 8 now fail; the ninth, a change inside one file's read (between
+the read and the second fstat), is a race no seam can place deterministically without
 an intrusive hook in the read path; it stays a code-reviewed guard.
 
 Counterexamples tried against the finished product:
