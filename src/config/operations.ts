@@ -57,7 +57,11 @@ export interface ConfigurationSource {
   readonly extensionAssets: "read" | "unread";
 }
 export const CONFIGURATION_SOURCE_LIMITS = Object.freeze({ files: 256, bytes: 8 * 1024 * 1024 });
-export type ConfigurationReadObserver = (event: Readonly<{ phase: "manifest-read"; layout: ConfigurationLayout }>) => void;
+/** Test seam: where a snapshot read is. `source-read` follows each file the
+ * snapshot closes over, after its bytes are recorded. */
+export type ConfigurationReadObserver = (event: Readonly<
+  | { phase: "manifest-read"; layout: ConfigurationLayout }
+  | { phase: "source-read"; path: string }>) => void;
 /** Where the files of a configuration actually live, after containment.
  *
  * This is the single answer to "what is inside this bundle". Every reference is
@@ -141,6 +145,7 @@ function localPath(root: string, value: unknown): string {
 }
 class SourceClosure {
   private readonly identities = new Map<string, ConfigurationFileIdentity>();
+  constructor(private readonly observer?: ConfigurationReadObserver) {}
   add(path: string, stat: Stats, content: Buffer): void {
     const identity = Object.freeze({
       path, dev: stat.dev, ino: stat.ino, bytes: content.length,
@@ -155,6 +160,7 @@ class SourceClosure {
     const total = [...this.identities.values()].reduce((sum, value) => sum + value.bytes, 0);
     if (files > CONFIGURATION_SOURCE_LIMITS.files || total > CONFIGURATION_SOURCE_LIMITS.bytes)
       throw new StoreError("LIMIT_EXCEEDED", "configuration source closure exceeds its file or byte budget");
+    if (!prior) this.observer?.(Object.freeze({ phase: "source-read", path }));
   }
   finish(manifestPath: string): readonly ConfigurationFileIdentity[] {
     for (const identity of this.identities.values()) {
@@ -365,7 +371,7 @@ export function readConfigurationSource(path: string, observer?: ConfigurationRe
 }
 function readSource(path: string, observer: ConfigurationReadObserver | undefined, assets: boolean): ConfigurationSource {
   try {
-    const closure = new SourceClosure();
+    const closure = new SourceClosure(observer);
     const resolved = resolveConfigurationLayout(path, closure);
     const layout = resolved.layout;
     observer?.(Object.freeze({ phase: "manifest-read", layout }));
