@@ -164,6 +164,14 @@ Read-only diagnosis preserves the old tree. State-root moves are not simple rena
 because leases and accepted paths refer to it. WP16 must supply collision, aliases,
 legacy and initialization-failure fixtures before enabling this new default.
 
+WP16 result (2026-09-24): enabled. `defaultSocietyFor` implements the recipe; the
+entry observes realpath once. The binding is published before configuration or
+provisioning; mismatch and unreadable bindings are refused even with --society; an
+existing unbound society is bound only with `--bind-project`; a pre-D05 default-name
+society of the project is pointed out, never replaced by a new one. Provisioning now
+separates absent from unreadable project/canonical repositories and flushes a new
+bare repository before and after its rename.
+
 ### D06 — ACCEPTED; runtime success remains unproven
 
 Receipt absence, unreadability, timeout and failed acceptance acknowledgement are

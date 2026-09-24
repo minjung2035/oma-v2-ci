@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 221,
-    "n_lines": 27238,
+    "n_lines": 27425,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -48,6 +48,12 @@
     "code": 335,
     "language": "TypeScript"
   },
+  "src/entry/oma.ts": {
+    "blank": 25,
+    "comment": 149,
+    "code": 312,
+    "language": "TypeScript"
+  },
   "src/tui/session.ts": {
     "blank": 31,
     "comment": 171,
@@ -58,12 +64,6 @@
     "blank": 30,
     "comment": 39,
     "code": 281,
-    "language": "TypeScript"
-  },
-  "src/entry/oma.ts": {
-    "blank": 24,
-    "comment": 141,
-    "code": 279,
     "language": "TypeScript"
   },
   "src/runner.ts": {
@@ -123,6 +123,12 @@
   "src/lifecycle/create.ts": {
     "blank": 7,
     "comment": 13,
+    "code": 235,
+    "language": "TypeScript"
+  },
+  "src/runtime/provision.ts": {
+    "blank": 17,
+    "comment": 119,
     "code": 235,
     "language": "TypeScript"
   },
@@ -414,12 +420,6 @@
     "code": 135,
     "language": "TypeScript"
   },
-  "src/runtime/provision.ts": {
-    "blank": 12,
-    "comment": 96,
-    "code": 134,
-    "language": "TypeScript"
-  },
   "src/domain/errors.ts": {
     "blank": 5,
     "comment": 14,
@@ -468,6 +468,12 @@
     "code": 115,
     "language": "TypeScript"
   },
+  "src/config/defaults.ts": {
+    "blank": 7,
+    "comment": 37,
+    "code": 108,
+    "language": "TypeScript"
+  },
   "src/broker/peer-authenticator.ts": {
     "blank": 1,
     "comment": 13,
@@ -479,12 +485,6 @@
     "comment": 4,
     "code": 104,
     "language": "SQL"
-  },
-  "src/config/defaults.ts": {
-    "blank": 6,
-    "comment": 28,
-    "code": 102,
-    "language": "TypeScript"
   },
   "src/git/integration-policy.ts": {
     "blank": 6,
@@ -1333,9 +1333,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1095,
-    "comment": 3851,
-    "code": 22292,
+    "blank": 1102,
+    "comment": 3891,
+    "code": 22432,
     "nFiles": 221
   }
 }

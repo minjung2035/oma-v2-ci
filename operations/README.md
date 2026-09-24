@@ -125,7 +125,15 @@ broker는 `status.get`과 같은 답을 state root의 `status.json`(`0600`)으�
 
 ## 첫 시작
 
-`oma`를 처음 실행한 디렉터리가 git 저장소면 그 커밋된 `HEAD`로 canonical `main`을 시작한다(`TUI-022`). 커밋되지 않은 변경은 가져오지 않으며, 이후 그 디렉터리의 새 커밋은 society 이력을 움직이지 않는다.
+`oma`를 처음 실행한 디렉터리가 git 저장소면 그 커밋된 `HEAD`로 canonical `main`을 시작한다(`TUI-022`). 커밋되지 않은 변경은 가져오지 않으며, 이후 그 디렉터리의 새 커밋은 society 이력을 움직이지 않는다. 저장소가 아니거나 커밋이 아직 없으면 빈 root commit으로 시작한다. 저장소를 읽을 수 없거나(권한·손상) 기존 canonical 저장소를 읽을 수 없으면 빈 저장소로 대신하지 않고 시작을 멈춘다.
+
+### 프로젝트 식별과 바인딩 (D05, WP16)
+
+기본 society 이름은 프로젝트 디렉터리의 실제 경로(realpath)에서 만든다: 디렉터리 이름의 ASCII slug 최대 15자(없으면 `project`) + `-` + 그 경로 SHA-256의 앞 16자. 이름이 같은 다른 프로젝트는 다른 society가 되고, symlink로 들어와도 같은 프로젝트면 같은 society다.
+
+처음 시작할 때 `<state root>/project-binding.json`(0600, `kind: oma-project-binding-v1`, `society`, `canonicalProjectPath`)을 private temp→fsync→no-replace link→parent fsync로 게시한 뒤에야 설정·provisioning을 한다. 이후 모든 실행은 무엇을 쓰기 전에 이 파일의 전체 경로를 현재 프로젝트와 비교하고, 다르면 `--society`를 줘도 거절한다. 이 파일은 quiescent backup/restore에 포함하는 host 메타데이터이며, 이것을 모르는 이전 바이너리는 이를 강제하지 못하므로 승격 뒤 writer로 쓰지 않는다.
+
+이전 버전이 디렉터리 이름만으로 만든 society는 자동으로 이름을 바꾸거나 새 프로젝트에 묶지 않는다. 기본 이름으로 실행했는데 그런 society가 있으면 새 society를 만들지 않고 안내만 한다. 그 society가 이 프로젝트의 것임을 확인했다면 `oma --society <이전 이름> --bind-project`로 한 번 실행해 바인딩을 기록한다. state root 이동은 lease와 수락된 경로가 그 위치를 가리키므로 단순 rename으로 하지 않는다.
 
 ## Pi 엔진
 

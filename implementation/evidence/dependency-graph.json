@@ -1452,7 +1452,7 @@
   }
  ],
  "files": 222,
- "runtimeEdges": 822,
+ "runtimeEdges": 823,
  "typeOnlyEdges": 317,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 215,
@@ -1461,7 +1461,7 @@
   "L3-workflow -> L1-kernel": 161,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 88,
+  "L4-orchestration -> L1-kernel": 89,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 10,
   "L4-orchestration -> L4-orchestration": 40,
@@ -1489,7 +1489,7 @@
  ],
  "fanIn": {
   "src/domain/errors.ts": 113,
-  "src/domain/identifiers.ts": 32,
+  "src/domain/identifiers.ts": 33,
   "src/ids.ts": 27,
   "src/storage/durable-fs.ts": 22,
   "src/storage/paths.ts": 22,
@@ -1527,7 +1527,7 @@
   "koffi": 2,
   "node:async_hooks": 3,
   "node:child_process": 4,
-  "node:crypto": 25,
+  "node:crypto": 26,
   "node:fs": 60,
   "node:http": 1,
   "node:https": 1,

@@ -134,6 +134,7 @@ export const lanes = Object.freeze({
   },
   durable: {
     files: [
+      "project-binding.test.js",
       "extension-editing.test.js",
       "rollover-settlement.test.js",
       "config-generations.test.js",
@@ -173,6 +174,8 @@ export const lanes = Object.freeze({
     ],
     sourceFiles: [],
     requiredNames: [
+      "V16A:",
+      "V16B:",
       "V14A:",
       "V14B:",
       "V07A:",
