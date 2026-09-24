@@ -147,7 +147,13 @@ export class UnitsModule {
     if (explicitRepair) this.run(["reset-failed", service]);
     this.run(["enable", "--now", join(this.installDir, path)]);
     this.verifyPath(agent, true);
-    this.run(["start", service]);
+    try { this.run(["start", service]); }
+    catch (error) {
+      // systemd 257 reports a start the limit refused as a failed control
+      // process; the unit's own counters say what it was.
+      if (this.startLimitStatus(agent) !== null) throw new StoreError("START_LIMIT", `start limit reached for ${agent}`);
+      throw error;
+    }
     const after = this.observe(agent);
     const exited = before.activeState !== "unknown" && after.activeState === "inactive" && after.result === "success" && after.execMainStatus === 0 &&
       /^[0-9a-f]{32}$/.test(after.invocationId ?? "") && after.invocationId !== before.invocationId;
@@ -241,8 +247,19 @@ export class UnitsModule {
     } catch { return false; }
   }
 
+  /** WP25: whether systemd stopped starting this unit because of its start
+   * limit. Older managers say so in Result; systemd 257 keeps the last
+   * failure's Result ("exit-code") and only logs "Start request repeated too
+   * quickly". A Resident unit restarts on every failure, so a failed unit
+   * whose restart counter reached its burst is one the limit stopped. */
   startLimitStatus(agent: Actor): string | null {
     const obs = this.observe(agent);
-    return obs.activeState === "failed" && obs.result === "start-limit-hit" ? "start_limit" : null;
+    if (obs.activeState !== "failed") return null;
+    if (obs.result === "start-limit-hit") return "start_limit";
+    const outcome = this.command(["show", unitName(this.society, agent, "service"), "-p", "NRestarts", "-p", "StartLimitBurst"]);
+    if (outcome.kind !== "succeeded") return null;
+    const fields = new Map(outcome.stdout.trim().split("\n").map(line => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)] as const));
+    const restarts = Number(fields.get("NRestarts")); const burst = Number(fields.get("StartLimitBurst"));
+    return Number.isSafeInteger(restarts) && Number.isSafeInteger(burst) && burst > 0 && restarts >= burst ? "start_limit" : null;
   }
 }

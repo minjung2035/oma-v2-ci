@@ -228,12 +228,15 @@ WantedBy=default.target
     while (waited < 12000) {
       await new Promise(resolve => setTimeout(resolve, 200));
       waited += 200;
-      if (env.units.observe("a").result === "start-limit-hit") break;
+      if (env.units.startLimitStatus("a") !== null) break;
     }
     let sawStartLimit = false;
     for (let i = 0; i < 10; i++) if (env.units.startLimitStatus("a") !== null) sawStartLimit = true;
     assert.equal(sawStartLimit, true);
     assert.equal(env.units.observe("a").activeState, "failed");
+    // WP25: a start the limit refuses is named as such, never auto-reset.
+    assert.throws(() => env.units.start("a", false), (error: unknown) => error instanceof StoreError && error.code === "START_LIMIT");
+    assert.equal(env.units.startLimitStatus("a"), "start_limit", "a refused start reset the limit");
   } finally { cleanup(); }
 });
 
@@ -676,4 +679,53 @@ test("peerCgroup parses /proc/<pid>/cgroup", () => {
   const cg = peerCgroup(process.pid);
   assert.ok(cg !== null);
   assert.ok(cg.startsWith("/user.slice") || cg.startsWith("/"));
+});
+
+test("V25A: start/stop intents accepted for an earlier incarnation cannot act on the current run; a current stop can", async () => {
+  const { env, cleanup } = envOf();
+  try {
+    seedPrincipalAndA(env.store);
+    seedGov(env);
+    env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "enabled" }));
+    env.units.ensureResident("a", "p");
+    const service = unitName(env.society, "a", "service");
+    const unitFile = join(env.xdg, "systemd", "user", service);
+    writeFileSync(unitFile, `[Unit]\nDescription=v25a run\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
+    // A start and a stop accepted while incarnation 1 ran, left unconfirmed.
+    const accepted = (key: string, kind: "agent.start" | "agent.stop", desired: "enabled" | "stopped") => {
+      const id = generateOperationId();
+      env.store.transaction(tx => tx.acceptOperation({ id, actor: "principal", requestKey: key,
+        requestHash: requestHash(kind, { agent: "a" }), kind, payloadJson: JSON.stringify({ agent: "a" }),
+        planJson: JSON.stringify({ kind, agent: "a", previousIncarnation: 1, desired, remainingOperations: [] }) }));
+      return id;
+    };
+    const oldStart = accepted("old-start", "agent.start", "enabled");
+    const oldStop = accepted("old-stop", "agent.stop", "stopped");
+    // Since then incarnation 2 opened and is enabled; its unit is not running yet.
+    env.store.transaction(tx => tx.updateAgent({ name: "a", incarnation: 2, desired: "enabled" }));
+    env.lifecycle.reconcileAction(oldStart);
+    assert.equal(env.store.getOperationById(oldStart)!.state, "unknown", "the old start settled as if it applied");
+    assert.equal(env.units.observe("a").activeState, "inactive", "the old start started a run for incarnation 2");
+    // The current run is up.
+    spawnSync("systemctl", ["--user", "start", service], { stdio: "ignore" });
+    const running = env.units.observe("a");
+    assert.equal(running.activeState, "active");
+    const principal = auth("principal", ["agent.manage.descendants"]);
+    env.lifecycle.reconcileAction(oldStop);
+    assert.equal(env.store.getOperationById(oldStop)!.state, "unknown", "the old stop settled as if it applied");
+    // Retrying either old key reports the old intent, unconfirmed, and does nothing.
+    assert.equal(env.lifecycle.stop(principal, "a", "old-stop").state, "unknown");
+    assert.equal(env.lifecycle.start(principal, "a", "old-start").state, "unknown");
+    const after = env.units.observe("a");
+    assert.equal(after.activeState, "active", "an old intent stopped the current run");
+    assert.equal(after.invocationId, running.invocationId, "an old intent restarted the current run");
+    assert.equal(env.store.getAgent("a")!.incarnation, 2, "an old intent rewrote the current incarnation");
+    assert.equal(env.store.getAgent("a")!.desired, "enabled");
+    // The current, explicit stop acts under current authority and proves death.
+    const current = env.lifecycle.stop(principal, "a", "stop-now");
+    assert.equal(current.state, "succeeded");
+    assert.equal(env.units.confirmDead("a", 2), true);
+    assert.equal(env.units.observe("a").activeState, "inactive");
+  } finally { cleanup(); }
 });
