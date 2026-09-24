@@ -137,6 +137,36 @@ test("architecture effect ownership rule rejects raw I/O and exit outside owners
   assert.ok(findings.some(value => value.rule === "cli-exit-owner"));
 }));
 
+/** V29A (WP29): the exit-owner rule's exact scope. It follows the spellings
+ * that reach the global `process.exit` without the literal call -- a reference,
+ * element access, destructuring, `globalThis.process`, a `node:process` import --
+ * and leaves alone what only looks similar. Arbitrary data flow is out of scope. */
+test("V29A: the exit-owner rule catches every spelling of process.exit it claims to", () => {
+  for (const [name, text] of [
+    ["direct call", "export const stop = () => process.exit(2);"],
+    ["reference", "export const stop = process.exit;"],
+    ["element access", "export const stop = () => process['exit'](2);"],
+    ["destructuring", "const { exit } = process; export const stop = () => exit(2);"],
+    ["renamed destructuring", "const { exit: quit } = process; export const stop = () => quit(2);"],
+    ["globalThis", "export const stop = () => globalThis.process.exit(2);"],
+    ["module import", "import { exit } from 'node:process'; export const stop = () => exit(2);"],
+    ["default module import", "import proc from 'process'; export const stop = () => proc.exit(2);"],
+  ]) withFixture({ "src/cli/rogue.ts": text }, root =>
+    assert.ok(effectOwnershipFindings(root).some(value => value.rule === "cli-exit-owner"), `${name} escaped the rule`));
+});
+
+test("V29A: the exit-owner rule leaves alone what only looks like process.exit", () => withFixture({
+  "src/cli/similar.ts": [
+    "const app = { exit: (code: number) => code, process: { exit: () => 0 } };",
+    "export const a = () => app.exit(2);",
+    "export const b = () => app.process.exit();",
+    "export const c = 'process.exit(2) in a string';",
+    "// process.exit(2) in a comment",
+    "export const d = () => process.env.HOME;",
+  ].join("\n"),
+  "src/cli/exit.ts": "export const stop = () => process.exit(2);",
+}, root => assert.deepEqual(effectOwnershipFindings(root), [])));
+
 /** REC-007: the rule that has to catch the next unfenced child.
  *
  * The society lease reached the broker and the engine and not the CLI the
