@@ -604,3 +604,51 @@ broken variants); layout-only fixtures prove parsing, not a startable config;
 `receipt-supersession.test.mjs` and the CLI replay suite are CLI cache evidence,
 never batch receipt recovery (that is V06/V07/V08); spawn-plan unit tests prove
 argv and environment, and only V27A/T117 prove an actual spawn.
+
+## WP28 — what the TUI says, and on what evidence
+
+WP28.01 — every statement on the screen and the fact behind it:
+
+| Where | Says | Evidence |
+|---|---|---|
+| Dashboard Workers / Active / Pending / Status | counts with the observation time, or `unknown (reason; time)` | the broker's status view (WP23 snapshot); missing, unreadable, malformed, foreign or stale is unknown (T118) |
+| Dashboard Mail | `N건 Principal 세션에 전달 대기` | files in the Principal's `new/`, which move to `cur/` only when a batch carrying them settles (`moveToCur`) |
+| Dashboard Model | configured value, and what the running session started with | configuration and `sessionModel` (V15B); never the engine's own report |
+| Dashboard Sandbox / Usage | declared rootfs or unconfined; usage unknown | configuration; the engine owns spend (INF-001) |
+| Config notices | saved (with when it applies), unchanged, saved but not read back, save failed | the managed writer's outcome (WP13/WP15) |
+| Transcript `✗ 보내지 못한 입력` | a prompt that was never written, returned once and in order | WP09 session disposition |
+| Transcript `⚠ … 확인하지 못했습니다(자동으로 다시 보내지 않음)` | a prompt written but not answered | WP09; never resent |
+| Mail list `●` | not yet delivered to the Principal's session; opening it is neither delivery nor acknowledgement | read-only bounded read of the Maildir file |
+
+Found and fixed. (1) The mail count and `●` said "unread", which reads as the
+Human's reading; they count messages not yet delivered to the Principal's session,
+and opening one writes nothing (V28A). (2) A failure after the terminal opened --
+any rejection of `main`, e.g. a broker that fails to start -- ended through the
+top-level catch, which wrote the message and exited without restoring the terminal:
+raw mode, the alternate screen, bracketed paste and a hidden cursor were left on
+the Human's shell, the message was written into the alternate screen and lost, and
+the broker and engine were not ended. `openTerminal` now restores on every process
+exit (its comment already promised "unconditional"), and the top-level catch first
+abandons the tenure, stops the broker and restores the terminal, then writes the
+reason on the Human's own screen. V28B, in a real pty: the normal quit, an exit that
+never calls restore and a rejection after the terminal opened all hand the terminal
+back with echo and line mode on and the screen modes undone, and nothing takes it
+again afterwards; the previous code fails the last two.
+
+WP28.02/03 — screens pass edit intents only; writing, validation and revision stay
+with the managed writer. Unsent prompts come back once, in order, when the session
+ends; there is no crash-surviving draft store and nothing on screen promises
+recovery after a crash.
+
+WP28.04 — bounds: the transcript is byte-bounded, a Human prompt is limited by its
+encoded frame bytes, the key decoder bounds escape and paste input, and a code point
+split across reads is one key (V28B); a resize reaches the owner and redraws.
+
+The Principal's workspace limit (left open by WP25): the Principal is not a unit and
+`oma` starts each session from the current principal profile -- model and workspace
+limit together, D05's "next Principal session"; there is no accepted spec the host
+could read before its broker exists. Recorded, not changed.
+
+Lanes: the repository has no `pty` lane; V28B runs in the durable lane with Python's
+pty module (a skip there is not a pass). Not covered: the whole `oma` entry in a pty
+with a real broker and engine, SIGHUP, and terminal emulator differences.
