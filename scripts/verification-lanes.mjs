@@ -346,9 +346,11 @@ export const lanes = Object.freeze({
       "r36-model-mutations.test.js",
       "r36-parser-fuzz.test.js",
       "r36-lifecycle-sequences.test.js",
+      "delivery-state-model.test.js",
     ],
     sourceFiles: [],
     requiredNames: [
+      "V30A:",
       "V02C:",
       "V11C:",
       "R35 property",
