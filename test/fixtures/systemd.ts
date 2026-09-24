@@ -112,18 +112,21 @@ export function cleanupOwnedSystemdUnits(
       throw new Error(`refusing cleanup of a foreign unit: ${name}`);
     present.push(name);
   }
-  if (present.length)
-    succeeded(
-      run(["disable", "--now", ...present]),
-      "disable exact owned units",
-    );
+  // Stop while the definitions are still loaded: systemd 257 removes the link
+  // before `disable --now` stops, and an inactive unit is then "not loaded".
+  if (present.length) {
+    succeeded(run(["stop", ...present]), "stop exact owned units");
+    succeeded(run(["disable", ...present]), "disable exact owned units");
+  }
   for (const path of definitions.values()) unlinkSync(path);
   succeeded(run(["daemon-reload"]), "reload after cleanup");
   for (const name of definitions.keys()) {
-    const listed = succeeded(
-      run(["list-unit-files", name, "--no-legend", "--no-pager"]),
-      "verify unit-file absence",
-    ).trim();
+    // systemd reports a pattern that matches no unit file with status 1 and no
+    // output (observed on 257); any other failure is still unavailable.
+    const query = run(["list-unit-files", name, "--no-legend", "--no-pager"]);
+    const listed = !query.error && !query.signal && query.status === 1 && query.stdout.trim() === ""
+      ? ""
+      : succeeded(query, "verify unit-file absence").trim();
     const observed = observation(name, run);
     if (listed || observed.load !== "not-found" || observed.fragment !== "")
       throw new Error(

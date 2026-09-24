@@ -47,7 +47,8 @@ export function createCompleteConfigurationFixture() {
       schemaVersion: 1,
       society: "demo",
       installation: {
-        node: "/usr/bin/node",
+        // A node that exists here: a runner entry resolves it for confinement.
+        node: process.execPath,
         libdir: installation,
         rootfs: "/rootfs",
         deploymentDigest: "a".repeat(64),

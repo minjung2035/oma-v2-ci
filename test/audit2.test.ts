@@ -84,7 +84,7 @@ function envOf(): Env {
       libdir: "/usr/lib/oma",
       state,
       society,
-      agent: "",
+      agent: "", config: join(state, "config.json"), run: join(state, "oma", society), brokerUnit: ""
     },
     join(dir, "xdg"),
   );
@@ -815,7 +815,7 @@ test("P0-1/2/3 + P1-7/8: real-socket serialization, stream length, closed schema
         `Environment=OMA_SCENARIOS_FILE=${join(env.dir, "scenarios.json")}`,
         `Environment=OMA_OUT=${outPath}`,
         `Environment=HOME=${env.dir}`,
-        `ExecStart=/usr/bin/node ${driverPath}`,
+        `ExecStart=${process.execPath} ${driverPath}`,
         "[Install]",
         "WantedBy=default.target",
         "",
@@ -1024,7 +1024,7 @@ test("P0-C: concurrent request-key races converge on one actor-socket effect", a
       `Environment=OMA_REQUESTS_FILE=${requestsPath}`,
       `Environment=OMA_OUT=${outPath}`,
       `Environment=HOME=${env.dir}`,
-      `ExecStart=/usr/bin/node ${driverPath}`,
+      `ExecStart=${process.execPath} ${driverPath}`,
       "[Install]",
       "WantedBy=default.target",
       "",

@@ -82,7 +82,7 @@ function envOf(): Env {
       libdir: "/usr/lib/oma",
       state,
       society,
-      agent: "",
+      agent: "", config: join(state, "config.json"), run: join(state, "oma", society), brokerUnit: ""
     },
     join(dir, "xdg"),
     {
@@ -581,7 +581,7 @@ test("CLI acceptance: freeze cache, same-key semantics, recovery, streamed submi
         `Environment=OMA_SCENARIOS_FILE=${join(env.dir, "scenarios.json")}`,
         `Environment=HOME=${env.dir}`,
         `WorkingDirectory=${env.dir}`,
-        `ExecStart=/usr/bin/node ${wrapPath}`,
+        `ExecStart=${process.execPath} ${wrapPath}`,
         "[Install]",
         "WantedBy=default.target",
         "",
