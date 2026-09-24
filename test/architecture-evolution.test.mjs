@@ -270,3 +270,16 @@ test("P22 D: optional repair/recover/transaction capabilities cannot silently wi
     }
   }
 });
+
+test("V29A: the request-hash set-field recipe is a closed registry of mutation methods and their array params", () => {
+  const identity = "src/domain/request-identity.ts";
+  const base = read(identity);
+  for (const [name, before, after] of [
+    ["an unknown method", '"mail.send": ["to"],', '"mail.sned": ["to"],'],
+    ["a field the method does not have", '"mail.send": ["to"],', '"mail.send": ["recipients"],'],
+    ["a field that is not a set", '"mail.send": ["to"],', '"mail.send": ["subject"],'],
+  ]) {
+    const diagnostics = errors(programWith({ [identity]: replaceOnce(base, before, after) }));
+    assert.ok(diagnostics.some((d) => d.file?.fileName === resolve(root, identity)), `${name} compiled`);
+  }
+});

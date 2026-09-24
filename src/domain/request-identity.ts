@@ -3,12 +3,21 @@
  * deliberately not passed to those complete-request decoders.
  */
 import type { Json } from "../../implementation/contracts/identity.js";
+import type { MutationMethod } from "../../implementation/contracts/durable.js";
+import type { PublicMethods } from "../../implementation/contracts/public-wire.js";
 import { canonicalJson, sha256Hex, snapshotJson, sortedUnique } from "./canonical-json.js";
 
-const SET_FIELDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+/** WP29: which params of a method are sets. The keys must be mutation methods
+ * and the fields must be array params of that method, checked at compile time;
+ * the values are the v1 request-hash recipe and do not change. */
+type SetFields = { readonly [M in MutationMethod]?: readonly Extract<{
+  [F in keyof PublicMethods[M]["params"]]: PublicMethods[M]["params"][F] extends readonly unknown[] | undefined ? F : never
+}[keyof PublicMethods[M]["params"]], string>[] };
+const SET_FIELD_RECIPE = {
   "mail.send": ["to"],
   "git.submit": ["prerequisites", "to", "paths"],
-});
+} as const satisfies SetFields;
+const SET_FIELDS: Readonly<Record<string, readonly string[]>> = Object.freeze(SET_FIELD_RECIPE);
 
 export interface ExistingStreamIdentity {
   bytes: number;
