@@ -441,3 +441,66 @@ at 64 agents), and `src/diagnostics/*` (SCOPE_ONLY). Negative controls: 11 mutan
 10 fail; M6 (the display projection's "counted twice" guard) is equivalent -- the
 primary key, the single batch column and manifest decoding already make a second
 count impossible -- and is kept for parity with `pendingWork`.
+
+## WP26 — protocol, CLI and request-cache boundary
+
+WP26.01 inventory. Trust boundary: what the file accepts from outside its
+process or owner. Budget: the bound it enforces (encoded bytes unless said).
+
+| File | Trust boundary | Budget / relation | Success means |
+|---|---|---|---|
+| `src/frame.ts` | bytes from any peer | uint32 length ≤ configured frame bytes; strict UTF-8 JSON, duplicate keys, surrogates, unsafe integers refused; a fatal error never resynchronizes | one JSON object root, fields still unknown |
+| `src/protocol/byte-queue.ts` | caller-owned chunks | frame-sized copies only | bytes delivered in order |
+| `src/protocol/jsonl.ts` | engine stdout | bounded line, LF only, no implicit final line | one line handed to its owner |
+| `src/protocol/channel.ts` (`BrokerChannel`) | broker socket | one request in flight; request and response ≤ frame bytes after encoding; idle and receipt deadlines; stream bytes equal the descriptor | a decoded reply for this request id |
+| `src/protocol/response-codec.ts` | broker reply | id, version and method discriminator must match; closed result per method | a transport fact, not replay authority |
+| `src/protocol/receipt-codec.ts` | receipt bytes (broker or cache) | closed shape; REQUEST_NOT_FOUND only with an empty operation; `receiptSupersession` orders observations of one operation | structural receipt, not ledger authority |
+| `src/protocol/request-codec.ts` | frozen cache/ledger payload | closed caller DTO per mutation method | structurally valid payload; broker still checks authority |
+| `src/protocol/methods.ts` | method name and params | closed public/internal method sets; params decoded per method with current actor names; internal resource category | a known method with decoded params |
+| `src/protocol/log-response.ts` | journal text | whole v1 response ≤ frame bytes including envelope, id and escaping; truncation flagged | a decodable bounded response |
+| `src/protocol/batch-view.ts` | prepared batch view | UTF-8 bytes, never UTF-16 length | six-field projection |
+| `src/protocol/host-channel.ts` | inherited descriptor | one bounded line per message | one closed host message |
+| `src/protocol/principal-credential.ts` | credential line | fixed-format credential and session handle | a well-formed credential, not authority |
+| `src/protocol/run-lease.ts` | `runner.open` result | paths checked against composition facts | transport identity, not live authority |
+| `src/protocol/status-view.ts` | host-private view file | schema, society, observation time, closed rows | a view; staleness is the reader's decision |
+| `src/broker/connection.ts` | one actor/host connection | one in-flight request; response ≤ frame bytes; EOF/close/error/timeout distinct; accepted work is not socket-owned | a reply written or a failure closed |
+| `src/broker/replies.ts` | none | envelope only | `ok`/`error` envelope |
+| `src/cli/transport.ts` | environment (socket, frame bytes, credential descriptor) | 60 s CLI deadline; frame bytes decimal and within log-response bounds | replies of one call |
+| `src/cli/arguments.ts` | argv | single-valued options, request key syntax | parsed options or usage exit |
+| `src/cli/request-intent.ts` | explicit argv vs frozen request | compares only arguments with defined semantics | no conflict with the frozen intent |
+| `src/cli/cache-codec.ts`, `src/request-cache.ts` | files in `~/.local/state/oma/requests` | absent / present / corrupt / unavailable kept apart; no-replace publication; body bytes and digest; one receipt lock per key | a frozen request, or a receipt ordered after the last one |
+| `src/cli/request-service.ts` | all of the above | resend only after decoded REQUEST_NOT_FOUND, with frozen params and body | a broker receipt shown with its key |
+| `src/cli/effects*.ts`, `src/cli/commands/*.ts` | local files, Git, argv | no-follow reads, digest of streamed bundles, random private temp dirs | a fresh request built once, before freezing |
+
+WP26.02 — transport owns frames, connection and one-shot task lifetime; authority is
+read again at dispatch (`validatePublicRequest` runs for stream preflight and again
+for dispatch, never stored across an await). Resource categories live in the
+internal method descriptor, not on the wire.
+
+WP26.03/04 — the CLI resends a frozen request only after an explicit, decoded
+REQUEST_NOT_FOUND, with the frozen params and body; every other lookup outcome ends
+without a resend (R08 scenarios). Found defect, fixed: when the broker had answered
+with a receipt and the request cache could not record it (unwritable cache, lock
+that cannot be opened, or a receipt contradicting the cache's earlier observation),
+the CLI printed only the cache error and exited 3 -- no receipt, and no key. A
+command run without `--request` has a random key, so the Human could not ask again
+and a retry took a new key and repeated the effect. `settle` now shows the receipt
+and the `--request` key first; an unrecordable receipt exits with the receipt's own
+code, a contradicting one exits 3. The receipt lock's open failure is now
+`CACHE_UNAVAILABLE`, not a raw error. `receipt-supersession.test.mjs` stays CLI
+cache evidence, not batch receipt recovery.
+
+WP26.05 — canonical JSON, request identity, derived ids/paths and method metadata
+already have single owners; re-validation at a different trust boundary (cache
+codec vs broker DTO vs receipt codec) is kept.
+
+Oracles. V26A: R14 (every header split, fatal UTF-8/JSON/length/EOF never
+resynchronizes, disconnect keeps dispatched ownership and cancels queued work,
+backpressure, half-close), R15 channel generations, P0 malformed-frame flood.
+V26B: R08 lookup scenarios plus `send` resent with the bytes frozen before the
+source changed, a settled receipt not replaced by a later pending one, and the fix
+above. V26C: request and response budgets counted in UTF-8 bytes on the real
+`BrokerChannel`, foreign id and unknown fields refused, with R15 response codec,
+F3/F4 frame bounds and P2 wire golden. Negative controls: 6 mutants, all fail.
+Not covered: the host channel and Principal credential paths end to end (WP28),
+concurrent CLI processes on one key beyond `receipt-supersession.test.mjs`.
