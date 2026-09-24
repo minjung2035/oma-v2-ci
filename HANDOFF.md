@@ -5,10 +5,11 @@
 ## 1. 현재 상태 (2026-09-24)
 
 - 브랜치 `refactor/safety-preserving-architecture`. push·PR·merge는 이 작업에서 하지 않는다.
-- 완료(local + 실제 user-systemd 검증): WP00, 01, 02, **03**, 04, 05, 06, **07**, 11, 12, **13**, **14**, **16**, 17, 18, 19, 20, 21, 22, 24.
-- 진행 중: **WP08** (코드·시험 작성, mutant 진행 중, 미커밋일 수 있음 — `git status` 확인).
-- 남은 카드(계획 순서): WP15 → WP09 → WP10 → WP25 → WP23 → WP26 → WP27 → WP29 → WP28 → WP31 → WP30 → WP32. 모두 끝난 뒤 전체 카드 재검토와 적대적 검증을 한다(사용자 지시).
-- 마지막 통합 검증(v2: WP03·WP13·WP07·WP14·WP16): 로컬 lane 전부 PASS, `npm test` 1458/1458, crash 63/63, kernel 59/60. kernel의 1건 `T36`은 systemd 257이 재시작 한도 도달을 `failed/exit-code`로 남기는 문제로 **WP25 소관**이다.
+- 완료(local + 실제 user-systemd 검증): WP00–WP27, WP29 (WP28·WP31·WP30·WP32 제외 전부).
+- 진행 중: **WP28**, **WP31** — 작업 트리에 수정·시험(V28A/V28B, V31A/V31B, lockfile 재동기화, 엔진 탐색 제한, README·지원표)이 있고 v7 docs commit 뒤에 커밋한다(`git status` 확인).
+- 남은 카드(계획 순서): WP28·WP31(작업 트리) → WP30 → WP32. 모두 끝난 뒤 전체 카드 재검토와 적대적 검증을 한다(사용자 지시).
+- 마지막 통합 검증은 `implementation/validation.md`(v7: WP08·WP15·WP09·WP10·WP25·WP23·WP26·WP27·WP29). v3–v6은 중간 증거로 `/home/dev/oma-evidence/v3..v6/`에 있다.
+- 새 lane 성격: V27A(실제 엔진)와 V28B(pty)는 저장소에 `engine`/`pty` lane이 없어 durable lane에서 돈다(bubblewrap·openssl·python3 필요, skip은 PASS 아님).
 
 ## 2. 환경 (이 머신에 한정)
 
@@ -48,6 +49,15 @@
 | WP07 | `754d225`, `9cb9988`, `2b448a6` | cgroup 제거는 pin의 `cgroup.events` 부재로 증명, open 시 이전 incarnation 영수증 정산 후 absent만 rollover | 실제 엔진 kill 경계는 WP27/30 |
 | WP14 | `c601592`, `b532f6a` | extension 참조 단일 규칙(loader), 사라진 optional 선언의 제한 복구, 순서 보존, bounded scan | — |
 | WP16 | `b6230ca`, `82580e5`, `ec5127d` | 기본 society = slug+경로 digest, `project-binding.json`, `--bind-project`, provisioning의 없음/읽을 수 없음 구분 | 바인딩된 state root 이동은 migration 필요 |
+| WP08 | `a5c6a41` | Principal 정산: 영수증을 먼저 관측, 검증된 영수증이면 엔진 전달 없이 complete만 재시도, `phase`로 실패 단계 구분 | 실제 엔진 kill 경계는 WP30 |
+| WP15 | `21b1f13` | 설정 필드가 적용 시점·차단 사유를 소유, bootstrap 뒤 seed 필드 차단, 같은 값 저장은 unchanged, 다시 읽기 실패는 saved-unread, dashboard는 설정값/세션 시작값 구분 | — |
+| WP09 | `b2300f7` | Principal run 소유는 settle·거절·확실한 미전송·세션 종료에서만 끝남, 미전송 입력은 한 번 순서대로 반환, 수락 불명은 따로 알리고 재전송 안 함 | 전체 pty 흐름은 WP28 범위 밖 |
+| WP10 | `b6a14cf` | 수락·유휴(재무장)·턴·종료 시한 분리, overflow 없는 alarm, broker generation이 바뀐 뒤의 등록 응답 무시 | 실제 provider 긴 턴 NOT_RUN |
+| WP25 | `4a4287d`…`6611644`, `1f6c31e` | systemd 257 start limit(NRestarts≥burst) 판별, 옛 incarnation의 start/stop 무효(V25A), Resident unit이 accepted 자원 전체(`OMA_RESOURCES_HEX`)를 싣고 runner는 그것만 사용 | WP03 이전 unit 재렌더 없음(재생성 필요) |
+| WP23 | `3f626d7`…`4cd7673` | status 관측을 single-flight 비동기 batch로(이벤트 루프 정지 10.1 s→16 ms), pending 수는 전체 사회 한 번 읽기(620건에서 3.9 s→10 ms), 권한 경로는 여전히 즉시 관측 | admission 트리 스캔·refreshWorld 부하 미측정 |
+| WP26 | `a09869d`…`437003a` | CLI가 cache에 기록 못 한 영수증도 영수증과 `--request` key를 먼저 보임(무작위 key 유실로 인한 중복 효과 방지), wire 바이트 한도·재전송 규칙 oracle | 동시 CLI 프로세스 범위 |
+| WP27 | `c7d1cbd`…`88d7173` | 격리 Resident가 실제로 배치를 전달하도록 계획이 `/usr/bin/bwrap`을 명시(이전엔 모든 격리 전달 실패), placeholder 생성 총함수화(무한 재귀 제거), relay 스트리밍 oracle, 실제 엔진 0.85.1 전체 전달 V27A | 실제 provider, 세션 내구성(WP30) |
+| WP29 | `76b95fa`…`f4f2bf9` | 보장 종류별 성립 위치 표, exit 소유 규칙이 alias 우회를 잡음, request-hash set-field recipe를 compile-time 닫힌 registry로 | 정적 규칙은 data flow 밖 |
 
 부수 수정: kernel/crash fixture의 systemd 257 호환(`list-unit-files` 무일치 exit 1, stop 후 disable), `/usr/bin/node` 가정 제거, crash hook의 descriptor 기준 rename 해석, 오래된 kernel 시험 기대값 갱신.
 
@@ -71,6 +81,6 @@
 
 ## 7. 다음에 할 일
 
-1. WP08: mutant 결과 확인(M2는 무효 mutant라 다시 정의), lane 등록, 커밋.
-2. WP15 → WP09 → WP10 → WP25(T36 포함) → WP23 → WP26 → WP27 → WP29 → WP28 → WP31(지원표에 util-linux/systemd/커널 차이와 quarantine 수정 기록) → WP30 → WP32.
+1. v7 docs commit 뒤 WP28 커밋(작업 트리의 `src/tui/screen.ts`, `src/entry/oma.ts`, `src/tui/view/*`, `test/tui-facts.test.ts`, `test/tui-pty.test.ts`, `test/fixtures/pty-*`, consistency-decisions WP28 절, lane 등록), 이어서 WP31 커밋(`package-lock.json`, `src/runtime/pi-runtime.ts`, `test/deployment-artifact.test.ts`, `test/package-lock-sync.test.ts`, README, operations 지원표).
+2. WP30 → WP32.
 3. 모든 카드 뒤: WP00부터 전체 카드 재검토와 적대적 검증(mutant, 반례, 우회 시도).
