@@ -2,14 +2,14 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 221,
-    "n_lines": 27691,
+    "n_files": 222,
+    "n_lines": 27912,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
     "blank": 3,
-    "comment": 47,
-    "code": 429,
+    "comment": 51,
+    "code": 431,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -44,8 +44,8 @@
   },
   "src/store.ts": {
     "blank": 4,
-    "comment": 22,
-    "code": 335,
+    "comment": 24,
+    "code": 337,
     "language": "TypeScript"
   },
   "src/entry/oma.ts": {
@@ -120,6 +120,12 @@
     "code": 245,
     "language": "TypeScript"
   },
+  "src/units.ts": {
+    "blank": 19,
+    "comment": 31,
+    "code": 243,
+    "language": "TypeScript"
+  },
   "src/broker/internal-dispatcher.ts": {
     "blank": 1,
     "comment": 5,
@@ -141,12 +147,6 @@
   "src/extension/mail-tools.ts": {
     "blank": 5,
     "comment": 37,
-    "code": 225,
-    "language": "TypeScript"
-  },
-  "src/units.ts": {
-    "blank": 18,
-    "comment": 24,
     "code": 225,
     "language": "TypeScript"
   },
@@ -198,6 +198,12 @@
     "code": 208,
     "language": "TypeScript"
   },
+  "src/storage/ledger-reader.ts": {
+    "blank": 2,
+    "comment": 14,
+    "code": 205,
+    "language": "TypeScript"
+  },
   "src/storage/immutable-file.ts": {
     "blank": 4,
     "comment": 14,
@@ -216,6 +222,12 @@
     "code": 190,
     "language": "TypeScript"
   },
+  "src/broker/public-dispatcher.ts": {
+    "blank": 3,
+    "comment": 14,
+    "code": 185,
+    "language": "TypeScript"
+  },
   "src/frame.ts": {
     "blank": 0,
     "comment": 9,
@@ -228,21 +240,9 @@
     "code": 185,
     "language": "TypeScript"
   },
-  "src/broker/public-dispatcher.ts": {
-    "blank": 3,
-    "comment": 11,
-    "code": 184,
-    "language": "TypeScript"
-  },
   "src/git/context.ts": {
     "blank": 5,
     "comment": 24,
-    "code": 183,
-    "language": "TypeScript"
-  },
-  "src/storage/ledger-reader.ts": {
-    "blank": 1,
-    "comment": 5,
     "code": 183,
     "language": "TypeScript"
   },
@@ -386,7 +386,7 @@
   },
   "src/broker/composition.ts": {
     "blank": 4,
-    "comment": 3,
+    "comment": 4,
     "code": 143,
     "language": "TypeScript"
   },
@@ -516,6 +516,18 @@
     "code": 96,
     "language": "TypeScript"
   },
+  "src/views.ts": {
+    "blank": 1,
+    "comment": 19,
+    "code": 96,
+    "language": "TypeScript"
+  },
+  "src/views/pending-work.ts": {
+    "blank": 4,
+    "comment": 14,
+    "code": 94,
+    "language": "TypeScript"
+  },
   "src/cli/transport.ts": {
     "blank": 7,
     "comment": 24,
@@ -568,12 +580,6 @@
     "blank": 10,
     "comment": 41,
     "code": 86,
-    "language": "TypeScript"
-  },
-  "src/views.ts": {
-    "blank": 1,
-    "comment": 13,
-    "code": 85,
     "language": "TypeScript"
   },
   "src/storage/paths.ts": {
@@ -924,6 +930,12 @@
     "code": 42,
     "language": "TypeScript"
   },
+  "src/views/status-refresh.ts": {
+    "blank": 5,
+    "comment": 20,
+    "code": 42,
+    "language": "TypeScript"
+  },
   "src/units/execute.ts": {
     "blank": 1,
     "comment": 8,
@@ -933,12 +945,6 @@
   "src/authority.ts": {
     "blank": 7,
     "comment": 8,
-    "code": 39,
-    "language": "TypeScript"
-  },
-  "src/views/pending-work.ts": {
-    "blank": 2,
-    "comment": 7,
     "code": 39,
     "language": "TypeScript"
   },
@@ -1333,9 +1339,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1113,
-    "comment": 4004,
-    "code": 22574,
-    "nFiles": 221
+    "blank": 1122,
+    "comment": 4063,
+    "code": 22727,
+    "nFiles": 222
   }
 }

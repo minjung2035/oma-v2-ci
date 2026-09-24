@@ -221,7 +221,8 @@
   "src/units/render.ts",
   "src/validate.ts",
   "src/views.ts",
-  "src/views/pending-work.ts"
+  "src/views/pending-work.ts",
+  "src/views/status-refresh.ts"
  ],
  "kernel": {
   "zones": [
@@ -332,7 +333,7 @@
    "K2-mechanisms -> K0-values": 55,
    "K2-mechanisms -> K1-codecs": 7,
    "K2-mechanisms -> K2-mechanisms": 34,
-   "K3-ledger -> K0-values": 19,
+   "K3-ledger -> K0-values": 20,
    "K3-ledger -> K1-codecs": 9,
    "K3-ledger -> K2-mechanisms": 1,
    "K3-ledger -> K3-ledger": 14
@@ -344,7 +345,7 @@
    "K2-mechanisms -> K0-values": 2,
    "K2-mechanisms -> K1-codecs": 1,
    "K2-mechanisms -> K2-mechanisms": 3,
-   "K3-ledger -> K0-values": 3,
+   "K3-ledger -> K0-values": 2,
    "K3-ledger -> K1-codecs": 2,
    "K3-ledger -> K3-ledger": 14
   },
@@ -836,13 +837,13 @@
    },
    {
     "from": "src/storage/ledger-reader.ts",
-    "to": "src/domain/lineage.ts",
+    "to": "src/domain/identifiers.ts",
     "kind": "runtime"
    },
    {
     "from": "src/storage/ledger-reader.ts",
-    "to": "src/domain/identifiers.ts",
-    "kind": "type"
+    "to": "src/domain/lineage.ts",
+    "kind": "runtime"
    },
    {
     "from": "src/storage/ledger-reader.ts",
@@ -1421,7 +1422,7 @@
     "src/views.ts",
     "src/reconcile/"
    ],
-   "files": 31
+   "files": 32
   },
   {
    "index": 4,
@@ -1451,19 +1452,19 @@
    "files": 55
   }
  ],
- "files": 222,
- "runtimeEdges": 826,
- "typeOnlyEdges": 317,
+ "files": 223,
+ "runtimeEdges": 829,
+ "typeOnlyEdges": 320,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 215,
+  "L1-kernel -> L1-kernel": 216,
   "L2-facts -> L1-kernel": 31,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 161,
+  "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
   "L4-orchestration -> L1-kernel": 89,
   "L4-orchestration -> L2-facts": 7,
-  "L4-orchestration -> L3-workflow": 10,
+  "L4-orchestration -> L3-workflow": 11,
   "L4-orchestration -> L4-orchestration": 40,
   "L5-entry -> L1-kernel": 71,
   "L5-entry -> L2-facts": 3,
@@ -1488,8 +1489,8 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 113,
-  "src/domain/identifiers.ts": 33,
+  "src/domain/errors.ts": 114,
+  "src/domain/identifiers.ts": 34,
   "src/ids.ts": 27,
   "src/storage/durable-fs.ts": 22,
   "src/storage/paths.ts": 22,
@@ -1505,7 +1506,7 @@
   "src/storage/receipt-projector.ts": 10
  },
  "fanOut": {
-  "src/broker.ts": 29,
+  "src/broker.ts": 30,
   "src/mail.ts": 28,
   "src/entry/oma.ts": 23,
   "src/entry/broker.ts": 22,
