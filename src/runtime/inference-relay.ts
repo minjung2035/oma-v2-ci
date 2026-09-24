@@ -43,6 +43,9 @@ const CALLER_AUTHORITY = Object.freeze(new Set([
 const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
 const UNSAFE_VALUE = /[\r\n\0]/;
 
+/** Open connections the relay keeps per request it may carry at once. */
+export const RELAY_CONNECTIONS_PER_REQUEST = 4;
+
 export interface RelaySubstitution {
   /** What the sandbox was given in place of the key. */
   readonly placeholder: string;
@@ -136,6 +139,9 @@ export class InferenceRelay {
     // A relay that silently drops a client error would look like a provider
     // failure from inside, so the socket is destroyed instead.
     this.server.on("clientError", (_error, socket) => { socket.destroy(); });
+    // WP27: connections are bounded as well as requests; idle ones would
+    // otherwise pile up in this process for as long as the sandbox keeps them.
+    this.server.maxConnections = RELAY_CONNECTIONS_PER_REQUEST * limits.concurrent;
   }
 
   static async open(

@@ -258,3 +258,23 @@ test("V27B: the relay hands a provider's answer on as it arrives; it never holds
     assert.deepEqual(relay.observe(), { accepted: 1, refused: 0, failed: 0, inFlight: 0 });
   } finally { bridged.close(); await relay.close(); await provider.close(); socket.clean(); }
 });
+
+test("V27B: idle connections to the relay are bounded, and a request is carried once they end", async () => {
+  const { RELAY_CONNECTIONS_PER_REQUEST } = await import("../src/runtime/inference-relay.js");
+  const provider = await tlsProvider();
+  const socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path,
+    { origin: provider.origin, headers: { authorization: "Bearer real-secret" } },
+    { concurrent: 2, timeoutMs: 5000 });
+  const idle = Array.from({ length: 100 }, () => { const client = netConnect(socket.path); client.on("error", () => {}); return client; });
+  try {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    const open = await new Promise<number>((resolve, reject) =>
+      (Reflect.get(relay, "server") as Server).getConnections((error, count) => { if (error) reject(error); else resolve(count); }));
+    assert.ok(open <= RELAY_CONNECTIONS_PER_REQUEST * 2, `the relay held ${open} idle connections`);
+    for (const client of idle) client.destroy();
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const answer = await throughBridge(socket.path, "/v1/messages", "{}");
+    assert.equal(answer.status, 200);
+  } finally { for (const client of idle) client.destroy(); await relay.close(); await provider.close(); socket.clean(); }
+});
