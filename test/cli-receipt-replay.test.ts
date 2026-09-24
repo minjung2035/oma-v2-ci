@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createServer, type Socket } from "node:net";
-import { spawn } from "node:child_process";
+import { createServer, type Server, type Socket } from "node:net";
+import { execFile, spawn } from "node:child_process";
 import { RequestCache } from "../src/request-cache.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
+import { receiptNotFound } from "../src/protocol/receipts.js";
 
 const cli = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 const operation = "op-12345678-1234-4234-8234-123456789abc";
@@ -95,4 +96,125 @@ test("actual CLI uses authoritative receipts without inventing resend permission
         assert.deepEqual(after[field], before[field], `receipt update must preserve frozen ${field}`);
     });
   }
+});
+
+/* V26B (WP26): the same CLI and cache with `send`, whose frozen request
+ * carries the message body. The peer is not a broker: CLI/cache evidence only. */
+const OP = (n: number) => `op-00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const MESSAGE = (n: number) => `m-00000000-0000-4000-8000-${String(n).padStart(12, "0")}-0`;
+const sent = (n: number) => ({ operation: OP(n), state: "succeeded",
+  result: { kind: "mail.send", message: MESSAGE(n), recipientCount: 1, archivePath: `/state/mail/archive/cur/${MESSAGE(n)}` } });
+
+interface Seen { method: string; key: string | undefined; params: Record<string, unknown> }
+type Script = (request: Seen) => object | "drop";
+
+/** One frame per connection, answered by the script or dropped unanswered. */
+async function peer(home: string, script: Script): Promise<{ seen: Seen[]; close: () => Promise<void> }> {
+  const seen: Seen[] = [];
+  const sockets = new Set<Socket>();
+  const server: Server = createServer(socket => {
+    sockets.add(socket); socket.once("close", () => sockets.delete(socket));
+    let pending = Buffer.alloc(0);
+    socket.on("error", () => {});
+    socket.on("data", (chunk: Buffer) => {
+      pending = Buffer.concat([pending, chunk]);
+      if (pending.length < 4 || pending.length < 4 + pending.readUInt32BE(0)) return;
+      const raw = JSON.parse(pending.subarray(4, 4 + pending.readUInt32BE(0)).toString("utf8"));
+      const request = { method: raw.method, key: raw.method === "operation.get" ? raw.params.key : raw.request, params: raw.params };
+      seen.push(request);
+      const answer = script(request);
+      if (answer === "drop") { socket.destroy(); return; }
+      socket.end(encodeFrame({ v: 1, id: raw.id, ...answer }));
+    });
+  });
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(join(home, "peer.sock"), resolve); });
+  return { seen, close: async () => { for (const socket of sockets) socket.destroy(); await new Promise<void>(resolve => server.close(() => resolve())); } };
+}
+
+function run(home: string, args: string[]): Promise<{ code: number | string; stdout: string; stderr: string }> {
+  return new Promise(resolve => execFile(process.execPath, [cli, ...args], {
+    cwd: home, encoding: "utf8", timeout: 10_000,
+    env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, OMA_SOCKET: join(home, "peer.sock") },
+  }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stdout, stderr })));
+}
+function scene() {
+  const home = mkdtempSync(join(tmpdir(), "oma-v26b-"));
+  writeFileSync(join(home, "input.txt"), "the words first chosen\n");
+  const send = (key?: string) => ["send", "bob", "--subject", "hello", "--file", join(home, "input.txt"), ...(key ? ["--request", key] : [])];
+  return { home, send, close: () => rmSync(home, { recursive: true, force: true }) };
+}
+const methods = (seen: Seen[]) => seen.map(request => request.method);
+
+test("V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time", async () => {
+  const s = scene();
+  let accepted = false;
+  const p = await peer(s.home, request => {
+    if (request.method === "operation.get") return accepted ? { ok: true, result: sent(1) } : { ok: true, result: receiptNotFound };
+    if (methods(p.seen).filter(method => method === "mail.send").length === 1) return "drop";
+    accepted = true;
+    return { ok: true, result: sent(1) };
+  });
+  try {
+    const first = await run(s.home, s.send("frozen-1"));
+    assert.equal(first.code, 3, first.stderr);
+    assert.match(first.stderr, /--request frozen-1/);
+    // The source changes before the retry; the retry must not read it.
+    writeFileSync(join(s.home, "input.txt"), "words typed later\n");
+    const second = await run(s.home, s.send("frozen-1"));
+    assert.equal(second.code, 0, second.stderr);
+    assert.deepEqual(methods(p.seen), ["mail.send", "operation.get", "mail.send"]);
+    assert.deepEqual(p.seen[2]!.params, p.seen[0]!.params, "the resend was rebuilt instead of replayed");
+    assert.equal(p.seen[2]!.params.body, "the words first chosen\n");
+    // Accepted now: a third run asks and does not send again.
+    const third = await run(s.home, s.send("frozen-1"));
+    assert.equal(third.code, 0, third.stderr);
+    assert.deepEqual(methods(p.seen).slice(3), ["operation.get"]);
+  } finally { await p.close(); s.close(); }
+});
+
+test("V26B: a terminal receipt in the cache is not replaced by a later lesser observation", async () => {
+  const s = scene();
+  let lookup: object = { ok: true, result: sent(1) };
+  const p = await peer(s.home, request => request.method === "operation.get" ? lookup : { ok: true, result: sent(1) });
+  try {
+    assert.equal((await run(s.home, s.send("t"))).code, 0);
+    lookup = { ok: true, result: { operation: OP(1), state: "pending" } };
+    const later = await run(s.home, s.send("t"));
+    assert.equal(later.code, 0, later.stderr);
+    const cached = new RequestCache(s.home).read("t");
+    assert.equal(cached.kind, "present");
+    if (cached.kind === "present") assert.equal(cached.value.lastReceipt?.state, "succeeded", "a pending observation replaced a settled one");
+    assert.deepEqual(methods(p.seen), ["mail.send", "operation.get"]);
+  } finally { await p.close(); s.close(); }
+});
+
+test("WP26: a receipt the request cache cannot record is still shown, with the key to ask again", async () => {
+  const s = scene();
+  const requests = join(s.home, ".local", "state", "oma", "requests");
+  const p = await peer(s.home, request => {
+    // The cache becomes unwritable after the freeze, before the answer.
+    if (request.method === "mail.send") chmodSync(requests, 0o500);
+    return { ok: true, result: sent(1) };
+  });
+  try {
+    const result = await run(s.home, s.send());
+    const key = p.seen[0]!.key!;
+    assert.match(key, /^cli-/);
+    assert.equal(result.code, 0, `an accepted send was reported as a failure: ${result.stderr}`);
+    assert.ok(result.stdout.includes(OP(1)), "the broker's receipt was not shown");
+    assert.ok(result.stderr.includes(`--request ${key}`), "the key needed to ask again was not shown");
+    assert.match(result.stderr, /CACHE_UNAVAILABLE/);
+  } finally { chmodSync(requests, 0o700); await p.close(); s.close(); }
+  // A receipt that contradicts the cache's earlier observation is unknown, and still shown.
+  const c = scene();
+  let lookup: object = { ok: true, result: sent(1) };
+  const q = await peer(c.home, request => request.method === "operation.get" ? lookup : { ok: true, result: sent(1) });
+  try {
+    assert.equal((await run(c.home, c.send("x"))).code, 0);
+    lookup = { ok: true, result: sent(2) };
+    const contradicted = await run(c.home, c.send("x"));
+    assert.equal(contradicted.code, 3, contradicted.stderr);
+    assert.ok(contradicted.stdout.includes(OP(2)));
+    assert.match(contradicted.stderr, /CACHE_CORRUPT.*--request x/);
+  } finally { await q.close(); c.close(); }
 });

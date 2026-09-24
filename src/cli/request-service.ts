@@ -1,6 +1,6 @@
 // MUST [CLI-001..003]/[IPC-004..008]: freeze before transport and never rebuild
 // same-key requests from current HEAD or mutable source files.
-import type { Json, MutationMethod } from "../../implementation/contracts.js";
+import type { Json, MutationMethod, Receipt } from "../../implementation/contracts.js";
 import { uuidV4 } from "../ids.js";
 import { snapshotJson } from "../domain/canonical-json.js";
 import { requestParamsEqual } from "../domain/request-identity.js";
@@ -9,7 +9,7 @@ import { decodeFailure, decodeReceipt } from "../protocol/receipt-codec.js";
 import { isRequestNotFound } from "../protocol/receipts.js";
 import { requestIntentConflict } from "./request-intent.js";
 import { call } from "./transport.js";
-import { fail, finishFailure, finishReceipt } from "./exit.js";
+import { fail, finishFailure, finishReceipt, finishUnrecordedReceipt } from "./exit.js";
 
 const HOME = process.env.HOME ?? "/tmp";
 const cache = new RequestCache(HOME);
@@ -39,6 +39,20 @@ function frozenBody(entry: CachedRequest): Uint8Array | undefined {
     `frozen request body ${observed.kind} for ${entry.key}${observed.kind === "absent" ? "" : `: ${observed.reason}`} (복구: 원래 freeze 보존; 새 payload 생성 금지)`,
     3,
   );
+}
+
+/** WP26: the broker's receipt is the outcome; the request cache only
+ * remembers it. A cache that cannot record it must not hide the receipt or
+ * the key the Human needs to ask again -- without them a retry takes a new
+ * key and repeats the effect. A receipt contradicting the cache's earlier
+ * observation of the same request is reported as unknown. */
+function settle(receipt: Receipt, key: string): never {
+  try { cache.updateReceipt(key, receipt); }
+  catch (error) {
+    if (!(error instanceof CacheError)) throw error;
+    finishUnrecordedReceipt(receipt, key, `${error.code}: 요청 cache가 이 영수증을 기록하지 못함: ${error.message}`, error.code === "CACHE_CORRUPT");
+  }
+  finishReceipt(receipt, key);
 }
 
 export interface FreshBuild {
@@ -104,10 +118,7 @@ export async function replayOrSend(
     if (reply?.ok === true) {
       const decoded = decodeReceipt(reply.result, { expectedKind: method, allowNotFound: true });
       if (!decoded.ok) fail(`invalid operation lookup: ${decoded.reason}; --request ${key}`, 3);
-      if (!isRequestNotFound(decoded.value)) {
-        cache.updateReceipt(key, decoded.value);
-        finishReceipt(decoded.value, key);
-      }
+      if (!isRequestNotFound(decoded.value)) settle(decoded.value, key);
     } else {
       const decoded = decodeFailure(reply?.error);
       if (!decoded.ok || decoded.value.code !== "REQUEST_NOT_FOUND")
@@ -127,8 +138,7 @@ export async function replayOrSend(
   if (reply?.ok === true) {
     const decoded = decodeReceipt(reply.result, { expectedKind: method });
     if (!decoded.ok) fail(`invalid mutation receipt: ${decoded.reason}; --request ${key}`, 3);
-    cache.updateReceipt(key, decoded.value);
-    finishReceipt(decoded.value, key);
+    settle(decoded.value, key);
   }
   return finishFailure(reply);
 }

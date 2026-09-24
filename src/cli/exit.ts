@@ -40,6 +40,15 @@ export function finishReceipt(receipt: Receipt, key: string): never {
   process.exit(receiptExit(receipt));
 }
 
+/** WP26: a receipt the request cache could not record. The receipt and the
+ * key to ask again come first; an observation contradicting the cache's
+ * earlier one is unknown (3), otherwise the receipt's own exit stands. */
+export function finishUnrecordedReceipt(receipt: Receipt, key: string, reason: string, contradicted: boolean): never {
+  for (const line of receiptLines(receipt, key)) console.log(line);
+  console.error(`oma: ${reason} (재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요)`);
+  process.exit(contradicted ? 3 : receiptExit(receipt));
+}
+
 export function succeed(): never {
   process.exit(0);
 }

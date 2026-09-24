@@ -240,9 +240,12 @@ export class RequestCache {
    * terminal is worse than one that says it is unavailable. */
   private withReceiptLock<T>(key: RequestKey, body: () => T): T {
     const path = `${this.path(key).replace(/\.json$/, "")}.lock`;
-    ensureDirectory(this.dir(), 0o700);
-    const fd = withinDirectory(path, (parent, name) =>
-      openBeneath(parent, name, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW, 0o600));
+    let fd: number;
+    try {
+      ensureDirectory(this.dir(), 0o700);
+      fd = withinDirectory(path, (parent, name) =>
+        openBeneath(parent, name, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW, 0o600));
+    } catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt lock could not be opened: ${messageOf(error)}`); }
     const pause = new Int32Array(new SharedArrayBuffer(4));
     try {
       for (let attempt = 0; attempt < RECEIPT_LOCK_ATTEMPTS; attempt += 1) {
