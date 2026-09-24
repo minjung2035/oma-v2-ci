@@ -53,6 +53,10 @@ const DEFAULT_LIMITS: ProtocolLimits = {
   bundleBytes: 256 * 1024 * 1024, logBytes: 1024 * 1024, batchMaxMessages: 24,
   idleStreamSeconds: 30, receiptWaitSeconds: 30,
 };
+/** Concurrent connections one actor socket serves. A Resident's CLI holds one
+ * connection per call. */
+export const ACTOR_CONNECTIONS = 16;
+
 export class Broker {
   private adminServer: Server | null = null;
   private hostServer: Server | null = null;
@@ -249,6 +253,11 @@ export class Broker {
       sockets.add(socket); socket.once("close", () => sockets.delete(socket));
       this.handleActor(socket, actor, incarnation);
     });
+    // INV10: a Resident reaches only its own actor socket, and every connection
+    // costs this process a socket and a peer pidfd. Past the bound the kernel
+    // connection is closed before it is handled, so a Resident flooding its
+    // socket exhausts its own endpoint, not the broker's descriptors.
+    server.maxConnections = ACTOR_CONNECTIONS;
     server.on("error", () => {
       const run = this.runLeases.get(actor);
       if (run?.identity.incarnation === incarnation) { try { run.revoke(); } catch (error) { this.cleanupError(error); } }
