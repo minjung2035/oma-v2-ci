@@ -66,8 +66,48 @@ export function reviewFindings(root, ledger = JSON.parse(readFileSync(join(root,
   return findings;
 }
 
+export const ORACLE_MAP = "implementation/oracle-map.json";
+/** The lanes a verification cycle executes; the `all` lane is a local aggregate. */
+export const EXECUTED_LANES = Object.freeze(["fast", "durable", "property", "stress", "kernel", "crash"]);
+
+/** Every plan oracle is a test by its own id, or carried by named tests, or
+ * recorded as not run -- and whatever carries it is required by an executed
+ * lane, so it cannot silently stop running. */
+export async function oracleFindings(root, map = JSON.parse(readFileSync(join(root, ORACLE_MAP), "utf8"))) {
+  const { lanes } = await import(new URL("./verification-lanes.mjs", import.meta.url).href);
+  const plan = JSON.parse(readFileSync(join(root, PLAN), "utf8"));
+  const names = testNames(root);
+  const required = EXECUTED_LANES.flatMap(lane => lanes[lane]?.requiredNames ?? []);
+  // A templated test name is known statically up to its first substitution.
+  const covers = (name, r) => {
+    if (!name.includes("${")) return name.startsWith(r);
+    const known = name.slice(0, name.indexOf("${"));
+    return r.startsWith(known) || known.startsWith(r);
+  };
+  const enforced = prefix => names.some(name => name.startsWith(prefix) && required.some(r => covers(name, r)));
+  const findings = [];
+  const notRun = [];
+  for (const { id } of plan.tests) {
+    const entry = map.oracles[id];
+    if (!entry) {
+      if (!oraclePresent(names, id)) findings.push({ id, problem: "no test carries it and the oracle map does not name one" });
+      else if (!names.some(name => [`${id}:`, `${id} `, `${id}/`].some(p => name.startsWith(p)) && required.some(r => covers(name, r))))
+        findings.push({ id, problem: "its test is not required by any executed lane" });
+      continue;
+    }
+    if ((entry.carriedBy ?? []).length === 0 && !entry.notRun) findings.push({ id, problem: "mapped to nothing" });
+    for (const carrier of entry.carriedBy ?? []) {
+      if (!names.some(name => name.startsWith(carrier))) findings.push({ id, problem: `carrier "${carrier}" is not a test in this tree` });
+      else if (!enforced(carrier)) findings.push({ id, problem: `carrier "${carrier}" is not required by any executed lane` });
+    }
+    if (entry.notRun) notRun.push(`${id}: ${entry.notRun}`);
+  }
+  for (const id of Object.keys(map.oracles)) if (!plan.tests.some(test => test.id === id)) findings.push({ id, problem: "the plan has no such oracle" });
+  return { findings, notRun };
+}
+
 /** The approval verdict, with everything that stands in its way. */
-export function approval(root, ledger = JSON.parse(readFileSync(join(root, LEDGER), "utf8"))) {
+export function approval(root, ledger = JSON.parse(readFileSync(join(root, LEDGER), "utf8")), oracles = { findings: [], notRun: [] }) {
   const findings = reviewFindings(root, ledger);
   const unreviewed = ledger.files.filter(entry => !REVIEWED.includes(entry.status) && entry.status !== "REMOVED").map(entry => entry.path);
   const lanes = ledger.lanes ?? {};
@@ -76,6 +116,8 @@ export function approval(root, ledger = JSON.parse(readFileSync(join(root, LEDGE
     ...findings.map(f => `${f.path}: ${f.problem}`),
     ...(unreviewed.length > 0 ? [`${unreviewed.length} production files not reviewed`] : []),
     ...notRun.map(lane => `lane ${lane}: ${lanes[lane] ?? "NOT_RUN"}`),
+    ...oracles.findings.map(f => `oracle ${f.id}: ${f.problem}`),
+    ...oracles.notRun.map(line => `oracle ${line}`),
   ];
   return { approved: blockers.length === 0, blockers, unreviewed };
 }

@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { LEDGER, approval, reviewFindings } from "../scripts/review-closure.mjs";
+import { LEDGER, ORACLE_MAP, approval, oracleFindings, reviewFindings } from "../scripts/review-closure.mjs";
 
 const ledger = () => JSON.parse(readFileSync(LEDGER, "utf8"));
 const problems = value => reviewFindings(".", value).map(finding => finding.problem);
@@ -20,11 +20,24 @@ test("V32A: the committed ledger accounts for every current and baseline file, w
     assert.ok(entry.by.length > 0 && entry.oracles.length > 0, entry.path);
 });
 
-test("V32A: approval is refused while files are unreviewed or a required lane has not run", () => {
-  const verdict = approval(".");
+test("V32A: approval is refused while files are unreviewed or a required lane has not run", async () => {
+  const verdict = approval(".", undefined, await oracleFindings("."));
   assert.equal(verdict.approved, false);
   assert.ok(verdict.blockers.some(line => /production files not reviewed/.test(line)));
   for (const lane of ["powercut", "provider", "ci"]) assert.ok(verdict.blockers.some(line => line.startsWith(`lane ${lane}:`)), lane);
+  for (const id of ["V05C", "V30B", "V32B"]) assert.ok(verdict.blockers.some(line => line.startsWith(`oracle ${id}:`)), id);
+});
+
+test("V32A: every plan oracle is a test, or carried by tests an executed lane requires, or recorded as not run", async () => {
+  const map = JSON.parse(readFileSync(ORACLE_MAP, "utf8"));
+  assert.deepEqual((await oracleFindings(".", map)).findings, []);
+  const findingsWith = async change => { const value = structuredClone(map); change(value); return (await oracleFindings(".", value)).findings.map(f => `${f.id} ${f.problem}`); };
+  // A carrier that is not a test, or that no executed lane requires, carries nothing.
+  assert.ok((await findingsWith(value => { value.oracles.V26A.carriedBy = ["R99: no such oracle"]; })).some(line => /V26A carrier "R99: no such oracle" is not a test/.test(line)));
+  assert.ok((await findingsWith(value => { value.oracles.V26A.carriedBy = ["R14: every two-way split"]; })).some(line => /is not required by any executed lane/.test(line)));
+  // Dropping a mapping leaves the oracle uncarried.
+  assert.ok((await findingsWith(value => { delete value.oracles.V25B; })).some(line => /^V25B no test carries it/.test(line)));
+  assert.ok((await findingsWith(value => { value.oracles.V99Z = { carriedBy: ["V02A:"] }; })).some(line => /^V99Z the plan has no such oracle/.test(line)));
 });
 
 test("V32A: an assignment is not a review, and a claimed review needs real oracles", () => {
@@ -50,6 +63,7 @@ test("V32A: with every file reviewed and every lane run, and only then, the verd
   assert.equal(approval(".", value).approved, false, "approved with lanes not run");
   for (const lane of Object.keys(value.lanes)) value.lanes[lane] = "PASS";
   value.lanes.ci = "PASS";
+  assert.equal(approval(".", value, { findings: [], notRun: ["V05C: not run"] }).approved, false, "approved with an oracle not run");
   const verdict = approval(".", value);
   assert.deepEqual(verdict.blockers, []);
   assert.equal(verdict.approved, true);
