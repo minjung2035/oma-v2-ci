@@ -29,7 +29,11 @@ type RunState =
   | { readonly phase: "revoked-awaiting-death" }
   | { readonly phase: "closed" };
 
-/** Native owner. ENOENT alone is not evidence: the pinned directory must be removed. */
+/** Native owner. A missing `cgroup.events` is evidence only through the pinned
+ * descriptor of a directory that was seen to hold one: that core file exists
+ * for a cgroup's whole life, so its absence below the same pinned inode means
+ * the kernel removed the cgroup. The directory's link count is not a signal:
+ * cgroup2 keeps it unchanged after removal (observed on Linux 6.12). */
 export function pinCgroup(path: string): CgroupPin {
   if (!path.startsWith("/") || path === "/" || path.includes("\0") || path.split("/").some(part => part === "." || part === ".."))
     throw new StoreError("AUTH_FAILED", "invalid observed cgroup path");
@@ -39,16 +43,22 @@ export function pinCgroup(path: string): CgroupPin {
     const st = fstatSync(fd, { bigint: true });
     if (!st.isDirectory()) throw new StoreError("AUTH_FAILED", "cgroup pin is not a directory");
     const identity = Object.freeze({ dev: st.dev, ino: st.ino });
+    let observedEvents = false;
     return {
       fd, identity,
       population() {
         if (closed) return "unknown";
-        try { return parseCgroupPopulation(readFileSync(`/proc/self/fd/${fd}/cgroup.events`, "utf8")); }
+        let events: string;
+        try { events = readFileSync(`/proc/self/fd/${fd}/cgroup.events`, "utf8"); }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") return "unknown";
+          if (observedEvents) return "removed";
           try { return fstatSync(fd, { bigint: true }).nlink === 0n ? "removed" : "unknown"; }
           catch { return "unknown"; }
         }
+        const population = parseCgroupPopulation(events);
+        if (population !== "unknown") observedEvents = true;
+        return population;
       },
       matches(currentPath) {
         if (closed) return false;
