@@ -2,7 +2,7 @@
  * validation are distinct; every lineage rule belongs to LineageSnapshot.
  */
 import type { DatabaseSync } from "node:sqlite";
-import type { OperationId } from "../domain/identifiers.js";
+import { isValidActor, type OperationId } from "../domain/identifiers.js";
 import type { MessagePlan } from "../../implementation/contracts/durable.js";
 import type { RepositoryIdentity } from "../durable.js";
 import { LineageSnapshot } from "../domain/lineage.js";
@@ -12,6 +12,13 @@ import {
   decodeBatchManifest, decodeUsageRow, decodeOperationIdProjection, rowCorrupt, safeInteger,
   type AgentRow, type SubscriptionRow, type DeliveryRow, type BatchRow, type UsageRow,
 } from "./rows.js";
+
+export interface PendingWorkRows {
+  readonly agents: readonly AgentRow[];
+  readonly unbatched: readonly DeliveryRow[];
+  readonly prepared: readonly BatchRow[];
+  readonly linked: readonly DeliveryRow[];
+}
 
 export class LedgerReader {
   constructor(private readonly db: Pick<DatabaseSync, "prepare">, private readonly stateRoot: string, private readonly identity: () => RepositoryIdentity | null) {}
@@ -43,6 +50,15 @@ export class LedgerReader {
     const raw = this.rawAgent(name);
     if (raw === undefined) return null;
     const row = decodeAgentRow(raw); this.lineage(row); return row;
+  }
+  /** WP23.03: which agents exist, by name only -- for request parameter checks
+   * and choosing which units to observe. Each name is checked as an identity;
+   * a caller that acts on an agent reads its full row. */
+  agentNames(): string[] {
+    return this.db.prepare("SELECT name FROM agents ORDER BY name").all().map(row => {
+      const name = (row as { name?: unknown }).name;
+      return isValidActor(name) ? name : rowCorrupt("agent name is not a valid identity");
+    });
   }
   agents(): AgentRow[] {
     const rows = this.db.prepare("SELECT * FROM agents ORDER BY name").all().map(decodeAgentRow);
@@ -169,6 +185,22 @@ export class LedgerReader {
   batch(id: string): BatchRow | null {
     const raw = this.db.prepare("SELECT * FROM batches WHERE id=?").get(id);
     return raw === undefined ? null : this.batchRow(raw);
+  }
+  /** WP23.03: every row that display counts of pending work rest on, read
+   * together with no await between the SELECTs (the broker is the only
+   * writer). Each row is decoded; relation checks are pendingWorkByAgent's.
+   * Unlike the full-row reads above it does not re-check each delivery against
+   * its operation's recipient snapshot -- a cost that grew with the square of
+   * an operation's recipients -- so no mutation or recovery path reads it. */
+  pendingWorkRows(): PendingWorkRows {
+    return {
+      agents: this.agents(),
+      unbatched: this.db.prepare(`SELECT * FROM deliveries WHERE materialized=1 AND presented=0 AND batch_id IS NULL
+        ORDER BY recipient, created_at_ms, message_id`).all().map(decodeDeliveryRow),
+      prepared: this.db.prepare("SELECT * FROM batches WHERE state='prepared' ORDER BY agent, created_at_ms, id").all().map(decodeBatchRow),
+      linked: this.db.prepare(`SELECT * FROM deliveries WHERE batch_id IN (SELECT id FROM batches WHERE state='prepared')
+        ORDER BY batch_id, message_id`).all().map(decodeDeliveryRow),
+    };
   }
   preparedBatches(agent: string): BatchRow[] {
     return this.db.prepare("SELECT * FROM batches WHERE agent=? AND state='prepared' ORDER BY created_at_ms, id").all(agent).map(raw => this.batchRow(raw));

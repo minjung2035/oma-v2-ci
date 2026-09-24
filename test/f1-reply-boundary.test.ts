@@ -73,7 +73,7 @@ function fixture() {
       hasOperation: (actor, key) => store.getOperation(actor, key) !== null,
     },
     mail,
-    units: { observe: unused },
+    units: { statusSnapshot: unused },
     views: { status: unused },
     git: null,
     lifecycle: {

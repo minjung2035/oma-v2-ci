@@ -9,13 +9,15 @@ import { unitNameFor as unitName } from "./domain/derived.js";
 import { replaceDerivedFile } from "./storage/durable-fs.js";
 import { renderUnit, type RenderValues } from "./units/render.js";
 import { executeUnitCommand, observeUnitCommand, type UnitCommandOutcome } from "./units/execute.js";
-import { parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "./units/observe.js";
+import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "./units/observe.js";
 
 export { unitName, renderUnit };
 export type { RenderValues, UnitCommandOutcome };
 export const UNIT_TPL_DIR = fileURLToPath(new URL("../../implementation/systemd", import.meta.url));
 export const INSTALL_DIR = join(process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? "/tmp", ".config"), "systemd", "user");
 export type IncarnationReader = (agent: Actor) => number | null;
+/** Units per status `show`: about 60 ms each on systemd 257 (WP23.01). */
+export const STATUS_CHUNK = 32;
 
 /** The words of a rendered ExecStart as `systemctl show` reports them: the
  * renderer escapes every separator inside a value, so a space separates words;
@@ -56,6 +58,10 @@ export class UnitsModule {
 
   private command(argv: readonly string[]): UnitCommandOutcome {
     return executeUnitCommand("systemctl", ["--user", ...argv]);
+  }
+  /** Read-only `show` off the event loop; the one asynchronous unit seam. */
+  private commandAsync(argv: readonly string[]): Promise<UnitCommandOutcome> {
+    return observeUnitCommand(["--user", ...argv]);
   }
 
   private run(argv: readonly string[]): string {
@@ -207,9 +213,29 @@ export class UnitsModule {
   observeAsync(agent: Actor): Promise<UnitObservation> {
     if (this.observationTask) return this.observationTask.agent === agent ? this.observationTask.task :
       Promise.reject(new StoreError("BROKER_UNAVAILABLE", "unit observation is busy"));
-    const task = observeUnitCommand(["--user", ...this.observationArgs(agent)]).then(parseUnitObservation)
+    const task = this.commandAsync(this.observationArgs(agent)).then(parseUnitObservation)
       .finally(() => { if (this.observationTask?.task === task) this.observationTask = null; });
     this.observationTask = { agent, task }; return task;
+  }
+
+  /** WP23/D04: display status of many units, one read-only `show` per chunk of
+   * STATUS_CHUNK units, one chunk at a time. Each block is bound to its unit by
+   * `Id`; a block that is missing, repeated or malformed leaves that agent
+   * unknown. Never death proof or authority: an effect observes again. */
+  async observeStatus(agents: readonly Actor[]): Promise<ReadonlyMap<Actor, UnitObservation>> {
+    const observed = new Map<Actor, UnitObservation>();
+    for (let from = 0; from < agents.length; from += STATUS_CHUNK) {
+      const byUnit = new Map(agents.slice(from, from + STATUS_CHUNK).map(agent => [unitName(this.society, agent, "service"), agent] as const));
+      const outcome = await this.commandAsync(["show", ...byUnit.keys(), "-p", "Id", ...this.observationArgs(agents[from]!).slice(2)]);
+      const blocks = outcome.kind === "succeeded" ? outcome.stdout.split("\n\n") : [];
+      const parsed = blocks.map(block => ({ block, agent: byUnit.get(parseProperties(block, ["Id"])?.get("Id") ?? "") }));
+      const count = new Map<Actor, number>();
+      for (const { agent } of parsed) if (agent !== undefined) count.set(agent, (count.get(agent) ?? 0) + 1);
+      // A unit reported twice is reported by nothing that can be believed.
+      for (const { block, agent } of parsed)
+        if (agent !== undefined && count.get(agent) === 1) observed.set(agent, parseUnitObservation({ ...outcome, stdout: block }));
+    }
+    return observed;
   }
 
   /** Diagnostic API. Read failure throws rather than pretending the cgroup is empty. */

@@ -18,7 +18,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
       getReceipt: unused,
     },
     mail: { send: async () => unused() },
-    units: { observe: unused },
+    units: { statusSnapshot: unused },
     views: { status: unused },
     lifecycle: {
       create: async () => unused(),

@@ -7,7 +7,9 @@ import { replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 import { encodeStatusView, statusViewPath } from "./protocol/status-view.js";
 import { publishBatchView } from "./storage/batch-view.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
-import { pendingWork } from "./views/pending-work.js";
+import { pendingWorkByAgent } from "./views/pending-work.js";
+import { StoreError } from "./domain/errors.js";
+import type { StatusSnapshot } from "./views/status-refresh.js";
 export { replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 
 import type { UnitObserve } from "./ports/runtime.js";
@@ -25,6 +27,7 @@ export function fieldEsce(value: string): string {
 }
 export class ViewsModule {
   private observations: readonly StatusUnitObservation[] = [];
+  private projected: { readonly snapshot: StatusSnapshot; readonly agents: readonly AgentStatus[] } | null = null;
   constructor(private readonly store: Store, private readonly stateRoot: string,
     private readonly society: string, private readonly principalProfile: string,
     private readonly viewLimits?: BatchViewLimits) {}
@@ -68,24 +71,38 @@ export class ViewsModule {
    * the Human launched is inside none, so the broker publishes the same answer
    * as a file only this user can read. It is a derived view, not a record: it
    * carries the moment it was observed, and a reader treats an old one as
-   * unknown rather than current.
+   * unknown rather than current. WP23: it carries when the units were
+   * observed, and a unit the snapshot does not hold is unknown.
    */
-  publishStatus(observe: UnitObserve): void {
-    const observedAtMs = Date.now();
-    const agents = this.status(undefined, observe);
-    writeAtomic(statusViewPath(this.stateRoot), encodeStatusView(this.society, { observedAtMs, agents }), 0o600);
+  publishStatus(snapshot: StatusSnapshot): void {
+    const agents = this.statusOf(snapshot);
+    writeAtomic(statusViewPath(this.stateRoot), encodeStatusView(this.society, { observedAtMs: snapshot.observedAtMs, agents }), 0o600);
   }
-  status(agent?: Actor, observe: UnitObserve = () => null): AgentStatus[] {
-    const rows = agent ? [this.store.getAgent(agent)].filter((value): value is NonNullable<typeof value> => value !== null) : this.store.listAgents();
+  /** WP23: every agent's status for one observation, projected once -- when
+   * the first answer for it is due, after every caller waiting on it asked --
+   * and shared by those answers and the published view. Display only. */
+  statusOf(snapshot: StatusSnapshot, agent?: Actor): AgentStatus[] {
+    if (this.projected?.snapshot !== snapshot)
+      this.projected = { snapshot, agents: this.status(undefined, name => snapshot.units.get(name) ?? null, snapshot.observedAtMs) };
+    const agents = this.projected.agents;
+    return agent === undefined ? [...agents] : agents.filter(row => row.agent === agent);
+  }
+  status(agent?: Actor, observe: UnitObserve = () => null, observedAtMs: number = Date.now()): AgentStatus[] {
+    // WP23.03: one read gives the registry and every agent's counts, not two
+    // reads per agent.
+    const read = this.store.pendingWorkRows();
+    const pending = pendingWorkByAgent(read);
+    const rows = agent === undefined ? read.agents : read.agents.filter(row => row.name === agent);
     const observations: StatusUnitObservation[] = [];
     try {
       return rows.map(row => {
-        const work = pendingWork(this.store, row.name);
+        const work = pending.get(row.name);
+        if (work === undefined) throw new StoreError("STORE_CORRUPT", "pending work projection lost an agent");
         let observation: ReturnType<UnitObserve> = null;
         try { observation = observe(row.name); } catch { /* A failed observation is not proof of running or exit zero. */ }
         const known = observation !== null && observation.activeState !== "unknown" && observation.subState !== "unknown" &&
           observation.result !== "unknown" && Number.isSafeInteger(observation.execMainStatus) && observation.execMainStatus >= 0;
-        observations.push(Object.freeze({ agent: row.name, observedAtMs: Date.now(),
+        observations.push(Object.freeze({ agent: row.name, observedAtMs,
           unknownReason: observation === null ? "unavailable" : known ? null : "unknown-state" }));
         return { agent: row.name, desired: row.desired,
           activeState: known ? observation!.activeState : null, subState: known ? observation!.subState : null,

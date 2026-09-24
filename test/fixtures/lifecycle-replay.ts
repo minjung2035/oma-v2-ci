@@ -6,7 +6,6 @@ import { Store } from "../../src/store.js";
 import { MailModule } from "../../src/mail.js";
 import { LifecycleModule } from "../../src/lifecycle.js";
 import { UnitsModule } from "../../src/units.js";
-import { ViewsModule } from "../../src/views.js";
 import { PublicDispatcher } from "../../src/broker/public-dispatcher.js";
 import { errorAnswer } from "../../src/broker/replies.js";
 import { publicFailure } from "../../src/domain/errors.js";
@@ -70,8 +69,9 @@ export function lifecycleReplayFixture() {
     getReceipt: (actor: string, key: string) => { const operation = store.getOperation(actor, key); return operation ? receiptOfOperation(operation) : null; },
     hasOperation: (actor: string, key: string) => store.getOperation(actor, key) !== null,
   };
-  const dispatcher = new PublicDispatcher({ store: publicStore, mail, units, lifecycle, git: null,
-    views: new ViewsModule(store, root, "replay", "p"), limits,
+  const dispatcher = new PublicDispatcher({ store: publicStore, mail, lifecycle, git: null,
+    units: { statusSnapshot: () => Promise.reject(new Error("status is not part of the action replay fixture")) },
+    views: { status: () => { throw new Error("status is not part of the action replay fixture"); } }, limits,
     isDraining: () => false, assertAdmission() {}, admitResource: () => () => undefined, refreshViews() {},
     failureAnswer: (id, error) => errorAnswer(id, publicFailure(error)),
     readLogs: async () => { throw new Error("logs are not part of the action replay fixture"); } });

@@ -25,7 +25,9 @@ test("R31 public facade delegates status and mutation with the original authorit
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
   const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" }, join(root, "units"), { p: TEST_RESOURCES });
-  t.mock.method(units, "observe", () => ({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" }));
+  // WP23: status observes through the batched, asynchronous unit read.
+  t.mock.method(units, "observeStatus", async (agents: readonly string[]) =>
+    new Map(agents.map(agent => [agent, { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" }])));
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);

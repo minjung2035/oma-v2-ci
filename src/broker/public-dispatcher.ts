@@ -1,6 +1,7 @@
 // IPC-004/AUTH-003: public preflight and method dispatch; no socket or lease ownership.
 import type { AuthContext, Failure, ProtocolLimits, PublicMethod, PublicMethods, Request, RequestKey, Actor, AgentCreateInput, Oid, MessageId, MailInput, Receipt, Json, AgentStatus } from "../../implementation/contracts.js";
 import type { UnitObserve } from "../ports/runtime.js";
+import type { StatusSnapshot } from "../views/status-refresh.js";
 import { StoreError } from "../domain/errors.js";
 import { assertNever } from "../domain/exhaustive.js";
 import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js";
@@ -28,10 +29,11 @@ export interface PublicMailPort {
   readonly send: (auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }) => Promise<Receipt>;
 }
 export interface PublicUnitsPort {
-  readonly observe: (agent: Actor) => NonNullable<ReturnType<UnitObserve>>;
+  /** WP23: the broker's shared diagnostic refresh; never authority. */
+  readonly statusSnapshot: () => Promise<StatusSnapshot>;
 }
 export interface PublicViewsPort {
-  readonly status: (agent: Actor | undefined, observe: UnitObserve) => AgentStatus[];
+  readonly status: (agent: Actor | undefined, snapshot: StatusSnapshot) => AgentStatus[];
 }
 export interface PublicLifecyclePort {
   readonly create: (auth: AuthContext, input: AgentCreateInput, key: RequestKey) => Promise<Receipt>;
@@ -136,9 +138,11 @@ export class PublicDispatcher {
     try {
       switch (method) {
         case "status.get": {
-          const observe = (agent: string) => { const value = units.observe(agent); return { activeState: value.activeState, subState: value.subState, result: value.result, execMainStatus: value.execMainStatus }; };
-          const agents = views.status(params.agent, observe);
-          return okAnswer(id, { observedAtMs: Date.now(), agents });
+          // WP23: observed off the event loop by the shared refresh; the
+          // registry rows and pending counts are read after it, current.
+          const snapshot = await units.statusSnapshot();
+          if (this.deps.isDraining()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining");
+          return okAnswer(id, { observedAtMs: snapshot.observedAtMs, agents: views.status(params.agent, snapshot) });
         }
         case "operation.get": {
           const receipt = store.getReceipt(auth.actor, params.key);

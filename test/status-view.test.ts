@@ -22,7 +22,7 @@ test("T118 what the broker publishes is what the Dashboard accepts, and only its
     const before = Date.now();
     // A unit whose state cannot be read must reach the reader as unknown
     // fields, not as a guessed "inactive".
-    views.publishStatus(() => null);
+    views.publishStatus({ observedAtMs: Date.now(), units: new Map(), failure: "unavailable" });
     const decoded = decodeStatusView(readFileSync(statusViewPath(root), "utf8"), "demo");
     assert.equal(decoded.kind, "view", decoded.kind === "invalid" ? decoded.reason : "");
     if (decoded.kind !== "view") return;

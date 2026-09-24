@@ -32,8 +32,8 @@
       "PublicAgentView": { "exported": true, "sha256": "179716fe688298b6fe4d7da5be3c72bf9ba656bb2968538c7231ea41271cd0b2" },
       "PublicStorePort": { "exported": true, "sha256": "20dd961b2dcc6eed5b428c6d85e88e6974f2486c71fa53fa4cf9eb29200ddca6" },
       "PublicMailPort": { "exported": true, "sha256": "720eb92c82abbf5458b0cff8bf0f7331f9efd3c11185223259d329ea4bded4fe" },
-      "PublicUnitsPort": { "exported": true, "sha256": "3b8fa0ef7c78405fdb392f806da98c6ed95728e9aabaf7d5b683df8a05d39b19" },
-      "PublicViewsPort": { "exported": true, "sha256": "d2e3cd6185e953a7adc76e73a26c0af5fc43b3462fc73d0b70171c729b229e1c" },
+      "PublicUnitsPort": { "exported": true, "sha256": "fe831326695d1e368d6e55b1c7ff39ed245e07784c116d41e3ac8739db68f017" },
+      "PublicViewsPort": { "exported": true, "sha256": "ff38d66b760196ec06f27810a69cbe4c844192a377183e3f28faf7b768ec84e0" },
       "PublicLifecyclePort": { "exported": true, "sha256": "44de497b03e4ff3424e2e050653c3175b72fbb0b87f9d64f43d992530bd2a8fa" },
       "PublicGitPort": { "exported": true, "sha256": "38ba4f6696f46ea9c2b0afe801d5a9569b4eeece7f65d7866124360bc9581835" },
       "PublicDispatchDependencies": { "exported": true, "sha256": "ccb432d8c7814138b0019f6d775c1dac4bf901fa072e56a6e5eb50a935c4d583" }

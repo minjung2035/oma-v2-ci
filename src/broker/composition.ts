@@ -4,7 +4,7 @@
 import type { ProtocolLimits } from "../../implementation/contracts.js";
 import type { Store } from "../store.js";
 import type { MailModule } from "../mail.js";
-import type { UnitsModule } from "../units.js";
+import type { StatusRefresh } from "../views/status-refresh.js";
 import type { ViewsModule } from "../views.js";
 import type { LifecycleModule } from "../lifecycle.js";
 import type { GitModule } from "../git.js";
@@ -35,14 +35,15 @@ export type PublicDispatchPorts = Pick<
 export function createPublicDispatchPorts(
   store: Store,
   mail: MailModule,
-  units: UnitsModule,
+  status: Pick<StatusRefresh, "request">,
   views: ViewsModule,
   lifecycle: LifecycleModule,
   git: GitModule | null,
   limits: ProtocolLimits,
 ): PublicDispatchPorts {
   const publicStore: PublicStorePort = {
-    listAgents: () => store.listAgents().map((agent) => ({ name: agent.name })),
+    // WP23.03: parameter checks need which names exist, not every decoded row.
+    listAgents: () => store.agentNames().map((name) => ({ name })),
     getAgent: (actor) => {
       const agent = store.getAgent(actor);
       return agent === null
@@ -65,10 +66,10 @@ export function createPublicDispatchPorts(
       mail.send(auth, key, input, requestContext),
   };
   const publicUnits: PublicUnitsPort = {
-    observe: (agent) => units.observe(agent),
+    statusSnapshot: () => status.request(),
   };
   const publicViews: PublicViewsPort = {
-    status: (agent, observe) => views.status(agent, observe),
+    status: (agent, snapshot) => views.statusOf(snapshot, agent),
   };
   const publicLifecycle: PublicLifecyclePort = {
     create: (auth, input, key) => lifecycle.create(auth, input, key),

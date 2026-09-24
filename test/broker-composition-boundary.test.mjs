@@ -57,6 +57,11 @@ function fixture() {
       calls.push("listAgents");
       return state.agents;
     },
+    // WP23.03: parameter checks read names only.
+    agentNames() {
+      calls.push("agentNames");
+      return state.agents.map((agent) => agent.name);
+    },
     getAgent(actor) {
       calls.push(`getAgent:${actor}`);
       return state.agents.find((agent) => agent.name === actor) ?? null;
@@ -100,15 +105,11 @@ function fixture() {
       return Promise.resolve({ examined: 0, repaired: 0, remaining: 0 });
     },
   };
+  // WP23: the public port sees the broker's shared status refresh only.
   const units = {
-    observe() {
-      calls.push("units.observe");
-      return {
-        activeState: "active",
-        subState: "running",
-        result: "success",
-        execMainStatus: 0,
-      };
+    request() {
+      calls.push("status.request");
+      return Promise.resolve({ observedAtMs: 1, units: new Map(), failure: null });
     },
   };
   const views = {
@@ -179,7 +180,7 @@ test("P18 public composition exposes only projected capabilities and keeps looku
     "listAgents",
   ]);
   assert.deepEqual(Object.keys(ports.mail), ["send"]);
-  assert.deepEqual(Object.keys(ports.units), ["observe"]);
+  assert.deepEqual(Object.keys(ports.units), ["statusSnapshot"]);
   assert.deepEqual(Object.keys(ports.views), ["status"]);
   assert.deepEqual(Object.keys(ports.lifecycle).sort(), [
     "ack",

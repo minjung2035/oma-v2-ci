@@ -50,7 +50,7 @@ function dispatcher(text: string, frameBytes: number) {
       hasOperation: unused,
     },
     mail: { send: async () => unused() },
-    units: { observe: unused },
+    units: { statusSnapshot: unused },
     views: { status: unused },
     git: null,
     lifecycle: {

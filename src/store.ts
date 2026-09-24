@@ -8,7 +8,7 @@ import type { Actor, MessageId, OperationId, RequestKey } from "../implementatio
 import type { ErrorCode } from "../implementation/contracts/errors.js";
 import type { RepositoryIdentity, OperationPlanContext } from "./durable.js";
 import type { DecodedOperation, OperationOf } from "./storage/operation-codec.js";
-import { LedgerReader } from "./storage/ledger-reader.js";
+import { LedgerReader, type PendingWorkRows } from "./storage/ledger-reader.js";
 import { assertDirectory } from "./storage/directory.js";
 import { LEDGER_TABLES, DIAGNOSTIC_READ_LIMITS, type DiagnosticReadLimits, type DiagnosticSnapshot, type LedgerTable } from "./storage/diagnostic-snapshot.js";
 import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
@@ -276,6 +276,8 @@ export class Store {
   }
   getAgent(name: string): AgentRow | null { return this.reader.agent(name); }
   listAgents(): AgentRow[] { return this.reader.agents(); }
+  /** WP23.03: names only; see LedgerReader.agentNames. */
+  agentNames(): string[] { return this.reader.agentNames(); }
   updateAgent(agent: { name: string; desired?: AgentRow["desired"]; incarnation?: number; specHash?: string; specJson?: string }): void {
     this.requireTx(); const now = Date.now();
     if (agent.desired !== undefined) {
@@ -341,6 +343,8 @@ export class Store {
   insertPreparedBatch(batch: PreparedBatchInput): void { this.transitions.insertPreparedBatch(batch); }
   getBatch(id: string): BatchRow | null { return this.reader.batch(id); }
   preparedBatches(agent: Actor): BatchRow[] { return this.reader.preparedBatches(agent); }
+  /** WP23.03: display projection only; see LedgerReader.pendingWorkRows. */
+  pendingWorkRows(): PendingWorkRows { return this.reader.pendingWorkRows(); }
   reassignPreparedBatches(agent: Actor, incarnation: number): void { this.transitions.reassignPreparedBatches(agent, incarnation); }
   linkDeliveriesToBatch(batchId: string, messages: MessageId[]): void { this.transitions.linkDeliveriesToBatch(batchId, messages); }
   pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation === incarnation); }

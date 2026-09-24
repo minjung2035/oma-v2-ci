@@ -26,6 +26,7 @@ import { GitModule } from "./git.js";
 import { ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
 import { STATUS_REFRESH_MS, statusViewPath } from "./protocol/status-view.js";
+import { StatusRefresh } from "./views/status-refresh.js";
 import { INTERNAL_METHODS } from "./protocol/methods.js";
 import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalHostChannel } from "./broker/principal-endpoint.js";
 import { resolvedSpecOf } from "./authority.js";
@@ -79,6 +80,9 @@ export class Broker {
   private readonly peers: PeerAuthenticator;
   private readonly publicDispatcher: PublicDispatcher;
   private readonly internalDispatcher: InternalDispatcher;
+  /** WP23: every status observation -- status.get, the published view, the
+   * timer -- shares this one bounded refresh. */
+  private readonly statusRefresh: StatusRefresh;
   constructor(
     private readonly store: Store, mail: MailModule, private readonly units: UnitsModule,
     private readonly views: ViewsModule, lifecycle: LifecycleModule,
@@ -92,7 +96,8 @@ export class Broker {
     this.storage = paths.storage ?? new StorageAdmission(paths.stateRoot, paths.storageBytes, limits.frameBytes);
     this.admitResource = category => this.storage.admit(category);
     this.peers = new PeerAuthenticator(store, units, this.runLeases, paths.society, error => this.cleanupError(error));
-    const publicPorts = createPublicDispatchPorts(this.store, mail, this.units, this.views, lifecycle, git, limits);
+    this.statusRefresh = new StatusRefresh(() => this.store.agentNames(), agents => this.units.observeStatus(agents));
+    const publicPorts = createPublicDispatchPorts(this.store, mail, this.statusRefresh, this.views, lifecycle, git, limits);
     this.publicDispatcher = new PublicDispatcher({ ...publicPorts,
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(), admitResource: this.admitResource,
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
@@ -216,15 +221,16 @@ export class Broker {
   }
   /** TUI-021: unit state changes without a broker transaction, so the status
    * view is also republished on a timer. A failure here is reported and left:
-   * the view is derived, and a stale one is visibly stale to its reader. */
+   * the view is derived, and a stale one is visibly stale to its reader.
+   * WP23: it is written when the shared refresh answers; nothing waits for it,
+   * and no request's outcome depends on it. */
   private publishStatus(): void {
     if (this.draining) return;
-    try {
-      this.views.publishStatus(agent => {
-        const value = this.units.observe(agent);
-        return { activeState: value.activeState, subState: value.subState, result: value.result, execMainStatus: value.execMainStatus };
-      });
-    } catch (error) { console.error("status view publish failed:", error instanceof Error ? error.message : String(error)); }
+    const failed = (error: unknown): void => { console.error("status view publish failed:", error instanceof Error ? error.message : String(error)); };
+    void this.statusRefresh.request().then(snapshot => {
+      if (this.draining) return;
+      try { this.views.publishStatus(snapshot); } catch (error) { failed(error); }
+    }, failed);
   }
   private actorSocketDirectory(actor: Actor, incarnation: number): string {
     const dir = actorSocketDirectoryAt(this.paths.runRoot, actor, incarnation);
