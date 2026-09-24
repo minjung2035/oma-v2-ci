@@ -695,3 +695,72 @@ without those are refused and must be recreated; managed config generations are
 not readable by earlier writers. Not covered: other Node versions and
 distributions, an `npm ci --omit=dev` install from the registry (offline here), and
 a systemd-managed broker in operation.
+
+## WP30 — crosscutting invariants, crash points and qualification
+
+WP30.01 / V30A (property lane) — an independent model of one prepared batch's
+delivery evidence, written from D01's decision table and run on the composed runtime
+(real Store, Mail, receipt files and `Broker.openRun` after each broker restart,
+which closes and reopens the database) over 24 seeded 8-event sequences: publish,
+corrupt, a late receipt from an incarnation the batch has left, hide, reveal, open.
+Each step compares the incarnation, the batch state and incarnation, the open
+outcome and the receipt bytes; each sequence ends by making the evidence readable
+and opening once more (liveness). Unreadable evidence blocks until it is readable
+again and then settles; conflicting or late evidence blocks, is kept, and never
+becomes success on its own; a completed batch stays completed. Mutants that treat
+unreadable or conflicting evidence as absent, or roll over without settling, fail
+it. Lifecycle, mail/ledger and parser models remain R36/R35.
+
+WP30.02 — FAULT-MATRIX rows and the seam that exercises each (lanes as of v7):
+
+| Boundary | Oracle | Lane / status |
+|---|---|---|
+| receipt temp before creation / partial write / file fsync / final publish / parent fsync | V05A, V05B checkpoint crashes | crash PASS; power loss (V05C) NOT_RUN |
+| receipt durable, ledger still prepared | V06A, V07A, V08A (completion only, no redelivery) | durable/crash PASS |
+| batch.complete commit, response lost | V06B exact replay | durable PASS |
+| old receipt settled, rollover not committed | V07B incarnation-commit fault | durable PASS |
+| rollover committed, endpoint not bound | V07B (no live lease after a failed open); endpoint-bind fault not injected separately | durable PASS / partial |
+| Principal prompt before write / written, unanswered / accepted, no boundary | V09B, V09A, V10A | durable PASS |
+| boundary notified, session durability unknown | V27A shows entry and notice agree; durability not claimed | durable PASS / power NOT_RUN |
+| config candidate before validation | V11A | durable PASS |
+| generation build / flush / pointer rename / parent flush | V13A crash at every durability point | durable PASS; power NOT_RUN |
+| committed config, UI reload fails | V15A saved-unread | durable PASS |
+| stale edit between compare and publish | V13B POLICY_CHANGED | durable PASS |
+| context/tree preparation error / last observation fails | V18A, V18B | durable/crash PASS |
+| bootstrap partial freeze / linked create | V19A, V19B | durable PASS |
+| DB COMMIT outcome unknown | V17A, V20 | durable/crash PASS |
+| Git CAS before authority change / after CAS / third ref | V24B, V24A | durable PASS |
+| logical quota exceeded | V21B, V22A/B | durable/stress PASS |
+| transport disconnect after acceptance | R14 (V26A) | durable PASS |
+| unit path stop fails | SEQ-002 (V25B) | fast/kernel PASS |
+| broker/host ends with children left | V03B, R37 shutdown, V10B | kernel/durable PASS |
+| status refresh fails | V23A, WP23.05, T118 | stress/fast PASS |
+| unsupported DB version | V04 | durable PASS |
+
+Injected exceptions run cleanup and process crashes do not: the crash lane kills at
+real checkpoints and the parent observes the boundary was reached (WP02 driver).
+
+WP30.03 — safety and liveness are judged apart: V30A, V07B and V23A each require
+progress once the fault clears (readable evidence settles, a manager that answers
+again is observed), while conflicting evidence, a start limit and unproven death
+stay blocked with their reason.
+
+WP30.04 — every fix in this plan has a regression that fails when its cause is put
+back, run as a mutant in a disposable copy on the disposable account or by
+restoring the previous code: WP03 10/10, WP07 5/5, WP08 6/6, WP09 4/6 (two
+equivalent), WP10 6/6, WP13 13/14 (one equivalent), WP14 8/8, WP15 7/7, WP23 10/11
+(one equivalent), WP25 10/10, WP26 6/6, WP27 4/4, WP28 3/3, WP30 3/3; WP29 and WP31
+by the previous rule, lockfile and resolver failing their oracles.
+
+WP30.05 — qualification, raw results kept apart:
+
+| Environment | Result |
+|---|---|
+| node / git-fs (fast, durable, property, stress, local) | PASS at v7, zero skips |
+| engine (bundled 0.85.1, provider stand-in) | PASS (V27A, T116, T117) |
+| pty | PASS (V28B; Python pty harness) |
+| kernel (disposable user manager, systemd 257) | PASS 63/63 at v7 |
+| crash (process SIGKILL at checkpoints) | PASS 63/63 at v7 |
+| powercut (VM storage loss) | NOT_RUN -- no approved VM; SIGKILL results are not power-loss evidence |
+| real provider | NOT_RUN -- no credential authorized |
+| CI | NOT_RUN -- nothing pushed |
