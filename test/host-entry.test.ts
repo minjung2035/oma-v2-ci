@@ -85,3 +85,21 @@ test("D03: a host unit without the rendered run root is refused, not pointed at 
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("D03: a runner unit without the whole rendered location is refused, not pointed at the environment's", () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-runner-root-"));
+  try {
+    const state = join(dir, "data", "oma", "probe");
+    mkdirSync(state, { recursive: true });
+    const full = ["--config", join(state, "config.json"), "--state-root", state, "--run-root", join(dir, "run", "oma", "probe")];
+    for (const drop of ["--config", "--state-root", "--run-root"]) {
+      const at = full.indexOf(drop);
+      const args = [...full.slice(0, at), ...full.slice(at + 2)];
+      const result = spawnSync(process.execPath, [entry("runner"), "--society", "probe", "--agent", "a", ...args], {
+        env: { ...process.env, XDG_DATA_HOME: join(dir, "data"), XDG_RUNTIME_DIR: join(dir, "run") }, encoding: "utf8", timeout: 3000,
+      });
+      assert.equal(result.status, 4, `${drop}: ${result.stderr}`);
+      assert.match(result.stderr, new RegExp(`launch location ${drop}`));
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

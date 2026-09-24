@@ -87,6 +87,7 @@ export const lanes = Object.freeze({
       "D03 launched location",
       "D03 resident unit",
       "D03: a host unit without the rendered run root",
+      "D03: a runner unit without the whole rendered location",
       "V01A:",
       "V01B:",
       "V02A:",
