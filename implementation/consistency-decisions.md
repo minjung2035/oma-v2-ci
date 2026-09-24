@@ -564,3 +564,43 @@ long streams (NOT_RUN, no credential), session durability under power loss (WP30
 the Principal's engine (WP28). The repository defines no separate `engine` lane;
 V27A and the T113/T114/T116/T117 engine and relay oracles run in the durable lane,
 which needs bubblewrap and openssl on the host (a skip there is not a pass).
+
+## WP29 — where each kind of guarantee actually holds
+
+| Claim kind | Holds at | Enforced by / negative oracle | Does not mean |
+|---|---|---|---|
+| closed method / kind / field vocabularies (`PUBLIC_METHODS`, `OPERATION_CODECS`, capability vocabulary, `RESOURCE_FIELDS`, `LIMIT` descriptors, set-field recipe) | type (compile) | `satisfies` / `[Missing] extends [never]` bindings; P22 A–D and V29A compile a mutated real Program and require an error | a runtime check of input -- decoders do that |
+| `ValidatedPlan` / decoded-operation brands | type provenance | non-exported unique symbol, issued only by the operation codec; no `as ValidatedPlan` outside it in `src` | that the relations still hold after decode, one use, or anything across a crash |
+| `readonly`, `Object.freeze` | type / shallow runtime | compiler; freeze on the owning object | ownership, aliasing control or durability |
+| request, receipt, config, batch-view, status-view decoding | runtime | closed decoders; R15, R36 corpus, V02A/V11A, T118 | authority -- the broker re-reads current state |
+| authority (peer, incarnation, capability, lease) | runtime, at the effect | `PeerAuthenticator`, `assertCurrentActor`, `currentIntent`, `requireManage`; V25A, V23B | anything a cached or earlier observation says |
+| architecture import / effect / fence / transaction / ownership rules | static source analysis | `scripts/architecture/rules/*`, each with accept and reject fixtures; the exit-owner rule also with alias and look-alike fixtures (V29A) | data flow: a value passed through a function is outside every static rule |
+| owner maps (`source-owners.json`, `mutation-owners.json`), traceability | inventory | drift and completeness checks (R39, P1) | proof: a requirement is proven only by an executed oracle with a fresh result |
+| lane `requiredNames` | execution evidence | the named test must run and pass in that lane | that the name covers the requirement -- the card's oracle text does |
+| cgroup death, unit state, start limit | kernel / user manager | kernel lane (T36, T38, V25A, V07B, V23B) | a pid, a signal or a socket close |
+| session and receipt durability under power loss | not proven | -- | NOT_RUN (WP30) |
+
+WP29.01 — one overstated comment corrected: the operation-result brand was said to
+"prove" ledger relations; it records that the codec checked them at decode time.
+The compile-time claims in `capabilities.ts`, `limits.ts`, `resources.ts`,
+`exhaustive.ts` and the operation codec are real compile-time bindings (P22).
+
+WP29.02 — the request-hash set-field recipe was a `Record<string, string[]>`: a
+misspelled method or field compiled and silently skipped normalization. It is now
+checked against `MutationMethod` and each method's array params (V29A compiles an
+unknown method, a missing field and a non-array field and requires an error); the
+recipe values, and so the v1 hash, are unchanged.
+
+WP29.03 — the CLI exit-owner rule matched only the literal call `process.exit(...)`.
+It now also catches a reference, element access, destructuring (renamed too),
+`globalThis.process` and a `node:process` import, and still ignores look-alikes
+(`app.exit()`, `obj.process.exit()`, strings, comments, `process.env`) (V29A; the
+previous rule lets five of the eight spellings through). Data flow stays out of scope;
+the CLI exit behaviour tests own it. No broad allowlist was added.
+
+WP29.04 — proof scopes of fixtures: `createCompleteConfigurationFixture` is
+production-valid and goes through the real loader (V02A rejects deliberately
+broken variants); layout-only fixtures prove parsing, not a startable config;
+`receipt-supersession.test.mjs` and the CLI replay suite are CLI cache evidence,
+never batch receipt recovery (that is V06/V07/V08); spawn-plan unit tests prove
+argv and environment, and only V27A/T117 prove an actual spawn.
