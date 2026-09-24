@@ -81,8 +81,11 @@ export class QuarantineImporter {
         "GIT_TERMINAL_PROMPT=0", "GIT_NO_REPLACE_OBJECTS=1", "GIT_CONFIG_COUNT=3",
         "GIT_CONFIG_KEY_0=core.hooksPath", "GIT_CONFIG_KEY_1=core.fsync", "GIT_CONFIG_KEY_2=core.fsyncMethod",
         "GIT_CONFIG_VALUE_0=/dev/null", "GIT_CONFIG_VALUE_1=all", "GIT_CONFIG_VALUE_2=fsync",
+        // The executor ends this tree only with SIGKILL to its process group,
+        // which no process can forward; --kill-child is what takes the forked
+        // namespace with unshare. util-linux 2.41 has no --forward-signals.
         "/usr/bin/unshare", "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork",
-        "--kill-child=SIGKILL", "--forward-signals", "--mount-proc", "/bin/sh", "-c", SCRIPT, "oma-quarantine",
+        "--kill-child=SIGKILL", "--mount-proc", "/bin/sh", "-c", SCRIPT, "oma-quarantine",
         "/proc/self/fd/3", this.paths.projectGit, candidate, exportRef, String(this.paths.quarantineTmpBytes), root, ...prerequisites,
       ], env: GIT_ENV, timeoutMs: Math.max(1000, timeoutMs), stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 }, undefined, [bundleFd]);
       if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", `quarantine import outcome is ${result.kind}`);
