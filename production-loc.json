@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 225,
-    "n_lines": 29562,
+    "n_lines": 29649,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -42,6 +42,12 @@
     "code": 381,
     "language": "TypeScript"
   },
+  "src/config/generations.ts": {
+    "blank": 24,
+    "comment": 112,
+    "code": 376,
+    "language": "TypeScript"
+  },
   "src/entry/oma.ts": {
     "blank": 26,
     "comment": 169,
@@ -58,12 +64,6 @@
     "blank": 36,
     "comment": 92,
     "code": 329,
-    "language": "TypeScript"
-  },
-  "src/config/generations.ts": {
-    "blank": 23,
-    "comment": 101,
-    "code": 316,
     "language": "TypeScript"
   },
   "src/tui/session.ts": {
@@ -96,16 +96,16 @@
     "code": 279,
     "language": "TypeScript"
   },
+  "src/tui/sources/settings.ts": {
+    "blank": 24,
+    "comment": 65,
+    "code": 278,
+    "language": "TypeScript"
+  },
   "src/runtime/pi-rpc.ts": {
     "blank": 3,
     "comment": 16,
     "code": 275,
-    "language": "TypeScript"
-  },
-  "src/tui/sources/settings.ts": {
-    "blank": 23,
-    "comment": 61,
-    "code": 271,
     "language": "TypeScript"
   },
   "src/broker/connection.ts": {
@@ -152,8 +152,8 @@
   },
   "src/lifecycle/create.ts": {
     "blank": 7,
-    "comment": 16,
-    "code": 230,
+    "comment": 18,
+    "code": 231,
     "language": "TypeScript"
   },
   "src/request-cache.ts": {
@@ -1357,9 +1357,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1190,
-    "comment": 4659,
-    "code": 23713,
+    "blank": 1192,
+    "comment": 4676,
+    "code": 23781,
     "nFiles": 225
   }
 }

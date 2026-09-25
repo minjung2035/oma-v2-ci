@@ -6,12 +6,16 @@
  * It never invents a model, a quota or a profile that the host did not declare.
  */
 import { createHash } from "node:crypto";
+import { lstatSync } from "node:fs";
 import type { HostConfigV1 } from "../../../implementation/contracts.js";
 import { StoreError } from "../../domain/errors.js";
 import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../../config.js";
 import type { ConfigurationLayout } from "../../config/operations.js";
-import { replaceDerivedFile, type DurabilityObserver } from "../../storage/durable-fs.js";
-import { commitManagedGeneration, managedRolesOf, type ManagedLimits, type ManagedCommit, type ManagedEdit, type ManagedSource } from "../../config/generations.js";
+import type { DurabilityObserver } from "../../storage/durable-fs.js";
+import {
+  commitInlineConfiguration, commitManagedGeneration, createInlineConfiguration, managedRolesOf,
+  type ManagedLimits, type ManagedCommit, type ManagedEdit, type ManagedSource,
+} from "../../config/generations.js";
 import type { ApplyScope, ConfigField } from "../model.js";
 import { CONFIG_BOUNDS } from "../limits.js";
 
@@ -160,25 +164,40 @@ export function applyField(settings: Settings, field: string, value: string | nu
   return EDITABLE_FIELD_DESCRIPTORS[field as EditableField].transform(settings, value);
 }
 
-/** FS-002/CFG-001: host authority is replaced atomically, never edited in place.
- * The complete candidate is validated before rendering; a later read independently
- * re-observes the committed bytes.
- *
- * Only for an inline `config.json`; a split bundle is published as a managed
- * generation by `commitManagedEdit`.
- */
-function writeValidatedSettings(path: string, candidate: ValidatedConfigCandidate): ValidatedConfigCandidate {
-  const revised = validateConfig({
-    ...candidate,
-    integration: { ...candidate.integration, policyRevision: revisionFor(candidate) },
-  });
-  replaceDerivedFile(path, `${JSON.stringify(revised, null, 2)}\n`, 0o600);
-  return revised;
+/** DR12, P0-2: whether two configurations mean the same -- the one answer for
+ * both layouts. The policy revision is derived from the meaning, so it is left
+ * out; in a bundle the roles' prompts, extensions and tool surfaces are part of
+ * the meaning (an inline config has none). */
+function sameMeaning(left: HostConfigV1, leftRoles: Record<string, unknown>, right: HostConfigV1, rightRoles: Record<string, unknown>): boolean {
+  const meaning = (value: HostConfigV1, roles: Record<string, unknown>) =>
+    JSON.stringify([{ ...value, integration: { ...value.integration, policyRevision: "" } }, roles]);
+  return meaning(left, leftRoles) === meaning(right, rightRoles);
+}
+function revised(config: HostConfigV1, roles?: Readonly<Record<string, unknown>>): ValidatedConfigCandidate {
+  return validateConfig({ ...config, integration: { ...config.integration, policyRevision: revisionFor(config, roles) } });
 }
 
-/** Compatibility facade: arbitrary HostConfigV1 is never handed to the writer. */
+/** DR12, P0-3: an inline `config.json` is committed by the generation owner
+ * (config/generations.ts): the expected version is the snapshot the edit was
+ * read as, and the loader reproduces the candidate before the commit point. */
+function commitInlineEdit(snapshot: ConfigurationSnapshot, config: HostConfigV1, faults?: DurabilityObserver): ManagedCommit {
+  if (sameMeaning(config, {}, snapshot.config, {})) return Object.freeze({ kind: "unchanged", generation: null });
+  return commitInlineConfiguration(snapshot, revised(config), faults);
+}
+
+/** Compatibility facade: arbitrary HostConfigV1 is never handed to the writer.
+ * A missing file is created, never overwritten if another start made it first;
+ * an existing one is committed against the version read just now. */
 export function writeSettings(path: string, config: HostConfigV1): HostConfigV1 {
-  return writeValidatedSettings(path, validateConfig(config));
+  const candidate = revised(validateConfig(config));
+  if (lstatSync(path, { throwIfNoEntry: false }) === undefined) {
+    if (createInlineConfiguration(path, candidate) === "existing") return loadConfigurationSnapshot(path).config;
+    return candidate;
+  }
+  const snapshot = loadConfigurationSnapshot(path);
+  if (snapshot.layout.kind === "inline") { commitInlineEdit(snapshot, candidate); return loadConfigurationSnapshot(path).config; }
+  commitManagedEdit(snapshot, candidate);
+  return loadConfigurationSnapshot(path).config;
 }
 
 /** D02/WP13: the one writer of a split bundle. The candidate is revised over
@@ -190,13 +209,9 @@ export function commitManagedEdit(snapshot: ManagedSource, config: HostConfigV1,
   faults?: DurabilityObserver, limits?: ManagedLimits): ManagedCommit {
   const before = managedRolesOf(snapshot, {}, snapshot.config);
   const after = managedRolesOf(snapshot, roles, config);
-  const semantic = (value: HostConfigV1, described: Record<string, unknown>) =>
-    JSON.stringify([{ ...value, integration: { ...value.integration, policyRevision: "" } }, described]);
-  if (semantic(config, roleRevisionInput(after)) === semantic(snapshot.config, roleRevisionInput(before)))
+  if (sameMeaning(config, roleRevisionInput(after), snapshot.config, roleRevisionInput(before)))
     return Object.freeze({ kind: "unchanged", generation: null });
-  const revised = validateConfig({ ...config,
-    integration: { ...config.integration, policyRevision: revisionFor(config, roleRevisionInput(after)) } });
-  return commitManagedGeneration(snapshot, { config: revised, roles }, faults, limits);
+  return commitManagedGeneration(snapshot, { config: revised(config, roleRevisionInput(after)), roles }, faults, limits);
 }
 function roleRevisionInput(roles: ReturnType<typeof managedRolesOf>): Record<string, unknown> {
   return Object.fromEntries(Object.keys(roles).sort().map(name => {
@@ -342,14 +357,11 @@ export function commitField(settings: Settings, field: string, value: string | n
   const blocked = descriptor.blocked?.(settings.config, bootstrap) ?? null;
   if (blocked !== null) throw new StoreError("INVALID_REQUEST", blocked);
   const applied = validateConfig(descriptor.transform(settings, value));
-  if (settings.layout.kind === "inline") {
-    const { integration: _before, ...current } = settings.config;
-    const { integration: _after, ...next } = applied;
-    if (JSON.stringify(next) === JSON.stringify(current)) return Object.freeze({ kind: "unchanged" });
-    writeValidatedSettings(settings.layout.path, applied);
-    return Object.freeze({ kind: "saved" });
-  }
+  // P0-3: every edit is transform -> whole validation -> one commit, against
+  // the snapshot it was read as.
   if (settings.snapshot === null)
-    throw new StoreError("UNSUPPORTED_PROFILE", "a split configuration is edited only from the snapshot it was read as");
-  return Object.freeze({ kind: commitManagedEdit(settings.snapshot, applied).kind === "unchanged" ? "unchanged" : "saved" });
+    throw new StoreError("UNSUPPORTED_PROFILE", "a configuration is edited only from the snapshot it was read as");
+  const committed = settings.layout.kind === "inline"
+    ? commitInlineEdit(settings.snapshot, applied) : commitManagedEdit(settings.snapshot, applied);
+  return Object.freeze({ kind: committed.kind === "unchanged" ? "unchanged" : "saved" });
 }

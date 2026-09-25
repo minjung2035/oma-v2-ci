@@ -18,7 +18,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import {
-  closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync,
+  closeSync, constants, fchmodSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync,
   readdirSync, readFileSync, readSync, renameSync, unlinkSync, writeSync,
 } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
@@ -159,7 +159,7 @@ function currentBytes(path: string): Buffer {
 /** CONFIG-CONTRACT expected version: every file of the closure the edit was
  * read from still holds the bytes it held. The whole commit below is one
  * synchronous run, so no other edit of this process interleaves after this. */
-function assertCurrent(snapshot: ManagedSource): void {
+function assertCurrent(snapshot: Pick<ConfigurationSnapshot, "sourceFiles">): void {
   for (const identity of snapshot.sourceFiles) {
     let bytes: Buffer;
     try { bytes = currentBytes(identity.path); }
@@ -342,6 +342,74 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
   return Object.freeze({ kind: "committed", generation: id });
 }
 
+/** DR12, P0-3: the inline `config.json` is a one-file generation with the
+ * same owner and order as a managed bundle (D02 keeps "validate -> durable
+ * replace of the same file" for it): the expected version is the snapshot the
+ * edit was derived from, the candidate is written to a private temporary, the
+ * production loader reads that temporary back and must reproduce the
+ * candidate, the version is checked again, and the rename is the commit
+ * point. A committed configuration is therefore always one the loader loads.
+ * A failed flush after the rename is reported as unconfirmed and blocks the
+ * next edit until the flush succeeds (CONFIG-CONTRACT outcome-unconfirmed). */
+export function commitInlineConfiguration(snapshot: Pick<ConfigurationSnapshot, "layout" | "sourceFiles">,
+  candidate: ValidatedConfigCandidate, faults?: DurabilityObserver): ManagedCommit {
+  const layout = snapshot.layout;
+  if (layout.kind !== "inline") throw new StoreError("UNSUPPORTED_PROFILE", "only an inline configuration is committed as one file");
+  const path = layout.path;
+  const root = dirname(path);
+  if (unconfirmed.has(root)) {
+    try { fsyncDir(root); unconfirmed.delete(root); }
+    catch (error) { throw storeFailure(error); }
+  }
+  assertCurrent(snapshot);
+  const bytes = Buffer.from(`${JSON.stringify(candidate, null, 2)}\n`);
+  publishInline(path, bytes, candidate, faults, () => assertCurrent(snapshot), "replace");
+  return Object.freeze({ kind: "committed", generation: `inline-${createHash("sha256").update(bytes).digest("hex")}` });
+}
+/** First run: the configuration is created only where none exists. A start
+ * that loses the race reads the winner's, never overwrites it. */
+export function createInlineConfiguration(path: string, candidate: ValidatedConfigCandidate, faults?: DurabilityObserver): "created" | "existing" {
+  const bytes = Buffer.from(`${JSON.stringify(candidate, null, 2)}\n`);
+  return publishInline(path, bytes, candidate, faults, () => undefined, "create");
+}
+function publishInline(path: string, bytes: Buffer, candidate: ValidatedConfigCandidate, faults: DurabilityObserver | undefined,
+  recheck: () => void, mode: "replace" | "create"): "created" | "existing" {
+  const root = dirname(path);
+  const temporaryName = `.${basename(path)}.${randomUUID()}.tmp`;
+  const temporary = join(root, temporaryName);
+  writeExclusiveFsyncedFile(temporary, bytes, 0o600, faults);
+  let outcome: "created" | "existing" = "created";
+  withinDirectory(path, (directory, name) => {
+    let published = false;
+    try {
+      const loaded = validateConfig(readConfigurationSource(temporary).host);
+      if (JSON.stringify(loaded) !== JSON.stringify(validateConfig(candidate)))
+        throw new StoreError("INTERNAL_ERROR", "the written configuration does not reproduce the candidate");
+      recheck();
+      faultAt(faults, "derived-rename", "before", path);
+      if (mode === "replace") renameSync(entryAt(directory, temporaryName), entryAt(directory, name));
+      else {
+        try { linkSync(entryAt(directory, temporaryName), entryAt(directory, name)); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; outcome = "existing"; }
+        unlinkSync(entryAt(directory, temporaryName));
+      }
+      published = true;
+      faultAt(faults, "derived-rename", "after-visible", path);
+    } catch (error) {
+      if (!published && !isDurabilityFault(error)) { try { unlinkSync(entryAt(directory, temporaryName)); } catch { /* collected later */ } }
+      throw error;
+    }
+    try { fsyncHeldDir(directory, root, faults); }
+    catch (error) {
+      if (isDurabilityFault(error)) throw error;
+      unconfirmed.add(root);
+      const cause = storeFailure(error);
+      throw new StoreError(cause.code, `configuration ${path} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error });
+    }
+  });
+  return outcome;
+}
+
 /** Only the newest entries of the journal are ever needed: which generation
  * was committed last, and the one before it. The journal grows by one line per
  * commit, so it is read from its end and never whole (INV10). */
@@ -406,6 +474,7 @@ function generationsToKeep(current: string, tail: readonly string[] | null, pres
  * directory. Age alone never selects a generation, and neither does a journal
  * that could not be read (`generationsToKeep`). */
 export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, "layout">): readonly string[] {
+  if (snapshot.layout.kind === "inline") return collectTemporaries(snapshot.layout.path);
   const current = managedGenerationOf(snapshot);
   if (current === null || snapshot.layout.kind !== "operations") return [];
   const base = join(dirname(snapshot.layout.index), MANAGED_DIRECTORY);
@@ -429,12 +498,15 @@ export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, 
     removed.push(entry);
   }
   if (removed.length > 0) fsyncDir(generations);
-  // Manifest temporaries a crashed commit left beside the index: only the
-  // exact names this writer creates, never other files of the bundle root.
-  const root = dirname(snapshot.layout.index);
-  const temporary = new RegExp(`^\\.${basename(snapshot.layout.index).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.[0-9a-f-]{36}\\.tmp$`);
-  let swept = false;
-  for (const entry of readdirSync(root)) if (temporary.test(entry)) { removeOwnedFile(join(root, entry)); removed.push(entry); swept = true; }
-  if (swept) fsyncDir(root);
-  return Object.freeze(removed);
+  return Object.freeze([...removed, ...collectTemporaries(snapshot.layout.index)]);
+}
+/** Commit-point temporaries a crashed commit left beside the file it would
+ * have replaced: only the exact names this writer creates, never other files. */
+function collectTemporaries(commitPoint: string): readonly string[] {
+  const root = dirname(commitPoint);
+  const temporary = new RegExp(`^\\.${basename(commitPoint).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.[0-9a-f-]{36}\\.tmp$`);
+  const removed: string[] = [];
+  for (const entry of readdirSync(root)) if (temporary.test(entry)) { removeOwnedFile(join(root, entry)); removed.push(entry); }
+  if (removed.length > 0) fsyncDir(root);
+  return removed;
 }

@@ -16,7 +16,12 @@ import type { LifecycleModule } from "../src/lifecycle.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { readCurrentHostPolicy } from "../src/config.js";
 import { defaultHostConfig } from "../src/config/defaults.js";
-import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { loadConfiguration, validateConfig } from "../src/config.js";
+import { collectManagedGenerations, commitInlineConfiguration, createInlineConfiguration } from "../src/config/generations.js";
+import { applyField, commitField, readSettings, WORKER_LIMIT } from "../src/tui/sources/settings.js";
+import { DurabilityFaultError, type DurabilityObserver } from "../src/storage/durable-fs.js";
+import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Store } from "../src/store.js";
 import { LifecycleModule as Lifecycle } from "../src/lifecycle.js";
@@ -130,4 +135,64 @@ test("DR13 / P0-5: a unit command that did not finish is an unknown outcome, not
     const units = new Units("demo", { node: "/usr/bin/node", libdir: "/opt/oma", state: bin, society: "demo", agent: "", config: join(bin, "c.json"), run: bin, brokerUnit: "" }, bin);
     assert.throws(() => units.start("alice", false), { code: "DEADLINE_EXCEEDED" });
   } finally { process.env.PATH = path; rmSync(bin, { recursive: true, force: true }); }
+});
+
+test("DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused, and the newer file is kept", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const settings = readSettings(f.input);
+    assert.equal(settings.layout.kind, "inline");
+    // The Human edits the file by hand after the screen read it.
+    const manual = { ...f.config, quota: { ...f.config.quota, societyAgents: f.config.quota.societyAgents + 5 } };
+    writeFileSync(f.input, JSON.stringify(manual));
+    assert.throws(() => commitField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1), { code: "POLICY_CHANGED" });
+    assert.equal(JSON.parse(readFileSync(f.input, "utf8")).quota.societyAgents, manual.quota.societyAgents, "the newer edit is not lost");
+  } finally { f.close(); }
+});
+
+test("DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const original = readFileSync(f.input);
+    const settings = readSettings(f.input);
+    const candidate = validateConfig(applyField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1));
+    const crashAt = (phase: "before" | "after-visible"): DurabilityObserver => event => {
+      if (event.point === "derived-rename" && event.phase === phase) throw new DurabilityFaultError(event);
+    };
+    assert.throws(() => commitInlineConfiguration(settings.snapshot!, candidate, crashAt("before")), DurabilityFaultError);
+    assert.deepEqual(readFileSync(f.input), original, "nothing is committed before the rename");
+    assert.equal(collectManagedGenerations({ layout: settings.snapshot!.layout }).length, 1, "the crashed temporary is collected");
+    assert.throws(() => commitInlineConfiguration(settings.snapshot!, candidate, crashAt("after-visible")), DurabilityFaultError);
+    assert.equal(loadConfiguration(f.input).config.quota.societyAgents, f.config.quota.societyAgents + 1,
+      "a committed configuration is one the loader loads");
+  } finally { f.close(); }
+});
+
+test("DR12: a flush that fails after the inline commit point is reported as unconfirmed, and the next edit flushes first", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const settings = readSettings(f.input);
+    const candidate = validateConfig(applyField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1));
+    let failed = false;
+    const failFlush: DurabilityObserver = event => {
+      if (!failed && event.point === "directory-fsync" && event.phase === "ambiguous" && event.path === f.root) { failed = true; throw new Error("EIO: injected flush failure"); }
+    };
+    assert.throws(() => commitInlineConfiguration(settings.snapshot!, candidate, failFlush), /published but its durability is unconfirmed/);
+    assert.equal(loadConfiguration(f.input).config.quota.societyAgents, f.config.quota.societyAgents + 1, "the rename happened");
+    assert.equal(commitField(readSettings(f.input), WORKER_LIMIT, f.config.quota.societyAgents + 2).kind, "saved");
+  } finally { f.close(); }
+});
+
+test("DR12: a first-run configuration is created where none exists and never overwrites one another start made", () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const path = join(f.root, "fresh.json");
+    const first = validateConfig(f.config);
+    assert.equal(createInlineConfiguration(path, first), "created");
+    const bytes = readFileSync(path); const inode = statSync(path).ino;
+    const other = validateConfig({ ...f.config, quota: { ...f.config.quota, societyAgents: f.config.quota.societyAgents + 1 } });
+    assert.equal(createInlineConfiguration(path, other), "existing");
+    assert.deepEqual(readFileSync(path), bytes); assert.equal(statSync(path).ino, inode);
+    assert.deepEqual(readdirSync(f.root).filter(name => name.endsWith(".tmp")), [], "no temporary is left behind");
+  } finally { f.close(); }
 });
