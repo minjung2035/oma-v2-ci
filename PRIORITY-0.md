@@ -2,11 +2,15 @@
 
 상태: **최상위 원칙 (사용자 결정, 2026-09-25)**. OMA의 모든 설계·수정·리팩터링·시험 판단은 이 문서에서
 시작한다. 이 문서는 새 wire method·DB state·error code를 직접 정의하지 않는다. 규범 문서
-(`architecture.md`, `implementation-spec.md`, 결정 D01–D06, 설계 수정 DR1–DR8)가 이미 전제하는
+(`architecture.md`, `implementation-spec.md`, 결정 D01–D06, 설계 수정 DR1–DR13)가 이미 전제하는
 명제를 가장 위에 적고, 기존 원칙을 그 하위 규칙으로 다시 정리한다. 규범 문장이나 코드가 이
 원칙과 충돌하면 편한 쪽을 고르지 않는다. 그 충돌은 **unresolved design decision**(MAINTENANCE §1)으로
 보고, 규범을 이 원칙에 맞게 고친다. N-001이 bytes를 결박하는 `architecture.md`는 고치지 않으며,
 그 문장과 어긋나는 판단은 `implementation/design-revisions.md`에 적는다.
+
+점검: 215개 production 파일의 1차 점검과 받는 자리 전부의 2차 점검을 마쳤고, 발견 23개(P0V-01–P0V-23)를
+고쳤다. 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
+설계 판단은 DR9–DR13에, 결박은 `implementation/validation.md`의 v16에 있다.
 
 ## 요약
 
@@ -95,6 +99,11 @@ plan의 중심 명제(`oma-v2-consistency-plan-b25961c/guide/PRINCIPLES.md`: "�
   아니다.
 - unknown을 끝내는 것은 새 관측, 명시적 repair, 또는 bounded policy가 정한 terminal이며, 그 terminal은
   무엇을 모르는지 기록한다.
+- 관측이 **답한 것**과 **답하지 않은 것**을 나눈다. 이름에 대한 답(없음, 종류가 다름)과 읽은 내용만 사실로
+  말한다. 답하지 않은 관측(권한 거부·I/O 오류·자원 부족으로 실패한 읽기, 끝나지 않은 명령)은 그 경계의
+  "모름"이다. 로컬 파일 관측의 판정은 `unobserved` 하나가 한다(DR13 일반 규칙).
+- 손상(STORE_CORRUPT)은 새 수락을 막는 fence를 닫는다. 그러므로 손상은 읽은 내용이나 답한 관측이 말할 때만
+  쓴다. commit point를 지났고 영속성만 불명인 효과는 "하지 않음"이 아니다(`publishedUnconfirmed`).
 - **판정 질문:** 이 catch/timeout/null 분기는 모르는 것을 아는 것처럼 기록하는가?
 - **기존 원칙:** INV02, INV10, MAINTENANCE §10–11, D01 증거 판정 표, D06.
 
@@ -153,11 +162,25 @@ plan의 중심 명제(`oma-v2-consistency-plan-b25961c/guide/PRINCIPLES.md`: "�
 (`implementation/design-revisions.md`)에 먼저 적고, 그 수정에서 코드 변경을 다시 도출한다. 원칙의 수정도
 점검 기록(`implementation/priority-0-audit.md`)에 근거와 함께 남긴다.
 
+**이번 점검에서 원칙을 다시 본 결과.**
+
+- **P0-5의 표현이 모자랐다.** "관측 실패"가 무엇인지를 코드가 자리마다 정했다. 그래서 2차 점검에서 같은
+  모습이 스무 곳 넘게 나왔다(디렉터리를 손상으로, 배포 파일을 지원 안 함으로, 목록을 0으로). 판정 기준을
+  errno 수준에서 한 번 정하고 한 함수에 두었다(위 P0-5, DR13). 원칙의 뜻은 그대로이고 표현을 날카롭게 했다.
+- **P0-1의 두 절반은 반대 방향이다.** 과거 사실을 다시 해석하지 않는 것과 새 효과 앞에서 현재 권한을 다시
+  보는 것은 코드 모양이 비슷하다. P0V-10의 첫 수정은 둘을 함께 지웠고, R37이 잡았다(`7e2559f`). 원칙은
+  이미 둘 다 말한다. 적용할 때 둘을 나눈다("일관성은 획일성이 아니다"의 한 예).
+- **결정이 원칙을 순서로만 지켰다.** D01의 "정산을 rollover보다 먼저"는 과거 전달 시도를 기록이 아니라
+  순서로 지켰다. schema에 과거 시도를 담을 곳이 없었다. 결정을 바꿨다(DR9). 원칙 자체의 결함은 아니었다.
+- 원칙을 지킨 코드에서 난 버그는 이번 점검에서 찾지 못했다. 찾으면 이 절차의 두 번째 질문부터 다시 한다.
+
 ## 적용 절차
 
 1. **파일 단위 점검.** 코드베이스 전체를 키워드로 훑지 않는다. 파일을 하나씩 읽고, 그 파일이 만들거나
    읽는 durable fact, 그 fact의 owner, 이 문서의 규칙별 판정과 근거(파일:줄)를 기록한다. 기록은
-   `implementation/priority-0-audit.md`에 남긴다.
+   `implementation/priority-0-audit.md`에 남긴다. 여러 파일을 한 항목으로 묶어 판정하면 놓침이 생긴다.
+   그래서 판정 질문 하나를 그 질문이 걸리는 모든 자리(예: P0-5는 모든 catch와 실패를 삼키는 API)에 다시
+   묻는 2차 점검을 한다.
 2. **판정.** 각 발견은 셋 중 하나다: 위반(고칠 규칙과 근거가 되는 기존 원칙을 적는다), 부합(근거를
    적는다), 의도된 예외(owner 문서와 이유를 적는다).
 3. **수정.** 위반은 이 문서의 하위 규칙에서 파생한 방식으로, 같은 종류가 있는 모든 곳에 함께 고친다.
