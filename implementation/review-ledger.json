@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 113,
-  "CHANGED_WITH_ORACLE": 110
+  "READ_UNCHANGED": 112,
+  "CHANGED_WITH_ORACLE": 111
  },
  "lanes": {
   "fast": "PASS",
@@ -1328,14 +1328,13 @@
   {
    "path": "src/extension/workspace-guard.ts",
    "primary": "WP22",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV13"
    ],
    "oracles": [
-    "AV3"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV13"
+   ]
   },
   {
    "path": "src/frame.ts",
@@ -2477,11 +2476,13 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV13",
     "AV3",
     "WP10",
     "WP27"
    ],
    "oracles": [
+    "AV13",
     "AV3",
     "V10A",
     "V10C",
@@ -3172,12 +3173,14 @@
    "by": [
     "AV10",
     "AV11",
+    "AV14",
     "AV3",
     "WP09"
    ],
    "oracles": [
     "AV10",
     "AV11",
+    "AV14",
     "AV3",
     "V09A",
     "V09B",
