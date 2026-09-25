@@ -146,6 +146,19 @@ export function loadConfiguration(path: string) {
   return Object.freeze({ config: snapshot.config, roles: snapshot.roles });
 }
 export function loadConfig(path: string): HostConfigV1 { return loadConfiguration(path).config; }
+/** DR13, P0-5: the host policy a running broker decides by now -- for an
+ * integration's revision and facts, and for a child's spec. One reader, one
+ * answer for "cannot be obtained": the file unreadable, or read mid-edit and
+ * invalid, is BROKER_UNAVAILABLE, not a changed policy; the work waits (a
+ * refusal to retry under the same key, or an accepted operation left for
+ * recovery). A readable policy of another society is a changed one. */
+export function readCurrentHostPolicy(path: string, society: string, load: (path: string) => HostConfigV1 = loadConfig): HostConfigV1 {
+  let current: HostConfigV1;
+  try { current = load(path); }
+  catch (error) { throw new StoreError("BROKER_UNAVAILABLE", "the host policy cannot be read now", { cause: error }); }
+  if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
+  return current;
+}
 
 export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const cfg = closedRecord(raw, ["schemaVersion", "society", "installation", "modelProfiles", "agentProfiles", "principalProfile", "initialResidents", "quota", "integration", "limits", "features"], "root");

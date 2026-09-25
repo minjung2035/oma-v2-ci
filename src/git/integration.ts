@@ -50,21 +50,30 @@ export class IntegrationCoordinator {
    * (TUI-007) -- and the revision is the host's current one (CFG-005, D02). An
    * edit that leaves the facts alone gives later integrations its revision; one
    * that changes them is refused until the broker holds them. Read outside
-   * acceptance (M-004); unreadable is refused, never the previous answer. */
+   * acceptance (M-004), and never answered from the previous read.
+   *
+   * DR13, P0-5: a policy that cannot be obtained now is not a changed policy.
+   * It is BROKER_UNAVAILABLE -- before acceptance a refusal to retry under the
+   * same key, after it an operation left pending for recovery to decide once
+   * the policy can be read. Only a policy read and found different is
+   * POLICY_CHANGED. */
   private currentPolicy(): IntegrationSnapshot {
     const bound = this.policy();
     if (this.store.inTransaction) throw new StoreError("INTERNAL_ERROR", "policy I/O cannot run inside acceptance");
     if (this.policyReader === null) return bound;
     let read: ReturnType<IntegrationPolicyReader>;
     try { read = this.policyReader(); }
-    catch { throw new StoreError("POLICY_CHANGED", "authoritative integration policy is unreadable or invalid"); }
+    catch (error) {
+      if (error instanceof StoreError && (error.code === "BROKER_UNAVAILABLE" || error.code === "POLICY_CHANGED")) throw error;
+      throw new StoreError("BROKER_UNAVAILABLE", "the host's integration policy cannot be read now", { cause: error });
+    }
     if (typeof read === "string") {
-      if (!read) throw new StoreError("POLICY_CHANGED", "authoritative integration policy is unreadable or invalid");
+      if (!read) throw new StoreError("BROKER_UNAVAILABLE", "the host's integration policy revision cannot be read now");
       return Object.freeze({ ...bound, policyRevision: read });
     }
     let current: IntegrationSnapshot;
     try { current = snapshotIntegrationPolicy(read); }
-    catch { throw new StoreError("POLICY_CHANGED", "authoritative integration policy is unreadable or invalid"); }
+    catch { throw new StoreError("POLICY_CHANGED", "the host's current integration policy is one the broker cannot hold"); }
     assertSameIntegrationPolicy(bound, current);
     return Object.freeze({ ...bound, policyRevision: current.policyRevision });
   }

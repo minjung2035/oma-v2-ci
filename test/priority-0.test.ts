@@ -14,6 +14,8 @@ import { ReconcileModule } from "../src/reconcile.js";
 import type { UnitsModule } from "../src/units.js";
 import type { LifecycleModule } from "../src/lifecycle.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
+import { readCurrentHostPolicy } from "../src/config.js";
+import { defaultHostConfig } from "../src/config/defaults.js";
 
 /** Leaves, in `root`, one of every artifact a request makes before its
  * acceptance, as a broker that died before accepting would leave them. */
@@ -69,4 +71,13 @@ test("DR10: startup recovery collects before anything is admitted or bootstrappe
     assert.equal(seenByBootstrap, false, "the collection ran before the bootstrap step");
     assert.ok(reconcile.preacceptCollection?.removed.includes(left.object));
   } finally { f.close(); }
+});
+
+test("DR13 / P0-5: the broker's host policy reader says 'cannot be read now', never 'changed', for a policy it cannot obtain", () => {
+  const config = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+  assert.equal(readCurrentHostPolicy("/config.json", "demo", () => config), config);
+  for (const failure of [Object.assign(new Error("EIO: i/o error"), { code: "EIO" }), new Error("config: quota.societyAgents must be a safe integer")])
+    assert.throws(() => readCurrentHostPolicy("/config.json", "demo", () => { throw failure; }), { code: "BROKER_UNAVAILABLE" });
+  assert.throws(() => readCurrentHostPolicy("/config.json", "other", () => config), { code: "POLICY_CHANGED" },
+    "a readable policy of another society is a changed one");
 });

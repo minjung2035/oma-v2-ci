@@ -13,7 +13,7 @@ import { openSupervisionChannel } from "../runtime/supervision-channel.js";
 import { GitModule } from "../git.js";
 import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "../git/integration-policy.js";
 import { ReconcileModule } from "../reconcile.js";
-import { loadConfig } from "../config.js";
+import { loadConfig, readCurrentHostPolicy } from "../config.js";
 import { createChildSpecResolver } from "../config/policy.js";
 import { ProcessLock, SOCIETY_OWNED_EXIT } from "../runtime/process-lock.js";
 import { claimSocietyFence } from "../runtime/society-lease.js";
@@ -151,22 +151,14 @@ async function main(): Promise<void> {
       undefined, Object.fromEntries(Object.entries(cfg.agentProfiles).map(([name, profile]) => [name, profile.resources])),
       agent => store.getAgent(agent)?.incarnation ?? null);
     const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
-    const resolveSpec = createChildSpecResolver(() => {
-      const current = loadConfig(configPath);
-      if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
-      return current;
-    }, () => store.inTransaction);
+    const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
     const git = new GitModule({ stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
       worldDir: join(stateRoot, "world"), society, quarantineTmpBytes: cfg.limits.bundleBytes,
       quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
       checkTimeoutSeconds: Math.max(1, ...cfg.integration.checks.map(check => check.resources.checkTimeoutSeconds)),
       checkRootfs: cfg.installation.rootfs, checkAssetsDir: cfg.installation.rootfs,
       checkTmpBytes: Math.max(1, ...cfg.integration.checks.map(check => check.resources.tmpBytes)),
-    }, store, mail, integrationPolicy, () => {
-      const current = loadConfig(configPath);
-      if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
-      return integrationPolicyFromConfig(current.integration);
-    });
+    }, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration));
     const hasGoal = (): boolean => git.hasCommittedContext();
     const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
       hasGoal, activationAllowed: () => lifetime.permitsActivation,
