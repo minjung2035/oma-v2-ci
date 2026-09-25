@@ -47,6 +47,11 @@ lease, and does not weaken live complete. Only proven-absent receipts permit the
 remaining prepared batches to roll over; absence does not prove no tool effect.
 Unavailable/conflicting/legacy-mismatched evidence blocks re-execution and remains
 intact for diagnosis. Completed incarnation is historical, never reassigned.
+(DR9, Priority 0: a prepared batch's incarnation is historical too -- its first
+delivery attempt. Rollover no longer rewrites it; a run inherits every prepared
+batch, and a receipt of any attempt from that first one to the ending run
+settles it. See design-revisions.md DR9 for how this differs from the rejected
+`receipt.incarnation <= current` below.)
 Principal examines settlement before starting a new turn; live endpoint registration
 still applies, and offline recovery is broker-owned, never anonymous completion.
 
@@ -919,7 +924,11 @@ Design revisions DR1–DR7 (after AV31, at the user's request) are recorded in
 `design-revisions.md`: the decisions behind AV10/AV17/AV27 (paths in the model's
 view), AV20 (the periodic sweep), AV22/AV28 (what a failure may say), the
 integrate delegation, AV23/AV26 (the stored mail format), redelivery, and AV31
-(the broker's lifetime), with the clauses each one changes.
+(the broker's lifetime), with the clauses each one changes. DR8 (the integration
+fact and the host's current revision) followed. DR9–DR13 come from the Priority 0
+audit (`../PRIORITY-0.md`, `priority-0-audit.md`): delivery attempts, pre-acceptance
+artifacts after a crash, session-entry durability before a receipt, one
+configuration commit owner, and one reading of an unknown.
 
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only

@@ -196,12 +196,12 @@
 |---|---|
 | T-send | 권한/중복 재검사, 주소 snapshot, op insert, deliveries insert |
 | T-route | 중복 op, subscription 변경, op succeeded |
-| T-batch-prepare | 현재 incarnation, snapshot, batch insert/회수, delivery.batch_id 연결 |
+| T-batch-prepare | 현재 incarnation, snapshot, batch insert(첫 시도 = 현재 incarnation, DR9) 또는 기존 prepared를 현재 시도로 반환, delivery.batch_id 연결 |
 | T-batch-complete | trusted receipt 확인 후 batch completed와 해당 deliveries.presented |
 | T-ack | 자기 delivery.acknowledged, op succeeded |
 | T-create-intent | 이름/spec conflict 검사, agents provisioning, parent op+initial message plan |
 | T-create-ready | 필수 clone/unit 확인 뒤 enabled 또는 stopped, initial mail 공개 조건 확정 |
-| T-run-open | 이전 cgroup 사망 및 BATCH-004의 old receipt 정산 뒤 incarnation 증가, receipt 부재가 확인된 나머지 prepared batch 소유 변경 |
+| T-run-open | 이전 cgroup 사망 및 BATCH-004의 이전 시도 receipt 정산 뒤 agent incarnation만 증가(나머지 prepared batch의 row는 바꾸지 않는다, DR9) |
 | T-stop-intent | desired=stopped 및 stop op pending |
 | T-submit-accept | durable bundle 검증 후 op+고정 result message plan/deliveries |
 | T-integrate-intent | 직렬화된 repo slot 확인, base/candidate/policy pending op |
@@ -278,7 +278,7 @@
 
 **MUST [BATCH-003]** 일반 batch의 최대 message 수는 host resource 설정 `batchMaxMessages`로 고정하며 초기 reference 값은 24다. direct/question/result/context class와 public-list class 양쪽이 있으면 각각 최소 1개를 포함하고, 남은 자리는 두 class를 교대로 oldest `(created_at_ms,message_id)`부터 선택한다. notice 6개도 이 순서를 사용한다. kind만 바꿔 권한·Principal 강제 개입을 얻을 수 없다.
 
-**MUST [BATCH-004]** D01: prepared batch의 원래 ordered message IDs와 session/evidence identity를 유지한다. 이전 run 또는 startup quiescence를 증명한 broker가 기존 durable incarnation과 정확히 일치하는 receipt를 먼저 관측·정산한다. filesystem 관측은 transaction 밖에서 하고 T-batch-complete 안에서 같은 batch/actor/incarnation/ordered manifest/state를 다시 확인한다. 그 뒤 receipt 최종 이름의 부재가 확인된 나머지 prepared만 T-run-open에서 재할당한다. completed batch의 incarnation은 역사적 사실로 남는다. 읽기 불가·손상·legacy incarnation mismatch는 재전달·재할당 근거가 아니며 원본 보존과 명시적 진단/repair 대상이다. live complete의 현재 peer/run fencing은 그대로 유지하고 recovery 권한을 새 RPC나 stale lease로 발급하지 않는다. 오류·abort·timeout·모델의 완료 문구는 boundary 증거가 아니다.
+**MUST [BATCH-004]** D01: prepared batch의 원래 ordered message IDs와 session/evidence identity를 유지한다. DR9: batch의 incarnation은 그 batch를 만든 첫 전달 시도이고 바뀌지 않는다. run이 열리면 나머지 prepared batch는 row를 바꾸지 않고 새 lease가 이어받으므로, batch의 전달 시도는 첫 시도부터 현재 lease까지다. 이전 run 또는 startup quiescence를 증명한 broker(현재 incarnation이 끝나는 run이어야 한다)가 그 구간 안의 시도가 쓴 receipt를 먼저 관측·정산한다. 정산은 현재 lease가 아니라 이 구간과 검증된 receipt에 묶인다. filesystem 관측은 transaction 밖에서 하고 T-batch-complete 안에서 같은 batch/actor/시도 구간/ordered manifest/state를 다시 확인한다. prepared·completed batch의 incarnation과 최초 유효 receipt는 역사적 사실로 남는다. 읽기 불가·손상·구간 밖 incarnation은 재전달 근거가 아니며 원본 보존과 명시적 진단/repair 대상이다. live complete의 현재 peer/run fencing은 그대로 유지하고 recovery 권한을 새 RPC나 stale lease로 발급하지 않는다. 오류·abort·timeout·모델의 완료 문구는 boundary 증거가 아니다.
 
 **MUST [BATCH-006]** 기본 followUp 경로의 production batch.complete는 validation record에 pin된 `oma-pi-rpc-v1@0.87.1` receipt만 허용한다. trusted runner가 소유한 정확한 state-root receipt path, batch ID/incarnation/message manifest, adapter revision, runner session root와 durable session file이 모두 일치해야 completed/presented를 같은 transaction에서 commit한다. 타입이나 문자열만 맞춘 evidence, model writable 경로, mock completion, 환경 변수 우회는 거절한다. 이 qualification은 진행 중 steer/concurrency 또는 전체 S-03 kill matrix를 통과했다는 뜻이 아니다.
 
@@ -304,7 +304,7 @@ pi.sendMessage(
 
 **MUST [PI-003]** 현재 qualified 기본 profile은 activation 때 준비된 batch를 followUp으로 전달하고 terminal boundary까지 완료한다. 이미 진행 중인 tool group 사이에 도착한 direct/question/reply/context를 끼워 넣는 steer profile은 도구 결과 보존·취소·동시 batch 귀속이 검증될 때까지 지원한다고 주장하지 않는다. 새 mail 때문에 준비된 batch의 ID나 mode를 바꾸지 않는다.
 
-**MUST [RUN-001]** activation은 unit/invocation 확인 → 이전 run 사망 확인 → BATCH-004의 exact old receipt 정산 → incarnation 발급 및 나머지 receipt-absent prepared 회수 → sandbox/Pi resume → batch 안내 → 정상 Pi loop → boundary commit → pending 재검사 → 필요 시 다음 loop 또는 exit 0 순서다. 최초 GOAL 전에는 inference를 시작하지 않는다.
+**MUST [RUN-001]** activation은 unit/invocation 확인 → 이전 run 사망 확인 → BATCH-004의 이전 시도 receipt 정산 → incarnation 발급(나머지 receipt-absent prepared는 batch를 바꾸지 않고 새 lease가 이어받는다, DR9) → sandbox/Pi resume → batch 안내 → 정상 Pi loop → boundary commit → pending 재검사 → 필요 시 다음 loop 또는 exit 0 순서다. 최초 GOAL 전에는 inference를 시작하지 않는다.
 
 **MUST [RUN-002]** inference slot이 부족하면 runner는 bounded 메모리 waiter로 기다린다. new를 남겨 둔 채 즉시 exit/restart를 반복하지 않는다. systemd·broker 취소를 받아 즉시 waiter에서 빠져야 한다. idle일 때 mail 유무를 모델에게 주기적으로 묻지 않는다.
 

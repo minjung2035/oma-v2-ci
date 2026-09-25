@@ -47,11 +47,11 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 | P0V-16 | P0-7 | test/crash-boundaries.test.ts, test/durable-fault-matrix.test.ts 외 | durable 경계의 목록이 코드에서 나오지 않고, 경계마다 kill·retry·restart 시험을 요구하는 장치가 없다. 이번에 바뀌는 경계에는 시험이 없거나 옛 의미로 적혀 있다 | 수정 b86d0c3(P0-7 gate) |
 | P0V-17 | P0-4, P0-7 | git.ts:`repairContextMirror`, git/context-mirror.ts; runtime/provision.ts `publishBinding` | P0-7 gate를 만들며 찾았다. (가) `repairContextMirror`는 durable 게시 경로인데 제품 코드도 시험도 부르지 않는다. owner 없는 durable 경계다. (나) project binding 게시가 죽으면 `.project-binding.json.<hex>.tmp` 임시 파일의 owner가 없다(P0-4). (다) draining broker의 status view 제거(broker.ts, protocol/status-view.ts)에 시험이 없다 | 수정 b86d0c3((가) 삭제, (나) tenure 보유자의 provisioning이 수집, (다) 시험 추가) |
 | P0V-18 | P0-2, P0-5 | (`b86d0c3` 기준) tui/exit.ts:9-21, entry/oma.ts:42,83,152,161,177,181,324 | Control Panel(`oma`)의 exit 판정이 CLI의 `errorExit`와 따로 구현되어 있다. `codeFor`는 UNSUPPORTED_PROFILE·SPIKE_UNRESOLVED만 4, BROKER_UNAVAILABLE·DEADLINE_EXCEEDED만 3이고 나머지는 모두 2다. 그래서 RUN_TERMINATION_UNKNOWN·REF_STATE_UNKNOWN·STORE_CORRUPT·INTERNAL_ERROR 같은 불명이 확정 실패(2)로 나간다. 진입점은 exit을 숫자로 직접 적는다. "잠시 후 다시 실행하세요"(다른 oma가 소유)는 4(지원하지 않음)이고, usage·다른 프로젝트의 바인딩도 4다. 1차 점검은 tui/exit.ts를 묶음 판정에서 부합으로 적었다. 2차 점검에서 바로잡았다 | 수정 7b6c462 |
-| P0V-19 | P0-5 | config/operations.ts:352,417 | loader가 읽지 못한 설정(EACCES·EIO)을 내용이 틀린 설정과 같은 INVALID_REQUEST로 쌌다(P0V-08의 빠진 부분). 자세히는 "2차 점검" | 수정(2차 점검 commit) |
-| P0V-20 | P0-5 | storage/directory.ts:23,47, store.ts:217,331, runtime/resident-rootfs.ts:137, runtime/provision.ts:103,319,345,403 | 관측하지 못한 것을 STORE_CORRUPT로 올려 broker의 sticky fence(domain/admission.ts:9-11)가 society를 멈춘다. 바인딩을 읽지 못한 것을 "다른 바인딩"으로 보고한다 | 수정(2차 점검 commit) |
-| P0V-21 | P0-5 | runtime/{assets.ts:50, deployment-manifest.ts:131, extension-integrity.ts:51, pi-adapter.ts:118, pi-runtime.ts:49,62} | 관측하지 못한 host 배치·배포·extension·Pi 경로를 UNSUPPORTED_PROFILE로 보고한다 | 수정(2차 점검 commit) |
-| P0V-22 | P0-5 | config/generations.ts:182, tui/sources/{extensions.ts:65,70, mail.ts:92} | 목록을 얻지 못한 것을 0·빠짐으로 센다(generation 예산, extension 후보, 메일·unread 수) | 수정(2차 점검 commit) |
-| P0V-23 | P0-5 | tui/app.ts:207 | commit된 뒤 flush만 실패한 설정 저장을 "저장하지 못했습니다"로 표시한다 | 수정(2차 점검 commit) |
+| P0V-19 | P0-5 | config/operations.ts:352,417 | loader가 읽지 못한 설정(EACCES·EIO)을 내용이 틀린 설정과 같은 INVALID_REQUEST로 쌌다(P0V-08의 빠진 부분). 자세히는 "2차 점검" | 수정 76a6827 |
+| P0V-20 | P0-5 | storage/directory.ts:23,47, store.ts:217,331, runtime/resident-rootfs.ts:137, runtime/provision.ts:103,319,345,403 | 관측하지 못한 것을 STORE_CORRUPT로 올려 broker의 sticky fence(domain/admission.ts:9-11)가 society를 멈춘다. 바인딩을 읽지 못한 것을 "다른 바인딩"으로 보고한다 | 수정 76a6827 |
+| P0V-21 | P0-5 | runtime/{assets.ts:50, deployment-manifest.ts:131, extension-integrity.ts:51, pi-adapter.ts:118, pi-runtime.ts:49,62} | 관측하지 못한 host 배치·배포·extension·Pi 경로를 UNSUPPORTED_PROFILE로 보고한다 | 수정 76a6827 |
+| P0V-22 | P0-5 | config/generations.ts:182, tui/sources/{extensions.ts:65,70, mail.ts:92} | 목록을 얻지 못한 것을 0·빠짐으로 센다(generation 예산, extension 후보, 메일·unread 수) | 수정 76a6827 |
+| P0V-23 | P0-5 | tui/app.ts:207 | commit된 뒤 flush만 실패한 설정 저장을 "저장하지 못했습니다"로 표시한다 | 수정 76a6827 |
 
 ## 파일별 기록
 

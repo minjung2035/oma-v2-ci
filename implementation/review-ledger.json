@@ -2,8 +2,9 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 100,
-  "CHANGED_WITH_ORACLE": 124
+  "READ_UNCHANGED": 93,
+  "CHANGED_WITH_ORACLE": 131,
+  "REMOVED": 1
  },
  "lanes": {
   "fast": "PASS",
@@ -195,6 +196,7 @@
    "by": [
     "AV20",
     "AV5",
+    "DR9",
     "WP03",
     "WP07",
     "WP21",
@@ -205,6 +207,7 @@
    "oracles": [
     "AV20",
     "AV5",
+    "DR9",
     "V03A",
     "V03B",
     "V07A",
@@ -592,6 +595,7 @@
     "AV27",
     "AV28",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -604,6 +608,7 @@
     "AV27",
     "AV28",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -663,11 +668,13 @@
    "primary": "WP11",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR13",
     "WP11",
     "WP12",
     "WP14"
    ],
    "oracles": [
+    "DR13",
     "V11A",
     "V11B",
     "V11C",
@@ -700,6 +707,8 @@
     "AV2",
     "AV5",
     "AV7",
+    "DR12",
+    "DR13",
     "WP13",
     "WP14"
    ],
@@ -708,6 +717,8 @@
     "AV2",
     "AV5",
     "AV7",
+    "DR12",
+    "DR13",
     "V13A",
     "V13B",
     "V13C",
@@ -720,10 +731,12 @@
    "primary": "WP12",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR13",
     "WP12",
     "WP14"
    ],
    "oracles": [
+    "DR13",
     "V12A",
     "V12B",
     "V14A",
@@ -932,6 +945,7 @@
     "AV27",
     "AV28",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -943,6 +957,7 @@
     "AV27",
     "AV28",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -1153,6 +1168,7 @@
     "AV28",
     "AV31",
     "AV5",
+    "DR13",
     "WP03",
     "WP21",
     "WP22"
@@ -1165,6 +1181,7 @@
     "AV28",
     "AV31",
     "AV5",
+    "DR13",
     "V03A",
     "V03B",
     "V21A",
@@ -1205,6 +1222,7 @@
     "AV3",
     "AV5",
     "AV7",
+    "DR13",
     "WP03",
     "WP08",
     "WP09",
@@ -1219,6 +1237,7 @@
     "AV3",
     "AV5",
     "AV7",
+    "DR13",
     "V03A",
     "V03B",
     "V08A",
@@ -1279,14 +1298,13 @@
   {
    "path": "src/extension/cli-process.ts",
    "primary": "WP27",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR13"
    ],
    "oracles": [
-    "T119"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "DR13"
+   ]
   },
   {
    "path": "src/extension/delivery.ts",
@@ -1335,6 +1353,7 @@
     "AV30",
     "AV5",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -1350,6 +1369,7 @@
     "AV26",
     "AV5",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -1424,11 +1444,13 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV13",
-    "AV25"
+    "AV25",
+    "DR13"
    ],
    "oracles": [
     "AV13",
-    "AV25"
+    "AV25",
+    "DR13"
    ]
   },
   {
@@ -1494,21 +1516,9 @@
   {
    "path": "src/git/context-mirror.ts",
    "primary": "WP18",
-   "status": "READ_UNCHANGED",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "CTX-003",
-    "CTX-004",
-    "DB-009",
-    "ERR-001",
-    "GIT-006",
-    "INT-003",
-    "R01",
-    "T53"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "status": "REMOVED",
+   "by": [],
+   "oracles": []
   },
   {
    "path": "src/git/context-publication.ts",
@@ -1597,6 +1607,7 @@
     "AV27",
     "AV28",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -1609,6 +1620,7 @@
     "AV27",
     "AV28",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -1809,6 +1821,7 @@
    "by": [
     "AV4",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -1821,6 +1834,7 @@
    "oracles": [
     "AV4",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -1944,6 +1958,7 @@
     "DR4",
     "DR6",
     "DR7",
+    "DR9",
     "WP06"
    ],
    "oracles": [
@@ -1957,6 +1972,7 @@
     "DR4",
     "DR6",
     "DR7",
+    "DR9",
     "V06A",
     "V06B"
    ]
@@ -2006,9 +2022,11 @@
    "primary": "WP20",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR10",
     "WP20"
    ],
    "oracles": [
+    "DR10",
     "V20A",
     "V20B"
    ]
@@ -2416,12 +2434,14 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV20",
+    "DR10",
     "WP03",
     "WP21",
     "WP22"
    ],
    "oracles": [
     "AV20",
+    "DR10",
     "V03A",
     "V03B",
     "V21A",
@@ -2442,6 +2462,17 @@
     "R36"
    ],
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+  },
+  {
+   "path": "src/reconcile/preaccept.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR10"
+   ],
+   "oracles": [
+    "DR10"
+   ]
   },
   {
    "path": "src/request-cache.ts",
@@ -2476,6 +2507,7 @@
     "AV10",
     "AV11",
     "AV21",
+    "DR9",
     "WP06",
     "WP10"
    ],
@@ -2483,6 +2515,7 @@
     "AV10",
     "AV11",
     "AV21",
+    "DR9",
     "V06A",
     "V06B",
     "V10A",
@@ -2494,9 +2527,11 @@
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR13",
     "WP03"
    ],
    "oracles": [
+    "DR13",
     "V03A",
     "V03B"
    ]
@@ -2529,10 +2564,12 @@
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV16"
+    "AV16",
+    "DR13"
    ],
    "oracles": [
-    "AV16"
+    "AV16",
+    "DR13"
    ]
   },
   {
@@ -2550,21 +2587,13 @@
   {
    "path": "src/runtime/extension-integrity.ts",
    "primary": "WP27",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR13"
    ],
    "oracles": [
-    "AV3",
-    "R28",
-    "REC-007",
-    "T106",
-    "T113",
-    "V08A",
-    "V08B",
-    "V10A"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "DR13"
+   ]
   },
   {
    "path": "src/runtime/host-tenure.ts",
@@ -2603,11 +2632,13 @@
    "by": [
     "AV17",
     "AV24",
+    "DR13",
     "WP10"
    ],
    "oracles": [
     "AV17",
     "AV24",
+    "DR13",
     "V10A",
     "V10C"
    ]
@@ -2630,9 +2661,11 @@
    "primary": "WP31",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR13",
     "WP31"
    ],
    "oracles": [
+    "DR13",
     "V31A",
     "V31B"
    ]
@@ -2661,11 +2694,13 @@
    "primary": "WP08",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR9",
     "WP05",
     "WP08",
     "WP09"
    ],
    "oracles": [
+    "DR9",
     "V05A",
     "V05B",
     "V08A",
@@ -2703,6 +2738,7 @@
     "AV11",
     "AV3",
     "AV5",
+    "DR13",
     "WP16"
    ],
    "oracles": [
@@ -2710,6 +2746,7 @@
     "AV11",
     "AV3",
     "AV5",
+    "DR13",
     "V16A",
     "V16B"
    ]
@@ -2722,12 +2759,14 @@
     "AV1",
     "AV19",
     "AV2",
-    "AV5"
+    "AV5",
+    "DR13"
    ],
    "oracles": [
     "AV1",
     "AV2",
-    "AV5"
+    "AV5",
+    "DR13"
    ]
   },
   {
@@ -2894,12 +2933,16 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV4",
+    "DR11",
+    "DR9",
     "WP05",
     "WP06",
     "WP27"
    ],
    "oracles": [
     "AV4",
+    "DR11",
+    "DR9",
     "V05A",
     "V05B",
     "V06A",
@@ -2930,21 +2973,13 @@
   {
    "path": "src/storage/directory.ts",
    "primary": "WP17",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR13"
    ],
    "oracles": [
-    "AV5",
-    "R14",
-    "R20",
-    "R21",
-    "S-06",
-    "V05A",
-    "V05B",
-    "V18A"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "DR13"
+   ]
   },
   {
    "path": "src/storage/durable-fs.ts",
@@ -2953,32 +2988,26 @@
    "by": [
     "AV1",
     "AV2",
-    "AV5"
+    "AV5",
+    "DR11"
    ],
    "oracles": [
     "AV1",
     "AV2",
-    "AV5"
+    "AV5",
+    "DR11"
    ]
   },
   {
    "path": "src/storage/facets.ts",
    "primary": "WP29",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR9"
    ],
    "oracles": [
-    "DB-009",
-    "GIT-006",
-    "ID-003",
-    "P9",
-    "R10",
-    "R21",
-    "V04A",
-    "V04B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+    "DR9"
+   ]
   },
   {
    "path": "src/storage/immutable-file.ts",
@@ -3185,31 +3214,27 @@
   {
    "path": "src/storage/transitions.ts",
    "primary": "WP06",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR9"
    ],
    "oracles": [
-    "DB-009",
-    "GIT-006",
-    "ID-003",
-    "P9",
-    "R10",
-    "R21",
-    "V04A",
-    "V04B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "DR9"
+   ]
   },
   {
    "path": "src/store.ts",
    "primary": "WP04",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR13",
+    "DR9",
     "WP04",
     "WP23"
    ],
    "oracles": [
+    "DR13",
+    "DR9",
     "V04A",
     "V04B",
     "V23A",
@@ -3222,10 +3247,12 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV7",
+    "DR13",
     "WP15"
    ],
    "oracles": [
     "AV7",
+    "DR13",
     "V15A",
     "V15B"
    ]
@@ -3247,20 +3274,13 @@
   {
    "path": "src/tui/exit.ts",
    "primary": "WP28",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR13"
    ],
    "oracles": [
-    "D05",
-    "T117",
-    "T119",
-    "V10C",
-    "V27A",
-    "VAL-002",
-    "WP15.03"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+    "DR13"
+   ]
   },
   {
    "path": "src/tui/keys.ts",
@@ -3300,6 +3320,7 @@
    "by": [
     "AV7",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -3310,6 +3331,7 @@
    "oracles": [
     "AV7",
     "DR1",
+    "DR13",
     "DR3",
     "DR4",
     "DR6",
@@ -3377,11 +3399,13 @@
    "primary": "WP14",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR13",
     "WP12",
     "WP13",
     "WP14"
    ],
    "oracles": [
+    "DR13",
     "V12A",
     "V12B",
     "V13A",
@@ -3397,11 +3421,13 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV26",
-    "AV7"
+    "AV7",
+    "DR13"
    ],
    "oracles": [
     "AV26",
-    "AV7"
+    "AV7",
+    "DR13"
    ]
   },
   {
@@ -3410,6 +3436,7 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR1",
+    "DR12",
     "DR3",
     "DR4",
     "DR6",
@@ -3422,6 +3449,7 @@
    ],
    "oracles": [
     "DR1",
+    "DR12",
     "DR3",
     "DR4",
     "DR6",
@@ -3543,9 +3571,11 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR13",
     "WP15"
    ],
    "oracles": [
+    "DR13",
     "V15A",
     "V15B"
    ]
@@ -3592,6 +3622,7 @@
    "by": [
     "AV12",
     "AV9",
+    "DR13",
     "WP03",
     "WP23",
     "WP25"
@@ -3599,6 +3630,7 @@
    "oracles": [
     "AV12",
     "AV9",
+    "DR13",
     "V03A",
     "V03B",
     "V23A",

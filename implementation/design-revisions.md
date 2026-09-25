@@ -168,7 +168,23 @@ batch는 모두 새 lease로 넘어간다(열기 전에 모든 prepared batch가
 제시(링크, prepare가 돌려주는 시도)는 여전히 현재 lease가 권한이다(INV06). 요청자 권한(runner·host가 자기
 시도를 완료함)은 RPC 경계가 본다.
 
+정산 권한은 끝나는 run의 사망 증명(또는 startup quiescence)에서 오고, 정산하는 broker는 agent의 현재
+incarnation이 바로 그 끝나는 run이어야 한다(run-registry의 opening 단계, `settleFromReceipt`).
+
 **바꾸는 규범.** BATCH-004의 "재할당" 문장, RUN-001의 "회수", DB-007의 T-run-open·T-batch-prepare 행.
+
+**앞의 거절과 무엇이 다른가.** consistency-decisions.md의 D01 절은 "`receipt.incarnation <= current`를
+받아들이는 것"을 증거를 지우거나 권한을 느슨하게 한다며 거절했다. 그 안은 하한이 없어서, batch가 한 번도
+전달된 적 없는 시도(batch가 생기기 전의 run)의 receipt도 받아들일 수 있었다. 게다가 재할당 아래에서는 batch의
+원래 시도가 지워지므로 하한을 둘 곳도 없었다. DR9의 하한은 batch의 첫 시도라는 durable fact다. run은 모든
+prepared batch를 이어받으므로, 구간 안의 모든 N은 이 batch가 실제로 있었던 시도다. receipt는 여전히 같은
+batch id·ordered manifest·session·adapter를 요구한다(`checkReceipt`). 정산은 새 효과의 권한이 아니라 과거 제시의
+기록이다. 새 제시의 권한(현재 lease)은 느슨해지지 않는다.
+
+**architecture와 어긋나는 문장.** architecture.md D01(409행)의 "그 뒤 receipt 최종 이름의 부재가 확인된 나머지
+prepared만 T-run-open에서 재할당한다"와 "기존 incarnation과 exact ordered manifest에 맞는 유효 receipt부터
+정산한다"의 "기존 incarnation". 이 결정이 우선한다. "completed batch의 역사적 incarnation과 최초 유효 receipt는
+바꾸지 않는다"는 prepared batch에도 그대로 넓혀 적용한다.
 
 **바꾸지 않는 것.** DB schema와 여섯 entity, `PreparedBatch.incarnation`의 뜻(현재 시도 = lease), receipt 형식
 `oma-pi-rpc-v1@0.87.1`. 기존 데이터: v1이 이미 재할당한 batch는 저장된 값을 첫 시도로 읽는다. 그보다 이른
