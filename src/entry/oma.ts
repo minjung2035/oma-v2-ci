@@ -348,17 +348,17 @@ async function main(argv: readonly string[]): Promise<void> {
       stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
     });
     ensureDirectory(piRuntime.agentDir, 0o700);
-    // AV3: the model's tools work in a directory of their own, not in the
+    // PR-003/PR-004/FS-003: the model's tools and its CLI's cache work in the
+    // Principal's private scratch, which provisioning created, not in the
     // private space that holds the Human's session history.
     const workspace = principalWorkspace(stateRoot);
-    ensureDirectory(workspace, 0o700);
     const profile = principalSessionProfile(configPath, society);
     sessionModel = settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? null;
     const started = PrincipalSession.start(
       { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
         coreExtension: join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension),
         sessionDir: principalSessionDir(stateRoot),
-        workspace, home: join(stateRoot, "principal", "private"),
+        workspace, home: workspace,
         fence: owner.fence },
       profile,
       limitsOf(settings.config.limits),

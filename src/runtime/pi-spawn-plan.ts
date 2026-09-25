@@ -190,9 +190,11 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
 /** The two branches differ only in whether the mount plan wraps the command,
  * so the argv the engine receives is built once. */
 export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
-  // AV3: the same rule as the Principal's: the model's workspace holds none of
-  // the engine's session history, the agent's home or its batch views.
-  assertModelScope(options.paths.workspace, [options.paths.sessionDir, options.paths.agentHome, options.paths.batchView]);
+  // PR-004/SB-006, the same rule as the Principal's: the model's workspace
+  // holds none of the engine's session history, its home (the confined
+  // engine's own settings live there), its batch views or its credentials.
+  assertModelScope(options.paths.workspace, [options.paths.sessionDir, options.paths.agentHome, options.paths.batchView,
+    ...(options.paths.piAgentDir === undefined ? [] : [options.paths.piAgentDir])]);
   const confinement = options.confinement;
   if (confinement === undefined)
     return {

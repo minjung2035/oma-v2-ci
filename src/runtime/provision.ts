@@ -36,6 +36,7 @@ import { closeSync, existsSync, fstatSync, linkSync, lstatSync, readdirSync, rea
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../domain/identifiers.js";
+import { modelWorkspaceFor } from "../domain/derived.js";
 import { runGitText } from "../process/policies.js";
 import { ensureDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { ensureDirectory, removeOwnedTree } from "../storage/directory.js";
@@ -61,6 +62,10 @@ const OWNED_DIRECTORIES: readonly string[] = Object.freeze([
   // Where the Principal's engine keeps its session: inside its own private
   // space (PR-003), not beside the runner artifacts of other agents.
   join("principal", "private", "sessions"),
+  // The Principal's private scratch, apart from the sessions beside it: its
+  // engine starts there and its CLI keeps its cache there (PR-003/PR-004,
+  // FS-003).
+  modelWorkspaceFor("principal"),
 ]);
 
 export interface ProvisionReport {
@@ -145,7 +150,7 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
     // WP16.04: everything the final name will expose is durable before it is
     // exposed, and the name itself is durable before this reports success.
     fsyncTree(staging);
-    // AV5: the rename names both entries through one resolution of their parent.
+    // FS-005 / architecture section 4: the rename names both entries through one resolution of their parent.
     try { withinDirectory(path, (directory, name) => { renameSync(entryAt(directory, stagingName), entryAt(directory, name)); fsyncHeldDir(directory, parent); }); }
     catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
@@ -295,7 +300,7 @@ export type ProjectBindingObservation =
   | { readonly kind: "unreadable"; readonly reason: string };
 
 export function observeProjectBinding(stateRoot: string): ProjectBindingObservation {
-  // AV5: one resolution of the state root; the entry checked is the one read.
+  // FS-005 / INV09: one resolution of the state root; the entry checked is the one read.
   let text: string | null;
   try {
     text = withinDirectory(join(stateRoot, PROJECT_BINDING), (directory, name) => {
@@ -372,7 +377,7 @@ export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBi
   const temporaryName = `.${PROJECT_BINDING}.${randomBytes(8).toString("hex")}.tmp`;
   const temporary = join(stateRoot, temporaryName);
   writeExclusiveFsyncedFile(temporary, bytes, 0o600);
-  // AV5: the link, the cleanup and the flush address one resolution of the root.
+  // FS-005 / architecture section 4: the link, the cleanup and the flush address one resolution of the root.
   withinDirectory(final, (directory, name) => {
   try {
     try { linkSync(entryAt(directory, temporaryName), entryAt(directory, name)); }

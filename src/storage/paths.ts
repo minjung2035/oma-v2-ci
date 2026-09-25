@@ -36,19 +36,18 @@ export function sessionDirPathAt(stateRoot: string, actor: string): string {
 export function modelWorkspacePathAt(stateRoot: string, actor: string): string {
   return join(stateRoot, modelWorkspaceFor(actor));
 }
-/** AV3: refuses a model scope that overlaps a directory the product keeps for
- * itself (`kept`: session history, views, receipts), or that holds one the
- * model's tools must stay out of (`above`: a home whose engine settings or
- * caches sit beside the workspace). Checked where an engine is started, on the
- * paths it is actually started with, so a layout that would hand the model the
- * session history cannot start rather than start quietly. */
-export function assertModelScope(workspace: string, kept: readonly string[], above: readonly string[] = []): void {
+/** PR-003/PR-004: refuses a model scope that overlaps, in either direction, a
+ * directory the product keeps from the model -- the Human's or an engine's
+ * session history, an engine's own settings and credentials, batch views.
+ * Checked where an engine is started, on the paths it is started with (INV09:
+ * the guard's guarantee is only as wide as the directory it is given). */
+export function assertModelScope(workspace: string, kept: readonly string[]): void {
   const within = (root: string, path: string): boolean => {
     const offset = relative(root, path);
     return offset === "" || (offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset));
   };
-  if (kept.some(path => within(workspace, path) || within(path, workspace)) || above.some(path => within(workspace, path)))
-    throw new StoreError("UNSUPPORTED_PROFILE", "the model's workspace overlaps a directory the product keeps for itself");
+  if (kept.some(path => within(workspace, path) || within(path, workspace)))
+    throw new StoreError("UNSUPPORTED_PROFILE", "the model's workspace overlaps a directory the product keeps from the model");
 }
 export function mailObjectPathAt(stateRoot: string, messageId: string): string {
   return join(stateRoot, mailObjectRelativePath(messageId));

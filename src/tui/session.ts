@@ -89,8 +89,8 @@ export function principalSessionDir(stateRoot: string): string {
   return sessionDirPathAt(stateRoot, "principal");
 }
 
-/** AV3: the directory the Principal model's tools work in -- its own, apart
- * from the Human's session history in the same private space. */
+/** The Principal's private scratch: where its model's tools work and, as for
+ * a Resident's home, where its CLI keeps its request cache (FS-003). */
 export function principalWorkspace(stateRoot: string): string {
   return modelWorkspacePathAt(stateRoot, "principal");
 }
@@ -109,7 +109,8 @@ export function principalEnvironment(
   profile: SessionProfile,
   limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages">,
 ): Record<string, string> {
-  const home = join(paths.stateRoot, "principal", "private");
+  // FS-003: the CLI's cache is in the Principal's private scratch.
+  const home = principalWorkspace(paths.stateRoot);
   return {
     HOME: home,
     PATH: "/usr/bin:/bin",
@@ -341,9 +342,9 @@ export class PrincipalSession {
     // TUI-010: the digests recorded for this role are checked again here, at the
     // last moment before the file is handed to Pi.
     assertExtensionIntegrity(profile.extensions);
-    // AV3: the model's tools are confined to `workspace`; the Human's session
-    // history and the CLI's home are never inside it.
-    assertModelScope(paths.workspace, [paths.sessionDir], [paths.home]);
+    // PR-004: the model's tools are confined to `workspace`, which holds
+    // neither the Human's session history nor the engine's credentials.
+    assertModelScope(paths.workspace, [paths.sessionDir, ...(paths.piAgentDir === undefined ? [] : [paths.piAgentDir])]);
     const child = spawnOwnedRpc(
       paths.piCommand,
       [...(paths.piArgs ?? []), ...sessionArgv(paths, profile)],

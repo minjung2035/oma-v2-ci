@@ -349,7 +349,8 @@ test("T119: the engine starts when this process is proved to own the society, no
   // AV3: not the private space itself, which holds the Human's session history.
   assert.ok(calls.includes("principalWorkspace"), "the entry decided the model's workspace itself");
   assert.equal(started.paths.workspace, `/state/oma/fixture/${WORKSPACE_FROM_OWNER}`);
-  assert.match(started.paths.home, /principal\/private$/);
+  // FS-003: the CLI's home, and its request cache, is that same private scratch.
+  assert.equal(started.paths.home, started.paths.workspace);
   assert.ok(calls.includes("principalSessionDir"), "the entry decided the session directory itself");
   assert.equal(started.paths.sessionDir, `/state/oma/fixture/${SESSION_DIR_FROM_OWNER}`);
   // The credential travels only after the engine exists, and only into it.

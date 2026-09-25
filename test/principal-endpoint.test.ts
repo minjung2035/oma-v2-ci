@@ -30,7 +30,7 @@ import { BrokerChannel } from "../src/protocol/channel.js";
 import { credentialMatches, isPrincipalCredential, sessionHandleMatches } from "../src/protocol/principal-credential.js";
 import { StoreError } from "../src/domain/errors.js";
 import { encodeHostMessage } from "../src/protocol/host-channel.js";
-import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir } from "../src/tui/session.js";
+import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../src/tui/session.js";
 import { CONVERSATION_BOUNDS } from "../src/tui/limits.js";
 import { provisionSociety } from "../src/runtime/provision.js";
 import { processIdentity, type ProcessIdentity } from "../src/broker/process-ancestry.js";
@@ -170,7 +170,7 @@ class Engine {
     };
     // Exactly the private socket the product opens for its engine.
     const child = spawn(process.execPath, [ENGINE], {
-      cwd: join(society.root, "principal", "private"), env, stdio: ["pipe", "pipe", "inherit", "pipe"],
+      cwd: principalWorkspace(society.root), env, stdio: ["pipe", "pipe", "inherit", "pipe"],
     });
     // The product's own session ignores errors on this socket the same way: the
     // engine closing its end with a line unread resets it, which is not a fault.
@@ -634,6 +634,7 @@ test("T114: provisioning creates the directories the Principal's engine and its 
     const report = provisionSociety(root);
     assert.ok(report.created.includes(join("principal", "private")));
     assert.ok(existsSync(principalSessionDir(root)));
+    assert.ok(existsSync(principalWorkspace(root)), "the Principal's scratch, where its engine starts, was not provisioned");
     assert.equal(statSync(join(root, "principal", "private")).mode & 0o777, 0o700);
     assert.equal(provisionSociety(root).created.length, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
