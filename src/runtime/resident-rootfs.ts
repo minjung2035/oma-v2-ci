@@ -93,7 +93,14 @@ function ensureDirectory(path: string): void {
   }
 }
 
-function ensureFile(path: string, pass: Pass, content = ""): void {
+/** provisionSociety is "safe to lose a race with another start": an entry
+ * another start created between this one's look and its create (EEXIST) is
+ * observed like any existing entry -- once; a second loss is not a race. */
+function lostRace(error: unknown, retried: boolean): boolean {
+  return !retried && (error as NodeJS.ErrnoException).code === "EEXIST";
+}
+
+function ensureFile(path: string, pass: Pass, content = "", retried = false): void {
   ensureDirectory(dirname(path));
   withinDirectory(path, (parent, name) => {
     const found = kindAt(parent, name);
@@ -112,7 +119,9 @@ function ensureFile(path: string, pass: Pass, content = ""): void {
     }
     if (found !== "absent")
       throw new StoreError("STORE_CORRUPT", `rootfs mount target ${path} is not a file`);
-    const fd = openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o644);
+    let fd: number;
+    try { fd = openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o644); }
+    catch (error) { if (lostRace(error, retried)) { ensureFile(path, pass, content, true); return; } throw error; }
     try { writeFileSync(fd, content); } finally { closeSync(fd); }
   });
 }
@@ -131,7 +140,7 @@ function readExisting(parent: number, name: string, path: string): string {
   }
 }
 
-function ensureLink(path: string, target: string, pass: Pass): void {
+function ensureLink(path: string, target: string, pass: Pass, retried = false): void {
   ensureDirectory(dirname(path));
   withinDirectory(path, (parent, name) => {
     const found = kindAt(parent, name);
@@ -146,7 +155,8 @@ function ensureLink(path: string, target: string, pass: Pass): void {
     }
     if (found !== "absent")
       throw new StoreError("STORE_CORRUPT", `rootfs entry ${path} is not the expected link`);
-    symlinkSync(target, entryAt(parent, name));
+    try { symlinkSync(target, entryAt(parent, name)); }
+    catch (error) { if (lostRace(error, retried)) { ensureLink(path, target, pass, true); return; } throw error; }
   });
 }
 
