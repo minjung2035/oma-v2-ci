@@ -864,7 +864,7 @@ Counterexamples tried against the finished product:
   refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
   controls and zero-width clusters.
 
-## Whole-codebase adversarial pass (after v9) -- AV1..AV8 as applications of INV01..INV12
+## Whole-codebase adversarial pass (after v9) -- AV1..AV11 as applications of INV01..INV12
 
 Every production file was read against the trust boundaries: a Resident (its
 actor socket, and the workspace, home and session directory its sandbox writes),
@@ -875,7 +875,7 @@ applied and was not honoured; it is fixed through that invariant's owner (an
 existing one, or one extended), every new helper meets the abstraction
 acceptance criterion there (it removes an independent decision, a premise a
 caller must remember, or a resource that can be missed), and the WP32.02 and
-WP29 tables below name the owners and regressions. "AV1..AV8" are regression
+WP29 tables below name the owners and regressions. "AV1..AV11" are regression
 ids, like R38 or T118, not principles. The requirement links are in
 `implementation/source-owners.json` (CLI-001, PR-004, FS-003, INF-007, FS-005,
 SB-006).
@@ -890,6 +890,9 @@ SB-006).
 | AV6 | found by the v11 kernel lane, not by reading: under load a live Resident's `git.submit` was refused CAPABILITY_DENIED (retry never). Reproduced (1 in about 20 loaded runs) and caught in the act: `poll` on the peer's pidfd returned -1 with errno EINTR in the same millisecond as the refusal. The same collapse in /proc: `processIdentity` returned null for any read failure, and the Principal endpoint retired the registration -- connections cut, credential dropped -- on that null | INV02 (unknown is not dead; an observation failure is not a licence to delete): a `poll` a pending SIGCHLD interrupted, and a /proc read that failed with EMFILE, were each read as the process having ended. `lockFileDescriptor` and `holdAbstractName` in the same leaf already keep the third answer; the pidfd poll did not | `pidfdLiveness` (leaf: running, exited, failed; EINTR asked again at most `PIDFD_POLL_ATTEMPTS` times, INV10; POLLNVAL is failed), and `processEnded` (process-ancestry: ended only when /proc names no such process or another start time). Authority still needs an answered "running" (INV06); retirement needs an answered "ended" | the reading of an interrupted or failed observation as an exit, at the one primitive for each question; the two inline "has the engine ended" expressions in `principal-endpoint` become one owner | AV6 (two tests) |
 | AV7 | AV6 was missed by the line-by-line reading, so INV02 was swept again through every observation whose failure is swallowed into a value (catches returning a definite value, defaults kept when a read fails, `existsSync`). Where that value decided an effect: the configuration collection read an unreadable journal as an empty history and removed every generation but the current, and removed the actual previous generation when its record was lost (a crash between the manifest's rename and the append); an existing generation that could not be read was reported as holding other bytes (STORE_CORRUPT); storage admission measured a root it could not see as 0 bytes; the Dashboard counted an unlistable Principal mailbox as 0 waiting and the Mail screen showed it as "no mail" | INV02 (an observation failure is not a licence to delete, and unavailable is not conflicting or empty); INV03 for the journal: the manifest's commit point is the fact, the journal only its order; arch §23.5 and TUI-012 ("never convert a missing observation into 0") for the display | `recordCommitted` writes back the generation the manifest named before (the committer knows it exactly) when the journal does not end with it; `generationsToKeep` removes a generation only when the journal vouches for it; `sameBytes` answers only for missing, linked or different files; `observedStorageBytes` walks its root like any entry; the mailbox read (`readMailbox`/`unreadCount`) carries "could not be read" to `DashboardData.unread` (null) and the Mail screen | a journal or directory that could not be read standing in for an empty one, at each owner; the old catch-all defaults | AV7 (six tests) |
 | AV8 | the same sweep for INV10 and for what the records promise: WP26 records CLI effects as "no-follow reads". The bundle and context reads were; the file named by `--file` (send, submit, agent brief) and `--reply` was read through a link and without a bound, so a link given as the body put the file it pointed at in the request, and `/dev/zero` was read until memory ran out. The Principal's own tools cannot make a link (bash is excluded), so no model path reached it; a person's CLI and a Human-installed tool could | FS-005 (no agent symlink followed to a host file), INV10 (every I/O bounded), INV12 (the WP26 inventory claimed a bound the code did not keep) | `readLocalFile` in `cli/effects.ts`: O_NOFOLLOW, a regular file, at most `cliFrameBytes()` -- the one owner of the CLI's frame, now shared with the transport (INV04) -- for both `readBody` and the reply source | the link-following, unbounded reads at the two call sites; the frame value computed inside the transport alone | AV8 (one test) |
+| AV9 | found by the real-provider functional run (ENG1 engine, GPT-6 Luna): `status` reported the Principal as `inactive / dead / success / 0` while its engine ran. systemd answers for a unit it does not have (the Principal has none) with `LoadState=not-found` and the values of a clean exit, and the observation did not read LoadState | INV02 (a unit that does not exist is not a unit that ran and exited) | the batched status observation (`observeStatus`) reads LoadState and answers `no-unit`; the status row shows null unit fields and `reason: "no systemd unit"`. The kernel lane's V23B had asserted the old reading for an agent with no unit and now asserts `no-unit` | the reading of an absent unit as a clean exit in the read model; effect paths (`confirmDead`) observe again and are unchanged | AV9 (one test, V23B) |
+| AV10 | same run: the delivery notice showed a Korean subject as RFC 2047 encoded words, and pointed the Principal at `/inbox.md`, which on the host where the Principal runs is no file -- a batch holds up to 24 messages and the notice names six | BATCH-002 (the notice carries the subject; the index gives every id and a directly readable path) | `displaySubject` beside `decodeSubject` in `mail/headers.ts` (decoded, or the header as it arrived if it is not this writer's); the Principal's mail tool reads `/inbox.md` from its batch view the way it already reads `/mail/archive/cur/...` names. The notice stays one text for both roles | an encoded subject in a notice; an index the Principal could not read | AV10 (two tests) |
+| AV11 | same run: the Principal could check status and mail and nothing else. Its profile holds `agent.create`, `agent.manage.descendants`, `route.follow` and `context.publish`; the default seeds no Resident ("created when they are asked for"), and no Resident works before the Principal publishes the GOAL (§15.1, LIFE-004) -- but the Principal's model had four tools and no shell, and the credential that makes a CLI the Principal's stays with the extension (T114). No society could start | arch §8.3 and §15.1 (the Principal publishes the GOAL and Residents are created on request) over PR-004 (the Principal's shell stays excluded while S-02 is open); INV09 (each value in its slot, as AV1) and INV04 (one grammar mirror bound to the wire, one revision resolver, one path owner) | `principal-tools.ts`: one tool per CLI command the Principal's capabilities allow (agent create, start/stop, follow/unfollow, context publish, logs), registered only for an engine with the product's credential channel; the brief is a fresh temporary, the context directory must be inside the Principal's scratch, the default base is the society's main resolved by the CLI's own `resolveOid` in the canonical repository (`projectGitPathAt`, now the one owner of that path) | the gap between the Principal's capabilities and its model's means; five inline copies of the canonical repository path | AV11 (three tests) |
 
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only
@@ -918,8 +921,8 @@ the previous generation. Both are the price of not deleting on an unknown.
 
 ### The pass's own evidence
 
-Mutants (one minimal reversion of each fix, on the disposable account): 41 in
-all, 40 fail their regression. The survivor is equivalent by construction: with
+Mutants (one minimal reversion of each fix, on the disposable account): 50 in
+all, 49 fail their regression. The survivor is equivalent by construction: with
 AV1's slot validation, addresses placed before rather than after `--` reach the
 same CLI parse. Results that were corrected rather than accepted: the first AV4
 session trap fired on the directory's own `realpath` (a check-then-open reader
@@ -947,7 +950,11 @@ unreadable generation as other bytes, an unseen storage root as 0, an
 unlistable mailbox as empty or as 0 waiting, the Mail screen silent about it)
 all fail, and so do AV8's four (the named file followed through a link, a file
 that is not regular read, one larger than the frame read, the reply source read
-outside the owner).
+outside the owner). AV9-AV11's nine (LoadState ignored, a missing unit shown
+without saying so, the encoded subject in a notice, `/inbox.md` not resolved,
+the Principal's tools not registered, an agent name, a context directory outside
+the workspace, the default base resolved elsewhere, a lifecycle action -- each
+unchecked) all fail.
 
 Review ledger: every production file has now been read in full; files a change
 touched carry that change's regressions, files read and left unchanged carry the
