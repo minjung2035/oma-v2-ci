@@ -16,6 +16,8 @@ import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
 import { readableMail, registerOmaTools } from "../src/extension/mail-tools.js";
 import { buildEml } from "../src/mail/serialize.js";
+import { readableMail as runtimeReadableMail } from "../src/mail/display.js";
+import { parseMessage, readBody } from "../src/tui/sources/mail.js";
 import { PrincipalChannel } from "../src/extension/principal-channel.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
@@ -113,4 +115,40 @@ test("AV23 / BATCH-002: the read tool shows the decoded body of an archived mess
     const read = await tools.get("oma_mail_read")!.execute("t", { messageId: id });
     assert.match(read.content[0]!.text, /재시작 후에도 이전 작업을 기억합니다\./);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+/** AV26 -- TUI-011, arch §5.1, INV04: the same run, on the Human's side. The
+ * Mail screen found the end of the header block at "\n\n", which the writer's
+ * CRLF mail never has: every message's body showed empty. Its own decoder kept
+ * the fold's space between adjacent encoded words ("기 억"), and it showed a
+ * body with its transfer encoding. The Mail screen now reads through the one
+ * owner of how a reader meets a message, and the extension's copy is bound to
+ * that owner. */
+test("AV26 / TUI-011, arch §5.1: the Human's Mail screen shows the subject and body the sender wrote", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av26-"));
+  try {
+    const subject = "재시작 후 OMA 결과 기억 확인";
+    const body = "재시작 후에도 이전 작업을 기억합니다.\n커밋과 제출도 완료했습니다.";
+    const eml = await buildEml({ from: "check-alpha@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [], subject, kind: "message",
+      contextRevision: null, inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-000000000009-0@demo.oma.invalid", body });
+    assert.match(eml.text, /\?=\r\n =\?UTF-8\?B\?/, "the case does not fold the subject into adjacent encoded words");
+    const path = join(root, "m-00000000-0000-4000-8000-000000000009-0:2,");
+    writeFileSync(path, eml.text);
+    const parsed = parseMessage(eml.text);
+    assert.equal(parsed.headers["subject"], subject);
+    assert.equal(parsed.body.replace(/\r\n/g, "\n").replace(/\n+$/, ""), body);
+    assert.equal(readBody(path)?.replace(/\r\n/g, "\n").replace(/\n+$/, ""), body, "the Mail screen's body view");
+    // Older LF mail still splits at its own blank line.
+    assert.equal(parseMessage("Subject: plain\nX-Oma-Kind: message\n\nhello\n").body, "hello\n");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("AV26 / INV04, PI-001: the extension's reader is the runtime's, on what the writer stores and on what it cannot undo", async () => {
+  const cases: string[] = [];
+  for (const body of ["ascii", `long ${"y".repeat(200)}`, "한국어 본문\n둘째 줄", "a = b =3D c \nnext", "🙂 끝"])
+    cases.push((await buildEml({ from: "a@demo.oma.invalid", to: ["b@demo.oma.invalid"], replyTo: [], subject: "제목", kind: "message",
+      contextRevision: null, inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-00000000000a-0@demo.oma.invalid", body })).text);
+  cases.push("H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n@@", "H: v\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n=ZZ",
+    "H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n/w==", "H: v\r\n\r\nplain", "no header block");
+  for (const text of cases) assert.equal(readableMail(text), runtimeReadableMail(text));
 });

@@ -59,11 +59,10 @@ function readBoundedMail(
 }
 
 /** AV23 -- arch §5.1, BATCH-002: a message is a UTF-8 plain text body, and
- * what a reader is pointed at can be read. The pinned MIME writer (MAIL-003)
- * stores a body with a transfer encoding -- Korean text as Base64 -- and the
- * Principal has no shell to undo it. The header block is shown as stored; the
- * body is shown as its sender wrote it. An encoding this cannot undo exactly
- * leaves the message as stored: nothing is guessed. */
+ * what a reader is pointed at can be read; the Principal has no shell to undo
+ * a transfer encoding. Mirrors `readableMail` in src/mail/display.ts, which
+ * owns the rule (PI-001 keeps this extension free of runtime imports); a test
+ * binds the two (INV04). */
 export function readableMail(text: string): string {
   const split = text.indexOf("\r\n\r\n");
   if (split < 0) return text;

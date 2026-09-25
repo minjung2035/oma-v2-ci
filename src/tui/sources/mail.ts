@@ -9,6 +9,8 @@ import { closeSync, constants, fstatSync, openSync, readSync, readdirSync } from
 import { join } from "node:path";
 import type { MailboxRead, MailRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
+import { displaySubject } from "../../mail/headers.js";
+import { headerEnd, readableBody } from "../../mail/display.js";
 
 export interface MailboxPaths {
   readonly newDir: string;
@@ -22,34 +24,26 @@ export function principalMailbox(stateRoot: string): MailboxPaths {
 
 const HEADER_LIMIT = READ_BOUNDS.mailHeaderBytes.value;
 
-function decodeWord(text: string): string {
-  return text.replace(/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g, (whole, charset: string, encoding: string, payload: string) => {
-    if (!/^utf-?8$/i.test(charset)) return whole;
-    try {
-      if (encoding.toLowerCase() === "b") return Buffer.from(payload, "base64").toString("utf8");
-      const bytes = payload.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16)));
-      return Buffer.from(bytes, "binary").toString("utf8");
-    } catch { return whole; }
-  });
-}
-
 export interface ParsedMessage {
   readonly headers: Readonly<Record<string, string>>;
   readonly body: string;
 }
 
 /** Folded headers are joined before lookup so that a wrapped Subject is not
- * silently truncated at the fold.
+ * silently truncated at the fold. AV26: the header block ends at the first
+ * blank line the writer emits (CRLF), a value is shown by the one reader rule
+ * for headers (`displaySubject`: adjacent encoded words join without the fold's
+ * space), and the body as its sender wrote it (`readableBody`).
  */
 export function parseMessage(text: string): ParsedMessage {
-  const split = text.indexOf("\n\n");
-  const head = split < 0 ? text : text.slice(0, split);
-  const body = split < 0 ? "" : text.slice(split + 2);
+  const end = headerEnd(text);
+  const head = end.at < 0 ? text : text.slice(0, end.at);
+  const body = readableBody(text);
   const headers: Record<string, string> = {};
   let field = "";
   const commit = (): void => {
     const colon = field.indexOf(":");
-    if (colon > 0) headers[field.slice(0, colon).trim().toLowerCase()] = decodeWord(field.slice(colon + 1).trim());
+    if (colon > 0) headers[field.slice(0, colon).trim().toLowerCase()] = displaySubject(field.slice(colon + 1).trim());
     field = "";
   };
   for (const raw of head.split("\n")) {

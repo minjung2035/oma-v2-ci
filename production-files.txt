@@ -112,6 +112,7 @@ src/mail.ts
 src/mail/addresses.ts
 src/mail/batch-policy.ts
 src/mail/batches.ts
+src/mail/display.ts
 src/mail/facts.ts
 src/mail/headers.ts
 src/mail/materializer.ts
