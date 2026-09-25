@@ -26,6 +26,7 @@ import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { confinedPath, type ResidentDirectories } from "../src/sandbox.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
 import { tlsProvider } from "./fixtures/tls-provider.js";
+import { observeDeliveryReceipt, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const bwrapAvailable = spawnSync("bwrap", ["--version"]).status === 0;
@@ -240,6 +241,15 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
     assert.ok(provider.seen.length >= 1);
     assert.ok(String(provider.seen[0]!.headers["x-api-key"] ?? provider.seen[0]!.headers.authorization).includes(secret));
     assert.ok(provider.seen[0]!.body.includes("m-00000000-0000-4000-8000-0000000000a7-0"), "the provider was not shown the batch");
+    // AV17 / D01, SB-006: the trusted receipt names the durable session file by
+    // its host path, and it is a receipt the batch settles from. The functional
+    // run found every confined delivery refused here, and the batch re-delivered
+    // at each new incarnation, because the boundary carried the sandbox's view.
+    assert.equal(boundary.sessionPath, join(directories.sessions, basename(boundary.sessionPath)),
+      "the boundary names the session by the sandbox's path, not the host's");
+    const receipt = publishDeliveryReceipt(stateRoot, batch as never, boundary, 1 << 20);
+    assert.equal(receipt.sessionPath, boundary.sessionPath);
+    assert.equal(observeDeliveryReceipt(stateRoot, batch as never, 1 << 20).kind, "verified");
   } finally {
     await relay?.close();
     await new Promise<void>(resolve => { if (control) control.close(() => { resolve(); }); else resolve(); });

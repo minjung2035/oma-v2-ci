@@ -126,15 +126,35 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
  * engine a path that does not exist inside would surface later as an
  * unexplained engine error instead of a refused configuration.
  */
-export function confinedPath(libdir: string, dirs: ResidentDirectories, hostPath: string): string {
-  const mounts: readonly (readonly [string, string])[] = [
+/** The directory mounts of a Resident's plan, host root beside the path the
+ * confined process sees -- the one table both translations read (INV04). */
+function residentMounts(libdir: string, dirs: ResidentDirectories): readonly (readonly [string, string])[] {
+  return [
     [libdir, RESIDENT_PATHS.libdir], [dirs.workspace, RESIDENT_PATHS.workspace],
     [dirs.home, RESIDENT_PATHS.home], [dirs.sessions, RESIDENT_PATHS.sessions],
     [dirs.archive, RESIDENT_PATHS.archive], [dirs.selfMail, RESIDENT_PATHS.selfMail],
     [dirs.view, RESIDENT_PATHS.view], [dirs.world, RESIDENT_PATHS.world],
     [dirs.projectGit, RESIDENT_PATHS.projectGit],
   ];
-  for (const [root, inside] of mounts) {
+}
+
+/** AV17, D01/SB-006: the host path of a session file the confined engine names.
+ * A delivery boundary is the confined engine's report, and the path in it is
+ * the sandbox's view; the trusted receipt names the durable file by its host
+ * path. Only the session mount translates back -- a boundary names a session
+ * file and nothing else -- and a name that is not a plain file beneath it is
+ * no session path (null). */
+export function hostSessionPath(dirs: ResidentDirectories, insidePath: string): string | null {
+  const prefix = `${RESIDENT_PATHS.sessions}/`;
+  if (!insidePath.startsWith(prefix) || insidePath.includes("\0")) return null;
+  const name = insidePath.slice(prefix.length);
+  if (name.length === 0 || name.includes("/") || name === "." || name === "..") return null;
+  const host = dirs.sessions.length > 1 && dirs.sessions.endsWith("/") ? dirs.sessions.slice(0, -1) : dirs.sessions;
+  return `${host}/${name}`;
+}
+
+export function confinedPath(libdir: string, dirs: ResidentDirectories, hostPath: string): string {
+  for (const [root, inside] of residentMounts(libdir, dirs)) {
     // A root may be written with a trailing separator (the installation path
     // `oma` records is); the comparison must not depend on that spelling.
     const host = root.length > 1 && root.endsWith("/") ? root.slice(0, -1) : root;

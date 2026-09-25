@@ -15,6 +15,7 @@ import {
 import { assertExtensionIntegrity } from "./extension-integrity.js";
 import { PiRpcClient, alarm, type PiEvent, type Timer } from "./pi-rpc.js";
 import { planPiSpawn, type PiAdapterOptions, type PiSpawnPlan } from "./pi-spawn-plan.js";
+import { hostSessionPath } from "../sandbox.js";
 
 function failure(
   code: "SESSION_BOUNDARY_UNCONFIRMED" | "PROVIDER_FAILED" | "UNSUPPORTED_PROFILE" | "DEADLINE_EXCEEDED",
@@ -126,6 +127,16 @@ export class PiAdapter {
   spawnPlan(): PiSpawnPlan {
     return planPiSpawn(this.options);
   }
+  /** AV17: a confined engine reports its session file by the sandbox's view of
+   * it; the receipt the trusted runner publishes names it by its host path
+   * (D01, SB-006). A boundary whose session path is not a file of this
+   * Resident's session mount is no boundary. */
+  private hostBoundary(boundary: DeliveryBoundary | null): DeliveryBoundary | null {
+    const confinement = this.options.confinement;
+    if (boundary === null || confinement === undefined) return boundary;
+    const sessionPath = hostSessionPath(confinement.directories, boundary.sessionPath);
+    return sessionPath === null ? null : { ...boundary, sessionPath };
+  }
   async deliver(batch: PreparedBatch): Promise<DeliveryBoundary> {
     if (batch.agent !== this.options.actor)
       throw failure(
@@ -187,7 +198,7 @@ export class PiAdapter {
           );
       }
       if (event.type === "agent_settled") settled = true;
-      const decoded = boundaryOf(event, batch);
+      const decoded = this.hostBoundary(boundaryOf(event, batch));
       if (decoded) boundary = decoded;
       if ((accepted && settled && boundary) || (settled && providerFailed()))
         wake();

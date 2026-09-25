@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
-import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, residentArgv, type ResidentDirectories } from "../src/sandbox.js";
+import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, type ResidentDirectories } from "../src/sandbox.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
 
@@ -282,5 +282,17 @@ test("AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and 
     assert.equal(host({ toolName: "read", input: { path: "/etc/passwd" } })?.block, true);
     assert.equal(MIRRORED_ENV, TOOL_SCOPE_ENV, "the extension's mirror is not the runner's value");
     assert.equal(MIRRORED_SANDBOX, TOOL_SCOPE_SANDBOX);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("AV17 / D01, SB-006: a session path the confined engine reports translates back only from its session mount", () => {
+  const f = fixture();
+  try {
+    const name = "2026-09-25T10-46-44-816Z_x.jsonl";
+    assert.equal(hostSessionPath(f.dirs, `${RESIDENT_PATHS.sessions}/${name}`), join(f.dirs.sessions, name));
+    assert.equal(confinedPath(f.libdir, f.dirs, join(f.dirs.sessions, name)), `${RESIDENT_PATHS.sessions}/${name}`, "the two directions disagree");
+    for (const other of [`${RESIDENT_PATHS.workspace}/${name}`, `${RESIDENT_PATHS.sessions}/../x.jsonl`, `${RESIDENT_PATHS.sessions}/a/${name}`,
+      `${RESIDENT_PATHS.sessions}/`, `${RESIDENT_PATHS.sessions}`, join(f.dirs.sessions, name), "/run/oma-sessionsX/x.jsonl"])
+      assert.equal(hostSessionPath(f.dirs, other), null, other);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
