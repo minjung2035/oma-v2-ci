@@ -1,4 +1,4 @@
-# 설계 수정 기록 DR1–DR8 (실제 provider 기능 점검 뒤)
+# 설계 수정 기록 DR1–DR13
 
 상태: **ACCEPTED (사용자 요청, 2026-09-25)**. AV9–AV31(`consistency-decisions.md`의 AV 절)을
 고치는 동안 결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우가 있었다. 이 문서는 그중
@@ -6,6 +6,8 @@
 바꾸지 않는 것, 위험을 적는다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않는다.
 이 문서와 어긋나는 architecture 문장은 여기에 적고, 규범의 owner는 `implementation-spec.md`다.
 wire schema·DB schema·receipt version은 바꾸지 않는다. 바뀌는 권한 의미는 DR4 하나다.
+DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다.
+이들도 wire·DB schema·receipt version을 바꾸지 않는다.
 
 ## DR1 — 모델에게 보이는 경로는 그 모델의 view로 말한다
 
@@ -146,3 +148,91 @@ revision이 여전히 host의 것인지 다시 보고, 다르면 거절한다(D0
 
 **바꾸는 규범.** 없음: INT-001·INT-003·CFG-005·TUI-007이 이미 이렇게 말한다. 구현과 그 시험
 (T62는 접수와 CAS 사이의 변경으로, R19는 사실의 변경으로)을 규범에 맞췄다.
+
+## DR9 — 전달 시도는 batch를 만든 시도로 고정하고, 현재 시도는 lease가 말한다
+
+**관측(P0V-01, P0V-02).** run이 열릴 때 prepared batch의 `incarnation`을 새 lease 값으로 다시 썼다
+(`reassignPreparedBatches`). 한 칸이 "이 batch가 전달된 시도"(과거 사실)와 "지금 이 batch를 제시할 수 있는
+lease"(현재 권한)를 겸했다. 그래서 rollover 뒤에 나타난 이전 시도의 올바른 receipt는 conflicting이 되었고
+(V30A가 이 결과를 명시했다), 그 agent는 수동 repair 전까지 run을 열 수 없었다. D01은 정산을 rollover보다 먼저
+하는 순서로 이것을 피했지만, 과거 시도를 기록이 아니라 순서가 지켰다.
+
+**원인.** D01이 v1 byte encoding을 유지하면서 "batch의 incarnation은 재할당된다"고 적었다. 재할당은 과거
+incarnation을 현재 값으로 덮어쓰는 것, 곧 INV01이 이름으로 짚은 잘못된 해석이다.
+
+**결정.** `batches.incarnation`은 batch를 만든 시도(첫 전달 시도)이고 바뀌지 않는다. run이 열리면 prepared
+batch는 모두 새 lease로 넘어간다(열기 전에 모든 prepared batch가 직전 lease에 있어야 한다). 그러니 batch B의
+전달 시도는 `B.incarnation ≤ N ≤ agents.incarnation`인 모든 N이다. 현재 시도는 agent의 현재 incarnation이
+말하고, rollover는 agent incarnation만 올린다. receipt의 시도 N이 이 구간 안이면 그 receipt는 언제든 B의
+증거다. 정산(이미 일어난 제시의 기록, INV08)은 현재 lease가 아니라 이 구간과 검증된 receipt에 묶인다. 새
+제시(링크, prepare가 돌려주는 시도)는 여전히 현재 lease가 권한이다(INV06). 요청자 권한(runner·host가 자기
+시도를 완료함)은 RPC 경계가 본다.
+
+**바꾸는 규범.** BATCH-004의 "재할당" 문장, RUN-001의 "회수", DB-007의 T-run-open·T-batch-prepare 행.
+
+**바꾸지 않는 것.** DB schema와 여섯 entity, `PreparedBatch.incarnation`의 뜻(현재 시도 = lease), receipt 형식
+`oma-pi-rpc-v1@0.87.1`. 기존 데이터: v1이 이미 재할당한 batch는 저장된 값을 첫 시도로 읽는다. 그보다 이른
+시도의 receipt는 전처럼 conflicting이다. 불충분한 역사에서 새 사실을 복원하지 않는다(D01 "기존 불일치 데이터").
+
+## DR10 — accept 전 artifact는 crash 뒤에도 owner가 있다
+
+**관측(P0V-05).** accept 전에 만든 메일 원문(`mail/objects/<id>.eml`), 그 staging 임시 파일, submit bundle
+staging, transport 복사본(`staging/rpc-*.wire`)의 owner는 프로세스 메모리의 `PreacceptScope`뿐이었다. 그 사이에
+broker가 죽으면 아무도 찾지 않았고, 진단은 "unknown"으로 보고만 했다.
+
+**결정.** 이름이 곧 등록이다. accept 전 artifact의 이름은 무작위 operation id에서 파생되므로(`domain/derived.ts`),
+ledger에 그 operation이 없거나 그 plan이 이 artifact를 가리키지 않으면 accept되지 않은 것이 확정된다. broker는
+**시작 복구에서, 요청을 받기 전에**(broker-lifetime의 recover 단계) broker 자신이 직접 쓴 artifact만 이렇게 판정해
+정리한다. 자식 프로세스가 쓰던 staging(quarantine namespace, context commit-work, workspace clone)은 broker lock이
+자식의 죽음을 증명하지 않으므로 보존한다(P0-4 "불명확이면 보존"). 실행 중에는 수집하지 않는다(처리 중인 요청의
+artifact일 수 있다).
+
+**바꾸는 규범.** 없음(FS-006, MAIL-010, INV05의 구현). 이 문서가 판단을 기록한다.
+
+## DR11 — receipt는 그 session entry가 durable해진 뒤에만 있다
+
+**관측(P0V-13).** receipt는 fsync와 parent flush로 게시되지만, 그것이 가리키는 session entry는 Pi가
+`appendFileSync`로만 쓰고 fsync하지 않는다. 게시와 검증은 session 파일이 있는지만 보았다. 전원이 나가면 "batch가
+session S의 entry X에 있다"는 durable fact가 재시작 뒤 거짓이 되고, batch는 완료되었으므로 다시 전달되지 않는다.
+BATCH-006은 이미 "durable session file"을 요구한다.
+
+**결정.** receipt 게시의 owner(`publishDeliveryReceipt`, Resident runner와 Principal host가 함께 쓴다)가 최종
+이름을 만들기 전에, session 디렉터리 아래에서 링크를 따르지 않고 session 파일을 열어 끝의 bounded 구간에서
+boundary entry(entry id, batch id, 시도, customType)를 찾고, 파일과 디렉터리를 fsync한다. 찾지 못하면 receipt를
+만들지 않는다(SESSION_BOUNDARY_UNCONFIRMED → 재전달 정책). 관측 쪽(나중의 정산)은 session이 그 뒤로 길어질 수
+있으므로 파일의 존재만 본다. entry의 영속은 게시가 이미 증명했다.
+
+**바꾸는 규범.** 없음(BATCH-006의 구현). S-03의 나머지(steer 동시성, 전체 kill matrix)는 여전히 OPEN이다.
+
+## DR12 — 설정 commit의 owner는 하나다
+
+**관측(P0V-12).** 설정 쓰기 경로가 둘이었다. bundle은 관리형 generation commit(기대 버전 확인, production
+loader 재현 증명, 결과 불명 기록)이었고, inline `config.json`은 검증 뒤 파일 교체뿐이었다. inline에는 lost update
+방지도 loader 재현 증명도 없었고, rename 뒤 flush가 실패하면 "저장 안 됨"처럼 보고했다. "같은 의미" 판정도 두 벌이었다.
+
+**결정.** D02가 inline에 대해 정한 "validate → 같은 파일 durable replace"는 유지하되, 그 교체를 관리형과 같은
+owner가 같은 순서로 한다: 읽은 snapshot의 기대 버전 확인 → 전체 검증 → 임시 파일 → production loader로 임시 파일을
+다시 읽어 후보와 같음을 증명 → 기대 버전 재확인 → rename(commit point) → parent flush, 실패하면 결과 불명으로 기록하고
+다음 편집 전에 다시 flush한다. "같은 의미"는 한 함수가 정한다(policy revision만 뺀 전체 설정과 role). 처음 만드는
+설정은 no-replace로 게시하고, 이미 있으면 그것을 읽는다. 성공한 설정은 언제나 다시 로드된다(P0-3).
+
+**바꾸는 규범.** 없음(D02·CONFIG-CONTRACT의 writer 순서를 inline에도 적용한다).
+
+## DR13 — 모르는 것에는 모른다는 코드를 붙인다
+
+**관측(P0V-08, P0V-09, P0V-11, P0V-14, P0V-15).** 관측 실패나 결과 불명에 확정 사실의 코드나 값을 붙이는 곳이
+있었다: 설정을 읽지 못한 것을 POLICY_CHANGED로(accept된 통합이 영구 실패), accept 뒤 결과가 불명확한 실패를 CLI
+exit 2로, 끝나지 않은 systemctl을 UNSUPPORTED_PROFILE로, 도구가 끝낸 CLI를 key 없는 실패로, 관측하지 못한
+workspace 파일을 0 byte로.
+
+**결정.** 각 경계에서 한 owner가 "모름"을 한 가지로 표현한다.
+
+| 경계 | 모를 때 | 아는 사실일 때 |
+|---|---|---|
+| host 정책 reader(통합, 자식 spec) | BROKER_UNAVAILABLE. accept된 통합은 pending으로 남아 복구가 다시 본다 | 읽었고 다르면 POLICY_CHANGED |
+| CLI 실패의 exit(CLI-003) | retry가 same-key·after-repair면 3 | retry never면 코드의 exit(2 또는 4) |
+| unit 명령(systemctl) | DEADLINE_EXCEEDED(명령이 끝나지 않음) | 끝나서 실패하면 INTERNAL_ERROR/START_LIMIT, 불러올 수 없는 unit은 UNSUPPORTED_PROFILE |
+| extension 도구가 부른 CLI | 결과 불명, 실패 문구에 request key | CLI가 스스로 낸 출력 |
+| workspace 크기 관측 | 한도 초과로 보고 거절 | ENOENT는 없음(0) |
+
+**바꾸는 규범.** 없음(CLI-003, ERR-002, INV02의 구현).
