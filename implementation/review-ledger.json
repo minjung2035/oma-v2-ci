@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 121,
-  "CHANGED_WITH_ORACLE": 101
+  "READ_UNCHANGED": 120,
+  "CHANGED_WITH_ORACLE": 102
  },
  "lanes": {
   "fast": "PASS",
@@ -675,6 +675,7 @@
     "AV1",
     "AV2",
     "AV5",
+    "AV7",
     "WP13",
     "WP14"
    ],
@@ -682,6 +683,7 @@
     "AV1",
     "AV2",
     "AV5",
+    "AV7",
     "V13A",
     "V13B",
     "V13C",
@@ -1141,6 +1143,7 @@
    "by": [
     "AV3",
     "AV5",
+    "AV7",
     "WP03",
     "WP08",
     "WP09",
@@ -1154,6 +1157,7 @@
    "oracles": [
     "AV3",
     "AV5",
+    "AV7",
     "V03A",
     "V03B",
     "V08A",
@@ -2894,10 +2898,12 @@
    "primary": "WP22",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV7",
     "WP21",
     "WP22"
    ],
    "oracles": [
+    "AV7",
     "V21A",
     "V21B",
     "V22A",
@@ -3018,9 +3024,11 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV7",
     "WP15"
    ],
    "oracles": [
+    "AV7",
     "V15A",
     "V15B"
    ]
@@ -3030,9 +3038,11 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV7",
     "WP15"
    ],
    "oracles": [
+    "AV7",
     "V15A",
     "V15B"
    ]
@@ -3091,10 +3101,12 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV7",
     "WP14",
     "WP15"
    ],
    "oracles": [
+    "AV7",
     "V14A",
     "V14B",
     "V15A",
@@ -3169,15 +3181,13 @@
   {
    "path": "src/tui/sources/mail.ts",
    "primary": "WP28",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "WP28"
+    "AV7"
    ],
    "oracles": [
-    "V28A",
-    "T98"
-   ],
-   "note": "bounded no-follow reads; new/ is not yet delivered to the Principal's session; reading writes nothing"
+    "AV7"
+   ]
   },
   {
    "path": "src/tui/sources/settings.ts",
@@ -3234,10 +3244,12 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV7",
     "WP15",
     "WP28"
    ],
    "oracles": [
+    "AV7",
     "V15A",
     "V15B",
     "V28A",
@@ -3318,11 +3330,13 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV7",
     "WP14",
     "WP15",
     "WP28"
    ],
    "oracles": [
+    "AV7",
     "V14A",
     "V14B",
     "V15A",
