@@ -864,7 +864,7 @@ Counterexamples tried against the finished product:
   refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
   controls and zero-width clusters.
 
-## Whole-codebase adversarial pass (after v9) -- AV1..AV26 as applications of INV01..INV12
+## Whole-codebase adversarial pass (after v9) -- AV1..AV30 as applications of INV01..INV12
 
 Every production file was read against the trust boundaries: a Resident (its
 actor socket, and the workspace, home and session directory its sandbox writes),
@@ -875,7 +875,7 @@ applied and was not honoured; it is fixed through that invariant's owner (an
 existing one, or one extended), every new helper meets the abstraction
 acceptance criterion there (it removes an independent decision, a premise a
 caller must remember, or a resource that can be missed), and the WP32.02 and
-WP29 tables below name the owners and regressions. "AV1..AV26" are regression
+WP29 tables below name the owners and regressions. "AV1..AV30" are regression
 ids, like R38 or T118, not principles. The requirement links are in
 `implementation/source-owners.json` (CLI-001, PR-004, FS-003, INF-007, FS-005,
 SB-006).
@@ -908,6 +908,10 @@ SB-006).
 | AV24 | the seventh functional run: a Resident ran its tests and then `sleep 31` in one bash call; the command printed nothing for 30 s, the adapter read the engine as idle, and the run ended DEADLINE_EXCEEDED inside the tool. Builds, installs and test suites have that shape | WP10's deadline table ("정상 긴 턴/진짜 idle" told apart; idle is the partial-line/stream stall) and CFG-004 (frame/stream no-progress), with the turn budget (inferenceTimeoutSeconds) bounding the whole turn | the idle budget is held while a tool the engine announced (`tool_execution_start` .. `tool_execution_end`, by `toolCallId`) runs, and resumes when none does; a tool that never ends meets the turn budget | an announced tool's silence read as the engine's | AV24 (two tests; V10A unchanged) |
 | AV25 | same run: a Resident's edit of a 35 KB workspace was refused "agent workspace quota would be exceeded" under a 2 GiB quota. Since the engine update (ENG1) the edit tool takes `edits: [{ oldText, newText }]`, and the workspace guard read the older top-level `newText`, so every edit by every agent was refused | BATCH-006 (the pinned engine revision is the contract the extension speaks) and TSP-009 (the guard keeps writes in the workspace and quota; it does not reinterpret a tool) | the guard reads the engine's validated input -- the engine folds its older single-edit form into `edits` before any tool_call handler sees it -- and bounds growth by the replacement text; a test takes the input from the pinned engine's own edit tool | a guard mirroring an input shape the engine no longer sends | AV25 (one test) |
 | AV26 | the eighth functional run, on the Human's side: the Mail screen listed "재시작 후 OMA 결과 기 억 확인" for a subject without that space, and its body view was empty for every message. The TUI had its own header decoder, which kept the fold's space between adjacent encoded words, and found the end of the header block at "\n\n", which the writer's CRLF mail never has; its body, had it been found, kept its transfer encoding | INV04 (one owner of how a reader meets a stored message), arch §5.1 and TUI-011 (the Mail screen reads the Principal's mail), and the reader rule AV10 and AV23 apply | `src/mail/display.ts` owns `readableMail`/`readableBody` (the eml reader in headers.ts still never decodes a body); the Mail screen splits at the first blank line in either form, shows each header through `displaySubject` and the body through `readableBody`; the extension's AV23 copy is a declared mirror bound to the owner by a test (PI-001) | a second decoder, and a boundary only older mail has | AV26 (two tests) |
+| AV27 | the ninth functional run, with `code.integrate` delegated by the host (A-002): a Resident told by a submit mail to `git fetch origin <published-ref>` got "does not appear to be a git repository". The workspace is cloned on the host from the host path, so its `origin` named a path the sandbox does not have | GIT-002 (the Resident's clone is from `/git/project.git`, and peer fetch is `fetch origin <published-ref>`) and SB-002-C (a host path reaches a Resident only through the mount table) | the workspace preparation sets `origin` to the canonical repository as the Resident reaches it, before the workspace is published and while only trusted preparation has touched it; the base still comes from the host path. Whether Residents are sealed has one reading, `residentsConfined` in sandbox.ts, used by the runner and the broker alike. A workspace already published keeps its origin: the trusted side does not write into a tree the model owns (FS-005) | a path handed to the model in the host's view | AV27 (two tests) |
+| AV28 | same run: an integrate on a main that had moved answered `STALE_BASE: STALE_BASE` and nothing else. The error table returns the actual OID for STALE_BASE and NOT_DESCENDANT, arch §11 says the same, and CTX-003 gives CONTEXT_CONFLICT its actual revision; the failure's `details` (already in the closed Failure shape) was never filled | ERR-001's table and CTX-003; `publicFailure` still sanitizes everything else | a `StoreError` may carry the value a conflict found (`actual`); `publicFailure` returns it as `details.actual` for those three codes and no other; STALE_BASE and CONTEXT_CONFLICT, which are refused before acceptance, carry it; the CLI shows it. NOT_DESCENDANT is only reached after acceptance, on the base the caller named, so it has no other value to return | a documented return value that was never returned | AV28 (three tests) |
+| AV29 | same run: the Principal's second context publication was refused "unsupported context directory .local". Its workspace is the CLI's home (FS-003), so the CLI's private request cache is there from the first call on; the first publication of the workspace worked only because no CLI call had run yet | FS-003 (the scratch holds the CLI's private state) and CTX-002 (a context tree is the closed set of context files); INV09 (a value is checked in its slot) | the Principal's publish tool refuses the workspace itself, every time, and says to publish a directory holding only the context files; the tool's description says the same | a refusal that depended on whether a CLI call had happened | AV29 (one test) |
+| AV30 | same run: a status call naming `principal@provtest.oma.invalid` was refused as not an agent. That call names the Principal, whose status the wire grammar refuses in any form, but the same slot refused a Resident's address too: AV15 took the displayed names in the mail tools only | AV15's rule (a tool takes the names OMA shows) for every slot that names an existing actor | `actorNameOf` in the extension maps this society's actor address to the actor for status, lifecycle and logs; creation, which names a new actor, keeps its own check | one reading of names in two places | AV30 (with AV29's test) |
 
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only
@@ -931,6 +935,13 @@ environment is SB-002's closed list and commit author provenance is S-08's;
 `/inbox.md` does not exist before the first batch; a Principal receives mail
 at its turn boundary (PR-003, TUI-004); the failure message is the code
 (`publicFailure` sanitizes).
+
+Found by the ninth run and left as they are: the host has no ripgrep, and a
+sealed Resident's programs are the host's (SB-007), so `rg` is absent in the
+sandbox too; the Principal has no integrate tool, because the plan's integrator
+is a Resident the host delegated `code.integrate` to (A-002), and with that
+delegation a Resident integrated a submitted candidate and main moved; the
+Principal's own status is refused by the wire grammar.
 
 Residuals: a WebSocket frame header inside the key's bytes would hide it from the
 byte tripwire (with compression refused, the provider would have to fragment its

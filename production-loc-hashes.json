@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3e6b9c3e9e0313d396961699f961d15ac6c8b796e016d37c6da224029d2ef04b",
-  "report": "c79f38daaf9369800b7d850ee88dc2968156ef322790d5800fb6314ec30f8ea8",
+  "report": "54720756ca23d2f1dd9a570da4caa5f4bde647e9d8fb4ed6f8c8de477792bb0e",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -85,7 +85,7 @@
     },
     {
       "path": "src/broker/replies.ts",
-      "sha256": "637247fb30e591d988ea3bee8582ca13cfe58641cb17cb3cc258fd4702bcadeb"
+      "sha256": "67b2ec3b29cab44ff2eeab676a4b2c5d6c7ce6919d353f8ac5edea99de50d886"
     },
     {
       "path": "src/broker/transport-spool.ts",
@@ -153,7 +153,7 @@
     },
     {
       "path": "src/cli/exit.ts",
-      "sha256": "e673a0edd8e2ea356c59aac8c490b6fd70fa703476ff2e853f8cb8e0bae270c1"
+      "sha256": "479c941f1e8b8a64da498fb5a56b91f77769bec74302ab7ec87627767aa4d275"
     },
     {
       "path": "src/cli/request-intent.ts",
@@ -233,7 +233,7 @@
     },
     {
       "path": "src/domain/errors.ts",
-      "sha256": "74f99bb1a66915fb788362e1e133188994b7d31995bcea5143eb181327e11812"
+      "sha256": "0534c79a8888ae8293dcb1cd13f663f96bbd354a7ff5b5f765deb39670c979cd"
     },
     {
       "path": "src/domain/exhaustive.ts",
@@ -285,7 +285,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "c3247239e23b54d90bc77d7b04376d564695bf6d45d66d760dcead4244553f73"
+      "sha256": "83e629d743f6de6f9d7b4e165c03ed7a45023e852550927031fb56f2922c47b5"
     },
     {
       "path": "src/entry/host.ts",
@@ -301,7 +301,7 @@
     },
     {
       "path": "src/entry/runner.ts",
-      "sha256": "8ccafbba89a07d5668a8794e30ed1847fd0f6503f01de22de72d8d6d93b847c5"
+      "sha256": "cfb88d881a2394190ec19dd7756401f8d1a925fdb43990a7da58a6c312f30f6c"
     },
     {
       "path": "src/extension/batch-view.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "1d01e326bfdfe7b8bcf1df789aa61416aae97f1d9cebf6cd7dadff865b6a83cf"
+      "sha256": "0cc0645902731c2aed77ff2a061442229e37c8ff605f285fd4415841cfc77409"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -329,11 +329,11 @@
     },
     {
       "path": "src/extension/principal-tools.ts",
-      "sha256": "02f33af0586f6825746c2fcba6d475f4a692170f956ce07d4e9fd736f49c543c"
+      "sha256": "6ac9ddab354b286d5f7241782b76eb6db04c2bb41c2960951ce5a564aa81a0ba"
     },
     {
       "path": "src/extension/shared.ts",
-      "sha256": "391f8e04cffda1ea27740193831da9b4935671b95d7c0d3bf539126c61428a9a"
+      "sha256": "5826e995b2a62af76c094adfd8863825764edfe75d9eb98f771c9d81377f339b"
     },
     {
       "path": "src/extension/tool-surface.ts",
@@ -369,7 +369,7 @@
     },
     {
       "path": "src/git/context.ts",
-      "sha256": "4cc5cfecf354a9e0e8ee9fcbf76ce34b009cf3eabb297eeeb192efe6eb6ce69f"
+      "sha256": "7604e851c7e51ae812d9d037c43a1dc02811bc54d80cdda8d1671a9050c13bc0"
     },
     {
       "path": "src/git/integration-policy.ts",
@@ -377,7 +377,7 @@
     },
     {
       "path": "src/git/integration.ts",
-      "sha256": "a65c5801119844b6c9d184f30b958924ff1d74b3115a7e31b1b424e7495135c8"
+      "sha256": "648fe05b93b30e8ab57c2a88e19d05b53745e5c48b16a8723f86502629984eff"
     },
     {
       "path": "src/git/observe.ts",
@@ -421,7 +421,7 @@
     },
     {
       "path": "src/lifecycle/contracts.ts",
-      "sha256": "d8e12c52dd1b345ce7c3a60af622d499b7286e29d7023a443c0a9bbeb3593497"
+      "sha256": "5af418e4b145e6d88b18b05cc8fcaf17efd5bd03c9a24082f3969e59a916453a"
     },
     {
       "path": "src/lifecycle/create-publication.ts",
@@ -441,7 +441,7 @@
     },
     {
       "path": "src/lifecycle/workspace.ts",
-      "sha256": "57c13fe60713399bf5756fe25735a4c1ae24e38343a63d047aa7e71d697ff4b4"
+      "sha256": "7a78def8fb785b570a624c07dafe91fc477203a9c1096093f989fd302f989924"
     },
     {
       "path": "src/mail.ts",
@@ -681,7 +681,7 @@
     },
     {
       "path": "src/sandbox.ts",
-      "sha256": "4338dadb58e43b91ba337744379e6963699d695935fb21b984def1b7663258fa"
+      "sha256": "f90eadfa6ceb1652f78c1ca365ba880d7d2291f1f8ce161ae2cb2298c78470aa"
     },
     {
       "path": "src/storage/batch-view.ts",

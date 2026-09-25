@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 29110,
+    "n_lines": 29163,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -186,16 +186,16 @@
     "code": 212,
     "language": "TypeScript"
   },
+  "src/git/integration.ts": {
+    "blank": 5,
+    "comment": 8,
+    "code": 209,
+    "language": "TypeScript"
+  },
   "src/reconcile.ts": {
     "blank": 1,
     "comment": 22,
     "code": 209,
-    "language": "TypeScript"
-  },
-  "src/git/integration.ts": {
-    "blank": 5,
-    "comment": 8,
-    "code": 208,
     "language": "TypeScript"
   },
   "src/storage/immutable-file.ts": {
@@ -270,16 +270,16 @@
     "code": 173,
     "language": "TypeScript"
   },
+  "src/entry/broker.ts": {
+    "blank": 3,
+    "comment": 43,
+    "code": 171,
+    "language": "TypeScript"
+  },
   "src/storage/rows.ts": {
     "blank": 9,
     "comment": 8,
     "code": 170,
-    "language": "TypeScript"
-  },
-  "src/entry/broker.ts": {
-    "blank": 3,
-    "comment": 43,
-    "code": 169,
     "language": "TypeScript"
   },
   "src/git/submit.ts": {
@@ -342,6 +342,12 @@
     "code": 156,
     "language": "TypeScript"
   },
+  "src/sandbox.ts": {
+    "blank": 14,
+    "comment": 55,
+    "code": 156,
+    "language": "TypeScript"
+  },
   "src/cli/request-service.ts": {
     "blank": 9,
     "comment": 9,
@@ -351,12 +357,6 @@
   "src/process/async.ts": {
     "blank": 4,
     "comment": 61,
-    "code": 152,
-    "language": "TypeScript"
-  },
-  "src/sandbox.ts": {
-    "blank": 12,
-    "comment": 51,
     "code": 152,
     "language": "TypeScript"
   },
@@ -428,8 +428,8 @@
   },
   "src/domain/errors.ts": {
     "blank": 5,
-    "comment": 14,
-    "code": 130,
+    "comment": 19,
+    "code": 134,
     "language": "TypeScript"
   },
   "src/extension/tool-surface.ts": {
@@ -450,6 +450,12 @@
     "code": 121,
     "language": "TypeScript"
   },
+  "src/extension/principal-tools.ts": {
+    "blank": 5,
+    "comment": 27,
+    "code": 118,
+    "language": "TypeScript"
+  },
   "src/git/observe.ts": {
     "blank": 11,
     "comment": 10,
@@ -466,12 +472,6 @@
     "blank": 14,
     "comment": 37,
     "code": 117,
-    "language": "TypeScript"
-  },
-  "src/extension/principal-tools.ts": {
-    "blank": 5,
-    "comment": 23,
-    "code": 116,
     "language": "TypeScript"
   },
   "src/config/defaults.ts": {
@@ -558,6 +558,12 @@
     "code": 92,
     "language": "TypeScript"
   },
+  "src/lifecycle/workspace.ts": {
+    "blank": 1,
+    "comment": 16,
+    "code": 91,
+    "language": "TypeScript"
+  },
   "src/reconcile/operations.ts": {
     "blank": 2,
     "comment": 4,
@@ -588,12 +594,6 @@
     "code": 88,
     "language": "TypeScript"
   },
-  "src/lifecycle/workspace.ts": {
-    "blank": 1,
-    "comment": 12,
-    "code": 88,
-    "language": "TypeScript"
-  },
   "src/protocol/receipt-codec.ts": {
     "blank": 8,
     "comment": 18,
@@ -615,7 +615,7 @@
   "src/entry/runner.ts": {
     "blank": 1,
     "comment": 16,
-    "code": 82,
+    "code": 83,
     "language": "TypeScript"
   },
   "src/runtime/society-lease.ts": {
@@ -792,6 +792,12 @@
     "code": 57,
     "language": "TypeScript"
   },
+  "src/cli/exit.ts": {
+    "blank": 7,
+    "comment": 7,
+    "code": 56,
+    "language": "TypeScript"
+  },
   "src/tui/transcript.ts": {
     "blank": 9,
     "comment": 28,
@@ -814,12 +820,6 @@
     "blank": 4,
     "comment": 15,
     "code": 54,
-    "language": "TypeScript"
-  },
-  "src/cli/exit.ts": {
-    "blank": 7,
-    "comment": 6,
-    "code": 53,
     "language": "TypeScript"
   },
   "src/mail/reconcile.ts": {
@@ -1212,6 +1212,18 @@
     "code": 19,
     "language": "TypeScript"
   },
+  "src/extension/shared.ts": {
+    "blank": 2,
+    "comment": 7,
+    "code": 19,
+    "language": "TypeScript"
+  },
+  "src/lifecycle/contracts.ts": {
+    "blank": 1,
+    "comment": 4,
+    "code": 18,
+    "language": "TypeScript"
+  },
   "src/storage/diagnostic-snapshot.ts": {
     "blank": 0,
     "comment": 2,
@@ -1234,18 +1246,6 @@
     "blank": 2,
     "comment": 9,
     "code": 16,
-    "language": "TypeScript"
-  },
-  "src/extension/shared.ts": {
-    "blank": 2,
-    "comment": 4,
-    "code": 15,
-    "language": "TypeScript"
-  },
-  "src/lifecycle/contracts.ts": {
-    "blank": 1,
-    "comment": 1,
-    "code": 15,
     "language": "TypeScript"
   },
   "src/git/paths.ts": {
@@ -1351,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1179,
-    "comment": 4481,
-    "code": 23450,
+    "blank": 1181,
+    "comment": 4505,
+    "code": 23477,
     "nFiles": 224
   }
 }
