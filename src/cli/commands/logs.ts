@@ -1,4 +1,4 @@
-import { opt } from "../arguments.js";
+import { parseArguments } from "../arguments.js";
 import { fail, finishFailure, succeed, usage } from "../exit.js";
 import { call } from "../transport.js";
 
@@ -11,10 +11,14 @@ function parseDuration(duration: string): number {
   return value * multiplier[match[2]!]!;
 }
 
+const LOGS = { options: { "--since": "value" }, positional: { min: 1, max: 1 } } as const;
+
 export async function runLogsCommand(args: string[]): Promise<never> {
-  const agent = args[0];
-  const since = opt(args, "--since");
-  if (!agent || !since) usage();
+  if (args.length === 0) usage();
+  const parsed = parseArguments(args, LOGS);
+  const agent = parsed.positional[0]!;
+  const since = parsed.value("--since");
+  if (!since) usage();
   let replies;
   try {
     replies = await call("logs.read", { agent, sinceSeconds: parseDuration(since) });

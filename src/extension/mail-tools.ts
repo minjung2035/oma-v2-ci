@@ -8,7 +8,8 @@ import { closeSync, constants, fstatSync, mkdtempSync, openSync, readSync, rmSyn
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { validMessageId } from "./batch-view.js";
+import { validActorName, validAddress, validMessageId, validRequestKey } from "./batch-view.js";
+export { validAddress } from "./batch-view.js";
 import { runCliProcess } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
 import { integerEnv, textResult } from "./shared.js";
@@ -51,6 +52,26 @@ function readBoundedMail(
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
+}
+
+/** AV1: what the model supplies is data. Each value is checked against the
+ * grammar of the slot it is going into before the CLI is started, and it goes
+ * into that slot and no other: an option's value right after its option, an
+ * address after `--`. The CLI refuses an option it does not know or one given
+ * twice, so a value that looks like an option cannot become one on either side.
+ * The grammar is the extension's one mirror of the wire grammar (batch-view.ts;
+ * the extension may not import the host's, PI-001), pinned by an AV1 test. */
+const SEND_KINDS: ReadonlySet<string> = new Set(["message", "question", "result", "alert", "critical"]);
+function refused(what: string, value: unknown): never {
+  throw new Error(`${what} is not valid: ${JSON.stringify(value)?.slice(0, 120)}`);
+}
+function requestKeyOf(value: unknown): string {
+  if (value === undefined) return `pi-${crypto.randomUUID()}`;
+  return validRequestKey(value) ? value : refused("request key", value);
+}
+/** The one spelling of a message the CLI is handed: its id. */
+function messageIdOf(value: unknown): string {
+  return (typeof value === "string" ? mailId(value) : null) ?? refused("message id or archive path", value);
 }
 
 /** Reads exactly the file that was measured, and no more than the bound.
@@ -196,24 +217,24 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       request: Type.Optional(Type.String()),
     }),
     async execute(_id, params, signal) {
+      const to = params.to.map(address => validAddress(address) ? address : refused("address", address));
+      const kind = params.kind ?? "message";
+      if (!SEND_KINDS.has(kind)) refused("mail kind", kind);
+      const key = requestKeyOf(params.request);
+      const reply = params.replyTo === undefined ? null : join(archive, `${messageIdOf(params.replyTo)}:2,`);
       const temporary = mkdtempSync(join(home, "oma-tool-"));
       const body = join(temporary, "body.txt");
       try {
         writeFileSync(body, params.body, { mode: 0o600 });
-        const key = params.request ?? `pi-${crypto.randomUUID()}`;
         const args = [
           "send",
-          ...params.to,
-          "--subject",
-          params.subject,
-          "--file",
-          body,
-          "--kind",
-          params.kind ?? "message",
-          "--request",
-          key,
+          "--subject", params.subject,
+          "--file", body,
+          "--kind", kind,
+          "--request", key,
+          ...(reply === null ? [] : ["--reply", reply]),
+          "--", ...to,
         ];
-        if (params.replyTo) args.push("--reply", params.replyTo);
         return textResult(
           await runCli(cli, cwd, environment, channel, args, signal),
           { request: key },
@@ -232,14 +253,15 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       request: Type.Optional(Type.String()),
     }),
     async execute(_id, params, signal) {
-      const key = params.request ?? `pi-${crypto.randomUUID()}`;
+      const message = messageIdOf(params.messageId);
+      const key = requestKeyOf(params.request);
       return textResult(
         await runCli(
           cli,
           cwd,
           environment,
           channel,
-          ["ack", params.messageId, "--request", key],
+          ["ack", "--request", key, "--", message],
           signal,
         ),
         { request: key },
@@ -258,7 +280,8 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
           cwd,
           environment,
           channel,
-          params.agent ? ["status", params.agent] : ["status"],
+          params.agent === undefined ? ["status"]
+            : ["status", "--", validActorName(params.agent) ? params.agent : refused("agent", params.agent)],
           signal,
         ),
       );

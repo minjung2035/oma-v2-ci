@@ -53,7 +53,7 @@ export const DEFAULT_POLICY = Object.freeze({
   // test/id-contracts.test.ts. This is not a general permission to restate
   // identifier grammars.
   identifierMirrors: Object.freeze({
-    "src/extension/batch-view.ts": "trusted Pi extension mirroring the batch-view identity grammar",
+    "src/extension/batch-view.ts": "trusted Pi extension mirroring the batch-view identity grammar and, for AV1, the address and request-key grammar of the CLI slots it fills",
     "src/extension/principal-channel.ts": "trusted Pi extension mirroring the host channel's credential line",
     "src/extension/cli-process.ts": "trusted Pi extension mirroring the credential and society-lease descriptor numbers",
   }),

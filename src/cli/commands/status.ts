@@ -1,8 +1,11 @@
+import { parseArguments } from "../arguments.js";
 import { call } from "../transport.js";
 import { fail, finishFailure, succeed } from "../exit.js";
 
+const STATUS = { options: {}, positional: { min: 0, max: 1 } } as const;
+
 export async function runStatusCommand(args: string[]): Promise<never> {
-  const agent = args[0];
+  const agent = parseArguments(args, STATUS).positional[0];
   let replies;
   try {
     replies = await call("status.get", agent ? { agent } : {});

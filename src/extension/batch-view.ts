@@ -45,6 +45,21 @@ function exactObject(
     keys.every((key) => Object.hasOwn(value, key))
   );
 }
+/** Mirrors isValidActorName: a Resident name, never a reserved word. */
+export function validActorName(value: unknown): boolean {
+  return typeof value === "string" && ACTOR.test(value) && !RESERVED.has(value) && !value.startsWith("topic-");
+}
+const TOPIC = /^[a-z][a-z0-9-]{0,63}$/;
+const REQUEST_KEY = /^[A-Za-z0-9._-]{1,96}$/;
+/** Mirrors isLogicalAddress: a list, a Resident, or a topic. */
+export function validAddress(value: unknown): value is string {
+  return typeof value === "string" && (value === "principal" || value === "commons" || value === "residents" ||
+    validActorName(value) || (value.startsWith("topic/") && TOPIC.test(value.slice(6))));
+}
+/** Mirrors isValidRequestKey. */
+export function validRequestKey(value: unknown): value is string {
+  return typeof value === "string" && REQUEST_KEY.test(value);
+}
 export function validMessageId(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const match = MESSAGE.exec(value);
@@ -78,10 +93,7 @@ function decodeManifest(
     !BATCH.test(value.id as string) ||
     typeof value.agent !== "string" ||
     // Mirrors isValidActor: the Principal, or a Resident name.
-    (value.agent !== "principal" &&
-      (!ACTOR.test(value.agent) ||
-        RESERVED.has(value.agent) ||
-        value.agent.startsWith("topic-"))) ||
+    (value.agent !== "principal" && !validActorName(value.agent)) ||
     !Number.isSafeInteger(value.incarnation) ||
     (value.incarnation as number) < 0 ||
     (value.deliveryMode !== "steer" && value.deliveryMode !== "followUp") ||

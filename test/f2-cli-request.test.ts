@@ -143,7 +143,10 @@ for (const [name, args] of mutations) {
       const before = readdirSync(home, { recursive: true }).sort();
       for (const options of [
         ["--request"],
-        ["--request", "--subject", "later"],
+        // AV1: an option's value is the next argument, whatever it looks like;
+        // `--request --subject` names the key "--subject". A malformed key is one
+        // outside the request-key grammar.
+        ["--request", "bad/key"],
         ["--request", ""],
         ["--request", "valid", "--request"],
         ["--request", "first", "--request", "second"],

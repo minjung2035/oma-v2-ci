@@ -25,6 +25,8 @@ export function usage(): never {
     "  oma context publish <dir> --expect <oid-or-none> [--request K]",
     "  oma status [agent]",
     "  oma logs <agent> --since <duration>",
+    "  each option once (--to/--path may repeat); an option's value is the next argument as written;",
+    "  arguments after -- are never options",
   ].join("\n"));
   process.exit(2);
 }

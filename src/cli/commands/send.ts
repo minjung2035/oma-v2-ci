@@ -1,32 +1,31 @@
 import { basename } from "node:path";
 import { parseMessageFileId } from "../../ids.js";
 import { exactCandidateCheck, isMailKind } from "../../domain/mail-values.js";
-import { keyOf, opt, positional } from "../arguments.js";
+import { keyOf, parseArguments } from "../arguments.js";
 import { readBody } from "../effects.js";
 import { prepareReplyEffects } from "../effects/mail.js";
 import { fail, usage } from "../exit.js";
 import { effect, randKey } from "../request-service.js";
 
+const SEND = {
+  options: { "--subject": "value", "--file": "value", "--kind": "value", "--reply": "value", "--request": "value",
+    "--candidate": "value", "--expect": "value", "--policy-revision": "value" },
+  positional: { min: 0, max: Number.MAX_SAFE_INTEGER },
+} as const;
+const ACK = { options: { "--request": "value" }, positional: { min: 1, max: 1 } } as const;
+
 export function runSendCommand(args: string[]): Promise<never> {
-  const to = positional(args, [
-    "--subject",
-    "--file",
-    "--kind",
-    "--reply",
-    "--request",
-    "--candidate",
-    "--expect",
-    "--policy-revision",
-  ]);
-  const subject = opt(args, "--subject");
-  const reply = opt(args, "--reply");
+  const parsed = parseArguments(args, SEND);
+  const to = [...parsed.positional];
+  const subject = parsed.value("--subject");
+  const reply = parsed.value("--reply");
   if (to.length === 0 && !reply) fail("send requires an address (or --reply)", 2);
   if (!subject && !reply) fail("send requires --subject (or --reply to reuse its subject)", 2);
-  const kindRaw = opt(args, "--kind") ?? "message";
+  const kindRaw = parsed.value("--kind") ?? "message";
   if (!isMailKind(kindRaw)) fail(`invalid --kind ${kindRaw}`, 2);
-  const candidate = opt(args, "--candidate");
-  const expectedBase = opt(args, "--expect");
-  const policyRevision = opt(args, "--policy-revision");
+  const candidate = parsed.value("--candidate");
+  const expectedBase = parsed.value("--expect");
+  const policyRevision = parsed.value("--policy-revision");
   let approvalFor:
     | {
         repo: string;
@@ -50,7 +49,7 @@ export function runSendCommand(args: string[]): Promise<never> {
   } else if (candidate !== null || expectedBase !== null || policyRevision !== null) {
     fail("approval identity flags require --kind approval_required", 2);
   }
-  const key = keyOf(args) ?? randKey();
+  const key = keyOf(parsed) ?? randKey();
   return effect(
     "mail.send",
     key,
@@ -59,7 +58,7 @@ export function runSendCommand(args: string[]): Promise<never> {
         to,
         subject: subject ?? "Re",
         kind: kindRaw,
-        body: readBody(opt(args, "--file")),
+        body: readBody(parsed.value("--file")),
       };
       if (reply) {
         const prepared = prepareReplyEffects(reply, subject === null);
@@ -86,10 +85,10 @@ function parseMessageArg(value: string): string {
 }
 
 export function runAckCommand(args: string[]): Promise<never> {
-  const raw = args[0];
-  if (!raw) usage();
-  const message = parseMessageArg(raw);
-  const key = keyOf(args) ?? randKey();
+  if (args.length === 0) usage();
+  const parsed = parseArguments(args, ACK);
+  const message = parseMessageArg(parsed.positional[0]!);
+  const key = keyOf(parsed) ?? randKey();
   return effect(
     "mail.ack",
     key,
