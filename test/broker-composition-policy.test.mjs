@@ -102,6 +102,8 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
       launchedLocation: (args, society) => ({ society, configPath: args[args.indexOf("--config") + 1],
         stateRoot: args[args.indexOf("--state-root") + 1], runRoot: args[args.indexOf("--run-root") + 1] }) },
     "../runtime/deployment-manifest.js": { assertDeploymentDigest() { calls.push("digest"); } },
+    // AV5: the Principal inbox is created through the held-parent primitive.
+    "../storage/directory.js": { ensureDirectory() {} },
     "../storage/quota.js": { StorageAdmission: class { admit() { calls.push("storage-quota"); return () => undefined; } reserve() { return () => undefined; } } },
     "../authority.js": { resolvedSpecOf: value => value },
     "../domain/errors.js": { StoreError: class extends Error {} },

@@ -32,12 +32,14 @@
  * step.
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, linkSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, linkSync, lstatSync, readdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../domain/identifiers.js";
 import { runGitText } from "../process/policies.js";
-import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
+import { ensureDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
+import { ensureDirectory, removeOwnedTree } from "../storage/directory.js";
+import { entryAt, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { hostSystemLayout, prepareResidentRootfs } from "./resident-rootfs.js";
 
 /** The trusted rootfs OMA builds for its Residents (SB-001). */
@@ -135,14 +137,16 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
   if (format !== "sha1" && format !== "sha256")
     throw new StoreError("UNSUPPORTED_PROFILE", `the project uses an unsupported object format ${format}`);
   const parent = dirname(path);
-  mkdirSync(parent, { recursive: true, mode: 0o700 });
-  const staging = join(parent, `.${basename(path)}.staging.${randomBytes(8).toString("hex")}`);
+  ensureDirectory(parent, 0o700);
+  const stagingName = `.${basename(path)}.staging.${randomBytes(8).toString("hex")}`;
+  const staging = join(parent, stagingName);
   try {
     git(["init", "--quiet", "--bare", "--initial-branch=main", `--object-format=${format}`, staging]);
     // WP16.04: everything the final name will expose is durable before it is
     // exposed, and the name itself is durable before this reports success.
     fsyncTree(staging);
-    try { renameSync(staging, path); fsyncDir(parent); }
+    // AV5: the rename names both entries through one resolution of their parent.
+    try { withinDirectory(path, (directory, name) => { renameSync(entryAt(directory, stagingName), entryAt(directory, name)); fsyncHeldDir(directory, parent); }); }
     catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       // The winner's repository is already there. Anything else is a real
@@ -154,7 +158,7 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
   } finally {
     // Nothing is left behind on either path: after a successful rename there
     // is no staging directory to remove, and after a lost race there is.
-    rmSync(staging, { recursive: true, force: true });
+    removeOwnedTree(staging);
   }
 }
 
@@ -291,14 +295,25 @@ export type ProjectBindingObservation =
   | { readonly kind: "unreadable"; readonly reason: string };
 
 export function observeProjectBinding(stateRoot: string): ProjectBindingObservation {
-  const path = join(stateRoot, PROJECT_BINDING);
-  let stat;
-  try { stat = lstatSync(path, { throwIfNoEntry: false }); }
-  catch (error) { return { kind: "unreadable", reason: error instanceof Error ? error.message : String(error) }; }
-  if (!stat) return { kind: "absent" };
-  if (!stat.isFile() || stat.size > BINDING_MAX_BYTES) return { kind: "unreadable", reason: "the project binding is not a small regular file" };
+  // AV5: one resolution of the state root; the entry checked is the one read.
+  let text: string | null;
   try {
-    const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+    text = withinDirectory(join(stateRoot, PROJECT_BINDING), (directory, name) => {
+      let fd: number;
+      try { fd = openRegularBeneath(directory, name); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
+      try {
+        if (fstatSync(fd).size > BINDING_MAX_BYTES) throw new Error("the project binding is not a small regular file");
+        return readFileSync(fd, "utf8");
+      } finally { closeSync(fd); }
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "absent" };
+    return { kind: "unreadable", reason: error instanceof Error ? error.message : String(error) };
+  }
+  if (text === null) return { kind: "absent" };
+  try {
+    const value: unknown = JSON.parse(text);
     if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("not an object");
     const record = value as Record<string, unknown>;
     const keys = Object.keys(record).sort();
@@ -354,10 +369,13 @@ export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBi
   const bytes = `${JSON.stringify(record, null, 2)}\n`;
   if (Buffer.byteLength(bytes) > BINDING_MAX_BYTES) throw new StoreError("INVALID_REQUEST", "the project path is too long to bind");
   const final = join(stateRoot, PROJECT_BINDING);
-  const temporary = join(stateRoot, `.${PROJECT_BINDING}.${randomBytes(8).toString("hex")}.tmp`);
+  const temporaryName = `.${PROJECT_BINDING}.${randomBytes(8).toString("hex")}.tmp`;
+  const temporary = join(stateRoot, temporaryName);
   writeExclusiveFsyncedFile(temporary, bytes, 0o600);
+  // AV5: the link, the cleanup and the flush address one resolution of the root.
+  withinDirectory(final, (directory, name) => {
   try {
-    try { linkSync(temporary, final); }
+    try { linkSync(entryAt(directory, temporaryName), entryAt(directory, name)); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       // Another start bound it first: the same binding is adoption, any other is a refusal.
@@ -366,6 +384,7 @@ export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBi
           observed.binding.canonicalProjectPath !== record.canonicalProjectPath)
         throw new StoreError("POLICY_CHANGED", "another binding was published for this state root");
     }
-  } finally { unlinkSync(temporary); }
-  fsyncDir(stateRoot);
+  } finally { unlinkSync(entryAt(directory, temporaryName)); }
+  fsyncHeldDir(directory, stateRoot);
+  });
 }

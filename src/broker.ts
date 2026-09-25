@@ -1,6 +1,7 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: authenticated transport and lifetime handoff.
 import { createServer, type Socket, type Server } from "node:net";
-import { mkdirSync, unlinkSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, unlinkSync, existsSync } from "node:fs";
+import { removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, AuthContext, Failure, ProtocolLimits, Request, RunLease } from "../implementation/contracts.js";
 import { Store } from "./store.js";
@@ -459,7 +460,8 @@ export class Broker {
     if (this.statusTimer !== null) { clearInterval(this.statusTimer); this.statusTimer = null; }
     // Absence is the truthful status of a broker that is going away; an old
     // file left behind would read as a broker that is merely quiet.
-    try { rmSync(statusViewPath(this.paths.stateRoot), { force: true }); } catch (error) { this.cleanupError(error); }
+    try { removeOwnedFile(statusViewPath(this.paths.stateRoot)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") this.cleanupError(error); }
     // The credential dies with the broker that minted it, so nothing observed
     // during this run can attach to a later one.
     this.principalEndpoint?.close();

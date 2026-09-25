@@ -4,7 +4,7 @@
  * model-facing CLI in the Resident rootfs (src/cli.ts) and shares no argv
  * parser, capability or socket with it. Nothing here is mounted into a sandbox.
  */
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isValidSocietyName } from "../ids.js";
@@ -51,7 +51,7 @@ function ensureConfiguration(configPath: string, society: string, stateRoot: str
   catch (error) {
     if (existsSync(configPath)) throw error;
     const libdir = fileURLToPath(new URL("../../../", import.meta.url));
-    mkdirSync(dirname(configPath), { recursive: true, mode: 0o700 });
+    ensureDirectory(dirname(configPath), 0o700);
     // Residents are confined from the first run: the rootfs is the one OMA
     // builds under the state root, not the host's `/` (SB-001).
     writeSettings(configPath, defaultHostConfig({

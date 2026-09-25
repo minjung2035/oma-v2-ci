@@ -1,8 +1,11 @@
 /** S-05/GIT-006: the existing disposable namespace recipe, not a new candidate
  * executor. No host fallback parses an untrusted bundle when isolation fails.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { ensureDirectory, removeOwnedTree } from "../storage/directory.js";
+import { entryAt, withinDirectory } from "../storage/contained-fs.js";
 import type { GitPaths } from "./paths.js";
 import { StoreError } from "../domain/errors.js";
 import { decodeProcessText } from "../process/run.js";
@@ -71,7 +74,11 @@ export class QuarantineImporter {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs > 0x7fffffff)
       throw new StoreError("SPIKE_UNRESOLVED", "quarantine timeout cannot be enforced by the native timer");
     if (this.executor.blocked) throw new StoreError("REF_STATE_UNKNOWN", "canonical quarantine preparation is active or uncertain");
-    const root = mkdtempSync(join(this.paths.stateRoot, "staging", "quarantine-ns-"));
+    // AV5: made under a staging directory resolved once, and removed the same way.
+    const staging = join(this.paths.stateRoot, "staging");
+    ensureDirectory(staging);
+    const root = join(staging, `quarantine-ns-${randomUUID()}`);
+    withinDirectory(root, (parent, name) => mkdirSync(entryAt(parent, name), { mode: 0o700 }));
     let settledNamespaceCommand = false;
     try {
       const result = await this.executor.run({ executable: "/usr/bin/prlimit", argv: [
@@ -103,7 +110,7 @@ export class QuarantineImporter {
     } finally {
       // No abort/disconnect cleanup of accepted bundle evidence. Unknown native
       // quiescence retains the namespace staging and blocks this executor owner.
-      if (settledNamespaceCommand) rmSync(root, { recursive: true, force: true });
+      if (settledNamespaceCommand) removeOwnedTree(root);
     }
   }
 }

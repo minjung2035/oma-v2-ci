@@ -18,8 +18,8 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import {
-  chmodSync, closeSync, constants, fsyncSync, lstatSync, mkdirSync, openSync,
-  readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeSync,
+  closeSync, constants, fchmodSync, fsyncSync, lstatSync, mkdirSync,
+  readdirSync, readFileSync, renameSync, unlinkSync, writeSync,
 } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import type { HostConfigV1 } from "../../implementation/contracts.js";
@@ -27,8 +27,11 @@ import { StoreError, normalizeStorageFailure } from "../domain/errors.js";
 import { validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../config.js";
 import { readConfigurationSource } from "./operations.js";
 import {
-  ensureDurableDirectory, fsyncDir, writeExclusiveFsyncedFile, faultAt, isDurabilityFault, type DurabilityObserver,
+  ensureDurableDirectory, fsyncDir, fsyncHeldDir, writeExclusiveFsyncedEntry, writeExclusiveFsyncedFile, faultAt, isDurabilityFault,
+  type DurabilityObserver,
 } from "../storage/durable-fs.js";
+import { removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
+import { entryAt, openBeneath, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 
 export const MANAGED_DIRECTORY = ".oma-config";
 /** D02 editing budget, not a reading rule: a valid bundle of any shape stays
@@ -185,33 +188,56 @@ function treeBytes(root: string): { bytes: number; generations: string[] } {
   return { bytes, generations };
 }
 
-function sameBytes(directory: string, files: ReadonlyMap<string, Buffer>): boolean {
+function sameBytes(parent: number, generation: string, files: ReadonlyMap<string, Buffer>): boolean {
   try {
-    for (const [name, bytes] of files) if (!readFileSync(join(directory, name)).equals(bytes)) return false;
+    for (const [name, bytes] of files) {
+      const fd = openRegularBeneath(parent, `${generation}/${name}`);
+      try { if (!readFileSync(fd).equals(bytes)) return false; } finally { closeSync(fd); }
+    }
     return true;
   } catch { return false; }
 }
 
 /** Writes the generation below `generations/.staging-*`, flushes every file and
  * directory, makes it read-only and renames it into place within the same
- * parent. An identical generation already present is reused as is. */
+ * parent. An identical generation already present is reused as is.
+ * AV5: `generations` is resolved once; the check for an existing generation,
+ * the staging tree, the rename and the flush all go through that one
+ * resolution and descriptors opened beneath it. */
 function publishGeneration(generations: string, id: string, published: ReadonlyMap<string, Buffer>, faults?: DurabilityObserver): void {
   const target = join(generations, id);
-  if (lstatSync(target, { throwIfNoEntry: false })) {
-    if (!sameBytes(target, published)) throw new StoreError("STORE_CORRUPT", `managed generation ${id} holds other bytes`);
-    return;
-  }
-  const staging = join(generations, `.staging-${randomUUID()}`);
-  mkdirSync(staging, { mode: 0o700 });
-  for (const directory of ["roles", "prompts"]) mkdirSync(join(staging, directory), { mode: 0o700 });
-  for (const [name, bytes] of published) writeExclusiveFsyncedFile(join(staging, name), bytes, 0o400, faults);
-  for (const directory of ["roles", "prompts"]) { chmodSync(join(staging, directory), 0o500); fsyncDir(join(staging, directory), faults); }
-  chmodSync(staging, 0o500);
-  fsyncDir(staging, faults);
-  faultAt(faults, "derived-rename", "before", target);
-  renameSync(staging, target);
-  faultAt(faults, "derived-rename", "after-visible", target);
-  fsyncDir(generations, faults);
+  withinDirectory(target, (parent, name) => {
+    if (lstatSync(entryAt(parent, name), { throwIfNoEntry: false })) {
+      if (!sameBytes(parent, name, published)) throw new StoreError("STORE_CORRUPT", `managed generation ${id} holds other bytes`);
+      return;
+    }
+    const stagingName = `.staging-${randomUUID()}`;
+    const staging = join(generations, stagingName);
+    mkdirSync(entryAt(parent, stagingName), { mode: 0o700 });
+    const tree = openBeneath(parent, stagingName, constants.O_RDONLY | constants.O_DIRECTORY);
+    try {
+      const sub: Record<string, number> = {};
+      try {
+        for (const directory of ["roles", "prompts"]) {
+          mkdirSync(entryAt(tree, directory), { mode: 0o700 });
+          sub[directory] = openBeneath(tree, directory, constants.O_RDONLY | constants.O_DIRECTORY);
+        }
+        for (const [file, bytes] of published) {
+          const slash = file.indexOf("/");
+          const holder = slash < 0 ? tree : sub[file.slice(0, slash)];
+          if (holder === undefined) throw new StoreError("INTERNAL_ERROR", `managed generation file ${file} has no directory`);
+          writeExclusiveFsyncedEntry(holder, slash < 0 ? file : file.slice(slash + 1), join(staging, file), bytes, 0o400, faults);
+        }
+        for (const directory of ["roles", "prompts"]) { fchmodSync(sub[directory]!, 0o500); fsyncHeldDir(sub[directory]!, join(staging, directory), faults); }
+      } finally { for (const fd of Object.values(sub)) closeSync(fd); }
+      fchmodSync(tree, 0o500);
+      fsyncHeldDir(tree, staging, faults);
+    } finally { closeSync(tree); }
+    faultAt(faults, "derived-rename", "before", target);
+    renameSync(entryAt(parent, stagingName), entryAt(parent, name));
+    faultAt(faults, "derived-rename", "after-visible", target);
+    fsyncHeldDir(parent, generations, faults);
+  });
 }
 
 /** Proves, with the production loader, that the manifest about to be
@@ -275,30 +301,35 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
 
   const pointer = json({ kind: "oma-operations-v1", host: at("host.json"), models: at("models.json"),
     roles: Object.fromEntries(Object.keys(roles).sort().map(name => [name, at(`roles/${name}.json`)])) });
-  const temporary = join(root, `.${basename(manifest)}.${randomUUID()}.tmp`);
+  const temporaryName = `.${basename(manifest)}.${randomUUID()}.tmp`;
+  const temporary = join(root, temporaryName);
   writeExclusiveFsyncedFile(temporary, pointer, 0o600, faults);
-  let renamed = false;
-  try {
-    assertReproduces(temporary, edit.config, roles);
-    assertCurrent(snapshot);
-    faultAt(faults, "derived-rename", "before", manifest);
-    renameSync(temporary, manifest);
-    renamed = true;
-    faultAt(faults, "derived-rename", "after-visible", manifest);
-  } catch (error) {
-    // A simulated crash stops here like process loss; the quiescent collection
-    // removes a manifest temporary a real crash leaves behind.
-    if (!renamed && !isDurabilityFault(error)) { try { unlinkSync(temporary); } catch { /* collected later */ } }
-    throw error;
-  }
-  try {
-    fsyncDir(root, faults);
-  } catch (error) {
-    if (isDurabilityFault(error)) throw error;
-    unconfirmed.add(root);
-    const cause = storeFailure(error);
-    throw new StoreError(cause.code, `configuration generation ${id} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error });
-  }
+  // AV5: the commit point is renamed, cleaned up and flushed through one
+  // resolution of the bundle root.
+  withinDirectory(manifest, (bundle, manifestName) => {
+    let renamed = false;
+    try {
+      assertReproduces(temporary, edit.config, roles);
+      assertCurrent(snapshot);
+      faultAt(faults, "derived-rename", "before", manifest);
+      renameSync(entryAt(bundle, temporaryName), entryAt(bundle, manifestName));
+      renamed = true;
+      faultAt(faults, "derived-rename", "after-visible", manifest);
+    } catch (error) {
+      // A simulated crash stops here like process loss; the quiescent collection
+      // removes a manifest temporary a real crash leaves behind.
+      if (!renamed && !isDurabilityFault(error)) { try { unlinkSync(entryAt(bundle, temporaryName)); } catch { /* collected later */ } }
+      throw error;
+    }
+    try {
+      fsyncHeldDir(bundle, root, faults);
+    } catch (error) {
+      if (isDurabilityFault(error)) throw error;
+      unconfirmed.add(root);
+      const cause = storeFailure(error);
+      throw new StoreError(cause.code, `configuration generation ${id} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error });
+    }
+  });
   recordCommitted(base, id);
   return Object.freeze({ kind: "committed", generation: id });
 }
@@ -308,8 +339,10 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
  * keeps besides the current one; it never undoes the commit. */
 function recordCommitted(base: string, id: string): void {
   try {
-    const fd = openSync(join(base, JOURNAL), constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
-    try { writeSync(fd, `${id}\n`); fsyncSync(fd); } finally { closeSync(fd); }
+    withinDirectory(join(base, JOURNAL), (directory, name) => {
+      const fd = openBeneath(directory, name, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
+      try { writeSync(fd, `${id}\n`); fsyncSync(fd); } finally { closeSync(fd); }
+    });
   } catch { /* bookkeeping only */ }
 }
 
@@ -330,13 +363,8 @@ export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, 
   for (const entry of readdirSync(generations)) {
     if (keep.has(entry)) continue;
     if (!GENERATION_ID.test(entry) && !entry.startsWith(".staging-")) continue;
-    const path = join(generations, entry);
-    const chmodTree = (directory: string): void => {
-      chmodSync(directory, 0o700);
-      for (const child of readdirSync(directory)) if (statSync(join(directory, child)).isDirectory()) chmodTree(join(directory, child));
-    };
-    chmodTree(path);
-    rmSync(path, { recursive: true, force: true });
+    // AV5: walked and removed beneath held directories, never through a link.
+    removeOwnedTree(join(generations, entry));
     removed.push(entry);
   }
   if (removed.length > 0) fsyncDir(generations);
@@ -345,7 +373,7 @@ export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, 
   const root = dirname(snapshot.layout.index);
   const temporary = new RegExp(`^\\.${basename(snapshot.layout.index).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.[0-9a-f-]{36}\\.tmp$`);
   let swept = false;
-  for (const entry of readdirSync(root)) if (temporary.test(entry)) { unlinkSync(join(root, entry)); removed.push(entry); swept = true; }
+  for (const entry of readdirSync(root)) if (temporary.test(entry)) { removeOwnedFile(join(root, entry)); removed.push(entry); swept = true; }
   if (swept) fsyncDir(root);
   return Object.freeze(removed);
 }

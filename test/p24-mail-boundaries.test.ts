@@ -196,7 +196,10 @@ test("P04: first cur parent flush precedes removing new; a flush fault preserves
       "renameSync",
       (source: fs.PathLike, destination: fs.PathLike) => {
         rename(source, destination);
-        events.push(`rename:${destination}`);
+        // AV5: the move names its entry through the held directory; the event
+        // records the directory that descriptor names, as the path did before.
+        const held = /^\/proc\/self\/fd\/(\d+)\/([^/]+)$/.exec(String(destination));
+        events.push(`rename:${held ? `${fs.readlinkSync(`/proc/self/fd/${held[1]}`)}/${held[2]}` : destination}`);
       },
     );
     syncBuiltinESMExports();

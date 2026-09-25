@@ -26,11 +26,13 @@
  * named: `"create"` leaves anything that exists but differs alone and reports
  * it, and `"repair"` -- which only an owner runs -- puts it back.
  */
-import { lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "../sandbox.js";
+import { ensureDirectory as ensureHeldDirectory } from "../storage/directory.js";
+import { entryAt, openBeneath, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 
 export interface SystemLayout {
   /** Host paths bound read-only at the same path. */
@@ -41,7 +43,15 @@ export interface SystemLayout {
 }
 
 function kind(path: string): "dir" | "file" | "link" | "absent" {
-  const stat = lstatSync(path, { throwIfNoEntry: false });
+  return kindOf(lstatSync(path, { throwIfNoEntry: false }));
+}
+/** AV5: an entry of a directory this pass holds. The rootfs is under the state
+ * tree, so what is checked and what is then written are always the same entry,
+ * named through one resolution of its parent. */
+function kindAt(parent: number, name: string): "dir" | "file" | "link" | "absent" {
+  return kindOf(lstatSync(entryAt(parent, name), { throwIfNoEntry: false }));
+}
+function kindOf(stat: ReturnType<typeof lstatSync> | undefined): "dir" | "file" | "link" | "absent" {
   if (!stat) return "absent";
   if (stat.isSymbolicLink()) return "link";
   if (stat.isDirectory()) return "dir";
@@ -75,60 +85,69 @@ export function hostSystemLayout(root = "/"): SystemLayout {
 export type RootfsPass = "create" | "repair";
 
 function ensureDirectory(path: string): void {
-  const found = kind(path);
-  if (found === "dir") return;
-  if (found !== "absent")
-    throw new StoreError("STORE_CORRUPT", `rootfs mount target ${path} is not a directory`);
-  mkdirSync(path, { recursive: true, mode: 0o755 });
+  // Created one component at a time beneath held parents, never through a link.
+  try { ensureHeldDirectory(path, 0o755); }
+  catch (error) {
+    if (error instanceof StoreError) throw new StoreError("STORE_CORRUPT", `rootfs mount target ${path} is not a directory`);
+    throw error;
+  }
 }
 
 function ensureFile(path: string, pass: Pass, content = ""): void {
-  const found = kind(path);
-  if (found === "file") {
-    // Generated content is written only when what is there is not already it.
-    // A write that reproduces the same bytes is still a write: it replaces the
-    // file every time the product starts, which is the one thing this module
-    // says it does not do to something that exists. An empty content means the
-    // file is a mount target and its contents are not this module's business.
-    if (content.length === 0 || readExisting(path) === content) return;
-    if (pass.mode === "create") { pass.differing.push(path); return; }
-    writeFileSync(path, content, { mode: 0o644 });
-    pass.corrected.push(path);
-    return;
-  }
-  if (found !== "absent")
-    throw new StoreError("STORE_CORRUPT", `rootfs mount target ${path} is not a file`);
-  mkdirSync(dirname(path), { recursive: true, mode: 0o755 });
-  writeFileSync(path, content, { mode: 0o644 });
+  ensureDirectory(dirname(path));
+  withinDirectory(path, (parent, name) => {
+    const found = kindAt(parent, name);
+    if (found === "file") {
+      // Generated content is written only when what is there is not already it.
+      // A write that reproduces the same bytes is still a write: it replaces the
+      // file every time the product starts, which is the one thing this module
+      // says it does not do to something that exists. An empty content means the
+      // file is a mount target and its contents are not this module's business.
+      if (content.length === 0 || readExisting(parent, name, path) === content) return;
+      if (pass.mode === "create") { pass.differing.push(path); return; }
+      const fd = openBeneath(parent, name, constants.O_WRONLY | constants.O_TRUNC | constants.O_NOFOLLOW);
+      try { writeFileSync(fd, content); } finally { closeSync(fd); }
+      pass.corrected.push(path);
+      return;
+    }
+    if (found !== "absent")
+      throw new StoreError("STORE_CORRUPT", `rootfs mount target ${path} is not a file`);
+    const fd = openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o644);
+    try { writeFileSync(fd, content); } finally { closeSync(fd); }
+  });
 }
 
 /** What is in a generated file now. Unreadable is not "different": it is a
  * rootfs entry this module cannot account for, and rewriting it would be the
  * silent overwrite this module refuses elsewhere. */
-function readExisting(path: string): string {
-  try { return readFileSync(path, "utf8"); }
-  catch (error) {
+function readExisting(parent: number, name: string, path: string): string {
+  try {
+    const fd = openRegularBeneath(parent, name);
+    try { if (!fstatSync(fd).isFile()) throw new Error("not a regular file"); return readFileSync(fd, "utf8"); }
+    finally { closeSync(fd); }
+  } catch (error) {
     throw new StoreError("STORE_CORRUPT",
       `rootfs identity file ${path} cannot be read: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 function ensureLink(path: string, target: string, pass: Pass): void {
-  const found = kind(path);
-  if (found === "link") {
-    if (readlinkSync(path) === target) return;
-    if (pass.mode === "create") { pass.differing.push(path); return; }
-    // Only a symlink is ever removed here, and only to point it back.
-    unlinkSync(path);
-    mkdirSync(dirname(path), { recursive: true, mode: 0o755 });
-    symlinkSync(target, path);
-    pass.corrected.push(path);
-    return;
-  }
-  if (found !== "absent")
-    throw new StoreError("STORE_CORRUPT", `rootfs entry ${path} is not the expected link`);
-  mkdirSync(dirname(path), { recursive: true, mode: 0o755 });
-  symlinkSync(target, path);
+  ensureDirectory(dirname(path));
+  withinDirectory(path, (parent, name) => {
+    const found = kindAt(parent, name);
+    if (found === "link") {
+      if (readlinkSync(entryAt(parent, name)) === target) return;
+      if (pass.mode === "create") { pass.differing.push(path); return; }
+      // Only a symlink is ever removed here, and only to point it back.
+      unlinkSync(entryAt(parent, name));
+      symlinkSync(target, entryAt(parent, name));
+      pass.corrected.push(path);
+      return;
+    }
+    if (found !== "absent")
+      throw new StoreError("STORE_CORRUPT", `rootfs entry ${path} is not the expected link`);
+    symlinkSync(target, entryAt(parent, name));
+  });
 }
 
 interface Pass {

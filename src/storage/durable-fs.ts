@@ -122,10 +122,18 @@ function cleanupAfterFailure(parent: number, name: string, path: string, failure
  */
 export function writeExclusiveFsyncedFile(path: string, bytes: string | Uint8Array, mode = 0o600, faults?: DurabilityObserver, use?: (fd: number) => void): void {
   const parent = openDirectory(dirname(path));
+  try { writeExclusiveFsyncedEntry(parent, basename(path), path, bytes, mode, faults, use); }
+  finally { closeSync(parent); }
+}
+/** The same sequence for an entry of a directory the caller already holds
+ * (AV5), so a caller that checked or created the directory writes into that
+ * one; `path` only names the entry for faults and errors. */
+export function writeExclusiveFsyncedEntry(parent: number, name: string, path: string, bytes: string | Uint8Array, mode = 0o600,
+  faults?: DurabilityObserver, use?: (fd: number) => void): void {
   let fd: number | undefined;
   try {
     faultAt(faults, "file-create", "before", path);
-    fd = openBeneath(parent, basename(path), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+    fd = openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
     faultAt(faults, "file-create", "after-visible", path);
     faultAt(faults, "file-write", "before", path);
     writeFileSync(fd, bytes);
@@ -137,14 +145,13 @@ export function writeExclusiveFsyncedFile(path: string, bytes: string | Uint8Arr
   } catch (error) {
     if (fd === undefined || isDurabilityFault(error)) throw error;
     try {
-      unlinkSync(entryAt(parent, basename(path)));
+      unlinkSync(entryAt(parent, name));
       faultAt(faults, "temporary-cleanup", "after-visible", path);
       fsyncSync(parent);
     } catch (cleanup) { throw new AggregateError([error, cleanup], "filesystem effect and owned cleanup failed"); }
     throw error;
   } finally {
     if (fd !== undefined) closeSync(fd);
-    closeSync(parent);
   }
 }
 

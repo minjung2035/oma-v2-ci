@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -9,6 +10,7 @@ import { ownershipRuleFindings } from "../scripts/architecture/rules/ownership-r
 import { schemaDuplicationFindings } from "../scripts/architecture/rules/schema-duplication-rules.mjs";
 import { contractDirectionFindings } from "../scripts/architecture/rules/contract-direction-rules.mjs";
 import { effectOwnershipFindings } from "../scripts/architecture/rules/effect-ownership-rules.mjs";
+import { stateTreeFindings } from "../scripts/architecture/rules/state-tree-rules.mjs";
 import { fenceRuleFindings } from "../scripts/architecture/rules/fence-rules.mjs";
 import { fenceExemptSpawnOwners } from "../scripts/architecture-owners.mjs";
 
@@ -231,4 +233,38 @@ export function ${name}(fence: number) { return spawn("/bin/true", [], { stdio: 
     const stale = fenceFindings(root, "fence-exemption-stale").map(value => value.reason);
     assert.ok(stale.some(reason => reason.includes(`${site} passes a fence`)), stale.join(" | "));
   });
+});
+
+test("AV5: the state-tree rule accepts effects through a held parent, a descriptor or a primitive", () => withFixture({
+  "src/storage/directory.ts": `import { mkdirSync } from "node:fs"; export function ensureDirectory(path) { mkdirSync(path); }`,
+  "src/mail/move.ts": `import { renameSync, unlinkSync, writeFileSync, openSync, constants, mkdirSync } from "node:fs";
+import { entryAt, withinDirectory } from "../storage/contained-fs.js";
+export function move(a, b, fd) {
+  withinDirectory(a, (parent, name) => renameSync(entryAt(parent, name), entryAt(parent, "x")));
+  withinDirectory(b, (parent, name) => { mkdirSync(entryAt(parent, name)); unlinkSync(entryAt(parent, name)); });
+  writeFileSync(fd, "bytes");
+  return openSync(a, constants.O_RDONLY | constants.O_NOFOLLOW);
+}`,
+  "src/broker.ts": `import { unlinkSync } from "node:fs"; export function listen(path) { unlinkSync(path); }`,
+}, root => assert.deepEqual(stateTreeFindings(root), [])));
+
+test("AV5: the state-tree rule rejects a mutation that names a path", () => {
+  for (const [name, body] of [
+    ["rename", `renameSync(join(root, "a"), join(root, "b"));`],
+    ["unlink", `unlinkSync(path);`],
+    ["mkdir", `mkdirSync(path, { recursive: true });`],
+    ["remove", `fs.rmSync(path, { recursive: true, force: true });`],
+    ["create", `openSync(path, constants.O_WRONLY | constants.O_CREAT, 0o600);`],
+    ["write", `writeFileSync(join(root, "view.json"), "{}");`],
+    ["held name kept in a variable", `const name = entryAt(parent, "x"); unlinkSync(name);`],
+  ]) withFixture({
+    "src/views/example.ts": `import fs, { renameSync, unlinkSync, mkdirSync, openSync, writeFileSync, constants } from "node:fs";
+import { join } from "node:path";
+export function effect(root, path, parent, entryAt) { ${body} }`,
+  }, root => assert.ok(stateTreeFindings(root).some(value => value.rule === "state-tree-held-parent"), `${name} escaped the rule`));
+});
+
+test("AV5: the real tree changes the state tree only through held parents", () => {
+  const repository = fileURLToPath(new URL("..", import.meta.url));
+  assert.deepEqual(stateTreeFindings(repository), []);
 });

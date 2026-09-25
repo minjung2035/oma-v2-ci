@@ -45,9 +45,8 @@ export class PreparedContextTree implements PreacceptOwner {
 function acquireStagingRoot(staging: string, tree: string): PreparedContextTree {
   const parent = openDirectory(dirname(staging));
   try {
-    const name = entryAt(parent, basename(staging));
-    mkdirSync(name, { mode: 0o700 });
-    const pinned = lstatSync(name);
+    mkdirSync(entryAt(parent, basename(staging)), { mode: 0o700 });
+    const pinned = lstatSync(entryAt(parent, basename(staging)));
     return new PreparedContextTree(tree, staging, { dev: pinned.dev, ino: pinned.ino });
   } finally { closeSync(parent); }
 }
@@ -181,12 +180,11 @@ export async function prepareContextStream(
         const relative = file.path.slice(tree.length + 1);
         const parent = dirname(relative) === "." ? treeFd : openBeneath(treeFd, dirname(relative), constants.O_RDONLY | constants.O_DIRECTORY);
         try {
-          const name = entryAt(parent, basename(relative));
-          const current = lstatSync(name, { throwIfNoEntry: false });
+          const current = lstatSync(entryAt(parent, basename(relative)), { throwIfNoEntry: false });
           if (!current) continue;
           if (!current.isFile() || current.dev !== file.dev || current.ino !== file.ino)
             throw new StoreError("STORE_CORRUPT", "owned context preparation changed identity during cleanup");
-          unlinkSync(name); fsyncSync(parent);
+          unlinkSync(entryAt(parent, basename(relative))); fsyncSync(parent);
         } finally { if (parent !== treeFd) closeSync(parent); }
       } catch (failure) { failures.push(failure); }
     }

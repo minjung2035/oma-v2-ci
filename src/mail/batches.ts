@@ -1,13 +1,14 @@
-import { unlinkSync, renameSync } from "node:fs";
-import { dirname } from "node:path";
+import { closeSync, unlinkSync, renameSync } from "node:fs";
+import { entryAt, openDirectory } from "../storage/contained-fs.js";
+import { basename, dirname } from "node:path";
 import type { Actor, AuthContext, BoundaryEvidence, MessageId, PreparedBatch } from "../../implementation/contracts.js";
 import { Store, type DeliveryRow } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { generateBatchId } from "../ids.js";
 import { mailArchiveDisplayPath, contextRevisionDisplayPath } from "../domain/derived.js";
 import { mailObjectPathAt, mailInboxPathAt, runnerReceiptPathAt } from "../storage/paths.js";
-import { ensureDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
-import { observeImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
+import { ensureDurableDirectory, fsyncHeldDir } from "../storage/durable-fs.js";
+import { observeImmutableEntry, readImmutableBytes, type ImmutableObservation } from "../storage/immutable-file.js";
 import { publishBatchView } from "../storage/batch-view.js";
 import { encodeBatchView, type BatchViewLimits } from "../protocol/batch-view.js";
 import {
@@ -136,24 +137,39 @@ export class BatchCoordinator {
       if (!delivery) throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
       const message = this.messagePlan(delivery); const object = mailObjectPathAt(this.stateRoot, id);
       readImmutableBytes(object, message.sha256, message.bytes);
-      const observe = (path: string): boolean => {
-        const result = observeImmutableFile(path, message.sha256, message.bytes);
+      const present = (result: ImmutableObservation): boolean => {
         if (result.kind === "corrupt") throw result.error;
         if (result.kind === "unavailable")
           throw new StoreError("BROKER_UNAVAILABLE", "mailbox observation is unavailable", { cause: result.error });
         return result.kind === "present";
       };
-      const fresh = observe(from); const current = observe(to);
-      if (fresh) {
+      // AV5: each mailbox directory is resolved once; what is observed in it
+      // and what is renamed or removed there are the same entries.
+      const newDirectory = heldParent(from);
+      try {
+        const fresh = newDirectory !== null && present(observeImmutableEntry(newDirectory, basename(from), message.sha256, message.bytes));
         // Persist cur's name in the mailbox parent BEFORE removing the new link.
-        ensureDurableDirectory(dirname(to));
-        if (current) unlinkSync(from); else renameSync(from, to);
-        count++;
-      } else if (!current) throw new StoreError("STORE_CORRUPT", `missing mailbox delivery ${id}/${agent}`);
-      fsyncDir(dirname(from)); fsyncDir(dirname(to));
+        if (fresh) ensureDurableDirectory(dirname(to));
+        const curDirectory = heldParent(to);
+        try {
+          const current = curDirectory !== null && present(observeImmutableEntry(curDirectory, basename(to), message.sha256, message.bytes));
+          if (fresh && newDirectory !== null && curDirectory !== null) {
+            if (current) unlinkSync(entryAt(newDirectory, basename(from)));
+            else renameSync(entryAt(newDirectory, basename(from)), entryAt(curDirectory, basename(to)));
+            count++;
+          } else if (!current) throw new StoreError("STORE_CORRUPT", `missing mailbox delivery ${id}/${agent}`);
+          if (curDirectory !== null) fsyncHeldDir(curDirectory, dirname(to));
+        } finally { if (curDirectory !== null) closeSync(curDirectory); }
+        if (newDirectory !== null) fsyncHeldDir(newDirectory, dirname(from));
+      } finally { if (newDirectory !== null) closeSync(newDirectory); }
     }
     return count;
   }
+}
+/** A mailbox directory held for one move, or null when it does not exist. */
+function heldParent(path: string): number | null {
+  try { return openDirectory(dirname(path)); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
 function oneLine(value: string | null): string { return (value ?? "").replace(/\s+/g, " ").trim(); }
 export function batchOf(batch: { id: string; incarnation: number; messageIds: string[]; sessionPath: string | null }, agent: Actor, notice = batchNotice(batch.messageIds)): PreparedBatch {

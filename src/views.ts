@@ -1,9 +1,9 @@
 // MUST [VIEW-001/002]: views are derived from SQLite, Maildir and unit observations.
-import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Actor, AgentStatus, PreparedBatch } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
+import { ensureDirectory } from "./storage/directory.js";
 import { encodeStatusView, statusViewPath } from "./protocol/status-view.js";
 import { publishBatchView } from "./storage/batch-view.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
@@ -34,7 +34,7 @@ export class ViewsModule {
   get unitObservations(): readonly StatusUnitObservation[] { return this.observations; }
   refreshWorld(): void {
     const world = join(this.stateRoot, "world");
-    mkdirSync(world, { recursive: true });
+    ensureDirectory(world);
     const agents = this.store.listAgents();
     const tsv = agents.map(agent => [agent.name, agent.role, agent.desired, agent.profile].map(fieldEsce).join("\t"))
       .join("\n") + (agents.length > 0 ? "\n" : "");

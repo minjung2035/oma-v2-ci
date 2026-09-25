@@ -88,13 +88,23 @@ export function observeImmutableFile(path: string, expectedHash: string, expecte
   let parent: number | undefined;
   try {
     parent = openDirectory(dirname(path));
-    const fd = openImmutable(parent, basename(path));
+    return observeImmutableEntry(parent, basename(path), expectedHash, expectedBytes);
+  } catch (error) {
+    return failedObservation(error);
+  } finally { if (parent !== undefined) closeSync(parent); }
+}
+/** The same observation of one entry of a directory the caller already holds,
+ * so the caller can observe and then act under one resolution (AV5). */
+export function observeImmutableEntry(parent: number, name: string, expectedHash: string, expectedBytes: number): ImmutableObservation {
+  try {
+    const fd = openImmutable(parent, name);
     try { return { kind: "present", bytes: checkedBytes(fd, expectedHash, expectedBytes).bytes }; }
     finally { closeSync(fd); }
-  } catch (error) {
-    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") return { kind: "absent" };
-    return { kind: error instanceof StoreError && error.code === "STORE_CORRUPT" ? "corrupt" : "unavailable", error };
-  } finally { if (parent !== undefined) closeSync(parent); }
+  } catch (error) { return failedObservation(error); }
+}
+function failedObservation(error: unknown): ImmutableObservation {
+  if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") return { kind: "absent" };
+  return { kind: error instanceof StoreError && error.code === "STORE_CORRUPT" ? "corrupt" : "unavailable", error };
 }
 
 /** Consumers parse these checked bytes, never reopen the checked pathname.

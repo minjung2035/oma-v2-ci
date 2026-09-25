@@ -1,6 +1,7 @@
 // UNIT-004/LIFE-006/REC-007: composition under a single process lifetime.
 import { join } from "node:path";
 import { mkdirSync, readFileSync } from "node:fs";
+import { ensureDirectory } from "../storage/directory.js";
 import { Store, SCHEMA_PATH } from "../store.js";
 import { MailModule } from "../mail.js";
 import { UnitsModule, UNIT_TPL_DIR, unitName, assertUserManagerReachable } from "../units.js";
@@ -191,7 +192,7 @@ async function main(): Promise<void> {
         validateStoredProfiles();
         await reconcile.startup(false, async () => { await lifecycle.bootstrap(cfg); validateStoredProfiles(); });
         if (store.getAgent("principal")) {
-          for (const directory of ["new", "cur", "tmp"]) mkdirSync(join(stateRoot, "mail", "inboxes", "principal", directory), { recursive: true });
+          for (const directory of ["new", "cur", "tmp"]) ensureDirectory(join(stateRoot, "mail", "inboxes", "principal", directory));
           units.ensurePrincipal();
         }
       },
