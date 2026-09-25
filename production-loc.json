@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 223,
-    "n_lines": 28843,
+    "n_lines": 28875,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -68,8 +68,8 @@
   },
   "src/tui/session.ts": {
     "blank": 34,
-    "comment": 194,
-    "code": 312,
+    "comment": 196,
+    "code": 313,
     "language": "TypeScript"
   },
   "src/tui/model.ts": {
@@ -282,6 +282,12 @@
     "code": 168,
     "language": "TypeScript"
   },
+  "src/runtime/pi-spawn-plan.ts": {
+    "blank": 9,
+    "comment": 70,
+    "code": 168,
+    "language": "TypeScript"
+  },
   "src/extension/batch-view.ts": {
     "blank": 1,
     "comment": 12,
@@ -297,12 +303,6 @@
   "src/mail/batches.ts": {
     "blank": 2,
     "comment": 17,
-    "code": 165,
-    "language": "TypeScript"
-  },
-  "src/runtime/pi-spawn-plan.ts": {
-    "blank": 8,
-    "comment": 57,
     "code": 165,
     "language": "TypeScript"
   },
@@ -600,6 +600,12 @@
     "code": 86,
     "language": "TypeScript"
   },
+  "src/extension/workspace-guard.ts": {
+    "blank": 5,
+    "comment": 12,
+    "code": 85,
+    "language": "TypeScript"
+  },
   "src/domain/canonical-json.ts": {
     "blank": 6,
     "comment": 4,
@@ -640,12 +646,6 @@
     "blank": 2,
     "comment": 12,
     "code": 81,
-    "language": "TypeScript"
-  },
-  "src/extension/workspace-guard.ts": {
-    "blank": 4,
-    "comment": 6,
-    "code": 80,
     "language": "TypeScript"
   },
   "src/runtime/assets.ts": {
@@ -1345,9 +1345,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1169,
-    "comment": 4380,
-    "code": 23294,
+    "blank": 1171,
+    "comment": 4401,
+    "code": 23303,
     "nFiles": 223
   }
 }

@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "e889e647658220ad0300715d3816ca900c7a55888fa37a19b850d08906f45132",
-  "report": "a01d4797664aeb37d67d2ca90520fb2c2aa1c8f5bb0685f326285bf3d0dd4672",
+  "report": "66313c3ba7b7be2e78c02910a8a106cd05db44658a88844b706aaf4c5abff4c3",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -341,7 +341,7 @@
     },
     {
       "path": "src/extension/workspace-guard.ts",
-      "sha256": "b248c77dc705bbb97ee8a0b371a3a5646f17132eb4072f8052d45861a54ae00c"
+      "sha256": "634e3816840b79ec7b4053efb5b953c9fc2fc4291ea09196ad0d6cbeb248e7cc"
     },
     {
       "path": "src/frame.ts",
@@ -645,7 +645,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "b5270316c7052a1f42b3efba2cba493e64921f6258d70188d9719043adb0ce0e"
+      "sha256": "1ce7b9c648eb8c207e445fde00aa6dfd075562fc4fed2db0d049fdbc960bfd87"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -813,7 +813,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "bed18ed69ccc50aba7aba9e2d5932afc41620041376275984a2c9468dff71e6f"
+      "sha256": "e091c808df6c92e65d94ad8dc2dcace28478e5786db85e363be4cfd58079b427"
     },
     {
       "path": "src/tui/sources/extensions.ts",
