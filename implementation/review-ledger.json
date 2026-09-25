@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 112,
-  "CHANGED_WITH_ORACLE": 111
+  "READ_UNCHANGED": 110,
+  "CHANGED_WITH_ORACLE": 113
  },
  "lanes": {
   "fast": "PASS",
@@ -856,21 +856,13 @@
   {
    "path": "src/domain/deployment.ts",
    "primary": "WP31",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV16"
    ],
    "oracles": [
-    "AUTH-003",
-    "LOC-003",
-    "PR-002",
-    "REC-007",
-    "T100",
-    "T101",
-    "T102",
-    "T103"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+    "AV16"
+   ]
   },
   {
    "path": "src/domain/derived.ts",
@@ -2361,21 +2353,13 @@
   {
    "path": "src/runtime/deployment-manifest.ts",
    "primary": "WP31",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV16"
    ],
    "oracles": [
-    "A1",
-    "A2",
-    "A3",
-    "A4",
-    "A5",
-    "A6",
-    "B1",
-    "C1"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV16"
+   ]
   },
   {
    "path": "src/runtime/engine-auth.ts",
@@ -2618,11 +2602,13 @@
    "by": [
     "AV10",
     "AV11",
+    "AV16",
     "WP27"
    ],
    "oracles": [
     "AV10",
     "AV11",
+    "AV16",
     "V27A",
     "V27B"
    ]
