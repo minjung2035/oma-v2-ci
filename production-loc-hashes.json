@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "162f1e6f78bc194df4149323332f6b0bd6678c2ac922f809081450d5d870c8b1",
-  "report": "0bc64b99e35c8000e6082673e69ada3a88c1aeb814ec253f86a6e252f33bbb45",
+  "report": "f0fdb1f14b6a0fa802128797818a95e3a6ad3cd2cdb6cb30d7e2772bef97f9aa",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -309,7 +309,7 @@
     },
     {
       "path": "src/extension/cli-process.ts",
-      "sha256": "dbab751e2c138ab5a984b5911e2a9089870bf9b21807933805b18de9b4292d68"
+      "sha256": "f5c0f3988ab614ae56b797ec85343b3687a882e0a47221fb7904f460f4c5eff7"
     },
     {
       "path": "src/extension/delivery.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "3e3791089638d5df9d0ad198bff93d2913f3b4c1384a38f18b3b0e261859787f"
+      "sha256": "52dc87a21f2e350d1b535bd2d696b6d1fbfffaeca3e52556910ece8b143686df"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -341,7 +341,7 @@
     },
     {
       "path": "src/extension/workspace-guard.ts",
-      "sha256": "20e7b6a8793ff64cb71ec503014489d6a05eb1bd81506f6c29d16b2a5656870b"
+      "sha256": "3b3c39cc736800cebeb58afe361c2ef7a9f62e20698802a70271f6e840bf3b5c"
     },
     {
       "path": "src/frame.ts",

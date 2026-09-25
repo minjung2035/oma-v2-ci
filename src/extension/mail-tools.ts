@@ -10,7 +10,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { logicalFromDisplay, validAddress, validMessageId } from "./batch-view.js";
 export { validAddress } from "./batch-view.js";
-import { runCliProcess } from "./cli-process.js";
+import { runCliProcess, type CliResult } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
 import { PRINCIPAL_TOOL_NAMES, registerPrincipalTools } from "./principal-tools.js";
 import { actorNameOf, integerEnv, refused, requestKeyOf, textResult } from "./shared.js";
@@ -207,13 +207,24 @@ async function runCli(
     grant: channel.current(),
     signal, timeoutMs: CLI_TIMEOUT_MS,
   });
-  if (result.code !== 0)
-    throw new Error(
-      (result.stderr || result.stdout || `CLI exited ${result.code}`)
-        .trim()
-        .slice(0, 2000),
-    );
+  const failure = cliFailure(result, args);
+  if (failure !== null) throw failure;
   return result.stdout.trim();
+}
+/** DR13, P0-5: what a tool reports when the CLI it ran did not succeed. A CLI
+ * that answered speaks for itself (it names the key when the outcome is to be
+ * looked up again, CLI-003). One this tool stopped, or could not start, gave no
+ * answer: the request may stand accepted, so the tool says the outcome is
+ * unknown and names the request key to look it up with, never "failed". */
+export function cliFailure(result: CliResult, args: readonly string[]): Error | null {
+  const at = args.indexOf("--request");
+  const key = at >= 0 && at + 1 < args.length && args[at + 1] !== "--" ? args[at + 1] : undefined;
+  if (!result.finished)
+    return new Error(key === undefined
+      ? "결과 불명확: CLI가 답하기 전에 멈췄습니다"
+      : `결과 불명확: CLI가 답하기 전에 멈춰 이 요청의 결과를 모릅니다. 같은 request "${key}"로 다시 호출하면 결과를 조회합니다; 새 request로 다시 하지 마세요`);
+  if (result.code === 0) return null;
+  return new Error((result.stderr || result.stdout || `CLI exited ${result.code}`).trim().slice(0, 2000));
 }
 export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: PrincipalChannel = PrincipalChannel.detached()): void {
   const cli = process.env.OMA_CLI_PATH;

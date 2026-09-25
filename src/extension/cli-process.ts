@@ -78,6 +78,11 @@ export interface CliResult {
   readonly code: number;
   readonly stdout: string;
   readonly stderr: string;
+  /** DR13, P0-5: the CLI ended by itself with an exit status. False when this
+   * process stopped it (abort, timeout, output bound) or it could not be
+   * started: then its answer was never given, and a mutation's outcome is
+   * unknown -- not failed. */
+  readonly finished: boolean;
 }
 
 export function runCliProcess(run: CliRun): Promise<CliResult> {
@@ -99,15 +104,17 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
     // declared bound.
     let stdoutBytes = 0; let stderrBytes = 0;
     let settled = false;
-    const finish = (code: number): void => {
+    let stopped = false;
+    const finish = (code: number, finished: boolean): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       run.signal?.removeEventListener("abort", abort);
-      resolve({ code, stdout, stderr });
+      resolve({ code, stdout, stderr, finished: finished && !stopped });
     };
     const terminate = (): void => {
       if (child.exitCode !== null || child.signalCode !== null) return;
+      stopped = true;
       child.kill("SIGTERM");
       setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); }, 5000).unref();
     };
@@ -124,12 +131,12 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
     child.stderr?.on("data", collect((text, bytes) => { stderr += text; stderrBytes += bytes; }, () => stderrBytes));
     if (run.grant !== null) {
       const channel = child.stdio[CREDENTIAL_FD] as unknown as Socket | null;
-      if (!channel) { terminate(); finish(1); return; }
+      if (!channel) { terminate(); finish(1, false); return; }
       channel.on("error", () => {});
       channel.end(`credential ${run.grant.credential} ${run.grant.sessionHandle}\n`);
     }
-    child.once("error", () => finish(1));
-    child.once("close", code => finish(code ?? 1));
+    child.once("error", () => finish(1, false));
+    child.once("close", code => finish(code ?? 1, code !== null));
   });
 }
 

@@ -306,6 +306,8 @@ export const lanes = Object.freeze({
       "DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads",
       "DR12: a flush that fails after the inline commit point is reported as unconfirmed",
       "DR12: a first-run configuration is created where none exists",
+      "DR13 / P0-5: a CLI a tool stopped gave no answer; the tool says the outcome is unknown and names the key",
+      "P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes",
       "AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan",
       "AV14 / arch §7: a Resident's activation resumes its existing session",
       "AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session",

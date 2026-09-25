@@ -42,7 +42,11 @@ function workspaceUsage(root: string, stopAfter: number): number {
   while (pending.length > 0) {
     const path = pending.pop()!;
     let stat: ReturnType<typeof lstatSync>;
-    try { stat = lstatSync(path); } catch { continue; }
+    // P0-5, MAINTENANCE §10 (unknown != zero): only a name that is gone is
+    // nothing; one that cannot be observed is refused like an unreadable
+    // directory below.
+    try { stat = lstatSync(path); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; return stopAfter + 1; }
     if (stat.isFile()) {
       const identity = `${stat.dev}:${stat.ino}`;
       if (files.has(identity)) continue;

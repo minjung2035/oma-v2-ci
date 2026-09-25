@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 225,
-    "n_lines": 29649,
+    "n_lines": 29671,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -78,16 +78,16 @@
     "code": 292,
     "language": "TypeScript"
   },
+  "src/extension/mail-tools.ts": {
+    "blank": 11,
+    "comment": 71,
+    "code": 291,
+    "language": "TypeScript"
+  },
   "src/runner.ts": {
     "blank": 0,
     "comment": 38,
     "code": 286,
-    "language": "TypeScript"
-  },
-  "src/extension/mail-tools.ts": {
-    "blank": 11,
-    "comment": 66,
-    "code": 285,
     "language": "TypeScript"
   },
   "src/leaf.ts": {
@@ -558,6 +558,18 @@
     "code": 92,
     "language": "TypeScript"
   },
+  "src/extension/cli-process.ts": {
+    "blank": 6,
+    "comment": 55,
+    "code": 91,
+    "language": "TypeScript"
+  },
+  "src/extension/workspace-guard.ts": {
+    "blank": 5,
+    "comment": 19,
+    "code": 91,
+    "language": "TypeScript"
+  },
   "src/lifecycle/workspace.ts": {
     "blank": 1,
     "comment": 16,
@@ -576,22 +588,10 @@
     "code": 91,
     "language": "TypeScript"
   },
-  "src/extension/workspace-guard.ts": {
-    "blank": 5,
-    "comment": 16,
-    "code": 90,
-    "language": "TypeScript"
-  },
   "src/mail/facts.ts": {
     "blank": 5,
     "comment": 8,
     "code": 89,
-    "language": "TypeScript"
-  },
-  "src/extension/cli-process.ts": {
-    "blank": 6,
-    "comment": 51,
-    "code": 88,
     "language": "TypeScript"
   },
   "src/protocol/receipt-codec.ts": {
@@ -1358,8 +1358,8 @@
   },
   "SUM": {
     "blank": 1192,
-    "comment": 4676,
-    "code": 23781,
+    "comment": 4688,
+    "code": 23791,
     "nFiles": 225
   }
 }
