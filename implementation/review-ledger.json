@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 110,
-  "CHANGED_WITH_ORACLE": 114
+  "READ_UNCHANGED": 108,
+  "CHANGED_WITH_ORACLE": 116
  },
  "lanes": {
   "fast": "PASS",
@@ -340,15 +340,15 @@
   {
    "path": "src/broker/replies.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV27",
+    "AV28"
    ],
    "oracles": [
-    "F1",
-    "F3"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV27",
+    "AV28"
+   ]
   },
   {
    "path": "src/broker/transport-spool.ts",
@@ -579,11 +579,15 @@
    "by": [
     "AV1",
     "AV22",
+    "AV27",
+    "AV28",
     "WP26"
    ],
    "oracles": [
     "AV1",
     "AV22",
+    "AV27",
+    "AV28",
     "V26A",
     "V26B",
     "V26C"
@@ -888,9 +892,13 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV27",
+    "AV28",
     "WP21"
    ],
    "oracles": [
+    "AV27",
+    "AV28",
     "V21A",
     "V21B"
    ]
@@ -1092,6 +1100,8 @@
     "AV10",
     "AV11",
     "AV20",
+    "AV27",
+    "AV28",
     "AV5",
     "WP03",
     "WP21",
@@ -1101,6 +1111,8 @@
     "AV10",
     "AV11",
     "AV20",
+    "AV27",
+    "AV28",
     "AV5",
     "V03A",
     "V03B",
@@ -1183,10 +1195,14 @@
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV27",
+    "AV28",
     "WP03",
     "WP25"
    ],
    "oracles": [
+    "AV27",
+    "AV28",
     "V03A",
     "V03B",
     "V25A"
@@ -1264,6 +1280,8 @@
     "AV2",
     "AV23",
     "AV26",
+    "AV29",
+    "AV30",
     "AV5"
    ],
    "oracles": [
@@ -1296,7 +1314,9 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV10",
-    "AV11"
+    "AV11",
+    "AV29",
+    "AV30"
    ],
    "oracles": [
     "AV10",
@@ -1309,7 +1329,9 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV10",
-    "AV11"
+    "AV11",
+    "AV29",
+    "AV30"
    ],
    "oracles": [
     "AV10",
@@ -1453,12 +1475,16 @@
    "primary": "WP18",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV27",
+    "AV28",
     "WP17",
     "WP18",
     "WP20",
     "WP21"
    ],
    "oracles": [
+    "AV27",
+    "AV28",
     "V17A",
     "V17B",
     "V18A",
@@ -1490,10 +1516,14 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV27",
+    "AV28",
     "WP21",
     "WP24"
    ],
    "oracles": [
+    "AV27",
+    "AV28",
     "V21A",
     "V21B",
     "V24A",
@@ -1661,21 +1691,15 @@
   {
    "path": "src/lifecycle/contracts.ts",
    "primary": "WP25",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV27",
+    "AV28"
    ],
    "oracles": [
-    "AUTH-003",
-    "AV4",
-    "F1",
-    "MAIL-001",
-    "P3",
-    "PRE-1",
-    "PRE-2",
-    "PRE-3"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "AV27",
+    "AV28"
+   ]
   },
   {
    "path": "src/lifecycle/create-publication.ts",
@@ -1743,9 +1767,13 @@
    "primary": "WP19",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV27",
+    "AV28",
     "AV4"
    ],
    "oracles": [
+    "AV27",
+    "AV28",
     "AV4"
    ]
   },
@@ -2640,6 +2668,8 @@
     "AV11",
     "AV16",
     "AV17",
+    "AV27",
+    "AV28",
     "WP27"
    ],
    "oracles": [
@@ -2647,6 +2677,8 @@
     "AV11",
     "AV16",
     "AV17",
+    "AV27",
+    "AV28",
     "V27A",
     "V27B"
    ]
