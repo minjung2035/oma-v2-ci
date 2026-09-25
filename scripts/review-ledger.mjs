@@ -18,9 +18,10 @@ const base = plan.baseline_commit;
 
 function changedBy(path) {
   const subjects = execFileSync("git", ["log", "--format=%s", `${base}..HEAD`, "--", path], { encoding: "utf8" });
-  // WP cards of the plan, and AV cards of the whole-codebase adversarial pass
-  // (implementation/consistency-decisions.md), whose oracle is their own id.
-  return [...new Set(subjects.match(/\b(?:WP\d{2}|AV\d+)\b/g) ?? [])].sort();
+  // WP cards of the plan, AV cards of the whole-codebase adversarial pass
+  // (implementation/consistency-decisions.md) and DR design revisions
+  // (implementation/design-revisions.md), whose oracle is their own id.
+  return [...new Set(subjects.match(/\b(?:WP\d{2}|AV\d+|DR\d+)\b/g) ?? [])].sort();
 }
 const files = [];
 for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
@@ -28,7 +29,7 @@ for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
   if (!current.includes(path)) { files.push({ path, primary, status: "REMOVED", by: changedBy(path), oracles: [] }); continue; }
   const by = changedBy(path);
   if (by.length > 0) {
-    const oracles = [...new Set(by.flatMap(card => oraclesOf.get(card) ?? (card.startsWith("AV") ? [card] : [])))]
+    const oracles = [...new Set(by.flatMap(card => oraclesOf.get(card) ?? (card.startsWith("AV") || card.startsWith("DR") ? [card] : [])))]
       .filter(id => oraclePresent(names, id)).sort();
     files.push({ path, primary, status: oracles.length > 0 ? "CHANGED_WITH_ORACLE" : "CHANGED_WITHOUT_ORACLE", by, oracles });
   } else if (read.has(path)) {
