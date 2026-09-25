@@ -193,6 +193,7 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV20",
     "AV5",
     "WP03",
     "WP07",
@@ -202,6 +203,7 @@
     "WP26"
    ],
    "oracles": [
+    "AV20",
     "AV5",
     "V03A",
     "V03B",
@@ -576,10 +578,12 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV1",
+    "AV22",
     "WP26"
    ],
    "oracles": [
     "AV1",
+    "AV22",
     "V26A",
     "V26B",
     "V26C"
@@ -609,9 +613,11 @@
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV22",
     "WP26"
    ],
    "oracles": [
+    "AV22",
     "V26A",
     "V26B",
     "V26C"
@@ -1085,6 +1091,7 @@
    "by": [
     "AV10",
     "AV11",
+    "AV20",
     "AV5",
     "WP03",
     "WP21",
@@ -1093,6 +1100,7 @@
    "oracles": [
     "AV10",
     "AV11",
+    "AV20",
     "AV5",
     "V03A",
     "V03B",
@@ -1254,6 +1262,7 @@
     "AV11",
     "AV15",
     "AV2",
+    "AV23",
     "AV5"
    ],
    "oracles": [
@@ -1262,6 +1271,7 @@
     "AV11",
     "AV15",
     "AV2",
+    "AV23",
     "AV5"
    ]
   },
@@ -2245,11 +2255,13 @@
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV20",
     "WP03",
     "WP21",
     "WP22"
    ],
    "oracles": [
+    "AV20",
     "V03A",
     "V03B",
     "V21A",
@@ -2303,12 +2315,14 @@
    "by": [
     "AV10",
     "AV11",
+    "AV21",
     "WP06",
     "WP10"
    ],
    "oracles": [
     "AV10",
     "AV11",
+    "AV21",
     "V06A",
     "V06B",
     "V10A",
