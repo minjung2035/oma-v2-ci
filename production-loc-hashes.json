@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3e6b9c3e9e0313d396961699f961d15ac6c8b796e016d37c6da224029d2ef04b",
-  "report": "b00ad68185dc86e6563d667288d703463c01a299bd3fc23aca1b7dcc9d66c7f9",
+  "report": "9739812ad655beac0133324dce23afd83f7a92708a85c95116a6670ddb2d9e57",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -233,7 +233,7 @@
     },
     {
       "path": "src/domain/errors.ts",
-      "sha256": "f42cb5981e63d5e4b4fbe42c664ab30729761a8e9f4eba9f8f9e706104f4cb23"
+      "sha256": "552883216cbdec84d4550ae97d27a6d295cd8f9ebec75368524809faa4a8a607"
     },
     {
       "path": "src/domain/exhaustive.ts",
@@ -373,11 +373,11 @@
     },
     {
       "path": "src/git/integration-policy.ts",
-      "sha256": "a22ccccd88c0df2a03c15bfc53a4bc3f405b2119f58f03d7fdae07c1b1220f48"
+      "sha256": "80b021bab48c2b77c9864ea9b513e9316c12836c21144d66b5510dd89cee46a0"
     },
     {
       "path": "src/git/integration.ts",
-      "sha256": "b5abbf7933ebf97cb20cf5fa9f659ffb2d42ed46ac1e6488f9cff6103ece18e9"
+      "sha256": "10362976581975d84a2e8b0302d12fff42b22c0d0ee5f23f3b336b6f10240523"
     },
     {
       "path": "src/git/observe.ts",

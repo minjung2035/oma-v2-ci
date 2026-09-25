@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 29289,
+    "n_lines": 29311,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -174,6 +174,12 @@
     "code": 218,
     "language": "TypeScript"
   },
+  "src/git/integration.ts": {
+    "blank": 5,
+    "comment": 16,
+    "code": 217,
+    "language": "TypeScript"
+  },
   "src/config.ts": {
     "blank": 11,
     "comment": 9,
@@ -184,12 +190,6 @@
     "blank": 12,
     "comment": 106,
     "code": 212,
-    "language": "TypeScript"
-  },
-  "src/git/integration.ts": {
-    "blank": 5,
-    "comment": 8,
-    "code": 209,
     "language": "TypeScript"
   },
   "src/reconcile.ts": {
@@ -228,6 +228,12 @@
     "code": 188,
     "language": "TypeScript"
   },
+  "src/domain/errors.ts": {
+    "blank": 7,
+    "comment": 27,
+    "code": 186,
+    "language": "TypeScript"
+  },
   "src/frame.ts": {
     "blank": 0,
     "comment": 9,
@@ -238,12 +244,6 @@
     "blank": 19,
     "comment": 29,
     "code": 185,
-    "language": "TypeScript"
-  },
-  "src/domain/errors.ts": {
-    "blank": 7,
-    "comment": 26,
-    "code": 184,
     "language": "TypeScript"
   },
   "src/git/context.ts": {
@@ -494,7 +494,7 @@
   },
   "src/git/integration-policy.ts": {
     "blank": 6,
-    "comment": 7,
+    "comment": 10,
     "code": 102,
     "language": "TypeScript"
   },
@@ -1352,8 +1352,8 @@
   },
   "SUM": {
     "blank": 1186,
-    "comment": 4537,
-    "code": 23566,
+    "comment": 4549,
+    "code": 23576,
     "nFiles": 224
   }
 }

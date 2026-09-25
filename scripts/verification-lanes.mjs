@@ -289,6 +289,7 @@ export const lanes = Object.freeze({
       "DR4 / TUI-019, TUI-007, LIFE-008: the Human turns worker integrate on and off",
       "DR6 / D01, BATCH-002: a batch presented again says so",
       "DR7 / D03: a supervised service leads its own session",
+      "DR3: a failure after acceptance keeps the facts its code may carry",
       "AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan",
       "AV14 / arch §7: a Resident's activation resumes its existing session",
       "AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session",
