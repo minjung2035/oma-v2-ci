@@ -138,7 +138,8 @@ test("R19: a same-revision full-policy change is rejected outside the acceptance
   try {
     await assert.rejects(f.coordinator.execute(f.auth, "policy", input), code("POLICY_CHANGED"));
     assert.equal(reads, 1); assert.equal(f.calls.includes("cas"), false);
-    assert.equal(operation(f.store, "policy").errorCode, "POLICY_CHANGED");
+    // DR8: facts the broker does not hold are refused before acceptance.
+    assert.equal(f.store.getOperation("alice", "policy"), null);
   } finally { f.close(); }
 });
 

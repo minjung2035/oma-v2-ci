@@ -128,3 +128,11 @@ test("DR7 / D03: a supervised service leads its own session, apart from its star
   assert.notEqual(sessionOf(stat), own, "the service shares its starter's session and terminal");
   assert.equal(sessionOf(stat), child.pid, "the service does not lead its session");
 });
+
+test("DR3: a failure after acceptance keeps the facts its code may carry", async () => {
+  // The thirteenth run: a create refused while another completed said
+  // BROKER_UNAVAILABLE without its reason, because the accepted wrapper dropped it.
+  const { StoreError, acceptedFailure, publicFailure } = await import("../src/domain/errors.js");
+  const wrapped = acceptedFailure(new StoreError("BROKER_UNAVAILABLE", "another accepted creation is completing", { details: { reason: "busy" } }));
+  assert.deepEqual(publicFailure(wrapped).details, { reason: "busy" });
+});

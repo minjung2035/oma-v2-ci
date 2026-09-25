@@ -29,7 +29,10 @@ export interface IntegrationSnapshot {
   readonly checks: readonly FrozenCheck[];
   /** Existing SHA256(canonicalJson(runtime checks)); do not change this recipe. */
   readonly checkProfileDigest: string;
-  /** In-memory freshness comparison only; never persisted as a new identity. */
+  /** DR8: the integration facts -- protected paths and checks -- the broker
+   * holds for its lifetime (TUI-007). The revision is not part of it: it is the
+   * host's current one (CFG-005) and is compared on its own. In-memory only;
+   * never persisted as a new identity. */
   readonly policyIdentity: string;
 }
 /** Revision-only readers remain source-compatible, but production composition
@@ -98,7 +101,7 @@ export function snapshotIntegrationPolicy(policy: IntegrationPolicy): Integratio
   return Object.freeze({
     policyRevision: policy.policyRevision, protectedPaths, checks: frozenChecks,
     checkProfileDigest: sha256Hex(canonicalJson(frozenChecks)),
-    policyIdentity: sha256Hex(canonicalJson({ policyRevision: policy.policyRevision, protectedPaths, checks: frozenChecks })),
+    policyIdentity: sha256Hex(canonicalJson({ protectedPaths, checks: frozenChecks })),
   });
 }
 
@@ -111,5 +114,5 @@ export function assertSupportedIntegration(snapshot: IntegrationSnapshot): void 
 
 export function assertSameIntegrationPolicy(expected: IntegrationSnapshot, actual: IntegrationSnapshot): void {
   if (expected.policyIdentity !== actual.policyIdentity)
-    throw new StoreError("POLICY_CHANGED", "integration policy facts changed; revision alone is not authority");
+    throw new StoreError("POLICY_CHANGED", "integration policy facts changed; they apply at the next broker start");
 }

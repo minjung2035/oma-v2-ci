@@ -1,8 +1,8 @@
-# 설계 수정 기록 DR1–DR7 (실제 provider 기능 점검 뒤)
+# 설계 수정 기록 DR1–DR8 (실제 provider 기능 점검 뒤)
 
 상태: **ACCEPTED (사용자 요청, 2026-09-25)**. AV9–AV31(`consistency-decisions.md`의 AV 절)을
 고치는 동안 결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우가 있었다. 이 문서는 그중
-일곱 가지를 설계 수준에서 다시 판단한다. 각 항목은 관측, 원인이 된 설계, 결정, 바꾸는 규범,
+일곱 가지를 설계 수준에서 다시 판단하고, 그 수정을 다시 점검하며 드러난 여덟 번째(DR8)를 더한다. 각 항목은 관측, 원인이 된 설계, 결정, 바꾸는 규범,
 바꾸지 않는 것, 위험을 적는다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않는다.
 이 문서와 어긋나는 architecture 문장은 여기에 적고, 규범의 owner는 `implementation-spec.md`다.
 wire schema·DB schema·receipt version은 바꾸지 않는다. 바뀌는 권한 의미는 DR4 하나다.
@@ -60,6 +60,9 @@ AV28)와 모델이 다음 행동을 고를 정보(어떤 권한이 없는지, �
 (ERR-001).
 
 **바꾸는 규범.** ERR-001에 details 규칙을 더한다.
+
+**재실행에서 고친 것.** 13차 점검에서 접수 뒤 실패(`acceptedFailure`)가 details를 옮기지 않아
+BROKER_UNAVAILABLE의 `reason`이 빠졌다. 접수 뒤 실패도 같은 details를 싣는다.
 
 ## DR4 — `code.integrate`는 host가 직접 위임한다
 
@@ -124,3 +127,22 @@ broker의 수명은 설계가 말한 대로 host와의 supervision 채널(닫히
 신호에만 묶인다. AV31의 신호 처리는 방어선으로 남긴다.
 
 **바꾸는 규범.** 없음(D03·LIFE-006의 구현). 이 문서가 판단을 기록한다.
+
+## DR8 — broker가 붙드는 것은 통합 사실이고, revision은 host의 현재 값이다
+
+**관측.** 13차 점검에서 Human이 Config 화면으로 Worker integrate를 켠 뒤, 새로 만든 Resident의
+integrate가 모두 `POLICY_CHANGED`로 거절되었다. Config 화면의 어떤 저장이든 CFG-005대로 새 policy
+revision을 매기는데, broker는 시작 때의 정책 스냅샷(revision 포함)으로 새 integrate를 접수하고
+CAS 직전에 현재 설정과 revision까지 같아야 통과시켰다. 편집 한 번이면 재시작 전까지 통합이 막혔다.
+
+**원인.** 두 규범의 대상이 섞였다. TUI-007은 보호 경로·check argv 같은 통합 *사실*을 broker 시작 때
+고정하고, CFG-005/D02는 의미가 바뀌면 새 *revision*으로 "outstanding integrate가 재검사하게" 한다.
+구현은 revision도 시작 때 고정했고, 같은 파일의 비교는 revision만 달라도 "facts changed"라고 했다.
+
+**결정.** broker가 수명 동안 붙드는 것은 통합 사실이고(TUI-007), revision은 host의 현재 값이다
+(CFG-005, INT-001의 "현재 policy"). 새 integrate는 현재 revision으로 접수하고, 현재 사실이 붙든
+사실과 다르면 접수 전에 거절한다(다음 broker 시작에 적용). CAS 직전(INT-003)과 복구에서는 접수 때의
+revision이 여전히 host의 것인지 다시 보고, 다르면 거절한다(D02의 재검사).
+
+**바꾸는 규범.** 없음: INT-001·INT-003·CFG-005·TUI-007이 이미 이렇게 말한다. 구현과 그 시험
+(T62는 접수와 CAS 사이의 변경으로, R19는 사실의 변경으로)을 규범에 맞췄다.

@@ -45,18 +45,34 @@ export class IntegrationCoordinator {
     if (this.bound === null) throw new StoreError("UNSUPPORTED_PROFILE", "integration requires an explicit host policy");
     return this.bound;
   }
-  private verifyCurrentPolicy(snapshot: IntegrationSnapshot): void {
+  /** DR8: the policy an integration is judged by now. The broker holds the
+   * facts it started with -- protected paths and checks apply at its next start
+   * (TUI-007) -- and the revision is the host's current one (CFG-005, D02). An
+   * edit that leaves the facts alone gives later integrations its revision; one
+   * that changes them is refused until the broker holds them. Read outside
+   * acceptance (M-004); unreadable is refused, never the previous answer. */
+  private currentPolicy(): IntegrationSnapshot {
+    const bound = this.policy();
     if (this.store.inTransaction) throw new StoreError("INTERNAL_ERROR", "policy I/O cannot run inside acceptance");
-    if (this.policyReader === null) return;
-    try {
-      const current = this.policyReader();
-      if (typeof current === "string") {
-        if (!current || current !== snapshot.policyRevision) throw new StoreError("POLICY_CHANGED", "integration policy revision changed");
-      } else assertSameIntegrationPolicy(snapshot, snapshotIntegrationPolicy(current));
-    } catch (error) {
-      if (error instanceof StoreError && error.code === "POLICY_CHANGED") throw error;
-      throw new StoreError("POLICY_CHANGED", "authoritative integration policy is unreadable or invalid");
+    if (this.policyReader === null) return bound;
+    let read: ReturnType<IntegrationPolicyReader>;
+    try { read = this.policyReader(); }
+    catch { throw new StoreError("POLICY_CHANGED", "authoritative integration policy is unreadable or invalid"); }
+    if (typeof read === "string") {
+      if (!read) throw new StoreError("POLICY_CHANGED", "authoritative integration policy is unreadable or invalid");
+      return Object.freeze({ ...bound, policyRevision: read });
     }
+    let current: IntegrationSnapshot;
+    try { current = snapshotIntegrationPolicy(read); }
+    catch { throw new StoreError("POLICY_CHANGED", "authoritative integration policy is unreadable or invalid"); }
+    assertSameIntegrationPolicy(bound, current);
+    return Object.freeze({ ...bound, policyRevision: current.policyRevision });
+  }
+  /** INT-003, D02: immediately before CAS, the revision an integration was
+   * accepted under is still the host's, and the facts are still the ones held. */
+  private verifyCurrentPolicy(revision: string): void {
+    if (this.currentPolicy().policyRevision !== revision)
+      throw new StoreError("POLICY_CHANGED", "integration policy revision changed after acceptance");
   }
   private operation(id: string): OperationOf<"git.integrate"> {
     const operation = this.store.getOperationById(id);
@@ -129,7 +145,7 @@ export class IntegrationCoordinator {
     const claim = this.store.claimKey(auth.actor, key, hash);
     if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
     if (claim === "reused") throw reused(auth.actor, key);
-    const policy = this.policy();
+    const policy = this.currentPolicy();
     assertSupportedIntegration(policy);
     this.requireWriterSlot();
     this.effects.verifyObjectFormat([input.candidate, input.expected]);
@@ -162,7 +178,7 @@ export class IntegrationCoordinator {
       for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check);
       if (!this.stillAtBase(operation)) return this.receipt(id);
       this.requireEligible(policy, plan.base, plan.candidate);
-      this.verifyCurrentPolicy(policy);
+      this.verifyCurrentPolicy(plan.policyRevision);
       this.requireExecuteAuthority(auth, true);
       this.requireWriterSlot(id);
       // No-op integrations also retain the current authority/stop/policy checks.
@@ -197,17 +213,17 @@ export class IntegrationCoordinator {
       knowledge = "none";
       this.requireWriterSlot(operation.id);
       const policy = this.policy();
-      if (policy.policyRevision !== plan.policyRevision || policy.checkProfileDigest !== plan.checkProfileDigest)
+      if (policy.checkProfileDigest !== plan.checkProfileDigest)
         throw new StoreError("POLICY_CHANGED", "accepted integration policy no longer matches the configured profile");
       assertSupportedIntegration(policy);
-      this.verifyCurrentPolicy(policy);
+      this.verifyCurrentPolicy(plan.policyRevision);
       this.requireRecoveryAuthority(operation.actor);
       this.effects.verifyObjectFormat([plan.base, plan.candidate]);
       this.requireEligible(policy, plan.base, plan.candidate);
       for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check);
       if (!this.stillAtBase(operation)) return;
       this.requireEligible(policy, plan.base, plan.candidate);
-      this.verifyCurrentPolicy(policy);
+      this.verifyCurrentPolicy(plan.policyRevision);
       this.requireRecoveryAuthority(operation.actor);
       this.requireWriterSlot(operation.id);
       if (!noOp) {

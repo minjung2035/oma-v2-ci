@@ -74,7 +74,9 @@ for (const format of ["sha1", "sha256"] as const) {
     const f = repository(t, format);
     await published(f);
     const other = f.third();
-    f.reader.onRead = () => { f.reader.onRead = null; f.move(other); };
+    // The policy read immediately before CAS; admission reads the current revision first (DR8).
+    let reads = 0;
+    f.reader.onRead = () => { if (++reads < 2) return; f.reader.onRead = null; f.move(other); };
     const receipt = await f.git.integrate(gitAuth, "raced", { expected: f.info.base, candidate: f.info.candidate });
     assert.equal(receipt.state, "unknown");
     assert.equal(f.main(), other, "the third writer's main is not overwritten");

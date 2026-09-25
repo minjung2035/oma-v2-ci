@@ -51,12 +51,15 @@ test("R19: policy freshness includes same-revision protected paths, argv, enviro
     policy => { policy.checks[0]!.argv.push("--unsafe"); },
     policy => { policy.checks[0]!.env.MODE = "other"; },
     policy => { policy.checks[0]!.resources!.memoryBytes *= 2; },
-    policy => { policy.policyRevision = "revision-2"; },
   ];
   for (const mutate of mutations) {
     const altered = structuredClone(original); mutate(altered);
     assert.throws(() => assertSameIntegrationPolicy(before, snapshotIntegrationPolicy(altered)), code("POLICY_CHANGED"));
   }
+  // DR8: the revision is the host's current one, compared on its own; a
+  // revision-only edit is not a change of the facts the broker holds.
+  const revised = structuredClone(original); revised.policyRevision = "revision-2";
+  assert.doesNotThrow(() => assertSameIntegrationPolicy(before, snapshotIntegrationPolicy(revised)));
 });
 
 test("R19: resource/runtime disagreement fails instead of silently rewriting a host profile", () => {

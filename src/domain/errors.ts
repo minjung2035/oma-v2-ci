@@ -121,7 +121,8 @@ export function classifyError(context: ErrorContext): ErrorPolicy {
 /** A coordinator's own statement that its operation committed before this
  * failure. The code stays the closed public code; no wire field is added. */
 export class AcceptedFailure extends StoreError {
-  constructor(code: ErrorCode, message: string, readonly effectKnowledge: EffectKnowledge, options?: ErrorOptions) {
+  constructor(code: ErrorCode, message: string, readonly effectKnowledge: EffectKnowledge,
+    options?: ErrorOptions & { readonly details?: Readonly<Record<string, unknown>> }) {
     super(code, message, options);
   }
 }
@@ -129,7 +130,9 @@ export function acceptedFailure(error: unknown, effectKnowledge: EffectKnowledge
   if (error instanceof AcceptedFailure) return error;
   const normalized = normalizeStorageFailure(error);
   return normalized instanceof StoreError
-    ? new AcceptedFailure(normalized.code, normalized.message, effectKnowledge, { cause: error })
+    // DR3: an accepted operation's failure keeps the facts its code may carry.
+    ? new AcceptedFailure(normalized.code, normalized.message, effectKnowledge,
+      { cause: error, ...(normalized.details === undefined ? {} : { details: normalized.details }) })
     : new AcceptedFailure("INTERNAL_ERROR", "accepted operation failed", effectKnowledge, { cause: error });
 }
 /** A durable failed receipt is terminal; same-key lookup is never effect replay. */

@@ -209,11 +209,27 @@ test("INT-003: accepted stop intent cancels before main CAS", async () => {
 });
 
 test("T62: policy revision is reread before CAS and a race fails closed", async () => {
-  let reads = 0; const env = envOf(null, () => { reads++; return "p2"; });
+  // Accepted under p1, changed to p2 before CAS: the re-check fails closed (D02).
+  let reads = 0; const env = envOf(null, () => (++reads === 1 ? "p1" : "p2"));
   try {
     const { base, candidate } = publishedFastForward(env);
     await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "policy-race", { candidate, expected: base }), failure("POLICY_CHANGED"));
-    assert.equal(reads, 1); assert.equal(main(env), base); assert.equal(env.store.getOperation("a", "policy-race")?.state, "failed");
+    assert.equal(reads, 2); assert.equal(main(env), base); assert.equal(env.store.getOperation("a", "policy-race")?.state, "failed");
+  } finally { env.seal(); }
+});
+
+test("DR8 / CFG-005, TUI-007: an integration after a revision-only edit is judged by the host's current revision", async () => {
+  // The broker started under p1; the Human's edit made it p2 and left the facts
+  // alone. The thirteenth functional run found every later integrate refused.
+  const env = envOf(null, () => "p2");
+  try {
+    const { base, candidate } = publishedFastForward(env);
+    const receipt = await env.git.integrate(auth("a", ["code.integrate"]), "after-edit", { candidate, expected: base });
+    assert.equal(receipt.state, "succeeded");
+    assert.equal(main(env), candidate);
+    const accepted = env.store.getOperation("a", "after-edit");
+    assert.ok(accepted?.kind === "git.integrate");
+    assert.equal(accepted.plan.policyRevision, "p2", "accepted under the revision the broker started with");
   } finally { env.seal(); }
 });
 
@@ -222,7 +238,8 @@ test("T62-negative: unreadable authoritative policy cannot integrate", async () 
   try {
     const { base, candidate } = publishedFastForward(env);
     await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "policy-malformed", { candidate, expected: base }), failure("POLICY_CHANGED"));
-    assert.equal(main(env), base); assert.equal(env.store.getOperation("a", "policy-malformed")?.state, "failed");
+    // Refused before acceptance: nothing is accepted under a policy that cannot be read.
+    assert.equal(main(env), base); assert.equal(env.store.getOperation("a", "policy-malformed"), null);
   } finally { env.seal(); }
 });
 
