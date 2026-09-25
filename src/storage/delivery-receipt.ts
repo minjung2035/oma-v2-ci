@@ -122,7 +122,7 @@ function requireBytes(bytes: Buffer | Failed): Buffer {
 function record(raw: unknown): Record<string, unknown> | null {
   return raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
 }
-/** AV4: the session directory is one the engine -- and so, for a Resident, the
+/** FS-005, SB-006: the session directory is one the engine -- and so, for a Resident, the
  * model's sandbox -- writes. The named file is found beneath it in one
  * resolution that follows no link at any component, never by resolving the
  * path and then opening it again. */

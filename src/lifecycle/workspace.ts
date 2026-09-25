@@ -40,27 +40,28 @@ export class WorkspaceCoordinator {
     const result = this.git(["--git-dir", this.paths.projectGit, "cat-file", "-e", `${oid}^{commit}`]);
     if (result.status !== 0) throw new StoreError("PREREQUISITE_MISSING", `create base ${oid} is not present in the canonical repository`);
   }
-  /** `hostOwned` says no run has opened on this agent yet (incarnation 0).
-   * AV4: once one has, the workspace is the Resident's -- its `.git` is the
-   * model's to write -- and the host neither walks it nor runs Git in it. Its
-   * readiness was proven before the agent was first enabled, which is the only
-   * way a run could have opened. */
-  ensure(plan: ValidatedPlan<"agent.create">, hostOwned = true): Promise<void> {
+  /** `readinessProven` is the durable fact that `ready()` verified this
+   * workspace and moved the agent out of `provisioning` -- the only transition
+   * out of it, and the only way a run can open. INV03: a settled fact is not
+   * derived again from current state, and after it the workspace is the
+   * Resident's (its `.git` is the model's to write), so the host neither walks
+   * it nor runs Git in it; only its presence is observed. */
+  ensure(plan: ValidatedPlan<"agent.create">, readinessProven = false): Promise<void> {
     if (!isWorkspacePathFor(plan.workspacePath, { stateRoot: this.paths.stateRoot, actor: plan.spec.name }))
       return Promise.reject(new StoreError("STORE_CORRUPT", "create workspace path differs from frozen identity"));
     const identity = Object.freeze({ name: plan.spec.name, from: plan.spec.from, workspacePath: plan.workspacePath, specHash: plan.specHash });
     const key = `${identity.workspacePath}\0${identity.specHash}`;
     if (this.working) return this.working.key === key ? this.working.task : Promise.reject(new StoreError("REF_STATE_UNKNOWN", "another workspace preparation is active"));
     if (this.executor.blocked) return Promise.reject(new StoreError("REF_STATE_UNKNOWN", "workspace executor outcome is uncertain"));
-    const task = Promise.resolve().then(() => this.prepare(identity, hostOwned)).finally(() => { if (this.working?.task === task) this.working = null; });
+    const task = Promise.resolve().then(() => this.prepare(identity, readinessProven)).finally(() => { if (this.working?.task === task) this.working = null; });
     this.working = { key, task }; return task;
   }
-  private async prepare(identity: Readonly<{ name: string; from: string; workspacePath: string; specHash: string }>, hostOwned: boolean): Promise<void> {
+  private async prepare(identity: Readonly<{ name: string; from: string; workspacePath: string; specHash: string }>, readinessProven: boolean): Promise<void> {
     this.assertCanonicalBase(identity.from);
     const workspace = identity.workspacePath;
     const root = agentRootPathAt(this.paths.stateRoot, identity.name), temporary = join(root, "workspace.tmp");
     ensureDurableDirectory(root);
-    if (!hostOwned) {
+    if (readinessProven) {
       // Only its presence is the host's to observe, through the parent it holds.
       withinDirectory(workspace, (parent, name) => {
         const fd = openBeneath(parent, name, constants.O_RDONLY | constants.O_DIRECTORY);

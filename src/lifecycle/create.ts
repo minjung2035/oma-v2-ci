@@ -226,7 +226,7 @@ export class CreateCoordinator {
       }
     };
     mail.publishCreateInitial(plan.initialMessage);
-    await this.workspace.ensure(plan, agent.incarnation === 0);
+    await this.workspace.ensure(plan, agent.desired !== "provisioning");
     const fresh = this.store.getOperationById(id);
     if (!fresh || fresh.kind !== "agent.create" || fresh.planJson !== operation.planJson)
       throw new StoreError("STORE_CORRUPT", "accepted creation changed during workspace preparation");

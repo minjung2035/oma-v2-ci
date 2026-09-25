@@ -1,4 +1,5 @@
-/** AV4: host code treats a directory a Resident writes as untrusted input.
+/** AV4 -- FS-005, SB-006 and INV03: host code treats a directory a Resident
+ * writes as untrusted input.
  *
  * A Resident's workspace, home and session directory are inside the state
  * tree and writable from its sandbox. Host code that names something in them
@@ -41,7 +42,7 @@ function trapBetweenCheckAndUse(component: string, elsewhere: string): () => voi
   return () => { for (const name of names) (fs as unknown as Record<string, unknown>)[name] = originals[name]; syncBuiltinESMExports(); };
 }
 
-test("AV4: a receipt's session is found beneath its directory in one resolution; a link at any component is never followed", async () => {
+test("AV4 / FS-005, SB-006: a receipt's session is found beneath its directory in one resolution; a link at any component is never followed", async () => {
   const f = await preparedFixture();
   const outside = mkdtempSync(join(tmpdir(), "oma-av4-outside-"));
   try {
@@ -82,30 +83,36 @@ function project(root: string): { projectGit: string; oid: string } {
   return { projectGit, oid: git(source, "rev-parse", "HEAD") };
 }
 
-test("AV4: once a run has opened, create recovery runs no Git in the workspace and walks nothing in it", async () => {
+test("AV4 / INV03: once readiness is a settled fact, create recovery runs no Git in the workspace and walks nothing in it", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av4-create-"));
   try {
     const { projectGit, oid } = project(root);
     const workspace = workspacePathAt(root, "alice");
     const plan = { spec: { name: "alice", from: oid, profile: "p", resources: {} }, workspacePath: workspace, specHash: "h" } as never;
     const workspaces = new WorkspaceCoordinator({ stateRoot: root, projectGit });
-    await workspaces.ensure(plan, true);
+    await workspaces.ensure(plan, false);
     // The Resident has had its workspace: its HEAD is whatever it wrote.
     writeFileSync(join(workspace, ".git", "HEAD"), "not a ref\n");
-    await assert.rejects(() => workspaces.ensure(plan, true), (error: unknown) => (error as { code?: string }).code === "STORE_CORRUPT",
-      "a host-owned workspace is still verified");
-    await workspaces.ensure(plan, false);
-    // Readiness is the same rule: with a run opened, the workspace is not consulted.
+    await assert.rejects(() => workspaces.ensure(plan, false), (error: unknown) => (error as { code?: string }).code === "STORE_CORRUPT",
+      "a workspace whose readiness is not yet proven is still verified");
+    await workspaces.ensure(plan, true);
+    // Readiness is the same rule, keyed on the recorded fact, not on whether a
+    // run happens to have opened yet: enabled with no run, and enabled after one.
     let ensured = 0;
-    const agent = { specHash: "h", incarnation: 1, desired: "enabled" };
+    const agent = { specHash: "h", incarnation: 0, desired: "enabled" };
     const store = { getAgent: () => agent, transaction: (body: (tx: unknown) => unknown) => body({ updateAgent: () => { throw new Error("no change is due"); } }) };
     const observer = new CreationPublicationObserver(store as never, { ensureResident: () => { ensured += 1; } } as never, root);
     const operation = { id: "op", actor: "principal", planJson: "{}", state: "pending",
       plan: { existingCreation: null, initialMessage: {}, workspacePath: workspace, specHash: "h", spec: { name: "alice", from: oid, profile: "p", resources: {} } } } as never;
     assert.doesNotThrow(() => observer.ready(operation));
-    assert.equal(ensured, 1);
-    // While no run has opened it is still the host's to verify, and it is wrong.
+    agent.incarnation = 1;
+    assert.doesNotThrow(() => observer.ready(operation));
+    assert.equal(ensured, 2);
+    // While the agent is still provisioning it is the host's to verify, and it is wrong.
     agent.incarnation = 0; agent.desired = "provisioning";
     assert.throws(() => observer.ready(operation), (error: unknown) => (error as { code?: string }).code === "STORE_CORRUPT");
+    // A provisioning agent with an opened run contradicts the only way a run opens.
+    agent.incarnation = 1;
+    assert.throws(() => observer.ready(operation), /a provisioning agent has opened a run/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -25,16 +25,18 @@ export class CreationPublicationObserver {
     const agent = this.store.getAgent(plan.spec.name);
     if (!agent || agent.specHash !== plan.specHash)
       throw new StoreError("STORE_CORRUPT", "creation owner differs from the frozen spec");
-    // AV4: the workspace is observed only while no run has opened on it. After
-    // one has, it is the Resident's, and this readiness was proven before the
-    // agent was first enabled -- the only way a run could have opened.
-    if (agent.incarnation === 0) {
+    // INV03: readiness is a settled fact once the agent has left `provisioning`
+    // (this method's own transaction below is the only way out of it, and a
+    // run can open only after it). It is proven here while the agent is still
+    // provisioning, and never derived again afterwards from the workspace, which
+    // is by then the Resident's to change.
+    if (agent.desired === "provisioning") {
+      if (agent.incarnation !== 0) throw new StoreError("STORE_CORRUPT", "a provisioning agent has opened a run");
       assertDirectory(plan.workspacePath); assertDirectory(join(plan.workspacePath, ".git"));
       const head = runGitText(["rev-parse", "HEAD"], { cwd: plan.workspacePath, timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
       if (head.status !== 0 || head.stdout.trim() !== plan.spec.from)
         throw new StoreError("STORE_CORRUPT", "creation workspace has no matching frozen base");
-    } else if (agent.desired === "provisioning")
-      throw new StoreError("STORE_CORRUPT", "a provisioning agent has opened a run");
+    }
     // ensureResident includes durable installation and actual fragment/drop-in/resource verification.
     this.units.ensureResident(plan.spec.name, plan.spec.profile, plan.spec.resources);
     this.store.transaction(tx => {
