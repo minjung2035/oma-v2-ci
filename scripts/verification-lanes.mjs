@@ -301,6 +301,7 @@ export const lanes = Object.freeze({
       "DR13 / P0-5: the broker's host policy reader says 'cannot be read now', never 'changed'",
       "DR13 / CLI-003: a failure the broker says to look up again is exit 3 whatever its code",
       "P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepted does not reinterpret it",
+      "DR13 / P0-5: a unit command that did not finish is an unknown outcome, not an unsupported profile",
       "AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan",
       "AV14 / arch §7: a Resident's activation resumes its existing session",
       "AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session",

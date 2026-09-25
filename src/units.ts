@@ -31,12 +31,27 @@ export function renderedExecArgv(rendered: string): string[] | null {
       hex !== undefined ? String.fromCharCode(parseInt(hex, 16)) : "%"));
 }
 
+/** DR13, P0-5: the one reading of a unit command that did not succeed. A
+ * command that did not finish -- timed out, killed, never spawned -- has an
+ * unknown outcome, DEADLINE_EXCEEDED, which a caller looks up again; it is not
+ * a platform that cannot run the profile (UNSUPPORTED_PROFILE is for what is
+ * known to be unsupported). A command that finished and failed says so. */
+export function unitCommandError(outcome: UnitCommandOutcome, what: string): StoreError | null {
+  switch (outcome.kind) {
+    case "succeeded": return null;
+    case "unknown": return new StoreError("DEADLINE_EXCEEDED", `systemctl ${what} did not finish; its outcome is unknown`);
+    case "failed":
+      return new StoreError(/start-limit/i.test(outcome.stdout + outcome.stderr) ? "START_LIMIT" : "INTERNAL_ERROR", `systemctl ${what} failed`);
+  }
+}
+
 /** D03: every unit effect goes through the user manager this process can
  * reach. A broker whose environment reaches none (a runtime directory that is
  * not the manager's, no user bus) supports no Resident activation, and says so
  * before it opens its Store rather than failing mid-recovery. */
 export function assertUserManagerReachable(): void {
   const outcome = executeUnitCommand("systemctl", ["--user", "show", "--property=Version", "--value"]);
+  if (outcome.kind === "unknown") throw unitCommandError(outcome, "show")!;
   if (outcome.kind !== "succeeded" || outcome.stdout.trim() === "")
     throw new StoreError("UNSUPPORTED_PROFILE", "the systemd user manager is not reachable from this broker's environment");
 }
@@ -66,10 +81,8 @@ export class UnitsModule {
 
   private run(argv: readonly string[]): string {
     const outcome = this.command(argv);
-    if (outcome.kind === "unknown")
-      throw new StoreError("UNSUPPORTED_PROFILE", `systemctl outcome unknown for ${argv[0] ?? "operation"}`);
-    if (outcome.kind === "failed")
-      throw new StoreError(/start-limit/i.test(outcome.stdout + outcome.stderr) ? "START_LIMIT" : "INTERNAL_ERROR", `systemctl ${argv[0] ?? "operation"} failed`);
+    const error = unitCommandError(outcome, argv[0] ?? "operation");
+    if (error) throw error;
     return outcome.stdout.trim();
   }
 
@@ -80,7 +93,8 @@ export class UnitsModule {
     const target = join(this.installDir, name);
     replaceDerivedFile(target, rendered, 0o600);
     const linked = this.command(["link", target]);
-    if (linked.kind === "unknown" || (linked.kind === "failed" && !/already|exists/i.test(linked.stdout + linked.stderr)))
+    if (linked.kind === "unknown") throw unitCommandError(linked, `link ${name}`)!;
+    if (linked.kind === "failed" && !/already|exists/i.test(linked.stdout + linked.stderr))
       throw new StoreError("INTERNAL_ERROR", `systemctl link not confirmed for ${name}`);
     this.run(["daemon-reload"]);
     if (this.run(["show", name, "--property=LoadState", "--value"]) !== "loaded")

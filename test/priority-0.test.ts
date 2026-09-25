@@ -11,12 +11,12 @@ import { generateOperationId } from "../src/ids.js";
 import { messageIdForOperation } from "../src/domain/derived.js";
 import { collectUnacceptedArtifacts } from "../src/reconcile/preaccept.js";
 import { ReconcileModule } from "../src/reconcile.js";
-import type { UnitsModule } from "../src/units.js";
+import { UnitsModule as Units, assertUserManagerReachable, unitCommandError, type UnitsModule } from "../src/units.js";
 import type { LifecycleModule } from "../src/lifecycle.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { readCurrentHostPolicy } from "../src/config.js";
 import { defaultHostConfig } from "../src/config/defaults.js";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Store } from "../src/store.js";
 import { LifecycleModule as Lifecycle } from "../src/lifecycle.js";
@@ -112,4 +112,22 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
     assert.equal(receipt.state, "succeeded", "the accepted plan is completed with the spec it froze");
     assert.deepEqual([...JSON.parse(store.getAgent("child")!.specJson).capabilities].sort(), [...ALL_CAPS].sort());
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("DR13 / P0-5: a unit command that did not finish is an unknown outcome, not an unsupported profile", async () => {
+  const unknown = { kind: "unknown", stdout: "", stderr: "", status: null, signal: null } as const;
+  assert.equal(unitCommandError(unknown, "start")?.code, "DEADLINE_EXCEEDED");
+  assert.equal(unitCommandError({ ...unknown, kind: "failed", status: 1, stderr: "start-limit-hit" }, "start")?.code, "START_LIMIT");
+  assert.equal(unitCommandError({ ...unknown, kind: "failed", status: 1 }, "start")?.code, "INTERNAL_ERROR");
+  assert.equal(unitCommandError({ ...unknown, kind: "succeeded", status: 0 }, "start"), null);
+  // The real path: a systemctl that is killed before it answers.
+  const bin = mkdtempSync(join(tmpdir(), "oma-dr13-units-"));
+  writeFileSync(join(bin, "systemctl"), "#!/bin/sh\nkill -KILL $$\n"); chmodSync(join(bin, "systemctl"), 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}:${path ?? ""}`;
+  try {
+    assert.throws(() => assertUserManagerReachable(), { code: "DEADLINE_EXCEEDED" });
+    const units = new Units("demo", { node: "/usr/bin/node", libdir: "/opt/oma", state: bin, society: "demo", agent: "", config: join(bin, "c.json"), run: bin, brokerUnit: "" }, bin);
+    assert.throws(() => units.start("alice", false), { code: "DEADLINE_EXCEEDED" });
+  } finally { process.env.PATH = path; rmSync(bin, { recursive: true, force: true }); }
 });
