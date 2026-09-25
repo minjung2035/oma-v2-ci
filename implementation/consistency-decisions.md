@@ -954,3 +954,55 @@ touched carry that change's regressions, files read and left unchanged carry the
 tests whose loaded module closure contains them (`review-notes.json`, `by:
 AV-review`). NOT_REVIEWED is 0. The verdict is still not approved: power loss,
 a real provider and CI have not run, and each needs the user.
+
+## ENG1 -- engine upgrade 0.85.1 -> 0.87.1 (asked for by the user, 2026-09-25)
+
+The user asked for the bundled engine to be updated so that the functional run with a
+real provider can use GPT-6 Luna, which 0.85.1 does not know. WP31 keeps a
+dependency upgrade out of every card and asks for it as its own review, risk and test
+item; WP27 asks that the exact locked version be mapped to what OMA uses from it. This
+section is that item.
+
+Review (the 0.86.0-0.87.1 changelog against the WP27.01 inventory). OMA's extension
+listens to `tool_call`, `session_start`, `message_end` and `agent_settled`, registers
+tools and commands, and sends custom messages with `triggerTurn`/`deliverAs`; the
+runner uses `ModelRuntime`, `ModelRegistry.getApiKeyAndHeaders` and `SettingsManager`.
+- 0.87.0 defers a run requested from an `agent_settled` handler until every settled
+  handler has finished: the delivery extension starts its turn from there; V27A
+  delivers a batch to a recorded boundary on 0.87.1.
+- 0.87.0 extends `TurnEndEvent`, adds `AgentBeforeSettleEvent` and the session entry
+  `context_edit`: OMA constructs no engine event, switches exhaustively on none, and
+  reads no session entry but its own custom entries.
+- 0.86.0 routes RPC `steer`/`follow_up` through extension `input` handlers: OMA
+  registers none.
+- 0.86.0 changes custom provider stream inputs and limits tool-result `details` to
+  JSON values: OMA defines no provider, and its `details` are JSON.
+- 0.86.0 adds prompt-cache warming, `streaming` by default: an engine may make extra
+  provider requests during a long run. For a Resident they go through the relay like
+  any other request. Inference cost is the engine's (INF-001); OMA does not change the
+  engine's setting and says so here.
+
+Changed. `package.json`/`package-lock.json` lock `pi-coding-agent` and `pi-tui` 0.87.1;
+the engine's own shrinkwrap now nests `pi-ai` and `pi-agent-core` 0.87.1 under it.
+`typebox` follows the engine (1.3.27), by the rule that set 1.3.7 before: 0.85.1
+depended on exactly 1.3.7, so the schemas OMA's tools declare are read by the same
+library the engine validates them with. `PI_ADAPTER_REVISION` is
+`oma-pi-rpc-v1@0.87.1` in both places that state it, and BATCH-006 pins that value: a
+receipt names the engine its adapter was verified against (INV12), so keeping
+`@0.85.1` would have claimed a verification that 0.87.1 did not have. The BATCH-006
+trace row is re-inventoried and so unverified until its evidence is bound again.
+
+Evidence on 0.87.1: V27A (bundled engine, production plan, batch to a recorded
+boundary), T116 (credential resolved from OMA's agent directory; the real key reaches
+the provider from a placeholder), T117 (a confined Resident reaches its provider only
+through the relay), V31A/V31B and the package check (the installation runs its own
+engine; the lock is what is installed), the whole local suite.
+
+Stated, not changed. A receipt the 0.85.1 adapter wrote for a batch not yet settled is
+`conflicting` after the upgrade (V08B: neither delivered again nor completed; the
+evidence is kept): an existing society is upgraded only after every prepared batch
+has settled. BATCH-006 still admits one revision; admitting the earlier one too would
+change receipt semantics the plan fixed. Separately, `implementation/traceability.json`
+already differed from the spec for clauses this change does not touch (N-001, CFG-005
+and others); re-inventorying them would reset their review state, so only the
+BATCH-006 row was replaced and the rest is left as it was found.

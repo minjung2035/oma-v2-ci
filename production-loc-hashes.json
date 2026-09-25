@@ -313,7 +313,7 @@
     },
     {
       "path": "src/extension/delivery.ts",
-      "sha256": "2060b496ce8136f95755639465776584253dd257485a777f7c6baf785860a2dd"
+      "sha256": "47f3d70557ac865b16d5393098667975b002fc540809ebdc6dde0f73c40c86e8"
     },
     {
       "path": "src/extension/inference-bridge.ts",
@@ -697,7 +697,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "5659591c087f86d88a106a4681074fb83d2d9202d75661c9be4704bbef3a7de6"
+      "sha256": "e0b434527120ec96e3d8beafccd398813bc593ba5a736557d26ba94a316cd1de"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
