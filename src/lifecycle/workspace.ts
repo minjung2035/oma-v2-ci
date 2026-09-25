@@ -1,4 +1,4 @@
-import { existsSync, lstatSync } from "node:fs";
+import { closeSync, constants, existsSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import type { ValidatedPlan } from "../storage/operation-codec.js";
 import { StoreError } from "../domain/errors.js";
@@ -7,6 +7,7 @@ import { agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
 import { ensureDurableDirectory, fsyncDir } from "../storage/durable-fs.js";
 import { publishStagedDirectory } from "../storage/staged-tree.js";
 import { assertDirectory } from "../storage/directory.js";
+import { openBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { runGitText, GIT_ENV } from "../process/policies.js";
 import { PreparationExecutor } from "../process/preparation.js";
 import { decodeProcessText } from "../process/run.js";
@@ -39,21 +40,34 @@ export class WorkspaceCoordinator {
     const result = this.git(["--git-dir", this.paths.projectGit, "cat-file", "-e", `${oid}^{commit}`]);
     if (result.status !== 0) throw new StoreError("PREREQUISITE_MISSING", `create base ${oid} is not present in the canonical repository`);
   }
-  ensure(plan: ValidatedPlan<"agent.create">): Promise<void> {
+  /** `hostOwned` says no run has opened on this agent yet (incarnation 0).
+   * AV4: once one has, the workspace is the Resident's -- its `.git` is the
+   * model's to write -- and the host neither walks it nor runs Git in it. Its
+   * readiness was proven before the agent was first enabled, which is the only
+   * way a run could have opened. */
+  ensure(plan: ValidatedPlan<"agent.create">, hostOwned = true): Promise<void> {
     if (!isWorkspacePathFor(plan.workspacePath, { stateRoot: this.paths.stateRoot, actor: plan.spec.name }))
       return Promise.reject(new StoreError("STORE_CORRUPT", "create workspace path differs from frozen identity"));
     const identity = Object.freeze({ name: plan.spec.name, from: plan.spec.from, workspacePath: plan.workspacePath, specHash: plan.specHash });
     const key = `${identity.workspacePath}\0${identity.specHash}`;
     if (this.working) return this.working.key === key ? this.working.task : Promise.reject(new StoreError("REF_STATE_UNKNOWN", "another workspace preparation is active"));
     if (this.executor.blocked) return Promise.reject(new StoreError("REF_STATE_UNKNOWN", "workspace executor outcome is uncertain"));
-    const task = Promise.resolve().then(() => this.prepare(identity)).finally(() => { if (this.working?.task === task) this.working = null; });
+    const task = Promise.resolve().then(() => this.prepare(identity, hostOwned)).finally(() => { if (this.working?.task === task) this.working = null; });
     this.working = { key, task }; return task;
   }
-  private async prepare(identity: Readonly<{ name: string; from: string; workspacePath: string; specHash: string }>): Promise<void> {
+  private async prepare(identity: Readonly<{ name: string; from: string; workspacePath: string; specHash: string }>, hostOwned: boolean): Promise<void> {
     this.assertCanonicalBase(identity.from);
     const workspace = identity.workspacePath;
     const root = agentRootPathAt(this.paths.stateRoot, identity.name), temporary = join(root, "workspace.tmp");
     ensureDurableDirectory(root);
+    if (!hostOwned) {
+      // Only its presence is the host's to observe, through the parent it holds.
+      withinDirectory(workspace, (parent, name) => {
+        const fd = openBeneath(parent, name, constants.O_RDONLY | constants.O_DIRECTORY);
+        closeSync(fd);
+      });
+      fsyncDir(root); return;
+    }
     const verify = (path: string): void => {
       assertDirectory(path); assertDirectory(join(path, ".git"));
       if (lstatSync(join(path, ".git", "objects", "info", "alternates"), { throwIfNoEntry: false })) throw new StoreError("STORE_CORRUPT", "workspace must not borrow another object store");

@@ -1,0 +1,111 @@
+/** AV4: host code treats a directory a Resident writes as untrusted input.
+ *
+ * A Resident's workspace, home and session directory are inside the state
+ * tree and writable from its sandbox. Host code that names something in them
+ * resolves it once, beneath the directory, following no link at any
+ * component -- never "check the path, then open the path" -- and runs no tool
+ * those directories configure once a run has had them.
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs, { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync, copyFileSync, truncateSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { observeDeliveryReceipt, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
+import { runnerSessionDirPathAt, workspacePathAt } from "../src/storage/paths.js";
+import { WorkspaceCoordinator } from "../src/lifecycle/workspace.js";
+import { CreationPublicationObserver } from "../src/lifecycle/create-publication.js";
+import { boundaryOf, completeSession, preparedFixture } from "./fixtures/delivery-receipt.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
+
+/** Replaces `component` with a link to `elsewhere` the first time any
+ * pathname check of the fs module is asked about something beneath `root` --
+ * the instant between "resolve the path" and "open the path again". */
+function trapBetweenCheckAndUse(root: string, component: string, elsewhere: string): () => void {
+  const names = ["realpathSync", "lstatSync", "statSync", "existsSync", "accessSync"] as const;
+  const originals = Object.fromEntries(names.map(name => [name, fs[name]])) as Record<(typeof names)[number], (...args: unknown[]) => unknown>;
+  let sprung = false;
+  for (const name of names) {
+    (fs as unknown as Record<string, unknown>)[name] = function (this: unknown, path: unknown, ...rest: unknown[]) {
+      const result = originals[name].call(this, path, ...rest);
+      if (!sprung && typeof path === "string" && path.startsWith(root)) {
+        sprung = true;
+        renameSync(component, `${component}.real`); symlinkSync(elsewhere, component);
+      }
+      return result;
+    };
+  }
+  syncBuiltinESMExports();
+  return () => { for (const name of names) (fs as unknown as Record<string, unknown>)[name] = originals[name]; syncBuiltinESMExports(); };
+}
+
+test("AV4: a receipt's session is found beneath its directory in one resolution; a link at any component is never followed", async () => {
+  const f = await preparedFixture();
+  const outside = mkdtempSync(join(tmpdir(), "oma-av4-outside-"));
+  try {
+    const sessions = runnerSessionDirPathAt(f.root, "alice");
+    mkdirSync(join(sessions, "sub"), { recursive: true, mode: 0o700 });
+    const session = completeSession(f.root, f.batch, "sub/delivery.jsonl");
+    publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes);
+    assert.equal(observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes).kind, "verified");
+    // What is named inside is empty; a complete copy waits outside.
+    copyFileSync(session, join(outside, "delivery.jsonl")); truncateSync(session, 0);
+    const restore = trapBetweenCheckAndUse(sessions, join(sessions, "sub"), outside);
+    let observed;
+    try { observed = observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes); }
+    finally { restore(); }
+    // The verdict is about the file the one resolution found: the empty one.
+    assert.equal(observed.kind, "conflicting", "a session outside the session directory was accepted");
+    // A component that is already a link is refused, not followed.
+    // (The directory itself, or the link a check-then-open reader was handed.)
+    rmSync(join(sessions, "sub"), { recursive: true, force: true });
+    symlinkSync(outside, join(sessions, "sub"));
+    const linked = observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes);
+    assert.equal(linked.kind, "conflicting");
+    assert.equal(linked.kind === "conflicting" ? linked.diagnostic.problem : null, "session-invalid");
+  } finally { rmSync(outside, { recursive: true, force: true }); f.close(); }
+});
+
+function project(root: string): { projectGit: string; oid: string } {
+  const git = (cwd: string, ...args: string[]) => {
+    const run = spawnSync("git", args, { cwd, encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: root,
+      GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
+    assert.equal(run.status, 0, run.stderr); return run.stdout.trim();
+  };
+  const source = join(root, "source"); mkdirSync(source);
+  git(source, "init", "-q", "-b", "main"); writeFileSync(join(source, "README"), "x\n");
+  git(source, "add", "README"); git(source, "commit", "-q", "-m", "base");
+  const projectGit = join(root, "repos", "project.git"); mkdirSync(join(root, "repos"));
+  git(root, "clone", "-q", "--bare", source, projectGit);
+  return { projectGit, oid: git(source, "rev-parse", "HEAD") };
+}
+
+test("AV4: once a run has opened, create recovery runs no Git in the workspace and walks nothing in it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av4-create-"));
+  try {
+    const { projectGit, oid } = project(root);
+    const workspace = workspacePathAt(root, "alice");
+    const plan = { spec: { name: "alice", from: oid, profile: "p", resources: {} }, workspacePath: workspace, specHash: "h" } as never;
+    const workspaces = new WorkspaceCoordinator({ stateRoot: root, projectGit });
+    await workspaces.ensure(plan, true);
+    // The Resident has had its workspace: its HEAD is whatever it wrote.
+    writeFileSync(join(workspace, ".git", "HEAD"), "not a ref\n");
+    await assert.rejects(() => workspaces.ensure(plan, true), (error: unknown) => (error as { code?: string }).code === "STORE_CORRUPT",
+      "a host-owned workspace is still verified");
+    await workspaces.ensure(plan, false);
+    // Readiness is the same rule: with a run opened, the workspace is not consulted.
+    let ensured = 0;
+    const agent = { specHash: "h", incarnation: 1, desired: "enabled" };
+    const store = { getAgent: () => agent, transaction: (body: (tx: unknown) => unknown) => body({ updateAgent: () => { throw new Error("no change is due"); } }) };
+    const observer = new CreationPublicationObserver(store as never, { ensureResident: () => { ensured += 1; } } as never, root);
+    const operation = { id: "op", actor: "principal", planJson: "{}", state: "pending",
+      plan: { existingCreation: null, initialMessage: {}, workspacePath: workspace, specHash: "h", spec: { name: "alice", from: oid, profile: "p", resources: {} } } } as never;
+    assert.doesNotThrow(() => observer.ready(operation));
+    assert.equal(ensured, 1);
+    // While no run has opened it is still the host's to verify, and it is wrong.
+    agent.incarnation = 0; agent.desired = "provisioning";
+    assert.throws(() => observer.ready(operation), (error: unknown) => (error as { code?: string }).code === "STORE_CORRUPT");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

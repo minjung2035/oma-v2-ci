@@ -3,14 +3,12 @@ import {
   constants,
   fstatSync,
   fsyncSync,
-  openSync,
   readSync,
-  realpathSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import type { Actor, PreparedBatch } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidBatchId, isValidMessageId } from "../domain/identifiers.js";
@@ -124,21 +122,24 @@ function requireBytes(bytes: Buffer | Failed): Buffer {
 function record(raw: unknown): Record<string, unknown> | null {
   return raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
 }
+/** AV4: the session directory is one the engine -- and so, for a Resident, the
+ * model's sandbox -- writes. The named file is found beneath it in one
+ * resolution that follows no link at any component, never by resolving the
+ * path and then opening it again. */
 function sessionPathCheck(stateRoot: string, actor: Actor, value: unknown): Failed | null {
   const bad: Failed = { failed: "conflicting", problem: "session-invalid", cause: null };
-  if (typeof value !== "string" || !isAbsolute(value) || value.includes("\0") || !value.endsWith(".jsonl"))
+  if (typeof value !== "string" || !isAbsolute(value) || value.includes("\0") || !value.endsWith(".jsonl") || normalize(value) !== value)
     return bad;
+  const offset = relative(sessionDirPathAt(stateRoot, actor), value);
+  if (offset === "" || offset === ".." || offset.startsWith(`..${sep}`) || isAbsolute(offset)) return bad;
+  let directory: number | undefined;
   let fd: number | undefined;
   try {
-    const root = realpathSync(sessionDirPathAt(stateRoot, actor));
-    const actual = realpathSync(value);
-    const offset = relative(root, actual);
-    fd = openSync(actual, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    const stat = fstatSync(fd);
-    const contained = stat.isFile() && stat.size > 0 && offset !== "" && offset !== ".." &&
-      !offset.startsWith(`..${sep}`) && !isAbsolute(offset) && actual === value;
-    return contained ? null : bad;
+    directory = openDirectory(sessionDirPathAt(stateRoot, actor));
+    fd = openRegularBeneath(directory, offset);
+    return fstatSync(fd).size > 0 ? null : bad;
   } catch (error) {
+    if (error instanceof StoreError) return { failed: "conflicting", problem: "session-invalid", cause: error.code };
     const code = errnoOf(error);
     if (code === null) throw error;
     if (code === "ENOENT") return { failed: "conflicting", problem: "session-absent", cause: code };
@@ -146,6 +147,7 @@ function sessionPathCheck(stateRoot: string, actor: Actor, value: unknown): Fail
     return { failed: "unavailable", problem: "session-unavailable", cause: code };
   } finally {
     if (fd !== undefined) closeSync(fd);
+    if (directory !== undefined) closeSync(directory);
   }
 }
 function checkReceipt(raw: unknown, expected: PreparedBatch, stateRoot: string): CheckedReceipt | Failed {
