@@ -10,7 +10,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readBatchView, type BatchManifest } from "./batch-view.js";
 import { integerEnv } from "./shared.js";
 
-export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.85.1";
+export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.87.1";
 export const PI_BOUNDARY_PREFIX = "OMA_PI_BOUNDARY_V1 ";
 
 export function registerDelivery(pi: ExtensionAPI): void {

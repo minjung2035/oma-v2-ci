@@ -23,7 +23,7 @@ import {
 import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath } from "./contained-fs.js";
 import { runnerReceiptPathAt, sessionDirPathAt } from "./paths.js";
 
-export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.85.1";
+export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.87.1";
 export const PI_BOUNDARY_PREFIX = "OMA_PI_BOUNDARY_V1 ";
 export interface DeliveryBoundary {
   readonly batchId: string;
