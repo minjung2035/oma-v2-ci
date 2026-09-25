@@ -583,6 +583,9 @@ which needs bubblewrap and openssl on the host (a skip there is not a pass).
 | where the relay writes a credential, and that none comes back | runtime, at the relay | declared slots, refusal elsewhere, response tripwire; AV2 | that a compressed or frame-split echo is seen -- compression is refused, frame splitting is a stated residual |
 | a model's tool scope | runtime, at engine start and at each tool call | `assertModelScope` and the workspace guard; AV3 | anything a tool the Human installed does outside the guard's path tools |
 | a check of a state-tree entry covers the effect on it | runtime (one resolution), static (rule) | held parents and the `state-tree-held-parent` rule; AV4, AV5 | data flow of a path through a function, and the quarantine script inside its namespace |
+| a peer or the Principal's engine has ended | runtime, at each observation | `pidfdLiveness` (running / exited / failed; EINTR asked again at most eight times) and `processEnded` (/proc answers); AV6 | that an unanswered question is reported as unavailable -- authority refuses it as CAPABILITY_DENIED (stated residual) |
+| the previous configuration generation survives collection | runtime, at the commit and at the quiescent collection | the committer writes back the manifest's previous generation; `generationsToKeep` removes only what the journal vouches for; AV7 | two consecutive lost journal records; a journal that stays unreadable keeps everything, so a full edit budget is not freed by a restart |
+| a local file the CLI is given | runtime, at `readLocalFile` | O_NOFOLLOW on the named file, a regular file, at most the CLI frame; AV8 | that directories on its path are not links -- only the named file is not followed |
 
 WP29.01 — one overstated comment corrected: the operation-result brand was said to
 "prove" ledger relations; it records that the codec checked them at decode time.
