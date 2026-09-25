@@ -87,12 +87,13 @@ test("V04 S-01 qualification uses freshly built production code", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-qualification-lane-"));
   const guard = new URL("../scripts/local-test-guard.mjs", import.meta.url).href;
   try {
-    // Copy unchanged production quota code and its two runtime dependencies.
+    // Copy unchanged production quota code and its runtime dependencies (errors
+    // names its detail vocabulary through capabilities and identifiers, DR3).
     // Build only this closure in an owned fixture: never rewrite shared dist.
     mkdirSync(join(root, "src/domain"), { recursive: true });
     mkdirSync(join(root, "dist/src/domain"), { recursive: true });
     mkdirSync(join(root, "scripts"));
-    const names = ["resources", "integer-fields", "errors"];
+    const names = ["resources", "integer-fields", "errors", "capabilities", "identifiers"];
     for (const name of names) writeFileSync(join(root, `src/domain/${name}.ts`),
       readFileSync(new URL(`../src/domain/${name}.ts`, import.meta.url)));
     writeFileSync(join(root, "package.json"), JSON.stringify({ type: "module", scripts: { build: "node scripts/build.mjs" } }));

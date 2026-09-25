@@ -184,6 +184,6 @@ test("AV28 / ERR-001, arch §11: a stale integration names the main it found, an
     assert.deepEqual(publicFailure(error).details, { actual: f.base });
     assert.equal(f.store.getOperation("a", "av28-stale"), null, "a stale base is refused before acceptance");
     // A value is carried only where the table returns one.
-    assert.equal(publicFailure(new StoreError("CAPABILITY_DENIED", "denied", { actual: f.base })).details, undefined);
+    assert.equal(publicFailure(new StoreError("CAPABILITY_DENIED", "denied", { details: { actual: f.base } })).details, undefined);
   } finally { f.close(); }
 });

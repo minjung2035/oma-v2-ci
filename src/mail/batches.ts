@@ -47,8 +47,10 @@ export class BatchCoordinator {
       throw new StoreError("STORE_CORRUPT", `message plan mismatch for ${delivery.messageId}`);
     return message;
   }
-  private noticeFor(agent: Actor, ids: readonly MessageId[]): string {
-    const lines: string[] = [];
+  private noticeFor(agent: Actor, ids: readonly MessageId[], again = false): string {
+    // DR6, D01: a batch prepared before and not confirmed complete says so,
+    // so a model that sees the same messages again does not drop unfinished work.
+    const lines: string[] = again ? [REDELIVERY_NOTICE] : [];
     for (const [index, id] of ids.slice(0, 6).entries()) {
       const delivery = this.store.getDelivery(id, agent);
       if (!delivery) throw new StoreError("STORE_CORRUPT", `missing delivery ${id}/${agent}`);
@@ -80,7 +82,7 @@ export class BatchCoordinator {
       const ids: unknown = JSON.parse(row.messageIdsJson);
       if (!Array.isArray(ids) || ids.some(id => typeof id !== "string")) throw new StoreError("STORE_CORRUPT", "invalid decoded batch manifest");
       const messageIds = ids as string[];
-      return this.finishPrepared(batchOf({ id: row.id, incarnation: row.incarnation, messageIds, sessionPath: row.sessionPath }, auth.actor, this.noticeFor(auth.actor, messageIds)));
+      return this.finishPrepared(batchOf({ id: row.id, incarnation: row.incarnation, messageIds, sessionPath: row.sessionPath }, auth.actor, this.noticeFor(auth.actor, messageIds, true)));
     }
     const pending = selectBatch(this.store.pendingDeliveries(auth.actor).map(value => {
       const message = this.messagePlan(value);
@@ -173,6 +175,8 @@ function heldParent(path: string): number | null {
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
 function oneLine(value: string | null): string { return (value ?? "").replace(/\s+/g, " ").trim(); }
+/** DR6: true whether or not the earlier preparation ever reached the engine. */
+export const REDELIVERY_NOTICE = "재전달: 이 batch는 이전에 준비되었지만 완료가 확인되지 않아 다시 전달됩니다. 이미 받은 적이 있을 수 있습니다. 세션에 이 batch를 다룬 작업이 있으면 끝나지 않은 부분을 이어서 하세요.";
 export function batchOf(batch: { id: string; incarnation: number; messageIds: string[]; sessionPath: string | null }, agent: Actor, notice = batchNotice(batch.messageIds)): PreparedBatch {
   return { id: batch.id, agent, incarnation: batch.incarnation, messageIds: batch.messageIds,
     sessionPath: batch.sessionPath, deliveryMode: "followUp", notice, indexPath: "/inbox.md" };

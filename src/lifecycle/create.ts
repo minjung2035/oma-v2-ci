@@ -192,7 +192,7 @@ export class CreateCoordinator {
 
   private finish(id: string, allowActivation = true, auth?: AuthContext): Promise<Receipt> {
     if (this.completing) return this.completing.id === id ? this.completing.task :
-      Promise.reject(new StoreError("BROKER_UNAVAILABLE", "another accepted creation is completing; its intent is retained"));
+      Promise.reject(new StoreError("BROKER_UNAVAILABLE", "another accepted creation is completing; its intent is retained", { details: { reason: "busy" } }));
     const task = Promise.resolve().then(() => this.finishAccepted(id, allowActivation, auth))
       .finally(() => { if (this.completing?.task === task) this.completing = null; });
     this.completing = { id, task }; return task;

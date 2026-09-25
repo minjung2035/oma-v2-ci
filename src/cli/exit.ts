@@ -1,5 +1,6 @@
+import { basename, isAbsolute, join } from "node:path";
 import type { Receipt } from "../../implementation/contracts.js";
-import { errorExit, type CliExitCode } from "../domain/errors.js";
+import { errorExit, failureText, type CliExitCode } from "../domain/errors.js";
 import { decodeFailure } from "../protocol/receipt-codec.js";
 import { receiptExit, receiptLines } from "../protocol/receipts.js";
 
@@ -39,15 +40,23 @@ export function finishFailure(reply: { error?: unknown } | undefined, prefix = "
   if (!decoded.ok) fail(`${prefix}invalid broker failure: ${decoded.reason}${key === undefined ? "" : `; --request ${key}`}`, 3);
   const again = key !== undefined && decoded.value.retry === "same-key"
     ? ` (재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요)` : "";
-  // AV28: a conflict names what it found, so the caller builds on the actual value.
-  const details = decoded.value.details;
-  const found = details !== null && typeof details === "object" && !Array.isArray(details) && "actual" in details
-    ? ` (actual: ${details.actual === null ? "none" : String(details.actual)})` : "";
-  fail(`${prefix}${decoded.value.code}: ${decoded.value.message}${found}${again}`, errorExit(decoded.value.code));
+  // DR3 (AV28): the code, its words and the facts its code may carry.
+  fail(`${prefix}${failureText(decoded.value)}${again}`, errorExit(decoded.value.code));
+}
+
+/** DR1, SB-002-C: a path this CLI's caller is shown is in the caller's view.
+ * The broker records and answers with the host's archive path; the archive
+ * root this CLI's environment names -- /mail/archive/cur inside a sandbox, the
+ * host's for the Principal -- is where the caller finds the message. */
+export function inCallerView(receipt: Receipt, root = process.env.OMA_MAIL_ARCHIVE): Receipt {
+  const result = receipt.result as { archivePath?: unknown } | undefined;
+  if (receipt.state !== "succeeded" || root === undefined || !isAbsolute(root) || typeof result?.archivePath !== "string") return receipt;
+  const shown = { ...receipt.result, archivePath: join(root, basename(result.archivePath)) } as NonNullable<Receipt["result"]>;
+  return { ...receipt, result: shown };
 }
 
 export function finishReceipt(receipt: Receipt, key: string): never {
-  for (const line of receiptLines(receipt, key)) console.log(line);
+  for (const line of receiptLines(inCallerView(receipt), key)) console.log(line);
   process.exit(receiptExit(receipt));
 }
 
@@ -55,7 +64,7 @@ export function finishReceipt(receipt: Receipt, key: string): never {
  * key to ask again come first; an observation contradicting the cache's
  * earlier one is unknown (3), otherwise the receipt's own exit stands. */
 export function finishUnrecordedReceipt(receipt: Receipt, key: string, reason: string, contradicted: boolean): never {
-  for (const line of receiptLines(receipt, key)) console.log(line);
+  for (const line of receiptLines(inCallerView(receipt), key)) console.log(line);
   console.error(`oma: ${reason} (재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요)`);
   process.exit(contradicted ? 3 : receiptExit(receipt));
 }

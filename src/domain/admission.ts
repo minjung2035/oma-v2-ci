@@ -12,7 +12,7 @@ export class AdmissionGate {
   close(): void { this.draining = true; }
   assertAdmission(): void {
     if (this.corrupt) throw new StoreError("STORE_CORRUPT", "new acceptance is fenced after durable corruption");
-    if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker admission is draining");
+    if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker admission is draining", { details: { reason: "draining" } });
   }
   get state(): "healthy" | "corrupt" | "draining" { return this.corrupt ? "corrupt" : this.draining ? "draining" : "healthy"; }
 }

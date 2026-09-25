@@ -171,10 +171,12 @@ const FRAME_BYTES = "OMA_FRAME_BYTES";
  * descriptor (see cli-process.ts), because an environment is readable by any
  * process of this user through /proc/<pid>/environ.
  */
-export function cliEnvironment(home: string, socket: string): Record<string, string> {
+export function cliEnvironment(home: string, socket: string, archive: string): Record<string, string> {
   const environment: Record<string, string> = {
     HOME: home,
     OMA_SOCKET: socket,
+    // DR1: the archive root in this engine's view, so the CLI shows paths there.
+    OMA_MAIL_ARCHIVE: archive,
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     LANG: "C.UTF-8",
   };
@@ -235,7 +237,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   // Read once, here, where every other value this extension needs is read. A
   // command assembled later from whatever the environment happens to hold then
   // would not be the environment the engine was started with.
-  const environment = cliEnvironment(home, socket);
+  const environment = cliEnvironment(home, socket, archive);
   pi.registerTool({
     name: "oma_mail_read",
     label: "Read OMA mail",

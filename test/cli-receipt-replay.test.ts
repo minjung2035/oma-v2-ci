@@ -254,6 +254,22 @@ test("AV28 / ERR-001: the CLI shows the actual value a conflict names", { timeou
   try {
     const result = await run(home, ["integrate", "2".repeat(40), "--expect", "3".repeat(40), "--request", "av28-cli"]);
     assert.equal(result.code, 2, result.stderr);
-    assert.match(result.stderr, new RegExp(`STALE_BASE: STALE_BASE \\(actual: ${actual}\\)`));
+    assert.match(result.stderr, new RegExp(`STALE_BASE: main이 expected와 다릅니다; actual을 기준으로 다시 하세요 \\(actual: ${actual}\\)`));
   } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
+});
+
+/* DR1 -- SB-002-C: a Resident's `oma send` showed the host's archive path,
+ * which is no path inside its sandbox. The CLI shows the receipt's path under
+ * the archive root its environment names; the recorded receipt is unchanged. */
+test("DR1 / SB-002-C: a sent message's archive path is shown in the caller's view", async () => {
+  const s = scene();
+  const p = await peer(s.home, request => request.method === "operation.get" ? { ok: true, result: receiptNotFound } : { ok: true, result: sent(7) });
+  try {
+    const shown = (archive?: string) => new Promise<string>(resolve => execFile(process.execPath, [cli, ...s.send(`dr1-${archive ? "in" : "out"}`)], {
+      cwd: s.home, encoding: "utf8", timeout: 10_000,
+      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: s.home, OMA_SOCKET: join(s.home, "peer.sock"), ...(archive ? { OMA_MAIL_ARCHIVE: archive } : {}) },
+    }, (_error, stdout) => resolve(JSON.parse(stdout.trim().split("\n").at(-1)!).result.archivePath)));
+    assert.equal(await shown("/mail/archive/cur"), `/mail/archive/cur/${MESSAGE(7)}`, "the sandbox view was not used");
+    assert.equal(await shown(), `/state/mail/archive/cur/${MESSAGE(7)}`, "without a view the recorded path is shown as it is");
+  } finally { await p.close(); s.close(); }
 });

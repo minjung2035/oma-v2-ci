@@ -22,7 +22,8 @@ export type ApplyScope =
   | "next-activation"
   | "next-session"
   | "restart"
-  | "bootstrap-only";
+  | "bootstrap-only"
+  | "new-agents";
 
 /** WP15: why a field cannot be edited right now, said where the apply time
  * would be (no target, or a value that would change nothing), or null. */

@@ -20,12 +20,14 @@ export const WORKER_MODEL = "worker-model";
 export const WORKER_LIMIT = "worker-limit";
 export const INITIAL_WORKERS = "initial-workers";
 export const WORKER_PROFILE = "worker-profile";
+export const WORKER_INTEGRATE = "worker-integrate";
 export const EDITABLE_FIELDS = Object.freeze([
   PRINCIPAL_MODEL,
   WORKER_MODEL,
   WORKER_LIMIT,
   INITIAL_WORKERS,
   WORKER_PROFILE,
+  WORKER_INTEGRATE,
 ] as const);
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
@@ -296,6 +298,28 @@ const DESCRIPTOR_SOURCE = {
       assertKnown(typeof value === "string" && Object.hasOwn(config.agentProfiles, value), "unknown agent profile");
       // Existing Resident specs are immutable; only not-yet-created bootstrap seeds change.
       return { ...config, initialResidents: config.initialResidents.map(resident => ({ ...resident, profile: value as string })) };
+    },
+  }),
+  // DR4, TUI-019: the role capability the Human decides. `code.integrate` is
+  // the host's to give (A-002); an agent created afterwards has it, one that
+  // exists keeps its frozen spec (LIFE-008).
+  [WORKER_INTEGRATE]: Object.freeze({
+    label: "Worker integrate",
+    apply: "new-agents",
+    view: (config: HostConfigV1, workerProfile: string) => ({
+      kind: "choice" as const,
+      value: config.agentProfiles[workerProfile]?.capabilities.includes("code.integrate") ? "on" : "off",
+      options: ["off", "on"],
+    }),
+    transform: (settings: Settings, value: string | number) => {
+      assertKnown(value === "on" || value === "off", "worker integrate is on or off");
+      const config = settings.config;
+      const name = settings.workerProfile;
+      const profile = config.agentProfiles[name];
+      assertKnown(profile !== undefined, "worker profile is missing from host config");
+      const others = profile!.capabilities.filter(capability => capability !== "code.integrate");
+      const capabilities = value === "on" ? [...others, "code.integrate" as const] : others;
+      return { ...config, agentProfiles: { ...config.agentProfiles, [name]: { ...profile!, capabilities } } };
     },
   }),
 } satisfies Readonly<Record<EditableField, EditableFieldDescriptor>>;

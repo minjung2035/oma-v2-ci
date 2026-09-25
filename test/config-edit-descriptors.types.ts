@@ -11,6 +11,7 @@ const complete = {
   "worker-limit": descriptor,
   "initial-workers": descriptor,
   "worker-profile": descriptor,
+  "worker-integrate": descriptor,
 } satisfies Readonly<Record<EditableField, EditableFieldDescriptor>>;
 
 const productionRegistry: Readonly<Record<EditableField, EditableFieldDescriptor>> =

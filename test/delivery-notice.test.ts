@@ -152,3 +152,33 @@ test("AV26 / INV04, PI-001: the extension's reader is the runtime's, on what the
     "H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n/w==", "H: v\r\n\r\nplain", "no header block");
   for (const text of cases) assert.equal(readableMail(text), runtimeReadableMail(text));
 });
+
+/** DR6 -- D01, BATCH-002: the twelfth functional run stopped two Residents in
+ * a tool call and started them again; the batch was presented again and the
+ * session resumed, but both models saw the same Message-ID and dropped the
+ * unfinished work as already handled. DR5: the index told readers to `cat` a
+ * body its writer stored with a transfer encoding. */
+test("DR6 / D01, BATCH-002: a batch presented again says so, a new one does not, and the index names the reader", async () => {
+  const { REDELIVERY_NOTICE } = await import("../src/mail/batches.js");
+  const { readFileSync } = await import("node:fs");
+  const { runnerViewPathAt } = await import("../src/storage/paths.js");
+  const root = mkdtempSync(join(tmpdir(), "oma-dr6-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  try {
+    store.transaction(tx => { tx.insertAgent(makeValidAgent("a")); tx.insertAgent(makeValidAgent("b")); });
+    const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64, 24, TEST_VIEW_LIMITS);
+    await mail.send(auth("b", ["mail.send"]), "work", { to: ["a"], subject: "작업", kind: "question", body: "sleep 90 뒤에 commit" });
+    const first = await mail.prepare(auth("a", []));
+    assert.ok(first);
+    assert.equal(first.notice.includes(REDELIVERY_NOTICE), false, "a new batch called itself a redelivery");
+    // Not completed: the next preparation is the same batch, presented again.
+    const again = await mail.prepare(auth("a", []));
+    assert.ok(again);
+    assert.equal(again.id, first.id);
+    assert.equal(again.notice.split("\n")[0], REDELIVERY_NOTICE);
+    assert.match(again.notice, /subject=작업 kind=question/, "the items changed");
+    const index = readFileSync(join(runnerViewPathAt(root, "a"), "inbox.md"), "utf8");
+    assert.match(index, /oma_mail_read/);
+    assert.doesNotMatch(index, /읽기: cat/);
+  } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+});

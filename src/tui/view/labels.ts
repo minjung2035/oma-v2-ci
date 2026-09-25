@@ -7,6 +7,7 @@ const APPLY_LABEL: Readonly<Record<ApplyScope, string>> = Object.freeze({
   "next-session": "다음 세션부터",
   restart: "재시작 후",
   "bootstrap-only": "bootstrap 전용",
+  "new-agents": "이후 만드는 worker부터",
 });
 
 export function applyLabel(scope: ApplyScope): string { return APPLY_LABEL[scope]; }

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import ts from "typescript";
+import { publicDetails } from "../dist/src/domain/errors.js";
 
 /** The real dispatcher and reply construction run against controlled metadata,
  * decoder and effect boundaries. This is not a wire-schema or transport proof.
@@ -36,7 +37,8 @@ function fixture(transform = source => source) {
   const replies = load("../src/broker/replies.ts", {});
   const logResponse = load("../src/protocol/log-response.ts", { "../domain/errors.js": { StoreError } });
   const { PublicDispatcher } = load("../src/broker/public-dispatcher.ts", {
-    "../domain/errors.js": { StoreError },
+    // DR3: which facts a failure may carry has one owner, used as it is.
+    "../domain/errors.js": { StoreError, publicDetails },
     "../domain/exhaustive.js": { assertNever(value) { throw new TypeError(`unhandled closed variant: ${String(value)}`); } },
     "../domain/admission.js": { NO_HOLD: () => undefined },
     "../authority.js": { capabilitiesOf: actor => actor.capabilities },

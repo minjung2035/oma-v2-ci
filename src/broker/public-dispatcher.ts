@@ -2,7 +2,7 @@
 import type { AuthContext, Failure, ProtocolLimits, PublicMethod, PublicMethods, Request, RequestKey, Actor, AgentCreateInput, Oid, MessageId, MailInput, Receipt, Json, AgentStatus } from "../../implementation/contracts.js";
 import type { UnitObserve } from "../ports/runtime.js";
 import type { StatusSnapshot } from "../views/status-refresh.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, publicDetails } from "../domain/errors.js";
 import { assertNever } from "../domain/exhaustive.js";
 import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js";
 import { capabilitiesOf } from "../authority.js";
@@ -86,7 +86,11 @@ export class PublicDispatcher {
   private validatePublicRequest(auth: AuthContext, envelope: Record<string, unknown>, phase: "stream-preflight" | "dispatch", hasStream: boolean): PublicValidation {
     const id = typeof envelope.id === "string" ? envelope.id : "x";
     const method = typeof envelope.method === "string" ? envelope.method : "";
-    const fail = (code: Failure["code"], message: string): PublicValidation => ({ ok: false, id, failure: { code, message, retry: "never" } });
+    const fail = (code: Failure["code"], message: string, details?: Readonly<Record<string, unknown>>): PublicValidation => {
+      // DR3: an authored validation sentence, and only the facts its code may carry.
+      const facts = details === undefined ? undefined : publicDetails(code, details);
+      return { ok: false, id, failure: { code, message, retry: "never", ...(facts === undefined ? {} : { details: facts }) } };
+    };
     if (typeof envelope.id !== "string" || typeof envelope.method !== "string" || !Object.keys(envelope).every(key => ["v", "id", "method", "params", "request"].includes(key))) return fail("INVALID_REQUEST", "invalid request envelope");
     // Dispatch historically fences stale actors before version/method errors.
     // Stream preflight rejects invalid metadata before querying current authority.
@@ -103,7 +107,7 @@ export class PublicDispatcher {
     const authority = earlyAuthority ?? this.readAuthority(auth);
     if (authority.failure) return { ok: false, id, failure: authority.failure };
     const need = descriptor.capability, actor = authority.actor;
-    if (need && (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))) return fail("CAPABILITY_DENIED", `missing capability ${need}`);
+    if (need && (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))) return fail("CAPABILITY_DENIED", `missing capability ${need}`, { capability: need });
     const params = this.checkParams(method, envelope.params);
     if (!params) return fail("INVALID_REQUEST", `invalid params for ${method}`);
     if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
@@ -141,7 +145,7 @@ export class PublicDispatcher {
           // WP23: observed off the event loop by the shared refresh; the
           // registry rows and pending counts are read after it, current.
           const snapshot = await units.statusSnapshot();
-          if (this.deps.isDraining()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining");
+          if (this.deps.isDraining()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
           return okAnswer(id, { observedAtMs: snapshot.observedAtMs, agents: views.status(params.agent, snapshot) });
         }
         case "operation.get": {

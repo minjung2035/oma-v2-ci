@@ -129,11 +129,11 @@ export class ContextCoordinator {
         quiescent: () => this.effects.preparationQuiescent(tree.path),
         observe: () => this.preacceptDisposition(id, plan => plan.stagingPath === stagingPath) });
       assertCurrentActor(this.store, auth, "context.publish");
-      { const actual = this.effects.current(); if (actual !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed", { actual }); }
+      { const actual = this.effects.current(); if (actual !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed", { details: { actual } }); }
       const candidate = await this.effects.prepareCandidate(tree.path, request.entries, request.expected);
       if (!isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
       assertCurrentActor(this.store, auth, "context.publish");
-      { const actual = this.effects.current(); if (actual !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed during preparation", { actual }); }
+      { const actual = this.effects.current(); if (actual !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed during preparation", { details: { actual } }); }
       const address = listAddress("residents", this.paths.society);
       const eml = await buildEml({ from: actorAddress(auth.actor, this.paths.society), to: [address], replyTo: [address],
         subject: "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
@@ -144,7 +144,7 @@ export class ContextCoordinator {
         observe: () => frozenMessageDisposition(this.store, id, { id: messageId, sha256: eml.sha256 }) });
       // Canonical observation is outside T. There is no await before the pure
       // current-authority/recipient snapshot and acceptance below.
-      { const actual = this.effects.current(); if (actual !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance", { actual }); }
+      { const actual = this.effects.current(); if (actual !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed before acceptance", { details: { actual } }); }
       accepted = this.store.transaction(tx => {
         assertCurrentActor(this.store, auth, "context.publish");
         const current = this.store.claimKey(auth.actor, key, hash);

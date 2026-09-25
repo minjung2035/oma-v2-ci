@@ -39,7 +39,7 @@ export function assertCurrentActor(store: AuthorityReader, auth: AuthContext, ne
   if (actor.desired !== "enabled") throw new StoreError("STALE_RUN", "actor stopped, retired or is not ready");
   // Access the getter at the decision point; never retain its Set across an await.
   if (need && (!auth.capabilities.has(need) || !capabilitiesOf(actor).has(need)))
-    throw new StoreError("CAPABILITY_DENIED", `${need} was revoked before acceptance`);
+    throw new StoreError("CAPABILITY_DENIED", `${need} was revoked before acceptance`, { details: { capability: need } });
   return actor;
 }
 

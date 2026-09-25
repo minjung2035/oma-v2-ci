@@ -239,3 +239,8 @@ test("AV29, AV30: the workspace itself is never a context tree, and an actor slo
       await assert.rejects(() => call("oma_status", { agent }), /is not valid/, agent);
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test("DR1 / SB-002-C: the CLI a tool starts is given this engine's archive root", async () => {
+  const { cliEnvironment } = await import("../src/extension/mail-tools.js");
+  assert.equal(cliEnvironment("/home/agent", "/run/oma/control.sock", "/mail/archive/cur").OMA_MAIL_ARCHIVE, "/mail/archive/cur");
+});

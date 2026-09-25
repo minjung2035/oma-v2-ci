@@ -74,7 +74,7 @@ export class GitModule {
    * admission and retry the SAME key; accepted/unknown rows still form a barrier.
    */
   private async withWriter<T>(work: () => Promise<T>): Promise<T> {
-    if (this.writerActive) throw new StoreError("BROKER_UNAVAILABLE", "repository writer is busy; retry the same request key");
+    if (this.writerActive) throw new StoreError("BROKER_UNAVAILABLE", "repository writer is busy; retry the same request key", { details: { reason: "busy" } });
     this.writerActive = true;
     // Preserve the former await-previous pre-admission scheduling boundary.
     try { return await Promise.resolve().then(work); } finally { this.writerActive = false; }

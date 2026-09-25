@@ -1,16 +1,16 @@
 /** ERR-001/002: pure error vocabulary. No Store, filesystem or process dependency. */
 import type { ErrorCode, Failure } from "../../implementation/contracts/errors.js";
+import { isCapability } from "./capabilities.js";
+import { isValidFullOid } from "./identifiers.js";
 
 export class StoreError extends Error {
-  /** AV28: what a conflict observed where the caller expected otherwise. The
-   * error table returns it for STALE_BASE and NOT_DESCENDANT ("actual OID
-   * 반환"), CTX-003 for CONTEXT_CONFLICT ("+actual revision"); `publicFailure`
-   * carries it for those codes and no other. */
-  readonly actual?: string | null;
-  constructor(readonly code: ErrorCode, message: string, options?: ErrorOptions & { readonly actual?: string | null }) {
+  /** DR3: facts this failure may tell its caller. `publicFailure` keeps only
+   * what ERROR_DETAILS allows for the code, and drops everything else. */
+  readonly details?: Readonly<Record<string, unknown>>;
+  constructor(readonly code: ErrorCode, message: string, options?: ErrorOptions & { readonly details?: Readonly<Record<string, unknown>> }) {
     super(message, options);
     this.name = "StoreError";
-    if (options?.actual !== undefined) this.actual = options.actual;
+    if (options?.details !== undefined) this.details = options.details;
   }
 }
 /** Normalize native storage exhaustion without interpreting operation phase.
@@ -148,11 +148,70 @@ export function publicFailure(error: unknown, context?: Omit<ErrorContext, "code
   const policy = classifyError({ ...(context ?? fallback), code });
   const retry = policy.reconcile === "repair" ? "after-repair" :
     policy.lookupSameKey && (policy.reconcile === "observe" || policy.reconcile === "reconcile" || policy.resendFrozen) ? "same-key" : "never";
-  const actual = error instanceof StoreError && error.code === policy.code && RETURNS_ACTUAL.has(policy.code) ? error.actual : undefined;
-  return { code: policy.code, message: policy.code, retry, ...(actual === undefined ? {} : { details: { actual } }) };
+  const details = error instanceof StoreError && error.code === policy.code ? publicDetails(policy.code, error.details) : undefined;
+  return { code: policy.code, message: policy.code, retry, ...(details === undefined ? {} : { details }) };
 }
-/** The codes whose failure names the value found instead (AV28). */
-const RETURNS_ACTUAL: ReadonlySet<ErrorCode> = new Set<ErrorCode>(["STALE_BASE", "NOT_DESCENDANT", "CONTEXT_CONFLICT"]);
+
+type DetailCheck = (value: unknown) => boolean;
+const FULL_OID_OR_NONE: DetailCheck = value => value === null || isValidFullOid(value);
+/** DR3: what a failure may tell its caller, per code: the error table returns
+ * the actual OID for STALE_BASE and NOT_DESCENDANT (AV28) and CTX-003 the
+ * actual revision for CONTEXT_CONFLICT; a denied request names the capability
+ * it needed; a broker that cannot take a request says whether it is busy or
+ * draining. Every other code, and every other field, is dropped. */
+export const ERROR_DETAILS: Readonly<Partial<Record<ErrorCode, Readonly<Record<string, DetailCheck>>>>> = Object.freeze({
+  STALE_BASE: Object.freeze({ actual: FULL_OID_OR_NONE }),
+  NOT_DESCENDANT: Object.freeze({ actual: FULL_OID_OR_NONE }),
+  CONTEXT_CONFLICT: Object.freeze({ actual: FULL_OID_OR_NONE }),
+  CAPABILITY_DENIED: Object.freeze({ capability: isCapability }),
+  BROKER_UNAVAILABLE: Object.freeze({ reason: (value: unknown) => value === "busy" || value === "draining" }),
+});
+/** The details a failure of this code may carry, exactly, or undefined. */
+export function publicDetails(code: ErrorCode, details: unknown): { readonly [key: string]: string | null } | undefined {
+  const schema = ERROR_DETAILS[code];
+  if (schema === undefined || details === null || typeof details !== "object" || Array.isArray(details)) return undefined;
+  const fields = Object.keys(schema); const given = details as Record<string, unknown>;
+  if (Object.keys(given).length !== fields.length || !fields.every(field => Object.hasOwn(given, field) && schema[field]!(given[field])))
+    return undefined;
+  return Object.freeze(Object.fromEntries(fields.map(field => [field, given[field] as string | null])));
+}
+
+/** DR3: what each code means, in the words a caller is shown. The error
+ * table's meaning column; the retry a caller takes comes from `retry`. */
+export const ERROR_DESCRIPTIONS = Object.freeze({
+  INVALID_REQUEST: "요청 형식이 맞지 않습니다", UNSUPPORTED_VERSION: "지원하지 않는 protocol 버전입니다",
+  UNKNOWN_METHOD: "알 수 없는 method입니다", FRAME_TOO_LARGE: "요청이 frame 한도를 넘었습니다",
+  STREAM_INVALID: "전송한 내용이 선언과 맞지 않습니다", AUTH_FAILED: "호출자 신원을 확인하지 못했습니다",
+  STALE_RUN: "이 run은 더 이상 현재 run이 아닙니다(정지·재시작·폐기됨)", CAPABILITY_DENIED: "이 요청에 필요한 권한이 없습니다",
+  REQUEST_KEY_REUSED: "같은 request key가 다른 요청에 이미 쓰였습니다", REQUEST_NOT_FOUND: "이 key로 접수된 요청이 없습니다",
+  ADDRESS_NOT_FOUND: "그런 주소나 agent가 없습니다", AGENT_CONFLICT: "같은 이름의 agent가 다른 설정으로 있습니다",
+  AGENT_NOT_READY: "agent가 아직 준비되지 않았습니다", AGENT_RETIRED: "은퇴한 agent입니다",
+  GOAL_REQUIRED: "공유 GOAL이 아직 게시되지 않았습니다", LIMIT_EXCEEDED: "입력이 선언된 한도를 넘었습니다",
+  STORAGE_FULL: "저장 공간이 부족합니다", DB_BUSY: "저장소가 잠시 바쁩니다",
+  STORE_CORRUPT: "원본 무결성 오류로 변경이 멈췄습니다; host 복구가 필요합니다",
+  BROKER_UNAVAILABLE: "broker가 지금 이 요청을 처리할 수 없습니다", DEADLINE_EXCEEDED: "기한 안에 끝나지 않았습니다",
+  RUN_TERMINATION_UNKNOWN: "이전 실행의 종료를 확인하지 못했습니다", START_LIMIT: "systemd 시작 한도에 걸렸습니다; 명시적 start가 필요합니다",
+  PRINCIPAL_DISCONNECTED: "Principal 화면이 연결되어 있지 않습니다", ATTACH_CONFLICT: "이미 다른 Principal 세션이 연결되어 있습니다",
+  BATCH_CONFLICT: "batch의 소유나 내용이 맞지 않습니다", SESSION_BOUNDARY_UNCONFIRMED: "전달 완료의 증거가 충분하지 않습니다",
+  INVALID_OID: "commit id 형식이 맞지 않습니다", CANDIDATE_NOT_PUBLISHED: "candidate가 society에 게시되어 있지 않습니다",
+  BUNDLE_INVALID: "제출한 Git bundle이 올바르지 않습니다", PREREQUISITE_MISSING: "필요한 선행 commit이 없습니다",
+  PUBLISHED_REF_CONFLICT: "게시 ref가 이미 다른 값을 가리킵니다", STALE_BASE: "main이 expected와 다릅니다; actual을 기준으로 다시 하세요",
+  NOT_DESCENDANT: "candidate가 base의 후손이 아닙니다(fast-forward 불가)", PROTECTED_PATH: "보호 경로를 바꾸는 candidate입니다",
+  CHECK_FAILED: "host 검사를 통과하지 못했습니다", POLICY_CHANGED: "접수 뒤 host 정책이 바뀌었습니다",
+  REF_STATE_UNKNOWN: "canonical ref 상태를 확정할 수 없습니다", CANCELLED_BEFORE_COMMIT: "commit 전에 취소되었습니다",
+  CONTEXT_CONFLICT: "공유 context가 expected와 다릅니다; actual을 기준으로 다시 하세요", QUOTA_EXCEEDED: "예산 한도를 넘었습니다",
+  PROVIDER_FAILED: "모델 제공자 호출이 실패했습니다", PROVIDER_OUTCOME_UNKNOWN: "모델 제공자 호출의 결과가 불명확합니다",
+  UNSUPPORTED_PROFILE: "이 배포가 지원하지 않는 설정입니다", SPIKE_UNRESOLVED: "아직 검증되지 않아 막혀 있는 기능입니다",
+  INTERNAL_ERROR: "내부 오류입니다",
+} satisfies Record<ErrorCode, string>);
+/** How a failure reads to its caller: the code, its words -- the authored text
+ * a validation gave, or the table's -- and the facts its code may carry. */
+export function failureText(failure: { readonly code: ErrorCode; readonly message: string; readonly details?: unknown }): string {
+  const said = failure.message === failure.code ? ERROR_DESCRIPTIONS[failure.code] : failure.message;
+  const facts = publicDetails(failure.code, failure.details);
+  const shown = facts === undefined ? "" : ` (${Object.entries(facts).map(([field, value]) => `${field}: ${value ?? "none"}`).join(", ")})`;
+  return `${failure.code}: ${said}${shown}`;
+}
 export type CliExitCode = 0 | 2 | 3 | 4;
 /** Direct failures differ from authoritative terminal receipts, which exit 2 (or gate 4). */
 export function errorExit(code: ErrorCode): Exclude<CliExitCode, 0> { return ERROR_METADATA[code].cliExit; }

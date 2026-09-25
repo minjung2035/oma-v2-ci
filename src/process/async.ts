@@ -185,10 +185,13 @@ export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: 
  * process through /proc/<pid>/fd the way an inherited pipe can. `fence` gives
  * it the society lease descriptor, so the society cannot pass to another host
  * while this service is still able to write to it. */
+/** DR7, D03: a supervised service leads its own session. Its lifetime is its
+ * supervision channel and an explicit stop, never the terminal of the process
+ * that started it: a hang-up or a job-control signal there does not reach it. */
 export function spawnSupervisedService(executable: string, argv: readonly string[],
   env: Readonly<Record<string, string>>, extraPipe = false, fence?: number): ChildProcess {
   validDirectSpawn(executable, argv, "/", env);
-  return spawn(executable, [...argv], { env: { ...env }, shell: false,
+  return spawn(executable, [...argv], { env: { ...env }, shell: false, detached: true,
     stdio: fencedStdio(["ignore", "ignore", "pipe"], extraPipe ? "pipe" : "ignore", fence) });
 }
 

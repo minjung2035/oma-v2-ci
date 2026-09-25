@@ -12,7 +12,8 @@ const root = mkdtempSync(join(tmpdir(), "oma-journal-policy-"));
 mkdirSync(join(root, "storage"));
 mkdirSync(join(root, "domain"));
 writeFileSync(join(root, "package.json"), '{"type":"module"}');
-for (const name of ["storage/operation-journal", "domain/errors"]) {
+// DR3: errors names its detail vocabulary through these two pure modules.
+for (const name of ["storage/operation-journal", "domain/errors", "domain/capabilities", "domain/identifiers"]) {
   const source = readFileSync(`src/${name}.ts`, "utf8");
   const output = ts.transpileModule(source, { compilerOptions: {
     target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext,

@@ -1,6 +1,6 @@
 /** IPC-008: wire receipt presentation; ledger projection belongs to storage. */
 import type { Receipt } from "../../implementation/contracts/durable.js";
-import type { CliExitCode } from "../domain/errors.js";
+import { failureText, type CliExitCode } from "../domain/errors.js";
 
 /** An absent lookup is not a durable operation or a cacheable receipt. */
 export const receiptNotFound: Receipt = Object.freeze({
@@ -26,6 +26,6 @@ export function receiptLines(receipt: Receipt, key: string): readonly string[] {
       `결과 불명확: ${receipt.reason ?? "authoritative evidence required"}`,
       `재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요`,
     ];
-    case "failed": return [`실패: ${receipt.error?.code ?? "?"} ${receipt.error?.message ?? ""}`];
+    case "failed": return [receipt.error === undefined ? "실패: ?" : `실패: ${failureText(receipt.error)}`];
   }
 }

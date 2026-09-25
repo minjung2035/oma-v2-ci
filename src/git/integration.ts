@@ -137,7 +137,7 @@ export class IntegrationCoordinator {
       throw new StoreError("CANDIDATE_NOT_PUBLISHED", "candidate is not published");
     const main = observed(this.effects.main(), "admission main");
     if (main !== input.expected)
-      throw new StoreError("STALE_BASE", "main differs from expected", { actual: main });
+      throw new StoreError("STALE_BASE", "main differs from expected", { details: { actual: main } });
     const id = generateOperationId();
     const plan = {
       kind: "git.integrate" as const, repo: "project" as const, target: "refs/heads/main" as const,
