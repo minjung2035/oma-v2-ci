@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "e889e647658220ad0300715d3816ca900c7a55888fa37a19b850d08906f45132",
-  "report": "3a934595a4d85c6428e28852337f8daff1572778a11f07ab53b239ba0352598c",
+  "report": "4dbf6c0bc2aaac24a7388b12951f10d4f91734a2076078c8c3a7d45477793849",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -341,7 +341,7 @@
     },
     {
       "path": "src/extension/workspace-guard.ts",
-      "sha256": "634e3816840b79ec7b4053efb5b953c9fc2fc4291ea09196ad0d6cbeb248e7cc"
+      "sha256": "20e7b6a8793ff64cb71ec503014489d6a05eb1bd81506f6c29d16b2a5656870b"
     },
     {
       "path": "src/frame.ts",
@@ -633,7 +633,7 @@
     },
     {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "d3241af7d4c62577e38869e9b75c5e24226464af48c30c0d72e173ff6fa1ce79"
+      "sha256": "2ef68316b9ace71a7465e9d2278dcd38772c1ce29dfd757a836b0d99aaebc762"
     },
     {
       "path": "src/runtime/pi-rpc.ts",

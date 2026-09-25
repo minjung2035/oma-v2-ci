@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 223,
-    "n_lines": 29044,
+    "n_lines": 29066,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -144,16 +144,16 @@
     "code": 242,
     "language": "TypeScript"
   },
+  "src/runtime/pi-adapter.ts": {
+    "blank": 1,
+    "comment": 36,
+    "code": 238,
+    "language": "TypeScript"
+  },
   "src/lifecycle/create.ts": {
     "blank": 7,
     "comment": 13,
     "code": 235,
-    "language": "TypeScript"
-  },
-  "src/runtime/pi-adapter.ts": {
-    "blank": 1,
-    "comment": 31,
-    "code": 230,
     "language": "TypeScript"
   },
   "src/request-cache.ts": {
@@ -570,6 +570,12 @@
     "code": 91,
     "language": "TypeScript"
   },
+  "src/extension/workspace-guard.ts": {
+    "blank": 5,
+    "comment": 16,
+    "code": 90,
+    "language": "TypeScript"
+  },
   "src/mail/facts.ts": {
     "blank": 5,
     "comment": 8,
@@ -598,12 +604,6 @@
     "blank": 2,
     "comment": 17,
     "code": 86,
-    "language": "TypeScript"
-  },
-  "src/extension/workspace-guard.ts": {
-    "blank": 5,
-    "comment": 12,
-    "code": 85,
     "language": "TypeScript"
   },
   "src/domain/canonical-json.ts": {
@@ -1346,8 +1346,8 @@
   },
   "SUM": {
     "blank": 1177,
-    "comment": 4457,
-    "code": 23410,
+    "comment": 4466,
+    "code": 23423,
     "nFiles": 223
   }
 }
