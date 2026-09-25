@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 117,
-  "CHANGED_WITH_ORACLE": 105
+  "READ_UNCHANGED": 113,
+  "CHANGED_WITH_ORACLE": 110
  },
  "lanes": {
   "fast": "PASS",
@@ -1089,12 +1089,16 @@
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV10",
+    "AV11",
     "AV5",
     "WP03",
     "WP21",
     "WP22"
    ],
    "oracles": [
+    "AV10",
+    "AV11",
     "AV5",
     "V03A",
     "V03B",
@@ -1191,10 +1195,14 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV1"
+    "AV1",
+    "AV10",
+    "AV11"
    ],
    "oracles": [
-    "AV1"
+    "AV1",
+    "AV10",
+    "AV11"
    ]
   },
   {
@@ -1246,11 +1254,15 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV1",
+    "AV10",
+    "AV11",
     "AV2",
     "AV5"
    ],
    "oracles": [
     "AV1",
+    "AV10",
+    "AV11",
     "AV2",
     "AV5"
    ]
@@ -1258,40 +1270,41 @@
   {
    "path": "src/extension/principal-channel.ts",
    "primary": "WP27",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV10",
+    "AV11"
    ],
    "oracles": [
-    "T100",
-    "T101",
-    "T102",
-    "T103",
-    "T119",
-    "T92",
-    "T96",
-    "T97"
+    "AV10",
+    "AV11"
+   ]
+  },
+  {
+   "path": "src/extension/principal-tools.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV10",
+    "AV11"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+   "oracles": [
+    "AV10",
+    "AV11"
+   ]
   },
   {
    "path": "src/extension/shared.ts",
    "primary": "WP27",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV10",
+    "AV11"
    ],
    "oracles": [
-    "T100",
-    "T101",
-    "T102",
-    "T103",
-    "T92",
-    "T96",
-    "T97",
-    "T99"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "AV10",
+    "AV11"
+   ]
   },
   {
    "path": "src/extension/tool-surface.ts",
@@ -1783,12 +1796,16 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV1",
+    "AV10",
+    "AV11",
     "AV2",
     "AV5",
     "WP06"
    ],
    "oracles": [
     "AV1",
+    "AV10",
+    "AV11",
     "AV2",
     "AV5",
     "V06A",
@@ -1814,14 +1831,15 @@
   {
    "path": "src/mail/headers.ts",
    "primary": "WP20",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV10",
+    "AV11"
    ],
    "oracles": [
-    "R36"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV10",
+    "AV11"
+   ]
   },
   {
    "path": "src/mail/materializer.ts",
@@ -1926,21 +1944,13 @@
   {
    "path": "src/ports/runtime.ts",
    "primary": "WP29",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV9"
    ],
    "oracles": [
-    "DB-009",
-    "ID-002",
-    "M-003",
-    "P23",
-    "PI-002",
-    "R28",
-    "T113",
-    "V10A"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+    "AV9"
+   ]
   },
   {
    "path": "src/process/async.ts",
@@ -2294,10 +2304,14 @@
    "primary": "WP07",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV10",
+    "AV11",
     "WP06",
     "WP10"
    ],
    "oracles": [
+    "AV10",
+    "AV11",
     "V06A",
     "V06B",
     "V10A",
@@ -2518,11 +2532,15 @@
    "primary": "WP16",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV10",
+    "AV11",
     "AV3",
     "AV5",
     "WP16"
    ],
    "oracles": [
+    "AV10",
+    "AV11",
     "AV3",
     "AV5",
     "V16A",
@@ -2593,9 +2611,13 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV10",
+    "AV11",
     "WP27"
    ],
    "oracles": [
+    "AV10",
+    "AV11",
     "V27A",
     "V27B"
    ]
@@ -2867,9 +2889,13 @@
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV10",
+    "AV11",
     "AV3"
    ],
    "oracles": [
+    "AV10",
+    "AV11",
     "AV3"
    ]
   },
@@ -3144,10 +3170,14 @@
    "primary": "WP09",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV10",
+    "AV11",
     "AV3",
     "WP09"
    ],
    "oracles": [
+    "AV10",
+    "AV11",
     "AV3",
     "V09A",
     "V09B",
@@ -3360,11 +3390,13 @@
    "primary": "WP25",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV9",
     "WP03",
     "WP23",
     "WP25"
    ],
    "oracles": [
+    "AV9",
     "V03A",
     "V03B",
     "V23A",
@@ -3436,10 +3468,12 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV5",
+    "AV9",
     "WP23"
    ],
    "oracles": [
     "AV5",
+    "AV9",
     "V23A",
     "V23B"
    ]
@@ -3461,9 +3495,11 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV9",
     "WP23"
    ],
    "oracles": [
+    "AV9",
     "V23A",
     "V23B"
    ]
