@@ -82,9 +82,11 @@ for (const point of ["stage", "object", "accepted", "archive", "inbox-a", "inbox
         if (batchPoint) {
           const prepared = store.preparedBatches("a")[0]!;
           assert.ok(prepared);
-          store.transaction(() => { store.updateAgent({ name: "a", incarnation: 2 }); store.reassignPreparedBatches("a", 2); });
+          store.transaction(() => { store.updateAgent({ name: "a", incarnation: 2 }); });
           const recovered = await mail.prepare({ ...auth, incarnation: 2 });
           assert.equal(recovered!.id, prepared.id);
+          assert.equal(recovered!.incarnation, 2, "DR9: presented in the new lease's attempt");
+          assert.equal(store.getBatch(prepared.id)!.incarnation, prepared.incarnation, "DR9: the batch row is not rewritten");
           assert.deepEqual(recovered!.messageIds, JSON.parse(prepared.messageIdsJson));
           assert.deepEqual(files(join(root, "mail", "inboxes", "a", "new")), []);
         }

@@ -435,10 +435,11 @@ export class Broker {
     this.actorSocketDirectory(actor, next);
     const record = this.runLeases.begin(actor, next, invocationId, observation.cgroup);
     try {
-      // D01/WP07: settle the previous incarnation's prepared batches from their
-      // own exact receipts BEFORE rollover, under the opening run's quiescence;
-      // only the batches whose receipt is proven absent roll over.
-      const absent = this.settlePreviousIncarnation(actor, agent.incarnation);
+      // D01/WP07: settle the prepared batches from their own receipts before the
+      // new run exists, under the opening run's quiescence. DR9: the batches
+      // left -- receipt proven absent -- are not rewritten; the new lease is
+      // simply their next delivery attempt.
+      const absent = this.settlePreviousIncarnation(actor);
       this.store.transaction(tx => {
         this.health.assertAdmission();
         const current = this.store.getAgent(actor);
@@ -446,7 +447,7 @@ export class Broker {
         const prepared = this.store.preparedBatches(actor).map(row => row.id).sort();
         if (prepared.length !== absent.length || prepared.some((id, index) => id !== absent[index]))
           throw new StoreError("STALE_RUN", "prepared batches changed between settlement and rollover");
-        tx.updateAgent({ name: actor, incarnation: next }); tx.reassignPreparedBatches(actor, next);
+        tx.updateAgent({ name: actor, incarnation: next });
       });
       const lease = record.publish(this.listenActor(actor, next)); this.refreshViews(); return lease;
     } catch (error) {
@@ -456,26 +457,21 @@ export class Broker {
   }
   /** D01/WP07 rollover boundary. `begin` has proven the previous invocation's
    * cgroup empty or removed (or this broker's startup quiesced every unit and
-   * has run none since), and the opening run has no endpoint yet: that is the
-   * whole authority to settle. A verified receipt completes its batch at the
-   * old incarnation; a completed batch stays completed; an absent receipt is
-   * returned for rollover. Unavailable or conflicting evidence opens nothing:
-   * it is kept for diagnosis and the run must be retried by a new invocation.
-   * Startup and every later open share this one path. */
-  private settlePreviousIncarnation(actor: Actor, incarnation: number): string[] {
+   * has run none since), and the opening run has no endpoint yet: that is what
+   * makes an absent receipt final for the run now ending. What each receipt
+   * means is the receipt decision's (P0-2): a verified receipt of any of the
+   * batch's attempts completes it; an absent one leaves the batch for the next
+   * attempt; a hold opens nothing, keeps the evidence, and the run must be
+   * retried by a new invocation. Startup and every later open share this path. */
+  private settlePreviousIncarnation(actor: Actor): string[] {
     const quiescence = this.runLeases.settlementQuiescence(actor);
     const absent: string[] = [];
     for (const row of this.store.preparedBatches(actor)) {
-      if (row.incarnation !== incarnation)
-        throw new StoreError("BATCH_CONFLICT", `prepared batch ${row.id} names incarnation ${row.incarnation}, not ${incarnation}`);
       const outcome = this.mail.settleFromReceipt(quiescence, row.id);
       switch (outcome.kind) {
         case "settled": case "completed": break;
-        case "absent": absent.push(row.id); break;
-        case "unavailable":
-          throw new StoreError("BROKER_UNAVAILABLE", `delivery receipt for batch ${row.id} cannot be observed; the run does not open until it can`);
-        case "conflicting":
-          throw new StoreError("BATCH_CONFLICT", `delivery receipt for batch ${row.id} does not match its batch; it is kept for diagnosis`);
+        case "present": absent.push(row.id); break;
+        case "hold": throw outcome.error;
       }
     }
     return absent.sort();

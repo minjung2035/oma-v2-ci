@@ -23,7 +23,6 @@ import { resolvedSpec, ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { RunRegistry } from "../src/runtime/run-registry.js";
 import { actorSocketPathAt } from "../src/storage/paths.js";
-import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 import { runnerReceiptPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
 import { UnitsModule } from "../src/units.js";
 import { ViewsModule } from "../src/views.js";
@@ -179,16 +178,18 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
     assert.equal(typeof socketDirectory.call(socketOwner, "a".repeat(31), 1), "string");
     assert.throws(() => socketDirectory.call(socketOwner, "a".repeat(31), Number.MAX_SAFE_INTEGER), /sun_path/);
     const staleAuth = auth(["mail.send"]);
-    const spec = JSON.parse(env.store.getAgent("a")!.specJson);
-    // A durable capability revocation keeps the row self-consistent: the stored
-    // hash must still describe the stored spec, or the row is corrupt rather
-    // than a valid identity whose rights were withdrawn.
-    const revokedSpec = { ...spec, capabilities: [] };
-    env.store.transaction(() => env.store.updateAgent({ name: "a", specJson: JSON.stringify(revokedSpec), specHash: resolvedSpecDigest(revokedSpec) }));
-    const revoked = await env.broker.dispatch(staleAuth,
+    // P0-1/LIFE-008: the durable half of the intersection is the frozen spec,
+    // fixed at creation and never rewritten. An agent created without a
+    // capability is refused it however much its lease claims.
+    env.store.transaction(() => env.store.insertAgent({ name: "c", ...storedSpec([], "p", "c"), role: "resident",
+      desired: "enabled", incarnation: 1, profile: "p", createdBy: null }));
+    const withoutDurable = await env.broker.dispatch({ ...auth(["mail.send"]), actor: "c" },
       { v: 1, id: "revoked", method: "mail.send", request: "revoked", params } as never, null);
-    assert.equal((revoked as { error: { code: string } }).error.code, "CAPABILITY_DENIED");
-    assert.equal(env.store.getOperation("a", "revoked"), null);
+    assert.equal((withoutDurable as { error: { code: string } }).error.code, "CAPABILITY_DENIED");
+    assert.equal(env.store.getOperation("c", "revoked"), null);
+    assert.throws(() => env.store.transaction(() => Reflect.apply(env.store.updateAgent, env.store,
+      [{ name: "a", specJson: "{}", specHash: "0".repeat(64) }])), /no spec rewrite/,
+      "the frozen spec has no write path");
     for (const [method, capability] of [["agent.create", "agent.create"], ["git.integrate", "code.integrate"], ["context.publish", "context.publish"]] as const) {
       const deniedMethod = await env.broker.dispatch(
         auth(["mail.send"]),
@@ -197,7 +198,7 @@ test("AUTH-002: durable effect requires the resolved method capability", async (
       );
       assert.equal((deniedMethod as { error?: { code: string } }).error?.code, "CAPABILITY_DENIED", `${method} must require ${capability}`);
     }
-    env.store.transaction(() => env.store.updateAgent({ name: "a", desired: "stopped", specJson: JSON.stringify(spec), specHash: resolvedSpecDigest(spec) }));
+    env.store.transaction(() => env.store.updateAgent({ name: "a", desired: "stopped" }));
     const stopped = await env.broker.dispatch(staleAuth,
       { v: 1, id: "stopped", method: "mail.send", request: "stopped", params } as never, null);
     assert.equal((stopped as { error: { code: string } }).error.code, "STALE_RUN");

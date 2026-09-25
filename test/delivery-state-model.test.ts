@@ -3,14 +3,17 @@
  * receipt files and Broker.openRun after a broker restart -- over seeded event
  * sequences.
  *
- * The expected outcomes are written from D01's decision table, not from the
- * production code: an exact receipt settles the batch at its own incarnation
- * and nothing rolls over; a receipt proven absent rolls the batch over; an
- * unreadable receipt opens nothing and changes nothing, and once it is readable
- * again the next run settles it (liveness); a conflicting receipt -- including a
- * late receipt from an incarnation the batch has left -- opens nothing, is kept
- * and never turns into success on its own. Facts never regress: a completed batch
- * stays completed, the incarnation never goes back, receipt bytes are not rewritten.
+ * The expected outcomes are written from D01's decision table and DR9, not from
+ * the production code: a receipt of any of the batch's delivery attempts -- the
+ * run it was created in up to the latest -- settles it, including one that
+ * appears only after later runs opened ("late"); a receipt proven absent leaves
+ * the batch for the next run's attempt, and the batch row is never rewritten;
+ * an unreadable receipt opens nothing and changes nothing, and once it is
+ * readable again the next run settles it (liveness); a conflicting receipt --
+ * other messages, or an attempt from before the batch existed ("early") --
+ * opens nothing, is kept and never turns into success on its own. Facts never
+ * regress: a completed batch stays completed, the incarnation never goes back,
+ * receipt bytes are not rewritten.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -32,7 +35,7 @@ const OWN_CGROUP = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[
 
 type Receipt = "absent" | "verified" | "conflicting";
 interface Model { incarnation: number; batch: { incarnation: number; state: "prepared" | "completed" }; receipt: Receipt; hidden: boolean }
-type Event = "publish" | "corrupt" | "late" | "hide" | "reveal" | "open";
+type Event = "publish" | "corrupt" | "late" | "early" | "hide" | "reveal" | "open";
 type Outcome = { opened: true } | { opened: false; code: "BROKER_UNAVAILABLE" | "BATCH_CONFLICT" } | null;
 
 /** D01, as a table: what an open does to the model. */
@@ -41,12 +44,13 @@ function expectOpen(m: Model): Outcome {
   if (m.receipt !== "absent" && m.hidden) return { opened: false, code: "BROKER_UNAVAILABLE" };
   if (m.receipt === "conflicting") return { opened: false, code: "BATCH_CONFLICT" };
   if (m.receipt === "verified") { m.batch.state = "completed"; m.incarnation += 1; return { opened: true }; }
-  m.incarnation += 1; m.batch.incarnation = m.incarnation; return { opened: true };
+  // DR9: the next run is the batch's next attempt; the batch row stays as it was.
+  m.incarnation += 1; return { opened: true };
 }
 /** Which events the model allows now; the rest are not reachable from here. */
 function allowed(m: Model, rolled: boolean): Event[] {
   const events: Event[] = ["open"];
-  if (m.batch.state === "prepared" && m.receipt === "absent") events.push("publish", "corrupt", ...(rolled ? ["late" as const] : []));
+  if (m.batch.state === "prepared" && m.receipt === "absent") events.push("publish", "corrupt", "early", ...(rolled ? ["late" as const] : []));
   if (m.receipt !== "absent" && !m.hidden) events.push("hide");
   if (m.hidden) events.push("reveal");
   return events;
@@ -100,27 +104,31 @@ async function run(seed: number, steps: number): Promise<string[]> {
     trace.push(event);
     const label = `seed ${seed} after ${trace.join(",")}`;
     switch (event) {
-      case "publish": receiptFor(w, m.batch.incarnation); m.receipt = "verified"; kept = readFileSync(path); break;
+      // The run holding the batch now publishes its attempt's receipt.
+      case "publish": receiptFor(w, m.incarnation); m.receipt = "verified"; kept = readFileSync(path); break;
       case "corrupt": {
         receiptFor(w, m.batch.incarnation); chmodSync(path, 0o600);
         const legacy = JSON.parse(readFileSync(path, "utf8"));
         legacy.messageIds = [...legacy.messageIds, "m-00000000-0000-4000-8000-000000000000-0"];
         writeFileSync(path, JSON.stringify(legacy)); m.receipt = "conflicting"; kept = readFileSync(path); break;
       }
-      // A runner of an incarnation the batch has left publishes late.
-      case "late": receiptFor(w, m.batch.incarnation - 1); m.receipt = "conflicting"; kept = readFileSync(path); break;
+      // DR9: a runner of an earlier attempt of this batch publishes late; it is
+      // still this batch's evidence.
+      case "late": receiptFor(w, m.incarnation - 1); m.receipt = "verified"; kept = readFileSync(path); break;
+      // A receipt claiming an attempt from before the batch existed is not its evidence.
+      case "early": receiptFor(w, m.batch.incarnation - 1); m.receipt = "conflicting"; kept = readFileSync(path); break;
       case "hide": chmodSync(path, 0o000); m.hidden = true; break;
       // Readable again exactly as published (0600); any other mode is not the receipt.
       case "reveal": chmodSync(path, 0o600); m.hidden = false; break;
       case "open": {
         const broker = await restart(w);
-        const before = m.batch.incarnation;
+        const before = m.incarnation;
         const expected = expectOpen(m);
         let actual: Outcome;
         try { broker.tryOpen(); actual = { opened: true }; }
         catch (error) { actual = { opened: false, code: (error as { code: "BROKER_UNAVAILABLE" | "BATCH_CONFLICT" }).code }; }
         assert.deepEqual(actual, expected, `${label}: open`);
-        if (m.batch.incarnation !== before) rolled = true;
+        if (m.incarnation !== before) rolled = true;
         break;
       }
     }
@@ -150,5 +158,5 @@ test("V30A: seeded delivery-evidence sequences follow D01 on the composed runtim
   const seen = new Set<string>();
   for (let seed = 1; seed <= 24; seed += 1) for (const event of await run(seed, 8)) seen.add(event);
   // The sequences reached every kind of event, so no row of the table went unexercised.
-  assert.deepEqual([...seen].sort(), ["corrupt", "hide", "late", "open", "publish", "reveal"]);
+  assert.deepEqual([...seen].sort(), ["corrupt", "early", "hide", "late", "open", "publish", "reveal"]);
 });

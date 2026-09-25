@@ -81,6 +81,9 @@ export class LedgerTransitions {
       .run(this.now(), message, recipient, row.operationId), "acknowledgement");
     this.read.delivery(message, recipient);
   }
+  /** DR9: `incarnation` is the batch's first delivery attempt, the lease that
+   * prepares it, and it never changes. Later attempts are the later leases of
+   * the same agent; nothing here moves a batch to them. */
   insertPreparedBatch(input: PreparedBatchInput): void {
     this.requireLive();
     const manifest = JSON.stringify(input.messageIds);
@@ -99,19 +102,6 @@ export class LedgerTransitions {
     this.db.prepare(`INSERT INTO batches (id, agent, incarnation, message_ids_json, session_path, state, created_at_ms, completed_at_ms)
       VALUES (?,?,?,?,?,'prepared',?,NULL)`).run(input.id, input.agent, input.incarnation, manifest, input.sessionPath, createdAt);
     this.touchedBatches.add(input.id);
-  }
-  reassignPreparedBatches(agent: string, incarnation: number): void {
-    this.requireLive();
-    if (!Number.isSafeInteger(incarnation) || incarnation < 0 || this.read.agent(agent)?.incarnation !== incarnation)
-      conflict("batch reassignment incarnation is not current");
-    for (const batch of this.read.preparedBatches(agent)) {
-      if (batch.incarnation === incarnation) continue;
-      if (batch.incarnation > incarnation) conflict("batch incarnation cannot regress");
-      changedExactlyOne(this.db.prepare(`UPDATE batches SET incarnation=?
-        WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL`)
-        .run(incarnation, batch.id, agent, batch.incarnation), "batch reassignment");
-      this.touchedBatches.add(batch.id);
-    }
   }
   linkDeliveriesToBatch(id: string, messages: readonly string[]): void {
     this.requireLive();
@@ -140,18 +130,24 @@ export class LedgerTransitions {
     this.touchedBatches.add(id);
     this.read.batch(id);
   }
-  completeBatch(id: string, messages: readonly string[], agent: string, expectedIncarnation: number, sessionPath: string): void {
+  /** DR9: a completion records a presentation that already happened in one of
+   * the batch's delivery attempts -- the lease it was created in up to the
+   * agent's current one. It is not a new effect, so it is bound to that attempt
+   * and its evidence, never to which lease is current now; the caller checks
+   * the requester's own authority. */
+  completeBatch(id: string, messages: readonly string[], agent: string, attempt: number, sessionPath: string): void {
     this.requireLive();
     const batch = this.read.batch(id);
     if (!batch || batch.agent !== agent) conflict("batch owner does not match");
     equalManifest(batch.messageIdsJson, messages);
-    if (batch.incarnation !== expectedIncarnation) conflict("batch completion incarnation differs");
+    const owner = this.read.agent(agent);
+    if (!Number.isSafeInteger(attempt) || attempt < batch.incarnation || owner === null || attempt > owner.incarnation)
+      conflict("batch completion names no delivery attempt of this batch");
     if (batch.state === "completed") {
       if (batch.sessionPath !== sessionPath) conflict("completed batch session differs");
       return; // Exact replay keeps all first fact timestamps.
     }
     if (batch.sessionPath !== null && batch.sessionPath !== sessionPath) conflict("prepared batch session differs");
-    if (this.read.agent(agent)?.incarnation !== batch.incarnation) conflict("batch completion incarnation is stale");
     const at = this.now();
     changedExactlyOne(this.db.prepare(`UPDATE batches SET state='completed', completed_at_ms=?, session_path=?
       WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL AND (session_path IS NULL OR session_path=?)`)

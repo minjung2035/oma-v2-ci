@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3e6b9c3e9e0313d396961699f961d15ac6c8b796e016d37c6da224029d2ef04b",
-  "report": "9739812ad655beac0133324dce23afd83f7a92708a85c95116a6670ddb2d9e57",
+  "report": "580cfeda5351b53be27f3dbfdef12ab70d2616433a420ee3c1fae04729e70761",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "c845fdd0e17d8ab629016af9496e0ac03f14ee299c63666cb68ab1dd4d1fefa2"
+      "sha256": "5d03b19b377f9d74795ca03394f352bb6cb7ed2ad80d4f9c3b03dc102062a753"
     },
     {
       "path": "src/broker/composition.ts",
@@ -457,7 +457,7 @@
     },
     {
       "path": "src/mail/batches.ts",
-      "sha256": "636efbadd1b3e707c23f63cadf4119c19d12c6c4ee671cd174f4d85bb7f709c8"
+      "sha256": "86db538eabae74cbbd7cfa91fbb80d4c1e47af655aa55c167771d216a3cb1b12"
     },
     {
       "path": "src/mail/display.ts",
@@ -601,7 +601,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "0fc87cc80a0e319b4c7cf3600750132d285815dc32c75c02108ba7565578365b"
+      "sha256": "34639e5d7c1dec748adacb7b69a06e49f70b120ecf144179b98d8ac05667f0e7"
     },
     {
       "path": "src/runtime/assets.ts",
@@ -653,7 +653,7 @@
     },
     {
       "path": "src/runtime/principal-delivery.ts",
-      "sha256": "8554a548abb1a623370a050385ff5cde3260c4f4634562862886c5e9387ad467"
+      "sha256": "788353e186e1415f462038c54e23bc2973e87b650c276fdae3678abfd06ffa01"
     },
     {
       "path": "src/runtime/process-lock.ts",
@@ -705,7 +705,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "e0b434527120ec96e3d8beafccd398813bc593ba5a736557d26ba94a316cd1de"
+      "sha256": "a1ea42d342dcf645755bfcf091dbf47487364135587f59dcb0ac9f8ec3592c72"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
@@ -721,7 +721,7 @@
     },
     {
       "path": "src/storage/facets.ts",
-      "sha256": "a2edda0a89ccc463b50547cdc62488c62e5f560b2d4e1874749e6b622ceda231"
+      "sha256": "5ee3f88b67e1a30501c0d692952ee61d5c72645739bc7735c2bae344df916013"
     },
     {
       "path": "src/storage/immutable-file.ts",
@@ -777,11 +777,11 @@
     },
     {
       "path": "src/storage/transitions.ts",
-      "sha256": "b164e7c91be91a43577285a83a67b3cf901c9eee5fd2b16872ddadcaeff8133e"
+      "sha256": "104b0859f901ecc90db120fda61c9be06647d1775ca6b9e7d901076285470e2a"
     },
     {
       "path": "src/store.ts",
-      "sha256": "6bc77922fa1e8d51f1a46c87ba016857341b588d264853a8995be53b12576894"
+      "sha256": "245bf11cff2479a7d4c2fe3a0f97abdc3b9d17ae027897af2df8ceb20dee137c"
     },
     {
       "path": "src/tui/app.ts",

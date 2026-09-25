@@ -32,7 +32,7 @@ export const WRITE_FACETS = freezeTable({
   subscriptions: { follow: "follow", unfollow: "unfollow" },
   deliveries: { insert: "insertDeliveries", materialize: "markMaterialized", acknowledge: "markAcknowledged" },
   batches: {
-    prepare: "insertPreparedBatch", reassign: "reassignPreparedBatches",
+    prepare: "insertPreparedBatch",
     link: "linkDeliveriesToBatch", complete: "completeBatch",
   },
   usage: { reserve: "reserveUsage", settle: "settleUsage" },

@@ -23,7 +23,7 @@
 import type { BoundaryEvidence, PreparedBatch, ProtocolLimits } from "../../implementation/contracts.js";
 import { BrokerChannel } from "../protocol/channel.js";
 import { StoreError } from "../domain/errors.js";
-import { observeDeliveryReceipt, publishDeliveryReceipt, type CheckedReceipt } from "../storage/delivery-receipt.js";
+import { deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt, type CheckedReceipt } from "../storage/delivery-receipt.js";
 import { runnerReceiptPathAt } from "../storage/paths.js";
 import { boundaryOf } from "./pi-adapter.js";
 import type { PiEvent } from "./pi-rpc.js";
@@ -130,16 +130,15 @@ export class PrincipalDelivery {
       const failed = this.failedAt.get(batch.id);
       if (failed !== undefined && now - failed < this.options.retryAfterMs)
         return { kind: "deferred", reason: `batch ${batch.id} failed recently` };
-      const evidence = observeDeliveryReceipt(this.options.stateRoot, batch, this.options.frameBytes);
-      if (evidence.kind === "verified") {
+      // What the receipt means is the receipt decision's (D01, P0-2).
+      const decision = deliveryDecision(observeDeliveryReceipt(this.options.stateRoot, batch, this.options.frameBytes));
+      if (decision.action === "hold") throw decision.error;
+      if (decision.action === "settle") {
         at.phase = "complete";
-        await this.complete(batch, evidence.receipt);
+        await this.complete(batch, decision.receipt);
         this.failedAt.delete(batch.id);
         return { kind: "settled", batchId: batch.id };
       }
-      if (evidence.kind !== "absent")
-        throw new StoreError(evidence.kind === "unavailable" ? "BROKER_UNAVAILABLE" : "BATCH_CONFLICT",
-          `the delivery receipt for batch ${batch.id} is ${evidence.kind}; it is kept and nothing is presented`);
       // A new presentation needs a session nothing else is speaking for.
       if (this.session.busy) return { kind: "deferred", reason: "the principal session is in a turn" };
       const receipt = await this.deliverOne(batch, next => { at.phase = next; });

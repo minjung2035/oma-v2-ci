@@ -83,12 +83,15 @@ test("R12: links and completion reject different owner, incarnation, missing/ext
   assert.equal(store.getDelivery(MESSAGE, "alice")?.presented, 0);
 });
 
-test("R12: the current incarnation owns transitions; completed replay preserves first fact times", async t => {
+test("R12, DR9: a later lease is the batch's next attempt, the row keeps its first; completed replay preserves first fact times", async t => {
   const store = fixture(t); batch(store);
-  store.transaction(tx => { tx.updateAgent({ name: "alice", incarnation: 2 }); tx.reassignPreparedBatches("alice", 2); });
-  assert.equal(store.getBatch(BATCH)?.incarnation, 2);
-  assert.throws(() => store.transaction(tx => tx.reassignPreparedBatches("alice", 1)), matches("BATCH_CONFLICT"));
-  assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 1, "/session/alice")), matches("BATCH_CONFLICT"));
+  store.transaction(tx => tx.updateAgent({ name: "alice", incarnation: 2 }));
+  assert.equal(store.getBatch(BATCH)?.incarnation, 1, "the attempt the batch was created in is a past fact");
+  assert.throws(() => store.transaction(tx => tx.updateAgent({ name: "alice", incarnation: 2 })), matches("STORE_CORRUPT"),
+    "a lease never goes back or repeats");
+  for (const attempt of [0, 3])
+    assert.throws(() => store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", attempt, "/session/alice")), matches("BATCH_CONFLICT"),
+      `attempt ${attempt} is not one of the batch's`);
   // This is the low-level DB contract, not production S-03 completion authority.
   store.transaction(tx => { tx.markAcknowledged(MESSAGE, "alice"); tx.completeBatch(BATCH, [MESSAGE], "alice", 2, "/session/alice"); });
   const beforeBatch = store.getBatch(BATCH); const beforeDelivery = store.getDelivery(MESSAGE, "alice");

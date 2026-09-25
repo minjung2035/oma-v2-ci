@@ -14,9 +14,11 @@ export interface ModelUsage { incarnation: number; outcome: "reserved" | "unknow
 export interface Model {
   desired: "enabled" | "stopped"; incarnation: number; revoked: boolean;
   operations: Map<number, ModelOperation>; batchMembers: number[] | null; usage: Map<number, ModelUsage>;
+  /** DR9: the run the prepared batch was created in; later runs are its later attempts. */
+  batchIncarnation: number | null;
 }
 export function initialModel(): Model {
-  return { desired: "enabled", incarnation: 1, revoked: false, operations: new Map(), batchMembers: null, usage: new Map() };
+  return { desired: "enabled", incarnation: 1, revoked: false, operations: new Map(), batchMembers: null, usage: new Map(), batchIncarnation: null };
 }
 export type Expected = "ok" | "noop" | "STALE_RUN" | "CAPABILITY_DENIED" | "REQUEST_KEY_REUSED" | "STORE_CORRUPT";
 function admission(model: Model): Expected | null {
@@ -63,7 +65,7 @@ export function advance(model: Model, action: Action): Expected {
       const denied = admission(model); if (denied) return denied;
       if (model.batchMembers === null) {
         const members = [...model.operations].filter(([, operation]) => operation.published).map(([slot]) => slot).sort((a, b) => a - b);
-        if (members.length) model.batchMembers = members;
+        if (members.length) { model.batchMembers = members; model.batchIncarnation = model.incarnation; }
       }
       return "ok";
     }

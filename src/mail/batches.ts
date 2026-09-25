@@ -12,7 +12,7 @@ import { observeImmutableEntry, readImmutableBytes, type ImmutableObservation } 
 import { publishBatchView } from "../storage/batch-view.js";
 import { encodeBatchView, type BatchViewLimits } from "../protocol/batch-view.js";
 import {
-  PI_ADAPTER_REVISION, observeDeliveryReceipt, readDeliveryReceipt, type CheckedReceipt, type ReceiptObservation,
+  PI_ADAPTER_REVISION, deliveryDecision, observeDeliveryReceipt, readDeliveryReceipt, type CheckedReceipt,
 } from "../storage/delivery-receipt.js";
 import type { BatchRow } from "../storage/rows.js";
 import { MailMaterializer, operationMessage } from "./materializer.js";
@@ -30,10 +30,14 @@ export interface SettlementQuiescence {
   readonly incarnation: number;
   confirm(): void;
 }
+/** What a broker-owned settlement found. `present` and `hold` are the receipt
+ * decision's own answers (D01, P0-2): the batch may be presented in the next
+ * attempt, or nothing may happen until the evidence is observed or repaired. */
 export type SettlementOutcome =
   | { readonly kind: "settled"; readonly receipt: CheckedReceipt }
   | { readonly kind: "completed" }
-  | Exclude<ReceiptObservation, { readonly kind: "verified" }>;
+  | { readonly kind: "present" }
+  | { readonly kind: "hold"; readonly error: StoreError };
 
 export class BatchCoordinator {
   constructor(private readonly store: Store, private readonly stateRoot: string,
@@ -62,11 +66,12 @@ export class BatchCoordinator {
     if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
     lines.push("전체 목록: /inbox.md"); return lines.join("\n");
   }
-  /** The expected batch of a receipt comes from the ledger, never a caller. */
-  private snapshot(row: BatchRow, agent: Actor): PreparedBatch {
+  /** The expected batch of a receipt comes from the ledger, never a caller,
+   * as presented in delivery attempt `attempt` (DR9). */
+  private snapshot(row: BatchRow, agent: Actor, attempt: number): PreparedBatch {
     const ids: unknown = JSON.parse(row.messageIdsJson);
     if (!Array.isArray(ids) || ids.some(id => typeof id !== "string")) throw new StoreError("STORE_CORRUPT", "invalid decoded batch manifest");
-    return batchOf({ id: row.id, incarnation: row.incarnation, messageIds: ids as string[], sessionPath: row.sessionPath }, agent);
+    return batchOf({ id: row.id, incarnation: attempt, messageIds: ids as string[], sessionPath: row.sessionPath }, agent);
   }
   private finishPrepared(batch: PreparedBatch): PreparedBatch {
     // Check the same bytes the extension will consume before changing Maildir views.
@@ -79,10 +84,11 @@ export class BatchCoordinator {
     const existing = this.store.preparedBatches(auth.actor);
     if (existing.length > 0) {
       const row = existing[0]!;
-      const ids: unknown = JSON.parse(row.messageIdsJson);
-      if (!Array.isArray(ids) || ids.some(id => typeof id !== "string")) throw new StoreError("STORE_CORRUPT", "invalid decoded batch manifest");
-      const messageIds = ids as string[];
-      return this.finishPrepared(batchOf({ id: row.id, incarnation: row.incarnation, messageIds, sessionPath: row.sessionPath }, auth.actor, this.noticeFor(auth.actor, messageIds, true)));
+      // DR9: the batch is presented in this lease's attempt; its row, and so
+      // the attempt it was first prepared in, stays as it was.
+      if (row.incarnation > auth.incarnation) throw new StoreError("BATCH_CONFLICT", "prepared batch belongs to a later run");
+      const prepared = this.snapshot(row, auth.actor, auth.incarnation);
+      return this.finishPrepared({ ...prepared, notice: this.noticeFor(auth.actor, prepared.messageIds, true) });
     }
     const pending = selectBatch(this.store.pendingDeliveries(auth.actor).map(value => {
       const message = this.messagePlan(value);
@@ -98,19 +104,22 @@ export class BatchCoordinator {
     catch (error) { if (error instanceof StoreError && error.code === "BATCH_CONFLICT") return null; throw error; }
     return this.finishPrepared(prepared);
   }
+  /** A live completion: the requester completes its own delivery attempt
+   * (current authority), and the ledger records it against the batch's
+   * attempts (DR9). */
   async complete(auth: AuthContext, evidence: BoundaryEvidence): Promise<void> {
     const batch = this.store.getBatch(evidence.batchId);
     if (!batch) throw new StoreError("BATCH_CONFLICT", `unknown batch ${evidence.batchId}`);
-    if (batch.agent !== auth.actor || auth.incarnation !== evidence.incarnation || batch.incarnation !== evidence.incarnation)
+    if (batch.agent !== auth.actor || auth.incarnation !== evidence.incarnation || batch.incarnation > evidence.incarnation)
       throw new StoreError("BATCH_CONFLICT", "batch ownership mismatch");
     if (!this.limits || evidence.adapterRevision !== PI_ADAPTER_REVISION ||
         evidence.receiptPath !== runnerReceiptPathAt(this.stateRoot, auth.actor, batch.id))
       throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "batch completion does not identify the pinned trusted receipt");
-    const prepared = this.snapshot(batch, auth.actor);
+    const prepared = this.snapshot(batch, auth.actor, evidence.incarnation);
     const receipt = readDeliveryReceipt(this.stateRoot, prepared, this.limits.frameBytes);
     if (receipt.sessionPath !== evidence.sessionPath)
       throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "receipt and completion session paths differ");
-    this.store.transaction(tx => tx.completeBatch(batch.id, prepared.messageIds, auth.actor, batch.incarnation, receipt.sessionPath));
+    this.store.transaction(tx => tx.completeBatch(batch.id, prepared.messageIds, auth.actor, receipt.incarnation, receipt.sessionPath));
   }
   /** D01/BATCH-004: broker-owned settlement of one prepared batch from its own
    * exact receipt, before rollover. No RPC reaches this: it prepares no batch,
@@ -121,15 +130,26 @@ export class BatchCoordinator {
     if (!this.limits) throw new StoreError("UNSUPPORTED_PROFILE", "receipt settlement requires the configured frame limit");
     const row = this.store.getBatch(batchId);
     if (!row) throw new StoreError("BATCH_CONFLICT", `unknown batch ${batchId}`);
-    if (row.agent !== quiescence.actor || row.incarnation !== quiescence.incarnation)
-      throw new StoreError("BATCH_CONFLICT", "settlement authority names another actor or incarnation");
+    // The authority is exactly the run now ending: the agent's current lease.
+    if (row.agent !== quiescence.actor || row.incarnation > quiescence.incarnation ||
+        this.store.getAgent(quiescence.actor)?.incarnation !== quiescence.incarnation)
+      throw new StoreError("BATCH_CONFLICT", "settlement authority is not this batch's actor and its ending run");
     if (row.state === "completed") return { kind: "completed" };
-    const snapshot = this.snapshot(row, quiescence.actor);
-    const observed = observeDeliveryReceipt(this.stateRoot, snapshot, this.limits.frameBytes);
-    if (observed.kind !== "verified") return observed;
-    quiescence.confirm();
-    this.store.transaction(tx => tx.completeBatch(row.id, snapshot.messageIds, quiescence.actor, row.incarnation, observed.receipt.sessionPath));
-    return { kind: "settled", receipt: observed.receipt };
+    // DR9: every attempt from the batch's first to the run now ending is the
+    // batch's; a receipt of any of them is its evidence.
+    const snapshot = this.snapshot(row, quiescence.actor, quiescence.incarnation);
+    const decision = deliveryDecision(observeDeliveryReceipt(this.stateRoot, snapshot, this.limits.frameBytes,
+      { first: row.incarnation, last: quiescence.incarnation }));
+    switch (decision.action) {
+      case "present": return { kind: "present" };
+      case "hold": return { kind: "hold", error: decision.error };
+      case "settle": {
+        quiescence.confirm();
+        const receipt = decision.receipt;
+        this.store.transaction(tx => tx.completeBatch(row.id, snapshot.messageIds, quiescence.actor, receipt.incarnation, receipt.sessionPath));
+        return { kind: "settled", receipt };
+      }
+    }
   }
   moveToCur(agent: Actor, ids: readonly MessageId[]): number {
     let count = 0;

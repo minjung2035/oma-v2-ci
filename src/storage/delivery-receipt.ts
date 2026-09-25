@@ -46,13 +46,26 @@ const issuedReceipts = new WeakSet<object>();
 export function isCheckedReceipt(value: unknown): value is CheckedReceipt {
   return typeof value === "object" && value !== null && issuedReceipts.has(value);
 }
-/** Identity only: never session content, entry text or credentials. */
+/** Identity only: never session content, entry text or credentials.
+ * `incarnation` is the latest delivery attempt the observer accepts and
+ * `earliestIncarnation` the first (DR9); a publisher expects exactly its own. */
 export interface ReceiptIdentity {
   readonly actor: string;
   readonly batchId: string;
   readonly incarnation: number;
+  readonly earliestIncarnation: number;
   readonly adapterRevision: string;
   readonly messageIds: readonly string[];
+}
+/** DR9: the delivery attempts of one batch -- every run lease from the one it
+ * was created in to the latest one it was granted to. A receipt is the batch's
+ * evidence when its attempt lies in this range, whatever lease is current now. */
+export interface DeliveryAttempts { readonly first: number; readonly last: number }
+function attemptsOf(batch: PreparedBatch, attempts?: DeliveryAttempts): DeliveryAttempts {
+  const range = attempts ?? { first: batch.incarnation, last: batch.incarnation };
+  if (!Number.isSafeInteger(range.first) || !Number.isSafeInteger(range.last) || range.first < 0 || range.first > range.last)
+    throw new StoreError("STORE_CORRUPT", "delivery attempt range is not an ordered pair of incarnations");
+  return range;
 }
 export type ReceiptProblem =
   | "runner-root-unavailable" | "receipt-directory-unavailable" | "receipt-path-not-contained"
@@ -150,7 +163,7 @@ function sessionPathCheck(stateRoot: string, actor: Actor, value: unknown): Fail
     if (directory !== undefined) closeSync(directory);
   }
 }
-function checkReceipt(raw: unknown, expected: PreparedBatch, stateRoot: string): CheckedReceipt | Failed {
+function checkReceipt(raw: unknown, expected: PreparedBatch, stateRoot: string, attempts: DeliveryAttempts): CheckedReceipt | Failed {
   const value = record(raw);
   const differs: Failed = { failed: "conflicting", problem: "receipt-identity-differs", cause: null };
   if (value === null) return differs;
@@ -172,8 +185,10 @@ function checkReceipt(raw: unknown, expected: PreparedBatch, stateRoot: string):
     value.batchId !== expected.id ||
     !isValidBatchId(value.batchId) ||
     value.actor !== expected.agent ||
-    value.incarnation !== expected.incarnation ||
+    typeof value.incarnation !== "number" ||
     !Number.isSafeInteger(value.incarnation) ||
+    value.incarnation < attempts.first ||
+    value.incarnation > attempts.last ||
     !Array.isArray(value.messageIds) ||
     value.messageIds.length !== expected.messageIds.length ||
     value.messageIds.some(
@@ -188,13 +203,14 @@ function checkReceipt(raw: unknown, expected: PreparedBatch, stateRoot: string):
     return differs;
   const session = sessionPathCheck(stateRoot, expected.agent, value.sessionPath);
   if (session !== null) return session;
-  // Every field now equals the expected batch or passed its own check.
+  // Every field now equals the expected batch or passed its own check; the
+  // attempt is the receipt's own, one of the batch's attempts (DR9).
   const receipt: DeliveryReceipt = Object.freeze({
     schemaVersion: 1,
     adapterRevision: PI_ADAPTER_REVISION,
     batchId: expected.id,
     actor: expected.agent,
-    incarnation: expected.incarnation,
+    incarnation: value.incarnation as number,
     messageIds: Object.freeze([...expected.messageIds]),
     sessionPath: value.sessionPath as string,
     entryId: value.entryId,
@@ -207,7 +223,7 @@ export function decodeDeliveryReceipt(
   expected: PreparedBatch,
   stateRoot: string,
 ): CheckedReceipt {
-  const checked = checkReceipt(raw, expected, stateRoot);
+  const checked = checkReceipt(raw, expected, stateRoot, attemptsOf(expected));
   if ("failed" in checked)
     return invalid("content does not match the prepared batch and pinned adapter");
   return checked;
@@ -233,10 +249,12 @@ export function observeDeliveryReceipt(
   stateRoot: string,
   batch: PreparedBatch,
   maximum: number,
+  attempts?: DeliveryAttempts,
 ): ReceiptObservation {
+  const range = attemptsOf(batch, attempts);
   const path = runnerReceiptPathAt(stateRoot, batch.agent, batch.id);
-  const expected: ReceiptIdentity = Object.freeze({ actor: batch.agent, batchId: batch.id, incarnation: batch.incarnation,
-    adapterRevision: PI_ADAPTER_REVISION, messageIds: Object.freeze([...batch.messageIds]) });
+  const expected: ReceiptIdentity = Object.freeze({ actor: batch.agent, batchId: batch.id, incarnation: range.last,
+    earliestIncarnation: range.first, adapterRevision: PI_ADAPTER_REVISION, messageIds: Object.freeze([...batch.messageIds]) });
   const failed = (failure: Failed, observed: Partial<ReceiptIdentity> | null = null): ReceiptObservation => ({
     kind: failure.failed,
     diagnostic: Object.freeze({ problem: failure.problem, cause: failure.cause, expected, observed }),
@@ -262,34 +280,60 @@ export function observeDeliveryReceipt(
       let raw: unknown;
       try { raw = parseJsonObject(bytes).raw; }
       catch { return failed({ failed: "conflicting", problem: "receipt-not-json", cause: null }); }
-      const checked = checkReceipt(raw, batch, stateRoot);
+      const checked = checkReceipt(raw, batch, stateRoot, range);
       return "failed" in checked ? failed(checked, claimedIdentity(raw)) : { kind: "verified", receipt: checked };
     } finally { closeSync(fd); }
   } finally { closeSync(parent); }
 }
-/** The one mapping from an observation that cannot settle to the error its
- * consumer reports: missing evidence, an observation to repeat, or evidence to
- * preserve for repair (spec error table: SESSION_BOUNDARY_UNCONFIRMED is an
- * insufficient receipt, BATCH_CONFLICT an ownership/snapshot mismatch). */
-export function requireVerifiedReceipt(observation: ReceiptObservation): CheckedReceipt {
+/** D01's decision table, P0-2: the one answer to "this batch's receipt was
+ * observed -- what may happen now?". Every consumer asks this and only this:
+ * the broker opening a run, the Resident's runner, the Principal's host.
+ *
+ *   verified    -> settle: the boundary is a past fact; record it, present nothing
+ *   absent      -> present: no durable boundary exists, so the batch may be
+ *                  presented (again, with the redelivery notice) -- absence of
+ *                  evidence is not evidence of no earlier presentation (DR6)
+ *   unavailable -> hold: observe again; nothing is presented or settled
+ *   conflicting -> hold: preserve the evidence for repair
+ *
+ * What each consumer does with a decision is its own (lifetimes differ); what
+ * the observation means is decided here once. The errors are the spec's:
+ * BROKER_UNAVAILABLE an observation to repeat, BATCH_CONFLICT an ownership or
+ * snapshot mismatch. */
+export type DeliveryDecision =
+  | { readonly action: "settle"; readonly receipt: CheckedReceipt }
+  | { readonly action: "present"; readonly missing: "receipt" | "receipt-directory" }
+  | { readonly action: "hold"; readonly error: StoreError };
+export function deliveryDecision(observation: ReceiptObservation): DeliveryDecision {
   switch (observation.kind) {
-    case "verified": return observation.receipt;
-    case "absent":
-      throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", `no durable delivery receipt exists (${observation.missing} absent)`);
+    case "verified": return { action: "settle", receipt: observation.receipt };
+    case "absent": return { action: "present", missing: observation.missing };
     case "unavailable":
-      throw new StoreError("BROKER_UNAVAILABLE", `delivery receipt observation is unavailable: ${observation.diagnostic.problem}`,
-        { cause: observation.diagnostic });
+      return { action: "hold", error: new StoreError("BROKER_UNAVAILABLE",
+        `delivery receipt observation is unavailable: ${observation.diagnostic.problem}`, { cause: observation.diagnostic }) };
     case "conflicting":
-      throw new StoreError("BATCH_CONFLICT", `delivery receipt conflicts with the prepared batch: ${observation.diagnostic.problem}`,
-        { cause: observation.diagnostic });
+      return { action: "hold", error: new StoreError("BATCH_CONFLICT",
+        `delivery receipt conflicts with the batch; it is kept for diagnosis: ${observation.diagnostic.problem}`, { cause: observation.diagnostic }) };
+  }
+}
+/** A completion needs evidence: the decision, where "present" means there is
+ * none (SESSION_BOUNDARY_UNCONFIRMED, an insufficient receipt). */
+export function requireVerifiedReceipt(observation: ReceiptObservation): CheckedReceipt {
+  const decision = deliveryDecision(observation);
+  switch (decision.action) {
+    case "settle": return decision.receipt;
+    case "present":
+      throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", `no durable delivery receipt exists (${decision.missing} absent)`);
+    case "hold": throw decision.error;
   }
 }
 export function readDeliveryReceipt(
   stateRoot: string,
   batch: PreparedBatch,
   maximum: number,
+  attempts?: DeliveryAttempts,
 ): CheckedReceipt {
-  return requireVerifiedReceipt(observeDeliveryReceipt(stateRoot, batch, maximum));
+  return requireVerifiedReceipt(observeDeliveryReceipt(stateRoot, batch, maximum, attempts));
 }
 export function publishDeliveryReceipt(
   stateRoot: string,

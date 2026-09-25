@@ -90,7 +90,10 @@ for (const format of ["sha1", "sha256"] as const) {
   });
 }
 
-for (const change of ["unchanged", "stop", "policy", "capability"] as const) {
+// P0-1/LIFE-008: an agent's durable capabilities are its frozen spec, which
+// nothing rewrites after creation; a current check can still refuse through
+// the desired state and the host's policy, the two cases below.
+for (const change of ["unchanged", "stop", "policy"] as const) {
   test(`V24B: a no-op integration recovered after ${change} repeats the current checks instead of trusting main == candidate`, async t => {
     const f = repository(t);
     await published(f);
@@ -102,10 +105,6 @@ for (const change of ["unchanged", "stop", "policy", "capability"] as const) {
     t.mock.restoreAll();
     if (change === "stop") f.store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
     if (change === "policy") f.reader.revision = "changed-policy";
-    if (change === "capability") {
-      const stripped = makeValidAgent("a", { capabilities: [] });
-      f.store.transaction(tx => tx.updateAgent({ name: "a", specHash: stripped.specHash, specJson: stripped.specJson }));
-    }
     const error = await f.reconcile(f.operation("no-op").id);
     const settled = f.operation("no-op");
     if (change === "unchanged") {
@@ -114,7 +113,7 @@ for (const change of ["unchanged", "stop", "policy", "capability"] as const) {
     } else {
       assert.ok(error instanceof StoreError, String(error));
       assert.equal(settled.state, "failed", `a no-op has no historical effect to settle after ${change}`);
-      assert.equal(settled.errorCode, { stop: "CANCELLED_BEFORE_COMMIT", policy: "POLICY_CHANGED", capability: "CAPABILITY_DENIED" }[change]);
+      assert.equal(settled.errorCode, { stop: "CANCELLED_BEFORE_COMMIT", policy: "POLICY_CHANGED" }[change]);
     }
     assert.equal(f.main(), f.info.candidate, "a no-op moves nothing");
   });

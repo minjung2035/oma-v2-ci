@@ -17,10 +17,10 @@ import { StoreError } from "./domain/errors.js";
 import { encodeToolSurfacePlan } from "./domain/tool-surface.js";
 import { BrokerChannel, type ChannelLimits } from "./protocol/channel.js";
 import {
+  deliveryDecision,
   observeDeliveryReceipt,
   PI_ADAPTER_REVISION,
   publishDeliveryReceipt,
-  requireVerifiedReceipt,
   type DeliveryReceipt,
 } from "./storage/delivery-receipt.js";
 import {
@@ -275,26 +275,30 @@ export class RunnerModule {
         "UNSUPPORTED_PROFILE",
         "runner receipt configuration is incomplete",
       );
-    // Only an observed absence lets the batch be presented again; a receipt
-    // that could not be read or does not match is never a new delivery.
-    const observed = observeDeliveryReceipt(
+    // What the receipt means is the receipt decision's (D01, P0-2); what a
+    // runner does with it is its own: present in a fresh engine, or complete.
+    const decision = deliveryDecision(observeDeliveryReceipt(
       stateRoot,
       batch,
       this.limits.frameBytes,
-    );
+    ));
     let receipt: DeliveryReceipt;
-    if (observed.kind === "absent") {
-      const opened = await this.openRelay();
-      let boundary;
-      try { boundary = await this.adapter(batch, opened?.inference).deliver(batch); }
-      finally { await opened?.relay.close(); }
-      receipt = publishDeliveryReceipt(
-        stateRoot,
-        batch,
-        boundary,
-        this.limits.frameBytes,
-      );
-    } else receipt = requireVerifiedReceipt(observed);
+    switch (decision.action) {
+      case "hold": throw decision.error;
+      case "settle": receipt = decision.receipt; break;
+      case "present": {
+        const opened = await this.openRelay();
+        let boundary;
+        try { boundary = await this.adapter(batch, opened?.inference).deliver(batch); }
+        finally { await opened?.relay.close(); }
+        receipt = publishDeliveryReceipt(
+          stateRoot,
+          batch,
+          boundary,
+          this.limits.frameBytes,
+        );
+      }
+    }
     await this.connect();
     const response = await this.channel.call("batch.complete", {
       batchId: batch.id,

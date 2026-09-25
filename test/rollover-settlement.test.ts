@@ -15,6 +15,9 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { ViewsModule } from "../src/views.js";
 import type { UnitsModule } from "../src/units.js";
 import { publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
+import { Store } from "../src/store.js";
+import { MailModule } from "../src/mail.js";
+import { REDELIVERY_NOTICE } from "../src/mail/batches.js";
 import { runnerReceiptPathAt } from "../src/storage/paths.js";
 import { boundaryOf, completeSession, preparedFixture, type ReceiptFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
@@ -80,15 +83,41 @@ test("V07A: a receipt made durable just before the runner died completes its bat
   } finally { await closeAll(broker, f); }
 });
 
-test("V07A: a batch whose receipt is proven absent rolls over, and only that batch", async () => {
+test("V07A, DR9: a batch whose receipt is proven absent is the next run's delivery attempt, and its row is not rewritten", async () => {
   const f = await preparedFixture(1);
   let broker: Broker | null = null;
   try {
     broker = await restartedBroker(f, () => FIRST);
     assert.equal(openRun(broker, FIRST).incarnation, 2);
-    const rolled = f.store.getBatch(f.batch.id)!;
-    assert.equal(rolled.state, "prepared");
-    assert.equal(rolled.incarnation, 2);
+    const kept = f.store.getBatch(f.batch.id)!;
+    assert.equal(kept.state, "prepared");
+    assert.equal(kept.incarnation, 1, "the run the batch was created in stays a past fact");
+    const again = await f.mail.prepare(nextAuth(2));
+    assert.equal(again?.id, f.batch.id);
+    assert.equal(again?.incarnation, 2, "presented in the new lease's attempt");
+    assert.ok(again?.notice.startsWith(REDELIVERY_NOTICE), "a batch presented again says so (DR6)");
+  } finally { await closeAll(broker, f); }
+});
+
+test("DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch, with no redelivery", async () => {
+  const f = await preparedFixture(1);
+  let broker: Broker | null = null;
+  try {
+    broker = await restartedBroker(f, () => FIRST);
+    assert.equal(openRun(broker, FIRST).incarnation, 2, "no receipt yet: the batch passes to run 2");
+    const receipt = withReceipt(f); // attempt 1's receipt, published late
+    await broker.drainAndClose(); broker = null;
+    const store = new Store(join(f.root, "runtime.sqlite"));
+    const reopened = Object.assign(Object.create(Object.getPrototypeOf(f)), f, {
+      store, mail: new MailModule({ stateRoot: f.root, society: "demo" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS),
+    }) as ReceiptFixture;
+    broker = await restartedBroker(reopened, () => SECOND);
+    assert.equal(openRun(broker, SECOND).incarnation, 3);
+    const settled = store.getBatch(f.batch.id)!;
+    assert.equal(settled.state, "completed", "attempt 1's receipt is this batch's evidence under any later lease");
+    assert.equal(settled.incarnation, 1);
+    assert.deepEqual(store.preparedBatches("alice"), [], "nothing is presented again");
+    assert.deepEqual(readFileSync(runnerReceiptPathAt(f.root, "alice", f.batch.id)), receipt, "the receipt bytes are unchanged");
   } finally { await closeAll(broker, f); }
 });
 

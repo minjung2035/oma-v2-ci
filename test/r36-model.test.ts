@@ -37,7 +37,7 @@ async function replay(sequence: readonly Action[]): Promise<void> {
         case "stop": store.transaction(tx => { tx.updateAgent({ name: "alice", desired: "stopped" }); }); revoked = true; break;
         case "start": {
           const incarnation = store.getAgent("alice")!.incarnation + 1;
-          store.transaction(tx => { tx.updateAgent({ name: "alice", desired: "enabled", incarnation }); tx.reassignPreparedBatches("alice", incarnation); });
+          store.transaction(tx => { tx.updateAgent({ name: "alice", desired: "enabled", incarnation }); });
           revoked = false; break;
         }
         case "revoke": revoked = true; break;
@@ -111,7 +111,7 @@ async function replay(sequence: readonly Action[]): Promise<void> {
       assert.equal(ledger.batches.length, model.batchMembers === null ? 0 : 1, "MODEL_BATCH_COUNT");
       if (model.batchMembers !== null) {
         const batch = ledger.batches[0]!;
-        assert.equal(batch.state, "prepared"); assert.equal(batch.incarnation, model.incarnation);
+        assert.equal(batch.state, "prepared"); assert.equal(batch.incarnation, model.batchIncarnation, "DR9: the batch keeps the run it was created in");
         assert.deepEqual(ledger.deliveries.filter(row => row.batchId === batch.id).map(row => slotByMessage.get(row.messageId)).sort((a, b) => a! - b!), model.batchMembers, "MODEL_BATCH_MEMBERS");
       }
       assert.equal(ledger.usage.length, model.usage.size, "MODEL_USAGE_COUNT");

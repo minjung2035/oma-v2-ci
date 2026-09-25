@@ -57,19 +57,22 @@ function files(root: string): string[] {
 }
 
 test("V06A: recovery settles only a verified receipt; absent, unavailable and conflicting settle nothing", async () => {
-  const cases: ReadonlyArray<readonly [string, (f: ReceiptFixture) => void, string]> = [
-    ["verified", f => { published(f); }, "settled"],
-    ["absent", () => undefined, "absent"],
-    ["unavailable", f => { published(f); chmodSync(f.receipt, 0o000); }, "unavailable"],
-    ["conflicting", f => { published(f); unlinkSync(join(runnerSessionDirPathAt(f.root, "alice"), "delivery.jsonl")); }, "conflicting"],
+  // P0-2: what each observation means is the receipt decision's; the outcome
+  // names the decision (settle, present, hold with the spec's error).
+  const cases: ReadonlyArray<readonly [string, (f: ReceiptFixture) => void, string, string | null]> = [
+    ["verified", f => { published(f); }, "settled", null],
+    ["absent", () => undefined, "present", null],
+    ["unavailable", f => { published(f); chmodSync(f.receipt, 0o000); }, "hold", "BROKER_UNAVAILABLE"],
+    ["conflicting", f => { published(f); unlinkSync(join(runnerSessionDirPathAt(f.root, "alice"), "delivery.jsonl")); }, "hold", "BATCH_CONFLICT"],
   ];
-  for (const [name, arrange, expected] of cases) {
+  for (const [name, arrange, expected, code] of cases) {
     const f = await preparedFixture();
     try {
       arrange(f);
       const { registry } = openingSuccessor(1);
       const outcome = f.mail.settleFromReceipt(registry.settlementQuiescence("alice"), f.batch.id);
       assert.equal(outcome.kind, expected, name);
+      assert.equal(outcome.kind === "hold" ? outcome.error.code : null, code, name);
       assert.equal(f.store.getBatch(f.batch.id)?.state, expected === "settled" ? "completed" : "prepared", name);
       assert.equal(f.presented(), expected === "settled" ? 1 : 0, name);
       registry.close();

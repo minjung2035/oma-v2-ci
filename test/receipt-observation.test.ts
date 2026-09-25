@@ -188,6 +188,7 @@ test("V06A: an observation that did not complete is unavailable, with its cause 
     assert.equal(observe(f).kind, "unavailable");
     assert.deepEqual([receipt.problem, receipt.cause], ["receipt-unreadable", "EACCES"]);
     assert.deepEqual(receipt.expected, { actor: "alice", batchId: f.batch.id, incarnation: f.batch.incarnation,
+      earliestIncarnation: f.batch.incarnation,
       adapterRevision: PI_ADAPTER_REVISION, messageIds: f.batch.messageIds });
     chmodSync(f.receipt, 0o600);
     chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o000);

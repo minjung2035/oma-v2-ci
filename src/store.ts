@@ -278,19 +278,28 @@ export class Store {
   listAgents(): AgentRow[] { return this.reader.agents(); }
   /** WP23.03: names only; see LedgerReader.agentNames. */
   agentNames(): string[] { return this.reader.agentNames(); }
-  updateAgent(agent: { name: string; desired?: AgentRow["desired"]; incarnation?: number; specHash?: string; specJson?: string }): void {
+  /** P0-1: an agent row holds one past fact and two current ones. The resolved
+   * spec is fixed when the agent is created (LIFE-008) and past operations,
+   * usage and receipts are read against it, so nothing rewrites it; revoking
+   * authority is the host's current policy, not a rewrite of this fact. What
+   * moves is the desired state and the run lease, and a lease only moves
+   * forward: an incarnation used again would let a new run's facts be read as
+   * an earlier run's. */
+  updateAgent(agent: { name: string; desired?: AgentRow["desired"]; incarnation?: number }): void {
     this.requireTx(); const now = Date.now();
+    for (const key of Object.keys(agent))
+      if (key !== "name" && key !== "desired" && key !== "incarnation")
+        throw new StoreError("INTERNAL_ERROR", `agent update has no spec rewrite or other field: ${key}`);
+    const existing = this.getAgent(agent.name);
+    if (!existing) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
     if (agent.desired !== undefined) {
-      const existing = this.getAgent(agent.name);
-      if (!existing) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
       if (!validDesiredTransition(existing.desired, agent.desired)) throw new StoreError("INVALID_REQUEST", `invalid desired transition ${existing.desired}->${agent.desired}`);
       this.db.prepare("UPDATE agents SET desired=?, updated_at_ms=? WHERE name=?").run(agent.desired, now, agent.name);
     }
-    if (agent.incarnation !== undefined) this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=? WHERE name=?").run(agent.incarnation, now, agent.name);
-    if (agent.specHash !== undefined || agent.specJson !== undefined) {
-      const current = this.getAgent(agent.name);
-      if (!current) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
-      this.db.prepare("UPDATE agents SET spec_hash=?, spec_json=?, updated_at_ms=? WHERE name=?").run(agent.specHash ?? current.specHash, agent.specJson ?? current.specJson, now, agent.name);
+    if (agent.incarnation !== undefined) {
+      if (!Number.isSafeInteger(agent.incarnation) || agent.incarnation <= existing.incarnation)
+        throw new StoreError("STORE_CORRUPT", `agent ${agent.name} incarnation can only move forward`);
+      this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=? WHERE name=?").run(agent.incarnation, now, agent.name);
     }
   }
   follow(topic: string, agent: string): void { this.transitions.follow(topic, agent); }
@@ -345,10 +354,12 @@ export class Store {
   preparedBatches(agent: Actor): BatchRow[] { return this.reader.preparedBatches(agent); }
   /** WP23.03: display projection only; see LedgerReader.pendingWorkRows. */
   pendingWorkRows(): PendingWorkRows { return this.reader.pendingWorkRows(); }
-  reassignPreparedBatches(agent: Actor, incarnation: number): void { this.transitions.reassignPreparedBatches(agent, incarnation); }
   linkDeliveriesToBatch(batchId: string, messages: MessageId[]): void { this.transitions.linkDeliveriesToBatch(batchId, messages); }
-  pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation === incarnation); }
-  completeBatch(batchId: string, messages: MessageId[], agent: Actor, incarnation: number, sessionPath: string): void { this.transitions.completeBatch(batchId, messages, agent, incarnation, sessionPath); }
+  /** DR9: the prepared batches a run at `incarnation` may present -- every
+   * prepared batch created no later than that run, since a run inherits all of
+   * them when it opens. */
+  pendingBatchesFor(agent: Actor, incarnation: number): BatchRow[] { return this.preparedBatches(agent).filter(batch => batch.incarnation <= incarnation); }
+  completeBatch(batchId: string, messages: MessageId[], agent: Actor, attempt: number, sessionPath: string): void { this.transitions.completeBatch(batchId, messages, agent, attempt, sessionPath); }
   reserveUsage(usage: UsageReservation): void { this.transitions.reserveUsage(usage); }
   usageRows(): UsageRow[] { return this.reader.usages(); }
   getUsage(id: string): UsageRow | null { return this.reader.usage(id); }
