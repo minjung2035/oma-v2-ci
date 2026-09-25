@@ -123,6 +123,7 @@ export const lanes = Object.freeze({
       "OPS config:",
       "WP25.03 / D05: a Resident runs",
       "AV9 / INV02: a unit systemd does not have is observed as no unit",
+      "AV12 / INV02, T36: an explicit start resets only a failed unit",
       "WP23.02:",
       "V26C:",
       "T118: a view dated ahead",

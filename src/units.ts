@@ -152,7 +152,12 @@ export class UnitsModule {
     const before = this.observe(agent);
     const service = unitName(this.society, agent, "service");
     const path = unitName(this.society, agent, "path");
-    if (explicitRepair) this.run(["reset-failed", service]);
+    // reset-failed changes one thing, a unit's failed state (a start limit
+    // among it). A unit that is not failed has none to clear, and one systemd
+    // has unloaded while inactive answers "not loaded": that is "nothing to
+    // reset", not a failed repair (INV02). Found by the real-provider run: a
+    // Resident started a while after it was created could never start.
+    if (explicitRepair && before.activeState === "failed") this.run(["reset-failed", service]);
     this.run(["enable", "--now", join(this.installDir, path)]);
     this.verifyPath(agent, true);
     try { this.run(["start", service]); }

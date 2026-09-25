@@ -220,3 +220,34 @@ test("WP23.03: the names-only read still refuses a name that is not an identity"
   f.store = new Store(path, 5, { society: "demo" });
   assert.throws(() => f.store.agentNames(), { code: "STORE_CORRUPT" });
 });
+
+test("AV12 / INV02, T36: an explicit start resets only a failed unit; an unloaded one is not a failed repair", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av12-"));
+  try {
+    const script = (state: string) => {
+      const calls: string[][] = [];
+      const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "u"), { p: TEST_RESOURCES });
+      let started = false;
+      Reflect.set(units, "command", (argv: readonly string[]): UnitCommandOutcome => {
+        calls.push([...argv]);
+        const [verb, unit, property] = argv;
+        // systemd refuses reset-failed for a unit it has unloaded.
+        if (verb === "reset-failed" && state !== "failed")
+          return { kind: "failed", stdout: "", stderr: `Unit ${unit} not loaded.`, status: 1, signal: null };
+        if (verb === "start") started = true;
+        if (verb === "show" && unit?.endsWith(".path"))
+          return ok(property === "--property=UnitFileState" ? "enabled\n" : "active\n");
+        if (verb === "show") return ok(block(unit!, started ? "active" : state).replace("InvocationID=", `InvocationID=${"b".repeat(32)}`));
+        return ok("");
+      });
+      return { units, calls };
+    };
+    const quiet = script("inactive");
+    quiet.units.start("a", true);
+    assert.equal(quiet.calls.some(argv => argv[0] === "reset-failed"), false, "a unit with no failed state was reset");
+    assert.ok(quiet.calls.some(argv => argv[0] === "start"), "the start never reached the unit");
+    const failed = script("failed");
+    failed.units.start("a", true);
+    assert.ok(failed.calls.some(argv => argv[0] === "reset-failed"), "an explicit start did not repair a failed unit");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

@@ -864,7 +864,7 @@ Counterexamples tried against the finished product:
   refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
   controls and zero-width clusters.
 
-## Whole-codebase adversarial pass (after v9) -- AV1..AV11 as applications of INV01..INV12
+## Whole-codebase adversarial pass (after v9) -- AV1..AV12 as applications of INV01..INV12
 
 Every production file was read against the trust boundaries: a Resident (its
 actor socket, and the workspace, home and session directory its sandbox writes),
@@ -875,7 +875,7 @@ applied and was not honoured; it is fixed through that invariant's owner (an
 existing one, or one extended), every new helper meets the abstraction
 acceptance criterion there (it removes an independent decision, a premise a
 caller must remember, or a resource that can be missed), and the WP32.02 and
-WP29 tables below name the owners and regressions. "AV1..AV11" are regression
+WP29 tables below name the owners and regressions. "AV1..AV12" are regression
 ids, like R38 or T118, not principles. The requirement links are in
 `implementation/source-owners.json` (CLI-001, PR-004, FS-003, INF-007, FS-005,
 SB-006).
@@ -893,6 +893,7 @@ SB-006).
 | AV9 | found by the real-provider functional run (ENG1 engine, GPT-6 Luna): `status` reported the Principal as `inactive / dead / success / 0` while its engine ran. systemd answers for a unit it does not have (the Principal has none) with `LoadState=not-found` and the values of a clean exit, and the observation did not read LoadState | INV02 (a unit that does not exist is not a unit that ran and exited) | the batched status observation (`observeStatus`) reads LoadState and answers `no-unit`; the status row shows null unit fields and `reason: "no systemd unit"`. The kernel lane's V23B had asserted the old reading for an agent with no unit and now asserts `no-unit` | the reading of an absent unit as a clean exit in the read model; effect paths (`confirmDead`) observe again and are unchanged | AV9 (one test, V23B) |
 | AV10 | same run: the delivery notice showed a Korean subject as RFC 2047 encoded words, and pointed the Principal at `/inbox.md`, which on the host where the Principal runs is no file -- a batch holds up to 24 messages and the notice names six | BATCH-002 (the notice carries the subject; the index gives every id and a directly readable path) | `displaySubject` beside `decodeSubject` in `mail/headers.ts` (decoded, or the header as it arrived if it is not this writer's); the Principal's mail tool reads `/inbox.md` from its batch view the way it already reads `/mail/archive/cur/...` names. The notice stays one text for both roles | an encoded subject in a notice; an index the Principal could not read | AV10 (two tests) |
 | AV11 | same run: the Principal could check status and mail and nothing else. Its profile holds `agent.create`, `agent.manage.descendants`, `route.follow` and `context.publish`; the default seeds no Resident ("created when they are asked for"), and no Resident works before the Principal publishes the GOAL (§15.1, LIFE-004) -- but the Principal's model had four tools and no shell, and the credential that makes a CLI the Principal's stays with the extension (T114). No society could start | arch §8.3 and §15.1 (the Principal publishes the GOAL and Residents are created on request) over PR-004 (the Principal's shell stays excluded while S-02 is open); INV09 (each value in its slot, as AV1) and INV04 (one grammar mirror bound to the wire, one revision resolver, one path owner) | `principal-tools.ts`: one tool per CLI command the Principal's capabilities allow (agent create, start/stop, follow/unfollow, context publish, logs), registered only for an engine with the product's credential channel; the brief is a fresh temporary, the context directory must be inside the Principal's scratch, the default base is the society's main resolved by the CLI's own `resolveOid` in the canonical repository (`projectGitPathAt`, now the one owner of that path) | the gap between the Principal's capabilities and its model's means; five inline copies of the canonical repository path | AV11 (three tests) |
+| AV12 | found by the second functional run, once AV11 let the Principal create and start a Resident: every `agent.start` ended `unknown` and the Resident never ran. An explicit start first ran `reset-failed`; systemd unloads an inactive unit nothing references, and answers `reset-failed` for it with "not loaded" (exit 1), so the start failed before it enabled anything. The kernel lane starts a unit right after creating it, while it is still loaded, and never met this | INV02 ("no failed state to clear" is an answer, not a failed repair); T36's repair is of a failed unit | `UnitsModule.start` resets only a unit it observed `failed`; T36's explicit repair of a start-limited unit is unchanged | a repair step that could only fail on the units it was not needed for | AV12 (one test, T36) |
 
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only
