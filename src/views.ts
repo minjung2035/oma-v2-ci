@@ -100,16 +100,18 @@ export class ViewsModule {
         if (work === undefined) throw new StoreError("STORE_CORRUPT", "pending work projection lost an agent");
         let observation: ReturnType<UnitObserve> = null;
         try { observation = observe(row.name); } catch { /* A failed observation is not proof of running or exit zero. */ }
-        const known = observation !== null && observation.activeState !== "unknown" && observation.subState !== "unknown" &&
-          observation.result !== "unknown" && Number.isSafeInteger(observation.execMainStatus) && observation.execMainStatus >= 0;
+        const unit = observation === "no-unit" ? null : observation;
+        const known = unit !== null && unit.activeState !== "unknown" && unit.subState !== "unknown" &&
+          unit.result !== "unknown" && Number.isSafeInteger(unit.execMainStatus) && unit.execMainStatus >= 0;
         observations.push(Object.freeze({ agent: row.name, observedAtMs,
-          unknownReason: observation === null ? "unavailable" : known ? null : "unknown-state" }));
+          unknownReason: observation === null ? "unavailable" : observation === "no-unit" || known ? null : "unknown-state" }));
         return { agent: row.name, desired: row.desired,
-          activeState: known ? observation!.activeState : null, subState: known ? observation!.subState : null,
-          unitResult: known ? observation!.result : null, execMainStatus: known ? observation!.execMainStatus : null,
+          activeState: known ? unit!.activeState : null, subState: known ? unit!.subState : null,
+          unitResult: known ? unit!.result : null, execMainStatus: known ? unit!.execMainStatus : null,
           // Observable semantic correction: eligible unbatched messages + prepared manifest messages.
           pending: work.pendingMessages, preparedBatches: work.preparedBatchCount,
-          reason: null, runnerObservedAtMs: null };
+          // A unit that does not exist is said, not shown as one that ran and exited.
+          reason: observation === "no-unit" ? "no systemd unit" : null, runnerObservedAtMs: null };
       });
     } finally { this.observations = Object.freeze(observations); }
   }

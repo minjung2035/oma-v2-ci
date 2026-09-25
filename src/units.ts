@@ -222,18 +222,22 @@ export class UnitsModule {
    * STATUS_CHUNK units, one chunk at a time. Each block is bound to its unit by
    * `Id`; a block that is missing, repeated or malformed leaves that agent
    * unknown. Never death proof or authority: an effect observes again. */
-  async observeStatus(agents: readonly Actor[]): Promise<ReadonlyMap<Actor, UnitObservation>> {
-    const observed = new Map<Actor, UnitObservation>();
+  async observeStatus(agents: readonly Actor[]): Promise<ReadonlyMap<Actor, UnitObservation | "no-unit">> {
+    const observed = new Map<Actor, UnitObservation | "no-unit">();
     for (let from = 0; from < agents.length; from += STATUS_CHUNK) {
       const byUnit = new Map(agents.slice(from, from + STATUS_CHUNK).map(agent => [unitName(this.society, agent, "service"), agent] as const));
-      const outcome = await this.commandAsync(["show", ...byUnit.keys(), "-p", "Id", ...this.observationArgs(agents[from]!).slice(2)]);
+      const outcome = await this.commandAsync(["show", ...byUnit.keys(), "-p", "Id", "-p", "LoadState", ...this.observationArgs(agents[from]!).slice(2)]);
       const blocks = outcome.kind === "succeeded" ? outcome.stdout.split("\n\n") : [];
       const parsed = blocks.map(block => ({ block, agent: byUnit.get(parseProperties(block, ["Id"])?.get("Id") ?? "") }));
       const count = new Map<Actor, number>();
       for (const { agent } of parsed) if (agent !== undefined) count.set(agent, (count.get(agent) ?? 0) + 1);
       // A unit reported twice is reported by nothing that can be believed.
       for (const { block, agent } of parsed)
-        if (agent !== undefined && count.get(agent) === 1) observed.set(agent, parseUnitObservation({ ...outcome, stdout: block }));
+        // systemd answers for a unit it does not have with the values of one
+        // that ran and exited cleanly; LoadState is what tells them apart.
+        if (agent !== undefined && count.get(agent) === 1)
+          observed.set(agent, parseProperties(block, ["LoadState"])?.get("LoadState") === "not-found"
+            ? "no-unit" : parseUnitObservation({ ...outcome, stdout: block }));
     }
     return observed;
   }

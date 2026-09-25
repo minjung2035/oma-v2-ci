@@ -68,7 +68,9 @@ export interface SandboxPort {
 
 /** Observation callback is an internal boundary value, not a Views implementation. */
 export interface UnitObserve {
-  (agent: Actor): { activeState: string; subState: string; result: string; execMainStatus: number } | null;
+  /** null: not observed. "no-unit": observed, and systemd has no such unit
+   * (LoadState=not-found) -- which is not a unit that ran and exited (INV02). */
+  (agent: Actor): { activeState: string; subState: string; result: string; execMainStatus: number } | "no-unit" | null;
 }
 
 export interface SandboxHost {

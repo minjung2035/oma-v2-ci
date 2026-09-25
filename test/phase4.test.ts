@@ -764,8 +764,10 @@ test("V23B: a status snapshot is display only; start, stop and death proof obser
     const refresh = new StatusRefresh(() => env.store.agentNames(), agents => env.units.observeStatus(agents));
     const snapshot = await refresh.request();
     assert.equal(snapshot.failure, null);
-    assert.equal(snapshot.units.get("a")?.activeState, "inactive");
-    assert.equal(snapshot.units.get("b")?.activeState, "inactive");
+    const unitOf = (value: ReturnType<typeof snapshot.units.get>) => { assert.ok(value !== undefined && value !== "no-unit"); return value; };
+    assert.equal(unitOf(snapshot.units.get("a")).activeState, "inactive");
+    // AV9 / INV02: a unit systemd does not have is not one that ran and exited.
+    assert.equal(snapshot.units.get("b"), "no-unit");
     const shown = env.views.statusOf(snapshot, "a")[0]!;
     assert.equal(shown.activeState, "inactive");
     // After the snapshot the unit really starts.
@@ -776,7 +778,7 @@ test("V23B: a status snapshot is display only; start, stop and death proof obser
     assert.ok(snapshot.observedAtMs <= Date.now());
     // Negative control: taking the cached "inactive" as death proof would
     // authorize acting on a live run.
-    const cachedDeathProof = (agent: string) => snapshot.units.get(agent)?.activeState === "inactive";
+    const cachedDeathProof = (agent: string) => unitOf(snapshot.units.get(agent)).activeState === "inactive";
     assert.equal(cachedDeathProof("a"), true, "the control does not reproduce the cached claim");
     assert.ok(env.units.cgroupProcs("a").length > 0, "the run the cached view calls inactive is alive");
     // The effect paths observe again and refuse.
@@ -785,7 +787,7 @@ test("V23B: a status snapshot is display only; start, stop and death proof obser
       (error: unknown) => error instanceof StoreError && error.code === "RUN_TERMINATION_UNKNOWN");
     assert.equal(env.store.getAgent("a")!.incarnation, 1);
     // A later refresh sees the change.
-    assert.equal((await refresh.request()).units.get("a")?.activeState, "active");
+    assert.equal(unitOf((await refresh.request()).units.get("a")).activeState, "active");
     spawnSync("systemctl", ["--user", "stop", service], { stdio: "ignore" });
   } finally { cleanup(); }
 });

@@ -17,7 +17,7 @@
     "SandboxPort": { "exported": true, "sha256": "dbad98300f5a7096e1255a8ac087046b0a893a19b46f60c4a620414a746b6137" },
     "StorePort": { "exported": true, "sha256": "9cef16e042a8f138387f98f31aefef79a63b576c2c3a003505f8b7f4232135fa" },
     "SyncUnitsPort": { "exported": true, "sha256": "8c595a2774c641f61291967397c286ca38c8cab2a69c49d3deffa5aa3e2d6261" },
-    "UnitObserve": { "exported": true, "sha256": "2aecd3e333a650a6efd3cea92d349fab952184847393844765e3646db231aa95" }
+    "UnitObserve": { "exported": true, "sha256": "68021841357991e1f178cf981a5d21baac5c66800e9c65e21df663142e2b320d" }
   },
   "ownershipRefinement": {
     "OperationRowsPort": { "exported": true, "sha256": "878009871e54f8437a1918dc16baa9b7fd1677719d3ac2c684058ecd64cc5c1a" },

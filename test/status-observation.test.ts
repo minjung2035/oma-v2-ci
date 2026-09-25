@@ -13,6 +13,7 @@ import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
 import { UnitsModule, STATUS_CHUNK, type UnitCommandOutcome } from "../src/units.js";
 import { StatusRefresh } from "../src/views/status-refresh.js";
+import { ViewsModule } from "../src/views.js";
 import { pendingWork, pendingWorkByAgent } from "../src/views/pending-work.js";
 import { generateBatchId } from "../src/ids.js";
 import { ALL_CAPS, TEST_RESOURCES, makeValidAgent } from "./fixtures/spec.js";
@@ -80,6 +81,11 @@ function scriptedShow(root: string, answer: (units: string[]) => UnitCommandOutc
 const block = (unit: string, state = "inactive") =>
   `Id=${unit}\nActiveState=${state}\nSubState=${state === "active" ? "running" : "dead"}\nResult=success\nExecMainStatus=0\nControlGroup=\nInvocationID=\n`;
 const ok = (stdout: string): UnitCommandOutcome => ({ kind: "succeeded", stdout, stderr: "", status: 0, signal: null });
+/** The observation of a unit that exists. */
+const unitOf = (value: UnitObservation | "no-unit" | undefined): UnitObservation => {
+  assert.ok(value !== undefined && value !== "no-unit", `expected an observed unit, got ${String(value)}`);
+  return value;
+};
 
 test("WP23.02: batched status observation binds each answer to its unit by Id, in bounded chunks", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-wp23-show-"));
@@ -89,8 +95,8 @@ test("WP23.02: batched status observation binds each answer to its unit by Id, i
     const { units, calls } = scriptedShow(root, names => ok(names.map((unit, i) => block(unit, i % 2 ? "active" : "inactive")).reverse().join("\n")));
     const observed = await units.observeStatus(agents);
     assert.deepEqual(calls.map(chunk => chunk.length), [STATUS_CHUNK, 8], "units were not observed in bounded chunks");
-    assert.equal(observed.get("w1")!.activeState, "active");
-    assert.equal(observed.get("w2")!.activeState, "inactive");
+    assert.equal(unitOf(observed.get("w1")).activeState, "active");
+    assert.equal(unitOf(observed.get("w2")).activeState, "inactive");
     assert.equal(observed.size, agents.length);
     // A repeated, missing, foreign or malformed block leaves only that agent unknown.
     const { units: odd } = scriptedShow(root, names => ok([block(names[0]!), block(names[0]!, "active"), block("oma-other-x.service", "active"),
@@ -98,12 +104,32 @@ test("WP23.02: batched status observation binds each answer to its unit by Id, i
     const partial = await odd.observeStatus(["a", "b", "c", "d"]);
     assert.equal(partial.has("a"), false, "a unit reported twice was believed");
     assert.equal(partial.has("b"), false, "a unit the manager did not report was invented");
-    assert.equal(partial.get("c")!.activeState, "unknown");
-    assert.equal(partial.get("d")!.activeState, "active");
+    assert.equal(unitOf(partial.get("c")).activeState, "unknown");
+    assert.equal(unitOf(partial.get("d")).activeState, "active");
     // A failed command observes nothing in its chunk.
     const { units: failing } = scriptedShow(root, () => ({ kind: "failed", stdout: block("oma-demo-a.service"), stderr: "", status: 1, signal: null }));
     assert.equal((await failing.observeStatus(["a"])).size, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("AV9 / INV02: a unit systemd does not have is observed as no unit, and shown as none -- not as one that ran and exited", async t => {
+  // systemd answers for a unit it does not have with LoadState=not-found and
+  // the values of a clean exit; the Principal, which has no unit, was shown so.
+  const f = await ledger(t);
+  const { units } = scriptedShow(f.root, names => ok(names.map(unit => unit.endsWith("-principal.service")
+    ? `Id=${unit}\nLoadState=not-found\nActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nControlGroup=\nInvocationID=\n`
+    : `Id=${unit}\nLoadState=loaded\nActiveState=active\nSubState=running\nResult=success\nExecMainStatus=0\nControlGroup=/u\nInvocationID=${"a".repeat(32)}\n`).join("\n")));
+  const observed = await units.observeStatus(["principal", "alice"]);
+  assert.equal(observed.get("principal"), "no-unit");
+  assert.equal(unitOf(observed.get("alice")).activeState, "active");
+  const views = new ViewsModule(f.store, f.root, "demo", "principal");
+  const [principal] = views.statusOf(Object.freeze({ observedAtMs: 1, units: observed, failure: null }), "principal");
+  assert.deepEqual({ activeState: principal!.activeState, subState: principal!.subState, unitResult: principal!.unitResult,
+    execMainStatus: principal!.execMainStatus, reason: principal!.reason },
+    { activeState: null, subState: null, unitResult: null, execMainStatus: null, reason: "no systemd unit" });
+  const [alice] = views.statusOf(Object.freeze({ observedAtMs: 1, units: observed, failure: null }), "alice");
+  assert.equal(alice!.activeState, "active");
+  assert.equal(alice!.reason, null);
 });
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",

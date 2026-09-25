@@ -19,10 +19,10 @@ export interface StatusSnapshot {
   /** When this observation started; the time every value in it is about. */
   readonly observedAtMs: number;
   /** An agent absent here was not observed and is unknown. */
-  readonly units: ReadonlyMap<Actor, UnitObservation>;
+  readonly units: ReadonlyMap<Actor, UnitObservation | "no-unit">;
   readonly failure: "timeout" | "unavailable" | null;
 }
-export type StatusObserver = (agents: readonly Actor[]) => Promise<ReadonlyMap<Actor, UnitObservation>>;
+export type StatusObserver = (agents: readonly Actor[]) => Promise<ReadonlyMap<Actor, UnitObservation | "no-unit">>;
 
 /** Status answers for up to 256 listed agents fit well inside this; beyond it
  * a caller is told unknown rather than kept waiting. */
