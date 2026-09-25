@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "e889e647658220ad0300715d3816ca900c7a55888fa37a19b850d08906f45132",
-  "report": "30515021d0c3f8f2aff5a2576938f9825db4fd8038ae08da0689d4dd06badac8",
+  "report": "348104a1c371e871c6abe76d769bbe7449341db38ccc701c7c48497a531ee9b4",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -225,7 +225,7 @@
     },
     {
       "path": "src/domain/deployment.ts",
-      "sha256": "f8c0404d6146415cab63c3972d6e8643d393bb241e8cd8fd4ffe5942db26c3d6"
+      "sha256": "b059e0cb87d7ade3ae9c15ed22204603139562e447b31dff07eb29f18cb86b3c"
     },
     {
       "path": "src/domain/derived.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "7c8cde8a065f724a3021d6a879c88087429e0f1deff975e9ce51b870c955784c"
+      "sha256": "bb8889283e2512025e8ebad3e69d464cb809d83f447fd291b2b9bb57cabd9de0"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -613,7 +613,7 @@
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
-      "sha256": "2031e34195a76d655448d893e8222928d4b12d34229da64a54ccab33bf0f12b3"
+      "sha256": "b47bb0bbdddee67c5df0d857c84f5fecfb525bee450b12dbab29af0fd709b090"
     },
     {
       "path": "src/runtime/engine-auth.ts",
@@ -677,7 +677,7 @@
     },
     {
       "path": "src/sandbox.ts",
-      "sha256": "01f48ca6649104f97414eebd210d0da4135eb96595de77d9689617edc0d7f8b3"
+      "sha256": "3d1b12cd0ec582d4434281114f69cf9fa0513d521e428c45c8d17451e85b4f49"
     },
     {
       "path": "src/storage/batch-view.ts",
