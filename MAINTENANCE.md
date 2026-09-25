@@ -8,6 +8,7 @@ OMA v2는 일반 애플리케이션이 아니라 durable operation, Git CAS, Mai
 
 작업을 시작할 때 다음 순서로 읽는다.
 
+0. `PRIORITY-0.md` — 최상위 원칙. 아래 모든 문서와 이 지침은 그 하위 규칙이며, 충돌은 unresolved design decision으로 다룬다.
 1. `architecture.md` — 최상위 architecture source of truth.
 2. `implementation-spec.md` — 구현 계약과 MUST/MUST NOT.
 3. `implementation/physical-ordering.md` — canonical physical ordering.

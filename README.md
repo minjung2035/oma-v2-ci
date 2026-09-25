@@ -26,6 +26,7 @@ Pi를 따로 설치할 필요는 없다. OMA는 자기 Pi 엔진을 함께 배�
 
 | 목적 | 문서 |
 |---|---|
+| 모든 판단의 최상위 원칙 | [PRIORITY-0.md](PRIORITY-0.md) |
 | 무엇을 만들고 있는지 | [PRODUCT.md](PRODUCT.md) |
 | 수정 전에 지켜야 할 작업 규율 | [MAINTENANCE.md](MAINTENANCE.md) |
 | 최상위 아키텍처 계약 | [architecture.md](architecture.md) |

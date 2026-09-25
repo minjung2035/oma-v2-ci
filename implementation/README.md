@@ -6,11 +6,12 @@
 
 새 작업은 다음 정도만 읽고 시작한다.
 
-1. [MAINTENANCE.md](../MAINTENANCE.md)
-2. [architecture.md](../architecture.md)
-3. [implementation-spec.md](../implementation-spec.md)
-4. 이 문서에서 작업 종류에 맞는 implementation owner
-5. [HANDOFF.md](../HANDOFF.md)와 [validation.md](validation.md)
+1. [PRIORITY-0.md](../PRIORITY-0.md) — 최상위 원칙
+2. [MAINTENANCE.md](../MAINTENANCE.md)
+3. [architecture.md](../architecture.md)
+4. [implementation-spec.md](../implementation-spec.md)
+5. 이 문서에서 작업 종류에 맞는 implementation owner
+6. [HANDOFF.md](../HANDOFF.md)와 [validation.md](validation.md)
 
 과거 phase/audit 보고서를 먼저 읽지 않는다.
 
@@ -18,6 +19,7 @@
 
 | 문서 | 역할 |
 |---|---|
+| [priority-0-audit.md](priority-0-audit.md) | Priority 0 파일 단위 점검 기록: 파일별 durable fact, owner, 규칙별 판정과 근거(갱신하는 한 문서) |
 | [physical-ordering.md](physical-ordering.md) | durable/physical effect의 canonical ordering |
 | [compliance.md](compliance.md) | requirement → owner → executable evidence 계약 |
 | [spikes.md](spikes.md) | OPEN qualification/spike 조건 |
