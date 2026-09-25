@@ -5,7 +5,7 @@
 ## 1. 현재 상태 (2026-09-25)
 
 - 브랜치 `refactor/safety-preserving-architecture`. push·PR·merge는 이 작업에서 하지 않는다.
-- **WP00–WP32 전부 커밋 완료, 재검토·적대적 검증, 이어서 전체 코드베이스 적대적 검증(AV1–AV5)과 v11 검증 중 발견한 AV6, 그 뒤 INV02 재점검 AV7, INV10·기록 약속 재점검 AV8 완료.** AV1–AV5는 카드별 새 원칙이 아니라 프로젝트 불변식(INV01–INV12)·spec MUST를 기존 owner가 적용한 것으로 재정렬했다(`implementation/consistency-decisions.md`의 AV 절). 마지막 통합 검증은 `implementation/validation.md`의 v11. v3–v10은 중간 증거로 `/home/dev/oma-evidence/v3..v10/`에 있다.
+- **WP00–WP32 전부 커밋 완료, 재검토·적대적 검증, 이어서 전체 코드베이스 적대적 검증(AV1–AV5)과 v11 검증 중 발견한 AV6, 그 뒤 INV02 재점검 AV7, INV10·기록 약속 재점검 AV8 완료.** AV1–AV5는 카드별 새 원칙이 아니라 프로젝트 불변식(INV01–INV12)·spec MUST를 기존 owner가 적용한 것으로 재정렬했다(`implementation/consistency-decisions.md`의 AV 절). 이어서 사용자 요청으로 동봉 엔진을 0.87.1로 올렸다(ENG1). 마지막 통합 검증은 `implementation/validation.md`의 v12. v3–v11은 중간 증거로 `/home/dev/oma-evidence/v3..v11/`에 있다.
 - 판정: **release 미승인**. `node --input-type=module -e 'const m=await import("./scripts/review-closure.mjs"); console.log(m.approval(".", undefined, await m.oracleFindings(".")))'`로 확인한다. production 파일 222개 전부 검토 완료(NOT_REVIEWED 0). 남은 차단 요인은 powercut·실제 provider·CI NOT_RUN(oracle V05C·V30B·V32B)뿐이며 모두 사용자 승인이 필요하다.
 - lane 성격: V27A(실제 엔진), V28B(pty), V31A(설치 closure)는 저장소에 `engine`/`pty` lane이 없어 durable lane에서 돈다(bubblewrap·openssl·python3 필요, skip은 PASS 아님).
 
@@ -64,6 +64,7 @@
 | AV6 (v11 kernel lane에서 발견) | `8fd3094`…`83f1b04` | INV02: 살아 있는 Resident가 부하에서 CAPABILITY_DENIED를 받음 — pidfd `poll`의 EINTR(보류 중인 SIGCHLD)을 종료로 읽음(거부 순간 EINTR 포착). 같은 원칙으로 `/proc` 읽기 실패를 엔진 종료로 읽어 Principal 등록을 retire하던 곳도 수정. `pidfdLiveness`(running/exited/failed, EINTR은 최대 8회 재질문)와 `processEnded`(/proc가 종료라고 말할 때만 ended) 하나씩으로. mutant 7개 모두 실패, 부하 반복 60/60 통과 | 부하 반복은 보조 증거(이전 빈도에서 우연 통과 가능) |
 | AV7 (AV6 뒤 INV02 재점검) | `b6e902f`…`6b92785` | 관측 실패를 값으로 삼키는 곳 전수 재점검: 설정 수거가 읽지 못한 journal을 빈 이력으로 읽어 generation을 지우고, 기록이 빠진 실제 직전 generation을 지우던 것(커밋 시 manifest 사실로 journal 보정, journal이 보증할 때만 삭제), 읽지 못한 generation을 STORE_CORRUPT로 보고, 저장 용량 루트를 못 보면 0, 대시보드·메일 화면이 읽지 못한 메일함을 0/없음으로 표시(arch §23.5). mutant 9개 모두 실패 | journal이 계속 읽히지 않으면 예산 한도에서 편집 거절이 재시작으로 풀리지 않음, journal 기록이 연속 두 번 빠지면 직전 generation을 잃을 수 있음 |
 | AV8 (INV10·기록 약속 재점검) | `31eb193`…`8f096b7` | WP26이 CLI 효과를 "no-follow reads"로 기록했지만 `--file`·`--reply`는 링크를 따라가고 한도 없이 읽음(`/dev/zero`는 메모리가 찰 때까지). `readLocalFile` 하나로: O_NOFOLLOW, 정규 파일만, CLI frame(`cliFrameBytes`, transport와 공유) 이하. mutant 4개 모두 실패 | Principal은 bash가 없어 모델 경로로는 도달 불가였음(사람의 CLI나 Human이 설치한 도구만) |
+| ENG1 엔진 0.87.1 (사용자 요청) | `cd389a1`…`157472b` | WP31의 별도 review/risk/test 항목으로 처리: 0.86.0–0.87.1 변경 기록을 WP27 inventory와 대조, `typebox`를 엔진 버전(1.3.27)에 맞춤, `PI_ADAPTER_REVISION`·BATCH-006을 `oma-pi-rpc-v1@0.87.1`로(영수증이 검증된 엔진을 말하게). V27A·T116·T117·V31A/B·package·전체 lane 통과 | 기존 society는 미정산 배치를 모두 정산한 뒤 업그레이드(0.85.1 adapter 영수증은 conflicting으로 보존), 무관한 조항의 기존 trace drift는 그대로 |
 | 재검토·적대적 | `f11c302`…`dea19b8` | 계획 oracle 73개의 담당·lane 필수 검사(`oracle-map.json`), 이전 카드 guard mutant 30개 중 생존 10개(공백 9·동치 1), 공백 8개에 oracle 추가, actor socket·relay 연결 수 상한, 시계보다 앞선 status view를 unknown으로 | 한 파일 읽기 도중 변경(WP12)은 결정적 재현 불가 |
 
 부수 수정: kernel/crash fixture의 systemd 257 호환(`list-unit-files` 무일치 exit 1, stop 후 disable), `/usr/bin/node` 가정 제거, crash hook의 descriptor 기준 rename 해석, 오래된 kernel 시험 기대값 갱신.
@@ -85,6 +86,10 @@
 | 14 | WP21 action 분류 | `0d3cd3e`, `cda45e5`, `75fa748` | method descriptor에 내부 resource category, quota는 검증 뒤 admit/settle에만, 같은 key 수락 조회 허용, recovery 단계별 gate, 수락 후 실패는 `AcceptedFailure`(retry same-key), startup stop은 전원 시도 | 오류 precedence 변경(quota가 검증 뒤) |
 | 15 | WP22 저장 용량 | `a16360e`, `b315f89`, `0f4e026` | `StorageAdmission` 단일 owner(scan+예약), stream 예약은 실행 종료/연결 종료 때 1회 반납, settle은 `limits.frameBytes` headroom 안에서 한 번에 하나, startup은 bounded recovery | hard quota 아님, SQLite/WAL 증가는 측정만(약 180 KiB/32수신자), WP22.05 장기 부하 NOT_RUN, full-FS "완료 기록" mutant 생존(구분 불가) |
 | 16 | WP24 Git 증거 | `482e878`, `ab5186a`, `bcbc627` | no-op integrate(`base==candidate`) 복구는 현재 policy·stop·권한을 다시 확인, 적용된 CAS는 역사적으로 정산, third main 보존 | 실행형 check는 gated 유지, context/submit의 no-op 부재는 소스 검토 근거 |
+
+## 6a. 실제 provider 기능 점검 (준비 완료, 사용자 승인 대기)
+
+`/home/dev/oma-evidence/provider/`: 샘플 프로젝트 `project/`(notes-cli), 시험 society `provtest`(`data/oma/provtest`, 엔진 설정 openai-codex / gpt-6-luna / high), `drive.py`(pty로 `oma --society provtest --bind-project`를 띄우고 `tty.log`에 화면, `tty.in` FIFO로 입력), `monitor.mjs`(읽기 전용 감시), `prompt.txt`(역할을 무시하고 모든 기능을 점검하라는 사용자 프롬프트). 사용자가 `~/.pi/agent/auth.json`을 `data/oma/provtest/pi/auth.json`(0600)으로 직접 복사하고 시작을 승인해야 한다(에이전트의 자격 증명 접근과 자율 세션 실행은 자동 권한 검사가 막음). 끝나면 oma 종료, unit 정리 확인, 복사한 `auth.json` 삭제.
 
 ## 7. 다음에 할 일
 
