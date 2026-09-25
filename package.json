@@ -17,7 +17,7 @@
     "check:package": "node scripts/check-package.mjs",
     "check:transactions": "node scripts/transaction-check.mjs",
     "check:architecture:rules": "node scripts/architecture/rule-check.mjs",
-    "check:architecture": "npm run check:inventory && npm run check:architecture:rules && node scripts/architecture-check.mjs && npm run check:transactions",
+    "check:architecture": "npm run check:inventory && npm run check:architecture:rules && node scripts/architecture-check.mjs && npm run check:transactions && npm run check:boundaries",
     "test": "npm run build && node scripts/test-local.mjs",
     "test:functional-pi": "npm run build && node scripts/functional-pi-smoke.mjs",
     "test:systemd": "node scripts/verify-lane.mjs kernel",
@@ -31,7 +31,8 @@
     "verify:all": "node scripts/verify-lane.mjs all",
     "evidence:graph": "node scripts/dependency-graph.mjs --write-evidence",
     "verify:powercut": "node scripts/powercut-lane.mjs",
-    "test:functional-surface": "npm run build && node scripts/functional-surface.mjs"
+    "test:functional-surface": "npm run build && node scripts/functional-surface.mjs",
+    "check:boundaries": "node scripts/durable-boundaries.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

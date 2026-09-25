@@ -39,7 +39,7 @@ import { isValidSocietyName } from "../domain/identifiers.js";
 import { modelWorkspaceFor } from "../domain/derived.js";
 import { runGitText } from "../process/policies.js";
 import { ensureDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
-import { ensureDirectory, removeOwnedTree } from "../storage/directory.js";
+import { ensureDirectory, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
 import { entryAt, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { hostSystemLayout, prepareResidentRootfs } from "./resident-rootfs.js";
 import { projectGitPathAt } from "../storage/paths.js";
@@ -231,6 +231,9 @@ function seedEmptyRoot(projectGit: string): boolean {
  * to lose a race with another start; it reports what it had to create, and
  * what it found wrong and deliberately did not touch. */
 export function provisionSociety(stateRoot: string, options: ProvisionOptions = {}): ProvisionReport {
+  // P0-4: a binding publication that died before or after its link left its
+  // private temporary; only the tenure holder writes one, and it runs this.
+  collectBindingTemporaries(stateRoot);
   const created: string[] = [];
   for (const relative of [".", ...OWNED_DIRECTORIES]) {
     const path = relative === "." ? stateRoot : join(stateRoot, relative);
@@ -369,6 +372,18 @@ export function projectBindingDecision(input: { readonly observation: ProjectBin
   return { kind: "refuse", reason: `society ${input.society} predates project bindings; review which project it belongs to, then run once with --bind-project` };
 }
 
+const BINDING_TEMPORARY = /^\.project-binding\.json\.[0-9a-f]{16}\.tmp$/;
+/** The temporaries `publishProjectBinding` names, left by a publication that
+ * did not finish. They are never a binding (`stateRootHasSociety` and the
+ * observer ignore them); the process holding the society's tenure removes them. */
+export function collectBindingTemporaries(stateRoot: string): readonly string[] {
+  let entries: string[];
+  try { entries = readdirSync(stateRoot); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
+  const removed = entries.filter(entry => BINDING_TEMPORARY.test(entry));
+  for (const entry of removed) removeOwnedFile(join(stateRoot, entry));
+  return removed;
+}
 export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBinding, "kind">): void {
   ensureDurableDirectory(stateRoot, 0o700);
   const record: ProjectBinding = { kind: BINDING_KIND, society: binding.society, canonicalProjectPath: binding.canonicalProjectPath };

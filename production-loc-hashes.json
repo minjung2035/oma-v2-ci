@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "162f1e6f78bc194df4149323332f6b0bd6678c2ac922f809081450d5d870c8b1",
-  "report": "f0fdb1f14b6a0fa802128797818a95e3a6ad3cd2cdb6cb30d7e2772bef97f9aa",
+  "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
+  "report": "da447c7728ab2ec7b9d0f37363a1b83bf2fb5a9d72f1486d2473b5bffcd7e717",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -349,15 +349,11 @@
     },
     {
       "path": "src/git.ts",
-      "sha256": "5627e42addfc0e0f09c87e9838e6de09f8fca677dfc4b92a2602a73d11a3dceb"
+      "sha256": "a8b8fb85c7dd676041ba4a543da71bb1e709ef8a3127d5ce1fffd9ffb84465f6"
     },
     {
       "path": "src/git/canonical-command.ts",
       "sha256": "5d2b90b077bab4668366b1e337797bafc77842f6f43c60348ccd6a82652e42ac"
-    },
-    {
-      "path": "src/git/context-mirror.ts",
-      "sha256": "2bae29645ce3e37e99a612889360da4c6c56431ac328ba4ca74ce1a38c2c035f"
     },
     {
       "path": "src/git/context-publication.ts",
@@ -665,7 +661,7 @@
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "4b61febbf5021776261e3b65fadd42e9f841dc9a755503400588dde06f990360"
+      "sha256": "ec47654b179eb936d7f1033cdcb8a4b3517c81584b7e0b0c086addfc1099f988"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",

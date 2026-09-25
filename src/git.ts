@@ -9,7 +9,6 @@ import { MailModule } from "./mail.js";
 import { isValidFullOid } from "./ids.js";
 import type { GitObservation, RefAfterCas } from "./git/observe.js";
 import { createCanonicalObserver, compareAndSwapCanonicalRef } from "./git/canonical-command.js";
-import { repairContextMirror } from "./git/context-mirror.js";
 import { IntegrationCoordinator } from "./git/integration.js";
 import { SubmitCoordinator, type SubmitInput } from "./git/submit.js";
 import { GitPublicationObserver } from "./git/publication.js";
@@ -145,10 +144,6 @@ export class GitModule {
     if (revision === null) return false;
     const operation = this.store.findSucceededContext(revision);
     return operation !== null && this.contextRepository.snapshotReady(operation.plan);
-  }
-  repairContextMirror(): void {
-    const revision = this.currentContext(); if (!revision) return;
-    repairContextMirror(this.paths, revision);
   }
   reconcile(operationId: string): Promise<void> {
     return this.withWriter(async () => {

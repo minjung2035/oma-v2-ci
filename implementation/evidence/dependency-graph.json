@@ -89,7 +89,6 @@
   "src/frame.ts",
   "src/git.ts",
   "src/git/canonical-command.ts",
-  "src/git/context-mirror.ts",
   "src/git/context-publication.ts",
   "src/git/context-repository.ts",
   "src/git/context.ts",
@@ -1425,7 +1424,7 @@
     "src/views.ts",
     "src/reconcile/"
    ],
-   "files": 34
+   "files": 33
   },
   {
    "index": 4,
@@ -1455,16 +1454,16 @@
    "files": 56
   }
  ],
- "files": 226,
- "runtimeEdges": 872,
- "typeOnlyEdges": 323,
+ "files": 225,
+ "runtimeEdges": 861,
+ "typeOnlyEdges": 321,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 222,
   "L2-facts -> L1-kernel": 31,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 171,
+  "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
-  "L3-workflow -> L3-workflow": 48,
+  "L3-workflow -> L3-workflow": 46,
   "L4-orchestration -> L1-kernel": 101,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
@@ -1492,10 +1491,10 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 117,
+  "src/domain/errors.ts": 116,
   "src/domain/identifiers.ts": 36,
-  "src/ids.ts": 27,
-  "src/storage/paths.ts": 26,
+  "src/ids.ts": 26,
+  "src/storage/paths.ts": 25,
   "src/storage/directory.ts": 21,
   "src/storage/durable-fs.ts": 21,
   "src/storage/contained-fs.ts": 20,
@@ -1503,9 +1502,9 @@
   "src/cli/exit.ts": 16,
   "src/store.ts": 16,
   "src/domain/canonical-json.ts": 13,
-  "src/hash.ts": 13,
   "src/authority.ts": 12,
-  "src/process/policies.ts": 12,
+  "src/hash.ts": 12,
+  "src/process/policies.ts": 11,
   "src/domain/deployment.ts": 10
  },
  "fanOut": {
@@ -1513,8 +1512,8 @@
   "src/mail.ts": 28,
   "src/entry/broker.ts": 25,
   "src/entry/oma.ts": 23,
-  "src/git.ts": 15,
   "src/lifecycle/create.ts": 15,
+  "src/git.ts": 14,
   "src/git/context-repository.ts": 14,
   "src/git/context.ts": 14,
   "src/git/submit.ts": 14,
@@ -1532,12 +1531,12 @@
   "node:async_hooks": 3,
   "node:child_process": 4,
   "node:crypto": 26,
-  "node:fs": 61,
+  "node:fs": 60,
   "node:http": 1,
   "node:https": 1,
   "node:net": 10,
   "node:os": 2,
-  "node:path": 67,
+  "node:path": 66,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

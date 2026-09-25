@@ -1,0 +1,837 @@
+{
+ "description": "P0-7 (PRIORITY-0.md): every durable boundary the code has (scripts/durable-boundaries.mjs finds them) and the tests that kill, retry or restart right after it and check that what was made durable means what it meant. Generated owners are checked against the code; a new boundary without an entry fails the gate.",
+ "boundaries": [
+  {
+   "owner": "src/broker.ts#Broker.closeAdmission",
+   "fact": "a draining broker's status view is gone (a derived view; absence says the broker is going away)",
+   "tests": [
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "P0-7: a draining broker removes its status view"
+    }
+   ]
+  },
+  {
+   "owner": "src/broker.ts#Broker.openRun",
+   "fact": "the agent's run lease (incarnation); DR9: prepared batches are not rewritten",
+   "tests": [
+    {
+     "file": "test/rollover-settlement.test.ts",
+     "title": "V07B: a failure at the incarnation commit leaves the settled batch settled and no live lease"
+    },
+    {
+     "file": "test/rollover-settlement.test.ts",
+     "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch"
+    },
+    {
+     "file": "test/delivery-state-model.test.ts",
+     "title": "V30A: seeded delivery-evidence sequences follow D01 on the composed runtime"
+    }
+   ]
+  },
+  {
+   "owner": "src/entry/oma.ts#main",
+   "fact": "the state root's project binding (D05)",
+   "tests": [
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one"
+    }
+   ]
+  },
+  {
+   "owner": "src/git.ts#GitModule.casRef",
+   "fact": "a canonical ref moved by CAS (the adapter every coordinator's CAS goes through)",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "int-cas",
+      "ctx-cas",
+      "submit-ref"
+     ]
+    },
+    {
+     "file": "test/git-effect-evidence.test.ts",
+     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied"
+    }
+   ]
+  },
+  {
+   "owner": "src/git.ts#GitModule.constructor",
+   "fact": "the CAS effects wired into the coordinators",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "int-cas",
+      "ctx-cas",
+      "submit-ref"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/git.ts#GitModule.publishRef",
+   "fact": "a published candidate ref (refs/oma/published/*)",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "submit-ref"
+     ]
+    },
+    {
+     "file": "test/phase8.test.ts",
+     "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/context-repository.ts#ContextRepository.publishSnapshot",
+   "fact": "the immutable context revision and the current pointer",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "ctx-snapshot",
+      "ctx-link"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/git/context-repository.ts#ContextRepository.writeEntry",
+   "fact": "a context file in the preparation or snapshot work tree",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "ctx-accepted",
+      "ctx-accepted-missing",
+      "ctx-snapshot"
+     ]
+    },
+    {
+     "file": "test/preaccept-ownership.test.ts",
+     "title": "V18A: a lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/context.ts#ContextCoordinator.materializeAndSettle",
+   "fact": "the context notification and the operation's success",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "ctx-mail"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/git/context.ts#ContextCoordinator.publish",
+   "fact": "the accepted context intent, its staging, message object and CAS",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "ctx-accepted",
+      "ctx-cas"
+     ]
+    },
+    {
+     "file": "test/r21-context-workflow.test.ts",
+     "title": "V18B: accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/context.ts#ContextCoordinator.reconcile",
+   "fact": "a recovered context CAS",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "ctx-cas",
+      "ctx-snapshot"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/git/context.ts#ContextCoordinator.rejectAccepted",
+   "fact": "an accepted context publication's failed or unknown state",
+   "tests": [
+    {
+     "file": "test/r21-context-workflow.test.ts",
+     "title": "lost notification blocks the next writer and recovers C without recreating a commit"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/context.ts#ContextCoordinator.unknown",
+   "fact": "an accepted context publication's unknown state",
+   "tests": [
+    {
+     "file": "test/r21-context-workflow.test.ts",
+     "title": "lost notification blocks the next writer and recovers C without recreating a commit"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/integration.ts#IntegrationCoordinator.execute",
+   "fact": "the accepted integration intent and the main CAS",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "int-before",
+      "int-cas",
+      "int-done"
+     ]
+    },
+    {
+     "file": "test/phase7.test.ts",
+     "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/integration.ts#IntegrationCoordinator.reconcile",
+   "fact": "a recovered main CAS",
+   "tests": [
+    {
+     "file": "test/r19-integration-decisions.test.ts",
+     "title": "R19: base recovery rechecks conditions twice and completes the same operation"
+    },
+    {
+     "file": "test/git-effect-evidence.test.ts",
+     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/integration.ts#IntegrationCoordinator.rejectAccepted",
+   "fact": "an accepted integration's failed or unknown state",
+   "tests": [
+    {
+     "file": "test/phase7.test.ts",
+     "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending"
+    },
+    {
+     "file": "test/phase7.test.ts",
+     "title": "INT-003: accepted stop intent cancels before main CAS"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/integration.ts#IntegrationCoordinator.succeed",
+   "fact": "an integration's success after its CAS",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "int-done"
+     ]
+    },
+    {
+     "file": "test/git-effect-evidence.test.ts",
+     "title": "V24B: an applied non-no-op CAS is settled as history even after stop and policy change"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/integration.ts#IntegrationCoordinator.unknown",
+   "fact": "an integration whose CAS outcome is not known",
+   "tests": [
+    {
+     "file": "test/git-effect-evidence.test.ts",
+     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/quarantine.ts#QuarantineImporter.importBundle",
+   "fact": "the removal of a settled quarantine namespace",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "submit-import"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/git/submit.ts#SubmitCoordinator.executeAccepted",
+   "fact": "an accepted submission's import and published ref",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "submit-import",
+      "submit-ref"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/git/submit.ts#SubmitCoordinator.publishMailAndSettle",
+   "fact": "the submission's result mail and success",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "submit-mail",
+      "submit-done"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/git/submit.ts#SubmitCoordinator.reconcileAccepted",
+   "fact": "a recovered submission",
+   "tests": [
+    {
+     "file": "test/phase8.test.ts",
+     "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers"
+    },
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "submit-accepted",
+      "submit-import"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/git/submit.ts#SubmitCoordinator.rejectAccepted",
+   "fact": "an accepted submission's failed or unknown state",
+   "tests": [
+    {
+     "file": "test/action-admission.test.ts",
+     "title": "V21B: a submit effect failure recorded as unknown is reported for same-key lookup"
+    }
+   ]
+  },
+  {
+   "owner": "src/git/submit.ts#SubmitCoordinator.submit",
+   "fact": "the accepted submission intent, its bundle and result message",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "R20 primitive SIGKILL at submit-stage"
+    },
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "points": [
+      "submit-accepted"
+     ]
+    },
+    {
+     "file": "test/mail-submit-scope.test.ts",
+     "title": "V20A: a submit same-key retry after acceptance reads no new bundle, and publication happens once"
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/actions.ts#LifecycleActions.reconcile",
+   "fact": "a recovered start/stop",
+   "tests": [
+    {
+     "file": "test/r36-lifecycle-sequences.test.ts",
+     "title": "R36 lifecycle replay seed="
+    },
+    {
+     "file": "test/r25-action-replay.test.ts",
+     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action"
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/actions.ts#LifecycleActions.start",
+   "fact": "an accepted start intent and its desired state",
+   "tests": [
+    {
+     "file": "test/r36-lifecycle-sequences.test.ts",
+     "title": "R36 lifecycle replay seed="
+    },
+    {
+     "file": "test/r25-action-replay.test.ts",
+     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action"
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/actions.ts#LifecycleActions.stop",
+   "fact": "an accepted stop intent and its desired state",
+   "tests": [
+    {
+     "file": "test/r36-lifecycle-sequences.test.ts",
+     "title": "R36 lifecycle replay seed="
+    },
+    {
+     "file": "test/r25-action-replay.test.ts",
+     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action"
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/actions.ts#LifecycleActions.unconfirmed",
+   "fact": "a start/stop whose physical outcome is not known",
+   "tests": [
+    {
+     "file": "test/r36-lifecycle-sequences.test.ts",
+     "title": "R36 lifecycle replay seed="
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/create-publication.ts#CreationPublicationObserver.ready",
+   "fact": "a created agent's readiness (provisioning -> enabled)",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/M-004 primitive SIGKILL at",
+     "points": [
+      "create-ready"
+     ]
+    },
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "points": [
+      "boot-ready"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/create.ts#CreateCoordinator.bootstrap",
+   "fact": "the bootstrap seed intents and agents",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "points": [
+      "boot-stage",
+      "boot-intent",
+      "boot-object"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/create.ts#CreateCoordinator.create",
+   "fact": "an accepted create intent, its agent row and initial message",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/M-004 primitive SIGKILL at",
+     "points": [
+      "create-stage",
+      "create-intent",
+      "create-object"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/create.ts#CreateCoordinator.finishAccepted",
+   "fact": "a created agent's workspace, units and success",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/M-004 primitive SIGKILL at",
+     "points": [
+      "create-workspace",
+      "create-unit",
+      "create-mail"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/create.ts#CreateCoordinator.settleLinked",
+   "fact": "a linked create's terminal state",
+   "tests": [
+    {
+     "file": "test/phase4.test.ts",
+     "title": "T39/LIFE-007: same name + same resolved spec converges without a second physical create"
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/registry-operations.ts#RegistryOperations.ack",
+   "fact": "an acknowledgement and its operation, in one transaction",
+   "tests": [
+    {
+     "file": "test/r10-ledger-rows.test.ts",
+     "title": "R10: normal restart, independent acknowledgement and unknown reservations preserve exact facts"
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/registry-operations.ts#RegistryOperations.follow",
+   "fact": "a subscription change and its operation, in one transaction",
+   "tests": [
+    {
+     "file": "test/r25-lifecycle-owners.test.ts",
+     "title": "R25: subscription replay keeps one durable identity and unchanged terminal bytes"
+    },
+    {
+     "file": "test/coordinator-facets.test.mjs",
+     "title": "P3 facets: route acceptance/retry preserves identity and fresh authority timing"
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/workspace.ts#WorkspaceCoordinator.prepare",
+   "fact": "a created agent's published workspace",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/M-004 primitive SIGKILL at",
+     "points": [
+      "create-workspace"
+     ]
+    },
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "points": [
+      "boot-workspace"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/mail.ts#MailModule.freezeObject",
+   "fact": "a frozen message object (and the removal of its staging copy)",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T18–T22/T27 primitive SIGKILL at",
+     "points": [
+      "stage",
+      "object"
+     ]
+    },
+    {
+     "file": "test/phase3.test.ts",
+     "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK"
+    },
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected"
+    }
+   ]
+  },
+  {
+   "owner": "src/mail.ts#MailModule.send",
+   "fact": "an accepted send, its recipients and deliveries",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T18–T22/T27 primitive SIGKILL at",
+     "points": [
+      "accepted"
+     ]
+    },
+    {
+     "file": "test/phase3.test.ts",
+     "title": "T20: kill after acceptance -> reconcile completes archive and all recipients"
+    },
+    {
+     "file": "test/mail-submit-scope.test.ts",
+     "title": "V20A: a same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients"
+    }
+   ]
+  },
+  {
+   "owner": "src/mail/batches.ts#BatchCoordinator.complete",
+   "fact": "a batch's completion and its deliveries' presentation",
+   "tests": [
+    {
+     "file": "test/principal-settlement.test.ts",
+     "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once"
+    },
+    {
+     "file": "test/runner-channel.test.ts",
+     "title": "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection"
+    }
+   ]
+  },
+  {
+   "owner": "src/mail/batches.ts#BatchCoordinator.finishPrepared",
+   "fact": "the batch view and the new->cur mailbox move",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T18–T22/T27 primitive SIGKILL at",
+     "points": [
+      "cur"
+     ]
+    },
+    {
+     "file": "test/p24-mail-boundaries.test.ts",
+     "title": "P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery"
+    }
+   ]
+  },
+  {
+   "owner": "src/mail/batches.ts#BatchCoordinator.prepare",
+   "fact": "a prepared batch and its delivery links",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T18–T22/T27 primitive SIGKILL at",
+     "points": [
+      "prepared"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/mail/batches.ts#BatchCoordinator.settleFromReceipt",
+   "fact": "a batch completed from its receipt at a run's rollover",
+   "tests": [
+    {
+     "file": "test/rollover-settlement.test.ts",
+     "title": "V07A: a receipt made durable just before the runner died completes its batch before rollover, with no redelivery"
+    },
+    {
+     "file": "test/rollover-settlement.test.ts",
+     "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch"
+    }
+   ]
+  },
+  {
+   "owner": "src/mail/materializer.ts#MailMaterializer.publish",
+   "fact": "the archive copy and each delivery's materialization",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T18–T22/T27 primitive SIGKILL at",
+     "points": [
+      "archive"
+     ]
+    },
+    {
+     "file": "test/durable-fault-matrix.test.ts",
+     "title": "P7 fault ${phase} ${point}: no false success, immutable bytes intact, reconcile converges"
+    }
+   ]
+  },
+  {
+   "owner": "src/mail/materializer.ts#MailMaterializer.publishDelivery",
+   "fact": "a recipient's mailbox name",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T18–T22/T27 primitive SIGKILL at",
+     "points": [
+      "inbox-a",
+      "inbox-b"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/mail/reconcile.ts#reconcileMailOperation",
+   "fact": "a recovered send's success",
+   "tests": [
+    {
+     "file": "test/phase3.test.ts",
+     "title": "T20: kill after acceptance -> reconcile completes archive and all recipients"
+    },
+    {
+     "file": "test/p24-mail-boundaries.test.ts",
+     "title": "P03: unavailable recovery retains reason and pending evidence, then converges"
+    }
+   ]
+  },
+  {
+   "owner": "src/reconcile/preaccept.ts#collectUnacceptedArtifacts",
+   "fact": "the removal of what no accepted plan owns (DR10)",
+   "tests": [
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected"
+    },
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "DR10: startup recovery collects before anything is admitted or bootstrapped"
+    }
+   ]
+  },
+  {
+   "owner": "src/runner.ts#RunnerModule.consume",
+   "fact": "a Resident's delivery receipt (DR11: after its session entry is durable)",
+   "tests": [
+    {
+     "file": "test/delivery-receipt-publication.test.ts",
+     "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it"
+    },
+    {
+     "file": "test/runner-channel.test.ts",
+     "title": "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection"
+    }
+   ]
+  },
+  {
+   "owner": "src/runtime/principal-delivery.ts#PrincipalDelivery.deliverOne",
+   "fact": "the Principal's delivery receipt (DR11)",
+   "tests": [
+    {
+     "file": "test/principal-settlement.test.ts",
+     "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once"
+    },
+    {
+     "file": "test/delivery-receipt-publication.test.ts",
+     "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it"
+    }
+   ]
+  },
+  {
+   "owner": "src/runtime/provision.ts#collectBindingTemporaries",
+   "fact": "the removal of a binding publication's leftover temporary",
+   "tests": [
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one"
+    }
+   ]
+  },
+  {
+   "owner": "src/runtime/provision.ts#ensureBareRepository",
+   "fact": "a society's canonical repository, moved into place from its staging",
+   "tests": [
+    {
+     "file": "test/project-binding.test.ts",
+     "title": "V16B: a leftover staging repository from an interrupted start is neither adopted nor fatal"
+    }
+   ]
+  },
+  {
+   "owner": "src/runtime/provision.ts#publishProjectBinding",
+   "fact": "the state root's project binding (D05)",
+   "tests": [
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one"
+    }
+   ]
+  },
+  {
+   "owner": "src/tui/sources/settings.ts#commitInlineEdit",
+   "fact": "an inline configuration generation (DR12)",
+   "tests": [
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads"
+    },
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused"
+    }
+   ]
+  },
+  {
+   "owner": "src/tui/sources/settings.ts#commitManagedEdit",
+   "fact": "a managed configuration generation (D02)",
+   "tests": [
+    {
+     "file": "test/config-generations.test.ts",
+     "title": "V13A: a crash at any point of a managed commit leaves the complete old or the complete new configuration"
+    }
+   ]
+  },
+  {
+   "owner": "src/tui/sources/settings.ts#writeSettings",
+   "fact": "a first-run or replaced configuration (DR12)",
+   "tests": [
+    {
+     "file": "test/priority-0.test.ts",
+     "title": "DR12: a first-run configuration is created where none exists"
+    },
+    {
+     "file": "test/surface-process.test.ts",
+     "title": "T111 real SIGKILL at ${point} leaves a configuration a next start can load"
+    }
+   ]
+  },
+  {
+   "owner": "src/units.ts#UnitsModule.install",
+   "fact": "an installed unit file",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "points": [
+      "boot-unit"
+     ]
+    },
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/M-004 primitive SIGKILL at",
+     "points": [
+      "create-unit"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/views.ts#ViewsModule.publishInbox",
+   "fact": "a derived inbox view (rebuilt from the ledger)",
+   "tests": [
+    {
+     "file": "test/durable-fault-matrix.test.ts",
+     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone"
+    }
+   ]
+  },
+  {
+   "owner": "src/views.ts#ViewsModule.publishStatus",
+   "fact": "a derived status view (rebuilt from observation)",
+   "tests": [
+    {
+     "file": "test/durable-fault-matrix.test.ts",
+     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone"
+    },
+    {
+     "file": "test/status-view.test.ts",
+     "title": "T118: a view dated ahead of the reader's clock is unknown, not current"
+    }
+   ]
+  },
+  {
+   "owner": "src/views.ts#ViewsModule.refreshWorld",
+   "fact": "the derived world views (agents, topics, START)",
+   "tests": [
+    {
+     "file": "test/durable-fault-matrix.test.ts",
+     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone"
+    }
+   ]
+  }
+ ]
+}

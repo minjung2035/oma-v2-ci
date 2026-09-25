@@ -24,6 +24,12 @@ import { createCompleteConfigurationFixture } from "./fixtures/configuration.js"
 import { runCliProcess } from "../src/extension/cli-process.js";
 import { cliFailure } from "../src/extension/mail-tools.js";
 import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
+import { collectBindingTemporaries, observeProjectBinding, publishProjectBinding, stateRootHasSociety } from "../src/runtime/provision.js";
+import { Broker } from "../src/broker.js";
+import { ViewsModule } from "../src/views.js";
+import { statusViewPath } from "../src/protocol/status-view.js";
+import type { ResolvedAgentSpec } from "../implementation/contracts.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Store } from "../src/store.js";
@@ -233,4 +239,44 @@ test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes
     assert.deepEqual(handler!(write), { block: true, reason: "agent workspace quota would be exceeded" },
       "what could not be observed was counted as nothing");
   } finally { chmodSync(locked, 0o700); rmSync(workspace, { recursive: true, force: true }); }
+});
+
+test("P0-7: a draining broker removes its status view, so a view that is there is a live broker's", async () => {
+  const f = await preparedFixture();
+  const cgroup = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[0]!.slice(3);
+  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "",
+    observe: () => ({ activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup, invocationId: "a".repeat(32) }),
+    observeStatus: async () => new Map() } as unknown as UnitsModule;
+  const lifecycle = new Lifecycle(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"),
+    society: "demo", hasGoal: () => true, activationAllowed: () => true },
+    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
+    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  try {
+    await broker.start();
+    for (let wait = 0; wait < 200 && !existsSync(statusViewPath(f.root)); wait++) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.ok(existsSync(statusViewPath(f.root)), "a running broker publishes its status view");
+    await broker.drainAndClose();
+    assert.equal(existsSync(statusViewPath(f.root)), false, "absence is a draining broker's truthful status");
+  } finally { (f.store as unknown as { close(): void }).close = () => undefined; f.close(); }
+});
+
+test("P0-7: a crash while binding a society to its project leaves no binding or the whole one, and the tenure holder collects the rest", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-p0-binding-"));
+  try {
+    const binding = { society: "demo", canonicalProjectPath: "/project" };
+    const bytes = `${JSON.stringify({ kind: "oma-project-binding-v1", ...binding }, null, 2)}\n`;
+    // Died after the private temporary was written, before the link: no binding.
+    writeFileSync(join(root, `.project-binding.json.${"a".repeat(16)}.tmp`), bytes, { mode: 0o600 });
+    assert.equal(observeProjectBinding(root).kind, "absent");
+    assert.equal(stateRootHasSociety(root), false, "a temporary is not a society");
+    publishProjectBinding(root, binding);
+    assert.equal(observeProjectBinding(root).kind, "bound");
+    // Died after the link, before the temporary was removed: the whole binding.
+    writeFileSync(join(root, `.project-binding.json.${"b".repeat(16)}.tmp`), bytes, { mode: 0o600 });
+    assert.equal(observeProjectBinding(root).kind, "bound");
+    assert.equal(collectBindingTemporaries(root).length, 2);
+    assert.deepEqual(readdirSync(root), ["project-binding.json"]);
+    assert.equal(observeProjectBinding(root).kind, "bound");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

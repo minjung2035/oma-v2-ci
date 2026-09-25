@@ -1171,23 +1171,6 @@
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
-   "path": "src/git/context-mirror.ts",
-   "by": [
-    "AV-review"
-   ],
-   "oracles": [
-    "CTX-003",
-    "CTX-004",
-    "DB-009",
-    "ERR-001",
-    "GIT-006",
-    "INT-003",
-    "R01",
-    "T53"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
-  },
-  {
    "path": "src/git/context-publication.ts",
    "by": [
     "AV-review"
