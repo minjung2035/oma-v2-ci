@@ -1,19 +1,47 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { FULL_OID_RE } from "../ids.js";
 import { runGitText } from "../process/policies.js";
 import { fail } from "./exit.js";
+import { cliFrameBytes } from "./transport.js";
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/** A local file a command was given, read as WP26 records for CLI effects:
+ * the named file is not followed if it is a link (FS-005), only a regular file
+ * is read, and never more than a request frame can carry (INV10) -- anything
+ * larger could not be sent, and a device such as /dev/zero would never end. */
+export function readLocalFile(path: string): Buffer {
+  let fd: number;
+  try { fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") fail(`file not found: ${path}`, 2);
+    if (code === "ELOOP") fail(`not a regular file (a link is not followed): ${path}`, 2);
+    return fail(`cannot open ${path}: ${code ?? String(error)}`, 2);
+  }
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) fail(`not a regular file: ${path}`, 2);
+    const limit = cliFrameBytes();
+    if (stat.size > limit) fail(`file is larger than a request can carry (${limit} bytes): ${path}`, 2);
+    const buffer = Buffer.alloc(stat.size + 1);
+    let filled = 0;
+    for (let count = 1; count > 0 && filled < buffer.length; filled += count)
+      count = readSync(fd, buffer, filled, buffer.length - filled, null);
+    if (filled > stat.size) fail(`file grew while it was read: ${path}`, 2);
+    return buffer.subarray(0, filled);
+  } finally { closeSync(fd); }
+}
+
 export function readBody(path: string | null): string {
   if (path === null) return "";
-  if (!existsSync(path)) fail(`file not found: ${path}`, 2);
+  const bytes = readLocalFile(path);
   try {
     return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true })
-      .decode(readFileSync(path))
+      .decode(bytes)
       .replace(/\r\n/g, "\n");
   } catch {
     return fail(`cannot read UTF-8 text file: ${path}`, 2);

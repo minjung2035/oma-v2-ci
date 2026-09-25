@@ -23,6 +23,17 @@ export function socketPath(): string {
   return fail("no broker socket (set OMA_SOCKET, or run inside the OMA sandbox)", 4);
 }
 
+/** The request frame this CLI speaks (CFG-003): the host's limit inside the
+ * sandbox, 256 KiB when unset. One owner for the transport and for how much a
+ * local file may hold to be carried in a request. */
+export function cliFrameBytes(): number {
+  const configured = process.env.OMA_FRAME_BYTES;
+  const frameBytes = configured === undefined ? 256 * 1024 : Number(configured);
+  if ((configured !== undefined && !/^[0-9]+$/.test(configured)) || !isLogResponseFrameLimit(frameBytes))
+    throw new StoreError("INVALID_REQUEST", "OMA_FRAME_BYTES must be decimal bytes supporting log responses and uint32 framing");
+  return frameBytes;
+}
+
 export async function callActor(
   path: string,
   method: PublicMethod,
@@ -30,10 +41,7 @@ export async function callActor(
   request?: string,
   streamBytes?: Uint8Array,
 ): Promise<RpcReply<PublicMethod>[]> {
-  const configured = process.env.OMA_FRAME_BYTES;
-  const frameBytes = configured === undefined ? 256 * 1024 : Number(configured);
-  if ((configured !== undefined && !/^[0-9]+$/.test(configured)) || !isLogResponseFrameLimit(frameBytes))
-    throw new StoreError("INVALID_REQUEST", "OMA_FRAME_BYTES must be decimal bytes supporting log responses and uint32 framing");
+  const frameBytes = cliFrameBytes();
   // Read once, before connecting: the descriptor holds one message.
   const grant = presentedGrant();
   const channel = new BrokerChannel({ frameBytes, idleStreamSeconds: 60, receiptWaitSeconds: 60 });

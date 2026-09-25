@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { decodeSubject, parseEmlHeaders } from "../../mail/headers.js";
 import { parseMessageId } from "../../ids.js";
 import { fail } from "../exit.js";
+import { readLocalFile } from "../effects.js";
 
 export interface ReplyEffects {
   replyToMessage: string;
@@ -12,8 +12,8 @@ export interface ReplyEffects {
 export function prepareReplyEffects(path: string, inheritSubject: boolean): ReplyEffects {
   let id: string | undefined;
   let inheritedSubject: string | undefined;
+  const source = readLocalFile(path);
   try {
-    const source = readFileSync(path);
     const headers = parseEmlHeaders(source, { maxHeaderBytes: source.byteLength });
     id = headers.messageId?.split("@", 1)[0];
     if (inheritSubject) inheritedSubject = `Re: ${decodeSubject(headers.subject)}`;
