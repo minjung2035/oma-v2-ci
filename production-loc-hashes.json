@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3e6b9c3e9e0313d396961699f961d15ac6c8b796e016d37c6da224029d2ef04b",
-  "report": "54720756ca23d2f1dd9a570da4caa5f4bde647e9d8fb4ed6f8c8de477792bb0e",
+  "report": "9de84744547f026281097fdb6de52784fdb71b7dacda2c976c09f420720934b1",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -285,7 +285,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "83e629d743f6de6f9d7b4e165c03ed7a45023e852550927031fb56f2922c47b5"
+      "sha256": "2f7f8b59040a0ba4448052e816d08e5a54f99f19793aca21214d9375dde0eebd"
     },
     {
       "path": "src/entry/host.ts",
@@ -609,7 +609,7 @@
     },
     {
       "path": "src/runtime/broker-lifetime.ts",
-      "sha256": "b0671d56250dd210ba8c158e9095ad2d0204f5a6ed27969dffcb8decc6b4a033"
+      "sha256": "d9e0b60e2c86bd562253ffb0cee6a13acdaf180fdc0c63d53cf26b0a7df32cf0"
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
