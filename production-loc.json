@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 222,
-    "n_lines": 28402,
+    "n_lines": 28414,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -38,8 +38,8 @@
   },
   "src/entry/oma.ts": {
     "blank": 26,
-    "comment": 168,
-    "code": 339,
+    "comment": 169,
+    "code": 338,
     "language": "TypeScript"
   },
   "src/store.ts": {
@@ -56,13 +56,13 @@
   },
   "src/runtime/inference-relay.ts": {
     "blank": 36,
-    "comment": 91,
+    "comment": 92,
     "code": 329,
     "language": "TypeScript"
   },
   "src/tui/session.ts": {
     "blank": 34,
-    "comment": 191,
+    "comment": 192,
     "code": 311,
     "language": "TypeScript"
   },
@@ -96,16 +96,16 @@
     "code": 256,
     "language": "TypeScript"
   },
+  "src/runtime/provision.ts": {
+    "blank": 17,
+    "comment": 125,
+    "code": 253,
+    "language": "TypeScript"
+  },
   "src/leaf.ts": {
     "blank": 25,
     "comment": 75,
     "code": 252,
-    "language": "TypeScript"
-  },
-  "src/runtime/provision.ts": {
-    "blank": 17,
-    "comment": 122,
-    "code": 251,
     "language": "TypeScript"
   },
   "src/tui/sources/settings.ts": {
@@ -140,7 +140,7 @@
   },
   "src/extension/mail-tools.ts": {
     "blank": 6,
-    "comment": 45,
+    "comment": 46,
     "code": 239,
     "language": "TypeScript"
   },
@@ -288,15 +288,15 @@
     "code": 165,
     "language": "TypeScript"
   },
+  "src/runtime/pi-spawn-plan.ts": {
+    "blank": 8,
+    "comment": 57,
+    "code": 165,
+    "language": "TypeScript"
+  },
   "src/mail/batches.ts": {
     "blank": 2,
     "comment": 17,
-    "code": 164,
-    "language": "TypeScript"
-  },
-  "src/runtime/pi-spawn-plan.ts": {
-    "blank": 8,
-    "comment": 56,
     "code": 164,
     "language": "TypeScript"
   },
@@ -518,7 +518,7 @@
   },
   "src/storage/paths.ts": {
     "blank": 3,
-    "comment": 12,
+    "comment": 11,
     "code": 96,
     "language": "TypeScript"
   },
@@ -578,7 +578,7 @@
   },
   "src/lifecycle/workspace.ts": {
     "blank": 1,
-    "comment": 11,
+    "comment": 12,
     "code": 88,
     "language": "TypeScript"
   },
@@ -872,7 +872,7 @@
   },
   "src/lifecycle/create-publication.ts": {
     "blank": 3,
-    "comment": 7,
+    "comment": 9,
     "code": 49,
     "language": "TypeScript"
   },
@@ -1340,8 +1340,8 @@
   },
   "SUM": {
     "blank": 1146,
-    "comment": 4235,
-    "code": 23021,
+    "comment": 4245,
+    "code": 23023,
     "nFiles": 222
   }
 }

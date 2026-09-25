@@ -542,5 +542,103 @@
       "test/principal-endpoint.test.ts#T114",
       "test/principal-channel.test.ts#T114"
     ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "CLI-001"
+    ],
+    "owner": "src/cli/arguments.ts#parseArguments",
+    "entrypoint": "src/cli.ts#main",
+    "callPath": [
+      "src/cli.ts#main",
+      "src/cli/commands/send.ts#runSendCommand",
+      "src/cli/arguments.ts#parseArguments"
+    ],
+    "negativeTests": [
+      "test/argument-boundary.test.ts#AV1",
+      "test/f2-cli-request.test.ts#F2"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "PR-004"
+    ],
+    "owner": "src/storage/paths.ts#assertModelScope",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/session.ts#PrincipalSession.start",
+      "src/storage/paths.ts#assertModelScope"
+    ],
+    "negativeTests": [
+      "test/model-scope.test.ts#AV3",
+      "test/argument-boundary.test.ts#AV1"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "FS-003"
+    ],
+    "owner": "src/tui/session.ts#principalEnvironment",
+    "entrypoint": "src/entry/oma.ts#main",
+    "callPath": [
+      "src/entry/oma.ts#main",
+      "src/tui/session.ts#principalEnvironment"
+    ],
+    "negativeTests": [
+      "test/model-scope.test.ts#AV3"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "INF-007"
+    ],
+    "owner": "src/runtime/inference-relay.ts#InferenceRelay",
+    "entrypoint": "src/runner.ts#RunnerModule",
+    "callPath": [
+      "src/runner.ts#RunnerModule",
+      "src/runtime/inference-relay.ts#InferenceRelay"
+    ],
+    "negativeTests": [
+      "test/inference-relay.test.ts#AV2"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "FS-005"
+    ],
+    "owner": "src/storage/contained-fs.ts#withinDirectory",
+    "entrypoint": "src/entry/broker.ts#main",
+    "callPath": [
+      "src/entry/broker.ts#main",
+      "src/broker/transport-spool.ts#TransportSpool",
+      "src/storage/contained-fs.ts#withinDirectory"
+    ],
+    "negativeTests": [
+      "test/held-parent.test.ts#AV5",
+      "test/untrusted-directories.test.ts#AV4",
+      "test/architecture-rule-modules.test.mjs#AV5"
+    ]
+  },
+  {
+    "source": "implementation-spec.md",
+    "requirements": [
+      "SB-006"
+    ],
+    "owner": "src/storage/delivery-receipt.ts#observeDeliveryReceipt",
+    "entrypoint": "src/runner.ts#RunnerModule",
+    "callPath": [
+      "src/runner.ts#RunnerModule",
+      "src/storage/delivery-receipt.ts#observeDeliveryReceipt"
+    ],
+    "negativeTests": [
+      "test/untrusted-directories.test.ts#AV4",
+      "test/receipt-observation.test.ts#V06A"
+    ]
   }
 ]

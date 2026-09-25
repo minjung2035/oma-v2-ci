@@ -517,7 +517,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 sandbox에는 진짜 key와 **같은 모양의 자리표시자**를 준다. provider 코드는 key를 읽는다 — Codex는 OAuth token의 claim에서 계정을 찾고 Anthropic은 key의 접두사로 header 방식을 고른다. 그래서 서명된 token은 header와 claim을 유지하고 서명만 바꾸며, 접두사가 있는 key는 종류를 나타내는 짧은 접두사를 유지하고 나머지를 같은 문자 종류로 바꾼다. 자리표시자는 비밀을 포함하지 않고, 비밀에 포함되지도 않으며, 엔진이 환경 참조나 명령으로 해석할 모양(`$`, `!`, `${`)을 갖지 않는다.
 
-relay는 자리표시자를 header 값과 request path에서만 진짜 key로 바꾼다. body는 model의 내용이지 credential 자리가 아니므로 읽지도 바꾸지도 않는다. 자리표시자를 담지 않은 caller의 인증 header는 버린다. WebSocket upgrade는 handshake에서 한 번 같은 규칙으로 고쳐 쓴 뒤 양방향 바이트로 나른다.
+relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key로 바꾼다: 값 전체가 자리표시자이거나 `Bearer <자리표시자>`인 인증 header(`authorization`, `x-api-key`, `api-key`, `x-goog-api-key`)와 값이 자리표시자인 `key` query parameter다. 그 밖(request path, 다른 header·query)에 자리표시자가 있으면 요청을 거절한다 — provider가 되돌려줄 수 있는 자리(경로를 되읊는 404, 되돌려주는 header)에 진짜 key를 넣으면 sandbox 안에 credential이 생기므로 `INF-007` 위반이다. 같은 이유로 relay는 응답의 상태줄·header·본문에 진짜 key의 바이트가 나타나면 그 바이트가 sandbox에 닿기 전에 응답을 끊는다. 이를 위해 압축된 응답을 요청하지 않는다(`accept-encoding: identity`, WebSocket 확장 제거). 이것은 byte 비교이지 stream 해석·재구성이 아니다. body는 model의 내용이지 credential 자리가 아니므로 읽지도 바꾸지도 않는다. 자리표시자를 담지 않은 caller의 인증 header는 버린다. WebSocket upgrade는 handshake에서 한 번 같은 규칙으로 고쳐 쓴 뒤 양방향 바이트로 나른다.
 
 **MUST NOT [INF-007]** 엔진의 agent directory를 Resident mount 계획에 넣지 않는다. sandbox 안에 진짜 credential을 두는 어떤 형태도 — agent별 복사본, society 공용 read-only mount, 환경 변수 — `PR-004` 위반이다. sandbox 안의 provider 설정에 들어가는 key는 relay가 교체할 자리표시자다.
 
