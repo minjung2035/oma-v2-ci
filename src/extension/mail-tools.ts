@@ -26,10 +26,17 @@ export const OMA_TOOL_NAMES: readonly string[] = Object.freeze([
   ...PRINCIPAL_TOOL_NAMES,
 ]);
 /** A message by any name OMA shows for it (AV15, BATCH-002): its id, its
- * canonical archive path, or that path's file name -- the Maildir name the
- * index lists. Nothing else names a message. */
+ * canonical archive path, that path's file name -- the Maildir name the index
+ * lists -- or this society's RFC Message-ID, which its headers show (MAIL-004).
+ * Nothing else names a message. */
 function mailId(value: string): string | null {
   if (validMessageId(value)) return value;
+  const rfc = value.startsWith("<") && value.endsWith(">") ? value.slice(1, -1) : value;
+  const domain = MESSAGE_DOMAIN();
+  if (domain !== null && rfc.endsWith(domain)) {
+    const local = rfc.slice(0, -domain.length);
+    return validMessageId(local) ? local : null;
+  }
   const prefix = "/mail/archive/cur/";
   const suffix = value.endsWith(":2,")
     ? ":2,"
@@ -50,6 +57,12 @@ function readBoundedMail(
   if (!id) throw new Error("expected a message id or canonical archive path");
   return { id, text: readBoundedText(join(root, `${id}:2,`), maximum) };
 }
+
+/** This society's RFC domain, from the environment the engine was started with. */
+const MESSAGE_DOMAIN = (): string | null => {
+  const society = process.env.OMA_SOCIETY;
+  return society === undefined || society.length === 0 ? null : `@${society}.oma.invalid`;
+};
 
 /** One file, not followed if it is a link, read within the bound. */
 function readBoundedText(path: string, maximum: number): string {

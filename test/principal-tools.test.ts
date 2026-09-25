@@ -182,5 +182,9 @@ test("AV15 / BATCH-002, INV04: a tool takes the names OMA shows -- this society'
     await assert.rejects(() => call("oma_mail_ack", { messageId: `${id}:2,` }));
     assert.deepEqual(sent(fixture.frames, "mail.ack").at(-1), { message: id }, "the Maildir file name was not taken as the message");
     await assert.rejects(() => call("oma_mail_ack", { messageId: `x${id}:2,` }), /is not valid/);
+    // The RFC Message-ID its headers show (In-Reply-To, References), this society's only.
+    await assert.rejects(() => call("oma_mail_ack", { messageId: `<${id}@demo.oma.invalid>` }));
+    assert.deepEqual(sent(fixture.frames, "mail.ack").at(-1), { message: id }, "the RFC Message-ID was not taken as the message");
+    await assert.rejects(() => call("oma_mail_ack", { messageId: `${id}@other.oma.invalid` }), /is not valid/);
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
