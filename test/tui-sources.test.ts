@@ -217,7 +217,7 @@ test("T98/TUI-011: unread comes from the mailbox position, and no read state is 
     writeFileSync(join(box.newDir, "m-1"), eml("API 선택 필요", "question"));
     writeFileSync(join(box.curDir, "m-2:2,"), eml("구현 완료", "result"));
 
-    const rows = readMailbox(box);
+    const rows = readMailbox(box).rows;
     assert.equal(rows.length, 2);
     const unread = rows.filter(row => row.unread);
     assert.deepEqual(unread.map(row => row.id), ["m-1"]);
@@ -227,10 +227,10 @@ test("T98/TUI-011: unread comes from the mailbox position, and no read state is 
     assert.equal(readBody(join(box.newDir, "m-1")), "본문입니다.\n");
 
     // Reading must not move, rename or create anything.
-    const before = [...readMailbox(box)];
+    const before = [...readMailbox(box).rows];
     readMailbox(box);
     readBody(join(box.newDir, "m-1"));
-    assert.deepEqual(readMailbox(box), before);
+    assert.deepEqual(readMailbox(box).rows, before);
     assert.equal(unreadCount(box), 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -7,7 +7,7 @@
  */
 import { closeSync, constants, fstatSync, openSync, readSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { MailRow } from "../model.js";
+import type { MailboxRead, MailRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
 
 export interface MailboxPaths {
@@ -99,16 +99,27 @@ function readBounded(path: string, limit: number): { text: string; deliveredAtMs
   finally { if (fd !== undefined) closeSync(fd); }
 }
 
-function listDir(path: string): readonly string[] {
-  try { return readdirSync(path).sort(); } catch { return []; }
+/** A mailbox directory's names. One that does not exist holds no mail; one
+ * that exists and cannot be listed is not an empty one (arch §23.5, INV02), and
+ * says why. */
+function listDir(path: string): { readonly names: readonly string[] } | { readonly unreadable: string } {
+  try { return { names: readdirSync(path).sort() }; }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "ENOENT" ? { names: [] } : { unreadable: `${code ?? "error"}: ${path}` };
+  }
 }
+
+type DirectoryRows = { readonly rows: readonly { row: MailRow; deliveredAtMs: number }[]; readonly unreadable: string | null };
 
 /** One derivation of a mailbox directory's rows, so the list and the unread
  * count can never disagree about what counts as a message (a directory, a
  * symlink or an unreadable entry is a message in neither). */
-function rowsIn(directory: string, unread: boolean): readonly { row: MailRow; deliveredAtMs: number }[] {
+function rowsIn(directory: string, unread: boolean): DirectoryRows {
   const rows: { row: MailRow; deliveredAtMs: number }[] = [];
-  for (const name of listDir(directory)) {
+  const listed = listDir(directory);
+  if ("unreadable" in listed) return { rows, unreadable: listed.unreadable };
+  for (const name of listed.names) {
     const path = join(directory, name);
     const read = readBounded(path, HEADER_LIMIT);
     if (read === null) continue;
@@ -125,7 +136,7 @@ function rowsIn(directory: string, unread: boolean): readonly { row: MailRow; de
       }),
     });
   }
-  return rows;
+  return { rows, unreadable: null };
 }
 
 /** Most recently delivered first, within unread and then read.
@@ -141,15 +152,20 @@ function byArrival(rows: readonly { row: MailRow; deliveredAtMs: number }[]): re
     .map(entry => entry.row);
 }
 
-export function readMailbox(paths: MailboxPaths): readonly MailRow[] {
-  return Object.freeze([
-    ...byArrival(rowsIn(paths.newDir, true)),
-    ...byArrival(rowsIn(paths.curDir, false)),
-  ]);
+export function readMailbox(paths: MailboxPaths): MailboxRead {
+  const pending = rowsIn(paths.newDir, true);
+  const settled = rowsIn(paths.curDir, false);
+  return Object.freeze({
+    rows: Object.freeze([...byArrival(pending.rows), ...byArrival(settled.rows)]),
+    unreadable: pending.unreadable ?? settled.unreadable,
+  });
 }
 
-export function unreadCount(paths: MailboxPaths): number {
-  return rowsIn(paths.newDir, true).length;
+/** Messages not yet delivered to the Principal's session, or null when the
+ * directory holding them could not be read: never a 0 for an unread mailbox. */
+export function unreadCount(paths: MailboxPaths): number | null {
+  const pending = rowsIn(paths.newDir, true);
+  return pending.unreadable === null ? pending.rows.length : null;
 }
 
 export function readBody(path: string, limit = READ_BOUNDS.mailBodyBytes.value): string | null {

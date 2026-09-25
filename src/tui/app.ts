@@ -9,7 +9,7 @@ import { KeyDecoder, type Key } from "./keys.js";
 import { assertNever } from "../domain/exhaustive.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
-  type DashboardData, type Effect, type ExtensionRow, type MailRow, type Notice, type PanelData, type State,
+  type DashboardData, type Effect, type ExtensionRow, type MailboxRead, type MailRow, type Notice, type PanelData, type State,
 } from "./model.js";
 import { render } from "./view/index.js";
 import type { ConfigField } from "./model.js";
@@ -20,7 +20,7 @@ import type { Terminal } from "./screen.js";
 export interface AppPorts {
   readonly configFields: () => readonly ConfigField[];
   readonly dashboard: () => DashboardData;
-  readonly mail: () => readonly MailRow[];
+  readonly mail: () => MailboxRead;
   readonly extensions: () => readonly ExtensionRow[];
   readonly body: (path: string) => string | null;
   /** WP15.03: what a confirmed value did -- saved, already the value, or
@@ -41,9 +41,9 @@ export type SetFieldOutcome =
 const EMPTY: PanelData = Object.freeze({
   dashboard: Object.freeze({
     status: Object.freeze({ kind: "unknown" as const, observedAtMs: 0, reason: "아직 관측하지 않음" }),
-    configuredWorkers: 0, workerLimit: 0, unread: 0, principalModel: Object.freeze({ configured: "unknown", session: null }), rootfs: null,
+    configuredWorkers: 0, workerLimit: 0, unread: null, principalModel: Object.freeze({ configured: "unknown", session: null }), rootfs: null,
   }),
-  config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]),
+  config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]), mailUnreadable: null,
 });
 
 function messageOf(error: unknown): string {
@@ -65,11 +65,13 @@ export class TuiApp {
    * the UI never keeps a value that a port no longer reports.
    */
   refresh(): void {
+    const mailbox = this.ports.mail();
     this.data = Object.freeze({
       dashboard: this.ports.dashboard(),
       config: this.ports.configFields(),
       extensions: this.ports.extensions(),
-      mail: this.ports.mail(),
+      mail: mailbox.rows,
+      mailUnreadable: mailbox.unreadable,
     });
   }
 

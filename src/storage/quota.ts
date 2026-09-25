@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readdirSync, type Stats } from "node:fs";
+import { lstatSync, readdirSync, type Stats } from "node:fs";
 import { join } from "node:path";
 import { assertStorageQuotaSupported } from "../domain/resources.js";
 import { StoreError } from "../domain/errors.js";
@@ -14,7 +14,8 @@ export function observedStorageBytes(
   root: string,
   stopAfter = Number.MAX_SAFE_INTEGER,
 ): number {
-  if (!existsSync(root)) return 0;
+  // The root is walked like any entry: absent is 0 bytes, and a root that
+  // cannot be observed is unavailable, not empty (INV02).
   const pending = [root];
   const files = new Set<string>();
   let total = 0;

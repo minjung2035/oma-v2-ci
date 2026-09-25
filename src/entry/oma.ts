@@ -34,7 +34,7 @@ import {
 import { brokerListening, superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
 import { HostTenure } from "../runtime/host-tenure.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
-import type { ExtensionRow, MailRow } from "../tui/model.js";
+import type { ExtensionRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
 
 function usage(): never {
@@ -262,7 +262,7 @@ async function main(argv: readonly string[]): Promise<void> {
       unread: unreadCount(mailbox),
       observation,
     }),
-    mail: (): readonly MailRow[] => readMailbox(mailbox),
+    mail: () => readMailbox(mailbox),
     extensions: (): readonly ExtensionRow[] => extensionContext.rows,
     body: (path: string) => (path.length === 0 ? null : readBody(path)),
     setField: (field, value) => {

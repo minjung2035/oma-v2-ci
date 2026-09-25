@@ -100,8 +100,11 @@ function rowsFor(input: ViewInput): string[] {
       const scope = field.kind === "link" ? "" : field.blocked !== null ? `(${field.blocked})` : applyLabel(field.apply);
       return `${marker} ${pad(field.label, labelWidth)}${value}${scope}`;
     });
-  if (data.mail.length === 0) return ["  받은 메일이 없습니다."];
-  return [fit("  ● Principal 세션에 아직 전달되지 않음 · 여기서 여는 것은 전달·확인이 아닙니다", columns), ...data.mail.map((row, index) => {
+  // arch §23.5: what could not be read is said, never shown as no mail.
+  const unreadable = data.mailUnreadable === null ? []
+    : [fit(`  메일함 일부를 읽지 못함 (${data.mailUnreadable}) · 아래 목록이 전부가 아닐 수 있습니다`, columns)];
+  if (data.mail.length === 0) return unreadable.length > 0 ? unreadable : ["  받은 메일이 없습니다."];
+  return [...unreadable, fit("  ● Principal 세션에 아직 전달되지 않음 · 여기서 여는 것은 전달·확인이 아닙니다", columns), ...data.mail.map((row, index) => {
     const marker = index === selected ? ">" : " ";
     const flag = row.unread ? "●" : " ";
     return `${marker}${flag} ${pad(row.from, LAYOUT_BOUNDS.senderColumn.value)}${pad(row.kind, LAYOUT_BOUNDS.kindColumn.value)}${row.subject}`;

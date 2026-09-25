@@ -67,7 +67,9 @@ export interface DashboardData {
   /** Seed population from configuration; not a running count. */
   readonly configuredWorkers: number;
   readonly workerLimit: number;
-  readonly unread: number;
+  /** Messages waiting for the Principal's session, or null when the mailbox
+   * could not be read: an unread directory is not an empty one. */
+  readonly unread: number | null;
   /** WP15.05: the configured Principal model, and the one the running session
    * was started with (null when no session runs). Nothing here is the engine's
    * own report of the model it is using; no pinned API gives that. */
@@ -93,11 +95,21 @@ export type Notice =
   | { readonly kind: "prompt-limit"; readonly cause: PromptOverflow }
   | { readonly kind: "text"; readonly text: string };
 
+/** A mailbox as read: its messages, and why a directory of it could not be
+ * read, if one could not. */
+export interface MailboxRead {
+  readonly rows: readonly MailRow[];
+  readonly unreadable: string | null;
+}
+
 export interface PanelData {
   readonly dashboard: DashboardData;
   readonly config: readonly ConfigField[];
   readonly extensions: readonly ExtensionRow[];
   readonly mail: readonly MailRow[];
+  /** Why part of the mailbox could not be read, or null when all of it was:
+   * the list above is then not the whole mailbox. */
+  readonly mailUnreadable: string | null;
 }
 
 export type Detail =

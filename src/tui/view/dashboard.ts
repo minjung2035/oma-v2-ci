@@ -33,7 +33,8 @@ export function dashboardRows(data: DashboardData): readonly DashboardRow[] {
   // WP28: a message stays in `new/` until a batch carrying it is settled with
   // the Principal's session; that is what this counts. It is not whether the
   // Human has looked at it, and opening it here changes nothing.
-  rows.push({ label: "Mail", value: `${data.unread}건 Principal 세션에 전달 대기` });
+  // arch §23.5: a mailbox that could not be read is not a mailbox with none.
+  rows.push({ label: "Mail", value: data.unread === null ? "unknown (메일함을 읽지 못함)" : `${data.unread}건 Principal 세션에 전달 대기` });
   // WP15.05: configured is not observed. The session's value is what this
   // product started it with, not the engine's own report.
   const model = data.principalModel;

@@ -92,6 +92,7 @@ test("the panel renders at degenerate terminal sizes without exceeding them", ()
     dashboard: unknownDashboard("아주 긴 이유 문자열입니다 ".repeat(4)),
     config: Object.freeze([]), extensions: Object.freeze([]),
     mail: Object.freeze([{ id: "m", from: "worker-a", kind: "question", subject: "제목".repeat(60), unread: true, path: "/tmp/m" }]),
+    mailUnreadable: null,
   });
   let state = step(INITIAL, { kind: "panel" }, data, FRAME_BYTES).state;
   for (const [columns, rows] of [[1, 1], [2, 2], [8, 3], [20, 6], [200, 60]] as const) {
@@ -139,7 +140,7 @@ test("mail reading survives malformed, empty and non-file entries", () => {
     mkdirSync(join(box.newDir, "a-directory"));
     symlinkSync("/etc/passwd", join(box.curDir, "a-symlink"));
 
-    const rows = readMailbox(box);
+    const rows = readMailbox(box).rows;
     // Nothing throws, a directory is not a message, and a symlink is refused
     // rather than followed: a corrupted Maildir must not be able to put the
     // contents of a host file on this screen.
@@ -209,7 +210,7 @@ test("T115/TUI-011: the Mail screen reads bounded, refuses links, and orders by 
     writeFileSync(huge, `Subject: big\n\n${filler.repeat(4 * 1024)}`);
     assert.ok(statSync(huge).size > READ_BOUNDS.mailHeaderBytes.value);
     const before = process.memoryUsage().arrayBuffers;
-    const rows = readMailbox(box);
+    const rows = readMailbox(box).rows;
     assert.ok(rows.some(row => row.subject === "big"));
     // The body reader has its own bound and honours it exactly.
     const body = readBody(huge, 32)!;
@@ -225,12 +226,12 @@ test("T115/TUI-011: the Mail screen reads bounded, refuses links, and orders by 
     writeFileSync(newer, "Subject: newer\n\nbody");
     utimesSync(older, new Date(1_000_000), new Date(1_000_000));
     utimesSync(newer, new Date(2_000_000), new Date(2_000_000));
-    const ordered = readMailbox(box).filter(row => row.subject === "older" || row.subject === "newer");
+    const ordered = readMailbox(box).rows.filter(row => row.subject === "older" || row.subject === "newer");
     assert.deepEqual(ordered.map(row => row.subject), ["newer", "older"]);
 
     // Unread before read, so the screen leads with what has not been seen.
     writeFileSync(join(box.curDir, "read-one"), "Subject: read\n\nbody");
-    const all = readMailbox(box);
+    const all = readMailbox(box).rows;
     const firstRead = all.findIndex(row => !row.unread);
     assert.ok(all.slice(0, firstRead).every(row => row.unread));
     assert.ok(all.slice(firstRead).every(row => !row.unread));

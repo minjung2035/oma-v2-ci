@@ -11,7 +11,7 @@ import type { Observation } from "./transport.js";
 export interface DashboardInput {
   readonly config: HostConfigV1;
   readonly principalModel: DashboardData["principalModel"];
-  readonly unread: number;
+  readonly unread: number | null;
   readonly observation: Observation;
 }
 

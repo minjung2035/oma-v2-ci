@@ -18,8 +18,8 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import {
-  closeSync, constants, fchmodSync, fsyncSync, lstatSync, mkdirSync,
-  readdirSync, readFileSync, renameSync, unlinkSync, writeSync,
+  closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync,
+  readdirSync, readFileSync, readSync, renameSync, unlinkSync, writeSync,
 } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import type { HostConfigV1 } from "../../implementation/contracts.js";
@@ -188,14 +188,22 @@ function treeBytes(root: string): { bytes: number; generations: string[] } {
   return { bytes, generations };
 }
 
+/** Whether an existing generation holds exactly these bytes. "No" is an
+ * answer: a file that is missing, is a link or not a regular file, or holds
+ * other bytes. A file that could not be read (too many open files, an I/O
+ * error) is no answer, and is raised as itself rather than reported as a
+ * generation holding other bytes (INV02). */
 function sameBytes(parent: number, generation: string, files: ReadonlyMap<string, Buffer>): boolean {
-  try {
-    for (const [name, bytes] of files) {
-      const fd = openRegularBeneath(parent, `${generation}/${name}`);
-      try { if (!readFileSync(fd).equals(bytes)) return false; } finally { closeSync(fd); }
+  for (const [name, bytes] of files) {
+    let fd: number;
+    try { fd = openRegularBeneath(parent, `${generation}/${name}`); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT" || (error instanceof StoreError && error.code === "STORE_CORRUPT")) return false;
+      throw error;
     }
-    return true;
-  } catch { return false; }
+    try { if (!readFileSync(fd).equals(bytes)) return false; } finally { closeSync(fd); }
+  }
+  return true;
 }
 
 /** Writes the generation below `generations/.staging-*`, flushes every file and
@@ -330,39 +338,92 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
       throw new StoreError(cause.code, `configuration generation ${id} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error });
     }
   });
-  recordCommitted(base, id);
+  recordCommitted(base, current, id);
   return Object.freeze({ kind: "committed", generation: id });
 }
 
-/** Last-known-good bookkeeping: an append-only list of published generations.
- * A failure here loses only which older generation a quiescent collection
- * keeps besides the current one; it never undoes the commit. */
-function recordCommitted(base: string, id: string): void {
+/** Only the newest entries of the journal are ever needed: which generation
+ * was committed last, and the one before it. The journal grows by one line per
+ * commit, so it is read from its end and never whole (INV10). */
+const JOURNAL_TAIL_BYTES = 4096;
+
+/** The generations the journal's tail records, oldest first. A line cut by
+ * the window's start or by a crash in the middle of an append is not an entry. */
+function journalTail(fd: number): readonly string[] {
+  const size = fstatSync(fd).size;
+  const length = Math.min(size, JOURNAL_TAIL_BYTES);
+  const buffer = Buffer.alloc(length);
+  const read = readSync(fd, buffer, 0, length, size - length);
+  const lines = buffer.subarray(0, read).toString("utf8").split("\n");
+  if (size > length) lines.shift();
+  return lines.filter(line => GENERATION_ID.test(line));
+}
+
+/** The journal of committed generations, in commit order. The manifest is
+ * what says a generation is committed (INV03); the journal only remembers the
+ * order, for the collection that keeps the previous generation as the basis of
+ * a rollback (WP13). So the committer, which knows exactly which generation the
+ * manifest named before its own (`previous`), writes that one first when the
+ * journal does not already end with it: a crash between an earlier commit and
+ * its record, or an append that failed, would otherwise leave the previous
+ * generation unrecorded, and a later collection would remove it as if it had
+ * never been committed. A failure here leaves the commit standing; a
+ * collection that cannot trust the journal removes no generation. */
+function recordCommitted(base: string, previous: string | null, id: string): void {
   try {
     withinDirectory(join(base, JOURNAL), (directory, name) => {
-      const fd = openBeneath(directory, name, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
-      try { writeSync(fd, `${id}\n`); fsyncSync(fd); } finally { closeSync(fd); }
+      const fd = openBeneath(directory, name, constants.O_RDWR | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
+      try {
+        const missing = previous !== null && journalTail(fd).at(-1) !== previous;
+        writeSync(fd, missing ? `${previous}\n${id}\n` : `${id}\n`);
+        fsyncSync(fd);
+      } finally { closeSync(fd); }
     });
-  } catch { /* bookkeeping only */ }
+  } catch { /* the commit stands; see collectManagedGenerations */ }
+}
+
+/** Which generations a collection keeps besides the staging it always removes
+ * (INV02: what the journal cannot vouch for is kept, never removed).
+ * - The journal cannot be read: every generation is kept.
+ * - It ends with the current generation: its record, and the previous one the
+ *   committer wrote before it, are exact; the current and that previous are kept.
+ * - It ends with another: the current generation's record was lost. The last
+ *   recorded one and every generation the tail does not record are kept; only
+ *   generations recorded before the last are known to be older than the previous. */
+function generationsToKeep(current: string, tail: readonly string[] | null, present: readonly string[]): ReadonlySet<string> | "all" {
+  if (tail === null) return "all";
+  if (tail.at(-1) === current) {
+    const previous = [...tail].reverse().find(id => id !== current);
+    return new Set([current, ...(previous === undefined ? [] : [previous])]);
+  }
+  const recorded = new Set(tail);
+  return new Set([current, ...(tail.length > 0 ? [tail.at(-1)!] : []), ...present.filter(id => !recorded.has(id))]);
 }
 
 /** Quiescent collection: called only by the society owner while no broker or
  * other reader of the society runs. Keeps the current generation and the one
  * committed before it; removes every other generation and every staging
- * directory. Age alone never selects a generation. */
+ * directory. Age alone never selects a generation, and neither does a journal
+ * that could not be read (`generationsToKeep`). */
 export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, "layout">): readonly string[] {
   const current = managedGenerationOf(snapshot);
   if (current === null || snapshot.layout.kind !== "operations") return [];
   const base = join(dirname(snapshot.layout.index), MANAGED_DIRECTORY);
   const generations = join(base, "generations");
-  let history: string[] = [];
-  try { history = readFileSync(join(base, JOURNAL), "utf8").split("\n").filter(line => GENERATION_ID.test(line)); } catch { /* none */ }
-  const earlier = history.filter(id => id !== current);
-  const keep = new Set([current, ...(earlier.length > 0 ? [earlier[earlier.length - 1]!] : [])]);
+  let tail: readonly string[] | null;
+  try {
+    tail = withinDirectory(join(base, JOURNAL), (directory, name) => {
+      const fd = openBeneath(directory, name, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try { return journalTail(fd); } finally { closeSync(fd); }
+    });
+  } catch { tail = null; }
+  const entries = readdirSync(generations);
+  const keep = generationsToKeep(current, tail, entries.filter(entry => GENERATION_ID.test(entry)));
   const removed: string[] = [];
-  for (const entry of readdirSync(generations)) {
-    if (keep.has(entry)) continue;
-    if (!GENERATION_ID.test(entry) && !entry.startsWith(".staging-")) continue;
+  for (const entry of entries) {
+    // A staging directory was never committed, so no journal is needed to remove it.
+    const removable = entry.startsWith(".staging-") || (GENERATION_ID.test(entry) && keep !== "all" && !keep.has(entry));
+    if (!removable) continue;
     // FS-005: walked and removed beneath held directories, never through a link.
     removeOwnedTree(join(generations, entry));
     removed.push(entry);

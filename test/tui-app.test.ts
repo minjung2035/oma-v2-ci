@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { TuiApp, type AppPorts } from "../src/tui/app.js";
 import { decodeKeys, KeyDecoder } from "../src/tui/keys.js";
 import { StoreError } from "../src/domain/errors.js";
-import type { ConfigField, ExtensionRow, MailRow } from "../src/tui/model.js";
+import type { ConfigField, ExtensionRow, MailboxRead } from "../src/tui/model.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
 import type { Terminal } from "../src/tui/screen.js";
 import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptByteLimit, humanPromptFrameBytes } from "../src/tui/limits.js";
@@ -63,9 +63,9 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
     { id: "dist/src/pi-extension.js", principal: true, workers: true, locked: true },
     { id: "extensions/review.js", principal: false, workers: false, locked: false },
   ];
-  const mail = (): readonly MailRow[] => [
+  const mail = (): MailboxRead => ({ rows: [
     { id: "m1", from: "worker-a", kind: "question", subject: "API 선택 필요", unread: true, path: "/tmp/m1" },
-  ];
+  ], unreadable: null });
   const ports: AppPorts = {
     configFields: config,
     dashboard,

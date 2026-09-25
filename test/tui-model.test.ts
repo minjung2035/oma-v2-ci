@@ -26,6 +26,7 @@ const data: PanelData = Object.freeze({
     { id: "m1", from: "worker-a", kind: "question", subject: "API 선택 필요", unread: true, path: "/tmp/m1" },
     { id: "m2", from: "worker-b", kind: "result", subject: "구현 완료", unread: false, path: "/tmp/m2" },
   ]),
+  mailUnreadable: null,
 });
 
 const KEY = {
