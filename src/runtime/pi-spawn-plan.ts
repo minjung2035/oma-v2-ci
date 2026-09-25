@@ -12,6 +12,7 @@ import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
 import type { ValidatedRunLease } from "../protocol/run-lease.js";
 import { StoreError } from "../domain/errors.js";
+import { assertModelScope } from "../storage/paths.js";
 
 /** Everything the adapter needs to run the engine inside the Resident sandbox.
  * Its absence is the unconfined profile, which the runner states explicitly. */
@@ -189,6 +190,9 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
 /** The two branches differ only in whether the mount plan wraps the command,
  * so the argv the engine receives is built once. */
 export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
+  // AV3: the same rule as the Principal's: the model's workspace holds none of
+  // the engine's session history, the agent's home or its batch views.
+  assertModelScope(options.paths.workspace, [options.paths.sessionDir, options.paths.agentHome, options.paths.batchView]);
   const confinement = options.confinement;
   if (confinement === undefined)
     return {

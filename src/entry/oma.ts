@@ -17,7 +17,7 @@ import { TuiApp, type AppPorts } from "../tui/app.js";
 import { codeFor, fail } from "../tui/exit.js";
 import { openTerminal } from "../tui/screen.js";
 import { dashboardData } from "../tui/dashboard.js";
-import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile } from "../tui/session.js";
+import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile, principalWorkspace } from "../tui/session.js";
 import { PrincipalDelivery, principalHostBroker } from "../runtime/principal-delivery.js";
 import type { PiEvent } from "../runtime/pi-rpc.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
@@ -348,13 +348,17 @@ async function main(argv: readonly string[]): Promise<void> {
       stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
     });
     ensureDirectory(piRuntime.agentDir, 0o700);
+    // AV3: the model's tools work in a directory of their own, not in the
+    // private space that holds the Human's session history.
+    const workspace = principalWorkspace(stateRoot);
+    ensureDirectory(workspace, 0o700);
     const profile = principalSessionProfile(configPath, society);
     sessionModel = settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? null;
     const started = PrincipalSession.start(
       { piCommand: piRuntime.executable, piArgs: piRuntime.args, piAgentDir: piRuntime.agentDir,
         coreExtension: join(settings.config.installation.libdir, DEPLOYMENT_LAYOUT.extension),
         sessionDir: principalSessionDir(stateRoot),
-        workspace: join(stateRoot, "principal", "private"), home: join(stateRoot, "principal", "private"),
+        workspace, home: join(stateRoot, "principal", "private"),
         fence: owner.fence },
       profile,
       limitsOf(settings.config.limits),

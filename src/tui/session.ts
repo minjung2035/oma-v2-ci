@@ -12,7 +12,7 @@ import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, type ChildProcessWi
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
-import { runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
+import { assertModelScope, modelWorkspacePathAt, runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
 import { PiRpcClient, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
@@ -87,6 +87,12 @@ export function newSessionHandle(): string { return randomBytes(16).toString("he
  * be traded for a receipt the broker can check. */
 export function principalSessionDir(stateRoot: string): string {
   return sessionDirPathAt(stateRoot, "principal");
+}
+
+/** AV3: the directory the Principal model's tools work in -- its own, apart
+ * from the Human's session history in the same private space. */
+export function principalWorkspace(stateRoot: string): string {
+  return modelWorkspacePathAt(stateRoot, "principal");
 }
 
 /** The environment the engine is started with.
@@ -335,6 +341,9 @@ export class PrincipalSession {
     // TUI-010: the digests recorded for this role are checked again here, at the
     // last moment before the file is handed to Pi.
     assertExtensionIntegrity(profile.extensions);
+    // AV3: the model's tools are confined to `workspace`; the Human's session
+    // history and the CLI's home are never inside it.
+    assertModelScope(paths.workspace, [paths.sessionDir], [paths.home]);
     const child = spawnOwnedRpc(
       paths.piCommand,
       [...(paths.piArgs ?? []), ...sessionArgv(paths, profile)],

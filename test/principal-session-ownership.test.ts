@@ -25,10 +25,13 @@ function scripted() {
   const root = mkdtempSync(join(tmpdir(), "oma-v09-"));
   const log = join(root, "prompts.log");
   mkdirSync(join(root, "agents", "principal", "runner", "view"), { recursive: true });
+  // AV3: the product's layout -- the model's workspace beside the session
+  // history, both inside the private home, neither holding the other.
+  mkdirSync(join(root, "workspace")); mkdirSync(join(root, "sessions"));
   const events = { failed: [] as { text: string; reason: string }[], unconfirmed: [] as string[], ends: 0, busy: [] as boolean[] };
   const session = PrincipalSession.start(
     { piCommand: process.execPath, piArgs: [join(process.cwd(), "test", "fixtures", "scripted-pi.mjs"), log],
-      coreExtension: "/nonexistent/core.js", sessionDir: root, workspace: root, home: root },
+      coreExtension: "/nonexistent/core.js", sessionDir: join(root, "sessions"), workspace: join(root, "workspace"), home: root },
     { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
     LIMITS, { PATH: process.env.PATH ?? "/usr/bin:/bin" },
     {

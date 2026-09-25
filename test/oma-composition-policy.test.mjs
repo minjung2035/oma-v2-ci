@@ -43,6 +43,7 @@ const FENCE = 41;
 
 const SESSION_ENVIRONMENT = { OMA_MARKER: "built by principalEnvironment" };
 const SESSION_DIR_FROM_OWNER = "answered-by-principalSessionDir";
+const WORKSPACE_FROM_OWNER = "answered-by-principalWorkspace";
 
 /** A supervised broker the test drives: it becomes ready when told, answers
  * registrations with the next credential in `credentials`, and records every
@@ -152,6 +153,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       // very layout the product had stopped using. What the owner actually
       // answers is asserted where the owner is tested.
       principalSessionDir: root => { calls.push("principalSessionDir"); return `${root}/${SESSION_DIR_FROM_OWNER}`; },
+      // AV3: the model's workspace has an owner too; the entry asks it.
+      principalWorkspace: root => { calls.push("principalWorkspace"); return `${root}/${WORKSPACE_FROM_OWNER}`; },
       principalEnvironment: (...args) => {
         calls.push(`principalEnvironment/${args.length}`);
         return { ...SESSION_ENVIRONMENT };
@@ -343,7 +346,10 @@ test("T119: the engine starts when this process is proved to own the society, no
   // arguments, no credential parameter to pass one through.
   assert.ok(calls.includes("principalEnvironment/3"));
   assert.deepEqual(started.environment, SESSION_ENVIRONMENT);
-  assert.match(started.paths.workspace, /principal\/private$/);
+  // AV3: not the private space itself, which holds the Human's session history.
+  assert.ok(calls.includes("principalWorkspace"), "the entry decided the model's workspace itself");
+  assert.equal(started.paths.workspace, `/state/oma/fixture/${WORKSPACE_FROM_OWNER}`);
+  assert.match(started.paths.home, /principal\/private$/);
   assert.ok(calls.includes("principalSessionDir"), "the entry decided the session directory itself");
   assert.equal(started.paths.sessionDir, `/state/oma/fixture/${SESSION_DIR_FROM_OWNER}`);
   // The credential travels only after the engine exists, and only into it.

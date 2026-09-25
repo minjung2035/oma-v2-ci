@@ -2,11 +2,12 @@
  * Lexical identity is NOT a symlink/FD-containment proof; secure filesystem effects
  * retain their own checks. Relative test roots retain their existing join semantics.
  */
-import { join } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
+import { StoreError } from "../domain/errors.js";
 import {
   agentRootFor, workspaceFor, runnerViewFor, batchViewFor, runnerReceiptFor, runnerSessionDirFor, sessionDirFor,
   mailObjectRelativePath, mailArchiveRelativePath, mailInboxRelativePath,
-  submitStagingFor, submitBundleFor, contextStagingFor, contextRevisionFor,
+  submitStagingFor, submitBundleFor, contextStagingFor, contextRevisionFor, modelWorkspaceFor,
   actorSocketDirectoryFor, actorSocketFor,
 } from "../domain/derived.js";
 
@@ -31,6 +32,23 @@ export function runnerSessionDirPathAt(stateRoot: string, actor: string): string
 /** Where this agent's engine keeps its session (PR-003 for the Principal). */
 export function sessionDirPathAt(stateRoot: string, actor: string): string {
   return join(stateRoot, sessionDirFor(actor));
+}
+export function modelWorkspacePathAt(stateRoot: string, actor: string): string {
+  return join(stateRoot, modelWorkspaceFor(actor));
+}
+/** AV3: refuses a model scope that overlaps a directory the product keeps for
+ * itself (`kept`: session history, views, receipts), or that holds one the
+ * model's tools must stay out of (`above`: a home whose engine settings or
+ * caches sit beside the workspace). Checked where an engine is started, on the
+ * paths it is actually started with, so a layout that would hand the model the
+ * session history cannot start rather than start quietly. */
+export function assertModelScope(workspace: string, kept: readonly string[], above: readonly string[] = []): void {
+  const within = (root: string, path: string): boolean => {
+    const offset = relative(root, path);
+    return offset === "" || (offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset));
+  };
+  if (kept.some(path => within(workspace, path) || within(path, workspace)) || above.some(path => within(workspace, path)))
+    throw new StoreError("UNSUPPORTED_PROFILE", "the model's workspace overlaps a directory the product keeps for itself");
 }
 export function mailObjectPathAt(stateRoot: string, messageId: string): string {
   return join(stateRoot, mailObjectRelativePath(messageId));

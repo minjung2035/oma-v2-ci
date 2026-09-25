@@ -95,6 +95,15 @@ export function sessionDirFor(actor: string): string {
     : runnerSessionDirFor(actor);
 }
 
+/** AV3: the directory an actor's model tools may touch. It holds nothing the
+ * product keeps for itself -- session history, request cache, receipts, views,
+ * credentials -- for any actor. A Resident's is its workspace clone; the
+ * Principal's is a directory of its own inside its private space, apart from
+ * the Human's session history beside it (PR-003/PR-004). */
+export function modelWorkspaceFor(actor: string): string {
+  return required(actor, parseActor, "actor") === "principal" ? "principal/private/workspace" : workspaceFor(actor);
+}
+
 export function mailObjectFileName(messageId: string): string {
   return `${required(messageId, parseMessageFileId, "message id")}.eml`;
 }
