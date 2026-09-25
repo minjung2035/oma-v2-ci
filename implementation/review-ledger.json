@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 120,
-  "CHANGED_WITH_ORACLE": 102
+  "READ_UNCHANGED": 118,
+  "CHANGED_WITH_ORACLE": 104
  },
  "lanes": {
   "fast": "PASS",
@@ -511,12 +511,14 @@
    "by": [
     "AV1",
     "AV2",
-    "AV5"
+    "AV5",
+    "AV8"
    ],
    "oracles": [
     "AV1",
     "AV2",
-    "AV5"
+    "AV5",
+    "AV8"
    ]
   },
   {
@@ -541,21 +543,13 @@
   {
    "path": "src/cli/effects/mail.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV8"
    ],
    "oracles": [
-    "AV1",
-    "CTX-001",
-    "CTX-002",
-    "D05",
-    "F2",
-    "R01",
-    "T119",
-    "V10C"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "AV8"
+   ]
   },
   {
    "path": "src/cli/effects/submit.ts",
@@ -626,15 +620,13 @@
   {
    "path": "src/cli/transport.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV8"
    ],
    "oracles": [
-    "F4",
-    "T114"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV8"
+   ]
   },
   {
    "path": "src/config.ts",
