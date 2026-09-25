@@ -33,15 +33,19 @@ function failure(
 function deadline(
   seconds: number,
   error: StoreError,
-): { promise: Promise<never>; rearm(): void; cancel(): void } {
+): { promise: Promise<never>; rearm(): void; hold(): void; cancel(): void } {
   let fire: (reason: StoreError) => void = () => {};
   const promise = new Promise<never>((_, reject) => { fire = reject; });
   promise.catch(() => {});
+  let live = true;
   let timer: Timer | null = alarm(seconds, () => fire(error));
   return {
     promise,
-    rearm() { if (timer === null) return; timer.cancel(); timer = alarm(seconds, () => fire(error)); },
-    cancel() { timer?.cancel(); timer = null; },
+    /** Starts the budget again; a held one resumes, a cancelled one stays cancelled. */
+    rearm() { if (!live) return; timer?.cancel(); timer = alarm(seconds, () => fire(error)); },
+    /** Stops the clock until the next rearm. */
+    hold() { timer?.cancel(); timer = null; },
+    cancel() { live = false; timer?.cancel(); timer = null; },
   };
 }
 /** The trusted extension's boundary notice for this batch, or null. The one
@@ -163,15 +167,24 @@ export class PiAdapter {
     // (idleStreamSeconds, re-armed by every event), the whole delivery turn
     // (the model profile's inferenceTimeoutSeconds) and the close after the
     // settled boundary (receiptWaitSeconds). A long turn that keeps
-    // producing events is not idle.
+    // producing events is not idle, and neither is one running a tool it
+    // announced (AV24): that silence is the tool's, which the tool's own
+    // timeout and the turn budget bound. Idle is silence while the engine
+    // owes an event.
     const acceptDeadline = deadline(this.options.limits.receiptWaitSeconds, failure(
       "SESSION_BOUNDARY_UNCONFIRMED", "Pi did not accept the delivery command before the acceptance deadline"));
     const idleDeadline = deadline(this.options.limits.idleStreamSeconds, failure(
       "DEADLINE_EXCEEDED", "Pi produced no event for the configured idle stream budget"));
     const turnDeadline = deadline(this.options.profile.turnSeconds, failure(
       "DEADLINE_EXCEEDED", "the delivery turn exceeded the model's inference timeout"));
+    const tools = new Set<string>();
     const unsubscribe = rpc.onEvent((event) => {
-      idleDeadline.rearm();
+      if (typeof event.toolCallId === "string") {
+        if (event.type === "tool_execution_start") tools.add(event.toolCallId);
+        if (event.type === "tool_execution_end") tools.delete(event.toolCallId);
+      }
+      if (tools.size > 0) idleDeadline.hold();
+      else idleDeadline.rearm();
       if (
         event.type === "response" &&
         event.id === batch.id &&

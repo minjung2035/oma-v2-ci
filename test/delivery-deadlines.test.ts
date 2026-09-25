@@ -9,7 +9,7 @@ import { PiAdapter } from "../src/runtime/pi-adapter.js";
 import { alarm } from "../src/runtime/pi-rpc.js";
 import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX } from "../src/storage/delivery-receipt.js";
 
-type Pacing = "steady" | "silent-after-accept" | "never-accepts";
+type Pacing = "steady" | "silent-after-accept" | "never-accepts" | "silent-tool" | "unfinished-tool";
 
 /** A fake Pi: after accepting, emits one progress event every `everyMs` for
  * `forMs`, then the boundary and the settle -- or goes silent, or never
@@ -29,6 +29,21 @@ process.stdin.on("data", chunk => { pending += chunk; const lines = pending.spli
     if (${JSON.stringify(pacing)} === "never-accepts") continue;
     out({ type: "response", id: request.id, command: "prompt", success: true });
     if (${JSON.stringify(pacing)} === "silent-after-accept") continue;
+    const finish = () => {
+      out({ type: "message_end", message: { role: "assistant", stopReason: "stop" } });
+      const batchId = request.message.split(" ").at(-1);
+      const evidence = { adapterRevision: ${JSON.stringify(PI_ADAPTER_REVISION)}, batchId, incarnation: 1, sessionPath, entryId: "0123abcd" };
+      out({ type: "extension_ui_request", id: "notice", method: "notify", message: ${JSON.stringify(PI_BOUNDARY_PREFIX)} + JSON.stringify(evidence) });
+      out({ type: "agent_settled" });
+    };
+    if (${JSON.stringify(pacing)} === "silent-tool" || ${JSON.stringify(pacing)} === "unfinished-tool") {
+      // A command that prints nothing, e.g. \`sleep\`: the engine says it started
+      // the tool and is silent until the tool ends.
+      out({ type: "tool_execution_start", toolCallId: "call_1", toolName: "bash", args: { command: "sleep" } });
+      if (${JSON.stringify(pacing)} === "unfinished-tool") continue;
+      setTimeout(() => { out({ type: "tool_execution_end", toolCallId: "call_1", toolName: "bash", result: { content: [] }, isError: false }); finish(); }, ${forMs});
+      continue;
+    }
     const started = Date.now();
     const progress = setInterval(() => {
       out({ type: "message_update", message: { role: "assistant" } });
@@ -87,6 +102,25 @@ test("V10A: a genuinely silent engine ends the delivery at the idle budget, as i
 
 test("V10A: a turn that keeps making progress past its own budget ends as a turn deadline", { timeout: 20_000 }, async () => {
   const result = await deliverWith("steady", 200, 10_000, { idle: 1, turn: 2, accept: 2 });
+  assert.equal(result.error?.code, "DEADLINE_EXCEEDED");
+  assert.match(result.error!.message, /inference timeout/);
+  assert.ok(result.ms >= 1_900 && result.ms < 6_000, `turn deadline at ${result.ms} ms`);
+});
+
+/** AV24 -- WP10, CFG-004: the seventh functional run. A Resident ran a test
+ * script and then \`sleep 31\` in one bash call; the command printed nothing
+ * for 30 s, the adapter read the engine as idle, and the run ended
+ * DEADLINE_EXCEEDED in the middle of the tool. Builds, installs and test
+ * suites are that shape. A tool the engine announced is progress. */
+test("AV24 / WP10: a silent tool the engine announced runs past the idle budget and the turn settles", { timeout: 20_000 }, async () => {
+  const result = await deliverWith("silent-tool", 200, 2_500, { idle: 1, turn: 10, accept: 2 });
+  assert.equal(result.error, null, String(result.error));
+  assert.ok(result.ms >= 2_400, "the tool was not actually longer than the idle budget");
+  assert.equal(result.outcome!.entryId, "0123abcd");
+});
+
+test("AV24 / WP10: a tool that never ends is bounded by the turn, not waited on", { timeout: 20_000 }, async () => {
+  const result = await deliverWith("unfinished-tool", 200, 0, { idle: 1, turn: 2, accept: 2 });
   assert.equal(result.error?.code, "DEADLINE_EXCEEDED");
   assert.match(result.error!.message, /inference timeout/);
   assert.ok(result.ms >= 1_900 && result.ms < 6_000, `turn deadline at ${result.ms} ms`);
