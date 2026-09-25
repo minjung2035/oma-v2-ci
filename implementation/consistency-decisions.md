@@ -914,6 +914,13 @@ SB-006).
 | AV30 | same run: a status call naming `principal@provtest.oma.invalid` was refused as not an agent. That call names the Principal, whose status the wire grammar refuses in any form, but the same slot refused a Resident's address too: AV15 took the displayed names in the mail tools only | AV15's rule (a tool takes the names OMA shows) for every slot that names an existing actor | `actorNameOf` in the extension maps this society's actor address to the actor for status, lifecycle and logs; creation, which names a new actor, keeps its own check | one reading of names in two places | AV30 (with AV29's test) |
 | AV31 | the twelfth functional run quit the product's `oma` while two Residents were inside a 90 s tool call. The broker was gone within a second and both Residents ran on with no broker; when their turns ended their runners failed until systemd's start limit stopped them. `oma` was the terminal session's leader, and its exit hung up the terminal: the broker, in its process group and handling SIGTERM and SIGINT only, died of SIGHUP in the middle of the drain the SIGTERM had started. A user closing the terminal window does the same | D03 (a product-owned broker's host loss must still revoke, quiesce the Residents and fence the next start) and LIFE-006 | `stopOnHostLoss` in broker-lifetime.ts owns the signals by which a host goes away (SIGTERM, SIGINT, SIGHUP), each ending the broker through the one drain; the entrypoint registers it before anything slow. The supervision channel's close already took the same path | a host-loss path that skipped the drain | AV31 (two tests) |
 
+
+Design revisions DR1–DR7 (after AV31, at the user's request) are recorded in
+`design-revisions.md`: the decisions behind AV10/AV17/AV27 (paths in the model's
+view), AV20 (the periodic sweep), AV22/AV28 (what a failure may say), the
+integrate delegation, AV23/AV26 (the stored mail format), redelivery, and AV31
+(the broker's lifetime), with the clauses each one changes.
+
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only
 the workspace, which put the request cache outside the private scratch FS-003

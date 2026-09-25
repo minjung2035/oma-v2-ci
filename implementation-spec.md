@@ -104,7 +104,7 @@
 
 **MUST [CFG-004]** 프로토콜 timeout 기본값은 frame/stream 무진행 30초, control receipt 기다림 30초다. 결과를 기다리다 timeout이면 해당 effect는 실패로 간주하지 않는다. 대규모 작업은 pending receipt 후 같은 key로 조회한다. inference timeout/output cap/가격 bound는 provider profile에 필수로 둔다.
 
-**MUST [AUTH-001]** 기본 capability 집합은 `mail.send`, `route.follow`, `agent.create`, `agent.manage.self`, `agent.manage.descendants`, `git.submit`, `code.integrate`, `context.publish`로 닫는다. Principal role은 자동 `code.integrate`/Human approval 권한이 아니다. 일반 Resident에게 `context.publish`를 주지 않는다. 자식 권한은 부모의 위임 가능한 부분집합과 host profile의 교집합이다.
+**MUST [AUTH-001]** 기본 capability 집합은 `mail.send`, `route.follow`, `agent.create`, `agent.manage.self`, `agent.manage.descendants`, `git.submit`, `code.integrate`, `context.publish`로 닫는다. Principal role은 자동 `code.integrate`/Human approval 권한이 아니다. 일반 Resident에게 `context.publish`를 주지 않는다. 자식 권한은 부모의 위임 가능한 부분집합과 host profile의 교집합이다. 단 `code.integrate`는 agent가 위임하지 않고 host가 profile로 직접 준다(A-002, [DR4](implementation/design-revisions.md)): 자식 profile에 있으면 부여하고 부모의 보유·delegable은 이 권한에 효과가 없다. 기본 profile은 이 권한을 어디에도 주지 않는다.
 
 **MUST [AUTH-002]** 관리 요청은 self 또는 `created_by` ancestry상의 descendant에만 해당 capability로 허용한다. Principal은 별도의 host 위임 범위 안에서 관리한다. sibling 정지·권한 증폭·자식 생성으로 quota 우회는 거절한다. status와 public operational logs 읽기는 사회 구성원에게 허용하되 host journal/secret은 제외한다. operation.get은 자기 actor의 key만 조회한다.
 
@@ -274,7 +274,7 @@
 
 **MUST [BATCH-001; arch §§7,18]** batch 선택 대상은 공개 가능한 parent effect의 materialized=1,presented=0인 자기 deliveries다. 이미 prepared batch에 묶인 ID를 새 batch로 복사하지 않는다. prepare transaction이 ID snapshot과 batch 연결을 먼저 commit하고 그 뒤 new→cur rename, directory fsync, inbox view atomic publish를 수행한다. snapshot을 진행 중 새 메일로 확장하지 않는다.
 
-**MUST [BATCH-002]** batch notice는 최대 6개 metadata 항목과 `/inbox.md` 경로를 포함하고 본문 자동 요약은 하지 않는다. 항목에는 sender, subject, kind, mail 경로, 필요 시 reply/reference만 둔다. index에는 batch의 전체 ID와 직접 읽을 수 있는 경로를 제공한다. context mail이면 고정 revision 경로와 GOAL 변경 안내를 포함한다. meta limit은 원문 잘림을 뜻하지 않는다.
+**MUST [BATCH-002]** batch notice는 최대 6개 metadata 항목과 `/inbox.md` 경로를 포함하고 본문 자동 요약은 하지 않는다. 항목에는 sender, subject, kind, mail 경로, 필요 시 reply/reference만 둔다. index에는 batch의 전체 ID와 직접 읽을 수 있는 경로를 제공하고, 읽기 안내는 저장된 원문이 아니라 본문을 보낸 사람이 쓴 그대로 보여 주는 읽기 도구를 가리킨다. context mail이면 고정 revision 경로와 GOAL 변경 안내를 포함한다. meta limit은 원문 잘림을 뜻하지 않는다. 완료가 확인되지 않은 batch를 다시 전달할 때는 notice 첫 줄에 그 사실을 고정 문장 하나로 밝힌다(D01, [DR5·DR6](implementation/design-revisions.md)).
 
 **MUST [BATCH-003]** 일반 batch의 최대 message 수는 host resource 설정 `batchMaxMessages`로 고정하며 초기 reference 값은 24다. direct/question/result/context class와 public-list class 양쪽이 있으면 각각 최소 1개를 포함하고, 남은 자리는 두 class를 교대로 oldest `(created_at_ms,message_id)`부터 선택한다. notice 6개도 이 순서를 사용한다. kind만 바꿔 권한·Principal 강제 개입을 얻을 수 없다.
 
@@ -420,7 +420,7 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **MUST [CREATE-001]** model-facing `agent.create`의 `params`는 `AgentCreateInput`으로 고정하고 `name`, CLI가 freeze한 full `from` OID, UTF-8 `brief`만 받는다. `profile`/`capabilities`는 CLI 옵션·wire 입력·request cache의 caller payload에 넣지 않는다. 해당 field가 들어오면 값이 host default와 같더라도 INVALID_REQUEST로 거절하고, 무시하거나 caller 선호로 사용하지 않는다. TypeScript의 `profile?: never`/`capabilities?: never`는 이러한 입력 금지 제약이며 선택 입력이 아니다. 다른 unknown field도 기존 strict validator 규칙으로 거절한다.
 
-**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile/resources를 결정한다. modelProfile/resources는 선택한 자식 host profile에서 복사해 고정한다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합을 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.
+**MUST [CREATE-002]** broker만 `ResolvedAgentSpec`의 최종 profile/capabilities/modelProfile/resources를 결정한다. modelProfile/resources는 선택한 자식 host profile에서 복사해 고정한다. 인증된 부모의 `agents.profile`에 대응하는 host `AgentProfile`을 찾고 그 `childProfile`을 선택한다. null이면 CAPABILITY_DENIED, 참조하는 profile이 없으면 UNSUPPORTED_PROFILE로 접수 전에 거절한다. 자식 capabilities는 `인증된 부모의 현재 유효 capabilities ∩ 부모 profile.delegable ∩ 선택한 자식 profile.capabilities`의 전체 교집합에, 선택한 자식 profile.capabilities가 host가 직접 주는 권한(`code.integrate`, AUTH-001)을 가지면 그것을 더해 중복 제거·사전순 정렬한 값이다. Principal도 동일한 명시적 host 위임을 적용하며 role로 교집합을 확대하지 않는다. CLI/모델이 host 설정을 대신 해석해 resolved spec을 전송하지 않는다. host의 초기 population 설정은 이 actor-facing 입력과 별개다.
 
 **MUST [CREATE-003]** `operations.payload_json`과 request_hash는 정규화한 `AgentCreateInput`만 포함한다. `plan_json.spec` 및 `agents.spec_json`에는 broker가 확정한 `ResolvedAgentSpec`을 저장하고 `spec_hash`는 그 전체 canonical spec의 hash다. 접수 transaction에서 부모 권한과 선택한 host 정책이 resolution 때와 같은지 재검사하고 달라졌으면 접수 전에 다시 계산한다. 같은 key의 accepted 요청은 새 host default를 해석하기 전에 기존 hash/receipt를 조회하고 저장된 resolved spec으로 복구한다. 재시도로 profile/capabilities를 재선택하거나 확대하지 않는다. 다른 key의 stable-name dedup은 최종 resolved spec hash를 비교하므로 host default 변경으로 spec이 달라졌으면 AGENT_CONFLICT다. 현재 권한의 폐기와 run 차단은 기존 AUTH/LIFE 규칙을 계속 적용한다.
 
@@ -482,7 +482,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 `--clearenv`가 환경 전체를 지우므로 trusted core extension이 읽는 `OMA_*`는 이 배열에 없으면 sandbox 안에 없다. builder는 caller가 준 이름/값을 검증하고(이름 문법, NUL 금지), `OMA_FRAME_BYTES`/`OMA_BATCH_MAX_MESSAGES`/`OMA_ACTOR`/`OMA_INCARNATION`를 마지막에 스스로 설정해 caller가 검증된 lease의 actor를 덮어쓰지 못하게 한다. host 환경은 상속하지 않는다.
 
-**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다.
+**MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, CLI 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 CLI는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](implementation/design-revisions.md)).
 
 **MUST [SB-002-D]** 엔진의 agent directory(provider credential 보관처)는 Resident mount 계획에 넣지 않는다(PR-004). 따라서 봉인된 Resident는 credential이 없고 `--unshare-all`로 network도 없다. 이 조합에서 Resident는 provider에 도달하지 못한다. `INF-001`이 inference를 엔진에 넘긴 뒤 그 경로를 이어줄 relay가 없기 때문이며, 이 사실을 숨기고 credential이나 network를 조용히 열지 않는다. architecture §16에 비용과 선택지를 적는다.
 
@@ -568,7 +568,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 ## 15. 오류 코드와 retry 계약
 
-**MUST [ERR-001]** 모든 경계는 아래 closed code 또는 contracts.ts의 동일 enum을 사용한다. `INTERNAL_ERROR`로 업무 실패를 모두 덮지 않는다. error message는 설명이며 caller 분기는 code/retry/state로 한다. retry 값이 same-key여도 authority/현재 run을 다시 인증한다.
+**MUST [ERR-001]** 모든 경계는 아래 closed code 또는 contracts.ts의 동일 enum을 사용한다. `INTERNAL_ERROR`로 업무 실패를 모두 덮지 않는다. error message는 설명이며 caller 분기는 code/retry/state로 한다. retry 값이 same-key여도 authority/현재 run을 다시 인증한다. 실패가 caller에게 말하는 사실은 code마다 닫힌 `details` 필드로만 싣는다: STALE_BASE·NOT_DESCENDANT·CONTEXT_CONFLICT의 `actual`, CAPABILITY_DENIED의 `capability`, BROKER_UNAVAILABLE의 `reason`(`busy`|`draining`). 그 밖의 code와 필드는 싣지 않고, 예외에서 온 message는 code 그대로다. caller에게 보이는 설명 문장은 code마다 하나인 고정 표에서 온다([DR3](implementation/design-revisions.md)).
 
 | code | 의미 | 자동 처리 범위 |
 |---|---|---|
@@ -660,6 +660,7 @@ session 경계를 넘지 않는 per-request 전환은 Principal inference가 bro
 | role의 model profile 내용 | 다음 runner activation | runner가 activation마다 config snapshot을 읽음 |
 | Principal model | 다음 Principal session | TUI-005 |
 | slot 수, quota cap, pricing, protected path, check argv | broker 재시작 | broker가 시작 시 config를 고정 |
+| worker의 `code.integrate` (Worker integrate) | 이후 만드는 worker부터 | AUTH-001, LIFE-008, [DR4](implementation/design-revisions.md) |
 
 **MUST [TUI-008]** `initialResidents`에 대응하는 항목은 bootstrap seed로만 표시하고 실행 중 society의 Resident 수를 바꾸는 값으로 제시하지 않는다. LIFE-009에 따라 값 변경이 다음 재시작에 agent를 자동 생성·삭제·중지하지 않는다. 현재 Resident를 늘리거나 줄이는 조작은 설정 항목이 아니라 명시적 lifecycle 행위로 분리해 표시한다.
 
