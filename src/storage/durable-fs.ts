@@ -126,7 +126,7 @@ export function writeExclusiveFsyncedFile(path: string, bytes: string | Uint8Arr
   finally { closeSync(parent); }
 }
 /** The same sequence for an entry of a directory the caller already holds
- * (AV5), so a caller that checked or created the directory writes into that
+ * (FS-005), so a caller that checked or created the directory writes into that
  * one; `path` only names the entry for faults and errors. */
 export function writeExclusiveFsyncedEntry(parent: number, name: string, path: string, bytes: string | Uint8Array, mode = 0o600,
   faults?: DurabilityObserver, use?: (fd: number) => void): void {

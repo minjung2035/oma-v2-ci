@@ -74,7 +74,7 @@ export class QuarantineImporter {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs > 0x7fffffff)
       throw new StoreError("SPIKE_UNRESOLVED", "quarantine timeout cannot be enforced by the native timer");
     if (this.executor.blocked) throw new StoreError("REF_STATE_UNKNOWN", "canonical quarantine preparation is active or uncertain");
-    // AV5: made under a staging directory resolved once, and removed the same way.
+    // FS-005: made under a staging directory resolved once, and removed the same way.
     const staging = join(this.paths.stateRoot, "staging");
     ensureDirectory(staging);
     const root = join(staging, `quarantine-ns-${randomUUID()}`);

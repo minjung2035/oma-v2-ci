@@ -22,7 +22,7 @@ export function readBody(path: string | null): string {
 
 export function resolveOid(revision: string): string {
   if (FULL_OID_RE.test(revision)) return revision;
-  // AV1: the revision is a value, and Git would read a leading `-` as an option.
+  // INV09: the revision is a value, and Git would read a leading `-` as an option.
   // No revision needs one, and `--end-of-options` says so to Git as well.
   if (revision.startsWith("-")) fail(`invalid revision ${revision}`, 2);
   const result = runGitText(["rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`], { cwd: process.cwd() });

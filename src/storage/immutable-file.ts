@@ -94,7 +94,7 @@ export function observeImmutableFile(path: string, expectedHash: string, expecte
   } finally { if (parent !== undefined) closeSync(parent); }
 }
 /** The same observation of one entry of a directory the caller already holds,
- * so the caller can observe and then act under one resolution (AV5). */
+ * so the caller can observe and then act under one resolution (FS-005, INV09). */
 export function observeImmutableEntry(parent: number, name: string, expectedHash: string, expectedBytes: number): ImmutableObservation {
   try {
     const fd = openImmutable(parent, name);

@@ -45,7 +45,7 @@ export interface SystemLayout {
 function kind(path: string): "dir" | "file" | "link" | "absent" {
   return kindOf(lstatSync(path, { throwIfNoEntry: false }));
 }
-/** AV5: an entry of a directory this pass holds. The rootfs is under the state
+/** FS-005 / architecture section 4: an entry of a directory this pass holds. The rootfs is under the state
  * tree, so what is checked and what is then written are always the same entry,
  * named through one resolution of its parent. */
 function kindAt(parent: number, name: string): "dir" | "file" | "link" | "absent" {

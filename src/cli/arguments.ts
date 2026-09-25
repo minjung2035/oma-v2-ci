@@ -1,4 +1,4 @@
-/** AV1: a value is data, never an option.
+/** CLI-001's grammar with one owner (INV04): a value is data, never an option.
  *
  * The CLI is started by people and by the trusted extension on a model's
  * behalf, and in both cases some of its arguments are values another party

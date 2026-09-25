@@ -54,13 +54,14 @@ function readBoundedMail(
   }
 }
 
-/** AV1: what the model supplies is data. Each value is checked against the
+/** INV09, PR-004: what the model supplies is data. Each value is checked against the
  * grammar of the slot it is going into before the CLI is started, and it goes
  * into that slot and no other: an option's value right after its option, an
  * address after `--`. The CLI refuses an option it does not know or one given
  * twice, so a value that looks like an option cannot become one on either side.
  * The grammar is the extension's one mirror of the wire grammar (batch-view.ts;
- * the extension may not import the host's, PI-001), pinned by an AV1 test. */
+ * the extension may not import the host's, PI-001; INV04 binds the mirror to its
+ * owner by an equivalence test). */
 const SEND_KINDS: ReadonlySet<string> = new Set(["message", "question", "result", "alert", "critical"]);
 function refused(what: string, value: unknown): never {
   throw new Error(`${what} is not valid: ${JSON.stringify(value)?.slice(0, 120)}`);

@@ -201,7 +201,7 @@ function sameBytes(parent: number, generation: string, files: ReadonlyMap<string
 /** Writes the generation below `generations/.staging-*`, flushes every file and
  * directory, makes it read-only and renames it into place within the same
  * parent. An identical generation already present is reused as is.
- * AV5: `generations` is resolved once; the check for an existing generation,
+ * FS-005 / architecture section 4: `generations` is resolved once; the check for an existing generation,
  * the staging tree, the rename and the flush all go through that one
  * resolution and descriptors opened beneath it. */
 function publishGeneration(generations: string, id: string, published: ReadonlyMap<string, Buffer>, faults?: DurabilityObserver): void {
@@ -304,7 +304,7 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
   const temporaryName = `.${basename(manifest)}.${randomUUID()}.tmp`;
   const temporary = join(root, temporaryName);
   writeExclusiveFsyncedFile(temporary, pointer, 0o600, faults);
-  // AV5: the commit point is renamed, cleaned up and flushed through one
+  // FS-005 / architecture section 4: the commit point is renamed, cleaned up and flushed through one
   // resolution of the bundle root.
   withinDirectory(manifest, (bundle, manifestName) => {
     let renamed = false;
@@ -363,7 +363,7 @@ export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, 
   for (const entry of readdirSync(generations)) {
     if (keep.has(entry)) continue;
     if (!GENERATION_ID.test(entry) && !entry.startsWith(".staging-")) continue;
-    // AV5: walked and removed beneath held directories, never through a link.
+    // FS-005: walked and removed beneath held directories, never through a link.
     removeOwnedTree(join(generations, entry));
     removed.push(entry);
   }

@@ -143,7 +143,7 @@ export class BatchCoordinator {
           throw new StoreError("BROKER_UNAVAILABLE", "mailbox observation is unavailable", { cause: result.error });
         return result.kind === "present";
       };
-      // AV5: each mailbox directory is resolved once; what is observed in it
+      // FS-005 / INV09: each mailbox directory is resolved once; what is observed in it
       // and what is renamed or removed there are the same entries.
       const newDirectory = heldParent(from);
       try {

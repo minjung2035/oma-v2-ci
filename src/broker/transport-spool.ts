@@ -1,6 +1,6 @@
 // IPC-003: .wire is an ephemeral transport copy, never an accepted plan artifact.
 // Workflow staging/object paths are not registered with this cleanup owner.
-// AV5: the staging directory is resolved once and held for the spool's life;
+// FS-005 / architecture section 4: the staging directory is resolved once and held for the spool's life;
 // the file is written, read back and removed through that one resolution, and
 // its path is never looked up again.
 import { constants, fsyncSync, fstatSync, closeSync, unlinkSync, createReadStream, writeSync, type ReadStream } from "node:fs";

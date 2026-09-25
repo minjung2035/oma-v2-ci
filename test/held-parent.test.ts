@@ -1,4 +1,5 @@
-/** AV5: a change under the state tree acts through a parent resolved once.
+/** AV5 -- FS-005 as architecture section 4 states it: a change under the state
+ * tree acts through a parent resolved once.
  *
  * The transport spool is written, read back and removed after its staging
  * directory was resolved at construction. Replacing that directory's path
@@ -14,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TransportSpool } from "../src/broker/transport-spool.js";
 
-test("AV5: a spool whose staging path is replaced after sealing reads and removes only its own file", async () => {
+test("AV5 / FS-005: a spool whose staging path is replaced after sealing reads and removes only its own file", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av5-"));
   try {
     const staging = join(root, "staging");

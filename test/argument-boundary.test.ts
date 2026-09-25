@@ -1,5 +1,5 @@
-/** AV1: a value one party supplies is data, never an option of the program it
- * is handed to.
+/** AV1 -- INV04 and INV09 applied to CLI-001 and PR-004: a value one party
+ * supplies is data, never an option of the program it is handed to.
  *
  * The CLI runs for people and, through the trusted extension, for models; both
  * pass it values chosen by someone else. These run the real CLI against a
@@ -62,7 +62,7 @@ function cli(root: string, socket: string, args: string[]): Promise<{ status: nu
 const sent = (frames: readonly Record<string, unknown>[], method: string) =>
   frames.filter(frame => frame.method === method).map(frame => frame.params as Record<string, unknown>);
 
-test("AV1: the CLI admits each declared option once, refuses unknown ones and takes a value verbatim", async () => {
+test("AV1 / INV04, CLI-001: the CLI admits each declared option once, refuses unknown ones and takes a value verbatim", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av1-cli-"));
   const fixture = await peer(root);
   try {
@@ -98,7 +98,7 @@ test("AV1: the CLI admits each declared option once, refuses unknown ones and ta
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("AV1: a value the model supplies cannot leave its slot through OMA's tools", async () => {
+test("AV1 / INV09, PR-004: a value the model supplies cannot leave its slot through OMA's tools", async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av1-tools-"));
   const fixture = await peer(root);
   const secret = join(root, "host-secret.txt");
@@ -143,7 +143,7 @@ test("AV1: a value the model supplies cannot leave its slot through OMA's tools"
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("AV1: the extension's address and actor grammar is the wire grammar", () => {
+test("AV1 / INV04: the extension's address and actor grammar is the wire grammar", () => {
   const samples = ["principal", "commons", "residents", "alice", "a", "a-b-9", "topic/dev", "topic/a", "topic/",
     "topic/Dev", "topic/-x", "topic-dev", "broker", "reconcile", "principal-relay", "topic", "Alice", "-x", "--file",
     "", "a".repeat(32), "a".repeat(33), "a.b_c-9", "a".repeat(96), "a".repeat(97), "not a key", "k/1", `topic/${"a".repeat(64)}`, `topic/${"a".repeat(65)}`, "alice@demo.oma.invalid", "a/b"];

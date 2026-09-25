@@ -15,7 +15,8 @@
  * The engine inside the sandbox builds its requests with a placeholder key of
  * the same shape as the real one, so provider code that inspects the key (an
  * OAuth token's claims, for instance) behaves exactly as it would on the host.
- * AV2: the relay writes the real key into the places a provider reads a key
+ * INF-007 (no credential in the sandbox, in any form) over INF-005: the relay
+ * writes the real key into the places a provider reads a key
  * from -- an authority header that holds the key or `Bearer <key>`, and the
  * `key` query parameter -- and nowhere else. A placeholder anywhere else is a
  * request to put the credential where the provider may repeat it (a 404 that
@@ -99,7 +100,7 @@ class Refusal extends Error {
 }
 const OUTSIDE_SLOT = "the credential placeholder is outside a credential slot";
 
-/** AV2: the key's bytes in a response. The tail of each chunk is kept so a key
+/** INF-007: the key's bytes in a response. The tail of each chunk is kept so a key
  * split across two chunks is seen too. Nothing is rewritten: a response either
  * passes unchanged or is cut off. */
 class CredentialTripwire {
@@ -343,7 +344,7 @@ export class InferenceRelay {
 
     const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "POST", admitted.path,
       admitted.headers), response => {
-      // AV2: a response that carries the key back is cut off, never delivered.
+      // INF-007: a response that carries the key back is cut off, never delivered.
       // Counted once, whether or not the response had already ended upstream.
       let cutOff = false;
       const cut = (): void => {

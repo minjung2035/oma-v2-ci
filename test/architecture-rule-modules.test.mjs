@@ -235,7 +235,7 @@ export function ${name}(fence: number) { return spawn("/bin/true", [], { stdio: 
   });
 });
 
-test("AV5: the state-tree rule accepts effects through a held parent, a descriptor or a primitive", () => withFixture({
+test("AV5 / FS-005: the state-tree rule accepts effects through a held parent, a descriptor or a primitive", () => withFixture({
   "src/storage/directory.ts": `import { mkdirSync } from "node:fs"; export function ensureDirectory(path) { mkdirSync(path); }`,
   "src/mail/move.ts": `import { renameSync, unlinkSync, writeFileSync, openSync, constants, mkdirSync } from "node:fs";
 import { entryAt, withinDirectory } from "../storage/contained-fs.js";
@@ -248,7 +248,7 @@ export function move(a, b, fd) {
   "src/broker.ts": `import { unlinkSync } from "node:fs"; export function listen(path) { unlinkSync(path); }`,
 }, root => assert.deepEqual(stateTreeFindings(root), [])));
 
-test("AV5: the state-tree rule rejects a mutation that names a path", () => {
+test("AV5 / FS-005: the state-tree rule rejects a mutation that names a path", () => {
   for (const [name, body] of [
     ["rename", `renameSync(join(root, "a"), join(root, "b"));`],
     ["unlink", `unlinkSync(path);`],
@@ -264,7 +264,7 @@ export function effect(root, path, parent, entryAt) { ${body} }`,
   }, root => assert.ok(stateTreeFindings(root).some(value => value.rule === "state-tree-held-parent"), `${name} escaped the rule`));
 });
 
-test("AV5: the real tree changes the state tree only through held parents", () => {
+test("AV5 / FS-005: the real tree changes the state tree only through held parents", () => {
   const repository = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(stateTreeFindings(repository), []);
 });

@@ -1,4 +1,4 @@
-// AV5 / architecture §4: every change under the state tree resolves its parent
+// FS-005 / architecture §4: every change under the state tree resolves its parent
 // directory once and names the entry through that resolution. A path-taking fs
 // mutation is therefore allowed only in the primitives that do the resolving,
 // through `entryAt(...)` of a held directory, on a descriptor, or in a file

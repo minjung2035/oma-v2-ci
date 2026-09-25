@@ -296,7 +296,7 @@ function collect(socketPath: string, path: string, headers: Record<string, strin
   });
 }
 
-test("AV2: the key is written only into its declared slots; a placeholder anywhere else is refused", async () => {
+test("AV2 / INF-007, INV09: the key is written only into its declared slots; a placeholder anywhere else is refused", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const placeholder = "sk-proj-PLACEHOLDERaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -332,7 +332,7 @@ test("AV2: the key is written only into its declared slots; a placeholder anywhe
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("AV2: a response that carries the key back is cut off before it reaches the sandbox", async () => {
+test("AV2 / INF-007: a response that carries the key back is cut off before it reaches the sandbox", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const placeholder = "sk-proj-PLACEHOLDERaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -362,7 +362,7 @@ test("AV2: a response that carries the key back is cut off before it reaches the
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
 
-test("AV2: a WebSocket upgrade keeps the same slots and is not compressed", async () => {
+test("AV2 / INF-007: a WebSocket upgrade keeps the same slots and is not compressed", async () => {
   const provider = await tlsProvider();
   const socket = scratchSocket();
   const placeholder = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.PLACEHOLDERsignature00";
