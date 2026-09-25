@@ -5,8 +5,8 @@
 ## 1. 현재 상태 (2026-09-25)
 
 - 브랜치 `refactor/safety-preserving-architecture`. push·PR·merge는 이 작업에서 하지 않는다.
-- **WP00–WP32 전부 커밋 완료, 재검토·적대적 검증, 이어서 전체 코드베이스 적대적 검증(AV1–AV5)과 v11 검증 중 발견한 AV6, 그 뒤 INV02 재점검 AV7, INV10·기록 약속 재점검 AV8 완료.** AV1–AV5는 카드별 새 원칙이 아니라 프로젝트 불변식(INV01–INV12)·spec MUST를 기존 owner가 적용한 것으로 재정렬했다(`implementation/consistency-decisions.md`의 AV 절). 이어서 사용자 요청으로 동봉 엔진을 0.87.1로 올렸다(ENG1). 마지막 통합 검증은 `implementation/validation.md`의 v12. v3–v11은 중간 증거로 `/home/dev/oma-evidence/v3..v11/`에 있다.
-- 판정: **release 미승인**. `node --input-type=module -e 'const m=await import("./scripts/review-closure.mjs"); console.log(m.approval(".", undefined, await m.oracleFindings(".")))'`로 확인한다. production 파일 222개 전부 검토 완료(NOT_REVIEWED 0). 남은 차단 요인은 powercut·실제 provider·CI NOT_RUN(oracle V05C·V30B·V32B)뿐이며 모두 사용자 승인이 필요하다.
+- **WP00–WP32 전부 커밋 완료, 재검토·적대적 검증, 이어서 전체 코드베이스 적대적 검증(AV1–AV5)과 v11 검증 중 발견한 AV6, 그 뒤 INV02 재점검 AV7, INV10·기록 약속 재점검 AV8 완료.** AV1–AV5는 카드별 새 원칙이 아니라 프로젝트 불변식(INV01–INV12)·spec MUST를 기존 owner가 적용한 것으로 재정렬했다(`implementation/consistency-decisions.md`의 AV 절). 이어서 사용자 요청으로 동봉 엔진을 0.87.1로 올렸다(ENG1). 그 뒤 사용자가 승인한 실제 provider 기능 점검(gpt-6-luna, test society `provtest`, 11회)에서 AV9–AV30을 찾아 기존 원칙에서 파생해 고치고 각각 재실행으로 확인했다(`implementation/consistency-decisions.md`의 AV 절, 의도된 동작으로 둔 발견 포함). 마지막 통합 검증은 `implementation/validation.md`의 v13. v3–v12는 중간 증거로 `/home/dev/oma-evidence/v3..v12/`에 있다.
+- 판정: **release 미승인**. `node --input-type=module -e 'const m=await import("./scripts/review-closure.mjs"); console.log(m.approval(".", undefined, await m.oracleFindings(".")))'`로 확인한다. production 파일 224개 전부 검토 완료(NOT_REVIEWED 0). 남은 차단 요인은 powercut·실제 provider(자동 lane)·CI NOT_RUN(oracle V05C·V30B·V32B)뿐이며 모두 사용자 승인이 필요하다. 수동 provider 기능 점검은 lane 증거가 아니다.
 - lane 성격: V27A(실제 엔진), V28B(pty), V31A(설치 closure)는 저장소에 `engine`/`pty` lane이 없어 durable lane에서 돈다(bubblewrap·openssl·python3 필요, skip은 PASS 아님).
 
 ## 2. 환경 (이 머신에 한정)
@@ -14,7 +14,8 @@
 - 새 clone(`/home/dev/oma-v2`)이다. 이전 세션의 `/tmp` 증거·worktree와 사용자 formatting 변경은 이 clone에 없다.
 - 일회용 systemd 계정 `omatest`(uid 1002, linger on, bubblewrap 설치, node 사본 `/opt/oma-test-node`)가 있고, `dev`는 `sudo -n -u omatest`만 비밀번호 없이 쓸 수 있다(`/etc/sudoers.d/oma-test`). 되돌리기: `loginctl disable-linger omatest; userdel -r omatest; rm /etc/sudoers.d/oma-test; rm -rf /opt/oma-test-node`.
 - `cloc` 2.08은 `~/.local/bin/cloc`(공식 릴리스 perl 스크립트).
-- 이 host의 차이: systemd 257, Linux 6.12(제거된 cgroup fd의 nlink가 2로 남음), util-linux 2.41(`unshare --forward-signals` 없음), `/usr/bin/node` 없음.
+- 이 host의 차이: systemd 257, Linux 6.12(제거된 cgroup fd의 nlink가 2로 남음), util-linux 2.41(`unshare --forward-signals` 없음), `/usr/bin/node` 없음, ripgrep 없음(봉인된 Resident의 `rg`도 없음, SB-007).
+- 실제 provider 기능 점검 환경 `/home/dev/oma-evidence/provider/`: `data/oma/provtest/`가 test society state이고, 그 `pi/auth.json`은 사용자가 이 컴퓨터의 Pi에서 직접 복사한 OAuth credential이다(내용은 읽지 않았다). 현재 society는 운영자 설정으로 Principal·Resident 프로필에 `code.integrate`를 위임한 상태다. 사용자 user manager에 `oma-provtest-*` unit이 남아 있다. 점검을 끝내면 정리: `for u in $(ls ~/.config/systemd/user | grep '^oma-provtest-'); do systemctl --user stop "$u"; rm -f ~/.config/systemd/user/"$u"; done; systemctl --user daemon-reload; rm -rf /home/dev/oma-evidence/provider/data` (credential 사본 포함).
 
 ## 3. 도구와 증거
 
@@ -26,6 +27,7 @@
 - `tools/wp-validate.py <repo> <spec.json>`: `validation.md`의 현재 판정 절과 A-008 LOC 문구를 다시 쓰고 digest를 결박한다.
 - `tools/mutants.py <spec.json> <out.json>`: omatest의 복사본에서 mutant마다 한 곳을 바꿔 build·시험. `INVALID`(적용/빌드 실패)와 `SURVIVED`를 구분한다.
 - 카드별 폴더: `wp03/`(수정 전 red, V03 baseline, 탐침), `wp07/`, `wp08/`, `wp13/`, `wp14/`, `wp16/`(mutant 정의·결과), `v1/`, `v2/`(통합 검증의 initial/final lane 산출물).
+- `provider/`: 실제 provider 기능 점검. `drive.py`(pty에서 `oma --society provtest` 실행, 입력은 `tty.in` FIFO, 화면은 `tty.log`), `monitor.mjs`(society 읽기 전용 요약, credential은 읽지 않음), `prompt*.txt`(회차별 지시), `runs/`(회차별 화면 기록), `archive/`(회차별 state). 재빌드 뒤에는 CFG-001에 따라 운영자로서 config의 `deploymentDigest`를 다시 고정한 뒤 실행한다.
 
 검증 절차: 코드 커밋 → spec 작성 → `wp-validate.py`로 v1 결박 → `run-lanes.sh … initial kernel crash` → 결과를 spec에 넣고 v2 결박 → `… final kernel crash` → 커밋될 트리의 digest가 final과 같은지 확인 → validation.md(+HANDOFF) docs commit.
 
@@ -33,7 +35,7 @@
 
 - 계획 디렉터리는 수정하지 않는다(`sha256sum -c SHA256SUMS.txt`).
 - 계획에 없는 schema·wire·receipt version·권한 변경, NOT_RUN/BLOCKED를 PASS로 바꾸기, 실제 credential·유료 provider, VM 전원 차단, push/PR/merge는 하지 않는다.
-- 커밋은 정확한 경로만 `git add`하고, 메시지 끝에 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- 커밋은 정확한 경로만 `git add`하고, 메시지 끝에 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. `src/mail/`은 gitignore의 `mail`에 걸리므로 그 아래 새 파일은 `git add -f`로 따로 추가한다.
 - 새 production 파일은 `scripts/kernel-zones.mjs`에 zone을 등록하고, 순수 kernel 파일은 `node:crypto` 같은 효과 capability를 import하지 않는다.
 - 소스 변경 뒤에는 `npm run evidence:graph && node scripts/loc.mjs && npm run check:architecture`를 커밋 전에 돌린다.
 - 전체 `npm test`를 도는 중에는 같은 트리에서 `npm run build`를 하지 않는다(dist가 바뀌어 대량 실패).
