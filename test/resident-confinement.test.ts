@@ -15,6 +15,7 @@ import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX,
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, type ResidentDirectories } from "../src/sandbox.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
+import { createEditToolDefinition } from "@earendil-works/pi-coding-agent";
 
 const RESOURCES = Object.freeze({
   memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100,
@@ -295,4 +296,30 @@ test("AV17 / D01, SB-006: a session path the confined engine reports translates 
       `${RESIDENT_PATHS.sessions}/`, `${RESIDENT_PATHS.sessions}`, join(f.dirs.sessions, name), "/run/oma-sessionsX/x.jsonl"])
       assert.equal(hostSessionPath(f.dirs, other), null, other);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+/** AV25 -- BATCH-006, TSP-009: the seventh functional run. A Resident's edit of
+ * a 35 KB workspace was refused "agent workspace quota would be exceeded"
+ * under a 2 GiB quota. Since the engine update (ENG1) the edit tool takes
+ * `edits: [{ oldText, newText }]`, and the guard read the older top-level
+ * `newText`: every edit, by every agent, was refused. The guard is bound here
+ * to the input the pinned engine's own edit tool hands a tool_call handler. */
+test("AV25 / BATCH-006, TSP-009: the guard reads the edit input the pinned engine hands it", async () => {
+  const workspace = mkdtempSync(join(tmpdir(), "oma-av25-"));
+  try {
+    writeFileSync(join(workspace, "a.txt"), "one\ntwo\n");
+    const tool = createEditToolDefinition(workspace);
+    let handler: ((event: { toolName: string; input: Record<string, unknown> }) => unknown) | null = null;
+    guardWorkspaceTools({ on: (_name: string, listener: typeof handler) => { handler = listener; } } as never, workspace, 1024, true);
+    // Both forms a model may send reach a handler as the engine prepares them.
+    for (const raw of [{ path: "a.txt", edits: [{ oldText: "one", newText: "uno" }, { oldText: "two", newText: "dos" }] },
+      { path: "a.txt", oldText: "one", newText: "uno" }]) {
+      const input = tool.prepareArguments!(raw) as Record<string, unknown>;
+      assert.equal(handler!({ toolName: "edit", input }), undefined, `a small edit was refused: ${JSON.stringify(input)}`);
+    }
+    const large = tool.prepareArguments!({ path: "a.txt", edits: [{ oldText: "one", newText: "x".repeat(2048) }] }) as Record<string, unknown>;
+    assert.deepEqual(handler!({ toolName: "edit", input: large }), { block: true, reason: "agent workspace quota would be exceeded" });
+    // An input the engine would not have validated is refused, not guessed at.
+    assert.equal((handler!({ toolName: "edit", input: { path: "a.txt", edits: [] } }) as { block?: boolean }).block, true);
+  } finally { rmSync(workspace, { recursive: true, force: true }); }
 });

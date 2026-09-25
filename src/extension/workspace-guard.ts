@@ -66,8 +66,17 @@ function workspaceWriteFits(root: string, tool: string, input: Record<string, un
     growth = Buffer.byteLength(input.content);
     try { const current = lstatSync(path); if (current.isFile()) growth = Math.max(0, growth - current.size); } catch { /* new file */ }
   } else {
-    if (typeof input.newText !== "string") return false;
-    growth = Buffer.byteLength(input.newText);
+    // AV25: the input a tool_call handler sees is the pinned engine's validated
+    // one (BATCH-006), `edits: [{ oldText, newText }]`; the engine has already
+    // folded its older single-edit form into it. What it may add is at most
+    // the replacement text.
+    const edits = input.edits;
+    if (!Array.isArray(edits) || edits.length === 0) return false;
+    for (const entry of edits) {
+      const replacement = (entry as { newText?: unknown } | null)?.newText;
+      if (typeof replacement !== "string") return false;
+      growth += Buffer.byteLength(replacement);
+    }
   }
   return growth <= maximum && workspaceUsage(root, maximum - growth) <= maximum - growth;
 }
