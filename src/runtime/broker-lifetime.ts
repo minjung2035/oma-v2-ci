@@ -29,6 +29,17 @@ export async function settleWithin(tasks: Iterable<Promise<unknown>>, seconds: n
   } finally { alarm?.cancel(); }
 }
 
+/** AV31 -- D03, LIFE-006: every way this broker's host can go away ends it
+ * through its drain, which revokes every run and stops the Residents. Asked to
+ * stop (SIGTERM), interrupted (SIGINT), or its terminal hung up (SIGHUP: the
+ * product's `oma` was the session leader and exited, or its window closed). An
+ * unhandled SIGHUP killed a draining broker outright and left Residents
+ * running with no broker, until systemd's start limit stopped them. */
+export const HOST_LOSS_SIGNALS = Object.freeze(["SIGTERM", "SIGINT", "SIGHUP"] as const);
+export function stopOnHostLoss(stop: () => void, target: Pick<NodeJS.Process, "once"> = process): void {
+  for (const signal of HOST_LOSS_SIGNALS) target.once(signal, stop);
+}
+
 export class BrokerLifetime {
   private current: LifetimePhase = "acquired";
   private stopping = false;

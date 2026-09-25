@@ -89,7 +89,8 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
         default: return { kind: "taken", lease: { name: "\0oma.society.fixture", fence: 4, release() { calls.push("release"); } } };
       }
     } },
-    "../runtime/broker-lifetime.js": { BrokerLifetime: class {
+    // AV31: every way the host goes away ends the broker through its drain.
+    "../runtime/broker-lifetime.js": { stopOnHostLoss() { calls.push("host-loss"); }, BrokerLifetime: class {
       permitsActivation = true;
       retainStore() {} attach() {}
       async shutdown() { calls.push("shutdown"); }
@@ -310,4 +311,12 @@ test("P1 composition root: a fence declaration that cannot be honoured is a star
   assert.equal(result.exitCode, 1, "a fence that could not be honoured did not fail startup");
   for (const opened of ["config", "Store", "Broker", "listen"])
     assert.equal(result.calls.includes(opened), false, `${opened} ran for a fence that could not be honoured`);
+});
+
+test("AV31 / D03, LIFE-006: the broker ends through its drain on every host-loss signal, registered before anything slow", async () => {
+  const { calls } = await compose();
+  const order = name => calls.indexOf(name);
+  assert.ok(order("host-loss") >= 0, "the entrypoint does not stop on host loss through the one signal owner");
+  for (const after of ["config", "Store", "Broker", "listen"])
+    assert.ok(order("host-loss") < order(after), `${after} happened before host loss could stop the broker`);
 });

@@ -17,7 +17,7 @@ import { loadConfig } from "../config.js";
 import { createChildSpecResolver } from "../config/policy.js";
 import { ProcessLock, SOCIETY_OWNED_EXIT } from "../runtime/process-lock.js";
 import { claimSocietyFence } from "../runtime/society-lease.js";
-import { BrokerLifetime } from "../runtime/broker-lifetime.js";
+import { BrokerLifetime, stopOnHostLoss } from "../runtime/broker-lifetime.js";
 import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout, hostLaunchLocation, launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
 import { StorageAdmission } from "../storage/quota.js";
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
     });
     return stopping;
   };
-  process.once("SIGTERM", () => { void stop(0); }); process.once("SIGINT", () => { void stop(0); });
+  stopOnHostLoss(() => { void stop(0); });
   // LIFE-006/PR-001: a broker started by the product holds a supervision
   // channel from it. Opened before anything slow, so a host that dies during
   // recovery still takes this broker with it; a broker started any other way

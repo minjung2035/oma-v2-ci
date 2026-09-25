@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { BrokerLifetime, settleWithin } from "../src/runtime/broker-lifetime.js";
+import { BrokerLifetime, HOST_LOSS_SIGNALS, settleWithin } from "../src/runtime/broker-lifetime.js";
 import { ProcessLock } from "../src/runtime/process-lock.js";
 import { AdmissionGate, bindAdmissionGate } from "../src/domain/admission.js";
 import { StoreError } from "../src/domain/errors.js";
@@ -104,4 +104,36 @@ test("R17: only Store corruption latches the global gate; run and repository unc
   gate.observe(new StoreError("STORE_CORRUPT", "bad durable row"));
   assert.throws(() => gate.assertAdmission(), { code: "STORE_CORRUPT" });
   gate.close(); assert.throws(() => gate.assertAdmission(), { code: "STORE_CORRUPT" });
+});
+
+/** AV31 -- D03, LIFE-006: the twelfth functional run quit the product's `oma`
+ * while two Residents were inside a 90 s tool call. `oma` was the terminal
+ * session's leader; its exit hung up the terminal, and the broker -- in its
+ * process group, handling SIGTERM and SIGINT only -- died of SIGHUP in the
+ * middle of its drain. The Residents ran on with no broker, and when their
+ * turns ended their runners failed until systemd's start limit stopped them. */
+test("AV31 / D03, LIFE-006: a hung-up terminal ends the broker through its drain, like any other host loss", { timeout: 20_000 }, async () => {
+  const { spawn } = await import("node:child_process");
+  const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const lifetime = fileURLToPath(new URL("../src/runtime/broker-lifetime.js", import.meta.url));
+  const root = mkdtempSync(join(tmpdir(), "oma-av31-"));
+  try {
+    for (const signal of HOST_LOSS_SIGNALS) {
+      const marker = join(root, signal);
+      const child = spawn(process.execPath, ["--input-type=module", "-e", `
+        const { stopOnHostLoss } = await import(${JSON.stringify(lifetime)});
+        const { writeFileSync } = await import("node:fs");
+        stopOnHostLoss(() => { setTimeout(() => { writeFileSync(${JSON.stringify(marker)}, "drained"); process.exit(0); }, 200); });
+        process.stdout.write("ready\\n"); setInterval(() => {}, 1000);`], { stdio: ["ignore", "pipe", "inherit"] });
+      await new Promise<void>(resolve => { child.stdout.once("data", () => { resolve(); }); });
+      child.kill(signal);
+      const code = await new Promise<number | null>(resolve => { child.once("exit", resolved => { resolve(resolved); }); });
+      assert.equal(code, 0, `${signal} ended the broker without its drain`);
+      assert.equal(readFileSync(marker, "utf8"), "drained");
+    }
+    assert.deepEqual([...HOST_LOSS_SIGNALS].sort(), ["SIGHUP", "SIGINT", "SIGTERM"]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
