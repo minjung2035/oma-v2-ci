@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "e889e647658220ad0300715d3816ca900c7a55888fa37a19b850d08906f45132",
-  "report": "5bd77771e9877c3566e9278821b890017fc213cac5411ad1f11aa8684b57837a",
+  "report": "3a934595a4d85c6428e28852337f8daff1572778a11f07ab53b239ba0352598c",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "64fb0aac1b06e2a6759ab34cfaf9045607a4809781fd1082c91e625a3898f0b4"
+      "sha256": "c845fdd0e17d8ab629016af9496e0ac03f14ee299c63666cb68ab1dd4d1fefa2"
     },
     {
       "path": "src/broker/composition.ts",
@@ -153,7 +153,7 @@
     },
     {
       "path": "src/cli/exit.ts",
-      "sha256": "af1c015d11644eacfec5cb57fe16d5bc25764541e5af13bb34ebe1bdb9aee969"
+      "sha256": "e673a0edd8e2ea356c59aac8c490b6fd70fa703476ff2e853f8cb8e0bae270c1"
     },
     {
       "path": "src/cli/request-intent.ts",
@@ -161,7 +161,7 @@
     },
     {
       "path": "src/cli/request-service.ts",
-      "sha256": "5e02f41b1313847044fc1b42aad92194c9553d096ce4fa8fb2486eb7f8cc16ec"
+      "sha256": "e0c0847e983b717f1969f71bdc035b618c26bba2c47e24ebc9f4d4a252a0ab66"
     },
     {
       "path": "src/cli/transport.ts",
@@ -285,7 +285,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "3355aa0fcfe45988c640fc971ec4a2982f4f4047a63180caf293eef9f739062b"
+      "sha256": "c3247239e23b54d90bc77d7b04376d564695bf6d45d66d760dcead4244553f73"
     },
     {
       "path": "src/entry/host.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "bb8889283e2512025e8ebad3e69d464cb809d83f447fd291b2b9bb57cabd9de0"
+      "sha256": "254039289eafa822bf7b39d1c3ae0cd356ac01c9eda98be101c4fbacdb0e0412"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -581,7 +581,7 @@
     },
     {
       "path": "src/reconcile.ts",
-      "sha256": "c09e9da4f3df1c6f09a614925fbc7f959c09373eb974b4de9fbbe472fc976cce"
+      "sha256": "3062b5803da38689f01883b9288917ee149962009b806209a92672d2761d29e8"
     },
     {
       "path": "src/reconcile/operations.ts",
@@ -597,7 +597,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "18534f3078612c99d312b757d4aff50ee892a23f848323eda8b0aa504b24d992"
+      "sha256": "0fc87cc80a0e319b4c7cf3600750132d285815dc32c75c02108ba7565578365b"
     },
     {
       "path": "src/runtime/assets.ts",

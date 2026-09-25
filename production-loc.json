@@ -3,13 +3,13 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 223,
-    "n_lines": 28970,
+    "n_lines": 29044,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
     "blank": 4,
-    "comment": 57,
-    "code": 435,
+    "comment": 63,
+    "code": 456,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -78,28 +78,28 @@
     "code": 291,
     "language": "TypeScript"
   },
+  "src/extension/mail-tools.ts": {
+    "blank": 11,
+    "comment": 66,
+    "code": 284,
+    "language": "TypeScript"
+  },
+  "src/runner.ts": {
+    "blank": 0,
+    "comment": 38,
+    "code": 282,
+    "language": "TypeScript"
+  },
   "src/leaf.ts": {
     "blank": 29,
     "comment": 90,
     "code": 279,
     "language": "TypeScript"
   },
-  "src/runner.ts": {
-    "blank": 0,
-    "comment": 34,
-    "code": 278,
-    "language": "TypeScript"
-  },
   "src/runtime/pi-rpc.ts": {
     "blank": 3,
     "comment": 16,
     "code": 275,
-    "language": "TypeScript"
-  },
-  "src/extension/mail-tools.ts": {
-    "blank": 10,
-    "comment": 60,
-    "code": 260,
     "language": "TypeScript"
   },
   "src/broker/connection.ts": {
@@ -186,15 +186,15 @@
     "code": 212,
     "language": "TypeScript"
   },
+  "src/reconcile.ts": {
+    "blank": 1,
+    "comment": 22,
+    "code": 209,
+    "language": "TypeScript"
+  },
   "src/git/integration.ts": {
     "blank": 5,
     "comment": 8,
-    "code": 208,
-    "language": "TypeScript"
-  },
-  "src/reconcile.ts": {
-    "blank": 1,
-    "comment": 20,
     "code": 208,
     "language": "TypeScript"
   },
@@ -816,6 +816,12 @@
     "code": 54,
     "language": "TypeScript"
   },
+  "src/cli/exit.ts": {
+    "blank": 7,
+    "comment": 6,
+    "code": 53,
+    "language": "TypeScript"
+  },
   "src/mail/reconcile.ts": {
     "blank": 0,
     "comment": 1,
@@ -850,12 +856,6 @@
     "blank": 0,
     "comment": 2,
     "code": 52,
-    "language": "TypeScript"
-  },
-  "src/cli/exit.ts": {
-    "blank": 7,
-    "comment": 3,
-    "code": 51,
     "language": "TypeScript"
   },
   "src/tui/prompt.ts": {
@@ -1345,9 +1345,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1176,
-    "comment": 4436,
-    "code": 23358,
+    "blank": 1177,
+    "comment": 4457,
+    "code": 23410,
     "nFiles": 223
   }
 }

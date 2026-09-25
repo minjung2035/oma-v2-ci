@@ -864,7 +864,7 @@ Counterexamples tried against the finished product:
   refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
   controls and zero-width clusters.
 
-## Whole-codebase adversarial pass (after v9) -- AV1..AV19 as applications of INV01..INV12
+## Whole-codebase adversarial pass (after v9) -- AV1..AV23 as applications of INV01..INV12
 
 Every production file was read against the trust boundaries: a Resident (its
 actor socket, and the workspace, home and session directory its sandbox writes),
@@ -875,7 +875,7 @@ applied and was not honoured; it is fixed through that invariant's owner (an
 existing one, or one extended), every new helper meets the abstraction
 acceptance criterion there (it removes an independent decision, a premise a
 caller must remember, or a resource that can be missed), and the WP32.02 and
-WP29 tables below name the owners and regressions. "AV1..AV19" are regression
+WP29 tables below name the owners and regressions. "AV1..AV23" are regression
 ids, like R38 or T118, not principles. The requirement links are in
 `implementation/source-owners.json` (CLI-001, PR-004, FS-003, INF-007, FS-005,
 SB-006).
@@ -901,6 +901,10 @@ SB-006).
 | AV17 | the fifth functional run: both Residents' runners failed with BATCH_CONFLICT at every activation, one batch was presented seventeen times (incarnations 2 to 20) and never completed, and systemd's start limit ended both. No confined Resident had ever completed a batch: the boundary the confined engine reports names its session file by the sandbox's view (`/run/oma-sessions/...`), and the receipt check requires the host session directory. V27A and T117 stop at the boundary and never published a receipt on the confined path | D01 and SB-006 (the trusted runner's receipt names the durable session file; the engine's report is model-side data) | `hostSessionPath` in `sandbox.ts` translates a session path back through the one mount table (`residentMounts`, now shared with `confinedPath`, INV04), only from the session mount and only a plain file directly in it; `PiAdapter` applies it to every confined boundary, and a path that does not translate is no boundary. V27A now publishes and verifies the receipt | the sandbox's view of a path used as the host's | AV17 (one test), V27A |
 | AV18 | same run: a Resident's `oma submit` answered CAPABILITY_DENIED git.submit. CREATE-002 gives a child the parent's current capabilities ∩ the parent profile's delegable ∩ the child profile, and the default Principal delegated `git.submit` and `agent.manage.self` without holding them, so every Resident the Principal creates -- the default's only kind ("created when they are asked for") -- got `mail.send` and `route.follow` only | CREATE-002 (the intersection, no widening by role) and arch §11/§15 (Residents submit the society's code); AUTH-001 still keeps `code.integrate` from the Principal | the default Principal profile holds what it delegates; a test runs the default configuration through `resolveChildSpec` and requires the Resident profile's capabilities, and that no profile delegates what it does not hold | a delegation the default configuration could never honour. A society bootstrapped before this keeps its Principal's frozen spec (LIFE-008) | AV18 (one test) |
 | AV19 | the full local suite during this work: T115 (two first starts racing on one state root) failed once with `EEXIST ... symlink 'usr/bin'`: both starts saw the rootfs link absent and the second create lost | provisionSociety's contract ("safe to lose a race with another start") | `ensureLink`/`ensureFile` treat EEXIST as the race it is and observe the entry the other start made, once | a lost race failing a start | T115 (15 of 15 after the change) |
+| AV20 | the sixth functional run, on a fresh society: the Principal created two Residents at once. The second create was accepted, found the first still completing and answered BROKER_UNAVAILABLE "its intent is retained"; the Resident stayed `provisioning` for as long as the broker ran. The intent was retained for the reconcile timer (arch §6.1, §6.5, §17.1; REC-002), and nothing installs that timer: `ensureReconcile` has had no caller since it was written, and the product's broker is a foreground one, whose lifetime no timer unit can share | REC-002 (a 5 s bounded sweep, joined when one runs, no model call), arch §6.5 ("이벤트는 빠른 반응용이며 원본이 아니다") and D03 (each mode renders only the lifetime dependencies that are true) | a foreground broker runs the sweep itself for exactly its own lifetime: `Broker` starts it with the status timer, each tick is `ReconcileModule.sweep` plus the view refresh `host.reconcile` does, the drain waits for a running one like any dispatched task, and a failure is reported once until it changes. `RECONCILE_INTERVAL_MS` is `reconcile.timer.in`'s interval, bound by a test. The systemd-managed profile's timer unit is still not installed; that profile's runtime gate stays NOT_RUN | a recovery the design depends on that no deployment runs | AV20 (four tests) |
+| AV21 | same run: a Resident's runner exited with BROKER_UNAVAILABLE after every delivery longer than `idleStreamSeconds` (30 s); the next incarnation settled the batch from its receipt (D01), but each long batch cost a failed start against the unit's start limit (5 in 60 s). The runner held the connection it opened the run with through the whole turn, and the broker closes a connection nothing speaks on for that long | the connection's bounded idle (IPC, CFG-004) on both ends, and authority by the calling unit rather than by the connection (`requireRunnerUnit`) | the runner dials again for the call after a delivery; a connection serves the calls made together, not the run | a connection held past the bound its own channel enforces | AV21 (one test) |
+| AV22 | same run: that refused create reached the model as `BROKER_UNAVAILABLE: BROKER_UNAVAILABLE` and no key, and the model asked again under a new key -- the one thing the error table forbids for that code ("bounded same-key 조회/재시도; 새 key 금지") | ERR-001 (the caller branches on retry) and the CLI's own recovery lines, which name the key wherever an outcome is unclear | a mutation failure whose retry is `same-key` names the request key and says not to use a new one; one never to retry does not | a retry instruction the caller could not follow | AV22 (one test, two cases) |
+| AV23 | same run: a Resident's report in Korean reached the Principal as a Base64 body; a Principal has no shell to decode it, and a Resident did so with `base64 -d`. The pinned MIME adapter (MAIL-003) chooses Base64 or quoted-printable for any text body that is not short ASCII, and cannot write the 8bit body arch §5.1 shows | arch §5.1 (UTF-8 plain text body), BATCH-002 (the index gives a path that can be read) and AV10's reading of it (a reader meets a message as its sender wrote it) | the read tool shows the stored header block unchanged and the body with its transfer encoding undone; an encoding it cannot undo exactly leaves the message as stored. The stored bytes are not changed. Bound to the runtime's own writer by a test over both encodings | a stored encoding shown to a reader as the message | AV23 (two tests) |
 
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only
@@ -912,6 +916,18 @@ the agent having left `provisioning`. AV2's rule is the spec's INF-005 sentence
 narrowed by INF-007; that sentence now says so (INV12). architecture.md is not
 changed: N-001 binds its reviewed bytes, and its "header and request path only"
 already contains the narrower slots. AV1's rule is CLI-001's grammar with one parser for it.
+
+Found by the sixth functional run and left as they are, because the plan intends
+them: an unknown `agent.start`/`agent.stop` whose intent a later operation
+replaced stays unknown and is listed in later stop receipts (the
+`previousIncarnation` row above: "otherwise the operation is `unknown`, never
+rewritten"); a stop that cannot prove death while the unit is restarting is
+unknown (LIFE-003); the Principal has no integrate tool (AUTH-001); a Resident's
+first commit needs a Git identity it sets itself, because the sandbox
+environment is SB-002's closed list and commit author provenance is S-08's;
+`/inbox.md` does not exist before the first batch; a Principal receives mail
+at its turn boundary (PR-003, TUI-004); the failure message is the code
+(`publicFailure` sanitizes).
 
 Residuals: a WebSocket frame header inside the key's bytes would hide it from the
 byte tripwire (with compression refused, the provider would have to fragment its
