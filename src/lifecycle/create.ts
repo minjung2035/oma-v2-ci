@@ -7,7 +7,7 @@ import { residentUnitsFor } from "../domain/derived.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
 import { generateOperationId } from "../ids.js";
 import { requestHash } from "../hash.js";
-import { resolvedSpecOf, assertActorIdentity } from "../authority.js";
+import { resolvedSpecOf, assertActorIdentity, assertCurrentActor } from "../authority.js";
 import { workspacePathAt, agentRootPathAt, isWorkspacePathFor } from "../storage/paths.js";
 import { ensureDurableDirectory } from "../storage/durable-fs.js";
 import { PreacceptScope } from "../storage/preaccept-artifact.js";
@@ -161,7 +161,7 @@ export class CreateCoordinator {
     scope.settle();
     if (accepted.outcome === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
     // The creation is accepted: a failure from here is reported as accepted.
-    try { return accepted.linked ? this.settleLinked(id, accepted.linked, input.name) : await this.finish(id, true); }
+    try { return accepted.linked ? this.settleLinked(id, accepted.linked, input.name) : await this.finish(id, true, auth); }
     catch (error) { throw acceptedFailure(error); }
   }
 
@@ -190,15 +190,15 @@ export class CreateCoordinator {
     return lifecycleReceipt(this.store, id);
   }
 
-  private finish(id: string, allowActivation = true): Promise<Receipt> {
+  private finish(id: string, allowActivation = true, auth?: AuthContext): Promise<Receipt> {
     if (this.completing) return this.completing.id === id ? this.completing.task :
       Promise.reject(new StoreError("BROKER_UNAVAILABLE", "another accepted creation is completing; its intent is retained", { details: { reason: "busy" } }));
-    const task = Promise.resolve().then(() => this.finishAccepted(id, allowActivation))
+    const task = Promise.resolve().then(() => this.finishAccepted(id, allowActivation, auth))
       .finally(() => { if (this.completing?.task === task) this.completing = null; });
     this.completing = { id, task }; return task;
   }
 
-  private async finishAccepted(id: string, allowActivation: boolean): Promise<Receipt> {
+  private async finishAccepted(id: string, allowActivation: boolean, auth?: AuthContext): Promise<Receipt> {
     const mail = this.requireMail();
     const operation = this.store.getOperationById(id);
     if (!operation || operation.kind !== "agent.create") throw new StoreError("REQUEST_NOT_FOUND", `no create operation ${id}`);
@@ -214,14 +214,17 @@ export class CreateCoordinator {
     if (!agent || agent.specHash !== plan.specHash || resolvedSpecDigest(resolvedSpecOf(agent)) !== plan.specHash)
       throw new StoreError("STORE_CORRUPT", "create agent/spec mismatch");
     // P0-1, CREATE-003: the accepted plan and the agent row it made are the
-    // facts; the host policy and the parent's authority were checked in the
-    // acceptance transaction. A later edit does not reinterpret them, here or in
-    // recovery -- one answer for both. What is checked is that the agent is
-    // still the one this plan made.
+    // facts, and the host policy was resolved in the acceptance transaction; a
+    // later edit does not reinterpret them, here or in recovery. Two things are
+    // checked instead: that the agent is still the one this plan made, and --
+    // before an effect on a live request's behalf -- that the requester still
+    // holds its lease and capability (INV06). A requester that lost them leaves
+    // the accepted intent to recovery, which never fabricates a live context.
     const assertCurrent = (): void => {
       const current = this.store.getAgent(plan.spec.name);
       if (!current || current.specHash !== plan.specHash) throw new StoreError("STORE_CORRUPT", "create owner changed during preparation");
       if (current.incarnation !== agent.incarnation) throw new StoreError("RUN_TERMINATION_UNKNOWN", "create incarnation changed during preparation");
+      if (auth) assertCurrentActor(this.store, auth, "agent.create");
     };
     mail.publishCreateInitial(plan.initialMessage);
     await this.workspace.ensure(plan, agent.desired !== "provisioning");
