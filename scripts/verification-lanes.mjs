@@ -299,6 +299,8 @@ export const lanes = Object.freeze({
       "DR11: the session file and its directory are flushed before the receipt's name exists",
       "DR11: a crash after the session flush and before the receipt leaves no receipt",
       "DR13 / P0-5: the broker's host policy reader says 'cannot be read now', never 'changed'",
+      "DR13 / CLI-003: a failure the broker says to look up again is exit 3 whatever its code",
+      "P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepted does not reinterpret it",
       "AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan",
       "AV14 / arch §7: a Resident's activation resumes its existing session",
       "AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session",

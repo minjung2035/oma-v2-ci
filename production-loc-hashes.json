@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "162f1e6f78bc194df4149323332f6b0bd6678c2ac922f809081450d5d870c8b1",
-  "report": "8991b23cfd2c33de52c92d104fc9f69238a76d29f10c314e89d0879dde5f20d5",
+  "report": "868be1574b5d8113998c795c95d0f1922b9a9da1eab5305c70c54e789ba64752",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -153,7 +153,7 @@
     },
     {
       "path": "src/cli/exit.ts",
-      "sha256": "4e546cf6191dd109160ba20baa555dc5aa2168775c27e267246cb9284fb3e3df"
+      "sha256": "d30ae2a0cce4235d0594aef1a3fd39ca503b31d7f552c77b10bb061265236f24"
     },
     {
       "path": "src/cli/request-intent.ts",
@@ -233,7 +233,7 @@
     },
     {
       "path": "src/domain/errors.ts",
-      "sha256": "552883216cbdec84d4550ae97d27a6d295cd8f9ebec75368524809faa4a8a607"
+      "sha256": "7cbd2479caec45b7b71c34f2b14ddaf7c1076609f1eb1846208964653ef57b2f"
     },
     {
       "path": "src/domain/exhaustive.ts",
@@ -429,7 +429,7 @@
     },
     {
       "path": "src/lifecycle/create.ts",
-      "sha256": "6d66852846f84b63ec4a7be4d0830bc2521b56180dc6b30f971c811ac1a172a2"
+      "sha256": "28de8afbaad0a8df5302fd4e44bcd34d1d3502c6d697fadda49bfb43b3beedff"
     },
     {
       "path": "src/lifecycle/policy.ts",

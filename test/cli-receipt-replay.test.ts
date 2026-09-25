@@ -246,6 +246,28 @@ test("AV22 / ERR-001, CLI-003: a failure to retry under the same key names the k
   }
 });
 
+/* DR13 / CLI-003, P0-5: exit 2 is a settled failure. An accepted operation whose
+ * outcome is not known yet -- here a create that failed after acceptance with a
+ * conflict-class code, retry same-key -- is 3 and names its key; the same code
+ * with nothing to look up stays 2. */
+test("DR13 / CLI-003: a failure the broker says to look up again is exit 3 whatever its code", { timeout: 30_000 }, async t => {
+  for (const [failure, exit] of [
+    [{ code: "POLICY_CHANGED", message: "POLICY_CHANGED", retry: "same-key" }, 3],
+    [{ code: "POLICY_CHANGED", message: "POLICY_CHANGED", retry: "never" }, 2],
+    [{ code: "UNSUPPORTED_PROFILE", message: "UNSUPPORTED_PROFILE", retry: "same-key" }, 4],
+  ] as const) {
+    await t.test(`${failure.code} ${failure.retry}`, async () => {
+      const home = mkdtempSync(join(tmpdir(), "oma-dr13-exit-"));
+      const broker = await peer(home, () => ({ ok: false, error: failure }));
+      try {
+        const result = await run(home, ["follow", "commons", "--request", "dr13-exit"]);
+        assert.equal(result.code, exit, result.stderr);
+        if (failure.retry === "same-key") assert.match(result.stderr, /--request dr13-exit; 새 key로 재실행하지 마세요/);
+      } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
+    });
+  }
+});
+
 /* AV28 -- the CLI shows the value a conflict found. */
 test("AV28 / ERR-001: the CLI shows the actual value a conflict names", { timeout: 30_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), "oma-av28-"));

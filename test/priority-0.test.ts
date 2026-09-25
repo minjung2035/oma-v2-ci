@@ -16,6 +16,12 @@ import type { LifecycleModule } from "../src/lifecycle.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { readCurrentHostPolicy } from "../src/config.js";
 import { defaultHostConfig } from "../src/config/defaults.js";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { Store } from "../src/store.js";
+import { LifecycleModule as Lifecycle } from "../src/lifecycle.js";
+import { gitFixture, gitAuth, seedGit } from "./fixtures/git-crash.js";
+import { ALL_CAPS, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 
 /** Leaves, in `root`, one of every artifact a request makes before its
  * acceptance, as a broker that died before accepting would leave them. */
@@ -80,4 +86,30 @@ test("DR13 / P0-5: the broker's host policy reader says 'cannot be read now', ne
     assert.throws(() => readCurrentHostPolicy("/config.json", "demo", () => { throw failure; }), { code: "BROKER_UNAVAILABLE" });
   assert.throws(() => readCurrentHostPolicy("/config.json", "other", () => config), { code: "POLICY_CHANGED" },
     "a readable policy of another society is a changed one");
+});
+
+test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepted does not reinterpret it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-p0v10-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  try {
+    seedGit(root);
+    const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8"));
+    store.transaction(tx => {
+      tx.insertAgent(makeValidAgent("principal", { from: info.base }));
+      tx.insertAgent(makeValidAgent("a", { from: info.base, createdBy: "principal" }));
+    });
+    const { mail, paths } = gitFixture(root, store);
+    const units = { bindIncarnationReader: () => undefined, ensureResident: () => undefined, start: () => undefined,
+      onRevokeRun: undefined } as unknown as UnitsModule;
+    // The policy resolves the accepted spec twice (preparation, acceptance
+    // transaction); an edit lands right after acceptance and would resolve a
+    // child with fewer capabilities from then on.
+    let resolutions = 0;
+    const lifecycle = new Lifecycle(store, units,
+      { stateRoot: root, projectGit: paths.projectGit, society: paths.society, hasGoal: () => false, activationAllowed: () => true },
+      (_parent, input) => makeValidResolvedSpec(input.name, "p", ++resolutions <= 2 ? ALL_CAPS : ["mail.send"], input.from, input.brief), mail);
+    const receipt = await lifecycle.create({ ...gitAuth, capabilities: new Set(ALL_CAPS) }, { name: "child", from: info.base, brief: "brief" }, "p0v10");
+    assert.equal(receipt.state, "succeeded", "the accepted plan is completed with the spec it froze");
+    assert.deepEqual([...JSON.parse(store.getAgent("child")!.specJson).capabilities].sort(), [...ALL_CAPS].sort());
+  } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });

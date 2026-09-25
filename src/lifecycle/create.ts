@@ -161,7 +161,7 @@ export class CreateCoordinator {
     scope.settle();
     if (accepted.outcome === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
     // The creation is accepted: a failure from here is reported as accepted.
-    try { return accepted.linked ? this.settleLinked(id, accepted.linked, input.name) : await this.finish(id, true, auth); }
+    try { return accepted.linked ? this.settleLinked(id, accepted.linked, input.name) : await this.finish(id, true); }
     catch (error) { throw acceptedFailure(error); }
   }
 
@@ -190,15 +190,15 @@ export class CreateCoordinator {
     return lifecycleReceipt(this.store, id);
   }
 
-  private finish(id: string, allowActivation = true, auth?: AuthContext): Promise<Receipt> {
+  private finish(id: string, allowActivation = true): Promise<Receipt> {
     if (this.completing) return this.completing.id === id ? this.completing.task :
       Promise.reject(new StoreError("BROKER_UNAVAILABLE", "another accepted creation is completing; its intent is retained", { details: { reason: "busy" } }));
-    const task = Promise.resolve().then(() => this.finishAccepted(id, allowActivation, auth))
+    const task = Promise.resolve().then(() => this.finishAccepted(id, allowActivation))
       .finally(() => { if (this.completing?.task === task) this.completing = null; });
     this.completing = { id, task }; return task;
   }
 
-  private async finishAccepted(id: string, allowActivation: boolean, auth?: AuthContext): Promise<Receipt> {
+  private async finishAccepted(id: string, allowActivation: boolean): Promise<Receipt> {
     const mail = this.requireMail();
     const operation = this.store.getOperationById(id);
     if (!operation || operation.kind !== "agent.create") throw new StoreError("REQUEST_NOT_FOUND", `no create operation ${id}`);
@@ -213,17 +213,15 @@ export class CreateCoordinator {
     const agent = this.store.getAgent(plan.spec.name);
     if (!agent || agent.specHash !== plan.specHash || resolvedSpecDigest(resolvedSpecOf(agent)) !== plan.specHash)
       throw new StoreError("STORE_CORRUPT", "create agent/spec mismatch");
+    // P0-1, CREATE-003: the accepted plan and the agent row it made are the
+    // facts; the host policy and the parent's authority were checked in the
+    // acceptance transaction. A later edit does not reinterpret them, here or in
+    // recovery -- one answer for both. What is checked is that the agent is
+    // still the one this plan made.
     const assertCurrent = (): void => {
       const current = this.store.getAgent(plan.spec.name);
       if (!current || current.specHash !== plan.specHash) throw new StoreError("STORE_CORRUPT", "create owner changed during preparation");
       if (current.incarnation !== agent.incarnation) throw new StoreError("RUN_TERMINATION_UNKNOWN", "create incarnation changed during preparation");
-      if (auth) {
-        // Keep the live lease object, not a copied capability Set. Recovery has
-        // its own accepted-intent policy and never fabricates this live context.
-        this.policy.refresh();
-        const resolved = this.policy.resolve(auth, { name: plan.spec.name, from: plan.spec.from, brief: plan.spec.brief });
-        if (resolved.specHash !== plan.specHash) throw new StoreError("POLICY_CHANGED", "child policy differs from accepted creation");
-      }
     };
     mail.publishCreateInitial(plan.initialMessage);
     await this.workspace.ensure(plan, agent.desired !== "provisioning");

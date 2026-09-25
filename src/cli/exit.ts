@@ -41,7 +41,7 @@ export function finishFailure(reply: { error?: unknown } | undefined, prefix = "
   const again = key !== undefined && decoded.value.retry === "same-key"
     ? ` (재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요)` : "";
   // DR3 (AV28): the code, its words and the facts its code may carry.
-  fail(`${prefix}${failureText(decoded.value)}${again}`, errorExit(decoded.value.code));
+  fail(`${prefix}${failureText(decoded.value)}${again}`, errorExit(decoded.value.code, decoded.value.retry));
 }
 
 /** DR1, SB-002-C: a path this CLI's caller is shown is in the caller's view.

@@ -217,4 +217,11 @@ export function failureText(failure: { readonly code: ErrorCode; readonly messag
 }
 export type CliExitCode = 0 | 2 | 3 | 4;
 /** Direct failures differ from authoritative terminal receipts, which exit 2 (or gate 4). */
-export function errorExit(code: ErrorCode): Exclude<CliExitCode, 0> { return ERROR_METADATA[code].cliExit; }
+/** CLI-003, DR13: 2 is a settled failure, 3 an outcome not yet known. A failure
+ * the caller must look up again under the same key (or after a repair) may
+ * stand accepted, so it is 3 whatever its code; only a profile/gate refusal
+ * keeps its 4. A failure with nothing to look up has its code's exit. */
+export function errorExit(code: ErrorCode, retry: Failure["retry"] = "never"): Exclude<CliExitCode, 0> {
+  const exit = ERROR_METADATA[code].cliExit;
+  return retry === "never" || exit === 4 ? exit : 3;
+}
