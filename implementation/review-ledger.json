@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 118,
-  "CHANGED_WITH_ORACLE": 104
+  "READ_UNCHANGED": 117,
+  "CHANGED_WITH_ORACLE": 105
  },
  "lanes": {
   "fast": "PASS",
@@ -1212,14 +1212,14 @@
   {
    "path": "src/extension/delivery.ts",
    "primary": "WP27",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
     "WP27"
    ],
    "oracles": [
-    "V27A"
-   ],
-   "note": "boundary entry appended before the notice, leaf checked; the notice names the entry the session holds"
+    "V27A",
+    "V27B"
+   ]
   },
   {
    "path": "src/extension/inference-bridge.ts",
@@ -2697,14 +2697,17 @@
    "by": [
     "AV4",
     "WP05",
-    "WP06"
+    "WP06",
+    "WP27"
    ],
    "oracles": [
     "AV4",
     "V05A",
     "V05B",
     "V06A",
-    "V06B"
+    "V06B",
+    "V27A",
+    "V27B"
    ]
   },
   {
