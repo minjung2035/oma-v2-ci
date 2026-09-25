@@ -5,8 +5,8 @@
 ## 1. 현재 상태 (2026-09-24)
 
 - 브랜치 `refactor/safety-preserving-architecture`. push·PR·merge는 이 작업에서 하지 않는다.
-- **WP00–WP32 전부 커밋 완료, 이어서 재검토와 적대적 검증 완료.** 마지막 통합 검증은 `implementation/validation.md`의 v9. v3–v8은 중간 증거로 `/home/dev/oma-evidence/v3..v8/`에 있다.
-- 판정: **release 미승인**. `node --input-type=module -e 'const m=await import("./scripts/review-closure.mjs"); console.log(m.approval(".", undefined, await m.oracleFindings(".")))'`로 확인한다. 차단 요인은 production 파일 139개 미검토, powercut·실제 provider·CI NOT_RUN(oracle V05C·V30B·V32B)이다.
+- **WP00–WP32 전부 커밋 완료, 재검토·적대적 검증, 이어서 전체 코드베이스 적대적 검증(AV1–AV5) 완료.** 마지막 통합 검증은 `implementation/validation.md`의 v10. v3–v9는 중간 증거로 `/home/dev/oma-evidence/v3..v9/`에 있다.
+- 판정: **release 미승인**. `node --input-type=module -e 'const m=await import("./scripts/review-closure.mjs"); console.log(m.approval(".", undefined, await m.oracleFindings(".")))'`로 확인한다. production 파일 222개 전부 검토 완료(NOT_REVIEWED 0). 남은 차단 요인은 powercut·실제 provider·CI NOT_RUN(oracle V05C·V30B·V32B)뿐이며 모두 사용자 승인이 필요하다.
 - lane 성격: V27A(실제 엔진), V28B(pty), V31A(설치 closure)는 저장소에 `engine`/`pty` lane이 없어 durable lane에서 돈다(bubblewrap·openssl·python3 필요, skip은 PASS 아님).
 
 ## 2. 환경 (이 머신에 한정)
@@ -60,6 +60,7 @@
 | WP31 | `1906cf3`, `7123719`, `f666a0c`, `bf87132` | lockfile이 엔진을 개발 의존성으로 둬 production 설치에서 빠지던 결함 수정(버전 변경 0), 엔진 탐색을 설치 루트로 한정, README 설치 주장 정정, 지원표 | `bin` 없음(C2 결정 보류), 다른 Node·배포판 NOT_RUN |
 | WP30 | `38944fb`, `6da019a`, `094e3b9` | D01 독립 모형을 실제 구성 요소에 교차 실행(V30A), FAULT-MATRIX 대응표, 환경별 판정 | endpoint bind 실패 별도 주입 없음, powercut·provider NOT_RUN |
 | WP32 | `40d339a`, `48e961b`, `736fd15` | review ledger와 승인 판정기(V32A), 불변식 12개 대조표, release 미승인 판정 | 139개 파일 미검토 |
+| 전체 적대적 AV1–AV5 | `9cff8c5`…`fd69dd7` | AV1 모델 값이 CLI 옵션이 되던 인자 주입(Principal이 host 파일을 공개 archive로 보냄) 차단, AV2 relay가 placeholder를 아무 header·path에나 바꿔 넣어 provider 404가 진짜 키를 sandbox로 되돌려주던 결함 차단(slot 한정 + 응답 tripwire), AV3 Principal 모델 도구 범위에서 Human 세션 이력 분리, AV4 Resident가 쓰는 디렉터리를 host가 이중 해석·git 실행하던 지점 제거, AV5 state tree 변경을 held parent로 일원화하고 규칙으로 강제 | quarantine 스크립트는 private mount namespace 안에서 경로 사용(잔여) |
 | 재검토·적대적 | `f11c302`…`dea19b8` | 계획 oracle 73개의 담당·lane 필수 검사(`oracle-map.json`), 이전 카드 guard mutant 30개 중 생존 10개(공백 9·동치 1), 공백 8개에 oracle 추가, actor socket·relay 연결 수 상한, 시계보다 앞선 status view를 unknown으로 | 한 파일 읽기 도중 변경(WP12)은 결정적 재현 불가 |
 
 부수 수정: kernel/crash fixture의 systemd 257 호환(`list-unit-files` 무일치 exit 1, stop 후 disable), `/usr/bin/node` 가정 제거, crash hook의 descriptor 기준 rename 해석, 오래된 kernel 시험 기대값 갱신.
@@ -86,6 +87,5 @@
 
 모든 카드와 검증은 끝났다. release 승인에 남은 것:
 
-1. `implementation/review-ledger.json`의 `NOT_REVIEWED` 139개를 실제로 읽고, 읽은 파일은 `implementation/review-notes.json`에 근거 oracle과 함께 적은 뒤 `npm run review:ledger`.
-2. 승인된 VM에서 powercut(V05C·V30B), 승인된 credential로 실제 provider, push 뒤 CI(V32B) — 모두 사용자 승인 필요.
-3. 보류한 결정: `bin`/설치 명령(C2), WP03 이전 Resident unit의 재생성 절차, 전체 `oma` entry의 pty 시험(최상위 catch 정리 순서), rollover 뒤 endpoint bind 실패의 별도 주입.
+1. 승인된 VM에서 powercut(V05C·V30B), 승인된 credential로 실제 provider, push 뒤 CI(V32B) — 모두 사용자 승인 필요.
+2. 보류한 결정: `bin`/설치 명령(C2), WP03 이전 Resident unit의 재생성 절차, 전체 `oma` entry의 pty 시험(최상위 catch 정리 순서), rollover 뒤 endpoint bind 실패의 별도 주입.
