@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "e889e647658220ad0300715d3816ca900c7a55888fa37a19b850d08906f45132",
-  "report": "66313c3ba7b7be2e78c02910a8a106cd05db44658a88844b706aaf4c5abff4c3",
+  "report": "30515021d0c3f8f2aff5a2576938f9825db4fd8038ae08da0689d4dd06badac8",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -305,7 +305,7 @@
     },
     {
       "path": "src/extension/batch-view.ts",
-      "sha256": "bd5482149e01887cb5ded5fd990a77fd2edf26eb9ef4167c54b39a07e7737ed9"
+      "sha256": "9b4a8bc92d33cf00b17873a5f47a85824634878538d1787e6843b972bfd17a54"
     },
     {
       "path": "src/extension/cli-process.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "615a0f262d07af49691d5f4e5cead9e0fe71d1bb2399b4dfde0a489a95b4a0c9"
+      "sha256": "7c8cde8a065f724a3021d6a879c88087429e0f1deff975e9ce51b870c955784c"
     },
     {
       "path": "src/extension/principal-channel.ts",

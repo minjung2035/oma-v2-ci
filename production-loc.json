@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 223,
-    "n_lines": 28875,
+    "n_lines": 28897,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -108,6 +108,12 @@
     "code": 254,
     "language": "TypeScript"
   },
+  "src/extension/mail-tools.ts": {
+    "blank": 9,
+    "comment": 58,
+    "code": 250,
+    "language": "TypeScript"
+  },
   "src/tui/sources/settings.ts": {
     "blank": 23,
     "comment": 58,
@@ -118,12 +124,6 @@
     "blank": 4,
     "comment": 14,
     "code": 247,
-    "language": "TypeScript"
-  },
-  "src/extension/mail-tools.ts": {
-    "blank": 9,
-    "comment": 53,
-    "code": 245,
     "language": "TypeScript"
   },
   "src/storage/operation-codec.ts": {
@@ -252,6 +252,12 @@
     "code": 179,
     "language": "TypeScript"
   },
+  "src/extension/batch-view.ts": {
+    "blank": 1,
+    "comment": 15,
+    "code": 176,
+    "language": "TypeScript"
+  },
   "src/tui/app.ts": {
     "blank": 20,
     "comment": 51,
@@ -286,12 +292,6 @@
     "blank": 9,
     "comment": 70,
     "code": 168,
-    "language": "TypeScript"
-  },
-  "src/extension/batch-view.ts": {
-    "blank": 1,
-    "comment": 12,
-    "code": 167,
     "language": "TypeScript"
   },
   "src/mail.ts": {
@@ -1346,8 +1346,8 @@
   },
   "SUM": {
     "blank": 1171,
-    "comment": 4401,
-    "code": 23303,
+    "comment": 4409,
+    "code": 23317,
     "nFiles": 223
   }
 }

@@ -156,3 +156,31 @@ test("AV11 / INV04: the extension's topic and full-id grammar is the wire gramma
     assert.equal(validFullOid(sample), isValidFullOid(sample), `full id ${JSON.stringify(sample)}`);
   }
 });
+
+test("AV15 / BATCH-002, INV04: a tool takes the names OMA shows -- this society's RFC address, a message's file name -- as what they display", async () => {
+  const { displayAddress } = await import("../src/mail/addresses.js");
+  const { logicalFromDisplay } = await import("../src/extension/batch-view.js");
+  // The mirror inverts the one owner of the display form, and nothing else.
+  for (const logical of ["principal", "commons", "residents", "alice", "a-b-9", "topic/dev", "topic/a"])
+    assert.equal(logicalFromDisplay(displayAddress(logical as never, "demo"), "demo"), logical, logical);
+  for (const other of ["alice@other.oma.invalid", "alice@demo.oma.invalid.evil", "Alice@demo.oma.invalid", "topic-@demo.oma.invalid",
+    "broker@demo.oma.invalid", "--file@demo.oma.invalid", "alice", "", "@demo.oma.invalid"])
+    assert.equal(logicalFromDisplay(other, "demo"), null, other);
+  const root = mkdtempSync(join(tmpdir(), "oma-av15-"));
+  const fixture = await peer(root);
+  try {
+    const previous = process.env.OMA_SOCIETY;
+    process.env.OMA_SOCIETY = "demo";
+    let tools: Map<string, Tool>;
+    try { tools = register(root, fixture.path, false); }
+    finally { if (previous === undefined) delete process.env.OMA_SOCIETY; else process.env.OMA_SOCIETY = previous; }
+    const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
+    await assert.rejects(() => call("oma_mail_send", { to: ["principal@demo.oma.invalid", "topic-dev@demo.oma.invalid"], subject: "s", body: "b" }));
+    assert.deepEqual(sent(fixture.frames, "mail.send")[0]!.to, ["principal", "topic/dev"], "the displayed address was not taken as the logical one");
+    await assert.rejects(() => call("oma_mail_send", { to: ["principal@other.oma.invalid"], subject: "s", body: "b" }), /is not valid/);
+    const id = "m-00000000-0000-4000-8000-000000000001-0";
+    await assert.rejects(() => call("oma_mail_ack", { messageId: `${id}:2,` }));
+    assert.deepEqual(sent(fixture.frames, "mail.ack").at(-1), { message: id }, "the Maildir file name was not taken as the message");
+    await assert.rejects(() => call("oma_mail_ack", { messageId: `x${id}:2,` }), /is not valid/);
+  } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
+});

@@ -256,6 +256,7 @@ export const lanes = Object.freeze({
       "AV11 / T114: a Resident's engine, which has no credential channel, is not given the Principal's tools",
       "AV11 / INV04: the extension's topic and full-id grammar is the wire grammar",
       "AV13 / SB-001, arch §11.1, CLI-001: a confined Resident has its sandbox's shell",
+      "AV15 / BATCH-002, INV04: a tool takes the names OMA shows",
       "AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan",
       "AV14 / arch §7: a Resident's activation resumes its existing session",
       "AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session",

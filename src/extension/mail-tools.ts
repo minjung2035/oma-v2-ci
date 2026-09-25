@@ -8,7 +8,7 @@ import { closeSync, constants, fstatSync, mkdtempSync, openSync, readSync, rmSyn
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { validActorName, validAddress, validMessageId } from "./batch-view.js";
+import { logicalFromDisplay, validActorName, validAddress, validMessageId } from "./batch-view.js";
 export { validAddress } from "./batch-view.js";
 import { runCliProcess } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
@@ -25,6 +25,9 @@ export const OMA_TOOL_NAMES: readonly string[] = Object.freeze([
   // Registered only for the Principal's engine (AV11).
   ...PRINCIPAL_TOOL_NAMES,
 ]);
+/** A message by any name OMA shows for it (AV15, BATCH-002): its id, its
+ * canonical archive path, or that path's file name -- the Maildir name the
+ * index lists. Nothing else names a message. */
 function mailId(value: string): string | null {
   if (validMessageId(value)) return value;
   const prefix = "/mail/archive/cur/";
@@ -33,8 +36,9 @@ function mailId(value: string): string | null {
     : value.endsWith(":2")
       ? ":2"
       : null;
-  if (!value.startsWith(prefix) || suffix === null) return null;
-  const candidate = value.slice(prefix.length, -suffix.length);
+  if (suffix === null) return null;
+  const name = value.startsWith(prefix) ? value.slice(prefix.length) : value;
+  const candidate = name.slice(0, -suffix.length);
   return validMessageId(candidate) ? candidate : null;
 }
 function readBoundedMail(
@@ -173,6 +177,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   const socket = process.env.OMA_SOCKET;
   const maximum = integerEnv("OMA_MAIL_BYTES") ?? 1024 * 1024;
   const batchView = process.env.OMA_BATCH_VIEW;
+  const society = process.env.OMA_SOCIETY;
   if (
     !cli ||
     !home ||
@@ -230,7 +235,12 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       request: Type.Optional(Type.String()),
     }),
     async execute(_id, params, signal) {
-      const to = params.to.map(address => validAddress(address) ? address : refused("address", address));
+      // AV15: the address a header or notice shows is accepted as the logical
+      // address it displays; nothing else is.
+      const to = params.to.map(address => {
+        const logical = logicalFromDisplay(address, society) ?? address;
+        return validAddress(logical) ? logical : refused("address", address);
+      });
       const kind = params.kind ?? "message";
       if (!SEND_KINDS.has(kind)) refused("mail kind", kind);
       const key = requestKeyOf(params.request);

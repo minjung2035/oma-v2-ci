@@ -60,6 +60,18 @@ export function validAddress(value: unknown): value is string {
 export function validRequestKey(value: unknown): value is string {
   return typeof value === "string" && REQUEST_KEY.test(value);
 }
+/** Mirrors the inverse of `displayAddress` (src/mail/addresses.ts): the logical
+ * address one of this society's RFC addresses displays, or null for anything
+ * else. A test binds the two by round trip (INV04). */
+export function logicalFromDisplay(value: unknown, society: string | undefined): string | null {
+  if (typeof value !== "string" || society === undefined) return null;
+  const domain = `@${society}.oma.invalid`;
+  if (!value.endsWith(domain)) return null;
+  const local = value.slice(0, -domain.length);
+  if (local === "principal" || local === "commons" || local === "residents") return local;
+  if (local.startsWith("topic-")) return TOPIC.test(local.slice(6)) ? `topic/${local.slice(6)}` : null;
+  return validActorName(local) ? local : null;
+}
 /** Mirrors isValidTopicName. */
 export function validTopicName(value: unknown): value is string {
   return typeof value === "string" && TOPIC.test(value);
