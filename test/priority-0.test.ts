@@ -25,7 +25,11 @@ import { runCliProcess } from "../src/extension/cli-process.js";
 import { cliFailure } from "../src/extension/mail-tools.js";
 import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { collectBindingTemporaries, observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety } from "../src/runtime/provision.js";
-import { ERROR_METADATA, errorExit, StoreError } from "../src/domain/errors.js";
+import { ERROR_METADATA, errorExit, StoreError, unobserved } from "../src/domain/errors.js";
+import { loadConfig } from "../src/config.js";
+import { assertExtensionIntegrity } from "../src/runtime/extension-integrity.js";
+import { assertHostDirectoryLayout } from "../src/runtime/assets.js";
+import { assertDirectory } from "../src/storage/directory.js";
 import { codeFor } from "../src/tui/exit.js";
 import type { ErrorCode } from "../implementation/contracts/errors.js";
 import { Broker } from "../src/broker.js";
@@ -294,8 +298,11 @@ test("DR13 / CLI-003, P0-2: the Control Panel's exit is the CLI's reading of the
   const input = { society: "demo", canonicalProjectPath: "/project", hasSociety: true, bindRequested: false };
   const unreadable = projectBindingDecision({ ...input, observation: { kind: "unreadable", reason: "EIO" } });
   const elsewhere = projectBindingDecision({ ...input, observation: { kind: "bound", binding: { kind: "oma-project-binding-v1", society: "demo", canonicalProjectPath: "/elsewhere" } } });
-  assert.ok(unreadable.kind === "refuse" && elsewhere.kind === "refuse");
+  const unavailable = projectBindingDecision({ ...input, observation: { kind: "unavailable", reason: "EIO" } });
+  assert.ok(unreadable.kind === "refuse" && elsewhere.kind === "refuse" && unavailable.kind === "refuse");
   assert.equal(errorExit(unreadable.code), 3);
+  assert.equal(errorExit(unavailable.code), 3);
+  assert.equal(unavailable.code, "BROKER_UNAVAILABLE");
   assert.equal(errorExit(elsewhere.code), 2);
 });
 
@@ -312,4 +319,52 @@ test("DR13 / DR12: a configuration file that cannot be read now is not a changed
     rmSync(f.input);
     assert.throws(() => commitField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1), { code: "POLICY_CHANGED" }, "a file that is gone has changed");
   } finally { f.close(); }
+});
+
+test("DR13 / P0-5: a local observation that did not answer is 'cannot be observed now', never a changed, invalid, corrupt or unsupported fact", { skip: process.getuid?.() === 0 }, () => {
+  const errno = (code: string) => Object.assign(new Error(code), { code });
+  assert.equal(unobserved(errno("EACCES"), "x")?.code, "BROKER_UNAVAILABLE");
+  assert.equal(unobserved(errno("EIO"), "x")?.code, "BROKER_UNAVAILABLE");
+  for (const answered of [errno("ENOENT"), errno("ENOTDIR"), new SyntaxError("bad JSON"), new StoreError("INVALID_REQUEST", "x"), errno("ERR_INVALID_ARG_TYPE")])
+    assert.equal(unobserved(answered, "x"), null, String(answered));
+
+  const root = mkdtempSync(join(tmpdir(), "oma-p0-unobserved-"));
+  try {
+    const config = join(root, "config.json");
+    writeFileSync(config, JSON.stringify(defaultHostConfig({ society: "demo", node: process.execPath, libdir: root, rootfs: root, deploymentDigest: "0".repeat(64) })));
+    chmodSync(config, 0o000);
+    try { assert.throws(() => loadConfig(config), { code: "BROKER_UNAVAILABLE" }, "a configuration that cannot be read now"); }
+    finally { chmodSync(config, 0o600); }
+    writeFileSync(config, "{");
+    assert.throws(() => loadConfig(config), { code: "INVALID_REQUEST" }, "bytes read and refused");
+
+    const extension = join(root, "tool.js");
+    writeFileSync(extension, "export {};\n");
+    chmodSync(extension, 0o000);
+    try { assert.throws(() => assertExtensionIntegrity([{ path: extension, sha256: "0".repeat(64) }]), { code: "BROKER_UNAVAILABLE" }); }
+    finally { chmodSync(extension, 0o600); }
+    rmSync(extension);
+    assert.throws(() => assertExtensionIntegrity([{ path: extension, sha256: "0".repeat(64) }]), { code: "UNSUPPORTED_PROFILE" }, "a recorded extension that is gone");
+
+    const closed = join(root, "closed");
+    mkdirSync(join(closed, "inside"), { recursive: true });
+    chmodSync(closed, 0o000);
+    try {
+      assert.throws(() => stateRootHasSociety(closed), { code: "BROKER_UNAVAILABLE" }, "a state root that cannot be listed is not corrupt");
+      assert.throws(() => assertHostDirectoryLayout(join(closed, "inside")), { code: "BROKER_UNAVAILABLE" }, "a layout that cannot be observed is not unsupported");
+      assert.equal(observeProjectBinding(join(closed, "inside")).kind, "unavailable", "a binding that cannot be read now is not an unreadable one");
+      assert.throws(() => assertDirectory(join(closed, "inside")), { code: "BROKER_UNAVAILABLE" }, "a directory that cannot be opened now is not one of another type");
+    } finally { chmodSync(closed, 0o700); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("DR13 / P0-5: a ledger query that failed without saying the database is corrupt does not fence the society as corrupt", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-p0-query-"));
+  try {
+    const store = new Store(join(root, "runtime.sqlite"));
+    store.close();
+    assert.throws(() => store.findSucceededContext("a".repeat(40)),
+      (error: unknown) => !(error instanceof StoreError && error.code === "STORE_CORRUPT"),
+      "a query that could not run is not a corrupt ledger");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

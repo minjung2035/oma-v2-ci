@@ -6,7 +6,7 @@ import { spawnOwnedRpc } from "../process/async.js";
 import { realpathSync } from "node:fs";
 import { basename } from "node:path";
 import type { PreparedBatch } from "../../implementation/contracts.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 import {
   PI_ADAPTER_REVISION,
   PI_BOUNDARY_PREFIX,
@@ -116,7 +116,7 @@ export class PiAdapter {
       try {
         realpathSync(path);
       } catch (cause) {
-        throw failure(
+        throw unobserved(cause, `the Pi adapter path ${basename(path)}`) ?? failure(
           "UNSUPPORTED_PROFILE",
           `Pi adapter path is unavailable: ${basename(path)}`,
           cause,

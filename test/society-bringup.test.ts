@@ -217,12 +217,14 @@ test("T115 REC-007: a second provisioning leaves the tree it finds byte for byte
 
     // And a generated file that cannot be read is not "different" -- it is a
     // rootfs entry provisioning cannot account for, so it refuses rather than
-    // treating it as something to report or overwrite.
+    // treating it as something to report or overwrite. Nor is it known to be
+    // corrupt (DR13): the refusal says it cannot be observed now.
     if (process.getuid?.() !== 0) {
       chmodSync(passwd, 0o000);
-      assert.throws(() => { provisionSociety(state); }, /cannot be read/);
-      assert.throws(() => { repairSociety(state); }, /cannot be read/);
+      assert.throws(() => { provisionSociety(state); }, { code: "BROKER_UNAVAILABLE", message: /cannot be observed now/ });
+      assert.throws(() => { repairSociety(state); }, { code: "BROKER_UNAVAILABLE", message: /cannot be observed now/ });
       chmodSync(passwd, 0o644);
+      assert.equal(readFileSync(passwd, "utf8"), tampered, "a refused pass wrote nothing");
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

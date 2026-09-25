@@ -82,3 +82,21 @@ test("AV7 / INV02, arch §23.5: a mailbox that cannot be listed is not an empty 
     assert.match(last(), /settled/, "what could be read was not shown");
   });
 });
+
+test("DR13 / INV02: a message file that cannot be read now is not 'no message'; the count is unknown and the rest is still shown", { skip: process.getuid?.() === 0 }, () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av7-entry-"));
+  try {
+    const pending = join(root, "new"), cur = join(root, "cur");
+    mkdirSync(pending); mkdirSync(cur);
+    writeFileSync(join(pending, "m1"), "From: worker-a\nSubject: readable\n\nbody\n");
+    writeFileSync(join(pending, "m2"), "From: worker-b\nSubject: sealed\n\nbody\n");
+    chmodSync(join(pending, "m2"), 0o000);
+    const paths: MailboxPaths = { newDir: pending, curDir: cur };
+    assert.equal(unreadCount(paths), null, "an unreadable message was counted as no message");
+    const read = readMailbox(paths);
+    assert.deepEqual(read.rows.map(row => row.id), ["m1"], "what could be read is still shown");
+    assert.match(read.unreadable ?? "", /EACCES/);
+    chmodSync(join(pending, "m2"), 0o600);
+    assert.equal(unreadCount(paths), 2);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

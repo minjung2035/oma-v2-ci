@@ -3,7 +3,7 @@
  */
 import { constants, closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, readdirSync, rmdirSync, unlinkSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
 
 function componentsOf(path: string): { root: string; components: string[] } {
@@ -22,7 +22,8 @@ export function assertDirectory(path: string): void {
   try { closeSync(openDirectory(path)); }
   catch (error) {
     if (error instanceof StoreError) throw error;
-    throw new StoreError("STORE_CORRUPT", `directory type mismatch: ${path}`);
+    // DR13: a directory that could not be opened now is not one of another type.
+    throw unobserved(error, `the directory ${path}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${path}`);
   }
 }
 
@@ -46,7 +47,7 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
       try { child = openBeneath(parent, component, constants.O_RDONLY | constants.O_DIRECTORY); }
       catch (error) {
         if (error instanceof StoreError) throw error;
-        throw new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
+        throw unobserved(error, `the directory ${current}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
       }
       closeSync(parent); parent = child;
     }

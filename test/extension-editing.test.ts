@@ -2,7 +2,7 @@
 // and a limited repair for a declared optional extension whose file is gone.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfiguration, loadConfigurationSnapshot } from "../src/config.js";
 import { observeExtensionAsset } from "../src/config/operations.js";
@@ -139,4 +139,17 @@ test("V14A: a symlink loop under the extension directory is not walked, so a sma
     assert.equal(context.scan, "complete", "the loop was followed until the depth bound");
     assert.deepEqual(context.rows.map(row => row.id), [CORE_EXTENSION, "extensions/ok.js"]);
   } finally { f.close(); }
+});
+
+test("P0-5: a directory the scan cannot list makes the list partial, and what it can see is still offered", { skip: process.getuid?.() === 0 }, () => {
+  const f = placed();
+  const closed = join(f.installation, "extensions", "aaa-closed");
+  mkdirSync(closed);
+  writeFileSync(join(closed, "hidden.js"), "export {};\n");
+  chmodSync(closed, 0o000);
+  try {
+    const context = readExtensions(f.path, "principal", "resident");
+    assert.equal(context.scan, "partial", "an unlisted directory is not an empty one");
+    assert.ok(context.rows.some(row => row.id === "extensions/ok.js"), "the rest of the scan still ran");
+  } finally { chmodSync(closed, 0o700); f.close(); }
 });

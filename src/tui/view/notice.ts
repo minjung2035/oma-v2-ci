@@ -17,6 +17,8 @@ function worded(notice: Notice): string {
       return `${notice.label} = ${notice.value} · 저장됨 · 설정을 다시 읽지 못해 화면 값은 확인되지 않았습니다: ${notice.reason}`;
     case "extension":
       return `${notice.id} · ${notice.role === "principal" ? "Principal" : "Workers"} ${notice.enabled ? "사용" : "해제"} · 저장됨`;
+    case "saved-unconfirmed":
+      return `저장됨 · 디스크에 남았는지는 아직 확인되지 않았습니다(다음 편집 전에 다시 확인합니다): ${notice.message}`;
     case "save-failed":
       // A rejected write says nothing was saved rather than leaving the old
       // value looking like it changed.

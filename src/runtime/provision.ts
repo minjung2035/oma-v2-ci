@@ -34,7 +34,7 @@
 import { randomBytes } from "node:crypto";
 import { closeSync, existsSync, fstatSync, linkSync, lstatSync, readdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 import { isValidSocietyName } from "../domain/identifiers.js";
 import { modelWorkspaceFor } from "../domain/derived.js";
 import { runGitText } from "../process/policies.js";
@@ -100,7 +100,7 @@ function projectHead(projectDir: string): { oid: string; format: string } | { no
     // all, so the directory's own `.git` entry decides which one this is.
     let dotGit;
     try { dotGit = lstatSync(join(projectDir, ".git"), { throwIfNoEntry: false }); }
-    catch (error) { throw new StoreError("STORE_CORRUPT", `the project directory cannot be observed: ${error instanceof Error ? error.message : String(error)}`); }
+    catch (error) { throw unobserved(error, "the project directory") ?? new StoreError("STORE_CORRUPT", `the project directory cannot be observed: ${error instanceof Error ? error.message : String(error)}`); }
     if (dotGit === undefined && /not a git repository/i.test(repository.stderr)) return { note: "the project directory is not a Git repository" };
     throw new StoreError("STORE_CORRUPT", `the project repository cannot be observed: ${repository.stderr.trim().slice(0, 200)}`);
   }
@@ -301,7 +301,8 @@ export interface ProjectBinding {
 export type ProjectBindingObservation =
   | { readonly kind: "absent" }
   | { readonly kind: "bound"; readonly binding: ProjectBinding }
-  | { readonly kind: "unreadable"; readonly reason: string };
+  | { readonly kind: "unreadable"; readonly reason: string }
+  | { readonly kind: "unavailable"; readonly reason: string };
 
 export function observeProjectBinding(stateRoot: string): ProjectBindingObservation {
   // FS-005 / INV09: one resolution of the state root; the entry checked is the one read.
@@ -318,6 +319,8 @@ export function observeProjectBinding(stateRoot: string): ProjectBindingObservat
     });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "absent" };
+    const unknown = unobserved(error, "the project binding");
+    if (unknown !== null) return { kind: "unavailable", reason: unknown.message };
     return { kind: "unreadable", reason: error instanceof Error ? error.message : String(error) };
   }
   if (text === null) return { kind: "absent" };
@@ -344,7 +347,7 @@ export function stateRootHasSociety(stateRoot: string): boolean {
   try { entries = readdirSync(stateRoot); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw new StoreError("STORE_CORRUPT", `the state root cannot be observed: ${error instanceof Error ? error.message : String(error)}`);
+    throw unobserved(error, "the state root") ?? new StoreError("STORE_CORRUPT", `the state root cannot be observed: ${error instanceof Error ? error.message : String(error)}`);
   }
   return entries.some(entry => entry !== PROJECT_BINDING && !entry.startsWith(`.${PROJECT_BINDING}.`));
 }
@@ -352,17 +355,19 @@ export function stateRootHasSociety(stateRoot: string): boolean {
 export type ProjectBindingDecision =
   | { readonly kind: "proceed" }
   | { readonly kind: "publish" }
-  | { readonly kind: "refuse"; readonly reason: string; readonly code: "STORE_CORRUPT" | "INVALID_REQUEST" };
+  | { readonly kind: "refuse"; readonly reason: string; readonly code: "BROKER_UNAVAILABLE" | "STORE_CORRUPT" | "INVALID_REQUEST" };
 /** D05: pure. A society is acted on only for the project it is bound to. A
  * missing binding is written for a new society, or for an existing one only
  * when the operator explicitly asked (`--bind-project`); a mismatch is refused
  * even for an explicit --society, and an unreadable binding is refused. The
- * refusal's code says which: a binding this process cannot vouch for is not
- * known (STORE_CORRUPT), a binding to another society or project is a fact
- * the operator decides on (INVALID_REQUEST). */
+ * refusal's code says which: a binding that cannot be read now is not known
+ * (BROKER_UNAVAILABLE), one that was read and cannot be vouched for is
+ * corrupt host metadata (STORE_CORRUPT), a binding to another society or
+ * project is a fact the operator decides on (INVALID_REQUEST). */
 export function projectBindingDecision(input: { readonly observation: ProjectBindingObservation; readonly society: string;
   readonly canonicalProjectPath: string; readonly hasSociety: boolean; readonly bindRequested: boolean }): ProjectBindingDecision {
   const observed = input.observation;
+  if (observed.kind === "unavailable") return { kind: "refuse", code: "BROKER_UNAVAILABLE", reason: `the society's project binding cannot be read now: ${observed.reason}` };
   if (observed.kind === "unreadable") return { kind: "refuse", code: "STORE_CORRUPT", reason: `the society's project binding cannot be read: ${observed.reason}` };
   if (observed.kind === "bound") {
     if (observed.binding.society !== input.society)
@@ -404,6 +409,8 @@ export function publishProjectBinding(stateRoot: string, binding: Omit<ProjectBi
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       // Another start bound it first: the same binding is adoption, any other is a refusal.
       const observed = observeProjectBinding(stateRoot);
+      if (observed.kind === "unavailable")
+        throw new StoreError("BROKER_UNAVAILABLE", `the binding another start published cannot be read now: ${observed.reason}`);
       if (observed.kind !== "bound" || observed.binding.society !== record.society ||
           observed.binding.canonicalProjectPath !== record.canonicalProjectPath)
         throw new StoreError("POLICY_CHANGED", "another binding was published for this state root");

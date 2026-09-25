@@ -1,7 +1,7 @@
 import { lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 
 export interface RuntimeAssets {
   readonly root: string; readonly schema: string; readonly systemd: string;
@@ -47,7 +47,7 @@ export function assertHostDirectoryLayout(path: string, allowMissing = false): v
     current = join(current, component);
     let stat;
     try { stat = lstatSync(current, { throwIfNoEntry: false }); }
-    catch (cause) { throw new StoreError("UNSUPPORTED_PROFILE", "host directory layout cannot be observed", { cause }); }
+    catch (cause) { throw unobserved(cause, "the host directory layout") ?? new StoreError("UNSUPPORTED_PROFILE", "host directory layout is not a supported one", { cause }); }
     if (!stat && allowMissing) return;
     if (!stat?.isDirectory())
       throw new StoreError("UNSUPPORTED_PROFILE", "host directory ancestors must be real directories, not symlinks");

@@ -28,7 +28,7 @@
  */
 import { closeSync, constants, fstatSync, lstatSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { RESIDENT_PATHS, SYSTEM_BIND_CANDIDATES } from "../sandbox.js";
 import { ensureDirectory as ensureHeldDirectory } from "../storage/directory.js";
@@ -128,14 +128,15 @@ function ensureFile(path: string, pass: Pass, content = "", retried = false): vo
 
 /** What is in a generated file now. Unreadable is not "different": it is a
  * rootfs entry this module cannot account for, and rewriting it would be the
- * silent overwrite this module refuses elsewhere. */
+ * silent overwrite this module refuses elsewhere. One that cannot be read now
+ * is not known to be foreign either (DR13); both refuse the rewrite. */
 function readExisting(parent: number, name: string, path: string): string {
   try {
     const fd = openRegularBeneath(parent, name);
     try { if (!fstatSync(fd).isFile()) throw new Error("not a regular file"); return readFileSync(fd, "utf8"); }
     finally { closeSync(fd); }
   } catch (error) {
-    throw new StoreError("STORE_CORRUPT",
+    throw unobserved(error, `the rootfs identity file ${path}`) ?? new StoreError("STORE_CORRUPT",
       `rootfs identity file ${path} cannot be read: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

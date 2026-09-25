@@ -29,6 +29,27 @@ export function normalizeStorageFailure(error: unknown): unknown {
     return new StoreError("STORAGE_FULL", "durable storage is exhausted", { cause: error });
   return error;
 }
+/** Errno answers about a name itself: it is not there, or is not what a path
+ * through it needs. The filesystem answered; the caller states what it means. */
+const ANSWERED_ERRNO = new Set(["ENOENT", "ENOTDIR", "ELOOP", "EISDIR", "ENAMETOOLONG"]);
+/** DR13, P0-5: the one reading of a local observation that failed. An OMA
+ * failure, an answered errno (above) or bytes that were read and refused are
+ * the caller's to state as a fact. Any other errno -- EACCES, EIO, EMFILE --
+ * is an observation that did not answer: "cannot be observed now"
+ * (BROKER_UNAVAILABLE, exit 3), never a changed, invalid, corrupt or
+ * unsupported fact. null when the caller states it. */
+export function unobserved(error: unknown, what: string): StoreError | null {
+  if (error instanceof StoreError || error === null || typeof error !== "object" || !("code" in error)) return null;
+  const code = error.code;
+  if (typeof code !== "string" || !/^E[A-Z0-9]+$/.test(code) || ANSWERED_ERRNO.has(code)) return null;
+  return new StoreError("BROKER_UNAVAILABLE", `${what} cannot be observed now (${code})`, { cause: error });
+}
+/** CONFIG-CONTRACT outcome-unconfirmed: the effect is visible -- the commit
+ * point was passed -- and only its durability is not known. The one reading
+ * of that fact for every caller; such a failure is never "nothing was saved". */
+export function publishedUnconfirmed(error: unknown): boolean {
+  return error instanceof StoreError && error.details?.publication === "unconfirmed";
+}
 export function errorCodeOf(error: unknown): ErrorCode {
   const normalized = normalizeStorageFailure(error);
   return normalized instanceof StoreError ? normalized.code : "INTERNAL_ERROR";

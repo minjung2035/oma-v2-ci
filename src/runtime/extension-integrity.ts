@@ -13,7 +13,7 @@
  */
 import { createHash } from "node:crypto";
 import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 
 export interface VerifiedExtension {
   readonly path: string;
@@ -50,7 +50,7 @@ export function assertExtensionIntegrity(extensions: readonly VerifiedExtension[
       observed = digestOf(extension.path);
     } catch (error) {
       if (error instanceof StoreError) throw error;
-      throw new StoreError(
+      throw unobserved(error, `the extension ${extension.path}`) ?? new StoreError(
         "UNSUPPORTED_PROFILE",
         `extension recorded at configuration load is unreadable now: ${extension.path}`,
         { cause: error },

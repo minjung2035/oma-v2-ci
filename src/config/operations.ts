@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { ACTOR_NAME_RE } from "../domain/identifiers.js";
 import { parseJsonObject } from "../frame.js";
@@ -82,6 +82,14 @@ export type ConfigurationLayout =
     };
 function invalid(message: string): never {
   throw new StoreError("INVALID_REQUEST", `operations config: ${message}`);
+}
+/** DR13, P0-5: bytes the loader could not get now are not known to be
+ * invalid (`unobserved`); a name the configuration gives that is not there,
+ * or bytes read and refused, are INVALID_REQUEST. */
+function sourceFailure(error: unknown): StoreError {
+  if (error instanceof StoreError) return error;
+  return unobserved(error, "the operations config") ??
+    new StoreError("INVALID_REQUEST", `operations config unreadable: ${error instanceof Error ? error.message : String(error)}`);
 }
 function record(value: unknown, name: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -350,11 +358,7 @@ function resolveConfigurationLayout(path: string, closure: SourceClosure): Resol
     });
     return { layout, index: source };
   } catch (error) {
-    if (error instanceof StoreError) throw error;
-    throw new StoreError(
-      "INVALID_REQUEST",
-      `operations config unreadable: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    throw sourceFailure(error);
   }
 }
 export function configurationLayout(path: string): ConfigurationLayout {
@@ -415,10 +419,6 @@ function readSource(path: string, observer: ConfigurationReadObserver | undefine
       extensionAssets: assets ? "read" : "unread",
     };
   } catch (error) {
-    if (error instanceof StoreError) throw error;
-    throw new StoreError(
-      "INVALID_REQUEST",
-      `operations config unreadable: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    throw sourceFailure(error);
   }
 }

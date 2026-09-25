@@ -23,7 +23,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import type { HostConfigV1 } from "../../implementation/contracts.js";
-import { StoreError, normalizeStorageFailure } from "../domain/errors.js";
+import { StoreError, normalizeStorageFailure, unobserved } from "../domain/errors.js";
 import { validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../config.js";
 import { readConfigurationSource } from "./operations.js";
 import {
@@ -167,19 +167,22 @@ function assertCurrent(snapshot: Pick<ConfigurationSnapshot, "sourceFiles">): vo
     try { bytes = currentBytes(identity.path); }
     catch (error) {
       if (error instanceof StoreError) throw error;
-      if ((error as NodeJS.ErrnoException).code === "ENOENT")
-        throw new StoreError("POLICY_CHANGED", `configuration changed since it was read: ${identity.path}`);
-      throw new StoreError("BROKER_UNAVAILABLE", `the configuration cannot be read now: ${identity.path}`, { cause: error });
+      throw unobserved(error, `the configuration file ${identity.path}`) ??
+        new StoreError("POLICY_CHANGED", `configuration changed since it was read: ${identity.path}`);
     }
     if (createHash("sha256").update(bytes).digest("hex") !== identity.sha256)
       throw new StoreError("POLICY_CHANGED", "configuration changed since it was read; reload it before editing");
   }
 }
 
+/** The retained generations and their bytes, for the edit budget. No
+ * generations directory yet is none; one that cannot be listed is no answer,
+ * raised as itself rather than counted as empty (INV02, P0-5). */
 function treeBytes(root: string): { bytes: number; generations: string[] } {
   let bytes = 0; const generations: string[] = [];
   let entries: string[];
-  try { entries = readdirSync(root); } catch { return { bytes, generations }; }
+  try { entries = readdirSync(root); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return { bytes, generations }; throw unobserved(error, "the configuration history") ?? error; }
   const walk = (path: string): void => {
     const stat = lstatSync(path);
     if (stat.isDirectory()) for (const entry of readdirSync(path)) walk(join(path, entry));
@@ -339,7 +342,7 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
       if (isDurabilityFault(error)) throw error;
       unconfirmed.add(root);
       const cause = storeFailure(error);
-      throw new StoreError(cause.code, `configuration generation ${id} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error });
+      throw new StoreError(cause.code, `configuration generation ${id} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error, details: { publication: "unconfirmed" } });
     }
   });
   recordCommitted(base, current, id);
@@ -408,7 +411,7 @@ function publishInline(path: string, bytes: Buffer, candidate: ValidatedConfigCa
       if (isDurabilityFault(error)) throw error;
       unconfirmed.add(root);
       const cause = storeFailure(error);
-      throw new StoreError(cause.code, `configuration ${path} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error });
+      throw new StoreError(cause.code, `configuration ${path} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error, details: { publication: "unconfirmed" } });
     }
   });
   return outcome;

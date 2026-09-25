@@ -47,7 +47,8 @@ export interface ExtensionContext {
   /** WP14.03: "repair" when the configuration cannot load because a declared
    * extension file is missing; then only removing such a declaration is offered. */
   readonly mode: "full" | "repair";
-  /** WP14.05: "partial" when the bounded scan stopped before seeing every entry. */
+  /** WP14.05: "partial" when the bounded scan stopped before seeing every
+   * entry, or could not observe one. */
   readonly scan: "complete" | "partial";
 }
 
@@ -57,17 +58,20 @@ export interface ExtensionContext {
  */
 function scanLibdir(libdir: string): { readonly entries: readonly string[]; readonly partial: boolean } {
   const found: string[] = [];
-  let examined = 0; let partial = false;
+  let examined = 0; let partial = false; let unobserved = false;
   const walk = (directory: string, depth: number): void => {
     if (partial) return;
     if (depth > READ_BOUNDS.extensionScanDepth.value) { partial = true; return; }
     let entries: readonly string[];
-    try { entries = [...readdirSync(directory)].sort(); } catch { return; }
+    // P0-5: a directory that could not be listed was not seen; the scan says so.
+    try { entries = [...readdirSync(directory)].sort(); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") unobserved = true; return; }
     for (const entry of entries) {
       if (++examined > READ_BOUNDS.extensionScanEntries.value) { partial = true; return; }
       const full = join(directory, entry);
       let stat;
-      try { stat = lstatSync(full); } catch { continue; }
+      try { stat = lstatSync(full); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") unobserved = true; continue; }
       if (stat.isDirectory()) { walk(full, depth + 1); continue; }
       const rel = relative(libdir, full);
       if (!stat.isFile() || extensionEntryProblem(rel) !== null) continue;
@@ -76,7 +80,7 @@ function scanLibdir(libdir: string): { readonly entries: readonly string[]; read
     }
   };
   walk(join(libdir, "extensions"), 0);
-  return { entries: found.sort(), partial };
+  return { entries: found.sort(), partial: partial || unobserved };
 }
 
 function rowsOf(available: readonly string[], principal: RoleFile | null, worker: RoleFile | null,

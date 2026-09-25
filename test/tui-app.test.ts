@@ -111,6 +111,17 @@ test("TUI-007: a rejected write says nothing was saved and keeps the previous va
   assert.doesNotMatch(frame, /· 저장됨/);
 });
 
+test("DR13 / P0-5, CONFIG-CONTRACT: a committed edit whose flush failed says it was saved, not that nothing was saved", () => {
+  const unconfirmed = () => { throw new StoreError("INTERNAL_ERROR", "configuration was published but its durability is unconfirmed", { details: { publication: "unconfirmed" } }); };
+  const h = harness({ setField: unconfirmed });
+  for (const chunk of [CTRL_X, RIGHT, ENTER, UP, ENTER]) h.app.feed(chunk);
+  assert.match(h.last(), /저장됨 · 디스크에 남았는지는 아직 확인되지 않았습니다/);
+  assert.doesNotMatch(h.last(), /저장하지 못했습니다/);
+  const toggled = harness({ setExtension: unconfirmed });
+  for (const chunk of [CTRL_X, RIGHT, DOWN, ENTER, DOWN, ENTER]) toggled.app.feed(chunk);
+  assert.match(toggled.last(), /저장됨 · 디스크에 남았는지는/);
+});
+
 test("TUI-010: toggling an extension routes the role and the new state to the port", () => {
   const h = harness();
   for (const chunk of [CTRL_X, RIGHT, DOWN, ENTER, DOWN, ENTER]) h.app.feed(chunk);

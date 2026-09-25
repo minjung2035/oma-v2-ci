@@ -89,6 +89,9 @@ export type Notice =
   | { readonly kind: "saved-unread"; readonly label: string; readonly value: string; readonly reason: string }
   | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "save-failed"; readonly message: string }
+  /** CONFIG-CONTRACT: the edit was committed and is what the file holds; that
+   * it survives a power loss is what is not known yet. */
+  | { readonly kind: "saved-unconfirmed"; readonly message: string }
   /** `kept` says where the text that was not sent now is, because a message
    * that says neither leaves the Human unsure whether to retype it. */
   | { readonly kind: "send-failed"; readonly message: string; readonly kept: "draft" | "conversation" }

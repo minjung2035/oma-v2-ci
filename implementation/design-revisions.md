@@ -220,7 +220,7 @@ owner가 같은 순서로 한다: 읽은 snapshot의 기대 버전 확인 → �
 
 ## DR13 — 모르는 것에는 모른다는 코드를 붙인다
 
-**관측(P0V-08, P0V-09, P0V-11, P0V-14, P0V-15, P0V-18, P0V-12 보완).** 관측 실패나 결과 불명에 확정 사실의 코드나 값을 붙이는 곳이
+**관측(P0V-08, P0V-09, P0V-11, P0V-14, P0V-15, P0V-18–P0V-23, P0V-12 보완).** 관측 실패나 결과 불명에 확정 사실의 코드나 값을 붙이는 곳이
 있었다: 설정을 읽지 못한 것을 POLICY_CHANGED로(accept된 통합이 영구 실패), accept 뒤 결과가 불명확한 실패를 CLI
 exit 2로, 끝나지 않은 systemctl을 UNSUPPORTED_PROFILE로, 도구가 끝낸 CLI를 key 없는 실패로, 관측하지 못한
 workspace 파일을 0 byte로, Control Panel의 불명 코드를 exit 2로, 다시 읽지 못한 설정 파일을 "바뀜"으로.
@@ -236,5 +236,12 @@ workspace 파일을 0 byte로, Control Panel의 불명 코드를 exit 2로, 다�
 | unit 명령(systemctl) | DEADLINE_EXCEEDED(명령이 끝나지 않음) | 끝나서 실패하면 INTERNAL_ERROR/START_LIMIT, 불러올 수 없는 unit은 UNSUPPORTED_PROFILE |
 | extension 도구가 부른 CLI | 결과 불명, 실패 문구에 request key | CLI가 스스로 낸 출력 |
 | workspace 크기 관측 | 한도 초과로 보고 거절 | ENOENT는 없음(0) |
+
+**일반 규칙(2차 점검, P0-6).** 위 표는 경계마다 규칙을 적었다. 2차 점검에서 같은 모습이 스무 곳 넘게 다시 나왔다. 관측하지 못한 디렉터리를 손상으로, 배포 파일을 지원 안 함으로, 목록을 0으로, 영속성 불명 저장을 저장 실패로 적은 곳들이다. 그래서 경계별 규칙이 아니라 모델 하나로 바꾼다.
+
+- 로컬 관측이 errno로 실패했을 때, 그 errno가 이름 자체에 대한 답(ENOENT·ENOTDIR·ELOOP·EISDIR·ENAMETOOLONG)이면 호출자가 그 사실의 뜻(없음, 종류가 다름, 설정이 가리키는 파일이 없음)을 말한다.
+- 그 밖의 errno(EACCES·EIO·EMFILE 등)는 관측이 답하지 않은 것이다. `unobserved`(domain/errors.ts) 한 함수가 이것을 BROKER_UNAVAILABLE("cannot be observed now", transient, exit 3)로 읽는다. 바뀜·잘못됨·손상·지원 안 함으로 읽지 않는다. 목록이면 0이나 빠짐이 아니라 "일부만 봄"이다.
+- commit point를 지났고 영속성만 불명인 게시는 `publishedUnconfirmed` 한 함수가 읽는다. 어느 표시도 이것을 "저장 안 됨"으로 말하지 않는다.
+- STORE_CORRUPT는 broker의 sticky fence를 닫는다(domain/admission.ts). 그러므로 읽은 내용이나 답한 errno가 손상을 말할 때만 쓴다.
 
 **바꾸는 규범.** 없음(CLI-003, ERR-002, INV02의 구현).

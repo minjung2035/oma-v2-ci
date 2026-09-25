@@ -7,6 +7,7 @@
  */
 import { KeyDecoder, type Key } from "./keys.js";
 import { assertNever } from "../domain/exhaustive.js";
+import { publishedUnconfirmed } from "../domain/errors.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
   type DashboardData, type Effect, type ExtensionRow, type MailboxRead, type MailRow, type Notice, type PanelData, type State,
@@ -206,8 +207,11 @@ export class TuiApp {
       }
     } catch (error) {
       // A rejected write must state that nothing was saved rather than leaving
-      // the previous value looking like it changed.
-      this.notice = { kind: "save-failed", message: messageOf(error) };
+      // the previous value looking like it changed -- and a committed one whose
+      // flush failed must not say that (P0-5): it was saved.
+      this.notice = publishedUnconfirmed(error)
+        ? { kind: "saved-unconfirmed", message: messageOf(error) }
+        : { kind: "save-failed", message: messageOf(error) };
       this.refresh();
     }
   }

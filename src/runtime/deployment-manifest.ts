@@ -5,7 +5,7 @@ import { closeSync, fstatSync, readSync, opendirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { DEPLOYMENT_LAYOUT, isDeploymentDigest } from "../domain/deployment.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 import { openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
 
 const MAX_ENTRIES = 4096;
@@ -129,7 +129,7 @@ export function deploymentManifest(root: string): DeploymentManifest {
     files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     return Object.freeze({ version: 1, files: Object.freeze(files) });
   } catch (cause) {
-    throw new StoreError(
+    throw unobserved(cause, "the deployment inventory") ?? new StoreError(
       "UNSUPPORTED_PROFILE",
       "deployment inventory could not be verified",
       { cause },

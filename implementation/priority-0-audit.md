@@ -8,7 +8,7 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 판정: **위반**(고칠 규칙과 근거 원칙), **부합**(근거), **의도된 예외**(owner 문서와 이유).
 줄 번호는 점검 시점(기준점)의 번호다. 수정 뒤에는 "수정" 열의 commit이 기준이다.
 
-진행: A–J 215개 파일 점검 완료(2026-09-25). P0V-01–P0V-17 수정 완료(`9a13f1b`–`b86d0c3`). 2차 점검(아래 "2차 점검")에서 P0V-18과 P0V-12 보완을 찾아 고쳤다. 각 ID의 상태 열이 수정 commit이고, 변이 시험 결과는 "수정 검증"에 있다.
+진행: A–J 215개 파일 점검 완료(2026-09-25). P0V-01–P0V-17 수정 완료(`9a13f1b`–`b86d0c3`). 2차 점검(아래 "2차 점검")에서 P0V-18–P0V-23과 P0V-12 보완을 찾아 고쳤다. 각 ID의 상태 열이 수정 commit이고, 변이 시험 결과는 "수정 검증"에 있다.
 
 ## 읽는 순서
 
@@ -46,7 +46,12 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 | P0V-15 | P0-5, P0-2 | extension/workspace-guard.ts:38-57 | workspace 크기 계산이 관측 실패를 두 가지로 다룬다. `readdirSync` 실패는 "한도 초과"(거절)이고, `lstatSync` 실패는 ENOENT가 아니어도 0 byte(건너뜀)다. unknown이 zero가 된다(MAINTENANCE §10 "unknown != zero") | 수정 8f7700a |
 | P0V-16 | P0-7 | test/crash-boundaries.test.ts, test/durable-fault-matrix.test.ts 외 | durable 경계의 목록이 코드에서 나오지 않고, 경계마다 kill·retry·restart 시험을 요구하는 장치가 없다. 이번에 바뀌는 경계에는 시험이 없거나 옛 의미로 적혀 있다 | 수정 b86d0c3(P0-7 gate) |
 | P0V-17 | P0-4, P0-7 | git.ts:`repairContextMirror`, git/context-mirror.ts; runtime/provision.ts `publishBinding` | P0-7 gate를 만들며 찾았다. (가) `repairContextMirror`는 durable 게시 경로인데 제품 코드도 시험도 부르지 않는다. owner 없는 durable 경계다. (나) project binding 게시가 죽으면 `.project-binding.json.<hex>.tmp` 임시 파일의 owner가 없다(P0-4). (다) draining broker의 status view 제거(broker.ts, protocol/status-view.ts)에 시험이 없다 | 수정 b86d0c3((가) 삭제, (나) tenure 보유자의 provisioning이 수집, (다) 시험 추가) |
-| P0V-18 | P0-2, P0-5 | (`b86d0c3` 기준) tui/exit.ts:9-21, entry/oma.ts:42,83,152,161,177,181,324 | Control Panel(`oma`)의 exit 판정이 CLI의 `errorExit`와 따로 구현되어 있다. `codeFor`는 UNSUPPORTED_PROFILE·SPIKE_UNRESOLVED만 4, BROKER_UNAVAILABLE·DEADLINE_EXCEEDED만 3이고 나머지는 모두 2다. 그래서 RUN_TERMINATION_UNKNOWN·REF_STATE_UNKNOWN·STORE_CORRUPT·INTERNAL_ERROR 같은 불명이 확정 실패(2)로 나간다. 진입점은 exit을 숫자로 직접 적는다. "잠시 후 다시 실행하세요"(다른 oma가 소유)는 4(지원하지 않음)이고, usage·다른 프로젝트의 바인딩도 4다. 1차 점검은 tui/exit.ts를 묶음 판정에서 부합으로 적었다. 2차 점검에서 바로잡았다 | 수정(아래 commit) |
+| P0V-18 | P0-2, P0-5 | (`b86d0c3` 기준) tui/exit.ts:9-21, entry/oma.ts:42,83,152,161,177,181,324 | Control Panel(`oma`)의 exit 판정이 CLI의 `errorExit`와 따로 구현되어 있다. `codeFor`는 UNSUPPORTED_PROFILE·SPIKE_UNRESOLVED만 4, BROKER_UNAVAILABLE·DEADLINE_EXCEEDED만 3이고 나머지는 모두 2다. 그래서 RUN_TERMINATION_UNKNOWN·REF_STATE_UNKNOWN·STORE_CORRUPT·INTERNAL_ERROR 같은 불명이 확정 실패(2)로 나간다. 진입점은 exit을 숫자로 직접 적는다. "잠시 후 다시 실행하세요"(다른 oma가 소유)는 4(지원하지 않음)이고, usage·다른 프로젝트의 바인딩도 4다. 1차 점검은 tui/exit.ts를 묶음 판정에서 부합으로 적었다. 2차 점검에서 바로잡았다 | 수정 7b6c462 |
+| P0V-19 | P0-5 | config/operations.ts:352,417 | loader가 읽지 못한 설정(EACCES·EIO)을 내용이 틀린 설정과 같은 INVALID_REQUEST로 쌌다(P0V-08의 빠진 부분). 자세히는 "2차 점검" | 수정(2차 점검 commit) |
+| P0V-20 | P0-5 | storage/directory.ts:23,47, store.ts:217,331, runtime/resident-rootfs.ts:137, runtime/provision.ts:103,319,345,403 | 관측하지 못한 것을 STORE_CORRUPT로 올려 broker의 sticky fence(domain/admission.ts:9-11)가 society를 멈춘다. 바인딩을 읽지 못한 것을 "다른 바인딩"으로 보고한다 | 수정(2차 점검 commit) |
+| P0V-21 | P0-5 | runtime/{assets.ts:50, deployment-manifest.ts:131, extension-integrity.ts:51, pi-adapter.ts:118, pi-runtime.ts:49,62} | 관측하지 못한 host 배치·배포·extension·Pi 경로를 UNSUPPORTED_PROFILE로 보고한다 | 수정(2차 점검 commit) |
+| P0V-22 | P0-5 | config/generations.ts:182, tui/sources/{extensions.ts:65,70, mail.ts:92} | 목록을 얻지 못한 것을 0·빠짐으로 센다(generation 예산, extension 후보, 메일·unread 수) | 수정(2차 점검 commit) |
+| P0V-23 | P0-5 | tui/app.ts:207 | commit된 뒤 flush만 실패한 설정 저장을 "저장하지 못했습니다"로 표시한다 | 수정(2차 점검 commit) |
 
 ## 파일별 기록
 
@@ -324,7 +329,7 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 |---|---|---|
 | 과거 사실을 현재 권한의 값으로 다시 씀 | P0V-01, P0V-02, P0V-03, P0V-04 | 전달 시도·고정 spec이라는 사실과 lease·권한이 같은 칸이나 같은 API에 있음 |
 | 한 결정에 owner가 여럿 | P0V-06, P0V-07, P0V-12, P0V-08(reader 두 벌), P0V-11(unknown 코드 셋), P0V-18(exit 판정 두 벌) | 같은 판정을 호출자마다 다시 씀 |
-| unknown을 사실로 승격 | P0V-08, P0V-09, P0V-11, P0V-14, P0V-15, P0V-18 | 관측 실패·결과 불명에 확정 사실의 코드나 값을 붙임 |
+| unknown을 사실로 승격 | P0V-08, P0V-09, P0V-11, P0V-14, P0V-15, P0V-18, P0V-19, P0V-20, P0V-21, P0V-22, P0V-23 | 관측 실패·결과 불명에 확정 사실의 코드나 값을 붙임 |
 | accept 전 artifact의 owner가 crash에서 사라짐 | P0V-05, P0V-17(나) | owner 기록이 메모리에만 있음 |
 | 나중의 설정이 접수된 사실을 다시 해석 | P0V-10, P0V-08 | accept 뒤 효과 시점 검사와 사실의 재해석을 구분하지 않음 |
 | durable fact가 durable하지 않은 근거를 가리킴 | P0V-13 | receipt와 session entry의 영속 단위가 다름(INV07) |
@@ -361,9 +366,89 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 
 ## 2차 점검
 
-1차 점검의 묶음 판정(여러 파일을 한 항목으로 적은 곳)에서 P0V-18을 놓쳤고, G묶음에 적은 후속 수정 하나(P0V-12 보완)를 빠뜨렸다. 그래서 판정 질문 하나를 모든 production 파일에 다시 묻는다: **P0-5 — 관측 실패나 결과 불명을 받는 자리(`catch`, 실패 status, 빈 결과)가 그것을 확정 사실의 코드·값으로 바꾸는가.** 215개 파일의 `catch` 359곳을 파일 순서대로 읽고, 곳마다 부합·위반·의도된 예외를 적는다.
+1차 점검은 여러 파일을 한 항목으로 묶어 판정한 곳이 있었다. 그 묶음에서 P0V-18을 놓쳤고, G묶음에 적은 후속 수정 하나(P0V-12 보완)와 P0V-08의 loader 부분(P0V-19)을 빠뜨렸다. 그래서 판정 질문 하나를 모든 production 파일에 다시 물었다. **P0-5: 관측 실패나 결과 불명을 받는 자리가 그것을 확정 사실의 코드·값(바뀜·잘못됨·손상·지원 안 함·없음·0)으로 바꾸는가.** 받는 자리는 `catch`와 실패를 삼키는 API(`existsSync`)다.
 
-진행: P0V-18, P0V-12 보완 수정. 나머지 판정은 아래 표에 적는다.
+기준점: `7b6c462`. 215개 파일 가운데 catch가 있는 107개 파일의 359곳과 `existsSync` 13곳을 파일 순서대로 앞뒤 맥락과 함께 읽었다(2026-09-25). 줄 번호는 기준점의 번호다.
+
+판정 약어:
+- **정리**: 정리·close·보고의 실패. 주 효과의 의미는 바꾸지 않는다.
+- **재던짐**: 관측한 뒤 그대로 올리거나 accepted failure로 싼다.
+- **관측종류**: absent·unavailable·unknown·corrupt 가운데 하나로 돌려준다. ENOENT만 absent다.
+- **내용**: 읽은 bytes를 거절한다. 입력이면 INVALID_REQUEST, accept된 증거면 STORE_CORRUPT, 파생물이면 null이다.
+- **불명유지**: 결과를 모르면 pending·unconfirmed·exit 3으로 둔다.
+- **거절**: 권한이나 생존을 관측하지 못하면 권한을 주지 않는다. 그것을 사망 증명으로 쓰지도 않는다.
+
+### 새 발견
+
+| ID | 규칙 | 파일:줄 | 요약 |
+|---|---|---|---|
+| P0V-19 | P0-5 | config/operations.ts:352,417 | loader가 읽지 못한 것(EACCES·EIO)과 내용이 틀린 것을 같은 INVALID_REQUEST(확정, exit 2)로 쌌다. P0V-08 기록에 "loader도 I/O 실패를 INVALID_REQUEST로 싼다"고 적었으나, `f2ff92a`는 broker reader만 고쳤다 |
+| P0V-20 | P0-5 | storage/directory.ts:23,47; store.ts:217,331; runtime/resident-rootfs.ts:137; runtime/provision.ts:103,345,319,403 | 열지 못한 디렉터리·파일과 실행되지 못한 ledger 조회를 STORE_CORRUPT("종류가 다름", "손상")로 올렸다. broker의 `AdmissionGate`(domain/admission.ts:9-11)는 STORE_CORRUPT를 한 번 보면 프로세스가 끝날 때까지 새 수락을 모두 막는다. 그래서 일시적인 EACCES·EIO 하나가 society를 멈춘다. 바인딩을 지금 읽지 못한 것은 "읽을 수 없는 바인딩"으로, 경쟁에서 진 뒤 읽지 못한 것은 "다른 바인딩이 게시됨"(POLICY_CHANGED)으로 보고했다 |
+| P0V-21 | P0-5 | runtime/assets.ts:50; runtime/deployment-manifest.ts:131; runtime/extension-integrity.ts:51; runtime/pi-adapter.ts:118; runtime/pi-runtime.ts:49,62 | host 배치·배포 목록·extension·Pi 경로를 관측하지 못한 것을 UNSUPPORTED_PROFILE("지원하지 않음", exit 4)로 보고했다. P0V-11과 같은 모습이다 |
+| P0V-22 | P0-5 | config/generations.ts:182; tui/sources/extensions.ts:65,70; tui/sources/mail.ts:92 | 목록을 얻지 못한 것을 비었다고 셌다. generation 예산은 0 byte·0개로, extension 후보 목록은 빠짐으로, 메일 목록·unread 수는 메시지 없음으로 셌다. P0V-15와 같은 모습이다 |
+| P0V-23 | P0-5 | tui/app.ts:207, tui/view/notice.ts:20 | commit point를 지났고 flush만 실패한 설정 저장(CONFIG-CONTRACT outcome-unconfirmed)을 "저장하지 못했습니다"로 표시했다 |
+
+**모델로 다시 본다(P0-6).** P0V-19–P0V-22는 DR13이 경계마다 적은 규칙과 같은 모습이다. 스무 곳 넘게 다시 나왔으므로 경계별 규칙이 모델을 대신하지 못한다고 판단했다. 그래서 규칙을 하나로 바꾼다(DR13 "일반 규칙"). 관측이 답하지 않은 errno는 모름이고, `unobserved`(domain/errors.ts) 한 함수가 그것을 BROKER_UNAVAILABLE로 읽는다. 답한 errno(ENOENT·ENOTDIR·ELOOP·EISDIR·ENAMETOOLONG)와 읽은 내용의 뜻만 호출자가 사실로 말한다. P0V-23의 "게시됨·영속성 불명"도 `publishedUnconfirmed` 한 함수가 읽는다.
+
+### 파일별 판정
+
+| 파일 | catch 줄 | 판정 |
+|---|---|---|
+| broker.ts | 157,169,172,233,243,263,290,308,309,326,327,340,341,357,365,384,453,454,487,494,500,511,513 | 정리·재던짐. 243은 admission이 닫혔으면 sweep을 건너뛴다(거절). 453-454는 run 게시 실패 뒤 record를 revoke한다. 이미 커밋된 lease 증가는 그대로 사실이다 |
+| broker/connection.ts | 78,94,95,145,154,165,184,203,230,234,245,246,247,263 | 정리·재던짐. 연결 종료는 task가 가진 accept된 작업을 지우지 않는다 |
+| broker/internal-dispatcher.ts, public-dispatcher.ts | 244; 119,134,198 | 재던짐(`failureAnswer`). 119: 거절된 자원 admission은 이미 accept된 same-key 조회만 허용한다 |
+| broker/peer-authenticator.ts, peer-pin.ts | 21,40; 22 | 거절. 관측하지 못한 peer·pidfd는 권한이 없다. 사망 증명으로 쓰지 않는다 |
+| broker/principal-endpoint.ts | 136,141,164,171,185 | 재던짐·정리 |
+| broker/process-ancestry.ts | 44 | 관측종류(ENOENT·ESRCH만 exited, 나머지 unavailable) |
+| broker/transport-spool.ts | 42,94,98,103,104 | 정리 |
+| cli.ts, cli/commands/{logs,status}.ts | 41; 25; 12 | 불명유지(단계를 모르는 실패와 전송 실패는 exit 3) |
+| cli/cache-codec.ts | 32,39 | 내용(corrupt cache는 재전송하지 않는다) |
+| cli/effects.ts, cli/effects/mail.ts | 19,46; 20 | 내용. 보내기 전 로컬 입력의 거절이라 이 호출의 결과(보내지 않음)는 확정이다(exit 2) |
+| cli/request-service.ts | 51,100,114,134 | 불명유지(114,134는 "미접수 여부 불명확", exit 3) |
+| cli/transport.ts | 83,95 | 거절(credential 없음은 AUTH_FAILED, 보내기 전) |
+| config.ts | 158 | DR13(현재 정책을 얻지 못함은 BROKER_UNAVAILABLE) |
+| config/generations.ts | 168,182,204,289,330,333,338,366,397,402,403,407,454,492 | 168: P0V-12 보완(`7b6c462`). **182: P0V-22.** 204: 읽지 못한 generation은 "다른 bytes"가 아니라 그대로 올린다(INV02). 289·366: 영속성 불명 기록을 먼저 flush한다. 330-338·397-410: commit point 전에는 정리, 뒤에는 불명유지. 454: journal 기록이 실패해도 commit은 선다. journal을 믿을 수 없으면 수집하지 않는다(492) |
+| config/operations.ts | 236,352,417 | 236: 관측하지 못한 extension asset은 refused(쓰지 않음). **352·417: P0V-19** |
+| diagnostics/{files,integrity,ledger}.ts | 44,73,116,119,130,164; 36,103; 110 | 관측종류(unknown과 corrupt를 나눈다) |
+| domain/{context-policy,resources}.ts | 98,104; 46 | 내용 |
+| entry/broker.ts, host.ts, runner.ts | 46,58,202,206; 19,32; 34 | 재던짐. 시작 실패는 systemd가 새 시도로 다시 한다. 58: cgroup을 읽지 못하면 unit 이름이 없다(권한 없음) |
+| entry/oma.ts | 51,83,111,115,165,174,203,205,212,275,454,527 | P0V-18(`7b6c462`)로 exit을 `codeFor`에서 얻는다. 51·174: 설정 파일을 만들 때는 no-replace라 모름이 덮어쓰기가 되지 않는다. 212: 수집 실패는 역사를 남길 뿐이다. 275: 다시 읽기 실패는 saved-unread다(저장은 사실) |
+| extension/{batch-view,cli-process,mail-tools,principal-channel,tool-surface}.ts | 147,187; 61; 87; 47; 40,110,136,151 | 내용·거절. 채널이 없으면 열지 않는다 |
+| extension/workspace-guard.ts | 34,49,58,71 | 34: 경계 안임을 증명하지 못하면 밖이다(거절). 49·58: P0V-15(`8f7700a`). 71: 관측하지 못한 기존 파일은 새 파일로 쳐서 증가분을 크게 잡는다(보수적) |
+| frame.ts, protocol/{batch-view,receipt-codec,status-view,jsonl}.ts | 29,57,67,97,129,143,187; 96; 23; 55; 35,45 | 내용. jsonl 35: Pi RPC의 형식 위반은 그 출력의 사실이고, 전달 결과는 receipt가 따로 판정한다 |
+| protocol/channel.ts | 59,80,147,172 | 불명유지(연결 실패는 unavailable) |
+| git/{context-repository,observe,quarantine}.ts | 41; 31,54; 102 | 내용·불명유지(끝까지 실행된 Git의 출력만 사실, UTF-8이 아니면 손상 또는 REF_STATE_UNKNOWN) |
+| git/{context,integration,submit}.ts | 98,165,185,210; 66,76,202,245; 83,125,132,157,180 | 재던짐(accept 뒤는 effect knowledge와 함께 accepted failure). integration 66·76: DR13 |
+| leaf.ts | 76,91,149,174,210,249,291,315,375,395 | 관측종류·거절(native 호출 실패는 failed·unknown·unreadable. 395는 native 모듈이 없음, 곧 지원하지 않는 host) |
+| lifecycle/{actions,create,workspace}.ts | 64,67,106,110,132; 92,160,165; 31 | 불명유지(unit 효과를 모르면 unconfirmed, accept 뒤는 accepted failure, workspace Git 출력이 이상하면 REF_STATE_UNKNOWN) |
+| mail.ts, mail/{batches,display,headers,materializer,reconcile}.ts | 106,114,119,163,164,168; 104,195; 33; 52,72,87; 49; 44 | 114: materialize를 끝내지 못하면 pending으로 남는다(불명유지). batches 104: BATCH_CONFLICT면 이번에는 준비하지 않는다(rollback, 기록 없음). 나머지는 내용·정리 |
+| process/{async,policies,run}.ts | 46,84,87,121; 19; 45 | 관측종류(spawn-failed·unobserved·INTERNAL_ERROR exit 3) |
+| reconcile.ts, reconcile/{operations,preaccept}.ts | 75,114,125,166,211; 73,76,94; 34 | 불명유지(진전이 없으면 다음 timer, 손상만 fence) |
+| request-cache.ts | 72,77,90,91,111,154,164,187,228,248,282 | 관측종류(absent·present·corrupt·unavailable) |
+| runtime/assets.ts, deployment-manifest.ts, extension-integrity.ts, pi-adapter.ts, pi-runtime.ts | 50; 131; 51; 39,69,118; 49,62 | **P0V-21.** pi-adapter 39·69는 정리·내용이다 |
+| runtime/{broker-supervisor,host-tenure,society-lease,supervision-channel,process-lock}.ts | 193,315; 153,174; 142; 38; 43 | 정리·거절 |
+| runtime/inference-relay.ts | 89,141,317 | 내용(설정의 URL, 경로 밖이면 403) |
+| runtime/pi-rpc.ts | 147,166,204,240,286 | 재던짐·정리(204: 인코딩할 수 없는 명령은 쓰지 않았음이 확정이다) |
+| runtime/principal-delivery.ts | 149 | 불명유지(session 경쟁에서 진 것은 실패가 아니다) |
+| runtime/provision.ts | 103,156,313,319,335,345,385,403 | **103·345·319·403: P0V-20.** 156: 진 경쟁만 채택하고 나머지는 올린다. 313·385: ENOENT만 없음 |
+| runtime/resident-rootfs.ts | 90,124,137,159 | **137: P0V-20.** 90: 답한 "디렉터리 아님"은 손상이다. 124·159는 진 경쟁이다 |
+| runtime/run-registry.ts | 53,57,71,75,138,159 | 관측종류(cgroup을 읽지 못하면 unknown, 사망 증명이 아니다) |
+| storage/{context-files,context-stream}.ts | 42; 58,81,99,168,174,189 | 42: 답한 errno만 손상이고 나머지는 올린다. 나머지는 정리 |
+| storage/delivery-receipt.ts | 120,154,264,267,273,282,342,428,441,449 | 관측종류(verified·absent·unavailable·conflicting, `deliveryDecision`) |
+| storage/directory.ts | 23,44,47,63,89 | **23·47: P0V-20.** 44·63·89: EEXIST·ENOENT만 삼킨다 |
+| storage/{durable-fs,immutable-file,staged-tree}.ts | 106,114,147,153,195,196; 92,103,157,185,205; 47,65,100 | 정리(자기가 만든 이름만 지운다). immutable-file 92·103: 관측종류 |
+| storage/{operation-codec,operation-journal,operation-transitions,rows,paths}.ts | 110,210; 45; 30,46; 78; 87 | 내용(저장된 row의 형식 위반은 손상, key 재사용은 조회) |
+| storage/preaccept-artifact.ts | 44,63,72,176,188,200,221 | 관측종류·불명유지(판정하지 못하면 outcome-unknown, 지우지 않음) |
+| storage/{quota,submit-spool,transaction}.ts | 27,52,123; 59,64,88,92,129,136,149; 28,68 | 관측종류(관측하지 못한 root는 BROKER_UNAVAILABLE, bundle은 absent·corrupt·unavailable) |
+| store.ts | 84,86,190,192,217,219,223,238,263,264,331 | **217·331: P0V-20.** 나머지는 정리·재던짐(`normalizeStorageFailure`) |
+| tui/app.ts | 207 | **P0V-23** |
+| tui/{screen,session,transport}.ts | 67; 417,445,485; 53 | 불명유지(쓰지 않았음이 증명될 때만 claim을 놓는다, status view는 ENOENT만 "관측 없음") |
+| tui/sources/extensions.ts | 65,70,103,109 | **65·70: P0V-22.** 103·109: 읽지 못한 설정은 편집하지 않는다고 표시한다 |
+| tui/sources/mail.ts | 92,101 | **92: P0V-22.** 101: 목록을 얻지 못한 디렉터리는 unreadable이다 |
+| units.ts, units/execute.ts | 178,206,276,290,298; 31,48 | 불명유지(P0V-11 `57731b6`, cgroup을 읽지 못하면 RUN_TERMINATION_UNKNOWN·사망 미증명) |
+| views.ts, views/status-refresh.ts | 102; 60 | 관측종류(관측 실패는 running·exit 0의 증명이 아니다) |
+
+`existsSync` 13곳: broker.ts:175,223,276(소켓을 정리한 뒤 listen이 실패하면 오류), broker.ts:425(production은 ledger의 `hasCommittedContext`를 쓰고 이 대체값은 시험 조립용), cli/effects/context.ts:58(보내기 전 입력 거절), cli/transport.ts:18(연결 실패는 exit 3), entry/oma.ts:52,177(no-replace 생성이라 덮어쓰지 않음), extension/workspace-guard.ts:27(조상 탐색, 실제 쓰기는 같은 권한으로 실패), lifecycle/workspace.ts:84(clone 실패는 오류), runtime/provision.ts:142,240,249(no-replace rename과 이긴 쪽 채택, 관측 실패는 git이 답한다). 모두 **부합**이다. 모름이 사실로 기록되거나 덮어쓰기가 되는 경로가 없다.
 
 ## 수정 검증
 
@@ -388,6 +473,13 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 | P0V-18: Control Panel exit을 옛 switch로 | tui/exit.ts `codeFor` | priority-0 | KILLED |
 | P0V-18: 보증할 수 없는 바인딩을 확정 거절로 | runtime/provision.ts `projectBindingDecision` | priority-0 | KILLED |
 | P0V-12 보완: 읽지 못한 설정 파일을 "바뀜"으로 | config/generations.ts `assertCurrent` | priority-0 | KILLED |
+| P0V-19–P0V-21: `unobserved`가 아무것도 모름으로 읽지 않음 | domain/errors.ts `unobserved` | priority-0 | KILLED |
+| P0V-19: loader의 읽기 실패를 내용 오류로 | config/operations.ts `sourceFailure` | priority-0 | KILLED |
+| P0V-20: 열지 못한 디렉터리를 종류 불일치로 | storage/directory.ts `assertDirectory` | priority-0 | KILLED |
+| P0V-20: 실행되지 못한 ledger 조회를 손상으로 | store.ts `findSucceededContext` | priority-0 | KILLED |
+| P0V-22: extension scan이 관측 실패를 말하지 않음 | tui/sources/extensions.ts | extension-editing | KILLED |
+| P0V-22: 읽지 못한 메시지를 메시지 없음으로 | tui/sources/mail.ts | unread-observations | KILLED |
+| P0V-23: 영속성 불명 저장을 저장 실패로 | domain/errors.ts `publishedUnconfirmed` | tui-app | KILLED |
 
 DR12의 SURVIVED는 동등 변이다. 앞의 확인이 없어도 rename 직전 재확인이 같은 lost update를 같은 코드(`POLICY_CHANGED` "configuration changed since it was read")로 막는다. 차이는 임시 파일을 만들기 전에 멈추는가뿐이며, 그 임시 파일은 같은 호출이 지운다. 두 확인을 모두 없애면 잡힌다. 앞의 확인은 쓸데없는 쓰기를 줄이는 것이지 사실을 지키는 것이 아니므로, 시험을 더 만들지 않았다.
 

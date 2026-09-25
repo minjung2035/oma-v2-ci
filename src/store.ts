@@ -20,7 +20,7 @@ export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./domain/identifiers.js";
 import { SCHEMA_USER_VERSION_READABLE, SCHEMA_USER_VERSION_WRITTEN } from "./domain/persisted-formats.js";
-import { StoreError, normalizeStorageFailure } from "./domain/errors.js";
+import { StoreError, normalizeStorageFailure, unobserved } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
 export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
@@ -214,7 +214,7 @@ export class Store {
     if (version !== 0) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
     let ddl: string;
     try { ddl = readFileSync(SCHEMA_PATH, "utf8"); }
-    catch (error) { throw new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`, { cause: error }); }
+    catch (error) { throw unobserved(error, "the schema file") ?? new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`, { cause: error }); }
     try { this.db.exec(ddl); }
     catch (error) {
       let failure: unknown = error;
@@ -329,7 +329,9 @@ export class Store {
       selected = this.db.prepare(`SELECT id FROM operations WHERE kind='context.publish' AND state='succeeded'
         AND json_extract(plan_json, '$.candidate')=? ORDER BY created_at_ms DESC, id DESC LIMIT 1`).get(candidate);
     } catch (error) {
-      throw new StoreError(isBusyError(error) ? "DB_BUSY" : "STORE_CORRUPT", "completed context identity query failed");
+      // As every other query: busy is DB_BUSY, and the native storage owner reads the rest.
+      if (isBusyError(error)) throw new StoreError("DB_BUSY", "completed context identity query failed");
+      throw normalizeStorageFailure(error);
     }
     if (selected === undefined) return null;
     const id = fullRow(selected, ["id"], "completed context projection").id;

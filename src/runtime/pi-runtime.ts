@@ -13,7 +13,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, unobserved } from "../domain/errors.js";
 
 export const PI_PACKAGE = "@earendil-works/pi-coding-agent";
 /** Pi derives this name from its own APP_NAME; pointing it elsewhere is the
@@ -45,8 +45,11 @@ export interface PiRuntimeOptions {
   readonly node?: string | undefined;
 }
 
+/** A name that is not there is not a regular file; one that cannot be
+ * observed now is no answer (DR13). */
 function regularFile(path: string): boolean {
-  try { return statSync(path).isFile(); } catch { return false; }
+  try { return statSync(path).isFile(); }
+  catch (error) { const unknown = unobserved(error, `the Pi runtime file ${path}`); if (unknown !== null) throw unknown; return false; }
 }
 
 /** Reads the vendored package's own `bin.pi`, so the entry file is whatever the
@@ -59,7 +62,7 @@ function regularFile(path: string): boolean {
 function entryFromPackage(packageJsonPath: string): string | null {
   let manifest: { name?: string; bin?: string | Record<string, string> };
   try { manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as typeof manifest; }
-  catch { return null; }
+  catch (error) { const unknown = unobserved(error, `the Pi package manifest ${packageJsonPath}`); if (unknown !== null) throw unknown; return null; }
   if (manifest.name !== PI_PACKAGE) return null;
   const bin = manifest.bin;
   const relative = typeof bin === "string" ? bin : bin?.["pi"];

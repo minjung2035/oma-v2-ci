@@ -11,6 +11,7 @@ import type { MailboxRead, MailRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
 import { displaySubject } from "../../mail/headers.js";
 import { headerEnd, readableBody } from "../../mail/display.js";
+import { unobserved } from "../../domain/errors.js";
 
 export interface MailboxPaths {
   readonly newDir: string;
@@ -74,12 +75,18 @@ function addressName(value: string | undefined): string {
  * taken from the same descriptor, so what is read and what it is ordered by
  * come from one observation of one file.
  */
-function readBounded(path: string, limit: number): { text: string; deliveredAtMs: number } | null {
+type BoundedRead =
+  | { readonly kind: "read"; readonly text: string; readonly deliveredAtMs: number }
+  /** Not a message: gone, a link, or not a regular file. */
+  | { readonly kind: "none" }
+  /** DR13: a file that could not be read now is not "no message". */
+  | { readonly kind: "unreadable"; readonly reason: string };
+function readBounded(path: string, limit: number): BoundedRead {
   let fd: number | undefined;
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const stat = fstatSync(fd);
-    if (!stat.isFile()) return null;
+    if (!stat.isFile()) return { kind: "none" };
     const wanted = Math.min(limit, stat.size);
     const buffer = Buffer.allocUnsafe(wanted);
     let filled = 0;
@@ -88,9 +95,11 @@ function readBounded(path: string, limit: number): { text: string; deliveredAtMs
       if (count === 0) break;
       filled += count;
     }
-    return { text: buffer.subarray(0, filled).toString("utf8"), deliveredAtMs: stat.mtimeMs };
-  } catch { return null; }
-  finally { if (fd !== undefined) closeSync(fd); }
+    return { kind: "read", text: buffer.subarray(0, filled).toString("utf8"), deliveredAtMs: stat.mtimeMs };
+  } catch (error) {
+    const unknown = unobserved(error, path);
+    return unknown === null ? { kind: "none" } : { kind: "unreadable", reason: unknown.message };
+  } finally { if (fd !== undefined) closeSync(fd); }
 }
 
 /** A mailbox directory's names. One that does not exist holds no mail; one
@@ -107,16 +116,20 @@ function listDir(path: string): { readonly names: readonly string[] } | { readon
 type DirectoryRows = { readonly rows: readonly { row: MailRow; deliveredAtMs: number }[]; readonly unreadable: string | null };
 
 /** One derivation of a mailbox directory's rows, so the list and the unread
- * count can never disagree about what counts as a message (a directory, a
- * symlink or an unreadable entry is a message in neither). */
+ * count can never disagree about what counts as a message (a directory or a
+ * symlink is a message in neither). An entry that could not be read now is
+ * not known to be no message: the rows that were read are kept, and the
+ * directory says it was not wholly read, as one it cannot list does. */
 function rowsIn(directory: string, unread: boolean): DirectoryRows {
   const rows: { row: MailRow; deliveredAtMs: number }[] = [];
   const listed = listDir(directory);
   if ("unreadable" in listed) return { rows, unreadable: listed.unreadable };
+  let unreadable: string | null = null;
   for (const name of listed.names) {
     const path = join(directory, name);
     const read = readBounded(path, HEADER_LIMIT);
-    if (read === null) continue;
+    if (read.kind === "unreadable") { unreadable ??= read.reason; continue; }
+    if (read.kind === "none") continue;
     const { headers } = parseMessage(read.text);
     rows.push({
       deliveredAtMs: read.deliveredAtMs,
@@ -130,7 +143,7 @@ function rowsIn(directory: string, unread: boolean): DirectoryRows {
       }),
     });
   }
-  return { rows, unreadable: null };
+  return { rows, unreadable };
 }
 
 /** Most recently delivered first, within unread and then read.
@@ -164,5 +177,5 @@ export function unreadCount(paths: MailboxPaths): number | null {
 
 export function readBody(path: string, limit = READ_BOUNDS.mailBodyBytes.value): string | null {
   const read = readBounded(path, limit);
-  return read === null ? null : parseMessage(read.text).body;
+  return read.kind === "read" ? parseMessage(read.text).body : null;
 }
