@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3e6b9c3e9e0313d396961699f961d15ac6c8b796e016d37c6da224029d2ef04b",
-  "report": "580cfeda5351b53be27f3dbfdef12ab70d2616433a420ee3c1fae04729e70761",
+  "report": "8126aed758311f92d145b09b21bf7311c3c0b997951b23fb0332418a500b0785",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -705,7 +705,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "a1ea42d342dcf645755bfcf091dbf47487364135587f59dcb0ac9f8ec3592c72"
+      "sha256": "4c0eb6e1209158f777c087d391e4faf72b8ad0d46f7d85b9ce92bab8e66eed4f"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
@@ -717,7 +717,7 @@
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "75f6fb80ebc49d5c7ef1331f69705b91b882a9e73f49c93ef20ae133f527f138"
+      "sha256": "e387781cdc14019b50fc1b4d294b5df0e78676c4e7b19d6718f24431a5fb0175"
     },
     {
       "path": "src/storage/facets.ts",

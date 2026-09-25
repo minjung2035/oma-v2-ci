@@ -12,6 +12,7 @@ import type { PiEvent } from "../src/runtime/pi-rpc.js";
 import { runnerReceiptPathAt, sessionDirPathAt } from "../src/storage/paths.js";
 import { StoreError } from "../src/domain/errors.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
+import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 
 const BATCH: PreparedBatch = {
   id: "b-00000000-0000-4000-8000-0000000000a8", agent: "principal", incarnation: 0,
@@ -24,7 +25,7 @@ function scene() {
   const sessions = sessionDirPathAt(root, "principal");
   mkdirSync(sessions, { recursive: true });
   const sessionPath = join(sessions, "live.jsonl");
-  writeFileSync(sessionPath, '{"type":"session","version":3}\n');
+  writeBoundarySession(sessionPath, BATCH, "0123abcd");
   const listeners = new Set<(event: PiEvent) => void>();
   const counts = { deliver: 0, complete: 0 };
   let claimed = false;

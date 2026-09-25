@@ -19,7 +19,9 @@ import { entryAt, openBeneath, openDirectory, openRegularBeneath, withinDirector
  * where it is and performs no cleanup, exactly like process loss. */
 export type DurabilityPoint =
   | "file-create" | "file-write" | "file-fsync" | "derived-rename"
-  | "publication-link" | "destination-validate" | "directory-fsync" | "temporary-cleanup";
+  | "publication-link" | "destination-validate" | "directory-fsync" | "temporary-cleanup"
+  /** DR11: flushing another writer's file that a publication names as its evidence. */
+  | "evidence-fsync";
 /** before: the effect has not happened. after-visible: another observer can see
  * it. ambiguous: this process cannot decide whether the effect happened. */
 export type DurabilityPhase = "before" | "after-visible" | "ambiguous";

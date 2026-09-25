@@ -38,6 +38,7 @@ import { PrincipalDelivery, principalHostBroker, type DeliverySession } from "..
 import { PI_ADAPTER_REVISION, PI_BOUNDARY_PREFIX, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
 import { sessionDirPathAt } from "../src/storage/paths.js";
 import { PiRpcClient, commandWasNotWritten, type PiEvent } from "../src/runtime/pi-rpc.js";
+import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 
 const LIMITS: ProtocolLimits = {
   frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64,
@@ -595,7 +596,7 @@ test("V08B: a busy or replaced session still settles an already-produced boundar
     const sessions = sessionDirPathAt(root, "principal");
     mkdirSync(sessions, { recursive: true });
     const oldSession = join(sessions, "old-engine.jsonl");
-    writeFileSync(oldSession, '{"type":"session","version":3}\n');
+    writeBoundarySession(oldSession, ONE_BATCH, "0123abcd");
     publishDeliveryReceipt(root, ONE_BATCH, { adapterRevision: PI_ADAPTER_REVISION, batchId: ONE_BATCH.id,
       incarnation: ONE_BATCH.incarnation, sessionPath: oldSession, entryId: "0123abcd" }, LIMITS.frameBytes);
     const calls: string[] = [];
@@ -977,8 +978,8 @@ test("V05B: Principal completion uses the first receipt returned by EEXIST publi
     mkdirSync(sessions, { recursive: true });
     const firstSession = join(sessions, "first.jsonl");
     const laterSession = join(sessions, "later.jsonl");
-    writeFileSync(firstSession, '{"type":"session","version":3}\n');
-    writeFileSync(laterSession, '{"type":"session","version":3}\n');
+    writeBoundarySession(firstSession, ONE_BATCH, "0123abcd");
+    writeBoundarySession(laterSession, ONE_BATCH, "89abcdef");
     const completed: Record<string, unknown>[] = [];
     const { session, emit } = stubSession();
     const delivery = new PrincipalDelivery(session, {

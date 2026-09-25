@@ -35,6 +35,15 @@ export function completeSession(stateRoot: string, batch: PreparedBatch, name = 
   writeFileSync(path, `${entries.map(entry => JSON.stringify(entry)).join("\n")}\n`, { mode: 0o600 });
   return path;
 }
+/** DR11: a session file holding the boundary entries a receipt may name --
+ * the session header, then one boundary entry per id, as Pi appends them. */
+export function writeBoundarySession(path: string, batch: PreparedBatch, ...entryIds: readonly string[]): string {
+  const entries = entryIds.map(id => JSON.stringify({ type: "custom", customType: "oma-delivery-boundary", id, parentId: null,
+    timestamp: "2026-09-25T00:00:00.000Z", data: { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id,
+      incarnation: batch.incarnation, messageIds: batch.messageIds, sessionPath: path } }));
+  writeFileSync(path, `${['{"type":"session","version":3}', ...entries].join("\n")}\n`, { mode: 0o600 });
+  return path;
+}
 export function boundaryOf(batch: PreparedBatch, sessionPath: string): DeliveryBoundary {
   return { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: batch.incarnation, sessionPath, entryId: ENTRY };
 }

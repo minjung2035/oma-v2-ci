@@ -39,6 +39,7 @@ import type {
 } from "../implementation/contracts.js";
 
 import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
+import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 requireSystemdTestManager();
 interface Env {
   dir: string;
@@ -559,7 +560,7 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
     }), (error: unknown) => error instanceof Error && "code" in error && error.code === "SESSION_BOUNDARY_UNCONFIRMED");
     assert.equal(env.store.getDelivery(batch.messageIds[0]!, "a")!.presented, 0);
     const sessions = runnerSessionDirPathAt(env.state, "a"); mkdirSync(sessions, { recursive: true });
-    const sessionPath = join(sessions, "settled.jsonl"); writeFileSync(sessionPath, '{"type":"session","version":3}\n');
+    const sessionPath = writeBoundarySession(join(sessions, "settled.jsonl"), batch, "0123abcd");
     const trusted = publishDeliveryReceipt(env.state, batch, { batchId: batch.id, incarnation: batch.incarnation,
       sessionPath, entryId: "0123abcd", adapterRevision: PI_ADAPTER_REVISION }, TEST_VIEW_LIMITS.frameBytes);
     await mail.complete(auth("a", []), { batchId: batch.id, incarnation: batch.incarnation, sessionPath: trusted.sessionPath,

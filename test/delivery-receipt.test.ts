@@ -16,6 +16,7 @@ import {
 } from "../src/storage/paths.js";
 import { ALL_CAPS, storedSpec } from "./fixtures/spec.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
+import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 
 function auth(): AuthContext {
   return {
@@ -79,7 +80,7 @@ test("S-03: only the pinned durable Pi boundary receipt completes a prepared bat
   const sessions = runnerSessionDirPathAt(root, "alice");
   mkdirSync(sessions, { recursive: true });
   const sessionPath = join(sessions, "settled.jsonl");
-  writeFileSync(sessionPath, '{"type":"session","version":3}\n');
+  writeBoundarySession(sessionPath, batch, "0123abcd");
   const receipt = publishDeliveryReceipt(
     root,
     batch,

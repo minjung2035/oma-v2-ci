@@ -335,6 +335,56 @@ export function readDeliveryReceipt(
 ): CheckedReceipt {
   return requireVerifiedReceipt(observeDeliveryReceipt(stateRoot, batch, maximum, attempts));
 }
+/** The boundary entry the trusted extension appends, as Pi writes it: a custom
+ * entry of the adapter's type naming this batch, attempt and manifest. */
+function isBoundaryEntry(line: string, batch: PreparedBatch, boundary: DeliveryBoundary): boolean {
+  let raw: unknown;
+  try { raw = JSON.parse(line); } catch { return false; }
+  const entry = record(raw); const data = record(entry?.data);
+  if (entry === null || data === null) return false;
+  const ids = data.messageIds;
+  return entry.type === "custom" && entry.customType === "oma-delivery-boundary" && entry.id === boundary.entryId &&
+    data.adapterRevision === PI_ADAPTER_REVISION && data.batchId === batch.id && data.incarnation === batch.incarnation &&
+    Array.isArray(ids) && ids.length === batch.messageIds.length && ids.every((id, index) => id === batch.messageIds[index]);
+}
+/** DR11, BATCH-006 "durable session file": the entry a receipt names is on disk
+ * before the receipt exists. Pi appends it with no flush, so the trusted
+ * publisher finds it in the bounded end of the session file -- a boundary is
+ * the session's last entry when its receipt is published -- and flushes the
+ * file and the directory holding it. A boundary the file does not hold is no
+ * boundary: nothing is published, and the batch stays for its next attempt. */
+function makeBoundaryDurable(stateRoot: string, batch: PreparedBatch, boundary: DeliveryBoundary, maximum: number,
+  faults?: DurabilityObserver): void {
+  const root = sessionDirPathAt(stateRoot, batch.agent);
+  const offset = relative(root, boundary.sessionPath);
+  const directory = openDirectory(root);
+  try {
+    const holder = dirname(offset) === "." ? directory
+      : openBeneath(directory, dirname(offset), constants.O_RDONLY | constants.O_DIRECTORY);
+    try {
+      const fd = openRegularBeneath(holder, basename(offset));
+      try {
+        const size = fstatSync(fd).size;
+        const window = Math.min(size, maximum);
+        const bytes = Buffer.alloc(window);
+        let filled = 0;
+        while (filled < window) {
+          const count = readSync(fd, bytes, filled, window - filled, size - window + filled);
+          if (count === 0) break;
+          filled += count;
+        }
+        const lines = bytes.subarray(0, filled).toString("utf8").split("\n");
+        if (window < size) lines.shift(); // cut by the window, not an entry
+        if (!lines.some(line => isBoundaryEntry(line, batch, boundary)))
+          throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the session file holds no boundary entry for this batch attempt; no receipt is published");
+        faultAt(faults, "evidence-fsync", "ambiguous", boundary.sessionPath);
+        fsyncSync(fd);
+      } finally { closeSync(fd); }
+      fsyncSync(holder);
+      faultAt(faults, "evidence-fsync", "after-visible", dirname(boundary.sessionPath));
+    } finally { if (holder !== directory) closeSync(holder); }
+  } finally { closeSync(directory); }
+}
 export function publishDeliveryReceipt(
   stateRoot: string,
   batch: PreparedBatch,
@@ -348,6 +398,7 @@ export function publishDeliveryReceipt(
     messageIds: [...batch.messageIds],
     ...boundary,
   }, batch, stateRoot);
+  makeBoundaryDurable(stateRoot, batch, boundary, maximum, faults);
   const encoded = `${JSON.stringify(candidate)}\n`;
   if (Buffer.byteLength(encoded) > maximum)
     return invalid("encoded receipt exceeds the configured frame limit");

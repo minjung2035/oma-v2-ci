@@ -12,6 +12,7 @@ import { PI_ADAPTER_REVISION, publishDeliveryReceipt } from "../src/storage/deli
 import { generateBatchId, generateOperationId } from "../src/ids.js";
 import { messageIdForOperation } from "../src/domain/derived.js";
 import { TEST_PROTOCOL_LIMITS } from "./fixtures/limits.js";
+import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
 
 test("RUN-001: broker EOF, malformed reply and local stop settle all pending calls", { timeout: 5000 }, async () => {
   for (const mode of ["eof", "malformed", "oversize", "stop", "timeout", "success"]) {
@@ -108,7 +109,7 @@ test("AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes 
   const sessions = runnerSessionDirPathAt(dir, "alice");
   mkdirSync(sessions, { recursive: true, mode: 0o700 });
   const sessionPath = join(sessions, "session.jsonl");
-  writeFileSync(sessionPath, '{"type":"session","version":3}\n');
+  writeBoundarySession(sessionPath, batch, "0123abcd");
   publishDeliveryReceipt(dir, batch, { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: 1, sessionPath, entryId: "0123abcd" },
     TEST_PROTOCOL_LIMITS.frameBytes);
   const calls: { method: string; connection: number }[] = [];
