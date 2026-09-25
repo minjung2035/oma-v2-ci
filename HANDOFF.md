@@ -2,10 +2,10 @@
 
 이 문서는 `oma-v2-consistency-plan-b25961c/` 계획(WP00–WP32) 적용 작업의 인계다. 현재 결과 수치(test count, LOC, lane PASS 표)는 `implementation/validation.md`가 단일 owner다. 이 문서는 진행 상태와 재현 방법만 적는다.
 
-## 1. 현재 상태 (2026-09-24)
+## 1. 현재 상태 (2026-09-25)
 
 - 브랜치 `refactor/safety-preserving-architecture`. push·PR·merge는 이 작업에서 하지 않는다.
-- **WP00–WP32 전부 커밋 완료, 재검토·적대적 검증, 이어서 전체 코드베이스 적대적 검증(AV1–AV5) 완료.** 마지막 통합 검증은 `implementation/validation.md`의 v10. v3–v9는 중간 증거로 `/home/dev/oma-evidence/v3..v9/`에 있다.
+- **WP00–WP32 전부 커밋 완료, 재검토·적대적 검증, 이어서 전체 코드베이스 적대적 검증(AV1–AV5)과 v11 검증 중 발견한 AV6, 그 뒤 INV02 재점검 AV7, INV10·기록 약속 재점검 AV8 완료.** AV1–AV5는 카드별 새 원칙이 아니라 프로젝트 불변식(INV01–INV12)·spec MUST를 기존 owner가 적용한 것으로 재정렬했다(`implementation/consistency-decisions.md`의 AV 절). 마지막 통합 검증은 `implementation/validation.md`의 v11. v3–v10은 중간 증거로 `/home/dev/oma-evidence/v3..v10/`에 있다.
 - 판정: **release 미승인**. `node --input-type=module -e 'const m=await import("./scripts/review-closure.mjs"); console.log(m.approval(".", undefined, await m.oracleFindings(".")))'`로 확인한다. production 파일 222개 전부 검토 완료(NOT_REVIEWED 0). 남은 차단 요인은 powercut·실제 provider·CI NOT_RUN(oracle V05C·V30B·V32B)뿐이며 모두 사용자 승인이 필요하다.
 - lane 성격: V27A(실제 엔진), V28B(pty), V31A(설치 closure)는 저장소에 `engine`/`pty` lane이 없어 durable lane에서 돈다(bubblewrap·openssl·python3 필요, skip은 PASS 아님).
 
@@ -60,7 +60,10 @@
 | WP31 | `1906cf3`, `7123719`, `f666a0c`, `bf87132` | lockfile이 엔진을 개발 의존성으로 둬 production 설치에서 빠지던 결함 수정(버전 변경 0), 엔진 탐색을 설치 루트로 한정, README 설치 주장 정정, 지원표 | `bin` 없음(C2 결정 보류), 다른 Node·배포판 NOT_RUN |
 | WP30 | `38944fb`, `6da019a`, `094e3b9` | D01 독립 모형을 실제 구성 요소에 교차 실행(V30A), FAULT-MATRIX 대응표, 환경별 판정 | endpoint bind 실패 별도 주입 없음, powercut·provider NOT_RUN |
 | WP32 | `40d339a`, `48e961b`, `736fd15` | review ledger와 승인 판정기(V32A), 불변식 12개 대조표, release 미승인 판정 | 139개 파일 미검토 |
-| 전체 적대적 AV1–AV5 | `9cff8c5`…`fd69dd7` | AV1 모델 값이 CLI 옵션이 되던 인자 주입(Principal이 host 파일을 공개 archive로 보냄) 차단, AV2 relay가 placeholder를 아무 header·path에나 바꿔 넣어 provider 404가 진짜 키를 sandbox로 되돌려주던 결함 차단(slot 한정 + 응답 tripwire), AV3 Principal 모델 도구 범위에서 Human 세션 이력 분리, AV4 Resident가 쓰는 디렉터리를 host가 이중 해석·git 실행하던 지점 제거, AV5 state tree 변경을 held parent로 일원화하고 규칙으로 강제 | quarantine 스크립트는 private mount namespace 안에서 경로 사용(잔여) |
+| 전체 적대적 AV1–AV5 | `9cff8c5`…`fd69dd7`, 원칙 재정렬 `abf54bb`…`0325450` | 발견마다 위반한 INV·MUST와 기존 owner로 고침: AV1 CLI-001 문법 owner 둘(INV04)·모델 값이 slot 밖으로(INV09) → `parseArguments` 하나, AV2 INF-005 교체가 provider가 되읊는 자리에 진짜 key를 넣음(INF-007) → slot 한정 + 응답 tripwire, AV3 PR-003/PR-004·FS-003 → Principal scratch `principal/private/workspace`(provisioning이 만들고 CLI home도 여기)와 시작 시 `assertModelScope`, AV4 INV03 → 준비 완료는 provisioning을 떠나며 기록된 사실로 쓰고 다시 도출하지 않음, FS-005·SB-006 → 세션 파일 한 번의 해석, AV5 FS-005(architecture §4) → state tree 변경을 storage primitive로 일원화하고 규칙으로 강제. mutant 21개 중 20개 실패, 1개 등가 | quarantine 스크립트는 private mount namespace 안에서 경로 사용(잔여), WebSocket frame header가 key 바이트를 가르는 경우 tripwire가 못 봄(잔여), 관측하지 못한 권한은 거부하되 CAPABILITY_DENIED로 보고(잔여, 바꾸면 정산 분류가 달라짐), architecture.md는 N-001 결박 그대로 |
+| AV6 (v11 kernel lane에서 발견) | `8fd3094`…`83f1b04` | INV02: 살아 있는 Resident가 부하에서 CAPABILITY_DENIED를 받음 — pidfd `poll`의 EINTR(보류 중인 SIGCHLD)을 종료로 읽음(거부 순간 EINTR 포착). 같은 원칙으로 `/proc` 읽기 실패를 엔진 종료로 읽어 Principal 등록을 retire하던 곳도 수정. `pidfdLiveness`(running/exited/failed, EINTR은 최대 8회 재질문)와 `processEnded`(/proc가 종료라고 말할 때만 ended) 하나씩으로. mutant 7개 모두 실패, 부하 반복 60/60 통과 | 부하 반복은 보조 증거(이전 빈도에서 우연 통과 가능) |
+| AV7 (AV6 뒤 INV02 재점검) | `b6e902f`…`6b92785` | 관측 실패를 값으로 삼키는 곳 전수 재점검: 설정 수거가 읽지 못한 journal을 빈 이력으로 읽어 generation을 지우고, 기록이 빠진 실제 직전 generation을 지우던 것(커밋 시 manifest 사실로 journal 보정, journal이 보증할 때만 삭제), 읽지 못한 generation을 STORE_CORRUPT로 보고, 저장 용량 루트를 못 보면 0, 대시보드·메일 화면이 읽지 못한 메일함을 0/없음으로 표시(arch §23.5). mutant 9개 모두 실패 | journal이 계속 읽히지 않으면 예산 한도에서 편집 거절이 재시작으로 풀리지 않음, journal 기록이 연속 두 번 빠지면 직전 generation을 잃을 수 있음 |
+| AV8 (INV10·기록 약속 재점검) | `31eb193`…`8f096b7` | WP26이 CLI 효과를 "no-follow reads"로 기록했지만 `--file`·`--reply`는 링크를 따라가고 한도 없이 읽음(`/dev/zero`는 메모리가 찰 때까지). `readLocalFile` 하나로: O_NOFOLLOW, 정규 파일만, CLI frame(`cliFrameBytes`, transport와 공유) 이하. mutant 4개 모두 실패 | Principal은 bash가 없어 모델 경로로는 도달 불가였음(사람의 CLI나 Human이 설치한 도구만) |
 | 재검토·적대적 | `f11c302`…`dea19b8` | 계획 oracle 73개의 담당·lane 필수 검사(`oracle-map.json`), 이전 카드 guard mutant 30개 중 생존 10개(공백 9·동치 1), 공백 8개에 oracle 추가, actor socket·relay 연결 수 상한, 시계보다 앞선 status view를 unknown으로 | 한 파일 읽기 도중 변경(WP12)은 결정적 재현 불가 |
 
 부수 수정: kernel/crash fixture의 systemd 257 호환(`list-unit-files` 무일치 exit 1, stop 후 disable), `/usr/bin/node` 가정 제거, crash hook의 descriptor 기준 rename 해석, 오래된 kernel 시험 기대값 갱신.
