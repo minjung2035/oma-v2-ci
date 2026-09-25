@@ -8,12 +8,12 @@ import { closeSync, constants, fstatSync, mkdtempSync, openSync, readSync, rmSyn
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { logicalFromDisplay, validActorName, validAddress, validMessageId } from "./batch-view.js";
+import { logicalFromDisplay, validAddress, validMessageId } from "./batch-view.js";
 export { validAddress } from "./batch-view.js";
 import { runCliProcess } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
 import { PRINCIPAL_TOOL_NAMES, registerPrincipalTools } from "./principal-tools.js";
-import { integerEnv, refused, requestKeyOf, textResult } from "./shared.js";
+import { actorNameOf, integerEnv, refused, requestKeyOf, textResult } from "./shared.js";
 
 /** TSP-008: tools OMA itself owns. A role projection may reorder or group the
  * extensions' tools, but it can never take these away from the agent. */
@@ -347,7 +347,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
           environment,
           channel,
           params.agent === undefined ? ["status"]
-            : ["status", "--", validActorName(params.agent) ? params.agent : refused("agent", params.agent)],
+            : ["status", "--", actorNameOf(params.agent, society, "agent")],
           signal,
         ),
       );
@@ -356,5 +356,5 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   // AV11: the Principal's other capabilities go through the same CLI, as the Principal.
   if (channel.attached)
     registerPrincipalTools(pi, { run: (args, signal, at) => runCli(cli, at ?? cwd, environment, channel, args, signal),
-      workspace: cwd, projectGit: process.env.OMA_PROJECT_GIT });
+      workspace: cwd, projectGit: process.env.OMA_PROJECT_GIT, society });
 }

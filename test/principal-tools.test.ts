@@ -204,3 +204,38 @@ test("AV18 / CREATE-002, arch §11, §15.1: under the default configuration a Re
   assert.ok(child.spec.capabilities.includes("git.submit"));
   assert.equal(principal.capabilities.includes("code.integrate"), false, "the Principal was given code.integrate (AUTH-001)");
 });
+
+/** AV29 -- FS-003, CTX-002: the ninth functional run. The Principal published
+ * its workspace as the context once, and the second publication was refused
+ * "unsupported context directory .local": the workspace is the CLI's home, and
+ * its private request cache appears there with the first CLI call. The
+ * workspace itself is refused the same way every time; a directory in it that
+ * holds only the context files is the one to publish.
+ * AV30 -- AV15's rule for every actor slot: a status call naming
+ * "principal@provtest.oma.invalid" was refused as not an agent. */
+test("AV29, AV30: the workspace itself is never a context tree, and an actor slot takes the address OMA shows", { timeout: 60_000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av29-"));
+  const fixture = await peer(root);
+  try {
+    const previous = process.env.OMA_SOCIETY;
+    process.env.OMA_SOCIETY = "demo";
+    let tools: Map<string, Tool>;
+    try { tools = register(root, fixture.path, true); }
+    finally { if (previous === undefined) delete process.env.OMA_SOCIETY; else process.env.OMA_SOCIETY = previous; }
+    const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
+    writeFileSync(join(root, "GOAL.md"), "goal\n");
+    for (const directory of [root, ".", `${root}/`])
+      await assert.rejects(() => call("oma_context_publish", { directory, expect: "none" }), /not the workspace itself/, directory);
+    mkdirSync(join(root, "context")); writeFileSync(join(root, "context", "GOAL.md"), "goal\n");
+    await assert.rejects(() => call("oma_context_publish", { directory: "context", expect: "none" }), /BROKER_UNAVAILABLE/);
+    assert.equal(sent(fixture.frames, "context.publish").length, 1, "a directory holding only the context was not published");
+    await assert.rejects(() => call("oma_status", { agent: "worker@demo.oma.invalid" }), /BROKER_UNAVAILABLE/);
+    assert.deepEqual(sent(fixture.frames, "status.get").at(-1), { agent: "worker" });
+    await assert.rejects(() => call("oma_agent_lifecycle", { name: "worker@demo.oma.invalid", action: "start" }), /BROKER_UNAVAILABLE/);
+    assert.deepEqual(sent(fixture.frames, "agent.start").at(-1), { agent: "worker" });
+    await assert.rejects(() => call("oma_logs", { agent: "worker@demo.oma.invalid", since: "10m" }), /BROKER_UNAVAILABLE/);
+    // Only an actor's address names an actor.
+    for (const agent of ["topic-dev@demo.oma.invalid", "worker@other.oma.invalid", "commons@demo.oma.invalid"])
+      await assert.rejects(() => call("oma_status", { agent }), /is not valid/, agent);
+  } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
+});

@@ -19,7 +19,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { validActorName, validFullOid, validTopicName } from "./batch-view.js";
-import { refused, requestKeyOf, textResult } from "./shared.js";
+import { actorNameOf, refused, requestKeyOf, textResult } from "./shared.js";
 
 export const PRINCIPAL_TOOL_NAMES: readonly string[] = Object.freeze([
   "oma_agent_create",
@@ -37,6 +37,8 @@ export interface PrincipalToolContext {
   readonly workspace: string;
   /** The society's canonical repository, read only to name its main. */
   readonly projectGit: string | undefined;
+  /** This society, whose addresses name its actors (AV30). */
+  readonly society: string | undefined;
 }
 
 /** CLI-001's duration: a positive integer and a unit. */
@@ -49,7 +51,7 @@ function within(root: string, path: string): boolean {
 }
 
 export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolContext): void {
-  const { run, workspace } = context;
+  const { run, workspace, society } = context;
   pi.registerTool({
     name: "oma_agent_create",
     label: "Create an OMA Resident",
@@ -90,7 +92,7 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
       request: Type.Optional(Type.String()),
     }),
     async execute(_id, params, signal) {
-      const name = validActorName(params.name) ? params.name : refused("agent name", params.name);
+      const name = actorNameOf(params.name, society, "agent name");
       const action = params.action === "start" || params.action === "stop" ? params.action : refused("action", params.action);
       const key = requestKeyOf(params.request);
       return textResult(await run(["agent", action, "--request", key, "--", name], signal), { request: key });
@@ -116,15 +118,19 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
     name: "oma_context_publish",
     label: "Publish the shared OMA context",
     description:
-      "Publish the shared context -- GOAL.md (required), RATIONALE.md, decisions/*.md -- from a directory in your workspace. expect is the current context revision, or none for the first publication.",
+      "Publish the shared context -- GOAL.md (required), RATIONALE.md, decisions/*.md -- from a directory in your workspace that holds only those files; not the workspace itself, which holds your CLI's private state. expect is the current context revision, or none for the first publication.",
     parameters: Type.Object({
-      directory: Type.String({ description: "A directory inside your workspace" }),
+      directory: Type.String({ description: "A directory inside your workspace holding only the context files" }),
       expect: Type.String({ description: "The current context revision (full id), or none" }),
       request: Type.Optional(Type.String()),
     }),
     async execute(_id, params, signal) {
       const directory = resolve(workspace, params.directory);
       if (params.directory.includes("\0") || !within(workspace, directory)) refused("directory (inside your workspace)", params.directory);
+      // AV29, FS-003 and CTX-002: the workspace is the CLI's home, and its
+      // private request cache is there from the first call on; a context tree
+      // holds only the context files. Refused the same way every time.
+      if (directory === resolve(workspace)) refused("directory (one holding only the context files, not the workspace itself)", params.directory);
       const expect = params.expect === "none" || validFullOid(params.expect) ? params.expect : refused("expect (a full id or none)", params.expect);
       const key = requestKeyOf(params.request);
       return textResult(await run(["context", "publish", "--expect", expect, "--request", key, "--", directory], signal), { request: key });
@@ -136,7 +142,7 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
     description: "Read a Resident's recent journal, for a duration such as 10m or 2h.",
     parameters: Type.Object({ agent: Type.String(), since: Type.String() }),
     async execute(_id, params, signal) {
-      const agent = validActorName(params.agent) ? params.agent : refused("agent", params.agent);
+      const agent = actorNameOf(params.agent, society, "agent");
       const since = DURATION.test(params.since) ? params.since : refused("since (like 10m)", params.since);
       return textResult(await run(["logs", "--since", since, "--", agent], signal));
     },
