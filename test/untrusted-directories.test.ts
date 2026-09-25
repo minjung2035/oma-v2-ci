@@ -21,16 +21,16 @@ import { boundaryOf, completeSession, preparedFixture } from "./fixtures/deliver
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
 /** Replaces `component` with a link to `elsewhere` the first time any
- * pathname check of the fs module is asked about something beneath `root` --
- * the instant between "resolve the path" and "open the path again". */
-function trapBetweenCheckAndUse(root: string, component: string, elsewhere: string): () => void {
+ * pathname check of the fs module is asked about something beneath it -- the
+ * instant between "resolve the named path" and "open the path again". */
+function trapBetweenCheckAndUse(component: string, elsewhere: string): () => void {
   const names = ["realpathSync", "lstatSync", "statSync", "existsSync", "accessSync"] as const;
   const originals = Object.fromEntries(names.map(name => [name, fs[name]])) as Record<(typeof names)[number], (...args: unknown[]) => unknown>;
   let sprung = false;
   for (const name of names) {
     (fs as unknown as Record<string, unknown>)[name] = function (this: unknown, path: unknown, ...rest: unknown[]) {
       const result = originals[name].call(this, path, ...rest);
-      if (!sprung && typeof path === "string" && path.startsWith(root)) {
+      if (!sprung && typeof path === "string" && path.startsWith(`${component}/`)) {
         sprung = true;
         renameSync(component, `${component}.real`); symlinkSync(elsewhere, component);
       }
@@ -52,7 +52,7 @@ test("AV4: a receipt's session is found beneath its directory in one resolution;
     assert.equal(observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes).kind, "verified");
     // What is named inside is empty; a complete copy waits outside.
     copyFileSync(session, join(outside, "delivery.jsonl")); truncateSync(session, 0);
-    const restore = trapBetweenCheckAndUse(sessions, join(sessions, "sub"), outside);
+    const restore = trapBetweenCheckAndUse(join(sessions, "sub"), outside);
     let observed;
     try { observed = observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes); }
     finally { restore(); }
