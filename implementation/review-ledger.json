@@ -652,9 +652,11 @@
    "primary": "WP16",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV18",
     "WP16"
    ],
    "oracles": [
+    "AV18",
     "V16A",
     "V16B"
    ]
@@ -2427,9 +2429,11 @@
    "primary": "WP10",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV17",
     "WP10"
    ],
    "oracles": [
+    "AV17",
     "V10A",
     "V10C"
    ]
@@ -2542,6 +2546,7 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV1",
+    "AV19",
     "AV2",
     "AV5"
    ],
@@ -2603,12 +2608,14 @@
     "AV10",
     "AV11",
     "AV16",
+    "AV17",
     "WP27"
    ],
    "oracles": [
     "AV10",
     "AV11",
     "AV16",
+    "AV17",
     "V27A",
     "V27B"
    ]
