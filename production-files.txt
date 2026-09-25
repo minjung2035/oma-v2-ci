@@ -145,6 +145,7 @@ src/protocol/run-lease.ts
 src/protocol/status-view.ts
 src/reconcile.ts
 src/reconcile/operations.ts
+src/reconcile/preaccept.ts
 src/request-cache.ts
 src/rpc-client.ts
 src/runner.ts

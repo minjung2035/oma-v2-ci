@@ -12,7 +12,7 @@ import { consumeCreationPublication, type CreationPublicationEvidence } from "..
 
 export type PublicationEvidence = SubmissionPublicationEvidence | ContextPublicationEvidence | CreationPublicationEvidence;
 /** The message an accepted plan names, or null for a plan that names none. */
-function namedMessage(operation: OperationRow): MessagePlan | null {
+export function namedMessage(operation: OperationRow): MessagePlan | null {
   switch (operation.kind) {
     case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return operation.plan.message;
     case "agent.create": return operation.plan.initialMessage;

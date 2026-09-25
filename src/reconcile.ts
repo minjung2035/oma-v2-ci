@@ -14,6 +14,8 @@ import { GitModule } from "./git.js";
 import { UnitsModule } from "./units.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { pendingWork } from "./views/pending-work.js";
+import { collectUnacceptedArtifacts, type PreacceptCollection } from "./reconcile/preaccept.js";
+import { dirname } from "node:path";
 
 export interface ReconcilePaths {
   projectGit: string; hasGoal?: () => boolean; activationAllowed(): boolean;
@@ -54,6 +56,10 @@ export class ReconcileModule {
       ...(paths.sweepBudgetSeconds === undefined ? {} : { budgetSeconds: paths.sweepBudgetSeconds }) });
   }
   get operationOutcomes() { return this.operations.lastOutcomes; }
+  /** DR10: what the last startup collected of the artifacts made before an
+   * acceptance that never happened, and what it kept and why. */
+  get preacceptCollection(): PreacceptCollection | null { return this.collected; }
+  private collected: PreacceptCollection | null = null;
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
   private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true; }
   private admit(category: ResourceCategory): Release { return this.paths.resourceGate?.(category) ?? NO_HOLD; }
@@ -84,6 +90,11 @@ export class ReconcileModule {
     this.starting = true;
     try {
       this.quiesceResidents();
+      // DR10: before any request is admitted, and before bootstrap freezes its
+      // own briefs. The state root is the Store's (store.ts planContext).
+      this.collected = collectUnacceptedArtifacts(dirname(this.store.path), this.store);
+      if (this.collected.removed.length > 0 || this.collected.kept.length > 0)
+        console.error(JSON.stringify({ event: "reconcile.preaccept", removed: this.collected.removed.length, kept: this.collected.kept.length }));
       if (this.git) {
         await this.assertCanonicalHealthyAsync();
         // An earlier death observation is not a token valid across fsck's await.

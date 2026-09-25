@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "3e6b9c3e9e0313d396961699f961d15ac6c8b796e016d37c6da224029d2ef04b",
-  "report": "8126aed758311f92d145b09b21bf7311c3c0b997951b23fb0332418a500b0785",
+  "manifest": "162f1e6f78bc194df4149323332f6b0bd6678c2ac922f809081450d5d870c8b1",
+  "report": "7d06e55aa0e91052cae0cbde196bf33a9e362fd028444b2b08335cbdc0d3b45e",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -473,7 +473,7 @@
     },
     {
       "path": "src/mail/materializer.ts",
-      "sha256": "c4f602e3f88ed252093c9a73defe2e8546f17fabc1a00937043725b508f4f829"
+      "sha256": "277f0f13fe83535f27b25f7cb4c44960344d9c353d7454608156105d00fa9f4f"
     },
     {
       "path": "src/mail/reconcile.ts",
@@ -585,11 +585,15 @@
     },
     {
       "path": "src/reconcile.ts",
-      "sha256": "3062b5803da38689f01883b9288917ee149962009b806209a92672d2761d29e8"
+      "sha256": "2f59b32c42c7191ea92c6a69418fc05db57766c56a01b989d2ab821979d23132"
     },
     {
       "path": "src/reconcile/operations.ts",
       "sha256": "cba9ef850810638075d8258abdb2642ddc02261051e8411b0b4a9a8b09f2c85c"
+    },
+    {
+      "path": "src/reconcile/preaccept.ts",
+      "sha256": "ccc655ab3aa08cc157e83c321aa6bfb50d2c3d48a97cc638e73d9853f5b141e6"
     },
     {
       "path": "src/request-cache.ts",
