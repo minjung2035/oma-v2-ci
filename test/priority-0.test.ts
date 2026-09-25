@@ -24,7 +24,10 @@ import { createCompleteConfigurationFixture } from "./fixtures/configuration.js"
 import { runCliProcess } from "../src/extension/cli-process.js";
 import { cliFailure } from "../src/extension/mail-tools.js";
 import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
-import { collectBindingTemporaries, observeProjectBinding, publishProjectBinding, stateRootHasSociety } from "../src/runtime/provision.js";
+import { collectBindingTemporaries, observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety } from "../src/runtime/provision.js";
+import { ERROR_METADATA, errorExit, StoreError } from "../src/domain/errors.js";
+import { codeFor } from "../src/tui/exit.js";
+import type { ErrorCode } from "../implementation/contracts/errors.js";
 import { Broker } from "../src/broker.js";
 import { ViewsModule } from "../src/views.js";
 import { statusViewPath } from "../src/protocol/status-view.js";
@@ -279,4 +282,34 @@ test("P0-7: a crash while binding a society to its project leaves no binding or 
     assert.deepEqual(readdirSync(root), ["project-binding.json"]);
     assert.equal(observeProjectBinding(root).kind, "bound");
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("DR13 / CLI-003, P0-2: the Control Panel's exit is the CLI's reading of the code, so an unknown is never a settled failure", () => {
+  for (const code of Object.keys(ERROR_METADATA) as ErrorCode[])
+    assert.equal(codeFor(new StoreError(code, code)), errorExit(code), code);
+  for (const unknown of ["RUN_TERMINATION_UNKNOWN", "REF_STATE_UNKNOWN", "SESSION_BOUNDARY_UNCONFIRMED", "PROVIDER_OUTCOME_UNKNOWN", "STORE_CORRUPT", "DB_BUSY"] as const)
+    assert.equal(codeFor(new StoreError(unknown, unknown)), 3, unknown);
+  assert.equal(codeFor(new Error("EIO")), 3, "a failure with no code is not known to be settled");
+  // A binding the process cannot vouch for is not known; one to another project is the operator's decision.
+  const input = { society: "demo", canonicalProjectPath: "/project", hasSociety: true, bindRequested: false };
+  const unreadable = projectBindingDecision({ ...input, observation: { kind: "unreadable", reason: "EIO" } });
+  const elsewhere = projectBindingDecision({ ...input, observation: { kind: "bound", binding: { kind: "oma-project-binding-v1", society: "demo", canonicalProjectPath: "/elsewhere" } } });
+  assert.ok(unreadable.kind === "refuse" && elsewhere.kind === "refuse");
+  assert.equal(errorExit(unreadable.code), 3);
+  assert.equal(errorExit(elsewhere.code), 2);
+});
+
+test("DR13 / DR12: a configuration file that cannot be read now is not a changed one; the edit waits and writes nothing", { skip: process.getuid?.() === 0 }, () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const settings = readSettings(f.input);
+    const original = readFileSync(f.input);
+    chmodSync(f.input, 0o000);
+    try {
+      assert.throws(() => commitField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1), { code: "BROKER_UNAVAILABLE" });
+    } finally { chmodSync(f.input, 0o600); }
+    assert.deepEqual(readFileSync(f.input), original, "nothing is committed");
+    rmSync(f.input);
+    assert.throws(() => commitField(settings, WORKER_LIMIT, f.config.quota.societyAgents + 1), { code: "POLICY_CHANGED" }, "a file that is gone has changed");
+  } finally { f.close(); }
 });

@@ -8,7 +8,7 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 판정: **위반**(고칠 규칙과 근거 원칙), **부합**(근거), **의도된 예외**(owner 문서와 이유).
 줄 번호는 점검 시점(기준점)의 번호다. 수정 뒤에는 "수정" 열의 commit이 기준이다.
 
-진행: A–J 215개 파일 점검 완료(2026-09-25). 수정은 아래 "수정 계획"과 각 ID의 상태 열을 따른다.
+진행: A–J 215개 파일 점검 완료(2026-09-25). P0V-01–P0V-17 수정 완료(`9a13f1b`–`b86d0c3`). 2차 점검(아래 "2차 점검")에서 P0V-18과 P0V-12 보완을 찾아 고쳤다. 각 ID의 상태 열이 수정 commit이고, 변이 시험 결과는 "수정 검증"에 있다.
 
 ## 읽는 순서
 
@@ -29,22 +29,24 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 
 | ID | 규칙 | 파일:줄 | 요약 | 상태 |
 |---|---|---|---|---|
-| P0V-01 | P0-1 | storage/transitions.ts:174-186, broker.ts:449 | rollover가 준비된 batch의 `incarnation`을 새 lease 값으로 덮어써, 이전 전달 시도(incarnation N)의 receipt가 더는 그 batch를 가리키지 못한다. 한 칸이 DeliveryAttemptIdentity와 RunLeaseIdentity를 겸한다 | 확인 |
-| P0V-02 | P0-1 | storage/transitions.ts:193,219,225, store.ts:350 | 링크·완료·조회가 "현재 lease == batch incarnation"을 요구해, 과거 시도의 증거로 하는 정산(과거 사실의 기록)을 현재 권한의 조건에 묶는다 | 확인 |
-| P0V-03 | P0-1 | store.ts:281-295 | `updateAgent`가 생성 뒤 고정인 spec(LIFE-008)을 다시 쓰는 경로와 감소 가능한 incarnation 쓰기를 연다. 제품 호출은 없고 시험 2곳(phase5:187, git-effect-evidence:107)만 쓴다. spec을 다시 쓰면 과거 create operation이 STORE_CORRUPT로 읽힌다(operation-codec.ts:228) | 확인 |
-| P0V-04 | P0-1 | storage/ledger-reader.ts:211 | usage row의 유효성이 현재 agent spec의 modelProfile과 같은지에 달려 있다. 과거 예약 사실의 의미가 현재 spec에 기대 있다(P0V-03이 막히면 spec이 바뀌지 않으므로 증상은 없다) | 확인(P0V-03에 종속) |
-| P0V-05 | P0-4 | mail.ts:88-107,155-170; storage/preaccept-artifact.ts:150-207 | accept 전 artifact(메일 원문 object, `staging/mail-objects/*.tmp`)의 owner가 메모리 속 `PreacceptScope`뿐이다. 그 사이에 프로세스가 죽으면 아무도 찾지 않고, 진단(diagnostics/integrity.ts:86)은 "unknown"으로 보고만 한다. 이름은 operation id에서 파생되므로 재시작한 broker가 "그 operation이 accept되지 않았다"를 확정할 수 있는데도 정리하지 않는다 | 확인(submit·context는 D·E묶음에서 확인) |
-| P0V-06 | P0-2 | broker.ts:465-482; runner.ts:278-297; runtime/principal-delivery.ts:133-144 | "receipt가 있으면 다시 제시하는가"(D01 공통 evidence 판정)를 broker 정산, Resident runner, Principal tick이 각자 switch로 구현한다 | 확인 |
-| P0V-07 | P0-2 | reconcile.ts:218-221 | 정본 저장소 건강 관측(fsck)이 둘이다: 동기판(218-221, 제품 호출 없음, 시험 phase8.test.ts:343만 사용)과 async판(222-231). git이 끝나지 않으면 동기판은 `runGitText`가 DEADLINE_EXCEEDED/INTERNAL_ERROR를 던지고(process/policies.ts:14-20), async판은 REF_STATE_UNKNOWN이다. 같은 unknown에 코드가 둘이다. (정정: 처음에는 "timeout을 STORE_CORRUPT로 올린다"고 적었으나, `runGitText`는 끝나지 않은 git을 status로 돌려주지 않으므로 사실이 아니다. 두 판 모두 끝까지 실행된 nonzero만 STORE_CORRUPT다.) | 확인(정정됨) |
-| P0V-09 | P0-5 | domain/errors.ts:220, cli/exit.ts:38-45 | CLI의 실패 exit code(`errorExit`)가 코드의 범주만 보고 retry 분류를 보지 않는다. accept된 뒤 결과가 불명확한 실패(retry `same-key`, effect possible)가 conflict/input 코드이면 exit 2(확정 실패)로 나간다. 예: accept된 create의 live 경로 POLICY_CHANGED(lifecycle/create.ts:225)는 operation이 pending인 채 exit 2다 | 확인 |
-| P0V-10 | P0-1, P0-2, P0-3 | lifecycle/create.ts:216-226 | accept된 create의 live 경로만 accept 뒤에 자식 정책을 다시 풀어 다르면 POLICY_CHANGED로 멈춘다. 같은 operation을 복구(`reconcile`, auth 없음)는 고정 spec으로 끝까지 만든다. 뒤의 설정 편집이 접수된 사실을 다시 해석하고, 판정이 둘로 갈린다. CREATE-003은 "accepted 요청은 … 저장된 resolved spec으로 복구"다 | 확인 |
-| P0V-11 | P0-5, P0-2 | units.ts:69-70,83-84,40-41 | systemctl 결과를 모를 때(timeout·signal·spawn 실패, units/execute.ts:16-31)를 `run`은 UNSUPPORTED_PROFILE(플랫폼이 지원하지 않는다는 사실, exit 4, operator review)로, `link`는 INTERNAL_ERROR로, `assertUserManagerReachable`은 UNSUPPORTED_PROFILE로 올린다. 같은 unknown에 코드가 셋이고 어느 것도 unknown이 아니다 | 확인 |
-| P0V-08 | P0-5, P0-2 | git/integration.ts:54-70, entry/broker.ts:154-158,165-169, config/operations.ts:417-423 | broker의 host 정책 reader가 현재 설정을 **얻지 못한** 경우(I/O 오류, 편집 중 invalid)를 POLICY_CHANGED로 바꾼다. CAS 직전(integration.ts:181,219,226)에 나면 accept된 통합이 "정책이 바뀜"이라는 terminal failed로 끝나고, 설정을 고쳐도 되살아나지 않는다. loader도 I/O 실패를 INVALID_REQUEST("config unreadable")로 싼다. "설정을 읽고 society를 확인하는" reader가 entry/broker.ts에 두 벌이다 | 확인 |
-| P0V-12 | P0-3, P0-2, P0-5 | tui/sources/settings.ts:163-182,337-351; entry/oma.ts:270-278 | 설정 쓰기 경로가 둘이다. bundle은 관리형 generation commit(기대 버전 확인, production loader 재현 증명, 결과 불명 상태 기록, config/generations.ts:276-343)이고, inline `config.json`은 `validateConfig` 뒤 파일 교체뿐이다. inline에는 CONFIG-CONTRACT의 기대 버전 확인(lost update 방지)과 loader 재현 증명이 없다. rename 뒤 flush가 실패하면 "저장 안 됨"처럼 오류만 던진다. "같은 의미인가(unchanged)" 판정도 두 벌이다(346-348 대 193-196). 그 결과 TUI에 `saved-unread`("저장됐지만 다시 읽지 못함", oma.ts:273-276)라는 결과 종류가 있다 | 확인 |
-| P0V-13 | P0-1, P0-7 (INV07) | storage/delivery-receipt.ts:129-152,294-364; node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js:786-812 | receipt는 fsync와 parent flush로 durable하게 게시되지만, 그것이 가리키는 session entry는 Pi가 `appendFileSync`로만 쓰고 fsync하지 않는다. 게시할 때도 검증할 때도 session 파일이 있는지만 보고, 그 entry가 파일에 있는지는 보지 않는다. 전원이 나가면 "batch가 session S의 entry X에 있다"는 durable fact가 재시작 뒤 거짓이 된다. batch는 완료로 기록되었으므로 다시 전달되지도 않는다 | 확인 |
-| P0V-14 | P0-5 | extension/cli-process.ts:131-132, extension/mail-tools.ts:204-215, extension/principal-tools.ts:76-136 | 도구가 CLI를 timeout·abort로 끝내거나 spawn이 실패하면 `code ?? 1`로 1이 되고, 오류 문구는 "CLI exited 1"뿐이다. 도구가 정한 request key는 성공 결과(`details.request`)에만 실린다. 결과를 모르는 mutation이 key 없는 실패로 보이므로, 모델은 같은 요청을 조회할 수 없고 새로 보내면 효과가 중복된다 | 확인 |
-| P0V-15 | P0-5, P0-2 | extension/workspace-guard.ts:38-57 | workspace 크기 계산이 관측 실패를 두 가지로 다룬다. `readdirSync` 실패는 "한도 초과"(거절)이고, `lstatSync` 실패는 ENOENT가 아니어도 0 byte(건너뜀)다. unknown이 zero가 된다(MAINTENANCE §10 "unknown != zero") | 확인 |
-| P0V-16 | P0-7 | test/crash-boundaries.test.ts, test/durable-fault-matrix.test.ts 외 | durable 경계의 목록이 코드에서 나오지 않고, 경계마다 kill·retry·restart 시험을 요구하는 장치가 없다. 이번에 바뀌는 경계에는 시험이 없거나 옛 의미로 적혀 있다 | 확인 |
+| P0V-01 | P0-1 | storage/transitions.ts:174-186, broker.ts:449 | rollover가 준비된 batch의 `incarnation`을 새 lease 값으로 덮어써, 이전 전달 시도(incarnation N)의 receipt가 더는 그 batch를 가리키지 못한다. 한 칸이 DeliveryAttemptIdentity와 RunLeaseIdentity를 겸한다 | 수정 9a13f1b(DR9) |
+| P0V-02 | P0-1 | storage/transitions.ts:193,219,225, store.ts:350 | 링크·완료·조회가 "현재 lease == batch incarnation"을 요구해, 과거 시도의 증거로 하는 정산(과거 사실의 기록)을 현재 권한의 조건에 묶는다 | 수정 9a13f1b(DR9) |
+| P0V-03 | P0-1 | store.ts:281-295 | `updateAgent`가 생성 뒤 고정인 spec(LIFE-008)을 다시 쓰는 경로와 감소 가능한 incarnation 쓰기를 연다. 제품 호출은 없고 시험 2곳(phase5:187, git-effect-evidence:107)만 쓴다. spec을 다시 쓰면 과거 create operation이 STORE_CORRUPT로 읽힌다(operation-codec.ts:228) | 수정 9a13f1b |
+| P0V-04 | P0-1 | storage/ledger-reader.ts:211 | usage row의 유효성이 현재 agent spec의 modelProfile과 같은지에 달려 있다. 과거 예약 사실의 의미가 현재 spec에 기대 있다(P0V-03이 막히면 spec이 바뀌지 않으므로 증상은 없다) | 해소 9a13f1b(P0V-03 수정으로 spec 고정) |
+| P0V-05 | P0-4 | mail.ts:88-107,155-170; storage/preaccept-artifact.ts:150-207 | accept 전 artifact(메일 원문 object, `staging/mail-objects/*.tmp`)의 owner가 메모리 속 `PreacceptScope`뿐이다. 그 사이에 프로세스가 죽으면 아무도 찾지 않고, 진단(diagnostics/integrity.ts:86)은 "unknown"으로 보고만 한다. 이름은 operation id에서 파생되므로 재시작한 broker가 "그 operation이 accept되지 않았다"를 확정할 수 있는데도 정리하지 않는다 | 수정 d7c6695, 5c08088(DR10) |
+| P0V-06 | P0-2 | broker.ts:465-482; runner.ts:278-297; runtime/principal-delivery.ts:133-144 | "receipt가 있으면 다시 제시하는가"(D01 공통 evidence 판정)를 broker 정산, Resident runner, Principal tick이 각자 switch로 구현한다 | 수정 9a13f1b(`deliveryDecision`) |
+| P0V-07 | P0-2 | reconcile.ts:218-221 | 정본 저장소 건강 관측(fsck)이 둘이다: 동기판(218-221, 제품 호출 없음, 시험 phase8.test.ts:343만 사용)과 async판(222-231). git이 끝나지 않으면 동기판은 `runGitText`가 DEADLINE_EXCEEDED/INTERNAL_ERROR를 던지고(process/policies.ts:14-20), async판은 REF_STATE_UNKNOWN이다. 같은 unknown에 코드가 둘이다. (정정: 처음에는 "timeout을 STORE_CORRUPT로 올린다"고 적었으나, `runGitText`는 끝나지 않은 git을 status로 돌려주지 않으므로 사실이 아니다. 두 판 모두 끝까지 실행된 nonzero만 STORE_CORRUPT다.) | 수정 a5321ee(정정됨) |
+| P0V-09 | P0-5 | domain/errors.ts:220, cli/exit.ts:38-45 | CLI의 실패 exit code(`errorExit`)가 코드의 범주만 보고 retry 분류를 보지 않는다. accept된 뒤 결과가 불명확한 실패(retry `same-key`, effect possible)가 conflict/input 코드이면 exit 2(확정 실패)로 나간다. 예: accept된 create의 live 경로 POLICY_CHANGED(lifecycle/create.ts:225)는 operation이 pending인 채 exit 2다 | 수정 145d519(DR13) |
+| P0V-10 | P0-1, P0-2, P0-3 | lifecycle/create.ts:216-226 | accept된 create의 live 경로만 accept 뒤에 자식 정책을 다시 풀어 다르면 POLICY_CHANGED로 멈춘다. 같은 operation을 복구(`reconcile`, auth 없음)는 고정 spec으로 끝까지 만든다. 뒤의 설정 편집이 접수된 사실을 다시 해석하고, 판정이 둘로 갈린다. CREATE-003은 "accepted 요청은 … 저장된 resolved spec으로 복구"다 | 수정 145d519, 7e2559f |
+| P0V-11 | P0-5, P0-2 | units.ts:69-70,83-84,40-41 | systemctl 결과를 모를 때(timeout·signal·spawn 실패, units/execute.ts:16-31)를 `run`은 UNSUPPORTED_PROFILE(플랫폼이 지원하지 않는다는 사실, exit 4, operator review)로, `link`는 INTERNAL_ERROR로, `assertUserManagerReachable`은 UNSUPPORTED_PROFILE로 올린다. 같은 unknown에 코드가 셋이고 어느 것도 unknown이 아니다 | 수정 57731b6(DR13) |
+| P0V-08 | P0-5, P0-2 | git/integration.ts:54-70, entry/broker.ts:154-158,165-169, config/operations.ts:417-423 | broker의 host 정책 reader가 현재 설정을 **얻지 못한** 경우(I/O 오류, 편집 중 invalid)를 POLICY_CHANGED로 바꾼다. CAS 직전(integration.ts:181,219,226)에 나면 accept된 통합이 "정책이 바뀜"이라는 terminal failed로 끝나고, 설정을 고쳐도 되살아나지 않는다. loader도 I/O 실패를 INVALID_REQUEST("config unreadable")로 싼다. "설정을 읽고 society를 확인하는" reader가 entry/broker.ts에 두 벌이다 | 수정 f2ff92a(DR13) |
+| P0V-12 | P0-3, P0-2, P0-5 | tui/sources/settings.ts:163-182,337-351; entry/oma.ts:270-278 | 설정 쓰기 경로가 둘이다. bundle은 관리형 generation commit(기대 버전 확인, production loader 재현 증명, 결과 불명 상태 기록, config/generations.ts:276-343)이고, inline `config.json`은 `validateConfig` 뒤 파일 교체뿐이다. inline에는 CONFIG-CONTRACT의 기대 버전 확인(lost update 방지)과 loader 재현 증명이 없다. rename 뒤 flush가 실패하면 "저장 안 됨"처럼 오류만 던진다. "같은 의미인가(unchanged)" 판정도 두 벌이다(346-348 대 193-196). 그 결과 TUI에 `saved-unread`("저장됐지만 다시 읽지 못함", oma.ts:273-276)라는 결과 종류가 있다 | 수정 efd5858, 70a6031(DR12). 보완: 기대 버전 확인(`assertCurrent`)이 다시 읽지 못한 파일을 "바뀜"(POLICY_CHANGED)으로 두던 것을 1차 기록(G묶음)은 "P0V-12 수정 때 함께 정리"라고 적었으나 빠뜨렸다. 2차 점검에서 수정(없어진 파일만 바뀜, 읽지 못함은 BROKER_UNAVAILABLE) |
+| P0V-13 | P0-1, P0-7 (INV07) | storage/delivery-receipt.ts:129-152,294-364; node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js:786-812 | receipt는 fsync와 parent flush로 durable하게 게시되지만, 그것이 가리키는 session entry는 Pi가 `appendFileSync`로만 쓰고 fsync하지 않는다. 게시할 때도 검증할 때도 session 파일이 있는지만 보고, 그 entry가 파일에 있는지는 보지 않는다. 전원이 나가면 "batch가 session S의 entry X에 있다"는 durable fact가 재시작 뒤 거짓이 된다. batch는 완료로 기록되었으므로 다시 전달되지도 않는다 | 수정 36e9928(DR11) |
+| P0V-14 | P0-5 | extension/cli-process.ts:131-132, extension/mail-tools.ts:204-215, extension/principal-tools.ts:76-136 | 도구가 CLI를 timeout·abort로 끝내거나 spawn이 실패하면 `code ?? 1`로 1이 되고, 오류 문구는 "CLI exited 1"뿐이다. 도구가 정한 request key는 성공 결과(`details.request`)에만 실린다. 결과를 모르는 mutation이 key 없는 실패로 보이므로, 모델은 같은 요청을 조회할 수 없고 새로 보내면 효과가 중복된다 | 수정 8f7700a(DR13) |
+| P0V-15 | P0-5, P0-2 | extension/workspace-guard.ts:38-57 | workspace 크기 계산이 관측 실패를 두 가지로 다룬다. `readdirSync` 실패는 "한도 초과"(거절)이고, `lstatSync` 실패는 ENOENT가 아니어도 0 byte(건너뜀)다. unknown이 zero가 된다(MAINTENANCE §10 "unknown != zero") | 수정 8f7700a |
+| P0V-16 | P0-7 | test/crash-boundaries.test.ts, test/durable-fault-matrix.test.ts 외 | durable 경계의 목록이 코드에서 나오지 않고, 경계마다 kill·retry·restart 시험을 요구하는 장치가 없다. 이번에 바뀌는 경계에는 시험이 없거나 옛 의미로 적혀 있다 | 수정 b86d0c3(P0-7 gate) |
+| P0V-17 | P0-4, P0-7 | git.ts:`repairContextMirror`, git/context-mirror.ts; runtime/provision.ts `publishBinding` | P0-7 gate를 만들며 찾았다. (가) `repairContextMirror`는 durable 게시 경로인데 제품 코드도 시험도 부르지 않는다. owner 없는 durable 경계다. (나) project binding 게시가 죽으면 `.project-binding.json.<hex>.tmp` 임시 파일의 owner가 없다(P0-4). (다) draining broker의 status view 제거(broker.ts, protocol/status-view.ts)에 시험이 없다 | 수정 b86d0c3((가) 삭제, (나) tenure 보유자의 provisioning이 수집, (다) 시험 추가) |
+| P0V-18 | P0-2, P0-5 | (`b86d0c3` 기준) tui/exit.ts:9-21, entry/oma.ts:42,83,152,161,177,181,324 | Control Panel(`oma`)의 exit 판정이 CLI의 `errorExit`와 따로 구현되어 있다. `codeFor`는 UNSUPPORTED_PROFILE·SPIKE_UNRESOLVED만 4, BROKER_UNAVAILABLE·DEADLINE_EXCEEDED만 3이고 나머지는 모두 2다. 그래서 RUN_TERMINATION_UNKNOWN·REF_STATE_UNKNOWN·STORE_CORRUPT·INTERNAL_ERROR 같은 불명이 확정 실패(2)로 나간다. 진입점은 exit을 숫자로 직접 적는다. "잠시 후 다시 실행하세요"(다른 oma가 소유)는 4(지원하지 않음)이고, usage·다른 프로젝트의 바인딩도 4다. 1차 점검은 tui/exit.ts를 묶음 판정에서 부합으로 적었다. 2차 점검에서 바로잡았다 | 수정(아래 commit) |
 
 ## 파일별 기록
 
@@ -300,6 +302,7 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 - **부합:** boundary는 turn이 `stop`으로 끝났을 때만 생긴다(delivery.ts:72-99, C묶음 참고). batch view의 decoder는 닫힌 형식이다. 자격 증명 선은 형식이 맞지 않으면 버린다.
 
 #### src/tui/session.ts (543), tui/{app,keys,model,prompt,screen,transcript,transport,limits,dashboard,exit}.ts, tui/view/*, tui/sources/{mail,extensions}.ts
+- **정정(2차 점검):** 아래 "부합"은 tui/exit.ts에는 맞지 않는다. exit 판정이 CLI와 따로 있고 불명을 2로 보고한다(P0V-18).
 - **부합(P0-5):** 부분 쓰기 뒤의 명령 수락은 unknown으로 두고, 쓰지 않은 것이 증명될 때만 claim을 돌려준다(session.ts:442-448, 478-499). 화면은 관측과 저장 결과를 표시만 한다. 확장 토글은 관리형 generation으로만 쓴다(extensions.ts:185).
 - **위반 P0V-12의 증상:** `entry/oma.ts:270-278`의 `saved-unread`.
 
@@ -320,11 +323,12 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 | 모습 | ID | 공통 원인 |
 |---|---|---|
 | 과거 사실을 현재 권한의 값으로 다시 씀 | P0V-01, P0V-02, P0V-03, P0V-04 | 전달 시도·고정 spec이라는 사실과 lease·권한이 같은 칸이나 같은 API에 있음 |
-| 한 결정에 owner가 여럿 | P0V-06, P0V-07, P0V-12, P0V-08(reader 두 벌), P0V-11(unknown 코드 셋) | 같은 판정을 호출자마다 다시 씀 |
-| unknown을 사실로 승격 | P0V-08, P0V-09, P0V-11, P0V-14, P0V-15 | 관측 실패·결과 불명에 확정 사실의 코드나 값을 붙임 |
-| accept 전 artifact의 owner가 crash에서 사라짐 | P0V-05 | owner 기록이 메모리에만 있음 |
+| 한 결정에 owner가 여럿 | P0V-06, P0V-07, P0V-12, P0V-08(reader 두 벌), P0V-11(unknown 코드 셋), P0V-18(exit 판정 두 벌) | 같은 판정을 호출자마다 다시 씀 |
+| unknown을 사실로 승격 | P0V-08, P0V-09, P0V-11, P0V-14, P0V-15, P0V-18 | 관측 실패·결과 불명에 확정 사실의 코드나 값을 붙임 |
+| accept 전 artifact의 owner가 crash에서 사라짐 | P0V-05, P0V-17(나) | owner 기록이 메모리에만 있음 |
 | 나중의 설정이 접수된 사실을 다시 해석 | P0V-10, P0V-08 | accept 뒤 효과 시점 검사와 사실의 재해석을 구분하지 않음 |
 | durable fact가 durable하지 않은 근거를 가리킴 | P0V-13 | receipt와 session entry의 영속 단위가 다름(INV07) |
+| durable 경계에 시험·호출자가 없음 | P0V-16, P0V-17(가)(다) | 경계 목록이 코드에서 나오지 않음 |
 
 ## P0-7 점검: 시험이 durable 경계를 덮는가
 
@@ -345,10 +349,46 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 | 6 | 동기 fsck를 없애고 관측 owner를 하나로 둔다 | P0V-07 | P0-2 |
 | 7 | DR13: host 정책 reader를 하나로 두고, 현재 정책을 얻지 못하면 BROKER_UNAVAILABLE(accept된 통합은 pending 유지)이다. 읽을 수 있고 다른 정책만 POLICY_CHANGED다 | P0V-08 | P0-5, P0-2 |
 | 8 | DR13: CLI exit은 retry 분류에서 도출한다(same-key/after-repair → 3) | P0V-09 | P0-5, CLI-003 |
-| 9 | accept된 create의 live 경로에서 accept 뒤 정책 재해석을 없앤다 | P0V-10 | P0-1, P0-3, CREATE-003 |
+| 9 | accept된 create의 live 경로에서 accept 뒤 정책 재해석을 없앤다. 요청자의 현재 권한 재확인(unit 설치 직전, INV06)은 과거 사실의 재해석이 아니라 새 효과 앞의 권한 검사이므로 남긴다(`7e2559f`: 첫 수정이 둘을 함께 지웠고 R37이 잡았다) | P0V-10 | P0-1, P0-3, CREATE-003, INV06 |
 | 10 | DR13: unit 명령의 unknown은 한 곳에서 DEADLINE_EXCEEDED로 둔다 | P0V-11 | P0-5, P0-2 |
 | 11 | DR12: inline·bundle 설정 commit을 한 owner로 모은다(기대 버전 확인, loader 재현 증명, 결과 불명 기록, 하나의 unchanged 판정) | P0V-12 | P0-3, D02, CONFIG-CONTRACT |
 | 12 | DR13: 도구가 끝낸 CLI는 결과 불명이고, 실패 문구에 request key를 싣는다 | P0V-14 | P0-5 |
 | 13 | workspace 크기 관측 실패는 거절이다 | P0V-15 | P0-5 |
 | 14 | durable 경계 목록을 코드에서 뽑고 경계마다 kill·restart 시험을 요구하는 gate를 둔다. 바뀐 경계의 시험을 새로 쓴다 | P0V-16 | P0-7, INV12 |
 | 15 | spec·traceability·결정 기록을 갱신하고 v16 전체 검증으로 결박한다 | 전체 | PRIORITY-0 적용 절차 5 |
+
+순서 1–14는 끝났다(상태 열의 commit). 순서 15는 [validation.md](validation.md)의 v16 행이 결박한다.
+
+## 2차 점검
+
+1차 점검의 묶음 판정(여러 파일을 한 항목으로 적은 곳)에서 P0V-18을 놓쳤고, G묶음에 적은 후속 수정 하나(P0V-12 보완)를 빠뜨렸다. 그래서 판정 질문 하나를 모든 production 파일에 다시 묻는다: **P0-5 — 관측 실패나 결과 불명을 받는 자리(`catch`, 실패 status, 빈 결과)가 그것을 확정 사실의 코드·값으로 바꾸는가.** 215개 파일의 `catch` 359곳을 파일 순서대로 읽고, 곳마다 부합·위반·의도된 예외를 적는다.
+
+진행: P0V-18, P0V-12 보완 수정. 나머지 판정은 아래 표에 적는다.
+
+## 수정 검증
+
+수정마다 그 수정을 되돌리는 변이를 넣고, 빌드한 뒤 해당 시험 파일을 돌렸다. 시험이 실패하면 KILLED다. 변이를 넣은 코드는 매번 원래대로 되돌리고 다시 빌드했다.
+
+| 변이 | 바꾼 곳 | 잡은 시험 | 결과 |
+|---|---|---|---|
+| DR9: receipt 시도를 현재 lease 하나로만 인정 | mail/batches.ts `settleFromReceipt`의 시도 구간 | rollover-settlement | KILLED |
+| DR9: run open이 준비된 batch를 이유로 멈춤(옛 재할당 자리) | broker.ts `openRun` | rollover-settlement | KILLED |
+| DR10: accept되지 않은 artifact를 지우지 않음 | reconcile/preaccept.ts | priority-0 | KILLED |
+| DR11: boundary entry 확인·flush 없이 receipt 게시 | storage/delivery-receipt.ts `publishDeliveryReceipt` | delivery-receipt-publication | KILLED |
+| DR12: 앞의 기대 버전 확인만 제거 | config/generations.ts `commitInlineConfiguration` | priority-0 | SURVIVED |
+| DR12: 앞의 확인과 rename 직전 재확인을 모두 제거 | config/generations.ts | priority-0 | KILLED |
+| DR13: 읽지 못한 정책을 POLICY_CHANGED로 | git/integration.ts `currentPolicy` | phase7 | KILLED |
+| DR13: CLI exit을 코드만으로 | domain/errors.ts `errorExit` | cli-receipt-replay | KILLED |
+| DR13: 끝나지 않은 unit 명령을 UNSUPPORTED_PROFILE로 | units.ts `unitCommandError` | priority-0 | KILLED |
+| DR13: 도구가 멈춘 CLI를 끝난 것으로 | extension/mail-tools.ts `cliFailure` | priority-0 | KILLED |
+| P0V-03: incarnation 감소 허용 | store.ts `updateAgent` | r12-ledger-transitions | KILLED |
+| P0V-06: receipt 부재를 보류로 | storage/delivery-receipt.ts `deliveryDecision` | receipt-settlement | KILLED |
+| P0V-10: accept 뒤 정책 재해석을 되살림 | lifecycle/create.ts | priority-0 | KILLED |
+| P0V-15: lstat 실패를 0 byte로 | extension/workspace-guard.ts | priority-0 | KILLED |
+| P0V-18: Control Panel exit을 옛 switch로 | tui/exit.ts `codeFor` | priority-0 | KILLED |
+| P0V-18: 보증할 수 없는 바인딩을 확정 거절로 | runtime/provision.ts `projectBindingDecision` | priority-0 | KILLED |
+| P0V-12 보완: 읽지 못한 설정 파일을 "바뀜"으로 | config/generations.ts `assertCurrent` | priority-0 | KILLED |
+
+DR12의 SURVIVED는 동등 변이다. 앞의 확인이 없어도 rename 직전 재확인이 같은 lost update를 같은 코드(`POLICY_CHANGED` "configuration changed since it was read")로 막는다. 차이는 임시 파일을 만들기 전에 멈추는가뿐이며, 그 임시 파일은 같은 호출이 지운다. 두 확인을 모두 없애면 잡힌다. 앞의 확인은 쓸데없는 쓰기를 줄이는 것이지 사실을 지키는 것이 아니므로, 시험을 더 만들지 않았다.
+
+P0-7 gate(`check:boundaries`)의 negative control은 test/durable-boundaries.test.mjs에 있다. 등록부에서 경계 하나를 빼거나 없는 시험을 적으면 gate가 실패한다.

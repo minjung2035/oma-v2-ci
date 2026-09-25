@@ -1,24 +1,16 @@
-/** The single process.exit owner for the product surface, mirroring the CLI's
- * exit ownership rule. Exit codes follow CLI-003's meaning: 0 success, 2
- * validation/authority failure, 3 unknown outcome, 4 unsupported profile.
+/** The single process.exit owner for the product surface. The exit a failure
+ * gets is the CLI's (CLI-003, DR13): `errorExit` is the one reading of what a
+ * code says -- 2 settled, 3 not known, 4 unsupported -- so an unknown outcome
+ * is never reported here as a settled failure.
  */
-import { StoreError } from "../domain/errors.js";
+import type { ErrorCode } from "../../implementation/contracts/errors.js";
+import { errorCodeOf, errorExit } from "../domain/errors.js";
 
 export type ExitCode = 0 | 2 | 3 | 4;
 
-export function codeFor(error: unknown): ExitCode {
-  if (!(error instanceof StoreError)) return 3;
-  switch (error.code) {
-    case "UNSUPPORTED_PROFILE":
-    case "SPIKE_UNRESOLVED":
-      return 4;
-    case "BROKER_UNAVAILABLE":
-    case "DEADLINE_EXCEEDED":
-      return 3;
-    default:
-      return 2;
-  }
-}
+export function exitFor(code: ErrorCode): ExitCode { return errorExit(code); }
+
+export function codeFor(error: unknown): ExitCode { return exitFor(errorCodeOf(error)); }
 
 export function fail(message: string, code: ExitCode): never {
   process.stderr.write(`oma: ${message}\n`);

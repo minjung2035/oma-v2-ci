@@ -220,10 +220,10 @@ owner가 같은 순서로 한다: 읽은 snapshot의 기대 버전 확인 → �
 
 ## DR13 — 모르는 것에는 모른다는 코드를 붙인다
 
-**관측(P0V-08, P0V-09, P0V-11, P0V-14, P0V-15).** 관측 실패나 결과 불명에 확정 사실의 코드나 값을 붙이는 곳이
+**관측(P0V-08, P0V-09, P0V-11, P0V-14, P0V-15, P0V-18, P0V-12 보완).** 관측 실패나 결과 불명에 확정 사실의 코드나 값을 붙이는 곳이
 있었다: 설정을 읽지 못한 것을 POLICY_CHANGED로(accept된 통합이 영구 실패), accept 뒤 결과가 불명확한 실패를 CLI
 exit 2로, 끝나지 않은 systemctl을 UNSUPPORTED_PROFILE로, 도구가 끝낸 CLI를 key 없는 실패로, 관측하지 못한
-workspace 파일을 0 byte로.
+workspace 파일을 0 byte로, Control Panel의 불명 코드를 exit 2로, 다시 읽지 못한 설정 파일을 "바뀜"으로.
 
 **결정.** 각 경계에서 한 owner가 "모름"을 한 가지로 표현한다.
 
@@ -231,6 +231,8 @@ workspace 파일을 0 byte로.
 |---|---|---|
 | host 정책 reader(통합, 자식 spec) | BROKER_UNAVAILABLE. accept된 통합은 pending으로 남아 복구가 다시 본다 | 읽었고 다르면 POLICY_CHANGED |
 | CLI 실패의 exit(CLI-003) | retry가 same-key·after-repair면 3 | retry never면 코드의 exit(2 또는 4) |
+| Control Panel(`oma`)의 exit | 같은 `errorExit`. 코드가 없는 실패는 INTERNAL_ERROR(3), "잠시 후 다시"는 BROKER_UNAVAILABLE(3), 보증할 수 없는 바인딩은 STORE_CORRUPT(3) | usage·다른 society/프로젝트의 바인딩은 INVALID_REQUEST(2) |
+| 설정 편집의 기대 버전 확인 | 파일을 지금 읽지 못함: BROKER_UNAVAILABLE, 쓰지 않음 | 없어졌거나 bytes가 다름: POLICY_CHANGED |
 | unit 명령(systemctl) | DEADLINE_EXCEEDED(명령이 끝나지 않음) | 끝나서 실패하면 INTERNAL_ERROR/START_LIMIT, 불러올 수 없는 unit은 UNSUPPORTED_PROFILE |
 | extension 도구가 부른 CLI | 결과 불명, 실패 문구에 request key | CLI가 스스로 낸 출력 |
 | workspace 크기 관측 | 한도 초과로 보고 거절 | ENOENT는 없음(0) |

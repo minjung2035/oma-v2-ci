@@ -14,7 +14,7 @@ import { assertHostDirectoryLayout, hostLaunchLocation } from "../runtime/assets
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
-import { codeFor, fail } from "../tui/exit.js";
+import { codeFor, exitFor, fail } from "../tui/exit.js";
 import { openTerminal } from "../tui/screen.js";
 import { dashboardData } from "../tui/dashboard.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile, principalWorkspace } from "../tui/session.js";
@@ -39,7 +39,7 @@ import type { PromptOutcome } from "../tui/prompt.js";
 
 function usage(): never {
   process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n");
-  process.exit(4);
+  process.exit(exitFor("INVALID_REQUEST"));
 }
 
 /** First run in a project: write a real, bounded configuration rather than
@@ -80,7 +80,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // checked below before anything of that society is written.
   let canonicalProjectPath: string;
   try { canonicalProjectPath = realpathSync(process.cwd()); }
-  catch (error) { fail(`프로젝트 디렉터리를 확인할 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, 4); }
+  catch (error) { fail(`프로젝트 디렉터리를 확인할 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
   const explicitSociety = argOf(argv, "--society");
   const society = explicitSociety ?? defaultSocietyFor(canonicalProjectPath, sha256Hex(canonicalProjectPath));
   const bindRequested = argv.includes("--bind-project");
@@ -149,7 +149,7 @@ async function main(argv: readonly string[]): Promise<void> {
       const legacy = societyFromDirectory(canonicalProjectPath);
       if (legacy !== society && isValidSocietyName(legacy) && stateRootHasSociety(join(dirname(stateRoot), legacy))) {
         if (tenure !== null) await tenure.end();
-        fail(`이 프로젝트 이름으로 만든 이전 society '${legacy}'가 있습니다. 그 society를 계속 쓰려면 이 프로젝트의 것인지 확인한 뒤 \`oma --society ${legacy} --bind-project\`로 실행하세요. 새 society로 시작하지 않았습니다.`, 4);
+        fail(`이 프로젝트 이름으로 만든 이전 society '${legacy}'가 있습니다. 그 society를 계속 쓰려면 이 프로젝트의 것인지 확인한 뒤 \`oma --society ${legacy} --bind-project\`로 실행하세요. 새 society로 시작하지 않았습니다.`, exitFor("INVALID_REQUEST"));
       }
     }
     const decision = projectBindingDecision({ observation, society, canonicalProjectPath, hasSociety,
@@ -157,7 +157,8 @@ async function main(argv: readonly string[]): Promise<void> {
     if (decision.kind === "refuse" || (decision.kind === "publish" && tenure === null && hasSociety)) {
       if (tenure !== null) await tenure.end();
       fail(decision.kind === "refuse" ? `이 society를 이 프로젝트에서 열 수 없습니다: ${decision.reason}` :
-        "이 society에는 프로젝트 바인딩이 없고 다른 oma가 소유하고 있습니다", 4);
+        "이 society에는 프로젝트 바인딩이 없고 다른 oma가 소유하고 있습니다",
+        exitFor(decision.kind === "refuse" ? decision.code : "BROKER_UNAVAILABLE"));
     }
     if (decision.kind === "publish" && tenure !== null) {
       try { publishProjectBinding(stateRoot, { society, canonicalProjectPath }); }
@@ -174,11 +175,11 @@ async function main(argv: readonly string[]): Promise<void> {
     // A process that does not own the society writes nothing into it, so it
     // does not create the configuration it is missing either.
     if (tenure === null && !existsSync(configPath))
-      fail("다른 oma가 이 society를 소유하고 있고 설정은 아직 만들어지지 않았습니다. 잠시 후 다시 실행하세요.", 4);
+      fail("다른 oma가 이 society를 소유하고 있고 설정은 아직 만들어지지 않았습니다. 잠시 후 다시 실행하세요.", exitFor("BROKER_UNAVAILABLE"));
     fail(`설정을 읽을 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error));
   }
   if (settings.config.society !== society)
-    fail("설정의 society가 요청한 society와 다릅니다", 4);
+    fail("설정의 society가 요청한 society와 다릅니다", exitFor("INVALID_REQUEST"));
 
   // REC-007: the society's tree is made to exist and then made right, and both
   // finish before anything can act on it.
@@ -321,7 +322,7 @@ async function main(argv: readonly string[]): Promise<void> {
   process.on("uncaughtException", error => {
     abandon?.();
     process.stderr.write(`oma: ${String(error)}\n`);
-    process.exit(3);
+    process.exit(codeFor(error));
   });
   process.on("SIGINT", () => { void shutdown(0); });
   process.on("SIGTERM", () => { void shutdown(0); });

@@ -313,6 +313,8 @@ export const lanes = Object.freeze({
       "P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes",
       "P0-7: a draining broker removes its status view",
       "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+      "DR13 / CLI-003, P0-2: the Control Panel's exit is the CLI's reading of the code",
+      "DR13 / DR12: a configuration file that cannot be read now is not a changed one",
       "AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan",
       "AV14 / arch §7: a Resident's activation resumes its existing session",
       "AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session",

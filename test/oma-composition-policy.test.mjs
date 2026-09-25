@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { Script } from "node:vm";
 import ts from "typescript";
+import { codeFor, exitFor } from "../dist/src/tui/exit.js";
 
 /** A production module compiled and run with its own controlled boundary.
  *
@@ -141,7 +142,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       constructor(ports) { calls.push("TuiApp"); capturedPorts = ports; }
       refresh() {} draw() {} line(text) { lines.push(text); } setBusy() {} note() {}
     } },
-    "../tui/exit.js": { codeFor: () => 1, fail: reason => { throw new Error(`fail: ${reason}`); } },
+    // The product's own exit reading (DR13); only the exit itself is stood in for.
+    "../tui/exit.js": { codeFor, exitFor, fail: reason => { throw new Error(`fail: ${reason}`); } },
     "../tui/screen.js": { openTerminal: () => ({ restore() { calls.push("restore"); }, onResize() {}, onKeys() {} }) },
     "../tui/dashboard.js": { dashboardData: () => ({}) },
     "../tui/session.js": {
@@ -232,7 +234,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       projectBindingDecision: input => {
         calls.push("projectBindingDecision");
         if (input.observation.kind === "bound")
-          return input.observation.binding.canonicalProjectPath === input.canonicalProjectPath ? { kind: "proceed" } : { kind: "refuse", reason: "another project" };
+          return input.observation.binding.canonicalProjectPath === input.canonicalProjectPath ? { kind: "proceed" } : { kind: "refuse", code: "INVALID_REQUEST", reason: "another project" };
         return { kind: "publish" };
       },
       publishProjectBinding: (root, value) => { calls.push(`publishProjectBinding:${root}:${value.society}:${value.canonicalProjectPath}`); },

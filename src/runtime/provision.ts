@@ -352,24 +352,27 @@ export function stateRootHasSociety(stateRoot: string): boolean {
 export type ProjectBindingDecision =
   | { readonly kind: "proceed" }
   | { readonly kind: "publish" }
-  | { readonly kind: "refuse"; readonly reason: string };
+  | { readonly kind: "refuse"; readonly reason: string; readonly code: "STORE_CORRUPT" | "INVALID_REQUEST" };
 /** D05: pure. A society is acted on only for the project it is bound to. A
  * missing binding is written for a new society, or for an existing one only
  * when the operator explicitly asked (`--bind-project`); a mismatch is refused
- * even for an explicit --society, and an unreadable binding is refused. */
+ * even for an explicit --society, and an unreadable binding is refused. The
+ * refusal's code says which: a binding this process cannot vouch for is not
+ * known (STORE_CORRUPT), a binding to another society or project is a fact
+ * the operator decides on (INVALID_REQUEST). */
 export function projectBindingDecision(input: { readonly observation: ProjectBindingObservation; readonly society: string;
   readonly canonicalProjectPath: string; readonly hasSociety: boolean; readonly bindRequested: boolean }): ProjectBindingDecision {
   const observed = input.observation;
-  if (observed.kind === "unreadable") return { kind: "refuse", reason: `the society's project binding cannot be read: ${observed.reason}` };
+  if (observed.kind === "unreadable") return { kind: "refuse", code: "STORE_CORRUPT", reason: `the society's project binding cannot be read: ${observed.reason}` };
   if (observed.kind === "bound") {
     if (observed.binding.society !== input.society)
-      return { kind: "refuse", reason: `the state root is bound to society ${observed.binding.society}, not ${input.society}` };
+      return { kind: "refuse", code: "INVALID_REQUEST", reason: `the state root is bound to society ${observed.binding.society}, not ${input.society}` };
     if (observed.binding.canonicalProjectPath !== input.canonicalProjectPath)
-      return { kind: "refuse", reason: `society ${input.society} belongs to the project at ${observed.binding.canonicalProjectPath}` };
+      return { kind: "refuse", code: "INVALID_REQUEST", reason: `society ${input.society} belongs to the project at ${observed.binding.canonicalProjectPath}` };
     return { kind: "proceed" };
   }
   if (!input.hasSociety || input.bindRequested) return { kind: "publish" };
-  return { kind: "refuse", reason: `society ${input.society} predates project bindings; review which project it belongs to, then run once with --bind-project` };
+  return { kind: "refuse", code: "INVALID_REQUEST", reason: `society ${input.society} predates project bindings; review which project it belongs to, then run once with --bind-project` };
 }
 
 const BINDING_TEMPORARY = /^\.project-binding\.json\.[0-9a-f]{16}\.tmp$/;

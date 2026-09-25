@@ -44,14 +44,14 @@
   },
   "src/config/generations.ts": {
     "blank": 24,
-    "comment": 112,
-    "code": 376,
+    "comment": 114,
+    "code": 378,
     "language": "TypeScript"
   },
   "src/entry/oma.ts": {
     "blank": 26,
     "comment": 169,
-    "code": 338,
+    "code": 339,
     "language": "TypeScript"
   },
   "src/store.ts": {
@@ -110,7 +110,7 @@
   },
   "src/runtime/provision.ts": {
     "blank": 17,
-    "comment": 130,
+    "comment": 133,
     "code": 264,
     "language": "TypeScript"
   },
@@ -1194,12 +1194,6 @@
     "code": 20,
     "language": "TypeScript"
   },
-  "src/tui/exit.ts": {
-    "blank": 4,
-    "comment": 4,
-    "code": 20,
-    "language": "TypeScript"
-  },
   "src/cli/commands/integrate.ts": {
     "blank": 2,
     "comment": 0,
@@ -1284,6 +1278,12 @@
     "code": 10,
     "language": "TypeScript"
   },
+  "src/tui/exit.ts": {
+    "blank": 5,
+    "comment": 5,
+    "code": 10,
+    "language": "TypeScript"
+  },
   "src/tui/view/labels.ts": {
     "blank": 2,
     "comment": 1,
@@ -1351,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1191,
-    "comment": 4691,
-    "code": 23736,
+    "blank": 1192,
+    "comment": 4697,
+    "code": 23729,
     "nFiles": 224
   }
 }

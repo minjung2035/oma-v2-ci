@@ -158,14 +158,18 @@ function currentBytes(path: string): Buffer {
 }
 /** CONFIG-CONTRACT expected version: every file of the closure the edit was
  * read from still holds the bytes it held. The whole commit below is one
- * synchronous run, so no other edit of this process interleaves after this. */
+ * synchronous run, so no other edit of this process interleaves after this.
+ * DR13: a file that is gone or holds other bytes has changed; a file that
+ * cannot be read now is not known to have changed, and the edit waits. */
 function assertCurrent(snapshot: Pick<ConfigurationSnapshot, "sourceFiles">): void {
   for (const identity of snapshot.sourceFiles) {
     let bytes: Buffer;
     try { bytes = currentBytes(identity.path); }
     catch (error) {
       if (error instanceof StoreError) throw error;
-      throw new StoreError("POLICY_CHANGED", `configuration changed since it was read: ${identity.path}`);
+      if ((error as NodeJS.ErrnoException).code === "ENOENT")
+        throw new StoreError("POLICY_CHANGED", `configuration changed since it was read: ${identity.path}`);
+      throw new StoreError("BROKER_UNAVAILABLE", `the configuration cannot be read now: ${identity.path}`, { cause: error });
     }
     if (createHash("sha256").update(bytes).digest("hex") !== identity.sha256)
       throw new StoreError("POLICY_CHANGED", "configuration changed since it was read; reload it before editing");
