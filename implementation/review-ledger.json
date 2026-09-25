@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 127,
-  "CHANGED_WITH_ORACLE": 95
+  "READ_UNCHANGED": 121,
+  "CHANGED_WITH_ORACLE": 101
  },
  "lanes": {
   "fast": "PASS",
@@ -276,61 +276,46 @@
   {
    "path": "src/broker/peer-authenticator.ts",
    "primary": "WP25",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "WP25"
+    "AV6"
    ],
    "oracles": [
-    "AUTH-003"
-   ],
-   "note": "capabilities re-read at each use against incarnation, InvocationID, peer cgroup and pin"
+    "AV6"
+   ]
   },
   {
    "path": "src/broker/peer-pin.ts",
    "primary": "WP25",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV6"
    ],
    "oracles": [
-    "R14",
-    "R21",
-    "R36",
-    "V18B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV6"
+   ]
   },
   {
    "path": "src/broker/principal-endpoint.ts",
    "primary": "WP06",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV6"
    ],
    "oracles": [
-    "T114",
-    "T120",
-    "V05B",
-    "V08B",
-    "V09B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV6"
+   ]
   },
   {
    "path": "src/broker/process-ancestry.ts",
    "primary": "WP25",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV6"
    ],
    "oracles": [
-    "T114",
-    "T120",
-    "V05B",
-    "V08B",
-    "V09B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV6"
+   ]
   },
   {
    "path": "src/broker/public-dispatcher.ts",
@@ -1614,18 +1599,13 @@
   {
    "path": "src/leaf.ts",
    "primary": "WP27",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV6"
    ],
    "oracles": [
-    "AUTH-003",
-    "LOC-003",
-    "R36",
-    "REC-007",
-    "UNIT-004"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV6"
+   ]
   },
   {
    "path": "src/lifecycle.ts",
@@ -2604,15 +2584,13 @@
   {
    "path": "src/runtime/supervision-channel.ts",
    "primary": "WP03",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV6"
    ],
    "oracles": [
-    "T115",
-    "T119"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV6"
+   ]
   },
   {
    "path": "src/sandbox.ts",
