@@ -58,6 +58,37 @@ function readBoundedMail(
   return { id, text: readBoundedText(join(root, `${id}:2,`), maximum) };
 }
 
+/** AV23 -- arch §5.1, BATCH-002: a message is a UTF-8 plain text body, and
+ * what a reader is pointed at can be read. The pinned MIME writer (MAIL-003)
+ * stores a body with a transfer encoding -- Korean text as Base64 -- and the
+ * Principal has no shell to undo it. The header block is shown as stored; the
+ * body is shown as its sender wrote it. An encoding this cannot undo exactly
+ * leaves the message as stored: nothing is guessed. */
+export function readableMail(text: string): string {
+  const split = text.indexOf("\r\n\r\n");
+  if (split < 0) return text;
+  const head = text.slice(0, split);
+  const encoded = text.slice(split + 4);
+  const unfolded = head.replace(/\r\n[ \t]+/g, " ").split("\r\n");
+  const declared = unfolded.filter(line => /^content-transfer-encoding:/i.test(line));
+  if (declared.length !== 1) return text;
+  const encoding = declared[0]!.slice(declared[0]!.indexOf(":") + 1).trim().toLowerCase();
+  let bytes: Buffer;
+  if (encoding === "base64") {
+    const compact = encoded.replace(/\r\n/g, "");
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 !== 0) return text;
+    bytes = Buffer.from(compact, "base64");
+    if (bytes.toString("base64") !== compact) return text;
+  } else if (encoding === "quoted-printable") {
+    const joined = encoded.replace(/=\r\n/g, "");
+    if (/=(?![0-9A-F]{2})/.test(joined)) return text;
+    bytes = Buffer.from(joined.replace(/=([0-9A-F]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16))), "latin1");
+  } else return text;
+  let body: string;
+  try { body = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return text; }
+  return `${head}\r\n\r\n${body}`;
+}
+
 /** This society's RFC domain, from the environment the engine was started with. */
 const MESSAGE_DOMAIN = (): string | null => {
   const society = process.env.OMA_SOCIETY;
@@ -223,7 +254,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
         return textResult(readBoundedText(join(batchView, "inbox.md"), maximum), { index: BATCH_INDEX });
       }
       const mail = readBoundedMail(archive, params.messageId, maximum);
-      return textResult(mail.text, { messageId: mail.id });
+      return textResult(readableMail(mail.text), { messageId: mail.id });
     },
   });
   pi.registerTool({
