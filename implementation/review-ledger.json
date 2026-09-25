@@ -368,9 +368,13 @@
    "primary": "WP22",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
+    "AV2",
     "AV5"
    ],
    "oracles": [
+    "AV1",
+    "AV2",
     "AV5"
    ]
   },
@@ -398,10 +402,14 @@
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV1"
+    "AV1",
+    "AV2",
+    "AV5"
    ],
    "oracles": [
-    "AV1"
+    "AV1",
+    "AV2",
+    "AV5"
    ]
   },
   {
@@ -516,10 +524,14 @@
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV1"
+    "AV1",
+    "AV2",
+    "AV5"
    ],
    "oracles": [
-    "AV1"
+    "AV1",
+    "AV2",
+    "AV5"
    ]
   },
   {
@@ -675,11 +687,15 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
+    "AV2",
     "AV5",
     "WP13",
     "WP14"
    ],
    "oracles": [
+    "AV1",
+    "AV2",
     "AV5",
     "V13A",
     "V13B",
@@ -1248,10 +1264,14 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV1"
+    "AV1",
+    "AV2",
+    "AV5"
    ],
    "oracles": [
-    "AV1"
+    "AV1",
+    "AV2",
+    "AV5"
    ]
   },
   {
@@ -1525,9 +1545,13 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
+    "AV2",
     "AV5"
    ],
    "oracles": [
+    "AV1",
+    "AV2",
     "AV5"
    ]
   },
@@ -1782,10 +1806,14 @@
    "primary": "WP06",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
+    "AV2",
     "AV5",
     "WP06"
    ],
    "oracles": [
+    "AV1",
+    "AV2",
     "AV5",
     "V06A",
     "V06B"
@@ -2404,11 +2432,15 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
     "AV2",
+    "AV5",
     "WP27"
    ],
    "oracles": [
+    "AV1",
     "AV2",
+    "AV5",
     "V27A",
     "V27B"
    ]
@@ -2510,10 +2542,12 @@
    "primary": "WP16",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV3",
     "AV5",
     "WP16"
    ],
    "oracles": [
+    "AV3",
     "AV5",
     "V16A",
     "V16B"
@@ -2524,9 +2558,13 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
+    "AV2",
     "AV5"
    ],
    "oracles": [
+    "AV1",
+    "AV2",
     "AV5"
    ]
   },
@@ -2738,9 +2776,13 @@
    "primary": "WP05",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
+    "AV2",
     "AV5"
    ],
    "oracles": [
+    "AV1",
+    "AV2",
     "AV5"
    ]
   },
@@ -2768,10 +2810,14 @@
    "primary": "WP20",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
+    "AV2",
     "AV5",
     "WP20"
    ],
    "oracles": [
+    "AV1",
+    "AV2",
     "AV5",
     "V20A",
     "V20B"
