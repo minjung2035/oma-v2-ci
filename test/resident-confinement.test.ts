@@ -10,7 +10,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
-import type { PiConfinement } from "../src/runtime/pi-spawn-plan.js";
+import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
+import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, residentArgv, type ResidentDirectories } from "../src/sandbox.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
@@ -243,5 +244,43 @@ test("T113 a hostile environment entry cannot become extra bwrap arguments", () 
     const argv = residentArgv(host, lease, directories, { OMA_ACTOR: "mallory" });
     assert.equal(argv[argv.lastIndexOf("OMA_ACTOR") + 1], "alice");
     assert.ok(argv.lastIndexOf("OMA_ACTOR") > argv.indexOf("mallory"));
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("AV13 / SB-001, arch §11.1, CLI-001: a confined Resident has its sandbox's shell; an engine outside a sandbox does not", () => {
+  const f = fixture();
+  try {
+    const confined = f.adapter.spawnPlan();
+    const engine = confined.args.slice(confined.args.lastIndexOf("--") + 1);
+    assert.equal(engine.includes("--exclude-tools"), false, "the confined Resident cannot run the commands its START names");
+    assert.ok(confined.args.includes(`${TOOL_SCOPE_ENV}=${TOOL_SCOPE_SANDBOX}`) ||
+      confined.args.some((arg, i) => arg === "--setenv" && confined.args[i + 1] === TOOL_SCOPE_ENV && confined.args[i + 2] === TOOL_SCOPE_SANDBOX),
+      "the confined engine was not told it runs in the sandbox");
+    const host = unconfinedAdapter(f).spawnPlan();
+    assert.equal(host.args[host.args.indexOf("--exclude-tools") + 1], "bash,powershell", "an unsealed engine got a host shell");
+    assert.equal(host.env[TOOL_SCOPE_ENV], undefined);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan; writes stay in the workspace", () => {
+  const f = fixture();
+  try {
+    type Guard = (event: { toolName: string; input: Record<string, unknown> }) => { block: boolean; reason: string } | undefined;
+    const guard = (sandboxed: boolean): Guard => {
+      let handler: Guard | undefined;
+      guardWorkspaceTools({ on: (_name: string, fn: Guard) => { handler = fn; } } as never, f.dirs.workspace, 1 << 20, sandboxed);
+      return handler!;
+    };
+    const inside = guard(true);
+    assert.equal(inside({ toolName: "bash", input: { command: "git status" } }), undefined);
+    assert.equal(inside({ toolName: "read", input: { path: "/inbox.md" } }), undefined);
+    assert.equal(inside({ toolName: "ls", input: { path: "/world" } }), undefined);
+    assert.equal(inside({ toolName: "write", input: { path: "/tmp/x", content: "x" } })?.block, true, "a write left the workspace");
+    assert.equal(inside({ toolName: "write", input: { path: join(f.dirs.workspace, "x"), content: "x" } }), undefined);
+    const host = guard(false);
+    assert.equal(host({ toolName: "bash", input: { command: "id" } })?.block, true);
+    assert.equal(host({ toolName: "read", input: { path: "/etc/passwd" } })?.block, true);
+    assert.equal(MIRRORED_ENV, TOOL_SCOPE_ENV, "the extension's mirror is not the runner's value");
+    assert.equal(MIRRORED_SANDBOX, TOOL_SCOPE_SANDBOX);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });

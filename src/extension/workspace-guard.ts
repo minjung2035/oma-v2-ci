@@ -1,8 +1,12 @@
 /** Built-in file tools stay inside the agent's workspace and its quota.
  *
- * Shell tools are refused outright; read/write/edit/grep/find/ls are allowed
- * only on paths whose real location is inside the workspace, and a write or
- * edit is refused before it would take the workspace over its byte quota.
+ * On the host -- the Principal, or a Resident of an unsealed deployment --
+ * shell tools are refused outright and read/write/edit/grep/find/ls are
+ * allowed only on paths whose real location is inside the workspace (PR-004).
+ * Inside the sandbox the mount plan is the boundary (SB-001, TSP-009): the
+ * shell the rootfs provides is the agent's, and reading is not narrowed below
+ * what the sandbox shows. Everywhere, a write or edit stays inside the
+ * workspace and is refused before it would take it over its byte quota.
  */
 import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -69,15 +73,23 @@ function workspaceWriteFits(root: string, tool: string, input: Record<string, un
 }
 
 const PATH_TOOLS: readonly string[] = Object.freeze(["read", "write", "edit", "grep", "find", "ls"]);
+const WRITE_TOOLS: readonly string[] = Object.freeze(["write", "edit"]);
 
-export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null): void {
+/** Mirrors `TOOL_SCOPE_ENV`/`TOOL_SCOPE_SANDBOX` in src/runtime/pi-spawn-plan.ts:
+ * the runner sets it in a confined engine's environment, and nowhere else. */
+export const TOOL_SCOPE_ENV = "OMA_TOOL_SCOPE";
+export const TOOL_SCOPE_SANDBOX = "sandbox";
+
+export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null,
+  sandboxed = process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX): void {
   pi.on("tool_call", (event) => {
     if (event.toolName === "bash" || event.toolName === "powershell")
-      return {
+      return sandboxed ? undefined : {
         block: true,
-        reason: "shell tools are disabled for OMA residents",
+        reason: "shell tools are disabled outside the OMA sandbox",
       };
     if (!PATH_TOOLS.includes(event.toolName)) return undefined;
+    if (sandboxed && !WRITE_TOOLS.includes(event.toolName)) return undefined;
     const input = event.input as Record<string, unknown>;
     const path = input.path ?? ".";
     if (!allowedWorkspacePath(workspace, path))

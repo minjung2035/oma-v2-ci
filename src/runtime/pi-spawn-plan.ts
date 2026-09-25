@@ -111,6 +111,12 @@ function pathView(options: PiAdapterOptions): PathView {
       : confinedPath(confinement.host.libdir, confinement.directories, path);
 }
 
+/** AV13: set in a confined engine's environment, and nowhere else. The trusted
+ * extension mirrors these two values (workspace-guard.ts; PI-001 keeps it from
+ * importing this module) and a test binds the mirror to them (INV04). */
+export const TOOL_SCOPE_ENV = "OMA_TOOL_SCOPE";
+export const TOOL_SCOPE_SANDBOX = "sandbox";
+
 /** The entries the trusted core extension reads. Nothing else is OMA's to set. */
 function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<string, string> {
   return {
@@ -157,10 +163,18 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
     "--no-skills",
     "--no-prompt-templates",
     "--no-extensions",
-    "--exclude-tools",
-    "bash,powershell",
+    // AV13: a confined Resident works with the shell its sandbox provides
+    // (SB-001: the rootfs holds Git and a shell; arch §11.1 and CLI-001: it
+    // commits and runs `oma` there, as its START tells it). An engine outside a
+    // sandbox -- an unsealed deployment -- keeps the shell excluded, like the
+    // Principal (PR-004).
+    ...(options.confinement === undefined ? ["--exclude-tools", "bash,powershell"] : []),
     "--session-dir",
     inside(options.paths.sessionDir),
+    // AV14, arch §7: the runner joins one Pi session to the mail queue, and an
+    // activation resumes it ("Pi session 재개 또는 새 session"): the most recent
+    // session in this directory, or a new one when there is none.
+    "--continue",
     "--name",
     `oma-${options.society}-${options.actor}`,
     "-e",
@@ -213,6 +227,9 @@ export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
   const relay = confinement.inference;
   const environment = {
     ...omaEnvironment(options, inside),
+    // The trusted extension's one statement of where it runs: inside the
+    // sandbox, the mount plan is the boundary of its tools (TSP-009).
+    [TOOL_SCOPE_ENV]: TOOL_SCOPE_SANDBOX,
     ...(relay === undefined ? {} : {
       OMA_INFERENCE_SOCKET: RESIDENT_PATHS.inference,
       OMA_INFERENCE_PROVIDER: relay.provider,
