@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { RpcConnection } from "../src/broker/connection.js";
 import { SharedPeerPin } from "../src/broker/peer-pin.js";
-import { peerPidFd, peerPidAlive } from "../src/leaf.js";
+import { peerPidFd, pidfdLiveness } from "../src/leaf.js";
 import { encodeFrame } from "../src/frame.js";
 import { sha256Hex } from "../src/hash.js";
 import { OperationRecovery, type RecoveryRow } from "../src/reconcile/operations.js";
@@ -59,7 +59,7 @@ test(`R36 stress native transport seed=${seed} cycles=${cycles} durationBudgetSe
     }
     const native = peerPidFd(handle.fd);
     if (native === null) { client.destroy(); peer.destroy(); throw new Error("native SO_PEERPIDFD is required; no PID-only fallback"); }
-    const owner = new SharedPeerPin(() => peerPidAlive(native), () => closeSync(native));
+    const owner = new SharedPeerPin(() => pidfdLiveness(native).kind === "running", () => closeSync(native));
     let groupFd: number;
     try { groupFd = openSync("/sys/fs/cgroup", constants.O_RDONLY | constants.O_DIRECTORY); }
     catch (error) { owner.releaseConnection(); client.destroy(); peer.destroy(); throw error; }

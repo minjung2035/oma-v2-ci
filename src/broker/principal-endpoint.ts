@@ -41,7 +41,7 @@ import {
 } from "../protocol/principal-credential.js";
 import { okAnswer } from "./replies.js";
 import type { BoundPeer } from "./peer-authenticator.js";
-import { descendsFrom, parentOf, processIdentity, type ProcessIdentity } from "./process-ancestry.js";
+import { descendsFrom, parentOf, processEnded, processIdentity, type ProcessIdentity } from "./process-ancestry.js";
 
 /** The supervision channel as the broker sees it. Present only when a host
  * started this broker; its absence means no Principal endpoint is opened. */
@@ -203,7 +203,7 @@ export class PrincipalEndpoint {
     if (parentOf(pid) !== this.channel.host.pid)
       throw new StoreError("AUTH_FAILED", "the registered engine is not a child of the host");
     const engine = processIdentity(pid);
-    if (engine === null) throw new StoreError("AUTH_FAILED", "the registered engine is not running");
+    if (engine === null) throw new StoreError("AUTH_FAILED", "the registered engine is not observed running");
     const credential = randomBytes(PRINCIPAL_CREDENTIAL_HEX / 2).toString("hex");
     this.registrations += 1;
     this.session = Object.freeze({ sessionHandle, engine, credential, generation: this.registrations });
@@ -221,15 +221,23 @@ export class PrincipalEndpoint {
    * recording boundaries against it. Identity is re-derived here for the same
    * reason it is re-derived on every model-facing request (AUTH-003), and a
    * registration found dead is retired rather than merely refused, so the
-   * connections attached under it lose authority at the same instant. */
+   * connections attached under it lose authority at the same instant. Found
+   * dead means /proc said so (`processEnded`); an engine that could not be
+   * observed is refused for now and retired for nothing (INV02). */
   get registeredEngine(): number | null {
     const session = this.session;
     if (session === null) return null;
-    if (processIdentity(session.engine.pid)?.startTime !== session.engine.startTime) {
-      setImmediate(() => { if (this.session === session) this.retire(); });
-      return null;
-    }
-    return session.engine.pid;
+    return this.engineRuns(session) ? session.engine.pid : null;
+  }
+
+  /** Whether the session's engine is observed running. One /proc says has
+   * ended retires the session; one that could not be observed is not answered
+   * for and retires nothing (INV02). The one owner of "has the Principal's
+   * engine ended", for every path that asks. */
+  private engineRuns(session: RegisteredSession): boolean {
+    const engine = processEnded(session.engine);
+    if (engine === "ended") setImmediate(() => { if (this.session === session) this.retire(); });
+    return engine === "running";
   }
 
   /** The credential stops existing with the broker that minted it. */
@@ -263,8 +271,7 @@ export class PrincipalEndpoint {
           // connection that never asks again is not left attached. It is taken
           // after this refusal is written: the caller is told why it lost
           // authority instead of finding a closed socket.
-          if (processIdentity(session.engine.pid)?.startTime !== session.engine.startTime)
-            setImmediate(() => { if (this.session === session) this.retire(); });
+          this.engineRuns(session);
           throw new StoreError("AUTH_FAILED", "the principal engine this connection was started by is no longer registered");
         }
         const auth = this.ports.principalContext(peer);

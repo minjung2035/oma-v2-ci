@@ -8,7 +8,7 @@ import { unitName } from "../units.js";
 import type { RunRegistry } from "../runtime/run-registry.js";
 import { StoreError } from "../domain/errors.js";
 import { capabilitiesOf } from "../authority.js";
-import { peerCred, peerPidFd, peerPidAlive, socketDescriptor, type PeerCred } from "../leaf.js";
+import { peerCred, peerPidFd, pidfdLiveness, socketDescriptor, type PeerCred } from "../leaf.js";
 import { SharedPeerPin, type ConnectionPeerPin } from "./peer-pin.js";
 
 export type BoundPeer = PeerCred & ConnectionPeerPin;
@@ -33,7 +33,9 @@ export class PeerAuthenticator {
     if (!credentials) return null;
     const pinned = peerPidFd(fd);
     if (pinned === null) return null;
-    const owner = new SharedPeerPin(() => peerPidAlive(pinned), () => closeSync(pinned));
+    // Only an answered "running" keeps the peer's authority (INV06); "exited"
+    // and "failed" both refuse, and neither is used as proof of death (INV02).
+    const owner = new SharedPeerPin(() => pidfdLiveness(pinned).kind === "running", () => closeSync(pinned));
     if (!owner.alive()) { owner.releaseConnection(); return null; }
     socket.once("close", () => { try { owner.releaseConnection(); } catch (error) { this.cleanupError(error); } });
     return { ...credentials, alive: () => owner.alive(), retainForExecution: () => owner.retainForExecution(), releaseConnection: () => owner.releaseConnection() };

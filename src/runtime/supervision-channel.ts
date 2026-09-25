@@ -46,7 +46,7 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
   // is what the delivery endpoint answers to.
   const host = processIdentity(credentials.pid);
   if (host === null) {
-    log("the host channel's peer is not running; no principal endpoint is opened");
+    log("the host channel's peer is not observed running; no principal endpoint is opened");
     return undefined;
   }
 

@@ -12,7 +12,9 @@
  *
  * A pid alone can be reused, so the engine is pinned by its start time as well,
  * and every step of the walk reads /proc fresh. Anything unreadable, malformed
- * or too deep is "not a descendant": the walk fails closed.
+ * or too deep is "not a descendant": the walk fails closed. Failing closed is
+ * refusing, not concluding that a process ended: only `processEnded` says
+ * that, and only from what /proc answered.
  */
 import { readFileSync } from "node:fs";
 
@@ -26,31 +28,55 @@ export interface ProcessIdentity {
  * longer walk is not a descendant OMA started. */
 const MAXIMUM_DEPTH = 16;
 
-function stat(pid: number): { readonly ppid: number; readonly startTime: string } | null {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+/** What /proc says about a pid: running (with its parent and start time),
+ * exited (the kernel has no such process), or unavailable -- unreadable for
+ * any other reason (too many open files, no memory, a hidden /proc) or
+ * malformed. Unavailable is not exited (INV02). */
+type ProcessObservation =
+  | { readonly kind: "running"; readonly ppid: number; readonly startTime: string }
+  | { readonly kind: "exited" }
+  | { readonly kind: "unavailable" };
+
+function stat(pid: number): ProcessObservation {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return { kind: "unavailable" };
   let text: string;
-  try { text = readFileSync(`/proc/${pid}/stat`, "utf8"); } catch { return null; }
+  try { text = readFileSync(`/proc/${pid}/stat`, "utf8"); }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "ENOENT" || code === "ESRCH" ? { kind: "exited" } : { kind: "unavailable" };
+  }
   // The command name is parenthesised and may itself contain ") ", so the
   // fields are counted from the last closing parenthesis.
   const close = text.lastIndexOf(")");
-  if (close < 0) return null;
+  if (close < 0) return { kind: "unavailable" };
   const fields = text.slice(close + 2).trim().split(" ");
   // After the name: state(3) ppid(4) ... starttime(22).
   const ppid = Number(fields[1]);
   const startTime = fields[19];
-  if (!Number.isSafeInteger(ppid) || ppid < 0 || startTime === undefined || !/^[0-9]+$/.test(startTime)) return null;
-  return { ppid, startTime };
+  if (!Number.isSafeInteger(ppid) || ppid < 0 || startTime === undefined || !/^[0-9]+$/.test(startTime)) return { kind: "unavailable" };
+  return { kind: "running", ppid, startTime };
 }
 
-/** The identity of a running process, or null if it cannot be observed. */
+/** The identity of a running process, or null if it is not observed running. */
 export function processIdentity(pid: number): ProcessIdentity | null {
   const observed = stat(pid);
-  return observed === null ? null : Object.freeze({ pid, startTime: observed.startTime });
+  return observed.kind === "running" ? Object.freeze({ pid, startTime: observed.startTime }) : null;
 }
 
 /** The parent of a running process, or null if it cannot be observed. */
 export function parentOf(pid: number): number | null {
-  return stat(pid)?.ppid ?? null;
+  const observed = stat(pid);
+  return observed.kind === "running" ? observed.ppid : null;
+}
+
+/** Whether the process an identity pins has ended (INV02). "ended" only when
+ * /proc says so: the pid names no process, or names one that started at
+ * another time. What cannot be read is "unknown", which refuses what the
+ * process would have been trusted for but ends nothing on its behalf. */
+export function processEnded(identity: ProcessIdentity): "running" | "ended" | "unknown" {
+  const observed = stat(identity.pid);
+  if (observed.kind === "unavailable") return "unknown";
+  return observed.kind === "running" && observed.startTime === identity.startTime ? "running" : "ended";
 }
 
 /** True only if `pid` is `ancestor` itself or was started, directly or
@@ -59,7 +85,7 @@ export function descendsFrom(pid: number, ancestor: ProcessIdentity): boolean {
   let current = pid;
   for (let depth = 0; depth <= MAXIMUM_DEPTH; depth += 1) {
     const observed = stat(current);
-    if (observed === null) return false;
+    if (observed.kind !== "running") return false;
     if (current === ancestor.pid) return observed.startTime === ancestor.startTime;
     if (observed.ppid <= 1) return false;
     current = observed.ppid;

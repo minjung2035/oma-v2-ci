@@ -91,16 +91,62 @@ export function peerPidFd(fd: number): number | null {
   } catch { return null; }
 }
 
+/** Whether the process a pidfd pins is running has three answers, not two
+ * (INV02): running, exited, or not answered. `poll` with a zero timeout never
+ * waits, but it does not answer when a signal is pending -- EINTR -- and the
+ * broker, which starts and reaps children all the time, often has one. Read
+ * as "exited", that took a live actor's authority away for an instant: its
+ * request was refused as CAPABILITY_DENIED, never to be retried. An
+ * interrupted poll is asked again, a bounded number of times (INV10); an
+ * invalid descriptor (POLLNVAL) or any other failure is "failed", which no
+ * caller reads as the process having exited. The same vocabulary as
+ * `lockFileDescriptor` and `holdAbstractName`: the missing answer is kept. */
+export type PidLiveness =
+  | { readonly kind: "running" }
+  | { readonly kind: "exited" }
+  | { readonly kind: "failed"; readonly errno: number };
+
+/** One `poll` of one descriptor: its return value, errno when it failed, and
+ * the returned events when it answered. */
+export interface PollAnswer { readonly result: number; readonly errno: number; readonly revents: number }
+
+const EINTR = 4;
+const EBADF = 9;
+const POLLIN = 0x1;
+const POLLHUP = 0x10;
+const POLLNVAL = 0x20;
+/** Interrupted polls asked again before the answer is "failed". */
+export const PIDFD_POLL_ATTEMPTS = 8;
+
+/** The classification of `poll`'s answers for a pidfd, apart from the call so
+ * that each answer the kernel can give is exercised by its regression. */
+export function livenessFromPoll(ask: () => PollAnswer): PidLiveness {
+  for (let attempt = 0; attempt < PIDFD_POLL_ATTEMPTS; attempt++) {
+    const answer = ask();
+    if (answer.result === 0) return { kind: "running" };
+    if (answer.result > 0) {
+      if ((answer.revents & POLLNVAL) !== 0) return { kind: "failed", errno: EBADF };
+      return (answer.revents & (POLLIN | POLLHUP)) !== 0 ? { kind: "exited" } : { kind: "failed", errno: 0 };
+    }
+    if (answer.errno !== EINTR) return { kind: "failed", errno: answer.errno };
+  }
+  return { kind: "failed", errno: EINTR };
+}
+
 /** Only accepts an owned peerPidFd result; no blocking waits or /proc PID lookups. */
-export function peerPidAlive(fd: number): boolean {
-  if (!Number.isInteger(fd) || fd < 0) return false;
+export function pidfdLiveness(fd: number): PidLiveness {
+  if (!Number.isInteger(fd) || fd < 0) return { kind: "failed", errno: EBADF };
   try {
-    const buffer = new ArrayBuffer(8); // struct pollfd: int fd, short events, short revents
-    const pollfd = new DataView(buffer);
-    pollfd.setInt32(0, fd, NATIVE_LE);
-    pollfd.setInt16(4, 1 /* POLLIN */, NATIVE_LE);
-    return lib().poll(buffer, 1, 0) === 0; // exited, invalid and unknown all fail closed
-  } catch { return false; }
+    const native = lib();
+    return livenessFromPoll(() => {
+      const buffer = new ArrayBuffer(8); // struct pollfd: int fd, short events, short revents
+      const pollfd = new DataView(buffer);
+      pollfd.setInt32(0, fd, NATIVE_LE);
+      pollfd.setInt16(4, POLLIN, NATIVE_LE);
+      const result = native.poll(buffer, 1, 0);
+      return { result, errno: result < 0 ? errno() : 0, revents: result > 0 ? pollfd.getUint16(6, NATIVE_LE) : 0 };
+    });
+  } catch { return { kind: "failed", errno: 0 }; }
 }
 
 const AF_UNIX = 1;
