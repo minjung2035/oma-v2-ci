@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "e889e647658220ad0300715d3816ca900c7a55888fa37a19b850d08906f45132",
-  "report": "348104a1c371e871c6abe76d769bbe7449341db38ccc701c7c48497a531ee9b4",
+  "report": "5bd77771e9877c3566e9278821b890017fc213cac5411ad1f11aa8684b57837a",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -173,7 +173,7 @@
     },
     {
       "path": "src/config/defaults.ts",
-      "sha256": "917568859d66c63948332fc793dcd22bf71840bbb009ca693fa4205b85c1ed9a"
+      "sha256": "02ccc5789600557e5f8220b3247bc693e54d29ff2e46eefc8047f328c0cbdf6b"
     },
     {
       "path": "src/config/generations.ts",
@@ -633,7 +633,7 @@
     },
     {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "d481474d57a2b14ec9337d00980170f06e647f235a1029f239700048bc738279"
+      "sha256": "d3241af7d4c62577e38869e9b75c5e24226464af48c30c0d72e173ff6fa1ce79"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -661,7 +661,7 @@
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
-      "sha256": "a9079cc6ea5fc730b0387c6f85503027240cb3e11eec33be066c0535c017b850"
+      "sha256": "05bd105acb38b35612ab2061f853f95b1394569e145e55e73fff8e1ad90f70aa"
     },
     {
       "path": "src/runtime/run-registry.ts",
@@ -677,7 +677,7 @@
     },
     {
       "path": "src/sandbox.ts",
-      "sha256": "3d1b12cd0ec582d4434281114f69cf9fa0513d521e428c45c8d17451e85b4f49"
+      "sha256": "4338dadb58e43b91ba337744379e6963699d695935fb21b984def1b7663258fa"
     },
     {
       "path": "src/storage/batch-view.ts",

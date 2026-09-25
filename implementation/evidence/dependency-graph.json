@@ -1454,7 +1454,7 @@
   }
  ],
  "files": 224,
- "runtimeEdges": 860,
+ "runtimeEdges": 861,
  "typeOnlyEdges": 322,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 219,
@@ -1466,7 +1466,7 @@
   "L4-orchestration -> L1-kernel": 101,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 11,
-  "L4-orchestration -> L4-orchestration": 40,
+  "L4-orchestration -> L4-orchestration": 41,
   "L5-entry -> L1-kernel": 73,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 5,
