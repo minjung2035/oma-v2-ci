@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
-import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, type ResidentDirectories } from "../src/sandbox.js";
+import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, residentProjectGit, residentsConfined, type ResidentDirectories } from "../src/sandbox.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
 import { createEditToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -322,4 +322,11 @@ test("AV25 / BATCH-006, TSP-009: the guard reads the edit input the pinned engin
     // An input the engine would not have validated is refused, not guessed at.
     assert.equal((handler!({ toolName: "edit", input: { path: "a.txt", edits: [] } }) as { block?: boolean }).block, true);
   } finally { rmSync(workspace, { recursive: true, force: true }); }
+});
+
+test("AV27 / SB-002-E, GIT-002: a Resident reaches the canonical repository at its mount when sealed, at the host path when not", () => {
+  assert.equal(residentsConfined("/"), false);
+  assert.equal(residentsConfined("/state/rootfs"), true);
+  assert.equal(residentProjectGit("/state/rootfs", "/state/repos/project.git"), RESIDENT_PATHS.projectGit);
+  assert.equal(residentProjectGit("/", "/state/repos/project.git"), "/state/repos/project.git");
 });

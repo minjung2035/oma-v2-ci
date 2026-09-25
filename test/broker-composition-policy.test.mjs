@@ -106,6 +106,8 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     "../storage/directory.js": { ensureDirectory() {} },
     // AV11: the canonical repository's path has one owner.
     "../storage/paths.js": { projectGitPathAt: stateRoot => `${stateRoot}/repos/project.git` },
+    // AV27: where a Resident's Git reaches that repository has one owner.
+    "../sandbox.js": { residentProjectGit: (_rootfs, hostPath) => hostPath },
     "../storage/quota.js": { StorageAdmission: class { admit() { calls.push("storage-quota"); return () => undefined; } reserve() { return () => undefined; } } },
     "../authority.js": { resolvedSpecOf: value => value },
     "../domain/errors.js": { StoreError: class extends Error {} },

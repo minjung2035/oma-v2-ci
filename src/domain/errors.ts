@@ -2,9 +2,15 @@
 import type { ErrorCode, Failure } from "../../implementation/contracts/errors.js";
 
 export class StoreError extends Error {
-  constructor(readonly code: ErrorCode, message: string, options?: ErrorOptions) {
+  /** AV28: what a conflict observed where the caller expected otherwise. The
+   * error table returns it for STALE_BASE and NOT_DESCENDANT ("actual OID
+   * 반환"), CTX-003 for CONTEXT_CONFLICT ("+actual revision"); `publicFailure`
+   * carries it for those codes and no other. */
+  readonly actual?: string | null;
+  constructor(readonly code: ErrorCode, message: string, options?: ErrorOptions & { readonly actual?: string | null }) {
     super(message, options);
     this.name = "StoreError";
+    if (options?.actual !== undefined) this.actual = options.actual;
   }
 }
 /** Normalize native storage exhaustion without interpreting operation phase.
@@ -142,8 +148,11 @@ export function publicFailure(error: unknown, context?: Omit<ErrorContext, "code
   const policy = classifyError({ ...(context ?? fallback), code });
   const retry = policy.reconcile === "repair" ? "after-repair" :
     policy.lookupSameKey && (policy.reconcile === "observe" || policy.reconcile === "reconcile" || policy.resendFrozen) ? "same-key" : "never";
-  return { code: policy.code, message: policy.code, retry };
+  const actual = error instanceof StoreError && error.code === policy.code && RETURNS_ACTUAL.has(policy.code) ? error.actual : undefined;
+  return { code: policy.code, message: policy.code, retry, ...(actual === undefined ? {} : { details: { actual } }) };
 }
+/** The codes whose failure names the value found instead (AV28). */
+const RETURNS_ACTUAL: ReadonlySet<ErrorCode> = new Set<ErrorCode>(["STALE_BASE", "NOT_DESCENDANT", "CONTEXT_CONFLICT"]);
 export type CliExitCode = 0 | 2 | 3 | 4;
 /** Direct failures differ from authoritative terminal receipts, which exit 2 (or gate 4). */
 export function errorExit(code: ErrorCode): Exclude<CliExitCode, 0> { return ERROR_METADATA[code].cliExit; }

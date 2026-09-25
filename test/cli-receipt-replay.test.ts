@@ -245,3 +245,15 @@ test("AV22 / ERR-001, CLI-003: a failure to retry under the same key names the k
     });
   }
 });
+
+/* AV28 -- the CLI shows the value a conflict found. */
+test("AV28 / ERR-001: the CLI shows the actual value a conflict names", { timeout: 30_000 }, async () => {
+  const home = mkdtempSync(join(tmpdir(), "oma-av28-"));
+  const actual = "1".repeat(40);
+  const broker = await peer(home, () => ({ ok: false, error: { code: "STALE_BASE", message: "STALE_BASE", retry: "never", details: { actual } } }));
+  try {
+    const result = await run(home, ["integrate", "2".repeat(40), "--expect", "3".repeat(40), "--request", "av28-cli"]);
+    assert.equal(result.code, 2, result.stderr);
+    assert.match(result.stderr, new RegExp(`STALE_BASE: STALE_BASE \\(actual: ${actual}\\)`));
+  } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
+});

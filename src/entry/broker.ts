@@ -25,6 +25,7 @@ import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
 import { projectGitPathAt } from "../storage/paths.js";
+import { residentProjectGit } from "../sandbox.js";
 
 function usage(): never {
   console.error("usage: broker.js --society <name> [--config <path>] [--state-root <dir> --run-root <dir>]"); process.exit(4);
@@ -168,7 +169,8 @@ async function main(): Promise<void> {
     });
     const hasGoal = (): boolean => git.hasCommittedContext();
     const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
-      hasGoal, activationAllowed: () => lifetime.permitsActivation }, resolveSpec, mail, cfg.quota);
+      hasGoal, activationAllowed: () => lifetime.permitsActivation,
+      residentProjectGit: residentProjectGit(cfg.installation.rootfs, projectGitPathAt(stateRoot)) }, resolveSpec, mail, cfg.quota);
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
       projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed: () => lifetime.permitsActivation,
       sweepBudgetSeconds: cfg.limits.receiptWaitSeconds, resourceGate: category => storage.admit(category),

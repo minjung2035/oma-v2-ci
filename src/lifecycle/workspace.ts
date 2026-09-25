@@ -19,7 +19,7 @@ import type { LifecyclePaths } from "./contracts.js";
 export class WorkspaceCoordinator {
   private readonly executor = new PreparationExecutor();
   private working: { readonly key: string; readonly task: Promise<void> } | null = null;
-  constructor(private readonly paths: Pick<LifecyclePaths, "stateRoot" | "projectGit">) {}
+  constructor(private readonly paths: Pick<LifecyclePaths, "stateRoot" | "projectGit" | "residentProjectGit">) {}
   private git(argv: readonly string[], cwd?: string) {
     return runGitText(argv, { ...(cwd === undefined ? {} : { cwd }), timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
   }
@@ -86,6 +86,13 @@ export class WorkspaceCoordinator {
       if (cloned.status !== 0) throw new StoreError("INTERNAL_ERROR", "private workspace clone failed");
     }
     assertDirectory(join(temporary, ".git"));
+    // AV27, GIT-002: the clone is made here, from the host path, but it is the
+    // Resident's: `git fetch origin <published-ref>` runs where the repository
+    // is its mount. Set before the workspace is published, while only this
+    // trusted preparation has touched it.
+    const origin = this.paths.residentProjectGit ?? this.paths.projectGit;
+    const remote = await this.prepareGit(["remote", "set-url", "origin", origin], temporary);
+    if (remote.status !== 0) throw new StoreError("INTERNAL_ERROR", "private workspace origin could not be set");
     let haveBase = await this.prepareGit(["cat-file", "-e", `${identity.from}^{commit}`], temporary);
     if (haveBase.status !== 0) {
       const fetched = await this.prepareGit(["fetch", "--no-tags", this.paths.projectGit, identity.from], temporary);

@@ -9,6 +9,7 @@ import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
 import { hostSystemLayout } from "../runtime/resident-rootfs.js";
+import { residentsConfined } from "../sandbox.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { parseCanonicalResourceLimits } from "../domain/resources.js";
 import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
@@ -62,7 +63,7 @@ ensureDirectory(piRuntime.agentDir, 0o700);
 // none, because binding the host root is exactly what SB-001 forbids. That is a
 // real difference in what OMA can promise, so it is said once, out loud, rather
 // than inferred later from an absent bwrap process.
-const confinement = cfg.installation.rootfs === "/" ? undefined : {
+const confinement = !residentsConfined(cfg.installation.rootfs) ? undefined : {
   rootfs: cfg.installation.rootfs,
   libdir: cfg.installation.libdir,
   // Bound as a single file, so resolve a symlinked Node to the real binary.

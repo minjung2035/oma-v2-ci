@@ -14,6 +14,7 @@ import { UnitsModule } from "../src/units.js";
 import { gitFixture, seedGit, gitCommand, gitAuth } from "./fixtures/git-crash.js";
 import { makeValidAgent, makeValidResolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
+import { StoreError, publicFailure } from "../src/domain/errors.js";
 
 function deferred() {
   let resolve!: () => void;
@@ -137,4 +138,52 @@ test("R37: creation awaits a real private workspace before unit publication and 
     assert.equal(f.store.getAgent("child")?.desired, "provisioning");
     assert.equal(existsSync(accepted.plan.workspacePath), true);
   } finally { release.resolve(); await work?.catch(() => undefined); f.close(); }
+});
+
+/** AV27 -- GIT-002: the ninth functional run. A Resident told by a submit mail
+ * to `git fetch origin <published-ref>` got "does not appear to be a git
+ * repository": the workspace was cloned on the host from the host path, and
+ * its `origin` named that path, which the sandbox does not have. GIT-002's
+ * clone is from /git/project.git, the Resident's mount. */
+test("AV27 / GIT-002: a new workspace's origin is the canonical repository as its Resident reaches it", { skip: process.platform !== "linux", timeout: 30000 }, async () => {
+  for (const residentProjectGit of ["/git/project.git", undefined]) {
+    const f = fixture();
+    try {
+      const paths = { stateRoot: f.root, projectGit: f.paths.projectGit, society: "crash", hasGoal: () => false, activationAllowed: () => true,
+        ...(residentProjectGit === undefined ? {} : { residentProjectGit }) };
+      const workspace = new WorkspaceCoordinator(paths);
+      const units = new UnitsModule("crash", { node: process.execPath, libdir: process.cwd(), state: f.root, society: "crash", agent: "", config: join(f.root, "config.json"), run: join(f.root, "oma", "crash"), brokerUnit: "" }, join(f.root, "units"));
+      // Stop after the workspace: this is about what the preparation left.
+      units.ensureResident = () => { throw new Error("stop after the workspace"); };
+      const policy = new LifecyclePolicy(f.store, (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), null);
+      const creates = new CreateCoordinator(f.store, units, paths, policy, workspace, f.mail);
+      await creates.create(f.auth, { name: "child", from: f.base, brief: "child" }, "create-origin").catch(() => undefined);
+      const accepted = f.store.getOperation("a", "create-origin");
+      assert.ok(accepted?.kind === "agent.create");
+      assert.equal(gitCommand(accepted.plan.workspacePath, ["remote", "get-url", "origin"]), residentProjectGit ?? f.paths.projectGit);
+      assert.equal(gitCommand(accepted.plan.workspacePath, ["rev-parse", "HEAD"]), f.base, "the base still came from the host path");
+    } finally { f.close(); }
+  }
+});
+
+/** AV28 -- the error table ("STALE_BASE, NOT_DESCENDANT: actual OID 반환") and
+ * arch §11 ("main이 이동하면 STALE_BASE와 actual OID를 반환한다"): the ninth
+ * functional run's second integrate answered "STALE_BASE: STALE_BASE" and
+ * nothing else, so the integrator had to find main by itself. */
+test("AV28 / ERR-001, arch §11: a stale integration names the main it found, and only such conflicts carry a value", { timeout: 30000 }, async () => {
+  const f = fixture();
+  try {
+    const body = readFileSync(join(f.root, "candidate.bundle"));
+    const candidate = gitCommand(join(f.root, "seed"), ["rev-parse", "HEAD"]);
+    const submitted = await f.git.submit(f.auth, "av28-submit", { candidate, exportRef: "refs/oma/export/crash", prerequisites: [f.base],
+      to: ["b"], subject: "candidate", body: "body", paths: [],
+      bundle: { bytes: body.length, sha256: sha256Hex(body), mediaType: "application/x-git-bundle" } }, (async function* () { yield body; })());
+    assert.equal(submitted.state, "succeeded", JSON.stringify(submitted));
+    const error = await f.git.integrate(f.auth, "av28-stale", { candidate, expected: candidate }).then(() => null, (reason: unknown) => reason);
+    assert.equal((error as { code?: string } | null)?.code, "STALE_BASE");
+    assert.deepEqual(publicFailure(error).details, { actual: f.base });
+    assert.equal(f.store.getOperation("a", "av28-stale"), null, "a stale base is refused before acceptance");
+    // A value is carried only where the table returns one.
+    assert.equal(publicFailure(new StoreError("CAPABILITY_DENIED", "denied", { actual: f.base })).details, undefined);
+  } finally { f.close(); }
 });

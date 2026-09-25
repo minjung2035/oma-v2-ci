@@ -144,6 +144,16 @@ function residentMounts(libdir: string, dirs: ResidentDirectories): readonly (re
  * path. Only the session mount translates back -- a boundary names a session
  * file and nothing else -- and a name that is not a plain file beneath it is
  * no session path (null). */
+/** SB-002-E: `installation.rootfs` set to "/" declares no trusted rootfs, and
+ * Residents run unconfined on the host; any other value is the rootfs they are
+ * sealed in. The one reading of that setting. */
+export function residentsConfined(rootfs: string): boolean { return rootfs !== "/"; }
+
+/** Where a Resident's Git reaches the canonical repository (GIT-002). */
+export function residentProjectGit(rootfs: string, hostPath: string): string {
+  return residentsConfined(rootfs) ? RESIDENT_PATHS.projectGit : hostPath;
+}
+
 export function hostSessionPath(dirs: ResidentDirectories, insidePath: string): string | null {
   const prefix = `${RESIDENT_PATHS.sessions}/`;
   if (!insidePath.startsWith(prefix) || insidePath.includes("\0")) return null;

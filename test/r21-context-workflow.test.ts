@@ -10,7 +10,7 @@ import { Store } from "../src/store.js";
 import { encodeFrame } from "../src/frame.js";
 import { RpcConnection, type RpcSocket, type SocketEvents } from "../src/broker/connection.js";
 import { SharedPeerPin } from "../src/broker/peer-pin.js";
-import { StoreError } from "../src/domain/errors.js";
+import { StoreError, publicFailure } from "../src/domain/errors.js";
 import { MailModule } from "../src/mail.js";
 import { GitModule } from "../src/git.js";
 import type { AuthContext } from "../implementation/contracts.js";
@@ -236,5 +236,21 @@ test("V18B: accepted context evidence outlives its RPC connection; same-key retr
     assert.deepEqual(readFileSync(join(f.root, `world/context/revisions/${accepted.plan.candidate}/GOAL.md`)), first.bytes);
     assert.deepEqual(readFileSync(f.mail.archivePath(accepted.plan.message.id)), object);
     assert.equal(f.git.hasCommittedContext(), true);
+  } finally { f.close(); }
+});
+
+/** AV28 -- CTX-003 ("CAS 실패는 CONTEXT_CONFLICT+actual revision이다"). */
+test("AV28 / CTX-003: a context publication on a stale revision names the revision it found", async () => {
+  const f = fixture("sha1");
+  try {
+    const first = input("# GOAL\n", null);
+    const published = await f.git.publishContext(auth, "av28-first", first.request, once(first.bytes));
+    assert.equal(published.state, "succeeded");
+    const revision = (published as { result?: { revision?: string } }).result?.revision;
+    assert.ok(revision);
+    const again = input("# GOAL 2\n", null);
+    const error = await f.git.publishContext(auth, "av28-stale", again.request, once(again.bytes)).then(() => null, (reason: unknown) => reason);
+    assert.equal((error as { code?: string } | null)?.code, "CONTEXT_CONFLICT");
+    assert.deepEqual(publicFailure(error).details, { actual: revision });
   } finally { f.close(); }
 });

@@ -39,7 +39,11 @@ export function finishFailure(reply: { error?: unknown } | undefined, prefix = "
   if (!decoded.ok) fail(`${prefix}invalid broker failure: ${decoded.reason}${key === undefined ? "" : `; --request ${key}`}`, 3);
   const again = key !== undefined && decoded.value.retry === "same-key"
     ? ` (재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요)` : "";
-  fail(`${prefix}${decoded.value.code}: ${decoded.value.message}${again}`, errorExit(decoded.value.code));
+  // AV28: a conflict names what it found, so the caller builds on the actual value.
+  const details = decoded.value.details;
+  const found = details !== null && typeof details === "object" && !Array.isArray(details) && "actual" in details
+    ? ` (actual: ${details.actual === null ? "none" : String(details.actual)})` : "";
+  fail(`${prefix}${decoded.value.code}: ${decoded.value.message}${found}${again}`, errorExit(decoded.value.code));
 }
 
 export function finishReceipt(receipt: Receipt, key: string): never {
