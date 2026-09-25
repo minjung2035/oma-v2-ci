@@ -3390,12 +3390,14 @@
    "primary": "WP25",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV12",
     "AV9",
     "WP03",
     "WP23",
     "WP25"
    ],
    "oracles": [
+    "AV12",
     "AV9",
     "V03A",
     "V03B",
