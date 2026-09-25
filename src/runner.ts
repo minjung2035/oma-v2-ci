@@ -96,10 +96,17 @@ export class RunnerModule {
     this.lease = null;
     return Promise.resolve();
   }
-  private async open(): Promise<void> {
+  /** A connection serves the calls made together, not the run: the broker
+   * closes one nothing speaks on for idleStreamSeconds, and a delivery takes
+   * as long as the model does. What a call may do is the calling unit's
+   * (requireRunnerUnit), never the connection's, so a later call dials again. */
+  private async connect(): Promise<void> {
     if (this.stopped)
       throw new StoreError("BROKER_UNAVAILABLE", "runner has been stopped");
     await this.channel.connect(join(this.paths.runRoot, "admin.sock"));
+  }
+  private async open(): Promise<void> {
+    await this.connect();
     const response = await this.channel.call("runner.open", {
       agent: this.agent,
       invocationId: process.env.INVOCATION_ID ?? "",
@@ -288,6 +295,7 @@ export class RunnerModule {
         this.limits.frameBytes,
       );
     } else receipt = requireVerifiedReceipt(observed);
+    await this.connect();
     const response = await this.channel.call("batch.complete", {
       batchId: batch.id,
       incarnation: batch.incarnation,

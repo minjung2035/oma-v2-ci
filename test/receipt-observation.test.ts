@@ -29,7 +29,11 @@ async function runnerConsume(t: TestContext, f: Fixture): Promise<{ deliveries: 
       return boundaryOf(batch, completeSession(f.root, batch, "redelivered.jsonl"));
     },
   }));
-  const channel = Reflect.get(runner, "channel") as { call: (method: string, params: Record<string, unknown>) => Promise<unknown> };
+  const channel = Reflect.get(runner, "channel") as {
+    connect: (path: string) => Promise<void>; call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
+  };
+  // AV21: completion dials again after a delivery; the replaced channel has nothing to dial.
+  t.mock.method(channel, "connect", async () => {});
   t.mock.method(channel, "call", async (method: string, params: Record<string, unknown>) => {
     assert.equal(method, "batch.complete");
     completions.push(params);
