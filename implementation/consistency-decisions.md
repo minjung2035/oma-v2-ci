@@ -856,3 +856,177 @@ Counterexamples tried against the finished product:
 - Terminal escape bytes in a Resident's mail subject or body, or in engine output:
   refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
   controls and zero-width clusters.
+
+## Whole-codebase adversarial pass (after v9) -- cards AV1..AV5
+
+Every production file was read against the trust boundaries, not against a card
+list: a Resident (its actor socket, and the workspace, home and session
+directory it writes from its sandbox), the Principal's model (its tools on the
+host), code running inside a sandbox, and a process of the same user. A finding
+was not patched where it was found. Each was reduced to the principle it
+breaks, every site of that principle was swept, and the fix was put in one
+owner so the sites follow from it; each card names its counterexample and the
+oracle that fails without the fix.
+
+### AV1 -- a value one party supplies is data, never an option
+
+Counterexample (run): the Principal's `oma_mail_send` tool built
+`send <to...> --subject S --file <tmp> ...`, and the CLI took an option's first
+occurrence. `to = ["commons", "--file", "/home/u/.ssh/id_ed25519"]` made the
+CLI read that host file as the body and post it to the public archive; the
+Principal's engine runs on the host with only the workspace guard, and Resident
+mail can ask its model to do this. The same injection sent `approval_required`,
+which the tool's own schema does not offer. The CLI also ignored unknown
+options and silently dropped an option value beginning with `--`.
+
+Sweep: extension → CLI (send, ack, status); the CLI's parser; CLI → Git
+(`resolveOid`); host → engine (Pi takes option values verbatim: no change);
+bwrap/journalctl/systemctl argv (derived or validated values: no change).
+
+Owner and rule: `src/cli/arguments.ts` `parseArguments` -- each command declares
+its options; each is admitted at most once unless repeatable (`--to`, `--path`);
+an option's value is the next argument verbatim; anything else option-like is
+refused; everything after `--` is positional. Semantic change, deliberate: a
+value beginning with `--` is a value (`--request --subject` names the key
+`--subject`, which the request-key grammar allows; F2's case was rewritten to a
+key outside the grammar). The extension checks every model value against the
+grammar of its slot before starting the CLI (address, message id or archive
+path, actor, request key, kind -- mirrors of the wire grammar, pinned by
+`AV1: the extension's address and actor grammar`) and places it in that slot:
+option values after their option, addresses after `--`, and `--reply` only as
+the archive's copy of a named message. `resolveOid` refuses a leading `-` and
+passes `--end-of-options`.
+
+Oracles: `AV1: the CLI admits each declared option once ...`, `AV1: a value the
+model supplies cannot leave its slot through OMA's tools` (the recorded
+counterexamples are refused before any frame; the host file never leaves).
+
+### AV2 -- the credential goes out only in its slots, and never comes back
+
+Counterexample (run): the relay swapped the placeholder for the real key in
+every header and in the request path. Code inside a sandbox (its shell is in
+the rootfs; §16 assumes tool execution there) reads the placeholder from
+`/proc/<pid>/environ` and asks for `GET /v1/<placeholder>`; a provider that names
+the path in its 404 (`Invalid URL (GET /v1/...)`) returned the real key into
+the sandbox, and so did any header the provider repeats. INF-007/PR-004 say
+the key never reaches the sandbox.
+
+Owner and rule (`src/runtime/inference-relay.ts`): the key is written only
+where a provider reads a key -- an authority header (`authorization`,
+`x-api-key`, `api-key`, `x-goog-api-key`) whose whole value is the placeholder
+or `Bearer <placeholder>`, and the `key` query parameter (the Google SDK's
+WebSocket endpoints use it) -- and the placeholder anywhere else refuses the
+request (403, counted as refused). The other direction has a tripwire: response
+status line, headers and body are scanned for the key's bytes (across chunk
+boundaries) and the response is cut off before any of them reach the sandbox
+(counted as failed). So the tripwire sees plaintext, the relay asks for
+`accept-encoding: identity` and drops `sec-websocket-extensions`. The body of a
+request is still not read or rewritten.
+
+Residual, stated: a WebSocket frame header inside the key's bytes would hide it
+from the byte tripwire; with compression refused that needs the provider to
+fragment its own echo there.
+
+Oracles: `AV2: the key is written only into its declared slots ...`, `AV2: a
+response that carries the key back is cut off ...`, `AV2: a WebSocket upgrade
+keeps the same slots and is not compressed`; T114 still shows the slots work.
+
+### AV3 -- a model's tool scope holds nothing the product keeps
+
+Finding (by construction): the Principal's engine was started with
+`<state>/principal/private` as its workspace, so the workspace guard let its
+read/write/edit tools reach `principal/private/sessions` -- the Human's session
+history (PR-003; PR-004 forbids giving the Human's original session to model
+tools). A Resident was already correct: `agents/<a>/workspace` is apart from its
+home and `runner/sessions`. The CLI's request cache under HOME is model-mutable
+by design (FS-003) and is not in scope.
+
+Owner and rule: `modelWorkspaceFor(actor)` (`src/domain/derived.ts`) names the
+one directory an actor's model tools work in -- for the Principal
+`principal/private/workspace` -- and `assertModelScope(workspace, kept, above)`
+(`src/storage/paths.ts`) refuses, where each engine is started, a workspace that
+overlaps a kept directory (session history, views) or contains the engine's
+home. `PrincipalSession.start` and `planPiSpawn` both call it on the paths they
+start with.
+
+Oracles: `AV3: the Principal's model scope holds neither the Human's session
+history nor the CLI's home`, `AV3: an engine whose workspace overlaps what the
+product keeps is refused before it starts` (the former Principal layout).
+
+### AV4 -- a directory a Resident writes is untrusted input to host code
+
+Findings: (1) the receipt's session check resolved the session path
+(`realpathSync`) and then opened it by name again, inside the session directory
+the Resident's sandbox writes; a component swapped in between was followed.
+(2) Create recovery ran `git rev-parse HEAD` in the new agent's workspace even
+after a run had opened there (a crash between enabling and settling), reading a
+`.git` the model writes, and a moved HEAD then made the creation STORE_CORRUPT
+for good.
+
+Rule: host code names something in a Resident-writable directory by one
+resolution beneath it that follows no link (`openDirectory` + `openRegularBeneath`,
+RESOLVE_NO_SYMLINKS), and runs no tool those directories configure once a run
+has had them. `sessionPathCheck` now opens the file that way; create recovery
+observes the workspace only while the agent's incarnation is 0 -- a run can open
+only after `ready()` proved it and enabled the agent, which is the only
+transition out of `provisioning` -- and afterwards checks only that the
+directory exists, through its held parent.
+
+Oracles: `AV4: a receipt's session is found beneath its directory in one
+resolution ...` (a component swapped at the first pathname check would hand a
+check-then-open reader a file outside; the one resolution finds the empty file
+inside), `AV4: once a run has opened, create recovery runs no Git in the
+workspace ...`.
+
+### AV5 -- every change under the state tree acts through a parent resolved once
+
+Finding (sweep): architecture §4 makes this the rule for the whole state tree
+("부모 디렉터리를 한 번만 해석하고, 그 뒤로 경로를 다시 말하지 않는다"), and the
+storage primitives follow it, but nothing held the rest of the code to it:
+path-taking mutations remained in the transport spool (created, read back and
+unlinked by name), the quarantine staging (mkdtemp, recursive rm), the mailbox
+move (`moveToCur` observed both names and then renamed by path), the Resident
+rootfs (lstat, then mkdir/write/symlink/unlink by path), configuration
+generations (lstat of the target, then mkdir/chmod/rename/rm by path; the
+manifest rename; the journal append), provisioning (repository rename, binding
+link/unlink), the status view and world directory, the Principal inbox and the
+first configuration directory. The threat is a process of the same user; a
+Resident cannot reach these directories.
+
+Owner and rule: the existing primitives (`withinDirectory`, `entryAt`,
+`openBeneath`, `ensureDirectory`, `removeOwnedTree`, `removeOwnedFile`), with two
+held-parent variants added so a caller that checked an entry acts on the same
+one: `observeImmutableEntry` and `writeExclusiveFsyncedEntry` (the fault seams
+are unchanged). The transport spool holds its staging directory for its life and
+reopens its file only beneath it, proving the inode it hashed. The architecture
+rule `state-tree-held-parent` (`scripts/architecture/rules/state-tree-rules.mjs`)
+refuses a path-taking fs mutation anywhere in `src/` except through `entryAt(...)`,
+on a descriptor, in the three primitives, or in a file whose effects are outside
+the state tree, each named with its reason (run root sockets and lock, the relay
+socket, the CLI's and the extension's own temporaries). Reads that decide a write
+were moved under the same held parent where they pair with one (generation
+reuse, binding observation, rootfs identity files).
+
+Residual, stated: the quarantine's shell script addresses its mount targets by
+path inside its own private mount namespace.
+
+Oracles: `AV5: a spool whose staging path is replaced after sealing reads and
+removes only its own file`, `AV5: the real tree changes the state tree only
+through held parents`, and the rule's own accept/reject tests.
+
+### The pass's own evidence
+
+Mutants (one minimal reversion of each fix, on the disposable account): 19 in
+all; 18 fail their card's oracles. The survivor is equivalent by construction:
+with AV1's slot validation, addresses placed before rather than after `--` reach
+the same CLI parse. Two first-run results were corrected rather than accepted:
+the AV4 session trap fired on the directory's own `realpath` (a check-then-open
+reader then refused by accident), and an AV4 mutant did not compile; both were
+redone and are killed. The AV5 path-taking reversions are killed by the rule
+running against the real tree, not by the architecture gate's stale-LOC check.
+
+Review ledger: every production file has now been read in full; files a card
+changed carry that card's oracles, files read and left unchanged carry the
+tests whose loaded module closure contains them (`review-notes.json`, `by:
+AV-review`). NOT_REVIEWED is 0. The verdict is still not approved: power loss,
+a real provider and CI have not run, and each needs the user.

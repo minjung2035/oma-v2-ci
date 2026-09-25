@@ -2,9 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "NOT_REVIEWED": 139,
-  "CHANGED_WITH_ORACLE": 75,
-  "READ_UNCHANGED": 8
+  "READ_UNCHANGED": 127,
+  "CHANGED_WITH_ORACLE": 95
  },
  "lanes": {
   "fast": "PASS",
@@ -21,23 +20,59 @@
   {
    "path": "implementation/contracts.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P1",
+    "P10",
+    "P13",
+    "P14",
+    "P15",
+    "P17",
+    "P19",
+    "P23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "implementation/schema-v1.sql",
    "primary": "WP04",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P01",
+    "P02",
+    "P05",
+    "R38",
+    "V01A",
+    "V01B",
+    "V31A",
+    "V31B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "implementation/systemd/broker.service.in",
    "primary": "WP03",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUD-1",
+    "AUD-2",
+    "AUD-3",
+    "AUD-4",
+    "AUD-5",
+    "AUD-6",
+    "AUD-7",
+    "AUD-8"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "implementation/systemd/principal-relay.service.in",
@@ -54,9 +89,21 @@
   {
    "path": "implementation/systemd/principal.path.in",
    "primary": "WP03",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CREATE-003",
+    "LIFE-007",
+    "LIFE-009",
+    "REC-001",
+    "REC-007",
+    "SEQ-002",
+    "T13",
+    "T36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "implementation/systemd/reconcile.service.in",
@@ -73,16 +120,40 @@
   {
    "path": "implementation/systemd/reconcile.timer.in",
    "primary": "WP03",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CREATE-003",
+    "LIFE-007",
+    "LIFE-009",
+    "REC-001",
+    "REC-007",
+    "SEQ-002",
+    "T13",
+    "T36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "implementation/systemd/resident.path.in",
    "primary": "WP03",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CREATE-003",
+    "D03",
+    "LIFE-007",
+    "LIFE-009",
+    "P01",
+    "P02",
+    "P05",
+    "REC-001"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "implementation/systemd/resident.service.in",
@@ -101,15 +172,28 @@
   {
    "path": "src/authority.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "LIFE-008",
+    "LOC-008",
+    "P08",
+    "R02",
+    "R13",
+    "R36",
+    "SEQ-002"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/broker.ts",
    "primary": "WP21",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV5",
     "WP03",
     "WP07",
     "WP21",
@@ -118,6 +202,7 @@
     "WP26"
    ],
    "oracles": [
+    "AV5",
     "V03A",
     "V03B",
     "V07A",
@@ -148,9 +233,17 @@
   {
    "path": "src/broker/connection.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R14",
+    "R21",
+    "R36",
+    "V18B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/broker/internal-dispatcher.ts",
@@ -170,9 +263,15 @@
   {
    "path": "src/broker/logs.ts",
    "primary": "WP23",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F3",
+    "VIEW-002"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/broker/peer-authenticator.ts",
@@ -189,23 +288,49 @@
   {
    "path": "src/broker/peer-pin.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R14",
+    "R21",
+    "R36",
+    "V18B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/broker/principal-endpoint.ts",
    "primary": "WP06",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "V05B",
+    "V08B",
+    "V09B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/broker/process-ancestry.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "V05B",
+    "V08B",
+    "V09B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/broker/public-dispatcher.ts",
@@ -228,130 +353,242 @@
   {
    "path": "src/broker/replies.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F1",
+    "F3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/broker/transport-spool.ts",
    "primary": "WP22",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV5"
+   ],
+   "oracles": [
+    "AV5"
+   ]
   },
   {
    "path": "src/cli.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T117",
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/cli/arguments.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/cache-codec.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "F2",
+    "R32",
+    "REC-007",
+    "V26B",
+    "WP26"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/cli/commands/agent.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/commands/context.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/commands/integrate.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/commands/logs.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/commands/routes.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/commands/send.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/commands/status.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/commands/submit.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/effects.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/cli/effects/context.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T119",
+    "V10C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/cli/effects/mail.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T119",
+    "V10C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/cli/effects/submit.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T119",
+    "V10C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/cli/exit.ts",
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV1",
     "WP26"
    ],
    "oracles": [
+    "AV1",
     "V26A",
     "V26B",
     "V26C"
@@ -360,9 +597,21 @@
   {
    "path": "src/cli/request-intent.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "CTX-001",
+    "CTX-002",
+    "D05",
+    "F2",
+    "R01",
+    "T119",
+    "V10C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/cli/request-service.ts",
@@ -380,9 +629,15 @@
   {
    "path": "src/cli/transport.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F4",
+    "T114"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/config.ts",
@@ -420,10 +675,12 @@
    "primary": null,
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV5",
     "WP13",
     "WP14"
    ],
    "oracles": [
+    "AV5",
     "V13A",
     "V13B",
     "V13C",
@@ -449,37 +706,90 @@
   {
    "path": "src/config/policy.ts",
    "primary": "WP19",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R13"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/diagnostics/files.ts",
    "primary": "WP23",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P6",
+    "P7",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3",
+    "PRE-4",
+    "PRE-5",
+    "PRE-6"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/diagnostics/integrity.ts",
    "primary": "WP23",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P6",
+    "P7",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3",
+    "PRE-4",
+    "PRE-5",
+    "PRE-6"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/diagnostics/ledger.ts",
    "primary": "WP23",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P6",
+    "P7",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3",
+    "PRE-4",
+    "PRE-5",
+    "PRE-6"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/diagnostics/mail.ts",
    "primary": "WP23",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P6",
+    "P7",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3",
+    "PRE-4",
+    "PRE-5",
+    "PRE-6"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/domain/admission.ts",
@@ -499,44 +809,84 @@
   {
    "path": "src/domain/canonical-json.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P0",
+    "P2"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/capabilities.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV5",
+    "R02",
+    "V29A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/child-policy.ts",
    "primary": "WP19",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R13"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/context-policy.ts",
    "primary": "WP18",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R21",
+    "V18A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/deployment.ts",
    "primary": "WP31",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "LOC-003",
+    "PR-002",
+    "REC-007",
+    "T100",
+    "T101",
+    "T102",
+    "T103"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/domain/derived.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV3"
+   ],
+   "oracles": [
+    "AV3"
+   ]
   },
   {
    "path": "src/domain/errors.ts",
@@ -553,51 +903,112 @@
   {
    "path": "src/domain/exhaustive.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/domain/identifiers.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1",
+    "P2.5",
+    "R03",
+    "R36",
+    "V16A",
+    "V16B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/integer-fields.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P1",
+    "R19",
+    "R26",
+    "T111",
+    "T112",
+    "V01A",
+    "V01B",
+    "V04"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/domain/limits.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R02"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/lineage.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R13"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/mail-values.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV1"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/persisted-formats.ts",
    "primary": "WP04",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "GIT-006",
+    "ID-003",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/domain/request-identity.ts",
@@ -624,34 +1035,72 @@
   {
    "path": "src/domain/spec-identity.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "AUD-1",
+    "AUD-2",
+    "AUD-3",
+    "AUD-4",
+    "AUD-5",
+    "AUD-6",
+    "AUD-7"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/domain/tool-surface.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F3",
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T111",
+    "T112",
+    "T99"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/durable.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "P1",
+    "P2.5",
+    "P3",
+    "PI-002",
+    "R28"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/entry/broker.ts",
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV5",
     "WP03",
     "WP21",
     "WP22"
    ],
    "oracles": [
+    "AV5",
     "V03A",
     "V03B",
     "V21A",
@@ -675,15 +1124,22 @@
   {
    "path": "src/entry/module-conformance.ts",
    "primary": "WP31",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
   },
   {
    "path": "src/entry/oma.ts",
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV3",
+    "AV5",
     "WP03",
     "WP08",
     "WP09",
@@ -695,6 +1151,8 @@
     "WP28"
    ],
    "oracles": [
+    "AV3",
+    "AV5",
     "V03A",
     "V03B",
     "V08A",
@@ -734,16 +1192,25 @@
   {
    "path": "src/extension/batch-view.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/extension/cli-process.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/extension/delivery.ts",
@@ -760,51 +1227,120 @@
   {
    "path": "src/extension/inference-bridge.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T92",
+    "T96",
+    "T97",
+    "T99"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/extension/mail-tools.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV1"
+   ],
+   "oracles": [
+    "AV1"
+   ]
   },
   {
    "path": "src/extension/principal-channel.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T119",
+    "T92",
+    "T96",
+    "T97"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/extension/shared.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T92",
+    "T96",
+    "T97",
+    "T99"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/extension/tool-surface.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T100",
+    "T101",
+    "T102",
+    "T103",
+    "T92",
+    "T96",
+    "T97",
+    "T99"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/extension/workspace-guard.ts",
    "primary": "WP22",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/frame.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "AUTH-002",
+    "AUTH-003"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/git.ts",
@@ -821,23 +1357,59 @@
   {
    "path": "src/git/canonical-command.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "T53"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/git/context-mirror.ts",
    "primary": "WP18",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "T53"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/git/context-publication.ts",
    "primary": "WP18",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "R16",
+    "R20",
+    "R33",
+    "S-03",
+    "S-05",
+    "T23",
+    "T39"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/git/context-repository.ts",
@@ -875,9 +1447,18 @@
   {
    "path": "src/git/integration-policy.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R19",
+    "V01A",
+    "V01B",
+    "V24A",
+    "V24B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/git/integration.ts",
@@ -897,30 +1478,58 @@
   {
    "path": "src/git/observe.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R19",
+    "R20",
+    "R36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/git/paths.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/git/publication.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R20"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/git/quarantine.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV5"
+   ],
+   "oracles": [
+    "AV5"
+   ]
   },
   {
    "path": "src/git/submit.ts",
@@ -943,30 +1552,75 @@
   {
    "path": "src/hash.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "AUTH-003",
+    "B1"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/ids.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "CREATE-003",
+    "CTX-003",
+    "DB-005",
+    "DB-009",
+    "F1",
+    "FS-005",
+    "ID-002"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/leaf.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "LOC-003",
+    "R36",
+    "REC-007",
+    "UNIT-004"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/lifecycle.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "AUD-1"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/lifecycle/actions.ts",
@@ -983,28 +1637,46 @@
   {
    "path": "src/lifecycle/contracts.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "AV4",
+    "F1",
+    "MAIL-001",
+    "P3",
+    "PRE-1",
+    "PRE-2",
+    "PRE-3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/lifecycle/create-publication.ts",
    "primary": "WP19",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV4"
+   ],
+   "oracles": [
+    "AV4"
+   ]
   },
   {
    "path": "src/lifecycle/create.ts",
    "primary": "WP19",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV4",
     "WP17",
     "WP19",
     "WP20",
     "WP21"
    ],
    "oracles": [
+    "AV4",
     "V17A",
     "V17B",
     "V19A",
@@ -1018,23 +1690,40 @@
   {
    "path": "src/lifecycle/policy.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R25",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/lifecycle/registry-operations.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F1",
+    "P3",
+    "R25"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/lifecycle/workspace.ts",
    "primary": "WP19",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV4"
+   ],
+   "oracles": [
+    "AV4"
+   ]
   },
   {
    "path": "src/mail.ts",
@@ -1060,25 +1749,44 @@
   {
    "path": "src/mail/addresses.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "P6",
+    "R16",
+    "R20",
+    "R33",
+    "S-03",
+    "S-05",
+    "T23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/mail/batch-policy.ts",
    "primary": "WP06",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R24"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/mail/batches.ts",
    "primary": "WP06",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV5",
     "WP06"
    ],
    "oracles": [
+    "AV5",
     "V06A",
     "V06B"
    ]
@@ -1086,16 +1794,30 @@
   {
    "path": "src/mail/facts.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ERR-001",
+    "P01",
+    "P02",
+    "P05"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/mail/headers.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/mail/materializer.ts",
@@ -1112,72 +1834,154 @@
   {
    "path": "src/mail/reconcile.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/mail/routing.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R31"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/mail/serialize.ts",
    "primary": "WP20",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ERR-001"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/module-ports.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P17/P23",
+    "P23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
   },
   {
    "path": "src/pi-extension.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "D05",
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "PI-002",
+    "R03",
+    "R28",
+    "T100"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/ports/ledger.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P23",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/ports/runtime.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "P23",
+    "PI-002",
+    "R28",
+    "T113",
+    "V10A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/process/async.ts",
    "primary": "WP10",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R37",
+    "REC-007",
+    "T106",
+    "T114",
+    "T115",
+    "T116",
+    "T117",
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/process/command.ts",
    "primary": "WP10",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R37",
+    "V17A",
+    "V17B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/process/policies.ts",
    "primary": "WP24",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R19"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/process/preparation.ts",
@@ -1194,23 +1998,54 @@
   {
    "path": "src/process/run.ts",
    "primary": "WP10",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P0",
+    "R19",
+    "R36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/protocol/batch-view.ts",
    "primary": "WP06",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "P23",
+    "PI-002",
+    "R28",
+    "T113",
+    "V10A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/protocol/byte-queue.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "D03",
+    "ID-001",
+    "PR-002",
+    "R14",
+    "R37",
+    "V05A",
+    "V05B",
+    "V26C"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/protocol/channel.ts",
@@ -1228,23 +2063,46 @@
   {
    "path": "src/protocol/host-channel.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T115",
+    "T119",
+    "T120",
+    "V05B",
+    "V08B",
+    "V09B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/protocol/jsonl.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R28",
+    "R35"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/protocol/log-response.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F3",
+    "F4"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/protocol/methods.ts",
@@ -1272,16 +2130,32 @@
   {
    "path": "src/protocol/principal-credential.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "V05B",
+    "V08B",
+    "V09B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/protocol/receipt-codec.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P2",
+    "P9",
+    "REC-007"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/protocol/receipts.ts",
@@ -1298,23 +2172,49 @@
   {
    "path": "src/protocol/request-codec.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P1",
+    "P2.5",
+    "P3",
+    "P6",
+    "R21",
+    "REC-007"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/protocol/response-codec.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F3",
+    "R15"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/protocol/run-lease.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R28",
+    "T113",
+    "T117",
+    "V27A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/protocol/status-view.ts",
@@ -1350,9 +2250,15 @@
   {
    "path": "src/reconcile/operations.ts",
    "primary": "WP21",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R29",
+    "R36"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/request-cache.ts",
@@ -1370,9 +2276,14 @@
   {
    "path": "src/rpc-client.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R28"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/runner.ts",
@@ -1404,9 +2315,15 @@
   {
    "path": "src/runtime/broker-lifetime.ts",
    "primary": "WP10",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "R17",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/runtime/broker-supervisor.ts",
@@ -1423,9 +2340,21 @@
   {
    "path": "src/runtime/deployment-manifest.ts",
    "primary": "WP31",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "B1",
+    "C1"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/runtime/engine-auth.ts",
@@ -1442,9 +2371,21 @@
   {
    "path": "src/runtime/extension-integrity.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV3",
+    "R28",
+    "REC-007",
+    "T106",
+    "T113",
+    "V08A",
+    "V08B",
+    "V10A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/runtime/host-tenure.ts",
@@ -1463,9 +2404,11 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV2",
     "WP27"
    ],
    "oracles": [
+    "AV2",
     "V27A",
     "V27B"
    ]
@@ -1512,10 +2455,12 @@
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV3",
     "WP10",
     "WP27"
    ],
    "oracles": [
+    "AV3",
     "V10A",
     "V10C",
     "V27A",
@@ -1544,18 +2489,32 @@
   {
    "path": "src/runtime/process-lock.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "A02",
+    "P01",
+    "P02",
+    "P05",
+    "P08",
+    "R17",
+    "T115",
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/runtime/provision.ts",
    "primary": "WP16",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV5",
     "WP16"
    ],
    "oracles": [
+    "AV5",
     "V16A",
     "V16B"
    ]
@@ -1563,9 +2522,13 @@
   {
    "path": "src/runtime/resident-rootfs.ts",
    "primary": "WP27",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV5"
+   ],
+   "oracles": [
+    "AV5"
+   ]
   },
   {
    "path": "src/runtime/run-registry.ts",
@@ -1585,16 +2548,33 @@
   {
    "path": "src/runtime/society-lease.ts",
    "primary": "WP25",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "LOC-003",
+    "PR-002",
+    "REC-007",
+    "T115",
+    "T119",
+    "TUI-004"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/runtime/supervision-channel.ts",
    "primary": "WP03",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T115",
+    "T119"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/sandbox.ts",
@@ -1611,39 +2591,89 @@
   {
    "path": "src/storage/batch-view.ts",
    "primary": "WP06",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AUTH-003",
+    "R16",
+    "R20",
+    "R33",
+    "S-03",
+    "S-05",
+    "T118",
+    "T23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/storage/contained-fs.ts",
    "primary": "WP05",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV5",
+    "R14",
+    "R20",
+    "R21",
+    "S-06",
+    "V05A",
+    "V05B",
+    "V18A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/storage/context-files.ts",
    "primary": "WP18",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/storage/context-snapshot.ts",
    "primary": "WP18",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-003",
+    "CTX-004",
+    "DB-009",
+    "ERR-001",
+    "GIT-006",
+    "INT-003",
+    "R01",
+    "R37"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/storage/context-stream.ts",
    "primary": "WP18",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV5",
     "WP18"
    ],
    "oracles": [
+    "AV5",
     "V18A",
     "V18B"
    ]
@@ -1653,10 +2683,12 @@
    "primary": "WP05",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV4",
     "WP05",
     "WP06"
    ],
    "oracles": [
+    "AV4",
     "V05A",
     "V05B",
     "V06A",
@@ -1666,39 +2698,81 @@
   {
    "path": "src/storage/diagnostic-snapshot.ts",
    "primary": "WP23",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P6",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/storage/directory.ts",
    "primary": "WP17",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "AV5",
+    "R14",
+    "R20",
+    "R21",
+    "S-06",
+    "V05A",
+    "V05B",
+    "V18A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/storage/durable-fs.ts",
    "primary": "WP05",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV5"
+   ],
+   "oracles": [
+    "AV5"
+   ]
   },
   {
    "path": "src/storage/facets.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "GIT-006",
+    "ID-003",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/storage/immutable-file.ts",
    "primary": "WP20",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV5",
     "WP20"
    ],
    "oracles": [
+    "AV5",
     "V20A",
     "V20B"
    ]
@@ -1718,30 +2792,63 @@
   {
    "path": "src/storage/operation-codec.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P1",
+    "P2.5",
+    "P3",
+    "P6",
+    "R21",
+    "V04A"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/storage/operation-journal.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P3"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/storage/operation-transitions.ts",
    "primary": "WP29",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "GIT-006",
+    "ID-003",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/storage/paths.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "AV3"
+   ],
+   "oracles": [
+    "AV3"
+   ]
   },
   {
    "path": "src/storage/preaccept-artifact.ts",
@@ -1776,23 +2883,46 @@
   {
    "path": "src/storage/receipt-projector.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "F1",
+    "P23"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/storage/rows.ts",
    "primary": "WP04",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "GIT-006",
+    "ID-003",
+    "P2.5",
+    "P6",
+    "R21",
+    "R36",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/storage/staged-tree.ts",
    "primary": "WP17",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "S-06"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/storage/submit-spool.ts",
@@ -1809,16 +2939,40 @@
   {
    "path": "src/storage/transaction.ts",
    "primary": "WP04",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "P4",
+    "T14",
+    "T15",
+    "T16",
+    "T17",
+    "T18",
+    "T19",
+    "T20"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/storage/transitions.ts",
    "primary": "WP06",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "DB-009",
+    "GIT-006",
+    "ID-003",
+    "P9",
+    "R10",
+    "R21",
+    "V04A",
+    "V04B"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/store.ts",
@@ -1862,16 +3016,39 @@
   {
    "path": "src/tui/exit.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "D05",
+    "T117",
+    "T119",
+    "V10C",
+    "V27A",
+    "VAL-002",
+    "WP15.03"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/tui/keys.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/tui/limits.ts",
@@ -1903,9 +3080,21 @@
   {
    "path": "src/tui/prompt.ts",
    "primary": "WP09",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
    "path": "src/tui/screen.ts",
@@ -1924,9 +3113,11 @@
    "primary": "WP09",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV3",
     "WP09"
    ],
    "oracles": [
+    "AV3",
     "V09A",
     "V09B",
     "V09C"
@@ -1993,9 +3184,14 @@
   {
    "path": "src/tui/transcript.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "TUI-023"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/tui/transport.ts",
@@ -2027,23 +3223,59 @@
   {
    "path": "src/tui/view/index.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/tui/view/labels.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/tui/view/layout.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T114",
+    "T120",
+    "T92",
+    "T96",
+    "T97",
+    "TUI-002",
+    "TUI-007",
+    "TUI-010"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
   },
   {
    "path": "src/tui/view/notice.ts",
@@ -2078,9 +3310,17 @@
   {
    "path": "src/tui/view/text.ts",
    "primary": "WP28",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "T92",
+    "T96",
+    "T97",
+    "TUI-007"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/units.ts",
@@ -2141,18 +3381,32 @@
   {
    "path": "src/validate.ts",
    "primary": "WP26",
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": []
+   "status": "READ_UNCHANGED",
+   "by": [
+    "AV-review"
+   ],
+   "oracles": [
+    "CTX-001",
+    "CTX-002",
+    "DB-009",
+    "ID-002",
+    "M-003",
+    "MAIL-003",
+    "MAIL-011",
+    "P9"
+   ],
+   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
    "path": "src/views.ts",
    "primary": "WP23",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "AV5",
     "WP23"
    ],
    "oracles": [
+    "AV5",
     "V23A",
     "V23B"
    ]

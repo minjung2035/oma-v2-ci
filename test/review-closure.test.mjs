@@ -11,6 +11,16 @@ import { LEDGER, ORACLE_MAP, approval, oracleFindings, reviewFindings } from "..
 
 const ledger = () => JSON.parse(readFileSync(LEDGER, "utf8"));
 const problems = value => reviewFindings(".", value).map(finding => finding.problem);
+const recount = value => { const counted = {}; for (const entry of value.files) counted[entry.status] = (counted[entry.status] ?? 0) + 1; value.summary = counted; return value; };
+/** The committed ledger with one reviewed file put back to NOT_REVIEWED: the
+ * oracles below hold whether or not the tree still has unreviewed files. */
+const withUnreviewed = () => {
+  const value = ledger();
+  const index = value.files.findIndex(entry => entry.status === "READ_UNCHANGED");
+  Object.assign(value.files[index], { status: "NOT_REVIEWED", by: [], oracles: [] });
+  delete value.files[index].note;
+  return { value: recount(value), index };
+};
 
 test("V32A: the committed ledger accounts for every current and baseline file, with evidence for every review", () => {
   assert.deepEqual(reviewFindings("."), []);
@@ -21,9 +31,10 @@ test("V32A: the committed ledger accounts for every current and baseline file, w
 });
 
 test("V32A: approval is refused while files are unreviewed or a required lane has not run", async () => {
-  const verdict = approval(".", undefined, await oracleFindings("."));
+  const oracles = await oracleFindings(".");
+  const verdict = approval(".", undefined, oracles);
   assert.equal(verdict.approved, false);
-  assert.ok(verdict.blockers.some(line => /production files not reviewed/.test(line)));
+  assert.ok(approval(".", withUnreviewed().value, oracles).blockers.some(line => /production files not reviewed/.test(line)));
   for (const lane of ["powercut", "provider", "ci"]) assert.ok(verdict.blockers.some(line => line.startsWith(`lane ${lane}:`)), lane);
   for (const id of ["V05C", "V30B", "V32B"]) assert.ok(verdict.blockers.some(line => line.startsWith(`oracle ${id}:`)), id);
 });
@@ -41,9 +52,8 @@ test("V32A: every plan oracle is a test, or carried by tests an executed lane re
 });
 
 test("V32A: an assignment is not a review, and a claimed review needs real oracles", () => {
-  const base = ledger();
-  const index = base.files.findIndex(entry => entry.status === "NOT_REVIEWED");
-  assert.ok(index >= 0);
+  const { value: base, index } = withUnreviewed();
+  assert.equal(base.files[index].status, "NOT_REVIEWED");
   const edit = change => { const value = structuredClone(base); change(value); const counted = {};
     for (const entry of value.files) counted[entry.status] = (counted[entry.status] ?? 0) + 1; value.summary = counted; return value; };
   assert.ok(problems(edit(value => { value.files[index].status = "READ_UNCHANGED"; })).includes("reviewed by no work package"));
