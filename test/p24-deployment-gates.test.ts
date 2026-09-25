@@ -104,6 +104,8 @@ test("P02: canonical deployment manifest pins every selected byte independent of
     "dist/implementation/contracts.js": "export {};\n",
     "implementation/systemd/resident.path.in": "[Path]\n",
     "implementation/schema-v1.sql": "schema\n",
+    // AV16: the sandbox's `oma` command is pinned with the rest.
+    "dist/libexec/oma": "#!/bin/sh\n",
     "package.json": "{}",
     "package-lock.json": "{}",
   };
@@ -153,6 +155,7 @@ test("P02: installed broker refuses deployment mismatch BEFORE SQLite or unit ef
       "dist/implementation",
       "implementation/systemd",
       "implementation/schema-v1.sql",
+      "dist/libexec",
       "package.json",
       "package-lock.json",
     ]) {

@@ -470,3 +470,71 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     rmSync(work, { recursive: true, force: true });
   }
 });
+
+test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the installed CLI on the pinned Node", {
+  skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
+  timeout: 60000,
+}, async () => {
+  // A Resident's START tells it to run `oma send`, `oma submit HEAD`; the
+  // functional run found no `oma` and no `node` on the sandbox's PATH.
+  const work = mkdtempSync(join(tmpdir(), "oma-live-command-"));
+  let control: Server | null = null;
+  try {
+    const stateRoot = join(work, "s");
+    const runRoot = join(work, "r");
+    provisionSociety(stateRoot);
+    const actor = "alice";
+    const directories: ResidentDirectories = {
+      workspace: workspacePathAt(stateRoot, actor), home: join(agentRootPathAt(stateRoot, actor), "home"),
+      archive: join(stateRoot, "mail", "archive"), selfMail: join(stateRoot, "mail", "inboxes", actor),
+      view: runnerViewPathAt(stateRoot, actor), world: join(stateRoot, "world"),
+      projectGit: join(stateRoot, "repos", "project.git"), sessions: runnerSessionDirPathAt(stateRoot, actor),
+    };
+    for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
+    const leaseSocket = actorSocketPathAt(runRoot, actor, 1);
+    mkdirSync(dirname(leaseSocket), { recursive: true });
+    control = createServer(socket => { socket.destroy(); });
+    await new Promise<void>(resolve => { control!.listen(leaseSocket, () => { resolve(); }); });
+    const lease = decodeRunLease({ actor, incarnation: 1, socketHostPath: leaseSocket }, { actor, runRoot });
+    const runtime = resolvePiRuntime({ stateRoot, libdir: root });
+    const adapter = new PiAdapter({
+      actor, society: "live",
+      limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096 },
+      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      paths: {
+        piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
+        coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
+        workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
+        mailArchive: join(directories.archive, "cur"), batchView: directories.view, socket: leaseSocket,
+      },
+      confinement: {
+        host: {
+          rootfs: residentRootfsPath(stateRoot), libdir: root,
+          node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
+          pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
+          tmpBytes: 64 * 1024 * 1024,
+          checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
+            workspaceBytes: 1 << 24, stagingBytes: 1 << 24, checkTimeoutSeconds: 30 },
+          stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
+        },
+        lease, directories,
+      },
+    });
+    const plan = adapter.spawnPlan();
+    // The production plan, with a shell in the engine's place.
+    const at = plan.args.lastIndexOf("--");
+    const probe = spawnSync(plan.command, [...plan.args.slice(0, at + 1), "/bin/sh", "-c",
+      "command -v oma; command -v node; node --version; oma; echo \"exit=$?\""], { encoding: "utf8", timeout: 30000 });
+    const lines = `${probe.stdout}\n${probe.stderr}`;
+    assert.match(lines, /^\/opt\/oma\/dist\/libexec\/oma$/m, `oma is not on the sandbox's PATH: ${lines.slice(0, 600)}`);
+    assert.match(lines, /^\/opt\/oma-node\/node$/m, "node on the PATH is not the pinned Node");
+    assert.match(lines, new RegExp(`^${process.version.replace(/\./g, "\\.")}$`, "m"));
+    // The CLI itself ran: without arguments it prints its usage and exits 2 (CLI-003).
+    assert.doesNotMatch(lines, /not found|No such file/);
+    assert.match(lines, /^  oma submit <revision>/m);
+    assert.match(lines, /^exit=2$/m);
+  } finally {
+    await new Promise<void>(resolve => { if (control) control.close(() => { resolve(); }); else resolve(); });
+    rmSync(work, { recursive: true, force: true });
+  }
+});

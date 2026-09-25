@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { lstatSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 
@@ -18,6 +18,15 @@ const compiled = spawnSync(process.execPath, [tsc, "-p", join(root, "tsconfig.bu
   cwd: root, stdio: "inherit", timeout: 600000, killSignal: "SIGKILL",
 });
 if (compiled.error || compiled.signal || compiled.status !== 0) process.exit(compiled.status ?? 1);
+// AV16, CLI-001: the sandbox's `oma` command, written from its one owner.
+{
+  const { DEPLOYMENT_LAYOUT } = await import(pathToFileURL(join(output, "src/domain/deployment.js")).href);
+  const { modelCommandScript } = await import(pathToFileURL(join(output, "src/sandbox.js")).href);
+  const command = join(root, DEPLOYMENT_LAYOUT.modelCommand);
+  mkdirSync(dirname(command), { recursive: true });
+  writeFileSync(command, modelCommandScript(), { mode: 0o755 });
+  chmodSync(command, 0o755);
+}
 const checked = spawnSync(process.execPath, [join(root, "scripts/check-package.mjs"), "--root", root], {
   cwd: root, stdio: "inherit", timeout: 60000, killSignal: "SIGKILL",
 });

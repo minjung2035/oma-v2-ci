@@ -1,6 +1,7 @@
 // SB-001..006: argv composition is NOT kernel resource-enforcement evidence.
 // Only a decoded incarnation socket and this actor's host-owned mount roots enter the plan.
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { DEPLOYMENT_LAYOUT } from "./domain/deployment.js";
 import type { RunLease, SandboxPlan } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
 import { assertValidatedRunLease, trustedAbsolutePath, type ValidatedRunLease } from "./protocol/run-lease.js";
@@ -62,6 +63,15 @@ function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentD
       throw new StoreError("AUTH_FAILED", `resident ${key} mount does not match the trusted actor root`);
 }
 
+/** AV16, CLI-001: what `oma` is inside the sandbox -- the pinned Node running
+ * the installed model-facing CLI -- and the PATH that finds it (the pinned
+ * Node's directory too, so `node` is the pinned one). The build writes the
+ * script from here; the package check compares the installed one with it. */
+export function modelCommandScript(): string {
+  return `#!/bin/sh\n# CLI-001: the model-facing OMA command inside a Resident's sandbox.\nexec ${RESIDENT_PATHS.node} ${RESIDENT_PATHS.libdir}/${DEPLOYMENT_LAYOUT.cli} "$@"\n`;
+}
+export const RESIDENT_PATH_ENV = `${RESIDENT_PATHS.libdir}/${dirname(DEPLOYMENT_LAYOUT.modelCommand)}:${dirname(RESIDENT_PATHS.node)}:/usr/bin:/bin`;
+
 /** WP27: the one bubblewrap a confined engine is started through; the same
  * binary `spawnSandboxed` pins. A plan names it absolutely, because the
  * owned spawn that delivers a batch accepts no PATH lookup. */
@@ -101,7 +111,7 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     ...(inferenceSocketHost === undefined ? []
       : ["--ro-bind", inferenceSocketHost, RESIDENT_PATHS.inference]),
     "--symlink", `${RESIDENT_PATHS.view}/inbox.md`, "/inbox.md", "--clearenv",
-    "--setenv", "HOME", RESIDENT_PATHS.home, "--setenv", "PATH", "/usr/bin:/bin",
+    "--setenv", "HOME", RESIDENT_PATHS.home, "--setenv", "PATH", RESIDENT_PATH_ENV,
     ...setenvPairs(env),
     "--setenv", "OMA_FRAME_BYTES", String(limits.frameBytes),
     "--setenv", "OMA_BATCH_MAX_MESSAGES", String(limits.batchMaxMessages),

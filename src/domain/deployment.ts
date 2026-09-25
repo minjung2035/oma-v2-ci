@@ -12,6 +12,9 @@ export const DEPLOYMENT_LAYOUT = Object.freeze({
   // has OMA tools runs this same file; naming it once keeps the Principal's
   // and a Resident's engine pointed at one binary.
   cli: "dist/src/cli.js",
+  // AV16, CLI-001: the `oma` command a Resident runs in its sandbox. The build
+  // writes it from the sandbox's paths (src/sandbox.ts) and the manifest pins it.
+  modelCommand: "dist/libexec/oma",
   // TUI-002: `tui` is the host product entrypoint a Human runs. It has no
   // systemd unit, so it is absent from templateEntries by design.
   entries: Object.freeze({ broker: "dist/src/entry/broker.js", runner: "dist/src/entry/runner.js", host: "dist/src/entry/host.js", tui: "dist/src/entry/oma.js" }),
