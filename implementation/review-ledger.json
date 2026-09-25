@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 108,
-  "CHANGED_WITH_ORACLE": 116
+  "READ_UNCHANGED": 107,
+  "CHANGED_WITH_ORACLE": 117
  },
  "lanes": {
   "fast": "PASS",
@@ -1102,6 +1102,7 @@
     "AV20",
     "AV27",
     "AV28",
+    "AV31",
     "AV5",
     "WP03",
     "WP21",
@@ -1113,6 +1114,7 @@
     "AV20",
     "AV27",
     "AV28",
+    "AV31",
     "AV5",
     "V03A",
     "V03B",
@@ -2387,15 +2389,13 @@
   {
    "path": "src/runtime/broker-lifetime.ts",
    "primary": "WP10",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "AV31"
    ],
    "oracles": [
-    "R17",
-    "R37"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "AV31"
+   ]
   },
   {
    "path": "src/runtime/broker-supervisor.ts",
