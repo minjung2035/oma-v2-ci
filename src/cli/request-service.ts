@@ -140,7 +140,7 @@ export async function replayOrSend(
     if (!decoded.ok) fail(`invalid mutation receipt: ${decoded.reason}; --request ${key}`, 3);
     settle(decoded.value, key);
   }
-  return finishFailure(reply);
+  return finishFailure(reply, "", key);
 }
 
 /** A corrupt/unavailable cache never reaches a source builder. */

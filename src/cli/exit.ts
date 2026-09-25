@@ -31,10 +31,15 @@ export function usage(): never {
   process.exit(2);
 }
 
-export function finishFailure(reply: { error?: unknown } | undefined, prefix = ""): never {
+/** `key` is the request the failure answers, when there is one. ERR-001: the
+ * caller branches on retry, and "same-key" says this request may stand
+ * accepted -- asked again under a new key it would be a second request. */
+export function finishFailure(reply: { error?: unknown } | undefined, prefix = "", key?: string): never {
   const decoded = decodeFailure(reply?.error);
-  if (!decoded.ok) fail(`${prefix}invalid broker failure: ${decoded.reason}`, 3);
-  fail(`${prefix}${decoded.value.code}: ${decoded.value.message}`, errorExit(decoded.value.code));
+  if (!decoded.ok) fail(`${prefix}invalid broker failure: ${decoded.reason}${key === undefined ? "" : `; --request ${key}`}`, 3);
+  const again = key !== undefined && decoded.value.retry === "same-key"
+    ? ` (재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요)` : "";
+  fail(`${prefix}${decoded.value.code}: ${decoded.value.message}${again}`, errorExit(decoded.value.code));
 }
 
 export function finishReceipt(receipt: Receipt, key: string): never {

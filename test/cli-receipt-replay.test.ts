@@ -218,3 +218,30 @@ test("WP26: a receipt the request cache cannot record is still shown, with the k
     assert.match(contradicted.stderr, /CACHE_CORRUPT.*--request x/);
   } finally { await q.close(); c.close(); }
 });
+
+/* AV22 -- ERR-001, CLI-003: the sixth functional run. The Principal's second
+ * agent.create was accepted and then answered BROKER_UNAVAILABLE (retry
+ * same-key); the CLI printed "BROKER_UNAVAILABLE: BROKER_UNAVAILABLE" and no
+ * key, so the model asked again under a new one -- the one thing the error
+ * table forbids for that code. A failure the broker says to retry under the
+ * same key names that key; one it says never to retry does not. */
+test("AV22 / ERR-001, CLI-003: a failure to retry under the same key names the key", { timeout: 30_000 }, async t => {
+  for (const [failure, exit, guided] of [
+    [{ code: "BROKER_UNAVAILABLE", message: "BROKER_UNAVAILABLE", retry: "same-key" }, 3, true],
+    [{ code: "CAPABILITY_DENIED", message: "CAPABILITY_DENIED", retry: "never" }, 2, false],
+  ] as const) {
+    await t.test(failure.code, async () => {
+      const home = mkdtempSync(join(tmpdir(), "oma-av22-"));
+      const broker = await peer(home, () => ({ ok: false, error: failure }));
+      try {
+        const key = "av22-first-ask";
+        const result = await run(home, ["follow", "commons", "--request", key]);
+        const stderr = result.stderr;
+        assert.equal(result.code, exit, stderr);
+        assert.deepEqual(broker.seen.map(request => request.method), ["route.follow"]);
+        if (guided) assert.match(stderr, new RegExp(`--request ${key}; 새 key로 재실행하지 마세요`), "the key to ask again was not given");
+        else assert.doesNotMatch(stderr, /--request/, "a failure never to retry was given a key to retry with");
+      } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
+    });
+  }
+});
