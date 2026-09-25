@@ -1338,10 +1338,12 @@
    "primary": "WP22",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV13"
+    "AV13",
+    "AV25"
    ],
    "oracles": [
-    "AV13"
+    "AV13",
+    "AV25"
    ]
   },
   {
@@ -2444,10 +2446,12 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV17",
+    "AV24",
     "WP10"
    ],
    "oracles": [
     "AV17",
+    "AV24",
     "V10A",
     "V10C"
    ]
