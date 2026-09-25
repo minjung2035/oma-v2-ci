@@ -470,7 +470,7 @@ process or owner. Budget: the bound it enforces (encoded bytes unless said).
 | `src/cli/request-intent.ts` | explicit argv vs frozen request | compares only arguments with defined semantics | no conflict with the frozen intent |
 | `src/cli/cache-codec.ts`, `src/request-cache.ts` | files in `~/.local/state/oma/requests` | absent / present / corrupt / unavailable kept apart; no-replace publication; body bytes and digest; one receipt lock per key | a frozen request, or a receipt ordered after the last one |
 | `src/cli/request-service.ts` | all of the above | resend only after decoded REQUEST_NOT_FOUND, with frozen params and body | a broker receipt shown with its key |
-| `src/cli/effects*.ts`, `src/cli/commands/*.ts` | local files, Git, argv | no-follow reads, digest of streamed bundles, random private temp dirs | a fresh request built once, before freezing |
+| `src/cli/effects*.ts`, `src/cli/commands/*.ts` | local files, Git, argv | no-follow reads of regular files only, a named file (`--file`, `--reply`) bounded by the CLI's request frame (`readLocalFile`, AV8), digest of streamed bundles, random private temp dirs | a fresh request built once, before freezing |
 
 WP26.02 — transport owns frames, connection and one-shot task lifetime; authority is
 read again at dispatch (`validatePublicRequest` runs for stream preflight and again
@@ -861,7 +861,7 @@ Counterexamples tried against the finished product:
   refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
   controls and zero-width clusters.
 
-## Whole-codebase adversarial pass (after v9) -- AV1..AV7 as applications of INV01..INV12
+## Whole-codebase adversarial pass (after v9) -- AV1..AV8 as applications of INV01..INV12
 
 Every production file was read against the trust boundaries: a Resident (its
 actor socket, and the workspace, home and session directory its sandbox writes),
@@ -872,7 +872,7 @@ applied and was not honoured; it is fixed through that invariant's owner (an
 existing one, or one extended), every new helper meets the abstraction
 acceptance criterion there (it removes an independent decision, a premise a
 caller must remember, or a resource that can be missed), and the WP32.02 and
-WP29 tables below name the owners and regressions. "AV1..AV7" are regression
+WP29 tables below name the owners and regressions. "AV1..AV8" are regression
 ids, like R38 or T118, not principles. The requirement links are in
 `implementation/source-owners.json` (CLI-001, PR-004, FS-003, INF-007, FS-005,
 SB-006).
@@ -886,6 +886,7 @@ SB-006).
 | AV5 | spool, quarantine staging, mailbox move, rootfs, configuration generations, provisioning, status view, world directory, Principal inbox named paths again after checking them | FS-005 (no-follow, exclusive create, no agent symlink followed) as architecture section 4 states it (the parent is resolved once and the path never said again) -- INV09 applied to the namespace: a check and an effect that are two walks guarantee nothing about each other | the storage primitives (`withinDirectory`, `entryAt`, `openBeneath`, `ensureDirectory`, `removeOwnedTree`/`removeOwnedFile`), extended by `observeImmutableEntry` and `writeExclusiveFsyncedEntry` so a caller acts on the entry it checked; the `state-tree-held-parent` rule holds `src/` to them | the second walk at each site; the rule removes the need to remember the discipline per file | AV5 (four tests) |
 | AV6 | found by the v11 kernel lane, not by reading: under load a live Resident's `git.submit` was refused CAPABILITY_DENIED (retry never). Reproduced (1 in about 20 loaded runs) and caught in the act: `poll` on the peer's pidfd returned -1 with errno EINTR in the same millisecond as the refusal. The same collapse in /proc: `processIdentity` returned null for any read failure, and the Principal endpoint retired the registration -- connections cut, credential dropped -- on that null | INV02 (unknown is not dead; an observation failure is not a licence to delete): a `poll` a pending SIGCHLD interrupted, and a /proc read that failed with EMFILE, were each read as the process having ended. `lockFileDescriptor` and `holdAbstractName` in the same leaf already keep the third answer; the pidfd poll did not | `pidfdLiveness` (leaf: running, exited, failed; EINTR asked again at most `PIDFD_POLL_ATTEMPTS` times, INV10; POLLNVAL is failed), and `processEnded` (process-ancestry: ended only when /proc names no such process or another start time). Authority still needs an answered "running" (INV06); retirement needs an answered "ended" | the reading of an interrupted or failed observation as an exit, at the one primitive for each question; the two inline "has the engine ended" expressions in `principal-endpoint` become one owner | AV6 (two tests) |
 | AV7 | AV6 was missed by the line-by-line reading, so INV02 was swept again through every observation whose failure is swallowed into a value (catches returning a definite value, defaults kept when a read fails, `existsSync`). Where that value decided an effect: the configuration collection read an unreadable journal as an empty history and removed every generation but the current, and removed the actual previous generation when its record was lost (a crash between the manifest's rename and the append); an existing generation that could not be read was reported as holding other bytes (STORE_CORRUPT); storage admission measured a root it could not see as 0 bytes; the Dashboard counted an unlistable Principal mailbox as 0 waiting and the Mail screen showed it as "no mail" | INV02 (an observation failure is not a licence to delete, and unavailable is not conflicting or empty); INV03 for the journal: the manifest's commit point is the fact, the journal only its order; arch §23.5 and TUI-012 ("never convert a missing observation into 0") for the display | `recordCommitted` writes back the generation the manifest named before (the committer knows it exactly) when the journal does not end with it; `generationsToKeep` removes a generation only when the journal vouches for it; `sameBytes` answers only for missing, linked or different files; `observedStorageBytes` walks its root like any entry; the mailbox read (`readMailbox`/`unreadCount`) carries "could not be read" to `DashboardData.unread` (null) and the Mail screen | a journal or directory that could not be read standing in for an empty one, at each owner; the old catch-all defaults | AV7 (six tests) |
+| AV8 | the same sweep for INV10 and for what the records promise: WP26 records CLI effects as "no-follow reads". The bundle and context reads were; the file named by `--file` (send, submit, agent brief) and `--reply` was read through a link and without a bound, so a link given as the body put the file it pointed at in the request, and `/dev/zero` was read until memory ran out. The Principal's own tools cannot make a link (bash is excluded), so no model path reached it; a person's CLI and a Human-installed tool could | FS-005 (no agent symlink followed to a host file), INV10 (every I/O bounded), INV12 (the WP26 inventory claimed a bound the code did not keep) | `readLocalFile` in `cli/effects.ts`: O_NOFOLLOW, a regular file, at most `cliFrameBytes()` -- the one owner of the CLI's frame, now shared with the transport (INV04) -- for both `readBody` and the reply source | the link-following, unbounded reads at the two call sites; the frame value computed inside the transport alone | AV8 (one test) |
 
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only
@@ -914,8 +915,8 @@ the previous generation. Both are the price of not deleting on an unknown.
 
 ### The pass's own evidence
 
-Mutants (one minimal reversion of each fix, on the disposable account): 37 in
-all, 36 fail their regression. The survivor is equivalent by construction: with
+Mutants (one minimal reversion of each fix, on the disposable account): 41 in
+all, 40 fail their regression. The survivor is equivalent by construction: with
 AV1's slot validation, addresses placed before rather than after `--` reach the
 same CLI parse. Results that were corrected rather than accepted: the first AV4
 session trap fired on the directory's own `realpath` (a check-then-open reader
@@ -941,7 +942,9 @@ record not written back, an unreadable journal as an empty history, a vouched
 journal keeping only the current, an unrecorded generation removed, an
 unreadable generation as other bytes, an unseen storage root as 0, an
 unlistable mailbox as empty or as 0 waiting, the Mail screen silent about it)
-all fail.
+all fail, and so do AV8's four (the named file followed through a link, a file
+that is not regular read, one larger than the frame read, the reply source read
+outside the owner).
 
 Review ledger: every production file has now been read in full; files a change
 touched carry that change's regressions, files read and left unchanged carry the

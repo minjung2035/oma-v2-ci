@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 222,
-    "n_lines": 28593,
+    "n_lines": 28629,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -510,6 +510,12 @@
     "code": 98,
     "language": "TypeScript"
   },
+  "src/cli/transport.ts": {
+    "blank": 8,
+    "comment": 27,
+    "code": 96,
+    "language": "TypeScript"
+  },
   "src/domain/context-policy.ts": {
     "blank": 8,
     "comment": 10,
@@ -538,12 +544,6 @@
     "blank": 4,
     "comment": 14,
     "code": 94,
-    "language": "TypeScript"
-  },
-  "src/cli/transport.ts": {
-    "blank": 7,
-    "comment": 24,
-    "code": 92,
     "language": "TypeScript"
   },
   "src/domain/persisted-formats.ts": {
@@ -864,6 +864,12 @@
     "code": 50,
     "language": "TypeScript"
   },
+  "src/cli/effects.ts": {
+    "blank": 4,
+    "comment": 6,
+    "code": 50,
+    "language": "TypeScript"
+  },
   "src/protocol/status-view.ts": {
     "blank": 8,
     "comment": 14,
@@ -1078,12 +1084,6 @@
     "blank": 3,
     "comment": 6,
     "code": 28,
-    "language": "TypeScript"
-  },
-  "src/cli/effects.ts": {
-    "blank": 3,
-    "comment": 2,
-    "code": 27,
     "language": "TypeScript"
   },
   "src/diagnostics/mail.ts": {
@@ -1339,9 +1339,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1158,
-    "comment": 4322,
-    "code": 23113,
+    "blank": 1160,
+    "comment": 4329,
+    "code": 23140,
     "nFiles": 222
   }
 }
