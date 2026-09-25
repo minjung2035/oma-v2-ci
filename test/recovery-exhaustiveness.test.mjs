@@ -45,6 +45,9 @@ function fixture() {
     reconcileMailOperation: async (_store, _mail, id) => { calls.push(["mail", id]); },
     observeStoreFailure: () => {},
     recoveryCategory: kind => kind,
+    // DR10: startup's collection of artifacts made before an acceptance.
+    collectUnacceptedArtifacts: () => { calls.push(["collect"]); return { removed: [], kept: [] }; },
+    dirname: path => path,
   });
   Object.assign(value, {
     starting: false, inFlight: null, mail: {},
@@ -87,12 +90,14 @@ test("P3 recovery: missing Git owner remains gated without a fallback effect", a
 test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only handling", async () => {
   const { value, calls } = fixture();
   value.store = {
+    path: "/state/runtime.sqlite",
     recoverableOperations: () => kinds,
     getOperationById: id => ({ id, kind: id, state: "pending" }),
   };
   await value.startup(false, async () => { calls.push(["prepare"]); });
-  assert.deepEqual(calls.slice(0, 4), [["quiesce"], ["health"], ["quiesce"], ["prepare"]]);
-  const physical = calls.slice(4);
+  // DR10: the collection runs after the quiesce and before anything is prepared.
+  assert.deepEqual(calls.slice(0, 5), [["quiesce"], ["collect"], ["health"], ["quiesce"], ["prepare"]]);
+  const physical = calls.slice(5);
   assert.equal(physical.length, kinds.length - 3);
   assert.ok(physical.every(call => !["mail.ack", "route.follow", "route.unfollow"].includes(call[1])));
   assert.equal(value.starting, false);
