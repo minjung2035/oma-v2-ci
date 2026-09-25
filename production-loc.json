@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 222,
-    "n_lines": 28414,
+    "n_lines": 28497,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -78,6 +78,12 @@
     "code": 285,
     "language": "TypeScript"
   },
+  "src/leaf.ts": {
+    "blank": 29,
+    "comment": 90,
+    "code": 279,
+    "language": "TypeScript"
+  },
   "src/runner.ts": {
     "blank": 0,
     "comment": 34,
@@ -100,12 +106,6 @@
     "blank": 17,
     "comment": 125,
     "code": 253,
-    "language": "TypeScript"
-  },
-  "src/leaf.ts": {
-    "blank": 25,
-    "comment": 75,
-    "code": 252,
     "language": "TypeScript"
   },
   "src/tui/sources/settings.ts": {
@@ -169,8 +169,8 @@
     "language": "TypeScript"
   },
   "src/broker/principal-endpoint.ts": {
-    "blank": 20,
-    "comment": 143,
+    "blank": 21,
+    "comment": 149,
     "code": 218,
     "language": "TypeScript"
   },
@@ -476,7 +476,7 @@
   },
   "src/broker/peer-authenticator.ts": {
     "blank": 1,
-    "comment": 13,
+    "comment": 15,
     "code": 106,
     "language": "TypeScript"
   },
@@ -858,6 +858,12 @@
     "code": 51,
     "language": "TypeScript"
   },
+  "src/broker/process-ancestry.ts": {
+    "blank": 8,
+    "comment": 36,
+    "code": 50,
+    "language": "TypeScript"
+  },
   "src/protocol/status-view.ts": {
     "blank": 8,
     "comment": 14,
@@ -980,13 +986,7 @@
   },
   "src/broker/peer-pin.ts": {
     "blank": 2,
-    "comment": 4,
-    "code": 36,
-    "language": "TypeScript"
-  },
-  "src/broker/process-ancestry.ts": {
-    "blank": 6,
-    "comment": 26,
+    "comment": 6,
     "code": 36,
     "language": "TypeScript"
   },
@@ -1339,9 +1339,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1146,
-    "comment": 4245,
-    "code": 23023,
+    "blank": 1153,
+    "comment": 4280,
+    "code": 23064,
     "nFiles": 222
   }
 }

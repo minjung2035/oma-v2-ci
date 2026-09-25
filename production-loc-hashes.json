@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3c9fb1fa11955caa2c813975246c113092921a3081e7c1d8f63b47bffe0a1651",
-  "report": "f743a7d12d75fbfe481cc08336822d7e0bf136df1bff5b5e1982927df614f8f9",
+  "report": "1011802d8491ff30a889bbe7928068e5ad71b55f25e87f14d5cb67a2c719ca90",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -65,19 +65,19 @@
     },
     {
       "path": "src/broker/peer-authenticator.ts",
-      "sha256": "6d23ed131482ab876cc4af01d886c86df0c025bcaf1ae989c59a9be4fb51fc4f"
+      "sha256": "e2f0f408bff631b4e1b068eaf1e97ff1d0d891ff6e9c5a5f69d2f60a7a566d90"
     },
     {
       "path": "src/broker/peer-pin.ts",
-      "sha256": "abbe6d424d7b7feb066146269c7edef3386e1ad7d47484951b2db24905acf056"
+      "sha256": "067b9ded64c3cd9f834bd816ae36f49d89e0193a6378ab83b0a8101b9362ecc2"
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "f56b861ae9298c0c19759e067b222c9be95a82b0142875f74e80efc5b618c9f4"
+      "sha256": "309d53913a44c720cfe2a67f54e96f04b3dac94dcbb65a371cf83b92ed0c84af"
     },
     {
       "path": "src/broker/process-ancestry.ts",
-      "sha256": "571c856d72291b9d9aefed773ac5304723bd719125fdb44fc723240a4f81e0c0"
+      "sha256": "745b2a1be3ea82a60fe5f1371a1fd1775e7b6b2142e7b96c032c471da58f92d8"
     },
     {
       "path": "src/broker/public-dispatcher.ts",
@@ -405,7 +405,7 @@
     },
     {
       "path": "src/leaf.ts",
-      "sha256": "9032ea81c5631ca2ec3d64f923b6e9b5dcf64f2167a8fe5a1fd0943ba90f2f18"
+      "sha256": "bda100efe973f3bdba0a491ba1969515ba6fc475db31de469db04159b4256214"
     },
     {
       "path": "src/lifecycle.ts",
@@ -669,7 +669,7 @@
     },
     {
       "path": "src/runtime/supervision-channel.ts",
-      "sha256": "ba0e2c0e89ade0f29904a0c7c4a746980e96f572ec8445945229b138ac7c4b9b"
+      "sha256": "2e2ca29cc2497d81498c4c280715e2d2fcb5131ae4a230fd0f262c1edd5bab59"
     },
     {
       "path": "src/sandbox.ts",
