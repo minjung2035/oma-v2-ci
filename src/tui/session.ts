@@ -192,6 +192,9 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
     "--no-extensions",
     "--exclude-tools", "bash,powershell",
     "--session-dir", paths.sessionDir,
+    // AV14, PR-003/TUI-004: the Human's context stays in the existing session;
+    // a new TUI run resumes the most recent one, or starts one when there is none.
+    "--continue",
     "--name", `oma-${profile.society}-principal`,
     "-e", paths.coreExtension,
   ];
