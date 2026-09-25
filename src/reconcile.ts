@@ -5,7 +5,7 @@ import { Store } from "./store.js";
 import { StoreError, classifyError, errorCodeOf } from "./domain/errors.js";
 import { assertNever } from "./domain/exhaustive.js";
 import { NO_HOLD, observeStoreFailure, type Release, type ResourceCategory, type ResourceGate } from "./domain/admission.js";
-import { runGitText, GIT_ENV } from "./process/policies.js";
+import { GIT_ENV } from "./process/policies.js";
 import { PreparationExecutor } from "./process/preparation.js";
 import { MailModule } from "./mail.js";
 import { reconcileMailOperation, type RecoveryCounts } from "./mail/reconcile.js";
@@ -225,11 +225,9 @@ export class ReconcileModule {
     }
     return result;
   }
-  /** Compatibility observation for synchronous callers, not the startup path. */
-  assertCanonicalHealthy(): void {
-    const result = runGitText(["fsck", "--strict", "--no-reflogs"], { gitDir: this.paths.projectGit, timeout: 30000, maxBuffer: 1024 * 1024 });
-    if (result.status !== 0) throw new StoreError("STORE_CORRUPT", "canonical repository health observation failed");
-  }
+  /** P0-2: the one observation of the canonical repository's health. A git
+   * that did not finish is unknown (REF_STATE_UNKNOWN); only a completed fsck
+   * that reports damage is corruption. */
   assertCanonicalHealthyAsync(): Promise<void> {
     if (this.healthTask) return this.healthTask;
     const task = this.healthExecutor.run({ executable: "/usr/bin/git",

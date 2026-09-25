@@ -336,11 +336,11 @@ test("T68b: reconcile never overwrites a moved published ref; ref==candidate rec
 });
 
 
-test("T68c: canonical repo integrity is asserted; start-limit surface reported without reset", () => {
+test("T68c: canonical repo integrity is asserted; start-limit surface reported without reset", async () => {
   const env = envOf(true);
   try {
     seedBare(env);
-    env.recon.assertCanonicalHealthy(); // clean repo passes
+    await env.recon.assertCanonicalHealthyAsync(); // clean repo passes; P0-2: the one health observation
     assert.deepEqual(env.recon.startLimitState(), []); // no units installed => none
   } finally {
     env.seal();
