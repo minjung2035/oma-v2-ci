@@ -113,7 +113,12 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
     agentProfiles: {
       [DEFAULT_PRINCIPAL_PROFILE]: {
         modelProfile: DEFAULT_MODEL_PROFILE,
-        capabilities: ["mail.send", "route.follow", "agent.create", "agent.manage.descendants", "context.publish"],
+        // AV18, CREATE-002: a child gets only what its parent holds, so the
+        // Principal holds everything it delegates -- Residents are created on
+        // request, and one without git.submit could never submit (arch §11).
+        // No code.integrate (AUTH-001).
+        capabilities: ["mail.send", "route.follow", "agent.create", "agent.manage.descendants", "context.publish",
+          "git.submit", "agent.manage.self"],
         delegable: ["mail.send", "route.follow", "git.submit", "agent.manage.self"],
         childProfile: DEFAULT_RESIDENT_PROFILE,
         resources: { ...RESOURCES },

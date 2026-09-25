@@ -188,3 +188,19 @@ test("AV15 / BATCH-002, INV04: a tool takes the names OMA shows -- this society'
     await assert.rejects(() => call("oma_mail_ack", { messageId: `${id}@other.oma.invalid` }), /is not valid/);
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test("AV18 / CREATE-002, arch §11, §15.1: under the default configuration a Resident the Principal creates can submit", async () => {
+  const { defaultHostConfig } = await import("../src/config/defaults.js");
+  const { resolveChildSpec } = await import("../src/domain/child-policy.js");
+  const cfg = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+  const principal = cfg.agentProfiles[cfg.principalProfile]!;
+  // Nothing is configured to be delegated that the delegator does not hold.
+  for (const [name, profile] of Object.entries(cfg.agentProfiles))
+    for (const capability of profile.delegable) assert.ok(profile.capabilities.includes(capability), `${name} delegates ${capability} it does not hold`);
+  const child = resolveChildSpec(cfg, { name: "principal", profile: cfg.principalProfile, capabilities: principal.capabilities }, { name: "worker", from: "a".repeat(40), brief: "b" });
+  assert.ok(child);
+  assert.deepEqual(child.spec.capabilities, [...cfg.agentProfiles[principal.childProfile!]!.capabilities].sort(),
+    "the default Principal cannot give its Residents the Resident profile's capabilities");
+  assert.ok(child.spec.capabilities.includes("git.submit"));
+  assert.equal(principal.capabilities.includes("code.integrate"), false, "the Principal was given code.integrate (AUTH-001)");
+});
