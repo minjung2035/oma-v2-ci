@@ -115,6 +115,7 @@
   "src/mail/addresses.ts",
   "src/mail/batch-policy.ts",
   "src/mail/batches.ts",
+  "src/mail/display.ts",
   "src/mail/facts.ts",
   "src/mail/headers.ts",
   "src/mail/materializer.ts",
@@ -1423,7 +1424,7 @@
     "src/views.ts",
     "src/reconcile/"
    ],
-   "files": 32
+   "files": 33
   },
   {
    "index": 4,
@@ -1453,8 +1454,8 @@
    "files": 56
   }
  ],
- "files": 224,
- "runtimeEdges": 861,
+ "files": 225,
+ "runtimeEdges": 863,
  "typeOnlyEdges": 322,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 219,
@@ -1467,9 +1468,9 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 11,
   "L4-orchestration -> L4-orchestration": 41,
-  "L5-entry -> L1-kernel": 73,
+  "L5-entry -> L1-kernel": 74,
   "L5-entry -> L2-facts": 3,
-  "L5-entry -> L3-workflow": 5,
+  "L5-entry -> L3-workflow": 6,
   "L5-entry -> L4-orchestration": 24,
   "L5-entry -> L5-entry": 115
  },

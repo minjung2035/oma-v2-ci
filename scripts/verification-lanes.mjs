@@ -271,6 +271,8 @@ export const lanes = Object.freeze({
       "AV24 / WP10: a silent tool the engine announced runs past the idle budget and the turn settles",
       "AV24 / WP10: a tool that never ends is bounded by the turn, not waited on",
       "AV25 / BATCH-006, TSP-009: the guard reads the edit input the pinned engine hands it",
+      "AV26 / TUI-011, arch §5.1: the Human's Mail screen shows the subject and body the sender wrote",
+      "AV26 / INV04, PI-001: the extension's reader is the runtime's",
       "AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and reading to the mount plan",
       "AV14 / arch §7: a Resident's activation resumes its existing session",
       "AV14 / PR-003, TUI-004: a TUI run resumes the Principal's existing session",

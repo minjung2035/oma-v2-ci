@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 223,
-    "n_lines": 29066,
+    "n_files": 224,
+    "n_lines": 29110,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -80,7 +80,7 @@
   },
   "src/extension/mail-tools.ts": {
     "blank": 11,
-    "comment": 66,
+    "comment": 65,
     "code": 284,
     "language": "TypeScript"
   },
@@ -438,12 +438,6 @@
     "code": 127,
     "language": "TypeScript"
   },
-  "src/tui/sources/mail.ts": {
-    "blank": 15,
-    "comment": 34,
-    "code": 125,
-    "language": "TypeScript"
-  },
   "src/mail/materializer.ts": {
     "blank": 2,
     "comment": 7,
@@ -465,6 +459,12 @@
   "src/storage/quota.ts": {
     "blank": 4,
     "comment": 18,
+    "code": 117,
+    "language": "TypeScript"
+  },
+  "src/tui/sources/mail.ts": {
+    "blank": 14,
+    "comment": 37,
     "code": 117,
     "language": "TypeScript"
   },
@@ -1020,6 +1020,12 @@
     "code": 36,
     "language": "TypeScript"
   },
+  "src/mail/display.ts": {
+    "blank": 3,
+    "comment": 13,
+    "code": 35,
+    "language": "TypeScript"
+  },
   "src/mail/addresses.ts": {
     "blank": 3,
     "comment": 7,
@@ -1345,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1177,
-    "comment": 4466,
-    "code": 23423,
-    "nFiles": 223
+    "blank": 1179,
+    "comment": 4481,
+    "code": 23450,
+    "nFiles": 224
   }
 }

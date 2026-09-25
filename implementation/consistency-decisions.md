@@ -864,7 +864,7 @@ Counterexamples tried against the finished product:
   refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
   controls and zero-width clusters.
 
-## Whole-codebase adversarial pass (after v9) -- AV1..AV25 as applications of INV01..INV12
+## Whole-codebase adversarial pass (after v9) -- AV1..AV26 as applications of INV01..INV12
 
 Every production file was read against the trust boundaries: a Resident (its
 actor socket, and the workspace, home and session directory its sandbox writes),
@@ -875,7 +875,7 @@ applied and was not honoured; it is fixed through that invariant's owner (an
 existing one, or one extended), every new helper meets the abstraction
 acceptance criterion there (it removes an independent decision, a premise a
 caller must remember, or a resource that can be missed), and the WP32.02 and
-WP29 tables below name the owners and regressions. "AV1..AV25" are regression
+WP29 tables below name the owners and regressions. "AV1..AV26" are regression
 ids, like R38 or T118, not principles. The requirement links are in
 `implementation/source-owners.json` (CLI-001, PR-004, FS-003, INF-007, FS-005,
 SB-006).
@@ -907,6 +907,7 @@ SB-006).
 | AV23 | same run: a Resident's report in Korean reached the Principal as a Base64 body; a Principal has no shell to decode it, and a Resident did so with `base64 -d`. The pinned MIME adapter (MAIL-003) chooses Base64 or quoted-printable for any text body that is not short ASCII, and cannot write the 8bit body arch §5.1 shows | arch §5.1 (UTF-8 plain text body), BATCH-002 (the index gives a path that can be read) and AV10's reading of it (a reader meets a message as its sender wrote it) | the read tool shows the stored header block unchanged and the body with its transfer encoding undone; an encoding it cannot undo exactly leaves the message as stored. The stored bytes are not changed. Bound to the runtime's own writer by a test over both encodings | a stored encoding shown to a reader as the message | AV23 (two tests) |
 | AV24 | the seventh functional run: a Resident ran its tests and then `sleep 31` in one bash call; the command printed nothing for 30 s, the adapter read the engine as idle, and the run ended DEADLINE_EXCEEDED inside the tool. Builds, installs and test suites have that shape | WP10's deadline table ("정상 긴 턴/진짜 idle" told apart; idle is the partial-line/stream stall) and CFG-004 (frame/stream no-progress), with the turn budget (inferenceTimeoutSeconds) bounding the whole turn | the idle budget is held while a tool the engine announced (`tool_execution_start` .. `tool_execution_end`, by `toolCallId`) runs, and resumes when none does; a tool that never ends meets the turn budget | an announced tool's silence read as the engine's | AV24 (two tests; V10A unchanged) |
 | AV25 | same run: a Resident's edit of a 35 KB workspace was refused "agent workspace quota would be exceeded" under a 2 GiB quota. Since the engine update (ENG1) the edit tool takes `edits: [{ oldText, newText }]`, and the workspace guard read the older top-level `newText`, so every edit by every agent was refused | BATCH-006 (the pinned engine revision is the contract the extension speaks) and TSP-009 (the guard keeps writes in the workspace and quota; it does not reinterpret a tool) | the guard reads the engine's validated input -- the engine folds its older single-edit form into `edits` before any tool_call handler sees it -- and bounds growth by the replacement text; a test takes the input from the pinned engine's own edit tool | a guard mirroring an input shape the engine no longer sends | AV25 (one test) |
+| AV26 | the eighth functional run, on the Human's side: the Mail screen listed "재시작 후 OMA 결과 기 억 확인" for a subject without that space, and its body view was empty for every message. The TUI had its own header decoder, which kept the fold's space between adjacent encoded words, and found the end of the header block at "\n\n", which the writer's CRLF mail never has; its body, had it been found, kept its transfer encoding | INV04 (one owner of how a reader meets a stored message), arch §5.1 and TUI-011 (the Mail screen reads the Principal's mail), and the reader rule AV10 and AV23 apply | `src/mail/display.ts` owns `readableMail`/`readableBody` (the eml reader in headers.ts still never decodes a body); the Mail screen splits at the first blank line in either form, shows each header through `displaySubject` and the body through `readableBody`; the extension's AV23 copy is a declared mirror bound to the owner by a test (PI-001) | a second decoder, and a boundary only older mail has | AV26 (two tests) |
 
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only

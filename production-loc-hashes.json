@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "e889e647658220ad0300715d3816ca900c7a55888fa37a19b850d08906f45132",
-  "report": "4dbf6c0bc2aaac24a7388b12951f10d4f91734a2076078c8c3a7d45477793849",
+  "manifest": "3e6b9c3e9e0313d396961699f961d15ac6c8b796e016d37c6da224029d2ef04b",
+  "report": "c79f38daaf9369800b7d850ee88dc2968156ef322790d5800fb6314ec30f8ea8",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "254039289eafa822bf7b39d1c3ae0cd356ac01c9eda98be101c4fbacdb0e0412"
+      "sha256": "1d01e326bfdfe7b8bcf1df789aa61416aae97f1d9cebf6cd7dadff865b6a83cf"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -458,6 +458,10 @@
     {
       "path": "src/mail/batches.ts",
       "sha256": "ef6a779671bfc556307ad89136651c8fa98a7df79a8c4ac7ce0baea786d55284"
+    },
+    {
+      "path": "src/mail/display.ts",
+      "sha256": "1a41035fa6e06e7112afd6a47a798b04f353110d88a5c85025b16bd24d7e89fb"
     },
     {
       "path": "src/mail/facts.ts",
@@ -821,7 +825,7 @@
     },
     {
       "path": "src/tui/sources/mail.ts",
-      "sha256": "edc42444a88c2b384ca3ba2098f09594383353fbe47f76de2c7ef7006dbd4d10"
+      "sha256": "b8a66f1938fd25a018208e54e5146fe064576d82763159ae4e02fc7c09743197"
     },
     {
       "path": "src/tui/sources/settings.ts",
