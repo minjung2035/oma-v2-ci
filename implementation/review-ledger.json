@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 101,
-  "CHANGED_WITH_ORACLE": 123
+  "READ_UNCHANGED": 100,
+  "CHANGED_WITH_ORACLE": 124
  },
  "lanes": {
   "fast": "PASS",
@@ -936,6 +936,7 @@
     "DR4",
     "DR6",
     "DR7",
+    "DR8",
     "WP21"
    ],
    "oracles": [
@@ -946,6 +947,7 @@
     "DR4",
     "DR6",
     "DR7",
+    "DR8",
     "V21A",
     "V21B"
    ]
@@ -1577,18 +1579,15 @@
   {
    "path": "src/git/integration-policy.ts",
    "primary": "WP24",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR3",
+    "DR8"
    ],
    "oracles": [
-    "R19",
-    "V01A",
-    "V01B",
-    "V24A",
-    "V24B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "DR3",
+    "DR8"
+   ]
   },
   {
    "path": "src/git/integration.ts",
@@ -1602,6 +1601,7 @@
     "DR4",
     "DR6",
     "DR7",
+    "DR8",
     "WP21",
     "WP24"
    ],
@@ -1613,6 +1613,7 @@
     "DR4",
     "DR6",
     "DR7",
+    "DR8",
     "V21A",
     "V21B",
     "V24A",
