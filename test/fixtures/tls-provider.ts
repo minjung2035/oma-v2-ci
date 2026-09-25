@@ -21,7 +21,7 @@ export interface TlsProvider {
   readonly origin: string;
   readonly seen: SeenRequest[];
   /** `gapMs` spaces the chunks out, so a reader can tell streaming from buffering. */
-  reply: { status: number; chunks: string[]; delayMs: number; gapMs?: number };
+  reply: { status: number; chunks: string[]; delayMs: number; gapMs?: number; headers?: Record<string, string> };
   close(): Promise<void>;
 }
 
@@ -43,7 +43,7 @@ export async function tlsProvider(): Promise<TlsProvider> {
     request.on("end", () => {
       const send = (): void => {
         const body = state.reply.chunks.join("");
-        response.writeHead(state.reply.status, { "content-type": "text/event-stream", "content-length": Buffer.byteLength(body) });
+        response.writeHead(state.reply.status, { "content-type": "text/event-stream", "content-length": Buffer.byteLength(body), ...state.reply.headers });
         const gap = state.reply.gapMs ?? 0;
         const pieces = [...state.reply.chunks];
         const next = (): void => {

@@ -15,12 +15,17 @@
  * The engine inside the sandbox builds its requests with a placeholder key of
  * the same shape as the real one, so provider code that inspects the key (an
  * OAuth token's claims, for instance) behaves exactly as it would on the host.
- * This relay swaps the placeholder for the real key on the way out, in headers
- * and in the request path, and nowhere else.
+ * AV2: the relay writes the real key into the places a provider reads a key
+ * from -- an authority header that holds the key or `Bearer <key>`, and the
+ * `key` query parameter -- and nowhere else. A placeholder anywhere else is a
+ * request to put the credential where the provider may repeat it (a 404 that
+ * names the path, a header echoed back), and it is refused. And the key never
+ * travels back: a response whose bytes carry it is cut off before they reach
+ * the sandbox, so the relay asks for responses it can see (no compression).
  */
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { request as httpsRequest } from "node:https";
-import type { Duplex } from "node:stream";
+import { Transform, type Duplex } from "node:stream";
 import { chmodSync, rmSync } from "node:fs";
 import { StoreError } from "../domain/errors.js";
 import { trustedAbsolutePath } from "../protocol/run-lease.js";
@@ -86,6 +91,27 @@ function parsedOrigin(origin: string): URL {
   if (url.search.length > 0 || url.hash.length > 0)
     throw new StoreError("UNSUPPORTED_PROFILE", "provider origin carries a query or fragment");
   return url;
+}
+
+/** Why a request was refused before anything was sent. */
+class Refusal extends Error {
+  constructor(readonly status: number, reason: string) { super(reason); }
+}
+const OUTSIDE_SLOT = "the credential placeholder is outside a credential slot";
+
+/** AV2: the key's bytes in a response. The tail of each chunk is kept so a key
+ * split across two chunks is seen too. Nothing is rewritten: a response either
+ * passes unchanged or is cut off. */
+class CredentialTripwire {
+  private tail = Buffer.alloc(0);
+  constructor(private readonly secret: Buffer) {}
+  /** True once the key has appeared in what was inspected so far. */
+  seen(chunk: Buffer): boolean {
+    const window = Buffer.concat([this.tail, chunk]);
+    if (window.indexOf(this.secret) >= 0) return true;
+    this.tail = window.subarray(Math.max(0, window.length - (this.secret.length - 1)));
+    return false;
+  }
 }
 
 /** The origin a request is resolved against to canonicalise it. Nothing is sent
@@ -179,33 +205,90 @@ export class InferenceRelay {
     });
   }
 
-  private swap(value: string): string {
-    const substitute = this.target.substitute;
-    return substitute === undefined ? value : value.split(substitute.placeholder).join(substitute.secret);
-  }
-
   private carriesPlaceholder(value: string): boolean {
     const substitute = this.target.substitute;
     return substitute !== undefined && value.includes(substitute.placeholder);
   }
 
+  /** The value an authority header carries once the key is in it, or null when
+   * the header is not a credential slot: the whole value is the placeholder,
+   * or `Bearer ` and the placeholder. */
+  private slotted(value: string): string | null {
+    const substitute = this.target.substitute;
+    if (substitute === undefined) return null;
+    if (value === substitute.placeholder) return substitute.secret;
+    const bearer = /^bearer /i.exec(value);
+    return bearer !== null && value.slice(bearer[0].length) === substitute.placeholder
+      ? `${bearer[0]}${substitute.secret}` : null;
+  }
+
+  /** The request target with the key in its one query slot. The placeholder in
+   * the path, or in any other query parameter, is refused. */
+  private slottedTarget(requestPath: string): string {
+    const query = requestPath.indexOf("?");
+    const path = query < 0 ? requestPath : requestPath.slice(0, query);
+    if (this.carriesPlaceholder(path)) throw new Refusal(403, OUTSIDE_SLOT);
+    if (query < 0) return path;
+    const parameters = requestPath.slice(query + 1).split("&").map(parameter => {
+      if (!this.carriesPlaceholder(parameter)) return parameter;
+      if (parameter === `key=${this.target.substitute!.placeholder}`) return `key=${this.target.substitute!.secret}`;
+      throw new Refusal(403, OUTSIDE_SLOT);
+    });
+    return `${path}?${parameters.join("&")}`;
+  }
+
   /** The outbound headers: hop-by-hop stripped, the caller's own authority
-   * dropped unless it is the placeholder being swapped, host headers last. */
+   * dropped unless it is the placeholder in its slot, the placeholder anywhere
+   * else refused, host headers last. Responses are asked for uncompressed so
+   * the tripwire reads the bytes the sandbox will. */
   private outboundHeaders(incoming: IncomingHttpHeaders, upgrade: boolean): Record<string, string | string[]> {
     const headers: Record<string, string | string[]> = {};
     for (const [name, value] of Object.entries(incoming)) {
       const lowered = name.toLowerCase();
       if (value === undefined) continue;
       if (HOP_BY_HOP.has(lowered) && !(upgrade && UPGRADE_KEPT.has(lowered))) continue;
+      if (lowered === "accept-encoding" || lowered === "sec-websocket-extensions") continue;
       const values = Array.isArray(value) ? value : [value];
-      if (CALLER_AUTHORITY.has(lowered) && !values.every(entry => this.carriesPlaceholder(entry))) continue;
-      const swapped = values.map(entry => this.swap(entry));
-      headers[name] = Array.isArray(value) ? swapped : swapped[0]!;
+      if (CALLER_AUTHORITY.has(lowered)) {
+        const slotted = values.map(entry => this.slotted(entry));
+        if (slotted.every(entry => entry !== null)) headers[name] = Array.isArray(value) ? slotted as string[] : slotted[0]!;
+        else if (values.some(entry => this.carriesPlaceholder(entry))) throw new Refusal(403, OUTSIDE_SLOT);
+        continue;
+      }
+      if (values.some(entry => this.carriesPlaceholder(entry)) || this.carriesPlaceholder(name)) throw new Refusal(403, OUTSIDE_SLOT);
+      headers[name] = value;
     }
+    if (this.target.substitute !== undefined) headers["accept-encoding"] = "identity";
     // Applied last: the host's resolved headers are not something the caller
     // can shadow.
     for (const [name, value] of Object.entries(this.target.headers)) headers[name] = value;
     return headers;
+  }
+
+  /** A tripwire for one response, or null when this relay holds no key. */
+  private tripwire(): CredentialTripwire | null {
+    const secret = this.target.substitute?.secret;
+    return secret === undefined ? null : new CredentialTripwire(Buffer.from(secret, "utf8"));
+  }
+
+  /** Whether response header lines already carry the key. */
+  private headersCarryKey(rawHeaders: readonly string[], statusMessage = ""): boolean {
+    const secret = this.target.substitute?.secret;
+    return secret !== undefined && [statusMessage, ...rawHeaders].some(value => value.includes(secret));
+  }
+
+  /** The response body on its way to the sandbox, unchanged unless it carries
+   * the key, in which case `cut` ends both sides before that byte is written. */
+  private guarded(cut: () => void): Transform {
+    const wire = this.tripwire();
+    const guard = new Transform({
+      transform(chunk: Buffer, _encoding, done) {
+        if (wire !== null && wire.seen(chunk)) { done(new Error("the credential is in the response")); return; }
+        done(null, chunk);
+      },
+    });
+    guard.on("error", cut);
+    return guard;
   }
 
   private refuse(outgoing: ServerResponse, status: number, reason: string): void {
@@ -219,12 +302,21 @@ export class InferenceRelay {
     socket.end(`HTTP/1.1 ${status} ${reason}\r\ncontent-type: text/plain\r\nconnection: close\r\n\r\n`);
   }
 
-  private admit(requestPath: string | undefined): { path: string } | { status: number; reason: string } {
+  /** The request's outbound path and headers, or why it is refused. Everything
+   * that can refuse runs here, before a request is counted or sent. */
+  private admit(incoming: IncomingMessage, upgrade: boolean):
+    { path: string; headers: Record<string, string | string[]> } | { status: number; reason: string } {
     if (this.closed) return { status: 503, reason: "relay is closed" };
     if (this.inFlight >= this.limits.concurrent) return { status: 503, reason: "relay concurrency limit reached" };
-    const path = targetPath(this.origin.pathname, requestPath === undefined ? undefined : this.swap(requestPath));
-    if (path.length === 0) return { status: 403, reason: "path is outside the declared provider endpoint" };
-    return { path };
+    try {
+      const requestPath = incoming.url;
+      const path = targetPath(this.origin.pathname, requestPath === undefined ? undefined : this.slottedTarget(requestPath));
+      if (path.length === 0) return { status: 403, reason: "path is outside the declared provider endpoint" };
+      return { path, headers: this.outboundHeaders(incoming.headers, upgrade) };
+    } catch (error) {
+      if (error instanceof Refusal) return { status: error.status, reason: error.message };
+      throw error;
+    }
   }
 
   private upstreamOptions(method: string, path: string, headers: Record<string, string | string[]>) {
@@ -236,7 +328,7 @@ export class InferenceRelay {
   }
 
   private forward(incoming: IncomingMessage, outgoing: ServerResponse): void {
-    const admitted = this.admit(incoming.url);
+    const admitted = this.admit(incoming, false);
     if ("status" in admitted) { this.refuse(outgoing, admitted.status, admitted.reason); return; }
 
     this.accepted += 1;
@@ -250,13 +342,21 @@ export class InferenceRelay {
     };
 
     const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "POST", admitted.path,
-      this.outboundHeaders(incoming.headers, false)), response => {
+      admitted.headers), response => {
+      // AV2: a response that carries the key back is cut off, never delivered.
+      // Counted once, whether or not the response had already ended upstream.
+      let cutOff = false;
+      const cut = (): void => {
+        if (cutOff) return;
+        cutOff = true; settle(); this.failed += 1; upstream.destroy(); outgoing.destroy();
+      };
+      if (this.headersCarryKey(response.rawHeaders, response.statusMessage)) { cut(); return; }
       // Status and headers travel verbatim; the engine interprets them.
       const replied: Record<string, string | string[]> = {};
       for (const [name, value] of Object.entries(response.headers))
         if (value !== undefined && !HOP_BY_HOP.has(name.toLowerCase())) replied[name] = value;
       outgoing.writeHead(response.statusCode ?? 502, replied);
-      response.pipe(outgoing);
+      response.pipe(this.guarded(cut)).pipe(outgoing);
       response.on("end", () => { settle(); });
       response.on("error", () => { if (settle()) this.failed += 1; outgoing.destroy(); });
     });
@@ -280,7 +380,7 @@ export class InferenceRelay {
    * handshake, then carried as bytes in both directions. The frames that
    * follow are not read, so the relay learns nothing about their contents. */
   private tunnel(incoming: IncomingMessage, socket: Duplex, head: Buffer): void {
-    const admitted = this.admit(incoming.url);
+    const admitted = this.admit(incoming, true);
     if ("status" in admitted) { this.refuseTunnel(socket, admitted.status, admitted.reason); return; }
 
     this.accepted += 1;
@@ -296,8 +396,12 @@ export class InferenceRelay {
     socket.once("close", () => { this.tunnels.delete(socket); settle(); });
     socket.on("error", () => { socket.destroy(); });
 
-    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "GET", admitted.path,
-      this.outboundHeaders(incoming.headers, true)));
+    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "GET", admitted.path, admitted.headers));
+    let cutOff = false;
+    const cut = (): void => {
+      if (cutOff) return;
+      cutOff = true; settle(); this.failed += 1; upstream.destroy(); socket.destroy();
+    };
     upstream.setTimeout(this.limits.timeoutMs, () => {
       if (settle()) this.failed += 1;
       upstream.destroy();
@@ -305,22 +409,25 @@ export class InferenceRelay {
     });
     upstream.on("upgrade", (response, providerSocket, providerHead) => {
       upstream.setTimeout(0);
+      if (this.headersCarryKey(response.rawHeaders, response.statusMessage)) { providerSocket.destroy(); cut(); return; }
       const lines = [`HTTP/1.1 ${response.statusCode ?? 101} ${response.statusMessage ?? "Switching Protocols"}`];
       for (let index = 0; index < response.rawHeaders.length; index += 2)
         lines.push(`${response.rawHeaders[index]!}: ${response.rawHeaders[index + 1]!}`);
       socket.write(`${lines.join("\r\n")}\r\n\r\n`);
-      if (providerHead.length > 0) socket.write(providerHead);
+      const guard = this.guarded(() => { providerSocket.destroy(); cut(); });
       if (head.length > 0) providerSocket.write(head);
       this.tunnels.add(providerSocket);
       providerSocket.once("close", () => { this.tunnels.delete(providerSocket); socket.destroy(); });
       providerSocket.on("error", () => { if (settle()) this.failed += 1; socket.destroy(); });
-      providerSocket.pipe(socket);
+      if (providerHead.length > 0) guard.write(providerHead);
+      providerSocket.pipe(guard).pipe(socket);
       socket.pipe(providerSocket);
     });
     // A provider that refuses the upgrade answers with an ordinary response;
     // it travels back verbatim so the engine can fall back as it would on the host.
     upstream.on("response", response => {
       upstream.setTimeout(0);
+      if (this.headersCarryKey(response.rawHeaders, response.statusMessage)) { cut(); return; }
       const lines = [`HTTP/1.1 ${response.statusCode ?? 502} ${response.statusMessage ?? ""}`.trimEnd()];
       for (let index = 0; index < response.rawHeaders.length; index += 2) {
         const name = response.rawHeaders[index]!;
@@ -329,7 +436,7 @@ export class InferenceRelay {
       }
       lines.push("connection: close");
       socket.write(`${lines.join("\r\n")}\r\n\r\n`);
-      response.pipe(socket);
+      response.pipe(this.guarded(cut)).pipe(socket);
     });
     upstream.on("error", () => {
       if (settle()) this.failed += 1;

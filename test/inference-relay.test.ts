@@ -278,3 +278,113 @@ test("V27B: idle connections to the relay are bounded, and a request is carried 
     assert.equal(answer.status, 200);
   } finally { for (const client of idle) client.destroy(); await relay.close(); await provider.close(); socket.clean(); }
 });
+
+/** The sandbox side of one request, collected until the connection ends, so a
+ * response the relay cuts off still reports what reached the sandbox. */
+function collect(socketPath: string, path: string, headers: Record<string, string>): Promise<{ status: number | null; bytes: string }> {
+  return new Promise(resolve => {
+    let status: number | null = null; let bytes = "";
+    const outgoing = httpRequest({ socketPath, path, method: "GET", headers }, response => {
+      status = response.statusCode ?? null;
+      response.setEncoding("utf8");
+      response.on("data", chunk => { bytes += chunk; });
+      response.on("error", () => {});
+      response.on("close", () => { resolve({ status, bytes }); });
+    });
+    outgoing.on("error", () => { resolve({ status, bytes }); });
+    outgoing.end();
+  });
+}
+
+test("AV2: the key is written only into its declared slots; a placeholder anywhere else is refused", async () => {
+  const provider = await tlsProvider();
+  const socket = scratchSocket();
+  const placeholder = "sk-proj-PLACEHOLDERaaaaaaaaaaaaaaaaaaaaaaaa";
+  const secret = "sk-proj-REALSECRETbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const relay = await InferenceRelay.open(socket.path,
+    { origin: `${provider.origin}/v1`, headers: {}, substitute: { placeholder, secret } },
+    { concurrent: 4, timeoutMs: 5000 });
+  try {
+    // The recorded counterexample was a 404 that names the path, and a header
+    // the provider repeats; every other non-slot place is the same request.
+    for (const [path, headers] of [
+      [`/${placeholder}`, { authorization: `Bearer ${placeholder}` }],
+      [`/messages?model=${placeholder}`, {}],
+      [`/messages?key=${placeholder}x`, {}],
+      ["/messages", { "x-trace": placeholder }],
+      ["/messages", { "x-api-key": `prefix-${placeholder}` }],
+      ["/messages", { authorization: `Basic ${placeholder}` }],
+    ] as const) {
+      const answer = await throughBridge(socket.path, path, "{}", { ...headers });
+      assert.equal(answer.status, 403, `${path} ${JSON.stringify(headers)} was carried`);
+      assert.match(answer.body, /outside a credential slot/);
+    }
+    assert.equal(provider.seen.length, 0, "a refused request reached the provider");
+    // In its slots the key is written, and responses are asked for as plain bytes.
+    await throughBridge(socket.path, `/messages?key=${placeholder}&alt=sse`, "{}",
+      { authorization: `Bearer ${placeholder}`, "x-api-key": placeholder, "accept-encoding": "gzip, br" });
+    const request = provider.seen[0]!;
+    assert.equal(request.path, `/v1/messages?key=${secret}&alt=sse`);
+    assert.equal(request.headers.authorization, `Bearer ${secret}`);
+    assert.equal(request.headers["x-api-key"], secret);
+    assert.equal(request.headers["accept-encoding"], "identity");
+    assert.equal(relay.observe().refused, 6);
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("AV2: a response that carries the key back is cut off before it reaches the sandbox", async () => {
+  const provider = await tlsProvider();
+  const socket = scratchSocket();
+  const placeholder = "sk-proj-PLACEHOLDERaaaaaaaaaaaaaaaaaaaaaaaa";
+  const secret = "sk-proj-REALSECRETbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const relay = await InferenceRelay.open(socket.path,
+    { origin: `${provider.origin}/v1`, headers: {}, substitute: { placeholder, secret } },
+    { concurrent: 4, timeoutMs: 5000 });
+  try {
+    for (const reply of [
+      // A provider that names the key in an error body...
+      { status: 401, chunks: [`{"error":"Incorrect API key provided: ${secret}"}`], delayMs: 0 },
+      // ...split across two writes...
+      { status: 200, chunks: [`data: ${secret.slice(0, 17)}`, `${secret.slice(17)}\n\n`], delayMs: 0, gapMs: 50 },
+      // ...or in a header.
+      { status: 200, chunks: ["ok"], delayMs: 0, headers: { "x-echo": secret } },
+    ]) {
+      provider.reply = reply;
+      const received = await collect(socket.path, "/messages", { authorization: `Bearer ${placeholder}` });
+      assert.ok(!received.bytes.includes(secret) && !received.bytes.includes(secret.slice(17)),
+        `the key reached the sandbox: ${received.status} ${received.bytes}`);
+    }
+    assert.equal(relay.observe().failed, 3);
+    assert.equal(relay.observe().inFlight, 0);
+    // A response without the key passes unchanged.
+    provider.reply = { status: 200, chunks: ["a", "b"], delayMs: 0 };
+    assert.deepEqual(await collect(socket.path, "/messages", { authorization: `Bearer ${placeholder}` }), { status: 200, bytes: "ab" });
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("AV2: a WebSocket upgrade keeps the same slots and is not compressed", async () => {
+  const provider = await tlsProvider();
+  const socket = scratchSocket();
+  const placeholder = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.PLACEHOLDERsignature00";
+  const secret = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.REALsignature111111111";
+  const relay = await InferenceRelay.open(socket.path,
+    { origin: `${provider.origin}/backend-api`, headers: {}, substitute: { placeholder, secret } },
+    { concurrent: 4, timeoutMs: 5000 });
+  const upgrade = (headers: Record<string, string>) => new Promise<number>((resolve, reject) => {
+    const outgoing = httpRequest({ socketPath: socket.path, path: "/codex/responses", method: "GET",
+      headers: { connection: "Upgrade", upgrade: "websocket", "sec-websocket-version": "13",
+        "sec-websocket-key": Buffer.from("the sample nonce").toString("base64"), ...headers } });
+    outgoing.on("upgrade", (response, tunnel) => { tunnel.destroy(); resolve(response.statusCode ?? 0); });
+    outgoing.on("response", response => { response.resume(); resolve(response.statusCode ?? 0); });
+    outgoing.on("error", reject);
+    outgoing.end();
+  });
+  try {
+    assert.equal(await upgrade({ authorization: `Bearer ${placeholder}`, "sec-websocket-protocol": placeholder }), 403);
+    assert.equal(provider.seen.length, 0);
+    assert.equal(await upgrade({ authorization: `Bearer ${placeholder}`, "sec-websocket-extensions": "permessage-deflate" }), 101);
+    const handshake = provider.seen.find(entry => entry.upgrade)!;
+    assert.equal(handshake.headers.authorization, `Bearer ${secret}`);
+    assert.equal(handshake.headers["sec-websocket-extensions"], undefined, "compression would hide the key from the tripwire");
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
