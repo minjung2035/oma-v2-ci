@@ -30,6 +30,10 @@ export function runnerSessionDirPathAt(stateRoot: string, actor: string): string
   return join(stateRoot, runnerSessionDirFor(actor));
 }
 /** Where this agent's engine keeps its session (PR-003 for the Principal). */
+/** The society's canonical project repository. */
+export function projectGitPathAt(stateRoot: string): string {
+  return join(stateRoot, "repos", "project.git");
+}
 export function sessionDirPathAt(stateRoot: string, actor: string): string {
   return join(stateRoot, sessionDirFor(actor));
 }

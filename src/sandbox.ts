@@ -5,7 +5,7 @@ import type { RunLease, SandboxPlan } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
 import { assertValidatedRunLease, trustedAbsolutePath, type ValidatedRunLease } from "./protocol/run-lease.js";
 import { validBatchViewLimits } from "./protocol/batch-view.js";
-import { agentRootPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "./storage/paths.js";
+import { agentRootPathAt, projectGitPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "./storage/paths.js";
 
 /** The paths a confined Resident sees. One table serves both the mount plan and
  * the arguments handed to the engine inside it, so the two cannot drift. */
@@ -54,7 +54,7 @@ function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentD
   const expected: ResidentDirectories = {
     workspace: workspacePathAt(h.stateRoot, lease.actor), home: join(agentRootPathAt(h.stateRoot, lease.actor), "home"),
     archive: join(h.stateRoot, "mail", "archive"), selfMail: join(h.stateRoot, "mail", "inboxes", lease.actor),
-    view: runnerViewPathAt(h.stateRoot, lease.actor), world: join(h.stateRoot, "world"), projectGit: join(h.stateRoot, "repos", "project.git"),
+    view: runnerViewPathAt(h.stateRoot, lease.actor), world: join(h.stateRoot, "world"), projectGit: projectGitPathAt(h.stateRoot),
     sessions: runnerSessionDirPathAt(h.stateRoot, lease.actor),
   };
   for (const key of Object.keys(expected) as Array<keyof ResidentDirectories>)

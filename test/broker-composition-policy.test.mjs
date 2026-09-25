@@ -104,6 +104,8 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     "../runtime/deployment-manifest.js": { assertDeploymentDigest() { calls.push("digest"); } },
     // AV5: the Principal inbox is created through the held-parent primitive.
     "../storage/directory.js": { ensureDirectory() {} },
+    // AV11: the canonical repository's path has one owner.
+    "../storage/paths.js": { projectGitPathAt: stateRoot => `${stateRoot}/repos/project.git` },
     "../storage/quota.js": { StorageAdmission: class { admit() { calls.push("storage-quota"); return () => undefined; } reserve() { return () => undefined; } } },
     "../authority.js": { resolvedSpecOf: value => value },
     "../domain/errors.js": { StoreError: class extends Error {} },

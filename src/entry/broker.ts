@@ -24,6 +24,7 @@ import { StorageAdmission } from "../storage/quota.js";
 import { resolvedSpecOf } from "../authority.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidSocietyName } from "../ids.js";
+import { projectGitPathAt } from "../storage/paths.js";
 
 function usage(): never {
   console.error("usage: broker.js --society <name> [--config <path>] [--state-root <dir> --run-root <dir>]"); process.exit(4);
@@ -154,7 +155,7 @@ async function main(): Promise<void> {
       if (current.society !== society) throw new StoreError("POLICY_CHANGED", "host policy society identity changed");
       return current;
     }, () => store.inTransaction);
-    const git = new GitModule({ stateRoot, projectGit: join(stateRoot, "repos", "project.git"), contextGit: join(stateRoot, "repos", "context.git"),
+    const git = new GitModule({ stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
       worldDir: join(stateRoot, "world"), society, quarantineTmpBytes: cfg.limits.bundleBytes,
       quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
       checkTimeoutSeconds: Math.max(1, ...cfg.integration.checks.map(check => check.resources.checkTimeoutSeconds)),
@@ -166,10 +167,10 @@ async function main(): Promise<void> {
       return integrationPolicyFromConfig(current.integration);
     });
     const hasGoal = (): boolean => git.hasCommittedContext();
-    const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: join(stateRoot, "repos", "project.git"), society,
+    const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
       hasGoal, activationAllowed: () => lifetime.permitsActivation }, resolveSpec, mail, cfg.quota);
     const reconcile = new ReconcileModule(store, mail, git, units, lifecycle, {
-      projectGit: join(stateRoot, "repos", "project.git"), hasGoal, activationAllowed: () => lifetime.permitsActivation,
+      projectGit: projectGitPathAt(stateRoot), hasGoal, activationAllowed: () => lifetime.permitsActivation,
       sweepBudgetSeconds: cfg.limits.receiptWaitSeconds, resourceGate: category => storage.admit(category),
     });
     // PR-001: only the host that started this process gets a Principal

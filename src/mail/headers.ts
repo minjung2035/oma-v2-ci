@@ -81,6 +81,11 @@ function headerWords(value: string, allowQuotedPrintable = false): string {
 export function decodeSubject(value: string | null): string {
   return headerWords(unfold(value ?? "").trim(), true);
 }
+/** A subject as a reader should see it (BATCH-002): decoded, or, when it is
+ * not something this writer produces, the header exactly as it arrived. */
+export function displaySubject(value: string | null): string {
+  try { return decodeSubject(value); } catch { return unfold(value ?? "").trim(); }
+}
 function singleId(value: string | undefined): string | null {
   if (value === undefined) return null;
   const match = /^<([^<>\s]+)>$/.exec(unfold(value).trim());

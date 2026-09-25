@@ -8,11 +8,12 @@ import { closeSync, constants, fstatSync, mkdtempSync, openSync, readSync, rmSyn
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { validActorName, validAddress, validMessageId, validRequestKey } from "./batch-view.js";
+import { validActorName, validAddress, validMessageId } from "./batch-view.js";
 export { validAddress } from "./batch-view.js";
 import { runCliProcess } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
-import { integerEnv, textResult } from "./shared.js";
+import { PRINCIPAL_TOOL_NAMES, registerPrincipalTools } from "./principal-tools.js";
+import { integerEnv, refused, requestKeyOf, textResult } from "./shared.js";
 
 /** TSP-008: tools OMA itself owns. A role projection may reorder or group the
  * extensions' tools, but it can never take these away from the agent. */
@@ -21,6 +22,8 @@ export const OMA_TOOL_NAMES: readonly string[] = Object.freeze([
   "oma_mail_send",
   "oma_mail_ack",
   "oma_status",
+  // Registered only for the Principal's engine (AV11).
+  ...PRINCIPAL_TOOL_NAMES,
 ]);
 function mailId(value: string): string | null {
   if (validMessageId(value)) return value;
@@ -41,18 +44,28 @@ function readBoundedMail(
 ): { id: string; text: string } {
   const id = mailId(value);
   if (!id) throw new Error("expected a message id or canonical archive path");
-  const path = join(root, `${id}:2,`);
+  return { id, text: readBoundedText(join(root, `${id}:2,`), maximum) };
+}
+
+/** One file, not followed if it is a link, read within the bound. */
+function readBoundedText(path: string, maximum: number): string {
   let fd: number | undefined;
   try {
     fd = openSync(
       path,
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
-    return { id, text: new TextDecoder("utf-8", { fatal: true }).decode(boundedBytes(fd, maximum)) };
+    return new TextDecoder("utf-8", { fatal: true }).decode(boundedBytes(fd, maximum));
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
 }
+
+/** BATCH-002: a delivery notice names at most six messages and the index that
+ * lists them all, `/inbox.md`. Inside a sandbox that is a file; the Principal
+ * runs on the host, where the same name is the batch view's index. The notice
+ * is one text for both, so the tool that reads what it names resolves both. */
+const BATCH_INDEX = "/inbox.md";
 
 /** INV09, PR-004: what the model supplies is data. Each value is checked against the
  * grammar of the slot it is going into before the CLI is started, and it goes
@@ -63,13 +76,7 @@ function readBoundedMail(
  * the extension may not import the host's, PI-001; INV04 binds the mirror to its
  * owner by an equivalence test). */
 const SEND_KINDS: ReadonlySet<string> = new Set(["message", "question", "result", "alert", "critical"]);
-function refused(what: string, value: unknown): never {
-  throw new Error(`${what} is not valid: ${JSON.stringify(value)?.slice(0, 120)}`);
-}
-function requestKeyOf(value: unknown): string {
-  if (value === undefined) return `pi-${crypto.randomUUID()}`;
-  return validRequestKey(value) ? value : refused("request key", value);
-}
+
 /** The one spelling of a message the CLI is handed: its id. */
 function messageIdOf(value: unknown): string {
   return (typeof value === "string" ? mailId(value) : null) ?? refused("message id or archive path", value);
@@ -165,6 +172,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   const archive = process.env.OMA_MAIL_ARCHIVE;
   const socket = process.env.OMA_SOCKET;
   const maximum = integerEnv("OMA_MAIL_BYTES") ?? 1024 * 1024;
+  const batchView = process.env.OMA_BATCH_VIEW;
   if (
     !cli ||
     !home ||
@@ -184,14 +192,18 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
     name: "oma_mail_read",
     label: "Read OMA mail",
     description:
-      "Read one immutable OMA mail message by message id or canonical /mail/archive/cur path.",
+      "Read one immutable OMA mail message by message id or canonical /mail/archive/cur path, or the delivery's full index /inbox.md.",
     promptSnippet: "Read OMA mail using the path from the delivery notice.",
     parameters: Type.Object({
       messageId: Type.String({
-        description: "Message id or canonical archive path from the notice",
+        description: "Message id or canonical archive path from the notice, or /inbox.md",
       }),
     }),
     async execute(_id, params) {
+      if (params.messageId === BATCH_INDEX) {
+        if (batchView === undefined || !isAbsolute(batchView)) throw new Error("no delivery index is available here");
+        return textResult(readBoundedText(join(batchView, "inbox.md"), maximum), { index: BATCH_INDEX });
+      }
       const mail = readBoundedMail(archive, params.messageId, maximum);
       return textResult(mail.text, { messageId: mail.id });
     },
@@ -288,4 +300,8 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       );
     },
   });
+  // AV11: the Principal's other capabilities go through the same CLI, as the Principal.
+  if (channel.attached)
+    registerPrincipalTools(pi, { run: (args, signal, at) => runCli(cli, at ?? cwd, environment, channel, args, signal),
+      workspace: cwd, projectGit: process.env.OMA_PROJECT_GIT });
 }

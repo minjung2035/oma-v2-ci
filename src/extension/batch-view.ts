@@ -60,6 +60,15 @@ export function validAddress(value: unknown): value is string {
 export function validRequestKey(value: unknown): value is string {
   return typeof value === "string" && REQUEST_KEY.test(value);
 }
+/** Mirrors isValidTopicName. */
+export function validTopicName(value: unknown): value is string {
+  return typeof value === "string" && TOPIC.test(value);
+}
+const FULL_OID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+/** Mirrors isValidFullOid. */
+export function validFullOid(value: unknown): value is string {
+  return typeof value === "string" && FULL_OID.test(value);
+}
 export function validMessageId(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const match = MESSAGE.exec(value);

@@ -12,7 +12,7 @@ import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, type ChildProcessWi
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
-import { assertModelScope, modelWorkspacePathAt, runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
+import { assertModelScope, modelWorkspacePathAt, projectGitPathAt, runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
 import { PiRpcClient, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
@@ -120,6 +120,9 @@ export function principalEnvironment(
     OMA_AGENT_HOME: home,
     OMA_MAIL_ARCHIVE: join(paths.stateRoot, "mail", "archive", "cur"),
     OMA_CLI_PATH: join(paths.libdir, DEPLOYMENT_LAYOUT.cli),
+    // AV11: read by the trusted extension only, to name the society's main as
+    // the base of an agent the Principal creates; the model's tools never see it.
+    OMA_PROJECT_GIT: projectGitPathAt(paths.stateRoot),
     OMA_FRAME_BYTES: String(limits.frameBytes),
     OMA_MAIL_BYTES: String(limits.mailBodyBytes),
     OMA_WORKSPACE_BYTES: String(profile.workspaceBytes),

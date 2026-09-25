@@ -32,6 +32,7 @@ export class PrincipalChannel {
   private grant: PrincipalGrant | null = null;
   private pending = "";
   private broken = false;
+  private opened = false;
 
   /** For code that holds a grant another way, and for tests. */
   static detached(): PrincipalChannel { return new PrincipalChannel(); }
@@ -44,6 +45,7 @@ export class PrincipalChannel {
     if (env[PRINCIPAL_CHANNEL_ENV] !== String(PRINCIPAL_CHANNEL_FD)) return channel;
     try { if (!fstatSync(PRINCIPAL_CHANNEL_FD).isSocket()) return channel; }
     catch { return channel; }
+    channel.opened = true;
     const socket = new Socket({ fd: PRINCIPAL_CHANNEL_FD, readable: true, writable: false });
     socket.on("data", chunk => channel.push(chunk));
     socket.on("error", () => { channel.clear(); });
@@ -58,6 +60,9 @@ export class PrincipalChannel {
   /** The credential to present right now, or null. Read at each call rather
    * than once, because a restarted broker replaces it. */
   current(): PrincipalGrant | null { return this.grant; }
+  /** Whether this engine was started with the product's credential channel:
+   * the Principal's always is, a Resident's never is. */
+  get attached(): boolean { return this.opened; }
 
   push(chunk: Buffer | string): void {
     if (this.broken) return;

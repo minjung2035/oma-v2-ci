@@ -17,6 +17,7 @@ import {
 import type { BatchRow } from "../storage/rows.js";
 import { MailMaterializer, operationMessage } from "./materializer.js";
 import { selectBatch } from "./batch-policy.js";
+import { displaySubject } from "./headers.js";
 
 /** D01/BATCH-004: what a broker-owned settlement must hold. The next run of
  * `actor` has begun only after its previous invocation's cgroup was proven
@@ -54,7 +55,7 @@ export class BatchCoordinator {
       const message = this.messagePlan(delivery); const headers = this.materializer.headers(message);
       const reply = headers.inReplyTo ?? headers.references.at(-1) ?? null;
       const context = message.contextRevision ? ` context=${contextRevisionDisplayPath(message.contextRevision)}${message.kind === "context" ? "/GOAL.md" : ""}` : "";
-      lines.push(`${index + 1}. sender=${oneLine(headers.from)} subject=${oneLine(headers.subject)} kind=${message.kind} path=${mailArchiveDisplayPath(id)}${reply ? ` reply=${reply}` : ""}${context}`);
+      lines.push(`${index + 1}. sender=${oneLine(headers.from)} subject=${oneLine(displaySubject(headers.subject))} kind=${message.kind} path=${mailArchiveDisplayPath(id)}${reply ? ` reply=${reply}` : ""}${context}`);
     }
     if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
     lines.push("전체 목록: /inbox.md"); return lines.join("\n");

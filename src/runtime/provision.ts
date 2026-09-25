@@ -42,6 +42,7 @@ import { ensureDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedF
 import { ensureDirectory, removeOwnedTree } from "../storage/directory.js";
 import { entryAt, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { hostSystemLayout, prepareResidentRootfs } from "./resident-rootfs.js";
+import { projectGitPathAt } from "../storage/paths.js";
 
 /** The trusted rootfs OMA builds for its Residents (SB-001). */
 export function residentRootfsPath(stateRoot: string): string { return join(stateRoot, "rootfs"); }
@@ -239,7 +240,7 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
     ensureDurableDirectory(path, 0o700);
     created.push(relative);
   }
-  const projectGit = join(stateRoot, "repos", "project.git");
+  const projectGit = projectGitPathAt(stateRoot);
   // The project is consulted only while the canonical repository has no main;
   // after that its history belongs to the society, not to this directory.
   const fresh = !existsSync(projectGit) || !hasCanonicalMain(projectGit);

@@ -20,7 +20,7 @@ function changedBy(path) {
   const subjects = execFileSync("git", ["log", "--format=%s", `${base}..HEAD`, "--", path], { encoding: "utf8" });
   // WP cards of the plan, and AV cards of the whole-codebase adversarial pass
   // (implementation/consistency-decisions.md), whose oracle is their own id.
-  return [...new Set(subjects.match(/\b(?:WP\d{2}|AV\d)\b/g) ?? [])].sort();
+  return [...new Set(subjects.match(/\b(?:WP\d{2}|AV\d+)\b/g) ?? [])].sort();
 }
 const files = [];
 for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
