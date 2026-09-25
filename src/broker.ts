@@ -24,7 +24,7 @@ import { UnitsModule } from "./units.js";
 import { sdNotifyReady } from "./leaf.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { GitModule } from "./git.js";
-import { ReconcileModule } from "./reconcile.js";
+import { RECONCILE_INTERVAL_MS, ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
 import { STATUS_REFRESH_MS, statusViewPath } from "./protocol/status-view.js";
 import { StatusRefresh } from "./views/status-refresh.js";
@@ -42,6 +42,9 @@ export interface BrokerPaths {
   /** D03: a broker no fixed unit binds its Residents to stops them itself on
    * drain, after every dispatched task settles and before its Store closes. */
   quiesceOnDrain?: () => void;
+  /** REC-002, D03: a broker no reconcile timer unit serves runs the periodic
+   * sweep itself, for exactly its own lifetime. */
+  periodicReconcile?: boolean;
 }
 
 /** PR-001: a broker no host started opens no Principal endpoint at all, so
@@ -76,6 +79,8 @@ export class Broker {
   private running = false;
   private draining = false;
   private statusTimer: ReturnType<typeof setInterval> | null = null;
+  private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+  private lastSweepFailure: string | null = null;
   private starting: Promise<void> | null = null;
   private closing: Promise<void> | null = null;
   private readonly runLeases = new RunRegistry();
@@ -91,7 +96,7 @@ export class Broker {
   constructor(
     private readonly store: Store, mail: MailModule, private readonly units: UnitsModule,
     private readonly views: ViewsModule, lifecycle: LifecycleModule,
-    git: GitModule | null, reconcile: ReconcileModule | null,
+    git: GitModule | null, private readonly reconcile: ReconcileModule | null,
     private readonly paths: BrokerPaths, private readonly limits: ProtocolLimits = DEFAULT_LIMITS,
     private readonly processLock?: ProcessLock,
     private readonly principalHost?: PrincipalHostChannel,
@@ -142,6 +147,10 @@ export class Broker {
       this.publishStatus();
       this.statusTimer = setInterval(() => { this.publishStatus(); }, STATUS_REFRESH_MS);
       this.statusTimer.unref();
+      if (this.paths.periodicReconcile === true && this.reconcile !== null) {
+        this.reconcileTimer = setInterval(() => { this.periodicSweep(); }, RECONCILE_INTERVAL_MS);
+        this.reconcileTimer.unref();
+      }
     });
     // Legacy non-awaiting callers cannot create an unhandled rejection. The
     // authoritative start Promise still rejects and production must await it.
@@ -223,6 +232,23 @@ export class Broker {
     try { this.views.refreshWorld(); }
     catch (error) { this.health.observe(error); console.error("world view refresh failed:", error instanceof Error ? error.message : String(error)); }
     this.publishStatus();
+  }
+  /** REC-002: one sweep per interval. A sweep still running is joined, not
+   * doubled (`ReconcileModule.sweep`), and the drain waits for it like any
+   * dispatched task. A failure is reported once until it changes: the next
+   * interval is the retry, and the Human's terminal is not a log to fill. */
+  private periodicSweep(): void {
+    const reconcile = this.reconcile;
+    if (reconcile === null || !this.running || this.draining) return;
+    try { this.health.assertAdmission(); } catch { return; }
+    const task = reconcile.sweep().then(() => { this.lastSweepFailure = null; this.refreshViews(); }, (error: unknown) => {
+      this.health.observe(error);
+      const code = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
+      if (code !== this.lastSweepFailure) console.error(JSON.stringify({ event: "reconcile.sweep", code }));
+      this.lastSweepFailure = code;
+    });
+    this.executingTasks.add(task);
+    void task.finally(() => { this.executingTasks.delete(task); });
   }
   /** TUI-021: unit state changes without a broker transaction, so the status
    * view is also republished on a timer. A failure here is reported and left:
@@ -458,6 +484,7 @@ export class Broker {
     if (this.draining) return;
     this.draining = true; this.running = false; this.health.close();
     if (this.statusTimer !== null) { clearInterval(this.statusTimer); this.statusTimer = null; }
+    if (this.reconcileTimer !== null) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
     // Absence is the truthful status of a broker that is going away; an old
     // file left behind would read as a broker that is merely quiet.
     try { removeOwnedFile(statusViewPath(this.paths.stateRoot)); }

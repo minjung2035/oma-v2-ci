@@ -178,7 +178,7 @@ async function main(): Promise<void> {
     // never through a file, an environment or this process's own output.
     const broker = new Broker(store, mail, units, views, lifecycle, git, reconcile,
       { stateRoot, runRoot, society, hasGoal, storageBytes: cfg.quota.storageBytes, storage,
-        ...(systemdManaged ? {} : { quiesceOnDrain: () => reconcile.quiesceForShutdown() }) }, cfg.limits, lock,
+        ...(systemdManaged ? {} : { quiesceOnDrain: () => reconcile.quiesceForShutdown(), periodicReconcile: true }) }, cfg.limits, lock,
       principalHost);
     lifetime.attach(broker);
     const validateStoredProfiles = () => {
