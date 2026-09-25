@@ -864,7 +864,7 @@ Counterexamples tried against the finished product:
   refuted -- every screen line passes `pad`/`fit`/`displayable`, which drop C0/C1
   controls and zero-width clusters.
 
-## Whole-codebase adversarial pass (after v9) -- AV1..AV30 as applications of INV01..INV12
+## Whole-codebase adversarial pass (after v9) -- AV1..AV31 as applications of INV01..INV12
 
 Every production file was read against the trust boundaries: a Resident (its
 actor socket, and the workspace, home and session directory its sandbox writes),
@@ -875,7 +875,7 @@ applied and was not honoured; it is fixed through that invariant's owner (an
 existing one, or one extended), every new helper meets the abstraction
 acceptance criterion there (it removes an independent decision, a premise a
 caller must remember, or a resource that can be missed), and the WP32.02 and
-WP29 tables below name the owners and regressions. "AV1..AV30" are regression
+WP29 tables below name the owners and regressions. "AV1..AV31" are regression
 ids, like R38 or T118, not principles. The requirement links are in
 `implementation/source-owners.json` (CLI-001, PR-004, FS-003, INF-007, FS-005,
 SB-006).
@@ -912,6 +912,7 @@ SB-006).
 | AV28 | same run: an integrate on a main that had moved answered `STALE_BASE: STALE_BASE` and nothing else. The error table returns the actual OID for STALE_BASE and NOT_DESCENDANT, arch §11 says the same, and CTX-003 gives CONTEXT_CONFLICT its actual revision; the failure's `details` (already in the closed Failure shape) was never filled | ERR-001's table and CTX-003; `publicFailure` still sanitizes everything else | a `StoreError` may carry the value a conflict found (`actual`); `publicFailure` returns it as `details.actual` for those three codes and no other; STALE_BASE and CONTEXT_CONFLICT, which are refused before acceptance, carry it; the CLI shows it. NOT_DESCENDANT is only reached after acceptance, on the base the caller named, so it has no other value to return | a documented return value that was never returned | AV28 (three tests) |
 | AV29 | same run: the Principal's second context publication was refused "unsupported context directory .local". Its workspace is the CLI's home (FS-003), so the CLI's private request cache is there from the first call on; the first publication of the workspace worked only because no CLI call had run yet | FS-003 (the scratch holds the CLI's private state) and CTX-002 (a context tree is the closed set of context files); INV09 (a value is checked in its slot) | the Principal's publish tool refuses the workspace itself, every time, and says to publish a directory holding only the context files; the tool's description says the same | a refusal that depended on whether a CLI call had happened | AV29 (one test) |
 | AV30 | same run: a status call naming `principal@provtest.oma.invalid` was refused as not an agent. That call names the Principal, whose status the wire grammar refuses in any form, but the same slot refused a Resident's address too: AV15 took the displayed names in the mail tools only | AV15's rule (a tool takes the names OMA shows) for every slot that names an existing actor | `actorNameOf` in the extension maps this society's actor address to the actor for status, lifecycle and logs; creation, which names a new actor, keeps its own check | one reading of names in two places | AV30 (with AV29's test) |
+| AV31 | the twelfth functional run quit the product's `oma` while two Residents were inside a 90 s tool call. The broker was gone within a second and both Residents ran on with no broker; when their turns ended their runners failed until systemd's start limit stopped them. `oma` was the terminal session's leader, and its exit hung up the terminal: the broker, in its process group and handling SIGTERM and SIGINT only, died of SIGHUP in the middle of the drain the SIGTERM had started. A user closing the terminal window does the same | D03 (a product-owned broker's host loss must still revoke, quiesce the Residents and fence the next start) and LIFE-006 | `stopOnHostLoss` in broker-lifetime.ts owns the signals by which a host goes away (SIGTERM, SIGINT, SIGHUP), each ending the broker through the one drain; the entrypoint registers it before anything slow. The supervision channel's close already took the same path | a host-loss path that skipped the drain | AV31 (two tests) |
 
 Corrections made while applying the invariants rather than per-card rules:
 AV3 first kept the Principal's CLI home in `principal/private` while moving only
