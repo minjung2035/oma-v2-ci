@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 222,
-    "n_lines": 28497,
+    "n_lines": 28593,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -60,6 +60,12 @@
     "code": 329,
     "language": "TypeScript"
   },
+  "src/config/generations.ts": {
+    "blank": 23,
+    "comment": 101,
+    "code": 316,
+    "language": "TypeScript"
+  },
   "src/tui/session.ts": {
     "blank": 34,
     "comment": 192,
@@ -67,15 +73,9 @@
     "language": "TypeScript"
   },
   "src/tui/model.ts": {
-    "blank": 30,
-    "comment": 49,
-    "code": 286,
-    "language": "TypeScript"
-  },
-  "src/config/generations.ts": {
-    "blank": 20,
-    "comment": 74,
-    "code": 285,
+    "blank": 31,
+    "comment": 55,
+    "code": 291,
     "language": "TypeScript"
   },
   "src/leaf.ts": {
@@ -252,15 +252,15 @@
     "code": 179,
     "language": "TypeScript"
   },
-  "src/storage/context-stream.ts": {
-    "blank": 6,
-    "comment": 17,
-    "code": 173,
-    "language": "TypeScript"
-  },
   "src/tui/app.ts": {
     "blank": 20,
     "comment": 51,
+    "code": 175,
+    "language": "TypeScript"
+  },
+  "src/storage/context-stream.ts": {
+    "blank": 6,
+    "comment": 17,
     "code": 173,
     "language": "TypeScript"
   },
@@ -378,6 +378,12 @@
     "code": 145,
     "language": "TypeScript"
   },
+  "src/tui/view/screens.ts": {
+    "blank": 11,
+    "comment": 18,
+    "code": 145,
+    "language": "TypeScript"
+  },
   "src/runtime/deployment-manifest.ts": {
     "blank": 3,
     "comment": 4,
@@ -393,12 +399,6 @@
   "src/broker/composition.ts": {
     "blank": 4,
     "comment": 4,
-    "code": 143,
-    "language": "TypeScript"
-  },
-  "src/tui/view/screens.ts": {
-    "blank": 11,
-    "comment": 17,
     "code": 143,
     "language": "TypeScript"
   },
@@ -438,6 +438,12 @@
     "code": 127,
     "language": "TypeScript"
   },
+  "src/tui/sources/mail.ts": {
+    "blank": 15,
+    "comment": 34,
+    "code": 125,
+    "language": "TypeScript"
+  },
   "src/mail/materializer.ts": {
     "blank": 2,
     "comment": 7,
@@ -458,14 +464,8 @@
   },
   "src/storage/quota.ts": {
     "blank": 4,
-    "comment": 16,
-    "code": 118,
-    "language": "TypeScript"
-  },
-  "src/tui/sources/mail.ts": {
-    "blank": 14,
-    "comment": 29,
-    "code": 115,
+    "comment": 18,
+    "code": 117,
     "language": "TypeScript"
   },
   "src/config/defaults.ts": {
@@ -1034,7 +1034,7 @@
   },
   "src/tui/view/dashboard.ts": {
     "blank": 3,
-    "comment": 15,
+    "comment": 16,
     "code": 31,
     "language": "TypeScript"
   },
@@ -1339,9 +1339,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1153,
-    "comment": 4280,
-    "code": 23064,
+    "blank": 1158,
+    "comment": 4322,
+    "code": 23113,
     "nFiles": 222
   }
 }

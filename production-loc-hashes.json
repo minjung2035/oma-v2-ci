@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "3c9fb1fa11955caa2c813975246c113092921a3081e7c1d8f63b47bffe0a1651",
-  "report": "1011802d8491ff30a889bbe7928068e5ad71b55f25e87f14d5cb67a2c719ca90",
+  "report": "fe69559d7d079d50d033ab7465eda793cc94cfa9d067085c27f55dafab539957",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -177,7 +177,7 @@
     },
     {
       "path": "src/config/generations.ts",
-      "sha256": "28851646998dcbeb4b911ef188170aaf306eab0423504e8d7cc766620f160da4"
+      "sha256": "2f6f4e74d0ca06d4e66b14bcab005114d2c6aa8a6e680dff582cfc7f93d7b1f2"
     },
     {
       "path": "src/config/operations.ts",
@@ -297,7 +297,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "8898e5221dc44fc66ec7477d9cec1e856438cdaeb08ddbb0d42ec2d0194b180c"
+      "sha256": "22923efa37816ae8528a9a1e23cd3e923af4da1fc0f4ada59ca6739dce1c3d5e"
     },
     {
       "path": "src/entry/runner.ts",
@@ -745,7 +745,7 @@
     },
     {
       "path": "src/storage/quota.ts",
-      "sha256": "ee822432320781a02e3e0ae3f1a63ae8d1529ebbbba665c5a8920ef05d3412b5"
+      "sha256": "28a0e3a405d86090402d1ef5e900490f876f4eb7594ef672c286483a33a24096"
     },
     {
       "path": "src/storage/receipt-projector.ts",
@@ -777,11 +777,11 @@
     },
     {
       "path": "src/tui/app.ts",
-      "sha256": "5944b7a2b1908afe742e5d5a2805d518ce32e2b6188d1739e2bd09c04588a9cd"
+      "sha256": "ae4e926f5a4348d54695714f5d4815a28c93508b5962b18f1851bd108c70ea77"
     },
     {
       "path": "src/tui/dashboard.ts",
-      "sha256": "a6b76c5518311888bed3e3e3f1d29e5493dd6a26838b533daab464ea9fc470d2"
+      "sha256": "427547598b85fce78c121de4bdd5810413960a5fef9b7cf4e4740b1c1aa8dc94"
     },
     {
       "path": "src/tui/exit.ts",
@@ -797,7 +797,7 @@
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "350835282336a63542623aedaf0ca664ad6c1e453b2b341c11a6ede57a655e49"
+      "sha256": "4729a82b3e0696a3fce2afa77f4c5099f579223b26ce6863cfd28c8916985115"
     },
     {
       "path": "src/tui/prompt.ts",
@@ -817,7 +817,7 @@
     },
     {
       "path": "src/tui/sources/mail.ts",
-      "sha256": "24223c0e227df04140e48a55c9a6e438ee2e4e2f4eff35eaeeff16623a83c0ed"
+      "sha256": "edc42444a88c2b384ca3ba2098f09594383353fbe47f76de2c7ef7006dbd4d10"
     },
     {
       "path": "src/tui/sources/settings.ts",
@@ -833,7 +833,7 @@
     },
     {
       "path": "src/tui/view/dashboard.ts",
-      "sha256": "0e91508c2799e55abdb88611c34d6c0e5c3369f387de3864b9280afc44d276a1"
+      "sha256": "76597e43b9130d4957fee9a03b3fc791de30c1a1076d6226322d14a3f34616c6"
     },
     {
       "path": "src/tui/view/index.ts",
@@ -853,7 +853,7 @@
     },
     {
       "path": "src/tui/view/screens.ts",
-      "sha256": "65aca459484ad98287d2d2dfca63fff64e84bbdbb697b3383f7378b93e4b7edc"
+      "sha256": "ba49c483286016c920ec5644c0d4744985321881981a3670128493d6e4411a71"
     },
     {
       "path": "src/tui/view/text.ts",
