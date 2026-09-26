@@ -9,7 +9,8 @@
 그 문장과 어긋나는 판단은 `implementation/design-revisions.md`에 적는다.
 
 점검: 215개 production 파일의 1차 점검과 받는 자리 전부의 2차 점검을 마쳤고, 발견 23개(P0V-01–P0V-23)를
-고쳤다. 실제 provider 점검(14차)에서 하나(P0V-24)를 더 찾아 고쳤다. 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
+고쳤다. 실제 provider 점검(14차)에서 하나(P0V-24)를 더 찾아 고쳤다. 외부 전수 검토를 받아 판정한 4차 점검의 발견
+P0V-25–P0V-53은 하나(P0V-44, 형식 결정이 필요)를 빼고 고쳤다. 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
 설계 판단은 DR9–DR13에 있다. 지금의 검증 판정은 `implementation/validation.md`가 소유한다.
 
 ## 요약
@@ -191,6 +192,9 @@ commit된 문서의 문장, 규범 조항과 그 ID, 수용 시험 번호, 발�
 - **원칙의 적용 범위를 좁게 적었다.** 명제와 용어가 durable fact를 런타임 기록으로만 들었다. 그 사이 문서에서는
   같은 요구 ID와 수용 번호가 두 뜻을 갖고(INF-005·INF-006, T115–T117, T122), 없어진 설계를 전제한 문장이 남았다.
   문서와 식별자에도 같은 원칙이 적용됨을 위 절에 적었다. 원칙의 뜻은 그대로이고 적용 범위를 분명히 했다.
+- **P0-4의 문장이 artifact만 말한다.** 4차 점검의 여섯 발견은 같은 모양(자원이 생긴 순간부터 끝날 때까지 한 owner)을
+  런타임 자원(FD, 자식 프로세스, 저장 예약, provider 호출, listener)에서 보였다. P0-4를 넓혀 읽어 분류했다. 문장을 넓힐지는
+  아직 정하지 않았다(점검 기록 "4차 점검").
 - 원칙을 지킨 코드에서 난 버그는 이번 점검에서 찾지 못했다. 찾으면 이 절차의 두 번째 질문부터 다시 한다.
 
 ## 적용 절차

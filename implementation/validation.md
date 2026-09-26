@@ -172,6 +172,7 @@ Final PASS condition: `v20-fast-final`, `v20-durable-final`, `v20-property-final
 - accept되어 성공한 submit·context의 staging 디렉터리는 남는다(WP20. 14차 실제 점검에서도 보존을 확인).
 - 한 key에 대한 동시 CLI 프로세스는 검증 범위 밖이다(WP26).
 - v1 코드가 이미 재할당한 prepared batch는 저장된 값을 첫 시도로 읽는다. 그보다 이른 시도의 receipt는 전처럼 conflicting이다(DR9).
+- Mail 화면의 갱신은 헤더를 최근 `mailListRows`통만 읽지만, 순서를 정하려고 메일함의 모든 이름을 lstat한다(P0V-43).
 
 **비용과 추적**
 - 비용 상한은 OMA 계약이 아니다. relay가 요청 수·동시성을 쥐지만 stream을 해석하지 않는다(INF-009).
@@ -182,6 +183,10 @@ Final PASS condition: `v20-fast-final`, `v20-durable-final`, `v20-property-final
 **보류한 결정과 검증 공백**
 - `bin`·설치 명령(C2), WP03 이전 Resident unit의 재생성 절차.
 - 전체 `oma` entry의 pty 시험(최상위 catch의 정리 순서), rollover 뒤 endpoint bind 실패의 별도 주입(WP30).
+- 결과 크기와 frame(P0V-44): stop 결과의 `remainingOperations`와 `status.get` 결과는 개수에 상한이 없어 frame 상한을 넘을 수 있다. 고치려면 durable receipt나 wire 형식(페이지·요약)을 바꿔야 한다.
+- unit 이름의 단사성(P0V-26): 두 소유자에게 같은 이름이 되는 unit은 교체하지 않고 거절한다. 이름 체계(UNIT-001) 자체를 바꾸려면 설치된 unit을 옮기는 절차가 필요하다.
+- P0-4 문장의 범위: 4차 점검의 여섯 발견은 런타임 자원(FD, 자식 프로세스, 예약, provider 호출, listener)의 owner 문제였다. P0-4를 넓혀 읽어 분류했으며, 문장을 넓힐지는 결정하지 않았다(priority-0-audit "4차 점검").
+- 4차 점검의 수정(`37cbeee`–`c980611`)은 관련 시험 묶음만 돌렸고 검증 cycle로 결박하지 않았다. 결박하기 전까지 fast lane의 R38 시험("the validation record names the verification inputs")은 이 기록이 지금 트리를 결박하지 않았으므로 실패한다.
 
 ## 기본 재검증
 

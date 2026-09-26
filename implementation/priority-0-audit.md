@@ -3,7 +3,8 @@
 이 문서는 **점검 기록**이다([문서 지도](../docs/README.md)). [PRIORITY-0.md](../PRIORITY-0.md)의 적용 절차가 요구하는 기록이며, 다음 점검도 새 파일을 만들지 않고 이 문서를 갱신한다.
 여기의 판정은 각 기준점의 코드에 대한 것이다. 지금의 검증 상태와 수치는 [validation.md](validation.md)가 소유한다.
 
-**상태: 완료(2026-09-26).** 코드의 발견 24개(P0V-01–P0V-24)와 문서·식별자의 발견 14개(P0D-01–P0D-14)를 모두 고쳤다. 코드 발견은 상태 열이 수정 commit이다.
+**상태(2026-09-26).** 코드의 발견 24개(P0V-01–P0V-24)와 문서·식별자의 발견 14개(P0D-01–P0D-14)를 모두 고쳤다. 4차 점검(외부 전수 검토)의 발견
+P0V-25–P0V-53 가운데 P0V-44만 결정을 기다리고 나머지는 고쳤다. 코드 발견은 상태 열이 수정 commit이다.
 
 | 절 | 내용 | 줄 번호의 기준 |
 |---|---|---|
@@ -13,6 +14,7 @@
 | 2차 점검 | 모든 `catch`와 `existsSync`에 P0-5를 다시 물은 판정, P0V-18–P0V-23 | `7b6c462` |
 | 실제 provider 점검(14차) | DR9–DR13을 제품에서 끝까지 확인한 결과, P0V-24 | 14차 빌드(`1b3827c` 이후) |
 | 3차 점검: 문서와 식별자 | 문서 25개와 식별자(요구 ID, 수용 번호)의 판정, P0D-01–P0D-14 | `8cb0406` |
+| 4차 점검: 외부 전수 검토 | 외부 검토의 N01–N23·F1–F7 판정, P0V-25–P0V-53, 결정이 필요한 것 | `6787211` |
 | 수정 검증 | 수정마다 되돌린 변이와 그 결과 | — |
 
 방법: 파일을 하나씩 읽고, 그 파일이 만들거나 해석하는 durable fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적는다. 키워드 검색은 읽은 파일의 호출 관계를 따라갈 때만 쓴다.
@@ -523,6 +525,83 @@ lock holder다. v17 final은 이 실패에서 멈췄고 v18이 대체한다.
 - P0-7: `scripts/document-integrity.mjs`(`check:documents`, `check:architecture`에 포함)가 요구 ID의 유일성, 수용 행의 위치와 대역, 링크와 anchor를 검사한다. `test/document-integrity.test.mjs`가 이 트리의 통과와 세 가지 negative control을 확인한다(fast lane 필수).
 
 작업 중 실수 하나: P0D-02를 처음 고칠 때 이미 쓰이던 T120–T122로 옮겨 새 충돌을 만들었다. HEAD의 최대 번호(T123)를 확인하고 되돌린 뒤 T124부터 다시 매겼다.
+
+## 4차 점검: 외부 전수 검토
+
+기준점 `6787211`. 사용자가 전달한 외부 전수 검토 묶음(224개 생산 파일, 신규 지적 N01–N23, 앞선 묶음의 F1–F7, 구조 개선 원장
+S01–S12)을 받아, 지적마다 코드와 대조해 판정했다. 묶음의 원문 사본 6개는 기준점의 Git blob과 바이트가 같았다. 판정 기준은 다른 점검과
+같다: 위반이면 고칠 하위 규칙을 적고 같은 종류가 있는 곳을 함께 고친다. S01–S12는 지적이 아니라 개선 제안이므로 판정 대상에서 뺐다.
+
+### 판정과 수정
+
+| ID | 외부 | 규칙 | 파일(`6787211`) | 요약 | 상태 |
+|---|---|---|---|---|---|
+| P0V-25 | N01 | P0-4 | cli/transport.ts `presentedGrant` | Principal CLI가 요청마다 credential FD를 읽어, 같은 프로세스의 두 번째 요청(조회 뒤 재전송)이 AUTH_FAILED가 되고 결과가 "불명확"으로 끝났다. `submit`은 Principal 도구가 부르지 않아 해당하지 않는다 | 수정 37cbeee |
+| P0V-26 | N02 | P0-1 | domain/derived.ts `unitNameFor`, units.ts `install` | UNIT-001의 이름(`oma-<society>-<actor>`)은 두 부분이 모두 `-`를 가질 수 있어 두 소유자에게 같은 이름이 된다. 설치는 그 이름의 파일을 그대로 교체했다 | 수정 c980611(교체 거절·접수 전 거절). 이름 자체는 그대로(아래 "결정이 필요한 것") |
+| P0V-27 | N03 | P0-4 | runtime/broker-supervisor.ts `start` | spawn이 실패하면 pid 없는 child를 돌려주고 나중에 `error`를 낸다. supervisor는 그 리스너를 달기 전에 반환해 host가 처리되지 않은 error로 끝났다. 같은 순서가 extension CLI 자식과 Pi RPC client에도 있었다 | 수정 37cbeee |
+| P0V-28 | N04 | P0-5 | entry/broker.ts, runtime/supervision-channel.ts | 감독 채널이 선언됐는데 성립하지 않으면(host가 먼저 죽음 등) 선언이 없을 때처럼 계속 돌아 society lock을 쥐었다 | 수정 74c9203 |
+| P0V-29 | N05 | P0-2 | entry/broker.ts, git/quarantine.ts | bundle 가져오기 전체의 기한이 integration check 기한의 최댓값이었다. check가 없는 기본 설정에서 1초였다 | 수정 74c9203(quarantine profile이 기한을 소유, canonical Git 기한 120초) |
+| P0V-30 | N06 | P0-5 | store.ts, storage/transitions.ts, storage/operation-transitions.ts | 뒤 단계 시각을 벽시계 그대로 써서, 시계가 뒤로 가면 CHECK가 갱신을 거절하거나 delivery가 STORE_CORRUPT(수락 차단)로 읽혔다 | 수정 7efa4d8(`MAX(?, created_at_ms)`, 형식·schema 불변) |
+| P0V-31 | N07 | P0-2 | domain/tool-surface.ts `assertAcyclic` | 순환 검사의 방문 표시를 깊이 계산에도 써서, 선언 순서에 따라 깊이 5가 허용됐다(120개 중 90개) | 수정 64cc237 |
+| P0V-32 | N08 | P0-2 | broker/principal-endpoint.ts, internal-dispatcher.ts | 내부 봉투 검사가 internal dispatcher에만 있고 Principal attach·detach와 host 전달 endpoint에는 없었다. detach 응답도 선언된 형식(`{ detached: true }`)과 달랐다 | 수정 9b18c34 |
+| P0V-33 | N09 | P0-1 | domain/errors.ts `normalizeStorageFailure`, broker.ts `fail` | 정리 실패가 함께 묶인 오류를 다시 만들면서 details와 AcceptedFailure 종류를 잃었고, 중첩된 AggregateError를 풀지 않았다. broker의 재구성도 details를 버렸고, "draining" 사실이 네 곳 중 한 곳에서만 사유를 실었다 | 수정 64cc237 |
+| P0V-34 | N11 | P0-4 | runtime/inference-relay.ts `forward`, `tunnel` | 응답을 기다리던 엔진이 떠나도 provider 호출을 끊지 않아, provider가 아무도 없는 곳에 계속 흘려보내고 slot이 idle timeout까지 남았다 | 수정 4f38e85. tunnel 쪽은 재현되지 않았다(아래) |
+| P0V-35 | N12 | P0-2 | extension/cli-process.ts `collect` | CLI 출력을 청크마다 UTF-8로 디코딩해 pipe가 자른 문자가 깨졌다 | 수정 37cbeee |
+| P0V-36 | N13 | P0-2 | runtime/pi-spawn-plan.ts, tui/session.ts, extension/mail-tools.ts | 저장된 메일(EML)의 읽기 한도로 본문 한도를 넘겼다. 저장된 메일은 인코딩 뒤 본문과 헤더라서 본문의 최대 3.12배(quoted-printable), 한글 base64는 1.37배다. 256 KiB 한도에서 한글 본문 약 190 KB부터 읽지 못했다 | 수정 d2505c9(`storedMailBytes` 한 곳) |
+| P0V-37 | N14 | P0-2 | extension/mail-tools.ts `mailId` | Principal의 CLI 결과는 host archive 경로를 보이는데(DR1), 메일 도구는 `/mail/archive/cur`만 되돌려 읽었다 | 수정 9b18c34 |
+| P0V-38 | N15 | P0-5 | cli/request-service.ts | 같은 key의 재시도가 조회보다 동결된 본문을 먼저 읽어, 본문이 없으면 broker의 영수증을 보지 못했다 | 수정 74c9203 |
+| P0V-39 | N16 | P0-5 | tui/dashboard.ts `activeCount` | 관측하지 못한 unit(`activeState: null`)을 세지 않아 Active 0, observed로 보였다 | 수정 74c9203 |
+| P0V-40 | N17 | — | tui/view/screens.ts, tui/model.ts | 목록을 늘 위에서부터 그려 작은 화면에서 선택이 사라지고, 본문은 스크롤할 수 없었다(↑/↓가 다른 메일을 열었다) | 수정 d2505c9 |
+| P0V-41 | N18 | P0-1 | tui/model.ts, tui/app.ts | 연 메일을 줄 번호로 기억해 갱신이 목록을 다시 정렬하면 다른 메일이 열렸다 | 수정 d2505c9(Maildir 이름의 identity) |
+| P0V-42 | N19 | P0-5 | tui/sources/mail.ts `readBody` | 한도에서 잘린 본문을 전체처럼 보였다 | 수정 d2505c9 |
+| P0V-43 | N20 | — | tui/sources/mail.ts | 갱신마다 메일함의 모든 메시지를 동기로 열고 읽었다 | 수정 d2505c9(lstat로 정렬, 헤더는 최근 `mailListRows`개만) |
+| P0V-44 | N21 | P0-5 | lifecycle/actions.ts, views.ts | stop 결과의 `remainingOperations`와 status 결과의 크기가 frame 상한과 묶이지 않았다 | 보류: durable receipt·wire 형식의 변경이라 결정이 필요 |
+| P0V-45 | N22 | P0-2 | mail/display.ts, extension/mail-tools.ts `readableMail` | 본문 앞의 U+FEFF를 지웠고, 머리 끝을 CRLF에서만 찾아 LF 메일을 인코딩된 채 보였다(`headerEnd`는 LF도 받음) | 수정 9b18c34 |
+| P0V-46 | N23 | P0-2 | tui/keys.ts | 일반 입력은 입력한 U+FFFD까지 지우고, 붙여넣기는 깨진 바이트에서 생긴 U+FFFD를 넣었다. 같은 사실을 두 경로가 반대로 읽었다 | 수정 260a760 |
+| P0V-47 | F1 | P0-3 | config/generations.ts `recordCommitted`, `journalTail` | 줄바꿈 전에 끊긴 journal 기록에 다음 기록이 붙어 둘 다 사라지고, 수집이 실제 직전 세대(rollback의 기준)를 지웠다 | 수정 64cc237 |
+| P0V-48 | F2 | P0-5 | runtime/pi-rpc.ts `onData` | 한 청크가 줄 A를 끝내고 줄 B를 시작하면 A의 기한이 B에 이어졌다 | 수정 64cc237 |
+| P0V-49 | F3 | P0-4 | storage/durable-fs.ts `replaceDerivedFile` 외 2곳 | 닫은 FD를 뒤의 실패에서 다시 닫았다. directory와 process-lock은 `closeSync`가 실패하면 같은 번호를 다시 닫았다(Linux는 실패해도 번호를 반납한다) | 수정 d48eb09 |
+| P0V-50 | F4 | P0-4 | broker.ts `serveFrames` | 실행으로 넘긴 요청의 저장 예약을 연결 종료가 돌려줬다 | 수정 d48eb09 |
+| P0V-51 | F5 | P0-1 | tui/sources/settings.ts, extensions.ts | Principal만 있는 설정에서 Worker 편집과 Extensions의 Worker 열이 Principal profile을 바꿨다 | 수정 74c9203 |
+| P0V-52 | F6 | P0-4 | broker.ts `closeListener` | 끝난 listener close를 배열에 계속 보관했다 | 수정 d48eb09 |
+| P0V-53 | F7 | P0-2 | views/status-refresh.ts `request` | 실행이 끝나고 이어지는 실행이 시작되기 전 틈에 새 요청이 두 번째 관측을 시작했다 | 수정 d48eb09 |
+
+부합으로 판정한 것: **N10**(Git 관측 실패를 손상으로 단정). workspace 검증에는 Git 실패를 넓게 잡는 `catch`가 없다. timeout·출력 한도·spawn
+실패는 `requireTextExit`가 DEADLINE_EXCEEDED·LIMIT_EXCEEDED·INTERNAL_ERROR로 올리고, STORE_CORRUPT는 끝까지 실행된 git이 0이 아닌 값으로
+끝났을 때뿐이다(P0V-07의 기준과 같다).
+
+재현되지 않은 것: **N11의 tunnel 쪽**. upgrade가 끝나기 전에 엔진이 떠나는 순서에서, 수정 전 코드도 엔진 쪽 socket이 끝나면 pipe가 provider 쪽을
+끝내 provider 연결이 닫혔다. 수정은 그 pipe의 부수 효과 대신 소유를 명시하는 것으로만 두었고, 그 시험은 회귀 방지이지 수정을 증명한 대조가 아니다.
+
+결정이 필요한 것:
+
+- **P0V-44(N21)**: 결과의 크기를 frame에 묶으려면 durable receipt(`remainingOperations`)나 status 결과의 형식(페이지·요약)을 바꿔야 한다.
+  계획 없는 receipt·wire 변경은 하지 않는다는 규칙에 따라 고치지 않았다.
+- **P0V-26(N02)의 이름**: 이번 수정은 겹치는 이름을 거절할 뿐이다. 이름을 단사로 만들려면 UNIT-001을 바꾸고 설치된 unit을 옮겨야 한다.
+
+### 기존 시험의 기대를 바꾼 곳
+
+- `cli-request-intent`의 "본문이 없으면 wire로 보내기 전에 멈춘다": 이 시험이 지키던 것은 "동결된 본문 없이 다시 보내거나 source에서 다시
+  만들지 않는다"이고, 조회(operation.get)까지 막는 것이 P0V-38의 결함이었다. 손상된 metadata 부분은 그대로 두고, 본문이 없는 부분은
+  "조회에 REQUEST_NOT_FOUND이면 body absent로 멈추고 다시 보내지 않는다"로 나눴다.
+- `unread-observations`의 DR13 시험: 읽을 수 없는 메시지 파일이 있으면 대기 수가 "모름"이었다. 대기 수는 이제 이름 관측(lstat)으로 세고,
+  lstat은 그 파일이 일반 파일이라고 답한다. DR13의 규칙(이름에 대한 답은 사실로 말한다)에 따라 대기 중인 메시지로 센다. 이름이 답하지 않는
+  경우(lstat 실패)는 여전히 "모름"이다.
+
+### 수정 검증
+
+수정마다 시험을 먼저 쓰고, 고친 소스 파일만 기준점의 것으로 되돌려 빌드한 뒤 그 시험이 실패하는지 확인했다(되돌린 코드는 매번 복원하고 다시
+빌드했다). 모두 실패했다. 다만 P0V-26, P0V-42, P0V-43은 되돌린 코드에 새 함수·필드가 없어 실패한 것이라 대조가 약하다. P0V-34의 tunnel
+시험은 위와 같이 되돌린 코드에서도 통과한다. 시험은 `test/p0-review4.test.ts`와 해당 owner의 시험 파일(storage-reservation,
+generation-retention, r12-ledger-transitions, principal-endpoint, delivery-notice, audit-cli-submit, cli-request-intent,
+broker-composition-policy, inference-relay)에 있다. 관련 시험 묶음은 커밋마다 다시 돌렸고, 전체 검증 cycle(lane)과 validation 결박은
+하지 않았다.
+
+### 원칙에 대한 관찰
+
+P0-4의 문장은 accept 전 artifact(파일·메일·staging·임시 작업공간)의 owner를 말한다. 이번 발견 가운데 여섯(P0V-25, 27, 34, 49, 50, 52)은
+같은 모양 -- 자원이 생긴 순간부터 끝날 때까지 한 owner가 있어야 한다 -- 을 런타임 자원(FD, 자식 프로세스, 저장 예약, provider 호출,
+listener)에서 보였다. 이번에는 P0-4를 넓혀 읽어 분류했다. 원칙의 문장을 그렇게 넓힐지는 사용자의 판단으로 남긴다.
 
 ## 수정 검증
 
