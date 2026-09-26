@@ -136,6 +136,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
     },
     "../domain/deployment.js": { DEPLOYMENT_LAYOUT: { extension: "dist/src/pi-extension.js", cli: "dist/src/cli.js" } },
+    "../domain/mail-values.js": { storedMailBytes: bodyBytes => bodyBytes },
     "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi" }) },
     "../storage/directory.js": { ensureDirectory() {} },
     "../tui/app.js": { TuiApp: class {

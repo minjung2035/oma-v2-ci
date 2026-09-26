@@ -5,6 +5,8 @@ import { Script } from "node:vm";
 import { join } from "node:path";
 import ts from "typescript";
 import { createArchitectureProgram } from "../scripts/dependency-graph.mjs";
+// The envelope rule is the protocol's own (P0V-32), not a copy in this fixture.
+import { internalEnvelopeProblem } from "../dist/src/protocol/methods.js";
 
 const options = {
   strict: true,
@@ -114,6 +116,7 @@ function internalFixture() {
         const descriptor = { channel: "host", paramsCheck: () => null };
         return {
           INTERNAL_METHODS: { "host.principalRelay": descriptor },
+          internalEnvelopeProblem,
           isInternalMethod: (value) => value === "host.principalRelay",
         };
       }

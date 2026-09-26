@@ -595,7 +595,9 @@ S01–S12)을 받아, 지적마다 코드와 대조해 판정했다. 묶음의 �
 시험은 위와 같이 되돌린 코드에서도 통과한다. 시험은 `test/p0-review4.test.ts`와 해당 owner의 시험 파일(storage-reservation,
 generation-retention, r12-ledger-transitions, principal-endpoint, delivery-notice, audit-cli-submit, cli-request-intent,
 broker-composition-policy, inference-relay)에 있다. 관련 시험 묶음은 커밋마다 다시 돌렸고, 전체 검증 cycle(lane)과 validation 결박은
-하지 않았다.
+하지 않았다. 관련 시험을 import로 골랐기 때문에, 소스를 직접 변환해 import를 대역으로 바꾸는 두 조립 시험
+(`oma-composition-policy`, `p11-p12-dispatch`)을 빠뜨렸다. 끝에 돌린 로컬 전체 시험에서 이 둘이 새 import(`domain/mail-values`,
+`internalEnvelopeProblem`)를 모른다는 이유로 29개 실패해 대역을 맞췄다(봉투 규칙은 복제하지 않고 컴파일된 실제 함수를 넘긴다).
 
 ### 원칙에 대한 관찰
 
