@@ -58,12 +58,12 @@ test("DR4 / TUI-019, TUI-007, LIFE-008: the Human turns worker integrate on and 
     assert.equal(applyLabel(field.apply), "이후 만드는 worker부터");
     assert.equal(commitField(before, WORKER_INTEGRATE, "on").kind, "saved");
     const on = readSettings(f.path);
-    assert.ok(on.config.agentProfiles[on.workerProfile]!.capabilities.includes("code.integrate"));
+    assert.ok(on.config.agentProfiles[on.workerProfile!]!.capabilities.includes("code.integrate"));
     assert.equal(on.config.agentProfiles[on.config.principalProfile]!.capabilities.includes("code.integrate"), false,
       "turning worker integrate on gave the Principal code.integrate");
     assert.equal(commitField(on, WORKER_INTEGRATE, "on").kind, "unchanged");
     assert.equal(commitField(on, WORKER_INTEGRATE, "off").kind, "saved");
-    assert.equal(readSettings(f.path).config.agentProfiles[on.workerProfile]!.capabilities.includes("code.integrate"), false);
+    assert.equal(readSettings(f.path).config.agentProfiles[on.workerProfile!]!.capabilities.includes("code.integrate"), false);
     assert.throws(() => commitField(readSettings(f.path), WORKER_INTEGRATE, "maybe"));
   } finally { f.close(); }
 });

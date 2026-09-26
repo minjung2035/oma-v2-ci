@@ -11,6 +11,16 @@ import { StoreError } from "../domain/errors.js";
 import { decodeProcessText } from "../process/run.js";
 import { PreparationExecutor } from "../process/preparation.js";
 import { GIT_ENV } from "../process/policies.js";
+import { CANONICAL_PROCESS_LIMITS } from "./canonical-command.js";
+
+/** The quarantine's resource profile: its CPU, memory and task bounds, and the
+ * deadline of one bundle import start to end. P0V-29, P0-2: the import is
+ * canonical Git work in a disposable repository and is bounded like the
+ * canonical Git commands; it is not an integration check, whose deadline it
+ * used to take (1 s when, as by default, there are no checks). */
+export const QUARANTINE_RESOURCES = Object.freeze({
+  cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024, timeoutSeconds: CANONICAL_PROCESS_LIMITS.timeout / 1000,
+});
 
 const SCRIPT = [
   "set -eu",
@@ -67,10 +77,10 @@ export class QuarantineImporter {
   constructor(private readonly paths: GitPaths, private readonly canonicalHas: (candidate: string) => boolean) {}
   async importBundle(bundleFd: number, candidate: string, exportRef: string, prerequisites: readonly string[]): Promise<void> {
     const limits = this.paths.quarantineResources;
-    if (!limits || ![limits.cpuSeconds, limits.memoryBytes, limits.tasks, this.paths.quarantineTmpBytes, this.paths.checkTimeoutSeconds]
+    if (!limits || ![limits.cpuSeconds, limits.memoryBytes, limits.tasks, limits.timeoutSeconds, this.paths.quarantineTmpBytes]
       .every(value => Number.isSafeInteger(value) && value > 0))
       throw new StoreError("SPIKE_UNRESOLVED", "quarantine resource profile is unavailable");
-    const timeoutMs = this.paths.checkTimeoutSeconds * 1000;
+    const timeoutMs = limits.timeoutSeconds * 1000;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs > 0x7fffffff)
       throw new StoreError("SPIKE_UNRESOLVED", "quarantine timeout cannot be enforced by the native timer");
     if (this.executor.blocked) throw new StoreError("REF_STATE_UNKNOWN", "canonical quarantine preparation is active or uncertain");
@@ -94,7 +104,7 @@ export class QuarantineImporter {
         "/usr/bin/unshare", "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork",
         "--kill-child=SIGKILL", "--mount-proc", "/bin/sh", "-c", SCRIPT, "oma-quarantine",
         "/proc/self/fd/3", this.paths.projectGit, candidate, exportRef, String(this.paths.quarantineTmpBytes), root, ...prerequisites,
-      ], env: GIT_ENV, timeoutMs: Math.max(1000, timeoutMs), stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 }, undefined, [bundleFd]);
+      ], env: GIT_ENV, timeoutMs, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 }, undefined, [bundleFd]);
       if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", `quarantine import outcome is ${result.kind}`);
       settledNamespaceCommand = true;
       let stdout: string; let stderr: string;

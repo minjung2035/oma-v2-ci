@@ -35,8 +35,7 @@ function repository(t: TestContext, format: "sha1" | "sha256" = "sha1") {
   // The authoritative policy is reread before main moves; a hook can act there.
   const reader = { revision: POLICY.policyRevision, onRead: null as (() => void) | null };
   const git = new GitModule({ stateRoot: root, projectGit, contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"),
-    society: "crash", quarantineTmpBytes: 256 * 1024 * 1024, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 },
-    checkTimeoutSeconds: 30 }, store, mail, POLICY, () => { reader.onRead?.(); return reader.revision; });
+    society: "crash", quarantineTmpBytes: 256 * 1024 * 1024, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30 } }, store, mail, POLICY, () => { reader.onRead?.(); return reader.revision; });
   const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8")) as { base: string; candidate: string; exportRef: string };
   const main = () => gitCommand(root, ["--git-dir", projectGit, "rev-parse", "refs/heads/main"]);
   const third = () => {

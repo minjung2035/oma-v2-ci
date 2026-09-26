@@ -9,6 +9,10 @@
  */
 import type { AgentStatus } from "../../implementation/contracts.js";
 
+/** The reason a status row gives for a unit systemd answered it does not have:
+ * an observed absence, unlike a row with no reason and no state (not observed).
+ * Written by the projection and read by the Dashboard (P0V-39, P0-2). */
+export const NO_UNIT_REASON = "no systemd unit";
 export const STATUS_VIEW_FILE = "status.json";
 /** How often the broker republishes while nothing else refreshes the view. */
 export const STATUS_REFRESH_MS = 5000;

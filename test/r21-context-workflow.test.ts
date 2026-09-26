@@ -50,7 +50,7 @@ function fixture(format: "sha1" | "sha256") {
   store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); tx.insertAgent(makeValidAgent("bob", { desired: "stopped" })); });
   const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
   const git = new GitModule({ stateRoot: root, projectGit: join(root, "repos/project.git"), contextGit,
-    worldDir: join(root, "world"), society: "demo", quarantineTmpBytes: 1024, checkTimeoutSeconds: 30 }, store, mail, null);
+    worldDir: join(root, "world"), society: "demo", quarantineTmpBytes: 1024 }, store, mail, null);
   return { root, store, mail, git, command, contextGit, close() { store.close(); cleanup(root); } };
 }
 

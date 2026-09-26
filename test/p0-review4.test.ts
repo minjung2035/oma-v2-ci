@@ -20,6 +20,14 @@ import type { UnitsModule } from "../src/units.js";
 import { AcceptedFailure, StoreError, normalizeStorageFailure, publicFailure } from "../src/domain/errors.js";
 import { depthOf, planToolSurface, type GroupSpec } from "../src/domain/tool-surface.js";
 import { PiRpcClient, type PiEvent } from "../src/runtime/pi-rpc.js";
+import { validateConfig } from "../src/config.js";
+import { defaultHostConfig } from "../src/config/defaults.js";
+import { INITIAL_WORKERS, WORKER_INTEGRATE, WORKER_MODEL, WORKER_PROFILE, applyField, fieldsOf, settingsOf } from "../src/tui/sources/settings.js";
+import type { AgentStatus } from "../implementation/contracts.js";
+import { dashboardData } from "../src/tui/dashboard.js";
+import { dashboardRows } from "../src/tui/view/dashboard.js";
+import { NO_UNIT_REASON } from "../src/protocol/status-view.js";
+import { HOST_CHANNEL_ENV } from "../src/protocol/host-channel.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -258,4 +266,71 @@ test("P0V-48 / F2, P0-5: each partial line has its own deadline, so a line start
   const ended = await Promise.race([client.completion, new Promise<"running">(resolve => setTimeout(() => resolve("running"), 1800))]);
   assert.equal(ended, "running", `the transport ended: ${JSON.stringify(ended)}`);
   assert.deepEqual(seen, ["a", "b"]);
+});
+
+test("P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is refused, never applied to the Principal", () => {
+  const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+  const principal = defaults.agentProfiles[defaults.principalProfile]!;
+  // A valid configuration with a Principal only.
+  const config = validateConfig({ ...defaults, agentProfiles: { [defaults.principalProfile]: { ...principal, childProfile: null } }, initialResidents: [] });
+  const settings = settingsOf("/nonexistent/config.json", config);
+  assert.equal(settings.workerProfile, null, "the Principal's profile was taken for the Workers'");
+  const fields = fieldsOf(config, settings.workerProfile);
+  for (const id of [WORKER_MODEL, WORKER_INTEGRATE]) {
+    const field = fields.find(entry => entry.id === id);
+    assert.ok(field !== undefined && field.kind !== "link");
+    assert.match(String(field.blocked), /Worker profile/, `${id} is offered`);
+  }
+  for (const [field, value] of [[WORKER_INTEGRATE, "on"], [WORKER_MODEL, defaults.agentProfiles[defaults.principalProfile]!.modelProfile], [INITIAL_WORKERS, 1]] as const)
+    assert.throws(() => applyField(settings, field, value), /no worker profile/, `${field} changed something`);
+  assert.throws(() => applyField({ ...settings, config: { ...config, initialResidents: [{ name: "w", profile: defaults.principalProfile, brief: "b" }] } },
+    WORKER_PROFILE, defaults.principalProfile), /unknown agent profile/, "a Resident was offered the Principal's profile");
+  // A profile the Principal names as its child is still the Workers' own.
+  assert.equal(settingsOf("/nonexistent/config.json", defaults).workerProfile, principal.childProfile);
+  assert.ok(applyField(settingsOf("/nonexistent/config.json", defaults), WORKER_INTEGRATE, "on").agentProfiles[principal.childProfile!]!.capabilities.includes("code.integrate"));
+});
+
+test("P0V-39 / N16, P0-5: a Resident whose unit was not observed leaves the Active count unknown, never 0", () => {
+  const defaults = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
+  const row = (agent: string, activeState: string | null, reason: string | null = null): AgentStatus => ({
+    agent, desired: "enabled", activeState, subState: activeState === null ? null : "running", unitResult: activeState === null ? null : "success",
+    execMainStatus: activeState === null ? null : 0, pending: 2, preparedBatches: 0, reason, runnerObservedAtMs: null });
+  const shown = (statuses: AgentStatus[]) => {
+    const data = dashboardData({ config: defaults, principalModel: { configured: "m", session: null }, unread: 0,
+      observation: { kind: "observed", statuses, observedAtMs: Date.UTC(2026, 8, 26) } });
+    return { data, active: dashboardRows(data).find(entry => entry.label === "Active")!.value };
+  };
+  // Observed: active, inactive, and a unit systemd says it does not have.
+  const known = shown([row("principal", null), row("alice", "active"), row("bob", "inactive"), row("carol", null, NO_UNIT_REASON)]);
+  assert.equal(known.data.status.kind === "observed" && known.data.status.active, 1);
+  assert.equal(known.active, "1");
+  // One Resident not observed: the count is unknown; what is known stays shown.
+  for (const statuses of [[row("alice", "active"), row("bob", null)], [row("alice", null), row("bob", null)]]) {
+    const unknown = shown(statuses);
+    assert.equal(unknown.data.status.kind === "observed" && unknown.data.status.active, null);
+    assert.match(unknown.active, /^unknown/, `shown as ${unknown.active}`);
+    assert.equal(unknown.data.status.kind === "observed" && unknown.data.status.pending, 4, "known pending counts are kept");
+  }
+});
+
+test("P0V-28 / N04, P0-5: a broker started as supervised whose channel cannot be established does not run on unsupervised", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-unsupervised-"));
+  try {
+    // Descriptor 3 declared as the host channel but a regular file: the host
+    // cannot be identified, which is not the same as there being none.
+    const channel = join(dir, "not-a-socket"); writeFileSync(channel, "");
+    const fd = openSync(channel, "r");
+    const child = spawn(process.execPath, [join(process.cwd(), "dist/src/entry/broker.js"), "--society", "unsupervised"], {
+      env: { PATH: "/usr/bin:/bin", HOME: dir, XDG_DATA_HOME: join(dir, "data"), XDG_RUNTIME_DIR: join(dir, "run"), [HOST_CHANNEL_ENV]: "3" },
+      stdio: ["ignore", "ignore", "pipe", fd],
+    });
+    closeSync(fd);
+    let stderr = "";
+    child.stderr!.on("data", chunk => { stderr += String(chunk); });
+    const code = await new Promise<number | null>(resolve => child.once("close", resolve));
+    assert.notEqual(code, 0);
+    assert.match(stderr, /could not be established; this broker does not start/);
+    // It stopped before configuration: nothing of the society was opened.
+    assert.doesNotMatch(stderr, /startup failed|config/i, stderr);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

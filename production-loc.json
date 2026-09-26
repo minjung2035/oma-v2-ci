@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 29792,
+    "n_lines": 29859,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -74,14 +74,20 @@
   },
   "src/tui/model.ts": {
     "blank": 31,
-    "comment": 57,
-    "code": 293,
+    "comment": 58,
+    "code": 294,
     "language": "TypeScript"
   },
   "src/extension/mail-tools.ts": {
     "blank": 11,
     "comment": 71,
     "code": 291,
+    "language": "TypeScript"
+  },
+  "src/tui/sources/settings.ts": {
+    "blank": 25,
+    "comment": 75,
+    "code": 287,
     "language": "TypeScript"
   },
   "src/runner.ts": {
@@ -94,12 +100,6 @@
     "blank": 29,
     "comment": 90,
     "code": 279,
-    "language": "TypeScript"
-  },
-  "src/tui/sources/settings.ts": {
-    "blank": 24,
-    "comment": 65,
-    "code": 278,
     "language": "TypeScript"
   },
   "src/runtime/pi-rpc.ts": {
@@ -288,6 +288,12 @@
     "code": 170,
     "language": "TypeScript"
   },
+  "src/entry/broker.ts": {
+    "blank": 3,
+    "comment": 49,
+    "code": 169,
+    "language": "TypeScript"
+  },
   "src/git/submit.ts": {
     "blank": 2,
     "comment": 12,
@@ -310,12 +316,6 @@
     "blank": 1,
     "comment": 12,
     "code": 165,
-    "language": "TypeScript"
-  },
-  "src/entry/broker.ts": {
-    "blank": 3,
-    "comment": 43,
-    "code": 163,
     "language": "TypeScript"
   },
   "src/storage/durable-fs.ts": {
@@ -342,12 +342,6 @@
     "code": 156,
     "language": "TypeScript"
   },
-  "src/cli/request-service.ts": {
-    "blank": 9,
-    "comment": 9,
-    "code": 155,
-    "language": "TypeScript"
-  },
   "src/git.ts": {
     "blank": 2,
     "comment": 9,
@@ -358,6 +352,12 @@
     "blank": 11,
     "comment": 77,
     "code": 155,
+    "language": "TypeScript"
+  },
+  "src/cli/request-service.ts": {
+    "blank": 10,
+    "comment": 17,
+    "code": 152,
     "language": "TypeScript"
   },
   "src/process/async.ts": {
@@ -422,7 +422,7 @@
   },
   "src/tui/sources/extensions.ts": {
     "blank": 9,
-    "comment": 39,
+    "comment": 41,
     "code": 142,
     "language": "TypeScript"
   },
@@ -486,6 +486,12 @@
     "code": 106,
     "language": "TypeScript"
   },
+  "src/git/quarantine.ts": {
+    "blank": 3,
+    "comment": 17,
+    "code": 106,
+    "language": "TypeScript"
+  },
   "src/cli/transport.ts": {
     "blank": 10,
     "comment": 32,
@@ -501,12 +507,6 @@
   "src/git/integration-policy.ts": {
     "blank": 6,
     "comment": 10,
-    "code": 102,
-    "language": "TypeScript"
-  },
-  "src/git/quarantine.ts": {
-    "blank": 2,
-    "comment": 12,
     "code": 102,
     "language": "TypeScript"
   },
@@ -858,6 +858,12 @@
     "code": 52,
     "language": "TypeScript"
   },
+  "src/protocol/status-view.ts": {
+    "blank": 8,
+    "comment": 17,
+    "code": 51,
+    "language": "TypeScript"
+  },
   "src/tui/prompt.ts": {
     "blank": 11,
     "comment": 42,
@@ -873,12 +879,6 @@
   "src/cli/effects.ts": {
     "blank": 4,
     "comment": 6,
-    "code": 50,
-    "language": "TypeScript"
-  },
-  "src/protocol/status-view.ts": {
-    "blank": 8,
-    "comment": 14,
     "code": 50,
     "language": "TypeScript"
   },
@@ -1020,6 +1020,12 @@
     "code": 36,
     "language": "TypeScript"
   },
+  "src/tui/dashboard.ts": {
+    "blank": 4,
+    "comment": 15,
+    "code": 36,
+    "language": "TypeScript"
+  },
   "src/mail/display.ts": {
     "blank": 3,
     "comment": 13,
@@ -1035,12 +1041,6 @@
   "src/domain/child-policy.ts": {
     "blank": 3,
     "comment": 5,
-    "code": 33,
-    "language": "TypeScript"
-  },
-  "src/tui/dashboard.ts": {
-    "blank": 4,
-    "comment": 9,
     "code": 33,
     "language": "TypeScript"
   },
@@ -1242,17 +1242,17 @@
     "code": 16,
     "language": "TypeScript"
   },
-  "src/git/paths.ts": {
-    "blank": 0,
-    "comment": 1,
-    "code": 14,
-    "language": "TypeScript"
-  },
   "implementation/systemd/principal-relay.service.in": {
     "blank": 0,
     "comment": 1,
     "code": 13,
     "language": "OMA systemd"
+  },
+  "src/git/paths.ts": {
+    "blank": 0,
+    "comment": 4,
+    "code": 13,
+    "language": "TypeScript"
   },
   "src/storage/batch-view.ts": {
     "blank": 1,
@@ -1351,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1195,
-    "comment": 4794,
-    "code": 23803,
+    "blank": 1198,
+    "comment": 4838,
+    "code": 23823,
     "nFiles": 224
   }
 }

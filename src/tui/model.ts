@@ -63,7 +63,9 @@ export interface MailRow {
  */
 export interface DashboardData {
   readonly status:
-    | { readonly kind: "observed"; readonly observedAtMs: number; readonly ready: number; readonly active: number; readonly pending: number }
+    | { readonly kind: "observed"; readonly observedAtMs: number; readonly ready: number;
+        /** P0V-39: null when a Resident's unit could not be observed. */
+        readonly active: number | null; readonly pending: number }
     | { readonly kind: "unknown"; readonly observedAtMs: number; readonly reason: string };
   /** Seed population from configuration; not a running count. */
   readonly configuredWorkers: number;

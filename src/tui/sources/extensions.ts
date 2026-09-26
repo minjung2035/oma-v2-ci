@@ -100,7 +100,7 @@ const unmanaged = (reason: string): ExtensionContext => Object.freeze({
   reason, snapshot: null, mode: "full" as const, scan: "complete" as const,
 });
 
-export function readExtensions(source: string | ConfigurationSnapshot, principalProfile: string, workerProfile: string): ExtensionContext {
+export function readExtensions(source: string | ConfigurationSnapshot, principalProfile: string, workerProfile: string | null): ExtensionContext {
   let snapshot: ManagedSource;
   let mode: "full" | "repair" = "full";
   try { snapshot = typeof source === "string" ? loadConfigurationSnapshot(source) : source; }
@@ -132,7 +132,9 @@ export function readExtensions(source: string | ConfigurationSnapshot, principal
   if (mode === "repair" && missing.size === 0)
     return unmanaged("설정을 읽을 수 없습니다: 없는 extension 파일 때문이 아닙니다");
   const principal = roles.find(role => role.name === principalProfile) ?? null;
-  const worker = roles.find(role => role.name === workerProfile) ?? null;
+  // P0V-51: no Worker profile of its own means no Worker column to edit, never
+  // the Principal's role under the Worker's name.
+  const worker = workerProfile === null || workerProfile === principalProfile ? null : roles.find(role => role.name === workerProfile) ?? null;
   const scanned = scanLibdir(libdir);
   const referenced = new Set<string>([CORE_EXTENSION]);
   for (const role of roles) for (const entry of role.extensions) referenced.add(entry);

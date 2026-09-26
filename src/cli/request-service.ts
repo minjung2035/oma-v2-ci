@@ -106,7 +106,16 @@ export async function replayOrSend(
       throw error;
     }
   }
-  const body = frozenBody(frozen);
+  return settleFrozen(frozen, key, replay);
+}
+
+/** The frozen request's outcome: looked up first when it may already have been
+ * sent, and sent -- with its frozen body -- only when this is its first send or
+ * the ledger has answered REQUEST_NOT_FOUND. P0V-38, P0-5: the lookup needs the
+ * key alone, so a body that is missing or cannot be read now never keeps the
+ * broker's receipt from the Human; it matters only for the resend, and there it
+ * is still never rebuilt from anything but the freeze. */
+async function settleFrozen(frozen: CachedRequest, key: string, replay: boolean): Promise<never> {
   if (replay) {
     let lookup;
     try {
@@ -116,7 +125,7 @@ export async function replayOrSend(
     }
     const reply = lookup[0];
     if (reply?.ok === true) {
-      const decoded = decodeReceipt(reply.result, { expectedKind: method, allowNotFound: true });
+      const decoded = decodeReceipt(reply.result, { expectedKind: frozen.method, allowNotFound: true });
       if (!decoded.ok) fail(`invalid operation lookup: ${decoded.reason}; --request ${key}`, 3);
       if (!isRequestNotFound(decoded.value)) settle(decoded.value, key);
     } else {
@@ -128,6 +137,7 @@ export async function replayOrSend(
         );
     }
   }
+  const body = frozenBody(frozen);
   let replies;
   try {
     replies = await call(frozen.method, requestPayload(frozen.params), key, body);
@@ -136,7 +146,7 @@ export async function replayOrSend(
   }
   const reply = replies[0];
   if (reply?.ok === true) {
-    const decoded = decodeReceipt(reply.result, { expectedKind: method });
+    const decoded = decodeReceipt(reply.result, { expectedKind: frozen.method });
     if (!decoded.ok) fail(`invalid mutation receipt: ${decoded.reason}; --request ${key}`, 3);
     settle(decoded.value, key);
   }
@@ -158,13 +168,9 @@ export async function effect(
     );
     if (mismatch !== null)
       fail(`REQUEST_KEY_REUSED: key ${key} conflicts with explicit argument ${mismatch}`, 2);
-    return replayOrSend(
-      cached.method,
-      requestPayload(cached.params),
-      key,
-      cached.digest,
-      frozenBody(cached),
-    );
+    // The frozen request is replayed as frozen; its body is read only if the
+    // ledger says it was never accepted (P0V-38).
+    return settleFrozen(cached, key, true);
   }
   const fresh = await build();
   if (fresh.method !== expectedMethod)

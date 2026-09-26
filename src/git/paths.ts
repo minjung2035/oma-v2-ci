@@ -6,8 +6,10 @@ export interface GitPaths {
   worldDir: string;
   society: string;
   quarantineTmpBytes: number;
-  quarantineResources?: { cpuSeconds: number; memoryBytes: number; tasks: number };
-  checkTimeoutSeconds: number;
+  /** The quarantine's own profile (`QUARANTINE_RESOURCES` in production).
+   * `timeoutSeconds` bounds one bundle import start to end; it is not an
+   * integration check's deadline (P0V-29). */
+  quarantineResources?: { cpuSeconds: number; memoryBytes: number; tasks: number; timeoutSeconds: number };
   checkRootfs?: string;
   checkAssetsDir?: string;
   checkTmpBytes?: number;

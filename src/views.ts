@@ -4,7 +4,7 @@ import type { Actor, AgentStatus, PreparedBatch } from "../implementation/contra
 import { Store } from "./store.js";
 import { replaceDerivedFile as writeAtomic } from "./storage/durable-fs.js";
 import { ensureDirectory } from "./storage/directory.js";
-import { encodeStatusView, statusViewPath } from "./protocol/status-view.js";
+import { NO_UNIT_REASON, encodeStatusView, statusViewPath } from "./protocol/status-view.js";
 import { publishBatchView } from "./storage/batch-view.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
 import { pendingWorkByAgent } from "./views/pending-work.js";
@@ -111,7 +111,7 @@ export class ViewsModule {
           // Observable semantic correction: eligible unbatched messages + prepared manifest messages.
           pending: work.pendingMessages, preparedBatches: work.preparedBatchCount,
           // A unit that does not exist is said, not shown as one that ran and exited.
-          reason: observation === "no-unit" ? "no systemd unit" : null, runnerObservedAtMs: null };
+          reason: observation === "no-unit" ? NO_UNIT_REASON : null, runnerObservedAtMs: null };
       });
     } finally { this.observations = Object.freeze(observations); }
   }

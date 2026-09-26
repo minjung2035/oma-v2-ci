@@ -14,8 +14,11 @@ import ts from "typescript";
  * and a stand-in that does would run the rest of a function the product ended. */
 class Exited extends Error {}
 
+const QUARANTINE_PROFILE = Object.freeze({ cpuSeconds: 30, memoryBytes: 1, tasks: 1, timeoutSeconds: 120 });
+
 async function compose(environment, { lockHeld = true, claim = "taken", cgroup = "0::/user.slice/app.slice/oma.scope",
-  argv = ["--society", "fixture"], starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" } = {}) {
+  argv = ["--society", "fixture"], supervisionEstablished = true,
+  starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" && supervisionEstablished } = {}) {
   const source = readFileSync(new URL("../src/entry/broker.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -25,6 +28,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
   const executable = compiled.replace("void main().catch", "main().catch");
   const calls = [], paths = [], exits = [], observation = { value: true, error: null };
   let supervision = null;
+  let gitPaths = null;
   let constructorGoal;
   let unitValues = null;
   const config = { society: "fixture", installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
@@ -43,7 +47,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
       constructor() { calls.push("Views"); } refreshWorld() { calls.push("refresh"); }
     } },
     "../git.js": { GitModule: class {
-      constructor() { calls.push("Git"); }
+      constructor(paths) { calls.push("Git"); gitPaths = paths; }
       hasCommittedContext() { if (observation.error) throw observation.error; return observation.value; }
     } },
     "../lifecycle.js": { LifecycleModule: class {
@@ -61,6 +65,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
       }
       async start() { calls.push("listen"); } notifyReady() { calls.push("notify"); return true; }
     } },
+    "../git/quarantine.js": { QUARANTINE_RESOURCES: QUARANTINE_PROFILE },
     "../git/integration-policy.js": { integrationPolicyFromConfig: value => value, snapshotIntegrationPolicy: value => value, assertSupportedIntegration() {} },
     "../config.js": { loadConfig: () => { calls.push("config"); return config; } },
     "../config/policy.js": { createChildSpecResolver: () => () => ({}) },
@@ -117,7 +122,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     "../runtime/supervision-channel.js": { openSupervisionChannel: options => {
       calls.push(`supervision:${options.fd}`);
       supervision = options;
-      return { hostPid: 4242, ready() {}, grant() {}, refuse() {}, onSession() {} };
+      return supervisionEstablished ? { hostPid: 4242, ready() {}, grant() {}, refuse() {}, onSession() {} } : undefined;
     } },
   };
   const process = { argv: ["node", "broker", ...argv], env: { ...(environment ?? {}) }, exitCode: 0, once() {},
@@ -132,7 +137,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     assert.deepEqual(exits, [], "the entrypoint ended the process on a society it does own");
     assert.equal(process.exitCode, 0, "entrypoint must complete without the startup failure path");
   }
-  return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, unitValues };
+  return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, unitValues, gitPaths };
 }
 
 test("D03 composition: a broker no fixed unit runs renders unbound Residents at its location and stops them on drain", async () => {
@@ -204,6 +209,21 @@ test("P1 composition root: only a broker the product started has a Principal end
   // The channel is opened before anything slow, so a host that dies during
   // recovery still takes this broker with it.
   assert.ok(supervised.calls.indexOf("supervision:3") < supervised.calls.indexOf("Store"));
+});
+
+test("P0V-28 / N04, P0-5: a broker told it is supervised whose channel cannot be established opens nothing and gives the society back", async () => {
+  const { calls, exitCode } = await compose({ OMA_HOST_CHANNEL: "3" }, { supervisionEstablished: false });
+  assert.ok(calls.includes("supervision:3"));
+  for (const opened of ["config", "Store", "Mail", "Git", "Broker"])
+    assert.ok(!calls.includes(opened), `${opened} was opened by a broker that does not know it has a host: ${calls.join(",")}`);
+  assert.ok(calls.includes("shutdown"), "the society's lock was not given back through the lifetime");
+  assert.equal(exitCode, 1);
+});
+
+test("P0V-29 / N05, P0-2: a bundle import is bounded by the quarantine's own deadline, not by an integration check's", async () => {
+  const { gitPaths } = await compose(undefined);
+  assert.equal(gitPaths.quarantineResources, QUARANTINE_PROFILE, "the broker composed its own quarantine profile");
+  assert.equal(Object.hasOwn(gitPaths, "checkTimeoutSeconds"), false, "the import deadline is taken from the checks again");
 });
 
 test("P1 composition root: the host going away stops the broker", async () => {

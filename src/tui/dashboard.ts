@@ -5,6 +5,7 @@
  * (arch §23.5); wording is the view's (`view/dashboard.ts`).
  */
 import type { AgentStatus, HostConfigV1 } from "../../implementation/contracts.js";
+import { NO_UNIT_REASON } from "../protocol/status-view.js";
 import type { DashboardData } from "./model.js";
 import type { Observation } from "./transport.js";
 
@@ -15,9 +16,17 @@ export interface DashboardInput {
   readonly observation: Observation;
 }
 
-/** Residents only. The Principal is not a worker and is reported separately. */
-export function activeCount(statuses: readonly AgentStatus[]): number {
-  return statuses.filter(status => status.agent !== "principal" && status.activeState === "active").length;
+/** Residents only. The Principal is not a worker and is reported separately.
+ *
+ * P0V-39, P0-5: a status file that was read is not a unit that was observed.
+ * A Resident whose unit could not be observed has no active state (null), and
+ * counting only the ones that said "active" would show that as 0 -- so any such
+ * Resident leaves the count unknown. A unit that does not exist was observed:
+ * it is not active. */
+export function activeCount(statuses: readonly AgentStatus[]): number | null {
+  const residents = statuses.filter(status => status.agent !== "principal");
+  if (residents.some(status => status.activeState === null && status.reason !== NO_UNIT_REASON)) return null;
+  return residents.filter(status => status.activeState === "active").length;
 }
 
 export function readyCount(statuses: readonly AgentStatus[]): number {

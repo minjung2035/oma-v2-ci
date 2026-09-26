@@ -30,7 +30,7 @@ test("corrupt accepted context rows fail before Git observation or snapshot/mail
   const git = new GitModule({
     stateRoot, society: "demo", projectGit: join(stateRoot, "repos", "project.git"),
     contextGit: join(stateRoot, "repos", "context.git"), worldDir: join(stateRoot, "world"),
-    quarantineTmpBytes: 64 * 1024 * 1024, checkTimeoutSeconds: 30,
+    quarantineTmpBytes: 64 * 1024 * 1024,
   }, store, mail, null);
   const auth: AuthContext = {
     actor: "principal", incarnation: 0, role: "principal", channel: "actor",

@@ -19,7 +19,7 @@ export function dashboardRows(data: DashboardData): readonly DashboardRow[] {
   const seen = data.status;
   if (seen.kind === "observed") {
     rows.push({ label: "Workers", value: `${seen.ready} / ${data.workerLimit}` });
-    rows.push({ label: "Active", value: String(seen.active) });
+    rows.push({ label: "Active", value: seen.active === null ? `unknown (unit을 관측하지 못함; ${clock(seen.observedAtMs)} 관측)` : String(seen.active) });
     rows.push({ label: "Pending", value: `${seen.pending} (${clock(seen.observedAtMs)} 관측)` });
     rows.push({ label: "Status", value: `observed (${clock(seen.observedAtMs)})` });
   } else {

@@ -220,6 +220,16 @@ for (const format of ["sha1", "sha256"] as const)
         assert.equal(retry.requests.length, 1);
         assert.equal(retry.requests[0]!.method, "operation.get");
         assert.deepEqual(new RequestCache(f.home).read(key), cached);
+        // P0V-38 / N15, P0-5: the lookup needs the key alone. A frozen body
+        // that is gone does not keep the broker's receipt from the Human; it
+        // would matter only for a resend, which a receipt makes unnecessary.
+        if (cached.value.digest !== undefined) {
+          rmSync(new RequestCache(f.home).bodyPath(key));
+          const lookedUp = await runCliWithLookup(f.home, f.cwd,
+            ["submit", "HEAD", "--request", key, "--to", "b", "--file", bodyPath], key, cached.value.lastReceipt!);
+          assert.equal(lookedUp.status, 0, lookedUp.stderr);
+          assert.deepEqual(lookedUp.requests.map(request => request.method), ["operation.get"]);
+        }
       } finally {
         f.close();
       }

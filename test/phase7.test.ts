@@ -33,7 +33,7 @@ function envOf(integration: IntegrationPolicy | null = null, policyRevisionReade
   const paths: GitPaths = {
     stateRoot: join(dir, "state"), projectGit: join(dir, "state/repos/project.git"), contextGit: join(dir, "state/repos/context.git"),
     worldDir: join(dir, "state/world"), society, quarantineTmpBytes: 256 * 1024 * 1024,
-    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096 }, checkTimeoutSeconds: 30,
+    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 4096, timeoutSeconds: 30 },
   };
   const policy = integration ?? { policyRevision: "p1", protectedPaths: [], checks: [] };
   const git = new GitModule(paths, store, mail, policy, policyRevisionReader);

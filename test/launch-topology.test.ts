@@ -106,8 +106,7 @@ async function publishGoal(t: Topology): Promise<void> {
     const mail = new MailModule({ stateRoot: t.stateRoot, society: t.society }, store, 64);
     const git = new GitModule({ stateRoot: t.stateRoot, projectGit: join(t.stateRoot, "repos", "project.git"),
       contextGit: join(t.stateRoot, "repos", "context.git"), worldDir: join(t.stateRoot, "world"), society: t.society,
-      quarantineTmpBytes: 256 * 1024 * 1024, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
-      checkTimeoutSeconds: 30 }, store, mail, { policyRevision: "1", protectedPaths: [], checks: [] });
+      quarantineTmpBytes: 256 * 1024 * 1024, quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024, timeoutSeconds: 30 } }, store, mail, { policyRevision: "1", protectedPaths: [], checks: [] });
     const principal = store.getAgent("principal")!;
     const bytes = Buffer.from("# GOAL\nobserve the launch topology\n");
     const receipt = await git.publishContext({ actor: "principal", incarnation: principal.incarnation, role: "principal", channel: "actor",

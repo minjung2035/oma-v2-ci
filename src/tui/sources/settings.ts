@@ -52,26 +52,41 @@ export interface Settings {
   readonly snapshot: ConfigurationSnapshot | null;
   readonly layout: ConfigLayout;
   readonly config: HostConfigV1;
-  readonly workerProfile: string;
+  /** The profile a Worker edit changes, or null when there is none of its own. */
+  readonly workerProfile: string | null;
   readonly fields: readonly ConfigField[];
 }
 
-function workerProfileOf(config: HostConfigV1): string {
+/** P0V-51, P0-1: the profile a "Worker" field shows and changes, or null. The
+ * Principal's own profile is never it: a configuration with a Principal only
+ * is valid, and in it a Worker edit has no target -- it is refused, not
+ * applied to the Principal the screen does not say it is changing. */
+export function workerProfileOf(config: HostConfigV1): string | null {
+  const own = (name: string | null | undefined): name is string =>
+    typeof name === "string" && name !== config.principalProfile && Object.hasOwn(config.agentProfiles, name);
   const seeded = config.initialResidents[0]?.profile;
-  if (seeded !== undefined && Object.hasOwn(config.agentProfiles, seeded)) return seeded;
+  if (own(seeded)) return seeded;
   const child = config.agentProfiles[config.principalProfile]?.childProfile;
-  if (child !== null && child !== undefined && Object.hasOwn(config.agentProfiles, child)) return child;
-  const other = Object.keys(config.agentProfiles).find(name => name !== config.principalProfile);
-  if (other !== undefined) return other;
-  return config.principalProfile;
+  if (own(child)) return child;
+  return Object.keys(config.agentProfiles).find(name => own(name)) ?? null;
 }
 
 /** Resident profiles exclude the Principal's own profile: the Config screen
- * never offers to run Residents under Principal authority.
+ * never offers to run Residents under Principal authority, and with none there
+ * is nothing to offer.
  */
 export function residentProfiles(config: HostConfigV1): readonly string[] {
-  const names = Object.keys(config.agentProfiles).filter(name => name !== config.principalProfile).sort();
-  return names.length > 0 ? names : [config.principalProfile];
+  return Object.keys(config.agentProfiles).filter(name => name !== config.principalProfile).sort();
+}
+
+/** WP15: a Worker field with no Worker profile to change. */
+const noWorkerProfile = (config: HostConfigV1): string | null =>
+  workerProfileOf(config) === null ? "Worker profile 없음: Principal 외의 agent profile을 먼저 설정하세요" : null;
+/** The Worker profile a transform changes; its absence is refused, never a fallback. */
+function workerTarget(settings: Settings): string {
+  const name = settings.workerProfile;
+  assertKnown(name !== null, "there is no worker profile to change");
+  return name!;
 }
 
 /** WP15/D05: whether this society's one bootstrap has happened, as observed.
@@ -84,7 +99,7 @@ export function bootstrapStateOf(observation: { readonly kind: string; readonly 
   return observation.statuses.some(status => status.agent === "principal") ? "done" : "pending";
 }
 
-export function fieldsOf(config: HostConfigV1, workerProfile: string, bootstrap: BootstrapState = "unknown"): readonly ConfigField[] {
+export function fieldsOf(config: HostConfigV1, workerProfile: string | null, bootstrap: BootstrapState = "unknown"): readonly ConfigField[] {
   const editable = EDITABLE_FIELDS
     .map(field => {
       const descriptor = EDITABLE_FIELD_DESCRIPTORS[field];
@@ -231,7 +246,7 @@ export interface EditableFieldDescriptor {
   /** WP15: why an edit would have no target or no effect now, or null. The
    * same descriptor owns label, value, apply time and this refusal. */
   readonly blocked?: (config: HostConfigV1, bootstrap: BootstrapState) => string | null;
-  readonly view: (config: HostConfigV1, workerProfile: string) => EditableFieldView;
+  readonly view: (config: HostConfigV1, workerProfile: string | null) => EditableFieldView;
   readonly transform: (settings: Settings, value: string | number) => HostConfigV1;
 }
 
@@ -260,15 +275,16 @@ const DESCRIPTOR_SOURCE = {
   [WORKER_MODEL]: Object.freeze({
     label: "Worker model",
     apply: "next-activation",
-    view: (config: HostConfigV1, workerProfile: string) => ({
+    blocked: noWorkerProfile,
+    view: (config: HostConfigV1, workerProfile: string | null) => ({
       kind: "choice" as const,
-      value: config.agentProfiles[workerProfile]?.modelProfile ?? "",
+      value: workerProfile === null ? "" : config.agentProfiles[workerProfile]?.modelProfile ?? "",
       options: Object.keys(config.modelProfiles).sort(),
     }),
     transform: (settings: Settings, value: string | number) => {
       const config = settings.config;
       assertKnown(typeof value === "string" && Object.hasOwn(config.modelProfiles, value), "unknown model profile");
-      const name = settings.workerProfile;
+      const name = workerTarget(settings);
       const profile = config.agentProfiles[name];
       assertKnown(profile !== undefined, "worker profile is missing from host config");
       return { ...config, agentProfiles: { ...config.agentProfiles,
@@ -295,7 +311,9 @@ const DESCRIPTOR_SOURCE = {
     }),
     transform: (settings: Settings, value: string | number) => {
       assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
-      return withSeedCount(settings.config, value as number, settings.workerProfile);
+      // A seed needs a Worker profile only when one is added.
+      const count = value as number;
+      return withSeedCount(settings.config, count, count > settings.config.initialResidents.length ? workerTarget(settings) : "");
     },
   }),
   [WORKER_PROFILE]: Object.freeze({
@@ -304,13 +322,14 @@ const DESCRIPTOR_SOURCE = {
     // D05: with no seeds there is no target; the selection is not kept anywhere.
     blocked: (config: HostConfigV1, bootstrap: BootstrapState) => config.initialResidents.length === 0
       ? "bootstrap worker 없음: Initial workers를 먼저 늘리세요" : seedsBlocked(config, bootstrap),
-    view: (config: HostConfigV1, workerProfile: string) => ({
-      kind: "choice" as const, value: workerProfile, options: residentProfiles(config),
+    view: (config: HostConfigV1, workerProfile: string | null) => ({
+      kind: "choice" as const, value: workerProfile ?? "", options: residentProfiles(config),
     }),
     transform: (settings: Settings, value: string | number) => {
       const config = settings.config;
       assertKnown(config.initialResidents.length > 0, "there are no bootstrap workers to change");
-      assertKnown(typeof value === "string" && Object.hasOwn(config.agentProfiles, value), "unknown agent profile");
+      // The profiles the screen offers are the ones a Resident may run under.
+      assertKnown(typeof value === "string" && residentProfiles(config).includes(value), "unknown agent profile");
       // Existing Resident specs are immutable; only not-yet-created bootstrap seeds change.
       return { ...config, initialResidents: config.initialResidents.map(resident => ({ ...resident, profile: value as string })) };
     },
@@ -321,15 +340,16 @@ const DESCRIPTOR_SOURCE = {
   [WORKER_INTEGRATE]: Object.freeze({
     label: "Worker integrate",
     apply: "new-agents",
-    view: (config: HostConfigV1, workerProfile: string) => ({
+    blocked: noWorkerProfile,
+    view: (config: HostConfigV1, workerProfile: string | null) => ({
       kind: "choice" as const,
-      value: config.agentProfiles[workerProfile]?.capabilities.includes("code.integrate") ? "on" : "off",
+      value: workerProfile !== null && config.agentProfiles[workerProfile]?.capabilities.includes("code.integrate") ? "on" : "off",
       options: ["off", "on"],
     }),
     transform: (settings: Settings, value: string | number) => {
       assertKnown(value === "on" || value === "off", "worker integrate is on or off");
       const config = settings.config;
-      const name = settings.workerProfile;
+      const name = workerTarget(settings);
       const profile = config.agentProfiles[name];
       assertKnown(profile !== undefined, "worker profile is missing from host config");
       const others = profile!.capabilities.filter(capability => capability !== "code.integrate");

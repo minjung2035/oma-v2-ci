@@ -11,6 +11,7 @@ import { Broker } from "../broker.js";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD } from "../protocol/host-channel.js";
 import { openSupervisionChannel } from "../runtime/supervision-channel.js";
 import { GitModule } from "../git.js";
+import { QUARANTINE_RESOURCES } from "../git/quarantine.js";
 import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "../git/integration-policy.js";
 import { ReconcileModule } from "../reconcile.js";
 import { loadConfig, readCurrentHostPolicy } from "../config.js";
@@ -119,13 +120,25 @@ async function main(): Promise<void> {
   // channel from it. Opened before anything slow, so a host that dies during
   // recovery still takes this broker with it; a broker started any other way
   // has no channel, opens no Principal endpoint, and runs as before.
-  const principalHost = process.env[HOST_CHANNEL_ENV] === String(HOST_CHANNEL_FD)
+  const supervised = process.env[HOST_CHANNEL_ENV] === String(HOST_CHANNEL_FD);
+  const principalHost = supervised
     ? openSupervisionChannel({
       fd: HOST_CHANNEL_FD,
       onHostGone: reason => { console.error(`${reason}; the broker stops with it`); void stop(0); },
       log: line => { console.error(line); },
     })
     : undefined;
+  // P0V-28, P0-5: a broker told it is supervised whose channel could not be
+  // established -- no descriptor, not a socket, a peer that is not this user or
+  // is not observed running (a host that died before this looked) -- does not
+  // know that it has a host. That is not "started without one": running on as
+  // if it were would keep the society's lock with nothing left to stop it. It
+  // gives the society back before anything is opened.
+  if (supervised && principalHost === undefined) {
+    console.error("the supervision channel this broker was started with could not be established; this broker does not start");
+    await stop(1);
+    return;
+  }
   try {
     const cfg = loadConfig(configPath);
     if (cfg.society !== society) throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
@@ -154,8 +167,7 @@ async function main(): Promise<void> {
     const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
     const git = new GitModule({ stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
       worldDir: join(stateRoot, "world"), society, quarantineTmpBytes: cfg.limits.bundleBytes,
-      quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 1024 },
-      checkTimeoutSeconds: Math.max(1, ...cfg.integration.checks.map(check => check.resources.checkTimeoutSeconds)),
+      quarantineResources: QUARANTINE_RESOURCES,
       checkRootfs: cfg.installation.rootfs, checkAssetsDir: cfg.installation.rootfs,
       checkTmpBytes: Math.max(1, ...cfg.integration.checks.map(check => check.resources.tmpBytes)),
     }, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration));

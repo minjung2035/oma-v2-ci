@@ -25,7 +25,7 @@ test("CTX-003/DB-009: T-context-accept already freezes candidate and matching EM
   const git = new GitModule({
     stateRoot: state, projectGit: join(state, "repos", "project.git"), contextGit: join(state, "repos", "context.git"),
     worldDir: join(state, "world"), society: "demo", quarantineTmpBytes: 64 * 1024 * 1024,
-    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 128 }, checkTimeoutSeconds: 30,
+    quarantineResources: { cpuSeconds: 30, memoryBytes: 512 * 1024 * 1024, tasks: 128, timeoutSeconds: 30 },
   }, store, mail, null);
   const auth: AuthContext = { actor: "principal", incarnation: 0, role: "principal", channel: "actor", capabilities: new Set(["context.publish"]),
     peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };

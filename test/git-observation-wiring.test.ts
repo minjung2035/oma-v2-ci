@@ -30,7 +30,7 @@ for (const path of ["M secret.txt", "A", "tab\tname", "line\nname"]) {
       const mail = new MailModule({ stateRoot, society: "demo" }, store, 16);
       const module = new GitModule({
         stateRoot, society: "demo", projectGit: join(stateRoot, "project.git"), contextGit: join(stateRoot, "context.git"),
-        worldDir: join(stateRoot, "world"), quarantineTmpBytes: 1048576, checkTimeoutSeconds: 30,
+        worldDir: join(stateRoot, "world"), quarantineTmpBytes: 1048576,
       }, store, mail, { policyRevision: "p1", protectedPaths: [path], checks: [] });
       const commands: string[][] = [];
       let casCalls = 0;

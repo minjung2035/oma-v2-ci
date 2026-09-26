@@ -11,6 +11,7 @@ import { RequestCache } from "../src/request-cache.js";
 import { generateOperationId } from "../src/ids.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
 import { explicitFullOid, requestIntentConflict } from "../src/cli/request-intent.js";
+import { StoreError, publicFailure } from "../src/domain/errors.js";
 
 const oid = "a".repeat(40);
 const otherOid = "b".repeat(40);
@@ -121,7 +122,7 @@ test("actual CLI cached create ignores missing brief and unresolvable HEAD while
   assert.deepEqual(readFileSync(cachePath), before);
 });
 
-test("actual CLI stops on corrupt metadata or a missing frozen body before source reads and wire sends", () => {
+test("actual CLI stops on corrupt metadata before source reads and wire sends", () => {
   const home = mkdtempSync(join(tmpdir(), "oma-r07-stop-"));
   try {
     const cache = new RequestCache(home);
@@ -134,16 +135,45 @@ test("actual CLI stops on corrupt metadata or a missing frozen body before sourc
     assert.match(corrupt.stderr, /CACHE_CORRUPT/);
     assert.doesNotMatch(corrupt.stderr, /cannot resolve|file not found|broker unreachable/);
     assert.equal(readFileSync(path, "utf8"), '{"key":');
-    const sha256 = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
-    cache.freeze({
-      key: "body-missing", method: "context.publish", createdAtMs: 1,
-      params: { expected: null, entries: [{ path: "GOAL.md", bytes: 5, sha256 }], content: { bytes: 5, sha256, mediaType: "application/vnd.oma.context-v1" } },
-      digest: { bytes: 5, sha256 },
-    }, Buffer.from("hello"));
-    unlinkSync(cache.bodyPath("body-missing"));
-    const missing = invoke(home, ["context", "publish", "deleted-directory", "--expect", "none", "--request", "body-missing"]);
-    assert.equal(missing.status, 3, missing.stderr);
-    assert.match(missing.stderr, /body absent/);
-    assert.doesNotMatch(missing.stderr, /not a directory|broker unreachable/);
   } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test("P0V-38 / N15: a missing frozen body does not stop the lookup, and without it nothing is resent or rebuilt from source", async t => {
+  const home = mkdtempSync(join(tmpdir(), "oma-r07-body-"));
+  t.after(() => { rmSync(home, { recursive: true, force: true }); });
+  const cache = new RequestCache(home);
+  const sha256 = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+  cache.freeze({
+    key: "body-missing", method: "context.publish", createdAtMs: 1,
+    params: { expected: null, entries: [{ path: "GOAL.md", bytes: 5, sha256 }], content: { bytes: 5, sha256, mediaType: "application/vnd.oma.context-v1" } },
+    digest: { bytes: 5, sha256 },
+  }, Buffer.from("hello"));
+  unlinkSync(cache.bodyPath("body-missing"));
+  // The ledger has no such request: the only thing left would be a resend,
+  // and that needs the frozen body, which is gone.
+  const methods: unknown[] = [];
+  const server = createServer(socket => {
+    const parser = new FrameParser(256 * 1024);
+    socket.on("error", () => {});
+    socket.on("data", (bytes: Buffer) => {
+      for (const frame of parser.feed(bytes)) {
+        methods.push(frame.raw.method);
+        socket.end(encodeFrame({ v: 1, id: frame.raw.id, ok: false, error: publicFailure(new StoreError("REQUEST_NOT_FOUND", "no such request")) }));
+      }
+    });
+  });
+  t.after(() => { server.close(); });
+  const socketPath = join(home, "broker.sock");
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(socketPath, resolve); });
+  const child = spawn(process.execPath, [cli, "context", "publish", "deleted-directory", "--expect", "none", "--request", "body-missing"], {
+    cwd: home, env: { ...process.env, HOME: home, OMA_SOCKET: socketPath }, stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => { child.kill(); });
+  let stderr = "";
+  child.stderr.on("data", bytes => { stderr += String(bytes); });
+  const status = await new Promise<number | null>((resolve, reject) => { child.once("error", reject); child.once("close", resolve); });
+  assert.equal(status, 3, stderr);
+  assert.match(stderr, /body absent/);
+  assert.doesNotMatch(stderr, /not a directory/);
+  assert.deepEqual(methods, ["operation.get"], "the request was sent again without its frozen body");
 });

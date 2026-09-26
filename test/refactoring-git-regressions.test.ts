@@ -64,8 +64,7 @@ for (const scenario of [
       git(["update-ref", "refs/heads/main", base]);
       const mail = new MailModule({ stateRoot: state, society: "demo" }, store, 8);
       const module = new GitModule({ stateRoot: state, society: "demo", projectGit: join(repo, ".git"),
-        contextGit: join(state, "context.git"), worldDir: join(state, "world"), quarantineTmpBytes: 1024,
-        checkTimeoutSeconds: 1 }, store, mail, { policyRevision: "p1", protectedPaths: scenario.protected, checks: [] });
+        contextGit: join(state, "context.git"), worldDir: join(state, "world"), quarantineTmpBytes: 1024 }, store, mail, { policyRevision: "p1", protectedPaths: scenario.protected, checks: [] });
       if (scenario.rejected) {
         await assert.rejects(module.integrate(actor("alice"), "protect", { expected: base, candidate }),
           (error: unknown) => error instanceof StoreError && error.code === "PROTECTED_PATH");
@@ -89,8 +88,7 @@ for (const corrupt of [false, true]) {
     const store = new Store(path);
     const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 8);
     const module = new GitModule({ stateRoot: root, society: "demo", projectGit: join(root, "repos/project.git"),
-      contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), quarantineTmpBytes: 1024,
-      checkTimeoutSeconds: 1 }, store, mail, null);
+      contextGit: join(root, "repos/context.git"), worldDir: join(root, "world"), quarantineTmpBytes: 1024 }, store, mail, null);
     try {
       seed(store, "principal");
       const original = store.transaction.bind(store);
