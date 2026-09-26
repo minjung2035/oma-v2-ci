@@ -10,7 +10,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -41,7 +42,17 @@ async function openedSession(command: string, args: readonly string[], cwd: stri
     });
     child.stdin.write(`${JSON.stringify({ id: "state", type: "get_state" })}\n`);
     return await answer;
-  } finally { child.kill(); }
+  } finally { await stopped(child); }
+}
+/** INV02: a signal is not a death. The engine is asked to stop and then waited
+ * for, so nothing it still writes (settings, the session file) races the test's
+ * removal of its directories. */
+async function stopped(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = once(child, "exit");
+  child.kill();
+  const forced = setTimeout(() => child.kill("SIGKILL"), 5_000);
+  try { await exited; } finally { clearTimeout(forced); }
 }
 /** A session the agent already had: the header the engine writes (session-format.md). */
 function priorSession(dir: string, cwd: string): string {
