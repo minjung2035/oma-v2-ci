@@ -741,7 +741,7 @@
     },
     {
       "path": "src/storage/operation-transitions.ts",
-      "sha256": "0217f4fa1ebef522af8c5c225675e198abd36afe6bdbe19460e4988a4be3ea5a"
+      "sha256": "77c23ff086a9affe95e61695a4827ef81b87215433a4a6afed0624c56bc1d9a5"
     },
     {
       "path": "src/storage/paths.ts",
@@ -777,11 +777,11 @@
     },
     {
       "path": "src/storage/transitions.ts",
-      "sha256": "104b0859f901ecc90db120fda61c9be06647d1775ca6b9e7d901076285470e2a"
+      "sha256": "efd8b9fcae157433fa9c4e305591958cbdbd17ab7da85be48a3745626cb2ecf8"
     },
     {
       "path": "src/store.ts",
-      "sha256": "86f7fe0842964ddff2d1c1659f2768826b3036282fee24663970e7c23bf1aba9"
+      "sha256": "010a1d9cffecfcd0be4c234603dc494050b278e7f0f951d3252d01f45f1a73a0"
     },
     {
       "path": "src/tui/app.ts",

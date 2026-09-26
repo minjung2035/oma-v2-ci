@@ -38,6 +38,38 @@ function batch(store: Store): void {
   assert.equal(store.getBatch(BATCH)?.state, "prepared");
 }
 
+test("P0V-30 / N06, P0-5: a wall clock that steps back makes no state change fail and no row read as corrupt", t => {
+  const at = Date.UTC(2026, 8, 26, 12);
+  t.mock.timers.enable({ apis: ["Date"], now: at });
+  const store = fixture(t);
+  const usage = makeValidUsage("alice");
+  store.transaction(tx => tx.reserveUsage(usage));
+  // NTP, a suspend on a drifting clock or an operator: the host's wall clock
+  // is now an hour earlier than when these rows were created.
+  t.mock.timers.setTime(at - 3_600_000);
+  batch(store);
+  store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 1, "/session/alice"));
+  store.transaction(tx => tx.markAcknowledged(MESSAGE, "alice"));
+  const incarnation = store.getAgent("alice")!.incarnation;
+  store.transaction(tx => tx.updateAgent({ name: "alice", incarnation: incarnation + 1 }));
+  store.transaction(() => store.setOperationUnknown(OP));
+  store.transaction(tx => tx.settleUsage(usage.requestId, "unknown", null, null));
+  // Every row still reads as what was recorded, with no stage before its creation.
+  const delivery = store.getDelivery(MESSAGE, "alice")!;
+  for (const stage of [delivery.materializedAtMs, delivery.presentedAtMs, delivery.acknowledgedAtMs])
+    assert.ok(stage !== null && stage >= delivery.createdAtMs);
+  const recorded = store.getBatch(BATCH)!;
+  assert.equal(recorded.state, "completed");
+  assert.ok(recorded.completedAtMs! >= recorded.createdAtMs);
+  const agent = store.getAgent("alice")!;
+  assert.equal(agent.incarnation, incarnation + 1);
+  assert.ok(agent.updatedAtMs >= agent.createdAtMs);
+  const operation = store.getOperationById(OP)!;
+  assert.equal(operation.state, "unknown");
+  assert.ok(operation.updatedAtMs >= operation.createdAtMs);
+  assert.equal(store.getUsage(usage.requestId)?.outcome, "unknown");
+});
+
 test("R12: only the intended identical delivery/subscription conflicts are no-ops", async t => {
   const store = fixture(t);
   store.transaction(tx => tx.follow("dev", "alice"));

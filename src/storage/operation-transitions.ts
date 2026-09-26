@@ -36,7 +36,7 @@ export class OperationTransitions {
     this.scope.requireLive(); this.scope.requireUnaccepted(id);
     const row = fullRow(this.db.prepare("SELECT state FROM operations WHERE id=?").get(id), ["state"], "unaccepted operation state");
     if (row.state !== "pending") throw new StoreError("STORE_CORRUPT", "terminal or unknown operation plan is immutable");
-    const result = this.db.prepare("UPDATE operations SET plan_json=?, updated_at_ms=? WHERE id=? AND state='pending'").run(planJson, Date.now(), id);
+    const result = this.db.prepare("UPDATE operations SET plan_json=?, updated_at_ms=MAX(?, created_at_ms) WHERE id=? AND state='pending'").run(planJson, Date.now(), id);
     if (Number(result.changes) !== 1) throw new StoreError("STORE_CORRUPT", "unaccepted plan update was not applied exactly once");
   }
   succeed(id: OperationId, resultJson: string): void {
@@ -51,7 +51,7 @@ export class OperationTransitions {
       throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
     }
     if (current.state === "failed") throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
-    const updated = this.db.prepare("UPDATE operations SET state='succeeded', result_json=?, error_code=NULL, updated_at_ms=? WHERE id=? AND state IN ('pending','unknown')").run(resultJson, Date.now(), id);
+    const updated = this.db.prepare("UPDATE operations SET state='succeeded', result_json=?, error_code=NULL, updated_at_ms=MAX(?, created_at_ms) WHERE id=? AND state IN ('pending','unknown')").run(resultJson, Date.now(), id);
     if (Number(updated.changes) !== 1) throw new StoreError("STORE_CORRUPT", `operation ${id} transition was not applied exactly once`);
   }
   fail(id: OperationId, code: ErrorCode): void {
@@ -61,7 +61,7 @@ export class OperationTransitions {
     if (!current) throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
     if (current.state === "failed" && current.errorCode === code) return;
     if (current.state === "failed" || current.state === "succeeded") throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
-    const updated = this.db.prepare("UPDATE operations SET state='failed', result_json=NULL, error_code=?, updated_at_ms=? WHERE id=? AND state IN ('pending','unknown')").run(code, Date.now(), id);
+    const updated = this.db.prepare("UPDATE operations SET state='failed', result_json=NULL, error_code=?, updated_at_ms=MAX(?, created_at_ms) WHERE id=? AND state IN ('pending','unknown')").run(code, Date.now(), id);
     if (Number(updated.changes) !== 1) throw new StoreError("STORE_CORRUPT", `operation ${id} transition was not applied exactly once`);
   }
   unknown(id: OperationId): void {
@@ -69,7 +69,7 @@ export class OperationTransitions {
     if (!current) throw new StoreError("STORE_CORRUPT", `missing operation ${id}`);
     if (current.state === "unknown") return;
     if (current.state !== "pending") throw new StoreError("STORE_CORRUPT", `operation ${id} terminal state is immutable`);
-    const result = this.db.prepare("UPDATE operations SET state='unknown', updated_at_ms=? WHERE id=? AND state='pending'").run(Date.now(), id);
+    const result = this.db.prepare("UPDATE operations SET state='unknown', updated_at_ms=MAX(?, created_at_ms) WHERE id=? AND state='pending'").run(Date.now(), id);
     if (Number(result.changes) !== 1) throw new StoreError("STORE_CORRUPT", `operation ${id} transition was not applied exactly once`);
   }
 }

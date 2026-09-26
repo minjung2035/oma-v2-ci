@@ -66,7 +66,7 @@ export class LedgerTransitions {
     const row = this.read.delivery(message, recipient);
     if (!row) corrupt("cannot materialize a missing delivery");
     if (row.materialized === 1) return; // Preserve the first durable fact time.
-    changedExactlyOne(this.db.prepare(`UPDATE deliveries SET materialized=1, materialized_at_ms=?
+    changedExactlyOne(this.db.prepare(`UPDATE deliveries SET materialized=1, materialized_at_ms=MAX(?, created_at_ms)
       WHERE message_id=? AND recipient=? AND operation_id=? AND materialized=0 AND materialized_at_ms IS NULL`)
       .run(this.now(), message, recipient, row.operationId), "materialization");
     this.read.delivery(message, recipient);
@@ -76,7 +76,7 @@ export class LedgerTransitions {
     const row = this.read.delivery(message, recipient);
     if (!row) throw new StoreError("REQUEST_NOT_FOUND", "cannot acknowledge a missing delivery");
     if (row.acknowledged === 1) return;
-    changedExactlyOne(this.db.prepare(`UPDATE deliveries SET acknowledged=1, acknowledged_at_ms=?
+    changedExactlyOne(this.db.prepare(`UPDATE deliveries SET acknowledged=1, acknowledged_at_ms=MAX(?, created_at_ms)
       WHERE message_id=? AND recipient=? AND operation_id=? AND acknowledged=0 AND acknowledged_at_ms IS NULL`)
       .run(this.now(), message, recipient, row.operationId), "acknowledgement");
     this.read.delivery(message, recipient);
@@ -149,11 +149,11 @@ export class LedgerTransitions {
     }
     if (batch.sessionPath !== null && batch.sessionPath !== sessionPath) conflict("prepared batch session differs");
     const at = this.now();
-    changedExactlyOne(this.db.prepare(`UPDATE batches SET state='completed', completed_at_ms=?, session_path=?
+    changedExactlyOne(this.db.prepare(`UPDATE batches SET state='completed', completed_at_ms=MAX(?, created_at_ms), session_path=?
       WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL AND (session_path IS NULL OR session_path=?)`)
       .run(at, sessionPath, id, agent, batch.incarnation, sessionPath), "batch completion");
     for (const message of messages) {
-      changedExactlyOne(this.db.prepare(`UPDATE deliveries SET presented=1, presented_at_ms=?
+      changedExactlyOne(this.db.prepare(`UPDATE deliveries SET presented=1, presented_at_ms=MAX(?, created_at_ms)
         WHERE message_id=? AND recipient=? AND batch_id=? AND materialized=1 AND presented=0 AND presented_at_ms IS NULL
         AND EXISTS (SELECT 1 FROM batches WHERE id=? AND agent=? AND incarnation=? AND state='completed')`)
         .run(at, message, agent, id, id, agent, batch.incarnation), "batch presentation");
@@ -185,9 +185,9 @@ export class LedgerTransitions {
     if (current.outcome === outcome && current.reportedUnits === reportedUnits && current.detailsJson === detailsJson) return;
     // No provider evidence policy currently authorizes unknown -> completed/cancelled.
     if (current.outcome !== "reserved" || outcome === "reserved") corrupt("usage outcome is immutable without verified settlement evidence");
-    const at = this.now();
+    const at = Math.max(this.now(), current.createdAtMs);
     decodeUsageRow(usageRaw({ ...current, outcome, reportedUnits, detailsJson, updatedAtMs: at }));
-    changedExactlyOne(this.db.prepare(`UPDATE usage SET outcome=?, reported_units=?, details_json=?, updated_at_ms=?
+    changedExactlyOne(this.db.prepare(`UPDATE usage SET outcome=?, reported_units=?, details_json=?, updated_at_ms=MAX(?, created_at_ms)
       WHERE request_id=? AND actor=? AND incarnation=? AND outcome='reserved' AND reported_units IS NULL`)
       .run(outcome, reportedUnits, detailsJson, at, id, current.actor, current.incarnation), "usage settlement");
     this.read.usage(id);

@@ -294,12 +294,12 @@ export class Store {
     if (!existing) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${agent.name}`);
     if (agent.desired !== undefined) {
       if (!validDesiredTransition(existing.desired, agent.desired)) throw new StoreError("INVALID_REQUEST", `invalid desired transition ${existing.desired}->${agent.desired}`);
-      this.db.prepare("UPDATE agents SET desired=?, updated_at_ms=? WHERE name=?").run(agent.desired, now, agent.name);
+      this.db.prepare("UPDATE agents SET desired=?, updated_at_ms=MAX(?, created_at_ms) WHERE name=?").run(agent.desired, now, agent.name);
     }
     if (agent.incarnation !== undefined) {
       if (!Number.isSafeInteger(agent.incarnation) || agent.incarnation <= existing.incarnation)
         throw new StoreError("STORE_CORRUPT", `agent ${agent.name} incarnation can only move forward`);
-      this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=? WHERE name=?").run(agent.incarnation, now, agent.name);
+      this.db.prepare("UPDATE agents SET incarnation=?, updated_at_ms=MAX(?, created_at_ms) WHERE name=?").run(agent.incarnation, now, agent.name);
     }
   }
   follow(topic: string, agent: string): void { this.transitions.follow(topic, agent); }
