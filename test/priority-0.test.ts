@@ -120,7 +120,7 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
       tx.insertAgent(makeValidAgent("a", { from: info.base, createdBy: "principal" }));
     });
     const { mail, paths } = gitFixture(root, store);
-    const units = { bindIncarnationReader: () => undefined, ensureResident: () => undefined, start: () => undefined,
+    const units = { bindIncarnationReader: () => undefined, ensureResident: () => undefined, assertResidentNamesFree: () => undefined, start: () => undefined,
       onRevokeRun: undefined } as unknown as UnitsModule;
     // The policy resolves the accepted spec twice (preparation, acceptance
     // transaction); an edit lands right after acceptance and would resolve a

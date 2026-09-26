@@ -123,6 +123,9 @@ export class CreateCoordinator {
       return this.settleLinked(id, original.id, input.name);
     }
     this.workspace.assertCanonicalBase(input.from);
+    // P0V-26: refused before acceptance, rather than accepted and then unable
+    // to install its units.
+    this.units.assertResidentNamesFree(input.name);
     const id = generateOperationId();
     // From the frozen brief to acceptance, one settlement decides the brief:
     // a physical winner's plan names it, a linked plan or a loser does not.

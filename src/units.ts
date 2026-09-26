@@ -3,7 +3,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Actor, ResourceLimits, UnitObservation } from "../implementation/contracts.js";
-import { StoreError } from "./domain/errors.js";
+import { StoreError, unobserved } from "./domain/errors.js";
 import { canonicalResourceLimits } from "./domain/resources.js";
 import { unitNameFor as unitName } from "./domain/derived.js";
 import { replaceDerivedFile } from "./storage/durable-fs.js";
@@ -15,6 +15,10 @@ export { unitName, renderUnit };
 export type { RenderValues, UnitCommandOutcome };
 export const UNIT_TPL_DIR = fileURLToPath(new URL("../../implementation/systemd", import.meta.url));
 export const INSTALL_DIR = join(process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? "/tmp", ".config"), "systemd", "user");
+/** The line of a unit that names what it was rendered for (P0V-26). */
+function identityLine(unit: string): string | null {
+  return unit.split("\n").find(line => line.startsWith("Description=")) ?? null;
+}
 export type IncarnationReader = (agent: Actor) => number | null;
 /** Units per status `show`: about 60 ms each on systemd 257 (WP23.01). */
 export const STATUS_CHUNK = 32;
@@ -91,6 +95,7 @@ export class UnitsModule {
       ...this.values, ...overrides, agent: this.agentFrom(name),
     });
     const target = join(this.installDir, name);
+    this.assertOwnUnit(name, identityLine(rendered));
     replaceDerivedFile(target, rendered, 0o600);
     const linked = this.command(["link", target]);
     if (linked.kind === "unknown") throw unitCommandError(linked, `link ${name}`)!;
@@ -121,6 +126,34 @@ export class UnitsModule {
       const micros = /^\s*(?:μs|Microseconds):\s*(\d+)$/m.exec(parsed.stdout);
       if (parsed.kind !== "succeeded" || !micros || Number(micros[1]) !== overrides.cpuQuotaPercent * 10000)
         throw new StoreError("UNSUPPORTED_PROFILE", `${name} effective CPU quota mismatch`);
+    }
+  }
+
+  /** P0V-26, P0-1: a unit file under this name that was rendered for another
+   * society, kind or agent is that other owner's installed fact, and it is
+   * refused rather than replaced. UNIT-001 joins society and actor with "-",
+   * and both may contain one, so one name can be two owners' ("oma-a-b-c" is
+   * society a's Resident b-c and society a-b's Resident c). The rendered
+   * Description names the owner -- kind, society and agent, which hold no
+   * spaces -- and the same owner renders the same one again. */
+  private assertOwnUnit(name: string, identity: string | null): void {
+    const target = join(this.installDir, name);
+    let existing: string;
+    try { existing = readFileSync(target, "utf8"); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw unobserved(error, target) ?? error;
+    }
+    if (identityLine(existing) !== identity)
+      throw new StoreError("AGENT_CONFLICT", `unit ${name} is installed for another society or agent; it is not replaced`);
+  }
+
+  /** Before a create is accepted: the unit names a Resident called `agent`
+   * would take are not another owner's (P0V-26). */
+  assertResidentNamesFree(agent: Actor): void {
+    for (const [suffix, template] of [["service", "resident.service.in"], ["path", "resident.path.in"]] as const) {
+      const line = identityLine(readFileSync(join(UNIT_TPL_DIR, template), "utf8"));
+      this.assertOwnUnit(unitName(this.society, agent, suffix), line === null ? null : renderUnit(line, { ...this.values, agent }));
     }
   }
 
