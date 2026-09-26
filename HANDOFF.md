@@ -4,8 +4,8 @@
 
 ## 1. 현재 판정 (2026-09-26)
 
-- 브랜치 `refactor/safety-preserving-architecture`. push·PR·merge는 하지 않았다.
-- consistency plan의 카드 WP00–WP32와 그 뒤의 작업(재검토와 적대적 검증 AV1–AV8, 엔진 0.87.1 ENG1, 실제 provider 기능 점검 1–14차와 AV9–AV31, 설계 수정 DR1–DR13, Priority 0 파일 단위 점검 P0V-01–P0V-24)을 모두 커밋했다. 마지막 통합 검증은 validation.md의 "현재 source 판정"이다.
+- 브랜치 `refactor/safety-preserving-architecture`. 사용자 승인으로 origin에 push했다(2026-09-26). PR·merge는 하지 않았다.
+- consistency plan의 카드 WP00–WP32와 그 뒤의 작업(재검토와 적대적 검증 AV1–AV8, 엔진 0.87.1 ENG1, 실제 provider 기능 점검 1–14차와 AV9–AV31, 설계 수정 DR1–DR13, Priority 0 파일 단위 점검 P0V-01–P0V-24)을 모두 커밋했다. 마지막 통합 검증은 validation.md의 "현재 source 판정"(v20)이다. v20은 initial lane 8개가 모두 PASS였고, final은 사용자 요청으로 끝나기 전에 멈췄다.
 - **release 미승인.** 남은 차단 요인은 powercut·실제 provider 자동 lane·CI(NOT_RUN, oracle V05C·V30B·V32B)이며 모두 사용자 승인이 필요하다. A-008 LOC gate도 OPEN이다. 수동 provider 점검은 lane 증거가 아니다. 판정은 다음 명령으로 다시 확인한다.
 
   ```sh
@@ -52,7 +52,7 @@
 ## 5. 작업 규칙
 
 - 계획 디렉터리는 수정하지 않는다(`sha256sum -c SHA256SUMS.txt`). architecture.md도 N-001 결박 때문에 고치지 않는다.
-- 계획에 없는 schema·wire·receipt version·권한 변경, NOT_RUN/BLOCKED를 PASS로 바꾸기, 실제 credential·유료 provider 사용(사용자 승인 없이), VM 전원 차단, push/PR/merge는 하지 않는다.
+- 계획에 없는 schema·wire·receipt version·권한 변경, NOT_RUN/BLOCKED를 PASS로 바꾸기, 실제 credential·유료 provider 사용(사용자 승인 없이), VM 전원 차단, PR·merge는 하지 않는다. push는 사용자가 승인한 때만 한다.
 - 커밋은 정확한 경로만 `git add`하고, 메시지 끝에 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. `src/mail/`은 gitignore의 `mail`에 걸리므로 그 아래 새 파일은 `git add -f`로 따로 추가한다.
 - 새 production 파일은 `scripts/kernel-zones.mjs`에 zone을 등록하고, 순수 kernel 파일은 `node:crypto` 같은 효과 capability를 import하지 않는다.
 - 소스 변경 뒤에는 `npm run evidence:graph && node scripts/loc.mjs && npm run check:architecture`를 커밋 전에 돌린다. gate는 파이프(`| tail`)로 감추지 말고 종료 코드로 판단한다.
@@ -60,7 +60,7 @@
 
 ## 6. 남은 일
 
-1. **release gate (사용자 승인 필요)**: 승인된 VM에서 powercut(V05C·V30B), 승인된 credential로 실제 provider 자동 lane, push 뒤 CI(V32B).
+1. **release gate**: 승인된 VM에서 powercut(V05C·V30B), 승인된 credential로 실제 provider 자동 lane(사용자 승인 필요). CI(V32B)는 push했으므로 GitHub Actions 결과를 확인해 기록한다.
 2. **보류한 결정과 검증 공백**: validation "알려진 한계"의 마지막 항목이 목록을 소유한다.
 3. **provtest 정리 (사용자 결정)**: 점검을 끝내면 `for u in $(ls ~/.config/systemd/user | grep '^oma-provtest-'); do systemctl --user stop "$u"; rm -f ~/.config/systemd/user/"$u"; done; systemctl --user daemon-reload; rm -rf /home/dev/oma-evidence/provider/data`(credential 사본 포함).
 

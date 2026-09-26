@@ -11,9 +11,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 통합 검증 트리의 부모 `de98db0`, 실행일 2026-09-26. 이 브랜치의 작업을 한 트리로 결박한 결과다. 작업은 consistency plan(WP00–WP32), 재검토와 적대적 검증(AV1–AV8), 엔진 0.87.1(ENG1), 실제 provider 기능 점검(1–14차, AV9–AV31), 설계 수정(DR1–DR13), Priority 0 파일 단위 점검(P0V-01–P0V-24)이다. 무엇을 왜 바꿨는지는 결정 기록([consistency-decisions](consistency-decisions.md), [design-revisions](design-revisions.md))과 점검 기록([priority-0-audit](priority-0-audit.md))에 있고, 이 절은 이 트리에서 실제로 돈 것만 적는다. 판정: 로컬·kernel·crash lane은 모두 PASS이고, release는 미승인이다(powercut·provider 자동 lane·CI NOT_RUN, A-008 OPEN). wire·DB schema·receipt 형식은 v1 그대로다. receipt의 adapter revision만 ENG1에서 `oma-pi-rpc-v1@0.87.1`이 되었다. 권한 의미가 바뀐 것은 AV18(기본 Principal 프로필이 이미 위임하던 권한을 보유)과 DR4(`code.integrate`를 host가 직접 위임)다. architecture.md는 N-001이 결박한 bytes 그대로이며, 어긋나는 문장은 design-revisions에 있다.
+브랜치 `refactor/safety-preserving-architecture`, 통합 검증 트리의 부모 `f3a55b6`, 실행일 2026-09-26. 이 브랜치의 작업을 한 트리로 결박한 결과다. 작업은 consistency plan(WP00–WP32), 재검토와 적대적 검증(AV1–AV8), 엔진 0.87.1(ENG1), 실제 provider 기능 점검(1–14차, AV9–AV31), 설계 수정(DR1–DR13), Priority 0 파일 단위 점검(코드 P0V-01–P0V-24, 문서·식별자 P0D-01–P0D-14)이다. 무엇을 왜 바꿨는지는 결정 기록([consistency-decisions](consistency-decisions.md), [design-revisions](design-revisions.md))과 점검 기록([priority-0-audit](priority-0-audit.md))에 있고, 이 절은 이 트리에서 실제로 돈 것만 적는다. 판정: 로컬·kernel·crash lane은 모두 PASS이고, release는 미승인이다(powercut·provider 자동 lane·CI NOT_RUN, A-008 OPEN). wire·DB schema·receipt 형식은 v1 그대로다. receipt의 adapter revision만 ENG1에서 `oma-pi-rpc-v1@0.87.1`이 되었다. 권한 의미가 바뀐 것은 AV18(기본 Principal 프로필이 이미 위임하던 권한을 보유)과 DR4(`code.integrate`를 host가 직접 위임)다. architecture.md는 N-001이 결박한 bytes 그대로이며, 어긋나는 문장은 design-revisions에 있다.
 
-검증 입력: verification input digest `e8c79aad33aaa9d08b655f4755a2e9abb9d9c02bd0846fa4d19359c61b5b4a8b` (619 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `3b0a6baee6003b0654d923f511770db3cb3dde917bddb9836c61848c0cf3f1b8` (621 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
@@ -21,7 +21,7 @@
 
 | 검사 | 결과와 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS on engine 0.87.1: fast/durable/property/stress 315/475/34/11, local 1631/1631, package; all fail/cancelled/skipped/todo=0 (`v19-initial-*`, `de98db0`). kernel 64/64과 crash 63/63 PASS on the disposable user manager(T38·SEQ-002 필수). durable은 실제 엔진 AV14(엔진 종료를 기다린 뒤 뒷정리)·V27A(영수증 게시·검증까지)·T116·T117·AV16, pty V28B, 설치 closure V31A, AV9–AV30, DR1·DR3·DR4·DR6·DR7 회귀, Priority 0의 DR9–DR13·P0V 회귀(durable requiredNames 22개)를 포함한다. property는 DR9의 V30A(late는 verified, early는 conflicting), fast는 V29A·V31B·V32A·AV3·AV5 규칙·AV9·AV12·AV31 wiring·runtime-contracts·T118과 P0-7 gate(`check:boundaries`와 그 negative control)를 포함한다. local은 AV31 신호 시험·DR8, P0V-18(Control Panel exit)·P0V-22·P0V-23·P0V-24 회귀를 포함한다. metadata-bound final rerun required |
+| type/build/package/local and lanes | PASS on engine 0.87.1: fast/durable/property/stress 318/475/34/11, local 1634/1634, package; all fail/cancelled/skipped/todo=0 (`v20-initial-*`, `f3a55b6`). kernel 64/64과 crash 63/63 PASS on the disposable user manager(T38·SEQ-002 필수). durable은 실제 엔진 AV14(엔진 종료를 기다린 뒤 뒷정리)·V27A(영수증 게시·검증까지)·T116·T117·AV16, pty V28B, 설치 closure V31A, AV9–AV30, DR1·DR3·DR4·DR6·DR7 회귀, Priority 0의 DR9–DR13·P0V 회귀(durable requiredNames 22개)를 포함한다. property는 DR9의 V30A(late는 verified, early는 conflicting), fast는 문서 무결성(`check:documents`와 negative control 셋)·V29A·V31B·V32A·AV3·AV5 규칙·AV9·AV12·AV31 wiring·runtime-contracts·T118과 P0-7 gate(`check:boundaries`와 그 negative control)를 포함한다. local은 AV31 신호 시험·DR8, P0V-18(Control Panel exit)·P0V-22·P0V-23·P0V-24 회귀를 포함한다. metadata-bound final rerun required |
 | Review ledger | production 파일 224개: 변경이 닿은 131개는 그 변경의 회귀 시험(DR·P0 카드 포함), 읽고 바꾸지 않은 93개는 그 모듈을 적재하는 시험(`review-notes.json`), 제거 1개(`src/git/context-mirror.ts`, P0V-17). NOT_REVIEWED 0 |
 | Release 판정 | release 미승인: 모든 production 파일 검토 완료(NOT_REVIEWED 0), powercut·실제 provider·CI NOT_RUN(V05C·V30B·V32B) — 모두 사용자 승인 필요 |
 | NOT_RUN과 OPEN | provider: 자동 lane NOT_RUN(아래 실제 provider 점검은 수동 기능 증거이며 lane 증거가 아니다); powercut·CI NOT_RUN; A-008 OPEN(아래 "A-008 LOC gate") |
@@ -131,6 +131,7 @@
 | P0-7 gate | fast: `check:boundaries`가 durable primitive 호출 owner 58개 전부에 등록된 kill·retry·restart 시험이 있음을 확인, 등록부에서 빠진 경계·없는 시험은 finding(negative control). 추가 시험: draining broker의 status view 제거, project binding 게시 crash |
 | P0 mutants | 수정을 되돌린 변이 25개(작업 트리에서 빌드·해당 시험, 빌드되지 않은 변이는 다시 써서 실행): 24개 실패. 생존 1개는 DR12의 앞선 버전 확인만 제거한 것으로, rename 직전 재확인이 같은 코드로 막는 등가 변이(둘 다 제거하면 실패) |
 | Provider run 14 | 수동 기능 점검(lane 증거 아님, 사용자 승인, `/home/dev/oma-evidence/provider/runs/run14-*`, `priority-0-audit.md` "실제 provider 점검(14차)"): DR10 시작 수집 removed 2·kept 0(넣은 흔적만), broker SIGKILL 뒤 batch 두 개가 뒤 시도의 receipt로 정산되고 행 불변(DR9), boundary 8/8(DR11), 재전달 알림, Mail 화면의 일부 읽기 실패 표시(DR13), Config 저장·lost update 거절(DR12), P0V-24 수정 뒤 거절 다음 값 표시와 저장 재확인, 종료 코드 0 |
+| 문서와 식별자(P0D) | fast: `check:documents`(`check:architecture`에 포함)가 이 트리에서 요구 ID 유일성, 수용 행의 위치와 대역(TEST-008), 링크·anchor를 확인하고, negative control 셋(두 조항에 붙은 ID, matrix 밖의 수용 행과 제품 대역의 빈 번호, 없는 파일·제목을 가리키는 링크)이 finding이 된다. 요구 ID INF-005·006의 중복은 INF-009·010으로, 수용 번호 T115–T117·T122의 두 뜻은 T124–T127로 풀었다 |
 
 #### 중간 실행에서 멈춘 것
 
@@ -139,9 +140,9 @@
 | PASS로 바꾸지 않은 실패 | v3(`9f7f551`) kernel 59/60: 실패는 WP25가 고친 `T36`. v4(`6611644`) kernel 61/62: WP25 뒤 갱신되지 않은 `systemd-analyze verify` fixture(`1f6c31e`에서 수정). v11 첫 initial(`0325450`) kernel 62/63: 부하에서 살아 있는 Resident가 CAPABILITY_DENIED(AV6의 발견 경위), 두 번째 initial(`83f1b04`)은 AV7을 고치려 local 도중 중단. v17 final(`140eed8`) durable 474/475: AV14 시험의 뒷정리 경쟁(`4dd80cc`에서 수정). 각각 원인을 고친 뒤 다음 회차가 대체했다 |
 | 중간 증거 | v1–v18의 initial·final 산출물은 결박되지 않은 중간 증거로 `/home/dev/oma-evidence/v1`–`v18`에 있다. 현재 판정은 이 절의 트리만 말한다 |
 
-Raw evidence: `/home/dev/oma-evidence/v19/`.
+Raw evidence: `/home/dev/oma-evidence/v20/`.
 
-Final PASS condition: `v19-fast-final`, `v19-durable-final`, `v19-property-final`, `v19-stress-final`, `v19-package-final`, `v19-local-final`, `v19-kernel-final`, `v19-crash-final` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `v20-fast-final`, `v20-durable-final`, `v20-property-final`, `v20-stress-final`, `v20-package-final`, `v20-local-final`, `v20-kernel-final`, `v20-crash-final` must bind one digest with exit 0 and zero unrun tests.
 
 ## 알려진 한계
 
