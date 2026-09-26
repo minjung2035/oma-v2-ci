@@ -52,7 +52,7 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 | P0V-21 | P0-5 | runtime/{assets.ts:50, deployment-manifest.ts:131, extension-integrity.ts:51, pi-adapter.ts:118, pi-runtime.ts:49,62} | 관측하지 못한 host 배치·배포·extension·Pi 경로를 UNSUPPORTED_PROFILE로 보고한다 | 수정 76a6827 |
 | P0V-22 | P0-5 | config/generations.ts:182, tui/sources/{extensions.ts:65,70, mail.ts:92} | 목록을 얻지 못한 것을 0·빠짐으로 센다(generation 예산, extension 후보, 메일·unread 수) | 수정 76a6827 |
 | P0V-23 | P0-5 | tui/app.ts:207 | commit된 뒤 flush만 실패한 설정 저장을 "저장하지 못했습니다"로 표시한다 | 수정 76a6827 |
-| P0V-24 | P0-5, P0-1 (INV11) | entry/oma.ts `setField`·`setExtension` | 14차 실제 provider 점검에서 찾았다. Control Panel은 저장에 성공했을 때만 설정을 다시 읽었다. 화면이 읽은 뒤 파일이 바뀌어 편집이 거절되면(DR12의 기대 버전 확인), 화면은 거절된 편집의 원본 snapshot을 계속 현재 값으로 보여 주었고(파일은 5, 화면은 6), 다음 편집도 같은 낡은 snapshot으로 만들어져 계속 거절되었다. 거절 문구는 "다시 읽으라"고 했지만 방법은 재시작뿐이었다. 확장 토글은 저장 뒤 다시 읽기가 실패하면 저장된 토글을 "저장하지 못했습니다"로 보고했다 | 수정(14차 commit) |
+| P0V-24 | P0-5, P0-1 (INV11) | entry/oma.ts `setField`·`setExtension` | 14차 실제 provider 점검에서 찾았다. Control Panel은 저장에 성공했을 때만 설정을 다시 읽었다. 화면이 읽은 뒤 파일이 바뀌어 편집이 거절되면(DR12의 기대 버전 확인), 화면은 거절된 편집의 원본 snapshot을 계속 현재 값으로 보여 주었고(파일은 5, 화면은 6), 다음 편집도 같은 낡은 snapshot으로 만들어져 계속 거절되었다. 거절 문구는 "다시 읽으라"고 했지만 방법은 재시작뿐이었다. 확장 토글은 저장 뒤 다시 읽기가 실패하면 저장된 토글을 "저장하지 못했습니다"로 보고했다 | 수정 721cfe1 |
 
 ## 파일별 기록
 

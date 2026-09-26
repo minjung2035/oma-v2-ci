@@ -9,8 +9,8 @@
 그 문장과 어긋나는 판단은 `implementation/design-revisions.md`에 적는다.
 
 점검: 215개 production 파일의 1차 점검과 받는 자리 전부의 2차 점검을 마쳤고, 발견 23개(P0V-01–P0V-23)를
-고쳤다. 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
-설계 판단은 DR9–DR13에, 결박은 `implementation/validation.md`의 v16에 있다.
+고쳤다. 실제 provider 점검(14차)에서 하나(P0V-24)를 더 찾아 고쳤다. 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
+설계 판단은 DR9–DR13에, 결박은 `implementation/validation.md`의 v17에 있다.
 
 ## 요약
 
