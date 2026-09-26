@@ -42,6 +42,7 @@ import { readMailbox, unreadCount } from "../src/tui/sources/mail.js";
 import { READ_BOUNDS } from "../src/tui/limits.js";
 import { utimesSync } from "node:fs";
 import { unknownDashboard } from "./fixtures/dashboard.js";
+import { KeyDecoder } from "../src/tui/keys.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -495,4 +496,36 @@ test("P0V-43 / N20: one refresh reads the headers of a bounded number of message
     for (const name of readdirSync(join(root, "cur"))) chmodSync(join(root, "cur", name), 0o600);
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("P0V-46 / N23, P0-2: typed and pasted text are read by one rule -- a typed U+FFFD is kept, broken bytes are dropped", () => {
+  const typed = (...reads: number[][]): string => {
+    const decoder = new KeyDecoder(() => 0);
+    const keys = [...reads.flatMap(read => decoder.push(Uint8Array.from(read))), ...decoder.finish()];
+    return keys.map(key => (key.kind === "char" ? key.value : "")).join("");
+  };
+  const pasted = (bytes: number[]): string => {
+    const decoder = new KeyDecoder(() => 0);
+    const keys = decoder.push(Uint8Array.from([...Buffer.from("\u001b[200~"), ...bytes, ...Buffer.from("\u001b[201~")]));
+    const paste = keys.find(key => key.kind === "paste");
+    return paste !== undefined && paste.kind === "paste" ? paste.value : "";
+  };
+  const replacement = [...Buffer.from("\ufffd", "utf8")];
+  const cases: [number[], string][] = [
+    [[...Buffer.from("a"), ...replacement, ...Buffer.from("b")], "a\ufffdb"],   // a character a Human can type
+    [[...Buffer.from("a"), 0xff, ...Buffer.from("b")], "ab"],                    // never UTF-8
+    [[...Buffer.from("a"), 0xc3, 0x28], "a("],                                   // a lead with no continuation
+    [[0xed, 0xa0, 0x80, ...Buffer.from("z")], "z"],                              // an encoded surrogate
+    [[0xe0, 0x80, 0x80, ...Buffer.from("z")], "z"],                              // an overlong form
+    [[...Buffer.from("한")], "한"],
+  ];
+  for (const [bytes, text] of cases) {
+    assert.equal(typed(bytes), text, `typed ${JSON.stringify(bytes)}`);
+    assert.equal(pasted(bytes), text, `pasted ${JSON.stringify(bytes)}`);
+  }
+  // A character split between two reads is one character, typed or pasted.
+  const han = [...Buffer.from("한")];
+  assert.equal(typed(han.slice(0, 1), han.slice(1)), "한");
+  // One the terminal never finishes is dropped, not turned into U+FFFD.
+  assert.equal(typed([...Buffer.from("x"), han[0]!]), "x");
 });

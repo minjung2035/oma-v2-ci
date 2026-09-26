@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "546a6bcd422b7e8940cb692b39adda99740260bee5b91e3119b94189e0fa24a1",
+  "report": "f5f42fad7df6217121d278aae7f8ae763ef683551ff70b8c64645b9f44c91641",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -797,7 +797,7 @@
     },
     {
       "path": "src/tui/keys.ts",
-      "sha256": "b00cff2554d09fd63a49441c01c74a7cfb56263697a37dfadb561449702d60fc"
+      "sha256": "44edf8c2180fa09e20c5d250a890ca705722224fd91baed101569b29eeb807e4"
     },
     {
       "path": "src/tui/limits.ts",

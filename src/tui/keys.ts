@@ -51,7 +51,6 @@ const ESC = 0x1b;
 const CSI = 0x5b;
 /** The most bytes one UTF-8 code point takes, which is how far back the
  * decoder has to look to know whether it is holding half of one. */
-const UTF8_MAX_BYTES = 4;
 /** Bracketed paste (DEC 2004). The terminal brackets pasted text with these,
  * which is the only way a stream of bytes says "this arrived at once" rather
  * than "this was typed": without it every newline in a paste is an Enter, and
@@ -66,7 +65,7 @@ const PASTE_END = `${String.fromCharCode(ESC)}[201~`;
  * Human meant to send. Display sanitising is a separate concern and belongs to
  * the view; this keeps them out of what is sent to the engine. */
 function pastedText(bytes: number[]): string {
-  return new TextDecoder("utf-8", { fatal: false }).decode(Uint8Array.from(bytes))
+  return decodeText(bytes, false).text
     .replace(/\r\n?/g, "\n")
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
 }
@@ -76,13 +75,45 @@ function actionOf(token: string): Key | undefined {
   return id === undefined ? undefined : ACTIONS[id];
 }
 
+/** P0V-46, P0-2: the one reading of the text bytes a terminal sends, typed or
+ * pasted. A well-formed UTF-8 sequence is text, whatever character it encodes
+ * -- U+FFFD included, which a Human can type. A byte that is not part of a
+ * well-formed sequence (a code point the terminal cut and never finished, or
+ * bytes that were never UTF-8) is no key anyone pressed and is dropped. Typed
+ * text used to drop every U+FFFD, the real one too, and a paste used to keep
+ * the ones decoding had put in place of broken bytes. With `open`, the bytes
+ * of a sequence that is not finished yet are returned as `rest` for the next
+ * read to complete. */
+export function decodeText(bytes: ArrayLike<number>, open: boolean): { readonly text: string; readonly rest: number[] } {
+  const kept: number[] = [];
+  let index = 0;
+  while (index < bytes.length) {
+    const lead = bytes[index]!;
+    const length = lead < 0x80 ? 1 : lead >= 0xc2 && lead <= 0xdf ? 2 : lead >= 0xe0 && lead <= 0xef ? 3 : lead >= 0xf0 && lead <= 0xf4 ? 4 : 0;
+    if (length === 0) { index += 1; continue; }
+    let have = 1;
+    let broken = false;
+    for (; have < length && index + have < bytes.length; have += 1) {
+      const next = bytes[index + have]!;
+      // RFC 3629: no overlong forms, no surrogates, nothing past U+10FFFF.
+      const low = have === 1 && lead === 0xe0 ? 0xa0 : have === 1 && lead === 0xf0 ? 0x90 : 0x80;
+      const high = have === 1 && lead === 0xed ? 0x9f : have === 1 && lead === 0xf4 ? 0x8f : 0xbf;
+      if (next < low || next > high) { broken = true; break; }
+    }
+    if (broken) { index += 1; continue; }
+    if (have < length) {
+      if (open) return { text: new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(kept)), rest: Array.from({ length: bytes.length - index }, (_, at) => bytes[index + at]!) };
+      break;
+    }
+    for (let at = 0; at < length; at += 1) kept.push(bytes[index + at]!);
+    index += length;
+  }
+  return { text: new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(kept)), rest: [] };
+}
+
 function chars(text: string, keys: Key[]): void {
   for (const value of text)
-    // U+FFFD is what `TextDecoder` returns for bytes that are not text: a code
-    // point the terminal cut in half, or a sequence that was never UTF-8. It
-    // is not a key anyone pressed, so it is dropped rather than typed into the
-    // prompt and sent to the engine as a character the Human never entered.
-    if (value >= " " && value !== "�") keys.push({ kind: "char", value });
+    if (value >= " ") keys.push({ kind: "char", value });
 }
 
 function isCsiFinal(byte: number): boolean {
@@ -100,12 +131,10 @@ function isCsiFinal(byte: number): boolean {
  * state rather than a race they have to win.
  */
 export class KeyDecoder {
-  private decoder = new TextDecoder("utf-8", { fatal: false });
-  /** The last few text bytes, so "the decoder is holding half a code point" is
-   * something this class can answer. `TextDecoder` keeps that state privately
-   * and reports it only by emitting U+FFFD, which is too late to be a
-   * deadline. */
-  private tail: number[] = [];
+  /** The bytes of a code point a read ended in the middle of, held for the
+   * next read to finish -- so "half a code point is pending" is something this
+   * class can answer, and give a deadline to. */
+  private pendingText: number[] = [];
   private escape: number[] | null = null;
   private discardingCsi = false;
   /** An assembling paste: its bytes, whether it has already passed its bound,
@@ -139,9 +168,9 @@ export class KeyDecoder {
     let textStart = 0;
     const flushText = (end: number, final: boolean): void => {
       const region = chunk.subarray(textStart, end);
-      chars(this.decoder.decode(region, { stream: !final }), keys);
-      if (final) this.resetText();
-      else this.remember(region);
+      const decoded = decodeText([...this.pendingText, ...region], !final);
+      this.pendingText = decoded.rest;
+      chars(decoded.text, keys);
     };
 
     let index = 0;
@@ -252,33 +281,14 @@ export class KeyDecoder {
     return keys;
   }
 
-  /** Keeps the last code point's worth of text bytes. */
-  private remember(region: Uint8Array): void {
-    for (const byte of region) {
-      this.tail.push(byte);
-      if (this.tail.length > UTF8_MAX_BYTES) this.tail.shift();
-    }
-  }
-
   private resetText(): void {
-    this.decoder = new TextDecoder("utf-8", { fatal: false });
-    this.tail = [];
+    this.pendingText = [];
   }
 
-  /** Whether the text the decoder holds ends in the middle of a code point.
-   *
-   * Read backwards from the last text byte: continuation bytes are skipped,
-   * and the first byte that is not one says how many bytes its code point
-   * takes. More than have arrived means the terminal has not finished it.
-   */
+  /** Whether a read ended in the middle of a code point that the terminal has
+   * not finished yet. */
   private get incompleteText(): boolean {
-    for (let back = 0; back < this.tail.length; back += 1) {
-      const byte = this.tail[this.tail.length - 1 - back]!;
-      if ((byte & 0xc0) === 0x80) continue;
-      const expected = byte < 0x80 ? 1 : byte < 0xe0 ? 2 : byte < 0xf0 ? 3 : UTF8_MAX_BYTES;
-      return expected > back + 1;
-    }
-    return false;
+    return this.pendingText.length > 0;
   }
 
   /** Defence in depth for a clipboard that carries its own paste end marker.
@@ -348,7 +358,8 @@ export class KeyDecoder {
    */
   finish(): Key[] {
     const keys: Key[] = [];
-    chars(this.decoder.decode(), keys);
+    // The stream is over: an unfinished code point is never finished.
+    chars(decodeText(this.pendingText, false).text, keys);
     this.resetText();
     keys.push(...this.flushPending());
     this.escape = null;
