@@ -6,7 +6,7 @@
  * case-insensitive; References remain ordered, including repeated ancestors.
  * Body bytes are never decoded, reserialized or hashed by this parser.
  */
-import { headerMessageIdCheck, isMailKind, exactCandidateCheck } from "../domain/mail-values.js";
+import { MAIL_HEADER_BYTES, headerMessageIdCheck, isMailKind, exactCandidateCheck } from "../domain/mail-values.js";
 import { isValidFullOid } from "../domain/identifiers.js";
 import { StoreError } from "../domain/errors.js";
 
@@ -18,7 +18,7 @@ export interface ParsedEmlHeaders {
     candidate: string | null; policyRevision: string | null } | null;
 }
 export interface HeaderReadLimits { readonly maxHeaderBytes: number }
-const DEFAULT_HEADER_LIMIT = 256 * 1024;
+const DEFAULT_HEADER_LIMIT = MAIL_HEADER_BYTES;
 export const MAX_HEADER_LINE_BYTES = 998;
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const allowed = new Set([

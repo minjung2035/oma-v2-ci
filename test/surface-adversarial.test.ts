@@ -92,7 +92,7 @@ test("the panel renders at degenerate terminal sizes without exceeding them", ()
     dashboard: unknownDashboard("아주 긴 이유 문자열입니다 ".repeat(4)),
     config: Object.freeze([]), extensions: Object.freeze([]),
     mail: Object.freeze([{ id: "m", from: "worker-a", kind: "question", subject: "제목".repeat(60), unread: true, path: "/tmp/m" }]),
-    mailUnreadable: null,
+    mailUnreadable: null, mailOmitted: 0,
   });
   let state = step(INITIAL, { kind: "panel" }, data, FRAME_BYTES).state;
   for (const [columns, rows] of [[1, 1], [2, 2], [8, 3], [20, 6], [200, 60]] as const) {
@@ -105,7 +105,7 @@ test("the panel renders at degenerate terminal sizes without exceeding them", ()
     }
   }
   state = step(state, { kind: "enter" }, data, FRAME_BYTES).state;
-  assert.doesNotThrow(() => render({ state, data, transcript: [], body: "본문", notice: null, busy: false, columns: 0, rows: 0 }));
+  assert.doesNotThrow(() => render({ state, data, transcript: [], body: { text: "본문", truncated: false }, notice: null, busy: false, columns: 0, rows: 0 }));
 });
 
 test("a tool surface declaration cannot smuggle an oversized or malformed name", () => {
@@ -146,14 +146,14 @@ test("mail reading survives malformed, empty and non-file entries", () => {
     // contents of a host file on this screen.
     assert.ok(!rows.some(row => row.id === "a-directory"));
     assert.ok(!rows.some(row => row.id === "a-symlink"), "a symlink was read as a message");
-    assert.equal(readBody(join(box.curDir, "a-symlink")), null, "a symlink's target was read");
+    assert.equal(readBody(join(box.curDir, "a-symlink"), 4096), null, "a symlink's target was read");
     for (const row of rows) {
       assert.equal(typeof row.subject, "string");
       assert.equal(typeof row.from, "string");
       assert.ok(row.path.startsWith(root));
     }
-    assert.doesNotThrow(() => readBody(join(box.newDir, "binary")));
-    assert.equal(readBody(join(box.newDir, "a-directory")), null);
+    assert.doesNotThrow(() => readBody(join(box.newDir, "binary"), 4096));
+    assert.equal(readBody(join(box.newDir, "a-directory"), 4096), null);
     // The count on the Dashboard and the list on the Mail screen are derived
     // the same way, so a directory cannot be counted as unread mail.
     assert.equal(unreadCount(box), rows.filter(row => row.unread).length);
@@ -214,7 +214,8 @@ test("T124/TUI-011: the Mail screen reads bounded, refuses links, and orders by 
     assert.ok(rows.some(row => row.subject === "big"));
     // The body reader has its own bound and honours it exactly.
     const body = readBody(huge, 32)!;
-    assert.ok(body.length <= 32, `body read past its bound: ${body.length}`);
+    assert.ok(body.text.length <= 32, `body read past its bound: ${body.text.length}`);
+    assert.equal(body.truncated, true, "a body read only in part was not said to be partial");
     assert.ok(process.memoryUsage().arrayBuffers - before < statSync(huge).size,
       "the whole file was buffered to show a header");
 

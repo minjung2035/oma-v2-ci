@@ -12,6 +12,7 @@ import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
 import type { ValidatedRunLease } from "../protocol/run-lease.js";
 import { StoreError } from "../domain/errors.js";
+import { storedMailBytes } from "../domain/mail-values.js";
 import { assertModelScope } from "../storage/paths.js";
 
 /** Everything the adapter needs to run the engine inside the Resident sandbox.
@@ -126,7 +127,8 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     OMA_BATCH_VIEW: inside(options.paths.batchView),
     OMA_FRAME_BYTES: String(options.limits.frameBytes),
     OMA_BATCH_MAX_MESSAGES: String(options.limits.batchMaxMessages),
-    OMA_MAIL_BYTES: String(options.limits.mailBodyBytes),
+    // The mail tool reads stored messages, whose bound is not the body's (P0V-36).
+    OMA_MAIL_BYTES: String(storedMailBytes(options.limits.mailBodyBytes)),
     OMA_WORKSPACE_BYTES: String(options.profile.workspaceBytes),
     OMA_MAIL_ARCHIVE: inside(options.paths.mailArchive),
     OMA_AGENT_HOME: inside(options.paths.agentHome),

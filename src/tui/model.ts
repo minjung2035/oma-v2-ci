@@ -106,6 +106,16 @@ export type Notice =
 export interface MailboxRead {
   readonly rows: readonly MailRow[];
   readonly unreadable: string | null;
+  /** Older messages this read counted but did not read (P0V-43). */
+  readonly omitted: number;
+}
+
+/** A stored message's body as the Mail screen shows it, and whether what was
+ * read is only the beginning of it (P0V-42): a partial body is not shown as the
+ * whole one. */
+export interface MailBody {
+  readonly text: string;
+  readonly truncated: boolean;
 }
 
 export interface PanelData {
@@ -116,12 +126,27 @@ export interface PanelData {
   /** Why part of the mailbox could not be read, or null when all of it was:
    * the list above is then not the whole mailbox. */
   readonly mailUnreadable: string | null;
+  /** Older messages counted but not listed (P0V-43). */
+  readonly mailOmitted: number;
+}
+
+/** P0V-41, P0-1: which message a row is, whatever position a refresh gives it
+ * and whether it has moved from new/ to cur/ -- the Maildir name without its
+ * info suffix. A row's index is a position in one observation of the list;
+ * what the Human opened is a message. */
+export function mailIdentity(row: MailRow): string {
+  const info = row.id.indexOf(":2,");
+  return info < 0 ? row.id : row.id.slice(0, info);
+}
+export function mailIndex(data: PanelData, id: string): number {
+  return data.mail.findIndex(row => mailIdentity(row) === id);
 }
 
 export type Detail =
   | { readonly kind: "none" }
   | { readonly kind: "extensions"; readonly row: number; readonly column: 0 | 1 }
-  | { readonly kind: "mail"; readonly row: number };
+  /** The message open, by identity, and how far its body is scrolled. */
+  | { readonly kind: "mail"; readonly id: string; readonly scroll: number };
 
 export type Edit =
   | { readonly kind: "none" }
@@ -289,12 +314,20 @@ function stepExtensions(state: State, data: PanelData, key: Key, detail: Extract
   return { state, effects: [] };
 }
 
+/** P0V-40: ↑/↓ move through the open message's body; ←/→ open the message
+ * before or after it in the list. The view keeps the scroll within the body. */
 function stepMailDetail(state: State, data: PanelData, key: Key, detail: Extract<Detail, { kind: "mail" }>): Step {
   if (key.kind === "escape") return { state: { ...state, detail: NONE }, effects: [] };
-  if (data.mail.length === 0) return { state: { ...state, detail: NONE }, effects: [] };
   if (key.kind === "up" || key.kind === "down") {
-    const next = Math.min(Math.max(detail.row + (key.kind === "up" ? -1 : 1), 0), data.mail.length - 1);
-    return { state: withCursor({ ...state, detail: { kind: "mail", row: next } }, "mail", next), effects: [] };
+    const scroll = Math.max(0, detail.scroll + (key.kind === "up" ? -1 : 1));
+    return { state: { ...state, detail: { ...detail, scroll } }, effects: [] };
+  }
+  if (key.kind === "left" || key.kind === "right") {
+    const at = mailIndex(data, detail.id);
+    const next = at < 0 ? -1 : at + (key.kind === "left" ? -1 : 1);
+    const row = data.mail[next];
+    if (row === undefined) return { state, effects: [] };
+    return { state: withCursor({ ...state, detail: { kind: "mail", id: mailIdentity(row), scroll: 0 } }, "mail", next), effects: [] };
   }
   return { state, effects: [] };
 }
@@ -319,8 +352,9 @@ function stepPanelRoot(state: State, data: PanelData, key: Key): Step {
         const field = selectedField(state, data);
         return field ? beginEdit(state, field) : { state, effects: [] };
       }
-      if (category === "mail" && data.mail.length > 0)
-        return { state: { ...state, detail: { kind: "mail", row: cursorOf(state, data, "mail") } }, effects: [] };
+      const opened = category === "mail" ? data.mail[cursorOf(state, data, "mail")] : undefined;
+      if (opened !== undefined)
+        return { state: { ...state, detail: { kind: "mail", id: mailIdentity(opened), scroll: 0 } }, effects: [] };
       // Arch §23.5: the Dashboard has no detail screen.
       return { state, effects: [] };
     }

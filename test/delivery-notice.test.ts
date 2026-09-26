@@ -137,7 +137,7 @@ test("AV26 / TUI-011, arch §5.1: the Human's Mail screen shows the subject and 
     const parsed = parseMessage(eml.text);
     assert.equal(parsed.headers["subject"], subject);
     assert.equal(parsed.body.replace(/\r\n/g, "\n").replace(/\n+$/, ""), body);
-    assert.equal(readBody(path)?.replace(/\r\n/g, "\n").replace(/\n+$/, ""), body, "the Mail screen's body view");
+    assert.equal(readBody(path, 1024 * 1024)?.text.replace(/\r\n/g, "\n").replace(/\n+$/, ""), body, "the Mail screen's body view");
     // Older LF mail still splits at its own blank line.
     assert.equal(parseMessage("Subject: plain\nX-Oma-Kind: message\n\nhello\n").body, "hello\n");
   } finally { rmSync(root, { recursive: true, force: true }); }

@@ -7,8 +7,8 @@
  * directory; the state machine, sources and transport do not change.
  */
 import {
-  CATEGORIES, categoryOf, cursorOf,
-  type ConfigField, type Notice, type PanelData, type State,
+  CATEGORIES, categoryOf, cursorOf, mailIdentity,
+  type ConfigField, type MailBody, type Notice, type PanelData, type State,
 } from "../model.js";
 import { dashboardRows } from "./dashboard.js";
 import { LAYOUT_BOUNDS } from "./layout.js";
@@ -34,7 +34,7 @@ export interface ViewInput {
   readonly state: State;
   readonly data: PanelData;
   readonly transcript: readonly string[];
-  readonly body: string | null;
+  readonly body: MailBody | null;
   readonly notice: Notice | null;
   /** The Principal is producing a reply. */
   readonly busy: boolean;
@@ -46,6 +46,16 @@ function frame(lines: string[], rows: number, columns: number): string[] {
   const out = lines.slice(0, rows).map(line => pad(line, columns));
   while (out.length < rows) out.push(" ".repeat(columns));
   return out;
+}
+
+/** P0V-40: the part of a list that fits `height` rows, placed so that the
+ * selected row is on screen. Drawing a list from its top whatever was selected
+ * moved the selection off a small screen with nothing saying where it went. */
+function windowed(lines: readonly string[], selected: number | null, height: number): string[] {
+  const fits = Math.max(1, height);
+  if (lines.length <= fits) return [...lines];
+  const start = selected === null ? 0 : Math.min(Math.max(0, selected - fits + 1), lines.length - fits);
+  return lines.slice(start, start + fits);
 }
 
 function conversation(input: ViewInput, notice: string | null): string[] {
@@ -79,7 +89,9 @@ function header(state: State, columns: number): string[] {
   return [fit(tabs, columns), "─".repeat(Math.max(0, columns))];
 }
 
-function rowsFor(input: ViewInput): string[] {
+/** The panel's lines: `fixed` ones always shown above `rows`, the list the
+ * selection moves through. */
+function rowsFor(input: ViewInput): { readonly fixed: string[]; readonly rows: string[]; readonly selected: number | null } {
   const { state, data, columns } = input;
   const category = categoryOf(state);
   const selected = cursorOf(state, data);
@@ -90,25 +102,30 @@ function rowsFor(input: ViewInput): string[] {
     // Label column follows the longest real label so a long unknown reason is
     // not clipped by padding that nothing uses.
     const width = rows.reduce((longest, row) => Math.max(longest, cellWidth(row.label)), 0) + 2;
-    return rows.map(row => `  ${pad(row.label, width)}${row.value}`);
+    return { fixed: rows.map(row => `  ${pad(row.label, width)}${row.value}`), rows: [], selected: null };
   }
   if (category === "config")
-    return data.config.map((field, index) => {
+    return { fixed: [], selected, rows: data.config.map((field, index) => {
       const marker = index === selected ? ">" : " ";
       const value = pad(fieldValue(field, state), LAYOUT_BOUNDS.valueColumn.value);
       // WP15: a blocked field says why instead of when it would apply.
       const scope = field.kind === "link" ? "" : field.blocked !== null ? `(${field.blocked})` : applyLabel(field.apply);
       return `${marker} ${pad(field.label, labelWidth)}${value}${scope}`;
-    });
+    }) };
   // arch §23.5: what could not be read is said, never shown as no mail.
   const unreadable = data.mailUnreadable === null ? []
     : [fit(`  메일함 일부를 읽지 못함 (${data.mailUnreadable}) · 아래 목록이 전부가 아닐 수 있습니다`, columns)];
-  if (data.mail.length === 0) return unreadable.length > 0 ? unreadable : ["  받은 메일이 없습니다."];
-  return [...unreadable, fit("  ● Principal 세션에 아직 전달되지 않음 · 여기서 여는 것은 전달·확인이 아닙니다", columns), ...data.mail.map((row, index) => {
-    const marker = index === selected ? ">" : " ";
-    const flag = row.unread ? "●" : " ";
-    return `${marker}${flag} ${pad(row.from, LAYOUT_BOUNDS.senderColumn.value)}${pad(row.kind, LAYOUT_BOUNDS.kindColumn.value)}${row.subject}`;
-  })];
+  // P0V-43: older messages counted but not listed are said, not hidden.
+  const omitted = data.mailOmitted === 0 ? []
+    : [fit(`  최근 ${data.mail.length}통만 표시 · 오래된 ${data.mailOmitted}통은 이번에 읽지 않음`, columns)];
+  if (data.mail.length === 0)
+    return { fixed: unreadable.length + omitted.length > 0 ? [...unreadable, ...omitted] : ["  받은 메일이 없습니다."], rows: [], selected: null };
+  return { fixed: [...unreadable, ...omitted, fit("  ● Principal 세션에 아직 전달되지 않음 · 여기서 여는 것은 전달·확인이 아닙니다", columns)],
+    selected, rows: data.mail.map((row, index) => {
+      const marker = index === selected ? ">" : " ";
+      const flag = row.unread ? "●" : " ";
+      return `${marker}${flag} ${pad(row.from, LAYOUT_BOUNDS.senderColumn.value)}${pad(row.kind, LAYOUT_BOUNDS.kindColumn.value)}${row.subject}`;
+    }) };
 }
 
 function extensionsScreen(input: ViewInput, notice: string | null): string[] {
@@ -124,38 +141,55 @@ function extensionsScreen(input: ViewInput, notice: string | null): string[] {
   const nameWidth = Math.max(LAYOUT_BOUNDS.minNameColumn.value,
     Math.min(longest + 2, Math.max(LAYOUT_BOUNDS.minNameColumn.value, columns - LAYOUT_BOUNDS.roleColumns.value)));
   const lines = ["EXTENSIONS", "", `  ${pad("", nameWidth)}Principal   Workers`, ""];
-  data.extensions.forEach((extension, index) => {
+  const entries = data.extensions.map((extension, index) => {
     const marker = index === row ? ">" : " ";
     const principal = `[${extension.principal ? "x" : " "}]`;
     const workers = `[${extension.workers ? "x" : " "}]`;
     const left = index === row && column === 0 ? `<${principal}>` : ` ${principal} `;
     const right = index === row && column === 1 ? `<${workers}>` : ` ${workers} `;
-    lines.push(`${marker} ${pad(labelOf(extension.id, extension.locked, extension.missing), nameWidth)}${pad(left, 12)}${right}`);
+    return `${marker} ${pad(labelOf(extension.id, extension.locked, extension.missing), nameWidth)}${pad(left, 12)}${right}`;
   });
-  lines.push("");
-  if (notice !== null) lines.push(fit(notice, columns));
-  lines.push("  Enter 전환 · ←/→ 대상 · Esc 뒤로");
-  return lines;
+  const footer = ["", ...(notice === null ? [] : [fit(notice, columns)]), "  Enter 전환 · ←/→ 대상 · Esc 뒤로"];
+  return [...lines, ...windowed(entries, row, input.rows - lines.length - footer.length), ...footer];
 }
 
-function mailDetail(input: ViewInput, notice: string | null): string[] {
+/** The open message's screen as three parts, so the body gets what the head
+ * and the foot leave (P0V-40) and says when it is only part of the message
+ * (P0V-42). */
+function mailDetailParts(input: ViewInput, notice: string | null) {
   const { state, data, body, columns } = input;
   const detail = state.detail;
-  const row = detail.kind === "mail" ? detail.row : 0;
-  const message = data.mail[row];
-  if (!message) return ["메일을 찾을 수 없습니다.", "", "  Esc 뒤로"];
-  const lines = [
+  const message = detail.kind === "mail" ? data.mail.find(row => mailIdentity(row) === detail.id) : undefined;
+  if (!message) return null;
+  const head = [
     `From: ${message.from}`,
     `Kind: ${message.kind}`,
     `Subject: ${message.subject}`,
     `Path: ${message.path}`,
     "─".repeat(Math.max(0, columns)),
+    ...(body?.truncated ? [fit("(저장된 메일이 읽기 한도를 넘어 앞부분만 표시합니다)", columns)] : []),
   ];
-  for (const line of wrap(body ?? "(본문을 읽을 수 없습니다)", columns)) lines.push(line);
-  lines.push("");
-  if (notice !== null) lines.push(fit(notice, columns));
-  lines.push("  ↑/↓ 이동 · Esc 뒤로");
-  return lines;
+  const text = wrap(body === null ? "(본문을 읽을 수 없습니다)" : body.text, columns);
+  const foot = ["", ...(notice === null ? [] : [fit(notice, columns)]), ""];
+  const height = Math.max(1, input.rows - head.length - foot.length);
+  return { head, text, foot, height, limit: Math.max(0, text.length - height) };
+}
+
+/** How far the open message's body can scroll on this screen: the owner of
+ * the state keeps the scroll within it. */
+export function mailScrollLimit(input: ViewInput): number {
+  return mailDetailParts(input, null)?.limit ?? 0;
+}
+
+function mailDetail(input: ViewInput, notice: string | null): string[] {
+  const parts = mailDetailParts(input, notice);
+  if (parts === null) return ["메일을 찾을 수 없습니다.", "", "  Esc 뒤로"];
+  const detail = input.state.detail;
+  const scroll = Math.min(detail.kind === "mail" ? detail.scroll : 0, parts.limit);
+  const shown = parts.text.slice(scroll, scroll + parts.height);
+  const position = parts.text.length > parts.height ? ` · ${scroll + 1}–${scroll + shown.length}/${parts.text.length}행` : "";
+  parts.foot[parts.foot.length - 1] = fit(`  ↑/↓ 스크롤 · ←/→ 이전/다음 메일 · Esc 뒤로${position}`, input.columns);
+  return [...parts.head, ...shown, ...parts.foot];
 }
 
 export function render(input: ViewInput): string[] {
@@ -166,9 +200,10 @@ export function render(input: ViewInput): string[] {
   if (detail.kind === "extensions") return frame(extensionsScreen(input, notice), rows, columns);
   if (detail.kind === "mail") return frame(mailDetail(input, notice), rows, columns);
   const lines = header(state, columns);
-  for (const line of rowsFor(input)) lines.push(line);
-  lines.push("");
-  if (notice !== null) lines.push(fit(notice, columns));
-  lines.push(fit("←/→ 카테고리 · ↑/↓ 항목 · Enter 선택 · Esc 뒤로 · Ctrl+X 닫기", columns));
+  const panel = rowsFor(input);
+  const foot = ["", ...(notice === null ? [] : [fit(notice, columns)]), fit("←/→ 카테고리 · ↑/↓ 항목 · Enter 선택 · Esc 뒤로 · Ctrl+X 닫기", columns)];
+  lines.push(...panel.fixed);
+  if (panel.rows.length > 0) lines.push(...windowed(panel.rows, panel.selected, rows - lines.length - foot.length));
+  lines.push(...foot);
   return frame(lines, rows, columns);
 }

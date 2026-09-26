@@ -18,6 +18,7 @@ import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from 
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
 import { loadConfiguration } from "../config.js";
 import { StoreError } from "../domain/errors.js";
+import { storedMailBytes } from "../domain/mail-values.js";
 import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
 import { CONVERSATION_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
 import type { PromptOutcome } from "./prompt.js";
@@ -124,7 +125,8 @@ export function principalEnvironment(
     // the base of an agent the Principal creates; the model's tools never see it.
     OMA_PROJECT_GIT: projectGitPathAt(paths.stateRoot),
     OMA_FRAME_BYTES: String(limits.frameBytes),
-    OMA_MAIL_BYTES: String(limits.mailBodyBytes),
+    // The mail tool reads stored messages, whose bound is not the body's (P0V-36).
+    OMA_MAIL_BYTES: String(storedMailBytes(limits.mailBodyBytes)),
     OMA_WORKSPACE_BYTES: String(profile.workspaceBytes),
     // PR-002: where the broker publishes the Principal's prepared batches, and
     // how large one may be. The host delivers them; the extension reads them.

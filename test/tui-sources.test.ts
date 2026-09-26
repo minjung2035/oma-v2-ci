@@ -224,12 +224,12 @@ test("T98/TUI-011: unread comes from the mailbox position, and no read state is 
     assert.equal(unreadCount(box), 1);
     assert.equal(rows.find(row => row.id === "m-1")!.kind, "question");
     assert.equal(rows.find(row => row.id === "m-1")!.from, "worker-a");
-    assert.equal(readBody(join(box.newDir, "m-1")), "본문입니다.\n");
+    assert.deepEqual(readBody(join(box.newDir, "m-1"), 4096), { text: "본문입니다.\n", truncated: false });
 
     // Reading must not move, rename or create anything.
     const before = [...readMailbox(box).rows];
     readMailbox(box);
-    readBody(join(box.newDir, "m-1"));
+    readBody(join(box.newDir, "m-1"), 4096);
     assert.deepEqual(readMailbox(box).rows, before);
     assert.equal(unreadCount(box), 1);
   } finally { rmSync(root, { recursive: true, force: true }); }

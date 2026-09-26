@@ -83,7 +83,7 @@ test("AV7 / INV02, arch §23.5: a mailbox that cannot be listed is not an empty 
   });
 });
 
-test("DR13 / INV02: a message file that cannot be read now is not 'no message'; the count is unknown and the rest is still shown", { skip: process.getuid?.() === 0 }, () => {
+test("DR13 / INV02: a message file that cannot be read now is not 'no message'; it is still counted as waiting and the rest is still shown", { skip: process.getuid?.() === 0 }, () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av7-entry-"));
   try {
     const pending = join(root, "new"), cur = join(root, "cur");
@@ -92,7 +92,10 @@ test("DR13 / INV02: a message file that cannot be read now is not 'no message'; 
     writeFileSync(join(pending, "m2"), "From: worker-b\nSubject: sealed\n\nbody\n");
     chmodSync(join(pending, "m2"), 0o000);
     const paths: MailboxPaths = { newDir: pending, curDir: cur };
-    assert.equal(unreadCount(paths), null, "an unreadable message was counted as no message");
+    // P0V-43: the count asks the directory's names (lstat), which answer that
+    // m2 is a regular file -- a message waiting, whether or not it can be read
+    // now. Only a name that does not answer is the count's unknown (DR13).
+    assert.equal(unreadCount(paths), 2, "an unreadable message was counted as no message");
     const read = readMailbox(paths);
     assert.deepEqual(read.rows.map(row => row.id), ["m1"], "what could be read is still shown");
     assert.match(read.unreadable ?? "", /EACCES/);

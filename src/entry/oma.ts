@@ -22,6 +22,7 @@ import { PrincipalDelivery, principalHostBroker } from "../runtime/principal-del
 import type { PiEvent } from "../runtime/pi-rpc.js";
 import { TuiTransport, limitsOf, type Observation } from "../tui/transport.js";
 import { principalMailbox, readBody, readMailbox, unreadCount } from "../tui/sources/mail.js";
+import { storedMailBytes } from "../domain/mail-values.js";
 import { readExtensions, toggleExtension } from "../tui/sources/extensions.js";
 import { bootstrapStateOf, commitField, fieldsOf, readSettings, writeSettings, type Settings } from "../tui/sources/settings.js";
 import { collectManagedGenerations } from "../config/generations.js";
@@ -274,7 +275,9 @@ async function main(argv: readonly string[]): Promise<void> {
     }),
     mail: () => readMailbox(mailbox),
     extensions: (): readonly ExtensionRow[] => extensionContext.rows,
-    body: (path: string) => (path.length === 0 ? null : readBody(path)),
+    // P0V-42: a stored message is read within the most one of this society's
+    // messages can take, and a longer one is shown as partial.
+    body: (path: string) => (path.length === 0 ? null : readBody(path, storedMailBytes(settings.config.limits.mailBodyBytes))),
     setField: (field, value) => {
       owning("설정");
       let committed: ReturnType<typeof commitField>;

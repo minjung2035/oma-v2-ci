@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "ad49fbce2e73034e5931f6dc9c157249f909093cb407c3592e902952efad2083",
+  "report": "b2c2363d545abce791db7c155ba2b6974a0efa84d2f22efa5255572aae16d6d0",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -257,7 +257,7 @@
     },
     {
       "path": "src/domain/mail-values.ts",
-      "sha256": "ccbf2b9c4f359f200e443d88798a90fc45b222068137bccf28f99eea0774f58e"
+      "sha256": "8151fa75f5556eebbc1f83ed559bf55514ef37b7fd372440f27f475854d49f9f"
     },
     {
       "path": "src/domain/persisted-formats.ts",
@@ -297,7 +297,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "f0148fa6856c142a75f98fb589b663b5b4e764d59aedef1f2677e6153ed0178d"
+      "sha256": "2850d8690e2dc7ff4eac926ed7ce0cffec3b29271ee31c64237f416a94c2cae9"
     },
     {
       "path": "src/entry/runner.ts",
@@ -465,7 +465,7 @@
     },
     {
       "path": "src/mail/headers.ts",
-      "sha256": "3ded8ff4390fbb14f37478700de5331e1c8409322d45c6c23d772c4e15566969"
+      "sha256": "4b4ebd4fecfd25d56fcdb87c53f6f7aca64934505b6819243537dc02d7ce8d40"
     },
     {
       "path": "src/mail/materializer.ts",
@@ -649,7 +649,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "1ce7b9c648eb8c207e445fde00aa6dfd075562fc4fed2db0d049fdbc960bfd87"
+      "sha256": "5151af0fea5a20e0623209ebc9c2740aadf8d99eefa87bb8ecf249fc8d5cc720"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -785,7 +785,7 @@
     },
     {
       "path": "src/tui/app.ts",
-      "sha256": "d4f4457788e20228fb7bc380932d98244df8b6eeb79ea8f37491142caa5f522d"
+      "sha256": "c8df8be2ea7fd46ba4bf3689c77b5861ba6d7b3b1c2b726203da65c020ce6821"
     },
     {
       "path": "src/tui/dashboard.ts",
@@ -801,11 +801,11 @@
     },
     {
       "path": "src/tui/limits.ts",
-      "sha256": "7839c2f05699eabac5905d63901e65ba37f590c8cb3e14b58cc32c4cd7cf10cc"
+      "sha256": "b31e0b3e8f1fef1d07e7060ee20f8f2ef8c1ad84567dc4fb506331f7c8fa4392"
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "bba958ca3512cc33f110ede32e917ded3344104ad2a6b41bcc5da6dc6a2ddb99"
+      "sha256": "a3be446ce25228f733b1b3dd8af60104094fd3bbf34753b39019884758d14367"
     },
     {
       "path": "src/tui/prompt.ts",
@@ -817,7 +817,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "e091c808df6c92e65d94ad8dc2dcace28478e5786db85e363be4cfd58079b427"
+      "sha256": "4799f14d50fa8d0c968ee6d8dcdca577e3a4387792a449a2c3aeb3f182e18e0c"
     },
     {
       "path": "src/tui/sources/extensions.ts",
@@ -825,7 +825,7 @@
     },
     {
       "path": "src/tui/sources/mail.ts",
-      "sha256": "4c51b94ac23005cd7e66395ab2a68867c85bc1b72f11448c8e4f1f9fd41ce821"
+      "sha256": "ba6d09455461819862106a1cf7165fb99ef4bc06e35d14b70a2a71315e39071e"
     },
     {
       "path": "src/tui/sources/settings.ts",
@@ -845,7 +845,7 @@
     },
     {
       "path": "src/tui/view/index.ts",
-      "sha256": "4f0a7188effd9fd8c82960d236684a20854bce1477dc5190d3c6a1af33bbc4c5"
+      "sha256": "036d7878776178833e8a35353ec48ab89bfe86fe8941e1e88b37f667ab2c5d99"
     },
     {
       "path": "src/tui/view/labels.ts",
@@ -861,7 +861,7 @@
     },
     {
       "path": "src/tui/view/screens.ts",
-      "sha256": "ba49c483286016c920ec5644c0d4744985321881981a3670128493d6e4411a71"
+      "sha256": "c9f945ac7dd6af881170858baeb77c54e5c95e9d1a8bb964810af4e02768a935"
     },
     {
       "path": "src/tui/view/text.ts",

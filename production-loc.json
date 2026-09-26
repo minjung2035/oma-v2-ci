@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 29892,
+    "n_lines": 30029,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -50,8 +50,8 @@
   },
   "src/entry/oma.ts": {
     "blank": 26,
-    "comment": 176,
-    "code": 341,
+    "comment": 178,
+    "code": 342,
     "language": "TypeScript"
   },
   "src/store.ts": {
@@ -66,22 +66,22 @@
     "code": 329,
     "language": "TypeScript"
   },
+  "src/tui/model.ts": {
+    "blank": 33,
+    "comment": 70,
+    "code": 314,
+    "language": "TypeScript"
+  },
   "src/tui/session.ts": {
     "blank": 34,
-    "comment": 196,
-    "code": 313,
+    "comment": 197,
+    "code": 314,
     "language": "TypeScript"
   },
   "src/extension/mail-tools.ts": {
     "blank": 12,
     "comment": 79,
     "code": 299,
-    "language": "TypeScript"
-  },
-  "src/tui/model.ts": {
-    "blank": 31,
-    "comment": 58,
-    "code": 294,
     "language": "TypeScript"
   },
   "src/tui/sources/settings.ts": {
@@ -246,6 +246,12 @@
     "code": 183,
     "language": "TypeScript"
   },
+  "src/tui/app.ts": {
+    "blank": 20,
+    "comment": 55,
+    "code": 182,
+    "language": "TypeScript"
+  },
   "src/protocol/channel.ts": {
     "blank": 1,
     "comment": 9,
@@ -256,12 +262,6 @@
     "blank": 3,
     "comment": 13,
     "code": 179,
-    "language": "TypeScript"
-  },
-  "src/tui/app.ts": {
-    "blank": 20,
-    "comment": 52,
-    "code": 178,
     "language": "TypeScript"
   },
   "src/extension/batch-view.ts": {
@@ -294,15 +294,15 @@
     "code": 169,
     "language": "TypeScript"
   },
+  "src/runtime/pi-spawn-plan.ts": {
+    "blank": 9,
+    "comment": 71,
+    "code": 169,
+    "language": "TypeScript"
+  },
   "src/git/submit.ts": {
     "blank": 2,
     "comment": 12,
-    "code": 168,
-    "language": "TypeScript"
-  },
-  "src/runtime/pi-spawn-plan.ts": {
-    "blank": 9,
-    "comment": 70,
     "code": 168,
     "language": "TypeScript"
   },
@@ -310,6 +310,12 @@
     "blank": 22,
     "comment": 38,
     "code": 167,
+    "language": "TypeScript"
+  },
+  "src/tui/view/screens.ts": {
+    "blank": 14,
+    "comment": 29,
+    "code": 166,
     "language": "TypeScript"
   },
   "src/mail.ts": {
@@ -372,6 +378,12 @@
     "code": 151,
     "language": "TypeScript"
   },
+  "src/tui/sources/mail.ts": {
+    "blank": 15,
+    "comment": 54,
+    "code": 149,
+    "language": "TypeScript"
+  },
   "src/storage/submit-spool.ts": {
     "blank": 3,
     "comment": 12,
@@ -393,12 +405,6 @@
   "src/runtime/run-registry.ts": {
     "blank": 4,
     "comment": 14,
-    "code": 145,
-    "language": "TypeScript"
-  },
-  "src/tui/view/screens.ts": {
-    "blank": 11,
-    "comment": 18,
     "code": 145,
     "language": "TypeScript"
   },
@@ -436,12 +442,6 @@
     "blank": 6,
     "comment": 27,
     "code": 127,
-    "language": "TypeScript"
-  },
-  "src/tui/sources/mail.ts": {
-    "blank": 14,
-    "comment": 41,
-    "code": 126,
     "language": "TypeScript"
   },
   "src/mail/materializer.ts": {
@@ -674,7 +674,7 @@
   },
   "src/tui/limits.ts": {
     "blank": 12,
-    "comment": 32,
+    "comment": 35,
     "code": 75,
     "language": "TypeScript"
   },
@@ -792,6 +792,12 @@
     "code": 59,
     "language": "TypeScript"
   },
+  "src/domain/mail-values.ts": {
+    "blank": 4,
+    "comment": 18,
+    "code": 57,
+    "language": "TypeScript"
+  },
   "src/units/observe.ts": {
     "blank": 5,
     "comment": 1,
@@ -838,12 +844,6 @@
     "blank": 5,
     "comment": 19,
     "code": 53,
-    "language": "TypeScript"
-  },
-  "src/domain/mail-values.ts": {
-    "blank": 4,
-    "comment": 9,
-    "code": 52,
     "language": "TypeScript"
   },
   "src/lifecycle/registry-operations.ts": {
@@ -1351,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1199,
-    "comment": 4858,
-    "code": 23835,
+    "blank": 1205,
+    "comment": 4913,
+    "code": 23911,
     "nFiles": 224
   }
 }

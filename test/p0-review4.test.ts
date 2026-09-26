@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, closeSync, fstatSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, fstatSync, mkdtempSync, openSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,6 +30,18 @@ import { NO_UNIT_REASON } from "../src/protocol/status-view.js";
 import { HOST_CHANNEL_ENV } from "../src/protocol/host-channel.js";
 import { registerOmaTools } from "../src/extension/mail-tools.js";
 import { mkdirSync } from "node:fs";
+import { storedMailBytes } from "../src/domain/mail-values.js";
+import { buildEml } from "../src/mail/serialize.js";
+import { principalEnvironment } from "../src/tui/session.js";
+import { planPiSpawn } from "../src/runtime/pi-spawn-plan.js";
+import { agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
+import { INITIAL, step, type ConfigField, type MailRow, type PanelData, type State } from "../src/tui/model.js";
+import { render } from "../src/tui/view/index.js";
+import type { Key } from "../src/tui/keys.js";
+import { readMailbox, unreadCount } from "../src/tui/sources/mail.js";
+import { READ_BOUNDS } from "../src/tui/limits.js";
+import { utimesSync } from "node:fs";
+import { unknownDashboard } from "./fixtures/dashboard.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -358,6 +370,129 @@ test("P0V-37 / N14, P0-2: a message path the Principal was shown reads back thro
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
     Object.assign(process.env, previous);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("P0V-36 / N13, P0-2: a message whose body is within the body limit is read back whole by the mail tool", async () => {
+  const bodyBytes = 16 * 1024;
+  // Both engines are told the bound of a stored message, not the body's.
+  const principal = principalEnvironment({ stateRoot: "/srv/oma-n13", runRoot: "/run/oma-n13", libdir: "/opt/oma" },
+    { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] }, { frameBytes: 256 * 1024, mailBodyBytes: bodyBytes, batchMaxMessages: 4 });
+  assert.equal(Number(principal.OMA_MAIL_BYTES), storedMailBytes(bodyBytes));
+  const state = "/srv/oma-n13";
+  const plan = planPiSpawn({ actor: "alice", society: "demo", paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
+    workspace: workspacePathAt(state, "alice"), sessionDir: runnerSessionDirPathAt(state, "alice"), agentHome: join(agentRootPathAt(state, "alice"), "home"),
+    mailArchive: join(state, "mail", "archive", "cur"), batchView: runnerViewPathAt(state, "alice"), socket: "/run/oma/control.sock" },
+    profile: { provider: "p", model: "m", turnSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
+    limits: { frameBytes: 256 * 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: bodyBytes } } as never);
+  const told = plan.env.OMA_MAIL_BYTES ?? plan.args[plan.args.indexOf("OMA_MAIL_BYTES") + 1];
+  assert.equal(Number(told), storedMailBytes(bodyBytes), "the Resident's engine was told the body limit");
+
+  // The widest bodies the writer can be given: every byte a quoted-printable
+  // escape, Korean and emoji text, and line breaks.
+  const bodies: Record<string, string> = {
+    equals: `a${"=".repeat(bodyBytes - 1)}`, korean: "가a".repeat(bodyBytes / 4), emoji: "😀abc".repeat(Math.floor(bodyBytes / 7)), lines: "a\n".repeat(bodyBytes / 2),
+  };
+  const root = mkdtempSync(join(tmpdir(), "oma-n13-"));
+  const archive = join(root, "archive"); mkdirSync(archive);
+  const previous = { ...process.env };
+  const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
+  Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
+    OMA_SOCKET: "/nonexistent/socket", OMA_SOCIETY: "demo", OMA_MAIL_BYTES: principal.OMA_MAIL_BYTES });
+  try {
+    registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root);
+    let index = 0;
+    for (const [name, body] of Object.entries(bodies)) {
+      assert.ok(Buffer.byteLength(body) <= bodyBytes, name);
+      const id = `m-00000000-0000-4000-8000-0000000001${String(index++).padStart(2, "0")}-0`;
+      const eml = await buildEml({ from: "a@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [], subject: name, kind: "message",
+        contextRevision: null, inReplyTo: null, references: [], messageId: `${id}@demo.oma.invalid`, body });
+      assert.ok(eml.bytes <= storedMailBytes(bodyBytes), `${name}: ${eml.bytes} stored bytes exceed the bound`);
+      writeFileSync(join(archive, `${id}:2,`), eml.text);
+      const shown = (await tools.get("oma_mail_read")!.execute("t", { messageId: id })).content[0]!.text;
+      // The writer ends the stored body with a line break of its own.
+      const read = shown.split("\r\n\r\n").slice(1).join("\r\n\r\n").replace(/\r\n/g, "\n");
+      assert.ok(read === body || read === `${body}\n`, `${name} was not read back whole (${read.length} of ${body.length} characters)`);
+    }
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const mailRow = (id: string, subject: string): MailRow => ({ id, from: "worker-a", kind: "message", subject, unread: true, path: `/mail/${id}` });
+const panel = (mail: MailRow[], config: ConfigField[] = []): PanelData => Object.freeze({
+  dashboard: unknownDashboard(), config: Object.freeze(config), extensions: Object.freeze([]), mail: Object.freeze(mail), mailUnreadable: null, mailOmitted: 0,
+});
+function drive(data: PanelData, keys: Key["kind"][]): State {
+  let state = step(INITIAL, { kind: "panel" } as Key, data, 262144).state;
+  for (const kind of keys) state = step(state, { kind } as Key, data, 262144).state;
+  return state;
+}
+const screen = (state: State, data: PanelData, rows: number, body: string | null = null, truncated = false) =>
+  render({ state, data, transcript: [], body: body === null ? null : { text: body, truncated }, notice: null, busy: false, columns: 60, rows }).join("\n");
+
+test("P0V-41 / N18, P0-1: the message a Human opened stays open when a refresh reorders the list or moves it to cur", () => {
+  const before = panel([mailRow("m-a", "first"), mailRow("m-b", "second")]);
+  const opened = drive(before, ["right", "right", "down", "enter"]);
+  assert.match(screen(opened, before, 20), /Subject: second/);
+  // A new message arrives at the top, and the opened one has moved to cur/.
+  const after = panel([mailRow("m-new", "newest"), mailRow("m-a", "first"), mailRow("m-b:2,", "second")]);
+  assert.match(screen(opened, after, 20), /Subject: second/, "the refresh opened a different message");
+});
+
+test("P0V-40 / N17: a list longer than the screen keeps its selection on screen, and a long body scrolls", () => {
+  const rows = 12;
+  const mail = Array.from({ length: 50 }, (_, index) => mailRow(`m-${index}`, `subject ${index}`));
+  const list = panel(mail);
+  const down = (count: number): Key["kind"][] => Array.from({ length: count }, () => "down");
+  assert.match(screen(drive(list, ["right", "right", ...down(40)]), list, rows), /^>.*subject 40\s*$/m, "the selected message is off the screen");
+  const config = Array.from({ length: 30 }, (_, index): ConfigField =>
+    ({ kind: "number", id: `f${index}`, label: `field ${index}`, value: index, min: 0, max: 99, apply: "restart", blocked: null }));
+  const fields = panel([], config);
+  assert.match(screen(drive(fields, ["right", ...down(25)]), fields, rows), /^> field 25 /m, "the selected field is off the screen");
+  // The open message's body: its later lines are reachable, and the foot stays.
+  const body = Array.from({ length: 100 }, (_, index) => `line ${index + 1}`).join("\n");
+  const opened = drive(list, ["right", "right", "enter", ...down(50)]);
+  const shown = screen(opened, list, rows, body);
+  assert.match(shown, /^line 51\s*$/m, "the body cannot be scrolled");
+  assert.match(shown, /Esc 뒤로/, "the foot was pushed off the screen");
+  assert.equal(shown.split("\n").length, rows);
+});
+
+test("P0V-42 / N19, P0-5: a body read only in part is shown as partial, not as the whole message", () => {
+  const list = panel([mailRow("m-a", "large")]);
+  const opened = drive(list, ["right", "right", "enter"]);
+  assert.match(screen(opened, list, 20, "beginning", true), /앞부분만 표시/);
+  assert.doesNotMatch(screen(opened, list, 20, "whole", false), /앞부분만 표시/);
+});
+
+test("P0V-43 / N20: one refresh reads the headers of a bounded number of messages, the most recent, and counts the rest", { skip: process.getuid?.() === 0 }, () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-mailbox-budget-"));
+  try {
+    const box = { newDir: join(root, "new"), curDir: join(root, "cur") };
+    mkdirSync(box.newDir); mkdirSync(box.curDir);
+    const budget = READ_BOUNDS.mailListRows.value;
+    const total = budget + 50;
+    for (let index = 0; index < total; index += 1) {
+      const path = join(box.curDir, `m-${String(index).padStart(4, "0")}:2,`);
+      writeFileSync(path, `Subject: message ${index}\n\nbody\n`);
+      utimesSync(path, 1_700_000_000 + index, 1_700_000_000 + index);
+      // The oldest ones cannot be read at all: a refresh that opened them would say so.
+      if (index < 50) chmodSync(path, 0o000);
+    }
+    for (let index = 0; index < 3; index += 1) writeFileSync(join(box.newDir, `m-new-${index}`), "Subject: waiting\n\nbody\n");
+    const read = readMailbox(box);
+    assert.equal(read.rows.length, budget);
+    assert.equal(read.omitted, total + 3 - budget);
+    assert.equal(read.unreadable, null, "a message beyond the budget was opened");
+    assert.deepEqual(read.rows.slice(0, 3).map(row => row.subject), ["waiting", "waiting", "waiting"], "waiting messages come first");
+    assert.equal(read.rows[3]!.subject, `message ${total - 1}`, "the most recent settled message is not first after them");
+    assert.equal(unreadCount(box), 3);
+  } finally {
+    for (const name of readdirSync(join(root, "cur"))) chmodSync(join(root, "cur", name), 0o600);
     rmSync(root, { recursive: true, force: true });
   }
 });

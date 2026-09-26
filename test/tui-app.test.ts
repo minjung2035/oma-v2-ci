@@ -65,13 +65,13 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
   ];
   const mail = (): MailboxRead => ({ rows: [
     { id: "m1", from: "worker-a", kind: "question", subject: "API 선택 필요", unread: true, path: "/tmp/m1" },
-  ], unreadable: null });
+  ], unreadable: null, omitted: 0 });
   const ports: AppPorts = {
     configFields: config,
     dashboard,
     extensions,
     mail,
-    body: () => "본문",
+    body: () => ({ text: "본문", truncated: false }),
     setField: (field, value) => { writes.push({ field, value }); if (field === "worker-model") model = String(value); return { kind: "saved" as const }; },
     setExtension: (id, role, enabled) => { toggles.push({ id, role, enabled }); },
     submitPrompt: text => {

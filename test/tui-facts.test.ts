@@ -37,7 +37,7 @@ test("V28A: a message the TUI shows is still waiting for the Principal's session
     const ports: AppPorts = {
       configFields: () => [], extensions: () => [],
       dashboard: () => ({ ...unknownDashboard(), unread: unreadCount(mailbox), principalModel: { configured: "review", session: "standard" } }),
-      mail: () => readMailbox(mailbox), body: path => readBody(path),
+      mail: () => readMailbox(mailbox), body: path => readBody(path, 1024 * 1024),
       setField: () => ({ kind: "saved" }), setExtension: () => {}, submitPrompt: () => ({ kind: "accepted" }), quit: () => {},
     };
     const app = new TuiApp(ports, screen, 262144);

@@ -5,9 +5,9 @@
  * cur, and stores no read state. "Unread" is the Maildir position the broker
  * already owns, not a new durable flag.
  */
-import { closeSync, constants, fstatSync, openSync, readSync, readdirSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { MailboxRead, MailRow } from "../model.js";
+import type { MailBody, MailboxRead, MailRow } from "../model.js";
 import { READ_BOUNDS } from "../limits.js";
 import { displaySubject } from "../../mail/headers.js";
 import { headerEnd, readableBody } from "../../mail/display.js";
@@ -76,7 +76,8 @@ function addressName(value: string | undefined): string {
  * come from one observation of one file.
  */
 type BoundedRead =
-  | { readonly kind: "read"; readonly text: string; readonly deliveredAtMs: number }
+  /** `complete` is false when the file holds more than the bound allowed. */
+  | { readonly kind: "read"; readonly text: string; readonly deliveredAtMs: number; readonly complete: boolean }
   /** Not a message: gone, a link, or not a regular file. */
   | { readonly kind: "none" }
   /** DR13: a file that could not be read now is not "no message". */
@@ -95,7 +96,8 @@ function readBounded(path: string, limit: number): BoundedRead {
       if (count === 0) break;
       filled += count;
     }
-    return { kind: "read", text: buffer.subarray(0, filled).toString("utf8"), deliveredAtMs: stat.mtimeMs };
+    return { kind: "read", text: buffer.subarray(0, filled).toString("utf8"), deliveredAtMs: stat.mtimeMs,
+      complete: stat.size <= limit && filled === stat.size };
   } catch (error) {
     const unknown = unobserved(error, path);
     return unknown === null ? { kind: "none" } : { kind: "unreadable", reason: unknown.message };
@@ -113,19 +115,48 @@ function listDir(path: string): { readonly names: readonly string[] } | { readon
   }
 }
 
-type DirectoryRows = { readonly rows: readonly { row: MailRow; deliveredAtMs: number }[]; readonly unreadable: string | null };
+type DirectoryRows = { readonly rows: readonly { row: MailRow; deliveredAtMs: number }[]; readonly unreadable: string | null; readonly omitted: number };
+type Entry = { readonly name: string; readonly deliveredAtMs: number };
 
-/** One derivation of a mailbox directory's rows, so the list and the unread
- * count can never disagree about what counts as a message (a directory or a
- * symlink is a message in neither). An entry that could not be read now is
- * not known to be no message: the rows that were read are kept, and the
- * directory says it was not wholly read, as one it cannot list does. */
-function rowsIn(directory: string, unread: boolean): DirectoryRows {
-  const rows: { row: MailRow; deliveredAtMs: number }[] = [];
+/** A mailbox directory's messages, most recently delivered first, by a name
+ * observation only (lstat): a regular file is a message, a directory or a
+ * symlink is not. The one derivation of "what counts as a message" for the
+ * list and for the count of messages waiting. An entry that could not be
+ * observed now is not known to be no message; the directory says so. */
+function entriesIn(directory: string): { readonly entries: readonly Entry[]; readonly unreadable: string | null } {
   const listed = listDir(directory);
-  if ("unreadable" in listed) return { rows, unreadable: listed.unreadable };
+  if ("unreadable" in listed) return { entries: [], unreadable: listed.unreadable };
+  const entries: Entry[] = [];
   let unreadable: string | null = null;
   for (const name of listed.names) {
+    const path = join(directory, name);
+    let stat;
+    try { stat = lstatSync(path); }
+    catch (error) {
+      const unknown = unobserved(error, path);
+      if (unknown !== null) unreadable ??= unknown.message;
+      continue;
+    }
+    if (stat.isFile()) entries.push({ name, deliveredAtMs: stat.mtimeMs });
+  }
+  // Entries delivered in the same millisecond keep a stable order by name.
+  entries.sort((left, right) => right.deliveredAtMs - left.deliveredAtMs || left.name.localeCompare(right.name));
+  return { entries, unreadable };
+}
+
+/** The rows of a mailbox directory: a header is read for at most `budget` of
+ * its messages, the most recent first (P0V-43). A refresh used to open and read
+ * every message in the mailbox, synchronously, on the event loop that also
+ * reads keys -- a cost that grew with every message ever delivered. The rest
+ * are counted as omitted, never shown as absent. An entry that could not be
+ * read now is not known to be no message: the rows that were read are kept,
+ * and the directory says it was not wholly read, as one it cannot list does. */
+function rowsIn(directory: string, unread: boolean, budget: number): DirectoryRows {
+  const rows: { row: MailRow; deliveredAtMs: number }[] = [];
+  const listed = entriesIn(directory);
+  let unreadable = listed.unreadable;
+  const shown = listed.entries.slice(0, Math.max(0, budget));
+  for (const { name } of shown) {
     const path = join(directory, name);
     const read = readBounded(path, HEADER_LIMIT);
     if (read.kind === "unreadable") { unreadable ??= read.reason; continue; }
@@ -143,7 +174,7 @@ function rowsIn(directory: string, unread: boolean): DirectoryRows {
       }),
     });
   }
-  return { rows, unreadable };
+  return { rows, unreadable, omitted: listed.entries.length - shown.length };
 }
 
 /** Most recently delivered first, within unread and then read.
@@ -160,22 +191,28 @@ function byArrival(rows: readonly { row: MailRow; deliveredAtMs: number }[]): re
 }
 
 export function readMailbox(paths: MailboxPaths): MailboxRead {
-  const pending = rowsIn(paths.newDir, true);
-  const settled = rowsIn(paths.curDir, false);
+  const budget = READ_BOUNDS.mailListRows.value;
+  const pending = rowsIn(paths.newDir, true, budget);
+  const settled = rowsIn(paths.curDir, false, budget - pending.rows.length);
   return Object.freeze({
     rows: Object.freeze([...byArrival(pending.rows), ...byArrival(settled.rows)]),
     unreadable: pending.unreadable ?? settled.unreadable,
+    omitted: pending.omitted + settled.omitted,
   });
 }
 
 /** Messages not yet delivered to the Principal's session, or null when the
- * directory holding them could not be read: never a 0 for an unread mailbox. */
+ * directory holding them could not be observed: never a 0 for an unread
+ * mailbox. Counted by name observation alone, reading no message (P0V-43). */
 export function unreadCount(paths: MailboxPaths): number | null {
-  const pending = rowsIn(paths.newDir, true);
-  return pending.unreadable === null ? pending.rows.length : null;
+  const pending = entriesIn(paths.newDir);
+  return pending.unreadable === null ? pending.entries.length : null;
 }
 
-export function readBody(path: string, limit = READ_BOUNDS.mailBodyBytes.value): string | null {
+/** P0V-42, P0-5: a stored message's body, read within `limit` -- the most a
+ * stored message of this society can take (`storedMailBytes` of its body
+ * limit) -- and whether what was read is only its beginning. */
+export function readBody(path: string, limit: number): MailBody | null {
   const read = readBounded(path, limit);
-  return read.kind === "read" ? parseMessage(read.text).body : null;
+  return read.kind === "read" ? Object.freeze({ text: parseMessage(read.text).body, truncated: !read.complete }) : null;
 }

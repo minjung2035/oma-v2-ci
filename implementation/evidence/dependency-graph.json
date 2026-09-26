@@ -1455,7 +1455,7 @@
   }
  ],
  "files": 225,
- "runtimeEdges": 866,
+ "runtimeEdges": 869,
  "typeOnlyEdges": 322,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 222,
@@ -1464,11 +1464,11 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 101,
+  "L4-orchestration -> L1-kernel": 102,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
   "L4-orchestration -> L4-orchestration": 41,
-  "L5-entry -> L1-kernel": 76,
+  "L5-entry -> L1-kernel": 78,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 26,
@@ -1511,7 +1511,7 @@
   "src/broker.ts": 31,
   "src/mail.ts": 28,
   "src/entry/broker.ts": 26,
-  "src/entry/oma.ts": 23,
+  "src/entry/oma.ts": 24,
   "src/lifecycle/create.ts": 15,
   "src/git.ts": 14,
   "src/git/context-repository.ts": 14,
@@ -1522,7 +1522,7 @@
   "src/store.ts": 14,
   "src/pi-extension.ts": 13,
   "src/runner.ts": 13,
-  "src/entry/runner.ts": 11
+  "src/tui/session.ts": 12
  },
  "external": {
   "@earendil-works/pi-coding-agent": 8,

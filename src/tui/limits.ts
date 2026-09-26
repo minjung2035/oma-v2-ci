@@ -104,7 +104,10 @@ export const CONFIG_BOUNDS = Object.freeze({
 
 export const READ_BOUNDS = Object.freeze({
   mailHeaderBytes: bound(64 * 1024, "bytes", "headers are read, not whole attachments"),
-  mailBodyBytes: bound(256 * 1024, "bytes", "matches the wire mail body limit"),
+  // P0V-43: one refresh reads the headers of at most this many messages, the
+  // most recent first; the rest of a large mailbox is counted, not read. (The
+  // body a message may have is the society's own limit, not a copy here.)
+  mailListRows: bound(200, "count", "messages one refresh reads a header for"),
   extensionScanDepth: bound(3, "count", "installed extensions are not nested deeper"),
   extensionScanEntries: bound(1024, "count", "directory entries one extension scan examines before it reports a partial list"),
   roleExtensions: bound(16, "count", "the operations contract's per-role maximum"),

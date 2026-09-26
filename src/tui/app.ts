@@ -10,9 +10,9 @@ import { assertNever } from "../domain/exhaustive.js";
 import { publishedUnconfirmed } from "../domain/errors.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
-  type DashboardData, type Effect, type ExtensionRow, type MailboxRead, type MailRow, type Notice, type PanelData, type State,
+  mailIdentity, type DashboardData, type Effect, type ExtensionRow, type MailBody, type MailboxRead, type MailRow, type Notice, type PanelData, type State,
 } from "./model.js";
-import { render } from "./view/index.js";
+import { mailScrollLimit, render, type ViewInput } from "./view/index.js";
 import type { ConfigField } from "./model.js";
 import { Transcript } from "./transcript.js";
 import { returnedPrompt, type PromptOutcome } from "./prompt.js";
@@ -23,7 +23,7 @@ export interface AppPorts {
   readonly dashboard: () => DashboardData;
   readonly mail: () => MailboxRead;
   readonly extensions: () => readonly ExtensionRow[];
-  readonly body: (path: string) => string | null;
+  readonly body: (path: string) => MailBody | null;
   /** WP15.03: what a confirmed value did -- saved, already the value, or
    * saved while the configuration could not be read back. */
   readonly setField: (field: string, value: string | number) => SetFieldOutcome;
@@ -44,7 +44,7 @@ const EMPTY: PanelData = Object.freeze({
     status: Object.freeze({ kind: "unknown" as const, observedAtMs: 0, reason: "아직 관측하지 않음" }),
     configuredWorkers: 0, workerLimit: 0, unread: null, principalModel: Object.freeze({ configured: "unknown", session: null }), rootfs: null,
   }),
-  config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]), mailUnreadable: null,
+  config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]), mailUnreadable: null, mailOmitted: 0,
 });
 
 function messageOf(error: unknown): string {
@@ -73,6 +73,7 @@ export class TuiApp {
       extensions: this.ports.extensions(),
       mail: mailbox.rows,
       mailUnreadable: mailbox.unreadable,
+      mailOmitted: mailbox.omitted,
     });
   }
 
@@ -232,14 +233,20 @@ export class TuiApp {
 
   draw(): void {
     const detail = this.state.detail;
-    const body = detail.kind === "mail"
-      ? this.ports.body(this.data.mail[detail.row]?.path ?? "")
-      : null;
-    this.terminal.draw(render({
+    // P0V-41: the message open is the one the Human opened, found by identity
+    // in this refresh's list, not whatever now sits at its old position.
+    const open = detail.kind === "mail" ? this.data.mail.find(row => mailIdentity(row) === detail.id) : undefined;
+    const body = open === undefined ? null : this.ports.body(open.path);
+    const input: ViewInput = {
       state: this.state, data: this.data, transcript: this.transcript.lines,
       body, notice: this.notice, busy: this.busy,
       columns: this.terminal.columns, rows: this.terminal.rows,
-    }));
+    };
+    // The scroll stays within the body this screen can show (P0V-40).
+    if (detail.kind === "mail" && detail.scroll > mailScrollLimit(input)) {
+      this.state = { ...this.state, detail: { ...detail, scroll: mailScrollLimit(input) } };
+    }
+    this.terminal.draw(render({ ...input, state: this.state }));
   }
 
   /** Exposed for tests and for the mail detail screen's current selection. */
