@@ -2219,10 +2219,10 @@
     "status": "unverified"
   },
   {
-    "requirement": "INF-005",
+    "requirement": "INF-009",
     "source": "implementation-spec.md",
-    "digest": "daa8e280dac9b0c4af1b0f74e0c5f32cf2b8456a4b432f621771e472d7a23dbc",
-    "normativeText": "**MUST [INF-005]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. `quota`의 unit 관련 필드는 host가 선언하는 운영 의도로 남지만, 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.",
+    "digest": "040af556bfa1774454cfa69586ae541159b5d5b0460ab1cd0914da9c500866fc",
+    "normativeText": "**MUST [INF-009]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. `quota`의 unit 관련 필드는 host가 선언하는 운영 의도로 남지만, 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,
@@ -2233,10 +2233,10 @@
     "status": "unverified"
   },
   {
-    "requirement": "INF-006",
+    "requirement": "INF-010",
     "source": "implementation-spec.md",
-    "digest": "4e91ec672b6776f81ee316b7393fb5a0e3d382be19473f23295eb169814d9fb8",
-    "normativeText": "**MUST [INF-006]** performance 검증은 Astra 단독, cheap society 단독, Principal+society의 동일 task/tool 접근/성공 기준으로 수행한다. 품질·결함·Principal 및 전체 tokens·비용·latency를 각각 기록한다. Principal tokens 감소만으로 전체 비용/품질 우위를 주장하지 않는다. 자동 평가 threshold는 S-09에서 합의한다.",
+    "digest": "fc6bcf8d040e5597fce7178d5f952eab3370b913eb31b5f9e7f90594c2a0d21a",
+    "normativeText": "**MUST [INF-010]** performance 검증은 Astra 단독, cheap society 단독, Principal+society의 동일 task/tool 접근/성공 기준으로 수행한다. 품질·결함·Principal 및 전체 tokens·비용·latency를 각각 기록한다. Principal tokens 감소만으로 전체 비용/품질 우위를 주장하지 않는다. 자동 평가 threshold는 S-09에서 합의한다.",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": null,

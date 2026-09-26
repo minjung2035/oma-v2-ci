@@ -197,7 +197,7 @@ test("a settings write refuses a value the closed config schema would reject", (
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115/TUI-011: the Mail screen reads bounded, refuses links, and orders by arrival", () => {
+test("T124/TUI-011: the Mail screen reads bounded, refuses links, and orders by arrival", () => {
   const root = scratch("oma-adv-mailbounds-");
   try {
     const box = principalMailbox(root);

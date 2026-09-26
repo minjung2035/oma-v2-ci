@@ -1,7 +1,8 @@
 # 문서 지도
 
 이 저장소의 모든 문서가 무엇을 소유하는지, 어느 문서가 우선하는지, 새 정보를 어디에 적는지를 이 문서 한 곳이 정한다.
-다른 문서의 "읽기 순서"는 이 지도를 줄여 보인 것이며, 어긋나면 이 지도를 고친다.
+다른 문서의 "읽기 순서"는 이 지도를 줄여 보인 것이며, 어긋나면 이 지도를 고친다. 이 지도의 규칙은 [PRIORITY-0](../PRIORITY-0.md)의
+"문서와 식별자에도 같은 원칙"에서 나온다.
 
 ## 처음 읽는 사람
 
@@ -23,12 +24,12 @@
 | | `implementation/contracts.ts`, `contracts/`, `schema-v1.sql`, `systemd/*.in` | 문서가 아니라 실제 wire·durable·deployment 선언 |
 | **결정 기록** | [consistency-decisions.md](../implementation/consistency-decisions.md) | 계획의 D01–D06, 카드(WP)별 결정, 재검토와 AV1–AV31, ENG1. 규범이 **왜** 그런지 |
 | | [design-revisions.md](../implementation/design-revisions.md) | 설계 수정 DR1–DR13과 그것이 바꾼 규범, architecture와 어긋나는 문장 |
-| **점검 기록** | [priority-0-audit.md](../implementation/priority-0-audit.md) | Priority 0 파일 단위 점검의 근거(파일:줄), 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검 |
+| **점검 기록** | [priority-0-audit.md](../implementation/priority-0-audit.md) | Priority 0 파일 단위 점검의 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14 |
 | **지침**(비규범) | [MAINTENANCE.md](../MAINTENANCE.md) | 사람과 AI가 코드를 고칠 때의 작업 규율 |
 | | [PRODUCT.md](../PRODUCT.md) | 제품 의도. 규범을 소유하지 않는다 |
 | | [operations/README.md](../operations/README.md) | 운영자 안내(설정 형식, 관리형 편집, 지원 범위). 계약은 spec이 소유한다 |
 | | [test/fixtures/README.md](../test/fixtures/README.md) | fixture 층이 무엇을 증명하고 무엇을 증명하지 않는가 |
-| **현재 상태** | [implementation/validation.md](../implementation/validation.md) | 현재 검증 판정, 시험 수·LOC 같은 모든 수치, 알려진 한계, 재검증 명령. 수치는 여기에만 적는다 |
+| **현재 상태** | [implementation/validation.md](../implementation/validation.md) | 현재 검증 판정, 시험 수·LOC 같은 모든 수치, 알려진 한계, 재검증 명령. 수치는 여기에만 적는다. 끝의 VAL 조항은 규범이다 |
 | | [HANDOFF.md](../HANDOFF.md) | 다음 작업자의 재개점: 판정 한 줄, 환경, 도구와 절차, 남은 일 |
 | **색인·과거** | [README.md](../README.md), 이 지도, [implementation/README.md](../implementation/README.md) | 진입점과 색인. 사실을 소유하지 않는다 |
 | | [archive.md](archive.md) | 현재 tree에서 뺀 과거 기록이 있는 Git snapshot |
@@ -52,8 +53,8 @@
 | 주제 | architecture | spec | acceptance |
 |---|---|---|---|
 | Core runtime | §§1–22 | §§1–17, §20 | T01–T77 |
-| tiered integration | §§12.5–12.8 | [integration-policy](../implementation/integration-policy.md) | T78–T90 |
-| 제품 표면·엔진 | §23.1–23.9, §§23.11–23.13 | §18 | T91–T98, T104–T106 |
+| tiered integration | §§12.5–12.8 | [integration-policy](../implementation/integration-policy.md) | T78–T90(예약 대역, 행 없음, tiered 출시 차단) |
+| 제품 표면·엔진 | §23.1–23.9, §§23.11–23.13 | §18 | T91–T98, T104–T127(대역은 test-matrix의 TEST-008 표) |
 | tool 표면 투영 | §23.10 | §19 | T99–T103 |
 
 절 번호가 바뀌면 이 표부터 고친다. 절 번호를 본문 여러 곳에 적지 않는다.

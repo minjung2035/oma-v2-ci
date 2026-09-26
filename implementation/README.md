@@ -13,7 +13,7 @@ spec을 구체화하는 계약이다. `**MUST [ID]**` 조항은 [traceability.js
 | [integration-policy.md](integration-policy.md) | base/tiered integration 정책 |
 | [compliance.md](compliance.md) | requirement → owner → executable evidence 계약 |
 | [loc-budget.md](loc-budget.md) | production LOC·inventory 측정 계약 |
-| [test-matrix.md](test-matrix.md) | 수용 oracle T01–T90 |
+| [test-matrix.md](test-matrix.md) | 수용 oracle: Core T01–T77, 제품 표면 T91–T127. T78–T90은 tiered 예약 대역이며 행이 아직 없다 |
 | [spikes.md](spikes.md) | OPEN qualification·spike 조건 |
 | [validation.md](validation.md) | 현재 검증 판정과 수치, 알려진 한계, 재검증 명령(VAL 조항 포함) |
 | [store-opening.md](store-opening.md) | Store를 열 때 writer 준비 전 호환성 판정 |
@@ -30,7 +30,7 @@ spec을 구체화하는 계약이다. `**MUST [ID]**` 조항은 [traceability.js
 |---|---|
 | [consistency-decisions.md](consistency-decisions.md) | 계획의 D01–D06, 카드(WP)별 결정, 재검토와 AV1–AV31, ENG1 |
 | [design-revisions.md](design-revisions.md) | 설계 수정 DR1–DR13, 바꾼 규범, architecture와 어긋나는 문장 |
-| [priority-0-audit.md](priority-0-audit.md) | Priority 0 파일 단위 점검: 근거(파일:줄), 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검 |
+| [priority-0-audit.md](priority-0-audit.md) | Priority 0 파일 단위 점검: 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14 |
 
 ## machine-readable map
 

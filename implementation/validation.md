@@ -53,7 +53,7 @@
 | WP23 negative controls | mutant 11개 중 10개 실패: refresh 안의 agent별 동기 show, 호출자마다 refresh, budget 제거(시험이 끝나지 않음), 실행 중 refresh 합류(질문보다 오래된 답), manifest/link 검사 생략, 미래 incarnation 수용, 관측 안 된 unit을 inactive로 표시, status.get을 답한 시각으로 표시, 이름 식별자 검사 생략, 반복 block 신뢰. 생존 1개는 등가: 표시 projection의 이중 계산 guard는 PK·batch 열 하나·manifest decode 때문에 도달할 수 없다 |
 | WP23 not covered | storage admission 트리 스캔(admit마다 새로 하는 정확성 검사, D04/WP22 소유)과 mutation마다의 world view 갱신(64 agent에서 4–6 ms)은 바꾸거나 부하 측정하지 않았다. `src/diagnostics/*`는 SCOPE_ONLY. 256 agent 상한은 모형 기준 budget 진술이며 실제 256 unit 측정은 하지 않았다 |
 | V25A | kernel: incarnation 1 때 수락되고 확인되지 않은 start와 stop은 incarnation 2가 열린 뒤 reconcile로도 같은 키 재시도로도 효과가 없다(start는 멈춘 unit을 시작하지 않고, stop은 실행 중 run의 InvocationID를 바꾸지 않음). 둘 다 unknown이고 incarnation·desired는 그대로다. 현재 명시적 stop은 성공하고 `confirmDead(a,2)` |
-| T36 / WP25.02 | kernel: systemd 257에서 restart 예산 소진은 failed/exit-code로만 남는다. `startLimitStatus`는 NRestarts≥StartLimitBurst로 이를 start_limit으로 보고하고, reset 없는 start는 START_LIMIT으로 거절되며 한도를 풀지 않는다(v2/v3의 kernel 59/60 원인) |
+| WP25.02 (T36) | kernel: systemd 257에서 restart 예산 소진은 failed/exit-code로만 남는다. `startLimitStatus`는 NRestarts≥StartLimitBurst로 이를 start_limit으로 보고하고, reset 없는 start는 START_LIMIT으로 거절되며 한도를 풀지 않는다(v2/v3의 kernel 59/60 원인) |
 | WP25.03 | fast: 실제 runner entry에 현재 profile과 다른 accepted 자원을 주면 workspace·/tmp·check 한도는 accepted 값이고 모델은 현재 profile 값이다. 자원 env가 없거나 hex가 아니거나 빈 객체·필드 누락·범위 밖·추가 필드·순서가 다른 JSON이면 exit 4로 거절한다. kernel: 설치된 unit의 Environment와 MemoryMax/TasksMax가 현재 profile이 아닌 accepted spec이다 |
 | V25B | 기존 oracle로 연결: SEQ-002(runtime-contracts: path·revoke 실패 뒤에도 나머지 stop 단계를 모두 시도하고 결과는 RUN_TERMINATION_UNKNOWN), T38(확인 안 된 stale cgroup은 start를 막고 incarnation 불변), phase4 SEQ-002(옛 run 죽음 불명이면 startup이 메일 정산 전에 멈춤), R37 shutdown(native 결과 불명이면 Store·lock 유지). revoke 뒤 pin은 다음 begin이 비었음을 증명할 때까지 유지 |
 | WP25 negative controls | mutant 10개 모두 실패: start-limit 판별 3개(v2 기록 뒤 WP25에서 실행), currentIntent에서 incarnation 제거, reconcile이 옛 plan의 previousIncarnation을 현재 값으로 보정, runner가 workspace 또는 /tmp 한도를 현재 profile에서 읽음, 자원 env 없을 때 현재 profile로 fallback, 비정규 자원 텍스트 수용, unit이 현재 profile을 렌더 |
@@ -62,10 +62,10 @@
 | V26B | R08 조회 시나리오 11개(pending/unknown/terminal/success/SPIKE/명시적 not-found 두 형태만 재전송, 조회 불가·손상 not-found·null·operation 있는 not-found는 재전송 없음)에 더해: 답을 못 받은 `send`는 증명된 REQUEST_NOT_FOUND 뒤에만, 원본 파일이 바뀐 뒤에도 처음 동결한 body로 재전송하고, 수락된 뒤에는 조회만 한다. 정착된 영수증은 뒤늦은 pending 관측으로 바뀌지 않는다. cache가 기록하지 못한 영수증은 영수증과 `--request` key를 보여 주고 영수증의 exit로 끝나며, cache의 이전 관측과 모순되면 exit 3(수정 전 코드에서 실패) |
 | V26A/V26C | V26A: R14(모든 header 분할, fatal 뒤 재동기화 없음, 연결 끊김은 dispatch된 작업을 보존하고 대기 요청만 취소, backpressure, half-close), R15 channel generation, P0 malformed frame. V26C: 실제 BrokerChannel에서 요청과 응답 한도는 UTF-8 bytes 기준(문자 수는 맞고 bytes가 넘으면 쓰기 전 거절, 정확히 맞으면 통과), 한도를 넘은 응답은 결과가 아닌 FRAME_TOO_LARGE, 다른 id·모르는 envelope/result 필드는 이 호출의 결과가 아님. R15 response codec, F3/F4, P2 wire golden 유지 |
 | WP26 negative controls | mutant 6개 모두 실패: cache가 기록 못 한 영수증에서 CLI 종료(현재 코드로 재실행), 모든 조회 실패를 not-found로, 같은 key 재시도에서 현재 원본으로 재구성, 늦은 pending이 정착 영수증 대체, lock open 실패를 raw 오류로, 요청 예산을 문자 수로 |
-| V27A | 실제 엔진 0.85.1, 생성된 rootfs, adapter 자신의 격리 계획, placeholder relay, Anthropic 한 턴을 답하는 TLS 대역: `PiAdapter.deliver`가 경계를 반환하고 세션 파일은 제시된 batch(custom_message oma-mail), `stop`으로 끝난 assistant 메시지, 통지된 entryId와 같은 id의 경계 항목을 그 순서로 가진다. provider는 batch와 실제 key를 봤다. 수정 전 계획(`bwrap`)에서 실패 |
+| V27A | 실제 동봉 엔진(지금 0.87.1, ENG1), 생성된 rootfs, adapter 자신의 격리 계획, placeholder relay, Anthropic 한 턴을 답하는 TLS 대역: `PiAdapter.deliver`가 경계를 반환하고 세션 파일은 제시된 batch(custom_message oma-mail), `stop`으로 끝난 assistant 메시지, 통지된 entryId와 같은 id의 경계 항목을 그 순서로 가진다. provider는 batch와 실제 key를 봤다. 수정 전 계획(`bwrap`)에서 실패 |
 | V27B | 바꿀 문자가 없는 key(서명이 `_-`뿐인 token, 구분자뿐인 key, 긴 구두점 segment)는 즉시 UNSUPPORTED_PROFILE(수정 전 코드는 스택 초과), 제공자가 쓰는 모양은 길이가 같고 key와 다르며 key를 포함하지 않는 placeholder. relay는 provider 답을 오는 대로 넘긴다(첫 bytes가 마지막보다 1초 이상 먼저), T114(키 교체, 경로 제한, 응답 없는 provider는 재전송 없이 504, 동시성 초과는 503, 안전하지 않은 설정 거절) |
 | WP27 negative controls | mutant 4개 모두 실패: placeholder 무한 재시도, 격리 계획이 bwrap을 PATH 이름으로, relay가 답 전체를 모은 뒤 전송, 경계 통지가 세션에 없는 항목을 가리킴 |
-| WP26/WP27 not covered | 실제 provider와 provider 쪽 재시도·긴 stream(자격 증명 없음, NOT_RUN), 전원 차단 뒤 세션 파일 내구성(WP30), Principal 엔진과 host channel·credential 전체 경로(WP28), 한 key에 대한 동시 CLI 프로세스(`receipt-supersession.test.mjs` 범위 밖). 저장소에 별도 engine lane이 없어 V27A는 durable lane에서 bubblewrap·openssl로 실행된다 |
+| WP26/WP27 not covered | 실제 provider 자동 lane(NOT_RUN; 수동 기능 점검은 1–14차에서 함). provider 쪽 재시도·긴 stream은 엔진이 소유한다(INF-001), 전원 차단 뒤 세션 파일 내구성(WP30), Principal 엔진과 host channel·credential 전체 경로(WP28), 한 key에 대한 동시 CLI 프로세스(`receipt-supersession.test.mjs` 범위 밖). 저장소에 별도 engine lane이 없어 V27A는 durable lane에서 bubblewrap·openssl로 실행된다 |
 | V28A | 실제 app과 실제 Maildir: Dashboard는 `N건 Principal 세션에 전달 대기`, 목록은 ●의 뜻과 여는 것이 전달·확인이 아님을 말한다. 관측이 없으면 unknown(이유), 설정 모델은 실행 세션 값과 구분. 메일을 열어도 new/·cur/·mtime 불변 |
 | V28B | 실제 pty(python pty + 제품 openTerminal·KeyDecoder): 정상 종료, restore 없는 exit, 터미널 연 뒤 reject 모두 echo·line mode 복원, 복원 뒤 다시 raw·alternate로 들어가지 않음. 코드 포인트 중간에서 쪼개진 입력은 한 key, resize 반영. 이전 코드는 뒤의 두 종료에서 실패 |
 | WP28 negative controls | mutant 3개 모두 실패: exit 때 복원 없음, 전달 대기를 unread로, 목록 범례 제거. oma entry의 최상위 catch 정리 순서는 oracle 없음(코드 검토, exit hook이 복원을 보장) |
@@ -74,7 +74,7 @@
 | WP29 negative controls | 이전 exit 소유 규칙은 V29A alias 사례에서 실패, 느슨한 recipe 타입은 오타를 컴파일한다. 현재 source에는 새 finding 없음 |
 | V30A | property: D01 결정표와 DR9로 쓴 독립 모형으로 실제 Store·Mail·영수증·broker 재시작 뒤 `Broker.openRun`을 24 seed × 8 사건에 교차 실행한다. 사건은 7종이다: 게시, 손상, 늦은 이전 시도 영수증(DR9: 재전달 없이 verified), 구간 밖 이른 영수증(conflicting), 가림, 드러냄, 열기. 마지막에 읽을 수 있게 하고 한 번 더 연다(liveness). batch row는 다시 쓰지 않는다. WP30 때의 mutant 3개(읽을 수 없음을 absent로, 충돌을 absent로, 정산 없이 rollover)는 모두 실패했다. DR9 뒤에는 다시 돌리지 않았고, DR9 자체의 변이는 'P0 mutants' 행에 있다 |
 | WP30 fault matrix / qualification | FAULT-MATRIX 32행을 oracle에 대응(rollover 뒤 endpoint bind 실패만 commit 실패와 따로 주입되지 않음). node/git-fs·engine·pty·kernel·crash PASS, powercut·실제 provider·CI NOT_RUN. 카드별 mutant 집계는 consistency-decisions WP30 절 |
-| V31A | 설치 closure(dist, schema, unit template, package.json, lockfile의 production 모듈)를 새 prefix로 복사하고 원본 트리로의 모듈 해석·파일 읽기를 모두 거절한 채: `check:package` 통과, 자산 해석, 자기 엔진 `--version` 0.85.1, broker·runner·host·CLI entry가 usage 검사까지 로드. 엔진 없는 설치본은 옆에 다른 설치본 엔진이 있어도 UNSUPPORTED_PROFILE(이전 탐색은 그것을 씀) |
+| V31A | 설치 closure(dist, schema, unit template, package.json, lockfile의 production 모듈)를 새 prefix로 복사하고 원본 트리로의 모듈 해석·파일 읽기를 모두 거절한 채: `check:package` 통과, 자산 해석, 자기 엔진 `--version`(지금 0.87.1, ENG1), broker·runner·host·CLI entry가 usage 검사까지 로드. 엔진 없는 설치본은 옆에 다른 설치본 엔진이 있어도 UNSUPPORTED_PROFILE(이전 탐색은 그것을 씀) |
 | V31B | lockfile 루트의 의존성 종류가 package.json과 같고 production closure에 dev 표시가 없음(이전 lockfile은 실패). package check는 빠진 unit template, 빠진 entry, lock과 다른 의존성 버전을 명시 실패. lockfile 재동기화는 버전 변경 0, 추가·제거 0, dev 표시 160개 해제 |
 | V32A | fast: 생성된 review ledger가 현재·기준선 production 파일 모두를 한 번씩 담고, 검토 표시는 작업과 실제 존재하는 시험 oracle을 가진다. 근거 없는 검토 표시, 없는 oracle, 빠진 파일, 손으로 고친 요약은 finding. 미검토 파일이나 NOT_RUN lane이 있으면 승인 거부, 모두 검토·통과일 때만 승인 |
 | Oracle closure | V32A: 계획 oracle 73개 모두 자기 ID 시험, 또는 실행 lane(fast/durable/property/stress/kernel/crash)이 요구하는 담당 시험(`implementation/oracle-map.json`), 또는 NOT_RUN(V05C power loss, V30B powercut/provider, V32B CI). 담당이 시험이 아니거나 어떤 lane도 요구하지 않거나 대응이 빠지면 finding |
@@ -173,7 +173,9 @@ Final PASS condition: `v19-fast-final`, `v19-durable-final`, `v19-property-final
 - v1 코드가 이미 재할당한 prepared batch는 저장된 값을 첫 시도로 읽는다. 그보다 이른 시도의 receipt는 전처럼 conflicting이다(DR9).
 
 **비용과 추적**
-- 비용 상한은 OMA 계약이 아니다. relay가 요청 수·동시성을 쥐지만 stream을 해석하지 않는다(INF-005).
+- 비용 상한은 OMA 계약이 아니다. relay가 요청 수·동시성을 쥐지만 stream을 해석하지 않는다(INF-009).
+- `usage` 표와 그 transaction(T-usage-reserve)은 schema v1 그대로 남아 있지만 쓰는 주체가 없다. INF-001이 inference와 사용량 회계를 엔진에 넘기면서 OMA의 예약·정산 경로를 없앴기 때문이다(INF-009가 이 사실을 여기에 기록하도록 요구한다).
+- 수용 시험 T48–T51(inference 예약·provider 정산)은 TEST-006에 따라 표에 남지만, INF-001 뒤로는 이를 이행할 OMA 경로가 없다. adversarial report(`scripts/adversarial-report.mjs`)는 이 행들을 NOT_RUN으로 두고 그 이유를 적는다.
 - traceability의 requirement는 모두 `unverified`다. owner·callPath·negative test가 연결된 것도 compliance 기록 절차를 거치지 않았다.
 
 **보류한 결정과 검증 공백**
@@ -237,7 +239,8 @@ npm run verify:all -- --out <new-dir>
 ## 남아 있는 release gate
 
 - `spikes.md`의 OPEN qualification 조건은 fresh harness evidence 없이 닫지 않는다.
-- live systemd/cgroup/READY, provider failure/usage/cancel, hostile import, filesystem/kernel containment, VM power-cut/ENOSPC/read-only/restore 등 environment-specific proof는 별도다.
+- live systemd/cgroup/READY, hostile import, filesystem/kernel containment, VM power-cut/ENOSPC/read-only/restore 등 environment-specific proof는 별도다.
+- 실제 provider: 제공자 호출·재시도·오류·사용량·취소는 동봉 엔진이 소유하므로(INF-001) OMA의 release 증거가 아니다. OMA 쪽 증거는 봉인된 Resident의 byte relay와 credential 경계(INF-005–INF-008), 엔진이 보고한 결과를 OMA가 읽는 방식(INF-004, 시한)이 실제 provider와 함께 끝까지 도는지다. 지금은 수동 기능 점검(1–14차)뿐이며 자동 lane은 NOT_RUN이다.
 - S-08/S-10 tiered attestation/floor와 S-11 clean-room, S-09 품질·비용·latency 평가는 해당 profile 계약을 따른다.
 - LOC/A-008/A-009 판정은 `node scripts/loc.mjs`의 current source-bound 결과로만 갱신한다.
 - requirement별 release proof는 [compliance.md](compliance.md)를 따른다.

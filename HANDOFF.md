@@ -61,7 +61,7 @@
 ## 6. 남은 일
 
 1. **release gate (사용자 승인 필요)**: 승인된 VM에서 powercut(V05C·V30B), 승인된 credential로 실제 provider 자동 lane, push 뒤 CI(V32B).
-2. **보류한 결정과 검증 공백**: validation "알려진 한계"의 마지막 항목(`bin`·설치 명령 C2, WP03 이전 unit 재생성, 전체 `oma` entry의 pty 시험, rollover 뒤 endpoint bind 실패 주입).
+2. **보류한 결정과 검증 공백**: validation "알려진 한계"의 마지막 항목이 목록을 소유한다.
 3. **provtest 정리 (사용자 결정)**: 점검을 끝내면 `for u in $(ls ~/.config/systemd/user | grep '^oma-provtest-'); do systemctl --user stop "$u"; rm -f ~/.config/systemd/user/"$u"; done; systemctl --user daemon-reload; rm -rf /home/dev/oma-evidence/provider/data`(credential 사본 포함).
 
 ## 7. 바꾸지 않은 것

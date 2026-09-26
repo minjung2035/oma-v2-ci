@@ -58,8 +58,13 @@ test("R39: core success cannot hide missing target oracles or a missing core row
 test("R39: duplicates, extra rows and malformed empty oracles cannot satisfy a fixed count", () => {
   const duplicate = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 90) + "\n" + matrix(78, 78) }]);
   assert.deepEqual(duplicate.tiered.duplicate, [78]); assert.equal(duplicate.complete, false);
-  const extra = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 91) }]);
-  assert.equal(extra.extra[0].id, 91); assert.equal(extra.complete, false);
+  // TEST-008: T91 onward is the product band, not an extra row; a gap in it is.
+  const product = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 91) }]);
+  assert.deepEqual(product.extra, []); assert.deepEqual(product.product.rows.map(row => row.id), [91]); assert.equal(product.complete, true);
+  const gap = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 90) + "\n" + matrix(92, 92) }]);
+  assert.deepEqual(gap.product.missing, [91]); assert.equal(gap.complete, false);
+  const extra = inventoryAcceptance([{ source: "matrix.md", text: matrix(1, 90) + "\n" + matrix(0, 0) }]);
+  assert.equal(extra.extra[0].id, 0); assert.equal(extra.complete, false);
   const empty = inventoryAcceptance([{ source: "matrix.md", text: "| T01 / synthetic |   |\nT02 mentioned in prose is not a row" }]);
   assert.equal(empty.complete, false); assert.ok(empty.core.empty.includes(1) || empty.core.missing.includes(1));
 });

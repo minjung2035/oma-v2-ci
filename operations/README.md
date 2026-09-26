@@ -48,7 +48,7 @@ new-operations/
 - `extensions`: 설치 `installation.libdir` 아래의 상대 JS/TS 파일 목록. 첫 항목은 항상 `dist/src/pi-extension.js`이며 생략·중복·자동 탐색은 허용하지 않는다. 예: `["dist/src/pi-extension.js", "extensions/verifier.js"]`.
 - `promptFile`: **config.json이 있는 디렉터리 기준** 상대 UTF-8 파일. 예: `prompts/verifier.md`.
 
-추가 extension 코드는 설치 디렉터리의 `extensions/` 등에 별도로 배치한다. 설정 로더 자체는 코드를 import하지 않지만 runner entry는 시작 직전에 기록된 SHA-256을 다시 확인한 뒤 core 및 role extension을 Pi에 명시적으로 `-e` 전달한다. 자동 탐색은 꺼 둔다. 추가 extension은 Pi host process와 같은 권한을 갖는 **trusted deployment code**이므로 model tool처럼 취급하면 안 된다. 기존 OMA 공통 extension의 프로토콜/검증 코드를 역할별로 복제하지 않는다. 모델 이름을 바꿀 때는 해당 codec·가격 revision·한도도 운영자가 함께 검토한다. credentialRef는 참조이며 API key를 파일에 넣는 자리가 아니다.
+추가 extension 코드는 설치 디렉터리의 `extensions/` 등에 별도로 배치한다. 설정 로더 자체는 코드를 import하지 않지만 runner entry는 시작 직전에 기록된 SHA-256을 다시 확인한 뒤 core 및 role extension을 Pi에 명시적으로 `-e` 전달한다. 자동 탐색은 꺼 둔다. 추가 extension은 Pi host process와 같은 권한을 갖는 **trusted deployment code**이므로 model tool처럼 취급하면 안 된다. 기존 OMA 공통 extension의 프로토콜/검증 코드를 역할별로 복제하지 않는다. `codecRevision`·`pricingRevision`·token 한도는 v1 설정 schema가 요구하는 선언이다. provider 선택·가격·codec은 동봉 엔진의 것이므로(INF-001) OMA는 이 값으로 가격을 계산하거나 비용을 집행하지 않는다. credentialRef는 참조이며 API key를 파일에 넣는 자리가 아니다.
 
 기록한 SHA-256과 시작 전 재검증은 관측한 자산 식별 정보다. 같은 UID가 검증 뒤 파일을 바꾸는 경합 전체나 trusted deployment manifest/Pi executable 승인을 대신하지 않는다.
 
@@ -117,7 +117,7 @@ Broker는 `quota.storageBytes`가 유효하면 시작하고, 시작 및 각 publ
 Resident는 기본으로 bwrap 안에서 실행된다. 설정 없이 시작한 society의 `installation.rootfs`는 OMA가 state root 아래에 만든 rootfs이며(`SB-007`), 빈 mount target 위에 host 운영체제의 `/usr` 등을 RO로 겹친다. 그 안에는 provider credential도 network도 없다(`PR-004`, `SB-004`). 엔진은 host의 relay socket을 통해 provider에 닿는다(`INF-005`/`INF-006`).
 
 - credential은 runner가 동봉 엔진으로 OMA 소유 agent directory에서 해석하고 한 delivery 동안만 relay에 둔다(`INF-008`). 로그인은 `oma` 대화 화면에서 엔진 자체 흐름으로 한 번 한다.
-- sandbox의 엔진은 진짜 key와 같은 모양의 자리표시자를 받고, relay가 나가는 길에 header와 path에서만 진짜 key로 바꾼다.
+- sandbox의 엔진은 진짜 key와 같은 모양의 자리표시자를 받는다. relay는 나가는 길에 인증 header(`authorization`, `x-api-key`, `api-key`, `x-goog-api-key`)와 `key` query parameter에서만 진짜 key로 바꾼다. 그 밖(request path, 다른 header·query)에 자리표시자가 있으면 요청을 거절하고, 응답에 진짜 key의 바이트가 나타나면 sandbox에 닿기 전에 끊는다(INF-007, INF-008).
 
 - relay는 stream을 해석하지 않는다. 헤더에 진짜 credential을 끼우고 바이트를 그대로 넘긴다. 가격·token·재시도는 계속 엔진의 것이다.
 - 목적지는 model profile이 선언한 provider endpoint 하나다. 그 경로를 벗어나는 요청은 provider에 닿기 전에 거절된다.
@@ -193,9 +193,9 @@ cycle, 중복 소속, 알 수 없는 참조, 한도 초과(group 32개, group당
 | systemd user manager | 257.13 | start limit 도달은 `failed/exit-code`로만 남아 `NRestarts ≥ StartLimitBurst`로 판별(WP25). path 설정은 C escape를 풀지 않음, ExecStart는 풂(WP03) |
 | util-linux | 2.41.5 | `unshare --forward-signals` 없음 → quarantine은 SIGKILL만 사용(`608f6ed`) |
 | bubblewrap | 0.12.0, `/usr/bin/bwrap` 고정 | 봉인 Resident는 이 경로로 시작(WP27). bwrap 없는 host는 `installation.rootfs = "/"`(비봉인)만 가능 |
-| 엔진 | `@earendil-works/pi-coding-agent`·`pi-ai`·`pi-agent-core`·`pi-tui` 0.85.1 | 설치본의 `node_modules`에 있는 것만 사용하고 상위 디렉터리나 PATH의 엔진으로 물러서지 않음(WP31). 실제 provider는 NOT_RUN |
+| 엔진 | `@earendil-works/pi-coding-agent`·`pi-ai`·`pi-agent-core`·`pi-tui` 0.87.1 | 설치본의 `node_modules`에 있는 것만 사용하고 상위 디렉터리나 PATH의 엔진으로 물러서지 않음(WP31). 0.85.1에서 올림(ENG1). 실제 provider는 수동 기능 점검만 했고 자동 lane은 NOT_RUN |
 | native 모듈 | `koffi` 3.2.1 | `check:package`가 로드만 확인. pidfd·SO_PEERPIDFD·cgroup 능력은 kernel lane이 확인 |
-| 기타 런타임 의존성 | `nodemailer` 10.0.1, `typebox` 1.3.7 | lockfile의 production 분류와 `check:package`의 버전 대조 |
+| 기타 런타임 의존성 | `nodemailer` 10.0.1, `typebox` 1.3.27(엔진과 같은 버전, ENG1) | lockfile의 production 분류와 `check:package`의 버전 대조 |
 | 설치 방식 | 빌드된 트리를 `installation.libdir`로 사용 | `npm pack`은 `dist`를 싣지 않으므로 npm 패키지는 실행 가능한 산출물이 아니다. `bin`이 없어 `oma` 명령은 생기지 않음 |
 | systemd-managed broker | 렌더와 `systemd-analyze verify`만 | 운영 lifecycle은 NOT_RUN, 지원한다고 표시하지 않음 |
 

@@ -207,7 +207,7 @@
 | T-integrate-intent | 직렬화된 repo slot 확인, base/candidate/policy pending op |
 | T-integrate-done | 실제 main 대조 뒤 op succeeded |
 | T-context-accept/done | 고정 commit/notification intent; 실제 ref/snapshot 대조 후 완료 |
-| T-usage-reserve | 전체/계통/Principal reserve 검사와 usage reserved insert |
+| T-usage-reserve | 전체/계통/Principal reserve 검사와 usage reserved insert. INF-001 뒤로는 production 호출자가 없다(usage 표에 쓰는 주체가 없다는 사실은 INF-009대로 validation이 기록한다) |
 | T-usage-settle | provider usage와 outcome 원자 갱신 |
 
 **MUST [DB-008]** prepared batch에 포함된 message IDs와 delivery.batch_id의 집합은 같아야 하며 recipient는 batch.agent와 같아야 한다. DB FK만으로 충분하지 않은 교차행 불변식은 store 함수와 integrity test에서 검증한다. completed batch는 변경·확장하지 않는다. 누락 원문, FK 손상, 실제 ref 불일치는 조용히 새 상태로 덮어쓰지 않는다.
@@ -529,11 +529,11 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST NOT [INF-004]** 결과가 불명확한 inference를 자동 재전송한다. 취소가 과금 취소를 보장한다고 가정하지 않는다. 엔진이 보고하지 않은 비용을 0으로 간주하지 않는다.
 
-**MUST [INF-005]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. `quota`의 unit 관련 필드는 host가 선언하는 운영 의도로 남지만, 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.
+**MUST [INF-009]** multi-agent 비용 상한은 이제 OMA 계약이 집행하는 값이 아니다. `quota`의 unit 관련 필드는 host가 선언하는 운영 의도로 남지만, 실제 과금 경계는 엔진과 provider 설정이 소유한다. OMA가 집행하지 않는 것을 집행한다고 표시하지 않는다.
 
 `usage` 표와 여섯 durable entity는 DB-001 그대로 유지한다. persisted v1 schema를 이 변경으로 바꾸지 않는다. 그 표에 쓰는 주체가 없다는 사실은 [validation](implementation/validation.md)에 기록한다.
 
-**MUST [INF-006]** performance 검증은 Astra 단독, cheap society 단독, Principal+society의 동일 task/tool 접근/성공 기준으로 수행한다. 품질·결함·Principal 및 전체 tokens·비용·latency를 각각 기록한다. Principal tokens 감소만으로 전체 비용/품질 우위를 주장하지 않는다. 자동 평가 threshold는 S-09에서 합의한다.
+**MUST [INF-010]** performance 검증은 Astra 단독, cheap society 단독, Principal+society의 동일 task/tool 접근/성공 기준으로 수행한다. 품질·결함·Principal 및 전체 tokens·비용·latency를 각각 기록한다. Principal tokens 감소만으로 전체 비용/품질 우위를 주장하지 않는다. 자동 평가 threshold는 S-09에서 합의한다.
 
 ## 14. model-facing CLI와 파생 view
 
@@ -589,7 +589,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 | PROTECTED_PATH, CHECK_FAILED, POLICY_CHANGED | host 통합 조건 미충족 | workflow 우회/자동 승인 금지 |
 | CANCELLED_BEFORE_COMMIT | stop 등으로 CAS 전 취소 확정 | 실패 receipt; 이미 변경된 ref를 되돌리지 않음 |
 | CONTEXT_CONFLICT | 공유 의도 expected 불일치 | actual revision 반환; 자동 덮어쓰기 금지 |
-| QUOTA_EXCEEDED, PROVIDER_FAILED, PROVIDER_OUTCOME_UNKNOWN | 예산/제공자 실패/비용 불명확 | reserve 보존, provider 자동 replay 금지 |
+| QUOTA_EXCEEDED, PROVIDER_FAILED, PROVIDER_OUTCOME_UNKNOWN | agent 수·저장 용량 quota 초과 / 엔진이 보고한 제공자 실패 / 제공자 호출 결과 불명확 | 새 접수 거절, 정산은 여유를 기다림(D04) / provider 자동 replay 금지(INF-004) |
 | UNSUPPORTED_PROFILE, SPIKE_UNRESOLVED | 플랫폼/검증 gate 미충족 | fail closed; backend 즉흥 추가 금지 |
 | INTERNAL_ERROR | 분류되지 않은 구현 결함 | effect 상태 대조 전 retry 금지, 진단 ID만 공개 |
 
@@ -648,7 +648,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [TUI-005]** Principal의 model 선택 대상은 host가 `HostConfigV1`에 선언한 model profile 이름뿐이다. caller는 provider, URL, header, credential, 가격, token 상한을 지정하지 못한다. 선택은 host authority를 고쳐 쓰는 것이므로 CFG-005의 policy revision 갱신을 동반하고, **다음 Principal session부터** 적용한다. 진행 중인 session이나 stream의 model을 바꾸지 않는다.
 
-session 경계를 넘지 않는 per-request 전환은 Principal inference가 broker relay를 실제로 경유할 때만 의미가 있다. `principal.attach` handshake는 IPC-011로 확정되었으나 그 경로는 Principal inference의 relay 경유와 `src/inference.ts`의 frozen authority 검사 개정을 함께 요구하므로 현재 구현하지 않는다. 호출 경로 없이 선택 API만 추가해 구현된 것처럼 표시하지 않는다(TRACE-002). 전환이 예산을 넘기면 기존 INF-002/003의 예약 검사가 그대로 거절한다.
+session 경계를 넘지 않는 per-request 전환은 하지 않는다. inference는 동봉 엔진이 소유하므로(INF-001) OMA에는 요청마다 model을 바꾸거나 예산을 검사하는 경로가 없다. `principal.attach`(IPC-011)는 Principal CLI의 credential handshake이지 model 전환 경로가 아니다. 호출 경로 없이 선택 API만 추가해 구현된 것처럼 표시하지 않는다(TRACE-002).
 
 **MUST NOT [TUI-006]** 현재 model 선택, 읽음 상태, UI 위치, 최근 화면 같은 TUI 상태를 여섯 durable entity에 추가하거나 새 표·컬럼·sidecar 파일로 저장한다. 재시작 후에도 유지되어야 하는 선택은 host config의 해당 필드로 표현하고, 그 외 UI 상태는 A-007의 메모리 전용 runtime 상태로 두며 crash 후 원본에서 재구성한다.
 

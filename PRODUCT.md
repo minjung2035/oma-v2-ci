@@ -8,12 +8,14 @@ OMA는 **Pi를 의존성으로 삼는 새로운 코딩 에이전트**다. Pi ext
 
 ## 사용자가 보는 것
 
+목표는 다음 두 줄이 전부인 것이다.
+
 ```sh
 npm install -g oma
 oma
 ```
 
-두 줄이 전부다. 이 뒤에 설정 파일 작성, 초기화 명령, 별도 Pi 설치, 재로그인이 오면 그것은 결함이다.
+이 뒤에 설정 파일 작성, 초기화 명령, 별도 Pi 설치, 재로그인이 오면 그것은 결함이다. 첫 줄은 아직 되지 않는다(아래 '아직 아닌 것'). 지금은 빌드한 트리의 entry를 `oma`로 부른다([README](README.md)).
 
 실행하면 대화 화면이 뜨고 바로 코딩을 시작한다. 관리 기능은 `Ctrl+X` 하나로 열리는 Control Panel에 있고 Dashboard / Config / Mail 셋뿐이다.
 
@@ -90,7 +92,8 @@ tool이 많아지면 모델이 보는 표면이 넓어지므로, role별로 DIRE
 정직하게 적는다. 아래는 제품 목표에 포함되지만 현재 충족되지 않았다.
 
 - **비용 상한** — inference를 엔진에 위임하면서 OMA가 multi-agent 예산을 집행하지 않는다. 봉인된 Resident의 요청은 모두 relay를 지나므로 요청 수·동시성은 OMA가 쥐지만, 비용 상한은 stream 해석을 요구하고 그 결정은 내리지 않았다.
-- **단일 설치 아티팩트** — 현재는 npm 패키지다. node·git·bwrap은 여전히 호스트에 있어야 한다. bwrap이 없는 호스트에서는 Resident 봉인이 불가능하다.
-- **release gate** — production LOC가 architecture review 기준을 넘어 열려 있다.
+- **설치 명령** — package가 `bin`을 선언하지 않아 `npm install -g oma` 뒤에 `oma` 명령이 생기지 않는다. 설치 명령을 어떻게 둘지는 보류한 결정이다(C2).
+- **단일 설치 아티팩트** — 현재는 빌드한 트리다. node·git·bwrap은 여전히 호스트에 있어야 한다. bwrap이 없는 호스트에서는 Resident 봉인이 불가능하다.
+- **release** — 승인되지 않았다. 무엇이 막고 있는지(LOC gate, 전원 차단·실제 provider·CI 검증)는 validation이 소유한다.
 
 현재 수치와 실행 증거, 자세한 한계 목록은 [implementation/validation.md](implementation/validation.md)("알려진 한계")에 있다.

@@ -50,7 +50,7 @@ if (process.argv.includes("--inventory")) {
     } catch { return true; }
   });
   for (const finding of findings) console.error(`Import closure: ${finding}`);
-  for (const scope of [acceptance.core, acceptance.tiered]) console.log(`${scope.name}: ${scope.rows.length} matrix rows; missing=[${scope.missing.join(",")}]; duplicates=[${scope.duplicate.join(",")}]; empty=[${scope.empty.join(",")}]`);
+  for (const scope of [acceptance.core, acceptance.tiered, acceptance.product]) console.log(`${scope.name}: ${scope.rows.length} matrix rows; missing=[${scope.missing.join(",")}]; duplicates=[${scope.duplicate.join(",")}]; empty=[${scope.empty.join(",")}]`);
   console.log(`${entries.length - failures.length}/${entries.length} clauses pass structural evidence checks; ${failures.length} unresolved; ${extras.length} stale/extra rows; ${findings.length} import-closure findings.`);
   console.log("Structural checks do not certify full-clause behavior, disabled-profile rejection or kernel isolation.");
   process.exitCode = failures.length || extras.length || findings.length || entries.length === 0 || !acceptance.complete ? 1 : 0;

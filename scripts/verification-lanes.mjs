@@ -94,9 +94,13 @@ export const lanes = Object.freeze({
       "test/society-lease-identity.test.mjs",
       "test/receipt-supersession.test.mjs",
       "test/durable-boundaries.test.mjs",
+      "test/document-integrity.test.mjs",
     ],
     requiredNames: [
       "P0-7: every durable boundary in the code has a registered kill/retry/restart test",
+      "PRIORITY-0 / P0-7: in this tree every requirement ID has one clause, acceptance rows live in the matrix, and every link resolves",
+      "PRIORITY-0 / P0-1: a requirement ID given to two clauses, or an acceptance number used outside its matrix, is a finding",
+      "PRIORITY-0 / P0-3: a link to a file or a heading that does not exist is a finding",
       "P0-7: a new boundary without a test, a stale entry, or a test that does not exist is a finding",
       "AV3 / PR-003, PR-004, FS-003: the Principal's model scope holds neither",
       "AV3 / INV04, INV09, PR-004: an engine whose workspace overlaps",

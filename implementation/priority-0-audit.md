@@ -3,7 +3,7 @@
 이 문서는 **점검 기록**이다([문서 지도](../docs/README.md)). [PRIORITY-0.md](../PRIORITY-0.md)의 적용 절차가 요구하는 기록이며, 다음 점검도 새 파일을 만들지 않고 이 문서를 갱신한다.
 여기의 판정은 각 기준점의 코드에 대한 것이다. 지금의 검증 상태와 수치는 [validation.md](validation.md)가 소유한다.
 
-**상태: 완료(2026-09-26).** 발견 24개(P0V-01–P0V-24)를 모두 고쳤다. 각 발견의 상태 열이 수정 commit이다.
+**상태: 완료(2026-09-26).** 코드의 발견 24개(P0V-01–P0V-24)와 문서·식별자의 발견 14개(P0D-01–P0D-14)를 모두 고쳤다. 코드 발견은 상태 열이 수정 commit이다.
 
 | 절 | 내용 | 줄 번호의 기준 |
 |---|---|---|
@@ -12,6 +12,7 @@
 | P0-7 점검, 수정 계획 | 시험이 durable 경계를 덮는가, 수정 순서와 근거 원칙 | `0cb9757` |
 | 2차 점검 | 모든 `catch`와 `existsSync`에 P0-5를 다시 물은 판정, P0V-18–P0V-23 | `7b6c462` |
 | 실제 provider 점검(14차) | DR9–DR13을 제품에서 끝까지 확인한 결과, P0V-24 | 14차 빌드(`1b3827c` 이후) |
+| 3차 점검: 문서와 식별자 | 문서 25개와 식별자(요구 ID, 수용 번호)의 판정, P0D-01–P0D-14 | `8cb0406` |
 | 수정 검증 | 수정마다 되돌린 변이와 그 결과 | — |
 
 방법: 파일을 하나씩 읽고, 그 파일이 만들거나 해석하는 durable fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적는다. 키워드 검색은 읽은 파일의 호출 관계를 따라갈 때만 쓴다.
@@ -482,6 +483,46 @@
 SIGKILL). 드문 경쟁이라 이전 코드에서 일부러 재현하지는 않았고, 원인은 코드를 읽어 확인했다. 같은 모습(살아 있으며 파일을 쓰는
 자식을 죽이고 기다리지 않은 채 지움)은 다른 시험에 없다. 다른 `kill()`은 스스로 끝난 자식의 안전장치이거나, 파일을 쓰지 않는
 lock holder다. v17 final은 이 실패에서 멈췄고 v18이 대체한다.
+
+## 3차 점검: 문서와 식별자
+
+기준점 `8cb0406`. 기준은 PRIORITY-0의 "문서와 식별자에도 같은 원칙"이다. commit된 문서의 문장과 식별자도 durable fact로 보고,
+하위 규칙(식별자의 뜻 불변, 한 사실 한 owner, 규범 변경의 한 경로, 기록 위치의 보존, 모름을 사실로 올리지 않음)을 물었다.
+문서 25개를 파일 순서로 읽었다. architecture.md와 계획 디렉터리는 읽기만 했다. 결정·점검 기록은 작성 시점이 밝혀져 있으므로,
+당시 사실을 적은 문장은 고치지 않았다.
+
+### 발견
+
+| ID | 규칙 | 파일:줄(`8cb0406`) | 요약 |
+|---|---|---|---|
+| P0D-01 | 명제, P0-1 | implementation-spec.md:505,514,532,536 | 요구 ID INF-005와 INF-006이 각각 두 조항에 붙어 있다(relay / 비용 상한, relay socket / 성능 검증). 2026-09-19에 두 커밋이 같은 번호에 다른 조항을 붙였다. architecture.md:1016과 코드·시험 여덟 곳은 relay 뜻으로 인용한다 |
+| P0D-02 | 명제, P0-1 | implementation/test-matrix.md:132-134,149-151 | 수용 번호 T115·T116·T117을 시험이 먼저 쓴 뜻(broker 감독, 봉인된 Resident의 provider 경로, 봉인. 8256269·34c8db3)이 있는데, 표는 나중에(1794bac·7249eb7) 같은 번호를 Mail 화면·CI 정직성·측정 증거에 붙였다. T116·T117에는 먼저 쓴 뜻의 행이 없었다. T122는 한 커밋에서 두 뜻(state tree 경합 / 다른 society의 lease)을 받았다. 대역 표에는 T120–T123이 없었다 |
+| P0D-03 | P0-2 | scripts/traceability.mjs `inventoryAcceptance`, scripts/adversarial-report.mjs | 도구가 수용 범위를 T01–T90으로 따로 들고 있어 TEST-008이 정한 제품 대역(T91부터)을 "범위 밖"으로 보고, 범위 규칙에 TUI·TSP 계열이 없어 report가 생성되지 않았다(`Unreviewed scope: TUI-001`). T78–T90은 한 번도 쓰인 적 없는 예약 대역이며, 이를 MISSING으로 보고하는 것은 설계대로다 |
+| P0D-04 | P0-2 | implementation/validation.md:56 | 판정 표의 행 이름 "T36 / WP25.02"가 수용 행 문법과 같아 도구가 T36을 두 번 센다 |
+| P0D-05 | P0-5, P0-2 | implementation/validation.md:240, 68 | release gate가 "provider failure/usage/cancel" 증명을 요구하고, WP26/WP27 행은 "provider 쪽 재시도·긴 stream(자격 증명 없음)"을 검증 공백으로 든다. INF-001에 따르면 이것은 엔진이 소유하는 사실이고, 실제 provider 점검은 이미 14회 했다 |
+| P0D-06 | P0-4 | implementation/validation.md(`de98db0` 정리) | 문서 정리 때 "usage 표에 쓰는 주체가 없다"(spec의 비용 조항이 validation에 기록하라고 정한 사실)와 "T48–T51을 이행할 OMA 경로가 없다"를 과거 기록과 함께 archive로 보냈다. 규범이 정한 기록 위치를 잃었다 |
+| P0D-07 | P0-1 | implementation/validation.md:65,77 | 현재 판정의 V27A·V31A 행이 엔진 0.85.1을 현재처럼 말한다(ENG1 뒤 0.87.1) |
+| P0D-08 | P0-5 | operations/README.md:94,196,198 | relay가 "header와 path에서만" 진짜 key로 바꾼다고 적었다. 실제(INF-008, AV2)는 인증 header와 `key` query에서만 바꾸고 path의 자리표시자는 거절한다. 지원 범위 표의 엔진 0.85.1·typebox 1.3.7·"실제 provider NOT_RUN"은 ENG1과 수동 점검 이전 상태다. model의 codec·pricing을 운영자가 "검토"한다는 문장은 OMA가 그 값을 쓰는 것처럼 읽힌다 |
+| P0D-09 | P0-5 | implementation-spec.md:651, 210, 592 | TUI-005 뒤 문단이 지운 `src/inference.ts`와 "INF-002/003의 예약 검사"를 전제한다. DB-007의 T-usage-reserve와 오류 표의 "reserve 보존"은 production 호출자가 없는 예약 경로를 현재처럼 적었다 |
+| P0D-10 | P0-5, P0-2 | MAINTENANCE.md §20 | "provider codec"을 OMA가 추측하지 말 OPEN gate로 든다. INF-001이 그 spike를 제거했다 |
+| P0D-11 | P0-5, P0-2 | PRODUCT.md:11-16, 94 | `npm install -g oma` 두 줄이 지금 되는 것처럼 읽힌다(`bin` 없음, C2 보류). release가 막힌 이유로 LOC만 든다(owner는 validation) |
+| P0D-12 | P0-2 | implementation/README.md:16, docs/README.md 범위 표 | "수용 oracle T01–T90"이 있는 것처럼 적었다. 실제로는 T01–T77, T91–T127이고 T78–T90은 예약 대역이다 |
+| P0D-13 | P0-2 | HANDOFF.md §6 | 보류한 결정 목록을 validation의 알려진 한계와 중복해 적었다 |
+| P0D-14 | P0-6(원칙 재검증) | PRIORITY-0.md | 명제와 용어가 durable fact를 런타임 기록으로만 들어, 문서와 식별자에 같은 원칙이 적용된다는 말이 없었다. P0D-01·P0D-02가 그 공백에서 났다 |
+
+부합으로 판정한 것: README(절 번호·설치 서술), MAINTENANCE의 나머지 절, systemd/README(7개 template과 일치), contracts/README(내보내는 이름 63개, 비공개 envelope 포함 64개), store-opening, spikes·test-matrix의 날짜가 붙은 실험 기록, 결정 기록 안의 0.85.1(작성 시점의 사실).
+
+### 수정
+
+- P0D-01: 먼저 번호를 가진 기록을 붙든 relay가 INF-005·INF-006을 지키고, 비용 상한은 INF-009, 성능 검증은 INF-010이 된다. traceability는 두 행의 ID·digest·문구만 갱신했다.
+- P0D-02: T115–T117은 먼저 쓴 뜻을 지키고 T116·T117에 그 행을 썼다. 뒤에 붙었던 뜻은 T124(Mail)·T125(CI)·T126(측정)으로, T122의 다른 뜻은 T127로 옮겼다. 시험 이름을 새 번호로 바꿨다(Mail 1개, CI 15개). 대역 표에 T120–T127을 적었다.
+- P0D-03: 수용 범위에 TEST-008의 제품 대역을 넣었다. 그 대역의 빈 번호와 빈 oracle은 finding이고, 한 뜻의 행 여럿(T119, T122)은 목록에만 올린다. report의 범위 규칙에 TUI·TSP를 runtime으로 넣었다. report는 이제 생성되고, T78–T90을 MISSING으로 보고하며 종료 코드 1을 낸다.
+- P0D-04–P0D-07: validation의 행 이름·버전·provider 문장을 고쳤고, 잃었던 두 사실을 "알려진 한계"에 되살렸다.
+- P0D-08–P0D-13: 각 문서의 문장을 owner의 사실에 맞췄다.
+- P0D-14: PRIORITY-0에 "문서와 식별자에도 같은 원칙"을 적었고, 문서 지도의 규칙이 그 절에서 나온다고 밝혔다.
+- P0-7: `scripts/document-integrity.mjs`(`check:documents`, `check:architecture`에 포함)가 요구 ID의 유일성, 수용 행의 위치와 대역, 링크와 anchor를 검사한다. `test/document-integrity.test.mjs`가 이 트리의 통과와 세 가지 negative control을 확인한다(fast lane 필수).
+
+작업 중 실수 하나: P0D-02를 처음 고칠 때 이미 쓰이던 T120–T122로 옮겨 새 충돌을 만들었다. HEAD의 최대 번호(T123)를 확인하고 되돌린 뒤 T124부터 다시 매겼다.
 
 ## 수정 검증
 

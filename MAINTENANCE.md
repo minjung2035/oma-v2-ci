@@ -293,7 +293,7 @@ Malformed UTF-8/JSON, duplicate key, oversized frame 등 fatal framing 오류 �
 
 `implementation/spikes.md`의 OPEN 상태는 실제 harness evidence가 없으면 유지한다. 현재 helper, mock, interface, test file이 존재한다는 사실만으로 gate를 닫지 않는다.
 
-지원되지 않는 경로는 필요에 따라 `SPIKE_UNRESOLVED`/`UNSUPPORTED_PROFILE`로 fail closed한다. SDK signature, provider codec, Pi session-boundary evidence, candidate kernel enforcement를 추측하지 않는다.
+지원되지 않는 경로는 필요에 따라 `SPIKE_UNRESOLVED`/`UNSUPPORTED_PROFILE`로 fail closed한다. SDK signature, Pi session-boundary evidence, candidate kernel enforcement를 추측하지 않는다. provider codec·가격·재시도는 동봉 엔진의 것이며(INF-001) OMA가 추측하거나 다시 만들 대상이 아니다.
 
 ## 21. 버그 수정 절차
 
