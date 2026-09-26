@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "b2c2363d545abce791db7c155ba2b6974a0efa84d2f22efa5255572aae16d6d0",
+  "report": "546a6bcd422b7e8940cb692b39adda99740260bee5b91e3119b94189e0fa24a1",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -633,7 +633,7 @@
     },
     {
       "path": "src/runtime/inference-relay.ts",
-      "sha256": "5b10a292a128e484d67c3d63227e51e063e8ece4a86b846e9f35b65b36cdedfd"
+      "sha256": "56f5ebd195753bccde59fcc067fce83c0665bbe3dc18ff7a8fd243f1efa24851"
     },
     {
       "path": "src/runtime/pi-adapter.ts",

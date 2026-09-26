@@ -15,6 +15,9 @@ export interface SeenRequest {
   readonly headers: IncomingHttpHeaders;
   body: string;
   readonly upgrade: boolean;
+  /** The provider's side of this request was closed before it had finished
+   * answering (a request), or at all (a tunnel): someone upstream cut it. */
+  cut?: boolean;
 }
 
 export interface TlsProvider {
@@ -40,6 +43,7 @@ export async function tlsProvider(): Promise<TlsProvider> {
     seen.push(record);
     request.setEncoding("utf8");
     request.on("data", chunk => { record.body += chunk; });
+    response.once("close", () => { if (!response.writableFinished) record.cut = true; });
     request.on("end", () => {
       const send = (): void => {
         const body = state.reply.chunks.join("");
@@ -61,7 +65,9 @@ export async function tlsProvider(): Promise<TlsProvider> {
   // An upgrade is answered with 101 and then echoes whatever arrives, so a
   // test can see bytes travel both ways through the tunnel.
   server.on("upgrade", (request, socket) => {
-    seen.push({ method: request.method, path: request.url, headers: request.headers, body: "", upgrade: true });
+    const record: SeenRequest = { method: request.method, path: request.url, headers: request.headers, body: "", upgrade: true };
+    seen.push(record);
+    socket.once("close", () => { record.cut = true; });
     socket.write("HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\n\r\n");
     socket.on("data", chunk => { socket.write(Buffer.concat([Buffer.from("echo:"), chunk])); });
     socket.on("error", () => {});

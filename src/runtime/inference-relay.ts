@@ -374,6 +374,17 @@ export class InferenceRelay {
       else outgoing.destroy();
     });
     incoming.on("error", () => { upstream.destroy(); });
+    // P0V-34, P0-4: the request, its answer and the provider call are one
+    // owner's. An engine that goes away before the answer ends takes the
+    // provider call with it -- nothing is left running for nobody, and the slot
+    // is given back after the call is cut, not while it still streams. The
+    // call is cut, never retried: whether the provider did the work stays the
+    // engine's to judge (INF-001, INF-004).
+    outgoing.once("close", () => {
+      if (outgoing.writableFinished) return;
+      upstream.destroy();
+      settle();
+    });
     incoming.pipe(upstream);
   }
 
@@ -394,10 +405,14 @@ export class InferenceRelay {
       return true;
     };
     this.tunnels.add(socket);
-    socket.once("close", () => { this.tunnels.delete(socket); settle(); });
+    // P0V-34, P0-4: either side ending ends the tunnel, before its slot is
+    // given back -- a provider connection with no engine left is closed, not
+    // left for the provider to end.
+    let provider: Duplex | null = null;
+    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "GET", admitted.path, admitted.headers));
+    socket.once("close", () => { this.tunnels.delete(socket); upstream.destroy(); provider?.destroy(); settle(); });
     socket.on("error", () => { socket.destroy(); });
 
-    const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "GET", admitted.path, admitted.headers));
     let cutOff = false;
     const cut = (): void => {
       if (cutOff) return;
@@ -415,6 +430,8 @@ export class InferenceRelay {
       for (let index = 0; index < response.rawHeaders.length; index += 2)
         lines.push(`${response.rawHeaders[index]!}: ${response.rawHeaders[index + 1]!}`);
       socket.write(`${lines.join("\r\n")}\r\n\r\n`);
+      provider = providerSocket;
+      if (socket.destroyed) { providerSocket.destroy(); return; }
       const guard = this.guarded(() => { providerSocket.destroy(); cut(); });
       if (head.length > 0) providerSocket.write(head);
       this.tunnels.add(providerSocket);

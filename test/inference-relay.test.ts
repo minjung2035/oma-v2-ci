@@ -259,6 +259,56 @@ test("V27B: the relay hands a provider's answer on as it arrives; it never holds
   } finally { bridged.close(); await relay.close(); await provider.close(); socket.clean(); }
 });
 
+/** Polls `ready` for up to `ms`, for what another process's sockets decide. */
+async function eventually(ready: () => boolean, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (!ready()) { if (Date.now() > deadline) return false; await new Promise(resolve => setTimeout(resolve, 20)); }
+  return true;
+}
+
+test("P0V-34 / N11, P0-4: an engine that goes away mid-answer takes the provider call with it, and its slot comes back", async () => {
+  const provider = await tlsProvider();
+  // Three seconds of answer, a chunk at a time.
+  provider.reply = { status: 200, chunks: Array.from({ length: 10 }, (_, index) => `chunk-${index} `), delayMs: 0, gapMs: 300 };
+  const socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: { authorization: "Bearer real-secret" } },
+    { concurrent: 4, timeoutMs: 10_000 });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const outgoing = httpRequest({ socketPath: socket.path, path: "/v1/messages", method: "POST", headers: { "content-type": "application/json" } }, response => {
+        response.once("data", () => { outgoing.destroy(); resolve(); });
+      });
+      outgoing.on("error", () => {});
+      outgoing.once("error", reject);
+      outgoing.end("{}");
+    });
+    assert.ok(await eventually(() => provider.seen[0]?.cut === true, 1000), "the provider call went on streaming for an engine that was gone");
+    assert.ok(await eventually(() => relay.observe().inFlight === 0, 1000), `the slot was not given back: ${JSON.stringify(relay.observe())}`);
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("P0V-34 / N11, P0-4: a tunnel whose engine leaves before the upgrade completes leaves no provider connection behind", async () => {
+  const provider = await tlsProvider();
+  const socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {} }, { concurrent: 4, timeoutMs: 10_000 });
+  try {
+    // The engine asks for an upgrade and is gone before the provider answers it.
+    const engine = netConnect(socket.path);
+    engine.on("error", () => {});
+    await new Promise<void>(resolve => engine.once("connect", () => resolve()));
+    engine.write(["GET /v1/realtime HTTP/1.1", "host: relay", "connection: Upgrade", "upgrade: websocket",
+      "sec-websocket-version: 13", `sec-websocket-key: ${Buffer.from("the sample nonce").toString("base64")}`, "", ""].join("\r\n"));
+    await new Promise(resolve => setTimeout(resolve, 5));
+    engine.destroy();
+    // Whatever reached the provider is closed; nothing is kept for nobody.
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.ok(provider.seen.some(entry => entry.upgrade), "the upgrade never reached the provider; the case proves nothing");
+    assert.ok(await eventually(() => provider.seen.filter(entry => entry.upgrade).every(entry => entry.cut === true), 1000),
+      "a provider connection outlived the engine that asked for it");
+    assert.ok(await eventually(() => relay.observe().inFlight === 0, 1000));
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
 test("V27B: idle connections to the relay are bounded, and a request is carried once they end", async () => {
   const { RELAY_CONNECTIONS_PER_REQUEST } = await import("../src/runtime/inference-relay.js");
   const provider = await tlsProvider();
