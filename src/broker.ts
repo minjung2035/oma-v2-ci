@@ -320,7 +320,7 @@ export class Broker {
   private handleActor(socket: Socket, actor: Actor, incarnation: number): void {
     let peer: BoundPeer | null = null; let transferred = false;
     try {
-      if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining");
+      if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
       if (this.store.getAgent(actor)?.incarnation !== incarnation) throw new StoreError("STALE_RUN", "actor incarnation is stale");
       peer = this.bindPeer(socket);
       if (!peer) throw new StoreError("AUTH_FAILED", "no peer credentials");
@@ -334,7 +334,7 @@ export class Broker {
   private handleInternal(socket: Socket, channel: "runner" | "host"): void {
     let peer: BoundPeer | null = null; let transferred = false;
     try {
-      if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining");
+      if (this.draining) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
       peer = this.bindPeer(socket);
       if (!peer || peer.uid !== (process.getuid?.() ?? -1)) throw new StoreError("AUTH_FAILED", "invalid internal peer credentials");
       const credentials = peer;
@@ -384,7 +384,10 @@ export class Broker {
   }
   private fail(socket: Socket, error: Failure): void {
     const connection = this.connections.get(socket);
-    if (connection) { connection.reject(new StoreError(error.code, error.message)); return; }
+    // P0V-33: restated with the facts its code may carry, as it was answered.
+    const details = error.details !== null && typeof error.details === "object" && !Array.isArray(error.details)
+      ? error.details as Readonly<Record<string, unknown>> : undefined;
+    if (connection) { connection.reject(new StoreError(error.code, error.message, details === undefined ? undefined : { details })); return; }
     if (socket.destroyed) return;
     const alarm = NODE_ALARMS.after(this.limits.idleStreamSeconds, () => socket.destroy());
     socket.once("close", () => alarm.cancel()); socket.once("error", () => socket.destroy());

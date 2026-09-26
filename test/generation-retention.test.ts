@@ -49,6 +49,23 @@ test("AV7 / INV03: a commit whose record was lost is written back by the next co
   } finally { f.close(); }
 });
 
+test("P0V-47 / F1, P0-3: a record an append left unfinished is closed off, so the next record and the previous generation survive", () => {
+  // The append of the last record stopped part-way: after the whole id but
+  // before its newline, or in the middle of the id.
+  const cuts: ((id: string) => string)[] = [id => id, id => id.slice(0, 20)];
+  for (const cut of cuts) {
+    const f = createCompleteConfigurationFixture();
+    try {
+      const [first, second] = commitEach(f, [5, 6]);
+      writeFileSync(journalOf(f), `${first}\n${cut(second!)}`);
+      const [third] = commitEach(f, [7]);
+      assert.deepEqual(recorded(f).slice(-2), [second, third], `the next record was glued onto the unfinished one: ${JSON.stringify(recorded(f))}`);
+      collectManagedGenerations(loadConfigurationSnapshot(f.path));
+      assert.deepEqual(new Set(readdirSync(generationsOf(f))), new Set([second, third]), "the previous generation, the basis of a rollback, was removed");
+    } finally { f.close(); }
+  }
+});
+
 test("AV7 / INV02: a journal that cannot be read removes no generation, only what was never committed", () => {
   const f = createCompleteConfigurationFixture();
   try {

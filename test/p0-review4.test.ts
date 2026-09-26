@@ -17,6 +17,9 @@ import { Broker } from "../src/broker.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { ViewsModule } from "../src/views.js";
 import type { UnitsModule } from "../src/units.js";
+import { AcceptedFailure, StoreError, normalizeStorageFailure, publicFailure } from "../src/domain/errors.js";
+import { depthOf, planToolSurface, type GroupSpec } from "../src/domain/tool-surface.js";
+import { PiRpcClient, type PiEvent } from "../src/runtime/pi-rpc.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -189,3 +192,70 @@ for (let gap = 0; gap < 8; gap += 1)
     assert.equal(active, 0);
     assert.equal(most, 1, "a second observation ran beside the follow-up");
   });
+
+test("P0V-33 / N09, P0-1: a failure restated beside a cleanup failure keeps its code, its facts and that it was accepted", () => {
+  const actual = "a".repeat(40);
+  const cleanup = new Error("owned temporary could not be removed");
+  const accepted = new AcceptedFailure("STALE_BASE", "main moved", "none", { details: { actual } });
+  for (const aggregate of [new AggregateError([accepted, cleanup]), new AggregateError([new AggregateError([accepted, cleanup]), cleanup])]) {
+    const restated = normalizeStorageFailure(aggregate);
+    assert.ok(restated instanceof AcceptedFailure, "the restated failure no longer says the operation was accepted");
+    assert.equal(restated.effectKnowledge, "none");
+    assert.deepEqual(restated.details, { actual });
+    assert.equal(restated.cause, aggregate, "the cleanup failures are kept as the cause");
+    assert.deepEqual(publicFailure(restated), publicFailure(accepted), "the caller is answered as if the cleanup had not failed");
+  }
+  const busy = new StoreError("BROKER_UNAVAILABLE", "busy", { details: { reason: "busy" } });
+  assert.deepEqual(publicFailure(normalizeStorageFailure(new AggregateError([busy, cleanup]))), publicFailure(busy));
+});
+
+/** A chain of `levels` nested groups, the innermost holding one tool. */
+function chain(levels: number): GroupSpec[] {
+  return Array.from({ length: levels }, (_, index) => ({
+    name: `g${index + 1}`, description: `level ${index + 1}`,
+    members: index + 1 < levels ? [{ group: `g${index + 2}` }] : [{ tool: "read" }],
+  }));
+}
+function orders<T>(items: readonly T[]): T[][] {
+  if (items.length <= 1) return [[...items]];
+  return items.flatMap((item, index) => orders([...items.slice(0, index), ...items.slice(index + 1)]).map(rest => [item, ...rest]));
+}
+
+test("P0V-31 / N07, P0-2: how deep groups nest does not depend on the order they are declared in", () => {
+  const plan = (groups: GroupSpec[]) => planToolSurface({ defaultMode: "DIRECT", direct: [], disabled: [], groups, roots: [] });
+  const tooDeep = orders(chain(5));
+  assert.equal(tooDeep.length, 120);
+  for (const groups of tooDeep)
+    assert.throws(() => plan(groups), /exceeds depth 4/, `accepted ${groups.map(group => group.name).join(",")}`);
+  const deepest = orders(chain(4));
+  for (const groups of deepest)
+    assert.equal(depthOf(plan(groups)), 4, `measured ${groups.map(group => group.name).join(",")} wrong`);
+  // A group shared by a shallow and a deep parent is measured from the deep one.
+  const shared: GroupSpec[] = [
+    { name: "shallow", description: "s", members: [{ group: "leaf" }] },
+    { name: "leaf", description: "l", members: [{ tool: "read" }] },
+    { name: "top", description: "t", members: [{ group: "middle" }] },
+    { name: "middle", description: "m", members: [{ group: "shallow" }] },
+  ];
+  assert.equal(depthOf(plan(shared)), 4);
+  assert.throws(() => plan([...shared, { name: "higher", description: "h", members: [{ group: "top" }] }]), /exceeds depth 4/);
+});
+
+test("P0V-48 / F2, P0-5: each partial line has its own deadline, so a line started late is not cut off by the one before it", { timeout: 10_000 }, async t => {
+  // Line a starts at 0 and ends at 0.6 s in the same chunk that starts line b;
+  // b ends at 1.3 s. With a 1 s line deadline both lines are in time.
+  const child = spawn(process.execPath, ["-e", `
+    const write = text => process.stdout.write(text);
+    write('{"type":"a"');
+    setTimeout(() => write('}\\n{"type":"b"'), 600);
+    setTimeout(() => write('}\\n'), 1300);
+    setInterval(() => {}, 1000);
+  `], { stdio: ["pipe", "pipe", "pipe"] });
+  const client = new PiRpcClient(child, { frameBytes: 64 * 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1 });
+  t.after(() => { client.close(); child.kill("SIGKILL"); });
+  const seen: string[] = [];
+  client.onEvent((event: PiEvent) => { seen.push(event.type); });
+  const ended = await Promise.race([client.completion, new Promise<"running">(resolve => setTimeout(() => resolve("running"), 1800))]);
+  assert.equal(ended, "running", `the transport ended: ${JSON.stringify(ended)}`);
+  assert.deepEqual(seen, ["a", "b"]);
+});

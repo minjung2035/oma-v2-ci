@@ -126,7 +126,7 @@ function serveConnection(
   let peer: BoundPeer | null = null;
   let transferred = false;
   try {
-    if (ports.isDraining() || !open()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining");
+    if (ports.isDraining() || !open()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
     peer = ports.bindPeer(socket);
     if (!peer || peer.uid !== (process.getuid?.() ?? -1))
       throw new StoreError("AUTH_FAILED", "invalid principal peer credentials");

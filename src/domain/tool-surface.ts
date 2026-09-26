@@ -78,20 +78,29 @@ function assertUnique(values: readonly string[], what: string): void {
 /** Depth-first cycle detection over the declared subgroup edges. A group that
  * can reach itself would let one reveal loop forever.
  */
+/** P0V-31, P0-2: two facts about the group graph, kept apart. Whether a group
+ * is on the path being walked answers "is there a cycle"; how many levels of
+ * groups hang from a finished group answers "how deep". Using the first for
+ * the second skipped a group already walked from a shallower root, so whether
+ * a too-deep nesting was refused depended on the order groups were declared. */
 function assertAcyclic(edges: ReadonlyMap<string, readonly string[]>): number {
   const state = new Map<string, "open" | "done">();
-  let deepest = 0;
-  const walk = (name: string, depth: number): void => {
-    if (depth > SURFACE_LIMITS.depth) invalid(`group nesting exceeds depth ${SURFACE_LIMITS.depth}`);
+  const height = new Map<string, number>();
+  const measure = (name: string): number => {
     const seen = state.get(name);
     if (seen === "open") invalid(`group "${name}" is part of a cycle`);
-    if (seen === "done") return;
+    if (seen === "done") return height.get(name)!;
     state.set(name, "open");
-    deepest = Math.max(deepest, depth);
-    for (const child of edges.get(name) ?? []) walk(child, depth + 1);
+    let below = 0;
+    for (const child of edges.get(name) ?? []) below = Math.max(below, measure(child));
+    const levels = below + 1;
+    if (levels > SURFACE_LIMITS.depth) invalid(`group nesting exceeds depth ${SURFACE_LIMITS.depth}`);
     state.set(name, "done");
+    height.set(name, levels);
+    return levels;
   };
-  for (const name of edges.keys()) walk(name, 1);
+  let deepest = 0;
+  for (const name of edges.keys()) deepest = Math.max(deepest, measure(name));
   return deepest;
 }
 

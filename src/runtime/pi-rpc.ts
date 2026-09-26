@@ -125,6 +125,7 @@ export class PiRpcClient {
       return;
     }
     try {
+      const ended = this.reader.endedLines;
       this.reader.feed(data, (event) => {
         for (const observer of [...this.observers]) {
           if (this.state !== "open") break;
@@ -132,10 +133,14 @@ export class PiRpcClient {
         }
       });
       if (this.state !== "open") return;
-      if (this.reader.pendingBytes === 0) {
+      // P0V-48, P0-5: the deadline is the partial line's own. A chunk that
+      // ended a line ended that line's deadline, even when it went on to start
+      // the next; the bytes left over are a new line with a deadline of its own.
+      if (this.reader.endedLines !== ended || this.reader.pendingBytes === 0) {
         this.partialLineTimer?.cancel();
         this.partialLineTimer = null;
-      } else if (this.partialLineTimer === null) {
+      }
+      if (this.reader.pendingBytes > 0 && this.partialLineTimer === null) {
         // Absolute lifetime of a partial line: dribbling bytes cannot renew it forever.
         this.partialLineTimer = alarm(this.limits.idleStreamSeconds, () =>
           this.terminate(

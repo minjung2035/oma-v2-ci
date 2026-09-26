@@ -3,13 +3,13 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 29743,
+    "n_lines": 29792,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
     "blank": 4,
-    "comment": 70,
-    "code": 455,
+    "comment": 71,
+    "code": 457,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -37,9 +37,9 @@
     "language": "TypeScript"
   },
   "src/config/generations.ts": {
-    "blank": 24,
-    "comment": 117,
-    "code": 378,
+    "blank": 25,
+    "comment": 126,
+    "code": 384,
     "language": "TypeScript"
   },
   "src/config/operations.ts": {
@@ -104,8 +104,8 @@
   },
   "src/runtime/pi-rpc.ts": {
     "blank": 3,
-    "comment": 18,
-    "code": 275,
+    "comment": 21,
+    "code": 277,
     "language": "TypeScript"
   },
   "src/runtime/provision.ts": {
@@ -204,16 +204,16 @@
     "code": 207,
     "language": "TypeScript"
   },
+  "src/domain/errors.ts": {
+    "blank": 7,
+    "comment": 47,
+    "code": 206,
+    "language": "TypeScript"
+  },
   "src/storage/ledger-reader.ts": {
     "blank": 2,
     "comment": 14,
     "code": 205,
-    "language": "TypeScript"
-  },
-  "src/domain/errors.ts": {
-    "blank": 7,
-    "comment": 42,
-    "code": 199,
     "language": "TypeScript"
   },
   "src/diagnostics/ledger.ts": {
@@ -300,16 +300,16 @@
     "code": 168,
     "language": "TypeScript"
   },
+  "src/domain/tool-surface.ts": {
+    "blank": 22,
+    "comment": 38,
+    "code": 167,
+    "language": "TypeScript"
+  },
   "src/mail.ts": {
     "blank": 1,
     "comment": 12,
     "code": 165,
-    "language": "TypeScript"
-  },
-  "src/domain/tool-surface.ts": {
-    "blank": 22,
-    "comment": 33,
-    "code": 163,
     "language": "TypeScript"
   },
   "src/entry/broker.ts": {
@@ -780,16 +780,16 @@
     "code": 60,
     "language": "TypeScript"
   },
-  "src/storage/facets.ts": {
-    "blank": 5,
+  "src/protocol/jsonl.ts": {
+    "blank": 1,
     "comment": 7,
     "code": 59,
     "language": "TypeScript"
   },
-  "src/protocol/jsonl.ts": {
-    "blank": 1,
-    "comment": 5,
-    "code": 57,
+  "src/storage/facets.ts": {
+    "blank": 5,
+    "comment": 7,
+    "code": 59,
     "language": "TypeScript"
   },
   "src/units/observe.ts": {
@@ -1351,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1194,
-    "comment": 4769,
-    "code": 23780,
+    "blank": 1195,
+    "comment": 4794,
+    "code": 23803,
     "nFiles": 224
   }
 }

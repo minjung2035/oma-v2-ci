@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "d585a14b97773e865aaa55a9a88af44a38b1e703809f6f95c4b2948cb1784287",
+  "report": "a54e635e0cf12217b22f7cadc91cddce7496b43694670e0ce6fa453e13479a55",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "960242fca2dfbd577a35ab07ef679adf4e4797f90eeac5a7161784563adaf934"
+      "sha256": "28c921ebd4c874833c860a9b80d9ae285fa4d1c45a5358f49706647748a739e6"
     },
     {
       "path": "src/broker/composition.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "309d53913a44c720cfe2a67f54e96f04b3dac94dcbb65a371cf83b92ed0c84af"
+      "sha256": "7d3ab8212d26658394c1c2034d4b210d5baed562b7e1cebcb65b40a8cde6aec4"
     },
     {
       "path": "src/broker/process-ancestry.ts",
@@ -177,7 +177,7 @@
     },
     {
       "path": "src/config/generations.ts",
-      "sha256": "1c4b98ed4c70148a1ab560cbcd87c4adea4773103dde2ed1141144e6a5bc0b12"
+      "sha256": "bd590282016474b68a521585eebccdbc9b7038bb21a04b55e47b41aa51db852d"
     },
     {
       "path": "src/config/operations.ts",
@@ -233,7 +233,7 @@
     },
     {
       "path": "src/domain/errors.ts",
-      "sha256": "ad8a6258e2ee83cdae2422af85976ba1fbd3cb00e3f8af848e5c520fec6d96b3"
+      "sha256": "f3302545d7653aef55bace3d86f83757206f22010f31d4458ee4512d8ad2efa2"
     },
     {
       "path": "src/domain/exhaustive.ts",
@@ -277,7 +277,7 @@
     },
     {
       "path": "src/domain/tool-surface.ts",
-      "sha256": "e029a4239e165049987045299e2652af95212a3cbe5f08e8a3f56f6796103b11"
+      "sha256": "dc8abfd426a18a620ec24c15fe55bf12caa1fd60f9b69d0b983e56f49f62fa91"
     },
     {
       "path": "src/durable.ts",
@@ -537,7 +537,7 @@
     },
     {
       "path": "src/protocol/jsonl.ts",
-      "sha256": "f49d72155d5b0dabbe6bbab912790baa4ff09343ccd20b9845c55f846cd5ef01"
+      "sha256": "f0fb1ad62026841fc4a511282ef21a5d72ff4a8d09a9fd8c691734f8388f3819"
     },
     {
       "path": "src/protocol/log-response.ts",
@@ -641,7 +641,7 @@
     },
     {
       "path": "src/runtime/pi-rpc.ts",
-      "sha256": "9d336a2779550f034a626e6d09b97081f49c94637e38288e34f9b55e3fffb0b8"
+      "sha256": "d80f0740a4f5c4cef9d47321b6aebb82bddacba635d460ac5798e75826ca878f"
     },
     {
       "path": "src/runtime/pi-runtime.ts",

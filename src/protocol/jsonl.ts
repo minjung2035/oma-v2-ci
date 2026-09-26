@@ -16,6 +16,10 @@ export class JsonlReader {
       throw new StoreError("UNSUPPORTED_PROFILE", "JSONL line limit must be a positive safe integer");
   }
   get pendingBytes(): number { return this.length; }
+  /** How many lines this reader has ended, so an owner can tell the partial
+   * line it holds now from the one it held before a chunk (P0V-48). */
+  get endedLines(): number { return this.ended; }
+  private ended = 0;
   feed(chunk: Uint8Array, accept: (event: PiEvent) => void): void {
     if (this.state !== "open" || this.feeding)
       throw new StoreError("INVALID_REQUEST", "JSONL reader is closed, poisoned or re-entered");
@@ -26,7 +30,7 @@ export class JsonlReader {
         if (chunk[index] !== 0x0a) continue;
         this.append(chunk.subarray(start, index));
         const bytes = Buffer.concat(this.pieces, this.length);
-        this.pieces = []; this.length = 0; start = index + 1;
+        this.pieces = []; this.length = 0; start = index + 1; this.ended += 1;
         let event: unknown;
         try {
           const line = this.utf8.decode(bytes);

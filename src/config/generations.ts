@@ -422,16 +422,27 @@ function publishInline(path: string, bytes: Buffer, candidate: ValidatedConfigCa
  * commit, so it is read from its end and never whole (INV10). */
 const JOURNAL_TAIL_BYTES = 4096;
 
-/** The generations the journal's tail records, oldest first. A line cut by
- * the window's start or by a crash in the middle of an append is not an entry. */
-function journalTail(fd: number): readonly string[] {
+/** The generations the journal's tail records, oldest first, and whether the
+ * journal ends on a line boundary. A line cut by the window's start, or left
+ * without its newline by a crash or a short write in the middle of an append,
+ * is not an entry (P0V-47): only a line the journal ended is one. */
+function journalTail(fd: number): { readonly entries: readonly string[]; readonly terminated: boolean } {
   const size = fstatSync(fd).size;
   const length = Math.min(size, JOURNAL_TAIL_BYTES);
   const buffer = Buffer.alloc(length);
   const read = readSync(fd, buffer, 0, length, size - length);
   const lines = buffer.subarray(0, read).toString("utf8").split("\n");
+  // After the last newline: nothing, or an unfinished append. Not an entry.
+  lines.pop();
   if (size > length) lines.shift();
-  return lines.filter(line => GENERATION_ID.test(line));
+  return { entries: lines.filter(line => GENERATION_ID.test(line)), terminated: read === 0 || buffer[read - 1] === 0x0a };
+}
+
+/** Appends every byte of `text`: a write may take fewer bytes than it was
+ * given, and a record written only in part is what P0V-47 is about. */
+function appendAll(fd: number, text: string): void {
+  const bytes = Buffer.from(text, "utf8");
+  for (let offset = 0; offset < bytes.length;) offset += writeSync(fd, bytes, offset, bytes.length - offset);
 }
 
 /** The journal of committed generations, in commit order. The manifest is
@@ -449,8 +460,13 @@ function recordCommitted(base: string, previous: string | null, id: string): voi
     withinDirectory(join(base, JOURNAL), (directory, name) => {
       const fd = openBeneath(directory, name, constants.O_RDWR | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
       try {
-        const missing = previous !== null && journalTail(fd).at(-1) !== previous;
-        writeSync(fd, missing ? `${previous}\n${id}\n` : `${id}\n`);
+        const tail = journalTail(fd);
+        const missing = previous !== null && tail.entries.at(-1) !== previous;
+        // P0V-47, P0-3: an append a crash cut short is closed off as its own
+        // line first; otherwise this record would be glued onto it and lost
+        // too, and a later collection would take the previous generation --
+        // the one a rollback needs -- for an older one.
+        appendAll(fd, `${tail.terminated ? "" : "\n"}${missing ? `${previous}\n` : ""}${id}\n`);
         fsyncSync(fd);
       } finally { closeSync(fd); }
     });
@@ -490,7 +506,7 @@ export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, 
   try {
     tail = withinDirectory(join(base, JOURNAL), (directory, name) => {
       const fd = openBeneath(directory, name, constants.O_RDONLY | constants.O_NOFOLLOW);
-      try { return journalTail(fd); } finally { closeSync(fd); }
+      try { return journalTail(fd).entries; } finally { closeSync(fd); }
     });
   } catch { tail = null; }
   const entries = readdirSync(generations);

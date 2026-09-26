@@ -19,8 +19,13 @@ export function normalizeStorageFailure(error: unknown): unknown {
   if (error instanceof StoreError || error === null || typeof error !== "object") return error;
   // Owned-temporary cleanup can also fail. Preserve the primary effect's meaning
   // and retain the whole aggregate as cause; a secondary ENOSPC cannot erase corruption.
-  const primary: unknown = error instanceof AggregateError ? error.errors[0] : error;
-  if (primary instanceof StoreError) return new StoreError(primary.code, primary.message, { cause: error });
+  // P0V-33, P0-1: the primary is the first failure however deeply the cleanups
+  // nest, and it is restated whole -- its code, the facts its code may carry and,
+  // for a coordinator's AcceptedFailure, that the operation had been accepted
+  // and what is known of its effect. A cleanup failing beside it changes none of that.
+  let primary: unknown = error;
+  while (primary instanceof AggregateError && primary.errors.length > 0) primary = primary.errors[0];
+  if (primary instanceof StoreError) return restated(primary, error);
   if (primary === null || typeof primary !== "object") return error;
   const code = "code" in primary ? primary.code : undefined;
   const sqliteFull = code === "ERR_SQLITE_ERROR" && "errcode" in primary &&
@@ -146,6 +151,13 @@ export class AcceptedFailure extends StoreError {
     options?: ErrorOptions & { readonly details?: Readonly<Record<string, unknown>> }) {
     super(code, message, options);
   }
+}
+/** A failure restated with another cause, as the same kind of failure. */
+function restated(primary: StoreError, cause: unknown): StoreError {
+  const options = { cause, ...(primary.details === undefined ? {} : { details: primary.details }) };
+  return primary instanceof AcceptedFailure
+    ? new AcceptedFailure(primary.code, primary.message, primary.effectKnowledge, options)
+    : new StoreError(primary.code, primary.message, options);
 }
 export function acceptedFailure(error: unknown, effectKnowledge: EffectKnowledge = "possible"): AcceptedFailure {
   if (error instanceof AcceptedFailure) return error;
