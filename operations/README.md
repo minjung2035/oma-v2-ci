@@ -72,8 +72,10 @@ new-operations/
 - **처음 편집**: 수동 bundle의 파일은 그대로 남는다(rollback/export 근거). 여러 profile이 같은
   role 파일을 가리키면 profile별 사본으로 펼치되 효과는 같아야 게시된다.
 - **충돌**: 화면이 읽은 뒤 manifest나 그 closure의 어떤 파일이라도 바뀌었으면 편집은
-  `POLICY_CHANGED`로 거절되고 아무것도 쓰지 않는다. 다시 읽고 편집한다. 비협조적인 same-UID
-  writer와의 동시 편집은 여전히 지원하지 않는다.
+  `POLICY_CHANGED`로 거절되고 아무것도 쓰지 않는다. Control Panel은 저장을 시도할 때마다(성공이든
+  거절이든) 설정을 다시 읽으므로, 거절 뒤에는 파일이 지금 가진 값을 보여 주고 다음 편집은 그 값에서
+  만든다. 파일을 지금 읽을 수 없으면(권한·I/O 오류) "바뀜"이 아니라 `BROKER_UNAVAILABLE`로 거절한다.
+  비협조적인 same-UID writer와의 동시 편집은 여전히 지원하지 않는다.
 - **정책 revision**: host·model·role·prompt·extension 선택·tool surface의 의미가 바뀐 편집만
   `integration.policyRevision`을 바꾼다. 의미가 같은 저장은 아무것도 게시하지 않는다.
 - **구버전 writer 금지**: 게시된 generation 디렉터리는 읽기 전용(0500/0400)이다. 파일을
@@ -89,7 +91,10 @@ new-operations/
   바꾸지 않는다. backup에는 index와 `.oma-config` 전체를 함께 포함한다.
 - **rollback**: 이전 설정으로 돌아가는 것은 검증된 새 generation을 게시하는 일이다. history를
   지우거나 수락된 spec을 다시 쓰지 않는다.
-- inline `config.json`은 기존처럼 전체 검증 뒤 같은 파일을 durable하게 교체한다.
+- inline `config.json`도 같은 commit 순서를 따른다(DR12): 화면이 읽은 버전 확인, 전체 검증, private
+  임시 파일, production loader로 다시 읽어 같음을 확인, 버전 재확인, rename(commit point), parent flush.
+  flush가 실패하면 "게시됐지만 영속 불명"으로 보고하고(화면은 "저장됨 · 디스크에 남았는지는 아직 확인되지
+  않았습니다") 다음 편집 전에 다시 flush한다. 처음 만드는 설정은 이미 있는 파일을 덮어쓰지 않는다.
 
 D03(WP03): 제품이 띄운 broker는 config 경로·state root·run root를 Resident unit의 ExecStart에
 그대로 전달하고, 존재하지 않는 broker.service에 Resident를 묶지 않으며 종료할 때 Resident를

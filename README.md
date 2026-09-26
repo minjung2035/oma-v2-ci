@@ -22,22 +22,14 @@ Pi를 따로 설치할 필요는 없다. OMA는 자기 Pi 엔진을 함께 배�
 
 `oma`라는 이름은 두 곳에서 쓰인다. host에 설치되는 위 실행 파일은 사람이 쓰는 TUI이고, Resident sandbox 안의 동명 실행 파일은 모델이 쓰는 `send`/`submit`/`agent`/`status` CLI다. 서로 다른 바이너리이며 argv 파서·권한·소켓을 공유하지 않는다.
 
-## 문서 읽기 순서
+## 문서
 
-| 목적 | 문서 |
-|---|---|
-| 모든 판단의 최상위 원칙 | [PRIORITY-0.md](PRIORITY-0.md) |
-| 무엇을 만들고 있는지 | [PRODUCT.md](PRODUCT.md) |
-| 수정 전에 지켜야 할 작업 규율 | [MAINTENANCE.md](MAINTENANCE.md) |
-| 최상위 아키텍처 계약 | [architecture.md](architecture.md) |
-| 구현 MUST/MUST NOT 계약 | [implementation-spec.md](implementation-spec.md) |
-| 현재 implementation 계약·machine-readable map | [implementation/README.md](implementation/README.md) |
-| 현재 브랜치의 재개점 | [HANDOFF.md](HANDOFF.md) |
-| 현재 검증 상태와 실행 명령 | [implementation/validation.md](implementation/validation.md) |
-| 운영 설정 | [operations/README.md](operations/README.md) |
-| 과거 phase/audit/proposal 조회 | [docs/archive.md](docs/archive.md) |
+처음이라면 [PRODUCT.md](PRODUCT.md)(무엇을 왜), [PRIORITY-0.md](PRIORITY-0.md)(최상위 원칙), [문서 지도](docs/README.md) 순서로 읽는다. 문서 지도가 모든 문서의 역할과 우선순위, 새 정보를 적는 곳을 정한다.
 
-현재 tree의 README/HANDOFF에는 과거 PASS 수, 당시 LOC, phase별 완료 보고서를 반복하지 않는다. 과거 기록은 Git history에 보존하며 현재 판단에는 current source와 fresh verification만 사용한다.
+- 지금 상태와 재개점: [HANDOFF.md](HANDOFF.md)
+- 검증 판정, 시험 수, LOC, 알려진 한계: [implementation/validation.md](implementation/validation.md) (수치는 여기에만 있다)
+- 코드를 고치기 전 작업 규율: [MAINTENANCE.md](MAINTENANCE.md)
+- 운영 설정: [operations/README.md](operations/README.md)
 
 ## 개발 루프
 

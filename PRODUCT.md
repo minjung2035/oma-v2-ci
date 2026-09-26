@@ -93,4 +93,4 @@ tool이 많아지면 모델이 보는 표면이 넓어지므로, role별로 DIRE
 - **단일 설치 아티팩트** — 현재는 npm 패키지다. node·git·bwrap은 여전히 호스트에 있어야 한다. bwrap이 없는 호스트에서는 Resident 봉인이 불가능하다.
 - **release gate** — production LOC가 architecture review 기준을 넘어 열려 있다.
 
-현재 수치와 실행 증거는 [implementation/validation.md](implementation/validation.md)에 있다.
+현재 수치와 실행 증거, 자세한 한계 목록은 [implementation/validation.md](implementation/validation.md)("알려진 한계")에 있다.

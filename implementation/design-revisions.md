@@ -1,13 +1,29 @@
 # 설계 수정 기록 DR1–DR13
 
-상태: **ACCEPTED (사용자 요청, 2026-09-25)**. AV9–AV31(`consistency-decisions.md`의 AV 절)을
-고치는 동안 결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우가 있었다. 이 문서는 그중
-일곱 가지를 설계 수준에서 다시 판단하고, 그 수정을 다시 점검하며 드러난 여덟 번째(DR8)를 더한다. 각 항목은 관측, 원인이 된 설계, 결정, 바꾸는 규범,
-바꾸지 않는 것, 위험을 적는다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않는다.
-이 문서와 어긋나는 architecture 문장은 여기에 적고, 규범의 owner는 `implementation-spec.md`다.
-wire schema·DB schema·receipt version은 바꾸지 않는다. 바뀌는 권한 의미는 DR4 하나다.
-DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다.
-이들도 wire·DB schema·receipt version을 바꾸지 않는다.
+상태: **ACCEPTED (사용자 요청, 2026-09-25)**. 이 문서는 **결정 기록**이다([문서 지도](../docs/README.md)).
+결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우를 설계 수준에서 다시 판단한다. 각 항목은 관측, 원인, 결정, 바꾸는 규범,
+바꾸지 않는 것을 적는다.
+
+- DR1–DR7은 실제 provider 점검에서 AV9–AV31(`consistency-decisions.md`의 AV 절)을 고치다 나왔고, DR8은 그 수정을 다시 점검하다 나왔다.
+- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다.
+- 규범 문장의 owner는 `implementation-spec.md`다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않고, 어긋나는 architecture 문장은 해당 DR에 적는다.
+- wire schema·DB schema·receipt 형식은 바꾸지 않는다. 권한 의미가 바뀌는 것은 DR4 하나다.
+
+| DR | 결정 | 바꾼 규범 |
+|---|---|---|
+| DR1 | 모델에게 보이는 경로는 그 모델의 view로 말한다 | SB-002-C |
+| DR2 | 주기 대조가 있어야 하는 곳에 실제로 있는가 | 없음(판단 기록) |
+| DR3 | 실패가 말할 수 있는 사실은 코드별로 닫는다 | ERR-001 |
+| DR4 | `code.integrate`는 host가 직접 위임한다 | AUTH-001, CREATE-002, TUI-007 표의 한 행 |
+| DR5 | 저장된 메일 형식 | BATCH-002의 index 문장 |
+| DR6 | 재전달은 재전달이라고 말한다 | BATCH-002 |
+| DR7 | broker의 수명은 supervision 채널에만 묶는다 | 없음(D03·LIFE-006의 구현) |
+| DR8 | broker가 붙드는 것은 통합 사실이고, revision은 host의 현재 값이다 | 없음(INT-001·INT-003·CFG-005·TUI-007의 구현) |
+| DR9 | 전달 시도는 batch를 만든 시도로 고정하고, 현재 시도는 lease가 말한다 | BATCH-004, RUN-001, DB-007의 두 행, physical-ordering의 runner.open 행 |
+| DR10 | accept 전 artifact는 crash 뒤에도 owner가 있다 | 없음(FS-006·MAIL-010·INV05의 구현) |
+| DR11 | receipt는 그 session entry가 durable해진 뒤에만 있다 | 없음(BATCH-006의 구현) |
+| DR12 | 설정 commit의 owner는 하나다 | 없음(D02·CONFIG-CONTRACT의 writer 순서를 inline에도) |
+| DR13 | 모르는 것에는 모른다는 코드를 붙인다 | 없음(CLI-003·ERR-002·INV02의 구현) |
 
 ## DR1 — 모델에게 보이는 경로는 그 모델의 view로 말한다
 

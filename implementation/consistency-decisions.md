@@ -1,4 +1,20 @@
-# Consistency decisions — WP01
+# Consistency decisions — D01–D06, 계획 카드, 적대적 점검
+
+이 문서는 **결정 기록**이다([문서 지도](../docs/README.md)). 규범 문장은 spec이 가지고, 이 문서는 그 규범이 왜 그런지 적는다.
+절 제목에 붙은 상태(ACCEPTED, "… pending", NEEDS_RUNTIME_EVIDENCE)는 그 절을 쓴 시점의 것이다. 지금의 검증 상태는
+[validation.md](validation.md)가 소유한다. D01의 "prepared batch의 rollover"는 [DR9](design-revisions.md)가 바꿨다.
+
+| 절 | 내용 |
+|---|---|
+| Fact / Relation / Phase / Authority | 모든 결정의 판단 틀 |
+| D01–D06, Decision case matrix — V01A | WP01에서 채택한 기술 결정과 사례별 oracle |
+| WP01.03–WP01.05 | profile 의도와 실제 증거, 의미 변경 표면, 실행·호환 gate |
+| WP25, WP23, WP26, WP27, WP29, WP28, WP31, WP30, WP32 | 카드별 결정(작성 순서) |
+| Re-review and adversarial verification | WP32 뒤의 재검토 |
+| Whole-codebase adversarial pass — AV1..AV31 | 적대적 점검(AV1–AV8)과 실제 provider 점검(AV9–AV31)의 발견, 의도된 동작으로 둔 것 |
+| ENG1 | 엔진 0.85.1 → 0.87.1 |
+
+---
 
 Decision baseline: `59422d48fa05f40e578884309a2190beac0129da` (runtime source
 unchanged from `b25961cc46532f5e30ff60cc381fed51c59d13ab`). The supplied plan is

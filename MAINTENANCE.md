@@ -6,20 +6,19 @@ OMA v2는 일반 애플리케이션이 아니라 durable operation, Git CAS, Mai
 
 ## 1. 문서 권위와 읽기 순서
 
-작업을 시작할 때 다음 순서로 읽는다.
+문서의 종류, 권위와 우선순위는 [문서 지도](docs/README.md)가 정한다. 코드를 고치기 전에는 다음 순서로 읽는다.
 
 0. `PRIORITY-0.md` — 최상위 원칙. 아래 모든 문서와 이 지침은 그 하위 규칙이며, 충돌은 unresolved design decision으로 다룬다.
-1. `architecture.md` — 최상위 architecture source of truth.
+1. `architecture.md` — 규범 가운데 최상위인 설계 계약(bytes를 N-001이 결박).
 2. `implementation-spec.md` — 구현 계약과 MUST/MUST NOT.
 3. `implementation/physical-ordering.md` — canonical physical ordering.
 4. `implementation/contracts.ts`, `implementation/schema-v1.sql` — wire/durable 선언.
 5. `implementation/compliance.md`, `implementation/spikes.md`, `implementation/integration-policy.md`, `implementation/test-matrix.md`, `implementation/loc-budget.md` — release/evidence, OPEN gate, integration/test/build 계약.
-6. **이 문서 `MAINTENANCE.md`** — 위 규범을 변경하지 않고 유지하는 방법.
-7. `HANDOFF.md` — 현재 재개 지점과 남은 작업.
-8. `validation.md`와 `implementation/validation.md` — 현재 실행 증거와 NOT_RUN/BLOCKED 범위.
-9. 관련 production source와 test.
-
-`implementation/README.md`에는 저장소 문서의 역할과 historical/generated 구분이 정리되어 있다.
+6. 고칠 곳에 관한 결정 기록 — `implementation/consistency-decisions.md`(D01–D06, WP·AV 결정), `implementation/design-revisions.md`(DR1–DR13). 규범이 왜 그런지를 알고 고친다.
+7. **이 문서 `MAINTENANCE.md`** — 위 규범을 변경하지 않고 유지하는 방법.
+8. `HANDOFF.md` — 현재 재개 지점과 남은 작업.
+9. `implementation/validation.md` — 현재 실행 증거, 알려진 한계, NOT_RUN/BLOCKED 범위.
+10. 관련 production source와 test. owner는 `implementation/README.md`의 machine-readable map으로 찾는다.
 
 ### 문서 충돌 처리
 
@@ -463,12 +462,14 @@ Checker 파일 분리는 책임·source universe·분석 재사용이 분명해�
 
 ## 29. 문서 관리 규칙
 
-새 정보는 역할에 따라 한 곳에 기록한다.
+새 정보는 역할에 따라 한 곳에 기록한다. 전체 표는 [문서 지도](docs/README.md#새-정보를-어디에-적는가)에 있다.
 
-- **영구 규범/architecture 의미**: 기존 architecture/spec 문서. 의도적 설계 변경일 때만 수정한다.
+- **영구 규범 의미**: spec과 implementation의 규범 문서. architecture는 N-001 결박 때문에 고치지 않고, 어긋나는 설계 판단은 `implementation/design-revisions.md`에 DR로 적는다.
+- **결정의 이유**: 계획 카드·적대적 점검은 `implementation/consistency-decisions.md`, 설계 수정은 `implementation/design-revisions.md`.
+- **Priority 0 점검**: `implementation/priority-0-audit.md` 한 문서를 갱신한다(PRIORITY-0 적용 절차).
 - **장기 유지보수 원칙**: `MAINTENANCE.md`.
 - **현재 재개 위치와 남은 작업**: `HANDOFF.md`.
-- **현재 실행 검증 상태와 명령**: `implementation/validation.md`.
+- **현재 실행 검증 상태, 명령, 알려진 한계**: `implementation/validation.md`.
 - **특정 작업/감사의 일회성 상세**: commit/PR 설명과 Git history에 남긴다. 완료된 follow-up/closure 문서를 current tree에 계속 누적하지 않는다.
 - **generated trace/report/inventory/evidence**: 생성 도구와 source revision에 결합한다. 사람이 새 측정처럼 수동 보정하지 않는다.
 - **파일 수·LOC·dependency edge/SCC 등 계산 가능한 현재 값**: generator artifact를 참조하며 README/HANDOFF/여러 보고서에 반복 기입하지 않는다. 최신 실행 개수도 검증 상태 한 곳에만 기록한다.
