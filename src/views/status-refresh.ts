@@ -41,10 +41,15 @@ export class StatusRefresh {
   /** A snapshot that starts no earlier than this call, within the budget. */
   request(): Promise<StatusSnapshot> {
     const askedAtMs = this.now();
-    const refresh = this.running === null ? this.start() : (this.following ??= this.running.then(() => {
+    // P0V-53, P0-2: a follow-up already scheduled is the one refresh for
+    // everyone who asks until it starts. Between the end of a run (which
+    // clears `running`) and the follow-up's start there is a moment when
+    // nothing runs; a caller arriving then shares the follow-up rather than
+    // starting a second observation beside it.
+    const refresh = this.following ?? (this.running === null ? this.start() : (this.following = this.running.then(() => {
       this.following = null;
       return this.start();
-    }));
+    })));
     return new Promise(resolve => {
       const timer = setTimeout(() => resolve(Object.freeze({ observedAtMs: askedAtMs, units: new Map(), failure: "timeout" })), this.budgetMs);
       void refresh.then(snapshot => { clearTimeout(timer); resolve(snapshot); });

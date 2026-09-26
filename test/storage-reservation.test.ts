@@ -1,7 +1,7 @@
 /** V22A: a streamed request's storage reservation lives from its preflight
- * until its execution settles or its connection closes, is counted by every
- * other admission meanwhile, is released exactly once, and refuses overflow and
- * exhaustion explicitly. Real Broker transport (serveFrames/RpcConnection with a
+ * until its execution settles -- or, if it never reaches one, until its
+ * connection closes (P0V-50) -- is counted by every other admission meanwhile,
+ * is released exactly once, and refuses overflow and exhaustion explicitly. Real Broker transport (serveFrames/RpcConnection with a
  * scripted socket), real TransportSpool, GitModule submit and Store; the tree
  * scan is the production observer.
  */
@@ -124,6 +124,31 @@ test("V22A: a streamed submission keeps its reservation until execution settles,
   // Settled: nothing remains reserved, so a tree exactly at the quota fits.
   padTree(f.root, QUOTA);
   assert.equal((await f.mailSend("after-settle")).ok, true, "a settled stream returns its reservation");
+});
+
+test("P0V-50 / F4, P0-4: a caller that goes away does not take back the reservation of the execution it handed its request to", async t => {
+  const f = society(t);
+  const entered = deferred(); const release = deferred();
+  const importer = Reflect.get(f.git, "quarantineImport") as (...args: unknown[]) => Promise<void>;
+  t.mock.method(f.git as unknown as Record<string, (...args: unknown[]) => Promise<void>>, "quarantineImport", async function (this: unknown, ...args: unknown[]) {
+    entered.resolve(); await release.promise; return importer.apply(this, args);
+  });
+  const storage = Reflect.get(f.broker, "storage") as { readonly outstanding: number };
+  const socket = f.serve();
+  socket.emit("data", Buffer.concat([f.submitFrame("gone"), f.bundle]));
+  await entered.promise;
+  assert.equal(storage.outstanding, f.bundle.length);
+  // The caller disconnects while the accepted submission is still being
+  // imported: its accepted copy is still to be written, so its bytes stay counted.
+  socket.emit("close", true);
+  assert.equal(storage.outstanding, f.bundle.length, "the connection gave back bytes its execution still holds");
+  padTree(f.root, QUOTA - Math.floor(f.bundle.length / 2));
+  const concurrent = await f.mailSend("while-gone");
+  assert.deepEqual([concurrent.ok, concurrent.error?.code], [false, "QUOTA_EXCEEDED"]);
+  removePad(f.root);
+  release.resolve();
+  await until(() => storage.outstanding === 0, "the execution to give its reservation back");
+  await until(() => f.store.getOperation("a", "gone")?.state === "succeeded", "the accepted submission to settle");
 });
 
 test("V22A: a reservation is released once however the connection ends, and a stream that no longer fits is refused before spooling", async t => {

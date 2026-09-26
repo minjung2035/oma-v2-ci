@@ -28,19 +28,21 @@ export class ProcessLock {
   static tryAcquire(path: string): ProcessLock | null {
     const target = resolve(path);
     const fd = openSync(target, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW, 0o600);
+    // P0V-49: given back once, whichever way this ends.
+    let held = true;
     try {
       const lock = lockFileDescriptor(fd);
       // Only contention means "another process owns this". A lock that could
       // not be evaluated -- EINTR, ENOLCK, a filesystem with no locking -- is
       // an environment failure, and reporting it as ownership makes the
       // product exit saying the society has another owner when it has none.
-      if (lock.kind === "contended") { closeSync(fd); return null; }
+      if (lock.kind === "contended") { held = false; closeSync(fd); return null; }
       if (lock.kind === "failed")
         throw new StoreError("BROKER_UNAVAILABLE", `process lock could not be evaluated (errno ${lock.errno})`);
       const stat = fstatSync(fd, { bigint: true });
       if (!stat.isFile() || stat.nlink !== 1n) throw new StoreError("BROKER_UNAVAILABLE", "process lock is not an exclusively named regular file");
       return new ProcessLock(fd, target, stat.dev, stat.ino);
-    } catch (error) { closeSync(fd); throw error; }
+    } catch (error) { if (held) closeSync(fd); throw error; }
   }
   /** The open descriptor the lock lives on.
    *

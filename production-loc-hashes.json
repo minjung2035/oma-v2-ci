@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "279002dd5eda9bacf5c024bab3e73d526c3781d77a6c57915ee1c483a6339c5d",
+  "report": "d585a14b97773e865aaa55a9a88af44a38b1e703809f6f95c4b2948cb1784287",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "5d03b19b377f9d74795ca03394f352bb6cb7ed2ad80d4f9c3b03dc102062a753"
+      "sha256": "960242fca2dfbd577a35ab07ef679adf4e4797f90eeac5a7161784563adaf934"
     },
     {
       "path": "src/broker/composition.ts",
@@ -657,7 +657,7 @@
     },
     {
       "path": "src/runtime/process-lock.ts",
-      "sha256": "d52413df666cdb553d71d03d396737c4075487ec22252f88868430315f3c9ece"
+      "sha256": "7bf77d456bc1a469f59dcb794d0594448988d712b65bbee5ca498c394e78a139"
     },
     {
       "path": "src/runtime/provision.ts",
@@ -713,11 +713,11 @@
     },
     {
       "path": "src/storage/directory.ts",
-      "sha256": "b5ed43b8708fc840d591a2c71ec9f30890141c547604d180753396152284a796"
+      "sha256": "27b036238a40e53be9f27c47500836e8bd4bbf3ca53855784a347556fb920356"
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "e387781cdc14019b50fc1b4d294b5df0e78676c4e7b19d6718f24431a5fb0175"
+      "sha256": "a85b34b90d71242fd5415360e9b0f7549950a9171b90ad3e8596aafaac7f6fec"
     },
     {
       "path": "src/storage/facets.ts",
@@ -897,7 +897,7 @@
     },
     {
       "path": "src/views/status-refresh.ts",
-      "sha256": "f513e90bc56adec092b522bbb318e83087271ce91f6f47de81b75e182d070466"
+      "sha256": "f7a3a1f96b671c6e0bd9b1aa7684ca47ab8cc1ffddaa8745219e03e0794c3339"
     }
   ]
 }

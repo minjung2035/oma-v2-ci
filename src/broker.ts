@@ -74,7 +74,10 @@ export class Broker {
   private readonly connections = new Map<Socket, RpcConnection>();
   private readonly executingTasks = new Set<Promise<void>>();
   private readonly listeners = new Map<Server, Promise<void>>();
-  private readonly listenerCloses: Promise<void>[] = [];
+  /** Listener closes still in progress. P0V-52, P0-4: one that has finished
+   * leaves the set, so a long-lived broker does not keep every close it ever
+   * made (one per run endpoint it revoked). */
+  private readonly listenerCloses = new Set<Promise<void>>();
   private standaloneLock: ProcessLock | null = null;
   private running = false;
   private draining = false;
@@ -304,9 +307,11 @@ export class Broker {
     const ready = this.listeners.get(server);
     if (!ready) return;
     this.listeners.delete(server);
-    this.listenerCloses.push(ready.then(() => new Promise<void>(resolve => {
+    const closing: Promise<void> = ready.then(() => new Promise<void>(resolve => {
       try { server.close(() => resolve()); } catch { resolve(); }
-    }), () => { try { server.close(); } catch { /* failed bind has no listening handle */ } }));
+    }), () => { try { server.close(); } catch { /* failed bind has no listening handle */ } });
+    this.listenerCloses.add(closing);
+    void closing.then(() => { this.listenerCloses.delete(closing); });
   }
   private bindPeer(socket: Socket): BoundPeer | null { return this.peers.bind(socket); }
   private trustedContext(actor: Actor, peer: BoundPeer, channel: "actor" | "trusted-runner" = "actor"): AuthContext | null {
@@ -349,13 +354,18 @@ export class Broker {
     preflight: (raw: Record<string, unknown>) => void,
   ): void {
     // A streamed request's reservation covers bytes the tree does not show yet:
-    // first its transport copy, then its accepted copy. It is held until the
-    // execution settles or the connection closes, and released once.
+    // first its transport copy, then its accepted copy. P0V-50, P0-4: it has
+    // one owner at a time. The connection holds it while it receives; once the
+    // request is handed to its execution, the execution holds it until it
+    // settles -- a caller that goes away does not stop the accepted copy from
+    // being written, so it cannot give back the bytes that copy will take.
     let releaseReservation = (): void => {};
+    let executing = false;
     const connection = new RpcConnection({ socket, peer, limits: this.limits, stagingRoot: join(this.paths.stateRoot, "staging"),
       handle: async (raw, body) => {
+        executing = true;
         try { return await handle(raw, body); } catch (error) { this.health.observe(error); throw error; }
-        finally { releaseReservation(); }
+        finally { executing = false; releaseReservation(); }
       },
       preflight: raw => {
         try {
@@ -364,7 +374,7 @@ export class Broker {
           releaseReservation = this.storage.reserve(this.streamReservationBytes(raw));
         } catch (error) { this.health.observe(error); throw error; }
       },
-      onClosed: () => { releaseReservation(); this.connections.delete(socket); }, onCleanupError: error => this.cleanupError(error),
+      onClosed: () => { if (!executing) releaseReservation(); this.connections.delete(socket); }, onCleanupError: error => this.cleanupError(error),
       onTask: task => {
         this.executingTasks.add(task);
         void task.then(() => this.executingTasks.delete(task), error => { this.health.observe(error); this.executingTasks.delete(task); });

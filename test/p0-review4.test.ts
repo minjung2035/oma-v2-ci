@@ -4,11 +4,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, fstatSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 import { CLI_CREDENTIAL_FD_ENV } from "../src/cli/transport.js";
 import { runCliProcess } from "../src/extension/cli-process.js";
+import { replaceDerivedFile } from "../src/storage/durable-fs.js";
+import { StatusRefresh } from "../src/views/status-refresh.js";
+import { Broker } from "../src/broker.js";
+import { LifecycleModule } from "../src/lifecycle.js";
+import { ViewsModule } from "../src/views.js";
+import type { UnitsModule } from "../src/units.js";
+import { preparedFixture } from "./fixtures/delivery-receipt.js";
+import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
 const CREDENTIAL = "c".repeat(64);
 const HANDLE = "d".repeat(32);
@@ -103,3 +113,79 @@ test("P0V-35 / N12, P0-2: a CLI's output is decoded as the bytes it wrote, where
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("P0V-49 / F3, P0-4: a descriptor given back is never closed again when the sequence fails after it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-close-once-"));
+  let borrowed: number | null = null;
+  try {
+    assert.throws(() => replaceDerivedFile(join(dir, "derived"), "bytes", 0o600, fault => {
+      if (fault.point !== "derived-rename" || fault.phase !== "before") return;
+      // Something else in this process opens a file now and is handed the
+      // number the temporary's descriptor just gave back; then the rename fails.
+      borrowed = openSync(join(dir, "someone-else"), "w");
+      throw new Error("rename failed");
+    }), /rename failed/);
+    assert.notEqual(borrowed, null);
+    assert.doesNotThrow(() => fstatSync(borrowed!), "the failed replacement closed a descriptor it no longer owned");
+  } finally {
+    if (borrowed !== null) try { closeSync(borrowed); } catch { /* the control closed it */ }
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("P0V-52 / F6, P0-4: a broker keeps only the listener closes still in progress", async () => {
+  const f = await preparedFixture(1);
+  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "" } as unknown as UnitsModule;
+  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
+    hasGoal: () => true, activationAllowed: () => true },
+    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
+    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true });
+  try {
+    const listeners = Reflect.get(broker, "listeners") as Map<Server, Promise<void>>;
+    const closeListener = Reflect.get(broker, "closeListener") as (server: Server) => void;
+    // A run endpoint per revoked run over a long-lived broker's life.
+    for (let index = 0; index < 20; index += 1) {
+      const server = createServer();
+      const ready = new Promise<void>(resolve => server.listen(join(f.root, `endpoint-${index}.sock`), resolve));
+      listeners.set(server, ready);
+      closeListener.call(broker, server);
+    }
+    const closes = Reflect.get(broker, "listenerCloses") as Set<Promise<void>> | Promise<void>[];
+    await Promise.all([...closes]);
+    await new Promise(resolve => setImmediate(resolve));
+    const kept = closes instanceof Set ? closes.size : closes.length;
+    assert.equal(kept, 0, `the broker kept ${kept} closes that had already finished`);
+  } finally {
+    await broker.drainAndClose();
+    (f.store as unknown as { close(): void }).close = () => undefined;
+    f.close();
+  }
+});
+
+for (let gap = 0; gap < 8; gap += 1)
+  test(`P0V-53 / F7, P0-2: one status observation at a time across the hand-over to its follow-up (microtask gap ${gap})`, async () => {
+    const finishers: (() => void)[] = [];
+    let active = 0; let most = 0;
+    const observe = () => {
+      active += 1; most = Math.max(most, active);
+      return new Promise<ReadonlyMap<string, never>>(resolve => {
+        let done = false;
+        finishers.push(() => { if (done) return; done = true; active -= 1; resolve(new Map<string, never>()); });
+      });
+    };
+    const refresh = new StatusRefresh(() => [], observe, 5000);
+    const first = refresh.request();
+    const second = refresh.request();
+    finishers[0]!();
+    for (let index = 0; index < gap; index += 1) await Promise.resolve();
+    const third = refresh.request();
+    for (let index = 0; index < 15; index += 1) await Promise.resolve();
+    for (let at = 1; at < finishers.length; at += 1) {
+      finishers[at]!();
+      for (let index = 0; index < 15; index += 1) await Promise.resolve();
+    }
+    await Promise.all([first, second, third]);
+    assert.equal(active, 0);
+    assert.equal(most, 1, "a second observation ran beside the follow-up");
+  });

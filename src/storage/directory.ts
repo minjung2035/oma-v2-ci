@@ -49,7 +49,9 @@ export function ensureDirectory(path: string, mode = 0o755): readonly string[] {
         if (error instanceof StoreError) throw error;
         throw unobserved(error, `the directory ${current}`) ?? new StoreError("STORE_CORRUPT", `directory type mismatch: ${current}`);
       }
-      closeSync(parent); parent = child;
+      // P0V-49: the slot names the descriptor still held before the old one is
+      // given back, so a close that fails is never followed by a second one.
+      const previous = parent; parent = child; closeSync(previous);
     }
     return created;
   } finally { closeSync(parent); }

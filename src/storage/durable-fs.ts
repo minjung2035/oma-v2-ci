@@ -179,6 +179,11 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
     const fd = openBeneath(parent, temporaryName, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
     faultAt(faults, "file-create", "after-visible", temporary);
     let renamed = false;
+    // P0V-49, P0-4: the descriptor is given back once. The number is free the
+    // moment it is closed -- even when close reports an error -- and anything
+    // opened afterwards may be handed it, so a failure later in the sequence
+    // must not close it a second time.
+    let held = true;
     try {
       faultAt(faults, "file-write", "before", temporary);
       writeFileSync(fd, bytes);
@@ -186,14 +191,14 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
       faultAt(faults, "file-fsync", "ambiguous", temporary);
       fsyncSync(fd);
       faultAt(faults, "file-fsync", "after-visible", temporary);
-      closeSync(fd);
+      held = false; closeSync(fd);
       faultAt(faults, "derived-rename", "before", target);
       renameSync(entryAt(parent, temporaryName), entryAt(parent, name));
       renamed = true;
       faultAt(faults, "derived-rename", "after-visible", target);
       fsyncHeldDir(parent, dirname(target), faults);
     } catch (error) {
-      try { closeSync(fd); } catch { /* already closed */ }
+      if (held) try { closeSync(fd); } catch { /* the kernel released it either way */ }
       if (!renamed) cleanupAfterFailure(parent, temporaryName, temporary, error, faults);
       throw error;
     }
