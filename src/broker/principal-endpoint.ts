@@ -35,7 +35,7 @@ import { randomBytes } from "node:crypto";
 import type { Socket } from "node:net";
 import type { AuthContext, BoundaryEvidence, PreparedBatch, Request } from "../../implementation/contracts.js";
 import { StoreError, publicFailure } from "../domain/errors.js";
-import { INTERNAL_METHODS } from "../protocol/methods.js";
+import { INTERNAL_METHODS, internalEnvelopeProblem } from "../protocol/methods.js";
 import {
   PRINCIPAL_CREDENTIAL_HEX, credentialMatches, isPrincipalSessionHandle, sessionHandleMatches,
 } from "../protocol/principal-credential.js";
@@ -288,9 +288,13 @@ export class PrincipalEndpoint {
             return attached.answer;
           }
           if (raw.method === "principal.detach") {
+            // P0V-32: the envelope is read the way every internal one is.
+            const problem = internalEnvelopeProblem(raw);
+            if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
             attachedTo = null;
             this.attached.delete(socket);
-            return okAnswer(typeof raw.id === "string" ? raw.id : "x", {});
+            // The declared answer (response-codec), not a shape of its own.
+            return okAnswer(raw.id as string, { detached: true });
           }
           return this.ports.dispatch(authority(), raw as Request, stream);
         },
@@ -306,6 +310,10 @@ export class PrincipalEndpoint {
    * registry, so this cannot drift from the declared contract. */
   private attach(raw: Record<string, unknown>, peer: BoundPeer): { generation: number; answer: object } {
     const id = typeof raw.id === "string" ? raw.id : "x";
+    // P0V-32, P0-2: the envelope first, as on every internal channel; a
+    // malformed frame is a malformed frame whatever it names.
+    const problem = internalEnvelopeProblem(raw);
+    if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
     if (raw.method !== "principal.attach")
       throw new StoreError("AUTH_FAILED", "the principal session must attach before any other request");
     if (INTERNAL_METHODS["principal.attach"].paramsCheck(raw.params) !== null)
@@ -356,6 +364,9 @@ export class PrincipalHostEndpoint {
     const id = typeof raw.id === "string" ? raw.id : "x";
     if (!isHost(peer, this.channel.host))
       throw new StoreError("AUTH_FAILED", "only the host that started this broker may deliver to the principal");
+    // P0V-32: the host is known; its frame is read as every internal one is.
+    const problem = internalEnvelopeProblem(raw);
+    if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
     const method = raw.method;
     // The host is already known by this point, so a method this endpoint does
     // not serve is a method-surface answer, not an authentication one

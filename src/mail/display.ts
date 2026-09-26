@@ -8,30 +8,33 @@
  * trusted extension imports no runtime module (PI-001) and mirrors
  * `readableMail`; a test binds the two (INV04). */
 
-/** The whole message, its body with the declared transfer encoding undone. */
+/** The whole message, its body with the declared transfer encoding undone.
+ * P0V-45, P0-2: the header block ends where `headerEnd` says, CRLF or LF, and
+ * the body keeps every character its sender wrote, a leading U+FEFF included. */
 export function readableMail(text: string): string {
-  const split = text.indexOf("\r\n\r\n");
-  if (split < 0) return text;
-  const head = text.slice(0, split);
-  const encoded = text.slice(split + 4);
-  const unfolded = head.replace(/\r\n[ \t]+/g, " ").split("\r\n");
+  const end = headerEnd(text);
+  if (end.at < 0) return text;
+  const newline = end.length === 4 ? "\r\n" : "\n";
+  const head = text.slice(0, end.at);
+  const encoded = text.slice(end.at + end.length);
+  const unfolded = head.split(`${newline} `).join(" ").split(`${newline}\t`).join(" ").split(newline);
   const declared = unfolded.filter(line => /^content-transfer-encoding:/i.test(line));
   if (declared.length !== 1) return text;
   const encoding = declared[0]!.slice(declared[0]!.indexOf(":") + 1).trim().toLowerCase();
   let bytes: Buffer;
   if (encoding === "base64") {
-    const compact = encoded.replace(/\r\n/g, "");
+    const compact = encoded.split(newline).join("");
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 !== 0) return text;
     bytes = Buffer.from(compact, "base64");
     if (bytes.toString("base64") !== compact) return text;
   } else if (encoding === "quoted-printable") {
-    const joined = encoded.replace(/=\r\n/g, "");
+    const joined = encoded.split(`=${newline}`).join("");
     if (/=(?![0-9A-F]{2})/.test(joined)) return text;
     bytes = Buffer.from(joined.replace(/=([0-9A-F]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16))), "latin1");
   } else return text;
   let body: string;
-  try { body = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return text; }
-  return `${head}\r\n\r\n${body}`;
+  try { body = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); } catch { return text; }
+  return `${head}${newline}${newline}${body}`;
 }
 
 /** Where the header block ends: the first blank line, CRLF as the writer

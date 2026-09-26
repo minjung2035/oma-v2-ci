@@ -14,7 +14,7 @@ import type { BoundPeer } from "./peer-authenticator.js";
 import { StoreError } from "../domain/errors.js";
 import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js";
 import { assertNever } from "../domain/exhaustive.js";
-import { INTERNAL_METHODS, isInternalMethod } from "../protocol/methods.js";
+import { INTERNAL_METHODS, internalEnvelopeProblem, isInternalMethod } from "../protocol/methods.js";
 import { errorAnswer, okAnswer } from "./replies.js";
 
 export interface InternalStorePort {
@@ -87,24 +87,14 @@ export class InternalDispatcher {
     const { store, mail, peers, reconcile } = this.deps;
     const id = typeof raw.id === "string" ? raw.id : "x";
     const method = typeof raw.method === "string" ? raw.method : "";
-    const paramsRaw = raw.params;
-    if (
-      raw.v !== 1 ||
-      typeof raw.id !== "string" ||
-      typeof raw.method !== "string" ||
-      typeof paramsRaw !== "object" ||
-      paramsRaw === null ||
-      Array.isArray(paramsRaw) ||
-      !Object.keys(raw).every((key) =>
-        ["v", "id", "method", "params"].includes(key),
-      )
-    )
+    const problem = internalEnvelopeProblem(raw);
+    if (problem !== null)
       return errorAnswer(id, {
         code: "INVALID_REQUEST",
-        message: "invalid internal envelope",
+        message: problem,
         retry: "never",
       });
-    const params = paramsRaw as Record<string, unknown>;
+    const params = raw.params as Record<string, unknown>;
     let release: Release = NO_HOLD;
     try {
       if (!isInternalMethod(method))

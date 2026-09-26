@@ -28,6 +28,8 @@ import { dashboardData } from "../src/tui/dashboard.js";
 import { dashboardRows } from "../src/tui/view/dashboard.js";
 import { NO_UNIT_REASON } from "../src/protocol/status-view.js";
 import { HOST_CHANNEL_ENV } from "../src/protocol/host-channel.js";
+import { registerOmaTools } from "../src/extension/mail-tools.js";
+import { mkdirSync } from "node:fs";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -333,4 +335,29 @@ test("P0V-28 / N04, P0-5: a broker started as supervised whose channel cannot be
     // It stopped before configuration: nothing of the society was opened.
     assert.doesNotMatch(stderr, /startup failed|config/i, stderr);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("P0V-37 / N14, P0-2: a message path the Principal was shown reads back through the same mail tool", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-shown-path-"));
+  const archive = join(root, "state", "mail", "archive", "cur");
+  mkdirSync(archive, { recursive: true });
+  const id = "m-00000000-0000-4000-8000-0000000000aa-0";
+  writeFileSync(join(archive, `${id}:2,`), "Subject: shown\r\n\r\nthe body\r\n");
+  const previous = { ...process.env };
+  const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
+  // The Principal's engine: its archive root is the host's own path (DR1).
+  Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
+    OMA_SOCKET: "/nonexistent/socket", OMA_SOCIETY: "demo" });
+  try {
+    registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root);
+    const read = tools.get("oma_mail_read")!;
+    for (const shown of [join(archive, `${id}:2,`), `/mail/archive/cur/${id}:2,`, `${id}:2,`, id])
+      assert.match((await read.execute("t", { messageId: shown })).content[0]!.text, /the body/, `could not read back ${shown}`);
+    // Only the root it was shown with: the same file name under another directory names nothing.
+    await assert.rejects(read.execute("t", { messageId: join(root, `${id}:2,`) }), /message id or canonical archive path|expected a message id/);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+    rmSync(root, { recursive: true, force: true });
+  }
 });

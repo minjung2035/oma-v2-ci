@@ -18,7 +18,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import type { Socket } from "node:net";
 import type { AuthContext, ProtocolLimits, Request, ResolvedAgentSpec } from "../implementation/contracts.js";
 import { Broker, type PrincipalHostChannel } from "../src/broker.js";
-import { PrincipalEndpoint, type PrincipalEndpointPorts } from "../src/broker/principal-endpoint.js";
+import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalEndpointPorts, type PrincipalHostEndpointPorts } from "../src/broker/principal-endpoint.js";
 import type { BoundPeer } from "../src/broker/peer-authenticator.js";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
@@ -1380,6 +1380,68 @@ async function attachAndUse(bench: Bench, held: Held, sessionHandle: string): Pr
   assert.equal((await held.call("status.get") as { ok: boolean }).ok, true);
   assert.equal(bench.dispatched.length, before + 1, "the attached connection was not served");
 }
+
+/** Frames whose envelope no internal channel accepts, whatever they name. */
+function malformed(method: string, params: Record<string, unknown>): Record<string, unknown>[] {
+  return [
+    { id: "e1", method, params },
+    { v: 2, id: "e2", method, params },
+    { v: 1, method, params },
+    { v: 1, id: "e4", method },
+    { v: 1, id: "e5", method, params: [] },
+    { v: 1, id: "e6", method, params, extra: true },
+    { v: 1, id: "e7", method, params, request: "k" },
+  ];
+}
+
+test("P0V-32 / N08, P0-2: the Principal's endpoint reads a request's envelope the way every internal channel does", async () => {
+  await withEngineProcess(async bench => {
+    const handle = newSessionHandle();
+    bench.register(handle);
+    const held = bench.open();
+    const attach = { sessionHandle: handle, credential: bench.grants.at(-1)!.credential };
+    for (const frame of malformed("principal.attach", attach))
+      assert.equal(await codeOf(held.raw(frame, null)), "INVALID_REQUEST", JSON.stringify(frame));
+    // None of them attached the connection.
+    assert.equal(await codeOf(held.call("status.get")), "AUTH_FAILED");
+    await attachAndUse(bench, held, handle);
+    for (const frame of malformed("principal.detach", {}))
+      assert.equal(await codeOf(held.raw(frame, null)), "INVALID_REQUEST", JSON.stringify(frame));
+    // None of them detached it, and a well-formed detach answers as declared.
+    const served = bench.dispatched.length;
+    assert.equal((await held.call("status.get") as { ok: boolean }).ok, true);
+    assert.equal(bench.dispatched.length, served + 1);
+    assert.deepEqual((await held.call("principal.detach") as { result: unknown }).result, { detached: true });
+  });
+});
+
+test("P0V-32 / N08, P0-2: the host's delivery endpoint reads the envelope before any delivery method runs", async () => {
+  const host = processIdentity(process.pid)!;
+  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
+    retainForExecution: () => () => {}, releaseConnection: () => {} } as unknown as BoundPeer;
+  const served: { handle?: (raw: Record<string, unknown>, stream: null) => Promise<object> } = {};
+  const ran: string[] = [];
+  const ports: PrincipalHostEndpointPorts = {
+    isDraining: () => false, bindPeer: () => peer,
+    principalContext: () => ({ actor: "principal", incarnation: 1, role: "principal", channel: "actor", capabilities: new Set(),
+      peer: { pid: process.pid, uid: peer.uid, gid: peer.gid, cgroup: null } }),
+    serveFrames: (_socket, _peer, handle) => { served.handle = handle; },
+    fail: () => {}, observe: () => {}, cleanupError: () => {},
+    registeredEngine: () => process.pid,
+    prepare: async () => { ran.push("prepare"); return null; },
+    complete: async () => { ran.push("complete"); },
+  };
+  const endpoint = new PrincipalHostEndpoint({ host, ready: () => {}, grant: () => {}, refuse: () => {}, onSession: () => {}, close: () => {} }, ports);
+  endpoint.serve({ destroyed: false, destroy() {}, once() {} } as unknown as Socket);
+  const handle = served.handle;
+  assert.ok(handle !== undefined);
+  for (const method of ["batch.prepare", "batch.complete"])
+    for (const frame of malformed(method, {}))
+      assert.equal(await codeOf(handle(frame, null)), "INVALID_REQUEST", JSON.stringify(frame));
+  assert.deepEqual(ran, [], "a delivery method ran for a malformed frame");
+  await handle({ v: 1, id: "ok", method: "batch.prepare", params: {} }, null);
+  assert.deepEqual(ran, ["prepare"]);
+});
 
 test("T114: re-registering the session revokes the connections the old one already had", async () => {
   await withEngineProcess(async bench => {

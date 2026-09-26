@@ -402,6 +402,18 @@ export const INTERNAL_METHODS = {
   },
 } as const satisfies Record<keyof InternalMethods, InternalDescriptor>;
 
+/** P0V-32, P0-2: the one reading of an internal request's envelope, for every
+ * endpoint that serves internal methods -- the runner and host channels and
+ * the Principal's attach, detach and delivery endpoints alike. It decides
+ * nothing about authority; each endpoint still asks its own questions after
+ * it. null when the envelope is well formed. */
+export function internalEnvelopeProblem(raw: Record<string, unknown>): string | null {
+  const params = raw.params;
+  return raw.v === 1 && typeof raw.id === "string" && typeof raw.method === "string" &&
+    typeof params === "object" && params !== null && !Array.isArray(params) &&
+    Object.keys(raw).every(key => key === "v" || key === "id" || key === "method" || key === "params")
+    ? null : "invalid internal envelope";
+}
 export function isInternalMethod(
   value: unknown,
 ): value is keyof InternalMethods {

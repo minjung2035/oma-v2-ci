@@ -25,8 +25,8 @@ export const OMA_TOOL_NAMES: readonly string[] = Object.freeze([
   // Registered only for the Principal's engine (AV11).
   ...PRINCIPAL_TOOL_NAMES,
 ]);
-/** A message by any name OMA shows for it (AV15, BATCH-002): its id, its
- * canonical archive path, that path's file name -- the Maildir name the index
+/** A message by any name OMA shows for it (AV15, BATCH-002): its id, the
+ * archive path shown for it, that path's file name -- the Maildir name the index
  * lists -- or this society's RFC Message-ID, which its headers show (MAIL-004).
  * Nothing else names a message. */
 function mailId(value: string): string | null {
@@ -37,14 +37,18 @@ function mailId(value: string): string | null {
     const local = rfc.slice(0, -domain.length);
     return validMessageId(local) ? local : null;
   }
-  const prefix = "/mail/archive/cur/";
+  // P0V-37, P0-2: a path is read back with the root it was shown with -- the
+  // sandbox's canonical one, or this engine's own archive root, which is what
+  // a Principal's results show (DR1). No other directory names a message.
+  const shown = DISPLAYED_ARCHIVE();
+  const prefix = ["/mail/archive/cur/", ...(shown === null ? [] : [`${shown}/`])].find(root => value.startsWith(root));
   const suffix = value.endsWith(":2,")
     ? ":2,"
     : value.endsWith(":2")
       ? ":2"
       : null;
   if (suffix === null) return null;
-  const name = value.startsWith(prefix) ? value.slice(prefix.length) : value;
+  const name = prefix === undefined ? value : value.slice(prefix.length);
   const candidate = name.slice(0, -suffix.length);
   return validMessageId(candidate) ? candidate : null;
 }
@@ -64,29 +68,42 @@ function readBoundedMail(
  * owns the rule (PI-001 keeps this extension free of runtime imports); a test
  * binds the two (INV04). */
 export function readableMail(text: string): string {
-  const split = text.indexOf("\r\n\r\n");
-  if (split < 0) return text;
+  // P0V-45, P0-2: the header block ends where `headerEnd` says (CRLF as the
+  // writer emits it, LF as older mail has it), and the body keeps every
+  // character its sender wrote, a leading U+FEFF included.
+  const crlf = text.indexOf("\r\n\r\n");
+  const lf = text.indexOf("\n\n");
+  const newline = crlf >= 0 && (lf < 0 || crlf < lf) ? "\r\n" : lf >= 0 ? "\n" : null;
+  if (newline === null) return text;
+  const split = newline === "\r\n" ? crlf : lf;
   const head = text.slice(0, split);
-  const encoded = text.slice(split + 4);
-  const unfolded = head.replace(/\r\n[ \t]+/g, " ").split("\r\n");
+  const encoded = text.slice(split + newline.length * 2);
+  const unfolded = head.split(`${newline} `).join(" ").split(`${newline}\t`).join(" ").split(newline);
   const declared = unfolded.filter(line => /^content-transfer-encoding:/i.test(line));
   if (declared.length !== 1) return text;
   const encoding = declared[0]!.slice(declared[0]!.indexOf(":") + 1).trim().toLowerCase();
   let bytes: Buffer;
   if (encoding === "base64") {
-    const compact = encoded.replace(/\r\n/g, "");
+    const compact = encoded.split(newline).join("");
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 !== 0) return text;
     bytes = Buffer.from(compact, "base64");
     if (bytes.toString("base64") !== compact) return text;
   } else if (encoding === "quoted-printable") {
-    const joined = encoded.replace(/=\r\n/g, "");
+    const joined = encoded.split(`=${newline}`).join("");
     if (/=(?![0-9A-F]{2})/.test(joined)) return text;
     bytes = Buffer.from(joined.replace(/=([0-9A-F]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16))), "latin1");
   } else return text;
   let body: string;
-  try { body = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return text; }
-  return `${head}\r\n\r\n${body}`;
+  try { body = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); } catch { return text; }
+  return `${head}${newline}${newline}${body}`;
 }
+
+/** The archive root this engine's CLI results name paths under (DR1): the
+ * sandbox's /mail/archive/cur for a Resident, the host's own for the Principal. */
+const DISPLAYED_ARCHIVE = (): string | null => {
+  const root = process.env.OMA_MAIL_ARCHIVE;
+  return root === undefined || !isAbsolute(root) ? null : root.replace(/\/+$/, "");
+};
 
 /** This society's RFC domain, from the environment the engine was started with. */
 const MESSAGE_DOMAIN = (): string | null => {
@@ -253,7 +270,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
     name: "oma_mail_read",
     label: "Read OMA mail",
     description:
-      "Read one immutable OMA mail message by message id or canonical /mail/archive/cur path, or the delivery's full index /inbox.md.",
+      "Read one immutable OMA mail message by message id or the archive path a notice or result showed, or the delivery's full index /inbox.md.",
     promptSnippet: "Read OMA mail using the path from the delivery notice.",
     parameters: Type.Object({
       messageId: Type.String({

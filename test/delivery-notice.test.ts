@@ -149,8 +149,22 @@ test("AV26 / INV04, PI-001: the extension's reader is the runtime's, on what the
     cases.push((await buildEml({ from: "a@demo.oma.invalid", to: ["b@demo.oma.invalid"], replyTo: [], subject: "제목", kind: "message",
       contextRevision: null, inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-00000000000a-0@demo.oma.invalid", body })).text);
   cases.push("H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n@@", "H: v\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n=ZZ",
-    "H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n/w==", "H: v\r\n\r\nplain", "no header block");
+    "H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n/w==", "H: v\r\n\r\nplain", "no header block",
+    // P0V-45: a body that begins with U+FEFF, and older LF mail with a transfer encoding.
+    `H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from("\ufeff시작", "utf8").toString("base64")}`,
+    `H: v\nContent-Transfer-Encoding: base64\n\n${Buffer.from("한글 LF", "utf8").toString("base64")}`,
+    "H: v\nX-Fold: a\n\tb\nContent-Transfer-Encoding: quoted-printable\n\n=ED=95=9C=\n=EA=B8=80");
   for (const text of cases) assert.equal(readableMail(text), runtimeReadableMail(text));
+});
+
+test("P0V-45 / N22, P0-2: a reader keeps the body's leading U+FEFF and finds the header block's end by the one rule, LF mail included", async () => {
+  const eml = await buildEml({ from: "a@demo.oma.invalid", to: ["b@demo.oma.invalid"], replyTo: [], subject: "bom", kind: "message",
+    contextRevision: null, inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-00000000000b-0@demo.oma.invalid", body: "\ufeff시작" });
+  for (const read of [readableMail, runtimeReadableMail]) {
+    assert.equal(read(eml.text).split("\r\n\r\n").slice(1).join("\r\n\r\n"), "\ufeff시작", "the sender's U+FEFF was dropped");
+    const lf = `Subject: legacy\nContent-Transfer-Encoding: base64\n\n${Buffer.from("한글 본문", "utf8").toString("base64")}`;
+    assert.equal(read(lf), "Subject: legacy\nContent-Transfer-Encoding: base64\n\n한글 본문", "LF mail kept its transfer encoding");
+  }
 });
 
 /** DR6 -- D01, BATCH-002: the twelfth functional run stopped two Residents in

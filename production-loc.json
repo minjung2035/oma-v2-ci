@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 29859,
+    "n_lines": 29892,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -18,16 +18,16 @@
     "code": 411,
     "language": "TypeScript"
   },
+  "src/protocol/methods.ts": {
+    "blank": 7,
+    "comment": 13,
+    "code": 408,
+    "language": "TypeScript"
+  },
   "src/storage/delivery-receipt.ts": {
     "blank": 2,
     "comment": 53,
     "code": 404,
-    "language": "TypeScript"
-  },
-  "src/protocol/methods.ts": {
-    "blank": 7,
-    "comment": 8,
-    "code": 401,
     "language": "TypeScript"
   },
   "src/validate.ts": {
@@ -72,16 +72,16 @@
     "code": 313,
     "language": "TypeScript"
   },
+  "src/extension/mail-tools.ts": {
+    "blank": 12,
+    "comment": 79,
+    "code": 299,
+    "language": "TypeScript"
+  },
   "src/tui/model.ts": {
     "blank": 31,
     "comment": 58,
     "code": 294,
-    "language": "TypeScript"
-  },
-  "src/extension/mail-tools.ts": {
-    "blank": 11,
-    "comment": 71,
-    "code": 291,
     "language": "TypeScript"
   },
   "src/tui/sources/settings.ts": {
@@ -138,16 +138,16 @@
     "code": 245,
     "language": "TypeScript"
   },
-  "src/broker/internal-dispatcher.ts": {
-    "blank": 1,
-    "comment": 5,
-    "code": 242,
-    "language": "TypeScript"
-  },
   "src/runtime/pi-adapter.ts": {
     "blank": 1,
     "comment": 36,
     "code": 238,
+    "language": "TypeScript"
+  },
+  "src/broker/internal-dispatcher.ts": {
+    "blank": 1,
+    "comment": 5,
+    "code": 232,
     "language": "TypeScript"
   },
   "src/lifecycle/create.ts": {
@@ -160,6 +160,12 @@
     "blank": 18,
     "comment": 41,
     "code": 227,
+    "language": "TypeScript"
+  },
+  "src/broker/principal-endpoint.ts": {
+    "blank": 21,
+    "comment": 154,
+    "code": 224,
     "language": "TypeScript"
   },
   "src/config.ts": {
@@ -178,12 +184,6 @@
     "blank": 5,
     "comment": 22,
     "code": 220,
-    "language": "TypeScript"
-  },
-  "src/broker/principal-endpoint.ts": {
-    "blank": 21,
-    "comment": 149,
-    "code": 218,
     "language": "TypeScript"
   },
   "src/reconcile.ts": {
@@ -1014,6 +1014,12 @@
     "code": 36,
     "language": "TypeScript"
   },
+  "src/mail/display.ts": {
+    "blank": 3,
+    "comment": 15,
+    "code": 36,
+    "language": "TypeScript"
+  },
   "src/mail/routing.ts": {
     "blank": 1,
     "comment": 1,
@@ -1024,12 +1030,6 @@
     "blank": 4,
     "comment": 15,
     "code": 36,
-    "language": "TypeScript"
-  },
-  "src/mail/display.ts": {
-    "blank": 3,
-    "comment": 13,
-    "code": 35,
     "language": "TypeScript"
   },
   "src/mail/addresses.ts": {
@@ -1351,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1198,
-    "comment": 4838,
-    "code": 23823,
+    "blank": 1199,
+    "comment": 4858,
+    "code": 23835,
     "nFiles": 224
   }
 }

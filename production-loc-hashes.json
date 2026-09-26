@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "2a24d5a693539fd380aba02229e06a3d0c0cd04b74847e578717cd03231b948f",
+  "report": "ad49fbce2e73034e5931f6dc9c157249f909093cb407c3592e902952efad2083",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -57,7 +57,7 @@
     },
     {
       "path": "src/broker/internal-dispatcher.ts",
-      "sha256": "62a0c2cfe513f4e8d7094b7ce9c0865122ff3e6f9c225484b1a7f7cae53fe305"
+      "sha256": "45a22c84509b7c772e8f77e9fc1b8e2710d572589c1e1d74ebfcddcd54c25ae4"
     },
     {
       "path": "src/broker/logs.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "7d3ab8212d26658394c1c2034d4b210d5baed562b7e1cebcb65b40a8cde6aec4"
+      "sha256": "3696a9a630707c9bd6bb12fd97981488694176c9d56329ea7da4c3807a814641"
     },
     {
       "path": "src/broker/process-ancestry.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "52dc87a21f2e350d1b535bd2d696b6d1fbfffaeca3e52556910ece8b143686df"
+      "sha256": "66cab44d768cb8373a5a372aadeb2784d62ff8b4d14121901a565411de1b1862"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -457,7 +457,7 @@
     },
     {
       "path": "src/mail/display.ts",
-      "sha256": "1a41035fa6e06e7112afd6a47a798b04f353110d88a5c85025b16bd24d7e89fb"
+      "sha256": "b3adddfe57c45e6f139f1135414dcd7c68956d5612df648ff5ed28b382e32b28"
     },
     {
       "path": "src/mail/facts.ts",
@@ -545,7 +545,7 @@
     },
     {
       "path": "src/protocol/methods.ts",
-      "sha256": "8651d42f8f1a9c7c17349003bef4f56e13eea54df0a7a9506558b9baac97f83e"
+      "sha256": "5b480c822e44eaa659784496c49e599ed69fb88488a51f9d121f6b4280c96996"
     },
     {
       "path": "src/protocol/operation-results.ts",
