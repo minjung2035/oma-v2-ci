@@ -8,7 +8,7 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 판정: **위반**(고칠 규칙과 근거 원칙), **부합**(근거), **의도된 예외**(owner 문서와 이유).
 줄 번호는 점검 시점(기준점)의 번호다. 수정 뒤에는 "수정" 열의 commit이 기준이다.
 
-진행: A–J 215개 파일 점검 완료(2026-09-25). P0V-01–P0V-17 수정 완료(`9a13f1b`–`b86d0c3`). 2차 점검(아래 "2차 점검")에서 P0V-18–P0V-23과 P0V-12 보완을 찾아 고쳤다. 각 ID의 상태 열이 수정 commit이고, 변이 시험 결과는 "수정 검증"에 있다.
+진행: A–J 215개 파일 점검 완료(2026-09-25). P0V-01–P0V-17 수정 완료(`9a13f1b`–`b86d0c3`). 2차 점검(아래 "2차 점검")에서 P0V-18–P0V-23과 P0V-12 보완을, 실제 provider 점검(14차)에서 P0V-24를 찾아 고쳤다. 각 ID의 상태 열이 수정 commit이고, 변이 시험 결과는 "수정 검증"에 있다.
 
 ## 읽는 순서
 
@@ -52,6 +52,7 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 | P0V-21 | P0-5 | runtime/{assets.ts:50, deployment-manifest.ts:131, extension-integrity.ts:51, pi-adapter.ts:118, pi-runtime.ts:49,62} | 관측하지 못한 host 배치·배포·extension·Pi 경로를 UNSUPPORTED_PROFILE로 보고한다 | 수정 76a6827 |
 | P0V-22 | P0-5 | config/generations.ts:182, tui/sources/{extensions.ts:65,70, mail.ts:92} | 목록을 얻지 못한 것을 0·빠짐으로 센다(generation 예산, extension 후보, 메일·unread 수) | 수정 76a6827 |
 | P0V-23 | P0-5 | tui/app.ts:207 | commit된 뒤 flush만 실패한 설정 저장을 "저장하지 못했습니다"로 표시한다 | 수정 76a6827 |
+| P0V-24 | P0-5, P0-1 (INV11) | entry/oma.ts `setField`·`setExtension` | 14차 실제 provider 점검에서 찾았다. Control Panel은 저장에 성공했을 때만 설정을 다시 읽었다. 화면이 읽은 뒤 파일이 바뀌어 편집이 거절되면(DR12의 기대 버전 확인), 화면은 거절된 편집의 원본 snapshot을 계속 현재 값으로 보여 주었고(파일은 5, 화면은 6), 다음 편집도 같은 낡은 snapshot으로 만들어져 계속 거절되었다. 거절 문구는 "다시 읽으라"고 했지만 방법은 재시작뿐이었다. 확장 토글은 저장 뒤 다시 읽기가 실패하면 저장된 토글을 "저장하지 못했습니다"로 보고했다 | 수정(14차 commit) |
 
 ## 파일별 기록
 
@@ -329,7 +330,8 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 |---|---|---|
 | 과거 사실을 현재 권한의 값으로 다시 씀 | P0V-01, P0V-02, P0V-03, P0V-04 | 전달 시도·고정 spec이라는 사실과 lease·권한이 같은 칸이나 같은 API에 있음 |
 | 한 결정에 owner가 여럿 | P0V-06, P0V-07, P0V-12, P0V-08(reader 두 벌), P0V-11(unknown 코드 셋), P0V-18(exit 판정 두 벌) | 같은 판정을 호출자마다 다시 씀 |
-| unknown을 사실로 승격 | P0V-08, P0V-09, P0V-11, P0V-14, P0V-15, P0V-18, P0V-19, P0V-20, P0V-21, P0V-22, P0V-23 | 관측 실패·결과 불명에 확정 사실의 코드나 값을 붙임 |
+| unknown을 사실로 승격 | P0V-08, P0V-09, P0V-11, P0V-14, P0V-15, P0V-18, P0V-19, P0V-20, P0V-21, P0V-22, P0V-23, P0V-24(확장 토글) |
+| 관측을 현재 사실처럼 표시 | P0V-24 | 낡은 snapshot을 거절 뒤에도 현재 값으로 둠(INV11) | 관측 실패·결과 불명에 확정 사실의 코드나 값을 붙임 |
 | accept 전 artifact의 owner가 crash에서 사라짐 | P0V-05, P0V-17(나) | owner 기록이 메모리에만 있음 |
 | 나중의 설정이 접수된 사실을 다시 해석 | P0V-10, P0V-08 | accept 뒤 효과 시점 검사와 사실의 재해석을 구분하지 않음 |
 | durable fact가 durable하지 않은 근거를 가리킴 | P0V-13 | receipt와 session entry의 영속 단위가 다름(INV07) |
@@ -450,6 +452,23 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 
 `existsSync` 13곳: broker.ts:175,223,276(소켓을 정리한 뒤 listen이 실패하면 오류), broker.ts:425(production은 ledger의 `hasCommittedContext`를 쓰고 이 대체값은 시험 조립용), cli/effects/context.ts:58(보내기 전 입력 거절), cli/transport.ts:18(연결 실패는 exit 3), entry/oma.ts:52,177(no-replace 생성이라 덮어쓰지 않음), extension/workspace-guard.ts:27(조상 탐색, 실제 쓰기는 같은 권한으로 실패), lifecycle/workspace.ts:84(clone 실패는 오류), runtime/provision.ts:142,240,249(no-replace rename과 이긴 쪽 채택, 관측 실패는 git이 답한다). 모두 **부합**이다. 모름이 사실로 기록되거나 덮어쓰기가 되는 경로가 없다.
 
+## 실제 provider 점검(14차)
+
+사용자 승인으로 v16 뒤의 빌드를 test society `provtest`(동봉 엔진 0.87.1, gpt-6-luna)에서 돌렸다. 기록은
+`/home/dev/oma-evidence/provider/runs/run14-*`에 있다. 13차 state는 credential 없이 `archive/run13-state`에 보관했다.
+
+| 확인 | 방법 | 결과 |
+|---|---|---|
+| DR10 | 시작 전에 죽은 broker가 남긴 것처럼 `staging/rpc-<uuid>.wire`와 `mail/objects/.<name>.<uuid>.tmp`를 넣었다 | 시작 수집 로그 `{"removed":2,"kept":0}`. 넣은 두 개만 지웠다. accept되어 성공한 operation의 staging 네 개(context 1, submit 3)는 보존했다 |
+| DR9 | 두 Resident가 `sleep 120` 도구를 실행하는 중에 broker를 SIGKILL했다(Control Panel은 켜진 채, supervisor가 다시 띄움) | 준비된 batch 두 개가 다음 시도에서 완료됐다. builder `b-d1fcc137…`는 첫 시도 9·receipt 10, integrator `b-6554ccb3…`는 첫 시도 20·receipt 21이다. 두 batch 모두 행의 incarnation은 바뀌지 않았다. Principal에게 전달 중이던 batch도 재전달 알림과 함께 다시 들어와 완료됐다 |
+| DR11 | 이번 회차에 완료된 batch 8개의 receipt가 가리키는 boundary entry를 session 파일에서 찾았다(읽기 전용 스크립트) | 8/8이 session 파일에 있고, 시도는 모두 구간 안이다. 문제 0 |
+| DR6 알림 | Resident session의 알림 원문 | 두 Resident 모두 첫 줄이 "재전달: 이 batch는 이전에 준비되었지만 완료가 확인되지 않아 다시 전달됩니다…"이다. integrator가 "재개 알림을 못 봤다"고 보고한 것은 모델이 따로 된 알림을 찾은 판단이다 |
+| DR13 | Principal 메일함의 메시지 한 통을 잠시 0000으로 두고 Mail 화면을 열었다 | "메일함 일부를 읽지 못함 (… cannot be observed now (EACCES))"를 밝히고 나머지 20통을 보여 줬다. 권한을 되돌렸다 |
+| DR12 | Control Panel에서 Worker limit 7→6 | "저장됨 · 재시작 후"이고, 파일은 0600, 임시 파일은 없으며 loader가 6을 읽는다 |
+| DR12 lost update | 화면이 읽은 뒤 운영자가 파일을 손으로 5로 바꾸고 화면에서 7로 편집했다 | "저장하지 못했습니다: configuration changed since it was read"이고, 파일은 5로 남았다. **이때 화면이 계속 6을 보여 주고 다음 편집도 거절돼 P0V-24를 찾았다** |
+
+엔진이 중단된 도구 호출에 붙이는 "No result provided."를 모델은 결과 불명으로 다뤘다(작업을 이어서 끝냄). 이것은 엔진의 표현이다.
+
 ## 수정 검증
 
 수정마다 그 수정을 되돌리는 변이를 넣고, 빌드한 뒤 해당 시험 파일을 돌렸다. 시험이 실패하면 KILLED다. 변이를 넣은 코드는 매번 원래대로 되돌리고 다시 빌드했다.
@@ -480,6 +499,7 @@ fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적�
 | P0V-22: extension scan이 관측 실패를 말하지 않음 | tui/sources/extensions.ts | extension-editing | KILLED |
 | P0V-22: 읽지 못한 메시지를 메시지 없음으로 | tui/sources/mail.ts | unread-observations | KILLED |
 | P0V-23: 영속성 불명 저장을 저장 실패로 | domain/errors.ts `publishedUnconfirmed` | tui-app | KILLED |
+| P0V-24: 거절된 저장 뒤 다시 읽지 않음 | entry/oma.ts `setField` | oma-composition-policy | KILLED |
 
 DR12의 SURVIVED는 동등 변이다. 앞의 확인이 없어도 rename 직전 재확인이 같은 lost update를 같은 코드(`POLICY_CHANGED` "configuration changed since it was read")로 막는다. 차이는 임시 파일을 만들기 전에 멈추는가뿐이며, 그 임시 파일은 같은 호출이 지운다. 두 확인을 모두 없애면 잡힌다. 앞의 확인은 쓸데없는 쓰기를 줄이는 것이지 사실을 지키는 것이 아니므로, 시험을 더 만들지 않았다.
 

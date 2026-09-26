@@ -83,7 +83,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
   disowned = null, leased = true, repairFails = false, engineExits = true,
-  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false } = {}) {
+  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false, commitRefused = false } = {}) {
   const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -207,12 +207,19 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../tui/sources/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], unreadCount: () => 0 },
     "../tui/sources/extensions.js": { readExtensions: () => ({ rows: [] }), toggleExtension() {} },
     "../tui/sources/settings.js": {
-      commitField: (_settings, field) => { calls.push(`commitField:${field}`); return { kind: "saved" }; },
+      commitField: (current, field) => {
+        calls.push(`commitField:${field}:${current.config.shownLimit ?? "-"}`);
+        if (commitRefused && current.config.shownLimit === 6)
+          throw new StoreError("POLICY_CHANGED", "configuration changed since it was read; reload it before editing");
+        return { kind: "saved" };
+      },
       bootstrapStateOf: () => "unknown",
-      fieldsOf: () => rereadFails ? [{ kind: "number", id: "worker-limit", label: "Worker limit", value: 8, min: 1, max: 64, apply: "restart", blocked: null },
+      fieldsOf: config => rereadFails || commitRefused ? [{ kind: "number", id: "worker-limit", label: "Worker limit", value: config.shownLimit ?? 8, min: 1, max: 64, apply: "restart", blocked: null },
         { kind: "link", id: "extensions", label: "Extensions" }] : settings.fields,
       readSettings: () => {
         calls.push("readSettings");
+        // The file as it is at each read: 6 when the screen first read it, 5 after an operator's hand edit.
+        if (commitRefused) return { ...settings, config: { ...settings.config, shownLimit: calls.filter(call => call === "readSettings").length > 1 ? 5 : 6 } };
         if (rereadFails && calls.filter(call => call === "readSettings").length > 1) throw new Error("manifest unreadable");
         return settings;
       },
@@ -806,13 +813,24 @@ test("WP15.03: a save whose configuration cannot be read back is reported as sav
   const ports = society.ports;
   assert.ok(ports, "the product built no screen ports");
   const outcome = ports.setField("worker-limit", 9);
-  assert.equal(society.calls.includes("commitField:worker-limit"), true);
+  assert.equal(society.calls.some(call => call.startsWith("commitField:worker-limit")), true);
   assert.equal(outcome.kind, "saved-unread");
   assert.match(outcome.reason, /manifest unreadable/);
   const fields = ports.configFields();
   const limit = fields.find(field => field.id === "worker-limit");
   assert.equal(limit.value, "?", "the old value was still shown as the configuration");
   assert.match(limit.blocked, /다시 읽지 못함/);
+});
+
+test("WP15.03, P0: a save refused because the file changed since it was read shows what the file holds, and the next edit is made from it", async () => {
+  const society = await run({ commitRefused: true });
+  const ports = society.ports;
+  assert.equal(ports.configFields().find(field => field.id === "worker-limit").value, 6);
+  assert.throws(() => ports.setField("worker-limit", 7), /changed since it was read/);
+  assert.equal(ports.configFields().find(field => field.id === "worker-limit").value, 5,
+    "the screen kept showing the snapshot the refused edit was made from");
+  assert.equal(ports.setField("worker-limit", 7).kind, "saved", "the next edit was still made from the stale snapshot");
+  assert.deepEqual(society.calls.filter(call => call.startsWith("commitField:")), ["commitField:worker-limit:6", "commitField:worker-limit:5"]);
 });
 
 test("V10C: a registration answered after its broker was lost or replaced grants nothing to the new one", async () => {

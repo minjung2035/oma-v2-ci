@@ -231,6 +231,15 @@ async function main(argv: readonly string[]): Promise<void> {
   let sessionModel: string | null = null;
   /** WP15.03: why the configuration could not be read back after a save. */
   let settingsUnread: string | null = null;
+  /** WP15.03, P0: the screen shows the configuration as last read. After any
+   * attempt to write it -- committed, refused or unconfirmed -- it is read
+   * again, so a refusal because the file changed since it was read shows what
+   * the file now holds instead of the snapshot the edit was made from, and the
+   * next edit is made from it. A read-back that fails is an unknown. */
+  const readBack = (): boolean => {
+    try { reload(); settingsUnread = null; return true; }
+    catch (error) { settingsUnread = error instanceof Error ? error.message : String(error); return false; }
+  };
 
   /** Every write this product performs on behalf of the Human passes here.
    *
@@ -268,20 +277,20 @@ async function main(argv: readonly string[]): Promise<void> {
     body: (path: string) => (path.length === 0 ? null : readBody(path)),
     setField: (field, value) => {
       owning("설정");
-      const committed = commitField(settings, field, value, bootstrapStateOf(observation));
+      let committed: ReturnType<typeof commitField>;
+      try { committed = commitField(settings, field, value, bootstrapStateOf(observation)); }
+      catch (error) { readBack(); throw error; }
       // WP15.03: a failed read-back does not undo the commit, and the old
       // values are not shown as current meanwhile.
-      try { reload(); settingsUnread = null; }
-      catch (error) {
-        settingsUnread = error instanceof Error ? error.message : String(error);
-        return { kind: "saved-unread" as const, reason: settingsUnread };
-      }
+      if (!readBack()) return { kind: "saved-unread" as const, reason: settingsUnread! };
       return committed;
     },
     setExtension: (id, role, enabled) => {
       owning("확장");
-      toggleExtension(extensionContext, id, role, enabled);
-      reload();
+      // A toggle that was committed is not reported as unsaved because the
+      // read-back failed (P0-5); the fields then say the read-back failed.
+      try { toggleExtension(extensionContext, id, role, enabled); }
+      finally { readBack(); }
     },
     submitPrompt: (text: string): PromptOutcome => {
       if (session === null) return { kind: "refused", reason: "Pi 세션이 없습니다." };
