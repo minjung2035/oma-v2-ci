@@ -93,6 +93,9 @@ export class PiRpcClient {
     this.completion = new Promise((resolve) => {
       this.endTransport = resolve;
     });
+    // P0V-27, P0-4: first, so a child that could not be started cannot end
+    // this process with an unhandled `error` while the rest is attached.
+    child.once("error", this.onError);
     child.stdout.on("data", this.onData);
     child.stdout.once("end", this.onEnd);
     child.stdout.on("error", this.onError);
@@ -100,7 +103,6 @@ export class PiRpcClient {
     child.stderr.on("error", this.onError);
     child.stdin.on("error", this.onError);
     child.stdin.on("drain", this.onDrain);
-    child.once("error", this.onError);
     child.once("close", this.onChildClose);
   }
   get diagnosticMetadata(): Readonly<{ stderrBytes: number }> {

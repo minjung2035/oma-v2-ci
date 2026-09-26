@@ -193,6 +193,11 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
     } catch (error) {
       return error instanceof Error ? error.message : String(error);
     }
+    // P0V-27, P0-4: a spawn that failed returns a child with no pid and says
+    // why in an `error` event afterwards. It is observed from here, before any
+    // path below can return, so that report reaches the Human instead of
+    // ending this process as an unhandled event.
+    child.once("error", error => { say(`broker failed: ${error.message}`); });
     const channel = child.stdio[HOST_CHANNEL_FD];
     if (child.pid === undefined || !channel || !("write" in channel)) {
       child.kill("SIGKILL");
@@ -229,7 +234,6 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
     child.stderr?.on("data", chunk => {
       for (const line of String(chunk).split("\n")) if (line.trim().length > 0) say(line.trim());
     });
-    child.once("error", error => { say(`broker failed: ${error.message}`); });
     child.once("exit", (code, signal) => {
       generation.pending?.settle(null);
       generation.pending = null;

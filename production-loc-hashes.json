@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "6f2ae6ea6bc657af71f96cd8801870dd408b9d478e8d20d234730ab286678991",
+  "report": "279002dd5eda9bacf5c024bab3e73d526c3781d77a6c57915ee1c483a6339c5d",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -165,7 +165,7 @@
     },
     {
       "path": "src/cli/transport.ts",
-      "sha256": "48d5e8521fe5f44a0c09aadc5d62cb0000e3b3020d1fe6faf18346494a8fea3b"
+      "sha256": "3283f2453f2230885e9fafe61f69e33caf2b9f50575f146c22e1d713f59f9431"
     },
     {
       "path": "src/config.ts",
@@ -309,7 +309,7 @@
     },
     {
       "path": "src/extension/cli-process.ts",
-      "sha256": "f5c0f3988ab614ae56b797ec85343b3687a882e0a47221fb7904f460f4c5eff7"
+      "sha256": "4ad05bbd0ac1ccb1a5c6ee93f8677aca8b0568efd2c1d8dabd57143569f27292"
     },
     {
       "path": "src/extension/delivery.ts",
@@ -613,7 +613,7 @@
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
-      "sha256": "ae2a484be1e566dcb25544a9217280f3fa765c46ed4bf45bd7cb0c2e27979864"
+      "sha256": "a1a71976cd8ca326ec9d889b55069a7cafbf2a54df8f397c7f215e2e95dfb62e"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -641,7 +641,7 @@
     },
     {
       "path": "src/runtime/pi-rpc.ts",
-      "sha256": "3e7d0dc9a01f3e319ae76a6f08074e8d694faf014dcd4823aa8039f4144ece4c"
+      "sha256": "9d336a2779550f034a626e6d09b97081f49c94637e38288e34f9b55e3fffb0b8"
     },
     {
       "path": "src/runtime/pi-runtime.ts",

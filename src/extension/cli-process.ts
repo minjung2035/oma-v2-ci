@@ -98,10 +98,12 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
       cwd: run.cwd, env, shell: false,
       stdio: childStdio(run.grant !== null, fence),
     });
-    let stdout = ""; let stderr = "";
-    // Counted as bytes, not as decoded string length: a UTF-8 character is up
-    // to four bytes, so a string-length cap would keep several times the
-    // declared bound.
+    // Counted and kept as bytes, and decoded once when the child is done
+    // (P0V-35, P0-2). A string-length cap would keep several times the declared
+    // bound, and a chunk ends wherever the pipe did, not where a character
+    // does: decoding each chunk alone turned a character split between two of
+    // them into replacement characters.
+    const stdout: Buffer[] = []; const stderr: Buffer[] = [];
     let stdoutBytes = 0; let stderrBytes = 0;
     let settled = false;
     let stopped = false;
@@ -110,7 +112,8 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
       settled = true;
       clearTimeout(timer);
       run.signal?.removeEventListener("abort", abort);
-      resolve({ code, stdout, stderr, finished: finished && !stopped });
+      resolve({ code, stdout: Buffer.concat(stdout, stdoutBytes).toString("utf8"),
+        stderr: Buffer.concat(stderr, stderrBytes).toString("utf8"), finished: finished && !stopped });
     };
     const terminate = (): void => {
       if (child.exitCode !== null || child.signalCode !== null) return;
@@ -119,23 +122,26 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
       setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); }, 5000).unref();
     };
     const abort = (): void => { terminate(); };
+    // P0V-27, P0-4: a child that could not be started reports it in an
+    // `error` event; it is observed before any path below can return.
+    child.once("error", () => finish(1, false));
     const timer = setTimeout(terminate, run.timeoutMs);
     timer.unref();
     if (run.signal?.aborted) terminate();
     else run.signal?.addEventListener("abort", abort, { once: true });
-    const collect = (append: (text: string, bytes: number) => void, current: () => number) => (chunk: Buffer) => {
+    const collect = (kept: Buffer[], add: (bytes: number) => void, current: () => number) => (chunk: Buffer) => {
+      if (settled) return;
       if (current() + chunk.byteLength > OUTPUT_BYTES) { terminate(); return; }
-      append(chunk.toString("utf8"), chunk.byteLength);
+      kept.push(chunk); add(chunk.byteLength);
     };
-    child.stdout?.on("data", collect((text, bytes) => { stdout += text; stdoutBytes += bytes; }, () => stdoutBytes));
-    child.stderr?.on("data", collect((text, bytes) => { stderr += text; stderrBytes += bytes; }, () => stderrBytes));
+    child.stdout?.on("data", collect(stdout, bytes => { stdoutBytes += bytes; }, () => stdoutBytes));
+    child.stderr?.on("data", collect(stderr, bytes => { stderrBytes += bytes; }, () => stderrBytes));
     if (run.grant !== null) {
       const channel = child.stdio[CREDENTIAL_FD] as unknown as Socket | null;
       if (!channel) { terminate(); finish(1, false); return; }
       channel.on("error", () => {});
       channel.end(`credential ${run.grant.credential} ${run.grant.sessionHandle}\n`);
     }
-    child.once("error", () => finish(1, false));
     child.once("close", code => finish(code ?? 1, code !== null));
   });
 }

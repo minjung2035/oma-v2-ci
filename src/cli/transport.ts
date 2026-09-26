@@ -42,7 +42,6 @@ export async function callActor(
   streamBytes?: Uint8Array,
 ): Promise<RpcReply<PublicMethod>[]> {
   const frameBytes = cliFrameBytes();
-  // Read once, before connecting: the descriptor holds one message.
   const grant = presentedGrant();
   const channel = new BrokerChannel({ frameBytes, idleStreamSeconds: 60, receiptWaitSeconds: 60 });
   const timer = setTimeout(() => channel.close(new StoreError("BROKER_UNAVAILABLE", "broker did not answer before the CLI deadline")), CLI_DEADLINE_MS);
@@ -66,6 +65,23 @@ export const CLI_CREDENTIAL_FD_ENV = "OMA_PRINCIPAL_CREDENTIAL_FD";
 /** How long the credential may take to arrive on its descriptor. */
 const CREDENTIAL_WAIT_MS = 5000;
 
+type Grant = { credential: string; sessionHandle: string };
+
+/** P0V-25, P0-4: the descriptor carries one message for the whole process, so
+ * the process reads it once -- its answer, or its refusal -- and every
+ * connection it opens (a lookup and the resend that follows it, a query and
+ * the submission it prepares) attaches with that same grant. A second read
+ * would find the extension's end already closed and refuse the Principal's
+ * second request as unauthenticated. */
+let presented: { readonly grant: Grant | null } | { readonly refused: unknown } | undefined;
+function presentedGrant(): Grant | null {
+  presented ??= (() => {
+    try { return { grant: readPresentedGrant() }; } catch (refused) { return { refused }; }
+  })();
+  if ("refused" in presented) throw presented.refused;
+  return presented.grant;
+}
+
 /** The credential the extension handed this process, or null when it handed
  * none -- a Resident's CLI, or a caller that is not a Principal tool.
  *
@@ -73,7 +89,7 @@ const CREDENTIAL_WAIT_MS = 5000;
  * the command line: both are readable by other processes of this user. The
  * descriptor must be a socket, the message must be the one credential line,
  * and anything else is refused rather than guessed at. */
-function presentedGrant(): { credential: string; sessionHandle: string } | null {
+function readPresentedGrant(): Grant | null {
   const declared = process.env[CLI_CREDENTIAL_FD_ENV];
   if (declared === undefined) return null;
   if (declared !== String(HOST_CHANNEL_FD))
@@ -115,7 +131,7 @@ function presentedGrant(): { credential: string; sessionHandle: string } | null 
  * no credential and this is a no-op. The broker additionally checks that this
  * process descends from the Principal's engine, so a credential alone would
  * not make any other process the Principal. */
-async function attachPrincipalSession(channel: BrokerChannel, grant: { credential: string; sessionHandle: string } | null): Promise<void> {
+async function attachPrincipalSession(channel: BrokerChannel, grant: Grant | null): Promise<void> {
   if (grant === null) return;
   const reply = await channel.call("principal.attach", { sessionHandle: grant.sessionHandle, credential: grant.credential });
   if (!reply.ok) throw new StoreError(reply.error.code, reply.error.message);
