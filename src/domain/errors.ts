@@ -42,7 +42,23 @@ export function normalizeStorageFailure(error: unknown): unknown {
   if (sqlite === 5 || sqlite === 6) return new StoreError("DB_BUSY", "the database is busy", { cause: error });
   if (sqlite === 3 || sqlite === 8 || sqlite === 10 || sqlite === 14 || sqlite === 15)
     return new StoreError("BROKER_UNAVAILABLE", `durable storage cannot be observed now (SQLite ${sqlite})`, { cause: error });
+  // R6-02: node:sqlite's own refusals, not SQLite's, belong to this table too.
+  // An INTEGER it cannot hand over as a JavaScript number is a value this
+  // product never writes (every integer field is a safe integer), so the file
+  // saying it holds one is the file saying it is not intact. The driver's other
+  // errors (ERR_INVALID_STATE for a closed database or finalized statement,
+  // ERR_INVALID_ARG_* for a bad binding) are this process's mistakes, not the
+  // file's, and stay what they are.
+  if (sqliteValueOutOfRange(primary))
+    return new StoreError("STORE_CORRUPT", "the database holds a value this product never writes", { cause: error });
   return error;
+}
+/** node:sqlite refusing to read an INTEGER outside the safe range. The code
+ * is Node's general ERR_OUT_OF_RANGE, so the driver's own words are what tell
+ * it from, say, a Buffer write out of range, which is no storage fact. */
+export function sqliteValueOutOfRange(error: unknown): boolean {
+  return error instanceof RangeError && (error as { code?: unknown }).code === "ERR_OUT_OF_RANGE" &&
+    error.message.startsWith("Value is too large to be represented as a JavaScript number");
 }
 /** SQLite's primary result code (the extended code's low byte) of a native
  * SQLite error, or null for anything else. */
