@@ -19,9 +19,15 @@ const base = plan.baseline_commit;
 function changedBy(path) {
   const subjects = execFileSync("git", ["log", "--format=%s", `${base}..HEAD`, "--", path], { encoding: "utf8" });
   // WP cards of the plan, AV cards of the whole-codebase adversarial pass
-  // (implementation/consistency-decisions.md) and DR design revisions
-  // (implementation/design-revisions.md), whose oracle is their own id.
-  return [...new Set(subjects.match(/\b(?:WP\d{2}|AV\d+|DR\d+)\b/g) ?? [])].sort();
+  // (implementation/consistency-decisions.md), DR design revisions
+  // (implementation/design-revisions.md) and Priority 0 findings
+  // (implementation/priority-0-audit.md), whose oracle is their own id. A
+  // finding range ("P0V-40..43") names every finding in it: a file a
+  // P0V-only commit changed is changed, not "read and unchanged".
+  const cards = subjects.match(/\b(?:WP\d{2}|AV\d+|DR\d+)\b/g) ?? [];
+  for (const [, from, to] of subjects.matchAll(/\bP0V-(\d+)(?:\.\.(\d+))?/g))
+    for (let id = Number(from); id <= Number(to ?? from); id += 1) cards.push(`P0V-${String(id).padStart(2, "0")}`);
+  return [...new Set(cards)].sort();
 }
 const files = [];
 for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
@@ -29,7 +35,7 @@ for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
   if (!current.includes(path)) { files.push({ path, primary, status: "REMOVED", by: changedBy(path), oracles: [] }); continue; }
   const by = changedBy(path);
   if (by.length > 0) {
-    const oracles = [...new Set(by.flatMap(card => oraclesOf.get(card) ?? (card.startsWith("AV") || card.startsWith("DR") ? [card] : [])))]
+    const oracles = [...new Set(by.flatMap(card => oraclesOf.get(card) ?? (/^(?:AV|DR|P0V-)/.test(card) ? [card] : [])))]
       .filter(id => oraclePresent(names, id)).sort();
     files.push({ path, primary, status: oracles.length > 0 ? "CHANGED_WITH_ORACLE" : "CHANGED_WITHOUT_ORACLE", by, oracles });
   } else if (read.has(path)) {
