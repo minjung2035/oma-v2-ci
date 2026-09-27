@@ -28,3 +28,14 @@ export function compareAndSwapCanonicalRef(observations: GitObserver, repository
     CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer);
   return classifyRefAfterCas(observations.ref(repository, ref), expected, candidate);
 }
+/** A ref made only from nothing. What the ref holds afterwards is the observed
+ * value, as for every CAS; whether this command is the one that made it is its
+ * own success, which matters only when a concurrent maker produced the same
+ * object -- the ref then holds this candidate either way (P0V-85). */
+export function createCanonicalRef(observations: GitObserver, repository: string, ref: string,
+  candidate: string): { readonly after: RefAfterCas; readonly created: boolean } {
+  const made = evidence(["--git-dir", repository, "update-ref", ref, candidate, ""],
+    CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer);
+  const after = classifyRefAfterCas(observations.ref(repository, ref), null, candidate);
+  return { after, created: after.kind === "candidate" && made.status === 0 };
+}

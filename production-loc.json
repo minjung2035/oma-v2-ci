@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 268,
-    "n_lines": 35061,
+    "n_lines": 35143,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -103,9 +103,9 @@
     "language": "TypeScript"
   },
   "src/runtime/provision.ts": {
-    "blank": 18,
-    "comment": 140,
-    "code": 285,
+    "blank": 19,
+    "comment": 141,
+    "code": 283,
     "language": "TypeScript"
   },
   "src/leaf.ts": {
@@ -142,6 +142,12 @@
     "blank": 1,
     "comment": 36,
     "code": 238,
+    "language": "TypeScript"
+  },
+  "src/storage/durable-fs.ts": {
+    "blank": 15,
+    "comment": 92,
+    "code": 237,
     "language": "TypeScript"
   },
   "src/tui/keys.ts": {
@@ -256,12 +262,6 @@
     "blank": 20,
     "comment": 56,
     "code": 183,
-    "language": "TypeScript"
-  },
-  "src/storage/durable-fs.ts": {
-    "blank": 13,
-    "comment": 78,
-    "code": 182,
     "language": "TypeScript"
   },
   "src/git/context.ts": {
@@ -1278,6 +1278,12 @@
     "code": 33,
     "language": "TypeScript"
   },
+  "src/git/canonical-command.ts": {
+    "blank": 1,
+    "comment": 7,
+    "code": 33,
+    "language": "TypeScript"
+  },
   "src/entry/guestctl.ts": {
     "blank": 3,
     "comment": 9,
@@ -1348,12 +1354,6 @@
     "blank": 4,
     "comment": 7,
     "code": 27,
-    "language": "TypeScript"
-  },
-  "src/git/canonical-command.ts": {
-    "blank": 1,
-    "comment": 3,
-    "code": 26,
     "language": "TypeScript"
   },
   "src/mail/batch-policy.ts": {
@@ -1615,9 +1615,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1537,
-    "comment": 5948,
-    "code": 27576,
+    "blank": 1540,
+    "comment": 5967,
+    "code": 27636,
     "nFiles": 268
   }
 }

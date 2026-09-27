@@ -9,6 +9,7 @@ import { basename, dirname, join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { assertDirectory, ensureDirectory } from "./directory.js";
 import { entryAt, openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "./contained-fs.js";
+import { lockFileDescriptor } from "../leaf.js";
 
 /** P7 durability fault seam. It is confined to these leaf primitives and their
  * one publication caller; no workflow constructor carries it and production
@@ -167,29 +168,99 @@ export function writeExclusiveFsyncedEntry(parent: number, name: string, path: s
  * both publish it. Existing bytes are never overwritten. Every name is
  * addressed through the one descriptor the directory was resolved into. The
  * one no-replace publication for every owner (P0V-59; it was the request
- * cache's own). */
-export function publishNoReplace(target: string, data: string | Uint8Array, mode = 0o600): "created" | "existing" {
-  return withinDirectory(target, (parent, name) => {
-    const temp = `.${name}.${randomUUID()}.tmp`;
-    const fd = openBeneath(parent, temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
-    try { writeFileSync(fd, data); fsyncSync(fd); }
-    catch (error) {
+ * cache's own).
+ *
+ * P0V-84 (R6-08, P0-4): the temporary carries a proof of its writer's death,
+ * as a leased tree does (P0V-77). The writer holds an flock on it from the
+ * moment it exists until it is gone; a writer killed in between leaves it
+ * unlocked. The next publication of the same name removes every temporary of
+ * that name whose lock is free, and leaves one still held. A temporary taken
+ * from under its writer in the instant between its creation and its lock is
+ * found missing at the link, and the publication starts again. */
+export function publishNoReplace(target: string, data: string | Uint8Array, mode = 0o600, faults?: DurabilityObserver): "created" | "existing" {
+  for (let attempt = 0; ; attempt++) {
+    const result = withinDirectory(target, (parent, name) => {
+      collectDeadTemporaries(parent, name);
+      return publishOnce(parent, name, target, data, mode, faults);
+    });
+    if (result !== "restart") return result;
+    if (attempt >= 2) throw new StoreError("INTERNAL_ERROR", "a no-replace publication's temporary kept being removed");
+  }
+}
+
+const TEMPORARY = /^\.(.+)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
+/** The temporaries of `name` whose writers are dead, removed under their lock. */
+function collectDeadTemporaries(parent: number, name: string): void {
+  let entries: string[];
+  try { entries = readdirSync(`/proc/self/fd/${parent}`); } catch { return; }
+  for (const entry of entries) {
+    if (TEMPORARY.exec(entry)?.[1] !== name) continue;
+    let fd: number;
+    try { fd = openBeneath(parent, entry, constants.O_RDONLY | constants.O_NOFOLLOW); } catch { continue; }
+    try {
+      if (lockFileDescriptor(fd).kind !== "held") continue;
+      try { unlinkSync(entryAt(parent, entry)); } catch { /* raced with another collector */ }
+    } finally { closeSync(fd); }
+  }
+}
+
+function publishOnce(parent: number, name: string, target: string, data: string | Uint8Array, mode: number,
+  faults: DurabilityObserver | undefined): "created" | "existing" | "restart" {
+  const temp = `.${name}.${randomUUID()}.tmp`;
+  const temporary = join(dirname(target), temp);
+  // P0V-83, R6-08: the same durability points as the other publications, so
+  // a crash can be put between any two steps. An injected crash runs no
+  // cleanup, as a real one would not.
+  faultAt(faults, "file-create", "before", temporary);
+  const fd = openBeneath(parent, temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+  let crashed = false;
+  try {
+    const lock = lockFileDescriptor(fd);
+    if (lock.kind !== "held") {
+      try { unlinkSync(entryAt(parent, temp)); } catch { /* cleanup only */ }
+      throw new StoreError("BROKER_UNAVAILABLE", `a publication's temporary could not be locked (${lock.kind})`);
+    }
+    faultAt(faults, "file-create", "after-visible", temporary);
+    try {
+      faultAt(faults, "file-write", "before", temporary);
+      writeFileSync(fd, data);
+      faultAt(faults, "file-write", "ambiguous", temporary);
+      faultAt(faults, "file-fsync", "ambiguous", temporary);
+      fsyncSync(fd);
+      faultAt(faults, "file-fsync", "after-visible", temporary);
+    } catch (error) {
+      if (isDurabilityFault(error)) { crashed = true; throw error; }
       try { unlinkSync(entryAt(parent, temp)); fsyncSync(parent); } catch { /* cleanup only; retain the write error */ }
       throw error;
-    } finally { closeSync(fd); }
+    }
     let result: "created" | "existing" = "created";
     try {
+      faultAt(faults, "publication-link", "before", target);
       try { linkSync(entryAt(parent, temp), entryAt(parent, name)); }
       catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        const code = (error as NodeJS.ErrnoException).code;
+        // Taken by a collector before this writer's lock: start again.
+        if (code === "ENOENT") return "restart";
+        if (code !== "EEXIST") throw error;
         result = "existing";
       }
+      faultAt(faults, "publication-link", "after-visible", target);
+    } catch (error) {
+      crashed = isDurabilityFault(error);
+      throw error;
     } finally {
-      unlinkSync(entryAt(parent, temp));
-      fsyncHeldDir(parent, dirname(target));
+      if (!crashed) {
+        faultAt(faults, "temporary-cleanup", "before", temporary);
+        try { unlinkSync(entryAt(parent, temp)); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        fsyncHeldDir(parent, dirname(target), faults);
+      }
     }
     return result;
-  });
+  } finally {
+    // The lock ends with the descriptor -- here, or at this process's death.
+    closeSync(fd);
+  }
 }
 
 /** Derived-only replacement: exclusive temporary -> file fsync -> close ->

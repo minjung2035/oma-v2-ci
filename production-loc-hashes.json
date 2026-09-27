@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "d07f0356eab4eb35485dc6e7e0160b84863db9b0aef3261d195ef1de3e5a4d0b",
-  "report": "a8c5402f6d486cd49633b87eb8db1b271bf3b9da0bfbf6cd018a739f58aeddcc",
+  "report": "773879cace087246d7b30e4419950ff9c3dbb7bba6775702ac9d8e392c58a97b",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -385,7 +385,7 @@
     },
     {
       "path": "src/git/canonical-command.ts",
-      "sha256": "5d2b90b077bab4668366b1e337797bafc77842f6f43c60348ccd6a82652e42ac"
+      "sha256": "d4bd308983ca5e4bc6e2fe98fe794df6de823531a5acfb437543c24f41ad9a38"
     },
     {
       "path": "src/git/context-publication.ts",
@@ -829,7 +829,7 @@
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "28726e048e681cd02737b6b547ccf16a8bc65de58ff0c0aa639bb61a6d380c4e"
+      "sha256": "de61f26af56688cd85f7cfd135abdaab42d6f651cb980ee4bb18cbfd6bd519ed"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
@@ -889,7 +889,7 @@
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "c48fa79cb3325b66ec4b744a2994494aaf9a04b7a4356855dfb37cc0a6107e45"
+      "sha256": "a5b88247c21dee26b4e0eca80778d4faefbd8faf643894ea53752f3218a4c4a7"
     },
     {
       "path": "src/storage/facets.ts",

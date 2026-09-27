@@ -1,5 +1,5 @@
 {
- "description": "P0-7 (PRIORITY-0.md): every durable boundary the code has (scripts/durable-boundaries.mjs finds them) and the tests that kill, retry or restart right after it and check that what was made durable means what it meant. Generated owners are checked against the code; a new boundary without an entry fails the gate.",
+ "description": "P0-7 (PRIORITY-0.md): every durable boundary the code has (scripts/durable-boundaries.mjs finds them) and the tests that kill, retry or restart right after it and check that what was made durable means what it meant. Generated owners are checked against the code; a new boundary without an entry fails the gate. Each test says how it stops the process (injection: sigkill, in-process-fault or logical, P0V-83), and the gate checks that the test's code shows it.",
  "boundaries": [
   {
    "owner": "src/broker.ts#Broker.closeAdmission",
@@ -7,7 +7,8 @@
    "tests": [
     {
      "file": "test/priority-0.test.ts",
-     "title": "P0-7: a draining broker removes its status view"
+     "title": "P0-7: a draining broker removes its status view",
+     "injection": "logical"
     }
    ]
   },
@@ -17,15 +18,18 @@
    "tests": [
     {
      "file": "test/rollover-settlement.test.ts",
-     "title": "V07B: a failure at the incarnation commit leaves the settled batch settled and no live lease"
+     "title": "V07B: a failure at the incarnation commit leaves the settled batch settled and no live lease",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/rollover-settlement.test.ts",
-     "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch"
+     "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch",
+     "injection": "logical"
     },
     {
      "file": "test/delivery-state-model.test.ts",
-     "title": "V30A: seeded delivery-evidence sequences follow D01 on the composed runtime"
+     "title": "V30A: seeded delivery-evidence sequences follow D01 on the composed runtime",
+     "injection": "logical"
     }
    ]
   },
@@ -35,7 +39,8 @@
    "tests": [
     {
      "file": "test/priority-0.test.ts",
-     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one"
+     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+     "injection": "logical"
     }
    ]
   },
@@ -46,6 +51,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "int-cas",
       "ctx-cas",
@@ -54,7 +60,8 @@
     },
     {
      "file": "test/git-effect-evidence.test.ts",
-     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied"
+     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+     "injection": "logical"
     }
    ]
   },
@@ -65,6 +72,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "int-cas",
       "ctx-cas",
@@ -80,13 +88,15 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "submit-ref"
      ]
     },
     {
      "file": "test/phase8.test.ts",
-     "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers"
+     "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -97,6 +107,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "ctx-snapshot",
       "ctx-link"
@@ -111,6 +122,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "ctx-accepted",
       "ctx-accepted-missing",
@@ -119,7 +131,8 @@
     },
     {
      "file": "test/preaccept-ownership.test.ts",
-     "title": "V18A: a lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them"
+     "title": "V18A: a lost acceptance acknowledgement retains the accepted tree and object, and recovery uses them",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -130,6 +143,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "ctx-mail"
      ]
@@ -143,6 +157,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "ctx-accepted",
       "ctx-cas"
@@ -150,7 +165,8 @@
     },
     {
      "file": "test/r21-context-workflow.test.ts",
-     "title": "V18B: accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan"
+     "title": "V18B: accepted context evidence outlives its RPC connection; same-key retry and reconcile reuse the frozen plan",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -161,6 +177,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "ctx-cas",
       "ctx-snapshot"
@@ -174,7 +191,8 @@
    "tests": [
     {
      "file": "test/r21-context-workflow.test.ts",
-     "title": "lost notification blocks the next writer and recovers C without recreating a commit"
+     "title": "lost notification blocks the next writer and recovers C without recreating a commit",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -184,7 +202,8 @@
    "tests": [
     {
      "file": "test/r21-context-workflow.test.ts",
-     "title": "lost notification blocks the next writer and recovers C without recreating a commit"
+     "title": "lost notification blocks the next writer and recovers C without recreating a commit",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -195,6 +214,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "int-before",
       "int-cas",
@@ -203,7 +223,8 @@
     },
     {
      "file": "test/phase7.test.ts",
-     "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending"
+     "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -213,11 +234,13 @@
    "tests": [
     {
      "file": "test/r19-integration-decisions.test.ts",
-     "title": "R19: base recovery rechecks conditions twice and completes the same operation"
+     "title": "R19: base recovery rechecks conditions twice and completes the same operation",
+     "injection": "logical"
     },
     {
      "file": "test/git-effect-evidence.test.ts",
-     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied"
+     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+     "injection": "logical"
     }
    ]
   },
@@ -227,11 +250,13 @@
    "tests": [
     {
      "file": "test/phase7.test.ts",
-     "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending"
+     "title": "DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integration pending",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/phase7.test.ts",
-     "title": "INT-003: accepted stop intent cancels before main CAS"
+     "title": "INT-003: accepted stop intent cancels before main CAS",
+     "injection": "logical"
     }
    ]
   },
@@ -242,13 +267,15 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "int-done"
      ]
     },
     {
      "file": "test/git-effect-evidence.test.ts",
-     "title": "V24B: an applied non-no-op CAS is settled as history even after stop and policy change"
+     "title": "V24B: an applied non-no-op CAS is settled as history even after stop and policy change",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -258,7 +285,8 @@
    "tests": [
     {
      "file": "test/git-effect-evidence.test.ts",
-     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied"
+     "title": "V24A: a recovery CAS that loses to a third writer after its checks is unknown, never applied",
+     "injection": "logical"
     }
    ]
   },
@@ -269,6 +297,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "submit-import"
      ]
@@ -282,6 +311,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "submit-import",
       "submit-ref"
@@ -296,6 +326,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "submit-mail",
       "submit-done"
@@ -309,11 +340,13 @@
    "tests": [
     {
      "file": "test/phase8.test.ts",
-     "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers"
+     "title": "T68b: reconcile never overwrites a moved published ref; ref==candidate recovers",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "submit-accepted",
       "submit-import"
@@ -327,7 +360,8 @@
    "tests": [
     {
      "file": "test/action-admission.test.ts",
-     "title": "V21B: a submit effect failure recorded as unknown is reported for same-key lookup"
+     "title": "V21B: a submit effect failure recorded as unknown is reported for same-key lookup",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -337,18 +371,21 @@
    "tests": [
     {
      "file": "test/crash-boundaries.test.ts",
-     "title": "R20 primitive SIGKILL at submit-stage"
+     "title": "R20 primitive SIGKILL at submit-stage",
+     "injection": "sigkill"
     },
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T57/T58/T63/T66 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "submit-accepted"
      ]
     },
     {
      "file": "test/mail-submit-scope.test.ts",
-     "title": "V20A: a submit same-key retry after acceptance reads no new bundle, and publication happens once"
+     "title": "V20A: a submit same-key retry after acceptance reads no new bundle, and publication happens once",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -358,11 +395,13 @@
    "tests": [
     {
      "file": "test/r36-lifecycle-sequences.test.ts",
-     "title": "R36 lifecycle replay seed="
+     "title": "R36 lifecycle replay seed=",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/r25-action-replay.test.ts",
-     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action"
+     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+     "injection": "logical"
     }
    ]
   },
@@ -372,11 +411,13 @@
    "tests": [
     {
      "file": "test/r36-lifecycle-sequences.test.ts",
-     "title": "R36 lifecycle replay seed="
+     "title": "R36 lifecycle replay seed=",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/r25-action-replay.test.ts",
-     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action"
+     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+     "injection": "logical"
     }
    ]
   },
@@ -386,11 +427,13 @@
    "tests": [
     {
      "file": "test/r36-lifecycle-sequences.test.ts",
-     "title": "R36 lifecycle replay seed="
+     "title": "R36 lifecycle replay seed=",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/r25-action-replay.test.ts",
-     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action"
+     "title": "R25 ${kind}: stale caller and revoked manager cannot replay an accepted action",
+     "injection": "logical"
     }
    ]
   },
@@ -400,7 +443,8 @@
    "tests": [
     {
      "file": "test/r36-lifecycle-sequences.test.ts",
-     "title": "R36 lifecycle replay seed="
+     "title": "R36 lifecycle replay seed=",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -411,6 +455,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "create-ready"
      ]
@@ -418,6 +463,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "boot-ready"
      ]
@@ -431,6 +477,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "boot-stage",
       "boot-intent",
@@ -446,6 +493,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "create-stage",
       "create-intent",
@@ -461,6 +509,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "create-workspace",
       "create-unit",
@@ -475,7 +524,8 @@
    "tests": [
     {
      "file": "test/phase4.test.ts",
-     "title": "T39/LIFE-007: same name + same resolved spec converges without a second physical create"
+     "title": "T39/LIFE-007: same name + same resolved spec converges without a second physical create",
+     "injection": "logical"
     }
    ]
   },
@@ -485,7 +535,8 @@
    "tests": [
     {
      "file": "test/r10-ledger-rows.test.ts",
-     "title": "R10: normal restart, independent acknowledgement and unknown reservations preserve exact facts"
+     "title": "R10: normal restart, independent acknowledgement and unknown reservations preserve exact facts",
+     "injection": "logical"
     }
    ]
   },
@@ -495,11 +546,13 @@
    "tests": [
     {
      "file": "test/r25-lifecycle-owners.test.ts",
-     "title": "R25: subscription replay keeps one durable identity and unchanged terminal bytes"
+     "title": "R25: subscription replay keeps one durable identity and unchanged terminal bytes",
+     "injection": "logical"
     },
     {
      "file": "test/coordinator-facets.test.mjs",
-     "title": "P3 facets: route acceptance/retry preserves identity and fresh authority timing"
+     "title": "P3 facets: route acceptance/retry preserves identity and fresh authority timing",
+     "injection": "logical"
     }
    ]
   },
@@ -510,6 +563,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "create-workspace"
      ]
@@ -517,6 +571,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "boot-workspace"
      ]
@@ -530,6 +585,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "create-workspace"
      ]
@@ -537,6 +593,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "boot-workspace"
      ]
@@ -550,6 +607,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T18–T22/T27 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "stage",
       "object"
@@ -557,11 +615,13 @@
     },
     {
      "file": "test/phase3.test.ts",
-     "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK"
+     "title": "T19: kill after object fsync -> unreferenced object, no recipients; resend OK",
+     "injection": "sigkill"
     },
     {
      "file": "test/priority-0.test.ts",
-     "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected"
+     "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+     "injection": "logical"
     }
    ]
   },
@@ -572,17 +632,20 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T18–T22/T27 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "accepted"
      ]
     },
     {
      "file": "test/phase3.test.ts",
-     "title": "T20: kill after acceptance -> reconcile completes archive and all recipients"
+     "title": "T20: kill after acceptance -> reconcile completes archive and all recipients",
+     "injection": "sigkill"
     },
     {
      "file": "test/mail-submit-scope.test.ts",
-     "title": "V20A: a same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients"
+     "title": "V20A: a same-key retry after acceptance returns the frozen message; recovery delivers the frozen recipients",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -592,11 +655,13 @@
    "tests": [
     {
      "file": "test/principal-settlement.test.ts",
-     "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once"
+     "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/runner-channel.test.ts",
-     "title": "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection"
+     "title": "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection",
+     "injection": "logical"
     }
    ]
   },
@@ -607,13 +672,15 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T18–T22/T27 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "cur"
      ]
     },
     {
      "file": "test/p24-mail-boundaries.test.ts",
-     "title": "P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery"
+     "title": "P04: first cur parent flush precedes removing new; a flush fault preserves prepared recovery",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -624,6 +691,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T18–T22/T27 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "prepared"
      ]
@@ -636,11 +704,13 @@
    "tests": [
     {
      "file": "test/rollover-settlement.test.ts",
-     "title": "V07A: a receipt made durable just before the runner died completes its batch before rollover, with no redelivery"
+     "title": "V07A: a receipt made durable just before the runner died completes its batch before rollover, with no redelivery",
+     "injection": "logical"
     },
     {
      "file": "test/rollover-settlement.test.ts",
-     "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch"
+     "title": "DR9: a receipt of an earlier attempt that appears after a later run opened still settles the batch",
+     "injection": "logical"
     }
    ]
   },
@@ -651,13 +721,15 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T18–T22/T27 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "archive"
      ]
     },
     {
      "file": "test/durable-fault-matrix.test.ts",
-     "title": "P7 fault ${phase} ${point}: no false success, immutable bytes intact, reconcile converges"
+     "title": "P7 fault ${phase} ${point}: no false success, immutable bytes intact, reconcile converges",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -668,6 +740,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T18–T22/T27 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "inbox-a",
       "inbox-b"
@@ -681,11 +754,13 @@
    "tests": [
     {
      "file": "test/phase3.test.ts",
-     "title": "T20: kill after acceptance -> reconcile completes archive and all recipients"
+     "title": "T20: kill after acceptance -> reconcile completes archive and all recipients",
+     "injection": "sigkill"
     },
     {
      "file": "test/p24-mail-boundaries.test.ts",
-     "title": "P03: unavailable recovery retains reason and pending evidence, then converges"
+     "title": "P03: unavailable recovery retains reason and pending evidence, then converges",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -695,11 +770,13 @@
    "tests": [
     {
      "file": "test/platform-request-ledger.test.ts",
-     "title": "P0-7/MAC-241: killed during its effect, a request is pending, and its retry runs it to one outcome"
+     "title": "P0-7/MAC-241: killed during its effect, a request is pending, and its retry runs it to one outcome",
+     "injection": "sigkill"
     },
     {
      "file": "test/platform-request-ledger.test.ts",
-     "title": "P0-7/MAC-240: killed right after its outcome, a request's retry is answered from the record"
+     "title": "P0-7/MAC-240: killed right after its outcome, a request's retry is answered from the record",
+     "injection": "sigkill"
     }
    ]
   },
@@ -709,11 +786,13 @@
    "tests": [
     {
      "file": "test/priority-0.test.ts",
-     "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected"
+     "title": "DR10 / P0-4: what a broker made before an acceptance that never happened is collected",
+     "injection": "logical"
     },
     {
      "file": "test/priority-0.test.ts",
-     "title": "DR10: startup recovery collects before anything is admitted or bootstrapped"
+     "title": "DR10: startup recovery collects before anything is admitted or bootstrapped",
+     "injection": "logical"
     }
    ]
   },
@@ -723,15 +802,18 @@
    "tests": [
     {
      "file": "test/request-cache.test.ts",
-     "title": "body-only crashes and metadata-only corruption cannot reconstruct a freeze"
+     "title": "body-only crashes and metadata-only corruption cannot reconstruct a freeze",
+     "injection": "logical"
     },
     {
      "file": "test/request-cache.test.ts",
-     "title": "competing processes cannot publish different bodies for one frozen identity"
+     "title": "competing processes cannot publish different bodies for one frozen identity",
+     "injection": "logical"
     },
     {
      "file": "test/cli-receipt-replay.test.ts",
-     "title": "V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time"
+     "title": "V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time",
+     "injection": "logical"
     }
    ]
   },
@@ -741,15 +823,18 @@
    "tests": [
     {
      "file": "test/request-cache.test.ts",
-     "title": "receipt updates cannot replace immutable request fields or change operation identity"
+     "title": "receipt updates cannot replace immutable request fields or change operation identity",
+     "injection": "logical"
     },
     {
      "file": "test/cli-receipt-replay.test.ts",
-     "title": "V26B: a terminal receipt in the cache is not replaced by a later lesser observation"
+     "title": "V26B: a terminal receipt in the cache is not replaced by a later lesser observation",
+     "injection": "logical"
     },
     {
      "file": "test/cli-receipt-replay.test.ts",
-     "title": "WP26: a receipt the request cache cannot record is still shown, with the key to ask again"
+     "title": "WP26: a receipt the request cache cannot record is still shown, with the key to ask again",
+     "injection": "logical"
     }
    ]
   },
@@ -759,11 +844,13 @@
    "tests": [
     {
      "file": "test/delivery-receipt-publication.test.ts",
-     "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it"
+     "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/runner-channel.test.ts",
-     "title": "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection"
+     "title": "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection",
+     "injection": "logical"
     }
    ]
   },
@@ -773,11 +860,13 @@
    "tests": [
     {
      "file": "test/principal-settlement.test.ts",
-     "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once"
+     "title": "V08A: a completion that fails after the receipt is retried alone; the engine sees the batch once",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/delivery-receipt-publication.test.ts",
-     "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it"
+     "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -787,7 +876,8 @@
    "tests": [
     {
      "file": "test/priority-0.test.ts",
-     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one"
+     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+     "injection": "logical"
     }
    ]
   },
@@ -797,7 +887,24 @@
    "tests": [
     {
      "file": "test/p0-review6.test.ts",
-     "title": "P0V-77 / R6-04: the next provision collects a crashed repository staging only when its lease is free"
+     "title": "P0V-77 / R6-04: the next provision collects a crashed repository staging only when its lease is free",
+     "injection": "sigkill"
+    }
+   ]
+  },
+  {
+   "owner": "src/runtime/provision.ts#createCanonicalMain",
+   "fact": "the canonical main, made once and only from nothing (P0V-85): the ref observed after the CAS, kept by every later start",
+   "tests": [
+    {
+     "file": "test/p0-review6.test.ts",
+     "title": "P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation",
+     "injection": "sigkill"
+    },
+    {
+     "file": "test/society-bringup.test.ts",
+     "title": "T115 REC-007: two first starts racing on one state root both survive it",
+     "injection": "logical"
     }
    ]
   },
@@ -807,7 +914,8 @@
    "tests": [
     {
      "file": "test/project-binding.test.ts",
-     "title": "V16B: a leftover staging repository from an interrupted start is neither adopted nor fatal"
+     "title": "V16B: a leftover staging repository from an interrupted start is neither adopted nor fatal",
+     "injection": "logical"
     }
    ]
   },
@@ -817,7 +925,8 @@
    "tests": [
     {
      "file": "test/priority-0.test.ts",
-     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one"
+     "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
+     "injection": "logical"
     }
    ]
   },
@@ -827,11 +936,13 @@
    "tests": [
     {
      "file": "test/priority-0.test.ts",
-     "title": "DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads"
+     "title": "DR12 / P0-3: a crash before an inline commit point changes nothing, one after it leaves a configuration that loads",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/priority-0.test.ts",
-     "title": "DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused"
+     "title": "DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused",
+     "injection": "logical"
     }
    ]
   },
@@ -841,7 +952,8 @@
    "tests": [
     {
      "file": "test/config-generations.test.ts",
-     "title": "V13A: a crash at any point of a managed commit leaves the complete old or the complete new configuration"
+     "title": "V13A: a crash at any point of a managed commit leaves the complete old or the complete new configuration",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -851,11 +963,13 @@
    "tests": [
     {
      "file": "test/priority-0.test.ts",
-     "title": "DR12: a first-run configuration is created where none exists"
+     "title": "DR12: a first-run configuration is created where none exists",
+     "injection": "logical"
     },
     {
      "file": "test/surface-process.test.ts",
-     "title": "T111 real SIGKILL at ${point} leaves a configuration a next start can load"
+     "title": "T111 real SIGKILL at ${point} leaves a configuration a next start can load",
+     "injection": "sigkill"
     }
    ]
   },
@@ -866,6 +980,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "boot-unit"
      ]
@@ -873,6 +988,7 @@
     {
      "file": "test/crash-boundaries.test.ts",
      "title": "T39/M-004 primitive SIGKILL at",
+     "injection": "sigkill",
      "points": [
       "create-unit"
      ]
@@ -885,7 +1001,8 @@
    "tests": [
     {
      "file": "test/durable-fault-matrix.test.ts",
-     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone"
+     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+     "injection": "in-process-fault"
     }
    ]
   },
@@ -895,11 +1012,13 @@
    "tests": [
     {
      "file": "test/durable-fault-matrix.test.ts",
-     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone"
+     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+     "injection": "in-process-fault"
     },
     {
      "file": "test/status-view.test.ts",
-     "title": "T118: a view dated ahead of the reader's clock is unknown, not current"
+     "title": "T118: a view dated ahead of the reader's clock is unknown, not current",
+     "injection": "logical"
     }
    ]
   },
@@ -909,7 +1028,8 @@
    "tests": [
     {
      "file": "test/durable-fault-matrix.test.ts",
-     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone"
+     "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
+     "injection": "in-process-fault"
     }
    ]
   }

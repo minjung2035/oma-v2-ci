@@ -38,6 +38,7 @@ import { StoreError, unobserved } from "../domain/errors.js";
 import { isValidSocietyName } from "../domain/identifiers.js";
 import { modelWorkspaceFor } from "../domain/derived.js";
 import { runGitText } from "../process/policies.js";
+import { createCanonicalObserver, createCanonicalRef } from "../git/canonical-command.js";
 import { ensureDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { ensureDirectory, removeOwnedFile } from "../storage/directory.js";
 import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
@@ -187,23 +188,30 @@ function hasCanonicalMain(projectGit: string): boolean {
   throw new StoreError("STORE_CORRUPT", `the canonical repository cannot be observed: ${existing.stderr.trim().slice(0, 200)}`);
 }
 
+/** P0V-85 (R6-08, P0-7): `main` is created once, only from nothing, through
+ * the canonical CAS -- the one durable effect the boundary gate sees for a
+ * ref, and one whose outcome is the ref observed after the command, not the
+ * command's exit status (GIT-004). A concurrent start that created it first
+ * made the same canonical history; losing to it is not a failure. */
+function createCanonicalMain(projectGit: string, oid: string, what: string): boolean {
+  const { after, created } = createCanonicalRef(createCanonicalObserver(), projectGit, "refs/heads/main", oid);
+  if (after.kind === "candidate") return created;
+  if (after.kind === "third") return false;
+  if (after.kind === "unknown") throw new StoreError("REF_STATE_UNKNOWN", `the canonical main could not be observed after ${what}`);
+  throw new StoreError("STORE_CORRUPT", `society provisioning could not create the canonical main from ${what}`);
+}
+
 /** Seeds `main` from the project's committed history. The fetch runs under the
  * trusted Git environment: no hooks, no user or system configuration, and
- * `upload-pack` ignores command-running settings in repository configuration. */
+ * `upload-pack` ignores command-running settings in repository configuration.
+ * It brings the objects only; `main` itself is made by the CAS above. */
 function seedFromProject(projectGit: string, projectDir: string, oid: string): boolean {
-  const fetched = runGitText(["fetch", "--no-tags", "--quiet", projectDir, `${oid}:refs/heads/main`],
+  const fetched = runGitText(["fetch", "--no-tags", "--quiet", projectDir, oid],
     { gitDir: projectGit, timeout: 10 * 60 * 1000 });
-  if (fetched.status !== 0) {
-    // A concurrent start that seeded first leaves a `main` this fetch cannot
-    // move. That is the other start's canonical history, not a failure.
-    if (hasCanonicalMain(projectGit)) return false;
+  if (fetched.status !== 0)
     throw new StoreError("STORE_CORRUPT",
       `society provisioning could not import the project's history: ${fetched.stderr.trim().slice(0, 200)}`);
-  }
-  const landed = runGitText(["rev-parse", "--verify", "refs/heads/main^{commit}"], { gitDir: projectGit });
-  if (landed.status !== 0)
-    throw new StoreError("STORE_CORRUPT", "the imported canonical main is not the project's HEAD");
-  return landed.stdout.trim() === oid;
+  return createCanonicalMain(projectGit, oid, "the project's HEAD");
 }
 
 function seedEmptyRoot(projectGit: string): boolean {
@@ -221,15 +229,7 @@ function seedEmptyRoot(projectGit: string): boolean {
   );
   if (commit.status !== 0 || commit.stdout.trim().length === 0)
     throw new StoreError("STORE_CORRUPT", "society provisioning could not create the canonical root commit");
-  // Created only from nothing: the old value must be absent, so a concurrent
-  // provisioner that won the race is not overwritten -- and losing it is not a
-  // failure, because what the winner created is the same canonical root.
-  const created = runGitText(["update-ref", "--create-reflog", "refs/heads/main", commit.stdout.trim(), ""],
-    { gitDir: projectGit });
-  if (created.status === 0) return true;
-  if (hasCanonicalMain(projectGit)) return false;
-  throw new StoreError("STORE_CORRUPT",
-    `society provisioning could not create the canonical main: ${created.stderr.trim().slice(0, 200)}`);
+  return createCanonicalMain(projectGit, commit.stdout.trim(), "the canonical root commit");
 }
 
 /** Brings a society's state tree to the point where the broker will start, by

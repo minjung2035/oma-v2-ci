@@ -62,7 +62,7 @@ test("P0V-76 / R6-03: an Enter after a paste's burst submits even when the wall 
 
 // ---- R6-04: native preparation trees carry a proof of their makers' death ----
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { TreeLease, collectLeasedTree, leasePathOf, treeQuiescence } from "../src/storage/tree-lease.js";
 import { collectRepositoryStaging, provisionSociety } from "../src/runtime/provision.js";
 import { collectUnacceptedArtifacts } from "../src/reconcile/preaccept.js";
@@ -307,4 +307,109 @@ test("P0V-79 / R6-06: the terminal owner asks for normal cursor keys when it tak
   terminal.repaint();
   assert.ok(written.join("").includes(DECCKM_OFF), "a newly attached screen is not told again");
   terminal.restore();
+});
+
+/** A child that publishes `bytes` at `target` and is SIGKILLed at `point`/`phase`. */
+function publishKilledAt(target: string, bytes: string, point: string, phase: string) {
+  const module = new URL("../src/storage/durable-fs.js", import.meta.url).href;
+  return spawnSync(process.execPath, ["--input-type=module", "-e", `
+    const { publishNoReplace } = await import(${JSON.stringify(module)});
+    publishNoReplace(${JSON.stringify(target)}, ${JSON.stringify(bytes)}, 0o600, fault => {
+      if (fault.point === ${JSON.stringify(point)} && fault.phase === ${JSON.stringify(phase)}) process.kill(process.pid, "SIGKILL");
+    });
+    process.stdout.write("finished");`], { encoding: "utf8", timeout: 30_000 });
+}
+
+test("P0V-83, P0V-84 / R6-08: a no-replace publication killed at any step leaves its name absent or whole, and the next one collects what it left", async t => {
+  const { publishNoReplace } = await import("../src/storage/durable-fs.js");
+  const root = mkdtempSync(join(tmpdir(), "oma-no-replace-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const points = [["file-create", "before"], ["file-create", "after-visible"], ["file-write", "before"], ["file-write", "ambiguous"],
+    ["file-fsync", "ambiguous"], ["file-fsync", "after-visible"], ["publication-link", "before"], ["publication-link", "after-visible"],
+    ["temporary-cleanup", "before"], ["directory-fsync", "ambiguous"], ["directory-fsync", "after-visible"]] as const;
+  const linked = new Set(["publication-link/after-visible", "temporary-cleanup/before", "directory-fsync/ambiguous", "directory-fsync/after-visible"]);
+  for (const [point, phase] of points) {
+    const dir = join(root, `${point}-${phase}`);
+    mkdirSync(dir);
+    const target = join(dir, "k.json");
+    const run = publishKilledAt(target, "whole bytes", point, phase);
+    assert.equal(run.signal, "SIGKILL", `${point}/${phase}: the child was not killed there: ${run.stdout}${run.stderr}`);
+    const names = readdirSync(dir);
+    if (linked.has(`${point}/${phase}`)) assert.equal(readFileSync(target, "utf8"), "whole bytes", `${point}/${phase}: the name is not whole`);
+    else assert.equal(existsSync(target), false, `${point}/${phase}: the name appeared before its link`);
+    assert.ok(names.every(name => name === "k.json" || /^\.k\.json\.[0-9a-f-]{36}\.tmp$/.test(name)), names.join(" "));
+    // The next publication of the name collects its dead writer's temporary.
+    const next = publishNoReplace(target, "whole bytes");
+    assert.equal(next, linked.has(`${point}/${phase}`) ? "existing" : "created", `${point}/${phase}`);
+    assert.deepEqual(readdirSync(dir), ["k.json"], `${point}/${phase}: a dead writer's temporary was left behind`);
+    assert.equal(readFileSync(target, "utf8"), "whole bytes");
+  }
+});
+
+test("P0V-84 / R6-08: a temporary whose writer is alive is not collected, and another name's never is", async t => {
+  const { publishNoReplace } = await import("../src/storage/durable-fs.js");
+  const root = mkdtempSync(join(tmpdir(), "oma-no-replace-live-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const module = new URL("../src/storage/durable-fs.js", import.meta.url).href;
+  const { spawn } = await import("node:child_process");
+  // A writer stopped between its write and its link: alive, holding its lock.
+  const child = spawn(process.execPath, ["--input-type=module", "-e", `
+    const { publishNoReplace } = await import(${JSON.stringify(module)});
+    publishNoReplace(${JSON.stringify(join(root, "k.json"))}, "late", 0o600, fault => {
+      if (fault.point === "publication-link" && fault.phase === "before") { process.stdout.write("stopped\\n"); process.kill(process.pid, "SIGSTOP"); }
+    });`], { stdio: ["ignore", "pipe", "inherit"] });
+  t.after(() => { child.kill("SIGKILL"); });
+  await new Promise<void>(resolve => { child.stdout!.once("data", () => { resolve(); }); });
+  const live = readdirSync(root).filter(name => name.endsWith(".tmp"));
+  assert.equal(live.length, 1);
+  // Another name's dead temporary is not this name's to collect.
+  writeFileSync(join(root, ".other.json.00000000-0000-4000-8000-000000000000.tmp"), "x");
+  assert.equal(publishNoReplace(join(root, "k.json"), "first"), "created");
+  assert.ok(readdirSync(root).includes(live[0]!), "a live writer's temporary was collected");
+  assert.ok(readdirSync(root).includes(".other.json.00000000-0000-4000-8000-000000000000.tmp"));
+  child.kill("SIGKILL");
+  await new Promise(resolve => child.once("exit", resolve));
+  assert.equal(publishNoReplace(join(root, "k.json"), "first"), "existing");
+  assert.deepEqual(readdirSync(root).sort(), [".other.json.00000000-0000-4000-8000-000000000000.tmp", "k.json"]);
+  assert.equal(readFileSync(join(root, "k.json"), "utf8"), "first");
+});
+
+test("P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation leaves no main or the one it made, and the next start keeps it", async t => {
+  const provision = new URL("../src/runtime/provision.js", import.meta.url).href;
+  for (const point of ["before-main", "after-main"] as const) {
+    const stateRoot = mkdtempSync(join(tmpdir(), `oma-main-${point}-`));
+    t.after(() => rmSync(stateRoot, { recursive: true, force: true }));
+    const run = spawnSync(process.execPath, ["--input-type=module", "-e", `
+      import cp from "node:child_process";
+      import { syncBuiltinESMExports } from "node:module";
+      const spawn = cp.spawnSync;
+      cp.spawnSync = (command, args, options) => {
+        const main = Array.isArray(args) && args.includes("update-ref") && args.includes("refs/heads/main");
+        if (main && ${JSON.stringify(point)} === "before-main") process.kill(process.pid, "SIGKILL");
+        const result = spawn(command, args, options);
+        if (main) process.kill(process.pid, "SIGKILL");
+        return result;
+      };
+      syncBuiltinESMExports();
+      const { provisionSociety } = await import(${JSON.stringify(provision)});
+      provisionSociety(${JSON.stringify(stateRoot)});
+      process.stdout.write("finished");`], { encoding: "utf8", timeout: 60_000 });
+    assert.equal(run.signal, "SIGKILL", `${point}: not killed at the main's creation: ${run.stdout}${run.stderr}`);
+    const repository = join(stateRoot, "repos", "project.git");
+    const observe = () => spawnSync("git", ["--git-dir", repository, "rev-parse", "--verify", "--quiet", "refs/heads/main^{commit}"], { encoding: "utf8" });
+    const left = observe();
+    if (point === "before-main") assert.equal(left.status, 1, "a main appeared before its creation");
+    else assert.equal(left.status, 0, "the main the killed start created is gone");
+    // The next start: what the dead one made is kept, nothing is made twice.
+    const report = provisionSociety(stateRoot);
+    const main = observe();
+    assert.equal(main.status, 0);
+    if (point === "after-main") {
+      assert.equal(main.stdout, left.stdout, "the next start replaced the main the killed one had made");
+      assert.equal(report.seeded, false, "the next start seeded a main that already existed");
+    } else assert.equal(report.seedSource, "empty");
+    assert.equal(spawnSync("git", ["--git-dir", repository, "fsck", "--strict"], { encoding: "utf8" }).status, 0);
+    assert.deepEqual(readdirSync(join(stateRoot, "repos")).filter(name => name.startsWith(".") || name.endsWith(".lease")), [],
+      "a staging or lease was left behind");
+  }
 });

@@ -26,7 +26,7 @@ export const PRIMITIVES = Object.freeze({
   prepareSubmitSpool: "file-publication", prepareContextStream: "file-publication",
   publishDeliveryReceipt: "receipt",
   commitManagedGeneration: "config-commit", commitInlineConfiguration: "config-commit", createInlineConfiguration: "config-commit",
-  compareAndSwapCanonicalRef: "git-cas", casRef: "git-cas", compareAndSwap: "git-cas", publishRef: "git-cas",
+  compareAndSwapCanonicalRef: "git-cas", createCanonicalRef: "git-cas", casRef: "git-cas", compareAndSwap: "git-cas", publishRef: "git-cas",
   removeOwnedTree: "collection", removeOwnedFile: "collection", collectLeasedTree: "collection",
 });
 /** The primitives' own modules: their internal calls are the mechanism, not boundaries. */
@@ -84,21 +84,172 @@ export function durableBoundaries(root = process.cwd()) {
   }
   return [...owners.values()].map(entry => ({ owner: entry.owner, kinds: [...entry.kinds].sort() })).sort((a, b) => a.owner.localeCompare(b.owner));
 }
-/** A test reference: the file, a literal fragment of the test's title as the
- * source spells it, and -- for a table-driven test -- the boundary points it is
- * run at, each of which must appear in that file as a quoted name. */
+/** P0V-83, R6-08: how a test stops the boundary's process, which the registry
+ * states for every test it names and this gate checks against the test's code.
+ * - `sigkill`: a real process is killed with SIGKILL at the boundary -- nothing
+ *   of it runs after, no finally block, no in-memory cleanup.
+ * - `in-process-fault`: the boundary fails inside the test's own process (a
+ *   durability observer that throws, an injected errno); what runs on the way
+ *   out still runs, and the page cache is shared, so it shows order and
+ *   meaning, not that a crash left the same.
+ * - `logical`: a retry, a restart or a replay with nothing injected. */
+export const INJECTIONS = Object.freeze(["sigkill", "in-process-fault", "logical"]);
+const FAULT_CODES = new Set(["EIO", "ENOSPC", "EDQUOT", "EROFS", "EPERM", "EACCES"]);
+
+const parsed = new Map();
+function parse(root, file) {
+  if (!parsed.has(`${root}\0${file}`)) {
+    let source = null;
+    try { source = ts.createSourceFile(file, readFileSync(join(root, file), "utf8"), ts.ScriptTarget.Latest, true); } catch { source = null; }
+    parsed.set(`${root}\0${file}`, source);
+  }
+  return parsed.get(`${root}\0${file}`);
+}
+/** The tests a file declares: each `test(...)`/`it(...)` call, its title as the
+ * source spells it, and the function that is its body. */
+function declaredTests(source) {
+  const tests = [];
+  const visit = node => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const named = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) ? callee.expression.text : "";
+      const [first] = node.arguments;
+      if ((named === "test" || named === "it") && first &&
+          (ts.isStringLiteralLike(first) || ts.isTemplateExpression(first))) {
+        const spelled = ts.isTemplateExpression(first) || ts.isNoSubstitutionTemplateLiteral(first) ? first.getText(source).slice(1, -1) : first.text;
+        const body = [...node.arguments].reverse().find(argument => ts.isArrowFunction(argument) || ts.isFunctionExpression(argument));
+        tests.push({ title: spelled, text: ts.isStringLiteralLike(first) ? first.text : spelled, body });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return tests;
+}
+/** The functions a file declares at its top level, by name. */
+function topLevelFunctions(source) {
+  const functions = new Map();
+  for (const statement of source.statements) {
+    const declaration = ts.isExportDeclaration(statement) ? null : statement;
+    if (declaration && ts.isFunctionDeclaration(declaration) && declaration.name) functions.set(declaration.name.text, declaration);
+    if (declaration && ts.isClassDeclaration(declaration) && declaration.name) functions.set(declaration.name.text, declaration);
+    if (declaration && ts.isVariableStatement(declaration))
+      for (const item of declaration.declarationList.declarations)
+        if (ts.isIdentifier(item.name) && item.initializer) functions.set(item.name.text, item.initializer);
+  }
+  return functions;
+}
+function relativeImports(source, file) {
+  const imports = new Map();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const specifier = statement.moduleSpecifier.text;
+    if (!specifier.startsWith(".")) continue;
+    const resolved = join(file, "..", specifier).replace(/\.js$/, ".ts");
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings))
+      for (const element of bindings.elements) imports.set(element.name.text, { file: resolved, name: (element.propertyName ?? element.name).text });
+  }
+  return imports;
+}
+/** What a test's body reaches: its own code, the functions of its file it
+ * calls, and the functions it imports from the test tree -- transitively. */
+function reachable(root, file, body) {
+  const nodes = [];
+  const seen = new Set();
+  const queue = [{ file, node: body }];
+  while (queue.length > 0) {
+    const { file: at, node } = queue.shift();
+    const source = parse(root, at);
+    if (source === null || node === undefined) continue;
+    const key = `${at}:${node.pos}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    nodes.push(node);
+    const functions = topLevelFunctions(source);
+    const imports = relativeImports(source, at);
+    const visit = inner => {
+      if (ts.isIdentifier(inner)) {
+        const local = functions.get(inner.text);
+        if (local !== undefined) queue.push({ file: at, node: local });
+        const imported = imports.get(inner.text);
+        if (imported !== undefined && imported.file.startsWith("test/")) {
+          const target = parse(root, imported.file);
+          const found = target === null ? undefined : topLevelFunctions(target).get(imported.name);
+          if (found !== undefined) queue.push({ file: imported.file, node: found });
+        }
+      }
+      ts.forEachChild(inner, visit);
+    };
+    visit(node);
+  }
+  return nodes;
+}
+/** The injection a test's reachable code shows, strongest first. */
+function shownInjection(nodes) {
+  let sigkill = false;
+  let fault = false;
+  for (const node of nodes) {
+    const visit = inner => {
+      if (ts.isStringLiteralLike(inner) && inner.text === "SIGKILL" && ts.isCallExpression(inner.parent)) sigkill = true;
+      if (ts.isIdentifier(inner) && inner.text === "DurabilityFaultError") fault = true;
+      if (ts.isStringLiteralLike(inner) && FAULT_CODES.has(inner.text)) fault = true;
+      // The source of a child the test runs, or of a probe it preloads.
+      if (ts.isStringLiteralLike(inner) || ts.isTemplateHead(inner) || ts.isTemplateMiddle(inner) || ts.isTemplateTail(inner)) {
+        if (/kill\([^)]*["']SIGKILL["']/.test(inner.text)) sigkill = true;
+        if ([...FAULT_CODES].some(code => new RegExp(`["']${code}["']`).test(inner.text))) fault = true;
+      }
+      // A callback handed to the code under test that throws: a fault seam.
+      if (ts.isThrowStatement(inner)) {
+        for (let up = inner.parent; up; up = up.parent) {
+          if ((ts.isArrowFunction(up) || ts.isFunctionExpression(up)) && ts.isCallExpression(up.parent) && up.parent.arguments.includes(up)) { fault = true; break; }
+          if (nodes.includes(up)) break;
+        }
+      }
+      ts.forEachChild(inner, visit);
+    };
+    visit(node);
+  }
+  return sigkill ? "sigkill" : fault ? "in-process-fault" : "logical";
+}
+/** The strongest injection the tests matching a reference's title show, or
+ * null when the file declares no such test. */
+export function shownInjectionOf(root, reference) {
+  const source = parse(root, reference.file);
+  if (source === null) return null;
+  const matches = declaredTests(source).filter(entry => entry.title.includes(reference.title) || entry.text.includes(reference.title));
+  if (matches.length === 0) return null;
+  return matches.map(entry => shownInjection(reachable(root, reference.file, entry.body)))
+    .sort((a, b) => INJECTIONS.indexOf(a) - INJECTIONS.indexOf(b))[0];
+}
+/** A test reference: the file, a literal fragment of a declared test's title
+ * as the source spells it, the injection it uses, and -- for a table-driven
+ * test -- the boundary points it is run at, each of which must appear in that
+ * file as a quoted name. A title in a comment, or an injection the test's code
+ * does not show, is a finding. */
 function checkTest(root, owner, reference, findings) {
   if (reference === null || typeof reference !== "object" || typeof reference.file !== "string" || typeof reference.title !== "string") {
-    findings.push(`${owner}: a test reference needs file and title`); return;
+    findings.push(`${owner}: a test reference needs file and title`); return null;
+  }
+  if (!INJECTIONS.includes(reference.injection)) {
+    findings.push(`${owner}: ${reference.file} "${reference.title}" does not say how it stops the process (injection: ${INJECTIONS.join(" | ")})`); return null;
   }
   let text;
   try { text = readFileSync(join(root, reference.file), "utf8"); }
-  catch { findings.push(`${owner}: named test file does not exist: ${reference.file}`); return; }
-  if (!text.includes(reference.title)) findings.push(`${owner}: ${reference.file} has no test titled "${reference.title}"`);
+  catch { findings.push(`${owner}: named test file does not exist: ${reference.file}`); return null; }
+  const source = parse(root, reference.file);
+  const matches = source === null ? [] : declaredTests(source).filter(entry => entry.title.includes(reference.title) || entry.text.includes(reference.title));
+  if (matches.length === 0) { findings.push(`${owner}: ${reference.file} has no test titled "${reference.title}"`); return null; }
   for (const point of reference.points ?? [])
     if (!text.includes(`"${point}"`)) findings.push(`${owner}: ${reference.file} does not run at point "${point}"`);
+  const rank = kind => INJECTIONS.indexOf(kind);
+  const shown = matches.map(entry => shownInjection(reachable(root, reference.file, entry.body))).sort((a, b) => rank(a) - rank(b))[0];
+  if (rank(shown) > rank(reference.injection))
+    findings.push(`${owner}: ${reference.file} "${reference.title}" is registered as ${reference.injection}, but its code shows ${shown}`);
+  return reference.injection;
 }
 export function checkDurableBoundaries(root = process.cwd()) {
+  parsed.clear();
   const registry = JSON.parse(readFileSync(join(root, "implementation", "durable-boundaries.json"), "utf8"));
   const found = durableBoundaries(root);
   const findings = [];
@@ -114,10 +265,23 @@ export function checkDurableBoundaries(root = process.cwd()) {
     if (!found.some(boundary => boundary.owner === entry.owner)) findings.push(`${entry.owner}: registered, but no such durable boundary exists in the code`);
   return findings;
 }
+/** P0V-83: the strongest injection each boundary is tested with, so the
+ * strength the gate stands for is stated rather than implied. */
+export function boundaryStrengths(root = process.cwd()) {
+  const registry = JSON.parse(readFileSync(join(root, "implementation", "durable-boundaries.json"), "utf8"));
+  return registry.boundaries.map(entry => ({ owner: entry.owner,
+    strongest: INJECTIONS.find(kind => (entry.tests ?? []).some(reference => reference.injection === kind)) ?? "none" }));
+}
 if (import.meta.url === `file://${process.argv[1]}`) {
-  if (process.argv.includes("--list")) { for (const boundary of durableBoundaries()) console.log(`${boundary.owner}\t${boundary.kinds.join(",")}`); process.exit(0); }
+  if (process.argv.includes("--list")) {
+    const strengths = new Map(boundaryStrengths().map(entry => [entry.owner, entry.strongest]));
+    for (const boundary of durableBoundaries()) console.log(`${boundary.owner}\t${boundary.kinds.join(",")}\t${strengths.get(boundary.owner) ?? "unregistered"}`);
+    process.exit(0);
+  }
   const findings = checkDurableBoundaries();
   for (const finding of findings) console.error(finding);
-  console.log(`Durable boundaries: ${findings.length === 0 ? "PASS" : "FAIL"}; ${findings.length} findings.`);
+  const counts = Object.fromEntries(INJECTIONS.map(kind => [kind, 0]));
+  for (const entry of boundaryStrengths()) if (Object.hasOwn(counts, entry.strongest)) counts[entry.strongest] += 1;
+  console.log(`Durable boundaries: ${findings.length === 0 ? "PASS" : "FAIL"}; ${findings.length} findings. Strongest injection per boundary: ${INJECTIONS.map(kind => `${kind} ${counts[kind]}`).join(", ")}.`);
   process.exit(findings.length === 0 ? 0 : 1);
 }
