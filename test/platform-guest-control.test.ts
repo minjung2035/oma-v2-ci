@@ -15,8 +15,9 @@ import { receiptWaitFloor } from "../src/platform/guest/linux-system.js";
 import { defaultHostConfig } from "../src/config/defaults.js";
 import { StoreError } from "../src/domain/errors.js";
 import {
-  HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, helloParamsProblem, negotiate, productText, type HelloParams,
+  HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, helloParamsProblem, negotiate, type HelloParams,
 } from "../src/protocol/host-guest.js";
+import { productText } from "../src/platform/product-text.js";
 
 const INSTANCE = randomUUID();
 const identity = (): GuestIdentity => ({ instanceId: INSTANCE, guestImage: "2026.09.1", bootId: randomUUID(),
@@ -82,9 +83,13 @@ test("MAC-230: a hello is exactly its shape; a terminal names a society (and may
   assert.equal(negotiate({ min: 1, max: 1 }, 2), null);
 });
 
-test("MAC-231: what the guest says about itself carries no Linux path, unit name or errno", () => {
-  assert.equal(productText("the state filesystem is frozen"), true);
-  for (const text of ["cannot open /var/lib/oma/societies/x", "oma-demo-alice.service failed", "EACCES while reading", "bad\u0007bell"])
+test("MAC-231: what the guest says about itself carries no Linux path, unit name, errno or machinery word", () => {
+  for (const text of ["the state filesystem is frozen", "ERROR: the EMAIL field is empty", "a society's receipt wait could not be read",
+    "this guest speaks protocol 1", "the oma-bridge account does not exist", "input/output is fine"])
+    assert.equal(productText(text), true, text);
+  for (const text of ["cannot open /var/lib/oma/societies/x", "oma-demo-alice.service failed", "user@1000.service is down",
+    "EACCES while reading", "failed with ENOSPC", "bad\u0007bell", "reading /dev/vdb", "systemd refused", "the cgroup is gone",
+    "Linux kernel error", "Debian package missing", "resize of ext4 failed", "(/proc/self/mounts)"])
     assert.equal(productText(text), false, text);
 });
 

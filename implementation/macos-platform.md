@@ -107,7 +107,7 @@ guest에서 도는 `oma`는 Linux의 `oma`와 같은 코드다. 그래서 역할
 | TUI-004의 "Principal session을 소유하는 TUI" | 바뀌지 않는다. guest의 `oma`가 소유한다. Mac의 화면은 그 terminal에 attach한다(§4.6) |
 | PR-001의 host-only channel | 바뀌지 않는다. guest 안의 `oma`와 broker 사이의 channel이다 |
 | PR-002의 "UI가 없으면 prepare하지 않는다" | 바뀌지 않는다. UI는 guest의 `oma`다. Mac의 화면이 detach해도 `oma`는 돈다. Linux에서 `oma`를 tmux 안에서 돌리고 detach한 것과 같다. detach한 뒤에도 돌게 둘지는 사용자가 정한다(§13 Q1) |
-| INF-001의 "OMA 소유 agent 디렉터리" | credential 상태: host의 Keychain backend(§7.2). 엔진의 나머지 상태(settings·models): guest의 agent 디렉터리. §12 D-4 |
+| INF-001의 "OMA 소유 agent 디렉터리" | 해석에 쓰이는 상태(credential, `models.json`, 기본 model의 `settings.json`): host 한 곳(MAC-704). credential은 그 안에서도 Keychain backend다. 엔진의 나머지 상태(session 기록 등): guest. §12 D-4 |
 | D03의 product-owned foreground broker | 바뀌지 않는다. guest의 `oma`가 감독한다 |
 | D05의 project binding(`canonicalProjectPath`) | 바뀌지 않는다. guest의 project mirror 경로(`/var/lib/oma/projects/<projectId>`)가 그 값이다. Mac 경로는 guest에 없다(MAC-402) |
 
@@ -127,6 +127,7 @@ guest의 OMA 코드는 Linux 배포본과 같은 source digest에서 만든다(�
 | `snapshots/<id>.img` | state disk의 APFS clone(§8.4) | 제외 |
 | `archives/<id>.omaarchive` | 암호화한 논리 백업(§8.4) | 포함 |
 | `logs/` | host 로그와 guest console 로그(크기 한도, 회전) | 제외 |
+| `engine/` | 해석에 쓰이는 엔진 상태: `models.json`, `settings.json`(MAC-704). credential은 여기가 아니라 Keychain에 있다 | 포함 |
 | `run/hostapi.sock` | Host API socket | — |
 | `run/vm/` | `oma-vmhelper`가 vsock 연결을 넘기는 unix socket들 | — |
 
@@ -238,10 +239,15 @@ bind는 systemd(pid 1)만 한다. guestctl과 guesthost는 bind capability를 �
 **MUST [MAC-204]** guest kernel은 `CONFIG_VSOCKETS_LOOPBACK=n`으로 build한다. 이렇게 하면 guest 안의 프로세스가 guest의 listener에
 vsock으로 닿을 수 없다. MAC-202의 CID 검사가 이에 대한 두 번째 방어다.
 
-**MUST [MAC-205]** Resident sandbox와 Principal의 model tool sandbox(bwrap)는 seccomp filter로 `socket()`과 `socketpair()`의 domain
-`AF_VSOCK(40)`을 `EPERM`으로 거절한다. vsock은 network namespace로 격리되지 않는 kernel이 있으므로(`--unshare-net`로는 막히지 않는다),
-namespace에 기대지 않는다. filter는 bwrap의 `--seccomp <fd>`로 넘기고, runner가 만든 BPF를 쓴다. SB-001 목록에 이 조항을 더하는 것은
-§12의 D-5다.
+**MUST [MAC-205]** Resident sandbox(bwrap)는 seccomp filter로 `socket()`과 `socketpair()`의 domain `AF_VSOCK(40)`을 `EPERM`으로
+거절한다. vsock은 network namespace로 격리되지 않는 kernel이 있으므로(`--unshare-net`로는 막히지 않는다), namespace에 기대지 않는다.
+filter는 bwrap의 `--seccomp <fd>`로 넘긴다. 지금 코드에는 seccomp가 없다. BPF는 새로 만든다: 몇 개의 명령으로 된 고정 classic BPF(arch
+확인, syscall 번호, 첫 인자)를 runner가 만든다. SB-001 목록에 이 조항을 더하는 것은 §12의 D-5다.
+
+Principal에는 bwrap sandbox가 없다. Linux의 Principal은 extension이 shell tool을 거절하고 파일 tool의 경로를 workspace 안으로 좁힌다
+(PR-004, `workspace-guard`). 모델이 임의의 코드를 실행할 길이 없으므로 socket을 만들 길도 없다. Principal의 엔진 프로세스와 그 extension은
+신뢰하는 코드이고, §3.4의 A2에 속한다. 그리고 guest 안의 어느 프로세스든 vsock으로 닿을 곳이 없다: guest에는 loopback이 없고(MAC-204)
+host는 listen하지 않는다(MAC-201). seccomp는 이 둘 위의 세 번째 방어다.
 
 ### 4.2 framing
 
@@ -292,7 +298,7 @@ control은 port 700, 나머지는 모두 port 701이다. hello의 field는 정�
 | `health.get` | `{}` | `{ uptimeMs, load, memory: { totalBytes, availableBytes }, disk: { totalBytes, freeBytes }, failedUnits, frozen }` | 예 | watchdog과 UI의 "엔진 상태". `failedUnits`는 셀 수 없으면 `null`이다. 0으로 채우지 않는다 |
 | `fs.freeze` | `{ deadlineMs }` | `{ frozenAt, deadlineMs }` | 아니요 | §8.4. 답의 `deadlineMs`는 실제로 건 deadline이다(MAC-620). 이미 얼어 있으면 `BATCH_CONFLICT` |
 | `fs.thaw` | `{}` | `{ thawed }` | 예 | `thawed: false`는 이미 풀려 있었다는 뜻이다. deadline이 먼저 풀었을 수 있다. host가 할 일은 §8.4 |
-| `disk.grow` | `{}` | `{ filesystemBytes }` | 예 | host가 `state.img`를 늘린 뒤 부른다. guest는 `resize2fs`로 파일 시스템을 device 크기까지 늘린다 |
+| `disk.grow` | `{}` | `{ filesystemBytes }` | 예 | host는 VM이 멈춰 있을 때만 `state.img`를 늘리고(§9.6), 다음 부팅 뒤 이것을 부른다. guest는 `resize2fs`로 mount된 파일 시스템을 device 크기까지 늘린다. ext4의 online resize는 `CAP_SYS_RESOURCE`가 있어야 하므로 guestctl의 bounding set에 있다 |
 | `power.off` | `{}` | `{ accepted }` | 예 | 얼어 있으면 먼저 풀고 `systemctl poweroff`를 한 번 요청한다. drain은 host가 먼저 끝낸다(MAC-320) |
 | `diag.collect` | `{ include: string[] }` | stream | 예 | §8.6. 사용자가 요청할 때만(아직 구현 안 됨) |
 
@@ -374,8 +380,8 @@ prompt·설정·확장은 terminal 안의 TUI가 한다. 그래서 prompt에는 
 egress 연결의 첫 message(guest→host)는 둘 가운데 하나다.
 
 ```
-egress.placeholder { v: 1, credentialRef, run: { society, actor, incarnation } }
-  → { placeholderId, placeholder }          // 엔진을 띄우기 전, run마다 한 번
+egress.placeholder { v: 1, credentialRef, provider, model, run: { society, actor, incarnation } }
+  → { placeholderId, placeholder, provider, model, definition }   // 엔진을 띄우기 전, run마다 한 번. MAC-704
 
 egress.open { v: 1, placeholderId, society, actor, incarnation, modelProfile }
 ```
@@ -486,7 +492,7 @@ macOS 버전이 이 모드를 주지 못하면 시작을 거절한다.
 | `/var/lib/oma/data/oma/<society>` | society state root(기존 layout, `config.json` 포함). guest의 `oma`에게 `XDG_DATA_HOME=/var/lib/oma/data`를 주면 기존 `hostLaunchLocation`이 이 경로를 낸다 |
 | `/var/lib/oma/projects/<projectId>` | project mirror(§6). guest의 `oma`가 이 디렉터리에서 돈다 |
 | `/var/lib/oma/requests/` | guesthost의 request 원장(MAC-240) |
-| `/var/lib/oma/home` | `oma` 사용자의 home(엔진 agent 디렉터리의 settings·models. credential은 없음) |
+| `/var/lib/oma/home` | `oma` 사용자의 home. 엔진의 해석 상태(credential·`models.json`·기본 model)는 여기에 없다(MAC-704) |
 | `/var/log/journal` | journald persistent. `SystemMaxUse=256M` |
 | `/run/user/1000/oma/<society>` | run root(tmpfs, 기존 `XDG_RUNTIME_DIR/oma/<society>`) |
 | `/run/oma-guestctl/`, `/run/oma-guesthost/` | 서비스의 unix socket(MAC-202) |
@@ -499,16 +505,25 @@ Resident unit이 그 아래에서 돈다.
 
 1. `omahostd`가 image를 검증한다(MAC-601). `state.img`를 sparse file로 만든다(기본 64 GiB, 실제 사용분만 차지). VM instance ID를
    만들어 `host-record.json`에 쓴다.
-2. kernel cmdline에 `oma.provision=<instanceId>`를 넣어 부팅한다. guestctl은 state disk에 ext4 signature가 없을 때만 `mkfs.ext4`를
-   만든다. signature가 있는데 `instance.json`의 ID가 다르면 포맷하지 않고 멈춘다(`failed`, "알 수 없는 disk"). 남의 데이터를
-   지우지 않는다.
+2. kernel cmdline에 `oma.provision=<instanceId>`를 넣어 부팅한다.
+
+**MUST [MAC-303]** 포맷은 한 번뿐이고, 한 번도 쓰이지 않은 disk에만 한다. "ext4 signature가 없다"는 기준으로 쓰지 않는다. superblock이
+손상된 disk도 signature가 없어 보이기 때문이다. 조건은 셋이 모두 참인 것이다.
+
+- `host-record`의 VM instance가 `provisioning` 상태다(provisioning이 끝났다는 기록이 없다).
+- host가 보기에 `state.img`에 할당된 block이 0이다(`st_blocks == 0`). APFS sparse file에서 이것은 파일 전체가 0이라는 뜻이다. host는
+  이때만 cmdline에 `oma.provision`을 넣는다.
+- guest가 보기에 device의 처음 1 MiB가 모두 0이다.
+
+하나라도 아니면 포맷하지 않는다. `instance.json`이 없거나 ID가 다르거나 파일 시스템을 mount할 수 없으면 `failed`("데이터를 확인해야
+합니다")로 멈추고 §8.5의 복구로 간다. 남의 데이터나 손상된 데이터를 지우지 않는다.
 3. `instance.json`을 쓰고 flush한다. 그 뒤에야 handshake에 답한다(`instance.json`을 읽지 못하는 guest는 모든 hello를 거절한다).
 
 ### 5.5 유휴 정책
 
 **MUST [MAC-310]** 아래 가운데 하나라도 참이면 VM은 `ready`에 머문다.
 
-- host UI가 떠 있다.
+- host UI가 떠 있다. society terminal이 attach돼 있거나 OMA.app의 창이 열려 있다는 뜻이다. menu bar extra는 늘 떠 있으므로 치지 않는다.
 - `keep-running`으로 닫은 society가 있고 그 society에 pending 작업이나 active Resident가 있다(status view로 관측).
 - sync·백업·update가 진행 중이다.
 
@@ -540,8 +555,19 @@ power-off 전에 무엇이 끝났는지는 host가 society마다 답으로 받�
 `forced`는 guest에게 전원 장애다. 다음 부팅은 fsck와 OMA의 crash 복구를 거친다. host는 이 사실을 `host-record`에 남긴다. 다음
 실행 때 UI는 "지난번에 정상적으로 멈추지 못해 복구했습니다"라고 한 줄 보인다.
 
-**MUST [MAC-321]** macOS 앱 종료·로그아웃·재시작 때는 `applicationShouldTerminate`에서 `.terminateLater`를 돌려주고 MAC-320을 한다.
-macOS가 준 시간이 모자라 먼저 끝나면 결과는 `forced`와 같다. 이 경우도 복구 경로가 처리한다.
+**MUST [MAC-321]** VM의 주인은 `omahostd`(LaunchAgent)다. 로그아웃·재시작·종료 때의 정지는 두 경로가 함께 맡는다.
+
+- **OMA.app이 떠 있을 때**: `applicationShouldTerminate`에서 `.terminateLater`를 돌려주고 `omahostd`에 MAC-320을 요청한다. 정지가
+  끝났다는 답을 받은 뒤 `replyToApplicationShouldTerminate(true)`를 한다. 로그아웃에서 app이 에이전트보다 먼저 종료 요청을 받는다면 이
+  경로가 drain에 쓸 시간을 더 얻는다. 그 순서와 시간은 MV-43이 잰다.
+- **`omahostd` 자신**: launchd가 보내는 SIGTERM에 MAC-320을 시작한다. launchd는 SIGTERM 뒤 `ExitTimeOut`이 지나면 SIGKILL을 보낸다.
+  기본값은 시스템이 정한다(대략 20초로 알려져 있으나 확인이 필요하다). 그래서 LaunchAgent plist에 `ExitTimeOut`을 둔다(90초). 로그아웃과
+  시스템 종료 때 이 값이 실제로 얼마나 지켜지는지는 MV-43이 잰다. drain 기한은 `min(drainDeadlineSeconds, 받은 시간 − 10초)`이고, 기한을
+  넘기면 SIGKILL 전에 `VZVirtualMachine.stop()`으로 끈다(`forced`). SIGKILL로 VM이 같이 죽는 것보다 낫지는 않지만, host가 `forced`를
+  기록할 수 있다.
+
+로그아웃마다 `forced`가 되는지는 MV-43의 결과로 정한다. 된다면 그 사실을 문서에 적고, 로그아웃 전에 "OMA를 멈추는 중" 알림을 보인다.
+결과가 어느 쪽이든 복구 경로가 불변식을 지킨다(MV-30·MV-31).
 
 ### 5.7 감시
 
@@ -580,6 +606,13 @@ mirror(`/var/lib/oma/projects/<projectId>`)에서 돈다. 그래서 기존 proje
 bookmark가 해석되지 않거나 다른 repo면 "프로젝트를 찾을 수 없음"으로 멈춘다. 다른 repo에 쓰지 않는다. 사용자가 새 위치를 고르면
 다시 확인한 뒤 bookmark만 바꾼다.
 
+**MUST [MAC-404]** host가 Mac repo에서 부르는 동봉 git은 사용자 repo의 hook·설정·transport를 믿지 않는다. GIT-001이 broker의 git에 거는
+조건을 그대로 쓴다: `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_TERMINAL_PROMPT=0`, `GIT_NO_REPLACE_OBJECTS=1`, 빈
+hooks 디렉터리(`-c core.hooksPath=<빈 디렉터리>`), 환경의 `GIT_*`는 허용 목록 밖을 지운다. repo 자신의 `.git/config`는 읽히므로, 실행을
+부르는 설정을 명령줄에서 덮는다: `core.fsmonitor=false`, `core.pager=cat`, `credential.helper=`, `protocol.allow=never`와
+`protocol.file.allow=always`(bundle 파일만), `uploadpack.packObjectsHook`는 쓰지 않는 명령만 부른다. 부르는 명령은 `bundle create`,
+`bundle verify`, `fetch <bundle>`, `rev-parse`, `rev-list`뿐이다. 작업 트리를 건드리는 명령(checkout, merge, status)은 부르지 않는다.
+
 ### 6.2 경계의 원칙
 
 **MUST [MAC-410]** sync는 **commit된 Git 이력만** 옮긴다. 작업 트리, index, stash, 무시된 파일, `.git/config`, hook은 옮기지 않는다.
@@ -591,19 +624,28 @@ import는 Mac의 commit을 guest의 **project mirror**로 옮긴다. canonical r
 `oma`를 실행하는 project checkout에 해당한다. 아무도 그 안에서 일하지 않는다. guesthost만 쓴다.
 
 1. 사용자가 "Mac에서 가져오기"를 누른다. 기본값은 현재 branch이고 다른 branch를 고를 수 있다.
-2. host가 동봉 git으로 `git bundle create - <branch> ^<lastImport.head>`를 만든다. 첫 import는 전체다. 크기가 `bundleBytes`를 넘으면
-   거절하고 이유를 말한다.
-3. host가 `git bundle verify`를 돌리고 sha256을 계산한다. 그다음 `project.import`로 보낸다.
-4. guesthost는 stream을 선언한 길이와 hash로 확인한다. mirror가 없으면 빈 repository로 만든다. 그다음 기존 quarantine 규칙과 같은
-   조건(object format 검사, `fsck`, prerequisite 확인, 빈 hooks, 신뢰하는 config)으로 `git fetch <bundle> <branch>:refs/remotes/mac/<branch>`를
-   한다. mirror의 HEAD는 그 ref로 detach한다. mirror에서 바뀌는 것은 `refs/remotes/mac/*`와 HEAD뿐이다.
+2. host가 동봉 git으로 `git bundle create - <branch> ^<lastImport.head>`를 만든다(MAC-404). 첫 import는 전체 이력이다. bundle은 파일로
+   두지 않고 stream 연결로 바로 흘린다.
+3. guesthost는 stream을 staging 파일에 받는다. 선언한 길이와 hash가 맞아야 쓴다. 크기의 한도는 `bundleBytes`가 아니다. 그것은 actor가
+   submit하는 bundle의 한도다(GIT-006). import의 한도는 guest disk의 빈 공간이다(D04의 admission과 같은 기준): 선언한 `bytes`를 받고도
+   admission 여유가 남을 때만 받는다. Linux의 seed(`clone --bare`)에 크기 한도가 없는 것과 같은 자리다.
+4. mirror가 없으면 bundle의 object format(bundle v3의 `@object-format`, 없으면 sha1)으로 빈 repository를 만든다. 그다음 기존 quarantine
+   규칙과 같은 조건(object format 검사, `fsck`, prerequisite 확인, 빈 hooks, 신뢰하는 config)으로
+   `git fetch <bundle> <branch>:refs/remotes/mac/<branch>`를 한다. mirror의 HEAD는 그 ref로 detach한다. mirror에서 바뀌는 것은
+   `refs/remotes/mac/*`와 HEAD뿐이다.
 5. 결과를 원장에 쓰고(MAC-240) 답한다. submodule은 gitlink만, LFS는 pointer만 온다. 둘 다 결과에 "옮기지 않은 것"으로 적는다. 조용히
    빠뜨리지 않는다.
+
+**MUST [MAC-412]** project에 묶인 society는 **첫 import 뒤에만** 만들 수 있다. guest의 `oma`는 society를 처음 열 때 mirror의 HEAD로
+canonical을 시작한다(아래 MAC-411). mirror가 비어 있을 때 열면 기존 provision은 빈 seed로 `oma: canonical root` commit을 만들고,
+object format도 그때 정해진다. 그 뒤로 Mac의 이력은 그 commit의 후손이 아니므로(NOT_DESCENDANT) 어떤 경로로도 main이 될 수 없고,
+다시 seed하는 것은 기존 binding 규칙(D05, V16B)이 막는다. 그래서 guesthost는 mirror에 HEAD가 없는 project의 `society.open`을
+거절한다("먼저 Mac에서 가져오세요"). host UI는 project를 고른 society를 만들 때 가져오기를 먼저 하고, 그것이 끝난 뒤에 연다.
 
 **MUST [MAC-411]** canonical에 들어가는 길은 기존 규범의 것뿐이다.
 
 - **society를 처음 열 때**: guest의 `oma`가 mirror에서 society를 준비한다. 기존 provision이 mirror의 HEAD로 canonical `main`을 시작한다
-  (GIT-003: 초기 main은 사람이 고른 commit이다. 여기서는 사람이 가져오기에서 고른 branch다).
+  (GIT-003: 초기 main은 사람이 고른 commit이다. 여기서는 사람이 가져오기에서 고른 branch다). object format도 Mac repo의 것이 된다.
 - **그 뒤의 import**: mirror만 새로워진다. canonical에 넣으려면 actor가 기존 경로를 탄다. `git.submit`으로 `refs/oma/published/<actor>/<operation>`에
   게시하고(GIT-006·GIT-008), `code.integrate`를 host profile로 받은 actor가 integrate한다(AUTH-001, INT-001). host나 guesthost는 actor가
   아니므로 submit·integrate하지 않는다. `refs/oma/import/*` 같은 새 ref 체계도 만들지 않는다.
@@ -624,8 +666,9 @@ actor가 쓸 수 있게 하는 것(예: mirror를 actor에게 읽기 전용으�
 
 ### 6.5 guest에 project가 없을 때
 
-society를 만들 때 project를 고르지 않을 수 있다. 그러면 mirror는 빈 repository이고, canonical repo는 빈 저장소로 시작한다(기존
-`seedSource: "empty"`). 그 뒤의 import는 §6.3의 MAC-411을 따른다: mirror만 새로워진다.
+society를 만들 때 project를 고르지 않을 수 있다. 그러면 canonical repo는 기존 빈 seed(`seedSource: "empty"`, `oma: canonical root`)로
+시작한다. 이 society는 나중에 Mac project를 base로 삼을 수 없다(MAC-412의 이유). UI는 만들 때 그렇게 말한다: "프로젝트 없이 시작합니다.
+나중에 Mac 프로젝트를 이 작업의 기준으로 가져올 수 없습니다."
 
 ---
 
@@ -670,12 +713,31 @@ item의 값은 엔진이 쓰는 credential blob이고, OMA는 그 형식을 읽�
 이렇게 하면 INF-001이 지켜진다. credential 흐름(OAuth 로그인, token 갱신, 형식)은 여전히 엔진이 소유한다. 바뀌는 것은 blob이 놓이는
 곳뿐이다. §12의 D-4가 INF-001의 "agent 디렉터리" 문장을 이렇게 넓힌다.
 
+**MUST [MAC-704]** 해석에 쓰이는 엔진 상태는 한 곳, host에 있다. 기존 `resolveEngineAuth`는 한 agent 디렉터리의 세 파일을 함께 읽는다:
+`auth.json`(credential), `models.json`(provider와 model의 정의, 그리고 origin이 되는 `baseUrl`), `settings.json`(`pi/current`가 가리키는
+기본 provider·model). 이 셋을 host와 guest로 나누면 두 가지가 깨진다. host는 기본 profile(`pi/current`)을 해석하지 못하고, host가 guest의
+`models.json`을 읽으면 origin을 guest가 정하게 된다(§3.3). 그래서:
+
+- host의 엔진 상태 디렉터리 `~/Library/Application Support/OMA/engine/`에 `models.json`과 `settings.json`을 둔다. `auth.json`의 자리는
+  Keychain backend다(MAC-701). 이 셋이 해석의 유일한 입력이다.
+- credentialRef `engine-managed`(기본 profile의 값)는 Keychain item 하나에 대응한다: `kSecAttrAccount = "engine-managed"`, 값은 엔진의
+  auth 저장소 blob 전체다. 다른 credentialRef는 v1에서 `UNSUPPORTED_PROFILE`로 거절한다.
+- guest는 해석에 쓰이는 파일을 갖지 않는다. `egress.placeholder`에는 society의 model profile 그대로(`provider`, `model`, 예:
+  `pi/current`)를 보낸다. host가 자기 상태로 해석해 `{ placeholderId, placeholder, provider, model, model 정의 }`를 답한다. model 정의는
+  엔진이 그 model과 말하는 데 필요한 것(API 종류, context 크기, 입력 종류 등)이고, `baseUrl`과 header·key는 뺀다. guest의 runner는 이것으로
+  엔진을 설정하고 `baseUrl`은 egress bridge로 둔다. Linux의 runner가 relay 앞의 Resident 엔진을 설정하는 것과 같다.
+- 그래서 guest가 바꿀 수 있는 것은 **어느** model을 쓸지(host가 아는 것 가운데)뿐이다. 그 model의 origin은 host의 정의가 정한다. host가
+  모르는 provider·model은 거절한다.
+
 ### 7.3 로그인과 해석
 
-- **로그인**: provider 로그인(API key 입력이나 OAuth)은 host UI에서 한다. Resolver가 엔진 SDK의 로그인 흐름을 돌린다. OAuth
-  browser는 Mac의 기본 browser다. 결과 blob은 Keychain에 들어간다. guest의 엔진은 로그인하지 않는다.
-- **해석**: egress 요청이 올 때 Relay는 Resolver에게 `(credentialRef, provider, model)`을 해석해 달라고 한다. 답은 `{ origin, key, headers }`다
-  (기존 `engine-auth`의 해석과 같다). 해석한 값은 그 요청 하나 동안만 memory에 있다. 저장하지 않는다.
+- **로그인과 model 선택**: guest의 엔진에는 network도 browser도 없으므로 로그인은 host에서 한다. 흐름은 엔진이 이미 가진 것을
+  쓴다(README·PRODUCT: OMA는 인증·model 관리 화면을 따로 만들지 않는다). 다만 PRODUCT는 엔진을 RPC 모드로만 돌려 엔진의 대화형
+  화면이 없게 하라고도 한다. 엔진의 로그인 흐름을 어느 표면으로 보일지는 Linux에서도 아직 열려 있는 문제다(PRODUCT의 첫 줄, "아직
+  아닌 것"). 그래서 macOS가 따로 정하지 않고 §12 D-9로 한 번에 정한다. 정해진 흐름은 host의 엔진 상태(MAC-704)에 결과를 쓴다. OAuth
+  browser는 Mac의 기본 browser다. guest의 엔진은 로그인하지 않는다.
+- **해석**: `egress.placeholder`마다 Resolver가 `(credentialRef, provider, model)`을 host의 엔진 상태로 해석한다(MAC-704). 답은
+  `{ origin, key, headers }`다(기존 `engine-auth`의 해석과 같다). 해석한 값은 그 run의 Relay가 끝날 때까지만 memory에 있다. 저장하지 않는다.
 - **갱신**: token 갱신은 엔진 SDK가 해석 중에 한다. 결과는 `withLock`으로 Keychain에 돌아간다.
 
 **MUST [MAC-702]** Keychain이 잠겼거나 item을 읽을 수 없으면 해석은 실패한다. Relay는 그 egress를 provider에 보내지 않고 연결 실패로
@@ -794,7 +856,7 @@ thaw한다. deadline은 host가 요청한 값과, guest의 society 설정에 실
 `<id>.partial`을 지우고 snapshot을 만들지 않은 것으로 끝낸다. UI는 "백업을 만들지 못했습니다. 다시 시도하세요"라고 말한다. 일관성을 모르는
 사본을 snapshot으로 남기지 않는다. `fs.thaw`의 답을 받지 못해도(연결 끊김) 같다.
 
-보존: 최근 7개와 update 전 snapshot.
+보존: 최근 3개와 update 전 snapshot. 개수보다 공간이 먼저다(MAC-661).
 
 **archive(논리·이식 가능·Time Machine용)**
 
@@ -810,6 +872,11 @@ host는 이 stream을 AES-256-GCM(64 KiB chunk마다 nonce와 tag)으로 암호�
 사용자가 저장했는지 확인한다(§13 결정 Q3).
 
 **MUST [MAC-621]** archive는 Human의 private context(A2)를 담는다. 암호화하지 않은 archive를 디스크에 쓰지 않는다.
+
+**MUST [MAC-623]** archive는 사용자가 만들지 않아도 생긴다. Time Machine이 담는 OMA의 데이터는 archive뿐이기 때문이다(`state.img`는
+제외한다). 유휴 정지(MAC-310) 때 society는 이미 모두 멈춰 있으므로, 그 society의 마지막 archive가 7일보다 오래됐으면 `power.off` 전에
+archive를 만든다. 공간이 첫 한도 아래면 만들지 않고 알린다(MAC-660). society마다 최근 4개를 남긴다. UI는 society마다 마지막 archive의
+시각을 보인다. 사용자는 주기를 바꾸거나 끌 수 있다.
 
 ### 8.5 복구(repair)와 복원(restore)
 
@@ -851,8 +918,16 @@ host는 이 stream을 AES-256-GCM(64 KiB chunk마다 nonce와 tag)으로 암호�
 - 절전 중에 막 update·snapshot을 하던 중이었다면, 깨어난 뒤 해당 단계를 처음부터 다시 판정한다. freeze는 MAC-620의 deadline이 지킨다.
 
 **MUST [MAC-650]** guest 코드가 경과 시간을 잴 때는 monotonic clock을 쓴다. 기한(idle, turn, receipt wait, retry backoff)을 wall clock
-차로 재지 않는다. 깨어난 뒤 wall clock이 몇 시간 앞으로 뛰면, wall clock으로 잰 기한은 한꺼번에 만료된다. 지금 코드에서 `Date.now()`로
-기한을 재는 곳(예: `principal-delivery`의 accept·retry)은 macOS 전에 고친다(§12의 D-7). 저장하는 사건 시각은 wall clock을 쓴다.
+차로 재지 않는다. 깨어난 뒤 wall clock이 몇 시간 앞으로 뛰면, wall clock으로 잰 기한은 한꺼번에 만료된다. 뒤로 가면 기한이 오지 않는다.
+지금 코드에서 `Date.now()`의 차로 경과 시간을 재는 곳은 셋이고, 모두 macOS 전에 고친다(§12의 D-7).
+
+- `runtime/principal-delivery.ts`: accept 기한과 실패 뒤 재시도 간격.
+- `runtime/broker-supervisor.ts`: broker 재시작 한도의 창. 시계가 뒤로 가면 오래된 재시작 기록이 창에서 빠지지 않아, broker를 포기할 까닭이
+  없는데 포기한다.
+- `cli/transport.ts`: Principal credential을 기다리는 기한. 시계가 앞으로 뛰면 곧바로 `AUTH_FAILED`가 된다.
+
+`Date.now()`의 나머지 쓰임(Store·operation의 시각, mail의 Date, 관측 시각)은 경과 시간이 아니라 기록하는 사건 시각이므로 그대로 둔다.
+저장하는 사건 시각은 wall clock을 쓴다.
 시계가 뒤로 가도 기존 하한 규칙(P0V-30, P0V-56)이 지킨다.
 
 ### 9.2 시계
@@ -907,12 +982,25 @@ fetch는 ref 하나의 갱신이다.
 
 ### 9.6 저장 공간
 
+guest의 ext4가 보는 빈 공간은 가상 disk(기본 64 GiB)의 빈 공간이다. Mac에 실제로 남은 공간이 아니다. 그래서 guest의 기존 storage
+admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 공간은 host가 본다.
+
 **MUST [MAC-660]** `omahostd`는 Mac 볼륨의 빈 공간을 1분마다 본다. 한도는 둘이다.
 
-- `max(5 GiB, state disk 실제 크기의 10%)` 아래: 새 society·import·snapshot을 거절하고 경고한다.
+- `max(5 GiB, state disk 실제 크기의 10%)` 아래: 새 society·import·snapshot·archive를 거절하고 경고한다. 먼저 MAC-661로 공간을 되찾는다.
 - 1 GiB 아래: guest에 admission을 닫으라고 한다(`HOST_STORAGE_LOW`). 이미 accept된 작업의 정산은 계속한다(D04와 같은 구분).
 
-guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
+**MUST [MAC-661]** host가 쓰는 공간은 되찾을 수 있어야 한다.
+
+- snapshot: APFS clone은 처음에는 공간을 쓰지 않지만, `state.img`에 쓰기가 쌓일수록 원본과 갈라진 만큼 공간을 차지한다. 그래서
+  snapshot은 개수(최근 3개)보다 공간이 먼저다. 첫 한도 아래로 내려가면 가장 오래된 snapshot부터 지운다. update 전 snapshot은 update가
+  확정될 때까지 지우지 않는다. 지운 것을 UI에 적는다.
+- state disk: sparse file은 guest가 파일을 지워도 스스로 줄지 않는다. guest는 state 파일 시스템에 주기적으로 `fstrim`을 한다
+  (`fstrim.timer`, 주 1회, 그리고 society를 지운 뒤). Virtualization.framework가 discard를 `state.img`의 hole로 바꾸는지는 확인이
+  필요하다(MV-62). 바꾸지 않는다면 VM이 멈춰 있을 때 host가 줄인다: guest가 빈 block을 0으로 채운 기록을 남기고, host가 0인 영역에
+  hole을 뚫는다(`F_PUNCHHOLE`).
+- disk를 늘리는 것은 VM이 멈춰 있을 때만 한다(`truncate`로 `state.img`를 늘리고, 다음 부팅 뒤 `disk.grow`). 실행 중인 disk의 크기
+  변경을 guest에 알리는 API에 기대지 않는다.
 
 ---
 
@@ -923,6 +1011,10 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 - 기존 lane(fast, durable, property, stress, kernel, crash)은 guest에서 그대로 돈다. **실제 image를 실제 Virtualization.framework
   위에 띄워서** 돌린다. guest는 기존 lane이 도는 환경(Debian 13, systemd 257)과 같다. 다른 점은 arm64와 macOS 아래의 disk뿐이다.
   그 차이가 결과를 바꾸지 않는다는 것을 이 lane들이 증명한다.
+- 시험이 skip되면 통과가 아니다(기존 규칙: `unrunTests`). 그래서 guest에서 원리적으로 돌 수 없는 시험은 skip으로 남기지 않고 lane의 목록에서
+  뺀 뒤, 그 증거를 어디서 얻는지 적는다. vsock bridge 시험(`platform-vsock-bridge`)은 vsock loopback이 있어야 도는데, guest kernel에는
+  loopback이 없다(MAC-204). 그래서 이 시험은 `platform` lane(loopback이 있는 Linux)에서 돌고 guest-lanes에는 들지 않는다. 실제 VM에서의
+  MAC-202 증거는 MV-21이다.
 - macOS 쪽은 새 lane을 더한다. 각 oracle은 기존 규율을 따른다: 고친 곳을 되돌리면 실패해야 하고(negative control), 결과는 source
   digest와 image manifest digest에 결박한다.
 - GitHub가 제공하는 macOS runner에서 Virtualization.framework로 VM을 띄우는 것에는 기댈 수 없다. runner 자체가 VM이고, nested
@@ -953,6 +1045,8 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 | MV-04 | mac-vm | 깨어난 뒤 guest의 wall clock이 host와 1초 안으로 맞고, monotonic으로 잰 기한이 잠든 시간 때문에 만료되지 않는다 | 기한을 wall clock으로 재면 실패 |
 | MV-05 | mac-vm | 절전 동안 진행하던 provider 요청은 다시 보내지 않는다(scripted provider가 받은 요청 수) | Relay가 재전송하면 실패 |
 | MV-10 | platform | 모든 RPC message의 conformance vector(정상과 거절)를 codec이 판정한다. host와 guest는 같은 codec을 쓴다 | schema에서 field 하나를 빼면 실패 |
+| MV-06 | platform | MAC-650의 세 곳이 wall clock의 앞뒤 step에 영향받지 않는다: 시계를 몇 시간 앞으로 옮겨도 credential 대기가 곧바로 끝나지 않고, 뒤로 옮겨도 broker 재시작 창의 기록이 빠진다 | `Date.now()`로 되돌리면 실패 |
+| MV-13 | platform | MAC-704: `pi/current`는 host의 `settings.json`으로 해석된다. guest가 보낸 provider·model이 host의 정의에 없으면 거절한다. 답의 model 정의에 `baseUrl`·header·key가 없다. origin은 host의 `models.json`이 정한다 | guest가 origin을 정하게 하면 실패 |
 | MV-11 | mac-vm | `bootId`가 바뀐 뒤 결과를 모르는 요청을 다시 보내지 않고 key로 조회한다. `REQUEST_NOT_FOUND`일 때만 다시 보낸다 | 다시 보내게 하면 guest 원장에 두 번 남아 실패 |
 | MV-12 | platform, mac-vm | terminal: detach한 뒤에도 `oma`가 돈다. 다시 attach하면 mode가 다시 오고 화면 전체가 다시 그려진다. 두 번째 attach는 `ATTACH_CONFLICT`, takeover는 앞 attach에 `detached`를 준다. 끊긴 연결의 입력을 다시 보내지 않는다 | 다시 그리기를 빼면 빈 화면으로 실패 |
 | MV-20 | mac-security | sandbox 안에서 `socket(AF_VSOCK)`이 `EPERM`이다 | seccomp filter를 빼면 실패 |
@@ -965,14 +1059,20 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 | MV-30 | mac-powercut | 쓰기 부하(mail 전달, 설정 commit, git 통합, receipt 게시) 중 임의 시점에 `omahostd`를 SIGKILL한 뒤 다음 부팅에서 확인한다: 확정된 사실이 그대로다, 원장 decode가 손상을 말하지 않는다, 결과를 모르는 operation은 unknown이다. 100회 이상 | `synchronizationMode: .fsync`로 바꾸면 이 lane은 전원 장애 증거로 인정하지 않는다(MAC-302) |
 | MV-31 | mac-powercut | 같은 시험을 `forced` 정지로도 한다 | — |
 | MV-32 | platform, mac-vm | freeze의 deadline이 guest 설정의 가장 짧은 `receiptWaitSeconds`보다 짧다. 설정을 읽지 못하면 freeze하지 않는다. `thawed: false`면 host가 사본을 버린다. 떠 있는 VM의 snapshot은 모든 society를 멈춘 뒤에만 만든다 | 한도를 고정값으로 되돌리면, 또는 `thawed: false`의 사본을 남기면 실패 |
+| MV-34 | platform, mac-vm | MAC-303: 할당된 block이 있는 `state.img`, 처음 1 MiB가 0이 아닌 device, provisioning이 끝난 기록 가운데 하나만 있어도 포맷하지 않는다. superblock을 지운 disk로 부팅하면 `failed`로 멈춘다 | signature 기준으로 되돌리면 손상 disk를 포맷해 실패 |
 | MV-33 | mac-vm | archive 왕복: 만들고, 다른 VM instance에서 복원하고, 무결성 진단이 통과한다. 1바이트를 바꾸면 복원을 거절한다 | digest 검사를 빼면 실패 |
+| MV-35 | mac-vm | MAC-623: 유휴 정지 때 7일이 지난 society의 archive가 생기고, society마다 4개만 남는다. 공간이 한도 아래면 만들지 않고 알린다 | 주기를 빼면 실패 |
 | MV-40 | CI | image를 두 번 build하면 sha256이 같다 | — |
 | MV-41 | mac-vm | update 성공, migration 실패 주입 뒤 rollback이 update 전 snapshot으로 돌아간다. 옛 app으로 새 state를 열지 않는다 | rollback이 부분 migration disk를 쓰면 실패 |
 | MV-42 | mac-vm | 표 §9.4의 모든 칸 | — |
+| MV-43 | mac-vm | MAC-321: 로그아웃·재시작·시스템 종료 때 OMA.app이 떠 있는 경우와 없는 경우 각각, `omahostd`가 받은 시간과 결과(`stopped` 또는 `forced`)를 기록한다. 결과가 무엇이든 다음 부팅의 불변식이 지켜진다 | — (측정) |
 | MV-50 | mac-e2e | import(작은 repo, 큰 repo, sha256 object format, submodule·LFS가 있는 repo) 뒤 mirror의 `refs/remotes/mac/<branch>`에 정확한 commit이 있다. 첫 society의 canonical `main`은 그 commit이다. 두 번째 import는 canonical을 바꾸지 않는다. 옮기지 않은 것을 보고한다 | submodule 보고를 빼면, 또는 import가 canonical을 바꾸면 실패 |
+| MV-53 | platform, mac-e2e | MAC-412: mirror가 비어 있는 project의 `society.open`은 거절된다. 첫 import 뒤에 연 society의 canonical `main`과 object format은 Mac repo의 것이다(sha256 repo 포함). 256 MiB를 넘는 첫 import가 공간이 있으면 된다 | 빈 mirror로 열게 하면 canonical root commit이 생겨 실패 |
+| MV-54 | platform | MAC-404: `core.fsmonitor`·hook·`core.pager`·`credential.helper`를 실행 파일로 둔 Mac repo에서 import·export를 해도 그 어느 것도 실행되지 않는다 | 명령줄 덮기를 빼면 실행 흔적이 남아 실패 |
 | MV-51 | mac-e2e | export 뒤 Mac repo에서 `refs/remotes/oma/main`만 바뀌었다. 작업 트리·index·`refs/heads/*`가 바이트 그대로다 | branch를 갱신하면 실패 |
 | MV-52 | mac-e2e | project를 옮기거나 이름을 바꾸면 bookmark가 따라간다. 다른 repo로 바꿔치기하면 멈춘다 | root commit 검사를 빼면 실패 |
 | MV-60 | platform, mac-e2e | 시나리오 층의 Principal 루프(SCN-L01 모양): host의 terminal attach로 guest의 `oma`를 움직여 위임, 답장, 읽기, 확인까지. provider는 host Relay 뒤의 scripted provider다 | — |
+| MV-62 | mac-vm | MAC-661: guest에서 큰 파일을 지우고 `fstrim`한 뒤 `state.img`의 할당 크기가 준다(아니면 멈춘 뒤의 hole 뚫기로 준다). snapshot이 공간 한도에서 오래된 것부터 지워진다 | 되찾기를 빼면 할당 크기가 그대로라 실패 |
 | MV-61 | mac-vm | Mac 디스크가 부족하면 새 작업을 거절하고 정산은 계속한다(작은 APFS sparsebundle 볼륨에서) | 한도 검사를 빼면 guest ext4 오류로 실패 |
 
 ### 10.4 증거와 판정
@@ -1024,7 +1124,8 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 | D-1 | TUI-* 문구 규칙 | TUI의 오류 문구에서 host 경로와 errno 이름을 빼고 제품 문구와 코드로 바꾼다. 원문은 로그에 남긴다(MAC-022). Linux 배포본에도 적용한다 |
 | D-4 | INF-001, INF-007, T116 | credential 저장소는 엔진의 agent 디렉터리가 아니라 host Keychain backend다. Principal의 엔진도 자리표시자와 relay를 쓴다 |
 | D-5 | SB-001 | sandbox baseline에 `AF_VSOCK` socket 금지 seccomp를 더한다(Linux 배포본에도 적용한다. 해가 없고 vsock이 있는 host에서 필요하다) |
-| D-7 | WP10, `principal-delivery` | 경과 시간은 monotonic clock으로 잰다(MAC-650). Linux에도 같은 이유가 있다(시계 조정) |
+| D-7 | WP10, `principal-delivery`, `broker-supervisor`, CLI transport | 경과 시간은 monotonic clock으로 잰다(MAC-650의 세 곳). Linux에도 같은 이유가 있다(시계 조정) |
+| D-9 | README·PRODUCT의 로그인 문장, INF-001 | (결정 필요) 엔진의 로그인·model 선택 흐름을 어느 표면으로 보이는가. PRODUCT는 "OMA는 인증 화면을 따로 만들지 않는다"와 "엔진은 RPC 모드로만 돈다"를 함께 요구하는데, 지금 Linux에도 이 둘을 함께 만족하는 흐름이 없다. macOS에서는 그 흐름이 host에서 돌고 결과가 host의 엔진 상태에 쓰인다는 것(MAC-704)만 다르다. 한 번 정해 두 배포본에 같이 적용한다 |
 | D-8 | GIT-006·GIT-008, AUTH-001 | (결정 필요) 이미 있는 society에 사람이 가져온 commit을 actor가 쓰게 하는 길. 후보 둘: mirror를 actor의 sandbox에 읽기 전용으로 보여 actor가 기존 `git.submit`으로 게시한다(권한 변화 없음, SB-* 변경), 또는 사람 권한의 게시(`refs/oma/published/<human>/<operation>`, 새 actor 종류와 wire 변경). 결정 전 v1은 MAC-411까지만 한다 |
 
 이전 초안의 D-2(REC-007의 host를 society host로), D-3(D03의 foreground mode 강제), D-6(project binding의 projectId)은 없어졌다. guest에서
@@ -1045,3 +1146,4 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 | Q6 guest disk 기본 크기 | 64 GiB sparse | 실제 사용분만 차지한다 |
 | Q7 진단 묶음을 받는 곳 | 배포 주체의 지원 창구. OMA는 자동으로 보내지 않는다(MAC-641) | 받는 주체가 정해져야 UI가 안내할 수 있다 |
 | Q8 D-8(가져온 commit을 actor가 쓰는 길) | mirror의 읽기 전용 노출(권한·wire 변화 없음) | 사람 권한의 게시는 새 actor 종류라 계획이 필요하다 |
+| Q9 D-9(로그인 흐름의 표면) | 두 배포본에 같은 답 | Linux의 첫 줄("아직 아닌 것")과 같은 문제다 |

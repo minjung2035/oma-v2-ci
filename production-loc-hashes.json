@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "e93e38aeadde13d997b104c098247a80aa8ef280264f8bf6325a9f1e0323e7d0",
-  "report": "453c5084bc54eeb708afbe10029adfe7b4f452ec768a30e77333979b8e672370",
+  "manifest": "393b5b373818be5867fb61737e5dfe3589353097550c781c1f80c56ed6b658d0",
+  "report": "7b921e6ccf079566b1c391457af840f885e43e61ec0efbe7f5878c292a4beea0",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -509,7 +509,11 @@
     },
     {
       "path": "src/platform/guest/server.ts",
-      "sha256": "2743b8752ed410c0a786377a48b69ddd2b42082aa66de6bc12bad597a4ce60c8"
+      "sha256": "660642166fe59dbf17a14c798fe76f914e4c3f1c386beb4d1a2c603118759209"
+    },
+    {
+      "path": "src/platform/product-text.ts",
+      "sha256": "a5efdc22b698db94f5d07dbc8d73ea10e2d5126e915890d11f80fa4eef069082"
     },
     {
       "path": "src/platform/rpc.ts",
@@ -561,7 +565,7 @@
     },
     {
       "path": "src/protocol/host-guest.ts",
-      "sha256": "1f7054164965edb13a87a72ac64e2203aa44e0ca5ba3623ea701261c9bc9ca4b"
+      "sha256": "26f523e8cc0eb54168271297ca8ce1b1697a8a8a392b21835d73969b8c576aba"
     },
     {
       "path": "src/protocol/jsonl.ts",
@@ -813,7 +817,7 @@
     },
     {
       "path": "src/tui/app.ts",
-      "sha256": "c8df8be2ea7fd46ba4bf3689c77b5861ba6d7b3b1c2b726203da65c020ce6821"
+      "sha256": "970bc482155130ca308dcf9345ebbf4c28582f48537dd7f6ea53dc014cbc90ac"
     },
     {
       "path": "src/tui/dashboard.ts",
@@ -825,7 +829,7 @@
     },
     {
       "path": "src/tui/keys.ts",
-      "sha256": "22c342e3cf4809b92b653773237713427009ebf65a10f06a4200878017cb446e"
+      "sha256": "b752ad0112cdafdbb09b67eea0b504c4a4f3f6392ab7364ecb5bb6b50dc4bf63"
     },
     {
       "path": "src/tui/limits.ts",
@@ -841,7 +845,7 @@
     },
     {
       "path": "src/tui/screen.ts",
-      "sha256": "72af46a68fa86a824dcd79c322d233924f507890a11325f7b22c73a62d9e7ff2"
+      "sha256": "768eee27d1482f3fd44b8d0d1bee54f2ae0dddc696767d5c4c148349abefbe17"
     },
     {
       "path": "src/tui/session.ts",

@@ -25,7 +25,7 @@ const RIGHT = Buffer.from(`${String.fromCharCode(27)}[C`);
 
 function terminal(): Terminal & { frames: string[][] } {
   const frames: string[][] = [];
-  return { frames, columns: 110, rows: 20, draw(lines) { frames.push([...lines]); }, onKeys() {}, onResize() {}, restore() {} };
+  return { frames, columns: 110, rows: 20, draw(lines) { frames.push([...lines]); }, onKeys() {}, onResize() {}, repaint() {}, restore() {} };
 }
 
 // Needs a user a mode of 000 refuses, as every verification lane runs as.

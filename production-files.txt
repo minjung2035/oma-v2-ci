@@ -125,6 +125,7 @@ src/platform/guest/control.ts
 src/platform/guest/identity.ts
 src/platform/guest/linux-system.ts
 src/platform/guest/server.ts
+src/platform/product-text.ts
 src/platform/rpc.ts
 src/ports/ledger.ts
 src/ports/runtime.ts

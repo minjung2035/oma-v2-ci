@@ -11,6 +11,13 @@ export interface Terminal {
   draw(lines: readonly string[]): void;
   onKeys(handler: (chunk: Uint8Array) => void): void;
   onResize(handler: () => void): void;
+  /** Forgets what was drawn and clears the screen, so the next draw writes
+   * every line. For a screen that no longer shows what this owner last drew:
+   * one the Human asked to redraw (Ctrl-L), or a terminal that has just
+   * attached to this one's session (macos-platform §4.6). The modes that save
+   * nothing are asserted again; the alternate screen is not, because entering
+   * it twice overwrites the cursor it saved. */
+  repaint(): void;
   restore(): void;
 }
 
@@ -60,6 +67,11 @@ export function openTerminal(streams: TerminalStreams): Terminal {
       input.on("data", chunk => handler(typeof chunk === "string" ? Buffer.from(chunk) : chunk));
     },
     onResize(handler) { output.on("resize", handler); },
+    repaint() {
+      if (restored) return;
+      previous = [];
+      output.write(CURSOR_OFF + PASTE_ON + CLEAR);
+    },
     restore() {
       if (restored) return;
       restored = true;

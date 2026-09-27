@@ -152,6 +152,8 @@ export class TuiApp {
   }
 
   private apply(key: Key): void {
+    // Ctrl-L, the terminal convention: the whole screen again, nothing else.
+    if (key.kind === "redraw") { this.terminal.repaint(); return; }
     const result = step(this.state, key, this.data, this.frameBytes);
     this.state = result.state;
     for (const effect of result.effects) this.run(effect);

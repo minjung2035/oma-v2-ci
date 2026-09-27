@@ -16,9 +16,10 @@ import { createServer, type Server, type Socket } from "node:net";
 import { chmodSync, chownSync, existsSync, unlinkSync } from "node:fs";
 import { peerCred, socketDescriptor } from "../../leaf.js";
 import { FramedPeer, readHello } from "../rpc.js";
+import { productText } from "../product-text.js";
 import { ERROR_METADATA, StoreError, errorCodeOf } from "../../domain/errors.js";
 import {
-  negotiate, productText, requestProblem, HOST_GUEST_PROTOCOL,
+  negotiate, requestProblem, HOST_GUEST_PROTOCOL,
   type Channel, type HelloParams, type HelloResult, type PlatformErrorCode,
 } from "../../protocol/host-guest.js";
 

@@ -21,7 +21,7 @@ const ENTER = Buffer.from("\r");
 
 function terminal(): Terminal & { frames: string[][] } {
   const frames: string[][] = [];
-  return { frames, columns: 110, rows: 20, draw(lines) { frames.push([...lines]); }, onKeys() {}, onResize() {}, restore() {} };
+  return { frames, columns: 110, rows: 20, draw(lines) { frames.push([...lines]); }, onKeys() {}, onResize() {}, repaint() {}, restore() {} };
 }
 
 test("V28A: a message the TUI shows is still waiting for the Principal's session, and opening it changes nothing", () => {

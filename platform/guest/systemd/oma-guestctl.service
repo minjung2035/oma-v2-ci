@@ -13,7 +13,8 @@ RuntimeDirectoryMode=0711
 ExecStart=/usr/lib/oma/node/bin/node /usr/lib/oma/dist/src/entry/guestctl.js --socket /run/oma-guestctl/control.sock --data /var/lib/oma --societies /var/lib/oma/data/oma
 Restart=on-failure
 RestartSec=1s
-CapabilityBoundingSet=CAP_SYS_TIME CAP_SYS_ADMIN CAP_SYS_BOOT
+# CAP_SYS_RESOURCE: ext4's online resize refuses without it (ext4_resize_begin).
+CapabilityBoundingSet=CAP_SYS_TIME CAP_SYS_ADMIN CAP_SYS_BOOT CAP_SYS_RESOURCE
 NoNewPrivileges=yes
 
 [Install]

@@ -128,6 +128,7 @@
   "src/platform/guest/identity.ts",
   "src/platform/guest/linux-system.ts",
   "src/platform/guest/server.ts",
+  "src/platform/product-text.ts",
   "src/platform/rpc.ts",
   "src/ports/ledger.ts",
   "src/ports/runtime.ts",
@@ -1456,7 +1457,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 39
+   "files": 40
   },
   {
    "index": 5,
@@ -1473,8 +1474,8 @@
    "files": 57
   }
  ],
- "files": 232,
- "runtimeEdges": 892,
+ "files": 233,
+ "runtimeEdges": 893,
  "typeOnlyEdges": 326,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
@@ -1486,7 +1487,7 @@
   "L4-orchestration -> L1-kernel": 114,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 43,
+  "L4-orchestration -> L4-orchestration": 44,
   "L5-entry -> L1-kernel": 80,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
@@ -1554,7 +1555,7 @@
   "node:http": 1,
   "node:https": 1,
   "node:net": 12,
-  "node:os": 2,
+  "node:os": 3,
   "node:path": 68,
   "node:perf_hooks": 5,
   "node:sqlite": 4,

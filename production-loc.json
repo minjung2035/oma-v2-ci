@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 231,
-    "n_lines": 31226,
+    "n_files": 232,
+    "n_lines": 31260,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -144,15 +144,15 @@
     "code": 238,
     "language": "TypeScript"
   },
-  "src/broker/internal-dispatcher.ts": {
-    "blank": 1,
-    "comment": 10,
-    "code": 234,
-    "language": "TypeScript"
-  },
   "src/tui/keys.ts": {
     "blank": 25,
     "comment": 126,
+    "code": 236,
+    "language": "TypeScript"
+  },
+  "src/broker/internal-dispatcher.ts": {
+    "blank": 1,
+    "comment": 10,
     "code": 234,
     "language": "TypeScript"
   },
@@ -240,15 +240,15 @@
     "code": 185,
     "language": "TypeScript"
   },
+  "src/tui/app.ts": {
+    "blank": 20,
+    "comment": 56,
+    "code": 183,
+    "language": "TypeScript"
+  },
   "src/storage/durable-fs.ts": {
     "blank": 13,
     "comment": 78,
-    "code": 182,
-    "language": "TypeScript"
-  },
-  "src/tui/app.ts": {
-    "blank": 20,
-    "comment": 55,
     "code": 182,
     "language": "TypeScript"
   },
@@ -450,12 +450,6 @@
     "code": 127,
     "language": "TypeScript"
   },
-  "src/protocol/host-guest.ts": {
-    "blank": 16,
-    "comment": 37,
-    "code": 125,
-    "language": "TypeScript"
-  },
   "src/platform/guest/linux-system.ts": {
     "blank": 5,
     "comment": 17,
@@ -471,6 +465,12 @@
   "src/protocol/batch-view.ts": {
     "blank": 1,
     "comment": 7,
+    "code": 121,
+    "language": "TypeScript"
+  },
+  "src/protocol/host-guest.ts": {
+    "blank": 15,
+    "comment": 34,
     "code": 121,
     "language": "TypeScript"
   },
@@ -558,15 +558,15 @@
     "code": 96,
     "language": "TypeScript"
   },
-  "src/cli/commands/send.ts": {
-    "blank": 4,
-    "comment": 0,
-    "code": 94,
-    "language": "TypeScript"
-  },
   "src/platform/guest/server.ts": {
     "blank": 6,
     "comment": 30,
+    "code": 95,
+    "language": "TypeScript"
+  },
+  "src/cli/commands/send.ts": {
+    "blank": 4,
+    "comment": 0,
     "code": 94,
     "language": "TypeScript"
   },
@@ -816,6 +816,12 @@
     "code": 61,
     "language": "TypeScript"
   },
+  "src/tui/screen.ts": {
+    "blank": 4,
+    "comment": 21,
+    "code": 60,
+    "language": "TypeScript"
+  },
   "src/storage/facets.ts": {
     "blank": 5,
     "comment": 7,
@@ -856,12 +862,6 @@
     "blank": 3,
     "comment": 10,
     "code": 55,
-    "language": "TypeScript"
-  },
-  "src/tui/screen.ts": {
-    "blank": 4,
-    "comment": 15,
-    "code": 54,
     "language": "TypeScript"
   },
   "src/mail/reconcile.ts": {
@@ -1308,6 +1308,12 @@
     "code": 12,
     "language": "OMA systemd"
   },
+  "src/platform/product-text.ts": {
+    "blank": 2,
+    "comment": 12,
+    "code": 11,
+    "language": "TypeScript"
+  },
   "implementation/systemd/reconcile.timer.in": {
     "blank": 0,
     "comment": 2,
@@ -1393,9 +1399,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1278,
-    "comment": 5244,
-    "code": 24704,
-    "nFiles": 231
+    "blank": 1279,
+    "comment": 5260,
+    "code": 24721,
+    "nFiles": 232
   }
 }

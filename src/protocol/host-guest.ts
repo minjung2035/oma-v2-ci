@@ -168,11 +168,3 @@ export function responseProblem(raw: Record<string, unknown>): string | null {
   if (error.retry !== "never" && error.retry !== "same-key" && error.retry !== "after-repair") return "invalid retry";
   return null;
 }
-
-/** MAC-231: what the guest may say about itself. A reason that would carry a
- * Linux path, a unit name or an errno is replaced by the product's word before
- * it leaves the guest; the host shows only strings that pass this. */
-export function productText(text: string): boolean {
-  return text.length <= 1024 && !/\/(?:var|run|etc|home|proc|sys|tmp|usr|opt)\//.test(text) &&
-    !/\boma-[a-z0-9-]+\.(?:service|path|timer|socket)\b/.test(text) && !/\bE[A-Z]{3,}\b/.test(text) && !/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text);
-}

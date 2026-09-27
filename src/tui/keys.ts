@@ -27,7 +27,8 @@ export type Key =
   | { readonly kind: "right" }
   | { readonly kind: "panel" }
   | { readonly kind: "interrupt" }
-  | { readonly kind: "eof" };
+  | { readonly kind: "eof" }
+  | { readonly kind: "redraw" };
 
 /** The engine's key ids this surface acts on. Anything else is deliberately
  * ignored rather than guessed at.
@@ -45,6 +46,7 @@ const ACTIONS: Readonly<Record<string, Key>> = Object.freeze({
   "ctrl+x": { kind: "panel" },
   "ctrl+c": { kind: "interrupt" },
   "ctrl+d": { kind: "eof" },
+  "ctrl+l": { kind: "redraw" },
 });
 
 const ESC = 0x1b;

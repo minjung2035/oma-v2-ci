@@ -21,22 +21,25 @@ const paste = (text: string): Buffer => Buffer.from(`${ESC}[200~${text}${ESC}[20
 const afterPasteBurst = (): Promise<void> =>
   new Promise(resolve => { setTimeout(resolve, TERMINAL_BOUNDS.pasteBurstMs.value + 20); });
 
-function fakeTerminal(): Terminal & { frames: string[][] } {
+function fakeTerminal(): Terminal & { frames: string[][]; repaints: number } {
   const frames: string[][] = [];
-  return {
+  const terminal = {
     frames,
+    repaints: 0,
     columns: 100,
     rows: 16,
-    draw(lines) { frames.push([...lines]); },
+    draw(lines: readonly string[]) { frames.push([...lines]); },
     onKeys() { /* driven directly in tests */ },
     onResize() { /* no resize in tests */ },
+    repaint() { terminal.repaints += 1; },
     restore() { /* nothing to restore */ },
   };
+  return terminal;
 }
 
 interface Harness {
   readonly app: TuiApp;
-  readonly terminal: Terminal & { frames: string[][] };
+  readonly terminal: Terminal & { frames: string[][]; repaints: number };
   readonly writes: { field: string; value: string | number }[];
   readonly toggles: { id: string; role: string; enabled: boolean }[];
   readonly prompts: string[];
@@ -91,6 +94,18 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
     last: () => (terminal.frames[terminal.frames.length - 1] ?? []).join("\n"),
   };
 }
+
+test("Ctrl-L repaints the whole screen and changes nothing else", () => {
+  const h = harness();
+  h.app.feed(Buffer.from("draft"));
+  const before = h.last();
+  const frames = h.terminal.frames.length;
+  h.app.feed(Buffer.from([0x0c]));
+  assert.equal(h.terminal.repaints, 1);
+  assert.equal(h.terminal.frames.length, frames + 1, "the screen is drawn right after");
+  assert.equal(h.last(), before, "the draft and the view are as they were");
+  assert.deepEqual(h.prompts, []);
+});
 
 test("TUI-007: confirming a choice writes through the port and reports when it applies", () => {
   const h = harness();
