@@ -75,7 +75,9 @@ test("AV7 / INV02, arch §23.5: a mailbox that cannot be listed is not an empty 
     app.refresh(); app.draw();
     const last = () => (screen.frames.at(-1) ?? []).join("\n");
     app.feed(CTRL_X);
-    assert.match(last(), /Mail\s+unknown \(메일함을 읽지 못함\)/);
+    // P0V-66: what waits for the session is the ledger's (unknown here); the
+    // mailbox that could not be listed makes what arrived unknown, not 0.
+    assert.match(last(), /Mail\s+unknown \(.*\) · 새 도착 unknown \(메일함을 읽지 못함\)/);
     assert.doesNotMatch(last(), /0건/, "the Dashboard counted an unlisted mailbox as none waiting");
     app.feed(RIGHT); app.feed(RIGHT);
     assert.match(last(), /메일함 일부를 읽지 못함 \(EACCES/, "the Mail screen did not say part of the mailbox was unread");
