@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 270,
-    "n_lines": 35281,
+    "n_files": 271,
+    "n_lines": 35366,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -48,6 +48,12 @@
     "code": 370,
     "language": "TypeScript"
   },
+  "src/entry/oma.ts": {
+    "blank": 27,
+    "comment": 178,
+    "code": 365,
+    "language": "TypeScript"
+  },
   "src/runtime/inference-relay.ts": {
     "blank": 39,
     "comment": 109,
@@ -58,12 +64,6 @@
     "blank": 4,
     "comment": 47,
     "code": 346,
-    "language": "TypeScript"
-  },
-  "src/entry/oma.ts": {
-    "blank": 26,
-    "comment": 172,
-    "code": 338,
     "language": "TypeScript"
   },
   "src/units.ts": {
@@ -330,6 +330,12 @@
     "code": 167,
     "language": "TypeScript"
   },
+  "src/process/async.ts": {
+    "blank": 4,
+    "comment": 76,
+    "code": 166,
+    "language": "TypeScript"
+  },
   "src/mail.ts": {
     "blank": 1,
     "comment": 12,
@@ -345,12 +351,6 @@
   "src/diagnostics/files.ts": {
     "blank": 2,
     "comment": 5,
-    "code": 159,
-    "language": "TypeScript"
-  },
-  "src/process/async.ts": {
-    "blank": 4,
-    "comment": 71,
     "code": 159,
     "language": "TypeScript"
   },
@@ -1428,6 +1428,12 @@
     "code": 22,
     "language": "TypeScript"
   },
+  "src/tui/login.ts": {
+    "blank": 2,
+    "comment": 15,
+    "code": 22,
+    "language": "TypeScript"
+  },
   "src/broker/logs.ts": {
     "blank": 1,
     "comment": 1,
@@ -1627,9 +1633,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1546,
-    "comment": 6061,
-    "code": 27674,
-    "nFiles": 270
+    "blank": 1549,
+    "comment": 6087,
+    "code": 27730,
+    "nFiles": 271
   }
 }

@@ -4,6 +4,9 @@
   "private": true,
   "description": "OMA Core v1 \u2014 Principal + Unix mailing-list society + Git (architecture.md is source of truth)",
   "type": "module",
+  "bin": {
+    "oma": "dist/src/entry/oma.js"
+  },
   "license": "UNLICENSED",
   "scripts": {
     "build": "node scripts/build.mjs",

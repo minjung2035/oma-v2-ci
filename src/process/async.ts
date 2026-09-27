@@ -226,6 +226,18 @@ export function spawnInTerminal(executable: string, argv: readonly string[], cwd
   return spawn("/usr/bin/setsid", ["--ctty", "--", executable, ...argv], { cwd, env: { ...env }, shell: false,
     stdio: [terminal, terminal, terminal] });
 }
+/** DR18 (D-9): a program the Human uses directly, on this process's own
+ * terminal -- stdin, stdout and stderr inherited -- while this process waits.
+ * It is started because this process holds the society lease, so it holds
+ * the lease too, at SOCIETY_FENCE_FD, like everything the lease starts
+ * (REC-007): the society cannot change hands while it runs. */
+export function spawnInteractive(executable: string, argv: readonly string[], cwd: string,
+  env: Readonly<Record<string, string>>, fence: number): ChildProcess {
+  validDirectSpawn(executable, argv, cwd, env);
+  const terminal: ("inherit" | "ignore" | number)[] = ["inherit", "inherit", "inherit"];
+  while (terminal.length < SOCIETY_FENCE_FD) terminal.push("ignore");
+  return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio: [...terminal, fence] });
+}
 export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
   if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox spawn requires direct pinned bubblewrap argv");

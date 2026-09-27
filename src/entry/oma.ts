@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /** TUI-002/003: the host product entrypoint.
  *
  * This is the `oma` a Human runs. It is a different executable from the
@@ -38,9 +39,10 @@ import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import type { ExtensionRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
+import { runEngineLogin } from "../tui/login.js";
 
 function usage(): never {
-  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n");
+  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma login [--society <name>] [--config <path>]\n");
   process.exit(exitFor("INVALID_REQUEST"));
 }
 
@@ -70,6 +72,37 @@ function argOf(args: readonly string[], flag: string): string | undefined {
   return args[index + 1];
 }
 
+/** DR18 (D-9): `oma login` -- the engine's own login and model selection over
+ * this society's engine directory (tui/login.ts). Only for a society that
+ * exists and is this project's, and only while no `oma` holds it: the login
+ * holds the society lease, so no session reads the engine's state while the
+ * Human is changing it. It writes nothing of the society but the engine's own
+ * directory. */
+async function login(society: string, stateRoot: string, configPath: string, canonicalProjectPath: string): Promise<never> {
+  if (!stateRootHasSociety(stateRoot))
+    fail("이 프로젝트의 society가 아직 없습니다. 먼저 `oma`를 한 번 실행하세요.", exitFor("INVALID_REQUEST"));
+  const decision = projectBindingDecision({ observation: observeProjectBinding(stateRoot), society, canonicalProjectPath,
+    hasSociety: true, bindRequested: false });
+  if (decision.kind === "refuse") fail(`이 society를 이 프로젝트에서 열 수 없습니다: ${decision.reason}`, exitFor(decision.code));
+  let settings: Settings;
+  try { settings = readSettings(configPath); }
+  catch (error) { fail(`설정을 읽을 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+  let tenure: HostTenure | null;
+  try { tenure = HostTenure.take(stateRoot); }
+  catch (error) { fail(`society 소유권을 확인하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+  if (tenure === null) fail("이 society가 실행 중입니다. oma를 끝낸 뒤 로그인하세요.", exitFor("BROKER_UNAVAILABLE"));
+  let code: number;
+  try {
+    code = await runEngineLogin({ stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
+      fence: tenure.fence, env: process.env });
+  } catch (error) {
+    await tenure.end();
+    fail(`엔진을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error));
+  }
+  await tenure.end();
+  process.exit(code);
+}
+
 /** Set once the terminal is open: what any failure path must undo. */
 let abandon: (() => void) | null = null;
 
@@ -91,6 +124,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // process starts is handed it rather than deriving its own.
   const location = hostLaunchLocation(society, process.env, argOf(argv, "--config"));
   const { stateRoot, runRoot, configPath } = location;
+  if (argv[0] === "login") return login(society, stateRoot, configPath, canonicalProjectPath);
 
   // TUI-004/REC-007: before a byte of this society's state is written and
   // before any broker is started, this process either owns the society or it

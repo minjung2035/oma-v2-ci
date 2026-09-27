@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "12c54a9377ce1702ddbe04c2568f50e42f3f8563e474cd17a80235f797e4fc33",
-  "report": "9acb8208deb11303944ae32ed85fd185a9265e7e59b51f6edf17e8b8c634ab2c",
+  "manifest": "19362cc2cdfc27a847b2baaac29127f10323fc80fde6d30fe38d5991c8ecf6fc",
+  "report": "bc654f6c67bd09f72f0cbe1793be61725074bfa6e3e586e89bbc409520fff7cf",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "528c2a53154c3177adafe17512b44ada8095b01c4f9e7ed2dd5b8f4fbb129373"
+      "sha256": "49081c09819caaec8806981403739e1cdc487078d30e96283a5c868297bcc2f8"
     },
     {
       "path": "src/entry/omahostd.ts",
@@ -669,7 +669,7 @@
     },
     {
       "path": "src/process/async.ts",
-      "sha256": "e768df2213139d3a2eeade5298175005cb075ab779dea63efdfe2d1c851ae45e"
+      "sha256": "767e1858e7041c57fb68c1622cfa038cb71430df1c3aaa97af58520266319f4d"
     },
     {
       "path": "src/process/command.ts",
@@ -986,6 +986,10 @@
     {
       "path": "src/tui/limits.ts",
       "sha256": "b31e0b3e8f1fef1d07e7060ee20f8f2ef8c1ad84567dc4fb506331f7c8fa4392"
+    },
+    {
+      "path": "src/tui/login.ts",
+      "sha256": "946fe0d8d5b583ba7df1082c2eda242167e8b7020c89fe3080276914757381b6"
     },
     {
       "path": "src/tui/model.ts",

@@ -32,6 +32,12 @@ export async function checkPackage(rootInput) {
     if (text.includes("@LIBDIR@/dist/entry/")) throw new Error(`obsolete flattened entry: ${template}`);
   }
   const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  // DR18 (C2): the install command is the package's `oma` bin, and it is the
+  // product's TUI entry -- the one the deployment layout names -- run by node.
+  if (packageJson.bin?.oma !== layout.entries.tui) throw new Error(`package bin "oma" is not the TUI entry ${layout.entries.tui}`);
+  requiredFile(join(root, layout.entries.tui));
+  if (!readFileSync(join(root, layout.entries.tui), "utf8").startsWith("#!/usr/bin/env node\n"))
+    throw new Error("the oma entry cannot be run as a command: it has no node shebang");
   const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8"));
   const require = createRequire(join(root, "package.json"));
   const versions = {};

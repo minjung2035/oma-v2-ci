@@ -296,6 +296,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../runtime/deployment-manifest.js": { deploymentDigest: () => "a".repeat(64) },
     // The one list of the signals that end a process with a drain (AV31).
     "../runtime/broker-lifetime.js": { HOST_LOSS_SIGNALS },
+    // `oma login` (DR18, D-9); a start never reaches it.
+    "../tui/login.js": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
     "../config/generations.js": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
   };
   const process_ = {

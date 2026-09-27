@@ -247,6 +247,7 @@
   "src/tui/exit.ts",
   "src/tui/keys.ts",
   "src/tui/limits.ts",
+  "src/tui/login.ts",
   "src/tui/model.ts",
   "src/tui/prompt.ts",
   "src/tui/screen.ts",
@@ -1542,11 +1543,11 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 65
+   "files": 66
   }
  ],
- "files": 271,
- "runtimeEdges": 1044,
+ "files": 272,
+ "runtimeEdges": 1048,
  "typeOnlyEdges": 341,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 236,
@@ -1559,11 +1560,11 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 13,
   "L4-orchestration -> L4-orchestration": 77,
-  "L5-entry -> L1-kernel": 89,
+  "L5-entry -> L1-kernel": 91,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 56,
-  "L5-entry -> L5-entry": 123
+  "L5-entry -> L4-orchestration": 57,
+  "L5-entry -> L5-entry": 124
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1586,8 +1587,8 @@
   "src/domain/identifiers.ts": 40,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 26,
+  "src/storage/directory.ts": 23,
   "src/storage/contained-fs.ts": 22,
-  "src/storage/directory.ts": 22,
   "src/storage/durable-fs.ts": 22,
   "src/protocol/host-guest.ts": 21,
   "src/domain/derived.ts": 17,
@@ -1602,7 +1603,7 @@
   "src/broker.ts": 30,
   "src/mail.ts": 28,
   "src/entry/broker.ts": 27,
-  "src/entry/oma.ts": 25,
+  "src/entry/oma.ts": 26,
   "src/git/context-repository.ts": 16,
   "src/lifecycle/create.ts": 15,
   "src/git.ts": 14,
