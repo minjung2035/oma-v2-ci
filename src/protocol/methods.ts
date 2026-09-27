@@ -89,8 +89,8 @@ export const PUBLIC_METHODS = {
     capability: "mail.send",
     resource: "admit",
     authority: ["current-actor", "current-capability", "published-candidate"],
-    paramsCheck: ({ actorNames, limits }) =>
-      mailParamsCheck(actorNames, limits),
+    paramsCheck: ({ limits }) =>
+      mailParamsCheck(limits),
   },
   "mail.ack": {
     mode: "mutation",
@@ -200,8 +200,8 @@ export const PUBLIC_METHODS = {
     capability: "git.submit",
     resource: "admit",
     authority: ["current-actor", "current-capability"],
-    paramsCheck: ({ actorNames, limits }) =>
-      gitSubmitParamsCheck(actorNames, limits),
+    paramsCheck: ({ limits }) =>
+      gitSubmitParamsCheck(limits),
   },
   "git.integrate": {
     mode: "mutation",

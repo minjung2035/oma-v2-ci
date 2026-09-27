@@ -13,7 +13,7 @@ import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
 import { assertModelScope, modelWorkspacePathAt, projectGitPathAt, runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
-import { PiRpcClient, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
+import { PiRpcClient, SKIPPED_EVENT, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
 import { loadConfiguration } from "../config.js";
@@ -257,6 +257,10 @@ function textOf(message: unknown): string {
  * that, and this only turns an event into the line the transcript shows.
  */
 export function projectEvent(event: PiEvent): { readonly line?: string } {
+  // DR15, P0-5: an event too large to hold was skipped; what it said is not
+  // shown, and the screen says so rather than showing nothing.
+  if (event.type === SKIPPED_EVENT)
+    return { line: `⚠ 엔진이 보낸 이벤트 하나(${String(event.bytes)} bytes)가 한도를 넘어 표시하지 못했습니다.` };
   if (event.type === "message_end") {
     const message = event.message;
     if (message === null || typeof message !== "object" || Array.isArray(message)) return {};

@@ -47,6 +47,31 @@ test("R28: oversized, malformed and partial-final JSONL poison rather than resyn
   assert.throws(() => partial.feed(Buffer.from("\n"), () => assert.fail("poisoned reader dispatched")));
 });
 
+test("DR15 / P0-5: a well-formed line longer than the bound is skipped whole and reported; the lines around it are read", () => {
+  const big = JSON.stringify({ type: "message_end", message: { role: "assistant", content: "x".repeat(200) } });
+  const source = Buffer.from(`{"type":"one"}\n${big}\n{"type":"two"}\n`);
+  // Every split, including ones inside the oversized line and at its LF.
+  for (let split = 0; split <= source.length; split += 1) {
+    const skipped: number[] = []; const found: string[] = [];
+    const reader = new JsonlReader(64, bytes => { skipped.push(bytes); });
+    reader.feed(source.subarray(0, split), event => found.push(event.type));
+    assert.ok(reader.pendingBytes <= 64, "the reader held more than its bound");
+    reader.feed(source.subarray(split), event => found.push(event.type));
+    reader.finish();
+    assert.deepEqual(found, ["one", "two"], `split at ${split}`);
+    assert.deepEqual(skipped, [Buffer.byteLength(big)], `split at ${split}`);
+  }
+  // A line that is not the protocol still poisons, skipped neighbour or not.
+  const reader = new JsonlReader(64, () => {});
+  assert.throws(() => reader.feed(Buffer.from(`${big}\n{bad}\n`), () => {}));
+  assert.throws(() => reader.feed(Buffer.from('{"type":"later"}\n'), () => {}));
+  // An oversized line the stream never ends is an unterminated line at EOF.
+  const open = new JsonlReader(64, () => {});
+  open.feed(Buffer.from(big), () => assert.fail("a partial line dispatched"));
+  assert.equal(open.midLine, true);
+  assert.throws(() => open.finish());
+});
+
 test("R28: observer exceptions preserve their identity and stop later events", () => {
   const reader = new JsonlReader(128); const failure = new Error("observer failed"); let calls = 0;
   assert.throws(() => reader.feed(Buffer.from('{"type":"one"}\n{"type":"two"}\n'), () => { calls++; throw failure; }),

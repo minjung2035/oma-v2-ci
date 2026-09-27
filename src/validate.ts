@@ -163,22 +163,13 @@ export const checkExportRef: Check = (v) =>
 /** Structural logical grammar comes from mail-values; this adds only the
  * caller-supplied registered-resident set, never a display-address fallback.
  */
-export function checkAddress(actorNames: ReadonlySet<string>): Check {
-  return (v) => {
-    const structural = checkLogicalAddress(v);
-    if (structural) return structural;
-    if (
-      v === "principal" ||
-      v === "commons" ||
-      v === "residents" ||
-      (typeof v === "string" && v.startsWith("topic/"))
-    )
-      return null;
-    return actorNames.has(v as string)
-      ? null
-      : `unknown address "${String(v)}"`;
-  };
-}
+/** An address's grammar. SCN-F04, P0-2: whether it names an agent -- and
+ * whether that agent can receive now -- is the routing owner's
+ * (`expandAddresses`), which answers ADDRESS_NOT_FOUND, AGENT_NOT_READY or
+ * AGENT_RETIRED before the request is accepted. Deciding existence here as
+ * well answered the same question a second way ("invalid params"), which told
+ * a caller neither that the name was unknown nor which one. */
+export const checkAddress: Check = (v) => checkLogicalAddress(v);
 
 export function checkBlobDescriptor(maxBytes: number): Check {
   return checkObject({
@@ -300,11 +291,10 @@ export function operationResultCheck(kind: string): Check {
 }
 
 export function mailParamsCheck(
-  actorNames: ReadonlySet<string>,
   l: ParamsLimits,
 ): Check {
   const shape = checkObject({
-    to: checkArray(checkAddress(actorNames), { min: 0, max: l.addresses }),
+    to: checkArray(checkAddress, { min: 0, max: l.addresses }),
     subject: checkString({ max: l.subjectBytes }),
     kind: messageKindCheck,
     body: checkString({ max: l.mailBodyBytes }),
@@ -345,14 +335,13 @@ export const agentCreateParamsCheck: Check = checkObject({
   brief: checkString({ min: 1, max: 8 * 1024 }),
 });
 export function gitSubmitParamsCheck(
-  actorNames: ReadonlySet<string>,
   l: ParamsLimits,
 ): Check {
   return checkObject({
     candidate: checkOid,
     exportRef: checkExportRef,
     prerequisites: checkArray(checkOid, { max: 1024 }),
-    to: checkArray(checkAddress(actorNames), { min: 0, max: l.addresses }),
+    to: checkArray(checkAddress, { min: 0, max: l.addresses }),
     subject: checkString({ max: l.subjectBytes }),
     body: checkString({ max: l.mailBodyBytes }),
     paths: checkArray(

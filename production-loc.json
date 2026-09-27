@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 30093,
+    "n_lines": 30114,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -30,12 +30,6 @@
     "code": 404,
     "language": "TypeScript"
   },
-  "src/validate.ts": {
-    "blank": 22,
-    "comment": 19,
-    "code": 387,
-    "language": "TypeScript"
-  },
   "src/config/generations.ts": {
     "blank": 25,
     "comment": 126,
@@ -46,6 +40,12 @@
     "blank": 2,
     "comment": 44,
     "code": 378,
+    "language": "TypeScript"
+  },
+  "src/validate.ts": {
+    "blank": 22,
+    "comment": 25,
+    "code": 370,
     "language": "TypeScript"
   },
   "src/entry/oma.ts": {
@@ -66,15 +66,15 @@
     "code": 337,
     "language": "TypeScript"
   },
+  "src/tui/session.ts": {
+    "blank": 34,
+    "comment": 199,
+    "code": 316,
+    "language": "TypeScript"
+  },
   "src/tui/model.ts": {
     "blank": 33,
     "comment": 70,
-    "code": 314,
-    "language": "TypeScript"
-  },
-  "src/tui/session.ts": {
-    "blank": 34,
-    "comment": 197,
     "code": 314,
     "language": "TypeScript"
   },
@@ -104,8 +104,8 @@
   },
   "src/runtime/pi-rpc.ts": {
     "blank": 3,
-    "comment": 21,
-    "code": 277,
+    "comment": 25,
+    "code": 279,
     "language": "TypeScript"
   },
   "src/units.ts": {
@@ -678,6 +678,12 @@
     "code": 75,
     "language": "TypeScript"
   },
+  "src/protocol/jsonl.ts": {
+    "blank": 1,
+    "comment": 15,
+    "code": 73,
+    "language": "TypeScript"
+  },
   "src/storage/operation-transitions.ts": {
     "blank": 1,
     "comment": 1,
@@ -778,12 +784,6 @@
     "blank": 8,
     "comment": 11,
     "code": 60,
-    "language": "TypeScript"
-  },
-  "src/protocol/jsonl.ts": {
-    "blank": 1,
-    "comment": 7,
-    "code": 59,
     "language": "TypeScript"
   },
   "src/storage/facets.ts": {
@@ -1352,8 +1352,8 @@
   },
   "SUM": {
     "blank": 1207,
-    "comment": 4935,
-    "code": 23951,
+    "comment": 4955,
+    "code": 23952,
     "nFiles": 224
   }
 }

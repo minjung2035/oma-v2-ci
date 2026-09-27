@@ -9,6 +9,9 @@ export type PiRpcLimits = Pick<
   ProtocolLimits,
   "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds"
 >;
+/** DR15: the event a PiRpcClient's observers receive in place of an engine
+ * event whose line was larger than the frame. `bytes` is the line's size. */
+export const SKIPPED_EVENT = "oma_event_skipped";
 export interface Timer {
   cancel(): void;
 }
@@ -89,7 +92,9 @@ export class PiRpcClient {
         "Pi transport requires explicit positive channel limits",
       );
     this.limits = Object.freeze({ ...limits });
-    this.reader = new JsonlReader(limits.frameBytes);
+    // DR15: an engine event larger than the frame is skipped whole and
+    // reported, as one event, to everyone who reads this engine's events.
+    this.reader = new JsonlReader(limits.frameBytes, bytes => { this.dispatch({ type: SKIPPED_EVENT, bytes }); });
     this.completion = new Promise((resolve) => {
       this.endTransport = resolve;
     });
@@ -116,6 +121,12 @@ export class PiRpcClient {
       this.observers.delete(observer);
     };
   }
+  private readonly dispatch = (event: PiEvent): void => {
+    for (const observer of [...this.observers]) {
+      if (this.state !== "open") break;
+      if (this.observers.has(observer)) observer(event);
+    }
+  };
   private readonly onData = (data: Buffer | string): void => {
     if (this.state !== "open") return;
     if (!Buffer.isBuffer(data)) {
@@ -126,21 +137,16 @@ export class PiRpcClient {
     }
     try {
       const ended = this.reader.endedLines;
-      this.reader.feed(data, (event) => {
-        for (const observer of [...this.observers]) {
-          if (this.state !== "open") break;
-          if (this.observers.has(observer)) observer(event);
-        }
-      });
+      this.reader.feed(data, this.dispatch);
       if (this.state !== "open") return;
       // P0V-48, P0-5: the deadline is the partial line's own. A chunk that
       // ended a line ended that line's deadline, even when it went on to start
       // the next; the bytes left over are a new line with a deadline of its own.
-      if (this.reader.endedLines !== ended || this.reader.pendingBytes === 0) {
+      if (this.reader.endedLines !== ended || !this.reader.midLine) {
         this.partialLineTimer?.cancel();
         this.partialLineTimer = null;
       }
-      if (this.reader.pendingBytes > 0 && this.partialLineTimer === null) {
+      if (this.reader.midLine && this.partialLineTimer === null) {
         // Absolute lifetime of a partial line: dribbling bytes cannot renew it forever.
         this.partialLineTimer = alarm(this.limits.idleStreamSeconds, () =>
           this.terminate(

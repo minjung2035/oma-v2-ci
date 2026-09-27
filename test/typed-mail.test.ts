@@ -9,7 +9,7 @@ const approvalFor = {
   repo: "project" as const, targetRef: "refs/heads/main" as const,
   expectedBase: "a".repeat(40), candidate: "b".repeat(40), policyRevision: "policy-1",
 };
-const check = mailParamsCheck(new Set(["a"]), {
+const check = mailParamsCheck({
   frameBytes: 1048576, mailBodyBytes: 262144, subjectBytes: 1024,
   addresses: 32, replyReferences: 64, contextFiles: 128, contextBytes: 1048576,
   bundleBytes: 1048576,

@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "1a7f073509a5496a3e4ea43bba1b0cb66a52f341a196806dc659d5b9f8d9f6c1",
+  "report": "b5658cb90ac16633cb5bd40e8d8d59262dbce469e77feb91e3830bbbf62f97e6",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -537,7 +537,7 @@
     },
     {
       "path": "src/protocol/jsonl.ts",
-      "sha256": "f0fb1ad62026841fc4a511282ef21a5d72ff4a8d09a9fd8c691734f8388f3819"
+      "sha256": "f7e978f4338c7f6314b574e3bf2c682dcc56d317bd6028ec4a855cdde06701ec"
     },
     {
       "path": "src/protocol/log-response.ts",
@@ -545,7 +545,7 @@
     },
     {
       "path": "src/protocol/methods.ts",
-      "sha256": "5b480c822e44eaa659784496c49e599ed69fb88488a51f9d121f6b4280c96996"
+      "sha256": "c2c116b40301efa4d1a74b56a536681825cd3c376635d2fe1d7b81b1fc90de57"
     },
     {
       "path": "src/protocol/operation-results.ts",
@@ -641,7 +641,7 @@
     },
     {
       "path": "src/runtime/pi-rpc.ts",
-      "sha256": "d80f0740a4f5c4cef9d47321b6aebb82bddacba635d460ac5798e75826ca878f"
+      "sha256": "803c092d38e2922a80df7e156cf9452987197a48aeb22771b68a7f9a04b21807"
     },
     {
       "path": "src/runtime/pi-runtime.ts",
@@ -817,7 +817,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "4799f14d50fa8d0c968ee6d8dcdca577e3a4387792a449a2c3aeb3f182e18e0c"
+      "sha256": "f5c704960756057667dc26c23bd276abd024d1caa92783c91124983d77eb661f"
     },
     {
       "path": "src/tui/sources/extensions.ts",
@@ -885,7 +885,7 @@
     },
     {
       "path": "src/validate.ts",
-      "sha256": "00693848a91a6f2719b27cbd6f7f9a87a2207ec3ce24e1ef3dcc906a22c8e30d"
+      "sha256": "287f21bf7c29ca863ca4e8a2cad05af33fc3024bbf73ee4e69086f8b2bd4a76d"
     },
     {
       "path": "src/views.ts",
