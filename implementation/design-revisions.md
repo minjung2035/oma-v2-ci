@@ -1,11 +1,11 @@
-# 설계 수정 기록 DR1–DR13
+# 설계 수정 기록 DR1–DR14
 
 상태: **ACCEPTED (사용자 요청, 2026-09-25)**. 이 문서는 **결정 기록**이다([문서 지도](../docs/README.md)).
 결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우를 설계 수준에서 다시 판단한다. 각 항목은 관측, 원인, 결정, 바꾸는 규범,
 바꾸지 않는 것을 적는다.
 
 - DR1–DR7은 실제 provider 점검에서 AV9–AV31(`consistency-decisions.md`의 AV 절)을 고치다 나왔고, DR8은 그 수정을 다시 점검하다 나왔다.
-- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다.
+- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다.
 - 규범 문장의 owner는 `implementation-spec.md`다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않고, 어긋나는 architecture 문장은 해당 DR에 적는다.
 - wire schema·DB schema·receipt 형식은 바꾸지 않는다. 권한 의미가 바뀌는 것은 DR4 하나다.
 
@@ -24,6 +24,7 @@
 | DR11 | receipt는 그 session entry가 durable해진 뒤에만 있다 | 없음(BATCH-006의 구현) |
 | DR12 | 설정 commit의 owner는 하나다 | 없음(D02·CONFIG-CONTRACT의 writer 순서를 inline에도) |
 | DR13 | 모르는 것에는 모른다는 코드를 붙인다 | 없음(CLI-003·ERR-002·INV02의 구현) |
+| DR14 | P0-4를 실행 중 자원에도 적용하고, 결과 크기(P0V-44)는 v1 receipt 안의 수용 한계로 두며, unit 이름은 그대로 두고 겹침을 거절한다 | PRIORITY-0 P0-4 |
 
 ## DR1 — 모델에게 보이는 경로는 그 모델의 view로 말한다
 
@@ -279,3 +280,27 @@ workspace 파일을 0 byte로, Control Panel의 불명 코드를 exit 2로, 다�
 - STORE_CORRUPT는 broker의 sticky fence를 닫는다(domain/admission.ts). 그러므로 읽은 내용이나 답한 errno가 손상을 말할 때만 쓴다.
 
 **바꾸는 규범.** 없음(CLI-003, ERR-002, INV02의 구현).
+
+## DR14 — 4차 점검이 남긴 세 판단
+
+**관측(4차 점검, priority-0-audit "4차 점검").** 외부 전수 검토를 판정한 4차 점검은 고치지 않은 발견 하나(P0V-44)와 고친 범위가
+좁은 발견 하나(P0V-26), 그리고 원칙 문장에 대한 관찰 하나를 남겼다. 사용자가 판단을 맡겼다(2026-09-27).
+
+**결정 1 — P0-4는 실행 중 자원에도 적용된다.** 4차 점검의 여섯 발견(P0V-25, 27, 34, 49, 50, 52)은 accept 전 artifact가 아니라 FD,
+자식 프로세스, 저장 예약, provider 호출, listener에서 같은 모양을 보였다: 자원이 생긴 순간부터 끝날 때까지 한 owner가 있어야 하고,
+넘길 때는 소유가 넘어가며, 반납은 한 번이다. P0-4의 문장이 artifact만 말해 이 여섯은 "넓혀 읽어" 분류됐다. PRIORITY-0의 P0-4에
+그 적용을 한 항목으로 더한다. P0-4의 뜻(수명의 owner를 명시한다)은 그대로이고 적용 범위를 적은 것이다(P0D-14와 같은 종류).
+
+**결정 2 — 결과 크기는 v1 receipt 형식 안에서 한계로 둔다(P0V-44, N21).** stop receipt의 `remainingOperations`는 그 시점에 미해결인
+operation 전부이고, `status.get`은 은퇴한 행까지 모든 agent를 담는다. 둘 다 개수에 상한이 없고, 응답이 frame을 넘으면 효과가 끝난
+요청에 FRAME_TOO_LARGE가 답해진다. 기본 frame 256 KiB에서 실제 encoder로 잰 수용량은 status가 agent 1052개, stop receipt가
+미해결 operation 6235개다. 고치려면 durable receipt의 뜻(목록의 일부만 담기)이나 wire 형식(페이지)을 바꿔야 하고, 그것은 receipt
+version을 올리는 계획으로만 한다(PRIORITY-0 명제: 기록된 receipt의 의미를 바꾸지 않는다). 그래서 v1에서는 바꾸지 않고, 수용량을
+validation의 알려진 한계에 수치로 적는다. P0V-44의 판정은 **의도된 예외**이며 owner는 이 결정이다.
+
+**결정 3 — unit 이름은 UNIT-001 그대로 두고, 겹침은 거절한다(P0V-26, N02).** 이름을 단사로 만드는 방법(구분자 바꾸기, tuple digest)은
+모두 이미 설치된 unit의 이름을 바꾸므로, 실행 중인 society의 정지·복구를 옮기는 전환 절차가 함께 있어야 한다. 겹침은 두 society가
+같은 사용자 아래 서로의 prefix인 이름을 가질 때만 생기고, P0V-26 뒤로는 다른 owner의 unit을 덮지 않고 AGENT_CONFLICT로 거절하며
+agent 생성은 접수 전에 거절한다. 이름 체계의 변경은 installation 형식 변경과 함께 계획한다.
+
+**바꾸는 규범.** PRIORITY-0 P0-4(적용 범위 한 항목). spec 조항은 바꾸지 않는다.

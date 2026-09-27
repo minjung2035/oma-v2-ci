@@ -23,7 +23,7 @@
 | 재검토, AV1–AV8 | consistency-decisions의 "Re-review", "Whole-codebase adversarial pass" | validation "재검토와 적대적 검증" |
 | ENG1 엔진 0.87.1 | consistency-decisions의 ENG1 | validation "엔진 0.87.1" |
 | 실제 provider 점검 1–13차, AV9–AV31 | consistency-decisions의 AV 절, 화면 기록 `/home/dev/oma-evidence/provider/runs/` | validation "실제 provider 기능 점검" |
-| 설계 수정 DR1–DR13 | [design-revisions](implementation/design-revisions.md) | validation "설계 수정", "Priority 0" |
+| 설계 수정 DR1–DR14 | [design-revisions](implementation/design-revisions.md) | validation "설계 수정", "Priority 0" |
 | Priority 0, 14차 점검 | [PRIORITY-0](PRIORITY-0.md), [priority-0-audit](implementation/priority-0-audit.md) | validation "Priority 0" |
 
 카드별 commit은 Git history에서 찾는다(예: `git log --oneline --grep 'WP13'`). 정리 전 이 문서에 있던 카드별 commit·한계 표는 [docs/archive.md](docs/archive.md)의 snapshot에 있고, 그 한계 가운데 지금도 유효한 것은 validation "알려진 한계"로 옮겼다.
@@ -62,7 +62,7 @@
 ## 6. 남은 일
 
 1. **release gate**: 승인된 VM에서 powercut(V05C·V30B), 승인된 credential로 실제 provider 자동 lane(사용자 승인 필요). CI(V32B)는 push했으므로 GitHub Actions 결과를 확인해 기록한다.
-2. **보류한 결정과 검증 공백**: validation "알려진 한계"의 마지막 항목이 목록을 소유한다. 4차 점검에서 P0V-44(결과 크기와 frame), unit 이름 체계(P0V-26), P0-4 문장의 범위가 더해졌다.
+2. **보류한 결정과 검증 공백**: validation "알려진 한계"의 마지막 항목이 목록을 소유한다. 4차 점검이 남긴 세 판단은 DR14로 정했다(P0-4 적용 범위, 결과 크기는 v1 한계, unit 이름 유지).
 3. **4차 점검의 결박(v21)**: 위 §1. 사용자 승인 뒤 §4의 검증 절차로 한다.
 4. **가짜 provider 시나리오 시험 (사용자 지시, 구조개선 다음)**: 번들 엔진·확장·broker는 진짜로 두고, provider 경계에 결정적 대본을 두는 시험을 기능별·루프별로, 정상과 장애(kill·재시작·재시도·끊김) 경우 모두 크게 늘린다. 실제 provider 증거로 기록하지 않는다(P0-5).
 5. **provtest 정리 (사용자 결정)**: 점검을 끝내면 `for u in $(ls ~/.config/systemd/user | grep '^oma-provtest-'); do systemctl --user stop "$u"; rm -f ~/.config/systemd/user/"$u"; done; systemctl --user daemon-reload; rm -rf /home/dev/oma-evidence/provider/data`(credential 사본 포함).

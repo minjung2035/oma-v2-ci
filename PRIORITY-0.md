@@ -2,7 +2,7 @@
 
 상태: **최상위 원칙 (사용자 결정, 2026-09-25)**. OMA의 모든 설계·수정·리팩터링·시험 판단은 이 문서에서
 시작한다. 이 문서는 새 wire method·DB state·error code를 직접 정의하지 않는다. 규범 문서
-(`architecture.md`, `implementation-spec.md`, 결정 D01–D06, 설계 수정 DR1–DR13)가 이미 전제하는
+(`architecture.md`, `implementation-spec.md`, 결정 D01–D06, 설계 수정 DR1–DR14)가 이미 전제하는
 명제를 가장 위에 적고, 기존 원칙을 그 하위 규칙으로 다시 정리한다. 규범 문장이나 코드가 이
 원칙과 충돌하면 편한 쪽을 고르지 않는다. 그 충돌은 **unresolved design decision**(MAINTENANCE §1)으로
 보고, 규범을 이 원칙에 맞게 고친다. N-001이 bytes를 결박하는 `architecture.md`는 고치지 않으며,
@@ -10,7 +10,7 @@
 
 점검: 215개 production 파일의 1차 점검과 받는 자리 전부의 2차 점검을 마쳤고, 발견 23개(P0V-01–P0V-23)를
 고쳤다. 실제 provider 점검(14차)에서 하나(P0V-24)를 더 찾아 고쳤다. 외부 전수 검토를 받아 판정한 4차 점검의 발견
-P0V-25–P0V-53은 하나(P0V-44, 형식 결정이 필요)를 빼고 고쳤다. 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
+P0V-25–P0V-53은 하나(P0V-44, v1 receipt 형식 안의 한계로 둔 의도된 예외, DR14)를 빼고 고쳤다. 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
 설계 판단은 DR9–DR13에 있다. 지금의 검증 판정은 `implementation/validation.md`가 소유한다.
 
 ## 요약
@@ -89,7 +89,11 @@ plan의 중심 명제(`oma-v2-consistency-plan-b25961c/guide/PRINCIPLES.md`: "�
   owner가 정리하고, accept되었거나 accept 여부가 unknown이면 보존한다.
 - 연결 종료나 요청 취소가 accept된 증거를 지우지 않는다. 정리는 "accept되지 않았다"는 확인된 사실
   위에서만 한다.
+- 같은 규칙은 실행 중 자원에도 적용된다(DR14). FD, 자식 프로세스, 저장 예약, 외부 호출, listener는 생긴 순간부터
+  끝날 때까지 한 owner가 가진다. 다른 owner에게 넘길 때는 소유가 넘어가고(넘긴 쪽은 더 반납하지 않는다), 반납은 한 번이다.
+  owner가 떠나면 그 owner의 자원도 끝난다.
 - **판정 질문:** 이 파일을 만든 직후 프로세스가 죽으면 누가 이것을 찾고, 무엇을 근거로 지우거나 남기는가?
+  이 자원을 지금 누가 가지며, 그 owner가 떠나거나 실패하면 누가 한 번 반납하는가?
 - **기존 원칙:** INV05, FS-006, MAIL-010, physical-ordering의 publication/derived replacement 분리.
 
 ### P0-5 unknown을 사실로 승격하지 않는다
@@ -192,9 +196,9 @@ commit된 문서의 문장, 규범 조항과 그 ID, 수용 시험 번호, 발�
 - **원칙의 적용 범위를 좁게 적었다.** 명제와 용어가 durable fact를 런타임 기록으로만 들었다. 그 사이 문서에서는
   같은 요구 ID와 수용 번호가 두 뜻을 갖고(INF-005·INF-006, T115–T117, T122), 없어진 설계를 전제한 문장이 남았다.
   문서와 식별자에도 같은 원칙이 적용됨을 위 절에 적었다. 원칙의 뜻은 그대로이고 적용 범위를 분명히 했다.
-- **P0-4의 문장이 artifact만 말한다.** 4차 점검의 여섯 발견은 같은 모양(자원이 생긴 순간부터 끝날 때까지 한 owner)을
-  런타임 자원(FD, 자식 프로세스, 저장 예약, provider 호출, listener)에서 보였다. P0-4를 넓혀 읽어 분류했다. 문장을 넓힐지는
-  아직 정하지 않았다(점검 기록 "4차 점검").
+- **P0-4의 문장이 artifact만 말했다.** 4차 점검의 여섯 발견은 같은 모양(자원이 생긴 순간부터 끝날 때까지 한 owner)을
+  런타임 자원(FD, 자식 프로세스, 저장 예약, provider 호출, listener)에서 보였다. P0-4에 그 적용을 적었다(DR14). 원칙의 뜻은
+  그대로이고 적용 범위를 분명히 했다.
 - 원칙을 지킨 코드에서 난 버그는 이번 점검에서 찾지 못했다. 찾으면 이 절차의 두 번째 질문부터 다시 한다.
 
 ## 적용 절차

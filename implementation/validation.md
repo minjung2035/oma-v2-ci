@@ -183,9 +183,8 @@ Final PASS condition: `v20-fast-final`, `v20-durable-final`, `v20-property-final
 **보류한 결정과 검증 공백**
 - `bin`·설치 명령(C2), WP03 이전 Resident unit의 재생성 절차.
 - 전체 `oma` entry의 pty 시험(최상위 catch의 정리 순서), rollover 뒤 endpoint bind 실패의 별도 주입(WP30).
-- 결과 크기와 frame(P0V-44): stop 결과의 `remainingOperations`와 `status.get` 결과는 개수에 상한이 없어 frame 상한을 넘을 수 있다. 고치려면 durable receipt나 wire 형식(페이지·요약)을 바꿔야 한다.
-- unit 이름의 단사성(P0V-26): 두 소유자에게 같은 이름이 되는 unit은 교체하지 않고 거절한다. 이름 체계(UNIT-001) 자체를 바꾸려면 설치된 unit을 옮기는 절차가 필요하다.
-- P0-4 문장의 범위: 4차 점검의 여섯 발견은 런타임 자원(FD, 자식 프로세스, 예약, provider 호출, listener)의 owner 문제였다. P0-4를 넓혀 읽어 분류했으며, 문장을 넓힐지는 결정하지 않았다(priority-0-audit "4차 점검").
+- 결과 크기와 frame(P0V-44, DR14): stop receipt의 `remainingOperations`(그때 미해결인 operation 전부)와 `status.get`(은퇴한 행까지 모든 agent)은 개수에 상한이 없다. 기본 frame 256 KiB에서 status는 agent 1052개, stop receipt는 미해결 operation 6235개까지 담긴다. 넘으면 효과가 끝난 요청에 FRAME_TOO_LARGE가 답해진다. 바꾸려면 receipt version 계획이 필요하다.
+- unit 이름(P0V-26, DR14): 두 소유자에게 같은 이름이 되는 unit은 교체하지 않고 AGENT_CONFLICT로 거절한다. 그런 이름의 agent는 만들 수 없다. 이름 체계(UNIT-001)는 그대로다.
 - 4차 점검의 수정(`37cbeee`–`c980611`)은 관련 시험 묶음만 돌렸고 검증 cycle로 결박하지 않았다. 결박하기 전까지 fast lane의 R38 시험("the validation record names the verification inputs")은 이 기록이 지금 트리를 결박하지 않았으므로 실패한다.
 
 ## 기본 재검증

@@ -4,7 +4,7 @@
 여기의 판정은 각 기준점의 코드에 대한 것이다. 지금의 검증 상태와 수치는 [validation.md](validation.md)가 소유한다.
 
 **상태(2026-09-26).** 코드의 발견 24개(P0V-01–P0V-24)와 문서·식별자의 발견 14개(P0D-01–P0D-14)를 모두 고쳤다. 4차 점검(외부 전수 검토)의 발견
-P0V-25–P0V-53 가운데 P0V-44만 결정을 기다리고 나머지는 고쳤다. 코드 발견은 상태 열이 수정 commit이다.
+P0V-25–P0V-53 가운데 P0V-44는 의도된 예외(DR14)이고 나머지는 고쳤다. 코드 발견은 상태 열이 수정 commit이다.
 
 | 절 | 내용 | 줄 번호의 기준 |
 |---|---|---|
@@ -555,7 +555,7 @@ S01–S12)을 받아, 지적마다 코드와 대조해 판정했다. 묶음의 �
 | P0V-41 | N18 | P0-1 | tui/model.ts, tui/app.ts | 연 메일을 줄 번호로 기억해 갱신이 목록을 다시 정렬하면 다른 메일이 열렸다 | 수정 d2505c9(Maildir 이름의 identity) |
 | P0V-42 | N19 | P0-5 | tui/sources/mail.ts `readBody` | 한도에서 잘린 본문을 전체처럼 보였다 | 수정 d2505c9 |
 | P0V-43 | N20 | — | tui/sources/mail.ts | 갱신마다 메일함의 모든 메시지를 동기로 열고 읽었다 | 수정 d2505c9(lstat로 정렬, 헤더는 최근 `mailListRows`개만) |
-| P0V-44 | N21 | P0-5 | lifecycle/actions.ts, views.ts | stop 결과의 `remainingOperations`와 status 결과의 크기가 frame 상한과 묶이지 않았다 | 보류: durable receipt·wire 형식의 변경이라 결정이 필요 |
+| P0V-44 | N21 | P0-5 | lifecycle/actions.ts, views.ts | stop 결과의 `remainingOperations`와 status 결과의 크기가 frame 상한과 묶이지 않았다 | 의도된 예외(DR14): v1 receipt 안의 수용 한계로 둠. 256 KiB frame에서 status agent 1052개, stop의 미해결 operation 6235개 |
 | P0V-45 | N22 | P0-2 | mail/display.ts, extension/mail-tools.ts `readableMail` | 본문 앞의 U+FEFF를 지웠고, 머리 끝을 CRLF에서만 찾아 LF 메일을 인코딩된 채 보였다(`headerEnd`는 LF도 받음) | 수정 9b18c34 |
 | P0V-46 | N23 | P0-2 | tui/keys.ts | 일반 입력은 입력한 U+FFFD까지 지우고, 붙여넣기는 깨진 바이트에서 생긴 U+FFFD를 넣었다. 같은 사실을 두 경로가 반대로 읽었다 | 수정 260a760 |
 | P0V-47 | F1 | P0-3 | config/generations.ts `recordCommitted`, `journalTail` | 줄바꿈 전에 끊긴 journal 기록에 다음 기록이 붙어 둘 다 사라지고, 수집이 실제 직전 세대(rollback의 기준)를 지웠다 | 수정 64cc237 |
@@ -573,11 +573,11 @@ S01–S12)을 받아, 지적마다 코드와 대조해 판정했다. 묶음의 �
 재현되지 않은 것: **N11의 tunnel 쪽**. upgrade가 끝나기 전에 엔진이 떠나는 순서에서, 수정 전 코드도 엔진 쪽 socket이 끝나면 pipe가 provider 쪽을
 끝내 provider 연결이 닫혔다. 수정은 그 pipe의 부수 효과 대신 소유를 명시하는 것으로만 두었고, 그 시험은 회귀 방지이지 수정을 증명한 대조가 아니다.
 
-결정이 필요한 것:
+판단을 맡긴 것(DR14, 2026-09-27 사용자가 판단을 맡김):
 
 - **P0V-44(N21)**: 결과의 크기를 frame에 묶으려면 durable receipt(`remainingOperations`)나 status 결과의 형식(페이지·요약)을 바꿔야 한다.
-  계획 없는 receipt·wire 변경은 하지 않는다는 규칙에 따라 고치지 않았다.
-- **P0V-26(N02)의 이름**: 이번 수정은 겹치는 이름을 거절할 뿐이다. 이름을 단사로 만들려면 UNIT-001을 바꾸고 설치된 unit을 옮겨야 한다.
+  receipt의 뜻을 바꾸는 일이므로 receipt version 계획으로만 하고, v1에서는 수용 한계(실측)를 validation에 적는다.
+- **P0V-26(N02)의 이름**: 이름은 UNIT-001 그대로 두고 겹침은 거절한다. 이름 체계의 변경은 installation 형식 변경과 함께 계획한다.
 
 ### 기존 시험의 기대를 바꾼 곳
 
@@ -603,7 +603,7 @@ broker-composition-policy, inference-relay)에 있다. 관련 시험 묶음은 �
 
 P0-4의 문장은 accept 전 artifact(파일·메일·staging·임시 작업공간)의 owner를 말한다. 이번 발견 가운데 여섯(P0V-25, 27, 34, 49, 50, 52)은
 같은 모양 -- 자원이 생긴 순간부터 끝날 때까지 한 owner가 있어야 한다 -- 을 런타임 자원(FD, 자식 프로세스, 저장 예약, provider 호출,
-listener)에서 보였다. 이번에는 P0-4를 넓혀 읽어 분류했다. 원칙의 문장을 그렇게 넓힐지는 사용자의 판단으로 남긴다.
+listener)에서 보였다. P0-4에 그 적용을 적었다(DR14).
 
 ## 수정 검증
 
