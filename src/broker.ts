@@ -528,13 +528,17 @@ export class Broker {
     this.closing = (async () => {
       await settleWithin([...(this.starting ? [this.starting] : []), ...this.executingTasks, ...this.listenerCloses], this.limits.receiptWaitSeconds);
       // Stop what nothing else will stop while the incarnations that prove
-      // each death are still readable; a failure is reported, not a reason to
-      // leave the Store and lock held.
-      try { this.paths.quiesceOnDrain?.(); } catch (error) { this.cleanupError(error); }
+      // each death are still readable. A failure is no reason to leave the
+      // Store and lock held -- P0V-58, P0-5: nor is it a drain that finished.
+      // A Resident whose end was not proven may still run, so the drain ends
+      // with that failure once everything this broker holds is given back.
+      let unproven: { readonly error: unknown } | null = null;
+      try { this.paths.quiesceOnDrain?.(); } catch (error) { this.cleanupError(error); unproven = { error }; }
       // No Store or pinned lease closes before all dispatched task owners settle.
       try { this.runLeases.close(); } catch (error) { this.cleanupError(error); }
       this.actorServers.clear(); this.store.close();
       this.standaloneLock?.close(); this.standaloneLock = null;
+      if (unproven !== null) throw unproven.error;
     })();
     return this.closing;
   }

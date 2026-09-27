@@ -180,3 +180,28 @@ test("P0V-59 / R04, P0-1: a unit another state tree's society of the same name i
   writeFileSync(join(dir, "oma-demo-dave.service"), theirs("Description=OMA @SOCIETY@ resident @AGENT@", "dave", join(dir, "tree-b")));
   assert.doesNotThrow(() => ours.assertResidentNamesFree("dave"));
 });
+
+test("P0V-58 / R03, P0-5: a drain that could not prove its Residents ended says so, and still gives back the Store", async () => {
+  // The lifetime passes the failure on and the entry ends the process with
+  // it (exit 1), whose death gives back the society lock (R37: a failed
+  // drain is not a reason to release the lock while this process lives).
+  const f = await preparedFixture(1);
+  const units = { onRevokeRun: undefined, bindIncarnationReader: () => undefined, unitCgroup: () => "" } as unknown as UnitsModule;
+  const lifecycle = new LifecycleModule(f.store, units, { stateRoot: f.root, projectGit: join(f.root, "repos", "project.git"), society: "demo",
+    hasGoal: () => true, activationAllowed: () => true },
+    (_parent: unknown, input: { name: string; from: string; brief: string }) => ({ ...input }) as unknown as ResolvedAgentSpec, f.mail);
+  let closed = 0;
+  const close = f.store.close.bind(f.store);
+  (f.store as unknown as { close(): void }).close = () => { closed += 1; close(); };
+  const broker = new Broker(f.store, f.mail, units, new ViewsModule(f.store, f.root, "demo", "p", TEST_VIEW_LIMITS), lifecycle, null, null,
+    { stateRoot: f.root, runRoot: join(f.root, "run"), society: "demo", hasGoal: () => true,
+      quiesceOnDrain: () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "cannot prove alice terminated"); } });
+  try {
+    await assert.rejects(broker.drainAndClose(), (error: unknown) => errorCodeOf(error) === "RUN_TERMINATION_UNKNOWN",
+      "a drain that could not prove every Resident ended was reported as finished");
+    assert.equal(closed, 1, "the Store was held because the proof failed");
+  } finally {
+    (f.store as unknown as { close(): void }).close = () => undefined;
+    f.close();
+  }
+});

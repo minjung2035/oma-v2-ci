@@ -1455,7 +1455,7 @@
   }
  ],
  "files": 225,
- "runtimeEdges": 869,
+ "runtimeEdges": 870,
  "typeOnlyEdges": 322,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 222,
@@ -1471,7 +1471,7 @@
   "L5-entry -> L1-kernel": 79,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 26,
+  "L5-entry -> L4-orchestration": 27,
   "L5-entry -> L5-entry": 115
  },
  "upwardTypeOnlyEdges": [
@@ -1510,7 +1510,7 @@
  "fanOut": {
   "src/broker.ts": 30,
   "src/mail.ts": 28,
-  "src/entry/broker.ts": 26,
+  "src/entry/broker.ts": 27,
   "src/entry/oma.ts": 24,
   "src/lifecycle/create.ts": 15,
   "src/git.ts": 14,

@@ -1,11 +1,11 @@
-# 설계 수정 기록 DR1–DR15
+# 설계 수정 기록 DR1–DR16
 
 상태: **ACCEPTED (사용자 요청, 2026-09-25)**. 이 문서는 **결정 기록**이다([문서 지도](../docs/README.md)).
 결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우를 설계 수준에서 다시 판단한다. 각 항목은 관측, 원인, 결정, 바꾸는 규범,
 바꾸지 않는 것을 적는다.
 
 - DR1–DR7은 실제 provider 점검에서 AV9–AV31(`consistency-decisions.md`의 AV 절)을 고치다 나왔고, DR8은 그 수정을 다시 점검하다 나왔다.
-- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다. DR15는 시나리오 시험이 찾았다.
+- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다. DR15는 시나리오 시험이 찾았다. DR16은 5차 점검(외부 재검토 R03)에서 나왔다.
 - 규범 문장의 owner는 `implementation-spec.md`다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않고, 어긋나는 architecture 문장은 해당 DR에 적는다.
 - wire schema·DB schema·receipt 형식은 바꾸지 않는다. 권한 의미가 바뀌는 것은 DR4 하나다.
 
@@ -26,6 +26,7 @@
 | DR13 | 모르는 것에는 모른다는 코드를 붙인다 | 없음(CLI-003·ERR-002·INV02의 구현) |
 | DR14 | P0-4를 실행 중 자원에도 적용하고, 결과 크기(P0V-44)는 v1 receipt 안의 수용 한계로 두며, unit 이름은 그대로 두고 겹침을 거절한다 | PRIORITY-0 P0-4 |
 | DR15 | 엔진 이벤트 한 줄이 frame보다 크면 건너뛰고 알린다(형식 오류는 전처럼 중독) | R28 결정, MAINTENANCE §19 |
+| DR16 | rootfs 수리는 이전 Resident의 종료가 증명된 뒤, 어떤 Resident도 깨어나기 전에(broker startup 안에서) 한다 | REC-007의 수리 순서 문장 |
 
 ## DR1 — 모델에게 보이는 경로는 그 모델의 view로 말한다
 
@@ -324,3 +325,28 @@ SESSION_BOUNDARY_UNCONFIRMED(재시도 대상)가 된다. 형식 오류(UTF-8·J
 만든 reader(다른 용도)는 여전히 크기 초과도 중독이다.
 
 **바꾸는 규범.** R28의 결정(consistency-decisions의 jsonl 행)과 MAINTENANCE §19의 해당 문장. spec 조항은 바꾸지 않는다.
+
+## DR16 — rootfs 수리는 이전 Resident의 종료가 증명된 뒤에 한다
+
+**관측(5차 점검 R03, P0V-58).** foreground broker는 drain에서 Resident를 멈추고 죽음을 증명한다. 증명하지 못해도 그 실패를
+로그에만 남기고 성공으로 끝났다. 이 mode의 Resident unit에는 BindsTo 대상이 없고, society lease도 상속하지 않는다(REC-007의
+sandbox 예외). 그래서 다음 `oma`는 lease를 잡고, broker가 startup quiescence로 그 Resident를 멈추기 **전에** rootfs를
+수리했다. broker가 SIGKILL로 죽어 drain이 아예 없는 경우도 같다.
+
+**원인.** REC-007은 수리를 "broker보다 먼저"라고 적었다. 목적은 수리되지 않은 rootfs 위에서 Resident가 깨어나지 않게 하는
+것이었다. 그런데 이 순서는 수리의 다른 전제, 즉 그 rootfs 위에서 아무것도 돌지 않는다는 것을 증명하지 못한다. 증명은 broker의
+startup quiescence가 한다. REC-007이 막으려던 경쟁(수리 중인 rootfs 위에 sandbox를 짓는 것)이 이전 Resident의 재시작과 path
+unit으로 그대로 남아 있었다.
+
+**결정.** 수리는 broker startup 안에서 한다. quiescence(이전 Resident마다 정지와 죽음 증명)가 끝난 뒤, bootstrap·recovery·listen·
+activate보다 먼저다. broker는 host가 시작했든(lease 상속) systemd가 시작했든(lease를 스스로 잡음) lease 보유자이므로 "수리는 lease
+보유자만"도 그대로다. 수리한 항목은 broker의 stderr로 나가고, host는 이를 화면에 한 줄씩 보인다. 수리에 실패하면 startup이 실패하고,
+broker는 준비를 알리지 않으며, engine도 시작하지 않는다. drain이 Resident의 종료를 증명하지 못하면 Store와 lock을 놓되 그 실패로
+끝나고(RUN_TERMINATION_UNKNOWN, entry는 exit 1), 증명되지 않은 것을 성공이라고 말하지 않는다(P0-5). host는 이제 없는 것만 만든다
+(provision). 세대 수집은 host에 남긴다. 살아 있는 Resident는 설정 세대를 다시 읽지 않고, broker startup에서 수집하면 이미 떠 있는
+Control Panel의 편집과 경쟁한다.
+
+**바꾸는 규범.** implementation-spec REC-007의 수리 순서 문장.
+
+**바꾸지 않는 것.** lease 규칙, provision/repair의 두 정책, UNIT-004의 BindsTo, 수리 대상과 방법.
+

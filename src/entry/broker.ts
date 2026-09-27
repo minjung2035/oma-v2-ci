@@ -12,6 +12,7 @@ import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD } from "../protocol/host-channel.js";
 import { openSupervisionChannel } from "../runtime/supervision-channel.js";
 import { GitModule } from "../git.js";
 import { QUARANTINE_RESOURCES } from "../git/quarantine.js";
+import { repairSociety } from "../runtime/provision.js";
 import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "../git/integration-policy.js";
 import { ReconcileModule } from "../reconcile.js";
 import { loadConfig, readCurrentHostPolicy } from "../config.js";
@@ -111,7 +112,10 @@ async function main(): Promise<void> {
     exitStatus = Math.max(exitStatus, code);
     if (stopping) return stopping;
     stopping = lifetime.shutdown().then(() => { process.exitCode = exitStatus; }, error => {
-      console.error("broker shutdown requires process termination:", error instanceof Error ? error.message : String(error)); process.exit(1);
+      // P0V-58: e.g. a Resident whose end the drain could not prove. The
+      // Store and lock are given back; the drain did not finish, and says so.
+      console.error("broker drain did not finish:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error));
+      process.exit(1);
     });
     return stopping;
   };
@@ -197,7 +201,16 @@ async function main(): Promise<void> {
     await lifetime.start({
       recover: async () => {
         validateStoredProfiles();
-        await reconcile.startup(false, async () => { await lifecycle.bootstrap(cfg); validateStoredProfiles(); });
+        await reconcile.startup(false, async () => {
+          // P0V-58, DR16 (REC-007): the Residents' rootfs is put right here --
+          // after the startup quiescence proved every earlier Resident ended,
+          // so nothing still runs on it, and before recovery, listening or
+          // activation can wake one on it. A repair that fails ends startup:
+          // no broker listens and no engine starts over a rootfs the product
+          // cannot vouch for.
+          for (const path of repairSociety(stateRoot)) console.error(`rootfs 항목을 기대값으로 되돌렸습니다: ${path}`);
+          await lifecycle.bootstrap(cfg); validateStoredProfiles();
+        });
         if (store.getAgent("principal")) {
           for (const directory of ["new", "cur", "tmp"]) ensureDirectory(join(stateRoot, "mail", "inboxes", "principal", directory));
           units.ensurePrincipal();

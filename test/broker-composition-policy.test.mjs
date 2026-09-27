@@ -17,8 +17,8 @@ class Exited extends Error {}
 const QUARANTINE_PROFILE = Object.freeze({ cpuSeconds: 30, memoryBytes: 1, tasks: 1, timeoutSeconds: 120 });
 
 async function compose(environment, { lockHeld = true, claim = "taken", cgroup = "0::/user.slice/app.slice/oma.scope",
-  argv = ["--society", "fixture"], supervisionEstablished = true,
-  starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" && supervisionEstablished } = {}) {
+  argv = ["--society", "fixture"], supervisionEstablished = true, repairFails = false,
+  starts = lockHeld && claim !== "elsewhere" && claim !== "unhonourable" && supervisionEstablished && !repairFails } = {}) {
   const source = readFileSync(new URL("../src/entry/broker.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -66,6 +66,11 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
       async start() { calls.push("listen"); } notifyReady() { calls.push("notify"); return true; }
     } },
     "../git/quarantine.js": { QUARANTINE_RESOURCES: QUARANTINE_PROFILE },
+    "../runtime/provision.js": { repairSociety: stateRoot => {
+      calls.push(`repair:${stateRoot}`);
+      if (repairFails) throw new Error("rootfs entry could not be corrected");
+      return [`${stateRoot}/rootfs/etc/passwd`];
+    } },
     "../git/integration-policy.js": { integrationPolicyFromConfig: value => value, snapshotIntegrationPolicy: value => value, assertSupportedIntegration() {} },
     "../config.js": { loadConfig: () => { calls.push("config"); return config; } },
     "../config/policy.js": { createChildSpecResolver: () => () => ({}) },
@@ -127,8 +132,9 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
   };
   const process = { argv: ["node", "broker", ...argv], env: { ...(environment ?? {}) }, exitCode: 0, once() {},
     exit(code) { exits.push(code); throw new Exited(`exit(${code})`); } };
+  const lines = [];
   await new Script(executable, { filename: "broker-composition.cjs" }).runInNewContext({
-    exports: {}, process, console: { error() {} }, require(name) {
+    exports: {}, process, console: { error(...parts) { lines.push(parts.join(" ")); } }, require(name) {
       assert.ok(Object.hasOwn(modules, name), `uncontrolled dependency: ${name}`);
       return modules[name];
     },
@@ -137,7 +143,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
     assert.deepEqual(exits, [], "the entrypoint ended the process on a society it does own");
     assert.equal(process.exitCode, 0, "entrypoint must complete without the startup failure path");
   }
-  return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, unitValues, gitPaths };
+  return { calls, paths, observation, constructorGoal, supervision, exits, exitCode: process.exitCode, unitValues, gitPaths, lines };
 }
 
 test("D03 composition: a broker no fixed unit runs renders unbound Residents at its location and stops them on drain", async () => {
@@ -187,7 +193,7 @@ test("P1 composition root: all consumers share a live reader that preserves obse
 
 test("P1 composition root: startup still wires recovery before listen, notify and activation", async () => {
   const { calls } = await compose();
-  assert.deepEqual(calls.slice(calls.indexOf("recover")), ["recover", "bootstrap", "listen", "notify", "activate", "refresh"]);
+  assert.deepEqual(calls.slice(calls.indexOf("recover")), ["recover", "repair:/data/oma/fixture", "bootstrap", "listen", "notify", "activate", "refresh"]);
   assert.equal(calls.filter(value => value === "Store").length, 1);
   assert.ok(calls.indexOf("digest") < calls.indexOf("storage-quota"));
   assert.ok(calls.indexOf("storage-quota") < calls.indexOf("Store"));
@@ -339,4 +345,24 @@ test("AV31 / D03, LIFE-006: the broker ends through its drain on every host-loss
   assert.ok(order("host-loss") >= 0, "the entrypoint does not stop on host loss through the one signal owner");
   for (const after of ["config", "Store", "Broker", "listen"])
     assert.ok(order("host-loss") < order(after), `${after} happened before host loss could stop the broker`);
+});
+
+test("P0V-58 / R03, DR16: the rootfs is put right after the startup quiescence and before anything can wake on it", async () => {
+  // The stand-in startup records "recover" -- the quiescence that proves every
+  // earlier Resident ended -- and only then runs what startup prepares.
+  const { calls, lines } = await compose();
+  const order = name => calls.indexOf(name);
+  assert.ok(order("recover") < order("repair:/data/oma/fixture"), `the rootfs was repaired before the quiescence: ${calls.join(" ")}`);
+  for (const later of ["bootstrap", "listen", "notify", "activate"])
+    assert.ok(order("repair:/data/oma/fixture") < order(later), `${later} came before the repair: ${calls.join(" ")}`);
+  assert.equal(calls.filter(name => name.startsWith("repair:")).length, 1);
+  assert.ok(lines.some(line => /rootfs 항목을 기대값으로 되돌렸습니다: \/data\/oma\/fixture\/rootfs\/etc\/passwd/.test(line)), lines.join(" | "));
+});
+
+test("P0V-58 / DR16: a rootfs that could not be put right ends startup: nothing listens and nothing wakes", async () => {
+  const { calls, lines } = await compose(undefined, { repairFails: true });
+  assert.ok(calls.includes("repair:/data/oma/fixture"));
+  for (const never of ["bootstrap", "listen", "notify", "activate"])
+    assert.equal(calls.includes(never), false, `${never} ran over a rootfs the product could not vouch for`);
+  assert.ok(lines.some(line => /broker startup failed/.test(line)), lines.join(" | "));
 });

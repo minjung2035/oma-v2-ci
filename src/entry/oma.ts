@@ -29,7 +29,7 @@ import { collectManagedGenerations } from "../config/generations.js";
 import { defaultHostConfig, defaultSocietyFor, societyFromDirectory } from "../config/defaults.js";
 import { sha256Hex } from "../hash.js";
 import {
-  observeProjectBinding, projectBindingDecision, provisionSociety, publishProjectBinding, repairSociety, residentRootfsPath,
+  observeProjectBinding, projectBindingDecision, provisionSociety, publishProjectBinding, residentRootfsPath,
   stateRootHasSociety, type ProvisionReport,
 } from "../runtime/provision.js";
 import { brokerListening, superviseBroker, type BrokerHandle } from "../runtime/broker-supervisor.js";
@@ -182,28 +182,16 @@ async function main(argv: readonly string[]): Promise<void> {
   if (settings.config.society !== society)
     fail("설정의 society가 요청한 society와 다릅니다", exitFor("INVALID_REQUEST"));
 
-  // REC-007: the society's tree is made to exist and then made right, and both
-  // finish before anything can act on it.
-  //
-  // This used to run after the broker said it was ready, which put a repair
-  // the product performs in one process in a race with Resident activation
-  // the broker performs in another: the broker's reconciliation starts enabled
-  // Residents with pending work as soon as it is listening, and a rootfs entry
-  // that was tampered with could still be wrong when a sandbox was built on
-  // it. Nothing acknowledges between the two processes, so the only ordering
-  // that can be relied on is the one that happens before the broker exists.
-  //
-  // A repair that fails is fatal here. Continuing would run Residents on a
-  // rootfs the product has said it cannot vouch for, and the previous
-  // behaviour -- writing the failure to the screen and carrying on -- made
-  // that outcome indistinguishable from a healthy start.
+  // REC-007: the society's tree is made to exist before anything can act on
+  // it. P0V-58, DR16: it is made right -- the rootfs repair -- by the broker,
+  // right after its startup quiescence proved every earlier Resident ended and
+  // before it can wake one. Repairing here, before the broker, ran while a
+  // Resident an earlier broker failed to stop could still be running, or
+  // restarting and building its sandbox, on the entries being rewritten.
   let provisioned: ProvisionReport | null = null;
-  let corrected: readonly string[] = [];
   if (tenure !== null) {
     try { provisioned = provisionSociety(stateRoot, { projectDir: process.cwd() }); }
     catch (error) { fail(`society를 준비하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
-    try { corrected = repairSociety(stateRoot); }
-    catch (error) { fail(`rootfs를 고치지 못해 society를 시작하지 않았습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
     // D02/WP13: configuration generations no reader can still use are
     // collected only here -- this process owns the society, no broker is
     // listening and nothing it will start has read the configuration yet. The
@@ -304,7 +292,6 @@ async function main(argv: readonly string[]): Promise<void> {
 
   const app = new TuiApp(ports, terminal, settings.config.limits.frameBytes);
   app.refresh();
-  for (const path of corrected) app.line(`rootfs 항목을 기대값으로 되돌렸습니다: ${path}`);
 
   let broker: BrokerHandle | null = null;
   let finished = false;

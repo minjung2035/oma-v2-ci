@@ -82,7 +82,7 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 }
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
-  disowned = null, leased = true, repairFails = false, engineExits = true,
+  disowned = null, leased = true, engineExits = true,
   brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false, commitRefused = false } = {}) {
   const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
@@ -252,7 +252,6 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
       repairSociety: () => {
         calls.push("repairSociety");
-        if (repairFails) throw new Error("rootfs entry could not be corrected");
         return ["/state/rootfs/etc/passwd"];
       },
       residentRootfsPath: () => "/state/rootfs",
@@ -370,7 +369,7 @@ test("T119: the engine starts when this process is proved to own the society, no
   assert.ok(order("superviseBroker") < order("PrincipalSession.start"));
   // D02/WP13: unused configuration generations are collected only while this
   // process owns the society and before the broker it starts can read them.
-  assert.ok(order("repairSociety") < order("collectManagedGenerations"));
+  assert.ok(order("provisionSociety") < order("collectManagedGenerations"));
   assert.ok(order("collectManagedGenerations") < order("superviseBroker"));
 });
 
@@ -630,7 +629,6 @@ test("T119 / REC-007 negative control: with no broker listening, the same run pr
   assert.ok(society.calls.includes("brokerListening"));
   assert.ok(society.calls.includes("provisionSociety"),
     "the control did not reproduce the ordinary path, so the refusal above proves nothing");
-  assert.ok(society.calls.includes("repairSociety"));
   assert.ok(society.calls.includes("superviseBroker"));
   assert.equal(society.lease.releases, 0);
 });
@@ -664,44 +662,25 @@ test("VAL-002 negative control: a run root the product can vouch for is judged a
     "the control did not reproduce the ordinary path, so the refusal above proves nothing");
 });
 
-test("T119 / REC-007: the rootfs is put right before anything can run on it", async () => {
-  // Provisioning creates what is absent; correcting an entry that exists and
-  // is wrong is a write over live state, so it waits for ownership. It used to
-  // wait for the broker's readiness as well, which put it in a race it could
-  // only lose: the broker reconciles as soon as it is listening and starts
-  // enabled Residents with pending work, in another process, with nothing
-  // acknowledging between the two. A sandbox could therefore be built on the
-  // very entry this repair was about to correct. Nothing the broker does can
-  // be ordered against this from here, so the repair finishes before the
-  // broker exists.
+test("P0V-58 / R03, DR16: the host provisions the tree and leaves its repair to the broker's startup", async () => {
+  // The rootfs used to be repaired here, before the broker existed -- and so
+  // before anything had proven that the Residents an earlier broker failed to
+  // stop had ended: one could still be running, or restarting and building its
+  // sandbox, on the entries being rewritten. The repair now runs in the
+  // broker, right after its startup quiescence and before it can wake a
+  // Resident (broker-composition-policy); a repair that fails ends the
+  // broker's startup, so no broker becomes ready and no engine starts.
   const society = await run();
   const order = name => society.calls.indexOf(name);
-  assert.equal(society.calls.filter(name => name === "repairSociety").length, 1);
+  assert.equal(society.calls.includes("repairSociety"), false, "the host repaired the rootfs before any quiescence");
   assert.ok(order("tryHoldSociety") < order("provisionSociety"));
-  assert.ok(order("provisionSociety") < order("repairSociety"));
-  assert.ok(order("repairSociety") < order("superviseBroker"),
-    `a broker was started before the rootfs it activates residents on was put right: ${society.calls.join(" ")}`);
-  assert.ok(society.lines.some(line => /etc\/passwd/.test(line)), society.lines.join(" | "));
-
-  // Only once, however many times a restarted broker becomes ready.
-  society.broker.fireReady();
-  await society.settle();
-  society.broker.fireReady();
-  await society.settle();
-  assert.equal(society.calls.filter(name => name === "repairSociety").length, 1);
-});
-
-test("T119 / REC-007: a rootfs that could not be put right starts no broker and no engine", async () => {
-  // The previous behaviour wrote the failure to the screen and carried on, so
-  // "the rootfs is as the product intends" and "the product could not tell"
-  // looked the same from the outside -- and Residents ran either way.
-  const society = await run({ repairFails: true });
-  assert.ok(society.calls.includes("repairSociety"));
-  assert.equal(society.calls.includes("superviseBroker"), false,
-    "a broker was started over a rootfs the product could not vouch for");
+  assert.ok(order("provisionSociety") < order("superviseBroker"));
+  // No engine starts until the broker says it is ready -- which a broker whose
+  // repair failed never does.
   assert.equal(society.calls.includes("PrincipalSession.start"), false);
-  assert.equal(society.started, null);
-  assert.ok(society.calls.some(name => /^exit:/.test(name)), society.calls.join(" "));
+  society.broker.fireReady();
+  await society.settle();
+  assert.ok(society.calls.includes("PrincipalSession.start"));
 });
 
 test("T119: quitting gives the society back, and only once the engine is really gone", async () => {

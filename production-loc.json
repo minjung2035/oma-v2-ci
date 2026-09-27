@@ -3,13 +3,13 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 30336,
+    "n_lines": 30340,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
     "blank": 4,
-    "comment": 77,
-    "code": 460,
+    "comment": 79,
+    "code": 462,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -48,16 +48,16 @@
     "code": 370,
     "language": "TypeScript"
   },
-  "src/entry/oma.ts": {
-    "blank": 26,
-    "comment": 178,
-    "code": 342,
-    "language": "TypeScript"
-  },
   "src/store.ts": {
     "blank": 4,
     "comment": 41,
     "code": 341,
+    "language": "TypeScript"
+  },
+  "src/entry/oma.ts": {
+    "blank": 26,
+    "comment": 169,
+    "code": 338,
     "language": "TypeScript"
   },
   "src/runtime/inference-relay.ts": {
@@ -276,6 +276,12 @@
     "code": 176,
     "language": "TypeScript"
   },
+  "src/entry/broker.ts": {
+    "blank": 3,
+    "comment": 57,
+    "code": 174,
+    "language": "TypeScript"
+  },
   "src/mail/batches.ts": {
     "blank": 2,
     "comment": 32,
@@ -292,12 +298,6 @@
     "blank": 9,
     "comment": 8,
     "code": 170,
-    "language": "TypeScript"
-  },
-  "src/entry/broker.ts": {
-    "blank": 3,
-    "comment": 49,
-    "code": 169,
     "language": "TypeScript"
   },
   "src/runtime/pi-spawn-plan.ts": {
@@ -1352,8 +1352,8 @@
   },
   "SUM": {
     "blank": 1212,
-    "comment": 5092,
-    "code": 24032,
+    "comment": 5093,
+    "code": 24035,
     "nFiles": 224
   }
 }
