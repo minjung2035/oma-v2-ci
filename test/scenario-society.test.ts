@@ -15,7 +15,8 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
-import { call, continuesTurn, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
+import { call, continuesTurn, delayed, lastUserText, text, textOf, toolResults, tools, type ChatRequest, type Reply } from "./fixtures/scripted-provider.js";
+import { WORKER_MODEL, commitField, readSettings } from "../src/tui/sources/settings.js";
 import { runnerReceiptPathAt, workspacePathAt } from "../src/storage/paths.js";
 
 const TIMEOUT = { timeout: 180_000 };
@@ -205,5 +206,90 @@ test("SCN-S03: mail that arrives while a Resident's run is going is left for its
     s.script([text("둘째 완료")]);
     assert.equal((await s.activate("worker-a")).code, 0);
     assert.equal(s.store.getDelivery(second, "worker-a")?.presented, 1);
+  });
+});
+
+test("SCN-L05: the Principal creates a Resident; its first run is given the brief; a repeat is the same operation and another brief is a conflict", TIMEOUT, async () => {
+  await withScenario({}, async s => {
+    const create = (brief: string, request: string) => tools(call("oma_agent_create", { name: "worker-n", brief, request }));
+    s.script([create("README를 정리하세요.", "create-1"), text("만들었습니다.")]);
+    await s.prompt("새 작업자를 만들어");
+    const created = receiptIn(lastResult(s.provider.seen[1]!.body));
+    assert.equal(created.state, "succeeded", JSON.stringify(created));
+    const agent = s.store.getAgent("worker-n")!;
+    assert.deepEqual([agent.desired, agent.createdBy], ["enabled", "principal"]);
+    const [brief] = s.inbox("worker-n");
+    assert.ok(brief, "the new Resident has no initial brief");
+    s.script(request => (continuesTurn(request) ? text("시작합니다.") : tools(call("oma_mail_read", { messageId: noticed(request)[0]! }))));
+    const run = await s.activate("worker-n");
+    assert.equal(run.code, 0, run.stderr);
+    assert.match(lastResult(residentRequests(s)[1]!.body), /README를 정리하세요/);
+    assert.equal(s.store.getDelivery(brief, "worker-n")?.presented, 1);
+    // The same request again is the same operation; another brief under a new key is a conflict.
+    s.script([create("README를 정리하세요.", "create-1"), create("다른 일", "create-2"), text("확인")]);
+    await s.prompt("다시 만들어");
+    // The whole conversation's tool results; the last two are this prompt's.
+    const [again, other] = toolResults(s.provider.seen.at(-1)!.body).map(result => result.text).slice(-2);
+    assert.equal(receiptIn(again!).operation, created.operation, "the repeat was a new operation");
+    assert.match(other!, /AGENT_CONFLICT/, `${other}`);
+    assert.equal(s.operations("principal").filter(row => row.kind === "agent.create" && row.state === "succeeded").length, 1);
+  });
+});
+
+test("SCN-L06: a stopped Resident is not run; its mail waits; started again, its next run gets the mail", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"] }, async s => {
+    const lifecycle = (action: "start" | "stop", request: string) => tools(call("oma_agent_lifecycle", { name: "worker-a", action, request }));
+    s.script([lifecycle("stop", "stop-1"), text("멈췄습니다.")]);
+    await s.prompt("worker-a 멈춰");
+    assert.equal(s.store.getAgent("worker-a")?.desired, "stopped", lastResult(s.provider.seen[1]!.body));
+    const task = await principalSends(s, ["worker-a"], "대기", "멈춘 동안 온 일", "p-l06");
+    const refused = await s.activate("worker-a");
+    assert.notEqual(refused.code, 0, "a stopped Resident's runner ran");
+    assert.equal(s.store.getDelivery(task, "worker-a")?.presented, 0);
+    s.script([lifecycle("start", "start-1"), text("시작했습니다.")]);
+    await s.prompt("worker-a 다시 시작해");
+    assert.equal(s.store.getAgent("worker-a")?.desired, "enabled");
+    await s.restartBroker();
+    s.script([text("대기하던 일을 받았습니다.")]);
+    assert.equal((await s.activate("worker-a")).code, 0);
+    assert.equal(s.store.getDelivery(task, "worker-a")?.presented, 1);
+  });
+});
+
+test("SCN-R08: the broker restarts during a Resident's turn; the next run settles the batch from its receipt and does not present it again", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"] }, async s => {
+    const task = await principalSends(s, ["worker-a"], "정산", "처리해 주세요.", "p-r08");
+    s.script(() => delayed(1500, text("처리했습니다.")));
+    const running = s.activate("worker-a");
+    const deadline = Date.now() + 30_000;
+    while (residentRequests(s).length === 0 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+    await s.stopBroker();
+    const first = await running;
+    assert.notEqual(first.code, 0, "the run completed against a broker that was gone");
+    const presentedBefore = residentRequests(s).filter(entry => !continuesTurn(entry.body)).length;
+    await s.restartBroker();
+    s.script([text("다시는 보이면 안 됩니다.")]);
+    const second = await s.activate("worker-a");
+    assert.equal(second.code, 0, second.stderr);
+    assert.equal(s.store.getDelivery(task, "worker-a")?.presented, 1);
+    assert.deepEqual(s.store.preparedBatches("worker-a"), []);
+    assert.equal(residentRequests(s).filter(entry => !continuesTurn(entry.body)).length, presentedBefore,
+      "the batch was presented to the model again although its receipt settled it");
+  });
+});
+
+test("SCN-X01: a Worker model changed in the configuration applies from the next activation", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"] }, async s => {
+    await principalSends(s, ["worker-a"], "첫째", "첫 번째", "p-x01a");
+    s.script([text("첫째 완료")]);
+    assert.equal((await s.activate("worker-a")).code, 0);
+    assert.equal(residentRequests(s).at(-1)!.body.model, "scripted");
+    const settings = readSettings(s.configPath);
+    assert.equal(commitField(settings, WORKER_MODEL, "scripted-2").kind, "saved");
+    await principalSends(s, ["worker-a"], "둘째", "두 번째", "p-x01b");
+    await s.restartBroker();
+    s.script([text("둘째 완료")]);
+    assert.equal((await s.activate("worker-a")).code, 0);
+    assert.equal(residentRequests(s).at(-1)!.body.model, "scripted-2", "the next activation did not use the changed model");
   });
 });

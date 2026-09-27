@@ -97,7 +97,7 @@ test("SCN-C03: submitting the same request twice publishes one candidate under o
 });
 
 test("SCN-C04: a Resident integrates its published candidate with the right expectation; main moves exactly there", OPTIONS, async () => {
-  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
+  await withScenario({ residents: ["worker-a"], confined: true, integrate: true }, async s => {
     const before = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "제출하고 통합하세요.", "c04");
     s.script((request, index) => {
@@ -119,7 +119,7 @@ test("SCN-C04: a Resident integrates its published candidate with the right expe
 });
 
 test("SCN-C05: an integration against a main that has moved is refused with the actual main, and changes nothing", OPTIONS, async () => {
-  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
+  await withScenario({ residents: ["worker-a"], confined: true, integrate: true }, async s => {
     const main = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "잘못된 기대로 통합해 보세요.", "c05");
     const stale = "b".repeat(40);
@@ -152,5 +152,23 @@ test("SCN-C06: the Principal publishes the shared context; a confined Resident r
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     assert.match(lastResult(s.provider.seen.at(-1)!.body), /로그인 오류를 없앤다/);
+  });
+});
+
+test("SCN-C07: without Worker integrate a Resident's integration is refused and main does not move (AUTH-001)", OPTIONS, async () => {
+  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
+    const main = git(s, "rev-parse", "refs/heads/main");
+    await assign(s, "worker-a", "통합해 보세요.", "c07");
+    s.script((request, index) => {
+      if (index === 0) return bash(`${COMMIT} && oma submit HEAD --to principal --subject '대상' --request sub-c07`);
+      if (index === 1) return bash(`oma integrate ${receiptIn(lastResult(request)).result!.candidate!} --expect ${main} --request int-c07; echo "exit=$?"`);
+      return text("권한이 없습니다.");
+    });
+    const run = await s.activate("worker-a");
+    assert.equal(run.code, 0, run.stderr);
+    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body);
+    assert.match(refused, /CAPABILITY_DENIED/, refused);
+    assert.match(refused, /exit=2/);
+    assert.equal(git(s, "rev-parse", "refs/heads/main"), main);
   });
 });

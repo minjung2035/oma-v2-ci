@@ -536,3 +536,28 @@ test("SCN-F16: mail that arrives while a delivery runs is delivered by the next 
     assert.notEqual(s.store.getDelivery(first, "principal")?.batchId, s.store.getDelivery(second, "principal")?.batchId);
   });
 });
+
+test("SCN-P09: status of one agent names that agent and its pending mail", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
+    await s.residentSends("worker-b", { to: ["worker-a"], subject: "대기", body: "처리 대기" }, "w-p09");
+    s.script([tools(call("oma_status", { agent: "worker-a" })), text("확인")]);
+    await s.prompt("worker-a 상태");
+    const status = lastResult(s.provider.seen[1]!.body);
+    assert.match(status, /worker-a/);
+    assert.doesNotMatch(status, /worker-b/, "status of one agent listed another");
+  });
+});
+
+test("SCN-P10: reading a message that does not exist is refused to the model and changes nothing", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"], script: [
+    tools(call("oma_mail_read", { messageId: "m-00000000-0000-4000-8000-00000000dead-0" }), call("oma_mail_read", { messageId: "../../etc/passwd" })),
+    text("그런 메일은 없습니다."),
+  ] }, async s => {
+    const turn = await s.prompt("그 메일 읽어");
+    const [missing, escaped] = toolResults(s.provider.seen[1]!.body).map(result => result.text);
+    assert.doesNotMatch(missing!, /root:/);
+    assert.doesNotMatch(escaped!, /root:x:0/, "a path outside the archive was read");
+    assert.ok(turn.lines.some(line => line.includes("그런 메일은 없습니다")));
+    assert.deepEqual(s.operations(), []);
+  });
+});

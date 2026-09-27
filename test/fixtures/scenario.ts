@@ -36,8 +36,11 @@ import { GitModule } from "../../src/git.js";
 import { QUARANTINE_RESOURCES } from "../../src/git/quarantine.js";
 import { integrationPolicyFromConfig } from "../../src/git/integration-policy.js";
 import { readCurrentHostPolicy } from "../../src/config.js";
+import { createChildSpecResolver } from "../../src/config/policy.js";
 import { residentProjectGit } from "../../src/sandbox.js";
-import type { HostConfigV1 } from "../../implementation/contracts.js";
+import type { HostConfigV1, ResolvedAgentSpec } from "../../implementation/contracts.js";
+import type { NewAgent } from "../../src/store.js";
+import { resolvedSpecDigest } from "../../src/domain/spec-identity.js";
 import { ViewsModule } from "../../src/views.js";
 import { LifecycleModule } from "../../src/lifecycle.js";
 import { provisionSociety, residentRootfsPath } from "../../src/runtime/provision.js";
@@ -151,6 +154,8 @@ export interface Scenario {
   inbox(actor: string, box?: "new" | "cur"): string[];
   /** The raw stored message a mail id names. */
   archived(messageId: string): string;
+  /** The society's configuration file, as the Control Panel edits it. */
+  readonly configPath: string;
   /** Runs a Resident once, as systemd starts its unit: the product's runner
    * opens a run, takes one prepared batch, delivers it into a fresh engine
    * (the scripted model answers) and completes it. Resolves when it exits. */
@@ -168,6 +173,9 @@ export interface ScenarioOptions {
    * bubblewrap in the society's generated rootfs, with bash, reaching the
    * (then TLS) scripted provider only through the runner's relay. */
   readonly confined?: boolean;
+  /** "Worker integrate" on, as the Control Panel sets it (DR4): Residents
+   * hold code.integrate. Off by default, as in the product's defaults. */
+  readonly integrate?: boolean;
 }
 
 /** A broker over the society's state, composed as entry/broker.ts composes
@@ -182,10 +190,11 @@ function composeBroker(root: string, runRoot: string, store: Store, host: HostSi
     worldDir: join(root, "world"), society: SOCIETY, quarantineTmpBytes: config.limits.bundleBytes, quarantineResources: QUARANTINE_RESOURCES,
     checkRootfs: config.installation.rootfs, checkAssetsDir: config.installation.rootfs, checkTmpBytes: 1,
   }, store, mail, integrationPolicyFromConfig(config.integration), () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration));
+  const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, SOCIETY), () => store.inTransaction);
   const lifecycle = new LifecycleModule(store, units,
     { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true,
       residentProjectGit: residentProjectGit(config.installation.rootfs, projectGitPathAt(root)) },
-    () => null, mail);
+    resolveSpec, mail, config.quota);
   return new Broker(store, mail, units, views, lifecycle, git, null,
     { stateRoot: root, runRoot, society: SOCIETY, hasGoal: () => true }, SCENARIO_LIMITS, undefined, host);
 }
@@ -204,8 +213,11 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
   const residentProfile = Object.keys(defaults.agentProfiles).find(name => name !== defaults.principalProfile)!;
   const config = validateConfig({ ...defaults,
     modelProfiles: { ...defaults.modelProfiles, scripted: { ...(options.confined === true ? CONFINED_MODEL : { provider: "fake", model: "scripted" }), credentialRef: "engine-managed",
+      codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 },
+      "scripted-2": { provider: "fake", model: "scripted-2", credentialRef: "engine-managed",
       codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 } },
-    agentProfiles: { ...defaults.agentProfiles, [residentProfile]: { ...defaults.agentProfiles[residentProfile]!, modelProfile: "scripted" } } });
+    agentProfiles: { ...defaults.agentProfiles, [residentProfile]: { ...defaults.agentProfiles[residentProfile]!, modelProfile: "scripted",
+      capabilities: [...defaults.agentProfiles[residentProfile]!.capabilities, ...(options.integrate === true ? ["code.integrate" as const] : [])] } } });
   const configPath = join(root, "config.json");
   writeFileSync(configPath, JSON.stringify(config, null, 2));
   const residentResources = config.agentProfiles[residentProfile]!.resources;
@@ -215,9 +227,21 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
   // certificate; certificate checking stays on.
   const trust: Record<string, string> = provider.caFile === null ? {} : { NODE_EXTRA_CA_CERTS: provider.caFile };
   let store = new Store(join(root, "runtime.sqlite"));
+  // Agents as the product records them: the configuration's profiles, their
+  // capabilities, model and resources, based on the canonical main.
+  const main = execFileSync("/usr/bin/git", ["--git-dir", projectGitPathAt(root), "rev-parse", "refs/heads/main"], { encoding: "utf8" }).trim();
+  const agentRow = (name: string): NewAgent => {
+    const profileName = name === "principal" ? config.principalProfile : residentProfile;
+    const profile = config.agentProfiles[profileName]!;
+    const spec: ResolvedAgentSpec = { name, from: main, brief: name === "principal" ? "Principal" : `${name}의 역할`, profile: profileName,
+      capabilities: [...profile.capabilities], modelProfile: profile.modelProfile, resources: { ...profile.resources } };
+    // Seeded Residents are the Principal's children, as bootstrap records them.
+    return { ...makeValidAgent(name), specHash: resolvedSpecDigest(spec), profile: profileName, specJson: JSON.stringify(spec),
+      createdBy: name === "principal" ? null : "principal" };
+  };
   store.transaction(tx => {
-    tx.insertAgent(makeValidAgent("principal"));
-    for (const name of options.residents ?? []) tx.insertAgent(makeValidAgent(name));
+    tx.insertAgent(agentRow("principal"));
+    for (const name of options.residents ?? []) tx.insertAgent(agentRow(name));
   });
   const host = new HostSide();
   let broker = composeBroker(root, runRoot, store, host, units, config, configPath);
@@ -278,7 +302,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
   };
 
   const scenario: Scenario = {
-    root, runRoot, provider, lines, events,
+    root, runRoot, provider, lines, events, configPath,
     get store() { return store; },
     get broker() { return broker; },
     get session() { return session; },

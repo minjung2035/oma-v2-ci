@@ -193,7 +193,8 @@ export async function scriptedProvider(initial: Script | readonly Reply[] = [], 
       // uses, because inside its sandbox the engine knows only its own catalog
       // and reaches it through the runner's relay.
       writeFileSync(join(agentDir, "models.json"), JSON.stringify({ providers: {
-        fake: { baseUrl, api: "openai-completions", apiKey: SCRIPTED_KEY, models: [{ id: "scripted", contextWindow: 200000, maxTokens: 8192 }] },
+        fake: { baseUrl, api: "openai-completions", apiKey: SCRIPTED_KEY, models: [
+          { id: "scripted", contextWindow: 200000, maxTokens: 8192 }, { id: "scripted-2", contextWindow: 200000, maxTokens: 8192 }] },
         groq: { baseUrl, apiKey: SCRIPTED_KEY },
       } }));
       // The engine's own retry policy stays on (INF-001); only its waits are
