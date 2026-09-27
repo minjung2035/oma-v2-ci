@@ -2,7 +2,8 @@
 # the oma user whose user manager runs the Residents (linger is on in the image).
 [Unit]
 Description=OMA guest host
-After=local-fs.target user@1000.service
+Requires=oma-provision.service
+After=local-fs.target oma-provision.service user@1000.service
 Wants=user@1000.service
 
 [Service]

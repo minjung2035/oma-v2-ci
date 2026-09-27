@@ -2,7 +2,8 @@
 # things that need root in the guest, and nothing else.
 [Unit]
 Description=OMA guest control
-After=local-fs.target
+Requires=oma-provision.service
+After=local-fs.target oma-provision.service
 
 [Service]
 Type=simple

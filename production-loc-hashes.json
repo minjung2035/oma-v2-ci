@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "9343442b7f598d86273a53d88e00cfc82e9bdb587b1124c8af4150518d3a2fe6",
-  "report": "3b0c1111198f038b3ecf6aee1dd6814875fe740f80d322b3ed4332b3ecfbf571",
+  "manifest": "55e07692d9bba8b54c404d0dfddac07283ef57bfbfc702e1cd53133344f4ec2f",
+  "report": "f7193f046b3727412f78d0c72821d29186b4c234183752a67f66d34e6a71d8af",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -288,6 +288,10 @@
       "sha256": "9b85faa7faa75251cfb41c68aeb341bbba75df742306f443302320a791725c87"
     },
     {
+      "path": "src/entry/guest-provision.ts",
+      "sha256": "24b77d285087cc3ed5e4368f8b9ed0a0e4a6f7be6dcd9d59f5d48b0fc7c83adf"
+    },
+    {
       "path": "src/entry/guest-session.ts",
       "sha256": "a4f12e445d94dcf8cc43cfd1dee5cad4cabbdeb84c0272e61ce8939443efc537"
     },
@@ -530,6 +534,10 @@
     {
       "path": "src/platform/guest/linux-system.ts",
       "sha256": "3ad1272bf31fc021ea6ef827548bc7763629adc0b0ec7d55b5f615488a3d6a5f"
+    },
+    {
+      "path": "src/platform/guest/provision.ts",
+      "sha256": "dff6937f6f94bfd4f508cd8b0e78add03e7a3ff84da9978c460c52b34b9c9693"
     },
     {
       "path": "src/platform/guest/pty.ts",

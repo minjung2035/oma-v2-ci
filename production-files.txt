@@ -69,6 +69,7 @@ src/domain/spec-identity.ts
 src/domain/tool-surface.ts
 src/durable.ts
 src/entry/broker.ts
+src/entry/guest-provision.ts
 src/entry/guest-session.ts
 src/entry/guestctl.ts
 src/entry/guesthost.ts
@@ -130,6 +131,7 @@ src/platform/guest/egress.ts
 src/platform/guest/host.ts
 src/platform/guest/identity.ts
 src/platform/guest/linux-system.ts
+src/platform/guest/provision.ts
 src/platform/guest/pty.ts
 src/platform/guest/server.ts
 src/platform/guest/session.ts

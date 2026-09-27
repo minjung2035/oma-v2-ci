@@ -72,6 +72,7 @@
   "src/domain/tool-surface.ts",
   "src/durable.ts",
   "src/entry/broker.ts",
+  "src/entry/guest-provision.ts",
   "src/entry/guest-session.ts",
   "src/entry/guestctl.ts",
   "src/entry/guesthost.ts",
@@ -133,6 +134,7 @@
   "src/platform/guest/host.ts",
   "src/platform/guest/identity.ts",
   "src/platform/guest/linux-system.ts",
+  "src/platform/guest/provision.ts",
   "src/platform/guest/pty.ts",
   "src/platform/guest/server.ts",
   "src/platform/guest/session.ts",
@@ -1481,7 +1483,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 58
+   "files": 59
   },
   {
    "index": 5,
@@ -1495,11 +1497,11 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 61
+   "files": 62
   }
  ],
- "files": 256,
- "runtimeEdges": 966,
+ "files": 258,
+ "runtimeEdges": 973,
  "typeOnlyEdges": 333,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
@@ -1508,14 +1510,14 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 143,
+  "L4-orchestration -> L1-kernel": 146,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 69,
-  "L5-entry -> L1-kernel": 86,
+  "L4-orchestration -> L4-orchestration": 70,
+  "L5-entry -> L1-kernel": 87,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 44,
+  "L5-entry -> L4-orchestration": 46,
   "L5-entry -> L5-entry": 115
  },
  "upwardTypeOnlyEdges": [
@@ -1535,7 +1537,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 133,
+  "src/domain/errors.ts": 134,
   "src/domain/identifiers.ts": 38,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 25,
@@ -1543,8 +1545,8 @@
   "src/storage/durable-fs.ts": 21,
   "src/storage/contained-fs.ts": 20,
   "src/domain/derived.ts": 17,
+  "src/protocol/host-guest.ts": 17,
   "src/cli/exit.ts": 16,
-  "src/protocol/host-guest.ts": 16,
   "src/store.ts": 16,
   "src/domain/canonical-json.ts": 13,
   "src/authority.ts": 12,
@@ -1575,12 +1577,12 @@
   "node:async_hooks": 3,
   "node:child_process": 6,
   "node:crypto": 31,
-  "node:fs": 75,
+  "node:fs": 77,
   "node:http": 1,
   "node:https": 1,
   "node:net": 25,
   "node:os": 3,
-  "node:path": 77,
+  "node:path": 79,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

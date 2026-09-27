@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 255,
-    "n_lines": 33520,
+    "n_files": 257,
+    "n_lines": 33670,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -750,6 +750,12 @@
     "code": 76,
     "language": "TypeScript"
   },
+  "src/platform/guest/provision.ts": {
+    "blank": 10,
+    "comment": 21,
+    "code": 75,
+    "language": "TypeScript"
+  },
   "src/storage/staged-tree.ts": {
     "blank": 3,
     "comment": 27,
@@ -1182,6 +1188,12 @@
     "code": 36,
     "language": "TypeScript"
   },
+  "src/entry/guest-provision.ts": {
+    "blank": 2,
+    "comment": 7,
+    "code": 35,
+    "language": "TypeScript"
+  },
   "src/tui/view/dashboard.ts": {
     "blank": 3,
     "comment": 18,
@@ -1537,9 +1549,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1448,
-    "comment": 5619,
-    "code": 26453,
-    "nFiles": 255
+    "blank": 1460,
+    "comment": 5647,
+    "code": 26563,
+    "nFiles": 257
   }
 }
