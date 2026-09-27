@@ -892,6 +892,9 @@ broker 하나다(REC-007). WAL 파일이 남아 있어도 같은 시점의 파�
 thaw한다. deadline은 host가 요청한 값과, guest의 society 설정에 실제로 있는 가장 짧은 `limits.receiptWaitSeconds`에서 여유(500 ms)를 뺀
 값 가운데 작은 것이다. society가 없으면 10초다. 어느 society의 설정을 읽을 수 없으면 그 한도를 모르는 것이므로 freeze하지 않는다(P0-5).
 위의 절차에서는 broker가 멈춰 있어 기다리는 receipt가 없지만, 이 한도는 절차가 깨졌을 때의 방어로 남긴다.
+deadline timer는 guestctl 프로세스 안에 있으므로 guestctl이 죽으면 함께 사라진다. 그래서 guestctl보다 오래 사는 것이 thaw한다.
+unit의 `ExecStopPost`가 멈춤마다(crash·SIGKILL 포함) `guestctl --thaw`를 돌리고, 시작할 때마다 앞의 것이 남긴 freeze를 풀며,
+guestctl은 자기가 보는 모든 끝(exit, 종료 신호)에서 제 freeze를 푼다(P0V-82).
 
 **MUST [MAC-622]** `fs.thaw`가 `thawed: false`로 답하면(deadline이 먼저 풀었다) clone이 언 동안에 끝났다는 보장이 없다. host는
 `<id>.partial`을 지우고 snapshot을 만들지 않은 것으로 끝낸다. UI는 "백업을 만들지 못했습니다. 다시 시도하세요"라고 말한다. 일관성을 모르는

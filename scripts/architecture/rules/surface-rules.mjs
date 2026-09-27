@@ -572,10 +572,11 @@ const TERMINATION_SIGNALS = Object.freeze(["SIGHUP", "SIGINT", "SIGQUIT", "SIGTE
 const HOST_LOSS_OWNER = "src/runtime/broker-lifetime.ts";
 const LISTENER_METHODS = new Set(["on", "once", "addListener", "prependListener", "prependOnceListener"]);
 /** The processes with a drain: the broker, a Resident's runner, the `oma`
- * TUI, the Mac service and its attach client, a guest's session holder. */
+ * TUI, the Mac service and its attach client, a guest's session holder, and
+ * guestctl (whose drain is the thaw of a freeze it holds, MAC-620). */
 const DRAINING_PROCESSES = Object.freeze([
   "src/entry/broker.ts", "src/entry/runner.ts", "src/entry/oma.ts", "src/entry/omahostd.ts",
-  "src/entry/guest-session.ts", "src/platform/host/attach-client.ts",
+  "src/entry/guest-session.ts", "src/entry/guestctl.ts", "src/platform/host/attach-client.ts",
 ]);
 function hostLossSignalRules(root, findings) {
   for (const file of filesUnder(root, "src")) {

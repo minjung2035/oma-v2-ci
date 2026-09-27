@@ -5,6 +5,7 @@ import { startGuestServer } from "../platform/guest/server.js";
 import { GuestControl } from "../platform/guest/control.js";
 import { linuxGuestSystem } from "../platform/guest/linux-system.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
+import { stopOnHostLoss } from "../runtime/broker-lifetime.js";
 
 function argOf(flag: string, fallback: string): string {
   const index = process.argv.indexOf(flag);
@@ -16,7 +17,18 @@ const dataDir = argOf("--data", "/var/lib/oma");
 const imageManifest = argOf("--image", "/usr/lib/oma/image.json");
 // Where the guest's `oma` keeps its state roots (XDG_DATA_HOME/oma).
 const societiesDir = argOf("--societies", "/var/lib/oma/data/oma");
-const control = new GuestControl(linuxGuestSystem(dataDir, societiesDir));
+const system = linuxGuestSystem(dataDir, societiesDir);
+// P0V-82, MAC-620: a freeze always ends -- and when the process that took it
+// dies, its deadline timer dies with it. So whatever outlives this process
+// ends it: systemd runs `--thaw` after every stop of this unit, however it
+// stopped (ExecStopPost); each start thaws what a predecessor left; and this
+// process ends its own freeze on every end it sees. A thaw of a filesystem
+// that is not frozen is not an error.
+if (process.argv.includes("--thaw")) { system.thaw(); process.exit(0); }
+system.thaw();
+const control = new GuestControl(system);
+process.on("exit", () => { control.release(); });
+stopOnHostLoss(() => { process.exit(0); });
 
 startGuestServer({
   socketPath,

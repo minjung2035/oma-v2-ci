@@ -12,6 +12,10 @@ RuntimeDirectory=oma-guestctl
 # connected is checked per connection.
 RuntimeDirectoryMode=0711
 ExecStart=/usr/lib/oma/node/bin/node /usr/lib/oma/dist/src/entry/guestctl.js --socket /run/oma-guestctl/control.sock --data /var/lib/oma --societies /var/lib/oma/data/oma
+# MAC-620: a freeze always ends. The deadline timer lives in the process above;
+# this runs after every stop, a crash or SIGKILL included, so a freeze that
+# process held cannot outlive it.
+ExecStopPost=/usr/lib/oma/node/bin/node /usr/lib/oma/dist/src/entry/guestctl.js --thaw --data /var/lib/oma --societies /var/lib/oma/data/oma
 Restart=on-failure
 RestartSec=1s
 # CAP_SYS_RESOURCE: ext4's online resize refuses without it (ext4_resize_begin).

@@ -51,7 +51,7 @@ export class GuestControl {
   private frozen: { readonly at: number; readonly timer: { cancel(): void } } | null = null;
   private poweringOff = false;
   /** Why the last freeze ended, for health and tests. */
-  lastThaw: "requested" | "deadline" | null = null;
+  lastThaw: "requested" | "deadline" | "released" | null = null;
 
   constructor(private readonly system: GuestSystem) {}
 
@@ -95,7 +95,13 @@ export class GuestControl {
     return { thawed: was };
   }
 
-  private end(reason: "requested" | "deadline"): void {
+  /** P0V-82, MAC-620: this process is ending, and the deadline timer that
+   * would have ended its freeze ends with it -- so the freeze ends now. */
+  release(): void {
+    this.end("released");
+  }
+
+  private end(reason: "requested" | "deadline" | "released"): void {
     const frozen = this.frozen;
     if (frozen === null) return;
     this.frozen = null;

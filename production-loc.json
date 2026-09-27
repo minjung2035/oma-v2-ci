@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 268,
-    "n_lines": 35043,
+    "n_lines": 35061,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -618,6 +618,12 @@
     "code": 96,
     "language": "TypeScript"
   },
+  "src/platform/guest/control.ts": {
+    "blank": 14,
+    "comment": 30,
+    "code": 95,
+    "language": "TypeScript"
+  },
   "src/platform/guest/stream.ts": {
     "blank": 3,
     "comment": 18,
@@ -657,12 +663,6 @@
   "src/domain/persisted-formats.ts": {
     "blank": 10,
     "comment": 26,
-    "code": 92,
-    "language": "TypeScript"
-  },
-  "src/platform/guest/control.ts": {
-    "blank": 13,
-    "comment": 28,
     "code": 92,
     "language": "TypeScript"
   },
@@ -1278,6 +1278,12 @@
     "code": 33,
     "language": "TypeScript"
   },
+  "src/entry/guestctl.ts": {
+    "blank": 3,
+    "comment": 9,
+    "code": 32,
+    "language": "TypeScript"
+  },
   "src/entry/host.ts": {
     "blank": 1,
     "comment": 2,
@@ -1342,12 +1348,6 @@
     "blank": 4,
     "comment": 7,
     "code": 27,
-    "language": "TypeScript"
-  },
-  "src/entry/guestctl.ts": {
-    "blank": 3,
-    "comment": 3,
-    "code": 26,
     "language": "TypeScript"
   },
   "src/git/canonical-command.ts": {
@@ -1615,9 +1615,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1536,
-    "comment": 5940,
-    "code": 27567,
+    "blank": 1537,
+    "comment": 5948,
+    "code": 27576,
     "nFiles": 268
   }
 }

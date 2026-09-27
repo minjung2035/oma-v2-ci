@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "d07f0356eab4eb35485dc6e7e0160b84863db9b0aef3261d195ef1de3e5a4d0b",
-  "report": "20f35e91a77d1604638b81cc2af94e2244a8cc3bd9641773bd7630107f55a5e6",
+  "report": "a8c5402f6d486cd49633b87eb8db1b271bf3b9da0bfbf6cd018a739f58aeddcc",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -297,7 +297,7 @@
     },
     {
       "path": "src/entry/guestctl.ts",
-      "sha256": "ec7964ab8e9c63845c57c95cbd35bac22367b5d3aec2bd89fb72eee212f41078"
+      "sha256": "36ac8bf138d4604303edfcea799894dbd7a4c2a53da34758ccaf4f710bbe735c"
     },
     {
       "path": "src/entry/guesthost.ts",
@@ -529,7 +529,7 @@
     },
     {
       "path": "src/platform/guest/control.ts",
-      "sha256": "4a6f7212e117e92afb2aa8495db210608a5dc1c76ce9c987f7af479d9620f1f5"
+      "sha256": "2ef700478f61b2ecc7fc2f47691da554f168d35f411c5375c3d724ad0268b73d"
     },
     {
       "path": "src/platform/guest/egress.ts",

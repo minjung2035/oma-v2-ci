@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, createServer, type Server } from "node:net";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -213,4 +213,23 @@ test("MAC-241: a request whose answer never comes is an unknown outcome, never a
   const pending = peer.request("project.export", {}, "k2");
   socket.destroy();
   await assert.rejects(pending, (error: unknown) => error instanceof PlatformError && error.failure.retry === "same-key");
+});
+
+test("P0V-82 / MAC-620: a freeze ends with the process that holds it, and after it by the unit, however it stopped", () => {
+  const system = fakeSystem();
+  const control = new GuestControl(system);
+  control.freeze(5000);
+  control.release();
+  assert.equal(control.isFrozen, false);
+  assert.equal(control.lastThaw, "released");
+  assert.equal(system.fire(), undefined);
+  control.release();
+  assert.deepEqual(system.calls, ["freeze", "thaw"], "a released freeze is thawed once, and its deadline never fires after");
+  // What outlives the process: systemd's post-stop runs the same entry to thaw.
+  const unit = readFileSync(new URL("../../platform/guest/systemd/oma-guestctl.service", import.meta.url), "utf8");
+  const line = (key: string) => unit.split("\n").find(entry => entry.startsWith(`${key}=`))?.slice(key.length + 1).split(" ") ?? [];
+  const [start, post] = [line("ExecStart"), line("ExecStopPost")];
+  assert.deepEqual(post.slice(0, 2), start.slice(0, 2), "the post-stop is not guestctl itself");
+  assert.ok(post.includes("--thaw"), "the post-stop does not thaw");
+  assert.equal(post[post.indexOf("--data") + 1], start[start.indexOf("--data") + 1], "the post-stop thaws another filesystem");
 });
