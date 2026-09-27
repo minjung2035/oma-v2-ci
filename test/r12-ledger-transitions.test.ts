@@ -70,6 +70,36 @@ test("P0V-30 / N06, P0-5: a wall clock that steps back makes no state change fai
   assert.equal(store.getUsage(usage.requestId)?.outcome, "unknown");
 });
 
+test("P0V-56 / R01, P0-5: a clock that steps back after materialization does not make the batch's completion corrupt", t => {
+  const created = Date.UTC(2026, 8, 27, 9);
+  t.mock.timers.enable({ apis: ["Date"], now: created });
+  const store = fixture(t);
+  // Materialized and prepared an hour after creation...
+  t.mock.timers.setTime(created + 3_600_000);
+  batch(store);
+  const materialized = store.getDelivery(MESSAGE, "alice")!.materializedAtMs!;
+  // ...and completed after the clock went back to half an hour after creation.
+  t.mock.timers.setTime(created + 1_800_000);
+  store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 1, "/session/alice"));
+  const delivery = store.getDelivery(MESSAGE, "alice")!;
+  assert.equal(delivery.presented, 1);
+  assert.ok(delivery.presentedAtMs! >= materialized, "presentation is not before the materialization it follows");
+  assert.equal(store.getBatch(BATCH)?.state, "completed");
+});
+
+test("P0V-56 / R01: an agent and an operation are created with one reading of the clock", t => {
+  // Two readings would put the update before the creation if the clock
+  // stepped back between them, and the row would then read as corrupt.
+  // Here every reading is earlier than the one before it.
+  let clock = Date.UTC(2026, 8, 27, 9);
+  t.mock.method(Date, "now", () => (clock -= 1_000));
+  const store = fixture(t);
+  const agent = store.getAgent("alice")!;
+  assert.equal(agent.updatedAtMs, agent.createdAtMs);
+  const operation = store.getOperationById(OP)!;
+  assert.equal(operation.updatedAtMs, operation.createdAtMs);
+});
+
 test("R12: only the intended identical delivery/subscription conflicts are no-ops", async t => {
   const store = fixture(t);
   store.transaction(tx => tx.follow("dev", "alice"));

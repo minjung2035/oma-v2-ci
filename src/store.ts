@@ -269,10 +269,13 @@ export class Store {
   private requireTx(): void { this.transactions.requireLive(); }
   insertAgent(agent: NewAgent): void {
     this.requireTx();
+    // P0V-56: one event, one reading of the clock -- two readings could put
+    // the update before the creation it belongs to.
+    const now = Date.now();
     this.db.prepare(`INSERT INTO agents
       (name, spec_hash, role, desired, incarnation, profile, created_by, spec_json, created_at_ms, updated_at_ms)
       VALUES (?,?,?,?,?,?,?,?,?,?)`).run(agent.name, agent.specHash, agent.role, agent.desired, agent.incarnation,
-      agent.profile, agent.createdBy, agent.specJson, Date.now(), Date.now());
+      agent.profile, agent.createdBy, agent.specJson, now, now);
   }
   getAgent(name: string): AgentRow | null { return this.reader.agent(name); }
   listAgents(): AgentRow[] { return this.reader.agents(); }

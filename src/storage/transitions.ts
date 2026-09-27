@@ -153,7 +153,10 @@ export class LedgerTransitions {
       WHERE id=? AND agent=? AND incarnation=? AND state='prepared' AND completed_at_ms IS NULL AND (session_path IS NULL OR session_path=?)`)
       .run(at, sessionPath, id, agent, batch.incarnation, sessionPath), "batch completion");
     for (const message of messages) {
-      changedExactlyOne(this.db.prepare(`UPDATE deliveries SET presented=1, presented_at_ms=MAX(?, created_at_ms)
+      // P0V-56, P0-5: presentation follows materialization as well as
+      // creation; a wall clock that stepped back in between is not a row
+      // the decoder must reject as corrupt.
+      changedExactlyOne(this.db.prepare(`UPDATE deliveries SET presented=1, presented_at_ms=MAX(?, created_at_ms, materialized_at_ms)
         WHERE message_id=? AND recipient=? AND batch_id=? AND materialized=1 AND presented=0 AND presented_at_ms IS NULL
         AND EXISTS (SELECT 1 FROM batches WHERE id=? AND agent=? AND incarnation=? AND state='completed')`)
         .run(at, message, agent, id, id, agent, batch.incarnation), "batch presentation");

@@ -21,11 +21,13 @@ export class OperationTransitions {
     private readonly planContext: (operation: DecodedOperation) => OperationPlanContext) {}
   insert(operation: NewOperation): void {
     this.scope.requireLive();
+    // P0V-56: created and updated are one event's single reading of the clock.
+    const now = Date.now();
     try {
       this.db.prepare(`INSERT INTO operations
         (id, actor, request_key, request_hash, kind, payload_json, plan_json, state, created_at_ms, updated_at_ms)
         VALUES (?,?,?,?,?,?,?, 'pending', ?, ?)`).run(operation.id, operation.actor, operation.requestKey, operation.requestHash,
-        operation.kind, operation.payloadJson, operation.planJson, Date.now(), Date.now());
+        operation.kind, operation.payloadJson, operation.planJson, now, now);
       this.scope.recordInserted(operation.id);
     } catch (error) {
       if (error instanceof Error && /UNIQUE constraint failed: operations.actor, operations.request_key/.test(error.message)) throw new StoreError("REQUEST_KEY_REUSED", "request key already used by this actor");

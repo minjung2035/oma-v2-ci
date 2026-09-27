@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "b5658cb90ac16633cb5bd40e8d8d59262dbce469e77feb91e3830bbbf62f97e6",
+  "report": "bc81b3a4bcd80b7ece84cd6f5065694f189b6a75b3a9fdc407f5650379a42364",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -741,7 +741,7 @@
     },
     {
       "path": "src/storage/operation-transitions.ts",
-      "sha256": "77c23ff086a9affe95e61695a4827ef81b87215433a4a6afed0624c56bc1d9a5"
+      "sha256": "c2488a3cd44f94dba3b4e8dde5626f55b321793f513e1840495afe2d018bd9da"
     },
     {
       "path": "src/storage/paths.ts",
@@ -777,11 +777,11 @@
     },
     {
       "path": "src/storage/transitions.ts",
-      "sha256": "efd8b9fcae157433fa9c4e305591958cbdbd17ab7da85be48a3745626cb2ecf8"
+      "sha256": "543c518712e5b4139c8d503f317b2d2419accfc7432ef80990f418ad8eaaf1c2"
     },
     {
       "path": "src/store.ts",
-      "sha256": "010a1d9cffecfcd0be4c234603dc494050b278e7f0f951d3252d01f45f1a73a0"
+      "sha256": "6c0f420ab6adf67a0464c435d8865d36203305a69ec0e0eae64d99a23231625a"
     },
     {
       "path": "src/tui/app.ts",
