@@ -13,7 +13,7 @@ import { sha256Hex } from "./domain/canonical-json.js";
 import { parseJsonObject } from "./frame.js";
 import { decodeReceipt, receiptSupersession } from "./protocol/receipt-codec.js";
 import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./cli/cache-codec.js";
-import { fsyncDir, fsyncHeldDir, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
+import { ensureDurableDirectory, fsyncHeldDir, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
 import { entryAt, openBeneath, withinDirectory } from "./storage/contained-fs.js";
 import { ensureDirectory } from "./storage/directory.js";
 import { lockFileDescriptor } from "./leaf.js";
@@ -182,8 +182,9 @@ export class RequestCache {
     const frozen = requirePresent(actual, "frozen metadata");
     if (!sameIdentity(request, frozen)) throw new CacheError("REQUEST_KEY_REUSED", `key ${request.key} is already frozen for another request`);
     if (frozen.digest) requirePresent(this.readBody(frozen.key, frozen.digest), "frozen body");
-    // Fence a competing link even when its original publisher has not fsynced yet.
-    try { fsyncDir(this.dir()); }
+    // Fence a competing link even when its original publisher has not fsynced
+    // yet -- and, P0V-71, the path to it, which that publisher may not have.
+    try { ensureDurableDirectory(this.dir(), 0o700); }
     catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `replay durability barrier failed: ${messageOf(error)}`); }
     return { kind: "existing", value: frozen };
   }
@@ -208,7 +209,9 @@ export class RequestCache {
         throw new CacheError("INVALID_REQUEST", "fresh body does not match frozen digest");
     } else if (body !== undefined) throw new CacheError("INVALID_REQUEST", "request without a descriptor cannot freeze a body");
     try {
-      ensureDirectory(this.dir(), 0o700);
+      // P0V-71, P0-3: the first freeze in a home creates `.local/state/oma/requests`;
+      // a frozen request is durable only if every name on that path is.
+      ensureDurableDirectory(this.dir(), 0o700);
       if (request.digest && body !== undefined) {
         const published = publishNoReplace(this.bodyPath(request.key), body);
         if (published === "existing") {

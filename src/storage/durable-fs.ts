@@ -67,19 +67,23 @@ export function fsyncDir(directory: string, faults?: DurabilityObserver): void {
   finally { closeSync(fd); }
 }
 
-/** Flush newly created directory names from the deepest parent upward. Existing
- * modes are never rewritten. This is a persistence barrier, not a race-proof
- * capability to traverse an arbitrary directory tree.
- */
+/** Makes `directory` exist and every name on its path durable, from the
+ * leaf up to the root. Existing modes are never rewritten. This is a
+ * persistence barrier, not a race-proof capability to traverse an arbitrary
+ * directory tree.
+ *
+ * P0V-71, P0-3: what this call created is not all that may be unflushed. A
+ * call whose flush failed after its mkdirs left names that no later call
+ * creates again -- the retry finds them all with EEXIST -- and another
+ * creator may have won a mkdir without flushing yet. So every name on the
+ * path is flushed on every call; a flush of a clean directory costs little
+ * (about 0.04 ms for a six-deep path here). */
 export function ensureDurableDirectory(directory: string, mode = 0o755, faults?: DurabilityObserver): void {
-  const created = ensureDirectory(directory, mode);
-  for (const path of [...created].reverse()) {
+  ensureDirectory(directory, mode);
+  for (let path = directory; ; path = dirname(path)) {
     fsyncDir(path, faults);
-    fsyncDir(dirname(path), faults);
+    if (dirname(path) === path) break;
   }
-  // Fence an immediate parent even when another creator won mkdir's EEXIST.
-  fsyncDir(directory, faults);
-  fsyncDir(dirname(directory), faults);
 }
 
 export function fsyncFile(path: string, faults?: DurabilityObserver): void {

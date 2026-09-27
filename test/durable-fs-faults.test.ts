@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { sha256Hex } from "../src/domain/canonical-json.js";
 import { StoreError } from "../src/domain/errors.js";
-import { replaceDerivedFile, fsyncTree } from "../src/storage/durable-fs.js";
+import { replaceDerivedFile, fsyncTree, ensureDurableDirectory } from "../src/storage/durable-fs.js";
 import { publishImmutableFile } from "../src/storage/immutable-file.js";
 import { publishImmutableFile as mailPublish, writeAtomic } from "../src/mail.js";
 
@@ -111,4 +111,21 @@ test("recursive fsync rejects a linked subtree rather than traversing its target
     assert.throws(() => fsyncTree(tree), isCorrupt);
     assert.equal(fs.readFileSync(join(outside, "evidence"), "utf8"), "retained");
   });
+});
+
+test("P0V-71 / F4, P0-3: a durable directory's whole path is flushed, also on the retry of a call whose flush failed", { concurrency: false }, () => {
+  const root = fs.mkdtempSync(join(tmpdir(), "oma-durable-path-"));
+  try {
+    const leaf = join(root, "a", "b", "c");
+    // The first call creates a, b and c, and its first flush fails.
+    let first = true;
+    assert.throws(() => ensureDurableDirectory(leaf, 0o700, fault => {
+      if (first && fault.point === "directory-fsync") { first = false; throw new Error("EIO: injected flush failure"); }
+    }), /EIO/);
+    // The retry creates nothing; every name on the path must still be flushed.
+    const flushed: string[] = [];
+    ensureDurableDirectory(leaf, 0o700, fault => { if (fault.point === "directory-fsync" && fault.phase === "after-visible") flushed.push(fault.path); });
+    for (const path of [leaf, join(root, "a", "b"), join(root, "a"), root])
+      assert.ok(flushed.includes(path), `${path} was not flushed on the retry: ${JSON.stringify(flushed)}`);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

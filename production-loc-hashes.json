@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "474099888ea5a95868d4b73232f95a8f35aa243b49a2663baef86039357f8939",
+  "report": "d1a436137fa3ff7a2ebc798117b6e48115d8f1151a075c560a43f2c1dc6039d2",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -593,7 +593,7 @@
     },
     {
       "path": "src/request-cache.ts",
-      "sha256": "235411e3406d9f2365cf828e431dac2fd173ea659d9ad4e94f6238e9b1669a63"
+      "sha256": "22b265720af5ce7acff433f4ce8ed77d5ff23eb3492e4b59548c6d8bf2e9f85c"
     },
     {
       "path": "src/rpc-client.ts",
@@ -717,7 +717,7 @@
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "a85b34b90d71242fd5415360e9b0f7549950a9171b90ad3e8596aafaac7f6fec"
+      "sha256": "2a76cc07519d336279e9a97e64740b385b8b1d0fab626b7be0e6f104d4efc429"
     },
     {
       "path": "src/storage/facets.ts",
