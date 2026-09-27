@@ -90,3 +90,47 @@ test("DR18 / D-9: `oma login` hands the terminal to the engine's own interactive
   assert.ok(after !== null, "the login kept the society after it ended");
   await after.end();
 });
+
+test("DR18 / D-8: every start brings the project's committed branch history into the society's mirror, and nothing else of the project", async t => {
+  const { spawnSync } = await import("node:child_process");
+  const { mkdirSync: mkdir, writeFileSync } = await import("node:fs");
+  const { provisionSociety } = await import("../src/runtime/provision.js");
+  const { projectMirrorPathAt } = await import("../src/storage/paths.js");
+  const root = mkdtempSync(join(tmpdir(), "oma-mirror-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const project = join(root, "project");
+  mkdir(project);
+  const env = { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: root, GIT_CONFIG_NOSYSTEM: "1",
+    GIT_AUTHOR_NAME: "h", GIT_AUTHOR_EMAIL: "h@example.invalid", GIT_COMMITTER_NAME: "h", GIT_COMMITTER_EMAIL: "h@example.invalid" };
+  const git = (cwd: string, ...argv: string[]) => {
+    const result = spawnSync("git", argv, { cwd, env, encoding: "utf8" });
+    assert.equal(result.status, 0, `${argv.join(" ")}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  git(project, "init", "-q", "-b", "main");
+  writeFileSync(join(project, "a.txt"), "a\n"); git(project, "add", "a.txt"); git(project, "commit", "-q", "-m", "first");
+  git(project, "checkout", "-q", "-b", "feature");
+  writeFileSync(join(project, "b.txt"), "b\n"); git(project, "add", "b.txt"); git(project, "commit", "-q", "-m", "feature work");
+  git(project, "checkout", "-q", "main");
+  // Uncommitted work of every kind: a stash, and a staged file.
+  writeFileSync(join(project, "a.txt"), "stashed\n"); git(project, "stash", "-q");
+  writeFileSync(join(project, "staged.txt"), "private staged bytes\n"); git(project, "add", "staged.txt");
+  const staged = git(project, "hash-object", "staged.txt");
+  const stateRoot = join(root, "state");
+  const report = provisionSociety(stateRoot, { projectDir: project });
+  assert.equal(report.mirrorNote, null);
+  const mirror = projectMirrorPathAt(stateRoot);
+  const refs = git(mirror, "for-each-ref", "--format=%(refname) %(objectname)").split("\n").sort();
+  assert.deepEqual(refs, [`refs/heads/feature ${git(project, "rev-parse", "feature")}`, `refs/heads/main ${git(project, "rev-parse", "main")}`]);
+  assert.notEqual(spawnSync("git", ["--git-dir", mirror, "cat-file", "-e", staged], { env }).status, 0, "a staged, uncommitted file reached the mirror");
+  // A later commit reaches it at the next start; the canonical main does not move.
+  const canonical = git(join(stateRoot, "repos", "project.git"), "rev-parse", "refs/heads/main");
+  git(project, "commit", "-q", "-m", "later");
+  assert.equal(provisionSociety(stateRoot, { projectDir: project }).mirrorNote, null);
+  assert.equal(git(mirror, "rev-parse", "refs/heads/main"), git(project, "rev-parse", "main"));
+  assert.equal(git(join(stateRoot, "repos", "project.git"), "rev-parse", "refs/heads/main"), canonical, "the canonical main moved (MAC-411)");
+  // A project that is not a repository now is a note, not a failed start.
+  const elsewhere = join(root, "not-a-repo");
+  mkdir(elsewhere);
+  assert.match(provisionSociety(stateRoot, { projectDir: elsewhere }).mirrorNote ?? "", /not a Git repository/);
+});

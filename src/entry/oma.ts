@@ -438,6 +438,8 @@ async function main(argv: readonly string[]): Promise<void> {
       app.line("이 프로젝트의 커밋된 HEAD로 society를 시작했습니다. 커밋되지 않은 변경은 포함되지 않습니다.");
     else if (provisioned?.seedSource === "empty")
       app.line(`빈 저장소로 society를 시작했습니다${provisioned.seedNote ? ` (${provisioned.seedNote})` : ""}.`);
+    // DR18 (D-8): the Residents see the project's committed history as of this start.
+    if (provisioned?.mirrorNote) app.line(`프로젝트의 커밋 이력을 Resident에게 새로 보이지 못했습니다: ${provisioned.mirrorNote}`);
     return started;
   };
   // PR-001/LIFE-006: each time a broker of this process's becomes ready -- at

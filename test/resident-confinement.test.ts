@@ -47,7 +47,7 @@ function fixture(): Fixture {
     selfMail: join(stateRoot, "mail", "inboxes", actor),
     view: runnerViewPathAt(stateRoot, actor),
     world: join(stateRoot, "world"),
-    projectGit: join(stateRoot, "repos", "project.git"),
+    projectGit: join(stateRoot, "repos", "project.git"), projectMirror: join(stateRoot, "repos", "project-mirror.git"),
     sessions: runnerSessionDirPathAt(stateRoot, actor),
   };
   for (const path of Object.values(dirs)) mkdirSync(path, { recursive: true });

@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 272,
-    "n_lines": 35591,
+    "n_lines": 35642,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -38,8 +38,8 @@
   },
   "src/entry/oma.ts": {
     "blank": 27,
-    "comment": 185,
-    "code": 378,
+    "comment": 186,
+    "code": 379,
     "language": "TypeScript"
   },
   "src/config/operations.ts": {
@@ -93,19 +93,19 @@
   "src/runner.ts": {
     "blank": 0,
     "comment": 42,
-    "code": 298,
+    "code": 299,
+    "language": "TypeScript"
+  },
+  "src/runtime/provision.ts": {
+    "blank": 20,
+    "comment": 156,
+    "code": 295,
     "language": "TypeScript"
   },
   "src/tui/sources/settings.ts": {
     "blank": 25,
     "comment": 75,
     "code": 287,
-    "language": "TypeScript"
-  },
-  "src/runtime/provision.ts": {
-    "blank": 19,
-    "comment": 141,
-    "code": 283,
     "language": "TypeScript"
   },
   "src/leaf.ts": {
@@ -138,16 +138,16 @@
     "code": 245,
     "language": "TypeScript"
   },
+  "src/runtime/pi-adapter.ts": {
+    "blank": 1,
+    "comment": 42,
+    "code": 243,
+    "language": "TypeScript"
+  },
   "src/storage/durable-fs.ts": {
     "blank": 15,
     "comment": 101,
     "code": 243,
-    "language": "TypeScript"
-  },
-  "src/runtime/pi-adapter.ts": {
-    "blank": 1,
-    "comment": 38,
-    "code": 239,
     "language": "TypeScript"
   },
   "src/tui/keys.ts": {
@@ -348,16 +348,16 @@
     "code": 164,
     "language": "TypeScript"
   },
+  "src/sandbox.ts": {
+    "blank": 15,
+    "comment": 61,
+    "code": 160,
+    "language": "TypeScript"
+  },
   "src/diagnostics/files.ts": {
     "blank": 2,
     "comment": 5,
     "code": 159,
-    "language": "TypeScript"
-  },
-  "src/sandbox.ts": {
-    "blank": 15,
-    "comment": 59,
-    "code": 158,
     "language": "TypeScript"
   },
   "src/diagnostics/integrity.ts": {
@@ -570,6 +570,12 @@
     "code": 104,
     "language": "TypeScript"
   },
+  "src/storage/paths.ts": {
+    "blank": 3,
+    "comment": 14,
+    "code": 102,
+    "language": "TypeScript"
+  },
   "src/extension/principal-tools.ts": {
     "blank": 5,
     "comment": 27,
@@ -600,21 +606,15 @@
     "code": 100,
     "language": "TypeScript"
   },
-  "src/broker/transport-spool.ts": {
-    "blank": 2,
-    "comment": 10,
-    "code": 99,
-    "language": "TypeScript"
-  },
-  "src/storage/paths.ts": {
-    "blank": 3,
-    "comment": 12,
-    "code": 99,
-    "language": "TypeScript"
-  },
   "src/views.ts": {
     "blank": 1,
     "comment": 26,
+    "code": 100,
+    "language": "TypeScript"
+  },
+  "src/broker/transport-spool.ts": {
+    "blank": 2,
+    "comment": 10,
     "code": 99,
     "language": "TypeScript"
   },
@@ -828,6 +828,12 @@
     "code": 73,
     "language": "TypeScript"
   },
+  "src/ports/runtime.ts": {
+    "blank": 7,
+    "comment": 27,
+    "code": 72,
+    "language": "TypeScript"
+  },
   "src/runtime/broker-lifetime.ts": {
     "blank": 4,
     "comment": 19,
@@ -837,12 +843,6 @@
   "src/domain/lineage.ts": {
     "blank": 0,
     "comment": 4,
-    "code": 71,
-    "language": "TypeScript"
-  },
-  "src/ports/runtime.ts": {
-    "blank": 7,
-    "comment": 26,
     "code": 71,
     "language": "TypeScript"
   },
@@ -1639,9 +1639,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1560,
-    "comment": 6141,
-    "code": 27890,
+    "blank": 1561,
+    "comment": 6166,
+    "code": 27915,
     "nFiles": 272
   }
 }

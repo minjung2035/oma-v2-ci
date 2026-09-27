@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "a84af49ed0c182d8823d6068d3f715908a800d27f4cee135f259f5dff998cde4",
-  "report": "6c29b1082916d02e503e4875e10c30c8538ed6fe830327384304e77f2bef9832",
+  "report": "1143ff94b9b312a5b35dcff5ba0467b677034044080f2eb701ce8bb6e009e143",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "f4c0d41e76c1be99e323be19745459091f1d512a210cec547f39953874f4b89e"
+      "sha256": "52a856965226127f1bbba8cbb6c6e46a1ea7747c5a4a6f798f82148e231f9f24"
     },
     {
       "path": "src/entry/omahostd.ts",
@@ -665,7 +665,7 @@
     },
     {
       "path": "src/ports/runtime.ts",
-      "sha256": "f58f696a8a359cc9d33147b5c0fe7b57000ec96cfc86740ac32a86ff17feafa3"
+      "sha256": "877b4f5fe76433f08303a4fe2e898a5909999837cc2ce4a7a346a1b4e683c4e2"
     },
     {
       "path": "src/process/async.ts",
@@ -777,7 +777,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "bb4e2e30001620cfeb3903365deeee69aac25f8fbdabcf9cb5ab97ddc8b64815"
+      "sha256": "2cb46c036f80286510733466868f50f1454533316edd698810a7de7232f575b6"
     },
     {
       "path": "src/runtime/assets.ts",
@@ -817,7 +817,7 @@
     },
     {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "cbed278f7f1cd8ac6d60bd4527ec33aa3501395cf6cc886ec37f353b4128ae8c"
+      "sha256": "627318285881cebd267f5abbef7f96aaad9349d6d48465d788a5c566787b5aa0"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -841,11 +841,11 @@
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "de61f26af56688cd85f7cfd135abdaab42d6f651cb980ee4bb18cbfd6bd519ed"
+      "sha256": "1c80bea977b82f53c0431decf1561f6040117ba1e486b4e4677a31879a4a47ff"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
-      "sha256": "50e11ae31c8151f88e1cb05152ba83e7c18315ea1ce213fedeb91ed595cf2f37"
+      "sha256": "b7a54e13c9a56289ff0a93041a57a06bfa69dda872344afa406cd5d18a840474"
     },
     {
       "path": "src/runtime/run-registry.ts",
@@ -865,7 +865,7 @@
     },
     {
       "path": "src/sandbox.ts",
-      "sha256": "828971cfe2bfe0e76d40641ef72137d47c3d54fab312558960fcf8bb1372376e"
+      "sha256": "4c6065d68f0ecc7cf8a118d485690855d8378fd49feb4d9d393bfb7a8697e168"
     },
     {
       "path": "src/storage/batch-view.ts",
@@ -929,7 +929,7 @@
     },
     {
       "path": "src/storage/paths.ts",
-      "sha256": "4368a4e748b2f6937ef5ad70792c35478a5f110bcb64b9b4d71ac54658b4942c"
+      "sha256": "08599eb891b311f21b504c406e9e2f0747d374d1b0c0519a66d1f7832ed56f10"
     },
     {
       "path": "src/storage/preaccept-artifact.ts",
@@ -1081,7 +1081,7 @@
     },
     {
       "path": "src/views.ts",
-      "sha256": "d21ca59afc9eeee051f4809138a32d32498fde0ca53771e23a87509637011811"
+      "sha256": "d7f9c40be5937c3725dae2eec13da2b638a2624448d504326a82fc6b74e5fe13"
     },
     {
       "path": "src/views/pending-work.ts",

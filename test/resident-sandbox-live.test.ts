@@ -56,7 +56,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor),
       world: join(stateRoot, "world"),
-      projectGit: join(stateRoot, "repos", "project.git"),
+      projectGit: join(stateRoot, "repos", "project.git"), projectMirror: join(stateRoot, "repos", "project-mirror.git"),
       sessions: runnerSessionDirPathAt(stateRoot, actor),
     };
     for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
@@ -174,7 +174,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
       selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor),
       world: join(stateRoot, "world"),
-      projectGit: join(stateRoot, "repos", "project.git"),
+      projectGit: join(stateRoot, "repos", "project.git"), projectMirror: join(stateRoot, "repos", "project-mirror.git"),
       sessions: runnerSessionDirPathAt(stateRoot, actor),
     };
     for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
@@ -327,7 +327,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
       selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor),
       world: join(stateRoot, "world"),
-      projectGit: join(stateRoot, "repos", "project.git"),
+      projectGit: join(stateRoot, "repos", "project.git"), projectMirror: join(stateRoot, "repos", "project-mirror.git"),
       sessions: runnerSessionDirPathAt(stateRoot, actor),
     };
     for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
@@ -419,7 +419,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
       selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor),
       world: join(stateRoot, "world"),
-      projectGit: join(stateRoot, "repos", "project.git"),
+      projectGit: join(stateRoot, "repos", "project.git"), projectMirror: join(stateRoot, "repos", "project-mirror.git"),
       sessions: runnerSessionDirPathAt(stateRoot, actor),
     };
     for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
@@ -498,7 +498,7 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
       workspace: workspacePathAt(stateRoot, actor), home: join(agentRootPathAt(stateRoot, actor), "home"),
       archive: join(stateRoot, "mail", "archive"), selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor), world: join(stateRoot, "world"),
-      projectGit: join(stateRoot, "repos", "project.git"), sessions: runnerSessionDirPathAt(stateRoot, actor),
+      projectGit: join(stateRoot, "repos", "project.git"), projectMirror: join(stateRoot, "repos", "project-mirror.git"), sessions: runnerSessionDirPathAt(stateRoot, actor),
     };
     for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
     const leaseSocket = actorSocketPathAt(runRoot, actor, 1);

@@ -36,7 +36,7 @@ import {
   runnerSessionDirPathAt,
   runnerViewPathAt,
   workspacePathAt,
-  projectGitPathAt,
+  projectGitPathAt, projectMirrorPathAt,
 } from "./storage/paths.js";
 export { BrokerChannel } from "./protocol/channel.js";
 import type { RoleSettings } from "./config/operations.js";
@@ -209,6 +209,7 @@ export class RunnerModule {
       view: runnerViewPathAt(stateRoot, this.agent),
       world: join(stateRoot, "world"),
       projectGit: projectGitPathAt(stateRoot),
+      projectMirror: projectMirrorPathAt(stateRoot),
       sessions: sessionDir,
     };
     const confinement = this.confinement(directories, piArgs, inference);

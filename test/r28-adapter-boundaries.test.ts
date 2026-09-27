@@ -156,12 +156,15 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   const sandbox = new SandboxModule(host);
   const dirs = { workspace: workspacePathAt(stateRoot, "alice"), home: join(agentRootPathAt(stateRoot, "alice"), "home"),
     archive: join(stateRoot, "mail/archive"), selfMail: join(stateRoot, "mail/inboxes/alice"),
-    view: runnerViewPathAt(stateRoot, "alice"), world: join(stateRoot, "world"), projectGit: join(stateRoot, "repos/project.git"),
+    view: runnerViewPathAt(stateRoot, "alice"), world: join(stateRoot, "world"), projectGit: join(stateRoot, "repos/project.git"), projectMirror: join(stateRoot, "repos/project-mirror.git"),
     sessions: runnerSessionDirPathAt(stateRoot, "alice") };
   const plan = sandbox.resident(lease, dirs);
   // DR18 (D-5): descriptor 3 carries the sandbox filter bubblewrap loads.
   assert.deepEqual(plan.inheritedFds, [0, 1, 2, 3]); assert.deepEqual(plan.env, {});
   assert.deepEqual(plan.argv.slice(plan.argv.indexOf("--seccomp"), plan.argv.indexOf("--seccomp") + 2), ["--seccomp", "3"]);
+  // DR18 (D-8): the project's committed history, read-only, where a start made it.
+  const mirror = plan.argv.indexOf("--ro-bind-try");
+  assert.deepEqual(plan.argv.slice(mirror, mirror + 3), ["--ro-bind-try", join(stateRoot, "repos/project-mirror.git"), "/git/project-mirror.git"]);
   assert.ok(plan.argv.includes("--unshare-all")); assert.ok(plan.argv.includes("--clearenv"));
   assert.ok(plan.argv.includes(lease.socketHostPath)); assert.equal(plan.argv.includes(runRoot), false);
   assert.throws(() => sandbox.resident(lease, { ...dirs, workspace: workspacePathAt(stateRoot, "bob") }), errorCode("AUTH_FAILED"));

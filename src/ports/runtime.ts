@@ -52,6 +52,8 @@ export interface SandboxDirectories {
   view: string;
   world: string;
   projectGit: string;
+  /** DR18 (D-8): the project's committed history, bound read-only if it exists. */
+  projectMirror: string;
   /** Writable session store for the confined engine. SB-006 already treats its
    * contents as model-origin data; the mount makes that explicit. */
   sessions: string;

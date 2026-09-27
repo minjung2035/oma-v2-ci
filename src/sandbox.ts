@@ -6,7 +6,7 @@ import type { RunLease, SandboxPlan } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
 import { assertValidatedRunLease, trustedAbsolutePath, type ValidatedRunLease } from "./protocol/run-lease.js";
 import { validBatchViewLimits } from "./protocol/batch-view.js";
-import { agentRootPathAt, projectGitPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "./storage/paths.js";
+import { agentRootPathAt, projectGitPathAt, projectMirrorPathAt, workspacePathAt, runnerViewPathAt, runnerSessionDirPathAt } from "./storage/paths.js";
 
 /** The paths a confined Resident sees. One table serves both the mount plan and
  * the arguments handed to the engine inside it, so the two cannot drift. */
@@ -14,6 +14,8 @@ export const RESIDENT_PATHS = Object.freeze({
   workspace: "/workspace", home: "/home/agent", archive: "/mail/archive",
   selfMail: "/mail/self", view: "/run/oma-view", world: "/world",
   projectGit: "/git/project.git", socket: "/run/oma/control.sock",
+  /** DR18 (D-8): the human's committed project history, read-only. */
+  projectMirror: "/git/project-mirror.git",
   sessions: "/run/oma-sessions", libdir: "/opt/oma",
   /** INF-006: the relay's host end. The confined engine reaches a provider
    * through this socket, so the network namespace stays unshared. */
@@ -56,7 +58,7 @@ function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentD
     workspace: workspacePathAt(h.stateRoot, lease.actor), home: join(agentRootPathAt(h.stateRoot, lease.actor), "home"),
     archive: join(h.stateRoot, "mail", "archive"), selfMail: join(h.stateRoot, "mail", "inboxes", lease.actor),
     view: runnerViewPathAt(h.stateRoot, lease.actor), world: join(h.stateRoot, "world"), projectGit: projectGitPathAt(h.stateRoot),
-    sessions: runnerSessionDirPathAt(h.stateRoot, lease.actor),
+    projectMirror: projectMirrorPathAt(h.stateRoot), sessions: runnerSessionDirPathAt(h.stateRoot, lease.actor),
   };
   for (const key of Object.keys(expected) as Array<keyof ResidentDirectories>)
     if (!trustedAbsolutePath(dirs[key]) || dirs[key] !== expected[key])
@@ -113,6 +115,8 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     "--ro-bind", dirs.archive, RESIDENT_PATHS.archive, "--ro-bind", dirs.selfMail, RESIDENT_PATHS.selfMail,
     "--ro-bind", dirs.view, RESIDENT_PATHS.view, "--ro-bind", dirs.world, RESIDENT_PATHS.world,
     "--ro-bind", dirs.projectGit, RESIDENT_PATHS.projectGit,
+    // DR18 (D-8): there only once a start has refreshed it from the project.
+    "--ro-bind-try", dirs.projectMirror, RESIDENT_PATHS.projectMirror,
     "--ro-bind", lease.socketHostPath, RESIDENT_PATHS.socket,
     ...(inferenceSocketHost === undefined ? []
       : ["--ro-bind", inferenceSocketHost, RESIDENT_PATHS.inference]),
@@ -140,7 +144,7 @@ function residentMounts(libdir: string, dirs: ResidentDirectories): readonly (re
     [dirs.home, RESIDENT_PATHS.home], [dirs.sessions, RESIDENT_PATHS.sessions],
     [dirs.archive, RESIDENT_PATHS.archive], [dirs.selfMail, RESIDENT_PATHS.selfMail],
     [dirs.view, RESIDENT_PATHS.view], [dirs.world, RESIDENT_PATHS.world],
-    [dirs.projectGit, RESIDENT_PATHS.projectGit],
+    [dirs.projectGit, RESIDENT_PATHS.projectGit], [dirs.projectMirror, RESIDENT_PATHS.projectMirror],
   ];
 }
 

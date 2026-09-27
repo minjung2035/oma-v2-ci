@@ -154,7 +154,15 @@ export class PiAdapter {
     // DR18 (D-5): a confined engine's sandbox filter reaches bubblewrap on the
     // descriptor only this parent holds, and nowhere else.
     const child = spawnOwnedRpc(spawn.command, spawn.args, spawn.cwd, spawn.env, spawn.filter !== undefined);
-    if (spawn.filter !== undefined) (child.stdio[3] as unknown as { end(bytes: Uint8Array): void }).end(spawn.filter);
+    if (spawn.filter !== undefined) {
+      const channel = child.stdio[3] as unknown as { on(event: "error", listener: () => void): void; end(bytes: Uint8Array): void };
+      // bubblewrap reads the program and closes its end, which may reset
+      // ours. That is no failure of this process: a program bubblewrap could
+      // not read fails bubblewrap itself, and that is the engine's start
+      // failing, which this delivery reports.
+      channel.on("error", () => {});
+      channel.end(spawn.filter);
+    }
     const rpc = new PiRpcClient(child, this.options.limits);
     let accepted = false;
     let settled = false;

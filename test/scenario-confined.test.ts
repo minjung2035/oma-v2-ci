@@ -188,3 +188,35 @@ test("SCN-C08 / DR18 (D-5): a confined Resident's shell runs under the sandbox f
     assert.match(status, /Seccomp:\s+2/, `the Resident's shell runs without the sandbox filter: ${status}`);
   });
 });
+
+test("SCN-C09 / DR18 (D-8): the human's later commit reaches a confined Resident through the read-only mirror, which it submits by the existing path", OPTIONS, async () => {
+  const { refreshProjectMirror } = await import("../src/runtime/provision.js");
+  const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
+    // The human's project: the society's history and one more commit made after the society started.
+    const human = mkdtempSync(join(tmpdir(), "oma-human-"));
+    try {
+      const env = { ...process.env, GIT_AUTHOR_NAME: "h", GIT_AUTHOR_EMAIL: "h@example.invalid", GIT_COMMITTER_NAME: "h", GIT_COMMITTER_EMAIL: "h@example.invalid" };
+      execFileSync("git", ["clone", "-q", projectGitPathAt(s.root), human], { env });
+      writeFileSync(join(human, "human.txt"), "from the human\n");
+      execFileSync("git", ["-C", human, "add", "human.txt"], { env });
+      execFileSync("git", ["-C", human, "commit", "-qm", "human work"], { env });
+      const commit = execFileSync("git", ["-C", human, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+      assert.equal(refreshProjectMirror(s.root, human), null);
+      await assign(s, "worker-a", "사람의 새 커밋을 가져와 제출하세요.", "c09");
+      s.script(request => (continuesTurn(request) ? text("제출했습니다.")
+        : bash("cd /workspace && git fetch -q /git/project-mirror.git main:refs/heads/human && git log -1 --format=%s human && oma submit human --to principal --subject '사람 커밋' --request sub-c09")));
+      const run = await s.activate("worker-a");
+      assert.equal(run.code, 0, run.stderr);
+      const result = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body);
+      assert.match(result, /human work/, `the Resident did not see the human's commit: ${result.slice(0, 300)}`);
+      const receipt = receiptIn(result);
+      assert.equal(receipt.state, "succeeded", JSON.stringify(receipt));
+      assert.equal(receipt.result!.candidate, commit, "the submitted candidate is not the human's commit");
+      assert.equal(git(s, "show", `${receipt.result!.publishedRef!}:human.txt`), "from the human");
+      // The mirror is read-only inside: the sandbox's view of it cannot be written.
+      assert.notEqual(git(s, "rev-parse", "refs/heads/main"), commit, "the canonical main moved without an integration (MAC-411)");
+    } finally { rmSync(human, { recursive: true, force: true }); }
+  });
+});

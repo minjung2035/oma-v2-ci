@@ -44,7 +44,7 @@ import { ensureDirectory, removeOwnedFile } from "../storage/directory.js";
 import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
 import { entryAt, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { hostSystemLayout, prepareResidentRootfs } from "./resident-rootfs.js";
-import { projectGitPathAt } from "../storage/paths.js";
+import { projectGitPathAt, projectMirrorPathAt } from "../storage/paths.js";
 
 /** The trusted rootfs OMA builds for its Residents (SB-001). */
 export function residentRootfsPath(stateRoot: string): string { return join(stateRoot, "rootfs"); }
@@ -80,6 +80,9 @@ export interface ProvisionReport {
   readonly seedSource: "project" | "empty" | null;
   /** Why a project directory was not used, when it was offered and not used. */
   readonly seedNote: string | null;
+  /** DR18 (D-8): why the project mirror was not refreshed this start, when a
+   * project directory was offered; null when it was. */
+  readonly mirrorNote: string | null;
   /** Rootfs entries that exist, are not what OMA generates, and were left
    * exactly as they are because correcting them is a write this pass is not
    * entitled to make. `repairSociety` is what puts them back. */
@@ -269,14 +272,39 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   }
   const seeded = seedSource !== null;
   const seedNote = project !== null && "note" in project && seeded ? project.note : null;
+  const mirrorNote = options.projectDir === undefined ? null : refreshProjectMirror(stateRoot, options.projectDir);
   // Confinement on by default: the rootfs is built here rather than being a
   // thing the user must assemble before Residents can be sandboxed.
   const rootfs = prepareResidentRootfs(residentRootfsPath(stateRoot), hostSystemLayout(),
     process.getuid?.() ?? 0, process.getgid?.() ?? 0, "create");
   return Object.freeze({
-    created: Object.freeze(created), seeded, seedSource, seedNote,
+    created: Object.freeze(created), seeded, seedSource, seedNote, mirrorNote,
     pendingRepairs: rootfs.deferred,
   });
+}
+
+/** DR18 (D-8): the project's committed branch history, brought into the
+ * society's mirror on every start. A Resident may fetch it (read-only in its
+ * sandbox) and submit what it builds on it by the existing path (GIT-006,
+ * GIT-008); canonical `main` is untouched here (MAC-411). Branch heads only:
+ * no index, stash, worktree or configuration of the project. The fetch runs
+ * under the trusted Git environment with object checks, local transport only.
+ * The canonical repository does not depend on the mirror, so a project that
+ * cannot be read now is a note, not a failed start; its answer is null when
+ * the mirror is current. */
+export function refreshProjectMirror(stateRoot: string, projectDir: string): string | null {
+  const project = projectHead(projectDir);
+  if ("note" in project) return project.note;
+  const mirror = projectMirrorPathAt(stateRoot);
+  ensureBareRepository(mirror, project.format);
+  const format = runGitText(["rev-parse", "--show-object-format"], { gitDir: mirror });
+  if (format.status !== 0 || format.stdout.trim() !== project.format)
+    return "the project's object format differs from its mirror's; the mirror was not refreshed";
+  const fetched = runGitText(["-c", "fetch.fsckObjects=true", "-c", "transfer.fsckObjects=true", "-c", "protocol.allow=never",
+    "-c", "protocol.file.allow=always", "fetch", "--no-tags", "--prune", "--quiet", projectDir, "+refs/heads/*:refs/heads/*"],
+  { gitDir: mirror, timeout: 10 * 60 * 1000 });
+  if (fetched.status !== 0) return `the project's history could not be brought into its mirror: ${fetched.stderr.trim().slice(0, 200)}`;
+  return null;
 }
 
 /** Puts back the generated rootfs entries `provisionSociety` found wrong and

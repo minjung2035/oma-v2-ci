@@ -34,6 +34,11 @@ export function runnerSessionDirPathAt(stateRoot: string, actor: string): string
 export function projectGitPathAt(stateRoot: string): string {
   return join(stateRoot, "repos", "project.git");
 }
+/** DR18 (D-8): the project's committed branch history, as of the last start,
+ * which a Resident may fetch from and submit (read-only in its sandbox). */
+export function projectMirrorPathAt(stateRoot: string): string {
+  return join(stateRoot, "repos", "project-mirror.git");
+}
 export function sessionDirPathAt(stateRoot: string, actor: string): string {
   return join(stateRoot, sessionDirFor(actor));
 }
