@@ -747,8 +747,8 @@ P0V-82, P0V-84, P0V-85)도 같은 표에 적는다.
 | P0V-93 | R6-16 | broker.ts, reconcile.ts | `hasGoal` 필수, fallback 둘 제거 | 수정 53409b8 |
 | P0V-94 | R6-17 | views.ts `fieldEscape` | 제어 문자 전부를 되돌릴 수 있게 escape | 수정 53409b8 |
 | P0V-95 | R6-20 | units.ts | owner를 알 수 없는 unit은 교체하지 않는다. `systemctl show` 형식 가정은 `effectiveExecArgv` 한 곳 | 수정 53409b8 |
-| P0V-96 | 시험 보강 중 발견(R6-08의 남은 것) | storage/durable-fs.ts, delivery-receipt.ts, immutable-file.ts | 설정 commit과 receipt를 실제 SIGKILL로 끊는 시험이 찾았다: receipt 게시, 파생 파일 교체, immutable 복사(EXDEV)가 죽은 writer의 임시 파일을 영구히 남겼다. P0V-84의 규칙(임시 파일은 writer의 죽음 증명을 지니고, 같은 이름의 다음 게시가 풀린 것만 거둔다)을 공유 helper(`createLockedTemporary`, `collectDeadTemporaries`)로 옮겨 세 곳에 둔다. immutable 게시는 목적지가 이미 있으면 link가 EEXIST를 먼저 내 복사 경로에 닿지 않으므로 수거를 게시 시작에 둔다 | 수정 이 커밋 |
-| P0V-97 | 같은 시험 | config/generations.ts `collectManagedGenerations` | 첫 managed commit이 commit point 전에 죽으면 bundle은 아직 manual이라 현재 세대가 없고, 수거가 그 경우 일찍 돌아가 manifest 임시본을 남겼다 | 수정 이 커밋 |
+| P0V-96 | 시험 보강 중 발견(R6-08의 남은 것) | storage/durable-fs.ts, delivery-receipt.ts, immutable-file.ts | 설정 commit과 receipt를 실제 SIGKILL로 끊는 시험이 찾았다: receipt 게시, 파생 파일 교체, immutable 복사(EXDEV)가 죽은 writer의 임시 파일을 영구히 남겼다. P0V-84의 규칙(임시 파일은 writer의 죽음 증명을 지니고, 같은 이름의 다음 게시가 풀린 것만 거둔다)을 공유 helper(`createLockedTemporary`, `collectDeadTemporaries`)로 옮겨 세 곳에 둔다. immutable 게시는 목적지가 이미 있으면 link가 EEXIST를 먼저 내 복사 경로에 닿지 않으므로 수거를 게시 시작에 둔다 | 수정 e4f4f74 |
+| P0V-97 | 같은 시험 | config/generations.ts `collectManagedGenerations` | 첫 managed commit이 commit point 전에 죽으면 bundle은 아직 manual이라 현재 세대가 없고, 수거가 그 경우 일찍 돌아가 manifest 임시본을 남겼다 | 수정 e4f4f74 |
 
 원칙에 따라 함께 고친 곳: P0V-77은 quarantine·context 준비·workspace clone·provision staging 네 곳에 같은 lease를 두었다. P0V-81은 broker
 밖의 draining 프로세스 다섯 곳을 같은 목록으로 옮겼고, 그 탐색에서 P0V-82를 찾았다. P0V-86은 decoder 열다섯 곳을 모두 owner로 옮겼다.
@@ -764,7 +764,8 @@ request can carry (8388608 bytes)`, G06 BOM frame 거절, G07-sweep `failureCall
 
 R6-08의 "설정 commit과 receipt에도 crash-worker 방식"은 시험 보강에서 했다: `test/crash-kill-boundaries`가 managed·inline 설정 commit,
 receipt 게시, 파생 파일 교체, 파일시스템을 건너는 immutable 게시를 durability 지점마다 실제 SIGKILL로 끊고, 남은 것을 제품의 loader와
-정산 판정으로 읽는다. 그 시험이 P0V-96·P0V-97을 찾았다. gate의 경계별 가장 강한 주입은 sigkill 40, in-process-fault 10, logical 14다.
+정산 판정으로 읽는다. 그 시험이 P0V-96·P0V-97을 찾았다. 관측 seam이 없는 요청 cache freeze와 project binding은 flush마다 앞뒤로 끊는다.
+gate의 경계별 가장 강한 주입은 sigkill 44, in-process-fault 10, logical 10이다.
 남긴 것: symlink 임시본(`replaceDerivedSymlink`)은 flock을 걸 수 없어 죽음 증명이 없다(broker 하나가 쓰는 context 포인터이고 창은
 symlink와 rename 사이뿐이다). crash lane(`crash-boundaries`)은 일회용 user manager가 있어야 돌아 이 환경에서 돌리지 않았다.
 

@@ -231,3 +231,96 @@ test("T23 / P0V-96: an immutable publication copied across filesystems and SIGKI
     } finally { rmSync(root, { recursive: true, force: true }); }
   }
 });
+
+/** A child that is SIGKILLed right before (even `crash`) or right after (odd)
+ * its `crash >> 1`-th fsync. For the paths with no durability observer, every
+ * fsync is a point where the order of what is durable changes. */
+function killedAtFsync(crash: number, body: string): ReturnType<typeof spawnSync> {
+  return spawnSync(process.execPath, ["--input-type=module", "-e", `
+    import fs from "node:fs";
+    import { syncBuiltinESMExports } from "node:module";
+    const fsync = fs.fsyncSync;
+    let seen = 0;
+    fs.fsyncSync = fd => {
+      const at = seen++;
+      if (at * 2 === ${crash}) process.kill(process.pid, "SIGKILL");
+      fsync(fd);
+      if (at * 2 + 1 === ${crash}) process.kill(process.pid, "SIGKILL");
+    };
+    syncBuiltinESMExports();
+    ${body}
+    process.stdout.write("finished:" + seen);`], { encoding: "utf8", timeout: 60_000 });
+}
+const fsyncCount = (body: string): number => {
+  const run = killedAtFsync(-1, body);
+  const count = /finished:(\d+)/.exec(String(run.stdout))?.[1];
+  assert.ok(count !== undefined, `the probe did not finish: ${String(run.stdout)}${String(run.stderr)}`);
+  return Number(count);
+};
+
+test("V26B / P0-7: a request freeze SIGKILLed at any flush leaves no request, the whole request, or an orphan body it refuses to rebuild from", TIMEOUT, async () => {
+  const { RequestCache } = await import("../src/request-cache.js");
+  const { makeValidFrozenRequest } = await import("./fixtures/valid.js");
+  const input = makeValidFrozenRequest("kill-1", "hello");
+  const freeze = (home: string) => `
+    const { RequestCache } = await import(${JSON.stringify(moduleUrl("../src/request-cache.js"))});
+    new RequestCache(${JSON.stringify(home)}).freeze(${JSON.stringify(input)}, Buffer.from("hello"));`;
+  const probe = mkdtempSync(join(tmpdir(), "oma-freeze-kill-"));
+  let flushes = 0;
+  try { flushes = fsyncCount(freeze(probe)); } finally { rmSync(probe, { recursive: true, force: true }); }
+  assert.ok(flushes >= 4, `a freeze flushed only ${flushes} times`);
+  const seen = new Set<string>();
+  for (let crash = 0; crash < flushes * 2; crash++) {
+    const home = mkdtempSync(join(tmpdir(), "oma-freeze-kill-"));
+    try {
+      const run = killedAtFsync(crash, freeze(home));
+      assert.equal(run.signal, "SIGKILL", `not killed at ${crash}: ${String(run.stdout)}${String(run.stderr)}`);
+      const cache = new RequestCache(home);
+      const left = cache.read(input.key);
+      seen.add(left.kind);
+      if (left.kind === "present") {
+        assert.deepEqual(left.value, { ...input, lastReceipt: null }, `at ${crash}`);
+        assert.equal(cache.readBody(input.key, input.digest!).kind, "present", `a frozen request without its body, at ${crash}`);
+        assert.equal(cache.freeze(input, Buffer.from("hello")).kind, "existing");
+      } else if (left.kind === "absent") {
+        assert.equal(cache.freeze(input, Buffer.from("hello")).kind, "created", `at ${crash}`);
+        const names = readdirSync(join(home, ".local/state/oma/requests"));
+        assert.deepEqual(names.sort(), ["kill-1.body", "kill-1.json"], `a dead freeze's temporary outlived the retry, at ${crash}`);
+      } else {
+        // A body published without its metadata: the payload it was frozen for
+        // is not known, and nothing is rebuilt from it (V26B's design).
+        assert.equal(left.kind, "corrupt", `at ${crash}: ${JSON.stringify(left)}`);
+        assert.match(left.reason, /orphan body/);
+        assert.throws(() => cache.freeze(input, Buffer.from("hello")), /CACHE_CORRUPT|orphan body/);
+      }
+    } finally { rmSync(home, { recursive: true, force: true }); }
+  }
+  assert.ok(seen.has("absent") && seen.has("present"), `the kill points did not span the freeze: ${[...seen].join(" ")}`);
+});
+
+test("D05 / P0-7: a project binding SIGKILLed at any flush is absent or whole, and the next start collects what it left", TIMEOUT, async () => {
+  const { collectBindingTemporaries, observeProjectBinding, publishProjectBinding } = await import("../src/runtime/provision.js");
+  const binding = { society: "demo", canonicalProjectPath: "/project" };
+  const publish = (root: string) => `
+    const { publishProjectBinding } = await import(${JSON.stringify(moduleUrl("../src/runtime/provision.js"))});
+    publishProjectBinding(${JSON.stringify(root)}, ${JSON.stringify(binding)});`;
+  const probe = mkdtempSync(join(tmpdir(), "oma-binding-kill-"));
+  let flushes = 0;
+  try { flushes = fsyncCount(publish(probe)); } finally { rmSync(probe, { recursive: true, force: true }); }
+  const seen = new Set<string>();
+  for (let crash = 0; crash < flushes * 2; crash++) {
+    const root = mkdtempSync(join(tmpdir(), "oma-binding-kill-"));
+    try {
+      const run = killedAtFsync(crash, publish(root));
+      assert.equal(run.signal, "SIGKILL", `not killed at ${crash}: ${String(run.stdout)}${String(run.stderr)}`);
+      const left = observeProjectBinding(root);
+      seen.add(left.kind);
+      assert.ok(left.kind === "absent" || left.kind === "bound", `killed at ${crash}: ${JSON.stringify(left)}`);
+      collectBindingTemporaries(root);
+      assert.deepEqual(readdirSync(root).filter(name => name.endsWith(".tmp")), [], `a temporary outlived the collection, at ${crash}`);
+      publishProjectBinding(root, binding);
+      assert.equal(observeProjectBinding(root).kind, "bound");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  assert.ok(seen.has("absent") && seen.has("bound"), `the kill points did not span the publication: ${[...seen].join(" ")}`);
+});

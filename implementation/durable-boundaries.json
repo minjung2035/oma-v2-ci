@@ -41,6 +41,11 @@
      "file": "test/priority-0.test.ts",
      "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
      "injection": "logical"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+     "injection": "sigkill"
     }
    ]
   },
@@ -814,6 +819,11 @@
      "file": "test/cli-receipt-replay.test.ts",
      "title": "V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time",
      "injection": "logical"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "V26B / P0-7: a request freeze SIGKILLed at any flush",
+     "injection": "sigkill"
     }
    ]
   },
@@ -888,6 +898,11 @@
      "file": "test/priority-0.test.ts",
      "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
      "injection": "logical"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+     "injection": "sigkill"
     }
    ]
   },
@@ -937,6 +952,11 @@
      "file": "test/priority-0.test.ts",
      "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one",
      "injection": "logical"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "D05 / P0-7: a project binding SIGKILLed at any flush",
+     "injection": "sigkill"
     }
    ]
   },
