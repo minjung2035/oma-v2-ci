@@ -23,8 +23,8 @@
 | | [physical-ordering](../implementation/physical-ordering.md), [integration-policy](../implementation/integration-policy.md), [compliance](../implementation/compliance.md), [loc-budget](../implementation/loc-budget.md), [test-matrix](../implementation/test-matrix.md), [spikes](../implementation/spikes.md), [systemd/README](../implementation/systemd/README.md), [store-opening](../implementation/store-opening.md), [contracts/README](../implementation/contracts/README.md) | spec을 구체화하는 계약(순서, tiered 정책, release trace, LOC 측정, 수용 시험, OPEN spike, unit template, Store 열기, contract owner) |
 | | `implementation/contracts.ts`, `contracts/`, `schema-v1.sql`, `systemd/*.in` | 문서가 아니라 실제 wire·durable·deployment 선언 |
 | **결정 기록** | [consistency-decisions.md](../implementation/consistency-decisions.md) | 계획의 D01–D06, 카드(WP)별 결정, 재검토와 AV1–AV31, ENG1. 규범이 **왜** 그런지 |
-| | [design-revisions.md](../implementation/design-revisions.md) | 설계 수정 DR1–DR14와 그것이 바꾼 규범, architecture와 어긋나는 문장 |
-| **점검 기록** | [priority-0-audit.md](../implementation/priority-0-audit.md) | Priority 0 파일 단위 점검의 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14, 외부 전수 검토를 판정한 4차 점검 P0V-25–P0V-53 |
+| | [design-revisions.md](../implementation/design-revisions.md) | 설계 수정 DR1–DR15와 그것이 바꾼 규범, architecture와 어긋나는 문장 |
+| **점검 기록** | [priority-0-audit.md](../implementation/priority-0-audit.md) | Priority 0 파일 단위 점검의 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14, 외부 전수 검토를 판정한 4차 점검 P0V-25–P0V-53, 시나리오 시험이 찾은 P0V-54–P0V-55 |
 | **지침**(비규범) | [MAINTENANCE.md](../MAINTENANCE.md) | 사람과 AI가 코드를 고칠 때의 작업 규율 |
 | | [PRODUCT.md](../PRODUCT.md) | 제품 의도. 규범을 소유하지 않는다 |
 | | [operations/README.md](../operations/README.md) | 운영자 안내(설정 형식, 관리형 편집, 지원 범위). 계약은 spec이 소유한다 |

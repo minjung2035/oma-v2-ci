@@ -1,11 +1,11 @@
-# 설계 수정 기록 DR1–DR14
+# 설계 수정 기록 DR1–DR15
 
 상태: **ACCEPTED (사용자 요청, 2026-09-25)**. 이 문서는 **결정 기록**이다([문서 지도](../docs/README.md)).
 결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우를 설계 수준에서 다시 판단한다. 각 항목은 관측, 원인, 결정, 바꾸는 규범,
 바꾸지 않는 것을 적는다.
 
 - DR1–DR7은 실제 provider 점검에서 AV9–AV31(`consistency-decisions.md`의 AV 절)을 고치다 나왔고, DR8은 그 수정을 다시 점검하다 나왔다.
-- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다.
+- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다. DR15는 시나리오 시험이 찾았다.
 - 규범 문장의 owner는 `implementation-spec.md`다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않고, 어긋나는 architecture 문장은 해당 DR에 적는다.
 - wire schema·DB schema·receipt 형식은 바꾸지 않는다. 권한 의미가 바뀌는 것은 DR4 하나다.
 
@@ -25,6 +25,7 @@
 | DR12 | 설정 commit의 owner는 하나다 | 없음(D02·CONFIG-CONTRACT의 writer 순서를 inline에도) |
 | DR13 | 모르는 것에는 모른다는 코드를 붙인다 | 없음(CLI-003·ERR-002·INV02의 구현) |
 | DR14 | P0-4를 실행 중 자원에도 적용하고, 결과 크기(P0V-44)는 v1 receipt 안의 수용 한계로 두며, unit 이름은 그대로 두고 겹침을 거절한다 | PRIORITY-0 P0-4 |
+| DR15 | 엔진 이벤트 한 줄이 frame보다 크면 건너뛰고 알린다(형식 오류는 전처럼 중독) | R28 결정, MAINTENANCE §19 |
 
 ## DR1 — 모델에게 보이는 경로는 그 모델의 view로 말한다
 
@@ -304,3 +305,22 @@ validation의 알려진 한계에 수치로 적는다. P0V-44의 판정은 **의
 agent 생성은 접수 전에 거절한다. 이름 체계의 변경은 installation 형식 변경과 함께 계획한다.
 
 **바꾸는 규범.** PRIORITY-0 P0-4(적용 범위 한 항목). spec 조항은 바꾸지 않는다.
+
+## DR15 — 엔진 이벤트 한 줄이 frame보다 크면 건너뛰고 알린다
+
+**관측(시나리오 시험 SCN-F13, SCN-F17, SCN-R06; P0V-55).** 엔진의 RPC 이벤트는 모델이 쓴 것을 담는다. 도구 호출 전체를 담은
+`message_end`, 인자를 담은 `tool_execution_start`가 그렇다. 모델이 frame(기본 256 KiB)보다 큰 파일이나 답을 만들면 그 이벤트 한 줄이
+reader의 한도를 넘었고, reader는 전송을 중독시켰다. Principal 세션은 오류로 끝났고 Resident의 run도 같은 이유로 끝났다. 큰 파일을 한
+번에 쓰는 평범한 작업이 세션을 죽였다.
+
+**원인.** R28의 규칙("크기 초과·형식 오류·끝나지 않은 줄은 재동기화하지 않고 중독")이 두 가지를 한데 묶었다. 형식 오류 뒤에는 다음
+경계를 믿을 수 없다. 반면 JSONL에서 크기만 큰 줄은 형식이 온전하다. JSON은 문자열 안의 LF를 모두 escape하므로 다음 LF가 그 줄의 끝이다.
+그 줄을 건너뛰는 것은 추측이 아니라 정확한 경계다. 크기 초과를 엔진 고장으로 올린 것은 P0-5 위반이다("큰 이벤트"는 "고장"이 아니다).
+
+**결정.** 엔진 채널의 reader(PiRpcClient)는 한도를 넘는 줄의 바이트를 보관하지 않고 다음 LF까지 건너뛰며, 그 크기를 관찰자들에게 한
+이벤트(`oma_event_skipped`)로 알린다. 메모리는 한도 안에 머문다. Principal 화면은 이벤트 하나를 보이지 못했다고 말한다. 전달 판정은
+영향을 받지 않는다. 전달 경계와 응답·settle 이벤트는 작고, 건너뛴 `message_end`의 stopReason은 "모름"으로 남아 경계가 없으면
+SESSION_BOUNDARY_UNCONFIRMED(재시도 대상)가 된다. 형식 오류(UTF-8·JSON·이벤트 모양)와 끝나지 않은 줄은 전처럼 중독이다. 콜백 없이
+만든 reader(다른 용도)는 여전히 크기 초과도 중독이다.
+
+**바꾸는 규범.** R28의 결정(consistency-decisions의 jsonl 행)과 MAINTENANCE §19의 해당 문장. spec 조항은 바꾸지 않는다.

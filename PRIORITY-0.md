@@ -2,7 +2,7 @@
 
 상태: **최상위 원칙 (사용자 결정, 2026-09-25)**. OMA의 모든 설계·수정·리팩터링·시험 판단은 이 문서에서
 시작한다. 이 문서는 새 wire method·DB state·error code를 직접 정의하지 않는다. 규범 문서
-(`architecture.md`, `implementation-spec.md`, 결정 D01–D06, 설계 수정 DR1–DR14)가 이미 전제하는
+(`architecture.md`, `implementation-spec.md`, 결정 D01–D06, 설계 수정 DR1–DR15)가 이미 전제하는
 명제를 가장 위에 적고, 기존 원칙을 그 하위 규칙으로 다시 정리한다. 규범 문장이나 코드가 이
 원칙과 충돌하면 편한 쪽을 고르지 않는다. 그 충돌은 **unresolved design decision**(MAINTENANCE §1)으로
 보고, 규범을 이 원칙에 맞게 고친다. N-001이 bytes를 결박하는 `architecture.md`는 고치지 않으며,
@@ -10,7 +10,8 @@
 
 점검: 215개 production 파일의 1차 점검과 받는 자리 전부의 2차 점검을 마쳤고, 발견 23개(P0V-01–P0V-23)를
 고쳤다. 실제 provider 점검(14차)에서 하나(P0V-24)를 더 찾아 고쳤다. 외부 전수 검토를 받아 판정한 4차 점검의 발견
-P0V-25–P0V-53은 하나(P0V-44, v1 receipt 형식 안의 한계로 둔 의도된 예외, DR14)를 빼고 고쳤다. 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
+P0V-25–P0V-53은 하나(P0V-44, v1 receipt 형식 안의 한계로 둔 의도된 예외, DR14)를 빼고 고쳤다. 모델만 대본인
+시나리오 시험이 두 개(P0V-54, P0V-55)를 더 찾았고 고쳤다(DR15). 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
 설계 판단은 DR9–DR13에 있다. 지금의 검증 판정은 `implementation/validation.md`가 소유한다.
 
 ## 요약

@@ -14,7 +14,7 @@ OMA v2는 일반 애플리케이션이 아니라 durable operation, Git CAS, Mai
 3. `implementation/physical-ordering.md` — canonical physical ordering.
 4. `implementation/contracts.ts`, `implementation/schema-v1.sql` — wire/durable 선언.
 5. `implementation/compliance.md`, `implementation/spikes.md`, `implementation/integration-policy.md`, `implementation/test-matrix.md`, `implementation/loc-budget.md` — release/evidence, OPEN gate, integration/test/build 계약.
-6. 고칠 곳에 관한 결정 기록 — `implementation/consistency-decisions.md`(D01–D06, WP·AV 결정), `implementation/design-revisions.md`(DR1–DR14). 규범이 왜 그런지를 알고 고친다.
+6. 고칠 곳에 관한 결정 기록 — `implementation/consistency-decisions.md`(D01–D06, WP·AV 결정), `implementation/design-revisions.md`(DR1–DR15). 규범이 왜 그런지를 알고 고친다.
 7. **이 문서 `MAINTENANCE.md`** — 위 규범을 변경하지 않고 유지하는 방법.
 8. `HANDOFF.md` — 현재 재개 지점과 남은 작업.
 9. `implementation/validation.md` — 현재 실행 증거, 알려진 한계, NOT_RUN/BLOCKED 범위.
@@ -287,7 +287,7 @@ Immutable publication은 `same path + same bytes = idempotent`, `same path + dif
 
 ## 19. Protocol fatal error 뒤에는 resync하지 않는다
 
-Malformed UTF-8/JSON, duplicate key, oversized frame 등 fatal framing 오류 뒤의 connection은 poisoned/closed라는 단순 계약을 유지한다. 남은 payload를 새 frame으로 재해석하지 않는다. Connection/session/run 상태는 가능하면 invalid combination을 만들기 어려운 explicit state로 표현한다.
+Malformed UTF-8/JSON, duplicate key, oversized frame 등 fatal framing 오류 뒤의 connection은 poisoned/closed라는 단순 계약을 유지한다. 남은 payload를 새 frame으로 재해석하지 않는다. 예외 하나(DR15): 엔진의 JSONL 채널에서 형식이 온전한데 크기만 한도를 넘는 줄은 다음 LF까지 건너뛰고 알린다. JSON 문자열에는 날 LF가 없으므로 그 LF는 추측이 아니라 정확한 경계다. 길이 접두 frame(broker wire)의 초과는 여전히 fatal이다. Connection/session/run 상태는 가능하면 invalid combination을 만들기 어려운 explicit state로 표현한다.
 
 ## 20. OPEN SPIKE를 guessed implementation으로 닫지 않는다
 
@@ -381,6 +381,8 @@ Validator 강화 후 test가 깨지면 production validator를 완화하기 전�
 정상 fixture는 production-valid constructor를 사용한다. Corruption test만 명시적인 raw/corruption helper로 validator를 우회한다.
 
 Test oracle은 실제 contract를 검사해야 한다. 우연한 casing, helper 이름, temporary path 같은 구현 세부를 불필요하게 고정하지 않는다. 반대로 crash ordering, immutable bytes, cgroup/ref relation처럼 contract 자체가 물리적이면 실제 physical oracle을 사용한다.
+
+사용자 흐름(모델 → 도구 → CLI → broker → 원장·메일 → 다음 전달)을 바꾸거나 고치면 시나리오 시험(`test/scenario-*.test.ts`, fixture는 `scripted-provider.ts`와 `scenario.ts`)을 함께 쓴다. 모델만 대본이고 나머지는 제품이다. 정상 경우와 장애 경우(provider 오류·끊김·멈춤, 엔진·broker·runner kill과 재시작, 같은 key 재시도)를 모두 두고, 판정은 화면이 아니라 원장·메일함·receipt·session 기록으로 한다. 단위 시험이 놓친 결함 여럿이 이 층에서만 드러났다(P0V-54, P0V-55). 이 층은 실제 provider의 증거가 아니다(P0-5, INF-001).
 
 ## 26. 검증 상태와 증거
 

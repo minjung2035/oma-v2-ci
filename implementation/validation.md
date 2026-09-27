@@ -173,6 +173,8 @@ Final PASS condition: `v20-fast-final`, `v20-durable-final`, `v20-property-final
 - 한 key에 대한 동시 CLI 프로세스는 검증 범위 밖이다(WP26).
 - v1 코드가 이미 재할당한 prepared batch는 저장된 값을 첫 시도로 읽는다. 그보다 이른 시도의 receipt는 전처럼 conflicting이다(DR9).
 - Mail 화면의 갱신은 헤더를 최근 `mailListRows`통만 읽지만, 순서를 정하려고 메일함의 모든 이름을 lstat한다(P0V-43).
+- 시나리오 시험(`scenario-principal`·`scenario-society`·`scenario-confined`, durable lane)은 모델만 대본이다. 실제 provider의 스트림·오류·재시도는 엔진 몫이라 증거가 아니다(P0-5, INF-001). systemd unit과 journal은 대역(`ScenarioUnits`)이고, runner가 시험 프로세스의 cgroup을 함께 쓰므로 한 broker 수명에서 Resident마다 한 번만 깨운다(test/fixtures/README).
+- 엔진 이벤트 한 줄이 frame보다 크면 그 이벤트는 건너뛰고 알린다(DR15). 그 이벤트의 내용(모델의 긴 답이나 큰 도구 인자)은 Principal 화면에 보이지 않는다.
 
 **비용과 추적**
 - 비용 상한은 OMA 계약이 아니다. relay가 요청 수·동시성을 쥐지만 stream을 해석하지 않는다(INF-009).

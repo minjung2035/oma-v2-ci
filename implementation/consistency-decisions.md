@@ -472,7 +472,7 @@ process or owner. Budget: the bound it enforces (encoded bytes unless said).
 |---|---|---|---|
 | `src/frame.ts` | bytes from any peer | uint32 length ≤ configured frame bytes; strict UTF-8 JSON, duplicate keys, surrogates, unsafe integers refused; a fatal error never resynchronizes | one JSON object root, fields still unknown |
 | `src/protocol/byte-queue.ts` | caller-owned chunks | frame-sized copies only | bytes delivered in order |
-| `src/protocol/jsonl.ts` | engine stdout | bounded line, LF only, no implicit final line | one line handed to its owner |
+| `src/protocol/jsonl.ts` | engine stdout | bounded line, LF only, no implicit final line; a well-formed line over the bound is skipped whole and reported (DR15) | one line handed to its owner |
 | `src/protocol/channel.ts` (`BrokerChannel`) | broker socket | one request in flight; request and response ≤ frame bytes after encoding; idle and receipt deadlines; stream bytes equal the descriptor | a decoded reply for this request id |
 | `src/protocol/response-codec.ts` | broker reply | id, version and method discriminator must match; closed result per method | a transport fact, not replay authority |
 | `src/protocol/receipt-codec.ts` | receipt bytes (broker or cache) | closed shape; REQUEST_NOT_FOUND only with an empty operation; `receiptSupersession` orders observations of one operation | structural receipt, not ledger authority |

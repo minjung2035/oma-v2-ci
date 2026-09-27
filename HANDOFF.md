@@ -6,7 +6,7 @@
 
 - 브랜치 `refactor/safety-preserving-architecture`. 사용자 승인으로 origin에 push했다(2026-09-26). PR·merge는 하지 않았다.
 - consistency plan의 카드 WP00–WP32와 그 뒤의 작업(재검토와 적대적 검증 AV1–AV8, 엔진 0.87.1 ENG1, 실제 provider 기능 점검 1–14차와 AV9–AV31, 설계 수정 DR1–DR13, Priority 0 파일 단위 점검 P0V-01–P0V-24)을 모두 커밋했다. 마지막 통합 검증은 validation.md의 "현재 source 판정"(v20)이다. v20은 initial lane 8개가 모두 PASS였고, final은 사용자 요청으로 끝나기 전에 멈췄다.
-- 그 뒤 외부 전수 검토(기준 `6787211`)를 판정한 4차 점검 P0V-25–P0V-53을 고쳤다(`37cbeee`–`c980611`, 기록은 priority-0-audit "4차 점검"). 관련 시험 묶음만 돌렸고 **검증 cycle로 결박하지 않았다**. 그래서 지금 트리에서는 fast lane의 R38 시험이 실패한다. 결박(v21)은 몇 시간 걸리므로 사용자에게 먼저 묻는다.
+- 그 뒤 외부 전수 검토(기준 `6787211`)를 판정한 4차 점검 P0V-25–P0V-53을 고쳤다(`37cbeee`–`c980611`, 기록은 priority-0-audit "4차 점검"). 그 뒤 DR14(4차 점검의 판단), 시나리오 시험 54개와 그것이 찾은 P0V-54·55(DR15)를 더했다. 이 모두는 v21 검증 cycle로 결박한다(§3).
 - **release 미승인.** 남은 차단 요인은 powercut·실제 provider 자동 lane·CI(NOT_RUN, oracle V05C·V30B·V32B)이며 모두 사용자 승인이 필요하다. A-008 LOC gate도 OPEN이다. 수동 provider 점검은 lane 증거가 아니다. 판정은 다음 명령으로 다시 확인한다.
 
   ```sh
@@ -23,7 +23,7 @@
 | 재검토, AV1–AV8 | consistency-decisions의 "Re-review", "Whole-codebase adversarial pass" | validation "재검토와 적대적 검증" |
 | ENG1 엔진 0.87.1 | consistency-decisions의 ENG1 | validation "엔진 0.87.1" |
 | 실제 provider 점검 1–13차, AV9–AV31 | consistency-decisions의 AV 절, 화면 기록 `/home/dev/oma-evidence/provider/runs/` | validation "실제 provider 기능 점검" |
-| 설계 수정 DR1–DR14 | [design-revisions](implementation/design-revisions.md) | validation "설계 수정", "Priority 0" |
+| 설계 수정 DR1–DR15 | [design-revisions](implementation/design-revisions.md) | validation "설계 수정", "Priority 0" |
 | Priority 0, 14차 점검 | [PRIORITY-0](PRIORITY-0.md), [priority-0-audit](implementation/priority-0-audit.md) | validation "Priority 0" |
 
 카드별 commit은 Git history에서 찾는다(예: `git log --oneline --grep 'WP13'`). 정리 전 이 문서에 있던 카드별 commit·한계 표는 [docs/archive.md](docs/archive.md)의 snapshot에 있고, 그 한계 가운데 지금도 유효한 것은 validation "알려진 한계"로 옮겼다.
@@ -63,8 +63,8 @@
 
 1. **release gate**: 승인된 VM에서 powercut(V05C·V30B), 승인된 credential로 실제 provider 자동 lane(사용자 승인 필요). CI(V32B)는 push했으므로 GitHub Actions 결과를 확인해 기록한다.
 2. **보류한 결정과 검증 공백**: validation "알려진 한계"의 마지막 항목이 목록을 소유한다. 4차 점검이 남긴 세 판단은 DR14로 정했다(P0-4 적용 범위, 결과 크기는 v1 한계, unit 이름 유지).
-3. **4차 점검의 결박(v21)**: 위 §1. 사용자 승인 뒤 §4의 검증 절차로 한다.
-4. **가짜 provider 시나리오 시험 (사용자 지시, 구조개선 다음)**: 번들 엔진·확장·broker는 진짜로 두고, provider 경계에 결정적 대본을 두는 시험을 기능별·루프별로, 정상과 장애(kill·재시작·재시도·끊김) 경우 모두 크게 늘린다. 실제 provider 증거로 기록하지 않는다(P0-5).
+3. **결박(v21)**: 4차 점검, DR14, 시나리오 시험과 DR15를 한 트리로 결박한다(§4의 검증 절차). 사용자가 남은 일을 모두 진행하라고 맡겼다(2026-09-27).
+4. **시나리오 시험 (사용자 지시)**: 모델만 대본인 시나리오 시험 54개를 만들었다(Principal 33, Resident·society 14, 봉인·git 7; fixture는 test/fixtures/README의 Scenario 층). 이 층이 P0V-54·55를 찾았다. 사용자 방향은 이 유형이 시험의 더 큰 몫이 되는 것이므로, 사용자 흐름을 바꿀 때마다 시나리오를 더한다(MAINTENANCE §25). 아직 없는 것: 설치된 제품 전체를 pty로 도는 시나리오(`oma` 진입점), 여러 Resident의 동시 run(대역 cgroup 한계), 실제 systemd에서의 unit 경로(kernel lane).
 5. **provtest 정리 (사용자 결정)**: 점검을 끝내면 `for u in $(ls ~/.config/systemd/user | grep '^oma-provtest-'); do systemctl --user stop "$u"; rm -f ~/.config/systemd/user/"$u"; done; systemctl --user daemon-reload; rm -rf /home/dev/oma-evidence/provider/data`(credential 사본 포함).
 
 ## 7. 바꾸지 않은 것

@@ -15,6 +15,7 @@ P0V-25–P0V-53 가운데 P0V-44는 의도된 예외(DR14)이고 나머지는 �
 | 실제 provider 점검(14차) | DR9–DR13을 제품에서 끝까지 확인한 결과, P0V-24 | 14차 빌드(`1b3827c` 이후) |
 | 3차 점검: 문서와 식별자 | 문서 25개와 식별자(요구 ID, 수용 번호)의 판정, P0D-01–P0D-14 | `8cb0406` |
 | 4차 점검: 외부 전수 검토 | 외부 검토의 N01–N23·F1–F7 판정, P0V-25–P0V-53, 결정이 필요한 것 | `6787211` |
+| 시나리오 시험이 찾은 것 | 모델만 대본인 시나리오 시험이 찾은 P0V-54, P0V-55 | `910a3f3` 이전 |
 | 수정 검증 | 수정마다 되돌린 변이와 그 결과 | — |
 
 방법: 파일을 하나씩 읽고, 그 파일이 만들거나 해석하는 durable fact와 owner, 하위 규칙 P0-1–P0-7별 판정과 근거(파일:줄)를 적는다. 키워드 검색은 읽은 파일의 호출 관계를 따라갈 때만 쓴다.
@@ -604,6 +605,19 @@ broker-composition-policy, inference-relay)에 있다. 관련 시험 묶음은 �
 P0-4의 문장은 accept 전 artifact(파일·메일·staging·임시 작업공간)의 owner를 말한다. 이번 발견 가운데 여섯(P0V-25, 27, 34, 49, 50, 52)은
 같은 모양 -- 자원이 생긴 순간부터 끝날 때까지 한 owner가 있어야 한다 -- 을 런타임 자원(FD, 자식 프로세스, 저장 예약, provider 호출,
 listener)에서 보였다. P0-4에 그 적용을 적었다(DR14).
+
+## 시나리오 시험이 찾은 것
+
+2026-09-27, 사용자 지시로 만든 시나리오 시험(모델만 대본이고 나머지는 제품, `test/scenario-*.test.ts`, MAINTENANCE §25)이
+단위 시험이 놓친 결함 두 개를 찾았다. 둘 다 고쳤고, 시나리오가 옛 코드에서 실패함을 확인했다.
+
+| ID | 규칙 | 파일(`910a3f3` 이전) | 요약 | 상태 |
+|---|---|---|---|---|
+| P0V-54 | P0-2 | validate.ts `checkAddress`, mail/routing.ts `expandAddresses` | 주소가 agent를 가리키는지를 params 검사와 라우팅 owner가 따로 판정했다. params 검사는 "invalid params for mail.send"로 답해 모델은 무엇이, 어느 주소가 잘못인지 알 수 없었고, 오류 표와 라우팅이 정한 ADDRESS_NOT_FOUND(·AGENT_NOT_READY·AGENT_RETIRED)가 가려졌다. SCN-F04 | 수정 910a3f3(params 검사는 문법만, 존재는 접수 전 라우팅이) |
+| P0V-55 | P0-5 | protocol/jsonl.ts, runtime/pi-rpc.ts | 모델이 frame보다 큰 파일이나 답을 만들면 엔진 이벤트 한 줄이 reader 한도를 넘어 전송이 중독되고 Principal 세션(또는 Resident run)이 끝났다. SCN-F13, SCN-F17, SCN-R06 | 수정 910a3f3(DR15) |
+
+시나리오 시험이 기대를 고친 곳(제품이 옳았던 것): commons의 수신자에 보낸 Resident 자신도 포함된다(spec MAIL 라우팅 표). Principal은
+자기 자손인 Resident만 관리한다(`agent.manage.descendants`). main 통합에는 `code.integrate`가 필요하다(AUTH-001, 기본값 없음).
 
 ## 수정 검증
 
