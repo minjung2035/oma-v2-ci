@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 268,
-    "n_lines": 35006,
+    "n_lines": 35043,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -62,7 +62,7 @@
   },
   "src/entry/oma.ts": {
     "blank": 26,
-    "comment": 169,
+    "comment": 172,
     "code": 338,
     "language": "TypeScript"
   },
@@ -600,6 +600,12 @@
     "code": 99,
     "language": "TypeScript"
   },
+  "src/platform/host/attach-client.ts": {
+    "blank": 6,
+    "comment": 19,
+    "code": 97,
+    "language": "TypeScript"
+  },
   "src/views.ts": {
     "blank": 1,
     "comment": 20,
@@ -666,12 +672,6 @@
     "code": 91,
     "language": "TypeScript"
   },
-  "src/platform/host/attach-client.ts": {
-    "blank": 6,
-    "comment": 13,
-    "code": 90,
-    "language": "TypeScript"
-  },
   "src/platform/host/project.ts": {
     "blank": 9,
     "comment": 17,
@@ -714,15 +714,15 @@
     "code": 85,
     "language": "TypeScript"
   },
+  "src/entry/runner.ts": {
+    "blank": 1,
+    "comment": 17,
+    "code": 84,
+    "language": "TypeScript"
+  },
   "src/domain/canonical-json.ts": {
     "blank": 6,
     "comment": 4,
-    "code": 83,
-    "language": "TypeScript"
-  },
-  "src/entry/runner.ts": {
-    "blank": 1,
-    "comment": 16,
     "code": 83,
     "language": "TypeScript"
   },
@@ -824,7 +824,7 @@
   },
   "src/runtime/broker-lifetime.ts": {
     "blank": 4,
-    "comment": 12,
+    "comment": 19,
     "code": 72,
     "language": "TypeScript"
   },
@@ -864,15 +864,15 @@
     "code": 67,
     "language": "TypeScript"
   },
+  "src/entry/omahostd.ts": {
+    "blank": 6,
+    "comment": 14,
+    "code": 67,
+    "language": "TypeScript"
+  },
   "src/cli/exit.ts": {
     "blank": 9,
     "comment": 18,
-    "code": 66,
-    "language": "TypeScript"
-  },
-  "src/entry/omahostd.ts": {
-    "blank": 6,
-    "comment": 13,
     "code": 66,
     "language": "TypeScript"
   },
@@ -944,8 +944,14 @@
   },
   "src/tui/screen.ts": {
     "blank": 4,
-    "comment": 24,
+    "comment": 28,
     "code": 61,
+    "language": "TypeScript"
+  },
+  "src/entry/oma-mac.ts": {
+    "blank": 4,
+    "comment": 9,
+    "code": 59,
     "language": "TypeScript"
   },
   "src/storage/facets.ts": {
@@ -963,12 +969,6 @@
   "src/domain/mail-values.ts": {
     "blank": 4,
     "comment": 18,
-    "code": 57,
-    "language": "TypeScript"
-  },
-  "src/entry/oma-mac.ts": {
-    "blank": 4,
-    "comment": 8,
     "code": 57,
     "language": "TypeScript"
   },
@@ -1142,7 +1142,7 @@
   },
   "src/entry/guest-session.ts": {
     "blank": 4,
-    "comment": 9,
+    "comment": 12,
     "code": 42,
     "language": "TypeScript"
   },
@@ -1616,8 +1616,8 @@
   },
   "SUM": {
     "blank": 1536,
-    "comment": 5914,
-    "code": 27556,
+    "comment": 5940,
+    "code": 27567,
     "nFiles": 268
   }
 }

@@ -1518,7 +1518,7 @@
   }
  ],
  "files": 269,
- "runtimeEdges": 1023,
+ "runtimeEdges": 1028,
  "typeOnlyEdges": 341,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 229,
@@ -1530,11 +1530,11 @@
   "L4-orchestration -> L1-kernel": 170,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 76,
+  "L4-orchestration -> L4-orchestration": 77,
   "L5-entry -> L1-kernel": 87,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 51,
+  "L5-entry -> L4-orchestration": 55,
   "L5-entry -> L5-entry": 121
  },
  "upwardTypeOnlyEdges": [
@@ -1574,7 +1574,7 @@
   "src/broker.ts": 30,
   "src/mail.ts": 28,
   "src/entry/broker.ts": 27,
-  "src/entry/oma.ts": 24,
+  "src/entry/oma.ts": 25,
   "src/git/context-repository.ts": 15,
   "src/lifecycle/create.ts": 15,
   "src/git.ts": 14,
@@ -1585,7 +1585,7 @@
   "src/reconcile.ts": 14,
   "src/store.ts": 14,
   "src/runner.ts": 13,
-  "src/tui/session.ts": 12
+  "src/entry/runner.ts": 12
  },
  "external": {
   "@earendil-works/pi-coding-agent": 10,
@@ -1598,7 +1598,7 @@
   "node:http": 1,
   "node:https": 1,
   "node:net": 27,
-  "node:os": 3,
+  "node:os": 4,
   "node:path": 85,
   "node:perf_hooks": 5,
   "node:sqlite": 4,

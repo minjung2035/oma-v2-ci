@@ -155,11 +155,14 @@ test("§4.6: a connection that does not begin with attach is dropped and the pro
   screen.socket.destroy();
 });
 
-test("MAC-320: a holder asked to stop asks its program to end and ends with its status", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
-  const { child, exited } = await holder(t);
-  await new Promise(r => setTimeout(r, 300));
-  child.kill("SIGTERM");
-  assert.equal(await exited, 7, "the program's own SIGTERM handling decided the end");
+test("MAC-320 / P0V-81: a holder asked to stop, by any signal that asks, asks its program to end and ends with its status", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { HOST_LOSS_SIGNALS } = await import("../src/runtime/broker-lifetime.js");
+  for (const signal of HOST_LOSS_SIGNALS) {
+    const { child, exited } = await holder(t);
+    await new Promise(r => setTimeout(r, 300));
+    child.kill(signal);
+    assert.equal(await exited, 7, `${signal}: the program's own SIGTERM handling did not decide the end`);
+  }
 });
 
 test("§4.6: a holder that dies hangs up its program, which holds no side of the terminal but its own", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {

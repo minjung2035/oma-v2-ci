@@ -30,7 +30,7 @@ spec을 구체화하는 계약이다. `**MUST [ID]**` 조항은 [traceability.js
 | 문서 | 내용 |
 |---|---|
 | [consistency-decisions.md](consistency-decisions.md) | 계획의 D01–D06, 카드(WP)별 결정, 재검토와 AV1–AV31, ENG1 |
-| [design-revisions.md](design-revisions.md) | 설계 수정 DR1–DR16, 바꾼 규범, architecture와 어긋나는 문장 |
+| [design-revisions.md](design-revisions.md) | 설계 수정 DR1–DR17, 바꾼 규범, architecture와 어긋나는 문장 |
 | [priority-0-audit.md](priority-0-audit.md) | Priority 0 파일 단위 점검: 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14, 외부 전수 검토를 판정한 4차 점검 P0V-25–P0V-53, 시나리오 시험이 찾은 P0V-54–P0V-55 |
 
 ## machine-readable map

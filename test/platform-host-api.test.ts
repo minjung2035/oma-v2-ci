@@ -134,6 +134,29 @@ test("MAC-020: the society calls reach guesthost and its refusals come back as t
   assert.deepEqual((opened.answer as { result: unknown }).result, { state: "running" });
 });
 
+test("P0V-81 / AV31: a Mac client asked to end puts its terminal back and leaves the session running", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { HOST_LOSS_SIGNALS } = await import("../src/runtime/broker-lifetime.js");
+  const { apiSocket, token, projectId } = await world(t);
+  await call(apiSocket, token, "society.open", { society: "demo", projectId });
+  for (const signal of HOST_LOSS_SIGNALS) {
+    const screen = new Screen();
+    const ended = attachTerminal({ socketPath: apiSocket, token, society: "demo", takeover: true, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, terminal: screen });
+    await screen.until(/frame \d+ 100x30/, `drawn whole before ${signal}`);
+    const before = process.listenerCount(signal);
+    assert.ok(before > 0, `nothing listens for ${signal}: its default action would leave the terminal raw`);
+    process.emit(signal, signal);
+    assert.deepEqual(await ended, { kind: "stopped", signal });
+    assert.ok(screen.shown.endsWith("\u001b[?2004l\u001b[?25h\u001b[?1049l"), `${signal}: the screen was not put back`);
+    assert.equal(process.listenerCount(signal), before - 1, `${signal}: the attachment's listener outlived it`);
+  }
+  // The session was left running: the next screen finds the same program.
+  const last = new Screen();
+  const lastEnd = attachTerminal({ socketPath: apiSocket, token, society: "demo", takeover: true, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, terminal: last });
+  await last.until(/frame \d+ 100x30/, "the session, still running");
+  last.input.write("q");
+  assert.deepEqual(await lastEnd, { kind: "exit", code: 0, signal: null });
+});
+
 test("MAC-222/§2.4: the Mac's client attaches, carries keys both ways, and puts its terminal back when another screen takes over", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
   const { apiSocket, token, projectId } = await world(t);
   await call(apiSocket, token, "society.open", { society: "demo", projectId });

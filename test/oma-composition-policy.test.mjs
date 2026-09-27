@@ -12,6 +12,7 @@ import * as path from "node:path";
 import { Script } from "node:vm";
 import ts from "typescript";
 import { codeFor, exitFor } from "../dist/src/tui/exit.js";
+import { HOST_LOSS_SIGNALS } from "../dist/src/runtime/broker-lifetime.js";
 
 /** A production module compiled and run with its own controlled boundary.
  *
@@ -293,6 +294,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
     },
     "../runtime/deployment-manifest.js": { deploymentDigest: () => "a".repeat(64) },
+    // The one list of the signals that end a process with a drain (AV31).
+    "../runtime/broker-lifetime.js": { HOST_LOSS_SIGNALS },
     "../config/generations.js": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
   };
   const process_ = {
@@ -697,6 +700,22 @@ test("T119: quitting gives the society back, and only once the engine is really 
   assert.ok(order("PrincipalSession.exited") >= 0 && order("PrincipalSession.exited") < order("lease.release"),
     `the society was given up before the engine's exit was observed: ${society.calls.join(" ")}`);
   assert.ok(society.calls.includes("exit:0"));
+});
+
+test("T119 / P0V-81, AV31: every signal that asks this process to end takes the same quitting path", async () => {
+  assert.deepEqual([...HOST_LOSS_SIGNALS].sort(), ["SIGHUP", "SIGINT", "SIGQUIT", "SIGTERM"]);
+  for (const signal of HOST_LOSS_SIGNALS) {
+    const society = await run();
+    society.broker.fireReady();
+    await society.settle();
+    assert.equal(typeof society.handlers[signal], "function", `${signal} ends the product by its default action`);
+    society.handlers[signal]();
+    await society.until(() => society.calls.includes("exit:0"));
+    const order = name => society.calls.indexOf(name);
+    assert.ok(order("PrincipalSession.exited") >= 0 && order("PrincipalSession.exited") < order("lease.release"),
+      `${signal}: the society was given up before the engine's exit was observed: ${society.calls.join(" ")}`);
+    assert.equal(society.lease.releases, 1, `${signal}: the society lease outlived the process that held it`);
+  }
 });
 
 test("T119: an engine that will not die does not keep the product from quitting", async () => {

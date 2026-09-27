@@ -24,7 +24,7 @@
 | | `implementation/contracts.ts`, `contracts/`, `schema-v1.sql`, `systemd/*.in` | 문서가 아니라 실제 wire·durable·deployment 선언 |
 | | [macos-platform](../implementation/macos-platform.md)(초안) | **승인 전, 구속력 없음.** macOS용 OMA 플랫폼 규격(host와 hidden Linux VM). 승인되면 규범이 되고, 바꾸는 기존 규범은 DR로 기록한다 |
 | **결정 기록** | [consistency-decisions.md](../implementation/consistency-decisions.md) | 계획의 D01–D06, 카드(WP)별 결정, 재검토와 AV1–AV31, ENG1. 규범이 **왜** 그런지 |
-| | [design-revisions.md](../implementation/design-revisions.md) | 설계 수정 DR1–DR16과 그것이 바꾼 규범, architecture와 어긋나는 문장 |
+| | [design-revisions.md](../implementation/design-revisions.md) | 설계 수정 DR1–DR17과 그것이 바꾼 규범, architecture와 어긋나는 문장 |
 | **점검 기록** | [priority-0-audit.md](../implementation/priority-0-audit.md) | Priority 0 파일 단위 점검의 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14, 외부 전수 검토를 판정한 4차 점검 P0V-25–P0V-53, 시나리오 시험이 찾은 P0V-54–P0V-55 |
 | **지침**(비규범) | [MAINTENANCE.md](../MAINTENANCE.md) | 사람과 AI가 코드를 고칠 때의 작업 규율 |
 | | [PRODUCT.md](../PRODUCT.md) | 제품 의도. 규범을 소유하지 않는다 |

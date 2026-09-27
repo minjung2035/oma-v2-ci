@@ -37,6 +37,7 @@ import { HostTenure } from "../runtime/host-tenure.js";
 import { deploymentDigest } from "../runtime/deployment-manifest.js";
 import type { ExtensionRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
+import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 
 function usage(): never {
   process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n");
@@ -323,8 +324,10 @@ async function main(argv: readonly string[]): Promise<void> {
     process.stderr.write(`oma: ${String(error)}\n`);
     process.exit(codeFor(error));
   });
-  process.on("SIGINT", () => { void shutdown(0); });
-  process.on("SIGTERM", () => { void shutdown(0); });
+  // AV31, P0V-81: every way this process is asked to end takes the same path --
+  // the engine reaped, the lease given back, the terminal restored. A default
+  // SIGHUP or SIGQUIT ended it with none of them.
+  for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => { void shutdown(0); });
   terminal.onResize(() => app.draw());
   terminal.onKeys(chunk => app.feed(chunk));
 

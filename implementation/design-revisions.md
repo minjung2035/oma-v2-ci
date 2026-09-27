@@ -1,11 +1,11 @@
-# 설계 수정 기록 DR1–DR16
+# 설계 수정 기록 DR1–DR17
 
 상태: **ACCEPTED (사용자 요청, 2026-09-25)**. 이 문서는 **결정 기록**이다([문서 지도](../docs/README.md)).
 결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우를 설계 수준에서 다시 판단한다. 각 항목은 관측, 원인, 결정, 바꾸는 규범,
 바꾸지 않는 것을 적는다.
 
 - DR1–DR7은 실제 provider 점검에서 AV9–AV31(`consistency-decisions.md`의 AV 절)을 고치다 나왔고, DR8은 그 수정을 다시 점검하다 나왔다.
-- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다. DR15는 시나리오 시험이 찾았다. DR16은 5차 점검(외부 재검토 R03)에서 나왔다.
+- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다. DR15는 시나리오 시험이 찾았다. DR16은 5차 점검(외부 재검토 R03)에서, DR17은 6차 점검(R6-07)에서 나왔다.
 - 규범 문장의 owner는 `implementation-spec.md`다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않고, 어긋나는 architecture 문장은 해당 DR에 적는다.
 - wire schema·DB schema·receipt 형식은 바꾸지 않는다. 권한 의미가 바뀌는 것은 DR4 하나다.
 
@@ -27,6 +27,7 @@
 | DR14 | P0-4를 실행 중 자원에도 적용하고, 결과 크기(P0V-44)는 v1 receipt 안의 수용 한계로 두며, unit 이름은 그대로 두고 겹침을 거절한다 | PRIORITY-0 P0-4 |
 | DR15 | 엔진 이벤트 한 줄이 frame보다 크면 건너뛰고 알린다(형식 오류는 전처럼 중독) | R28 결정, MAINTENANCE §19 |
 | DR16 | rootfs 수리는 이전 Resident의 종료가 증명된 뒤, 어떤 Resident도 깨어나기 전에(broker startup 안에서) 한다 | REC-007의 수리 순서 문장 |
+| DR17 | 끝나라는 신호는 잡을 수 있는 종료 신호 전부이고, drain이 있는 모든 프로세스가 그 목록 하나로 drain을 밟는다 | AV31의 신호 목록, screen.ts의 "unconditional" 문장 |
 
 ## DR1 — 모델에게 보이는 경로는 그 모델의 view로 말한다
 
@@ -350,3 +351,27 @@ Control Panel의 편집과 경쟁한다.
 
 **바꾸지 않는 것.** lease 규칙, provision/repair의 두 정책, UNIT-004의 BindsTo, 수리 대상과 방법.
 
+## DR17 — 끝나라는 신호는 종료 신호 전부이고, drain이 있는 프로세스는 모두 그 목록으로 끝난다
+
+**관측(6차 점검 R6-07, P0V-81).** `oma` TUI는 SIGINT와 SIGTERM만 잡았다. 다른 프로세스가 보낸 SIGHUP·SIGQUIT에서는 Node가
+기본 동작으로 끝나 `exit`가 돌지 않았다. raw mode·대체 화면·bracketed paste가 켜진 채 셸로 돌아갔고, TUI-004의 종료 순서(engine을
+거둔 뒤 lease 반납)도 밟지 않았다. screen.ts는 복원이 "unconditional"이라고 적었지만 참이 아니었다. 같은 종류를 찾으니 Mac의 attach
+client(raw mode를 켠다)는 신호를 하나도 잡지 않았고, Resident runner와 Mac service는 SIGTERM(과 SIGINT)만, guest의 session
+holder는 SIGTERM만 잡았다. broker만 AV31의 `stopOnHostLoss`(SIGTERM·SIGINT·SIGHUP)를 썼고, 그 목록에도 SIGQUIT이 없었다.
+
+**원인.** AV31은 "host가 사라지는 모든 길은 drain을 밟는다"를 broker 하나에 적용했다. 목록은 그때 관측한 신호였지, 무엇이 목록에
+드는지의 정의가 아니었다. 다른 프로세스는 각자 신호를 골랐다.
+
+**결정.** `HOST_LOSS_SIGNALS`는 프로세스가 잡을 수 있는 종료 신호 전부다(glibc의 "Termination Signals"에서 SIGKILL을 뺀 SIGTERM·
+SIGINT·SIGHUP·SIGQUIT). drain이 있는 프로세스 -- broker, Resident runner, `oma` TUI, Mac service와 attach client, guest session
+holder -- 는 모두 이 목록 하나로 drain을 밟는다(`stopOnHostLoss`, 또는 목록을 도는 loop). attach client는 신호를 연결이 닫힌 것처럼
+받아 같은 복원 경로로 화면을 돌려놓고 `stopped`로 끝난다(session은 계속 돈다). screen.ts의 문장은 "이 프로세스가 보는 모든 끝에서
+복원한다. SIGKILL과 치명적 abort는 아무도 보지 못하므로 society는 fence(REC-007)가, 터미널은 셸의 `reset`이 맡는다"로 고친다.
+architecture 규칙 `host-loss-signals`가 이것을 붙든다. 목록의 내용, 신호 하나만 따로 다루는 handler(어디서든), drain이 있는 프로세스가
+목록을 쓰지 않는 것을 거절한다.
+
+**바꾸는 규범.** consistency-decisions AV31 행의 "(SIGTERM, SIGINT, SIGHUP)"와 적용 범위(broker). TUI-002를 구현한 screen.ts의
+"unconditional" 문장.
+
+**바꾸지 않는 것.** 각 프로세스의 drain 내용과 순서(TUI-004, D03, LIFE-006), 두 번째 신호의 뜻(broker는 once, TUI는 같은 종료를
+기다림), exit code.

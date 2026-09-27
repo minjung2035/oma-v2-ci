@@ -9,6 +9,7 @@ import { createServer } from "node:net";
 import { chmodSync, existsSync, unlinkSync } from "node:fs";
 import { peerCred, socketDescriptor } from "../leaf.js";
 import { TerminalSession } from "../platform/guest/session.js";
+import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 
 function fail(message: string): never {
   process.stderr.write(`guest-session: ${message}\n`);
@@ -45,8 +46,10 @@ const server = createServer({ allowHalfOpen: false }, socket => {
 server.listen(socketPath, () => { chmodSync(socketPath, 0o600); });
 server.on("error", error => { session.terminate(); fail(error.message); });
 
-process.on("SIGTERM", () => { session.terminate(); });
-process.on("SIGHUP", () => { /* no terminal of its own to lose */ });
+// AV31, P0V-81: asked to end in any way, the holder asks its program to end
+// and ends with it. A holder killed outright would hang its program up with no
+// exit reported to the screen.
+for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => { session.terminate(); });
 session.onEnd(end => {
   server.close();
   try { unlinkSync(socketPath); } catch { /* already gone */ }

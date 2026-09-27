@@ -134,6 +134,6 @@ test("AV31 / D03, LIFE-006: a hung-up terminal ends the broker through its drain
       assert.equal(code, 0, `${signal} ended the broker without its drain`);
       assert.equal(readFileSync(marker, "utf8"), "drained");
     }
-    assert.deepEqual([...HOST_LOSS_SIGNALS].sort(), ["SIGHUP", "SIGINT", "SIGTERM"]);
+    assert.deepEqual([...HOST_LOSS_SIGNALS].sort(), ["SIGHUP", "SIGINT", "SIGQUIT", "SIGTERM"]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

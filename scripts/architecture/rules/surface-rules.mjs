@@ -563,6 +563,55 @@ function principalTurnOwnerRules(root, findings) {
   }
 }
 
+/** AV31, P0V-81: the termination signals a process can catch (glibc's
+ * "Termination Signals", less SIGKILL). A process of this product that has a
+ * drain takes it on each of them, and they are named together in one list
+ * (runtime/broker-lifetime.ts), so a handler for one of them alone -- and the
+ * default action on the others -- cannot be written. */
+const TERMINATION_SIGNALS = Object.freeze(["SIGHUP", "SIGINT", "SIGQUIT", "SIGTERM"]);
+const HOST_LOSS_OWNER = "src/runtime/broker-lifetime.ts";
+const LISTENER_METHODS = new Set(["on", "once", "addListener", "prependListener", "prependOnceListener"]);
+/** The processes with a drain: the broker, a Resident's runner, the `oma`
+ * TUI, the Mac service and its attach client, a guest's session holder. */
+const DRAINING_PROCESSES = Object.freeze([
+  "src/entry/broker.ts", "src/entry/runner.ts", "src/entry/oma.ts", "src/entry/omahostd.ts",
+  "src/entry/guest-session.ts", "src/platform/host/attach-client.ts",
+]);
+function hostLossSignalRules(root, findings) {
+  for (const file of filesUnder(root, "src")) {
+    eachNode(sourceOf(root, file), node => {
+      if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return;
+      if (!LISTENER_METHODS.has(node.expression.name.text)) return;
+      const first = node.arguments[0];
+      if (first && ts.isStringLiteralLike(first) && TERMINATION_SIGNALS.includes(first.text))
+        findings.push(finding("host-loss-signals", file,
+          `handles ${first.text} alone; a process asked to end may be asked by any of HOST_LOSS_SIGNALS, and takes them together`));
+    });
+  }
+  if (exists(root, HOST_LOSS_OWNER)) {
+    let listed = null;
+    eachNode(sourceOf(root, HOST_LOSS_OWNER), node => {
+      if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || node.name.text !== "HOST_LOSS_SIGNALS") return;
+      listed = [];
+      eachNode(node, inner => { if (ts.isStringLiteralLike(inner)) listed.push(inner.text); });
+    });
+    const sorted = listed === null ? null : [...listed].sort();
+    if (sorted === null || sorted.join(",") !== TERMINATION_SIGNALS.join(","))
+      findings.push(finding("host-loss-signals", HOST_LOSS_OWNER,
+        `HOST_LOSS_SIGNALS is ${sorted === null ? "missing" : `[${sorted.join(", ")}]`}; it is every termination signal a process can catch: ${TERMINATION_SIGNALS.join(", ")}`));
+  }
+  for (const file of DRAINING_PROCESSES) {
+    if (!exists(root, file)) continue;
+    let takes = false;
+    eachNode(sourceOf(root, file), node => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "stopOnHostLoss") takes = true;
+      if (ts.isForOfStatement(node) && ts.isIdentifier(node.expression) && node.expression.text === "HOST_LOSS_SIGNALS") takes = true;
+    });
+    if (!takes)
+      findings.push(finding("host-loss-signals", file, "has a drain, and does not take it on HOST_LOSS_SIGNALS (stopOnHostLoss, or a loop over the list)"));
+  }
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
   extensionRules(root, findings);
@@ -576,5 +625,6 @@ export function surfaceRuleFindings(root) {
   ownerShapeRules(root, findings);
   principalSessionEnvRules(root, findings);
   principalTurnOwnerRules(root, findings);
+  hostLossSignalRules(root, findings);
   return findings;
 }

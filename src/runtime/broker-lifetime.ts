@@ -34,8 +34,15 @@ export async function settleWithin(tasks: Iterable<Promise<unknown>>, seconds: n
  * stop (SIGTERM), interrupted (SIGINT), or its terminal hung up (SIGHUP: the
  * product's `oma` was the session leader and exited, or its window closed). An
  * unhandled SIGHUP killed a draining broker outright and left Residents
- * running with no broker, until systemd's start limit stopped them. */
-export const HOST_LOSS_SIGNALS = Object.freeze(["SIGTERM", "SIGINT", "SIGHUP"] as const);
+ * running with no broker, until systemd's start limit stopped them.
+ *
+ * P0V-81, R6-07: the list is the termination signals a process can catch
+ * (glibc's "Termination Signals"; SIGKILL is the one it cannot), and it is the
+ * list for every process of this product that has a drain -- the `oma` TUI's
+ * shutdown and terminal restore, the Mac's attach client, a Resident's runner,
+ * the Mac service, a guest's session holder. SIGQUIT was missing: its default
+ * action ends a process with none of that, as SIGHUP's did. */
+export const HOST_LOSS_SIGNALS = Object.freeze(["SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"] as const);
 export function stopOnHostLoss(stop: () => void, target: Pick<NodeJS.Process, "once"> = process): void {
   for (const signal of HOST_LOSS_SIGNALS) target.once(signal, stop);
 }

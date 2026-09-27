@@ -1,7 +1,11 @@
 /** TUI-002: the only terminal owner. Raw mode, alternate screen and cursor
  * state live here so that every other TUI module stays pure and testable.
- * Restoring the terminal is unconditional: a crash must not leave the user
- * without an echo.
+ * The terminal is restored on every end this process sees: its exit, however
+ * it comes, and each termination signal, which the entry turns into its
+ * shutdown (HOST_LOSS_SIGNALS, P0V-81). A crash must not leave the user
+ * without an echo. SIGKILL and a fatal abort are seen by nothing in the
+ * process; then the society is held by the fence (REC-007) and the terminal
+ * is left to the shell's `reset`.
  */
 import { TERMINAL_BOUNDS } from "./limits.js";
 

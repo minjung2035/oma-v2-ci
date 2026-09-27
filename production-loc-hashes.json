@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "d07f0356eab4eb35485dc6e7e0160b84863db9b0aef3261d195ef1de3e5a4d0b",
-  "report": "7635d30225508c56ef7bf0e08d0f9513218689647484e7d320cdf8c5a12ba9be",
+  "report": "20f35e91a77d1604638b81cc2af94e2244a8cc3bd9641773bd7630107f55a5e6",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -293,7 +293,7 @@
     },
     {
       "path": "src/entry/guest-session.ts",
-      "sha256": "a4f12e445d94dcf8cc43cfd1dee5cad4cabbdeb84c0272e61ce8939443efc537"
+      "sha256": "afa0338b4ebdbc17f0802077cfc6cfe2c5d8b808f3903b7a8f2f543b24082675"
     },
     {
       "path": "src/entry/guestctl.ts",
@@ -313,19 +313,19 @@
     },
     {
       "path": "src/entry/oma-mac.ts",
-      "sha256": "458c88289dc60fdb49f5943a2dfd4eae072ae52c15c73e72a47c29ef05f6c202"
+      "sha256": "5d6f1281255f627393d6bb26334463af2e99c6d59e2a1d79b2d82646715583c0"
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "94f31dd8751e28bb4a8638ca25e6dfb2e57dafe144e15b7bfd5b4d67afa83072"
+      "sha256": "528c2a53154c3177adafe17512b44ada8095b01c4f9e7ed2dd5b8f4fbb129373"
     },
     {
       "path": "src/entry/omahostd.ts",
-      "sha256": "59df060e47842e0dcf70dedc79777b0cbc2a5218787304806600d7b7720312d9"
+      "sha256": "17700735bce736e9569415d433781cd6fc7d9bcd7726670c28aa1beec716ca10"
     },
     {
       "path": "src/entry/runner.ts",
-      "sha256": "0a38ada03288fd4db373068603025d3aea5b36da07c92dda979d79914a4a40f7"
+      "sha256": "3334e821b4b6245f8979f3e6c5d340605e53def57a84bf4ec52fd10bc8174bfc"
     },
     {
       "path": "src/extension/batch-view.ts",
@@ -585,7 +585,7 @@
     },
     {
       "path": "src/platform/host/attach-client.ts",
-      "sha256": "a68f0668676fffbcf8c806f49c3a75fe9a9c390e5f93008b918b391221afda12"
+      "sha256": "52573da7dbecb4d028ac67f7d140537c452600a2e2eda93c8aefd92d29d9f387"
     },
     {
       "path": "src/platform/host/egress.ts",
@@ -777,7 +777,7 @@
     },
     {
       "path": "src/runtime/broker-lifetime.ts",
-      "sha256": "d9e0b60e2c86bd562253ffb0cee6a13acdaf180fdc0c63d53cf26b0a7df32cf0"
+      "sha256": "3590ba5f2407a0581378cd372fd2cd3070b4159714c6d9c64651b947f09bed5b"
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
@@ -989,7 +989,7 @@
     },
     {
       "path": "src/tui/screen.ts",
-      "sha256": "8d0da975cc5e35395a628cbd1704be05bb639261d8f45b834c886f8eceb56703"
+      "sha256": "d2ca84ecf0a9bd77b8eab92ca9ec69c3efcdf4757eacc120f9847ec4ded58118"
     },
     {
       "path": "src/tui/session.ts",

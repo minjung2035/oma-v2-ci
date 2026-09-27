@@ -17,6 +17,7 @@ import { HostService } from "../platform/host/service.js";
 import { hostResolver } from "../platform/host/resolver.js";
 import { newHostRecord, readHostRecord, writeHostRecord } from "../platform/host/record.js";
 import { HOST_GUEST_PROTOCOL } from "../protocol/host-guest.js";
+import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 
 const STATE_DISK_BYTES = 64 * 1024 ** 3;
 const GIB = 1024 ** 3;
@@ -74,9 +75,10 @@ async function main(): Promise<void> {
     writeHostRecord(recordPath, { ...current, image: { current: image.version, previous: current.image.current === image.version ? current.image.previous : current.image.current },
       highestSchemaWritten: Math.max(current.highestSchemaWritten ?? 0, image.stateSchema.written) });
   });
-  // MAC-321: launchd's SIGTERM at logout, restart or update.
+  // MAC-321: launchd's SIGTERM at logout, restart or update -- and, AV31 and
+  // P0V-81, every other way this process is asked to end.
   let ending = false;
-  process.on("SIGTERM", () => {
+  for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => {
     if (ending) return;
     ending = true;
     void service.shutdown().finally(() => { driver.close(); process.exit(0); });

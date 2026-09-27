@@ -13,6 +13,7 @@ import { residentsConfined } from "../sandbox.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { parseCanonicalResourceLimits } from "../domain/resources.js";
 import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
+import { stopOnHostLoss } from "../runtime/broker-lifetime.js";
 
 function usage(): never {
   console.error("usage: runner.js --society <name> --agent <name> --config <path> --state-root <dir> --run-root <dir>");
@@ -89,7 +90,8 @@ const stop = (): void => {
     console.error(`runner ${agent}: transport shutdown failed`); process.exitCode = 2;
   });
 };
-process.once("SIGTERM", stop); process.once("SIGINT", stop);
+// AV31, P0V-81: a SIGHUP or SIGQUIT stops the runner through its drain too.
+stopOnHostLoss(stop);
 void runner.run().then(
   () => { if (!stopping) process.exitCode = 0; },
   error => {

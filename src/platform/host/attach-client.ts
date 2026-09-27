@@ -9,6 +9,7 @@ import { connect, type Socket } from "node:net";
 import { encodeFrame } from "../../frame.js";
 import { PlatformError, readLeadingFrame } from "../rpc.js";
 import { TerminalModes } from "../terminal-modes.js";
+import { HOST_LOSS_SIGNALS } from "../../runtime/broker-lifetime.js";
 import { HOST_API_VERSION } from "../../protocol/host-api.js";
 import {
   TERMINAL_FRAME_BYTES, TerminalFrameParser, encodeTerminalFrame, parseTerminalJson, resizePayload, responseProblem,
@@ -27,7 +28,10 @@ export type AttachEnd =
   | { readonly kind: "refused"; readonly code: string; readonly message: string }
   /** The connection ended without the session saying why: whether the
    * society still runs is not known here (P0-5). */
-  | { readonly kind: "lost" };
+  | { readonly kind: "lost" }
+  /** This process was asked to end (P0V-81): the screen was put back and the
+   * session left running, as a closed window leaves it. */
+  | { readonly kind: "stopped"; readonly signal: string };
 
 export interface AttachOptions {
   readonly socketPath: string;
@@ -88,6 +92,13 @@ export async function attachTerminal(options: AttachOptions): Promise<AttachEnd>
 
   const raw = input.isTTY === true && typeof input.setRawMode === "function";
   if (raw) input.setRawMode!(true);
+  // AV31, P0V-81: a termination signal ends the attachment as a closed
+  // connection does, so the one restore below puts this screen back. Its
+  // default action would leave the Human's terminal raw, on the session's
+  // alternate screen.
+  let stoppedBy: string | null = null;
+  const stop = (signal: NodeJS.Signals): void => { stoppedBy ??= signal; socket.destroy(); };
+  for (const signal of HOST_LOSS_SIGNALS) process.on(signal, stop);
   const unresize = options.terminal.onResize(resize);
   input.on("data", typed);
   input.resume();
@@ -105,5 +116,7 @@ export async function attachTerminal(options: AttachOptions): Promise<AttachEnd>
   // MAC-222: whatever the session left on, this screen is put back.
   output.write(modes.undo());
   if (raw) input.setRawMode!(false);
+  for (const signal of HOST_LOSS_SIGNALS) process.off(signal, stop);
+  if (stoppedBy !== null) return { kind: "stopped", signal: stoppedBy };
   return end ?? { kind: "lost" };
 }

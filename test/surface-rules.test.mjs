@@ -294,3 +294,32 @@ export function runCliProcess(run) {
   withTree({ "src/tui/session.ts": "export const a = 1;" },
     findings => clean(findings, "principal-session-env", "principal-secret-env"));
 });
+
+test("host-loss-signals (AV31, P0V-81): a process with a drain takes it on every termination signal, from the one list", () => {
+  const owner = list => ({ "src/runtime/broker-lifetime.ts": `export const HOST_LOSS_SIGNALS = Object.freeze([${list}] as const);
+export function stopOnHostLoss(stop, target = process) { for (const signal of HOST_LOSS_SIGNALS) target.once(signal, stop); }` });
+  const full = '"SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"';
+  const entry = body => ({ "src/entry/runner.ts": `import { HOST_LOSS_SIGNALS, stopOnHostLoss } from "../runtime/broker-lifetime.js";\n${body}` });
+  // Accept: the helper, or a loop over the list.
+  withTree({ ...owner(full), ...entry("stopOnHostLoss(() => {});") }, findings => clean(findings, "host-loss-signals"));
+  withTree({ ...owner(full), ...entry("for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => {});") },
+    findings => clean(findings, "host-loss-signals"));
+  // Reject: one signal handled alone, anywhere -- here beside the list, too.
+  withTree({ ...owner(full), ...entry('stopOnHostLoss(() => {}); process.on("SIGHUP", () => {});') }, findings => {
+    assert.ok(findings.some(value => value.rule === "host-loss-signals" && value.reason.includes("handles SIGHUP alone")));
+  });
+  withTree({ ...owner(full), "src/platform/x.ts": 'process.once("SIGQUIT", () => {});' }, findings => {
+    assert.ok(findings.some(value => value.rule === "host-loss-signals" && value.file === "src/platform/x.ts"));
+  });
+  // Reject: a process with a drain that takes none of it.
+  withTree({ ...owner(full), ...entry("const stop = () => {};") }, findings => {
+    assert.ok(findings.some(value => value.rule === "host-loss-signals" && value.file === "src/entry/runner.ts" && value.reason.includes("has a drain")));
+  });
+  // Reject: the list lost a termination signal.
+  withTree({ ...owner('"SIGTERM", "SIGINT", "SIGHUP"'), ...entry("stopOnHostLoss(() => {});") }, findings => {
+    assert.ok(findings.some(value => value.rule === "host-loss-signals" && value.file === "src/runtime/broker-lifetime.ts" && value.reason.includes("SIGQUIT")));
+  });
+  // Near miss: signalling a child, and other process events, are not handling one.
+  withTree({ ...owner(full), ...entry('stopOnHostLoss(() => {}); child.kill("SIGTERM"); process.on("uncaughtException", () => {}); process.on("SIGWINCH", () => {});') },
+    findings => clean(findings, "host-loss-signals"));
+});

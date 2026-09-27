@@ -8,6 +8,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { connect } from "node:net";
+import { constants } from "node:os";
 import { encodeFrame } from "../frame.js";
 import { PlatformError, readLeadingFrame } from "../platform/rpc.js";
 import { attachTerminal } from "../platform/host/attach-client.js";
@@ -58,6 +59,8 @@ async function main(argv: readonly string[]): Promise<void> {
     terminal: { input: process.stdin, output: process.stdout,
       onResize: listener => { process.stdout.on("resize", listener); return () => { process.stdout.off("resize", listener); }; } } });
   if (end.kind === "exit") process.exit(end.code ?? 1);
+  // Asked to end: the conventional status of a process a signal ended.
+  if (end.kind === "stopped") process.exit(128 + (constants.signals[end.signal as NodeJS.Signals] ?? 0));
   if (end.kind === "detached") say("다른 화면이 이 society를 가져갔습니다.", 0);
   if (end.kind === "refused") say(end.code === "ATTACH_CONFLICT" ? "이 society는 다른 화면에서 열려 있습니다. 여기서 계속하려면 --takeover를 붙이세요." : end.message, 1);
   // P0-5: the connection ended without a word; the society may still run.
