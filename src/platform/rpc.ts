@@ -60,8 +60,10 @@ export class FramedPeer {
 
   /** Hands the socket over to a byte channel: this peer stops reading it and
    * no longer reacts to its end or close. Only after the hello was answered,
-   * before which the host sends nothing else (§4.3). */
+   * before which the host sends nothing else (§4.3). The socket is handed
+   * over paused, so nothing that arrives before its new owner reads is lost. */
   detach(): Socket {
+    this.socket.pause();
     this.socket.off("data", this.onData);
     this.socket.off("end", this.onEnd);
     this.socket.off("close", this.onSocketClose);
@@ -183,6 +185,26 @@ export async function sendHello(peer: FramedPeer, params: HelloParams): Promise<
   const invalid = helloResultProblem(result);
   if (invalid !== null) { peer.close(invalid); throw unknownOutcome(`the guest's hello was malformed (${invalid})`); }
   return result as unknown as HelloResult;
+}
+
+/** The host's side of a byte channel's handshake (terminal, egress, stream).
+ * The guest may send bytes the moment it has answered, so its answer is read
+ * as exactly one frame and whatever came after it is handed back with the
+ * socket; a framed peer would read those bytes as frames too. */
+export async function sendHelloForBytes(socket: Socket, params: HelloParams, frameBytes: number, deadlineMs: number):
+  Promise<{ readonly result: HelloResult; readonly rest: Buffer }> {
+  const problem = helloParamsProblem(params);
+  if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
+  socket.write(encodeFrame({ v: 1, id: "hello", method: "hello", params }));
+  let answer: { frame: Record<string, unknown>; rest: Buffer };
+  try { answer = await readLeadingFrame(socket, frameBytes, deadlineMs); }
+  catch (error) { socket.destroy(); throw unknownOutcome(`no answer to hello: ${error instanceof Error ? error.message : String(error)}`); }
+  const shape = responseProblem(answer.frame);
+  if (shape !== null || answer.frame.id !== "hello") { socket.destroy(); throw unknownOutcome(`the guest's hello answer was malformed (${shape ?? "wrong id"})`); }
+  if (answer.frame.ok !== true) { socket.destroy(); throw new PlatformError(answer.frame.error as PlatformFailure); }
+  const invalid = helloResultProblem(answer.frame.result);
+  if (invalid !== null) { socket.destroy(); throw unknownOutcome(`the guest's hello was malformed (${invalid})`); }
+  return { result: answer.frame.result as unknown as HelloResult, rest: answer.rest };
 }
 
 /** Reads exactly one frame from a socket that will then carry raw bytes (the

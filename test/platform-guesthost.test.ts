@@ -1,0 +1,192 @@
+/** macos-platform §4.5, §4.6 (MAC-412, MAC-220, MV-12): guesthost over its
+ * real guest server -- the society channel and a terminal relayed to a real
+ * session holder on a real pseudo-terminal. The holder runs a stand-in TUI
+ * instead of `oma`; how a session is started is the launcher's, and the test
+ * one starts the holder directly where production uses a user unit. */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { connect, type Server } from "node:net";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
+import { FramedPeer, PlatformError, sendHello, sendHelloForBytes } from "../src/platform/rpc.js";
+import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
+import { GuestHost, listening, type SessionLauncher } from "../src/platform/guest/host.js";
+import { publishProjectBinding } from "../src/runtime/provision.js";
+import {
+  HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, TerminalFrameParser, encodeTerminalFrame, parseTerminalJson, resizePayload,
+  type HelloParams,
+} from "../src/protocol/host-guest.js";
+
+const here = fileURLToPath(new URL(".", import.meta.url));
+const holderEntry = join(here, "..", "src", "entry", "guest-session.js");
+const fakeTui = join(here, "..", "..", "test", "fixtures", "fake-tui.mjs");
+const INSTANCE = randomUUID();
+const self = { uid: process.getuid!(), gid: process.getgid!() };
+const identity = (): GuestIdentity => ({ instanceId: INSTANCE, guestImage: "2026.09.1", bootId: randomUUID(),
+  stateSchema: { written: 1, readable: [1] }, capabilities: ["society", "terminal"] });
+const hello = (overrides: Partial<HelloParams> = {}): HelloParams => ({ channel: "society",
+  protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL }, hostVersion: "1.0.0",
+  installationId: randomUUID(), instanceId: INSTANCE, expectImage: "2026.09.1", ...overrides });
+const code = (expected: string) => (error: unknown) => error instanceof PlatformError && error.failure.code === expected;
+
+/** Starts the holder as a child of the test; records what it was asked. */
+function localLauncher(dir: string): SessionLauncher & { started: { society: string; projectDir: string }[]; children: ChildProcess[] } {
+  const started: { society: string; projectDir: string }[] = [];
+  const children: ChildProcess[] = [];
+  const socketPath = (society: string): string => join(dir, `${society}.sock`);
+  return {
+    started, children, socketPath,
+    async start(society, projectDir) {
+      started.push({ society, projectDir });
+      const child = spawn(process.execPath, [holderEntry, "--socket", socketPath(society), "--cwd", projectDir, "--", process.execPath, fakeTui],
+        { stdio: ["ignore", "ignore", "inherit"] });
+      children.push(child);
+      for (let i = 0; i < 200 && !(await listening(socketPath(society))); i++) await new Promise(r => setTimeout(r, 20));
+    },
+    async stop(society, deadlineMs) {
+      const child = children.find(item => item.exitCode === null);
+      if (child === undefined) return "stopped";
+      child.kill("SIGTERM");
+      const ended = await Promise.race([new Promise(r => child.once("exit", () => r(true))), new Promise(r => setTimeout(() => r(false), deadlineMs))]);
+      return ended === true && !(await listening(socketPath(society))) ? "stopped" : "unknown";
+    },
+  };
+}
+
+async function setup(t: import("node:test").TestContext) {
+  const dir = mkdtempSync(join(tmpdir(), "oma-guesthost-"));
+  const societiesDir = join(dir, "data", "oma"); const projectsDir = join(dir, "projects");
+  mkdirSync(societiesDir, { recursive: true }); mkdirSync(projectsDir);
+  const launcher = localLauncher(dir);
+  const host = new GuestHost({ societiesDir, projectsDir, launcher, stopDeadlineMs: 5000 });
+  const socketPath = join(dir, "society.sock");
+  const server: Server = await startGuestServer({ socketPath, identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
+    helloDeadlineMs: 2000, requestTimeoutMs: 10_000,
+    channels: {
+      society: { kind: "json", serve: ({ peer }) => host.serve(peer) },
+      terminal: { kind: "bytes", serve: (socket, params) => host.terminal(socket, params) },
+    } });
+  const peers: FramedPeer[] = [];
+  t.after(async () => {
+    for (const peer of peers) peer.close();
+    for (const child of launcher.children) if (child.exitCode === null) { child.kill("SIGKILL"); await new Promise(r => child.once("exit", r)); }
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const open = async (params: HelloParams): Promise<FramedPeer> => {
+    const socket = connect(socketPath);
+    await new Promise<void>((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
+    const peer = new FramedPeer(socket, { frameBytes: PLATFORM_FRAME_BYTES, requestTimeoutMs: 10_000 });
+    peers.push(peer);
+    await sendHello(peer, params);
+    return peer;
+  };
+  /** A mirror with one commit, as a first import leaves it (§6.3). */
+  const importedMirror = (projectId: string): string => {
+    const mirror = join(projectsDir, projectId);
+    const git = (...args: string[]) => assert.equal(spawnSync("git", args, { cwd: mirror, encoding: "utf8" }).status, 0, args.join(" "));
+    mkdirSync(mirror);
+    git("init", "-q"); writeFileSync(join(mirror, "README"), "hello\n"); git("add", "README");
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "first");
+    return mirror;
+  };
+  return { host, launcher, open, importedMirror, societiesDir, projectsDir, socketPath };
+}
+
+/** The host's screen on a terminal channel. */
+async function screenOf(socketPath: string, params: HelloParams) {
+  const socket = connect(socketPath);
+  await new Promise<void>((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
+  const { rest } = await sendHelloForBytes(socket, params, PLATFORM_FRAME_BYTES, 5000);
+  const parser = new TerminalFrameParser();
+  const state = { shown: "", controls: [] as { kind: string; value: Record<string, unknown> | null }[] };
+  socket.on("data", (chunk: Buffer) => {
+    for (const frame of parser.feed(chunk)) {
+      if (frame.kind === "output") state.shown += frame.payload.toString("latin1");
+      else state.controls.push({ kind: frame.kind, value: parseTerminalJson(frame.payload, Object.keys(JSON.parse(frame.payload.toString("utf8")) as object)) });
+    }
+  });
+  const closed = new Promise<void>(resolve => socket.once("close", () => resolve()));
+  socket.emit("data", rest);
+  socket.resume();
+  const until = async (pattern: RegExp, what: string): Promise<void> => {
+    for (let i = 0; i < 200; i++) { if (pattern.test(state.shown)) return; await new Promise(r => setTimeout(r, 20)); }
+    assert.fail(`${what}: never shown; ${JSON.stringify(state.shown.slice(-200))}`);
+  };
+  return { socket, state, closed, until, size: (c: number, r: number) => socket.write(encodeTerminalFrame("resize", resizePayload(c, r))),
+    type: (text: string) => socket.write(encodeTerminalFrame("input", Buffer.from(text))) };
+}
+
+const setsid = existsSync("/usr/bin/setsid");
+
+test("MAC-412: a project's society does not open before its first import, and opens from the mirror after it", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { open, launcher, importedMirror } = await setup(t);
+  const projectId = randomUUID();
+  const peer = await open(hello());
+  await assert.rejects(peer.request("society.open", { society: "demo", projectId }), code("INVALID_REQUEST"));
+  assert.deepEqual(launcher.started, [], "nothing was started on an empty mirror");
+  const mirror = importedMirror(projectId);
+  assert.deepEqual(await peer.request("society.open", { society: "demo", projectId }), { state: "running" });
+  assert.deepEqual(launcher.started, [{ society: "demo", projectDir: mirror }]);
+  assert.deepEqual(await peer.request("society.open", { society: "demo", projectId }), { state: "running" });
+  assert.equal(launcher.started.length, 1, "an open society is not started twice");
+});
+
+test("D05 in the guest: an existing society opens only for the project it is bound to", async t => {
+  const { open, launcher, importedMirror, societiesDir } = await setup(t);
+  const bound = randomUUID(); const other = randomUUID();
+  const boundMirror = importedMirror(bound); importedMirror(other);
+  publishProjectBinding(join(societiesDir, "demo"), { society: "demo", canonicalProjectPath: boundMirror });
+  const peer = await open(hello());
+  await assert.rejects(peer.request("society.open", { society: "demo", projectId: other }), code("INVALID_REQUEST"));
+  assert.deepEqual(launcher.started, []);
+});
+
+test("MAC-320: while maintenance is open no society opens, and a stopped society is reported stopped", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { open, importedMirror, societiesDir } = await setup(t);
+  const projectId = randomUUID(); importedMirror(projectId);
+  const peer = await open(hello());
+  await peer.request("maintenance.begin", {}, "m1");
+  await assert.rejects(peer.request("society.open", { society: "demo", projectId }), code("BROKER_UNAVAILABLE"));
+  assert.deepEqual(await peer.request("maintenance.end", {}, "m1"), { maintenance: false });
+  await peer.request("society.open", { society: "demo", projectId });
+  mkdirSync(join(societiesDir, "demo", "state"), { recursive: true });
+  assert.deepEqual(await peer.request("society.list", {}), { societies: [{ society: "demo", running: true }] });
+  assert.deepEqual(await peer.request("society.close", { society: "demo", mode: "stop" }), { state: "stopped" });
+  assert.deepEqual(await peer.request("society.list", {}), { societies: [{ society: "demo", running: false }] });
+});
+
+test("§4.6/MV-12: a terminal relayed through guesthost attaches, is drawn whole, and gives way to a takeover", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { open, importedMirror, socketPath } = await setup(t);
+  const projectId = randomUUID(); importedMirror(projectId);
+  const control = await open(hello());
+  await control.request("society.open", { society: "demo", projectId });
+
+  const first = await screenOf(socketPath, hello({ channel: "terminal", society: "demo" }));
+  first.size(120, 40);
+  await first.until(/frame \d+ 120x40/, "the relayed screen");
+  first.type("z");
+  await first.until(/typed:z/, "input through the relay");
+
+  const refused = await screenOf(socketPath, hello({ channel: "terminal", society: "demo" }));
+  refused.size(80, 24);
+  await refused.closed;
+  assert.deepEqual(refused.state.controls, [{ kind: "refused", value: { code: "ATTACH_CONFLICT", message: "this society is shown on another screen" } }]);
+
+  const taker = await screenOf(socketPath, hello({ channel: "terminal", society: "demo", takeover: true }));
+  taker.size(120, 40);
+  await taker.until(/frame \d+ 120x40/, "the screen that took over, drawn whole at an unchanged size");
+  await first.closed;
+  assert.deepEqual(first.state.controls, [{ kind: "detached", value: { reason: "taken-over" } }]);
+});
+
+test("§4.6: a terminal for a society that is not open is refused in words the host can show", async t => {
+  const { socketPath } = await setup(t);
+  const screen = await screenOf(socketPath, hello({ channel: "terminal", society: "demo" }));
+  await screen.closed;
+  assert.deepEqual(screen.state.controls, [{ kind: "refused", value: { code: "INVALID_REQUEST", message: "the society is not open" } }]);
+});

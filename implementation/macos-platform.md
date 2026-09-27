@@ -285,6 +285,10 @@ hello→  { ok: true, result: { protocol: uint, guestImage: string, bootId: uuid
 
 control은 port 700, 나머지는 모두 port 701이다. hello의 field는 정확히 이것이다. 모르는 field가 있으면 거절한다(MAC-230).
 
+byte channel(terminal, egress, stream)에서 guest는 hello에 답한 바로 뒤에 byte를 보낼 수 있다(예: terminal의 `refused`). 그래서 host는 그
+연결의 답을 frame **하나**로만 읽고, 같은 read에 뒤따라 온 byte는 channel의 것으로 넘긴다. JSON channel의 parser로 읽으면 그 byte를
+frame으로 잘못 읽는다.
+
 **MUST [MAC-211]** guest는 두 경우 모두 `hello`를 거절하고 연결을 닫는다. 하나는 `instanceId`가 state disk에 기록된 VM instance와
 다를 때다(다른 사용자의 disk나 잘못 붙은 disk). 다른 하나는 host의 protocol 범위와 겹치지 않을 때다. 거절은 답을 먼저 보내고 그것이
 나간 뒤에 닫는다. host는 `bootId`가 바뀌면 guest가 재부팅된 것으로 안다. 그러면 그 전 부팅에 보낸 요청 가운데 결과를 모르는 것을
@@ -309,7 +313,7 @@ guestctl이 control channel로 내보내는 거절 문구는 MAC-231을 거친�
 | method | params | result | 멱등 | 설명 |
 |---|---|---|---|---|
 | `society.list` | `{}` | `{ societies: SocietySummary[] }` | 예 | state root가 있는 society와 그 session이 떠 있는지 |
-| `society.open` | `{ society }` | `{ state: "running" }` | 예 | session이 없으면 society session을 띄운다(§4.6). 있으면 그대로 답한다 |
+| `society.open` | `{ society, projectId }` | `{ state: "running" }` | 예 | session이 없으면 society session을 띄운다(§4.6). 있으면 그대로 답한다. mirror에 가져온 이력이 없으면 거절한다(MAC-412). 이미 있는 society는 그것이 묶인 project로만 연다(D05) |
 | `society.close` | `{ society, mode: "keep-running" \| "stop" }` | `{ state }` | 예 | `stop`은 `oma`에 종료를 요청하고(SIGTERM, 기존 종료 경로) 그 session이 끝날 때까지 기다린다. 끝은 session holder가 본 `oma`의 종료다 |
 | `society.status` | `{ society }` | `StatusView` | 예 | 기존 status view(관측 시각 포함)를 제품 field만 남겨 보낸다(MAC-231) |
 | `project.import` | `{ key, projectId, displayName, bundle: {bytes, sha256}, branch }` | `Receipt` | key | §6.3. bundle은 따로 연 stream 연결로 온다 |
@@ -339,6 +343,8 @@ unit이라서, guesthost가 다시 시작해도 society는 계속 돈다(dtach·
 | guest→host | `output` | 출력 byte |
 | guest→host | `exit` | `{ code, signal }`(JSON). `oma`가 끝났다. 연결은 이어서 닫힌다 |
 | guest→host | `detached` | `{ reason: "taken-over" }`(JSON). 다른 attach가 가져갔다 |
+| guest→host | `refused` | `{ code, message }`(JSON). attach를 받지 않았다: `ATTACH_CONFLICT`(MAC-220), 또는 society가 열려 있지 않다 |
+| guesthost→holder | `attach` | `{ takeover?: true }`(JSON). holder 연결의 첫 frame이자 한 번뿐이다. guesthost가 hello에서 옮긴다. 이것으로 시작하지 않는 연결은 holder가 읽지 않고 닫는다 |
 
 **attach.** attach는 `resize`로 시작한다. holder는 이렇게 한다.
 

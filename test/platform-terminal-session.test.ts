@@ -1,0 +1,162 @@
+/** macos-platform §4.6 (MAC-220..222, MV-12): a society's terminal session
+ * holder, run as the real entry on a real pseudo-terminal, with a stand-in
+ * TUI that draws only when something changes -- as the product's does. */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { spawn, type ChildProcess } from "node:child_process";
+import { connect, type Socket } from "node:net";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { TerminalModes } from "../src/platform/guest/session.js";
+import {
+  TerminalFrameParser, encodeTerminalFrame, encodeTerminalJson, parseTerminalJson, resizePayload, type TerminalFrame,
+} from "../src/protocol/host-guest.js";
+
+const here = fileURLToPath(new URL(".", import.meta.url));
+const holderEntry = join(here, "..", "src", "entry", "guest-session.js");
+const fakeTui = join(here, "..", "..", "test", "fixtures", "fake-tui.mjs");
+const setsid = existsSync("/usr/bin/setsid");
+
+interface Holder { readonly child: ChildProcess; readonly socketPath: string; readonly exited: Promise<number | null> }
+async function holder(t: import("node:test").TestContext): Promise<Holder> {
+  const dir = mkdtempSync(join(tmpdir(), "oma-session-"));
+  const socketPath = join(dir, "s.sock");
+  const child = spawn(process.execPath, [holderEntry, "--socket", socketPath, "--cwd", dir, "--", process.execPath, fakeTui],
+    { stdio: ["ignore", "ignore", "inherit"] });
+  const exited = new Promise<number | null>(resolve => child.once("exit", code => resolve(code)));
+  t.after(async () => { if (child.exitCode === null) { child.kill("SIGKILL"); await exited; } rmSync(dir, { recursive: true, force: true }); });
+  for (let i = 0; i < 100 && !existsSync(socketPath); i++) await new Promise(r => setTimeout(r, 20));
+  assert.ok(existsSync(socketPath), "the holder listens");
+  return { child, socketPath, exited };
+}
+
+/** One screen: what it has been shown, and the control frames it received. */
+class Screen {
+  readonly socket: Socket;
+  shown = "";
+  readonly controls: TerminalFrame[] = [];
+  readonly closed: Promise<void>;
+  private readonly parser = new TerminalFrameParser();
+  private constructor(socket: Socket) {
+    this.socket = socket;
+    socket.on("data", (chunk: Buffer) => {
+      for (const frame of this.parser.feed(chunk)) {
+        if (frame.kind === "output") this.shown += frame.payload.toString("latin1");
+        else this.controls.push(frame);
+      }
+    });
+    this.closed = new Promise(resolve => socket.once("close", () => resolve()));
+  }
+  static async attach(path: string, options: { takeover?: true; size?: [number, number] } = {}): Promise<Screen> {
+    const socket = connect(path);
+    await new Promise<void>((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
+    const screen = new Screen(socket);
+    socket.write(encodeTerminalJson("attach", options.takeover === true ? { takeover: true } : {}));
+    const [columns, rows] = options.size ?? [100, 30];
+    socket.write(encodeTerminalFrame("resize", resizePayload(columns, rows)));
+    return screen;
+  }
+  type(text: string): void { this.socket.write(encodeTerminalFrame("input", Buffer.from(text, "latin1"))); }
+  async until(pattern: RegExp, what: string): Promise<void> {
+    for (let i = 0; i < 150; i++) { if (pattern.test(this.shown)) return; await new Promise(r => setTimeout(r, 20)); }
+    assert.fail(`${what}: never shown; the screen has ${JSON.stringify(this.shown.slice(-300))}`);
+  }
+  control(kind: string): Record<string, unknown> | null {
+    const frame = this.controls.find(item => item.kind === kind);
+    return frame === undefined ? null : parseTerminalJson(frame.payload, Object.keys(JSON.parse(frame.payload.toString("utf8")) as object));
+  }
+}
+
+test("§4.6: the modes a screen needs are followed across read boundaries", () => {
+  const modes = new TerminalModes();
+  modes.feed(Buffer.from("hello \u001b[?10"));
+  modes.feed(Buffer.from("49h\u001b[?25l\u001b"));
+  modes.feed(Buffer.from("[?2004h text"));
+  assert.equal(modes.replay(), "\u001b[?1049h\u001b[?2004h\u001b[?25l");
+  modes.feed(Buffer.from("\u001b[?2004l\u001b[?25h\u001b[?1049l"));
+  assert.equal(modes.replay(), "");
+});
+
+test("MAC-221/MV-12: a screen that leaves does not stop the program; one that comes back gets its modes and the whole screen", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { socketPath } = await holder(t);
+  const first = await Screen.attach(socketPath);
+  await first.until(/frame \d+ 100x30/, "the first screen's size");
+  first.type("a");
+  await first.until(/typed:a/, "input reaching the program");
+  const pid = /pid (\d+)/.exec(first.shown)![1];
+  first.socket.destroy();
+  await first.closed;
+
+  // Same size: the kernel reports no resize, so only the redraw request can
+  // make a program that draws on change draw again.
+  const second = await Screen.attach(socketPath);
+  await second.until(/frame \d+ 100x30 pid \d+/, "the whole screen drawn again");
+  assert.match(second.shown, /^\u001b\[\?1049h\u001b\[\?2004h\u001b\[\?25l/, "the modes come first");
+  assert.equal(/pid (\d+)/.exec(second.shown)![1], pid, "the same program, still running");
+  second.socket.destroy();
+});
+
+test("MAC-220: one screen at a time; a takeover tells the one it replaces", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { socketPath } = await holder(t);
+  const first = await Screen.attach(socketPath);
+  await first.until(/frame/, "the first screen");
+  const second = await Screen.attach(socketPath);
+  await second.closed;
+  assert.deepEqual(second.control("refused"), { code: "ATTACH_CONFLICT", message: "this society is shown on another screen" });
+  const third = await Screen.attach(socketPath, { takeover: true, size: [90, 20] });
+  await third.until(/frame \d+ 90x20/, "the screen that took over");
+  await first.closed;
+  assert.deepEqual(first.control("detached"), { reason: "taken-over" });
+  third.socket.destroy();
+});
+
+test("MAC-221: the program's end reaches the attached screen, and the holder ends with it", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { socketPath, exited } = await holder(t);
+  const screen = await Screen.attach(socketPath);
+  await screen.until(/frame/, "the screen");
+  screen.type("q");
+  await screen.closed;
+  assert.match(screen.shown, /\u001b\[\?1049l$/, "the program's own restore reached the screen before its end");
+  assert.deepEqual(screen.control("exit"), { code: 0, signal: null });
+  assert.equal(await exited, 0);
+  assert.equal(existsSync(socketPath), false, "the socket is gone with it");
+});
+
+test("MAC-221: output the program wrote just before it ended reaches the screen before the end does", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { socketPath } = await holder(t);
+  const screen = await Screen.attach(socketPath);
+  await screen.until(/frame/, "the screen");
+  screen.type("Q");
+  await screen.closed;
+  assert.ok(screen.shown.endsWith(`${"x".repeat(1024)}END\u001b[?1049l`), "the whole last burst arrived");
+  assert.deepEqual(screen.control("exit"), { code: 0, signal: null });
+
+  const { socketPath: other } = await holder(t);
+  const late = await Screen.attach(other);
+  await late.until(/frame/, "the second screen");
+  late.type("D");
+  await late.closed;
+  assert.match(late.shown, /LATE$/, "what was still being written when the program ended arrived before the end");
+  assert.deepEqual(late.control("exit"), { code: 0, signal: null });
+});
+
+test("§4.6: a connection that does not begin with attach is dropped and the program is untouched", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { socketPath, child } = await holder(t);
+  const socket = connect(socketPath);
+  await new Promise<void>(resolve => socket.once("connect", resolve));
+  socket.write(encodeTerminalFrame("input", Buffer.from("q")));
+  await new Promise<void>(resolve => socket.once("close", () => resolve()));
+  const screen = await Screen.attach(socketPath);
+  await screen.until(/frame/, "the program, still there");
+  assert.equal(child.exitCode, null);
+  screen.socket.destroy();
+});
+
+test("MAC-320: a holder asked to stop asks its program to end and ends with its status", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { child, exited } = await holder(t);
+  await new Promise(r => setTimeout(r, 300));
+  child.kill("SIGTERM");
+  assert.equal(await exited, 7, "the program's own SIGTERM handling decided the end");
+});

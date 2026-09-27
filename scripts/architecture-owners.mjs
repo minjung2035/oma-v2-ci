@@ -18,8 +18,9 @@ export const subprocessResponsibilities = Object.freeze({
  */
 export const fenceExemptSpawnOwners = Object.freeze({
   // The bounded command mechanism. Its descriptors are the caller's to choose
-  // (`inheritedFds`), and its only caller runs systemctl, which writes units
-  // rather than this society's state.
+  // (`inheritedFds`). Its callers run systemctl, systemd-run, resize2fs and
+  // git; none of them writes a society's state itself. A society session that
+  // systemd-run starts runs `oma`, which takes the society lease on its own.
   "src/process/async.ts#startProcess":
     "bounded command whose inherited descriptors are the caller's; not a society writer",
   // SB-001: a confined Resident. The fence is deliberately not handed across
@@ -37,6 +38,12 @@ export const fenceExemptSpawnOwners = Object.freeze({
   // does not return until the child has exited, so it cannot outlive anything.
   "src/process/policies.ts#runHostEditor":
     "synchronous child with an inherited terminal; the call returns only after it exits",
+  // macos-platform §4.6: the guest's society session. Its program is the
+  // product's own `oma`, which takes the society lease itself (HostTenure) and
+  // hands it down to its engine and broker; the holder that starts it owns no
+  // society and has no lease to pass.
+  "src/process/async.ts#spawnInTerminal":
+    "a society session's `oma`, which takes the society lease itself; its holder has none to hand down",
 });
 export const DEFAULT_POLICY = Object.freeze({
   capabilityOwner: "src/domain/capabilities.ts",

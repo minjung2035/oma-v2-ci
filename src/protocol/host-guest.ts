@@ -168,3 +168,69 @@ export function responseProblem(raw: Record<string, unknown>): string | null {
   if (error.retry !== "never" && error.retry !== "same-key" && error.retry !== "after-repair") return "invalid retry";
   return null;
 }
+
+/** §4.6: the terminal channel's frames, after its hello: `uint32 BE length`
+ * of what follows, one kind byte, the payload. Bytes are carried as they are;
+ * the few control messages are JSON. */
+export const TERMINAL_FRAME_BYTES = 64 * 1024;
+export const TERMINAL_KINDS = Object.freeze({
+  /** host → guest */ input: 0x01, resize: 0x02,
+  /** guesthost → session holder, first and once: `{ takeover?: true }` */ attach: 0x03,
+  /** guest → host */ output: 0x81, exit: 0x82, detached: 0x83, refused: 0x84,
+} as const);
+export type TerminalKind = keyof typeof TERMINAL_KINDS;
+const KIND_OF = new Map<number, TerminalKind>(Object.entries(TERMINAL_KINDS).map(([name, byte]) => [byte, name as TerminalKind]));
+
+export interface TerminalFrame { readonly kind: TerminalKind; readonly payload: Buffer }
+
+export function encodeTerminalFrame(kind: TerminalKind, payload: Uint8Array = Buffer.alloc(0)): Buffer {
+  if (payload.length + 1 > TERMINAL_FRAME_BYTES) throw new RangeError("a terminal frame exceeds its limit");
+  const frame = Buffer.allocUnsafe(5 + payload.length);
+  frame.writeUInt32BE(payload.length + 1, 0);
+  frame.writeUInt8(TERMINAL_KINDS[kind], 4);
+  frame.set(payload, 5);
+  return frame;
+}
+export function encodeTerminalJson(kind: "attach" | "exit" | "detached" | "refused", value: Record<string, unknown>): Buffer {
+  return encodeTerminalFrame(kind, Buffer.from(JSON.stringify(value), "utf8"));
+}
+
+/** Splits a byte stream into terminal frames. A frame over the limit or of
+ * an unknown kind poisons the stream: the caller closes it (IPC-002). */
+export class TerminalFrameParser {
+  private buffered = Buffer.alloc(0);
+  feed(chunk: Uint8Array): TerminalFrame[] {
+    this.buffered = this.buffered.length === 0 ? Buffer.from(chunk) : Buffer.concat([this.buffered, chunk]);
+    const frames: TerminalFrame[] = [];
+    while (this.buffered.length >= 4) {
+      const length = this.buffered.readUInt32BE(0);
+      if (length === 0 || length > TERMINAL_FRAME_BYTES) throw new RangeError("a terminal frame has an invalid length");
+      if (this.buffered.length < 4 + length) break;
+      const kind = KIND_OF.get(this.buffered.readUInt8(4));
+      if (kind === undefined) throw new RangeError("a terminal frame has an unknown kind");
+      frames.push({ kind, payload: Buffer.from(this.buffered.subarray(5, 4 + length)) });
+      this.buffered = this.buffered.subarray(4 + length);
+    }
+    return frames;
+  }
+}
+
+export function resizePayload(columns: number, rows: number): Buffer {
+  const payload = Buffer.alloc(4);
+  payload.writeUInt16BE(columns, 0);
+  payload.writeUInt16BE(rows, 2);
+  return payload;
+}
+/** A window size, or null when it is not one a terminal can have. */
+export function parseResize(payload: Buffer): { readonly columns: number; readonly rows: number } | null {
+  if (payload.length !== 4) return null;
+  const columns = payload.readUInt16BE(0); const rows = payload.readUInt16BE(2);
+  return columns > 0 && rows > 0 ? { columns, rows } : null;
+}
+/** A JSON control payload of exactly the given keys, or null. */
+export function parseTerminalJson(payload: Buffer, required: readonly string[], optional: readonly string[] = []): Record<string, unknown> | null {
+  let value: unknown;
+  try { value = JSON.parse(payload.toString("utf8")); } catch { return null; }
+  if (!object(value) || exactKeys(value, required, optional) !== null) return null;
+  return value;
+}

@@ -212,6 +212,20 @@ function fencedStdio(base: readonly ("ignore" | "pipe")[], channel: "ignore" | "
   stdio.push(fence);
   return stdio;
 }
+/** A program on a terminal (macos-platform §4.6): `terminal` is the slave
+ * side of a pseudo-terminal this process opened, and becomes the child's
+ * stdin, stdout and stderr. The child leads a new session with it as its
+ * controlling terminal -- util-linux `setsid --ctty`, which calls setsid(2)
+ * and then TIOCSCTTY on its stdin -- so job control and window-size changes
+ * reach it as they would under a terminal emulator. setsid execs the program,
+ * so the child's pid is the program's. */
+export function spawnInTerminal(executable: string, argv: readonly string[], cwd: string,
+  env: Readonly<Record<string, string>>, terminal: number): ChildProcess {
+  validDirectSpawn(executable, argv, cwd, env);
+  if (!Number.isSafeInteger(terminal) || terminal < 0) throw new StoreError("UNSUPPORTED_PROFILE", "a terminal child needs its terminal descriptor");
+  return spawn("/usr/bin/setsid", ["--ctty", "--", executable, ...argv], { cwd, env: { ...env }, shell: false,
+    stdio: [terminal, terminal, terminal] });
+}
 export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
   if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox spawn requires direct pinned bubblewrap argv");

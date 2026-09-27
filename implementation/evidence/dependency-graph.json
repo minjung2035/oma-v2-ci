@@ -72,7 +72,9 @@
   "src/domain/tool-surface.ts",
   "src/durable.ts",
   "src/entry/broker.ts",
+  "src/entry/guest-session.ts",
   "src/entry/guestctl.ts",
+  "src/entry/guesthost.ts",
   "src/entry/host.ts",
   "src/entry/module-conformance.ts",
   "src/entry/oma.ts",
@@ -125,9 +127,13 @@
   "src/module-ports.ts",
   "src/pi-extension.ts",
   "src/platform/guest/control.ts",
+  "src/platform/guest/host.ts",
   "src/platform/guest/identity.ts",
   "src/platform/guest/linux-system.ts",
+  "src/platform/guest/pty.ts",
   "src/platform/guest/server.ts",
+  "src/platform/guest/session.ts",
+  "src/platform/guest/systemd-launcher.ts",
   "src/platform/product-text.ts",
   "src/platform/rpc.ts",
   "src/ports/ledger.ts",
@@ -1457,7 +1463,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 40
+   "files": 44
   },
   {
    "index": 5,
@@ -1471,12 +1477,12 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 57
+   "files": 59
   }
  ],
- "files": 233,
- "runtimeEdges": 893,
- "typeOnlyEdges": 326,
+ "files": 239,
+ "runtimeEdges": 913,
+ "typeOnlyEdges": 327,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
   "L2-facts -> L1-kernel": 31,
@@ -1484,14 +1490,14 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 114,
+  "L4-orchestration -> L1-kernel": 123,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 44,
-  "L5-entry -> L1-kernel": 80,
+  "L4-orchestration -> L4-orchestration": 48,
+  "L5-entry -> L1-kernel": 82,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 31,
+  "L5-entry -> L4-orchestration": 36,
   "L5-entry -> L5-entry": 115
  },
  "upwardTypeOnlyEdges": [
@@ -1511,8 +1517,8 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 124,
-  "src/domain/identifiers.ts": 37,
+  "src/domain/errors.ts": 127,
+  "src/domain/identifiers.ts": 38,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 25,
   "src/storage/directory.ts": 21,
@@ -1524,8 +1530,8 @@
   "src/domain/canonical-json.ts": 13,
   "src/authority.ts": 12,
   "src/hash.ts": 12,
-  "src/domain/mail-values.ts": 11,
-  "src/process/policies.ts": 11
+  "src/process/policies.ts": 12,
+  "src/domain/mail-values.ts": 11
  },
  "fanOut": {
   "src/broker.ts": 30,
@@ -1547,22 +1553,23 @@
  "external": {
   "@earendil-works/pi-coding-agent": 8,
   "@earendil-works/pi-tui": 2,
-  "koffi": 3,
+  "koffi": 4,
   "node:async_hooks": 3,
-  "node:child_process": 4,
+  "node:child_process": 5,
   "node:crypto": 25,
-  "node:fs": 63,
+  "node:fs": 67,
   "node:http": 1,
   "node:https": 1,
-  "node:net": 12,
+  "node:net": 15,
   "node:os": 3,
-  "node:path": 68,
+  "node:path": 71,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,
   "node:string_decoder": 1,
+  "node:tty": 1,
   "node:url": 4,
-  "node:util": 3,
+  "node:util": 4,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,
   "typebox": 3
