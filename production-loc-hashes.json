@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "6ef6f572bb6c9075e1b77982c402db99d6eac1cf098c9574a95e9e25a81163dd",
+  "report": "1c1c5ad6c14ed7ae2a07b5d1552f0675ab51cdff546c0aa36042ce206d88a601",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -93,7 +93,7 @@
     },
     {
       "path": "src/cli.ts",
-      "sha256": "f837383f38aefcd2388ceb1b5679b074df234b358df0d2d7eedf4b332a66f341"
+      "sha256": "d8bbe45963d534aa9f387900922ed3132bc80a4cf2924b2edc4392b3e9c7f181"
     },
     {
       "path": "src/cli/arguments.ts",
@@ -153,7 +153,7 @@
     },
     {
       "path": "src/cli/exit.ts",
-      "sha256": "d30ae2a0cce4235d0594aef1a3fd39ca503b31d7f552c77b10bb061265236f24"
+      "sha256": "9f4dc48327e08c3d2064dbd7e865be3867bb2f3de632c85996b7d9c23f7e5a54"
     },
     {
       "path": "src/cli/request-intent.ts",

@@ -116,3 +116,43 @@ test("P0V-63 / R08: a reply to a stored message larger than a request reads its 
     assert.equal((frame.params as { replyToMessage?: string }).replyToMessage, id);
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test("P0V-62 / R07, P0-4: a long answer reaches a reader that is slow to take it, whole, before the CLI exits", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-cli-output-"));
+  const agents = Array.from({ length: 6000 }, (_, index) => ({ agent: `worker-${String(index).padStart(5, "0")}`, desired: "enabled",
+    activeState: "active", subState: "running", unitResult: "success", execMainStatus: 0, pending: 0, preparedBatches: 0,
+    reason: null, runnerObservedAtMs: null }));
+  const answer = { observedAtMs: 1, agents };
+  const expected = `${JSON.stringify(answer)}\n`;
+  const socket = join(root, "status.sock");
+  const server: Server = createServer(connection => {
+    let pending = Buffer.alloc(0);
+    connection.on("data", (chunk: Buffer) => {
+      pending = Buffer.concat([pending, chunk]);
+      if (pending.length < 4 || pending.length < 4 + pending.readUInt32BE(0)) return;
+      const frame = JSON.parse(pending.subarray(4, 4 + pending.readUInt32BE(0)).toString("utf8")) as { id: string };
+      const reply = Buffer.from(JSON.stringify({ v: 1, id: frame.id, ok: true, result: answer }));
+      const head = Buffer.alloc(4); head.writeUInt32BE(reply.length, 0);
+      connection.write(Buffer.concat([head, reply]));
+    });
+    connection.on("error", () => {});
+  });
+  await new Promise<void>(resolve => { server.listen(socket, resolve); });
+  try {
+    assert.ok(expected.length > 1024 * 1024, "the answer is not long enough to fill the pipe");
+    const result = await new Promise<{ status: number | null; stdout: string }>(resolve => {
+      const child = spawn(process.execPath, [CLI, "status"], { cwd: root, stdio: ["ignore", "pipe", "ignore"],
+        env: { PATH: "/usr/bin:/bin", HOME: root, OMA_SOCKET: socket, OMA_FRAME_BYTES: String(4 * 1024 * 1024) } });
+      const chunks: Buffer[] = []; let status: number | null = null; let ended = false;
+      const settle = (): void => { if (ended && status !== null) resolve({ status, stdout: Buffer.concat(chunks).toString("utf8") }); };
+      // The reader takes nothing for a while, as a busy parent would.
+      child.stdout.pause();
+      setTimeout(() => { child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk)); child.stdout.resume(); }, 400);
+      child.stdout.on("end", () => { ended = true; settle(); });
+      child.on("exit", code => { status = code; settle(); });
+    });
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.length, expected.length, "the answer was cut off before the CLI exited");
+    assert.equal(result.stdout, expected);
+  } finally { await new Promise<void>(resolve => { server.close(() => resolve()); }); rmSync(root, { recursive: true, force: true }); }
+});

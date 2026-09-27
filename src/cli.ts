@@ -7,7 +7,7 @@ import { runIntegrateCommand } from "./cli/commands/integrate.js";
 import { runContextCommand } from "./cli/commands/context.js";
 import { runStatusCommand } from "./cli/commands/status.js";
 import { runLogsCommand } from "./cli/commands/logs.js";
-import { fatal, usage } from "./cli/exit.js";
+import { fatal, holdOutputUntilWritten, usage } from "./cli/exit.js";
 
 export async function main(argv: string[]): Promise<never> {
   const [command, ...rest] = argv;
@@ -38,4 +38,5 @@ export async function main(argv: string[]): Promise<never> {
   }
 }
 
+holdOutputUntilWritten();
 main(process.argv.slice(2)).catch(fatal);

@@ -4,6 +4,20 @@ import { errorExit, failureText, type CliExitCode } from "../domain/errors.js";
 import { decodeFailure } from "../protocol/receipt-codec.js";
 import { receiptExit, receiptLines } from "../protocol/receipts.js";
 
+/** P0V-62, P0-4: this module ends the process, so it also owns that nothing
+ * written before the end is lost to it. A write to a pipe or socket completes
+ * asynchronously in Node and `process.exit` does not wait for it: a status or
+ * a log longer than the reader had taken so far was cut off, with exit 0.
+ * Called once, before anything is written, it makes every later write to
+ * stdout and stderr complete before it returns -- so each exit below leaves
+ * nothing behind. A file or a terminal is already written synchronously. */
+export function holdOutputUntilWritten(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    const handle = (stream as unknown as { readonly _handle?: { setBlocking?: (blocking: boolean) => unknown } })._handle;
+    handle?.setBlocking?.(true);
+  }
+}
+
 export function fail(message: string, code: CliExitCode): never {
   console.error(`oma: ${message}`);
   process.exit(code);
