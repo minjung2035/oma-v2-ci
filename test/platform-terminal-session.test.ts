@@ -9,7 +9,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TerminalModes } from "../src/platform/guest/session.js";
+import { TerminalModes } from "../src/platform/terminal-modes.js";
 import {
   TerminalFrameParser, encodeTerminalFrame, encodeTerminalJson, parseTerminalJson, resizePayload, type TerminalFrame,
 } from "../src/protocol/host-guest.js";
@@ -75,6 +75,7 @@ test("§4.6: the modes a screen needs are followed across read boundaries", () =
   modes.feed(Buffer.from("49h\u001b[?25l\u001b"));
   modes.feed(Buffer.from("[?2004h text"));
   assert.equal(modes.replay(), "\u001b[?1049h\u001b[?2004h\u001b[?25l");
+  assert.equal(modes.undo(), "\u001b[?2004l\u001b[?25h\u001b[?1049l", "a leaving screen is put back, alternate screen last");
   modes.feed(Buffer.from("\u001b[?2004l\u001b[?25h\u001b[?1049l"));
   assert.equal(modes.replay(), "");
 });

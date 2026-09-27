@@ -711,11 +711,14 @@ item의 값은 엔진이 쓰는 credential blob이고, OMA는 그 형식을 읽�
 
 ### 7.2 엔진 SDK의 저장소
 
-동봉 엔진 SDK는 credential 저장소를 바꿔 끼울 수 있다(`AuthStorage.fromStorage(backend: AuthStorageBackend)`,
-`withLock`·`withLockAsync`). host의 Resolver는 `KeychainAuthStorageBackend`를 쓴다.
+동봉 엔진 SDK의 `ModelRuntime.create`는 credential 저장소를 `credentials`(`CredentialStore`: `read`·`list`·`modify`·`delete`)로
+받는다. SDK는 `AuthStorage`를 공개하지 않으므로, host는 이 공개 계약을 Keychain 위에 직접 구현한다(`keychainCredentials`). 기존
+`resolveEngineAuth`는 이 저장소를 선택 인자로 받고, 받으면 agent 디렉터리의 credential 파일 대신 그것을 쓴다. 나머지(`models.json`,
+`settings.json`)는 여전히 디렉터리에서 읽는다(MAC-704). Linux의 호출은 바뀌지 않는다.
 
-- `withLock(fn)`: `omahostd`의 per-credential lock을 잡는다. item의 현재 값을 읽어 `fn(current)`에 준다. `next`가 나오면 item을 갱신한다.
-  lock은 `omahostd`의 memory에 있다. Resolver는 `omahostd` 안에서 돌므로 lock은 `omahostd`와 함께 사라진다.
+- item 하나에 엔진의 credential blob 전체(agent 디렉터리의 파일과 같은 JSON)를 둔다. account는 `credentialRef`다.
+- `modify`와 `delete`는 item마다 `omahostd` 안에서 직렬화한다. item을 쓰는 곳은 이 프로세스 하나다. 각 쓰기는 앞의 쓰기를 본다.
+- Keychain을 읽을 수 없으면(잠김 등) 오류가 그대로 올라가 해석이 실패한다. 환경 변수 같은 다른 credential로 대신하지 않는다(MAC-702).
 - Resolver는 Keychain을 직접 부르지 않는다. `omahostd`가 `oma-vmhelper`와의 channel로 `get`/`put`을 요청한다. Keychain을 만지는
   코드는 서명된 Swift binary 하나뿐이다(MAC-701).
 

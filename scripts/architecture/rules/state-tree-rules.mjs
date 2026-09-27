@@ -22,6 +22,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/platform/guest/server.ts": "a guest service's listening socket in its own systemd RuntimeDirectory, which the vsock bridge connects to",
   "src/platform/guest/pty.ts": "the slave device of a pseudo-terminal this process just made (/dev/pts), opened to hand to the session's program",
   "src/platform/guest/egress.ts": "guesthost's egress socket in the oma user's runtime directory, which the guest's own processes connect to",
+  "src/platform/host/host-api.ts": "omahostd's Host API socket in its own run directory under the app's support directory",
   "src/entry/guest-session.ts": "a society session holder's listening socket in the oma user's runtime directory, which guesthost connects to",
   "src/cli/effects/submit.ts": "the CLI caller's own temporary directory",
   "src/extension/mail-tools.ts": "a fresh mkdtemp directory under the model's own working directory (a Resident's sandbox home; the Principal's scratch, in the state tree but the model's own), written once and removed; the extension cannot import the storage primitives (PI-001)",

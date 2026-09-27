@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "0276477e4675eb3311e8e5017ae4f45a767853c99ac8d941e5486a72597223a2",
-  "report": "331edaa7a490ea1686001de10c31b0d8b6e5435dfcf83f06515ac7e81e18843b",
+  "manifest": "aba9e6fc7d4e8702c0d3627f5ac46d25f38123338637cdf78afcf32d045ed06a",
+  "report": "a9cf3e36bc8335584fa80f89298625c494b27235a582427ce23f69d8c53d6317",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -529,15 +529,19 @@
     },
     {
       "path": "src/platform/guest/server.ts",
-      "sha256": "660642166fe59dbf17a14c798fe76f914e4c3f1c386beb4d1a2c603118759209"
+      "sha256": "e8e53c3545adcc1c54b2a2d876145f51e1c17bf07363f9d05fede4230d89ed1a"
     },
     {
       "path": "src/platform/guest/session.ts",
-      "sha256": "88207d433b8d8aba861f35feddb9b4d7b73ad61c72a168c0a7984f1859d721c5"
+      "sha256": "3967bf343749278222df2136379b62fa00465a4e8023a52e88ea6f0043262f45"
     },
     {
       "path": "src/platform/guest/systemd-launcher.ts",
       "sha256": "5784d0356f26e11a8d3dfeb6436a705b0879f01347504302f0510f9268baab9c"
+    },
+    {
+      "path": "src/platform/host/attach-client.ts",
+      "sha256": "a68f0668676fffbcf8c806f49c3a75fe9a9c390e5f93008b918b391221afda12"
     },
     {
       "path": "src/platform/host/egress.ts",
@@ -548,8 +552,24 @@
       "sha256": "7c1d4a8691a9906d96a9c07fe87f491dd07751fe058a20f17cb6c7963b812f22"
     },
     {
+      "path": "src/platform/host/host-api.ts",
+      "sha256": "81403f873471b4cd0f7329ee227b0f2a8727a6af1c7018724922ec35e78bbabf"
+    },
+    {
+      "path": "src/platform/host/keychain.ts",
+      "sha256": "4e9d4eef39028d21406060ce51dde2390113aa3daa0d6bb8c0bb6fd1c3d4c48c"
+    },
+    {
       "path": "src/platform/host/lifecycle.ts",
       "sha256": "400b5acd1dbb3660ee4a6e5ca92592096c9cf3be2481fd3ec0602da1c06697b9"
+    },
+    {
+      "path": "src/platform/host/peer.ts",
+      "sha256": "71471221ed0b7861216d07c26319cf82438671d2e84b5bd42478e3d412728cc3"
+    },
+    {
+      "path": "src/platform/host/resolver.ts",
+      "sha256": "6e136291f4d55be3e88dd64043d38f57d07ad5a5a27af2079fae9341dd9c82b3"
     },
     {
       "path": "src/platform/product-text.ts",
@@ -558,6 +578,10 @@
     {
       "path": "src/platform/rpc.ts",
       "sha256": "a873bce787448db5394cc2f363c5b62d3d2b094d96c98cda17bc48279a644d37"
+    },
+    {
+      "path": "src/platform/terminal-modes.ts",
+      "sha256": "d93cfaba3b5759357206241662d690f890f91b3555d23e43f35ddb377fa0a961"
     },
     {
       "path": "src/ports/ledger.ts",
@@ -598,6 +622,10 @@
     {
       "path": "src/protocol/channel.ts",
       "sha256": "ee8cf3c2aeeed039a24d23e37defed957a0b8848f1cdcfaf8a6aa87577566486"
+    },
+    {
+      "path": "src/protocol/host-api.ts",
+      "sha256": "514b5e508df1e1fb939fa8b5af0ae09950d7231970b6b6912a8fde6901222928"
     },
     {
       "path": "src/protocol/host-channel.ts",
@@ -693,7 +721,7 @@
     },
     {
       "path": "src/runtime/engine-auth.ts",
-      "sha256": "4afb938ea918f6b2c25a4ad8010570559cd9cde7cf04485276aca1e697cac36b"
+      "sha256": "d990d2c55557849a9ff94310d60b237a814b100883efca8911cdac0cbc87fbee"
     },
     {
       "path": "src/runtime/extension-integrity.ts",

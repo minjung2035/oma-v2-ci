@@ -15,41 +15,12 @@ import type { Socket } from "node:net";
 import type { ChildProcess } from "node:child_process";
 import { spawnInTerminal } from "../../process/async.js";
 import { openPseudoTerminal, setWindowSize } from "./pty.js";
+import { TerminalModes } from "../terminal-modes.js";
 import {
   TERMINAL_FRAME_BYTES, TerminalFrameParser, encodeTerminalFrame, encodeTerminalJson, parseResize, parseTerminalJson,
 } from "../../protocol/host-guest.js";
 
-const ESC = "\u001b";
 const REDRAW = Buffer.from([0x0c]);
-
-/** The DEC private modes a newly attached screen needs back. Only these are
- * followed; the screen's contents are the program's to redraw. */
-export class TerminalModes {
-  private alternate = false;
-  private paste = false;
-  private cursorHidden = false;
-  /** An escape sequence cut by a read boundary, kept for the next chunk. */
-  private tail = "";
-
-  feed(chunk: Uint8Array): void {
-    // latin1 maps each byte to one code unit, so escape bytes stay where they are.
-    const text = this.tail + Buffer.from(chunk).toString("latin1");
-    for (const match of text.matchAll(/\u001b\[\?([0-9;]+)([hl])/g)) {
-      const on = match[2] === "h";
-      for (const mode of match[1]!.split(";")) {
-        if (mode === "1049" || mode === "1047" || mode === "47") this.alternate = on;
-        else if (mode === "2004") this.paste = on;
-        else if (mode === "25") this.cursorHidden = !on;
-      }
-    }
-    const partial = /\u001b(?:\[(?:\?[0-9;]*)?)?$/.exec(text);
-    this.tail = partial === null ? "" : partial[0].slice(-32);
-  }
-
-  replay(): string {
-    return (this.alternate ? `${ESC}[?1049h` : "") + (this.paste ? `${ESC}[?2004h` : "") + (this.cursorHidden ? `${ESC}[?25l` : "");
-  }
-}
 
 export interface SessionProgram {
   readonly executable: string;

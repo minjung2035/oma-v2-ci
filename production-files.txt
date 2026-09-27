@@ -132,11 +132,17 @@ src/platform/guest/pty.ts
 src/platform/guest/server.ts
 src/platform/guest/session.ts
 src/platform/guest/systemd-launcher.ts
+src/platform/host/attach-client.ts
 src/platform/host/egress.ts
 src/platform/host/guest-link.ts
+src/platform/host/host-api.ts
+src/platform/host/keychain.ts
 src/platform/host/lifecycle.ts
+src/platform/host/peer.ts
+src/platform/host/resolver.ts
 src/platform/product-text.ts
 src/platform/rpc.ts
+src/platform/terminal-modes.ts
 src/ports/ledger.ts
 src/ports/runtime.ts
 src/process/async.ts
@@ -147,6 +153,7 @@ src/process/run.ts
 src/protocol/batch-view.ts
 src/protocol/byte-queue.ts
 src/protocol/channel.ts
+src/protocol/host-api.ts
 src/protocol/host-channel.ts
 src/protocol/host-guest.ts
 src/protocol/jsonl.ts

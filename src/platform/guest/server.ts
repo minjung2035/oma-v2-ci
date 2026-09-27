@@ -15,7 +15,7 @@
 import { createServer, type Server, type Socket } from "node:net";
 import { chmodSync, chownSync, existsSync, unlinkSync } from "node:fs";
 import { peerCred, socketDescriptor } from "../../leaf.js";
-import { FramedPeer, readHello } from "../rpc.js";
+import { FramedPeer, PlatformError, readHello } from "../rpc.js";
 import { productText } from "../product-text.js";
 import { ERROR_METADATA, StoreError, errorCodeOf } from "../../domain/errors.js";
 import {
@@ -103,20 +103,36 @@ async function accept(socket: Socket, options: GuestServerOptions): Promise<void
   handler.serve(peer.detach(), hello.params);
 }
 
+/** A result whose connection changes hands once it is answered: the function
+ * runs right after the answer is written, before anything else is read, so
+ * a peer that starts sending other bytes on reading the answer loses none. */
+export const HANDOFF = Symbol("handoff");
+export type Answer = Record<string, unknown> & { [HANDOFF]?: () => void };
+
 /** Runs one JSON request at a time for a channel and answers it. A handler
- * that throws a StoreError is refused with that code; anything else is an
- * internal error. The words of a refusal leave the guest only when they say
- * nothing of Linux (MAC-231); otherwise the code alone speaks. */
+ * that throws a StoreError is refused with that code; a refusal relayed from
+ * the other side (a PlatformError) keeps its code and retry; anything else is
+ * an internal error. The words of a refusal pass only when they say nothing
+ * of Linux (MAC-231); otherwise the code alone speaks. */
 export function serveRequests(peer: FramedPeer,
-  handle: (method: string, params: Record<string, unknown>, key: string | undefined) => Promise<Record<string, unknown>>): void {
+  handle: (method: string, params: Record<string, unknown>, key: string | undefined) => Promise<Answer>): void {
   let chain = Promise.resolve();
   peer.onFrame(frame => {
     chain = chain.then(async () => {
       const id = typeof frame.id === "string" ? frame.id : "x";
       const problem = requestProblem(frame);
       if (problem !== null) { safeRefuse(peer, id, "INVALID_REQUEST", problem); return; }
-      try { peer.answer(id, await handle(frame.method as string, frame.params as Record<string, unknown>, frame.key as string | undefined)); }
+      try {
+        const answer = await handle(frame.method as string, frame.params as Record<string, unknown>, frame.key as string | undefined);
+        peer.answer(id, answer);
+        answer[HANDOFF]?.();
+      }
       catch (error) {
+        if (error instanceof PlatformError) {
+          const failure = error.failure;
+          safeRefuse(peer, id, failure.code, productText(failure.message) ? failure.message : failure.code, failure.retry);
+          return;
+        }
         const code = errorCodeOf(error);
         const category = ERROR_METADATA[code].category;
         const retry = category === "transient" || category === "ambiguous" || category === "internal" ? "same-key" : "never";
@@ -126,6 +142,6 @@ export function serveRequests(peer: FramedPeer,
     });
   });
 }
-function safeRefuse(peer: FramedPeer, id: string, code: PlatformErrorCode, message: string, retry: "never" | "same-key" = "never"): void {
+function safeRefuse(peer: FramedPeer, id: string, code: PlatformErrorCode, message: string, retry: "never" | "same-key" | "after-repair" = "never"): void {
   try { peer.refuse(id, { code, message: message.slice(0, 1024), retry }); } catch { /* the connection is gone */ }
 }

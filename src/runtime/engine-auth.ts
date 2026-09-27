@@ -89,15 +89,22 @@ export interface EngineAuth {
   readonly headers: Readonly<Record<string, string>>;
 }
 
+/** The engine's own credential store, when it is not the agent directory's
+ * file: on macOS the host keeps it in the Keychain (macos-platform MAC-701). */
+export type EngineCredentials = NonNullable<import("@earendil-works/pi-coding-agent").CreateModelRuntimeOptions["credentials"]>;
+
 /** Resolves a provider through the engine, reading only the OMA-owned agent
  * directory. `provider`/`model` of `pi`/`current` mean "whatever the engine
- * would pick", which is the default its own settings name. */
+ * would pick", which is the default its own settings name. `credentials`
+ * replaces the directory's credential file and nothing else: the models and
+ * the default still come from the directory (macos-platform MAC-704). */
 export async function resolveEngineAuth(
-  agentDir: string, provider: string, model: string,
+  agentDir: string, provider: string, model: string, credentials?: EngineCredentials,
 ): Promise<EngineAuth> {
   const sdk = await import("@earendil-works/pi-coding-agent");
   const runtime = await sdk.ModelRuntime.create({
-    authPath: join(agentDir, "auth.json"), modelsPath: join(agentDir, "models.json"),
+    ...(credentials === undefined ? { authPath: join(agentDir, "auth.json") } : { credentials }),
+    modelsPath: join(agentDir, "models.json"),
     allowModelNetwork: false,
   });
   const registry = new sdk.ModelRegistry(runtime);
