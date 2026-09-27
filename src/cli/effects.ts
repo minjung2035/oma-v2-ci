@@ -14,6 +14,18 @@ export function sha256Hex(bytes: Uint8Array): string {
  * is read, and never more than a request frame can carry (INV10) -- anything
  * larger could not be sent, and a device such as /dev/zero would never end. */
 export function readLocalFile(path: string): Buffer {
+  return readLocal(path, cliFrameBytes(), true);
+}
+
+/** P0V-63: the first `bytes` bytes of a local file, with the same checks --
+ * for a command that needs a file's beginning, not the whole of it. A reply
+ * needs the message's headers; the stored message it replies to may be far
+ * larger than a request, and nothing of its body is sent. */
+export function readLocalHead(path: string, bytes: number): Buffer {
+  return readLocal(path, bytes, false);
+}
+
+function readLocal(path: string, limit: number, whole: boolean): Buffer {
   let fd: number;
   try { fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
   catch (error) {
@@ -25,14 +37,13 @@ export function readLocalFile(path: string): Buffer {
   try {
     const stat = fstatSync(fd);
     if (!stat.isFile()) fail(`not a regular file: ${path}`, 2);
-    const limit = cliFrameBytes();
-    if (stat.size > limit) fail(`file is larger than a request can carry (${limit} bytes): ${path}`, 2);
-    const buffer = Buffer.alloc(stat.size + 1);
+    if (whole && stat.size > limit) fail(`file is larger than a request can carry (${limit} bytes): ${path}`, 2);
+    const buffer = Buffer.alloc((whole ? stat.size : Math.min(stat.size, limit)) + 1);
     let filled = 0;
     for (let count = 1; count > 0 && filled < buffer.length; filled += count)
       count = readSync(fd, buffer, filled, buffer.length - filled, null);
-    if (filled > stat.size) fail(`file grew while it was read: ${path}`, 2);
-    return buffer.subarray(0, filled);
+    if (whole && filled > stat.size) fail(`file grew while it was read: ${path}`, 2);
+    return buffer.subarray(0, Math.min(filled, whole ? filled : limit));
   } finally { closeSync(fd); }
 }
 

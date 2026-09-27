@@ -15,6 +15,7 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildEml } from "../src/mail/serialize.js";
 
 const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 
@@ -92,4 +93,26 @@ test("AV8 / FS-005, INV10: a file given to the CLI is read only if it is a regul
     await fixture.close();
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("P0V-63 / R08: a reply to a stored message larger than a request reads its headers and is sent", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-reply-large-"));
+  const fixture = await peer(root);
+  try {
+    // A body within the default 256 KiB body limit whose stored (encoded) form
+    // is larger than a request frame: accepted, delivered, stored.
+    const id = "m-00000000-0000-4000-8000-000000000063-0";
+    const eml = await buildEml({ from: "a@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [], subject: "large",
+      kind: "message", contextRevision: null, inReplyTo: null, references: [], messageId: `${id}@demo.oma.invalid`, body: "한".repeat(70_000) });
+    assert.ok(eml.bytes > 256 * 1024, "the fixture is not larger than a request");
+    const original = join(root, `${id}:2,`);
+    writeFileSync(original, eml.text);
+    const body = join(root, "reply.txt");
+    writeFileSync(body, "short answer\n");
+    const sent = await cli(root, fixture.path, ["send", "--reply", original, "--subject", "re", "--file", body, "--request", "reply-large", "--", "commons"]);
+    assert.doesNotMatch(sent.stderr, /larger than a request can carry/);
+    const frame = fixture.frames.find(entry => entry.method === "mail.send");
+    assert.ok(frame, `nothing was sent: ${sent.stderr}`);
+    assert.equal((frame.params as { replyToMessage?: string }).replyToMessage, id);
+  } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });

@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 30163,
+    "n_lines": 30178,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -816,6 +816,12 @@
     "code": 55,
     "language": "TypeScript"
   },
+  "src/cli/effects.ts": {
+    "blank": 6,
+    "comment": 10,
+    "code": 55,
+    "language": "TypeScript"
+  },
   "src/units/render.ts": {
     "blank": 3,
     "comment": 10,
@@ -873,12 +879,6 @@
   "src/broker/process-ancestry.ts": {
     "blank": 8,
     "comment": 36,
-    "code": 50,
-    "language": "TypeScript"
-  },
-  "src/cli/effects.ts": {
-    "blank": 4,
-    "comment": 6,
     "code": 50,
     "language": "TypeScript"
   },
@@ -1122,6 +1122,12 @@
     "code": 26,
     "language": "TypeScript"
   },
+  "src/cli/effects/mail.ts": {
+    "blank": 2,
+    "comment": 4,
+    "code": 25,
+    "language": "TypeScript"
+  },
   "src/domain/capabilities.ts": {
     "blank": 6,
     "comment": 9,
@@ -1144,12 +1150,6 @@
     "blank": 4,
     "comment": 2,
     "code": 25,
-    "language": "TypeScript"
-  },
-  "src/cli/effects/mail.ts": {
-    "blank": 2,
-    "comment": 1,
-    "code": 24,
     "language": "TypeScript"
   },
   "src/protocol/principal-credential.ts": {
@@ -1351,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1208,
-    "comment": 4993,
-    "code": 23962,
+    "blank": 1210,
+    "comment": 5000,
+    "code": 23968,
     "nFiles": 224
   }
 }
