@@ -6,6 +6,9 @@ import { startGuestServer } from "../platform/guest/server.js";
 import { GuestHost } from "../platform/guest/host.js";
 import { systemdSessionLauncher } from "../platform/guest/systemd-launcher.js";
 import { EgressPool, startEgressService } from "../platform/guest/egress.js";
+import { RequestLedger } from "../platform/guest/requests.js";
+import { GuestProjects } from "../platform/guest/project.js";
+import { serveStream } from "../platform/guest/stream.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
 
 function argOf(flag: string, fallback: string): string {
@@ -20,9 +23,12 @@ const libdir = argOf("--libdir", "/usr/lib/oma");
 const runtimeDir = process.env.XDG_RUNTIME_DIR ?? "/run/user/1000";
 const dataHome = process.env.XDG_DATA_HOME ?? join(dataDir, "data");
 
+const ledger = new RequestLedger(join(dataDir, "requests"));
+const projects = new GuestProjects(join(dataDir, "projects"), join(dataHome, "oma"), ledger);
 const host = new GuestHost({
   societiesDir: join(dataHome, "oma"),
   projectsDir: join(dataDir, "projects"),
+  projects, ledger,
   stopDeadlineMs: 150_000,
   launcher: systemdSessionLauncher({
     sessionsDir: runtimeDir,
@@ -48,11 +54,13 @@ startEgressService({ socketPath: join(runtimeDir, "oma-egress.sock"), pool: egre
 startGuestServer({
   socketPath,
   bridge: systemUser("oma-bridge"),
-  identity: () => readGuestIdentity(dataDir, imageManifest, ["society", "terminal", "egress"]),
+  identity: () => readGuestIdentity(dataDir, imageManifest, ["society", "terminal", "egress", "stream"]),
   channels: {
     society: { kind: "json", serve: ({ peer }) => host.serve(peer) },
     terminal: { kind: "bytes", serve: (socket, hello) => host.terminal(socket, hello) },
     egress: { kind: "bytes", serve: socket => { egress.park(socket); } },
+    stream: { kind: "bytes", serve: socket => { void serveStream(socket, { ledger, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 60_000,
+      reserveBytes: 1024 ** 3, dataDir }); } },
   },
   frameBytes: PLATFORM_FRAME_BYTES,
   helloDeadlineMs: 5000,

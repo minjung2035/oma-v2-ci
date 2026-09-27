@@ -1,0 +1,109 @@
+/** The guest's side of project sync (macos-platform §6.3, §6.4).
+ *
+ * Import brings the Mac's commits into the project mirror and nowhere else:
+ * the mirror is made with the bundle's object format, the bundle is verified
+ * and fetched with object checks into `refs/remotes/mac/<branch>` only, and
+ * the mirror's HEAD is left on that commit. Canonical `main` changes only
+ * through the paths the norms already have (MAC-411). Export bundles the
+ * society's canonical `main` for the host. Every git here runs with the
+ * product's trusted configuration (GIT-001).
+ */
+import { createHash } from "node:crypto";
+import { closeSync, createReadStream, existsSync, openSync, readSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { StoreError } from "../../domain/errors.js";
+import { isValidSocietyName } from "../../domain/identifiers.js";
+import { runGitText } from "../../process/policies.js";
+import { projectGitPathAt } from "../../storage/paths.js";
+import { isUuid } from "../../protocol/host-guest.js";
+import type { RequestLedger } from "./requests.js";
+
+/** The product's trusted git, with object checks on everything fetched. */
+function git(argv: readonly string[], cwd?: string): { status: number; stdout: string; stderr: string } {
+  return runGitText(["-c", "fetch.fsckObjects=true", "-c", "transfer.fsckObjects=true", "-c", "protocol.allow=never",
+    "-c", "protocol.file.allow=always", ...argv], cwd === undefined ? {} : { cwd });
+}
+const BRANCH = /^(?!-)(?!.*\.\.)(?!.*\/\/)(?!\/)[A-Za-z0-9._/-]{1,200}(?<!\/)(?<!\.lock)$/;
+
+export async function sha256File(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
+/** The object format a bundle's header declares (v3 `@object-format=`), or
+ * sha1 for a v2 bundle, which has no such line. */
+export function bundleObjectFormat(path: string): "sha1" | "sha256" {
+  const fd = openSync(path, "r");
+  try {
+    const head = Buffer.alloc(4096);
+    const count = readSync(fd, head, 0, head.length, 0);
+    const lines = head.subarray(0, count).toString("latin1").split("\n");
+    if (lines[0] !== "# v2 git bundle" && lines[0] !== "# v3 git bundle") throw new StoreError("BUNDLE_INVALID", "not a git bundle");
+    const declared = lines.find(line => line.startsWith("@object-format="));
+    const format = declared === undefined ? "sha1" : declared.slice("@object-format=".length);
+    if (format !== "sha1" && format !== "sha256") throw new StoreError("BUNDLE_INVALID", "the bundle's object format is unknown");
+    return format;
+  } finally { closeSync(fd); }
+}
+
+export type ImportParams = Record<string, unknown> & { projectId?: unknown; branch?: unknown; bundle?: unknown };
+
+export class GuestProjects {
+  constructor(private readonly projectsDir: string, private readonly societiesDir: string, private readonly ledger: RequestLedger) {}
+
+  mirrorOf(projectId: string): string { return join(this.projectsDir, projectId); }
+
+  /** §6.3. The bundle was staged under this key by a stream (§4.8). */
+  import(key: unknown, params: ImportParams): Promise<Record<string, unknown>> {
+    return this.ledger.run(key, "project.import", params, async () => {
+      const { projectId, branch, bundle } = params;
+      if (!isUuid(projectId)) throw new StoreError("INVALID_REQUEST", "projectId must be a UUID");
+      if (typeof branch !== "string" || !BRANCH.test(branch)) throw new StoreError("INVALID_REQUEST", "invalid branch name");
+      const declared = bundle as { bytes?: unknown; sha256?: unknown } | null;
+      if (declared === null || typeof declared !== "object" || typeof declared.sha256 !== "string" || typeof declared.bytes !== "number")
+        throw new StoreError("INVALID_REQUEST", "bundle must be { bytes, sha256 }");
+      const staged = this.ledger.staging(key as string, "bundle");
+      if (!existsSync(staged) || statSync(staged).size !== declared.bytes || await sha256File(staged) !== declared.sha256)
+        throw new StoreError("STREAM_INVALID", "the bundle did not arrive as declared");
+      const format = bundleObjectFormat(staged);
+      const mirror = this.mirrorOf(projectId);
+      if (!existsSync(mirror)) {
+        const made = git(["init", "-q", `--object-format=${format}`, mirror]);
+        if (made.status !== 0) throw new StoreError("INTERNAL_ERROR", "the project mirror could not be made");
+      } else if (git(["-C", mirror, "rev-parse", "--show-object-format"]).stdout.trim() !== format)
+        throw new StoreError("BUNDLE_INVALID", "the bundle's object format is not the project's");
+      const verified = git(["-C", mirror, "bundle", "verify", "-q", staged]);
+      if (verified.status !== 0)
+        throw new StoreError(/prerequisite|lacks these/i.test(verified.stderr) ? "PREREQUISITE_MISSING" : "BUNDLE_INVALID", "the bundle does not verify against the project");
+      const ref = `refs/remotes/mac/${branch}`;
+      const fetched = git(["-C", mirror, "fetch", "--no-tags", "--no-write-fetch-head", staged, `+refs/heads/${branch}:${ref}`]);
+      if (fetched.status !== 0) throw new StoreError("BUNDLE_INVALID", "the bundle does not carry that branch");
+      const head = git(["-C", mirror, "rev-parse", "--verify", `${ref}^{commit}`]).stdout.trim();
+      if (git(["-C", mirror, "update-ref", "--no-deref", "HEAD", head]).status !== 0)
+        throw new StoreError("INTERNAL_ERROR", "the project mirror could not be moved");
+      // What a bundle cannot carry is said, not dropped silently (§6.3).
+      const notCarried: string[] = [];
+      if (git(["-C", mirror, "cat-file", "-e", `${head}:.gitmodules`]).status === 0) notCarried.push("submodule contents");
+      const attributes = git(["-C", mirror, "cat-file", "-p", `${head}:.gitattributes`]);
+      if (attributes.status === 0 && /filter=lfs/.test(attributes.stdout)) notCarried.push("large files (LFS)");
+      return { head, ref, objectFormat: format, notCarried };
+    });
+  }
+
+  /** §6.4: the society's canonical main, as a bundle staged for the host. */
+  export(key: unknown, params: { society: unknown; since?: unknown }): Promise<Record<string, unknown>> {
+    return this.ledger.run(key, "project.export", params as Record<string, unknown>, async () => {
+      if (!isValidSocietyName(params.society)) throw new StoreError("INVALID_REQUEST", "invalid society name");
+      const canonical = projectGitPathAt(join(this.societiesDir, params.society));
+      const head = git(["--git-dir", canonical, "rev-parse", "--verify", "refs/heads/main^{commit}"]);
+      if (head.status !== 0) throw new StoreError("INVALID_REQUEST", "the society has no main to export");
+      const since = typeof params.since === "string" && git(["--git-dir", canonical, "cat-file", "-e", `${params.since}^{commit}`]).status === 0
+        ? [`^${params.since}`] : [];
+      const staged = this.ledger.staging(key as string, "export.bundle");
+      const made = git(["--git-dir", canonical, "bundle", "create", "-q", staged, "refs/heads/main", ...since]);
+      if (made.status !== 0) throw new StoreError("INTERNAL_ERROR", "the export bundle could not be made");
+      return { head: head.stdout.trim(), bytes: statSync(staged).size, sha256: await sha256File(staged) };
+    });
+  }
+}

@@ -39,13 +39,13 @@ async function world(t: import("node:test").TestContext, overrides: { restarts?:
   link.onReboot(bootId => reboots.push(bootId));
   const lifecycle = new VmLifecycle({
     driver, link, now: () => performance.now(), wallClock: () => Date.now(),
-    after: (ms, run) => { const timer = setTimeout(run, ms); return { cancel: () => clearTimeout(timer) }; },
+    after: (ms, run) => { const timer = setTimeout(run, ms); timer.unref(); return { cancel: () => clearTimeout(timer) }; },
     handshakeDeadlineMs: 2000, handshakeRetryMs: 20, drainDeadlineMs: 800, healthEveryMs: 40, hungAfterMs: 250,
     restarts: overrides.restarts ?? { max: 3, windowMs: 60_000, backoffMs: 20 },
     record: event => records.push(event),
   });
   lifecycle.onState(state => states.push(state));
-  t.after(async () => { await driver.dispose(); await new Promise(r => holder === null ? r(null) : holder.close(r)); rmSync(dir, { recursive: true, force: true }); });
+  t.after(async () => { await lifecycle.stop().catch(() => undefined); await driver.dispose(); await new Promise(r => holder === null ? r(null) : holder.close(r)); rmSync(dir, { recursive: true, force: true }); });
   const until = async (state: VmState, what: string): Promise<void> => {
     for (let i = 0; i < 300 && lifecycle.state !== state; i++) await new Promise(r => setTimeout(r, 10));
     assert.equal(lifecycle.state, state, what);

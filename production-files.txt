@@ -131,10 +131,13 @@ src/platform/guest/egress.ts
 src/platform/guest/host.ts
 src/platform/guest/identity.ts
 src/platform/guest/linux-system.ts
+src/platform/guest/project.ts
 src/platform/guest/provision.ts
 src/platform/guest/pty.ts
+src/platform/guest/requests.ts
 src/platform/guest/server.ts
 src/platform/guest/session.ts
+src/platform/guest/stream.ts
 src/platform/guest/systemd-launcher.ts
 src/platform/host/attach-client.ts
 src/platform/host/egress.ts
@@ -144,6 +147,7 @@ src/platform/host/image.ts
 src/platform/host/keychain.ts
 src/platform/host/lifecycle.ts
 src/platform/host/peer.ts
+src/platform/host/project.ts
 src/platform/host/record.ts
 src/platform/host/resolver.ts
 src/platform/host/service.ts

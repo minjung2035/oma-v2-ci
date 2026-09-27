@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 257,
-    "n_lines": 33670,
+    "n_files": 261,
+    "n_lines": 34171,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -462,10 +462,22 @@
     "code": 139,
     "language": "TypeScript"
   },
+  "src/platform/host/host-api.ts": {
+    "blank": 7,
+    "comment": 13,
+    "code": 138,
+    "language": "TypeScript"
+  },
   "src/extension/tool-surface.ts": {
     "blank": 6,
     "comment": 27,
     "code": 127,
+    "language": "TypeScript"
+  },
+  "src/platform/guest/host.ts": {
+    "blank": 13,
+    "comment": 25,
+    "code": 123,
     "language": "TypeScript"
   },
   "src/platform/guest/linux-system.ts": {
@@ -504,16 +516,10 @@
     "code": 117,
     "language": "TypeScript"
   },
-  "src/platform/guest/host.ts": {
-    "blank": 12,
-    "comment": 24,
-    "code": 112,
-    "language": "TypeScript"
-  },
-  "src/platform/host/host-api.ts": {
-    "blank": 7,
-    "comment": 12,
-    "code": 111,
+  "src/platform/host/service.ts": {
+    "blank": 6,
+    "comment": 10,
+    "code": 110,
     "language": "TypeScript"
   },
   "src/config/defaults.ts": {
@@ -606,6 +612,12 @@
     "code": 94,
     "language": "TypeScript"
   },
+  "src/platform/guest/stream.ts": {
+    "blank": 3,
+    "comment": 18,
+    "code": 94,
+    "language": "TypeScript"
+  },
   "src/views/pending-work.ts": {
     "blank": 4,
     "comment": 14,
@@ -666,6 +678,12 @@
     "code": 89,
     "language": "TypeScript"
   },
+  "src/platform/host/project.ts": {
+    "blank": 9,
+    "comment": 17,
+    "code": 89,
+    "language": "TypeScript"
+  },
   "src/platform/guest/egress.ts": {
     "blank": 8,
     "comment": 20,
@@ -684,6 +702,12 @@
     "code": 86,
     "language": "TypeScript"
   },
+  "src/platform/guest/project.ts": {
+    "blank": 8,
+    "comment": 16,
+    "code": 85,
+    "language": "TypeScript"
+  },
   "src/domain/canonical-json.ts": {
     "blank": 6,
     "comment": 4,
@@ -694,12 +718,6 @@
     "blank": 1,
     "comment": 16,
     "code": 83,
-    "language": "TypeScript"
-  },
-  "src/platform/host/service.ts": {
-    "blank": 6,
-    "comment": 9,
-    "code": 82,
     "language": "TypeScript"
   },
   "src/runtime/society-lease.ts": {
@@ -870,6 +888,12 @@
     "code": 62,
     "language": "TypeScript"
   },
+  "src/entry/guesthost.ts": {
+    "blank": 5,
+    "comment": 4,
+    "code": 62,
+    "language": "TypeScript"
+  },
   "src/platform/host/image.ts": {
     "blank": 6,
     "comment": 12,
@@ -898,6 +922,12 @@
     "blank": 5,
     "comment": 7,
     "code": 59,
+    "language": "TypeScript"
+  },
+  "src/platform/guest/requests.ts": {
+    "blank": 7,
+    "comment": 18,
+    "code": 58,
     "language": "TypeScript"
   },
   "src/domain/mail-values.ts": {
@@ -940,12 +970,6 @@
     "blank": 3,
     "comment": 10,
     "code": 55,
-    "language": "TypeScript"
-  },
-  "src/entry/guesthost.ts": {
-    "blank": 5,
-    "comment": 4,
-    "code": 54,
     "language": "TypeScript"
   },
   "src/platform/guest/pty.ts": {
@@ -1266,6 +1290,12 @@
     "code": 27,
     "language": "TypeScript"
   },
+  "src/protocol/host-api.ts": {
+    "blank": 4,
+    "comment": 7,
+    "code": 27,
+    "language": "TypeScript"
+  },
   "src/entry/guestctl.ts": {
     "blank": 3,
     "comment": 3,
@@ -1287,12 +1317,6 @@
   "src/platform/terminal-modes.ts": {
     "blank": 3,
     "comment": 9,
-    "code": 26,
-    "language": "TypeScript"
-  },
-  "src/protocol/host-api.ts": {
-    "blank": 4,
-    "comment": 7,
     "code": 26,
     "language": "TypeScript"
   },
@@ -1549,9 +1573,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1460,
-    "comment": 5647,
-    "code": 26563,
-    "nFiles": 257
+    "blank": 1488,
+    "comment": 5719,
+    "code": 26964,
+    "nFiles": 261
   }
 }

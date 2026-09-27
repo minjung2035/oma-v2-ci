@@ -10,6 +10,7 @@ export const HOST_API_METHODS = Object.freeze([
   "engine.status", "engine.start", "engine.stop",
   "society.list", "society.open", "society.close",
   "terminal.attach",
+  "project.import", "project.export", "request.status",
 ] as const);
 export type HostApiMethod = (typeof HOST_API_METHODS)[number];
 

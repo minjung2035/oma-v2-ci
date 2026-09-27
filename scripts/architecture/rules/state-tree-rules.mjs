@@ -28,6 +28,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/entry/omahostd.ts": "the Mac host's support directory and its sparse state disk image, outside any society's state tree",
   "src/platform/guest/provision.ts": "the guest's data disk mount point, before any society's state tree exists on it",
   "src/entry/guest-provision.ts": "the guest's data disk mount point and its top-level parts, made once at the first boot",
+  "src/platform/host/project.ts": "the Mac host's transfer files in its own run directory, outside any society's state tree",
   "src/entry/guest-session.ts": "a society session holder's listening socket in the oma user's runtime directory, which guesthost connects to",
   "src/cli/effects/submit.ts": "the CLI caller's own temporary directory",
   "src/extension/mail-tools.ts": "a fresh mkdtemp directory under the model's own working directory (a Resident's sandbox home; the Principal's scratch, in the state tree but the model's own), written once and removed; the extension cannot import the storage primitives (PI-001)",

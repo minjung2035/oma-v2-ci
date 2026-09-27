@@ -2,14 +2,15 @@
  * machine, the guest link, egress, the Host API, and the host record. The
  * entry adds only the Mac-specific pieces (the VM helper, the paths). */
 import type { Server } from "node:net";
-import { randomBytes } from "node:crypto";
-import { writeFileSync, chmodSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GuestLink, type HostIdentity } from "./guest-link.js";
 import { VmLifecycle, type LifecycleOptions, type VmDriver } from "./lifecycle.js";
 import { EgressHost, type EgressHostOptions } from "./egress.js";
 import { startHostApi } from "./host-api.js";
 import { readHostRecord, writeHostRecord, type HostRecord } from "./record.js";
+import { MacGit, getStream, putStream } from "./project.js";
 import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
 
 export type Timings = Pick<LifecycleOptions, "handshakeDeadlineMs" | "handshakeRetryMs" | "drainDeadlineMs" | "healthEveryMs" | "hungAfterMs" | "restarts">;
@@ -27,6 +28,8 @@ export interface HostServiceOptions {
   readonly identity: HostIdentity;
   readonly resolve: EgressHostOptions["resolve"];
   readonly uid: number;
+  /** §6: the git the app ships, for the Human's repositories (MAC-404). */
+  readonly git: string;
   readonly timings?: Timings;
   /** §9.1: the Mac's sleep and wake, when the driver reports them. */
   readonly power?: (listener: (event: "sleep" | "wake") => void) => void;
@@ -69,6 +72,9 @@ export class HostService {
       if (result === "stopped") record(current => ({ ...current, lastStop: "clean" }));
       return result;
     };
+    const git = new MacGit(options.git);
+    const transfer = join(options.runDir, "transfer");
+    mkdirSync(transfer, { recursive: true, mode: 0o700 });
     const token = randomBytes(32).toString("hex");
     const tokenPath = join(options.runDir, "token");
     writeFileSync(tokenPath, `${token}\n`, { mode: 0o600 });
@@ -82,6 +88,29 @@ export class HostService {
         stop: stopRecorded,
         society: () => link.json("society"),
         terminal: (society, takeover) => link.bytes("terminal", { society, ...(takeover ? { takeover: true as const } : {}) }),
+        importProject: async (key, params) => {
+          const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.import.bundle`);
+          try {
+            const bundled = await git.bundle(params.macRepo, params.branch, params.since, file);
+            await putStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
+            const society = await link.json("society");
+            try {
+              return await society.request("project.import",
+                { projectId: params.projectId, branch: params.branch, bundle: { bytes: bundled.bytes, sha256: bundled.sha256 } }, key);
+            } finally { society.close(); }
+          } finally { rmSync(file, { force: true }); }
+        },
+        exportProject: async (key, params) => {
+          const society = await link.json("society");
+          let exported: Record<string, unknown>;
+          try { exported = await society.request("project.export", { society: params.society, ...(params.since === null ? {} : { since: params.since }) }, key); }
+          finally { society.close(); }
+          const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.export.bundle`);
+          try {
+            await getStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
+            return { ...exported, ...(await git.fetchExport(params.macRepo, file)), ref: "refs/remotes/oma/main" };
+          } finally { rmSync(file, { force: true }); }
+        },
       },
     });
     return new HostService(lifecycle, egress, link, api, token, stopRecorded);

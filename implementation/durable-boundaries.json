@@ -670,6 +670,20 @@
    ]
   },
   {
+   "owner": "src/platform/guest/requests.ts#RequestLedger.run",
+   "fact": "macOS guesthost's request ledger: a keyed request's intent before its effect and its outcome after (MAC-240/241), each published once",
+   "tests": [
+    {
+     "file": "test/platform-request-ledger.test.ts",
+     "title": "P0-7/MAC-241: killed during its effect, a request is pending, and its retry runs it to one outcome"
+    },
+    {
+     "file": "test/platform-request-ledger.test.ts",
+     "title": "P0-7/MAC-240: killed right after its outcome, a request's retry is answered from the record"
+    }
+   ]
+  },
+  {
    "owner": "src/reconcile/preaccept.ts#collectUnacceptedArtifacts",
    "fact": "the removal of what no accepted plan owns (DR10)",
    "tests": [

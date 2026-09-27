@@ -3,7 +3,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, type Server } from "node:net";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { encodeFrame } from "../src/frame.js";
@@ -29,7 +31,7 @@ async function world(t: import("node:test").TestContext) {
     stop: async () => { await new Promise(r => holder?.close(r)); holder = null; return "stopped"; } };
   const driver = new LocalDriver(dir, { dir: societiesDir, launcher }, record.instanceId);
   const service = await HostService.start({
-    runDir, recordPath, driver, uid: process.getuid!(),
+    runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git",
     identity: { hostVersion: "1.0.0", installationId: record.installationId, instanceId: record.instanceId, expectImage: "2026.09.1",
       protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } },
     resolve: async () => ({ provider: "anthropic", model: "m", origin: "https://provider.invalid", apiKey: "sk-ant-api03-" + "r".repeat(40), headers: {} }),
@@ -44,13 +46,13 @@ async function world(t: import("node:test").TestContext) {
     rmSync(dir, { recursive: true, force: true });
   });
   const token = readFileSync(join(runDir, "token"), "utf8").trim();
-  const call = async (method: string): Promise<Record<string, unknown>> => {
+  const call = async (method: string, params: Record<string, unknown> = {}, key?: string): Promise<Record<string, unknown>> => {
     const socket = connect(join(runDir, "hostapi.sock"));
     await new Promise<void>((ok, fail) => { socket.once("connect", ok); socket.once("error", fail); });
     socket.write(encodeFrame({ v: 1, id: "h", method: "hello", params: { api: { min: 1, max: HOST_API_VERSION }, token, client: "oma-cli" } }));
     const hello = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 3000);
     if (hello.rest.length > 0) socket.unshift(hello.rest);
-    socket.write(encodeFrame({ v: 1, id: "r", method, params: {} }));
+    socket.write(encodeFrame({ v: 1, id: "r", method, params, ...(key === undefined ? {} : { key }) }));
     const answer = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 10_000);
     socket.destroy();
     return answer.frame;
@@ -59,7 +61,7 @@ async function world(t: import("node:test").TestContext) {
     for (let i = 0; i < 300 && !condition(); i++) await new Promise(r => setTimeout(r, 10));
     assert.ok(condition(), what);
   };
-  return { service, driver, recordPath, call, until, markShut: () => { shut = true; } };
+  return { service, driver, recordPath, call, until, dir, markShut: () => { shut = true; } };
 }
 
 test("§2.1/MAC-303: starting through the Host API readies the engine, fills the egress pool, and records the disk as made", async t => {
@@ -98,4 +100,19 @@ test("MAC-211/MAC-712: after the guest reboots, no placeholder of the last boot 
   assert.equal(service.egress.activeRuns, 1);
   await driver.crash();
   await until(() => service.lifecycle.state === "ready" && service.egress.activeRuns === 0, "restarted, and the old boot's placeholder dropped");
+});
+
+test("§6/MAC-241 through the Host API: an import runs end to end under the UI's key, and the key's outcome can be asked for", async t => {
+  const { call, dir } = await world(t);
+  const mac = join(dir, "mac"); mkdirSync(mac);
+  const git = (...args: string[]) => spawnSync("git", ["-C", mac, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { encoding: "utf8" });
+  git("init", "-q", "-b", "main"); writeFileSync(join(mac, "a"), "a\n"); git("add", "a"); git("commit", "-qm", "a");
+  const head = git("rev-parse", "HEAD").stdout.trim();
+  const projectId = randomUUID();
+  const imported = await call("project.import", { projectId, macRepo: mac, branch: "main" }, "ui-import-1");
+  assert.equal((imported.result as { head: string }).head, head, JSON.stringify(imported));
+  const status = await call("request.status", { key: "ui-import-1" });
+  assert.equal((status.result as { state: string }).state, "done");
+  const again = await call("project.import", { projectId, macRepo: mac, branch: "main" }, "ui-import-1");
+  assert.deepEqual(again.result, imported.result, "the same key is answered with the same outcome");
 });

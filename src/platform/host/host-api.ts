@@ -13,7 +13,8 @@ import { StoreError } from "../../domain/errors.js";
 import { FramedPeer } from "../rpc.js";
 import { HANDOFF, serveRequests, type Answer } from "../guest/server.js";
 import { peerUid } from "./peer.js";
-import { requestProblem } from "../../protocol/host-guest.js";
+import { isRequestKey, isUuid, requestProblem } from "../../protocol/host-guest.js";
+import { isAbsolute } from "node:path";
 import { HOST_API_VERSION, hostApiHelloProblem, type HostApiHello } from "../../protocol/host-api.js";
 import type { VmState } from "./lifecycle.js";
 
@@ -24,6 +25,9 @@ export interface HostApiBackend {
   /** A society connection to the running guest. */
   society(): Promise<FramedPeer>;
   terminal(society: string, takeover: boolean): Promise<{ readonly socket: Socket; readonly rest: Buffer }>;
+  /** §6: the project sync, keyed by the UI's request key (MAC-240). */
+  importProject(key: string, params: { projectId: string; macRepo: string; branch: string; since: string | null }): Promise<Record<string, unknown>>;
+  exportProject(key: string, params: { society: string; macRepo: string; since: string | null }): Promise<Record<string, unknown>>;
 }
 
 export interface HostApiOptions {
@@ -97,7 +101,20 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
     finally { society.close(); }
   };
   let attached = false;
-  serveRequests(peer, async (method, params): Promise<Answer> => {
+  const keyed = (key: string | undefined): string => {
+    if (!isRequestKey(key)) throw new StoreError("INVALID_REQUEST", "this request needs a request key");
+    return key;
+  };
+  const macRepo = (value: unknown): string => {
+    if (typeof value !== "string" || !isAbsolute(value) || value.includes("\0")) throw new StoreError("INVALID_REQUEST", "the project's folder must be an absolute path");
+    return value;
+  };
+  const since = (value: unknown): string | null => {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== "string" || !/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(value)) throw new StoreError("INVALID_REQUEST", "since is a commit id");
+    return value;
+  };
+  serveRequests(peer, async (method, params, key): Promise<Answer> => {
     if (attached) throw new StoreError("INVALID_REQUEST", "this connection is a terminal now");
     switch (method) {
       case "engine.status": return { state: backend.state() };
@@ -106,6 +123,17 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
       case "society.list": return await forward("society.list", {});
       case "society.open": return await forward("society.open", { society: params.society, projectId: params.projectId });
       case "society.close": return await forward("society.close", { society: params.society, mode: params.mode });
+      case "project.import": {
+        if (!isUuid(params.projectId) || typeof params.branch !== "string") throw new StoreError("INVALID_REQUEST", "project.import names a project and a branch");
+        await backend.start();
+        return await backend.importProject(keyed(key), { projectId: params.projectId, macRepo: macRepo(params.macRepo), branch: params.branch, since: since(params.since) });
+      }
+      case "project.export": {
+        if (typeof params.society !== "string") throw new StoreError("INVALID_REQUEST", "project.export names a society");
+        await backend.start();
+        return await backend.exportProject(keyed(key), { society: params.society, macRepo: macRepo(params.macRepo), since: since(params.since) });
+      }
+      case "request.status": return await forward("request.status", { key: params.key });
       case "terminal.attach": {
         if (typeof params.society !== "string" || (params.takeover !== undefined && params.takeover !== true))
           throw new StoreError("INVALID_REQUEST", "terminal.attach names a society and may take over");

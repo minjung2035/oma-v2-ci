@@ -60,7 +60,7 @@ async function main(): Promise<void> {
       cpus: 4, memoryBytes: 4 * GIB, consoleLog: join(dirs.logs, "guest-console.log"), ports: [700, 701],
     });
   const service = await HostService.start({
-    runDir: dirs.run, recordPath, driver, uid: process.getuid!(),
+    runDir: dirs.run, recordPath, driver, uid: process.getuid!(), git: join(bundle!, "Contents", "Resources", "git", "bin", "git"),
     identity: { hostVersion: process.env.OMA_APP_VERSION ?? "0.0.0", installationId: record.installationId, instanceId: record.instanceId,
       expectImage: image.version, protocol: { min: Math.max(1, HOST_GUEST_PROTOCOL - 1), max: HOST_GUEST_PROTOCOL } },
     resolve: hostResolver(dirs.engine, driver),

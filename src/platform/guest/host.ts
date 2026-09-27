@@ -17,6 +17,8 @@ import { observeProjectBinding, stateRootHasSociety } from "../../runtime/provis
 import type { FramedPeer } from "../rpc.js";
 import { serveRequests } from "./server.js";
 import { encodeTerminalJson, isRequestKey, isUuid, type HelloParams } from "../../protocol/host-guest.js";
+import type { GuestProjects } from "./project.js";
+import type { RequestLedger } from "./requests.js";
 
 /** Starts and stops the holder of one society's session. */
 export interface SessionLauncher {
@@ -34,6 +36,9 @@ export interface GuestHostOptions {
   readonly projectsDir: string;
   readonly launcher: SessionLauncher;
   readonly stopDeadlineMs: number;
+  /** §6 and MAC-240: project sync and its request ledger. */
+  readonly projects?: GuestProjects;
+  readonly ledger?: RequestLedger;
 }
 
 /** Whether something accepts connections at a path: a holder that ended
@@ -119,9 +124,17 @@ export class GuestHost {
         case "society.close": return await this.close(params.society, params.mode);
         case "maintenance.begin": return this.maintenanceBegin(key);
         case "maintenance.end": return this.maintenanceEnd(key);
+        case "project.import": return await this.need(this.options.projects, method).import(key, params);
+        case "project.export": return await this.need(this.options.projects, method).export(key, { society: params.society, since: params.since });
+        case "request.status": return this.need(this.options.ledger, method).status(params.key);
         default: throw new StoreError("UNKNOWN_METHOD", `the society channel has no ${method}`);
       }
     });
+  }
+
+  private need<T>(part: T | undefined, method: string): T {
+    if (part === undefined) throw new StoreError("UNKNOWN_METHOD", `the society channel has no ${method}`);
+    return part;
   }
 
   /** §4.6: relays one screen to the society's session holder. The frames

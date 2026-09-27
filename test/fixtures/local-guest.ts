@@ -10,6 +10,9 @@ import { startGuestServer, type GuestIdentity } from "../../src/platform/guest/s
 import { GuestControl, type GuestSystem } from "../../src/platform/guest/control.js";
 import { GuestHost, type SessionLauncher } from "../../src/platform/guest/host.js";
 import { EgressPool } from "../../src/platform/guest/egress.js";
+import { RequestLedger } from "../../src/platform/guest/requests.js";
+import { GuestProjects } from "../../src/platform/guest/project.js";
+import { serveStream } from "../../src/platform/guest/stream.js";
 import type { VmDriver } from "../../src/platform/host/lifecycle.js";
 import { GUEST_PORTS, PLATFORM_FRAME_BYTES } from "../../src/protocol/host-guest.js";
 
@@ -35,7 +38,9 @@ export class LocalDriver implements VmDriver {
   onStopped(listener: () => void): void { this.stopListeners.push(listener); }
   private stopped(): void { for (const listener of this.stopListeners) listener(); }
 
+  private disposed = false;
   async start(): Promise<void> {
+    if (this.disposed) throw new Error("this test's VM is gone");
     this.starts += 1;
     this.hung = false;
     this.running = await this.boot();
@@ -77,7 +82,10 @@ export class LocalDriver implements VmDriver {
       receiptWaitFloor: () => ({ kind: "none" }),
     };
     const control = new GuestControl(system);
-    const host = new GuestHost({ societiesDir: this.societies.dir, projectsDir: join(this.dir, "projects"), launcher: this.societies.launcher, stopDeadlineMs: 2000 });
+    const ledger = new RequestLedger(join(this.dir, "requests"));
+    const projects = new GuestProjects(join(this.dir, "projects"), this.societies.dir, ledger);
+    const host = new GuestHost({ societiesDir: this.societies.dir, projectsDir: join(this.dir, "projects"), launcher: this.societies.launcher, stopDeadlineMs: 2000,
+      projects, ledger });
     const suffix = randomUUID().slice(0, 8);
     const servers = [
       await startGuestServer({ socketPath: join(this.dir, `c-${suffix}.sock`), identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
@@ -86,7 +94,8 @@ export class LocalDriver implements VmDriver {
         helloDeadlineMs: 1000, requestTimeoutMs: 2000, channels: { society: { kind: "json", serve: ({ peer }) => {
           peer.onFrame(frame => { if (typeof frame.method === "string") this.calls.push(frame.method); });
           host.serve(peer);
-        } }, egress: { kind: "bytes", serve: socket => { this.pool.park(socket); } } } }),
+        } }, egress: { kind: "bytes", serve: socket => { this.pool.park(socket); } },
+        stream: { kind: "bytes", serve: socket => { void serveStream(socket, { ledger, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, reserveBytes: 0, dataDir: this.dir }); } } } }),
     ];
     const sockets = new Set<Socket>();
     for (const server of servers) server.on("connection", socket => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
@@ -96,7 +105,7 @@ export class LocalDriver implements VmDriver {
       silence: () => { for (const socket of sockets) socket.destroy(); },
     };
   }
-  async dispose(): Promise<void> { await this.halt(); await new Promise(r => this.silent === null ? r(null) : this.silent.close(r)); }
+  async dispose(): Promise<void> { this.disposed = true; await this.halt(); await new Promise(r => this.silent === null ? r(null) : this.silent.close(r)); }
 }
 export async function open(path: string): Promise<Socket> {
   const socket = connect(path);

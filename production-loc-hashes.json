@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "55e07692d9bba8b54c404d0dfddac07283ef57bfbfc702e1cd53133344f4ec2f",
-  "report": "f7193f046b3727412f78d0c72821d29186b4c234183752a67f66d34e6a71d8af",
+  "manifest": "e7875898a0e8db59b2c33dbf77102e4add818838865da77852ef5ab26f7ed17c",
+  "report": "478bbfe4736f79914b5b422576a14d43271df5ba5faf546bf6560ac84ee7f68f",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -301,7 +301,7 @@
     },
     {
       "path": "src/entry/guesthost.ts",
-      "sha256": "1d5f8282e0afb9db3dbe281c82adb82b00c6240eb389751496157e9d06379751"
+      "sha256": "f64560404cd54ce79e715e147aa9c8f6b6736ac82182831961e467540f25f370"
     },
     {
       "path": "src/entry/host.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/entry/omahostd.ts",
-      "sha256": "ed14737a4966ab56b953800ab3b6a8740b50e06350d76a5437fd5ab8bbea2e07"
+      "sha256": "33ea2c4c57444e566d4a60f8db6584a86e309e05478321ae36a201bbd24ae3dc"
     },
     {
       "path": "src/entry/runner.ts",
@@ -525,7 +525,7 @@
     },
     {
       "path": "src/platform/guest/host.ts",
-      "sha256": "e49cf0dda896f62777c2ae511195bd7e8d537b92491bfa3caf8f695f827fb45e"
+      "sha256": "3072b110d576096253c493e44a3322e86d76919949e1a85f33caacaf8ec9e22f"
     },
     {
       "path": "src/platform/guest/identity.ts",
@@ -536,6 +536,10 @@
       "sha256": "3ad1272bf31fc021ea6ef827548bc7763629adc0b0ec7d55b5f615488a3d6a5f"
     },
     {
+      "path": "src/platform/guest/project.ts",
+      "sha256": "ce54f1d284387b0105f2b32e835d148c4a70b3b22c24f5abb219ca7dae555480"
+    },
+    {
       "path": "src/platform/guest/provision.ts",
       "sha256": "dff6937f6f94bfd4f508cd8b0e78add03e7a3ff84da9978c460c52b34b9c9693"
     },
@@ -544,12 +548,20 @@
       "sha256": "a1da83c7ba3fe315d8ecd2b44c6fecc4741145fb9c86da7beb8dbbf9fba8c91e"
     },
     {
+      "path": "src/platform/guest/requests.ts",
+      "sha256": "96e477a690bc6f04a9c25977bcce57cec396ef9525c1a3faf44da584c69c1666"
+    },
+    {
       "path": "src/platform/guest/server.ts",
       "sha256": "e8e53c3545adcc1c54b2a2d876145f51e1c17bf07363f9d05fede4230d89ed1a"
     },
     {
       "path": "src/platform/guest/session.ts",
       "sha256": "3967bf343749278222df2136379b62fa00465a4e8023a52e88ea6f0043262f45"
+    },
+    {
+      "path": "src/platform/guest/stream.ts",
+      "sha256": "98f51a1329bbc1ea9f8d5f2570ac1a2878f904417c3feac0df5060b54441a627"
     },
     {
       "path": "src/platform/guest/systemd-launcher.ts",
@@ -569,7 +581,7 @@
     },
     {
       "path": "src/platform/host/host-api.ts",
-      "sha256": "81403f873471b4cd0f7329ee227b0f2a8727a6af1c7018724922ec35e78bbabf"
+      "sha256": "c47600b94acf33f4d45842ca9eba7ca31105a2db9c74d988d520d444a32b598e"
     },
     {
       "path": "src/platform/host/image.ts",
@@ -588,6 +600,10 @@
       "sha256": "71471221ed0b7861216d07c26319cf82438671d2e84b5bd42478e3d412728cc3"
     },
     {
+      "path": "src/platform/host/project.ts",
+      "sha256": "702d99cd21cc566ffd66b7e8af08785331c76f82c5d6dc30e1ce4fbe71a03c90"
+    },
+    {
       "path": "src/platform/host/record.ts",
       "sha256": "6f1b642271491293b6772355674b04c3c9a886159659c291938fb1e4fde301c8"
     },
@@ -597,7 +613,7 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "04bf2efae80a1cf72123a0dc58cc5540f06b5ff4272e3e4c7b12e40ca73e59b5"
+      "sha256": "7d021f7a9e0ad817ebbbc00717f76deeda78b51ec4e24bb5474d96f10fd07620"
     },
     {
       "path": "src/platform/host/vz-driver.ts",
@@ -657,7 +673,7 @@
     },
     {
       "path": "src/protocol/host-api.ts",
-      "sha256": "514b5e508df1e1fb939fa8b5af0ae09950d7231970b6b6912a8fde6901222928"
+      "sha256": "b22a7d930c12b71f149854231bbe43ae77202b8f5ea645c080b2942fc787d738"
     },
     {
       "path": "src/protocol/host-channel.ts",
