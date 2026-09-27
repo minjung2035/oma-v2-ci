@@ -688,6 +688,102 @@ P0V-59의 배타 생성(`O_EXCL`로 이름에 바로 쓰기)은 crash에서 반�
 실패한 drain 뒤에도 lock을 풀어 R37(결과를 모르는 native 준비가 있으면 프로세스가 사는 동안 lock을 풀지 않는다)을 깼다. 그래서
 lifetime은 그대로 두었다. 회귀 시험은 `test/p0-review5.test.ts`(durable lane, requiredNames 3개)와 각 owner의 시험 파일에 있다.
 
+## 6차 점검: 외부 검토 R6-01–R6-20
+
+기준점 `712eb53`와 그때의 작업 트리. 2026-09-27 사용자가 외부 검토 보고서(`/home/dev/oma-evidence/review6/REPORT.md`, 저장소 밖)를
+전달했다. 발견 20개(S2 하나, S3 다섯, S4 열넷)와 재현 스크립트(`repro/`)가 있다. 발견마다 코드와 대조해 위반·부합·의도된 한계로 판정했고,
+재현 스크립트는 빌드 뒤 돌려 옛 코드에서 재현되는 것을 확인했다. 수정은 사용자 지시대로 `feat/macos-hidden-vm`에 했다(`refactor` 브런치는
+`d4ed8b8` 그대로). 판정 기준은 다른 점검과 같다: 위반이면 고칠 원칙을 적고 같은 종류가 있는 곳을 함께 고친다. 검증하다 찾은 것(P0V-80,
+P0V-82, P0V-84, P0V-85)도 같은 표에 적는다.
+
+### 판정
+
+| 발견 | 판정 | 원칙 | P0V |
+|---|---|---|---|
+| R6-01 (S2) dangling symlink가 봉인하지 않은 host의 workspace guard를 지난다 | 위반 | 확인과 효과는 한 해석(architecture §4) | 74 |
+| R6-02 (S3) 2^53을 넘는 INTEGER가 INTERNAL_ERROR | 위반 | P0-5, 저장소 오류 정규화 한 곳 | 75 |
+| R6-03 (S3) 상대 기한이 벽시계로 잰다 | 위반(키 디코더 한 곳). status-refresh·tui/transport·storage/transitions의 `Date.now`는 프로세스 사이에 기록·비교되는 시각이라 부합 | D-7 단조 시계 | 76 |
+| R6-04 (S3) native 자식이 일한 트리에 수거자가 없다 | 위반 | P0-4, P0-5(죽음을 증명할 수 있어야 보존이 영구 보존이 되지 않음) | 77 |
+| R6-05 (S3) CLI가 로컬 입력을 상한 없이 읽는다 | 위반. 상한은 frame이 아니라 stream(context·bundle)의 것 | INV10, CFG-003 | 78 |
+| R6-06 (S3) SS3를 escape와 문자로 푼다 | 위반 | TUI-002 | 79 |
+| R6-07 (S4) 신호 종료에서 터미널 복원이 돌지 않는다 | 위반. 같은 종류 다섯 곳 | AV31 목록 하나(DR17) | 81 |
+| R6-08 (S4) P0-7 gate가 주입을 확인하지 않는다 | 위반 | P0-7 | 83–85 |
+| R6-09 (S4) BOM 정책이 decoder마다 다르다 | 위반 | P0-2, IPC-001, decoder owner 하나 | 86 |
+| R6-10 (S4) 벽시계가 순서의 1차 키 | 위반 | 뜻 있는 순서는 단조 원천(rowid) | 87 |
+| R6-11 (S4) sweep이 실패를 두 번 관측 | 위반(지금은 멱등이라 해 없음) | 관측은 한 번 | 88 |
+| R6-12 (S4) `planLocatorsBelongTo`를 부르는 곳이 없다 | 위반(쓰이지 않는 약한 중복). 실제 owner는 plan decoder | 이름 없는 검사를 지움 | 89 |
+| R6-13 (S4) generation 재사용이 여분 파일을 보지 않는다 | 위반(지금은 loader가 manifest만 읽어 해 없음) | P0-3, 이름은 트리 전체 | 90 |
+| R6-14 (S4) `specHash`가 선택 인자 | 위반 | 검증을 건너뛸 수 없는 타입 | 91 |
+| R6-15 (S4) `getAgentIdentity(agent)!` | 위반. 같은 모양 `getOperation(…)!` 열다섯 곳 | 이름 있는 가드 | 92 |
+| R6-16 (S4) `hasGoal` fallback이 EACCES를 "GOAL 없음"으로 | 위반(제품은 닿지 않음). reconcile의 "있음" fallback도 같은 종류 | P0-5, owner 하나 | 93 |
+| R6-17 (S4) TSV view가 구분자만 escape | 위반(지금은 입력 문법이 막음) | 파생 view가 스스로 escape | 94 |
+| R6-18 (S4) workspace quota가 검사와 쓰기가 떨어진 soft quota | 위반. R6-01과 같은 owner로 고침 | 예약은 효과의 owner가 | 74 |
+| R6-19 (S4) 동기 SQLite와 `busy_timeout=5000` | 의도된 한계. 상한을 문서에 적음 | — | — |
+| R6-20 (S4) owner 줄 없는 옛 unit을 Description으로 판정 | 위반 | P0-1, P0-5 | 95 |
+
+### 수정
+
+| ID | 발견 | 파일 | 요약 | 상태 |
+|---|---|---|---|---|
+| P0V-74 | R6-01, R6-18 | extension/contained-files.ts·contained-tools.ts, workspace-guard.ts, pi-extension.ts | 모델에게 보이는 파일 효과(write·edit, 봉인하지 않으면 read·ls도)를 containment 하나로 옮겼다. 경로 구성요소마다 `O_NOFOLLOW`로 `/proc/self/fd`를 따라 열고, 확인과 효과가 같은 fd를 쓴다. 쓰기 quota는 그 owner가 직렬화한 쓰기 안에서 정한다 | 수정 489f1f9 |
+| P0V-75 | R6-02 | domain/errors.ts | node:sqlite의 `ERR_OUT_OF_RANGE`(정수를 JS 값으로 넘길 수 없음)를 STORE_CORRUPT로. 같은 코드의 Buffer 오류는 저장소가 아니다 | 수정 cc5c46e |
+| P0V-76 | R6-03 | tui/keys.ts | paste burst를 단조 시계로 잰다 | 수정 a847bf8 |
+| P0V-77 | R6-04 | storage/tree-lease.ts, git/quarantine.ts, storage/context-stream.ts, git/context-repository.ts, runtime/provision.ts, reconcile/preaccept.ts, lifecycle/workspace.ts | 자식이 일하는 트리 옆에 flock한 lease를 두고 자식에게 물려준다. 잠금이 풀려 있으면 만든 자가 모두 죽었다는 증명이라 수거하고, 쥐어 있으면 남긴다 | 수정 882ef85 |
+| P0V-78 | R6-05 | cli/effects.ts·effects/context.ts·effects/submit.ts, cli/transport.ts, 환경 셋 | CLI의 로컬 입력은 `readBounded` 하나로 읽는다. 크기는 할당 전에 그 입력이 가는 stream의 상한(`OMA_CONTEXT_BYTES`·`OMA_BUNDLE_BYTES`, host가 frame 상한 옆에 넣음)과 비교한다. 두 번째 복사를 없앴다 | 수정 5a4771f |
+| P0V-79 | R6-06 | tui/keys.ts, tui/screen.ts | `ESC O`를 `ESC [`처럼 토큰으로 모으고, 모르는 것은 버린다. 시작과 repaint에서 DECCKM을 끈다 | 수정 effbcc4 |
+| P0V-80 | 검증 중 발견 | platform/guest/pty.ts | `posix_openpt`에 O_CLOEXEC가 없어 society의 프로그램이 자기 터미널의 master를 물려받았다. holder가 죽어도 hangup이 없어 고아로 남았다(전체 시험 한 번에 fake-tui 63개) | 수정 71bf92f |
+| P0V-81 | R6-07 | runtime/broker-lifetime.ts, entry/oma.ts·runner.ts·omahostd.ts·guest-session.ts, platform/host/attach-client.ts, tui/screen.ts | `HOST_LOSS_SIGNALS`를 잡을 수 있는 종료 신호 전부(SIGQUIT 추가)로 정의하고, drain이 있는 모든 프로세스가 그 목록으로 drain을 밟는다. 규칙 `host-loss-signals` | 수정 90088b8(DR17) |
+| P0V-82 | R6-07의 같은 종류 | entry/guestctl.ts, platform/guest/control.ts, oma-guestctl.service | guestctl이 언 채로 죽으면 deadline timer도 사라져 freeze가 남았다(MAC-620). `ExecStopPost`의 `--thaw`, 시작할 때의 thaw, 종료마다의 release | 수정 302bcf1 |
+| P0V-83 | R6-08 | scripts/durable-boundaries.mjs, durable-boundaries.json | 등록한 시험마다 주입 종류(sigkill·in-process-fault·logical)를 적고, gate가 AST로 제목을 확인하고 시험이 닿는 코드가 그 주입을 보이는지 본다. 요약은 경계별 가장 강한 주입을 말한다 | 수정 e270d75 |
+| P0V-84 | R6-08 작업 중 발견 | storage/durable-fs.ts `publishNoReplace` | 다른 게시 primitive와 같은 durability 지점. 게시 도중 죽은 writer의 임시 파일에 owner가 없었다: 임시 파일에 flock을 걸어 두고 같은 이름의 다음 게시가 풀린 것만 거둔다 | 수정 e270d75 |
+| P0V-85 | R6-08 | runtime/provision.ts, git/canonical-command.ts | canonical `main`을 child git의 fetch·update-ref가 직접 쓰던 것을 생성 전용 CAS(`createCanonicalRef`)로. gate가 보는 경계가 되고 SIGKILL 시험을 등록했다 | 수정 e270d75 |
+| P0V-86 | R6-09 | domain/utf8.ts, extension/utf8.ts, decoder 열다섯 곳 | UTF-8 읽기 owner 하나: 잘못된 바이트는 거절하고 U+FEFF는 글자로 남긴다. strict JSON은 BOM을 다른 글자처럼 거절한다. 빈 문서 판정은 context 정책의 것이다. 규칙 `utf8-decoder-owner` | 수정 2762903 |
+| P0V-87 | R6-10 | storage/ledger-reader.ts, store.ts | 뜻 있는 순서를 rowid로. 규칙 `ledger-order-clock` | 수정 53409b8 |
+| P0V-88 | R6-11 | reconcile/operations.ts | 관측자의 판정을 다시 관측자에게 넘기지 않는다 | 수정 53409b8 |
+| P0V-89 | R6-12 | domain/persisted-formats.ts | 쓰이지 않는 약한 중복 검사를 지우고, 시험은 owner(plan decoder)를 본다 | 수정 53409b8 |
+| P0V-90 | R6-13 | config/generations.ts | 재사용은 트리 전체가 같을 때만 | 수정 53409b8 |
+| P0V-91 | R6-14 | authority.ts | `specHash` 필수 | 수정 53409b8 |
+| P0V-92 | R6-15 | broker/internal-dispatcher.ts, store.ts `retriedOperation`, lifecycle/create.ts 외 | 이름 없는 `!` 열일곱 곳을 이름 있는 가드로 | 수정 53409b8 |
+| P0V-93 | R6-16 | broker.ts, reconcile.ts | `hasGoal` 필수, fallback 둘 제거 | 수정 53409b8 |
+| P0V-94 | R6-17 | views.ts `fieldEscape` | 제어 문자 전부를 되돌릴 수 있게 escape | 수정 53409b8 |
+| P0V-95 | R6-20 | units.ts | owner를 알 수 없는 unit은 교체하지 않는다. `systemctl show` 형식 가정은 `effectiveExecArgv` 한 곳 | 수정 53409b8 |
+
+원칙에 따라 함께 고친 곳: P0V-77은 quarantine·context 준비·workspace clone·provision staging 네 곳에 같은 lease를 두었다. P0V-81은 broker
+밖의 draining 프로세스 다섯 곳을 같은 목록으로 옮겼고, 그 탐색에서 P0V-82를 찾았다. P0V-86은 decoder 열다섯 곳을 모두 owner로 옮겼다.
+P0V-92는 R6-15의 두 자리와 같은 모양(`claim === "retry"` 뒤의 `getOperation(…)!`) 열다섯 곳과 create의 `getAgent(…)!`를 함께 고쳤다.
+P0V-93은 reconcile의 반대 방향 fallback도 지웠다.
+
+재현한 것: 보고서 §8의 스크립트를 빌드 뒤 돌려 옛 코드에서 모두 재현했고, 수정 뒤에는 R6-01 `guard: blocked`, G07 `context is larger than a
+request can carry (8388608 bytes)`, G06 BOM frame 거절, G07-sweep `failureCalls: 1`을 확인했다.
+
+판정을 바꾼 곳: R6-05의 상한은 보고서가 적은 frame(256 KiB)이 아니다. context와 bundle은 frame 뒤의 raw stream이라 society의
+`contextBytes`·`bundleBytes`가 상한이다. R6-09의 "문서 시작과 stream 중간을 구분하는 decoder"는 두지 않았다. decoder는 그것을 알 수 없고,
+구분이 필요한 곳(빈 GOAL.md)은 그 규칙의 owner(context 정책)가 정한다.
+
+남긴 것: R6-08의 "설정 commit과 receipt에도 crash-worker 방식"은 아직이다. 그 경계의 가장 강한 주입은 in-process-fault이고, gate의
+요약이 그렇게 말한다(sigkill 33, in-process-fault 17, logical 14). crash lane(`crash-boundaries`)은 일회용 user manager가 있어야 돌아 이
+환경에서 돌리지 않았다.
+
+### 기존 시험의 기대를 바꾼 곳
+
+- `context-security`, `preaccept-ownership`, `r21-context-*`: P0V-77의 lease 파일을 트리와 따로 센다. 거절된 요청의 lease는 트리와 함께 간다.
+- `audit-cli-submit`: bundle 읽기 실패 주입이 이제 bundle이 실제로 지나는 `readSync`를 겨냥한다(P0V-78).
+- `r17-lifetime`, `oma-composition-policy`(T119): `HOST_LOSS_SIGNALS`에 SIGQUIT이 있다. T119 harness가 그 목록 모듈을 준다(DR17).
+- `r30-views`: CR은 지우지 않고 `\r`로 escape한다(P0V-94).
+- `persisted-format-boundary`: locator 소유 확인은 plan decoder가 한다(P0V-89).
+- `domain-policy`, `runtime-contracts`: `resolvedSpecOf`에 digest를 준다(P0V-91).
+- Broker·ReconcileModule을 조립하는 시험 열여섯 곳: `hasGoal`을 명시한다. 값은 예전 fallback과 같다(`fixtures/goal.ts`, P0V-93).
+- PiAdapter·principalEnvironment에 한도를 주는 시험 일곱 곳: `contextBytes`·`bundleBytes`가 더해졌다(P0V-78).
+
+### 수정 검증
+
+수정마다 시험을 먼저 쓰고, 고친 판정만 되돌리는 변이를 넣어 해당 시험이 실패하는지 확인했다(`scratchpad/mutate.sh`: 빌드된 파일에 변이를
+넣고 그 시험만 돌린 뒤 되돌린다). 모두 KILLED다. 처음 쓴 시험 둘이 살아남아 고쳤다: P0V-76과 P0V-87의 시험은 대상 객체가 만들어질 때
+`Date.now`를 잡아 두므로, 시계를 객체보다 먼저 쥐도록 했다. 규칙(`host-loss-signals`, `utf8-decoder-owner`, `ledger-order-clock`,
+`principal-session-env`의 새 이름)은 accept·reject·near-miss fixture와, 실제 트리에서 되돌린 변이로 확인했다. 회귀 시험은
+`test/p0-review6.test.ts`(durable lane, requiredNames 6개)와 각 owner의 시험 파일에 있다. 전체 `npm test`의 실패는 기록 결박(R38 둘, V32A
+둘: 새 production 파일이 validation과 review ledger에 없음)뿐이다.
+
 ## 수정 검증
 
 수정마다 그 수정을 되돌리는 변이를 넣고, 빌드한 뒤 해당 시험 파일을 돌렸다. 시험이 실패하면 KILLED다. 변이를 넣은 코드는 매번 원래대로 되돌리고 다시 빌드했다.

@@ -5,8 +5,8 @@
 ## 1. 현재 판정 (2026-09-27)
 
 - 브랜치 `refactor/safety-preserving-architecture`. origin에는 v21 결박 커밋 `18421f0`까지 push했다(2026-09-26 사용자 승인, 2026-09-27 사용자가 맡긴 남은 일로). 그 뒤의 5차 점검 커밋들은 push하지 않았다. PR·merge는 하지 않았다.
-- consistency plan의 카드 WP00–WP32와 그 뒤의 작업(재검토와 적대적 검증 AV1–AV8, 엔진 0.87.1 ENG1, 실제 provider 기능 점검 1–14차와 AV9–AV31, 설계 수정 DR1–DR16, Priority 0 점검 P0V-01–P0V-73, 시나리오 시험 SCN)을 모두 커밋했다. 마지막 통합 검증은 validation.md의 "현재 source 판정"(v21, 부모 `b4b0d29`)이다. initial과 final lane 8개씩이 모두 PASS였고, final은 결박한 digest와 같은 트리에서 돌았다. 5차 점검(P0V-56–P0V-73, DR16)은 그 뒤의 커밋이라 결박하지 않았다. 로컬 전체 시험의 R38 두 개는 다음 결박까지 실패한다(validation이 이전 트리의 digest를 적고 있다).
-- 외부 전수 검토(기준 `6787211`)를 판정한 4차 점검 P0V-25–P0V-53은 priority-0-audit "4차 점검", 그 판단 DR14와 framing 예외 DR15는 design-revisions, 시나리오 시험 54개와 그것이 찾은 P0V-54·55는 priority-0-audit "시나리오 시험이 찾은 것"에 있다. `18421f0`을 본 외부 재검토 두 건(R01–R13, F1–F6)을 판정한 5차 점검 P0V-56–P0V-73은 priority-0-audit "5차 점검", rootfs 수리 순서를 바꾼 DR16은 design-revisions에 있다.
+- consistency plan의 카드 WP00–WP32와 그 뒤의 작업(재검토와 적대적 검증 AV1–AV8, 엔진 0.87.1 ENG1, 실제 provider 기능 점검 1–14차와 AV9–AV31, 설계 수정 DR1–DR17, Priority 0 점검 P0V-01–P0V-95, 시나리오 시험 SCN)을 모두 커밋했다. 마지막 통합 검증은 validation.md의 "현재 source 판정"(v21, 부모 `b4b0d29`)이다. initial과 final lane 8개씩이 모두 PASS였고, final은 결박한 digest와 같은 트리에서 돌았다. 5차 점검(P0V-56–P0V-73, DR16)과 6차 점검(P0V-74–P0V-95, DR17, 브런치 `feat/macos-hidden-vm`)은 그 뒤의 커밋이라 결박하지 않았다. 로컬 전체 시험의 R38 두 개는 다음 결박까지 실패한다(validation이 이전 트리의 digest를 적고 있다).
+- 외부 전수 검토(기준 `6787211`)를 판정한 4차 점검 P0V-25–P0V-53은 priority-0-audit "4차 점검", 그 판단 DR14와 framing 예외 DR15는 design-revisions, 시나리오 시험 54개와 그것이 찾은 P0V-54·55는 priority-0-audit "시나리오 시험이 찾은 것"에 있다. `18421f0`을 본 외부 재검토 두 건(R01–R13, F1–F6)을 판정한 5차 점검 P0V-56–P0V-73은 priority-0-audit "5차 점검", rootfs 수리 순서를 바꾼 DR16은 design-revisions에 있다. 외부 검토 R6-01–R6-20을 판정한 6차 점검 P0V-74–P0V-95는 priority-0-audit "6차 점검", 종료 신호 목록을 넓힌 DR17은 design-revisions에 있다.
 - **release 미승인.** 남은 차단 요인은 powercut·실제 provider 자동 lane·CI(NOT_RUN, oracle V05C·V30B·V32B)이며 모두 사용자 승인이 필요하다. A-008 LOC gate도 OPEN이다. 수동 provider 점검은 lane 증거가 아니다. 판정은 다음 명령으로 다시 확인한다.
 
   ```sh
@@ -23,7 +23,7 @@
 | 재검토, AV1–AV8 | consistency-decisions의 "Re-review", "Whole-codebase adversarial pass" | validation "재검토와 적대적 검증" |
 | ENG1 엔진 0.87.1 | consistency-decisions의 ENG1 | validation "엔진 0.87.1" |
 | 실제 provider 점검 1–13차, AV9–AV31 | consistency-decisions의 AV 절, 화면 기록 `/home/dev/oma-evidence/provider/runs/` | validation "실제 provider 기능 점검" |
-| 설계 수정 DR1–DR16 | [design-revisions](implementation/design-revisions.md) | validation "설계 수정", "Priority 0" |
+| 설계 수정 DR1–DR17 | [design-revisions](implementation/design-revisions.md) | validation "설계 수정", "Priority 0" |
 | Priority 0, 14차 점검 | [PRIORITY-0](PRIORITY-0.md), [priority-0-audit](implementation/priority-0-audit.md) | validation "Priority 0" |
 
 카드별 commit은 Git history에서 찾는다(예: `git log --oneline --grep 'WP13'`). 정리 전 이 문서에 있던 카드별 commit·한계 표는 [docs/archive.md](docs/archive.md)의 snapshot에 있고, 그 한계 가운데 지금도 유효한 것은 validation "알려진 한계"로 옮겼다.

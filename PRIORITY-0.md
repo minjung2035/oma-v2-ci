@@ -12,7 +12,8 @@
 고쳤다. 실제 provider 점검(14차)에서 하나(P0V-24)를 더 찾아 고쳤다. 외부 전수 검토를 받아 판정한 4차 점검의 발견
 P0V-25–P0V-53은 하나(P0V-44, v1 receipt 형식 안의 한계로 둔 의도된 예외, DR14)를 빼고 고쳤다. 모델만 대본인
 시나리오 시험이 두 개(P0V-54, P0V-55)를 더 찾았고 고쳤다(DR15). 외부 재검토 두 건의 5차 점검에서 찾은
-P0V-56–P0V-73을 모두 고쳤다(rootfs 수리 순서는 DR16). 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
+P0V-56–P0V-73을 모두 고쳤다(rootfs 수리 순서는 DR16). 6차 점검(외부 검토 R6-01–R6-20)과 그 검증에서 찾은
+P0V-74–P0V-95를 고쳤다(R6-19는 의도된 한계로 문서화, 종료 신호 목록은 DR17). 근거와 수정 commit은 [`implementation/priority-0-audit.md`](implementation/priority-0-audit.md)에,
 설계 판단은 DR9–DR13에 있다. 지금의 검증 판정은 `implementation/validation.md`가 소유한다.
 
 ## 요약
