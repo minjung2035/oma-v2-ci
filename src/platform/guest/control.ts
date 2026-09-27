@@ -16,6 +16,14 @@ export interface HealthFacts {
   readonly failedUnits: number | null;
 }
 
+/** The shortest receipt wait any society in this guest is configured with
+ * (`limits.receiptWaitSeconds`): "none" when there is no society, "unknown"
+ * when a configuration could not be read. */
+export type ReceiptWaitFloor =
+  | { readonly kind: "none" }
+  | { readonly kind: "known"; readonly ms: number }
+  | { readonly kind: "unknown" };
+
 export interface GuestSystem {
   /** CLOCK_REALTIME, milliseconds. */
   wallClock(): number;
@@ -30,11 +38,14 @@ export interface GuestSystem {
   powerOff(): void;
   /** A timer this module can cancel; injected so tests control time. */
   schedule(ms: number, run: () => void): { cancel(): void };
+  receiptWaitFloor(): ReceiptWaitFloor;
 }
 
-/** The most a freeze may last, whatever the host asks: broker writes stop
- * while it holds (MAC-620). */
-export const FREEZE_LIMIT_MS = 30_000;
+/** The most a freeze may last when no society bounds it. */
+export const FREEZE_LIMIT_MS = 10_000;
+/** How much sooner than the shortest receipt wait a freeze must end: the
+ * thaw itself and the first write after it take time too. */
+export const FREEZE_MARGIN_MS = 500;
 
 export class GuestControl {
   private frozen: { readonly at: number; readonly timer: { cancel(): void } } | null = null;
@@ -54,17 +65,28 @@ export class GuestControl {
     return { steppedByMs: wallMs - before };
   }
 
-  /** MAC-620: a freeze always ends. The deadline is the host's, capped, and
-   * it is kept even if the host's connection closes. */
-  freeze(deadlineMs: number): { frozenAt: number } {
+  /** MAC-620: a freeze always ends, and it ends before any society's
+   * receipt wait could expire behind it: writes block while it holds. The
+   * deadline is the host's, shortened to the shortest receipt wait actually
+   * configured here less a margin; the one used is answered. A configuration
+   * that cannot be read leaves that bound unknown, and no freeze is taken on
+   * an unknown bound (P0-5). The deadline is kept even if the host's
+   * connection closes. */
+  freeze(deadlineMs: number): { frozenAt: number; deadlineMs: number } {
     if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= 0) throw new StoreError("INVALID_REQUEST", "deadlineMs must be a positive integer");
     if (this.frozen !== null) throw new StoreError("BATCH_CONFLICT", "the state filesystem is already frozen");
     if (this.poweringOff) throw new StoreError("BROKER_UNAVAILABLE", "the guest is powering off");
+    const floor = this.system.receiptWaitFloor();
+    if (floor.kind === "unknown")
+      throw new StoreError("BROKER_UNAVAILABLE", "a society's receipt wait could not be read, so no freeze can be shown to end before it");
+    const ceiling = Math.min(FREEZE_LIMIT_MS, floor.kind === "known" ? floor.ms - FREEZE_MARGIN_MS : FREEZE_LIMIT_MS);
+    if (ceiling <= 0) throw new StoreError("INVALID_REQUEST", "a society's receipt wait is too short for any freeze");
+    const effective = Math.min(deadlineMs, ceiling);
     this.system.freeze();
     const at = this.system.wallClock();
-    const timer = this.system.schedule(Math.min(deadlineMs, FREEZE_LIMIT_MS), () => { this.end("deadline"); });
+    const timer = this.system.schedule(effective, () => { this.end("deadline"); });
     this.frozen = { at, timer };
-    return { frozenAt: at };
+    return { frozenAt: at, deadlineMs: effective };
   }
 
   thaw(): { thawed: boolean } {

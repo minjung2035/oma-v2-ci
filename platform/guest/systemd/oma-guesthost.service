@@ -8,10 +8,14 @@ Wants=user@1000.service
 [Service]
 Type=simple
 User=oma
+# To hand its socket to the bridge's group; it is not the bridge.
+SupplementaryGroups=oma-bridge
+Environment=HOME=/var/lib/oma/home
+Environment=XDG_DATA_HOME=/var/lib/oma/data
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 RuntimeDirectory=oma-guesthost
-RuntimeDirectoryMode=0700
+RuntimeDirectoryMode=0711
 ExecStart=/usr/lib/oma/node/bin/node /usr/lib/oma/dist/src/entry/guesthost.js --socket /run/oma-guesthost/society.sock --data /var/lib/oma
 Restart=on-failure
 RestartSec=1s

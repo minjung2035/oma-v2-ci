@@ -4,11 +4,17 @@
  * In the guest a host connection arrives through the vsock bridge (one
  * socket-activated instance per connection, MAC-202), so by the time it is
  * here it is a unix-socket stream from a peer the bridge identified as the
- * host. This server still checks everything the host says (MAC-230): the
- * hello's shape, the VM instance it names (MAC-211) and the protocol.
+ * host. Which process connected is asked of the kernel (SO_PEERCRED), not
+ * inferred from the socket file's mode: the bridge runs as its own user and
+ * nothing else is served, because a process of this service's own user could
+ * open a socket this user owns, and a file's mode is no boundary within one
+ * uid (FS-005, AUTH-003). This server still checks everything the host says
+ * (MAC-230): the hello's shape, the VM instance it names (MAC-211) and the
+ * protocol.
  */
 import { createServer, type Server, type Socket } from "node:net";
-import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { chmodSync, chownSync, existsSync, unlinkSync } from "node:fs";
+import { peerCred, socketDescriptor } from "../../leaf.js";
 import { FramedPeer, readHello } from "../rpc.js";
 import { ERROR_METADATA, StoreError, errorCodeOf } from "../../domain/errors.js";
 import {
@@ -37,6 +43,8 @@ export type ChannelHandler =
 
 export interface GuestServerOptions {
   readonly socketPath: string;
+  /** The vsock bridge's user: the only peer this server answers (MAC-202). */
+  readonly bridge: { readonly uid: number; readonly gid: number };
   readonly identity: () => GuestIdentity;
   readonly channels: Partial<Record<Channel, ChannelHandler>>;
   readonly frameBytes: number;
@@ -50,8 +58,11 @@ export function startGuestServer(options: GuestServerOptions): Promise<Server> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(options.socketPath, () => {
-      // Only the bridge, running as this service's user, may connect.
-      chmodSync(options.socketPath, 0o600);
+      // The bridge's group may connect; who did is checked per connection.
+      try {
+        if (options.bridge.gid !== process.getgid?.()) chownSync(options.socketPath, -1, options.bridge.gid);
+        chmodSync(options.socketPath, 0o660);
+      } catch (error) { server.close(); reject(error as Error); return; }
       server.off("error", reject);
       resolve(server);
     });
@@ -60,6 +71,11 @@ export function startGuestServer(options: GuestServerOptions): Promise<Server> {
 
 async function accept(socket: Socket, options: GuestServerOptions): Promise<void> {
   socket.on("error", () => { socket.destroy(); });
+  // Closed unread: a peer that is not the bridge learns nothing, not even
+  // that a hello would have been refused.
+  const fd = socketDescriptor(socket);
+  const credentials = fd === null ? null : peerCred(fd);
+  if (credentials === null || credentials.uid !== options.bridge.uid) { socket.destroy(); return; }
   const peer = new FramedPeer(socket, { frameBytes: options.frameBytes, requestTimeoutMs: options.requestTimeoutMs });
   let hello: { readonly id: string; readonly params: HelloParams };
   try { hello = await readHello(peer, options.helloDeadlineMs); }

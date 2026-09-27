@@ -22,6 +22,18 @@ function readJson(path: string, what: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+/** A system user of the image, from its own account database (the image's
+ * sysusers configuration creates it). Unknown is an error, never a guess. */
+export function systemUser(name: string, passwd = "/etc/passwd"): { readonly uid: number; readonly gid: number } {
+  for (const line of readFileSync(passwd, "utf8").split("\n")) {
+    const fields = line.split(":");
+    if (fields[0] !== name || fields.length < 4) continue;
+    const uid = Number(fields[2]); const gid = Number(fields[3]);
+    if (Number.isSafeInteger(uid) && uid >= 0 && Number.isSafeInteger(gid) && gid >= 0) return Object.freeze({ uid, gid });
+  }
+  throw new StoreError("BROKER_UNAVAILABLE", `the ${name} account does not exist`);
+}
+
 export function readGuestIdentity(dataDir: string, imageManifest: string, capabilities: readonly string[],
   bootIdPath = "/proc/sys/kernel/random/boot_id"): GuestIdentity {
   const instance = readJson(join(dataDir, INSTANCE_FILE), "the VM instance record");

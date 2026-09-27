@@ -6,12 +6,14 @@
  * the product's bounded process runner. Nothing here decides anything;
  * `GuestControl` does.
  */
-import { closeSync, openSync, readFileSync, statfsSync, constants } from "node:fs";
+import { closeSync, lstatSync, openSync, readFileSync, readdirSync, statfsSync, constants } from "node:fs";
+import { join } from "node:path";
 import { getSystemErrorName } from "node:util";
 import { errno, load } from "koffi";
 import { StoreError } from "../../domain/errors.js";
 import { decodeProcessText, runProcess, runProcessSync, type CommandSpec } from "../../process/run.js";
-import type { GuestSystem, HealthFacts } from "./control.js";
+import { loadConfig } from "../../config.js";
+import type { GuestSystem, HealthFacts, ReceiptWaitFloor } from "./control.js";
 
 const CLOCK_REALTIME = 0;
 /** _IOWR('X', 119, int) and _IOWR('X', 120, int). */
@@ -62,7 +64,29 @@ function deviceOf(mountPoint: string): string {
   throw new StoreError("BROKER_UNAVAILABLE", "the state filesystem's device is not mounted");
 }
 
-export function linuxGuestSystem(stateMount: string): GuestSystem {
+/** The shortest `limits.receiptWaitSeconds` among the societies whose state
+ * roots are under `societiesDir` (each `<society>/config.json`, the layout
+ * `hostLaunchLocation` gives the guest's `oma`). A state root without a
+ * configuration has no broker to wait on; one whose configuration does not
+ * load makes the answer unknown. */
+export function receiptWaitFloor(societiesDir: string): ReceiptWaitFloor {
+  let names: string[];
+  try { names = readdirSync(societiesDir, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name); }
+  catch (error) { return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "none" } : { kind: "unknown" }; }
+  let floor: number | null = null;
+  for (const name of names) {
+    const configPath = join(societiesDir, name, "config.json");
+    try { if (lstatSync(configPath, { throwIfNoEntry: false }) === undefined) continue; }
+    catch { return { kind: "unknown" }; }
+    let seconds: number;
+    try { seconds = loadConfig(configPath).limits.receiptWaitSeconds; }
+    catch { return { kind: "unknown" }; }
+    floor = floor === null ? seconds * 1000 : Math.min(floor, seconds * 1000);
+  }
+  return floor === null ? { kind: "none" } : { kind: "known", ms: floor };
+}
+
+export function linuxGuestSystem(stateMount: string, societiesDir: string): GuestSystem {
   const withMount = <T>(run: (fd: number) => T): T => {
     const fd = openSync(stateMount, constants.O_RDONLY | constants.O_DIRECTORY);
     try { return run(fd); } finally { closeSync(fd); }
@@ -115,5 +139,6 @@ export function linuxGuestSystem(stateMount: string): GuestSystem {
       const timer = setTimeout(run, ms);
       return { cancel: () => clearTimeout(timer) };
     },
+    receiptWaitFloor: () => receiptWaitFloor(societiesDir),
   };
 }

@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 231,
-    "n_lines": 31145,
+    "n_lines": 31226,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -452,8 +452,14 @@
   },
   "src/protocol/host-guest.ts": {
     "blank": 16,
-    "comment": 36,
-    "code": 123,
+    "comment": 37,
+    "code": 125,
+    "language": "TypeScript"
+  },
+  "src/platform/guest/linux-system.ts": {
+    "blank": 5,
+    "comment": 17,
+    "code": 122,
     "language": "TypeScript"
   },
   "src/mail/materializer.ts": {
@@ -516,12 +522,6 @@
     "code": 104,
     "language": "SQL"
   },
-  "src/platform/guest/linux-system.ts": {
-    "blank": 4,
-    "comment": 12,
-    "code": 103,
-    "language": "TypeScript"
-  },
   "src/git/integration-policy.ts": {
     "blank": 6,
     "comment": 10,
@@ -564,6 +564,12 @@
     "code": 94,
     "language": "TypeScript"
   },
+  "src/platform/guest/server.ts": {
+    "blank": 6,
+    "comment": 30,
+    "code": 94,
+    "language": "TypeScript"
+  },
   "src/views/pending-work.ts": {
     "blank": 4,
     "comment": 14,
@@ -579,6 +585,12 @@
   "src/domain/persisted-formats.ts": {
     "blank": 10,
     "comment": 26,
+    "code": 92,
+    "language": "TypeScript"
+  },
+  "src/platform/guest/control.ts": {
+    "blank": 13,
+    "comment": 28,
     "code": 92,
     "language": "TypeScript"
   },
@@ -624,12 +636,6 @@
     "code": 86,
     "language": "TypeScript"
   },
-  "src/platform/guest/server.ts": {
-    "blank": 6,
-    "comment": 22,
-    "code": 86,
-    "language": "TypeScript"
-  },
   "src/domain/canonical-json.ts": {
     "blank": 6,
     "comment": 4,
@@ -670,12 +676,6 @@
     "blank": 2,
     "comment": 12,
     "code": 81,
-    "language": "TypeScript"
-  },
-  "src/platform/guest/control.ts": {
-    "blank": 12,
-    "comment": 19,
-    "code": 80,
     "language": "TypeScript"
   },
   "src/runtime/assets.ts": {
@@ -1008,6 +1008,12 @@
     "code": 39,
     "language": "TypeScript"
   },
+  "src/platform/guest/identity.ts": {
+    "blank": 4,
+    "comment": 7,
+    "code": 39,
+    "language": "TypeScript"
+  },
   "src/domain/resources.ts": {
     "blank": 6,
     "comment": 9,
@@ -1098,12 +1104,6 @@
     "code": 30,
     "language": "TypeScript"
   },
-  "src/platform/guest/identity.ts": {
-    "blank": 3,
-    "comment": 5,
-    "code": 30,
-    "language": "TypeScript"
-  },
   "src/domain/limits.ts": {
     "blank": 4,
     "comment": 4,
@@ -1138,6 +1138,12 @@
     "blank": 0,
     "comment": 1,
     "code": 27,
+    "language": "TypeScript"
+  },
+  "src/entry/guestctl.ts": {
+    "blank": 3,
+    "comment": 3,
+    "code": 26,
     "language": "TypeScript"
   },
   "src/git/canonical-command.ts": {
@@ -1186,12 +1192,6 @@
     "blank": 4,
     "comment": 2,
     "code": 25,
-    "language": "TypeScript"
-  },
-  "src/entry/guestctl.ts": {
-    "blank": 3,
-    "comment": 2,
-    "code": 24,
     "language": "TypeScript"
   },
   "src/protocol/principal-credential.ts": {
@@ -1393,9 +1393,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1275,
-    "comment": 5218,
-    "code": 24652,
+    "blank": 1278,
+    "comment": 5244,
+    "code": 24704,
     "nFiles": 231
   }
 }

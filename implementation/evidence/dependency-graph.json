@@ -1474,7 +1474,7 @@
   }
  ],
  "files": 232,
- "runtimeEdges": 890,
+ "runtimeEdges": 892,
  "typeOnlyEdges": 326,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
@@ -1483,7 +1483,7 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 112,
+  "L4-orchestration -> L1-kernel": 114,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
   "L4-orchestration -> L4-orchestration": 43,
@@ -1555,7 +1555,7 @@
   "node:https": 1,
   "node:net": 12,
   "node:os": 2,
-  "node:path": 67,
+  "node:path": 68,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

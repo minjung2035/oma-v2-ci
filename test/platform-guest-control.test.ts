@@ -4,13 +4,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, createServer, type Server } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { FramedPeer, PlatformError, sendHello } from "../src/platform/rpc.js";
 import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
-import { GuestControl, type GuestSystem } from "../src/platform/guest/control.js";
+import { FREEZE_LIMIT_MS, FREEZE_MARGIN_MS, GuestControl, type GuestSystem, type ReceiptWaitFloor } from "../src/platform/guest/control.js";
+import { receiptWaitFloor } from "../src/platform/guest/linux-system.js";
+import { defaultHostConfig } from "../src/config/defaults.js";
 import { StoreError } from "../src/domain/errors.js";
 import {
   HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, helloParamsProblem, negotiate, productText, type HelloParams,
@@ -23,10 +25,11 @@ const hello = (overrides: Partial<HelloParams> = {}): HelloParams => ({ channel:
   protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL }, hostVersion: "1.0.0",
   installationId: randomUUID(), instanceId: INSTANCE, expectImage: "2026.09.1", ...overrides });
 
-function fakeSystem(): GuestSystem & { calls: string[]; fire(): void; clock: number } {
+function fakeSystem(): GuestSystem & { calls: string[]; fire(): void; clock: number; floor: ReceiptWaitFloor; scheduledMs: number | null } {
   let pending: (() => void) | null = null;
   const system = {
-    calls: [] as string[], clock: 1_000_000,
+    calls: [] as string[], clock: 1_000_000, floor: { kind: "known", ms: 30_000 } as ReceiptWaitFloor, scheduledMs: null as number | null,
+    receiptWaitFloor: () => system.floor,
     wallClock: () => system.clock,
     setWallClock(ms: number) { system.calls.push(`clock:${ms}`); system.clock = ms; },
     health: () => ({ uptimeMs: 1, load: [0, 0, 0] as [number, number, number], memory: { totalBytes: 2, availableBytes: 1 },
@@ -35,16 +38,18 @@ function fakeSystem(): GuestSystem & { calls: string[]; fire(): void; clock: num
     thaw() { system.calls.push("thaw"); },
     grow: async () => { throw new StoreError("INTERNAL_ERROR", "resize2fs failed on /dev/vdb for /var/lib/oma"); },
     powerOff() { system.calls.push("poweroff"); },
-    schedule(_ms: number, run: () => void) { pending = run; return { cancel: () => { pending = null; } }; },
+    schedule(ms: number, run: () => void) { system.scheduledMs = ms; pending = run; return { cancel: () => { pending = null; } }; },
     fire() { const run = pending; pending = null; run?.(); },
   };
   return system;
 }
 
-async function guest(t: import("node:test").TestContext, control = new GuestControl(fakeSystem())) {
+/** The bridge's user is this test's own: the server answers only it. */
+const self = { uid: process.getuid!(), gid: process.getgid!() };
+async function guest(t: import("node:test").TestContext, control = new GuestControl(fakeSystem()), bridge = self) {
   const dir = mkdtempSync(join(tmpdir(), "oma-guest-"));
   const socketPath = join(dir, "control.sock");
-  const server = await startGuestServer({ socketPath, identity, frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 2000, requestTimeoutMs: 5000,
+  const server = await startGuestServer({ socketPath, identity, bridge, frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 2000, requestTimeoutMs: 5000,
     channels: { control: { kind: "json", serve: ({ peer }) => control.serve(peer) } } });
   // A server closes once its connections have: the host's ends are closed first.
   const peers: FramedPeer[] = [];
@@ -63,12 +68,15 @@ async function guest(t: import("node:test").TestContext, control = new GuestCont
 }
 const code = (expected: string) => (error: unknown) => error instanceof PlatformError && error.failure.code === expected;
 
-test("MAC-230: a hello is exactly its shape; a terminal names a society and nothing else does", () => {
+test("MAC-230: a hello is exactly its shape; a terminal names a society (and may take over) and nothing else does", () => {
   assert.equal(helloParamsProblem(hello()), null);
   assert.match(helloParamsProblem({ ...hello(), extra: 1 }) ?? "", /unknown field/);
   assert.match(helloParamsProblem(hello({ channel: "terminal" })) ?? "", /names a valid society/);
   assert.equal(helloParamsProblem(hello({ channel: "terminal", society: "demo" })), null);
   assert.match(helloParamsProblem(hello({ society: "demo" })) ?? "", /only a terminal/);
+  assert.equal(helloParamsProblem(hello({ channel: "terminal", society: "demo", takeover: true })), null);
+  assert.match(helloParamsProblem(hello({ takeover: true })) ?? "", /only a terminal/);
+  assert.match(helloParamsProblem({ ...hello({ channel: "terminal", society: "demo" }), takeover: false }) ?? "", /true or absent/);
   assert.match(helloParamsProblem(hello({ protocol: { min: 3, max: 2 } })) ?? "", /min <= max/);
   assert.equal(negotiate({ min: 1, max: 2 }, 2), 2);
   assert.equal(negotiate({ min: 1, max: 1 }, 2), null);
@@ -95,12 +103,59 @@ test("MAC-211: the guest answers a hello for its own VM instance and protocol, a
   await assert.rejects(sendHello(wrong, hello({ channel: "society" })), code("INVALID_REQUEST"));
 });
 
+test("MAC-202: a connection from any process but the bridge's user is closed unread", async t => {
+  // A process of the service's own user can open the socket; the kernel's
+  // answer about who connected, not the file's mode, decides (FS-005).
+  const { open } = await guest(t, undefined, { uid: self.uid + 1, gid: self.gid });
+  const intruder = await open();
+  await assert.rejects(sendHello(intruder, hello()), (error: unknown) =>
+    error instanceof PlatformError && error.failure.code === "ENGINE_UNAVAILABLE");
+});
+
+test("MAC-620: a freeze ends before the shortest receipt wait configured here, and never on an unknown one", () => {
+  const system = fakeSystem();
+  const control = new GuestControl(system);
+  system.floor = { kind: "known", ms: 3000 };
+  assert.deepEqual(control.freeze(5000), { frozenAt: system.clock, deadlineMs: 3000 - FREEZE_MARGIN_MS });
+  assert.equal(system.scheduledMs, 3000 - FREEZE_MARGIN_MS, "the timer is the shortened deadline");
+  control.thaw();
+  system.floor = { kind: "known", ms: 30_000 };
+  assert.equal(control.freeze(5000).deadlineMs, 5000, "a shorter request stands");
+  control.thaw();
+  system.floor = { kind: "none" };
+  assert.equal(control.freeze(60_000).deadlineMs, FREEZE_LIMIT_MS);
+  control.thaw();
+  system.floor = { kind: "unknown" };
+  assert.throws(() => control.freeze(1000), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+  system.floor = { kind: "known", ms: FREEZE_MARGIN_MS };
+  assert.throws(() => control.freeze(1000), (error: unknown) => error instanceof StoreError && error.code === "INVALID_REQUEST");
+  assert.deepEqual(system.calls, ["freeze", "thaw", "freeze", "thaw", "freeze", "thaw"], "a refused freeze froze nothing");
+});
+
+test("MAC-620: the receipt-wait bound is read from each society's own configuration", t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-societies-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.deepEqual(receiptWaitFloor(join(dir, "absent")), { kind: "none" });
+  const society = (name: string, seconds: number | null): void => {
+    mkdirSync(join(dir, name));
+    if (seconds === null) return;
+    const config = defaultHostConfig({ society: name, node: "/usr/bin/node", libdir: "/opt/oma", rootfs: `/state/${name}/rootfs`, deploymentDigest: "a".repeat(64) });
+    writeFileSync(join(dir, name, "config.json"), JSON.stringify({ ...config, limits: { ...config.limits, receiptWaitSeconds: seconds } }));
+  };
+  society("alpha", 30);
+  society("beta", 4);
+  society("fresh", null);
+  assert.deepEqual(receiptWaitFloor(dir), { kind: "known", ms: 4000 });
+  writeFileSync(join(dir, "fresh", "config.json"), "{ not json");
+  assert.deepEqual(receiptWaitFloor(dir), { kind: "unknown" }, "an unreadable configuration is not skipped");
+});
+
 test("MAC-620: a freeze always ends -- at the host's thaw, or at its deadline when no thaw comes", async t => {
   const system = fakeSystem();
   const { open } = await guest(t, new GuestControl(system));
   const peer = await open();
   await sendHello(peer, hello());
-  await peer.request("fs.freeze", { deadlineMs: 5000 });
+  assert.deepEqual(await peer.request("fs.freeze", { deadlineMs: 5000 }), { frozenAt: system.clock, deadlineMs: 5000 });
   await assert.rejects(peer.request("fs.freeze", { deadlineMs: 5000 }), code("BATCH_CONFLICT"));
   assert.deepEqual(await peer.request("fs.thaw", {}), { thawed: true });
   assert.deepEqual(await peer.request("fs.thaw", {}), { thawed: false }, "a second thaw is not an error");

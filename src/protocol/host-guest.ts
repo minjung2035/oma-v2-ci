@@ -68,6 +68,8 @@ export interface HelloParams {
   readonly expectImage: string;
   /** terminal: the society whose session to attach to. */
   readonly society?: string;
+  /** terminal: take the attach from whoever holds it (MAC-220). */
+  readonly takeover?: true;
 }
 export interface HelloResult {
   readonly protocol: number;
@@ -91,7 +93,7 @@ const uint = (value: unknown): value is number => typeof value === "number" && N
  * one of these shapes is refused, not repaired. */
 export function helloParamsProblem(value: unknown): string | null {
   if (!object(value)) return "hello params must be an object";
-  const shape = exactKeys(value, ["channel", "protocol", "hostVersion", "installationId", "instanceId", "expectImage"], ["society"]);
+  const shape = exactKeys(value, ["channel", "protocol", "hostVersion", "installationId", "instanceId", "expectImage"], ["society", "takeover"]);
   if (shape !== null) return shape;
   if (!(CHANNELS as readonly unknown[]).includes(value.channel)) return "unknown channel";
   const protocol = value.protocol;
@@ -102,7 +104,8 @@ export function helloParamsProblem(value: unknown): string | null {
   if (!isUuid(value.installationId) || !isUuid(value.instanceId)) return "installationId and instanceId must be UUIDs";
   if (value.channel === "terminal") {
     if (!isValidSocietyName(value.society)) return "a terminal names a valid society";
-  } else if (value.society !== undefined) return "only a terminal names a society in its hello";
+    if (value.takeover !== undefined && value.takeover !== true) return "takeover is true or absent";
+  } else if (value.society !== undefined || value.takeover !== undefined) return "only a terminal names a society or a takeover in its hello";
   return null;
 }
 

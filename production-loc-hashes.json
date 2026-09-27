@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "e93e38aeadde13d997b104c098247a80aa8ef280264f8bf6325a9f1e0323e7d0",
-  "report": "2f6ce6715d9d9cda03369e17b58f83d5f7f14271bc82ab44b74e7359897015c2",
+  "report": "453c5084bc54eeb708afbe10029adfe7b4f452ec768a30e77333979b8e672370",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -289,7 +289,7 @@
     },
     {
       "path": "src/entry/guestctl.ts",
-      "sha256": "2bdbf731adc30f731ca445a4ef4844a0dd72d2827461a0b57ae3ba8c606f83ab"
+      "sha256": "ec7964ab8e9c63845c57c95cbd35bac22367b5d3aec2bd89fb72eee212f41078"
     },
     {
       "path": "src/entry/host.ts",
@@ -497,19 +497,19 @@
     },
     {
       "path": "src/platform/guest/control.ts",
-      "sha256": "1faaa891f7dada1398f02a0889ea94337f60e42a2889adceaf8f4d6abe68c345"
+      "sha256": "4a6f7212e117e92afb2aa8495db210608a5dc1c76ce9c987f7af479d9620f1f5"
     },
     {
       "path": "src/platform/guest/identity.ts",
-      "sha256": "26045b15e1289a988b3cd64e1b77a23d0cc928576945168f4cf4f3d9d8373496"
+      "sha256": "a8cc6f67d9056322a080f6fbe6bbb2db9d388af7b95aa92b6a18de83a385c383"
     },
     {
       "path": "src/platform/guest/linux-system.ts",
-      "sha256": "2a747405debe76ea914e19762e759fa3f612deffb2911fb86cf08f06416c19e1"
+      "sha256": "3ad1272bf31fc021ea6ef827548bc7763629adc0b0ec7d55b5f615488a3d6a5f"
     },
     {
       "path": "src/platform/guest/server.ts",
-      "sha256": "71c153b36d42ae9e44332ba49482b07fddafb11c2cd7430e8adaf62da3914858"
+      "sha256": "2743b8752ed410c0a786377a48b69ddd2b42082aa66de6bc12bad597a4ce60c8"
     },
     {
       "path": "src/platform/rpc.ts",
@@ -561,7 +561,7 @@
     },
     {
       "path": "src/protocol/host-guest.ts",
-      "sha256": "b21a30a7f7fe97a7c90900db7cb3f49d4b5f3b02b2ab592fa261a5c1e76c5526"
+      "sha256": "1f7054164965edb13a87a72ac64e2203aa44e0ca5ba3623ea701261c9bc9ca4b"
     },
     {
       "path": "src/protocol/jsonl.ts",

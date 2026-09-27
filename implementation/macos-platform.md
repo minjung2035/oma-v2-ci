@@ -5,6 +5,9 @@ macOS에 적용하는 규범 문서가 된다. 그때 할 일은 셋이다. [tra
 §12의 설계 수정을 [design-revisions](design-revisions.md)에 DR로 기록한다. 수용 시험은 [test-matrix](test-matrix.md)의 번호로 옮긴다.
 그 전까지 이 문서의 `MUST`는 설계 제안이다.
 
+구현: `feat/macos-hidden-vm` 브랜치. 이 문서는 그 구현과 맞춘다. 구현에서 설계가 바뀐 곳(pty attach, socket activation과 bridge,
+Node `omahostd`와 Swift helper)은 본문을 그렇게 고쳤다.
+
 조항 ID: 요구는 `MAC-###`, 검증 oracle은 `MV-##`다. 기존 spec 조항은 그 ID로 인용한다. 이 문서는 기존 조항을 바꾸지 않는다.
 바꿔야 하는 것은 §12에 모았다.
 
@@ -14,9 +17,11 @@ macOS에 적용하는 규범 문서가 된다. 그때 할 일은 셋이다. [tra
 
 macOS용 OMA는 두 부분으로 나뉜다.
 
-- **host(macOS)**: 사람이 보는 모든 것과 Mac의 자원을 가진다. native UI, Terminal의 TUI, Mac 프로젝트, Keychain, VM 제어가 여기 있다.
-- **guest(Linux VM)**: OMA가 Linux에 기대는 실행부만 가진다. broker, durable state, systemd, cgroup, pidfd, openat2, bubblewrap이 여기 있다.
-  guest는 Apple Virtualization.framework로 띄우는 hidden VM이다.
+- **host(macOS)**: 사람이 쓰는 창과 Mac의 자원을 가진다. native UI, Terminal의 `oma` 명령, Mac 프로젝트, Keychain, VM 제어가 여기 있다.
+- **guest(Linux VM)**: OMA가 Linux에 기대는 실행부를 가진다. broker, durable state, systemd, cgroup, pidfd, openat2, bubblewrap, 그리고
+  society마다 도는 기존 `oma`(TUI 포함)가 여기 있다. guest는 Apple Virtualization.framework로 띄우는 hidden VM이다.
+- Mac의 화면은 guest의 `oma`가 쓰는 terminal에 attach한다. tmux·ssh와 같은 모델이다. 그래서 Linux의 `oma`가 지키는 규범은
+  guest에서 코드 그대로 지켜지고, host는 그 판단을 다시 만들지 않는다.
 
 사용자는 VM이 있다는 것을 알 필요가 없다. host와 guest는 vsock 위의 비공개 RPC로만 말한다. 이 RPC는 제품 어휘만 쓰고
 Linux 경로·unit 이름·errno를 보이지 않는다. durable state는 guest의 Linux disk에 있다. Mac 프로젝트는 명시적인 import/export로만
@@ -28,8 +33,8 @@ guest와 오간다. provider credential은 Keychain을 떠나지 않는다. gues
 | 기존 원칙 | macOS에서의 적용 |
 |---|---|
 | INF-005/INF-007: sandbox 안에는 credential이 없고, relay가 선언된 자리에만 key를 넣는다 | VM 전체를 그 sandbox처럼 다룬다. relay의 key 교체는 host에서 한다 |
-| PR-001: Principal attach는 host-only channel의 credential로 인증한다 | host-only channel은 host가 여는 vsock 연결이다 |
-| REC-007: society lease를 쥔 host만 society에 행위한다 | lease는 guest 안의 society host가 쥔다. macOS UI는 그 society host에 attach한다 |
+| PR-001: Principal attach는 host-only channel의 credential로 인증한다 | 바뀌지 않는다. guest의 `oma`와 broker 사이의 channel 그대로다. vsock은 그 `oma`의 terminal을 나를 뿐이다 |
+| REC-007: society lease를 쥔 host만 society에 행위한다 | 바뀌지 않는다. lease는 guest에서 도는 `oma`가 쥔다. Mac의 화면은 그 terminal에 attach한다(§4.6) |
 | P0-5: 확인하지 않은 것을 사실로 말하지 않는다 | VM 재시작·절전·연결 끊김 뒤 결과를 모르는 요청은 같은 key로 조회한다. 다시 보내지 않는다 |
 | REC-004: 전원 장애 보장은 S-06 증거가 있을 때만 말한다 | host 프로세스가 죽으면 guest에는 전원 장애다. 그래서 guest disk는 동기화 모드 `full`로 붙이고, VM kill을 S-06 증거로 쓴다 |
 
@@ -44,8 +49,8 @@ guest와 오간다. provider credential은 Keychain을 떠나지 않는다. gues
 distribution 이름, VM의 CPU·memory 수치. 예외는 둘뿐이다. 하나는 사용자가 명시적으로 만드는 진단 묶음이다(§8.6). 다른 하나는
 "고급" 설정의 VM 자원 한도다(§5.2). 이 한도는 "OMA 엔진 자원"이라는 제품 어휘로 보인다.
 
-**MUST [MAC-002]** Linux 의존 실행부는 모두 guest에서 돈다. 여기에 속하는 것: broker, runner, society host(현재 `oma` entry의
-host 역할), Principal·Resident 엔진, Store(SQLite), Git canonical repository, Maildir, systemd unit, bwrap sandbox. host는 이 가운데
+**MUST [MAC-002]** Linux 의존 실행부는 모두 guest에서 돈다. 여기에 속하는 것: broker, runner, society마다 도는 `oma`(기존
+entry 그대로: host 역할과 TUI), Principal·Resident 엔진, Store(SQLite), Git canonical repository, Maildir, systemd unit, bwrap sandbox. host는 이 가운데
 어느 것도 흉내 내지 않는다. host에 Linux 호환 계층을 만들지 않는다.
 
 **MUST [MAC-003]** durable state의 유일한 저장소는 guest의 state disk다(§5.3). host는 state를 사본으로 들고 있지 않다. 예외는 셋이다:
@@ -74,30 +79,37 @@ guest memory 어디에도 없다. guest에 있는 것은 자리표시자뿐이�
 
 | 구성 요소 | 위치 | 언어·실행 | 소유하는 것 |
 |---|---|---|---|
-| **OMA.app** | host | Swift/SwiftUI, 로그인한 사용자 | native UI(창, menu bar extra, 알림). Host API의 client |
-| **`oma` (Terminal)** | host | 동봉 Node + 기존 `src/tui` | TUI. 기존 `TuiApp`에 Host API를 쓰는 원격 port를 붙인다(§2.4) |
-| **OMA Host Service (`omahostd`)** | host | Swift, `SMAppService`로 등록한 LaunchAgent | VM 수명(Virtualization.framework), vsock 연결, Host API server, Keychain, project 기록, 백업, image 관리 |
-| **Credential Resolver** | host | 동봉 Node + 동봉 엔진 SDK, `omahostd`의 자식 | 엔진 SDK로 credential을 해석하고 갱신한다(§7.3). 저장소는 Keychain backend |
-| **Egress Relay** | host | 동봉 Node, 기존 `inference-relay`의 교체·tripwire 로직, `omahostd`의 자식 | guest의 provider 요청에 진짜 key를 선언된 자리에만 넣고 provider로 보낸다(§7.4) |
+| **OMA.app** | host | Swift/SwiftUI, 로그인한 사용자 | native UI(창, menu bar extra, 알림)와 terminal view(§2.4). Host API의 client |
+| **`oma` (Terminal)** | host | 동봉 Node, 작은 attach client | Host API로 society의 terminal에 attach한다. 화면을 그리지 않고 byte를 나른다(§2.4) |
+| **OMA Host Service (`omahostd`)** | host | 동봉 Node, `SMAppService`로 등록한 LaunchAgent | VM 수명 state machine, guest와의 연결, Host API server, project 기록, 백업, image 관리. Credential Resolver와 Egress Relay를 자기 안에서 돌린다 |
+| **`oma-vmhelper`** | host | Swift, `omahostd`의 자식, 서명된 binary 하나 | Virtualization.framework(VM 구성·시작·정지), vsock 연결을 `omahostd`의 unix socket으로 잇기(vfkit과 같은 방식), Keychain get/put, 절전·깨어남 알림. VM은 이 프로세스 안에서 돈다 |
+| **Credential Resolver** | host | 동봉 Node + 동봉 엔진 SDK, `omahostd` 안 | 엔진 SDK로 credential을 해석하고 갱신한다(§7.3). 저장소는 `oma-vmhelper`를 거치는 Keychain backend다 |
+| **Egress Relay** | host | 동봉 Node, 기존 `inference-relay` 그대로, `omahostd` 안 | guest의 provider 요청에 진짜 key를 선언된 자리에만 넣고 provider로 보낸다(§7.4) |
 | **동봉 git** | host | 고정 버전 git binary(arm64) | Mac repo의 bundle 생성·검증·fetch(§6). `/usr/bin/git`(Xcode CLT shim)에 기대지 않는다 |
-| **guestctl** | guest | Node, system unit `oma-guestctl.service`, root | vsock control port. 시각 맞추기, freeze/thaw, poweroff, disk 확장, 진단 수집 |
-| **guesthost** | guest | Node, system unit `oma-guesthost.service`, `User=oma`, `AmbientCapabilities=CAP_NET_BIND_SERVICE` 하나 | society port. society host의 기동·attach, egress pool, project sync·archive의 guest 쪽 |
-| **society host** | guest | Node, `oma` 사용자, society마다 하나 | 지금 `src/entry/oma.ts`가 하는 host 역할을 headless로 한다. HostTenure(REC-007), 감독되는 foreground broker(D03), PrincipalSession(TUI-004), PrincipalDelivery(PR-002) |
+| **socket unit과 vsock bridge** | guest | systemd `oma-control.socket`(vsock 700)·`oma-society.socket`(vsock 701), `Accept=yes`. 연결마다 C로 된 `oma-vsock-bridge` 하나가 `oma-bridge` 사용자로 돈다 | reserved port의 bind(systemd만 한다), peer CID 검사, 서비스 unix socket으로의 relay(MAC-202) |
+| **guestctl** | guest | Node, `oma-guestctl.service`, root. capability는 `CAP_SYS_TIME`·`CAP_SYS_ADMIN`·`CAP_SYS_BOOT`뿐 | control channel. 시각, freeze/thaw, disk 확장, 전원 |
+| **guesthost** | guest | Node, `oma-guesthost.service`, `User=oma`, capability 없음 | society channel: society 목록·열기·멈추기, terminal attach, egress pool, project mirror, archive의 guest 쪽 |
+| **society session** | guest | society마다 `oma` 사용자의 user unit 하나. 작은 session holder가 pty를 쥐고 그 위에서 기존 `oma` entry를 그대로 돌린다 | HostTenure(REC-007), 감독되는 foreground broker(D03), PrincipalSession(TUI-004), PrincipalDelivery(PR-002), TUI. Linux에서 사람이 terminal로 `oma`를 실행한 것과 같은 프로세스다 |
 | broker·runner·unit·bwrap | guest | 기존 코드 그대로 | 기존 규범 그대로 |
-| **egress bridge** | guest | Node, runner와 society host 안 | 엔진이 말하는 unix socket을 egress pool의 vsock 연결로 잇는 byte pipe. key를 모른다 |
+| **egress bridge** | guest | Node, runner와 `oma` 안 | 엔진이 말하는 unix socket을 egress pool의 연결로 잇는 byte pipe. key를 모른다 |
+
+guest 쪽 구성은 알려진 방식을 그대로 쓴다. port는 systemd socket activation으로 받는다(sshd의 `Accept=yes`와 같다). Node는 AF_VSOCK
+descriptor를 socket으로 감쌀 수 없으므로(`ERR_INVALID_FD_TYPE`) vsock을 아는 부분은 bridge 하나로 모았다. terminal의 유지는
+dtach·tmux의 모델이다: session holder가 pty를 쥐고, 화면은 붙었다 떨어진다.
 
 ### 2.2 기존 규범의 역할 대응
 
-기존 spec의 "host"는 사람의 terminal에서 도는 `oma` 프로세스 하나였다. macOS에서는 그 역할이 두 곳으로 나뉜다.
+guest에서 도는 `oma`는 Linux의 `oma`와 같은 코드다. 그래서 역할 대응은 거의 없다.
 
 | 기존 규범의 역할 | macOS |
 |---|---|
-| REC-007의 host(society lease 보유자) | guest의 society host. lease는 guest kernel의 abstract namespace에 있다 |
-| TUI-004의 "Principal session을 소유하는 TUI" | 소유: society host. 입력과 화면: host UI(native 또는 TUI). host UI는 attach한다(§4.6) |
-| PR-001의 host-only channel | host가 연 vsock 연결 위의 society session channel(§4.6) |
-| PR-002의 "UI가 없으면 prepare하지 않는다" | attach된 host UI가 없으면 society host는 새 batch를 prepare하지 않는다 |
-| INF-001의 "OMA 소유 agent 디렉터리" | credential 상태: host의 Keychain backend(§7.2). 엔진의 나머지 상태(settings·models): guest의 agent 디렉터리 |
-| D03의 product-owned foreground broker | society host가 감독하는 broker. guest에서도 이 mode만 쓴다(§12, DR 후보 D-3) |
+| REC-007의 host(society lease 보유자) | 바뀌지 않는다. guest의 `oma`가 쥔다. lease는 guest kernel의 abstract namespace에 있다 |
+| TUI-004의 "Principal session을 소유하는 TUI" | 바뀌지 않는다. guest의 `oma`가 소유한다. Mac의 화면은 그 terminal에 attach한다(§4.6) |
+| PR-001의 host-only channel | 바뀌지 않는다. guest 안의 `oma`와 broker 사이의 channel이다 |
+| PR-002의 "UI가 없으면 prepare하지 않는다" | 바뀌지 않는다. UI는 guest의 `oma`다. Mac의 화면이 detach해도 `oma`는 돈다. Linux에서 `oma`를 tmux 안에서 돌리고 detach한 것과 같다. detach한 뒤에도 돌게 둘지는 사용자가 정한다(§13 Q1) |
+| INF-001의 "OMA 소유 agent 디렉터리" | credential 상태: host의 Keychain backend(§7.2). 엔진의 나머지 상태(settings·models): guest의 agent 디렉터리. §12 D-4 |
+| D03의 product-owned foreground broker | 바뀌지 않는다. guest의 `oma`가 감독한다 |
+| D05의 project binding(`canonicalProjectPath`) | 바뀌지 않는다. guest의 project mirror 경로(`/var/lib/oma/projects/<projectId>`)가 그 값이다. Mac 경로는 guest에 없다(MAC-402) |
 
 **MUST [MAC-010]** guest 안의 모든 규범은 Linux에서와 같다. 위 표의 역할 대응 말고는 guest에 macOS 전용 예외를 두지 않는다.
 guest의 OMA 코드는 Linux 배포본과 같은 source digest에서 만든다(§8.1).
@@ -116,21 +128,31 @@ guest의 OMA 코드는 Linux 배포본과 같은 source digest에서 만든다(�
 | `archives/<id>.omaarchive` | 암호화한 논리 백업(§8.4) | 포함 |
 | `logs/` | host 로그와 guest console 로그(크기 한도, 회전) | 제외 |
 | `run/hostapi.sock` | Host API socket | — |
+| `run/vm/` | `oma-vmhelper`가 vsock 연결을 넘기는 unix socket들 | — |
 
 **MUST [MAC-011]** host는 이 트리 밖에 쓰지 않는다. 예외는 사용자가 연결한 Mac 프로젝트의 `refs/remotes/oma/*`와 그 object뿐이다(§6.4).
 
 ### 2.4 host UI의 구조
 
-**MUST [MAC-020]** native UI와 TUI는 같은 Host API를 쓴다. 둘 다 guest와 직접 말하지 않는다. vsock은 `omahostd`만 연다.
+**MUST [MAC-020]** native UI와 `oma` 명령은 같은 Host API를 쓴다. 둘 다 guest와 직접 말하지 않는다. guest와의 연결은 `omahostd`만 연다.
 
-TUI는 기존 `TuiApp`을 그대로 쓴다. `AppPorts`(dashboard, config fields, mail, body, setField, setExtension, submitPrompt, quit)를
-Host API 호출로 채운다. 지금 host 파일을 직접 읽는 source(`tui/sources/*`)는 guest의 society host가 대신 읽는다. host는 그 결과를
-구조화된 데이터로 받는다. 따라서 TUI-011·TUI-012의 관측 규칙(unknown을 0으로 바꾸지 않는다, 관측 시각을 보인다)은 guest가 만든
-데이터를 host가 그대로 보이는 것으로 지켜진다.
+society의 화면은 guest의 `oma`가 그린다. host UI는 그 terminal에 attach한다.
+
+- Terminal의 `oma` 명령: Mac terminal을 raw mode로 두고, Host API의 `terminal.attach`로 받은 연결에 입력 byte와 창 크기를 보내고
+  출력 byte를 그대로 쓴다. 떠날 때(detach, 연결 끊김, `oma`의 종료) Mac terminal을 원래대로 돌린다: alternate screen을 나오고,
+  bracketed paste를 끄고, cursor를 보인다. tmux client와 같은 책임이다.
+- OMA.app: 창 안의 terminal view(SwiftTerm 같은 terminal emulator)가 같은 일을 한다. 그 밖의 native 화면(society 목록, menu bar의
+  상태, 알림)은 Host API의 `society.list`·`society.status`로 채운다.
+
+TUI의 관측 규칙(TUI-011·TUI-012: unknown을 0으로 바꾸지 않는다, 관측 시각을 보인다)은 guest의 TUI가 코드 그대로 지킨다. native 화면은
+`society.status`의 값을 그대로 보이고, 없는 값을 채우지 않는다.
 
 **MUST [MAC-021]** Host API server는 두 조건을 모두 만족하는 연결만 받는다. 연결 peer의 uid(`getpeereid`)가 `omahostd`와 같아야 한다.
 그리고 hello에서 `run/` 아래 0600 파일의 login token을 제시해야 한다. token은 `omahostd`가 시작할 때마다 새로 만든다. 같은 사용자의
-다른 프로세스가 token을 읽을 수 있다는 점은 경계가 아니다(§3.4 A4). credential의 보호는 Keychain ACL이 맡는다.
+다른 프로세스가 token을 읽을 수 있다는 점은 경계가 아니다(§3.4 A4). credential의 보호는 Keychain이 맡는다(MAC-701).
+
+**MUST [MAC-022]** guest의 `oma`가 화면에 쓰는 문구는 MAC-001을 지킨다. 지금 TUI의 오류 문구 가운데 host 경로나 errno 이름을 담는 곳은
+제품 문구와 코드로 바꾸고, 원문은 guest 로그에 남긴다. 이 변경은 Linux 배포본의 문구에도 적용한다(§12 D-1).
 
 ---
 
@@ -140,7 +162,7 @@ Host API 호출로 채운다. 지금 host 파일을 직접 읽는 source(`tui/so
 
 | 자산 | 있는 곳 | 보호 수단 |
 |---|---|---|
-| A1 provider credential(API key, OAuth token) | host Keychain, 해석하는 동안 Resolver·Relay의 memory | Keychain ACL, guest로 보내지 않음 |
+| A1 provider credential(API key, OAuth token) | host Keychain, 해석하는 동안 Resolver·Relay의 memory | data protection keychain과 access group(MAC-701), guest로 보내지 않음 |
 | A2 Human의 private context(Principal session, `principal/private`) | guest state disk | guest의 FS-005, PR-003·PR-004 |
 | A3 project source | Mac repo, guest canonical repo | 명시적 sync(§6) |
 | A4 durable society state(Store, Maildir, receipt, 설정 세대) | guest state disk | Priority 0, disk 동기화 모드 `full` |
@@ -178,9 +200,9 @@ guest는 **host의 자원과 credential에 대해서는 신뢰하지 않는다.*
 | 공격자 | 대응 |
 |---|---|
 | A1 Resident나 Principal tool 안의 모델이 만든 코드 | 기존 bwrap 경계. 여기에 seccomp로 `socket(AF_VSOCK, …)`을 막는다(MAC-205). guest에는 NIC가 없다. vsock loopback transport를 빼고 build한다(MAC-204) |
-| A2 guest 안의 `oma` 사용자 프로세스(sandbox 밖의 엔진 포함) | guesthost는 peer CID가 host(2)인 연결만 받는다(MAC-202). reserved port는 `CAP_NET_BIND_SERVICE`가 있어야 bind할 수 있다 |
+| A2 guest 안의 `oma` 사용자 프로세스(sandbox 밖의 엔진 포함) | reserved port는 systemd만 bind한다. bridge는 peer CID가 host(2)인 연결만 잇는다. guestctl·guesthost는 bridge의 uid(`oma-bridge`)에서 온 연결만 받는다(`SO_PEERCRED`). 그래서 `oma`의 프로세스는 서비스의 unix socket을 열어도 host 행세를 할 수 없다(MAC-202) |
 | A3 탈취된 guest root | §3.3의 잔여 위험. host는 guest 입력을 schema·한도로 검사한다(MAC-230) |
-| A4 같은 macOS 사용자의 다른 프로세스 | Host API를 부를 수 있다. 사용자가 `oma`를 실행하는 것과 같은 권한이다. Keychain item은 OMA의 서명된 binary만 prompt 없이 읽는다(MAC-701) |
+| A4 같은 macOS 사용자의 다른 프로세스 | Host API를 부를 수 있다. 사용자가 `oma`를 실행하는 것과 같은 권한이다. Keychain item은 access group을 가진 서명된 `oma-vmhelper`만 읽는다. bundle 안의 JS를 바꿔 Resolver를 가로채는 것은 bundle 봉인과 App Management 보호가 막는다(MAC-701의 조건과 잔여 위험) |
 | A5 다른 macOS 사용자 | 0700 디렉터리. VM도 사용자마다 따로다 |
 | A6 provider 경로의 network 공격자 | Relay가 TLS를 검증한다(시스템 trust store). 인증서 pin은 하지 않는다(provider가 인증서를 바꾸기 때문) |
 | A7 악성 update image | 서명 검증. 서명되지 않았거나 manifest와 다른 image로는 부팅하지 않는다(MAC-601) |
@@ -194,12 +216,22 @@ guest는 **host의 자원과 credential에 대해서는 신뢰하지 않는다.*
 **MUST [MAC-201]** 연결은 항상 host가 연다. host는 어떤 vsock port도 listen하지 않는다(`VZVirtioSocketDevice.setSocketListener`를 부르지
 않는다). guest에서 host로 가는 요청(provider egress)은 host가 미리 열어 둔 연결 위에서만 간다(§4.7).
 
-**MUST [MAC-202]** guest는 reserved port(1024 미만) 두 개를 listen한다.
+**MUST [MAC-202]** guest는 reserved port(1024 미만) 두 개를 systemd socket unit으로 listen한다.
 
-- `700` control: guestctl(root)
-- `701` society: guesthost(`oma` 사용자, `CAP_NET_BIND_SERVICE` 하나)
+- `700` control: `oma-control.socket` → guestctl(root)
+- `701` society: `oma-society.socket` → guesthost(`oma` 사용자)
 
-두 listener는 `accept`의 peer 주소에서 `svm_cid == VMADDR_CID_HOST (2)`인 연결만 받는다. 그 밖의 연결은 읽지 않고 닫는다.
+bind는 systemd(pid 1)만 한다. guestctl과 guesthost는 bind capability를 갖지 않는다. 두 socket unit은 `Accept=yes`다. 연결마다 systemd가
+`oma-vsock-bridge` instance 하나를 `oma-bridge` 사용자로 띄운다. bridge는 이렇게 한다.
+
+1. 자기가 systemd가 연결을 넘긴 그 instance인지 확인한다(`LISTEN_FDS=1`, `LISTEN_PID`가 자기 pid). 아니면 끝난다.
+2. `getpeername`의 `svm_cid`가 `VMADDR_CID_HOST (2)`인지 본다. 다른 CID거나 peer를 알 수 없으면 한 byte도 읽지 않고 닫는다.
+3. 서비스의 unix socket에 연결하고 양쪽 byte를 그대로 잇는다. 한쪽의 close를 다른 쪽에 half-close로 넘긴다.
+
+서비스의 unix socket은 서비스 사용자와 `oma-bridge` group의 0660이다. 서비스는 연결마다 `SO_PEERCRED`의 uid가 `oma-bridge`인지 보고,
+아니면 읽지 않고 닫는다. guesthost는 `oma` 사용자로 돌기 때문에, 같은 사용자의 다른 프로세스는 그 socket 파일을 열 수 있다. 같은 uid
+안에서는 파일의 mode가 경계가 아니다(FS-005). 그래서 누가 연결했는지는 커널에게 묻는다(AUTH-003과 같은 원칙). `oma-bridge`로 도는
+것은 bridge instance뿐이다.
 
 **MUST [MAC-203]** guest VM 구성에는 network device를 두지 않는다. `VZNetworkDeviceConfiguration`을 붙이지 않는다.
 
@@ -213,106 +245,131 @@ namespace에 기대지 않는다. filter는 bwrap의 `--seccomp <fd>`로 넘기�
 
 ### 4.2 framing
 
-**MUST [MAC-210]** 모든 연결의 message는 기존 OMA frame 형식을 쓴다: 4바이트 big-endian 길이 + UTF-8 JSON. 한도는 `frameBytes`(기본
-256 KiB)다. byte stream(bundle, archive, provider 요청)은 message로 먼저 `{bytes, sha256}`을 선언하고, 이어서 그 바이트를 그대로
-보낸다. 받는 쪽은 선언한 길이와 hash를 확인한 뒤에만 그 stream을 사실로 쓴다(기존 transport-spool과 같은 규칙).
+**MUST [MAC-210]** JSON channel(control, society)의 message는 기존 OMA frame 형식을 쓴다: 4바이트 big-endian 길이 + UTF-8 JSON.
+parser도 broker의 것을 그대로 쓴다. 한도는 `PLATFORM_FRAME_BYTES`(256 KiB)다. byte channel(egress, stream)은 hello 뒤 첫 message로
+무엇을 싣는지 선언하고, 이어서 byte를 그대로 보낸다. stream은 `{bytes, sha256}`을 선언하고, 받는 쪽은 선언한 길이와 hash를 확인한
+뒤에만 그 stream을 사실로 쓴다(기존 transport-spool과 같은 규칙). terminal channel의 frame은 §4.6에 있다.
 
 message의 모양:
 
 ```
 request   { v: 1, id: string, method: string, params: object, key?: RequestKey }
 response  { v: 1, id: string, ok: true, result: object } | { v: 1, id: string, ok: false, error: Failure }
-event     { v: 1, event: string, seq: uint53, data: object }
 ```
 
-`Failure`는 기존 `{ code, message, retry, details? }`다. 기존 `ErrorCode`에 host·VM 코드 넷을 더한다(§4.9).
+`Failure`는 `{ code, message, retry }`다. `code`는 기존 `ErrorCode`와 host·VM 코드 넷(§4.9)이다. 한 연결의 요청은 guest가 받은
+순서대로 하나씩 처리한다.
 
 ### 4.3 연결 종류와 handshake
 
-한 연결은 한 용도다. 연결을 연 직후 host가 `hello`를 보낸다.
+한 연결은 한 용도다. 연결을 연 직후 host가 `hello`를 보낸다. host는 hello의 답을 받기 전에는 아무것도 더 보내지 않는다. byte channel은
+그 뒤부터 byte다.
 
 ```
-hello   { v: 1, method: "hello", params: {
-          channel: "control" | "society" | "session" | "egress" | "stream",
+hello   { v: 1, id, method: "hello", params: {
+          channel: "control" | "society" | "terminal" | "egress" | "stream",
           protocol: { min: uint, max: uint },
           hostVersion: string, installationId: uuid, instanceId: uuid,
           expectImage: string,           // host가 부팅시킨 image 버전
-          society?: SocietyId, sessionHandle?: string } }
+          society?: SocietyId,           // terminal만, 그리고 terminal은 반드시
+          takeover?: true } }            // terminal만(MAC-220)
 hello→  { ok: true, result: { protocol: uint, guestImage: string, bootId: uuid,
           stateSchema: { written: uint, readable: uint[] }, capabilities: string[] } }
 ```
 
+control은 port 700, 나머지는 모두 port 701이다. hello의 field는 정확히 이것이다. 모르는 field가 있으면 거절한다(MAC-230).
+
 **MUST [MAC-211]** guest는 두 경우 모두 `hello`를 거절하고 연결을 닫는다. 하나는 `instanceId`가 state disk에 기록된 VM instance와
-다를 때다(다른 사용자의 disk나 잘못 붙은 disk). 다른 하나는 host의 protocol 범위와 겹치지 않을 때다. host는 `bootId`가 바뀌면
-guest가 재부팅된 것으로 안다. 그러면 그 전 부팅에 보낸 요청 가운데 결과를 모르는 것을 모두 key로 다시 조회한다(MAC-241).
+다를 때다(다른 사용자의 disk나 잘못 붙은 disk). 다른 하나는 host의 protocol 범위와 겹치지 않을 때다. 거절은 답을 먼저 보내고 그것이
+나간 뒤에 닫는다. host는 `bootId`가 바뀌면 guest가 재부팅된 것으로 안다. 그러면 그 전 부팅에 보낸 요청 가운데 결과를 모르는 것을
+모두 key로 다시 조회한다(MAC-241).
 
 ### 4.4 control channel(port 700, guestctl)
 
 | method | params | result | 멱등 | 설명 |
 |---|---|---|---|---|
-| `time.set` | `{ wallMs, monotonicHint }` | `{ steppedByMs }` | 예 | guest의 `CLOCK_REALTIME`을 host 시각으로 맞춘다(§9.2) |
-| `health.get` | `{}` | `{ uptimeMs, load, memory, disk: { usedBytes, freeBytes }, units: { failed: uint } }` | 예 | watchdog과 UI의 "엔진 상태" |
-| `fs.freeze` | `{ deadlineMs }` | `{ frozenAt }` | 아니요 | §8.4. deadline이 지나면 guestctl이 스스로 thaw한다 |
-| `fs.thaw` | `{}` | `{ thawedAt }` | 예 | |
-| `disk.grow` | `{ bytes }` | `{ filesystemBytes }` | 예 | host가 `state.img`를 늘린 뒤 `resize2fs`를 부른다 |
-| `power.off` | `{ reason }` | `{ accepted }` | 예 | 모든 society host의 drain을 기다린 뒤 `systemctl poweroff`(§5.6) |
-| `diag.collect` | `{ include: string[] }` | stream | 예 | §8.6. 사용자가 요청할 때만 |
+| `time.set` | `{ wallMs }` | `{ steppedByMs }` | 예 | guest의 `CLOCK_REALTIME`을 host 시각으로 step한다(§9.2). 기한은 monotonic clock으로 재므로 step의 영향을 받지 않는다(MAC-650) |
+| `health.get` | `{}` | `{ uptimeMs, load, memory: { totalBytes, availableBytes }, disk: { totalBytes, freeBytes }, failedUnits, frozen }` | 예 | watchdog과 UI의 "엔진 상태". `failedUnits`는 셀 수 없으면 `null`이다. 0으로 채우지 않는다 |
+| `fs.freeze` | `{ deadlineMs }` | `{ frozenAt, deadlineMs }` | 아니요 | §8.4. 답의 `deadlineMs`는 실제로 건 deadline이다(MAC-620). 이미 얼어 있으면 `BATCH_CONFLICT` |
+| `fs.thaw` | `{}` | `{ thawed }` | 예 | `thawed: false`는 이미 풀려 있었다는 뜻이다. deadline이 먼저 풀었을 수 있다. host가 할 일은 §8.4 |
+| `disk.grow` | `{}` | `{ filesystemBytes }` | 예 | host가 `state.img`를 늘린 뒤 부른다. guest는 `resize2fs`로 파일 시스템을 device 크기까지 늘린다 |
+| `power.off` | `{}` | `{ accepted }` | 예 | 얼어 있으면 먼저 풀고 `systemctl poweroff`를 한 번 요청한다. drain은 host가 먼저 끝낸다(MAC-320) |
+| `diag.collect` | `{ include: string[] }` | stream | 예 | §8.6. 사용자가 요청할 때만(아직 구현 안 됨) |
+
+guestctl이 control channel로 내보내는 거절 문구는 MAC-231을 거친다. Linux 경로·unit 이름·errno가 들어 있으면 문구 없이 code만 보낸다.
 
 ### 4.5 society channel(port 701, guesthost)
 
 | method | params | result | 멱등 | 설명 |
 |---|---|---|---|---|
-| `society.list` | `{}` | `{ societies: SocietySummary[] }` | 예 | |
-| `society.create` | `{ key, displayName, projectId, template }` | `Receipt` | key | 새 state root를 만들고 설정을 쓴다. project import는 따로 한다(§6.3) |
-| `society.open` | `{ society }` | `{ state: "running" }` | 예 | society host를 띄운다. society host는 lease를 잡고 broker를 감독한다 |
-| `society.close` | `{ society, mode: "keep-running" \| "stop" }` | `{ state }` | 예 | `stop`은 Principal 엔진 종료, broker drain, Resident 정지까지다 |
-| `society.status` | `{ society }` | `StatusView` | 예 | 기존 status view(관측 시각 포함)를 제품 필드만 남겨 보낸다(MAC-231) |
-| `society.mail.list` | `{ society, budget }` | `MailboxRead` | 예 | 기존 `readMailbox`의 결과 모양 |
-| `society.mail.read` | `{ society, id }` | `MailBody` | 예 | `storedMailBytes` 한도 |
-| `society.config.get` | `{ society }` | `{ snapshot, fields }` | 예 | 기존 관리형 설정 snapshot과 field 목록 |
-| `society.config.commit` | `{ society, key, basedOn, edit }` | `ManagedCommit` | key | 기존 `commitManagedGeneration`. `basedOn`이 현재가 아니면 거절(CONFIG-CONTRACT) |
-| `society.extensions.set` | `{ society, key, id, role, enabled }` | `Receipt` | key | |
-| `project.import` | `{ society, key, projectId, bundle: {bytes, sha256}, refs }` | `Receipt` | key | §6.3. bundle은 이 연결의 stream으로 온다 |
-| `project.export` | `{ society, key, since?: Oid }` | stream + `{ head, bundleSha256 }` | key | §6.4 |
-| `archive.create` | `{ society?, key }` | stream | key | §8.4 |
+| `society.list` | `{}` | `{ societies: SocietySummary[] }` | 예 | state root가 있는 society와 그 session이 떠 있는지 |
+| `society.open` | `{ society }` | `{ state: "running" }` | 예 | session이 없으면 society session을 띄운다(§4.6). 있으면 그대로 답한다 |
+| `society.close` | `{ society, mode: "keep-running" \| "stop" }` | `{ state }` | 예 | `stop`은 `oma`에 종료를 요청하고(SIGTERM, 기존 종료 경로) 그 session이 끝날 때까지 기다린다. 끝은 session holder가 본 `oma`의 종료다 |
+| `society.status` | `{ society }` | `StatusView` | 예 | 기존 status view(관측 시각 포함)를 제품 field만 남겨 보낸다(MAC-231) |
+| `project.import` | `{ key, projectId, displayName, bundle: {bytes, sha256}, branch }` | `Receipt` | key | §6.3. bundle은 따로 연 stream 연결로 온다 |
+| `project.export` | `{ key, society, since?: Oid }` | stream + `{ head, bundleSha256 }` | key | §6.4 |
+| `archive.create` | `{ key, society }` | stream | key | §8.4. society가 멈춰 있을 때만 |
 | `archive.restore` | `{ key, into }` | `Receipt` | key | §8.5 |
+| `maintenance.begin` / `maintenance.end` | `{ key }` | `{ societies }` | key | §8.4. 동안에는 `society.open`을 거절한다 |
 | `request.status` | `{ key }` | `Receipt` 또는 `REQUEST_NOT_FOUND` | 예 | 결과를 모르는 요청의 조회(MAC-241) |
 
-### 4.6 session channel(Principal)
+mail·설정·확장은 society channel에 없다. 그것은 guest의 TUI가 terminal 안에서 한다(기존 Control Panel 그대로).
 
-host UI가 society의 Principal과 대화할 때 `omahostd`가 이 연결을 연다.
+### 4.6 terminal channel
 
-**MUST [MAC-220]** attach는 society당 하나다(PR-001). 두 번째 attach는 `ATTACH_CONFLICT`로 거절한다. host UI가 명시적으로
-"여기서 계속"을 고르면 `session.takeover`를 보낸다. 그러면 society host는 앞 연결을 닫은 뒤 새 연결을 attach한다.
+society의 화면과 입력은 guest의 `oma`가 쓰는 terminal을 그대로 나른다.
 
-| 방향 | 이름 | 모양 | 설명 |
-|---|---|---|---|
-| host→guest | `session.attach` | `{ society, resumeFrom?: seq }` | 응답은 `{ sessionHandle, lastSeq, model: { configured, session } }` |
-| host→guest | `session.prompt` | `{ key, text }` | 응답은 기존 `PromptOutcome`이다. key는 같은 prompt를 두 번 넣지 않기 위한 것이다(아래) |
-| host→guest | `session.interrupt` | `{}` | |
-| host→guest | `session.quit` | `{}` | 엔진 종료. society는 계속 돈다 |
-| host→guest | `session.takeover` | `{ society }` | 앞의 attach를 닫고 이 연결을 attach한다(MAC-220) |
-| host→guest | `session.prompt.status` | `{ key }` | 그 prompt의 disposition(MAC-222) |
-| host→guest | `session.transcript.tail` | `{ entries: uint }` | session 기록의 마지막 부분. `gap` 뒤에 쓴다(MAC-221) |
-| guest→host | event `transcript` | `{ lines: string[] }` | 기존 `projectEvent`가 만드는 줄. 제어 문자는 guest에서 지운다 |
-| guest→host | event `busy` | `{ busy: boolean }` | |
-| guest→host | event `promptFailed` / `promptUnconfirmed` | `{ key, text, reason? }` | 기존 WP09 disposition |
-| guest→host | event `notice` | `{ kind, … }` | 기존 `Notice` |
+**session.** society session은 society마다 `oma` 사용자의 user unit 하나다. 그 안의 작은 session holder가 pseudo-terminal을 열고, 그
+slave를 controlling terminal로 하는 새 session에서 기존 `oma`를 실행한다(cwd는 project mirror, §6). holder는 guesthost와 떨어진
+unit이라서, guesthost가 다시 시작해도 society는 계속 돈다(dtach·abduco의 모델). guesthost는 holder의 unix socket(0600)에 연결해 attach를
+중계한다. holder는 누가 attach해 있든 없든 pty 출력을 계속 읽는다. 그래서 `oma`는 화면이 없다고 막히지 않는다.
 
-**MUST [MAC-221]** society host는 attach마다 event에 1부터 오르는 `seq`를 붙인다. 최근 event를 한도(기본 2 MiB) 안에서 보관한다.
-연결이 끊겼다가 같은 attach로 돌아온 host는 `resumeFrom`으로 이어 받는다. 한도를 넘어 잃은 event가 있으면 society host는
-`{ gap: true }`를 보낸다. 그러면 host UI는 "앞부분 일부를 보이지 못했습니다"라고 말하고, `session.transcript.tail`로 session 기록의
-마지막 부분을 다시 받는다. 잃은 것을 없었던 것처럼 이어 보이지 않는다.
+**frame.** hello 뒤 양쪽은 `uint32 BE 길이 + 1바이트 종류 + payload` frame을 보낸다(한도 64 KiB).
 
-**MUST [MAC-222]** `session.prompt`의 key는 host UI가 만든다. society host는 key마다 disposition(accepted / failed / unconfirmed)을
-attach가 끝날 때까지 기억한다. 연결이 끊겨 결과를 모르는 host는 같은 key로 `session.prompt.status`를 묻는다. 다시 보내지 않는다(WP09).
+| 방향 | 종류 | payload |
+|---|---|---|
+| host→guest | `input` | 입력 byte |
+| host→guest | `resize` | `cols: uint16, rows: uint16` |
+| guest→host | `output` | 출력 byte |
+| guest→host | `exit` | `{ code, signal }`(JSON). `oma`가 끝났다. 연결은 이어서 닫힌다 |
+| guest→host | `detached` | `{ reason: "taken-over" }`(JSON). 다른 attach가 가져갔다 |
+
+**attach.** attach는 `resize`로 시작한다. holder는 이렇게 한다.
+
+1. pty의 창 크기를 그 값으로 둔다(`TIOCSWINSZ`). 크기가 바뀌었으면 커널이 `oma`에게 `SIGWINCH`를 준다.
+2. `oma`가 켜 둔 terminal mode(alternate screen, bracketed paste, cursor 숨김)를 새 화면에 다시 보낸다. holder는 출력에서 이 mode만
+   따라 둔다. 화면 내용은 흉내 내지 않는다.
+3. `oma`에게 전체를 다시 그리라고 한다. 기존 TUI의 Ctrl-L이다(dtach의 redraw 방식). TUI는 Ctrl-L에 화면을 지우고 전부 다시 그린다.
+
+**MUST [MAC-220]** attach는 society당 하나다(PR-001의 뜻을 화면에도 적용한다). 두 번째 attach는 `ATTACH_CONFLICT`로 거절한다. host UI가
+명시적으로 "여기서 계속"을 고르면 hello에 `takeover: true`를 넣는다. 그러면 holder는 앞 연결에 `detached`를 보내고 닫은 뒤 새 연결을
+attach한다.
+
+**MUST [MAC-221]** 연결이 끊겨도 `oma`에는 아무 일도 없다. 그때 보낸 입력 byte가 도착했는지는 host가 알 수 없다. host는 입력을 다시
+보내지 않는다. 그 입력이 prompt였다면 그 결과는 guest의 TUI가 기존 WP09 규칙으로 보인다: 쓰지 못한 prompt는 "보내지 못한 입력"으로
+돌려주고, 쓰고 답을 받지 못한 prompt는 "확인하지 못했습니다(자동으로 다시 보내지 않음)"로 남긴다. 다시 attach하면 그 화면이 보인다.
+
+**MUST [MAC-222]** host UI는 떠날 때 Mac terminal의 mode를 원래대로 돌린다(§2.4). 화면이 떠나도 `oma`의 mode 상태는 바뀌지 않는다.
+
+prompt·설정·확장은 terminal 안의 TUI가 한다. 그래서 prompt에는 RPC가 없고 request key도 없다. MAC-240·MAC-241은 prompt에 적용되지
+않는다. prompt의 disposition은 WP09가 정한다.
 
 ### 4.7 egress channel과 pool
 
-**MUST [MAC-225]** `omahostd`는 guest가 떠 있는 동안 egress 연결을 미리 열어 둔다. 개수는 `min(inferenceSlots 합, 32)`개다.
-guesthost는 이 연결들을 pool로 가진다. provider 요청 하나가 연결 하나를 쓰고, 끝나면 그 연결을 닫는다. `omahostd`는 닫힌 만큼
-새로 연다. pool이 비면 egress bridge는 `receiptWaitSeconds` 동안 기다린다. 그래도 없으면 요청을 연결 실패로 끝낸다. 재시도는
-엔진이 한다(INF-001).
+**MUST [MAC-225]** guest의 엔진은 provider에 직접 닿지 않는다(guest에는 NIC가 없다). egress 연결은 host가 연다(MAC-201).
+
+- `omahostd`는 guest가 떠 있는 동안 egress 연결을 pool로 열어 둔다. 개수는 `min(2 + 4 × 진행 중인 run 수, 32)`다. 4는 기존
+  relay가 run 하나에 허락하는 동시 요청 수(`concurrent: 4`)다. run은 `egress.placeholder`로 시작하고 run의 끝이나 `bootId`의 변화로
+  끝난다.
+- guest의 egress bridge는 엔진이 연 연결 하나를 pool의 egress 연결 하나에 잇는다. 둘은 엔진의 연결이 끝날 때까지 짝이다. keep-alive로
+  같은 연결에 오는 요청 여럿과 WebSocket upgrade가 모두 그 짝 위로 간다. host는 그 연결을 기존 `InferenceRelay`의 HTTP server에 그대로
+  넘긴다. keep-alive, 요청마다의 교체, upgrade tunnel, tripwire는 모두 기존 relay가 한다.
+- 동시 요청의 한도는 기존 relay의 규칙 그대로다. 자리표시자(= run)마다 `concurrent: 4`이고, 넘으면 relay가 곧바로 503으로 답한다.
+  기다리게 하지 않는다.
+- pool이 비어 있으면 egress bridge는 엔진의 연결을 곧바로 닫는다. 연결 실패다. 재시도는 엔진이 자기 정책대로 한다(INF-001). 기다리지
+  않는 것은 기존 relay가 한도에서 곧바로 거절하는 것과 같은 선택이다.
+- `quota.inferenceSlots`는 지금 어떤 코드도 강제하지 않는다. 그래서 여기서 기준으로 쓰지 않는다. 그것을 강제하게 되면 그 판단은 guest의
+  broker가 하고(MAC-713), host는 따르지 않는다.
 
 egress 연결의 첫 message(guest→host)는 둘 가운데 하나다.
 
@@ -320,14 +377,12 @@ egress 연결의 첫 message(guest→host)는 둘 가운데 하나다.
 egress.placeholder { v: 1, credentialRef, run: { society, actor, incarnation } }
   → { placeholderId, placeholder }          // 엔진을 띄우기 전, run마다 한 번
 
-egress.open { v: 1, placeholderId, society, actor, incarnation, modelProfile, requestId,
-              framing: "http1", declaredBytes?: uint }
+egress.open { v: 1, placeholderId, society, actor, incarnation, modelProfile }
 ```
 
 `egress.placeholder`는 작은 요청과 응답으로 끝나고 연결을 닫는다. 엔진의 provider 설정에는 이 자리표시자가 들어간다(§7.4).
-`egress.open` 뒤에는 엔진이 쓴 HTTP/1.1 요청 바이트가 그대로 흐르고, 응답 바이트가 반대로 흐른다. 이 연결은 byte relay다(INF-005).
-host의 Relay는 `placeholderId`로 그 run의 자리표시자와 credential을 찾는다. 자리표시자는 guest가 run의 끝을 알리거나 `bootId`가 바뀌면
-버린다. host 쪽의 규칙은 §7.4에 있다.
+`egress.open` 뒤에는 엔진이 쓴 HTTP/1.1 byte가 그대로 흐르고, 응답 byte가 반대로 흐른다(INF-005). host의 Relay는 `placeholderId`로
+그 run의 자리표시자와 credential을 찾는다. 자리표시자는 guest가 run의 끝을 알리거나 `bootId`가 바뀌면 버린다. host 쪽 규칙은 §7.4에 있다.
 
 ### 4.8 stream channel
 
@@ -357,19 +412,26 @@ bundle·archive·진단처럼 큰 byte stream은 `stream` 연결을 따로 연�
 | `STATE_NEWER_THAN_APP` | state schema가 이 app의 image가 읽을 수 없는 것이다 | never | "새 버전의 OMA가 만든 데이터입니다. OMA를 업데이트하세요" |
 | `HOST_STORAGE_LOW` | Mac의 빈 공간이 한도 아래다 | after-repair | "Mac의 저장 공간이 부족합니다" |
 
-**MUST [MAC-240]** state를 바꾸는 요청은 모두 request key를 가진다. 대상은 society 생성, 설정 commit, 확장 토글, project import·export,
-archive·restore, prompt다. guest는 key마다 결과를 durable하게 기록한다. 기존 operation 원장을 쓰고, prompt는 MAC-222의 기억을 쓴다.
+**MUST [MAC-240]** RPC로 state를 바꾸는 요청은 모두 request key를 가진다. 대상은 project import·export, archive·restore,
+maintenance다. guesthost는 key마다 효과 **전에** intent를, 끝난 뒤 결과를 자기 원장(`/var/lib/oma/requests/`)에 기존 durable 쓰기
+primitive로 publish한다. society의 원장(broker의 Store)에는 쓰지 않는다. 그것의 writer는 broker 하나다(REC-007). prompt·설정·확장은
+RPC가 아니라 guest의 TUI가 하므로 이 조항 밖이다(§4.6).
 
 **MUST [MAC-241]** 요청 뒤 연결이 끊겼거나 `bootId`가 바뀌어 결과를 모르면, host는 그 요청을 다시 보내지 않는다. 같은 key로
-조회한다(`request.status`). 결과가 없다고 증명되면(`REQUEST_NOT_FOUND`) 그때만 다시 보낸다. 기존 CLI의 V26B 규칙과 같다.
+조회한다(`request.status`). 결과가 없다고 증명되면(`REQUEST_NOT_FOUND`: 그 key의 intent가 원장에 없다) 그때만 다시 보낸다. intent만
+있고 결과가 없으면 guesthost가 효과를 관측해 판정할 때까지 unknown이다. 기존 CLI의 V26B 규칙과 같다.
 결과를 모르는 동안 UI는 "결과를 확인하는 중"이라고 말한다. "실패"라고 말하지 않는다(P0-5).
 
 ### 4.10 protocol 버전
 
 **MUST [MAC-250]** protocol 버전은 정수 하나다. 메시지 모양이나 뜻이 바뀌면 올린다. host는 두 버전을 모두 말한다. 하나는 자기가
-동봉한 image의 protocol이다. 다른 하나는 직전 image의 protocol이다(update 중인 VM과 말하기 위해, §8.3). guest는 자기 버전 하나만
-말한다. 메시지 schema의 원본은 TypeScript(`implementation/contracts/host-guest.ts`, 새 파일)에 두고, Swift 선언은 거기서 생성한다.
-양쪽 codec은 같은 conformance vector로 시험한다(MV-10).
+동봉한 image의 protocol이다. 다른 하나는 직전 image의 protocol이다. update가 실패해 직전 image로 되돌아가 부팅할 때 필요하다(§8.3의
+rollback). guest는 자기 버전 하나만 말한다. 메시지 schema의 원본은 `src/protocol/host-guest.ts`(순수 codec, K1)다. host와 guest가 모두
+Node이므로 양쪽은 같은 codec을 쓴다. Swift helper가 말하는 것은 VM 제어와 Keychain뿐이고 이 protocol을 말하지 않는다.
+
+**MUST [MAC-251]** Host API(`omahostd` ↔ OMA.app·`oma` 명령)도 정수 버전 하나를 가진다. host UI는 자기 버전과 직전 버전을 말한다.
+`omahostd`는 자기 버전 하나만 말한다. app을 update하면 새 UI가 아직 다시 시작하지 않은 옛 `omahostd`와 말하게 되기 때문이다(§8.3,
+§9.4). 겹치지 않으면 UI는 "OMA를 다시 시작해야 합니다"와 다시 시작 버튼만 보인다. 다시 시작은 MAC-320의 정지를 거친다.
 
 ---
 
@@ -420,14 +482,18 @@ macOS 버전이 이 모드를 주지 못하면 시작을 거절한다.
 |---|---|
 | `/` | system image(erofs, 읽기 전용, dm-verity) |
 | `/var/lib/oma` | state disk(ext4, `errors=remount-ro`, `data=ordered`, journal 켬) |
-| `/var/lib/oma/instance.json` | VM instance ID, 만든 시각, 쓴 적 있는 최대 state schema |
-| `/var/lib/oma/societies/<id>/state` | society state root(기존 layout) |
-| `/var/lib/oma/societies/<id>/config` | 관리형 설정 bundle(기존 operations layout) |
-| `/var/lib/oma/home/oma` | `oma` 사용자의 home(엔진 agent 디렉터리의 settings·models. credential은 없음) |
+| `/var/lib/oma/instance.json` | VM instance ID(`kind: "oma-guest-instance-v1"`), 만든 시각, 쓴 적 있는 최대 state schema |
+| `/var/lib/oma/data/oma/<society>` | society state root(기존 layout, `config.json` 포함). guest의 `oma`에게 `XDG_DATA_HOME=/var/lib/oma/data`를 주면 기존 `hostLaunchLocation`이 이 경로를 낸다 |
+| `/var/lib/oma/projects/<projectId>` | project mirror(§6). guest의 `oma`가 이 디렉터리에서 돈다 |
+| `/var/lib/oma/requests/` | guesthost의 request 원장(MAC-240) |
+| `/var/lib/oma/home` | `oma` 사용자의 home(엔진 agent 디렉터리의 settings·models. credential은 없음) |
 | `/var/log/journal` | journald persistent. `SystemMaxUse=256M` |
-| `/run/oma/<id>` | run root(tmpfs) |
+| `/run/user/1000/oma/<society>` | run root(tmpfs, 기존 `XDG_RUNTIME_DIR/oma/<society>`) |
+| `/run/oma-guestctl/`, `/run/oma-guesthost/` | 서비스의 unix socket(MAC-202) |
 
-`oma` 사용자에게는 linger를 켠다(`loginctl enable-linger oma`). 그래야 user manager가 로그인 없이 돌고, Resident unit이 그 아래에서 돈다.
+계정은 image의 sysusers 설정이 만든다. `oma`(uid 1000)는 state disk를 소유하고 모든 society를 돌린다. `oma-bridge`는 bridge instance만
+돌린다. `oma` 사용자에게는 linger를 켠다(`loginctl enable-linger oma`). 그래야 user manager가 로그인 없이 돌고, society session과
+Resident unit이 그 아래에서 돈다.
 
 ### 5.4 첫 설치
 
@@ -436,7 +502,7 @@ macOS 버전이 이 모드를 주지 못하면 시작을 거절한다.
 2. kernel cmdline에 `oma.provision=<instanceId>`를 넣어 부팅한다. guestctl은 state disk에 ext4 signature가 없을 때만 `mkfs.ext4`를
    만든다. signature가 있는데 `instance.json`의 ID가 다르면 포맷하지 않고 멈춘다(`failed`, "알 수 없는 disk"). 남의 데이터를
    지우지 않는다.
-3. `instance.json`을 쓰고 flush한다. `oma` 사용자와 linger를 준비하고 handshake에 답한다.
+3. `instance.json`을 쓰고 flush한다. 그 뒤에야 handshake에 답한다(`instance.json`을 읽지 못하는 guest는 모든 hello를 거절한다).
 
 ### 5.5 유휴 정책
 
@@ -448,6 +514,11 @@ macOS 버전이 이 모드를 주지 못하면 시작을 거절한다.
 
 아무것도 참이 아닌 상태가 `idleStopSeconds`(기본 600초) 이어지면 `draining`으로 간다. 관측이 unknown이면 유휴로 보지 않는다(P0-5).
 
+**MUST [MAC-312]** 위 관측(society의 pending 작업·active Resident, guesthost의 답)이 `idleStopSeconds` 넘게 계속 unknown이면
+`omahostd`는 그것을 UI에 올린다. menu bar와 창에 "엔진 상태를 확인하지 못하고 있습니다"를 보이고, "진단 내보내기"와 "다시 시작"을 준다.
+VM은 그대로 둔다. unknown을 유휴로도, 멈춤으로도 바꾸지 않는다. 사용자가 "다시 시작"을 고르면 MAC-320으로 멈춘 뒤 다시 부팅한다.
+unknown이 풀리면 알림도 내린다.
+
 **SHOULD [MAC-311]** Resident가 일하는 동안에는 `IOPMAssertionCreateWithName(kIOPMAssertPreventUserIdleSystemSleep)`로 유휴 절전을
 막는다. 사용자가 끌 수 있다. 덮개를 닫거나 사용자가 요청한 절전은 막지 않는다(§9.1).
 
@@ -455,11 +526,16 @@ macOS 버전이 이 모드를 주지 못하면 시작을 거절한다.
 
 **MUST [MAC-320]** 정지 순서는 이렇다.
 
-1. `omahostd`가 `power.off`를 보낸다.
-2. guestctl이 guesthost에게 모든 society의 `stop` drain을 요청한다: Principal 엔진 종료, broker drain(DR16의 종료 증명 포함),
-   Resident 정지.
-3. 모든 drain이 끝나면(성공이든 실패든 결과가 나오면) `systemctl poweroff`를 한다.
-4. host는 `drainDeadlineSeconds`(기본 60초) 안에 `guestDidStop`을 기다린다. 넘으면 `VZVirtualMachine.stop()`으로 끈다(`forced`).
+1. `omahostd`가 guesthost에 `maintenance.begin`을 보낸다. 그 뒤로 새 `society.open`은 거절된다.
+2. 떠 있는 society마다 `society.close { mode: "stop" }`를 보낸다. guest의 `oma`가 기존 종료 경로를 탄다: Principal 엔진 종료, broker
+   drain(DR16의 종료 증명 포함), Resident 정지, lease 반납. 모든 session이 끝나거나(성공이든 실패든 결과가 나오면) 기한이 지나면 3으로
+   간다.
+3. `omahostd`가 guestctl에 `power.off`를 보낸다. guestctl은 얼어 있으면 먼저 풀고 `systemctl poweroff`를 한 번 요청한다.
+4. host는 `drainDeadlineSeconds`(기본 60초, 1–2단계 포함) 안에 `guestDidStop`을 기다린다. 넘으면 `VZVirtualMachine.stop()`으로
+   끈다(`forced`).
+
+drain을 guestctl이 아니라 host가 하는 이유: drain의 대상(society session)은 guesthost가 알고, guestctl은 root의 몇 가지 효과만 가진다.
+power-off 전에 무엇이 끝났는지는 host가 society마다 답으로 받는다.
 
 `forced`는 guest에게 전원 장애다. 다음 부팅은 fsck와 OMA의 crash 복구를 거친다. host는 이 사실을 `host-record`에 남긴다. 다음
 실행 때 UI는 "지난번에 정상적으로 멈추지 못해 복구했습니다"라고 한 줄 보인다.
@@ -495,8 +571,9 @@ ProjectRecord {
 }
 ```
 
-**MUST [MAC-402]** guest는 Mac 경로를 받지 않는다. 기존 project binding(`canonicalProjectPath`)에 해당하는 guest 쪽 기록에는
-`projectId`와 `displayName`만 둔다(§12의 D-6).
+**MUST [MAC-402]** guest는 Mac 경로를 받지 않는다. guest가 아는 것은 `projectId`와 `displayName`뿐이다. guest의 `oma`는 project
+mirror(`/var/lib/oma/projects/<projectId>`)에서 돈다. 그래서 기존 project binding(D05)의 `canonicalProjectPath`는 그 mirror 경로가
+되고, 규범은 바뀌지 않는다.
 
 **MUST [MAC-403]** host는 import·export 전마다 bookmark를 해석한다. 그리고 그 디렉터리의 repo가 기록과 같은 project인지 확인한다.
 확인하는 것은 셋이다: `objectFormat`이 같다, `rootCommits` 가운데 하나 이상이 여전히 닿는다, `git rev-parse --git-common-dir`이 존재한다.
@@ -510,17 +587,29 @@ sync는 사용자가 누를 때만 일어난다. 백그라운드 자동 sync는 
 
 ### 6.3 import(Mac → guest)
 
+import는 Mac의 commit을 guest의 **project mirror**로 옮긴다. canonical repository는 import가 바꾸지 않는다. mirror는 Linux에서 사람이
+`oma`를 실행하는 project checkout에 해당한다. 아무도 그 안에서 일하지 않는다. guesthost만 쓴다.
+
 1. 사용자가 "Mac에서 가져오기"를 누른다. 기본값은 현재 branch이고 다른 branch를 고를 수 있다.
 2. host가 동봉 git으로 `git bundle create - <branch> ^<lastImport.head>`를 만든다. 첫 import는 전체다. 크기가 `bundleBytes`를 넘으면
    거절하고 이유를 말한다.
 3. host가 `git bundle verify`를 돌리고 sha256을 계산한다. 그다음 `project.import`로 보낸다.
-4. guest는 기존 submit quarantine으로 받는다. 거치는 것: object format 검사, fsck, prerequisite 확인. 받은 commit은 canonical repo의
-   `refs/oma/import/<projectId>/<n>`에 둔다.
-5. canonical `main`으로의 반영은 기존 integration 규칙을 탄다: fast-forward만, `code.integrate` 권한, STALE_BASE와 NOT_DESCENDANT.
-   반영하는 주체는 host UI의 사용자, 즉 Principal 권한이다. import 자체는 main을 바꾸지 않는다.
+4. guesthost는 stream을 선언한 길이와 hash로 확인한다. mirror가 없으면 빈 repository로 만든다. 그다음 기존 quarantine 규칙과 같은
+   조건(object format 검사, `fsck`, prerequisite 확인, 빈 hooks, 신뢰하는 config)으로 `git fetch <bundle> <branch>:refs/remotes/mac/<branch>`를
+   한다. mirror의 HEAD는 그 ref로 detach한다. mirror에서 바뀌는 것은 `refs/remotes/mac/*`와 HEAD뿐이다.
+5. 결과를 원장에 쓰고(MAC-240) 답한다. submodule은 gitlink만, LFS는 pointer만 온다. 둘 다 결과에 "옮기지 않은 것"으로 적는다. 조용히
+   빠뜨리지 않는다.
 
-submodule은 superproject의 gitlink만 온다. 내용은 오지 않는다. LFS object도 오지 않는다(pointer만 온다). 둘 다 import 결과에 "옮기지
-않은 것"으로 적는다. 조용히 빠뜨리지 않는다.
+**MUST [MAC-411]** canonical에 들어가는 길은 기존 규범의 것뿐이다.
+
+- **society를 처음 열 때**: guest의 `oma`가 mirror에서 society를 준비한다. 기존 provision이 mirror의 HEAD로 canonical `main`을 시작한다
+  (GIT-003: 초기 main은 사람이 고른 commit이다. 여기서는 사람이 가져오기에서 고른 branch다).
+- **그 뒤의 import**: mirror만 새로워진다. canonical에 넣으려면 actor가 기존 경로를 탄다. `git.submit`으로 `refs/oma/published/<actor>/<operation>`에
+  게시하고(GIT-006·GIT-008), `code.integrate`를 host profile로 받은 actor가 integrate한다(AUTH-001, INT-001). host나 guesthost는 actor가
+  아니므로 submit·integrate하지 않는다. `refs/oma/import/*` 같은 새 ref 체계도 만들지 않는다.
+
+지금 Linux에도 사람의 새 commit을 이미 있는 society의 canonical에 넣는 제품 경로는 없다. macOS도 v1에서는 같다. 사람이 import한 commit을
+actor가 쓸 수 있게 하는 것(예: mirror를 actor에게 읽기 전용으로 보이기, 또는 사람 권한의 게시)은 §12 D-8의 결정을 기다린다.
 
 ### 6.4 export(guest → Mac)
 
@@ -535,8 +624,8 @@ submodule은 superproject의 gitlink만 온다. 내용은 오지 않는다. LFS 
 
 ### 6.5 guest에 project가 없을 때
 
-society를 만들 때 project를 고르지 않을 수 있다. 그러면 canonical repo는 빈 저장소로 시작한다(기존 `seedSource: "empty"`). 나중에
-import하면 첫 import가 base가 된다.
+society를 만들 때 project를 고르지 않을 수 있다. 그러면 mirror는 빈 repository이고, canonical repo는 빈 저장소로 시작한다(기존
+`seedSource: "empty"`). 그 뒤의 import는 §6.3의 MAC-411을 따른다: mirror만 새로워진다.
 
 ---
 
@@ -544,12 +633,27 @@ import하면 첫 import가 base가 된다.
 
 ### 7.1 원칙
 
-**MUST [MAC-701]** provider credential은 Keychain의 generic password item으로만 저장한다.
+**MUST [MAC-701]** provider credential은 Keychain의 generic password item으로만 저장한다. 조건은 이렇다.
 
-- `kSecAttrService = "com.<vendor>.oma.provider"`, `kSecAttrAccount = <credentialRef>`
-- `kSecAttrAccessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`
-- `kSecAttrSynchronizable = false`
-- access group은 OMA의 team ID다.
+- **data protection keychain만 쓴다**: 모든 호출에 `kSecUseDataProtectionKeychain = true`. 옛 파일 기반 keychain에서는
+  `kSecAttrAccessible`과 access group이 효력이 없고 ACL(신뢰 app 목록)이 대신하므로, 거기에는 item을 두지 않는다.
+- item: `kSecAttrService = "com.<vendor>.oma.provider"`, `kSecAttrAccount = <credentialRef>`,
+  `kSecAttrAccessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, `kSecAttrSynchronizable = false`,
+  `kSecAttrAccessGroup = "<TeamID>.com.<vendor>.oma"`.
+- **누가 읽는가**: `keychain-access-groups` entitlement에 그 group을 가진 binary뿐이다. macOS에서 이 entitlement는 app에 embed한
+  provisioning profile(Developer ID용)이 허가해야 효력이 있다. OMA에서 이 entitlement와 profile을 가진 binary는 `oma-vmhelper` 하나다.
+  Keychain을 부르는 코드는 그 Swift binary에만 있다.
+- **서명과 packaging**: `oma-vmhelper`, 동봉 `node`, `omahostd`의 launcher는 모두 app bundle 안에서 Developer ID로 서명하고 hardened
+  runtime을 켠다. `omahostd`의 JS(Resolver·Relay 포함)는 `Contents/Resources` 아래에 두고 bundle 서명의 봉인에 포함한다.
+  `omahostd`는 bundle 기준의 고정 경로에 있는 이 파일들만 실행한다.
+
+**MUST [MAC-703]** Resolver와 Relay는 JS이고 진짜 key를 memory에 가진다. 그 무결성은 코드 서명의 실행 시 검사가 아니라 다음에 기댄다.
+이것을 스펙에 적고, 이보다 강하게 말하지 않는다.
+
+- bundle 봉인: 첫 실행 때 Gatekeeper가 bundle 전체(Resources 포함)의 서명을 확인한다. 그 뒤의 실행마다 JS를 다시 확인하지는 않는다.
+- macOS 13 이상의 App Management 보호: 다른 app이 서명된 app bundle을 바꾸는 것을 막는다. 사용자가 그 권한을 준 프로세스는 예외다.
+- 잔여 위험: 같은 macOS 사용자로 돌면서 App Management 권한이나 관리자 권한을 받은 프로세스는 Resolver를 바꿀 수 있다. 이것은 §3.4의 A4를
+  넘는 공격자이며, OMA는 이를 막는다고 말하지 않는다.
 
 item의 값은 엔진이 쓰는 credential blob이고, OMA는 그 형식을 읽지 않는다(engine-auth의 원칙). guest로 가는 경로는 없다(MAC-004).
 
@@ -559,9 +663,9 @@ item의 값은 엔진이 쓰는 credential blob이고, OMA는 그 형식을 읽�
 `withLock`·`withLockAsync`). host의 Resolver는 `KeychainAuthStorageBackend`를 쓴다.
 
 - `withLock(fn)`: `omahostd`의 per-credential lock을 잡는다. item의 현재 값을 읽어 `fn(current)`에 준다. `next`가 나오면 item을 갱신한다.
-  lock은 `omahostd`의 memory에 있다. Resolver가 죽으면 lock은 연결 종료와 함께 풀린다.
-- Resolver는 Keychain을 직접 부르지 않는다. `omahostd`와의 socketpair로 `get`/`put`을 요청한다. Keychain을 만지는 코드는 서명된
-  Swift binary 하나뿐이다.
+  lock은 `omahostd`의 memory에 있다. Resolver는 `omahostd` 안에서 돌므로 lock은 `omahostd`와 함께 사라진다.
+- Resolver는 Keychain을 직접 부르지 않는다. `omahostd`가 `oma-vmhelper`와의 channel로 `get`/`put`을 요청한다. Keychain을 만지는
+  코드는 서명된 Swift binary 하나뿐이다(MAC-701).
 
 이렇게 하면 INF-001이 지켜진다. credential 흐름(OAuth 로그인, token 갱신, 형식)은 여전히 엔진이 소유한다. 바뀌는 것은 blob이 놓이는
 곳뿐이다. §12의 D-4가 INF-001의 "agent 디렉터리" 문장을 이렇게 넓힌다.
@@ -581,7 +685,7 @@ item의 값은 엔진이 쓰는 credential blob이고, OMA는 그 형식을 읽�
 
 ```
 guest 엔진(자리표시자 key) --HTTP/1.1 평문--> egress bridge(unix socket)
-   --pool의 vsock 연결--> omahostd --socketpair--> Egress Relay(host, 진짜 key를 자리에 넣음)
+   --pool의 vsock 연결(oma-vmhelper가 omahostd의 unix socket으로 이음)--> omahostd 안의 Egress Relay(진짜 key를 자리에 넣음)
    --TLS--> provider origin(Resolver가 정함)
 ```
 
@@ -599,9 +703,10 @@ Principal 엔진은 자기 agent 디렉터리의 credential을 직접 쓰지만,
 - 응답에 key가 섞이면 끊는다.
 - 결과를 모르는 요청은 다시 보내지 않는다(INF-004).
 
-**MUST [MAC-712]** Relay는 `egress.open`의 `credentialRef`가 host에 바인딩된 credential일 때만 연결한다. 목적지는 Resolver가 해석한
-origin 하나다. guest가 목적지를 정할 수 없다. society마다 동시 연결 수를 `inferenceSlots`로 제한한다. 이 제한은 host가 관측한 설정
-snapshot에서 읽고, 설정이 바뀌면 다시 읽는다.
+**MUST [MAC-712]** Relay는 `egress.open`의 `placeholderId`가 host가 이번 `bootId`에서 발급한 자리표시자이고, 그 자리표시자의
+`credentialRef`가 host에 바인딩된 credential일 때만 연결한다. 목적지는 Resolver가 해석한 origin 하나다. guest가 목적지를 정할 수 없다.
+동시 요청 수는 자리표시자(run)마다 기존 relay의 한도(`concurrent: 4`)이고, 넘으면 곧바로 503이다(§4.7). `quota.inferenceSlots`는 쓰지
+않는다(강제하는 코드가 없다).
 
 **MUST [MAC-713]** 누가 어떤 profile을 쓸 수 있는지(`actor`, `incarnation`, `modelProfile`)는 guest의 broker가 판단한다. 판단 근거는
 run lease와 spec의 model profile이다. host는 이 판단을 다시 하지 않는다. `egress.open`의 attribution은 로그와 비용 표시에만 쓴다.
@@ -641,14 +746,16 @@ image는 app bundle에 들어간다(`OMA.app/Contents/Resources/guest/<version>/
 
 **MUST [MAC-610]** update 순서는 이렇다.
 
-1. 새 app이 설치되면 host는 새 image를 검증한다. VM이 옛 image로 돌고 있으면 그대로 둔다. host는 직전 protocol도 말하므로 계속 쓸 수
-   있다(MAC-250).
-2. 유휴 정책이 VM을 멈추거나 사용자가 "지금 적용"을 누르면 update를 시작한다. 진행 중인 작업을 끊지 않는다.
-3. 정지 뒤 host는 **update 전 snapshot**을 만든다: `state.img`의 APFS clone(`clonefile`). VM이 멈춰 있으므로 일관된다.
+1. 새 app이 설치돼도 떠 있는 `omahostd`(옛 binary)와 VM은 그대로 돈다. VM은 `omahostd`의 자식(`oma-vmhelper`) 안에서 돌기 때문에,
+   `omahostd`를 바꾸면 VM도 멈춘다(§9.3). 그래서 새 app의 UI는 옛 `omahostd`와 Host API의 직전 버전으로 말한다(MAC-251). 새 image의
+   검증은 새 `omahostd`가 시작할 때 한다.
+2. 유휴 정책이 VM을 멈추거나 사용자가 "지금 적용"을 누르면 update를 시작한다. 옛 `omahostd`가 MAC-320으로 VM을 멈추고 끝난다. launchd가
+   새 binary의 `omahostd`를 띄운다. 진행 중인 작업을 끊지 않는다(정지는 drain을 거친다).
+3. 새 `omahostd`는 부팅 전에 **update 전 snapshot**을 만든다: `state.img`의 APFS clone(`clonefile`). VM이 멈춰 있으므로 quiescent다.
 4. 새 image로 부팅한다. guest는 broker를 띄우기 전에 state migration을 한다. migration은 앞으로만 간다. 기존 Store의
    `SCHEMA_USER_VERSION_READABLE` 규칙대로, 모르는 버전은 열지 않는다.
 5. handshake와 health가 성공하면 update는 끝난다. 실패하면 **rollback**한다: 부분적으로 migration한 disk를 쓰지 않는다. `state.img`를
-   3의 snapshot으로 되돌리고 직전 image로 부팅한다. UI는 "업데이트를 적용하지 못해 이전 상태로 돌렸습니다"와 진단 내보내기를 준다.
+   3의 snapshot으로 되돌리고 직전 image로 부팅한다. 이때 새 `omahostd`는 직전 image의 protocol로 말한다(MAC-250). UI는 "업데이트를 적용하지 못해 이전 상태로 돌렸습니다"와 진단 내보내기를 준다.
 6. update 전 snapshot은 새 image로 세 번 정상 부팅하거나 7일이 지날 때까지 남긴다.
 
 **MUST [MAC-611]** host는 state를 옛 image로 내리지 않는다. `host-record`의 "쓴 적 있는 최대 state schema"가 부팅하려는 image의 읽을 수
@@ -657,30 +764,46 @@ image는 app bundle에 들어간다(`OMA.app/Contents/Resources/guest/<version>/
 
 ### 8.4 백업
 
-두 종류를 둔다.
+두 종류를 둔다. 둘 다 REC-005의 quiescent 조건을 지킨다: 백업하는 society에서는 mutation 접수와 inference dispatch가 멈춰 있고, active
+cgroup이 끝났음이 확인돼 있으며, DB·Maildir·Git·context·staging·receipt·session·설정이 같은 시점의 것이다. 이 조건은 새로 만드는 것이
+아니라 기존 society 정지(`society.close { mode: "stop" }`)가 이미 주는 것이다: Principal 엔진 종료, broker drain(DR16의 종료 증명),
+Resident 정지. broker가 멈춰 있으므로 DB를 쓰는 프로세스가 없다.
+
+**MUST [MAC-619]** 백업은 broker 밖에서 DB를 열지 않는다. checkpoint(`wal_checkpoint`)도, `VACUUM INTO`도 하지 않는다. DB의 writer는
+broker 하나다(REC-007). WAL 파일이 남아 있어도 같은 시점의 파일로 함께 복사되므로 사본은 그대로 열린다. WAL을 합치는 것은 그 사본을
+다음에 여는 broker가 한다.
 
 **snapshot(로컬·빠름·같은 Mac 전용)**
 
-1. `fs.freeze` 전에 guesthost가 society마다 SQLite checkpoint(`wal_checkpoint(TRUNCATE)`)를 한다.
-2. guestctl이 `FIFREEZE`로 `/var/lib/oma`를 얼린다.
-3. host가 `clonefile(state.img, snapshots/<id>.img)`을 한다. APFS copy-on-write라 즉시 끝난다.
-4. `fs.thaw`로 푼다.
-
-얼린 동안 쓰기는 멈춘다. guestctl은 `deadlineMs`(기본 5초)가 지나면 스스로 푼다(MAC-620). 결과는 crash-consistent 이상이다.
-OMA는 crash 복구를 이미 요구하므로 이 snapshot으로 부팅하면 복구 경로를 탄다. 자동 snapshot은 하루 한 번, 사용자가 원할 때, update
-전에 만든다. 보존: 최근 7개와 update 전 snapshot.
+- **자동 snapshot**은 VM이 멈춰 있을 때만 만든다: 유휴 정지 뒤, update 전(§8.3), 사용자가 요청했는데 VM이 멈춰 있을 때. `state.img`의
+  `clonefile`이다. freeze가 필요 없다.
+- **떠 있는 VM의 snapshot**(사용자 요청)은 이렇게 한다.
+  1. `maintenance.begin`: 새 `society.open`을 막는다.
+  2. 떠 있는 society를 모두 `stop`으로 닫는다. 하나라도 결과가 unknown이면 snapshot을 만들지 않고 멈춘다.
+  3. `fs.freeze`로 `/var/lib/oma`를 얼린다. 답의 `deadlineMs`가 실제 deadline이다.
+  4. host가 `clonefile(state.img, snapshots/<id>.partial)`을 한다. APFS copy-on-write라 곧 끝난다.
+  5. `fs.thaw`. 답이 `thawed: true`일 때만 `<id>.partial`을 `<id>.img`로 publish한다.
+  6. `maintenance.end`. 사용자가 계속 돌게 두었던 society를 다시 연다.
 
 **MUST [MAC-620]** freeze가 thaw 없이 남는 일은 없어야 한다. guestctl은 freeze마다 deadline timer를 건다. host의 연결이 끊겨도 deadline에
-thaw한다. freeze 중에는 broker의 쓰기가 막히므로, deadline은 `receiptWaitSeconds`보다 짧아야 한다.
+thaw한다. deadline은 host가 요청한 값과, guest의 society 설정에 실제로 있는 가장 짧은 `limits.receiptWaitSeconds`에서 여유(500 ms)를 뺀
+값 가운데 작은 것이다. society가 없으면 10초다. 어느 society의 설정을 읽을 수 없으면 그 한도를 모르는 것이므로 freeze하지 않는다(P0-5).
+위의 절차에서는 broker가 멈춰 있어 기다리는 receipt가 없지만, 이 한도는 절차가 깨졌을 때의 방어로 남긴다.
+
+**MUST [MAC-622]** `fs.thaw`가 `thawed: false`로 답하면(deadline이 먼저 풀었다) clone이 언 동안에 끝났다는 보장이 없다. host는
+`<id>.partial`을 지우고 snapshot을 만들지 않은 것으로 끝낸다. UI는 "백업을 만들지 못했습니다. 다시 시도하세요"라고 말한다. 일관성을 모르는
+사본을 snapshot으로 남기지 않는다. `fs.thaw`의 답을 받지 못해도(연결 끊김) 같다.
+
+보존: 최근 7개와 update 전 snapshot.
 
 **archive(논리·이식 가능·Time Machine용)**
 
-guesthost가 society마다 다음을 stream으로 만든다.
+society 하나를 멈춘 상태에서 만든다. 절차는 떠 있는 VM의 snapshot 1–2와 같고, 그 society만 멈춘다.
 
-- `VACUUM INTO`로 만든 SQLite 사본
-- state tree의 tar: Maildir, archive, receipt, session 기록, 설정 세대, world context. `run/`과 cache는 뺀다
-- canonical·context repo의 `git bundle --all`
-- 각 항목의 sha256을 담은 manifest
+- guesthost가 그 society의 state root를 tar로 stream한다. DB와 WAL 파일, Maildir, archive, receipt, session 기록, 설정 세대, world
+  context, canonical·context repository(state root 안에 있다)가 모두 같은 시점의 파일이다. `run/`과 cache는 뺀다.
+- 각 항목의 sha256을 담은 manifest를 끝에 붙인다.
+- 만드는 동안 그 society의 `society.open`은 거절된다. 끝나면 사용자가 연다.
 
 host는 이 stream을 AES-256-GCM(64 KiB chunk마다 nonce와 tag)으로 암호화해 `archives/<id>.omaarchive`로 쓴다. key는 Keychain의
 `com.<vendor>.oma.archive` item이고 이 기기에만 있다. 이 key를 잃으면 archive를 열 수 없다. 그래서 첫 archive 때 UI는 복구 key를 보이고
@@ -706,6 +829,11 @@ host는 이 stream을 AES-256-GCM(64 KiB chunk마다 nonce와 tag)으로 암호�
 
 사용자가 "진단 내보내기"를 누르면 host가 만든다. 담는 것: host 로그, guest console 로그, `diag.collect`의 결과(journal, unit 상태, 무결성
 진단 보고, image manifest), `host-record`에서 경로를 가린 사본.
+
+**MUST [MAC-641]** 진단 묶음은 사용자가 저장하는 파일로만 만든다. OMA는 그것을 어디에도 자동으로 보내지 않는다. 받는 곳(지원 창구)은
+배포 주체가 정하고(§13 Q4·Q7), UI는 그 창구를 안내만 한다. 앱 안의 진단 화면은 journal 뷰어가 아니다. 제품 어휘의 상태 요약만 보인다:
+엔진 상태, 마지막 정지가 정상이었는지, 마지막 health 시각, Mac과 엔진의 저장 공간, image 버전, 최근 자동 재시작 횟수. Linux 세부는 묶음
+안에만 있다(MAC-640).
 
 **MUST [MAC-640]** 진단 묶음에는 다음이 들어가지 않는다: credential, Keychain item, mail 본문, session 기록 내용, project source. 넣기 전에
 사용자에게 무엇이 들어가는지 보인다. Linux 세부가 보이는 곳은 이 묶음뿐이다(MAC-001의 예외).
@@ -736,11 +864,12 @@ guest에는 NTP가 없다(network 없음). guestctl은 부팅 때와 깨어날 �
 
 | 장애 | guest에게 어떻게 보이나 | 복구 | 사용자에게 |
 |---|---|---|---|
-| `omahostd` crash | VM이 같이 죽는다(VM은 app의 XPC 프로세스에서 돈다). 전원 장애와 같다 | launchd가 `omahostd`를 다시 띄운다. 다음 부팅의 R0 | "비정상 종료 뒤 복구했습니다" 한 줄 |
-| OMA.app·TUI crash | 영향 없음(VM은 `omahostd`가 소유) | UI를 다시 열면 attach한다. 결과를 모르는 요청은 key로 조회한다 | 없음 |
+| `omahostd` crash | VM이 같이 죽는다(VM은 `omahostd`의 자식 `oma-vmhelper` 안에서 돈다. helper는 부모가 죽으면 VM을 멈추고 끝난다). 전원 장애와 같다 | launchd가 `omahostd`를 다시 띄운다. 다음 부팅의 R0 | "비정상 종료 뒤 복구했습니다" 한 줄 |
+| `oma-vmhelper` crash | 위와 같다 | `omahostd`가 `crashed`로 다룬다(MAC-331) | "엔진을 다시 시작했습니다" |
+| OMA.app·`oma` 명령 crash | 영향 없음. society session은 guest에서 계속 돈다 | 다시 열면 attach한다. 결과를 모르는 RPC는 key로 조회한다. terminal 입력은 다시 보내지 않는다(MAC-221) | 없음 |
 | guest kernel panic | — | `crashed`, backoff 재부팅(MAC-331) | "엔진을 다시 시작했습니다" |
-| guestctl·guesthost crash | systemd가 다시 띄운다 | host가 다시 연결한다. `bootId`는 같다. 진행 중이던 요청은 key로 조회한다 | 없음(길어지면 "연결 중") |
-| society host crash | broker는 supervision channel이 끊겨 drain한다(기존) | guesthost가 다시 띄운다. lease를 다시 잡는다 | Principal 화면이 다시 attach한다 |
+| guestctl·guesthost crash | systemd가 다시 띄운다. society session은 따로 된 unit이라 계속 돈다(§4.6) | host가 다시 연결한다. `bootId`는 같다. 진행 중이던 요청은 key로 조회한다 | 없음(길어지면 "연결 중") |
+| guest의 `oma` crash | broker는 supervision channel이 끊겨 drain한다(기존). 엔진은 상속한 lease로 society를 쥔 채 끝난다(REC-007) | session holder가 끝을 알리고 끝난다. 사용자가 다시 열면 새 session이 lease를 다시 잡는다 | "society가 멈췄습니다. 다시 열 수 있습니다" |
 | VM hung | health 무응답 | MAC-330 | "엔진이 응답하지 않아 다시 시작했습니다" |
 | Mac 디스크 부족 | virtio-blk 쓰기 오류가 guest ext4 오류로 이어진다 | §9.6 | "저장 공간이 부족합니다" |
 | image 손상 | — | 부팅 전 검증에서 걸린다. 직전 image로 부팅한다(MAC-601) | "업데이트 파일이 손상되어 이전 버전으로 실행합니다" |
@@ -749,13 +878,25 @@ guest에는 NTP가 없다(network 없음). guestctl은 부팅 때와 깨어날 �
 
 ### 9.4 version skew
 
-| host app | 도는 image | state schema | 동작 |
+guest protocol(MAC-250):
+
+| `omahostd` | 도는 image | state schema | 동작 |
 |---|---|---|---|
 | N | N | ≤ N | 정상 |
-| N | N−1(update 전에 떠 있던 VM) | ≤ N−1 | 정상. host가 N−1 protocol을 말한다. 유휴 때 update한다 |
+| N | N−1(update가 실패해 rollback한 뒤) | ≤ N−1 | 정상. host가 N−1 protocol을 말한다. 다음 update 시도는 사용자가 한다 |
+| N−1 | N−1(app은 N으로 update됐지만 `omahostd`는 아직 옛 것) | ≤ N−1 | 정상. 옛 `omahostd`와 옛 VM이 함께 돈다. 새 UI와의 관계는 아래 Host API 표 |
 | N | N−2 이하 | — | 이 image로 부팅하지 않는다. N image로 부팅한다(host는 두 image만 가진다) |
 | N−1(사용자가 되돌림) | N−1 | N | MAC-611: 부팅 거절, `STATE_NEWER_THAN_APP` |
 | N | N | N+1(다른 Mac의 archive 복원) | archive 복원이 거절한다. 읽을 수 있는 schema가 아니다 |
+
+Host API(MAC-251):
+
+| host UI(OMA.app·`oma` 명령) | 떠 있는 `omahostd` | 동작 |
+|---|---|---|
+| N | N | 정상 |
+| N | N−1(app update 뒤 아직 다시 시작하지 않음) | UI가 N−1 Host API로 말한다. N에만 있는 기능은 보이지 않는다. 유휴 정지나 "지금 적용" 뒤 `omahostd`가 N으로 다시 시작한다(§8.3) |
+| N | N−2 이하 | 말하지 않는다. "OMA를 다시 시작해야 합니다"와 다시 시작 버튼. 다시 시작은 MAC-320을 거친다 |
+| N−1(사용자가 app을 되돌림) | N | 겹치지 않는다. 위와 같이 다시 시작을 제안한다. 다시 시작한 `omahostd`는 설치된 N−1 binary다. state schema는 MAC-611이 지킨다 |
 
 ### 9.5 진행 중이던 작업
 
@@ -794,8 +935,9 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 | lane | 어디서 | 무엇을 |
 |---|---|---|
 | `guest-lanes` | self-hosted Mac, 실제 VM | 기존 fast·durable·property·stress를 guest에서. kernel·crash는 guest의 disposable `omatest` 사용자로 |
-| `mac-unit` | hosted macOS | Swift 단위: state machine 전이표, Host API codec, Keychain backend(시험 keychain), project record, archive 암복호 |
-| `mac-contract` | hosted macOS + Linux | host(Swift)와 guest(TS) codec이 같은 conformance vector를 같은 결과로 읽는가 |
+| `platform` | Linux(기존 CI) | host와 guest의 Node 코드: protocol codec, guest 서버·control·terminal session, `omahostd`의 state machine·Host API·pool·relay를 LocalDriver(VM 대신 같은 host의 guest 서비스)로. bridge는 vsock loopback으로 |
+| `mac-unit` | hosted macOS | Swift helper 단위: VZ 구성, vsock→unix 이음, Keychain backend(시험 keychain), 절전 알림 |
+| `mac-contract` | hosted macOS | `omahostd`와 `oma-vmhelper` 사이의 channel이 같은 vector를 같은 결과로 읽는가 |
 | `mac-vm` | self-hosted Mac | 부팅·handshake·정지·강제 정지·crash 재부팅·절전과 깨어남·version skew·update와 rollback·disk full |
 | `mac-security` | self-hosted Mac | §10.3의 경계 oracle |
 | `mac-powercut` | self-hosted Mac | host 프로세스 kill로 guest 전원 장애를 만들고 불변식을 확인한다. S-06의 VM 부분 |
@@ -810,11 +952,11 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 | MV-03 | mac-vm | guest panic(`echo c > /proc/sysrq-trigger`) 뒤 backoff 재부팅, 10분 세 번 뒤 `failed` | 재부팅 한도를 없애면 실패 |
 | MV-04 | mac-vm | 깨어난 뒤 guest의 wall clock이 host와 1초 안으로 맞고, monotonic으로 잰 기한이 잠든 시간 때문에 만료되지 않는다 | 기한을 wall clock으로 재면 실패 |
 | MV-05 | mac-vm | 절전 동안 진행하던 provider 요청은 다시 보내지 않는다(scripted provider가 받은 요청 수) | Relay가 재전송하면 실패 |
-| MV-10 | mac-contract | 모든 RPC message의 conformance vector(정상과 거절)를 양쪽이 같게 판정한다 | 한쪽 schema에서 field 하나를 빼면 실패 |
+| MV-10 | platform | 모든 RPC message의 conformance vector(정상과 거절)를 codec이 판정한다. host와 guest는 같은 codec을 쓴다 | schema에서 field 하나를 빼면 실패 |
 | MV-11 | mac-vm | `bootId`가 바뀐 뒤 결과를 모르는 요청을 다시 보내지 않고 key로 조회한다. `REQUEST_NOT_FOUND`일 때만 다시 보낸다 | 다시 보내게 하면 guest 원장에 두 번 남아 실패 |
-| MV-12 | mac-vm | session event의 `seq` 이어 받기와 `gap` 보고 | gap을 숨기면 실패 |
+| MV-12 | platform, mac-vm | terminal: detach한 뒤에도 `oma`가 돈다. 다시 attach하면 mode가 다시 오고 화면 전체가 다시 그려진다. 두 번째 attach는 `ATTACH_CONFLICT`, takeover는 앞 attach에 `detached`를 준다. 끊긴 연결의 입력을 다시 보내지 않는다 | 다시 그리기를 빼면 빈 화면으로 실패 |
 | MV-20 | mac-security | sandbox 안에서 `socket(AF_VSOCK)`이 `EPERM`이다 | seccomp filter를 빼면 실패 |
-| MV-21 | mac-security | guest의 `oma` 사용자 프로세스(sandbox 밖)가 CID 1·3으로 guest port에 닿지 못한다. guesthost가 CID 2가 아닌 연결을 닫는다 | CID 검사를 빼면 실패 |
+| MV-21 | platform, mac-security | bridge가 CID 2가 아닌 연결을 읽지 않고 닫는다(platform에서는 vsock loopback의 CID 1로). guestctl·guesthost가 `oma-bridge`가 아닌 uid의 연결을 읽지 않고 닫는다. guest의 `oma` 사용자 프로세스가 서비스 socket을 직접 열어도 host 행세를 하지 못한다 | CID 검사나 `SO_PEERCRED` 검사를 빼면 실패 |
 | MV-22 | mac-security | host가 vsock을 listen하지 않는다. guest에서 CID 2의 모든 port로의 connect가 실패한다 | host listener를 하나 열면 실패 |
 | MV-23 | mac-security | 시나리오를 돌린 뒤 `state.img`, guest memory dump, guest journal 어디에도 진짜 key의 바이트가 없다 | 엔진 환경에 key를 넣으면 실패 |
 | MV-24 | mac-security | 응답에 key를 되돌려 주는 scripted provider에 Relay가 연결을 끊는다(INF-007 tripwire가 host에서도 성립) | tripwire를 끄면 실패 |
@@ -822,15 +964,15 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 | MV-26 | mac-security | 서명이 틀린 image, sha256이 다른 `system.erofs`, verity가 깨진 블록으로는 부팅하지 않는다 | 검증을 건너뛰면 실패 |
 | MV-30 | mac-powercut | 쓰기 부하(mail 전달, 설정 commit, git 통합, receipt 게시) 중 임의 시점에 `omahostd`를 SIGKILL한 뒤 다음 부팅에서 확인한다: 확정된 사실이 그대로다, 원장 decode가 손상을 말하지 않는다, 결과를 모르는 operation은 unknown이다. 100회 이상 | `synchronizationMode: .fsync`로 바꾸면 이 lane은 전원 장애 증거로 인정하지 않는다(MAC-302) |
 | MV-31 | mac-powercut | 같은 시험을 `forced` 정지로도 한다 | — |
-| MV-32 | mac-vm | snapshot을 만드는 동안 쓰기 부하를 걸어도 freeze가 deadline 안에 풀리고, snapshot으로 부팅하면 복구 경로가 불변식을 지킨다 | thaw를 막으면 deadline이 푼다 |
+| MV-32 | platform, mac-vm | freeze의 deadline이 guest 설정의 가장 짧은 `receiptWaitSeconds`보다 짧다. 설정을 읽지 못하면 freeze하지 않는다. `thawed: false`면 host가 사본을 버린다. 떠 있는 VM의 snapshot은 모든 society를 멈춘 뒤에만 만든다 | 한도를 고정값으로 되돌리면, 또는 `thawed: false`의 사본을 남기면 실패 |
 | MV-33 | mac-vm | archive 왕복: 만들고, 다른 VM instance에서 복원하고, 무결성 진단이 통과한다. 1바이트를 바꾸면 복원을 거절한다 | digest 검사를 빼면 실패 |
 | MV-40 | CI | image를 두 번 build하면 sha256이 같다 | — |
 | MV-41 | mac-vm | update 성공, migration 실패 주입 뒤 rollback이 update 전 snapshot으로 돌아간다. 옛 app으로 새 state를 열지 않는다 | rollback이 부분 migration disk를 쓰면 실패 |
 | MV-42 | mac-vm | 표 §9.4의 모든 칸 | — |
-| MV-50 | mac-e2e | import(작은 repo, 큰 repo, sha256 object format, submodule·LFS가 있는 repo) 뒤 canonical에 정확한 commit이 있다. 옮기지 않은 것을 보고한다 | submodule 보고를 빼면 실패 |
+| MV-50 | mac-e2e | import(작은 repo, 큰 repo, sha256 object format, submodule·LFS가 있는 repo) 뒤 mirror의 `refs/remotes/mac/<branch>`에 정확한 commit이 있다. 첫 society의 canonical `main`은 그 commit이다. 두 번째 import는 canonical을 바꾸지 않는다. 옮기지 않은 것을 보고한다 | submodule 보고를 빼면, 또는 import가 canonical을 바꾸면 실패 |
 | MV-51 | mac-e2e | export 뒤 Mac repo에서 `refs/remotes/oma/main`만 바뀌었다. 작업 트리·index·`refs/heads/*`가 바이트 그대로다 | branch를 갱신하면 실패 |
 | MV-52 | mac-e2e | project를 옮기거나 이름을 바꾸면 bookmark가 따라간다. 다른 repo로 바꿔치기하면 멈춘다 | root commit 검사를 빼면 실패 |
-| MV-60 | mac-e2e | 시나리오 층의 Principal 루프(SCN-L01 모양): native UI와 TUI 양쪽에서 위임, 답장, 읽기, 확인까지 | — |
+| MV-60 | platform, mac-e2e | 시나리오 층의 Principal 루프(SCN-L01 모양): host의 terminal attach로 guest의 `oma`를 움직여 위임, 답장, 읽기, 확인까지. provider는 host Relay 뒤의 scripted provider다 | — |
 | MV-61 | mac-vm | Mac 디스크가 부족하면 새 작업을 거절하고 정산은 계속한다(작은 APFS sparsebundle 볼륨에서) | 한도 검사를 빼면 guest ext4 오류로 실패 |
 
 ### 10.4 증거와 판정
@@ -866,9 +1008,12 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 
 - Developer ID 서명과 hardened runtime을 쓴다. entitlement는 `com.apple.security.virtualization`이다. VM에 network를 주지 않으므로
   네트워크 entitlement는 host의 Relay에만 필요하다.
-- 동봉하는 Node, git, Resolver, Relay는 모두 app bundle 안에서 서명한다. `omahostd`는 bundle 안의 이 binary만 실행한다(경로를 bundle
-  기준으로 고정한다).
+- 동봉하는 Node, git, `oma-vmhelper`는 app bundle 안에서 서명한다. `omahostd`·Resolver·Relay의 JS는 bundle 봉인에 들어간다. `omahostd`는
+  bundle 안의 이 파일들만 실행한다(경로를 bundle 기준으로 고정한다). Keychain의 조건은 MAC-701·MAC-703이다.
 - update는 Sparkle(EdDSA 서명)로 한다. guest image는 app update에 함께 들어간다(lockstep). image만 따로 update하지 않는다.
+- v2 후보: image만 따로 update하기. 전제는 셋을 바꾸는 것이다. MAC-250(host가 자기 image와 직전 image의 protocol만 말한다. 따로 온 새
+  image는 host가 모르는 protocol일 수 있다), MAC-601(부팅 전에 manifest의 protocol이 host의 범위 안인지 확인한다), §8.2(image는 app
+  bundle 안에 있고 host는 둘만 둔다).
 
 ---
 
@@ -876,13 +1021,15 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 
 | 후보 | 바뀌는 규범 | 내용 |
 |---|---|---|
-| D-1 | TUI-004 | Principal session의 소유자는 "OMA TUI"가 아니라 "society host"다. Linux에서는 둘이 같은 프로세스다. macOS에서는 society host가 guest에 있고, host UI가 attach한다(MAC-220) |
-| D-2 | REC-007 | lease를 쥐는 "host"는 society host다. macOS host UI는 lease를 쥐지 않는다. 여러 UI 사이의 배타는 MAC-220의 attach가 맡는다 |
-| D-3 | D03, UNIT-004 | guest의 broker는 product-owned foreground mode만 쓴다(Principal endpoint가 있어야 하므로, PR-001). systemd-managed mode는 guest에서 쓰지 않는다 |
+| D-1 | TUI-* 문구 규칙 | TUI의 오류 문구에서 host 경로와 errno 이름을 빼고 제품 문구와 코드로 바꾼다. 원문은 로그에 남긴다(MAC-022). Linux 배포본에도 적용한다 |
 | D-4 | INF-001, INF-007, T116 | credential 저장소는 엔진의 agent 디렉터리가 아니라 host Keychain backend다. Principal의 엔진도 자리표시자와 relay를 쓴다 |
 | D-5 | SB-001 | sandbox baseline에 `AF_VSOCK` socket 금지 seccomp를 더한다(Linux 배포본에도 적용한다. 해가 없고 vsock이 있는 host에서 필요하다) |
-| D-6 | project binding(REC-007의 binding 문장) | guest의 binding은 Mac 경로 대신 `projectId`를 가진다 |
 | D-7 | WP10, `principal-delivery` | 경과 시간은 monotonic clock으로 잰다(MAC-650). Linux에도 같은 이유가 있다(시계 조정) |
+| D-8 | GIT-006·GIT-008, AUTH-001 | (결정 필요) 이미 있는 society에 사람이 가져온 commit을 actor가 쓰게 하는 길. 후보 둘: mirror를 actor의 sandbox에 읽기 전용으로 보여 actor가 기존 `git.submit`으로 게시한다(권한 변화 없음, SB-* 변경), 또는 사람 권한의 게시(`refs/oma/published/<human>/<operation>`, 새 actor 종류와 wire 변경). 결정 전 v1은 MAC-411까지만 한다 |
+
+이전 초안의 D-2(REC-007의 host를 society host로), D-3(D03의 foreground mode 강제), D-6(project binding의 projectId)은 없어졌다. guest에서
+기존 `oma`를 그대로 돌리므로 lease·broker mode·binding이 코드 그대로 지켜진다. D-1은 뜻이 바뀌었다(Principal session의 소유자는 바뀌지
+않는다). REC-005(백업의 quiescence)는 §8.4가 society 정지 위에서만 백업하므로 DR이 필요 없다.
 
 ---
 
@@ -896,3 +1043,5 @@ guest의 ext4는 따로 기존 storage admission(D04)을 가진다.
 | Q4 vendor 식별자(Keychain service, bundle ID) | `com.<vendor>.oma` | 배포 주체가 정한다 |
 | Q5 guest image의 크기 목표 | 압축 후 600 MB 이하 | 첫 설치 download 크기 |
 | Q6 guest disk 기본 크기 | 64 GiB sparse | 실제 사용분만 차지한다 |
+| Q7 진단 묶음을 받는 곳 | 배포 주체의 지원 창구. OMA는 자동으로 보내지 않는다(MAC-641) | 받는 주체가 정해져야 UI가 안내할 수 있다 |
+| Q8 D-8(가져온 commit을 actor가 쓰는 길) | mirror의 읽기 전용 노출(권한·wire 변화 없음) | 사람 권한의 게시는 새 actor 종류라 계획이 필요하다 |
