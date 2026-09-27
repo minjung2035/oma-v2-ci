@@ -8,6 +8,7 @@ import { Store, StoreError } from "../src/store.js";
 import { requestHash } from "../src/hash.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { makeValidMessagePlan, makeValidUsage } from "./fixtures/valid.js";
+import { AdmissionGate, bindAdmissionGate } from "../src/domain/admission.js";
 
 const OP = "op-00000000-0000-4000-8000-000000000012";
 const MESSAGE = "m-00000000-0000-4000-8000-000000000012-0";
@@ -98,6 +99,43 @@ test("P0V-56 / R01: an agent and an operation are created with one reading of th
   assert.equal(agent.updatedAtMs, agent.createdAtMs);
   const operation = store.getOperationById(OP)!;
   assert.equal(operation.updatedAtMs, operation.createdAtMs);
+});
+
+test("P0V-56 / R01, F1: every order of the wall clock across a delivery's stages is a valid history", t => {
+  // Creation, materialization with the batch, completion and acknowledgement
+  // each at one of three wall-clock times, in every combination (3^4): no
+  // legal transition is read back as corruption, the fence stays open, and a
+  // repeated completion keeps the first facts.
+  const times = [1_000_000, 2_000_000, 3_000_000];
+  for (const created of times) for (const prepared of times) for (const completed of times) for (const acknowledged of times) {
+    const at = `created ${created}, prepared ${prepared}, completed ${completed}, acknowledged ${acknowledged}`;
+    t.mock.timers.enable({ apis: ["Date"], now: created });
+    const root = mkdtempSync(join(tmpdir(), "oma-clock-orders-"));
+    const store = new Store(join(root, "runtime.sqlite"));
+    const gate = new AdmissionGate(); bindAdmissionGate(store, gate);
+    try {
+      const input = { to: ["alice"], subject: "fixture", kind: "message", body: "fixture\n" };
+      store.transaction(tx => {
+        tx.insertAgent(makeValidAgent("alice"));
+        tx.acceptOperation({ id: OP, actor: "alice", requestKey: "orders", requestHash: requestHash("mail.send", input),
+          kind: "mail.send", payloadJson: JSON.stringify(input), planJson: JSON.stringify({ kind: "mail.send", message: makeValidMessagePlan(OP) }) });
+        tx.insertDeliveries([{ messageId: MESSAGE, recipient: "alice", operationId: OP }]);
+      });
+      t.mock.timers.setTime(prepared); batch(store);
+      t.mock.timers.setTime(completed);
+      store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 1, "/session/alice"));
+      const first = store.getDelivery(MESSAGE, "alice")!;
+      t.mock.timers.setTime(acknowledged);
+      store.transaction(tx => tx.markAcknowledged(MESSAGE, "alice"));
+      store.transaction(tx => tx.completeBatch(BATCH, [MESSAGE], "alice", 1, "/session/alice"));
+      const delivery = store.getDelivery(MESSAGE, "alice")!;
+      assert.equal(delivery.presentedAtMs, first.presentedAtMs, `${at}: a repeated completion moved the first presentation`);
+      assert.ok(delivery.presentedAtMs! >= delivery.materializedAtMs!, at);
+      assert.ok(delivery.acknowledgedAtMs! >= delivery.createdAtMs, at);
+      assert.equal(store.getBatch(BATCH)?.state, "completed", at);
+      assert.equal(gate.state, "healthy", `${at}: a legal history closed the fence`);
+    } finally { t.mock.timers.reset(); store.close(); rmSync(root, { recursive: true, force: true }); }
+  }
 });
 
 test("R12: only the intended identical delivery/subscription conflicts are no-ops", async t => {
