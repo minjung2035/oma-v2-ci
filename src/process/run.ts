@@ -3,6 +3,7 @@
 import { spawnSync, type SpawnSyncOptionsWithBufferEncoding } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { validateCommand, processErrorCode as errorCode, type CommandSpec, type ProcessObservation, type Capture } from "./command.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 export { validateCommand, snapshotCommand } from "./command.js";
 export type { CommandSpec, ProcessObservation } from "./command.js";
 export { runProcess, startProcess } from "./async.js";
@@ -60,4 +61,4 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
   if (kind === "exited" && typeof result.status === "number") return { ...capture, kind, exitCode: result.status };
   return { ...capture, kind: kind === "exited" ? "unobserved" : kind, exitCode: result.status };
 }
-export function decodeProcessText(bytes: Uint8Array): string { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+export function decodeProcessText(bytes: Uint8Array): string { return decodeUtf8(bytes); }

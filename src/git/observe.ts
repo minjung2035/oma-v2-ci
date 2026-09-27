@@ -3,6 +3,7 @@
  * evidence; nonzero, timeout, signal and malformed output are not absence.
  */
 import { isValidFullOid, isValidWirePath } from "../domain/identifiers.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 
 export interface GitProcessEvidence {
   readonly status: number | null;
@@ -19,7 +20,6 @@ export type GitObservation<T> =
 export type GitObservationRunner = (args: readonly string[], input?: string) => GitProcessEvidence;
 export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
 export interface ChangedPath { readonly status: "A" | "M" | "D" | "T"; readonly path: string }
-const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 /** Fixed --no-renames grammar: status NUL path NUL, never status-as-path.
  * No trimming, whitespace replacement, Unicode normalization or deduplication.
@@ -28,7 +28,7 @@ export function parseNameStatusZ(bytes: Uint8Array): Parsed<readonly ChangedPath
   if (bytes.byteLength === 0) return { ok: true, value: [] };
   if (bytes[bytes.byteLength - 1] !== 0) return { ok: false, reason: "unterminated name-status record" };
   let text: string;
-  try { text = utf8.decode(bytes); } catch { return { ok: false, reason: "name-status output is not UTF-8" }; }
+  try { text = decodeUtf8(bytes); } catch { return { ok: false, reason: "name-status output is not UTF-8" }; }
   const fields = text.split("\0");
   fields.pop();
   if (fields.length % 2 !== 0) return { ok: false, reason: "incomplete name-status pair" };
@@ -51,7 +51,7 @@ export function protectedPathMatches(path: string, protectedPath: string): boole
 }
 function text(bytes: Uint8Array | null): string | null {
   if (bytes === null) return null;
-  try { return utf8.decode(bytes); } catch { return null; }
+  try { return decodeUtf8(bytes); } catch { return null; }
 }
 function uncertain(evidence: GitProcessEvidence): boolean {
   return evidence.error !== undefined || evidence.signal !== null || evidence.status === null;

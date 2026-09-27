@@ -323,3 +323,21 @@ export function stopOnHostLoss(stop, target = process) { for (const signal of HO
   withTree({ ...owner(full), ...entry('stopOnHostLoss(() => {}); child.kill("SIGTERM"); process.on("uncaughtException", () => {}); process.on("SIGWINCH", () => {});') },
     findings => clean(findings, "host-loss-signals"));
 });
+
+test("utf8-decoder-owner (P0V-86): UTF-8 is read through the owner and the extension's mirror, which keep a U+FEFF and refuse malformed bytes", () => {
+  const owner = options => ({ "src/domain/utf8.ts": `export function utf8Decoder() { return new TextDecoder("utf-8", ${options}); }` });
+  withTree({ ...owner("{ fatal: true, ignoreBOM: true }"), "src/extension/utf8.ts": 'const d = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });' },
+    findings => clean(findings, "utf8-decoder-owner"));
+  // Reject: a decoder of its own, anywhere else -- the default strips a BOM.
+  withTree({ ...owner("{ fatal: true, ignoreBOM: true }"), "src/frame.ts": 'const utf8 = new TextDecoder("utf-8", { fatal: true });' }, findings => {
+    assert.ok(findings.some(value => value.rule === "utf8-decoder-owner" && value.file === "src/frame.ts"));
+  });
+  // Reject: the owner itself drops either property.
+  for (const options of ["{ fatal: true }", "{ ignoreBOM: true }", "{ fatal: false, ignoreBOM: true }", ""])
+    withTree(owner(options), findings => {
+      assert.ok(findings.some(value => value.rule === "utf8-decoder-owner" && value.file === "src/domain/utf8.ts"), options);
+    });
+  // Near miss: an encoder, and a decoder's name in a comment, are not decoders.
+  withTree({ ...owner("{ fatal: true, ignoreBOM: true }"), "src/x.ts": "// new TextDecoder()\nconst e = new TextEncoder();" },
+    findings => clean(findings, "utf8-decoder-owner"));
+});

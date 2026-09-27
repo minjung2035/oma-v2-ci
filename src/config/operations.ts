@@ -23,6 +23,7 @@ import {
   type ToolSurfaceConfig,
   type ToolSurfacePlan,
 } from "../domain/tool-surface.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 
 export interface RoleSettings {
   readonly prompt: string;
@@ -262,10 +263,7 @@ function roleSettings(
       sha256: createHash("sha256").update(bytes(path, closure)).digest("hex"),
     });
   });
-  const prompt = new TextDecoder("utf-8", {
-    fatal: true,
-    ignoreBOM: true,
-  }).decode(bytes(localPath(root, role.promptFile), closure));
+  const prompt = decodeUtf8(bytes(localPath(root, role.promptFile), closure));
   return Object.freeze({
     prompt,
     extensions: Object.freeze(extensions),

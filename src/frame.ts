@@ -2,6 +2,7 @@
 import { TextDecoder } from "node:util";
 import { checkString } from "./validate.js";
 import { ByteQueue } from "./protocol/byte-queue.js";
+import { decodeUtf8 } from "./domain/utf8.js";
 const unicodeString = checkString();
 export class FrameError extends Error {
   constructor(readonly code: "FRAME_TOO_LARGE" | "INVALID_REQUEST", message: string) { super(message); this.name = "FrameError"; }
@@ -46,7 +47,6 @@ export function encodeFrame(value: unknown): Buffer {
   const out = Buffer.alloc(4 + body.length); out.writeUInt32BE(body.length, 0); body.copy(out, 4);
   return out;
 }
-const utf8 = new TextDecoder("utf-8", { fatal: true });
 /** Only the JSON root shape is established here; request fields remain unknown. */
 export interface ParsedFrame { raw: Record<string, unknown>; text: string }
 function isJsonObject(value: unknown): value is Record<string, unknown> {
@@ -54,7 +54,7 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 }
 export function parseJsonObject(bytes: Uint8Array): ParsedFrame {
   let text: string;
-  try { text = utf8.decode(bytes); } catch { throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in JSON"); }
+  try { text = decodeUtf8(bytes); } catch { throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in JSON"); }
   const duplicate = findDuplicateKey(text);
   if (duplicate !== null) throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${duplicate}"`);
   let raw: unknown;

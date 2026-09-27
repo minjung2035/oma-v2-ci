@@ -9,6 +9,7 @@
 import { MAIL_HEADER_BYTES, headerMessageIdCheck, isMailKind, exactCandidateCheck } from "../domain/mail-values.js";
 import { isValidFullOid } from "../domain/identifiers.js";
 import { StoreError } from "../domain/errors.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 
 export interface ParsedEmlHeaders {
   from: string | null; to: string[] | null; subject: string | null; dateMs: number | null;
@@ -20,7 +21,6 @@ export interface ParsedEmlHeaders {
 export interface HeaderReadLimits { readonly maxHeaderBytes: number }
 const DEFAULT_HEADER_LIMIT = MAIL_HEADER_BYTES;
 export const MAX_HEADER_LINE_BYTES = 998;
-const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const allowed = new Set([
   "from", "to", "reply-to", "subject", "date", "message-id", "in-reply-to", "references",
   "mime-version", "content-type", "content-transfer-encoding", "content-disposition",
@@ -49,7 +49,7 @@ function headerBlock(input: string | Uint8Array, limit: number): string {
     if (input[i] === 13 && input[i + 1] === 10 && input[i + 2] === 13 && input[i + 3] === 10) { end = i; break; }
   }
   if (end > limit) return invalid("header byte limit");
-  try { return utf8.decode(input.subarray(0, end)); } catch { return invalid("header is not UTF-8"); }
+  try { return decodeUtf8(input.subarray(0, end)); } catch { return invalid("header is not UTF-8"); }
 }
 
 function headerWords(value: string, allowQuotedPrintable = false): string {
@@ -69,7 +69,7 @@ function headerWords(value: string, allowQuotedPrintable = false): string {
       if (!allowQuotedPrintable || !encoded || /[^\x21-\x7e]|=(?![0-9a-f]{2})/i.test(encoded)) return invalid("unsupported Q word");
       bytes = Buffer.from(encoded.replace(/_/g, " ").replace(/=([0-9a-f]{2})/gi, (_word, hex: string) => String.fromCharCode(parseInt(hex, 16))), "latin1");
     }
-    try { output += utf8.decode(bytes); } catch { return invalid("malformed encoded UTF-8"); }
+    try { output += decodeUtf8(bytes); } catch { return invalid("malformed encoded UTF-8"); }
     last = index + match[0].length; previousEncoded = true;
   }
   const tail = source.slice(last);

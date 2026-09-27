@@ -613,6 +613,27 @@ function hostLossSignalRules(root, findings) {
   }
 }
 
+/** P0V-86 (R6-09): one reading of UTF-8. A decoder is made only by the owner
+ * and by the extension's mirror of it (PI-001), and both refuse malformed
+ * bytes and keep a U+FEFF: `fatal: true, ignoreBOM: true`. */
+const UTF8_OWNERS = Object.freeze(["src/domain/utf8.ts", "src/extension/utf8.ts"]);
+function utf8DecoderRules(root, findings) {
+  for (const file of filesUnder(root, "src")) {
+    eachNode(sourceOf(root, file), node => {
+      if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== "TextDecoder") return;
+      if (!UTF8_OWNERS.includes(file)) {
+        findings.push(finding("utf8-decoder-owner", file, "makes its own TextDecoder; UTF-8 is read through src/domain/utf8.ts (the extension: src/extension/utf8.ts)"));
+        return;
+      }
+      const options = node.arguments?.[1];
+      const flag = name => options !== undefined && ts.isObjectLiteralExpression(options) && options.properties.some(property =>
+        ts.isPropertyAssignment(property) && propertyName(property.name) === name && property.initializer.kind === ts.SyntaxKind.TrueKeyword);
+      if (!flag("fatal") || !flag("ignoreBOM"))
+        findings.push(finding("utf8-decoder-owner", file, "the owner's decoder must refuse malformed bytes and keep a U+FEFF (fatal: true, ignoreBOM: true)"));
+    });
+  }
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
   extensionRules(root, findings);
@@ -627,5 +648,6 @@ export function surfaceRuleFindings(root) {
   principalSessionEnvRules(root, findings);
   principalTurnOwnerRules(root, findings);
   hostLossSignalRules(root, findings);
+  utf8DecoderRules(root, findings);
   return findings;
 }

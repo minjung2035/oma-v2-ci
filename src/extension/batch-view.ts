@@ -6,6 +6,7 @@
  */
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
+import { decodeUtf8 } from "./utf8.js";
 
 const UUID_V4 =
   "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
@@ -180,9 +181,7 @@ export function readBatchView(
       after.ctimeMs !== before.ctimeMs
     )
       return null;
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(
-      bytes.subarray(0, total),
-    );
+    const text = decodeUtf8(bytes.subarray(0, total));
     return decodeBatchViewText(text, batchId, limits);
   } catch {
     return null;

@@ -8,6 +8,8 @@
  * trusted extension imports no runtime module (PI-001) and mirrors
  * `readableMail`; a test binds the two (INV04). */
 
+import { decodeUtf8 } from "../domain/utf8.js";
+
 /** The whole message, its body with the declared transfer encoding undone.
  * P0V-45, P0-2: the header block ends where `headerEnd` says, CRLF or LF, and
  * the body keeps every character its sender wrote, a leading U+FEFF included. */
@@ -33,7 +35,7 @@ export function readableMail(text: string): string {
     bytes = Buffer.from(joined.replace(/=([0-9A-F]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16))), "latin1");
   } else return text;
   let body: string;
-  try { body = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); } catch { return text; }
+  try { body = decodeUtf8(bytes); } catch { return text; }
   return `${head}${newline}${newline}${body}`;
 }
 

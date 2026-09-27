@@ -11,6 +11,7 @@
  */
 import { parseKey } from "@earendil-works/pi-tui";
 import { TERMINAL_BOUNDS } from "./limits.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 
 export type Key =
   | { readonly kind: "char"; readonly value: string }
@@ -121,7 +122,7 @@ export function decodeText(bytes: ArrayLike<number>, open: boolean): { readonly 
  * document, so a U+FEFF at their start is a character like any other --
  * where the terminal happened to cut its reads must not change the text. */
 function decodeKept(kept: readonly number[]): string {
-  return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Uint8Array.from(kept));
+  return decodeUtf8(Uint8Array.from(kept));
 }
 
 function chars(text: string, keys: Key[]): void {
@@ -254,7 +255,8 @@ export class KeyDecoder {
         index += 1;
         textStart = index;
         if (this.escape.length >= 3 && isCsiFinal(byte)) {
-          const token = new TextDecoder().decode(Uint8Array.from(this.escape));
+          // A report is bytes the engine names, not text: one code unit per byte.
+          const token = String.fromCharCode(...this.escape);
           this.escape = null;
           if (token === PASTE_START) {
             this.paste = { bytes: [], truncated: false, matched: 0, ended: false };

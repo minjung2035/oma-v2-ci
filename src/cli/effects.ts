@@ -4,6 +4,7 @@ import { FULL_OID_RE } from "../ids.js";
 import { runGitText } from "../process/policies.js";
 import { fail } from "./exit.js";
 import { cliFrameBytes } from "./transport.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -67,8 +68,7 @@ export function readBody(path: string | null): string {
   if (path === null) return "";
   const bytes = readLocalFile(path);
   try {
-    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true })
-      .decode(bytes)
+    return decodeUtf8(bytes)
       .replace(/\r\n/g, "\n");
   } catch {
     return fail(`cannot read UTF-8 text file: ${path}`, 2);

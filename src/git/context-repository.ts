@@ -22,6 +22,7 @@ import { GIT_ENV } from "../process/policies.js";
 import type { GitPaths } from "./paths.js";
 import type { GitObserver, GitObservation } from "./observe.js";
 import { consumeContextPublication, type ContextPublicationEvidence } from "./context-publication.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 
 const CONTEXT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   ...GIT_ENV, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: "broker@oma.invalid",
@@ -33,13 +34,12 @@ const CONTEXT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   // Preparation must settle all writers before fsyncTree observes the worktree.
   GIT_CONFIG_KEY_8: "maintenance.auto", GIT_CONFIG_VALUE_8: "false",
 });
-const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 function present<T>(observation: GitObservation<T>, name: string): T {
   if (observation.kind === "present") return observation.value;
   throw new StoreError(observation.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", `${name}: ${observation.kind}`);
 }
 function text(bytes: Uint8Array): string {
-  try { return utf8.decode(bytes); } catch { throw new StoreError("STORE_CORRUPT", "context Git returned malformed UTF-8 metadata"); }
+  try { return decodeUtf8(bytes); } catch { throw new StoreError("STORE_CORRUPT", "context Git returned malformed UTF-8 metadata"); }
 }
 function oneLine(bytes: Uint8Array): string {
   const value = text(bytes);

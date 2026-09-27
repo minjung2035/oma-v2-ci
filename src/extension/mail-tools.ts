@@ -14,6 +14,7 @@ import { runCliProcess, type CliResult } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
 import { PRINCIPAL_TOOL_NAMES, registerPrincipalTools } from "./principal-tools.js";
 import { actorNameOf, integerEnv, refused, requestKeyOf, textResult } from "./shared.js";
+import { decodeUtf8 } from "./utf8.js";
 
 /** TSP-008: tools OMA itself owns. A role projection may reorder or group the
  * extensions' tools, but it can never take these away from the agent. */
@@ -94,7 +95,7 @@ export function readableMail(text: string): string {
     bytes = Buffer.from(joined.replace(/=([0-9A-F]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16))), "latin1");
   } else return text;
   let body: string;
-  try { body = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); } catch { return text; }
+  try { body = decodeUtf8(bytes); } catch { return text; }
   return `${head}${newline}${newline}${body}`;
 }
 
@@ -119,7 +120,7 @@ function readBoundedText(path: string, maximum: number): string {
       path,
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
-    return new TextDecoder("utf-8", { fatal: true }).decode(boundedBytes(fd, maximum));
+    return decodeUtf8(boundedBytes(fd, maximum));
   } finally {
     if (fd !== undefined) closeSync(fd);
   }

@@ -1,4 +1,5 @@
 import { StoreError } from "../domain/errors.js";
+import { decodeUtf8 } from "../domain/utf8.js";
 
 export interface PiEvent { type: string; id?: string; [key: string]: unknown }
 /** No event queue: each bounded line is handed synchronously to its owner.
@@ -18,7 +19,6 @@ export class JsonlReader {
   private skipping: number | null = null;
   private state: "open" | "closed" | "poisoned" = "open";
   private feeding = false;
-  private readonly utf8 = new TextDecoder("utf-8", { fatal: true });
   constructor(readonly lineBytes: number, private readonly skipped?: (bytes: number) => void) {
     if (!Number.isSafeInteger(lineBytes) || lineBytes < 1)
       throw new StoreError("UNSUPPORTED_PROFILE", "JSONL line limit must be a positive safe integer");
@@ -50,7 +50,7 @@ export class JsonlReader {
         this.pieces = []; this.length = 0;
         let event: unknown;
         try {
-          const line = this.utf8.decode(bytes);
+          const line = decodeUtf8(bytes);
           if (line.trim().length === 0) continue;
           event = JSON.parse(line);
         } catch { throw new StoreError("INVALID_REQUEST", "Pi RPC returned malformed UTF-8 or JSON"); }

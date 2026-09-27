@@ -413,3 +413,42 @@ test("P0V-85 / R6-08, P0-7: provisioning killed at the canonical main's creation
       "a staging or lease was left behind");
   }
 });
+
+test("P0V-86 / R6-09, IPC-001: every UTF-8 reading keeps a U+FEFF as the character it is, so strict JSON refuses a BOM", async () => {
+  const owner = await import("../src/domain/utf8.js");
+  const mirror = await import("../src/extension/utf8.js");
+  const vectors: Array<[string, Uint8Array]> = [
+    ["leading BOM", Buffer.from("﻿a")], ["BOM only", Buffer.from("﻿")], ["inner BOM", Buffer.from("a﻿b")],
+    ["two BOMs", Buffer.from("﻿﻿")], ["Korean", Buffer.from("한글")], ["empty", new Uint8Array(0)],
+    ["overlong", Uint8Array.from([0xc0, 0xaf])], ["cut", Uint8Array.from([0xe3, 0x81])], ["surrogate", Uint8Array.from([0xed, 0xa0, 0x80])],
+  ];
+  const answer = (decode: (bytes: Uint8Array) => string, bytes: Uint8Array) => { try { return { text: decode(bytes) }; } catch { return { refused: true }; } };
+  for (const [name, bytes] of vectors) {
+    assert.deepEqual(answer(mirror.decodeUtf8, bytes), answer(owner.decodeUtf8, bytes), `the extension's mirror differs on ${name}`);
+    const expected = answer(bytes => Buffer.from(bytes).toString("utf8"), bytes);
+    if (!("refused" in answer(owner.decodeUtf8, bytes))) assert.deepEqual(answer(owner.decodeUtf8, bytes), expected, `${name} is not read as its bytes`);
+  }
+  assert.equal(owner.decodeUtf8(Buffer.from("﻿a")), "﻿a");
+  // A stream keeps a BOM that a read boundary cuts, wherever it falls.
+  const bom = Buffer.from("x﻿y");
+  for (let split = 0; split <= bom.length; split++) {
+    const decoder = owner.utf8Decoder();
+    assert.equal(decoder.decode(bom.subarray(0, split), { stream: true }) + decoder.decode(bom.subarray(split)), "x﻿y", `split at ${split}`);
+  }
+  // The wire: a BOM-prefixed frame is not JSON (G06's `== BOM at start ==`).
+  const { parseJsonObject } = await import("../src/frame.js");
+  assert.throws(() => parseJsonObject(Buffer.from('﻿{"a":1}')), (error: unknown) => (error as { code?: string }).code === "INVALID_REQUEST");
+  assert.deepEqual(parseJsonObject(Buffer.from('{"a":"﻿"}')).raw, { a: "﻿" }, "a U+FEFF inside a string is data");
+  // The engine's JSONL: a BOM-prefixed line is not an event.
+  const { JsonlReader } = await import("../src/protocol/jsonl.js");
+  const reader = new JsonlReader(1024);
+  assert.throws(() => reader.feed(Buffer.from('﻿{"type":"x"}\n'), () => {}), /malformed UTF-8 or JSON/);
+  // A process's output is its bytes.
+  const { decodeProcessText } = await import("../src/process/run.js");
+  assert.equal(decodeProcessText(Buffer.from("﻿line\n")), "﻿line\n");
+  // Context: the text keeps it; a document of nothing but it is still empty.
+  const { contextFileCheck } = await import("../src/domain/context-policy.js");
+  assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿")), "GOAL.md must not be empty");
+  assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿﻿")), null, "only the one that begins the document is its signature");
+  assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿goal")), null);
+});
