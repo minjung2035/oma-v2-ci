@@ -139,6 +139,7 @@
   "src/platform/host/egress.ts",
   "src/platform/host/guest-link.ts",
   "src/platform/host/host-api.ts",
+  "src/platform/host/image.ts",
   "src/platform/host/keychain.ts",
   "src/platform/host/lifecycle.ts",
   "src/platform/host/peer.ts",
@@ -1476,7 +1477,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 55
+   "files": 56
   },
   {
    "index": 5,
@@ -1493,8 +1494,8 @@
    "files": 59
   }
  ],
- "files": 251,
- "runtimeEdges": 946,
+ "files": 252,
+ "runtimeEdges": 947,
  "typeOnlyEdges": 333,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
@@ -1506,7 +1507,7 @@
   "L4-orchestration -> L1-kernel": 140,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 63,
+  "L4-orchestration -> L4-orchestration": 64,
   "L5-entry -> L1-kernel": 82,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
@@ -1569,13 +1570,13 @@
   "koffi": 5,
   "node:async_hooks": 3,
   "node:child_process": 6,
-  "node:crypto": 27,
-  "node:fs": 69,
+  "node:crypto": 28,
+  "node:fs": 70,
   "node:http": 1,
   "node:https": 1,
   "node:net": 23,
   "node:os": 3,
-  "node:path": 72,
+  "node:path": 73,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

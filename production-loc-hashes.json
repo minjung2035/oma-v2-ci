@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "29173820dce4f600eec749153ab345869d6cc0e4f9e61ea36839008d892090e6",
-  "report": "9cdac392d6d2913a37b80d5c563e769e02ff4a7333acd283ffea082951fd00d0",
+  "manifest": "dd1da39471099cba22655fab98c196244d693a0464a49962e213e0539ec43357",
+  "report": "0dc2eda2304917fa235510427799d723528135245169d39f3012c8f8582f891b",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -554,6 +554,10 @@
     {
       "path": "src/platform/host/host-api.ts",
       "sha256": "81403f873471b4cd0f7329ee227b0f2a8727a6af1c7018724922ec35e78bbabf"
+    },
+    {
+      "path": "src/platform/host/image.ts",
+      "sha256": "4ccdbe455ce3a26f0f1f173b62f06dcbac9ee6741afc1c0b27a730c9791ce954"
     },
     {
       "path": "src/platform/host/keychain.ts",

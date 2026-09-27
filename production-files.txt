@@ -136,6 +136,7 @@ src/platform/host/attach-client.ts
 src/platform/host/egress.ts
 src/platform/host/guest-link.ts
 src/platform/host/host-api.ts
+src/platform/host/image.ts
 src/platform/host/keychain.ts
 src/platform/host/lifecycle.ts
 src/platform/host/peer.ts
