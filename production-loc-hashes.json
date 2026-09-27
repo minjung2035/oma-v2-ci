@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "12c54a9377ce1702ddbe04c2568f50e42f3f8563e474cd17a80235f797e4fc33",
-  "report": "0e6117822e087d447bdab6151a5de03791305332c8436be422f6be3aea1c23a2",
+  "report": "439fb4ae504517c82aa931d6dfed99b81bee8dfbb9c2ebd32ab68aa660a9fc93",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -177,7 +177,7 @@
     },
     {
       "path": "src/config/generations.ts",
-      "sha256": "2fe20e66dc3e896dd9d04349b02141232907ac1355b456ded19fcceda386297c"
+      "sha256": "4b2a1d16ea300672847f161aa22056cf54bab7730ec0a8ec2164b8eb6d246832"
     },
     {
       "path": "src/config/operations.ts",
@@ -885,7 +885,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "84a8fd5f64c245b704c8c7d48590a18a3b1daa1ac1bcd593731fadbcfab7925b"
+      "sha256": "49fb8b197df42ce4d82842e853bad14a9ea3c7fd1c4b8e927f439a032a698233"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
@@ -897,7 +897,7 @@
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "a5b88247c21dee26b4e0eca80778d4faefbd8faf643894ea53752f3218a4c4a7"
+      "sha256": "1aa945fbbc01478df6d3f3dd9956333da3657a326c944f82623d69bd2fb3cd93"
     },
     {
       "path": "src/storage/facets.ts",
@@ -905,7 +905,7 @@
     },
     {
       "path": "src/storage/immutable-file.ts",
-      "sha256": "81174e0f0d148a38113a781ff545c04304630d6c38b876fc63d0cc103c13e261"
+      "sha256": "fff70034e55979d875e47ea379c6d13fe6ab7e12d2e4d104f84fdbab6de63176"
     },
     {
       "path": "src/storage/ledger-reader.ts",

@@ -747,6 +747,8 @@ P0V-82, P0V-84, P0V-85)도 같은 표에 적는다.
 | P0V-93 | R6-16 | broker.ts, reconcile.ts | `hasGoal` 필수, fallback 둘 제거 | 수정 53409b8 |
 | P0V-94 | R6-17 | views.ts `fieldEscape` | 제어 문자 전부를 되돌릴 수 있게 escape | 수정 53409b8 |
 | P0V-95 | R6-20 | units.ts | owner를 알 수 없는 unit은 교체하지 않는다. `systemctl show` 형식 가정은 `effectiveExecArgv` 한 곳 | 수정 53409b8 |
+| P0V-96 | 시험 보강 중 발견(R6-08의 남은 것) | storage/durable-fs.ts, delivery-receipt.ts, immutable-file.ts | 설정 commit과 receipt를 실제 SIGKILL로 끊는 시험이 찾았다: receipt 게시, 파생 파일 교체, immutable 복사(EXDEV)가 죽은 writer의 임시 파일을 영구히 남겼다. P0V-84의 규칙(임시 파일은 writer의 죽음 증명을 지니고, 같은 이름의 다음 게시가 풀린 것만 거둔다)을 공유 helper(`createLockedTemporary`, `collectDeadTemporaries`)로 옮겨 세 곳에 둔다. immutable 게시는 목적지가 이미 있으면 link가 EEXIST를 먼저 내 복사 경로에 닿지 않으므로 수거를 게시 시작에 둔다 | 수정 이 커밋 |
+| P0V-97 | 같은 시험 | config/generations.ts `collectManagedGenerations` | 첫 managed commit이 commit point 전에 죽으면 bundle은 아직 manual이라 현재 세대가 없고, 수거가 그 경우 일찍 돌아가 manifest 임시본을 남겼다 | 수정 이 커밋 |
 
 원칙에 따라 함께 고친 곳: P0V-77은 quarantine·context 준비·workspace clone·provision staging 네 곳에 같은 lease를 두었다. P0V-81은 broker
 밖의 draining 프로세스 다섯 곳을 같은 목록으로 옮겼고, 그 탐색에서 P0V-82를 찾았다. P0V-86은 decoder 열다섯 곳을 모두 owner로 옮겼다.
@@ -760,9 +762,11 @@ request can carry (8388608 bytes)`, G06 BOM frame 거절, G07-sweep `failureCall
 `contextBytes`·`bundleBytes`가 상한이다. R6-09의 "문서 시작과 stream 중간을 구분하는 decoder"는 두지 않았다. decoder는 그것을 알 수 없고,
 구분이 필요한 곳(빈 GOAL.md)은 그 규칙의 owner(context 정책)가 정한다.
 
-남긴 것: R6-08의 "설정 commit과 receipt에도 crash-worker 방식"은 아직이다. 그 경계의 가장 강한 주입은 in-process-fault이고, gate의
-요약이 그렇게 말한다(sigkill 33, in-process-fault 17, logical 14). crash lane(`crash-boundaries`)은 일회용 user manager가 있어야 돌아 이
-환경에서 돌리지 않았다.
+R6-08의 "설정 commit과 receipt에도 crash-worker 방식"은 시험 보강에서 했다: `test/crash-kill-boundaries`가 managed·inline 설정 commit,
+receipt 게시, 파생 파일 교체, 파일시스템을 건너는 immutable 게시를 durability 지점마다 실제 SIGKILL로 끊고, 남은 것을 제품의 loader와
+정산 판정으로 읽는다. 그 시험이 P0V-96·P0V-97을 찾았다. gate의 경계별 가장 강한 주입은 sigkill 40, in-process-fault 10, logical 14다.
+남긴 것: symlink 임시본(`replaceDerivedSymlink`)은 flock을 걸 수 없어 죽음 증명이 없다(broker 하나가 쓰는 context 포인터이고 창은
+symlink와 rename 사이뿐이다). crash lane(`crash-boundaries`)은 일회용 user manager가 있어야 돌아 이 환경에서 돌리지 않았다.
 
 ### 기존 시험의 기대를 바꾼 곳
 
@@ -774,6 +778,8 @@ request can carry (8388608 bytes)`, G06 BOM frame 거절, G07-sweep `failureCall
 - `domain-policy`, `runtime-contracts`: `resolvedSpecOf`에 digest를 준다(P0V-91).
 - Broker·ReconcileModule을 조립하는 시험 열여섯 곳: `hasGoal`을 명시한다. 값은 예전 fallback과 같다(`fixtures/goal.ts`, P0V-93).
 - PiAdapter·principalEnvironment에 한도를 주는 시험 일곱 곳: `contextBytes`·`bundleBytes`가 더해졌다(P0V-78).
+- `durable-fault-matrix`(P7 derived rename): in-process 충돌의 임시본은 같은 이름의 다음 교체가 거둔다(P0V-96). "임시본 하나가 남는다"는
+  기대는 "다음 교체 뒤에는 남지 않는다"가 되었다.
 - `p0-review4`(P0V-26): owner 줄도 state tree도 없는 unit을 Description만으로 제 것이라 하던 기대는 R6-20이 지적한 판정 그 자체였다.
   이제 owner 줄이 있어야 제 것이고, 없는 것은 교체하지 않는다(P0V-95). 전체 시험에서 찾았다.
 

@@ -12,17 +12,19 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { sha256Hex } from "../domain/canonical-json.js";
 import { StoreError } from "../domain/errors.js";
 import {
+  collectDeadTemporaries,
+  createLockedTemporary,
   ensureDurableDirectory,
   faultAt,
   isDurabilityFault,
+  temporaryNameFor,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "./contained-fs.js";
+import { entryAt, linkDescriptor, openDirectory, openRegularBeneath, closeEvery } from "./contained-fs.js";
 import type { PublishedIdentity } from "./preaccept-artifact.js";
 
 function checkedBytes(
@@ -140,6 +142,10 @@ export function publishImmutableFile(
     const original = checkedBytes(sourceFd, expectedHash);
     ensureDurableDirectory(dirname(destination), 0o755, faults);
     parent = openDirectory(dirname(destination));
+    // P0V-96: a copy killed before its temporary was removed left it with a
+    // free lock; every publication of this name collects it first -- one
+    // whose destination already exists never reaches the copying path.
+    collectDeadTemporaries(parent, basename(destination));
     const report = (fd: number): void => {
       const stat = fstatSync(fd);
       linked?.({ dev: stat.dev, ino: stat.ino });
@@ -152,18 +158,10 @@ export function publishImmutableFile(
       if (isDurabilityFault(error)) throw error;
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "EXDEV") {
-        const name = `.${basename(destination)}.${randomUUID()}.tmp`;
+        const name = temporaryNameFor(basename(destination));
         const label = join(dirname(destination), name);
         faultAt(faults, "file-create", "before", label);
-        temporaryFd = openBeneath(
-          parent,
-          name,
-          constants.O_RDWR |
-            constants.O_CREAT |
-            constants.O_EXCL |
-            constants.O_NOFOLLOW,
-          0o600,
-        );
+        temporaryFd = createLockedTemporary(parent, name, constants.O_RDWR, 0o600);
         temporary = name;
         faultAt(faults, "file-create", "after-visible", label);
         faultAt(faults, "file-write", "before", label);

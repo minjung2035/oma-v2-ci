@@ -236,6 +236,7 @@ export const lanes = Object.freeze({
       "p0-review4.test.js",
       "p0-review5.test.js",
       "p0-review6.test.js",
+      "crash-kill-boundaries.test.js",
       "settlement-headroom.test.js",
       "git-effect-evidence.test.js",
       "r21-context-workflow.test.js",

@@ -189,8 +189,27 @@ export function publishNoReplace(target: string, data: string | Uint8Array, mode
 }
 
 const TEMPORARY = /^\.(.+)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
-/** The temporaries of `name` whose writers are dead, removed under their lock. */
-function collectDeadTemporaries(parent: number, name: string): void {
+/** The one-time name a publication's temporary beside `name` has. */
+export function temporaryNameFor(name: string): string {
+  return `.${name}.${randomUUID()}.tmp`;
+}
+/** P0V-84, P0V-96: a publication's temporary, created under the held parent
+ * and flocked from the moment it exists. Its writer holds the descriptor until
+ * the temporary is gone -- linked away, renamed away or removed -- so a lock
+ * found free is the proof its writer died in between. */
+export function createLockedTemporary(parent: number, temporaryName: string, flags: number, mode: number): number {
+  const fd = openBeneath(parent, temporaryName, flags | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+  const lock = lockFileDescriptor(fd);
+  if (lock.kind === "held") return fd;
+  closeSync(fd);
+  try { unlinkSync(entryAt(parent, temporaryName)); } catch { /* cleanup only */ }
+  throw new StoreError("BROKER_UNAVAILABLE", `a publication's temporary could not be locked (${lock.kind})`);
+}
+/** The temporaries of `name` whose writers are dead, removed under their lock.
+ * Every publication of `name` calls it first, so what a killed writer left is
+ * gone by the next publication of the same name; a live writer's is kept, and
+ * another name's is never touched. */
+export function collectDeadTemporaries(parent: number, name: string): void {
   let entries: string[];
   try { entries = readdirSync(`/proc/self/fd/${parent}`); } catch { return; }
   for (const entry of entries) {
@@ -206,20 +225,15 @@ function collectDeadTemporaries(parent: number, name: string): void {
 
 function publishOnce(parent: number, name: string, target: string, data: string | Uint8Array, mode: number,
   faults: DurabilityObserver | undefined): "created" | "existing" | "restart" {
-  const temp = `.${name}.${randomUUID()}.tmp`;
+  const temp = temporaryNameFor(name);
   const temporary = join(dirname(target), temp);
   // P0V-83, R6-08: the same durability points as the other publications, so
   // a crash can be put between any two steps. An injected crash runs no
   // cleanup, as a real one would not.
   faultAt(faults, "file-create", "before", temporary);
-  const fd = openBeneath(parent, temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+  const fd = createLockedTemporary(parent, temp, constants.O_WRONLY, mode);
   let crashed = false;
   try {
-    const lock = lockFileDescriptor(fd);
-    if (lock.kind !== "held") {
-      try { unlinkSync(entryAt(parent, temp)); } catch { /* cleanup only */ }
-      throw new StoreError("BROKER_UNAVAILABLE", `a publication's temporary could not be locked (${lock.kind})`);
-    }
     faultAt(faults, "file-create", "after-visible", temporary);
     try {
       faultAt(faults, "file-write", "before", temporary);
@@ -279,34 +293,35 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
   // having just succeeded proved nothing about the walk that followed it: it
   // was a different walk.
   withinDirectory(target, (parent, name) => {
-    const temporaryName = `.${name}.${randomUUID()}.tmp`;
+    // P0V-96: what a killed writer of this name left is collected first, and
+    // this writer's temporary is locked until it is renamed away.
+    collectDeadTemporaries(parent, name);
+    const temporaryName = temporaryNameFor(name);
     const temporary = join(dirname(target), temporaryName);
     faultAt(faults, "file-create", "before", temporary);
-    const fd = openBeneath(parent, temporaryName, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
-    faultAt(faults, "file-create", "after-visible", temporary);
+    const fd = createLockedTemporary(parent, temporaryName, constants.O_WRONLY, mode);
     let renamed = false;
-    // P0V-49, P0-4: the descriptor is given back once. The number is free the
-    // moment it is closed -- even when close reports an error -- and anything
-    // opened afterwards may be handed it, so a failure later in the sequence
-    // must not close it a second time.
-    let held = true;
+    // P0V-49, P0-4: the descriptor is given back once, in the finally. The
+    // number is free the moment it is closed, and anything opened afterwards
+    // may be handed it, so nothing closes it a second time.
     try {
+      faultAt(faults, "file-create", "after-visible", temporary);
       faultAt(faults, "file-write", "before", temporary);
       writeFileSync(fd, bytes);
       faultAt(faults, "file-write", "ambiguous", temporary);
       faultAt(faults, "file-fsync", "ambiguous", temporary);
       fsyncSync(fd);
       faultAt(faults, "file-fsync", "after-visible", temporary);
-      held = false; closeSync(fd);
       faultAt(faults, "derived-rename", "before", target);
       renameSync(entryAt(parent, temporaryName), entryAt(parent, name));
       renamed = true;
       faultAt(faults, "derived-rename", "after-visible", target);
       fsyncHeldDir(parent, dirname(target), faults);
     } catch (error) {
-      if (held) try { closeSync(fd); } catch { /* the kernel released it either way */ }
       if (!renamed) cleanupAfterFailure(parent, temporaryName, temporary, error, faults);
       throw error;
+    } finally {
+      try { closeSync(fd); } catch { /* the kernel released it either way */ }
     }
   });
 }

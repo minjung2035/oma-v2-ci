@@ -559,8 +559,12 @@ function generationsToKeep(current: string, records: readonly CommitRecord[] | n
  * that could not be read (`generationsToKeep`). */
 export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, "layout">): readonly string[] {
   if (snapshot.layout.kind === "inline") return collectTemporaries(snapshot.layout.path);
+  if (snapshot.layout.kind !== "operations") return [];
   const current = managedGenerationOf(snapshot);
-  if (current === null || snapshot.layout.kind !== "operations") return [];
+  // P0V-97: a first commit killed before its commit point leaves the bundle
+  // manual -- no generation is current yet -- and its manifest temporary is
+  // still this writer's to collect.
+  if (current === null) return collectTemporaries(snapshot.layout.index);
   const base = join(dirname(snapshot.layout.index), MANAGED_DIRECTORY);
   const generations = join(base, "generations");
   let records: readonly CommitRecord[] | null;

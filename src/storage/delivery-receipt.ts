@@ -7,17 +7,19 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import type { Actor, PreparedBatch } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { isValidBatchId, isValidMessageId } from "../domain/identifiers.js";
 import { parseJsonObject } from "../frame.js";
 import {
+  collectDeadTemporaries,
+  createLockedTemporary,
   ensureDurableDirectory,
   faultAt,
   fsyncHeldDir,
   isDurabilityFault,
+  temporaryNameFor,
   type DurabilityObserver,
 } from "./durable-fs.js";
 import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "./contained-fs.js";
@@ -403,14 +405,17 @@ export function publishDeliveryReceipt(
   ensureDurableDirectory(dirname(path), 0o700, faults);
   const parent = openDirectory(dirname(path));
   const finalName = basename(path);
-  const temporaryName = `.${finalName}.${randomUUID()}.tmp`;
+  const temporaryName = temporaryNameFor(finalName);
   const temporaryPath = join(dirname(path), temporaryName);
   let fd: number | undefined;
   let temporaryExists = false;
   let crashed = false;
   try {
+    // P0V-96: a killed publication of this receipt left its temporary with a
+    // free lock; the retry collects it, and locks its own until it is gone.
+    collectDeadTemporaries(parent, finalName);
     faultAt(faults, "file-create", "before", temporaryPath);
-    fd = openBeneath(parent, temporaryName, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    fd = createLockedTemporary(parent, temporaryName, constants.O_RDWR, 0o600);
     temporaryExists = true;
     faultAt(faults, "file-create", "after-visible", temporaryPath);
     faultAt(faults, "file-write", "before", temporaryPath);

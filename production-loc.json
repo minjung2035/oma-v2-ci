@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 270,
-    "n_lines": 35264,
+    "n_lines": 35286,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -14,8 +14,8 @@
   },
   "src/config/generations.ts": {
     "blank": 27,
-    "comment": 144,
-    "code": 425,
+    "comment": 147,
+    "code": 426,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -32,8 +32,8 @@
   },
   "src/storage/delivery-receipt.ts": {
     "blank": 2,
-    "comment": 53,
-    "code": 400,
+    "comment": 55,
+    "code": 403,
     "language": "TypeScript"
   },
   "src/config/operations.ts": {
@@ -138,6 +138,12 @@
     "code": 245,
     "language": "TypeScript"
   },
+  "src/storage/durable-fs.ts": {
+    "blank": 15,
+    "comment": 101,
+    "code": 243,
+    "language": "TypeScript"
+  },
   "src/runtime/pi-adapter.ts": {
     "blank": 1,
     "comment": 36,
@@ -148,12 +154,6 @@
     "blank": 25,
     "comment": 134,
     "code": 238,
-    "language": "TypeScript"
-  },
-  "src/storage/durable-fs.ts": {
-    "blank": 15,
-    "comment": 92,
-    "code": 237,
     "language": "TypeScript"
   },
   "src/domain/errors.ts": {
@@ -216,16 +216,16 @@
     "code": 205,
     "language": "TypeScript"
   },
-  "src/storage/immutable-file.ts": {
-    "blank": 4,
-    "comment": 16,
-    "code": 198,
-    "language": "TypeScript"
-  },
   "src/request-cache.ts": {
     "blank": 17,
     "comment": 36,
     "code": 196,
+    "language": "TypeScript"
+  },
+  "src/storage/immutable-file.ts": {
+    "blank": 4,
+    "comment": 19,
+    "code": 193,
     "language": "TypeScript"
   },
   "src/diagnostics/ledger.ts": {
@@ -1628,8 +1628,8 @@
   },
   "SUM": {
     "blank": 1546,
-    "comment": 6033,
-    "code": 27685,
+    "comment": 6050,
+    "code": 27690,
     "nFiles": 270
   }
 }

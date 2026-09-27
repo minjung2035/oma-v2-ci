@@ -851,6 +851,11 @@
      "file": "test/runner-channel.test.ts",
      "title": "AV21 / D01, RUN-001: a batch outlasting the broker's idle bound completes on a new connection",
      "injection": "logical"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability point",
+     "injection": "sigkill"
     }
    ]
   },
@@ -867,6 +872,11 @@
      "file": "test/delivery-receipt-publication.test.ts",
      "title": "DR11: a crash after the session flush and before the receipt leaves no receipt, and the retry publishes it",
      "injection": "in-process-fault"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "DR11 / V05A / P0-7: a receipt publication SIGKILLed at any durability point",
+     "injection": "sigkill"
     }
    ]
   },
@@ -943,6 +953,11 @@
      "file": "test/priority-0.test.ts",
      "title": "DR12 / P0-3, CONFIG-CONTRACT: an inline edit from a snapshot that is no longer current is refused",
      "injection": "logical"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "DR12 / P0-7: an inline commit SIGKILLed at any durability point",
+     "injection": "sigkill"
     }
    ]
   },
@@ -954,6 +969,11 @@
      "file": "test/config-generations.test.ts",
      "title": "V13A: a crash at any point of a managed commit leaves the complete old or the complete new configuration",
      "injection": "in-process-fault"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "V13A / P0-7: a managed commit SIGKILLed at any durability point",
+     "injection": "sigkill"
     }
    ]
   },
@@ -1003,6 +1023,11 @@
      "file": "test/durable-fault-matrix.test.ts",
      "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
      "injection": "in-process-fault"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+     "injection": "sigkill"
     }
    ]
   },
@@ -1019,6 +1044,11 @@
      "file": "test/status-view.test.ts",
      "title": "T118: a view dated ahead of the reader's clock is unknown, not current",
      "injection": "logical"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+     "injection": "sigkill"
     }
    ]
   },
@@ -1030,6 +1060,11 @@
      "file": "test/durable-fault-matrix.test.ts",
      "title": "P7 fault derived rename: derived view replacement is idempotent and leaves accepted bytes alone",
      "injection": "in-process-fault"
+    },
+    {
+     "file": "test/crash-kill-boundaries.test.ts",
+     "title": "P0V-96 / P0-7: a derived-file replacement SIGKILLed at any point",
+     "injection": "sigkill"
     }
    ]
   }
