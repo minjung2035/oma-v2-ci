@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "600ec992920f2b1358c1e109f046cd759231ed94aa474d181363df2420238fd6",
-  "report": "52dcff8b786b0dc74a0a47397bc12ca2d33088d9e0c0ae2a70b863733dbcf42d",
+  "manifest": "56e4f4c04ab8dc3c1f40b89c4a3eae55b744e9e5011c3a9494db2baa3a59490e",
+  "report": "ed8b38295cd64259b901b9d974fce20a5828204d383013eb0a6ee38bdd634fbc",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -297,7 +297,7 @@
     },
     {
       "path": "src/entry/guesthost.ts",
-      "sha256": "8c75d698504f043ab822e84a826fd9e7e71dfdea424f00226982069310461e33"
+      "sha256": "1d5f8282e0afb9db3dbe281c82adb82b00c6240eb389751496157e9d06379751"
     },
     {
       "path": "src/entry/host.ts",
@@ -508,6 +508,10 @@
       "sha256": "4a6f7212e117e92afb2aa8495db210608a5dc1c76ce9c987f7af479d9620f1f5"
     },
     {
+      "path": "src/platform/guest/egress.ts",
+      "sha256": "247a9332a8d056c271a2489237947c9caeb41fe8d9b9266e5145d97dd46e695d"
+    },
+    {
       "path": "src/platform/guest/host.ts",
       "sha256": "e49cf0dda896f62777c2ae511195bd7e8d537b92491bfa3caf8f695f827fb45e"
     },
@@ -536,12 +540,16 @@
       "sha256": "5784d0356f26e11a8d3dfeb6436a705b0879f01347504302f0510f9268baab9c"
     },
     {
+      "path": "src/platform/host/egress.ts",
+      "sha256": "40134d86aa1134e207cbfa0d11ec2300987bc9a6d84e433355c3004263d77099"
+    },
+    {
       "path": "src/platform/product-text.ts",
       "sha256": "a5efdc22b698db94f5d07dbc8d73ea10e2d5126e915890d11f80fa4eef069082"
     },
     {
       "path": "src/platform/rpc.ts",
-      "sha256": "2a74f345267b0c6d61e76d97fb05236f562aeecd06993281da3bf56887bcf070"
+      "sha256": "a873bce787448db5394cc2f363c5b62d3d2b094d96c98cda17bc48279a644d37"
     },
     {
       "path": "src/ports/ledger.ts",
@@ -589,7 +597,7 @@
     },
     {
       "path": "src/protocol/host-guest.ts",
-      "sha256": "cb2fd38db471731c59eb6ea4be274c04fc5900d8dd296e9ba0e86c293417664d"
+      "sha256": "ce1b1ee4ec26893c7db1a4e9580bc2e4189f7b85f4304f454967180e361927b1"
     },
     {
       "path": "src/protocol/jsonl.ts",
@@ -689,7 +697,7 @@
     },
     {
       "path": "src/runtime/inference-relay.ts",
-      "sha256": "56f5ebd195753bccde59fcc067fce83c0665bbe3dc18ff7a8fd243f1efa24851"
+      "sha256": "5481beea8bc0ef8833541a1b72ba98c6aedea867ff509ff815e490fc512367c0"
     },
     {
       "path": "src/runtime/pi-adapter.ts",

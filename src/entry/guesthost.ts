@@ -5,6 +5,7 @@ import { readGuestIdentity, systemUser } from "../platform/guest/identity.js";
 import { startGuestServer } from "../platform/guest/server.js";
 import { GuestHost } from "../platform/guest/host.js";
 import { systemdSessionLauncher } from "../platform/guest/systemd-launcher.js";
+import { EgressPool, startEgressService } from "../platform/guest/egress.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
 
 function argOf(flag: string, fallback: string): string {
@@ -38,13 +39,20 @@ const host = new GuestHost({
   }),
 });
 
+// §4.7: the host's pooled egress connections, and the socket the guest's own
+// processes ask for them on.
+const egress = new EgressPool();
+startEgressService({ socketPath: join(runtimeDir, "oma-egress.sock"), pool: egress, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 30_000 })
+  .catch(error => { console.error(`guesthost: egress: ${error instanceof Error ? error.message : String(error)}`); process.exit(1); });
+
 startGuestServer({
   socketPath,
   bridge: systemUser("oma-bridge"),
-  identity: () => readGuestIdentity(dataDir, imageManifest, ["society", "terminal"]),
+  identity: () => readGuestIdentity(dataDir, imageManifest, ["society", "terminal", "egress"]),
   channels: {
     society: { kind: "json", serve: ({ peer }) => host.serve(peer) },
     terminal: { kind: "bytes", serve: (socket, hello) => host.terminal(socket, hello) },
+    egress: { kind: "bytes", serve: socket => { egress.park(socket); } },
   },
   frameBytes: PLATFORM_FRAME_BYTES,
   helloDeadlineMs: 5000,

@@ -234,3 +234,51 @@ export function parseTerminalJson(payload: Buffer, required: readonly string[], 
   if (!object(value) || exactKeys(value, required, optional) !== null) return null;
   return value;
 }
+
+/** §4.7: the first message on an egress connection, guest → host, in the
+ * request envelope. `egress.placeholder` is answered and the connection
+ * closes; after `egress.open` the connection carries the engine's HTTP. */
+const TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$/;
+export interface EgressRun { readonly society: string; readonly actor: string; readonly incarnation: number }
+export interface EgressPlaceholderParams {
+  readonly credentialRef: string; readonly provider: string; readonly model: string; readonly run: EgressRun;
+}
+export interface EgressOpenParams {
+  readonly placeholderId: string; readonly society: string; readonly actor: string; readonly incarnation: number;
+  readonly modelProfile: string;
+}
+export interface EgressPlaceholderResult {
+  readonly placeholderId: string; readonly placeholder: string; readonly provider: string; readonly model: string;
+}
+function runProblem(value: unknown): string | null {
+  if (!object(value) || exactKeys(value, ["society", "actor", "incarnation"]) !== null) return "run must be { society, actor, incarnation }";
+  if (!isValidSocietyName(value.society)) return "invalid society";
+  if (typeof value.actor !== "string" || !TOKEN.test(value.actor)) return "invalid actor";
+  if (!uint(value.incarnation)) return "invalid incarnation";
+  return null;
+}
+export function egressPlaceholderProblem(params: unknown): string | null {
+  if (!object(params)) return "params must be an object";
+  const shape = exactKeys(params, ["credentialRef", "provider", "model", "run"]);
+  if (shape !== null) return shape;
+  for (const key of ["credentialRef", "provider", "model"] as const)
+    if (typeof params[key] !== "string" || !TOKEN.test(params[key] as string)) return `invalid ${key}`;
+  return runProblem(params.run);
+}
+export function egressOpenProblem(params: unknown): string | null {
+  if (!object(params)) return "params must be an object";
+  const shape = exactKeys(params, ["placeholderId", "society", "actor", "incarnation", "modelProfile"]);
+  if (shape !== null) return shape;
+  if (!isUuid(params.placeholderId)) return "invalid placeholderId";
+  if (typeof params.modelProfile !== "string" || !TOKEN.test(params.modelProfile)) return "invalid modelProfile";
+  return runProblem({ society: params.society, actor: params.actor, incarnation: params.incarnation });
+}
+export function egressPlaceholderResultProblem(result: unknown): string | null {
+  if (!object(result) || exactKeys(result, ["placeholderId", "placeholder", "provider", "model"]) !== null) return "invalid placeholder answer";
+  if (!isUuid(result.placeholderId)) return "invalid placeholderId";
+  if (typeof result.placeholder !== "string" || result.placeholder.length < 16 || result.placeholder.length > 4096 || /[\s\u0000-\u001f]/.test(result.placeholder))
+    return "invalid placeholder";
+  if (typeof result.provider !== "string" || !TOKEN.test(result.provider) || typeof result.model !== "string" || !TOKEN.test(result.model))
+    return "invalid provider or model";
+  return null;
+}

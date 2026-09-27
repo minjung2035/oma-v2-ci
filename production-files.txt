@@ -124,6 +124,7 @@ src/mail/serialize.ts
 src/module-ports.ts
 src/pi-extension.ts
 src/platform/guest/control.ts
+src/platform/guest/egress.ts
 src/platform/guest/host.ts
 src/platform/guest/identity.ts
 src/platform/guest/linux-system.ts
@@ -131,6 +132,7 @@ src/platform/guest/pty.ts
 src/platform/guest/server.ts
 src/platform/guest/session.ts
 src/platform/guest/systemd-launcher.ts
+src/platform/host/egress.ts
 src/platform/product-text.ts
 src/platform/rpc.ts
 src/ports/ledger.ts

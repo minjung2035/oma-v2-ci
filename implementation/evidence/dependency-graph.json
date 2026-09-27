@@ -127,6 +127,7 @@
   "src/module-ports.ts",
   "src/pi-extension.ts",
   "src/platform/guest/control.ts",
+  "src/platform/guest/egress.ts",
   "src/platform/guest/host.ts",
   "src/platform/guest/identity.ts",
   "src/platform/guest/linux-system.ts",
@@ -134,6 +135,7 @@
   "src/platform/guest/server.ts",
   "src/platform/guest/session.ts",
   "src/platform/guest/systemd-launcher.ts",
+  "src/platform/host/egress.ts",
   "src/platform/product-text.ts",
   "src/platform/rpc.ts",
   "src/ports/ledger.ts",
@@ -1463,7 +1465,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 44
+   "files": 46
   },
   {
    "index": 5,
@@ -1480,8 +1482,8 @@
    "files": 59
   }
  ],
- "files": 239,
- "runtimeEdges": 913,
+ "files": 241,
+ "runtimeEdges": 924,
  "typeOnlyEdges": 327,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
@@ -1490,14 +1492,14 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 123,
+  "L4-orchestration -> L1-kernel": 128,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 48,
+  "L4-orchestration -> L4-orchestration": 53,
   "L5-entry -> L1-kernel": 82,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 36,
+  "L5-entry -> L4-orchestration": 37,
   "L5-entry -> L5-entry": 115
  },
  "upwardTypeOnlyEdges": [
@@ -1517,7 +1519,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 127,
+  "src/domain/errors.ts": 128,
   "src/domain/identifiers.ts": 38,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 25,
@@ -1556,11 +1558,11 @@
   "koffi": 4,
   "node:async_hooks": 3,
   "node:child_process": 5,
-  "node:crypto": 25,
-  "node:fs": 67,
+  "node:crypto": 26,
+  "node:fs": 68,
   "node:http": 1,
   "node:https": 1,
-  "node:net": 15,
+  "node:net": 18,
   "node:os": 3,
   "node:path": 71,
   "node:perf_hooks": 5,

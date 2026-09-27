@@ -209,14 +209,18 @@ export async function sendHelloForBytes(socket: Socket, params: HelloParams, fra
 
 /** Reads exactly one frame from a socket that will then carry raw bytes (the
  * egress and stream channels), and hands back what arrived after it. The
- * socket is paused on return so nothing is lost before the caller pipes it. */
+ * socket is paused on return so nothing is lost before the caller pipes it.
+ * An infinite deadline waits as long as the connection lives: a pooled
+ * egress connection is idle until an engine needs it. */
 export function readLeadingFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promise<{ readonly frame: Record<string, unknown>; readonly rest: Buffer }> {
   return new Promise((resolve, reject) => {
     let buffered = Buffer.alloc(0);
-    const timer = setTimeout(() => finish(new StoreError("INVALID_REQUEST", "no leading frame before the deadline")), deadlineMs);
-    timer.unref();
+    const timer = Number.isFinite(deadlineMs)
+      ? setTimeout(() => finish(new StoreError("INVALID_REQUEST", "no leading frame before the deadline")), deadlineMs)
+      : null;
+    timer?.unref();
     const finish = (error: Error | null, value?: { frame: Record<string, unknown>; rest: Buffer }): void => {
-      clearTimeout(timer);
+      if (timer !== null) clearTimeout(timer);
       socket.off("data", onData); socket.off("close", onClose);
       socket.pause();
       if (error !== null) reject(error); else resolve(value!);

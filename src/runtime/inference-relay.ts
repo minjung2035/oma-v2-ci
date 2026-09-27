@@ -27,6 +27,7 @@
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { Transform, type Duplex } from "node:stream";
+import type { Socket } from "node:net";
 import { chmodSync, rmSync } from "node:fs";
 import { StoreError } from "../domain/errors.js";
 import { trustedAbsolutePath } from "../protocol/run-lease.js";
@@ -154,7 +155,7 @@ export class InferenceRelay {
   private readonly tunnels = new Set<Duplex>();
 
   private constructor(
-    private readonly socketPath: string,
+    private readonly socketPath: string | null,
     private readonly origin: URL,
     private readonly target: RelayTarget,
     private readonly limits: RelayLimits,
@@ -176,17 +177,7 @@ export class InferenceRelay {
   ): Promise<InferenceRelay> {
     if (!trustedAbsolutePath(socketPath))
       throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path is not a trusted absolute path");
-    if (!Number.isSafeInteger(limits.concurrent) || limits.concurrent <= 0 ||
-      !Number.isSafeInteger(limits.timeoutMs) || limits.timeoutMs <= 0)
-      throw new StoreError("UNSUPPORTED_PROFILE", "relay limits are invalid");
-    for (const [name, value] of Object.entries(target.headers))
-      if (!HEADER_NAME.test(name) || typeof value !== "string" || UNSAFE_VALUE.test(value))
-        throw new StoreError("UNSUPPORTED_PROFILE", "relay credential header is invalid");
-    const swap = target.substitute;
-    if (swap !== undefined && (swap.placeholder.length < 16 || swap.secret.length === 0 ||
-      swap.placeholder === swap.secret || UNSAFE_VALUE.test(swap.placeholder) || UNSAFE_VALUE.test(swap.secret)))
-      throw new StoreError("UNSUPPORTED_PROFILE", "relay substitution is invalid");
-    const relay = new InferenceRelay(socketPath, parsedOrigin(target.origin), target, limits);
+    const relay = new InferenceRelay(socketPath, InferenceRelay.checked(target, limits), target, limits);
     // A leftover socket from a killed run would make listen fail; it belongs to
     // this incarnation's run root, so removing it is removing our own artefact.
     rmSync(socketPath, { force: true });
@@ -197,6 +188,39 @@ export class InferenceRelay {
     // Only this user may speak to the relay; the sandbox runs as the same user.
     chmodSync(socketPath, 0o600);
     return relay;
+  }
+
+  /** macos-platform §4.7: the same relay, listening nowhere. The macOS host
+   * hands it each egress connection the guest opened for this run's engine;
+   * everything a connection carries is then this relay's, exactly as if it
+   * had arrived on its socket. */
+  static detached(target: RelayTarget, limits: RelayLimits): InferenceRelay {
+    return new InferenceRelay(null, InferenceRelay.checked(target, limits), target, limits);
+  }
+
+  /** One connection for a detached relay, with what already arrived on it.
+   * The caller read a message off it first and left it paused; the HTTP
+   * server takes it from here, so it is let flow again after the hand-over
+   * (the same order as any server that sniffs a connection's first bytes). */
+  accept(socket: Socket, head: Buffer = Buffer.alloc(0)): void {
+    if (this.closed) { socket.destroy(); return; }
+    if (head.length > 0) socket.unshift(head);
+    this.server.emit("connection", socket);
+    socket.resume();
+  }
+
+  private static checked(target: RelayTarget, limits: RelayLimits): URL {
+    if (!Number.isSafeInteger(limits.concurrent) || limits.concurrent <= 0 ||
+      !Number.isSafeInteger(limits.timeoutMs) || limits.timeoutMs <= 0)
+      throw new StoreError("UNSUPPORTED_PROFILE", "relay limits are invalid");
+    for (const [name, value] of Object.entries(target.headers))
+      if (!HEADER_NAME.test(name) || typeof value !== "string" || UNSAFE_VALUE.test(value))
+        throw new StoreError("UNSUPPORTED_PROFILE", "relay credential header is invalid");
+    const swap = target.substitute;
+    if (swap !== undefined && (swap.placeholder.length < 16 || swap.secret.length === 0 ||
+      swap.placeholder === swap.secret || UNSAFE_VALUE.test(swap.placeholder) || UNSAFE_VALUE.test(swap.secret)))
+      throw new StoreError("UNSUPPORTED_PROFILE", "relay substitution is invalid");
+    return parsedOrigin(target.origin);
   }
 
   observe(): RelayObservation {
@@ -469,6 +493,6 @@ export class InferenceRelay {
     for (const tunnel of this.tunnels) tunnel.destroy();
     this.tunnels.clear();
     await new Promise<void>(resolve => { this.server.close(() => { resolve(); }); this.server.closeAllConnections(); });
-    rmSync(this.socketPath, { force: true });
+    if (this.socketPath !== null) rmSync(this.socketPath, { force: true });
   }
 }

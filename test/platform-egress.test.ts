@@ -1,0 +1,152 @@
+/** macos-platform §4.7 / §7 (MAC-225, MAC-704, MAC-710..712, MV-13, MV-25):
+ * egress end to end on one machine -- the guest's pool and its service for
+ * in-guest clients, behind the real guest server, and the host's pool and
+ * per-run relays in front of a real TLS provider. The client plays the
+ * runner: it asks for a placeholder, then speaks HTTP the way an engine does. */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { connect, type Server, type Socket } from "node:net";
+import { request as httpRequest } from "node:http";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { encodeFrame } from "../src/frame.js";
+import { StoreError } from "../src/domain/errors.js";
+import { readLeadingFrame, sendHelloForBytes } from "../src/platform/rpc.js";
+import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
+import { EgressPool, startEgressService } from "../src/platform/guest/egress.js";
+import { EgressHost } from "../src/platform/host/egress.js";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, type HelloParams } from "../src/protocol/host-guest.js";
+import { tlsProvider, type TlsProvider } from "./fixtures/tls-provider.js";
+
+// The provider's certificate is self-signed for the test, as in the relay's own tests.
+const previousTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+test.beforeEach(() => { process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; });
+test.afterEach(() => {
+  if (previousTlsSetting === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting;
+});
+
+const INSTANCE = randomUUID();
+const SECRET = "sk-ant-api03-REALSECRETyyyyyyyyyyyyyyyyyyyyy";
+const identity = (): GuestIdentity => ({ instanceId: INSTANCE, guestImage: "2026.09.1", bootId: randomUUID(),
+  stateSchema: { written: 1, readable: [1] }, capabilities: ["egress"] });
+const egressHello: HelloParams = { channel: "egress", protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL },
+  hostVersion: "1.0.0", installationId: randomUUID(), instanceId: INSTANCE, expectImage: "2026.09.1" };
+const RUN = { society: "demo", actor: "alice", incarnation: 3 };
+
+async function world(t: import("node:test").TestContext) {
+  const dir = mkdtempSync(join(tmpdir(), "oma-egress-"));
+  const provider: TlsProvider = await tlsProvider();
+  const pool = new EgressPool();
+  const serviceSocket = join(dir, "egress.sock");
+  const service: Server = await startEgressService({ socketPath: serviceSocket, pool, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 });
+  const guestSocket = join(dir, "society.sock");
+  const guest: Server = await startGuestServer({ socketPath: guestSocket, identity, bridge: { uid: process.getuid!(), gid: process.getgid!() },
+    frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 2000, requestTimeoutMs: 5000,
+    channels: { egress: { kind: "bytes", serve: socket => { pool.park(socket); } } } });
+  const resolved: string[] = [];
+  const host = new EgressHost({
+    open: async () => {
+      const socket = connect(guestSocket);
+      await new Promise<void>((ok, fail) => { socket.once("connect", ok); socket.once("error", fail); });
+      return sendHelloForBytes(socket, egressHello, PLATFORM_FRAME_BYTES, 5000).then(({ rest }) => ({ socket, rest }));
+    },
+    resolve: async (credentialRef, provider_, model) => {
+      resolved.push(`${credentialRef}:${provider_}/${model}`);
+      if (provider_ !== "anthropic") throw new StoreError("UNSUPPORTED_PROFILE", `the engine does not know ${provider_}/${model}`);
+      return { provider: "anthropic", model: "claude-test", origin: `${provider.origin}/v1`, apiKey: SECRET, headers: {} };
+    },
+    limits: { concurrent: 4, timeoutMs: 5000 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
+  });
+  t.after(async () => {
+    await host.stop();
+    pool.close();
+    await new Promise<void>(r => service.close(() => r()));
+    await new Promise<void>(r => guest.close(() => r()));
+    await provider.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  return { host, pool, provider, serviceSocket, resolved };
+}
+
+async function ask(serviceSocket: string, method: string, params: Record<string, unknown>): Promise<Socket> {
+  const socket = connect(serviceSocket);
+  await new Promise<void>((ok, fail) => { socket.once("connect", ok); socket.once("error", fail); });
+  socket.write(encodeFrame({ v: 1, id: "e1", method, params }));
+  return socket;
+}
+async function placeholder(serviceSocket: string, provider = "anthropic") {
+  const socket = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider, model: "current", run: RUN });
+  const { frame } = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 5000);
+  socket.destroy();
+  return frame;
+}
+/** One engine connection: `egress.open`, then plain HTTP on the same socket. */
+async function post(serviceSocket: string, open: Record<string, unknown>, key: string): Promise<{ status: number; body: string } | "closed"> {
+  const socket = await ask(serviceSocket, "egress.open", open);
+  return new Promise(resolve => {
+    const request = httpRequest({ createConnection: () => socket, method: "POST", path: "/messages",
+      headers: { "x-api-key": key, "content-type": "application/json" } }, response => {
+      let body = "";
+      response.on("data", chunk => { body += chunk; });
+      response.on("end", () => resolve({ status: response.statusCode ?? 0, body }));
+    });
+    request.on("error", () => resolve("closed"));
+    request.end('{"hello":true}');
+  });
+}
+const until = async (condition: () => boolean, what: string): Promise<void> => {
+  for (let i = 0; i < 200 && !condition(); i++) await new Promise(r => setTimeout(r, 10));
+  assert.ok(condition(), what);
+};
+
+test("MAC-710/711: an engine in the guest reaches the provider with the host's key; the guest only ever held a placeholder", async t => {
+  const { host, pool, provider, serviceSocket, resolved } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "two spare connections wait in the guest");
+  const answer = await placeholder(serviceSocket);
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  const result = answer.result as Record<string, string>;
+  assert.notEqual(result.placeholder, SECRET);
+  assert.equal(result.provider, "anthropic");
+  assert.deepEqual(resolved, ["engine-managed:anthropic/current"], "the host resolved it, from its own state");
+  await until(() => pool.size >= 6, "the pool grows by the relay's four for the run");
+
+  const reply = await post(serviceSocket, { placeholderId: result.placeholderId, ...RUN, modelProfile: "default" }, result.placeholder!);
+  assert.deepEqual(reply, { status: 200, body: "ab" });
+  assert.equal(provider.seen.length, 1);
+  assert.equal(provider.seen[0]!.headers["x-api-key"], SECRET, "the key was put in its slot on the host");
+  assert.equal(provider.seen[0]!.path, "/v1/messages", "the origin is the host's");
+});
+
+test("MAC-712: a placeholder the host did not issue, or one used for another run, opens nothing", async t => {
+  const { host, pool, provider, serviceSocket } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const issued = (await placeholder(serviceSocket)).result as Record<string, string>;
+  assert.equal(await post(serviceSocket, { placeholderId: randomUUID(), ...RUN, modelProfile: "default" }, issued.placeholder!), "closed");
+  assert.equal(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, actor: "mallory", modelProfile: "default" }, issued.placeholder!), "closed");
+  await host.forgetBoot();
+  assert.equal(await post(serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "default" }, issued.placeholder!), "closed",
+    "a placeholder of the last boot opens nothing");
+  assert.equal(provider.seen.length, 0);
+});
+
+test("MV-13: the guest names a model; one the host does not know is refused, in words the guest may pass on", async t => {
+  const { host, pool, serviceSocket } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const answer = await placeholder(serviceSocket, "elsewhere");
+  assert.deepEqual(answer.error, { code: "UNSUPPORTED_PROFILE", message: "the engine does not know elsewhere/current", retry: "never" });
+  assert.equal(host.activeRuns, 0);
+});
+
+test("MAC-225: with no connection waiting, an engine's connection is refused at once rather than held", async t => {
+  const { pool, serviceSocket } = await world(t);
+  assert.equal(pool.size, 0);
+  const started = performance.now();
+  assert.equal(await post(serviceSocket, { placeholderId: randomUUID(), ...RUN, modelProfile: "default" }, "sk-ant-api03-PLACEHOLDERxxxxxxxxxxxxxxxx"), "closed");
+  assert.ok(performance.now() - started < 1000, "refused, not waited out");
+});

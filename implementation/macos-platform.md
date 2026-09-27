@@ -386,12 +386,15 @@ prompt·설정·확장은 terminal 안의 TUI가 한다. 그래서 prompt에는 
 egress 연결의 첫 message(guest→host)는 둘 가운데 하나다.
 
 ```
-egress.placeholder { v: 1, credentialRef, provider, model, run: { society, actor, incarnation } }
-  → { placeholderId, placeholder, provider, model, definition }   // 엔진을 띄우기 전, run마다 한 번. MAC-704
+egress.placeholder { v: 1, id, method: "egress.placeholder", params: { credentialRef, provider, model, run: { society, actor, incarnation } } }
+  → { v: 1, id, ok: true, result: { placeholderId, placeholder, provider, model } }   // 엔진을 띄우기 전, run마다 한 번. MAC-704
 
-egress.open { v: 1, placeholderId, society, actor, incarnation, modelProfile }
+egress.open { v: 1, id, method: "egress.open", params: { placeholderId, society, actor, incarnation, modelProfile } }
 ```
 
+두 message는 요청 envelope를 쓴다(§4.2). guest 안의 client(runner, `oma`)는 guesthost의 egress socket(`$XDG_RUNTIME_DIR/oma-egress.sock`)에
+같은 message를 보내고, guesthost가 pool의 연결 하나에 그대로 옮긴다. host는 `egress.open`의 run(society, actor, incarnation)이 그
+자리표시자를 받은 run과 같을 때만 연결한다. MAC-704의 model 정의(`definition`)는 guest의 엔진 설정을 이 경로에 붙일 때 더한다(§12 D-10).
 `egress.placeholder`는 작은 요청과 응답으로 끝나고 연결을 닫는다. 엔진의 provider 설정에는 이 자리표시자가 들어간다(§7.4).
 `egress.open` 뒤에는 엔진이 쓴 HTTP/1.1 byte가 그대로 흐르고, 응답 byte가 반대로 흐른다(INF-005). host의 Relay는 `placeholderId`로
 그 run의 자리표시자와 credential을 찾는다. 자리표시자는 guest가 run의 끝을 알리거나 `bootId`가 바뀌면 버린다. host 쪽 규칙은 §7.4에 있다.
@@ -1131,6 +1134,7 @@ admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 
 | D-4 | INF-001, INF-007, T116 | credential 저장소는 엔진의 agent 디렉터리가 아니라 host Keychain backend다. Principal의 엔진도 자리표시자와 relay를 쓴다 |
 | D-5 | SB-001 | sandbox baseline에 `AF_VSOCK` socket 금지 seccomp를 더한다(Linux 배포본에도 적용한다. 해가 없고 vsock이 있는 host에서 필요하다) |
 | D-7 | WP10, `principal-delivery`, `broker-supervisor`, CLI transport | 경과 시간은 monotonic clock으로 잰다(MAC-650의 세 곳). Linux에도 같은 이유가 있다(시계 조정) |
+| D-10 | runner의 inference 준비, Principal 엔진의 credential(INF-001·INF-007, TUI-004) | (계획 필요) guest에서 runner와 `oma`가 §4.7의 egress를 쓰게 하는 연결. runner는 지금 자기 agent 디렉터리로 key를 해석하고 relay를 직접 연다. guest에서는 host에 자리표시자를 받고, 같은 socket 경로에 egress로 넘기는 forwarder를 연다. Principal 엔진도 같은 길을 탄다(D-4). 어느 배포본인지를 broker·runner까지 알리는 방법(설정 field, unit 인자, 배포 manifest 가운데 하나)은 schema나 unit template을 바꾸므로 계획과 승인이 먼저다 |
 | D-9 | README·PRODUCT의 로그인 문장, INF-001 | (결정 필요) 엔진의 로그인·model 선택 흐름을 어느 표면으로 보이는가. PRODUCT는 "OMA는 인증 화면을 따로 만들지 않는다"와 "엔진은 RPC 모드로만 돈다"를 함께 요구하는데, 지금 Linux에도 이 둘을 함께 만족하는 흐름이 없다. macOS에서는 그 흐름이 host에서 돌고 결과가 host의 엔진 상태에 쓰인다는 것(MAC-704)만 다르다. 한 번 정해 두 배포본에 같이 적용한다 |
 | D-8 | GIT-006·GIT-008, AUTH-001 | (결정 필요) 이미 있는 society에 사람이 가져온 commit을 actor가 쓰게 하는 길. 후보 둘: mirror를 actor의 sandbox에 읽기 전용으로 보여 actor가 기존 `git.submit`으로 게시한다(권한 변화 없음, SB-* 변경), 또는 사람 권한의 게시(`refs/oma/published/<human>/<operation>`, 새 actor 종류와 wire 변경). 결정 전 v1은 MAC-411까지만 한다 |
 

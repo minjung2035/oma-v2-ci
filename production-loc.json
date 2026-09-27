@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 238,
-    "n_lines": 31962,
+    "n_files": 240,
+    "n_lines": 32298,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -48,6 +48,12 @@
     "code": 370,
     "language": "TypeScript"
   },
+  "src/runtime/inference-relay.ts": {
+    "blank": 39,
+    "comment": 109,
+    "code": 350,
+    "language": "TypeScript"
+  },
   "src/store.ts": {
     "blank": 4,
     "comment": 41,
@@ -58,12 +64,6 @@
     "blank": 26,
     "comment": 169,
     "code": 338,
-    "language": "TypeScript"
-  },
-  "src/runtime/inference-relay.ts": {
-    "blank": 36,
-    "comment": 101,
-    "code": 337,
     "language": "TypeScript"
   },
   "src/tui/session.ts": {
@@ -180,6 +180,12 @@
     "code": 223,
     "language": "TypeScript"
   },
+  "src/protocol/host-guest.ts": {
+    "blank": 21,
+    "comment": 44,
+    "code": 219,
+    "language": "TypeScript"
+  },
   "src/git/integration.ts": {
     "blank": 5,
     "comment": 22,
@@ -222,16 +228,16 @@
     "code": 190,
     "language": "TypeScript"
   },
+  "src/platform/rpc.ts": {
+    "blank": 20,
+    "comment": 36,
+    "code": 189,
+    "language": "TypeScript"
+  },
   "src/broker/public-dispatcher.ts": {
     "blank": 3,
     "comment": 15,
     "code": 188,
-    "language": "TypeScript"
-  },
-  "src/platform/rpc.ts": {
-    "blank": 20,
-    "comment": 34,
-    "code": 187,
     "language": "TypeScript"
   },
   "src/frame.ts": {
@@ -280,12 +286,6 @@
     "blank": 1,
     "comment": 15,
     "code": 176,
-    "language": "TypeScript"
-  },
-  "src/protocol/host-guest.ts": {
-    "blank": 20,
-    "comment": 41,
-    "code": 175,
     "language": "TypeScript"
   },
   "src/entry/broker.ts": {
@@ -534,6 +534,12 @@
     "code": 104,
     "language": "SQL"
   },
+  "src/platform/host/egress.ts": {
+    "blank": 12,
+    "comment": 20,
+    "code": 104,
+    "language": "TypeScript"
+  },
   "src/git/integration-policy.ts": {
     "blank": 6,
     "comment": 10,
@@ -634,6 +640,12 @@
     "blank": 5,
     "comment": 8,
     "code": 89,
+    "language": "TypeScript"
+  },
+  "src/platform/guest/egress.ts": {
+    "blank": 8,
+    "comment": 20,
+    "code": 88,
     "language": "TypeScript"
   },
   "src/protocol/receipt-codec.ts": {
@@ -876,6 +888,12 @@
     "code": 55,
     "language": "TypeScript"
   },
+  "src/entry/guesthost.ts": {
+    "blank": 5,
+    "comment": 4,
+    "code": 54,
+    "language": "TypeScript"
+  },
   "src/platform/guest/pty.ts": {
     "blank": 5,
     "comment": 16,
@@ -934,12 +952,6 @@
     "blank": 2,
     "comment": 9,
     "code": 50,
-    "language": "TypeScript"
-  },
-  "src/entry/guesthost.ts": {
-    "blank": 4,
-    "comment": 2,
-    "code": 49,
     "language": "TypeScript"
   },
   "src/lifecycle/create-publication.ts": {
@@ -1435,9 +1447,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1330,
-    "comment": 5374,
-    "code": 25258,
-    "nFiles": 238
+    "blank": 1355,
+    "comment": 5429,
+    "code": 25514,
+    "nFiles": 240
   }
 }
