@@ -11,9 +11,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 통합 검증 트리의 부모 `f3a55b6`, 실행일 2026-09-26. 이 브랜치의 작업을 한 트리로 결박한 결과다. 작업은 consistency plan(WP00–WP32), 재검토와 적대적 검증(AV1–AV8), 엔진 0.87.1(ENG1), 실제 provider 기능 점검(1–14차, AV9–AV31), 설계 수정(DR1–DR13), Priority 0 파일 단위 점검(코드 P0V-01–P0V-24, 문서·식별자 P0D-01–P0D-14)이다. 무엇을 왜 바꿨는지는 결정 기록([consistency-decisions](consistency-decisions.md), [design-revisions](design-revisions.md))과 점검 기록([priority-0-audit](priority-0-audit.md))에 있고, 이 절은 이 트리에서 실제로 돈 것만 적는다. 판정: 로컬·kernel·crash lane은 모두 PASS이고, release는 미승인이다(powercut·provider 자동 lane·CI NOT_RUN, A-008 OPEN). wire·DB schema·receipt 형식은 v1 그대로다. receipt의 adapter revision만 ENG1에서 `oma-pi-rpc-v1@0.87.1`이 되었다. 권한 의미가 바뀐 것은 AV18(기본 Principal 프로필이 이미 위임하던 권한을 보유)과 DR4(`code.integrate`를 host가 직접 위임)다. architecture.md는 N-001이 결박한 bytes 그대로이며, 어긋나는 문장은 design-revisions에 있다.
+브랜치 `refactor/safety-preserving-architecture`, 통합 검증 트리의 부모 `b4b0d29`, 실행일 2026-09-27. 이 브랜치의 작업을 한 트리로 결박한 결과다. 작업은 consistency plan(WP00–WP32), 재검토와 적대적 검증(AV1–AV8), 엔진 0.87.1(ENG1), 실제 provider 기능 점검(1–14차, AV9–AV31), 설계 수정(DR1–DR15), Priority 0 점검(코드 P0V-01–P0V-55, 문서·식별자 P0D-01–P0D-14), 모델만 대본인 시나리오 시험(SCN)이다. 무엇을 왜 바꿨는지는 결정 기록([consistency-decisions](consistency-decisions.md), [design-revisions](design-revisions.md))과 점검 기록([priority-0-audit](priority-0-audit.md))에 있고, 이 절은 이 트리에서 실제로 돈 것만 적는다. 판정: 로컬·kernel·crash lane은 모두 PASS이고, release는 미승인이다(powercut·provider 자동 lane·CI NOT_RUN, A-008 OPEN). wire·DB schema·receipt 형식은 v1 그대로다. receipt의 adapter revision만 ENG1에서 `oma-pi-rpc-v1@0.87.1`이 되었다. 권한 의미가 바뀐 것은 AV18(기본 Principal 프로필이 이미 위임하던 권한을 보유)과 DR4(`code.integrate`를 host가 직접 위임)다. 엔진 이벤트 framing의 예외 하나(DR15: frame보다 큰 올바른 줄은 건너뛰고 알림)가 있다. architecture.md는 N-001이 결박한 bytes 그대로이며, 어긋나는 문장은 design-revisions에 있다.
 
-검증 입력: verification input digest `3b0a6baee6003b0654d923f511770db3cb3dde917bddb9836c61848c0cf3f1b8` (621 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `74da2131d2c26820f9fe093d6e43698fb3fe279b8e729ad47f4a3390e3e79aae` (627 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
@@ -21,8 +21,8 @@
 
 | 검사 | 결과와 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS on engine 0.87.1: fast/durable/property/stress 318/475/34/11, local 1634/1634, package; all fail/cancelled/skipped/todo=0 (`v20-initial-*`, `f3a55b6`). kernel 64/64과 crash 63/63 PASS on the disposable user manager(T38·SEQ-002 필수). durable은 실제 엔진 AV14(엔진 종료를 기다린 뒤 뒷정리)·V27A(영수증 게시·검증까지)·T116·T117·AV16, pty V28B, 설치 closure V31A, AV9–AV30, DR1·DR3·DR4·DR6·DR7 회귀, Priority 0의 DR9–DR13·P0V 회귀(durable requiredNames 22개)를 포함한다. property는 DR9의 V30A(late는 verified, early는 conflicting), fast는 문서 무결성(`check:documents`와 negative control 셋)·V29A·V31B·V32A·AV3·AV5 규칙·AV9·AV12·AV31 wiring·runtime-contracts·T118과 P0-7 gate(`check:boundaries`와 그 negative control)를 포함한다. local은 AV31 신호 시험·DR8, P0V-18(Control Panel exit)·P0V-22·P0V-23·P0V-24 회귀를 포함한다. metadata-bound final rerun required |
-| Review ledger | production 파일 224개: 변경이 닿은 131개는 그 변경의 회귀 시험(DR·P0 카드 포함), 읽고 바꾸지 않은 93개는 그 모듈을 적재하는 시험(`review-notes.json`), 제거 1개(`src/git/context-mirror.ts`, P0V-17). NOT_REVIEWED 0 |
+| type/build/package/local and lanes | PASS on engine 0.87.1: fast/durable/property/stress 320/560/34/12, local 1727/1727, package; all fail/cancelled/skipped/todo=0 (`v21-initial-*`, `b4b0d29`). kernel 64/64과 crash 63/63 PASS on the disposable user manager(T38·SEQ-002 필수). durable은 실제 엔진 AV14(엔진 종료를 기다린 뒤 뒷정리)·V27A(영수증 게시·검증까지)·T116·T117·AV16, pty V28B, 설치 closure V31A, AV9–AV30, DR1·DR3·DR4·DR6·DR7 회귀, Priority 0의 DR9–DR13·P0V 회귀(durable requiredNames 22개), 4차 점검 회귀 `p0-review4`(requiredNames 3개), 모델만 대본인 시나리오 시험 54개(requiredNames 11개)를 포함한다. property는 DR9의 V30A(late는 verified, early는 conflicting), fast는 문서 무결성(`check:documents`와 negative control 셋)·V29A·V31B·V32A·AV3·AV5 규칙·AV9·AV12·AV31 wiring·runtime-contracts·T118과 P0-7 gate(`check:boundaries`와 그 negative control)를 포함한다. local은 AV31 신호 시험·DR8, P0V-18(Control Panel exit)·P0V-22·P0V-23·P0V-24 회귀를 포함한다. metadata-bound final rerun required |
+| Review ledger | production 파일 224개: 변경이 닿은 141개는 그 변경의 회귀 시험(DR·P0V 카드 포함), 읽고 바꾸지 않은 83개는 그 모듈을 적재하는 시험(`review-notes.json`), 제거 1개(`src/git/context-mirror.ts`, P0V-17). NOT_REVIEWED 0. P0V만 붙은 커밋이 바꾼 파일도 변경으로 센다(원장 도구가 P0V ID와 범위를 읽는다) |
 | Release 판정 | release 미승인: 모든 production 파일 검토 완료(NOT_REVIEWED 0), powercut·실제 provider·CI NOT_RUN(V05C·V30B·V32B) — 모두 사용자 승인 필요 |
 | NOT_RUN과 OPEN | provider: 자동 lane NOT_RUN(아래 실제 provider 점검은 수동 기능 증거이며 lane 증거가 아니다); powercut·CI NOT_RUN; A-008 OPEN(아래 "A-008 LOC gate") |
 
@@ -133,16 +133,32 @@
 | Provider run 14 | 수동 기능 점검(lane 증거 아님, 사용자 승인, `/home/dev/oma-evidence/provider/runs/run14-*`, `priority-0-audit.md` "실제 provider 점검(14차)"): DR10 시작 수집 removed 2·kept 0(넣은 흔적만), broker SIGKILL 뒤 batch 두 개가 뒤 시도의 receipt로 정산되고 행 불변(DR9), boundary 8/8(DR11), 재전달 알림, Mail 화면의 일부 읽기 실패 표시(DR13), Config 저장·lost update 거절(DR12), P0V-24 수정 뒤 거절 다음 값 표시와 저장 재확인, 종료 코드 0 |
 | 문서와 식별자(P0D) | fast: `check:documents`(`check:architecture`에 포함)가 이 트리에서 요구 ID 유일성, 수용 행의 위치와 대역(TEST-008), 링크·anchor를 확인하고, negative control 셋(두 조항에 붙은 ID, matrix 밖의 수용 행과 제품 대역의 빈 번호, 없는 파일·제목을 가리키는 링크)이 finding이 된다. 요구 ID INF-005·006의 중복은 INF-009·010으로, 수용 번호 T115–T117·T122의 두 뜻은 T124–T127로 풀었다 |
 
+#### Priority 0 4차 점검(P0V-25–P0V-53, DR14)
+
+| 검사 | 결과와 범위 |
+|---|---|
+| P0V-25–P0V-53 | 외부 전수 검토(N01–N23, F1–F7)를 코드와 대조했다(기준점 `6787211`). 위반 28개를 고쳤고(P0V-25–P0V-43, P0V-45–P0V-53), N21(P0V-44)은 DR14의 의도된 예외, N10은 부합으로 판정했다. 회귀 시험은 `p0-review4`(durable, requiredNames P0V-25·P0V-28·P0V-49)와 각 owner의 시험(storage-reservation, generation-retention, r12-ledger-transitions, principal-endpoint, delivery-notice, audit-cli-submit, cli-request-intent, broker-composition-policy, inference-relay)이며, 위 durable·local 결과가 결박한다 |
+| P0V 4차 대조 | 고친 소스 파일만 기준점으로 되돌려 빌드하면 해당 시험이 모두 실패했다. P0V-26·P0V-42·P0V-43은 되돌린 코드에 새 함수·필드가 없어 실패한 것이라 대조가 약하다. P0V-34의 tunnel 시험은 옛 코드에서도 통과한다(회귀 방지, 재현되지 않음) |
+| DR14 | P0-4를 런타임 자원(FD·자식 프로세스·저장 예약·provider 호출·listener)에도 적용한다. P0V-44의 결과 크기는 v1 수용 한계다(256 KiB frame에서 status agent 1052개, stop의 미해결 operation 6235개; "알려진 한계"). P0V-26의 unit 이름은 UNIT-001 그대로 두고, 다른 소유자의 이름과 겹치면 교체하지 않고 거절한다 |
+
+#### 시나리오 시험(SCN, P0V-54–P0V-55, DR15)
+
+| 검사 | 결과와 범위 |
+|---|---|
+| Scenario layer | 모델만 대본이고(OpenAI 호환 scripted provider를 엔진의 models.json으로 연결) 동봉 엔진 0.87.1·확장·CLI·broker·ledger·Maildir·runner(격리는 bwrap과 생성된 rootfs)는 제품 그대로인 시험 54개: Principal 루프 33개(P01–P10, F01–F17, L01–L04), Resident와 society 14개(R01–R08, S01–S03, L05, L06, X01), 격리 Resident와 Git 7개(C01–C07). 모두 durable lane이며 11개를 이름으로 요구한다(SCN-P03·L01·F06·F08·F13·R01·R05·S01·C01·C02·C04). provider 증거가 아니다(P0-5, INF-001) |
+| P0V-54 | 주소 존재를 params 검사와 라우팅 owner가 따로 판정했다. params 검사는 문법만 보고, 존재는 라우팅 owner가 접수 전에 ADDRESS_NOT_FOUND·AGENT_NOT_READY·AGENT_RETIRED로 답한다(SCN-F04, 옛 코드에서 실패) |
+| P0V-55 / DR15 | frame보다 큰 올바른 엔진 이벤트 한 줄은 다음 LF까지 통째로 건너뛰고 `oma_event_skipped`로 알린다. 형식이 틀린 입력은 여전히 전송을 중독시킨다(SCN-F13·F17·R06, 옛 코드에서 실패; jsonl·pi-rpc 단위 시험) |
+
 #### 중간 실행에서 멈춘 것
 
 | 검사 | 결과와 범위 |
 |---|---|
 | PASS로 바꾸지 않은 실패 | v3(`9f7f551`) kernel 59/60: 실패는 WP25가 고친 `T36`. v4(`6611644`) kernel 61/62: WP25 뒤 갱신되지 않은 `systemd-analyze verify` fixture(`1f6c31e`에서 수정). v11 첫 initial(`0325450`) kernel 62/63: 부하에서 살아 있는 Resident가 CAPABILITY_DENIED(AV6의 발견 경위), 두 번째 initial(`83f1b04`)은 AV7을 고치려 local 도중 중단. v17 final(`140eed8`) durable 474/475: AV14 시험의 뒷정리 경쟁(`4dd80cc`에서 수정). 각각 원인을 고친 뒤 다음 회차가 대체했다 |
-| 중간 증거 | v1–v18의 initial·final 산출물은 결박되지 않은 중간 증거로 `/home/dev/oma-evidence/v1`–`v18`에 있다. 현재 판정은 이 절의 트리만 말한다 |
+| 중간 증거 | v1–v20의 initial·final 산출물은 결박되지 않은 중간 증거로 `/home/dev/oma-evidence/v1`–`v20`에 있다. 현재 판정은 이 절의 트리만 말한다 |
 
-Raw evidence: `/home/dev/oma-evidence/v20/`.
+Raw evidence: `/home/dev/oma-evidence/v21/`.
 
-Final PASS condition: `v20-fast-final`, `v20-durable-final`, `v20-property-final`, `v20-stress-final`, `v20-package-final`, `v20-local-final`, `v20-kernel-final`, `v20-crash-final` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `v21-final-fast`, `v21-final-durable`, `v21-final-property`, `v21-final-stress`, `v21-final-package`, `v21-final-local`, `v21-final-kernel`, `v21-final-crash` must bind one digest with exit 0 and zero unrun tests.
 
 ## 알려진 한계
 
@@ -239,7 +255,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **224 files / 23,763 code LOC**이며 A-008 기준을 넘는다. 이 브랜치의 변경 뒤 LOC/hash와 dependency graph를 다시 만들었지만 review/release gate는 OPEN이다. 기능 작업은 멈추지 않기로 했고 architecture review는 별도 작업이다. 동봉 엔진은 수정하지 않은 upstream 의존이라 LOC-003에 따라 계산 대상이 아니며, 엔진을 수정하면 계산 대상이 된다(TUI-018).
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **224 files / 23,952 code LOC**이며 A-008 기준을 넘는다. 이 브랜치의 변경 뒤 LOC/hash와 dependency graph를 다시 만들었지만 review/release gate는 OPEN이다. 기능 작업은 멈추지 않기로 했고 architecture review는 별도 작업이다. 동봉 엔진은 수정하지 않은 upstream 의존이라 LOC-003에 따라 계산 대상이 아니며, 엔진을 수정하면 계산 대상이 된다(TUI-018).
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 
