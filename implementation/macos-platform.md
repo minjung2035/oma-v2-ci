@@ -8,6 +8,35 @@ macOS에 적용하는 규범 문서가 된다. 그때 할 일은 셋이다. [tra
 구현: `feat/macos-hidden-vm` 브랜치. 이 문서는 그 구현과 맞춘다. 구현에서 설계가 바뀐 곳(pty attach, socket activation과 bridge,
 Node `omahostd`와 Swift helper)은 본문을 그렇게 고쳤다.
 
+### 구현 현황(2026-09-27, `feat/macos-hidden-vm`)
+
+Linux에서 시험한 것(`test/platform-*.test.ts`, `test/vsock-seccomp.test.ts`; 규칙마다 되돌리면 실패하는 변이를 확인했다):
+
+| 영역 | 코드 | 조항 |
+|---|---|---|
+| host↔guest protocol, 연결, hello | `src/protocol/host-guest.ts`, `src/platform/rpc.ts`, `src/platform/product-text.ts` | MAC-210/211/230/231/241/250 |
+| guest 연결 경계 | `platform/guest/bridge/oma-vsock-bridge.c`, `platform/guest/systemd/*`, `platform/guest/sysusers.d/oma.conf`, `src/platform/guest/server.ts` | MAC-202(CID와 `SO_PEERCRED`) |
+| guestctl | `src/platform/guest/control.ts`, `linux-system.ts`, `src/entry/guestctl.ts` | §4.4, MAC-320, MAC-620 |
+| 첫 설치 | `src/platform/guest/provision.ts`, `src/entry/guest-provision.ts`, `oma-provision.service` | MAC-303 |
+| terminal session과 guesthost | `src/platform/guest/{pty,session,host,systemd-launcher}.ts`, `src/entry/{guest-session,guesthost}.ts`, TUI의 Ctrl-L | §4.5, §4.6, MAC-220..222, MAC-412 |
+| egress | `src/platform/guest/egress.ts`, `src/platform/host/egress.ts`, `InferenceRelay.detached` | MAC-225, MAC-710..712 |
+| request 원장과 stream | `src/platform/guest/{requests,stream}.ts` | MAC-240/241, §4.8, P0-7 등록 |
+| project sync | `src/platform/guest/project.ts`, `src/platform/host/project.ts` | §6, MAC-404, MAC-411/412, MAC-420 |
+| host 수명과 조립 | `src/platform/host/{guest-link,lifecycle,service,record}.ts` | MAC-301, MAC-320, MAC-330, MAC-331, MAC-601 |
+| Host API와 Mac 명령 | `src/protocol/host-api.ts`, `src/platform/host/{host-api,peer,attach-client}.ts`, `src/entry/oma-mac.ts` | MAC-020/021/222/251 |
+| credential | `src/platform/host/{keychain,resolver}.ts`, `resolveEngineAuth`의 선택 저장소 | MAC-701/702/704 |
+| image | `src/platform/host/image.ts`, `scripts/platform/sign-image.mjs` | MAC-601, MAC-611 |
+| VM helper 규약(Node 쪽) | `src/platform/host/vz-driver.ts` | §2.1, §9.3 |
+| 백업 | `src/platform/host/{snapshot,archive-crypto}.ts`, `src/platform/guest/archive.ts` | REC-005, MAC-619..623, MAC-661 |
+| 시계 | `principal-delivery`, `broker-supervisor`, CLI transport | MAC-650(D-7) |
+| sandbox filter | `src/runtime/vsock-seccomp.ts` | MAC-205(생성기만) |
+
+**NOT_BUILT**(Mac에서만 빌드·시험한다): `platform/host/vmhelper`(Swift), `src/entry/omahostd.ts`와 `src/entry/oma-mac.ts`의 실제 실행.
+
+아직 없는 것: OMA.app(SwiftUI), guest image build(mkosi, kernel 설정), archive 복원(R3)과 복구 모드(R1), 진단 묶음(`diag.collect`),
+`society.status`, 로그인 흐름(D-9), guest의 runner와 Principal 엔진을 egress에 잇는 것(D-10), sandbox에 filter를 붙이는 것(D-5),
+가져온 commit을 actor가 쓰는 길(D-8), `platform` lane의 등록(지금은 로컬 시험 전체에 들어 있다), mac-* lane.
+
 조항 ID: 요구는 `MAC-###`, 검증 oracle은 `MV-##`다. 기존 spec 조항은 그 ID로 인용한다. 이 문서는 기존 조항을 바꾸지 않는다.
 바꿔야 하는 것은 §12에 모았다.
 
