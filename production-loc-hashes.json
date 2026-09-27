@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "712dad1053b8104d520dd472eb5dd4c9f3fd69fd316e7ea570ef0085fb25e52e",
-  "report": "59d060b2c145632f04b823d395f762b4a4f2c68f2dc0f239c2f06dc258fd4596",
+  "manifest": "d07f0356eab4eb35485dc6e7e0160b84863db9b0aef3261d195ef1de3e5a4d0b",
+  "report": "15018990b2f0d9ce73a296bd365fa9f51f76eca5cf6dbd4a21891e10d9f8be76",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -393,7 +393,7 @@
     },
     {
       "path": "src/git/context-repository.ts",
-      "sha256": "d291833f354a317c1dfd9754174a39134eda254a97184bf0c17c4d359c1f7bb2"
+      "sha256": "b580436512d6f975da9fec7092a231b87cdb9a291ae07ead9c459efc24b97ee7"
     },
     {
       "path": "src/git/context.ts",
@@ -421,7 +421,7 @@
     },
     {
       "path": "src/git/quarantine.ts",
-      "sha256": "2756c916945cabd4685ef0197d082bccab67415908128c1d784a171ab762a510"
+      "sha256": "a99677ff7bf2ccad2d6d4aaf7f0720345f5b1867c264972bb7d29fd45d5fc9d8"
     },
     {
       "path": "src/git/submit.ts",
@@ -469,7 +469,7 @@
     },
     {
       "path": "src/lifecycle/workspace.ts",
-      "sha256": "7a78def8fb785b570a624c07dafe91fc477203a9c1096093f989fd302f989924"
+      "sha256": "43ab91a613076c964e6daf32becc4941e889e3d8e42eecb72b1c6ca3c025f26e"
     },
     {
       "path": "src/mail.ts",
@@ -669,7 +669,7 @@
     },
     {
       "path": "src/process/policies.ts",
-      "sha256": "1e6c81a801eba96b2764e7cb56aed66af2681648a4d87af0c1c5c4492f588e44"
+      "sha256": "eaa147f56720a2cdef03d736ecdbf621280a96d4321218c89994e559bb4fcc0a"
     },
     {
       "path": "src/process/preparation.ts",
@@ -677,7 +677,7 @@
     },
     {
       "path": "src/process/run.ts",
-      "sha256": "f58a8785ee743139940b7f10802b3a167c819cf3d70875f7b08bc723a6c72471"
+      "sha256": "40a6bb006f714486a0bfad1aff437c62f089f6708de57a6b0c59aaca3e50bc93"
     },
     {
       "path": "src/protocol/batch-view.ts",
@@ -757,7 +757,7 @@
     },
     {
       "path": "src/reconcile/preaccept.ts",
-      "sha256": "ccc655ab3aa08cc157e83c321aa6bfb50d2c3d48a97cc638e73d9853f5b141e6"
+      "sha256": "595e1b7e8fe4a0d98f37b72197292bb0197b287f2ff3bfcc58e63fb9ea5e7097"
     },
     {
       "path": "src/request-cache.ts",
@@ -829,7 +829,7 @@
     },
     {
       "path": "src/runtime/provision.ts",
-      "sha256": "fa3f1eaff1af3d2e4a1e181af41be86ee0792df4b77ab9dcea718c58aec5c945"
+      "sha256": "28726e048e681cd02737b6b547ccf16a8bc65de58ff0c0aa639bb61a6d380c4e"
     },
     {
       "path": "src/runtime/resident-rootfs.ts",
@@ -873,7 +873,7 @@
     },
     {
       "path": "src/storage/context-stream.ts",
-      "sha256": "d4d92fd4f7dc9c60d6c047ea8d447d1b38fd84cd52f381d7e6d8f30a92e62ef7"
+      "sha256": "6ce1536db45f5f2c1ebafe83c0ddae262d88b9944438bd11f9250ea4711e4fe6"
     },
     {
       "path": "src/storage/delivery-receipt.ts",
@@ -950,6 +950,10 @@
     {
       "path": "src/storage/transitions.ts",
       "sha256": "543c518712e5b4139c8d503f317b2d2419accfc7432ef80990f418ad8eaaf1c2"
+    },
+    {
+      "path": "src/storage/tree-lease.ts",
+      "sha256": "7f008ffe54b8f628f67c4004169d87ef3b955a70c67f841db0d7ebe707a2f57b"
     },
     {
       "path": "src/store.ts",

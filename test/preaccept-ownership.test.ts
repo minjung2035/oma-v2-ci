@@ -318,7 +318,12 @@ function contextOnlyFixture() {
 type ContextOnlyFixture = ReturnType<typeof contextOnlyFixture>;
 function contextStaging(root: string): string[] {
   const staging = join(root, "staging");
-  return fs.existsSync(staging) ? fs.readdirSync(staging).filter((name) => name.startsWith("context-")).sort() : [];
+  return fs.existsSync(staging) ? fs.readdirSync(staging).filter((name) => name.startsWith("context-") && !name.endsWith(".lease")).sort() : [];
+}
+/** R6-04: the leases beside the staged trees. */
+function contextLeases(root: string): string[] {
+  const staging = join(root, "staging");
+  return fs.existsSync(staging) ? fs.readdirSync(staging).filter((name) => name.startsWith("context-") && name.endsWith(".lease")).sort() : [];
 }
 function contextOperations(root: string): string[] {
   const rows = readDiagnosticSnapshot(root).tables.operations as readonly { id: string; kind: string }[];
@@ -483,6 +488,7 @@ test("V18A: an unavailable acceptance observation after refusal retains the tree
     t.mock.restoreAll();
     assert.deepEqual(contextOperations(f.root), []);
     assert.equal(contextStaging(f.root).length, 1, "an undecidable staged tree is retained");
+    assert.deepEqual(contextLeases(f.root), contextStaging(f.root).map(name => `${name}.lease`), "with its lease, by which the next start decides (R6-04)");
     const named = expectedObjects(f.root);
     assert.equal(objectsOf(f.root).filter((name) => !named.includes(name)).length, 1, "an undecidable mail object is retained");
   } finally { f.close(); }
@@ -503,6 +509,7 @@ test("V18A: native preparation uncertainty retains only the tree that preparatio
     assert.equal(executor.quiescence, "unknown");
     const retained = contextStaging(f.root);
     assert.equal(retained.length, 1, "a tree a non-quiescent preparation may use is retained");
+    assert.deepEqual(contextLeases(f.root), retained.map(name => `${name}.lease`), "with its lease, by which the next start decides (R6-04)");
     // A later request is refused before any native work touches its own tree.
     await assert.rejects(f.publish("context-after-uncertain"), { code: "REF_STATE_UNKNOWN" });
     assert.deepEqual(contextStaging(f.root), retained);

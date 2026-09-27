@@ -505,7 +505,27 @@
   },
   {
    "owner": "src/lifecycle/workspace.ts#WorkspaceCoordinator.prepare",
-   "fact": "a created agent's published workspace",
+   "fact": "a created agent's published workspace; after publication the clone's lease is collected (R6-04)",
+   "tests": [
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/M-004 primitive SIGKILL at",
+     "points": [
+      "create-workspace"
+     ]
+    },
+    {
+     "file": "test/crash-boundaries.test.ts",
+     "title": "T39/LIFE-009/M-004 primitive SIGKILL at",
+     "points": [
+      "boot-workspace"
+     ]
+    }
+   ]
+  },
+  {
+   "owner": "src/lifecycle/workspace.ts#WorkspaceCoordinator.prepareLeased",
+   "fact": "a created agent's published workspace (the publication, inside the preparation that holds the clone's lease, R6-04)",
    "tests": [
     {
      "file": "test/crash-boundaries.test.ts",
@@ -768,6 +788,16 @@
     {
      "file": "test/priority-0.test.ts",
      "title": "P0-7: a crash while binding a society to its project leaves no binding or the whole one"
+    }
+   ]
+  },
+  {
+   "owner": "src/runtime/provision.ts#collectRepositoryStaging",
+   "fact": "a repository staging a crashed start left is removed, with its lease, only when the lease proves nothing still writes it (R6-04)",
+   "tests": [
+    {
+     "file": "test/p0-review6.test.ts",
+     "title": "P0V-77 / R6-04: the next provision collects a crashed repository staging only when its lease is free"
     }
    ]
   },

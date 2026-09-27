@@ -235,6 +235,7 @@ src/storage/staged-tree.ts
 src/storage/submit-spool.ts
 src/storage/transaction.ts
 src/storage/transitions.ts
+src/storage/tree-lease.ts
 src/store.ts
 src/tui/app.ts
 src/tui/dashboard.ts

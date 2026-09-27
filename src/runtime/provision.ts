@@ -39,7 +39,8 @@ import { isValidSocietyName } from "../domain/identifiers.js";
 import { modelWorkspaceFor } from "../domain/derived.js";
 import { runGitText } from "../process/policies.js";
 import { ensureDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
-import { ensureDirectory, removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
+import { ensureDirectory, removeOwnedFile } from "../storage/directory.js";
+import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
 import { entryAt, openRegularBeneath, withinDirectory } from "../storage/contained-fs.js";
 import { hostSystemLayout, prepareResidentRootfs } from "./resident-rootfs.js";
 import { projectGitPathAt } from "../storage/paths.js";
@@ -119,8 +120,8 @@ function projectHead(projectDir: string): { oid: string; format: string } | { no
   return { oid: head.stdout.trim(), format: format.stdout.trim() };
 }
 
-function git(argv: readonly string[], gitDir?: string): string {
-  const result = runGitText(argv, gitDir === undefined ? {} : { gitDir });
+function git(argv: readonly string[], gitDir?: string, inheritedFds: readonly number[] = []): string {
+  const result = runGitText(argv, { ...(gitDir === undefined ? {} : { gitDir }), inheritedFds });
   if (result.status !== 0)
     throw new StoreError("STORE_CORRUPT",
       `society provisioning could not run git ${argv[0] ?? ""}: ${result.stderr.trim().slice(0, 200)}`);
@@ -146,8 +147,11 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
   ensureDirectory(parent, 0o700);
   const stagingName = `.${basename(path)}.staging.${randomBytes(8).toString("hex")}`;
   const staging = join(parent, stagingName);
+  // R6-04: the lease first, held by the git that makes the tree, so a start
+  // after a crash can tell a finished staging from one still being written.
+  const lease = TreeLease.take(staging);
   try {
-    git(["init", "--quiet", "--bare", "--initial-branch=main", `--object-format=${format}`, staging]);
+    git(["init", "--quiet", "--bare", "--initial-branch=main", `--object-format=${format}`, staging], undefined, [lease.descriptor]);
     // WP16.04: everything the final name will expose is durable before it is
     // exposed, and the name itself is durable before this reports success.
     fsyncTree(staging);
@@ -163,8 +167,10 @@ function ensureBareRepository(path: string, format = "sha1"): boolean {
     return true;
   } finally {
     // Nothing is left behind on either path: after a successful rename there
-    // is no staging directory to remove, and after a lost race there is.
-    removeOwnedTree(staging);
+    // is no staging directory to remove, and after a lost race there is. The
+    // lease goes with it once nothing holds it.
+    lease.release();
+    collectLeasedTree(staging);
   }
 }
 
@@ -234,6 +240,7 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   // P0-4: a binding publication that died before or after its link left its
   // private temporary; only the tenure holder writes one, and it runs this.
   collectBindingTemporaries(stateRoot);
+  collectRepositoryStaging(stateRoot);
   const created: string[] = [];
   for (const relative of [".", ...OWNED_DIRECTORIES]) {
     const path = relative === "." ? stateRoot : join(stateRoot, relative);
@@ -384,6 +391,21 @@ const BINDING_TEMPORARY = /^\.project-binding\.json\.[0-9a-f]{16}\.tmp$/;
 /** The temporaries `publishProjectBinding` names, left by a publication that
  * did not finish. They are never a binding (`stateRootHasSociety` and the
  * observer ignore them); the process holding the society's tenure removes them. */
+/** R6-04, P0-4: a repository staging a crashed start left, with its lease.
+ * Removed when its lease proves nothing still writes it; kept otherwise --
+ * including one made before leases, of which nothing is proven. */
+const REPOSITORY_STAGING = /^\.[^/]+\.staging\.[0-9a-f]{16}$/;
+export function collectRepositoryStaging(stateRoot: string): { readonly removed: readonly string[]; readonly kept: readonly string[] } {
+  const repos = join(stateRoot, "repos");
+  let entries: string[];
+  try { entries = readdirSync(repos); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return { removed: [], kept: [] }; throw error; }
+  const trees = new Set(entries.map(entry => entry.endsWith(".lease") ? entry.slice(0, -".lease".length) : entry).filter(entry => REPOSITORY_STAGING.test(entry)));
+  const removed: string[] = []; const kept: string[] = [];
+  for (const tree of [...trees].sort()) (collectLeasedTree(join(repos, tree)).kind === "quiescent" ? removed : kept).push(tree);
+  return { removed, kept };
+}
+
 export function collectBindingTemporaries(stateRoot: string): readonly string[] {
   let entries: string[];
   try { entries = readdirSync(stateRoot); }

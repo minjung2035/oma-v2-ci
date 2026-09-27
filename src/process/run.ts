@@ -29,8 +29,9 @@ function classify(result: NativeSyncResult, limited: boolean): ProcessObservatio
 /** Bounded synchronous commands remain available for the final authority/CAS
  * section. This direct-child result is not proof that an entire cgroup is dead.
  */
-export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSync): ProcessObservation {
+export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSync, inheritedFds: readonly number[] = []): ProcessObservation {
   validateCommand(spec);
+  if (inheritedFds.some(fd => !Number.isInteger(fd) || fd < 0)) throw new TypeError("invalid inherited descriptor");
   const started = performance.now();
   let result: NativeSyncResult;
   try {
@@ -40,7 +41,7 @@ export function runProcessSync(spec: CommandSpec, invoke: SyncInvoker = spawnSyn
       input: spec.input === undefined ? undefined : Buffer.from(spec.input),
       encoding: "buffer", shell: false, timeout: spec.timeoutMs, killSignal: "SIGKILL",
       // Preserve the existing native cap, not the sum of two legacy caps.
-      maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: Math.max(1, spec.stdoutBytes, spec.stderrBytes), stdio: ["pipe", "pipe", "pipe", ...inheritedFds],
     });
   } catch (error) {
     return { kind: "spawn-failed", exitCode: null, signal: null, errorCode: errorCode(error), elapsedMs: performance.now() - started,

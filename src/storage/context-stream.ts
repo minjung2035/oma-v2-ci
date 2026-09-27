@@ -9,7 +9,8 @@ import type { BlobDescriptor, ContextEntry } from "../../implementation/contract
 import { StoreError } from "../domain/errors.js";
 import { contextEntriesCheck, ContextTextValidator } from "../domain/context-policy.js";
 import { contextStagingPathAt } from "./paths.js";
-import { assertDirectory, removeOwnedTree } from "./directory.js";
+import { assertDirectory } from "./directory.js";
+import { TreeLease, collectLeasedTree } from "./tree-lease.js";
 import { entryAt, openBeneath, openDirectory, closeEvery } from "./contained-fs.js";
 import { ensureDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
 import type { PreacceptOwner } from "./preaccept-artifact.js";
@@ -25,10 +26,18 @@ export class PreparedContextTree implements PreacceptOwner {
     readonly path: string,
     private readonly root: string,
     private readonly identity: Readonly<{ dev: number; ino: number }>,
+    /** R6-04: held while this process writes the tree; released after. */
+    private readonly lease: TreeLease,
   ) {}
+  /** This process has finished writing the tree; a native preparation that
+   * works in it later takes the lease again for its children. */
+  releaseWriting(): void { this.lease.release(); }
   retainForOperation(): void {
     if (this.owner === "released") throw new StoreError("INTERNAL_ERROR", "released context tree cannot become accepted");
     this.owner = "accepted";
+    // Its lease stays beside it: a kept tree whose outcome turns out unknown
+    // is decided by it at the next start (R6-04).
+    this.lease.release();
   }
   discardUnaccepted(): void {
     if (this.owner !== "preaccept") return;
@@ -36,19 +45,26 @@ export class PreparedContextTree implements PreacceptOwner {
     if (!current) { this.owner = "released"; return; }
     if (!current.isDirectory() || current.dev !== this.identity.dev || current.ino !== this.identity.ino)
       throw new StoreError("REF_STATE_UNKNOWN", "prepared context root identity changed; cleanup is unconfirmed");
-    removeOwnedTree(this.root);
+    this.lease.release();
+    // A native preparation's children may still be working in it: only a
+    // lease nobody holds lets the tree go (R6-04).
+    const found = collectLeasedTree(this.root);
+    if (found.kind !== "quiescent") throw new StoreError("REF_STATE_UNKNOWN", "a native preparation may still work in the context tree; it is kept");
     this.owner = "released";
   }
 }
 
 /** An existing root belongs to another operation and is never adopted. */
 function acquireStagingRoot(staging: string, tree: string): PreparedContextTree {
+  // R6-04: the lease first, then the tree.
+  const lease = TreeLease.take(staging);
   const parent = openDirectory(dirname(staging));
   try {
     mkdirSync(entryAt(parent, basename(staging)), { mode: 0o700 });
     const pinned = lstatSync(entryAt(parent, basename(staging)));
-    return new PreparedContextTree(tree, staging, { dev: pinned.dev, ino: pinned.ino });
-  } finally { closeSync(parent); }
+    return new PreparedContextTree(tree, staging, { dev: pinned.dev, ino: pinned.ino }, lease);
+  } catch (error) { lease.release(); throw error; }
+  finally { closeSync(parent); }
 }
 
 /** A failed preparation removes its own root only after every exact file it
@@ -57,6 +73,7 @@ function discardFailedPreparation(prepared: PreparedContextTree, failures: unkno
   if (failures.length === 1) {
     try { prepared.discardUnaccepted(); } catch (failure) { failures.push(failure); }
   }
+  prepared.releaseWriting();
   return failures.length > 1 ? new AggregateError(failures, "context preparation and owned cleanup failed") : failures[0];
 }
 
@@ -189,5 +206,5 @@ export async function prepareContextStream(
       } catch (failure) { failures.push(failure); }
     }
     throw discardFailedPreparation(prepared, failures);
-  } finally { closeEvery(state.active?.fd, treeFd); }
+  } finally { try { closeEvery(state.active?.fd, treeFd); } finally { prepared.releaseWriting(); } }
 }

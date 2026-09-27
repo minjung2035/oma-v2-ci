@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import type { BlobDescriptor, ContextEntry } from "../implementation/contracts.js";
 import { generateOperationId } from "../src/ids.js";
 import { ContextTextValidator, contextFileCheck } from "../src/domain/context-policy.js";
+import { TreeLease } from "../src/storage/tree-lease.js";
 import { PreparedContextTree, prepareContextStream } from "../src/storage/context-stream.js";
 import { contextStagingPathAt } from "../src/storage/paths.js";
 
@@ -144,7 +145,7 @@ test("V18A: a staging root replaced after preparation is kept, and its cleanup i
     const root = join(base, "staging-op");
     mkdirSync(root, { mode: 0o700 });
     const pinned = lstatSync(root);
-    const prepared = new PreparedContextTree(join(root, "tree"), root, { dev: pinned.dev, ino: pinned.ino });
+    const prepared = new PreparedContextTree(join(root, "tree"), root, { dev: pinned.dev, ino: pinned.ino }, TreeLease.take(root));
     // Something else now stands where the prepared root was.
     renameSync(root, join(base, "moved-away"));
     mkdirSync(root, { mode: 0o700 });

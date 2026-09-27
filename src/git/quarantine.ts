@@ -4,7 +4,8 @@
 import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { ensureDirectory, removeOwnedTree } from "../storage/directory.js";
+import { ensureDirectory } from "../storage/directory.js";
+import { TreeLease, collectLeasedTree } from "../storage/tree-lease.js";
 import { entryAt, withinDirectory } from "../storage/contained-fs.js";
 import type { GitPaths } from "./paths.js";
 import { StoreError } from "../domain/errors.js";
@@ -88,8 +89,12 @@ export class QuarantineImporter {
     const staging = join(this.paths.stateRoot, "staging");
     ensureDirectory(staging);
     const root = join(staging, `quarantine-ns-${randomUUID()}`);
-    withinDirectory(root, (parent, name) => mkdirSync(entryAt(parent, name), { mode: 0o700 }));
+    // R6-04: the lease first, then the tree; every process of the namespace
+    // command holds it, so a later start can prove they are all gone.
+    const lease = TreeLease.take(root);
     let settledNamespaceCommand = false;
+    try { withinDirectory(root, (parent, name) => mkdirSync(entryAt(parent, name), { mode: 0o700 })); }
+    catch (error) { lease.release(); throw error; }
     try {
       const result = await this.executor.run({ executable: "/usr/bin/prlimit", argv: [
         `--cpu=${limits.cpuSeconds}`, `--as=${limits.memoryBytes}`, `--nproc=${limits.tasks}`, "--",
@@ -104,7 +109,7 @@ export class QuarantineImporter {
         "/usr/bin/unshare", "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork",
         "--kill-child=SIGKILL", "--mount-proc", "/bin/sh", "-c", SCRIPT, "oma-quarantine",
         "/proc/self/fd/3", this.paths.projectGit, candidate, exportRef, String(this.paths.quarantineTmpBytes), root, ...prerequisites,
-      ], env: GIT_ENV, timeoutMs, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 }, undefined, [bundleFd]);
+      ], env: GIT_ENV, timeoutMs, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024 }, undefined, [bundleFd, lease.descriptor]);
       if (result.kind !== "exited") throw new StoreError("REF_STATE_UNKNOWN", `quarantine import outcome is ${result.kind}`);
       settledNamespaceCommand = true;
       let stdout: string; let stderr: string;
@@ -119,8 +124,10 @@ export class QuarantineImporter {
       if (stdout !== `${candidate}\n` || !this.canonicalHas(candidate)) throw new StoreError("BUNDLE_INVALID", "bundle candidate was not imported exactly");
     } finally {
       // No abort/disconnect cleanup of accepted bundle evidence. Unknown native
-      // quiescence retains the namespace staging and blocks this executor owner.
-      if (settledNamespaceCommand) removeOwnedTree(root);
+      // quiescence retains the namespace staging and blocks this executor owner;
+      // its lease tells the next start when the namespace is gone.
+      lease.release();
+      if (settledNamespaceCommand) collectLeasedTree(root);
     }
   }
 }

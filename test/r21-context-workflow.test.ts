@@ -202,7 +202,8 @@ test("V18B: accepted context evidence outlives its RPC connection; same-key retr
     assert.equal(accepted.state, "pending");
     assert.equal(f.command(["--git-dir", f.contextGit, "for-each-ref", "--format=%(refname)"]), "", "no canonical effect ran");
     // Connection cleanup released only its own spool; the accepted tree and object remain exact.
-    assert.deepEqual(readdirSync(join(f.root, "staging")).filter(name => name !== "mail-objects"), [basename(accepted.plan.stagingPath)]);
+    assert.deepEqual(readdirSync(join(f.root, "staging")).filter(name => name !== "mail-objects"),
+      [basename(accepted.plan.stagingPath), `${basename(accepted.plan.stagingPath)}.lease`], "the accepted tree, and the lease beside it (R6-04)");
     for (const part of ["tree", "commit-work"]) assert.deepEqual(readFileSync(join(accepted.plan.stagingPath, part, "GOAL.md")), first.bytes);
     const object = readFileSync(f.mail.objectPath(accepted.plan.message.id));
     assert.equal(digest(object), accepted.plan.message.sha256);
@@ -221,7 +222,8 @@ test("V18B: accepted context evidence outlives its RPC connection; same-key retr
     await Promise.all(retried.tasks);
     assert.equal(reads, 0, "a same-key retry reads no new payload");
     assert.deepEqual(receipts.map(receipt => [receipt.operation, receipt.state]), [[accepted.id, "pending"]]);
-    assert.deepEqual(readdirSync(join(f.root, "staging")).filter(name => name !== "mail-objects"), [basename(accepted.plan.stagingPath)]);
+    assert.deepEqual(readdirSync(join(f.root, "staging")).filter(name => name !== "mail-objects"),
+      [basename(accepted.plan.stagingPath), `${basename(accepted.plan.stagingPath)}.lease`], "the accepted tree, and the lease beside it (R6-04)");
     assert.deepEqual(readdirSync(join(f.root, "mail/objects")), [`${accepted.plan.message.id}.eml`]);
 
     await f.git.reconcile(accepted.id);

@@ -27,7 +27,7 @@ export const PRIMITIVES = Object.freeze({
   publishDeliveryReceipt: "receipt",
   commitManagedGeneration: "config-commit", commitInlineConfiguration: "config-commit", createInlineConfiguration: "config-commit",
   compareAndSwapCanonicalRef: "git-cas", casRef: "git-cas", compareAndSwap: "git-cas", publishRef: "git-cas",
-  removeOwnedTree: "collection", removeOwnedFile: "collection",
+  removeOwnedTree: "collection", removeOwnedFile: "collection", collectLeasedTree: "collection",
 });
 /** The primitives' own modules: their internal calls are the mechanism, not boundaries. */
 export const PRIMITIVE_MODULES = Object.freeze([
@@ -35,7 +35,7 @@ export const PRIMITIVE_MODULES = Object.freeze([
   "src/storage/operation-journal.ts", "src/storage/durable-fs.ts", "src/storage/immutable-file.ts", "src/storage/staged-tree.ts",
   "src/storage/contained-fs.ts", "src/storage/directory.ts", "src/storage/delivery-receipt.ts", "src/storage/context-snapshot.ts",
   "src/storage/submit-spool.ts", "src/storage/context-stream.ts", "src/storage/batch-view.ts", "src/config/generations.ts",
-  "src/git/canonical-command.ts",
+  "src/git/canonical-command.ts", "src/storage/tree-lease.ts",
 ]);
 
 function calleeName(expression) {

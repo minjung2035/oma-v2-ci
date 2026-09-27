@@ -21,6 +21,8 @@ export function requireTextExit(result: ProcessObservation, command: string): Te
 export interface GitTextOptions {
   readonly gitDir?: string; readonly cwd?: string; readonly input?: string;
   readonly env?: Readonly<NodeJS.ProcessEnv>; readonly timeout?: number; readonly maxBuffer?: number;
+  /** Descriptors the child keeps, from 3 on: a preparation lease (R6-04). */
+  readonly inheritedFds?: readonly number[];
 }
 export function runGitText(argv: readonly string[], options: GitTextOptions = {}): TextExit {
   const budget = options.maxBuffer ?? 32 * 1024 * 1024;
@@ -30,7 +32,7 @@ export function runGitText(argv: readonly string[], options: GitTextOptions = {}
     ...(options.input === undefined ? {} : { input: options.input }),
     env: { ...GIT_ENV, ...options.env },
     timeoutMs: options.timeout ?? 30000, stdoutBytes: budget, stderrBytes: budget,
-  }), "git");
+  }, undefined, options.inheritedFds ?? []), "git");
 }
 /** Existing lifecycle call shape, constrained to its named executable policy. */
 export function runWorkspaceGit(command: string, argv: readonly string[], options: SpawnSyncOptionsWithStringEncoding): TextExit {

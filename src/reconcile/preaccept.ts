@@ -9,17 +9,19 @@
  * request is admitted: no request of this broker can still be making one, and
  * the broker that made the others is gone -- its lock is this one's.
  *
- * Only what the broker writes itself is collected. Staging a child process
- * worked in -- a quarantine namespace, a context commit work tree, a workspace
- * clone -- is kept: the broker lock does not reach a child, so its death is not
- * proven by this broker's start (P0-5), and such a tree is reported, not
- * removed. */
+ * What the broker writes itself is collected. Staging a child process
+ * worked in -- a quarantine namespace, a context commit work tree -- is
+ * collected only when its lease proves every child is gone (R6-04): the broker
+ * lock does not reach a child, so this broker's start proves nothing of its
+ * death (P0-5), but a lease every child inherited does. One whose lease is
+ * held, or that has none (made before leases), is reported and kept. */
 import { lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { OperationRow, Store } from "../store.js";
 import { parseMessageId, parseOperationId } from "../domain/identifiers.js";
 import { submitBundlePathAt } from "../storage/paths.js";
 import { removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
+import { collectLeasedTree } from "../storage/tree-lease.js";
 import { namedMessage } from "../mail/materializer.js";
 
 export interface PreacceptCollection {
@@ -42,6 +44,12 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     if (tree) removeOwnedTree(path); else removeOwnedFile(path);
     removed.push(path);
   };
+  const leased = (path: string, what: string): void => {
+    const found = collectLeasedTree(path);
+    if (found.kind === "quiescent") { removed.push(path); return; }
+    kept.push({ path, reason: found.kind === "active" ? `${what}; a process that works in it still holds its lease`
+      : `${what}; its quiescence is not proven (${found.reason})` });
+  };
   // Frozen message objects: the plan that owns one names its id.
   const objects = join(stateRoot, "mail", "objects");
   for (const name of names(objects)) {
@@ -57,9 +65,19 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
   for (const directory of [join(stateRoot, "mail", "archive", "cur"), ...names(join(stateRoot, "mail", "inboxes"))
     .flatMap(actor => ["new", "cur"].map(folder => join(stateRoot, "mail", "inboxes", actor, folder)))])
     for (const name of names(directory)) if (PUBLICATION_TEMPORARY.test(name)) remove(join(directory, name));
-  // Staging: in-process names are collected, a child's are kept.
+  // Staging: in-process names are collected, a child's by its lease.
   const staging = join(stateRoot, "staging");
-  for (const name of names(staging)) {
+  const present = new Set(names(staging));
+  for (const name of present) {
+    // A lease is decided with its tree; one whose tree is gone is collected
+    // the same way (the tree's absence costs nothing to "remove").
+    if (name.endsWith(".lease")) {
+      const tree = name.slice(0, -".lease".length);
+      if (present.has(tree)) continue;
+      const context = tree.startsWith("context-") ? parseOperationId(tree.slice("context-".length)) : null;
+      if (tree.startsWith("quarantine-ns-") || (context !== null && accepted(context) === null)) leased(join(staging, tree), "a preparation lease without its tree");
+      continue;
+    }
     const path = join(staging, name);
     if (name === "mail-objects" && lstatSync(path).isDirectory()) {
       for (const temporary of names(path)) if (temporary.endsWith(".tmp")) remove(join(path, temporary));
@@ -75,11 +93,10 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     }
     const context = name.startsWith("context-") ? parseOperationId(name.slice("context-".length)) : null;
     if (context !== null) {
-      if (accepted(context) === null)
-        kept.push({ path, reason: "unaccepted, but a native preparation may have worked in it; its quiescence is not proven" });
+      if (accepted(context) === null) leased(path, "unaccepted, and a native preparation may have worked in it");
       continue;
     }
-    if (name.startsWith("quarantine-ns-")) { kept.push({ path, reason: "a quarantine namespace; its commands' quiescence is not proven" }); continue; }
+    if (name.startsWith("quarantine-ns-")) { leased(path, "a quarantine namespace"); continue; }
     kept.push({ path, reason: "not a name this broker derives" });
   }
   return Object.freeze({ removed: Object.freeze(removed), kept: Object.freeze(kept.map(entry => Object.freeze(entry))) });

@@ -12,6 +12,7 @@ import { isValidFullOid } from "../ids.js";
 import { sha256Hex } from "../hash.js";
 import { readContextEntry, assertContextDirectory } from "../storage/context-files.js";
 import { contextStagingPathAt, contextRevisionPathAt } from "../storage/paths.js";
+import { TreeLease } from "../storage/tree-lease.js";
 import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { entryAt, openBeneath, openDirectory, closeEvery } from "../storage/contained-fs.js";
 import { publishContextRevision, verifyContextRevision } from "../storage/context-snapshot.js";
@@ -125,6 +126,7 @@ export class ContextRepository {
     if (this.preparing || this.preparation.blocked) throw new StoreError("REF_STATE_UNKNOWN", "context preparation is active or uncertain");
     this.preparing = true; this.preparedTree = tree;
     let treeFd: number | undefined; let workFd: number | undefined;
+    let lease: TreeLease | undefined;
     try {
       treeFd = openDirectory(tree);
       for (const entry of entries) readContextEntry(treeFd, entry);
@@ -132,6 +134,8 @@ export class ContextRepository {
       if (expected !== null && (!isValidFullOid(expected) || expected.length !== (format === "sha1" ? 40 : 64)))
         throw new StoreError("INVALID_OID", "context base has the wrong repository object format");
       const staging = dirname(tree); const work = join(staging, "commit-work");
+      // R6-04: every git that works in this tree holds its lease.
+      const held = lease = TreeLease.take(staging);
       const stagingFd = openDirectory(staging);
       try {
         mkdirSync(entryAt(stagingFd, "commit-work"), { mode: 0o700 });
@@ -142,7 +146,7 @@ export class ContextRepository {
       const run = (argv: readonly string[], input?: Uint8Array) => this.preparation.run({
         executable: "/usr/bin/git", argv: ["-C", "/proc/self/fd/3", ...argv], env: CONTEXT_ENV,
         ...(input === undefined ? {} : { input }), timeoutMs: 120000, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 4 * 1024 * 1024,
-      }, undefined, [directory]);
+      }, undefined, [directory, held.descriptor]);
       const success = async (argv: readonly string[], input?: Uint8Array) => requirePreparedSuccess(await run(argv, input), "context preparation");
       await success(["init", "-q", `--object-format=${format}`]);
       if (expected !== null) {
@@ -175,7 +179,7 @@ export class ContextRepository {
     } finally {
       // P0V-65: a close that fails neither keeps the other descriptor nor
       // leaves this repository marked as preparing forever.
-      try { closeEvery(workFd, treeFd); } finally { this.preparing = false; }
+      try { closeEvery(workFd, treeFd); } finally { this.preparing = false; lease?.release(); }
       // No cleanup here: uncertain native children/staging need recovery proof.
     }
   }
