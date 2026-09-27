@@ -22,6 +22,7 @@
 | | [implementation-spec.md](../implementation-spec.md) | 구현 MUST/MUST NOT. 규범 문장의 owner |
 | | [physical-ordering](../implementation/physical-ordering.md), [integration-policy](../implementation/integration-policy.md), [compliance](../implementation/compliance.md), [loc-budget](../implementation/loc-budget.md), [test-matrix](../implementation/test-matrix.md), [spikes](../implementation/spikes.md), [systemd/README](../implementation/systemd/README.md), [store-opening](../implementation/store-opening.md), [contracts/README](../implementation/contracts/README.md) | spec을 구체화하는 계약(순서, tiered 정책, release trace, LOC 측정, 수용 시험, OPEN spike, unit template, Store 열기, contract owner) |
 | | `implementation/contracts.ts`, `contracts/`, `schema-v1.sql`, `systemd/*.in` | 문서가 아니라 실제 wire·durable·deployment 선언 |
+| | [macos-platform](../implementation/macos-platform.md)(초안) | **승인 전, 구속력 없음.** macOS용 OMA 플랫폼 규격(host와 hidden Linux VM). 승인되면 규범이 되고, 바꾸는 기존 규범은 DR로 기록한다 |
 | **결정 기록** | [consistency-decisions.md](../implementation/consistency-decisions.md) | 계획의 D01–D06, 카드(WP)별 결정, 재검토와 AV1–AV31, ENG1. 규범이 **왜** 그런지 |
 | | [design-revisions.md](../implementation/design-revisions.md) | 설계 수정 DR1–DR16과 그것이 바꾼 규범, architecture와 어긋나는 문장 |
 | **점검 기록** | [priority-0-audit.md](../implementation/priority-0-audit.md) | Priority 0 파일 단위 점검의 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14, 외부 전수 검토를 판정한 4차 점검 P0V-25–P0V-53, 시나리오 시험이 찾은 P0V-54–P0V-55 |

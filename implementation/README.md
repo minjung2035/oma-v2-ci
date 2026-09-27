@@ -19,6 +19,7 @@ spec을 구체화하는 계약이다. `**MUST [ID]**` 조항은 [traceability.js
 | [store-opening.md](store-opening.md) | Store를 열 때 writer 준비 전 호환성 판정 |
 | [contracts/README.md](contracts/README.md) | contract owner 경계 |
 | [systemd/README.md](systemd/README.md) | unit template 계약(UNIT-TPL) |
+| [macos-platform.md](macos-platform.md) | **초안, 승인 전(구속력 없음).** macOS용 OMA: host(macOS)와 hidden Linux VM(guest)의 나눔, 신뢰 경계, RPC, VM 수명, project sync, Keychain credential, image·update·백업·복구, 검증 전략(MAC·MV 조항). 아직 traceability가 inventory하지 않는다 |
 
 `contracts.ts`, `contracts/`, `schema-v1.sql`, `systemd/*.in`, `cloc-systemd.lang`은 문서가 아니라 실제 선언·배포 표면·측정 filter다.
 
