@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "600ec992920f2b1358c1e109f046cd759231ed94aa474d181363df2420238fd6",
-  "report": "fe9509806ce25ea05e27e181af6b825b5f6e0070c7beb80c161e139a29389406",
+  "report": "52dcff8b786b0dc74a0a47397bc12ca2d33088d9e0c0ae2a70b863733dbcf42d",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -165,7 +165,7 @@
     },
     {
       "path": "src/cli/transport.ts",
-      "sha256": "3283f2453f2230885e9fafe61f69e33caf2b9f50575f146c22e1d713f59f9431"
+      "sha256": "5488c899e7c4078f902e95cd1518261feea1976a3859bfd37af9a2467cb75222"
     },
     {
       "path": "src/config.ts",
@@ -669,7 +669,7 @@
     },
     {
       "path": "src/runtime/broker-supervisor.ts",
-      "sha256": "a1a71976cd8ca326ec9d889b55069a7cafbf2a54df8f397c7f215e2e95dfb62e"
+      "sha256": "506d6b2b44973a3ea0b055ca07bf00a8e405e550eb308ab6cf5420c00abd7843"
     },
     {
       "path": "src/runtime/deployment-manifest.ts",
@@ -709,7 +709,7 @@
     },
     {
       "path": "src/runtime/principal-delivery.ts",
-      "sha256": "788353e186e1415f462038c54e23bc2973e87b650c276fdae3678abfd06ffa01"
+      "sha256": "6894d7fb650f2746e7a2577f77bd0eb0b06226d997e8953730fa3072d8be2d75"
     },
     {
       "path": "src/runtime/process-lock.ts",

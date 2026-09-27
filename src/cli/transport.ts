@@ -103,7 +103,9 @@ function readPresentedGrant(): Grant | null {
   // The extension writes the line and closes its end as soon as it starts this
   // process, so the wait is short; a descriptor that never delivers is a
   // failure, not something to spin on.
-  const deadline = Date.now() + CREDENTIAL_WAIT_MS;
+  // Elapsed time on the monotonic clock: a wall clock stepped forward would
+  // refuse a credential that is on its way (MAC-650).
+  const deadline = performance.now() + CREDENTIAL_WAIT_MS;
   const pause = new Int32Array(new SharedArrayBuffer(4));
   for (;;) {
     let count: number;
@@ -111,7 +113,7 @@ function readPresentedGrant(): Grant | null {
     catch (error) {
       if ((error as { code?: string }).code !== "EAGAIN")
         throw new StoreError("AUTH_FAILED", "the principal credential could not be read");
-      if (Date.now() > deadline) throw new StoreError("AUTH_FAILED", "the principal credential did not arrive");
+      if (performance.now() > deadline) throw new StoreError("AUTH_FAILED", "the principal credential did not arrive");
       Atomics.wait(pause, 0, 0, 5);
       continue;
     }

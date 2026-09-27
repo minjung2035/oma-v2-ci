@@ -107,6 +107,24 @@ test("V08A / WP08.04: losing the session claim is still deferred without back-of
   } finally { s.close(); }
 });
 
+test("MAC-650 / D-7: the retry spacing is elapsed time, not the wall clock's difference", async () => {
+  // A wall clock that leaps two hours at every reading -- a machine waking
+  // from sleep -- must not end the back-off of a batch that just failed.
+  const s = scene();
+  const wall = Date.now;
+  let leaps = 0;
+  try {
+    const path = runnerReceiptPathAt(s.root, "principal", BATCH.id);
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, "{\"not\":\"a receipt\"}");
+    const delivery = new PrincipalDelivery(s.session, { prepare: async () => BATCH, complete: async () => {} },
+      { stateRoot: s.root, frameBytes: TEST_VIEW_LIMITS.frameBytes, acceptMs: 10_000, retryAfterMs: 5_000 });
+    Date.now = () => wall() + (leaps += 1) * 2 * 3600_000;
+    assert.equal((await delivery.tick()).kind, "failed");
+    assert.deepEqual(await delivery.tick(), { kind: "deferred", reason: `batch ${BATCH.id} failed recently` });
+  } finally { Date.now = wall; s.close(); }
+});
+
 test("V08B: conflicting or unavailable receipt evidence presents nothing and is kept", async () => {
   for (const fault of ["conflicting", "unavailable"] as const) {
     const s = scene();

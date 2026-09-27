@@ -252,7 +252,9 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
         disown("another oma took this society while this one was starting");
         return;
       }
-      const now = Date.now();
+      // The restart window is elapsed time: a wall clock stepped back would
+      // keep old restarts inside it and give the broker up (MAC-650).
+      const now = performance.now();
       while (restarts.length > 0 && now - restarts[0]! > windowMs) restarts.shift();
       if (restarts.length >= maxRestarts) {
         say(`broker ended ${restarts.length} times within ${Math.round(windowMs / 1000)}s; not restarting it`);

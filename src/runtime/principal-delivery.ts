@@ -94,6 +94,10 @@ export interface PrincipalDeliveryOptions {
    * again. It stays prepared meanwhile; the broker never re-selects it into
    * another batch. */
   readonly retryAfterMs: number;
+  /** Elapsed time only -- the retry spacing and the accept deadline -- so a
+   * monotonic clock by default: a wall clock stepped forward after a sleep
+   * would expire every deadline at once, and stepped back would hold one
+   * open (MAC-650). */
   readonly now?: () => number;
 }
 
@@ -126,7 +130,7 @@ export class PrincipalDelivery {
     try {
       batch = await this.broker.prepare();
       if (batch === null) return { kind: "idle" };
-      const now = (this.options.now ?? Date.now)();
+      const now = (this.options.now ?? performance.now.bind(performance))();
       const failed = this.failedAt.get(batch.id);
       if (failed !== undefined && now - failed < this.options.retryAfterMs)
         return { kind: "deferred", reason: `batch ${batch.id} failed recently` };
@@ -160,7 +164,7 @@ export class PrincipalDelivery {
 
   private rememberFailure(batchId: string): void {
     this.failedAt.delete(batchId);
-    this.failedAt.set(batchId, (this.options.now ?? Date.now)());
+    this.failedAt.set(batchId, (this.options.now ?? performance.now.bind(performance))());
     while (this.failedAt.size > FAILED_BATCHES) this.failedAt.delete(this.failedAt.keys().next().value!);
   }
 
@@ -207,7 +211,7 @@ export class PrincipalDelivery {
       enter("claim");
       await this.session.deliver(batch.id);
       enter("engine");
-      const acceptBy = (this.options.now ?? Date.now)() + this.options.acceptMs;
+      const acceptBy = (this.options.now ?? performance.now.bind(performance))() + this.options.acceptMs;
       // Wait for the engine's answer, then for the turn to settle. There is no
       // deadline on the turn itself: a model thinking about its mail is not a
       // failure, and a batch abandoned mid-turn would be delivered twice.
@@ -220,7 +224,7 @@ export class PrincipalDelivery {
             throw new StoreError("PROVIDER_FAILED", "the principal's provider failed while delivering mail");
           if (accepted === true) throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the turn settled without a delivery boundary");
         }
-        const waitMs = accepted === null ? Math.max(0, acceptBy - (this.options.now ?? Date.now)()) : 1000;
+        const waitMs = accepted === null ? Math.max(0, acceptBy - (this.options.now ?? performance.now.bind(performance))()) : 1000;
         if (accepted === null && waitMs === 0)
           throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the engine did not accept the delivery command in time");
         await Promise.race([next, new Promise<void>(resolve => { setTimeout(resolve, Math.min(waitMs, 1000)).unref?.(); })]);
