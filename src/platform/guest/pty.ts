@@ -50,7 +50,10 @@ export interface PseudoTerminal {
 
 export function openPseudoTerminal(columns: number, rows: number): PseudoTerminal {
   const c = libc();
-  const master = c.openpt(constants.O_RDWR | constants.O_NOCTTY);
+  // Close-on-exec, as every descriptor this product opens natively is (leaf.ts,
+  // contained-fs.ts): a program that inherited its own terminal's master side
+  // would keep that terminal alive past the holder, and never be hung up.
+  const master = c.openpt(constants.O_RDWR | constants.O_NOCTTY | 0o2000000 /* O_CLOEXEC */);
   if (master < 0) throw failed("posix_openpt");
   try {
     if (c.grantpt(master) !== 0) throw failed("grantpt");

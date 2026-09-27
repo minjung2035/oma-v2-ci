@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { connect, type Socket } from "node:net";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -160,4 +160,19 @@ test("MAC-320: a holder asked to stop asks its program to end and ends with its 
   await new Promise(r => setTimeout(r, 300));
   child.kill("SIGTERM");
   assert.equal(await exited, 7, "the program's own SIGTERM handling decided the end");
+});
+
+test("§4.6: a holder that dies hangs up its program, which holds no side of the terminal but its own", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { child, socketPath, exited } = await holder(t);
+  const screen = await Screen.attach(socketPath);
+  await screen.until(/pid \d+/, "the program's pid");
+  const pid = Number(/pid (\d+)/.exec(screen.shown)![1]);
+  t.after(() => { try { process.kill(pid, "SIGKILL"); } catch { /* already gone */ } });
+  const held = readdirSync(`/proc/${pid}/fd`).map(fd => { try { return readlinkSync(`/proc/${pid}/fd/${fd}`); } catch { return ""; } });
+  assert.ok(!held.includes("/dev/ptmx"), `the program holds its terminal's master side: ${held.join(" ")}`);
+  child.kill("SIGKILL");
+  await exited;
+  for (let i = 0; i < 150 && existsSync(`/proc/${pid}`); i++) await new Promise(r => setTimeout(r, 20));
+  assert.equal(existsSync(`/proc/${pid}`), false, "the program outlived the holder of its terminal");
+  screen.socket.destroy();
 });
