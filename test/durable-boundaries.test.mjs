@@ -31,3 +31,16 @@ test("P0-7: a new boundary without a test, a stale entry, or a test that does no
     assert.deepEqual(checkDurableBoundaries(root), []);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("P0-7, P0V-59: a primitive imported under another name is still a boundary", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-p0-7-alias-"));
+  try {
+    mkdirSync(join(root, "src")); mkdirSync(join(root, "implementation"));
+    writeFileSync(join(root, "production-files.txt"), "src/owner.ts\n");
+    writeFileSync(join(root, "src/owner.ts"),
+      'import { replaceDerivedFile as recordIt } from "./storage/durable-fs.js";\nexport function keep(path) { recordIt(path, "x"); }\n');
+    writeFileSync(join(root, "implementation/durable-boundaries.json"), JSON.stringify({ boundaries: [] }));
+    assert.deepEqual(durableBoundaries(root).map(entry => entry.owner), ["src/owner.ts#keep"]);
+    assert.match(checkDurableBoundaries(root).join("\n"), /src\/owner\.ts#keep: a durable boundary \(file-publication\) has no registered/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

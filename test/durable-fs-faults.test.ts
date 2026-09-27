@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { sha256Hex } from "../src/domain/canonical-json.js";
 import { StoreError } from "../src/domain/errors.js";
-import { replaceDerivedFile, fsyncTree, ensureDurableDirectory } from "../src/storage/durable-fs.js";
+import { replaceDerivedFile, fsyncTree, ensureDurableDirectory, publishNoReplace } from "../src/storage/durable-fs.js";
 import { publishImmutableFile } from "../src/storage/immutable-file.js";
 import { publishImmutableFile as mailPublish, writeAtomic } from "../src/mail.js";
 
@@ -128,4 +128,16 @@ test("P0V-71 / F4, P0-3: a durable directory's whole path is flushed, also on th
     for (const path of [leaf, join(root, "a", "b"), join(root, "a"), root])
       assert.ok(flushed.includes(path), `${path} was not flushed on the retry: ${JSON.stringify(flushed)}`);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("P0V-59: a no-replace publication that fails while writing leaves no file under the name, and never replaces one", { concurrency: false }, t => {
+  fixture((root, _source, target) => {
+    scoped(t, () => { t.mock.method(fs, "writeFileSync", () => { throw eio(); }); },
+      () => assert.throws(() => publishNoReplace(target, "partial unit"), isEio));
+    assert.equal(fs.existsSync(target), false, "a failed write left a file under the name");
+    assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith(".tmp")), [], "the temporary was left behind");
+    assert.equal(publishNoReplace(target, "first"), "created");
+    assert.equal(publishNoReplace(target, "second"), "existing");
+    assert.equal(fs.readFileSync(target, "utf8"), "first");
+  });
 });

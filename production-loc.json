@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 30270,
+    "n_lines": 30336,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -78,6 +78,12 @@
     "code": 315,
     "language": "TypeScript"
   },
+  "src/units.ts": {
+    "blank": 22,
+    "comment": 74,
+    "code": 314,
+    "language": "TypeScript"
+  },
   "src/extension/mail-tools.ts": {
     "blank": 12,
     "comment": 79,
@@ -106,12 +112,6 @@
     "blank": 3,
     "comment": 25,
     "code": 279,
-    "language": "TypeScript"
-  },
-  "src/units.ts": {
-    "blank": 22,
-    "comment": 53,
-    "code": 274,
     "language": "TypeScript"
   },
   "src/runtime/provision.ts": {
@@ -162,12 +162,6 @@
     "code": 232,
     "language": "TypeScript"
   },
-  "src/request-cache.ts": {
-    "blank": 18,
-    "comment": 44,
-    "code": 227,
-    "language": "TypeScript"
-  },
   "src/broker/principal-endpoint.ts": {
     "blank": 21,
     "comment": 157,
@@ -216,6 +210,12 @@
     "code": 198,
     "language": "TypeScript"
   },
+  "src/request-cache.ts": {
+    "blank": 17,
+    "comment": 36,
+    "code": 196,
+    "language": "TypeScript"
+  },
   "src/diagnostics/ledger.ts": {
     "blank": 2,
     "comment": 5,
@@ -238,6 +238,12 @@
     "blank": 19,
     "comment": 29,
     "code": 185,
+    "language": "TypeScript"
+  },
+  "src/storage/durable-fs.ts": {
+    "blank": 13,
+    "comment": 78,
+    "code": 182,
     "language": "TypeScript"
   },
   "src/tui/app.ts": {
@@ -322,12 +328,6 @@
     "blank": 2,
     "comment": 12,
     "code": 164,
-    "language": "TypeScript"
-  },
-  "src/storage/durable-fs.ts": {
-    "blank": 12,
-    "comment": 70,
-    "code": 160,
     "language": "TypeScript"
   },
   "src/diagnostics/files.ts": {
@@ -1158,17 +1158,17 @@
     "code": 24,
     "language": "TypeScript"
   },
+  "implementation/systemd/resident.service.in": {
+    "blank": 0,
+    "comment": 6,
+    "code": 23,
+    "language": "OMA systemd"
+  },
   "src/cli/request-intent.ts": {
     "blank": 4,
     "comment": 5,
     "code": 23,
     "language": "TypeScript"
-  },
-  "implementation/systemd/resident.service.in": {
-    "blank": 0,
-    "comment": 5,
-    "code": 22,
-    "language": "OMA systemd"
   },
   "src/domain/deployment.ts": {
     "blank": 1,
@@ -1212,6 +1212,12 @@
     "code": 19,
     "language": "TypeScript"
   },
+  "implementation/systemd/broker.service.in": {
+    "blank": 0,
+    "comment": 2,
+    "code": 18,
+    "language": "OMA systemd"
+  },
   "src/lifecycle/contracts.ts": {
     "blank": 1,
     "comment": 4,
@@ -1223,12 +1229,6 @@
     "comment": 2,
     "code": 18,
     "language": "TypeScript"
-  },
-  "implementation/systemd/broker.service.in": {
-    "blank": 0,
-    "comment": 1,
-    "code": 17,
-    "language": "OMA systemd"
   },
   "src/cli/commands/status.ts": {
     "blank": 2,
@@ -1244,8 +1244,8 @@
   },
   "implementation/systemd/principal-relay.service.in": {
     "blank": 0,
-    "comment": 1,
-    "code": 13,
+    "comment": 2,
+    "code": 14,
     "language": "OMA systemd"
   },
   "src/git/paths.ts": {
@@ -1262,8 +1262,14 @@
   },
   "implementation/systemd/reconcile.service.in": {
     "blank": 0,
-    "comment": 1,
-    "code": 11,
+    "comment": 2,
+    "code": 12,
+    "language": "OMA systemd"
+  },
+  "implementation/systemd/reconcile.timer.in": {
+    "blank": 0,
+    "comment": 2,
+    "code": 10,
     "language": "OMA systemd"
   },
   "src/domain/spec-identity.ts": {
@@ -1302,10 +1308,16 @@
     "code": 9,
     "language": "TypeScript"
   },
-  "implementation/systemd/reconcile.timer.in": {
+  "implementation/systemd/principal.path.in": {
     "blank": 0,
-    "comment": 1,
-    "code": 9,
+    "comment": 2,
+    "code": 8,
+    "language": "OMA systemd"
+  },
+  "implementation/systemd/resident.path.in": {
+    "blank": 0,
+    "comment": 2,
+    "code": 8,
     "language": "OMA systemd"
   },
   "src/module-ports.ts": {
@@ -1313,18 +1325,6 @@
     "comment": 7,
     "code": 8,
     "language": "TypeScript"
-  },
-  "implementation/systemd/principal.path.in": {
-    "blank": 0,
-    "comment": 1,
-    "code": 7,
-    "language": "OMA systemd"
-  },
-  "implementation/systemd/resident.path.in": {
-    "blank": 0,
-    "comment": 1,
-    "code": 7,
-    "language": "OMA systemd"
   },
   "src/broker/replies.ts": {
     "blank": 0,
@@ -1352,8 +1352,8 @@
   },
   "SUM": {
     "blank": 1212,
-    "comment": 5064,
-    "code": 23994,
+    "comment": 5092,
+    "code": 24032,
     "nFiles": 224
   }
 }

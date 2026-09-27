@@ -5,6 +5,8 @@
 # BROKER_UNIT is empty when no fixed broker unit exists (the product runs the broker).
 [Unit]
 Description=OMA @SOCIETY@ resident @AGENT@
+# P0V-59: the state tree this unit belongs to; systemd ignores X- keys.
+X-OMA-Owner=@STATE@
 BindsTo=@BROKER_UNIT@
 After=@BROKER_UNIT@
 StartLimitIntervalSec=60s

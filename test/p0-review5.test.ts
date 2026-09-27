@@ -10,7 +10,7 @@ import { unknownDashboard } from "./fixtures/dashboard.js";
 import { AcceptedFailure, StoreError, acceptedFailure, errorCodeOf, publicFailure } from "../src/domain/errors.js";
 import { AdmissionGate } from "../src/domain/admission.js";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -18,10 +18,11 @@ import { Store } from "../src/store.js";
 import { Broker } from "../src/broker.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { ViewsModule } from "../src/views.js";
-import type { UnitsModule } from "../src/units.js";
+import { UnitsModule, renderUnit } from "../src/units.js";
 import type { ResolvedAgentSpec } from "../implementation/contracts.js";
 import { preparedFixture } from "./fixtures/delivery-receipt.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
+import { TEST_RESOURCES } from "./fixtures/spec.js";
 
 test("P0V-67 / R12, P0-2: where the terminal's reads are cut does not change the text -- a U+FEFF after the cut is kept", () => {
   const bom = [...Buffer.from("﻿", "utf8")];
@@ -138,4 +139,44 @@ test("P0V-70 / F3, P0-2: a status publication that finds the ledger corrupt clos
     (f.store as unknown as { close(): void }).close = () => undefined;
     f.close();
   }
+});
+
+test("P0V-59 / R04, P0-1: a unit another state tree's society of the same name installed is that owner's, and no effect of this one reaches it", t => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-unit-tree-"));
+  // Every systemctl call is recorded, and none reaches a real user manager.
+  const bin = join(dir, "bin"); mkdirSync(bin);
+  const log = join(dir, "systemctl.log");
+  writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "$@" >> ${JSON.stringify(log)}\nexit 0\n`, { mode: 0o755 });
+  const savedPath = process.env.PATH; process.env.PATH = bin;
+  t.after(() => { process.env.PATH = savedPath; rmSync(dir, { recursive: true, force: true }); });
+  const resources = TEST_RESOURCES;
+  const values = (state: string) => ({ node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
+    config: join(state, "config.json"), run: join(dir, "run"), brokerUnit: "" });
+  const ours = new UnitsModule("demo", values(join(dir, "tree-b")), dir, { p: resources }, () => 1);
+  const conflict = (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT";
+  // The society called demo whose state tree is tree-a installed Resident alice.
+  const theirs = (template: string, agent: string, state: string) =>
+    renderUnit(`[Unit]\n${template}\nX-OMA-Owner=@STATE@\n`, { ...values(state), agent });
+  const service = theirs("Description=OMA @SOCIETY@ resident @AGENT@", "alice", join(dir, "tree-a"));
+  const path = theirs("Description=Wake OMA @SOCIETY@ resident @AGENT@ on mail", "alice", join(dir, "tree-a"));
+  writeFileSync(join(dir, "oma-demo-alice.service"), service);
+  writeFileSync(join(dir, "oma-demo-alice.path"), path);
+  assert.throws(() => ours.assertResidentNamesFree("alice"), conflict, "a create was accepted onto another tree's unit");
+  assert.throws(() => ours.ensureResident("alice", "p", resources), conflict);
+  assert.throws(() => ours.start("alice", false), conflict);
+  // This society has no unit under the name: stopping it touches nothing, and
+  // what is observed is that absence, not the other society's Resident.
+  assert.equal(ours.stop("alice", 1).activeState, "inactive");
+  assert.equal(ours.observe("alice").cgroup, "");
+  assert.equal(readFileSync(join(dir, "oma-demo-alice.service"), "utf8"), service, "another tree's unit was replaced");
+  const calls = (() => { try { return readFileSync(log, "utf8"); } catch { return ""; } })();
+  assert.doesNotMatch(calls, /alice/, `an effect of this society reached another tree's unit: ${calls}`);
+  // A unit an earlier release installed has no owner line; the tree it named decides.
+  writeFileSync(join(dir, "oma-demo-bob.service"), `[Unit]\nDescription=OMA demo resident bob\n[Service]\nExecStart=/n /l/runner.js --society demo --agent bob --config /c --state-root ${join(dir, "tree-a")} --run-root /r\n`);
+  assert.throws(() => ours.assertResidentNamesFree("bob"), conflict, "an earlier release's unit of another tree was taken for this one's");
+  writeFileSync(join(dir, "oma-demo-carol.path"), `[Unit]\nDescription=Wake OMA demo resident carol on mail\n[Path]\nDirectoryNotEmpty=${join(dir, "tree-b")}/mail/inboxes/carol/new\n`);
+  assert.doesNotThrow(() => ours.assertResidentNamesFree("carol"), "this tree's unit from an earlier release was refused");
+  // Its own tree's unit is its own.
+  writeFileSync(join(dir, "oma-demo-dave.service"), theirs("Description=OMA @SOCIETY@ resident @AGENT@", "dave", join(dir, "tree-b")));
+  assert.doesNotThrow(() => ours.assertResidentNamesFree("dave"));
 });

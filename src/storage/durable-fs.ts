@@ -2,8 +2,7 @@
 // Immutable publication and derived replacement are deliberately separate APIs.
 // These helpers neither modify a ledger nor collect accepted recovery evidence.
 import {
-  constants, closeSync, fstatSync, fsyncSync, lstatSync,
-  readdirSync, renameSync, unlinkSync, writeFileSync,
+  constants, closeSync, fstatSync, fsyncSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync, linkSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
@@ -159,6 +158,38 @@ export function writeExclusiveFsyncedEntry(parent: number, name: string, path: s
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
+}
+
+/** A file under `target` only if no file has that name: the bytes are written
+ * and flushed under a temporary name, linked to `target` -- which fails if the
+ * name exists -- and the directory is flushed. The name appears whole or not at
+ * all, so a crash never leaves a partial file under it, and two writers cannot
+ * both publish it. Existing bytes are never overwritten. Every name is
+ * addressed through the one descriptor the directory was resolved into. The
+ * one no-replace publication for every owner (P0V-59; it was the request
+ * cache's own). */
+export function publishNoReplace(target: string, data: string | Uint8Array, mode = 0o600): "created" | "existing" {
+  return withinDirectory(target, (parent, name) => {
+    const temp = `.${name}.${randomUUID()}.tmp`;
+    const fd = openBeneath(parent, temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, mode);
+    try { writeFileSync(fd, data); fsyncSync(fd); }
+    catch (error) {
+      try { unlinkSync(entryAt(parent, temp)); fsyncSync(parent); } catch { /* cleanup only; retain the write error */ }
+      throw error;
+    } finally { closeSync(fd); }
+    let result: "created" | "existing" = "created";
+    try {
+      try { linkSync(entryAt(parent, temp), entryAt(parent, name)); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        result = "existing";
+      }
+    } finally {
+      unlinkSync(entryAt(parent, temp));
+      fsyncHeldDir(parent, dirname(target));
+    }
+    return result;
+  });
 }
 
 /** Derived-only replacement: exclusive temporary -> file fsync -> close ->

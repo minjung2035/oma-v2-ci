@@ -684,6 +684,42 @@
    ]
   },
   {
+   "owner": "src/request-cache.ts#RequestCache.freeze",
+   "fact": "a frozen request: its body, then its metadata, each published without replacing",
+   "tests": [
+    {
+     "file": "test/request-cache.test.ts",
+     "title": "body-only crashes and metadata-only corruption cannot reconstruct a freeze"
+    },
+    {
+     "file": "test/request-cache.test.ts",
+     "title": "competing processes cannot publish different bodies for one frozen identity"
+    },
+    {
+     "file": "test/cli-receipt-replay.test.ts",
+     "title": "V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, with the bytes frozen the first time"
+    }
+   ]
+  },
+  {
+   "owner": "src/request-cache.ts#RequestCache.updateReceipt",
+   "fact": "the last receipt a request's cache recorded",
+   "tests": [
+    {
+     "file": "test/request-cache.test.ts",
+     "title": "receipt updates cannot replace immutable request fields or change operation identity"
+    },
+    {
+     "file": "test/cli-receipt-replay.test.ts",
+     "title": "V26B: a terminal receipt in the cache is not replaced by a later lesser observation"
+    },
+    {
+     "file": "test/cli-receipt-replay.test.ts",
+     "title": "WP26: a receipt the request cache cannot record is still shown, with the key to ask again"
+    }
+   ]
+  },
+  {
    "owner": "src/runner.ts#RunnerModule.consume",
    "fact": "a Resident's delivery receipt (DR11: after its session entry is durable)",
    "tests": [

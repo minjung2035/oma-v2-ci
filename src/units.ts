@@ -6,7 +6,7 @@ import type { Actor, ResourceLimits, UnitObservation } from "../implementation/c
 import { StoreError, unobserved } from "./domain/errors.js";
 import { canonicalResourceLimits } from "./domain/resources.js";
 import { unitNameFor as unitName } from "./domain/derived.js";
-import { replaceDerivedFile } from "./storage/durable-fs.js";
+import { publishNoReplace, replaceDerivedFile } from "./storage/durable-fs.js";
 import { renderUnit, type RenderValues } from "./units/render.js";
 import { executeUnitCommand, observeUnitCommand, type UnitCommandOutcome } from "./units/execute.js";
 import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "./units/observe.js";
@@ -15,10 +15,16 @@ export { unitName, renderUnit };
 export type { RenderValues, UnitCommandOutcome };
 export const UNIT_TPL_DIR = fileURLToPath(new URL("../../implementation/systemd", import.meta.url));
 export const INSTALL_DIR = join(process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? "/tmp", ".config"), "systemd", "user");
-/** The line of a unit that names what it was rendered for (P0V-26). */
-function identityLine(unit: string): string | null {
-  return unit.split("\n").find(line => line.startsWith("Description=")) ?? null;
+/** The line of a unit that names the society, the kind and the agent it was
+ * rendered for (P0V-26), and the one that names the state tree (P0V-59). */
+const DESCRIPTION = "Description=";
+const OWNER = "X-OMA-Owner=";
+function lineOf(unit: string, key: string): string | null {
+  return unit.split("\n").find(line => line.startsWith(key)) ?? null;
 }
+/** What `observe` answers for a unit that is not this society's: the values
+ * systemd gives a unit it does not have. */
+const NO_UNIT: UnitObservation = Object.freeze({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" });
 export type IncarnationReader = (agent: Actor) => number | null;
 /** Units per status `show`: about 60 ms each on systemd 257 (WP23.01). */
 export const STATUS_CHUNK = 32;
@@ -95,8 +101,14 @@ export class UnitsModule {
       ...this.values, ...overrides, agent: this.agentFrom(name),
     });
     const target = join(this.installDir, name);
-    this.assertOwnUnit(name, identityLine(rendered));
-    replaceDerivedFile(target, rendered, 0o600);
+    // P0V-59, P0-1: a free name is claimed in one step -- the whole file is
+    // linked in only if no file has the name -- so two owners cannot both see
+    // it free and both write it, and a crash leaves no partial unit to be
+    // taken for another owner's. A name already held is replaced only by its owner.
+    if (publishNoReplace(target, rendered, 0o600) === "existing") {
+      this.assertOwnUnit(name, rendered);
+      replaceDerivedFile(target, rendered, 0o600);
+    }
     const linked = this.command(["link", target]);
     if (linked.kind === "unknown") throw unitCommandError(linked, `link ${name}`)!;
     if (linked.kind === "failed" && !/already|exists/i.test(linked.stdout + linked.stderr))
@@ -130,31 +142,64 @@ export class UnitsModule {
   }
 
   /** P0V-26, P0-1: a unit file under this name that was rendered for another
-   * society, kind or agent is that other owner's installed fact, and it is
-   * refused rather than replaced. UNIT-001 joins society and actor with "-",
-   * and both may contain one, so one name can be two owners' ("oma-a-b-c" is
-   * society a's Resident b-c and society a-b's Resident c). The rendered
-   * Description names the owner -- kind, society and agent, which hold no
-   * spaces -- and the same owner renders the same one again. */
-  private assertOwnUnit(name: string, identity: string | null): void {
-    const target = join(this.installDir, name);
-    let existing: string;
-    try { existing = readFileSync(target, "utf8"); }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-      throw unobserved(error, target) ?? error;
-    }
-    if (identityLine(existing) !== identity)
+   * owner is that owner's installed fact, and it is refused rather than
+   * replaced. UNIT-001 joins society and actor with "-", and both may contain
+   * one, so one name can be two owners' ("oma-a-b-c" is society a's Resident
+   * b-c and society a-b's Resident c). P0V-59: and a society is its state tree,
+   * not its name -- two trees may each hold a society called "demo" (REC-007).
+   * The rendered Description names kind, society and agent, the owner line the
+   * state tree, and the same owner renders the same two again. */
+  private assertOwnUnit(name: string, expected: string): void {
+    if (this.foreign(name, expected))
       throw new StoreError("AGENT_CONFLICT", `unit ${name} is installed for another society or agent; it is not replaced`);
+  }
+  /** Whether the unit file under `name` is another owner's; false when there is none. */
+  private foreign(name: string, expected: string): boolean {
+    let existing: string;
+    try { existing = readFileSync(join(this.installDir, name), "utf8"); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw unobserved(error, join(this.installDir, name)) ?? error;
+    }
+    return !this.sameOwner(existing, expected);
+  }
+  private sameOwner(existing: string, expected: string): boolean {
+    if (lineOf(existing, DESCRIPTION) !== lineOf(expected, DESCRIPTION)) return false;
+    const owner = lineOf(existing, OWNER);
+    if (owner !== null) return owner === lineOf(expected, OWNER);
+    // An earlier release wrote no owner line. Where it named the state tree --
+    // a Resident's --state-root, a path unit's watched directory -- that tree
+    // decides; a unit that names none is known by its Description until this
+    // owner installs it again.
+    const lines = existing.split("\n");
+    const exec = lines.find(line => line.startsWith("ExecStart=") && line.includes(" --state-root "));
+    if (exec !== undefined) {
+      const argument = renderUnit("--state-root @STATE_ARG@", this.values);
+      return exec.endsWith(` ${argument}`) || exec.includes(` ${argument} `);
+    }
+    const watched = lines.find(line => line.startsWith("DirectoryNotEmpty="));
+    if (watched !== undefined) return watched.startsWith(renderUnit("DirectoryNotEmpty=@STATE@/", this.values));
+    return true;
+  }
+  /** The identity lines a unit of `template` renders for `agent`. */
+  private identity(template: string, agent: string): string {
+    const lines = readFileSync(join(UNIT_TPL_DIR, template), "utf8").split("\n")
+      .filter(line => line.startsWith(DESCRIPTION) || line.startsWith(OWNER));
+    return renderUnit(lines.join("\n"), { ...this.values, agent });
+  }
+  /** P0V-59, P0-1: whether a Resident's unit names are held by another owner.
+   * Such a name is not this society's unit: nothing of this society runs under
+   * it, and no effect of this society is applied to it. */
+  private residentForeign(agent: Actor): boolean {
+    return this.foreign(unitName(this.society, agent, "service"), this.identity("resident.service.in", agent)) ||
+      this.foreign(unitName(this.society, agent, "path"), this.identity("resident.path.in", agent));
   }
 
   /** Before a create is accepted: the unit names a Resident called `agent`
    * would take are not another owner's (P0V-26). */
   assertResidentNamesFree(agent: Actor): void {
-    for (const [suffix, template] of [["service", "resident.service.in"], ["path", "resident.path.in"]] as const) {
-      const line = identityLine(readFileSync(join(UNIT_TPL_DIR, template), "utf8"));
-      this.assertOwnUnit(unitName(this.society, agent, suffix), line === null ? null : renderUnit(line, { ...this.values, agent }));
-    }
+    for (const [suffix, template] of [["service", "resident.service.in"], ["path", "resident.path.in"]] as const)
+      this.assertOwnUnit(unitName(this.society, agent, suffix), this.identity(template, agent));
   }
 
   private agentFrom(unit: string): string {
@@ -196,6 +241,8 @@ export class UnitsModule {
   }
 
   start(agent: Actor, explicitRepair: boolean): void {
+    if (this.residentForeign(agent))
+      throw new StoreError("AGENT_CONFLICT", `the unit names of ${agent} are another society's or agent's; it is not started`);
     const before = this.observe(agent);
     const service = unitName(this.society, agent, "service");
     const path = unitName(this.society, agent, "path");
@@ -225,7 +272,11 @@ export class UnitsModule {
     const service = unitName(this.society, agent, "service");
     const path = unitName(this.society, agent, "path");
     const failures: unknown[] = [];
+    // P0V-59: a name another owner holds is not stopped or disabled for this
+    // society; this society has no unit under it, so nothing of it runs there.
+    const foreign = this.residentForeign(agent);
     const missing = (unit: string): boolean => {
+      if (foreign) return true;
       const outcome = this.command(["show", unit, "--property=LoadState", "--value"]);
       return outcome.kind === "succeeded" && outcome.stdout.trim() === "not-found";
     };
@@ -234,7 +285,7 @@ export class UnitsModule {
       () => { if (!missing(path)) this.run(["disable", path]); },
       () => this.onRevokeRun?.(agent),
       () => { if (!missing(service)) this.run(["stop", service]); },
-      () => this.verifyPath(agent, false),
+      () => { if (!foreign) this.verifyPath(agent, false); },
     ]) {
       try { action(); } catch (error) { failures.push(error); }
     }
@@ -246,6 +297,8 @@ export class UnitsModule {
   }
 
   unitCgroup(kind: "principal-relay" | "reconcile"): string {
+    // P0V-59: another society's host unit of this name authenticates nothing here.
+    if (this.foreign(unitName(this.society, kind, "service"), this.identity(`${kind}.service.in`, kind))) return "";
     const outcome = this.command(["show", unitName(this.society, kind, "service"), "-p", "ControlGroup"]);
     if (outcome.kind !== "succeeded") return "";
     const lines = outcome.stdout.trim().split("\n");
@@ -257,6 +310,7 @@ export class UnitsModule {
       "-p", "ActiveState", "-p", "SubState", "-p", "Result", "-p", "ExecMainStatus", "-p", "ControlGroup", "-p", "InvocationID"];
   }
   observe(agent: Actor): UnitObservation {
+    if (this.residentForeign(agent)) return NO_UNIT;
     return parseUnitObservation(this.command(this.observationArgs(agent)));
   }
   /** Recovery diagnostics only. Never use this stale-able result as death proof.
@@ -265,6 +319,7 @@ export class UnitsModule {
   observeAsync(agent: Actor): Promise<UnitObservation> {
     if (this.observationTask) return this.observationTask.agent === agent ? this.observationTask.task :
       Promise.reject(new StoreError("BROKER_UNAVAILABLE", "unit observation is busy"));
+    if (this.residentForeign(agent)) return Promise.resolve(NO_UNIT);
     const task = this.commandAsync(this.observationArgs(agent)).then(parseUnitObservation)
       .finally(() => { if (this.observationTask?.task === task) this.observationTask = null; });
     this.observationTask = { agent, task }; return task;
@@ -276,6 +331,12 @@ export class UnitsModule {
    * unknown. Never death proof or authority: an effect observes again. */
   async observeStatus(agents: readonly Actor[]): Promise<ReadonlyMap<Actor, UnitObservation | "no-unit">> {
     const observed = new Map<Actor, UnitObservation | "no-unit">();
+    // P0V-59: a name another owner holds is no unit of this society's.
+    const own: Actor[] = [];
+    for (const agent of agents) {
+      if (this.residentForeign(agent)) observed.set(agent, "no-unit"); else own.push(agent);
+    }
+    agents = own;
     for (let from = 0; from < agents.length; from += STATUS_CHUNK) {
       const byUnit = new Map(agents.slice(from, from + STATUS_CHUNK).map(agent => [unitName(this.society, agent, "service"), agent] as const));
       const outcome = await this.commandAsync(["show", ...byUnit.keys(), "-p", "Id", "-p", "LoadState", ...this.observationArgs(agents[from]!).slice(2)]);

@@ -1,6 +1,8 @@
 # MUST [REC-001..002]: No LLM call; request a bounded broker sweep.
 [Unit]
 Description=Reconcile OMA @SOCIETY@ physical state
+# P0V-59: the state tree this unit belongs to; systemd ignores X- keys.
+X-OMA-Owner=@STATE@
 Requires=@BROKER_UNIT@
 After=@BROKER_UNIT@
 [Service]

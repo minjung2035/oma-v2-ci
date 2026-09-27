@@ -19,6 +19,7 @@ import { join } from "node:path";
 export const PRIMITIVES = Object.freeze({
   transaction: "db-commit",
   publishImmutableFile: "file-publication", replaceDerivedFile: "file-publication", writeAtomic: "file-publication",
+  publishNoReplace: "file-publication",
   writeExclusiveFsyncedFile: "file-publication", writeFsynced: "file-publication", writeExclusiveFsyncedEntry: "file-publication",
   publishStagedDirectory: "file-publication", replaceDerivedSymlink: "file-publication", publishBatchView: "file-publication",
   publishContextRevision: "file-publication", publishProjectBinding: "file-publication",
@@ -60,9 +61,17 @@ export function durableBoundaries(root = process.cwd()) {
   for (const file of files) {
     if (PRIMITIVE_MODULES.includes(file)) continue;
     const source = ts.createSourceFile(file, readFileSync(join(root, file), "utf8"), ts.ScriptTarget.Latest, true);
+    // P0V-59: a primitive imported under another name is still that primitive;
+    // an alias must not hide a boundary from this gate.
+    const aliases = new Map();
+    for (const statement of source.statements)
+      if (ts.isImportDeclaration(statement) && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings))
+        for (const element of statement.importClause.namedBindings.elements)
+          if (element.propertyName) aliases.set(element.name.text, element.propertyName.text);
     const visit = node => {
       if (ts.isCallExpression(node)) {
-        const name = calleeName(node.expression);
+        const called = calleeName(node.expression);
+        const name = aliases.get(called) ?? called;
         if (Object.hasOwn(PRIMITIVES, name)) {
           const key = `${file}#${ownerOf(node, source)}`;
           const entry = owners.get(key) ?? { owner: key, kinds: new Set() };

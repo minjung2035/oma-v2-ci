@@ -1,11 +1,8 @@
 // MUST [FS-003]/[IPC-006/008]: private model-mutable preaccept cache.
 // This is neither a durable effect ledger nor broker/session authority.
-import {
-  readFileSync, writeFileSync, openSync, fsyncSync,
-  closeSync, linkSync, unlinkSync, fstatSync, lstatSync, constants,
-} from "node:fs";
-import { randomUUID } from "node:crypto";
-import { dirname, join } from "node:path";
+import { readFileSync, openSync, closeSync, fstatSync, lstatSync, constants } from "node:fs";
+
+import { join } from "node:path";
 import type { Receipt, RequestKey } from "../implementation/contracts.js";
 import { isValidRequestKey } from "./domain/identifiers.js";
 import { requestParamsEqual } from "./domain/request-identity.js";
@@ -13,8 +10,8 @@ import { sha256Hex } from "./domain/canonical-json.js";
 import { parseJsonObject } from "./frame.js";
 import { decodeReceipt, receiptSupersession } from "./protocol/receipt-codec.js";
 import { decodeCachedRequest, decodeStreamDigest, type CachedRequest, type StreamDigest } from "./cli/cache-codec.js";
-import { ensureDurableDirectory, fsyncHeldDir, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
-import { entryAt, openBeneath, withinDirectory } from "./storage/contained-fs.js";
+import { ensureDurableDirectory, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "./storage/durable-fs.js";
+import { openBeneath, withinDirectory } from "./storage/contained-fs.js";
 import { ensureDirectory } from "./storage/directory.js";
 import { lockFileDescriptor } from "./leaf.js";
 
@@ -83,43 +80,6 @@ export const readCacheFile: CacheReader = (path, expectedBytes) => {
  * Initial cache publication owns this descriptor and its unlink separately from
  * immutable mail and from the receipt-only derived replacement API.
  */
-function prepareTemp(parent: number, name: string, data: string | Uint8Array): string {
-  const temp = `.${name}.${randomUUID()}.tmp`;
-  const fd = openBeneath(parent, temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  try { writeFileSync(fd, data); fsyncSync(fd); }
-  catch (error) {
-    try { unlinkSync(entryAt(parent, temp)); fsyncSync(parent); } catch { /* cleanup only; retain the write error */ }
-    throw error;
-  } finally { closeSync(fd); }
-  return temp;
-}
-
-/** File fsync -> no-replace hardlink -> directory fsync. Existing bytes are never overwritten.
- *
- * Every name here is addressed through the one descriptor the cache directory
- * was resolved into. The temporary used to be created, linked and unlinked by
- * pathname after the directory had been made, which at this UID is three more
- * chances for a component of that path to be something else than the one that
- * was checked.
- */
-function publishNoReplace(target: string, data: string | Uint8Array): "created" | "existing" {
-  return withinDirectory(target, (parent, name) => {
-    const temp = prepareTemp(parent, name, data);
-    let result: "created" | "existing" = "created";
-    try {
-      try { linkSync(entryAt(parent, temp), entryAt(parent, name)); }
-      catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-        result = "existing";
-      }
-    } finally {
-      unlinkSync(entryAt(parent, temp));
-      fsyncHeldDir(parent, dirname(target));
-    }
-    return result;
-  });
-}
-
 function sameIdentity(left: CachedRequest, right: CachedRequest): boolean {
   return left.key === right.key && left.method === right.method &&
     requestParamsEqual(left.method, left.params, right.params) &&

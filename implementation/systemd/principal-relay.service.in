@@ -1,6 +1,8 @@
 # MUST [PR-002,UNIT-001]: Host entry calls the existing broker, not another daemon.
 [Unit]
 Description=OMA @SOCIETY@ Principal mail relay
+# P0V-59: the state tree this unit belongs to; systemd ignores X- keys.
+X-OMA-Owner=@STATE@
 Requires=@BROKER_UNIT@
 After=@BROKER_UNIT@
 StartLimitIntervalSec=60s
