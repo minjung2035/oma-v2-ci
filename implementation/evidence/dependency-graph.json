@@ -210,6 +210,7 @@
   "src/runtime/run-registry.ts",
   "src/runtime/society-lease.ts",
   "src/runtime/supervision-channel.ts",
+  "src/runtime/vsock-seccomp.ts",
   "src/sandbox.ts",
   "src/storage/batch-view.ts",
   "src/storage/contained-fs.ts",
@@ -1490,7 +1491,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 66
+   "files": 67
   },
   {
    "index": 5,
@@ -1507,8 +1508,8 @@
    "files": 62
   }
  ],
- "files": 265,
- "runtimeEdges": 1006,
+ "files": 266,
+ "runtimeEdges": 1007,
  "typeOnlyEdges": 341,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
@@ -1517,7 +1518,7 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 168,
+  "L4-orchestration -> L1-kernel": 169,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
   "L4-orchestration -> L4-orchestration": 76,
@@ -1544,7 +1545,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 141,
+  "src/domain/errors.ts": 142,
   "src/domain/identifiers.ts": 40,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 26,

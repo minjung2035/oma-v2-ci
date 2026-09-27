@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "d538467a7ae8c4d669f8a2ef2a85006f14d6e53b8ba8eec10819244f3b0a9671",
-  "report": "7d8ea2a01c45b0e6d488f9fb0c9e43e49e158a3d9c05852e477b0cc836f5dddb",
+  "manifest": "de75044201c567aa317b10256677f92bd60cdbb255db797b4f3d25f2d8e0c250",
+  "report": "78c5a6d038c32b956fd160d406d477a68522d181e4f0ee215501f04f700604d2",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -838,6 +838,10 @@
     {
       "path": "src/runtime/supervision-channel.ts",
       "sha256": "2e2ca29cc2497d81498c4c280715e2d2fcb5131ae4a230fd0f262c1edd5bab59"
+    },
+    {
+      "path": "src/runtime/vsock-seccomp.ts",
+      "sha256": "4dca1aaa216ba904cb57b19404ee8c28273a55ee6d500ea8787e66335fe7400e"
     },
     {
       "path": "src/sandbox.ts",
