@@ -42,6 +42,11 @@ export const fenceExemptSpawnOwners = Object.freeze({
   // product's own `oma`, which takes the society lease itself (HostTenure) and
   // hands it down to its engine and broker; the holder that starts it owns no
   // society and has no lease to pass.
+  // macos-platform §2.1: the Mac's VM helper. It owns no society; the guest's
+  // societies are bounded by the VM, which runs inside the helper and ends
+  // with it, and the helper ends when omahostd's channel to it closes.
+  "src/platform/host/vz-driver.ts#launch":
+    "the VM helper, which holds no society; everything in the guest ends with the VM it runs",
   "src/process/async.ts#spawnInTerminal":
     "a society session's `oma`, which takes the society lease itself; its holder has none to hand down",
 });

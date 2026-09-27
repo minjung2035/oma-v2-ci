@@ -140,6 +140,7 @@ src/platform/host/keychain.ts
 src/platform/host/lifecycle.ts
 src/platform/host/peer.ts
 src/platform/host/resolver.ts
+src/platform/host/vz-driver.ts
 src/platform/product-text.ts
 src/platform/rpc.ts
 src/platform/terminal-modes.ts

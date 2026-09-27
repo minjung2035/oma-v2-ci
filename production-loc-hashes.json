@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "aba9e6fc7d4e8702c0d3627f5ac46d25f38123338637cdf78afcf32d045ed06a",
-  "report": "a9cf3e36bc8335584fa80f89298625c494b27235a582427ce23f69d8c53d6317",
+  "manifest": "29173820dce4f600eec749153ab345869d6cc0e4f9e61ea36839008d892090e6",
+  "report": "9cdac392d6d2913a37b80d5c563e769e02ff4a7333acd283ffea082951fd00d0",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -570,6 +570,10 @@
     {
       "path": "src/platform/host/resolver.ts",
       "sha256": "6e136291f4d55be3e88dd64043d38f57d07ad5a5a27af2079fae9341dd9c82b3"
+    },
+    {
+      "path": "src/platform/host/vz-driver.ts",
+      "sha256": "0c538f7f13a087489b622e986b0bed67d108ae63ef3f08eb5da18acf30b10dfd"
     },
     {
       "path": "src/platform/product-text.ts",

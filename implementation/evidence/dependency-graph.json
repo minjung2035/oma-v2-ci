@@ -143,6 +143,7 @@
   "src/platform/host/lifecycle.ts",
   "src/platform/host/peer.ts",
   "src/platform/host/resolver.ts",
+  "src/platform/host/vz-driver.ts",
   "src/platform/product-text.ts",
   "src/platform/rpc.ts",
   "src/platform/terminal-modes.ts",
@@ -1475,7 +1476,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 54
+   "files": 55
   },
   {
    "index": 5,
@@ -1492,9 +1493,9 @@
    "files": 59
   }
  ],
- "files": 250,
- "runtimeEdges": 944,
- "typeOnlyEdges": 331,
+ "files": 251,
+ "runtimeEdges": 946,
+ "typeOnlyEdges": 333,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
   "L2-facts -> L1-kernel": 31,
@@ -1502,7 +1503,7 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 138,
+  "L4-orchestration -> L1-kernel": 140,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
   "L4-orchestration -> L4-orchestration": 63,
@@ -1529,7 +1530,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 131,
+  "src/domain/errors.ts": 132,
   "src/domain/identifiers.ts": 38,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 25,
@@ -1567,14 +1568,14 @@
   "@earendil-works/pi-tui": 2,
   "koffi": 5,
   "node:async_hooks": 3,
-  "node:child_process": 5,
+  "node:child_process": 6,
   "node:crypto": 27,
   "node:fs": 69,
   "node:http": 1,
   "node:https": 1,
-  "node:net": 22,
+  "node:net": 23,
   "node:os": 3,
-  "node:path": 71,
+  "node:path": 72,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,
