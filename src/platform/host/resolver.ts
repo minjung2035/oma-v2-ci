@@ -5,9 +5,10 @@
 import { StoreError } from "../../domain/errors.js";
 import { resolveEngineAuth, type EngineAuth } from "../../runtime/engine-auth.js";
 import { keychainCredentials, type KeychainStore } from "./keychain.js";
+import { EGRESS_ENGINE_MANAGED } from "../../protocol/host-guest.js";
 
 /** The one credential reference v1 knows: the engine's own login. */
-export const ENGINE_MANAGED = "engine-managed";
+export const ENGINE_MANAGED = EGRESS_ENGINE_MANAGED;
 
 export function hostResolver(engineDir: string, keychain: KeychainStore) {
   return async (credentialRef: string, provider: string, model: string): Promise<EngineAuth> => {

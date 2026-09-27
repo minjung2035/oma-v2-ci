@@ -199,6 +199,7 @@
   "src/runtime/broker-lifetime.ts",
   "src/runtime/broker-supervisor.ts",
   "src/runtime/deployment-manifest.ts",
+  "src/runtime/egress-forwarder.ts",
   "src/runtime/engine-auth.ts",
   "src/runtime/extension-integrity.ts",
   "src/runtime/host-tenure.ts",
@@ -1529,7 +1530,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 67
+   "files": 68
   },
   {
    "index": 5,
@@ -1546,8 +1547,8 @@
    "files": 66
   }
  ],
- "files": 272,
- "runtimeEdges": 1049,
+ "files": 273,
+ "runtimeEdges": 1055,
  "typeOnlyEdges": 341,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 236,
@@ -1556,14 +1557,14 @@
   "L3-workflow -> L1-kernel": 169,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 170,
+  "L4-orchestration -> L1-kernel": 174,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 13,
-  "L4-orchestration -> L4-orchestration": 78,
+  "L4-orchestration -> L4-orchestration": 79,
   "L5-entry -> L1-kernel": 91,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 57,
+  "L5-entry -> L4-orchestration": 58,
   "L5-entry -> L5-entry": 124
  },
  "upwardTypeOnlyEdges": [
@@ -1583,27 +1584,27 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 143,
+  "src/domain/errors.ts": 144,
   "src/domain/identifiers.ts": 40,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 26,
+  "src/protocol/host-guest.ts": 23,
   "src/storage/directory.ts": 23,
   "src/storage/contained-fs.ts": 22,
   "src/storage/durable-fs.ts": 22,
-  "src/protocol/host-guest.ts": 21,
   "src/domain/derived.ts": 17,
   "src/cli/exit.ts": 16,
   "src/store.ts": 16,
+  "src/frame.ts": 14,
   "src/process/policies.ts": 14,
   "src/domain/canonical-json.ts": 13,
-  "src/frame.ts": 13,
   "src/authority.ts": 12
  },
  "fanOut": {
   "src/broker.ts": 30,
   "src/mail.ts": 28,
   "src/entry/broker.ts": 27,
-  "src/entry/oma.ts": 26,
+  "src/entry/oma.ts": 27,
   "src/git/context-repository.ts": 16,
   "src/lifecycle/create.ts": 15,
   "src/git.ts": 14,
@@ -1612,8 +1613,8 @@
   "src/mail/batches.ts": 14,
   "src/pi-extension.ts": 14,
   "src/reconcile.ts": 14,
+  "src/runner.ts": 14,
   "src/store.ts": 14,
-  "src/runner.ts": 13,
   "src/entry/runner.ts": 12
  },
  "external": {
@@ -1622,13 +1623,13 @@
   "koffi": 5,
   "node:async_hooks": 3,
   "node:child_process": 6,
-  "node:crypto": 35,
-  "node:fs": 86,
+  "node:crypto": 36,
+  "node:fs": 87,
   "node:http": 1,
   "node:https": 1,
-  "node:net": 27,
+  "node:net": 28,
   "node:os": 4,
-  "node:path": 85,
+  "node:path": 86,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

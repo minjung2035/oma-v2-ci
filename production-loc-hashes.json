@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "19362cc2cdfc27a847b2baaac29127f10323fc80fde6d30fe38d5991c8ecf6fc",
-  "report": "3d61e619c129b2b2643319b7a00c24584ac225ee042cd6126f4936795710f647",
+  "manifest": "a84af49ed0c182d8823d6068d3f715908a800d27f4cee135f259f5dff998cde4",
+  "report": "6c29b1082916d02e503e4875e10c30c8538ed6fe830327384304e77f2bef9832",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "49081c09819caaec8806981403739e1cdc487078d30e96283a5c868297bcc2f8"
+      "sha256": "f4c0d41e76c1be99e323be19745459091f1d512a210cec547f39953874f4b89e"
     },
     {
       "path": "src/entry/omahostd.ts",
@@ -329,7 +329,7 @@
     },
     {
       "path": "src/entry/runner.ts",
-      "sha256": "3334e821b4b6245f8979f3e6c5d340605e53def57a84bf4ec52fd10bc8174bfc"
+      "sha256": "81c3800fcb6b3cb2f6366b84841a68037b7488169fdf2859f6f43dc2a48a8042"
     },
     {
       "path": "src/extension/batch-view.ts",
@@ -633,7 +633,7 @@
     },
     {
       "path": "src/platform/host/resolver.ts",
-      "sha256": "6e136291f4d55be3e88dd64043d38f57d07ad5a5a27af2079fae9341dd9c82b3"
+      "sha256": "f35b93f91e66987a15d16b101146c9f36476a21301452933e40f0f10b52d6a42"
     },
     {
       "path": "src/platform/host/service.ts",
@@ -709,7 +709,7 @@
     },
     {
       "path": "src/protocol/host-guest.ts",
-      "sha256": "ce1b1ee4ec26893c7db1a4e9580bc2e4189f7b85f4304f454967180e361927b1"
+      "sha256": "a2fe9e1964dd3373d1c2ba8c81dbc520140348efc291b0c778bb1c8f7d77f3f8"
     },
     {
       "path": "src/protocol/jsonl.ts",
@@ -777,7 +777,7 @@
     },
     {
       "path": "src/runner.ts",
-      "sha256": "34639e5d7c1dec748adacb7b69a06e49f70b120ecf144179b98d8ac05667f0e7"
+      "sha256": "bb4e2e30001620cfeb3903365deeee69aac25f8fbdabcf9cb5ab97ddc8b64815"
     },
     {
       "path": "src/runtime/assets.ts",
@@ -794,6 +794,10 @@
     {
       "path": "src/runtime/deployment-manifest.ts",
       "sha256": "2209c5284911f062ebd09f689fb0f004fc1901eb213fed505104adcbb29deecb"
+    },
+    {
+      "path": "src/runtime/egress-forwarder.ts",
+      "sha256": "dd4b35c117aea20b09c29da680a982ab8bd0a1bc150c6a641a680b3414700d7e"
     },
     {
       "path": "src/runtime/engine-auth.ts",

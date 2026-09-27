@@ -196,6 +196,7 @@ src/runtime/assets.ts
 src/runtime/broker-lifetime.ts
 src/runtime/broker-supervisor.ts
 src/runtime/deployment-manifest.ts
+src/runtime/egress-forwarder.ts
 src/runtime/engine-auth.ts
 src/runtime/extension-integrity.ts
 src/runtime/host-tenure.ts

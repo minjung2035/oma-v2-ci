@@ -40,6 +40,7 @@ import type { ExtensionRow } from "../tui/model.js";
 import type { PromptOutcome } from "../tui/prompt.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 import { runEngineLogin } from "../tui/login.js";
+import { openPrincipalEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
 
 function usage(): never {
   process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma login [--society <name>] [--config <path>]\n");
@@ -329,6 +330,8 @@ async function main(argv: readonly string[]): Promise<void> {
   app.refresh();
 
   let broker: BrokerHandle | null = null;
+  // DR18: the Principal's provider path in the macOS guest, opened below.
+  let principalEgress: PrincipalEgress | null = null;
   let finished = false;
   const shutdown = async (code: number): Promise<void> => {
     if (finished) return;
@@ -340,6 +343,7 @@ async function main(argv: readonly string[]): Promise<void> {
     if (tenure !== null) await tenure.end();
     session = null;
     broker?.stop();
+    await principalEgress?.close();
     terminal.restore();
     process.exit(code);
   };
@@ -380,6 +384,22 @@ async function main(argv: readonly string[]): Promise<void> {
   // gives that engine its own agent directory so a Pi the user installed keeps
   // its configuration, extensions and sessions to itself. It starts without
   // authority: the credential reaches it later, on a private socket.
+  // DR18 (D-4 with D-10): in the macOS guest the Principal's engine reaches its
+  // provider through the guest's egress, as a Resident's does -- one
+  // placeholder and forwarder for this process, kept across engine restarts.
+  // On Linux the environment names no egress socket and this is null.
+  try {
+    const egressProfile = principalSessionProfile(configPath, society);
+    principalEgress = await openPrincipalEgress({ society, runRoot, provider: egressProfile.provider, model: egressProfile.model,
+      modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
+      frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env });
+  } catch (error) {
+    app.line(`⚠ provider에 닿는 길을 열지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  // The session environment is principalEnvironment's own value, with the
+  // provider path added only where there is one.
+  const withEgress = (environment: Record<string, string>): Record<string, string> =>
+    principalEgress === null ? environment : { ...environment, ...principalEgress.env };
   const startEngine = (owner: HostTenure): PrincipalSession => {
     const piRuntime = resolvePiRuntime({
       stateRoot, libdir: settings.config.installation.libdir, override: process.env.OMA_PI_COMMAND,
@@ -399,7 +419,7 @@ async function main(argv: readonly string[]): Promise<void> {
         fence: owner.fence },
       profile,
       limitsOf(settings.config.limits),
-      principalEnvironment({ stateRoot, runRoot, libdir: settings.config.installation.libdir }, profile, settings.config.limits),
+      withEgress(principalEnvironment({ stateRoot, runRoot, libdir: settings.config.installation.libdir }, profile, settings.config.limits)),
       {
         // WP09.03: every callback is this engine's; a late one from an engine
         // that is no longer the session cannot clear or re-mark its successor.

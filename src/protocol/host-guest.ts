@@ -240,6 +240,9 @@ export function parseTerminalJson(payload: Buffer, required: readonly string[], 
  * closes; after `egress.open` the connection carries the engine's HTTP. */
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$/;
 export interface EgressRun { readonly society: string; readonly actor: string; readonly incarnation: number }
+/** The credential the host keeps for the engine (MAC-704): the one a run's
+ * placeholder stands for. Guest and host name it the same way. */
+export const EGRESS_ENGINE_MANAGED = "engine-managed";
 export interface EgressPlaceholderParams {
   readonly credentialRef: string; readonly provider: string; readonly model: string; readonly run: EgressRun;
 }

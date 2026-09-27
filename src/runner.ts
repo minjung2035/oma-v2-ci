@@ -11,6 +11,7 @@ import { dirname } from "node:path";
 import { confinedPath, type ResidentDirectories } from "./sandbox.js";
 import type { PiConfinement, PiInference } from "./runtime/pi-spawn-plan.js";
 import { InferenceRelay } from "./runtime/inference-relay.js";
+import { EGRESS_SOCKET_ENV, EgressForwarder, requestEgressPlaceholder } from "./runtime/egress-forwarder.js";
 import { placeholderFor, resolveEngineAuth } from "./runtime/engine-auth.js";
 import { productSurfaceMasks } from "./runtime/resident-rootfs.js";
 import { StoreError } from "./domain/errors.js";
@@ -41,6 +42,8 @@ export { BrokerChannel } from "./protocol/channel.js";
 import type { RoleSettings } from "./config/operations.js";
 export interface RunnerProfile {
   readonly name: string;
+  /** The model profile's name, as a placeholder request names it (DR18). */
+  readonly modelProfile?: string;
   readonly model: Readonly<ModelProfile>;
   readonly settings?: RoleSettings;
   readonly workspaceBytes?: number;
@@ -145,18 +148,31 @@ export class RunnerModule {
    * delivery, and the sandbox is given only a placeholder of the same shape.
    * Unconfined runs need none of this: the engine reads its agent directory
    * directly. */
-  private async openRelay(): Promise<{ inference: PiInference; relay: InferenceRelay } | undefined> {
+  private async openRelay(): Promise<{ inference: PiInference; relay: { close(): Promise<void> } } | undefined> {
     if (this.paths.confinement === undefined) return undefined;
     const { piAgentDir } = this.paths;
     if (!this.lease || !this.limits || !this.profile || !piAgentDir)
       throw new StoreError("UNSUPPORTED_PROFILE", "confined inference configuration is incomplete");
-    const auth = await resolveEngineAuth(piAgentDir, this.profile.model.provider, this.profile.model.model);
-    const placeholder = placeholderFor(auth.apiKey);
     // Beside the lease socket: the same per-incarnation directory, so a stale
     // run's relay cannot be reached by the next incarnation.
     const socketHostPath = join(dirname(this.lease.socketHostPath), "inference.sock");
     if (Buffer.byteLength(socketHostPath) > 107)
       throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path exceeds Linux sun_path");
+    // DR18 (D-10): in the macOS guest the credential stays on the host; the
+    // run asks the guest's egress service for its placeholder and forwards the
+    // engine's connections there.
+    const egress = process.env[EGRESS_SOCKET_ENV];
+    if (egress !== undefined && egress.length > 0) {
+      if (!this.paths.society) throw new StoreError("UNSUPPORTED_PROFILE", "confined inference configuration is incomplete");
+      const run = { society: this.paths.society, actor: this.lease.actor, incarnation: this.lease.incarnation };
+      const issued = await requestEgressPlaceholder({ socket: egress, frameBytes: this.limits.frameBytes, deadlineMs: this.limits.receiptWaitSeconds * 1000 },
+        run, this.profile.model.provider, this.profile.model.model);
+      const forwarder = await EgressForwarder.listen(socketHostPath, egress,
+        { placeholderId: issued.placeholderId, ...run, modelProfile: this.profile.modelProfile ?? this.profile.name }, 4);
+      return { relay: forwarder, inference: { socketHostPath, provider: issued.provider, model: issued.model, placeholder: issued.placeholder } };
+    }
+    const auth = await resolveEngineAuth(piAgentDir, this.profile.model.provider, this.profile.model.model);
+    const placeholder = placeholderFor(auth.apiKey);
     const relay = await InferenceRelay.open(socketHostPath,
       { origin: auth.origin, headers: auth.headers, substitute: { placeholder, secret: auth.apiKey } },
       { concurrent: 4, timeoutMs: this.limits.idleStreamSeconds * 1000 });

@@ -50,7 +50,7 @@ const resources = /^(?:[0-9a-f]{2})+$/.test(resourcesHex) ? parseCanonicalResour
 if (resources === null) { console.error(`runner: missing or malformed broker-rendered resources for ${agent}`); process.exit(4); }
 const agentProfile = cfg.agentProfiles[profileName]!;
 const modelName = agentProfile.modelProfile;
-const profile = Object.freeze({ name: profileName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
+const profile = Object.freeze({ name: profileName, modelProfile: modelName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
   workspaceBytes: resources.workspaceBytes,
   ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}) });
 // OMA runs the engine it shipped with, never one found on PATH, and points it

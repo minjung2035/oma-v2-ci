@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 271,
-    "n_lines": 35381,
+    "n_files": 272,
+    "n_lines": 35591,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -36,6 +36,12 @@
     "code": 403,
     "language": "TypeScript"
   },
+  "src/entry/oma.ts": {
+    "blank": 27,
+    "comment": 185,
+    "code": 378,
+    "language": "TypeScript"
+  },
   "src/config/operations.ts": {
     "blank": 2,
     "comment": 44,
@@ -46,12 +52,6 @@
     "blank": 22,
     "comment": 25,
     "code": 370,
-    "language": "TypeScript"
-  },
-  "src/entry/oma.ts": {
-    "blank": 27,
-    "comment": 178,
-    "code": 365,
     "language": "TypeScript"
   },
   "src/runtime/inference-relay.ts": {
@@ -90,16 +90,16 @@
     "code": 302,
     "language": "TypeScript"
   },
+  "src/runner.ts": {
+    "blank": 0,
+    "comment": 42,
+    "code": 298,
+    "language": "TypeScript"
+  },
   "src/tui/sources/settings.ts": {
     "blank": 25,
     "comment": 75,
     "code": 287,
-    "language": "TypeScript"
-  },
-  "src/runner.ts": {
-    "blank": 0,
-    "comment": 38,
-    "code": 286,
     "language": "TypeScript"
   },
   "src/runtime/provision.ts": {
@@ -188,8 +188,8 @@
   },
   "src/protocol/host-guest.ts": {
     "blank": 21,
-    "comment": 44,
-    "code": 219,
+    "comment": 46,
+    "code": 220,
     "language": "TypeScript"
   },
   "src/git/integration.ts": {
@@ -478,6 +478,12 @@
     "blank": 13,
     "comment": 26,
     "code": 132,
+    "language": "TypeScript"
+  },
+  "src/runtime/egress-forwarder.ts": {
+    "blank": 10,
+    "comment": 32,
+    "code": 128,
     "language": "TypeScript"
   },
   "src/extension/tool-surface.ts": {
@@ -1524,6 +1530,12 @@
     "code": 12,
     "language": "OMA systemd"
   },
+  "src/platform/host/resolver.ts": {
+    "blank": 2,
+    "comment": 5,
+    "code": 11,
+    "language": "TypeScript"
+  },
   "src/platform/product-text.ts": {
     "blank": 2,
     "comment": 12,
@@ -1545,12 +1557,6 @@
   "src/hash.ts": {
     "blank": 2,
     "comment": 6,
-    "code": 10,
-    "language": "TypeScript"
-  },
-  "src/platform/host/resolver.ts": {
-    "blank": 2,
-    "comment": 5,
     "code": 10,
     "language": "TypeScript"
   },
@@ -1633,9 +1639,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1550,
-    "comment": 6096,
-    "code": 27735,
-    "nFiles": 271
+    "blank": 1560,
+    "comment": 6141,
+    "code": 27890,
+    "nFiles": 272
   }
 }

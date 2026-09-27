@@ -150,3 +150,47 @@ test("MAC-225: with no connection waiting, an engine's connection is refused at 
   assert.equal(await post(serviceSocket, { placeholderId: randomUUID(), ...RUN, modelProfile: "default" }, "sk-ant-api03-PLACEHOLDERxxxxxxxxxxxxxxxx"), "closed");
   assert.ok(performance.now() - started < 1000, "refused, not waited out");
 });
+
+test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the engine's connections through egress; the key is put in on the host", async t => {
+  const { EgressForwarder, requestEgressPlaceholder, openPrincipalEgress } = await import("../src/runtime/egress-forwarder.js");
+  const { host, pool, provider, serviceSocket, resolved } = await world(t);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current");
+  assert.notEqual(issued.placeholder, SECRET);
+  assert.deepEqual(resolved, ["engine-managed:anthropic/current"]);
+  await until(() => pool.size >= 6, "the pool grows for the run");
+  const dir = mkdtempSync(join(tmpdir(), "oma-forwarder-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const socketPath = join(dir, "inference.sock");
+  const forwarder = await EgressForwarder.listen(socketPath, serviceSocket, { placeholderId: issued.placeholderId, ...RUN, modelProfile: "worker" }, 4);
+  // The engine speaks HTTP to the socket it was given, with the placeholder as its key.
+  const engine = (key: string) => new Promise<{ status: number; body: string } | "closed">(resolve => {
+    const request = httpRequest({ socketPath, method: "POST", path: "/messages", headers: { "x-api-key": key, "content-type": "application/json" } }, response => {
+      let body = "";
+      response.on("data", chunk => { body += chunk; });
+      response.on("end", () => resolve({ status: response.statusCode ?? 0, body }));
+    });
+    request.on("error", () => resolve("closed"));
+    request.end('{"hello":true}');
+  });
+  assert.deepEqual(await engine(issued.placeholder), { status: 200, body: "ab" });
+  assert.equal(provider.seen.length, 1);
+  assert.equal(provider.seen[0]!.headers["x-api-key"], SECRET, "the key was not put in on the host");
+  await forwarder.close();
+  assert.equal(await engine(issued.placeholder), "closed", "a closed forwarder still forwarded");
+  // A host that refuses the credential is refused to the run, by name.
+  await assert.rejects(requestEgressPlaceholder(ask, RUN, "openai", "gpt"), (error: unknown) =>
+    error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /no placeholder/.test(error.message));
+  // The Principal's path: nothing without the environment's egress socket, the bridge's environment with it.
+  assert.equal(await openPrincipalEgress({ society: "demo", runRoot: dir, provider: "anthropic", model: "current", modelProfile: "default",
+    frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, env: {} }), null);
+  const principal = await openPrincipalEgress({ society: "demo", runRoot: dir, provider: "anthropic", model: "current", modelProfile: "default",
+    frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, env: { OMA_EGRESS_SOCKET: serviceSocket } });
+  assert.ok(principal !== null);
+  assert.deepEqual(Object.keys(principal.env).sort(), ["OMA_INFERENCE_KEY", "OMA_INFERENCE_PORT", "OMA_INFERENCE_PROVIDER", "OMA_INFERENCE_SOCKET"]);
+  assert.equal(principal.env.OMA_INFERENCE_PROVIDER, "anthropic");
+  assert.notEqual(principal.env.OMA_INFERENCE_KEY, SECRET);
+  await principal.close();
+});

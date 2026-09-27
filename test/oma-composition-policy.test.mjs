@@ -298,6 +298,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../runtime/broker-lifetime.js": { HOST_LOSS_SIGNALS },
     // `oma login` (DR18, D-9); a start never reaches it.
     "../tui/login.js": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
+    // DR18 (D-10): the environment names no egress socket here, as on Linux.
+    "../runtime/egress-forwarder.js": { openPrincipalEgress: async () => null },
     "../config/generations.js": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
   };
   const process_ = {
