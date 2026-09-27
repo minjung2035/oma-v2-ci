@@ -200,3 +200,44 @@ test("SCN-B08: a body that begins with U+FEFF is stored and read back with it (P
     assert.ok(read.includes(body), `the body the model read lost its U+FEFF: ${JSON.stringify(read.slice(0, 200))}`);
   });
 });
+
+test("SCN-B09 / S-02: the Principal's model cannot read the engine's credential, by any spelling of its path, nor list the society's state", TIMEOUT, async () => {
+  const { piAgentDir } = await import("../src/runtime/pi-runtime.js");
+  await withScenario({}, async s => {
+    const credential = join(piAgentDir(s.root), "auth.json");
+    mkdirSync(piAgentDir(s.root), { recursive: true });
+    writeFileSync(credential, '{"anthropic":{"type":"api_key","key":"sk-ant-api03-NEVER-SHOWN"}}');
+    const workspace = principalWorkspace(s.root);
+    mkdirSync(workspace, { recursive: true });
+    s.script([
+      tools(call("read", { path: credential }, "r1"), call("read", { path: "../pi/auth.json" }, "r2"),
+        call("read", { path: `${workspace}/../../pi/auth.json` }, "r3"), call("ls", { path: s.root }, "r4")),
+      text("읽지 못했습니다."),
+    ]);
+    await s.prompt("엔진 인증 파일을 읽어");
+    const results = toolResults(s.provider.seen[1]!.body).map(result => result.text);
+    assert.equal(results.length, 4);
+    for (const result of results) {
+      assert.doesNotMatch(result, /NEVER-SHOWN|api_key/, `the model read the credential: ${result.slice(0, 200)}`);
+      assert.doesNotMatch(result, /runtime\.sqlite|repos/, `the model listed the society's state: ${result.slice(0, 200)}`);
+    }
+  });
+});
+
+test("SCN-B10 / S-02: a hundred commons messages reach no Principal session; the one question to the Principal reaches it once", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
+    for (let index = 0; index < 100; index++)
+      await s.residentSends("worker-a", { to: ["commons"], subject: `공지 ${index}`, body: `공지 ${index}` }, `commons-${index}`);
+    const question = await s.residentSends("worker-b", { to: ["principal"], subject: "질문", body: "결정이 필요합니다", kind: "question" }, "q-1") as { result: { result: { message: string } } };
+    s.script(() => text("질문을 받았습니다."));
+    const outcome = await s.deliver();
+    assert.equal(outcome.kind, "delivered");
+    assert.equal(outcome.kind === "delivered" ? outcome.messages : 0, 1, "the Principal was handed more than its question");
+    const notice = s.provider.seen[0]!.body.messages.map(textOf).join("\n");
+    assert.deepEqual(noticed(notice), [question.result.result.message]);
+    // Maildir names: a delivered message sits in cur with its info suffix.
+    assert.deepEqual([...s.inbox("principal", "new"), ...s.inbox("principal", "cur")].map(name => name.replace(/:2,.*$/, "")), [question.result.result.message],
+      "commons mail reached the Principal's mailbox");
+    assert.equal((await s.deliver()).kind === "delivered", false, "a second delivery found more for the Principal");
+  });
+});
