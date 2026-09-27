@@ -9,7 +9,11 @@
 // This is not provider evidence (P0-5): what a real provider streams, how it
 // fails and how the engine retries it are the engine's (INF-001).
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createServer as createTlsServer } from "node:https";
+import { execFileSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Socket } from "node:net";
 
@@ -51,6 +55,8 @@ export const failing = (status = 500): Reply => ({ kind: "http-error", status })
 
 export interface Seen {
   readonly path: string;
+  /** The credential the request carried (the Authorization header). */
+  readonly authorization: string;
   readonly body: ChatRequest;
   readonly reply: Reply;
 }
@@ -58,6 +64,8 @@ export type Script = (request: ChatRequest, index: number) => Reply;
 
 export interface ScriptedProvider {
   readonly baseUrl: string;
+  /** With TLS: the certificate a client must trust (NODE_EXTRA_CA_CERTS). */
+  readonly caFile: string | null;
   readonly seen: readonly Seen[];
   /** Replaces the script for the requests still to come. */
   script(next: Script | readonly Reply[]): void;
@@ -91,7 +99,23 @@ const scriptOf = (source: Script | readonly Reply[]): Script => {
   return (_request, index) => replies[index] ?? { kind: "text", text: "(script exhausted)" };
 };
 
-export async function scriptedProvider(initial: Script | readonly Reply[] = []): Promise<ScriptedProvider> {
+/** The engine's catalog model a confined Resident runs, served here. */
+export const CONFINED_MODEL = Object.freeze({ provider: "groq", model: "llama-3.1-8b-instant" });
+/** A key the engine and the relay accept as a provider credential: long
+ * enough to be given a placeholder of the same shape (engine-auth). */
+export const SCRIPTED_KEY = `sk-scripted-${"k".repeat(40)}`;
+
+/** A throwaway certificate for 127.0.0.1, so a TLS client can trust exactly it. */
+function certificate(): { dir: string; key: string; cert: string } {
+  const dir = mkdtempSync(join(tmpdir(), "oma-scripted-tls-"));
+  const keyPath = join(dir, "key.pem"); const certPath = join(dir, "cert.pem");
+  writeFileSync(keyPath, generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs8", format: "pem" }));
+  execFileSync("openssl", ["req", "-new", "-x509", "-key", keyPath, "-out", certPath, "-days", "1", "-subj", "/CN=127.0.0.1",
+    "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"], { stdio: "ignore" });
+  return { dir, key: readFileSync(keyPath, "utf8"), cert: certPath };
+}
+
+export async function scriptedProvider(initial: Script | readonly Reply[] = [], options: { readonly tls?: boolean } = {}): Promise<ScriptedProvider> {
   const seen: Seen[] = [];
   let script = scriptOf(initial);
   let offset = 0;
@@ -100,7 +124,7 @@ export async function scriptedProvider(initial: Script | readonly Reply[] = []):
     const index = seen.length - offset;
     let reply: Reply;
     try { reply = script(body, index); } catch (error) { reply = { kind: "http-error", status: 599, body: String(error) }; }
-    seen.push({ path: request.url ?? "", body, reply });
+    seen.push({ path: request.url ?? "", authorization: String(request.headers.authorization ?? ""), body, reply });
     respond(response, reply);
   };
   const respond = (response: ServerResponse, reply: Reply): void => {
@@ -140,7 +164,8 @@ export async function scriptedProvider(initial: Script | readonly Reply[] = []):
     send({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } });
     response.end("data: [DONE]\n\n");
   };
-  const server = createServer((request, response) => {
+  const tls = options.tls === true ? certificate() : null;
+  const handler = (request: IncomingMessage, response: ServerResponse): void => {
     let raw = "";
     request.setEncoding("utf8");
     request.on("data", chunk => { raw += chunk; });
@@ -149,22 +174,28 @@ export async function scriptedProvider(initial: Script | readonly Reply[] = []):
       try { body = JSON.parse(raw) as ChatRequest; } catch { response.writeHead(400); response.end(); return; }
       answer(request, response, body);
     });
-  });
+  };
+  const server = tls === null ? createServer(handler) : createTlsServer({ key: tls.key, cert: readFileSync(tls.cert) }, handler);
   server.on("connection", socket => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
   await new Promise<void>(resolve => { server.listen(0, "127.0.0.1", () => resolve()); });
   const address = server.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
-  const baseUrl = `http://127.0.0.1:${port}/v1`;
+  const baseUrl = `${tls === null ? "http" : "https"}://127.0.0.1:${port}/v1`;
   return {
     baseUrl,
+    caFile: tls?.cert ?? null,
     get seen() { return seen; },
     script(next) { script = scriptOf(next); offset = seen.length; },
     configure(agentDir) {
       mkdirSync(agentDir, { recursive: true, mode: 0o700 });
-      writeFileSync(join(agentDir, "models.json"), JSON.stringify({ providers: { fake: {
-        baseUrl, api: "openai-completions", apiKey: "scripted-key",
-        models: [{ id: "scripted", contextWindow: 200000, maxTokens: 8192 }],
-      } } }));
+      // `fake` is a provider of its own; `groq` is one the engine ships with an
+      // OpenAI-compatible API, pointed here -- the provider a confined Resident
+      // uses, because inside its sandbox the engine knows only its own catalog
+      // and reaches it through the runner's relay.
+      writeFileSync(join(agentDir, "models.json"), JSON.stringify({ providers: {
+        fake: { baseUrl, api: "openai-completions", apiKey: SCRIPTED_KEY, models: [{ id: "scripted", contextWindow: 200000, maxTokens: 8192 }] },
+        groq: { baseUrl, apiKey: SCRIPTED_KEY },
+      } }));
       // The engine's own retry policy stays on (INF-001); only its waits are
       // shortened so a scenario that makes it retry does not take minutes.
       writeFileSync(join(agentDir, "settings.json"), JSON.stringify({
@@ -174,7 +205,7 @@ export async function scriptedProvider(initial: Script | readonly Reply[] = []):
     },
     close: () => new Promise<void>(resolve => {
       for (const socket of sockets) socket.destroy();
-      server.close(() => resolve());
+      server.close(() => { if (tls !== null) rmSync(tls.dir, { recursive: true, force: true }); resolve(); });
     }),
   };
 }

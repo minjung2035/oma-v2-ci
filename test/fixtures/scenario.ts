@@ -20,7 +20,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,18 +32,24 @@ import type { UnitsModule } from "../../src/units.js";
 import { validateConfig } from "../../src/config.js";
 import { defaultHostConfig } from "../../src/config/defaults.js";
 import { canonicalResourceLimits } from "../../src/domain/resources.js";
+import { GitModule } from "../../src/git.js";
+import { QUARANTINE_RESOURCES } from "../../src/git/quarantine.js";
+import { integrationPolicyFromConfig } from "../../src/git/integration-policy.js";
+import { readCurrentHostPolicy } from "../../src/config.js";
+import { residentProjectGit } from "../../src/sandbox.js";
+import type { HostConfigV1 } from "../../implementation/contracts.js";
 import { ViewsModule } from "../../src/views.js";
 import { LifecycleModule } from "../../src/lifecycle.js";
-import { provisionSociety } from "../../src/runtime/provision.js";
+import { provisionSociety, residentRootfsPath } from "../../src/runtime/provision.js";
 import { processIdentity, type ProcessIdentity } from "../../src/broker/process-ancestry.js";
 import { encodeHostMessage } from "../../src/protocol/host-channel.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../../src/tui/session.js";
 import { PrincipalDelivery, principalHostBroker, type DeliveryOutcome } from "../../src/runtime/principal-delivery.js";
 import { resolvePiRuntime } from "../../src/runtime/pi-runtime.js";
 import type { PiEvent } from "../../src/runtime/pi-rpc.js";
-import { agentRootPathAt, runnerViewPathAt, workspacePathAt } from "../../src/storage/paths.js";
+import { agentRootPathAt, projectGitPathAt, runnerViewPathAt, workspacePathAt } from "../../src/storage/paths.js";
 import { makeValidAgent } from "./spec.js";
-import { scriptedProvider, type Reply, type Script, type ScriptedProvider } from "./scripted-provider.js";
+import { CONFINED_MODEL, scriptedProvider, type Reply, type Script, type ScriptedProvider } from "./scripted-provider.js";
 
 export const SCENARIO_LIMITS: ProtocolLimits = {
   frameBytes: 262144, mailBodyBytes: 262144, subjectBytes: 512, addresses: 64,
@@ -158,18 +164,29 @@ export interface ScenarioOptions {
   readonly residents?: readonly string[];
   readonly acceptMs?: number;
   readonly retryAfterMs?: number;
+  /** Residents run confined, as a deployment with a rootfs runs them: under
+   * bubblewrap in the society's generated rootfs, with bash, reaching the
+   * (then TLS) scripted provider only through the runner's relay. */
+  readonly confined?: boolean;
 }
 
-/** A broker over the society's state. It owns the Store it is given: its
- * drain closes it, as the product's broker process does on its way out. */
-function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, stand: ScenarioUnits): Broker {
+/** A broker over the society's state, composed as entry/broker.ts composes
+ * it (mail, views, lifecycle, Git with its quarantine and the host's current
+ * integration policy). It owns the Store it is given: its drain closes it, as
+ * the product's broker process does on its way out. */
+function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, stand: ScenarioUnits, config: HostConfigV1, configPath: string): Broker {
   const units = stand as unknown as UnitsModule;
   const mail = new MailModule({ stateRoot: root, society: SOCIETY }, store, 64, SCENARIO_LIMITS.batchMaxMessages, SCENARIO_LIMITS);
   const views = new ViewsModule(store, root, SOCIETY, "p");
+  const git = new GitModule({ stateRoot: root, projectGit: projectGitPathAt(root), contextGit: join(root, "repos", "context.git"),
+    worldDir: join(root, "world"), society: SOCIETY, quarantineTmpBytes: config.limits.bundleBytes, quarantineResources: QUARANTINE_RESOURCES,
+    checkRootfs: config.installation.rootfs, checkAssetsDir: config.installation.rootfs, checkTmpBytes: 1,
+  }, store, mail, integrationPolicyFromConfig(config.integration), () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration));
   const lifecycle = new LifecycleModule(store, units,
-    { stateRoot: root, projectGit: join(root, "project.git"), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true },
+    { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true,
+      residentProjectGit: residentProjectGit(config.installation.rootfs, projectGitPathAt(root)) },
     () => null, mail);
-  return new Broker(store, mail, units, views, lifecycle, null, null,
+  return new Broker(store, mail, units, views, lifecycle, git, null,
     { stateRoot: root, runRoot, society: SOCIETY, hasGoal: () => true }, SCENARIO_LIMITS, undefined, host);
 }
 
@@ -182,24 +199,28 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
   provisionSociety(root);
   // The society's configuration: the product's defaults with the scripted
   // model for Residents and no rootfs, so a runner runs its engine unconfined.
-  const defaults = defaultHostConfig({ society: SOCIETY, node: process.execPath, libdir: REPO, rootfs: "/", deploymentDigest: "a".repeat(64) });
+  const defaults = defaultHostConfig({ society: SOCIETY, node: process.execPath, libdir: REPO,
+    rootfs: options.confined === true ? residentRootfsPath(root) : "/", deploymentDigest: "a".repeat(64) });
   const residentProfile = Object.keys(defaults.agentProfiles).find(name => name !== defaults.principalProfile)!;
   const config = validateConfig({ ...defaults,
-    modelProfiles: { ...defaults.modelProfiles, scripted: { provider: "fake", model: "scripted", credentialRef: "engine-managed",
+    modelProfiles: { ...defaults.modelProfiles, scripted: { ...(options.confined === true ? CONFINED_MODEL : { provider: "fake", model: "scripted" }), credentialRef: "engine-managed",
       codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 } },
     agentProfiles: { ...defaults.agentProfiles, [residentProfile]: { ...defaults.agentProfiles[residentProfile]!, modelProfile: "scripted" } } });
   const configPath = join(root, "config.json");
   writeFileSync(configPath, JSON.stringify(config, null, 2));
   const residentResources = config.agentProfiles[residentProfile]!.resources;
   const units = new ScenarioUnits();
-  const provider = await scriptedProvider(options.script ?? []);
+  const provider = await scriptedProvider(options.script ?? [], { tls: options.confined === true });
+  // The engines and the runner's relay trust the scripted provider's own
+  // certificate; certificate checking stays on.
+  const trust: Record<string, string> = provider.caFile === null ? {} : { NODE_EXTRA_CA_CERTS: provider.caFile };
   let store = new Store(join(root, "runtime.sqlite"));
   store.transaction(tx => {
     tx.insertAgent(makeValidAgent("principal"));
     for (const name of options.residents ?? []) tx.insertAgent(makeValidAgent(name));
   });
   const host = new HostSide();
-  let broker = composeBroker(root, runRoot, store, host, units);
+  let broker = composeBroker(root, runRoot, store, host, units, config, configPath);
   await broker.start();
 
   const runtime = resolvePiRuntime({ stateRoot: root, libdir: REPO });
@@ -214,7 +235,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
         coreExtension: join(REPO, "dist/src/pi-extension.js"), sessionDir: principalSessionDir(root),
         workspace: principalWorkspace(root), home: principalWorkspace(root) },
       profile, { frameBytes: SCENARIO_LIMITS.frameBytes, idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds },
-      principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS),
+      { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust },
       { onLine: line => { lines.push(line); }, onBusy: () => {}, onEnd: reason => { lines.push(`[end] ${reason}`); },
         onPromptFailed: (_text, reason) => { lines.push(`[prompt failed] ${reason}`); },
         onPromptUnconfirmed: (_text, reason) => { lines.push(`[prompt unconfirmed] ${reason}`); } },
@@ -304,7 +325,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     async restartBroker() {
       await scenario.stopBroker();
       store = new Store(join(root, "runtime.sqlite"));
-      broker = composeBroker(root, runRoot, store, host, units);
+      broker = composeBroker(root, runRoot, store, host, units, config, configPath);
       await broker.start();
       register();
     },
@@ -331,12 +352,20 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     async activate(agent, timeoutMs = 90_000) {
       // What provisioning a created Resident leaves: its home and its workspace.
       const home = join(agentRootPathAt(root, agent), "home");
-      for (const path of [home, workspacePathAt(root, agent), runnerViewPathAt(root, agent)]) mkdirSync(path, { recursive: true });
+      for (const path of [home, runnerViewPathAt(root, agent)]) mkdirSync(path, { recursive: true });
+      // The workspace lifecycle creates (LIFE-002): a private clone of the
+      // canonical repository whose origin is that repository as the Resident sees it.
+      const workspace = workspacePathAt(root, agent);
+      if (!existsSync(join(workspace, ".git"))) {
+        const git = (args: string[], cwd?: string): void => { execFileSync("/usr/bin/git", args, { cwd, stdio: "ignore" }); };
+        git(["clone", "--no-local", "--single-branch", "--branch", "main", projectGitPathAt(root), workspace]);
+        git(["remote", "set-url", "origin", residentProjectGit(config.installation.rootfs, projectGitPathAt(root))], workspace);
+      }
       units.running = { agent, invocationId: randomBytes(16).toString("hex") };
       try {
         const child = spawn(process.execPath, [join(REPO, "dist/src/entry/runner.js"), "--society", SOCIETY, "--agent", agent,
           "--config", configPath, "--state-root", root, "--run-root", runRoot], {
-          env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, INVOCATION_ID: units.running.invocationId,
+          env: { ...trust, PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, INVOCATION_ID: units.running.invocationId,
             OMA_PROFILE_HEX: Buffer.from(residentProfile, "utf8").toString("hex"),
             OMA_RESOURCES_HEX: Buffer.from(canonicalResourceLimits(residentResources), "utf8").toString("hex") },
           stdio: ["ignore", "ignore", "pipe"] });
@@ -356,6 +385,8 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       await broker.drainAndClose().catch(() => undefined);
       await provider.close();
       try { store.close(); } catch { /* the broker's drain closed it */ }
+      // Published context revisions are sealed read-only (CTX); open them to remove.
+      execFileSync("chmod", ["-R", "u+rwX", base]);
       rmSync(base, { recursive: true, force: true });
     },
   };
