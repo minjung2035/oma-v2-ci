@@ -35,6 +35,10 @@ const CLEAR = `${ESC}[2J`;
  * them. */
 const PASTE_ON = `${ESC}[?2004h`;
 const PASTE_OFF = `${ESC}[?2004l`;
+/** P0V-79: DECCKM off -- the cursor keys send `ESC [`, not `ESC O`. Another
+ * program may have left the terminal in application cursor mode, and it saves
+ * nothing, so it is asserted wherever the other modes are. */
+const CURSOR_KEYS_NORMAL = `${ESC}[?1l`;
 const NEWLINE = `${String.fromCharCode(13)}${String.fromCharCode(10)}`;
 
 export interface TerminalStreams {
@@ -48,7 +52,7 @@ export function openTerminal(streams: TerminalStreams): Terminal {
   let previous: readonly string[] = [];
   if (input.isTTY) input.setRawMode(true);
   input.resume();
-  output.write(ALT_ON + CURSOR_OFF + PASTE_ON + CLEAR);
+  output.write(ALT_ON + CURSOR_OFF + PASTE_ON + CURSOR_KEYS_NORMAL + CLEAR);
   // WP28: unconditional means every exit, not only the ones that remember to
   // call restore(). A TTY write and setRawMode are synchronous, so they still
   // happen inside an `exit` handler.
@@ -70,7 +74,7 @@ export function openTerminal(streams: TerminalStreams): Terminal {
     repaint() {
       if (restored) return;
       previous = [];
-      output.write(CURSOR_OFF + PASTE_ON + CLEAR);
+      output.write(CURSOR_OFF + PASTE_ON + CURSOR_KEYS_NORMAL + CLEAR);
     },
     restore() {
       if (restored) return;

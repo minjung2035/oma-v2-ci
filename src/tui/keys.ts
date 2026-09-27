@@ -51,6 +51,11 @@ const ACTIONS: Readonly<Record<string, Key>> = Object.freeze({
 
 const ESC = 0x1b;
 const CSI = 0x5b;
+/** P0V-79: `ESC O` introduces a report as `ESC [` does. The xterm family sends
+ * F1–F4 this way, and the cursor keys and Home/End too while a terminal is in
+ * application cursor mode; read as an Escape and two characters, a key would
+ * type `OP` into the prompt. */
+const SS3 = 0x4f;
 /** The most bytes one UTF-8 code point takes, which is how far back the
  * decoder has to look to know whether it is holding half of one. */
 /** Bracketed paste (DEC 2004). The terminal brackets pasted text with these,
@@ -238,7 +243,7 @@ export class KeyDecoder {
       }
 
       if (this.escape !== null) {
-        if (this.escape.length === 1 && byte !== CSI) {
+        if (this.escape.length === 1 && byte !== CSI && byte !== SS3) {
           const action = actionOf(String.fromCharCode(ESC));
           if (action) keys.push(action);
           this.escape = null;

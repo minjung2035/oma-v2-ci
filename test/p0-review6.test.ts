@@ -268,3 +268,43 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
 });
+
+test("P0V-79 / R6-06: an SS3 report is one key or none, never an Escape and the characters behind it", async () => {
+  const { KeyDecoder, decodeKeys } = await import("../src/tui/keys.js");
+  const ss3 = (text: string) => decodeKeys(Buffer.from(`\u001bO${text}`));
+  // Application cursor mode's arrows are the arrows.
+  assert.deepEqual(ss3("A"), [{ kind: "up" }]);
+  assert.deepEqual(ss3("B"), [{ kind: "down" }]);
+  assert.deepEqual(ss3("C"), [{ kind: "right" }]);
+  assert.deepEqual(ss3("D"), [{ kind: "left" }]);
+  // F1–F4, Home, End, a modified F1, and a report nobody names: nothing is typed.
+  for (const tail of ["P", "Q", "R", "S", "H", "F", "2P", "x"]) assert.deepEqual(ss3(tail), [], `ESC O ${tail}`);
+  // Around text, in the same read.
+  assert.deepEqual(decodeKeys(Buffer.from("a\u001bOPb")), [{ kind: "char", value: "a" }, { kind: "char", value: "b" }]);
+  // Cut between reads, it is still one report.
+  const decoder = new KeyDecoder();
+  assert.deepEqual(decoder.push(Buffer.from("\u001bO")), []);
+  assert.notEqual(decoder.pendingDelayMs, null, "a half report waits for its end");
+  assert.deepEqual(decoder.push(Buffer.from("A")), [{ kind: "up" }]);
+  // One that never ends is dropped at the deadline, and the next key is itself.
+  assert.deepEqual(decoder.push(Buffer.from("\u001bO")), []);
+  assert.deepEqual(decoder.flushPending(), []);
+  assert.deepEqual(decoder.push(Buffer.from("q")), [{ kind: "char", value: "q" }]);
+  // A lone Escape is still the Escape key, and CSI is unchanged.
+  assert.deepEqual(decodeKeys(Buffer.from("\u001b")), [{ kind: "escape" }]);
+  assert.deepEqual(decodeKeys(Buffer.from("\u001b[A")), [{ kind: "up" }]);
+});
+
+test("P0V-79 / R6-06: the terminal owner asks for normal cursor keys when it takes the terminal and whenever it repaints", async () => {
+  const { openTerminal } = await import("../src/tui/screen.js");
+  const input = { isTTY: false, resume() {}, pause() {}, on() {}, setRawMode() {} } as unknown as NodeJS.ReadStream;
+  const written: string[] = [];
+  const output = { columns: 80, rows: 24, write(text: string) { written.push(text); return true; }, on() {} } as unknown as NodeJS.WriteStream;
+  const terminal = openTerminal({ input, output });
+  const DECCKM_OFF = "\u001b[?1l";
+  assert.ok(written.join("").includes(DECCKM_OFF), "application cursor mode left by another program stays on");
+  written.length = 0;
+  terminal.repaint();
+  assert.ok(written.join("").includes(DECCKM_OFF), "a newly attached screen is not told again");
+  terminal.restore();
+});

@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "d07f0356eab4eb35485dc6e7e0160b84863db9b0aef3261d195ef1de3e5a4d0b",
-  "report": "36d3169973379513f26976a9ec5ffba325123a59aecf4e98a44a976cdec33f22",
+  "report": "a76dc71ec7b96e341fdab25f31d98d2c4725e7d5016518b8d9ea1d81fed94311",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -973,7 +973,7 @@
     },
     {
       "path": "src/tui/keys.ts",
-      "sha256": "8fd9035be7771d33b399f0ad79aff77cd339461f0b1f8e4e80f885dffe7e2082"
+      "sha256": "3b117dbc83f09567a147244e32bdc17b56dad91ac8227fadee25e0026442e34b"
     },
     {
       "path": "src/tui/limits.ts",
@@ -989,7 +989,7 @@
     },
     {
       "path": "src/tui/screen.ts",
-      "sha256": "768eee27d1482f3fd44b8d0d1bee54f2ae0dddc696767d5c4c148349abefbe17"
+      "sha256": "8d0da975cc5e35395a628cbd1704be05bb639261d8f45b834c886f8eceb56703"
     },
     {
       "path": "src/tui/session.ts",
