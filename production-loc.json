@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 251,
-    "n_lines": 33204,
+    "n_files": 255,
+    "n_lines": 33520,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -696,6 +696,12 @@
     "code": 83,
     "language": "TypeScript"
   },
+  "src/platform/host/service.ts": {
+    "blank": 6,
+    "comment": 9,
+    "code": 82,
+    "language": "TypeScript"
+  },
   "src/runtime/society-lease.ts": {
     "blank": 10,
     "comment": 136,
@@ -816,6 +822,12 @@
     "code": 66,
     "language": "TypeScript"
   },
+  "src/entry/omahostd.ts": {
+    "blank": 6,
+    "comment": 13,
+    "code": 65,
+    "language": "TypeScript"
+  },
   "src/runtime/pi-runtime.ts": {
     "blank": 9,
     "comment": 47,
@@ -885,6 +897,12 @@
   "src/domain/mail-values.ts": {
     "blank": 4,
     "comment": 18,
+    "code": 57,
+    "language": "TypeScript"
+  },
+  "src/entry/oma-mac.ts": {
+    "blank": 4,
+    "comment": 8,
     "code": 57,
     "language": "TypeScript"
   },
@@ -987,6 +1005,12 @@
   "src/broker/process-ancestry.ts": {
     "blank": 8,
     "comment": 36,
+    "code": 50,
+    "language": "TypeScript"
+  },
+  "src/platform/host/record.ts": {
+    "blank": 6,
+    "comment": 10,
     "code": 50,
     "language": "TypeScript"
   },
@@ -1513,9 +1537,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1426,
-    "comment": 5579,
-    "code": 26199,
-    "nFiles": 251
+    "blank": 1448,
+    "comment": 5619,
+    "code": 26453,
+    "nFiles": 255
   }
 }

@@ -74,7 +74,9 @@ src/entry/guestctl.ts
 src/entry/guesthost.ts
 src/entry/host.ts
 src/entry/module-conformance.ts
+src/entry/oma-mac.ts
 src/entry/oma.ts
+src/entry/omahostd.ts
 src/entry/runner.ts
 src/extension/batch-view.ts
 src/extension/cli-process.ts
@@ -140,7 +142,9 @@ src/platform/host/image.ts
 src/platform/host/keychain.ts
 src/platform/host/lifecycle.ts
 src/platform/host/peer.ts
+src/platform/host/record.ts
 src/platform/host/resolver.ts
+src/platform/host/service.ts
 src/platform/host/vz-driver.ts
 src/platform/product-text.ts
 src/platform/rpc.ts

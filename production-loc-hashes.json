@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "dd1da39471099cba22655fab98c196244d693a0464a49962e213e0539ec43357",
-  "report": "0dc2eda2304917fa235510427799d723528135245169d39f3012c8f8582f891b",
+  "manifest": "9343442b7f598d86273a53d88e00cfc82e9bdb587b1124c8af4150518d3a2fe6",
+  "report": "3b0c1111198f038b3ecf6aee1dd6814875fe740f80d322b3ed4332b3ecfbf571",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -308,8 +308,16 @@
       "sha256": "d71b8b0312dd7ec7328c7ba507f5597706c8d0870b2e86cee6d03bf8e8e68840"
     },
     {
+      "path": "src/entry/oma-mac.ts",
+      "sha256": "458c88289dc60fdb49f5943a2dfd4eae072ae52c15c73e72a47c29ef05f6c202"
+    },
+    {
       "path": "src/entry/oma.ts",
       "sha256": "94f31dd8751e28bb4a8638ca25e6dfb2e57dafe144e15b7bfd5b4d67afa83072"
+    },
+    {
+      "path": "src/entry/omahostd.ts",
+      "sha256": "ed14737a4966ab56b953800ab3b6a8740b50e06350d76a5437fd5ab8bbea2e07"
     },
     {
       "path": "src/entry/runner.ts",
@@ -572,8 +580,16 @@
       "sha256": "71471221ed0b7861216d07c26319cf82438671d2e84b5bd42478e3d412728cc3"
     },
     {
+      "path": "src/platform/host/record.ts",
+      "sha256": "6f1b642271491293b6772355674b04c3c9a886159659c291938fb1e4fde301c8"
+    },
+    {
       "path": "src/platform/host/resolver.ts",
       "sha256": "6e136291f4d55be3e88dd64043d38f57d07ad5a5a27af2079fae9341dd9c82b3"
+    },
+    {
+      "path": "src/platform/host/service.ts",
+      "sha256": "04bf2efae80a1cf72123a0dc58cc5540f06b5ff4272e3e4c7b12e40ca73e59b5"
     },
     {
       "path": "src/platform/host/vz-driver.ts",

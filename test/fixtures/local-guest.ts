@@ -1,0 +1,112 @@
+/** A "VM" for the host's tests: the real guest services -- guestctl's
+ * control, guesthost's society channel and egress pool -- run on this machine,
+ * and `connect(port)` reaches them as vsock would. Power-off stops "the VM"
+ * unless the guest is told to ignore it; `hung` makes every new connection
+ * one that is accepted and never answered. */
+import { connect, createServer, type Server, type Socket } from "node:net";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { startGuestServer, type GuestIdentity } from "../../src/platform/guest/server.js";
+import { GuestControl, type GuestSystem } from "../../src/platform/guest/control.js";
+import { GuestHost, type SessionLauncher } from "../../src/platform/guest/host.js";
+import { EgressPool } from "../../src/platform/guest/egress.js";
+import type { VmDriver } from "../../src/platform/host/lifecycle.js";
+import { GUEST_PORTS, PLATFORM_FRAME_BYTES } from "../../src/protocol/host-guest.js";
+
+const self = { uid: process.getuid!(), gid: process.getgid!() };
+
+export interface Guest { readonly control: string; readonly society: string; readonly calls: string[]; close(): Promise<void>; silence(): void }
+
+/** Runs guestctl and guesthost here; `power.off` stops "the VM" unless the
+ * guest is told to ignore it. */
+export class LocalDriver implements VmDriver {
+  pool = new EgressPool();
+  running: Guest | null = null;
+  starts = 0;
+  forced = 0;
+  image = "2026.09.1";
+  ignorePowerOff = false;
+  hung = false;
+  readonly calls: string[] = [];
+  private readonly stopListeners: (() => void)[] = [];
+  private silent: Server | null = null;
+  constructor(private readonly dir: string, private readonly societies: { dir: string; launcher: SessionLauncher }, private readonly instanceId: string) {}
+
+  onStopped(listener: () => void): void { this.stopListeners.push(listener); }
+  private stopped(): void { for (const listener of this.stopListeners) listener(); }
+
+  async start(): Promise<void> {
+    this.starts += 1;
+    this.hung = false;
+    this.running = await this.boot();
+  }
+  async forceStop(): Promise<void> {
+    this.forced += 1;
+    await this.halt();
+  }
+  /** The guest crashes on its own. */
+  async crash(): Promise<void> { await this.halt(); }
+  private async halt(): Promise<void> {
+    const guest = this.running;
+    this.running = null;
+    if (guest === null) return;
+    this.pool.close();
+    this.pool = new EgressPool();
+    await guest.close();
+    this.stopped();
+  }
+  async connect(port: number): Promise<Socket> {
+    if (this.hung) {
+      this.silent ??= await listenSilently(join(this.dir, "silent.sock"));
+      return open(join(this.dir, "silent.sock"));
+    }
+    if (this.running === null) throw new Error("no VM");
+    return open(port === GUEST_PORTS.control ? this.running.control : this.running.society);
+  }
+
+  private async boot(): Promise<Guest> {
+    const bootId = randomUUID();
+    const identity = (): GuestIdentity => ({ instanceId: this.instanceId, guestImage: this.image, bootId,
+      stateSchema: { written: 1, readable: [1] }, capabilities: [] });
+    const system: GuestSystem = {
+      wallClock: () => 0, setWallClock: ms => { this.calls.push(`time.set:${ms > 0}`); },
+      health: () => ({ uptimeMs: 1, load: [0, 0, 0], memory: { totalBytes: 1, availableBytes: 1 }, disk: { totalBytes: 1, freeBytes: 1 }, failedUnits: 0 }),
+      freeze: () => {}, thaw: () => {}, grow: async () => 0,
+      powerOff: () => { this.calls.push("power.off"); if (!this.ignorePowerOff) setTimeout(() => { void this.halt(); }, 10); },
+      schedule: (ms, run) => { const timer = setTimeout(run, ms); return { cancel: () => clearTimeout(timer) }; },
+      receiptWaitFloor: () => ({ kind: "none" }),
+    };
+    const control = new GuestControl(system);
+    const host = new GuestHost({ societiesDir: this.societies.dir, projectsDir: join(this.dir, "projects"), launcher: this.societies.launcher, stopDeadlineMs: 2000 });
+    const suffix = randomUUID().slice(0, 8);
+    const servers = [
+      await startGuestServer({ socketPath: join(this.dir, `c-${suffix}.sock`), identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
+        helloDeadlineMs: 1000, requestTimeoutMs: 2000, channels: { control: { kind: "json", serve: ({ peer }) => control.serve(peer) } } }),
+      await startGuestServer({ socketPath: join(this.dir, `s-${suffix}.sock`), identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
+        helloDeadlineMs: 1000, requestTimeoutMs: 2000, channels: { society: { kind: "json", serve: ({ peer }) => {
+          peer.onFrame(frame => { if (typeof frame.method === "string") this.calls.push(frame.method); });
+          host.serve(peer);
+        } }, egress: { kind: "bytes", serve: socket => { this.pool.park(socket); } } } }),
+    ];
+    const sockets = new Set<Socket>();
+    for (const server of servers) server.on("connection", socket => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
+    return {
+      control: join(this.dir, `c-${suffix}.sock`), society: join(this.dir, `s-${suffix}.sock`), calls: this.calls,
+      close: async () => { for (const socket of sockets) socket.destroy(); await Promise.all(servers.map(server => new Promise(r => server.close(r)))); },
+      silence: () => { for (const socket of sockets) socket.destroy(); },
+    };
+  }
+  async dispose(): Promise<void> { await this.halt(); await new Promise(r => this.silent === null ? r(null) : this.silent.close(r)); }
+}
+export async function open(path: string): Promise<Socket> {
+  const socket = connect(path);
+  await new Promise<void>((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
+  return socket;
+}
+/** A guest that accepts and never answers: a hung VM. */
+export async function listenSilently(path: string): Promise<Server> {
+  const server = createServer(socket => { socket.on("data", () => {}); });
+  await new Promise<void>(resolve => server.listen(path, resolve));
+  return server;
+}
+

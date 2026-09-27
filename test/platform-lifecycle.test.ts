@@ -3,113 +3,19 @@
  * services on this machine instead of a VM. Timers are real and short. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { connect, createServer, type Server, type Socket } from "node:net";
+import { type Server } from "node:net";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { PlatformError } from "../src/platform/rpc.js";
-import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
-import { GuestControl, type GuestSystem } from "../src/platform/guest/control.js";
-import { GuestHost, type SessionLauncher } from "../src/platform/guest/host.js";
+import type { SessionLauncher } from "../src/platform/guest/host.js";
+import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
 import { GuestLink } from "../src/platform/host/guest-link.js";
-import { VmLifecycle, type VmDriver, type VmState } from "../src/platform/host/lifecycle.js";
-import { GUEST_PORTS, HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
+import { VmLifecycle, type VmState } from "../src/platform/host/lifecycle.js";
+import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 
 const INSTANCE = randomUUID();
-const self = { uid: process.getuid!(), gid: process.getgid!() };
-
-interface Guest { readonly control: string; readonly society: string; readonly calls: string[]; close(): Promise<void>; silence(): void }
-
-/** Runs guestctl and guesthost here; `power.off` stops "the VM" unless the
- * guest is told to ignore it. */
-class LocalDriver implements VmDriver {
-  running: Guest | null = null;
-  starts = 0;
-  forced = 0;
-  image = "2026.09.1";
-  ignorePowerOff = false;
-  hung = false;
-  readonly calls: string[] = [];
-  private readonly stopListeners: (() => void)[] = [];
-  private silent: Server | null = null;
-  constructor(private readonly dir: string, private readonly societies: { dir: string; launcher: SessionLauncher }) {}
-
-  onStopped(listener: () => void): void { this.stopListeners.push(listener); }
-  private stopped(): void { for (const listener of this.stopListeners) listener(); }
-
-  async start(): Promise<void> {
-    this.starts += 1;
-    this.hung = false;
-    this.running = await this.boot();
-  }
-  async forceStop(): Promise<void> {
-    this.forced += 1;
-    await this.halt();
-  }
-  /** The guest crashes on its own. */
-  async crash(): Promise<void> { await this.halt(); }
-  private async halt(): Promise<void> {
-    const guest = this.running;
-    this.running = null;
-    if (guest === null) return;
-    await guest.close();
-    this.stopped();
-  }
-  async connect(port: number): Promise<Socket> {
-    if (this.hung) {
-      this.silent ??= await listenSilently(join(this.dir, "silent.sock"));
-      return open(join(this.dir, "silent.sock"));
-    }
-    if (this.running === null) throw new Error("no VM");
-    return open(port === GUEST_PORTS.control ? this.running.control : this.running.society);
-  }
-
-  private async boot(): Promise<Guest> {
-    const bootId = randomUUID();
-    const identity = (): GuestIdentity => ({ instanceId: INSTANCE, guestImage: this.image, bootId,
-      stateSchema: { written: 1, readable: [1] }, capabilities: [] });
-    const system: GuestSystem = {
-      wallClock: () => 0, setWallClock: ms => { this.calls.push(`time.set:${ms > 0}`); },
-      health: () => ({ uptimeMs: 1, load: [0, 0, 0], memory: { totalBytes: 1, availableBytes: 1 }, disk: { totalBytes: 1, freeBytes: 1 }, failedUnits: 0 }),
-      freeze: () => {}, thaw: () => {}, grow: async () => 0,
-      powerOff: () => { this.calls.push("power.off"); if (!this.ignorePowerOff) setTimeout(() => { void this.halt(); }, 10); },
-      schedule: (ms, run) => { const timer = setTimeout(run, ms); return { cancel: () => clearTimeout(timer) }; },
-      receiptWaitFloor: () => ({ kind: "none" }),
-    };
-    const control = new GuestControl(system);
-    const host = new GuestHost({ societiesDir: this.societies.dir, projectsDir: join(this.dir, "projects"), launcher: this.societies.launcher, stopDeadlineMs: 2000 });
-    const suffix = randomUUID().slice(0, 8);
-    const servers = [
-      await startGuestServer({ socketPath: join(this.dir, `c-${suffix}.sock`), identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
-        helloDeadlineMs: 1000, requestTimeoutMs: 2000, channels: { control: { kind: "json", serve: ({ peer }) => control.serve(peer) } } }),
-      await startGuestServer({ socketPath: join(this.dir, `s-${suffix}.sock`), identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
-        helloDeadlineMs: 1000, requestTimeoutMs: 2000, channels: { society: { kind: "json", serve: ({ peer }) => {
-          peer.onFrame(frame => { if (typeof frame.method === "string") this.calls.push(frame.method); });
-          host.serve(peer);
-        } } } }),
-    ];
-    const sockets = new Set<Socket>();
-    for (const server of servers) server.on("connection", socket => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
-    return {
-      control: join(this.dir, `c-${suffix}.sock`), society: join(this.dir, `s-${suffix}.sock`), calls: this.calls,
-      close: async () => { for (const socket of sockets) socket.destroy(); await Promise.all(servers.map(server => new Promise(r => server.close(r)))); },
-      silence: () => { for (const socket of sockets) socket.destroy(); },
-    };
-  }
-  async dispose(): Promise<void> { await this.halt(); await new Promise(r => this.silent === null ? r(null) : this.silent.close(r)); }
-}
-async function open(path: string): Promise<Socket> {
-  const socket = connect(path);
-  await new Promise<void>((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
-  return socket;
-}
-/** A guest that accepts and never answers: a hung VM. */
-async function listenSilently(path: string): Promise<Server> {
-  const server = createServer(socket => { socket.on("data", () => {}); });
-  await new Promise<void>(resolve => server.listen(path, resolve));
-  return server;
-}
 
 async function world(t: import("node:test").TestContext, overrides: { restarts?: { max: number; windowMs: number; backoffMs: number } } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "oma-lifecycle-"));
@@ -124,7 +30,7 @@ async function world(t: import("node:test").TestContext, overrides: { restarts?:
     start: async () => {},
     stop: async society => { stops.push(society); await new Promise(r => holder?.close(r)); holder = null; return "stopped"; },
   };
-  const driver = new LocalDriver(dir, { dir: societiesDir, launcher });
+  const driver = new LocalDriver(dir, { dir: societiesDir, launcher }, INSTANCE);
   const link = new GuestLink(driver, { hostVersion: "1.0.0", installationId: randomUUID(), instanceId: INSTANCE, expectImage: "2026.09.1",
     protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } }, { frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 300, requestTimeoutMs: 300 });
   const records: string[] = [];
