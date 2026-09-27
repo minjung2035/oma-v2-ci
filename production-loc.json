@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 30122,
+    "n_lines": 30128,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -144,6 +144,12 @@
     "code": 238,
     "language": "TypeScript"
   },
+  "src/tui/keys.ts": {
+    "blank": 25,
+    "comment": 126,
+    "code": 234,
+    "language": "TypeScript"
+  },
   "src/broker/internal-dispatcher.ts": {
     "blank": 1,
     "comment": 5,
@@ -154,12 +160,6 @@
     "blank": 7,
     "comment": 20,
     "code": 232,
-    "language": "TypeScript"
-  },
-  "src/tui/keys.ts": {
-    "blank": 25,
-    "comment": 123,
-    "code": 231,
     "language": "TypeScript"
   },
   "src/request-cache.ts": {
@@ -1352,8 +1352,8 @@
   },
   "SUM": {
     "blank": 1207,
-    "comment": 4961,
-    "code": 23954,
+    "comment": 4964,
+    "code": 23957,
     "nFiles": 224
   }
 }

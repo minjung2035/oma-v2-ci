@@ -102,13 +102,19 @@ export function decodeText(bytes: ArrayLike<number>, open: boolean): { readonly 
     }
     if (broken) { index += 1; continue; }
     if (have < length) {
-      if (open) return { text: new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(kept)), rest: Array.from({ length: bytes.length - index }, (_, at) => bytes[index + at]!) };
+      if (open) return { text: decodeKept(kept), rest: Array.from({ length: bytes.length - index }, (_, at) => bytes[index + at]!) };
       break;
     }
     for (let at = 0; at < length; at += 1) kept.push(bytes[index + at]!);
     index += length;
   }
-  return { text: new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(kept)), rest: [] };
+  return { text: decodeKept(kept), rest: [] };
+}
+/** P0V-67, P0-2: these bytes are one read of a stream, not the start of a
+ * document, so a U+FEFF at their start is a character like any other --
+ * where the terminal happened to cut its reads must not change the text. */
+function decodeKept(kept: readonly number[]): string {
+  return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Uint8Array.from(kept));
 }
 
 function chars(text: string, keys: Key[]): void {
