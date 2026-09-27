@@ -19,6 +19,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/broker.ts": "the run root (XDG_RUNTIME_DIR): its directory and the listening sockets",
   "src/entry/broker.ts": "the run root (XDG_RUNTIME_DIR) the broker listens in",
   "src/runtime/inference-relay.ts": "the relay's socket in the run's own run-root directory",
+  "src/platform/guest/server.ts": "a guest service's listening socket in its own systemd RuntimeDirectory, which the vsock bridge connects to",
   "src/cli/effects/submit.ts": "the CLI caller's own temporary directory",
   "src/extension/mail-tools.ts": "a fresh mkdtemp directory under the model's own working directory (a Resident's sandbox home; the Principal's scratch, in the state tree but the model's own), written once and removed; the extension cannot import the storage primitives (PI-001)",
   "src/extension/principal-tools.ts": "the same fresh mkdtemp directory under the Principal's scratch for an agent brief, written once and removed (PI-001)",

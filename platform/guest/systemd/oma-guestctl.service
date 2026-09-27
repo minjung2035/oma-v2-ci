@@ -1,0 +1,18 @@
+# MAC-2xx §4.4: time, filesystem freeze/thaw, disk growth, power. The few
+# things that need root in the guest, and nothing else.
+[Unit]
+Description=OMA guest control
+After=local-fs.target
+
+[Service]
+Type=simple
+RuntimeDirectory=oma-guestctl
+RuntimeDirectoryMode=0700
+ExecStart=/usr/lib/oma/node/bin/node /usr/lib/oma/dist/src/entry/guestctl.js --socket /run/oma-guestctl/control.sock
+Restart=on-failure
+RestartSec=1s
+CapabilityBoundingSet=CAP_SYS_TIME CAP_SYS_ADMIN CAP_SYS_BOOT
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

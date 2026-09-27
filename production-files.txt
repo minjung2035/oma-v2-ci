@@ -69,6 +69,7 @@ src/domain/spec-identity.ts
 src/domain/tool-surface.ts
 src/durable.ts
 src/entry/broker.ts
+src/entry/guestctl.ts
 src/entry/host.ts
 src/entry/module-conformance.ts
 src/entry/oma.ts
@@ -120,6 +121,11 @@ src/mail/routing.ts
 src/mail/serialize.ts
 src/module-ports.ts
 src/pi-extension.ts
+src/platform/guest/control.ts
+src/platform/guest/identity.ts
+src/platform/guest/linux-system.ts
+src/platform/guest/server.ts
+src/platform/rpc.ts
 src/ports/ledger.ts
 src/ports/runtime.ts
 src/process/async.ts
@@ -131,6 +137,7 @@ src/protocol/batch-view.ts
 src/protocol/byte-queue.ts
 src/protocol/channel.ts
 src/protocol/host-channel.ts
+src/protocol/host-guest.ts
 src/protocol/jsonl.ts
 src/protocol/log-response.ts
 src/protocol/methods.ts

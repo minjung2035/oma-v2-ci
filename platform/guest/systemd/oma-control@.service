@@ -1,0 +1,16 @@
+# One host connection to guestctl. Root only to reach guestctl's root-owned
+# socket; it holds no capability and cannot gain one.
+[Unit]
+Description=OMA guest control connection
+Requires=oma-guestctl.service
+After=oma-guestctl.service
+
+[Service]
+ExecStart=/usr/lib/oma/bin/oma-vsock-bridge /run/oma-guestctl/control.sock
+StandardInput=null
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_VSOCK

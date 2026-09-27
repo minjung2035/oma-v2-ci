@@ -1,0 +1,175 @@
+/** MAC-2xx (implementation/macos-platform.md): the private protocol between
+ * the macOS host and the hidden Linux guest.
+ *
+ * Framing is the broker's own (IPC-001/002: uint32 BE length + strict JSON),
+ * so one parser decides what a well-formed message is on both boundaries.
+ * This module is pure: it names the channels, validates the handshake and the
+ * envelopes, and owns the vocabulary a guest may use toward the host. It
+ * opens nothing and reads no clock.
+ *
+ * The broker's wire (`contracts.ts`) is not changed by this protocol: the
+ * host never speaks to a broker, only to the guest's services, and the codes
+ * it adds are its own (`PlatformErrorCode`).
+ */
+import type { ErrorCode } from "../../implementation/contracts/errors.js";
+import { isErrorCode } from "../domain/errors.js";
+import { isValidSocietyName } from "../domain/identifiers.js";
+
+/** One protocol version, raised whenever a message's shape or meaning changes
+ * (MAC-250). A host speaks the version of the image it ships and the one
+ * before it; a guest speaks one. */
+export const HOST_GUEST_PROTOCOL = 1;
+
+/** The platform protocol's frame limit. A society's own limits
+ * (`ProtocolLimits.frameBytes`) govern its broker; this governs the host-guest
+ * connection, which carries no society payload larger than a status view. */
+export const PLATFORM_FRAME_BYTES = 256 * 1024;
+
+/** MAC-202: the guest's reserved vsock ports. Binding one takes
+ * CAP_NET_BIND_SERVICE; in the guest only systemd holds it. */
+export const GUEST_PORTS = Object.freeze({ control: 700, society: 701 });
+
+/** One connection, one purpose (MAC-2xx §4.3). */
+export const CHANNELS = Object.freeze(["control", "society", "terminal", "egress", "stream"] as const);
+export type Channel = (typeof CHANNELS)[number];
+/** Which port serves which channel. */
+export function portOf(channel: Channel): number {
+  return channel === "control" ? GUEST_PORTS.control : GUEST_PORTS.society;
+}
+
+/** The codes the platform adds to the broker's (§4.9). A guest may send any
+ * broker code as well; nothing else is a code. */
+export const PLATFORM_ERROR_CODES = Object.freeze([
+  "ENGINE_UNAVAILABLE", "ENGINE_VERSION_SKEW", "STATE_NEWER_THAN_APP", "HOST_STORAGE_LOW",
+] as const);
+export type PlatformErrorCode = ErrorCode | (typeof PLATFORM_ERROR_CODES)[number];
+export function isPlatformErrorCode(value: unknown): value is PlatformErrorCode {
+  return isErrorCode(value) || (typeof value === "string" && (PLATFORM_ERROR_CODES as readonly string[]).includes(value));
+}
+
+export interface PlatformFailure {
+  readonly code: PlatformErrorCode;
+  readonly message: string;
+  readonly retry: "never" | "same-key" | "after-repair";
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+export function isUuid(value: unknown): value is string { return typeof value === "string" && UUID.test(value); }
+const VERSION = /^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$/;
+const REQUEST_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+export function isRequestKey(value: unknown): value is string { return typeof value === "string" && REQUEST_KEY.test(value); }
+
+export interface HelloParams {
+  readonly channel: Channel;
+  readonly protocol: { readonly min: number; readonly max: number };
+  readonly hostVersion: string;
+  readonly installationId: string;
+  readonly instanceId: string;
+  readonly expectImage: string;
+  /** terminal: the society whose session to attach to. */
+  readonly society?: string;
+}
+export interface HelloResult {
+  readonly protocol: number;
+  readonly guestImage: string;
+  readonly bootId: string;
+  readonly stateSchema: { readonly written: number; readonly readable: readonly number[] };
+  readonly capabilities: readonly string[];
+}
+
+function exactKeys(value: Record<string, unknown>, required: readonly string[], optional: readonly string[] = []): string | null {
+  for (const key of required) if (!Object.hasOwn(value, key)) return `missing ${key}`;
+  for (const key of Object.keys(value)) if (!required.includes(key) && !optional.includes(key)) return `unknown field ${key}`;
+  return null;
+}
+const object = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const uint = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+/** MAC-230: the host reads every guest message as untrusted input, and the
+ * guest reads the host's hello the same way; a message that is not exactly
+ * one of these shapes is refused, not repaired. */
+export function helloParamsProblem(value: unknown): string | null {
+  if (!object(value)) return "hello params must be an object";
+  const shape = exactKeys(value, ["channel", "protocol", "hostVersion", "installationId", "instanceId", "expectImage"], ["society"]);
+  if (shape !== null) return shape;
+  if (!(CHANNELS as readonly unknown[]).includes(value.channel)) return "unknown channel";
+  const protocol = value.protocol;
+  if (!object(protocol) || exactKeys(protocol, ["min", "max"]) !== null || !uint(protocol.min) || !uint(protocol.max) || protocol.min > protocol.max)
+    return "protocol must be { min, max } with min <= max";
+  if (typeof value.hostVersion !== "string" || !VERSION.test(value.hostVersion)) return "invalid hostVersion";
+  if (typeof value.expectImage !== "string" || !VERSION.test(value.expectImage)) return "invalid expectImage";
+  if (!isUuid(value.installationId) || !isUuid(value.instanceId)) return "installationId and instanceId must be UUIDs";
+  if (value.channel === "terminal") {
+    if (!isValidSocietyName(value.society)) return "a terminal names a valid society";
+  } else if (value.society !== undefined) return "only a terminal names a society in its hello";
+  return null;
+}
+
+export function helloResultProblem(value: unknown): string | null {
+  if (!object(value)) return "hello result must be an object";
+  const shape = exactKeys(value, ["protocol", "guestImage", "bootId", "stateSchema", "capabilities"]);
+  if (shape !== null) return shape;
+  if (!uint(value.protocol)) return "invalid protocol";
+  if (typeof value.guestImage !== "string" || !VERSION.test(value.guestImage)) return "invalid guestImage";
+  if (!isUuid(value.bootId)) return "bootId must be a UUID";
+  const schema = value.stateSchema;
+  if (!object(schema) || exactKeys(schema, ["written", "readable"]) !== null || !uint(schema.written) ||
+      !Array.isArray(schema.readable) || schema.readable.length === 0 || schema.readable.length > 16 || !schema.readable.every(uint))
+    return "invalid stateSchema";
+  if (!Array.isArray(value.capabilities) || value.capabilities.length > 32 ||
+      !value.capabilities.every(item => typeof item === "string" && /^[a-z][a-z0-9.-]{0,47}$/.test(item)))
+    return "invalid capabilities";
+  return null;
+}
+
+/** MAC-211: the one protocol both ends speak, or null when their ranges do not
+ * meet (the guest then refuses and closes). */
+export function negotiate(host: { readonly min: number; readonly max: number }, guest: number): number | null {
+  return guest >= host.min && guest <= host.max ? guest : null;
+}
+
+export interface Envelope {
+  readonly id: string;
+  readonly method: string;
+  readonly params: Record<string, unknown>;
+  readonly key?: string;
+}
+const ID = /^[A-Za-z0-9._:-]{1,64}$/;
+const METHOD = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*$/;
+
+/** A request on any JSON channel: `{ v: 1, id, method, params, key? }`. */
+export function requestProblem(raw: Record<string, unknown>): string | null {
+  const shape = exactKeys(raw, ["v", "id", "method", "params"], ["key"]);
+  if (shape !== null) return shape;
+  if (raw.v !== 1) return "unsupported envelope version";
+  if (typeof raw.id !== "string" || !ID.test(raw.id)) return "invalid id";
+  if (typeof raw.method !== "string" || !METHOD.test(raw.method) || raw.method.length > 64) return "invalid method";
+  if (!object(raw.params)) return "params must be an object";
+  if (raw.key !== undefined && !isRequestKey(raw.key)) return "invalid request key";
+  return null;
+}
+
+/** A response: `{ v: 1, id, ok: true, result }` or `{ v: 1, id, ok: false, error }`. */
+export function responseProblem(raw: Record<string, unknown>): string | null {
+  if (raw.v !== 1) return "unsupported envelope version";
+  if (typeof raw.id !== "string" || !ID.test(raw.id)) return "invalid id";
+  if (raw.ok === true) return exactKeys(raw, ["v", "id", "ok", "result"]) ?? (object(raw.result) ? null : "result must be an object");
+  if (raw.ok !== false) return "ok must be a boolean";
+  const shape = exactKeys(raw, ["v", "id", "ok", "error"]);
+  if (shape !== null) return shape;
+  const error = raw.error;
+  if (!object(error) || exactKeys(error, ["code", "message", "retry"]) !== null) return "invalid error";
+  if (!isPlatformErrorCode(error.code)) return "unknown error code";
+  if (typeof error.message !== "string" || error.message.length > 1024) return "invalid error message";
+  if (error.retry !== "never" && error.retry !== "same-key" && error.retry !== "after-repair") return "invalid retry";
+  return null;
+}
+
+/** MAC-231: what the guest may say about itself. A reason that would carry a
+ * Linux path, a unit name or an errno is replaced by the product's word before
+ * it leaves the guest; the host shows only strings that pass this. */
+export function productText(text: string): boolean {
+  return text.length <= 1024 && !/\/(?:var|run|etc|home|proc|sys|tmp|usr|opt)\//.test(text) &&
+    !/\boma-[a-z0-9-]+\.(?:service|path|timer|socket)\b/.test(text) && !/\bE[A-Z]{3,}\b/.test(text) && !/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text);
+}

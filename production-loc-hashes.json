@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "9f5c928d6244d9542896bcce69a4fbaf330d9a734acde429ee19892053bfcdef",
+  "manifest": "e93e38aeadde13d997b104c098247a80aa8ef280264f8bf6325a9f1e0323e7d0",
+  "report": "2f6ce6715d9d9cda03369e17b58f83d5f7f14271bc82ab44b74e7359897015c2",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -288,6 +288,10 @@
       "sha256": "9b85faa7faa75251cfb41c68aeb341bbba75df742306f443302320a791725c87"
     },
     {
+      "path": "src/entry/guestctl.ts",
+      "sha256": "2bdbf731adc30f731ca445a4ef4844a0dd72d2827461a0b57ae3ba8c606f83ab"
+    },
+    {
       "path": "src/entry/host.ts",
       "sha256": "a1430c6ffccdf53aaa783e4c87f0ae8c62c8eaa47eb74f27c3c484ca8be81a50"
     },
@@ -492,6 +496,26 @@
       "sha256": "11deff254215a971f97eb1f8e39aeb3a7f59601677d83a0eaa6bc9c36746cf55"
     },
     {
+      "path": "src/platform/guest/control.ts",
+      "sha256": "1faaa891f7dada1398f02a0889ea94337f60e42a2889adceaf8f4d6abe68c345"
+    },
+    {
+      "path": "src/platform/guest/identity.ts",
+      "sha256": "26045b15e1289a988b3cd64e1b77a23d0cc928576945168f4cf4f3d9d8373496"
+    },
+    {
+      "path": "src/platform/guest/linux-system.ts",
+      "sha256": "2a747405debe76ea914e19762e759fa3f612deffb2911fb86cf08f06416c19e1"
+    },
+    {
+      "path": "src/platform/guest/server.ts",
+      "sha256": "71c153b36d42ae9e44332ba49482b07fddafb11c2cd7430e8adaf62da3914858"
+    },
+    {
+      "path": "src/platform/rpc.ts",
+      "sha256": "b97084cf195657cfd9bed62dd8bae29104ff80f87a76a81488a492f6b8f91021"
+    },
+    {
       "path": "src/ports/ledger.ts",
       "sha256": "1a81915fabf9162b4f64bb54504cb7abaa6817634c44dce41fc39e80cf04ab9c"
     },
@@ -534,6 +558,10 @@
     {
       "path": "src/protocol/host-channel.ts",
       "sha256": "15f567cb580ff172d615fa1422c4c1802a5dc4055f4cecdb1bd1d4f39d0b27e9"
+    },
+    {
+      "path": "src/protocol/host-guest.ts",
+      "sha256": "b21a30a7f7fe97a7c90900db7cb3f49d4b5f3b02b2ab592fa261a5c1e76c5526"
     },
     {
       "path": "src/protocol/jsonl.ts",

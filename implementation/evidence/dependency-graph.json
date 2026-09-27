@@ -72,6 +72,7 @@
   "src/domain/tool-surface.ts",
   "src/durable.ts",
   "src/entry/broker.ts",
+  "src/entry/guestctl.ts",
   "src/entry/host.ts",
   "src/entry/module-conformance.ts",
   "src/entry/oma.ts",
@@ -123,6 +124,11 @@
   "src/mail/serialize.ts",
   "src/module-ports.ts",
   "src/pi-extension.ts",
+  "src/platform/guest/control.ts",
+  "src/platform/guest/identity.ts",
+  "src/platform/guest/linux-system.ts",
+  "src/platform/guest/server.ts",
+  "src/platform/rpc.ts",
   "src/ports/ledger.ts",
   "src/ports/runtime.ts",
   "src/process/async.ts",
@@ -134,6 +140,7 @@
   "src/protocol/byte-queue.ts",
   "src/protocol/channel.ts",
   "src/protocol/host-channel.ts",
+  "src/protocol/host-guest.ts",
   "src/protocol/jsonl.ts",
   "src/protocol/log-response.ts",
   "src/protocol/methods.ts",
@@ -268,6 +275,7 @@
      "src/protocol/batch-view.ts",
      "src/protocol/byte-queue.ts",
      "src/protocol/host-channel.ts",
+     "src/protocol/host-guest.ts",
      "src/protocol/jsonl.ts",
      "src/protocol/log-response.ts",
      "src/protocol/methods.ts",
@@ -330,7 +338,7 @@
   ],
   "runtimeEdgeMatrix": {
    "K0-values -> K0-values": 21,
-   "K1-codecs -> K0-values": 43,
+   "K1-codecs -> K0-values": 45,
    "K1-codecs -> K1-codecs": 16,
    "K2-mechanisms -> K0-values": 55,
    "K2-mechanisms -> K1-codecs": 7,
@@ -636,6 +644,16 @@
     "from": "src/protocol/channel.ts",
     "to": "src/protocol/response-codec.ts",
     "kind": "type"
+   },
+   {
+    "from": "src/protocol/host-guest.ts",
+    "to": "src/domain/errors.ts",
+    "kind": "runtime"
+   },
+   {
+    "from": "src/protocol/host-guest.ts",
+    "to": "src/domain/identifiers.ts",
+    "kind": "runtime"
    },
    {
     "from": "src/protocol/jsonl.ts",
@@ -1394,7 +1412,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 79
+   "files": 80
   },
   {
    "index": 2,
@@ -1435,9 +1453,10 @@
     "src/broker.ts",
     "src/runtime/",
     "src/runner.ts",
-    "src/sandbox.ts"
+    "src/sandbox.ts",
+    "src/platform/"
    ],
-   "files": 34
+   "files": 39
   },
   {
    "index": 5,
@@ -1451,27 +1470,27 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 56
+   "files": 57
   }
  ],
- "files": 225,
- "runtimeEdges": 870,
- "typeOnlyEdges": 322,
+ "files": 232,
+ "runtimeEdges": 890,
+ "typeOnlyEdges": 326,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 222,
+  "L1-kernel -> L1-kernel": 224,
   "L2-facts -> L1-kernel": 31,
   "L2-facts -> L2-facts": 5,
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 101,
+  "L4-orchestration -> L1-kernel": 112,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 41,
-  "L5-entry -> L1-kernel": 79,
+  "L4-orchestration -> L4-orchestration": 43,
+  "L5-entry -> L1-kernel": 80,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 27,
+  "L5-entry -> L4-orchestration": 31,
   "L5-entry -> L5-entry": 115
  },
  "upwardTypeOnlyEdges": [
@@ -1491,8 +1510,8 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 118,
-  "src/domain/identifiers.ts": 36,
+  "src/domain/errors.ts": 124,
+  "src/domain/identifiers.ts": 37,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 25,
   "src/storage/directory.ts": 21,
@@ -1527,22 +1546,22 @@
  "external": {
   "@earendil-works/pi-coding-agent": 8,
   "@earendil-works/pi-tui": 2,
-  "koffi": 2,
+  "koffi": 3,
   "node:async_hooks": 3,
   "node:child_process": 4,
   "node:crypto": 25,
-  "node:fs": 60,
+  "node:fs": 63,
   "node:http": 1,
   "node:https": 1,
-  "node:net": 10,
+  "node:net": 12,
   "node:os": 2,
-  "node:path": 66,
+  "node:path": 67,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,
   "node:string_decoder": 1,
   "node:url": 4,
-  "node:util": 2,
+  "node:util": 3,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,
   "typebox": 3

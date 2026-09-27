@@ -86,6 +86,9 @@ const LAYERS = Object.freeze([
       "src/runtime/",
       "src/runner.ts",
       "src/sandbox.ts",
+      // macOS host and hidden-VM guest services (implementation/macos-platform.md):
+      // they compose runtime pieces the way the entries do, below the entries.
+      "src/platform/",
     ],
   },
   {

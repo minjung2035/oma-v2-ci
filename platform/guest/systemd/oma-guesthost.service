@@ -1,0 +1,21 @@
+# MAC-2xx §2.2: the societies, their terminal sessions, egress and streams, as
+# the oma user whose user manager runs the Residents (linger is on in the image).
+[Unit]
+Description=OMA guest host
+After=local-fs.target user@1000.service
+Wants=user@1000.service
+
+[Service]
+Type=simple
+User=oma
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+RuntimeDirectory=oma-guesthost
+RuntimeDirectoryMode=0700
+ExecStart=/usr/lib/oma/node/bin/node /usr/lib/oma/dist/src/entry/guesthost.js --socket /run/oma-guesthost/society.sock --data /var/lib/oma
+Restart=on-failure
+RestartSec=1s
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

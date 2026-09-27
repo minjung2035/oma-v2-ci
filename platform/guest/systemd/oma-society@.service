@@ -1,0 +1,16 @@
+# One host connection to guesthost, as the oma user.
+[Unit]
+Description=OMA guest society connection
+Requires=oma-guesthost.service
+After=oma-guesthost.service
+
+[Service]
+User=oma
+ExecStart=/usr/lib/oma/bin/oma-vsock-bridge /run/oma-guesthost/society.sock
+StandardInput=null
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_VSOCK
