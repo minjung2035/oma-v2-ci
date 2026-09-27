@@ -159,7 +159,9 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
     view: runnerViewPathAt(stateRoot, "alice"), world: join(stateRoot, "world"), projectGit: join(stateRoot, "repos/project.git"),
     sessions: runnerSessionDirPathAt(stateRoot, "alice") };
   const plan = sandbox.resident(lease, dirs);
-  assert.deepEqual(plan.inheritedFds, [0, 1, 2]); assert.deepEqual(plan.env, {});
+  // DR18 (D-5): descriptor 3 carries the sandbox filter bubblewrap loads.
+  assert.deepEqual(plan.inheritedFds, [0, 1, 2, 3]); assert.deepEqual(plan.env, {});
+  assert.deepEqual(plan.argv.slice(plan.argv.indexOf("--seccomp"), plan.argv.indexOf("--seccomp") + 2), ["--seccomp", "3"]);
   assert.ok(plan.argv.includes("--unshare-all")); assert.ok(plan.argv.includes("--clearenv"));
   assert.ok(plan.argv.includes(lease.socketHostPath)); assert.equal(plan.argv.includes(runRoot), false);
   assert.throws(() => sandbox.resident(lease, { ...dirs, workspace: workspacePathAt(stateRoot, "bob") }), errorCode("AUTH_FAILED"));

@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "19362cc2cdfc27a847b2baaac29127f10323fc80fde6d30fe38d5991c8ecf6fc",
-  "report": "bc654f6c67bd09f72f0cbe1793be61725074bfa6e3e586e89bbc409520fff7cf",
+  "report": "3d61e619c129b2b2643319b7a00c24584ac225ee042cd6126f4936795710f647",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -813,7 +813,7 @@
     },
     {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "6f4210f111e10ce1e3baa0bf1ff5e27f5d04565d7a21bf77b744216673439f4a"
+      "sha256": "cbed278f7f1cd8ac6d60bd4527ec33aa3501395cf6cc886ec37f353b4128ae8c"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -825,7 +825,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "53e627296adeb13d616070b10bc4ff17a7bbb76df0c78fad0e0251be5736ede5"
+      "sha256": "eb680b36d8696e97dc87fbc5b7a0894e26e90ad45e5aca1e16fdf4ea2ce20424"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -857,11 +857,11 @@
     },
     {
       "path": "src/runtime/vsock-seccomp.ts",
-      "sha256": "4dca1aaa216ba904cb57b19404ee8c28273a55ee6d500ea8787e66335fe7400e"
+      "sha256": "de7a1bc6967eca6981bb8482b686d94922db72ea52bd8fd574804c536e34570d"
     },
     {
       "path": "src/sandbox.ts",
-      "sha256": "75844b852b3fa6579f8931cff764b83a7675d009ea56d23832ef794353bdb0f5"
+      "sha256": "828971cfe2bfe0e76d40641ef72137d47c3d54fab312558960fcf8bb1372376e"
     },
     {
       "path": "src/storage/batch-view.ts",

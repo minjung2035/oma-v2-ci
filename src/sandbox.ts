@@ -84,6 +84,9 @@ export const SANDBOX_EXECUTABLE = "/usr/bin/bwrap";
  * four entries this builder owns are set last and are not overridable, because
  * they name the actor whose lease was validated above.
  */
+/** The descriptor bubblewrap reads the sandbox's seccomp program from. */
+export const SANDBOX_FILTER_FD = 3;
+
 export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
   dirs: ResidentDirectories, env: Readonly<Record<string, string>> = {},
   inferenceSocketHost?: string): string[] {
@@ -92,6 +95,9 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path is not a trusted absolute path");
   const limits = h.limits!;
   return ["bwrap", "--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
+    // DR18 (D-5, MAC-205): the baseline refuses AF_VSOCK sockets by system
+    // call; the program is read from this descriptor (vsockSeccompFilter).
+    "--seccomp", String(SANDBOX_FILTER_FD),
     "--ro-bind", h.rootfs, "/",
     ...(h.systemBinds ?? []).flatMap(path => ["--ro-bind", path, path]),
     "--ro-bind", h.node, RESIDENT_PATHS.node,
@@ -216,7 +222,8 @@ export class SandboxModule {
     const argv = residentArgv(this.host, lease, dirs, env);
     // `env` is empty on purpose: `--clearenv` means the child's environment is
     // the argv above, so nothing is inherited from whoever spawns bwrap.
-    return { argv, env: {}, inheritedFds: [0, 1, 2] };
+    // Descriptor 3 carries the sandbox filter (vsockSeccompFilter, DR18).
+    return { argv, env: {}, inheritedFds: [0, 1, 2, SANDBOX_FILTER_FD] };
   }
   candidate(oid: string, checkProfile: string): SandboxPlan {
     void oid; void checkProfile;

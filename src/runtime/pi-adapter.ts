@@ -151,7 +151,10 @@ export class PiAdapter {
     // at the last moment before the file is handed to Pi.
     assertExtensionIntegrity(this.options.profile.extensions);
     const spawn = this.spawnPlan();
-    const child = spawnOwnedRpc(spawn.command, spawn.args, spawn.cwd, spawn.env);
+    // DR18 (D-5): a confined engine's sandbox filter reaches bubblewrap on the
+    // descriptor only this parent holds, and nowhere else.
+    const child = spawnOwnedRpc(spawn.command, spawn.args, spawn.cwd, spawn.env, spawn.filter !== undefined);
+    if (spawn.filter !== undefined) (child.stdio[3] as unknown as { end(bytes: Uint8Array): void }).end(spawn.filter);
     const rpc = new PiRpcClient(child, this.options.limits);
     let accepted = false;
     let settled = false;

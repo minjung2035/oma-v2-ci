@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 271,
-    "n_lines": 35366,
+    "n_lines": 35381,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -146,8 +146,8 @@
   },
   "src/runtime/pi-adapter.ts": {
     "blank": 1,
-    "comment": 36,
-    "code": 238,
+    "comment": 38,
+    "code": 239,
     "language": "TypeScript"
   },
   "src/tui/keys.ts": {
@@ -294,6 +294,12 @@
     "code": 175,
     "language": "TypeScript"
   },
+  "src/runtime/pi-spawn-plan.ts": {
+    "blank": 9,
+    "comment": 74,
+    "code": 175,
+    "language": "TypeScript"
+  },
   "src/entry/broker.ts": {
     "blank": 3,
     "comment": 57,
@@ -304,12 +310,6 @@
     "blank": 2,
     "comment": 32,
     "code": 174,
-    "language": "TypeScript"
-  },
-  "src/runtime/pi-spawn-plan.ts": {
-    "blank": 9,
-    "comment": 72,
-    "code": 173,
     "language": "TypeScript"
   },
   "src/storage/rows.ts": {
@@ -354,15 +354,15 @@
     "code": 159,
     "language": "TypeScript"
   },
+  "src/sandbox.ts": {
+    "blank": 15,
+    "comment": 59,
+    "code": 158,
+    "language": "TypeScript"
+  },
   "src/diagnostics/integrity.ts": {
     "blank": 1,
     "comment": 4,
-    "code": 156,
-    "language": "TypeScript"
-  },
-  "src/sandbox.ts": {
-    "blank": 14,
-    "comment": 55,
     "code": 156,
     "language": "TypeScript"
   },
@@ -1256,7 +1256,7 @@
   },
   "src/runtime/vsock-seccomp.ts": {
     "blank": 4,
-    "comment": 12,
+    "comment": 13,
     "code": 35,
     "language": "TypeScript"
   },
@@ -1633,9 +1633,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1549,
-    "comment": 6087,
-    "code": 27730,
+    "blank": 1550,
+    "comment": 6096,
+    "code": 27735,
     "nFiles": 271
   }
 }

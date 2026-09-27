@@ -5,8 +5,9 @@
  *
  * Classic BPF, a few fixed instructions, for bubblewrap's `--seccomp <fd>`:
  * a process of any other architecture (a 32-bit ABI, where the call numbers
- * differ) is refused every call rather than let past the check. Not wired
- * into the sandbox until D-5 is decided.
+ * differ) is refused every call rather than let past the check. Every
+ * Resident sandbox loads it (DR18: `residentArgv` reads it from descriptor 3,
+ * which the engine's spawn fills).
  */
 import { StoreError } from "../domain/errors.js";
 

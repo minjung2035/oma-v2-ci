@@ -172,3 +172,19 @@ test("SCN-C07: without Worker integrate a Resident's integration is refused and 
     assert.equal(git(s, "rev-parse", "refs/heads/main"), main);
   });
 });
+
+test("SCN-C08 / DR18 (D-5): a confined Resident's shell runs under the sandbox filter (the program vsock-seccomp holds to refusing vsock)", OPTIONS, async () => {
+  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
+    await assign(s, "worker-a", "필터를 확인하세요.", "c08");
+    s.script(request => {
+      const results = toolResults(request);
+      if (results.length === 0) return bash("grep '^Seccomp:' /proc/self/status");
+      return text("확인했습니다.");
+    });
+    const run = await s.activate("worker-a");
+    assert.equal(run.code, 0, run.stderr);
+    const status = lastResult(s.provider.seen.at(-1)!.body);
+    // 2 is SECCOMP_MODE_FILTER: a program is loaded (the sandbox filter).
+    assert.match(status, /Seccomp:\s+2/, `the Resident's shell runs without the sandbox filter: ${status}`);
+  });
+});

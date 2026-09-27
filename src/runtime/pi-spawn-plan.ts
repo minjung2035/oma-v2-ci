@@ -14,6 +14,7 @@ import type { ValidatedRunLease } from "../protocol/run-lease.js";
 import { StoreError } from "../domain/errors.js";
 import { storedMailBytes } from "../domain/mail-values.js";
 import { assertModelScope } from "../storage/paths.js";
+import { vsockSeccompFilter } from "./vsock-seccomp.js";
 
 /** Everything the adapter needs to run the engine inside the Resident sandbox.
  * Its absence is the unconfined profile, which the runner states explicitly. */
@@ -97,6 +98,9 @@ export interface PiSpawnPlan {
   readonly args: string[];
   readonly cwd: string;
   readonly env: Record<string, string>;
+  /** A confined engine's sandbox filter: the bytes descriptor 3 carries to
+   * bubblewrap (SANDBOX_FILTER_FD, DR18). */
+  readonly filter?: Uint8Array;
 }
 
 /** Maps a host path to the path the engine is told. Identity when the engine
@@ -250,5 +254,5 @@ export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
   // takes only an absolute executable; a bare `bwrap` was refused there, so no
   // confined Resident could ever deliver a batch.
   if (plan[0] !== "bwrap") throw new StoreError("UNSUPPORTED_PROFILE", "resident sandbox recipe does not start bubblewrap");
-  return { command: SANDBOX_EXECUTABLE, args: plan.slice(1), cwd: options.paths.workspace, env: {} };
+  return { command: SANDBOX_EXECUTABLE, args: plan.slice(1), cwd: options.paths.workspace, env: {}, filter: vsockSeccompFilter() };
 }
