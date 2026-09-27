@@ -551,8 +551,12 @@ test("P0V-26 / N02, P0-1: a unit name that is another society's or agent's is re
     assert.throws(() => units.ensureReconcile(), conflict);
     assert.equal(readFileSync(join(dir, "oma-a-b-reconcile.service"), "utf8"), resident);
     // The owner's own unit is its to replace, and a free name is free.
-    writeFileSync(join(dir, "oma-a-b-d.service"), "[Unit]\nDescription=OMA a-b resident d\n");
+    writeFileSync(join(dir, "oma-a-b-d.service"), `[Unit]\nDescription=OMA a-b resident d\nX-OMA-Owner=${join(dir, "a-b")}\n`);
     assert.doesNotThrow(() => units.assertResidentNamesFree("d"));
+    // P0V-95 (R6-20): one that names no owner and no tree is not known to be
+    // its by the Description alone -- two trees' societies share names.
+    writeFileSync(join(dir, "oma-a-b-f.service"), "[Unit]\nDescription=OMA a-b resident f\n");
+    assert.throws(() => units.assertResidentNamesFree("f"), conflict);
     assert.doesNotThrow(() => units.assertResidentNamesFree("e"));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -774,6 +774,8 @@ request can carry (8388608 bytes)`, G06 BOM frame 거절, G07-sweep `failureCall
 - `domain-policy`, `runtime-contracts`: `resolvedSpecOf`에 digest를 준다(P0V-91).
 - Broker·ReconcileModule을 조립하는 시험 열여섯 곳: `hasGoal`을 명시한다. 값은 예전 fallback과 같다(`fixtures/goal.ts`, P0V-93).
 - PiAdapter·principalEnvironment에 한도를 주는 시험 일곱 곳: `contextBytes`·`bundleBytes`가 더해졌다(P0V-78).
+- `p0-review4`(P0V-26): owner 줄도 state tree도 없는 unit을 Description만으로 제 것이라 하던 기대는 R6-20이 지적한 판정 그 자체였다.
+  이제 owner 줄이 있어야 제 것이고, 없는 것은 교체하지 않는다(P0V-95). 전체 시험에서 찾았다.
 
 ### 수정 검증
 
