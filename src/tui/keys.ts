@@ -152,7 +152,10 @@ export class KeyDecoder {
   /** When the last paste ended, for the burst rule in `afterPaste`. */
   private pasteEndedAtMs: number | null = null;
 
-  constructor(private readonly now: () => number = Date.now) {}
+  /** Elapsed time only (the paste burst), so a monotonic clock: a wall clock
+   * set back after a paste would hold every Enter as a newline for as long as
+   * the jump (R6-03, MAC-650). */
+  constructor(private readonly now: () => number = () => performance.now()) {}
 
   /** How long the stream owner should wait for the rest of what this decoder
    * has started, or null when nothing is pending.

@@ -42,3 +42,19 @@ test("P0V-75 / R6-02, P0-5: an INTEGER the driver cannot hand over is corruption
   const healthy = new AdmissionGate(); healthy.observe(buffer);
   assert.equal(healthy.state, "healthy");
 });
+
+test("P0V-76 / R6-03: an Enter after a paste's burst submits even when the wall clock was set back meanwhile", async () => {
+  const { KeyDecoder } = await import("../src/tui/keys.js");
+  const { TERMINAL_BOUNDS } = await import("../src/tui/limits.js");
+  const wall = Date.now;
+  let offset = 0;
+  // The wall clock is under the test's hand from before the decoder exists.
+  Date.now = () => wall() + offset;
+  try {
+    const decoder = new KeyDecoder();
+    decoder.push(Buffer.from("\u001b[200~pasted\u001b[201~"));
+    offset = -3600_000;
+    await new Promise(resolve => setTimeout(resolve, TERMINAL_BOUNDS.pasteBurstMs.value + 30));
+    assert.deepEqual(decoder.push(Buffer.from("\r")), [{ kind: "enter" }], "the Enter was held as a newline by a clock set back an hour");
+  } finally { Date.now = wall; }
+});
