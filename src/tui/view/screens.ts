@@ -120,7 +120,7 @@ function rowsFor(input: ViewInput): { readonly fixed: string[]; readonly rows: s
     : [fit(`  최근 ${data.mail.length}통만 표시 · 오래된 ${data.mailOmitted}통은 이번에 읽지 않음`, columns)];
   if (data.mail.length === 0)
     return { fixed: unreadable.length + omitted.length > 0 ? [...unreadable, ...omitted] : ["  받은 메일이 없습니다."], rows: [], selected: null };
-  return { fixed: [...unreadable, ...omitted, fit("  ● Principal 세션에 아직 전달되지 않음 · 여기서 여는 것은 전달·확인이 아닙니다", columns)],
+  return { fixed: [...unreadable, ...omitted, fit("  ● 새 도착(아직 batch에 담기지 않음) · 여기서 여는 것은 전달·확인이 아닙니다", columns)],
     selected, rows: data.mail.map((row, index) => {
       const marker = index === selected ? ">" : " ";
       const flag = row.unread ? "●" : " ";

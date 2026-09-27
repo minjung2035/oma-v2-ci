@@ -266,8 +266,9 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
     // A configured seed count must not be presented as a running count.
     assert.match(byLabel.get("Workers")!, /configured/);
     assert.match(byLabel.get("Usage")!, /^unknown/);
-    // WP28: the count is what waits for the Principal's session, not reading.
-    assert.equal(byLabel.get("Mail"), "2건 Principal 세션에 전달 대기");
+    // WP28, P0V-66: what waits for the Principal's session is the ledger's
+    // count, unknown here; the mailbox says only what arrived in no batch yet.
+    assert.match(byLabel.get("Mail")!, /^unknown \(principal 실행 endpoint 없음; [0-9:]+ 관측\) · 새 도착 2건$/);
 
     const observed = dashboardLines({
       config: cfg, principalModel: { configured: "strong", session: null }, unread: 0,
@@ -285,6 +286,24 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
     assert.equal(observedByLabel.get("Workers"), "2 / 8");
     assert.match(observedByLabel.get("Pending")!, /^3 \(/);
     assert.match(observedByLabel.get("Status")!, /^observed \(/);
+    assert.match(observedByLabel.get("Mail")!, /^0건 Principal 세션에 전달 대기 \([0-9:]+ 관측\) · 새 도착 0건$/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("P0V-66 / R11, P0-5: mail in a batch prepared while the session was in a turn still waits for it", () => {
+  const root = scratch("oma-tui-prepared-");
+  try {
+    // The batch was prepared -- its two messages left new/ for cur/ -- and the
+    // session, in a turn, has not taken it: the ledger still counts them.
+    const lines = dashboardLines({
+      config: config(root), principalModel: { configured: "strong", session: null }, unread: 0,
+      observation: { kind: "observed", observedAtMs: Date.UTC(2026, 8, 27), statuses: [
+        { agent: "principal", desired: "enabled", activeState: null, subState: null, unitResult: null, execMainStatus: null,
+          pending: 2, preparedBatches: 1, reason: null, runnerObservedAtMs: null }] },
+    });
+    const mail = new Map(lines.map(line => [line.label, line.value])).get("Mail")!;
+    assert.match(mail, /^2건 Principal 세션에 전달 대기 /, "prepared mail was shown as delivered");
+    assert.match(mail, /새 도착 0건$/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

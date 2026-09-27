@@ -40,6 +40,7 @@ export function dashboardData(input: DashboardInput): DashboardData {
       kind: "observed", observedAtMs: observation.observedAtMs,
       ready: readyCount(observation.statuses), active: activeCount(observation.statuses),
       pending: observation.statuses.reduce((total, row) => total + row.pending, 0),
+      principalPending: observation.statuses.find(row => row.agent === "principal")?.pending ?? null,
     }
     : { kind: "unknown", observedAtMs: observation.observedAtMs, reason: observation.reason };
   return Object.freeze({

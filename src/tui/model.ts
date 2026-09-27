@@ -65,13 +65,19 @@ export interface DashboardData {
   readonly status:
     | { readonly kind: "observed"; readonly observedAtMs: number; readonly ready: number;
         /** P0V-39: null when a Resident's unit could not be observed. */
-        readonly active: number | null; readonly pending: number }
+        readonly active: number | null; readonly pending: number;
+        /** P0V-66: the Principal's messages not yet presented to its session
+         * -- in no batch, or in a prepared one -- as the ledger counts them;
+         * null when the status has no Principal. */
+        readonly principalPending: number | null }
     | { readonly kind: "unknown"; readonly observedAtMs: number; readonly reason: string };
   /** Seed population from configuration; not a running count. */
   readonly configuredWorkers: number;
   readonly workerLimit: number;
-  /** Messages waiting for the Principal's session, or null when the mailbox
-   * could not be read: an unread directory is not an empty one. */
+  /** Messages that arrived and are in no batch yet (the mailbox's `new/`,
+   * UNIT-005), or null when the mailbox could not be read: an unread directory
+   * is not an empty one. A prepared batch's messages are already in `cur/`
+   * and still wait for the session; that count is `principalPending`. */
   readonly unread: number | null;
   /** WP15.05: the configured Principal model, and the one the running session
    * was started with (null when no session runs). Nothing here is the engine's

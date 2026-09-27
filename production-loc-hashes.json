@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "1c1c5ad6c14ed7ae2a07b5d1552f0675ab51cdff546c0aa36042ce206d88a601",
+  "report": "3d3209bda738868f2a4f096912d924e12027a348a02ee02d287eedb026845c86",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -789,7 +789,7 @@
     },
     {
       "path": "src/tui/dashboard.ts",
-      "sha256": "d0873cd80427ea3fffb71bf39efce5fce9f8cf4d68f356b5e97cf3be0d8bc0e1"
+      "sha256": "3cb5901abc5e95a8a265f532706fe2df4aac61e30da078b613e3ca7e3df4c673"
     },
     {
       "path": "src/tui/exit.ts",
@@ -805,7 +805,7 @@
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "a3be446ce25228f733b1b3dd8af60104094fd3bbf34753b39019884758d14367"
+      "sha256": "4c7ac8e379d534c9d5907b57359ab2bf53ed1c58b327614c2977543c069a4e5d"
     },
     {
       "path": "src/tui/prompt.ts",
@@ -841,7 +841,7 @@
     },
     {
       "path": "src/tui/view/dashboard.ts",
-      "sha256": "2c82a71835eab1335829d008fbe4f700a667612b1432a25ca7f97c94c60449f0"
+      "sha256": "4321b31f5e8a3cf551c730d6388003c4dcaaebba434a4a1fcaeaa89723bd095f"
     },
     {
       "path": "src/tui/view/index.ts",
@@ -861,7 +861,7 @@
     },
     {
       "path": "src/tui/view/screens.ts",
-      "sha256": "6f89fb230fe10d1981f109de730fa277515414b9eced48a6ba5626fe093c7702"
+      "sha256": "776250ffd095ca5d3b37618a0cc603cf6da803a66f4953904cb669456fa3f956"
     },
     {
       "path": "src/tui/view/text.ts",

@@ -640,13 +640,13 @@ WP28.01 — every statement on the screen and the fact behind it:
 | Where | Says | Evidence |
 |---|---|---|
 | Dashboard Workers / Active / Pending / Status | counts with the observation time, or `unknown (reason; time)` | the broker's status view (WP23 snapshot); missing, unreadable, malformed, foreign or stale is unknown (T118) |
-| Dashboard Mail | `N건 Principal 세션에 전달 대기` | files in the Principal's `new/`, which move to `cur/` only when a batch carrying them settles (`moveToCur`) |
+| Dashboard Mail | `N건 Principal 세션에 전달 대기 (time 관측) · 새 도착 M건`, or `unknown (reason; time) · 새 도착 M건` | N: the ledger's pending count for the Principal in the status view (in no batch, or in a prepared one); M: files in the Principal's `new/`. P0V-66 corrected the evidence recorded here earlier -- `new/` alone. A batch is prepared, and its messages move to `cur/` (`moveToCur`), before the session takes it, and a session in a turn defers it (UNIT-005) |
 | Dashboard Model | configured value, and what the running session started with | configuration and `sessionModel` (V15B); never the engine's own report |
 | Dashboard Sandbox / Usage | declared rootfs or unconfined; usage unknown | configuration; the engine owns spend (INF-001) |
 | Config notices | saved (with when it applies), unchanged, saved but not read back, save failed | the managed writer's outcome (WP13/WP15) |
 | Transcript `✗ 보내지 못한 입력` | a prompt that was never written, returned once and in order | WP09 session disposition |
 | Transcript `⚠ … 확인하지 못했습니다(자동으로 다시 보내지 않음)` | a prompt written but not answered | WP09; never resent |
-| Mail list `●` | not yet delivered to the Principal's session; opening it is neither delivery nor acknowledgement | read-only bounded read of the Maildir file |
+| Mail list `●` | arrived and in no batch yet (P0V-66: not "not yet delivered" -- a prepared batch's messages are in `cur/` and still wait); opening it is neither delivery nor acknowledgement | the Maildir file's place (`new/`) and a read-only bounded read of it |
 
 Found and fixed. (1) The mail count and `●` said "unread", which reads as the
 Human's reading; they count messages not yet delivered to the Principal's session,
