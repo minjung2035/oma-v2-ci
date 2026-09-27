@@ -1,26 +1,37 @@
 // A society and its Principal, composed the way `oma` composes them, with only
 // the model scripted (./scripted-provider.ts).
 //
-// Real: provisioning, the Store, the mail module, the broker and its Principal
-// and host endpoints, the bundled engine started by the product's
-// PrincipalSession with the trusted core extension, the model-facing CLI that
-// extension starts, the credential channel, and the product's PrincipalDelivery.
+// Real: provisioning, the Store, the mail module, the broker and its Principal,
+// host, runner and actor endpoints, the bundled engine started by the
+// product's PrincipalSession with the trusted core extension, the model-facing
+// CLI that extension starts, the credential channel, the product's
+// PrincipalDelivery, and -- when a Resident is activated -- the product's own
+// runner process (dist/src/entry/runner.js) with its adapter and engine.
 // Stand-ins: the host's side of the supervision channel (this process is the
-// host, and registers its engine as `oma` does), and systemd (no unit is ever
-// needed by what a Principal-only scenario does).
+// host, and registers its engine as `oma` does), and systemd: `ScenarioUnits`
+// answers what a unit manager would about the one Resident being run. A runner
+// runs unconfined (the configuration declares no rootfs); confinement has its
+// own live tests (resident-sandbox-live). A runner shares this process's
+// cgroup, which a run pins, so each Resident can be activated once per broker;
+// `restartBroker` makes it activatable again.
 //
 // Scenarios assert durable facts -- ledger rows, mailbox files, receipts, the
 // session history -- not screen text.
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AuthContext, ProtocolLimits, Request } from "../../implementation/contracts.js";
+import type { Actor, AuthContext, ProtocolLimits, Request, UnitObservation } from "../../implementation/contracts.js";
 import { Broker, type PrincipalHostChannel } from "../../src/broker.js";
 import { Store } from "../../src/store.js";
 import { MailModule } from "../../src/mail.js";
-import { UnitsModule } from "../../src/units.js";
+import type { UnitsModule } from "../../src/units.js";
+import { validateConfig } from "../../src/config.js";
+import { defaultHostConfig } from "../../src/config/defaults.js";
+import { canonicalResourceLimits } from "../../src/domain/resources.js";
 import { ViewsModule } from "../../src/views.js";
 import { LifecycleModule } from "../../src/lifecycle.js";
 import { provisionSociety } from "../../src/runtime/provision.js";
@@ -30,6 +41,7 @@ import { PrincipalSession, newSessionHandle, principalEnvironment, principalSess
 import { PrincipalDelivery, principalHostBroker, type DeliveryOutcome } from "../../src/runtime/principal-delivery.js";
 import { resolvePiRuntime } from "../../src/runtime/pi-runtime.js";
 import type { PiEvent } from "../../src/runtime/pi-rpc.js";
+import { agentRootPathAt, runnerViewPathAt, workspacePathAt } from "../../src/storage/paths.js";
 import { makeValidAgent } from "./spec.js";
 import { scriptedProvider, type Reply, type Script, type ScriptedProvider } from "./scripted-provider.js";
 
@@ -41,6 +53,31 @@ export const SCENARIO_LIMITS: ProtocolLimits = {
 };
 const SOCIETY = "demo";
 const REPO = process.cwd();
+const OWN_CGROUP = readFileSync("/proc/self/cgroup", "utf8").trim().split("\n")[0]!.slice(3);
+
+/** What a user manager would answer about units: the one Resident a scenario
+ * is running is an active unit in this process's cgroup, with the invocation
+ * id its runner was given; everything else is not running. */
+class ScenarioUnits {
+  running: { readonly agent: Actor; readonly invocationId: string } | null = null;
+  onRevokeRun: ((agent: Actor) => void) | undefined = undefined;
+  bindIncarnationReader(): void {}
+  observe(agent: Actor): UnitObservation {
+    return this.running?.agent === agent
+      ? { activeState: "active", subState: "running", result: "success", execMainStatus: 0, cgroup: OWN_CGROUP, invocationId: this.running.invocationId }
+      : { activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" };
+  }
+  observeAsync(agent: Actor): Promise<UnitObservation> { return Promise.resolve(this.observe(agent)); }
+  async observeStatus(agents: readonly Actor[]): Promise<ReadonlyMap<Actor, UnitObservation>> { return new Map(agents.map(agent => [agent, this.observe(agent)])); }
+  unitCgroup(): string { return ""; }
+  startLimitStatus(): string | null { return null; }
+  start(): void {}
+  stop(agent: Actor): UnitObservation { return this.observe(agent); }
+  confirmDead(agent: Actor): boolean { return this.running?.agent !== agent; }
+  ensureResident(): void {}
+  ensurePrincipal(): void {}
+  assertResidentNamesFree(): void {}
+}
 
 /** The host's side of the supervision channel, as `oma` holds it: grants and
  * refusals are recorded, and a session is registered through the listener the
@@ -108,6 +145,10 @@ export interface Scenario {
   inbox(actor: string, box?: "new" | "cur"): string[];
   /** The raw stored message a mail id names. */
   archived(messageId: string): string;
+  /** Runs a Resident once, as systemd starts its unit: the product's runner
+   * opens a run, takes one prepared batch, delivers it into a fresh engine
+   * (the scripted model answers) and completes it. Resolves when it exits. */
+  activate(agent: string, timeoutMs?: number): Promise<{ readonly code: number | null; readonly stderr: string }>;
   close(): Promise<void>;
 }
 
@@ -121,9 +162,8 @@ export interface ScenarioOptions {
 
 /** A broker over the society's state. It owns the Store it is given: its
  * drain closes it, as the product's broker process does on its way out. */
-function composeBroker(root: string, runRoot: string, store: Store, host: HostSide): Broker {
-  const units = new UnitsModule(SOCIETY, { node: process.execPath, libdir: REPO, state: root, society: SOCIETY, agent: "",
-    config: join(root, "config.json"), run: runRoot, brokerUnit: "" }, join(root, "units"));
+function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, stand: ScenarioUnits): Broker {
+  const units = stand as unknown as UnitsModule;
   const mail = new MailModule({ stateRoot: root, society: SOCIETY }, store, 64, SCENARIO_LIMITS.batchMaxMessages, SCENARIO_LIMITS);
   const views = new ViewsModule(store, root, SOCIETY, "p");
   const lifecycle = new LifecycleModule(store, units,
@@ -134,9 +174,24 @@ function composeBroker(root: string, runRoot: string, store: Store, host: HostSi
 }
 
 export async function startScenario(options: ScenarioOptions = {}): Promise<Scenario> {
-  const root = mkdtempSync(join(tmpdir(), "oma-scenario-"));
-  const runRoot = join(root, "run");
+  // D03: a launched runner checks that its roots name this society under `oma`.
+  const base = mkdtempSync(join(tmpdir(), "oma-scn-"));
+  const root = join(base, "oma", SOCIETY);
+  const runRoot = join(base, "run", "oma", SOCIETY);
+  mkdirSync(root, { recursive: true }); mkdirSync(runRoot, { recursive: true });
   provisionSociety(root);
+  // The society's configuration: the product's defaults with the scripted
+  // model for Residents and no rootfs, so a runner runs its engine unconfined.
+  const defaults = defaultHostConfig({ society: SOCIETY, node: process.execPath, libdir: REPO, rootfs: "/", deploymentDigest: "a".repeat(64) });
+  const residentProfile = Object.keys(defaults.agentProfiles).find(name => name !== defaults.principalProfile)!;
+  const config = validateConfig({ ...defaults,
+    modelProfiles: { ...defaults.modelProfiles, scripted: { provider: "fake", model: "scripted", credentialRef: "engine-managed",
+      codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 } },
+    agentProfiles: { ...defaults.agentProfiles, [residentProfile]: { ...defaults.agentProfiles[residentProfile]!, modelProfile: "scripted" } } });
+  const configPath = join(root, "config.json");
+  writeFileSync(configPath, JSON.stringify(config, null, 2));
+  const residentResources = config.agentProfiles[residentProfile]!.resources;
+  const units = new ScenarioUnits();
   const provider = await scriptedProvider(options.script ?? []);
   let store = new Store(join(root, "runtime.sqlite"));
   store.transaction(tx => {
@@ -144,7 +199,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     for (const name of options.residents ?? []) tx.insertAgent(makeValidAgent(name));
   });
   const host = new HostSide();
-  let broker = composeBroker(root, runRoot, store, host);
+  let broker = composeBroker(root, runRoot, store, host, units);
   await broker.start();
 
   const runtime = resolvePiRuntime({ stateRoot: root, libdir: REPO });
@@ -249,7 +304,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     async restartBroker() {
       await scenario.stopBroker();
       store = new Store(join(root, "runtime.sqlite"));
-      broker = composeBroker(root, runRoot, store, host);
+      broker = composeBroker(root, runRoot, store, host, units);
       await broker.start();
       register();
     },
@@ -273,6 +328,27 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       assert.ok(name, `no archived message ${messageId}`);
       return readFileSync(join(root, "mail", "archive", "cur", name), "utf8");
     },
+    async activate(agent, timeoutMs = 90_000) {
+      // What provisioning a created Resident leaves: its home and its workspace.
+      const home = join(agentRootPathAt(root, agent), "home");
+      for (const path of [home, workspacePathAt(root, agent), runnerViewPathAt(root, agent)]) mkdirSync(path, { recursive: true });
+      units.running = { agent, invocationId: randomBytes(16).toString("hex") };
+      try {
+        const child = spawn(process.execPath, [join(REPO, "dist/src/entry/runner.js"), "--society", SOCIETY, "--agent", agent,
+          "--config", configPath, "--state-root", root, "--run-root", runRoot], {
+          env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, INVOCATION_ID: units.running.invocationId,
+            OMA_PROFILE_HEX: Buffer.from(residentProfile, "utf8").toString("hex"),
+            OMA_RESOURCES_HEX: Buffer.from(canonicalResourceLimits(residentResources), "utf8").toString("hex") },
+          stdio: ["ignore", "ignore", "pipe"] });
+        let stderr = "";
+        child.stderr!.on("data", chunk => { stderr += String(chunk); });
+        const code = await new Promise<number | null>((resolve) => {
+          const timer = setTimeout(() => { child.kill("SIGKILL"); }, timeoutMs);
+          child.once("close", status => { clearTimeout(timer); resolve(status); });
+        });
+        return { code, stderr };
+      } finally { units.running = null; }
+    },
     async close() {
       try { session.close(); } catch { /* already ended */ }
       const pid = session.pid;
@@ -280,7 +356,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       await broker.drainAndClose().catch(() => undefined);
       await provider.close();
       try { store.close(); } catch { /* the broker's drain closed it */ }
-      rmSync(root, { recursive: true, force: true });
+      rmSync(base, { recursive: true, force: true });
     },
   };
   return scenario;
