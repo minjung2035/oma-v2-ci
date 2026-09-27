@@ -8,6 +8,19 @@ import { getSystemErrorName } from "node:util";
 import { load, errno } from "koffi";
 import { StoreError } from "../domain/errors.js";
 
+/** P0V-65, P0-4: gives back every descriptor it is handed, whichever of them
+ * fails to close -- Linux releases a number even when close reports an error
+ * (P0V-49), so one failure is no reason to keep the others. The first failure
+ * is reported once every close has been attempted. */
+export function closeEvery(...descriptors: readonly (number | null | undefined)[]): void {
+  let failure: { readonly error: unknown } | null = null;
+  for (const fd of descriptors) {
+    if (fd === null || fd === undefined) continue;
+    try { closeSync(fd); } catch (error) { failure ??= { error }; }
+  }
+  if (failure !== null) throw failure.error;
+}
+
 let native:
   | {
       open: (nr: number, ...args: unknown[]) => number;

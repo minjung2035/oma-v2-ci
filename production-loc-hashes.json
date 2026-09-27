@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "9ccdf908c748d7b47282b52f4139d003c29a78b6396439205fbbb9c4d2d04d83",
+  "report": "6ef6f572bb6c9075e1b77982c402db99d6eac1cf098c9574a95e9e25a81163dd",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -89,7 +89,7 @@
     },
     {
       "path": "src/broker/transport-spool.ts",
-      "sha256": "c363c880d883e8a778450d1cc5d742135f0fe23e5f49727f50834bd00eeeb193"
+      "sha256": "2df0bdb5abab60bc743f0bc3de51e22eda90a1b39fc4fbd5d2a3dca9375bb6f7"
     },
     {
       "path": "src/cli.ts",
@@ -361,7 +361,7 @@
     },
     {
       "path": "src/git/context-repository.ts",
-      "sha256": "e63d3c68322a790a12f12d41e6ab2096fbbef8ee3247b47346d38ff6165c1f8a"
+      "sha256": "d291833f354a317c1dfd9754174a39134eda254a97184bf0c17c4d359c1f7bb2"
     },
     {
       "path": "src/git/context.ts",
@@ -689,7 +689,7 @@
     },
     {
       "path": "src/storage/contained-fs.ts",
-      "sha256": "976cac8e86027fcba332688231923efcdb9d5811697ec0e5baf51c89b4330da6"
+      "sha256": "689ae8fe5c06a41b9ee51b0acb14ecbbfc812d349f119eba924e9fed19268f0a"
     },
     {
       "path": "src/storage/context-files.ts",
@@ -701,11 +701,11 @@
     },
     {
       "path": "src/storage/context-stream.ts",
-      "sha256": "9b710df173158ee31b2291ebbeb4392c74358b861bb0ff3a350c4aceb91a424a"
+      "sha256": "d4d92fd4f7dc9c60d6c047ea8d447d1b38fd84cd52f381d7e6d8f30a92e62ef7"
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "4c0eb6e1209158f777c087d391e4faf72b8ad0d46f7d85b9ce92bab8e66eed4f"
+      "sha256": "84a8fd5f64c245b704c8c7d48590a18a3b1daa1ac1bcd593731fadbcfab7925b"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
@@ -725,7 +725,7 @@
     },
     {
       "path": "src/storage/immutable-file.ts",
-      "sha256": "f0847d09127b2e8541241e8d6584132f468f0c4335d7927ae0aba4cda6b5fd3e"
+      "sha256": "81174e0f0d148a38113a781ff545c04304630d6c38b876fc63d0cc103c13e261"
     },
     {
       "path": "src/storage/ledger-reader.ts",

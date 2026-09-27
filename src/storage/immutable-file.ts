@@ -22,13 +22,7 @@ import {
   isDurabilityFault,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import {
-  entryAt,
-  linkDescriptor,
-  openBeneath,
-  openDirectory,
-  openRegularBeneath,
-} from "./contained-fs.js";
+import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "./contained-fs.js";
 import type { PublishedIdentity } from "./preaccept-artifact.js";
 
 function checkedBytes(
@@ -218,10 +212,7 @@ export function publishImmutableFile(
         fsyncSync(parent);
       }
     } finally {
-      if (temporaryFd !== undefined) closeSync(temporaryFd);
-      if (parent !== undefined) closeSync(parent);
-      if (sourceFd !== undefined) closeSync(sourceFd);
-      closeSync(sourceParent);
+      closeEvery(temporaryFd, parent, sourceFd, sourceParent);
     }
   }
 }

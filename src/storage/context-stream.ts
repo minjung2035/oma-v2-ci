@@ -10,7 +10,7 @@ import { StoreError } from "../domain/errors.js";
 import { contextEntriesCheck, ContextTextValidator } from "../domain/context-policy.js";
 import { contextStagingPathAt } from "./paths.js";
 import { assertDirectory, removeOwnedTree } from "./directory.js";
-import { entryAt, openBeneath, openDirectory } from "./contained-fs.js";
+import { entryAt, openBeneath, openDirectory, closeEvery } from "./contained-fs.js";
 import { ensureDurableDirectory, faultAt, fsyncDir, fsyncTree, isDurabilityFault, type DurabilityObserver } from "./durable-fs.js";
 import type { PreacceptOwner } from "./preaccept-artifact.js";
 
@@ -189,8 +189,5 @@ export async function prepareContextStream(
       } catch (failure) { failures.push(failure); }
     }
     throw discardFailedPreparation(prepared, failures);
-  } finally {
-    if (state.active?.fd !== null && state.active?.fd !== undefined) closeSync(state.active.fd);
-    closeSync(treeFd);
-  }
+  } finally { closeEvery(state.active?.fd, treeFd); }
 }

@@ -13,7 +13,7 @@ import { sha256Hex } from "../hash.js";
 import { readContextEntry, assertContextDirectory } from "../storage/context-files.js";
 import { contextStagingPathAt, contextRevisionPathAt } from "../storage/paths.js";
 import { ensureDurableDirectory, fsyncDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
-import { entryAt, openBeneath, openDirectory } from "../storage/contained-fs.js";
+import { entryAt, openBeneath, openDirectory, closeEvery } from "../storage/contained-fs.js";
 import { publishContextRevision, verifyContextRevision } from "../storage/context-snapshot.js";
 import { runProcessSync, type ProcessObservation } from "../process/run.js";
 import { PreparationExecutor, requirePreparedSuccess } from "../process/preparation.js";
@@ -173,9 +173,9 @@ export class ContextRepository {
       this.verifyCandidate(candidate, entries, expected);
       return candidate;
     } finally {
-      if (workFd !== undefined) closeSync(workFd);
-      if (treeFd !== undefined) closeSync(treeFd);
-      this.preparing = false;
+      // P0V-65: a close that fails neither keeps the other descriptor nor
+      // leaves this repository marked as preparing forever.
+      try { closeEvery(workFd, treeFd); } finally { this.preparing = false; }
       // No cleanup here: uncertain native children/staging need recovery proof.
     }
   }

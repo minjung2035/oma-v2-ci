@@ -20,7 +20,7 @@ import {
   isDurabilityFault,
   type DurabilityObserver,
 } from "./durable-fs.js";
-import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath } from "./contained-fs.js";
+import { entryAt, linkDescriptor, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "./contained-fs.js";
 import { runnerReceiptPathAt, sessionDirPathAt } from "./paths.js";
 
 export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.87.1";
@@ -158,10 +158,7 @@ function sessionPathCheck(stateRoot: string, actor: Actor, value: unknown): Fail
     if (code === "ENOENT") return { failed: "conflicting", problem: "session-absent", cause: code };
     if (code === "ELOOP" || code === "ENOTDIR") return { failed: "conflicting", problem: "session-invalid", cause: code };
     return { failed: "unavailable", problem: "session-unavailable", cause: code };
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-    if (directory !== undefined) closeSync(directory);
-  }
+  } finally { closeEvery(fd, directory); }
 }
 function checkReceipt(raw: unknown, expected: PreparedBatch, stateRoot: string, attempts: DeliveryAttempts): CheckedReceipt | Failed {
   const value = record(raw);
@@ -452,8 +449,7 @@ export function publishDeliveryReceipt(
     }
     throw error;
   } finally {
-    if (fd !== undefined) closeSync(fd);
-    closeSync(parent);
+    closeEvery(fd, parent);
     void crashed;
   }
 }

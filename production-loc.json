@@ -27,7 +27,7 @@
   "src/storage/delivery-receipt.ts": {
     "blank": 2,
     "comment": 53,
-    "code": 404,
+    "code": 400,
     "language": "TypeScript"
   },
   "src/config/generations.ts": {
@@ -128,8 +128,8 @@
   },
   "src/git/context-repository.ts": {
     "blank": 4,
-    "comment": 14,
-    "code": 247,
+    "comment": 16,
+    "code": 245,
     "language": "TypeScript"
   },
   "src/storage/operation-codec.ts": {
@@ -204,16 +204,16 @@
     "code": 212,
     "language": "TypeScript"
   },
-  "src/storage/immutable-file.ts": {
-    "blank": 4,
-    "comment": 16,
-    "code": 207,
-    "language": "TypeScript"
-  },
   "src/storage/ledger-reader.ts": {
     "blank": 2,
     "comment": 14,
     "code": 205,
+    "language": "TypeScript"
+  },
+  "src/storage/immutable-file.ts": {
+    "blank": 4,
+    "comment": 16,
+    "code": 198,
     "language": "TypeScript"
   },
   "src/diagnostics/ledger.ts": {
@@ -279,7 +279,7 @@
   "src/storage/context-stream.ts": {
     "blank": 6,
     "comment": 17,
-    "code": 173,
+    "code": 170,
     "language": "TypeScript"
   },
   "src/storage/rows.ts": {
@@ -372,6 +372,12 @@
     "code": 152,
     "language": "TypeScript"
   },
+  "src/storage/contained-fs.ts": {
+    "blank": 3,
+    "comment": 42,
+    "code": 152,
+    "language": "TypeScript"
+  },
   "src/mail/headers.ts": {
     "blank": 4,
     "comment": 18,
@@ -406,12 +412,6 @@
     "blank": 4,
     "comment": 14,
     "code": 145,
-    "language": "TypeScript"
-  },
-  "src/storage/contained-fs.ts": {
-    "blank": 2,
-    "comment": 38,
-    "code": 144,
     "language": "TypeScript"
   },
   "src/broker/composition.ts": {
@@ -516,16 +516,16 @@
     "code": 100,
     "language": "TypeScript"
   },
+  "src/broker/transport-spool.ts": {
+    "blank": 2,
+    "comment": 10,
+    "code": 99,
+    "language": "TypeScript"
+  },
   "src/storage/paths.ts": {
     "blank": 3,
     "comment": 12,
     "code": 99,
-    "language": "TypeScript"
-  },
-  "src/broker/transport-spool.ts": {
-    "blank": 2,
-    "comment": 8,
-    "code": 98,
     "language": "TypeScript"
   },
   "src/views.ts": {
@@ -1351,9 +1351,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1210,
-    "comment": 5000,
-    "code": 23968,
+    "blank": 1211,
+    "comment": 5008,
+    "code": 23959,
     "nFiles": 224
   }
 }

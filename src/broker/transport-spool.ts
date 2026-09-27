@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { StoreError } from "../domain/errors.js";
 import { ensureDirectory } from "../storage/directory.js";
-import { entryAt, openBeneath, openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
+import { entryAt, openBeneath, openDirectory, openRegularBeneath, closeEvery } from "../storage/contained-fs.js";
 
 export interface RawDescriptor { readonly bytes: number; readonly sha256: string }
 export interface ExecutionBody { readonly chunks: AsyncIterable<Uint8Array>; release(): void }
@@ -70,12 +70,15 @@ export class TransportSpool implements ConnectionSpool {
       // Reopened through the held directory, and proven to be the file whose
       // bytes were hashed; the reader owns and closes this descriptor itself.
       const fd = openRegularBeneath(self.directory, self.name);
-      const stat = fstatSync(fd);
-      if (stat.dev !== self.written.dev || stat.ino !== self.written.ino || stat.size !== self.descriptor.bytes) {
-        closeSync(fd);
-        throw new StoreError("STREAM_INVALID", "the transport copy changed after it was sealed");
-      }
-      const reader = createReadStream("", { fd, start: 0 });
+      // P0V-65, P0-4: this frame owns the descriptor until the reader does;
+      // a failure between the two gives it back here.
+      let reader: ReadStream | null = null;
+      try {
+        const stat = fstatSync(fd);
+        if (stat.dev !== self.written.dev || stat.ino !== self.written.ino || stat.size !== self.descriptor.bytes)
+          throw new StoreError("STREAM_INVALID", "the transport copy changed after it was sealed");
+        reader = createReadStream("", { fd, start: 0 });
+      } finally { if (reader === null) closeEvery(fd); }
       self.reader = reader;
       try {
         for await (const value of reader) {
