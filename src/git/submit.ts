@@ -82,7 +82,7 @@ export class SubmitCoordinator {
     Object.freeze(request);
     const hash = requestHash("git.submit", canonicalRequestParams("git.submit", request));
     const claim = this.store.claimKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
     this.effects.verifyObjectFormat([request.candidate, ...request.prerequisites]);
     const id = generateOperationId(); const messageId = generateMessageId(id, 0);
@@ -120,7 +120,7 @@ export class SubmitCoordinator {
       });
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
-    if (claimResult === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (claimResult === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     // The submission is accepted: a failure from here is reported as accepted.
     try {
       await this.exclusive(id, () => this.executeAccepted(this.operation(id), auth));

@@ -88,6 +88,16 @@ type ValidatedInternalCall = {
     params: InternalMethods[M];
   };
 }[keyof InternalMethods];
+/** P0V-92 (R6-15): the runner a request comes from, as the ledger knows it.
+ * A runner is authenticated from a unit and a row that exist, and no code
+ * removes an agent row, so a missing one is the ledger no longer saying who
+ * the runner is -- refused by name rather than assumed away. */
+function runnerIdentity(store: InternalStorePort, agent: Actor): { readonly incarnation: number } {
+  const identity = store.getAgentIdentity(agent);
+  if (identity === null) throw new StoreError("AUTH_FAILED", "runner identity missing");
+  return identity;
+}
+
 export class InternalDispatcher {
   private readonly observations = new Map<Actor, Readonly<{ reason: string; toolName?: string; observedAtMs: number }>>();
   constructor(private readonly deps: InternalDispatchDependencies) {}
@@ -147,11 +157,7 @@ export class InternalDispatcher {
         }
         case "runner.pending": {
           const agent = peers.runnerActor(peer);
-          peers.runnerAuth(
-            agent,
-            store.getAgentIdentity(agent)!.incarnation,
-            peer,
-          );
+          peers.runnerAuth(agent, runnerIdentity(store, agent).incarnation, peer);
           return okAnswer(id, {
             pending: store.pendingDeliveryCount(agent),
             recoverableBatchIds: [...store.preparedBatchIds(agent)],
@@ -159,11 +165,7 @@ export class InternalDispatcher {
         }
         case "runner.observe": {
           const agent = peers.runnerActor(peer);
-          peers.runnerAuth(
-            agent,
-            store.getAgentIdentity(agent)!.incarnation,
-            peer,
-          );
+          peers.runnerAuth(agent, runnerIdentity(store, agent).incarnation, peer);
           this.observations.set(agent, Object.freeze({
             reason: dispatchParams.reason,
             ...(dispatchParams.toolName === undefined ? {} : { toolName: dispatchParams.toolName }),
@@ -173,13 +175,10 @@ export class InternalDispatcher {
         }
         case "batch.prepare": {
           const agent = peers.runnerActor(peer);
-          const identity = store.getAgentIdentity(agent);
-          if (!identity)
-            throw new StoreError("AUTH_FAILED", "runner identity missing");
           return okAnswer(
             id,
             await mail.prepare(
-              peers.runnerAuth(agent, identity.incarnation, peer),
+              peers.runnerAuth(agent, runnerIdentity(store, agent).incarnation, peer),
             ),
           );
         }

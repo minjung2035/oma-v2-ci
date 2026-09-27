@@ -27,7 +27,7 @@ export class LifecycleActions {
     this.policy.requireManage(auth, agent);
     const target = this.requireTarget(agent);
     if (!this.paths.hasGoal()) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
-    const prior = claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
+    const prior = claim === "retry" ? this.store.retriedOperation(auth.actor, key) : null;
     if (prior && prior.state !== "pending" && prior.state !== "unknown") return receiptOfOperation(prior);
     if (prior) {
       if (prior.kind !== "agent.start" || prior.plan.agent !== agent)
@@ -53,7 +53,7 @@ export class LifecycleActions {
         if (result !== "retry") tx.updateAgent({ name: agent, desired: "enabled" });
         return result;
       });
-      if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+      if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     }
     // Synchronous final identity check -> physical action. Neither a new target
     // epoch nor an old plan is rewritten to make this comparison succeed.
@@ -74,7 +74,7 @@ export class LifecycleActions {
     if (claim === "reused") throw reused(auth.actor, key);
     this.policy.requireManage(auth, agent);
     const target = this.requireTarget(agent);
-    const prior = claim === "retry" ? this.store.getOperation(auth.actor, key)! : null;
+    const prior = claim === "retry" ? this.store.retriedOperation(auth.actor, key) : null;
     if (prior && prior.state !== "pending" && prior.state !== "unknown") return receiptOfOperation(prior);
     if (prior) {
       if (prior.kind !== "agent.stop" || prior.plan.agent !== agent)
@@ -95,7 +95,7 @@ export class LifecycleActions {
         if (result !== "retry") tx.updateAgent({ name: agent, desired: "stopped" });
         return result;
       });
-      if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+      if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     }
     // The stop intent is accepted: a failure from here is reported as accepted.
     try {

@@ -11,7 +11,7 @@ function freezeTable<T extends Table>(table: T): T {
 }
 export const READ_FACETS = freezeTable({
   operations: {
-    get: "getOperation", getById: "getOperationById", classifyKey: "claimKey",
+    get: "getOperation", getById: "getOperationById", classifyKey: "claimKey", retried: "retriedOperation",
     recoverableIds: "recoverableOperations", physicalCreate: "findPhysicalCreate",
     succeededContext: "findSucceededContext",
   },

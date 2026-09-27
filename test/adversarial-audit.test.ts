@@ -32,6 +32,7 @@ import { UnitsModule } from "../src/units.js";
 import { ReconcileModule } from "../src/reconcile.js";
 import type { AuthContext, ProtocolLimits } from "../implementation/contracts.js";
 import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const LIMITS: ProtocolLimits = {
   frameBytes: 262144,
@@ -288,7 +289,7 @@ test("AUD-8: actor socket paths remain under Linux sun_path", () => {
       lifecycle,
       null,
       null,
-      { stateRoot: root, runRoot, society: "demo" },
+      { stateRoot: root, runRoot, society: "demo", hasGoal: goalPublishedAt(root) },
       LIMITS,
     );
     const socketDirectory = Reflect.get(broker, "actorSocketDirectory") as (
@@ -348,7 +349,7 @@ test("AUD-9: public dispatch rejects top-level request on read/ephemeral methods
       lifecycle,
       null,
       null,
-      { stateRoot: root, runRoot: join(root, "run"), society: "demo" },
+      { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) },
       LIMITS,
     );
     const reply = await broker.dispatch(

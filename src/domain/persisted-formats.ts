@@ -104,19 +104,6 @@ export function planPortability(plans: readonly { readonly kind: string; readonl
   return Object.freeze(findings);
 }
 
-/** Host-derived locators must still be derived from this state root. The check
- * exists so a copied tree cannot be silently accepted as its own evidence. */
-export function planLocatorsBelongTo(plan: unknown, stateRoot: string): boolean {
-  if (typeof stateRoot !== "string" || !stateRoot.startsWith("/")) return false;
-  const classify = classifyPersistedPlan(plan);
-  if (classify.format !== "v1") return false;
-  const value = plan as Record<string, unknown>;
-  const path = value.kind === "agent.create" ? value.workspacePath : value.kind === "context.publish" ? value.stagingPath :
-    value.kind === "git.submit" && value.bundle !== null ? (value.bundle as { path?: unknown }).path : null;
-  if (typeof path !== "string") return true;
-  return path.startsWith(`${stateRoot}/`);
-}
-
 /** Terminal result bytes are historical facts, not recomputable fields. */
 export function isHistoricalResult(value: unknown): boolean {
   return value === null || typeof value === "string";

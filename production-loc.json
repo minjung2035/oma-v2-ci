@@ -3,13 +3,19 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 270,
-    "n_lines": 35185,
+    "n_lines": 35264,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
     "blank": 4,
-    "comment": 79,
-    "code": 462,
+    "comment": 81,
+    "code": 461,
+    "language": "TypeScript"
+  },
+  "src/config/generations.ts": {
+    "blank": 27,
+    "comment": 144,
+    "code": 425,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -28,12 +34,6 @@
     "blank": 2,
     "comment": 53,
     "code": 400,
-    "language": "TypeScript"
-  },
-  "src/config/generations.ts": {
-    "blank": 25,
-    "comment": 137,
-    "code": 395,
     "language": "TypeScript"
   },
   "src/config/operations.ts": {
@@ -56,14 +56,20 @@
   },
   "src/store.ts": {
     "blank": 4,
-    "comment": 41,
-    "code": 341,
+    "comment": 47,
+    "code": 346,
     "language": "TypeScript"
   },
   "src/entry/oma.ts": {
     "blank": 26,
     "comment": 172,
     "code": 338,
+    "language": "TypeScript"
+  },
+  "src/units.ts": {
+    "blank": 23,
+    "comment": 82,
+    "code": 323,
     "language": "TypeScript"
   },
   "src/tui/session.ts": {
@@ -76,12 +82,6 @@
     "blank": 33,
     "comment": 75,
     "code": 315,
-    "language": "TypeScript"
-  },
-  "src/units.ts": {
-    "blank": 22,
-    "comment": 74,
-    "code": 314,
     "language": "TypeScript"
   },
   "src/extension/mail-tools.ts": {
@@ -156,12 +156,6 @@
     "code": 237,
     "language": "TypeScript"
   },
-  "src/broker/internal-dispatcher.ts": {
-    "blank": 1,
-    "comment": 10,
-    "code": 234,
-    "language": "TypeScript"
-  },
   "src/domain/errors.ts": {
     "blank": 7,
     "comment": 77,
@@ -170,8 +164,14 @@
   },
   "src/lifecycle/create.ts": {
     "blank": 7,
-    "comment": 20,
+    "comment": 21,
     "code": 232,
+    "language": "TypeScript"
+  },
+  "src/broker/internal-dispatcher.ts": {
+    "blank": 2,
+    "comment": 14,
+    "code": 228,
     "language": "TypeScript"
   },
   "src/broker/principal-endpoint.ts": {
@@ -212,7 +212,7 @@
   },
   "src/storage/ledger-reader.ts": {
     "blank": 2,
-    "comment": 14,
+    "comment": 21,
     "code": 205,
     "language": "TypeScript"
   },
@@ -606,16 +606,22 @@
     "code": 99,
     "language": "TypeScript"
   },
+  "src/views.ts": {
+    "blank": 1,
+    "comment": 26,
+    "code": 99,
+    "language": "TypeScript"
+  },
   "src/platform/host/attach-client.ts": {
     "blank": 6,
     "comment": 19,
     "code": 97,
     "language": "TypeScript"
   },
-  "src/views.ts": {
-    "blank": 1,
-    "comment": 20,
-    "code": 97,
+  "src/reconcile/operations.ts": {
+    "blank": 2,
+    "comment": 6,
+    "code": 96,
     "language": "TypeScript"
   },
   "src/platform/guest/control.ts": {
@@ -658,18 +664,6 @@
     "blank": 8,
     "comment": 36,
     "code": 93,
-    "language": "TypeScript"
-  },
-  "src/domain/persisted-formats.ts": {
-    "blank": 10,
-    "comment": 26,
-    "code": 92,
-    "language": "TypeScript"
-  },
-  "src/reconcile/operations.ts": {
-    "blank": 2,
-    "comment": 4,
-    "code": 91,
     "language": "TypeScript"
   },
   "src/platform/host/project.ts": {
@@ -724,6 +718,12 @@
     "blank": 6,
     "comment": 4,
     "code": 83,
+    "language": "TypeScript"
+  },
+  "src/domain/persisted-formats.ts": {
+    "blank": 9,
+    "comment": 24,
+    "code": 82,
     "language": "TypeScript"
   },
   "src/runtime/society-lease.ts": {
@@ -1176,12 +1176,6 @@
     "code": 40,
     "language": "TypeScript"
   },
-  "src/authority.ts": {
-    "blank": 7,
-    "comment": 8,
-    "code": 39,
-    "language": "TypeScript"
-  },
   "src/cli.ts": {
     "blank": 2,
     "comment": 1,
@@ -1192,6 +1186,12 @@
     "blank": 4,
     "comment": 7,
     "code": 39,
+    "language": "TypeScript"
+  },
+  "src/authority.ts": {
+    "blank": 7,
+    "comment": 10,
+    "code": 38,
     "language": "TypeScript"
   },
   "src/domain/resources.ts": {
@@ -1627,9 +1627,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1543,
-    "comment": 5990,
-    "code": 27652,
+    "blank": 1546,
+    "comment": 6033,
+    "code": 27685,
     "nFiles": 270
   }
 }

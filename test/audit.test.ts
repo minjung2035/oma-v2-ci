@@ -289,6 +289,7 @@ function brokerEnv(): BrokerEnv {
     null,
   );
   const recon = new ReconcileModule(store, mail, git, units, lifecycle, {
+    hasGoal: () => true,
     activationAllowed: () => true,
     projectGit: join(state, "repos", "project.git"),
   });

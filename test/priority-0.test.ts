@@ -92,7 +92,7 @@ test("DR10: startup recovery collects before anything is admitted or bootstrappe
     const units = { confirmDead: () => true, stop: () => undefined, observeAsync: async () => ({ activeState: "inactive" }),
       bindIncarnationReader: () => undefined } as unknown as UnitsModule;
     const reconcile = new ReconcileModule(f.store, f.mail, null, units, {} as LifecycleModule,
-      { projectGit: join(f.root, "repos", "project.git"), activationAllowed: () => false });
+      { projectGit: join(f.root, "repos", "project.git"), hasGoal: () => true, activationAllowed: () => false });
     let seenByBootstrap: boolean | null = null;
     await reconcile.startup(false, async () => { seenByBootstrap = existsSync(left.object); });
     assert.equal(seenByBootstrap, false, "the collection ran before the bootstrap step");

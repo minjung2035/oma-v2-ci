@@ -40,6 +40,7 @@ import type {
 
 import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
 import { writeBoundarySession } from "./fixtures/delivery-receipt.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 requireSystemdTestManager();
 interface Env {
   dir: string;
@@ -102,6 +103,7 @@ function envOf(): Env {
     stateRoot: state,
     runRoot,
     society,
+    hasGoal: goalPublishedAt(state),
   });
   broker.start();
   return {

@@ -10,10 +10,11 @@ import { resolvedSpecDigest } from "./domain/spec-identity.js";
 
 type AuthorityReader = Pick<StoreReads, "getAgent">;
 
-export function resolvedSpecOf(agent: { name: string; profile: string; specJson: string; specHash?: string }): ResolvedAgentSpec {
+/** P0V-91 (R6-14): the stored digest is required, so no caller can read a
+ * spec without the check that it is the spec the row was accepted with. */
+export function resolvedSpecOf(agent: { name: string; profile: string; specJson: string; specHash: string }): ResolvedAgentSpec {
   const spec = decodeAgentSpec(agent.specJson);
-  if (spec.name !== agent.name || spec.profile !== agent.profile ||
-      (agent.specHash !== undefined && resolvedSpecDigest(spec) !== agent.specHash))
+  if (spec.name !== agent.name || spec.profile !== agent.profile || resolvedSpecDigest(spec) !== agent.specHash)
     throw new StoreError("STORE_CORRUPT", `resolved identity mismatch for ${agent.name}`);
   return spec;
 }

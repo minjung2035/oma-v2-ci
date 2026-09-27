@@ -20,6 +20,13 @@ export interface PendingWorkRows {
   readonly linked: readonly DeliveryRow[];
 }
 
+/** P0V-87 (R6-10): an order that means something -- recovery, delivery, the
+ * batches a runner is handed -- is the order rows were accepted in, which is
+ * their rowid: the ledger has one writer, a new row's rowid is above every
+ * existing one, and this product never VACUUMs (the one operation that may
+ * renumber a table without an INTEGER PRIMARY KEY). The wall-clock
+ * `created_at_ms` is when, for display and audit; a clock set back must not
+ * put later mail in front of earlier. */
 export class LedgerReader {
   constructor(private readonly db: Pick<DatabaseSync, "prepare">, private readonly stateRoot: string, private readonly identity: () => RepositoryIdentity | null) {}
   private rawAgent(name: string) { return this.db.prepare("SELECT * FROM agents WHERE name=?").get(name); }
@@ -125,14 +132,14 @@ export class LedgerReader {
   physicalCreate(name: string, specHash: string): OperationOf<"agent.create"> | null {
     const raw = this.db.prepare(`SELECT * FROM operations WHERE kind='agent.create'
       AND json_extract(plan_json,'$.spec.name')=? AND json_extract(plan_json,'$.specHash')=?
-      AND json_type(plan_json,'$.existingCreation')='null' ORDER BY created_at_ms, id LIMIT 1`).get(name, specHash);
+      AND json_type(plan_json,'$.existingCreation')='null' ORDER BY rowid LIMIT 1`).get(name, specHash);
     if (raw === undefined) return null;
     const operation = this.operationRow(raw);
     if (operation.kind !== "agent.create") return rowCorrupt("physical create query returned another kind");
     return operation;
   }
   recoverableIds(): OperationId[] {
-    return this.db.prepare("SELECT id FROM operations WHERE state IN ('pending','unknown') ORDER BY created_at_ms, id").all().map(decodeOperationIdProjection);
+    return this.db.prepare("SELECT id FROM operations WHERE state IN ('pending','unknown') ORDER BY rowid").all().map(decodeOperationIdProjection);
   }
   private message(operation: DecodedOperation): MessagePlan | null {
     switch (operation.kind) {
@@ -160,11 +167,11 @@ export class LedgerReader {
   }
   pendingDeliveries(agent: string): DeliveryRow[] {
     return this.db.prepare(`SELECT * FROM deliveries WHERE recipient=? AND materialized=1
-      AND presented=0 AND batch_id IS NULL ORDER BY created_at_ms, message_id`).all(agent).map(raw => this.deliveryRow(raw));
+      AND presented=0 AND batch_id IS NULL ORDER BY rowid`).all(agent).map(raw => this.deliveryRow(raw));
   }
   operationDeliveries(id: string): DeliveryRow[] {
     const operation = this.operationById(id);
-    const rows = this.db.prepare("SELECT * FROM deliveries WHERE operation_id=? ORDER BY created_at_ms, message_id").all(id);
+    const rows = this.db.prepare("SELECT * FROM deliveries WHERE operation_id=? ORDER BY rowid").all(id);
     if (operation === null && rows.length > 0) rowCorrupt("deliveries reference a missing operation");
     return rows.map(raw => this.deliveryRow(raw));
   }
@@ -196,14 +203,14 @@ export class LedgerReader {
     return {
       agents: this.agents(),
       unbatched: this.db.prepare(`SELECT * FROM deliveries WHERE materialized=1 AND presented=0 AND batch_id IS NULL
-        ORDER BY recipient, created_at_ms, message_id`).all().map(decodeDeliveryRow),
-      prepared: this.db.prepare("SELECT * FROM batches WHERE state='prepared' ORDER BY agent, created_at_ms, id").all().map(decodeBatchRow),
+        ORDER BY recipient, rowid`).all().map(decodeDeliveryRow),
+      prepared: this.db.prepare("SELECT * FROM batches WHERE state='prepared' ORDER BY agent, rowid").all().map(decodeBatchRow),
       linked: this.db.prepare(`SELECT * FROM deliveries WHERE batch_id IN (SELECT id FROM batches WHERE state='prepared')
         ORDER BY batch_id, message_id`).all().map(decodeDeliveryRow),
     };
   }
   preparedBatches(agent: string): BatchRow[] {
-    return this.db.prepare("SELECT * FROM batches WHERE agent=? AND state='prepared' ORDER BY created_at_ms, id").all(agent).map(raw => this.batchRow(raw));
+    return this.db.prepare("SELECT * FROM batches WHERE agent=? AND state='prepared' ORDER BY rowid").all(agent).map(raw => this.batchRow(raw));
   }
   private usageRow(raw: unknown): UsageRow {
     const row = decodeUsageRow(raw);
@@ -216,6 +223,6 @@ export class LedgerReader {
     return raw === undefined ? null : this.usageRow(raw);
   }
   usages(): UsageRow[] {
-    return this.db.prepare("SELECT * FROM usage ORDER BY created_at_ms, request_id").all().map(raw => this.usageRow(raw));
+    return this.db.prepare("SELECT * FROM usage ORDER BY rowid").all().map(raw => this.usageRow(raw));
   }
 }

@@ -28,6 +28,7 @@ import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from 
 import { removeTree } from "./fixtures/cleanup.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 import { padTree, removePad } from "./fixtures/storage-pad.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const HEADROOM = 256 * 1024;
 const LIMITS: ProtocolLimits = { frameBytes: HEADROOM, mailBodyBytes: 64 * 1024, subjectBytes: 8 * 1024, addresses: 64,
@@ -64,7 +65,7 @@ function society(t: TestContext, residents: readonly string[] = ["alice", "carol
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  const paths = { stateRoot: root, runRoot: join(root, "run"), society: "demo", storageBytes: QUOTA };
+  const paths = { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root), storageBytes: QUOTA };
   // Recovery shares the broker's own storage owner, as the entry composition wires it.
   let broker: Broker | null = null;
   const gate = ((category: never) => (Reflect.get(broker!, "admitResource") as (value: unknown) => unknown)(category)) as never;

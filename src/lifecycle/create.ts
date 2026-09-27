@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { Actor, AgentCreateInput, AuthContext, Receipt, ResolvedAgentSpec } from "../../implementation/contracts.js";
-import { Store, reused } from "../store.js";
+import { Store, reused, type AgentRow } from "../store.js";
 import { StoreError, acceptedFailure } from "../domain/errors.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { residentUnitsFor } from "../domain/derived.js";
@@ -98,7 +98,7 @@ export class CreateCoordinator {
     assertActorIdentity(this.store, auth);
     const hash = requestHash("agent.create", { name: input.name, from: input.from, brief: input.brief });
     const claim = this.store.claimKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
     let revision = this.policy.refresh();
     let { spec, specHash } = this.policy.resolve(auth, input);
@@ -119,7 +119,7 @@ export class CreateCoordinator {
         return tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "agent.create",
           payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
       });
-      if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+      if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
       return this.settleLinked(id, original.id, input.name);
     }
     this.workspace.assertCanonicalBase(input.from);
@@ -162,7 +162,7 @@ export class CreateCoordinator {
       });
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
-    if (accepted.outcome === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (accepted.outcome === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     // The creation is accepted: a failure from here is reported as accepted.
     try { return accepted.linked ? this.settleLinked(id, accepted.linked, input.name) : await this.finish(id, true, auth); }
     catch (error) { throw acceptedFailure(error); }
@@ -223,11 +223,12 @@ export class CreateCoordinator {
     // before an effect on a live request's behalf -- that the requester still
     // holds its lease and capability (INV06). A requester that lost them leaves
     // the accepted intent to recovery, which never fabricates a live context.
-    const assertCurrent = (): void => {
+    const assertCurrent = (): AgentRow => {
       const current = this.store.getAgent(plan.spec.name);
       if (!current || current.specHash !== plan.specHash) throw new StoreError("STORE_CORRUPT", "create owner changed during preparation");
       if (current.incarnation !== agent.incarnation) throw new StoreError("RUN_TERMINATION_UNKNOWN", "create incarnation changed during preparation");
       if (auth) assertCurrentActor(this.store, auth, "agent.create");
+      return current;
     };
     mail.publishCreateInitial(plan.initialMessage);
     await this.workspace.ensure(plan, agent.desired !== "provisioning");
@@ -241,8 +242,8 @@ export class CreateCoordinator {
     // Current authority -> installation/readiness is a synchronous section.
     const proof = this.publication.ready(fresh);
     await mail.publishGated(id, proof);
-    assertCurrent();
-    const current = this.store.getAgent(plan.spec.name)!;
+    // P0V-92: the row the check just read, not a second read assumed present.
+    const current = assertCurrent();
     const desired = current.desired;
     if (desired === "enabled" && this.paths.hasGoal()) {
       if (!allowActivation || this.paths.activationAllowed() !== true) return lifecycleReceipt(this.store, id);

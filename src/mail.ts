@@ -56,7 +56,7 @@ export class MailModule {
     const society = this.paths.society;
     const newHash = requestHash(operationKind, canonicalRequestParams(operationKind, requestParams));
     const claim = this.store.claimKey(auth.actor, key, newHash);
-    if (claim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
+    if (claim === "retry") return receiptOf(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
     let parent: ParsedEmlHeaders | null = null;
     if (input.replyToMessage) parent = this.replyHeaders(input.replyToMessage);
@@ -105,7 +105,7 @@ export class MailModule {
       });
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
-    if (txClaim === "retry") return receiptOf(this.store.getOperation(auth.actor, key)!);
+    if (txClaim === "retry") return receiptOf(this.store.retriedOperation(auth.actor, key));
     // From here the intent is accepted: a failure is reported as accepted, never as a refusal.
     try {
       const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId) };

@@ -50,6 +50,9 @@ export class OperationRecovery {
     for (const id of this.retryAfter.keys()) if (!eligible.has(id)) this.retryAfter.delete(id);
     const index = this.resumeAfter === null ? -1 : snapshot.indexOf(this.resumeAfter);
     const ordered = index < 0 ? snapshot : [...snapshot.slice(index + 1), ...snapshot.slice(0, index + 1)];
+    // P0V-88 (R6-11): a failure is observed once. What `failure` throws is its
+    // own verdict on an error it has already seen, not a second failure.
+    let verdict = null as { readonly error: unknown } | null;
     try {
       // At most the finite initial snapshot; new accepts belong to the next pass.
       // Individual physical I/O retains its adapter timeout/output bound. The
@@ -74,7 +77,8 @@ export class OperationRecovery {
           reason = errorCodeOf(error);
           try { this.dependencies.failure(error); }
           catch (fatal) {
-            outcomes.push({ id, state: "corrupt", reason, nextAction: "close-mutation-gate" }); throw fatal;
+            outcomes.push({ id, state: "corrupt", reason, nextAction: "close-mutation-gate" });
+            verdict = { error: fatal }; throw fatal;
           }
         }
         const after = this.dependencies.read(id);
@@ -91,7 +95,10 @@ export class OperationRecovery {
       }
       if (counts.examined !== counts.repaired + counts.remaining) throw new StoreError("INTERNAL_ERROR", "recovery count invariant violated");
       return Object.freeze(counts);
-    } catch (error) { this.dependencies.failure(error); throw error; }
+    } catch (error) {
+      if (verdict === null || verdict.error !== error) this.dependencies.failure(error);
+      throw error;
+    }
     finally { this.outcomes = Object.freeze(outcomes.map(outcome => Object.freeze(outcome))); }
   }
 }

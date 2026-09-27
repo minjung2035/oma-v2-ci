@@ -3,13 +3,17 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { resolvedSpecOf } from "../src/authority.js";
+import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 import { StoreError } from "../src/domain/errors.js";
 import { resolvedSpec, ALL_CAPS } from "./fixtures/spec.js";
 import { UnitsModule } from "../src/units.js";
 
 test("LIFE-008: stored identity and frozen resources reject stale or mismatched records", () => {
-  const agent = { name: "a", profile: "p", specJson: resolvedSpec(ALL_CAPS, "p", "a") };
+  const specJson = resolvedSpec(ALL_CAPS, "p", "a");
+  const agent = { name: "a", profile: "p", specJson, specHash: resolvedSpecDigest(JSON.parse(specJson)) };
   const spec = resolvedSpecOf(agent);
+  // P0V-91 (R6-14): the digest is always checked; a row whose spec is not the one it was accepted with is corrupt.
+  assert.throws(() => resolvedSpecOf({ ...agent, specHash: "0".repeat(64) }), /identity mismatch/);
   assert.equal(spec.modelProfile, "md");
   assert.equal(spec.resources.tasks, 128);
   assert.throws(() => resolvedSpecOf({ ...agent, name: "b" }), /identity mismatch/);

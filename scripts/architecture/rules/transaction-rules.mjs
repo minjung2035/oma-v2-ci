@@ -1,4 +1,5 @@
-import { finding, readJson } from "./shared.mjs";
+import ts from "typescript";
+import { eachNode, filesUnder, finding, readJson, sourceOf } from "./shared.mjs";
 
 /** Recovery metadata makes transaction-complete versus physical-replay ownership explicit. */
 export function transactionRuleFindings(root) {
@@ -29,5 +30,21 @@ export function transactionRuleFindings(root) {
         `${mutation} has unknown recovery strategy ${String(recovery.strategy)}`));
     }
   }
+  ledgerOrderRules(root, findings);
   return findings;
+}
+
+/** P0V-87 (R6-10): a ledger order is the order rows were accepted in (rowid),
+ * never a wall-clock column: SQL in src that orders by an `*_at_ms` column is
+ * refused. */
+function ledgerOrderRules(root, findings) {
+  for (const file of filesUnder(root, "src")) {
+    eachNode(sourceOf(root, file), node => {
+      const text = ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node) ? node.text : null;
+      if (text === null) return;
+      const order = /ORDER\s+BY\s+([^;)]*)/i.exec(text);
+      if (order && /\b\w+_at_ms\b/.test(order[1]))
+        findings.push(finding("ledger-order-clock", file, `orders by a wall-clock column (${order[1].trim().slice(0, 60)}); acceptance order is rowid`));
+    });
+  }
 }

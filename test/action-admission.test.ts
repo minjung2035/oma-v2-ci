@@ -26,6 +26,7 @@ import { removeTree } from "./fixtures/cleanup.js";
 import { padTree } from "./fixtures/storage-pad.js";
 import { sendWithStop } from "./fixtures/mail-faults.js";
 import { gitFixture, seedGit, submitFixture } from "./fixtures/git-crash.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
   capabilities: new Set(ALL_CAPS), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
@@ -78,7 +79,7 @@ function society(t: TestContext) {
   const storage = new StorageAdmission(root, QUOTA, HEADROOM);
   const reconcile = new ReconcileModule(store, mail, null, units, lifecycle, { projectGit: join(root, "project.git"),
     hasGoal: () => true, activationAllowed: () => true, resourceGate: category => storage.admit(category) });
-  const broker = new Broker(store, mail, units, views, lifecycle, null, reconcile, { stateRoot: root, runRoot: join(root, "run"), society: "demo", storageBytes: QUOTA, storage });
+  const broker = new Broker(store, mail, units, views, lifecycle, null, reconcile, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root), storageBytes: QUOTA, storage });
   const internal = (method: string, params: Record<string, unknown>, channel: "runner" | "host") =>
     (Reflect.get(broker, "dispatchInternal") as (raw: object, peer: object, stream: null, channel: string) => Promise<object>)
       .call(broker, { v: 1, id: method, method, params }, { pid: process.pid, uid: process.getuid!(), gid: process.getgid!() }, null, channel);

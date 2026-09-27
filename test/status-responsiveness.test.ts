@@ -22,6 +22,7 @@ import { LifecycleModule } from "../src/lifecycle.js";
 import { decodeStatusView, statusViewPath } from "../src/protocol/status-view.js";
 import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const AGENTS = 64;
 const showCostMs = (units: number): number => 6.9 + 1.61 * units;
@@ -90,7 +91,7 @@ function society(t: TestContext, options: { hang?: () => boolean; fail?: () => b
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo" });
+  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root) });
   t.after(async () => { try { await broker.drainAndClose(); } catch { store.close(); } finally { removeTree(root); } });
   const call = async (request: Record<string, unknown>) => {
     const started = performance.now();

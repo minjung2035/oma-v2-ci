@@ -191,6 +191,7 @@ Final PASS condition: `v21-final-fast`, `v21-final-durable`, `v21-final-property
 - Mail 화면의 갱신은 헤더를 최근 `mailListRows`통만 읽지만, 순서를 정하려고 메일함의 모든 이름을 lstat한다(P0V-43).
 - 시나리오 시험(`scenario-principal`·`scenario-society`·`scenario-confined`, durable lane)은 모델만 대본이다. 실제 provider의 스트림·오류·재시도는 엔진 몫이라 증거가 아니다(P0-5, INF-001). systemd unit과 journal은 대역(`ScenarioUnits`)이고, runner가 시험 프로세스의 cgroup을 함께 쓰므로 한 broker 수명에서 Resident마다 한 번만 깨운다(test/fixtures/README).
 - 엔진 이벤트 한 줄이 frame보다 크면 그 이벤트는 건너뛰고 알린다(DR15). 그 이벤트의 내용(모델의 긴 답이나 큰 도구 인자)은 Principal 화면에 보이지 않는다.
+- broker의 ledger 연결은 동기 node:sqlite다. 다른 연결이 쓰기 잠금을 쥐고 있으면 `busy_timeout`(5초)까지 broker의 event loop가 멈추고, 그동안 IPC 응답과 timer가 늦는다. 쓰는 연결은 broker 하나이므로 잠금을 쥐는 것은 운영자의 외부 writer나 checkpoint 경합이다. 기한(alarm)은 단조 시계로 다시 걸려 이 멈춤이 거짓 만료를 만들지 않는다(D-7, P0V-76). watchdog은 없고, 두게 되면 이 상한이 그 주기보다 짧아야 한다(6차 점검 R6-19).
 
 **비용과 추적**
 - 비용 상한은 OMA 계약이 아니다. relay가 요청 수·동시성을 쥐지만 stream을 해석하지 않는다(INF-009).

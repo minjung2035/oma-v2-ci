@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Store } from "../src/store.js";
-import { errorCodeOf, publicFailure } from "../src/domain/errors.js";
+import { StoreError, errorCodeOf, publicFailure } from "../src/domain/errors.js";
 import { AdmissionGate } from "../src/domain/admission.js";
 
 const schemaPath = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "implementation", "schema-v1.sql");
@@ -451,4 +451,193 @@ test("P0V-86 / R6-09, IPC-001: every UTF-8 reading keeps a U+FEFF as the charact
   assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿")), "GOAL.md must not be empty");
   assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿﻿")), null, "only the one that begins the document is its signature");
   assert.equal(contextFileCheck("GOAL.md", Buffer.from("﻿goal")), null);
+});
+
+test("P0V-87 / R6-10: mail accepted after the clock was set back is still delivered after the mail accepted before it", async t => {
+  const { MailModule } = await import("../src/mail.js");
+  const { makeValidAgent } = await import("./fixtures/spec.js");
+  const dir = mkdtempSync(join(tmpdir(), "oma-order-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // The wall clock is under the test's hand before anything that reads it exists.
+  const wall = Date.now;
+  let offset = 0;
+  Date.now = () => wall() + offset;
+  t.after(() => { Date.now = wall; });
+  const store = new Store(join(dir, "runtime.sqlite"));
+  t.after(() => store.close());
+  store.transaction(() => { for (const name of ["a", "b"]) store.insertAgent(makeValidAgent(name, { desired: "enabled", incarnation: 1 })); });
+  const mail = new MailModule({ stateRoot: dir, society: "demo" }, store, 64);
+  const auth = { actor: "a", incarnation: 1, role: "resident" as const, channel: "actor" as const, capabilities: new Set(["mail.send" as const]),
+    peer: { pid: 1, uid: 1000, gid: 1000, cgroup: null } };
+  try {
+    // Each one accepted an hour earlier, on the wall clock, than the one before it.
+    for (let index = 0; index < 5; index++) {
+      await mail.send(auth, `order-${index}`, { to: ["b"], subject: `s${index}`, kind: "message", body: `m${index}` });
+      offset -= 3600_000;
+    }
+  } finally { Date.now = wall; }
+  const stamps = store.pendingDeliveries("b").map(row => row.createdAtMs);
+  assert.ok(stamps.every((stamp, index) => index === 0 || stamp < stamps[index - 1]!), `the wall clock was not set back between acceptances: ${stamps.join(" ")}`);
+  const accepted = [0, 1, 2, 3, 4].map(index => {
+    const operation = store.transaction(() => store.getOperation("a", `order-${index}`))!;
+    return (JSON.parse(operation.planJson) as { message: { id: string } }).message.id;
+  });
+  assert.deepEqual(store.pendingDeliveries("b").map(row => row.messageId), accepted, "the recipient reads its mail in another order than it was accepted");
+  assert.deepEqual(store.pendingWorkRows().unbatched.filter(row => row.recipient === "b").map(row => row.messageId), accepted);
+});
+
+test("P0V-87 / R6-10: ledger SQL that orders by a wall-clock column is refused", async () => {
+  const { transactionRuleFindings } = await import(new URL("../../scripts/architecture/rules/transaction-rules.mjs", import.meta.url).href);
+  const root = mkdtempSync(join(tmpdir(), "oma-order-rule-"));
+  try {
+    mkdirSync(join(root, "src"), { recursive: true }); mkdirSync(join(root, "implementation"));
+    writeFileSync(join(root, "implementation/mutation-owners.json"), JSON.stringify({ mutations: {} }));
+    const findings = (sql: string) => { writeFileSync(join(root, "src/reader.ts"), `export const q = \`${sql}\`;`);
+      return (transactionRuleFindings(root) as Array<{ rule: string }>).filter(value => value.rule === "ledger-order-clock"); };
+    assert.equal(findings("SELECT * FROM deliveries WHERE recipient=? ORDER BY rowid").length, 0);
+    assert.equal(findings("SELECT * FROM batches ORDER BY agent, rowid").length, 0, "a column that is not a clock may lead");
+    assert.equal(findings("SELECT created_at_ms FROM operations ORDER BY rowid").length, 0, "reading the clock is display");
+    assert.equal(findings("SELECT * FROM deliveries ORDER BY created_at_ms, message_id").length, 1);
+    assert.equal(findings("SELECT id FROM operations ORDER BY rowid, updated_at_ms DESC").length, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("P0V-88 / R6-11: a sweep observes a recovery failure once, and still observes a failure of its own", async () => {
+  const { OperationRecovery } = await import("../src/reconcile/operations.js");
+  const row = { id: "op1", kind: "git.submit", state: "pending" } as never;
+  // The review's counterexample: the observer's own verdict comes back to it.
+  const seen: unknown[] = [];
+  const blocking = new OperationRecovery({ snapshot: () => ["op1"], read: () => row,
+    recover: async () => { throw new StoreError("STORE_CORRUPT", "injected corrupt during recover"); },
+    failure: error => { seen.push(error); throw new StoreError("STORE_CORRUPT", "fence"); } });
+  await assert.rejects(blocking.sweep(), /fence/);
+  assert.equal(seen.length, 1, "the observer was handed its own verdict as a second failure");
+  assert.match(String((seen[0] as Error).message), /injected corrupt/);
+  // A failure the observer has not seen -- the row vanishing -- is still observed, once.
+  const vanished: unknown[] = [];
+  let reads = 0;
+  const vanishing = new OperationRecovery({ snapshot: () => ["op1"], read: () => (reads++ === 0 ? row : null),
+    recover: async () => {}, failure: error => { vanished.push(error); } });
+  await assert.rejects(vanishing.sweep(), /disappeared/);
+  assert.equal(vanished.length, 1);
+});
+
+test("P0V-90 / R6-13: a generation already present is reused only if it holds these files and nothing else", async () => {
+  const { loadConfigurationSnapshot, validateConfig } = await import("../src/config.js");
+  const { commitManagedEdit } = await import("../src/tui/sources/settings.js");
+  const { MANAGED_DIRECTORY } = await import("../src/config/generations.js");
+  const { createCompleteConfigurationFixture } = await import("./fixtures/configuration.js");
+  const { chmodSync } = await import("node:fs");
+  type Snapshot = ReturnType<typeof loadConfigurationSnapshot>;
+  const withModel = (snapshot: Snapshot, model: string) => validateConfig({ ...snapshot.config,
+    agentProfiles: { ...snapshot.config.agentProfiles, principal: { ...snapshot.config.agentProfiles.principal!, modelProfile: model } } });
+  for (const tamper of ["none", "extra file", "extra directory"] as const) {
+    const f = createCompleteConfigurationFixture();
+    try {
+      const original = loadConfigurationSnapshot(f.path).config.agentProfiles.principal!.modelProfile;
+      const review = commitManagedEdit(loadConfigurationSnapshot(f.path), withModel(loadConfigurationSnapshot(f.path), "review"));
+      assert.ok(review.generation !== null);
+      commitManagedEdit(loadConfigurationSnapshot(f.path), withModel(loadConfigurationSnapshot(f.path), original));
+      const generation = join(f.output, MANAGED_DIRECTORY, "generations", review.generation!);
+      if (tamper !== "none") {
+        chmodSync(generation, 0o700);
+        if (tamper === "extra file") writeFileSync(join(generation, "extra.json"), "{}\n");
+        else mkdirSync(join(generation, "extra"));
+        chmodSync(generation, 0o500);
+      }
+      const again = () => commitManagedEdit(loadConfigurationSnapshot(f.path), withModel(loadConfigurationSnapshot(f.path), "review"));
+      if (tamper === "none") assert.equal(again().generation, review.generation, "an identical generation is reused");
+      else assert.throws(again, (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT" && /holds other bytes/.test(error.message),
+        `a generation with an ${tamper} was taken for the one its name says`);
+    } finally { f.close(); }
+  }
+});
+
+test("P0V-92 / R6-15: a runner or a retried key the ledger no longer knows is refused by name, not assumed away", async t => {
+  const { InternalDispatcher } = await import("../src/broker/internal-dispatcher.js");
+  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
+    retainForExecution: () => () => undefined, releaseConnection: () => undefined };
+  const dispatcher = new InternalDispatcher({
+    store: { getAgentIdentity: () => null, pendingDeliveryCount: () => 0, getBatchAgent: () => null, preparedBatchIds: () => [] },
+    mail: { prepare: async () => null, complete: async () => {}, moveToCur: () => 0, reconcilePending: async () => ({}) } as never,
+    reconcile: null, stateRoot: "/nonexistent",
+    peers: { requireRunnerUnit: () => {}, requireHostUnit: () => {}, runnerActor: () => "alice",
+      runnerAuth: () => { throw new Error("authenticated a runner the ledger does not know"); } },
+    isDraining: () => false, assertAdmission: () => {}, admitResource: () => () => {},
+    failureAnswer: (id, error) => ({ id, ok: false, code: (error as { code?: string }).code, message: (error as Error).message }),
+    refreshViews: () => {}, openRun: () => { throw new Error("no run is opened here"); },
+  });
+  for (const [method, params] of [["runner.pending", {}], ["runner.observe", { reason: "test", observedAtMs: 1 }], ["batch.prepare", {}]] as const) {
+    const answer = await dispatcher.dispatch({ v: 1, id: method, method, params }, peer as never, null, "runner") as { code?: string; message?: string };
+    assert.equal(answer.code, "AUTH_FAILED", `${method}: ${answer.message}`);
+    assert.match(answer.message ?? "", /runner identity missing/);
+  }
+  // A key answered as a retry whose operation is gone: corrupt, said so.
+  const dir = mkdtempSync(join(tmpdir(), "oma-retried-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const store = new Store(join(dir, "runtime.sqlite"));
+  t.after(() => store.close());
+  assert.throws(() => store.retriedOperation("alice", "no-such-key"),
+    (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT" && /answered as a retry/.test(error.message));
+});
+
+test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer it cannot give is not \"no GOAL\"", async t => {
+  const { MailModule } = await import("../src/mail.js");
+  const { Broker } = await import("../src/broker.js");
+  const { UnitsModule } = await import("../src/units.js");
+  const { ViewsModule } = await import("../src/views.js");
+  const { LifecycleModule } = await import("../src/lifecycle.js");
+  const { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } = await import("./fixtures/spec.js");
+  const root = mkdtempSync(join(tmpdir(), "oma-goal-owner-"));
+  const store = new Store(join(root, "runtime.sqlite"), 5, { society: "demo" });
+  t.after(() => { try { store.close(); } finally { rmSync(root, { recursive: true, force: true }); } });
+  store.transaction(tx => { tx.insertAgent(makeValidAgent("alice", { desired: "enabled", incarnation: 1 })); });
+  const mail = new MailModule({ stateRoot: root, society: "demo" }, store, 64);
+  const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "", config: join(root, "config.json"), run: join(root, "oma", "demo"), brokerUnit: "" }, join(root, "units"), { p: TEST_RESOURCES });
+  const views = new ViewsModule(store, root, "demo", "p");
+  const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => false, activationAllowed: () => true },
+    (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
+  let answer: () => boolean = () => false;
+  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => answer() });
+  const openRun = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => unknown).bind(broker);
+  assert.throws(() => openRun("alice", "inv"), (error: unknown) => error instanceof StoreError && error.code === "GOAL_REQUIRED");
+  // The owner could not look (EACCES, EIO): that is its answer, not a missing GOAL.
+  answer = () => { throw new StoreError("BROKER_UNAVAILABLE", "the context could not be observed"); };
+  assert.throws(() => openRun("alice", "inv"), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+});
+
+test("P0V-94 / R6-17: a derived TSV field escapes every control character itself, reversibly", async () => {
+  const { fieldEscape } = await import("../src/views.js");
+  assert.equal(fieldEscape("a\tb\nc\rd\\e"), "a\\tb\\nc\\rd\\\\e");
+  assert.equal(fieldEscape("\u001b[2Jx\u0000\u007f\u0085"), "\\x1b[2Jx\\x00\\x7f\\x85", "a terminal instruction or a C1 control reached the reader");
+  assert.equal(fieldEscape("동료 😀"), "동료 😀", "text is not touched");
+  // Reversible: one escape per character, and a backslash is never ambiguous.
+  const unescape = (text: string) => text.replace(/\\(\\|t|n|r|x[0-9a-f]{2})/g, (_all, code: string) =>
+    code === "\\" ? "\\" : code === "t" ? "\t" : code === "n" ? "\n" : code === "r" ? "\r" : String.fromCharCode(parseInt(code.slice(1), 16)));
+  for (const value of ["\\t", "a\\\tb", "\u0001\u001f\u009f", "x\\x1b"]) {
+    const escaped = fieldEscape(value);
+    assert.doesNotMatch(escaped, /[\u0000-\u001f\u007f-\u009f]/);
+    assert.equal(unescape(escaped), value);
+  }
+});
+
+test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace, and the manager's ExecStart format is read in one place", async t => {
+  const { UnitsModule, effectiveExecArgv } = await import("../src/units.js");
+  const { TEST_RESOURCES } = await import("./fixtures/spec.js");
+  const dir = mkdtempSync(join(tmpdir(), "oma-unit-owner-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const values = { node: process.execPath, libdir: process.cwd(), state: join(dir, "tree"), society: "demo", agent: "",
+    config: join(dir, "tree", "config.json"), run: join(dir, "run"), brokerUnit: "" };
+  const units = new UnitsModule("demo", values, dir, { p: TEST_RESOURCES }, () => 1);
+  // An earlier release's unit with this name and Description, naming no tree.
+  writeFileSync(join(dir, "oma-demo-erin.service"), "[Unit]\nDescription=OMA demo resident erin\n[Service]\nExecStart=/n /l/runner.js --society demo --agent erin\n");
+  assert.throws(() => units.assertResidentNamesFree("erin"),
+    (error: unknown) => error instanceof StoreError && error.code === "AGENT_CONFLICT" && /names no owner/.test(error.message),
+    "a unit whose owner cannot be told was taken for this society's by its Description");
+  // One that names this tree is still this owner's.
+  writeFileSync(join(dir, "oma-demo-fay.path"), `[Unit]\nDescription=Wake OMA demo resident fay on mail\n[Path]\nDirectoryNotEmpty=${join(dir, "tree")}/mail/inboxes/fay/new\n`);
+  assert.doesNotThrow(() => units.assertResidentNamesFree("fay"));
+  assert.equal(effectiveExecArgv("{ path=/usr/bin/node ; argv[]=/usr/bin/node /opt/oma/runner.js --agent a ; ignore_errors=no ; start_time=[n/a] }"),
+    "/usr/bin/node /opt/oma/runner.js --agent a");
+  assert.equal(effectiveExecArgv("/usr/bin/node /opt/oma/runner.js"), null, "an answer in another form is not read as the argv");
 });

@@ -27,6 +27,7 @@ import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 import type { AuthContext, Capability, ResolvedAgentSpec, ResourceLimits } from "../implementation/contracts.js";
 
 import { cleanupOwnedSystemdUnits, requireSystemdTestManager } from "./fixtures/systemd.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 requireSystemdTestManager();
 const NODE = process.execPath;
 const TEST_RESOURCES: ResourceLimits = {
@@ -343,7 +344,7 @@ test("SEQ-002: unknown old-run death stops startup before mail reconciliation", 
     Reflect.set(env.units, "confirmDead", () => false);
     Reflect.set(env.units, "stop", () => { throw new StoreError("RUN_TERMINATION_UNKNOWN", "injected unknown death"); });
     Reflect.set(env.mail, "reconcilePending", () => assert.fail("mail reconciled before death proof"));
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), activationAllowed: () => true });
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
     await assert.rejects(reconcile.startup(false), /injected unknown death/);
   } finally { cleanup(); }
 });
@@ -374,7 +375,7 @@ test("LIFE-009: bootstrap freezes all seeds before effects and never reseeds a r
     mkdirSync(goal, { recursive: true });
     const start = env.units.start.bind(env.units);
     Reflect.set(env.units, "start", () => assert.fail("activation before broker READY"));
-    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), activationAllowed: () => true });
+    const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, { projectGit: join(env.dir, "state", "repos", "project.git"), hasGoal: () => true, activationAllowed: () => true });
     await reconcile.startup(false);
     assert.equal(env.store.getOperationById(op.id)!.state, "pending");
     assert.equal(env.store.getAgent("child")!.desired, "enabled");
@@ -663,7 +664,7 @@ test("REC-007: broker singleton lock — second broker refuses the society", asy
   let b1: Broker | null = null;
   try {
     const mk = () => new Broker(env.store, env.mail, env.units, env.views, env.lifecycle, null, null, {
-      stateRoot: join(env.dir, "state"), runRoot: join(env.dir, "R"), society: env.society,
+      stateRoot: join(env.dir, "state"), runRoot: join(env.dir, "R"), society: env.society, hasGoal: goalPublishedAt(join(env.dir, "state")),
     });
     b1 = mk();
     await b1.start();

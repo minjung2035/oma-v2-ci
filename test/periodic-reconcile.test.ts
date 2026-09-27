@@ -26,6 +26,7 @@ import { RECONCILE_INTERVAL_MS, type ReconcileModule } from "../src/reconcile.js
 import { parseUnitObservation } from "../src/units/observe.js";
 import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const idle = parseUnitObservation({ kind: "succeeded", status: 0, signal: null, stderr: "",
   stdout: `ActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nControlGroup=/oma-test\nInvocationID=${"1".repeat(32)}\n` });
@@ -65,7 +66,7 @@ function society(t: TestContext, periodicReconcile: boolean) {
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
   const recovery = countingRecovery();
   const broker = new Broker(store, mail, units, views, lifecycle, null, recovery as unknown as ReconcileModule,
-    { stateRoot: root, runRoot: join(root, "run"), society: "demo", ...(periodicReconcile ? { periodicReconcile: true } : {}) });
+    { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root), ...(periodicReconcile ? { periodicReconcile: true } : {}) });
   let drained = false;
   const drain = async () => { if (!drained) { drained = true; await broker.drainAndClose(); } };
   t.after(async () => { try { await drain(); } finally { removeTree(root); } });

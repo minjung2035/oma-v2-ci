@@ -41,6 +41,14 @@ export function renderedExecArgv(rendered: string): string[] | null {
       hex !== undefined ? String.fromCharCode(parseInt(hex, 16)) : "%"));
 }
 
+/** R6-20: the one reading of `systemctl show --property=ExecStart --value`,
+ * whose format is the manager's (`{ path=... ; argv[]=<words> ; ignore_errors=... }`,
+ * observed on systemd 257): the words the manager will execute, or null when
+ * the answer is not in that form -- which the caller refuses. */
+export function effectiveExecArgv(show: string): string | null {
+  return /(?:^|\s)argv\[\]=(.*?) ; ignore_errors=/.exec(show)?.[1] ?? null;
+}
+
 /** DR13, P0-5: the one reading of a unit command that did not succeed. A
  * command that did not finish -- timed out, killed, never spawned -- has an
  * unknown outcome, DEADLINE_EXCEEDED, which a caller looks up again; it is not
@@ -124,8 +132,8 @@ export class UnitsModule {
     // location the broker never resolved.
     const exec = renderedExecArgv(rendered);
     if (exec !== null) {
-      const effective = /(?:^|\s)argv\[\]=(.*?) ; ignore_errors=/.exec(this.run(["show", name, "--property=ExecStart", "--value"]));
-      if (effective?.[1] !== exec.join(" "))
+      const effective = effectiveExecArgv(this.run(["show", name, "--property=ExecStart", "--value"]));
+      if (effective !== exec.join(" "))
         throw new StoreError("UNSUPPORTED_PROFILE", `${name} effective ExecStart differs from its rendered argv`);
     }
     for (const [property, expected] of [["MemoryMax", overrides.memoryBytes], ["TasksMax", overrides.tasks]] as const) {
@@ -150,36 +158,46 @@ export class UnitsModule {
    * The rendered Description names kind, society and agent, the owner line the
    * state tree, and the same owner renders the same two again. */
   private assertOwnUnit(name: string, expected: string): void {
-    if (this.foreign(name, expected))
+    const owner = this.ownerOf(name, expected);
+    if (owner === "other")
       throw new StoreError("AGENT_CONFLICT", `unit ${name} is installed for another society or agent; it is not replaced`);
+    if (owner === "unknown")
+      throw new StoreError("AGENT_CONFLICT", `unit ${name} names no owner, so whose it is cannot be told; it is not replaced (remove it to let this society install its own)`);
   }
-  /** Whether the unit file under `name` is another owner's; false when there is none. */
+  /** Whether the unit file under `name` is not provably this owner's; false when there is none. */
   private foreign(name: string, expected: string): boolean {
+    return this.ownerOf(name, expected) !== "same";
+  }
+  /** Whose the unit file under `name` is: this owner's ("same", also when
+   * there is none), another's, or -- a unit that names no owner at all --
+   * nobody can tell. */
+  private ownerOf(name: string, expected: string): "same" | "other" | "unknown" {
     let existing: string;
     try { existing = readFileSync(join(this.installDir, name), "utf8"); }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return "same";
       throw unobserved(error, join(this.installDir, name)) ?? error;
     }
-    return !this.sameOwner(existing, expected);
+    return this.sameOwner(existing, expected);
   }
-  private sameOwner(existing: string, expected: string): boolean {
-    if (lineOf(existing, DESCRIPTION) !== lineOf(expected, DESCRIPTION)) return false;
+  private sameOwner(existing: string, expected: string): "same" | "other" | "unknown" {
+    if (lineOf(existing, DESCRIPTION) !== lineOf(expected, DESCRIPTION)) return "other";
     const owner = lineOf(existing, OWNER);
-    if (owner !== null) return owner === lineOf(expected, OWNER);
+    if (owner !== null) return owner === lineOf(expected, OWNER) ? "same" : "other";
     // An earlier release wrote no owner line. Where it named the state tree --
     // a Resident's --state-root, a path unit's watched directory -- that tree
-    // decides; a unit that names none is known by its Description until this
-    // owner installs it again.
+    // decides. P0V-95 (R6-20): a unit that names none is not known to be this
+    // owner's by its Description -- two trees' societies share names -- so it
+    // is nobody's to replace (P0-5).
     const lines = existing.split("\n");
     const exec = lines.find(line => line.startsWith("ExecStart=") && line.includes(" --state-root "));
     if (exec !== undefined) {
       const argument = renderUnit("--state-root @STATE_ARG@", this.values);
-      return exec.endsWith(` ${argument}`) || exec.includes(` ${argument} `);
+      return exec.endsWith(` ${argument}`) || exec.includes(` ${argument} `) ? "same" : "other";
     }
     const watched = lines.find(line => line.startsWith("DirectoryNotEmpty="));
-    if (watched !== undefined) return watched.startsWith(renderUnit("DirectoryNotEmpty=@STATE@/", this.values));
-    return true;
+    if (watched !== undefined) return watched.startsWith(renderUnit("DirectoryNotEmpty=@STATE@/", this.values)) ? "same" : "other";
+    return "unknown";
   }
   /** The identity lines a unit of `template` renders for `agent`. */
   private identity(template: string, agent: string): string {

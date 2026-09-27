@@ -18,7 +18,7 @@ import { collectUnacceptedArtifacts, type PreacceptCollection } from "./reconcil
 import { dirname } from "node:path";
 
 export interface ReconcilePaths {
-  projectGit: string; hasGoal?: () => boolean; activationAllowed(): boolean;
+  projectGit: string; hasGoal: () => boolean; activationAllowed(): boolean;
   /** Existing host receiptWaitSeconds; not a new configuration/wire field. */
   sweepBudgetSeconds?: number;
   /** D04: admits each recovery stage by what it would consume. Absent only in a
@@ -194,7 +194,7 @@ export class ReconcileModule {
           if (observation.activeState === "unknown") {
             diagnostics.push({ agent: current.name, outcome: "unknown", reason: "RUN_TERMINATION_UNKNOWN" }); continue;
           }
-          if (current.desired === "enabled" && this.activation() && (!this.paths.hasGoal || this.paths.hasGoal())) {
+          if (current.desired === "enabled" && this.activation() && this.paths.hasGoal()) {
             const { hasPendingWork } = pendingWork(this.store, current.name);
             if (hasPendingWork && ["inactive", "dead"].includes(observation.activeState)) {
               const fresh = this.units.observe(current.name);

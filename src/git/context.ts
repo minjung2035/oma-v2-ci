@@ -97,7 +97,7 @@ export class ContextCoordinator {
     Object.freeze(request.entries); Object.freeze(request.content); Object.freeze(request);
     const hash = requestHash("context.publish", request);
     const claim = this.store.claimKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
     this.requireWriterSlot();
     // ID-003: a wire OID must match this repository's object format before any
@@ -162,7 +162,7 @@ export class ContextCoordinator {
     // Connection close cannot remove accepted intent: the plan names the tree and
     // object, so they are retained. A same-key loser's plan names nothing of ours.
     scope.settle();
-    if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     const operation = this.operation(id);
     let knowledge: EffectKnowledge = "none";
     try {

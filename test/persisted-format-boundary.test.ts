@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store, StoreError } from "../src/store.js";
 import { requestHash, sha256Hex } from "../src/hash.js";
-import { classifyPersistedPlan, planLocatorsBelongTo, planPortability, HOST_DERIVED_PLAN_FIELDS,
+import { classifyPersistedPlan, planPortability, HOST_DERIVED_PLAN_FIELDS,
   PLAN_FORMAT_WRITTEN, SCHEMA_USER_VERSION_WRITTEN, V1_PLAN_FIELDS } from "../src/domain/persisted-formats.js";
 import { publishImmutableFile } from "../src/mail.js";
 import { writeExclusiveFsyncedFile } from "../src/storage/durable-fs.js";
@@ -89,8 +89,9 @@ test("P8 host-derived locators: a copied state root keeps readable bytes but not
     });
     const plan = JSON.parse(planJson);
     assert.deepEqual(classifyPersistedPlan(plan), { format: "v1" });
-    assert.equal(planLocatorsBelongTo(plan, root), true);
-    assert.equal(planLocatorsBelongTo(plan, other), false, "a copied root is not the locator owner");
+    // P0V-89 (R6-12): whether a locator belongs to this root is the ledger's
+    // reading of the row, not a separate check a caller may forget to make.
+    assert.equal(store.getOperationById(OP as never)?.id, OP, "the root that derived the locator reads it");
     const findings = planPortability([{ kind: "git.submit", plan }, { kind: "mail.send", plan: { kind: "mail.send" } }]);
     assert.deepEqual(findings[0], { kind: "git.submit", fields: ["bundle.path"], portable: false });
     assert.deepEqual(findings[1], { kind: "mail.send", fields: [], portable: true });
@@ -111,8 +112,6 @@ test("P8 host-derived locators: a copied state root keeps readable bytes but not
     assert.equal(rawPlanJson(join(other, "runtime.sqlite"), OP), persistedBefore, "restore does not rewrite accepted plan bytes");
     const restoredPlan = JSON.parse(rawPlanJson(join(other, "runtime.sqlite"), OP));
     assert.deepEqual(classifyPersistedPlan(restoredPlan), { format: "v1" });
-    assert.equal(planLocatorsBelongTo(restoredPlan, other), false);
-    assert.equal(planLocatorsBelongTo(restoredPlan, root), true, "the locator still belongs to the original root");
     assert.deepEqual(planPortability([{ kind: "git.submit", plan: restoredPlan }])[0]!.fields, ["bundle.path"]);
     restored.close();
   } finally { removeTree(root); removeTree(other); }
@@ -147,7 +146,6 @@ test("P8 rewrite prohibition: a legacy plan with an unusable locator stays byte-
     const reopened = new Store(path);
     assert.equal(reopened.getOperationById(OP2 as never)!.planJson, legacy, "no read path rewrites the plan");
     assert.deepEqual(classifyPersistedPlan(JSON.parse(legacy)), { format: "v1" });
-    assert.equal(planLocatorsBelongTo(JSON.parse(legacy), root), true);
     // No repair is attempted for the missing staging file: it is not derived.
     assert.throws(() => publishImmutableFile(join(root, "missing"), join(root, "target")), /ENOENT|STORE_CORRUPT/);
     reopened.close();

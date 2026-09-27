@@ -201,6 +201,10 @@ function treeBytes(root: string): { bytes: number; generations: string[] } {
  * error) is no answer, and is raised as itself rather than reported as a
  * generation holding other bytes (INV02). */
 function sameBytes(parent: number, generation: string, files: ReadonlyMap<string, Buffer>): boolean {
+  // P0V-90 (R6-13): the same generation holds these files and nothing else. A
+  // generation's identity names its whole tree; one with an extra file is not
+  // it, whatever the loader happens to read today.
+  if (!sameEntries(parent, generation, files)) return false;
   for (const [name, bytes] of files) {
     let fd: number;
     try { fd = openRegularBeneath(parent, `${generation}/${name}`); }
@@ -211,6 +215,41 @@ function sameBytes(parent: number, generation: string, files: ReadonlyMap<string
     try { if (!readFileSync(fd).equals(bytes)) return false; } finally { closeSync(fd); }
   }
   return true;
+}
+
+/** The directories every generation has, whether or not it has files in them. */
+const GENERATION_DIRECTORIES = Object.freeze(["roles", "prompts"] as const);
+
+/** Whether the generation's tree is exactly the directories and regular files
+ * `files` names. A missing or linked directory is "no"; an unreadable one is
+ * raised as itself. */
+function sameEntries(parent: number, generation: string, files: ReadonlyMap<string, Buffer>): boolean {
+  const directories = new Set<string>(GENERATION_DIRECTORIES);
+  for (const name of files.keys()) {
+    const parts = name.split("/");
+    for (let depth = 1; depth < parts.length; depth++) directories.add(parts.slice(0, depth).join("/"));
+  }
+  let found = 0;
+  const walk = (relativePath: string): boolean => {
+    let fd: number;
+    try { fd = openBeneath(parent, relativePath === "" ? generation : `${generation}/${relativePath}`, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP" || (error instanceof StoreError && error.code === "STORE_CORRUPT")) return false;
+      throw error;
+    }
+    try {
+      for (const entry of readdirSync(`/proc/self/fd/${fd}`)) {
+        const path = relativePath === "" ? entry : `${relativePath}/${entry}`;
+        const stat = lstatSync(`/proc/self/fd/${fd}/${entry}`);
+        if (stat.isDirectory()) { if (!directories.has(path) || !walk(path)) return false; }
+        else if (stat.isFile() && files.has(path)) found++;
+        else return false;
+      }
+      return true;
+    } finally { closeSync(fd); }
+  };
+  return walk("") && found === files.size;
 }
 
 /** Writes the generation below `generations/.staging-*`, flushes every file and
@@ -233,7 +272,7 @@ function publishGeneration(generations: string, id: string, published: ReadonlyM
     try {
       const sub: Record<string, number> = {};
       try {
-        for (const directory of ["roles", "prompts"]) {
+        for (const directory of GENERATION_DIRECTORIES) {
           mkdirSync(entryAt(tree, directory), { mode: 0o700 });
           sub[directory] = openBeneath(tree, directory, constants.O_RDONLY | constants.O_DIRECTORY);
         }
@@ -243,7 +282,7 @@ function publishGeneration(generations: string, id: string, published: ReadonlyM
           if (holder === undefined) throw new StoreError("INTERNAL_ERROR", `managed generation file ${file} has no directory`);
           writeExclusiveFsyncedEntry(holder, slash < 0 ? file : file.slice(slash + 1), join(staging, file), bytes, 0o400, faults);
         }
-        for (const directory of ["roles", "prompts"]) { fchmodSync(sub[directory]!, 0o500); fsyncHeldDir(sub[directory]!, join(staging, directory), faults); }
+        for (const directory of GENERATION_DIRECTORIES) { fchmodSync(sub[directory]!, 0o500); fsyncHeldDir(sub[directory]!, join(staging, directory), faults); }
       } finally { for (const fd of Object.values(sub)) closeSync(fd); }
       fchmodSync(tree, 0o500);
       fsyncHeldDir(tree, staging, faults);

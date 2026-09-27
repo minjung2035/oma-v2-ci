@@ -23,6 +23,7 @@ import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from 
 import { removeTree } from "./fixtures/cleanup.js";
 import { gitAuth, gitFixture, seedGit } from "./fixtures/git-crash.js";
 import { padTree, removePad } from "./fixtures/storage-pad.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const LIMITS: ProtocolLimits = { frameBytes: 256 * 1024, mailBodyBytes: 64 * 1024, subjectBytes: 8 * 1024, addresses: 64,
   replyReferences: 64, contextFiles: 64, contextBytes: 1024 * 1024, bundleBytes: 64 * 1024 * 1024, logBytes: 64 * 1024,
@@ -73,7 +74,7 @@ function society(t: TestContext) {
   const views = new ViewsModule(store, root, "crash", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "repos/project.git"), society: "crash", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  const paths = { stateRoot: root, runRoot: join(root, "run"), society: "crash", storageBytes: QUOTA };
+  const paths = { stateRoot: root, runRoot: join(root, "run"), society: "crash", hasGoal: goalPublishedAt(root), storageBytes: QUOTA };
   const broker = new Broker(store, mail, units, views, lifecycle, git, null, paths, LIMITS);
   const info = JSON.parse(readFileSync(join(root, "git-fixture.json"), "utf8")) as { base: string; candidate: string; exportRef: string };
   const bundle = readFileSync(join(root, "candidate.bundle"));

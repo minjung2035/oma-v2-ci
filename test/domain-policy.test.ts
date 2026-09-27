@@ -5,6 +5,7 @@ import { CAPABILITIES, isCapability } from "../src/domain/capabilities.js";
 import { RESOURCE_FIELDS, resourceLimitsCheck } from "../src/domain/resources.js";
 import { PROTOCOL_LIMIT_FIELDS, protocolLimitsCheck } from "../src/domain/limits.js";
 import { capabilitiesOf, resolvedSpecOf } from "../src/authority.js";
+import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 import { StoreError } from "../src/store.js";
 import { ALL_CAPS, resolvedSpec } from "./fixtures/spec.js";
 
@@ -65,7 +66,7 @@ const SPEC_BYTES = '{"name":"alice","modelProfile":"md","resources":{"memoryByte
 
 test("R02: policy deduplication preserves resolved-spec bytes and does not grant by role", () => {
   assert.equal(resolvedSpec(ALL_CAPS, "p", "alice"), SPEC_BYTES);
-  const agent = { name: "alice", profile: "p", specJson: SPEC_BYTES };
+  const agent = { name: "alice", profile: "p", specJson: SPEC_BYTES, specHash: resolvedSpecDigest(JSON.parse(SPEC_BYTES)) };
   assert.deepEqual(resolvedSpecOf(agent), JSON.parse(SPEC_BYTES));
   assert.deepEqual([...capabilitiesOf(agent)], EXPECTED_CAPABILITIES);
   assert.equal(capabilitiesOf({ specJson: resolvedSpec([], "p", "principal") }).size, 0);

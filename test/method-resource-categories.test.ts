@@ -19,6 +19,7 @@ import { PUBLIC_METHODS, INTERNAL_METHODS } from "../src/protocol/methods.js";
 import { StoreError } from "../src/domain/errors.js";
 import { ALL_CAPS, TEST_RESOURCES, makeValidAgent, makeValidResolvedSpec } from "./fixtures/spec.js";
 import { removeTree } from "./fixtures/cleanup.js";
+import { goalPublishedAt } from "./fixtures/goal.js";
 
 const CATEGORIES = ["read", "admit", "settle", "safety-control"];
 const auth: AuthContext = { actor: "alice", incarnation: 1, role: "resident", channel: "actor",
@@ -43,7 +44,7 @@ function society(t: TestContext) {
   const views = new ViewsModule(store, root, "demo", "p");
   const lifecycle = new LifecycleModule(store, units, { stateRoot: root, projectGit: join(root, "project.git"), society: "demo", hasGoal: () => true, activationAllowed: () => true },
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
-  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", storageBytes: 1 });
+  const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: goalPublishedAt(root), storageBytes: 1 });
   return { broker };
 }
 

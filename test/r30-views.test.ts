@@ -7,7 +7,7 @@ import { join } from "node:path";
 import type { AuthContext } from "../implementation/contracts.js";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
-import { ViewsModule, fieldEsce } from "../src/views.js";
+import { ViewsModule, fieldEscape } from "../src/views.js";
 import { pendingWork } from "../src/views/pending-work.js";
 import { generateBatchId } from "../src/ids.js";
 import { ALL_CAPS, makeValidAgent } from "./fixtures/spec.js";
@@ -104,5 +104,6 @@ test("R30 rebuildable world files preserve durable receipts and exclude private 
   assert.deepEqual(paths.map(path => readFileSync(join(f.root, "world", path), "utf8")), expected);
   assert.equal(expected.join("\n").includes("private-body-0"), false);
   assert.equal(f.store.getOperation("alice", "r30-0")!.resultJson, receiptBefore);
-  assert.equal(fieldEsce("동료\tmetadata\nline\r"), "동료\\tmetadata\\nline");
+  // P0V-94: the carriage return is escaped, not dropped.
+  assert.equal(fieldEscape("동료\tmetadata\nline\r"), "동료\\tmetadata\\nline\\r");
 });

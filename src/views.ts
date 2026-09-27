@@ -22,8 +22,16 @@ export interface StatusUnitObservation {
   readonly observedAtMs: number;
   readonly unknownReason: "unavailable" | "unknown-state" | null;
 }
-export function fieldEsce(value: string): string {
-  return value.replace(/\t/g, "\\t").replace(/\n/g, "\\n").replace(/\r/g, "");
+/** P0V-94 (R6-17): a field of a derived TSV view is escaped by the view
+ * itself, not left to the grammars upstream -- the backslash an escape begins
+ * with, the tab and newline that separate, and every other control character
+ * (C0, DEL, C1) -- so no stored value, however it got there, adds a column or
+ * a row or puts a terminal instruction in front of a reader. Reversible: a
+ * carriage return used to be dropped. */
+export function fieldEscape(value: string): string {
+  return value.replace(/[\\\u0000-\u001f\u007f-\u009f]/g, character =>
+    character === "\\" ? "\\\\" : character === "\t" ? "\\t" : character === "\n" ? "\\n" : character === "\r" ? "\\r"
+      : `\\x${character.charCodeAt(0).toString(16).padStart(2, "0")}`);
 }
 export class ViewsModule {
   private observations: readonly StatusUnitObservation[] = [];
@@ -36,7 +44,7 @@ export class ViewsModule {
     const world = join(this.stateRoot, "world");
     ensureDirectory(world);
     const agents = this.store.listAgents();
-    const tsv = agents.map(agent => [agent.name, agent.role, agent.desired, agent.profile].map(fieldEsce).join("\t"))
+    const tsv = agents.map(agent => [agent.name, agent.role, agent.desired, agent.profile].map(fieldEscape).join("\t"))
       .join("\n") + (agents.length > 0 ? "\n" : "");
     writeAtomic(join(world, "agents.tsv"), tsv, 0o444);
     const byTopic = new Map<string, string[]>();
@@ -45,7 +53,7 @@ export class ViewsModule {
       list.push(subscription.agent); byTopic.set(subscription.topic, list);
     }
     const topicLines = [...byTopic.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
-      .map(([topic, subscribers]) => `${fieldEsce(topic)}\t${fieldEsce([...subscribers].sort().join(","))}`);
+      .map(([topic, subscribers]) => `${fieldEscape(topic)}\t${fieldEscape([...subscribers].sort().join(","))}`);
     writeAtomic(join(world, "topics.tsv"), topicLines.length > 0 ? `${topicLines.join("\n")}\n` : "", 0o444);
     writeAtomic(join(world, "START.md"), this.startText(), 0o444);
   }

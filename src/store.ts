@@ -183,6 +183,9 @@ export class Store {
       this.db.exec("PRAGMA foreign_keys = ON");
       this.db.exec("PRAGMA journal_mode = WAL");
       this.db.exec("PRAGMA synchronous = FULL");
+      // R6-19: the bound on how long this synchronous connection -- and so the
+      // broker's event loop -- waits for another writer's lock (validation,
+      // "알려진 한계"). A watchdog, if one is added, must be longer.
       this.db.exec("PRAGMA busy_timeout = 5000");
       this.migrate();
       this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
@@ -323,6 +326,14 @@ export class Store {
   claimOperation(operation: NewOperation): "inserted" | "retry" { return this.journal.accept(operation); }
   acceptOperation(operation: Parameters<Store["insertOperation"]>[0]): "inserted" | "retry" { return this.claimOperation(operation); }
   getOperation(actor: Actor, key: RequestKey): OperationRow | null { return this.journal.get(actor, key); }
+  /** P0V-92 (R6-15): the operation behind a key the ledger has just answered
+   * as a retry. No code removes an operation, so a missing one is a ledger
+   * that no longer says what it said -- corrupt, and said so, not a `!`. */
+  retriedOperation(actor: Actor, key: RequestKey): OperationRow {
+    const operation = this.getOperation(actor, key);
+    if (operation === null) throw new StoreError("STORE_CORRUPT", `request key ${key} was answered as a retry and has no operation`);
+    return operation;
+  }
   getOperationById(id: OperationId): OperationRow | null { return this.journal.getById(id); }
   findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
   recoverableOperations(): OperationId[] { return this.journal.recoverableIds(); }
@@ -335,7 +346,7 @@ export class Store {
     let selected: unknown;
     try {
       selected = this.db.prepare(`SELECT id FROM operations WHERE kind='context.publish' AND state='succeeded'
-        AND json_extract(plan_json, '$.candidate')=? ORDER BY created_at_ms DESC, id DESC LIMIT 1`).get(candidate);
+        AND json_extract(plan_json, '$.candidate')=? ORDER BY rowid DESC LIMIT 1`).get(candidate);
     } catch (error) {
       // As every other query: busy is DB_BUSY, and the native storage owner reads the rest.
       if (isBusyError(error)) throw new StoreError("DB_BUSY", "completed context identity query failed");

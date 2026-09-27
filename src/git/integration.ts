@@ -148,7 +148,7 @@ export class IntegrationCoordinator {
     this.requireExecuteAuthority(auth, false);
     const hash = requestHash("git.integrate", input);
     const claim = this.store.claimKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
     const policy = this.currentPolicy();
     assertSupportedIntegration(policy);
@@ -174,7 +174,7 @@ export class IntegrationCoordinator {
       return tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash,
         kind: "git.integrate", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
     });
-    if (accepted === "retry") return receiptOfOperation(this.store.getOperation(auth.actor, key)!);
+    if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     const operation = this.operation(id);
     let knowledge: EffectKnowledge = "none";
     try {

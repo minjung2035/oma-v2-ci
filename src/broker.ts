@@ -35,7 +35,7 @@ export { boundedLogOutput } from "./broker/logs.js";
 export { peerCgroup } from "./broker/peer-authenticator.js";
 
 export interface BrokerPaths {
-  stateRoot: string; runRoot: string; society: string; hasGoal?: () => boolean; storageBytes?: number;
+  stateRoot: string; runRoot: string; society: string; hasGoal: () => boolean; storageBytes?: number;
   /** The process's storage owner when composition shares it with recovery. */
   storage?: StorageAdmission;
   /** D03: a broker no fixed unit binds its Residents to stops them itself on
@@ -444,8 +444,9 @@ export class Broker {
     if (agent.desired === "provisioning") throw new StoreError("AGENT_NOT_READY", `${actor} is provisioning`);
     if (agent.desired === "stopped") throw new StoreError("STALE_RUN", `${actor} is stopped`);
     if (agent.desired === "retired") throw new StoreError("AGENT_RETIRED", `${actor} is retired`);
-    const hasGoal = this.paths.hasGoal?.() ?? existsSync(join(this.paths.stateRoot, "world", "context", "current"));
-    if (!hasGoal) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
+    // P0V-93 (R6-16): the GOAL question's one owner, which every composition
+    // passes. A fallback here read EACCES or EIO as "no GOAL".
+    if (!this.paths.hasGoal()) throw new StoreError("GOAL_REQUIRED", "shared GOAL not published yet");
     const active = this.runLeases.get(actor); const observation = this.units.observe(actor);
     if (observation.activeState === "unknown" || observation.invocationId !== invocationId || !observation.cgroup) throw new StoreError("AUTH_FAILED", "runner invocation changed during open");
     if (active?.invocationId === invocationId) {
