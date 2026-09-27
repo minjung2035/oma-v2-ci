@@ -175,10 +175,15 @@ function mailDetailParts(input: ViewInput, notice: string | null) {
   return { head, text, foot, height, limit: Math.max(0, text.length - height) };
 }
 
+/** The notice line this screen shows, if any. P0V-68: one reading for the
+ * render and for the scroll limit, so the limit is taken from the layout that
+ * is actually drawn -- a notice (or the busy line) takes a row from the body. */
+function screenNotice(input: ViewInput): string | null { return noticeText(input.notice, input.busy); }
+
 /** How far the open message's body can scroll on this screen: the owner of
  * the state keeps the scroll within it. */
 export function mailScrollLimit(input: ViewInput): number {
-  return mailDetailParts(input, null)?.limit ?? 0;
+  return mailDetailParts(input, screenNotice(input))?.limit ?? 0;
 }
 
 function mailDetail(input: ViewInput, notice: string | null): string[] {
@@ -194,7 +199,7 @@ function mailDetail(input: ViewInput, notice: string | null): string[] {
 
 export function render(input: ViewInput): string[] {
   const { state, columns, rows } = input;
-  const notice = noticeText(input.notice, input.busy);
+  const notice = screenNotice(input);
   if (!state.open) return conversation(input, notice);
   const detail = state.detail;
   if (detail.kind === "extensions") return frame(extensionsScreen(input, notice), rows, columns);
