@@ -68,8 +68,9 @@ export interface PrincipalHostChannel {
 interface ConnectionPorts {
   readonly isDraining: () => boolean;
   readonly bindPeer: (socket: Socket) => BoundPeer | null;
-  /** The live authority of the `principal` row, re-derived on every read. */
-  readonly principalContext: (peer: BoundPeer) => AuthContext | null;
+  /** The live authority of the `principal` row, re-derived on every read;
+   * `live` says whether what the caller was authorised under still stands. */
+  readonly principalContext: (peer: BoundPeer, live: () => boolean) => AuthContext | null;
   readonly serveFrames: (
     socket: Socket,
     peer: BoundPeer,
@@ -274,7 +275,11 @@ export class PrincipalEndpoint {
           this.engineRuns(session);
           throw new StoreError("AUTH_FAILED", "the principal engine this connection was started by is no longer registered");
         }
-        const auth = this.ports.principalContext(peer);
+        // P0V-60: the authority handed on keeps asking the same question --
+        // this registration, this engine's descendant -- at every later read.
+        const live = (): boolean => this.open && this.session === session && session.generation === attachedTo &&
+          peer.alive() && descendsFrom(peer.pid, session.engine);
+        const auth = this.ports.principalContext(peer, live);
         if (auth === null) throw new StoreError("AUTH_FAILED", "no live principal to act for");
         return auth;
       };
@@ -333,7 +338,7 @@ export class PrincipalEndpoint {
     // have been started by the registered engine.
     if (!descendsFrom(peer.pid, session.engine) || !peer.alive())
       throw new StoreError("AUTH_FAILED", "the connecting process was not started by the principal engine");
-    const auth = this.ports.principalContext(peer);
+    const auth = this.ports.principalContext(peer, () => this.session === session && peer.alive());
     if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to attach to");
     return { generation: session.generation, answer: okAnswer(id, { actor: "principal", incarnation: auth.incarnation }) };
   }
@@ -384,7 +389,7 @@ export class PrincipalHostEndpoint {
     // be indistinguishable here from an accepted one.
     if (this.ports.registeredEngine() === null)
       throw new StoreError("AUTH_FAILED", "no principal session is registered with this broker");
-    const auth = this.ports.principalContext(peer);
+    const auth = this.ports.principalContext(peer, () => this.ports.registeredEngine() !== null);
     if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to deliver to");
     if (method === "batch.prepare") {
       if (INTERNAL_METHODS["batch.prepare"].paramsCheck(raw.params) !== null)

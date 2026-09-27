@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "fb76bbfbe6f254cbc2acc3dd2cc346f4ebe279536540e9aaa71c8c45b2836b01",
+  "report": "ea8b2fdf29e7d486d2a9f432a62b02a12acff54747911f89b5c03a014ad29bdc",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "6093f4f89df3eff8adeea2e2cbaa32dd1164aabf243fd1a4b2a07fde86d7a66f"
+      "sha256": "a033305554ce9889b37239cfd8e985da3e12095da36053ecf34778aca2ada0bd"
     },
     {
       "path": "src/broker/composition.ts",
@@ -65,7 +65,7 @@
     },
     {
       "path": "src/broker/peer-authenticator.ts",
-      "sha256": "e2f0f408bff631b4e1b068eaf1e97ff1d0d891ff6e9c5a5f69d2f60a7a566d90"
+      "sha256": "301660b69e4df165e414f20087fc5b9b3b608be97528b6fe3a27cc850d4e5635"
     },
     {
       "path": "src/broker/peer-pin.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "src/broker/principal-endpoint.ts",
-      "sha256": "3696a9a630707c9bd6bb12fd97981488694176c9d56329ea7da4c3807a814641"
+      "sha256": "c0398e7737801b46ceef81cab13e56fa7803c28ff1688714e23fffae56e1d130"
     },
     {
       "path": "src/broker/process-ancestry.ts",

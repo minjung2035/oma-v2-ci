@@ -194,7 +194,7 @@ export class Broker {
     const connection = {
       isDraining: () => this.draining,
       bindPeer: (socket: Socket) => this.bindPeer(socket),
-      principalContext: (peer: BoundPeer) => this.peers.principalContext(peer),
+      principalContext: (peer: BoundPeer, live: () => boolean) => this.peers.principalContext(peer, live),
       serveFrames: (socket: Socket, peer: BoundPeer,
         handle: (raw: Record<string, unknown>, stream: AsyncIterable<Uint8Array> | null) => Promise<object>,
         preflight: (raw: Record<string, unknown>) => void) => this.serveFrames(socket, peer, handle, preflight),

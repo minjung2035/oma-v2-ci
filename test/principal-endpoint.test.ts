@@ -19,7 +19,8 @@ import type { Socket } from "node:net";
 import type { AuthContext, ProtocolLimits, Request, ResolvedAgentSpec } from "../implementation/contracts.js";
 import { Broker, type PrincipalHostChannel } from "../src/broker.js";
 import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalEndpointPorts, type PrincipalHostEndpointPorts } from "../src/broker/principal-endpoint.js";
-import type { BoundPeer } from "../src/broker/peer-authenticator.js";
+import { PeerAuthenticator, type BoundPeer } from "../src/broker/peer-authenticator.js";
+import { RunRegistry } from "../src/runtime/run-registry.js";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
 import { UnitsModule } from "../src/units.js";
@@ -1275,6 +1276,8 @@ class Bench {
   readonly dispatched: string[] = [];
   readonly preflighted: string[] = [];
   readonly failed: string[] = [];
+  /** What each authority the endpoint handed on was told to keep asking. */
+  readonly lives: (() => boolean)[] = [];
   readonly endpoint: PrincipalEndpoint;
   private deliver: ((sessionHandle: string, pid: number) => void) | null = null;
   private capture: ((handle: Held["raw"], preflight: Held["check"]) => void) | null = null;
@@ -1306,7 +1309,7 @@ class Bench {
     const ports: PrincipalEndpointPorts = {
       isDraining: () => false,
       bindPeer: () => peer,
-      principalContext: () => context(),
+      principalContext: (_peer, live) => { this.lives.push(live); return context(); },
       serveFrames: (_socket, _peer, handle, preflight) => { this.capture?.(handle, preflight); },
       fail: (_socket, failure) => { this.failed.push(failure.code); },
       observe: error => { this.observed.push(error instanceof StoreError ? error.code : String(error)); },
@@ -1675,4 +1678,36 @@ test("P0V-57 / R02, P0-2: after corruption is observed the host's delivery endpo
       }
     });
   } finally { await stopSociety(society); }
+});
+
+test("P0V-60 / R05, P0-2: the authority a request was handed stops standing when its registration is retired", async () => {
+  await withEngineProcess(async bench => {
+    const first = newSessionHandle();
+    bench.register(first);
+    const held = bench.open();
+    await attachAndUse(bench, held, first);
+    // The authority the dispatched request carries into its awaits.
+    const live = bench.lives.at(-1)!;
+    assert.equal(live(), true);
+    // The host registers another session; the request is still running.
+    bench.register(newSessionHandle());
+    assert.equal(live(), false, "a request authorised under a retired registration can still accept");
+  });
+});
+
+test("P0V-60 / R05, P0-2: the Principal's capabilities are read against what the caller was authorised under, at every read", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-principal-live-"));
+  const store = new Store(join(root, "runtime.sqlite"));
+  t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
+  store.transaction(() => store.insertAgent({ name: "principal", specHash: resolvedSpecDigest(PRINCIPAL_SPEC), role: "principal",
+    desired: "enabled", incarnation: 0, profile: "p", createdBy: null, specJson: JSON.stringify(PRINCIPAL_SPEC) }));
+  const peers = new PeerAuthenticator(store, {} as UnitsModule, new RunRegistry(), "demo", () => undefined);
+  const peer = { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), alive: () => true,
+    retainForExecution: () => () => undefined, releaseConnection: () => undefined } as BoundPeer;
+  let standing = true;
+  const auth = peers.principalContext(peer, () => standing)!;
+  assert.ok(auth.capabilities.size > 0);
+  standing = false;
+  assert.equal(auth.capabilities.size, 0, "a retired registration kept its capabilities");
+  assert.equal(peers.principalContext(peer, () => false), null);
 });

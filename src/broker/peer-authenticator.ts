@@ -74,12 +74,16 @@ export class PeerAuthenticator {
    * that a row edited mid-connection takes effect at once rather than leaving a
    * copied grant behind.
    */
-  principalContext(credentials: BoundPeer): AuthContext | null {
+  principalContext(credentials: BoundPeer, live: () => boolean): AuthContext | null {
     const agent = this.store.getAgent("principal");
     if (!agent || agent.role !== "principal" || agent.desired !== "enabled") return null;
-    if (credentials.uid !== (process.getuid?.() ?? -1) || !credentials.alive()) return null;
+    if (credentials.uid !== (process.getuid?.() ?? -1) || !credentials.alive() || !live()) return null;
     const currentCapabilities = (): ReadonlySet<Capability> => {
-      if (!credentials.alive()) return new Set<Capability>();
+      // P0V-60, P0-2: what stands in for a Resident's run lease -- the
+      // registration the caller was authorised under -- is re-checked on every
+      // read, as the lease is. A request that awaited while its registration
+      // was retired reaches acceptance with nothing to act with.
+      if (!credentials.alive() || !live()) return new Set<Capability>();
       const current = this.store.getAgent("principal");
       if (!current || current.desired !== "enabled" || current.role !== agent.role ||
         current.specHash !== agent.specHash || current.incarnation !== agent.incarnation) return new Set<Capability>();
