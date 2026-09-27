@@ -25,7 +25,8 @@ function runInPty(mode: string) {
   try {
     const side = join(work, "side.jsonl");
     const korean = hex("한");
-    const spec = { argv: [process.execPath, join(fixtures, "pty-terminal.mjs"), dist, side, mode],
+    // The driver draws this once its keys handler is installed.
+    const spec = { argv: [process.execPath, join(fixtures, "pty-terminal.mjs"), dist, side, mode], ready: hex("V28B ready"),
       steps: [{ write: korean.slice(0, 4) }, { write: korean.slice(4) }, { resize: [30, 100] }, { write: hex("q"), wait: 0.5 }] };
     const run = spawnSync("python3", [join(fixtures, "pty-harness.py"), JSON.stringify(spec)], { encoding: "utf8", timeout: 30_000 });
     assert.equal(run.status, 0, run.stderr);

@@ -21,7 +21,20 @@ def main():
                 if not data:
                     return
                 out.extend(data)
-    pump(1.5)
+    # Keys go in once the program says it is reading them. A fixed pause was
+    # a race under load: keys typed before raw mode was on were echoed and
+    # line-buffered by the tty, and never reached the program as keys.
+    ready = bytes.fromhex(spec["ready"]) if "ready" in spec else None
+    if ready is None:
+        pump(1.5)
+    else:
+        deadline = time.time() + 20
+        while ready not in out and time.time() < deadline:
+            pump(0.05)
+        if ready not in out:
+            print(json.dumps({"exited": False, "code": None, "echo": False, "icanon": False, "output": out.hex(), "ready": False}))
+            os.kill(pid, signal.SIGKILL)
+            return
     for step in spec["steps"]:
         if "write" in step:
             os.write(master, bytes.fromhex(step["write"]))
@@ -31,13 +44,17 @@ def main():
         if "signal" in step:
             os.kill(pid, getattr(signal, step["signal"]))
         pump(step.get("wait", 0.2))
+    # Waited by the clock, not by rounds: once the program has closed its side,
+    # a read answers EIO at once and a round takes no time at all.
     status = None
-    for _ in range(100):
+    deadline = time.time() + 10
+    while time.time() < deadline:
         done, raw = os.waitpid(pid, os.WNOHANG)
         if done:
             status = raw
             break
         pump(0.05)
+        time.sleep(0.01)
     pump(0.2)
     attrs = termios.tcgetattr(master)
     lflag = attrs[3]
