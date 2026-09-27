@@ -7,6 +7,7 @@ import { KeyDecoder, type Key } from "../src/tui/keys.js";
 import { INITIAL, step, type MailRow, type Notice, type PanelData, type State } from "../src/tui/model.js";
 import { mailScrollLimit, render } from "../src/tui/view/index.js";
 import { unknownDashboard } from "./fixtures/dashboard.js";
+import { AcceptedFailure, StoreError, acceptedFailure, publicFailure } from "../src/domain/errors.js";
 
 test("P0V-67 / R12, P0-2: where the terminal's reads are cut does not change the text -- a U+FEFF after the cut is kept", () => {
   const bom = [...Buffer.from("﻿", "utf8")];
@@ -35,4 +36,20 @@ test("P0V-68 / R13, P0-2: the last line of a long message can be scrolled to whi
     const bottom = { ...input, state: { ...state, detail: { ...state.detail, scroll: mailScrollLimit(input) } } as State };
     assert.match(render(bottom).join("\n"), /^line 60\s*$/m, `the last line is out of reach (notice ${notice !== null}, busy ${busy})`);
   }
+});
+
+test("P0V-64 / R09, P0-2: an accepted failure a cleanup failure was bundled with is public as that accepted failure", () => {
+  const actual = "a".repeat(40);
+  const accepted = new AcceptedFailure("STALE_BASE", "main moved", "none", { details: { actual } });
+  const bundled = new AggregateError([accepted, new Error("EIO while removing a temporary")]);
+  assert.deepEqual(publicFailure(bundled), publicFailure(accepted), "phase or details were read from the bundle, not the failure");
+  assert.deepEqual(publicFailure(bundled).details, { actual });
+  // What is known of the effect is the failure's, not a default.
+  for (const knowledge of ["none", "applied"] as const) {
+    const failure = acceptedFailure(new AggregateError([new AcceptedFailure("POLICY_CHANGED", "changed", knowledge), new Error("cleanup")]));
+    assert.equal(failure.effectKnowledge, knowledge);
+    assert.equal(failure.code, "POLICY_CHANGED");
+  }
+  // A plain failure before acceptance is still one.
+  assert.equal(publicFailure(new AggregateError([new StoreError("INVALID_REQUEST", "bad"), new Error("cleanup")])).code, "INVALID_REQUEST");
 });

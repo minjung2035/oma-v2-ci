@@ -210,7 +210,7 @@ export class ReconcileModule {
           diagnostics.push({ agent: current.name, outcome: "observed", reason: null });
         } catch (error) {
           this.retainRecoveryFailure(error);
-          const reason = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
+          const reason = errorCodeOf(error);
           diagnostics.push({ agent: agent.name, outcome: "unknown", reason });
           console.error(JSON.stringify({ event: "reconcile.unit", agent: agent.name, code: reason }));
         }

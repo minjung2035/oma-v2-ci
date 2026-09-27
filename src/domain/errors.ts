@@ -160,13 +160,32 @@ function restated(primary: StoreError, cause: unknown): StoreError {
     : new StoreError(primary.code, primary.message, options);
 }
 export function acceptedFailure(error: unknown, effectKnowledge: EffectKnowledge = "possible"): AcceptedFailure {
-  if (error instanceof AcceptedFailure) return error;
+  // P0V-64, P0-2: what the failure is, is read once -- from its normalized
+  // form. An accepted failure a cleanup failure was bundled with is still
+  // that accepted failure, with what is known of its effect.
   const normalized = normalizeStorageFailure(error);
+  if (normalized instanceof AcceptedFailure) return normalized;
   return normalized instanceof StoreError
     // DR3: an accepted operation's failure keeps the facts its code may carry.
     ? new AcceptedFailure(normalized.code, normalized.message, effectKnowledge,
       { cause: error, ...(normalized.details === undefined ? {} : { details: normalized.details }) })
     : new AcceptedFailure("INTERNAL_ERROR", "accepted operation failed", effectKnowledge, { cause: error });
+}
+/** P0V-64, P0-2: how an accepted operation's failure settles, one reading for
+ * every coordinator. Its code is the normalized failure's -- a refusal a
+ * cleanup failure was bundled with is still that refusal -- and a stream found
+ * invalid after acceptance is corrupt evidence, not a refusal. */
+export function acceptedFailurePolicy(error: unknown, phase: ErrorPhase, effectKnowledge: EffectKnowledge): ErrorPolicy {
+  const code = errorCodeOf(error);
+  const category = ERROR_METADATA[code].category;
+  return classifyError({ code, phase, effectKnowledge,
+    observationKind: code === "STREAM_INVALID" || category === "integrity" ? "corrupt" :
+      category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
+}
+/** The normalized failure's own message, or null for a failure OMA does not name. */
+export function failureMessage(error: unknown): string | null {
+  const normalized = normalizeStorageFailure(error);
+  return normalized instanceof StoreError ? normalized.message : null;
 }
 /** A durable failed receipt is terminal; same-key lookup is never effect replay. */
 export function terminalFailure(code: ErrorCode): Failure { return { code, message: code, retry: "never" }; }
@@ -174,17 +193,22 @@ export function terminalFailure(code: ErrorCode): Failure { return { code, messa
 /** Sanitize exceptions. Without admission evidence, do not invent acceptance or
  * absence; a coordinator's AcceptedFailure is that evidence. */
 export function publicFailure(error: unknown, context?: Omit<ErrorContext, "code">): Failure {
-  const code = errorCodeOf(error);
+  // P0V-64, P0-2: code, phase, effect and details all come from the one
+  // normalized failure. Reading the phase and details from the raw error made
+  // an accepted failure bundled with a cleanup failure public as a refusal
+  // before acceptance, without its facts.
+  const normalized = normalizeStorageFailure(error);
+  const code: ErrorCode = normalized instanceof StoreError ? normalized.code : "INTERNAL_ERROR";
   const metadata = ERROR_METADATA[code];
   const observationKind: ObservationKind = metadata.category === "integrity" ? "corrupt" :
     metadata.category === "transient" || metadata.category === "ambiguous" || metadata.category === "internal" ? "unavailable" : "rejected";
-  const fallback: Omit<ErrorContext, "code"> = error instanceof AcceptedFailure
-    ? { phase: "accepted", effectKnowledge: error.effectKnowledge, observationKind }
+  const fallback: Omit<ErrorContext, "code"> = normalized instanceof AcceptedFailure
+    ? { phase: "accepted", effectKnowledge: normalized.effectKnowledge, observationKind }
     : { phase: "preaccept", effectKnowledge: "none", observationKind };
   const policy = classifyError({ ...(context ?? fallback), code });
   const retry = policy.reconcile === "repair" ? "after-repair" :
     policy.lookupSameKey && (policy.reconcile === "observe" || policy.reconcile === "reconcile" || policy.resendFrozen) ? "same-key" : "never";
-  const details = error instanceof StoreError && error.code === policy.code ? publicDetails(policy.code, error.details) : undefined;
+  const details = normalized instanceof StoreError && normalized.code === policy.code ? publicDetails(policy.code, normalized.details) : undefined;
   return { code: policy.code, message: policy.code, retry, ...(details === undefined ? {} : { details }) };
 }
 

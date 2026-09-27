@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 30133,
+    "n_lines": 30145,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -180,10 +180,16 @@
     "code": 223,
     "language": "TypeScript"
   },
+  "src/domain/errors.ts": {
+    "blank": 7,
+    "comment": 59,
+    "code": 218,
+    "language": "TypeScript"
+  },
   "src/git/integration.ts": {
     "blank": 5,
     "comment": 22,
-    "code": 220,
+    "code": 216,
     "language": "TypeScript"
   },
   "src/reconcile.ts": {
@@ -202,12 +208,6 @@
     "blank": 4,
     "comment": 16,
     "code": 207,
-    "language": "TypeScript"
-  },
-  "src/domain/errors.ts": {
-    "blank": 7,
-    "comment": 47,
-    "code": 206,
     "language": "TypeScript"
   },
   "src/storage/ledger-reader.ts": {
@@ -240,16 +240,16 @@
     "code": 185,
     "language": "TypeScript"
   },
-  "src/git/context.ts": {
-    "blank": 5,
-    "comment": 24,
-    "code": 183,
-    "language": "TypeScript"
-  },
   "src/tui/app.ts": {
     "blank": 20,
     "comment": 55,
     "code": 182,
+    "language": "TypeScript"
+  },
+  "src/git/context.ts": {
+    "blank": 5,
+    "comment": 24,
+    "code": 179,
     "language": "TypeScript"
   },
   "src/protocol/channel.ts": {
@@ -300,12 +300,6 @@
     "code": 169,
     "language": "TypeScript"
   },
-  "src/git/submit.ts": {
-    "blank": 2,
-    "comment": 12,
-    "code": 168,
-    "language": "TypeScript"
-  },
   "src/domain/tool-surface.ts": {
     "blank": 22,
     "comment": 38,
@@ -322,6 +316,12 @@
     "blank": 1,
     "comment": 12,
     "code": 165,
+    "language": "TypeScript"
+  },
+  "src/git/submit.ts": {
+    "blank": 2,
+    "comment": 12,
+    "code": 164,
     "language": "TypeScript"
   },
   "src/storage/durable-fs.ts": {
@@ -1352,7 +1352,7 @@
   },
   "SUM": {
     "blank": 1208,
-    "comment": 4967,
+    "comment": 4979,
     "code": 23958,
     "nFiles": 224
   }

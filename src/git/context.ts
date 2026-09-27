@@ -7,7 +7,7 @@ import { Store, reused } from "../store.js";
 import type { OperationOf } from "../storage/operation-codec.js";
 import type { PlanFor } from "../durable.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
-import { StoreError, AcceptedFailure, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
+import { StoreError, AcceptedFailure, type EffectKnowledge, acceptedFailurePolicy, failureMessage } from "../domain/errors.js";
 import { requestHash } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey, isValidFullOid } from "../ids.js";
 import { mailObjectRelativePath, contextRevisionDisplayPath } from "../domain/derived.js";
@@ -72,14 +72,10 @@ export class ContextCoordinator {
       throw new StoreError("CAPABILITY_DENIED", "current context publication authority is unavailable");
   }
   private rejectAccepted(id: string, error: unknown, recovering: boolean, knowledge: EffectKnowledge): never {
-    const code = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
-    const category = ERROR_METADATA[code].category;
-    const policy = classifyError({ code, phase: recovering ? "recovering" : "accepted", effectKnowledge: knowledge,
-      observationKind: code === "STREAM_INVALID" || category === "integrity" ? "corrupt" :
-        category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
+    const policy = acceptedFailurePolicy(error, recovering ? "recovering" : "accepted", knowledge);
     if (policy.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, policy.code));
     else if (policy.terminal === "unknown") this.unknown(id);
-    throw new AcceptedFailure(policy.code, error instanceof StoreError ? error.message : "context effect or observation failed", knowledge);
+    throw new AcceptedFailure(policy.code, failureMessage(error) ?? "context effect or observation failed", knowledge);
   }
   private async materializeAndSettle(operation: OperationOf<"context.publish">): Promise<void> {
     this.effects.publishSnapshot(operation, this.publication.observe(operation));

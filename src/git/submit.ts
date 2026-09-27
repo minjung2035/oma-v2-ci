@@ -7,7 +7,7 @@ import type { OperationOf } from "../storage/operation-codec.js";
 import type { PlanFor } from "../durable.js";
 import { MailModule, buildEml, expandAddresses, defaultReplyTo, defaultLogicalReplyTo, actorAddress } from "../mail.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
-import { StoreError, AcceptedFailure, acceptedFailure, ERROR_METADATA, classifyError, type EffectKnowledge } from "../domain/errors.js";
+import { StoreError, AcceptedFailure, acceptedFailure, type EffectKnowledge, acceptedFailurePolicy, failureMessage } from "../domain/errors.js";
 import { requestHash, canonicalRequestParams } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey } from "../ids.js";
 import { publishedRefFor, mailObjectRelativePath } from "../domain/derived.js";
@@ -57,14 +57,10 @@ export class SubmitCoordinator {
       throw new StoreError("CAPABILITY_DENIED", "current submit recovery authority is unavailable");
   }
   private rejectAccepted(id: string, error: unknown, recovering: boolean, knowledge: EffectKnowledge): never {
-    const code = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
-    const category = ERROR_METADATA[code].category;
-    const failure = classifyError({ code, phase: recovering ? "recovering" : "accepted", effectKnowledge: knowledge,
-      observationKind: category === "integrity" || code === "STREAM_INVALID" ? "corrupt" :
-        category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
+    const failure = acceptedFailurePolicy(error, recovering ? "recovering" : "accepted", knowledge);
     if (failure.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, failure.code));
     if (failure.terminal === "unknown") this.store.transaction(tx => tx.setOperationUnknown(id));
-    throw new AcceptedFailure(failure.code, error instanceof StoreError ? error.message : "submit effect or observation failed", knowledge);
+    throw new AcceptedFailure(failure.code, failureMessage(error) ?? "submit effect or observation failed", knowledge);
   }
   /** The spool belongs to the operation only if its accepted plan names this
    * exact bundle, or names none when none was spooled. */

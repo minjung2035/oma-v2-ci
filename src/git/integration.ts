@@ -5,7 +5,7 @@ import type { AuthContext, Receipt, Oid } from "../../implementation/contracts.j
 import { Store, reused } from "../store.js";
 import type { OperationOf } from "../storage/operation-codec.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
-import { StoreError, AcceptedFailure, ERROR_METADATA, classifyError, type EffectKnowledge, type ErrorPhase } from "../domain/errors.js";
+import { StoreError, AcceptedFailure, type EffectKnowledge, type ErrorPhase, acceptedFailurePolicy, failureMessage } from "../domain/errors.js";
 import { requestHash } from "../hash.js";
 import { generateOperationId } from "../ids.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
@@ -138,14 +138,10 @@ export class IntegrationCoordinator {
     return false;
   }
   private rejectAccepted(id: string, error: unknown, phase: ErrorPhase, knowledge: EffectKnowledge): never {
-    const code = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
-    const category = ERROR_METADATA[code].category;
-    const policy = classifyError({ code, phase, effectKnowledge: knowledge,
-      observationKind: category === "integrity" ? "corrupt" :
-        category === "transient" || category === "ambiguous" || category === "internal" ? "unavailable" : "rejected" });
+    const policy = acceptedFailurePolicy(error, phase, knowledge);
     if (policy.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, policy.code));
     else if (policy.terminal === "unknown") this.unknown(id);
-    throw new AcceptedFailure(policy.code, error instanceof StoreError ? error.message : "integration observation or settlement failed", knowledge);
+    throw new AcceptedFailure(policy.code, failureMessage(error) ?? "integration observation or settlement failed", knowledge);
   }
 
   async execute(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {

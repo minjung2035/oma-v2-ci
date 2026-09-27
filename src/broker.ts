@@ -5,7 +5,7 @@ import { removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, AuthContext, Failure, ProtocolLimits, Request, RunLease } from "../implementation/contracts.js";
 import { Store } from "./store.js";
-import { StoreError, publicFailure } from "./domain/errors.js";
+import { StoreError, publicFailure, errorCodeOf } from "./domain/errors.js";
 import { AdmissionGate, bindAdmissionGate, type ResourceGate } from "./domain/admission.js";
 import { actorSocketDirectoryAt, actorSocketPathAt } from "./storage/paths.js";
 import { encodeFrame } from "./frame.js";
@@ -246,7 +246,7 @@ export class Broker {
     try { this.health.assertAdmission(); } catch { return; }
     const task = reconcile.sweep().then(() => { this.lastSweepFailure = null; this.refreshViews(); }, (error: unknown) => {
       this.health.observe(error);
-      const code = error instanceof StoreError ? error.code : "INTERNAL_ERROR";
+      const code = errorCodeOf(error);
       if (code !== this.lastSweepFailure) console.error(JSON.stringify({ event: "reconcile.sweep", code }));
       this.lastSweepFailure = code;
     });

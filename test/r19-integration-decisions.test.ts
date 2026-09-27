@@ -220,3 +220,22 @@ test("R19: an unavailable pre-CAS observation is neither absence nor a failed ph
     assert.equal(f.store.getOperation("alice", "blocked"), null);
   } finally { f.close(); }
 });
+
+test("P0V-64 / R09, P0-2: a refusal after acceptance that a cleanup failure was bundled with settles by its own code", async () => {
+  const f = fixture();
+  try {
+    let asked = 0;
+    f.effects.ancestry = () => {
+      asked += 1;
+      if (asked === 1) return present(true);
+      // The execution's observation is refused, and a cleanup failed beside it.
+      throw new AggregateError([new StoreError("NOT_DESCENDANT", "candidate no longer descends"), new Error("EIO while removing a temporary")]);
+    };
+    const coordinator = new IntegrationCoordinator(f.store, f.effects, basePolicy(), null);
+    await assert.rejects(coordinator.execute(f.auth, "bundled", input), code("NOT_DESCENDANT"));
+    const row = operation(f.store, "bundled");
+    assert.equal(row.state, "failed", "the refusal was read as an internal error and left the operation pending");
+    assert.equal(row.errorCode, "NOT_DESCENDANT");
+    assert.equal(f.calls.includes("cas"), false);
+  } finally { f.close(); }
+});

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { RunnerModule } from "../runner.js";
 import { loadConfiguration } from "../config.js";
 import { isValidActorName, isValidSocietyName } from "../ids.js";
-import { StoreError } from "../domain/errors.js";
+import { StoreError, errorCodeOf } from "../domain/errors.js";
 import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
@@ -94,7 +94,7 @@ void runner.run().then(
   () => { if (!stopping) process.exitCode = 0; },
   error => {
     if (stopping) return;
-    console.error(`runner ${agent} failed: ${error instanceof StoreError ? error.code : "INTERNAL_ERROR"}`);
+    console.error(`runner ${agent} failed: ${errorCodeOf(error)}`);
     process.exitCode = 2;
   },
 ).finally(() => { process.off("SIGTERM", stop); process.off("SIGINT", stop); });
