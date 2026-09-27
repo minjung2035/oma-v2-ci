@@ -68,6 +68,19 @@ export interface InternalDispatchDependencies {
   refreshViews(): void;
   openRun(actor: Actor, invocationId: string): RunLease;
 }
+/** What admitting an internal method needs from the broker. */
+export type InternalAdmission = Pick<InternalDispatchDependencies, "isDraining" | "assertAdmission" | "admitResource">;
+/** P0V-57, P0-2: the admission an internal method takes, whichever endpoint
+ * serves it -- the runner channel here, or the Principal host's endpoint for
+ * the same `batch.prepare` and `batch.complete`. Only a runner's own pending
+ * and observation reads pass a store fenced after corruption. */
+export function admitInternal(method: keyof InternalMethods, admission: InternalAdmission): Release {
+  if (admission.isDraining() || (method !== "runner.pending" && method !== "runner.observe"))
+    admission.assertAdmission();
+  const resource = INTERNAL_METHODS[method].resource;
+  // A composite recovery pass admits each of its stages itself.
+  return resource === "staged" ? NO_HOLD : admission.admitResource(resource);
+}
 type ValidatedInternalCall = {
   [M in keyof InternalMethods]: {
     id: string;
@@ -113,13 +126,7 @@ export class InternalDispatcher {
       const invalid = descriptor.paramsCheck(params);
       if (invalid)
         throw new StoreError("INVALID_REQUEST", `${method}: ${invalid}`);
-      if (
-        this.deps.isDraining() ||
-        (method !== "runner.pending" && method !== "runner.observe")
-      )
-        this.deps.assertAdmission();
-      // A composite recovery pass admits each of its stages itself.
-      release = descriptor.resource === "staged" ? NO_HOLD : this.deps.admitResource(descriptor.resource);
+      release = admitInternal(method, this.deps);
       // SAFETY: params passed this method's descriptor check; retain the correlation erased by dynamic indexing.
       const call = { id, method, params } as ValidatedInternalCall;
       const { method: dispatchMethod, params: dispatchParams } = call;

@@ -29,6 +29,7 @@ import { resolvedSpecDigest } from "../src/domain/spec-identity.js";
 import { BrokerChannel } from "../src/protocol/channel.js";
 import { credentialMatches, isPrincipalCredential, sessionHandleMatches } from "../src/protocol/principal-credential.js";
 import { StoreError } from "../src/domain/errors.js";
+import { observeStoreFailure } from "../src/domain/admission.js";
 import { encodeHostMessage } from "../src/protocol/host-channel.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../src/tui/session.js";
 import { CONVERSATION_BOUNDS } from "../src/tui/limits.js";
@@ -1650,4 +1651,28 @@ test("T114: revocation reaches every attached connection, and only attached ones
     // The idle one can still attach -- with the current credential.
     await attachAndUse(bench, idle, handle);
   });
+});
+
+test("P0V-57 / R02, P0-2: after corruption is observed the host's delivery endpoint is fenced like the runner channel", async () => {
+  const society = await startSociety("oma-host-fenced-");
+  try {
+    await withRegisteredEngine(society, async () => {
+      const before = channel();
+      try {
+        await before.connect(join(society.runRoot, "principal-host.sock"));
+        assert.equal((await before.call("batch.prepare", {})).ok, true, "a healthy broker serves the host");
+      } finally { before.close(); }
+      // Any owner of this Store observing corruption closes the broker's fence.
+      observeStoreFailure(society.store, new StoreError("STORE_CORRUPT", "injected"));
+      for (const method of ["batch.prepare", "batch.complete"] as const) {
+        const client = channel();
+        try {
+          await client.connect(join(society.runRoot, "principal-host.sock"));
+          const params = method === "batch.prepare" ? {} : { batchId: "b-00000000-0000-4000-8000-000000000001", incarnation: 0,
+            sessionPath: "/s", adapterRevision: "r", receiptPath: "/r" };
+          assert.equal(await failureOf(client.call(method, params)), "STORE_CORRUPT", `${method} passed a fenced store`);
+        } finally { client.close(); }
+      }
+    });
+  } finally { await stopSociety(society); }
 });

@@ -12,7 +12,7 @@ import { encodeFrame } from "./frame.js";
 import { RpcConnection, NODE_ALARMS } from "./broker/connection.js";
 import { PeerAuthenticator, type BoundPeer } from "./broker/peer-authenticator.js";
 import { PublicDispatcher } from "./broker/public-dispatcher.js";
-import { InternalDispatcher } from "./broker/internal-dispatcher.js";
+import { InternalDispatcher, admitInternal, type InternalAdmission } from "./broker/internal-dispatcher.js";
 import { createPublicDispatchPorts, createInternalDispatchPorts } from "./broker/composition.js";
 import { readUnitLogs } from "./broker/logs.js";
 import { errorAnswer, okAnswer } from "./broker/replies.js";
@@ -28,7 +28,6 @@ import { RECONCILE_INTERVAL_MS, ReconcileModule } from "./reconcile.js";
 import { ViewsModule } from "./views.js";
 import { STATUS_REFRESH_MS, statusViewPath } from "./protocol/status-view.js";
 import { StatusRefresh } from "./views/status-refresh.js";
-import { INTERNAL_METHODS } from "./protocol/methods.js";
 import { PrincipalEndpoint, PrincipalHostEndpoint, type PrincipalHostChannel } from "./broker/principal-endpoint.js";
 import { resolvedSpecOf } from "./authority.js";
 import { StorageAdmission } from "./storage/quota.js";
@@ -93,6 +92,8 @@ export class Broker {
   private readonly peers: PeerAuthenticator;
   private readonly publicDispatcher: PublicDispatcher;
   private readonly internalDispatcher: InternalDispatcher;
+  /** One admission for internal methods, whichever endpoint serves them. */
+  private readonly internalAdmission: InternalAdmission;
   /** WP23: every status observation -- status.get, the published view, the
    * timer -- shares this one bounded refresh. */
   private readonly statusRefresh: StatusRefresh;
@@ -120,8 +121,8 @@ export class Broker {
       requireHostUnit: (peer, kind) => this.requireHostUnit(peer, kind), runnerActor: peer => this.runnerActor(peer),
       runnerAuth: (agent, incarnation, peer) => this.runnerAuth(agent, incarnation, peer),
     });
-    this.internalDispatcher = new InternalDispatcher({ ...internalPorts,
-      isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(), admitResource: this.admitResource,
+    this.internalAdmission = { isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(), admitResource: this.admitResource };
+    this.internalDispatcher = new InternalDispatcher({ ...internalPorts, ...this.internalAdmission,
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       openRun: (actor, invocationId) => this.openRun(actor, invocationId) });
   }
@@ -206,12 +207,13 @@ export class Broker {
       preflight: (auth, raw) => this.preflightPublicStream(auth, raw),
     });
     const hostEndpoint = new PrincipalHostEndpoint(channel, { ...connection,
+      // P0V-57: the same admission the runner channel gives these methods.
       prepare: async auth => {
-        const release = this.admitResource(INTERNAL_METHODS["batch.prepare"].resource);
+        const release = admitInternal("batch.prepare", this.internalAdmission);
         try { return await this.mail.prepare(auth); } finally { release(); }
       },
       complete: async (auth, evidence) => {
-        const release = this.admitResource(INTERNAL_METHODS["batch.complete"].resource);
+        const release = admitInternal("batch.complete", this.internalAdmission);
         try { await this.mail.complete(auth, evidence); } finally { release(); }
         this.refreshViews();
       },
