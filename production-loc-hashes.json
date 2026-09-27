@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "e7875898a0e8db59b2c33dbf77102e4add818838865da77852ef5ab26f7ed17c",
-  "report": "478bbfe4736f79914b5b422576a14d43271df5ba5faf546bf6560ac84ee7f68f",
+  "manifest": "d538467a7ae8c4d669f8a2ef2a85006f14d6e53b8ba8eec10819244f3b0a9671",
+  "report": "7d8ea2a01c45b0e6d488f9fb0c9e43e49e158a3d9c05852e477b0cc836f5dddb",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -301,7 +301,7 @@
     },
     {
       "path": "src/entry/guesthost.ts",
-      "sha256": "f64560404cd54ce79e715e147aa9c8f6b6736ac82182831961e467540f25f370"
+      "sha256": "fbffc6481e5316c53084c46466f66ed973f3108b27532aa268b5fa55267f98d9"
     },
     {
       "path": "src/entry/host.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/entry/omahostd.ts",
-      "sha256": "33ea2c4c57444e566d4a60f8db6584a86e309e05478321ae36a201bbd24ae3dc"
+      "sha256": "59df060e47842e0dcf70dedc79777b0cbc2a5218787304806600d7b7720312d9"
     },
     {
       "path": "src/entry/runner.ts",
@@ -516,6 +516,10 @@
       "sha256": "11deff254215a971f97eb1f8e39aeb3a7f59601677d83a0eaa6bc9c36746cf55"
     },
     {
+      "path": "src/platform/guest/archive.ts",
+      "sha256": "c6ad15a2f52c23cab639bf786602c44d419c6c0a7a681d62b303cc0c60171a7b"
+    },
+    {
       "path": "src/platform/guest/control.ts",
       "sha256": "4a6f7212e117e92afb2aa8495db210608a5dc1c76ce9c987f7af479d9620f1f5"
     },
@@ -525,7 +529,7 @@
     },
     {
       "path": "src/platform/guest/host.ts",
-      "sha256": "3072b110d576096253c493e44a3322e86d76919949e1a85f33caacaf8ec9e22f"
+      "sha256": "3c01e7ce251f6a5bb65b650114924ef7f99d9f6e65848101632beabb712398a7"
     },
     {
       "path": "src/platform/guest/identity.ts",
@@ -561,11 +565,15 @@
     },
     {
       "path": "src/platform/guest/stream.ts",
-      "sha256": "98f51a1329bbc1ea9f8d5f2570ac1a2878f904417c3feac0df5060b54441a627"
+      "sha256": "cbee66f3b3f3de42d34fe8f80e9007a43612b908e222dcb644f712c6dea24567"
     },
     {
       "path": "src/platform/guest/systemd-launcher.ts",
       "sha256": "5784d0356f26e11a8d3dfeb6436a705b0879f01347504302f0510f9268baab9c"
+    },
+    {
+      "path": "src/platform/host/archive-crypto.ts",
+      "sha256": "8f225078c7bcb5fb2c76abcb0e8c0f00a2d3ba63f50a47961b597677ddb9bc25"
     },
     {
       "path": "src/platform/host/attach-client.ts",
@@ -581,7 +589,7 @@
     },
     {
       "path": "src/platform/host/host-api.ts",
-      "sha256": "c47600b94acf33f4d45842ca9eba7ca31105a2db9c74d988d520d444a32b598e"
+      "sha256": "ffc2a7e7c0148d483f74e2a2a6a6547d5d82031b610feb3a8242a062c1f6f247"
     },
     {
       "path": "src/platform/host/image.ts",
@@ -601,7 +609,7 @@
     },
     {
       "path": "src/platform/host/project.ts",
-      "sha256": "702d99cd21cc566ffd66b7e8af08785331c76f82c5d6dc30e1ce4fbe71a03c90"
+      "sha256": "767d31bf4d0fd57c2d95de8b1d0807919072f1244732c64c04d01e56a4c9aa8b"
     },
     {
       "path": "src/platform/host/record.ts",
@@ -613,7 +621,11 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "7d021f7a9e0ad817ebbbc00717f76deeda78b51ec4e24bb5474d96f10fd07620"
+      "sha256": "71910cc42d95b36d257d01c90557cd148ddb88912a9c36e15b4a71dd6c130b5b"
+    },
+    {
+      "path": "src/platform/host/snapshot.ts",
+      "sha256": "d204030f0c943d22b43c06f67cdef55918e1de7e9a46823968662db22903401d"
     },
     {
       "path": "src/platform/host/vz-driver.ts",
@@ -673,7 +685,7 @@
     },
     {
       "path": "src/protocol/host-api.ts",
-      "sha256": "b22a7d930c12b71f149854231bbe43ae77202b8f5ea645c080b2942fc787d738"
+      "sha256": "40e63546edbb6168c6512f4657d305fcd10c06a97e976483e0ed47de5d77a843"
     },
     {
       "path": "src/protocol/host-channel.ts",

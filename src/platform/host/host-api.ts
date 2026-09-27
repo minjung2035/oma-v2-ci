@@ -28,6 +28,8 @@ export interface HostApiBackend {
   /** §6: the project sync, keyed by the UI's request key (MAC-240). */
   importProject(key: string, params: { projectId: string; macRepo: string; branch: string; since: string | null }): Promise<Record<string, unknown>>;
   exportProject(key: string, params: { society: string; macRepo: string; since: string | null }): Promise<Record<string, unknown>>;
+  /** §8.4: a stopped society's archive, encrypted at rest (MAC-621). */
+  archive(key: string, society: string): Promise<Record<string, unknown>>;
 }
 
 export interface HostApiOptions {
@@ -134,6 +136,11 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
         return await backend.exportProject(keyed(key), { society: params.society, macRepo: macRepo(params.macRepo), since: since(params.since) });
       }
       case "request.status": return await forward("request.status", { key: params.key });
+      case "archive.create": {
+        if (typeof params.society !== "string") throw new StoreError("INVALID_REQUEST", "archive.create names a society");
+        await backend.start();
+        return await backend.archive(keyed(key), params.society);
+      }
       case "terminal.attach": {
         if (typeof params.society !== "string" || (params.takeover !== undefined && params.takeover !== true))
           throw new StoreError("INVALID_REQUEST", "terminal.attach names a society and may take over");

@@ -32,7 +32,7 @@ if (process.platform !== "darwin") fail("omahostd runs on macOS");
 const userHome = process.env.HOME;
 if (process.env.OMA_HOST_HOME === undefined && (userHome === undefined || !userHome.startsWith("/"))) fail("HOME is not set");
 const home = process.env.OMA_HOST_HOME ?? join(userHome!, "Library", "Application Support", "OMA");
-const dirs = { run: join(home, "run"), vm: join(home, "vm"), engine: join(home, "engine"), logs: join(home, "logs") };
+const dirs = { run: join(home, "run"), vm: join(home, "vm"), engine: join(home, "engine"), logs: join(home, "logs"), archives: join(home, "archives") };
 for (const dir of [home, ...Object.values(dirs), join(dirs.run, "vm")]) { mkdirSync(dir, { recursive: true, mode: 0o700 }); chmodSync(dir, 0o700); }
 const recordPath = join(home, "host-record.json");
 const record = readHostRecord(recordPath) ?? (() => { const fresh = newHostRecord(); writeHostRecord(recordPath, fresh); return fresh; })();
@@ -61,6 +61,7 @@ async function main(): Promise<void> {
     });
   const service = await HostService.start({
     runDir: dirs.run, recordPath, driver, uid: process.getuid!(), git: join(bundle!, "Contents", "Resources", "git", "bin", "git"),
+    archivesDir: dirs.archives, keychain: driver,
     identity: { hostVersion: process.env.OMA_APP_VERSION ?? "0.0.0", installationId: record.installationId, instanceId: record.instanceId,
       expectImage: image.version, protocol: { min: Math.max(1, HOST_GUEST_PROTOCOL - 1), max: HOST_GUEST_PROTOCOL } },
     resolve: hostResolver(dirs.engine, driver),

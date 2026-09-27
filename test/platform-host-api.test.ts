@@ -61,7 +61,7 @@ async function world(t: import("node:test").TestContext, options: { uid?: number
     state: () => "ready", start: async () => {}, stop: async () => "stopped",
     society: () => link.json("society"),
     terminal: (society, takeover) => link.bytes("terminal", { society, ...(takeover ? { takeover: true as const } : {}) }),
-    importProject: async () => ({}), exportProject: async () => ({}),
+    importProject: async () => ({}), exportProject: async () => ({}), archive: async () => ({}),
   };
   const token = randomBytes(32).toString("hex");
   const apiSocket = join(dir, "hostapi.sock");

@@ -17,6 +17,11 @@ import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-
 import { HOST_API_VERSION } from "../src/protocol/host-api.js";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
 
+function memoryKeychain() {
+  const items = new Map<string, string>();
+  return { items, get: async (account: string) => items.get(account), put: async (account: string, value: string) => { items.set(account, value); } };
+}
+
 async function world(t: import("node:test").TestContext) {
   const dir = mkdtempSync(join(tmpdir(), "oma-hostsvc-"));
   const runDir = join(dir, "run"); mkdirSync(runDir);
@@ -31,7 +36,7 @@ async function world(t: import("node:test").TestContext) {
     stop: async () => { await new Promise(r => holder?.close(r)); holder = null; return "stopped"; } };
   const driver = new LocalDriver(dir, { dir: societiesDir, launcher }, record.instanceId);
   const service = await HostService.start({
-    runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git",
+    runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git", archivesDir: join(dir, "archives"), keychain: memoryKeychain(),
     identity: { hostVersion: "1.0.0", installationId: record.installationId, instanceId: record.instanceId, expectImage: "2026.09.1",
       protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } },
     resolve: async () => ({ provider: "anthropic", model: "m", origin: "https://provider.invalid", apiKey: "sk-ant-api03-" + "r".repeat(40), headers: {} }),

@@ -126,6 +126,7 @@ src/mail/routing.ts
 src/mail/serialize.ts
 src/module-ports.ts
 src/pi-extension.ts
+src/platform/guest/archive.ts
 src/platform/guest/control.ts
 src/platform/guest/egress.ts
 src/platform/guest/host.ts
@@ -139,6 +140,7 @@ src/platform/guest/server.ts
 src/platform/guest/session.ts
 src/platform/guest/stream.ts
 src/platform/guest/systemd-launcher.ts
+src/platform/host/archive-crypto.ts
 src/platform/host/attach-client.ts
 src/platform/host/egress.ts
 src/platform/host/guest-link.ts
@@ -151,6 +153,7 @@ src/platform/host/project.ts
 src/platform/host/record.ts
 src/platform/host/resolver.ts
 src/platform/host/service.ts
+src/platform/host/snapshot.ts
 src/platform/host/vz-driver.ts
 src/platform/product-text.ts
 src/platform/rpc.ts

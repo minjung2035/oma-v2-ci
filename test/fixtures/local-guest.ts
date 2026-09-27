@@ -13,6 +13,8 @@ import { EgressPool } from "../../src/platform/guest/egress.js";
 import { RequestLedger } from "../../src/platform/guest/requests.js";
 import { GuestProjects } from "../../src/platform/guest/project.js";
 import { serveStream } from "../../src/platform/guest/stream.js";
+import { GuestArchives } from "../../src/platform/guest/archive.js";
+import { listening } from "../../src/platform/guest/host.js";
 import type { VmDriver } from "../../src/platform/host/lifecycle.js";
 import { GUEST_PORTS, PLATFORM_FRAME_BYTES } from "../../src/protocol/host-guest.js";
 
@@ -84,8 +86,9 @@ export class LocalDriver implements VmDriver {
     const control = new GuestControl(system);
     const ledger = new RequestLedger(join(this.dir, "requests"));
     const projects = new GuestProjects(join(this.dir, "projects"), this.societies.dir, ledger);
+    const archives = new GuestArchives(this.societies.dir, ledger, society => listening(this.societies.launcher.socketPath(society)));
     const host = new GuestHost({ societiesDir: this.societies.dir, projectsDir: join(this.dir, "projects"), launcher: this.societies.launcher, stopDeadlineMs: 2000,
-      projects, ledger });
+      projects, ledger, archives });
     const suffix = randomUUID().slice(0, 8);
     const servers = [
       await startGuestServer({ socketPath: join(this.dir, `c-${suffix}.sock`), identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,

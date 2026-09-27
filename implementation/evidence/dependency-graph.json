@@ -129,6 +129,7 @@
   "src/mail/serialize.ts",
   "src/module-ports.ts",
   "src/pi-extension.ts",
+  "src/platform/guest/archive.ts",
   "src/platform/guest/control.ts",
   "src/platform/guest/egress.ts",
   "src/platform/guest/host.ts",
@@ -142,6 +143,7 @@
   "src/platform/guest/session.ts",
   "src/platform/guest/stream.ts",
   "src/platform/guest/systemd-launcher.ts",
+  "src/platform/host/archive-crypto.ts",
   "src/platform/host/attach-client.ts",
   "src/platform/host/egress.ts",
   "src/platform/host/guest-link.ts",
@@ -154,6 +156,7 @@
   "src/platform/host/record.ts",
   "src/platform/host/resolver.ts",
   "src/platform/host/service.ts",
+  "src/platform/host/snapshot.ts",
   "src/platform/host/vz-driver.ts",
   "src/platform/product-text.ts",
   "src/platform/rpc.ts",
@@ -1487,7 +1490,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 63
+   "files": 66
   },
   {
    "index": 5,
@@ -1504,9 +1507,9 @@
    "files": 62
   }
  ],
- "files": 262,
- "runtimeEdges": 998,
- "typeOnlyEdges": 337,
+ "files": 265,
+ "runtimeEdges": 1006,
+ "typeOnlyEdges": 341,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
   "L2-facts -> L1-kernel": 31,
@@ -1514,14 +1517,14 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 163,
+  "L4-orchestration -> L1-kernel": 168,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 75,
+  "L4-orchestration -> L4-orchestration": 76,
   "L5-entry -> L1-kernel": 87,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 49,
+  "L5-entry -> L4-orchestration": 51,
   "L5-entry -> L5-entry": 115
  },
  "upwardTypeOnlyEdges": [
@@ -1541,8 +1544,8 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 138,
-  "src/domain/identifiers.ts": 39,
+  "src/domain/errors.ts": 141,
+  "src/domain/identifiers.ts": 40,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 26,
   "src/storage/durable-fs.ts": 22,
@@ -1580,13 +1583,13 @@
   "koffi": 5,
   "node:async_hooks": 3,
   "node:child_process": 6,
-  "node:crypto": 35,
-  "node:fs": 81,
+  "node:crypto": 37,
+  "node:fs": 84,
   "node:http": 1,
   "node:https": 1,
   "node:net": 27,
   "node:os": 3,
-  "node:path": 82,
+  "node:path": 84,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

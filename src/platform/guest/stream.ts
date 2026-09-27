@@ -3,7 +3,7 @@
  * declared.
  *
  *   stream.put { key, bytes, sha256 } + the bytes  → { bytes, sha256 } | STREAM_INVALID
- *   stream.get { key }                             → { bytes, sha256 } + the bytes
+ *   stream.get { key, kind }                       → { bytes, sha256 } + the bytes
  *
  * A put is staged under its request key for the request that uses it
  * (project.import); a get sends what a request staged (project.export). The
@@ -60,7 +60,8 @@ export async function serveStream(socket: Socket, options: StreamOptions): Promi
       return;
     }
     if (frame.method === "stream.get") {
-      const source = options.ledger.staging(params.key, "export.bundle");
+      if (params.kind !== "export" && params.kind !== "archive") throw new StoreError("INVALID_REQUEST", "a get names what was staged: export or archive");
+      const source = options.ledger.staging(params.key, params.kind === "export" ? "export.bundle" : "archive.tar");
       let size: number;
       try { size = statSync(source).size; } catch { throw new StoreError("REQUEST_NOT_FOUND", "nothing was staged for this request"); }
       const hash = createHash("sha256");

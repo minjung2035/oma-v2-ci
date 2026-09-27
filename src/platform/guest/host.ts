@@ -19,6 +19,7 @@ import { serveRequests } from "./server.js";
 import { encodeTerminalJson, isRequestKey, isUuid, type HelloParams } from "../../protocol/host-guest.js";
 import type { GuestProjects } from "./project.js";
 import type { RequestLedger } from "./requests.js";
+import type { GuestArchives } from "./archive.js";
 
 /** Starts and stops the holder of one society's session. */
 export interface SessionLauncher {
@@ -39,6 +40,7 @@ export interface GuestHostOptions {
   /** §6 and MAC-240: project sync and its request ledger. */
   readonly projects?: GuestProjects;
   readonly ledger?: RequestLedger;
+  readonly archives?: GuestArchives;
 }
 
 /** Whether something accepts connections at a path: a holder that ended
@@ -53,6 +55,7 @@ export function listening(path: string): Promise<boolean> {
 
 export class GuestHost {
   private readonly maintenance = new Set<string>();
+  private readonly archiving = new Set<string>();
 
   constructor(private readonly options: GuestHostOptions) {}
 
@@ -81,6 +84,7 @@ export class GuestHost {
     if (!isValidSocietyName(society)) throw new StoreError("INVALID_REQUEST", "invalid society name");
     if (!isUuid(projectId)) throw new StoreError("INVALID_REQUEST", "projectId must be a UUID");
     if (this.maintenance.size > 0) throw new StoreError("BROKER_UNAVAILABLE", "the engine is being maintained; try again shortly");
+    if (this.archiving.has(society)) throw new StoreError("BROKER_UNAVAILABLE", "this society is being archived; try again shortly");
     if (await listening(this.options.launcher.socketPath(society))) return { state: "running" };
     const mirror = this.mirrorOf(projectId);
     const head = runGitText(["-C", mirror, "rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
@@ -127,6 +131,12 @@ export class GuestHost {
         case "project.import": return await this.need(this.options.projects, method).import(key, params);
         case "project.export": return await this.need(this.options.projects, method).export(key, { society: params.society, since: params.since });
         case "request.status": return this.need(this.options.ledger, method).status(params.key);
+        case "archive.create": {
+          // §8.4: a society being archived does not open.
+          if (isValidSocietyName(params.society)) this.archiving.add(params.society);
+          try { return await this.need(this.options.archives, method).create(key, { society: params.society }); }
+          finally { if (typeof params.society === "string") this.archiving.delete(params.society); }
+        }
         default: throw new StoreError("UNKNOWN_METHOD", `the society channel has no ${method}`);
       }
     });

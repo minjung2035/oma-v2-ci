@@ -3,7 +3,7 @@
  * entry adds only the Mac-specific pieces (the VM helper, the paths). */
 import type { Server } from "node:net";
 import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GuestLink, type HostIdentity } from "./guest-link.js";
 import { VmLifecycle, type LifecycleOptions, type VmDriver } from "./lifecycle.js";
@@ -11,6 +11,8 @@ import { EgressHost, type EgressHostOptions } from "./egress.js";
 import { startHostApi } from "./host-api.js";
 import { readHostRecord, writeHostRecord, type HostRecord } from "./record.js";
 import { MacGit, getStream, putStream } from "./project.js";
+import { encryptArchive } from "./archive-crypto.js";
+import type { KeychainStore } from "./keychain.js";
 import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
 
 export type Timings = Pick<LifecycleOptions, "handshakeDeadlineMs" | "handshakeRetryMs" | "drainDeadlineMs" | "healthEveryMs" | "hungAfterMs" | "restarts">;
@@ -30,9 +32,21 @@ export interface HostServiceOptions {
   readonly uid: number;
   /** §6: the git the app ships, for the Human's repositories (MAC-404). */
   readonly git: string;
+  /** §8.4: where archives are kept, and the Keychain that holds their key. */
+  readonly archivesDir: string;
+  readonly keychain: KeychainStore;
   readonly timings?: Timings;
   /** §9.1: the Mac's sleep and wake, when the driver reports them. */
   readonly power?: (listener: (event: "sleep" | "wake") => void) => void;
+}
+
+/** The archive key: made once on this Mac and kept in the Keychain (§8.4). */
+async function archiveKey(keychain: KeychainStore): Promise<Buffer> {
+  const stored = await keychain.get("archive");
+  if (stored !== undefined) return Buffer.from(stored, "base64");
+  const made = randomBytes(32);
+  await keychain.put("archive", made.toString("base64"));
+  return made;
 }
 
 export class HostService {
@@ -75,6 +89,7 @@ export class HostService {
     const git = new MacGit(options.git);
     const transfer = join(options.runDir, "transfer");
     mkdirSync(transfer, { recursive: true, mode: 0o700 });
+    mkdirSync(options.archivesDir, { recursive: true, mode: 0o700 });
     const token = randomBytes(32).toString("hex");
     const tokenPath = join(options.runDir, "token");
     writeFileSync(tokenPath, `${token}\n`, { mode: 0o600 });
@@ -110,6 +125,20 @@ export class HostService {
             await getStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
             return { ...exported, ...(await git.fetchExport(params.macRepo, file)), ref: "refs/remotes/oma/main" };
           } finally { rmSync(file, { force: true }); }
+        },
+        archive: async (key, society) => {
+          const peer = await link.json("society");
+          let made: Record<string, unknown>;
+          try { made = await peer.request("archive.create", { society }, key); } finally { peer.close(); }
+          const name = createHash("sha256").update(key).digest("hex");
+          const plain = join(transfer, `${name}.archive.tar`);
+          const target = join(options.archivesDir, `${society}-${name.slice(0, 16)}.omaarchive`);
+          try {
+            await getStream(await link.bytes("stream"), key, plain, PLATFORM_FRAME_BYTES, "archive");
+            // MAC-621: the plain bytes live only in this run directory, and only until they are sealed.
+            if (!existsSync(target)) encryptArchive(plain, target, await archiveKey(options.keychain));
+          } finally { rmSync(plain, { force: true }); }
+          return { ...made, path: target };
         },
       },
     });

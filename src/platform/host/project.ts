@@ -85,10 +85,11 @@ export async function putStream(opened: { socket: Socket; rest: Buffer }, key: s
 
 /** §4.8 get: the declared stream into `path`, kept only if it is what the
  * guest declared. */
-export async function getStream(opened: { socket: Socket; rest: Buffer }, key: string, path: string, frameBytes: number): Promise<{ bytes: number; sha256: string }> {
+export async function getStream(opened: { socket: Socket; rest: Buffer }, key: string, path: string, frameBytes: number,
+  kind: "export" | "archive" = "export"): Promise<{ bytes: number; sha256: string }> {
   const { socket } = opened;
   if (opened.rest.length > 0) socket.unshift(opened.rest);
-  socket.write(encodeFrame({ v: 1, id: "get", method: "stream.get", params: { key } }));
+  socket.write(encodeFrame({ v: 1, id: "get", method: "stream.get", params: { key, kind } }));
   const answer = await readLeadingFrame(socket, frameBytes, 60_000);
   if (answer.frame.ok !== true) { socket.destroy(); throw failureOf(answer.frame); }
   const declared = answer.frame.result as { bytes: number; sha256: string };

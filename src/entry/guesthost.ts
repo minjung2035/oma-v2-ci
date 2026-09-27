@@ -9,6 +9,8 @@ import { EgressPool, startEgressService } from "../platform/guest/egress.js";
 import { RequestLedger } from "../platform/guest/requests.js";
 import { GuestProjects } from "../platform/guest/project.js";
 import { serveStream } from "../platform/guest/stream.js";
+import { GuestArchives } from "../platform/guest/archive.js";
+import { listening } from "../platform/guest/host.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
 
 function argOf(flag: string, fallback: string): string {
@@ -25,7 +27,10 @@ const dataHome = process.env.XDG_DATA_HOME ?? join(dataDir, "data");
 
 const ledger = new RequestLedger(join(dataDir, "requests"));
 const projects = new GuestProjects(join(dataDir, "projects"), join(dataHome, "oma"), ledger);
+const sessionsDir = runtimeDir;
+const archives = new GuestArchives(join(dataHome, "oma"), ledger, society => listening(join(sessionsDir, `${society}.sock`)));
 const host = new GuestHost({
+  archives,
   societiesDir: join(dataHome, "oma"),
   projectsDir: join(dataDir, "projects"),
   projects, ledger,
