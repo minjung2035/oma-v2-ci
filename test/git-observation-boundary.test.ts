@@ -26,7 +26,7 @@ test("name-status pairs preserve filename bytes and never add status tokens as p
   assert.equal(protectedPathMatches("src/a.ts", "src/"), true);
   assert.equal(protectedPathMatches("src-other/a.ts", "src/"), false);
   assert.equal(protectedPathMatches("A-file", "A"), false);
-  assert.throws(() => protectedPathMatches("a", "/"), /gated/);
+  assert.equal(protectedPathMatches("a", "/"), true, "DR18: the root protects the whole tree");
   for (const input of [bytes("M\0"), bytes("M\0x"), bytes("M\0\0"), bytes("R100\0old\0new\0"),
     bytes("M100\0x\0"), bytes("X\0x\0"), bytes("M\0../outside\0"), Buffer.from([77, 0, 255, 0])])
     assert.equal(parseNameStatusZ(input).ok, false);

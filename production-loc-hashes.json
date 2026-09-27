@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "12c54a9377ce1702ddbe04c2568f50e42f3f8563e474cd17a80235f797e4fc33",
-  "report": "439fb4ae504517c82aa931d6dfed99b81bee8dfbb9c2ebd32ab68aa660a9fc93",
+  "report": "9acb8208deb11303944ae32ed85fd185a9265e7e59b51f6edf17e8b8c634ab2c",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -365,7 +365,7 @@
     },
     {
       "path": "src/extension/principal-tools.ts",
-      "sha256": "6ac9ddab354b286d5f7241782b76eb6db04c2bb41c2960951ce5a564aa81a0ba"
+      "sha256": "4342ba817b01fdc30947d716f100d2ca590ba3adcaf1041699474aae22449eab"
     },
     {
       "path": "src/extension/shared.ts",
@@ -389,7 +389,7 @@
     },
     {
       "path": "src/git.ts",
-      "sha256": "a8b8fb85c7dd676041ba4a543da71bb1e709ef8a3127d5ce1fffd9ffb84465f6"
+      "sha256": "ede46331f6a2acfc08419c157c3e5a1f0a9da86403dbaf15b33570a6ba8b29c7"
     },
     {
       "path": "src/git/canonical-command.ts",
@@ -409,7 +409,7 @@
     },
     {
       "path": "src/git/integration-policy.ts",
-      "sha256": "80b021bab48c2b77c9864ea9b513e9316c12836c21144d66b5510dd89cee46a0"
+      "sha256": "2a697844a9678c1be513e872f77a89f07c0706eb0fc8e0fe4b998d3c8aa773a2"
     },
     {
       "path": "src/git/integration.ts",
@@ -417,7 +417,7 @@
     },
     {
       "path": "src/git/observe.ts",
-      "sha256": "07eb6e6dfaab955789441c47b812ca982dcd725a712c1b044c408364ddd90eb3"
+      "sha256": "1e2b373e787f2605e3cf7c2ce99ecb381b340c872ae6b9e067595477eebef134"
     },
     {
       "path": "src/git/paths.ts",
@@ -473,7 +473,7 @@
     },
     {
       "path": "src/lifecycle/registry-operations.ts",
-      "sha256": "b8d13d596475f6612e12ce8f8327cbc2a80ace2cb73fde2b8773d21304d86c05"
+      "sha256": "09885ef553314701482c25b61cc0f8e5d00d5a22c176901eae7149ce3873ebb2"
     },
     {
       "path": "src/lifecycle/workspace.ts",
@@ -861,7 +861,7 @@
     },
     {
       "path": "src/sandbox.ts",
-      "sha256": "f90eadfa6ceb1652f78c1ca365ba880d7d2291f1f8ce161ae2cb2298c78470aa"
+      "sha256": "75844b852b3fa6579f8931cff764b83a7675d009ea56d23832ef794353bdb0f5"
     },
     {
       "path": "src/storage/batch-view.ts",
@@ -1077,7 +1077,7 @@
     },
     {
       "path": "src/views/pending-work.ts",
-      "sha256": "725a745e5d0210e078846daa494622de5d1f369b2c674a6c3db17aa7e22266f4"
+      "sha256": "94d02ae62349026a3219a71d8483c01557f01b99a472a97b7a14958eed975732"
     },
     {
       "path": "src/views/status-refresh.ts",

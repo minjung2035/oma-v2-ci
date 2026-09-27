@@ -46,7 +46,8 @@ export function parseNameStatusZ(bytes: Uint8Array): Parsed<readonly ChangedPath
 
 /** '/' stays gated by the production profile admission check. */
 export function protectedPathMatches(path: string, protectedPath: string): boolean {
-  if (protectedPath === "/") throw new RangeError("root protected-path policy remains gated");
+  // DR18: the root protects the whole tree -- every change a candidate makes.
+  if (protectedPath === "/") return true;
   return protectedPath.endsWith("/") ? path.startsWith(protectedPath) : path === protectedPath;
 }
 function text(bytes: Uint8Array | null): string | null {

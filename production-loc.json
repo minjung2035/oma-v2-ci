@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 270,
-    "n_lines": 35286,
+    "n_lines": 35281,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -368,7 +368,7 @@
   },
   "src/git.ts": {
     "blank": 2,
-    "comment": 9,
+    "comment": 10,
     "code": 155,
     "language": "TypeScript"
   },
@@ -504,15 +504,9 @@
     "code": 121,
     "language": "TypeScript"
   },
-  "src/extension/principal-tools.ts": {
-    "blank": 5,
-    "comment": 27,
-    "code": 118,
-    "language": "TypeScript"
-  },
   "src/git/observe.ts": {
     "blank": 11,
-    "comment": 10,
+    "comment": 11,
     "code": 118,
     "language": "TypeScript"
   },
@@ -570,10 +564,10 @@
     "code": 104,
     "language": "TypeScript"
   },
-  "src/git/integration-policy.ts": {
-    "blank": 6,
-    "comment": 10,
-    "code": 102,
+  "src/extension/principal-tools.ts": {
+    "blank": 5,
+    "comment": 27,
+    "code": 101,
     "language": "TypeScript"
   },
   "src/domain/context-policy.ts": {
@@ -585,6 +579,12 @@
   "src/domain/identifiers.ts": {
     "blank": 15,
     "comment": 5,
+    "code": 100,
+    "language": "TypeScript"
+  },
+  "src/git/integration-policy.ts": {
+    "blank": 6,
+    "comment": 16,
     "code": 100,
     "language": "TypeScript"
   },
@@ -642,15 +642,15 @@
     "code": 95,
     "language": "TypeScript"
   },
-  "src/cli/commands/send.ts": {
-    "blank": 4,
-    "comment": 0,
-    "code": 94,
-    "language": "TypeScript"
-  },
   "src/views/pending-work.ts": {
     "blank": 4,
     "comment": 14,
+    "code": 95,
+    "language": "TypeScript"
+  },
+  "src/cli/commands/send.ts": {
+    "blank": 4,
+    "comment": 0,
     "code": 94,
     "language": "TypeScript"
   },
@@ -1002,6 +1002,12 @@
     "code": 55,
     "language": "TypeScript"
   },
+  "src/lifecycle/registry-operations.ts": {
+    "blank": 3,
+    "comment": 7,
+    "code": 54,
+    "language": "TypeScript"
+  },
   "src/platform/guest/pty.ts": {
     "blank": 5,
     "comment": 19,
@@ -1024,12 +1030,6 @@
     "blank": 5,
     "comment": 19,
     "code": 53,
-    "language": "TypeScript"
-  },
-  "src/lifecycle/registry-operations.ts": {
-    "blank": 3,
-    "comment": 4,
-    "code": 52,
     "language": "TypeScript"
   },
   "src/platform/host/keychain.ts": {
@@ -1628,8 +1628,8 @@
   },
   "SUM": {
     "blank": 1546,
-    "comment": 6050,
-    "code": 27690,
+    "comment": 6061,
+    "code": 27674,
     "nFiles": 270
   }
 }

@@ -260,13 +260,13 @@ test("DR13 / INT-003, P0-5: a policy unreadable at CAS leaves the accepted integ
   } finally { env.seal(); }
 });
 
-test("T62-resource: unresolved workspace/staging limits fail closed before candidate execution", async () => {
+test("T62-resource / DR18: a policy with integration checks is not supported and fails closed before candidate execution", async () => {
   const env = envOf({ policyRevision: "p1", protectedPaths: [], checks: [{ id: "resource-boundary", argv: ["true"], env: {}, timeoutSeconds: 1, tmpBytes: 1024,
     resources: { memoryBytes: 64 * 1024 * 1024, tasks: 16, cpuQuotaPercent: 10, tmpBytes: 1024, workspaceBytes: 1024, stagingBytes: 1024, checkTimeoutSeconds: 1 } }] });
   env.paths.checkRootfs = "/trusted/rootfs"; env.paths.checkAssetsDir = "/trusted/checks";
   try {
     const { base, candidate } = publishedFastForward(env);
-    await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "resource-boundary", { candidate, expected: base }), failure("SPIKE_UNRESOLVED")); assert.equal(main(env), base);
+    await assert.rejects(env.git.integrate(auth("a", ["code.integrate"]), "resource-boundary", { candidate, expected: base }), failure("UNSUPPORTED_PROFILE")); assert.equal(main(env), base);
   } finally { env.seal(); }
 });
 

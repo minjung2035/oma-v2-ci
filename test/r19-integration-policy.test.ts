@@ -73,12 +73,12 @@ test("R19: resource/runtime disagreement fails instead of silently rewriting a h
   assert.throws(() => snapshotIntegrationPolicy(duplicate), code("UNSUPPORTED_PROFILE"));
 });
 
-test("R19: original nonempty check and root-path gates remain explicit", () => {
+test("R19 / DR18: nonempty checks are an unsupported configuration, never emptied; the root is an ordinary protected path", () => {
   const source = integrationPolicyFromConfig(structuredClone(profile));
   const before = JSON.stringify(source);
-  assert.throws(() => assertSupportedIntegration(snapshotIntegrationPolicy(source)), code("SPIKE_UNRESOLVED"));
+  assert.throws(() => assertSupportedIntegration(snapshotIntegrationPolicy(source)), code("UNSUPPORTED_PROFILE"));
   assert.equal(JSON.stringify(source), before, "checks are not replaced with an empty list");
-  assert.throws(() => assertSupportedIntegration(snapshotIntegrationPolicy({
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({
     policyRevision: "p1", protectedPaths: ["/"], checks: [],
-  })), code("SPIKE_UNRESOLVED"));
+  })));
 });

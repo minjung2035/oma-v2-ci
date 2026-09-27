@@ -220,6 +220,6 @@ export class SandboxModule {
   }
   candidate(oid: string, checkProfile: string): SandboxPlan {
     void oid; void checkProfile;
-    throw new StoreError("SPIKE_UNRESOLVED", "candidate-check sandbox is gated by phase 7 integrate checks");
+    throw new StoreError("UNSUPPORTED_PROFILE", "integration checks are not run by this version (DR18)");
   }
 }

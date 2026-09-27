@@ -95,6 +95,8 @@ test("AV11 / arch §8.3, §15.1, PR-004: the Principal's model reaches its capab
     const { gitDir, main } = canonical(root);
     const tools = register(root, fixture.path, true, gitDir);
     for (const name of PRINCIPAL_TOOL_NAMES) assert.ok(tools.has(name), `${name} was not registered for the Principal`);
+    // DR18 (MAIL-001/002): topics are the Residents'; the Principal is offered no tool to follow one.
+    assert.equal(tools.has("oma_route"), false, "the Principal was offered a topic subscription that delivers nothing");
     const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
     mkdirSync(join(root, "shared"));
     writeFileSync(join(root, "shared", "GOAL.md"), "Check every feature.\n");
@@ -106,8 +108,6 @@ test("AV11 / arch §8.3, §15.1, PR-004: the Principal's model reaches its capab
         ["oma_agent_create", { name: "worker", brief: "" }],
         ["oma_agent_lifecycle", { name: "worker", action: "retire" }],
         ["oma_agent_lifecycle", { name: "principal", action: "stop" }],
-        ["oma_route", { topic: "--help", action: "follow" }],
-        ["oma_route", { topic: "dev", action: "subscribe" }],
         ["oma_context_publish", { directory: outside, expect: "none" }],
         ["oma_context_publish", { directory: "../elsewhere", expect: "none" }],
         ["oma_context_publish", { directory: "shared", expect: "HEAD" }],
@@ -128,8 +128,6 @@ test("AV11 / arch §8.3, §15.1, PR-004: the Principal's model reaches its capab
     assert.equal(sent(fixture.frames, "agent.create")[1]!.from, other);
     await assert.rejects(() => call("oma_agent_lifecycle", { name: "worker", action: "stop" }));
     assert.deepEqual(sent(fixture.frames, "agent.stop"), [{ agent: "worker" }]);
-    await assert.rejects(() => call("oma_route", { topic: "dev", action: "follow" }));
-    assert.deepEqual(sent(fixture.frames, "route.follow"), [{ topic: "dev" }]);
     await assert.rejects(() => call("oma_context_publish", { directory: "shared", expect: "none" }));
     const [published] = sent(fixture.frames, "context.publish");
     assert.equal(published!.expected, null);

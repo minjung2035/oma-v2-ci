@@ -243,10 +243,11 @@ test("V01B: the actual unsupported integration gate is not generic success or re
         },
       ],
     },
-    { ...policy, protectedPaths: ["/"] },
   ])
     assert.throws(
       () => assertSupportedIntegration(snapshotIntegrationPolicy(restricted)),
-      (error) => error.code === "SPIKE_UNRESOLVED",
+      (error) => error.code === "UNSUPPORTED_PROFILE",
     );
+  // DR18: the root is an ordinary protected path (the whole tree).
+  assert.doesNotThrow(() => assertSupportedIntegration(snapshotIntegrationPolicy({ ...policy, protectedPaths: ["/"] })));
 });

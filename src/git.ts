@@ -116,7 +116,8 @@ export class GitModule {
   isPublished(oid: Oid): boolean { return observed(this.observations.published(this.paths.projectGit), "published refs").includes(oid); }
   private currentMain(): Oid { return observed(this.observations.ref(this.paths.projectGit, "refs/heads/main"), "canonical main ref"); }
   private async runCheck(_candidate: Oid, _check: FrozenCheck): Promise<void> {
-    throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE bounded writable work area is not verified");
+    // Unreachable: a policy with checks is refused before it is used (DR18).
+    throw new StoreError("UNSUPPORTED_PROFILE", "integration checks are not run by this version");
   }
   publishContext(auth: AuthContext, key: string, input: ContextInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     return this.withWriter(() => this.contextCoordinator.publish(auth, key, input, bytes));

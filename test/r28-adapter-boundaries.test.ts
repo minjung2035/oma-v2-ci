@@ -164,7 +164,7 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.ok(plan.argv.includes(lease.socketHostPath)); assert.equal(plan.argv.includes(runRoot), false);
   assert.throws(() => sandbox.resident(lease, { ...dirs, workspace: workspacePathAt(stateRoot, "bob") }), errorCode("AUTH_FAILED"));
   assert.throws(() => sandbox.resident(value, dirs), errorCode("AUTH_FAILED"));
-  assert.throws(() => sandbox.candidate("a".repeat(40), "checks"), errorCode("SPIKE_UNRESOLVED"));
+  assert.throws(() => sandbox.candidate("a".repeat(40), "checks"), errorCode("UNSUPPORTED_PROFILE"));
 });
 
 // The run is the unit, not the message. Pi retries a retryable assistant

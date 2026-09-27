@@ -54,7 +54,7 @@ const environment: Check = value => {
 };
 const protectedPath: Check = value => {
   if (typeof value !== "string") return "invalid protected path";
-  if (value === "/") return null; // recognized spelling, still explicitly gated below
+  if (value === "/") return null; // the whole tree (DR18)
   const path = value.endsWith("/") ? value.slice(0, -1) : value;
   return isValidWirePath(path) ? null : "invalid protected path";
 };
@@ -105,11 +105,15 @@ export function snapshotIntegrationPolicy(policy: IntegrationPolicy): Integratio
   });
 }
 
+/** DR18 (S-01-CANDIDATE closed): this version runs no integration checks of
+ * its own. A candidate is tested where it is made -- in its Resident's
+ * sandbox, before the submission -- and integration decides by CAS and the
+ * protected paths. A configuration that names checks is one this version does
+ * not support, said so at the broker's start; the checks are never dropped
+ * silently (S-01-CANDIDATE's MUST). */
 export function assertSupportedIntegration(snapshot: IntegrationSnapshot): void {
   if (snapshot.checks.length !== 0)
-    throw new StoreError("SPIKE_UNRESOLVED", "S-01-CANDIDATE does not verify a bounded writable check workspace");
-  if (snapshot.protectedPaths.includes("/"))
-    throw new StoreError("SPIKE_UNRESOLVED", "root protected-path matching remains unsupported");
+    throw new StoreError("UNSUPPORTED_PROFILE", "integration checks are not run by this version; remove integration.checks from the configuration (Residents test their candidates before they submit)");
 }
 
 export function assertSameIntegrationPolicy(expected: IntegrationSnapshot, actual: IntegrationSnapshot): void {

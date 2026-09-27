@@ -20,7 +20,7 @@ export class RegistryOperations {
     assertActorIdentity(this.store, auth);
     const hash = requestHash("mail.ack", { message });
     const claim = this.store.operations.classifyKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.operations.get(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
     const id = generateOperationId();
     const outcome = this.store.transaction(tx => {
@@ -34,7 +34,7 @@ export class RegistryOperations {
       tx.operations.succeed(id, JSON.stringify({ kind: "mail.ack", message, acknowledged: true }));
       return accepted;
     });
-    return outcome === "retry" ? receiptOfOperation(this.store.operations.get(auth.actor, key)!) : lifecycleReceipt(this.store, id);
+    return outcome === "retry" ? receiptOfOperation(this.store.retriedOperation(auth.actor, key)) : lifecycleReceipt(this.store, id);
   }
 
   follow(auth: AuthContext, topic: string, subscribe: boolean, key: string): Receipt {
@@ -42,8 +42,13 @@ export class RegistryOperations {
     const kind = subscribe ? "route.follow" : "route.unfollow";
     const hash = requestHash(kind, { topic });
     const claim = this.store.operations.classifyKey(auth.actor, key, hash);
-    if (claim === "retry") return receiptOfOperation(this.store.operations.get(auth.actor, key)!);
+    if (claim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     if (claim === "reused") throw reused(auth.actor, key);
+    // MAIL-001/002 (DR18): topics are the Residents'. A topic's mail goes to
+    // the Residents that follow it and to no one else, so a follow by anyone
+    // else would be a subscription that delivers nothing -- refused, not kept.
+    if (auth.role !== "resident")
+      throw new StoreError("CAPABILITY_DENIED", "topics are followed by Residents; the Principal receives the mail addressed to it");
     const id = generateOperationId();
     const outcome = this.store.transaction(tx => {
       assertCurrentActor(this.store, auth);
@@ -54,6 +59,6 @@ export class RegistryOperations {
       tx.operations.succeed(id, JSON.stringify({ kind, topic, subscribed: subscribe }));
       return accepted;
     });
-    return outcome === "retry" ? receiptOfOperation(this.store.operations.get(auth.actor, key)!) : lifecycleReceipt(this.store, id);
+    return outcome === "retry" ? receiptOfOperation(this.store.retriedOperation(auth.actor, key)) : lifecycleReceipt(this.store, id);
   }
 }

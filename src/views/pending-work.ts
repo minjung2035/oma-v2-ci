@@ -90,7 +90,8 @@ export function pendingWorkByAgent(rows: PendingWorkRows): ReadonlyMap<Actor, Pe
     if (batch.state !== "prepared" || batches.has(batch.id)) corrupt("a prepared batch is repeated or not prepared");
     batches.add(batch.id);
     const entry = of(batch.agent);
-    if (batch.incarnation > owners.get(batch.agent)!.incarnation) corrupt("a batch belongs to a future incarnation");
+    const owner = owners.get(batch.agent) ?? corrupt("a batch names a missing agent");
+    if (batch.incarnation > owner.incarnation) corrupt("a batch belongs to a future incarnation");
     const manifest = decodeBatchManifest(batch.messageIdsJson);
     const set = linked.get(batch.id) ?? new Set<string>();
     if (manifest.length !== set.size || manifest.some(message => !set.has(message) || recipients.get(`${batch.id}/${message}`) !== batch.agent))

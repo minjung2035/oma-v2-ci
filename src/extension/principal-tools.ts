@@ -18,13 +18,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { validActorName, validFullOid, validTopicName } from "./batch-view.js";
+import { validActorName, validFullOid } from "./batch-view.js";
 import { actorNameOf, refused, requestKeyOf, textResult } from "./shared.js";
 
 export const PRINCIPAL_TOOL_NAMES: readonly string[] = Object.freeze([
   "oma_agent_create",
   "oma_agent_lifecycle",
-  "oma_route",
   "oma_context_publish",
   "oma_logs",
 ]);
@@ -96,22 +95,6 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
       const action = params.action === "start" || params.action === "stop" ? params.action : refused("action", params.action);
       const key = requestKeyOf(params.request);
       return textResult(await run(["agent", action, "--request", key, "--", name], signal), { request: key });
-    },
-  });
-  pi.registerTool({
-    name: "oma_route",
-    label: "Follow or unfollow an OMA topic",
-    description: "Follow a topic to receive its future mail, or unfollow it.",
-    parameters: Type.Object({
-      topic: Type.String(),
-      action: Type.Union([Type.Literal("follow"), Type.Literal("unfollow")]),
-      request: Type.Optional(Type.String()),
-    }),
-    async execute(_id, params, signal) {
-      const topic = validTopicName(params.topic) ? params.topic : refused("topic", params.topic);
-      const action = params.action === "follow" || params.action === "unfollow" ? params.action : refused("action", params.action);
-      const key = requestKeyOf(params.request);
-      return textResult(await run([action, "--request", key, "--", topic], signal), { request: key });
     },
   });
   pi.registerTool({
