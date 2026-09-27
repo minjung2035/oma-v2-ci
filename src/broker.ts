@@ -262,7 +262,14 @@ export class Broker {
    * and no request's outcome depends on it. */
   private publishStatus(): void {
     if (this.draining) return;
-    const failed = (error: unknown): void => { console.error("status view publish failed:", error instanceof Error ? error.message : String(error)); };
+    // P0V-70, P0-2: publishing reads the ledger before it writes a file, so a
+    // failure here may be an integrity observation. Like every other failure
+    // this broker catches, it reaches the fence, which reads it normalized:
+    // corruption closes admission, a view file that failed to write does not.
+    const failed = (error: unknown): void => {
+      this.health.observe(error);
+      console.error("status view publish failed:", error instanceof Error ? error.message : String(error));
+    };
     void this.statusRefresh.request().then(snapshot => {
       if (this.draining) return;
       try { this.views.publishStatus(snapshot); } catch (error) { failed(error); }

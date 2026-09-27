@@ -1,4 +1,4 @@
-import { StoreError } from "./errors.js";
+import { StoreError, errorCodeOf } from "./errors.js";
 
 /** A process-local acceptance fence. Read diagnostics and already-accepted
  * settlement are separate from permission to create another durable intent.
@@ -6,8 +6,11 @@ import { StoreError } from "./errors.js";
 export class AdmissionGate {
   private corrupt = false;
   private draining = false;
+  /** P0V-69, P0-2: the fence reads a failure the way every boundary does --
+   * normalized -- so a native SQLite CORRUPT or NOTADB, or corruption bundled
+   * with a cleanup failure, closes it like a decoded STORE_CORRUPT. */
   observe(error: unknown): void {
-    if (error instanceof StoreError && error.code === "STORE_CORRUPT") this.corrupt = true;
+    if (errorCodeOf(error) === "STORE_CORRUPT") this.corrupt = true;
   }
   close(): void { this.draining = true; }
   assertAdmission(): void {

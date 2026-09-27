@@ -28,11 +28,27 @@ export function normalizeStorageFailure(error: unknown): unknown {
   if (primary instanceof StoreError) return restated(primary, error);
   if (primary === null || typeof primary !== "object") return error;
   const code = "code" in primary ? primary.code : undefined;
-  const sqliteFull = code === "ERR_SQLITE_ERROR" && "errcode" in primary &&
-    typeof primary.errcode === "number" && Number.isInteger(primary.errcode) && (primary.errcode & 0xff) === 13;
-  if (code === "ENOSPC" || code === "EDQUOT" || code === "SQLITE_FULL" || sqliteFull)
+  const sqlite = sqlitePrimaryCode(primary);
+  if (code === "ENOSPC" || code === "EDQUOT" || code === "SQLITE_FULL" || sqlite === 13)
     return new StoreError("STORAGE_FULL", "durable storage is exhausted", { cause: error });
+  // P0V-69, P0-5: what SQLite's own result code says, read here once for every
+  // query, BEGIN, COMMIT and ROLLBACK. CORRUPT and NOTADB are the database file
+  // saying it is not intact: an integrity observation, which closes new
+  // acceptance. BUSY and LOCKED are contention. An I/O error, a file that could
+  // not be opened, a read-only or refused file, or a broken lock protocol is an
+  // observation that did not finish -- not proof of corruption.
+  if (sqlite === 11 || sqlite === 26)
+    return new StoreError("STORE_CORRUPT", `the database reports it is not intact (SQLite ${sqlite})`, { cause: error });
+  if (sqlite === 5 || sqlite === 6) return new StoreError("DB_BUSY", "the database is busy", { cause: error });
+  if (sqlite === 3 || sqlite === 8 || sqlite === 10 || sqlite === 14 || sqlite === 15)
+    return new StoreError("BROKER_UNAVAILABLE", `durable storage cannot be observed now (SQLite ${sqlite})`, { cause: error });
   return error;
+}
+/** SQLite's primary result code (the extended code's low byte) of a native
+ * SQLite error, or null for anything else. */
+export function sqlitePrimaryCode(error: unknown): number | null {
+  if (error === null || typeof error !== "object" || !("code" in error) || error.code !== "ERR_SQLITE_ERROR" || !("errcode" in error)) return null;
+  return typeof error.errcode === "number" && Number.isInteger(error.errcode) ? error.errcode & 0xff : null;
 }
 /** Errno answers about a name itself: it is not there, or is not what a path
  * through it needs. The filesystem answered; the caller states what it means. */

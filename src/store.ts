@@ -20,7 +20,7 @@ export { reused } from "./storage/operation-journal.js";
 import { TransactionScope, assertSynchronousResult, type SyncCallback } from "./storage/transaction.js";
 import { isValidSocietyName, isValidFullOid, isValidOperationId } from "./domain/identifiers.js";
 import { SCHEMA_USER_VERSION_READABLE, SCHEMA_USER_VERSION_WRITTEN } from "./domain/persisted-formats.js";
-import { StoreError, normalizeStorageFailure, unobserved } from "./domain/errors.js";
+import { StoreError, normalizeStorageFailure, unobserved, sqlitePrimaryCode } from "./domain/errors.js";
 export { StoreError } from "./domain/errors.js";
 export type { DecodedOperation } from "./storage/operation-codec.js";
 export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
@@ -28,8 +28,11 @@ export type { Transaction, StoreReads, StoreWrites } from "./storage/transaction
 
 export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v1.sql", import.meta.url));
 export type OperationRow = DecodedOperation;
+/** SQLITE_BUSY or SQLITE_LOCKED, read from SQLite's result code rather than
+ * from its message (P0V-69). */
 export function isBusyError(error: unknown): boolean {
-  return error instanceof Error && /busy|locked/i.test(error.message) && !(error instanceof StoreError);
+  const primary = sqlitePrimaryCode(error);
+  return primary === 5 || primary === 6;
 }
 export interface NewAgent {
   name: Actor; specHash: string; role: "resident" | "principal"; desired: AgentRow["desired"];
@@ -242,7 +245,9 @@ export class Store {
         }
         const normalized = normalizeStorageFailure(error);
         if (normalized instanceof StoreError) throw normalized;
-        throw new StoreError("STORE_CORRUPT", `BEGIN IMMEDIATE failed: ${(error as Error).message}`);
+        // P0V-69, P0-5: a failure SQLite does not name as corruption is not
+        // taken for it; corruption closes admission for this process.
+        throw new StoreError("INTERNAL_ERROR", `BEGIN IMMEDIATE failed: ${(error as Error).message}`, { cause: error });
       }
     }
     throw new StoreError("INTERNAL_ERROR", "invalid transaction retry configuration");

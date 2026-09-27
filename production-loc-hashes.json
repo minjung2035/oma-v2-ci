@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "56e544466ac433966261c43fb832d5f99a1dfdd1fabc52b55d5f10d2a0734e31",
-  "report": "d1a436137fa3ff7a2ebc798117b6e48115d8f1151a075c560a43f2c1dc6039d2",
+  "report": "25b39a6de89ceefcbd949ae3f9ad2d1aa45334d265d1d7091ed9f30932894e1d",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "src/broker.ts",
-      "sha256": "a033305554ce9889b37239cfd8e985da3e12095da36053ecf34778aca2ada0bd"
+      "sha256": "e1ce7f1a939ec0cda6cb05c38941228abc4c6de18e909992efe31b992e29a24d"
     },
     {
       "path": "src/broker/composition.ts",
@@ -205,7 +205,7 @@
     },
     {
       "path": "src/domain/admission.ts",
-      "sha256": "83056e3517d6aa02351de60434356b3dfaa5c933da9eb6a119e7069d5376f768"
+      "sha256": "47c11ed4f1468fb327fd40f0522923f5264d16621c333c7e4a4cdc2d25693b09"
     },
     {
       "path": "src/domain/canonical-json.ts",
@@ -233,7 +233,7 @@
     },
     {
       "path": "src/domain/errors.ts",
-      "sha256": "41c5e4436078a9d849ea432238e47406da4434eb650aeaae484d9cfaae934a50"
+      "sha256": "108fa29b222b08140f781be8df110988a9dc1c4794f8cbbd41507242950ed384"
     },
     {
       "path": "src/domain/exhaustive.ts",
@@ -781,7 +781,7 @@
     },
     {
       "path": "src/store.ts",
-      "sha256": "6c0f420ab6adf67a0464c435d8865d36203305a69ec0e0eae64d99a23231625a"
+      "sha256": "9224810b60eebf87b22704e7765427df40ce7d8ea2a4078600a1a4e7ec02a4d5"
     },
     {
       "path": "src/tui/app.ts",

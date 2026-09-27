@@ -3,13 +3,13 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 30235,
+    "n_lines": 30266,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
     "blank": 4,
-    "comment": 73,
-    "code": 457,
+    "comment": 77,
+    "code": 460,
     "language": "TypeScript"
   },
   "src/durable.ts": {
@@ -56,8 +56,8 @@
   },
   "src/store.ts": {
     "blank": 4,
-    "comment": 37,
-    "code": 340,
+    "comment": 41,
+    "code": 341,
     "language": "TypeScript"
   },
   "src/runtime/inference-relay.ts": {
@@ -174,16 +174,16 @@
     "code": 226,
     "language": "TypeScript"
   },
+  "src/domain/errors.ts": {
+    "blank": 7,
+    "comment": 67,
+    "code": 226,
+    "language": "TypeScript"
+  },
   "src/config.ts": {
     "blank": 11,
     "comment": 15,
     "code": 223,
-    "language": "TypeScript"
-  },
-  "src/domain/errors.ts": {
-    "blank": 7,
-    "comment": 59,
-    "code": 218,
     "language": "TypeScript"
   },
   "src/git/integration.ts": {
@@ -1064,7 +1064,7 @@
   },
   "src/domain/admission.ts": {
     "blank": 1,
-    "comment": 7,
+    "comment": 10,
     "code": 30,
     "language": "TypeScript"
   },
@@ -1352,8 +1352,8 @@
   },
   "SUM": {
     "blank": 1212,
-    "comment": 5042,
-    "code": 23981,
+    "comment": 5061,
+    "code": 23993,
     "nFiles": 224
   }
 }
