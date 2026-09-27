@@ -114,3 +114,20 @@ test("V09C: after the session ends, a late settle frees nothing and starts nothi
     assert.equal(s.session.busy, false);
   } finally { await s.close(); }
 });
+
+test("P0V-73 / F6, P0-4: a Principal engine that could not be spawned has ended, and nothing else ends it early", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-spawn-failed-"));
+  try {
+    mkdirSync(join(root, "agents", "principal", "runner", "view"), { recursive: true });
+    mkdirSync(join(root, "workspace")); mkdirSync(join(root, "sessions"));
+    const session = PrincipalSession.start(
+      { piCommand: join(root, "no-such-engine"), coreExtension: "/nonexistent/core.js", sessionDir: join(root, "sessions"),
+        workspace: join(root, "workspace"), home: root },
+      { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
+      LIMITS, { PATH: process.env.PATH ?? "/usr/bin:/bin" },
+      { onLine: () => {}, onBusy: () => {}, onEnd: () => {}, onPromptFailed: () => {}, onPromptUnconfirmed: () => {} },
+    );
+    const outcome = await Promise.race([session.exited.then(() => "ended"), new Promise(resolve => setTimeout(() => resolve("pending"), 2000))]);
+    assert.equal(outcome, "ended", "the session of a spawn that failed never ended");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

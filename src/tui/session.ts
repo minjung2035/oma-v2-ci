@@ -331,6 +331,10 @@ export class PrincipalSession {
     this.exited = new Promise<void>(resolve => {
       if (child.exitCode !== null || child.signalCode !== null) { resolve(); return; }
       child.once("exit", () => { resolve(); });
+      // P0V-73, P0-4: a spawn that failed never had a process -- `error` with no
+      // pid, then `close`, and no `exit` -- and that is its terminal fact. An
+      // error from a process that did start (a kill that failed) is not its end.
+      child.once("error", () => { if (child.pid === undefined) resolve(); });
     });
     this.rpc = new PiRpcClient(child, limits);
     // The private socket the credential travels on. Kept open for the life of
