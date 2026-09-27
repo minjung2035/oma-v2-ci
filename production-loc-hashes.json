@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "de75044201c567aa317b10256677f92bd60cdbb255db797b4f3d25f2d8e0c250",
-  "report": "78c5a6d038c32b956fd160d406d477a68522d181e4f0ee215501f04f700604d2",
+  "manifest": "712dad1053b8104d520dd472eb5dd4c9f3fd69fd316e7ea570ef0085fb25e52e",
+  "report": "e4c10c27a3673359afd5de1ca6b6228f9f70aa588a927a139f2f97c1ca5c1737",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -336,6 +336,14 @@
       "sha256": "4ad05bbd0ac1ccb1a5c6ee93f8677aca8b0568efd2c1d8dabd57143569f27292"
     },
     {
+      "path": "src/extension/contained-files.ts",
+      "sha256": "2f7af69f5ad328960c3442ff56d4cd9109b98cad727721a6c89e8f5d89d70185"
+    },
+    {
+      "path": "src/extension/contained-tools.ts",
+      "sha256": "c38e7cdc535b03d252dfae1a26915b859ce37c012d4ad715cd14252ecd739065"
+    },
+    {
       "path": "src/extension/delivery.ts",
       "sha256": "47f3d70557ac865b16d5393098667975b002fc540809ebdc6dde0f73c40c86e8"
     },
@@ -365,7 +373,7 @@
     },
     {
       "path": "src/extension/workspace-guard.ts",
-      "sha256": "3b3c39cc736800cebeb58afe361c2ef7a9f62e20698802a70271f6e840bf3b5c"
+      "sha256": "affdf8b791ee273dcc541dd7acb87c1c0a83632595eaed0037a4f35d63749618"
     },
     {
       "path": "src/frame.ts",
@@ -513,7 +521,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "11deff254215a971f97eb1f8e39aeb3a7f59601677d83a0eaa6bc9c36746cf55"
+      "sha256": "e4385ec69219e518e9da559b3d669ab8086f5b0c5fcea0609336a6c376ce7846"
     },
     {
       "path": "src/platform/guest/archive.ts",

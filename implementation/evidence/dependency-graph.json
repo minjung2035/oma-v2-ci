@@ -84,6 +84,8 @@
   "src/entry/runner.ts",
   "src/extension/batch-view.ts",
   "src/extension/cli-process.ts",
+  "src/extension/contained-files.ts",
+  "src/extension/contained-tools.ts",
   "src/extension/delivery.ts",
   "src/extension/inference-bridge.ts",
   "src/extension/mail-tools.ts",
@@ -1505,11 +1507,11 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 62
+   "files": 64
   }
  ],
- "files": 266,
- "runtimeEdges": 1007,
+ "files": 268,
+ "runtimeEdges": 1010,
  "typeOnlyEdges": 341,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
@@ -1526,7 +1528,7 @@
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 51,
-  "L5-entry -> L5-entry": 115
+  "L5-entry -> L5-entry": 118
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1572,25 +1574,25 @@
   "src/git/context.ts": 14,
   "src/git/submit.ts": 14,
   "src/mail/batches.ts": 14,
+  "src/pi-extension.ts": 14,
   "src/reconcile.ts": 14,
   "src/store.ts": 14,
-  "src/pi-extension.ts": 13,
   "src/runner.ts": 13,
   "src/tui/session.ts": 12
  },
  "external": {
-  "@earendil-works/pi-coding-agent": 9,
+  "@earendil-works/pi-coding-agent": 10,
   "@earendil-works/pi-tui": 2,
   "koffi": 5,
   "node:async_hooks": 3,
   "node:child_process": 6,
   "node:crypto": 37,
-  "node:fs": 84,
+  "node:fs": 85,
   "node:http": 1,
   "node:https": 1,
   "node:net": 27,
   "node:os": 3,
-  "node:path": 84,
+  "node:path": 85,
   "node:perf_hooks": 5,
   "node:sqlite": 4,
   "node:stream": 1,

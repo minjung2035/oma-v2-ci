@@ -81,6 +81,8 @@ src/entry/omahostd.ts
 src/entry/runner.ts
 src/extension/batch-view.ts
 src/extension/cli-process.ts
+src/extension/contained-files.ts
+src/extension/contained-tools.ts
 src/extension/delivery.ts
 src/extension/inference-bridge.ts
 src/extension/mail-tools.ts

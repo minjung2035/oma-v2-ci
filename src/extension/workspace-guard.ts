@@ -8,8 +8,8 @@
  * what the sandbox shows. Everywhere, a write or edit stays inside the
  * workspace and is refused before it would take it over its byte quota.
  */
-import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstatSync, readdirSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 function inside(root: string, path: string): boolean {
@@ -19,23 +19,27 @@ function inside(root: string, path: string): boolean {
     (offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset))
   );
 }
+/** R6-01: every component that exists is looked at itself (lstat), from the
+ * root down, and a link anywhere -- one that points nowhere included -- is
+ * refused; what does not exist yet is a name to be made. This is the early
+ * refusal every path tool gets. The effect of read/write/edit/ls is also made
+ * through the containment primitives (contained-tools.ts); grep and find walk
+ * with their own programs from a start this check has seen. */
 function allowedWorkspacePath(root: string, input: unknown): boolean {
   if (typeof input !== "string" || input.includes("\0")) return false;
   const target = resolve(root, input);
   if (!inside(root, target)) return false;
-  let existing = target;
-  while (!existsSync(existing)) {
-    const parent = dirname(existing);
-    if (parent === existing) return false;
-    existing = parent;
+  let path = root;
+  for (const part of relative(root, target).split(sep).filter(Boolean)) {
+    path = join(path, part);
+    let stat: ReturnType<typeof lstatSync> | undefined;
+    try { stat = lstatSync(path, { throwIfNoEntry: false }); } catch { return false; }
+    if (stat === undefined) return true;
+    if (stat.isSymbolicLink()) return false;
   }
-  try {
-    return inside(root, realpathSync(existing));
-  } catch {
-    return false;
-  }
+  return true;
 }
-function workspaceUsage(root: string, stopAfter: number): number {
+export function workspaceUsage(root: string, stopAfter: number): number {
   const pending = [root];
   const files = new Set<string>();
   let total = 0;

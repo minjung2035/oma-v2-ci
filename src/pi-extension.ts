@@ -14,7 +14,8 @@ import { OMA_TOOL_NAMES, registerOmaTools } from "./extension/mail-tools.js";
 import { integerEnv } from "./extension/shared.js";
 import { PrincipalChannel } from "./extension/principal-channel.js";
 import { registerToolSurface } from "./extension/tool-surface.js";
-import { guardWorkspaceTools } from "./extension/workspace-guard.js";
+import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, guardWorkspaceTools } from "./extension/workspace-guard.js";
+import { containWorkspaceTools } from "./extension/contained-tools.js";
 
 export { decodeBatchViewText, readBatchView } from "./extension/batch-view.js";
 export { OMA_TOOL_NAMES, cliEnvironment, registerOmaTools } from "./extension/mail-tools.js";
@@ -33,5 +34,6 @@ export default function extension(pi: ExtensionAPI) {
   registerToolSurface(pi, OMA_TOOL_NAMES);
   startInferenceBridge(pi);
   guardWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"));
+  containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX);
   registerDelivery(pi);
 }

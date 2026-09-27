@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 265,
-    "n_lines": 34516,
+    "n_files": 267,
+    "n_lines": 34732,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -528,6 +528,12 @@
     "code": 109,
     "language": "TypeScript"
   },
+  "src/extension/contained-files.ts": {
+    "blank": 15,
+    "comment": 28,
+    "code": 108,
+    "language": "TypeScript"
+  },
   "src/broker/peer-authenticator.ts": {
     "blank": 1,
     "comment": 19,
@@ -648,12 +654,6 @@
     "code": 92,
     "language": "TypeScript"
   },
-  "src/extension/workspace-guard.ts": {
-    "blank": 5,
-    "comment": 19,
-    "code": 91,
-    "language": "TypeScript"
-  },
   "src/lifecycle/workspace.ts": {
     "blank": 1,
     "comment": 16,
@@ -676,6 +676,12 @@
     "blank": 9,
     "comment": 17,
     "code": 90,
+    "language": "TypeScript"
+  },
+  "src/extension/workspace-guard.ts": {
+    "blank": 5,
+    "comment": 25,
+    "code": 89,
     "language": "TypeScript"
   },
   "src/mail/facts.ts": {
@@ -1134,6 +1140,12 @@
     "code": 42,
     "language": "TypeScript"
   },
+  "src/extension/contained-tools.ts": {
+    "blank": 1,
+    "comment": 16,
+    "code": 42,
+    "language": "TypeScript"
+  },
   "src/platform/guest/systemd-launcher.ts": {
     "blank": 3,
     "comment": 10,
@@ -1314,6 +1326,12 @@
     "code": 27,
     "language": "TypeScript"
   },
+  "src/pi-extension.ts": {
+    "blank": 2,
+    "comment": 10,
+    "code": 27,
+    "language": "TypeScript"
+  },
   "src/protocol/host-api.ts": {
     "blank": 4,
     "comment": 7,
@@ -1365,12 +1383,6 @@
   "src/extension/inference-bridge.ts": {
     "blank": 1,
     "comment": 17,
-    "code": 25,
-    "language": "TypeScript"
-  },
-  "src/pi-extension.ts": {
-    "blank": 2,
-    "comment": 10,
     "code": 25,
     "language": "TypeScript"
   },
@@ -1597,9 +1609,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1506,
-    "comment": 5773,
-    "code": 27237,
-    "nFiles": 265
+    "blank": 1522,
+    "comment": 5823,
+    "code": 27387,
+    "nFiles": 267
   }
 }
