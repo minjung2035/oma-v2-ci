@@ -619,6 +619,75 @@ listener)에서 보였다. P0-4에 그 적용을 적었다(DR14).
 시나리오 시험이 기대를 고친 곳(제품이 옳았던 것): commons의 수신자에 보낸 Resident 자신도 포함된다(spec MAIL 라우팅 표). Principal은
 자기 자손인 Resident만 관리한다(`agent.manage.descendants`). main 통합에는 `code.integrate`가 필요하다(AUTH-001, 기본값 없음).
 
+## 5차 점검: 외부 재검토 두 건
+
+기준점 `18421f0`(v21 결박 커밋). 2026-09-27 사용자가 외부 검토 두 건을 전달했다. 하나는 224개 생산 파일 전수 재검토이고(R01–R13,
+이전 30개 재평가, 구조 개선 제안 S01–S14), 다른 하나는 37개 파일의 적대적 검토다(F1–F6. 앞선 묶음의 F1–F7과 다른 번호다). 지적마다
+코드와 대조했고, 옛 코드에서 재현되는 것은 재현했다. 두 검토가 같은 결함을 짚은 곳이 하나다(R01 = 둘째 검토 F1). 판정 기준은 다른 점검과
+같다: 위반이면 고칠 하위 규칙을 적고, 같은 종류가 있는 곳을 함께 고친다. 구조 개선 제안(S01–S14, 둘째 검토 §9)은 지적이 아니라서
+판정하지 않았다.
+
+### 판정과 수정
+
+| ID | 외부 | 규칙 | 파일(`18421f0`) | 요약 | 상태 |
+|---|---|---|---|---|---|
+| P0V-56 | R01, 둘째 F1 | P0-5 | storage/transitions.ts `completeBatch`, store.ts `insertAgent`, operation-transitions.ts `insert` | presentation 시각의 하한이 생성 시각뿐이라, materialization 뒤 시계가 뒤로 가면 decoder가 batch 완료를 손상으로 거절했다(P0V-30의 잔여). 같은 사건의 시각을 두 번 읽는 삽입이 둘 있었다 | 수정 10343cb, 시각 순서 81가지 property da22def |
+| P0V-57 | R02 | P0-2 | broker.ts, broker/internal-dispatcher.ts | 같은 `batch.prepare`·`batch.complete`인데 runner 경로만 손상·drain fence를 거쳤다. 새 batch 행은 트랜잭션 안에서 막혔지만, 이미 준비된 batch는 손상 관측 뒤에도 host 경로로 세션에 전달됐다 | 수정 6f2da6b(`admitInternal` 하나) |
+| P0V-58 | R03 | P0-5 | broker.ts `drainAndClose`, entry/oma.ts, entry/broker.ts | drain이 Resident의 종료를 증명하지 못해도 성공으로 끝났고, 다음 host는 broker의 startup quiescence 전에 rootfs를 고쳤다 | 수정 b08cd88(DR16: 수리는 broker startup의 quiescence 뒤, 어떤 Resident도 깨어나기 전) |
+| P0V-59 | R04 | P0-1 | units.ts, implementation/systemd/*.in | unit 소유 확인에 state tree가 없어 같은 이름의 두 society가 서로의 unit을 제 것으로 봤고, 확인과 교체가 두 단계였으며, start·stop·관측은 소유를 묻지 않았다 | 수정 ff0a1ba(owner 줄 `X-OMA-Owner`, no-replace 게시, 효과마다 확인) |
+| P0V-60 | R05 | P0-2 | broker/peer-authenticator.ts, broker/principal-endpoint.ts | Principal의 AuthContext가 요청을 시작할 때의 등록 세대를 다시 확인하지 않아, await 중에 등록이 바뀐 요청이 accept 때 권한을 가졌다. Resident의 context는 run lease를 매번 다시 본다 | 수정 e62ba8c |
+| P0V-61 | R06 | P0-3 | config/generations.ts | 세대 ID는 내용이라 A→B→A가 되풀이되는데, journal 기록은 commit 뒤에 쓰였고 실패해도 넘어갔다. 기록 둘이 사라지면 수집이 실제 직전 세대 B를 지웠다(AV7 뒤 알려진 한계였다) | 수정 3f8bcb3(기록은 "이전 현재" 쌍, commit point 전, 실패하면 commit하지 않음) |
+| P0V-62 | R07 | P0-4 | cli/exit.ts, cli.ts | CLI가 pipe·socket에 출력하고 바로 `process.exit`해서 긴 답이 잘렸다. 이 머신(Node 24)에서 262,001바이트가 146,176바이트로 도착했고 종료 코드는 0이었다 | 수정 0b60402(exit owner가 출력을 동기 쓰기로 둠) |
+| P0V-63 | R08 | P0-2 | cli/effects.ts, cli/effects/mail.ts | `--reply`가 헤더만 필요한데 저장 메일 전체를 frame 한도로 읽어, 받을 수 있는 큰 메일에 회신하지 못했다 | 수정 c3c1d03 |
+| P0V-64 | R09 | P0-2 | domain/errors.ts, git/context.ts·submit.ts·integration.ts 외 | 공개 경계와 accept 뒤 판정이 code는 정규화된 오류에서, phase·details는 원래 예외에서 읽었다. 정리 실패와 묶인 거절은 INTERNAL_ERROR로 판정돼 pending으로 남았다 | 수정 b84c3d2(`acceptedFailurePolicy` 하나) |
+| P0V-65 | R10 | P0-4 | broker/transport-spool.ts, 닫기를 차례로 하던 finally 다섯 곳 | spool reader의 FD가 stream에 넘어가기 전 실패에서 owner가 없었고, 첫 close가 실패하면 나머지 close와 `preparing` 해제를 건너뛰었다 | 수정 b5eee34(`closeEvery`) |
+| P0V-66 | R11 | P0-5 | tui/view/dashboard.ts, tui/view/screens.ts | 대시보드가 new/만 세어 "세션에 전달 대기"라고 했다. batch 준비는 세션 전달 전에 메일을 cur/로 옮기므로 준비된 메일이 전달된 것으로 보였다 | 수정 9af31fb(원장 pending 관측, ●는 "아직 batch에 담기지 않음") |
+| P0V-67 | R12 | P0-2 | tui/keys.ts | 키 디코더가 read마다 새 TextDecoder로 첫 U+FEFF를 BOM으로 지워, read가 잘린 자리에 따라 글자가 달라졌다 | 수정 8e5c644 |
+| P0V-68 | R13 | P0-2 | tui/view/screens.ts | 메일 scroll 상한이 알림 줄이 없다고 보고 계산돼, 알림이나 busy 줄이 있으면 마지막 줄에 닿지 못했다 | 수정 a94a168 |
+| P0V-69 | 둘째 F2 | P0-5 | domain/errors.ts, domain/admission.ts, store.ts | SQLite의 CORRUPT·NOTADB가 INTERNAL_ERROR로 남아 fence가 닫히지 않았고, 반대로 BEGIN의 I/O 오류는 STORE_CORRUPT로 단정했다 | 수정 d723f46(결과 코드 표를 정규화 한 곳에) |
+| P0V-70 | 둘째 F3 | P0-2 | broker.ts `publishStatus` | broker가 잡는 실패 가운데 status 발행만 fence에 가지 않았다. 발행은 원장을 먼저 읽는다 | 수정 d723f46 |
+| P0V-71 | 둘째 F4 | P0-3 | storage/durable-fs.ts `ensureDurableDirectory`, request-cache.ts | 영속 디렉터리가 이번 호출이 만든 이름만 flush해, fsync 실패 뒤 재시도는 깊은 조상 이름을 flush하지 않고 성공했다. request cache는 모양만 만드는 `ensureDirectory`를 썼다 | 수정 3850169(leaf부터 root까지 매번) |
+| P0V-72 | 둘째 F5 | P0-5 | config/generations.ts `journalTail` | journal tail을 `readSync` 한 번으로 읽고 모자란 읽기를 전체로 믿었다 | 수정 3f8bcb3(끝까지 읽고, 이른 EOF는 모두 보존) |
+| P0V-73 | 둘째 F6 | P0-4 | tui/session.ts | spawn이 실패하면 `exit` 없이 `error`·`close`만 오는데 `exited`는 `exit`만 기다렸다. host의 tenure는 자기 기다림에 상한이 있어 멈추지는 않았다 | 수정 8ec694c |
+
+원칙에 따라 함께 고친 곳: P0V-64는 원래 예외에서 code를 읽던 sweep·reconcile·runner 로그도 고쳤다. P0V-65는 같은 모양의 finally 다섯 곳을 모두
+고쳤다. P0V-59는 no-replace 게시를 request cache 전용에서 durable-fs의 primitive 하나로 옮겼다. 그리고 P0-7 gate가 별칭으로 import된
+primitive를 보지 못해 request cache의 receipt 경계가 등록 없이 빠져 있던 것을 고쳤다(별칭 해석, 경계 두 개 등록). P0V-61은 validation의
+알려진 한계("기록이 연속 두 번 빠지면 직전 세대를 잃을 수 있다")를 닫았다.
+
+재현한 것: R07(Node 24, 위 수치), 둘째 F2(실제 node:sqlite가 NOTADB에 `errcode: 26`을 냄), 둘째 F6(없는 실행 파일, spawn 실패). 나머지는
+시험이 옛 코드에서 실패하는 것으로 확인했다.
+
+판정을 바꾼 곳: R02는 "새 batch 행이 생긴다"는 부분이 과장이었다. `insertPreparedBatch`는 트랜잭션 안에서 fence를 확인한다. 결함은 이미
+준비된 batch의 전달과 같은 method의 두 규칙이다. R03의 순서 부분은 규범(REC-007)끼리의 충돌이라 DR16으로 정했다.
+
+판정하지 않은 것: 두 검토의 구조 개선 제안(S01–S14, 둘째 §9: validated graph, SQLite 대기 시간 예산, ROLLBACK 실패 관측, 단조 시계).
+첫 검토의 재평가 가운데 N20(부분 수정: 목록의 lstat 전수와 이중 관측)과 N21(미해결)은 각각 개선 제안, DR14의 의도된 예외로 둔다.
+
+CI: 두 검토 모두 `18421f0`의 Actions run 36290090020이 failure라고 관측했고 원인은 모른다고 적었다. 여기서는 로그를 읽을 수 없다.
+직전 `6787211`의 run은 4초 만에 artifact 0개로 끝났다(첫 검토 묶음의 ci-observation). 그러니 checkout 전에 job이 끝났다. 코드 시험의
+실패라기보다 job 할당이나 계정 단계의 실패로 보이지만, 확인하지 못했다. workflow가 고정한 action SHA 셋은 공개 태그와 같다.
+
+### 기존 시험의 기대를 바꾼 곳
+
+- `generation-retention`: journal 기록이 "이전 현재" 쌍이 되어, 기록을 적은 시험(AV7, P0V-47)은 새 형식으로 같은 뜻을 확인한다. "현재 세대의
+  기록이 빠지면 마지막 기록과 기록되지 않은 세대를 남긴다"는 이제 "현재 세대를 만든 commit의 기록이 없으면 모두 남긴다"다.
+- `tui-sources`, `tui-facts`(V28A), `unread-observations`(AV7): Mail 행과 ● 범례가 원장 관측과 new/의 실제 뜻을 말한다. 목록을 읽지 못한
+  메일함은 여전히 0건이 아니라 unknown이다. `unread-observations`는 P0V-66을 고칠 때 import로 고른 시험 묶음에서 빠져, 로컬 전체 시험에서 찾았다.
+- `oma-composition-policy`: host가 rootfs를 수리한다는 세 기대는 broker 조립 시험의 DR16 순서로 옮겼다.
+- `broker-composition-policy`: startup 순서에 수리(`repair`)가 recovery의 quiescence 뒤, bootstrap 앞에 들어간다.
+
+### 수정 검증
+
+수정마다 시험을 먼저 쓰고, 고친 파일만 기준점의 것으로 되돌려 빌드한 뒤 해당 시험이 실패하는지 확인했다. 서명이 바뀌어 되돌리면
+빌드가 깨지는 곳(P0V-60, P0V-64의 공유 판정 함수, P0V-65의 `closeEvery`, P0V-72의 읽기 loop)은 판정만 지우는 변이로 확인했다. 모두
+실패했다(KILLED). 처음 쓴 두 시험은 대조에서 살아남아 고쳤다: `closeEvery` 시험은 닫은 FD 번호가 재사용돼 두 FD가 같은 번호였고,
+spool 시험은 주입한 fstat 실패를 `openRegularBeneath` 안의 fstat이 먼저 소비했다. P0V-71의 request cache 시험은 옛
+`ensureDurableDirectory`에서도 통과한다(첫 호출은 만든 이름을 모두 flush한다). 재시도의 차이는 durable-fs 시험이 잡는다. 처음 쓴
+P0V-59의 배타 생성(`O_EXCL`로 이름에 바로 쓰기)은 crash에서 반쯤 찬 unit을 남길 수 있어 no-replace 게시로 바꿨다. P0V-58의 첫 수정은
+실패한 drain 뒤에도 lock을 풀어 R37(결과를 모르는 native 준비가 있으면 프로세스가 사는 동안 lock을 풀지 않는다)을 깼다. 그래서
+lifetime은 그대로 두었다. 회귀 시험은 `test/p0-review5.test.ts`(durable lane, requiredNames 3개)와 각 owner의 시험 파일에 있다.
+
 ## 수정 검증
 
 수정마다 그 수정을 되돌리는 변이를 넣고, 빌드한 뒤 해당 시험 파일을 돌렸다. 시험이 실패하면 KILLED다. 변이를 넣은 코드는 매번 원래대로 되돌리고 다시 빌드했다.

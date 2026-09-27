@@ -14,7 +14,7 @@ OMA v2는 일반 애플리케이션이 아니라 durable operation, Git CAS, Mai
 3. `implementation/physical-ordering.md` — canonical physical ordering.
 4. `implementation/contracts.ts`, `implementation/schema-v1.sql` — wire/durable 선언.
 5. `implementation/compliance.md`, `implementation/spikes.md`, `implementation/integration-policy.md`, `implementation/test-matrix.md`, `implementation/loc-budget.md` — release/evidence, OPEN gate, integration/test/build 계약.
-6. 고칠 곳에 관한 결정 기록 — `implementation/consistency-decisions.md`(D01–D06, WP·AV 결정), `implementation/design-revisions.md`(DR1–DR15). 규범이 왜 그런지를 알고 고친다.
+6. 고칠 곳에 관한 결정 기록 — `implementation/consistency-decisions.md`(D01–D06, WP·AV 결정), `implementation/design-revisions.md`(DR1–DR16). 규범이 왜 그런지를 알고 고친다.
 7. **이 문서 `MAINTENANCE.md`** — 위 규범을 변경하지 않고 유지하는 방법.
 8. `HANDOFF.md` — 현재 재개 지점과 남은 작업.
 9. `implementation/validation.md` — 현재 실행 증거, 알려진 한계, NOT_RUN/BLOCKED 범위.

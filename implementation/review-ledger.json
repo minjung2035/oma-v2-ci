@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 83,
-  "CHANGED_WITH_ORACLE": 141,
+  "READ_UNCHANGED": 77,
+  "CHANGED_WITH_ORACLE": 147,
   "REMOVED": 1
  },
  "lanes": {
@@ -59,30 +59,24 @@
   {
    "path": "implementation/systemd/broker.service.in",
    "primary": "WP03",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-59"
    ],
    "oracles": [
-    "AUD-1",
-    "AUD-2",
-    "AUD-3",
-    "AUD-4",
-    "AUD-5",
-    "AUD-6",
-    "AUD-7",
-    "AUD-8"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-59"
+   ]
   },
   {
    "path": "implementation/systemd/principal-relay.service.in",
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-59",
     "WP03"
    ],
    "oracles": [
+    "P0V-59",
     "V03A",
     "V03B"
    ]
@@ -90,30 +84,24 @@
   {
    "path": "implementation/systemd/principal.path.in",
    "primary": "WP03",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-59"
    ],
    "oracles": [
-    "CREATE-003",
-    "LIFE-007",
-    "LIFE-009",
-    "REC-001",
-    "REC-007",
-    "SEQ-002",
-    "T13",
-    "T36"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-59"
+   ]
   },
   {
    "path": "implementation/systemd/reconcile.service.in",
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-59",
     "WP03"
    ],
    "oracles": [
+    "P0V-59",
     "V03A",
     "V03B"
    ]
@@ -121,50 +109,36 @@
   {
    "path": "implementation/systemd/reconcile.timer.in",
    "primary": "WP03",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-59"
    ],
    "oracles": [
-    "CREATE-003",
-    "LIFE-007",
-    "LIFE-009",
-    "REC-001",
-    "REC-007",
-    "SEQ-002",
-    "T13",
-    "T36"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-59"
+   ]
   },
   {
    "path": "implementation/systemd/resident.path.in",
    "primary": "WP03",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-59"
    ],
    "oracles": [
-    "CREATE-003",
-    "D03",
-    "LIFE-007",
-    "LIFE-009",
-    "P01",
-    "P02",
-    "P05",
-    "REC-001"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-59"
+   ]
   },
   {
    "path": "implementation/systemd/resident.service.in",
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-59",
     "WP03",
     "WP25"
    ],
    "oracles": [
+    "P0V-59",
     "V03A",
     "V03B",
     "V25A"
@@ -196,6 +170,7 @@
    "by": [
     "AV20",
     "AV5",
+    "DR16",
     "DR9",
     "P0V-01",
     "P0V-02",
@@ -210,6 +185,12 @@
     "P0V-50",
     "P0V-52",
     "P0V-53",
+    "P0V-57",
+    "P0V-58",
+    "P0V-60",
+    "P0V-64",
+    "P0V-69",
+    "P0V-70",
     "WP03",
     "WP07",
     "WP21",
@@ -229,6 +210,12 @@
     "P0V-50",
     "P0V-52",
     "P0V-53",
+    "P0V-57",
+    "P0V-58",
+    "P0V-60",
+    "P0V-64",
+    "P0V-69",
+    "P0V-70",
     "V03A",
     "V03B",
     "V07A",
@@ -279,6 +266,7 @@
     "P0V-32",
     "P0V-37",
     "P0V-45",
+    "P0V-57",
     "WP21",
     "WP22"
    ],
@@ -286,6 +274,7 @@
     "P0V-32",
     "P0V-37",
     "P0V-45",
+    "P0V-57",
     "V21A",
     "V21B",
     "V22A",
@@ -310,10 +299,12 @@
    "primary": "WP25",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV6"
+    "AV6",
+    "P0V-60"
    ],
    "oracles": [
-    "AV6"
+    "AV6",
+    "P0V-60"
    ]
   },
   {
@@ -339,7 +330,8 @@
     "P0V-37",
     "P0V-45",
     "P0V-47",
-    "P0V-48"
+    "P0V-48",
+    "P0V-60"
    ],
    "oracles": [
     "AV6",
@@ -349,7 +341,8 @@
     "P0V-37",
     "P0V-45",
     "P0V-47",
-    "P0V-48"
+    "P0V-48",
+    "P0V-60"
    ]
   },
   {
@@ -411,32 +404,26 @@
    "by": [
     "AV1",
     "AV2",
-    "AV5"
+    "AV5",
+    "P0V-65"
    ],
    "oracles": [
     "AV1",
     "AV2",
-    "AV5"
+    "AV5",
+    "P0V-65"
    ]
   },
   {
    "path": "src/cli.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-62"
    ],
    "oracles": [
-    "AV1",
-    "CTX-001",
-    "CTX-002",
-    "D05",
-    "F2",
-    "R01",
-    "T117",
-    "T119"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-62"
+   ]
   },
   {
    "path": "src/cli/arguments.ts",
@@ -568,13 +555,15 @@
     "AV1",
     "AV2",
     "AV5",
-    "AV8"
+    "AV8",
+    "P0V-63"
    ],
    "oracles": [
     "AV1",
     "AV2",
     "AV5",
-    "AV8"
+    "AV8",
+    "P0V-63"
    ]
   },
   {
@@ -601,10 +590,12 @@
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV8"
+    "AV8",
+    "P0V-63"
    ],
    "oracles": [
-    "AV8"
+    "AV8",
+    "P0V-63"
    ]
   },
   {
@@ -643,6 +634,7 @@
     "DR7",
     "P0V-09",
     "P0V-10",
+    "P0V-62",
     "WP26"
    ],
    "oracles": [
@@ -657,6 +649,7 @@
     "DR6",
     "DR7",
     "P0V-10",
+    "P0V-62",
     "V26A",
     "V26B",
     "V26C"
@@ -781,6 +774,8 @@
     "P0V-33",
     "P0V-47",
     "P0V-48",
+    "P0V-61",
+    "P0V-72",
     "WP13",
     "WP14"
    ],
@@ -795,6 +790,8 @@
     "P0V-33",
     "P0V-47",
     "P0V-48",
+    "P0V-61",
+    "P0V-72",
     "V13A",
     "V13B",
     "V13C",
@@ -922,6 +919,8 @@
     "DR4",
     "DR6",
     "DR7",
+    "P0V-69",
+    "P0V-70",
     "WP21",
     "WP22"
    ],
@@ -931,6 +930,8 @@
     "DR4",
     "DR6",
     "DR7",
+    "P0V-69",
+    "P0V-70",
     "V21A",
     "V21B",
     "V22A",
@@ -1043,6 +1044,9 @@
     "P0V-33",
     "P0V-47",
     "P0V-48",
+    "P0V-64",
+    "P0V-69",
+    "P0V-70",
     "WP21"
    ],
    "oracles": [
@@ -1060,6 +1064,9 @@
     "P0V-33",
     "P0V-47",
     "P0V-48",
+    "P0V-64",
+    "P0V-69",
+    "P0V-70",
     "V21A",
     "V21B"
    ]
@@ -1271,12 +1278,14 @@
     "AV31",
     "AV5",
     "DR13",
+    "DR16",
     "P0V-08",
     "P0V-28",
     "P0V-29",
     "P0V-38",
     "P0V-39",
     "P0V-51",
+    "P0V-58",
     "WP03",
     "WP21",
     "WP22"
@@ -1295,6 +1304,7 @@
     "P0V-38",
     "P0V-39",
     "P0V-51",
+    "P0V-58",
     "V03A",
     "V03B",
     "V21A",
@@ -1336,6 +1346,7 @@
     "AV5",
     "AV7",
     "DR13",
+    "DR16",
     "P0V-12",
     "P0V-18",
     "P0V-24",
@@ -1344,6 +1355,7 @@
     "P0V-41",
     "P0V-42",
     "P0V-43",
+    "P0V-58",
     "WP03",
     "WP08",
     "WP09",
@@ -1364,6 +1376,7 @@
     "P0V-41",
     "P0V-42",
     "P0V-43",
+    "P0V-58",
     "V03A",
     "V03B",
     "V08A",
@@ -1393,12 +1406,14 @@
    "by": [
     "AV27",
     "AV28",
+    "P0V-64",
     "WP03",
     "WP25"
    ],
    "oracles": [
     "AV27",
     "AV28",
+    "P0V-64",
     "V03A",
     "V03B",
     "V25A"
@@ -1694,9 +1709,11 @@
    "primary": "WP18",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-65",
     "WP18"
    ],
    "oracles": [
+    "P0V-65",
     "V18A",
     "V18B"
    ]
@@ -1713,6 +1730,7 @@
     "DR4",
     "DR6",
     "DR7",
+    "P0V-64",
     "WP17",
     "WP18",
     "WP20",
@@ -1726,6 +1744,7 @@
     "DR4",
     "DR6",
     "DR7",
+    "P0V-64",
     "V17A",
     "V17B",
     "V18A",
@@ -1764,6 +1783,7 @@
     "DR7",
     "DR8",
     "P0V-08",
+    "P0V-64",
     "WP21",
     "WP24"
    ],
@@ -1777,6 +1797,7 @@
     "DR6",
     "DR7",
     "DR8",
+    "P0V-64",
     "V21A",
     "V21B",
     "V24A",
@@ -1858,11 +1879,13 @@
    "primary": "WP20",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-64",
     "WP17",
     "WP20",
     "WP21"
    ],
    "oracles": [
+    "P0V-64",
     "V17A",
     "V17B",
     "V20A",
@@ -2645,6 +2668,7 @@
     "DR10",
     "P0V-05",
     "P0V-07",
+    "P0V-64",
     "WP03",
     "WP21",
     "WP22"
@@ -2652,6 +2676,7 @@
    "oracles": [
     "AV20",
     "DR10",
+    "P0V-64",
     "V03A",
     "V03B",
     "V21A",
@@ -2690,9 +2715,13 @@
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-59",
+    "P0V-71",
     "WP26"
    ],
    "oracles": [
+    "P0V-59",
+    "P0V-71",
     "V26A",
     "V26B",
     "V26C"
@@ -3150,21 +3179,13 @@
   {
    "path": "src/storage/contained-fs.ts",
    "primary": "WP05",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-65"
    ],
    "oracles": [
-    "AV5",
-    "R14",
-    "R20",
-    "R21",
-    "S-06",
-    "V05A",
-    "V05B",
-    "V18A"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "P0V-65"
+   ]
   },
   {
    "path": "src/storage/context-files.ts",
@@ -3210,10 +3231,12 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV5",
+    "P0V-65",
     "WP18"
    ],
    "oracles": [
     "AV5",
+    "P0V-65",
     "V18A",
     "V18B"
    ]
@@ -3232,6 +3255,7 @@
     "P0V-04",
     "P0V-06",
     "P0V-13",
+    "P0V-65",
     "WP05",
     "WP06",
     "WP27"
@@ -3240,6 +3264,7 @@
     "AV4",
     "DR11",
     "DR9",
+    "P0V-65",
     "V05A",
     "V05B",
     "V06A",
@@ -3304,7 +3329,9 @@
     "P0V-49",
     "P0V-50",
     "P0V-52",
-    "P0V-53"
+    "P0V-53",
+    "P0V-59",
+    "P0V-71"
    ],
    "oracles": [
     "AV1",
@@ -3314,7 +3341,9 @@
     "P0V-49",
     "P0V-50",
     "P0V-52",
-    "P0V-53"
+    "P0V-53",
+    "P0V-59",
+    "P0V-71"
    ]
   },
   {
@@ -3341,12 +3370,14 @@
     "AV1",
     "AV2",
     "AV5",
+    "P0V-65",
     "WP20"
    ],
    "oracles": [
     "AV1",
     "AV2",
     "AV5",
+    "P0V-65",
     "V20A",
     "V20B"
    ]
@@ -3399,10 +3430,12 @@
    "primary": "WP29",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-30"
+    "P0V-30",
+    "P0V-56"
    ],
    "oracles": [
-    "P0V-30"
+    "P0V-30",
+    "P0V-56"
    ]
   },
   {
@@ -3538,11 +3571,13 @@
     "P0V-03",
     "P0V-04",
     "P0V-06",
-    "P0V-30"
+    "P0V-30",
+    "P0V-56"
    ],
    "oracles": [
     "DR9",
-    "P0V-30"
+    "P0V-30",
+    "P0V-56"
    ]
   },
   {
@@ -3563,6 +3598,9 @@
     "P0V-22",
     "P0V-23",
     "P0V-30",
+    "P0V-56",
+    "P0V-69",
+    "P0V-70",
     "WP04",
     "WP23"
    ],
@@ -3570,6 +3608,9 @@
     "DR13",
     "DR9",
     "P0V-30",
+    "P0V-56",
+    "P0V-69",
+    "P0V-70",
     "V04A",
     "V04B",
     "V23A",
@@ -3618,6 +3659,7 @@
     "P0V-38",
     "P0V-39",
     "P0V-51",
+    "P0V-66",
     "WP15"
    ],
    "oracles": [
@@ -3627,6 +3669,7 @@
     "P0V-38",
     "P0V-39",
     "P0V-51",
+    "P0V-66",
     "V15A",
     "V15B"
    ]
@@ -3649,10 +3692,12 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "P0V-46"
+    "P0V-46",
+    "P0V-67"
    ],
    "oracles": [
-    "P0V-46"
+    "P0V-46",
+    "P0V-67"
    ]
   },
   {
@@ -3704,6 +3749,7 @@
     "P0V-42",
     "P0V-43",
     "P0V-51",
+    "P0V-66",
     "WP14",
     "WP15"
    ],
@@ -3725,6 +3771,7 @@
     "P0V-42",
     "P0V-43",
     "P0V-51",
+    "P0V-66",
     "V14A",
     "V14B",
     "V15A",
@@ -3777,6 +3824,7 @@
     "P0V-41",
     "P0V-42",
     "P0V-43",
+    "P0V-73",
     "WP09"
    ],
    "oracles": [
@@ -3790,6 +3838,7 @@
     "P0V-41",
     "P0V-42",
     "P0V-43",
+    "P0V-73",
     "V09A",
     "V09B",
     "V09C"
@@ -3945,6 +3994,7 @@
     "P0V-38",
     "P0V-39",
     "P0V-51",
+    "P0V-66",
     "WP15",
     "WP28"
    ],
@@ -3955,6 +4005,7 @@
     "P0V-38",
     "P0V-39",
     "P0V-51",
+    "P0V-66",
     "V15A",
     "V15B",
     "V28A",
@@ -4048,6 +4099,8 @@
     "P0V-41",
     "P0V-42",
     "P0V-43",
+    "P0V-66",
+    "P0V-68",
     "WP14",
     "WP15",
     "WP28"
@@ -4059,6 +4112,8 @@
     "P0V-41",
     "P0V-42",
     "P0V-43",
+    "P0V-66",
+    "P0V-68",
     "V14A",
     "V14B",
     "V15A",
@@ -4092,6 +4147,7 @@
     "DR13",
     "P0V-11",
     "P0V-26",
+    "P0V-59",
     "WP03",
     "WP23",
     "WP25"
@@ -4101,6 +4157,7 @@
     "AV9",
     "DR13",
     "P0V-26",
+    "P0V-59",
     "V03A",
     "V03B",
     "V23A",
