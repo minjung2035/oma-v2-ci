@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 224,
-    "n_lines": 30206,
+    "n_lines": 30228,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -32,8 +32,8 @@
   },
   "src/config/generations.ts": {
     "blank": 25,
-    "comment": 126,
-    "code": 384,
+    "comment": 137,
+    "code": 395,
     "language": "TypeScript"
   },
   "src/config/operations.ts": {
@@ -1352,8 +1352,8 @@
   },
   "SUM": {
     "blank": 1212,
-    "comment": 5022,
-    "code": 23972,
+    "comment": 5033,
+    "code": 23983,
     "nFiles": 224
   }
 }

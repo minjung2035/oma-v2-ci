@@ -313,6 +313,14 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
     throw new StoreError("LIMIT_EXCEEDED",
       `configuration history is full (${limits.generations} generations or ${limits.bytes} bytes); restart oma to collect unused generations`);
   publishGeneration(generations, id, published, faults);
+  // P0V-61, P0-3: the order of commits is what a collection keeps the rollback
+  // basis by, so it is recorded before the commit point, not after it: a
+  // commit whose record could not be written is not made.
+  try { recordCommit(base, current, id); }
+  catch (error) {
+    const cause = storeFailure(error);
+    throw new StoreError(cause.code, `configuration generation ${id} was not committed: its record could not be written`, { cause: error });
+  }
 
   const pointer = json({ kind: "oma-operations-v1", host: at("host.json"), models: at("models.json"),
     roles: Object.fromEntries(Object.keys(roles).sort().map(name => [name, at(`roles/${name}.json`)])) });
@@ -345,7 +353,6 @@ export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEd
       throw new StoreError(cause.code, `configuration generation ${id} was published but its durability is unconfirmed; the next edit re-checks it`, { cause: error, details: { publication: "unconfirmed" } });
     }
   });
-  recordCommitted(base, current, id);
   return Object.freeze({ kind: "committed", generation: id });
 }
 
@@ -417,25 +424,44 @@ function publishInline(path: string, bytes: Buffer, candidate: ValidatedConfigCa
   return outcome;
 }
 
-/** Only the newest entries of the journal are ever needed: which generation
- * was committed last, and the one before it. The journal grows by one line per
- * commit, so it is read from its end and never whole (INV10). */
+/** Only the newest records of the journal are ever needed: the one that made
+ * the current generation current, which names the generation it replaced. The
+ * journal grows by one line per commit, so it is read from its end and never
+ * whole (INV10). */
 const JOURNAL_TAIL_BYTES = 4096;
+/** One commit: the generation the manifest named before (`-` for none) and
+ * the one it names after. An earlier release wrote the generation alone. */
+const COMMIT_RECORD = /^(-|g-[0-9a-f]{64}) (g-[0-9a-f]{64})$/;
+interface CommitRecord { readonly previous: string | null; readonly id: string; readonly legacy: boolean }
+function commitRecord(line: string): CommitRecord | null {
+  const pair = COMMIT_RECORD.exec(line);
+  if (pair !== null) return { previous: pair[1] === "-" ? null : pair[1]!, id: pair[2]!, legacy: false };
+  return GENERATION_ID.test(line) ? { previous: null, id: line, legacy: true } : null;
+}
 
-/** The generations the journal's tail records, oldest first, and whether the
- * journal ends on a line boundary. A line cut by the window's start, or left
- * without its newline by a crash or a short write in the middle of an append,
- * is not an entry (P0V-47): only a line the journal ended is one. */
-function journalTail(fd: number): { readonly entries: readonly string[]; readonly terminated: boolean } {
+/** The records of the journal's last window, oldest first, and whether the
+ * journal ends on a line boundary -- or null when the window could not be read
+ * whole. A line cut by the window's start, or left without its newline by a
+ * crash or a short write in the middle of an append, is not a record (P0V-47):
+ * only a line the journal ended is one. P0V-72, P0-5: a read may return fewer
+ * bytes than it was asked for (read(2)), and what came back is not the
+ * window's end; the window is read until it is whole, and an end of file
+ * before that is an observation that did not finish. */
+function journalTail(fd: number): { readonly records: readonly CommitRecord[]; readonly terminated: boolean } | null {
   const size = fstatSync(fd).size;
   const length = Math.min(size, JOURNAL_TAIL_BYTES);
   const buffer = Buffer.alloc(length);
-  const read = readSync(fd, buffer, 0, length, size - length);
-  const lines = buffer.subarray(0, read).toString("utf8").split("\n");
-  // After the last newline: nothing, or an unfinished append. Not an entry.
+  for (let filled = 0; filled < length;) {
+    const read = readSync(fd, buffer, filled, length - filled, size - length + filled);
+    if (read === 0) return null;
+    filled += read;
+  }
+  const lines = buffer.toString("utf8").split("\n");
+  // After the last newline: nothing, or an unfinished append. Not a record.
   lines.pop();
   if (size > length) lines.shift();
-  return { entries: lines.filter(line => GENERATION_ID.test(line)), terminated: read === 0 || buffer[read - 1] === 0x0a };
+  const records = lines.map(commitRecord).filter((record): record is CommitRecord => record !== null);
+  return { records, terminated: length === 0 || buffer[length - 1] === 0x0a };
 }
 
 /** Appends every byte of `text`: a write may take fewer bytes than it was
@@ -445,50 +471,46 @@ function appendAll(fd: number, text: string): void {
   for (let offset = 0; offset < bytes.length;) offset += writeSync(fd, bytes, offset, bytes.length - offset);
 }
 
-/** The journal of committed generations, in commit order. The manifest is
- * what says a generation is committed (INV03); the journal only remembers the
- * order, for the collection that keeps the previous generation as the basis of
- * a rollback (WP13). So the committer, which knows exactly which generation the
- * manifest named before its own (`previous`), writes that one first when the
- * journal does not already end with it: a crash between an earlier commit and
- * its record, or an append that failed, would otherwise leave the previous
- * generation unrecorded, and a later collection would remove it as if it had
- * never been committed. A failure here leaves the commit standing; a
- * collection that cannot trust the journal removes no generation. */
-function recordCommitted(base: string, previous: string | null, id: string): void {
-  try {
-    withinDirectory(join(base, JOURNAL), (directory, name) => {
-      const fd = openBeneath(directory, name, constants.O_RDWR | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
-      try {
-        const tail = journalTail(fd);
-        const missing = previous !== null && tail.entries.at(-1) !== previous;
-        // P0V-47, P0-3: an append a crash cut short is closed off as its own
-        // line first; otherwise this record would be glued onto it and lost
-        // too, and a later collection would take the previous generation --
-        // the one a rollback needs -- for an older one.
-        appendAll(fd, `${tail.terminated ? "" : "\n"}${missing ? `${previous}\n` : ""}${id}\n`);
-        fsyncSync(fd);
-      } finally { closeSync(fd); }
-    });
-  } catch { /* the commit stands; see collectManagedGenerations */ }
+/** The journal of commits. The manifest is what says a generation is
+ * committed (INV03); the journal says which one each commit replaced, for the
+ * collection that keeps the previous generation as the basis of a rollback
+ * (WP13). P0V-61, P0-3: a generation's id is its content, so one returns
+ * whenever a configuration does (A, B, A) -- a record of the id alone could
+ * not say which occurrence it was, and records lost to failed appends made a
+ * journal ending in A look exact while B, the real previous, went unrecorded.
+ * So each record names the generation it replaced, and it is written and
+ * flushed before the commit point: a commit whose record failed is not made,
+ * and a record whose commit did not follow names a generation the manifest
+ * never pointed at, which no collection takes for the current one. */
+function recordCommit(base: string, previous: string | null, id: string): void {
+  withinDirectory(join(base, JOURNAL), (directory, name) => {
+    const fd = openBeneath(directory, name, constants.O_RDWR | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
+    try {
+      // P0V-47, P0-3: an append a crash cut short is closed off as its own
+      // line first, so this record is not glued onto it. A tail that could
+      // not be read whole may end anywhere; an empty line costs nothing.
+      const tail = journalTail(fd);
+      appendAll(fd, `${tail?.terminated === true ? "" : "\n"}${previous ?? "-"} ${id}\n`);
+      fsyncSync(fd);
+    } finally { closeSync(fd); }
+    // The journal's name is as durable as its record.
+    fsyncSync(directory);
+  });
 }
 
 /** Which generations a collection keeps besides the staging it always removes
  * (INV02: what the journal cannot vouch for is kept, never removed).
- * - The journal cannot be read: every generation is kept.
- * - It ends with the current generation: its record, and the previous one the
- *   committer wrote before it, are exact; the current and that previous are kept.
- * - It ends with another: the current generation's record was lost. The last
- *   recorded one and every generation the tail does not record are kept; only
- *   generations recorded before the last are known to be older than the previous. */
-function generationsToKeep(current: string, tail: readonly string[] | null, present: readonly string[]): ReadonlySet<string> | "all" {
-  if (tail === null) return "all";
-  if (tail.at(-1) === current) {
-    const previous = [...tail].reverse().find(id => id !== current);
-    return new Set([current, ...(previous === undefined ? [] : [previous])]);
-  }
-  const recorded = new Set(tail);
-  return new Set([current, ...(tail.length > 0 ? [tail.at(-1)!] : []), ...present.filter(id => !recorded.has(id))]);
+ * - The journal cannot be read whole: every generation is kept.
+ * - Its last record of the current generation names what that commit
+ *   replaced: the current and that previous are kept. Every other generation
+ *   is either older than the previous or was published and never committed.
+ * - No record of the current generation's commit is in the window, or only
+ *   one from before records named what they replaced: every generation is kept. */
+function generationsToKeep(current: string, records: readonly CommitRecord[] | null): ReadonlySet<string> | "all" {
+  if (records === null) return "all";
+  const last = [...records].reverse().find(record => record.id === current);
+  if (last === undefined || last.legacy) return "all";
+  return new Set([current, ...(last.previous === null || last.previous === current ? [] : [last.previous])]);
 }
 
 /** Quiescent collection: called only by the society owner while no broker or
@@ -502,15 +524,15 @@ export function collectManagedGenerations(snapshot: Pick<ConfigurationSnapshot, 
   if (current === null || snapshot.layout.kind !== "operations") return [];
   const base = join(dirname(snapshot.layout.index), MANAGED_DIRECTORY);
   const generations = join(base, "generations");
-  let tail: readonly string[] | null;
+  let records: readonly CommitRecord[] | null;
   try {
-    tail = withinDirectory(join(base, JOURNAL), (directory, name) => {
+    records = withinDirectory(join(base, JOURNAL), (directory, name) => {
       const fd = openBeneath(directory, name, constants.O_RDONLY | constants.O_NOFOLLOW);
-      try { return journalTail(fd).entries; } finally { closeSync(fd); }
+      try { return journalTail(fd)?.records ?? null; } finally { closeSync(fd); }
     });
-  } catch { tail = null; }
+  } catch { records = null; }
   const entries = readdirSync(generations);
-  const keep = generationsToKeep(current, tail, entries.filter(entry => GENERATION_ID.test(entry)));
+  const keep = generationsToKeep(current, records);
   const removed: string[] = [];
   for (const entry of entries) {
     // A staging directory was never committed, so no journal is needed to remove it.

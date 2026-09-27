@@ -183,7 +183,7 @@ Final PASS condition: `v21-final-fast`, `v21-final-durable`, `v21-final-property
 **동시성과 내구성**
 - S-03: 실행 중인 turn 안의 delivery boundary 귀속은 미결이다. Principal delivery는 idle session에만 전달하므로 Human의 긴 turn 동안 전달이 기다린다.
 - 설정 편집은 비협조적인 same-UID writer와의 동시 편집을 지원하지 않는다. 전원 차단 뒤의 순서는 증명하지 않았다(WP12, WP13).
-- 설정 journal이 계속 읽히지 않으면 generation 예산에서 편집 거절이 재시작으로 풀리지 않는다. journal 기록이 연속 두 번 빠지면 직전 generation을 잃을 수 있다(AV7).
+- 설정 journal이 계속 읽히지 않으면 generation 예산에서 편집 거절이 재시작으로 풀리지 않는다(AV7). journal 기록이 연속 두 번 빠지면 직전 generation을 잃던 한계는 P0V-61이 닫았다: 기록은 commit point 전에 쓰이고, 기록하지 못한 commit은 하지 않는다.
 - 저장 용량은 kernel hard quota가 아니다. SQLite·WAL 증가는 측정만 했다(WP22).
 - accept되어 성공한 submit·context의 staging 디렉터리는 남는다(WP20. 14차 실제 점검에서도 보존을 확인).
 - 한 key에 대한 동시 CLI 프로세스는 검증 범위 밖이다(WP26).
