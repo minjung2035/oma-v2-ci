@@ -136,6 +136,8 @@
   "src/platform/guest/session.ts",
   "src/platform/guest/systemd-launcher.ts",
   "src/platform/host/egress.ts",
+  "src/platform/host/guest-link.ts",
+  "src/platform/host/lifecycle.ts",
   "src/platform/product-text.ts",
   "src/platform/rpc.ts",
   "src/ports/ledger.ts",
@@ -1465,7 +1467,7 @@
     "src/sandbox.ts",
     "src/platform/"
    ],
-   "files": 46
+   "files": 48
   },
   {
    "index": 5,
@@ -1482,9 +1484,9 @@
    "files": 59
   }
  ],
- "files": 241,
- "runtimeEdges": 924,
- "typeOnlyEdges": 327,
+ "files": 243,
+ "runtimeEdges": 927,
+ "typeOnlyEdges": 329,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 224,
   "L2-facts -> L1-kernel": 31,
@@ -1492,10 +1494,10 @@
   "L3-workflow -> L1-kernel": 162,
   "L3-workflow -> L2-facts": 11,
   "L3-workflow -> L3-workflow": 47,
-  "L4-orchestration -> L1-kernel": 128,
+  "L4-orchestration -> L1-kernel": 129,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 12,
-  "L4-orchestration -> L4-orchestration": 53,
+  "L4-orchestration -> L4-orchestration": 55,
   "L5-entry -> L1-kernel": 82,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
@@ -1562,7 +1564,7 @@
   "node:fs": 68,
   "node:http": 1,
   "node:https": 1,
-  "node:net": 18,
+  "node:net": 19,
   "node:os": 3,
   "node:path": 71,
   "node:perf_hooks": 5,

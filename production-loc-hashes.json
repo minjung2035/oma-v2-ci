@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "56e4f4c04ab8dc3c1f40b89c4a3eae55b744e9e5011c3a9494db2baa3a59490e",
-  "report": "ed8b38295cd64259b901b9d974fce20a5828204d383013eb0a6ee38bdd634fbc",
+  "manifest": "0276477e4675eb3311e8e5017ae4f45a767853c99ac8d941e5486a72597223a2",
+  "report": "331edaa7a490ea1686001de10c31b0d8b6e5435dfcf83f06515ac7e81e18843b",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -542,6 +542,14 @@
     {
       "path": "src/platform/host/egress.ts",
       "sha256": "40134d86aa1134e207cbfa0d11ec2300987bc9a6d84e433355c3004263d77099"
+    },
+    {
+      "path": "src/platform/host/guest-link.ts",
+      "sha256": "7c1d4a8691a9906d96a9c07fe87f491dd07751fe058a20f17cb6c7963b812f22"
+    },
+    {
+      "path": "src/platform/host/lifecycle.ts",
+      "sha256": "400b5acd1dbb3660ee4a6e5ca92592096c9cf3be2481fd3ec0602da1c06697b9"
     },
     {
       "path": "src/platform/product-text.ts",
