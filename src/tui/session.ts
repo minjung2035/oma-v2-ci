@@ -108,7 +108,7 @@ export function principalWorkspace(stateRoot: string): string {
 export function principalEnvironment(
   paths: PrincipalPaths,
   profile: SessionProfile,
-  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages">,
+  limits: Pick<ProtocolLimits, "frameBytes" | "mailBodyBytes" | "batchMaxMessages" | "contextBytes" | "bundleBytes">,
 ): Record<string, string> {
   // FS-003: the CLI's cache is in the Principal's private scratch.
   const home = principalWorkspace(paths.stateRoot);
@@ -127,6 +127,9 @@ export function principalEnvironment(
     OMA_FRAME_BYTES: String(limits.frameBytes),
     // The mail tool reads stored messages, whose bound is not the body's (P0V-36).
     OMA_MAIL_BYTES: String(storedMailBytes(limits.mailBodyBytes)),
+    // P0V-78: the streams the CLI prepares are read only up to these.
+    OMA_CONTEXT_BYTES: String(limits.contextBytes),
+    OMA_BUNDLE_BYTES: String(limits.bundleBytes),
     OMA_WORKSPACE_BYTES: String(profile.workspaceBytes),
     // PR-002: where the broker publishes the Principal's prepared batches, and
     // how large one may be. The host delivers them; the extension reads them.

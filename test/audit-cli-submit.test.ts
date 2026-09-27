@@ -76,7 +76,7 @@ function probe(home: string, fault: "none" | "git" | "read"): string {
     path,
     `import fs from 'node:fs'; import cp from 'node:child_process';
     import { dirname, join } from 'node:path'; import { syncBuiltinESMExports } from 'node:module';
-    const spawn = cp.spawnSync, open = fs.openSync, read = fs.readFileSync; let bundleFd;
+    const spawn = cp.spawnSync, open = fs.openSync, read = fs.readSync; let bundleFd;
     cp.spawnSync = (command, args, options) => {
       if (command === '/usr/bin/git' && args[0] === 'bundle' && args[1] === 'create') {
         fs.appendFileSync(join(process.env.HOME, 'probe.jsonl'), JSON.stringify({ path: args[2], mode: fs.statSync(dirname(args[2])).mode & 511 }) + '\\n');
@@ -85,7 +85,8 @@ function probe(home: string, fault: "none" | "git" | "read"): string {
       return spawn(command, args, options);
     };
     fs.openSync = (path, ...args) => { const fd = open(path, ...args); if (typeof path === 'string' && path.endsWith('/candidate.bundle')) bundleFd = fd; return fd; };
-    fs.readFileSync = (path, ...args) => { if (${JSON.stringify(fault)} === 'read' && typeof path === 'number' && path === bundleFd) throw Object.assign(new Error('controlled bundle read error'), { code: 'EIO' }); return read(path, ...args); };
+    // P0V-78: the bundle is read through the CLI's one bounded reader.
+    fs.readSync = (fd, ...args) => { if (${JSON.stringify(fault)} === 'read' && fd === bundleFd) throw Object.assign(new Error('controlled bundle read error'), { code: 'EIO' }); return read(fd, ...args); };
     syncBuiltinESMExports();`,
   );
   return path;

@@ -35,16 +35,32 @@ function readLocal(path: string, limit: number, whole: boolean): Buffer {
     return fail(`cannot open ${path}: ${code ?? String(error)}`, 2);
   }
   try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile()) fail(`not a regular file: ${path}`, 2);
-    if (whole && stat.size > limit) fail(`file is larger than a request can carry (${limit} bytes): ${path}`, 2);
-    const buffer = Buffer.alloc((whole ? stat.size : Math.min(stat.size, limit)) + 1);
-    let filled = 0;
-    for (let count = 1; count > 0 && filled < buffer.length; filled += count)
-      count = readSync(fd, buffer, filled, buffer.length - filled, null);
-    if (whole && filled > stat.size) fail(`file grew while it was read: ${path}`, 2);
-    return buffer.subarray(0, Math.min(filled, whole ? filled : limit));
+    return readBounded(fd, limit, whole, refusal => fail(
+      refusal === "type" ? `not a regular file: ${path}`
+        : refusal === "size" ? `file is larger than a request can carry (${limit} bytes): ${path}`
+          : `file grew while it was read: ${path}`, 2));
   } finally { closeSync(fd); }
+}
+
+export type LocalReadRefusal = "type" | "size" | "grew";
+
+/** P0V-78, INV10: the one way the CLI reads a local input -- a file a command
+ * names, a context document, the bundle Git wrote. The descriptor was opened
+ * without following a link. Only a regular file is read; a whole read is held
+ * to `limit` by the size the descriptor reports before anything is allocated,
+ * and a file that grows past that size while it is read is refused rather
+ * than read on (a device such as /dev/zero would never end). A head read takes
+ * at most `limit` bytes of a file of any size. */
+export function readBounded(fd: number, limit: number, whole: boolean, refuse: (refusal: LocalReadRefusal) => never): Buffer {
+  const stat = fstatSync(fd);
+  if (!stat.isFile()) refuse("type");
+  if (whole && stat.size > limit) refuse("size");
+  const buffer = Buffer.alloc((whole ? stat.size : Math.min(stat.size, limit)) + 1);
+  let filled = 0;
+  for (let count = 1; count > 0 && filled < buffer.length; filled += count)
+    count = readSync(fd, buffer, filled, buffer.length - filled, null);
+  if (whole && filled > stat.size) refuse("grew");
+  return buffer.subarray(0, Math.min(filled, whole ? filled : limit));
 }
 
 export function readBody(path: string | null): string {

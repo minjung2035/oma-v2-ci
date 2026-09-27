@@ -4,7 +4,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { closeSync, ftruncateSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -155,4 +156,115 @@ test("R6-04: a synchronous command inherits the descriptors it is given, from 3 
     assert.equal(seen.kind, "exited");
     assert.equal(seen.stdout.toString("utf8").trim(), leasePathOf(join(root, "tree")));
   } finally { lease.release(); }
+});
+
+/** A CLI effect run in its own process: `fail` ends the process it runs in. */
+function cliChild(script: string, options: { cwd?: string; env?: Record<string, string> } = {}) {
+  const at = (module: string) => new URL(module, import.meta.url).href;
+  const source = script.replace(/@(\.\.\/src\/[\w/.-]+\.js)/g, (_all, module: string) => at(module));
+  return spawnSync(process.execPath, ["--input-type=module", "-e", source], {
+    cwd: options.cwd, encoding: "utf8", timeout: 60_000,
+    env: { PATH: process.env.PATH ?? "/usr/bin:/bin", ...options.env },
+  });
+}
+
+test("P0V-78 / R6-05, INV10: a context tree is read only up to the context stream's bound, refused before the document that overflows it is read", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-context-bound-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const tree = join(root, "ctx");
+  mkdirSync(tree);
+  writeFileSync(join(tree, "GOAL.md"), "goal\n");
+  // 64 MiB, sparse: the reader this replaced allocated all of it first.
+  const big = openSync(join(tree, "RATIONALE.md"), "w");
+  ftruncateSync(big, 64 * 1024 * 1024);
+  closeSync(big);
+  const prepare = `
+    import { prepareContextEffects } from "@../src/cli/effects/context.js";
+    process.on("exit", () => process.stdout.write(JSON.stringify({ arrayBuffers: process.memoryUsage().arrayBuffers })));
+    const prepared = prepareContextEffects(${JSON.stringify(tree)});
+    process.stdout.write(JSON.stringify({ bytes: prepared.digest.bytes }) + "\\n");`;
+  const refused = cliChild(prepare);
+  assert.equal(refused.status, 2, refused.stderr);
+  assert.match(refused.stderr, /context is larger than a request can carry \(8388608 bytes\) at RATIONALE\.md/);
+  assert.ok(JSON.parse(refused.stdout).arrayBuffers < 8 * 1024 * 1024, `the refused document was allocated: ${refused.stdout}`);
+
+  // The bound is the society's, carried in the environment; the edge is exact.
+  writeFileSync(join(tree, "RATIONALE.md"), "why\n");
+  const total = 5 + 4;
+  const fits = cliChild(prepare, { env: { OMA_CONTEXT_BYTES: String(total) } });
+  assert.equal(fits.status, 0, fits.stderr);
+  assert.equal(JSON.parse(fits.stdout.split("\n")[0]!).bytes, total);
+  const over = cliChild(prepare, { env: { OMA_CONTEXT_BYTES: String(total - 1) } });
+  assert.equal(over.status, 2);
+  assert.match(over.stderr, /larger than a request can carry \(8 bytes\) at RATIONALE\.md/);
+});
+
+test("P0V-78 / R6-05, INV10: a submission's bundle is read only up to the bundle stream's bound", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-bundle-bound-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const env = { GIT_CONFIG_NOSYSTEM: "1", HOME: root, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid",
+    GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid", PATH: process.env.PATH ?? "/usr/bin:/bin" };
+  const git = (...argv: string[]) => {
+    const result = spawnSync("git", argv, { cwd: root, env, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  git("init", "-q");
+  writeFileSync(join(root, "a.txt"), "a\n");
+  git("add", "a.txt");
+  git("commit", "-q", "-m", "a");
+  const candidate = git("rev-parse", "HEAD");
+  const submit = `
+    import { prepareSubmitEffects } from "@../src/cli/effects/submit.js";
+    try {
+      const prepared = prepareSubmitEffects(${JSON.stringify(candidate)}, "cli-${randomUUID()}", { hasCandidate: false, prerequisites: [] });
+      process.stdout.write(JSON.stringify({ bytes: prepared.content.length }));
+    } catch (error) { process.stdout.write(JSON.stringify({ code: error.code, message: error.message })); }`;
+  const whole = JSON.parse(cliChild(submit, { cwd: root, env }).stdout);
+  assert.ok(whole.bytes > 0, JSON.stringify(whole));
+  const fits = JSON.parse(cliChild(submit, { cwd: root, env: { ...env, OMA_BUNDLE_BYTES: String(whole.bytes) } }).stdout);
+  assert.equal(fits.bytes, whole.bytes);
+  const over = JSON.parse(cliChild(submit, { cwd: root, env: { ...env, OMA_BUNDLE_BYTES: String(whole.bytes - 1) } }).stdout);
+  assert.equal(over.code, "LIMIT_EXCEEDED");
+  assert.match(over.message, new RegExp(`larger than a request can carry \\(${whole.bytes - 1} bytes\\)`));
+});
+
+test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the society's stream bounds, and an omitted one is the reference value", async () => {
+  const { principalEnvironment } = await import("../src/tui/session.js");
+  const { cliEnvironment } = await import("../src/extension/mail-tools.js");
+  const { cliBundleBytes, cliContextBytes } = await import("../src/cli/transport.js");
+  const { defaultHostConfig } = await import("../src/config/defaults.js");
+  const limits = { frameBytes: 256 * 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 12345, bundleBytes: 67890 };
+  const principal = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
+    { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] }, limits);
+  assert.equal(principal.OMA_CONTEXT_BYTES, "12345");
+  assert.equal(principal.OMA_BUNDLE_BYTES, "67890");
+  // A Resident's engine, whose shell and tools run the same CLI.
+  const { planPiSpawn } = await import("../src/runtime/pi-spawn-plan.js");
+  const resident = planPiSpawn({ actor: "alice", society: "demo", paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
+    workspace: "/srv/oma/w", sessionDir: "/srv/oma/s", agentHome: "/srv/oma/h", mailArchive: "/srv/oma/m", batchView: "/srv/oma/v", socket: "/run/oma/control.sock" },
+    profile: { provider: "p", model: "m", turnSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
+    limits: { ...limits, idleStreamSeconds: 1, receiptWaitSeconds: 1 } });
+  assert.equal(resident.env.OMA_CONTEXT_BYTES, "12345");
+  assert.equal(resident.env.OMA_BUNDLE_BYTES, "67890");
+  const saved = { context: process.env.OMA_CONTEXT_BYTES, bundle: process.env.OMA_BUNDLE_BYTES };
+  try {
+    process.env.OMA_CONTEXT_BYTES = principal.OMA_CONTEXT_BYTES;
+    process.env.OMA_BUNDLE_BYTES = principal.OMA_BUNDLE_BYTES;
+    const forwarded = cliEnvironment("/h", "/s", "/a");
+    assert.equal(forwarded.OMA_CONTEXT_BYTES, "12345", "the tools' CLI environment drops the context bound");
+    assert.equal(forwarded.OMA_BUNDLE_BYTES, "67890", "the tools' CLI environment drops the bundle bound");
+    assert.equal(cliContextBytes(), 12345);
+    assert.equal(cliBundleBytes(), 67890);
+    process.env.OMA_CONTEXT_BYTES = "8 MiB";
+    assert.throws(() => cliContextBytes(), /OMA_CONTEXT_BYTES must be decimal bytes/);
+    delete process.env.OMA_CONTEXT_BYTES;
+    delete process.env.OMA_BUNDLE_BYTES;
+    const reference = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) }).limits;
+    assert.equal(cliContextBytes(), reference.contextBytes);
+    assert.equal(cliBundleBytes(), reference.bundleBytes);
+  } finally {
+    for (const [name, value] of [["OMA_CONTEXT_BYTES", saved.context], ["OMA_BUNDLE_BYTES", saved.bundle]] as const)
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+  }
 });

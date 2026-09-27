@@ -1,13 +1,18 @@
-import { constants, closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { constants, closeSync, existsSync, fstatSync, lstatSync, openSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { contextFileCheck } from "../../domain/context-policy.js";
 import { fail } from "../exit.js";
-import { sha256Hex } from "../effects.js";
+import { readBounded, sha256Hex } from "../effects.js";
+import { cliContextBytes } from "../transport.js";
 
 type ContextFile = { path: string; bytes: number; sha256: string; data: Uint8Array };
 
-function walk(dir: string): ContextFile[] {
+/** P0V-78: the documents together are one context stream, so each is read
+ * only up to what the stream has left -- a tree larger than a request can
+ * carry is refused before the file that overflows it is read. */
+function walk(dir: string, streamBytes: number): ContextFile[] {
   const out: ContextFile[] = [];
+  let total = 0;
   const walker = (directoryPath: string, relative: string): void => {
     if (!lstatSync(directoryPath).isDirectory()) fail(`unsupported context directory ${relative}`, 2);
     const directory = openSync(
@@ -31,7 +36,11 @@ function walk(dir: string): ContextFile[] {
           const opened = fstatSync(fd);
           if (!opened.isFile() || opened.nlink !== 1)
             fail(`unsupported file type/link at ${relPath}`, 2);
-          const data = readFileSync(fd);
+          const data = readBounded(fd, streamBytes - total, true, refusal => fail(refusal === "size"
+            ? `context is larger than a request can carry (${streamBytes} bytes) at ${relPath}`
+            : refusal === "grew" ? `file grew while it was read: ${relPath}`
+              : `unsupported file type/link at ${relPath}`, 2));
+          total += data.length;
           const invalid = contextFileCheck(relPath, data);
           if (invalid) fail(`${invalid}: ${relPath}`, 2);
           out.push({ path: relPath, bytes: data.length, sha256: sha256Hex(data), data });
@@ -56,9 +65,9 @@ export interface PreparedContextEffects {
 /** Local no-follow directory observation only; request transport remains elsewhere. */
 export function prepareContextEffects(dir: string): PreparedContextEffects {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) fail(`not a directory: ${dir}`, 2);
-  const files = walk(dir);
+  const files = walk(dir, cliContextBytes());
   if (!files.some((entry) => entry.path === "GOAL.md")) fail("GOAL.md is required", 2);
-  const content = Buffer.concat(files.map((entry) => Buffer.from(entry.data)));
+  const content = Buffer.concat(files.map((entry) => entry.data));
   return {
     entries: files.map((entry) => ({ path: entry.path, bytes: entry.bytes, sha256: entry.sha256 })),
     content,

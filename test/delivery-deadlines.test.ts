@@ -74,7 +74,7 @@ async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budge
     writeFileSync(core, "export default function() {}\n"); writeFileSync(cli, "\n");
     const adapter = new PiAdapter({ actor: "alice", society: "demo",
       profile: { provider: "pi", model: "current", turnSeconds: budgets.turn, prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
-      limits: { frameBytes: 65536, idleStreamSeconds: budgets.idle, receiptWaitSeconds: budgets.accept, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024 },
+      limits: { frameBytes: 65536, idleStreamSeconds: budgets.idle, receiptWaitSeconds: budgets.accept, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       paths: { piCommand: fakePi(root, pacing, everyMs, forMs), coreExtension: core, cli, workspace: dirs.workspace!, sessionDir: dirs.sessions!,
         agentHome: dirs.home!, mailArchive: dirs.archive!, batchView: dirs.view!, socket: join(root, "control.sock") } });
     const batch = { id: "b-00000000-0000-4000-8000-0000000000b1", agent: "alice", incarnation: 1,

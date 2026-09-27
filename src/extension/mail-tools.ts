@@ -175,10 +175,12 @@ function boundedBytes(fd: number, maximum: number): Buffer {
     throw new Error("mail changed while it was read");
   return bytes;
 }
-/** Mirrors the frame-limit name the CLI reads. The extension cannot import
+/** Mirrors the frame- and stream-limit names the CLI reads. The extension cannot import
  * OMA's modules (PI-001); a rule holds the names this file forwards to the
  * names the CLI reads. */
 const FRAME_BYTES = "OMA_FRAME_BYTES";
+const CONTEXT_BYTES = "OMA_CONTEXT_BYTES";
+const BUNDLE_BYTES = "OMA_BUNDLE_BYTES";
 
 /** The environment the model-facing CLI is started with.
  *
@@ -197,9 +199,10 @@ export function cliEnvironment(home: string, socket: string, archive: string): R
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     LANG: "C.UTF-8",
   };
-  // The frame bound the broker was configured with. Without it the CLI falls
-  // back to its own default, which is not necessarily this society's.
-  for (const name of [FRAME_BYTES]) {
+  // The frame and stream bounds the broker was configured with. Without them
+  // the CLI falls back to its own defaults, which are not necessarily this
+  // society's.
+  for (const name of [FRAME_BYTES, CONTEXT_BYTES, BUNDLE_BYTES]) {
     const value = process.env[name];
     if (value !== undefined && value.length > 0) environment[name] = value;
   }

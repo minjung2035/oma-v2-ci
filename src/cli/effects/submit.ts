@@ -1,4 +1,4 @@
-import { constants, closeSync, fstatSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
+import { constants, closeSync, fstatSync, mkdtempSync, openSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { PublicMethods } from "../../../implementation/contracts.js";
@@ -6,6 +6,8 @@ import { StoreError } from "../../domain/errors.js";
 import { exportRefForRequestKey } from "../../domain/derived.js";
 import { runGitText } from "../../process/policies.js";
 import { fail } from "../exit.js";
+import { readBounded } from "../effects.js";
+import { cliBundleBytes } from "../transport.js";
 
 function git(cwd: string, args: string[]): string {
   const result = runGitText(args, { cwd });
@@ -46,7 +48,13 @@ function submitBundle(cwd: string, exportRef: string, prerequisites: readonly st
       const stat = fstatSync(fd);
       if (!stat.isFile() || stat.nlink !== 1)
         throw new StoreError("INVALID_REQUEST", "bundle output is not an owned regular file");
-      return readFileSync(fd);
+      // P0V-78: the bundle is the submission's stream, read only up to its bound.
+      const bundleBytes = cliBundleBytes();
+      return readBounded(fd, bundleBytes, true, refusal => {
+        throw refusal === "size"
+          ? new StoreError("LIMIT_EXCEEDED", `bundle is larger than a request can carry (${bundleBytes} bytes)`)
+          : new StoreError("INVALID_REQUEST", refusal === "grew" ? "bundle output grew while it was read" : "bundle output is not an owned regular file");
+      });
     } finally {
       closeSync(fd);
     }

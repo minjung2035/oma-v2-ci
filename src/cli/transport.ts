@@ -34,6 +34,24 @@ export function cliFrameBytes(): number {
   return frameBytes;
 }
 
+/** P0V-78, CFG-003: the raw streams a request carries after its frame -- a
+ * context tree's documents and a submission's bundle -- are held to the bounds
+ * the broker was configured with, named into the CLI's environment beside the
+ * frame bound; only an omitted setting uses the reference value. The CLI reads
+ * no more of a local input than the stream it is for can carry. */
+export function cliContextBytes(): number {
+  return streamBound("OMA_CONTEXT_BYTES", process.env.OMA_CONTEXT_BYTES, 8 * 1024 * 1024);
+}
+export function cliBundleBytes(): number {
+  return streamBound("OMA_BUNDLE_BYTES", process.env.OMA_BUNDLE_BYTES, 256 * 1024 * 1024);
+}
+function streamBound(name: string, configured: string | undefined, reference: number): number {
+  const bytes = configured === undefined ? reference : Number(configured);
+  if ((configured !== undefined && !/^[0-9]+$/.test(configured)) || !Number.isSafeInteger(bytes) || bytes < 1)
+    throw new StoreError("INVALID_REQUEST", `${name} must be decimal bytes`);
+  return bytes;
+}
+
 export async function callActor(
   path: string,
   method: PublicMethod,

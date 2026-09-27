@@ -21,7 +21,7 @@ import { resolvePiRuntime } from "../src/runtime/pi-runtime.js";
 import { sessionArgv } from "../src/tui/session.js";
 
 const LIBDIR = fileURLToPath(new URL("../../", import.meta.url));
-const LIMITS = { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 4, mailBodyBytes: 1 << 16 };
+const LIMITS = { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 4, mailBodyBytes: 1 << 16, contextBytes: 1 << 20, bundleBytes: 1 << 20 };
 
 /** Starts the engine with this argv and returns the session file it reports. */
 async function openedSession(command: string, args: readonly string[], cwd: string, env: Record<string, string>): Promise<string> {

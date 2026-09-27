@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "d07f0356eab4eb35485dc6e7e0160b84863db9b0aef3261d195ef1de3e5a4d0b",
-  "report": "15018990b2f0d9ce73a296bd365fa9f51f76eca5cf6dbd4a21891e10d9f8be76",
+  "report": "36d3169973379513f26976a9ec5ffba325123a59aecf4e98a44a976cdec33f22",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -137,11 +137,11 @@
     },
     {
       "path": "src/cli/effects.ts",
-      "sha256": "2f5fe11c0ce1fc00daeab22b0be8fc4492c76bc2b9ab29e70703ca6fa0e19ced"
+      "sha256": "791874f0ff0dc06096497597bad833cb131b150bd945586832e3727853ff3910"
     },
     {
       "path": "src/cli/effects/context.ts",
-      "sha256": "56be2946399cb3f581b62a008f5ec9a4079a4c78df77fd9bf8ec1a21b3726f86"
+      "sha256": "279faba093d28d07e42c838a72d115b37873e11e82f4172c2fbd44773a24f443"
     },
     {
       "path": "src/cli/effects/mail.ts",
@@ -149,7 +149,7 @@
     },
     {
       "path": "src/cli/effects/submit.ts",
-      "sha256": "75e5fb1697350268dc9c3a59c5bafe3582b3600738c248735ad797bcdd98faec"
+      "sha256": "16f01c09e4676e88feedf90e43b45330e5073850dc4b2104a8f736bc1e8d3cfb"
     },
     {
       "path": "src/cli/exit.ts",
@@ -165,7 +165,7 @@
     },
     {
       "path": "src/cli/transport.ts",
-      "sha256": "5488c899e7c4078f902e95cd1518261feea1976a3859bfd37af9a2467cb75222"
+      "sha256": "26de0908f42a06123b9ef4e6b8a64c6871348f69a658db7c357a6a03b236ace7"
     },
     {
       "path": "src/config.ts",
@@ -353,7 +353,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "66cab44d768cb8373a5a372aadeb2784d62ff8b4d14121901a565411de1b1862"
+      "sha256": "7fc8bc4a82629766bc32005388ada152cade7cf01bc0a283748b5cb2f3b01866"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -817,7 +817,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "5151af0fea5a20e0623209ebc9c2740aadf8d99eefa87bb8ecf249fc8d5cc720"
+      "sha256": "53e627296adeb13d616070b10bc4ff17a7bbb76df0c78fad0e0251be5736ede5"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -993,7 +993,7 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "ac3e4fa833762277e25bf39c05533ef51c3547594d13b4d49a8c9897e8623dfe"
+      "sha256": "fe76f7632f3bc6fab5e945c539c45e1d7d8c02a339afba74a4bd1ba459670e84"
     },
     {
       "path": "src/tui/sources/extensions.ts",
