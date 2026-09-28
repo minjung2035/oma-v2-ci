@@ -9,13 +9,13 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs, { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync, copyFileSync, truncateSync } from "node:fs";
+import fs, { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync, copyFileSync, truncateSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { observeDeliveryReceipt, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
-import { runnerSessionDirPathAt, workspacePathAt } from "../src/storage/paths.js";
+import { runnerReceiptPathAt, runnerSessionDirPathAt, workspacePathAt } from "../src/storage/paths.js";
 import { WorkspaceCoordinator } from "../src/lifecycle/workspace.js";
 import { CreationPublicationObserver } from "../src/lifecycle/create-publication.js";
 import { boundaryOf, completeSession, preparedFixture } from "./fixtures/delivery-receipt.js";
@@ -49,23 +49,26 @@ test("AV4 / FS-005, SB-006: a receipt's session is found beneath its directory i
     const sessions = runnerSessionDirPathAt(f.root, "alice");
     mkdirSync(join(sessions, "sub"), { recursive: true, mode: 0o700 });
     const session = completeSession(f.root, f.batch, "sub/delivery.jsonl");
-    publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes);
-    assert.equal(observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes).kind, "verified");
-    // What is named inside is empty; a complete copy waits outside.
-    copyFileSync(session, join(outside, "delivery.jsonl")); truncateSync(session, 0);
-    const restore = trapBetweenCheckAndUse(join(sessions, "sub"), outside);
-    let observed;
-    try { observed = observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes); }
-    finally { restore(); }
-    // The verdict is about the file the one resolution found: the empty one.
-    assert.equal(observed.kind, "conflicting", "a session outside the session directory was accepted");
-    // A component that is already a link is refused, not followed.
-    // (The directory itself, or the link a check-then-open reader was handed.)
+    // The boundary the receipt would name is complete, but outside: the
+    // component on the way is a link to it. Publication finds the session in
+    // one resolution that follows no link, so nothing is published.
+    copyFileSync(session, join(outside, "delivery.jsonl"));
     rmSync(join(sessions, "sub"), { recursive: true, force: true });
     symlinkSync(outside, join(sessions, "sub"));
-    const linked = observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes);
-    assert.equal(linked.kind, "conflicting");
-    assert.equal(linked.kind === "conflicting" ? linked.diagnostic.problem : null, "session-invalid");
+    assert.throws(() => publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes));
+    assert.equal(existsSync(runnerReceiptPathAt(f.root, "alice", f.batch.id)), false, "a receipt was published from a session outside");
+    // The same check-then-use trap on the session's directory: the one resolution sees the empty file inside.
+    rmSync(join(sessions, "sub"));
+    mkdirSync(join(sessions, "sub"), { mode: 0o700 });
+    writeFileSync(session, "");
+    const restore = trapBetweenCheckAndUse(join(sessions, "sub"), outside);
+    try { assert.throws(() => publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes), { code: "SESSION_BOUNDARY_UNCONFIRMED" }); }
+    finally { restore(); }
+    // P0V-107: once published, a receipt is not judged by the session file again.
+    completeSession(f.root, f.batch, "sub/delivery.jsonl");
+    publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes);
+    truncateSync(session, 0);
+    assert.equal(observeDeliveryReceipt(f.root, f.batch, TEST_VIEW_LIMITS.frameBytes).kind, "verified");
   } finally { rmSync(outside, { recursive: true, force: true }); f.close(); }
 });
 

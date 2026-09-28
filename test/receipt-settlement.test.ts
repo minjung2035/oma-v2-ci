@@ -5,11 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, readFileSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { chmodSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AuthContext } from "../implementation/contracts.js";
 import { publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
-import { agentRootPathAt, runnerSessionDirPathAt } from "../src/storage/paths.js";
+import { agentRootPathAt } from "../src/storage/paths.js";
 import { RunRegistry, type CgroupPin, type Population } from "../src/runtime/run-registry.js";
 import { PeerAuthenticator, peerCgroup, type BoundPeer } from "../src/broker/peer-authenticator.js";
 import { InternalDispatcher } from "../src/broker/internal-dispatcher.js";
@@ -63,7 +63,10 @@ test("V06A: recovery settles only a verified receipt; absent, unavailable and co
     ["verified", f => { published(f); }, "settled", null],
     ["absent", () => undefined, "present", null],
     ["unavailable", f => { published(f); chmodSync(f.receipt, 0o000); }, "hold", "BROKER_UNAVAILABLE"],
-    ["conflicting", f => { published(f); unlinkSync(join(runnerSessionDirPathAt(f.root, "alice"), "delivery.jsonl")); }, "hold", "BATCH_CONFLICT"],
+    // A receipt whose attempt is not one of the batch's (P0V-107: the session
+    // file it names is not observed again, so its absence is no conflict).
+    ["conflicting", f => { published(f); const raw = JSON.parse(readFileSync(f.receipt, "utf8")) as Record<string, unknown>;
+      writeFileSync(f.receipt, `${JSON.stringify({ ...raw, incarnation: f.batch.incarnation + 5 })}\n`, { mode: 0o600 }); }, "hold", "BATCH_CONFLICT"],
   ];
   for (const [name, arrange, expected, code] of cases) {
     const f = await preparedFixture();

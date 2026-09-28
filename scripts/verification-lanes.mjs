@@ -566,7 +566,10 @@ export const lanes = Object.freeze({
     sourceFiles: [],
     requiredNames: [
       "MAC-202: the production bridge closes a connection that is not from the host, unread",
-      "MAC-205:",
+      "MAC-205/MV-20, P0V-102:",
+      "SB-001, P0V-102:",
+      "P0V-103 (F-02):",
+      "P0V-104 (F-03):",
       "MAC-230:",
       "MAC-021:",
       "MAC-704:",

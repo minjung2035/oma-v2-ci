@@ -72,7 +72,7 @@ function attemptsOf(batch: PreparedBatch, attempts?: DeliveryAttempts): Delivery
 export type ReceiptProblem =
   | "runner-root-unavailable" | "receipt-directory-unavailable" | "receipt-path-not-contained"
   | "receipt-unreadable" | "receipt-not-private-regular" | "receipt-changed-while-read" | "receipt-not-json"
-  | "receipt-identity-differs" | "session-absent" | "session-unavailable" | "session-invalid";
+  | "receipt-identity-differs" | "session-invalid";
 export interface ReceiptDiagnostic {
   readonly problem: ReceiptProblem;
   /** The errno-style code of the step that failed, or null. */
@@ -137,30 +137,22 @@ function requireBytes(bytes: Buffer | Failed): Buffer {
 function record(raw: unknown): Record<string, unknown> | null {
   return raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
 }
-/** FS-005, SB-006: the session directory is one the engine -- and so, for a Resident, the
- * model's sandbox -- writes. The named file is found beneath it in one
- * resolution that follows no link at any component, never by resolving the
- * path and then opening it again. */
+/** P0V-107 (seventh review F-04), P0-1: the session a receipt names is a
+ * name, checked as one -- an absolute, normalized `.jsonl` path beneath the
+ * actor's session directory. What the file holds now is not asked. The
+ * receipt was published only after its boundary entry was found in that
+ * file in one resolution that follows no link and was flushed
+ * (`makeBoundaryDurable`, DR11, AV4); from then on the receipt is the fact.
+ * The session directory is the engine's -- for a Resident, the model's
+ * sandbox writes it (SB-006) -- so a file there that later changed or went
+ * away would otherwise change what an already durable delivery means. */
 function sessionPathCheck(stateRoot: string, actor: Actor, value: unknown): Failed | null {
   const bad: Failed = { failed: "conflicting", problem: "session-invalid", cause: null };
   if (typeof value !== "string" || !isAbsolute(value) || value.includes("\0") || !value.endsWith(".jsonl") || normalize(value) !== value)
     return bad;
   const offset = relative(sessionDirPathAt(stateRoot, actor), value);
   if (offset === "" || offset === ".." || offset.startsWith(`..${sep}`) || isAbsolute(offset)) return bad;
-  let directory: number | undefined;
-  let fd: number | undefined;
-  try {
-    directory = openDirectory(sessionDirPathAt(stateRoot, actor));
-    fd = openRegularBeneath(directory, offset);
-    return fstatSync(fd).size > 0 ? null : bad;
-  } catch (error) {
-    if (error instanceof StoreError) return { failed: "conflicting", problem: "session-invalid", cause: error.code };
-    const code = errnoOf(error);
-    if (code === null) throw error;
-    if (code === "ENOENT") return { failed: "conflicting", problem: "session-absent", cause: code };
-    if (code === "ELOOP" || code === "ENOTDIR") return { failed: "conflicting", problem: "session-invalid", cause: code };
-    return { failed: "unavailable", problem: "session-unavailable", cause: code };
-  } finally { closeEvery(fd, directory); }
+  return null;
 }
 function checkReceipt(raw: unknown, expected: PreparedBatch, stateRoot: string, attempts: DeliveryAttempts): CheckedReceipt | Failed {
   const value = record(raw);

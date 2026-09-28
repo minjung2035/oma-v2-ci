@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "6bc9b9241e676bd77f5fa41f7bcff82a726a0a2ea9c312deab5179113fcf2f9e",
-  "report": "7c6956e34a844b83cee01f0acdc5e68f284e43066b0e6936a11e857608829416",
+  "report": "0b6a5575e91b7d9d1e7dbcadb12bd3d4b4c64b6115e5d32d92117d2e6847fc81",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -897,7 +897,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "49fb8b197df42ce4d82842e853bad14a9ea3c7fd1c4b8e927f439a032a698233"
+      "sha256": "d5d005ce527d65a1906b00a10e9904026100d690da01fe1dec7a8067cb8da61c"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",

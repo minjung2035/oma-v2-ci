@@ -83,7 +83,6 @@ for (const where of ["receipt-directory", "receipt"] as const) {
 
 const unavailable: ReadonlyArray<{ readonly point: string; readonly arrange: (f: Fixture) => void }> = [
   { point: "an unreadable receipt", arrange: f => chmodSync(f.receipt, 0o000) },
-  { point: "an unreadable session the receipt names", arrange: f => chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o000) },
   { point: "a vanished runner root the batch was prepared under", arrange: f => rmSync(join(agentRootPathAt(f.root, "alice"), "runner"), { recursive: true }) },
 ];
 for (const item of unavailable) {
@@ -111,10 +110,6 @@ const conflicting: ReadonlyArray<{ readonly point: string; readonly arrange: (f:
     mkdirSync(dirname(f.receipt), { recursive: true, mode: 0o700 });
     writeFileSync(f.receipt, `${JSON.stringify({ schemaVersion: 1, adapterRevision: PI_ADAPTER_REVISION, batchId: f.batch.id,
       actor: "alice", incarnation: f.batch.incarnation - 1, messageIds: f.batch.messageIds, sessionPath: session, entryId: ENTRY })}\n`, { mode: 0o600 });
-  } },
-  { point: "a receipt whose session file is gone", arrange: (f, session) => {
-    publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes);
-    unlinkSync(session);
   } },
 ];
 for (const item of conflicting) {
@@ -191,11 +186,10 @@ test("V06A: an observation that did not complete is unavailable, with its cause 
       earliestIncarnation: f.batch.incarnation,
       adapterRevision: PI_ADAPTER_REVISION, messageIds: f.batch.messageIds });
     chmodSync(f.receipt, 0o600);
+    // P0V-107: the session the receipt names is not observed again.
     chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o000);
-    const session = diagnosticOf(observe(f));
-    assert.equal(observe(f).kind, "unavailable");
-    assert.deepEqual([session.problem, session.cause], ["session-unavailable", "EACCES"]);
-  } finally { f.close(); }
+    assert.equal(observe(f).kind, "verified");
+  } finally { chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o700); f.close(); }
 });
 
 test("V06A: conflicting evidence says what differs, and a legacy incarnation is never accepted as current", async () => {
@@ -218,10 +212,9 @@ test("V06A: conflicting evidence says what differs, and a legacy incarnation is 
     assert.equal(diagnosticOf(observe(f)).problem, "receipt-not-json");
     unlinkSync(f.receipt);
     publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes);
+    // P0V-107: a session file gone after publication changes nothing.
     unlinkSync(session);
-    const gone = diagnosticOf(observe(f));
-    assert.equal(observe(f).kind, "conflicting");
-    assert.deepEqual([gone.problem, gone.cause], ["session-absent", "ENOENT"]);
+    assert.equal(observe(f).kind, "verified");
   } finally { f.close(); }
 });
 
@@ -253,3 +246,27 @@ test("V06A: live completion binds the current run's incarnation and the receipt'
     assert.equal(f.store.getBatch(f.batch.id)?.state, "completed");
   } finally { f.close(); }
 });
+
+const afterPublication: ReadonlyArray<{ readonly point: string; readonly arrange: (f: Fixture, session: string) => void }> = [
+  { point: "removed", arrange: (_f, session) => { unlinkSync(session); } },
+  { point: "emptied", arrange: (_f, session) => { writeFileSync(session, ""); } },
+  { point: "rewritten", arrange: (_f, session) => { writeFileSync(session, "{\"type\":\"custom\",\"id\":\"other\"}\n"); } },
+  { point: "behind a directory that cannot be read", arrange: f => { chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o000); } },
+];
+for (const item of afterPublication) {
+  test(`P0V-107 / F-04, P0-1: once published, a receipt settles its batch though the session it names was then ${item.point}`, async t => {
+    const f = await preparedFixture(2);
+    try {
+      const session = completeSession(f.root, f.batch);
+      publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes);
+      const before = readFileSync(f.receipt);
+      item.arrange(f, session);
+      assert.equal(observe(f).kind, "verified");
+      const runner = await runnerConsume(t, f);
+      assert.equal(runner.error, null);
+      assert.equal(runner.deliveries, 0, "a delivered batch is not presented again");
+      assert.deepEqual(runner.completions.map(call => call.sessionPath), [session]);
+      assert.deepEqual(readFileSync(f.receipt), before);
+    } finally { chmodSync(runnerSessionDirPathAt(f.root, "alice"), 0o700); f.close(); }
+  });
+}
