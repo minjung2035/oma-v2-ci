@@ -13,7 +13,8 @@
  * protocol.
  */
 import { createServer, type Server, type Socket } from "node:net";
-import { chmodSync, chownSync, existsSync, unlinkSync } from "node:fs";
+import { chmodSync, chownSync } from "node:fs";
+import { clearSocketName } from "../../storage/socket-name.js";
 import { peerCred, socketDescriptor } from "../../leaf.js";
 import { FramedPeer, PlatformError, readHello } from "../rpc.js";
 import { productText } from "../product-text.js";
@@ -54,7 +55,7 @@ export interface GuestServerOptions {
 }
 
 export function startGuestServer(options: GuestServerOptions): Promise<Server> {
-  if (existsSync(options.socketPath)) unlinkSync(options.socketPath);
+  clearSocketName(options.socketPath);
   const server = createServer({ allowHalfOpen: true }, socket => { void accept(socket, options); });
   return new Promise((resolve, reject) => {
     server.once("error", reject);

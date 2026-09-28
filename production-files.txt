@@ -237,6 +237,7 @@ src/storage/preaccept-artifact.ts
 src/storage/quota.ts
 src/storage/receipt-projector.ts
 src/storage/rows.ts
+src/storage/socket-name.ts
 src/storage/staged-tree.ts
 src/storage/submit-spool.ts
 src/storage/transaction.ts

@@ -1,6 +1,7 @@
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: authenticated transport and lifetime handoff.
 import { createServer, type Socket, type Server } from "node:net";
-import { mkdirSync, unlinkSync, existsSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { clearSocketName } from "./storage/socket-name.js";
 import { removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, AuthContext, Failure, ProtocolLimits, Request, RunLease } from "../implementation/contracts.js";
@@ -176,7 +177,7 @@ export class Broker {
     void ready.catch(() => undefined);
   }
   private listenInternal(path: string, channel: "runner" | "host"): Server {
-    if (existsSync(path)) unlinkSync(path);
+    clearSocketName(path);
     const server = createServer({ allowHalfOpen: true }, socket => {
       if (this.draining) { socket.destroy(); return; }
       this.handleInternal(socket, channel);
@@ -225,7 +226,7 @@ export class Broker {
     this.principalHostServer = this.listenOn(join(this.paths.runRoot, "principal-host.sock"), socket => hostEndpoint.serve(socket));
   }
   private listenOn(path: string, serve: (socket: Socket) => void): Server {
-    if (existsSync(path)) unlinkSync(path);
+    clearSocketName(path);
     const server = createServer({ allowHalfOpen: true }, socket => {
       if (this.draining) { socket.destroy(); return; }
       serve(socket);
@@ -285,7 +286,7 @@ export class Broker {
     const dir = this.actorSocketDirectoryAfterAdmission(actor, incarnation);
     const path = actorSocketPathAt(this.paths.runRoot, actor, incarnation);
     mkdirSync(dir, { recursive: true });
-    if (existsSync(path)) unlinkSync(path);
+    clearSocketName(path);
     const sockets = new Set<Socket>(); let revoked = false;
     const server = createServer({ allowHalfOpen: true }, socket => {
       if (revoked || this.draining) return this.fail(socket, { code: "STALE_RUN", message: "run endpoint revoked", retry: "never" });
@@ -457,12 +458,19 @@ export class Broker {
     if (!Number.isSafeInteger(next)) throw new StoreError("STORE_CORRUPT", "incarnation exhausted");
     this.actorSocketDirectory(actor, next);
     const record = this.runLeases.begin(actor, next, invocationId, observation.cgroup);
+    let endpoint: { socketHostPath: string; done: () => void } | null = null;
     try {
       // D01/WP07: settle the prepared batches from their own receipts before the
       // new run exists, under the opening run's quiescence. DR9: the batches
       // left -- receipt proven absent -- are not rewritten; the new lease is
       // simply their next delivery attempt.
       const absent = this.settlePreviousIncarnation(actor);
+      // P0V-113 (G03-broker-r2-01): the new incarnation's endpoint is made
+      // before the incarnation is committed, so nothing that can fail comes
+      // after the commit: a failed open leaves the incarnation where it was.
+      // Until the commit it serves nobody (handleActor refuses an incarnation
+      // the ledger does not hold).
+      endpoint = this.listenActor(actor, next);
       this.store.transaction(tx => {
         this.health.assertAdmission();
         const current = this.store.getAgent(actor);
@@ -472,8 +480,9 @@ export class Broker {
           throw new StoreError("STALE_RUN", "prepared batches changed between settlement and rollover");
         tx.updateAgent({ name: actor, incarnation: next });
       });
-      const lease = record.publish(this.listenActor(actor, next)); this.refreshViews(); return lease;
+      const lease = record.publish(endpoint); this.refreshViews(); return lease;
     } catch (error) {
+      try { endpoint?.done(); } catch (cleanup) { this.cleanupError(cleanup); }
       try { record.revoke(); } catch (cleanup) { this.cleanupError(cleanup); }
       throw error;
     }

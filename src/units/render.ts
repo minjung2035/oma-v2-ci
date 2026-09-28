@@ -1,5 +1,6 @@
 // MUST [UNIT-002/003]: pure rendering; no environment, filesystem or command reads.
 import { StoreError } from "../domain/errors.js";
+import { ACTOR_NAME_RE, isValidSocietyName } from "../domain/identifiers.js";
 
 export interface RenderValues {
   node: string;
@@ -27,6 +28,14 @@ export interface RenderValues {
  * expand specifiers (observed on systemd 257). */
 const ARGUMENT = new Set(["NODE", "LIBDIR", "CONFIG_ARG", "STATE_ARG", "RUN_ARG"]);
 const PATH = new Set(["STATE"]);
+/** P0V-115 (G05-02): a society's and an agent's name land in ExecStart words,
+ * a Description, a Unit= and a watched path alike, and no one escape reads
+ * the same in all of them. Only a name that needs none is rendered -- this
+ * renderer's own rule, not one it trusts its callers to have kept. */
+const NAME: Readonly<Record<string, (value: string) => boolean>> = {
+  SOCIETY: isValidSocietyName,
+  AGENT: value => ACTOR_NAME_RE.test(value),
+};
 
 export function renderUnit(template: string, values: RenderValues): string {
   for (const [key, value] of Object.entries(values)) {
@@ -54,6 +63,8 @@ export function renderUnit(template: string, values: RenderValues): string {
     if (!Object.prototype.hasOwnProperty.call(substitutions, key) || substitutions[key] === undefined)
       throw new StoreError("UNSUPPORTED_PROFILE", `unit template input is missing: ${key}`);
     const value = String(substitutions[key]);
+    if (Object.prototype.hasOwnProperty.call(NAME, key) && !NAME[key]!(value))
+      throw new StoreError("INVALID_REQUEST", `${key} is not a name a unit can carry`);
     if (PATH.has(key)) {
       // A path setting keeps surrounding whitespace out of the value it reads.
       if (value.trim() !== value || value === "")

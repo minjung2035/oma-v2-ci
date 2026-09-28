@@ -86,6 +86,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/storage/context-snapshot.ts",
       "src/storage/context-stream.ts",
       "src/storage/directory.ts",
+      "src/storage/socket-name.ts",
       "src/storage/durable-fs.ts",
       "src/storage/delivery-receipt.ts",
       "src/storage/quota.ts",

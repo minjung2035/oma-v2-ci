@@ -48,8 +48,8 @@ test("only the defined ref outcome proves absence; process evidence is retained"
     assert.equal(value.kind, "unknown");
     assert.equal(value.evidence, failed);
   }
-  assert.equal(new GitObserver(() => evidence({ stdout: bytes(" a".repeat(20)) })).ref("/repo", "main").kind, "corrupt");
-  assert.equal(new GitObserver(() => evidence({ stdout: bytes(`${"a".repeat(40)}\n`) })).ref("/repo", "main").kind, "present");
+  assert.equal(new GitObserver(() => evidence({ stdout: bytes(" a".repeat(20)) })).ref("/repo", "refs/heads/main").kind, "corrupt");
+  assert.equal(new GitObserver(() => evidence({ stdout: bytes(`${"a".repeat(40)}\n`) })).ref("/repo", "refs/heads/main").kind, "present");
 });
 
 test("post-CAS observations distinguish expected candidate third and unknown without mutation", () => {

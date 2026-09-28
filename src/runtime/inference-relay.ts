@@ -28,7 +28,8 @@ import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Serv
 import { request as httpsRequest } from "node:https";
 import { Transform, type Duplex } from "node:stream";
 import type { Socket } from "node:net";
-import { chmodSync, rmSync } from "node:fs";
+import { chmodSync } from "node:fs";
+import { clearSocketName } from "../storage/socket-name.js";
 import { StoreError } from "../domain/errors.js";
 import { trustedAbsolutePath } from "../protocol/run-lease.js";
 
@@ -155,7 +156,6 @@ export class InferenceRelay {
   private readonly tunnels = new Set<Duplex>();
 
   private constructor(
-    private readonly socketPath: string | null,
     private readonly origin: URL,
     private readonly target: RelayTarget,
     private readonly limits: RelayLimits,
@@ -177,10 +177,10 @@ export class InferenceRelay {
   ): Promise<InferenceRelay> {
     if (!trustedAbsolutePath(socketPath))
       throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path is not a trusted absolute path");
-    const relay = new InferenceRelay(socketPath, InferenceRelay.checked(target, limits), target, limits);
+    const relay = new InferenceRelay(InferenceRelay.checked(target, limits), target, limits);
     // A leftover socket from a killed run would make listen fail; it belongs to
     // this incarnation's run root, so removing it is removing our own artefact.
-    rmSync(socketPath, { force: true });
+    clearSocketName(socketPath);
     await new Promise<void>((resolve, reject) => {
       relay.server.once("error", reject);
       relay.server.listen(socketPath, () => { relay.server.off("error", reject); resolve(); });
@@ -195,7 +195,7 @@ export class InferenceRelay {
    * everything a connection carries is then this relay's, exactly as if it
    * had arrived on its socket. */
   static detached(target: RelayTarget, limits: RelayLimits): InferenceRelay {
-    return new InferenceRelay(null, InferenceRelay.checked(target, limits), target, limits);
+    return new InferenceRelay(InferenceRelay.checked(target, limits), target, limits);
   }
 
   /** One connection for a detached relay, with what already arrived on it.
@@ -492,7 +492,7 @@ export class InferenceRelay {
     this.closed = true;
     for (const tunnel of this.tunnels) tunnel.destroy();
     this.tunnels.clear();
+    // The server's own close removes its name (P0V-114).
     await new Promise<void>(resolve => { this.server.close(() => { resolve(); }); this.server.closeAllConnections(); });
-    if (this.socketPath !== null) rmSync(this.socketPath, { force: true });
   }
 }

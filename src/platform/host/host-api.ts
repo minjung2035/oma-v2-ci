@@ -7,7 +7,8 @@
  * the answer, frames pass through to the guest unchanged (§4.6).
  */
 import { createServer, type Server, type Socket } from "node:net";
-import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { chmodSync } from "node:fs";
+import { clearSocketName } from "../../storage/socket-name.js";
 import { timingSafeEqual } from "node:crypto";
 import { StoreError } from "../../domain/errors.js";
 import { FramedPeer } from "../rpc.js";
@@ -44,7 +45,7 @@ export interface HostApiOptions {
 }
 
 export function startHostApi(options: HostApiOptions): Promise<Server> {
-  if (existsSync(options.socketPath)) unlinkSync(options.socketPath);
+  clearSocketName(options.socketPath);
   const server = createServer({ allowHalfOpen: true }, socket => { void accept(socket, options); });
   return new Promise((resolve, reject) => {
     server.once("error", reject);

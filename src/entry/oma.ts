@@ -341,10 +341,10 @@ async function main(argv: readonly string[]): Promise<void> {
     // it is gone before the lease is given up. Order alone was never enough:
     // `close()` on a child is a signal, and the next `oma` could start its own
     // engine while this one was still running.
+    // The tenure's end also closes what it holds (the provider path).
     if (tenure !== null) await tenure.end();
     session = null;
     broker?.stop();
-    await principalEgress?.close();
     terminal.restore();
     process.exit(code);
   };
@@ -389,11 +389,16 @@ async function main(argv: readonly string[]): Promise<void> {
   // provider through the guest's egress, as a Resident's does -- one
   // placeholder and forwarder for this process, kept across engine restarts.
   // On Linux the environment names no egress socket and this is null.
-  try {
+  // P0V-114 (G04-01): it is the tenure's -- opened only by the owner, closed as
+  // the tenure ends however it ends, and closed at once if the tenure ended
+  // while it was opening.
+  const egressOwner = tenure;
+  if (egressOwner !== null) try {
     const egressProfile = principalSessionProfile(configPath, society);
-    principalEgress = await openPrincipalEgress({ society, runRoot, provider: egressProfile.provider, model: egressProfile.model,
+    const opened = await openPrincipalEgress({ society, runRoot, provider: egressProfile.provider, model: egressProfile.model,
       modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
       frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env });
+    if (opened !== null && await egressOwner.hold(opened)) principalEgress = opened;
   } catch (error) {
     app.line(`⚠ provider에 닿는 길을 열지 못했습니다: ${errorWords(error)}`);
   }

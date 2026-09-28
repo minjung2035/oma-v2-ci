@@ -19,6 +19,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/broker.ts": "the run root (XDG_RUNTIME_DIR): its directory and the listening sockets",
   "src/entry/broker.ts": "the run root (XDG_RUNTIME_DIR) the broker listens in",
   "src/runtime/inference-relay.ts": "the relay's socket in the run's own run-root directory",
+  "src/storage/socket-name.ts": "the one owner of a listening socket's name, which every caller keeps in a run directory (run root, guest and host service directories), never in a state tree",
   "src/runtime/egress-forwarder.ts": "the egress forwarder's socket beside the relay's, in the run's run-root directory (DR18, D-10)",
   "src/platform/guest/server.ts": "a guest service's listening socket in its own systemd RuntimeDirectory, which the vsock bridge connects to",
   "src/platform/guest/pty.ts": "the slave device of a pseudo-terminal this process just made (/dev/pts), opened to hand to the session's program",

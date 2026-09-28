@@ -24,6 +24,8 @@
  *    mutate it by reaching a port that forgot to ask.
  *  - It ends in one place, which closes the engine and waits for the operating
  *    system to say it is gone before giving the lease up.
+ *  - What else it paid for -- the Principal's provider path -- it holds, and
+ *    closes as it ends, before the lease is given up (`hold`).
  */
 import { tryHoldSociety, type SocietyLease } from "./society-lease.js";
 import { StoreError } from "../domain/errors.js";
@@ -33,6 +35,14 @@ import { StoreError } from "../domain/errors.js";
 export interface FencedEngine {
   close(): void;
   readonly exited: Promise<void>;
+}
+
+/** Something other than the engine that a tenure paid for (P0V-114, G04-01):
+ * the Principal's provider path, whose forwarder listens at a name in the
+ * society's run directory. `close()` ends it; its name is gone when `close()`
+ * returns, the rest may follow. */
+export interface TenureHolding {
+  close(): Promise<void>;
 }
 
 /** How long a polite teardown waits for the engine before giving up its own
@@ -56,6 +66,8 @@ export class HostTenure {
   }
 
   private engine: FencedEngine | null = null;
+  private readonly holdings = new Set<TenureHolding>();
+  private ending: Promise<void> | null = null;
   private over = false;
   private brokerLive = false;
   private generation = 0;
@@ -87,6 +99,27 @@ export class HostTenure {
     this.assertOwned("Principal 엔진");
     if (this.engine !== null) throw new StoreError("INTERNAL_ERROR", "a tenure runs one engine at a time");
     this.engine = engine;
+  }
+
+  /** P0V-114 (G04-01), P0-4: a resource opened because this process owns the
+   * society is the tenure's from then on, and ends with it. One handed over
+   * after the tenure is over has no owner and is closed at once; the answer
+   * says whether the tenure took it. */
+  async hold(holding: TenureHolding): Promise<boolean> {
+    if (this.over) { await holding.close(); return false; }
+    this.holdings.add(holding);
+    return true;
+  }
+
+  /** What this tenure holds is closed before the lease is given up: a name in
+   * the run directory removed after the society changed hands could be the
+   * next owner's. Each close removes its name before it returns a promise. */
+  private closeHoldings(): Promise<unknown> {
+    const closing = [...this.holdings].map(holding => {
+      try { return holding.close().catch(() => undefined); } catch { return Promise.resolve(); }
+    });
+    this.holdings.clear();
+    return Promise.all(closing);
   }
 
   /** The engine ended by itself. Its registration ended with it. */
@@ -142,21 +175,29 @@ export class HostTenure {
    * The wait is bounded because quitting must finish, and bounding it is safe:
    * the engine inherited the lease's descriptor, so a release that runs before
    * a stubborn engine has died hands the society to nobody until it does. */
-  async end(): Promise<void> {
-    if (this.over) return;
+  end(): Promise<void> {
+    // Every path that ends the tenure waits for the same end: a quit during a
+    // disown must not exit while the engine it is waiting for still runs.
+    if (this.ending !== null) return this.ending;
+    if (this.over) return Promise.resolve();
     this.over = true;
     this.brokerLive = false;
     this.principalLive = false;
     const live = this.engine;
     this.engine = null;
-    if (live !== null) {
-      try { live.close(); } catch { /* the engine is ending either way */ }
-      await Promise.race([
-        live.exited,
-        new Promise<void>(resolve => { setTimeout(resolve, this.graceMs).unref?.(); }),
-      ]);
-    }
-    this.lease.release();
+    this.ending = (async () => {
+      try {
+        if (live !== null) {
+          try { live.close(); } catch { /* the engine is ending either way */ }
+          await Promise.race([
+            live.exited,
+            new Promise<void>(resolve => { setTimeout(resolve, this.graceMs).unref?.(); }),
+          ]);
+        }
+        await this.closeHoldings();
+      } finally { this.lease.release(); }
+    })();
+    return this.ending;
   }
 
   /** Ends the tenure on a path that cannot wait: an unhandled exception, where
@@ -172,6 +213,7 @@ export class HostTenure {
     const live = this.engine;
     this.engine = null;
     try { live?.close(); } catch { /* the engine is ending either way */ }
+    void this.closeHoldings();
     this.lease.release();
   }
 }

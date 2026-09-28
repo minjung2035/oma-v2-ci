@@ -13,7 +13,8 @@
  * its credential and opens its own relay, as on Linux.
  */
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { chmodSync } from "node:fs";
+import { clearSocketName } from "../storage/socket-name.js";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { StoreError } from "../domain/errors.js";
@@ -83,7 +84,7 @@ export class EgressForwarder {
 
   static listen(socketPath: string, egressSocket: string, run: EgressOpenParams, concurrent: number): Promise<EgressForwarder> {
     if (!Number.isSafeInteger(concurrent) || concurrent < 1) throw new StoreError("UNSUPPORTED_PROFILE", "the forwarder's connection bound is invalid");
-    if (existsSync(socketPath)) unlinkSync(socketPath);
+    clearSocketName(socketPath);
     let forwarder: EgressForwarder;
     const server = createServer(engine => {
       if (forwarder.closing !== null || forwarder.open.size >= concurrent) { engine.destroy(); return; }
@@ -115,10 +116,8 @@ export class EgressForwarder {
   close(): Promise<void> {
     this.closing ??= new Promise(resolve => {
       for (const socket of this.open) socket.destroy();
-      this.server.close(() => {
-        try { unlinkSync(this.socketPath); } catch { /* already gone */ }
-        resolve();
-      });
+      // The server's own close removes its name (P0V-114).
+      this.server.close(() => { resolve(); });
     });
     return this.closing;
   }
@@ -161,7 +160,10 @@ export async function openPrincipalEgress(options: { readonly society: string; r
   const socketPath = join(options.runRoot, "principal-inference.sock");
   const forwarder = await EgressForwarder.listen(socketPath, egress,
     { placeholderId: issued.placeholderId, ...run, modelProfile: options.modelProfile }, 4);
-  const port = await freeLoopbackPort();
+  // P0-4: the forwarder is this call's until it is handed back inside the result.
+  let port: number;
+  try { port = await freeLoopbackPort(); }
+  catch (error) { await forwarder.close(); throw error; }
   return Object.freeze({
     env: Object.freeze({ OMA_INFERENCE_SOCKET: socketPath, OMA_INFERENCE_PROVIDER: issued.provider,
       OMA_INFERENCE_PORT: String(port), OMA_INFERENCE_KEY: issued.placeholder }),

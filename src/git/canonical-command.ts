@@ -1,7 +1,7 @@
 // GIT-004/008: bounded canonical command adapter. Effect exit status is never CAS proof.
 import { GIT_ENV } from "../process/policies.js";
 import { runProcessSync } from "../process/run.js";
-import { GitObserver, classifyRefAfterCas, type GitProcessEvidence, type RefAfterCas } from "./observe.js";
+import { GitObserver, classifyRefAfterCas, gitOidArgument, gitRefArgument, type GitProcessEvidence, type RefAfterCas } from "./observe.js";
 
 export const GIT_BIN = "/usr/bin/git";
 export const CANONICAL_PROCESS_LIMITS = { timeout: 120000, maxBuffer: 4 * 1024 * 1024 } as const;
@@ -24,7 +24,8 @@ export function createCanonicalObserver(): GitObserver {
 }
 export function compareAndSwapCanonicalRef(observations: GitObserver, repository: string, ref: string,
   candidate: string, expected: string | null): RefAfterCas {
-  evidence(["--git-dir", repository, "update-ref", ref, candidate, expected ?? ""],
+  // P0V-116: the adapter's own invariant; a refused argument is no observation.
+  evidence(["--git-dir", repository, "update-ref", gitRefArgument(ref), gitOidArgument(candidate), expected === null ? "" : gitOidArgument(expected)],
     CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer);
   return classifyRefAfterCas(observations.ref(repository, ref), expected, candidate);
 }
@@ -34,7 +35,7 @@ export function compareAndSwapCanonicalRef(observations: GitObserver, repository
  * object -- the ref then holds this candidate either way (P0V-85). */
 export function createCanonicalRef(observations: GitObserver, repository: string, ref: string,
   candidate: string): { readonly after: RefAfterCas; readonly created: boolean } {
-  const made = evidence(["--git-dir", repository, "update-ref", ref, candidate, ""],
+  const made = evidence(["--git-dir", repository, "update-ref", gitRefArgument(ref), gitOidArgument(candidate), ""],
     CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer);
   const after = classifyRefAfterCas(observations.ref(repository, ref), null, candidate);
   return { after, created: after.kind === "candidate" && made.status === 0 };

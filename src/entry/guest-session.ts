@@ -6,7 +6,8 @@
  * usage: guest-session.js --socket <path> --cwd <dir> -- <executable> [args...]
  */
 import { createServer } from "node:net";
-import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { chmodSync } from "node:fs";
+import { clearSocketName } from "../storage/socket-name.js";
 import { peerCred, socketDescriptor } from "../leaf.js";
 import { TerminalSession } from "../platform/guest/session.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
@@ -37,7 +38,7 @@ let session: TerminalSession;
 try { session = TerminalSession.start({ executable: executable!, argv: args, cwd, env }, { columns: 80, rows: 24, backlogBytes: 4 * 1024 * 1024 }); }
 catch (error) { fail(error instanceof Error ? error.message : String(error)); }
 
-if (existsSync(socketPath)) unlinkSync(socketPath);
+clearSocketName(socketPath);
 const uid = process.getuid!();
 const server = createServer({ allowHalfOpen: false }, socket => {
   // guesthost runs as this user; within one uid the socket's mode is no
@@ -54,8 +55,8 @@ server.on("error", error => { session.terminate(); fail(error.message); });
 // exit reported to the screen.
 for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => { session.terminate(); });
 session.onEnd(end => {
+  // The server's own close removes its name (P0V-114).
   server.close();
-  try { unlinkSync(socketPath); } catch { /* already gone */ }
   process.exitCode = end.code ?? (end.signal === null ? 1 : 128);
   setTimeout(() => process.exit(), 200).unref();
 });

@@ -9,7 +9,8 @@
  * once, as the relay refuses at its limit: the engine retries (INF-001).
  */
 import { createServer, type Server, type Socket } from "node:net";
-import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { chmodSync } from "node:fs";
+import { clearSocketName } from "../../storage/socket-name.js";
 import { encodeFrame } from "../../frame.js";
 import { readLeadingFrame } from "../rpc.js";
 import { egressOpenProblem, egressPlaceholderProblem, requestProblem } from "../../protocol/host-guest.js";
@@ -70,7 +71,7 @@ export interface EgressServiceOptions {
 }
 
 export function startEgressService(options: EgressServiceOptions): Promise<Server> {
-  if (existsSync(options.socketPath)) unlinkSync(options.socketPath);
+  clearSocketName(options.socketPath);
   const server = createServer({ allowHalfOpen: true }, client => { void serve(client, options); });
   return new Promise((resolve, reject) => {
     server.once("error", reject);

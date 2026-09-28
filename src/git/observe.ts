@@ -2,8 +2,23 @@
  * The caller supplies the fixed host runner. Every observation retains process
  * evidence; nonzero, timeout, signal and malformed output are not absence.
  */
+import { StoreError } from "../domain/errors.js";
 import { isValidFullOid, isValidWirePath } from "../domain/identifiers.js";
 import { decodeUtf8 } from "../domain/utf8.js";
+
+/** P0V-116 (G06-01, G06-02): what reaches git in an argument position is an
+ * object id or a ref name -- never a word git could read as an option,
+ * whatever a caller checked. A refusal here is not an observation: a ref named
+ * by an option is not "absent", and a CAS of one is not "already expected". */
+const REF_NAME = /^(?:HEAD|refs\/[A-Za-z0-9._/-]+)$/;
+export function gitRefArgument(ref: string): string {
+  if (typeof ref !== "string" || !REF_NAME.test(ref)) throw new StoreError("INVALID_REQUEST", "a git ref argument is not a ref name");
+  return ref;
+}
+export function gitOidArgument(oid: string): string {
+  if (!isValidFullOid(oid)) throw new StoreError("INVALID_REQUEST", "a git object argument is not a full object id");
+  return oid;
+}
 
 export interface GitProcessEvidence {
   readonly status: number | null;
@@ -70,7 +85,7 @@ export class GitObserver {
   constructor(private readonly run: GitObservationRunner) {}
 
   ref(repository: string, ref: string): GitObservation<string> {
-    const evidence = this.run(["--git-dir", repository, "rev-parse", "--verify", "--quiet", ref]);
+    const evidence = this.run(["--git-dir", repository, "rev-parse", "--verify", "--quiet", gitRefArgument(ref)]);
     if (uncertain(evidence) || diagnostic(evidence)) return unknown(evidence, "ref process unavailable");
     const output = text(evidence.stdout);
     if (evidence.status === 1 && output === "") return { kind: "absent", evidence };
@@ -87,7 +102,7 @@ export class GitObserver {
   }
 
   commit(repository: string, oid: string): GitObservation<true> {
-    const expression = `${oid}^{commit}`;
+    const expression = `${gitOidArgument(oid)}^{commit}`;
     const evidence = this.run(["--git-dir", repository, "cat-file", "--batch-check=%(objecttype)"], `${expression}\n`);
     if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "commit process unavailable");
     const output = line(text(evidence.stdout));
@@ -97,7 +112,7 @@ export class GitObserver {
   }
 
   ancestry(repository: string, base: string, candidate: string): GitObservation<boolean> {
-    const evidence = this.run(["--git-dir", repository, "merge-base", "--is-ancestor", base, candidate]);
+    const evidence = this.run(["--git-dir", repository, "merge-base", "--is-ancestor", gitOidArgument(base), gitOidArgument(candidate)]);
     if (uncertain(evidence) || diagnostic(evidence) || (evidence.status !== 0 && evidence.status !== 1))
       return unknown(evidence, "ancestry process unavailable");
     if (evidence.stdout === null || evidence.stdout.byteLength !== 0) return corrupt(evidence, "unexpected ancestry output");
@@ -118,7 +133,7 @@ export class GitObserver {
   }
 
   changedPaths(repository: string, base: string, candidate: string): GitObservation<readonly ChangedPath[]> {
-    const evidence = this.run(["--git-dir", repository, "diff-tree", "--no-commit-id", "--name-status", "-r", "-z", "--no-renames", base, candidate]);
+    const evidence = this.run(["--git-dir", repository, "diff-tree", "--no-commit-id", "--name-status", "-r", "-z", "--no-renames", gitOidArgument(base), gitOidArgument(candidate)]);
     if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "changed-path process unavailable");
     if (evidence.stdout === null) return corrupt(evidence, "missing changed-path output");
     const parsed = parseNameStatusZ(evidence.stdout);
