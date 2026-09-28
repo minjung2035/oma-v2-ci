@@ -6,7 +6,7 @@ import type { Actor, ResourceLimits, UnitObservation } from "../implementation/c
 import { StoreError, unobserved } from "./domain/errors.js";
 import { canonicalResourceLimits } from "./domain/resources.js";
 import { unitNameFor as unitName } from "./domain/derived.js";
-import { publishNoReplace, replaceDerivedFile } from "./storage/durable-fs.js";
+import { ensureDurableDirectory, publishNoReplace, replaceDerivedFile } from "./storage/durable-fs.js";
 import { renderUnit, type RenderValues } from "./units/render.js";
 import { executeUnitCommand, observeUnitCommand, type UnitCommandOutcome } from "./units/execute.js";
 import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "./units/observe.js";
@@ -109,6 +109,10 @@ export class UnitsModule {
       ...this.values, ...overrides, agent: this.agentFrom(name),
     });
     const target = join(this.installDir, name);
+    // P0V-98: the first unit a user installs makes the unit directory, and
+    // makes it durable, as replacing a unit always did; the no-replace claim
+    // below publishes into a directory that exists.
+    ensureDurableDirectory(this.installDir, 0o755);
     // P0V-59, P0-1: a free name is claimed in one step -- the whole file is
     // linked in only if no file has the name -- so two owners cannot both see
     // it free and both write it, and a crash leaves no partial unit to be

@@ -45,6 +45,19 @@ interface Env {
   lifecycle: LifecycleModule;
   views: ViewsModule;
 }
+/** P0V-59: a unit a test writes in place of a Resident's rendered one carries
+ * the identity lines that one does -- its Description and its owner, the state
+ * tree -- so the units module takes it for this society's unit, as it would a
+ * unit it rendered. A unit without them is another owner's, and no effect of
+ * this society reaches it. */
+function ownedBy(env: Env, agent: string): string {
+  const lines = readFileSync(join(UNIT_TPL_DIR, "resident.service.in"), "utf8").split("\n")
+    .filter(line => line.startsWith("Description=") || line.startsWith("X-OMA-Owner="));
+  const state = join(env.dir, "state");
+  return renderUnit(lines.join("\n"), { node: NODE, libdir: "/usr/lib/oma", state, society: env.society, agent,
+    config: join(state, "config.json"), run: join(state, "oma", env.society), brokerUnit: "" });
+}
+
 function envOf(): { env: Env; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "oma-t4-"));
   const xdg = join(dir, "xdg");
@@ -215,7 +228,7 @@ test("T36: start-limit is exposed, never auto-reset; explicit start repairs", as
     env.units.ensureResident("a", "p");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
     writeFileSync(unitFile, `[Unit]
-Description=test fail
+${ownedBy(env, "a")}
 StartLimitIntervalSec=60s
 StartLimitBurst=5
 [Service]
@@ -251,7 +264,7 @@ test("T37: stop saves new mail, empties cgroup, leaves unit inactive", async () 
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "enabled" }));
     env.units.ensureResident("a", "p");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
-    writeFileSync(unitFile, `[Unit]\nDescription=test sleep\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     spawnSync("systemctl", ["--user", "start", unitName(env.society, "a", "service")], { stdio: "ignore" });
     assert.equal(env.store.getAgent("a")!.incarnation, 1);
@@ -276,7 +289,7 @@ test("T38: stopped actor with an unconfirmed stale cgroup cannot start; incarnat
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
     env.units.ensureResident("a", "p");
     const unitFile = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
-    writeFileSync(unitFile, `[Unit]\nDescription=test stale sleep\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     spawnSync("systemctl", ["--user", "start", unitName(env.society, "a", "service")], { stdio: "ignore" });
     // A separate current manager reaches the death oracle; the stopped target's
@@ -294,7 +307,7 @@ test("REC-001: pending start and stop effects settle from actual systemd state",
     seedGov(env);
     env.units.ensureResident("a", "p");
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "a", "service"));
-    writeFileSync(service, "[Unit]\nDescription=reconcile action\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n");
+    writeFileSync(service, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     const startId = generateOperationId();
     env.store.transaction(tx => tx.acceptOperation({
@@ -485,7 +498,7 @@ try {
   log("ok"); process.exit(0);
 } catch (error) { log(String(error?.code ?? "") + " " + String(error?.message ?? error)); process.exit(2); }`);
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "dynamic", "service"));
-    writeFileSync(service, `[Unit]\nDescription=dynamic runner\n[Service]\nType=exec\nEnvironment=OMA_RUN_ROOT=${join(env.dir, "R")}\nEnvironment=OMA_AGENT=dynamic\nExecStart=${NODE} ${wrapper}\nRestart=no\n`);
+    writeFileSync(service, `[Unit]\n${ownedBy(env, "dynamic")}\n[Service]\nType=exec\nEnvironment=OMA_RUN_ROOT=${join(env.dir, "R")}\nEnvironment=OMA_AGENT=dynamic\nExecStart=${NODE} ${wrapper}\nRestart=no\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     broker = new Broker(env.store, env.mail, env.units, env.views, env.lifecycle, null, null, {
       stateRoot: join(env.dir, "state"), runRoot: join(env.dir, "R"), society: env.society, hasGoal: () => true,
@@ -643,7 +656,7 @@ test("T41/CTX-006: pre-GOAL create stays logically enabled but cannot activate u
     await env.lifecycle.create(auth("a", ["agent.create"]), { name: "child", from: base, brief: "wait for goal" }, "c1");
     assert.equal(env.store.getAgent("child")!.desired, "enabled");
     const service = join(env.xdg, "systemd", "user", unitName(env.society, "child", "service"));
-    writeFileSync(service, `[Unit]\nDescription=t41 child\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    writeFileSync(service, `[Unit]\n${ownedBy(env, "child")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     const reconcile = new ReconcileModule(env.store, env.mail, null, env.units, env.lifecycle, {
       activationAllowed: () => true,
@@ -694,7 +707,7 @@ test("V25A: start/stop intents accepted for an earlier incarnation cannot act on
     env.units.ensureResident("a", "p");
     const service = unitName(env.society, "a", "service");
     const unitFile = join(env.xdg, "systemd", "user", service);
-    writeFileSync(unitFile, `[Unit]\nDescription=v25a run\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    writeFileSync(unitFile, `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     // A start and a stop accepted while incarnation 1 ran, left unconfirmed.
     const accepted = (key: string, kind: "agent.start" | "agent.stop", desired: "enabled" | "stopped") => {
@@ -759,7 +772,7 @@ test("V23B: a status snapshot is display only; start, stop and death proof obser
     env.store.transaction(tx => tx.updateAgent({ name: "a", desired: "stopped" }));
     env.units.ensureResident("a", "p");
     const service = unitName(env.society, "a", "service");
-    writeFileSync(join(env.xdg, "systemd", "user", service), `[Unit]\nDescription=v23b run\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
+    writeFileSync(join(env.xdg, "systemd", "user", service), `[Unit]\n${ownedBy(env, "a")}\n[Service]\nType=exec\nExecStart=/usr/bin/sleep 60\nRestart=no\n[Install]\nWantedBy=default.target\n`);
     spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
     // One real batched observation of every agent: a is stopped, b has no unit.
     const refresh = new StatusRefresh(() => env.store.agentNames(), agents => env.units.observeStatus(agents));

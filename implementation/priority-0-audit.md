@@ -793,6 +793,20 @@ symlink와 rename 사이뿐이다). crash lane(`crash-boundaries`)은 일회용 
 `test/p0-review6.test.ts`(durable lane, requiredNames 6개)와 각 owner의 시험 파일에 있다. 전체 `npm test`의 실패는 기록 결박(R38 둘, V32A
 둘: 새 production 파일이 validation과 review ledger에 없음)뿐이다.
 
+
+## v22 결박이 찾은 것
+
+2026-09-28, DR18 뒤에 v21 이후의 커밋 전부를 한 트리로 결박하려고 전체 시험과 lane을 돌렸다. v21 뒤로 kernel·crash·durable lane을
+돌린 적이 없었으므로(5차·6차 점검과 DR18은 관련 시험 묶음과 전체 `npm test`로 검증했다) lane이 넷을 찾았다. 모두 고쳤고, 고친 뒤
+같은 lane이 통과했다. 제품 결함은 P0V-98과 P0V-101이고, 나머지는 시험·lane이 규칙을 따라오지 못한 것이다.
+
+| ID | 발견 | 파일 | 요약 | 상태 |
+|---|---|---|---|---|
+| P0V-98 | v22 kernel·crash lane(LIFE-009, CLI acceptance, T39 부팅·생성 경계 14개) | units.ts `install` | P0V-59가 unit 설치를 no-replace 게시로 바꾸면서, 교체 경로(`replaceDerivedFile`)가 하던 unit 디렉터리 생성을 잃었다. 그 사용자의 첫 Resident 설치가 ENOENT로 실패했다(unit 디렉터리가 아직 없는 user manager). 설치는 게시 전에 unit 디렉터리를 durable하게 만든다. 시험: `P0V-98 / P0V-59, P0-3:`(가짜 systemctl) | 수정 |
+| P0V-99 | 같은 kernel lane(T36, T38, REC-001, T-create-ready, T41, V25A, V23B) | test/phase4.test.ts | Resident unit 자리에 시험이 손으로 쓴 unit이 P0V-59의 소유 줄(Description, X-OMA-Owner)을 갖지 않아 다른 소유자의 unit으로 판정됐다(runner 인증 실패, 관측이 unit 없음). 시험 unit은 rendered unit과 같은 소유 줄을 쓴다(`ownedBy`). 제품의 판정은 옳았다 | 수정 |
+| P0V-100 | v22 durable lane(critical oracle not executed) | scripts/verification-lanes.mjs | P0V-61이 이름을 바꾼 AV7 시험 둘을 durable lane이 옛 이름으로 요구했다. lane은 지금 이름을 요구하고, fast lane의 `R35 every required name of every lane is the start of a test in this tree`가 lane이 아무 시험도 싣지 않는 이름을 요구하면 그 rename에서 실패한다 | 수정 |
+| P0V-101 | DR18 뒤 전체 `npm test`(T117 셋, AV16) | process/async.ts `spawnSandboxed`, test/resident-sandbox-live.test.ts | D-5가 모든 Resident argv에 `--seccomp 3`을 넣었지만 bwrap을 직접 띄우는 primitive와 시험 probe는 fd 3을 주지 않아 bwrap이 거절했다. `spawnSandboxed`가 plan의 filter를 fd 3으로 넘기고, filter와 `--seccomp`가 짝이 아니면 거절한다. 같은 전체 실행이 D-8의 고정 port 표면(P17/P23)과 broker 조립 시험의 `assertStateRoot` stub, CI가 platform lane을 돌리지 않는 것(T125)도 찾았다 | 수정 dea7f03 |
+
 ## 수정 검증
 
 수정마다 그 수정을 되돌리는 변이를 넣고, 빌드한 뒤 해당 시험 파일을 돌렸다. 시험이 실패하면 KILLED다. 변이를 넣은 코드는 매번 원래대로 되돌리고 다시 빌드했다.

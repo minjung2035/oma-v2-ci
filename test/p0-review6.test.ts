@@ -641,3 +641,30 @@ test("P0V-95 / R6-20: a unit that names no owner is nobody's to replace, and the
     "/usr/bin/node /opt/oma/runner.js --agent a");
   assert.equal(effectiveExecArgv("/usr/bin/node /opt/oma/runner.js"), null, "an answer in another form is not read as the argv");
 });
+
+import { UnitsModule } from "../src/units.js";
+import { TEST_RESOURCES } from "./fixtures/spec.js";
+
+test("P0V-98 / P0V-59, P0-3: the first Resident a user installs makes the unit directory it is installed into", t => {
+  // Found by the kernel lane of the v22 binding: a user manager whose unit
+  // directory did not exist yet refused every first install (ENOENT), since
+  // the no-replace claim publishes into a directory that must exist.
+  const dir = mkdtempSync(join(tmpdir(), "oma-unit-dir-"));
+  const bin = join(dir, "bin"); mkdirSync(bin);
+  writeFileSync(join(bin, "systemctl"), `#!/bin/sh\ncase "$*" in *LoadState*) echo loaded ;; esac\nexit 0\n`, { mode: 0o755 });
+  const savedPath = process.env.PATH; process.env.PATH = bin;
+  t.after(() => { process.env.PATH = savedPath; rmSync(dir, { recursive: true, force: true }); });
+  const installDir = join(dir, "config", "systemd", "user");
+  const state = join(dir, "tree");
+  const units = new UnitsModule("demo", { node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
+    config: join(state, "config.json"), run: join(dir, "run"), brokerUnit: "" }, installDir, { p: TEST_RESOURCES }, () => 1);
+  // This stand-in manager does not report the fragment it loaded, so the
+  // install stops after publishing, at the check of what the manager read;
+  // what matters here is that it got that far.
+  try { units.ensureResident("alice", "p", TEST_RESOURCES); }
+  catch (error) {
+    assert.ok(error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /differs from rendered contract/.test(error.message),
+      `the install failed before it published: ${String(error)}`);
+  }
+  assert.ok(readdirSync(installDir).includes("oma-demo-alice.service"), "the unit was not published into the directory it made");
+});
