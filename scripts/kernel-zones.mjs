@@ -30,6 +30,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/domain/tool-surface.ts",
       "src/domain/usage-budget.ts",
       "src/domain/utf8.ts",
+      "src/domain/unseen-text.ts",
       "src/hash.ts",
       "src/process/command.ts",
       "src/storage/paths.ts",

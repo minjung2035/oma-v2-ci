@@ -67,6 +67,7 @@ src/domain/request-identity.ts
 src/domain/resources.ts
 src/domain/spec-identity.ts
 src/domain/tool-surface.ts
+src/domain/unseen-text.ts
 src/domain/utf8.ts
 src/durable.ts
 src/entry/broker.ts

@@ -82,6 +82,16 @@ test("§4.6: the modes a screen needs are followed across read boundaries", () =
   assert.equal(modes.replay(), "");
 });
 
+test("P0V-109 (G12-05): a program's mouse reporting, cursor keys and synchronized output are put back when its screen leaves", () => {
+  const modes = new TerminalModes();
+  modes.feed(Buffer.from("\u001b[?1;1000;1006h\u001b[?2026h\u001b[?7l\u001b[?47h\u001b[?1004h"));
+  assert.equal(modes.undo(), "\u001b[?1l\u001b[?7h\u001b[?1000l\u001b[?1004l\u001b[?1006l\u001b[?2026l\u001b[?1049l");
+  assert.equal(modes.replay(), "\u001b[?1049h\u001b[?1h\u001b[?7l\u001b[?1000h\u001b[?1004h\u001b[?1006h\u001b[?2026h");
+  // A mode the program turned back is nothing to put back; one not followed is left alone.
+  modes.feed(Buffer.from("\u001b[?1000l\u001b[?7h\u001b[?12h"));
+  assert.equal(modes.undo(), "\u001b[?1l\u001b[?1004l\u001b[?1006l\u001b[?2026l\u001b[?1049l");
+});
+
 test("MAC-221/MV-12: a screen that leaves does not stop the program; one that comes back gets its modes and the whole screen", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
   const { socketPath } = await holder(t);
   const first = await Screen.attach(socketPath);

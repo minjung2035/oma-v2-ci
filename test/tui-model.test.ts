@@ -195,3 +195,24 @@ test("TUI-007: the panel always shows when a setting takes effect", () => {
   assert.match(text, /다음 세션부터/);
   assert.match(text, /재시작 후/);
 });
+
+test("P0V-108 / F-06, TUI-002: what reorders or hides letters is not drawn, and the joiners that shape them are", () => {
+  // A subject that would read "evil txt.exe": the override is gone, the letters are in order.
+  assert.equal(fit("evil‮exe.txt", 40), "evilexe.txt");
+  for (const unseen of ["‪", "‫", "‬", "‭", "‮", "⁦", "⁧", "⁨", "⁩", "‎", "‏",
+    "؜", "​", "⁠", "﻿", "­", "\u{E0041}", "\u001B", "\u009B"])
+    assert.equal(fit(`a${unseen}b`, 40), "ab", `U+${unseen.codePointAt(0)!.toString(16)}`);
+  // The joiners stay: an emoji family is one cluster, a Persian word keeps its shape.
+  assert.equal(fit("\u{1F468}‍\u{1F469}‍\u{1F467}", 40), "\u{1F468}‍\u{1F469}‍\u{1F467}");
+  assert.equal(fit("می‌خواهم", 40), "می‌خواهم");
+  // G11-02: a mark with nothing before it is text too; it takes no cell.
+  assert.equal(fit("́ab", 1), "́a");
+});
+
+test("P0V-108: a paste loses what the screen would not show, so the draft the Human reads is the text that is sent", () => {
+  const pasted = (text: string): Key[] => decodeKeys(Buffer.from(`\u001b[200~${text}\u001b[201~`));
+  const keys = pasted("rm -rf ‮/ ; echo​ ok\tdone\r\nnext\u{E0049}");
+  const paste = keys.find(key => key.kind === "paste") as { kind: "paste"; value: string } | undefined;
+  assert.ok(paste, JSON.stringify(keys));
+  assert.equal(paste.value, "rm -rf / ; echo ok\tdone\nnext");
+});

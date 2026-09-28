@@ -12,6 +12,7 @@
 import { parseKey } from "@earendil-works/pi-tui";
 import { TERMINAL_BOUNDS } from "./limits.js";
 import { decodeUtf8 } from "../domain/utf8.js";
+import { UNSEEN_EXCEPT_LAYOUT } from "../domain/unseen-text.js";
 
 export type Key =
   | { readonly kind: "char"; readonly value: string }
@@ -73,9 +74,11 @@ const PASTE_END = `${String.fromCharCode(ESC)}[201~`;
  * Human meant to send. Display sanitising is a separate concern and belongs to
  * the view; this keeps them out of what is sent to the engine. */
 function pastedText(bytes: number[]): string {
+  // P0V-108: what the screen will not show is not sent either -- the draft
+  // the Human reads is the text the engine gets.
   return decodeText(bytes, false).text
     .replace(/\r\n?/g, "\n")
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
+    .replace(UNSEEN_EXCEPT_LAYOUT, "");
 }
 
 function actionOf(token: string): Key | undefined {

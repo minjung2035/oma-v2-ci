@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 275,
-    "n_lines": 36098,
+    "n_files": 276,
+    "n_lines": 36149,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -152,8 +152,8 @@
   },
   "src/tui/keys.ts": {
     "blank": 25,
-    "comment": 134,
-    "code": 238,
+    "comment": 136,
+    "code": 239,
     "language": "TypeScript"
   },
   "src/domain/errors.ts": {
@@ -1118,8 +1118,8 @@
   },
   "src/tui/view/text.ts": {
     "blank": 8,
-    "comment": 31,
-    "code": 46,
+    "comment": 34,
+    "code": 45,
     "language": "TypeScript"
   },
   "src/entry/guest-session.ts": {
@@ -1179,6 +1179,12 @@
   "src/platform/host/record.ts": {
     "blank": 6,
     "comment": 11,
+    "code": 42,
+    "language": "TypeScript"
+  },
+  "src/platform/terminal-modes.ts": {
+    "blank": 4,
+    "comment": 17,
     "code": 42,
     "language": "TypeScript"
   },
@@ -1377,12 +1383,6 @@
   "src/mail/batch-policy.ts": {
     "blank": 2,
     "comment": 4,
-    "code": 26,
-    "language": "TypeScript"
-  },
-  "src/platform/terminal-modes.ts": {
-    "blank": 3,
-    "comment": 9,
     "code": 26,
     "language": "TypeScript"
   },
@@ -1650,6 +1650,12 @@
     "code": 3,
     "language": "TypeScript"
   },
+  "src/domain/unseen-text.ts": {
+    "blank": 2,
+    "comment": 17,
+    "code": 2,
+    "language": "TypeScript"
+  },
   "src/tui/view/index.ts": {
     "blank": 0,
     "comment": 2,
@@ -1657,9 +1663,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1597,
-    "comment": 6335,
-    "code": 28166,
-    "nFiles": 275
+    "blank": 1600,
+    "comment": 6365,
+    "code": 28184,
+    "nFiles": 276
   }
 }

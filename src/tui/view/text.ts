@@ -2,6 +2,7 @@
  * product surface that imports the engine's terminal library (TUI-020).
  */
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { UNSEEN } from "../../domain/unseen-text.js";
 
 /** Measurement comes from the engine's terminal library, layout does not.
  *
@@ -29,12 +30,13 @@ const TAB = "    ";
  * Control bytes never reach the terminal: an escape sequence in produced text
  * or in a paste would be read by the terminal as an instruction -- move the
  * cursor, change colour, start a paste -- and this product owns its frame.
- * That used to hold only because such bytes measure zero cells and a
- * zero-width cluster is skipped below, which is an accident of the width
- * function rather than a rule anyone stated. It is stated here.
+ * P0V-108: nor do the format characters that reorder or hide letters (a mail
+ * subject that reads backwards, a token hidden between visible ones); what
+ * the Human sees is what the text says. The set is the domain's one
+ * definition (`UNSEEN`), which the paste reading shares.
  */
 export function displayable(text: string): string {
-  return text.replace(/\t/g, TAB).replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
+  return text.replace(/\t/g, TAB).replace(UNSEEN, "");
 }
 
 /** Iterating graphemes rather than code points is what keeps a cut from
@@ -49,7 +51,8 @@ export function fit(text: string, width: number): string {
   let used = 0;
   for (const cluster of clusters(displayable(text))) {
     const size = cellWidth(cluster);
-    if (size === 0) continue;
+    // G11-02: a cluster of no width (a mark with nothing to sit on) is part
+    // of the text; it takes no cell and is kept.
     if (used + size > width) return out;
     out += cluster;
     used += size;
@@ -74,8 +77,7 @@ export function wrap(text: string, width: number): string[] {
     let used = 0;
     for (const cluster of clusters(paragraph)) {
       const size = cellWidth(cluster);
-      if (size === 0) continue;
-      if (used + size > width) { lines.push(line); line = ""; used = 0; }
+      if (size > 0 && used + size > width) { lines.push(line); line = ""; used = 0; }
       line += cluster;
       used += size;
     }

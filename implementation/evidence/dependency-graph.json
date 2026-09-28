@@ -70,6 +70,7 @@
   "src/domain/resources.ts",
   "src/domain/spec-identity.ts",
   "src/domain/tool-surface.ts",
+  "src/domain/unseen-text.ts",
   "src/domain/utf8.ts",
   "src/durable.ts",
   "src/entry/broker.ts",
@@ -301,6 +302,7 @@
      "src/domain/resources.ts",
      "src/domain/spec-identity.ts",
      "src/domain/tool-surface.ts",
+     "src/domain/unseen-text.ts",
      "src/domain/utf8.ts",
      "src/hash.ts",
      "src/process/command.ts",
@@ -1489,7 +1491,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 83
+   "files": 84
   },
   {
    "index": 2,
@@ -1550,8 +1552,8 @@
    "files": 67
   }
  ],
- "files": 276,
- "runtimeEdges": 1077,
+ "files": 277,
+ "runtimeEdges": 1079,
  "typeOnlyEdges": 342,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 236,
@@ -1564,7 +1566,7 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 13,
   "L4-orchestration -> L4-orchestration": 86,
-  "L5-entry -> L1-kernel": 92,
+  "L5-entry -> L1-kernel": 94,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
   "L5-entry -> L4-orchestration": 59,

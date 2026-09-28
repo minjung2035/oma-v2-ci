@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "6bc9b9241e676bd77f5fa41f7bcff82a726a0a2ea9c312deab5179113fcf2f9e",
-  "report": "0b6a5575e91b7d9d1e7dbcadb12bd3d4b4c64b6115e5d32d92117d2e6847fc81",
+  "manifest": "ad6da116a0ae019d7e52e3746a3129b1a70071a129a102914f001a9e88bb7451",
+  "report": "4b9abc84b975de86e7561ebc0e35c43dd61ada0066e985fe2af0a4e5e3673ab1",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -278,6 +278,10 @@
     {
       "path": "src/domain/tool-surface.ts",
       "sha256": "dc8abfd426a18a620ec24c15fe55bf12caa1fd60f9b69d0b983e56f49f62fa91"
+    },
+    {
+      "path": "src/domain/unseen-text.ts",
+      "sha256": "82b6b15994d95012b18a6d4cee469c37d5cc7a5f8f89adb019f3b624e8e676ed"
     },
     {
       "path": "src/domain/utf8.ts",
@@ -665,7 +669,7 @@
     },
     {
       "path": "src/platform/terminal-modes.ts",
-      "sha256": "d93cfaba3b5759357206241662d690f890f91b3555d23e43f35ddb377fa0a961"
+      "sha256": "102e1af15b0492730df0563be0c29ad065cf08662e6f5ec0cc962ae30889c400"
     },
     {
       "path": "src/ports/ledger.ts",
@@ -993,7 +997,7 @@
     },
     {
       "path": "src/tui/keys.ts",
-      "sha256": "550924460bd1fab09e967cd306f45566a31ea280cef0fd290603cb9ec422edc0"
+      "sha256": "5741c7668405fbce18e99b04623142450c042defd78eb4fcea7520c515ee594d"
     },
     {
       "path": "src/tui/limits.ts",
@@ -1065,7 +1069,7 @@
     },
     {
       "path": "src/tui/view/text.ts",
-      "sha256": "2b68e671faeb3b5648497ebd405ded237828606c5a6166faaacfb190de56e415"
+      "sha256": "5ad996f9064b24323a0320550a5dad026018192d995c03da79348126d16350b4"
     },
     {
       "path": "src/tui/words.ts",
