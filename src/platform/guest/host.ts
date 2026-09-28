@@ -56,6 +56,10 @@ export function listening(path: string): Promise<boolean> {
 export class GuestHost {
   private readonly maintenance = new Set<string>();
   private readonly archiving = new Set<string>();
+  /** P0V-106 (G13-04): one open of a society at a time. A second open waits
+   * for the first and then sees what it made, instead of starting a second
+   * session under the same unit name. */
+  private readonly opening = new Map<string, Promise<unknown>>();
 
   constructor(private readonly options: GuestHostOptions) {}
 
@@ -82,6 +86,14 @@ export class GuestHost {
    * for the project it is bound to (D05, as on Linux). */
   async open(society: unknown, projectId: unknown): Promise<{ state: "running" }> {
     if (!isValidSocietyName(society)) throw new StoreError("INVALID_REQUEST", "invalid society name");
+    const before = this.opening.get(society) ?? Promise.resolve();
+    const opened = before.catch(() => undefined).then(() => this.openAlone(society, projectId));
+    this.opening.set(society, opened);
+    try { return await opened; }
+    finally { if (this.opening.get(society) === opened) this.opening.delete(society); }
+  }
+
+  private async openAlone(society: string, projectId: unknown): Promise<{ state: "running" }> {
     if (!isUuid(projectId)) throw new StoreError("INVALID_REQUEST", "projectId must be a UUID");
     if (this.maintenance.size > 0) throw new StoreError("BROKER_UNAVAILABLE", "the engine is being maintained; try again shortly");
     if (this.archiving.has(society)) throw new StoreError("BROKER_UNAVAILABLE", "this society is being archived; try again shortly");

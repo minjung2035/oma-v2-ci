@@ -3,11 +3,12 @@
  * this instance's. The probes run against real files with the real tools. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, closeSync, existsSync, ftruncateSync, mkdtempSync, openSync, rmSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, ftruncateSync, mkdtempSync, openSync, readdirSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { allZero, hasFilesystem, instanceCheck, makeFilesystem, parseCmdline, provisionDecision } from "../src/platform/guest/provision.js";
+import { allZero, hasFilesystem, instanceCheck, makeFilesystem, parseCmdline, provisionDecision, readInstance, writeInstance } from "../src/platform/guest/provision.js";
+import { bundleObjectFormat } from "../src/platform/guest/project.js";
 
 const ID = randomUUID();
 const tools = existsSync("/usr/sbin/blkid") && existsSync("/usr/sbin/mkfs.ext4");
@@ -60,4 +61,32 @@ test("MAC-303/MV-34: the probes on real disks -- blank, made, and damaged at its
   chmodSync(unreadable, 0o000);
   if (process.getuid!() !== 0) await assert.rejects(hasFilesystem(unreadable), /could not be read/);
   await assert.rejects(hasFilesystem(join(dir, "absent.img")), /could not be read/);
+});
+
+test("P0V-106 (X2-03): the data disk's record is published whole, never replaced by another instance's, and leaves no temporary", () => {
+  const mount = mkdtempSync(join(tmpdir(), "oma-instance-"));
+  try {
+    const instance = randomUUID();
+    writeInstance(mount, instance);
+    assert.equal(readInstance(mount), instance);
+    writeInstance(mount, instance);
+    assert.throws(() => writeInstance(mount, randomUUID()), /another instance/);
+    assert.equal(readInstance(mount), instance);
+    assert.deepEqual(readdirSync(mount).filter(name => name.startsWith(".")), []);
+  } finally { rmSync(mount, { recursive: true, force: true }); }
+});
+
+test("P0V-106 (G13-02): a bundle's object format is read from its whole capability header, and a header that does not end is refused", () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-bundle-head-"));
+  try {
+    const bundle = (lines: string[]): string => { const path = join(dir, randomUUID()); writeFileSync(path, `${lines.join("\n")}\n`); return path; };
+    const padding = `@filter=${"x".repeat(8000)}`;
+    assert.equal(bundleObjectFormat(bundle(["# v3 git bundle", padding, "@object-format=sha256", `${"a".repeat(64)} refs/heads/main`])), "sha256",
+      "past the first 4096 bytes, still the capabilities");
+    assert.equal(bundleObjectFormat(bundle(["# v3 git bundle", "@object-format=sha256", `${"a".repeat(64)} refs/heads/main`])), "sha256");
+    assert.equal(bundleObjectFormat(bundle(["# v2 git bundle", `${"a".repeat(40)} refs/heads/main`])), "sha1");
+    // An object-format line after the capabilities is a ref line's business, not the format.
+    assert.equal(bundleObjectFormat(bundle(["# v3 git bundle", `${"a".repeat(40)} refs/heads/main`, "@object-format=sha256"])), "sha1");
+    assert.throws(() => bundleObjectFormat(bundle(["# v3 git bundle", `@filter=${"x".repeat(70 * 1024)}`, "@object-format=sha256"])), /longer than/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

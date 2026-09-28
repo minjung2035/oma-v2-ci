@@ -370,3 +370,23 @@ test("no-open-spike (DR18): nothing in v1 throws SPIKE_UNRESOLVED; a known unsup
       assert.ok(findings.some(value => value.rule === "no-open-spike" && value.file === "src/git/a.ts"), text);
     });
 });
+
+test("socket-callback-effects (P0V-104): a data callback makes no synchronous file effect outside a try", () => {
+  withTree({ "src/platform/receive.ts": `const take = chunk => { try { writeSync(fd, chunk); } catch (error) { fail(error); } };
+socket.on("data", take);
+socket.on("data", chunk => { try { fsyncSync(fd); } catch (e) { reject(e); } });
+socket.on("data", chunk => reader.push(chunk));` }, findings => clean(findings, "socket-callback-effects"));
+  for (const text of [
+    'socket.on("data", chunk => { writeSync(fd, chunk); });',
+    'const take = chunk => { for (let at = 0; at < chunk.length;) at += writeSync(fd, chunk, at, chunk.length - at); };\nsocket.on("data", take);',
+    'function take(chunk) { fsyncSync(fd); }\nsocket.once("data", take);',
+    'class R { onData = chunk => { unlinkSync(path); }; start() { socket.on("data", this.onData); } }',
+    'socket.on("data", chunk => { try { ok(); } finally { closeSync(fd); } });',
+  ])
+    withTree({ "src/platform/receive.ts": text }, findings => {
+      assert.ok(findings.some(value => value.rule === "socket-callback-effects"), text);
+    });
+  // Near miss: an effect in another event's callback, or in a function the callback does not name.
+  withTree({ "src/platform/receive.ts": 'socket.on("end", () => { closeSync(fd); });\nconst other = () => { writeSync(fd, b); };' },
+    findings => clean(findings, "socket-callback-effects"));
+});

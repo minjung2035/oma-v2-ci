@@ -2,12 +2,12 @@
  * only at a quiescent point, and no copy whose consistency is not proven. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { GuestLink } from "../src/platform/host/guest-link.js";
-import { pruneSnapshots, snapshotRunning, snapshotStopped } from "../src/platform/host/snapshot.js";
+import { openSnapshotStore, pruneSnapshots, snapshotRunning, snapshotStopped } from "../src/platform/host/snapshot.js";
 import type { SessionLauncher } from "../src/platform/guest/host.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
@@ -36,7 +36,7 @@ const copy = (from: string, to: string): void => { copyFileSync(from, to); };
 test("REC-005/MAC-620: a running VM's snapshot stops every society, freezes for the clone, and keeps it only after a thaw that found the freeze", async t => {
   const { driver, link, snapshots, statePath, stops } = await world(t);
   const made = await snapshotRunning({ dir: snapshots, statePath, clone: copy }, link, "s1");
-  assert.equal(made.path, join(snapshots, "s1.img"));
+  assert.equal(made.path, join(snapshots, "00000000-s1.img"));
   assert.deepEqual(made.stopped, ["demo"]);
   assert.deepEqual(stops, ["demo"]);
   assert.equal(readFileSync(made.path, "utf8"), "the state disk");
@@ -59,13 +59,32 @@ test("P0-5: a society whose stop is not seen to end means no snapshot, and openi
   assert.ok(driver.calls.includes("maintenance.end"));
 });
 
-test("§8.4/MAC-661: a stopped VM is cloned as it is; old snapshots go oldest first, an update's own is kept", async t => {
+test("§8.4/MAC-661, P0V-103 (G12-04): old snapshots go oldest first by the order they were made, not by their clock; an update's own is kept", async t => {
   const { snapshots, statePath } = await world(t);
+  const made: string[] = [];
   for (const [index, id] of ["a", "b", "c", "d", "e"].entries()) {
-    await snapshotStopped({ dir: snapshots, statePath, clone: copy }, id);
-    utimesSync(join(snapshots, `${id}.img`), 1000 + index, 1000 + index);
+    made.push(await snapshotStopped({ dir: snapshots, statePath, clone: copy }, id));
+    // The wall clock went back between snapshots: the newest looks oldest.
+    utimesSync(made[index]!, 5000 - index, 5000 - index);
   }
-  assert.deepEqual(pruneSnapshots(snapshots, 3, new Set(["a.img"])), ["b.img"]);
-  assert.deepEqual(readdirSync(snapshots).sort(), ["a.img", "c.img", "d.img", "e.img"]);
-  assert.equal(existsSync(join(snapshots, "a.img")), true, "the update's snapshot stays");
+  const names = made.map(path => path.slice(snapshots.length + 1));
+  assert.deepEqual(names, ["00000000-a.img", "00000001-b.img", "00000002-c.img", "00000003-d.img", "00000004-e.img"]);
+  assert.deepEqual(pruneSnapshots(snapshots, 3, new Set([names[0]!])), [names[1]]);
+  assert.deepEqual(readdirSync(snapshots).sort(), [names[0], names[2], names[3], names[4]]);
+  assert.equal(existsSync(made[0]!), true, "the update's snapshot stays");
+});
+
+test("P0V-103 (F-08): a snapshot that was not finished is a temporary, never a snapshot, and the store's start removes it", async t => {
+  const { snapshots, statePath } = await world(t);
+  await assert.rejects(snapshotStopped({ dir: snapshots, statePath, clone: (from, to) => { copy(from, to); throw new Error("the clone was cut off"); } }, "cut"),
+    /cut off/);
+  assert.deepEqual(readdirSync(snapshots), [], "the cut clone is not left under any name");
+  // A service that died mid-clone left a temporary; the next start removes it.
+  const clone = (from: string, to: string): void => { copy(from, to); };
+  let leftover = "";
+  await snapshotStopped({ dir: snapshots, statePath, clone: (from, to) => { clone(from, to); leftover = to; copyFileSync(to, `${to}.kept`); } }, "whole");
+  renameSync(`${leftover}.kept`, leftover);
+  assert.equal(readdirSync(snapshots).some(name => name.endsWith(".partial")), true);
+  assert.deepEqual(openSnapshotStore(snapshots).length, 1);
+  assert.deepEqual(readdirSync(snapshots), ["00000000-whole.img"]);
 });

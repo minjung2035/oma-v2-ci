@@ -136,6 +136,17 @@ test("MAC-412: a project's society does not open before its first import, and op
   assert.equal(launcher.started.length, 1, "an open society is not started twice");
 });
 
+test("P0V-106 (G13-04): two opens of one society at once start it once; the second sees what the first made", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { open, launcher, importedMirror } = await setup(t);
+  const projectId = randomUUID();
+  importedMirror(projectId);
+  const first = await open(hello());
+  const second = await open(hello());
+  const answers = await Promise.all([first.request("society.open", { society: "demo", projectId }), second.request("society.open", { society: "demo", projectId })]);
+  assert.deepEqual(answers, [{ state: "running" }, { state: "running" }]);
+  assert.equal(launcher.started.length, 1, "one session under the society's name");
+});
+
 test("D05 in the guest: an existing society opens only for the project it is bound to", async t => {
   const { open, launcher, importedMirror, societiesDir } = await setup(t);
   const bound = randomUUID(); const other = randomUUID();

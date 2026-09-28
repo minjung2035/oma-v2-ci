@@ -18,7 +18,7 @@ import { GuestProjects } from "../src/platform/guest/project.js";
 import { RequestLedger } from "../src/platform/guest/requests.js";
 import { serveStream } from "../src/platform/guest/stream.js";
 import { GuestLink } from "../src/platform/host/guest-link.js";
-import { MacGit, getStream, putStream } from "../src/platform/host/project.js";
+import { MacGit, fileSink, getStream, putStream } from "../src/platform/host/project.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 
 const INSTANCE = randomUUID();
@@ -131,7 +131,7 @@ test("§6.4/MAC-420/MV-51: export brings the engine's main into refs/remotes/oma
 
   const exported = await w.request("project.export", { society: "demo" }, "export-1");
   assert.equal(exported.head, done);
-  await getStream(await w.link.bytes("stream"), "export-1", w.transfer("e1"), PLATFORM_FRAME_BYTES);
+  await getStream(await w.link.bytes("stream"), "export-1", () => fileSink(w.transfer("e1")), PLATFORM_FRAME_BYTES);
   assert.deepEqual(await w.macGit.fetchExport(w.mac, w.transfer("e1")), { head: done });
   assert.equal(git(w.mac, "rev-parse", "refs/remotes/oma/main"), done);
   assert.deepEqual({ heads: git(w.mac, "for-each-ref", "refs/heads"), head: git(w.mac, "rev-parse", "HEAD"), status: git(w.mac, "--no-optional-locks", "status", "--porcelain") }, before,

@@ -688,6 +688,50 @@ function openSpikeRules(root, findings) {
   }
 }
 
+/** P0V-104 (F-03): a callback a socket or a stream calls with its data has
+ * no caller to catch what it throws -- an exception there ends the whole
+ * process, not the one stream. So a data callback makes no synchronous file
+ * effect outside a try that hands the failure on (the one receiver,
+ * `src/platform/stream-receive.ts`, is the model). The callback is the
+ * function given to `.on`/`.once("data", ...)`, found inline, as a function
+ * or constant of the same file, or as a member of the class it names. */
+const SYNC_FILE_EFFECTS = new Set(["writeSync", "fsyncSync", "fdatasyncSync", "closeSync", "openSync", "unlinkSync", "renameSync",
+  "ftruncateSync", "truncateSync", "linkSync", "symlinkSync", "mkdirSync", "rmSync", "rmdirSync", "appendFileSync", "writeFileSync", "copyFileSync"]);
+function socketCallbackEffectRules(root, findings) {
+  for (const file of filesUnder(root, "src")) {
+    const source = sourceOf(root, file);
+    const named = new Map();
+    eachNode(source, node => {
+      if (ts.isFunctionDeclaration(node) && node.name) named.set(node.name.text, node);
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+        && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) named.set(node.name.text, node.initializer);
+      if ((ts.isMethodDeclaration(node) || ts.isPropertyDeclaration(node)) && node.name && ts.isIdentifier(node.name)) {
+        const body = ts.isPropertyDeclaration(node) ? node.initializer : node;
+        if (body && (ts.isMethodDeclaration(body) || ts.isArrowFunction(body) || ts.isFunctionExpression(body))) named.set(`this.${node.name.text}`, body);
+      }
+    });
+    eachNode(source, node => {
+      if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return;
+      if (!["on", "once", "addListener", "prependListener"].includes(node.expression.name.text)) return;
+      const [event, handler] = node.arguments;
+      if (event === undefined || !ts.isStringLiteralLike(event) || event.text !== "data" || handler === undefined) return;
+      const target = ts.isArrowFunction(handler) || ts.isFunctionExpression(handler) ? handler
+        : ts.isIdentifier(handler) ? named.get(handler.text)
+        : ts.isPropertyAccessExpression(handler) && handler.expression.kind === ts.SyntaxKind.ThisKeyword ? named.get(`this.${handler.name.text}`) : undefined;
+      if (target === undefined) return;
+      eachNode(target, inner => {
+        if (!ts.isCallExpression(inner)) return;
+        const callee = ts.isIdentifier(inner.expression) ? inner.expression.text : ts.isPropertyAccessExpression(inner.expression) ? inner.expression.name.text : null;
+        if (callee === null || !SYNC_FILE_EFFECTS.has(callee)) return;
+        for (let up = inner.parent; up && up !== target.parent; up = up.parent)
+          if (ts.isBlock(up) && up.parent && ts.isTryStatement(up.parent) && up.parent.tryBlock === up) return;
+        findings.push(finding("socket-callback-effects", file,
+          `a data callback calls ${callee} outside a try: what it throws would end the process; hand the failure to the stream's promise (platform/stream-receive.ts)`));
+      });
+    });
+  }
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
   extensionRules(root, findings);
@@ -705,5 +749,6 @@ export function surfaceRuleFindings(root) {
   utf8DecoderRules(root, findings);
   errorWordsRules(root, findings);
   openSpikeRules(root, findings);
+  socketCallbackEffectRules(root, findings);
   return findings;
 }

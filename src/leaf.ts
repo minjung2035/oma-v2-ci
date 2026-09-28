@@ -197,9 +197,9 @@ export type FileLock =
   | { readonly kind: "contended" }
   | { readonly kind: "failed"; readonly errno: number };
 
-/** EAGAIN and EWOULDBLOCK are the same value on Linux, which is the only
- * platform this product locks on. */
-const EWOULDBLOCK = 11;
+/** EAGAIN and EWOULDBLOCK are one value on each platform the product locks
+ * on: 11 on Linux, 35 on macOS (the host service's lock, P0V-105). */
+const EWOULDBLOCK = process.platform === "darwin" ? 35 : 11;
 
 export function lockFileDescriptor(fd: number): FileLock {
   const LOCK_EX = 2; const LOCK_NB = 4;

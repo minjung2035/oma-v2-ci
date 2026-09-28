@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "41e18ba1fe2006dac672becd5eedb465b7abb6098d8fce5450d411ccd284c8c7",
-  "report": "de4cc47bbee62fca36ac25704198ad487d6cc5bdbb295080c3b2519d40bbb8d5",
+  "manifest": "6bc9b9241e676bd77f5fa41f7bcff82a726a0a2ea9c312deab5179113fcf2f9e",
+  "report": "7c6956e34a844b83cee01f0acdc5e68f284e43066b0e6936a11e857608829416",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -325,7 +325,7 @@
     },
     {
       "path": "src/entry/omahostd.ts",
-      "sha256": "17700735bce736e9569415d433781cd6fc7d9bcd7726670c28aa1beec716ca10"
+      "sha256": "169c5f6c7709b17e1e8fb3bdccf5ebe6685d235e881d641bd10c5f0265f7ea87"
     },
     {
       "path": "src/entry/runner.ts",
@@ -445,7 +445,7 @@
     },
     {
       "path": "src/leaf.ts",
-      "sha256": "bda100efe973f3bdba0a491ba1969515ba6fc475db31de469db04159b4256214"
+      "sha256": "5cc2b784c3888ad3484fe573e1d8f8e3224afb21719c53ca5f02ed6d536f389c"
     },
     {
       "path": "src/lifecycle.ts",
@@ -545,7 +545,7 @@
     },
     {
       "path": "src/platform/guest/host.ts",
-      "sha256": "3c01e7ce251f6a5bb65b650114924ef7f99d9f6e65848101632beabb712398a7"
+      "sha256": "8d50b65ef51942274bb6e30398242a325ba36fad25cbc63a1dbf607bce48049b"
     },
     {
       "path": "src/platform/guest/identity.ts",
@@ -557,11 +557,11 @@
     },
     {
       "path": "src/platform/guest/project.ts",
-      "sha256": "ce54f1d284387b0105f2b32e835d148c4a70b3b22c24f5abb219ca7dae555480"
+      "sha256": "b66faaee9441b6be03021f2cc6a51469f677359393bbaaec1d6d2def30c1e432"
     },
     {
       "path": "src/platform/guest/provision.ts",
-      "sha256": "dff6937f6f94bfd4f508cd8b0e78add03e7a3ff84da9978c460c52b34b9c9693"
+      "sha256": "cda859c8c8c09dead6a0d59cef92c4e4b4807f3648e83b937dfc25002be60427"
     },
     {
       "path": "src/platform/guest/pty.ts",
@@ -581,15 +581,15 @@
     },
     {
       "path": "src/platform/guest/stream.ts",
-      "sha256": "cbee66f3b3f3de42d34fe8f80e9007a43612b908e222dcb644f712c6dea24567"
+      "sha256": "3b3716d22dc3a8d603e7d8965e02cf1b33bbd28159571f8f7175f64fab8a135e"
     },
     {
       "path": "src/platform/guest/systemd-launcher.ts",
-      "sha256": "5784d0356f26e11a8d3dfeb6436a705b0879f01347504302f0510f9268baab9c"
+      "sha256": "bd0c33db2f0d06742291218abe8036507ee1e8ea2a0248c140c8cfed1d22fce4"
     },
     {
       "path": "src/platform/host/archive-crypto.ts",
-      "sha256": "8f225078c7bcb5fb2c76abcb0e8c0f00a2d3ba63f50a47961b597677ddb9bc25"
+      "sha256": "e515b6f3d69ad4b38122d6ca94de39157262dc88e41fb3767e86f34f5eee2cb1"
     },
     {
       "path": "src/platform/host/attach-client.ts",
@@ -598,6 +598,10 @@
     {
       "path": "src/platform/host/egress.ts",
       "sha256": "40134d86aa1134e207cbfa0d11ec2300987bc9a6d84e433355c3004263d77099"
+    },
+    {
+      "path": "src/platform/host/files.ts",
+      "sha256": "2e3c0e59f391a6909b1d94ff509d68cdce6f340c2d4617129f02061a5cf4308a"
     },
     {
       "path": "src/platform/host/guest-link.ts",
@@ -625,11 +629,11 @@
     },
     {
       "path": "src/platform/host/project.ts",
-      "sha256": "767d31bf4d0fd57c2d95de8b1d0807919072f1244732c64c04d01e56a4c9aa8b"
+      "sha256": "8cd73aed6b13d9fb1dad4e4f07b9ae09f816a90c576c0dc12707a5d0167a126e"
     },
     {
       "path": "src/platform/host/record.ts",
-      "sha256": "6f1b642271491293b6772355674b04c3c9a886159659c291938fb1e4fde301c8"
+      "sha256": "eadfe043cfdac2c2d3c8ffb8d2ff59c4c0e58eab3c6c505ac7d34f3e11515df9"
     },
     {
       "path": "src/platform/host/resolver.ts",
@@ -637,11 +641,11 @@
     },
     {
       "path": "src/platform/host/service.ts",
-      "sha256": "71910cc42d95b36d257d01c90557cd148ddb88912a9c36e15b4a71dd6c130b5b"
+      "sha256": "717e3a4b8a17c09926ddab91faa6361b7a2c1333d2a8ccaf6c3fe5f61e05f6b0"
     },
     {
       "path": "src/platform/host/snapshot.ts",
-      "sha256": "d204030f0c943d22b43c06f67cdef55918e1de7e9a46823968662db22903401d"
+      "sha256": "7871fe1ec06fde5a8e06ffeadb9630b504f40767f979ef9604ebf417f0dcf709"
     },
     {
       "path": "src/platform/host/vz-driver.ts",
@@ -654,6 +658,10 @@
     {
       "path": "src/platform/rpc.ts",
       "sha256": "a873bce787448db5394cc2f363c5b62d3d2b094d96c98cda17bc48279a644d37"
+    },
+    {
+      "path": "src/platform/stream-receive.ts",
+      "sha256": "ca2c1e6585e1a2b6c5767cffe44919c84bac57f4c4ca3c77d228000f1f9a9cc0"
     },
     {
       "path": "src/platform/terminal-modes.ts",

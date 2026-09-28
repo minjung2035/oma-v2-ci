@@ -147,6 +147,7 @@ src/platform/guest/systemd-launcher.ts
 src/platform/host/archive-crypto.ts
 src/platform/host/attach-client.ts
 src/platform/host/egress.ts
+src/platform/host/files.ts
 src/platform/host/guest-link.ts
 src/platform/host/host-api.ts
 src/platform/host/image.ts
@@ -161,6 +162,7 @@ src/platform/host/snapshot.ts
 src/platform/host/vz-driver.ts
 src/platform/product-text.ts
 src/platform/rpc.ts
+src/platform/stream-receive.ts
 src/platform/terminal-modes.ts
 src/ports/ledger.ts
 src/ports/runtime.ts

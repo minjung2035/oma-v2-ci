@@ -770,6 +770,17 @@
    ]
   },
   {
+   "owner": "src/platform/guest/provision.ts#writeInstance",
+   "fact": "the data disk's instance record, written once at the first boot (MAC-303); P0V-106: published whole, never replaced by another instance's",
+   "tests": [
+    {
+     "file": "test/platform-provision.test.ts",
+     "title": "P0V-106 (X2-03): the data disk's record is published whole, never replaced by another instance's, and leaves no temporary",
+     "injection": "logical"
+    }
+   ]
+  },
+  {
    "owner": "src/platform/guest/requests.ts#RequestLedger.run",
    "fact": "macOS guesthost's request ledger: a keyed request's intent before its effect and its outcome after (MAC-240/241), each published once",
    "tests": [

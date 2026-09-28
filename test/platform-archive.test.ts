@@ -49,7 +49,7 @@ test("MAC-621: an archive is sealed in chunks that open only whole, in order, an
   const other = join(dir, "other"); assert.throws(() => decryptArchive(round.sealed, other, randomBytes(32)), damaged, "another key");
 });
 
-async function world(t: import("node:test").TestContext, running: boolean) {
+async function world(t: import("node:test").TestContext, running: boolean, storageFloorBytes = 0) {
   const dir = mkdtempSync(join(tmpdir(), "oma-archive-"));
   const runDir = join(dir, "run"); mkdirSync(runDir);
   const recordPath = join(dir, "host-record.json"); const record = newHostRecord(); writeHostRecord(recordPath, record);
@@ -64,7 +64,7 @@ async function world(t: import("node:test").TestContext, running: boolean) {
   const driver = new LocalDriver(dir, { dir: societiesDir, launcher }, record.instanceId);
   const keychain = new Map<string, string>();
   const service = await HostService.start({ runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git",
-    archivesDir: join(dir, "archives"), keychain: { get: async a => keychain.get(a), put: async (a, v) => { keychain.set(a, v); } },
+    archivesDir: join(dir, "archives"), storageFloorBytes, keychain: { get: async a => keychain.get(a), put: async (a, v) => { keychain.set(a, v); } },
     identity: { hostVersion: "1.0.0", installationId: record.installationId, instanceId: record.instanceId, expectImage: "2026.09.1",
       protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } },
     resolve: async () => { throw new Error("unused"); },
@@ -107,4 +107,12 @@ test("REC-005: a running society is not archived", async t => {
   const { call } = await world(t, true);
   const answer = await call("archive.create", { society: "demo" }, "archive-2");
   assert.equal((answer.error as { code: string }).code, "BATCH_CONFLICT");
+});
+
+test("MAC-660 (P0V-103): an archive the Mac has no room for is refused before a byte is kept", async t => {
+  const { dir, runDir, call } = await world(t, false, Number.MAX_SAFE_INTEGER);
+  const answer = await call("archive.create", { society: "demo" }, "archive-full");
+  assert.equal((answer.error as { code: string }).code, "STORAGE_FULL", JSON.stringify(answer));
+  assert.deepEqual(readdirSync(join(dir, "archives")), []);
+  assert.deepEqual(readdirSync(join(runDir, "transfer")), []);
 });

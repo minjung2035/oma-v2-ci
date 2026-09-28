@@ -3,15 +3,18 @@
  * entry adds only the Mac-specific pieces (the VM helper, the paths). */
 import type { Server } from "node:net";
 import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { GuestLink, type HostIdentity } from "./guest-link.js";
 import { VmLifecycle, type LifecycleOptions, type VmDriver } from "./lifecycle.js";
 import { EgressHost, type EgressHostOptions } from "./egress.js";
 import { startHostApi } from "./host-api.js";
 import { readHostRecord, writeHostRecord, type HostRecord } from "./record.js";
-import { MacGit, getStream, putStream } from "./project.js";
-import { encryptArchive } from "./archive-crypto.js";
+import { MacGit, fileSink, getStream, putStream } from "./project.js";
+import { sealedArchiveSink } from "./archive-crypto.js";
+import { collectTemporaries } from "./files.js";
+import { ProcessLock } from "../../runtime/process-lock.js";
+import { StoreError } from "../../domain/errors.js";
 import type { KeychainStore } from "./keychain.js";
 import { PLATFORM_FRAME_BYTES } from "../../protocol/host-guest.js";
 
@@ -38,6 +41,25 @@ export interface HostServiceOptions {
   readonly timings?: Timings;
   /** §9.1: the Mac's sleep and wake, when the driver reports them. */
   readonly power?: (listener: (event: "sleep" | "wake") => void) => void;
+  /** MAC-660: the state disk, whose size sets the free space the Mac keeps. */
+  readonly statePath?: string;
+  /** MAC-660's floor, when it is not the spec's max(5 GiB, 10% of the state
+   * disk): the free space below which new transfers are refused. */
+  readonly storageFloorBytes?: number;
+}
+
+const GIB = 1024 ** 3;
+/** MAC-660: what the Mac keeps free -- max(5 GiB, 10% of the state disk). */
+function storageFloor(options: HostServiceOptions): number {
+  if (options.storageFloorBytes !== undefined) return options.storageFloorBytes;
+  const disk = options.statePath === undefined ? 0 : statSync(options.statePath).blocks * 512;
+  return Math.max(5 * GIB, Math.ceil(disk / 10));
+}
+/** MAC-660: `incoming` more bytes in `dir` must leave the floor free. */
+function assertRoom(dir: string, incoming: number, floor: number): void {
+  const disk = statfsSync(dir);
+  if (disk.bavail * disk.bsize - incoming < floor)
+    throw new StoreError("STORAGE_FULL", "the Mac does not have room for this; free some space and try again");
 }
 
 /** The archive key: made once on this Mac and kept in the Keychain (§8.4). */
@@ -51,9 +73,19 @@ async function archiveKey(keychain: KeychainStore): Promise<Buffer> {
 
 export class HostService {
   private constructor(readonly lifecycle: VmLifecycle, readonly egress: EgressHost, readonly link: GuestLink,
-    private readonly api: Server, readonly token: string, private readonly stopRecorded: () => Promise<"stopped" | "forced">) {}
+    private readonly api: Server, readonly token: string, private readonly stopRecorded: () => Promise<"stopped" | "forced">,
+    private readonly lock: ProcessLock) {}
 
   static async start(options: HostServiceOptions): Promise<HostService> {
+    // P0V-105 (F-09): one host service per support directory. Two would boot
+    // two VMs on one state disk and take each other's sockets and record.
+    const lock = ProcessLock.tryAcquire(join(options.runDir, "omahostd.lock"));
+    if (lock === null) throw new StoreError("BROKER_UNAVAILABLE", "another OMA host service is running");
+    try { return await HostService.startHeld(options, lock); }
+    catch (error) { lock.close(); throw error; }
+  }
+
+  private static async startHeld(options: HostServiceOptions, lock: ProcessLock): Promise<HostService> {
     const record = (update: (current: HostRecord) => HostRecord): void => {
       const current = readHostRecord(options.recordPath);
       if (current !== null) writeHostRecord(options.recordPath, update(current));
@@ -90,6 +122,13 @@ export class HostService {
     const transfer = join(options.runDir, "transfer");
     mkdirSync(transfer, { recursive: true, mode: 0o700 });
     mkdirSync(options.archivesDir, { recursive: true, mode: 0o700 });
+    // P0V-103, P0V-104: under the lock, what a dead service left is its own:
+    // the temporaries of publications it did not finish, and the transfer
+    // files of requests it did not finish (a same-key retry makes them again).
+    collectTemporaries(options.archivesDir);
+    collectTemporaries(dirname(options.recordPath));
+    for (const name of readdirSync(transfer)) rmSync(join(transfer, name), { force: true, recursive: true });
+    const floor = storageFloor(options);
     const token = randomBytes(32).toString("hex");
     const tokenPath = join(options.runDir, "token");
     writeFileSync(tokenPath, `${token}\n`, { mode: 0o600 });
@@ -105,6 +144,7 @@ export class HostService {
         terminal: (society, takeover) => link.bytes("terminal", { society, ...(takeover ? { takeover: true as const } : {}) }),
         importProject: async (key, params) => {
           const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.import.bundle`);
+          assertRoom(transfer, 0, floor);
           try {
             const bundled = await git.bundle(params.macRepo, params.branch, params.since, file);
             await putStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
@@ -122,7 +162,8 @@ export class HostService {
           finally { society.close(); }
           const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.export.bundle`);
           try {
-            await getStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
+            await getStream(await link.bytes("stream"), key, declared => { assertRoom(transfer, declared.bytes, floor); return fileSink(file); },
+              PLATFORM_FRAME_BYTES);
             return { ...exported, ...(await git.fetchExport(params.macRepo, file)), ref: "refs/remotes/oma/main" };
           } finally { rmSync(file, { force: true }); }
         },
@@ -130,19 +171,24 @@ export class HostService {
           const peer = await link.json("society");
           let made: Record<string, unknown>;
           try { made = await peer.request("archive.create", { society }, key); } finally { peer.close(); }
-          const name = createHash("sha256").update(key).digest("hex");
-          const plain = join(transfer, `${name}.archive.tar`);
-          const target = join(options.archivesDir, `${society}-${name.slice(0, 16)}.omaarchive`);
-          try {
-            await getStream(await link.bytes("stream"), key, plain, PLATFORM_FRAME_BYTES, "archive");
-            // MAC-621: the plain bytes live only in this run directory, and only until they are sealed.
-            if (!existsSync(target)) encryptArchive(plain, target, await archiveKey(options.keychain));
-          } finally { rmSync(plain, { force: true }); }
+          const name = `${society}-${createHash("sha256").update(key).digest("hex").slice(0, 16)}.omaarchive`;
+          const target = join(options.archivesDir, name);
+          // P0V-103: a name in the archives directory is a finished
+          // publication (files.ts); an interrupted one is only a temporary.
+          if (!existsSync(target)) {
+            const sealKey = await archiveKey(options.keychain);
+            // MAC-621, P0V-104: sealed as it arrives -- the plain bytes are
+            // never written -- into a temporary published whole.
+            await getStream(await link.bytes("stream"), key, declared => {
+              assertRoom(options.archivesDir, declared.bytes, floor);
+              return sealedArchiveSink(options.archivesDir, name, sealKey);
+            }, PLATFORM_FRAME_BYTES, "archive");
+          }
           return { ...made, path: target };
         },
       },
     });
-    return new HostService(lifecycle, egress, link, api, token, stopRecorded);
+    return new HostService(lifecycle, egress, link, api, token, stopRecorded, lock);
   }
 
   /** MAC-320/321: the service is ending (logout, restart, update). */
@@ -150,6 +196,7 @@ export class HostService {
     await this.egress.stop();
     const result = await this.stopRecorded();
     await new Promise<void>(resolve => { this.api.close(() => resolve()); });
+    this.lock.close();
     return result;
   }
 }

@@ -10,12 +10,13 @@
  * size a put may have is what the data disk can take (D04's admission).
  */
 import { createHash } from "node:crypto";
-import { closeSync, constants, createReadStream, fsyncSync, statSync, statfsSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, constants, createReadStream, fstatSync, fsyncSync, statfsSync, unlinkSync, writeSync } from "node:fs";
 import { entryAt, openBeneath, withinDirectory } from "../../storage/contained-fs.js";
 import type { Socket } from "node:net";
 import { encodeFrame } from "../../frame.js";
 import { StoreError, errorCodeOf } from "../../domain/errors.js";
 import { readLeadingFrame } from "../rpc.js";
+import { receiveDeclared } from "../stream-receive.js";
 import { isRequestKey, requestProblem } from "../../protocol/host-guest.js";
 import { productText } from "../product-text.js";
 import type { RequestLedger } from "./requests.js";
@@ -62,12 +63,23 @@ export async function serveStream(socket: Socket, options: StreamOptions): Promi
     if (frame.method === "stream.get") {
       if (params.kind !== "export" && params.kind !== "archive") throw new StoreError("INVALID_REQUEST", "a get names what was staged: export or archive");
       const source = options.ledger.staging(params.key, params.kind === "export" ? "export.bundle" : "archive.tar");
+      // P0V-106 (G13-03): one open -- the size, the hash and the bytes sent
+      // are all of the same file, whatever replaces the name meanwhile.
+      let fd: number;
+      try { fd = withinDirectory(source, (parent, name) => openBeneath(parent, name, constants.O_RDONLY | constants.O_NOFOLLOW)); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new StoreError("REQUEST_NOT_FOUND", "nothing was staged for this request");
+        throw error;
+      }
       let size: number;
-      try { size = statSync(source).size; } catch { throw new StoreError("REQUEST_NOT_FOUND", "nothing was staged for this request"); }
       const hash = createHash("sha256");
-      for await (const chunk of createReadStream(source)) hash.update(chunk as Buffer);
+      try {
+        size = fstatSync(fd).size;
+        for await (const chunk of createReadStream("", { fd, start: 0, end: Math.max(0, size - 1), autoClose: false })) hash.update(chunk as Buffer);
+      } catch (error) { closeSync(fd); throw error; }
       answer({ ok: true, result: { bytes: size, sha256: hash.digest("hex") } });
-      createReadStream(source).pipe(socket);
+      if (size === 0) { closeSync(fd); socket.end(); return; }
+      createReadStream("", { fd, start: 0, end: size - 1, autoClose: true }).pipe(socket);
       return;
     }
     throw new StoreError("UNKNOWN_METHOD", "a stream is stream.put or stream.get");
@@ -75,42 +87,24 @@ export async function serveStream(socket: Socket, options: StreamOptions): Promi
 }
 
 /** Writes exactly `bytes` to a new staging file and keeps it only if its
- * sha256 is the declared one. A stream that ends short, runs long, or hashes
- * differently leaves nothing behind. */
+ * sha256 is the declared one. A stream that ends short, runs long, hashes
+ * differently or cannot be written leaves nothing behind (P0V-104: the one
+ * receiver, `receiveDeclared`). */
 function receive(socket: Socket, head: Buffer, target: string, bytes: number, sha256: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // The ledger's directory is resolved once and the staging file named
-    // through it (FS-005): the oma user's other processes share this uid.
-    const fd = withinDirectory(target, (parent, name) => {
-      try { unlinkSync(entryAt(parent, name)); } catch { /* none staged yet */ }
-      return openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-    });
-    const hash = createHash("sha256");
-    let received = 0;
-    let done = false;
-    const finish = (error: Error | null): void => {
-      if (done) return;
-      done = true;
-      socket.off("data", onData); socket.off("end", onEnd);
-      try { if (error === null) fsyncSync(fd); } finally { closeSync(fd); }
-      if (error !== null) {
-        try { withinDirectory(target, (parent, name) => { unlinkSync(entryAt(parent, name)); }); } catch { /* already gone */ }
-        reject(error); return;
-      }
-      resolve();
-    };
-    const onData = (chunk: Buffer): void => {
-      if (received + chunk.length > bytes) { finish(new StoreError("STREAM_INVALID", "the stream is longer than declared")); return; }
-      hash.update(chunk);
-      for (let at = 0; at < chunk.length; ) at += writeSync(fd, chunk, at, chunk.length - at);
-      received += chunk.length;
-      if (received === bytes) finish(hash.digest("hex") === sha256 ? null : new StoreError("STREAM_INVALID", "the stream is not what was declared"));
-    };
-    const onEnd = (): void => { finish(new StoreError("STREAM_INVALID", "the stream ended before its declared length")); };
-    socket.on("data", onData);
-    socket.once("end", onEnd);
-    if (head.length > 0) onData(head);
-    if (bytes === 0) finish(hash.digest("hex") === sha256 ? null : new StoreError("STREAM_INVALID", "the stream is not what was declared"));
-    socket.resume();
+  // The ledger's directory is resolved once and the staging file named
+  // through it (FS-005): the oma user's other processes share this uid.
+  const fd = withinDirectory(target, (parent, name) => {
+    try { unlinkSync(entryAt(parent, name)); } catch { /* none staged yet */ }
+    return openBeneath(parent, name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  });
+  let open = true;
+  const close = (): void => { if (open) { open = false; closeSync(fd); } };
+  return receiveDeclared(socket, head, { bytes, sha256 }, {
+    write: chunk => { for (let at = 0; at < chunk.length;) at += writeSync(fd, chunk, at, chunk.length - at); },
+    complete: () => { try { fsyncSync(fd); } finally { close(); } },
+    abandon: () => {
+      try { close(); } catch { /* already closed */ }
+      try { withinDirectory(target, (parent, name) => { unlinkSync(entryAt(parent, name)); }); } catch { /* already gone */ }
+    },
   });
 }

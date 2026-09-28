@@ -67,6 +67,7 @@ async function main(): Promise<void> {
       expectImage: image.version, protocol: { min: Math.max(1, HOST_GUEST_PROTOCOL - 1), max: HOST_GUEST_PROTOCOL } },
     resolve: hostResolver(dirs.engine, driver),
     power: listener => { driver.onPower(listener); },
+    statePath,
   });
   service.lifecycle.onState(state => {
     if (state !== "ready") return;

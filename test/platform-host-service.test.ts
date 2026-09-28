@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, type Server } from "node:net";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -22,9 +22,10 @@ function memoryKeychain() {
   return { items, get: async (account: string) => items.get(account), put: async (account: string, value: string) => { items.set(account, value); } };
 }
 
-async function world(t: import("node:test").TestContext) {
+async function world(t: import("node:test").TestContext, before?: (dir: string, runDir: string) => void) {
   const dir = mkdtempSync(join(tmpdir(), "oma-hostsvc-"));
   const runDir = join(dir, "run"); mkdirSync(runDir);
+  before?.(dir, runDir);
   const recordPath = join(dir, "host-record.json");
   const record = newHostRecord();
   writeHostRecord(recordPath, record);
@@ -36,7 +37,7 @@ async function world(t: import("node:test").TestContext) {
     stop: async () => { await new Promise(r => holder?.close(r)); holder = null; return "stopped"; } };
   const driver = new LocalDriver(dir, { dir: societiesDir, launcher }, record.instanceId);
   const service = await HostService.start({
-    runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git", archivesDir: join(dir, "archives"), keychain: memoryKeychain(),
+    runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git", archivesDir: join(dir, "archives"), storageFloorBytes: 0, keychain: memoryKeychain(),
     identity: { hostVersion: "1.0.0", installationId: record.installationId, instanceId: record.instanceId, expectImage: "2026.09.1",
       protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } },
     resolve: async () => ({ provider: "anthropic", model: "m", origin: "https://provider.invalid", apiKey: "sk-ant-api03-" + "r".repeat(40), headers: {} }),
@@ -66,7 +67,7 @@ async function world(t: import("node:test").TestContext) {
     for (let i = 0; i < 300 && !condition(); i++) await new Promise(r => setTimeout(r, 10));
     assert.ok(condition(), what);
   };
-  return { service, driver, recordPath, call, until, dir, markShut: () => { shut = true; } };
+  return { service, driver, recordPath, call, until, dir, runDir, record, markShut: () => { shut = true; } };
 }
 
 test("§2.1/MAC-303: starting through the Host API readies the engine, fills the egress pool, and records the disk as made", async t => {
@@ -120,4 +121,32 @@ test("§6/MAC-241 through the Host API: an import runs end to end under the UI's
   assert.equal((status.result as { state: string }).state, "done");
   const again = await call("project.import", { projectId, macRepo: mac, branch: "main" }, "ui-import-1");
   assert.deepEqual(again.result, imported.result, "the same key is answered with the same outcome");
+});
+
+test("P0V-105 (F-09): one host service per support directory -- a second is refused while the first runs, and may start once it has ended", async t => {
+  const { dir, runDir, recordPath, driver, record, service, markShut } = await world(t);
+  const options = { runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git", archivesDir: join(dir, "archives"), storageFloorBytes: 0,
+    keychain: memoryKeychain(), resolve: async () => { throw new Error("unused"); },
+    identity: { hostVersion: "1.0.0", installationId: record.installationId, instanceId: record.instanceId, expectImage: "2026.09.1",
+      protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } } };
+  await assert.rejects(HostService.start(options), /another OMA host service is running/);
+  await service.shutdown();
+  markShut();
+  const second = await HostService.start(options);
+  await second.shutdown();
+});
+
+test("P0V-103, P0V-104: at start the service removes what a dead one left -- unfinished publications and transfer files -- and nothing finished", async t => {
+  const leftover = `.demo-0123456789abcdef.omaarchive.${randomUUID()}.partial`;
+  await world(t, (dir, runDir) => {
+    mkdirSync(join(dir, "archives")); mkdirSync(join(runDir, "transfer"));
+    writeFileSync(join(dir, "archives", leftover), "half an archive");
+    writeFileSync(join(dir, "archives", "demo-fedcba9876543210.omaarchive"), "a finished archive");
+    writeFileSync(join(runDir, "transfer", "k.archive.tar"), "PRIVATE plain bytes a dead service was receiving");
+    writeFileSync(join(dir, `.host-record.json.${randomUUID()}.partial`), "{");
+  }).then(({ dir, runDir }) => {
+    assert.deepEqual(readdirSync(join(dir, "archives")), ["demo-fedcba9876543210.omaarchive"]);
+    assert.deepEqual(readdirSync(join(runDir, "transfer")), []);
+    assert.equal(readdirSync(dir).some(name => name.endsWith(".partial")), false);
+  });
 });

@@ -33,14 +33,27 @@ export async function sha256File(path: string): Promise<string> {
 
 /** The object format a bundle's header declares (v3 `@object-format=`), or
  * sha1 for a v2 bundle, which has no such line. */
+/** The bundle's header up to the end of its capabilities, at most this many
+ * bytes (P0V-106, G13-02): a v3 bundle states its capabilities -- the
+ * object format among them -- right after its signature line, and a header
+ * whose capabilities do not end within this is refused, not read as sha1. */
+const BUNDLE_CAPABILITIES_BYTES = 64 * 1024;
+
 export function bundleObjectFormat(path: string): "sha1" | "sha256" {
   const fd = openSync(path, "r");
   try {
-    const head = Buffer.alloc(4096);
-    const count = readSync(fd, head, 0, head.length, 0);
+    const head = Buffer.alloc(BUNDLE_CAPABILITIES_BYTES);
+    let count = 0;
+    for (let read = -1; read !== 0 && count < head.length;) { read = readSync(fd, head, count, head.length - count, count); count += read; }
     const lines = head.subarray(0, count).toString("latin1").split("\n");
     if (lines[0] !== "# v2 git bundle" && lines[0] !== "# v3 git bundle") throw new StoreError("BUNDLE_INVALID", "not a git bundle");
-    const declared = lines.find(line => line.startsWith("@object-format="));
+    // Capabilities are the `@` lines after the signature; the first other
+    // line ends them. One that is still going at the end of what was read
+    // (the last element is an unfinished line) is a header too long to trust.
+    let end = 1;
+    while (end < lines.length - 1 && lines[end]!.startsWith("@")) end += 1;
+    if (end === lines.length - 1 && count === head.length) throw new StoreError("BUNDLE_INVALID", "the bundle's header is longer than a bundle's header is");
+    const declared = lines.slice(1, end).find(line => line.startsWith("@object-format="));
     const format = declared === undefined ? "sha1" : declared.slice("@object-format=".length);
     if (format !== "sha1" && format !== "sha256") throw new StoreError("BUNDLE_INVALID", "the bundle's object format is unknown");
     return format;

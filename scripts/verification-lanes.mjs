@@ -561,7 +561,7 @@ export const lanes = Object.freeze({
       "platform-host-api.test.js", "platform-host-resolver.test.js", "platform-host-service.test.js", "platform-image.test.js",
       "platform-lifecycle.test.js", "platform-project.test.js", "platform-provision.test.js", "platform-request-ledger.test.js",
       "platform-snapshot.test.js", "platform-terminal-session.test.js", "platform-vsock-bridge.test.js", "platform-vz-driver.test.js",
-      "sandbox-seccomp.test.js", "dr18-product-words.test.js",
+      "sandbox-seccomp.test.js", "dr18-product-words.test.js", "platform-stream-publication.test.js",
     ],
     sourceFiles: [],
     requiredNames: [

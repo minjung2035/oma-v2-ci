@@ -3,11 +3,12 @@
  * was ever provisioned (MAC-303), the images it runs, the newest state schema
  * ever written (MAC-611), and how the last stop ended (MAC-320). It is written
  * whole and published by rename, so a reader sees one version or the next. */
-import { closeSync, fsyncSync, openSync, readFileSync, renameSync, unlinkSync, writeSync, constants } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { StoreError } from "../../domain/errors.js";
 import { isUuid } from "../../protocol/host-guest.js";
+import { replaceFile } from "./files.js";
 
 export const HOST_RECORD_KIND = "oma-host-record-v1";
 
@@ -52,15 +53,7 @@ export function readHostRecord(path: string): HostRecord | null {
   return value as unknown as HostRecord;
 }
 
+/** Rewritten whole through the host's one publication owner (files.ts). */
 export function writeHostRecord(path: string, record: HostRecord): void {
-  const temporary = join(dirname(path), `.host-record.${process.pid}.${randomUUID().slice(0, 8)}`);
-  const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-  try {
-    writeSync(fd, `${JSON.stringify(record, null, 2)}\n`);
-    fsyncSync(fd);
-  } catch (error) { closeSync(fd); unlinkSync(temporary); throw error; }
-  closeSync(fd);
-  renameSync(temporary, path);
-  const directory = openSync(dirname(path), constants.O_RDONLY);
-  try { fsyncSync(directory); } finally { closeSync(directory); }
+  replaceFile(dirname(path), basename(path), `${JSON.stringify(record, null, 2)}\n`);
 }

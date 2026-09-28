@@ -27,6 +27,13 @@ export function systemdSessionLauncher(options: SystemdLauncherOptions): Session
   return {
     socketPath,
     async start(society, projectDir) {
+      // P0V-106 (G13-04): a society is started only when its session is not
+      // serving (host.ts opens one at a time), so a unit under its name is a
+      // leftover -- one that never listened, or ended failed -- and is
+      // cleared before the new one takes the name. Not loaded is the usual
+      // answer; anything else shows in the start that follows.
+      await runProcess(command("/usr/bin/systemctl", ["--user", "stop", unitOf(society)], options.env, 30_000));
+      await runProcess(command("/usr/bin/systemctl", ["--user", "reset-failed", unitOf(society)], options.env, 10_000));
       const setenv = Object.entries({ ...options.env, TERM: "xterm-256color" }).map(([key, value]) => `--setenv=${key}=${value}`);
       const result = await runProcess(command("/usr/bin/systemd-run", [
         "--user", `--unit=${unitOf(society)}`, "--collect", "--quiet",

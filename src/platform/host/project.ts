@@ -8,13 +8,14 @@
  * fetch and inspection commands, never one that touches the working tree.
  */
 import { createHash } from "node:crypto";
-import { closeSync, constants, createReadStream, fsyncSync, openSync, statSync, writeSync } from "node:fs";
+import { closeSync, constants, createReadStream, fsyncSync, openSync, rmSync, statSync, writeSync } from "node:fs";
 import type { Socket } from "node:net";
 import { StoreError } from "../../domain/errors.js";
 import { encodeFrame } from "../../frame.js";
 import { GIT_ENV } from "../../process/policies.js";
 import { decodeProcessText, runProcess } from "../../process/run.js";
 import { PlatformError, readLeadingFrame } from "../rpc.js";
+import { receiveDeclared, type Declared, type StreamSink } from "../stream-receive.js";
 import { responseProblem, type PlatformFailure } from "../../protocol/host-guest.js";
 
 /** Settings a repository could use to make git run a program, overridden. */
@@ -83,34 +84,34 @@ export async function putStream(opened: { socket: Socket; rest: Buffer }, key: s
   if (answer.frame.ok !== true) throw failureOf(answer.frame);
 }
 
-/** §4.8 get: the declared stream into `path`, kept only if it is what the
- * guest declared. */
-export async function getStream(opened: { socket: Socket; rest: Buffer }, key: string, path: string, frameBytes: number,
-  kind: "export" | "archive" = "export"): Promise<{ bytes: number; sha256: string }> {
+/** §4.8 get: the declared stream into the sink `sinkFor` makes once the
+ * guest has declared it (P0V-104: the one receiver, `receiveDeclared`). */
+export async function getStream(opened: { socket: Socket; rest: Buffer }, key: string, sinkFor: (declared: Declared) => StreamSink,
+  frameBytes: number, kind: "export" | "archive" = "export"): Promise<Declared> {
   const { socket } = opened;
   if (opened.rest.length > 0) socket.unshift(opened.rest);
-  socket.write(encodeFrame({ v: 1, id: "get", method: "stream.get", params: { key, kind } }));
-  const answer = await readLeadingFrame(socket, frameBytes, 60_000);
-  if (answer.frame.ok !== true) { socket.destroy(); throw failureOf(answer.frame); }
-  const declared = answer.frame.result as { bytes: number; sha256: string };
-  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC, 0o600);
-  const hash = createHash("sha256");
-  let received = 0;
   try {
-    await new Promise<void>((resolve, reject) => {
-      const take = (chunk: Buffer): void => {
-        if (received + chunk.length > declared.bytes) { reject(new StoreError("STREAM_INVALID", "the engine sent more than it declared")); return; }
-        hash.update(chunk);
-        for (let at = 0; at < chunk.length; ) at += writeSync(fd, chunk, at, chunk.length - at);
-        received += chunk.length;
-      };
-      if (answer.rest.length > 0) take(answer.rest);
-      socket.on("data", take);
-      socket.once("close", () => { received === declared.bytes ? resolve() : reject(new StoreError("STREAM_INVALID", "the engine's stream ended short")); });
-      socket.resume();
-    });
-    fsyncSync(fd);
-  } finally { closeSync(fd); socket.destroy(); }
-  if (hash.digest("hex") !== declared.sha256) throw new StoreError("STREAM_INVALID", "the engine's stream is not what it declared");
-  return declared;
+    socket.write(encodeFrame({ v: 1, id: "get", method: "stream.get", params: { key, kind } }));
+    const answer = await readLeadingFrame(socket, frameBytes, 60_000);
+    if (answer.frame.ok !== true) throw failureOf(answer.frame);
+    const declared = answer.frame.result as Record<string, unknown>;
+    if (!Number.isSafeInteger(declared.bytes) || (declared.bytes as number) < 0 || typeof declared.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(declared.sha256))
+      throw new PlatformError({ code: "ENGINE_UNAVAILABLE", message: "the engine's stream declaration was malformed", retry: "same-key" });
+    const stream = { bytes: declared.bytes as number, sha256: declared.sha256 };
+    await receiveDeclared(socket, answer.rest, stream, sinkFor(stream));
+    return stream;
+  } finally { socket.destroy(); }
+}
+
+/** A plain file the host keeps only while it uses it (an export bundle in
+ * its transfer directory): written, flushed at the end, removed on failure. */
+export function fileSink(path: string): StreamSink {
+  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+  let open = true;
+  const close = (): void => { if (open) { open = false; closeSync(fd); } };
+  return {
+    write: chunk => { for (let at = 0; at < chunk.length;) at += writeSync(fd, chunk, at, chunk.length - at); },
+    complete: () => { try { fsyncSync(fd); } finally { close(); } },
+    abandon: () => { try { close(); } catch { /* already closed */ } rmSync(path, { force: true }); },
+  };
 }
