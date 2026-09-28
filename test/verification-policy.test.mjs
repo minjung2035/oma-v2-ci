@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { evaluateExecution, validateCrashObservation, lanes, unrunDirectives, unrunTests } from "../scripts/verification-lanes.mjs";
 const healthy = ["TAP version 13", "1..2", "ok 1 - critical oracle", "ok 2 - second oracle", "# tests 2", "# pass 2", "# fail 0", "# cancelled 0", "# skipped 0", "# todo 0", ""].join("\n");
 const evaluate = tap => evaluateExecution({ exitCode: 0, tap, requiredNames: ["critical oracle"], baselineNames: ["critical oracle", "second oracle"] });
@@ -194,4 +195,21 @@ test("R35 Git effect evidence oracles are required by durable and all lanes", ()
     assert.ok(lanes.all.requiredNames.includes(id));
     assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
   }
+});
+
+test("R35 every required name of every lane is the start of a test in this tree", async () => {
+  // A renamed test leaves its lane requiring a name nothing carries; the lane
+  // then fails only when it is run, as a critical oracle not executed. Here it
+  // fails with the rename. A templated name counts only through the part
+  // before its first substitution, and only when that part is not empty.
+  const { testNames } = await import("../scripts/review-closure.mjs");
+  const names = testNames(fileURLToPath(new URL("..", import.meta.url)));
+  const carries = (name, required) => {
+    if (!name.includes("${")) return name.startsWith(required);
+    const known = name.slice(0, name.indexOf("${"));
+    return known.length > 0 && (required.startsWith(known) || known.startsWith(required));
+  };
+  const missing = Object.entries(lanes).flatMap(([lane, { requiredNames = [] }]) =>
+    requiredNames.filter(required => !names.some(name => carries(name, required))).map(required => `${lane}: ${required}`));
+  assert.deepEqual(missing, []);
 });
