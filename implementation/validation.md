@@ -11,9 +11,9 @@
 
 ## 현재 source 판정
 
-브랜치 `refactor/safety-preserving-architecture`, 통합 검증 트리의 부모 `b4b0d29`, 실행일 2026-09-27. 이 브랜치의 작업을 한 트리로 결박한 결과다. 작업은 consistency plan(WP00–WP32), 재검토와 적대적 검증(AV1–AV8), 엔진 0.87.1(ENG1), 실제 provider 기능 점검(1–14차, AV9–AV31), 설계 수정(DR1–DR15), Priority 0 점검(코드 P0V-01–P0V-55, 문서·식별자 P0D-01–P0D-14), 모델만 대본인 시나리오 시험(SCN)이다. 무엇을 왜 바꿨는지는 결정 기록([consistency-decisions](consistency-decisions.md), [design-revisions](design-revisions.md))과 점검 기록([priority-0-audit](priority-0-audit.md))에 있고, 이 절은 이 트리에서 실제로 돈 것만 적는다. 판정: 로컬·kernel·crash lane은 모두 PASS이고, release는 미승인이다(powercut·provider 자동 lane·CI NOT_RUN, A-008 OPEN). wire·DB schema·receipt 형식은 v1 그대로다. receipt의 adapter revision만 ENG1에서 `oma-pi-rpc-v1@0.87.1`이 되었다. 권한 의미가 바뀐 것은 AV18(기본 Principal 프로필이 이미 위임하던 권한을 보유)과 DR4(`code.integrate`를 host가 직접 위임)다. 엔진 이벤트 framing의 예외 하나(DR15: frame보다 큰 올바른 줄은 건너뛰고 알림)가 있다. architecture.md는 N-001이 결박한 bytes 그대로이며, 어긋나는 문장은 design-revisions에 있다.
+브랜치 `feat/macos-hidden-vm`, 통합 검증 트리의 부모 `db4f558`, 실행일 2026-09-28. 이 브랜치의 작업을 한 트리로 결박한 결과다. 작업은 consistency plan(WP00–WP32), 재검토와 적대적 검증(AV1–AV8), 엔진 0.87.1(ENG1), 실제 provider 기능 점검(1–14차, AV9–AV31), 설계 수정(DR1–DR18), Priority 0 점검(코드 P0V-01–P0V-101, 문서·식별자 P0D-01–P0D-14), 모델만 대본인 시나리오 시험(SCN), macOS hidden-VM 플랫폼(macos-platform, DR18로 수용)이다. 무엇을 왜 바꿨는지는 결정 기록([consistency-decisions](consistency-decisions.md), [design-revisions](design-revisions.md))과 점검 기록([priority-0-audit](priority-0-audit.md))에 있고, 이 절은 이 트리에서 실제로 돈 것만 적는다. 판정: 로컬·platform·kernel·crash lane은 모두 PASS이고, release는 미승인이다(powercut·provider 자동 lane·CI·mac-* lane NOT_RUN, A-008 OPEN). wire·DB schema·receipt 형식은 v1 그대로다. receipt의 adapter revision만 ENG1에서 `oma-pi-rpc-v1@0.87.1`이 되었다. 권한 의미가 바뀐 것은 AV18과 DR4다. 엔진 이벤트 framing의 예외 하나(DR15)가 있다. architecture.md는 N-001이 결박한 bytes 그대로이며, 어긋나는 문장은 design-revisions에 있다.
 
-검증 입력: verification input digest `74da2131d2c26820f9fe093d6e43698fb3fe279b8e729ad47f4a3390e3e79aae` (627 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
+검증 입력: verification input digest `8e7ccfc61a2a9ac58b97626c59a1947c39b800d39cefff1161482109ac88bd7e` (708 files). source/test/script/config/manifest/implementation/generated measurement·graph를 결박하며 validation digest field만 정규화한다.
 
 ### 실행 결과
 
@@ -21,7 +21,7 @@
 
 | 검사 | 결과와 범위 |
 |---|---|
-| type/build/package/local and lanes | PASS on engine 0.87.1: fast/durable/property/stress 320/560/34/12, local 1727/1727, package; all fail/cancelled/skipped/todo=0 (`v21-initial-*`, `b4b0d29`). kernel 64/64과 crash 63/63 PASS on the disposable user manager(T38·SEQ-002 필수). durable은 실제 엔진 AV14(엔진 종료를 기다린 뒤 뒷정리)·V27A(영수증 게시·검증까지)·T116·T117·AV16, pty V28B, 설치 closure V31A, AV9–AV30, DR1·DR3·DR4·DR6·DR7 회귀, Priority 0의 DR9–DR13·P0V 회귀(durable requiredNames 22개), 4차 점검 회귀 `p0-review4`(requiredNames 3개), 모델만 대본인 시나리오 시험 54개(requiredNames 11개)를 포함한다. property는 DR9의 V30A(late는 verified, early는 conflicting), fast는 문서 무결성(`check:documents`와 negative control 셋)·V29A·V31B·V32A·AV3·AV5 규칙·AV9·AV12·AV31 wiring·runtime-contracts·T118과 P0-7 gate(`check:boundaries`와 그 negative control)를 포함한다. local은 AV31 신호 시험·DR8, P0V-18(Control Panel exit)·P0V-22·P0V-23·P0V-24 회귀를 포함한다. metadata-bound final rerun required |
+| type/build/package/local and lanes | PASS on engine 0.87.1: fast/durable/property/stress/platform 326/626/34/12/82, local 1910/1910, package; all fail/cancelled/skipped/todo=0 (`v22-initial`, `db4f558`). kernel 64/64과 crash 63/63 PASS on the disposable user manager(T38·SEQ-002 필수). durable은 실제 엔진 AV14(엔진 종료를 기다린 뒤 뒷정리)·V27A(영수증 게시·검증까지)·T116·T117·AV16, pty V28B, 설치 closure V31A, AV9–AV30, DR1·DR3·DR4·DR6·DR7 회귀, Priority 0의 DR9–DR13·P0V 회귀(durable requiredNames 22개), 4차 점검 회귀 `p0-review4`(requiredNames 3개), 모델만 대본인 시나리오 시험 54개(requiredNames 11개)를 포함한다. property는 DR9의 V30A(late는 verified, early는 conflicting), fast는 문서 무결성(`check:documents`와 negative control 셋)·V29A·V31B·V32A·AV3·AV5 규칙·AV9·AV12·AV31 wiring·runtime-contracts·T118과 P0-7 gate(`check:boundaries`와 그 negative control)를 포함한다. local은 AV31 신호 시험·DR8, P0V-18(Control Panel exit)·P0V-22·P0V-23·P0V-24 회귀를 포함한다. metadata-bound final rerun required v22에서 더한 것: durable에 6차 점검 회귀 `p0-review6`·crash-kill 경계(P0V-96·97)·S-05 hostile bundle·DR18 판정 시험, platform lane(macOS 배포본의 Node 코드, vsock loopback의 bridge 포함). |
 | Review ledger | production 파일 224개: 변경이 닿은 141개는 그 변경의 회귀 시험(DR·P0V 카드 포함), 읽고 바꾸지 않은 83개는 그 모듈을 적재하는 시험(`review-notes.json`), 제거 1개(`src/git/context-mirror.ts`, P0V-17). NOT_REVIEWED 0. P0V만 붙은 커밋이 바꾼 파일도 변경으로 센다(원장 도구가 P0V ID와 범위를 읽는다) |
 | Release 판정 | release 미승인: 모든 production 파일 검토 완료(NOT_REVIEWED 0), powercut·실제 provider·CI NOT_RUN(V05C·V30B·V32B) — 모두 사용자 승인 필요 |
 | NOT_RUN과 OPEN | provider: 자동 lane NOT_RUN(아래 실제 provider 점검은 수동 기능 증거이며 lane 증거가 아니다); powercut·CI NOT_RUN; A-008 OPEN(아래 "A-008 LOC gate") |
@@ -149,16 +149,56 @@
 | P0V-54 | 주소 존재를 params 검사와 라우팅 owner가 따로 판정했다. params 검사는 문법만 보고, 존재는 라우팅 owner가 접수 전에 ADDRESS_NOT_FOUND·AGENT_NOT_READY·AGENT_RETIRED로 답한다(SCN-F04, 옛 코드에서 실패) |
 | P0V-55 / DR15 | frame보다 큰 올바른 엔진 이벤트 한 줄은 다음 LF까지 통째로 건너뛰고 `oma_event_skipped`로 알린다. 형식이 틀린 입력은 여전히 전송을 중독시킨다(SCN-F13·F17·R06, 옛 코드에서 실패; jsonl·pi-rpc 단위 시험) |
 
+#### Priority 0 5차 점검(P0V-56–P0V-73, DR16)
+
+| 검사 | 결과와 범위 |
+|---|---|
+| P0V-56–P0V-73 | v21 결박 커밋 `18421f0`을 본 외부 재검토 두 건(R01–R13, F1–F6)을 코드와 대조해 18개를 고쳤다. rootfs 수리는 이전 Resident의 종료가 증명된 뒤 broker startup 안에서 한다(DR16). 회귀 시험은 `p0-review5`(durable, requiredNames 3개)와 각 owner의 시험이며 위 durable·local 결과가 결박한다. 수정마다 되돌린 변이가 실패했다(priority-0-audit "5차 점검") |
+
+#### Priority 0 6차 점검(P0V-74–P0V-95, DR17)
+
+| 검사 | 결과와 범위 |
+|---|---|
+| P0V-74–P0V-95 | 외부 검토 R6-01–R6-20을 판정했다(위반 19, 의도된 한계 1: R6-19). 검증하다 찾은 P0V-80·82·84·85를 함께 고쳤다. 종료 신호는 SIGTERM·SIGINT·SIGHUP·SIGQUIT 전부이고 drain이 있는 모든 프로세스가 그 목록으로 끝난다(DR17). 회귀 시험은 `p0-review6`(durable, requiredNames 6개), 규칙 `host-loss-signals`·`utf8-decoder-owner`·`ledger-order-clock`이다. 모든 변이 KILLED(priority-0-audit "6차 점검") |
+
+#### 시험 보강(P0V-96–P0V-97, SCN-B)
+
+| 검사 | 결과와 범위 |
+|---|---|
+| crash-kill 경계 | `test/crash-kill-boundaries.test.ts`: 설정 managed/inline commit, receipt, derived file, immutable EXDEV, request freeze와 project binding을 fsync마다 SIGKILL한다. 이 시험이 publication 임시 파일이 남는 것(P0V-96·97)을 찾았고, 시작할 때 죽은 임시 파일을 거두게 고쳤다. P0-7 registry: durable 경계 64개 가운데 SIGKILL 44, in-process fault 10, logical 10 |
+| SCN-B01–B10 | 모델만 대본인 경계 시나리오 10개(`test/scenario-boundaries.test.ts`): 작업공간 quota, contained tool, credential 읽기 시도(B09), commons 100통 + 질문 1통(B10) 등 |
+| V28B | pty harness가 `ready`를 기다리고 끝을 시계로 기다린다(고정 시간 대기 제거) |
+
+#### v22 결박이 찾은 것(P0V-98–P0V-101)
+
+| 검사 | 결과와 범위 |
+|---|---|
+| P0V-98–P0V-101 | v21 뒤로 처음 돈 kernel·crash·durable lane과 DR18 뒤의 전체 시험이 찾았다(priority-0-audit "v22 결박이 찾은 것"). P0V-98: 첫 Resident 설치가 unit 디렉터리를 만들지 않아 ENOENT(P0V-59의 회귀, 제품). P0V-99: kernel lane의 손으로 쓴 unit에 소유 줄이 없음(시험). P0V-100: durable lane이 이름이 바뀐 AV7 시험을 옛 이름으로 요구(lane, fast lane에 정적 검사 추가). P0V-101: D-5 뒤 bwrap을 직접 띄우는 primitive가 filter를 주지 않음(제품). 고치기 전 initial은 durable(필수 이름)·kernel 55/64·crash 49/63으로 실패했고(`v22/failed-initial-1/`), 고친 뒤 kernel 64/64·crash 63/63 |
+
+#### macOS 플랫폼(macos-platform, DR18)
+
+| 검사 | 결과와 범위 |
+|---|---|
+| platform lane | `npm run verify:platform`: 82/82. host↔guest protocol, guest 서비스·control·terminal session, host의 수명·Host API·egress·image·archive를 VM 대신 같은 host의 guest 서비스로, bridge는 vsock loopback으로 시험한다. Swift helper와 Keychain, Virtualization.framework, mac-* lane은 Mac이 필요하고 NOT_BUILT/NOT_RUN이다. MV oracle과 시험의 대응은 test-matrix의 macOS 절에 있다 |
+| D-1·D-5·D-8·D-9·D-10 | 제품 문구(`src/tui/words.ts`, 규칙 `error-words-owner`), 모든 Resident sandbox의 vsock seccomp(SCN-C08), 읽기 전용 project mirror(SCN-C09), `oma login`, guest의 egress forwarder. 각 수정을 되돌린 변이가 실패했다 |
+
+#### 열린 결정과 spike(DR18)
+
+| 검사 | 결과와 범위 |
+|---|---|
+| DR18 | S-01–S-11과 macOS D·Q, topic follow, C2(`bin`), 비용 상한을 판정했다(design-revisions DR18, spikes의 "DR18 판정"). v1에 없다고 정한 설정은 `UNSUPPORTED_PROFILE`이고 `SPIKE_UNRESOLVED`는 던지지 않는다(규칙 `no-open-spike`). state root는 local kernel file system이어야 한다(규칙 `state-root-judgement`, `DR18 / S-06:`). macos-platform.md를 수용해 traceability가 MAC 조항 68개를 inventory한다(전체 367, 모두 unverified) |
+
 #### 중간 실행에서 멈춘 것
 
 | 검사 | 결과와 범위 |
 |---|---|
 | PASS로 바꾸지 않은 실패 | v3(`9f7f551`) kernel 59/60: 실패는 WP25가 고친 `T36`. v4(`6611644`) kernel 61/62: WP25 뒤 갱신되지 않은 `systemd-analyze verify` fixture(`1f6c31e`에서 수정). v11 첫 initial(`0325450`) kernel 62/63: 부하에서 살아 있는 Resident가 CAPABILITY_DENIED(AV6의 발견 경위), 두 번째 initial(`83f1b04`)은 AV7을 고치려 local 도중 중단. v17 final(`140eed8`) durable 474/475: AV14 시험의 뒷정리 경쟁(`4dd80cc`에서 수정). 각각 원인을 고친 뒤 다음 회차가 대체했다 |
-| 중간 증거 | v1–v20의 initial·final 산출물은 결박되지 않은 중간 증거로 `/home/dev/oma-evidence/v1`–`v20`에 있다. 현재 판정은 이 절의 트리만 말한다 |
+| v22 initial 두 번 | 첫 initial(`v22/failed-initial-1/`): durable은 이름이 바뀐 AV7 시험 둘을 옛 이름으로 요구해 실패(P0V-100), kernel 55/64·crash 49/63은 첫 Resident 설치의 ENOENT(P0V-98)와 소유 줄 없는 시험 unit(P0V-99). 두 번째(`v22/failed-initial-2/`, 중단): durable 625/626, P0V-98의 새 시험이 lane guard 아래에서 다른 오류로 멈춤(시험만 고침). 각각 고친 뒤 세 번째 initial이 이 절의 결과다 |
+| 중간 증거 | v1–v21의 initial·final 산출물은 결박되지 않은 중간 증거로 `/home/dev/oma-evidence/v1`–`v21`에 있다. 현재 판정은 이 절의 트리만 말한다 |
 
-Raw evidence: `/home/dev/oma-evidence/v21/`.
+Raw evidence: `/home/dev/oma-evidence/v22/`.
 
-Final PASS condition: `v21-final-fast`, `v21-final-durable`, `v21-final-property`, `v21-final-stress`, `v21-final-package`, `v21-final-local`, `v21-final-kernel`, `v21-final-crash` must bind one digest with exit 0 and zero unrun tests.
+Final PASS condition: `v22-final-fast`, `v22-final-durable`, `v22-final-property`, `v22-final-stress`, `v22-final-platform`, `v22-final-package`, `v22-final-local`, `v22-final-kernel`, `v22-final-crash` must bind one digest with exit 0 and zero unrun tests.
 
 ## 알려진 한계
 
@@ -207,7 +247,6 @@ Final PASS condition: `v21-final-fast`, `v21-final-durable`, `v21-final-property
 - 전체 `oma` entry의 pty 시험(최상위 catch의 정리 순서), rollover 뒤 endpoint bind 실패의 별도 주입(WP30).
 - 결과 크기와 frame(P0V-44, DR14): stop receipt의 `remainingOperations`(그때 미해결인 operation 전부)와 `status.get`(은퇴한 행까지 모든 agent)은 개수에 상한이 없다. 기본 frame 256 KiB에서 status는 agent 1052개, stop receipt는 미해결 operation 6235개까지 담긴다. 넘으면 효과가 끝난 요청에 FRAME_TOO_LARGE가 답해진다. 바꾸려면 receipt version 계획이 필요하다.
 - unit 이름(P0V-26, DR14): 두 소유자에게 같은 이름이 되는 unit은 교체하지 않고 AGENT_CONFLICT로 거절한다. 그런 이름의 agent는 만들 수 없다. 이름 체계(UNIT-001)는 그대로다.
-- 4차 점검의 수정(`37cbeee`–`c980611`)은 관련 시험 묶음만 돌렸고 검증 cycle로 결박하지 않았다. 결박하기 전까지 fast lane의 R38 시험("the validation record names the verification inputs")은 이 기록이 지금 트리를 결박하지 않았으므로 실패한다.
 
 ## 기본 재검증
 
@@ -259,7 +298,7 @@ npm run verify:all -- --out <new-dir>
 
 ## A-008 LOC gate — 현재 OPEN
 
-`node scripts/loc.mjs`의 현재 source-bound 결과는 **224 files / 23,952 code LOC**이며 A-008 기준을 넘는다. 이 브랜치의 변경 뒤 LOC/hash와 dependency graph를 다시 만들었지만 review/release gate는 OPEN이다. 기능 작업은 멈추지 않기로 했고 architecture review는 별도 작업이다. 동봉 엔진은 수정하지 않은 upstream 의존이라 LOC-003에 따라 계산 대상이 아니며, 엔진을 수정하면 계산 대상이 된다(TUI-018).
+`node scripts/loc.mjs`의 현재 source-bound 결과는 **273 files / 27,965 code LOC**이며 A-008 기준을 넘는다. 이 브랜치의 변경 뒤 LOC/hash와 dependency graph를 다시 만들었지만 review/release gate는 OPEN이다. 기능 작업은 멈추지 않기로 했고 architecture review는 별도 작업이다. 동봉 엔진은 수정하지 않은 upstream 의존이라 LOC-003에 따라 계산 대상이 아니며, 엔진을 수정하면 계산 대상이 된다(TUI-018).
 
 이 gate가 열려 있다는 사실을 기능 추가의 승인으로 해석하지 않는다. TUI 및 제품 표면 source도 TUI-015/LOC-003에 따라 같은 manifest와 같은 budget으로 계산하며, 별도 manifest로 분리해 Core 수치에서 제외하지 않는다.
 

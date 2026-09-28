@@ -196,7 +196,7 @@ cycle, 중복 소속, 알 수 없는 참조, 한도 초과(group 32개, group당
 | 엔진 | `@earendil-works/pi-coding-agent`·`pi-ai`·`pi-agent-core`·`pi-tui` 0.87.1 | 설치본의 `node_modules`에 있는 것만 사용하고 상위 디렉터리나 PATH의 엔진으로 물러서지 않음(WP31). 0.85.1에서 올림(ENG1). 실제 provider는 수동 기능 점검만 했고 자동 lane은 NOT_RUN |
 | native 모듈 | `koffi` 3.2.1 | `check:package`가 로드만 확인. pidfd·SO_PEERPIDFD·cgroup 능력은 kernel lane이 확인 |
 | 기타 런타임 의존성 | `nodemailer` 10.0.1, `typebox` 1.3.27(엔진과 같은 버전, ENG1) | lockfile의 production 분류와 `check:package`의 버전 대조 |
-| 설치 방식 | 빌드된 트리를 `installation.libdir`로 사용 | `npm pack`은 `dist`를 싣지 않으므로 npm 패키지는 실행 가능한 산출물이 아니다. `bin`이 없어 `oma` 명령은 생기지 않음 |
+| 설치 방식 | 빌드된 트리를 `installation.libdir`로 사용 | `npm pack`은 `dist`를 싣지 않으므로 npm 패키지는 실행 가능한 산출물이 아니다. 빌드한 checkout에서 `npm install -g .`가 `bin`의 `oma` 명령을 설치한다(C2, DR18) |
 | systemd-managed broker | 렌더와 `systemd-analyze verify`만 | 운영 lifecycle은 NOT_RUN, 지원한다고 표시하지 않음 |
 
 호환성: WP03 이전에 렌더된 Resident unit은 launch location이 없고, WP25 이전 unit은 accepted 자원(`OMA_RESOURCES_HEX`)이 없어 runner가 시작을 거절한다. 기존 unit을 다시 렌더하는 경로는 없으므로 그런 society의 Resident는 다시 만들어야 한다. 관리형 설정 generation(WP13)은 이전 버전 writer가 알지 못하므로, 이전 바이너리로 같은 설정을 편집하지 않는다.
