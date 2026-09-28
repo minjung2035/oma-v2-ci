@@ -19,13 +19,20 @@ const commands = new Map();
 const handlers = new Map();
 const entries = [];
 const sessionFile = process.env.OMA_TEST_SESSION_FILE;
+const sessionId = randomBytes(8).toString("hex");
 const ctx = {
   ui: { notify: (message, level) => emit({ type: "extension_ui_request", method: "notify", message, level }) },
   sessionManager: {
+    getSessionId: () => sessionId,
     getSessionFile: () => sessionFile,
     getLeafEntry: () => entries.at(-1) ?? null,
+    getBranch: () => [...entries],
   },
 };
+// The engine's session holds each tool call in the assistant message that made
+// it, then the call's result, whether it returned or threw. These entries are
+// kept here only: the file is the extension's own entries.
+const message = message => { entries.push({ type: "message", id: randomBytes(4).toString("hex"), message }); };
 const pi = {
   registerTool: tool => { tools.set(tool.name, tool); },
   registerCommand: (name, command) => { commands.set(name, command); },
@@ -56,7 +63,11 @@ for await (const line of createInterface({ input: process.stdin })) {
       case "tool": {
         const tool = tools.get(request.name);
         if (!tool) throw new Error(`no tool ${request.name}`);
-        const result = await tool.execute(`call-${request.id}`, request.params ?? {}, undefined, undefined, ctx);
+        const call = `call-${request.id}`;
+        message({ role: "assistant", content: [{ type: "toolCall", id: call, name: request.name, arguments: request.params ?? {} }] });
+        let result;
+        try { result = await tool.execute(call, request.params ?? {}, undefined, undefined, ctx); }
+        finally { message({ role: "toolResult", toolCallId: call, toolName: request.name, content: result?.content ?? [], isError: result === undefined }); }
         emit({ type: "tool", id: request.id, ok: true, text: result.content[0]?.text ?? "" });
         break;
       }
