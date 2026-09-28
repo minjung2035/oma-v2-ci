@@ -167,7 +167,7 @@ test("MAC-320 / P0V-81: a holder asked to stop, by any signal that asks, asks it
   }
 });
 
-test("§4.6: a holder that dies hangs up its program, which holds no side of the terminal but its own", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+test("P0V-80 / §4.6: a holder that dies hangs up its program, which holds no side of the terminal but its own", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
   const { child, socketPath, exited } = await holder(t);
   const screen = await Screen.attach(socketPath);
   await screen.until(/pid \d+/, "the program's pid");

@@ -361,3 +361,12 @@ test("error-words-owner (DR18, D-1): an error's words on the product surface com
   withTree({ ...words, "src/tui/view/notice.ts": "const text = notice.message;", "src/tui/app.ts": "const n = String(count);" },
     findings => clean(findings, "error-words-owner"));
 });
+
+test("no-open-spike (DR18): nothing in v1 throws SPIKE_UNRESOLVED; a known unsupported setting is UNSUPPORTED_PROFILE", () => {
+  withTree({ "src/git/a.ts": 'throw new StoreError("UNSUPPORTED_PROFILE", "x"); const gated = reason === "SPIKE_UNRESOLVED"; // OMA_ERROR=SPIKE_UNRESOLVED' },
+    findings => clean(findings, "no-open-spike"));
+  for (const text of ['throw new StoreError("SPIKE_UNRESOLVED", "x");', 'const s = "fail() { echo OMA_ERROR=SPIKE_UNRESOLVED >&2; }";'])
+    withTree({ "src/git/a.ts": text }, findings => {
+      assert.ok(findings.some(value => value.rule === "no-open-spike" && value.file === "src/git/a.ts"), text);
+    });
+});

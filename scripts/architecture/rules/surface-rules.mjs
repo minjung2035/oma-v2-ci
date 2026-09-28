@@ -667,6 +667,27 @@ function errorWordsRules(root, findings) {
   }
 }
 
+/** DR18: no spike is open in v1. What this version does not do is refused as
+ * a known unsupported setting (UNSUPPORTED_PROFILE), which tells the Human
+ * the setting and not a pending experiment. The code stays in the wire's
+ * enum, so stored receipts that carry it are still read. Opening a spike
+ * again is a design revision, not a new throw. */
+function openSpikeRules(root, findings) {
+  for (const file of filesUnder(root, "src")) {
+    eachNode(sourceOf(root, file), node => {
+      if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== "StoreError") return;
+      const first = node.arguments?.[0];
+      if (first !== undefined && ts.isStringLiteralLike(first) && first.text === "SPIKE_UNRESOLVED")
+        findings.push(finding("no-open-spike", file, "throws SPIKE_UNRESOLVED; no spike is open in v1 (DR18): refuse with UNSUPPORTED_PROFILE"));
+    });
+    eachNode(sourceOf(root, file), node => {
+      if ((ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node))
+        && node.text.includes("OMA_ERROR=SPIKE_UNRESOLVED"))
+        findings.push(finding("no-open-spike", file, "a helper script reports SPIKE_UNRESOLVED; no spike is open in v1 (DR18)"));
+    });
+  }
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
   extensionRules(root, findings);
@@ -683,5 +704,6 @@ export function surfaceRuleFindings(root) {
   hostLossSignalRules(root, findings);
   utf8DecoderRules(root, findings);
   errorWordsRules(root, findings);
+  openSpikeRules(root, findings);
   return findings;
 }

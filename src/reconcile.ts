@@ -136,7 +136,7 @@ export class ReconcileModule {
           if (!this.git) throw new StoreError("UNSUPPORTED_PROFILE", "Git recovery owner unavailable");
           await this.git.reconcile(operation.id); return;
         case "mail.ack": case "route.follow": case "route.unfollow":
-          throw new StoreError("SPIKE_UNRESOLVED", "operation has no safe physical recovery handler");
+          throw new StoreError("UNSUPPORTED_PROFILE", "operation has no safe physical recovery handler");
         default: assertNever(operation.kind);
       }
     } finally { release(); }

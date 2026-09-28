@@ -551,6 +551,37 @@ export const lanes = Object.freeze({
     proof:
       "finite real Linux socket/pidfd/cgroup-FD and direct-child pipe cleanup, measured test RSS and queue bounds; not provider throughput, kernel quota or process-tree death certification",
   },
+  // macos-platform §10.2 (DR18): the host's and the guest's Node code on
+  // Linux -- protocol, guest services, terminal session, the host's state
+  // machine, Host API, egress, image and archive -- with the guest's services
+  // on this host in place of a VM, and the bridge over vsock loopback.
+  platform: {
+    files: [
+      "platform-archive.test.js", "platform-egress.test.js", "platform-guest-control.test.js", "platform-guesthost.test.js",
+      "platform-host-api.test.js", "platform-host-resolver.test.js", "platform-host-service.test.js", "platform-image.test.js",
+      "platform-lifecycle.test.js", "platform-project.test.js", "platform-provision.test.js", "platform-request-ledger.test.js",
+      "platform-snapshot.test.js", "platform-terminal-session.test.js", "platform-vsock-bridge.test.js", "platform-vz-driver.test.js",
+      "vsock-seccomp.test.js", "dr18-product-words.test.js",
+    ],
+    sourceFiles: [],
+    requiredNames: [
+      "MAC-202: the production bridge closes a connection that is not from the host, unread",
+      "MAC-205:",
+      "MAC-230:",
+      "MAC-021:",
+      "MAC-704:",
+      "MAC-710/711:",
+      "MAC-601:",
+      "MAC-621:",
+      "P0-7/MAC-241:",
+      "§4.6:",
+      "DR18 D-1:",
+    ],
+    environment: "git-fs",
+    timeoutSeconds: 900,
+    proof:
+      "the macOS distribution's Node code on Linux with the guest's services in place of a VM; not a VM, not Virtualization.framework, not the Swift helper or the Keychain (mac-* lanes)",
+  },
   all: {
     files: "all",
     sourceFiles: [

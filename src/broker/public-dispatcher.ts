@@ -168,7 +168,7 @@ export class PublicDispatcher {
         case "agent.continue": return okAnswer(id, await mail.send(auth, keyOf(request), { to: [auth.actor], subject: "continue", kind: "message", body: params.note }, { kind: "agent.continue", params: { note: params.note } }));
         case "agent.wait": return okAnswer(id, { accepted: true });
         case "git.known": {
-          if (!git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          if (!git) throw new StoreError("UNSUPPORTED_PROFILE", "git module unavailable");
           const refs = git.knownRefs();
           const known = [...new Set([refs.main, ...refs.published])];
           const result = { hasCandidate: known.includes(params.candidate), prerequisites: [] as Oid[] };
@@ -181,15 +181,15 @@ export class PublicDispatcher {
           return okAnswer(id, result);
         }
         case "git.submit": {
-          if (!git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          if (!git) throw new StoreError("UNSUPPORTED_PROFILE", "git module unavailable");
           return okAnswer(id, await git.submit(auth, keyOf(request), params, stream ?? emptyStream()));
         }
         case "git.integrate": {
-          if (!git) throw new StoreError("SPIKE_UNRESOLVED", "git module unavailable");
+          if (!git) throw new StoreError("UNSUPPORTED_PROFILE", "git module unavailable");
           return okAnswer(id, await git.integrate(auth, keyOf(request), params));
         }
         case "context.publish": {
-          if (!git) throw new StoreError("SPIKE_UNRESOLVED", "context module unavailable");
+          if (!git) throw new StoreError("UNSUPPORTED_PROFILE", "context module unavailable");
           return okAnswer(id, await git.publishContext(auth, keyOf(request), params, stream ?? emptyStream()));
         }
         case "logs.read": return boundedLogResponse(id, await this.deps.readLogs(params.agent, params.sinceSeconds), this.deps.limits.frameBytes);

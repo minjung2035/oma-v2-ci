@@ -28,30 +28,30 @@ const SCRIPT = [
   "bundle=$1; project=$2; candidate=$3; export_ref=$4; tmp_bytes=$5; shift 5",
   "root=$1; shift",
   "git=/usr/bin/git",
-  "fail_spike() { echo OMA_ERROR=SPIKE_UNRESOLVED >&2; exit 70; }",
+  "fail_unsupported() { echo OMA_ERROR=UNSUPPORTED_PROFILE >&2; exit 70; }",
   "fail_bundle() { echo OMA_ERROR=BUNDLE_INVALID >&2; exit 71; }",
   "fail_prereq() { echo OMA_ERROR=PREREQUISITE_MISSING >&2; exit 72; }",
   "fail_internal() { echo OMA_ERROR=INTERNAL_ERROR >&2; exit 73; }",
-  "mount --make-rprivate / || fail_spike",
+  "mount --make-rprivate / || fail_unsupported",
   "mkdir -p \"$root/project\" \"$root/bundle\" \"$root/quarantine\"",
   "touch \"$root/bundle/input.bundle\"",
   "cleanup() { umount \"$root/project\" 2>/dev/null || true; umount \"$root/bundle/input.bundle\" 2>/dev/null || true; umount \"$root/quarantine\" 2>/dev/null || true; rmdir \"$root/project\" \"$root/bundle\" \"$root/quarantine\" \"$root/hooks\" \"$root\" 2>/dev/null || true; }",
   "trap cleanup EXIT",
-  "mount --bind \"$project\" \"$root/project\" || fail_spike",
-  "mount -o remount,bind,ro \"$root/project\" || fail_spike",
-  "mount -t tmpfs -o size=\"$tmp_bytes\" tmpfs \"$root/quarantine\" || fail_spike",
+  "mount --bind \"$project\" \"$root/project\" || fail_unsupported",
+  "mount -o remount,bind,ro \"$root/project\" || fail_unsupported",
+  "mount -t tmpfs -o size=\"$tmp_bytes\" tmpfs \"$root/quarantine\" || fail_unsupported",
   // Read the inherited checked descriptor into the existing bounded private tmpfs.
   // A descriptor from the parent mount namespace is not a portable bind-mount source.
-  "cat \"$bundle\" > \"$root/quarantine/input.bundle\" || fail_spike",
-  "mount --bind \"$root/quarantine/input.bundle\" \"$root/bundle/input.bundle\" || fail_spike",
-  "mount -o remount,bind,ro \"$root/bundle/input.bundle\" || fail_spike",
+  "cat \"$bundle\" > \"$root/quarantine/input.bundle\" || fail_unsupported",
+  "mount --bind \"$root/quarantine/input.bundle\" \"$root/bundle/input.bundle\" || fail_unsupported",
+  "mount -o remount,bind,ro \"$root/bundle/input.bundle\" || fail_unsupported",
   "mkdir -p \"$root/quarantine/tmp\"",
   "export TMPDIR=\"$root/quarantine/tmp\"",
   "mkdir -p \"$root/hooks\"",
   "export GIT_CONFIG_VALUE_0=\"$root/hooks\"",
   "repo=\"$root/quarantine/repo\"",
   "format=$($git --git-dir=\"$root/project\" rev-parse --show-object-format) || fail_internal",
-  "$git --git-dir=\"$repo\" init -q --bare --object-format=\"$format\" >/dev/null 2>&1 || fail_spike",
+  "$git --git-dir=\"$repo\" init -q --bare --object-format=\"$format\" >/dev/null 2>&1 || fail_unsupported",
   "mkdir -p \"$repo/objects/info\"",
   "printf '%s\\n' \"$root/project/objects\" > \"$repo/objects/info/alternates\"",
   "$git --git-dir=\"$repo\" bundle verify \"$root/bundle/input.bundle\" >/dev/null 2>&1 || fail_bundle",
@@ -67,7 +67,7 @@ const SCRIPT = [
   "[ \"$input\" = \"$candidate\" ] || fail_bundle",
   "$git --git-dir=\"$repo\" fsck --strict --no-reflogs >/dev/null 2>&1 || fail_bundle",
   "for prerequisite in \"$@\"; do $git --git-dir=\"$repo\" cat-file -e \"$prerequisite^{commit}\" >/dev/null 2>&1 || fail_prereq; done",
-  "mount -o remount,bind,rw \"$root/project\" || fail_spike",
+  "mount -o remount,bind,rw \"$root/project\" || fail_unsupported",
   // Import objects only. The coordinator owns the later immutable published ref.
   "$git --git-dir=\"$root/project\" fetch -q --no-tags --no-write-fetch-head --no-auto-maintenance --refmap= \"$repo\" refs/oma/input >/dev/null 2>&1 || fail_internal",
   "printf '%s\\n' \"$input\"",
@@ -80,10 +80,10 @@ export class QuarantineImporter {
     const limits = this.paths.quarantineResources;
     if (!limits || ![limits.cpuSeconds, limits.memoryBytes, limits.tasks, limits.timeoutSeconds, this.paths.quarantineTmpBytes]
       .every(value => Number.isSafeInteger(value) && value > 0))
-      throw new StoreError("SPIKE_UNRESOLVED", "quarantine resource profile is unavailable");
+      throw new StoreError("UNSUPPORTED_PROFILE", "quarantine resource profile is unavailable");
     const timeoutMs = limits.timeoutSeconds * 1000;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs > 0x7fffffff)
-      throw new StoreError("SPIKE_UNRESOLVED", "quarantine timeout cannot be enforced by the native timer");
+      throw new StoreError("UNSUPPORTED_PROFILE", "quarantine timeout cannot be enforced by the native timer");
     if (this.executor.blocked) throw new StoreError("REF_STATE_UNKNOWN", "canonical quarantine preparation is active or uncertain");
     // FS-005: made under a staging directory resolved once, and removed the same way.
     const staging = join(this.paths.stateRoot, "staging");
@@ -116,10 +116,10 @@ export class QuarantineImporter {
       try { stdout = decodeProcessText(result.stdout); stderr = decodeProcessText(result.stderr); }
       catch { throw new StoreError("REF_STATE_UNKNOWN", "quarantine command output is not valid UTF-8"); }
       if (result.exitCode !== 0) {
-        const code = /OMA_ERROR=(BUNDLE_INVALID|PREREQUISITE_MISSING|INTERNAL_ERROR|SPIKE_UNRESOLVED)/.exec(stderr)?.[1];
-        if (code === "BUNDLE_INVALID" || code === "PREREQUISITE_MISSING" || code === "INTERNAL_ERROR" || code === "SPIKE_UNRESOLVED")
+        const code = /OMA_ERROR=(BUNDLE_INVALID|PREREQUISITE_MISSING|INTERNAL_ERROR|UNSUPPORTED_PROFILE)/.exec(stderr)?.[1];
+        if (code === "BUNDLE_INVALID" || code === "PREREQUISITE_MISSING" || code === "INTERNAL_ERROR" || code === "UNSUPPORTED_PROFILE")
           throw new StoreError(code, stderr.slice(0, 400) || "quarantine failed");
-        throw new StoreError("SPIKE_UNRESOLVED", "required quarantine namespace is unavailable");
+        throw new StoreError("UNSUPPORTED_PROFILE", "required quarantine namespace is unavailable");
       }
       if (stdout !== `${candidate}\n` || !this.canonicalHas(candidate)) throw new StoreError("BUNDLE_INVALID", "bundle candidate was not imported exactly");
     } finally {

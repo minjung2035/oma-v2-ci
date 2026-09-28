@@ -31,6 +31,7 @@
     "verify:crash": "node scripts/verify-lane.mjs crash",
     "verify:property": "node scripts/verify-lane.mjs property",
     "verify:stress": "node scripts/verify-lane.mjs stress",
+    "verify:platform": "node scripts/verify-lane.mjs platform",
     "verify:all": "node scripts/verify-lane.mjs all",
     "evidence:graph": "node scripts/dependency-graph.mjs --write-evidence",
     "verify:powercut": "node scripts/powercut-lane.mjs",

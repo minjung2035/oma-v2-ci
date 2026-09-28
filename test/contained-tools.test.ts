@@ -29,7 +29,7 @@ function world(t: import("node:test").TestContext, quota: number | null = 1024 *
 }
 const refused = (error: unknown) => error instanceof Error && /link|not followed|other names|outside/.test(error.message);
 
-test("R6-01: a write through a dangling link is refused and makes nothing outside the workspace", async t => {
+test("P0V-74 / R6-01: a write through a dangling link is refused and makes nothing outside the workspace", async t => {
   const { workspace, outside, run } = world(t);
   const planted = join(outside, ".profile-planted");
   symlinkSync(planted, join(workspace, "notes.md"));
@@ -42,7 +42,7 @@ test("R6-01: a write through a dangling link is refused and makes nothing outsid
     assert.deepEqual(hook!({ toolName: tool, input: { path: "notes.md", content: "x" } }), { block: true, reason: "tool path is outside the agent workspace" }, tool);
 });
 
-test("R6-01: a directory link on the way is refused for every contained tool, and an existing target outside is not read", async t => {
+test("P0V-74 / R6-01: a directory link on the way is refused for every contained tool, and an existing target outside is not read", async t => {
   const { workspace, outside, run } = world(t);
   writeFileSync(join(outside, "secret"), "host secret\n");
   symlinkSync(outside, join(workspace, "linked"));
@@ -54,7 +54,7 @@ test("R6-01: a directory link on the way is refused for every contained tool, an
   assert.equal(existsSync(join(outside, "new.txt")), false);
 });
 
-test("R6-01: a file with another name is not written through", async t => {
+test("P0V-74 / R6-01: a file with another name is not written through", async t => {
   const { workspace, outside, run } = world(t);
   writeFileSync(join(outside, "profile"), "original\n");
   linkSync(join(outside, "profile"), join(workspace, "alias"));
@@ -72,7 +72,7 @@ test("PR-004: inside the workspace the tools work as the engine's own do", async
   assert.match(await run("ls", { path: "a" }), /b\//);
 });
 
-test("R6-18: the quota is decided at the write, so two writes that each fit cannot together exceed it", async t => {
+test("P0V-74 / R6-18: the quota is decided at the write, so two writes that each fit cannot together exceed it", async t => {
   const { workspace, run } = world(t, 1000);
   const results = await Promise.allSettled([run("write", { path: "one", content: "x".repeat(600) }), run("write", { path: "two", content: "y".repeat(600) })]);
   assert.deepEqual(results.map(result => result.status).sort(), ["fulfilled", "rejected"]);

@@ -68,7 +68,7 @@ test("P3 recovery: physical owners retain every existing route and activation fl
   for (const kind of kinds) {
     const { value, calls } = fixture();
     if (["mail.ack", "route.follow", "route.unfollow"].includes(kind)) {
-      await assert.rejects(value.recover({ id: kind, kind, state: "pending" }, false), { code: "SPIKE_UNRESOLVED" });
+      await assert.rejects(value.recover({ id: kind, kind, state: "pending" }, false), { code: "UNSUPPORTED_PROFILE" });
       assert.deepEqual(calls, []);
       continue;
     }
