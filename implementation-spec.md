@@ -82,7 +82,7 @@
 
 **MUST [M-004]** `Store.transaction` callback은 동기식이다. transaction 안에서 await, Git, systemd, fsync, provider 호출을 수행하지 않는다. subprocess는 argv 배열로 실행하고 shell 문자열 보간을 사용하지 않는다. stdout/stderr는 설정된 크기를 넘으면 bounded spool 또는 명시적 실패로 처리하며 메모리에 무한 수집하지 않는다.
 
-**SPIKE [S-01]** Node/Pi/SQLite binding/Git/systemd/bwrap/email library/rootfs의 정확한 version과 배포 방식은 플랫폼 검증 결과로 pin한다. 버전 번호를 이 계약에서 추측하지 않는다. pin 결과는 host 배포 manifest이며 새 운영 상태 DB가 아니다.
+**SPIKE [S-01]** Node/Pi/SQLite binding/Git/systemd/bwrap/email library/rootfs의 정확한 version과 배포 방식은 플랫폼 검증 결과로 pin한다. 버전 번호를 이 계약에서 추측하지 않는다. pin 결과는 host 배포 manifest이며 새 운영 상태 DB가 아니다. 판정([DR18](implementation/design-revisions.md)): pin은 validation이 기록한 배포 manifest다.
 
 ## 3. 신원·이름·설정·권한
 
@@ -110,7 +110,7 @@
 
 **MUST [AUTH-003]** per-incarnation pathname listener에 actor를 고정하고 SO_PEERCRED 및 실제 systemd cgroup을 검증한다. 같은 UID, payload actor, 환경 변수, unit처럼 보이는 문자열은 증명이 아니다. 이전 incarnation 연결을 닫고 이후 요청을 `STALE_RUN`으로 거절한다. 실행 인증과 이미 접수된 broker-owned effect의 복구를 구분한다.
 
-**SPIKE [S-01,S-02]** host PID 재사용을 피하는 peer 확인, Node binding, Principal attach credential 보호와 tool sandbox 검증은 release gate다. 검증 실패 시 UID-only fallback·무격리 fallback을 만들지 않는다.
+**SPIKE [S-01,S-02]** host PID 재사용을 피하는 peer 확인, Node binding, Principal attach credential 보호와 tool sandbox 검증은 release gate다. 검증 실패 시 UID-only fallback·무격리 fallback을 만들지 않는다. 판정([DR18](implementation/design-revisions.md)): peer 확인은 `SO_PEERCRED`와 cgroup identity(kernel lane), credential 보호와 tool 경계는 T114·SCN-B09·SCN-B10이 증거다.
 
 ## 4. 파일시스템 계약과 원본
 
@@ -212,7 +212,7 @@
 
 **MUST [DB-008]** prepared batch에 포함된 message IDs와 delivery.batch_id의 집합은 같아야 하며 recipient는 batch.agent와 같아야 한다. DB FK만으로 충분하지 않은 교차행 불변식은 store 함수와 integrity test에서 검증한다. completed batch는 변경·확장하지 않는다. 누락 원문, FK 손상, 실제 ref 불일치는 조용히 새 상태로 덮어쓰지 않는다.
 
-**SPIKE [S-03]** 진행 중 steer batch와 agent_end 완료 경계의 동시성은 기준 architecture에 남은 미결정이다. 기본 DDL은 새로운 state를 추가하지 않으며, prepared batch의 동시 허용 수/선택 알고리즘을 spike 결과 없이 추측하지 않는다. 단일 batch로 잠그고 모든 실시간 안내를 agent_end까지 미루는 것도 상위 요구를 만족한 구현으로 간주하지 않는다.
+**S-03 판정 ([DR18](implementation/design-revisions.md)).** v1은 batch를 activation 때 준비해 followUp으로 전달하고, terminal boundary의 receipt로 완료한다. run 도중 도착한 mail은 다음 run의 batch다. run 중 steer는 v1 기능이 아니다: pinned 엔진에서 run 중에 넣은 안내를 batch에 durable하게 귀속시킬 경계가 그 receipt 하나뿐이기 때문이다. 대가는 지연(현재 run의 남은 시간)이고, 순서와 정확히 한 번의 귀속은 지켜진다. 기본 DDL은 새 state를 추가하지 않는다. architecture §7의 steer 문장과의 차이는 DR18이 적는다. steer는 SP-03-T를 진입 조건으로 하는 v2 후보다.
 
 ## 6. IPC framing, schema, idempotency
 
@@ -280,13 +280,13 @@
 
 **MUST [BATCH-004]** D01: prepared batch의 원래 ordered message IDs와 session/evidence identity를 유지한다. DR9: batch의 incarnation은 그 batch를 만든 첫 전달 시도이고 바뀌지 않는다. run이 열리면 나머지 prepared batch는 row를 바꾸지 않고 새 lease가 이어받으므로, batch의 전달 시도는 첫 시도부터 현재 lease까지다. 이전 run 또는 startup quiescence를 증명한 broker(현재 incarnation이 끝나는 run이어야 한다)가 그 구간 안의 시도가 쓴 receipt를 먼저 관측·정산한다. 정산은 현재 lease가 아니라 이 구간과 검증된 receipt에 묶인다. filesystem 관측은 transaction 밖에서 하고 T-batch-complete 안에서 같은 batch/actor/시도 구간/ordered manifest/state를 다시 확인한다. prepared·completed batch의 incarnation과 최초 유효 receipt는 역사적 사실로 남는다. 읽기 불가·손상·구간 밖 incarnation은 재전달 근거가 아니며 원본 보존과 명시적 진단/repair 대상이다. live complete의 현재 peer/run fencing은 그대로 유지하고 recovery 권한을 새 RPC나 stale lease로 발급하지 않는다. 오류·abort·timeout·모델의 완료 문구는 boundary 증거가 아니다.
 
-**MUST [BATCH-006]** 기본 followUp 경로의 production batch.complete는 validation record에 pin된 `oma-pi-rpc-v1@0.87.1` receipt만 허용한다. trusted runner가 소유한 정확한 state-root receipt path, batch ID/incarnation/message manifest, adapter revision, runner session root와 durable session file이 모두 일치해야 completed/presented를 같은 transaction에서 commit한다. 타입이나 문자열만 맞춘 evidence, model writable 경로, mock completion, 환경 변수 우회는 거절한다. 이 qualification은 진행 중 steer/concurrency 또는 전체 S-03 kill matrix를 통과했다는 뜻이 아니다.
+**MUST [BATCH-006]** 기본 followUp 경로의 production batch.complete는 validation record에 pin된 `oma-pi-rpc-v1@0.87.1` receipt만 허용한다. trusted runner가 소유한 정확한 state-root receipt path, batch ID/incarnation/message manifest, adapter revision, runner session root와 durable session file이 모두 일치해야 completed/presented를 같은 transaction에서 commit한다. 타입이나 문자열만 맞춘 evidence, model writable 경로, mock completion, 환경 변수 우회는 거절한다. v1은 followUp만 쓰므로 이 경계가 v1의 유일한 완료 경계다([DR18](implementation/design-revisions.md)).
 
 D01 publication은 private same-filesystem temp에 bounded bytes를 쓰고 file fsync → final name no-replace publication → parent directory fsync 후에만 durable receipt를 반환한다. 기존 final name이면 exact batch 관계를 검증해 최초 유효 receipt 자체를 반환하며, 새 boundary의 sessionPath로 바꿔 complete하지 않는다. 0600 mode를 유지하고 final publication 뒤 fsync 불명에서는 final name을 삭제하지 않는다. 이것이 Pi session 자체의 power-loss flush를 증명하지는 않는다.
 
 **MUST [BATCH-005]** session 경계 증거가 불충분하면 같은 batch ID로 재안내할 수 있다. 같은 mail을 다시 안내했다는 사실을 표시하고 기존 operation receipt와 workspace를 대조하게 한다. 이전 shell/tool을 자동 replay하지 않는다. Pi 사고과정·tool cursor·reasoning snapshot용 state를 추가하지 않는다.
 
-**SPIKE [S-03]** 위 fairness 규칙은 prepare 대상으로 허용된 시점에 적용한다. 진행 중 direct steer와 public followUp의 batch 분리/완료 귀속은 검증 전 미정이다. 현재 batch의 deliveryMode를 새 mail 때문에 바꾸거나 ID를 추가하는 구현은 금지한다.
+위 fairness 규칙은 prepare 대상으로 허용된 시점에 적용한다. v1의 deliveryMode는 언제나 followUp이다([DR18](implementation/design-revisions.md)). 현재 batch의 deliveryMode를 새 mail 때문에 바꾸거나 ID를 추가하는 구현은 금지한다.
 
 ## 8. Resident·Principal·Pi 경계
 
@@ -302,7 +302,7 @@ pi.sendMessage(
 );
 ```
 
-**MUST [PI-003]** 현재 qualified 기본 profile은 activation 때 준비된 batch를 followUp으로 전달하고 terminal boundary까지 완료한다. 이미 진행 중인 tool group 사이에 도착한 direct/question/reply/context를 끼워 넣는 steer profile은 도구 결과 보존·취소·동시 batch 귀속이 검증될 때까지 지원한다고 주장하지 않는다. 새 mail 때문에 준비된 batch의 ID나 mode를 바꾸지 않는다.
+**MUST [PI-003]** v1은 activation 때 준비된 batch를 followUp으로 전달하고 terminal boundary까지 완료한다. 이미 진행 중인 tool group 사이에 도착한 direct/question/reply/context를 끼워 넣는 steer profile은 v1에 없다([DR18](implementation/design-revisions.md)). 새 mail 때문에 준비된 batch의 ID나 mode를 바꾸지 않는다.
 
 **MUST [RUN-001]** activation은 unit/invocation 확인 → 이전 run 사망 확인 → BATCH-004의 이전 시도 receipt 정산 → incarnation 발급(나머지 receipt-absent prepared는 batch를 바꾸지 않고 새 lease가 이어받는다, DR9) → sandbox/Pi resume → batch 안내 → 정상 Pi loop → boundary commit → pending 재검사 → 필요 시 다음 loop 또는 exit 0 순서다. 최초 GOAL 전에는 inference를 시작하지 않는다.
 
@@ -326,7 +326,7 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **MUST [PR-004]** Principal host Pi의 모든 model-facing shell/read/write/edit 및 동적으로 등록된 tool 경로를 sandbox-backed 구현으로 제한한다. extension attach credential·Human 원본 session·provider credential을 model tool sandbox에 mount하지 않는다. trusted extension은 session 접근이 필요하지만 model에게 그 권한을 위임하지 않는다.
 
-**SPIKE [S-02,S-03]** Pi hook/command/tool replacement·session flush의 정확한 import와 signature는 pinned SDK로 실행 검증 후 작성한다. provider API는 엔진이 소유하므로(INF-001) OMA가 확정할 signature가 없다. 비슷해 보이는 SDK 함수명이나 `appendEntry` 호출만으로 fsync를 보장한다고 추측하지 않는다.
+**SPIKE [S-02,S-03]** Pi hook/command/tool replacement·session flush의 정확한 import와 signature는 pinned SDK로 실행 검증 후 작성한다. provider API는 엔진이 소유하므로(INF-001) OMA가 확정할 signature가 없다. 비슷해 보이는 SDK 함수명이나 `appendEntry` 호출만으로 fsync를 보장한다고 추측하지 않는다. 판정([DR18](implementation/design-revisions.md)): import와 signature는 pinned 0.87.1로 실행 검증했고(ENG1), 완료의 durable 증거는 session flush가 아니라 runner의 host-private receipt다(BATCH-006).
 
 ## 9. Git command 계약
 
@@ -362,17 +362,17 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **MUST [GIT-007]** quarantine prerequisite은 broker의 read-only project objects에서만 해소한다. temporary quarantine의 RO alternate는 이 검사 동안만 허용되며 Resident persistent clone에는 mutable alternate를 절대 두지 않는다. 검증한 pack/object만 canonical repository에 반입하고 ref 생성 전에 객체 durable write를 확인한다. unvalidated pack을 host 권한으로 파싱하는 지름길은 금지한다.
 
-**SPIKE [S-05]** quarantine→canonical의 정확한 검증·object import argv/pack flush 조합은 hostile bundle와 prerequisite 실험으로 확정한다. 단순 `cp -r quarantine/objects` 또는 agent repo를 host `git fetch`하는 대안으로 채우지 않는다. 위 command 표는 양 끝의 확정된 계약이며 이 중간 경로의 검증 완료를 뜻하지 않는다.
+**SPIKE [S-05]** quarantine→canonical의 정확한 검증·object import argv/pack flush 조합은 hostile bundle와 prerequisite 실험으로 확정한다. 단순 `cp -r quarantine/objects` 또는 agent repo를 host `git fetch`하는 대안으로 채우지 않는다. 위 command 표는 양 끝의 확정된 계약이다. 판정([DR18](implementation/design-revisions.md)): 중간 경로는 `test/s05-hostile-bundles.test.ts`와 GIT-006 시험이 hostile 입력으로 검증했다.
 
 **MUST [GIT-008]** published ref는 `refs/oma/published/<actor>/<operation-id>`이고 immutable이다. 이미 C면 idempotent success, 다른 OID면 PUBLISHED_REF_CONFLICT 후 해당 효과 중단이다. canonical main을 bundle ref에 따라 변경하지 않는다. ref 확인 후 고정 result message를 공개·배달하고 receipt에 C/ref/fetch command/dirty 안내를 반환한다.
 
 **MUST [GIT-009]** submit succeeded는 published ref와 result mail materialization이 완료됐다는 뜻이다. main 통합·review 완료·Principal 판단·agent 종료를 뜻하지 않는다. report/document도 private clone에서 commit하고 published ref+path로 전달할 수 있다. 별도 Artifact repository나 모든 report를 main에 넣는 규칙을 추가하지 않는다.
 
-**MUST [INT-001]** base 및 tiered의 공통 조건으로 integrate는 candidate가 하나 이상의 canonical published ref로 보존됨, code.integrate capability, actual main==expected, expected ancestor of candidate, protected path 조건, fixed host checks, 현재 policy를 검사한다. protected path는 default profile에서 Resident integrate를 거절한다. candidate==expected면 main은 변경하지 않는 검증된 no-op receipt로 처리할 수 있지만 published/권한 조건을 생략하지 않는다.
+**MUST [INT-001]** base 및 tiered의 공통 조건으로 integrate는 candidate가 하나 이상의 canonical published ref로 보존됨, code.integrate capability, actual main==expected, expected ancestor of candidate, protected path 조건, 현재 policy를 검사한다. v1은 fixed host checks를 돌리지 않는다: checks를 적은 설정은 broker 시작 때 `UNSUPPORTED_PROFILE`로 거절한다([DR18](implementation/design-revisions.md)). protected path `/`는 모든 변경을 보호한다. protected path는 default profile에서 Resident integrate를 거절한다. candidate==expected면 main은 변경하지 않는 검증된 no-op receipt로 처리할 수 있지만 published/권한 조건을 생략하지 않는다.
 
 **MUST [INT-002]** candidate 검사는 별도 sandbox의 해당 C checkout에서 host 지정 argv/env로 수행한다. 검사의 stdout 'PASS'가 아닌 실제 exit code/timeout을 사용한다. candidate가 수정할 수 있는 검사 script가 존재한다는 사실만으로 trusted 검사 정책을 대체하지 않는다. test sandbox에 actor/admin socket, credential, shared repo RW, workspace 밖 host FS를 노출하지 않는다.
 
-**SPIKE [S-01-CANDIDATE]** 허용 fixed unit 집합 안에서 candidate check의 CPU/memory/tasks/tmp/workspace/staging 한도와 모든 후손 종료를 kernel-enforced 하는 정확한 실행 primitive는 미확정이다. transient systemd-run/service/scope, userland polling, broker 전체 cgroup 한도만을 candidate별 격리로 취급하는 방식, 무제한 fallback을 허용하지 않는다. 증거가 pin되기 전 nonempty integration.checks를 가진 production profile의 활성화 및 실제 검사 요청은 SPIKE_UNRESOLVED로 차단한다. checks를 자동으로 []로 바꾸어 회피하지 않는다. host가 원래 명시적으로 선택한 checks=[] base profile만 이 sub-gate의 비적용 범위다.
+**S-01-CANDIDATE 판정 ([DR18](implementation/design-revisions.md)).** v1은 candidate check를 돌리지 않는다. candidate별 kernel 자원 한도가 검증되지 않은 채 host에서 candidate 코드를 돌리는 것은 검사가 없는 것보다 나쁘다. candidate는 만든 곳(그 Resident의 sandbox)에서 시험하고, 사람이 쓰는 CI는 게시된 ref를 그대로 받는다. nonempty `integration.checks`와 `sandbox.candidate`·`git.runCheck`는 `UNSUPPORTED_PROFILE`이다. checks를 자동으로 []로 바꾸어 회피하지 않는다. transient systemd-run/service/scope, userland polling, broker 전체 cgroup 한도만을 candidate별 격리로 취급하는 방식은 뒤에 이 기능을 더할 때도 허용하지 않는다.
 
 **MUST [INT-007]** 실제 spawn의 candidate OID/argv/env/resources는 검증된 check snapshot과 정확히 같아야 한다. builder unit test만 통과하고 production이 다른 cwd/config/default를 쓰는 것을 금지한다. timeout/signal/검사 후손 잔존/관측 불명확은 CHECK_FAILED 또는 대조 전 pending/unknown이며 PASS가 아니다. host check exit 0만으로 아직 살아 있는 background process를 무시하고 종료했다고 기록하지 않는다. 실제 candidate 출처와 kernel limits를 production entrypoint 시험에서 확인한다.
 
@@ -386,7 +386,7 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 **MUST [APP-001]** tiered attestation 구현은 actor를 인증하고 append-only fact+mail을 기록하며 동일 actor의 중복 승인은 한 번만 집계한다. object는 명시 revoke 전까지 유효하고 자기 attestation만 취소할 수 있다. branch/base/candidate/policy가 다르면 재사용하지 않는다. Human 승인은 host/UI channel만 발급한다. mail의 approve 문구를 parser로 권한화하지 않는다.
 
-**SPIKE [S-08]** tiered의 MEDIUM 기본 peer floor 1, zero active OBJECT, HIGH의 peer floor+Principal ACCEPT는 채택했다. eligible actor/author provenance·host trust 설정·exact decision/revoke evaluator·최소 DDL/IPC는 아직 검증이 필요하다. S-08은 이제 tiered의 필수 gate이며 S-10의 floor/정책 snapshot 계약과 함께 통과해야 한다. base의 protected-path 거절 구현은 계속 가능하지만 tiered 지원의 대체품은 아니다.
+**SPIKE [S-08]** tiered의 MEDIUM 기본 peer floor 1, zero active OBJECT, HIGH의 peer floor+Principal ACCEPT는 채택했다. eligible actor/author provenance·host trust 설정·exact decision/revoke evaluator·최소 DDL/IPC는 아직 검증이 필요하다. S-08은 이제 tiered의 필수 gate이며 S-10의 floor/정책 snapshot 계약과 함께 통과해야 한다. base의 protected-path 거절 구현은 계속 가능하지만 tiered 지원의 대체품은 아니다. 판정([DR18](implementation/design-revisions.md)): tiered는 v1에 없다.
 
 ## 10. 공유 context 게시
 
@@ -444,14 +444,14 @@ Live batch.prepare/complete는 이 broker를 시작한 host endpoint에서만 �
 
 ## 12. sandbox mount·FD·network 계약
 
-**MUST [SB-001; arch §16]** baseline은 trusted rootfs RO, user/mount/PID/IPC/network/UTS/cgroup namespace 분리, cap drop, private proc/dev, new session, die-with-parent다. rootfs에는 pinned Node/Pi/Git/shell/rg/library와 empty mount targets만 둔다. host `/` 또는 `/home` 전체를 bind하지 않는다.
+**MUST [SB-001; arch §16]** baseline은 trusted rootfs RO, user/mount/PID/IPC/network/UTS/cgroup namespace 분리, cap drop, private proc/dev, new session, die-with-parent, 그리고 `socket()`·`socketpair()`의 domain `AF_VSOCK`을 `EPERM`으로 거절하는 seccomp filter다(bwrap `--seccomp 3`, filter는 fd 3의 channel로 넘긴다; [DR18](implementation/design-revisions.md) D-5, MAC-205). vsock은 network namespace로 막히지 않는 kernel이 있으므로 namespace에 기대지 않는다. rootfs에는 pinned Node/Pi/Git/shell/rg/library와 empty mount targets만 둔다. host `/` 또는 `/home` 전체를 bind하지 않는다.
 
 **MUST [SB-007; arch §16]** 기본 rootfs는 OMA가 society state root 아래에 만든다. 내용은 빈 mount target과 agent만을 이름으로 갖는 생성된 `/etc/passwd`·`/etc/group`뿐이며 host `/etc`에서 복사하지 않는다. 프로그램과 라이브러리(`SB-001`의 Node/Git/shell/rg/library)는 host 운영체제의 것을 RO bind로 겹쳐 제공하고, 그 대상은 `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc/alternatives`, `/etc/ld.so.cache`로 닫힌다. 이 목록 밖의 host 경로 — `/`, `/home`, state root, runtime directory — 는 받아들이지 않는다. host가 merged-`/usr`로 둔 최상위 link는 rootfs 안에 같은 모양으로 재현하되 `/usr` 밖을 가리키는 link는 따라가지 않는다. Node는 실제 binary 한 파일만 고정 경로에 RO bind한다. rootfs 생성은 idempotent하며, 예상 밖의 항목은 지우지 않고 거절한다.
 
 **MUST [SB-002]** Resident argv builder는 다음 의미의 배열을 생성한다. 옵션 지원 여부와 identity 매핑은 S-01로 검증한다. rootfs 안 mount target은 배포 때 생성하고 actor가 수정하지 못한다. `/tmp` reference cap은 512 MiB이고 host가 더 제한할 수 있다.
 
 ```text
-bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
+bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL --seccomp 3
   --ro-bind <rootfs> /
   <--ro-bind <osPath> <osPath> for each SB-007 system path the host has>
   --ro-bind <realNodeBinary> /opt/oma-node/node
@@ -468,6 +468,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
   --ro-bind <ownRunnerViewDir> /run/oma-view
   --ro-bind <worldDir> /world
   --ro-bind <projectGit> /git/project.git
+  --ro-bind-try <projectMirror> /git/project-mirror.git
   --ro-bind <ownIncarnationSocket> /run/oma/control.sock
   --symlink /run/oma-view/inbox.md /inbox.md
   --clearenv --setenv HOME /home/agent
@@ -478,19 +479,21 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 `/opt/oma`는 OMA 설치 디렉터리의 RO mount다. 동봉 엔진·trusted core extension·model-facing CLI·role extension이 모두 그 아래 있으므로, OMA를 갱신할 때 rootfs를 다시 만들지 않는다. rootfs는 pinned Node/Git/shell/rg/library와 빈 mount target만 갖는다.
 
+`/git/project-mirror.git`은 사람의 project의 bare mirror다. `oma`가 시작할 때마다 project의 `refs/heads/*`를 fetch하고(fsck, file protocol만), actor는 거기서 fetch해 기존 `git.submit`으로 게시한다. mirror가 아직 없으면 mount하지 않는다([DR18](implementation/design-revisions.md) D-8).
+
 `/run/oma-sessions`는 엔진이 session을 쓰는 유일한 경로다. SB-006이 이미 그 내용을 model-origin data로 규정하므로 mount를 명시한다.
 
 `--clearenv`가 환경 전체를 지우므로 trusted core extension이 읽는 `OMA_*`는 이 배열에 없으면 sandbox 안에 없다. builder는 caller가 준 이름/값을 검증하고(이름 문법, NUL 금지), `OMA_FRAME_BYTES`/`OMA_BATCH_MAX_MESSAGES`/`OMA_ACTOR`/`OMA_INCARNATION`를 마지막에 스스로 설정해 caller가 검증된 lease의 actor를 덮어쓰지 못하게 한다. host 환경은 상속하지 않는다.
 
 **MUST [SB-002-C]** argv에 등장하는 host 경로는 위 mount 표를 통해서만 sandbox 경로로 번역한다. 어느 mount에도 속하지 않는 경로는 그대로 전달하지 않고 거절한다. 그렇지 않으면 host에서 검증된 파일이 sandbox 안에서 조용히 없는 파일이 되고, 설정 오류가 엔진 오류로 둔갑한다. 모델에게 보이는 경로(도구 결과, CLI 출력, 메일 안내)도 그 모델의 view로 보인다: broker는 host의 이름으로 기록·응답하고, 모델의 경계(sandbox 안 CLI는 자기 환경의 mount root, Principal의 도구는 host root)가 번역한다([DR1](implementation/design-revisions.md)).
 
-**MUST [SB-002-D]** 엔진의 agent directory(provider credential 보관처)는 Resident mount 계획에 넣지 않는다(PR-004). 따라서 봉인된 Resident는 credential이 없고 `--unshare-all`로 network도 없다. 이 조합에서 Resident는 provider에 도달하지 못한다. `INF-001`이 inference를 엔진에 넘긴 뒤 그 경로를 이어줄 relay가 없기 때문이며, 이 사실을 숨기고 credential이나 network를 조용히 열지 않는다. architecture §16에 비용과 선택지를 적는다.
+**MUST [SB-002-D]** 엔진의 agent directory(provider credential 보관처)는 Resident mount 계획에 넣지 않는다(PR-004). 따라서 봉인된 Resident는 credential이 없고 `--unshare-all`로 network도 없다. 이 조합에서 Resident가 provider에 닿는 길은 INF-005의 relay 하나다. credential이나 network를 조용히 열어 다른 길을 만들지 않는다. architecture §16에 비용과 선택지를 적는다.
 
 **MUST [SB-002-E]** 설정 없이 시작한 society의 `installation.rootfs`는 `SB-007`의 생성된 rootfs다. 즉 기본은 봉인이다. 운영자가 `installation.rootfs`를 `/`로 명시하면 신뢰 rootfs가 없다는 선언이다(SB-001이 host `/` bind를 금지하므로 `/`는 rootfs가 될 수 없다). 그 배포에서 Resident는 봉인 없이 host에서 실행되며, runner는 시작할 때 그 사실을 한 줄로 보고하고 Dashboard가 같은 사실을 보인다. 봉인 부재를 기본값처럼 조용히 넘기지 않는다.
 
 **MUST [SB-003]** stdin/stdout/stderr와 명시적으로 검증한 RPC pipe 외 상속 FD를 닫는다. runner admin FD, provider socket, host credential FD, systemd bus, SSH agent, desktop socket을 전달하지 않는다. OMA actor socket에는 자기 limited API만 존재한다. 다른 actor endpoint는 mount하지 않는다. rootfs의 기존 symlink/mount target이 다른 host path를 노출하지 않는지 검사한다.
 
-**MUST [SB-004]** private network가 기본이다. provider는 actor inference stream→broker만 사용한다. dependency fetch 같은 egress가 필요한 project는 Human-configured proxy/cache profile에 한해 OPTIONAL로 노출하고 별도 S-01 escape 시험을 통과한다. 실패하면 host network 공유로 대체하지 않는다.
+**MUST [SB-004]** private network가 기본이다. provider는 actor inference stream→broker만 사용한다. dependency fetch 같은 project egress(Human-configured proxy/cache profile)는 v1에 없다([DR18](implementation/design-revisions.md), S-07). 뒤에 더할 때는 OPTIONAL로 노출하고 별도 S-01 escape 시험을 통과한다. host network 공유로 대체하지 않는다.
 
 **MUST [SB-005]** candidate-check sandbox는 staged candidate checkout만 RW, trusted check assets RO, tmp cap, private network, no actor/admin/inference socket이다. Git quarantine은 필요한 broker objects만 RO와 자기 staging만 RW다. Principal tools는 public world/mail/Git RO+자기 scratch RW만 갖고 Human session directory는 없다.
 
@@ -498,7 +501,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 ## 13. inference·quota·취소
 
-**MUST [INF-001; arch §13.3]** inference는 **동봉 엔진이 소유한다.** OMA는 provider relay, credential store, model catalogue, 가격표, 재시도 정책을 따로 구현하지 않는다. 엔진이 이미 갖고 있는 흐름을 그대로 쓰며, 그 상태는 TUI-017의 OMA 소유 agent 디렉터리 안에 있다.
+**MUST [INF-001; arch §13.3]** inference는 **동봉 엔진이 소유한다.** OMA는 provider relay, credential store, model catalogue, 가격표, 재시도 정책을 따로 구현하지 않는다. 엔진이 이미 갖고 있는 흐름을 그대로 쓰며, 그 상태는 TUI-017의 OMA 소유 agent 디렉터리 안에 있다. macOS 배포본에서는 해석에 쓰이는 상태가 host 한 곳에 있고, credential은 그 안에서 Keychain backend에 있다([DR18](implementation/design-revisions.md) D-4, MAC-704).
 
 이 조항은 이전 판을 대체한다. 이전 판은 broker가 credential을 붙여 provider에 직접 요청하는 relay를 요구했다. 그 relay는 만들어지지 않았고 구현은 호출 경로 없이 남아 있었다. 문서와 코드가 어긋난 상태를 유지하는 것보다 실제 선택을 규범으로 확정하는 쪽을 택한다. 이 선택으로 provider codec·가격 upper bound·usage 회계를 gate하던 spike는 OMA의 대상이 아니게 되어 제거했다.
 
@@ -513,7 +516,7 @@ bwrap --unshare-all --new-session --die-with-parent --cap-drop ALL
 
 **MUST [INF-006]** relay의 sandbox 쪽 끝은 bind-mount된 unix socket이며, network namespace는 계속 `--unshare-all`이다. trusted core extension이 sandbox 안에서 loopback listener를 열어 그 socket으로 넘기고, 엔진에는 그 loopback을 가리키는 provider를 등록한다. host와 sandbox 사이에 새 network 경로·CA·TLS 가로채기를 만들지 않으며, provider와의 TLS는 host쪽 relay가 소유한다.
 
-**MUST [INF-008]** relay가 쓰는 credential은 **엔진이 해석한다.** runner는 동봉 엔진의 공개 SDK로 OMA 소유 agent directory에서 provider를 해석해 origin·key·추가 header를 얻고, 그 값은 한 delivery 동안만 relay에 있다. OMA는 엔진의 저장 형식을 읽지 않고, 해석 결과를 저장하지 않는다. `pi`/`current`는 엔진 설정의 기본 provider/model로 해석하며, 기본이 없거나 credential이 없으면 추측하지 않고 `UNSUPPORTED_PROFILE`로 거절한다.
+**MUST [INF-008]** relay가 쓰는 credential은 **엔진이 해석한다.** runner는 동봉 엔진의 공개 SDK로 OMA 소유 agent directory에서 provider를 해석해 origin·key·추가 header를 얻고, 그 값은 한 delivery 동안만 relay에 있다. OMA는 엔진의 저장 형식을 읽지 않고, 해석 결과를 저장하지 않는다. `pi`/`current`는 엔진 설정의 기본 provider/model로 해석하며, 기본이 없거나 credential이 없으면 추측하지 않고 `UNSUPPORTED_PROFILE`로 거절한다. macOS guest에서는 runner가 해석하지 않는다: user manager 환경이 egress service(`OMA_EGRESS_SOCKET`)를 이름하면 run은 host에 자리표시자를 받고 relay 자리에 egress forwarder를 연다([DR18](implementation/design-revisions.md) D-10, MAC-710).
 
 sandbox에는 진짜 key와 **같은 모양의 자리표시자**를 준다. provider 코드는 key를 읽는다 — Codex는 OAuth token의 claim에서 계정을 찾고 Anthropic은 key의 접두사로 header 방식을 고른다. 그래서 서명된 token은 header와 claim을 유지하고 서명만 바꾸며, 접두사가 있는 key는 종류를 나타내는 짧은 접두사를 유지하고 나머지를 같은 문자 종류로 바꾼다. 자리표시자는 비밀을 포함하지 않고, 비밀에 포함되지도 않으며, 엔진이 환경 참조나 명령으로 해석할 모양(`$`, `!`, `${`)을 갖지 않는다.
 
@@ -605,7 +608,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [REC-003]** 각 crash 지점의 복구는 [test matrix](implementation/test-matrix.md)의 oracle을 만족해야 한다. shutdown에서 새 mutation acceptance를 중단하고 진행 중 DB transaction을 마친 뒤 fd를 닫는다. 강제 kill을 피할 수 있다고 가정하지 않는다. SQLite commit과 Git ref update를 한 atomic transaction이라고 기술하지 않는다.
 
-**MUST [REC-004]** process crash 보장과 power-loss 보장을 구분한다. file/dir fsync·SQLite FULL·Git object/ref flush·지원 filesystem/장치 계약을 S-06으로 검증하기 전 '전원 장애에도 유실 없음'이라고 표시하지 않는다. 지원 외 filesystem에서 자동 weak durability로 전환하지 않는다.
+**MUST [REC-004]** process crash 보장과 power-loss 보장을 구분한다. file/dir fsync·SQLite FULL·Git object/ref flush·지원 filesystem/장치 계약을 S-06으로 검증하기 전 '전원 장애에도 유실 없음'이라고 표시하지 않는다. 지원 외 filesystem에서 자동 weak durability로 전환하지 않는다. state는 local kernel file system에 있어야 한다: NFS·SMB/CIFS·FUSE(virtiofs 포함)·9P·Ceph·AFS·Coda·NCP 위의 state root는 시작 때 `UNSUPPORTED_PROFILE`로 거절한다. SQLite WAL은 network file system을 지원하지 않고, 사망 증명은 kernel이 `flock`을 놓는 것에 기대기 때문이다([DR18](implementation/design-revisions.md), S-06). process crash 보장은 SIGKILL 시험이 받치고, 전원 장애 보장은 powercut lane(승인된 VM) 전에는 말하지 않는다.
 
 **MUST [REC-005]** backup은 host maintenance에서 mutation acceptance와 inference dispatch를 멈추고 active cgroup을 종료/확인한 quiescent 상태에서 수행한다. outstanding usage를 보수적으로 settle/unknown 처리하고 DB checkpoint/SQLite backup을 얻는다. DB와 참조 eml/Git/context/staging/runner receipts/Pi sessions/config를 같은 quiescent 시점으로 복사한다. provider secret은 별도 host credential backup 정책이다.
 
@@ -632,7 +635,7 @@ relay는 자리표시자를 provider가 key를 읽는 자리에서만 진짜 key
 
 **MUST [ORDER-002]** 구현 PR에는 변경 requirement IDs, source LOC 전후/모듈별 수치, 수행 tests, 남은 SPIKE, schema/method/state/service 변경 유무를 기록한다. 마지막 항목에 '있음'이면 기존 계약의 허용 확장인지 증명하고 아니면 architecture review를 요청한다. 구현 편의성만으로 새 entity를 승인한 것으로 간주하지 않는다.
 
-**MUST [ORDER-003]** default Core release gate는 S-01~06 및 S-09의 요구 산출물, test matrix의 core cases, package/type/schema 검증, 실제 systemd+bwrap+Pi E2E다. S-07/S-11은 optional feature만 차단한다. 목표 tiered release는 S-08/S-10 및 T78–T90을 추가로 요구한다. base gate 통과만으로 현재 목표 아키텍처가 완료됐다고 표시하지 않는다. unresolved spike가 남은 adapter는 stub success 대신 SPIKE_UNRESOLVED로 명시적으로 실패해야 한다.
+**MUST [ORDER-003]** default Core release gate는 S-01~06의 판정([DR18](implementation/design-revisions.md))과 그 증거, S-09에 대해서는 성능을 주장하지 않는다는 사실, test matrix의 core cases, package/type/schema 검증, 실제 systemd+bwrap+Pi E2E다. S-07/S-11은 optional feature만 차단한다. 목표 tiered release는 S-08/S-10 및 T78–T90을 추가로 요구한다. base gate 통과만으로 현재 목표 아키텍처가 완료됐다고 표시하지 않는다. v1에 없는 기능의 adapter는 stub success 대신 `UNSUPPORTED_PROFILE`로 명시적으로 실패한다. spike를 다시 여는 것은 설계 수정이며, 그 전에는 `SPIKE_UNRESOLVED`를 던지지 않는다(규칙 `no-open-spike`).
 
 **MUST [ORDER-004]** performance가 목표에 미달하면 수치를 보고하고 모델/profile/배치 resource 설정을 평가한다. Principal의 필수 판단 경로 삭제·숨은 자동 요약 agent·task scheduler 추가로 평가를 통과시키지 않는다. 구조 변경은 별도 architecture 판단이다.
 

@@ -1,12 +1,15 @@
 # OMA Core v1 — 미확정 구현 경계
 
-**MUST [SP-001]** 이 파일은 [구현 계약](../implementation-spec.md)의 일부다. 모든 항목의 현재 상태는 `OPEN`이다. 이전 primitive 실험이나 문서 열람은 아래 실행 검증을 대신하지 않는다. 이 파일은 runtime state가 아닌 구현 검증 기록이다.
+**MUST [SP-001]** 이 파일은 [구현 계약](../implementation-spec.md)의 일부다. 각 항목은 [DR18](design-revisions.md)이 판정했다(항목마다 "DR18 판정" 줄). 판정은 v1이 하는 것(증거와 함께)과 하지 않는 것(알려진 미지원 설정으로 거절한다)을 정한다. 하지 않는 것의 MUST 항목은 그 기능을 더할 때의 진입 조건으로 남는다. 이전 primitive 실험이나 문서 열람은 아래 실행 검증을 대신하지 않는다. 이 파일은 runtime state가 아닌 구현 검증 기록이다.
 
 **MUST [SP-002]** 각 spike의 산출물은 `검증한 versions/config`, `실행 가능한 최소 harness`, `명령과 raw 결과`, `fault/negative 결과`, `선택한 좁은 adapter 계약`, `상위 architecture와의 차이 유무`다. 산출물은 tests/검증 문서에 보관한다. 성공한 것처럼 채운 signature·mock·boolean은 통과 증거가 아니다.
 
 **MUST [SP-003]** 실패 시 해당 profile/경로를 차단하고 이유를 반환한다. 아키텍처 변경이 필요한 결과는 제안만 하며 이 spec의 근거 없는 확정으로 바꾸지 않는다. 아래 기재한 후보는 선택이 확정된 설계가 아니다.
 
 ## S-01 — Linux / Node / systemd / sandbox substrate
+
+**DR18 판정 — 닫음(v1 기반).** 아래 결정(systemd+bwrap+내장 SQLite+koffi leaf)을 v1의 substrate로 확정한다. pin은 validation의 배포 manifest다(엔진 0.87.1). 같은 UID 외부 writer, kernel project quota, 전체 FD/PID stress는 validation "알려진 한계"에 남기고 gate로 쓰지 않는다. 증거: kernel lane.
+
 
 **SPIKE [S-01]** 정확한 Node/Pi/Git/systemd/bwrap/SQLite/email codec pin, SO_PEERCRED/cgroup identity binding, READY notify, inherited FD close, rootfs/UID mapping, storage quota enforce 방법을 검증한다. Node에서 필요한 syscall binding을 제공할 library와 최소 native leaf 필요성이 미정이다.
 
@@ -34,6 +37,9 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 ### S-01-CANDIDATE — candidate resource execution primitive
 
+**DR18 판정 — v1에 없음.** v1은 candidate check를 돌리지 않는다. `integration.checks`, `sandbox.candidate`, `git.runCheck`는 `UNSUPPORTED_PROFILE`이다. 아래 MUST는 이 기능을 더할 때의 진입 조건이다. 증거: `DR18 / S-01-CANDIDATE:`.
+
+
 **SPIKE [S-01-CANDIDATE]** fixed unit set을 변경하지 않고 candidate check의 CPU/memory/tasks/tmp/workspace/staging 한도와 모든 후손 종료를 실제 kernel 경계에서 집행하는 primitive가 필요하다. 현재 구현은 bwrap/systemd cgroup으로 candidate descendant timeout을 검증하지만 workspace/staging quota와 고정 worker 경계 전체를 production profile로 확정하지 않았다.
 
 **현재 상태 (2026-09-10)**: T62-resource는 unresolved workspace/staging limit을 candidate 실행 전에 `SPIKE_UNRESOLVED`로 차단하는 것을 확인했고, T61 계열은 candidate descendant 종료를 확인했다. 이것은 S-01-CANDIDATE 전체 통과가 아니다.
@@ -41,6 +47,9 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 **MUST** transient `systemd-run`/새 durable unit, userland polling만으로 candidate 격리를 완성했다고 표시하지 않는다. 허용 primitive와 exact argv/mount/FD/resource observation이 validation 기록에 고정되기 전 non-empty integration checks production profile을 활성화하지 않는다. checks를 자동으로 빈 배열로 바꾸는 fallback도 금지한다.
 
 ## S-02 — 기존 Principal Pi의 host/private 경계
+
+**DR18 판정 — 닫음.** OMA가 session을 띄우므로 외부 session attach는 범위 밖이다. SP-02-T/A의 기준 가운데 credential 비노출은 T114와 SCN-B09(모델이 도구로 엔진 credential을 어떤 경로 표기로도 읽지 못하고 society state를 나열하지 못한다), commons 자동 주입 0건과 질문의 한 번 전달은 SCN-B10(commons 100통 + 질문 1통), duplicate attach 거절은 T114가 실제 프로세스로 보인다. 실제 모델로 도는 점검은 validation의 provider 점검 기록이다.
+
 
 **SPIKE [S-02]** 기존 interactive Pi session에 attach하는 정확한 API/credential 전달, 모든 model-facing tool override, trusted extension helper와 model tool의 분리 방식을 검증한다. Principal에게 full Human context를 유지하면서 model tool이 host filesystem/credentials를 읽지 못해야 한다.
 
@@ -57,6 +66,9 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 **MUST [SP-02-A]** Human history는 기존 session에 유지되고 commons 자동 주입은 0건, principal 질문은 동일 session에만 전달되어야 한다. UI 부재 동안 Astra 호출은 0건이다. tool 하나라도 host로 우회하면 profile 출시를 막는다. 별도 SOTA worker 생성으로 우회하지 않는다.
 
 ## S-03 — Pi 실시간 알림과 durable batch 경계
+
+**DR18 판정 — 닫음(followUp만).** v1은 batch를 activation 때 준비해 followUp으로 전달하고 `agent_settled` 경계의 host-private receipt로 완료한다. run 중에 도착한 mail은 다음 run의 batch다. run 중 steer는 v1 기능이 아니다(PI-003). 모델이 writable session을 바꿔 완료를 위조하지 못한다: 완료의 증거는 runner가 쓰는 host-private receipt다(BATCH-006). 증거: `S-03: only the pinned durable Pi boundary receipt completes a prepared batch`, T31-neg, SCN-S03, SCN-F16, crash-kill의 receipt 경계. 아래 SP-03-T/A/D는 steer를 더할 때의 진입 조건이다.
+
 
 **SPIKE [S-03]** architecture §§7.1/18.2는 성공 agent_end에서 batch 완료를 기록하고 prepared snapshot을 확장하지 않는다. 동시에 §7은 busy Pi의 현재 tool group 다음 LLM 호출 전에 새 direct mail을 steer하도록 요구한다. 이 둘을 만족하는 pinned Pi의 custom message 귀속·batch prepare 시점·동시 prepared 수는 아직 확정되지 않았다.
 
@@ -85,6 +97,9 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 ## S-05 — hostile bundle / canonical object import
 
+**DR18 판정 — 닫음.** 손상 pack, `fsck --strict`가 거절하는 object, 추가 ref가 든 bundle은 거절하고 canonical을 바꾸지 않는다. 압축이 큰 blob은 압축된 채 저장되므로 quarantine과 canonical은 pack 크기만큼 자란다. bundle 크기는 CLI의 `OMA_BUNDLE_BYTES`가, quarantine의 CPU·memory·tasks·시간은 `QUARANTINE_RESOURCES`가 묶는다. 증거: `S-05:` 세 시험(`test/s05-hostile-bundles.test.ts`), GIT-006 시험, durable-boundaries의 git 경계.
+
+
 **SPIKE [S-05]** 검증된 quarantine에서 canonical object store로 옮길 정확한 pack/import/flush recipe와 resource limit을 결정한다. Resident clone의 objects hardlink/mutable alternate는 후보가 아니다.
 
 **MUST [SP-05-T]** prerequisite 있는 작은 incremental bundle과 full bundle을 만들고 exact C peer fetch를 확인한다. 누락 prerequisite, 추가 main ref, exported C 불일치, malformed pack, object hash 손상, excessive expansion/depth, symlink staging, hook/config injection, interrupted import, published ref 충돌을 주입한다. quarantine은 network 없는 제한 sandbox로 실행한다.
@@ -109,6 +124,9 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 **현재 runtime 상태 (2026-09-10)**: published ref/peer exact fetch/CAS race/extra-ref rejection 및 private quarantine 경로는 test suite에서 실행됐다. hostile malformed pack, interrupted import, 전체 resource exhaustion corpus가 남아 있으므로 S-05 전체를 완료로 표시하지 않는다.
 ## S-06 — durability / systemd races / storage qualification
 
+**DR18 판정 — process crash는 닫음, 전원 장애는 release gate.** durable 경계 64개 가운데 44개가 SIGKILL로 시험된다(P0-7 registry). state는 local kernel file system에 있어야 한다: NFS·SMB/CIFS·FUSE(virtiofs 포함)·9P·Ceph·AFS·Coda·NCP는 시작 때 `UNSUPPORTED_PROFILE`이다(REC-004, `DR18 / S-06:`). 시험한 file system은 ext4와 tmpfs다. 전원 장애·ENOSPC·read-only remount는 powercut lane(승인된 VM)의 몫이며 그 전에는 "전원 장애에도 유실 없음"을 말하지 않는다.
+
+
 **SPIKE [S-06]** SQLite FULL+WAL, eml/object/link/rename, Git object/ref, directory fsync와 지원 filesystem의 전원 장애 보장을 검증한다. systemd .path 재활성화 및 cgroup death 확인도 실서비스에서 검증한다.
 
 **S-06 상태 (2026-09-07)**: 전원 장애(abrupt power loss)·VM fault 시험은 전용 disposable VM/fault-injection harness가 없어 **미실행, OPEN (환경 부재)** — SIGKILL/sudo 불가 환경이므로 host를 위험에 빠뜨리지 않는다 (작업 지시: VM 없으면 S-06 결과를 unresolved로 남긴다). process-kill 지점(T18-T22/T27/T30/T39/T57/T58/T63/T66)은 실제 subprocess kill로 실행 가능하며 구현 단계(phase 3 mail, phase 7 git)에서 실행해 별도 기록한다. systemd `.path` 재활성화·cgroup death는 phase 4(units)에서 실서비스로 재검증한다. SIGKILL 통과만으로 power-loss passed로 표시하지 않는다 (SP-06-A).
@@ -121,11 +139,17 @@ node v26.7.0 · npm 12.0.2 · git 2.55.0 · sqlite 3.53.4 (node:sqlite 내장, `
 
 ## S-07 — OPTIONAL notmuch / reflink / egress
 
+**DR18 판정 — v1에 없음.** notmuch·reflink·project egress는 꺼 둔다. provider로 가는 길은 relay(INF-005)와 macOS의 egress channel(macos-platform §4.7)뿐이다. 아래 SP-07-A는 각 기능을 더할 때의 조건이다.
+
+
 **SPIKE [S-07]** 각 optional 기능은 독립 gate다. notmuch의 database.path/mail_root와 indexer/model mount mapping, reflink의 inode/object 독립성, egress proxy allowlist와 credential 비노출을 검증한다.
 
 **MUST [SP-07-A]** notmuch rebuild/손상/old index 후에도 archive path가 직접 열리고 routing에는 영향이 없어야 한다. reflink 불가면 독립 clone으로 fallback하며 hardlink하지 않는다. egress는 Human 설정 endpoint 외 연결을 거절한다. 기능별 결과가 없으면 각각 꺼 둔다. 새 index daemon은 기본으로 추가하지 않고 기존 reconcile이 제한된 index subprocess를 요청한다.
 
 ## S-08 — base optional / tiered required attestation gate
+
+**DR18 판정 — v1에 없음.** tiered integration과 attestation은 v1 밖이다. base profile의 보호 경로 거절이 그대로 남고 approve/object/revoke는 노출하지 않는다.
+
 
 **SPIKE [S-08]** Human이 신뢰 주체/quorum/보호 경로/Principal 위임을 선택한 뒤 최소 append-only attestation DDL, revoke relation, tuple evaluation을 확정한다. 이 계약은 quorum 수나 'agent 2명=독립 2표'를 결정하지 않는다.
 
@@ -135,6 +159,9 @@ Tiered profile에서 S-08은 [`integration-policy.md`](./integration-policy.md)�
 
 ## S-09 — 성능 목표와 모델 사용성 수용 기준
 
+**DR18 판정 — v1은 성능 주장을 하지 않는다.** 문서는 Principal token 감소나 품질을 달성한 것으로 말하지 않고, release gate에 성능 threshold가 없다. 아래 protocol은 성능을 주장할 때의 조건이다.
+
+
 **SPIKE [S-09]** 동일 task 집합·예산/시간 cap·반복 수·통계 및 품질 비열등성 margin은 실험 전에 고정한다. Principal tokens 감소와 Astra 단독 수준 이상 품질이라는 목표의 실제 달성 여부는 아직 미검증이다.
 
 **MUST [SP-09-T]** strong 단독/cheap 단독/hybrid에 같은 repository snapshot과 tools를 제공하고 반복한다. quality/defect/omission, Principal 및 전체 tokens/cost, latency, commons의 Principal 유입 건수, 경로/ID lookup 실패, 첫 유용한 행동까지 tool 수, Principal 재검증 비용을 기록한다.
@@ -143,11 +170,17 @@ Tiered profile에서 S-08은 [`integration-policy.md`](./integration-policy.md)�
 
 ## S-10 — tiered challenge + persistent floor
 
+**DR18 판정 — v1에 없음.** tiered integration과 함께 v1 밖이다.
+
+
 **SPIKE [S-10]** canonical 범위와 성공 기준은 [`integration-policy.md`](./integration-policy.md)의 challenge/floor 계약이다. authenticated challenge와 persistent floor의 DDL/migration/recovery 의미가 실행 증거로 고정되기 전에는 challenge mutation API나 durable floor state를 추가하지 않는다. 현재 상태는 `OPEN`이다.
 
 **MUST [SP-10-A]** S-10이 닫히기 전 tiered integration을 활성화하지 않는다. challenge 또는 floor를 process-local cache, caller boolean, 자연어 mail, 임의 DB column으로 대체하지 않는다.
 
 ## S-11 — OPTIONAL fresh clean-room verifier
+
+**DR18 판정 — v1에 없음.** verifier state와 API를 두지 않는다.
+
 
 **SPIKE [S-11]** canonical 범위와 성공 기준은 [`integration-policy.md`](./integration-policy.md)의 fresh-context verifier 계약이다. 선택 기능이며 exact verifier input/output, isolation, revision pin과 negative evidence가 별도로 고정되기 전에는 구현 또는 활성화하지 않는다. 현재 상태는 `OPEN`이다.
 

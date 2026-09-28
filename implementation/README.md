@@ -19,7 +19,7 @@ spec을 구체화하는 계약이다. `**MUST [ID]**` 조항은 [traceability.js
 | [store-opening.md](store-opening.md) | Store를 열 때 writer 준비 전 호환성 판정 |
 | [contracts/README.md](contracts/README.md) | contract owner 경계 |
 | [systemd/README.md](systemd/README.md) | unit template 계약(UNIT-TPL) |
-| [macos-platform.md](macos-platform.md) | **초안, 승인 전(구속력 없음).** macOS용 OMA: host(macOS)와 hidden Linux VM(guest)의 나눔, 신뢰 경계, RPC, VM 수명, project sync, Keychain credential, image·update·백업·복구, 검증 전략(MAC·MV 조항). 아직 traceability가 inventory하지 않는다 |
+| [macos-platform.md](macos-platform.md) | **규범(DR18로 수용).** macOS용 OMA: host(macOS)와 hidden Linux VM(guest)의 나눔, 신뢰 경계, RPC, VM 수명, project sync, Keychain credential, image·update·백업·복구, 검증 전략(MAC·MV 조항). traceability가 MAC 조항을 inventory한다 |
 
 `contracts.ts`, `contracts/`, `schema-v1.sql`, `systemd/*.in`, `cloc-systemd.lang`은 문서가 아니라 실제 선언·배포 표면·측정 filter다.
 
@@ -30,7 +30,7 @@ spec을 구체화하는 계약이다. `**MUST [ID]**` 조항은 [traceability.js
 | 문서 | 내용 |
 |---|---|
 | [consistency-decisions.md](consistency-decisions.md) | 계획의 D01–D06, 카드(WP)별 결정, 재검토와 AV1–AV31, ENG1 |
-| [design-revisions.md](design-revisions.md) | 설계 수정 DR1–DR17, 바꾼 규범, architecture와 어긋나는 문장 |
+| [design-revisions.md](design-revisions.md) | 설계 수정 DR1–DR18, 바꾼 규범, architecture와 어긋나는 문장 |
 | [priority-0-audit.md](priority-0-audit.md) | Priority 0 파일 단위 점검: 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14, 외부 전수 검토를 판정한 4차 점검 P0V-25–P0V-53, 시나리오 시험이 찾은 P0V-54–P0V-55 |
 
 ## machine-readable map

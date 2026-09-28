@@ -165,7 +165,7 @@ Final PASS condition: `v21-final-fast`, `v21-final-durable`, `v21-final-property
 현재 제품이 하지 않거나, 현재 트리가 증명하지 않은 것이다. 각 항목의 근거는 괄호 안의 카드·결정 기록에 있다. 검증하지 않은 환경(powercut·provider 자동 lane·CI)은 아래 "남아 있는 release gate"에 있다.
 
 **설치와 배포**
-- package가 `bin`이나 설치 명령을 선언하지 않는다. `oma`는 빌드된 entry를 가리키는 alias나 wrapper다(WP31, C2 결정 보류).
+- package는 `bin`으로 `oma` 명령을 선언한다(C2, [DR18](design-revisions.md)). checkout에서 `npm install -g .`로 설치한다. npm registry에는 게시하지 않았다(WP31).
 - node·git·bwrap은 host에 있어야 한다. 봉인에는 `bwrap`과 `/usr`가 필요하고, 없는 host에서 T117은 이유를 적고 skip되며 그 skip은 `npm test` 실패다. OS별 배포본은 없고 다른 Node·배포판은 NOT_RUN이다(WP31).
 - 동봉 엔진을 바꾸기 전에 기존 society의 미정산 batch를 모두 정산한다. 0.85.1 adapter의 receipt는 conflicting으로 보존된다(ENG1).
 
@@ -181,7 +181,8 @@ Final PASS condition: `v21-final-fast`, `v21-final-durable`, `v21-final-property
 - 추가 role extension은 core extension의 제한 밖에서 도는 trusted code가 될 수 있어 운영자가 따로 검토한다(operations).
 
 **동시성과 내구성**
-- S-03: 실행 중인 turn 안의 delivery boundary 귀속은 미결이다. Principal delivery는 idle session에만 전달하므로 Human의 긴 turn 동안 전달이 기다린다.
+- S-03: v1은 batch를 followUp으로만 전달한다([DR18](design-revisions.md)). run 중에 도착한 mail은 다음 run의 batch가 되므로, Resident의 긴 run과 Human의 긴 turn 동안 전달이 기다린다(Principal delivery는 idle session에만 전달한다).
+- state root는 local kernel file system에 있어야 한다. NFS·SMB/CIFS·FUSE(virtiofs 포함)·9P·Ceph·AFS·Coda·NCP 위에서는 시작하지 않는다(REC-004, [DR18](design-revisions.md) S-06). 시험한 file system은 ext4와 tmpfs다.
 - 설정 편집은 비협조적인 same-UID writer와의 동시 편집을 지원하지 않는다. 전원 차단 뒤의 순서는 증명하지 않았다(WP12, WP13).
 - 설정 journal이 계속 읽히지 않으면 generation 예산에서 편집 거절이 재시작으로 풀리지 않는다(AV7). journal 기록이 연속 두 번 빠지면 직전 generation을 잃던 한계는 P0V-61이 닫았다: 기록은 commit point 전에 쓰이고, 기록하지 못한 commit은 하지 않는다.
 - 저장 용량은 kernel hard quota가 아니다. SQLite·WAL 증가는 측정만 했다(WP22).
@@ -194,13 +195,15 @@ Final PASS condition: `v21-final-fast`, `v21-final-durable`, `v21-final-property
 - broker의 ledger 연결은 동기 node:sqlite다. 다른 연결이 쓰기 잠금을 쥐고 있으면 `busy_timeout`(5초)까지 broker의 event loop가 멈추고, 그동안 IPC 응답과 timer가 늦는다. 쓰는 연결은 broker 하나이므로 잠금을 쥐는 것은 운영자의 외부 writer나 checkpoint 경합이다. 기한(alarm)은 단조 시계로 다시 걸려 이 멈춤이 거짓 만료를 만들지 않는다(D-7, P0V-76). watchdog은 없고, 두게 되면 이 상한이 그 주기보다 짧아야 한다(6차 점검 R6-19).
 
 **비용과 추적**
-- 비용 상한은 OMA 계약이 아니다. relay가 요청 수·동시성을 쥐지만 stream을 해석하지 않는다(INF-009).
+- v1에는 비용 상한이 없다([DR18](design-revisions.md), INF-009). relay가 요청 수·동시성을 쥐지만 stream을 해석하지 않는다. 비용의 경계는 provider 계정의 한도다.
 - `usage` 표와 그 transaction(T-usage-reserve)은 schema v1 그대로 남아 있지만 쓰는 주체가 없다. INF-001이 inference와 사용량 회계를 엔진에 넘기면서 OMA의 예약·정산 경로를 없앴기 때문이다(INF-009가 이 사실을 여기에 기록하도록 요구한다).
 - 수용 시험 T48–T51(inference 예약·provider 정산)은 TEST-006에 따라 표에 남지만, INF-001 뒤로는 이를 이행할 OMA 경로가 없다. adversarial report(`scripts/adversarial-report.mjs`)는 이 행들을 NOT_RUN으로 두고 그 이유를 적는다.
 - traceability의 requirement는 모두 `unverified`다. owner·callPath·negative test가 연결된 것도 compliance 기록 절차를 거치지 않았다.
 
 **보류한 결정과 검증 공백**
-- `bin`·설치 명령(C2), WP03 이전 Resident unit의 재생성 절차.
+- [DR18](design-revisions.md)이 열린 spike(S-01–S-11)와 결정(macOS D-1·D-4·D-5·D-7·D-8·D-9·D-10, Q1–Q9, topic follow, C2, 비용 상한)을 닫았다. v1에 없다고 정한 것: run 중 steer, 통합 검사(`integration.checks`), tiered integration·attestation·verifier, notmuch·reflink·project egress, 비용 상한, 성능 주장. 이 설정들은 `UNSUPPORTED_PROFILE`로 거절된다.
+- macOS에서 transcript(모델과 도구가 쓰는 내용)에는 guest의 작업공간 경로가 보일 수 있다. MAC-022는 OMA의 말만 제품 문구로 바꾼다(D-1).
+- WP03 이전 Resident unit의 재생성 절차.
 - 전체 `oma` entry의 pty 시험(최상위 catch의 정리 순서), rollover 뒤 endpoint bind 실패의 별도 주입(WP30).
 - 결과 크기와 frame(P0V-44, DR14): stop receipt의 `remainingOperations`(그때 미해결인 operation 전부)와 `status.get`(은퇴한 행까지 모든 agent)은 개수에 상한이 없다. 기본 frame 256 KiB에서 status는 agent 1052개, stop receipt는 미해결 operation 6235개까지 담긴다. 넘으면 효과가 끝난 요청에 FRAME_TOO_LARGE가 답해진다. 바꾸려면 receipt version 계획이 필요하다.
 - unit 이름(P0V-26, DR14): 두 소유자에게 같은 이름이 되는 unit은 교체하지 않고 AGENT_CONFLICT로 거절한다. 그런 이름의 agent는 만들 수 없다. 이름 체계(UNIT-001)는 그대로다.
@@ -262,10 +265,11 @@ npm run verify:all -- --out <new-dir>
 
 ## 남아 있는 release gate
 
-- `spikes.md`의 OPEN qualification 조건은 fresh harness evidence 없이 닫지 않는다.
+- `spikes.md`의 각 spike는 [DR18](design-revisions.md)이 판정했다. S-06의 전원 장애 부분은 아래 VM power-cut이 남은 gate다. v1에 없다고 정한 기능의 조건은 그 기능을 더할 때 fresh harness evidence로만 닫는다.
 - live systemd/cgroup/READY, hostile import, filesystem/kernel containment, VM power-cut/ENOSPC/read-only/restore 등 environment-specific proof는 별도다.
 - 실제 provider: 제공자 호출·재시도·오류·사용량·취소는 동봉 엔진이 소유하므로(INF-001) OMA의 release 증거가 아니다. OMA 쪽 증거는 봉인된 Resident의 byte relay와 credential 경계(INF-005–INF-008), 엔진이 보고한 결과를 OMA가 읽는 방식(INF-004, 시한)이 실제 provider와 함께 끝까지 도는지다. 지금은 수동 기능 점검(1–14차)뿐이며 자동 lane은 NOT_RUN이다.
-- S-08/S-10 tiered attestation/floor와 S-11 clean-room, S-09 품질·비용·latency 평가는 해당 profile 계약을 따른다.
+- S-08/S-10 tiered attestation/floor와 S-11 clean-room은 v1에 없다. S-09의 품질·비용·latency 평가는 성능을 주장할 때의 조건이며 v1은 주장하지 않는다([DR18](design-revisions.md)).
+- macOS: mac-vm·mac-security·mac-powercut·mac-e2e lane은 Apple Silicon Mac이 필요하고 NOT_RUN이다. `platform` lane은 Linux에서 돈다([test-matrix](test-matrix.md)의 macOS 절).
 - LOC/A-008/A-009 판정은 `node scripts/loc.mjs`의 current source-bound 결과로만 갱신한다.
 - requirement별 release proof는 [compliance.md](compliance.md)를 따른다.
 

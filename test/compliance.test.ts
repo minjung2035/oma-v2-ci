@@ -27,7 +27,8 @@ test("COMP-005/006: structural evidence rejects stale, incomplete and duplicate 
   };
   try {
     const sources = ["implementation-spec.md", "implementation/integration-policy.md", "implementation/physical-ordering.md",
-      "implementation/compliance.md", "implementation/loc-budget.md", "implementation/test-matrix.md", "implementation/spikes.md", "implementation/validation.md"];
+      "implementation/compliance.md", "implementation/loc-budget.md", "implementation/test-matrix.md", "implementation/spikes.md", "implementation/validation.md",
+      "implementation/macos-platform.md"];
     for (const file of sources) put(file, "**MUST [TEST-001]** Reject absent proof.\n");
     const matrixText = "**MUST [TEST-001]** Reject absent proof.\n\n" + matrix(1, 77) + "\n\n" + matrix(78, 90) + "\n";
     put("implementation/test-matrix.md", matrixText);

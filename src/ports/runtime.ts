@@ -64,7 +64,7 @@ export interface SandboxCompositionInput {
 }
 export interface SandboxPort {
   resident(lease: RunLease, directories: SandboxDirectories, env?: Readonly<Record<string, string>>): SandboxPlan;
-  /** S01-CANDIDATE remains gated; this declaration does not attest to execution. */
+  /** DR18: v1 runs no candidate checks; an implementation refuses with UNSUPPORTED_PROFILE. */
   candidate(oid: string, checkProfile: string): SandboxPlan;
 }
 

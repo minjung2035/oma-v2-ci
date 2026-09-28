@@ -665,7 +665,7 @@
     },
     {
       "path": "src/ports/runtime.ts",
-      "sha256": "877b4f5fe76433f08303a4fe2e898a5909999837cc2ce4a7a346a1b4e683c4e2"
+      "sha256": "c96dcf31a06c1f8b6a15b6ba2ba835c6cd00c0eedd5091f15c6798d4619ba770"
     },
     {
       "path": "src/process/async.ts",

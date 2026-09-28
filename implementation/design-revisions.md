@@ -1,11 +1,11 @@
-# 설계 수정 기록 DR1–DR17
+# 설계 수정 기록 DR1–DR18
 
 상태: **ACCEPTED (사용자 요청, 2026-09-25)**. 이 문서는 **결정 기록**이다([문서 지도](../docs/README.md)).
 결함이 코드 한 곳이 아니라 설계의 선택에서 나온 경우를 설계 수준에서 다시 판단한다. 각 항목은 관측, 원인, 결정, 바꾸는 규범,
 바꾸지 않는 것을 적는다.
 
 - DR1–DR7은 실제 provider 점검에서 AV9–AV31(`consistency-decisions.md`의 AV 절)을 고치다 나왔고, DR8은 그 수정을 다시 점검하다 나왔다.
-- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다. DR15는 시나리오 시험이 찾았다. DR16은 5차 점검(외부 재검토 R03)에서, DR17은 6차 점검(R6-07)에서 나왔다.
+- DR9–DR13은 [Priority 0](../PRIORITY-0.md) 파일 단위 점검([priority-0-audit.md](priority-0-audit.md))에서 나왔다. DR14는 그 4차 점검(외부 전수 검토)이 남긴 판단이다. DR15는 시나리오 시험이 찾았다. DR16은 5차 점검(외부 재검토 R03)에서, DR17은 6차 점검(R6-07)에서 나왔다. DR18은 열려 있던 spike와 결정(사용자가 맡긴 선택, 2026-09-27)을 닫은 기록이며 macOS 플랫폼 규격을 수용한다.
 - 규범 문장의 owner는 `implementation-spec.md`다. `architecture.md`는 N-001이 bytes를 결박하므로 고치지 않고, 어긋나는 architecture 문장은 해당 DR에 적는다.
 - wire schema·DB schema·receipt 형식은 바꾸지 않는다. 권한 의미가 바뀌는 것은 DR4 하나다.
 
@@ -28,6 +28,7 @@
 | DR15 | 엔진 이벤트 한 줄이 frame보다 크면 건너뛰고 알린다(형식 오류는 전처럼 중독) | R28 결정, MAINTENANCE §19 |
 | DR16 | rootfs 수리는 이전 Resident의 종료가 증명된 뒤, 어떤 Resident도 깨어나기 전에(broker startup 안에서) 한다 | REC-007의 수리 순서 문장 |
 | DR17 | 끝나라는 신호는 잡을 수 있는 종료 신호 전부이고, drain이 있는 모든 프로세스가 그 목록 하나로 drain을 밟는다 | AV31의 신호 목록, screen.ts의 "unconditional" 문장 |
+| DR18 | 열린 spike와 결정을 닫는다: v1이 하는 것과 하지 않는 것을 정하고, 하지 않는 것은 알려진 미지원 설정으로 거절한다. macOS 플랫폼 규격을 수용한다 | SP-001, S-01-CANDIDATE, S-03, INT-001, PI-003, SB-001, SB-002, SB-004, INF-001, REC-004, PRODUCT·README의 설치·로그인·비용, macos-platform 전체 |
 
 ## DR1 — 모델에게 보이는 경로는 그 모델의 view로 말한다
 
@@ -375,3 +376,54 @@ architecture 규칙 `host-loss-signals`가 이것을 붙든다. 목록의 내용
 
 **바꾸지 않는 것.** 각 프로세스의 drain 내용과 순서(TUI-004, D03, LIFE-006), 두 번째 신호의 뜻(broker는 once, TUI는 같은 종료를
 기다림), exit code.
+
+## DR18 — 열린 spike와 결정을 닫는다
+
+**관측.** 6차 점검과 macOS 구현 뒤에도 결정 없이 열린 것이 남아 있었다. [spikes](spikes.md)의 S-01–S-11은 SP-001에 따라 모두
+`OPEN`이었다. 코드에는 `SPIKE_UNRESOLVED`로 막힌 경로가 셋 있었다(`integration.checks`, `sandbox.candidate`, `git.runCheck`).
+[macOS 규격](macos-platform.md)은 초안이었고 §12의 D-1·D-4·D-5·D-7·D-8·D-9·D-10과 §13의 Q1–Q9가 결정을 기다렸다. 그 밖에 Principal의
+topic follow(도구는 있고 규범은 막는다), 설치 명령(C2), 로그인 표면, PRODUCT의 "비용 상한"이 열려 있었다. 사용자는 2026-09-27에 이
+선택을 맡겼다("모든 구현 스파이크, 정해지지 않은것을 너가 임의로 잘 선택해서 닫아").
+
+**원인.** 열린 항목은 둘 중 하나로 남아 있었다. 코드가 `SPIKE_UNRESOLVED`로 막거나(그러면 설정한 사람은 무엇이 언제 풀리는지 모른다),
+규범끼리 어긋난 채 두 답이 공존했다(topic: MAIL-001/002는 Principal에게 commons를 보내지 않는데 `oma_route`는 follow를 제안했다).
+"v1이 하지 않는다"는 결정 자체가 내려지지 않았기 때문이다.
+
+**원칙.** 각 항목을 "v1이 한다(증거와 함께)"와 "v1이 하지 않는다(알려진 미지원 설정으로 거절하고 이유를 말한다)"로 닫는다. 하지 않는
+것을 조용히 비우거나(checks를 `[]`로) 약한 보장으로 바꾸지 않는다(SP-003, REC-004). 정할 때는 비슷한 문제의 기존 답을 따른다.
+
+**결정.**
+
+| 항목 | 결정 | 근거(비슷한 답) | 증거 | commit |
+|---|---|---|---|---|
+| topic follow | Principal은 topic을 follow하지 않는다. `oma_route`를 Principal 도구에서 뺀다. Resident가 아닌 actor의 새 `follow`는 기록 전에 `CAPABILITY_DENIED`로 거절한다(이미 받은 요청의 replay는 그 receipt로 답한다). MAIL-002("호출 Resident 자신의 subscriptions")의 구현이며 규범은 그대로다. 지금까지는 받아들이고 아무것도 배달하지 않는 구독이었다 | MAIL-001/002, SP-02-A(commons 자동 주입 0건), S-09가 재는 "Principal에 들어간 양" | `DR18 / MAIL-001/002:`, principal-tools 시험 | `42b238f` |
+| S-01-CANDIDATE, `integration.checks` | v1은 통합 검사를 스스로 돌리지 않는다. candidate는 만든 곳(그 Resident의 sandbox)에서 시험하고, 통합은 CAS와 보호 경로로 결정한다. checks를 적은 설정은 `UNSUPPORTED_PROFILE`("remove integration.checks")로 broker 시작 때 거절하고, `sandbox.candidate`와 `git.runCheck`도 `UNSUPPORTED_PROFILE`이다. `SPIKE_UNRESOLVED` 경로는 없어진다 | candidate별 kernel 자원 한도가 검증되지 않은 채 host에서 candidate 코드를 돌리는 것은 검사가 없는 것보다 나쁘다. 사람이 쓰는 CI는 게시된 ref(`refs/oma/published/*`)를 그대로 받는다 | `DR18 / S-01-CANDIDATE:`, T62, r19·r28 | `42b238f` |
+| 보호 경로 `/` | `/`는 트리 전체를 보호한다: candidate의 모든 변경이 `PROTECTED_PATH`다. 막아 둔 표기가 아니다 | 경로 prefix 규칙의 자연스러운 끝 | 같은 시험 | `42b238f` |
+| C2 설치 | `package.json`의 `bin`이 `oma`를 `dist/src/entry/oma.js`로 둔다. checkout에서 `npm install -g .`가 `oma` 명령을 설치한다. `check-package`가 bin이 layout의 TUI entry와 같고 entry에 shebang이 있는지 본다 | npm 패키지의 표준 설치 경로 | check-package, T119 | `78658c7` |
+| D-9 로그인 | `oma login`이 동봉 엔진의 대화형 모드를 이 society의 엔진 디렉터리 위에서 연다. 사람은 엔진 자신의 로그인·model 선택을 쓴다. OMA는 인증 화면을 만들지 않고, society의 session은 계속 RPC 모드로만 돈다. 로그인은 society lease를 쥔다(돌고 있는 society에는 "이 society가 실행 중입니다"로 거절). macOS에서는 같은 흐름이 host의 엔진 상태(MAC-704) 위에서 돈다 | PRODUCT의 두 요구를 둘 다 지키는 유일한 표면: 엔진의 흐름을 쓰되 session 밖에서 | `DR18 / D-9:`, T119 | `78658c7` |
+| D-5 | 모든 Resident sandbox가 `AF_VSOCK` socket을 거절하는 seccomp filter를 싣는다(Linux 포함). bwrap `--seccomp 3`, filter는 fd 3의 channel로 넘긴다 | vsock은 network namespace로 막히지 않는 kernel이 있다(MAC-205). 해가 없다 | SCN-C08(`Seccomp: 2`), MAC-205 시험 | `37293f3` |
+| D-10, D-4 | guest의 runner와 Principal 엔진은 guest의 egress service(§4.7)로 provider에 닿는다. 배포본의 표지는 guest image의 user manager 환경(`environment.d`의 `OMA_EGRESS_SOCKET`)이다. 설정 field·unit 인자·manifest를 늘리지 않는다. 그 이름이 있으면 run은 host에 자리표시자를 받고 relay 자리에 forwarder를 연다. INF-001의 "OMA 소유 agent 디렉터리"는 credential 저장소로 host Keychain backend를 포함하도록 넓힌다 | 환경은 systemd가 unit에 주는 기존 경로다. schema·wire 변경이 없다 | `platform-egress` D-10 시험 | `51c5ada` |
+| D-8 | 사람의 project를 bare mirror(`repos/project-mirror.git`)로 두고 `oma`가 시작할 때마다 `refs/heads/*`를 fetch한다(fsck, file protocol만). Resident sandbox에 `/git/project-mirror.git`으로 읽기 전용 bind한다(`--ro-bind-try`). actor는 거기서 fetch하고 기존 `git.submit`으로 게시한다. 권한·wire 변화가 없다 | §13 Q8의 기본 제안. 사람 권한의 게시는 새 actor 종류다 | `DR18 / D-8:`, SCN-C09, r28 bind | `83ff797` |
+| D-7 | 경과 시간은 monotonic clock으로 잰다(MAC-650의 세 곳). 이미 구현했다 | 시계 조정은 Linux에도 있다 | MV-06 시험 | 이전 커밋 |
+| D-1 | 오류의 말은 한 곳(`src/tui/words.ts`)에서 읽는다. Linux에서는 사람 자신의 경로와 이름이므로 그대로 보인다. guest의 terminal session(`OMA_PRODUCT_TEXT=1`) 아래에서는 Linux 경로·unit 이름·errno 이름이 든 말을 오류 코드로 바꾸고 원문을 guest 로그에 한 번 쓴다. 그 프로그램의 stderr는 session holder의 것(journal)이고, 사람에게 가는 실패 문구는 stdout으로 간다. 규칙 `error-words-owner`가 `oma` 프로세스의 다른 파일이 오류의 말을 스스로 읽지 못하게 한다 | MAC-001의 이유(VM을 드러내지 않는다)는 Linux에 없다 | `DR18 D-1:`, `error-words-owner` | `2d45b82` |
+| Q1–Q3, Q5–Q7 | §13의 기본 제안을 채택한다. Q7(진단 묶음을 받는 곳)은 이 저장소의 GitHub issue이며, 사람이 직접 붙인다(MAC-641) | — | — | 이 문서 |
+| Q4 | Keychain service와 access group은 `io.github.minjung2035.oma`다. Team ID는 서명하는 주체의 것이다 | 도메인이 없는 프로젝트의 역DNS 관례(Flatpak의 `io.github.<user>.<app>`) | — | `2d45b82` |
+| Q8, Q9 | D-8, D-9와 같다 | — | — | — |
+| S-01 | 결정된 substrate(systemd+bwrap+SQLite+koffi leaf)를 v1 기반으로 확정한다. 같은 UID 외부 writer, kernel project quota, 전체 FD/PID stress는 알려진 한계로 남기고 gate로 쓰지 않는다 | spikes의 S-01 기록 | kernel lane | — |
+| S-02 | 닫는다. OMA가 session을 띄우므로 외부 session attach는 범위 밖이다 | IPC-011 | T114, SCN-B09(모델이 credential을 어떤 경로 표기로도 읽지 못한다), SCN-B10(commons 100통 + 질문 1통 → Principal에 1통) | `ac477da` |
+| S-03 | v1은 followUp만 쓴다. batch는 activation 때 준비되고 terminal boundary(`agent_settled`)의 receipt로 완료한다. run 도중 도착한 mail은 다음 run의 batch다. run 중 `steer`는 v1 기능이 아니다: pinned 엔진에서 run 중에 넣은 custom message를 batch에 durable하게 귀속시킬 경계가 receipt 하나(`agent_settled`)뿐이기 때문이다. 대가는 지연(현재 run의 남은 시간)이며, 순서와 정확히 한 번의 귀속은 지켜진다. steer는 SP-03-T의 항목을 진입 조건으로 하는 v2 후보다 | architecture §7의 steer 문장은 N-001로 고치지 않는다. 이 DR이 v1과의 차이다 | `S-03: only the pinned durable Pi boundary receipt…`, T31-neg, SCN-S03, SCN-F16, crash-kill의 receipt 경계 | — |
+| S-05 | 닫는다. 손상 pack, `fsck --strict`가 거절하는 object, 압축이 큰 blob(object는 압축된 채 저장되므로 저장소는 pack만큼 자란다), 추가 ref가 든 bundle을 거절하거나 한도 안에 둔다. bundle 크기는 CLI의 `OMA_BUNDLE_BYTES`가 묶는다 | git 자체의 quarantine과 fsck | `S-05:` 세 시험, GIT-006 시험, durable-boundaries의 git 경계 | `ac477da` |
+| S-06 | process crash는 닫는다: durable 경계 64개 가운데 44개가 SIGKILL로 시험된다. state는 local kernel file system에 있어야 한다. NFS·SMB/CIFS·FUSE(virtiofs 포함)·9P·Ceph·AFS·Coda·NCP는 시작 때 `UNSUPPORTED_PROFILE`로 거절한다(SQLite WAL은 network file system을 지원하지 않고, 사망 증명은 kernel이 `flock`을 놓는 것에 기댄다). 전원 장애·ENOSPC·read-only remount는 release gate로 남고(powercut lane, 승인된 VM 필요), 그 전에는 REC-004대로 "전원 장애에도 유실 없음"을 말하지 않는다 | SQLite 문서의 WAL 조건 | `DR18 / S-06:`, `state-root-judgement`, durable lane | `f4b7276` |
+| S-07 | notmuch와 reflink는 v1에 없다(꺼 둔다). project egress(의존성 fetch proxy)도 v1에 없다. provider로 가는 길은 relay(INF-005)와 macOS의 §4.7뿐이다 | SP-07-A의 "결과가 없으면 꺼 둔다" | — | — |
+| S-08, S-10, S-11 | tiered integration, attestation, challenge·floor, fresh verifier는 v1에 없다. base profile의 보호 경로 거절이 그대로 남는다 | integration-policy | 기존 base profile 시험 | — |
+| S-09 | v1은 성능 주장을 하지 않는다. 문서는 Principal token 감소나 품질을 달성한 것으로 말하지 않는다. 평가 protocol은 v2의 측정 과제다 | SP-09-A | — | — |
+| 비용 상한 | v1에는 없다. OMA는 relay에서 요청 수와 동시성을 쥐지만 돈을 세지 않는다. provider 계정의 한도가 적용된다 | INF-001(해석은 엔진의 것) | — | — |
+| macOS 규격 | [macos-platform](macos-platform.md)을 수용한다(상태 ACCEPTED). traceability의 `normativeSources`에 넣는다. MV oracle은 그 ID로 남기고 [test-matrix](test-matrix.md)의 platform 절이 lane과 시험에 잇는다. `platform` lane을 등록한다 | 규격 머리의 수용 절차 | `verify:platform` | 이 문서 |
+
+**바꾸는 규범.** SP-001(모든 항목 `OPEN` → 항목별 판정), S-01-CANDIDATE와 INT-001의 "fixed host checks"(v1은 checks를 거절한다),
+S-03과 PI-003(followUp만), SB-001(seccomp filter), SB-002(mirror mount), SB-004(project egress는 v1에 없다), INF-001(credential
+저장소), REC-004(지원 file system), PRODUCT·README의 설치·로그인·비용 문장, macos-platform §12·§13.
+architecture §7의 steer 문장과 §16의 candidate 검사 문장은 N-001 때문에 고치지 않고 여기에 차이를 적는다.
+
+**바꾸지 않는 것.** wire·DB schema·receipt 형식, 여섯 durable entity, base profile의 보호 경로 거절, relay의 credential 규칙(INF-005,
+INF-007), 권한 표(AUTH-001), MAIL-002(이미 follow를 Resident의 것으로 적는다).

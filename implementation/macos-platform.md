@@ -1,9 +1,8 @@
 # OMA for macOS — hidden Linux VM 플랫폼 규격
 
-상태: **초안(DRAFT), 사용자 승인 전. 아직 구속력이 없다.** 승인되면 이 문서는 [implementation-spec](../implementation-spec.md)을
-macOS에 적용하는 규범 문서가 된다. 그때 할 일은 셋이다. [traceability](../scripts/traceability.mjs)의 `normativeSources`에 넣는다.
-§12의 설계 수정을 [design-revisions](design-revisions.md)에 DR로 기록한다. 수용 시험은 [test-matrix](test-matrix.md)의 번호로 옮긴다.
-그 전까지 이 문서의 `MUST`는 설계 제안이다.
+상태: **ACCEPTED ([DR18](design-revisions.md), 2026-09-27: 사용자가 열린 결정의 선택을 맡겼다).** 이 문서는 [implementation-spec](../implementation-spec.md)을
+macOS에 적용하는 규범 문서다. [traceability](../scripts/traceability.mjs)의 `normativeSources`에 들어 있다. §12의 설계 수정과 §13의
+결정은 DR18이 기록한다. MV oracle은 그 ID로 남고, [test-matrix](test-matrix.md)의 "macOS 플랫폼" 절이 lane과 시험에 잇는다.
 
 구현: `feat/macos-hidden-vm` 브랜치. 이 문서는 그 구현과 맞춘다. 구현에서 설계가 바뀐 곳(pty attach, socket activation과 bridge,
 Node `omahostd`와 Swift helper)은 본문을 그렇게 고쳤다.
@@ -26,16 +25,19 @@ Linux에서 시험한 것(`test/platform-*.test.ts`, `test/vsock-seccomp.test.ts
 | Host API와 Mac 명령 | `src/protocol/host-api.ts`, `src/platform/host/{host-api,peer,attach-client}.ts`, `src/entry/oma-mac.ts` | MAC-020/021/222/251 |
 | credential | `src/platform/host/{keychain,resolver}.ts`, `resolveEngineAuth`의 선택 저장소 | MAC-701/702/704 |
 | image | `src/platform/host/image.ts`, `scripts/platform/sign-image.mjs` | MAC-601, MAC-611 |
-| VM helper 규약(Node 쪽) | `src/platform/host/vz-driver.ts` | §2.1, §9.3 |
+| VM helper 규약(Node 쪽) | `src/platform/host/vz-driver.ts` | §2.1, §9.1, §9.3, MAC-701/702(Keychain을 helper에게 묻는 channel) |
 | 백업 | `src/platform/host/{snapshot,archive-crypto}.ts`, `src/platform/guest/archive.ts` | REC-005, MAC-619..623, MAC-661 |
 | 시계 | `principal-delivery`, `broker-supervisor`, CLI transport | MAC-650(D-7) |
-| sandbox filter | `src/runtime/vsock-seccomp.ts` | MAC-205(생성기만) |
+| sandbox filter | `src/runtime/vsock-seccomp.ts`, `src/sandbox.ts`의 `--seccomp 3`, `src/runtime/pi-adapter.ts`의 filter channel | MAC-205(D-5) |
+| guest의 provider 길 | `src/runtime/egress-forwarder.ts`, `platform/guest/environment.d/60-oma-egress.conf`, runner의 `openRelay` | MAC-710(D-10, D-4) |
+| 가져온 commit을 actor가 쓰는 길 | `src/runtime/provision.ts`의 `refreshProjectMirror`, `src/sandbox.ts`의 mirror mount | MAC-411(D-8) |
+| 로그인 | `src/tui/login.ts`, `oma login` | MAC-704(D-9) |
+| 제품 문구 | `src/tui/words.ts`, guest session의 `OMA_PRODUCT_TEXT` | MAC-022(D-1) |
 
 **NOT_BUILT**(Mac에서만 빌드·시험한다): `platform/host/vmhelper`(Swift), `src/entry/omahostd.ts`와 `src/entry/oma-mac.ts`의 실제 실행.
 
 아직 없는 것: OMA.app(SwiftUI), guest image build(mkosi, kernel 설정), archive 복원(R3)과 복구 모드(R1), 진단 묶음(`diag.collect`),
-`society.status`, 로그인 흐름(D-9), guest의 runner와 Principal 엔진을 egress에 잇는 것(D-10), sandbox에 filter를 붙이는 것(D-5),
-가져온 commit을 actor가 쓰는 길(D-8), `platform` lane의 등록(지금은 로컬 시험 전체에 들어 있다), mac-* lane.
+`society.status`, OMA.app의 로그인 메뉴(host에서 D-9의 흐름을 여는 것), mac-* lane. `platform` lane은 `npm run verify:platform`이다.
 
 조항 ID: 요구는 `MAC-###`, 검증 oracle은 `MV-##`다. 기존 spec 조항은 그 ID로 인용한다. 이 문서는 기존 조항을 바꾸지 않는다.
 바꿔야 하는 것은 §12에 모았다.
@@ -182,7 +184,10 @@ TUI의 관측 규칙(TUI-011·TUI-012: unknown을 0으로 바꾸지 않는다, �
 다른 프로세스가 token을 읽을 수 있다는 점은 경계가 아니다(§3.4 A4). credential의 보호는 Keychain이 맡는다(MAC-701).
 
 **MUST [MAC-022]** guest의 `oma`가 화면에 쓰는 문구는 MAC-001을 지킨다. 지금 TUI의 오류 문구 가운데 host 경로나 errno 이름을 담는 곳은
-제품 문구와 코드로 바꾸고, 원문은 guest 로그에 남긴다. 이 변경은 Linux 배포본의 문구에도 적용한다(§12 D-1).
+제품 문구와 코드로 바꾸고, 원문은 guest 로그에 남긴다. 오류의 말은 `src/tui/words.ts` 한 곳에서 읽는다. guest의 terminal session이
+`OMA_PRODUCT_TEXT=1`을 주고 프로그램의 stderr를 자기 것(journal)으로 둔다. Linux 배포본에서는 그 말이 사람 자신의 경로와 이름이므로 그대로
+보인다(D-1, DR18). 모델과 도구가 transcript에 쓰는 내용은 작업의 내용이며 이 조항 밖이다: guest의 작업공간 경로가 거기 보일 수 있다.
+(v2 후보: guest의 project를 Mac의 경로와 같은 곳에 두는 것. Lima와 Docker Desktop이 home을 같은 경로로 mount하는 방식이다.)
 
 ---
 
@@ -270,8 +275,8 @@ vsock으로 닿을 수 없다. MAC-202의 CID 검사가 이에 대한 두 번째
 
 **MUST [MAC-205]** Resident sandbox(bwrap)는 seccomp filter로 `socket()`과 `socketpair()`의 domain `AF_VSOCK(40)`을 `EPERM`으로
 거절한다. vsock은 network namespace로 격리되지 않는 kernel이 있으므로(`--unshare-net`로는 막히지 않는다), namespace에 기대지 않는다.
-filter는 bwrap의 `--seccomp <fd>`로 넘긴다. 지금 코드에는 seccomp가 없다. BPF는 새로 만든다: 몇 개의 명령으로 된 고정 classic BPF(arch
-확인, syscall 번호, 첫 인자)를 runner가 만든다. SB-001 목록에 이 조항을 더하는 것은 §12의 D-5다.
+filter는 bwrap의 `--seccomp 3`으로 넘긴다. 몇 개의 명령으로 된 고정 classic BPF(arch 확인, syscall 번호, 첫 인자)를 runner가 만들어
+fd 3의 channel에 쓴다(`vsockSeccompFilter`). 모든 Resident sandbox가, Linux 배포본에서도 이것을 싣는다(SB-001, D-5).
 
 Principal에는 bwrap sandbox가 없다. Linux의 Principal은 extension이 shell tool을 거절하고 파일 tool의 경로를 workspace 안으로 좁힌다
 (PR-004, `workspace-guard`). 모델이 임의의 코드를 실행할 길이 없으므로 socket을 만들 길도 없다. Principal의 엔진 프로세스와 그 extension은
@@ -423,7 +428,7 @@ egress.open { v: 1, id, method: "egress.open", params: { placeholderId, society,
 
 두 message는 요청 envelope를 쓴다(§4.2). guest 안의 client(runner, `oma`)는 guesthost의 egress socket(`$XDG_RUNTIME_DIR/oma-egress.sock`)에
 같은 message를 보내고, guesthost가 pool의 연결 하나에 그대로 옮긴다. host는 `egress.open`의 run(society, actor, incarnation)이 그
-자리표시자를 받은 run과 같을 때만 연결한다. MAC-704의 model 정의(`definition`)는 guest의 엔진 설정을 이 경로에 붙일 때 더한다(§12 D-10).
+자리표시자를 받은 run과 같을 때만 연결한다. guest의 엔진은 INF-006의 bridge로 provider를 등록하고, 그 provider 이름과 자리표시자는 `egress.placeholder`의 답이다(D-10).
 `egress.placeholder`는 작은 요청과 응답으로 끝나고 연결을 닫는다. 엔진의 provider 설정에는 이 자리표시자가 들어간다(§7.4).
 `egress.open` 뒤에는 엔진이 쓴 HTTP/1.1 byte가 그대로 흐르고, 응답 byte가 반대로 흐른다(INF-005). host의 Relay는 `placeholderId`로
 그 run의 자리표시자와 credential을 찾는다. 자리표시자는 guest가 run의 끝을 알리거나 `bootId`가 바뀌면 버린다. host 쪽 규칙은 §7.4에 있다.
@@ -689,7 +694,8 @@ object format도 그때 정해진다. 그 뒤로 Mac의 이력은 그 commit의 
   아니므로 submit·integrate하지 않는다. `refs/oma/import/*` 같은 새 ref 체계도 만들지 않는다.
 
 지금 Linux에도 사람의 새 commit을 이미 있는 society의 canonical에 넣는 제품 경로는 없다. macOS도 v1에서는 같다. 사람이 import한 commit을
-actor가 쓸 수 있게 하는 것(예: mirror를 actor에게 읽기 전용으로 보이기, 또는 사람 권한의 게시)은 §12 D-8의 결정을 기다린다.
+actor가 쓰는 길은 D-8로 정했다: mirror를 Resident sandbox에 `/git/project-mirror.git`으로 읽기 전용 bind한다. actor는 거기서 fetch하고
+기존 `git.submit`으로 게시한다. 권한과 wire는 바뀌지 않는다. Linux에서는 `oma`가 시작할 때마다 사람의 project에서 mirror를 채운다.
 
 ### 6.4 export(guest → Mac)
 
@@ -718,9 +724,9 @@ society를 만들 때 project를 고르지 않을 수 있다. 그러면 canonica
 
 - **data protection keychain만 쓴다**: 모든 호출에 `kSecUseDataProtectionKeychain = true`. 옛 파일 기반 keychain에서는
   `kSecAttrAccessible`과 access group이 효력이 없고 ACL(신뢰 app 목록)이 대신하므로, 거기에는 item을 두지 않는다.
-- item: `kSecAttrService = "com.<vendor>.oma.provider"`, `kSecAttrAccount = <credentialRef>`,
+- item: `kSecAttrService = "io.github.minjung2035.oma.provider"`, `kSecAttrAccount = <credentialRef>`,
   `kSecAttrAccessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, `kSecAttrSynchronizable = false`,
-  `kSecAttrAccessGroup = "<TeamID>.com.<vendor>.oma"`.
+  `kSecAttrAccessGroup = "<TeamID>.io.github.minjung2035.oma"`.
 - **누가 읽는가**: `keychain-access-groups` entitlement에 그 group을 가진 binary뿐이다. macOS에서 이 entitlement는 app에 embed한
   provisioning profile(Developer ID용)이 허가해야 효력이 있다. OMA에서 이 entitlement와 profile을 가진 binary는 `oma-vmhelper` 하나다.
   Keychain을 부르는 코드는 그 Swift binary에만 있다.
@@ -752,7 +758,7 @@ item의 값은 엔진이 쓰는 credential blob이고, OMA는 그 형식을 읽�
   코드는 서명된 Swift binary 하나뿐이다(MAC-701).
 
 이렇게 하면 INF-001이 지켜진다. credential 흐름(OAuth 로그인, token 갱신, 형식)은 여전히 엔진이 소유한다. 바뀌는 것은 blob이 놓이는
-곳뿐이다. §12의 D-4가 INF-001의 "agent 디렉터리" 문장을 이렇게 넓힌다.
+곳뿐이다. D-4(DR18)가 INF-001의 "agent 디렉터리" 문장을 이렇게 넓혔다.
 
 **MUST [MAC-704]** 해석에 쓰이는 엔진 상태는 한 곳, host에 있다. 기존 `resolveEngineAuth`는 한 agent 디렉터리의 세 파일을 함께 읽는다:
 `auth.json`(credential), `models.json`(provider와 model의 정의, 그리고 origin이 되는 `baseUrl`), `settings.json`(`pi/current`가 가리키는
@@ -775,7 +781,8 @@ item의 값은 엔진이 쓰는 credential blob이고, OMA는 그 형식을 읽�
 - **로그인과 model 선택**: guest의 엔진에는 network도 browser도 없으므로 로그인은 host에서 한다. 흐름은 엔진이 이미 가진 것을
   쓴다(README·PRODUCT: OMA는 인증·model 관리 화면을 따로 만들지 않는다). 다만 PRODUCT는 엔진을 RPC 모드로만 돌려 엔진의 대화형
   화면이 없게 하라고도 한다. 엔진의 로그인 흐름을 어느 표면으로 보일지는 Linux에서도 아직 열려 있는 문제다(PRODUCT의 첫 줄, "아직
-  아닌 것"). 그래서 macOS가 따로 정하지 않고 §12 D-9로 한 번에 정한다. 정해진 흐름은 host의 엔진 상태(MAC-704)에 결과를 쓴다. OAuth
+  아닌 것"). 그래서 macOS가 따로 정하지 않고 D-9로 한 번에 정했다: `oma login`이 엔진 자신의 대화형 모드를 엔진 디렉터리 위에서 연다.
+  society의 session은 계속 RPC 모드로만 돈다. macOS에서는 host가 같은 흐름을 host의 엔진 상태(MAC-704) 위에서 연다. 흐름은 그곳에 결과를 쓴다. OAuth
   browser는 Mac의 기본 browser다. guest의 엔진은 로그인하지 않는다.
 - **해석**: `egress.placeholder`마다 Resolver가 `(credentialRef, provider, model)`을 host의 엔진 상태로 해석한다(MAC-704). 답은
   `{ origin, key, headers }`다(기존 `engine-auth`의 해석과 같다). 해석한 값은 그 run의 Relay가 끝날 때까지만 memory에 있다. 저장하지 않는다.
@@ -794,7 +801,7 @@ guest 엔진(자리표시자 key) --HTTP/1.1 평문--> egress bridge(unix socket
 
 **MUST [MAC-710]** guest 안의 모든 엔진은 자리표시자 key와 egress bridge를 쓴다. 여기에는 Principal의 엔진도 들어간다. 지금 Linux의
 Principal 엔진은 자기 agent 디렉터리의 credential을 직접 쓰지만, guest에는 credential이 없으므로 Resident와 같은 relay 경로를 탄다
-(§12의 D-4). 자리표시자는 기존 `engine-auth`의 규칙으로 만든다(진짜 key와 모양이 같다). 다만 모양의 원본인 진짜 key가 host에
+(D-4). 자리표시자는 기존 `engine-auth`의 규칙으로 만든다(진짜 key와 모양이 같다). 다만 모양의 원본인 진짜 key가 host에
 있으므로, 자리표시자는 host의 Resolver가 만든다. guest는 run을 시작할 때(엔진을 띄우기 전) `egress.placeholder`로 한 번 받는다(§4.7).
 이 값은 진짜 key를 포함하지 않는다(서명·비밀 부분이 무작위로 바뀐다).
 
@@ -912,7 +919,7 @@ society 하나를 멈춘 상태에서 만든다. 절차는 떠 있는 VM의 snap
 - 만드는 동안 그 society의 `society.open`은 거절된다. 끝나면 사용자가 연다.
 
 host는 이 stream을 AES-256-GCM(64 KiB chunk마다 nonce와 tag)으로 암호화해 `archives/<id>.omaarchive`로 쓴다. key는 Keychain의
-`com.<vendor>.oma.archive` item이고 이 기기에만 있다. 이 key를 잃으면 archive를 열 수 없다. 그래서 첫 archive 때 UI는 복구 key를 보이고
+`io.github.minjung2035.oma.archive` item이고 이 기기에만 있다. 이 key를 잃으면 archive를 열 수 없다. 그래서 첫 archive 때 UI는 복구 key를 보이고
 사용자가 저장했는지 확인한다(§13 결정 Q3).
 
 **MUST [MAC-621]** archive는 Human의 private context(A2)를 담는다. 암호화하지 않은 archive를 디스크에 쓰지 않는다.
@@ -942,7 +949,7 @@ archive를 만든다. 공간이 첫 한도 아래면 만들지 않고 알린다(
 진단 보고, image manifest), `host-record`에서 경로를 가린 사본.
 
 **MUST [MAC-641]** 진단 묶음은 사용자가 저장하는 파일로만 만든다. OMA는 그것을 어디에도 자동으로 보내지 않는다. 받는 곳(지원 창구)은
-배포 주체가 정하고(§13 Q4·Q7), UI는 그 창구를 안내만 한다. 앱 안의 진단 화면은 journal 뷰어가 아니다. 제품 어휘의 상태 요약만 보인다:
+이 저장소의 GitHub issue다(§13 Q7). UI는 그 창구를 안내만 한다. 앱 안의 진단 화면은 journal 뷰어가 아니다. 제품 어휘의 상태 요약만 보인다:
 엔진 상태, 마지막 정지가 정상이었는지, 마지막 health 시각, Mac과 엔진의 저장 공간, image 버전, 최근 자동 재시작 횟수. Linux 세부는 묶음
 안에만 있다(MAC-640).
 
@@ -963,7 +970,7 @@ archive를 만든다. 공간이 첫 한도 아래면 만들지 않고 알린다(
 
 **MUST [MAC-650]** guest 코드가 경과 시간을 잴 때는 monotonic clock을 쓴다. 기한(idle, turn, receipt wait, retry backoff)을 wall clock
 차로 재지 않는다. 깨어난 뒤 wall clock이 몇 시간 앞으로 뛰면, wall clock으로 잰 기한은 한꺼번에 만료된다. 뒤로 가면 기한이 오지 않는다.
-지금 코드에서 `Date.now()`의 차로 경과 시간을 재는 곳은 셋이고, 모두 macOS 전에 고친다(§12의 D-7).
+`Date.now()`의 차로 경과 시간을 재던 곳은 셋이었고, 모두 고쳤다(D-7).
 
 - `runtime/principal-delivery.ts`: accept 기한과 실패 뒤 재시도 간격.
 - `runtime/broker-supervisor.ts`: broker 재시작 한도의 창. 시계가 뒤로 가면 오래된 재시작 기록이 창에서 빠지지 않아, broker를 포기할 까닭이
@@ -1071,7 +1078,7 @@ admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 
 | lane | 어디서 | 무엇을 |
 |---|---|---|
 | `guest-lanes` | self-hosted Mac, 실제 VM | 기존 fast·durable·property·stress를 guest에서. kernel·crash는 guest의 disposable `omatest` 사용자로 |
-| `platform` | Linux(기존 CI) | host와 guest의 Node 코드: protocol codec, guest 서버·control·terminal session, `omahostd`의 state machine·Host API·pool·relay를 LocalDriver(VM 대신 같은 host의 guest 서비스)로. bridge는 vsock loopback으로 |
+| `platform` | Linux(기존 CI), `npm run verify:platform` | host와 guest의 Node 코드: protocol codec, guest 서버·control·terminal session, `omahostd`의 state machine·Host API·pool·relay를 LocalDriver(VM 대신 같은 host의 guest 서비스)로. bridge는 vsock loopback으로 |
 | `mac-unit` | hosted macOS | Swift helper 단위: VZ 구성, vsock→unix 이음, Keychain backend(시험 keychain), 절전 알림 |
 | `mac-contract` | hosted macOS | `omahostd`와 `oma-vmhelper` 사이의 channel이 같은 vector를 같은 결과로 읽는가 |
 | `mac-vm` | self-hosted Mac | 부팅·handshake·정지·강제 정지·crash 재부팅·절전과 깨어남·version skew·update와 rollback·disk full |
@@ -1161,17 +1168,17 @@ admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 
 
 ---
 
-## 12. 기존 규범과의 관계(승인 때 DR로 기록할 것)
+## 12. 기존 규범과의 관계(DR18로 기록했다)
 
-| 후보 | 바뀌는 규범 | 내용 |
+| 항목 | 바뀌는 규범 | 결정 |
 |---|---|---|
-| D-1 | TUI-* 문구 규칙 | TUI의 오류 문구에서 host 경로와 errno 이름을 빼고 제품 문구와 코드로 바꾼다. 원문은 로그에 남긴다(MAC-022). Linux 배포본에도 적용한다 |
-| D-4 | INF-001, INF-007, T116 | credential 저장소는 엔진의 agent 디렉터리가 아니라 host Keychain backend다. Principal의 엔진도 자리표시자와 relay를 쓴다 |
-| D-5 | SB-001 | sandbox baseline에 `AF_VSOCK` socket 금지 seccomp를 더한다(Linux 배포본에도 적용한다. 해가 없고 vsock이 있는 host에서 필요하다) |
-| D-7 | WP10, `principal-delivery`, `broker-supervisor`, CLI transport | 경과 시간은 monotonic clock으로 잰다(MAC-650의 세 곳). Linux에도 같은 이유가 있다(시계 조정) |
-| D-10 | runner의 inference 준비, Principal 엔진의 credential(INF-001·INF-007, TUI-004) | (계획 필요) guest에서 runner와 `oma`가 §4.7의 egress를 쓰게 하는 연결. runner는 지금 자기 agent 디렉터리로 key를 해석하고 relay를 직접 연다. guest에서는 host에 자리표시자를 받고, 같은 socket 경로에 egress로 넘기는 forwarder를 연다. Principal 엔진도 같은 길을 탄다(D-4). 어느 배포본인지를 broker·runner까지 알리는 방법(설정 field, unit 인자, 배포 manifest 가운데 하나)은 schema나 unit template을 바꾸므로 계획과 승인이 먼저다 |
-| D-9 | README·PRODUCT의 로그인 문장, INF-001 | (결정 필요) 엔진의 로그인·model 선택 흐름을 어느 표면으로 보이는가. PRODUCT는 "OMA는 인증 화면을 따로 만들지 않는다"와 "엔진은 RPC 모드로만 돈다"를 함께 요구하는데, 지금 Linux에도 이 둘을 함께 만족하는 흐름이 없다. macOS에서는 그 흐름이 host에서 돌고 결과가 host의 엔진 상태에 쓰인다는 것(MAC-704)만 다르다. 한 번 정해 두 배포본에 같이 적용한다 |
-| D-8 | GIT-006·GIT-008, AUTH-001 | (결정 필요) 이미 있는 society에 사람이 가져온 commit을 actor가 쓰게 하는 길. 후보 둘: mirror를 actor의 sandbox에 읽기 전용으로 보여 actor가 기존 `git.submit`으로 게시한다(권한 변화 없음, SB-* 변경), 또는 사람 권한의 게시(`refs/oma/published/<human>/<operation>`, 새 actor 종류와 wire 변경). 결정 전 v1은 MAC-411까지만 한다 |
+| D-1 | TUI-* 문구 규칙 | 오류의 말은 `src/tui/words.ts` 한 곳에서 읽는다. guest의 terminal session 아래에서는 Linux 경로·unit 이름·errno 이름이 든 말을 오류 코드로 바꾸고 원문을 guest 로그에 남긴다(MAC-022). Linux에서는 사람 자신의 말이므로 그대로 보인다 |
+| D-4 | INF-001, INF-007, T116 | credential 저장소는 엔진의 agent 디렉터리가 아니라 host Keychain backend다. Principal의 엔진도 자리표시자와 relay를 쓴다(`openPrincipalEgress`) |
+| D-5 | SB-001 | sandbox baseline에 `AF_VSOCK` socket 금지 seccomp를 더했다(Linux 배포본에도. 해가 없고 vsock이 있는 host에서 필요하다) |
+| D-7 | WP10, `principal-delivery`, `broker-supervisor`, CLI transport | 경과 시간은 monotonic clock으로 잰다(MAC-650의 세 곳, 구현했다). Linux에도 같은 이유가 있다(시계 조정) |
+| D-10 | runner의 inference 준비, Principal 엔진의 credential(INF-001·INF-007·INF-008, TUI-004) | guest에서 runner와 `oma`는 §4.7의 egress를 쓴다. 배포본의 표지는 guest image가 user manager 환경에 두는 `OMA_EGRESS_SOCKET`(`environment.d`)이다. 설정 field·unit 인자·manifest를 늘리지 않는다. 그 이름이 있으면 run은 host에 자리표시자를 받고 같은 socket 경로에 egress forwarder를 연다. Principal 엔진도 같은 길을 탄다(D-4) |
+| D-9 | README·PRODUCT의 로그인 문장, INF-001 | `oma login`이 동봉 엔진의 대화형 모드를 이 society의 엔진 디렉터리 위에서 연다. 사람은 엔진 자신의 로그인·model 선택을 쓴다. OMA는 인증 화면을 만들지 않고 society의 session은 RPC 모드로만 돈다. 로그인은 society lease를 쥔다. macOS에서는 host가 같은 흐름을 host의 엔진 상태(MAC-704) 위에서 연다 |
+| D-8 | GIT-006·GIT-008, AUTH-001, SB-002 | mirror를 Resident sandbox에 `/git/project-mirror.git`으로 읽기 전용 보이고(`--ro-bind-try`), actor가 기존 `git.submit`으로 게시한다. 권한·wire 변화가 없다. 사람 권한의 게시는 하지 않는다 |
 
 이전 초안의 D-2(REC-007의 host를 society host로), D-3(D03의 foreground mode 강제), D-6(project binding의 projectId)은 없어졌다. guest에서
 기존 `oma`를 그대로 돌리므로 lease·broker mode·binding이 코드 그대로 지켜진다. D-1은 뜻이 바뀌었다(Principal session의 소유자는 바뀌지
@@ -1179,16 +1186,18 @@ admission(D04)만으로는 Mac이 가득 차는 것을 막지 못한다. Mac의 
 
 ---
 
-## 13. 사용자가 정할 것
+## 13. 정한 것([DR18](design-revisions.md))
 
-| 질문 | 기본 제안 | 이유 |
+사용자가 2026-09-27에 선택을 맡겼다. 기본 제안을 채택했고, Q4와 Q7은 값을 정했다.
+
+| 질문 | 결정 | 이유 |
 |---|---|---|
 | Q1 창을 닫은 society를 백그라운드에서 계속 돌릴 것인가 | 예(`keep-running`), menu bar에서 멈출 수 있음 | Resident의 긴 작업이 창을 닫았다고 멈추면 놀랍다 |
 | Q2 유휴 절전을 막을 것인가 | Resident가 일할 때만, 끌 수 있음(MAC-311) | 배터리와 진행의 균형 |
 | Q3 archive key를 잃었을 때의 복구 | 첫 archive 때 복구 key를 보이고 확인받음 | Keychain만으로는 Mac을 잃으면 archive도 잃는다 |
-| Q4 vendor 식별자(Keychain service, bundle ID) | `com.<vendor>.oma` | 배포 주체가 정한다 |
+| Q4 vendor 식별자(Keychain service, bundle ID) | `io.github.minjung2035.oma`(Keychain service는 `.provider`·`.archive`를 붙인다). Team ID는 서명하는 주체의 것이다 | 도메인이 없는 프로젝트의 역DNS 관례(Flatpak의 `io.github.<user>.<app>`) |
 | Q5 guest image의 크기 목표 | 압축 후 600 MB 이하 | 첫 설치 download 크기 |
 | Q6 guest disk 기본 크기 | 64 GiB sparse | 실제 사용분만 차지한다 |
-| Q7 진단 묶음을 받는 곳 | 배포 주체의 지원 창구. OMA는 자동으로 보내지 않는다(MAC-641) | 받는 주체가 정해져야 UI가 안내할 수 있다 |
+| Q7 진단 묶음을 받는 곳 | 이 저장소의 GitHub issue. 사람이 직접 붙인다. OMA는 자동으로 보내지 않는다(MAC-641) | 받는 곳이 정해져야 UI가 안내할 수 있다 |
 | Q8 D-8(가져온 commit을 actor가 쓰는 길) | mirror의 읽기 전용 노출(권한·wire 변화 없음) | 사람 권한의 게시는 새 actor 종류라 계획이 필요하다 |
-| Q9 D-9(로그인 흐름의 표면) | 두 배포본에 같은 답 | Linux의 첫 줄("아직 아닌 것")과 같은 문제다 |
+| Q9 D-9(로그인 흐름의 표면) | 두 배포본에 같은 답(`oma login`) | Linux의 첫 줄("아직 아닌 것")과 같은 문제다 |

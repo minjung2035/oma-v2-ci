@@ -7,14 +7,16 @@ Principal과 Resident가 Unix 메일링 리스트·Git을 통해 협업하는 or
 사용자 진입점은 `oma` 하나다. Pi는 내부 실행 엔진이며 사용자가 Pi 명령 체계를 알 필요는 없다.
 
 ```sh
-node <설치 디렉터리>/dist/src/entry/oma.js
+npm ci && npm run build
+npm install -g .
+oma
 ```
 
-설치 단위는 빌드된 트리다(`npm ci && npm run build`; `npm run check:package`가 그 트리를 설치본으로 검사한다). 이 package는 `bin`이나 전역 설치 명령을 선언하지 않으므로 `oma`라는 명령이 PATH에 생기지 않는다. 짧게 부르려면 운영자가 위 entry를 가리키는 alias나 wrapper를 둔다. 이 문서에서 `oma`는 이 entry를 뜻한다([지원 범위](operations/README.md#지원-범위-wp31)).
+설치 단위는 빌드된 트리다(`npm run check:package`가 그 트리를 설치본으로 검사한다). package의 `bin`이 `oma`를 `dist/src/entry/oma.js`로 두므로, checkout에서 `npm install -g .`를 하면 `oma` 명령이 PATH에 생긴다. registry에서의 `npm install -g oma`는 package를 게시한 뒤의 일이다(PRODUCT "아직 아닌 것"). 설치하지 않고 `node <설치 디렉터리>/dist/src/entry/oma.js`로 불러도 같다([지원 범위](operations/README.md#지원-범위-wp31)).
 
 설정 파일을 쓰거나 초기화 명령을 실행할 필요는 없다. 프로젝트 디렉터리에서 그냥 실행하면 society 이름을 프로젝트의 실제 경로에서 유도하고(이름 slug + 경로 digest), 그 society를 이 프로젝트에 묶은 뒤 보수적인 기본 설정을 만들고 시작한다. 다른 society를 쓰려면 `--society <name>`을 주되, 다른 프로젝트에 묶인 society는 열리지 않는다([운영 설정](operations/README.md#프로젝트-식별과-바인딩-d05-wp16)).
 
-로그인·모델 선택은 **동봉 엔진이 이미 가진 흐름**을 그대로 쓴다. OMA가 별도의 인증·모델 관리 화면을 만들지 않는다.
+로그인·모델 선택은 **동봉 엔진이 이미 가진 흐름**을 그대로 쓴다. OMA가 별도의 인증·모델 관리 화면을 만들지 않는다. `oma login`이 이 society의 엔진 디렉터리 위에서 엔진 자신의 대화형 모드를 연다. 거기서 엔진의 로그인과 model 선택을 쓰고 나오면, 다음 `oma`의 session이 그 결과를 쓴다(society를 한 번 실행한 뒤, 그 society가 돌고 있지 않을 때).
 
 Pi를 따로 설치할 필요는 없다. OMA는 자기 Pi 엔진을 함께 배포하고 그것만 실행하며, `PATH`의 Pi를 찾지 않는다. 사용자가 이미 Pi를 쓰고 있어도 서로 간섭하지 않는다. OMA가 띄우는 엔진은 자기 복사본이고, 설정·extension·session도 society state root 아래의 별도 디렉터리를 쓰기 때문에 사용자의 `~/.pi`를 읽지도 쓰지도 않는다.
 

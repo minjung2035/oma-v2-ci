@@ -15,7 +15,7 @@ npm install -g oma
 oma
 ```
 
-이 뒤에 설정 파일 작성, 초기화 명령, 별도 Pi 설치, 재로그인이 오면 그것은 결함이다. 첫 줄은 아직 되지 않는다(아래 '아직 아닌 것'). 지금은 빌드한 트리의 entry를 `oma`로 부른다([README](README.md)).
+이 뒤에 설정 파일 작성, 초기화 명령, 별도 Pi 설치, 재로그인이 오면 그것은 결함이다. package는 `bin`으로 `oma` 명령을 선언한다. 첫 줄의 registry 설치는 package를 게시한 뒤의 일이고(아래 '아직 아닌 것'), 지금은 checkout에서 `npm install -g .`로 같은 명령을 설치한다([README](README.md)).
 
 실행하면 대화 화면이 뜨고 바로 코딩을 시작한다. 관리 기능은 `Ctrl+X` 하나로 열리는 Control Panel에 있고 Dashboard / Config / Mail 셋뿐이다.
 
@@ -58,11 +58,11 @@ Pi가 이미 하는 일을 다시 만들지 않는다. 자격 증명, 모델 선
 - 엔진은 **함께 배포**한다. 사용자 컴퓨터에 Pi가 없어도 동작한다.
 - 사용자가 이미 Pi를 쓰고 있어도 **섞이지 않는다**. OMA는 자기 복사본을 실행하고 자기 agent 디렉터리를 쓴다. `PATH`의 Pi를 찾지 않는다.
 - 설정 파일이 없으면 **만든다**. society 이름은 실행 디렉터리에서 유도한다. 프로젝트마다 준비 작업을 시키지 않는다.
-- 로그인·모델 선택은 **엔진의 기존 흐름**을 쓴다. OMA가 인증 화면을 따로 만들지 않는다.
+- 로그인·모델 선택은 **엔진의 기존 흐름**을 쓴다. OMA가 인증 화면을 따로 만들지 않는다. `oma login`이 그 흐름을 society의 엔진 디렉터리 위에서 연다([DR18](implementation/design-revisions.md)).
 
 ### 3. 하나의 제품처럼 보여야 한다
 
-`oma` 안에 Pi UI와 OMA UI가 동시에 존재해서는 안 된다. Pi는 RPC 모드로만 실행해서 대화형 표면이 애초에 없게 한다 — 사후에 가리는 것이 아니다.
+`oma` 안에 Pi UI와 OMA UI가 동시에 존재해서는 안 된다. society의 session은 RPC 모드로만 실행해서 대화형 표면이 애초에 없게 한다 — 사후에 가리는 것이 아니다. 엔진 자신의 화면이 뜨는 것은 `oma login` 하나이고, 그때 OMA의 화면은 떠 있지 않다.
 
 extension이 늘어도 사용자는 "extension을 여러 개 깔았다"가 아니라 **"OMA의 기능이 늘었다"**고 느껴야 한다. extension은 능력을 제공하고, UI는 OMA가 소유한다.
 
@@ -91,8 +91,8 @@ tool이 많아지면 모델이 보는 표면이 넓어지므로, role별로 DIRE
 
 정직하게 적는다. 아래는 제품 목표에 포함되지만 현재 충족되지 않았다.
 
-- **비용 상한** — inference를 엔진에 위임하면서 OMA가 multi-agent 예산을 집행하지 않는다. 봉인된 Resident의 요청은 모두 relay를 지나므로 요청 수·동시성은 OMA가 쥐지만, 비용 상한은 stream 해석을 요구하고 그 결정은 내리지 않았다.
-- **설치 명령** — package가 `bin`을 선언하지 않아 `npm install -g oma` 뒤에 `oma` 명령이 생기지 않는다. 설치 명령을 어떻게 둘지는 보류한 결정이다(C2).
+- **비용 상한** — v1에는 없다고 정했다([DR18](implementation/design-revisions.md), INF-009). inference를 엔진에 위임하므로 OMA는 돈을 세지 않는다. 봉인된 Resident의 요청은 모두 relay를 지나므로 요청 수·동시성은 OMA가 쥔다. 비용의 경계는 provider 계정의 한도다.
+- **registry 설치** — `bin`은 선언했다(C2, DR18). `npm install -g oma`는 package를 npm registry에 게시해야 되고, 게시는 release 뒤의 일이다.
 - **단일 설치 아티팩트** — 현재는 빌드한 트리다. node·git·bwrap은 여전히 호스트에 있어야 한다. bwrap이 없는 호스트에서는 Resident 봉인이 불가능하다.
 - **release** — 승인되지 않았다. 무엇이 막고 있는지(LOC gate, 전원 차단·실제 provider·CI 검증)는 validation이 소유한다.
 

@@ -5,7 +5,7 @@ import { join } from "node:path";
 export const normativeSources = Object.freeze([
   "implementation-spec.md", "implementation/integration-policy.md", "implementation/physical-ordering.md",
   "implementation/compliance.md", "implementation/loc-budget.md", "implementation/test-matrix.md",
-  "implementation/spikes.md", "implementation/validation.md",
+  "implementation/spikes.md", "implementation/validation.md", "implementation/macos-platform.md",
 ]);
 export const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 export const traceIdentity = row => JSON.stringify([row.source, row.requirement, row.digest]);

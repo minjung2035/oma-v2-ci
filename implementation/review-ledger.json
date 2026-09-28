@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "READ_UNCHANGED": 77,
-  "CHANGED_WITH_ORACLE": 147,
+  "READ_UNCHANGED": 64,
+  "CHANGED_WITH_ORACLE": 209,
   "REMOVED": 1
  },
  "lanes": {
@@ -153,14 +153,30 @@
     "DR3",
     "DR4",
     "DR6",
-    "DR7"
+    "DR7",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95"
    ],
    "oracles": [
     "DR1",
     "DR3",
     "DR4",
     "DR6",
-    "DR7"
+    "DR7",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95"
    ]
   },
   {
@@ -191,6 +207,15 @@
     "P0V-64",
     "P0V-69",
     "P0V-70",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP03",
     "WP07",
     "WP21",
@@ -216,6 +241,13 @@
     "P0V-64",
     "P0V-69",
     "P0V-70",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V03A",
     "V03B",
     "V07A",
@@ -267,6 +299,15 @@
     "P0V-37",
     "P0V-45",
     "P0V-57",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP21",
     "WP22"
    ],
@@ -275,6 +316,13 @@
     "P0V-37",
     "P0V-45",
     "P0V-57",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V21A",
     "V21B",
     "V22A",
@@ -362,6 +410,7 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR1",
+    "DR18",
     "DR3",
     "DR4",
     "DR6",
@@ -372,6 +421,7 @@
    ],
    "oracles": [
     "DR1",
+    "DR18",
     "DR3",
     "DR4",
     "DR6",
@@ -556,34 +606,30 @@
     "AV2",
     "AV5",
     "AV8",
-    "P0V-63"
+    "P0V-63",
+    "P0V-78",
+    "P0V-86"
    ],
    "oracles": [
     "AV1",
     "AV2",
     "AV5",
     "AV8",
-    "P0V-63"
+    "P0V-63",
+    "P0V-78",
+    "P0V-86"
    ]
   },
   {
    "path": "src/cli/effects/context.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-78"
    ],
    "oracles": [
-    "AV1",
-    "CTX-001",
-    "CTX-002",
-    "D05",
-    "F2",
-    "R01",
-    "T119",
-    "V10C"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "P0V-78"
+   ]
   },
   {
    "path": "src/cli/effects/mail.ts",
@@ -601,21 +647,13 @@
   {
    "path": "src/cli/effects/submit.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-78"
    ],
    "oracles": [
-    "AV1",
-    "CTX-001",
-    "CTX-002",
-    "D05",
-    "F2",
-    "R01",
-    "T119",
-    "V10C"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "P0V-78"
+   ]
   },
   {
    "path": "src/cli/exit.ts",
@@ -705,15 +743,19 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV8",
+    "MAC-650",
     "P0V-25",
     "P0V-27",
-    "P0V-35"
+    "P0V-35",
+    "P0V-78"
    ],
    "oracles": [
     "AV8",
+    "MAC-650",
     "P0V-25",
     "P0V-27",
-    "P0V-35"
+    "P0V-35",
+    "P0V-78"
    ]
   },
   {
@@ -776,6 +818,17 @@
     "P0V-48",
     "P0V-61",
     "P0V-72",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
+    "P0V-96",
+    "P0V-97",
     "WP13",
     "WP14"
    ],
@@ -792,6 +845,14 @@
     "P0V-48",
     "P0V-61",
     "P0V-72",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
+    "P0V-96",
     "V13A",
     "V13B",
     "V13C",
@@ -810,11 +871,13 @@
     "P0V-21",
     "P0V-22",
     "P0V-23",
+    "P0V-86",
     "WP12",
     "WP14"
    ],
    "oracles": [
     "DR13",
+    "P0V-86",
     "V12A",
     "V12B",
     "V14A",
@@ -987,15 +1050,13 @@
   {
    "path": "src/domain/context-policy.ts",
    "primary": "WP18",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-86"
    ],
    "oracles": [
-    "R21",
-    "V18A"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-86"
+   ]
   },
   {
    "path": "src/domain/deployment.ts",
@@ -1047,6 +1108,7 @@
     "P0V-64",
     "P0V-69",
     "P0V-70",
+    "P0V-75",
     "WP21"
    ],
    "oracles": [
@@ -1067,6 +1129,7 @@
     "P0V-64",
     "P0V-69",
     "P0V-70",
+    "P0V-75",
     "V21A",
     "V21B"
    ]
@@ -1172,21 +1235,27 @@
   {
    "path": "src/domain/persisted-formats.ts",
    "primary": "WP04",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95"
    ],
    "oracles": [
-    "DB-009",
-    "GIT-006",
-    "ID-003",
-    "P9",
-    "R10",
-    "R21",
-    "V04A",
-    "V04B"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure (or text) contains this file"
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95"
+   ]
   },
   {
    "path": "src/domain/request-identity.ts",
@@ -1247,6 +1316,17 @@
    ]
   },
   {
+   "path": "src/domain/utf8.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "P0V-86"
+   ],
+   "oracles": [
+    "P0V-86"
+   ]
+  },
+  {
    "path": "src/durable.ts",
    "primary": "WP29",
    "status": "READ_UNCHANGED",
@@ -1279,6 +1359,7 @@
     "AV5",
     "DR13",
     "DR16",
+    "DR18",
     "P0V-08",
     "P0V-28",
     "P0V-29",
@@ -1299,6 +1380,7 @@
     "AV31",
     "AV5",
     "DR13",
+    "DR18",
     "P0V-28",
     "P0V-29",
     "P0V-38",
@@ -1312,6 +1394,89 @@
     "V22A",
     "V22B"
    ]
+  },
+  {
+   "path": "src/entry/guest-provision.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-303"
+   ],
+   "oracles": [
+    "MAC-303"
+   ]
+  },
+  {
+   "path": "src/entry/guest-session.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR17",
+    "DR18",
+    "MAC-022",
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-412",
+    "P0V-81"
+   ],
+   "oracles": [
+    "DR18",
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-412",
+    "P0V-81"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/entry/guestctl.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-202",
+    "MAC-320",
+    "MAC-620",
+    "P0V-82"
+   ],
+   "oracles": [
+    "MAC-202",
+    "MAC-320",
+    "MAC-620",
+    "P0V-82"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/entry/guesthost.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-240",
+    "MAC-241",
+    "MAC-412",
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623"
+   ],
+   "oracles": [
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-240",
+    "MAC-241",
+    "MAC-412",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
   },
   {
    "path": "src/entry/host.ts",
@@ -1338,6 +1503,27 @@
    "note": "read in full in the whole-codebase adversarial pass after v9; type-only, exercised by the tests that compile or inspect it"
   },
   {
+   "path": "src/entry/oma-mac.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR17",
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
+    "P0V-81"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
+    "P0V-81"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
    "path": "src/entry/oma.ts",
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
@@ -1347,6 +1533,9 @@
     "AV7",
     "DR13",
     "DR16",
+    "DR17",
+    "DR18",
+    "MAC-022",
     "P0V-12",
     "P0V-18",
     "P0V-24",
@@ -1356,6 +1545,7 @@
     "P0V-42",
     "P0V-43",
     "P0V-58",
+    "P0V-81",
     "WP03",
     "WP08",
     "WP09",
@@ -1371,12 +1561,14 @@
     "AV5",
     "AV7",
     "DR13",
+    "DR18",
     "P0V-36",
     "P0V-40",
     "P0V-41",
     "P0V-42",
     "P0V-43",
     "P0V-58",
+    "P0V-81",
     "V03A",
     "V03B",
     "V08A",
@@ -1400,20 +1592,49 @@
    ]
   },
   {
+   "path": "src/entry/omahostd.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR17",
+    "MAC-240",
+    "MAC-241",
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623",
+    "P0V-81"
+   ],
+   "oracles": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "P0V-81"
+   ]
+  },
+  {
    "path": "src/entry/runner.ts",
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV27",
     "AV28",
+    "DR17",
+    "DR18",
     "P0V-64",
+    "P0V-81",
     "WP03",
     "WP25"
    ],
    "oracles": [
     "AV27",
     "AV28",
+    "DR18",
     "P0V-64",
+    "P0V-81",
     "V03A",
     "V03B",
     "V25A"
@@ -1427,13 +1648,15 @@
     "AV1",
     "AV10",
     "AV11",
-    "AV15"
+    "AV15",
+    "P0V-86"
    ],
    "oracles": [
     "AV1",
     "AV10",
     "AV11",
-    "AV15"
+    "AV15",
+    "P0V-86"
    ]
   },
   {
@@ -1454,6 +1677,28 @@
     "P0V-25",
     "P0V-27",
     "P0V-35"
+   ]
+  },
+  {
+   "path": "src/extension/contained-files.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "P0V-74"
+   ],
+   "oracles": [
+    "P0V-74"
+   ]
+  },
+  {
+   "path": "src/extension/contained-tools.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "P0V-74"
+   ],
+   "oracles": [
+    "P0V-74"
    ]
   },
   {
@@ -1512,7 +1757,9 @@
     "P0V-15",
     "P0V-32",
     "P0V-37",
-    "P0V-45"
+    "P0V-45",
+    "P0V-78",
+    "P0V-86"
    ],
    "oracles": [
     "AV1",
@@ -1532,7 +1779,9 @@
     "P0V-15",
     "P0V-32",
     "P0V-37",
-    "P0V-45"
+    "P0V-45",
+    "P0V-78",
+    "P0V-86"
    ]
   },
   {
@@ -1556,11 +1805,13 @@
     "AV10",
     "AV11",
     "AV29",
-    "AV30"
+    "AV30",
+    "DR18"
    ],
    "oracles": [
     "AV10",
-    "AV11"
+    "AV11",
+    "DR18"
    ]
   },
   {
@@ -1598,6 +1849,17 @@
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
   },
   {
+   "path": "src/extension/utf8.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "P0V-86"
+   ],
+   "oracles": [
+    "P0V-86"
+   ]
+  },
+  {
    "path": "src/extension/workspace-guard.ts",
    "primary": "WP22",
    "status": "CHANGED_WITH_ORACLE",
@@ -1606,33 +1868,27 @@
     "AV25",
     "DR13",
     "P0V-14",
-    "P0V-15"
+    "P0V-15",
+    "P0V-74"
    ],
    "oracles": [
     "AV13",
     "AV25",
     "DR13",
-    "P0V-15"
+    "P0V-15",
+    "P0V-74"
    ]
   },
   {
    "path": "src/frame.ts",
    "primary": "WP26",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-86"
    ],
    "oracles": [
-    "A1",
-    "A2",
-    "A3",
-    "A4",
-    "A5",
-    "A6",
-    "AUTH-002",
-    "AUTH-003"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-86"
+   ]
   },
   {
    "path": "src/git.ts",
@@ -1640,6 +1896,7 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR1",
+    "DR18",
     "DR3",
     "DR4",
     "DR6",
@@ -1649,6 +1906,7 @@
    ],
    "oracles": [
     "DR1",
+    "DR18",
     "DR3",
     "DR4",
     "DR6",
@@ -1660,21 +1918,17 @@
   {
    "path": "src/git/canonical-command.ts",
    "primary": "WP24",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-83",
+    "P0V-84",
+    "P0V-85"
    ],
    "oracles": [
-    "CTX-003",
-    "CTX-004",
-    "DB-009",
-    "ERR-001",
-    "GIT-006",
-    "INT-003",
-    "R01",
-    "T53"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are tests whose loaded module closure contains this module"
+    "P0V-83",
+    "P0V-84",
+    "P0V-85"
+   ]
   },
   {
    "path": "src/git/context-mirror.ts",
@@ -1710,10 +1964,14 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "P0V-65",
+    "P0V-77",
+    "P0V-86",
     "WP18"
    ],
    "oracles": [
     "P0V-65",
+    "P0V-77",
+    "P0V-86",
     "V18A",
     "V18B"
    ]
@@ -1731,6 +1989,15 @@
     "DR6",
     "DR7",
     "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP17",
     "WP18",
     "WP20",
@@ -1745,6 +2012,13 @@
     "DR6",
     "DR7",
     "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V17A",
     "V17B",
     "V18A",
@@ -1760,10 +2034,12 @@
    "primary": "WP24",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR18",
     "DR3",
     "DR8"
    ],
    "oracles": [
+    "DR18",
     "DR3",
     "DR8"
    ]
@@ -1784,6 +2060,15 @@
     "DR8",
     "P0V-08",
     "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP21",
     "WP24"
    ],
@@ -1798,6 +2083,13 @@
     "DR7",
     "DR8",
     "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V21A",
     "V21B",
     "V24A",
@@ -1807,16 +2099,15 @@
   {
    "path": "src/git/observe.ts",
    "primary": "WP24",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR18",
+    "P0V-86"
    ],
    "oracles": [
-    "R19",
-    "R20",
-    "R36"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "DR18",
+    "P0V-86"
+   ]
   },
   {
    "path": "src/git/paths.ts",
@@ -1857,21 +2148,25 @@
     "AV1",
     "AV2",
     "AV5",
+    "DR18",
     "P0V-28",
     "P0V-29",
     "P0V-38",
     "P0V-39",
-    "P0V-51"
+    "P0V-51",
+    "P0V-77"
    ],
    "oracles": [
     "AV1",
     "AV2",
     "AV5",
+    "DR18",
     "P0V-28",
     "P0V-29",
     "P0V-38",
     "P0V-39",
-    "P0V-51"
+    "P0V-51",
+    "P0V-77"
    ]
   },
   {
@@ -1880,12 +2175,28 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP17",
     "WP20",
     "WP21"
    ],
    "oracles": [
     "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V17A",
     "V17B",
     "V20A",
@@ -1967,9 +2278,25 @@
    "primary": "WP25",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP21"
    ],
    "oracles": [
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V21A",
     "V21B"
    ]
@@ -2013,6 +2340,15 @@
     "P0V-09",
     "P0V-10",
     "P0V-26",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP17",
     "WP19",
     "WP20",
@@ -2028,6 +2364,13 @@
     "DR7",
     "P0V-10",
     "P0V-26",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V17A",
     "V17B",
     "V19A",
@@ -2054,16 +2397,13 @@
   {
    "path": "src/lifecycle/registry-operations.ts",
    "primary": "WP25",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR18"
    ],
    "oracles": [
-    "F1",
-    "P3",
-    "R25"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "DR18"
+   ]
   },
   {
    "path": "src/lifecycle/workspace.ts",
@@ -2072,12 +2412,14 @@
    "by": [
     "AV27",
     "AV28",
-    "AV4"
+    "AV4",
+    "P0V-77"
    ],
    "oracles": [
     "AV27",
     "AV28",
-    "AV4"
+    "AV4",
+    "P0V-77"
    ]
   },
   {
@@ -2085,12 +2427,28 @@
    "primary": "WP20",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP06",
     "WP17",
     "WP20",
     "WP21"
    ],
    "oracles": [
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V06A",
     "V06B",
     "V17A",
@@ -2179,13 +2537,15 @@
     "AV26",
     "P0V-32",
     "P0V-37",
-    "P0V-45"
+    "P0V-45",
+    "P0V-86"
    ],
    "oracles": [
     "AV26",
     "P0V-32",
     "P0V-37",
-    "P0V-45"
+    "P0V-45",
+    "P0V-86"
    ]
   },
   {
@@ -2215,7 +2575,8 @@
     "P0V-40",
     "P0V-41",
     "P0V-42",
-    "P0V-43"
+    "P0V-43",
+    "P0V-86"
    ],
    "oracles": [
     "AV10",
@@ -2224,7 +2585,8 @@
     "P0V-40",
     "P0V-41",
     "P0V-42",
-    "P0V-43"
+    "P0V-43",
+    "P0V-86"
    ]
   },
   {
@@ -2295,21 +2657,648 @@
   {
    "path": "src/pi-extension.ts",
    "primary": "WP27",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-74"
    ],
    "oracles": [
-    "D05",
-    "DB-009",
-    "ID-002",
-    "M-003",
-    "PI-002",
-    "R03",
-    "R28",
-    "T100"
+    "P0V-74"
+   ]
+  },
+  {
+   "path": "src/platform/guest/archive.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623",
+    "MAC-661"
    ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+   "oracles": [
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/guest/control.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-202",
+    "MAC-320",
+    "MAC-620",
+    "P0V-82"
+   ],
+   "oracles": [
+    "MAC-202",
+    "MAC-320",
+    "MAC-620",
+    "P0V-82"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/guest/egress.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-225",
+    "MAC-710",
+    "MAC-711",
+    "MAC-712"
+   ],
+   "oracles": [
+    "MAC-225",
+    "MAC-710",
+    "MAC-712"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/guest/host.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-240",
+    "MAC-241",
+    "MAC-412",
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623"
+   ],
+   "oracles": [
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-240",
+    "MAC-241",
+    "MAC-412",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/guest/identity.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-202",
+    "MAC-620"
+   ],
+   "oracles": [
+    "MAC-202",
+    "MAC-620"
+   ]
+  },
+  {
+   "path": "src/platform/guest/linux-system.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-202",
+    "MAC-620"
+   ],
+   "oracles": [
+    "MAC-202",
+    "MAC-620"
+   ]
+  },
+  {
+   "path": "src/platform/guest/project.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-404",
+    "MAC-411",
+    "MAC-412",
+    "MAC-420"
+   ],
+   "oracles": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-404",
+    "MAC-412"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/guest/provision.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-303"
+   ],
+   "oracles": [
+    "MAC-303"
+   ]
+  },
+  {
+   "path": "src/platform/guest/pty.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-412",
+    "P0V-80"
+   ],
+   "oracles": [
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-412",
+    "P0V-80"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/guest/requests.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-240",
+    "MAC-241"
+   ],
+   "oracles": [
+    "MAC-240",
+    "MAC-241"
+   ]
+  },
+  {
+   "path": "src/platform/guest/server.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-202",
+    "MAC-222",
+    "MAC-251",
+    "MAC-620"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-202",
+    "MAC-222",
+    "MAC-251",
+    "MAC-620"
+   ]
+  },
+  {
+   "path": "src/platform/guest/session.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-251",
+    "MAC-412"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-251",
+    "MAC-412"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/guest/stream.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623"
+   ],
+   "oracles": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ]
+  },
+  {
+   "path": "src/platform/guest/systemd-launcher.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-412"
+   ],
+   "oracles": [
+    "MAC-220",
+    "MAC-221",
+    "MAC-222",
+    "MAC-412"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/archive-crypto.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623",
+    "MAC-661"
+   ],
+   "oracles": [
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/attach-client.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR17",
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
+    "P0V-81"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
+    "P0V-81"
+   ]
+  },
+  {
+   "path": "src/platform/host/egress.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-225",
+    "MAC-710",
+    "MAC-711",
+    "MAC-712"
+   ],
+   "oracles": [
+    "MAC-225",
+    "MAC-710",
+    "MAC-712"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/guest-link.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-301",
+    "MAC-320",
+    "MAC-330",
+    "MAC-331",
+    "MAC-601"
+   ],
+   "oracles": [
+    "MAC-301",
+    "MAC-320",
+    "MAC-330",
+    "MAC-331",
+    "MAC-601"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/host-api.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-240",
+    "MAC-241",
+    "MAC-251",
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-240",
+    "MAC-241",
+    "MAC-251",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ]
+  },
+  {
+   "path": "src/platform/host/image.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-601",
+    "MAC-611"
+   ],
+   "oracles": [
+    "MAC-601",
+    "MAC-611"
+   ]
+  },
+  {
+   "path": "src/platform/host/keychain.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
+    "MAC-701",
+    "MAC-702",
+    "MAC-704"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
+    "MAC-701",
+    "MAC-702",
+    "MAC-704"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/lifecycle.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-301",
+    "MAC-320",
+    "MAC-330",
+    "MAC-331",
+    "MAC-601"
+   ],
+   "oracles": [
+    "MAC-301",
+    "MAC-320",
+    "MAC-330",
+    "MAC-331",
+    "MAC-601"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/peer.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251"
+   ]
+  },
+  {
+   "path": "src/platform/host/project.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-404",
+    "MAC-411",
+    "MAC-412",
+    "MAC-420",
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623"
+   ],
+   "oracles": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-404",
+    "MAC-412",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/record.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-301",
+    "MAC-320",
+    "MAC-330",
+    "MAC-331",
+    "MAC-601"
+   ],
+   "oracles": [
+    "MAC-301",
+    "MAC-320",
+    "MAC-330",
+    "MAC-331",
+    "MAC-601"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/resolver.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18",
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
+    "MAC-701",
+    "MAC-702",
+    "MAC-704"
+   ],
+   "oracles": [
+    "DR18",
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
+    "MAC-701",
+    "MAC-702",
+    "MAC-704"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/service.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-301",
+    "MAC-320",
+    "MAC-330",
+    "MAC-331",
+    "MAC-601",
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623"
+   ],
+   "oracles": [
+    "MAC-240",
+    "MAC-241",
+    "MAC-301",
+    "MAC-320",
+    "MAC-330",
+    "MAC-331",
+    "MAC-601",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/snapshot.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623",
+    "MAC-661"
+   ],
+   "oracles": [
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/host/vz-driver.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-701",
+    "MAC-702"
+   ],
+   "oracles": [
+    "MAC-701",
+    "MAC-702"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/product-text.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-210",
+    "MAC-211",
+    "MAC-230",
+    "MAC-231",
+    "MAC-241",
+    "MAC-250"
+   ],
+   "oracles": [
+    "MAC-211",
+    "MAC-230",
+    "MAC-231",
+    "MAC-241",
+    "MAC-250"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/rpc.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-210",
+    "MAC-211",
+    "MAC-230",
+    "MAC-231",
+    "MAC-241",
+    "MAC-250"
+   ],
+   "oracles": [
+    "MAC-211",
+    "MAC-230",
+    "MAC-231",
+    "MAC-241",
+    "MAC-250"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
+   "path": "src/platform/terminal-modes.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251"
+   ]
   },
   {
    "path": "src/ports/ledger.ts",
@@ -2335,10 +3324,12 @@
    "primary": "WP29",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV9"
+    "AV9",
+    "DR18"
    ],
    "oracles": [
-    "AV9"
+    "AV9",
+    "DR18"
    ]
   },
   {
@@ -2347,13 +3338,16 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR1",
+    "DR18",
     "DR3",
     "DR4",
     "DR6",
-    "DR7"
+    "DR7",
+    "MAC-022"
    ],
    "oracles": [
     "DR1",
+    "DR18",
     "DR3",
     "DR4",
     "DR6",
@@ -2377,14 +3371,13 @@
   {
    "path": "src/process/policies.ts",
    "primary": "WP24",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-77"
    ],
    "oracles": [
-    "R19"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-77"
+   ]
   },
   {
    "path": "src/process/preparation.ts",
@@ -2401,16 +3394,15 @@
   {
    "path": "src/process/run.ts",
    "primary": "WP10",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-77",
+    "P0V-86"
    ],
    "oracles": [
-    "P0",
-    "R19",
-    "R36"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-77",
+    "P0V-86"
+   ]
   },
   {
    "path": "src/protocol/batch-view.ts",
@@ -2464,6 +3456,35 @@
    "note": "one request in flight, encoded-byte budgets both ways, deadlines"
   },
   {
+   "path": "src/protocol/host-api.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-240",
+    "MAC-241",
+    "MAC-251",
+    "MAC-619",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622",
+    "MAC-623"
+   ],
+   "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-240",
+    "MAC-241",
+    "MAC-251",
+    "MAC-620",
+    "MAC-621",
+    "MAC-622"
+   ]
+  },
+  {
    "path": "src/protocol/host-channel.ts",
    "primary": "WP26",
    "status": "READ_UNCHANGED",
@@ -2482,6 +3503,33 @@
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
+   "path": "src/protocol/host-guest.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18",
+    "MAC-202",
+    "MAC-210",
+    "MAC-211",
+    "MAC-230",
+    "MAC-231",
+    "MAC-241",
+    "MAC-250",
+    "MAC-620"
+   ],
+   "oracles": [
+    "DR18",
+    "MAC-202",
+    "MAC-211",
+    "MAC-230",
+    "MAC-231",
+    "MAC-241",
+    "MAC-250",
+    "MAC-620"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
    "path": "src/protocol/jsonl.ts",
    "primary": "WP26",
    "status": "CHANGED_WITH_ORACLE",
@@ -2490,14 +3538,16 @@
     "P0V-31",
     "P0V-33",
     "P0V-47",
-    "P0V-48"
+    "P0V-48",
+    "P0V-86"
    ],
    "oracles": [
     "DR15",
     "P0V-31",
     "P0V-33",
     "P0V-47",
-    "P0V-48"
+    "P0V-48",
+    "P0V-86"
    ]
   },
   {
@@ -2666,9 +3716,19 @@
    "by": [
     "AV20",
     "DR10",
+    "DR18",
     "P0V-05",
     "P0V-07",
     "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP03",
     "WP21",
     "WP22"
@@ -2676,7 +3736,15 @@
    "oracles": [
     "AV20",
     "DR10",
+    "DR18",
     "P0V-64",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V03A",
     "V03B",
     "V21A",
@@ -2688,15 +3756,27 @@
   {
    "path": "src/reconcile/operations.ts",
    "primary": "WP21",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95"
    ],
    "oracles": [
-    "R29",
-    "R36"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95"
+   ]
   },
   {
    "path": "src/reconcile/preaccept.ts",
@@ -2704,10 +3784,12 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR10",
-    "P0V-05"
+    "P0V-05",
+    "P0V-77"
    ],
    "oracles": [
-    "DR10"
+    "DR10",
+    "P0V-77"
    ]
   },
   {
@@ -2747,6 +3829,7 @@
     "AV10",
     "AV11",
     "AV21",
+    "DR18",
     "DR9",
     "P0V-01",
     "P0V-02",
@@ -2760,6 +3843,7 @@
     "AV10",
     "AV11",
     "AV21",
+    "DR18",
     "DR9",
     "V06A",
     "V06B",
@@ -2773,6 +3857,7 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR13",
+    "DR18",
     "P0V-19",
     "P0V-20",
     "P0V-21",
@@ -2782,6 +3867,7 @@
    ],
    "oracles": [
     "DR13",
+    "DR18",
     "V03A",
     "V03B"
    ]
@@ -2791,10 +3877,13 @@
    "primary": "WP10",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV31"
+    "AV31",
+    "DR17",
+    "P0V-81"
    ],
    "oracles": [
-    "AV31"
+    "AV31",
+    "P0V-81"
    ]
   },
   {
@@ -2802,12 +3891,14 @@
    "primary": "WP03",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "MAC-650",
     "P0V-25",
     "P0V-27",
     "P0V-35",
     "WP03"
    ],
    "oracles": [
+    "MAC-650",
     "P0V-25",
     "P0V-27",
     "P0V-35",
@@ -2834,13 +3925,35 @@
    ]
   },
   {
+   "path": "src/runtime/egress-forwarder.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18",
+    "MAC-710"
+   ],
+   "oracles": [
+    "DR18",
+    "MAC-710"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
+  },
+  {
    "path": "src/runtime/engine-auth.ts",
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
     "WP27"
    ],
    "oracles": [
+    "MAC-020",
+    "MAC-021",
+    "MAC-222",
+    "MAC-251",
     "V27A",
     "V27B"
    ]
@@ -2901,6 +4014,8 @@
     "AV17",
     "AV24",
     "DR13",
+    "DR18",
+    "MAC-205",
     "P0V-19",
     "P0V-20",
     "P0V-21",
@@ -2912,6 +4027,8 @@
     "AV17",
     "AV24",
     "DR13",
+    "DR18",
+    "MAC-205",
     "V10A",
     "V10C"
    ]
@@ -2971,22 +4088,28 @@
    "by": [
     "AV13",
     "AV3",
+    "DR18",
+    "MAC-205",
     "P0V-36",
     "P0V-40",
     "P0V-41",
     "P0V-42",
     "P0V-43",
+    "P0V-78",
     "WP10",
     "WP27"
    ],
    "oracles": [
     "AV13",
     "AV3",
+    "DR18",
+    "MAC-205",
     "P0V-36",
     "P0V-40",
     "P0V-41",
     "P0V-42",
     "P0V-43",
+    "P0V-78",
     "V10A",
     "V10C",
     "V27A",
@@ -2999,6 +4122,7 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR9",
+    "MAC-650",
     "P0V-01",
     "P0V-02",
     "P0V-03",
@@ -3010,6 +4134,7 @@
    ],
    "oracles": [
     "DR9",
+    "MAC-650",
     "V05A",
     "V05B",
     "V08A",
@@ -3046,6 +4171,8 @@
     "AV3",
     "AV5",
     "DR13",
+    "DR18",
+    "MAC-411",
     "P0V-12",
     "P0V-16",
     "P0V-18",
@@ -3054,6 +4181,10 @@
     "P0V-21",
     "P0V-22",
     "P0V-23",
+    "P0V-77",
+    "P0V-83",
+    "P0V-84",
+    "P0V-85",
     "WP16"
    ],
    "oracles": [
@@ -3062,9 +4193,15 @@
     "AV3",
     "AV5",
     "DR13",
+    "DR18",
+    "P0V-77",
+    "P0V-83",
+    "P0V-84",
+    "P0V-85",
     "V16A",
     "V16B"
-   ]
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
   },
   {
    "path": "src/runtime/resident-rootfs.ts",
@@ -3076,6 +4213,7 @@
     "AV2",
     "AV5",
     "DR13",
+    "DR18",
     "P0V-19",
     "P0V-20",
     "P0V-21",
@@ -3086,7 +4224,8 @@
     "AV1",
     "AV2",
     "AV5",
-    "DR13"
+    "DR13",
+    "DR18"
    ]
   },
   {
@@ -3107,20 +4246,13 @@
   {
    "path": "src/runtime/society-lease.ts",
    "primary": "WP25",
-   "status": "READ_UNCHANGED",
+   "status": "CHANGED_WITH_ORACLE",
    "by": [
-    "AV-review"
+    "DR18"
    ],
    "oracles": [
-    "AUTH-003",
-    "LOC-003",
-    "PR-002",
-    "REC-007",
-    "T115",
-    "T119",
-    "TUI-004"
-   ],
-   "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
+    "DR18"
+   ]
   },
   {
    "path": "src/runtime/supervision-channel.ts",
@@ -3134,6 +4266,19 @@
    ]
   },
   {
+   "path": "src/runtime/vsock-seccomp.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18",
+    "MAC-205"
+   ],
+   "oracles": [
+    "DR18",
+    "MAC-205"
+   ]
+  },
+  {
    "path": "src/sandbox.ts",
    "primary": "WP27",
    "status": "CHANGED_WITH_ORACLE",
@@ -3144,6 +4289,9 @@
     "AV17",
     "AV27",
     "AV28",
+    "DR18",
+    "MAC-205",
+    "MAC-411",
     "WP27"
    ],
    "oracles": [
@@ -3153,9 +4301,12 @@
     "AV17",
     "AV27",
     "AV28",
+    "DR18",
+    "MAC-205",
     "V27A",
     "V27B"
-   ]
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
   },
   {
    "path": "src/storage/batch-view.ts",
@@ -3232,11 +4383,13 @@
    "by": [
     "AV5",
     "P0V-65",
+    "P0V-77",
     "WP18"
    ],
    "oracles": [
     "AV5",
     "P0V-65",
+    "P0V-77",
     "V18A",
     "V18B"
    ]
@@ -3256,6 +4409,8 @@
     "P0V-06",
     "P0V-13",
     "P0V-65",
+    "P0V-96",
+    "P0V-97",
     "WP05",
     "WP06",
     "WP27"
@@ -3265,6 +4420,7 @@
     "DR11",
     "DR9",
     "P0V-65",
+    "P0V-96",
     "V05A",
     "V05B",
     "V06A",
@@ -3331,7 +4487,12 @@
     "P0V-52",
     "P0V-53",
     "P0V-59",
-    "P0V-71"
+    "P0V-71",
+    "P0V-83",
+    "P0V-84",
+    "P0V-85",
+    "P0V-96",
+    "P0V-97"
    ],
    "oracles": [
     "AV1",
@@ -3343,7 +4504,11 @@
     "P0V-52",
     "P0V-53",
     "P0V-59",
-    "P0V-71"
+    "P0V-71",
+    "P0V-83",
+    "P0V-84",
+    "P0V-85",
+    "P0V-96"
    ]
   },
   {
@@ -3356,10 +4521,26 @@
     "P0V-02",
     "P0V-03",
     "P0V-04",
-    "P0V-06"
+    "P0V-06",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95"
    ],
    "oracles": [
-    "DR9"
+    "DR9",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95"
    ]
   },
   {
@@ -3371,6 +4552,8 @@
     "AV2",
     "AV5",
     "P0V-65",
+    "P0V-96",
+    "P0V-97",
     "WP20"
    ],
    "oracles": [
@@ -3378,6 +4561,7 @@
     "AV2",
     "AV5",
     "P0V-65",
+    "P0V-96",
     "V20A",
     "V20B"
    ]
@@ -3387,9 +4571,25 @@
    "primary": "WP04",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP23"
    ],
    "oracles": [
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V23A",
     "V23B"
    ]
@@ -3445,12 +4645,14 @@
    "by": [
     "AV10",
     "AV11",
-    "AV3"
+    "AV3",
+    "DR18"
    ],
    "oracles": [
     "AV10",
     "AV11",
-    "AV3"
+    "AV3",
+    "DR18"
    ]
   },
   {
@@ -3581,6 +4783,17 @@
    ]
   },
   {
+   "path": "src/storage/tree-lease.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "P0V-77"
+   ],
+   "oracles": [
+    "P0V-77"
+   ]
+  },
+  {
    "path": "src/store.ts",
    "primary": "WP04",
    "status": "CHANGED_WITH_ORACLE",
@@ -3601,6 +4814,15 @@
     "P0V-56",
     "P0V-69",
     "P0V-70",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP04",
     "WP23"
    ],
@@ -3611,6 +4833,13 @@
     "P0V-56",
     "P0V-69",
     "P0V-70",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V04A",
     "V04B",
     "V23A",
@@ -3624,6 +4853,8 @@
    "by": [
     "AV7",
     "DR13",
+    "DR18",
+    "MAC-022",
     "P0V-19",
     "P0V-20",
     "P0V-21",
@@ -3639,6 +4870,7 @@
    "oracles": [
     "AV7",
     "DR13",
+    "DR18",
     "P0V-36",
     "P0V-40",
     "P0V-41",
@@ -3654,6 +4886,8 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "AV7",
+    "DR18",
+    "MAC-022",
     "P0V-28",
     "P0V-29",
     "P0V-38",
@@ -3664,6 +4898,7 @@
    ],
    "oracles": [
     "AV7",
+    "DR18",
     "P0V-28",
     "P0V-29",
     "P0V-38",
@@ -3680,11 +4915,14 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR13",
+    "DR18",
+    "MAC-022",
     "P0V-12",
     "P0V-18"
    ],
    "oracles": [
-    "DR13"
+    "DR13",
+    "DR18"
    ]
   },
   {
@@ -3693,11 +4931,17 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "P0V-46",
-    "P0V-67"
+    "P0V-67",
+    "P0V-76",
+    "P0V-79",
+    "P0V-86"
    ],
    "oracles": [
     "P0V-46",
-    "P0V-67"
+    "P0V-67",
+    "P0V-76",
+    "P0V-79",
+    "P0V-86"
    ]
   },
   {
@@ -3705,6 +4949,8 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR18",
+    "MAC-022",
     "P0V-36",
     "P0V-40",
     "P0V-41",
@@ -3713,6 +4959,7 @@
     "WP14"
    ],
    "oracles": [
+    "DR18",
     "P0V-36",
     "P0V-40",
     "P0V-41",
@@ -3721,6 +4968,20 @@
     "V14A",
     "V14B"
    ]
+  },
+  {
+   "path": "src/tui/login.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18",
+    "MAC-704"
+   ],
+   "oracles": [
+    "DR18",
+    "MAC-704"
+   ],
+   "note": "clauses declared by macos-platform.md's implementation table"
   },
   {
    "path": "src/tui/model.ts",
@@ -3802,9 +5063,14 @@
    "primary": "WP28",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR17",
+    "P0V-79",
+    "P0V-81",
     "WP28"
    ],
    "oracles": [
+    "P0V-79",
+    "P0V-81",
     "V28A",
     "V28B"
    ]
@@ -3819,12 +5085,15 @@
     "AV14",
     "AV3",
     "DR15",
+    "DR18",
+    "MAC-022",
     "P0V-36",
     "P0V-40",
     "P0V-41",
     "P0V-42",
     "P0V-43",
     "P0V-73",
+    "P0V-78",
     "WP09"
    ],
    "oracles": [
@@ -3833,12 +5102,14 @@
     "AV14",
     "AV3",
     "DR15",
+    "DR18",
     "P0V-36",
     "P0V-40",
     "P0V-41",
     "P0V-42",
     "P0V-43",
     "P0V-73",
+    "P0V-78",
     "V09A",
     "V09B",
     "V09C"
@@ -3850,6 +5121,8 @@
    "status": "CHANGED_WITH_ORACLE",
    "by": [
     "DR13",
+    "DR18",
+    "MAC-022",
     "P0V-19",
     "P0V-20",
     "P0V-21",
@@ -3866,6 +5139,7 @@
    ],
    "oracles": [
     "DR13",
+    "DR18",
     "P0V-28",
     "P0V-29",
     "P0V-38",
@@ -3888,6 +5162,8 @@
     "AV26",
     "AV7",
     "DR13",
+    "DR18",
+    "MAC-022",
     "P0V-19",
     "P0V-20",
     "P0V-21",
@@ -3903,6 +5179,7 @@
     "AV26",
     "AV7",
     "DR13",
+    "DR18",
     "P0V-36",
     "P0V-40",
     "P0V-41",
@@ -4138,6 +5415,18 @@
    "note": "read in full in the whole-codebase adversarial pass after v9; oracles are the tests that load this module"
   },
   {
+   "path": "src/tui/words.ts",
+   "primary": null,
+   "status": "CHANGED_WITH_ORACLE",
+   "by": [
+    "DR18",
+    "MAC-022"
+   ],
+   "oracles": [
+    "DR18"
+   ]
+  },
+  {
    "path": "src/units.ts",
    "primary": "WP25",
    "status": "CHANGED_WITH_ORACLE",
@@ -4148,6 +5437,15 @@
     "P0V-11",
     "P0V-26",
     "P0V-59",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP03",
     "WP23",
     "WP25"
@@ -4158,6 +5456,13 @@
     "DR13",
     "P0V-26",
     "P0V-59",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V03A",
     "V03B",
     "V23A",
@@ -4222,21 +5527,39 @@
    "by": [
     "AV5",
     "AV9",
+    "DR18",
     "P0V-28",
     "P0V-29",
     "P0V-38",
     "P0V-39",
     "P0V-51",
+    "P0V-87",
+    "P0V-88",
+    "P0V-89",
+    "P0V-90",
+    "P0V-91",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "WP23"
    ],
    "oracles": [
     "AV5",
     "AV9",
+    "DR18",
     "P0V-28",
     "P0V-29",
     "P0V-38",
     "P0V-39",
     "P0V-51",
+    "P0V-87",
+    "P0V-88",
+    "P0V-90",
+    "P0V-92",
+    "P0V-93",
+    "P0V-94",
+    "P0V-95",
     "V23A",
     "V23B"
    ]
@@ -4246,9 +5569,11 @@
    "primary": "WP23",
    "status": "CHANGED_WITH_ORACLE",
    "by": [
+    "DR18",
     "WP23"
    ],
    "oracles": [
+    "DR18",
     "V23A",
     "V23B"
    ]
