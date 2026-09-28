@@ -405,7 +405,7 @@ export function publishDeliveryReceipt(
   try {
     // P0V-96: a killed publication of this receipt left its temporary with a
     // free lock; the retry collects it, and locks its own until it is gone.
-    collectDeadTemporaries(parent, finalName);
+    collectDeadTemporaries(parent);
     faultAt(faults, "file-create", "before", temporaryPath);
     fd = createLockedTemporary(parent, temporaryName, constants.O_RDWR, 0o600);
     temporaryExists = true;

@@ -337,7 +337,7 @@ test("P0V-83, P0V-84 / R6-08: a no-replace publication killed at any step leaves
     const names = readdirSync(dir);
     if (linked.has(`${point}/${phase}`)) assert.equal(readFileSync(target, "utf8"), "whole bytes", `${point}/${phase}: the name is not whole`);
     else assert.equal(existsSync(target), false, `${point}/${phase}: the name appeared before its link`);
-    assert.ok(names.every(name => name === "k.json" || /^\.k\.json\.[0-9a-f-]{36}\.tmp$/.test(name)), names.join(" "));
+    assert.ok(names.every(name => name === "k.json" || /^\.k\.json\.[0-9a-f-]{36}\.held\.tmp$/.test(name)), names.join(" "));
     // The next publication of the name collects its dead writer's temporary.
     const next = publishNoReplace(target, "whole bytes");
     assert.equal(next, linked.has(`${point}/${phase}`) ? "existing" : "created", `${point}/${phase}`);
@@ -346,7 +346,7 @@ test("P0V-83, P0V-84 / R6-08: a no-replace publication killed at any step leaves
   }
 });
 
-test("P0V-84 / R6-08: a temporary whose writer is alive is not collected, and another name's never is", async t => {
+test("P0V-84 / R6-08, P0V-111: a temporary whose writer is alive is not collected, nor one written without a lock", async t => {
   const { publishNoReplace } = await import("../src/storage/durable-fs.js");
   const root = mkdtempSync(join(tmpdir(), "oma-no-replace-live-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -362,7 +362,8 @@ test("P0V-84 / R6-08: a temporary whose writer is alive is not collected, and an
   await new Promise<void>(resolve => { child.stdout!.once("data", () => { resolve(); }); });
   const live = readdirSync(root).filter(name => name.endsWith(".tmp"));
   assert.equal(live.length, 1);
-  // Another name's dead temporary is not this name's to collect.
+  assert.match(live[0]!, /\.held\.tmp$/, "a locked temporary is named as one");
+  // A temporary written without a lock (a configuration's) proves nothing by a free lock.
   writeFileSync(join(root, ".other.json.00000000-0000-4000-8000-000000000000.tmp"), "x");
   assert.equal(publishNoReplace(join(root, "k.json"), "first"), "created");
   assert.ok(readdirSync(root).includes(live[0]!), "a live writer's temporary was collected");

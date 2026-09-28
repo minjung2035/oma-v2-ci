@@ -25,7 +25,13 @@ export type FileObservation<T> =
 export type CacheRead = FileObservation<CachedRequest>;
 export type BodyRead = FileObservation<Uint8Array>;
 export type FreezeResult = { readonly kind: "created" | "existing"; readonly value: CachedRequest };
-export type CacheReader = (path: string, expectedBytes?: number) => FileObservation<Uint8Array>;
+export type CacheReader = (path: string, expectedBytes?: number, maximumBytes?: number) => FileObservation<Uint8Array>;
+
+/** P0V-112 (G02-ledger-r2-02): a request's metadata holds the request and its
+ * latest receipt, each no larger than one frame; a file larger than two
+ * frames is not one this cache wrote, and is not read whole. The reference
+ * frame is the CLI's when unset (256 KiB, CFG-003). */
+export const REFERENCE_METADATA_BYTES = 2 * 256 * 1024;
 
 /** How long a competing process may hold one request key's receipt lock
  * before this one reports the cache unavailable rather than waiting further. */
@@ -54,7 +60,7 @@ function requirePresent<T>(observation: FileObservation<T>, what: string): T {
 }
 
 /** No existsSync precheck, symlink following, or FIFO read can erase an I/O failure. */
-export const readCacheFile: CacheReader = (path, expectedBytes) => {
+export const readCacheFile: CacheReader = (path, expectedBytes, maximumBytes) => {
   let fd: number | undefined;
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -63,6 +69,8 @@ export const readCacheFile: CacheReader = (path, expectedBytes) => {
       return { kind: "corrupt", reason: "cache entry is not a regular file with a safe size" };
     if (expectedBytes !== undefined && stat.size !== expectedBytes)
       return { kind: "corrupt", reason: "body size differs from frozen digest" };
+    if (maximumBytes !== undefined && stat.size > maximumBytes)
+      return { kind: "corrupt", reason: "cache entry is larger than a request and its receipt can be" };
     const bytes = readFileSync(fd);
     if (bytes.length !== stat.size) return { kind: "corrupt", reason: "cache file changed during read" };
     return { kind: "present", value: bytes };
@@ -95,7 +103,8 @@ function freezeInput(input: FreezeInput): CachedRequest {
 
 export class RequestCache {
   /** The injected reader is for deterministic I/O-failure tests, never wire input. */
-  constructor(readonly homeDir: string, private readonly reader: CacheReader = readCacheFile) {}
+  constructor(readonly homeDir: string, private readonly reader: CacheReader = readCacheFile,
+    private readonly metadataBytes: number = REFERENCE_METADATA_BYTES) {}
 
   private dir(): string { return join(this.homeDir, ".local", "state", "oma", "requests"); }
   private path(key: RequestKey): string {
@@ -106,7 +115,7 @@ export class RequestCache {
 
   private readMetadata(key: RequestKey): CacheRead {
     if (!isValidRequestKey(key)) return { kind: "corrupt", reason: "invalid request key" };
-    const bytes = this.reader(this.path(key));
+    const bytes = this.reader(this.path(key), undefined, this.metadataBytes);
     if (bytes.kind !== "present") return bytes;
     try {
       const decoded = decodeCachedRequest(parseJsonObject(bytes.value).raw, key);

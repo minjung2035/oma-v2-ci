@@ -4,15 +4,18 @@ import type { Json, MutationMethod, Receipt } from "../../implementation/contrac
 import { uuidV4 } from "../ids.js";
 import { snapshotJson } from "../domain/canonical-json.js";
 import { requestParamsEqual } from "../domain/request-identity.js";
-import { RequestCache, CacheError, type CachedRequest, type FreezeInput } from "../request-cache.js";
+import { RequestCache, CacheError, readCacheFile, type CachedRequest, type FreezeInput } from "../request-cache.js";
 import { decodeFailure, decodeReceipt } from "../protocol/receipt-codec.js";
 import { isRequestNotFound } from "../protocol/receipts.js";
 import { requestIntentConflict } from "./request-intent.js";
-import { call } from "./transport.js";
+import { call, cliFrameBytes } from "./transport.js";
 import { fail, finishFailure, finishReceipt, finishUnrecordedReceipt } from "./exit.js";
 
 const HOME = process.env.HOME ?? "/tmp";
-const cache = new RequestCache(HOME);
+// P0V-112: made at first use, with the frame this CLI speaks -- a request's
+// metadata is at most the request and its receipt, a frame each.
+let made: RequestCache | null = null;
+const cache = (): RequestCache => made ??= new RequestCache(HOME, readCacheFile, 2 * cliFrameBytes());
 
 function requestPayload(value: unknown): { [key: string]: Json } {
   const copied = snapshotJson(value);
@@ -22,7 +25,7 @@ function requestPayload(value: unknown): { [key: string]: Json } {
 }
 
 function readFrozen(key: string): CachedRequest | null {
-  const observed = cache.read(key);
+  const observed = cache().read(key);
   if (observed.kind === "present") return observed.value;
   if (observed.kind === "absent") return null;
   return fail(
@@ -33,7 +36,7 @@ function readFrozen(key: string): CachedRequest | null {
 
 function frozenBody(entry: CachedRequest): Uint8Array | undefined {
   if (entry.digest === undefined) return undefined;
-  const observed = cache.readBody(entry.key, entry.digest);
+  const observed = cache().readBody(entry.key, entry.digest);
   if (observed.kind === "present") return observed.value;
   return fail(
     `frozen request body ${observed.kind} for ${entry.key}${observed.kind === "absent" ? "" : `: ${observed.reason}`} (복구: 원래 freeze 보존; 새 payload 생성 금지)`,
@@ -47,7 +50,7 @@ function frozenBody(entry: CachedRequest): Uint8Array | undefined {
  * key and repeats the effect. A receipt contradicting the cache's earlier
  * observation of the same request is reported as unknown. */
 function settle(receipt: Receipt, key: string): never {
-  try { cache.updateReceipt(key, receipt); }
+  try { cache().updateReceipt(key, receipt); }
   catch (error) {
     if (!(error instanceof CacheError)) throw error;
     finishUnrecordedReceipt(receipt, key, `${error.code}: 요청 cache가 이 영수증을 기록하지 못함: ${error.message}`, error.code === "CACHE_CORRUPT");
@@ -94,7 +97,7 @@ export async function replayOrSend(
     const input: FreezeInput = { key, method, params: payload, createdAtMs: Date.now() };
     if (digest !== undefined) input.digest = digest;
     try {
-      const publication = cache.freeze(input, streamBytes);
+      const publication = cache().freeze(input, streamBytes);
       frozen = publication.value;
       replay = publication.kind === "existing";
     } catch (error) {

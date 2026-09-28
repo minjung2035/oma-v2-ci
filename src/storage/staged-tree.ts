@@ -2,7 +2,7 @@
  * The caller serializes publication in a trusted root and validates artifact
  * identity. These syscalls do not establish a new kernel no-replace guarantee.
  */
-import { lstatSync, renameSync, symlinkSync, unlinkSync } from "node:fs";
+import { lstatSync, readdirSync, renameSync, symlinkSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute } from "node:path";
 import { StoreError } from "../domain/errors.js";
@@ -88,6 +88,16 @@ export function replaceDerivedSymlink(path: string, target: string): void {
   // Same rule as the derived file: the parent is resolved once and the link is
   // created, renamed and cleaned up through that descriptor only.
   withinDirectory(path, (parent, name) => {
+    // P0V-111 (G01r2-02): a link cannot carry a lock, so the proof that a
+    // leftover link temporary of this name is dead is who writes it: this
+    // synchronous call is its only writer, and the caller serializes
+    // publication in its root (above). What a killed one left is removed
+    // before the next link is made; a file, or another name's, is not.
+    for (const entry of readdirSync(`/proc/self/fd/${parent}`)) {
+      if (!entry.startsWith(`.${name}.`) || !/\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/.test(entry)) continue;
+      try { if (lstatSync(entryAt(parent, entry)).isSymbolicLink()) unlinkSync(entryAt(parent, entry)); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    }
     const temporaryName = `.${name}.${randomUUID()}.tmp`;
     symlinkSync(target, entryAt(parent, temporaryName));
     let owned = true;

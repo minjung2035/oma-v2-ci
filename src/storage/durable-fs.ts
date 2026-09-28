@@ -180,7 +180,7 @@ export function writeExclusiveFsyncedEntry(parent: number, name: string, path: s
 export function publishNoReplace(target: string, data: string | Uint8Array, mode = 0o600, faults?: DurabilityObserver): "created" | "existing" {
   for (let attempt = 0; ; attempt++) {
     const result = withinDirectory(target, (parent, name) => {
-      collectDeadTemporaries(parent, name);
+      collectDeadTemporaries(parent);
       return publishOnce(parent, name, target, data, mode, faults);
     });
     if (result !== "restart") return result;
@@ -188,10 +188,15 @@ export function publishNoReplace(target: string, data: string | Uint8Array, mode
   }
 }
 
-const TEMPORARY = /^\.(.+)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
-/** The one-time name a publication's temporary beside `name` has. */
+/** P0V-111 (G01-01): a temporary that carries its writer's lock is named as
+ * one -- `.held.tmp` -- so that a free lock on it is proof of a dead writer
+ * whatever name it was for. Temporaries written without a lock (a
+ * configuration's, a derived link's) keep the plain `.tmp` and are never
+ * collected here; their owners collect them. */
+const TEMPORARY = /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.held\.tmp$/;
+/** The one-time name a locked publication temporary beside `name` has. */
 export function temporaryNameFor(name: string): string {
-  return `.${name}.${randomUUID()}.tmp`;
+  return `.${name}.${randomUUID()}.held.tmp`;
 }
 /** P0V-84, P0V-96: a publication's temporary, created under the held parent
  * and flocked from the moment it exists. Its writer holds the descriptor until
@@ -205,15 +210,16 @@ export function createLockedTemporary(parent: number, temporaryName: string, fla
   try { unlinkSync(entryAt(parent, temporaryName)); } catch { /* cleanup only */ }
   throw new StoreError("BROKER_UNAVAILABLE", `a publication's temporary could not be locked (${lock.kind})`);
 }
-/** The temporaries of `name` whose writers are dead, removed under their lock.
- * Every publication of `name` calls it first, so what a killed writer left is
- * gone by the next publication of the same name; a live writer's is kept, and
- * another name's is never touched. */
-export function collectDeadTemporaries(parent: number, name: string): void {
+/** The locked temporaries in the held directory whose writers are dead,
+ * removed under their lock. Every publication calls it first, so what a
+ * killed writer left is gone by the next publication in the same directory,
+ * of any name (P0V-111: a name never published again would otherwise keep
+ * its leftover for ever); a live writer's is kept. */
+export function collectDeadTemporaries(parent: number): void {
   let entries: string[];
   try { entries = readdirSync(`/proc/self/fd/${parent}`); } catch { return; }
   for (const entry of entries) {
-    if (TEMPORARY.exec(entry)?.[1] !== name) continue;
+    if (!TEMPORARY.test(entry)) continue;
     let fd: number;
     try { fd = openBeneath(parent, entry, constants.O_RDONLY | constants.O_NOFOLLOW); } catch { continue; }
     try {
@@ -295,7 +301,7 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
   withinDirectory(target, (parent, name) => {
     // P0V-96: what a killed writer of this name left is collected first, and
     // this writer's temporary is locked until it is renamed away.
-    collectDeadTemporaries(parent, name);
+    collectDeadTemporaries(parent);
     const temporaryName = temporaryNameFor(name);
     const temporary = join(dirname(target), temporaryName);
     faultAt(faults, "file-create", "before", temporary);

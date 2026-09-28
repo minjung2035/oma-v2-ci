@@ -28,8 +28,9 @@ export interface PreacceptCollection {
   readonly removed: readonly string[];
   readonly kept: readonly { readonly path: string; readonly reason: string }[];
 }
-/** The one-time temporary a publication names `.<target>.<uuid>.tmp`. */
-const PUBLICATION_TEMPORARY = /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
+/** The one-time temporary a publication names `.<target>.<uuid>.tmp`, or
+ * `.<target>.<uuid>.held.tmp` when it carries its writer's lock (P0V-111). */
+const PUBLICATION_TEMPORARY = /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.held)?\.tmp$/;
 
 function names(directory: string): string[] {
   try { return readdirSync(directory); }

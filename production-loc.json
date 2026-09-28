@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 276,
-    "n_lines": 36208,
+    "n_lines": 36237,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -140,7 +140,7 @@
   },
   "src/storage/durable-fs.ts": {
     "blank": 15,
-    "comment": 101,
+    "comment": 107,
     "code": 243,
     "language": "TypeScript"
   },
@@ -217,9 +217,9 @@
     "language": "TypeScript"
   },
   "src/request-cache.ts": {
-    "blank": 17,
-    "comment": 36,
-    "code": 196,
+    "blank": 18,
+    "comment": 40,
+    "code": 200,
     "language": "TypeScript"
   },
   "src/storage/immutable-file.ts": {
@@ -386,8 +386,8 @@
   },
   "src/cli/request-service.ts": {
     "blank": 10,
-    "comment": 17,
-    "code": 152,
+    "comment": 19,
+    "code": 153,
     "language": "TypeScript"
   },
   "src/platform/host/lifecycle.ts": {
@@ -774,6 +774,12 @@
     "code": 81,
     "language": "TypeScript"
   },
+  "src/storage/staged-tree.ts": {
+    "blank": 3,
+    "comment": 32,
+    "code": 80,
+    "language": "TypeScript"
+  },
   "src/protocol/run-lease.ts": {
     "blank": 1,
     "comment": 3,
@@ -782,7 +788,7 @@
   },
   "src/reconcile/preaccept.ts": {
     "blank": 3,
-    "comment": 23,
+    "comment": 24,
     "code": 77,
     "language": "TypeScript"
   },
@@ -808,12 +814,6 @@
     "blank": 12,
     "comment": 36,
     "code": 76,
-    "language": "TypeScript"
-  },
-  "src/storage/staged-tree.ts": {
-    "blank": 3,
-    "comment": 27,
-    "code": 75,
     "language": "TypeScript"
   },
   "src/storage/operation-transitions.ts": {
@@ -1663,9 +1663,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1604,
-    "comment": 6381,
-    "code": 28223,
+    "blank": 1605,
+    "comment": 6399,
+    "code": 28233,
     "nFiles": 276
   }
 }

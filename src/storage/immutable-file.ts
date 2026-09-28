@@ -145,7 +145,7 @@ export function publishImmutableFile(
     // P0V-96: a copy killed before its temporary was removed left it with a
     // free lock; every publication of this name collects it first -- one
     // whose destination already exists never reaches the copying path.
-    collectDeadTemporaries(parent, basename(destination));
+    collectDeadTemporaries(parent);
     const report = (fd: number): void => {
       const stat = fstatSync(fd);
       linked?.({ dev: stat.dev, ino: stat.ino });

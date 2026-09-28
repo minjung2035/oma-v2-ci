@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "ad6da116a0ae019d7e52e3746a3129b1a70071a129a102914f001a9e88bb7451",
-  "report": "5d561800ad545dcea0c587f177e5c3a029850023f488f093cf6ce99912284820",
+  "report": "2f4c1747bc117b97984cb6060b9d3218a1c1193545df7b2d4fa214bf09d499a7",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -161,7 +161,7 @@
     },
     {
       "path": "src/cli/request-service.ts",
-      "sha256": "ad0990d22ffa41dfb45ca0ca739b933e6ef2e3d8087f1b52deb0b1c825449d2e"
+      "sha256": "f55a2f86dc474508b77de68237144d0df1b9072ed0d3ca58634220fdfccc7016"
     },
     {
       "path": "src/cli/transport.ts",
@@ -777,11 +777,11 @@
     },
     {
       "path": "src/reconcile/preaccept.ts",
-      "sha256": "595e1b7e8fe4a0d98f37b72197292bb0197b287f2ff3bfcc58e63fb9ea5e7097"
+      "sha256": "3647766993d0adc4d2982beb56fc4cafe5c5d1da65781ee7b545394ddc4d143e"
     },
     {
       "path": "src/request-cache.ts",
-      "sha256": "edaabc1c84f4e61e9415e9e9818bd54bc2d5dbcb7f5fbb4304271bab9034be3a"
+      "sha256": "b7422600db5adf728baca0cf9001dec1790d11064c444416e8a1e1db37f69a7d"
     },
     {
       "path": "src/rpc-client.ts",
@@ -901,7 +901,7 @@
     },
     {
       "path": "src/storage/delivery-receipt.ts",
-      "sha256": "d5d005ce527d65a1906b00a10e9904026100d690da01fe1dec7a8067cb8da61c"
+      "sha256": "71dc8735116989eb4f9215340b781a48de935838dff098d3df66546c9ed0cd8f"
     },
     {
       "path": "src/storage/diagnostic-snapshot.ts",
@@ -913,7 +913,7 @@
     },
     {
       "path": "src/storage/durable-fs.ts",
-      "sha256": "1aa945fbbc01478df6d3f3dd9956333da3657a326c944f82623d69bd2fb3cd93"
+      "sha256": "af6ebb7b3f32ff4fd2a1ad0021bfddafb67c041c5279c16def47b4d868e394d7"
     },
     {
       "path": "src/storage/facets.ts",
@@ -921,7 +921,7 @@
     },
     {
       "path": "src/storage/immutable-file.ts",
-      "sha256": "fff70034e55979d875e47ea379c6d13fe6ab7e12d2e4d104f84fdbab6de63176"
+      "sha256": "8d764cec31d868ca01a2f9d92c5dc0e813aa3dbe42da199f11d29c8cc935bad9"
     },
     {
       "path": "src/storage/ledger-reader.ts",
@@ -961,7 +961,7 @@
     },
     {
       "path": "src/storage/staged-tree.ts",
-      "sha256": "4a4ac0c14a0c6126c039ca79805c93980ce065777f24c23710d3f1e1e049b51d"
+      "sha256": "3175ed609818d825a307d4790336114d92146ee006e718cdc4c11d1742fe365c"
     },
     {
       "path": "src/storage/submit-spool.ts",
