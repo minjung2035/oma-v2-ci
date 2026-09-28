@@ -300,3 +300,74 @@ test("G08-03: the canonical spelling of numbers is Number::toString, held by gol
   assert.equal(document, '{"a":{"y":null,"z":0.1},"b":[1.5,0,1e+21]}');
   assert.equal(sha256Hex(document), "485a45b66e22b875f2cf59f3b982deae7045941126f6f58a95e83413933637d7");
 });
+
+test("P0V-120 / G10-04: the provider names only a port the bridge holds -- no one's while it has none, then the one the kernel gave it", async t => {
+  const { createServer, connect } = await import("node:net");
+  const { startInferenceBridge } = await import("../src/extension/inference-bridge.js");
+  const dir = mkdtempSync(join(tmpdir(), "oma-bridge-"));
+  const listening = (server: import("node:net").Server, at: number | string): Promise<void> =>
+    new Promise(resolve => { typeof at === "number" ? server.listen(at, "127.0.0.1", resolve) : server.listen(at, resolve); });
+  // Another process took the port chosen for the bridge.
+  const holder = createServer(socket => { socket.end("a stranger"); });
+  await listening(holder, 0);
+  const taken = (holder.address() as import("node:net").AddressInfo).port;
+  const relay = createServer(socket => { socket.end("the relay"); });
+  await listening(relay, join(dir, "relay.sock"));
+  const saved = { ...process.env };
+  t.after(() => { process.env = saved; holder.close(); relay.close(); rmSync(dir, { recursive: true, force: true }); });
+  Object.assign(process.env, { OMA_INFERENCE_SOCKET: join(dir, "relay.sock"), OMA_INFERENCE_PROVIDER: "p", OMA_INFERENCE_KEY: "placeholder", OMA_INFERENCE_PORT: String(taken) });
+  const urls: string[] = [];
+  startInferenceBridge({ registerProvider: (_name: string, config: { baseUrl: string }) => { urls.push(config.baseUrl); } } as never);
+  for (let wait = 0; wait < 200 && urls.length < 3; wait++) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(urls[0], `http://127.0.0.1:${taken}`);
+  assert.equal(urls[1], "http://127.0.0.1:0", "while the bridge held no port, the provider still named the stranger's");
+  const port = Number(/^http:\/\/127\.0\.0\.1:(\d+)$/.exec(urls[2] ?? "")?.[1]);
+  assert.ok(port > 0 && port !== taken);
+  const answer = await new Promise<string>(resolve => {
+    const socket = connect(port, "127.0.0.1"); let text = "";
+    socket.on("data", chunk => { text += chunk; }); socket.on("close", () => resolve(text));
+  });
+  assert.equal(answer, "the relay");
+});
+
+test("P0V-121 / G10-05: a journal prefix stands only when the view's own bound ended the read", async () => {
+  const { journalView } = await import("../src/process/policies.js");
+  const observed = (kind: string, truncated: boolean, exitCode: number | null = null) => ({ kind, exitCode, stdout: Buffer.from("prefix"), stderr: Buffer.alloc(0),
+    stdoutTruncated: truncated, stderrTruncated: false, signal: null, errorCode: null, elapsedMs: 1 }) as never;
+  assert.deepEqual(journalView(observed("output-limited", true)), { bytes: Buffer.from("prefix"), truncated: true });
+  assert.deepEqual(journalView(observed("exited", true, 0)), { bytes: Buffer.from("prefix"), truncated: true });
+  assert.deepEqual(journalView(observed("exited", false, 0)), { bytes: Buffer.from("prefix"), truncated: false });
+  for (const kind of ["signalled", "aborted", "unobserved", "spawn-failed"])
+    assert.throws(() => journalView(observed(kind, true)), { code: "INTERNAL_ERROR" }, kind);
+  assert.throws(() => journalView(observed("timed-out", true)), { code: "DEADLINE_EXCEEDED" });
+});
+
+test("P0V-122 / G10-02: grep's own reads are contained, and the pinned engine walks without following links", async t => {
+  const { readFileSync, realpathSync } = await import("node:fs");
+  const { containWorkspaceTools } = await import("../src/extension/contained-tools.js");
+  const base = realpathSync(mkdtempSync(join(tmpdir(), "oma-grep-")));
+  t.after(() => { rmSync(base, { recursive: true, force: true }); });
+  const workspace = join(base, "workspace"); mkdirSync(workspace);
+  writeFileSync(join(base, "secret"), "host secret\n");
+  symlinkSync(join(base, "secret"), join(workspace, "linked"));
+  writeFileSync(join(workspace, "notes.txt"), "a secret of the workspace\n");
+  const tools: Record<string, { execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<{ content: { text?: string }[] }> }> = {};
+  containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, 1024, false);
+  assert.ok(tools.grep, "grep is registered with contained operations");
+  await assert.rejects(tools.grep.execute("call", { pattern: "secret", path: "linked" }, undefined, undefined, { cwd: workspace }), /link|not followed|outside/);
+  // A match's lines are read as read reads: not through a file that has another name.
+  writeFileSync(join(base, "profile"), "before\nsecret line\nafter\n");
+  const { linkSync } = await import("node:fs");
+  linkSync(join(base, "profile"), join(workspace, "alias"));
+  const found = await tools.grep.execute("call", { pattern: "secret line", path: "alias", context: 1 }, undefined, undefined, { cwd: workspace });
+  const shown = found.content.map(part => part.text ?? "").join("");
+  // The engine formats matches from these reads too: it says it could not read the file.
+  assert.match(shown, /alias:2: \(unable to read file\)/);
+  assert.doesNotMatch(shown, /secret line|before|after/, "grep read a file through another name");
+  // The engine's ripgrep and fd, as the pinned engine runs them: never told to follow a link.
+  for (const tool of ["grep", "find"]) {
+    const source = readFileSync(new URL(`../../node_modules/@earendil-works/pi-coding-agent/dist/core/tools/${tool}.js`, import.meta.url), "utf8");
+    assert.match(source, /spawn\((?:rgPath|fdPath), args/, `${tool} no longer runs its program as this test knows it`);
+    assert.doesNotMatch(source, /["'](?:--follow|-L)["']/, `${tool} is run with link following`);
+  }
+});

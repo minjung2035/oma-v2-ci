@@ -6,7 +6,13 @@
  * Inside the sandbox the mount plan is the boundary (SB-001, TSP-009): the
  * shell the rootfs provides is the agent's, and reading is not narrowed below
  * what the sandbox shows. Everywhere, a write or edit stays inside the
- * workspace and is refused before it would take it over its byte quota.
+ * workspace.
+ *
+ * P0V-122 (G10-03), P0-2: the byte quota is not decided here. Its one owner
+ * is the contained write (contained-tools.ts), which decides it at the moment
+ * of the write, from the exact growth, inside the serialization every write
+ * of this engine takes. A second decision here, by path and by the upper
+ * bound an edit's replacement texts give, refused edits that fit.
  */
 import { lstatSync, readdirSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -22,9 +28,11 @@ function inside(root: string, path: string): boolean {
 /** R6-01: every component that exists is looked at itself (lstat), from the
  * root down, and a link anywhere -- one that points nowhere included -- is
  * refused; what does not exist yet is a name to be made. This is the early
- * refusal every path tool gets. The effect of read/write/edit/ls is also made
- * through the containment primitives (contained-tools.ts); grep and find walk
- * with their own programs from a start this check has seen. */
+ * refusal every path tool gets. The effect of read/write/edit/ls, and grep's
+ * own reads, are also made through the containment primitives
+ * (contained-tools.ts); grep and find walk with the engine's ripgrep and fd
+ * from a start this check has seen, and the pinned engine runs neither with
+ * --follow, so a link met in the walk is not followed (P0V-122, G10-02). */
 function allowedWorkspacePath(root: string, input: unknown): boolean {
   if (typeof input !== "string" || input.includes("\0")) return false;
   const target = resolve(root, input);
@@ -64,31 +72,6 @@ export function workspaceUsage(root: string, stopAfter: number): number {
   return total;
 }
 
-function workspaceWriteFits(root: string, tool: string, input: Record<string, unknown>, maximum: number): boolean {
-  if (tool !== "write" && tool !== "edit") return true;
-  const path = typeof input.path === "string" ? resolve(root, input.path) : null;
-  if (!path) return false;
-  let growth = 0;
-  if (tool === "write") {
-    if (typeof input.content !== "string") return false;
-    growth = Buffer.byteLength(input.content);
-    try { const current = lstatSync(path); if (current.isFile()) growth = Math.max(0, growth - current.size); } catch { /* new file */ }
-  } else {
-    // AV25: the input a tool_call handler sees is the pinned engine's validated
-    // one (BATCH-006), `edits: [{ oldText, newText }]`; the engine has already
-    // folded its older single-edit form into it. What it may add is at most
-    // the replacement text.
-    const edits = input.edits;
-    if (!Array.isArray(edits) || edits.length === 0) return false;
-    for (const entry of edits) {
-      const replacement = (entry as { newText?: unknown } | null)?.newText;
-      if (typeof replacement !== "string") return false;
-      growth += Buffer.byteLength(replacement);
-    }
-  }
-  return growth <= maximum && workspaceUsage(root, maximum - growth) <= maximum - growth;
-}
-
 const PATH_TOOLS: readonly string[] = Object.freeze(["read", "write", "edit", "grep", "find", "ls"]);
 const WRITE_TOOLS: readonly string[] = Object.freeze(["write", "edit"]);
 
@@ -97,7 +80,7 @@ const WRITE_TOOLS: readonly string[] = Object.freeze(["write", "edit"]);
 export const TOOL_SCOPE_ENV = "OMA_TOOL_SCOPE";
 export const TOOL_SCOPE_SANDBOX = "sandbox";
 
-export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null,
+export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
   sandboxed = process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX): void {
   pi.on("tool_call", (event) => {
     if (event.toolName === "bash" || event.toolName === "powershell")
@@ -111,9 +94,6 @@ export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string, workspa
     const path = input.path ?? ".";
     if (!allowedWorkspacePath(workspace, path))
       return { block: true, reason: "tool path is outside the agent workspace" };
-    if ((event.toolName === "write" || event.toolName === "edit") &&
-        (!workspaceBytes || !workspaceWriteFits(workspace, event.toolName, input, workspaceBytes)))
-      return { block: true, reason: "agent workspace quota would be exceeded" };
     return undefined;
   });
 }

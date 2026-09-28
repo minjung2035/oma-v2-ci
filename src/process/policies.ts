@@ -58,10 +58,18 @@ export async function runJournal(argv: readonly string[], maxBytes: number): Pro
     // Command diagnostics stay bounded but never terminate the read: only the
     // requested stdout prefix governs this view's success.
     stderrOverflow: "discard" });
+  return journalView(result);
+}
+/** What a journal read shows. A bounded view may resolve with an explicitly
+ * truncated prefix, exactly as the previous view implementation did;
+ * truncation is never silent. P0V-121 (G10-05): the prefix stands only when
+ * this view's own byte bound ended the read, or the reader exited on its
+ * own: a read aborted, signalled or unobserved is not a view that was cut
+ * short, and fails as what it was. */
+export function journalView(result: ProcessObservation): { bytes: Buffer; truncated: boolean } {
   if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "journalctl timed out");
-  // A bounded view may resolve with an explicitly truncated prefix, exactly as
-  // the previous view implementation did. Truncation is never silent.
-  if (result.stdoutTruncated) return { bytes: result.stdout, truncated: true };
+  if (result.stdoutTruncated && (result.kind === "output-limited" || result.kind === "exited"))
+    return { bytes: result.stdout, truncated: true };
   if (result.kind !== "exited" || result.exitCode !== 0)
     throw new StoreError("INTERNAL_ERROR", `journalctl outcome is ${result.kind}` +
       (result.stderr.byteLength === 0 ? "" : `: ${result.stderr.toString("utf8").slice(0, 300)}`));

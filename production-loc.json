@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 277,
-    "n_lines": 36401,
+    "n_lines": 36413,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -696,12 +696,6 @@
     "code": 89,
     "language": "TypeScript"
   },
-  "src/extension/workspace-guard.ts": {
-    "blank": 5,
-    "comment": 25,
-    "code": 89,
-    "language": "TypeScript"
-  },
   "src/mail/facts.ts": {
     "blank": 5,
     "comment": 8,
@@ -858,6 +852,12 @@
     "code": 70,
     "language": "TypeScript"
   },
+  "src/process/policies.ts": {
+    "blank": 1,
+    "comment": 16,
+    "code": 69,
+    "language": "TypeScript"
+  },
   "src/cli/effects/context.ts": {
     "blank": 4,
     "comment": 4,
@@ -888,16 +888,16 @@
     "code": 66,
     "language": "TypeScript"
   },
+  "src/extension/workspace-guard.ts": {
+    "blank": 4,
+    "comment": 29,
+    "code": 66,
+    "language": "TypeScript"
+  },
   "src/protocol/log-response.ts": {
     "blank": 1,
     "comment": 4,
     "code": 66,
-    "language": "TypeScript"
-  },
-  "src/process/policies.ts": {
-    "blank": 1,
-    "comment": 12,
-    "code": 65,
     "language": "TypeScript"
   },
   "src/runtime/pi-runtime.ts": {
@@ -1116,6 +1116,12 @@
     "code": 47,
     "language": "TypeScript"
   },
+  "src/extension/contained-tools.ts": {
+    "blank": 1,
+    "comment": 19,
+    "code": 46,
+    "language": "TypeScript"
+  },
   "src/platform/stream-receive.ts": {
     "blank": 3,
     "comment": 15,
@@ -1174,12 +1180,6 @@
     "blank": 7,
     "comment": 9,
     "code": 43,
-    "language": "TypeScript"
-  },
-  "src/extension/contained-tools.ts": {
-    "blank": 1,
-    "comment": 16,
-    "code": 42,
     "language": "TypeScript"
   },
   "src/platform/host/record.ts": {
@@ -1296,6 +1296,12 @@
     "code": 35,
     "language": "TypeScript"
   },
+  "src/extension/inference-bridge.ts": {
+    "blank": 1,
+    "comment": 25,
+    "code": 34,
+    "language": "TypeScript"
+  },
   "src/mail/addresses.ts": {
     "blank": 3,
     "comment": 7,
@@ -1407,12 +1413,6 @@
   "src/domain/capabilities.ts": {
     "blank": 6,
     "comment": 9,
-    "code": 25,
-    "language": "TypeScript"
-  },
-  "src/extension/inference-bridge.ts": {
-    "blank": 1,
-    "comment": 17,
     "code": 25,
     "language": "TypeScript"
   },
@@ -1669,9 +1669,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1611,
-    "comment": 6477,
-    "code": 28313,
+    "blank": 1610,
+    "comment": 6496,
+    "code": 28307,
     "nFiles": 277
   }
 }

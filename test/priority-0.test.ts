@@ -23,7 +23,7 @@ import { DurabilityFaultError, type DurabilityObserver } from "../src/storage/du
 import { createCompleteConfigurationFixture } from "./fixtures/configuration.js";
 import { runCliProcess } from "../src/extension/cli-process.js";
 import { cliFailure } from "../src/extension/mail-tools.js";
-import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
+import { containWorkspaceTools } from "../src/extension/contained-tools.js";
 import { collectBindingTemporaries, observeProjectBinding, projectBindingDecision, publishProjectBinding, stateRootHasSociety } from "../src/runtime/provision.js";
 import { ERROR_METADATA, errorExit, StoreError, unobserved } from "../src/domain/errors.js";
 import { loadConfig } from "../src/config.js";
@@ -232,19 +232,19 @@ test("DR13 / P0-5: a CLI a tool stopped gave no answer; the tool says the outcom
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes; the guard refuses the write", { skip: process.getuid?.() === 0 }, () => {
+test("P0V-15 / P0-5: a workspace entry that cannot be observed is not zero bytes; the write is refused", { skip: process.getuid?.() === 0 }, async () => {
   const workspace = mkdtempSync(join(tmpdir(), "oma-p0v15-"));
   const locked = join(workspace, "locked");
   try {
     writeFileSync(join(workspace, "a.txt"), "small\n");
     mkdirSync(locked); writeFileSync(join(locked, "big.bin"), "x".repeat(64));
-    let handler: ((event: { toolName: string; input: Record<string, unknown> }) => unknown) | null = null;
-    guardWorkspaceTools({ on: (_name: string, listener: typeof handler) => { handler = listener; } } as never, workspace, 1024, true);
-    const write = { toolName: "write", input: { path: "note.txt", content: "hello" } };
-    assert.equal(handler!(write), undefined, "an observable small workspace admits a small write");
+    // P0V-122: the quota's one owner is the contained write.
+    const tools: Record<string, { execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<unknown> }> = {};
+    containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, 1024, true);
+    const write = (path: string): Promise<unknown> => tools.write!.execute("call", { path, content: "hello" }, undefined, undefined, { cwd: workspace });
+    await write("note.txt");
     chmodSync(locked, 0o600); // listable, but its entries cannot be looked at
-    assert.deepEqual(handler!(write), { block: true, reason: "agent workspace quota would be exceeded" },
-      "what could not be observed was counted as nothing");
+    await assert.rejects(write("other.txt"), /quota would be exceeded/, "what could not be observed was counted as nothing");
   } finally { chmodSync(locked, 0o700); rmSync(workspace, { recursive: true, force: true }); }
 });
 

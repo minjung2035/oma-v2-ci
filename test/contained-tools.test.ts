@@ -37,7 +37,7 @@ test("P0V-74 / R6-01: a write through a dangling link is refused and makes nothi
   assert.equal(existsSync(planted), false, "no file was made outside the workspace");
   // The check the guard does for every path tool refuses it too.
   let hook: ((event: { toolName: string; input: unknown }) => unknown) | undefined;
-  guardWorkspaceTools({ on: (_: string, handler: typeof hook) => { hook = handler; } } as never, workspace, 1024 * 1024, false);
+  guardWorkspaceTools({ on: (_: string, handler: typeof hook) => { hook = handler; } } as never, workspace, false);
   for (const tool of ["write", "grep", "find", "read"])
     assert.deepEqual(hook!({ toolName: tool, input: { path: "notes.md", content: "x" } }), { block: true, reason: "tool path is outside the agent workspace" }, tool);
 });

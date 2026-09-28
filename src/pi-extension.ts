@@ -33,7 +33,7 @@ export default function extension(pi: ExtensionAPI) {
   registerOmaTools(pi, workspace, PrincipalChannel.open());
   registerToolSurface(pi, OMA_TOOL_NAMES);
   startInferenceBridge(pi);
-  guardWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"));
+  guardWorkspaceTools(pi, workspace);
   containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX);
   registerDelivery(pi);
 }

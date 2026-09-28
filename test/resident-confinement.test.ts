@@ -6,12 +6,13 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
+import { containWorkspaceTools } from "../src/extension/contained-tools.js";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, confinedPath, hostSessionPath, residentArgv, residentProjectGit, residentsConfined, type ResidentDirectories } from "../src/sandbox.js";
 import { decodeRunLease } from "../src/protocol/run-lease.js";
 import { actorSocketPathAt, agentRootPathAt, runnerSessionDirPathAt, runnerViewPathAt, workspacePathAt } from "../src/storage/paths.js";
@@ -269,7 +270,7 @@ test("AV13 / TSP-009, PR-004: inside the sandbox the guard leaves the shell and 
     type Guard = (event: { toolName: string; input: Record<string, unknown> }) => { block: boolean; reason: string } | undefined;
     const guard = (sandboxed: boolean): Guard => {
       let handler: Guard | undefined;
-      guardWorkspaceTools({ on: (_name: string, fn: Guard) => { handler = fn; } } as never, f.dirs.workspace, 1 << 20, sandboxed);
+      guardWorkspaceTools({ on: (_name: string, fn: Guard) => { handler = fn; } } as never, f.dirs.workspace, sandboxed);
       return handler!;
     };
     const inside = guard(true);
@@ -302,25 +303,29 @@ test("AV17 / D01, SB-006: a session path the confined engine reports translates 
  * a 35 KB workspace was refused "agent workspace quota would be exceeded"
  * under a 2 GiB quota. Since the engine update (ENG1) the edit tool takes
  * `edits: [{ oldText, newText }]`, and the guard read the older top-level
- * `newText`: every edit, by every agent, was refused. The guard is bound here
- * to the input the pinned engine's own edit tool hands a tool_call handler. */
-test("AV25 / BATCH-006, TSP-009: the guard reads the edit input the pinned engine hands it", async () => {
+ * `newText`: every edit, by every agent, was refused. P0V-122 (G10-03): the
+ * guard no longer decides the quota at all; the contained write, its one
+ * owner, decides it from the edit's exact growth. */
+test("AV25 / BATCH-006, TSP-009, P0V-122: an edit is judged by its exact growth at the write, whatever form the model sent", async () => {
   const workspace = mkdtempSync(join(tmpdir(), "oma-av25-"));
   try {
-    writeFileSync(join(workspace, "a.txt"), "one\ntwo\n");
-    const tool = createEditToolDefinition(workspace);
+    writeFileSync(join(workspace, "a.txt"), `one\ntwo\n${"z".repeat(900)}\n`);
+    const tools: Record<string, { execute(id: string, params: Record<string, unknown>, signal: undefined, update: undefined, ctx: unknown): Promise<unknown> }> = {};
+    containWorkspaceTools({ registerTool: (tool: { name: string }) => { tools[tool.name] = tool as never; } } as never, workspace, 1024, true);
+    const edit = (params: Record<string, unknown>): Promise<unknown> => tools.edit!.execute("call", params, undefined, undefined, { cwd: workspace });
     let handler: ((event: { toolName: string; input: Record<string, unknown> }) => unknown) | null = null;
-    guardWorkspaceTools({ on: (_name: string, listener: typeof handler) => { handler = listener; } } as never, workspace, 1024, true);
-    // Both forms a model may send reach a handler as the engine prepares them.
+    guardWorkspaceTools({ on: (_name: string, listener: typeof handler) => { handler = listener; } } as never, workspace, true);
+    const tool = createEditToolDefinition(workspace);
+    // Both forms a model may send reach the guard as the engine prepares them, and pass it.
     for (const raw of [{ path: "a.txt", edits: [{ oldText: "one", newText: "uno" }, { oldText: "two", newText: "dos" }] },
-      { path: "a.txt", oldText: "one", newText: "uno" }]) {
-      const input = tool.prepareArguments!(raw) as Record<string, unknown>;
-      assert.equal(handler!({ toolName: "edit", input }), undefined, `a small edit was refused: ${JSON.stringify(input)}`);
-    }
-    const large = tool.prepareArguments!({ path: "a.txt", edits: [{ oldText: "one", newText: "x".repeat(2048) }] }) as Record<string, unknown>;
-    assert.deepEqual(handler!({ toolName: "edit", input: large }), { block: true, reason: "agent workspace quota would be exceeded" });
-    // An input the engine would not have validated is refused, not guessed at.
-    assert.equal((handler!({ toolName: "edit", input: { path: "a.txt", edits: [] } }) as { block?: boolean }).block, true);
+      { path: "a.txt", oldText: "one", newText: "uno" }])
+      assert.equal(handler!({ toolName: "edit", input: tool.prepareArguments!(raw) as Record<string, unknown> }), undefined);
+    await edit({ path: "a.txt", edits: [{ oldText: "one", newText: "uno" }] });
+    // Replacing 900 bytes with 900 others grows nothing: it fits a workspace near its quota.
+    await edit({ path: "a.txt", edits: [{ oldText: "z".repeat(900), newText: "y".repeat(900) }] });
+    assert.match(readFileSync(join(workspace, "a.txt"), "utf8"), /^uno\ntwo\ny{900}\n$/);
+    await assert.rejects(edit({ path: "a.txt", edits: [{ oldText: "two", newText: "x".repeat(2048) }] }), /quota would be exceeded/);
+    assert.match(readFileSync(join(workspace, "a.txt"), "utf8"), /^uno\ntwo\n/, "a refused edit changed the file");
   } finally { rmSync(workspace, { recursive: true, force: true }); }
 });
 

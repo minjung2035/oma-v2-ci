@@ -41,7 +41,7 @@ test("AV3 / PR-003, PR-004, FS-003: the Principal's model scope holds neither th
     mkdirSync(workspace, { recursive: true }); mkdirSync(sessions, { recursive: true });
     const history = join(sessions, "2026-09-25.jsonl"); writeFileSync(history, "{}\n");
     let handler: ((event: { toolName: string; input: Record<string, unknown> }) => unknown) | null = null;
-    guardWorkspaceTools({ on: (_name: string, listener: typeof handler) => { handler = listener; } } as never, workspace, 1024);
+    guardWorkspaceTools({ on: (_name: string, listener: typeof handler) => { handler = listener; } } as never, workspace);
     for (const toolName of ["read", "write", "edit"]) {
       const verdict = handler!({ toolName, input: { path: history, content: "x", newText: "x" } }) as { block?: boolean } | undefined;
       assert.equal(verdict?.block, true, `${toolName} reached the session history`);

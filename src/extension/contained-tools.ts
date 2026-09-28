@@ -15,7 +15,7 @@
  * edit are replaced there.
  */
 import {
-  createEditToolDefinition, createLsToolDefinition, createReadToolDefinition, createWriteToolDefinition,
+  createEditToolDefinition, createGrepToolDefinition, createLsToolDefinition, createReadToolDefinition, createWriteToolDefinition,
   detectSupportedImageMimeTypeFromFile, type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -50,6 +50,13 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, works
     readFile: async path => readWithin(workspace, path),
     access: async path => { accessWithin(workspace, path, false); },
     detectImageMimeType: path => withFileWithin(workspace, path, held => detectSupportedImageMimeTypeFromFile(held)),
+  } }));
+  // P0V-122 (G10-02): grep's own reads -- whether its start is a directory,
+  // the lines around a match -- are made as read's are. Its search is the
+  // engine's ripgrep, run without --follow.
+  pi.registerTool(createGrepToolDefinition(workspace, { operations: {
+    isDirectory: path => isDirectoryWithin(workspace, path),
+    readFile: path => readWithin(workspace, path).toString("utf8"),
   } }));
   pi.registerTool(createLsToolDefinition(workspace, { operations: {
     exists: path => existsWithin(workspace, path),

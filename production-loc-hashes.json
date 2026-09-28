@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "0326b22c39e02e78604fb9539d51905d06a093287ae437eeebc6f2dec2eec9aa",
-  "report": "79128087d7ee14794eebabc721e883d2930d1e7797ebefea3d3569aecc41eea7",
+  "report": "96e0ca663f0af640f3f966f9d788d727e6f6ee89ad3d1581b7cd5c6a57613dbd",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -349,7 +349,7 @@
     },
     {
       "path": "src/extension/contained-tools.ts",
-      "sha256": "c38e7cdc535b03d252dfae1a26915b859ce37c012d4ad715cd14252ecd739065"
+      "sha256": "2617c37ba47952dffdba9259a6fd16752a64aa3ba69cb1ac265db4cdab890f60"
     },
     {
       "path": "src/extension/delivery.ts",
@@ -357,7 +357,7 @@
     },
     {
       "path": "src/extension/inference-bridge.ts",
-      "sha256": "2737cceea2f460fd47ad768f7ef3c4ba32c2b6c45b3f05ac4f2da02537b821e4"
+      "sha256": "661143412774237284d9cd5a0d7422f4aa0bd9b20a9c8b6206769c38823072fa"
     },
     {
       "path": "src/extension/mail-tools.ts",
@@ -385,7 +385,7 @@
     },
     {
       "path": "src/extension/workspace-guard.ts",
-      "sha256": "affdf8b791ee273dcc541dd7acb87c1c0a83632595eaed0037a4f35d63749618"
+      "sha256": "e8fbefeaebf24b08d46cc530264a9d24294241176fc8ad001d8245741f69e7c8"
     },
     {
       "path": "src/frame.ts",
@@ -533,7 +533,7 @@
     },
     {
       "path": "src/pi-extension.ts",
-      "sha256": "e4385ec69219e518e9da559b3d669ab8086f5b0c5fcea0609336a6c376ce7846"
+      "sha256": "6e86938030bdb40d54eb5b4dca07aad4d201bc90d0cf0fbdaf2ab0bf8aaf16ad"
     },
     {
       "path": "src/platform/guest/archive.ts",
@@ -689,7 +689,7 @@
     },
     {
       "path": "src/process/policies.ts",
-      "sha256": "eaa147f56720a2cdef03d736ecdbf621280a96d4321218c89994e559bb4fcc0a"
+      "sha256": "aae7df66ea104a9e00deaede7f472de90996bfda1e37751798dcf8aacb9d0ba0"
     },
     {
       "path": "src/process/preparation.ts",
