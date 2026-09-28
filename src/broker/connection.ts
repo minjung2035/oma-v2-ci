@@ -1,7 +1,7 @@
 // IPC-002/003/005: one in-flight request; accepted workflow artifacts never
 // belong to socket cleanup. EOF, close, error and timeout are distinct events.
 import { ConnectionDecoder, FrameError, encodeFrame, type DecoderEvent } from "../frame.js";
-import { StoreError, publicFailure } from "../domain/errors.js";
+import { AcceptedFailure, StoreError, publicFailure } from "../domain/errors.js";
 import { TransportSpool, type ConnectionSpool, type ExecutionBody, type RawDescriptor } from "./transport-spool.js";
 import type { ConnectionPeerPin } from "./peer-pin.js";
 export interface SocketEvents { data: [Buffer]; end: []; close: [boolean]; error: [Error]; drain: [] }
@@ -239,7 +239,12 @@ export class RpcConnection {
       if (!outcome.ok) { this.fatal(outcome.error, task.id); return; }
       try {
         const frame = encodeFrame(outcome.value);
-        if (frame.length > Math.min(this.options.limits.frameBytes, 0xffffffff) + 4) throw new FrameError("FRAME_TOO_LARGE", "RPC response exceeds the configured frame budget");
+        // P0V-123 (G03-broker-01, r2-02), P0-5: the request was handled before
+        // its answer was found too large to send, and this connection cannot
+        // know whether that committed an effect. It is not refused as input
+        // ("never"): its outcome is unknown, asked again under the same key.
+        if (frame.length > Math.min(this.options.limits.frameBytes, 0xffffffff) + 4)
+          throw new AcceptedFailure("FRAME_TOO_LARGE", "the RPC response exceeds the configured frame budget; the request was handled", "possible");
         if (this.options.socket.destroyed) { this.close(); return; }
         if (this.options.socket.write(frame)) this.finishWrite(task); else current.phase = "backpressure";
       } catch (error) { this.fatal(error, task.id); }

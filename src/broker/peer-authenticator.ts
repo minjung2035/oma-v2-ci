@@ -25,6 +25,14 @@ function socketFd(socket: Socket): number {
   if (fd === null) throw new StoreError("AUTH_FAILED", "no socket fd");
   return fd;
 }
+/** P0V-124 (G03-broker-r2-04), P0-2: the one judgment of whether a peer
+ * runs inside a unit's cgroup -- the cgroup itself or one below it. Both
+ * must be known; an unknown one contains nothing and is contained by
+ * nothing. Every authority check here asks this, so none can drift. */
+export function insideCgroup(peerGroup: string | null | undefined, unitGroup: string | null | undefined): boolean {
+  if (!peerGroup || !unitGroup) return false;
+  return peerGroup === unitGroup || peerGroup.startsWith(unitGroup.endsWith("/") ? unitGroup : `${unitGroup}/`);
+}
 export class PeerAuthenticator {
   constructor(private readonly store: Store, private readonly units: UnitsModule, private readonly runs: RunRegistry,
     private readonly society: string, private readonly cleanupError: (error: unknown) => void) {}
@@ -51,13 +59,11 @@ export class PeerAuthenticator {
       if (!current || current.desired !== "enabled" || current.incarnation !== lease.incarnation || current.role !== agent.role || current.specHash !== agent.specHash) return new Set<Capability>();
       const observed = this.units.observe(actor); const peerGroup = peerCgroup(credentials.pid);
       if (observed.activeState === "unknown" || observed.invocationId !== run.invocationId || !observed.cgroup || !peerGroup) return new Set<Capability>();
-      const prefix = observed.cgroup.endsWith("/") ? observed.cgroup : `${observed.cgroup}/`;
-      if ((peerGroup !== observed.cgroup && !peerGroup.startsWith(prefix)) || !run.matches(observed.cgroup) || !credentials.alive()) return new Set<Capability>();
+      if (!insideCgroup(peerGroup, observed.cgroup) || !run.matches(observed.cgroup) || !credentials.alive()) return new Set<Capability>();
       return capabilitiesOf(current);
     };
     const observed = this.units.observe(actor); const peerGroup = peerCgroup(credentials.pid);
-    const prefix = observed.cgroup?.endsWith("/") ? observed.cgroup : `${observed.cgroup}/`;
-    if (agent.desired !== "enabled" || observed.activeState === "unknown" || observed.invocationId !== run.invocationId || !observed.cgroup || !peerGroup || (peerGroup !== observed.cgroup && !peerGroup.startsWith(prefix)) || !run.matches(observed.cgroup) || !credentials.alive()) return null;
+    if (agent.desired !== "enabled" || observed.activeState === "unknown" || observed.invocationId !== run.invocationId || !observed.cgroup || !peerGroup || !insideCgroup(peerGroup, observed.cgroup) || !run.matches(observed.cgroup) || !credentials.alive()) return null;
     return { actor, incarnation: agent.incarnation, role: agent.role, channel,
       get capabilities() { return currentCapabilities(); },
       peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid, cgroup: peerGroup } };
@@ -96,13 +102,11 @@ export class PeerAuthenticator {
   requireRunnerUnit(peer: BoundPeer, agent: Actor, invocationId?: string): void {
     const unit = unitName(this.society, agent, "service");
     const observed = this.units.observe(agent); const peerGroup = peerCgroup(peer.pid);
-    const prefix = observed.cgroup?.endsWith("/") ? observed.cgroup : `${observed.cgroup}/`;
-    if (!peer.alive() || !observed.cgroup || !peerGroup || (peerGroup !== observed.cgroup && !peerGroup.startsWith(prefix)) || (invocationId !== undefined && observed.invocationId !== invocationId)) throw new StoreError("AUTH_FAILED", `caller is not the current ${unit} invocation`);
+    if (!peer.alive() || !insideCgroup(peerGroup, observed.cgroup) || (invocationId !== undefined && observed.invocationId !== invocationId)) throw new StoreError("AUTH_FAILED", `caller is not the current ${unit} invocation`);
   }
   requireHostUnit(peer: BoundPeer, kind: "principal-relay" | "reconcile"): void {
     const unitGroup = this.units.unitCgroup(kind); const peerGroup = peerCgroup(peer.pid);
-    const prefix = unitGroup.endsWith("/") ? unitGroup : `${unitGroup}/`;
-    if (!peer.alive() || !unitGroup || !peerGroup || (peerGroup !== unitGroup && !peerGroup.startsWith(prefix))) throw new StoreError("AUTH_FAILED", `caller is not inside the ${kind} service`);
+    if (!peer.alive() || !insideCgroup(peerGroup, unitGroup)) throw new StoreError("AUTH_FAILED", `caller is not inside the ${kind} service`);
   }
   runnerActor(peer: BoundPeer): Actor {
     const peerGroup = peerCgroup(peer.pid);
@@ -110,10 +114,7 @@ export class PeerAuthenticator {
     const matches: Actor[] = [];
     for (const row of this.store.listAgents()) {
       if (row.role !== "resident" || row.desired === "retired") continue;
-      const unitGroup = this.units.observe(row.name).cgroup;
-      if (!unitGroup) continue;
-      const prefix = unitGroup.endsWith("/") ? unitGroup : `${unitGroup}/`;
-      if (peerGroup === unitGroup || peerGroup.startsWith(prefix)) matches.push(row.name);
+      if (insideCgroup(peerGroup, this.units.observe(row.name).cgroup)) matches.push(row.name);
     }
     if (matches.length !== 1 || !peer.alive()) throw new StoreError("AUTH_FAILED", "runner cgroup identity is ambiguous");
     return matches[0]!;

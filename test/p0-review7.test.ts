@@ -371,3 +371,71 @@ test("P0V-122 / G10-02: grep's own reads are contained, and the pinned engine wa
     assert.doesNotMatch(source, /["'](?:--follow|-L)["']/, `${tool} is run with link following`);
   }
 });
+
+test("P0V-123 / G03-broker-01, r2-02: an answer too large to send after the request was handled is an unknown outcome, asked again under the same key", async t => {
+  const { EventEmitter } = await import("node:events");
+  const { RpcConnection } = await import("../src/broker/connection.js");
+  const { SharedPeerPin } = await import("../src/broker/peer-pin.js");
+  const { encodeFrame, FrameParser } = await import("../src/frame.js");
+  class Sock extends EventEmitter {
+    destroyed = false; output: Buffer[] = [];
+    pause(): void {} resume(): void {}
+    write(bytes: Uint8Array): boolean { this.output.push(Buffer.from(bytes)); return true; }
+    end(bytes?: Uint8Array): void { if (bytes) this.output.push(Buffer.from(bytes)); }
+    destroy(): void { if (!this.destroyed) { this.destroyed = true; this.emit("close", false); } }
+  }
+  const root = mkdtempSync(join(tmpdir(), "oma-answer-"));
+  t.after(() => { rmSync(root, { recursive: true, force: true }); });
+  const socket = new Sock(); const tasks: Promise<unknown>[] = [];
+  let handled = false;
+  new RpcConnection({ socket, peer: new SharedPeerPin(() => true, () => undefined), stagingRoot: root,
+    limits: { frameBytes: 256, idleStreamSeconds: 2, receiptWaitSeconds: 5 },
+    handle: async () => { handled = true; return { v: 1, id: "req", ok: true, result: { big: "x".repeat(2000) } }; },
+    preflight: () => undefined, onTask: (task: Promise<unknown>) => { tasks.push(task); } } as never);
+  socket.emit("data", encodeFrame({ v: 1, id: "req", method: "mail.send", params: {} }));
+  await Promise.allSettled(tasks); await new Promise(resolve => setImmediate(resolve));
+  const frames = socket.output.flatMap(chunk => new FrameParser(1 << 20).feed(chunk).map(frame => frame.raw));
+  assert.equal(handled, true);
+  assert.deepEqual(frames.map(frame => [frame.ok, (frame.error as { code: string; retry: string }).code, (frame.error as { retry: string }).retry]),
+    [[false, "FRAME_TOO_LARGE", "same-key"]], "a handled request was answered as refused input");
+});
+
+test("P0V-124 / G03-broker-r2-04: one judgment of whether a peer runs inside a unit's cgroup", async () => {
+  const { insideCgroup } = await import("../src/broker/peer-authenticator.js");
+  const unit = "/user.slice/app.slice/oma-demo-alice.service";
+  assert.equal(insideCgroup(unit, unit), true);
+  assert.equal(insideCgroup(`${unit}/payload`, unit), true);
+  assert.equal(insideCgroup(`${unit}/payload`, `${unit}/`), true);
+  assert.equal(insideCgroup(`${unit}x`, unit), false, "a sibling whose name begins the same is not inside");
+  assert.equal(insideCgroup("/user.slice/app.slice", unit), false);
+  for (const [peer, group] of [[null, unit], [unit, ""], [unit, null], ["", unit]] as const) assert.equal(insideCgroup(peer, group), false);
+});
+
+test("P0V-126 / G02-ledger-r2-03: every row a store writes is stamped from its one clock, clamped where it steps back", async t => {
+  const { Store } = await import("../src/store.js");
+  const { makeValidAgent } = await import("./fixtures/spec.js");
+  const root = mkdtempSync(join(tmpdir(), "oma-clock-"));
+  let clock = 5_000_000;
+  const store = new Store(join(root, "runtime.sqlite"), undefined, null, () => clock);
+  t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
+  store.transaction(tx => { tx.insertAgent(makeValidAgent("alice")); });
+  assert.deepEqual([store.getAgent("alice")!.createdAtMs, store.getAgent("alice")!.updatedAtMs], [5_000_000, 5_000_000]);
+  clock = 4_000_000;
+  store.transaction(tx => { tx.updateAgent({ name: "alice", incarnation: store.getAgent("alice")!.incarnation + 1 }); tx.follow("news", "alice"); });
+  assert.equal(store.getAgent("alice")!.updatedAtMs, 5_000_000, "a clock that stepped back is clamped at the row's creation");
+  assert.equal(store.allSubscriptions().find(row => row.topic === "news")?.createdAtMs, 4_000_000, "a subscription read its own clock");
+  clock = 6_000_000;
+  store.transaction(tx => { tx.updateAgent({ name: "alice", desired: "stopped" }); });
+  assert.equal(store.getAgent("alice")!.updatedAtMs, 6_000_000);
+  // An operation is stamped from the same clock.
+  const { requestHash } = await import("../src/hash.js");
+  const { makeValidMessagePlan } = await import("./fixtures/valid.js");
+  const operation = "op-00000000-0000-4000-8000-000000000126";
+  const input = { to: ["alice"], subject: "clock", kind: "message", body: "clock\n" };
+  clock = 7_000_000;
+  store.transaction(tx => { tx.acceptOperation({ id: operation, actor: "alice", requestKey: "clock-126", requestHash: requestHash("mail.send", input),
+    kind: "mail.send", payloadJson: JSON.stringify(input), planJson: JSON.stringify({ kind: "mail.send", message: makeValidMessagePlan(operation) }) });
+    tx.insertDeliveries([{ messageId: "m-00000000-0000-4000-8000-000000000126-0", recipient: "alice", operationId: operation }]); });
+  const row = store.getOperationById(operation as never)!;
+  assert.deepEqual([row.createdAtMs, row.updatedAtMs], [7_000_000, 7_000_000]);
+});

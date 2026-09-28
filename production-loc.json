@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 277,
-    "n_lines": 36413,
+    "n_lines": 36427,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -26,8 +26,8 @@
   },
   "src/protocol/methods.ts": {
     "blank": 7,
-    "comment": 13,
-    "code": 408,
+    "comment": 16,
+    "code": 407,
     "language": "TypeScript"
   },
   "src/storage/delivery-receipt.ts": {
@@ -62,8 +62,8 @@
   },
   "src/store.ts": {
     "blank": 4,
-    "comment": 47,
-    "code": 346,
+    "comment": 51,
+    "code": 349,
     "language": "TypeScript"
   },
   "src/units.ts": {
@@ -122,8 +122,8 @@
   },
   "src/broker/connection.ts": {
     "blank": 1,
-    "comment": 8,
-    "code": 256,
+    "comment": 12,
+    "code": 257,
     "language": "TypeScript"
   },
   "src/git/context-repository.ts": {
@@ -248,7 +248,7 @@
   },
   "src/broker/public-dispatcher.ts": {
     "blank": 3,
-    "comment": 15,
+    "comment": 17,
     "code": 188,
     "language": "TypeScript"
   },
@@ -558,12 +558,6 @@
     "code": 107,
     "language": "TypeScript"
   },
-  "src/broker/peer-authenticator.ts": {
-    "blank": 1,
-    "comment": 19,
-    "code": 106,
-    "language": "TypeScript"
-  },
   "src/runtime/host-tenure.ts": {
     "blank": 21,
     "comment": 93,
@@ -580,6 +574,12 @@
     "blank": 12,
     "comment": 20,
     "code": 104,
+    "language": "TypeScript"
+  },
+  "src/broker/peer-authenticator.ts": {
+    "blank": 1,
+    "comment": 23,
+    "code": 103,
     "language": "TypeScript"
   },
   "src/storage/paths.ts": {
@@ -812,8 +812,8 @@
   },
   "src/storage/operation-transitions.ts": {
     "blank": 1,
-    "comment": 2,
-    "code": 74,
+    "comment": 3,
+    "code": 75,
     "language": "TypeScript"
   },
   "src/protocol/jsonl.ts": {
@@ -1398,12 +1398,6 @@
     "code": 26,
     "language": "TypeScript"
   },
-  "src/protocol/request-codec.ts": {
-    "blank": 2,
-    "comment": 6,
-    "code": 26,
-    "language": "TypeScript"
-  },
   "src/cli/effects/mail.ts": {
     "blank": 2,
     "comment": 4,
@@ -1456,6 +1450,12 @@
     "blank": 2,
     "comment": 15,
     "code": 22,
+    "language": "TypeScript"
+  },
+  "src/protocol/request-codec.ts": {
+    "blank": 2,
+    "comment": 6,
+    "code": 21,
     "language": "TypeScript"
   },
   "src/broker/logs.ts": {
@@ -1670,8 +1670,8 @@
   },
   "SUM": {
     "blank": 1610,
-    "comment": 6496,
-    "code": 28307,
+    "comment": 6514,
+    "code": 28303,
     "nFiles": 277
   }
 }

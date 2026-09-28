@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "0326b22c39e02e78604fb9539d51905d06a093287ae437eeebc6f2dec2eec9aa",
-  "report": "96e0ca663f0af640f3f966f9d788d727e6f6ee89ad3d1581b7cd5c6a57613dbd",
+  "report": "09e6b26b6a162fa166753f785396699a3b1032426a542fe327d0834973959d0c",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -53,7 +53,7 @@
     },
     {
       "path": "src/broker/connection.ts",
-      "sha256": "531b607d79a42147edcf5b030cc2efdd1b8a3d7b7a13d62452dcea57dcd4ac68"
+      "sha256": "add69b5d6a3ce9fb17feb352732d91c7c2676571b3d7a975a6d40c8044425110"
     },
     {
       "path": "src/broker/internal-dispatcher.ts",
@@ -65,7 +65,7 @@
     },
     {
       "path": "src/broker/peer-authenticator.ts",
-      "sha256": "301660b69e4df165e414f20087fc5b9b3b608be97528b6fe3a27cc850d4e5635"
+      "sha256": "6b5280c134360d7960b84a68fbeb43b07f58d3237963bcda10c925b7662c4e0f"
     },
     {
       "path": "src/broker/peer-pin.ts",
@@ -81,7 +81,7 @@
     },
     {
       "path": "src/broker/public-dispatcher.ts",
-      "sha256": "e28f81405d7bc8da190bb853f8d2f8e0df827f47bccab0203aa5d1505b9d3198"
+      "sha256": "fee9e633f991e7f73ca5bacf744cc58e2b9a3b8ed916bbe5fb700f33bb792193"
     },
     {
       "path": "src/broker/replies.ts",
@@ -733,7 +733,7 @@
     },
     {
       "path": "src/protocol/methods.ts",
-      "sha256": "c2c116b40301efa4d1a74b56a536681825cd3c376635d2fe1d7b81b1fc90de57"
+      "sha256": "99024fb840120810f7aa405fb157c82e2b2fe3f100b4e46cfdc4df5885bc460c"
     },
     {
       "path": "src/protocol/operation-results.ts",
@@ -753,7 +753,7 @@
     },
     {
       "path": "src/protocol/request-codec.ts",
-      "sha256": "be6463ccccedd3d6a94ea71107a34e67c248813b8260d75a9d430d9bc8380fcb"
+      "sha256": "93559207c0d2296a5e3dbdac5fdc68980b6109a3d242ceca235e80f93cfffefd"
     },
     {
       "path": "src/protocol/response-codec.ts",
@@ -937,7 +937,7 @@
     },
     {
       "path": "src/storage/operation-transitions.ts",
-      "sha256": "c2488a3cd44f94dba3b4e8dde5626f55b321793f513e1840495afe2d018bd9da"
+      "sha256": "c46b6b46b43d3b3c00cb388b5c1e5ed1c09ced62d68c1eda8be942cfb66c8988"
     },
     {
       "path": "src/storage/paths.ts",
@@ -985,7 +985,7 @@
     },
     {
       "path": "src/store.ts",
-      "sha256": "f53b2381428f0eb3f9888eadef2021276dd739d24cbc813ad2677a0cb92ef0f5"
+      "sha256": "2d1d3b09fe40076686a996248a78a70dccb646d94bdd1d42b775e960c03de97a"
     },
     {
       "path": "src/tui/app.ts",

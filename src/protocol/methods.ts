@@ -37,8 +37,10 @@ import {
   statusGetParamsCheck,
 } from "../validate.js";
 
+/** What a method's parameter check may depend on. P0V-125 (G02-ledger-r2-01):
+ * it held the society's whole agent list, which no check read, and every
+ * public request decoded that list to build it. */
 export interface ParamsContext {
-  readonly actorNames: ReadonlySet<string>;
   readonly limits: ProtocolLimits;
 }
 export type AuthorityCheck =

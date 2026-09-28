@@ -73,7 +73,7 @@ type PublicValidation = ValidatedPublicCall | { ok: false; id: string; failure: 
 export class PublicDispatcher {
   constructor(private readonly deps: PublicDispatchDependencies) {}
   private checkParams<M extends PublicMethod>(method: M, rawParams: unknown): PublicMethods[M]["params"] | null {
-    return decodePublicParams(method, rawParams, { actorNames: new Set(this.deps.store.listAgents().map(agent => agent.name)), limits: this.deps.limits });
+    return decodePublicParams(method, rawParams, { limits: this.deps.limits });
   }
   private readAuthority(auth: AuthContext): { actor: PublicAgentView | null; failure: Failure | null } {
     const actor = this.deps.store.getAgent(auth.actor);
@@ -171,6 +171,8 @@ export class PublicDispatcher {
           if (!git) throw new StoreError("UNSUPPORTED_PROFILE", "git module unavailable");
           const refs = git.knownRefs();
           const known = [...new Set([refs.main, ...refs.published])];
+          // A bounded subset, main first (the contract says so): a bundle built on
+          // fewer prerequisites is still complete, only larger.
           const result = { hasCandidate: known.includes(params.candidate), prerequisites: [] as Oid[] };
           let bytes = Buffer.byteLength(JSON.stringify(okAnswer(id, result)));
           for (const oid of known) {

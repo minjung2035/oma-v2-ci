@@ -4,7 +4,6 @@
 import type { MutationMethod } from "../../implementation/contracts/durable.js";
 import type { ProtocolLimits } from "../../implementation/contracts/host.js";
 import type { PublicMethods } from "../../implementation/contracts/public-wire.js";
-import { isValidActorName } from "../domain/identifiers.js";
 import { snapshotJson } from "../domain/canonical-json.js";
 import { decodePublicParams } from "./methods.js";
 
@@ -24,11 +23,7 @@ export function decodeMutationPayload<K extends MutationMethod>(method: K, value
   const copied = snapshotJson(value);
   if (copied === null || typeof copied !== "object" || Array.isArray(copied))
     throw new TypeError("mutation payload must be a JSON object");
-  const actorNames = new Set<string>();
-  if (Array.isArray(copied.to)) {
-    for (const address of copied.to) if (typeof address === "string" && isValidActorName(address)) actorNames.add(address);
-  }
-  const decoded = decodePublicParams(method, copied, { actorNames, limits: structuralLimits });
+  const decoded = decodePublicParams(method, copied, { limits: structuralLimits });
   if (decoded === null) throw new TypeError(`invalid caller DTO for ${method}`);
   return decoded;
 }

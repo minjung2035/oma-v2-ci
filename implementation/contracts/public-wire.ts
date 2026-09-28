@@ -15,6 +15,10 @@ export interface PublicMethods {
   'agent.stop': { params: { agent: Actor }; result: Receipt };
   'agent.continue': { params: { note: string }; result: Receipt };
   'agent.wait': { params: Record<string, never>; result: { accepted: boolean } };
+  /** `prerequisites` is a bounded subset of the commits the broker holds --
+   * main first, then published candidates, as many as one frame carries -- not
+   * a complete list (G03-broker-02). A bundle built on any subset is complete,
+   * only larger; `hasCandidate` is judged against all of them. */
   'git.known': { params: { candidate: Oid }; result: { hasCandidate: boolean; prerequisites: Oid[] } };
   'git.submit': { params: { candidate: Oid; exportRef: string; prerequisites: Oid[]; to: Address[]; subject: string; body: string; paths: string[]; bundle?: BlobDescriptor }; result: Receipt };
   'git.integrate': { params: { candidate: Oid; expected: Oid }; result: Receipt };

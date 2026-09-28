@@ -172,7 +172,14 @@ export class Store {
   private readonly journal: OperationJournal;
   private readonly transactions = new TransactionScope(this);
   private repositoryIdentity: RepositoryIdentity | null;
-  constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null) {
+  /** P0V-126 (G02-ledger-r2-03), P0-2: the one clock every row this store
+   * writes is stamped from -- agents, operations, deliveries, subscriptions,
+   * batches and usage alike. A reading that goes backwards is clamped where it
+   * lands (MAX(?, created_at_ms)); what the time is, is read here only. */
+  private readonly now: () => number;
+  constructor(readonly path: string, readonly busyRetries: number = DEFAULT_BUSY_RETRIES, identity: RepositoryIdentity | null = null,
+    now: () => number = () => Date.now()) {
+    this.now = now;
     this.repositoryIdentity = null;
     if (identity !== null) this.bindRepositoryIdentity(identity);
     preflightDatabase(path);
@@ -189,9 +196,9 @@ export class Store {
       this.db.exec("PRAGMA busy_timeout = 5000");
       this.migrate();
       this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
-      this.transitions = new LedgerTransitions(this.db, this.reader, () => this.requireTx());
+      this.transitions = new LedgerTransitions(this.db, this.reader, () => this.requireTx(), this.now);
       this.journal = new OperationJournal(this.reader,
-        new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation)),
+        new OperationTransitions(this.db, this.reader, this.transactions, operation => this.planContext(operation), this.now),
         this.transactions);
     } catch (error) {
       try { this.db.close(); }
@@ -279,7 +286,7 @@ export class Store {
     this.requireTx();
     // P0V-56: one event, one reading of the clock -- two readings could put
     // the update before the creation it belongs to.
-    const now = Date.now();
+    const now = this.now();
     this.db.prepare(`INSERT INTO agents
       (name, spec_hash, role, desired, incarnation, profile, created_by, spec_json, created_at_ms, updated_at_ms)
       VALUES (?,?,?,?,?,?,?,?,?,?)`).run(agent.name, agent.specHash, agent.role, agent.desired, agent.incarnation,
@@ -297,7 +304,7 @@ export class Store {
    * forward: an incarnation used again would let a new run's facts be read as
    * an earlier run's. */
   updateAgent(agent: { name: string; desired?: AgentRow["desired"]; incarnation?: number }): void {
-    this.requireTx(); const now = Date.now();
+    this.requireTx(); const now = this.now();
     for (const key of Object.keys(agent))
       if (key !== "name" && key !== "desired" && key !== "incarnation")
         throw new StoreError("INTERNAL_ERROR", `agent update has no spec rewrite or other field: ${key}`);

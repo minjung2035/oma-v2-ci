@@ -26,7 +26,7 @@ const limits: ProtocolLimits = {
   replyReferences: 8, contextFiles: 8, contextBytes: 4096, bundleBytes: 8192,
   logBytes: 1024, batchMaxMessages: 8, idleStreamSeconds: 1, receiptWaitSeconds: 1,
 };
-const context = { actorNames: new Set(["alice"]), limits };
+const context = { limits };
 
 test("public/internal registries are closed, disjoint, and classify all 11 mutations", () => {
   assert.equal(Object.keys(PUBLIC_METHODS).length, 16);
