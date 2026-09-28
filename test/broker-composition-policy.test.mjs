@@ -107,7 +107,7 @@ async function compose(environment, { lockHeld = true, claim = "taken", cgroup =
       async start(phases) { await phases.recover(); await phases.listen(); await phases.notify(); await phases.activate(); }
     } },
     // Deliberately controlled qualification gates: this is wiring proof, not a supported deployment profile.
-    "../runtime/assets.js": { assertHostDirectoryLayout() {}, assertRuntimeAssets() {}, runtimeAssets: () => ({}),
+    "../runtime/assets.js": { assertHostDirectoryLayout() {}, assertStateRoot() {}, assertRuntimeAssets() {}, runtimeAssets: () => ({}),
       hostLaunchLocation: (society, _env, configPath) => ({ society, stateRoot: `/data/oma/${society}`, runRoot: `/run/oma/${society}`,
         configPath: configPath ?? `/data/oma/${society}/config.json` }),
       launchedLocation: (args, society) => ({ society, configPath: args[args.indexOf("--config") + 1],

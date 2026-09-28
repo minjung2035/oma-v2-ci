@@ -240,9 +240,22 @@ export function spawnInteractive(executable: string, argv: readonly string[], cw
   while (terminal.length < SOCIETY_FENCE_FD) terminal.push("ignore");
   return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio: [...terminal, fence] });
 }
-export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>): ChildProcessWithoutNullStreams {
+/** DR18 (D-5): a sandbox whose argv loads a filter (`--seccomp 3`) gets the
+ * filter on descriptor 3, the way the adapter delivers it; argv that names a
+ * filter it is not given is refused rather than left for bubblewrap to fail
+ * on a descriptor this process never opened. */
+export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>, filter?: Uint8Array): ChildProcessWithoutNullStreams {
   if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox spawn requires direct pinned bubblewrap argv");
+  if (argv.includes("--seccomp") !== (filter !== undefined))
+    throw new StoreError("UNSUPPORTED_PROFILE", "a sandbox's filter and its --seccomp argument come together");
   validDirectSpawn("/usr/bin/bwrap", argv.slice(1), "/", env);
-  return spawn("/usr/bin/bwrap", argv.slice(1), { env: { ...env }, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn("/usr/bin/bwrap", argv.slice(1), { env: { ...env }, shell: false,
+    stdio: filter === undefined ? ["pipe", "pipe", "pipe"] : ["pipe", "pipe", "pipe", "pipe"] }) as ChildProcessWithoutNullStreams;
+  if (filter !== undefined) {
+    const channel = child.stdio[3] as unknown as { on(event: "error", listener: () => void): void; end(bytes: Uint8Array): void };
+    channel.on("error", () => {});
+    channel.end(filter);
+  }
+  return child;
 }

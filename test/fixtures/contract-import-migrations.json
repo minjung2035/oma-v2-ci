@@ -17,7 +17,7 @@
     },
     "src/ports/runtime.ts": {
       "sourceBlob": "18ff3990b027e92a0d0dc825552d4a01578a968a",
-      "bodySha256": "0f5674695c0ebd6ea2c7f07fe2204ba95471504233b83799d583bd99cfb65191",
+      "bodySha256": "50bbf202c8f461a5f6cb41eb4368148773faa49cdd7e2d0365c93966dd1e3215",
       "bindings": [["Actor", "Actor"], ["AgentStatus", "AgentStatus"], ["PreparedBatch", "PreparedBatch"], ["RunLease", "RunLease"], ["SandboxPlan", "SandboxPlan"], ["UnitObservation", "UnitObservation"], ["ResourceLimits", "ResourceLimits"], ["ProtocolLimits", "ProtocolLimits"]],
       "inline": []
     }

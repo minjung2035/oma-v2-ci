@@ -80,6 +80,11 @@ jobs:
           if-no-files-found: error
       - name: Install the sandbox the containment tests need
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - name: Load vsock loopback for the platform lane's bridge
+        # macos-platform §10.2: the guest bridge is tested over vsock loopback.
+        # A kernel without the module fails the lane, visibly, rather than
+        # letting the bridge tests skip (a skip is not a pass).
+        run: sudo modprobe vsock_loopback
       - name: Install the pinned line counter
         # The LOC gate re-measures the source and compares every count, so the
         # exact counting tool is part of the evidence. The distribution package
@@ -142,6 +147,7 @@ jobs:
           run_check verify-durable 1500 npm run verify:durable -- --out "$EVIDENCE/durable"
           run_check verify-property 900 npm run verify:property -- --out "$EVIDENCE/property"
           run_check verify-stress 900 npm run verify:stress -- --out "$EVIDENCE/stress"
+          run_check verify-platform 1000 npm run verify:platform -- --out "$EVIDENCE/platform"
           for lane in kernel crash all; do
             printf '%s\tNOT_RUN\n' "verify-$lane" >> "$EVIDENCE/exit-codes.tsv"
           done

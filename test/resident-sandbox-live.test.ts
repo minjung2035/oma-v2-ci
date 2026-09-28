@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -30,6 +30,17 @@ import { observeDeliveryReceipt, publishDeliveryReceipt } from "../src/storage/d
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const bwrapAvailable = spawnSync("bwrap", ["--version"]).status === 0;
+
+/** DR18 (D-5): a probe run on the production plan gets the plan's filter on
+ * descriptor 3, as the adapter gives it; bubblewrap reads it to the end. */
+function withFilter<T>(plan: { readonly filter?: Uint8Array }, run: (stdio: ["pipe", "pipe", "pipe", number]) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), "oma-filter-"));
+  const path = join(dir, "filter.bpf");
+  writeFileSync(path, plan.filter ?? new Uint8Array());
+  const fd = openSync(path, "r");
+  try { return run(["pipe", "pipe", "pipe", fd]); }
+  finally { closeSync(fd); rmSync(dir, { recursive: true, force: true }); }
+}
 
 test("T117 a confined Resident reaches its provider only through the relay, with the real key", {
   skip: bwrapAvailable ? false : "bubblewrap is not installed on this host",
@@ -105,7 +116,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
       },
     });
     const plan = adapter.spawnPlan();
-    child = spawnSandboxed([plan.command, ...plan.args], plan.env);
+    child = spawnSandboxed([plan.command, ...plan.args], plan.env, plan.filter);
     child.stderr.on("data", chunk => { stderr += String(chunk); });
     rpc = new PiRpcClient(child, { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30 });
     await rpc.send({ id: "go", type: "prompt", message: "say hello" });
@@ -368,7 +379,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
       },
     });
     const plan = adapter.spawnPlan();
-    child = spawnSandboxed([plan.command, ...plan.args], plan.env);
+    child = spawnSandboxed([plan.command, ...plan.args], plan.env, plan.filter);
     child.stderr.on("data", chunk => { stderr += String(chunk); });
     rpc = new PiRpcClient(child, { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30 });
     const events: { type: string; message?: { role?: string; customType?: string; stopReason?: string } }[] = [];
@@ -456,7 +467,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     });
     const plan = adapter.spawnPlan();
     const separator = plan.args.lastIndexOf("--");
-    const probe = spawnSync(plan.command, [...plan.args.slice(0, separator + 1), "/opt/oma-node/node", "-e", `
+    const probe = withFilter(plan, stdio => spawnSync(plan.command, [...plan.args.slice(0, separator + 1), "/opt/oma-node/node", "-e", `
       const fs = require("fs");
       const read = p => { try { return fs.readFileSync(p, "utf8").length; } catch (e) { return e.code; } };
       const list = p => { try { return fs.readdirSync(p); } catch (e) { return e.code; } };
@@ -465,7 +476,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
         tuiDir: list("/opt/oma/dist/src/tui"), tuiSource: list("/opt/oma/src/tui"),
         entry: read("/opt/oma/dist/src/entry/oma.js"), entrySource: read("/opt/oma/src/entry/oma.ts"),
         writeIntoMask: write("/opt/oma/dist/src/tui/planted.js"),
-        extension: read("/opt/oma/dist/src/pi-extension.js") }));`], { encoding: "utf8", timeout: 30000 });
+        extension: read("/opt/oma/dist/src/pi-extension.js") }));`], { encoding: "utf8", timeout: 30000, stdio }));
     assert.equal(probe.status, 0, probe.stderr);
     const seen = JSON.parse(probe.stdout.trim()) as Record<string, unknown>;
     assert.deepEqual(seen.tuiDir, [], "the built product surface is readable inside");
@@ -533,8 +544,8 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
     const plan = adapter.spawnPlan();
     // The production plan, with a shell in the engine's place.
     const at = plan.args.lastIndexOf("--");
-    const probe = spawnSync(plan.command, [...plan.args.slice(0, at + 1), "/bin/sh", "-c",
-      "command -v oma; command -v node; node --version; oma; echo \"exit=$?\""], { encoding: "utf8", timeout: 30000 });
+    const probe = withFilter(plan, stdio => spawnSync(plan.command, [...plan.args.slice(0, at + 1), "/bin/sh", "-c",
+      "command -v oma; command -v node; node --version; oma; echo \"exit=$?\""], { encoding: "utf8", timeout: 30000, stdio }));
     const lines = `${probe.stdout}\n${probe.stderr}`;
     assert.match(lines, /^\/opt\/oma\/dist\/libexec\/oma$/m, `oma is not on the sandbox's PATH: ${lines.slice(0, 600)}`);
     assert.match(lines, /^\/opt\/oma-node\/node$/m, "node on the PATH is not the pinned Node");

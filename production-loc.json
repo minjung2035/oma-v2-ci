@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 273,
-    "n_lines": 35720,
+    "n_lines": 35733,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -294,6 +294,12 @@
     "code": 175,
     "language": "TypeScript"
   },
+  "src/process/async.ts": {
+    "blank": 4,
+    "comment": 82,
+    "code": 175,
+    "language": "TypeScript"
+  },
   "src/runtime/pi-spawn-plan.ts": {
     "blank": 9,
     "comment": 74,
@@ -328,12 +334,6 @@
     "blank": 15,
     "comment": 32,
     "code": 167,
-    "language": "TypeScript"
-  },
-  "src/process/async.ts": {
-    "blank": 4,
-    "comment": 78,
-    "code": 166,
     "language": "TypeScript"
   },
   "src/mail.ts": {
@@ -1646,8 +1646,8 @@
   },
   "SUM": {
     "blank": 1568,
-    "comment": 6197,
-    "code": 27955,
+    "comment": 6201,
+    "code": 27964,
     "nFiles": 273
   }
 }

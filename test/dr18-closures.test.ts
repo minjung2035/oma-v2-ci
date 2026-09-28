@@ -10,6 +10,7 @@ import { StoreError } from "../src/domain/errors.js";
 import { RegistryOperations } from "../src/lifecycle/registry-operations.js";
 import { makeValidAgent } from "./fixtures/spec.js";
 import { NON_LOCAL_FILESYSTEMS, assertStateRoot } from "../src/runtime/assets.js";
+import { spawnSandboxed } from "../src/process/async.js";
 
 const peer = { pid: 1, uid: 1000, gid: 1000, cgroup: null };
 
@@ -161,4 +162,13 @@ test("DR18 / S-06: a state root on a network or user-space file system is refuse
     assert.throws(() => assertStateRoot(join(dir, "link", "a"), on(0xef53)), /symlink/);
     assert.deepEqual(seen, []);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("DR18 / D-5: a sandbox is started with its filter exactly when its argv loads one", () => {
+  const env = { PATH: "/usr/bin:/bin" };
+  // A filter named but not given, or given but not named: refused before anything runs.
+  assert.throws(() => spawnSandboxed(["bwrap", "--seccomp", "3", "--", "/bin/true"], env),
+    (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE");
+  assert.throws(() => spawnSandboxed(["bwrap", "--", "/bin/true"], env, new Uint8Array(8)),
+    (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE");
 });
