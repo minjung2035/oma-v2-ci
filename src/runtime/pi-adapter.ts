@@ -2,7 +2,7 @@
  * hand it a prepared batch, and wait for the trusted boundary it reports.
  * How the process is started lives in `pi-spawn-plan.ts`.
  */
-import { spawnOwnedRpc } from "../process/async.js";
+import { assertSandboxFilterPaired, deliverSandboxFilter, spawnOwnedRpc } from "../process/async.js";
 import { realpathSync } from "node:fs";
 import { basename } from "node:path";
 import type { PreparedBatch } from "../../implementation/contracts.js";
@@ -153,16 +153,9 @@ export class PiAdapter {
     const spawn = this.spawnPlan();
     // DR18 (D-5): a confined engine's sandbox filter reaches bubblewrap on the
     // descriptor only this parent holds, and nowhere else.
+    assertSandboxFilterPaired(spawn.args, spawn.filter);
     const child = spawnOwnedRpc(spawn.command, spawn.args, spawn.cwd, spawn.env, spawn.filter !== undefined);
-    if (spawn.filter !== undefined) {
-      const channel = child.stdio[3] as unknown as { on(event: "error", listener: () => void): void; end(bytes: Uint8Array): void };
-      // bubblewrap reads the program and closes its end, which may reset
-      // ours. That is no failure of this process: a program bubblewrap could
-      // not read fails bubblewrap itself, and that is the engine's start
-      // failing, which this delivery reports.
-      channel.on("error", () => {});
-      channel.end(spawn.filter);
-    }
+    if (spawn.filter !== undefined) deliverSandboxFilter(child.stdio[3], spawn.filter);
     const rpc = new PiRpcClient(child, this.options.limits);
     let accepted = false;
     let settled = false;

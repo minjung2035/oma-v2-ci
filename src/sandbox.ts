@@ -97,8 +97,8 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path is not a trusted absolute path");
   const limits = h.limits!;
   return ["bwrap", "--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
-    // DR18 (D-5, MAC-205): the baseline refuses AF_VSOCK sockets by system
-    // call; the program is read from this descriptor (vsockSeccompFilter).
+    // SB-001, MAC-205: the kernel objects no namespace confines are refused by
+    // system call; the program is read from this descriptor (sandboxSeccompFilter).
     "--seccomp", String(SANDBOX_FILTER_FD),
     "--ro-bind", h.rootfs, "/",
     ...(h.systemBinds ?? []).flatMap(path => ["--ro-bind", path, path]),
@@ -226,7 +226,7 @@ export class SandboxModule {
     const argv = residentArgv(this.host, lease, dirs, env);
     // `env` is empty on purpose: `--clearenv` means the child's environment is
     // the argv above, so nothing is inherited from whoever spawns bwrap.
-    // Descriptor 3 carries the sandbox filter (vsockSeccompFilter, DR18).
+    // Descriptor 3 carries the sandbox filter (sandboxSeccompFilter, DR18).
     return { argv, env: {}, inheritedFds: [0, 1, 2, SANDBOX_FILTER_FD] };
   }
   candidate(oid: string, checkProfile: string): SandboxPlan {

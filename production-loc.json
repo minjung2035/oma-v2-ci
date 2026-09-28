@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 273,
-    "n_lines": 35737,
+    "n_lines": 35791,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -138,16 +138,16 @@
     "code": 245,
     "language": "TypeScript"
   },
-  "src/runtime/pi-adapter.ts": {
-    "blank": 1,
-    "comment": 42,
-    "code": 243,
-    "language": "TypeScript"
-  },
   "src/storage/durable-fs.ts": {
     "blank": 15,
     "comment": 101,
     "code": 243,
+    "language": "TypeScript"
+  },
+  "src/runtime/pi-adapter.ts": {
+    "blank": 1,
+    "comment": 38,
+    "code": 240,
     "language": "TypeScript"
   },
   "src/tui/keys.ts": {
@@ -258,6 +258,12 @@
     "code": 185,
     "language": "TypeScript"
   },
+  "src/process/async.ts": {
+    "blank": 6,
+    "comment": 90,
+    "code": 181,
+    "language": "TypeScript"
+  },
   "src/tui/app.ts": {
     "blank": 20,
     "comment": 56,
@@ -291,12 +297,6 @@
   "src/extension/batch-view.ts": {
     "blank": 1,
     "comment": 15,
-    "code": 175,
-    "language": "TypeScript"
-  },
-  "src/process/async.ts": {
-    "blank": 4,
-    "comment": 82,
     "code": 175,
     "language": "TypeScript"
   },
@@ -936,6 +936,12 @@
     "code": 62,
     "language": "TypeScript"
   },
+  "src/runtime/sandbox-seccomp.ts": {
+    "blank": 6,
+    "comment": 29,
+    "code": 62,
+    "language": "TypeScript"
+  },
   "src/runtime/supervision-channel.ts": {
     "blank": 4,
     "comment": 25,
@@ -1257,12 +1263,6 @@
   "src/entry/guest-provision.ts": {
     "blank": 2,
     "comment": 7,
-    "code": 35,
-    "language": "TypeScript"
-  },
-  "src/runtime/vsock-seccomp.ts": {
-    "blank": 4,
-    "comment": 13,
     "code": 35,
     "language": "TypeScript"
   },
@@ -1645,9 +1645,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1568,
-    "comment": 6204,
-    "code": 27965,
+    "blank": 1572,
+    "comment": 6224,
+    "code": 27995,
     "nFiles": 273
   }
 }

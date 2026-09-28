@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "02a45172a59060ebed5eb3ff416f6f28d8e25ed938b76773d7daf7c2ea90183e",
-  "report": "024a6ab62758fcaef3a3a23f177faeb0229c91bd1b012b47732b9dffd756d466",
+  "manifest": "41e18ba1fe2006dac672becd5eedb465b7abb6098d8fce5450d411ccd284c8c7",
+  "report": "de4cc47bbee62fca36ac25704198ad487d6cc5bdbb295080c3b2519d40bbb8d5",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -669,7 +669,7 @@
     },
     {
       "path": "src/process/async.ts",
-      "sha256": "9266fb96fe35075cec31baf59b38070a37b599e3a891d60e2f4d2a0299ffd89f"
+      "sha256": "89a157ad3349eca95b046a2e4ecb052583c46c5bf4dcf4514554195baeef29e3"
     },
     {
       "path": "src/process/command.ts",
@@ -817,7 +817,7 @@
     },
     {
       "path": "src/runtime/pi-adapter.ts",
-      "sha256": "627318285881cebd267f5abbef7f96aaad9349d6d48465d788a5c566787b5aa0"
+      "sha256": "9a710062965984c2636828b89a09c86a2bb8ad9e9690892f7f507279249316d7"
     },
     {
       "path": "src/runtime/pi-rpc.ts",
@@ -829,7 +829,7 @@
     },
     {
       "path": "src/runtime/pi-spawn-plan.ts",
-      "sha256": "eb680b36d8696e97dc87fbc5b7a0894e26e90ad45e5aca1e16fdf4ea2ce20424"
+      "sha256": "ffc1bf68dfe4a9977d4a9d6f676d1c89902a76657c3f5827fcaa48249afe7964"
     },
     {
       "path": "src/runtime/principal-delivery.ts",
@@ -852,6 +852,10 @@
       "sha256": "243d7827d1449add126ac77ea8ee3abe575e33e16ad58855686d5b2503fb9b15"
     },
     {
+      "path": "src/runtime/sandbox-seccomp.ts",
+      "sha256": "dc90818bf7987ff7de17059d7f64c1657a65feb9eab1e7d79bf9c745efcb5eaf"
+    },
+    {
       "path": "src/runtime/society-lease.ts",
       "sha256": "4e3e960215b37f79ac742a178b866eb3e9b0302ad10be21f4ad7029375c1ab37"
     },
@@ -860,12 +864,8 @@
       "sha256": "2e2ca29cc2497d81498c4c280715e2d2fcb5131ae4a230fd0f262c1edd5bab59"
     },
     {
-      "path": "src/runtime/vsock-seccomp.ts",
-      "sha256": "de7a1bc6967eca6981bb8482b686d94922db72ea52bd8fd574804c536e34570d"
-    },
-    {
       "path": "src/sandbox.ts",
-      "sha256": "4c6065d68f0ecc7cf8a118d485690855d8378fd49feb4d9d393bfb7a8697e168"
+      "sha256": "83be347005a683f00208fc6a8d223cb35594587ea366b7bdfa43fb34bf6e4a99"
     },
     {
       "path": "src/storage/batch-view.ts",
