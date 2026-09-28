@@ -55,7 +55,7 @@ import { createHash } from "node:crypto";
 import { closeSync } from "node:fs";
 import { abstractNameHeld, abstractNameHolder, holdAbstractName } from "../leaf.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../process/async.js";
-import { assertHostDirectoryLayout } from "./assets.js";
+import { assertStateRoot } from "./assets.js";
 import { StoreError } from "../domain/errors.js";
 
 /** The abstract-namespace prefix every society lease is taken under. The rest
@@ -97,7 +97,7 @@ export interface SocietyLease {
  * the digest because the abstract namespace is shared by every user of the
  * machine, so two users with the same state path must not collide there. */
 export function societyLeaseName(stateRoot: string): string {
-  assertHostDirectoryLayout(stateRoot, true);
+  assertStateRoot(stateRoot);
   const uid = process.geteuid?.() ?? -1;
   return SOCIETY_LEASE_PREFIX + createHash("sha256").update(`${uid}\n${stateRoot}`).digest("hex");
 }

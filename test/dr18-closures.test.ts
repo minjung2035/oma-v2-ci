@@ -2,13 +2,14 @@
  * by a test of what the product now does. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store.js";
 import { StoreError } from "../src/domain/errors.js";
 import { RegistryOperations } from "../src/lifecycle/registry-operations.js";
 import { makeValidAgent } from "./fixtures/spec.js";
+import { NON_LOCAL_FILESYSTEMS, assertStateRoot } from "../src/runtime/assets.js";
 
 const peer = { pid: 1, uid: 1000, gid: 1000, cgroup: null };
 
@@ -133,4 +134,31 @@ test("DR18 / D-8: every start brings the project's committed branch history into
   const elsewhere = join(root, "not-a-repo");
   mkdir(elsewhere);
   assert.match(provisionSociety(stateRoot, { projectDir: elsewhere }).mirrorNote ?? "", /not a Git repository/);
+});
+
+test("DR18 / S-06: a state root on a network or user-space file system is refused; a local one is accepted", () => {
+  const dir = mkdtempSync(join(tmpdir(), "oma-dr18-fs-"));
+  try {
+    const root = join(dir, "state", "oma", "a");
+    const seen: string[] = [];
+    const on = (type: number) => (path: string): { type: number } => { seen.push(path); return { type }; };
+    // Named here, not read from the table, so a row dropped from it is caught.
+    const refused: [number, string][] = [[0x6969, "NFS"], [0x517b, "SMB"], [0xff534d42, "CIFS"], [0xfe534d42, "SMB2"],
+      [0x65735546, "FUSE"], [0x01021997, "9P"], [0x00c36400, "Ceph"]];
+    assert.deepEqual(refused.filter(([magic, name]) => NON_LOCAL_FILESYSTEMS[magic] !== name), []);
+    for (const [magic, name] of Object.entries(NON_LOCAL_FILESYSTEMS))
+      assert.throws(() => assertStateRoot(root, on(Number(magic))),
+        (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && error.message.includes(name), name);
+    // ext4, xfs, btrfs, tmpfs: local kernel file systems.
+    for (const magic of [0xef53, 0x58465342, 0x9123683e, 0x01021994]) assertStateRoot(root, on(magic));
+    // The part of the path that exists is the one read: startup makes the rest.
+    assert.ok(seen.every(path => path === dir), `read at ${[...new Set(seen)].join(", ")}`);
+    // The real file system under the test's directory is a local one.
+    assertStateRoot(root);
+    // The layout is still judged first: a symlinked ancestor is refused before any file system is read.
+    symlinkSync(dir, join(dir, "link"));
+    seen.length = 0;
+    assert.throws(() => assertStateRoot(join(dir, "link", "a"), on(0xef53)), /symlink/);
+    assert.deepEqual(seen, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

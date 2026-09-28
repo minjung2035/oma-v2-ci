@@ -10,7 +10,7 @@ import { ownershipRuleFindings } from "../scripts/architecture/rules/ownership-r
 import { schemaDuplicationFindings } from "../scripts/architecture/rules/schema-duplication-rules.mjs";
 import { contractDirectionFindings } from "../scripts/architecture/rules/contract-direction-rules.mjs";
 import { effectOwnershipFindings } from "../scripts/architecture/rules/effect-ownership-rules.mjs";
-import { stateTreeFindings } from "../scripts/architecture/rules/state-tree-rules.mjs";
+import { stateRootFindings, stateTreeFindings } from "../scripts/architecture/rules/state-tree-rules.mjs";
 import { fenceRuleFindings } from "../scripts/architecture/rules/fence-rules.mjs";
 import { fenceExemptSpawnOwners } from "../scripts/architecture-owners.mjs";
 
@@ -267,4 +267,15 @@ export function effect(root, path, parent, entryAt) { ${body} }`,
 test("AV5 / FS-005: the real tree changes the state tree only through held parents", () => {
   const repository = fileURLToPath(new URL("..", import.meta.url));
   assert.deepEqual(stateTreeFindings(repository), []);
+});
+
+test("state-root-judgement (DR18, S-06): a state root is judged by assertStateRoot, never by its layout alone", () => {
+  withFixture({ "src/runtime/assets.ts": "export function assertStateRoot(stateRoot) { assertHostDirectoryLayout(stateRoot, true); }",
+    "src/entry/broker.ts": "assertStateRoot(stateRoot); assertHostDirectoryLayout(runRoot, true); assertHostDirectoryLayout(cfg.installation.libdir);" },
+  root => assert.deepEqual(stateRootFindings(root), []));
+  for (const text of ["assertHostDirectoryLayout(stateRoot, true);", "assertHostDirectoryLayout(location.stateRoot);"])
+    withFixture({ "src/runtime/society-lease.ts": text },
+      root => assert.ok(stateRootFindings(root).some(value => value.rule === "state-root-judgement"), text));
+  const repository = fileURLToPath(new URL("..", import.meta.url));
+  assert.deepEqual(stateRootFindings(repository), []);
 });

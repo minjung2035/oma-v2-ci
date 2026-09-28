@@ -265,6 +265,7 @@
   "src/tui/view/notice.ts",
   "src/tui/view/screens.ts",
   "src/tui/view/text.ts",
+  "src/tui/words.ts",
   "src/units.ts",
   "src/units/execute.ts",
   "src/units/observe.ts",
@@ -1544,11 +1545,11 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 66
+   "files": 67
   }
  ],
- "files": 273,
- "runtimeEdges": 1055,
+ "files": 274,
+ "runtimeEdges": 1066,
  "typeOnlyEdges": 341,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 236,
@@ -1561,11 +1562,11 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 13,
   "L4-orchestration -> L4-orchestration": 79,
-  "L5-entry -> L1-kernel": 91,
+  "L5-entry -> L1-kernel": 92,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 7,
-  "L5-entry -> L4-orchestration": 58,
-  "L5-entry -> L5-entry": 124
+  "L5-entry -> L4-orchestration": 59,
+  "L5-entry -> L5-entry": 133
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1584,7 +1585,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 144,
+  "src/domain/errors.ts": 145,
   "src/domain/identifiers.ts": 40,
   "src/ids.ts": 26,
   "src/storage/paths.ts": 26,
@@ -1602,9 +1603,9 @@
  },
  "fanOut": {
   "src/broker.ts": 30,
+  "src/entry/oma.ts": 28,
   "src/mail.ts": 28,
   "src/entry/broker.ts": 27,
-  "src/entry/oma.ts": 27,
   "src/git/context-repository.ts": 16,
   "src/lifecycle/create.ts": 15,
   "src/git.ts": 14,
@@ -1615,7 +1616,7 @@
   "src/reconcile.ts": 14,
   "src/runner.ts": 14,
   "src/store.ts": 14,
-  "src/entry/runner.ts": 12
+  "src/tui/session.ts": 13
  },
  "external": {
   "@earendil-works/pi-coding-agent": 10,

@@ -75,3 +75,23 @@ export function stateTreeFindings(root) {
   }
   return findings;
 }
+
+/** DR18 (S-06): a state root is judged by one function, which adds to the
+ * layout check (VAL-002, FS-005) that the tree is on a local file system. A
+ * process that judged a state root by its layout alone would open a store and
+ * take locks on a file system that keeps neither. */
+const STATE_ROOT_OWNER = "src/runtime/assets.ts";
+export function stateRootFindings(root) {
+  const findings = [];
+  for (const file of filesUnder(root, "src")) {
+    if (file === STATE_ROOT_OWNER) continue;
+    eachNode(sourceOf(root, file), node => {
+      if (!ts.isCallExpression(node) || calleeName(node) !== "assertHostDirectoryLayout") return;
+      const first = node.arguments[0];
+      const named = first === undefined ? "" : ts.isIdentifier(first) ? first.text : ts.isPropertyAccessExpression(first) ? first.name.text : "";
+      if (/stateRoot/i.test(named))
+        findings.push(finding("state-root-judgement", file, `judges ${named} by its layout alone; a state root is judged by assertStateRoot`));
+    });
+  }
+  return findings;
+}

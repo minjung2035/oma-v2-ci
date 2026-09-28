@@ -262,6 +262,7 @@ src/tui/view/layout.ts
 src/tui/view/notice.ts
 src/tui/view/screens.ts
 src/tui/view/text.ts
+src/tui/words.ts
 src/units.ts
 src/units/execute.ts
 src/units/observe.ts

@@ -20,7 +20,7 @@ import { createChildSpecResolver } from "../config/policy.js";
 import { ProcessLock, SOCIETY_OWNED_EXIT } from "../runtime/process-lock.js";
 import { claimSocietyFence } from "../runtime/society-lease.js";
 import { BrokerLifetime, stopOnHostLoss } from "../runtime/broker-lifetime.js";
-import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout, hostLaunchLocation, launchedLocation, type LaunchLocation } from "../runtime/assets.js";
+import { assertRuntimeAssets, runtimeAssets, assertHostDirectoryLayout, assertStateRoot, hostLaunchLocation, launchedLocation, type LaunchLocation } from "../runtime/assets.js";
 import { assertDeploymentDigest } from "../runtime/deployment-manifest.js";
 import { StorageAdmission } from "../storage/quota.js";
 import { resolvedSpecOf } from "../authority.js";
@@ -146,7 +146,7 @@ async function main(): Promise<void> {
   try {
     const cfg = loadConfig(configPath);
     if (cfg.society !== society) throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
-    assertHostDirectoryLayout(stateRoot, true);
+    assertStateRoot(stateRoot);
     assertHostDirectoryLayout(cfg.installation.libdir);
     assertHostDirectoryLayout(cfg.installation.rootfs);
     // No schema search, path flattening or cross-installation fallback.

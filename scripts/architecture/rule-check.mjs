@@ -8,7 +8,7 @@ import { contractDirectionFindings } from "./rules/contract-direction-rules.mjs"
 import { effectOwnershipFindings } from "./rules/effect-ownership-rules.mjs";
 import { surfaceRuleFindings } from "./rules/surface-rules.mjs";
 import { fenceRuleFindings } from "./rules/fence-rules.mjs";
-import { stateTreeFindings } from "./rules/state-tree-rules.mjs";
+import { stateRootFindings, stateTreeFindings } from "./rules/state-tree-rules.mjs";
 
 export const ARCHITECTURE_RULES = Object.freeze([
   ["imports", importRuleFindings],
@@ -20,6 +20,7 @@ export const ARCHITECTURE_RULES = Object.freeze([
   ["surface", surfaceRuleFindings],
   ["fence", fenceRuleFindings],
   ["state-tree", stateTreeFindings],
+  ["state-root", stateRootFindings],
 ]);
 
 export function runArchitectureRuleCheck(root = process.cwd()) {

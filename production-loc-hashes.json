@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "a84af49ed0c182d8823d6068d3f715908a800d27f4cee135f259f5dff998cde4",
-  "report": "1143ff94b9b312a5b35dcff5ba0467b677034044080f2eb701ce8bb6e009e143",
+  "manifest": "02a45172a59060ebed5eb3ff416f6f28d8e25ed938b76773d7daf7c2ea90183e",
+  "report": "77528d481e786874267b4d503b42cadf1f6739af570b2b5a31f343ec3303332a",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -289,7 +289,7 @@
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "9b85faa7faa75251cfb41c68aeb341bbba75df742306f443302320a791725c87"
+      "sha256": "b9f3cf91e3abe7549608313e1a462d85599a24906e10a32cb7a214a4c9472ca7"
     },
     {
       "path": "src/entry/guest-provision.ts",
@@ -297,7 +297,7 @@
     },
     {
       "path": "src/entry/guest-session.ts",
-      "sha256": "afa0338b4ebdbc17f0802077cfc6cfe2c5d8b808f3903b7a8f2f543b24082675"
+      "sha256": "85819fbd8fe5f03bd0f370bbf5b36f3320982a8328bd44d0ed401147e6ec8c97"
     },
     {
       "path": "src/entry/guestctl.ts",
@@ -321,7 +321,7 @@
     },
     {
       "path": "src/entry/oma.ts",
-      "sha256": "52a856965226127f1bbba8cbb6c6e46a1ea7747c5a4a6f798f82148e231f9f24"
+      "sha256": "b5b94f91f781ff1f13bca637b774d72cacc6247ed3052cdaa122bc546ea01abc"
     },
     {
       "path": "src/entry/omahostd.ts",
@@ -669,7 +669,7 @@
     },
     {
       "path": "src/process/async.ts",
-      "sha256": "767e1858e7041c57fb68c1622cfa038cb71430df1c3aaa97af58520266319f4d"
+      "sha256": "3b63e2dc76e7de4086107156d3bdb6407cf8890b226824d5ba4746adb992f80c"
     },
     {
       "path": "src/process/command.ts",
@@ -781,7 +781,7 @@
     },
     {
       "path": "src/runtime/assets.ts",
-      "sha256": "9530934497d419404f853ab6344a263e7075b3a7014842660095c2a52e1c78ac"
+      "sha256": "23c853644474a58cacb6c8102f813f966b16ecd22073322a062b87ee86182136"
     },
     {
       "path": "src/runtime/broker-lifetime.ts",
@@ -853,7 +853,7 @@
     },
     {
       "path": "src/runtime/society-lease.ts",
-      "sha256": "cd825bd8d55369da132306345acf2658c3dcec3f65441ebc615e9c3d62ace533"
+      "sha256": "4e3e960215b37f79ac742a178b866eb3e9b0302ad10be21f4ad7029375c1ab37"
     },
     {
       "path": "src/runtime/supervision-channel.ts",
@@ -973,15 +973,15 @@
     },
     {
       "path": "src/tui/app.ts",
-      "sha256": "970bc482155130ca308dcf9345ebbf4c28582f48537dd7f6ea53dc014cbc90ac"
+      "sha256": "646371d9047b49c24e84b71bee62a6c998fafb2b0eb73100b382f074c2e741a6"
     },
     {
       "path": "src/tui/dashboard.ts",
-      "sha256": "3cb5901abc5e95a8a265f532706fe2df4aac61e30da078b613e3ca7e3df4c673"
+      "sha256": "858c7d8cd42b51006d6341401b5403f3cf72e49731bcdf1235a8346e66786ead"
     },
     {
       "path": "src/tui/exit.ts",
-      "sha256": "c7f64f6bc894f3532e9b9309e1007455dd454aec5ad3ed5021da9ef5b4313726"
+      "sha256": "1ecb1a0c9628c2d025779eb449fd27955441b55c618fb906f87067011071839c"
     },
     {
       "path": "src/tui/keys.ts",
@@ -989,7 +989,7 @@
     },
     {
       "path": "src/tui/limits.ts",
-      "sha256": "b31e0b3e8f1fef1d07e7060ee20f8f2ef8c1ad84567dc4fb506331f7c8fa4392"
+      "sha256": "a79b026c31f32068cb6da1e49d89677863184c89aa673e3cea020d32b452ef27"
     },
     {
       "path": "src/tui/login.ts",
@@ -1009,15 +1009,15 @@
     },
     {
       "path": "src/tui/session.ts",
-      "sha256": "fe76f7632f3bc6fab5e945c539c45e1d7d8c02a339afba74a4bd1ba459670e84"
+      "sha256": "7b844950ea658d3ed7d61ae5ce263f9f002e2771e08f3a00039ad80a14418bcb"
     },
     {
       "path": "src/tui/sources/extensions.ts",
-      "sha256": "989784bce3900edbb17b82523ba403d7bbd61ed22dab4d421952e12000166019"
+      "sha256": "cddd55af8977d2003aa2bdebde1c12b9dc44aa50594574b462956725dad3542c"
     },
     {
       "path": "src/tui/sources/mail.ts",
-      "sha256": "ba6d09455461819862106a1cf7165fb99ef4bc06e35d14b70a2a71315e39071e"
+      "sha256": "fde8f8b037614ba41cc48c0cc7cedd9f4718ed27b5c4897a2ac554c47b461fab"
     },
     {
       "path": "src/tui/sources/settings.ts",
@@ -1058,6 +1058,10 @@
     {
       "path": "src/tui/view/text.ts",
       "sha256": "2b68e671faeb3b5648497ebd405ded237828606c5a6166faaacfb190de56e415"
+    },
+    {
+      "path": "src/tui/words.ts",
+      "sha256": "e5eb7c786a0de5a390c70ac689070383c7528e0f361ffff04718b0903071f968"
     },
     {
       "path": "src/units.ts",

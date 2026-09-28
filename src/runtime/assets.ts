@@ -1,4 +1,4 @@
-import { lstatSync, realpathSync } from "node:fs";
+import { lstatSync, realpathSync, statfsSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { StoreError, unobserved } from "../domain/errors.js";
@@ -52,6 +52,36 @@ export function assertHostDirectoryLayout(path: string, allowMissing = false): v
     if (!stat?.isDirectory())
       throw new StoreError("UNSUPPORTED_PROFILE", "host directory ancestors must be real directories, not symlinks");
   }
+}
+
+/** DR18 (S-06): the file systems a state tree may not live on, by the
+ * kernel's `statfs` magic. Every guarantee the product gives about a crash
+ * rests on two things a network or user-space file system does not keep:
+ * SQLite's write-ahead log shares memory between the processes that open it,
+ * which SQLite itself does not support over a network file system; and a
+ * holder's death is proved by the kernel dropping its `flock`, which a remote
+ * lock only approximates. So these are refused, rather than run with a weaker
+ * guarantee the Human was never told of (REC-004). */
+export const NON_LOCAL_FILESYSTEMS: Readonly<Record<number, string>> = Object.freeze({
+  0x6969: "NFS", 0x517b: "SMB", 0xff534d42: "CIFS", 0xfe534d42: "SMB2", 0x65735546: "FUSE",
+  0x01021997: "9P", 0x00c36400: "Ceph", 0x5346414f: "AFS", 0x6b414653: "AFS", 0x73757245: "Coda", 0x564c: "NCP",
+});
+
+/** The judgement of a state root: a normalized, symlink-free path (VAL-002,
+ * FS-005) on a local kernel file system (S-06). The file system is read at
+ * the deepest part of the path that exists, since startup creates the rest
+ * beneath it. */
+export function assertStateRoot(stateRoot: string, statfs: (path: string) => { type: number } = statfsSync): void {
+  assertHostDirectoryLayout(stateRoot, true);
+  let existing = stateRoot;
+  while (lstatSync(existing, { throwIfNoEntry: false }) === undefined) existing = dirname(existing);
+  let type: number;
+  try { type = statfs(existing).type; }
+  catch (cause) { throw unobserved(cause, "the state root's file system") ?? new StoreError("UNSUPPORTED_PROFILE", "the state root's file system cannot be read", { cause }); }
+  const name = NON_LOCAL_FILESYSTEMS[type];
+  if (name !== undefined)
+    throw new StoreError("UNSUPPORTED_PROFILE",
+      `the state root is on a ${name} file system; a society's state must be on a local disk (its store and its locks are only sound there)`);
 }
 
 /** D03: where one society lives on this host, decided once by the process that
