@@ -23,7 +23,11 @@ export interface EmlParams {
 export interface EmlEmission { text: string; bytes: number; sha256: string; dateMs: number }
 export interface RenderedMessageWithHeaders extends RenderedMessage { readonly headerFacts: Readonly<ParsedEmlHeaders> }
 
-function assertNoCrlf(value: string, what: string): void {
+/** P0V-118 (G07-02): a header value is a string on one line. A value of
+ * another type is refused here as the request it is, not coerced into its
+ * spelling ("undefined") and left to fail later as a TypeError. */
+function assertNoCrlf(value: unknown, what: string): void {
+  if (typeof value !== "string") throw new StoreError("INVALID_REQUEST", `${what} is not a string`);
   if (/[\r\n]/.test(value)) throw new StoreError("INVALID_REQUEST", `${what} contains CR/LF`);
 }
 
@@ -34,6 +38,9 @@ function assertNoCrlf(value: string, what: string): void {
 export async function buildEml(p: EmlParams): Promise<EmlEmission> {
   if (p.approvalFor) { const error = exactCandidateCheck(p.approvalFor); if (error) throw new StoreError("INVALID_REQUEST", error); }
   assertNoCrlf(p.subject, "subject");
+  for (const [list, what] of [[p.to, "to"], [p.replyTo, "replyTo"], [p.references, "references"]] as const)
+    if (!Array.isArray(list)) throw new StoreError("INVALID_REQUEST", `${what} is not a list`);
+  if (typeof p.body !== "string") throw new StoreError("INVALID_REQUEST", "body is not a string");
   for (const header of [p.from, ...p.to, ...p.replyTo, p.messageId, ...(p.inReplyTo ? [p.inReplyTo] : []), ...p.references]) assertNoCrlf(header, "header");
   const dateMs = freezeMessageDate(p.dateMs);
   // An unbroken ASCII subject cannot be folded between words. RFC 2047 words

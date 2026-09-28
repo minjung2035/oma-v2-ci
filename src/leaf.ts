@@ -1,6 +1,6 @@
 // MUST [S-01]: minimal native leaf for SO_PEERCRED, sd_notify and the
 // REC-007 society lease through koffi FFI.
-import { closeSync, openSync } from "node:fs";
+import { closeSync, openSync, readlinkSync } from "node:fs";
 import { errno, load } from "koffi";
 import { endianness } from "node:os";
 
@@ -133,9 +133,19 @@ export function livenessFromPoll(ask: () => PollAnswer): PidLiveness {
   return { kind: "failed", errno: EINTR };
 }
 
-/** Only accepts an owned peerPidFd result; no blocking waits or /proc PID lookups. */
+/** Only accepts an owned peerPidFd result; no blocking waits or /proc PID lookups.
+ *
+ * P0V-117 (G07-01), P0-5: that is checked, each time, not assumed. A
+ * descriptor that is not a pidfd -- a number passed by mistake, or reused
+ * after the pidfd was closed -- polls readable at end of file exactly as an
+ * exited process does; asked here, it is no answer (`failed`), never
+ * `exited`. The descriptor's own link names what it is. */
 export function pidfdLiveness(fd: number): PidLiveness {
   if (!Number.isInteger(fd) || fd < 0) return { kind: "failed", errno: EBADF };
+  let target: string;
+  try { target = readlinkSync(`/proc/self/fd/${fd}`); }
+  catch (error) { return { kind: "failed", errno: (error as NodeJS.ErrnoException).code === "ENOENT" ? EBADF : 0 }; }
+  if (target !== "anon_inode:[pidfd]") return { kind: "failed", errno: EBADF };
   try {
     const native = lib();
     return livenessFromPoll(() => {

@@ -35,12 +35,15 @@ const unfold = (value: string): string => value.replace(/\n/g, " ");
  */
 function headerBlock(input: string | Uint8Array, limit: number): string {
   if (!Number.isSafeInteger(limit) || limit < 1) return invalid("invalid header limit");
+  // P0V-118 (G07-03): one rule for what a header block is, whichever form it
+  // arrived in: the bytes a message was stored as and the text it is read
+  // from are judged alike once each is text.
+  const accepted = (block: string): string =>
+    Buffer.byteLength(block, "utf8") > limit || /\p{Cs}/u.test(block) ? invalid("header byte/Unicode limit") : block;
   if (typeof input === "string") {
     const crlf = input.indexOf("\r\n\r\n"); const lf = input.indexOf("\n\n");
     const ends = [crlf, lf].filter(index => index >= 0);
-    const block = ends.length ? input.slice(0, Math.min(...ends)) : input;
-    if (Buffer.byteLength(block, "utf8") > limit || /\p{Cs}/u.test(block)) return invalid("header byte/Unicode limit");
-    return block;
+    return accepted(ends.length ? input.slice(0, Math.min(...ends)) : input);
   }
   let end = input.byteLength;
   const scanned = Math.min(input.byteLength, limit + 4);
@@ -49,7 +52,9 @@ function headerBlock(input: string | Uint8Array, limit: number): string {
     if (input[i] === 13 && input[i + 1] === 10 && input[i + 2] === 13 && input[i + 3] === 10) { end = i; break; }
   }
   if (end > limit) return invalid("header byte limit");
-  try { return decodeUtf8(input.subarray(0, end)); } catch { return invalid("header is not UTF-8"); }
+  let text: string;
+  try { text = decodeUtf8(input.subarray(0, end)); } catch { return invalid("header is not UTF-8"); }
+  return accepted(text);
 }
 
 function headerWords(value: string, allowQuotedPrintable = false): string {

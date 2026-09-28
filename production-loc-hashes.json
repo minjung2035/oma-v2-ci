@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "0326b22c39e02e78604fb9539d51905d06a093287ae437eeebc6f2dec2eec9aa",
-  "report": "ebef94ccf913db2e3ba4b8255b695cd3b5e02a3d348b0f13cdb481c964a4bd84",
+  "report": "ce4d735627f4af0addb5e7329c901692fe65bbbe4b0e1dac3586d9c6ed83e3c9",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -449,7 +449,7 @@
     },
     {
       "path": "src/leaf.ts",
-      "sha256": "5cc2b784c3888ad3484fe573e1d8f8e3224afb21719c53ca5f02ed6d536f389c"
+      "sha256": "b5c79f0101179b656c8b6e08b88789e65624d9019dd3747de5cca3a0bc379ce8"
     },
     {
       "path": "src/lifecycle.ts",
@@ -509,7 +509,7 @@
     },
     {
       "path": "src/mail/headers.ts",
-      "sha256": "ba9bd201ea82998234c8e7e4f805a55447f90a79f11e60ce7b65cfa185d1bb61"
+      "sha256": "c3b2ab022a56d766b380691b9bd56624a131889ca6de6226e8354cf748add0fe"
     },
     {
       "path": "src/mail/materializer.ts",
@@ -525,7 +525,7 @@
     },
     {
       "path": "src/mail/serialize.ts",
-      "sha256": "6665ed0131c5d7d5c9d2e7a4247cda5fc6bb1acfc3818afc6414e6a467c9d0a3"
+      "sha256": "dfc11fa6f566a3a0c53ecd21f7e0d70f5d67a0fcf7b39e37fa8ff75211294263"
     },
     {
       "path": "src/module-ports.ts",

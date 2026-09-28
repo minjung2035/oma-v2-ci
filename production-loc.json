@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 277,
-    "n_lines": 36347,
+    "n_lines": 36369,
     "report_file": "production-loc.json"
   },
   "src/broker.ts": {
@@ -110,8 +110,8 @@
   },
   "src/leaf.ts": {
     "blank": 29,
-    "comment": 90,
-    "code": 279,
+    "comment": 96,
+    "code": 283,
     "language": "TypeScript"
   },
   "src/runtime/pi-rpc.ts": {
@@ -390,6 +390,12 @@
     "code": 153,
     "language": "TypeScript"
   },
+  "src/mail/headers.ts": {
+    "blank": 4,
+    "comment": 21,
+    "code": 153,
+    "language": "TypeScript"
+  },
   "src/platform/host/lifecycle.ts": {
     "blank": 14,
     "comment": 34,
@@ -400,12 +406,6 @@
     "blank": 3,
     "comment": 42,
     "code": 152,
-    "language": "TypeScript"
-  },
-  "src/mail/headers.ts": {
-    "blank": 4,
-    "comment": 18,
-    "code": 151,
     "language": "TypeScript"
   },
   "src/tui/sources/mail.ts": {
@@ -732,6 +732,12 @@
     "code": 86,
     "language": "TypeScript"
   },
+  "src/mail/serialize.ts": {
+    "blank": 4,
+    "comment": 18,
+    "code": 85,
+    "language": "TypeScript"
+  },
   "src/entry/runner.ts": {
     "blank": 1,
     "comment": 17,
@@ -754,12 +760,6 @@
     "blank": 10,
     "comment": 136,
     "code": 82,
-    "language": "TypeScript"
-  },
-  "src/mail/serialize.ts": {
-    "blank": 4,
-    "comment": 15,
-    "code": 81,
     "language": "TypeScript"
   },
   "src/protocol/response-codec.ts": {
@@ -1670,8 +1670,8 @@
   },
   "SUM": {
     "blank": 1610,
-    "comment": 6447,
-    "code": 28290,
+    "comment": 6459,
+    "code": 28300,
     "nFiles": 277
   }
 }

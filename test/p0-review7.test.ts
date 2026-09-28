@@ -243,3 +243,28 @@ test("P0V-116 / G06-01, G06-02: a word git could read as an option never reaches
   assert.equal(observer.ref("/nowhere.git", "HEAD").kind, "absent");
   assert.equal(runs.length, 2);
 });
+
+test("P0V-117 / G07-01: a descriptor that is not a pidfd is no answer about a process, not an exited one", async () => {
+  const { pidfdLiveness } = await import("../src/leaf.js");
+  // /dev/null polls readable, exactly as a pidfd of an exited process does.
+  const fd = openSync("/dev/null", "r");
+  try { assert.deepEqual(pidfdLiveness(fd), { kind: "failed", errno: 9 }); }
+  finally { closeSync(fd); }
+  assert.deepEqual(pidfdLiveness(fd), { kind: "failed", errno: 9 }, "a closed number is no answer either");
+});
+
+test("P0V-118 / G07-02, G07-03: a message's values are refused as the request they are; a header block is judged by one rule in either form", async () => {
+  const { buildEml } = await import("../src/mail/serialize.js");
+  const { parseEmlHeaders } = await import("../src/mail/headers.js");
+  const id = "m-00000000-0000-4000-8000-000000000118-0";
+  const valid = { from: "a@demo.oma.invalid", to: ["principal@demo.oma.invalid"], replyTo: [], subject: "hello", kind: "message" as const,
+    contextRevision: null, inReplyTo: null, references: [], messageId: `${id}@demo.oma.invalid`, body: "body" };
+  await buildEml(valid);
+  for (const broken of [{ subject: undefined }, { subject: 7 }, { to: undefined }, { references: "x" }, { body: 1 }, { from: null }])
+    await assert.rejects(buildEml({ ...valid, ...broken } as never), { code: "INVALID_REQUEST" }, JSON.stringify(broken));
+  const block = "Subject: hi\r\nFrom: a@demo.oma.invalid";
+  assert.deepEqual(parseEmlHeaders(Buffer.from(`${block}\r\n\r\nbody`)), parseEmlHeaders(`${block}\r\n\r\nbody`));
+  for (const form of [`${block}\r\n\r\n`, Buffer.from(`${block}\r\n\r\n`)])
+    assert.throws(() => parseEmlHeaders(form, { maxHeaderBytes: 8 }), { code: "INVALID_REQUEST" });
+  assert.throws(() => parseEmlHeaders("Subject: \ud800\r\n\r\n"), { code: "INVALID_REQUEST" });
+});
