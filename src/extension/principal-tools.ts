@@ -19,7 +19,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { validActorName, validFullOid } from "./batch-view.js";
-import { actorNameOf, refused, requestKeyOf, textResult } from "./shared.js";
+import { REQUEST_PARAMETER_HELP, actorNameOf, refused, requestKeyOf, textResult } from "./shared.js";
 
 export const PRINCIPAL_TOOL_NAMES: readonly string[] = Object.freeze([
   "oma_agent_create",
@@ -60,9 +60,9 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
       name: Type.String(),
       brief: Type.String(),
       from: Type.Optional(Type.String()),
-      request: Type.Optional(Type.String()),
+      request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
     }),
-    async execute(_id, params, signal) {
+    async execute(id, params, signal, _update, engine) {
       const name = validActorName(params.name) ? params.name : refused("agent name", params.name);
       if (params.brief.length === 0 || Buffer.byteLength(params.brief) > BRIEF_BYTES) refused("brief (1..8 KiB)", params.brief.slice(0, 40));
       // The default base is the society's main, resolved by the CLI the way it
@@ -72,7 +72,7 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
         refused("from (there is no canonical repository to take main from)", params.from);
       const from = params.from ?? "main";
       const cwd = params.from === undefined ? context.projectGit : undefined;
-      const key = requestKeyOf(params.request);
+      const key = requestKeyOf(params.request, { id, tool: "oma_agent_create", params, context: engine });
       const temporary = mkdtempSync(join(workspace, "oma-tool-"));
       const brief = join(temporary, "brief.md");
       try {
@@ -88,12 +88,12 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
     parameters: Type.Object({
       name: Type.String(),
       action: Type.Union([Type.Literal("start"), Type.Literal("stop")]),
-      request: Type.Optional(Type.String()),
+      request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
     }),
-    async execute(_id, params, signal) {
+    async execute(id, params, signal, _update, engine) {
       const name = actorNameOf(params.name, society, "agent name");
       const action = params.action === "start" || params.action === "stop" ? params.action : refused("action", params.action);
-      const key = requestKeyOf(params.request);
+      const key = requestKeyOf(params.request, { id, tool: "oma_agent_lifecycle", params, context: engine });
       return textResult(await run(["agent", action, "--request", key, "--", name], signal), { request: key });
     },
   });
@@ -105,9 +105,9 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
     parameters: Type.Object({
       directory: Type.String({ description: "A directory inside your workspace holding only the context files" }),
       expect: Type.String({ description: "The current context revision (full id), or none" }),
-      request: Type.Optional(Type.String()),
+      request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
     }),
-    async execute(_id, params, signal) {
+    async execute(id, params, signal, _update, engine) {
       const directory = resolve(workspace, params.directory);
       if (params.directory.includes("\0") || !within(workspace, directory)) refused("directory (inside your workspace)", params.directory);
       // AV29, FS-003 and CTX-002: the workspace is the CLI's home, and its
@@ -115,7 +115,7 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
       // holds only the context files. Refused the same way every time.
       if (directory === resolve(workspace)) refused("directory (one holding only the context files, not the workspace itself)", params.directory);
       const expect = params.expect === "none" || validFullOid(params.expect) ? params.expect : refused("expect (a full id or none)", params.expect);
-      const key = requestKeyOf(params.request);
+      const key = requestKeyOf(params.request, { id, tool: "oma_context_publish", params, context: engine });
       return textResult(await run(["context", "publish", "--expect", expect, "--request", key, "--", directory], signal), { request: key });
     },
   });

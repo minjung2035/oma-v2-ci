@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "ad6da116a0ae019d7e52e3746a3129b1a70071a129a102914f001a9e88bb7451",
-  "report": "4b9abc84b975de86e7561ebc0e35c43dd61ada0066e985fe2af0a4e5e3673ab1",
+  "report": "5d561800ad545dcea0c587f177e5c3a029850023f488f093cf6ce99912284820",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -361,7 +361,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "ece406757fc0b5b0d693570e7478fe94115508101aa98193b5d4274f63ec33af"
+      "sha256": "808f30fb3328d8149d286a9de2a62a083fb850fa8fa32a4ef25031f1792c7fe7"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -369,11 +369,11 @@
     },
     {
       "path": "src/extension/principal-tools.ts",
-      "sha256": "4342ba817b01fdc30947d716f100d2ca590ba3adcaf1041699474aae22449eab"
+      "sha256": "fef7db6c4093a8ebb93c8ea3a35f0245eea830d25d3fe35aea80f68447a37867"
     },
     {
       "path": "src/extension/shared.ts",
-      "sha256": "5826e995b2a62af76c094adfd8863825764edfe75d9eb98f771c9d81377f339b"
+      "sha256": "9a6765bdb82d3809bf893068491a1c4026f7c8ebeff8784402e1a0a48943c61f"
     },
     {
       "path": "src/extension/tool-surface.ts",

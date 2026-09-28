@@ -1628,7 +1628,7 @@
   "koffi": 5,
   "node:async_hooks": 3,
   "node:child_process": 6,
-  "node:crypto": 38,
+  "node:crypto": 39,
   "node:fs": 88,
   "node:http": 1,
   "node:https": 1,

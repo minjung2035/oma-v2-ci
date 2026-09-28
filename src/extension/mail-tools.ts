@@ -13,7 +13,7 @@ export { validAddress } from "./batch-view.js";
 import { runCliProcess, type CliResult } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
 import { PRINCIPAL_TOOL_NAMES, registerPrincipalTools } from "./principal-tools.js";
-import { actorNameOf, integerEnv, refused, requestKeyOf, textResult } from "./shared.js";
+import { REQUEST_PARAMETER_HELP, actorNameOf, integerEnv, refused, requestKeyOf, textResult } from "./shared.js";
 import { decodeUtf8 } from "./utf8.js";
 
 /** TSP-008: tools OMA itself owns. A role projection may reorder or group the
@@ -309,9 +309,9 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
         ]),
       ),
       replyTo: Type.Optional(Type.String()),
-      request: Type.Optional(Type.String()),
+      request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
     }),
-    async execute(_id, params, signal) {
+    async execute(id, params, signal, _update, context) {
       // AV15: the address a header or notice shows is accepted as the logical
       // address it displays; nothing else is.
       const to = params.to.map(address => {
@@ -320,7 +320,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       });
       const kind = params.kind ?? "message";
       if (!SEND_KINDS.has(kind)) refused("mail kind", kind);
-      const key = requestKeyOf(params.request);
+      const key = requestKeyOf(params.request, { id, tool: "oma_mail_send", params, context });
       const reply = params.replyTo === undefined ? null : join(archive, `${messageIdOf(params.replyTo)}:2,`);
       const temporary = mkdtempSync(join(home, "oma-tool-"));
       const body = join(temporary, "body.txt");
@@ -350,11 +350,11 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
     description: "Durably acknowledge one OMA message.",
     parameters: Type.Object({
       messageId: Type.String(),
-      request: Type.Optional(Type.String()),
+      request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
     }),
-    async execute(_id, params, signal) {
+    async execute(id, params, signal, _update, context) {
       const message = messageIdOf(params.messageId);
-      const key = requestKeyOf(params.request);
+      const key = requestKeyOf(params.request, { id, tool: "oma_mail_ack", params, context });
       return textResult(
         await runCli(
           cli,
