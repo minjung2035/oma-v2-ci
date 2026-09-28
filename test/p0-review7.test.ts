@@ -268,3 +268,35 @@ test("P0V-118 / G07-02, G07-03: a message's values are refused as the request th
     assert.throws(() => parseEmlHeaders(form, { maxHeaderBytes: 8 }), { code: "INVALID_REQUEST" });
   assert.throws(() => parseEmlHeaders("Subject: \ud800\r\n\r\n"), { code: "INVALID_REQUEST" });
 });
+
+test("P0V-119 / G08-01, G09-01, G09-02: JSON nested past one named bound is refused as a request, by the parser and by the codec, never as a stack overflow", async () => {
+  const { JSON_NESTING_LIMIT, canonicalJson, snapshotJson } = await import("../src/domain/canonical-json.js");
+  const { parseJsonObject, FrameError } = await import("../src/frame.js");
+  const { decodeMutationPayload } = await import("../src/protocol/request-codec.js");
+  const { buildRequestIdentity } = await import("../src/domain/request-identity.js");
+  const nested = (levels: number): unknown => { let value: unknown = 0; for (let i = 0; i < levels; i++) value = [value]; return value; };
+  const text = (levels: number): string => `{"a":${"[".repeat(levels)}0${"]".repeat(levels)}}`;
+  assert.equal(JSON_NESTING_LIMIT, 64);
+  // The root object is the first level.
+  assert.doesNotThrow(() => canonicalJson({ a: nested(JSON_NESTING_LIMIT - 1) }));
+  assert.doesNotThrow(() => parseJsonObject(Buffer.from(text(JSON_NESTING_LIMIT - 1))));
+  const refused = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST" && /nesting exceeds 64/.test(error.message);
+  for (const levels of [JSON_NESTING_LIMIT, 100_000]) {
+    assert.throws(() => snapshotJson({ a: nested(levels) }), refused);
+    assert.throws(() => canonicalJson({ a: nested(levels) }), refused);
+    assert.throws(() => decodeMutationPayload("mail.ack", { ids: nested(levels) }), refused);
+    assert.throws(() => buildRequestIdentity("mail.send", { to: ["alice"], body: nested(levels) } as never), refused);
+    assert.throws(() => parseJsonObject(Buffer.from(text(levels))),
+      (error: unknown) => error instanceof FrameError && error.code === "INVALID_REQUEST" && /nesting exceeds 64/.test(error.message));
+  }
+});
+
+test("G08-03: the canonical spelling of numbers is Number::toString, held by golden vectors", async () => {
+  const { canonicalJson, sha256Hex } = await import("../src/domain/canonical-json.js");
+  assert.equal(canonicalJson([0, -0, 1, -1, 1.5, 0.1 + 0.2, 1e21, 1e-7, 5e-324, 1.7976931348623157e308, 9007199254740991, 123e-20, 100, 2 ** 53]),
+    "[0,0,1,-1,1.5,0.30000000000000004,1e+21,1e-7,5e-324,1.7976931348623157e+308,9007199254740991,1.23e-18,100,9007199254740992]");
+  // Computed apart from this code: printf '%s' '<text>' | sha256sum.
+  const document = canonicalJson({ b: [1.5, -0, 1e21], a: { z: 0.1, y: null } });
+  assert.equal(document, '{"a":{"y":null,"z":0.1},"b":[1.5,0,1e+21]}');
+  assert.equal(sha256Hex(document), "485a45b66e22b875f2cf59f3b982deae7045941126f6f58a95e83413933637d7");
+});

@@ -17,6 +17,9 @@ const structuralLimits: ProtocolLimits = Object.freeze({
   idleStreamSeconds: Number.MAX_SAFE_INTEGER, receiptWaitSeconds: Number.MAX_SAFE_INTEGER,
 });
 
+/** Throws TypeError for a value that is not this method's caller DTO, and
+ * (through snapshotJson) StoreError INVALID_REQUEST for one nested past
+ * JSON_NESTING_LIMIT -- never a stack overflow (P0V-119, G09-02). */
 export function decodeMutationPayload<K extends MutationMethod>(method: K, value: unknown): PublicMethods[K]["params"] {
   const copied = snapshotJson(value);
   if (copied === null || typeof copied !== "object" || Array.isArray(copied))

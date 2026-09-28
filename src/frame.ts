@@ -3,12 +3,20 @@ import { TextDecoder } from "node:util";
 import { checkString } from "./validate.js";
 import { ByteQueue } from "./protocol/byte-queue.js";
 import { decodeUtf8 } from "./domain/utf8.js";
+import { JSON_NESTING_LIMIT } from "./domain/canonical-json.js";
 const unicodeString = checkString();
 export class FrameError extends Error {
   constructor(readonly code: "FRAME_TOO_LARGE" | "INVALID_REQUEST", message: string) { super(message); this.name = "FrameError"; }
 }
 /** Reject duplicate object keys, including escaped spelling of the same key. */
 export function findDuplicateKey(text: string): string | null {
+  const structure = jsonStructure(text);
+  return structure?.kind === "duplicate" ? structure.key : null;
+}
+/** What a JSON text's structure shows before it is parsed, in one iterative
+ * pass: its first duplicated object key, or nesting past JSON_NESTING_LIMIT
+ * (P0V-119), which no recursive walk after the parse then meets. */
+function jsonStructure(text: string): { readonly kind: "duplicate"; readonly key: string } | { readonly kind: "too-deep" } | null {
   interface Container { isObj: boolean; keys: Set<string> | null; expectKey: boolean }
   const stack: Container[] = [];
   let index = 0;
@@ -29,11 +37,12 @@ export function findDuplicateKey(text: string): string | null {
         let key: unknown;
         try { key = JSON.parse(text.slice(index, end)); } catch { return null; }
         if (typeof key !== "string") return null;
-        if (top.keys!.has(key)) return key;
+        if (top.keys!.has(key)) return { kind: "duplicate", key };
         top.keys!.add(key); top.expectKey = false;
       }
       index = end; continue;
     }
+    if ((char === "{" || char === "[") && stack.length >= JSON_NESTING_LIMIT) return { kind: "too-deep" };
     if (char === "{") stack.push({ isObj: true, keys: new Set(), expectKey: true });
     else if (char === "[") stack.push({ isObj: false, keys: null, expectKey: false });
     else if (char === "}" || char === "]") stack.pop();
@@ -55,8 +64,9 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 export function parseJsonObject(bytes: Uint8Array): ParsedFrame {
   let text: string;
   try { text = decodeUtf8(bytes); } catch { throw new FrameError("INVALID_REQUEST", "invalid UTF-8 in JSON"); }
-  const duplicate = findDuplicateKey(text);
-  if (duplicate !== null) throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${duplicate}"`);
+  const structure = jsonStructure(text);
+  if (structure?.kind === "too-deep") throw new FrameError("INVALID_REQUEST", `JSON nesting exceeds ${JSON_NESTING_LIMIT}`);
+  if (structure?.kind === "duplicate") throw new FrameError("INVALID_REQUEST", `duplicate JSON key "${structure.key}"`);
   let raw: unknown;
   try {
     raw = JSON.parse(text, (key: string, value: unknown) => {

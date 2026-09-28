@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "0326b22c39e02e78604fb9539d51905d06a093287ae437eeebc6f2dec2eec9aa",
-  "report": "ce4d735627f4af0addb5e7329c901692fe65bbbe4b0e1dac3586d9c6ed83e3c9",
+  "report": "79128087d7ee14794eebabc721e883d2930d1e7797ebefea3d3569aecc41eea7",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -209,7 +209,7 @@
     },
     {
       "path": "src/domain/canonical-json.ts",
-      "sha256": "8574c3b23621491bb4869d6ec396d515a55d996ca4b8f9f99a31465d73f6411f"
+      "sha256": "4486a308eea2d63f491775e05eeda6623197b6bde1721243caf25a0452e8d58a"
     },
     {
       "path": "src/domain/capabilities.ts",
@@ -389,7 +389,7 @@
     },
     {
       "path": "src/frame.ts",
-      "sha256": "21b2861d3f73f12af27fa91d48f276dc4b52a7926a68571d5fb77659a76dfca9"
+      "sha256": "f10f57853e1c6b452de4ad07847a61a2524bcf0f64005556df078203b2768965"
     },
     {
       "path": "src/git.ts",
@@ -753,7 +753,7 @@
     },
     {
       "path": "src/protocol/request-codec.ts",
-      "sha256": "15f6f9d9118a1aa4bab740dd03b70d95b8dbdcc8abc97921b76444f87e247c40"
+      "sha256": "be6463ccccedd3d6a94ea71107a34e67c248813b8260d75a9d430d9bc8380fcb"
     },
     {
       "path": "src/protocol/response-codec.ts",
