@@ -19,17 +19,19 @@ const holderEntry = join(here, "..", "src", "entry", "guest-session.js");
 const fakeTui = join(here, "..", "..", "test", "fixtures", "fake-tui.mjs");
 const setsid = existsSync("/usr/bin/setsid");
 
-interface Holder { readonly child: ChildProcess; readonly socketPath: string; readonly exited: Promise<number | null> }
-async function holder(t: import("node:test").TestContext): Promise<Holder> {
+interface Holder { readonly child: ChildProcess; readonly socketPath: string; readonly exited: Promise<number | null>; log: string }
+async function holder(t: import("node:test").TestContext, program: readonly string[] = [process.execPath, fakeTui]): Promise<Holder> {
   const dir = mkdtempSync(join(tmpdir(), "oma-session-"));
   const socketPath = join(dir, "s.sock");
-  const child = spawn(process.execPath, [holderEntry, "--socket", socketPath, "--cwd", dir, "--", process.execPath, fakeTui],
-    { stdio: ["ignore", "ignore", "inherit"] });
+  const child = spawn(process.execPath, [holderEntry, "--socket", socketPath, "--cwd", dir, "--", ...program],
+    { stdio: ["ignore", "ignore", "pipe"] });
   const exited = new Promise<number | null>(resolve => child.once("exit", code => resolve(code)));
+  const held: Holder = { child, socketPath, exited, log: "" };
+  child.stderr!.on("data", (chunk: Buffer) => { held.log += chunk.toString("utf8"); process.stderr.write(chunk); });
   t.after(async () => { if (child.exitCode === null) { child.kill("SIGKILL"); await exited; } rmSync(dir, { recursive: true, force: true }); });
   for (let i = 0; i < 100 && !existsSync(socketPath); i++) await new Promise(r => setTimeout(r, 20));
   assert.ok(existsSync(socketPath), "the holder listens");
-  return { child, socketPath, exited };
+  return held;
 }
 
 /** One screen: what it has been shown, and the control frames it received. */
@@ -177,5 +179,17 @@ test("§4.6: a holder that dies hangs up its program, which holds no side of the
   await exited;
   for (let i = 0; i < 150 && existsSync(`/proc/${pid}`); i++) await new Promise(r => setTimeout(r, 20));
   assert.equal(existsSync(`/proc/${pid}`), false, "the program outlived the holder of its terminal");
+  screen.socket.destroy();
+});
+
+test("DR18 D-1: the program speaks product text, and what it writes for diagnosis goes to the holder's log, not the screen", { skip: !setsid }, async t => {
+  const held = await holder(t, ["/bin/sh", "-c",
+    // A screen sees what is written after it attaches, so this keeps writing.
+    'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do printf "surface:%s|" "$OMA_PRODUCT_TEXT"; echo "diagnosis /var/lib/oma" >&2; sleep 0.2; done']);
+  const screen = await Screen.attach(held.socketPath);
+  await screen.until(/surface:1\|/, "the product-text marker");
+  for (let i = 0; i < 150 && !held.log.includes("diagnosis /var/lib/oma"); i++) await new Promise(r => setTimeout(r, 20));
+  assert.match(held.log, /diagnosis \/var\/lib\/oma/, "the program's stderr is the holder's, which is the guest's log");
+  assert.doesNotMatch(screen.shown, /diagnosis/, "and never the screen");
   screen.socket.destroy();
 });

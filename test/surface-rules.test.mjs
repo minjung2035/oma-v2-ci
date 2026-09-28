@@ -341,3 +341,23 @@ test("utf8-decoder-owner (P0V-86): UTF-8 is read through the owner and the exten
   withTree({ ...owner("{ fatal: true, ignoreBOM: true }"), "src/x.ts": "// new TextDecoder()\nconst e = new TextEncoder();" },
     findings => clean(findings, "utf8-decoder-owner"));
 });
+
+test("error-words-owner (DR18, D-1): an error's words on the product surface come from one reading", () => {
+  const words = { "src/tui/words.ts": "export function errorWords(error) { return error instanceof Error ? error.message : String(error); }" };
+  withTree({ ...words, "src/entry/oma.ts": "try { f(); } catch (error) { fail(errorWords(error)); }",
+    "src/tui/session.ts": "const message = event.message;" }, findings => clean(findings, "error-words-owner"));
+  // Reject: each way a file reads a thrown value's words itself.
+  for (const [file, text] of [
+    ["src/entry/oma.ts", "try { f(); } catch (error) { fail(error instanceof Error ? 'x' : 'y'); }"],
+    ["src/tui/app.ts", "const text = failure.message;"],
+    ["src/tui/sources/mail.ts", "try { f(); } catch (error) { note(String(error)); }"],
+    ["src/tui/session.ts", "const text = result.message;"],
+  ])
+    withTree({ ...words, [file]: text }, findings => {
+      assert.ok(findings.some(value => value.rule === "error-words-owner" && value.file === file), `${file}: ${text}`);
+    });
+  // Near miss: the views only lay out passed words; String() of a value that
+  // was not caught is not an error's words.
+  withTree({ ...words, "src/tui/view/notice.ts": "const text = notice.message;", "src/tui/app.ts": "const n = String(count);" },
+    findings => clean(findings, "error-words-owner"));
+});

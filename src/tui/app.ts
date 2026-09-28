@@ -8,6 +8,7 @@
 import { KeyDecoder, type Key } from "./keys.js";
 import { assertNever } from "../domain/exhaustive.js";
 import { publishedUnconfirmed } from "../domain/errors.js";
+import { errorWords } from "./words.js";
 import {
   INITIAL, categoryOf, cursorOf, step,
   mailIdentity, type DashboardData, type Effect, type ExtensionRow, type MailBody, type MailboxRead, type MailRow, type Notice, type PanelData, type State,
@@ -47,9 +48,6 @@ const EMPTY: PanelData = Object.freeze({
   config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]), mailUnreadable: null, mailOmitted: 0,
 });
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export class TuiApp {
   private state: State = INITIAL;
@@ -213,8 +211,8 @@ export class TuiApp {
       // the previous value looking like it changed -- and a committed one whose
       // flush failed must not say that (P0-5): it was saved.
       this.notice = publishedUnconfirmed(error)
-        ? { kind: "saved-unconfirmed", message: messageOf(error) }
-        : { kind: "save-failed", message: messageOf(error) };
+        ? { kind: "saved-unconfirmed", message: errorWords(error) }
+        : { kind: "save-failed", message: errorWords(error) };
       this.refresh();
     }
   }

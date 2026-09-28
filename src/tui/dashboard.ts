@@ -8,6 +8,7 @@ import type { AgentStatus, HostConfigV1 } from "../../implementation/contracts.j
 import { NO_UNIT_REASON } from "../protocol/status-view.js";
 import type { DashboardData } from "./model.js";
 import type { Observation } from "./transport.js";
+import { surfaceWords } from "./words.js";
 
 export interface DashboardInput {
   readonly config: HostConfigV1;
@@ -42,7 +43,7 @@ export function dashboardData(input: DashboardInput): DashboardData {
       pending: observation.statuses.reduce((total, row) => total + row.pending, 0),
       principalPending: observation.statuses.find(row => row.agent === "principal")?.pending ?? null,
     }
-    : { kind: "unknown", observedAtMs: observation.observedAtMs, reason: observation.reason };
+    : { kind: "unknown", observedAtMs: observation.observedAtMs, reason: surfaceWords(observation.reason, "관측하지 못함") };
   return Object.freeze({
     status,
     configuredWorkers: config.initialResidents.length,

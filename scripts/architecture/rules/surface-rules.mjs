@@ -634,6 +634,39 @@ function utf8DecoderRules(root, findings) {
   }
 }
 
+/** DR18 (D-1, MAC-022): an error's words reach the product surface through
+ * one reading, `src/tui/words.ts`, which on a Mac's screen keeps only product
+ * text and sends the rest to the guest's log. So no other file of the `oma`
+ * process reads a thrown value's words itself: no `instanceof Error` test, no
+ * `.message`, no `String()` of a caught value. The views only lay out what
+ * already passed that reading. The engine's own message event is the
+ * transcript's content, not OMA's words. */
+const WORDS_OWNER = "src/tui/words.ts";
+const ENGINE_CONTENT = Object.freeze({ "src/tui/session.ts": "event" });
+function errorWordsRules(root, findings) {
+  const files = [...filesUnder(root, "src/tui").filter(file => file !== WORDS_OWNER && !file.startsWith(VIEW)),
+    ...present(root, ["src/entry/oma.ts"])];
+  for (const file of files) {
+    const caught = new Set();
+    const source = sourceOf(root, file);
+    eachNode(source, node => {
+      if (ts.isCatchClause(node) && node.variableDeclaration && ts.isIdentifier(node.variableDeclaration.name))
+        caught.add(node.variableDeclaration.name.text);
+    });
+    eachNode(source, node => {
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword
+        && ts.isIdentifier(node.right) && node.right.text === "Error")
+        findings.push(finding("error-words-owner", file, "reads a thrown value's words itself (instanceof Error); use errorWords from src/tui/words.ts"));
+      if (ts.isPropertyAccessExpression(node) && node.name.text === "message"
+        && !(ts.isIdentifier(node.expression) && ENGINE_CONTENT[file] === node.expression.text))
+        findings.push(finding("error-words-owner", file, `reads .message of ${node.expression.getText(source)}; an error's words come from errorWords (src/tui/words.ts)`));
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "String"
+        && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]) && caught.has(node.arguments[0].text))
+        findings.push(finding("error-words-owner", file, "turns a caught value into text with String(); use errorWords from src/tui/words.ts"));
+    });
+  }
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
   extensionRules(root, findings);
@@ -649,5 +682,6 @@ export function surfaceRuleFindings(root) {
   principalTurnOwnerRules(root, findings);
   hostLossSignalRules(root, findings);
   utf8DecoderRules(root, findings);
+  errorWordsRules(root, findings);
   return findings;
 }

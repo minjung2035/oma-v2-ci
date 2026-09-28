@@ -18,6 +18,7 @@ import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from 
 import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
 import { loadConfiguration } from "../config.js";
 import { StoreError } from "../domain/errors.js";
+import { errorWords } from "./words.js";
 import { storedMailBytes } from "../domain/mail-values.js";
 import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
 import { CONVERSATION_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
@@ -235,9 +236,6 @@ export function sessionEnv(
   };
 }
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function textOf(message: unknown): string {
   if (typeof message === "string") return message;
@@ -348,7 +346,7 @@ export class PrincipalSession {
     void this.rpc.completion.then(result => {
       this.closed = true;
       const reason = result.state === "failed"
-        ? `세션이 오류로 종료되었습니다: ${result.error instanceof Error ? result.error.message : String(result.error)}`
+        ? `세션이 오류로 종료되었습니다: ${errorWords(result.error)}`
         : "세션이 종료되었습니다.";
       this.handBack(reason);
       this.owner = null;
@@ -429,7 +427,7 @@ export class PrincipalSession {
   private write(text: string): void {
     void this.sendPrompt(this.nextRequestId(), text, "human").catch((error: unknown) => {
       if (!commandWasNotWritten(error)) return;
-      this.sink.onPromptFailed(text, messageOf(error));
+      this.sink.onPromptFailed(text, errorWords(error));
       this.release("human");
     });
   }

@@ -232,7 +232,7 @@ func relay(_ client: Int32, _ connection: VZVirtioSocketConnection) {
 
 // MARK: - Keychain (MAC-701)
 
-let keychainService = ProcessInfo.processInfo.environment["OMA_KEYCHAIN_SERVICE"] ?? "com.vendor.oma.provider"
+let keychainService = ProcessInfo.processInfo.environment["OMA_KEYCHAIN_SERVICE"] ?? "io.github.minjung2035.oma.provider"
 let keychainGroup = ProcessInfo.processInfo.environment["OMA_KEYCHAIN_GROUP"]
 
 func keychainQuery(_ account: String) -> [String: Any] {

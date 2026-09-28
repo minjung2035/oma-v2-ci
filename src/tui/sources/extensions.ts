@@ -14,6 +14,7 @@
 import { lstatSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { StoreError } from "../../domain/errors.js";
+import { errorWords } from "../words.js";
 import { DEPLOYMENT_LAYOUT } from "../../domain/deployment.js";
 import { loadConfigurationSnapshot, loadEditableConfiguration, type ConfigurationSnapshot } from "../../config.js";
 import { extensionEntryProblem, extensionListProblem, observeExtensionAsset } from "../../config/operations.js";
@@ -105,7 +106,7 @@ export function readExtensions(source: string | ConfigurationSnapshot, principal
   let mode: "full" | "repair" = "full";
   try { snapshot = typeof source === "string" ? loadConfigurationSnapshot(source) : source; }
   catch (error) {
-    const unreadable = error instanceof StoreError ? `설정을 읽을 수 없습니다: ${error.message}` : "설정을 읽을 수 없습니다";
+    const unreadable = error instanceof StoreError ? `설정을 읽을 수 없습니다: ${errorWords(error)}` : "설정을 읽을 수 없습니다";
     // WP14.03: a configuration that fails only because a declared extension
     // file is gone can still be read as an editing input for its removal.
     if (typeof source !== "string") return unmanaged(unreadable);

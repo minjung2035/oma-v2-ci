@@ -12,6 +12,7 @@ import { READ_BOUNDS } from "../limits.js";
 import { displaySubject } from "../../mail/headers.js";
 import { headerEnd, readableBody } from "../../mail/display.js";
 import { unobserved } from "../../domain/errors.js";
+import { errorWords } from "../words.js";
 
 export interface MailboxPaths {
   readonly newDir: string;
@@ -100,7 +101,7 @@ function readBounded(path: string, limit: number): BoundedRead {
       complete: stat.size <= limit && filled === stat.size };
   } catch (error) {
     const unknown = unobserved(error, path);
-    return unknown === null ? { kind: "none" } : { kind: "unreadable", reason: unknown.message };
+    return unknown === null ? { kind: "none" } : { kind: "unreadable", reason: errorWords(unknown) };
   } finally { if (fd !== undefined) closeSync(fd); }
 }
 
@@ -134,7 +135,7 @@ function entriesIn(directory: string): { readonly entries: readonly Entry[]; rea
     try { stat = lstatSync(path); }
     catch (error) {
       const unknown = unobserved(error, path);
-      if (unknown !== null) unreadable ??= unknown.message;
+      if (unknown !== null) unreadable ??= errorWords(unknown);
       continue;
     }
     if (stat.isFile()) entries.push({ name, deliveredAtMs: stat.mtimeMs });

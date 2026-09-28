@@ -19,5 +19,5 @@ connect mode), Keychain item을 읽고 쓰고(MAC-701), 절전·깨어남을 알
 
 descriptor 3이 닫히면(부모가 끝남) VM을 멈추고 끝난다(§9.3).
 
-환경: `OMA_KEYCHAIN_SERVICE`(기본 `com.vendor.oma.provider`), `OMA_KEYCHAIN_GROUP`(access group 전체 이름). vendor와 Team ID는 배포
-주체가 정한다(§13 Q4).
+환경: `OMA_KEYCHAIN_SERVICE`(기본 `io.github.minjung2035.oma.provider`), `OMA_KEYCHAIN_GROUP`(access group 전체 이름). 식별자는 §13 Q4로 정했다. Team ID는
+서명하는 주체의 것이다.

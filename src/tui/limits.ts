@@ -111,6 +111,8 @@ export const READ_BOUNDS = Object.freeze({
   extensionScanDepth: bound(3, "count", "installed extensions are not nested deeper"),
   extensionScanEntries: bound(1024, "count", "directory entries one extension scan examines before it reports a partial list"),
   roleExtensions: bound(16, "count", "the operations contract's per-role maximum"),
+  // DR18 (D-1): distinct replaced texts written to the guest's log, once each.
+  loggedWords: bound(256, "count", "a view redrawn every second must not fill the log with one reason"),
 });
 
 /** Every declared bound, for tests that assert the surface stays bounded. */

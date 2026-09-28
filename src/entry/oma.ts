@@ -16,6 +16,7 @@ import { resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { ensureDirectory } from "../storage/directory.js";
 import { TuiApp, type AppPorts } from "../tui/app.js";
 import { codeFor, exitFor, fail } from "../tui/exit.js";
+import { errorWords, humanStream, surfaceWords } from "../tui/words.js";
 import { openTerminal } from "../tui/screen.js";
 import { dashboardData } from "../tui/dashboard.js";
 import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalSessionProfile, principalWorkspace } from "../tui/session.js";
@@ -43,7 +44,7 @@ import { runEngineLogin } from "../tui/login.js";
 import { openPrincipalEgress, type PrincipalEgress } from "../runtime/egress-forwarder.js";
 
 function usage(): never {
-  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma login [--society <name>] [--config <path>]\n");
+  humanStream().write("usage: oma [--society <name>] [--config <path>] [--bind-project]\n       oma login [--society <name>] [--config <path>]\n");
   process.exit(exitFor("INVALID_REQUEST"));
 }
 
@@ -84,13 +85,13 @@ async function login(society: string, stateRoot: string, configPath: string, can
     fail("이 프로젝트의 society가 아직 없습니다. 먼저 `oma`를 한 번 실행하세요.", exitFor("INVALID_REQUEST"));
   const decision = projectBindingDecision({ observation: observeProjectBinding(stateRoot), society, canonicalProjectPath,
     hasSociety: true, bindRequested: false });
-  if (decision.kind === "refuse") fail(`이 society를 이 프로젝트에서 열 수 없습니다: ${decision.reason}`, exitFor(decision.code));
+  if (decision.kind === "refuse") fail(`이 society를 이 프로젝트에서 열 수 없습니다: ${surfaceWords(decision.reason, `오류 코드 ${decision.code}`)}`, exitFor(decision.code));
   let settings: Settings;
   try { settings = readSettings(configPath); }
-  catch (error) { fail(`설정을 읽을 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+  catch (error) { fail(`설정을 읽을 수 없습니다: ${errorWords(error)}`, codeFor(error)); }
   let tenure: HostTenure | null;
   try { tenure = HostTenure.take(stateRoot); }
-  catch (error) { fail(`society 소유권을 확인하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+  catch (error) { fail(`society 소유권을 확인하지 못했습니다: ${errorWords(error)}`, codeFor(error)); }
   if (tenure === null) fail("이 society가 실행 중입니다. oma를 끝낸 뒤 로그인하세요.", exitFor("BROKER_UNAVAILABLE"));
   let code: number;
   try {
@@ -98,7 +99,7 @@ async function login(society: string, stateRoot: string, configPath: string, can
       fence: tenure.fence, env: process.env });
   } catch (error) {
     await tenure.end();
-    fail(`엔진을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error));
+    fail(`엔진을 시작하지 못했습니다: ${errorWords(error)}`, codeFor(error));
   }
   await tenure.end();
   process.exit(code);
@@ -116,7 +117,7 @@ async function main(argv: readonly string[]): Promise<void> {
   // checked below before anything of that society is written.
   let canonicalProjectPath: string;
   try { canonicalProjectPath = realpathSync(process.cwd()); }
-  catch (error) { fail(`프로젝트 디렉터리를 확인할 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+  catch (error) { fail(`프로젝트 디렉터리를 확인할 수 없습니다: ${errorWords(error)}`, codeFor(error)); }
   const explicitSociety = argOf(argv, "--society");
   const society = explicitSociety ?? defaultSocietyFor(canonicalProjectPath, sha256Hex(canonicalProjectPath));
   const bindRequested = argv.includes("--bind-project");
@@ -145,11 +146,11 @@ async function main(argv: readonly string[]): Promise<void> {
   // the lease itself, because that is where the name it takes comes from
   // (VAL-002, FS-005).
   try { assertHostDirectoryLayout(runRoot, true); }
-  catch (error) { fail(`society의 실행 디렉터리를 신뢰할 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+  catch (error) { fail(`society의 실행 디렉터리를 신뢰할 수 없습니다: ${errorWords(error)}`, codeFor(error)); }
 
   let tenure: HostTenure | null;
   try { tenure = HostTenure.take(stateRoot); }
-  catch (error) { fail(`society 소유권을 확인하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+  catch (error) { fail(`society 소유권을 확인하지 못했습니다: ${errorWords(error)}`, codeFor(error)); }
 
   // A broker that is already listening owns the writing of this society, no
   // matter who started it -- a systemd unit, an operator by hand, or an `oma`
@@ -193,7 +194,7 @@ async function main(argv: readonly string[]): Promise<void> {
       bindRequested: bindRequested && tenure !== null });
     if (decision.kind === "refuse" || (decision.kind === "publish" && tenure === null && hasSociety)) {
       if (tenure !== null) await tenure.end();
-      fail(decision.kind === "refuse" ? `이 society를 이 프로젝트에서 열 수 없습니다: ${decision.reason}` :
+      fail(decision.kind === "refuse" ? `이 society를 이 프로젝트에서 열 수 없습니다: ${surfaceWords(decision.reason, `오류 코드 ${decision.code}`)}` :
         "이 society에는 프로젝트 바인딩이 없고 다른 oma가 소유하고 있습니다",
         exitFor(decision.kind === "refuse" ? decision.code : "BROKER_UNAVAILABLE"));
     }
@@ -201,7 +202,7 @@ async function main(argv: readonly string[]): Promise<void> {
       try { publishProjectBinding(stateRoot, { society, canonicalProjectPath }); }
       catch (error) {
         await tenure.end();
-        fail(`society의 프로젝트 바인딩을 기록하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error));
+        fail(`society의 프로젝트 바인딩을 기록하지 못했습니다: ${errorWords(error)}`, codeFor(error));
       }
     }
   }
@@ -213,7 +214,7 @@ async function main(argv: readonly string[]): Promise<void> {
     // does not create the configuration it is missing either.
     if (tenure === null && !existsSync(configPath))
       fail("다른 oma가 이 society를 소유하고 있고 설정은 아직 만들어지지 않았습니다. 잠시 후 다시 실행하세요.", exitFor("BROKER_UNAVAILABLE"));
-    fail(`설정을 읽을 수 없습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error));
+    fail(`설정을 읽을 수 없습니다: ${errorWords(error)}`, codeFor(error));
   }
   if (settings.config.society !== society)
     fail("설정의 society가 요청한 society와 다릅니다", exitFor("INVALID_REQUEST"));
@@ -227,7 +228,7 @@ async function main(argv: readonly string[]): Promise<void> {
   let provisioned: ProvisionReport | null = null;
   if (tenure !== null) {
     try { provisioned = provisionSociety(stateRoot, { projectDir: process.cwd() }); }
-    catch (error) { fail(`society를 준비하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`, codeFor(error)); }
+    catch (error) { fail(`society를 준비하지 못했습니다: ${errorWords(error)}`, codeFor(error)); }
     // D02/WP13: configuration generations no reader can still use are
     // collected only here -- this process owns the society, no broker is
     // listening and nothing it will start has read the configuration yet. The
@@ -263,7 +264,7 @@ async function main(argv: readonly string[]): Promise<void> {
    * next edit is made from it. A read-back that fails is an unknown. */
   const readBack = (): boolean => {
     try { reload(); settingsUnread = null; return true; }
-    catch (error) { settingsUnread = error instanceof Error ? error.message : String(error); return false; }
+    catch (error) { settingsUnread = errorWords(error); return false; }
   };
 
   /** Every write this product performs on behalf of the Human passes here.
@@ -359,7 +360,7 @@ async function main(argv: readonly string[]): Promise<void> {
   };
   process.on("uncaughtException", error => {
     abandon?.();
-    process.stderr.write(`oma: ${String(error)}\n`);
+    humanStream().write(`oma: ${errorWords(error)}\n`);
     process.exit(codeFor(error));
   });
   // AV31, P0V-81: every way this process is asked to end takes the same path --
@@ -394,7 +395,7 @@ async function main(argv: readonly string[]): Promise<void> {
       modelProfile: settings.config.agentProfiles[settings.config.principalProfile]?.modelProfile ?? settings.config.principalProfile,
       frameBytes: settings.config.limits.frameBytes, deadlineMs: settings.config.limits.receiptWaitSeconds * 1000, env: process.env });
   } catch (error) {
-    app.line(`⚠ provider에 닿는 길을 열지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+    app.line(`⚠ provider에 닿는 길을 열지 못했습니다: ${errorWords(error)}`);
   }
   // The session environment is principalEnvironment's own value, with the
   // provider path added only where there is one.
@@ -484,9 +485,9 @@ async function main(argv: readonly string[]): Promise<void> {
       if (outcome.kind === "delivered") { app.line(`[메일] ${outcome.messages}통을 Principal 세션에 넣었습니다.`); app.refresh(); app.draw(); }
       // WP08.05: completing an already-presented batch is not a new delivery.
       else if (outcome.kind === "settled") { app.refresh(); app.draw(); }
-      else if (outcome.kind === "failed") { app.line(`[메일] 전달을 마치지 못했습니다(${outcome.phase}): ${outcome.reason}`); app.draw(); }
+      else if (outcome.kind === "failed") { app.line(`[메일] 전달을 마치지 못했습니다(${outcome.phase}): ${surfaceWords(outcome.reason, "원인은 로그에 남겼습니다")}`); app.draw(); }
     }, (error: unknown) => {
-      app.line(`[메일] 전달 중 오류: ${error instanceof Error ? error.message : String(error)}`);
+      app.line(`[메일] 전달 중 오류: ${errorWords(error)}`);
       app.draw();
     });
   };
@@ -512,7 +513,7 @@ async function main(argv: readonly string[]): Promise<void> {
     catch (error) {
       // The Control Panel stays usable without a session: the product must
       // still show status and settings when Pi cannot start.
-      app.line(`Pi 세션을 시작하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+      app.line(`Pi 세션을 시작하지 못했습니다: ${errorWords(error)}`);
       app.line("Ctrl+X 로 Dashboard, Config, Mail 은 계속 사용할 수 있습니다.");
       app.draw();
       return;
@@ -587,6 +588,6 @@ main(process.argv.slice(2)).catch((error: unknown) => {
   // restored, broker stopped, engine ended -- and the reason is written after
   // the alternate screen is gone, where the Human can still read it.
   abandon?.();
-  process.stderr.write(`oma: ${error instanceof Error ? error.message : String(error)}\n`);
+  humanStream().write(`oma: ${errorWords(error)}\n`);
   process.exit(codeFor(error));
 });
