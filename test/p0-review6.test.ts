@@ -658,13 +658,11 @@ test("P0V-98 / P0V-59, P0-3: the first Resident a user installs makes the unit d
   const state = join(dir, "tree");
   const units = new UnitsModule("demo", { node: process.execPath, libdir: process.cwd(), state, society: "demo", agent: "",
     config: join(state, "config.json"), run: join(dir, "run"), brokerUnit: "" }, installDir, { p: TEST_RESOURCES }, () => 1);
-  // This stand-in manager does not report the fragment it loaded, so the
-  // install stops after publishing, at the check of what the manager read;
-  // what matters here is that it got that far.
-  try { units.ensureResident("alice", "p", TEST_RESOURCES); }
-  catch (error) {
-    assert.ok(error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /differs from rendered contract/.test(error.message),
-      `the install failed before it published: ${String(error)}`);
-  }
-  assert.ok(readdirSync(installDir).includes("oma-demo-alice.service"), "the unit was not published into the directory it made");
+  // Whatever the stand-in manager then answers -- it does not report the
+  // fragment it loaded, and a lane's guard refuses systemctl outright -- the
+  // install stops after publishing; what matters here is that it got that far.
+  let failure: unknown = null;
+  try { units.ensureResident("alice", "p", TEST_RESOURCES); } catch (error) { failure = error; }
+  assert.ok(existsSync(installDir) && readdirSync(installDir).includes("oma-demo-alice.service"),
+    `the unit was not published into the directory it made: ${String(failure)}`);
 });
