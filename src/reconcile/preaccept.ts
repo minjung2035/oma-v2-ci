@@ -63,7 +63,8 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     remove(path);
   }
   // Publication temporaries beside archive and mailbox names.
-  for (const directory of [join(stateRoot, "mail", "archive", "cur"), ...names(join(stateRoot, "mail", "inboxes"))
+  for (const directory of [join(stateRoot, "mail", "archive", "cur"), join(stateRoot, "mail", "workers", "cur"),
+    ...names(join(stateRoot, "mail", "inboxes"))
     .flatMap(actor => ["new", "cur"].map(folder => join(stateRoot, "mail", "inboxes", actor, folder)))])
     for (const name of names(directory)) if (PUBLICATION_TEMPORARY.test(name)) remove(join(directory, name));
   // Staging: in-process names are collected, a child's by its lease.

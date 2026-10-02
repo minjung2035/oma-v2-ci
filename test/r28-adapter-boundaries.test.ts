@@ -155,7 +155,7 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
     stateRoot, runRoot, limits: { frameBytes: 4096, batchMaxMessages: 24 } };
   const sandbox = new SandboxModule(host);
   const dirs = { workspace: workspacePathAt(stateRoot, "alice"), home: join(agentRootPathAt(stateRoot, "alice"), "home"),
-    archive: join(stateRoot, "mail/archive"), selfMail: join(stateRoot, "mail/inboxes/alice"),
+    archive: join(stateRoot, "mail/archive"), workerArchive: join(stateRoot, "mail/workers"), selfMail: join(stateRoot, "mail/inboxes/alice"),
     view: runnerViewPathAt(stateRoot, "alice"), world: join(stateRoot, "world"), projectGit: join(stateRoot, "repos/project.git"), projectMirror: join(stateRoot, "repos/project-mirror.git"),
     sessions: runnerSessionDirPathAt(stateRoot, "alice") };
   const plan = sandbox.resident(lease, dirs);
@@ -179,7 +179,7 @@ for (const retried of [false, true]) {
 test(`R28: Pi adapter accepts only a settled pinned boundary from its owned RPC child${retried ? ", including one the run reached after a failed message" : ""}`, { timeout: 10000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-r28-pi-"));
   try {
-    const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "view"].map(name => {
+    const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "workerArchive", "projectGit", "view"].map(name => {
       const path = join(root, name); mkdirSync(path, { recursive: true }); return [name, path];
     })) as Record<string, string>;
     const core = join(root, "extension.js"); const cli = join(root, "cli.js");
@@ -212,7 +212,7 @@ process.on("SIGTERM", () => process.exit(0));
     const adapter = new PiAdapter({ actor: "alice", society: "demo", profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
       limits: { frameBytes: 65536, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       paths: { piCommand: command, coreExtension: core, cli, workspace: dirs.workspace!, sessionDir: dirs.sessions!,
-        agentHome: dirs.home!, mailArchive: dirs.archive!, batchView: dirs.view!, socket: join(root, "control.sock") } });
+        agentHome: dirs.home!, mailArchive: dirs.archive!, workerArchive: dirs.workerArchive!, projectGit: dirs.projectGit!, batchView: dirs.view!, socket: join(root, "control.sock") } });
     const boundary = await adapter.deliver(batch);
     assert.deepEqual(boundary, { adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: 1,
       sessionPath: join(dirs.sessions!, "owned.jsonl"), entryId: "0123abcd" });

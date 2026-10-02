@@ -63,7 +63,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
     const directories: ResidentDirectories = {
       workspace: workspacePathAt(stateRoot, actor),
       home: join(agentRootPathAt(stateRoot, actor), "home"),
-      archive: join(stateRoot, "mail", "archive"),
+      archive: join(stateRoot, "mail", "archive"), workerArchive: join(stateRoot, "mail", "workers"),
       selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor),
       world: join(stateRoot, "world"),
@@ -99,7 +99,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
-        mailArchive: join(directories.archive, "cur"), batchView: directories.view, socket: leaseSocket,
+        mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
       confinement: {
         host: {
@@ -179,7 +179,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
     const directories: ResidentDirectories = {
       workspace: workspacePathAt(stateRoot, actor),
       home: join(agentRootPathAt(stateRoot, actor), "home"),
-      archive: join(stateRoot, "mail", "archive"),
+      archive: join(stateRoot, "mail", "archive"), workerArchive: join(stateRoot, "mail", "workers"),
       selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor),
       world: join(stateRoot, "world"),
@@ -211,7 +211,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
-        mailArchive: join(directories.archive, "cur"), batchView: directories.view, socket: leaseSocket,
+        mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
       confinement: {
         host: {
@@ -331,7 +331,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
     const directories: ResidentDirectories = {
       workspace: workspacePathAt(stateRoot, actor),
       home: join(agentRootPathAt(stateRoot, actor), "home"),
-      archive: join(stateRoot, "mail", "archive"),
+      archive: join(stateRoot, "mail", "archive"), workerArchive: join(stateRoot, "mail", "workers"),
       selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor),
       world: join(stateRoot, "world"),
@@ -360,7 +360,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
-        mailArchive: join(directories.archive, "cur"), batchView: directories.view, socket: leaseSocket,
+        mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
       confinement: {
         host: {
@@ -421,7 +421,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     const directories: ResidentDirectories = {
       workspace: workspacePathAt(stateRoot, actor),
       home: join(agentRootPathAt(stateRoot, actor), "home"),
-      archive: join(stateRoot, "mail", "archive"),
+      archive: join(stateRoot, "mail", "archive"), workerArchive: join(stateRoot, "mail", "workers"),
       selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor),
       world: join(stateRoot, "world"),
@@ -445,7 +445,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
-        mailArchive: join(directories.archive, "cur"), batchView: directories.view, socket: leaseSocket,
+        mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
       confinement: {
         host: {
@@ -500,7 +500,7 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
     const actor = "alice";
     const directories: ResidentDirectories = {
       workspace: workspacePathAt(stateRoot, actor), home: join(agentRootPathAt(stateRoot, actor), "home"),
-      archive: join(stateRoot, "mail", "archive"), selfMail: join(stateRoot, "mail", "inboxes", actor),
+      archive: join(stateRoot, "mail", "archive"), workerArchive: join(stateRoot, "mail", "workers"), selfMail: join(stateRoot, "mail", "inboxes", actor),
       view: runnerViewPathAt(stateRoot, actor), world: join(stateRoot, "world"),
       projectGit: join(stateRoot, "repos", "project.git"), projectMirror: join(stateRoot, "repos", "project-mirror.git"), sessions: runnerSessionDirPathAt(stateRoot, actor),
     };
@@ -519,7 +519,7 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
         workspace: directories.workspace, sessionDir: directories.sessions, agentHome: directories.home,
-        mailArchive: join(directories.archive, "cur"), batchView: directories.view, socket: leaseSocket,
+        mailArchive: join(directories.archive, "cur"), workerArchive: join(directories.workerArchive, "cur"), projectGit: directories.projectGit, batchView: directories.view, socket: leaseSocket,
       },
       confinement: {
         host: {

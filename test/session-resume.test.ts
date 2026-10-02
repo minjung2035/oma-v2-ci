@@ -65,14 +65,14 @@ test("AV14 / arch §7: a Resident's activation resumes its existing session inst
   const root = mkdtempSync(join(tmpdir(), "oma-av14-resident-"));
   try {
     const runtime = resolvePiRuntime({ stateRoot: root, libdir: LIBDIR });
-    const dirs = { workspace: join(root, "workspace"), sessions: join(root, "sessions"), home: join(root, "home"), view: join(root, "view"), agent: join(root, "agent"), archive: join(root, "archive") };
+    const dirs = { workspace: join(root, "workspace"), sessions: join(root, "sessions"), home: join(root, "home"), view: join(root, "view"), agent: join(root, "agent"), archive: join(root, "archive"), workerArchive: join(root, "workers") };
     for (const path of Object.values(dirs)) mkdirSync(path, { recursive: true });
     const adapter = new PiAdapter({ actor: "alice", society: "s", limits: LIMITS,
       profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 20, extensions: [] },
       paths: { piCommand: runtime.executable, piArgs: [...runtime.args], piAgentDir: dirs.agent,
         coreExtension: join(LIBDIR, "dist/src/pi-extension.js"), cli: join(LIBDIR, "dist/src/cli.js"),
         workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home,
-        mailArchive: join(root, "archive"), batchView: dirs.view, socket: join(root, "control.sock") } });
+        mailArchive: join(root, "archive"), workerArchive: join(root, "workers"), projectGit: join(root, "project.git"), batchView: dirs.view, socket: join(root, "control.sock") } });
     const plan = adapter.spawnPlan();
     const prior = priorSession(dirs.sessions, dirs.workspace);
     assert.equal(await openedSession(plan.command, plan.args, plan.cwd, { ...plan.env, PATH: "/usr/bin:/bin" }), prior,

@@ -116,7 +116,7 @@ setInterval(() => {}, 1000);
 async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budgets: { idle: number; model: number; accept: number }) {
   const root = mkdtempSync(join(tmpdir(), "oma-v10a-"));
   try {
-    const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "view"].map(name => {
+    const dirs = Object.fromEntries(["workspace", "sessions", "home", "archive", "workerArchive", "projectGit", "view"].map(name => {
       const path = join(root, name); mkdirSync(path, { recursive: true }); return [name, path];
     })) as Record<string, string>;
     const core = join(root, "extension.js"); const cli = join(root, "cli.js");
@@ -125,7 +125,7 @@ async function deliverWith(pacing: Pacing, everyMs: number, forMs: number, budge
       profile: { provider: "pi", model: "current", inferenceSeconds: budgets.model, prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
       limits: { frameBytes: 65536, idleStreamSeconds: budgets.idle, receiptWaitSeconds: budgets.accept, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       paths: { piCommand: fakePi(root, pacing, everyMs, forMs), coreExtension: core, cli, workspace: dirs.workspace!, sessionDir: dirs.sessions!,
-        agentHome: dirs.home!, mailArchive: dirs.archive!, batchView: dirs.view!, socket: join(root, "control.sock") } });
+        agentHome: dirs.home!, mailArchive: dirs.archive!, workerArchive: dirs.workerArchive!, projectGit: dirs.projectGit!, batchView: dirs.view!, socket: join(root, "control.sock") } });
     const batch = { id: "b-00000000-0000-4000-8000-0000000000b1", agent: "alice", incarnation: 1,
       messageIds: ["m-00000000-0000-4000-8000-000000000001-0"], sessionPath: null, deliveryMode: "followUp" as const,
       notice: "mail", indexPath: "/inbox.md" as const };

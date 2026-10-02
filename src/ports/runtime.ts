@@ -48,6 +48,8 @@ export interface SandboxDirectories {
   workspace: string;
   home: string;
   archive: string;
+  /** mail-v1: the worker-only review archive, bound read-only per Resident. */
+  workerArchive: string;
   selfMail: string;
   view: string;
   world: string;

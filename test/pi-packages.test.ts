@@ -163,7 +163,7 @@ test("DR25: a project's inline settings become a managed bundle that runs as it 
 
 test("DR25: a Resident's paths reach the package store, and only it -- never the engine home beside it", () => {
   const host = { libdir: "/opt/install/", packages: "/data/oma/.packages" };
-  const dirs = { workspace: "/s/w", home: "/s/h", archive: "/s/a", selfMail: "/s/m", view: "/s/v", world: "/s/world",
+  const dirs = { workspace: "/s/w", home: "/s/h", archive: "/s/a", workerArchive: "/s/wa", selfMail: "/s/m", view: "/s/v", world: "/s/world",
     projectGit: "/s/git", projectMirror: "/s/mirror", sessions: "/s/sessions" };
   assert.equal(confinedPath(host, dirs, "/data/oma/.packages/npm/node_modules/x/ext.ts"), `${RESIDENT_PATHS.packages}/npm/node_modules/x/ext.ts`);
   assert.throws(() => confinedPath(host, dirs, "/data/oma/.engine/auth.json"), /outside every mount/);

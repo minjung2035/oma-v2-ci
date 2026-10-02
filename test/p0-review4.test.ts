@@ -393,7 +393,7 @@ test("P0V-36 / N13, P0-2: a message whose body is within the body limit is read 
   const state = "/srv/oma-n13";
   const plan = planPiSpawn({ actor: "alice", society: "demo", paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
     workspace: workspacePathAt(state, "alice"), sessionDir: runnerSessionDirPathAt(state, "alice"), agentHome: join(agentRootPathAt(state, "alice"), "home"),
-    mailArchive: join(state, "mail", "archive", "cur"), batchView: runnerViewPathAt(state, "alice"), socket: "/run/oma/control.sock" },
+    mailArchive: join(state, "mail", "archive", "cur"), workerArchive: join(state, "mail", "workers", "cur"), projectGit: join(state, "repos", "project.git"), batchView: runnerViewPathAt(state, "alice"), socket: "/run/oma/control.sock" },
     profile: { provider: "p", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
     limits: { frameBytes: 256 * 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: bodyBytes } } as never);
   const told = plan.env.OMA_MAIL_BYTES ?? plan.args[plan.args.indexOf("OMA_MAIL_BYTES") + 1];

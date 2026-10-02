@@ -46,7 +46,13 @@ function mailId(value: string): string | null {
   // sandbox's canonical one, or this engine's own archive root, which is what
   // a Principal's results show (DR1). No other directory names a message.
   const shown = DISPLAYED_ARCHIVE();
-  const prefix = ["/mail/archive/cur/", ...(shown === null ? [] : [`${shown}/`])].find(root => value.startsWith(root));
+  const worker = WORKER_ARCHIVE();
+  const prefix = ["/mail/archive/cur/", ...(shown === null ? [] : [`${shown}/`]),
+    // mail-v1: a Resident also sees worker-only review mail under its own
+    // archive mount. An engine without OMA_WORKER_ARCHIVE (the Principal's)
+    // refuses the name entirely.
+    ...(worker === null ? [] : ["/mail/workers/cur/", `${worker}/`]),
+  ].find(root => value.startsWith(root));
   const suffix = value.endsWith(":2,")
     ? ":2,"
     : value.endsWith(":2")
@@ -64,7 +70,15 @@ function readBoundedMail(
 ): { id: string; text: string } {
   const id = mailId(value);
   if (!id) throw new Error("expected a message id or canonical archive path");
-  return { id, text: readBoundedText(join(root, `${id}:2,`), maximum) };
+  try {
+    return { id, text: readBoundedText(join(root, `${id}:2,`), maximum) };
+  } catch (error) {
+    // mail-v1: worker-only review mail is not in the public archive; the worker
+    // mount is consulted only when this engine has one and the name is absent.
+    const worker = WORKER_ARCHIVE();
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT" || worker === null) throw error;
+    return { id, text: readBoundedText(join(worker, `${id}:2,`), maximum) };
+  }
 }
 
 /** AV23 -- arch §5.1, BATCH-002: a message is a UTF-8 plain text body, and
@@ -107,6 +121,16 @@ export function readableMail(text: string): string {
  * sandbox's /mail/archive/cur for a Resident, the host's own for the Principal. */
 const DISPLAYED_ARCHIVE = (): string | null => {
   const root = process.env.OMA_MAIL_ARCHIVE;
+  return root === undefined || !isAbsolute(root) ? null : root.replace(/\/+$/, "");
+};
+
+/** mail-v1: the worker-only review archive in this engine's view, set only for
+ * Residents (the sandbox bind is /mail/workers; the host path otherwise). The
+ * literal "/mail/workers/cur" mirrors RESIDENT_PATHS.workerArchive in
+ * src/sandbox.ts -- PI-001 keeps this extension free of runtime imports, so a
+ * test binds the two. */
+const WORKER_ARCHIVE = (): string | null => {
+  const root = process.env.OMA_WORKER_ARCHIVE;
   return root === undefined || !isAbsolute(root) ? null : root.replace(/\/+$/, "");
 };
 
@@ -207,7 +231,7 @@ export function cliEnvironment(home: string, socket: string, archive: string): R
   // The frame and stream bounds the broker was configured with. Without them
   // the CLI falls back to its own defaults, which are not necessarily this
   // society's.
-  for (const name of [FRAME_BYTES, CONTEXT_BYTES, BUNDLE_BYTES, "OMA_PROJECT_GIT", "OMA_CONTEXT_GIT"]) {
+  for (const name of [FRAME_BYTES, CONTEXT_BYTES, BUNDLE_BYTES, "OMA_PROJECT_GIT", "OMA_CONTEXT_GIT", "OMA_WORKER_ARCHIVE"]) {
     const value = process.env[name];
     if (value !== undefined && value.length > 0) environment[name] = value;
   }

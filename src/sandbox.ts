@@ -12,6 +12,8 @@ import { agentRootPathAt, projectGitPathAt, projectMirrorPathAt, workspacePathAt
  * the arguments handed to the engine inside it, so the two cannot drift. */
 export const RESIDENT_PATHS = Object.freeze({
   workspace: "/workspace", home: "/home/agent", archive: "/mail/archive",
+  /** mail-v1: worker-only review mail; a Resident's tools read it here. */
+  workerArchive: "/mail/workers",
   selfMail: "/mail/self", view: "/run/oma-view", world: "/world",
   projectGit: "/git/project.git", socket: "/run/oma/control.sock",
   /** DR18 (D-8): the human's committed project history, read-only. */
@@ -58,7 +60,8 @@ function requireResidentContext(h: SandboxHost, lease: RunLease, dirs: ResidentD
   assertValidatedRunLease(lease, h.runRoot);
   const expected: ResidentDirectories = {
     workspace: workspacePathAt(h.stateRoot, lease.actor), home: join(agentRootPathAt(h.stateRoot, lease.actor), "home"),
-    archive: join(h.stateRoot, "mail", "archive"), selfMail: join(h.stateRoot, "mail", "inboxes", lease.actor),
+    archive: join(h.stateRoot, "mail", "archive"), workerArchive: join(h.stateRoot, "mail", "workers"),
+    selfMail: join(h.stateRoot, "mail", "inboxes", lease.actor),
     view: runnerViewPathAt(h.stateRoot, lease.actor), world: join(h.stateRoot, "world"), projectGit: projectGitPathAt(h.stateRoot),
     projectMirror: projectMirrorPathAt(h.stateRoot), sessions: runnerSessionDirPathAt(h.stateRoot, lease.actor),
   };
@@ -117,7 +120,8 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
     ...(h.packages === undefined ? [] : ["--ro-bind", h.packages, RESIDENT_PATHS.packages]),
     "--bind", dirs.workspace, RESIDENT_PATHS.workspace, "--bind", dirs.home, RESIDENT_PATHS.home,
     "--bind", dirs.sessions, RESIDENT_PATHS.sessions,
-    "--ro-bind", dirs.archive, RESIDENT_PATHS.archive, "--ro-bind", dirs.selfMail, RESIDENT_PATHS.selfMail,
+    "--ro-bind", dirs.archive, RESIDENT_PATHS.archive, "--ro-bind", dirs.workerArchive, RESIDENT_PATHS.workerArchive,
+    "--ro-bind", dirs.selfMail, RESIDENT_PATHS.selfMail,
     "--ro-bind", dirs.view, RESIDENT_PATHS.view, "--ro-bind", dirs.world, RESIDENT_PATHS.world,
     "--ro-bind", dirs.projectGit, RESIDENT_PATHS.projectGit,
     // DR18 (D-8): there only once a start has refreshed it from the project.
@@ -148,7 +152,8 @@ function residentMounts(host: MountedInstallation, dirs: ResidentDirectories): r
     [host.libdir, RESIDENT_PATHS.libdir], ...(host.packages === undefined ? [] : [[host.packages, RESIDENT_PATHS.packages] as const]),
     [dirs.workspace, RESIDENT_PATHS.workspace],
     [dirs.home, RESIDENT_PATHS.home], [dirs.sessions, RESIDENT_PATHS.sessions],
-    [dirs.archive, RESIDENT_PATHS.archive], [dirs.selfMail, RESIDENT_PATHS.selfMail],
+    [dirs.archive, RESIDENT_PATHS.archive], [dirs.workerArchive, RESIDENT_PATHS.workerArchive],
+    [dirs.selfMail, RESIDENT_PATHS.selfMail],
     [dirs.view, RESIDENT_PATHS.view], [dirs.world, RESIDENT_PATHS.world],
     [dirs.projectGit, RESIDENT_PATHS.projectGit], [dirs.projectMirror, RESIDENT_PATHS.projectMirror],
   ];

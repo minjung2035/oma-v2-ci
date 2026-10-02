@@ -72,6 +72,10 @@ export interface PiAdapterPaths {
   readonly sessionDir: string;
   readonly agentHome: string;
   readonly mailArchive: string;
+  /** mail-v1: worker-only review mail archive (S/mail/workers/cur). */
+  readonly workerArchive: string;
+  /** The society's canonical repository, read-only to a Resident (oma merge). */
+  readonly projectGit: string;
   readonly batchView: string;
   readonly socket: string;
 }
@@ -145,6 +149,10 @@ function omaEnvironment(options: PiAdapterOptions, inside: PathView): Record<str
     OMA_BUNDLE_BYTES: String(options.limits.bundleBytes),
     OMA_WORKSPACE_BYTES: String(options.profile.workspaceBytes),
     OMA_MAIL_ARCHIVE: inside(options.paths.mailArchive),
+    // mail-v1: only Resident engines reach this builder; the Principal's host
+    // engine is composed in tui/session.ts and gets neither of these.
+    OMA_WORKER_ARCHIVE: inside(options.paths.workerArchive),
+    OMA_PROJECT_GIT: inside(options.paths.projectGit),
     OMA_AGENT_HOME: inside(options.paths.agentHome),
     OMA_CLI_PATH: inside(options.paths.cli),
     ...(options.profile.toolSurface === undefined

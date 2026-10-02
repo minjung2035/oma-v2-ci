@@ -242,7 +242,7 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
   // A Resident's engine, whose shell and tools run the same CLI.
   const { planPiSpawn } = await import("../src/runtime/pi-spawn-plan.js");
   const resident = planPiSpawn({ actor: "alice", society: "demo", paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
-    workspace: "/srv/oma/w", sessionDir: "/srv/oma/s", agentHome: "/srv/oma/h", mailArchive: "/srv/oma/m", batchView: "/srv/oma/v", socket: "/run/oma/control.sock" },
+    workspace: "/srv/oma/w", sessionDir: "/srv/oma/s", agentHome: "/srv/oma/h", mailArchive: "/srv/oma/m", workerArchive: "/srv/oma/wa", projectGit: "/srv/oma/git", batchView: "/srv/oma/v", socket: "/run/oma/control.sock" },
     profile: { provider: "p", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
     limits: { ...limits, idleStreamSeconds: 1, receiptWaitSeconds: 1 } });
   assert.equal(resident.env.OMA_CONTEXT_BYTES, "12345");

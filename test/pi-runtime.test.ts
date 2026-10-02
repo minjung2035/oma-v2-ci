@@ -88,7 +88,7 @@ test("INF-001: the Resident adapter waits for five failed provider retries, then
     paths: { piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: runtime.agentDir,
       coreExtension: join(process.cwd(), "dist/src/pi-extension.js"), cli: join(process.cwd(), "dist/src/cli.js"),
       workspace: join(root, "workspace"), sessionDir: join(root, "sessions"), agentHome: join(root, "home"),
-      mailArchive: join(root, "archive"), batchView: join(root, "view"), socket: join(root, "absent.sock") } });
+      mailArchive: join(root, "archive"), workerArchive: join(root, "workers"), projectGit: join(root, "project.git"), batchView: join(root, "view"), socket: join(root, "absent.sock") } });
   await assert.rejects(adapter.deliver(batch), { code: "PROVIDER_FAILED" });
   assert.equal(provider.seen.length, 6);
   provider.script([{ kind: "text", text: "Recovered" }]);

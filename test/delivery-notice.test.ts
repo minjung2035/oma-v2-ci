@@ -199,3 +199,50 @@ test("DR6 / D01, BATCH-002: a batch presented again says so, a new one does not,
     assert.doesNotMatch(index, /읽기: cat/);
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+/** mail-v1: worker-only review mail lives in the workers archive. A Resident
+ * engine (OMA_WORKER_ARCHIVE set) reaches it by id, by the sandbox's canonical
+ * /mail/workers/cur path and by the path its own environment shows; a
+ * Principal engine has no such root and the workers path is no name at all. */
+test("mail-v1: a Resident reads worker-audience mail by id and by its workers path; a Principal refuses the name", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-workers-read-"));
+  try {
+    const archive = join(root, "archive"), workers = join(root, "workers");
+    mkdirSync(archive, { recursive: true }); mkdirSync(workers, { recursive: true });
+    const id = "m-00000000-0000-4000-8000-000000000042-0";
+    const eml = await buildEml({ from: "alice@demo.oma.invalid", to: ["residents@demo.oma.invalid"], replyTo: [],
+      subject: "review", kind: "message", contextRevision: null, inReplyTo: null, references: [],
+      messageId: `${id}@demo.oma.invalid`, body: "worker-only thread body" });
+    writeFileSync(join(workers, `${id}:2,`), eml.text);
+    const tools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
+    const previous = { ...process.env };
+    Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
+      OMA_WORKER_ARCHIVE: workers, OMA_SOCKET: join(root, "control.sock") });
+    try {
+      registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; tools.set(t.name, tool); } } as never, root, PrincipalChannel.detached());
+      const read = tools.get("oma_mail_read")!;
+      for (const name of [id, `/mail/workers/cur/${id}:2,`, `${workers}/${id}:2,`]) {
+        const found = await read.execute("t", { messageId: name });
+        assert.match(found.content[0]!.text, /worker-only thread body/, `not readable as ${name}`);
+      }
+      // The public archive stays the first read: a same-named file wins there.
+      await assert.rejects(() => read.execute("t", { messageId: `/mail/workers/${id}:2,` }), /message id or canonical archive path/);
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+      Object.assign(process.env, previous);
+    }
+    // A Principal engine has no worker archive: the workers path is unknown.
+    const principalTools = new Map<string, { execute: (id: string, params: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }>();
+    const before = { ...process.env };
+    Object.assign(process.env, { OMA_CLI_PATH: "/nonexistent/cli.js", OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: archive,
+      OMA_SOCKET: join(root, "control.sock") });
+    try {
+      registerOmaTools({ registerTool: (tool: never) => { const t = tool as { name: string }; principalTools.set(t.name, tool); } } as never, root, PrincipalChannel.detached());
+      await assert.rejects(() => principalTools.get("oma_mail_read")!.execute("t", { messageId: `/mail/workers/cur/${id}:2,` }),
+        /message id or canonical archive path/);
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in before)) delete process.env[key];
+      Object.assign(process.env, before);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

@@ -44,7 +44,7 @@ function fixture(): Fixture {
   const dirs: ResidentDirectories = {
     workspace: workspacePathAt(stateRoot, actor),
     home: join(agentRootPathAt(stateRoot, actor), "home"),
-    archive: join(stateRoot, "mail", "archive"),
+    archive: join(stateRoot, "mail", "archive"), workerArchive: join(stateRoot, "mail", "workers"),
     selfMail: join(stateRoot, "mail", "inboxes", actor),
     view: runnerViewPathAt(stateRoot, actor),
     world: join(stateRoot, "world"),
@@ -63,6 +63,7 @@ function fixture(): Fixture {
     cli: join(libdir, "dist", "src", "cli.js"),
     piAgentDir: join(stateRoot, "pi"),
     mailArchive: join(dirs.archive, "cur"),
+    workerArchive: join(dirs.workerArchive, "cur"), projectGit: dirs.projectGit,
     socket: actorSocketPathAt(runRoot, actor, 1),
   });
   for (const file of [paths.piEntry, paths.coreExtension, paths.cli]) writeFileSync(file, "export {};\n");
@@ -84,7 +85,7 @@ function fixture(): Fixture {
     piCommand: paths.piCommand, piArgs: [paths.piEntry], piAgentDir: paths.piAgentDir,
     coreExtension: paths.coreExtension, cli: paths.cli,
     workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home,
-    mailArchive: paths.mailArchive, batchView: dirs.view, socket: paths.socket,
+    mailArchive: paths.mailArchive, workerArchive: paths.workerArchive, projectGit: paths.projectGit, batchView: dirs.view, socket: paths.socket,
   };
   const profile = {
     provider: "pi", model: "current", inferenceSeconds: 600, prompt: "",
@@ -107,7 +108,7 @@ function unconfinedAdapter(f: Fixture): PiAdapter {
       piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
       coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
       workspace: f.dirs.workspace, sessionDir: f.dirs.sessions, agentHome: f.dirs.home,
-      mailArchive: f.paths.mailArchive!, batchView: f.dirs.view, socket: f.paths.socket!,
+      mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket!,
     },
   });
 }
@@ -219,7 +220,7 @@ test("DR25: a Resident's sandbox mounts the installed packages read-only, and it
       extensions: [{ path: file, sha256: "0".repeat(64) }] };
     const adapterPaths = { piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
       coreExtension: f.paths.coreExtension!, cli: f.paths.cli!, workspace: f.dirs.workspace, sessionDir: f.dirs.sessions,
-      agentHome: f.dirs.home, mailArchive: f.paths.mailArchive!, batchView: f.dirs.view, socket: f.paths.socket! };
+      agentHome: f.dirs.home, mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket! };
     const plan = new PiAdapter({ actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
       confinement: { ...f.confinement, host: { ...f.confinement.host, packages } } }).spawnPlan();
     const at = plan.args.indexOf(packages);
@@ -362,4 +363,34 @@ test("AV27 / SB-002-E, GIT-002: a Resident reaches the canonical repository at i
   assert.equal(residentsConfined("/state/rootfs"), true);
   assert.equal(residentProjectGit("/state/rootfs", "/state/repos/project.git"), RESIDENT_PATHS.projectGit);
   assert.equal(residentProjectGit("/", "/state/repos/project.git"), "/state/repos/project.git");
+});
+
+test("mail-v1: the worker archive is a read-only Resident mount its environment names", () => {
+  const f = fixture();
+  try {
+    const plan = f.adapter.spawnPlan();
+    const at = plan.args.indexOf(RESIDENT_PATHS.workerArchive);
+    assert.deepEqual(plan.args.slice(at - 2, at + 1),
+      ["--ro-bind", f.dirs.workerArchive, RESIDENT_PATHS.workerArchive]);
+    const setenv = (name: string): string | undefined => {
+      const i = plan.args.lastIndexOf(name);
+      return i > 0 && plan.args[i - 1] === "--setenv" ? plan.args[i + 1] : undefined;
+    };
+    assert.equal(setenv("OMA_WORKER_ARCHIVE"), `${RESIDENT_PATHS.workerArchive}/cur`);
+    assert.equal(setenv("OMA_PROJECT_GIT"), RESIDENT_PATHS.projectGit);
+    // PI-001: the core extension cannot import this module, so its mirrored
+    // literal is bound here to the value it mirrors.
+    assert.equal(RESIDENT_PATHS.workerArchive, "/mail/workers");
+    const host = unconfinedAdapter(f).spawnPlan();
+    assert.equal(host.env.OMA_WORKER_ARCHIVE, f.paths.workerArchive);
+    assert.equal(host.env.OMA_PROJECT_GIT, f.paths.projectGit);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("mail-v1: the Principal's host engine is given no worker archive", async () => {
+  const { principalEnvironment } = await import("../src/tui/session.js");
+  const env = principalEnvironment({ stateRoot: "/srv/oma", runRoot: "/run/oma", libdir: "/opt/oma" },
+    { society: "s", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] } as never,
+    { frameBytes: 1024, mailBodyBytes: 1024, batchMaxMessages: 4, contextBytes: 1 << 20, bundleBytes: 1 << 20 } as never);
+  assert.equal("OMA_WORKER_ARCHIVE" in env, false);
 });

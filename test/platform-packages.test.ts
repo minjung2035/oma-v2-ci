@@ -267,7 +267,7 @@ test("DR25/mac: a store that is a link to its generation is read, pinned and mou
     const pinned = loadConfiguration(f.path).roles.resident!.extensions.find(item => item.path.endsWith("hello.ts"))!.path;
     assert.equal(pinned, join(realpathSync(generation), "npm/node_modules/oma-hello-ext/extensions/hello.ts"));
     // The runner mounts the generation itself, so the pinned file is under the mount.
-    const dirs = { workspace: "/s/w", home: "/s/h", archive: "/s/a", selfMail: "/s/m", view: "/s/v", world: "/s/world",
+    const dirs = { workspace: "/s/w", home: "/s/h", archive: "/s/a", workerArchive: "/s/wa", selfMail: "/s/m", view: "/s/v", world: "/s/world",
       projectGit: "/s/git", projectMirror: "/s/mirror", sessions: "/s/sessions" };
     assert.equal(confinedPath({ libdir: f.installation, packages: packageStoreRoot(store)! }, dirs, pinned),
       `${RESIDENT_PATHS.packages}/npm/node_modules/oma-hello-ext/extensions/hello.ts`);
