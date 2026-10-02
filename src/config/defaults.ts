@@ -157,7 +157,7 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
     integration: {
       policyRevision: "default-1",
       protectedPaths: [],
-      tiered: { repositoryFloor: "LOW", highPeerFloor: 2, principalDelegated: true, rules: [] },
+      tiered: { repositoryFloor: "LOW", highPeerFloor: 2, principalDelegated: true, rules: [], review: "mail-v1" },
       // Host-specific checks can be configured with complete resource limits.
       // Integrating remains a separate explicit Human grant in Config.
       checks: [],

@@ -4,7 +4,7 @@ import type { LegacyAttestationInput } from "../implementation/contracts/attesta
 import { canonicalJson } from "./domain/canonical-json.js";
 import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
-import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
+import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, OperationId, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import { StoreError, acceptedFailure } from "./domain/errors.js";
 import { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js";
@@ -39,6 +39,18 @@ export type { ParsedEmlHeaders } from "./mail/headers.js";
 export { actorAddress, listAddress, topicAddress, displayAddress, defaultReplyTo } from "./mail/addresses.js";
 export { defaultLogicalReplyTo } from "./mail/facts.js";
 
+/** One review-mail message ReviewModule freezes before acceptance (design
+ * §3); the accepting operation fills `recipients` from a live expansion. */
+export interface ReviewEmission {
+  readonly to: readonly Address[];
+  readonly kind: MessagePlan["kind"];
+  readonly subject: string;
+  readonly body: string;
+  readonly replyHeaders: { replyTo: readonly Address[]; inReplyTo: string | null; references: readonly string[] };
+  readonly approvalFor?: NonNullable<MessagePlan["approvalFor"]>;
+  readonly audience?: "workers";
+  readonly review: NonNullable<MessagePlan["review"]>;
+}
 export interface MailSociety { stateRoot: string; society: string }
 export class MailModule {
   private readonly materializer: MailMaterializer;
@@ -170,6 +182,23 @@ export class MailModule {
     }, { subject: "initial brief", body: brief });
     const artifact = this.freezeObject(messageId, eml);
     return { message: messagePlanFrom(eml, [recipient]), artifact };
+  }
+  /** The frozen object is owned by nobody until the operation naming it is
+   * accepted; the caller registers the artifact in its own PreacceptScope. */
+  async freezeReviewMessage(operationId: OperationId, ordinal: number, sender: Actor,
+      input: ReviewEmission): Promise<{ message: MessagePlan; artifact: PreacceptArtifact }> {
+    const messageId = generateMessageId(operationId, ordinal);
+    const ancestry = [...input.replyHeaders.references];
+    const references = ancestry.slice(-this.maxReplyReferences);
+    if (ancestry.length > this.maxReplyReferences) references[0] = ancestry[0]!;
+    const eml = await buildFrozenMessage({ id: messageId, sender, society: this.paths.society, to: [...input.to],
+      kind: input.kind, contextRevision: null,
+      replyHeaders: { replyTo: [...input.replyHeaders.replyTo], inReplyTo: input.replyHeaders.inReplyTo, references },
+      ...(input.approvalFor === undefined ? {} : { approvalFor: input.approvalFor }) },
+      { subject: input.subject, body: input.body });
+    const artifact = this.freezeObject(messageId, eml);
+    return { message: { ...messagePlanFrom(eml, []),
+      ...(input.audience === undefined ? {} : { audience: input.audience }), review: input.review }, artifact };
   }
   publishCreateInitial(message: MessagePlan): void {
     readImmutableBytes(this.objectPath(message.id), message.sha256, message.bytes);

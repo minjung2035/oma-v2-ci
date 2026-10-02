@@ -76,6 +76,7 @@ const LAYERS = Object.freeze([
       "src/views/",
       "src/views.ts",
       "src/reconcile/",
+      "src/review.ts",
     ],
   },
   {

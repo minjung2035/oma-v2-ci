@@ -6,8 +6,8 @@ import { sameExactCandidate } from "./attestation-relations.js";
 import { canonicalJson, sha256Hex } from "./canonical-json.js";
 import { StoreError } from "./errors.js";
 
-export type { PrincipalDecision, ReviewFact, ChallengeFloor, ScopeAssessment, TierSnapshot } from "../../implementation/contracts/integration.js";
-import type { ReviewFact, TierSnapshot } from "../../implementation/contracts/integration.js";
+export type { PrincipalDecision, TieredReviewFact, ChallengeFloor, ScopeAssessment, TierSnapshot } from "../../implementation/contracts/integration.js";
+import type { TieredReviewFact, TierSnapshot } from "../../implementation/contracts/integration.js";
 export interface TierEvaluation {
   readonly effectiveTier: RiskTier;
   readonly reasons: readonly string[];
@@ -75,7 +75,7 @@ export function evaluateTier(snapshot: TierSnapshot): TierEvaluation {
   // The latest decision is a fact even when revoked. Revoking a REJECT must
   // not resurrect an older ACCEPT. An explicit new decision is required.
   const latest = exact.filter(review => review.actor === "principal")
-    .reduce<ReviewFact | null>((last, review) => last === null || review.sequence > last.sequence ? review : last, null);
+    .reduce<TieredReviewFact | null>((last, review) => last === null || review.sequence > last.sequence ? review : last, null);
   if (effectiveTier === "HIGH") {
     if (!snapshot.principalDelegated) missing.push("Human delegation of HIGH decisions to the Principal");
     if (latest === null || latest.revoked || latest.value !== "ACCEPT") missing.push("current exact Principal ACCEPT");

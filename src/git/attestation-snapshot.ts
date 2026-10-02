@@ -4,10 +4,10 @@ import type { ExactCandidateIdentity } from "../../implementation/contracts/valu
 import type { OperationOf } from "../storage/operation-codec.js";
 import { StoreError } from "../domain/errors.js";
 import { sameExactCandidate } from "../domain/attestation-relations.js";
-import type { ReviewFact, ChallengeFloor, ScopeAssessment } from "./approval.js";
+import type { TieredReviewFact, ChallengeFloor, ScopeAssessment } from "./approval.js";
 
 export function attestationSnapshot(rows: readonly { readonly sequence: number; readonly operation: OperationOf<"attest.record"> }[],
-  identity: ExactCandidateIdentity): { readonly reviews: readonly ReviewFact[]; readonly floors: readonly ChallengeFloor[];
+  identity: ExactCandidateIdentity): { readonly reviews: readonly TieredReviewFact[]; readonly floors: readonly ChallengeFloor[];
     readonly scopeAssessments: readonly ScopeAssessment[] } {
   const ids = new Set<string>(); let last = 0;
   const revoked = new Set<string>();
@@ -17,7 +17,7 @@ export function attestationSnapshot(rows: readonly { readonly sequence: number; 
     last = sequence; ids.add(operation.id);
     if (operation.plan.fact.kind === "revoke") revoked.add(operation.plan.fact.attestation);
   }
-  const reviews: ReviewFact[] = [], floors: ChallengeFloor[] = [];
+  const reviews: TieredReviewFact[] = [], floors: ChallengeFloor[] = [];
   const scope = new Map<string, ScopeAssessment | null>();
   for (const { sequence, operation } of rows) {
     const fact = operation.plan.fact;

@@ -17,7 +17,7 @@ export interface TieredAcceptance {
 }
 
 export type PrincipalDecision = "ACCEPT" | "REQUEST_REVISION" | "REJECT";
-export interface ReviewFact {
+export interface TieredReviewFact {
   readonly id: string;
   /** Durable acceptance order, never a wall clock or arrival timestamp. */
   readonly sequence: number;
@@ -53,7 +53,7 @@ export interface TierSnapshot {
    * strings. Republishing a commit must retain its previous submitters. */
   readonly submitters: readonly string[] | null;
   readonly eligibleResidents: readonly string[] | null;
-  readonly reviews: readonly ReviewFact[] | null;
+  readonly reviews: readonly TieredReviewFact[] | null;
   readonly highPeerFloor: number;
   readonly principalDelegated: boolean;
 }

@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateTier, maximumTier, type ReviewFact, type TierSnapshot } from "../src/git/approval.js";
+import { evaluateTier, maximumTier, type TieredReviewFact, type TierSnapshot } from "../src/git/approval.js";
 import type { ExactCandidateIdentity, RiskTier } from "../implementation/contracts/values.js";
 
 const identity: ExactCandidateIdentity = { repo: "project", targetRef: "refs/heads/main", expectedBase: "a".repeat(40),
   candidate: "b".repeat(40), policyRevision: "policy-1" };
-const fact = (id: string, sequence: number, actor: string, value: ReviewFact["value"], patch: Partial<ReviewFact> = {}): ReviewFact =>
+const fact = (id: string, sequence: number, actor: string, value: TieredReviewFact["value"], patch: Partial<TieredReviewFact> = {}): TieredReviewFact =>
   ({ id, sequence, actor, value, identity, revoked: false, ...patch });
 const snapshot = (patch: Partial<TierSnapshot> = {}): TierSnapshot => ({ identity, requester: "author", requested: "LOW",
   deterministic: { tier: "LOW", reasons: [] }, repositoryFloor: "LOW", floors: [], scopeAssessments: [], submitters: ["author"],

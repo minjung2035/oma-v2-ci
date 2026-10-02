@@ -14,6 +14,7 @@ import { isValidFullOid } from "./ids.js";
 import type { GitObservation, RefAfterCas } from "./git/observe.js";
 import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop } from "./git/canonical-command.js";
 import { IntegrationCoordinator } from "./git/integration.js";
+import { ReviewModule, type ReviewBounds } from "./review.js";
 import { SubmitCoordinator, type SubmitInput } from "./git/submit.js";
 import { GitPublicationObserver } from "./git/publication.js";
 import { QuarantineImporter } from "./git/quarantine.js";
@@ -30,6 +31,7 @@ export const gitEnv = GIT_ENV;
 
 export class GitModule {
   readonly attestations: AttestationModule;
+  readonly reviews: ReviewModule;
   private readonly integrationCoordinator: IntegrationCoordinator;
   private readonly submissionCoordinator: SubmitCoordinator;
   private readonly contextCoordinator: ContextCoordinator;
@@ -41,6 +43,7 @@ export class GitModule {
     private readonly paths: GitPaths, private readonly store: Store, mail: MailModule,
     integration: IntegrationPolicy | null = null, policyRevisionReader: PolicyRevisionReader | null = null,
     private readonly candidateCheck: ((candidate: Oid, check: FrozenCheck) => Promise<void>) | null = null,
+    reviewBounds: ReviewBounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512 },
   ) {
     this.store.bindRepositoryIdentity({ society: paths.society });
     this.integrationCoordinator = new IntegrationCoordinator(store, {
@@ -55,8 +58,21 @@ export class GitModule {
       authorizeNoop: (ref, candidate) => authorizeCanonicalNoop(this.observations, paths.projectGit, ref, candidate),
       submitters: (base, candidate) => this.submitters(base, candidate),
     }, integration, policyRevisionReader, mail);
+    this.reviews = new ReviewModule(store, mail, {
+      policy: () => this.integrationCoordinator.boundPolicy(),
+      currentPolicy: () => this.integrationCoordinator.currentIntegrationPolicy(),
+      verifyObjectFormat: oids => { this.objectFormat(paths.projectGit, oids); },
+      main: () => this.observations.ref(paths.projectGit, "refs/heads/main"),
+      published: () => this.observations.published(paths.projectGit),
+      ancestry: (base, candidate) => this.observations.ancestry(paths.projectGit, base, candidate),
+      changedPaths: (base, candidate) => this.observations.changedPaths(paths.projectGit, base, candidate),
+      submitters: (base, candidate) => this.submitters(base, candidate),
+      withWriter: work => this.withWriter(work),
+    }, reviewBounds, paths.society);
     this.attestations = new AttestationModule(store, mail, { exact: identity => this.integrationCoordinator.assertReviewIdentity(identity),
-      principal: () => this.integrationCoordinator.assertPrincipalDelegated() });
+      principal: () => this.integrationCoordinator.assertPrincipalDelegated() },
+      { mode: () => this.integrationCoordinator.boundPolicy()?.tiered?.review === "mail-v1",
+        record: (a, k, i) => this.reviews.record(a, k, i) });
     this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate));
     this.submissionCoordinator = new SubmitCoordinator(paths, store, mail, {
       verifyObjectFormat: oids => { this.objectFormat(paths.projectGit, oids); },

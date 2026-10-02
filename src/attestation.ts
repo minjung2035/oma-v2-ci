@@ -1,6 +1,6 @@
 /** DR27/S-08: authentication and live authority apply at acceptance only. The
  * fact is then immutable, even if mail publication is pending or its author stops. */
-import type { AttestationInput, LegacyAttestationInput } from "../implementation/contracts/attestation.js";
+import type { AttestationInput, LegacyAttestationInput, ReviewInput } from "../implementation/contracts/attestation.js";
 import type { AuthContext, Receipt } from "../implementation/contracts.js";
 import type { ExactCandidateIdentity } from "../implementation/contracts/values.js";
 import type { Store } from "./store.js";
@@ -18,11 +18,28 @@ export interface AttestationAuthority {
   exact(identity: ExactCandidateIdentity): void;
   principal(): void;
 }
+/** mail-v1: the review kinds attest.record can carry; `refresh` is listed so
+ * a caller-shaped one routes to the refusal it deserves, not to legacy text. */
+const REVIEW_INPUT_KINDS = new Set(["merge.open", "challenge.open", "review", "vote", "cancel", "refresh"]);
+export interface ReviewRoute {
+  /** Whether the society reviews with mail-v1 (bound policy, no I/O). */
+  mode(): boolean;
+  record(auth: AuthContext, key: string, input: ReviewInput): Promise<Receipt>;
+}
 export class AttestationModule {
-  constructor(private readonly store: Store, private readonly mail: MailModule, private readonly authority: AttestationAuthority) {}
+  constructor(private readonly store: Store, private readonly mail: MailModule,
+    private readonly authority: AttestationAuthority, private readonly reviews: ReviewRoute | null = null) {}
   async record(auth: AuthContext, key: string, input: AttestationInput): Promise<Receipt> {
     assertActorIdentity(this.store, auth);
     const copied = snapshotJson(input);
+    const kind = copied !== null && typeof copied === "object" && !Array.isArray(copied)
+      ? (copied as { kind?: unknown }).kind : undefined;
+    if (typeof kind === "string" && REVIEW_INPUT_KINDS.has(kind)) {
+      if (this.reviews === null) throw new StoreError("UNSUPPORTED_PROFILE", "mail-v1 review is not configured on this society");
+      return this.reviews.record(auth, key, copied as ReviewInput);
+    }
+    if (this.reviews !== null && this.reviews.mode())
+      throw new StoreError("UNSUPPORTED_PROFILE", "this society reviews with oma_merge/oma_challenge");
     const problem = attestationProblem(copied);
     if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
     const fact = copied as LegacyAttestationInput; // attestationProblem proved the legacy variant

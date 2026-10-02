@@ -57,6 +57,10 @@ export class IntegrationCoordinator {
     if (this.bound === null) throw new StoreError("UNSUPPORTED_PROFILE", "integration requires an explicit host policy");
     return this.bound;
   }
+  /** The bound snapshot without I/O; review code reads tiered facts from it. */
+  boundPolicy(): IntegrationSnapshot | null { return this.bound; }
+  /** The host's live policy read (currentPolicy semantics), outside T only. */
+  currentIntegrationPolicy(): IntegrationSnapshot { return this.currentPolicy(); }
   /** DR8: the policy an integration is judged by now. The broker holds the
    * facts it started with -- protected paths and checks apply at its next start
    * (TUI-007) -- and the revision is the host's current one (CFG-005, D02). An
@@ -227,6 +231,8 @@ export class IntegrationCoordinator {
     if (claim === "reused") throw reused(auth.actor, key);
     const policy = this.currentPolicy();
     assertSupportedIntegration(policy);
+    if (policy.tiered?.review === "mail-v1")
+      throw new StoreError("UNSUPPORTED_PROFILE", "this society reviews with oma_merge/oma_challenge");
     if (policy.tiered === null && input.tier !== undefined)
       throw new StoreError("UNSUPPORTED_PROFILE", "requested tier requires tiered integration");
     this.requireWriterSlot();

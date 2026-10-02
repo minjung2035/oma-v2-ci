@@ -199,6 +199,9 @@ export class RunnerModule {
     const root = agentRootPathAt(stateRoot, this.agent);
     const sessionDir = runnerSessionDirPathAt(stateRoot, this.agent);
     ensureDurableDirectory(sessionDir, 0o700);
+    // mail-v1: the worker archive is a Resident mount; a society provisioned
+    // before it existed gets the directory before any bind can name it.
+    ensureDurableDirectory(join(stateRoot, "mail", "workers"), 0o700);
     // Host mount roots. The builder checks each one against this actor's
     // trusted root, so a mistake here is refused rather than mounted.
     const directories: ResidentDirectories = {

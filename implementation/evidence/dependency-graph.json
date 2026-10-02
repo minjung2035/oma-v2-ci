@@ -242,6 +242,7 @@
   "src/reconcile/operations.ts",
   "src/reconcile/preaccept.ts",
   "src/request-cache.ts",
+  "src/review.ts",
   "src/rpc-client.ts",
   "src/runner.ts",
   "src/runtime/assets.ts",
@@ -1725,9 +1726,10 @@
     "src/inference.ts",
     "src/views/",
     "src/views.ts",
-    "src/reconcile/"
+    "src/reconcile/",
+    "src/review.ts"
    ],
-   "files": 40
+   "files": 41
   },
   {
    "index": 4,
@@ -1758,16 +1760,16 @@
    "files": 89
   }
  ],
- "files": 354,
- "runtimeEdges": 1510,
- "typeOnlyEdges": 410,
+ "files": 355,
+ "runtimeEdges": 1528,
+ "typeOnlyEdges": 414,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 283,
   "L2-facts -> L1-kernel": 35,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 203,
-  "L3-workflow -> L2-facts": 13,
-  "L3-workflow -> L3-workflow": 62,
+  "L3-workflow -> L1-kernel": 215,
+  "L3-workflow -> L2-facts": 14,
+  "L3-workflow -> L3-workflow": 67,
   "L4-orchestration -> L1-kernel": 290,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 17,
@@ -1795,21 +1797,21 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 193,
-  "src/domain/identifiers.ts": 58,
+  "src/domain/errors.ts": 194,
+  "src/domain/identifiers.ts": 59,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,
+  "src/ids.ts": 28,
   "src/storage/contained-fs.ts": 28,
-  "src/ids.ts": 27,
   "src/storage/directory.ts": 26,
   "src/storage/durable-fs.ts": 26,
-  "src/domain/canonical-json.ts": 21,
+  "src/domain/canonical-json.ts": 22,
   "src/cli/exit.ts": 20,
   "src/frame.ts": 20,
-  "src/hash.ts": 19,
+  "src/hash.ts": 20,
   "src/process/run.ts": 18,
-  "src/domain/deployment.ts": 17,
-  "src/domain/derived.ts": 17
+  "src/store.ts": 18,
+  "src/domain/deployment.ts": 17
  },
  "fanOut": {
   "src/entry/oma-society.ts": 40,
@@ -1817,16 +1819,16 @@
   "src/mail.ts": 30,
   "src/entry/broker.ts": 28,
   "src/entry/oma-mac.ts": 19,
-  "src/git.ts": 17,
+  "src/git.ts": 18,
   "src/git/context-repository.ts": 17,
+  "src/review.ts": 17,
   "src/git/context.ts": 15,
   "src/lifecycle/create.ts": 15,
   "src/reconcile.ts": 15,
   "src/git/integration.ts": 14,
   "src/git/submit.ts": 14,
   "src/mail/batches.ts": 14,
-  "src/pi-extension.ts": 14,
-  "src/platform/guest/host.ts": 14
+  "src/pi-extension.ts": 14
  },
  "external": {
   "@earendil-works/pi-coding-agent": 22,

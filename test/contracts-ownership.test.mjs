@@ -21,10 +21,16 @@ const digest = surface => createHash("sha256").update(JSON.stringify(surface)).d
 // any other declaration still fails the old digest. DR27 deltas below are
 // exact anchors; new declarations have their own explicit syntax fixture.
 const REVIEWED_CHANGES = Object.freeze({
-  "implementation/contracts/errors.ts": [["'INTEGRATION_CONDITIONS' | ", ""]],
+  "implementation/contracts/errors.ts": [["'INTEGRATION_CONDITIONS' | ", ""],
+    ["  | 'REQUEST_CLOSED' | 'REQUEST_EXISTS' | 'SELF_REVIEW' | 'APPROVAL_STALE' | 'REVERT_CONFLICT'\n", ""]],
   "implementation/contracts/durable.ts": [
     ['  | { kind: "society.set"; state: "open" | "closed" }\n  | { kind: "attest.record"; message: MessageId; recipientCount: number; archivePath: string }', ""],
-    ['  | { kind: "society.set"; state: "open" | "closed" }\n  | { kind: "attest.record"; fact: AttestationInput; message: MessagePlan }', ""],
+    ['  | { kind: "society.set"; state: "open" | "closed" }\n  | { kind: "attest.record"; fact: LegacyAttestationInput; message: MessagePlan }', ""],
+    ['  | { kind: "attest.record"; fact: ReviewFact; messages: MessagePlan[] }', ""],
+    ['  | { kind: "attest.record"; request: string; messages: MessageId[]; recipientCount: number }', ""],
+    ["\n  audience?: \"workers\";\n  review?: ReviewMailMeta;", ""],
+    ['; merge?: { name: string; notices: MessageId[]; recipientCount: number }', ""],
+    [';\n      merge?: { version: 1; request: OperationId; name: string; tier: RiskTier; notice: MessagePlan[] }', ""],
     ["; publication?: { message: MessageId; recipientCount: number; effectiveTier: RiskTier; authorityDigest: string }", ""],
     ["; publication?: { tiered: TieredAcceptance; message: MessagePlan; noopRef: string | null }", ""],
     ["; goalMail?: { subject: string }; noopRef?: string | null", ""],
@@ -48,6 +54,8 @@ const REVIEWED_CHANGES = Object.freeze({
 });
 /** DR24: the one public name the reviewed additions export. */
 const REVIEWED_NAMES = Object.freeze(["EffortLevel"]);
+/** Additions declared with `export type` (the rest are `export interface`). */
+const ADDITION_TYPE_NAMES = new Set(["PrincipalDecision", "AttestationInput", "LegacyAttestationInput", "ReviewInput", "ReviewFact", "ReviewMailMeta"]);
 function beforeReviewedChanges(text, file) {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   for (const node of [...source.statements].reverse()) {
@@ -76,8 +84,8 @@ test("DR27 contracts: every explicit addition is present and changes cannot hide
   for (const [name, expected] of Object.entries(additions)) {
     assert.deepEqual(actual[name], declarationSurface(expected, "fixture.ts")[name], name);
     const file = files.find(file => Object.hasOwn(declarationSurface(read(file), file), name));
-    const changed = read(file).replace(`export ${name === "PrincipalDecision" || name === "AttestationInput" ? "type" : "interface"} ${name}`,
-      `declare ${name === "PrincipalDecision" || name === "AttestationInput" ? "type" : "interface"} ${name}`);
+    const changed = read(file).replace(`export ${ADDITION_TYPE_NAMES.has(name) ? "type" : "interface"} ${name}`,
+      `declare ${ADDITION_TYPE_NAMES.has(name) ? "type" : "interface"} ${name}`);
     assert.throws(() => beforeReviewedChanges(changed, file), { code: "ERR_ASSERTION" }, name);
   }
   for (const [file, changes] of Object.entries(REVIEWED_CHANGES)) {
