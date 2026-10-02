@@ -1,5 +1,5 @@
 // MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
-import { ownedMessage } from "./durable.js";
+import { ownedMessages } from "./durable.js";
 import type { AttestationInput } from "../implementation/contracts/attestation.js";
 import { canonicalJson } from "./domain/canonical-json.js";
 import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
@@ -140,9 +140,10 @@ export class MailModule {
     const parsed = parseMessageId(id);
     const operation = parsed && this.store.getOperationById(parsed.operationId);
     if (!operation) throw new StoreError("INVALID_REQUEST", "reply target is not accepted");
-    const message = ownedMessage(operation.plan);
-    if (message === null) throw new StoreError("INVALID_REQUEST", "reply target owns no message");
-    if (message.id !== id) throw new StoreError("INVALID_REQUEST", "reply target message is unknown");
+    const owned = ownedMessages(operation.plan);
+    if (owned.length === 0) throw new StoreError("INVALID_REQUEST", "reply target owns no message");
+    const message = owned.find(candidate => candidate.id === id);
+    if (message === undefined) throw new StoreError("INVALID_REQUEST", "reply target message is unknown");
     return this.materializer.headers(message);
   }
   async freezeIntegration(auth: AuthContext, operationId: string, body: string): Promise<{ message: MessagePlan; artifact: PreacceptArtifact }> {

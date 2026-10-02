@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AuthContext } from "../implementation/contracts.js";
 import { MailModule } from "../src/mail.js";
-import { ownedMessage } from "../src/durable.js";
+import { ownedMessages } from "../src/durable.js";
 import { Store } from "../src/store.js";
 import { StoreError } from "../src/domain/errors.js";
 import { RegistryOperations } from "../src/lifecycle/registry-operations.js";
@@ -88,7 +88,7 @@ test("DR27: ACK explains absent message versus another recipient without creatin
   const mail = new MailModule({ stateRoot: f.root, society: "r25test" }, f.store, 64);
   await mail.send(f.auth, "to-peer", { to: ["peer"], kind: "message", subject: "review", body: "body" });
   const operation = f.store.getOperation("alice", "to-peer")!;
-  const message = ownedMessage(operation.plan)!;
+  const message = ownedMessages(operation.plan)[0]!;
   assert.throws(() => f.registry.ack(f.auth, message.id, "not-mine"), (error: unknown) =>
     error instanceof StoreError && error.code === "REQUEST_NOT_FOUND" && /not addressed to alice/.test(error.message));
   const absent = message.id.replace(/-[0-9]+$/, "-999");

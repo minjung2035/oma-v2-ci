@@ -5,7 +5,7 @@ import { DIAGNOSTIC_READ_LIMITS } from "./diagnostic-snapshot.js";
 import { StoreError } from "../domain/errors.js";
 import type { DatabaseSync, SQLInputValue, SQLOutputValue } from "node:sqlite";
 import { isValidOperationId, isValidActor, type OperationId } from "../domain/identifiers.js";
-import { ownedMessage, type RepositoryIdentity } from "../durable.js";
+import { ownedMessages, type RepositoryIdentity } from "../durable.js";
 import { LineageSnapshot } from "../domain/lineage.js";
 import { decodeOperation, type DecodedOperation, type OperationDecodeContext, type OperationOf } from "./operation-codec.js";
 import {
@@ -203,8 +203,9 @@ export class LedgerReader {
   private deliveryCore(raw: unknown): DeliveryRow {
     const row = decodeDeliveryRow(raw); this.requiredAgent(row.recipient);
     const operation = this.operationById(row.operationId);
-    const message = operation === null ? null : ownedMessage(operation.plan);
-    if (message === null || message.id !== row.messageId || !message.recipients.includes(row.recipient)) rowCorrupt("delivery differs from immutable operation recipient snapshot");
+    const message = operation === null ? undefined
+      : ownedMessages(operation.plan).find(candidate => candidate.id === row.messageId);
+    if (message === undefined || !message.recipients.includes(row.recipient)) rowCorrupt("delivery differs from immutable operation recipient snapshot");
     this.batchMembership(row);
     return row;
   }

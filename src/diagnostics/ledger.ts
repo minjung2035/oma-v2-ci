@@ -9,7 +9,7 @@ import {
 } from "../storage/rows.js";
 import { LineageSnapshot } from "../domain/lineage.js";
 import { isValidOperationId, isValidSocietyName } from "../domain/identifiers.js";
-import { ownedMessage } from "../durable.js";
+import { ownedMessages } from "../durable.js";
 import { fullRow, safeInteger } from "../storage/rows.js";
 import { SCHEMA_USER_VERSION_READABLE } from "../domain/persisted-formats.js";
 import { StoreError } from "../domain/errors.js";
@@ -67,7 +67,8 @@ function record(value: unknown): value is Record<string, unknown> {
 function closed(value: unknown, fields: readonly string[]): value is Record<string, unknown> {
   return record(value) && Object.keys(value).length === fields.length && fields.every(field => Object.hasOwn(value, field));
 }
-const messageOf = (operation: DecodedOperation) => ownedMessage(operation.plan);
+const messageOf = (operation: DecodedOperation, messageId: string) =>
+  ownedMessages(operation.plan).find(message => message.id === messageId);
 
 /** PASS means consistency in this snapshot, NOT settled effects or release proof.
  * Pending/unknown intent remains pending/unknown; historical intent is not
@@ -178,8 +179,8 @@ export function inspectLedger(raw: unknown, context: InspectionContext, options:
   for (const row of facts.deliveries) {
     const identity = `${row.messageId}/${row.recipient}`;
     expect(agents.has(row.recipient), "deliveries", identity, "MISSING_RECIPIENT");
-    const operation = operations.get(row.operationId), message = operation ? messageOf(operation) : null;
-    expect(message !== null && message !== undefined && message.id === row.messageId && message.recipients.includes(row.recipient), "deliveries", identity, "MESSAGE_OWNERSHIP");
+    const operation = operations.get(row.operationId), message = operation ? messageOf(operation, row.messageId) : undefined;
+    expect(message !== undefined && message.recipients.includes(row.recipient), "deliveries", identity, "MESSAGE_OWNERSHIP");
     if (row.batchId !== null) {
       const batch = batches.get(row.batchId);
       expect(batch !== undefined && batch.agent === row.recipient && decodeBatchManifest(batch.messageIdsJson).includes(row.messageId) &&

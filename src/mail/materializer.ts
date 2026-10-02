@@ -3,7 +3,7 @@ import { readableBody } from "./display.js";
 import { sha256Hex } from "../domain/canonical-json.js";
 import type { Address, MessagePlan } from "../../implementation/contracts.js";
 import { Store, type DeliveryRow, type OperationRow } from "../store.js";
-import { ownedMessage } from "../durable.js";
+import { ownedMessages } from "../durable.js";
 import { StoreError } from "../domain/errors.js";
 import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "../storage/paths.js";
 import { publishImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
@@ -15,9 +15,9 @@ import { consumeContextPublication, type ContextPublicationEvidence } from "../g
 import { consumeCreationPublication, type CreationPublicationEvidence } from "../lifecycle/create-publication.js";
 
 export type PublicationEvidence = IntegrationPublicationEvidence | SubmissionPublicationEvidence | ContextPublicationEvidence | CreationPublicationEvidence;
-/** The message an accepted plan names, or null for a plan that names none. */
-export function namedMessage(operation: OperationRow): MessagePlan | null {
-  return ownedMessage(operation.plan);
+/** The messages an accepted plan names, empty for a plan that names none. */
+export function namedMessages(operation: OperationRow): readonly MessagePlan[] {
+  return ownedMessages(operation.plan);
 }
 /** Pre-accept ownership of a frozen message object follows the accepted plan,
  * not row existence: only a plan naming this id and sha256 owns it. A linked
@@ -26,11 +26,15 @@ export function frozenMessageDisposition(store: Pick<Store, "getOperationById">,
   message: { readonly id: string; readonly sha256: string }): "unaccepted-known" | "accepted-referenced" | "accepted-unreferenced" {
   const operation = store.getOperationById(operationId);
   if (operation === null) return "unaccepted-known";
-  const named = namedMessage(operation);
-  return named !== null && named.id === message.id && named.sha256 === message.sha256 ? "accepted-referenced" : "accepted-unreferenced";
+  const named = namedMessages(operation);
+  return named.some(candidate => candidate.id === message.id && candidate.sha256 === message.sha256)
+    ? "accepted-referenced" : "accepted-unreferenced";
 }
-export function operationMessage(operation: OperationRow): MessagePlan {
-  const message = namedMessage(operation);
+export function operationMessage(operation: OperationRow, messageId?: string): MessagePlan {
+  const owned = namedMessages(operation);
+  const message = messageId === undefined
+    ? (owned.length === 1 ? owned[0]! : null)
+    : owned.find(candidate => candidate.id === messageId) ?? null;
   if (message !== null) return message;
   throw new StoreError("STORE_CORRUPT", operation.kind === "agent.create"
     ? "linked create owns no separate initial message" : `operation ${operation.kind} owns no message`);
@@ -101,29 +105,36 @@ export class MailMaterializer {
     this.publish(operation);
   }
   private publish(operation: OperationRow): void {
-    const message = operationMessage(operation);
+    const messages = namedMessages(operation);
+    if (messages.length === 0) throw new StoreError("STORE_CORRUPT", `operation ${operation.kind} owns no message`);
     const deliveries = this.store.deliveriesForOperation(operation.id);
-    const expected = new Set(message.recipients);
-    const actual = new Set<string>();
-    for (const delivery of deliveries) {
-      if (delivery.operationId !== operation.id || delivery.messageId !== message.id ||
-        !expected.has(delivery.recipient) || actual.has(delivery.recipient))
-        throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
-      actual.add(delivery.recipient);
-    }
-    if (expected.size !== message.recipients.length || actual.size !== expected.size)
+    const ownedIds = new Set(messages.map(message => message.id));
+    if (deliveries.some(delivery => !ownedIds.has(delivery.messageId)))
       throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
-    const { headers, bytes } = this.checked(message);
-    if (operation.kind === "context.publish" && operation.plan.goalMail) {
-      const goal = operation.plan.entries.find(entry => entry.path === "GOAL.md")!;
-      const body = Buffer.from(readableBody(bytes.toString("utf8")));
-      if (body.length !== goal.bytes || sha256Hex(body) !== goal.sha256 || decodeSubject(headers.subject) !== operation.plan.goalMail.subject)
-        throw new StoreError("STORE_CORRUPT", "GOAL mail differs from the accepted document or subject");
-    }
-    publishImmutableFile(mailObjectPathAt(this.stateRoot, message.id), mailArchivePathAt(this.stateRoot, message.id), message.sha256);
-    for (const delivery of deliveries) {
-      this.publishDelivery(message, delivery);
-      this.store.transaction(tx => tx.markMaterialized(delivery.messageId, delivery.recipient));
+    for (const message of messages) {
+      const owned = deliveries.filter(delivery => delivery.messageId === message.id);
+      const expected = new Set(message.recipients);
+      const actual = new Set<string>();
+      for (const delivery of owned) {
+        if (delivery.operationId !== operation.id ||
+          !expected.has(delivery.recipient) || actual.has(delivery.recipient))
+          throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
+        actual.add(delivery.recipient);
+      }
+      if (expected.size !== message.recipients.length || actual.size !== expected.size)
+        throw new StoreError("STORE_CORRUPT", `delivery snapshot mismatch for ${operation.id}`);
+      const { headers, bytes } = this.checked(message);
+      if (operation.kind === "context.publish" && operation.plan.goalMail) {
+        const goal = operation.plan.entries.find(entry => entry.path === "GOAL.md")!;
+        const body = Buffer.from(readableBody(bytes.toString("utf8")));
+        if (body.length !== goal.bytes || sha256Hex(body) !== goal.sha256 || decodeSubject(headers.subject) !== operation.plan.goalMail.subject)
+          throw new StoreError("STORE_CORRUPT", "GOAL mail differs from the accepted document or subject");
+      }
+      publishImmutableFile(mailObjectPathAt(this.stateRoot, message.id), mailArchivePathAt(this.stateRoot, message.id), message.sha256);
+      for (const delivery of owned) {
+        this.publishDelivery(message, delivery);
+        this.store.transaction(tx => tx.markMaterialized(delivery.messageId, delivery.recipient));
+      }
     }
   }
   private publishDelivery(message: MessagePlan, delivery: DeliveryRow): void {

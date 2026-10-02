@@ -2,7 +2,7 @@ import type { AuthContext } from "../../implementation/contracts/runtime.js";
 import type { MessageId } from "../../implementation/contracts/identity.js";
 import type { Receipt } from "../../implementation/contracts/durable.js";
 import { Store, reused } from "../store.js";
-import { ownedMessage } from "../durable.js";
+import { ownedMessages } from "../durable.js";
 import { parseMessageId } from "../domain/identifiers.js";
 import { StoreError } from "../domain/errors.js";
 import { assertActorIdentity, assertCurrentActor } from "../authority.js";
@@ -33,8 +33,8 @@ export class RegistryOperations {
       if (!this.store.deliveries.get(message, auth.actor)) {
         const identity = parseMessageId(message);
         const operation = identity === null ? null : this.store.operations.getById(identity.operationId);
-        const named = operation === null ? null : ownedMessage(operation.plan);
-        throw new StoreError("REQUEST_NOT_FOUND", named?.id === message
+        const named = operation === null ? undefined : ownedMessages(operation.plan).find(candidate => candidate.id === message);
+        throw new StoreError("REQUEST_NOT_FOUND", named !== undefined
           ? `${message} was not addressed to ${auth.actor}; acknowledge a message delivered to your own inbox`
           : `message ${message} does not exist in this society; use the Message-ID of a message in your own inbox`);
       }

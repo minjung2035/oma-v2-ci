@@ -61,14 +61,15 @@ export type ResultFor<K extends MutationMethod> = NarrowKind<
 export type PlanFor<K extends MutationMethod> = K extends "git.integrate"
   ? NarrowKind<OperationPlan, K> & { result?: ResultFor<"git.integrate"> }
   : NarrowKind<OperationPlan, K>;
-/** The message owned by an immutable accepted plan, not by a file or a
- * present-day recipient lookup. All ledger/publication readers share this. */
-export function ownedMessage(plan: OperationPlan): MessagePlan | null {
+/** The messages owned by an immutable accepted plan, not by a file or a
+ * present-day recipient lookup. All ledger/publication readers share this.
+ * v1 plans own at most one message at ordinal zero. */
+export function ownedMessages(plan: OperationPlan): readonly MessagePlan[] {
   switch (plan.kind) {
-    case "attest.record": case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return plan.message;
-    case "agent.create": return plan.initialMessage;
-    case "git.integrate": return plan.publication?.message ?? null;
-    default: return null;
+    case "attest.record": case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return [plan.message];
+    case "agent.create": return plan.initialMessage === null ? [] : [plan.initialMessage];
+    case "git.integrate": return plan.publication === undefined ? [] : [plan.publication.message];
+    default: return [];
   }
 }
 export interface RepositoryIdentity {
@@ -242,11 +243,10 @@ export function operationPlanCheck(
     )
       return "missing or invalid operation identity context";
     const plan = value as PlanFor<MutationMethod>;
-    const message = ownedMessage(plan);
-    if (message !== null) {
-      // All v1 plans that own an EML have exactly one message at documented ordinal zero.
+    const messages = ownedMessages(plan);
+    for (const [ordinal, message] of messages.entries()) {
       if (
-        message.id !== messageIdForOperation(context.operationId, 0) ||
+        message.id !== messageIdForOperation(context.operationId, ordinal) ||
         !isMailObjectRelativePathFor(message.objectPath, {
           messageId: message.id,
         })

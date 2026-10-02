@@ -46,7 +46,7 @@ export class BatchCoordinator {
   private messagePlan(delivery: DeliveryRow) {
     const operation = this.store.getOperationById(delivery.operationId);
     if (!operation) throw new StoreError("STORE_CORRUPT", `missing operation ${delivery.operationId}`);
-    const message = operationMessage(operation);
+    const message = operationMessage(operation, delivery.messageId);
     if (message.id !== delivery.messageId || !message.recipients.includes(delivery.recipient))
       throw new StoreError("STORE_CORRUPT", `message plan mismatch for ${delivery.messageId}`);
     return message;

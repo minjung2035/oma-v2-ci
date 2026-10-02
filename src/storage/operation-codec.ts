@@ -6,7 +6,7 @@ import type { Json } from "../../implementation/contracts/identity.js";
 import type { MessagePlan, MutationMethod } from "../../implementation/contracts/durable.js";
 import type { PublicMethods } from "../../implementation/contracts/public-wire.js";
 import {
-  ownedMessage, operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
+  ownedMessages, operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
   type OperationPlanContext, type PlanFor, type RepositoryIdentity, type ResultFor,
 } from "../durable.js";
 import { isValidActor, isValidOperationId, isValidRequestKey } from "../domain/identifiers.js";
@@ -174,18 +174,23 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
     }
   }
 }
-function validateDeliveries(id: string, message: MessagePlan | null, rows: readonly unknown[]): void {
-  if (message === null) {
+function validateDeliveries(id: string, messages: readonly MessagePlan[], rows: readonly unknown[]): void {
+  if (messages.length === 0) {
     if (rows.length !== 0) corrupt("operation without an owned message has delivery rows");
     return;
   }
-  const recipients = new Set<string>();
+  const seen = new Set<string>();
   for (const raw of rows) {
-    if (!record(raw) || raw.operation_id !== id || raw.message_id !== message.id || !isValidActor(raw.recipient)) corrupt("delivery identity differs from operation/message");
-    if (recipients.has(raw.recipient) || !message.recipients.includes(raw.recipient)) corrupt("duplicate or extra delivery recipient");
-    recipients.add(raw.recipient);
+    if (!record(raw) || raw.operation_id !== id || !isValidActor(raw.recipient)) corrupt("delivery identity differs from operation/message");
+    const message = messages.find(candidate => candidate.id === raw.message_id);
+    if (message === undefined || !message.recipients.includes(raw.recipient)) corrupt("duplicate or extra delivery recipient");
+    const delivery = `${raw.message_id as string}/${raw.recipient}`;
+    if (seen.has(delivery)) corrupt("duplicate or extra delivery recipient");
+    seen.add(delivery);
   }
-  if (recipients.size !== message.recipients.length || message.recipients.some(recipient => !recipients.has(recipient))) corrupt("delivery rows do not match the frozen recipient set");
+  for (const message of messages)
+    for (const recipient of message.recipients)
+      if (!seen.has(`${message.id}/${recipient}`)) corrupt("delivery rows do not match the frozen recipient set");
 }
 
 /** All identity facts and relational observations are required arguments. No
@@ -224,7 +229,7 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
       // operation-context checks. Workflow code consumes the returned union.
       const plan = planRaw as PlanFor<MutationMethod>;
       validatePayloadRelation(plan, payload);
-      validateDeliveries(value.id, ownedMessage(plan), context.relations.deliveries(value.id));
+      validateDeliveries(value.id, ownedMessages(plan), context.relations.deliveries(value.id));
       if (plan.kind === "attest.record") {
         const index = context.relations.attestation?.(value.id);
         if (!record(index) || Object.keys(index).length !== 2 || index.operation_id !== value.id ||

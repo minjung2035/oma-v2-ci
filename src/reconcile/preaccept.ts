@@ -22,7 +22,7 @@ import { parseMessageId, parseOperationId } from "../domain/identifiers.js";
 import { submitBundlePathAt } from "../storage/paths.js";
 import { removeOwnedFile, removeOwnedTree } from "../storage/directory.js";
 import { collectLeasedTree } from "../storage/tree-lease.js";
-import { namedMessage } from "../mail/materializer.js";
+import { namedMessages } from "../mail/materializer.js";
 
 export interface PreacceptCollection {
   readonly removed: readonly string[];
@@ -59,7 +59,7 @@ export function collectUnacceptedArtifacts(stateRoot: string, store: Pick<Store,
     const message = name.endsWith(".eml") ? parseMessageId(name.slice(0, -4)) : null;
     if (message === null || !lstatSync(path).isFile()) { kept.push({ path, reason: "not a name this broker derives" }); continue; }
     const operation = accepted(message.operationId);
-    if (operation !== null && namedMessage(operation)?.id === name.slice(0, -4)) continue;
+    if (operation !== null && namedMessages(operation).some(message => message.id === name.slice(0, -4))) continue;
     remove(path);
   }
   // Publication temporaries beside archive and mailbox names.
