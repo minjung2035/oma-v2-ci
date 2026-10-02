@@ -21,7 +21,7 @@ import assert from "node:assert/strict";
 import { closeSync, constants, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { execFileSync, spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Actor, AuthContext, ProtocolLimits, Request, UnitObservation } from "../../implementation/contracts.js";
@@ -42,6 +42,7 @@ import { residentProjectGit } from "../../src/sandbox.js";
 import type { HostConfigV1, ResolvedAgentSpec } from "../../implementation/contracts.js";
 import type { NewAgent } from "../../src/store.js";
 import { resolvedSpecDigest } from "../../src/domain/spec-identity.js";
+import { exportRefForRequestKey } from "../../src/domain/derived.js";
 import { ViewsModule } from "../../src/views.js";
 import { LifecycleModule } from "../../src/lifecycle.js";
 import { provisionSociety, residentRootfsPath } from "../../src/runtime/provision.js";
@@ -146,6 +147,15 @@ export interface Scenario {
   idle(timeoutMs?: number): Promise<void>;
   /** A Resident writing to the society, through the broker's own dispatch. */
   residentSends(from: string, input: { to: string[]; subject: string; body: string; kind?: string; replyTo?: string }, key: string): Promise<Record<string, unknown>>;
+  /** Any public method as a Resident, through the broker's own dispatch with
+   * the resident profile's capabilities (mail.send, git.submit, ...). A null
+   * `key` sends a read-style envelope: no top-level request key. */
+  residentCall(from: string, method: string, params: Record<string, unknown>, key: string | null,
+      stream?: AsyncIterable<Uint8Array> | null): Promise<Record<string, unknown>>;
+  /** The trusted candidate path for a Resident: commits `change` on a clone
+   * of canonical main and publishes it with git.submit. Returns the pushed
+   * candidate oid and the main it was built on. */
+  residentPushes(from: string, key: string, change: (workspace: string) => void): Promise<{ candidate: string; base: string }>;
   /** Stops the broker and starts a new one over the same state, as the
    * supervisor restarts it; the engine is registered with the new one. */
   restartBroker(): Promise<void>;
@@ -182,13 +192,17 @@ export interface ScenarioOptions {
   /** Withhold git.submit, as the Control Panel can (DR4): a Resident without
    * it cannot publish candidates or open a merge request. */
   readonly submit?: boolean;
+  /** mail-v1 notice splitting: a small bound makes applied-change notices
+   * multi-part; the default keeps them whole. */
+  readonly reviewBodyBytes?: number;
 }
 
 /** A broker over the society's state, composed as entry/broker.ts composes
  * it (mail, views, lifecycle, Git with its quarantine and the host's current
  * integration policy). It owns the Store it is given: its drain closes it, as
  * the product's broker process does on its way out. */
-function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, stand: ScenarioUnits, config: HostConfigV1, configPath: string): Broker {
+function composeBroker(root: string, runRoot: string, store: Store, host: HostSide, stand: ScenarioUnits, config: HostConfigV1, configPath: string,
+    reviewBodyBytes?: number): Broker {
   const units = stand as unknown as UnitsModule;
   const mail = new MailModule({ stateRoot: root, society: SOCIETY }, store, 64, SCENARIO_LIMITS.batchMaxMessages, SCENARIO_LIMITS);
   const views = new ViewsModule(store, root, SOCIETY, "p");
@@ -199,7 +213,8 @@ function composeBroker(root: string, runRoot: string, store: Store, host: HostSi
   const checks = new CandidateChecks(gitPaths);
   const git = new GitModule(gitPaths, store, mail, integrationPolicyFromConfig(config.integration),
     () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration),
-    (candidate, check) => checks.run(candidate, check));
+    (candidate, check) => checks.run(candidate, check),
+    ...(reviewBodyBytes === undefined ? [] : [{ mailBodyBytes: reviewBodyBytes, subjectBytes: 512, bundleBytes: 256 * 1024 * 1024 }]));
   const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, SOCIETY), () => store.inTransaction);
   const lifecycle = new LifecycleModule(store, units,
     { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true,
@@ -259,7 +274,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     for (const name of options.residents ?? []) tx.insertAgent(agentRow(name));
   });
   const host = new HostSide();
-  let broker = composeBroker(root, runRoot, store, host, units, config, configPath);
+  let broker = composeBroker(root, runRoot, store, host, units, config, configPath, options.reviewBodyBytes);
   await broker.start();
 
   const runtime = resolvePiRuntime({ stateRoot: root, libdir: REPO });
@@ -354,13 +369,48 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     },
     idle,
     async residentSends(from, input, key) {
+      return await scenario.residentCall(from, "mail.send", {
+        to: input.to, subject: input.subject, kind: input.kind ?? "message", body: input.body,
+        ...(input.replyTo === undefined ? {} : { replyToMessage: input.replyTo }) }, key);
+    },
+    async residentCall(from, method, params, key, stream = null) {
       const agent = store.getAgent(from);
       assert.ok(agent, `no resident ${from}`);
       const auth: AuthContext = { actor: from, incarnation: agent.incarnation, role: "resident", channel: "actor",
-        capabilities: new Set(["mail.send"]), peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
-      const request = { v: 1, id: key, method: "mail.send", request: key,
-        params: { to: input.to, subject: input.subject, kind: input.kind ?? "message", body: input.body, ...(input.replyTo === undefined ? {} : { replyToMessage: input.replyTo }) } };
-      return await broker.dispatch(auth, request as unknown as Request, null) as Record<string, unknown>;
+        capabilities: new Set(["mail.send", "route.follow", "git.submit", "agent.manage.self"]),
+        peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } };
+      const request = { v: 1, id: key ?? method, method, ...(key === null ? {} : { request: key }), params };
+      return await broker.dispatch(auth, request as unknown as Request, stream) as Record<string, unknown>;
+    },
+    async residentPushes(from, key, change) {
+      const workspace = join(root, "scratch", `push-${from}-${key}`);
+      mkdirSync(join(root, "scratch"), { recursive: true });
+      // A private clone of canonical main, as a Resident's workspace is.
+      execFileSync("git", ["clone", "--no-local", "--single-branch", "--branch", "main", projectGitPathAt(root), workspace]);
+      const work = (argv: string[]): string => execFileSync("git", argv, { cwd: workspace, encoding: "utf8" }).trim();
+      work(["config", "user.email", `${from}@demo.oma.invalid`]);
+      work(["config", "user.name", from]);
+      const base = work(["rev-parse", "HEAD"]);
+      change(workspace);
+      work(["add", "-A"]);
+      work(["commit", "-m", `${from} change ${key}`]);
+      const candidate = work(["rev-parse", "HEAD"]);
+      // The same publication oma submit runs: an export ref bundled off the
+      // clone and handed to the broker as a git.submit stream.
+      const exportRef = exportRefForRequestKey(key);
+      work(["update-ref", exportRef, candidate]);
+      const bundlePath = join(root, "scratch", `bundle-${from}-${key}`);
+      work(["bundle", "create", bundlePath, exportRef]);
+      const content = readFileSync(bundlePath);
+      const digest = { bytes: content.length, sha256: createHash("sha256").update(content).digest("hex") };
+      const reply = await scenario.residentCall(from, "git.submit", {
+        candidate, exportRef, prerequisites: [], to: [from],
+        subject: `merge candidate ${candidate.slice(0, 12)}`,
+        body: "Candidate for a merge request; review happens in the request thread.",
+        paths: [], bundle: { ...digest, mediaType: "application/x-git-bundle" },
+      }, `${key}.submit`, (async function* () { yield content; })());
+      assert.equal(reply.ok, true, `git.submit refused: ${JSON.stringify(reply).slice(0, 400)}`);
+      return { candidate, base };
     },
     async stopBroker() {
       await broker.drainAndClose();
@@ -369,7 +419,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     async restartBroker() {
       await scenario.stopBroker();
       store = new Store(join(root, "runtime.sqlite"));
-      broker = composeBroker(root, runRoot, store, host, units, readCurrentHostPolicy(configPath, SOCIETY), configPath);
+      broker = composeBroker(root, runRoot, store, host, units, readCurrentHostPolicy(configPath, SOCIETY), configPath, options.reviewBodyBytes);
       await broker.start();
       register();
     },

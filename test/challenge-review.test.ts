@@ -218,8 +218,9 @@ test("mail-v1: a refused open never publishes; a crash before publication is rep
     assert.equal(now.length, 2, "recovery published the challenge ref once");
     const chName = f.requestName("ch-crash");
     const fact = openFact(f, chName);
-    assert.equal(now[1]!.split(" ")[0], `refs/oma/published/alice/${receipt.operation}`);
-    assert.equal(now[1]!.split(" ")[1], fact.identity.candidate);
+    const published = now.find(line => line.startsWith(`refs/oma/published/alice/${receipt.operation} `));
+    assert.ok(published, `the challenge candidate ref was published: ${now}`);
+    assert.equal(published.split(" ")[1], fact.identity.candidate);
     // A second sweep does not republish; the challenge still reviews/approves.
     await f.module.reviews.advanceAll();
     assert.equal(aliceRefs().length, 2);
