@@ -112,6 +112,7 @@ src/extension/inference-bridge.ts
 src/extension/mail-tools.ts
 src/extension/principal-channel.ts
 src/extension/principal-tools.ts
+src/extension/review-tools.ts
 src/extension/shared.ts
 src/extension/tool-surface.ts
 src/extension/utf8.ts

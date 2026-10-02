@@ -862,7 +862,8 @@ test("mail-v1: the review.status wire method filters the Principal and rejects b
       mail: { send: async () => unused() },
       units: { statusSnapshot: unused }, views: { status: unused },
       lifecycle: { create: async () => unused(), start: unused, stop: unused, ack: unused, follow: unused },
-      git: { reviews: f.module.reviews, knownRefs: unused, isPublished: () => false,
+      git: { reviews: f.module.reviews, attestations: { record: (auth, key, params) => f.module.attestations.record(auth, key, params) },
+        knownRefs: unused, isPublished: () => false,
         submit: async () => unused(), integrate: async () => unused(), publishContext: async () => unused() },
       limits: { frameBytes: 64 * 1024, mailBodyBytes: 256 * 1024, subjectBytes: 512, addresses: 64,
         replyReferences: 64, contextFiles: 256, contextBytes: 8 * 1024 * 1024, bundleBytes: 256 * 1024 * 1024,
@@ -911,5 +912,21 @@ test("mail-v1: the review.status wire method filters the Principal and rejects b
     const reply = await call("bob", { name });
     const decoded = decodeRpcReply("review.status", reply, "wire-1", { name });
     assert.ok(decoded.ok);
+    // Raw attest.record by the Principal (the tools are only a schema): open,
+    // review, cancel and a vote that names no approval are all refused -- the
+    // module is the authority, not the registered tool.
+    const attest = (params: Record<string, unknown>) => dispatcher.dispatch(f.auth("principal"),
+      { v: 1, id: "wire-p", method: "attest.record", request: `wire-p-${JSON.stringify(params).length}`, params } as never, null);
+    for (const params of [
+      { kind: "merge.open", tier: "HIGH", title: "bypass", reason: "r", candidate, base: f.base },
+      { kind: "review", name, body: "b" },
+      { kind: "cancel", name, reason: "r" },
+      { kind: "vote", name, verdict: "approve", body: "b" },
+      { kind: "vote", name, verdict: "approve", body: "b", approval: "m-00000000-0000-4000-8000-000000000001-0" },
+    ]) {
+      const answer = await attest(params) as { ok: boolean; error: { code: string; message: string } };
+      assert.equal(answer.ok, false, JSON.stringify(answer));
+      assert.match(answer.error.code, /CAPABILITY_DENIED|INVALID_REQUEST|APPROVAL_STALE/, answer.error.message);
+    }
   } finally { f.close(); }
 });

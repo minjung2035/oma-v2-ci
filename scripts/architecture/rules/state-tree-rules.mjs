@@ -37,6 +37,7 @@ export const OUTSIDE_STATE_TREE = Object.freeze({
   "src/cli/effects/submit.ts": "the CLI caller's own temporary directory",
   "src/extension/mail-tools.ts": "a fresh mkdtemp directory under the model's own working directory (a Resident's sandbox home; the Principal's scratch, in the state tree but the model's own), written once and removed; the extension cannot import the storage primitives (PI-001)",
   "src/extension/principal-tools.ts": "the same fresh mkdtemp directory under the Principal's scratch for an agent brief, written once and removed (PI-001)",
+  "src/extension/review-tools.ts": "the same fresh mkdtemp directory under the caller's own working directory for a vote/review/open body file, written once and removed (PI-001)",
   "src/runtime/process-lock.ts": "the broker's lock file, which both callers keep in the run root",
 });
 /** A descriptor, not a path: `fd`, `this.fd`, `active.fd`, `temporaryFd`. */

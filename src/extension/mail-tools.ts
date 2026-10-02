@@ -13,22 +13,28 @@ export { validAddress } from "./batch-view.js";
 import { runCliProcess, type CliResult } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
 import { PRINCIPAL_TOOL_NAMES, registerPrincipalTools } from "./principal-tools.js";
+import { registerReviewTools } from "./review-tools.js";
 import { REQUEST_PARAMETER_HELP, actorNameOf, integerEnv, refused, requestKeyOf, textResult } from "./shared.js";
 import { decodeUtf8 } from "./utf8.js";
 
 /** TSP-008: tools OMA itself owns. A role projection may reorder or group the
  * extensions' tools, but it can never take these away from the agent. */
+/** mail-v1: the review requests both roles work, through the same two tool
+ * names -- the Worker's schema carries the whole vocabulary, the Principal's
+ * only diff and vote. */
+export const REVIEW_TOOL_NAMES: readonly string[] = Object.freeze(["oma_merge", "oma_challenge"]);
 export const OMA_TOOL_NAMES: readonly string[] = Object.freeze([
   "oma_mail_read",
   "oma_mail_send",
   "oma_mail_ack",
   "oma_status",
+  ...REVIEW_TOOL_NAMES,
   // Registered only for the Principal's engine (AV11).
-  ...PRINCIPAL_TOOL_NAMES,
+  ...PRINCIPAL_TOOL_NAMES.filter(name => !REVIEW_TOOL_NAMES.includes(name)),
 ]);
 export function omaToolNames(principal: boolean): readonly string[] {
   return principal ? ["oma_mail_read", "oma_mail_send", ...PRINCIPAL_TOOL_NAMES]
-    : ["oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status"];
+    : ["oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status", ...REVIEW_TOOL_NAMES];
 }
 /** A message by any name OMA shows for it (AV15, BATCH-002): its id, the
  * archive path shown for it, that path's file name -- the Maildir name the index
@@ -422,6 +428,12 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       );
     },
   });
+  // mail-v1: Workers open, discuss, vote and read the merge/challenge requests
+  // the broker's review module applies. The Principal's restricted pair of the
+  // same names is registered in registerPrincipalTools.
+  if (!channel.attached)
+    registerReviewTools(pi, { principal: false,
+      run: (args, signal) => runCli(cli, cwd, environment, channel, args, signal), temporaryRoot: home });
   // AV11: the Principal's other capabilities go through the same CLI, as the Principal.
   if (channel.attached)
     registerPrincipalTools(pi, { run: (args, signal, at) => runCli(cli, at ?? cwd, environment, channel, args, signal),

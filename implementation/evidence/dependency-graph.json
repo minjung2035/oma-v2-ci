@@ -113,6 +113,7 @@
   "src/extension/mail-tools.ts",
   "src/extension/principal-channel.ts",
   "src/extension/principal-tools.ts",
+  "src/extension/review-tools.ts",
   "src/extension/shared.ts",
   "src/extension/tool-surface.ts",
   "src/extension/utf8.ts",
@@ -1755,11 +1756,11 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 87
+   "files": 88
   }
  ],
- "files": 353,
- "runtimeEdges": 1529,
+ "files": 354,
+ "runtimeEdges": 1533,
  "typeOnlyEdges": 416,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 283,
@@ -1776,7 +1777,7 @@
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 9,
   "L5-entry -> L4-orchestration": 114,
-  "L5-entry -> L5-entry": 180
+  "L5-entry -> L5-entry": 184
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1829,7 +1830,7 @@
   "src/pi-extension.ts": 14
  },
  "external": {
-  "@earendil-works/pi-coding-agent": 22,
+  "@earendil-works/pi-coding-agent": 23,
   "@earendil-works/pi-tui": 5,
   "koffi": 6,
   "node:async_hooks": 3,
@@ -1854,7 +1855,7 @@
   "node:util": 5,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,
-  "typebox": 3
+  "typebox": 4
  },
  "unresolved": []
 }

@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 354,
-    "n_lines": 47542,
+    "n_files": 355,
+    "n_lines": 47683,
     "report_file": "production-loc.json"
   },
   "src/review.ts": {
@@ -102,16 +102,16 @@
     "code": 373,
     "language": "TypeScript"
   },
+  "src/extension/mail-tools.ts": {
+    "blank": 12,
+    "comment": 98,
+    "code": 340,
+    "language": "TypeScript"
+  },
   "src/runtime/pi-adapter.ts": {
     "blank": 3,
     "comment": 46,
     "code": 335,
-    "language": "TypeScript"
-  },
-  "src/extension/mail-tools.ts": {
-    "blank": 12,
-    "comment": 92,
-    "code": 334,
     "language": "TypeScript"
   },
   "src/tui/model.ts": {
@@ -450,6 +450,12 @@
     "code": 162,
     "language": "TypeScript"
   },
+  "src/extension/review-tools.ts": {
+    "blank": 9,
+    "comment": 19,
+    "code": 161,
+    "language": "TypeScript"
+  },
   "src/diagnostics/files.ts": {
     "blank": 2,
     "comment": 5,
@@ -528,6 +534,12 @@
     "code": 148,
     "language": "TypeScript"
   },
+  "src/broker/composition.ts": {
+    "blank": 4,
+    "comment": 4,
+    "code": 147,
+    "language": "TypeScript"
+  },
   "src/runtime/deployment-manifest.ts": {
     "blank": 3,
     "comment": 4,
@@ -538,12 +550,6 @@
     "blank": 3,
     "comment": 12,
     "code": 146,
-    "language": "TypeScript"
-  },
-  "src/broker/composition.ts": {
-    "blank": 4,
-    "comment": 4,
-    "code": 145,
     "language": "TypeScript"
   },
   "src/runtime/resident-rootfs.ts": {
@@ -711,12 +717,6 @@
   "src/broker/peer-authenticator.ts": {
     "blank": 1,
     "comment": 23,
-    "code": 103,
-    "language": "TypeScript"
-  },
-  "src/extension/principal-tools.ts": {
-    "blank": 1,
-    "comment": 3,
     "code": 103,
     "language": "TypeScript"
   },
@@ -1566,6 +1566,12 @@
     "code": 38,
     "language": "TypeScript"
   },
+  "src/extension/principal-tools.ts": {
+    "blank": 1,
+    "comment": 6,
+    "code": 38,
+    "language": "TypeScript"
+  },
   "src/tui/view/notice.ts": {
     "blank": 2,
     "comment": 14,
@@ -2131,9 +2137,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1931,
-    "comment": 7595,
-    "code": 38016,
-    "nFiles": 354
+    "blank": 1940,
+    "comment": 7623,
+    "code": 38120,
+    "nFiles": 355
   }
 }

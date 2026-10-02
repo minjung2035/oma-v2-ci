@@ -113,8 +113,9 @@ test("a tool surface declared in a role reaches the loader as a validated plan",
 test("the product surface did not widen the broker's method surface", () => {
   // The TUI and the projection are read and configuration work. If either had
   // needed a new socket method, these closed sets would have changed.
-  // IPC-008 adds the actor/key-bound receipt read, not a TUI capability.
-  assert.equal(Object.keys(PUBLIC_METHODS).length, 19);
+  // IPC-008 adds the actor/key-bound receipt read, not a TUI capability;
+  // mail-v1 adds review.status, the public filtered review read.
+  assert.equal(Object.keys(PUBLIC_METHODS).length, 20);
   assert.equal(PUBLIC_METHODS["operation.read"].mode, "read");
   assert.equal(Object.keys(INTERNAL_METHODS).length, 10);
   for (const name of Object.keys(PUBLIC_METHODS))

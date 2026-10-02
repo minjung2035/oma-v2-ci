@@ -26,14 +26,16 @@ const TIMEOUT = { timeout: 120_000 };
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 
 test("SCN-P01: a Human asks about code; the Principal reads canonical main without orchestration", TIMEOUT, async () => {
-  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_git", { action: "ls-tree" })), text("코드를 확인했습니다.")] }, async s => {
+  // mail-v1: the Principal reads code only as a review request's patch; an
+  // unknown name answers with the visibility refusal, not a listing.
+  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_merge", { action: "diff", name: "merge-01234567" })), text("코드를 확인했습니다.")] }, async s => {
     const turn = await s.prompt("현재 프로젝트 코드를 확인해줘");
     assert.equal(s.provider.seen.length, 2, "the model was not asked again with the tool's result");
     const offered = (s.provider.seen[0]!.body.tools ?? []).map(tool => tool.function?.name);
-    for (const name of ["oma_git", "oma_mail_send", "oma_mail_read"]) assert.ok(offered.includes(name), `${name} was not offered to the model`);
-    for (const name of ["bash", "write", "edit", "oma_status", "oma_mail_ack", "oma_agent_create"]) assert.ok(!offered.includes(name), name);
+    for (const name of ["oma_merge", "oma_challenge", "oma_mail_send", "oma_mail_read"]) assert.ok(offered.includes(name), `${name} was not offered to the model`);
+    for (const name of ["bash", "write", "edit", "oma_status", "oma_mail_ack", "oma_agent_create", "oma_git", "oma_review_decide"]) assert.ok(!offered.includes(name), name);
     const result = lastResult(s.provider.seen[1]!.body);
-    assert.match(result, /"revision":"[a-f0-9]{40,64}"/, result);
+    assert.match(result, /CAPABILITY_DENIED|Insufficient permission/, result);
     assert.ok(continuesTurn(s.provider.seen[1]!.body));
     assert.ok(turn.lines.some(line => line.includes("코드를 확인했습니다")), JSON.stringify(turn.lines));
   });
@@ -407,9 +409,9 @@ test("SCN-F11: a provider that stops answering mid-turn does not wedge the sessi
   await withScenario({ residents: ["worker-a"] }, async s => {
     s.script((_request, index) => (index < 3 ? { kind: "hang" } : text("이제 답합니다.")));
     await s.prompt("응답해", 60_000);
-    s.script([tools(call("oma_git", { action: "ls-tree" })), text("상태 확인")]);
+    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567" })), text("상태 확인")]);
     await s.prompt("상태", 30_000);
-    assert.match(lastResult(s.provider.seen.at(-1)!.body), /"revision":"[a-f0-9]{40,64}"/);
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission/);
   });
 });
 
@@ -520,9 +522,9 @@ test("SCN-F13: a model's answer larger than a frame does not end the session; it
     assert.equal(s.operations("principal").filter(row => row.state === "succeeded").length, 0);
     assert.deepEqual(s.inbox("worker-a"), []);
     // The session goes on.
-    s.script([tools(call("oma_git", { action: "ls-tree" })), text("계속 동작합니다.")]);
+    s.script([tools(call("oma_merge", { action: "diff", name: "merge-01234567" })), text("계속 동작합니다.")]);
     await s.prompt("상태");
-    assert.match(lastResult(s.provider.seen.at(-1)!.body), /"revision":"[a-f0-9]{40,64}"/);
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /CAPABILITY_DENIED|Insufficient permission/);
   });
 });
 

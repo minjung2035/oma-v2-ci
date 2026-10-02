@@ -92,6 +92,8 @@ export function createPublicDispatchPorts(
           integrate: (auth, key, input) => git.integrate(auth, key, input),
           publishContext: (auth, key, input, bytes) =>
             git.publishContext(auth, key, input, bytes),
+          reviews: { status: (auth, name, frameBytes, responseId) =>
+            git.reviews.status(auth, name, frameBytes, responseId) },
         };
   return {
     store: publicStore,

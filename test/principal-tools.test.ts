@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,7 +17,7 @@ import { isValidFullOid, isValidTopicName } from "../src/domain/identifiers.js";
 const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 
 interface Peer { readonly path: string; readonly frames: Record<string, unknown>[]; close(): Promise<void> }
-async function peer(root: string): Promise<Peer> {
+async function peer(root: string, answer?: (frame: Record<string, unknown>) => Record<string, unknown> | null): Promise<Peer> {
   const frames: Record<string, unknown>[] = [];
   const path = join(root, "control.sock");
   const server: Server = createServer(socket => {
@@ -31,7 +31,8 @@ async function peer(root: string): Promise<Peer> {
         catch { pending = Buffer.alloc(0); break; }
         pending = pending.subarray(4 + length);
         frames.push(frame);
-        const reply = Buffer.from(JSON.stringify({ v: 1, id: frame.id, ok: false,
+        const custom = answer?.(frame);
+        const reply = Buffer.from(JSON.stringify(custom ?? { v: 1, id: frame.id, ok: false,
           error: { code: "BROKER_UNAVAILABLE", message: "fixture", retry: "same-key" } }));
         const head = Buffer.alloc(4); head.writeUInt32BE(reply.length, 0);
         socket.write(Buffer.concat([head, reply]));
@@ -80,46 +81,63 @@ function canonical(root: string, format = "sha1", filename = "README.md"): { git
   return { gitDir, main: git(gitDir, "rev-parse", "refs/heads/main") };
 }
 
-test("AV11/DR27: the Principal reaches read/review/safety capabilities, without orchestration tools", { timeout: 60_000 }, async () => {
+test("AV11/DR27: the Principal reviews and controls safety, without orchestration tools", { timeout: 60_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av11-")); const fixture = await peer(root);
   try {
-    const { gitDir, main } = canonical(root); const tools = register(root, fixture.path, true, gitDir);
+    const { gitDir } = canonical(root); const tools = register(root, fixture.path, true, gitDir);
     for (const name of PRINCIPAL_TOOL_NAMES) assert.ok(tools.has(name), `${name} was not registered`);
-    for (const name of ["oma_agent_create", "oma_status", "oma_logs", "oma_mail_ack", "oma_context_publish", "oma_route", "write", "edit"])
+    for (const name of ["oma_agent_create", "oma_status", "oma_logs", "oma_mail_ack", "oma_context_publish", "oma_route", "write", "edit",
+      "oma_git", "oma_review_decide", "oma_challenge_finding", "oma_challenge_scope", "oma_attestation_revoke"])
       assert.equal(tools.has(name), false, `${name} must not be offered to the Principal`);
     const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
+    // The Principal's merge/challenge schema has only diff and vote: no open,
+    // review, status or cancel action, and no fields those actions would take.
+    for (const toolName of ["oma_merge", "oma_challenge"]) {
+      const schema = (tools.get(toolName)! as unknown as { parameters: { properties: Record<string, { const?: unknown; anyOf?: { const: string }[] }> } })
+        .parameters.properties;
+      assert.deepEqual(schema.action!.anyOf!.map(v => v.const).sort(), ["diff", "vote"], `${toolName} must only carry diff|vote`);
+      assert.equal("tier" in schema || "title" in schema || "reason" in schema || "merge" in schema, false,
+        `${toolName} must not carry open's fields`);
+      for (const params of [
+        { action: "open", tier: "LOW", title: "t", reason: "r" },
+        { action: "review", name: "merge-01234567", body: "b" },
+        { action: "status" }, { action: "cancel", name: "merge-01234567", reason: "r" },
+      ] as const) await assert.rejects(() => call(toolName, params), /is not valid/);
+    }
+    assert.equal(fixture.frames.length, 0, "a refused action runs no CLI");
     for (const [name, params] of [
       ["oma_society", { action: "restart" }],
       ["oma_agent_lifecycle", { name: "worker", action: "retire" }],
       ["oma_agent_lifecycle", { name: "principal", action: "stop" }],
       ["oma_agent_lifecycle", { name: "--file", action: "stop" }],
-      ["oma_challenge_finding", { challenge: "invalid", valid: true }],
+      ["oma_merge", { action: "vote", name: "merge-01234567", verdict: "approve", body: "ok" }],           // vote needs its approval
+      ["oma_merge", { action: "vote", name: "merge-01234567", verdict: "approve", body: "ok", approval: "not-a-message" }],
+      ["oma_merge", { action: "diff", name: "topic/dev" }],                                              // name prefix
+      ["oma_challenge", { action: "diff", name: "merge-01234567" }],                                     // kind prefix
+      ["oma_merge", { action: "vote", name: "merge-01234567", verdict: "approve", body: "ok", approval: "m-00000000-0000-4000-8000-000000000001-0", tier: "LOW" }],
       ["oma_mail_send", { to: ["residents"], subject: "Goal", body: "b", intent: "goal", expectedRevision: "HEAD" }],
     ] as const) await assert.rejects(() => call(name, params), /is not valid/);
     assert.equal(fixture.frames.length, 0);
-    const read = await call("oma_git", { action: "show", path: "README.md" });
-    assert.match(JSON.stringify(read), /seed/); assert.match(JSON.stringify(read), new RegExp(main));
-    assert.equal(fixture.frames.length, 0, "code observation is local and read-only");
+    // diff is a read: the CLI asks the broker for the request's status, which
+    // is what decides visibility and identity.
+    await assert.rejects(() => call("oma_merge", { action: "diff", name: "merge-01234567" }), /BROKER_UNAVAILABLE/);
+    assert.deepEqual(sent(fixture.frames, "review.status"), [{ name: "merge-01234567" }]);
     await assert.rejects(() => call("oma_society", { action: "close", request: "close" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     await assert.rejects(() => call("oma_society", { action: "open", request: "open" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     assert.deepEqual(sent(fixture.frames, "society.set"), [{ state: "closed" }, { state: "open" }]);
     await assert.rejects(() => call("oma_agent_lifecycle", { name: "worker", action: "stop" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     assert.deepEqual(sent(fixture.frames, "agent.stop"), [{ agent: "worker" }]);
-    const exact = { candidate: "c".repeat(40), base: main, policyRevision: "p1" };
-    const operation = "op-00000000-0000-4000-8000-000000000001";
-    const facts = [
-      ["oma_review_decide", { ...exact, verdict: "ACCEPT", evidence: "Read exact diff" }, "decision"],
-      ["oma_challenge_finding", { challenge: operation, valid: true, floor: "HIGH", scope: "changed semantics", evidence: "Reproduced" }, "finding"],
-      ["oma_challenge_scope", { ...exact, finding: operation, applies: false, evidence: "Different semantics" }, "scope"],
-      ["oma_attestation_revoke", { attestation: operation, evidence: "Withdrawn" }, "revoke"],
-    ] as const;
-    for (const [name, params, kind] of facts) {
-      await assert.rejects(() => call(name, params), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
-      const recorded = sent(fixture.frames, "attest.record").at(-1)!;
-      assert.equal(recorded.kind, kind); assert.equal(recorded.evidence, params.evidence);
-      if ("candidate" in params) assert.deepEqual(recorded.identity, { repo: "project", targetRef: "refs/heads/main",
-        candidate: exact.candidate, expectedBase: exact.base, policyRevision: exact.policyRevision });
-    }
+    // The Principal's vote carries its approval id; the exact wire fact.
+    const approval = "m-00000000-0000-4000-8000-000000000001-0";
+    await assert.rejects(() => call("oma_merge", { action: "vote", name: "merge-01234567", verdict: "reject",
+      body: "needs another pass", approval, request: "vote-1" }),
+      /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1),
+      { kind: "vote", name: "merge-01234567", verdict: "reject", body: "needs another pass", approval });
+    await assert.rejects(() => call("oma_challenge", { action: "vote", name: "challenge-01234567", verdict: "approve",
+      body: "revert is right", approval, request: "vote-2" }), /Acceptance status unknown/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1),
+      { kind: "vote", name: "challenge-01234567", verdict: "approve", body: "revert is right", approval });
     await assert.rejects(() => call("oma_mail_send", { to: ["residents"], subject: "Plan", body: "Check every feature.\n",
       intent: "goal", expectedRevision: "none", request: "goal" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     const published = sent(fixture.frames, "context.publish")[0]!;
@@ -128,12 +146,75 @@ test("AV11/DR27: the Principal reaches read/review/safety capabilities, without 
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
+test("mail-v1 / CLI-001: a Worker's oma_merge and oma_challenge carry the whole review vocabulary, never approval", { timeout: 60_000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-worker-tools-"));
+  // A workspace clone: HEAD + the recorded origin/main, so merge open resolves.
+  const gitW = (args: string[]) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args],
+    { cwd: root, encoding: "utf8" });
+  gitW(["init", "-q", "-b", "main"]); writeFileSync(join(root, "a.txt"), "a\n"); gitW(["add", "a.txt"]);
+  gitW(["commit", "-qm", "base"]); writeFileSync(join(root, "a.txt"), "b\n"); gitW(["commit", "-qam", "cand"]);
+  gitW(["update-ref", "refs/remotes/origin/main", "HEAD~1"]);
+  const sockdir = mkdtempSync(join(tmpdir(), "oma-worker-sock-"));
+  const fixture = await peer(sockdir, frame =>
+    frame.method === "git.known" ? { v: 1, id: frame.id, ok: true, result: { hasCandidate: true, prerequisites: [] } } : null);
+  try {
+    const tools = register(root, fixture.path, false);
+    const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
+    for (const toolName of ["oma_merge", "oma_challenge"]) {
+      const schema = (tools.get(toolName)! as unknown as { parameters: { properties: Record<string, { const?: unknown; anyOf?: { const: string }[] }> } })
+        .parameters.properties;
+      assert.deepEqual(schema.action!.anyOf!.map(v => v.const).sort(), ["cancel", "diff", "open", "review", "status", "vote"],
+        `${toolName} carries the six actions`);
+      assert.equal("approval" in schema, false, "a Worker's vote never names an approval");
+      await assert.rejects(() => call(toolName, { action: "vote", name: `${toolName.slice(4)}-01234567`, verdict: "approve", body: "b", approval: "m-00000000-0000-4000-8000-000000000001-0" }),
+        /is not valid/);
+      await assert.rejects(() => call(toolName, { action: "review", name: `${toolName.slice(4)}-01234567`, body: "b", title: "leaked" }), /is not valid/);
+    }
+    // The full action set reaches the wire with exact argv.
+    await assert.rejects(() => call("oma_merge", { action: "review", name: "merge-01234567", body: "try this", request: "rv1" }), /Acceptance status unknown/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "review", name: "merge-01234567", body: "try this" });
+    await assert.rejects(() => call("oma_merge", { action: "vote", name: "merge-01234567", verdict: "approve", body: "looks right", request: "v1" }),
+      /Acceptance status unknown/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "vote", name: "merge-01234567", verdict: "approve", body: "looks right" });
+    await assert.rejects(() => call("oma_merge", { action: "cancel", name: "merge-01234567", reason: "superseded", request: "c1" }), /Acceptance status unknown/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "cancel", name: "merge-01234567", reason: "superseded" });
+    await assert.rejects(() => call("oma_challenge", { action: "review", name: "challenge-01234567", body: "note", request: "cr" }), /Acceptance status unknown/);
+    assert.deepEqual(sent(fixture.frames, "attest.record").at(-1), { kind: "review", name: "challenge-01234567", body: "note" });
+    await assert.rejects(() => call("oma_merge", { action: "status", name: "merge-01234567" }), /BROKER_UNAVAILABLE/);
+    assert.deepEqual(sent(fixture.frames, "review.status").at(-1), { name: "merge-01234567" });
+    // open writes the reason to a file the CLI reads and removes afterwards.
+    await assert.rejects(() => call("oma_merge", { action: "open", tier: "MEDIUM", title: "Ship it", reason: "the fix", request: "o1" }), /Acceptance status unknown/);
+    const opened = sent(fixture.frames, "attest.record").at(-1)!;
+    assert.equal(opened.kind, "merge.open"); assert.equal(opened.tier, "MEDIUM"); assert.equal(opened.title, "Ship it");
+    assert.equal(opened.reason, "the fix");
+    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567", tier: "HIGH", title: "Revert it", reason: "regress", request: "o2" }),
+      /Acceptance status unknown/);
+    const challenged = sent(fixture.frames, "attest.record").at(-1)!;
+    assert.equal(challenged.kind, "challenge.open"); assert.equal(challenged.merge, "merge-01234567");
+    assert.equal(challenged.candidate, undefined, "a prepared revert carries no candidate");
+    assert.equal(readdirSync(root).filter(name => name.startsWith("oma-tool-")).length, 0, "evidence files are removed");
+    for (const params of [
+      { action: "open", tier: "LOW", title: "t", reason: "r", verdict: "approve" },                      // field is not open's
+      { action: "open", tier: "MEDIUM", title: "t", reason: "r", merge: "merge-01234567" },              // merge has no merge field
+      { action: "open", tier: "HIGH", title: "t", reason: "r", name: "merge-01234567" },                 // open takes no name
+      { action: "open", tier: "LOW", title: "t", reason: "r", path: "x" },                               // diff field
+    ] as const) {
+      await assert.rejects(() => call("oma_merge", params), /is not valid|not valid/);
+    }
+    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "challenge-01234567", tier: "LOW", title: "t", reason: "r" }), /is not valid/);
+    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567", tier: "MEDIUM", title: "t", reason: "r" }), /is not valid/);
+    await assert.rejects(() => call("oma_challenge", { action: "open", merge: "merge-01234567", tier: "LOW", title: "t", reason: "r", candidate: "x" }), /is not valid/);
+  } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); rmSync(sockdir, { recursive: true, force: true }); }
+});
+
 test("AV11 / T114: a Resident's engine, which has no credential channel, is not given the Principal's tools", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-av11-resident-"));
   try {
     const tools = register(root, join(root, "control.sock"), false);
-    for (const name of PRINCIPAL_TOOL_NAMES) assert.equal(tools.has(name), false, `${name} was registered for a Resident`);
+    for (const name of PRINCIPAL_TOOL_NAMES.filter(n => n !== "oma_merge" && n !== "oma_challenge"))
+      assert.equal(tools.has(name), false, `${name} was registered for a Resident`);
     assert.ok(tools.has("oma_mail_send") && tools.has("oma_status"));
+    assert.ok(tools.has("oma_merge") && tools.has("oma_challenge"), "mail-v1 review tools are the Worker's");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -162,6 +243,15 @@ test("DR27/INV04: full object ids use one grammar in host and isolated extension
   }
   for (const sample of [null, undefined, false, 40, {}, [], ["a".repeat(40)]])
     for (const decode of [isValidFullOid, validFullOid]) assert.equal(decode(sample), false);
+});
+
+test("mail-v1 / INV04: the tools' request-name mirror is the wire grammar", async () => {
+  const { isReviewRequestName } = await import("../src/domain/identifiers.js");
+  const samples = ["merge-01234567", "challenge-abcdef00", "merge-0123456", "merge-012345678", "merge-0123456G",
+    "merge_01234567", "Merge-01234567", "merge-01234567 ", "challenge-0123456x", "topic/dev", "merge-", "", "mrg-01234567"];
+  for (const sample of samples) {
+    assert.equal(isReviewRequestName(sample), /^((merge)|(challenge))-[0-9a-f]{8}$/.test(sample), sample);
+  }
 });
 
 test("AV15 / BATCH-002, INV04: a tool takes the names OMA shows -- this society's RFC address, a message's file name -- as what they display", async () => {

@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
-  "manifest": "04b481a2d4c6d743140d9ff4936cb942e78f194b76bb274f54c9322bcfb243ee",
-  "report": "65041332bab3fef47e25ffdfd8b8ab86c75a1084d253cc346c0bf304fddcd206",
+  "manifest": "598e9a9f21c08f501bcd4adc83caaf70e5880724e26ec90286164473d7ef1ce7",
+  "report": "e0b521a827a02bc8a3f455ae5049bcbb3e06da3c01dc26cca2786c2bd80f33c7",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -69,7 +69,7 @@
     },
     {
       "path": "src/broker/composition.ts",
-      "sha256": "2f9bbd479269b8103616fa4920b28c592b65abcc190229af152257aead1af539"
+      "sha256": "7f0262863910f4a4d49188f181eb324c8783100c4200059ab908bd3211309cb1"
     },
     {
       "path": "src/broker/connection.ts",
@@ -449,7 +449,7 @@
     },
     {
       "path": "src/extension/mail-tools.ts",
-      "sha256": "d4e3c0ff809c9f828115c789bdad70509fc706df87bde564466aaab60e55967b"
+      "sha256": "f5c4f8d47185388ccab8b803211b716d401f57a9fd320c8d34c5c3421ca2a7c8"
     },
     {
       "path": "src/extension/principal-channel.ts",
@@ -457,7 +457,11 @@
     },
     {
       "path": "src/extension/principal-tools.ts",
-      "sha256": "0ff26d497ff86b3591e5b7d67c219af19d4dde15bb2475a162d2244b3e68e00a"
+      "sha256": "3c3fda8e509f51fc4bb69652728c86dbcc624344113ea6297e0a8ec1fbf54238"
+    },
+    {
+      "path": "src/extension/review-tools.ts",
+      "sha256": "813c7c9f3ba6afe3dd4cba00abbc56edc91d44bccdd05abd24e2f00fb5d50a62"
     },
     {
       "path": "src/extension/shared.ts",
