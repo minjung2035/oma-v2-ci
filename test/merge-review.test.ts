@@ -17,6 +17,7 @@ import type { ReviewState as RS } from "../src/domain/review-evaluation.js";
 import type { ReviewFact } from "../implementation/contracts/attestation.js";
 import { applyRequestKeyFor } from "../src/domain/identifiers.js";
 import { StoreError } from "../src/domain/errors.js";
+import { runGitText } from "../src/process/policies.js";
 import { PublicDispatcher } from "../src/broker/public-dispatcher.js";
 import { decodeRpcReply } from "../src/protocol/response-codec.js";
 import { ReviewModule } from "../src/review.js";
@@ -928,5 +929,49 @@ test("mail-v1: the review.status wire method filters the Principal and rejects b
       assert.equal(answer.ok, false, JSON.stringify(answer));
       assert.match(answer.error.code, /CAPABILITY_DENIED|INVALID_REQUEST|APPROVAL_STALE/, answer.error.message);
     }
+  } finally { f.close(); }
+});
+
+test("mail-v1: authority comes from authenticated facts — mail text and git authorship are not votes", async () => {
+  const f = fixture(); try {
+    // The candidate's commit claims bob as its author, but alice is the
+    // authenticated submitter: submitters come from git.submit records,
+    // never from Git author fields.
+    const blob = f.git(["hash-object", "-w", "--stdin"], "spoofed authorship\n");
+    const tree = f.git(["mktree"], `100644 blob ${blob}\tspoof.txt\n`);
+    const forged = runGitText(["commit-tree", tree, "-p", f.base, "-m", "authored as bob"],
+      { gitDir: f.projectGit, env: { GIT_AUTHOR_NAME: "bob", GIT_AUTHOR_EMAIL: "bob@demo.oma.invalid",
+        GIT_COMMITTER_NAME: "mallory", GIT_COMMITTER_EMAIL: "mallory@elsewhere.invalid" } });
+    assert.equal(forged.status, 0, forged.stderr);
+    const candidate = forged.stdout.trim();
+    await f.submit("alice", candidate, "submit-spoofed");
+    const opened = await f.open("alice", { tier: "MEDIUM", candidate }, "open-spoofed");
+    assert.equal(opened.state, "succeeded");
+    const name = f.requestName("open-spoofed");
+    const state = f.stateOf(name);
+    assert.deepEqual(state.authors, ["alice"], "the authenticated submitter owns the request");
+    // alice cannot approve what she submitted, even though the commit names bob.
+    await assert.rejects(f.vote("alice", name, "approve", "mine", "v-self"), { code: "SELF_REVIEW" });
+    await f.vote("bob", name, "approve", "bob approves", "v-bob");
+    assert.equal(f.stateOf(name).display, "applied", "bob's approve applies alice's request");
+
+    // Mail text is never a vote: two Workers mailing "approve" move nothing.
+    const mainNow = f.git(["rev-parse", "refs/heads/main"]);
+    const candidate2 = f.candidateWith({ "mail.txt": "mail says approve\n" }, mainNow);
+    await f.submit("alice", candidate2, "submit-mail");
+    await f.open("alice", { tier: "HIGH", candidate: candidate2, base: mainNow }, "open-mail");
+    const name2 = f.requestName("open-mail");
+    for (const [actor, key] of [["bob", "mail-bob"], ["carol", "mail-carol"]] as const)
+      await f.mail.send(f.auth(actor), key, { to: ["residents"], subject: `[${name2}] I approve`,
+        kind: "message", body: "approve — looks good to me" });
+    const after = f.stateOf(name2);
+    assert.equal(after.display, "peer-needed", "mail text approving changed nothing");
+    assert.deepEqual(after.approvers, []);
+    assert.equal(after.approval, null, "no approval mail was emitted");
+    const inboxDir = join(f.root, "mail", "inboxes", "principal", "new");
+    const principalMails = (existsSync(inboxDir) ? readdirSync(inboxDir) : [])
+      .map(file => readFileSync(join(inboxDir, file), "utf8"));
+    assert.equal(principalMails.filter(eml => /X-Oma-Kind: approval_required/i.test(eml)).length, 0,
+      "no approval was ever sent to the Principal");
   } finally { f.close(); }
 });
