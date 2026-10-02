@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiAdapter } from "../src/runtime/pi-adapter.js";
+import { RESIDENT_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, type PiConfinement } from "../src/runtime/pi-spawn-plan.js";
 import { TOOL_SCOPE_ENV as MIRRORED_ENV, TOOL_SCOPE_SANDBOX as MIRRORED_SANDBOX, guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import { containWorkspaceTools } from "../src/extension/contained-tools.js";
@@ -162,6 +163,32 @@ test("T113 every path the confined engine is told about is a path it can reach",
         `${value} is a host path the confined engine cannot open`);
     }
     assert.ok(checked >= 6, `only ${checked} paths were checked; the plan lost entries`);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("T113 the engine's system prompt is the role's, or the built-in Resident prompt", () => {
+  const f = fixture();
+  try {
+    const engineArgs = (adapter: PiAdapter) =>
+      adapter.spawnPlan().args.slice(adapter.spawnPlan().args.lastIndexOf("--") + 1);
+    // An authored-empty role prompt runs on the built-in Resident prompt, and
+    // the flag replaces Pi's generated base prompt rather than appending.
+    const bare = engineArgs(f.adapter);
+    assert.equal(bare[bare.indexOf("--system-prompt") + 1], RESIDENT_SYSTEM_PROMPT);
+    assert.equal(bare.includes("--append-system-prompt"), false);
+    const authored = new PiAdapter({
+      actor: "alice", society: "s", limits: LIMITS,
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "a role prompt",
+        workspaceBytes: RESOURCES.workspaceBytes, extensions: [] },
+      paths: {
+        piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
+        coreExtension: f.paths.coreExtension!, cli: f.paths.cli!,
+        workspace: f.dirs.workspace, sessionDir: f.dirs.sessions, agentHome: f.dirs.home,
+        mailArchive: f.paths.mailArchive!, workerArchive: f.paths.workerArchive!, projectGit: f.paths.projectGit!, batchView: f.dirs.view, socket: f.paths.socket!,
+      },
+    });
+    const args = engineArgs(authored);
+    assert.equal(args[args.indexOf("--system-prompt") + 1], "a role prompt");
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 

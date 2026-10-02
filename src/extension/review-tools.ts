@@ -102,14 +102,14 @@ export function registerReviewTools(pi: ExtensionAPI, context: ReviewToolContext
       label: kind === "merge" ? "Merge review requests" : "Challenge an applied merge",
       description: principal
         ? kind === "merge"
-          ? "Decide the HIGH merge requests whose approval mail reaches you. diff pages the exact base→candidate patch of a request you can see; vote names that approval mail's id with approve or reject and its reason. You do not open, review or cancel requests, assign reviewers, or poll; LOW and MEDIUM completions arrive as notice mail by themselves."
-          : "Decide a challenge's approval when its mail reaches you. diff pages the exact patch; view chooses the revert (default) or the merge it reverts; vote names the approval id from the mail. Only recorded votes count."
+          ? "Decide the HIGH merge request an approval mail named. diff pages its exact base→candidate patch; vote is approve or reject with approval set to that mail's id. Open, review and cancel belong to Workers; LOW and MEDIUM arrive as result notices."
+          : "Decide a challenge's approval when its mail reaches you. diff pages the patch -- view selects the revert (default) or the merge it undoes; vote names the approval id. Only recorded votes count."
         : kind === "merge"
-          ? "Work a merge request through review mail. open names a tier and freezes the candidate and base; review adds discussion; vote approves or rejects with a body (only recorded votes count; you cannot approve your own request); status reads it; cancel ends it; diff pages the exact base→candidate patch. A LOW merge applies without further review; a MEDIUM or HIGH one then needs peer and, for HIGH, Principal approval."
-          : "Challenge a merge that already applied: open prepares a revert (or takes your own candidate+base), then reviews and votes like a merge request until it applies. diff's view chooses the revert (default) or the original merge's patch.",
+          ? "Drive a merge request through peer review. open freezes candidate and base under a tier; review adds discussion; vote records the binding verdict -- recorded votes only, never your own request; status reads the ledger; cancel withdraws an unapplied request; diff pages the exact base→candidate patch. Tiers: LOW applies alone, MEDIUM needs one peer approve, HIGH needs two then the Principal."
+          : "Revert a merge that already applied, through the same review path as a merge request. open prepares the revert (or takes your own candidate+base); diff's view selects the revert (default) or the original patch.",
       promptSnippet: kind === "merge"
-        ? "Open a merge request and review others' through oma_merge."
-        : "Revert an applied merge with oma_challenge open.",
+        ? "open and review merge requests"
+        : "revert an applied merge",
       parameters: principal ? principalSchema(kind) : workSchema(kind),
       async execute(id, raw, signal, _update, engine) {
         const params = raw as Record<string, unknown>;

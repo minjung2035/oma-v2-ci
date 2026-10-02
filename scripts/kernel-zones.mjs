@@ -13,6 +13,7 @@ export const KERNEL_ZONES = Object.freeze([
       "src/domain/attestation-relations.ts",
       "src/domain/canonical-json.ts",
       "src/config/defaults.ts",
+      "src/config/role-prompts.ts",
       "src/domain/capabilities.ts",
       "src/domain/child-policy.ts",
       "src/domain/context-policy.ts",

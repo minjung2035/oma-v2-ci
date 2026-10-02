@@ -479,6 +479,9 @@ export async function runInteractive(): Promise<void> {
       noExtensions: true, noSkills: true, noPromptTemplates: true, noContextFiles: true,
       additionalExtensionPaths: extensions,
       extensionFactories: [boundary],
+      // The role prompt replaces Pi's generated base prompt, the same as the
+      // RPC session's argv does; an absent flag leaves the loader's own default.
+      ...(argv.includes("--system-prompt") ? { systemPrompt: flag("--system-prompt") } : {}),
       appendSystemPrompt: argv.includes("--append-system-prompt") ? [flag("--append-system-prompt")] : [],
       extensionsOverride: loaded => {
         if (loaded.errors.length || !loaded.extensions.some(extension => extension.resolvedPath === upstream)) {

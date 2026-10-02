@@ -143,7 +143,8 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
     },
     principalProfile: DEFAULT_PRINCIPAL_PROFILE,
     // LIFE-004: prepared by the host, activated only once GOAL is published.
-    initialResidents: [{ name: "worker-1", profile: DEFAULT_RESIDENT_PROFILE, brief: "Work toward the shared GOAL and collaborate with other Workers as needed." }],
+    initialResidents: [{ name: "worker-1", profile: DEFAULT_RESIDENT_PROFILE,
+      brief: "You have woken in an OMA society. Read /world/START.md for the map, then /inbox.md and the mail it lists. The shared objective is /world/context/current/GOAL.md -- find an unheld piece of it, say so on the board, and start." }],
     quota: {
       societyAgents: 8,
       lineageAgents: 4,

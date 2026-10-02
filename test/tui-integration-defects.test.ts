@@ -16,6 +16,7 @@ import {
   commitField, readSettings,
 } from "../src/tui/sources/settings.js";
 import { principalSessionProfile, sessionArgv, sessionEnv } from "../src/tui/session.js";
+import { PRINCIPAL_SYSTEM_PROMPT } from "../src/config/role-prompts.js";
 import { loadConfiguration } from "../src/config.js";
 import { registerToolSurface } from "../src/pi-extension.js";
 import { assertExtensionIntegrity, verifiedPaths } from "../src/runtime/extension-integrity.js";
@@ -374,8 +375,8 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
         toolSurface: encodeToolSurfacePlan(role.toolSurface!),
       },
     );
-    assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], "role prompt",
-      "the Principal must run with its role prompt, as a Resident does");
+    assert.equal(argv[argv.indexOf("--system-prompt") + 1], "role prompt",
+      "the Principal's role prompt replaces Pi's generated system prompt");
 
     const env = sessionEnv({ HOME: "/h" }, {
       society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [],
@@ -384,11 +385,12 @@ test("the Principal and Resident spawn seams carry the same role contract", () =
     assert.ok(env.OMA_TOOL_SURFACE, "the projection reaches the engine");
     assert.equal(env.PI_CODING_AGENT_DIR, "/state/pi", "the engine stays in OMA's directory");
 
-    // A role without a prompt must not push an empty flag.
+    // A role without an authored prompt runs on the built-in Principal prompt,
+    // not on Pi's generic coding-agent default.
     const bare = sessionArgv(
       { piCommand: "/usr/bin/node", piArgs: [], coreExtension: "/lib/core.js", sessionDir: "/s", workspace: "/w", home: "/h" },
       { society: "demo", provider: "pi", model: "current", workspaceBytes: 1024, extensions: [] },
     );
-    assert.ok(!bare.includes("--append-system-prompt"));
+    assert.equal(bare[bare.indexOf("--system-prompt") + 1], PRINCIPAL_SYSTEM_PROMPT);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -52,6 +52,7 @@ src/config/defaults.ts
 src/config/generations.ts
 src/config/operations.ts
 src/config/policy.ts
+src/config/role-prompts.ts
 src/diagnostics/files.ts
 src/diagnostics/integrity.ts
 src/diagnostics/ledger.ts

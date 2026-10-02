@@ -26,6 +26,7 @@ import { storedMailBytes } from "../domain/mail-values.js";
 import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
 import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
 import type { PromptOutcome } from "./prompt.js";
+import { PRINCIPAL_SYSTEM_PROMPT } from "../config/role-prompts.js";
 
 export interface SessionPaths {
   readonly piCommand: string;
@@ -218,8 +219,11 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
     if (extension !== paths.coreExtension) args.push("-e", extension);
   if (!(profile.provider === "pi" && profile.model === "current"))
     args.push("--model", `${profile.provider}/${profile.model}`);
-  if (profile.prompt !== undefined && profile.prompt.length > 0)
-    args.push("--append-system-prompt", profile.prompt);
+  // The role prompt replaces Pi's generated system prompt entirely: pi's base
+  // describes a lone coding agent, not the Principal. An authored-empty role
+  // runs on the built-in rather than on that default.
+  args.push("--system-prompt",
+    profile.prompt !== undefined && profile.prompt.length > 0 ? profile.prompt : PRINCIPAL_SYSTEM_PROMPT);
   return Object.freeze(args);
 }
 

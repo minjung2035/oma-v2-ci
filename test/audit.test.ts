@@ -1101,9 +1101,9 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     writeFileSync(join(state, "config.json"), JSON.stringify(cfg));
     await run();
     const start = readFileSync(join(state, "world", "START.md"), "utf8");
-    assert.match(start, /--subject/);
-    assert.match(start, /oma_merge open/);
-    assert.match(start, /only recorded votes count/);
+    assert.match(start, /\/inbox\.md/);
+    assert.match(start, /oma_merge/);
+    assert.match(start, /not authority/);
     assert.match(
       readFileSync(join(state, "world", "agents.tsv"), "utf8"),
       /child\tresident\tenabled\tchild/,

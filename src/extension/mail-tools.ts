@@ -306,11 +306,11 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
     name: "oma_mail_read",
     label: "Read OMA mail",
     description:
-      "Read one immutable OMA mail message by message id or the archive path a notice or result showed, or the delivery's full index /inbox.md.",
-    promptSnippet: "Read OMA mail using the path from the delivery notice.",
+      "Read one durable mail message by its id or the archive path a notice or tool result showed. `/inbox.md` reads this batch's delivery index.",
+    promptSnippet: "Read mail by id or `/inbox.md`.",
     parameters: Type.Object({
       messageId: Type.String({
-        description: "Message id or canonical archive path from the notice, or /inbox.md",
+        description: "Message id or archive path from a notice, or /inbox.md",
       }),
     }),
     async execute(_id, params) {
@@ -325,10 +325,11 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   pi.registerTool({
     name: "oma_mail_send",
     label: "Send OMA mail",
-    description: "Send durable mail to agents or public addresses.",
-    promptSnippet: "Send collaboration results through durable OMA mail.",
+    description: "Send durable mail to agents or shared addresses. `to` names agents or addresses (`commons`/`residents` reach every Worker, `principal` reaches the Principal); `replyTo` threads the message; `kind` marks message/question/result/alert/critical.",
+    promptSnippet: "Send durable society mail.",
     parameters: Type.Object({
-      to: Type.Array(Type.String(), { minItems: 1, maxItems: 32 }),
+      to: Type.Array(Type.String(), { minItems: 1, maxItems: 32,
+        description: "agent names, or shared addresses: commons / residents (all Workers), principal" }),
       subject: Type.String({ maxLength: 998 }),
       body: Type.String(),
       kind: Type.Optional(
@@ -388,7 +389,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   if (!channel.attached) pi.registerTool({
     name: "oma_mail_ack",
     label: "Acknowledge OMA mail",
-    description: "Durably acknowledge one OMA message.",
+    description: "Durably acknowledge one delivered message so it stops pending. Acknowledge after you have read and acted on it.",
     parameters: Type.Object({
       messageId: Type.String(),
       request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
@@ -412,7 +413,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   if (!channel.attached) pi.registerTool({
     name: "oma_status",
     label: "OMA status",
-    description: "Read society or agent status.",
+    description: "Read society status or one agent's row. Counts are pending deliveries, not messages read or work done.",
     parameters: Type.Object({ agent: Type.Optional(Type.String()) }),
     async execute(_id, params, signal) {
       return textResult(

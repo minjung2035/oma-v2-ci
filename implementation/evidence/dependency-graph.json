@@ -53,6 +53,7 @@
   "src/config/generations.ts",
   "src/config/operations.ts",
   "src/config/policy.ts",
+  "src/config/role-prompts.ts",
   "src/diagnostics/files.ts",
   "src/diagnostics/integrity.ts",
   "src/diagnostics/ledger.ts",
@@ -361,6 +362,7 @@
     "name": "K0-values",
     "files": [
      "src/config/defaults.ts",
+     "src/config/role-prompts.ts",
      "src/domain/admission.ts",
      "src/domain/attestation-relations.ts",
      "src/domain/canonical-json.ts",
@@ -1696,7 +1698,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 102
+   "files": 103
   },
   {
    "index": 2,
@@ -1759,8 +1761,8 @@
    "files": 88
   }
  ],
- "files": 354,
- "runtimeEdges": 1535,
+ "files": 355,
+ "runtimeEdges": 1537,
  "typeOnlyEdges": 417,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 283,
@@ -1769,11 +1771,11 @@
   "L3-workflow -> L1-kernel": 219,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 68,
-  "L4-orchestration -> L1-kernel": 290,
+  "L4-orchestration -> L1-kernel": 291,
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 17,
   "L4-orchestration -> L4-orchestration": 148,
-  "L5-entry -> L1-kernel": 139,
+  "L5-entry -> L1-kernel": 140,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 9,
   "L5-entry -> L4-orchestration": 114,
@@ -1824,10 +1826,10 @@
   "src/git/context.ts": 15,
   "src/lifecycle/create.ts": 15,
   "src/reconcile.ts": 15,
+  "src/tui/session.ts": 15,
   "src/git/integration.ts": 14,
   "src/git/submit.ts": 14,
-  "src/mail/batches.ts": 14,
-  "src/pi-extension.ts": 14
+  "src/mail/batches.ts": 14
  },
  "external": {
   "@earendil-works/pi-coding-agent": 23,

@@ -22,7 +22,7 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
   const { run, workspace, society } = context;
   pi.registerTool({
     name: "oma_society", label: "Open or close society execution",
-    description: "Close all Worker execution after the work is complete, or reopen it for more work. Closing preserves mail, sessions and each Worker's individual stop state. Resume restores this setting; open explicitly to continue. Only a succeeded close confirms Worker termination. Opening lets enabled Workers with pending mail resume automatically; force-stopped Workers stay stopped.",
+    description: "Close all Worker execution when the work is done, or reopen it. Close preserves mail, sessions and per-agent stop state; only a succeeded close confirms Workers ended. Open lets stopped-eligible Workers resume on pending mail; Principal-stopped ones stay stopped.",
     parameters: Type.Object({ action: Type.Union([Type.Literal("open"), Type.Literal("close")]), request }),
     async execute(id, params, signal, _update, engine) {
       const action = params.action === "open" || params.action === "close" ? params.action : refused("society action", params.action);
@@ -32,7 +32,7 @@ export function registerPrincipalTools(pi: ExtensionAPI, context: PrincipalToolC
   });
   pi.registerTool({
     name: "oma_agent_lifecycle", label: "Force-stop or release an OMA Resident",
-    description: "Emergency stop of a Resident, or explicit release/start after a Principal stop. Not a task scheduler: Workers manage ordinary collaboration themselves. Other Workers cannot undo a Principal stop.",
+    description: "Emergency-stop a Resident, or release one the Principal stopped. Not a task scheduler -- Workers organize ordinary work themselves, and other Workers cannot undo a Principal stop.",
     parameters: Type.Object({ name: Type.String(), action: Type.Union([Type.Literal("start"), Type.Literal("stop")]), request }),
     async execute(id, params, signal, _update, engine) {
       const name = actorNameOf(params.name, society, "agent name");

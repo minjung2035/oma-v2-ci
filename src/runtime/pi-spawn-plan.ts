@@ -16,6 +16,7 @@ import { StoreError } from "../domain/errors.js";
 import { storedMailBytes } from "../domain/mail-values.js";
 import { assertModelScope } from "../storage/paths.js";
 import { sandboxSeccompFilter } from "./sandbox-seccomp.js";
+import { RESIDENT_SYSTEM_PROMPT } from "../config/role-prompts.js";
 
 /** Everything the adapter needs to run the engine inside the Resident sandbox.
  * Its absence is the unconfined profile, which the runner states explicitly. */
@@ -221,8 +222,11 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
       `${options.profile.provider}/${options.profile.model}`,
     );
   if (options.profile.thinking !== undefined) args.push("--thinking", options.profile.thinking);
-  if (options.profile.prompt.length > 0)
-    args.push("--append-system-prompt", options.profile.prompt);
+  // The role prompt is the engine's whole system prompt: pi's generated base
+  // describes a lone coding agent, not a Resident. An authored-empty role runs
+  // on the built-in rather than on that default.
+  args.push("--system-prompt",
+    options.profile.prompt.length > 0 ? options.profile.prompt : RESIDENT_SYSTEM_PROMPT);
   return args;
 }
 
