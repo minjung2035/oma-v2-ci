@@ -20,6 +20,26 @@ test("R24: the existing two-class policy preserves oldest order and direct/publi
   assert.deepEqual(pending.map(value => value.value), ["public-old", "direct-old", "public-new", "direct-new", "public-last"]);
 });
 
+test("G02-ledger-r2: bounded selection preserves both classes across a long leading backlog", () => {
+  for (const leadingPublic of [true, false]) {
+    let visited = 0; let closed = false;
+    function* backlog() {
+      try {
+        for (let i = 0; i < 10000; i++) { visited++; yield { value: `leading-${i}`, publicList: leadingPublic }; }
+        for (let i = 0; i < 4; i++) { visited++; yield { value: `trailing-${i}`, publicList: !leadingPublic }; }
+        throw new Error("selection must stop once both classes have enough rows");
+      } finally { closed = true; }
+    }
+    assert.deepEqual(selectBatch(backlog(), 4), leadingPublic
+      ? ["trailing-0", "leading-0", "trailing-1", "leading-1"]
+      : ["leading-0", "trailing-0", "leading-1", "trailing-1"]);
+    assert.equal(visited, 10004);
+    assert.equal(closed, true, "early termination closes the underlying ledger iterator");
+  }
+  for (const maximum of [0, -1, NaN, Infinity, 1.5])
+    assert.throws(() => selectBatch([], maximum), { code: "UNSUPPORTED_PROFILE" });
+});
+
 test("R24: the extension projection has six fields and never publishes host session or index paths", () => {
   const batch: PreparedBatch = {
     id: "12345678-1234-4234-8234-123456789abc", agent: "alice", incarnation: 1,

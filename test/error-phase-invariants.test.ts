@@ -102,11 +102,11 @@ test("one receipt builder retains terminal bytes after the decoder rejects contr
 test("CLI receipt mapping distinguishes pending, terminal failure and unknown effect", () => {
   const pending = receiptOfOperation(receiptOperation());
   assert.equal(receiptExit(pending), 0);
-  assert.equal(receiptLines(pending, "same-key")[0], "접수됨 / 아직 완료되지 않음");
+  assert.equal(receiptLines(pending, "same-key")[0], "Accepted / not yet complete");
   assert.match(receiptLines(pending, "same-key").join("\n"), /--request same-key/);
   const unknown = receiptOfOperation(receiptOperation({ state: "unknown" }));
   assert.equal(receiptExit(unknown), 3);
-  assert.match(receiptLines(unknown, "same-key")[0]!, /결과 불명확/);
+  assert.match(receiptLines(unknown, "same-key")[0]!, /Outcome unknown/);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "CHECK_FAILED" }))), 2);
   assert.equal(receiptExit(receiptOfOperation(receiptOperation({ state: "failed", error_code: "SPIKE_UNRESOLVED" }))), 4);
 });

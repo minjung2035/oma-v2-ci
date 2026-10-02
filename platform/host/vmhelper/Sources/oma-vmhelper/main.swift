@@ -14,8 +14,47 @@ import Foundation
 import Security
 import Virtualization
 
+// This one-shot path exits before the VM/control channel is constructed.
+if CommandLine.arguments.dropFirst().contains("--project-bookmark") {
+  guard CommandLine.arguments.dropFirst().elementsEqual(["--project-bookmark"]) else { exit(2) }
+  do {
+    var input = Data()
+    while true {
+      let part = FileHandle.standardInput.readData(ofLength: min(65536, 1024 * 1024 + 1 - input.count))
+      if part.isEmpty { break }
+      input.append(part)
+      guard input.count <= 1024 * 1024 else { exit(2) }
+    }
+    guard let request = try JSONSerialization.jsonObject(with: input) as? [String: String]
+    else { exit(2) }
+    let reply: [String: String]
+    switch request["op"] {
+    case "create":
+      guard Set(request.keys) == Set(["op", "path"]), let path = request["path"], path.hasPrefix("/") else { exit(2) }
+      let url = URL(fileURLWithPath: path, isDirectory: true)
+      let data = try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
+      reply = ["bookmark": data.base64EncodedString()]
+    case "resolve":
+      guard Set(request.keys) == Set(["op", "bookmark"]), let text = request["bookmark"],
+            let data = Data(base64Encoded: text) else { exit(2) }
+      var stale = false
+      let url = try URL(resolvingBookmarkData: data, options: [.withoutUI, .withoutMounting],
+                        relativeTo: nil, bookmarkDataIsStale: &stale)
+      guard url.isFileURL else { exit(2) }
+      reply = ["path": url.path]
+    default: exit(2)
+    }
+    let output = try JSONSerialization.data(withJSONObject: reply)
+    guard output.count <= 1024 * 1024 else { exit(2) }
+    FileHandle.standardOutput.write(output)
+    exit(0)
+  } catch { exit(1) }
+}
+
 // MARK: - The channel (descriptor 3, JSON lines)
 
+// Personal uses the same signed Keychain code without admitting VM commands.
+let keychainOnly = CommandLine.arguments.dropFirst().contains("--keychain-only")
 let channelQueue = DispatchQueue(label: "oma.vmhelper.channel")
 let channel = FileHandle(fileDescriptor: 3, closeOnDealloc: false)
 
@@ -278,9 +317,11 @@ func keychainPut(_ id: Int, _ account: String, _ value: String) {
 
 // MARK: - Sleep and wake (§9.1)
 
-let workspace = NSWorkspace.shared.notificationCenter
-workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { _ in send(["event": "sleep"]) }
-workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { _ in send(["event": "wake"]) }
+if !keychainOnly {
+  let workspace = NSWorkspace.shared.notificationCenter
+  workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { _ in send(["event": "sleep"]) }
+  workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { _ in send(["event": "wake"]) }
+}
 
 // MARK: - Main loop
 
@@ -303,6 +344,10 @@ channel.readabilityHandler = { handle in
     guard let request = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
       let op = request["op"] as? String, let id = request["id"] as? Int
     else { exit(2) }
+    if keychainOnly && op != "keychain.get" && op != "keychain.put" {
+      refuse(id, "the Keychain channel does not run an engine")
+      continue
+    }
     switch op {
     case "start":
       guard let config = VmConfig(request["config"]) else { refuse(id, "the engine's configuration is invalid"); continue }

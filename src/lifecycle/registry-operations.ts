@@ -2,6 +2,8 @@ import type { AuthContext } from "../../implementation/contracts/runtime.js";
 import type { MessageId } from "../../implementation/contracts/identity.js";
 import type { Receipt } from "../../implementation/contracts/durable.js";
 import { Store, reused } from "../store.js";
+import { ownedMessage } from "../durable.js";
+import { parseMessageId } from "../domain/identifiers.js";
 import { StoreError } from "../domain/errors.js";
 import { assertActorIdentity, assertCurrentActor } from "../authority.js";
 import { generateOperationId } from "../ids.js";
@@ -28,8 +30,14 @@ export class RegistryOperations {
       const accepted = tx.operations.accept({ id, actor: auth.actor, requestKey: key, requestHash: hash, kind: "mail.ack",
         payloadJson: JSON.stringify({ message }), planJson: JSON.stringify({ kind: "mail.ack", recipient: auth.actor, message }) });
       if (accepted === "retry") return accepted;
-      if (!this.store.deliveries.get(message, auth.actor))
-        throw new StoreError("REQUEST_NOT_FOUND", `no delivery of ${message} to ${auth.actor}`);
+      if (!this.store.deliveries.get(message, auth.actor)) {
+        const identity = parseMessageId(message);
+        const operation = identity === null ? null : this.store.operations.getById(identity.operationId);
+        const named = operation === null ? null : ownedMessage(operation.plan);
+        throw new StoreError("REQUEST_NOT_FOUND", named?.id === message
+          ? `${message} was not addressed to ${auth.actor}; acknowledge a message delivered to your own inbox`
+          : `message ${message} does not exist in this society; use the Message-ID of a message in your own inbox`);
+      }
       tx.deliveries.acknowledge(message, auth.actor);
       tx.operations.succeed(id, JSON.stringify({ kind: "mail.ack", message, acknowledged: true }));
       return accepted;

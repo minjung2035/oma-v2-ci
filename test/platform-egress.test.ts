@@ -36,7 +36,7 @@ const egressHello: HelloParams = { channel: "egress", protocol: { min: HOST_GUES
   hostVersion: "1.0.0", installationId: randomUUID(), instanceId: INSTANCE, expectImage: "2026.09.1" };
 const RUN = { society: "demo", actor: "alice", incarnation: 3 };
 
-async function world(t: import("node:test").TestContext) {
+async function world(t: import("node:test").TestContext, timeoutMs = 5000) {
   const dir = mkdtempSync(join(tmpdir(), "oma-egress-"));
   const provider: TlsProvider = await tlsProvider();
   const pool = new EgressPool();
@@ -58,7 +58,7 @@ async function world(t: import("node:test").TestContext) {
       if (provider_ !== "anthropic") throw new StoreError("UNSUPPORTED_PROFILE", `the engine does not know ${provider_}/${model}`);
       return { provider: "anthropic", model: "claude-test", origin: `${provider.origin}/v1`, apiKey: SECRET, headers: {} };
     },
-    limits: { concurrent: 4, timeoutMs: 5000 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
+    limits: { concurrent: 4, timeoutMs }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
   });
   t.after(async () => {
     await host.stop();
@@ -157,7 +157,7 @@ test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the 
   await host.fill();
   await until(() => pool.size === 2, "the pool");
   const ask = { socket: serviceSocket, frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000 };
-  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current");
+  const issued = await requestEgressPlaceholder(ask, RUN, "anthropic", "current", 5);
   assert.notEqual(issued.placeholder, SECRET);
   assert.deepEqual(resolved, ["engine-managed:anthropic/current"]);
   await until(() => pool.size >= 6, "the pool grows for the run");
@@ -181,16 +181,37 @@ test("DR18 / D-10: a run in the guest asks for its placeholder and forwards the 
   await forwarder.close();
   assert.equal(await engine(issued.placeholder), "closed", "a closed forwarder still forwarded");
   // A host that refuses the credential is refused to the run, by name.
-  await assert.rejects(requestEgressPlaceholder(ask, RUN, "openai", "gpt"), (error: unknown) =>
+  await assert.rejects(requestEgressPlaceholder(ask, RUN, "openai", "gpt", 5), (error: unknown) =>
     error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /no placeholder/.test(error.message));
   // The Principal's path: nothing without the environment's egress socket, the bridge's environment with it.
-  assert.equal(await openPrincipalEgress({ society: "demo", runRoot: dir, provider: "anthropic", model: "current", modelProfile: "default",
+  assert.equal(await openPrincipalEgress({ society: "demo", runRoot: dir, provider: "anthropic", model: "current", modelProfile: "default", inferenceSeconds: 5,
     frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, env: {} }), null);
-  const principal = await openPrincipalEgress({ society: "demo", runRoot: dir, provider: "anthropic", model: "current", modelProfile: "default",
+  const principal = await openPrincipalEgress({ society: "demo", runRoot: dir, provider: "anthropic", model: "current", modelProfile: "default", inferenceSeconds: 5,
     frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, env: { OMA_EGRESS_SOCKET: serviceSocket } });
   assert.ok(principal !== null);
   assert.deepEqual(Object.keys(principal.env).sort(), ["OMA_INFERENCE_KEY", "OMA_INFERENCE_PORT", "OMA_INFERENCE_PROVIDER", "OMA_INFERENCE_SOCKET"]);
   assert.equal(principal.env.OMA_INFERENCE_PROVIDER, "anthropic");
   assert.notEqual(principal.env.OMA_INFERENCE_KEY, SECRET);
   await principal.close();
+});
+
+
+test("DR27 / MAC-710: each run carries its model silence budget, not the host RPC budget", { timeout: 15_000 }, async t => {
+  const { host, pool, provider, serviceSocket } = await world(t, 100);
+  await host.fill();
+  await until(() => pool.size === 2, "the pool");
+  const socket = await ask(serviceSocket, "egress.placeholder", { credentialRef: "engine-managed", provider: "anthropic",
+    model: "current", run: RUN, inferenceSeconds: 1 });
+  const { frame } = await readLeadingFrame(socket, PLATFORM_FRAME_BYTES, 5000);
+  socket.destroy();
+  assert.equal(frame.ok, true);
+  const issued = frame.result as Record<string, string>;
+  provider.reply = { status: 200, chunks: ["reasoned"], delayMs: 300 };
+  const open = { placeholderId: issued.placeholderId, ...RUN, modelProfile: "default" };
+  assert.deepEqual(await post(serviceSocket, open, issued.placeholder!), { status: 200, body: "reasoned" });
+  provider.reply = { status: 200, chunks: ["too late"], delayMs: 2000 };
+  const result = await post(serviceSocket, open, issued.placeholder!);
+  assert.notEqual(result, "closed");
+  assert.equal((result as { status: number }).status, 504);
+  assert.equal(provider.seen.length, 2, "no hidden replay after a silence timeout");
 });

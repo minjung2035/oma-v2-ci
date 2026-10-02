@@ -42,6 +42,18 @@ export function defaultSocietyFor(canonicalProjectPath: string, pathSha256: stri
   return `${slug.length > 0 ? slug : "project"}-${pathSha256.slice(0, 16)}`;
 }
 
+/** DR24: the society of one session of `project` (its defaultSocietyFor
+ * name), started at `stamp` (ms): the project's slug and a shortened digest,
+ * then the start time in base 36, within the 32 characters a society name
+ * has. A shortened digest can collide; the project binding, which compares the
+ * full path, refuses that. */
+export function sessionSocietyName(project: string, stamp: number): string {
+  const digest = /-([0-9a-f]{16})$/.exec(project);
+  const slug = digest ? project.slice(0, -17) : project;
+  const short = `${slug.slice(0, 13).replace(/-+$/, "")}-${(digest?.[1] ?? "").slice(0, 8)}`.replace(/-+$/, "");
+  return `${short}-${Math.max(0, Math.trunc(stamp)).toString(36)}`;
+}
+
 /** The pre-D05 default: a slug of the directory name alone. Kept only to find
  * a society an earlier version created for this project, which is never
  * renamed or rebound implicitly.
@@ -113,28 +125,25 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
     agentProfiles: {
       [DEFAULT_PRINCIPAL_PROFILE]: {
         modelProfile: DEFAULT_MODEL_PROFILE,
-        // AV18, CREATE-002: a child gets only what its parent holds, so the
-        // Principal holds everything it delegates -- Residents are created on
-        // request, and one without git.submit could never submit (arch §11).
-        // No code.integrate (AUTH-001).
-        capabilities: ["mail.send", "route.follow", "agent.create", "agent.manage.descendants", "context.publish",
-          "git.submit", "agent.manage.self"],
-        delegable: ["mail.send", "route.follow", "git.submit", "agent.manage.self"],
-        childProfile: DEFAULT_RESIDENT_PROFILE,
+        // DR27: the host bootstraps seeds. The Principal reviews, communicates
+        // and controls safety; ordinary creation belongs to Workers.
+        capabilities: ["mail.send", "agent.manage.descendants", "context.publish"],
+        delegable: [],
+        childProfile: null,
         resources: { ...RESOURCES },
       },
       [DEFAULT_RESIDENT_PROFILE]: {
         // No code.integrate by default: canonical main stays a deliberate grant.
         modelProfile: DEFAULT_MODEL_PROFILE,
-        capabilities: ["mail.send", "route.follow", "git.submit", "agent.manage.self"],
-        delegable: [],
-        childProfile: null,
+        capabilities: ["mail.send", "route.follow", "git.submit", "agent.manage.self", "agent.create", "agent.manage.descendants"],
+        delegable: ["mail.send", "route.follow", "git.submit", "agent.manage.self", "agent.create", "agent.manage.descendants"],
+        childProfile: DEFAULT_RESIDENT_PROFILE,
         resources: { ...RESOURCES },
       },
     },
     principalProfile: DEFAULT_PRINCIPAL_PROFILE,
-    // Residents are created when they are asked for, not at first start.
-    initialResidents: [],
+    // LIFE-004: prepared by the host, activated only once GOAL is published.
+    initialResidents: [{ name: "worker-1", profile: DEFAULT_RESIDENT_PROFILE, brief: "Work toward the shared GOAL and collaborate with other Workers as needed." }],
     quota: {
       societyAgents: 8,
       lineageAgents: 4,
@@ -148,8 +157,9 @@ export function defaultHostConfig(input: DefaultConfigInput): HostConfigV1 {
     integration: {
       policyRevision: "default-1",
       protectedPaths: [],
-      // Explicitly empty: this society has no integration policy yet, and a
-      // Resident cannot integrate without code.integrate anyway.
+      tiered: { repositoryFloor: "LOW", highPeerFloor: 2, principalDelegated: true, rules: [] },
+      // Host-specific checks can be configured with complete resource limits.
+      // Integrating remains a separate explicit Human grant in Config.
       checks: [],
     },
     limits: { ...LIMITS },

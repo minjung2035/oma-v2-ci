@@ -14,8 +14,11 @@ import { RequestLedger } from "../../src/platform/guest/requests.js";
 import { GuestProjects } from "../../src/platform/guest/project.js";
 import { serveStream } from "../../src/platform/guest/stream.js";
 import { GuestArchives } from "../../src/platform/guest/archive.js";
+import { GuestPackages } from "../../src/platform/guest/packages.js";
+import { DEPLOYMENT_LAYOUT } from "../../src/domain/deployment.js";
+import { fileURLToPath } from "node:url";
 import { listening } from "../../src/platform/guest/host.js";
-import type { VmDriver } from "../../src/platform/host/lifecycle.js";
+import type { VmDriver, VmStopCause } from "../../src/platform/host/lifecycle.js";
 import { GUEST_PORTS, PLATFORM_FRAME_BYTES } from "../../src/protocol/host-guest.js";
 
 const self = { uid: process.getuid!(), gid: process.getgid!() };
@@ -33,12 +36,12 @@ export class LocalDriver implements VmDriver {
   ignorePowerOff = false;
   hung = false;
   readonly calls: string[] = [];
-  private readonly stopListeners: (() => void)[] = [];
+  private readonly stopListeners: ((cause: VmStopCause) => void)[] = [];
   private silent: Server | null = null;
   constructor(private readonly dir: string, private readonly societies: { dir: string; launcher: SessionLauncher }, private readonly instanceId: string) {}
 
-  onStopped(listener: () => void): void { this.stopListeners.push(listener); }
-  private stopped(): void { for (const listener of this.stopListeners) listener(); }
+  onStopped(listener: (cause: VmStopCause) => void): void { this.stopListeners.push(listener); }
+  private stopped(cause: VmStopCause): void { for (const listener of this.stopListeners) listener(cause); }
 
   private disposed = false;
   async start(): Promise<void> {
@@ -53,14 +56,14 @@ export class LocalDriver implements VmDriver {
   }
   /** The guest crashes on its own. */
   async crash(): Promise<void> { await this.halt(); }
-  private async halt(): Promise<void> {
+  private async halt(cause: VmStopCause = "error"): Promise<void> {
     const guest = this.running;
     this.running = null;
     if (guest === null) return;
     this.pool.close();
     this.pool = new EgressPool();
     await guest.close();
-    this.stopped();
+    this.stopped(cause);
   }
   async connect(port: number): Promise<Socket> {
     if (this.hung) {
@@ -79,7 +82,7 @@ export class LocalDriver implements VmDriver {
       wallClock: () => 0, setWallClock: ms => { this.calls.push(`time.set:${ms > 0}`); },
       health: () => ({ uptimeMs: 1, load: [0, 0, 0], memory: { totalBytes: 1, availableBytes: 1 }, disk: { totalBytes: 1, freeBytes: 1 }, failedUnits: 0 }),
       freeze: () => {}, thaw: () => {}, grow: async () => 0,
-      powerOff: () => { this.calls.push("power.off"); if (!this.ignorePowerOff) setTimeout(() => { void this.halt(); }, 10); },
+      powerOff: () => { this.calls.push("power.off"); if (!this.ignorePowerOff) setTimeout(() => { void this.halt("guest"); }, 10); },
       schedule: (ms, run) => { const timer = setTimeout(run, ms); return { cancel: () => clearTimeout(timer) }; },
       receiptWaitFloor: () => ({ kind: "none" }),
     };
@@ -87,8 +90,13 @@ export class LocalDriver implements VmDriver {
     const ledger = new RequestLedger(join(this.dir, "requests"));
     const projects = new GuestProjects(join(this.dir, "projects"), this.societies.dir, ledger);
     const archives = new GuestArchives(this.societies.dir, ledger, society => listening(this.societies.launcher.socketPath(society)));
+    // DR25: the engine's `oma pi` code, this checkout's, over the guest's data.
+    const libdir = fileURLToPath(new URL("../../../", import.meta.url));
+    const packages = new GuestPackages({ ledger, projects, dataDir: this.societies.dir, libdir, node: process.execPath,
+      entry: join(libdir, DEPLOYMENT_LAYOUT.entries.guestPackages), env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: this.dir, LANG: "C.UTF-8" },
+      timeoutMs: 60_000 });
     const host = new GuestHost({ societiesDir: this.societies.dir, projectsDir: join(this.dir, "projects"), launcher: this.societies.launcher, stopDeadlineMs: 2000,
-      projects, ledger, archives });
+      projects, ledger, archives, packages });
     const suffix = randomUUID().slice(0, 8);
     const servers = [
       await startGuestServer({ socketPath: join(this.dir, `c-${suffix}.sock`), identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,

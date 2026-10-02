@@ -10,7 +10,7 @@ import {
 } from "../dist/src/git/integration-policy.js";
 
 const root = new URL("../", import.meta.url);
-const document = new URL("implementation/consistency-decisions.md", root);
+const document = new URL("docs/implementation/consistency-decisions.md", root);
 function decisions() {
   assert.ok(
     existsSync(document),
@@ -29,7 +29,7 @@ function rows(text) {
         .map((cell) => cell.trim()),
     );
 }
-const spec = readFileSync(new URL("implementation-spec.md", root), "utf8");
+const spec = readFileSync(new URL("docs/implementation-spec.md", root), "utf8");
 
 
 test('V01A: execution order names every WP once and preserves late observation dependencies', () => {
@@ -188,7 +188,7 @@ test("V01A: existing normative requirements explicitly carry their reviewed deci
 });
 
 test('V01A: N-001 identifies the reviewed architecture bytes', () => {
-  const architecture = readFileSync(new URL('architecture.md', root));
+  const architecture = readFileSync(new URL('docs/architecture.md', root));
   const digest = createHash('sha256').update(architecture).digest('hex');
   const rule = spec.split('\n').find(line => line.startsWith('**MUST [N-001]'));
   assert.ok(rule?.includes(digest), 'N-001 architecture hash is not the reviewed source');

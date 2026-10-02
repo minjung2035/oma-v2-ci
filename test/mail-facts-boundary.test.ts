@@ -4,8 +4,10 @@ import { createHash } from "node:crypto";
 import { createTransport } from "nodemailer";
 import { encodeWord } from "nodemailer/lib/mime-funcs";
 import { freezeMessageFacts, messagePlanFrom, defaultLogicalReplyTo } from "../src/mail/facts.js";
-import { renderFrozenMessage } from "../src/mail/serialize.js";
-import { parseEmlHeaders } from "../src/mail/headers.js";
+import { buildEml, renderFrozenMessage } from "../src/mail/serialize.js";
+import { headerEnd, readableBody } from "../src/mail/display.js";
+import { readableMail as extensionReadableMail } from "../src/extension/mail-tools.js";
+import { decodeSubject, parseEmlHeaders } from "../src/mail/headers.js";
 import { parseRfcMessageId, headerMessageIdCheck, exactCandidateCheck } from "../src/domain/mail-values.js";
 import { parseMessageFileId } from "../src/domain/identifiers.js";
 import { displayAddress, defaultReplyTo } from "../src/mail/addresses.js";
@@ -19,17 +21,18 @@ const approvalFor = { repo: "project" as const, targetRef: "refs/heads/main" as 
   expectedBase: "a".repeat(40), candidate: "b".repeat(40), policyRevision: "검토정책-1" };
 const invalid = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST";
 
-/** Independent pre-refactor serializer fixture: the expected byte buffer does
+/** Independent pinned serializer fixture: the expected byte buffer does
  * not call buildEml, any facts builder, the parser, or the production hash code.
  */
-async function legacyBytes(subject: string, body: string): Promise<Buffer> {
+async function pinnedBytes(subject: string, body: string): Promise<Buffer> {
   const transporter = createTransport({ streamTransport: true, buffer: true, newline: "\r\n" });
   const info = await transporter.sendMail({
     from: "alice@demo.oma.invalid", to: "principal@demo.oma.invalid",
-    replyTo: "alice@demo.oma.invalid", subject, text: body,
+    replyTo: "alice@demo.oma.invalid", text: { content: Buffer.from(body), contentTransferEncoding: "base64" },
     messageId: `<${id}@demo.oma.invalid>`, inReplyTo: `<${second}>`,
     references: [`<${first}>`, `<${second}>`], date: new Date(dateMs),
     headers: {
+      Subject: { prepared: true, foldLines: true, value: encodeWord(subject, "B", 52) },
       "X-OMA-Kind": "approval_required",
       "X-OMA-Approval-Repo": "project", "X-OMA-Approval-Target": "refs/heads/main",
       "X-OMA-Approval-Base": "a".repeat(40), "X-OMA-Approval-Candidate": "b".repeat(40),
@@ -53,7 +56,7 @@ test("frozen logical facts produce byte-identical pinned MIME and one timestamp"
   assert.deepEqual(facts.to, ["principal"]); assert.deepEqual(facts.replyHeaders.references, [first, second]);
   const subject = "한글 제목 / frozen " .repeat(8);
   const body = "본문 UTF-8\nX-OMA-Kind: text in the body is not a header\n";
-  const expected = await legacyBytes(subject, body);
+  const expected = await pinnedBytes(subject, body);
   const emitted = await renderFrozenMessage(facts, { subject, body });
   assert.deepEqual(Buffer.from(emitted.text, "utf8"), expected);
   assert.equal(emitted.sha256, createHash("sha256").update(expected).digest("hex"));
@@ -121,4 +124,19 @@ test("parser rejects ambiguous fields unsupported MIME invalid tuples and bounds
   assert.throws(() => freezeMessageFacts({ id, sender: "alice", society: "demo", to: ["principal"],
     kind: "approval_required", contextRevision: null,
     replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] } }), invalid);
+});
+
+
+test("MAIL-003/DR27: fresh MIME preserves exact body and subject bytes in both readers", async () => {
+  for (const body of ["", "plain", "plain\n", "a\nb\n", "\ufeffgoal", "Goal\r\nSecond\n", "한글\n", "a".repeat(4096)]) {
+    for (const subject of ["Goal", "  Goal  ", "a  b", "a\tb", "=?UTF-8?B?Z29hbA==?=", "한글 ".repeat(5), "a".repeat(998)]) {
+      const emitted = await buildEml({ from: "alice@demo.oma.invalid", to: ["bob@demo.oma.invalid"], replyTo: [],
+        subject, body, kind: "message", contextRevision: null, inReplyTo: null, references: [], messageId: `${id}@demo.oma.invalid`, dateMs });
+      assert.equal(readableBody(emitted.text), body);
+      const shown = extensionReadableMail(emitted.text); const end = headerEnd(shown);
+      assert.equal(shown.slice(end.at + end.length), body);
+      assert.equal(decodeSubject(parseEmlHeaders(emitted.text).subject), subject);
+      assert.equal(emitted.bytes, Buffer.byteLength(emitted.text));
+    }
+  }
 });

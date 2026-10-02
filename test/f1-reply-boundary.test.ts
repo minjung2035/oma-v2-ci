@@ -62,7 +62,7 @@ function fixture() {
   const unused = (): never => {
     throw new Error("unrelated fixture effect");
   };
-  const dispatcher = new PublicDispatcher({
+  const dispatcher = new PublicDispatcher({ waitRun: () => { throw new Error("no live run in this fixture"); },
     store: {
       listAgents: () => store.listAgents(),
       getAgent: (actor) => store.getAgent(actor),

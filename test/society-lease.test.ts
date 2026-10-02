@@ -573,7 +573,7 @@ test("T119/REC-007 a supervised service keeps its supervision channel and its fe
  * agent home is `<stateRoot>/principal/private` and its request cache is
  * written underneath. It also outlives signals sent to the engine, because a
  * signal to a process is not a signal to its children, and it may run for its
- * whole 120-second timeout after both the host and the engine are gone.
+ * remaining preparation/transport work after both the host and the engine are gone.
  *
  * So the exact sequence the audit described is run here: host takes the
  * society, engine inherits the lease, engine starts the CLI, host and engine
@@ -608,7 +608,7 @@ function engineStartingACli(scriptRoot: string, fence: number, declare: boolean)
     `import { runCliProcess } from ${JSON.stringify(module)};`,
     'process.stdout.write("engine " + process.pid + String.fromCharCode(10));',
     "const done = runCliProcess({ node: process.execPath, cli: process.argv[2], args: [process.argv[3]],",
-    '  cwd: "/", env: { PATH: process.env.PATH ?? "/usr/bin" }, grant: null, timeoutMs: 120000 });',
+    '  cwd: "/", env: { PATH: process.env.PATH ?? "/usr/bin" }, grant: null });',
     'done.then(result => process.stdout.write("cli-exit " + result.code + String.fromCharCode(10)),',
     '  error => process.stdout.write("cli-error " + error.message + String.fromCharCode(10)));',
     "setInterval(() => {}, 60000);",

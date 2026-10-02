@@ -53,6 +53,7 @@ function fixture() {
     starting: false, inFlight: null, mail: {},
     activation: allowed => allowed, admit: () => () => undefined,
     lifecycle: {
+      reconcileSociety: id => { calls.push(["society", id]); },
       reconcileCreate: async (id, allowed) => { calls.push(["create", id, allowed]); },
       reconcileAction: (id, allowed) => { calls.push(["action", id, allowed]); },
     },
@@ -75,7 +76,8 @@ test("P3 recovery: physical owners retain every existing route and activation fl
     await value.recover({ id: kind, kind, state: "pending" }, false);
     const expected = kind === "agent.create" ? ["create", kind, false]
       : ["agent.start", "agent.stop"].includes(kind) ? ["action", kind, false]
-      : ["mail.send", "agent.continue"].includes(kind) ? ["mail", kind] : ["git", kind];
+      : kind === "society.set" ? ["society", kind]
+      : ["attest.record", "mail.send", "agent.continue"].includes(kind) ? ["mail", kind] : ["git", kind];
     assert.deepEqual(calls, [expected]);
   }
 });
@@ -99,6 +101,11 @@ test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only h
   assert.deepEqual(calls.slice(0, 5), [["quiesce"], ["collect"], ["health"], ["quiesce"], ["prepare"]]);
   const physical = calls.slice(5);
   assert.equal(physical.length, kinds.length - 3);
+  assert.deepEqual(physical, kinds.filter(kind => !["mail.ack", "route.follow", "route.unfollow"].includes(kind)).map(kind =>
+    kind === "agent.create" ? ["create", kind, false]
+      : ["agent.start", "agent.stop"].includes(kind) ? ["action", kind, false]
+      : kind === "society.set" ? ["society", kind]
+      : ["attest.record", "mail.send", "agent.continue"].includes(kind) ? ["mail", kind] : ["git", kind]));
   assert.ok(physical.every(call => !["mail.ack", "route.follow", "route.unfollow"].includes(call[1])));
   assert.equal(value.starting, false);
 });

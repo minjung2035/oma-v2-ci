@@ -15,7 +15,7 @@
  * a race that only fails sometimes is not a test.
  *
  * What this does NOT claim: the durability half of S-06 -- power loss, ENOSPC,
- * read-only remount, storage qualification (implementation/spikes.md) -- is an
+ * read-only remount, storage qualification (docs/verification-spec.md) -- is an
  * environment gate and no test in this file observes it.
  */
 import test from "node:test";

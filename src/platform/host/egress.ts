@@ -11,11 +11,9 @@
 import type { Socket } from "node:net";
 import { randomUUID } from "node:crypto";
 import { encodeFrame } from "../../frame.js";
-import { StoreError, errorCodeOf } from "../../domain/errors.js";
 import { InferenceRelay, type RelayLimits } from "../../runtime/inference-relay.js";
 import { placeholderFor, type EngineAuth } from "../../runtime/engine-auth.js";
-import { readLeadingFrame } from "../rpc.js";
-import { productText } from "../product-text.js";
+import { platformFailure, readLeadingFrame } from "../rpc.js";
 import {
   egressOpenProblem, egressPlaceholderProblem, requestProblem,
   type EgressOpenParams, type EgressPlaceholderParams, type EgressPlaceholderResult,
@@ -90,16 +88,15 @@ export class EgressHost {
     try {
       const auth = await this.options.resolve(asked.credentialRef, asked.provider, asked.model);
       const placeholder = placeholderFor(auth.apiKey);
-      const relay = InferenceRelay.detached({ origin: auth.origin, headers: auth.headers, substitute: { placeholder, secret: auth.apiKey } }, this.options.limits);
+      const relay = InferenceRelay.detached({ origin: auth.origin, headers: auth.headers, substitute: { placeholder, secret: auth.apiKey } },
+        { ...this.options.limits, timeoutMs: asked.inferenceSeconds === undefined ? this.options.limits.timeoutMs : asked.inferenceSeconds * 1000 });
       const placeholderId = randomUUID();
       this.runs.set(placeholderId, { relay, params: asked });
       const result: EgressPlaceholderResult = { placeholderId, placeholder, provider: auth.provider, model: auth.model };
       answer({ ok: true, result });
       void this.fill();
     } catch (error) {
-      const code = errorCodeOf(error);
-      const message = error instanceof StoreError && productText(error.message) ? error.message : code;
-      answer({ ok: false, error: { code, message, retry: "never" } });
+      answer({ ok: false, error: platformFailure(error) });
     }
   }
 

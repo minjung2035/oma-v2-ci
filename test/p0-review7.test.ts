@@ -120,7 +120,7 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
     return { fd: -1, identity: { dev: 1n, ino: BigInt(cgroups.length) }, population: () => cgroup.population, matches: () => true, close() {} };
   }));
   await broker.start();
-  const openRun = (): unknown => (Reflect.get(broker, "openRun") as (actor: string, id: string) => unknown).call(broker, "alice", invocation);
+  const openRun = (): Promise<{ incarnation: number }> => (Reflect.get(broker, "openRun") as (actor: string, id: string) => Promise<{ incarnation: number }>).call(broker, "alice", invocation);
   const incarnation = (): number => f.store.getAgent("alice")!.incarnation;
   const servers = (): number => (Reflect.get(broker, "actorServers") as Set<unknown>).size;
   const nextInvocation = (): void => { cgroups.at(-1)!.population = "empty"; invocation = String(cgroups.length).padStart(32, "d"); };
@@ -128,25 +128,80 @@ test("P0V-113 / G03-broker-r2-01: a run that could not be opened leaves the inca
   // The endpoint could not be made (a full disk, a path too long).
   const listen = Reflect.get(broker, "listenActor") as (...args: unknown[]) => unknown;
   Reflect.set(broker, "listenActor", () => { throw Object.assign(new Error("ENOSPC: no space left on device, mkdir"), { code: "ENOSPC" }); });
-  assert.throws(openRun, /ENOSPC/);
+  await assert.rejects(openRun, /ENOSPC/);
   Reflect.set(broker, "listenActor", listen);
   assert.equal(incarnation(), before, "a failed open consumed an incarnation");
   // R16/V07B: the invocation whose opening failed ends; it does not retry.
-  assert.throws(openRun, { code: "STALE_RUN" });
+  await assert.rejects(openRun, { code: "STALE_RUN" });
   // The next invocation: the endpoint was made and the commit then refused.
   nextInvocation();
   const transaction = f.store.transaction.bind(f.store);
   (f.store as unknown as { transaction: unknown }).transaction = () => { throw new StoreError("DB_BUSY", "the ledger is busy"); };
-  assert.throws(openRun, { code: "DB_BUSY" });
+  await assert.rejects(openRun, { code: "DB_BUSY" });
   (f.store as unknown as { transaction: unknown }).transaction = transaction;
   assert.equal(incarnation(), before);
   assert.equal(servers(), listening, "the endpoint of a run that was not opened is left listening");
-  // The invocation after it opens the incarnation that neither failure took.
+  // The pathname exists, but listening fails later: still no incarnation.
   nextInvocation();
-  const lease = openRun() as { incarnation: number };
+  let releaseReady!: () => void;
+  let failReady!: (error: Error) => void;
+  let closed = 0;
+  const delayed = (): void => {
+    const ready = new Promise<void>((resolve, reject) => { releaseReady = resolve; failReady = reject; });
+    Reflect.set(broker, "listenActor", () => ({ socketHostPath: "not-ready.sock", ready, done: () => { closed += 1; } }));
+  };
+  delayed();
+  const failed = openRun();
+  assert.equal(incarnation(), before);
+  const refused = assert.rejects(failed, /EADDRINUSE/);
+  failReady(new Error("EADDRINUSE: asynchronous bind failure"));
+  await refused;
+  assert.equal(incarnation(), before); assert.equal(closed, 1);
+  await assert.rejects(openRun, { code: "STALE_RUN" });
+  // A revoke or new unit observation during readiness cannot commit either.
+  for (const change of ["revoke", "invocation", "population", "drain"] as const) {
+    nextInvocation(); delayed();
+    const opening = openRun();
+    await assert.rejects(openRun, { code: "STALE_RUN" });
+    if (change === "revoke") (Reflect.get(broker, "runLeases") as InstanceType<typeof RunRegistry>).get("alice")!.revoke();
+    if (change === "invocation") invocation = "e".repeat(32);
+    if (change === "population") cgroups.at(-1)!.population = "empty";
+    if (change === "drain") Reflect.set(broker, "draining", true);
+    releaseReady();
+    await assert.rejects(opening, { code: "STALE_RUN" });
+    assert.equal(incarnation(), before);
+    if (change === "drain") Reflect.set(broker, "draining", false);
+  }
+  assert.equal(closed, 5);
+  Reflect.set(broker, "listenActor", listen);
+  // Only a ready endpoint under the still-current invocation commits.
+  nextInvocation();
+  const lease = await openRun();
   assert.equal(lease.incarnation, before + 1);
   assert.equal(incarnation(), before + 1);
   assert.equal(servers(), listening + 1);
+  // Drive the actual listener's asynchronous error, not just a rejected stub.
+  nextInvocation();
+  const { Server } = await import("node:net");
+  const originalListen = Server.prototype.listen;
+  Server.prototype.listen = function (this: InstanceType<typeof Server>) {
+    queueMicrotask(() => this.emit("error", Object.assign(new Error("injected bind conflict"), { code: "EADDRINUSE" })));
+    return this;
+  } as typeof originalListen;
+  try { await assert.rejects(openRun, /injected bind conflict/); }
+  finally { Server.prototype.listen = originalListen; }
+  assert.equal(incarnation(), before + 1);
+  assert.equal(servers(), listening);
+  await assert.rejects(openRun, { code: "STALE_RUN" });
+  // A real drain closes admission while readiness is pending. The resumed
+  // open must refuse before touching the Store that the drain closes.
+  nextInvocation(); delayed();
+  const pendingDrain = openRun();
+  const rejectedDrain = assert.rejects(pendingDrain, { code: "BROKER_UNAVAILABLE" });
+  const draining = broker.drainAndClose();
+  releaseReady();
+  await rejectedDrain; await draining;
+  assert.equal(servers(), 0);
 });
 
 test("P0V-114 / G04-02, G04-03, G03-05: one owner clears a socket's name before a server listens there; a name already gone is no failure, and a file that is not a socket is kept", async t => {
@@ -317,11 +372,13 @@ test("P0V-120 / G10-04: the provider names only a port the bridge holds -- no on
   t.after(() => { process.env = saved; holder.close(); relay.close(); rmSync(dir, { recursive: true, force: true }); });
   Object.assign(process.env, { OMA_INFERENCE_SOCKET: join(dir, "relay.sock"), OMA_INFERENCE_PROVIDER: "p", OMA_INFERENCE_KEY: "placeholder", OMA_INFERENCE_PORT: String(taken) });
   const urls: string[] = [];
-  startInferenceBridge({ registerProvider: (_name: string, config: { baseUrl: string }) => { urls.push(config.baseUrl); } } as never);
-  for (let wait = 0; wait < 200 && urls.length < 3; wait++) await new Promise(resolve => setTimeout(resolve, 10));
-  assert.equal(urls[0], `http://127.0.0.1:${taken}`);
-  assert.equal(urls[1], "http://127.0.0.1:0", "while the bridge held no port, the provider still named the stranger's");
-  const port = Number(/^http:\/\/127\.0\.0\.1:(\d+)$/.exec(urls[2] ?? "")?.[1]);
+  const ready = startInferenceBridge({ on: () => {}, registerProvider: (_name: string, config: { baseUrl: string }) => { urls.push(config.baseUrl); } } as never);
+  assert.deepEqual(urls, ["http://127.0.0.1:0"], "no request may name the planned port before binding");
+  await ready;
+  assert.ok(urls.length >= 2);
+  assert.ok(!urls.includes(`http://127.0.0.1:${taken}`), "the stranger's port was registered");
+  assert.ok(urls.slice(0, -1).every(url => url === "http://127.0.0.1:0"));
+  const port = Number(/^http:\/\/127\.0\.0\.1:(\d+)$/.exec(urls.at(-1) ?? "")?.[1]);
   assert.ok(port > 0 && port !== taken);
   const answer = await new Promise<string>(resolve => {
     const socket = connect(port, "127.0.0.1"); let text = "";
@@ -342,7 +399,7 @@ test("P0V-121 / G10-05: a journal prefix stands only when the view's own bound e
   assert.throws(() => journalView(observed("timed-out", true)), { code: "DEADLINE_EXCEEDED" });
 });
 
-test("P0V-122 / G10-02: grep's own reads are contained, and the pinned engine walks without following links", async t => {
+test("P0V-122 / G10-02: the pinned engine searches only copied single-link files, including context-zero grep", async t => {
   const { readFileSync, realpathSync } = await import("node:fs");
   const { containWorkspaceTools } = await import("../src/extension/contained-tools.js");
   const base = realpathSync(mkdtempSync(join(tmpdir(), "oma-grep-")));
@@ -359,11 +416,17 @@ test("P0V-122 / G10-02: grep's own reads are contained, and the pinned engine wa
   writeFileSync(join(base, "profile"), "before\nsecret line\nafter\n");
   const { linkSync } = await import("node:fs");
   linkSync(join(base, "profile"), join(workspace, "alias"));
-  const found = await tools.grep.execute("call", { pattern: "secret line", path: "alias", context: 1 }, undefined, undefined, { cwd: workspace });
-  const shown = found.content.map(part => part.text ?? "").join("");
-  // The engine formats matches from these reads too: it says it could not read the file.
-  assert.match(shown, /alias:2: \(unable to read file\)/);
-  assert.doesNotMatch(shown, /secret line|before|after/, "grep read a file through another name");
+  for (const context of [undefined, 0, 1]) {
+    await assert.rejects(tools.grep.execute("call", { pattern: "secret line", path: "alias", context }, undefined, undefined, { cwd: workspace }), /other names/);
+    const found = await tools.grep.execute("call", { pattern: "secret", context }, undefined, undefined, { cwd: workspace });
+    const shown = found.content.map(part => part.text ?? "").join("");
+    assert.match(shown, /notes.txt:1: a secret of the workspace/);
+    assert.doesNotMatch(shown, /host secret|secret line|before|after|alias|linked/);
+  }
+  assert.ok(tools.find);
+  const found = await tools.find.execute("call", { pattern: "*" }, undefined, undefined, { cwd: workspace });
+  assert.match(found.content.map(part => part.text ?? "").join(""), /notes.txt/);
+  assert.doesNotMatch(found.content.map(part => part.text ?? "").join(""), /alias|linked/);
   // The engine's ripgrep and fd, as the pinned engine runs them: never told to follow a link.
   for (const tool of ["grep", "find"]) {
     const source = readFileSync(new URL(`../../node_modules/@earendil-works/pi-coding-agent/dist/core/tools/${tool}.js`, import.meta.url), "utf8");
@@ -438,4 +501,28 @@ test("P0V-126 / G02-ledger-r2-03: every row a store writes is stamped from its o
     tx.insertDeliveries([{ messageId: "m-00000000-0000-4000-8000-000000000126-0", recipient: "alice", operationId: operation }]); });
   const row = store.getOperationById(operation as never)!;
   assert.deepEqual([row.createdAtMs, row.updatedAtMs], [7_000_000, 7_000_000]);
+});
+
+
+test("P0V-127 / G05-04: another owner's unit proves neither death nor an empty process list", async t => {
+  const { UnitsModule, renderUnit } = await import("../src/units.js");
+  const dir = mkdtempSync(join(tmpdir(), "oma-foreign-death-"));
+  t.after(() => { rmSync(dir, { recursive: true, force: true }); });
+  const values = { node: process.execPath, libdir: process.cwd(), state: join(dir, "ours"), society: "demo", agent: "alice",
+    config: join(dir, "config.json"), run: join(dir, "run"), brokerUnit: "" };
+  const units = new UnitsModule("demo", values, dir, {}, () => 1);
+  let revoked = 0;
+  units.onRevokeRun = () => { revoked++; };
+  for (const [suffix, description] of [["service", "OMA @SOCIETY@ resident @AGENT@"], ["path", "Wake OMA @SOCIETY@ resident @AGENT@ on mail"]]) {
+    const path = join(dir, `oma-demo-alice.${suffix}`);
+    writeFileSync(path, renderUnit(`[Unit]\nDescription=${description}\nX-OMA-Owner=@STATE@\n`, { ...values, state: join(dir, "theirs") }));
+    assert.equal(units.observe("alice").activeState, "unknown");
+    assert.equal((await units.observeAsync("alice")).activeState, "unknown");
+    assert.equal((await units.observeStatus(["alice"])).get("alice"), "no-unit", "the diagnostic view still identifies the name collision");
+    for (const incarnation of [0, 1]) assert.equal(units.confirmDead("alice", incarnation), false);
+    assert.throws(() => units.cgroupProcs("alice"), { code: "RUN_TERMINATION_UNKNOWN" });
+    assert.throws(() => units.stop("alice", 1), { code: "RUN_TERMINATION_UNKNOWN" });
+    rmSync(path);
+  }
+  assert.equal(revoked, 2, "our own run authority is still revoked without touching the foreign unit");
 });

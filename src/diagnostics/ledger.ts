@@ -1,6 +1,6 @@
 /** P6: independent set/cross-row inspection. Never runs transitions or reconcile. */
 import { isAbsolute } from "node:path";
-import { LEDGER_TABLES, type LedgerTable } from "../storage/diagnostic-snapshot.js";
+import { LEDGER_TABLES, ledgerTables, type LedgerTable } from "../storage/diagnostic-snapshot.js";
 import { decodeOperation, type DecodedOperation } from "../storage/operation-codec.js";
 import {
   decodeAgentRow, decodeAgentSpec, decodeSubscriptionRow, decodeDeliveryRow,
@@ -9,6 +9,9 @@ import {
 } from "../storage/rows.js";
 import { LineageSnapshot } from "../domain/lineage.js";
 import { isValidOperationId, isValidSocietyName } from "../domain/identifiers.js";
+import { ownedMessage } from "../durable.js";
+import { fullRow, safeInteger } from "../storage/rows.js";
+import { SCHEMA_USER_VERSION_READABLE } from "../domain/persisted-formats.js";
 import { StoreError } from "../domain/errors.js";
 
 export type DiagnosticSeverity = "corrupt" | "unknown";
@@ -64,13 +67,7 @@ function record(value: unknown): value is Record<string, unknown> {
 function closed(value: unknown, fields: readonly string[]): value is Record<string, unknown> {
   return record(value) && Object.keys(value).length === fields.length && fields.every(field => Object.hasOwn(value, field));
 }
-function messageOf(operation: DecodedOperation) {
-  switch (operation.kind) {
-    case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return operation.plan.message;
-    case "agent.create": return operation.plan.initialMessage;
-    case "mail.ack": case "route.follow": case "route.unfollow": case "agent.start": case "agent.stop": case "git.integrate": return null;
-  }
-}
+const messageOf = (operation: DecodedOperation) => ownedMessage(operation.plan);
 
 /** PASS means consistency in this snapshot, NOT settled effects or release proof.
  * Pending/unknown intent remains pending/unknown; historical intent is not
@@ -78,7 +75,7 @@ function messageOf(operation: DecodedOperation) {
  */
 export function inspectLedger(raw: unknown, context: InspectionContext, options: { maxRows?: number; maxIssues?: number } = {}) {
   const ledger = new DiagnosticLedger(options.maxIssues);
-  const scanned: Record<LedgerTable, number> = { agents: 0, operations: 0, subscriptions: 0, deliveries: 0, batches: 0, usage: 0 };
+  const scanned: Record<LedgerTable, number> = { agents: 0, operations: 0, subscriptions: 0, deliveries: 0, batches: 0, usage: 0, attestations: 0 };
   const facts: { -readonly [K in keyof LedgerFacts]: LedgerFacts[K][number][] } = {
     agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [],
   };
@@ -90,13 +87,13 @@ export function inspectLedger(raw: unknown, context: InspectionContext, options:
   if (!Number.isSafeInteger(maxRows) || maxRows < 1) throw new RangeError("invalid diagnostic row budget");
   if (!isAbsolute(context.stateRoot) || !isValidSocietyName(context.society) ||
       !closed(raw, ["schemaVersion", "tables", "integrity", "foreignKeys"]) ||
-      raw.schemaVersion !== 1 || !closed(raw.tables, LEDGER_TABLES) ||
+      (typeof raw.schemaVersion !== "number" || !SCHEMA_USER_VERSION_READABLE.includes(raw.schemaVersion)) || !closed(raw.tables, ledgerTables(raw.schemaVersion)) ||
       !Array.isArray(raw.integrity) || !Array.isArray(raw.foreignKeys)) {
     ledger.add("corrupt", "UNSUPPORTED_OR_INVALID_SNAPSHOT", "snapshot"); return finish();
   }
-  const tables: Record<LedgerTable, readonly unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [] };
+  const tables: Record<LedgerTable, readonly unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [], attestations: [] };
   let totalRows = 0;
-  for (const table of LEDGER_TABLES) {
+  for (const table of ledgerTables(raw.schemaVersion as number)) {
     const rows = raw.tables[table];
     if (!Array.isArray(rows)) { ledger.add("corrupt", "INVALID_TABLE_SNAPSHOT", table); return finish(); }
     totalRows += rows.length;
@@ -150,9 +147,21 @@ export function inspectLedger(raw: unknown, context: InspectionContext, options:
   for (const row of tables.deliveries) if (record(row) && typeof row.operation_id === "string") {
     const values = byOperation.get(row.operation_id) ?? []; values.push(row); byOperation.set(row.operation_id, values);
   }
+  const rawAttestations = new Map<string, unknown>();
+  const sequences = new Set<number>();
+  for (const row of tables.attestations) check("attestations", null, () => {
+    const value = fullRow(row, ["sequence", "operation_id"], "attestation index");
+    const sequence = safeInteger(value.sequence, "attestation sequence", 1);
+    if (!isValidOperationId(value.operation_id) || rawAttestations.has(value.operation_id) || sequences.has(sequence))
+      throw new StoreError("STORE_CORRUPT", "invalid or duplicate attestation index");
+    const operation = rawOperations.get(value.operation_id);
+    if (!record(operation) || operation.kind !== "attest.record") throw new StoreError("STORE_CORRUPT", "attestation index has no fact");
+    sequences.add(sequence); rawAttestations.set(value.operation_id, value);
+  });
   for (const [id, row] of rawOperations) {
     const operation = check("operations", id, () => decodeOperation(row, { stateRoot: context.stateRoot,
       repositoryIdentity: { society: context.society }, relations: {
+        attestation: target => rawAttestations.get(target) ?? null,
         operation: target => rawOperations.get(target) ?? null,
         agent: target => rawAgents.get(target) ?? null,
         deliveries: target => byOperation.get(target) ?? [],

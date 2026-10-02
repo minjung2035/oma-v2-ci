@@ -71,7 +71,7 @@ test("T119 the fence is a live descriptor while the tenure holds, and unreadable
     assert.equal(held.held, true);
     await held.end();
     assert.equal(held.held, false);
-    assert.throws(() => held.fence, /소유하고 있지 않습니다/);
+    assert.throws(() => held.fence, /does not own this society/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -98,7 +98,7 @@ test("PR-002 delivery needs a tenure, a live broker, a registration and an engin
     assert.equal(held.deliverable, false, "a dead broker left delivery open");
     held.brokerReady();
     held.principalRegistered();
-    held.engineEnded();
+    engine.die(); await engine.exited;
     assert.equal(held.deliverable, false, "a dead engine left delivery open");
     await held.end();
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -162,8 +162,8 @@ test("TUI-004 writes are refused once the society has been given back", async ()
     assert.ok(held);
     held.assertOwned("설정");
     await held.end();
-    assert.throws(() => { held.assertOwned("설정"); }, /소유하고 있지 않습니다/);
-    assert.throws(() => { held.adopt(engineThat(true)); }, /소유하고 있지 않습니다/);
+    assert.throws(() => { held.assertOwned("설정"); }, /does not own this society/);
+    assert.throws(() => { held.adopt(engineThat(true)); }, /does not own this society/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -248,7 +248,7 @@ test("REC-007 a crash path gives the society up without waiting, and asks the en
     assert.equal(engine.closed, 1, "the crash path left the engine running with nothing asked of it");
     assert.equal(held.held, false);
     assert.equal(held.deliverable, false);
-    assert.throws(() => { held.assertOwned("설정"); }, /소유하고 있지 않습니다/);
+    assert.throws(() => { held.assertOwned("설정"); }, /does not own this society/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -265,4 +265,39 @@ test("T119 ending twice is the same as ending once", async () => {
     assert.equal(engine.closed, 1, "a second teardown reached the engine again");
     assert.equal(takeable(root), true);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("DR27: a successor requires actual death and a current broker, not close or broker restart", async () => {
+  const root = scratch(); const held = HostTenure.take(root)!;
+  try {
+    assert.equal(held.canStartEngine, false);
+    held.brokerReady(); assert.equal(held.canStartEngine, true);
+    const engine = engineThat(false); held.adopt(engine);
+    engine.close(); assert.equal(held.canStartEngine, false);
+    held.brokerLost(); held.brokerReady(); assert.equal(held.canStartEngine, false);
+    engine.die(); await engine.exited;
+    assert.equal(held.canStartEngine, true);
+    held.brokerLost(); assert.equal(held.canStartEngine, false);
+    held.brokerReady(); const next = engineThat(true); held.adopt(next);
+    assert.equal(held.canStartEngine, false);
+    await held.end(); assert.equal(held.canStartEngine, false);
+  } finally { await held.end(); rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("DR27/P0-4: engine exit returns the unused tenure grace timer", async t => {
+  const root = scratch(); const held = HostTenure.take(root)!;
+  const pending = new Set<ReturnType<typeof setTimeout>>();
+  const schedule = globalThis.setTimeout, cancel = globalThis.clearTimeout;
+  t.mock.method(globalThis, "setTimeout", (callback: () => void, ms?: number) => {
+    const timer = schedule(() => { pending.delete(timer); callback(); }, ms);
+    pending.add(timer); return timer;
+  });
+  t.mock.method(globalThis, "clearTimeout", (timer: ReturnType<typeof setTimeout>) => { pending.delete(timer); cancel(timer); });
+  try {
+    held.adopt(engineThat(true));
+    await held.end();
+    assert.equal(pending.size, 0, "grace timer outlived the engine and tenure");
+  } finally { for (const timer of pending) cancel(timer); await held.end(); rmSync(root, { recursive: true, force: true }); }
 });

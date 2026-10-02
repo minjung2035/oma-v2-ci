@@ -54,7 +54,7 @@ export class PeerAuthenticator {
     const run = this.runs.get(actor); const lease = run?.lease;
     if (!run || !lease || lease.incarnation !== agent.incarnation) return null;
     const currentCapabilities = (): ReadonlySet<Capability> => {
-      if (!credentials.alive() || this.runs.get(actor) !== run || run.lease !== lease) return new Set<Capability>();
+      if (!this.store.societyOpen() || !credentials.alive() || this.runs.get(actor) !== run || run.lease !== lease) return new Set<Capability>();
       const current = this.store.getAgent(actor);
       if (!current || current.desired !== "enabled" || current.incarnation !== lease.incarnation || current.role !== agent.role || current.specHash !== agent.specHash) return new Set<Capability>();
       const observed = this.units.observe(actor); const peerGroup = peerCgroup(credentials.pid);
@@ -63,7 +63,7 @@ export class PeerAuthenticator {
       return capabilitiesOf(current);
     };
     const observed = this.units.observe(actor); const peerGroup = peerCgroup(credentials.pid);
-    if (agent.desired !== "enabled" || observed.activeState === "unknown" || observed.invocationId !== run.invocationId || !observed.cgroup || !peerGroup || !insideCgroup(peerGroup, observed.cgroup) || !run.matches(observed.cgroup) || !credentials.alive()) return null;
+    if (!this.store.societyOpen() || agent.desired !== "enabled" || observed.activeState === "unknown" || observed.invocationId !== run.invocationId || !observed.cgroup || !peerGroup || !insideCgroup(peerGroup, observed.cgroup) || !run.matches(observed.cgroup) || !credentials.alive()) return null;
     return { actor, incarnation: agent.incarnation, role: agent.role, channel,
       get capabilities() { return currentCapabilities(); },
       peer: { pid: credentials.pid, uid: credentials.uid, gid: credentials.gid, cgroup: peerGroup } };

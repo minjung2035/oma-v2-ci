@@ -7,6 +7,7 @@ import type { MailModule } from "./mail.js";
 import { LifecyclePolicy } from "./lifecycle/policy.js";
 import { WorkspaceCoordinator } from "./lifecycle/workspace.js";
 import { CreateCoordinator } from "./lifecycle/create.js";
+import { SocietyControl } from "./lifecycle/society.js";
 import { LifecycleActions } from "./lifecycle/actions.js";
 import { RegistryOperations } from "./lifecycle/registry-operations.js";
 import type { AgentQuota, LifecyclePaths, SeedConfig, SpecResolver } from "./lifecycle/contracts.js";
@@ -14,6 +15,7 @@ export type { LifecyclePaths, SpecResolver } from "./lifecycle/contracts.js";
 
 export class LifecycleModule {
   private readonly creates: CreateCoordinator;
+  private readonly society: SocietyControl;
   private readonly actions: LifecycleActions;
   private readonly registry: RegistryOperations;
   constructor(store: Store, units: UnitsModule, paths: LifecyclePaths, resolveSpec: SpecResolver,
@@ -24,10 +26,14 @@ export class LifecycleModule {
     // The durable reader remains authoritative over custom constructor readers.
     units.bindIncarnationReader(agent => store.getAgent(agent)?.incarnation ?? null);
     const policy = new LifecyclePolicy(store, resolveSpec, agentQuota);
-    this.creates = new CreateCoordinator(store, units, paths, policy, new WorkspaceCoordinator(paths), mail);
-    this.actions = new LifecycleActions(store, units, paths, policy);
+    const gatedPaths = { ...paths, activationAllowed: () => paths.activationAllowed() && store.societyOpen() };
+    this.creates = new CreateCoordinator(store, units, gatedPaths, policy, new WorkspaceCoordinator(paths), mail);
+    this.actions = new LifecycleActions(store, units, gatedPaths, policy);
+    this.society = new SocietyControl(store, units);
     this.registry = new RegistryOperations(store);
   }
+  setSociety(auth: AuthContext, state: "open" | "closed", key: string): Receipt { return this.society.set(auth, state, key); }
+  reconcileSociety(id: string): void { this.society.reconcileById(id); }
   bootstrap(config: SeedConfig): Promise<void> { return this.creates.bootstrap(config); }
   create(auth: AuthContext, input: AgentCreateInput, key: string): Promise<Receipt> { return this.creates.create(auth, input, key); }
   start(auth: AuthContext, agent: Actor, key: string): Receipt { return this.actions.start(auth, agent, key); }

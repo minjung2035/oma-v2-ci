@@ -30,6 +30,8 @@ export class OperationTransitions {
         (id, actor, request_key, request_hash, kind, payload_json, plan_json, state, created_at_ms, updated_at_ms)
         VALUES (?,?,?,?,?,?,?, 'pending', ?, ?)`).run(operation.id, operation.actor, operation.requestKey, operation.requestHash,
         operation.kind, operation.payloadJson, operation.planJson, now, now);
+      if (operation.kind === "attest.record")
+        this.db.prepare("INSERT INTO attestations(operation_id) VALUES (?)").run(operation.id);
       this.scope.recordInserted(operation.id);
     } catch (error) {
       if (error instanceof Error && /UNIQUE constraint failed: operations.actor, operations.request_key/.test(error.message)) throw new StoreError("REQUEST_KEY_REUSED", "request key already used by this actor");

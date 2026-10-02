@@ -104,13 +104,13 @@ for (const [subject, explicit] of [
       const sent = store.getOperation("a", key)!;
       if (sent.kind !== "mail.send") throw new Error("wrong fixture operation");
       const raw = readFileSync(mail.objectPath(sent.plan.message.id));
-      // Pinned MIME strips outer raw-header whitespace; the CLI request/cache
-      // above must still retain the explicit subject bytes for IPC identity.
+      // MAIL-003/P0-2: the MIME subject preserves the same explicit bytes as
+      // the frozen CLI request, including outer whitespace.
       assert.equal(
         decodeSubject(
           parseEmlHeaders(raw, { maxHeaderBytes: raw.byteLength }).subject,
         ),
-        expected.trim(),
+        expected,
       );
       const cached = new RequestCache(home).read(key);
       assert.equal(cached.kind, "present");
@@ -179,10 +179,10 @@ test("CLI text: agent brief is normalized before freezing and never reread on re
     const first = await runCliWithPeer(home, home, args, handle);
     assert.equal(first.signal, null);
     assert.equal(first.status, 3, first.stderr);
-    assert.match(first.stderr, /controlled rejection/);
+    assert.match(first.stderr, /Acceptance status unknown: brief/);
     assert.deepEqual(
       first.requests.map((request) => request.method),
-      ["agent.create"],
+      ["agent.create", "operation.get"],
     );
     const cached = new RequestCache(home).read(key);
     assert.equal(cached.kind, "present");
@@ -190,10 +190,10 @@ test("CLI text: agent brief is normalized before freezing and never reread on re
     const retry = await runCliWithPeer(home, home, args, handle);
     assert.equal(retry.signal, null);
     assert.equal(retry.status, 3, retry.stderr);
-    assert.match(retry.stderr, /controlled rejection/);
+    assert.match(retry.stderr, /Acceptance status unknown: brief/);
     assert.deepEqual(
       retry.requests.map((request) => request.method),
-      ["operation.get", "agent.create"],
+      ["operation.get", "agent.create", "operation.get"],
     );
     assert.deepEqual(new RequestCache(home).read(key), cached);
   } finally {

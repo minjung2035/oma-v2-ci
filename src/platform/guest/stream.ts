@@ -9,16 +9,17 @@
  * (project.import); a get sends what a request staged (project.export). The
  * size a put may have is what the data disk can take (D04's admission).
  */
+import { pipeline } from "node:stream/promises";
+import { borrowedFileRange, withStreamSource } from "../stream-source.js";
 import { createHash } from "node:crypto";
-import { closeSync, constants, createReadStream, fstatSync, fsyncSync, statfsSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, constants, fstatSync, fsyncSync, statfsSync, unlinkSync, writeSync } from "node:fs";
 import { entryAt, openBeneath, withinDirectory } from "../../storage/contained-fs.js";
 import type { Socket } from "node:net";
 import { encodeFrame } from "../../frame.js";
-import { StoreError, errorCodeOf } from "../../domain/errors.js";
-import { readLeadingFrame } from "../rpc.js";
+import { StoreError } from "../../domain/errors.js";
+import { platformFailure, readLeadingFrame } from "../rpc.js";
 import { receiveDeclared } from "../stream-receive.js";
 import { isRequestKey, requestProblem } from "../../protocol/host-guest.js";
-import { productText } from "../product-text.js";
 import type { RequestLedger } from "./requests.js";
 
 export interface StreamOptions {
@@ -40,10 +41,9 @@ export async function serveStream(socket: Socket, options: StreamOptions): Promi
   const id = typeof frame.id === "string" ? frame.id : "x";
   const answer = (value: Record<string, unknown>): void => { socket.write(encodeFrame({ v: 1, id, ...value })); };
   const refuse = (error: unknown): void => {
-    const code = errorCodeOf(error);
-    const message = error instanceof StoreError && productText(error.message) ? error.message : code;
-    socket.end(encodeFrame({ v: 1, id, ok: false, error: { code, message, retry: "never" } }));
+    socket.end(encodeFrame({ v: 1, id, ok: false, error: platformFailure(error) }));
   };
+  let declared = false;
   try {
     if (requestProblem(frame) !== null) throw new StoreError("INVALID_REQUEST", "a stream begins with stream.put or stream.get");
     const params = frame.params as Record<string, unknown>;
@@ -66,24 +66,31 @@ export async function serveStream(socket: Socket, options: StreamOptions): Promi
       // P0V-106 (G13-03): one open -- the size, the hash and the bytes sent
       // are all of the same file, whatever replaces the name meanwhile.
       let fd: number;
-      try { fd = withinDirectory(source, (parent, name) => openBeneath(parent, name, constants.O_RDONLY | constants.O_NOFOLLOW)); }
+      try { fd = withinDirectory(source, (parent, name) => openBeneath(parent, name, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)); }
       catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new StoreError("REQUEST_NOT_FOUND", "nothing was staged for this request");
         throw error;
       }
-      let size: number;
-      const hash = createHash("sha256");
-      try {
-        size = fstatSync(fd).size;
-        for await (const chunk of createReadStream("", { fd, start: 0, end: Math.max(0, size - 1), autoClose: false })) hash.update(chunk as Buffer);
-      } catch (error) { closeSync(fd); throw error; }
-      answer({ ok: true, result: { bytes: size, sha256: hash.digest("hex") } });
-      if (size === 0) { closeSync(fd); socket.end(); return; }
-      createReadStream("", { fd, start: 0, end: size - 1, autoClose: true }).pipe(socket);
+      await withStreamSource(fd, async fd => {
+        const source = fstatSync(fd);
+        if (!source.isFile()) throw new StoreError("STREAM_INVALID", "a staged stream must be a regular file");
+        const size = source.size;
+        const hash = createHash("sha256");
+        if (size > 0) for await (const chunk of borrowedFileRange(fd, size)) hash.update(chunk as Buffer);
+        answer({ ok: true, result: { bytes: size, sha256: hash.digest("hex") } });
+        declared = true;
+        if (size > 0) await pipeline(borrowedFileRange(fd, size), socket, { end: false });
+      });
+      socket.end();
       return;
     }
     throw new StoreError("UNKNOWN_METHOD", "a stream is stream.put or stream.get");
-  } catch (error) { refuse(error); }
+  } catch (error) {
+    // After a declaration even a cleanup failure ends raw bytes, never appends
+    // another JSON answer. The receiver alone confirms its size and hash.
+    if (declared) socket.destroy();
+    else refuse(error);
+  }
 }
 
 /** Writes exactly `bytes` to a new staging file and keeps it only if its

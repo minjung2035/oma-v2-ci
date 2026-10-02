@@ -9,7 +9,7 @@ import { unitNameFor as unitName } from "./domain/derived.js";
 import { ensureDurableDirectory, publishNoReplace, replaceDerivedFile } from "./storage/durable-fs.js";
 import { renderUnit, type RenderValues } from "./units/render.js";
 import { executeUnitCommand, observeUnitCommand, type UnitCommandOutcome } from "./units/execute.js";
-import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgroupProcs } from "./units/observe.js";
+import { parseProperties, parseUnitObservation, parseCgroupPopulation, parseCgroupProcs, unknownObservation } from "./units/observe.js";
 
 export { unitName, renderUnit };
 export type { RenderValues, UnitCommandOutcome };
@@ -22,9 +22,6 @@ const OWNER = "X-OMA-Owner=";
 function lineOf(unit: string, key: string): string | null {
   return unit.split("\n").find(line => line.startsWith(key)) ?? null;
 }
-/** What `observe` answers for a unit that is not this society's: the values
- * systemd gives a unit it does not have. */
-const NO_UNIT: UnitObservation = Object.freeze({ activeState: "inactive", subState: "dead", result: "success", execMainStatus: 0, cgroup: "", invocationId: "" });
 export type IncarnationReader = (agent: Actor) => number | null;
 /** Units per status `show`: about 60 ms each on systemd 257 (WP23.01). */
 export const STATUS_CHUNK = 32;
@@ -59,7 +56,7 @@ export function unitCommandError(outcome: UnitCommandOutcome, what: string): Sto
     case "succeeded": return null;
     case "unknown": return new StoreError("DEADLINE_EXCEEDED", `systemctl ${what} did not finish; its outcome is unknown`);
     case "failed":
-      return new StoreError(/start-limit/i.test(outcome.stdout + outcome.stderr) ? "START_LIMIT" : "INTERNAL_ERROR", `systemctl ${what} failed`);
+      return new StoreError("INTERNAL_ERROR", `systemctl ${what} failed`);
   }
 }
 
@@ -210,8 +207,8 @@ export class UnitsModule {
     return renderUnit(lines.join("\n"), { ...this.values, agent });
   }
   /** P0V-59, P0-1: whether a Resident's unit names are held by another owner.
-   * Such a name is not this society's unit: nothing of this society runs under
-   * it, and no effect of this society is applied to it. */
+   * No effect of this society is applied to it. Its current owner says nothing
+   * about the death of a process this society previously started (P0-5). */
   private residentForeign(agent: Actor): boolean {
     return this.foreign(unitName(this.society, agent, "service"), this.identity("resident.service.in", agent)) ||
       this.foreign(unitName(this.society, agent, "path"), this.identity("resident.path.in", agent));
@@ -278,9 +275,10 @@ export class UnitsModule {
     this.verifyPath(agent, true);
     try { this.run(["start", service]); }
     catch (error) {
-      // systemd 257 reports a start the limit refused as a failed control
-      // process; the unit's own counters say what it was.
-      if (this.startLimitStatus(agent) !== null) throw new StoreError("START_LIMIT", `start limit reached for ${agent}`);
+      // A completed refusal may be explained by current structured evidence.
+      // A later observation cannot settle a command that never answered.
+      if (error instanceof StoreError && error.code === "INTERNAL_ERROR" && this.startLimitStatus(agent) !== null)
+        throw new StoreError("START_LIMIT", `start limit reached for ${agent}`, { cause: error });
       throw error;
     }
     const after = this.observe(agent);
@@ -295,7 +293,7 @@ export class UnitsModule {
     const path = unitName(this.society, agent, "path");
     const failures: unknown[] = [];
     // P0V-59: a name another owner holds is not stopped or disabled for this
-    // society; this society has no unit under it, so nothing of it runs there.
+    // society. Refusing that effect is not proof that an earlier run died.
     const foreign = this.residentForeign(agent);
     const missing = (unit: string): boolean => {
       if (foreign) return true;
@@ -332,7 +330,7 @@ export class UnitsModule {
       "-p", "ActiveState", "-p", "SubState", "-p", "Result", "-p", "ExecMainStatus", "-p", "ControlGroup", "-p", "InvocationID"];
   }
   observe(agent: Actor): UnitObservation {
-    if (this.residentForeign(agent)) return NO_UNIT;
+    if (this.residentForeign(agent)) return unknownObservation();
     return parseUnitObservation(this.command(this.observationArgs(agent)));
   }
   /** Recovery diagnostics only. Never use this stale-able result as death proof.
@@ -341,7 +339,7 @@ export class UnitsModule {
   observeAsync(agent: Actor): Promise<UnitObservation> {
     if (this.observationTask) return this.observationTask.agent === agent ? this.observationTask.task :
       Promise.reject(new StoreError("BROKER_UNAVAILABLE", "unit observation is busy"));
-    if (this.residentForeign(agent)) return Promise.resolve(NO_UNIT);
+    if (this.residentForeign(agent)) return Promise.resolve(unknownObservation());
     const task = this.commandAsync(this.observationArgs(agent)).then(parseUnitObservation)
       .finally(() => { if (this.observationTask?.task === task) this.observationTask = null; });
     this.observationTask = { agent, task }; return task;
@@ -414,19 +412,11 @@ export class UnitsModule {
     } catch { return false; }
   }
 
-  /** WP25: whether systemd stopped starting this unit because of its start
-   * limit. Older managers say so in Result; systemd 257 keeps the last
-   * failure's Result ("exit-code") and only logs "Start request repeated too
-   * quickly". A Resident unit restarts on every failure, so a failed unit
-   * whose restart counter reached its burst is one the limit stopped. */
+  /** UNIT-006/P0-5: only a current explicit result establishes a start limit.
+   * NRestarts is cumulative, not the count in StartLimitIntervalSec. Managers
+   * that retain exit-code leave the cause unconfirmed; null is not absence. */
   startLimitStatus(agent: Actor): string | null {
     const obs = this.observe(agent);
-    if (obs.activeState !== "failed") return null;
-    if (obs.result === "start-limit-hit") return "start_limit";
-    const outcome = this.command(["show", unitName(this.society, agent, "service"), "-p", "NRestarts", "-p", "StartLimitBurst"]);
-    if (outcome.kind !== "succeeded") return null;
-    const fields = new Map(outcome.stdout.trim().split("\n").map(line => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)] as const));
-    const restarts = Number(fields.get("NRestarts")); const burst = Number(fields.get("StartLimitBurst"));
-    return Number.isSafeInteger(restarts) && Number.isSafeInteger(burst) && burst > 0 && restarts >= burst ? "start_limit" : null;
+    return obs.activeState === "failed" && obs.result === "start-limit-hit" ? "start_limit" : null;
   }
 }

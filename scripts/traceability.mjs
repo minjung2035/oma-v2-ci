@@ -3,9 +3,8 @@ import { readFileSync, existsSync, readdirSync, lstatSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 export const normativeSources = Object.freeze([
-  "implementation-spec.md", "implementation/integration-policy.md", "implementation/physical-ordering.md",
-  "implementation/compliance.md", "implementation/loc-budget.md", "implementation/test-matrix.md",
-  "implementation/spikes.md", "implementation/validation.md", "implementation/macos-platform.md",
+  "docs/implementation-spec.md", "docs/implementation/integration-policy.md",
+  "docs/verification-spec.md", "docs/macos-platform.md",
 ]);
 export const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 export const traceIdentity = row => JSON.stringify([row.source, row.requirement, row.digest]);
@@ -107,6 +106,7 @@ export function sourceFiles(root, relative) {
   if (stat.isSymbolicLink()) throw new Error(`symlink in source closure: ${relative}`);
   if (stat.isFile()) return [relative];
   if (!stat.isDirectory()) throw new Error(`unsupported source closure input: ${relative}`);
-  return readdirSync(path).sort().filter(name => !(relative === "implementation" && name === "evidence"))
+  return readdirSync(path).sort().filter(name =>
+    !(relative === "implementation" && name === "evidence") && !(relative === "docs" && name === "archive"))
     .flatMap(name => sourceFiles(root, `${relative}/${name}`));
 }

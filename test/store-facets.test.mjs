@@ -10,9 +10,9 @@ import { ledgerFixture, routeOperation, routeResult, agentRecord } from "./helpe
 
 const code = expected => error => error?.code === expected;
 
-test("P4 facets: frozen descriptors cover all six entities and compatibility writes exactly once", () => {
+test("P4 facets: frozen descriptors cover ledger entities and compatibility writes exactly once", () => {
   const groups = ["agents", "batches", "deliveries", "operations", "subscriptions", "usage"];
-  assert.deepEqual(Object.keys(READ_FACETS).sort(), groups);
+  assert.deepEqual(Object.keys(READ_FACETS).sort(), [...groups, "attestations"].sort());
   assert.deepEqual(Object.keys(WRITE_FACETS).sort(), groups);
   for (const table of [READ_FACETS, WRITE_FACETS]) {
     assert.ok(Object.isFrozen(table));

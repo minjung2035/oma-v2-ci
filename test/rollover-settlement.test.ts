@@ -47,7 +47,7 @@ async function restartedBroker(f: ReceiptFixture, invocation: () => string): Pro
   return broker;
 }
 const openRun = (broker: Broker, invocation: string) =>
-  (Reflect.get(broker, "openRun") as (actor: string, id: string) => { incarnation: number }).call(broker, "alice", invocation);
+  (Reflect.get(broker, "openRun") as (actor: string, id: string) => Promise<{ incarnation: number }>).call(broker, "alice", invocation);
 function withReceipt(f: ReceiptFixture): Buffer {
   const session = completeSession(f.root, f.batch);
   publishDeliveryReceipt(f.root, f.batch, boundaryOf(f.batch, session), TEST_VIEW_LIMITS.frameBytes);
@@ -69,7 +69,7 @@ test("V07A: a receipt made durable just before the runner died completes its bat
     // The ledger was not completed: the process died after the receipt.
     assert.equal(f.store.getBatch(f.batch.id)!.state, "prepared");
     broker = await restartedBroker(f, () => FIRST);
-    const lease = openRun(broker, FIRST);
+    const lease = await openRun(broker, FIRST);
     assert.equal(lease.incarnation, 2);
     const settled = f.store.getBatch(f.batch.id)!;
     assert.equal(settled.state, "completed");
@@ -88,7 +88,7 @@ test("V07A, DR9: a batch whose receipt is proven absent is the next run's delive
   let broker: Broker | null = null;
   try {
     broker = await restartedBroker(f, () => FIRST);
-    assert.equal(openRun(broker, FIRST).incarnation, 2);
+    assert.equal((await openRun(broker, FIRST)).incarnation, 2);
     const kept = f.store.getBatch(f.batch.id)!;
     assert.equal(kept.state, "prepared");
     assert.equal(kept.incarnation, 1, "the run the batch was created in stays a past fact");
@@ -104,7 +104,7 @@ test("DR9: a receipt of an earlier attempt that appears after a later run opened
   let broker: Broker | null = null;
   try {
     broker = await restartedBroker(f, () => FIRST);
-    assert.equal(openRun(broker, FIRST).incarnation, 2, "no receipt yet: the batch passes to run 2");
+    assert.equal((await openRun(broker, FIRST)).incarnation, 2, "no receipt yet: the batch passes to run 2");
     const receipt = withReceipt(f); // attempt 1's receipt, published late
     await broker.drainAndClose(); broker = null;
     const store = new Store(join(f.root, "runtime.sqlite"));
@@ -112,7 +112,7 @@ test("DR9: a receipt of an earlier attempt that appears after a later run opened
       store, mail: new MailModule({ stateRoot: f.root, society: "demo" }, store, 64, TEST_VIEW_LIMITS.batchMaxMessages, TEST_VIEW_LIMITS),
     }) as ReceiptFixture;
     broker = await restartedBroker(reopened, () => SECOND);
-    assert.equal(openRun(broker, SECOND).incarnation, 3);
+    assert.equal((await openRun(broker, SECOND)).incarnation, 3);
     const settled = store.getBatch(f.batch.id)!;
     assert.equal(settled.state, "completed", "attempt 1's receipt is this batch's evidence under any later lease");
     assert.equal(settled.incarnation, 1);
@@ -137,18 +137,18 @@ test("V07B: unavailable or conflicting receipt evidence opens no run, keeps the 
       const before = fault === "conflicting" ? readFileSync(path) : null;
       let invocation = FIRST;
       broker = await restartedBroker(f, () => invocation);
-      assert.throws(() => openRun(broker!, FIRST), { code: fault === "conflicting" ? "BATCH_CONFLICT" : "BROKER_UNAVAILABLE" });
+      await assert.rejects(() => openRun(broker!, FIRST), { code: fault === "conflicting" ? "BATCH_CONFLICT" : "BROKER_UNAVAILABLE" });
       assert.equal(f.store.getAgent("alice")!.incarnation, 1);
       const row = f.store.getBatch(f.batch.id)!;
       assert.deepEqual([row.state, row.incarnation], ["prepared", 1], "blocked evidence was neither settled nor rolled over");
       if (before) assert.deepEqual(readFileSync(path), before, "the mismatched receipt is kept for diagnosis");
       // The same invocation cannot retry into a half-open run: it must end
       // and a new invocation opens once the evidence can be read.
-      assert.throws(() => openRun(broker!, FIRST), { code: "STALE_RUN" });
+      await assert.rejects(() => openRun(broker!, FIRST), { code: "STALE_RUN" });
       if (fault === "unavailable") {
         chmodSync(path, 0o400);
         invocation = SECOND;
-        assert.throws(() => openRun(broker!, SECOND), { code: "RUN_TERMINATION_UNKNOWN" },
+        await assert.rejects(() => openRun(broker!, SECOND), { code: "RUN_TERMINATION_UNKNOWN" },
           "the failed opening's own invocation is still running in this cgroup, so it is not proven dead");
       }
     } finally { chmodSync(runnerReceiptPathAt(f.root, "alice", f.batch.id), 0o600); await closeAll(broker, f); }
@@ -166,7 +166,7 @@ test("V07B: a failure at the incarnation commit leaves the settled batch settled
     const original = store.transaction.bind(f.store);
     let calls = 0;
     store.transaction = fn => { calls += 1; if (calls === 2) throw Object.assign(new Error("injected"), { code: "DB_BUSY" }); return original(fn); };
-    assert.throws(() => openRun(broker!, FIRST), /injected/);
+    await assert.rejects(() => openRun(broker!, FIRST), /injected/);
     store.transaction = original;
     assert.equal(f.store.getBatch(f.batch.id)!.state, "completed", "the settlement stands on its own");
     assert.equal(f.store.getAgent("alice")!.incarnation, 1, "no incarnation was published");

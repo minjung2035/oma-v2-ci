@@ -1,4 +1,4 @@
-/** The sixth review's regressions (implementation/priority-0-audit.md,
+/** The sixth review's regressions (docs/priority-0-audit.md,
  * "6차 점검", P0V-74 on): each is the review's counterexample, run against
  * the code that fixed it. */
 import test from "node:test";
@@ -243,7 +243,7 @@ test("P0V-78 / R6-05, CFG-003: every environment the CLI runs in carries the soc
   const { planPiSpawn } = await import("../src/runtime/pi-spawn-plan.js");
   const resident = planPiSpawn({ actor: "alice", society: "demo", paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
     workspace: "/srv/oma/w", sessionDir: "/srv/oma/s", agentHome: "/srv/oma/h", mailArchive: "/srv/oma/m", batchView: "/srv/oma/v", socket: "/run/oma/control.sock" },
-    profile: { provider: "p", model: "m", turnSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
+    profile: { provider: "p", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
     limits: { ...limits, idleStreamSeconds: 1, receiptWaitSeconds: 1 } });
   assert.equal(resident.env.OMA_CONTEXT_BYTES, "12345");
   assert.equal(resident.env.OMA_BUNDLE_BYTES, "67890");
@@ -600,11 +600,11 @@ test("P0V-93 / R6-16: a run is opened on the GOAL owner's answer, and an answer 
     (_parent, input) => makeValidResolvedSpec(input.name, "p", ALL_CAPS, input.from, input.brief), mail);
   let answer: () => boolean = () => false;
   const broker = new Broker(store, mail, units, views, lifecycle, null, null, { stateRoot: root, runRoot: join(root, "run"), society: "demo", hasGoal: () => answer() });
-  const openRun = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => unknown).bind(broker);
-  assert.throws(() => openRun("alice", "inv"), (error: unknown) => error instanceof StoreError && error.code === "GOAL_REQUIRED");
+  const openRun = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<unknown>).bind(broker);
+  await assert.rejects(() => openRun("alice", "inv"), (error: unknown) => error instanceof StoreError && error.code === "GOAL_REQUIRED");
   // The owner could not look (EACCES, EIO): that is its answer, not a missing GOAL.
   answer = () => { throw new StoreError("BROKER_UNAVAILABLE", "the context could not be observed"); };
-  assert.throws(() => openRun("alice", "inv"), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
+  await assert.rejects(() => openRun("alice", "inv"), (error: unknown) => error instanceof StoreError && error.code === "BROKER_UNAVAILABLE");
 });
 
 test("P0V-94 / R6-17: a derived TSV field escapes every control character itself, reversibly", async () => {

@@ -34,7 +34,8 @@ export function collectProductionFiles(rootInput = process.cwd()) {
     throw new Error("duplicate production source identity");
   // These are fixed runtime source roots, not a previous generated file list.
   // Removing a root from the input manifest cannot silently lower coverage/LOC.
-  const required = ["src", "implementation/contracts.ts", "implementation/schema-v1.sql", "implementation/systemd"].flatMap(expand);
+  const required = ["src", "implementation/contracts.ts", "implementation/schema-v1.sql", "implementation/schema-v2.sql", "implementation/schema-v3.sql",
+    "implementation/schema-v1-to-v2.sql", "implementation/schema-v2-to-v3.sql", "implementation/systemd"].flatMap(expand);
   const listed = new Set(files);
   const missing = required.filter(file => !listed.has(file));
   if (missing.length) throw new Error(`production manifest omits current runtime sources: ${missing.join(", ")}`);
@@ -104,7 +105,7 @@ export function assertMeasurementCurrent(root = process.cwd(), files = collectPr
   if (missing.length || counted.header?.n_files !== files.length)
     throw new Error(`stale production-loc.json; counted ${counted.header?.n_files} of ${files.length} files; ` +
       `missing=[${missing.join(", ")}]; regenerate with node scripts/loc.mjs`);
-  // The number A-008 is judged on is the total, so the total is checked too:
+  // The informational total must still agree with what was measured:
   // every row present and a header that counts them is not the same as a total
   // that is the sum of those rows. A report whose SUM disagrees with its own
   // rows, or that has no SUM, is not a measurement this gate will pass on.

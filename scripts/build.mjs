@@ -18,6 +18,10 @@ const compiled = spawnSync(process.execPath, [tsc, "-p", join(root, "tsconfig.bu
   cwd: root, stdio: "inherit", timeout: 600000, killSignal: "SIGKILL",
 });
 if (compiled.error || compiled.signal || compiled.status !== 0) process.exit(compiled.status ?? 1);
+// Rebuilding a linked package must preserve executable permissions for its commands.
+const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+const commands = typeof manifest.bin === "string" ? [manifest.bin] : Object.values(manifest.bin ?? {});
+for (const command of commands) chmodSync(join(root, command), 0o755);
 // AV16, CLI-001: the sandbox's `oma` command, written from its one owner.
 {
   const { DEPLOYMENT_LAYOUT } = await import(pathToFileURL(join(output, "src/domain/deployment.js")).href);

@@ -20,15 +20,16 @@ if (process.argv.includes("--inventory")) {
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd());
   const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
   const { findings } = runtimeImportClosure({ rootDir: process.cwd(), roots, manifest: production, compilerOptions: parsed.options });
-  const acceptance = inventoryAcceptance([...normativeSources, "architecture.md"].map(source => ({ source, text: readFileSync(source, "utf8") })));
+  const acceptance = inventoryAcceptance([...normativeSources, "docs/architecture.md"].map(source => ({ source, text: readFileSync(source, "utf8") })));
   // The generated inventory is not a complete dependency closure after a move.
   // Include ALL current source/test/tool inputs so an added helper or changed
   // negative test cannot hide behind an old production-files.txt snapshot.
   const authoredImplementation = sourceFiles(".", "implementation").filter(file =>
-    file !== "implementation/traceability.json" && file !== "implementation/adversarial-review.md");
-  const closure = [...new Set([...normativeSources, ...production, ...authoredImplementation,
+    file !== "implementation/traceability.json");
+  const authoredDocuments = sourceFiles(".", "docs");
+  const closure = [...new Set([...normativeSources, ...production, ...authoredImplementation, ...authoredDocuments,
     ...["src", "test", "scripts"].flatMap(directory => sourceFiles(".", directory)),
-    "architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"] )];
+    "docs/architecture.md", "production-files.txt", "production-manifest.json", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"] )];
   const failures = linkedRows.filter((row, index) => {
     const entry = entries[index];
     if (!previous.has(traceIdentity(entry)) || !["runtime", "build", "document", "optional"].includes(row.applicability) ||

@@ -2,7 +2,7 @@
  *
  * Every part of the Principal's path had a test and the path was still broken,
  * twice, because nothing ran the file that wires the parts together. This runs
- * the real `src/entry/oma.ts` with controlled module boundaries and no host
+ * the real `src/entry/oma-society.ts` with controlled module boundaries and no host
  * I/O, and asserts the order and the values it passes between them.
  */
 import test from "node:test";
@@ -12,6 +12,7 @@ import * as path from "node:path";
 import { Script } from "node:vm";
 import ts from "typescript";
 import { codeFor, exitFor } from "../dist/src/tui/exit.js";
+import { parseOmaArguments } from "../dist/src/runtime/host-arguments.js";
 import { HOST_LOSS_SIGNALS } from "../dist/src/runtime/broker-lifetime.js";
 
 /** A production module compiled and run with its own controlled boundary.
@@ -83,21 +84,27 @@ function brokerStandIn(state, credentials, disownedReason = null) {
 }
 
 async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["1".repeat(64), "2".repeat(64)],
-  disowned = null, leased = true, engineExits = true,
-  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false, commitRefused = false } = {}) {
-  const source = readFileSync(new URL("../src/entry/oma.ts", import.meta.url), "utf8");
+  disowned = null, leased = true, engineExits = true, startFailures = 0, acquiredFailures = 0,
+  brokerAlreadyListening = false, untrustedRunRoot = false, binding = "fresh", rereadFails = false, commitRefused = false, startupFailure = null, statusReply = null, onEgress = null,
+  resumeBirth = null, resumeError = null, resumeReply = null, hostNew = false, hostHistory = null, tenureGraceMs, env = {}, argv = ["node", "oma", "--society", "fixture"] } = {}) {
+  // DR24: a start without a society is a new session of the project; the
+  // ownership rules below are asked of the society a start names.
+  const expected = argv.includes("--society") ? argv[argv.indexOf("--society") + 1] : "fixture-new";
+  const source = readFileSync(process.env.OMA_SOCIETY_ENTRY_SOURCE ?? new URL("../src/entry/oma-society.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
   } }).outputText
     // The entry resolves its installation directory from its own module URL,
     // which CommonJS has no equivalent for. Only that one expression is
     // substituted; nothing else about the file is rewritten.
-    .replaceAll("import.meta.url", JSON.stringify("file:///lib/dist/src/entry/oma.js"));
+    .replaceAll("import.meta.url", JSON.stringify("file:///lib/dist/src/entry/oma-society.js"));
   const calls = [];
+  const restarts = [];
   const lines = [];
   const grants = [];
   const handlers = {};
   const deliveries = [];
+  const intervals = new Set();
   const lease = { holds: leased, releases: 0 };
   let started = null;
   let capturedPorts = null;
@@ -105,20 +112,42 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
   const broker = brokerStandIn(brokerState, credentials, disowned);
   const settings = {
     config: {
-      society: "fixture",
+      society: expected,
       installation: { node: "node", libdir: "/lib", rootfs: "/rootfs", deploymentDigest: "a".repeat(64) },
       limits: { frameBytes: 262144, mailBodyBytes: 262144, batchMaxMessages: 24, idleStreamSeconds: 30, receiptWaitSeconds: 30 },
       principalProfile: "principal",
+      initialResidents: [],
       agentProfiles: { principal: { modelProfile: "m", resources: { workspaceBytes: 4096 } } },
       modelProfiles: { m: { provider: "pi", model: "current" } },
     },
     fields: [],
     workerProfile: "worker",
   };
+  const PACKAGE_STORE = "/state/oma/.packages";
+  const readSettings = path => {
+    calls.push("readSettings");
+    if (startupFailure === "settings") throw new StoreError("BROKER_UNAVAILABLE", "settings could not be observed");
+    // The file as it is at each read: 6 when the screen first read it, 5 after an operator's hand edit.
+    // What the start reads is the file as it was; what the screen reads back later is the file as it now is.
+    if (commitRefused) return { ...settings, config: { ...settings.config, shownLimit: capturedPorts !== null ? 5 : 6 } };
+    if (rereadFails && capturedPorts !== null && path === `/state/oma/${expected}/config.json`) throw new Error("manifest unreadable");
+    return settings;
+  };
   const modules = {
     "node:path": path,
-    "node:fs": { existsSync: () => true, mkdirSync() {}, realpathSync: path => { calls.push(`realpath:${path}`); return "/project"; } },
+    "node:fs": { existsSync: () => true, mkdirSync() {}, realpathSync: path => { calls.push(`realpath:${path}`); return path === "/saved-personal" ? path : "/project"; },
+      readdirSync: () => [], statSync: () => ({ mtimeMs: 1, size: 1, isDirectory: () => true }) },
     "node:url": { fileURLToPath: () => "/lib/" },
+    "../runtime/host-arguments.js": { parseOmaArguments },
+    "../runtime/session-mode.js": {
+      newSessionBirth: (root, mode, cwd) => ({ id: path.basename(root), mode, cwd }),
+      publishSessionBirth(root, birth) { calls.push(`publishSessionBirth:${root}`); return birth; },
+    },
+    "../runtime/session-catalog.js": {
+      RESUME_SESSION_ENV: "OMA_RESUME_SESSION",
+      async sessionBirthForHistory(...args) { calls.push("sessionBirthForHistory"); if (resumeError) throw resumeError; return resumeReply ? await resumeReply(...args) : resumeBirth; },
+      sessionHistoryDirectories() { calls.push("sessionHistoryDirectories"); return []; },
+    },
     "../ids.js": { isValidSocietyName: () => true },
     // The path checks are the product's own; what this harness controls is
     // only whether they pass, because what is under test here is when the
@@ -136,17 +165,24 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         if (untrustedRunRoot) throw new StoreError("INVALID_ARGUMENT", "host directory ancestors must be real directories, not symlinks");
       },
     },
-    "../domain/deployment.js": { DEPLOYMENT_LAYOUT: { extension: "dist/src/pi-extension.js", cli: "dist/src/cli.js" } },
+    "../domain/deployment.js": { DEPLOYMENT_LAYOUT: { extension: "dist/src/pi-extension.js", cli: "dist/src/cli.js",
+      entries: { interactive: "dist/src/entry/pi-interactive.js", tui: "dist/src/entry/oma.js" } } },
     "../domain/mail-values.js": { storedMailBytes: bodyBytes => bodyBytes },
-    "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi" }) },
-    "../storage/directory.js": { ensureDirectory() {} },
+    "../runtime/pi-runtime.js": { resolvePiRuntime: () => ({ executable: "node", args: [], agentDir: "/state/pi", source: "bundled" }),
+      adoptEngineHome: () => { calls.push("adoptEngineHome"); } },
+    "../storage/directory.js": { ensureDirectory() {}, removeUnusedTree: path => { calls.push(`removeUnusedTree:${path}`); } },
     "../tui/app.js": { TuiApp: class {
       constructor(ports) { calls.push("TuiApp"); capturedPorts = ports; }
-      refresh() {} draw() {} line(text) { lines.push(text); } setBusy() {} note() {}
+      close() { calls.push("app.close"); }
+      refresh() { calls.push("app.refresh"); } draw() { calls.push("app.draw"); } line(text) { lines.push(text); } setBusy() {} note() {}
     } },
     // The product's own exit reading (DR13); only the exit itself is stood in for.
-    "../tui/exit.js": { codeFor, exitFor, fail: reason => { throw new Error(`fail: ${reason}`); } },
-    "../tui/screen.js": { openTerminal: () => ({ restore() { calls.push("restore"); }, onResize() {}, onKeys() {} }) },
+    "../tui/exit.js": { codeFor, exitFor, fail: (reason, code) => { calls.push(`fail:${code}`); calls.push(`holdsAtFail:${lease.holds}`); throw new Error(`fail: ${reason}`); } },
+    // One terminal owner: this process's panel, or the engine's screen.
+    "../tui/panel-terminal.js": { PanelTerminal: class {
+      restore() { calls.push("restore"); } onResize() {} onKeys() {} handoff() {} reclaim() { calls.push("reclaim"); } open() {} size() {} draw() {}
+      whenUnclaimed() {}
+    } },
     "../tui/dashboard.js": { dashboardData: () => ({}) },
     "../tui/session.js": {
       newSessionHandle: () => "h".repeat(32),
@@ -165,25 +201,28 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       },
       principalSessionProfile: () => ({ society: "fixture", provider: "pi", model: "current", workspaceBytes: 4096, extensions: [] }),
       PrincipalSession: class {
-        static start(paths, profile, limits, environment) {
+        static start(paths, profile, limits, environment, sink) {
           calls.push("PrincipalSession.start");
+          if (startFailures-- > 0) throw new Error("injected engine start failure");
           // The engine the entry is holding, not a snapshot of its arguments:
           // whether it is still running when ownership ends is the whole
           // question TUI-004 asks here.
           let confirmDeath = () => {};
           started = {
-            paths, profile, limits, environment, closes: 0,
+            paths, profile, limits, environment, sink, closes: 0,
             pid: 777, busy: false, running: true,
             // The operating system's answer, not this process's request. A
             // teardown that treated `close()` as the death could give the
             // society away while the engine it paid for was still running.
             exited: new Promise(resolve => { confirmDeath = resolve; }),
             confirmDeath: () => { confirmDeath(); },
+            uiEvents: [],
+            sendUi(event) { this.uiEvents.push(event); },
             grant(credential, sessionHandle) { grants.push({ credential, sessionHandle }); },
             onEvent(listener) { sessionListener = listener; return () => {}; },
             deliver: async () => {}, submit: async () => {},
             close() {
-              calls.push("PrincipalSession.close"); started.closes += 1; started.running = false;
+              calls.push("PrincipalSession.close"); this.closes += 1; this.running = false;
               // A real engine's exit is reported by the operating system on a
               // later turn, never inside the call that asked it to stop.
               // Resolving it here would make a teardown that never waited
@@ -191,6 +230,11 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
               if (engineExits) setImmediate(() => { calls.push("PrincipalSession.exited"); confirmDeath(); });
             },
           };
+          sink.onAcquire?.(started);
+          if (acquiredFailures-- > 0) {
+            started.close();
+            throw new Error("injected setup failure after acquisition");
+          }
           return started;
         }
       },
@@ -204,10 +248,13 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     },
     "../tui/transport.js": {
       limitsOf: value => value,
-      TuiTransport: class { async status() { return { kind: "unknown", reason: "probe", observedAtMs: 1 }; } },
+      TuiTransport: class { async status() { calls.push("status"); return statusReply ? await statusReply(handlers) : { kind: "unknown", reason: "probe", observedAtMs: 1 }; } },
     },
     "../tui/sources/mail.js": { principalMailbox: () => ({}), readBody: () => null, readMailbox: () => [], unreadCount: () => 0 },
-    "../tui/sources/extensions.js": { readExtensions: () => ({ rows: [] }), toggleExtension() {} },
+    "../tui/sources/extensions.js": { readExtensions: () => {
+      if (startupFailure === "extensions") throw new StoreError("BROKER_UNAVAILABLE", "extensions could not be observed");
+      return { rows: [] };
+    }, toggleExtension() {} },
     "../tui/sources/settings.js": {
       commitField: (current, field) => {
         calls.push(`commitField:${field}:${current.config.shownLimit ?? "-"}`);
@@ -218,28 +265,53 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       bootstrapStateOf: () => "unknown",
       fieldsOf: config => rereadFails || commitRefused ? [{ kind: "number", id: "worker-limit", label: "Worker limit", value: config.shownLimit ?? 8, min: 1, max: 64, apply: "restart", blocked: null },
         { kind: "link", id: "extensions", label: "Extensions" }] : settings.fields,
-      readSettings: () => {
-        calls.push("readSettings");
-        // The file as it is at each read: 6 when the screen first read it, 5 after an operator's hand edit.
-        if (commitRefused) return { ...settings, config: { ...settings.config, shownLimit: calls.filter(call => call === "readSettings").length > 1 ? 5 : 6 } };
-        if (rereadFails && calls.filter(call => call === "readSettings").length > 1) throw new Error("manifest unreadable");
-        return settings;
-      },
+      readSettings,
       writeSettings() { calls.push("writeSettings"); },
+      // DR24: the project's settings, which a session's society configuration is made from.
+      projectSettingsPath: (root, project) => `${root}/.projects/${project}/config.json`,
+      sessionConfigOf: (project, own) => ({ ...project, society: own.society }),
+      // DR25: the project's settings are a managed bundle naming the package store,
+      // and a session's configuration is made from them, roles and all.
+      readSettingsForEditing: path => readSettings(path),
+      projectBundle: path => { const read = readSettings(path);
+        return { ...read, config: { ...read.config, installation: { ...read.config.installation, packages: PACKAGE_STORE } } }; },
+      deriveSessionSettings: (_project, path) => { calls.push(`deriveSessionSettings:${path}`); return { settings: readSettings(path), missing: [] }; },
+      commitRoleSet() { calls.push("commitRoleSet"); return { kind: "unchanged", generation: null }; },
+      commitManagedEdit() { calls.push("commitManagedEdit"); return { kind: "unchanged", generation: null }; },
+      roleSetOf: () => ({}),
     },
+    // DR25: the project's settings, made once and kept a bundle naming the store.
+    "../tui/project-settings.js": {
+      ensureProjectSettings: (root, project) => { const read = readSettings(`${root}/.projects/${project}/config.json`);
+        return { ...read, config: { ...read.config, installation: { ...read.config.installation, packages: PACKAGE_STORE } } }; },
+      applyPackageChange: () => { throw new Error("a start applied a package change"); },
+    },
+    // DR25: the package store; a start reads its index and changes nothing in it.
+    "../runtime/pi-packages.js": { PACKAGE_USAGE: "usage: oma pi ...", packageStoreDir: () => PACKAGE_STORE,
+      readPackageIndex: () => [], packageCommand: () => { throw new Error("a start ran oma pi"); },
+      writePackageIndex: async () => { throw new Error("a start wrote the package index"); }, reconciledEntries: entries => entries },
+    "../runtime/personal-settings.js": { reconcilePersonalSettings() { throw new Error("a Society start reconciled Personal choices"); } },
+    "../runtime/session-handoff.js": { requestHostNewSession() { calls.push("host-new"); return hostNew; } },
+    "../runtime/host-history-channel.js": { HostHistoryChannel: { open() { return hostHistory; } } },
+    "../protocol/host-history.js": { isHostHistoryReference: value => value.startsWith("oma-host-history:") },
+    "../protocol/guest-history.js": { guestHistoryReference() { throw new Error("Guest reference requires a host history channel"); } },
+    "../runtime/session-history.js": { inspectSessionHistory() { throw new Error("Guest inspection requires a host history channel"); } },
     "../hash.js": { sha256Hex: bytes => { calls.push("sha256Hex"); return "f".repeat(64); } },
     "../config/defaults.js": { defaultHostConfig: () => ({}), defaultSocietyFor: (path, digest) => { calls.push(`defaultSocietyFor:${path}:${digest.length}`); return "fixture"; },
+      sessionSocietyName: project => `${project}-new`,
       societyFromDirectory: () => "old-slug" },
     "../runtime/provision.js": {
       // D05: the binding scenario is controlled; the decision itself is the
       // product's pure rule, exercised against real files in project-binding.test.
       observeProjectBinding: root => {
         calls.push(`observeProjectBinding:${root}`);
-        if (binding === "bound") return { kind: "bound", binding: { kind: "oma-project-binding-v1", society: "fixture", canonicalProjectPath: "/project" } };
-        if (binding === "mismatch") return { kind: "bound", binding: { kind: "oma-project-binding-v1", society: "fixture", canonicalProjectPath: "/elsewhere" } };
+        if (startupFailure === "binding") throw new StoreError("BROKER_UNAVAILABLE", "binding could not be observed");
+        if (root !== `/state/oma/${expected}`) return { kind: "absent" };
+        if (binding === "bound") return { kind: "bound", binding: { kind: "oma-project-binding-v1", society: expected, canonicalProjectPath: "/project" } };
+        if (binding === "mismatch") return { kind: "bound", binding: { kind: "oma-project-binding-v1", society: expected, canonicalProjectPath: "/elsewhere" } };
         return { kind: "absent" };
       },
-      stateRootHasSociety: root => root === "/state/oma/fixture" ? binding === "bound" || binding === "mismatch" : binding === "legacy" && root === "/state/oma/old-slug",
+      stateRootHasSociety: root => root === `/state/oma/${expected}` ? binding === "bound" || binding === "mismatch" : binding === "legacy" && root === "/state/oma/old-slug",
       projectBindingDecision: input => {
         calls.push("projectBindingDecision");
         if (input.observation.kind === "bound")
@@ -249,6 +321,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
       publishProjectBinding: (root, value) => { calls.push(`publishProjectBinding:${root}:${value.society}:${value.canonicalProjectPath}`); },
       provisionSociety: () => {
         calls.push("provisionSociety");
+        if (startupFailure === "provision") throw new StoreError("BROKER_UNAVAILABLE", "provisioning could not be observed");
         return { created: [], seeded: false, seedSource: null, seedNote: null, pendingRepairs: ["/state/rootfs/etc/passwd"] };
       },
       repairSociety: () => {
@@ -260,6 +333,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../domain/errors.js": { StoreError },
     // The real tenure over a controlled lease: what the entry may do, and when,
     // is the thing under test here.
+    // `/resume` asks whether the chosen session is free; a start never does.
+    "../runtime/society-lease.js": { tryHoldSociety: () => { throw new Error("a start probed another session"); } },
     "../runtime/host-tenure.js": loadSource("src/runtime/host-tenure.ts", {
       "../domain/errors.js": { StoreError },
       "./society-lease.js": {
@@ -269,7 +344,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
           // must not have two writers, and a run directory is per-boot and
           // replaceable, so two run directories over one tree used to be two
           // societies as far as the lease could tell.
-          assert.equal(stateRoot, "/state/oma/fixture", "the lease was not taken on this society's state tree");
+          assert.equal(stateRoot, `/state/oma/${expected}`, "the lease was not taken on this society's state tree");
           if (!lease.holds) return null;
           return { name: `\0oma.society.${"a".repeat(64)}`, fence: FENCE,
             release() { calls.push("lease.release"); lease.releases += 1; lease.holds = false; } };
@@ -279,7 +354,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     "../runtime/broker-supervisor.js": {
       brokerListening: async runRoot => {
         calls.push("brokerListening");
-        assert.equal(runRoot, "/run/oma/fixture", "the standing broker was looked for somewhere else");
+        if (startupFailure === "endpoint") throw new StoreError("BROKER_UNAVAILABLE", "endpoint could not be observed");
+        assert.equal(runRoot, `/run/oma/${expected}`, "the standing broker was looked for somewhere else");
         return brokerAlreadyListening;
       },
       superviseBroker: async options => {
@@ -289,7 +365,7 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
         assert.equal(options.fence, FENCE, "the broker was started without the society lease descriptor");
         // D03: the broker is handed the host's whole location, not left to derive it.
         assert.deepEqual([options.stateRoot, options.runRoot, options.configPath],
-          ["/state/oma/fixture", "/run/oma/fixture", "/state/oma/fixture/config.json"]);
+          [`/state/oma/${expected}`, `/run/oma/${expected}`, `/state/oma/${expected}/config.json`]);
         return broker.handle;
       },
     },
@@ -299,22 +375,28 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     // `oma login` (DR18, D-9); a start never reaches it.
     "../tui/login.js": { runEngineLogin: () => { throw new Error("a start ran the engine's login"); } },
     // DR18 (D-10): the environment names no egress socket here, as on Linux.
-    "../runtime/egress-forwarder.js": { openPrincipalEgress: async () => null },
+    "../runtime/egress-forwarder.js": { openPrincipalEgress: async () => { onEgress?.(handlers); return null; } },
     // DR18 (D-1): an error's words as Linux shows them.
     "../tui/words.js": { errorWords: error => (error instanceof Error ? error.message : String(error)), surfaceWords: text => text,
       humanStream: () => process.stderr },
     "../config/generations.js": { collectManagedGenerations: () => { calls.push("collectManagedGenerations"); return []; } },
   };
   const process_ = {
-    argv: ["node", "oma"], env: { HOME: "/home/user", XDG_DATA_HOME: "/state", XDG_RUNTIME_DIR: "/run" },
-    execPath: "node", cwd: () => "/project", exitCode: 0,
+    argv, env: { HOME: "/home/user", XDG_DATA_HOME: "/state", XDG_RUNTIME_DIR: "/run", ...env },
+    execPath: "node", execArgv: [], execve(...args) { calls.push("execve"); restarts.push(args); },
+    chdir(cwd) { calls.push(`chdir:${cwd}`); }, cwd: () => "/project", exitCode: 0,
     on(event, handler) { handlers[event] = handler; },
     exit(code) { calls.push(`exit:${code}`); },
     stdin: {}, stdout: {}, stderr: { write() {} },
   };
+  if (tenureGraceMs !== undefined) {
+    const actual = modules["../runtime/host-tenure.js"].HostTenure;
+    modules["../runtime/host-tenure.js"] = { HostTenure: { take: root => actual.take(root, tenureGraceMs) } };
+  }
   const completion = new Script(compiled, { filename: "oma-composition.cjs" }).runInNewContext({
     exports: {}, module: { exports: {} }, process: process_, console: { error() {} },
-    setInterval: () => ({ unref() {} }), clearInterval() {}, setTimeout, clearTimeout, Promise, Date, JSON,
+    setInterval: run => { const timer = { run, unref() {} }; intervals.add(timer); return timer; },
+    clearInterval: timer => { intervals.delete(timer); }, setTimeout, clearTimeout, Promise, Date, JSON, URL, Buffer,
     require(name) {
       assert.ok(Object.hasOwn(modules, name), `uncontrolled dependency: ${name}`);
       return modules[name];
@@ -338,7 +420,8 @@ async function run({ brokerState = { kind: "started", pid: 1 }, credentials = ["
     while (!done() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
     if (!done()) throw new Error(`waited ${ms}ms for something that never happened: ${calls.join(" ")}`);
   };
-  return { calls, lines, grants, handlers, deliveries, broker: broker.record, settle, lease, until,
+  return { calls, restarts, lines, grants, handlers, deliveries, intervals, broker: broker.record, settle, lease, until,
+    env: process_.env,
     get started() { return started; },
     get ports() { return capturedPorts; },
     fireEvent: event => sessionListener?.(event) };
@@ -429,7 +512,7 @@ test("T119 / PR-002: a refused registration grants nothing and delivers nothing"
   society.broker.fireReady();
   await society.settle();
   assert.equal(society.grants.length, 0);
-  assert.ok(society.lines.some(line => /받아들이지 않았습니다/.test(line)), society.lines.join(" | "));
+  assert.ok(society.lines.some(line => /rejected the Principal session/.test(line)), society.lines.join(" | "));
   assert.deepEqual(society.deliveries, [], "mail was delivered into an engine no broker accepted");
 
   // And no later occasion re-opens it either: a settled turn and the product's
@@ -470,12 +553,12 @@ test("T119 / REC-007: a Control Panel over someone else's society cannot write t
   // policy files while its owner was using them. The check belongs at the
   // write, because that is the only place that knows a write is about to
   // happen.
-  const society = await run({ leased: false });
+  const society = await run({ leased: false, argv: ["node", "oma", "--society", "fixture"] });
   const ports = society.ports;
   assert.ok(ports, "the product built no panels at all");
-  assert.throws(() => ports.setField("limits.frameBytes", 1024), /소유/,
+  assert.throws(() => ports.setField("limits.frameBytes", 1024), /another oma process owns/,
     "a non-owner changed the running owner's configuration");
-  assert.throws(() => ports.setExtension("ext", "principal", true), /소유/,
+  assert.throws(() => ports.setExtension("ext", "principal", true), /another oma process owns/,
     "a non-owner changed the running owner's extensions");
   assert.equal(society.calls.includes("writeSettings"), false);
   // Reading is exactly what it is for, and still works.
@@ -494,9 +577,9 @@ test("T119 / REC-007: an owner that has given the society back stops being able 
 
   society.broker.fireDisowned("the broker could not stay running");
   await society.settle();
-  assert.throws(() => society.ports.setField("limits.frameBytes", 2048), /소유/,
+  assert.throws(() => society.ports.setField("limits.frameBytes", 2048), /another oma process owns/,
     "a process wrote to a society it had already given back");
-  assert.throws(() => society.ports.setExtension("ext", "principal", true), /소유/);
+  assert.throws(() => society.ports.setExtension("ext", "principal", true), /another oma process owns/);
 });
 
 test("T119 / REC-007: everything started on the strength of the lease inherits it", async () => {
@@ -523,9 +606,9 @@ test("T119: a society whose broker this host does not own gets a Control Panel, 
   assert.equal(calls.includes("PrincipalSession.start"), false);
   assert.equal(calls.includes("PrincipalDelivery"), false, "a delivery owner was built with no session to deliver into");
   assert.deepEqual(deliveries, []);
-  assert.ok(lines.some(line => /소유하지 않습니다/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /does not own this society/.test(line)), lines.join(" | "));
   assert.ok(lines.some(line => /already owns this society/.test(line)), lines.join(" | "));
-  assert.ok(lines.some(line => /Dashboard, Config, Mail/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /Dashboard, Config, and Mail/.test(line)), lines.join(" | "));
 });
 
 test("T119: a broker that could not be started leaves a Control Panel, not an unauthorised engine", async () => {
@@ -540,7 +623,7 @@ test("T119: a broker that could not be started leaves a Control Panel, not an un
   assert.equal(calls.includes("PrincipalSession.start"), false);
   assert.equal(broker.registrations.length, 0);
   assert.ok(lines.some(line => /no entry/.test(line)), lines.join(" | "));
-  assert.ok(lines.some(line => /Dashboard, Config, Mail/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /Dashboard, Config, and Mail/.test(line)), lines.join(" | "));
 });
 
 test("T119: a society this process stops owning loses the engine that ownership paid for", async () => {
@@ -569,7 +652,7 @@ test("T119: a society this process stops owning loses the engine that ownership 
   assert.ok(closedAt >= 0 && releasedAt >= 0 && closedAt < releasedAt,
     `the lease was released before the engine ended: ${society.calls.join(" ")}`);
   assert.ok(society.lines.some(line => /could not stay running/.test(line)), society.lines.join(" | "));
-  assert.ok(society.lines.some(line => /Pi 세션을 닫았습니다/.test(line)), society.lines.join(" | "));
+  assert.ok(society.lines.some(line => /the Pi session was closed/.test(line)), society.lines.join(" | "));
 
   // And nothing starts again behind it: a stray readiness after the society is
   // gone must not build a second engine on state this process no longer owns.
@@ -584,7 +667,7 @@ test("T119 / REC-007: a process that cannot take the society lease writes nothin
   // spawned. A process that does not hold the lease provisions nothing,
   // repairs nothing, writes no configuration and spawns no broker: every one
   // of those is a write into, or a claim on, a society that is someone else's.
-  const society = await run({ leased: false });
+  const society = await run({ leased: false, argv: ["node", "oma", "--society", "fixture"] });
   const { calls, lines } = society;
   assert.ok(calls.includes("tryHoldSociety"), "the lease was never asked for");
   assert.equal(calls.includes("provisionSociety"), false, "a non-owner wrote into the society's state tree");
@@ -597,11 +680,23 @@ test("T119 / REC-007: a process that cannot take the society lease writes nothin
   assert.equal(society.started, null);
   assert.equal(society.broker.registrations.length, 0);
   assert.equal(society.lease.releases, 0, "a lease this process never held was released");
-  assert.ok(lines.some(line => /소유하지 않습니다/.test(line)), lines.join(" | "));
-  assert.ok(lines.some(line => /Dashboard, Config, Mail/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /does not own this society/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /Dashboard, Config, and Mail/.test(line)), lines.join(" | "));
   // The lease is taken before anything is written, not after.
   assert.ok(calls.indexOf("tryHoldSociety") < calls.indexOf("readSettings"),
     `the configuration was read before ownership was decided: ${calls.join(" ")}`);
+});
+
+test("DR24: a start that names no society is a new session of the project, bound to it before anything of it is written", async () => {
+  const society = await run({ argv: ["node", "oma"] });
+  const { calls } = society;
+  assert.ok(calls.includes("publishProjectBinding:/state/oma/fixture-new:fixture-new:/project"), calls.join(" "));
+  assert.ok(calls.indexOf("tryHoldSociety") < calls.indexOf("publishProjectBinding:/state/oma/fixture-new:fixture-new:/project"));
+  assert.ok(calls.includes("superviseBroker"), "the new session's broker was not started");
+  society.broker.fireReady();
+  await society.settle();
+  assert.equal(society.started?.paths.sessionDir, `/state/oma/fixture-new/${SESSION_DIR_FROM_OWNER}`);
+  assert.ok(calls.includes("adoptEngineHome"), "the session's engine was not given the Human's engine home");
 });
 
 test("T119 / REC-007: a broker that is already listening is found before this process writes anything", async () => {
@@ -615,7 +710,7 @@ test("T119 / REC-007: a broker that is already listening is found before this pr
   // `/etc/passwd`, `/etc/group` and symlinks inside a rootfs the standing
   // broker may be building sandboxes from right now. The probe is the first
   // thing asked after ownership, so standing down costs nothing.
-  const society = await run({ brokerAlreadyListening: true });
+  const society = await run({ brokerAlreadyListening: true, argv: ["node", "oma", "--society", "fixture"] });
   const { calls, lines } = society;
   const order = name => calls.indexOf(name);
   assert.ok(calls.includes("brokerListening"), "the standing broker was never looked for");
@@ -629,7 +724,7 @@ test("T119 / REC-007: a broker that is already listening is found before this pr
   // Standing down gives the society back. Holding a lease over a society this
   // process has refused to act on would keep the next `oma` out for nothing.
   assert.equal(society.lease.releases, 1, "the society was refused and kept at the same time");
-  assert.ok(lines.some(line => /broker가 이미 실행 중입니다/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /broker is already running/.test(line)), lines.join(" | "));
 });
 
 test("T119 / REC-007 negative control: with no broker listening, the same run provisions and repairs", async () => {
@@ -707,6 +802,7 @@ test("T119: quitting gives the society back, and only once the engine is really 
   assert.ok(order("PrincipalSession.exited") >= 0 && order("PrincipalSession.exited") < order("lease.release"),
     `the society was given up before the engine's exit was observed: ${society.calls.join(" ")}`);
   assert.ok(society.calls.includes("exit:0"));
+  assert.ok(order("app.close") >= 0 && order("app.close") < order("PrincipalSession.exited"));
 });
 
 test("T119 / P0V-81, AV31: every signal that asks this process to end takes the same quitting path", async () => {
@@ -761,6 +857,7 @@ test("T119: a crash stops the broker and the engine this process started", async
   assert.equal(society.started.closes, 1, "the engine outlived the process that owned it");
   assert.equal(society.lease.releases, 1);
   assert.ok(society.calls.includes("exit:3"));
+  assert.ok(society.calls.indexOf("app.close") < society.calls.indexOf("restore"));
 });
 
 test("T119 / PR-002: delivery runs only once a broker is ready, and again as each turn settles", async () => {
@@ -806,7 +903,7 @@ test("D05/WP16: a society bound to another project is refused before any write, 
 });
 
 test("D05/WP16: an earlier default-name society of this project is pointed out, not silently replaced by a new one", async () => {
-  const society = await run({ binding: "legacy" }).catch(error => ({ error }));
+  const society = await run({ binding: "legacy", argv: ["node", "oma"] }).catch(error => ({ error }));
   const calls = society.calls ?? [];
   assert.ok(society.error ? /old-slug/.test(String(society.error)) : calls.some(call => /^exit:/.test(call)), calls.join(" "));
   for (const effect of ["readSettings", "writeSettings", "provisionSociety", "superviseBroker"])
@@ -825,7 +922,7 @@ test("WP15.03: a save whose configuration cannot be read back is reported as sav
   const fields = ports.configFields();
   const limit = fields.find(field => field.id === "worker-limit");
   assert.equal(limit.value, "?", "the old value was still shown as the configuration");
-  assert.match(limit.blocked, /다시 읽지 못함/);
+  assert.match(limit.blocked, /Could not read settings back/);
 });
 
 test("WP15.03, P0: a save refused because the file changed since it was read shows what the file holds, and the next edit is made from it", async () => {
@@ -864,5 +961,279 @@ test("V10C: a registration answered after its broker was lost or replaced grants
   await other.until(() => other.grants.length === 1);
   refuseA(null);
   await other.settle();
-  assert.equal(other.lines.some(line => /받아들이지 않았습니다/.test(line)), false, "a late refusal from a lost broker was reported as current");
+  assert.equal(other.lines.some(line => /rejected the Principal session/.test(line)), false, "a late refusal from a lost broker was reported as current");
+});
+
+
+test("DR27: engine start failure is retryable from the fallback without restarting the broker", async () => {
+  const society = await run({ startFailures: 1 });
+  society.broker.fireReady(); await society.settle();
+  assert.equal(society.started, null);
+  assert.match(society.lines.join("\n"), /Enter \/restart/);
+  assert.equal(society.ports.submitPrompt("/restart").kind, "accepted");
+  await society.settle();
+  assert.ok(society.started); assert.equal(society.broker.registrations.length, 1);
+  assert.equal(society.calls.filter(call => call === "PrincipalSession.start").length, 2);
+  assert.equal(society.calls.filter(call => call === "superviseBroker").length, 1);
+});
+
+test("DR27/P0: an RPC end waits for OS death; stale engine registration cannot grant its successor", async () => {
+  let answerOld;
+  const delayed = new Promise(resolve => { answerOld = resolve; });
+  const society = await run({ credentials: [delayed, "2".repeat(64)] });
+  society.broker.fireReady(); await society.settle();
+  const old = society.started;
+  old.running = false; old.sink.onEnd("RPC ended");
+  await society.settle();
+  society.ports.submitPrompt("/restart");
+  assert.equal(society.started, old, "RPC termination is not child death");
+  old.confirmDeath(); await society.settle();
+  assert.equal(society.calls.filter(call => call === "PrincipalSession.start").length, 1, "no automatic crash loop");
+  society.broker.fireLost();
+  assert.equal(society.ports.submitPrompt("/restart").kind, "refused");
+  society.broker.fireReady(); await society.settle();
+  const next = society.started; assert.notEqual(next, old);
+  assert.equal(society.grants.length, 1); assert.equal(society.grants[0].credential, "2".repeat(64));
+  answerOld("1".repeat(64)); await society.settle();
+  assert.equal(society.grants.length, 1);
+  const lines = society.lines.length;
+  old.sink.onEnd("late end"); old.sink.onLine("late line"); await society.settle();
+  assert.equal(society.lines.length, lines); assert.equal(society.started, next);
+  next.running = false; next.confirmDeath(); next.sink.onEnd("OS ended"); await society.settle();
+  assert.equal(society.ports.submitPrompt("/restart").kind, "accepted"); await society.settle();
+  assert.notEqual(society.started, next);
+});
+
+test("DR27: malformed host arguments perform no filesystem, lease, broker or engine work", async () => {
+  for (const args of [["--unknown"], ["--config"], ["--society", "a", "--society", "b"],
+    ["--bind-project", "--bind-project"], ["login", "--society", "ignored"], ["--config", "--help", "--unknown"]]) {
+    const society = await run({ argv: ["node", "oma", ...args] });
+    assert.deepEqual(society.calls, ["exit:2"], args.join(" "));
+  }
+});
+
+for (const startupFailure of ["endpoint", "binding", "settings", "provision", "extensions"]) {
+  test(`DR27/P0-4: startup ${startupFailure} failure returns its tenure before any terminal or broker exists`, async () => {
+    const society = await run({ startupFailure });
+    assert.equal(society.lease.holds, false);
+    assert.equal(society.lease.releases, 1, "a taken lease has one return even if failure reporting also unwinds");
+    for (const absent of ["superviseBroker", "PrincipalSession.start", "TuiApp", "restore", "holdsAtFail:true"])
+      assert.equal(society.calls.includes(absent), false, absent);
+    assert.equal(society.calls.filter(call => call.startsWith("exit:")).length, 1);
+    if (["settings", "provision"].includes(startupFailure))
+      assert.ok(society.calls.indexOf("lease.release") < society.calls.indexOf("fail:3"), "release precedes immediate process exit");
+    else assert.ok(society.calls.indexOf("lease.release") < society.calls.indexOf("exit:3"));
+  });
+}
+
+test("DR27/P0-4: an inconclusive startup observation never returns another host's tenure", async () => {
+  const society = await run({ startupFailure: "endpoint", leased: false });
+  assert.equal(society.lease.releases, 0);
+  assert.equal(society.calls.includes("superviseBroker"), false);
+  assert.equal(society.calls.includes("exit:3"), true);
+});
+
+
+test("DR27/P0-4: failed acquired engine keeps the terminal and restart slot until actual exit", async () => {
+  const society = await run({ acquiredFailures: 1, engineExits: false });
+  society.broker.fireReady(); await society.settle();
+  const failed = society.started;
+  assert.ok(failed); assert.equal(failed.closes, 1);
+  assert.equal(society.calls.includes("reclaim"), false, "setup failure is not terminal ownership release");
+  assert.equal(society.lines.some(line => /Enter \/restart/.test(line)), false);
+  assert.equal(society.broker.registrations.length, 0, "failed setup cannot register");
+  society.ports.submitPrompt("/restart"); await society.settle();
+  assert.equal(society.calls.filter(call => call === "PrincipalSession.start").length, 1);
+  society.broker.fireLost(); society.broker.fireReady(); await society.settle();
+  assert.equal(society.calls.filter(call => call === "PrincipalSession.start").length, 1,
+    "broker readiness cannot release a failed engine");
+  failed.confirmDeath(); await society.settle();
+  assert.equal(society.calls.filter(call => call === "reclaim").length, 1);
+  assert.match(society.lines.join("\n"), /Enter \/restart/);
+  assert.equal(society.ports.submitPrompt("/restart").kind, "accepted"); await society.settle();
+  assert.notEqual(society.started, failed);
+  assert.equal(society.broker.registrations.length, 1);
+  assert.equal(society.calls.filter(call => call === "superviseBroker").length, 1);
+  society.started.confirmDeath(); await society.settle();
+});
+
+
+test("DR27: project session directories echo the requesting UI observation id", async () => {
+  const society = await run(); society.broker.fireReady(); await society.settle();
+  const started = society.started;
+  for (const id of ["sessions-1", "sessions-2"]) {
+    started.sink.onUi({ type: "sessions_request", id });
+    await society.settle();
+    const reply = started.uiEvents.at(-1);
+    assert.equal(reply.type, "session_dirs"); assert.equal(reply.id, id);
+    assert.ok(Array.isArray(reply.dirs)); assert.equal(typeof reply.current, "string");
+  }
+  const before = started.uiEvents.length;
+  started.sink.onUi({ type: "sessions_request" });
+  assert.equal(started.uiEvents.length, before, "an uncorrelated query must not produce an uncorrelated answer");
+  society.handlers.SIGINT(); await society.settle();
+});
+
+for (const ending of ["SIGTERM", "uncaughtException"]) {
+  test(`DR27/P0-4: ${ending} returns the display poll and fences its late callback`, async () => {
+    const society = await run(); const old = [...society.intervals][0];
+    assert.ok(old); assert.equal(society.intervals.size, 1);
+    society.handlers[ending](new Error("injected end"));
+    assert.equal(society.intervals.size, 0, "display poll outlived host shutdown");
+    const calls = society.calls.filter(name => name === "status").length;
+    old.run(); await society.settle();
+    assert.equal(society.calls.filter(name => name === "status").length, calls);
+  });
+}
+
+for (const ending of ["SIGTERM", "uncaughtException"]) {
+  test(`DR27/P0-4: ${ending} fences an in-flight display status response`, async () => {
+    let resolveStatus, reads = 0;
+    const society = await run({ statusReply: () => ++reads === 1 ? { kind: "unknown", reason: "probe", observedAtMs: 1 }
+      : new Promise(resolve => { resolveStatus = resolve; }) });
+    const timer = [...society.intervals][0]; timer.run(); assert.equal(reads, 2);
+    society.handlers[ending](new Error("injected end"));
+    const before = society.calls.filter(name => name === "app.draw" || name === "app.refresh").length;
+    resolveStatus({ kind: "unknown", reason: "late", observedAtMs: 2 }); await society.settle();
+    assert.equal(society.calls.filter(name => name === "app.draw" || name === "app.refresh").length, before);
+    assert.equal(society.intervals.size, 0);
+  });
+  test(`DR27/P0-4: ${ending} during initial status cannot restore the closed display`, async () => {
+    const society = await run({ statusReply: handlers => {
+      handlers[ending](new Error("injected initial end"));
+      return { kind: "unknown", reason: "late initial", observedAtMs: 1 };
+    } });
+    const closed = society.calls.indexOf("app.close"); assert.ok(closed >= 0);
+    assert.equal(society.calls.slice(closed + 1).some(name => name === "app.draw" || name === "app.refresh"), false);
+    assert.equal(society.intervals.size, 0);
+  });
+}
+test("DR27/P0-4: a disowned host keeps its observation-only display until the Human quits", async () => {
+  const society = await run({ disowned: "fixture disowned" }); await society.settle();
+  assert.equal(society.intervals.size, 1);
+  assert.equal(society.started, null);
+  society.ports.quit(); await society.settle(); assert.equal(society.intervals.size, 0);
+});
+test("DR27/P0-4: shutdown during startup cannot acquire a later display poll", async () => {
+  const society = await run({ onEgress: handlers => handlers.SIGTERM() });
+  assert.equal(society.intervals.size, 0);
+  assert.equal(society.calls.includes("status"), false);
+});
+test("DR27/P0-4: relaunch returns the display poll before waiting for the engine", async () => {
+  const society = await run({ engineExits: false }); society.broker.fireReady(); await society.settle();
+  const old = [...society.intervals][0]; const live = society.started; assert.ok(live);
+  live.sink.onUi({ type: "switch" });
+  assert.equal(society.intervals.size, 0); assert.equal(society.calls.includes("execve"), false);
+  const reads = society.calls.filter(name => name === "status").length;
+  old.run(); await society.settle(); assert.equal(society.calls.filter(name => name === "status").length, reads);
+  live.confirmDeath(); await society.settle(); assert.equal(society.calls.includes("execve"), true);
+});
+
+const PERSONAL_BIRTH = { id: "personal-fixture", mode: "personal", cwd: "/saved-personal" };
+const PERSONAL_HISTORY = "/state/oma/.personal/personal-fixture/history/fixture.jsonl";
+
+test("DR29/MODE-006: host Personal handoff waits for actual outgoing exit beyond the bounded tenure grace", async () => {
+  const selected = "oma-host-history:controlled", calls = [];
+  const hostHistory = { async inspect(reference) { calls.push(["inspect", reference]); }, async finish(reference) { calls.push(["finish", reference]); }, close() { calls.push(["close"]); }, async pages() {} };
+  const society = await run({ engineExits: false, tenureGraceMs: 1, hostHistory });
+  society.broker.fireReady(); await society.settle(); const live = society.started;
+  live.sink.onUi({ type: "switch", session: selected }); await society.settle();
+  await society.until(() => society.lease.releases === 1);
+  assert.deepEqual(calls, [["inspect", selected]]); assert.equal(society.broker.stops, 0);
+  assert.equal(society.calls.includes("exit:0"), false); assert.equal(society.restarts.length, 0);
+  live.confirmDeath(); await society.until(() => calls.some(call => call[0] === "finish"));
+  assert.deepEqual(calls, [["inspect", selected], ["finish", selected]]);
+  assert.equal(society.broker.stops, 1); assert.equal(society.calls.includes("exit:0"), true);
+  assert.equal(society.restarts.length, 0);
+});
+test("DR29/MODE-006: failed host history admission leaves the outgoing Society and writer running", async () => {
+  const hostHistory = { async inspect() { throw new Error("host history replaced"); }, async finish() { assert.fail("failed admission handed off"); }, close() {}, async pages() {} };
+  const society = await run({ hostHistory }); society.broker.fireReady(); await society.settle(); const live = society.started;
+  live.sink.onUi({ type: "switch", session: "oma-host-history:controlled" }); await society.settle();
+  assert.equal(live.closes, 0); assert.equal(society.broker.stops, 0); assert.equal(society.restarts.length, 0);
+  assert.ok(live.uiEvents.some(event => event.type === "notice" && /replaced/.test(event.text)));
+  society.handlers.SIGTERM(); await society.settle();
+});
+
+test("MODE-005: Society resumes Personal in its saved cwd only after the outgoing writer dies", async () => {
+  const society = await run({ engineExits: false, resumeBirth: PERSONAL_BIRTH, argv: ["node", "oma", "--society", "fixture", "--bind-project"] });
+  society.broker.fireReady(); await society.settle(); const live = society.started;
+  live.sink.onUi({ type: "switch", session: PERSONAL_HISTORY }); await society.settle();
+  assert.equal(live.closes, 1); assert.equal(society.restarts.length, 0); assert.equal(society.broker.stops, 0);
+  live.confirmDeath(); await society.until(() => society.restarts.length === 1);
+  const [node, argv, env] = society.restarts[0];
+  assert.equal(node, "node"); assert.deepEqual(Array.from(argv), ["node", "/lib/dist/src/entry/oma.js"]);
+  assert.equal(env.OMA_RESUME_SESSION, PERSONAL_HISTORY);
+  assert.ok(society.calls.indexOf("chdir:/saved-personal") < society.calls.indexOf("execve"));
+  assert.equal(society.broker.stops, 1); assert.equal(society.lease.releases, 1);
+});
+
+test("MODE-005: /new removes stale resume and binding intent instead of changing the old birth", async () => {
+  const society = await run({ argv: ["node", "oma", "--society", "fixture", "--bind-project"] });
+  society.broker.fireReady(); await society.settle();
+  society.env.OMA_RESUME_SESSION = PERSONAL_HISTORY;
+  society.started.sink.onUi({ type: "switch" }); await society.until(() => society.restarts.length === 1);
+  const [, argv, env] = society.restarts[0];
+  assert.equal(Object.hasOwn(env, "OMA_RESUME_SESSION"), false);
+  assert.deepEqual(Array.from(argv), ["node", "/lib/dist/src/entry/oma.js"]);
+  assert.equal(society.calls.filter(call => call.startsWith("publishSessionBirth:")).length, 1);
+});
+
+test("MODE-006: guest /new reaches the host only after the outgoing writer dies and its broker is returned", async () => {
+  const society = await run({ engineExits: false, hostNew: true });
+  society.broker.fireReady(); await society.settle(); const live = society.started;
+  live.sink.onUi({ type: "switch" }); await society.settle();
+  assert.equal(society.calls.includes("host-new"), false); assert.equal(society.broker.stops, 0);
+  live.confirmDeath();
+  await society.until(() => society.calls.includes("exit:0") || society.restarts.length > 0);
+  assert.equal(society.calls.includes("exit:0"), true, "guest /new must return to the host, not exec inside the guest");
+  assert.equal(society.broker.stops, 1); assert.equal(society.lease.releases, 1);
+  assert.equal(society.restarts.length, 0); assert.equal(society.calls.some(call => call.startsWith("chdir:")), false);
+  assert.ok(society.calls.indexOf("lease.release") < society.calls.indexOf("host-new"));
+});
+
+test("MODE-005: failed resume admission leaves the current Society and its display alive", async () => {
+  const society = await run({ resumeError: new StoreError("STORE_CORRUPT", "fixture history is corrupt") });
+  society.broker.fireReady(); await society.settle(); const live = society.started;
+  live.sink.onUi({ type: "switch", session: PERSONAL_HISTORY }); await society.settle();
+  assert.equal(society.started, live); assert.equal(live.closes, 0); assert.equal(society.broker.stops, 0);
+  assert.equal(society.intervals.size, 1); assert.equal(society.restarts.length, 0); assert.equal(society.lease.holds, true);
+  assert.match(live.uiEvents.at(-1).text, /fixture history is corrupt/);
+  society.handlers.SIGTERM(); await society.settle();
+});
+
+for (const admission of ["corrupt", "personal"]) test(`MODE-005: direct Society ${admission} resume refuses before ownership or provisioning`, async () => {
+  const society = await run({ argv: ["node", "oma", "--resume", PERSONAL_HISTORY], resumeBirth: PERSONAL_BIRTH,
+    ...(admission === "corrupt" ? { resumeError: new StoreError("STORE_CORRUPT", "fixture history is corrupt") } : {}) });
+  assert.equal(society.calls.filter(call => call === "sessionBirthForHistory").length, 1);
+  for (const absent of ["tryHoldSociety", "readSettings", "writeSettings", "provisionSociety", "superviseBroker", "PrincipalSession.start", "TuiApp"])
+    assert.equal(society.calls.includes(absent), false, absent);
+  assert.equal(society.calls.filter(call => call.startsWith("exit:")).length, 1);
+});
+
+for (const failure of [false, true]) test(`MODE-005/P0-4: shutdown fences a late resume ${failure ? "failure" : "success"}`, async () => {
+  let resolve, reject;
+  const society = await run({ resumeReply: () => new Promise((yes, no) => { resolve = yes; reject = no; }) });
+  society.broker.fireReady(); await society.settle(); const live = society.started;
+  live.sink.onUi({ type: "switch", session: PERSONAL_HISTORY });
+  society.handlers.SIGTERM(); await society.settle(); const notices = live.uiEvents.length;
+  if (failure) reject(new StoreError("STORE_CORRUPT", "late admission failure")); else resolve(PERSONAL_BIRTH);
+  await society.settle();
+  assert.equal(society.restarts.length, 0); assert.equal(live.uiEvents.length, notices);
+  assert.equal(society.calls.filter(call => call === "app.close").length, 1);
+  assert.equal(society.lease.releases, 1); assert.equal(society.broker.stops, 1);
+});
+
+test("MODE-005/P0-4: one pending resume owns admission; duplicate switch cannot start a second teardown", async () => {
+  let resolve;
+  const society = await run({ resumeReply: () => new Promise(yes => { resolve = yes; }) });
+  society.broker.fireReady(); await society.settle(); const live = society.started;
+  live.sink.onUi({ type: "switch", session: PERSONAL_HISTORY });
+  live.sink.onUi({ type: "switch" });
+  live.sink.onUi({ type: "switch", session: PERSONAL_HISTORY }); await society.settle();
+  assert.equal(live.closes, 0); assert.equal(society.restarts.length, 0);
+  assert.equal(society.calls.filter(call => call === "sessionBirthForHistory").length, 1);
+  resolve(PERSONAL_BIRTH); await society.until(() => society.restarts.length === 1);
+  assert.equal(live.closes, 1); assert.equal(society.broker.stops, 1);
+  assert.equal(society.restarts[0][2].OMA_RESUME_SESSION, PERSONAL_HISTORY);
 });

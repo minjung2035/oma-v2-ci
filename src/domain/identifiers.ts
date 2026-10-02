@@ -17,6 +17,8 @@ export const ACTOR_NAME_RE = /^[a-z][a-z0-9-]{0,31}$/;
 export const TOPIC_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
 export const REQUEST_KEY_RE = /^[A-Za-z0-9._-]{1,96}$/;
 export const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const PLATFORM_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+export function isPlatformUuid(value: unknown): value is string { return typeof value === "string" && PLATFORM_UUID.test(value); }
 export const OPERATION_ID_RE = new RegExp(`^op-${UUID_V4_RE.source.slice(1, -1)}$`);
 export const BATCH_ID_RE = new RegExp(`^b-${UUID_V4_RE.source.slice(1, -1)}$`);
 export const MESSAGE_ID_RE = new RegExp(`^m-(${UUID_V4_RE.source.slice(1, -1)})-(\\d+)$`);

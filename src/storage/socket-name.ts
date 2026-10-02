@@ -1,9 +1,9 @@
 /** A listening socket's name at a path (P0V-114, G04-02/G04-03/G03-05).
  *
  * One owner for the name a server of this path left: cleared before a server
- * listens there again, and removed when a server is done with it. The name's
- * absence is what is wanted, so a name already gone -- removed by the kernel's
- * own close, or by anyone between a look and the removal -- is not a failure.
+ * listens there again. Node server.close owns removal at shutdown; calling
+ * this helper then could unlink a replacement server. An already absent name
+ * (including ENOENT between the check and removal) needs no cleanup.
  * Only a socket is removed: a file of another type at the path is not a name
  * a server left, and it is refused rather than deleted.
  *

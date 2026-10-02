@@ -8,12 +8,11 @@
  * it is idempotent: it creates what is absent and touches nothing that exists.
  *
  * `oma` names the society after the project directory, so the society works
- * on that project: the canonical `main` starts at the project's committed
- * `HEAD`. Only committed history is taken — what a clone would take — never
- * uncommitted files, and never anything past the first start: afterwards the
- * canonical repository moves only through OMA's own integration. A directory
- * that is not a repository, or one with no commit yet, starts from an empty
- * root commit, and the report says which happened.
+ * on that project: the first canonical `main` captures its current worktree,
+ * with committed HEAD as parent (or no parent for an unborn/plain directory).
+ * The user's index, refs and worktree are not written. After the first start,
+ * canonical history moves only through OMA's own integration. A bare source
+ * is an already-frozen imported snapshot and supplies its committed HEAD.
  *
  * REC-007: this only ever creates. Correcting something that is there and
  * wrong is a write over state that may belong to another process's society, so
@@ -38,6 +37,7 @@ import { StoreError, unobserved } from "../domain/errors.js";
 import { isValidSocietyName } from "../domain/identifiers.js";
 import { modelWorkspaceFor } from "../domain/derived.js";
 import { runGitText } from "../process/policies.js";
+import { withProjectSnapshot, SNAPSHOT_GIT_OPTIONS } from "../git/project-snapshot.js";
 import { createCanonicalObserver, createCanonicalRef } from "../git/canonical-command.js";
 import { ensureDurableDirectory, fsyncHeldDir, fsyncTree, writeExclusiveFsyncedFile } from "../storage/durable-fs.js";
 import { ensureDirectory, removeOwnedFile } from "../storage/directory.js";
@@ -209,7 +209,7 @@ function createCanonicalMain(projectGit: string, oid: string, what: string): boo
  * `upload-pack` ignores command-running settings in repository configuration.
  * It brings the objects only; `main` itself is made by the CAS above. */
 function seedFromProject(projectGit: string, projectDir: string, oid: string): boolean {
-  const fetched = runGitText(["fetch", "--no-tags", "--quiet", projectDir, oid],
+  const fetched = runGitText([...SNAPSHOT_GIT_OPTIONS, "fetch", "--no-tags", "--quiet", projectDir, oid],
     { gitDir: projectGit, timeout: 10 * 60 * 1000 });
   if (fetched.status !== 0)
     throw new StoreError("STORE_CORRUPT",
@@ -258,7 +258,11 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
   // after that its history belongs to the society, not to this directory.
   const fresh = !existsSync(projectGit) || !hasCanonicalMain(projectGit);
   const project = fresh && options.projectDir !== undefined ? projectHead(options.projectDir) : null;
-  const format = project !== null && "oid" in project ? project.format : "sha1";
+  const bare = project !== null && "oid" in project &&
+    git(["-C", options.projectDir!, "rev-parse", "--is-bare-repository"]) === "true";
+  const sourceIsGit = project !== null && ("oid" in project || project.note === "the project directory has no committed HEAD");
+  const format = project !== null && "oid" in project ? project.format : sourceIsGit
+    ? git(["-C", options.projectDir!, "rev-parse", "--show-object-format"]) : "sha1";
   if (ensureBareRepository(projectGit, format)) created.push(join("repos", "project.git"));
   if (ensureBareRepository(join(stateRoot, "repos", "context.git"))) created.push(join("repos", "context.git"));
   let seedSource: ProvisionReport["seedSource"] = null;
@@ -266,8 +270,15 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
     // Reported only by the start that actually seeded. A start that lost the
     // race created nothing and says so, so the product does not tell the user
     // it started a society that was already there.
-    if (project !== null && "oid" in project) {
+    if (bare && project !== null && "oid" in project) {
       if (seedFromProject(projectGit, options.projectDir!, project.oid)) seedSource = "project";
+    } else if (options.projectDir !== undefined) {
+      if (format !== "sha1" && format !== "sha256") throw new StoreError("UNSUPPORTED_PROFILE", "unsupported project object format");
+      withProjectSnapshot({ source: options.projectDir, parent: project !== null && "oid" in project ? project.oid : null,
+        sourceIsGit, format, temporaryParent: dirname(projectGit), executable: "/usr/bin/git" }, snapshot => {
+        if (seedFromProject(projectGit, snapshot.repository, snapshot.head)) seedSource = snapshot.empty &&
+          (project === null || !("oid" in project)) ? "empty" : "project";
+      });
     } else if (seedEmptyRoot(projectGit)) seedSource = "empty";
   }
   const seeded = seedSource !== null;
@@ -294,8 +305,10 @@ export function provisionSociety(stateRoot: string, options: ProvisionOptions = 
  * the mirror is current. */
 export function refreshProjectMirror(stateRoot: string, projectDir: string): string | null {
   const project = projectHead(projectDir);
-  if ("note" in project) return project.note;
   const mirror = projectMirrorPathAt(stateRoot);
+  // A project that never had history has nothing to mirror, which is not news
+  // at every start; one whose history the mirror holds and cannot now be read is.
+  if ("note" in project) return existsSync(mirror) ? project.note : null;
   ensureBareRepository(mirror, project.format);
   const format = runGitText(["rev-parse", "--show-object-format"], { gitDir: mirror });
   if (format.status !== 0 || format.stdout.trim() !== project.format)
@@ -319,61 +332,8 @@ export function repairSociety(stateRoot: string): readonly string[] {
     process.getuid?.() ?? 0, process.getgid?.() ?? 0, "repair").corrected;
 }
 
-/** D05/WP16.03: the host identity record that binds a society to exactly one
- * project. Closed fields, at most 4 KiB, 0600 in the 0700 state root,
- * published through a private temporary, file fsync, no-replace link and
- * parent fsync before anything else of the society is written. It is host
- * metadata for quiescent backup/restore -- not a ledger, wire or receipt
- * record -- and binaries older than it cannot enforce it. */
-export const PROJECT_BINDING = "project-binding.json";
-const BINDING_KIND = "oma-project-binding-v1";
-const BINDING_MAX_BYTES = 4096;
-export interface ProjectBinding {
-  readonly kind: typeof BINDING_KIND;
-  readonly society: string;
-  readonly canonicalProjectPath: string;
-}
-export type ProjectBindingObservation =
-  | { readonly kind: "absent" }
-  | { readonly kind: "bound"; readonly binding: ProjectBinding }
-  | { readonly kind: "unreadable"; readonly reason: string }
-  | { readonly kind: "unavailable"; readonly reason: string };
-
-export function observeProjectBinding(stateRoot: string): ProjectBindingObservation {
-  // FS-005 / INV09: one resolution of the state root; the entry checked is the one read.
-  let text: string | null;
-  try {
-    text = withinDirectory(join(stateRoot, PROJECT_BINDING), (directory, name) => {
-      let fd: number;
-      try { fd = openRegularBeneath(directory, name); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
-      try {
-        if (fstatSync(fd).size > BINDING_MAX_BYTES) throw new Error("the project binding is not a small regular file");
-        return readFileSync(fd, "utf8");
-      } finally { closeSync(fd); }
-    });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "absent" };
-    const unknown = unobserved(error, "the project binding");
-    if (unknown !== null) return { kind: "unavailable", reason: unknown.message };
-    return { kind: "unreadable", reason: error instanceof Error ? error.message : String(error) };
-  }
-  if (text === null) return { kind: "absent" };
-  try {
-    const value: unknown = JSON.parse(text);
-    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("not an object");
-    const record = value as Record<string, unknown>;
-    const keys = Object.keys(record).sort();
-    if (keys.join(",") !== "canonicalProjectPath,kind,society" || record.kind !== BINDING_KIND ||
-        !isValidSocietyName(record.society) || typeof record.canonicalProjectPath !== "string" ||
-        !record.canonicalProjectPath.startsWith("/"))
-      throw new Error("not an oma-project-binding-v1 record");
-    return { kind: "bound", binding: Object.freeze({ kind: BINDING_KIND, society: record.society,
-      canonicalProjectPath: record.canonicalProjectPath }) };
-  } catch (error) {
-    return { kind: "unreadable", reason: error instanceof Error ? error.message : String(error) };
-  }
-}
+export { PROJECT_BINDING, observeProjectBinding, type ProjectBinding, type ProjectBindingObservation } from "./project-binding.js";
+import { PROJECT_BINDING, BINDING_KIND, BINDING_MAX_BYTES, observeProjectBinding, type ProjectBinding, type ProjectBindingObservation } from "./project-binding.js";
 
 /** Whether a state root already holds a society (anything but a binding or
  * its temporaries): such a tree is never bound implicitly. */
@@ -384,7 +344,7 @@ export function stateRootHasSociety(stateRoot: string): boolean {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw unobserved(error, "the state root") ?? new StoreError("STORE_CORRUPT", `the state root cannot be observed: ${error instanceof Error ? error.message : String(error)}`);
   }
-  return entries.some(entry => entry !== PROJECT_BINDING && !entry.startsWith(`.${PROJECT_BINDING}.`));
+  return entries.some(entry => entry !== "session-mode.json" && entry !== PROJECT_BINDING && !entry.startsWith(`.${PROJECT_BINDING}.`));
 }
 
 export type ProjectBindingDecision =

@@ -8,7 +8,7 @@ import { closeSync, constants, fstatSync, mkdtempSync, openSync, readSync, rmSyn
 import { isAbsolute, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { logicalFromDisplay, validAddress, validMessageId } from "./batch-view.js";
+import { logicalFromDisplay, validAddress, validFullOid, validMessageId } from "./batch-view.js";
 export { validAddress } from "./batch-view.js";
 import { runCliProcess, type CliResult } from "./cli-process.js";
 import { PrincipalChannel } from "./principal-channel.js";
@@ -26,6 +26,10 @@ export const OMA_TOOL_NAMES: readonly string[] = Object.freeze([
   // Registered only for the Principal's engine (AV11).
   ...PRINCIPAL_TOOL_NAMES,
 ]);
+export function omaToolNames(principal: boolean): readonly string[] {
+  return principal ? ["oma_mail_read", "oma_mail_send", ...PRINCIPAL_TOOL_NAMES]
+    : ["oma_mail_read", "oma_mail_send", "oma_mail_ack", "oma_status"];
+}
 /** A message by any name OMA shows for it (AV15, BATCH-002): its id, the
  * archive path shown for it, that path's file name -- the Maildir name the index
  * lists -- or this society's RFC Message-ID, which its headers show (MAIL-004).
@@ -203,17 +207,15 @@ export function cliEnvironment(home: string, socket: string, archive: string): R
   // The frame and stream bounds the broker was configured with. Without them
   // the CLI falls back to its own defaults, which are not necessarily this
   // society's.
-  for (const name of [FRAME_BYTES, CONTEXT_BYTES, BUNDLE_BYTES]) {
+  for (const name of [FRAME_BYTES, CONTEXT_BYTES, BUNDLE_BYTES, "OMA_PROJECT_GIT", "OMA_CONTEXT_GIT"]) {
     const value = process.env[name];
     if (value !== undefined && value.length > 0) environment[name] = value;
   }
   return environment;
 }
 
-/** How long one CLI call may take before it is stopped. The CLI enforces its
- * own shorter deadline; this bounds a child that stopped answering at all. */
-const CLI_TIMEOUT_MS = 120_000;
-
+/** The CLI owns each preparation/transport deadline. No sum-of-phases tool
+ * timer may kill it between an accepted effect and its same-key lookup. */
 async function runCli(
   cli: string,
   cwd: string,
@@ -226,7 +228,7 @@ async function runCli(
     node: process.execPath, cli, args, cwd, env: environment,
     // Read at each call: a restarted broker replaces the credential.
     grant: channel.current(),
-    signal, timeoutMs: CLI_TIMEOUT_MS,
+    signal,
   });
   const failure = cliFailure(result, args);
   if (failure !== null) throw failure;
@@ -242,12 +244,12 @@ export function cliFailure(result: CliResult, args: readonly string[]): Error | 
   const key = at >= 0 && at + 1 < args.length && args[at + 1] !== "--" ? args[at + 1] : undefined;
   if (!result.finished)
     return new Error(key === undefined
-      ? "결과 불명확: CLI가 답하기 전에 멈췄습니다"
-      : `결과 불명확: CLI가 답하기 전에 멈춰 이 요청의 결과를 모릅니다. 같은 request "${key}"로 다시 호출하면 결과를 조회합니다; 새 request로 다시 하지 마세요`);
+      ? "Outcome unknown:The CLI stopped before replying"
+      : `Outcome unknown:The CLI stopped before replying, so the outcome is unknown. Call again with the same request "${key}" to query the outcome; do not use a new request`);
   if (result.code === 0) return null;
   return new Error((result.stderr || result.stdout || `CLI exited ${result.code}`).trim().slice(0, 2000));
 }
-export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: PrincipalChannel = PrincipalChannel.detached()): void {
+export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: PrincipalChannel = PrincipalChannel.detached()): (() => Promise<boolean>) | undefined {
   const cli = process.env.OMA_CLI_PATH;
   const home = process.env.OMA_AGENT_HOME;
   const archive = process.env.OMA_MAIL_ARCHIVE;
@@ -308,6 +310,8 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
           Type.Literal("critical"),
         ]),
       ),
+      ...(channel.attached ? { intent: Type.Optional(Type.Literal("goal", { description: "Explicitly publish this body as GOAL.md and mail it to residents. Requires expectedRevision; preserves other shared context documents." })),
+        expectedRevision: Type.Optional(Type.String({ description: "Current context revision or none for the first GOAL" })) } : {}),
       replyTo: Type.Optional(Type.String()),
       request: Type.Optional(Type.String({ description: REQUEST_PARAMETER_HELP })),
     }),
@@ -318,6 +322,13 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
         const logical = logicalFromDisplay(address, society) ?? address;
         return validAddress(logical) ? logical : refused("address", address);
       });
+      const intent = "intent" in params ? params.intent : undefined;
+      const expected = "expectedRevision" in params ? params.expectedRevision : undefined;
+      if (intent !== undefined && (!channel.attached || intent !== "goal" || typeof expected !== "string" ||
+          (expected !== "none" && !validFullOid(expected)) ||
+          to.length !== 1 || to[0] !== "residents" || params.kind !== undefined || params.replyTo !== undefined))
+        refused("GOAL mail intent", params);
+      if (intent === undefined && expected !== undefined) refused("expectedRevision without GOAL intent", expected);
       const kind = params.kind ?? "message";
       if (!SEND_KINDS.has(kind)) refused("mail kind", kind);
       const key = requestKeyOf(params.request, { id, tool: "oma_mail_send", params, context });
@@ -330,7 +341,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
           "send",
           "--subject", params.subject,
           "--file", body,
-          "--kind", kind,
+          ...(intent === "goal" ? ["--intent", "goal", "--expect", expected as string] : ["--kind", kind]),
           "--request", key,
           ...(reply === null ? [] : ["--reply", reply]),
           "--", ...to,
@@ -344,7 +355,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       }
     },
   });
-  pi.registerTool({
+  if (!channel.attached) pi.registerTool({
     name: "oma_mail_ack",
     label: "Acknowledge OMA mail",
     description: "Durably acknowledge one OMA message.",
@@ -368,7 +379,7 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
       );
     },
   });
-  pi.registerTool({
+  if (!channel.attached) pi.registerTool({
     name: "oma_status",
     label: "OMA status",
     description: "Read society or agent status.",
@@ -390,5 +401,14 @@ export function registerOmaTools(pi: ExtensionAPI, cwd: string, channel: Princip
   // AV11: the Principal's other capabilities go through the same CLI, as the Principal.
   if (channel.attached)
     registerPrincipalTools(pi, { run: (args, signal, at) => runCli(cli, at ?? cwd, environment, channel, args, signal),
-      workspace: cwd, projectGit: process.env.OMA_PROJECT_GIT, society });
+      workspace: cwd, society });
+  // RUN-003: observe only at a persisted tool boundary, through the same
+  // authenticated CLI and frozen environment as every collaboration tool.
+  if (!channel.attached) return async () => {
+    const value: unknown = JSON.parse(await runCli(cli, cwd, environment, channel, ["agent", "wait", "--observe", "true"]));
+    if (value === null || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).length !== 1 || !("accepted" in value) || typeof value.accepted !== "boolean")
+      throw new Error("Run wait observation was malformed");
+    return value.accepted;
+  };
 }

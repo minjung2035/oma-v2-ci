@@ -66,7 +66,7 @@ export interface InternalDispatchDependencies {
   admitResource: ResourceGate;
   failureAnswer(id: string, error: unknown): object;
   refreshViews(): void;
-  openRun(actor: Actor, invocationId: string): RunLease;
+  openRun(actor: Actor, invocationId: string): Promise<RunLease>;
 }
 /** What admitting an internal method needs from the broker. */
 export type InternalAdmission = Pick<InternalDispatchDependencies, "isDraining" | "assertAdmission" | "admitResource">;
@@ -149,7 +149,7 @@ export class InternalDispatcher {
           );
           return okAnswer(
             id,
-            this.deps.openRun(
+            await this.deps.openRun(
               dispatchParams.agent,
               dispatchParams.invocationId,
             ),

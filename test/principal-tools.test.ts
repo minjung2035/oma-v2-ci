@@ -1,13 +1,5 @@
-/** AV11 -- the Principal's capabilities, reachable by its model through the
- * trusted extension, each value in its slot.
- *
- * The functional run with a real provider found a society that could not start:
- * the Principal holds agent.create, agent.manage.descendants, route.follow and
- * context.publish, Residents are created when asked for and none works before
- * the GOAL is published, but the Principal's model had only mail and status
- * tools and no shell. These run the real extension tools against the real CLI
- * and a socket peer that records every frame and refuses it.
- */
+/** AV11/DR27: the Principal reviews, reads and communicates; it does not
+ * orchestrate workers or write code. Real extension -> CLI -> refusing peer. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -54,11 +46,11 @@ const sent = (frames: readonly Record<string, unknown>[], method: string) =>
   frames.filter(frame => frame.method === method).map(frame => frame.params as Record<string, unknown>);
 
 type Tool = { execute: (id: string, params: Record<string, unknown>) => Promise<unknown> };
-function register(root: string, socket: string, principal: boolean, projectGit?: string): Map<string, Tool> {
+function register(root: string, socket: string, principal: boolean, projectGit?: string, contextGit?: string): Map<string, Tool> {
   const tools = new Map<string, Tool>();
   const previous = { ...process.env };
   Object.assign(process.env, { OMA_CLI_PATH: CLI, OMA_AGENT_HOME: root, OMA_MAIL_ARCHIVE: join(root, "archive"), OMA_SOCKET: socket,
-    ...(projectGit === undefined ? {} : { OMA_PROJECT_GIT: projectGit }) });
+    ...(projectGit === undefined ? {} : { OMA_PROJECT_GIT: projectGit }), OMA_CONTEXT_GIT: contextGit ?? "" });
   const channel = PrincipalChannel.detached();
   // The Principal's engine is the one the product starts with its channel attached.
   if (principal) Object.defineProperty(channel, "attached", { value: true });
@@ -71,7 +63,7 @@ function register(root: string, socket: string, principal: boolean, projectGit?:
   return tools;
 }
 /** A bare canonical repository whose main is one commit. */
-function canonical(root: string): { gitDir: string; main: string } {
+function canonical(root: string, format = "sha1", filename = "README.md"): { gitDir: string; main: string } {
   const git = (cwd: string, ...args: string[]) => {
     const run = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8" });
     assert.equal(run.status, 0, run.stderr);
@@ -79,61 +71,60 @@ function canonical(root: string): { gitDir: string; main: string } {
   };
   const work = join(root, "seed");
   mkdirSync(work);
-  git(work, "init", "-q", "-b", "main");
-  writeFileSync(join(work, "README.md"), "seed\n");
-  git(work, "add", "README.md");
+  git(work, "init", "-q", "-b", "main", `--object-format=${format}`);
+  writeFileSync(join(work, filename), "seed\n");
+  git(work, "add", filename);
   git(work, "commit", "-qm", "seed");
   const gitDir = join(root, "project.git");
   git(root, "clone", "-q", "--bare", work, gitDir);
   return { gitDir, main: git(gitDir, "rev-parse", "refs/heads/main") };
 }
 
-test("AV11 / arch §8.3, §15.1, PR-004: the Principal's model reaches its capabilities through the extension, each value in its slot", { timeout: 60_000 }, async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-av11-"));
-  const fixture = await peer(root);
+test("AV11/DR27: the Principal reaches read/review/safety capabilities, without orchestration tools", { timeout: 60_000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av11-")); const fixture = await peer(root);
   try {
-    const { gitDir, main } = canonical(root);
-    const tools = register(root, fixture.path, true, gitDir);
-    for (const name of PRINCIPAL_TOOL_NAMES) assert.ok(tools.has(name), `${name} was not registered for the Principal`);
-    // DR18 (MAIL-001/002): topics are the Residents'; the Principal is offered no tool to follow one.
-    assert.equal(tools.has("oma_route"), false, "the Principal was offered a topic subscription that delivers nothing");
+    const { gitDir, main } = canonical(root); const tools = register(root, fixture.path, true, gitDir);
+    for (const name of PRINCIPAL_TOOL_NAMES) assert.ok(tools.has(name), `${name} was not registered`);
+    for (const name of ["oma_agent_create", "oma_status", "oma_logs", "oma_mail_ack", "oma_context_publish", "oma_route", "write", "edit"])
+      assert.equal(tools.has(name), false, `${name} must not be offered to the Principal`);
     const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
-    mkdirSync(join(root, "shared"));
-    writeFileSync(join(root, "shared", "GOAL.md"), "Check every feature.\n");
-    const outside = mkdtempSync(join(tmpdir(), "oma-av11-outside-"));
-    try {
-      for (const [name, params] of [
-        ["oma_agent_create", { name: "--file", brief: "b" }],
-        ["oma_agent_create", { name: "worker", brief: "b", from: "main" }],
-        ["oma_agent_create", { name: "worker", brief: "" }],
-        ["oma_agent_lifecycle", { name: "worker", action: "retire" }],
-        ["oma_agent_lifecycle", { name: "principal", action: "stop" }],
-        ["oma_context_publish", { directory: outside, expect: "none" }],
-        ["oma_context_publish", { directory: "../elsewhere", expect: "none" }],
-        ["oma_context_publish", { directory: "shared", expect: "HEAD" }],
-        ["oma_logs", { agent: "worker", since: "10" }],
-        ["oma_logs", { agent: "--since", since: "10m" }],
-      ] as const) {
-        await assert.rejects(() => call(name, params), /is not valid/, `${name} ${JSON.stringify(params)} was not refused`);
-      }
-    } finally { rmSync(outside, { recursive: true, force: true }); }
-    assert.equal(fixture.frames.length, 0, "a refused tool call reached the broker");
-
-    // What the model meant reaches the broker as that method and those values.
-    await assert.rejects(() => call("oma_agent_create", { name: "worker", brief: "Check the mail paths." }));
-    assert.deepEqual(sent(fixture.frames, "agent.create"), [{ name: "worker", from: main, brief: "Check the mail paths." }],
-      "the default base was not the society's main");
-    const other = "c".repeat(40);
-    await assert.rejects(() => call("oma_agent_create", { name: "helper", brief: "b", from: other }));
-    assert.equal(sent(fixture.frames, "agent.create")[1]!.from, other);
-    await assert.rejects(() => call("oma_agent_lifecycle", { name: "worker", action: "stop" }));
+    for (const [name, params] of [
+      ["oma_society", { action: "restart" }],
+      ["oma_agent_lifecycle", { name: "worker", action: "retire" }],
+      ["oma_agent_lifecycle", { name: "principal", action: "stop" }],
+      ["oma_agent_lifecycle", { name: "--file", action: "stop" }],
+      ["oma_challenge_finding", { challenge: "invalid", valid: true }],
+      ["oma_mail_send", { to: ["residents"], subject: "Goal", body: "b", intent: "goal", expectedRevision: "HEAD" }],
+    ] as const) await assert.rejects(() => call(name, params), /is not valid/);
+    assert.equal(fixture.frames.length, 0);
+    const read = await call("oma_git", { action: "show", path: "README.md" });
+    assert.match(JSON.stringify(read), /seed/); assert.match(JSON.stringify(read), new RegExp(main));
+    assert.equal(fixture.frames.length, 0, "code observation is local and read-only");
+    await assert.rejects(() => call("oma_society", { action: "close", request: "close" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
+    await assert.rejects(() => call("oma_society", { action: "open", request: "open" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
+    assert.deepEqual(sent(fixture.frames, "society.set"), [{ state: "closed" }, { state: "open" }]);
+    await assert.rejects(() => call("oma_agent_lifecycle", { name: "worker", action: "stop" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     assert.deepEqual(sent(fixture.frames, "agent.stop"), [{ agent: "worker" }]);
-    await assert.rejects(() => call("oma_context_publish", { directory: "shared", expect: "none" }));
-    const [published] = sent(fixture.frames, "context.publish");
-    assert.equal(published!.expected, null);
-    assert.deepEqual((published!.entries as { path: string }[]).map(entry => entry.path), ["GOAL.md"]);
-    await assert.rejects(() => call("oma_logs", { agent: "worker", since: "10m" }));
-    assert.deepEqual(sent(fixture.frames, "logs.read"), [{ agent: "worker", sinceSeconds: 600 }]);
+    const exact = { candidate: "c".repeat(40), base: main, policyRevision: "p1" };
+    const operation = "op-00000000-0000-4000-8000-000000000001";
+    const facts = [
+      ["oma_review_decide", { ...exact, verdict: "ACCEPT", evidence: "Read exact diff" }, "decision"],
+      ["oma_challenge_finding", { challenge: operation, valid: true, floor: "HIGH", scope: "changed semantics", evidence: "Reproduced" }, "finding"],
+      ["oma_challenge_scope", { ...exact, finding: operation, applies: false, evidence: "Different semantics" }, "scope"],
+      ["oma_attestation_revoke", { attestation: operation, evidence: "Withdrawn" }, "revoke"],
+    ] as const;
+    for (const [name, params, kind] of facts) {
+      await assert.rejects(() => call(name, params), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
+      const recorded = sent(fixture.frames, "attest.record").at(-1)!;
+      assert.equal(recorded.kind, kind); assert.equal(recorded.evidence, params.evidence);
+      if ("candidate" in params) assert.deepEqual(recorded.identity, { repo: "project", targetRef: "refs/heads/main",
+        candidate: exact.candidate, expectedBase: exact.base, policyRevision: exact.policyRevision });
+    }
+    await assert.rejects(() => call("oma_mail_send", { to: ["residents"], subject: "Plan", body: "Check every feature.\n",
+      intent: "goal", expectedRevision: "none", request: "goal" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
+    const published = sent(fixture.frames, "context.publish")[0]!;
+    assert.equal(published.expected, null); assert.deepEqual(published.goalMail, { subject: "Plan" });
+    assert.deepEqual((published.entries as { path: string }[]).map(entry => entry.path), ["GOAL.md"]);
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -153,6 +144,24 @@ test("AV11 / INV04: the extension's topic and full-id grammar is the wire gramma
     assert.equal(validTopicName(sample), isValidTopicName(sample), `topic ${JSON.stringify(sample)}`);
     assert.equal(validFullOid(sample), isValidFullOid(sample), `full id ${JSON.stringify(sample)}`);
   }
+});
+
+test("DR27/INV04: full object ids use one grammar in host and isolated extension", () => {
+  for (let size = 0; size <= 66; size++) {
+    const sample = "a".repeat(size);
+    for (const decode of [isValidFullOid, validFullOid])
+      assert.equal(decode(sample), size === 40 || size === 64, `length ${size}`);
+  }
+  for (const size of [40, 64]) {
+    const id = "0123456789abcdef".repeat(4).slice(0, size);
+    for (const decode of [isValidFullOid, validFullOid]) {
+      assert.equal(decode(id), true);
+      for (const sample of [id.toUpperCase(), ` ${id}`, `${id} `, `${id}\n`, `${id}\0`, `refs/${id}`, id.slice(1)])
+        assert.equal(decode(sample), false, JSON.stringify(sample));
+    }
+  }
+  for (const sample of [null, undefined, false, 40, {}, [], ["a".repeat(40)]])
+    for (const decode of [isValidFullOid, validFullOid]) assert.equal(decode(sample), false);
 });
 
 test("AV15 / BATCH-002, INV04: a tool takes the names OMA shows -- this society's RFC address, a message's file name -- as what they display", async () => {
@@ -187,54 +196,44 @@ test("AV15 / BATCH-002, INV04: a tool takes the names OMA shows -- this society'
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test("AV18 / CREATE-002, arch §11, §15.1: under the default configuration a Resident the Principal creates can submit", async () => {
-  const { defaultHostConfig } = await import("../src/config/defaults.js");
-  const { resolveChildSpec } = await import("../src/domain/child-policy.js");
-  const cfg = defaultHostConfig({ society: "demo", node: "/usr/bin/node", libdir: "/opt/oma", rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
-  const principal = cfg.agentProfiles[cfg.principalProfile]!;
-  // Nothing is configured to be delegated that the delegator does not hold.
-  for (const [name, profile] of Object.entries(cfg.agentProfiles))
-    for (const capability of profile.delegable) assert.ok(profile.capabilities.includes(capability), `${name} delegates ${capability} it does not hold`);
-  const child = resolveChildSpec(cfg, { name: "principal", profile: cfg.principalProfile, capabilities: principal.capabilities }, { name: "worker", from: "a".repeat(40), brief: "b" });
-  assert.ok(child);
-  assert.deepEqual(child.spec.capabilities, [...cfg.agentProfiles[principal.childProfile!]!.capabilities].sort(),
-    "the default Principal cannot give its Residents the Resident profile's capabilities");
-  assert.ok(child.spec.capabilities.includes("git.submit"));
-  assert.equal(principal.capabilities.includes("code.integrate"), false, "the Principal was given code.integrate (AUTH-001)");
-});
 
-/** AV29 -- FS-003, CTX-002: the ninth functional run. The Principal published
- * its workspace as the context once, and the second publication was refused
- * "unsupported context directory .local": the workspace is the CLI's home, and
- * its private request cache appears there with the first CLI call. The
- * workspace itself is refused the same way every time; a directory in it that
- * holds only the context files is the one to publish.
- * AV30 -- AV15's rule for every actor slot: a status call naming
- * "principal@provtest.oma.invalid" was refused as not an agent. */
-test("AV29, AV30: the workspace itself is never a context tree, and an actor slot takes the address OMA shows", { timeout: 60_000 }, async () => {
-  const root = mkdtempSync(join(tmpdir(), "oma-av29-"));
-  const fixture = await peer(root);
+test("AV29/DR27, AV30: GOAL is explicit mail intent, and safety control accepts displayed actor addresses", { timeout: 60_000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-av29-")); const fixture = await peer(root);
   try {
-    const previous = process.env.OMA_SOCIETY;
-    process.env.OMA_SOCIETY = "demo";
+    const previous = process.env.OMA_SOCIETY; process.env.OMA_SOCIETY = "demo";
     let tools: Map<string, Tool>;
     try { tools = register(root, fixture.path, true); }
     finally { if (previous === undefined) delete process.env.OMA_SOCIETY; else process.env.OMA_SOCIETY = previous; }
     const call = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute("t", params);
-    writeFileSync(join(root, "GOAL.md"), "goal\n");
-    for (const directory of [root, ".", `${root}/`])
-      await assert.rejects(() => call("oma_context_publish", { directory, expect: "none" }), /not the workspace itself/, directory);
-    mkdirSync(join(root, "context")); writeFileSync(join(root, "context", "GOAL.md"), "goal\n");
-    await assert.rejects(() => call("oma_context_publish", { directory: "context", expect: "none" }), /BROKER_UNAVAILABLE/);
-    assert.equal(sent(fixture.frames, "context.publish").length, 1, "a directory holding only the context was not published");
-    await assert.rejects(() => call("oma_status", { agent: "worker@demo.oma.invalid" }), /BROKER_UNAVAILABLE/);
-    assert.deepEqual(sent(fixture.frames, "status.get").at(-1), { agent: "worker" });
-    await assert.rejects(() => call("oma_agent_lifecycle", { name: "worker@demo.oma.invalid", action: "start" }), /BROKER_UNAVAILABLE/);
+    writeFileSync(join(root, "GOAL.md"), "workspace file must not be used\n");
+    for (const extra of [{ kind: "context" }, { expectedRevision: "none" }, { intent: "goal" },
+      { intent: "goal", expectedRevision: "none", replyTo: "m-00000000-0000-4000-8000-000000000001-0" }])
+      await assert.rejects(() => call("oma_mail_send", { to: ["residents"], subject: "Plan", body: "explicit body", ...extra }), /is not valid/);
+    assert.equal(fixture.frames.length, 0);
+    await assert.rejects(() => call("oma_mail_send", { to: ["residents"], subject: "Plan", body: "explicit body",
+      intent: "goal", expectedRevision: "none" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
+    assert.equal(sent(fixture.frames, "context.publish").length, 1);
+    for (const format of ["sha1", "sha256"]) {
+      const contextRoot = join(root, format); mkdirSync(contextRoot);
+      const { gitDir, main: expectedRevision } = canonical(contextRoot, format, "GOAL.md");
+      const publisher = register(contextRoot, fixture.path, true, undefined, gitDir).get("oma_mail_send")!;
+      await assert.rejects(() => publisher.execute(`goal-${format}`, { to: ["residents"], subject: "Plan", body: "explicit body",
+        intent: "goal", expectedRevision }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
+      assert.equal(sent(fixture.frames, "context.publish").at(-1)!.expected, expectedRevision);
+    }
+    const before = fixture.frames.length;
+    for (const expectedRevision of [null, 40, "HEAD", "a".repeat(39), "a".repeat(41), "a".repeat(63), "a".repeat(65), "A".repeat(40)])
+      await assert.rejects(() => call("oma_mail_send", { to: ["residents"], subject: "Plan", body: "explicit body",
+        intent: "goal", expectedRevision }), /is not valid/);
+    assert.equal(fixture.frames.length, before, "invalid revisions never reach the CLI");
+    const publications = fixture.frames.filter(frame => frame.method === "context.publish");
+    const lookups = sent(fixture.frames, "operation.get");
+    assert.equal(publications.length, 3, "unknown acceptance never resends automatically");
+    assert.deepEqual(lookups, publications.map(frame => ({ key: frame.request })), "one same-key lookup per unobserved publication");
+    await assert.rejects(() => call("oma_agent_lifecycle", { name: "worker@demo.oma.invalid", action: "start" }), /Acceptance status unknown: .*Recovery: use --request .* with the same command; do not rerun with a new key/);
     assert.deepEqual(sent(fixture.frames, "agent.start").at(-1), { agent: "worker" });
-    await assert.rejects(() => call("oma_logs", { agent: "worker@demo.oma.invalid", since: "10m" }), /BROKER_UNAVAILABLE/);
-    // Only an actor's address names an actor.
-    for (const agent of ["topic-dev@demo.oma.invalid", "worker@other.oma.invalid", "commons@demo.oma.invalid"])
-      await assert.rejects(() => call("oma_status", { agent }), /is not valid/, agent);
+    for (const name of ["topic-dev@demo.oma.invalid", "worker@other.oma.invalid", "commons@demo.oma.invalid"])
+      await assert.rejects(() => call("oma_agent_lifecycle", { name, action: "stop" }), /is not valid/);
   } finally { await fixture.close(); rmSync(root, { recursive: true, force: true }); }
 });
 

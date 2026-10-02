@@ -1,21 +1,14 @@
-/** Width, fitting and wrapping for terminal cells. The only module on the
- * product surface that imports the engine's terminal library (TUI-020).
+/** Width, fitting and wrapping for terminal cells (TUI-020).
  */
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { cellWidth } from "../cells.js";
 import { UNSEEN } from "../../domain/unseen-text.js";
 
-/** Measurement comes from the engine's terminal library, layout does not.
- *
- * `visibleWidth` is grapheme-aware, so it gets ZWJ emoji, skin-tone sequences
- * and combining marks right where a hand-rolled code-point table silently
- * misaligns every column that follows. That is pure arithmetic and is worth
- * sharing.
- *
- * Fitting and wrapping stay here. The engine's versions carry its own
- * presentation choices, including ANSI styling it emits around a cut, and this
- * product owns its layout. Borrowing the arithmetic must not import a design.
- */
-export const cellWidth = visibleWidth;
+/** Measurement comes from the engine's terminal library (cells.ts), layout
+ * does not. Fitting and wrapping stay here. The engine's versions carry its
+ * own presentation choices, including ANSI styling it emits around a cut, and
+ * this product owns its layout. Borrowing the arithmetic must not import a
+ * design. */
+export { cellWidth };
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 

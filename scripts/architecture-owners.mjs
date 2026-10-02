@@ -4,11 +4,13 @@
 export const subprocessResponsibilities = Object.freeze({
   "src/process/run.ts": "bounded synchronous command mechanism and final no-await observations",
   "src/process/async.ts": "bounded asynchronous child and pipe lifecycle mechanism",
-  "src/process/policies.ts": "explicit host editor with inherited terminal I/O via runProcessSync",
   "src/rpc-client.ts": "long-lived Pi JSONL session with bounded framing, writes, drain and close",
   // PI-001: the trusted extension cannot import src/process, and the engine's
   // exec cannot pass a private descriptor, so the extension owns this one child.
   "src/extension/cli-process.ts": "model-facing CLI child with an explicit environment and a private credential socket",
+  // PI-001: engine grep/fd inherit global config and expose no spawn options.
+  // This read-only process searches a descriptor-created copy with clean env.
+  "src/extension/contained-search.ts": "bounded search-only process group over private copied inputs, with abort/timeout/output cleanup",
 });
 /** REC-007: the places that start a child without handing it the society
  * lease, and why each one may. An entry is a claim that this child cannot be a
@@ -17,6 +19,9 @@ export const subprocessResponsibilities = Object.freeze({
  * stops being true, in either direction.
  */
 export const fenceExemptSpawnOwners = Object.freeze({
+  "src/extension/contained-search.ts#searchWorkspace":
+    "read-only source traversal and engine search over a private temporary copy; no society writes or credentials; parent pipe EOF aborts its owned copy and walker group",
+
   // The bounded command mechanism. Its descriptors are the caller's to choose
   // (`inheritedFds`). Its callers run systemctl, systemd-run, resize2fs and
   // git; none of them writes a society's state itself. A society session that
@@ -34,10 +39,6 @@ export const fenceExemptSpawnOwners = Object.freeze({
     "bubblewrap confinement boundary; a listening lease inside a sandbox would be answerable from inside it",
   "src/runtime/pi-adapter.ts#deliver":
     "Resident engine started through the confinement boundary above",
-  // The Human's editor, run synchronously with the terminal attached: the call
-  // does not return until the child has exited, so it cannot outlive anything.
-  "src/process/policies.ts#runHostEditor":
-    "synchronous child with an inherited terminal; the call returns only after it exits",
   // macos-platform §4.6: the guest's society session. Its program is the
   // product's own `oma`, which takes the society lease itself (HostTenure) and
   // hands it down to its engine and broker; the holder that starts it owns no
@@ -49,6 +50,10 @@ export const fenceExemptSpawnOwners = Object.freeze({
     "the VM helper, which holds no society; everything in the guest ends with the VM it runs",
   "src/process/async.ts#spawnInTerminal":
     "a society session's `oma`, which takes the society lease itself; its holder has none to hand down",
+  // MODE-003/005: Personal is a separate Human session, not a Society role.
+  // It holds a history-writer lock but no Society authority or writable state.
+  "src/process/async.ts#spawnSessionInteractive":
+    "independent Human session with its own inherited history lock and IPC; no Society role, state or lease",
 });
 export const DEFAULT_POLICY = Object.freeze({
   capabilityOwner: "src/domain/capabilities.ts",
@@ -71,7 +76,8 @@ export const DEFAULT_POLICY = Object.freeze({
   }),
   // The framed transport is intentionally I/O, unlike the codecs next to it.
   // This does not allow fs, process, SQLite, Store or entrypoint imports here.
-  protocolIoModules: Object.freeze({ "src/protocol/channel.ts": Object.freeze(["node:net"]) }),
+  protocolIoModules: Object.freeze({ "src/protocol/channel.ts": Object.freeze(["node:net"]),
+    "src/protocol/connection.ts": Object.freeze(["node:net"]) }),
 });
 export function pureBoundaryViolation(file, specifier, target, effectModules, policy = DEFAULT_POLICY) {
   if (!/^src\/(?:domain|protocol)\//.test(file)) return false;

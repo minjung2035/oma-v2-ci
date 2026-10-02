@@ -4,7 +4,7 @@
 import type { PublicMethods, PublicMethod, InternalMethods, InternalResults, Failure, MutationMethod } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { parseActor, parseBatchId, parseMessageFileId, parseOperationId } from "../domain/identifiers.js";
-import { checkObject, checkArray, checkString, checkInt, checkBool, checkEnum, checkOid, type Check } from "../validate.js";
+import { checkObject, checkArray, checkString, checkInt, checkBool, checkEnum, checkOid, checkOptional, type Check } from "../validate.js";
 import { PUBLIC_METHODS, isPublicMethod, isInternalMethod } from "./methods.js";
 import { decodeReceipt, decodeFailure } from "./receipt-codec.js";
 
@@ -38,9 +38,11 @@ const agentStatus = checkObject({
 });
 type ReadResultMethod = Exclude<PublicMethod, MutationMethod | "operation.get">;
 const checks = {
+  "operation.read": checkObject({ sha256: checkString({ re: /^[0-9a-f]{64}$/ }), bytes: checkInt({ min: 1 }), offset: nonnegative,
+    data: checkString({ min: 1, re: /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/ }), next: nullable(nonnegative) }),
   "agent.wait": checkObject({ accepted: checkBool() }),
   "git.known": checkObject({ hasCandidate: checkBool(), prerequisites: checkArray(checkOid) }),
-  "status.get": checkObject({ observedAtMs: nonnegative, agents: checkArray(agentStatus) }),
+  "status.get": checkObject({ observedAtMs: nonnegative, agents: checkArray(agentStatus), next: checkOptional(actor) }),
   "logs.read": checkObject({ text: string, truncated: checkBool(), observedAtMs: nonnegative }),
   "runner.open": checkObject({ actor, incarnation: nonnegative, socketHostPath: checkString({ min: 1 }) }),
   "runner.pending": checkObject({ pending: nonnegative, recoverableBatchIds: checkArray(batchId) }),

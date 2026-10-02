@@ -12,13 +12,32 @@ import { integerEnv } from "./shared.js";
 
 export const PI_ADAPTER_REVISION = "oma-pi-rpc-v1@0.87.1";
 export const PI_BOUNDARY_PREFIX = "OMA_PI_BOUNDARY_V1 ";
+export const PI_WAIT_PREFIX = "OMA_PI_WAIT_V1 ";
+export const PI_WAIT_OBSERVATION_PREFIX = "OMA_PI_WAIT_OBSERVATION_V1 ";
 
-export function registerDelivery(pi: ExtensionAPI): void {
+export function registerDelivery(pi: ExtensionAPI, waitRequested?: () => Promise<boolean>): void {
   const root = process.env.OMA_BATCH_VIEW ?? "/run/oma-view";
   const frameBytes = integerEnv("OMA_FRAME_BYTES");
   const batchMaxMessages = integerEnv("OMA_BATCH_MAX_MESSAGES");
   let pending: BatchManifest | null = null;
   let terminalStop: string | null = null;
+  let waiting = false;
+  let waitUnobserved = false;
+  pi.on("turn_end", async (event, ctx) => {
+    if (!pending || !waitRequested || waiting || waitUnobserved || event.toolResults.length === 0) return;
+    // Pi awaits this hook after persisting every tool result. Aborting here
+    // stops continuation, not an in-flight tool or an accepted broker effect.
+    const batch = pending;
+    const observe = (phase: "begin" | "end" | "failed"): void => ctx.ui.notify(
+      `${PI_WAIT_OBSERVATION_PREFIX}${JSON.stringify({
+        adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: batch.incarnation, phase,
+      })}`, "info");
+    observe("begin");
+    try { waiting = await waitRequested(); }
+    catch { waitUnobserved = true; }
+    finally { observe(waitUnobserved ? "failed" : "end"); }
+    if (waiting || waitUnobserved) ctx.abort();
+  });
   pi.on("message_end", (event) => {
     // SAFETY: Pi's typed message_end contract supplies the discriminated AgentMessage union.
     const message = event.message;
@@ -42,6 +61,8 @@ export function registerDelivery(pi: ExtensionAPI): void {
       }
       pending = batch;
       terminalStop = null;
+      waiting = false;
+      waitUnobserved = false;
       await pi.sendMessage(
         {
           customType: "oma-mail",
@@ -69,6 +90,17 @@ export function registerDelivery(pi: ExtensionAPI): void {
     // itself stays prepared in the broker and is delivered again; only this
     // engine's claim on it is released.
     try {
+      // A wait is ephemeral control, never a successful delivery receipt.
+      if (waiting) {
+        ctx.ui.notify(`${PI_WAIT_PREFIX}${JSON.stringify({
+          adapterRevision: PI_ADAPTER_REVISION, batchId: batch.id, incarnation: batch.incarnation,
+        })}`, "info");
+        return;
+      }
+      if (waitUnobserved) {
+        ctx.ui.notify("OMA could not observe the current run's wait intent; delivery remains unconfirmed", "error");
+        return;
+      }
       // A turn that ended any other way produced no boundary.
       if (terminalStop !== "stop") return;
       const sessionPath = ctx.sessionManager.getSessionFile();
@@ -100,6 +132,8 @@ export function registerDelivery(pi: ExtensionAPI): void {
     } finally {
       pending = null;
       terminalStop = null;
+      waiting = false;
+      waitUnobserved = false;
     }
   });
 }

@@ -80,9 +80,11 @@ try {
   environment.NODE_OPTIONS = `--import=${new URL("./local-test-guard.mjs", import.meta.url).href}`;
   if (lane.environment !== "systemd")
     environment.DBUS_SESSION_BUS_ADDRESS = "unix:path=/nonexistent/oma-local-tests-no-user-bus";
-  const roots = ["src", "test", "scripts", "implementation", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "architecture.md", "implementation-spec.md"];
+  const roots = ["src", "test", "scripts", "implementation", "docs", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json"];
   for (const path of roots.flatMap(name => filesUnder(join(root, name))).sort()) {
-    const rel = relative(root, path); const bytes = readFileSync(path);
+    const rel = relative(root, path);
+    if (rel.startsWith("docs/archive/")) continue;
+    const bytes = readFileSync(path);
     report.sourceDigests[rel] = createHash("sha256").update(bytes).digest("hex");
     if (rel.startsWith("test/") && rel.endsWith(".ts")) {
       const source = ts.createSourceFile(rel, bytes.toString("utf8"), ts.ScriptTarget.Latest, true);

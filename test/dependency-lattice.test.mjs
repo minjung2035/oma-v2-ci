@@ -38,6 +38,7 @@ test("P5 lattice: the measured layer order is kernel < facts < workflow < orches
     ["implementation/contracts.ts", "L0-contracts"],
   ]);
   assert.equal(layerOf("src/domain/identifiers.ts").index < layerOf("src/mail.ts").index, true);
+  assert.equal(layerOf("src/attestation.ts")?.name, "L3-workflow", "attestation coordinates acceptance and publication, not primitive facts");
 });
 
 test("P5 lattice: a reverse runtime edge fails and the forward edge does not", () => {

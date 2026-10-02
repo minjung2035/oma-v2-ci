@@ -22,11 +22,11 @@ interface Scenario {
   stdout?: RegExp;
 }
 const scenarios: Scenario[] = [
-  { name: "pending is accepted but unfinished", lookup: { ok: true, result: { operation, state: "pending" } }, exit: 0, resend: false, stdout: /^접수됨 \/ 아직 완료되지 않음\n재조회: 동일 command에 --request / },
-  { name: "unknown is not absence", lookup: { ok: true, result: { operation, state: "unknown" } }, exit: 3, resend: false, stdout: /^결과 불명확:/ },
-  { name: "terminal failed is not absence", lookup: { ok: true, result: { operation, state: "failed", error: { code: "CHECK_FAILED", message: "CHECK_FAILED", retry: "never" } } }, exit: 2, resend: false, stdout: /^실패: CHECK_FAILED/ },
+  { name: "pending is accepted but unfinished", lookup: { ok: true, result: { operation, state: "pending" } }, exit: 0, resend: false, stdout: /^Accepted \/ not yet complete\nQuery again: use --request / },
+  { name: "unknown is not absence", lookup: { ok: true, result: { operation, state: "unknown" } }, exit: 3, resend: false, stdout: /^Outcome unknown:/ },
+  { name: "terminal failed is not absence", lookup: { ok: true, result: { operation, state: "failed", error: { code: "CHECK_FAILED", message: "CHECK_FAILED", retry: "never" } } }, exit: 2, resend: false, stdout: /^Failed: CHECK_FAILED/ },
   { name: "success has no repeated physical effect", lookup: { ok: true, result: success }, exit: 0, resend: false, stdout: /"state":"succeeded"/ },
-  { name: "SPIKE remains unsupported", lookup: { ok: true, result: { operation, state: "failed", error: { code: "SPIKE_UNRESOLVED", message: "SPIKE_UNRESOLVED", retry: "never" } } }, exit: 4, resend: false, stdout: /^실패: SPIKE_UNRESOLVED/ },
+  { name: "SPIKE remains unsupported", lookup: { ok: true, result: { operation, state: "failed", error: { code: "SPIKE_UNRESOLVED", message: "SPIKE_UNRESOLVED", retry: "never" } } }, exit: 4, resend: false, stdout: /^Failed: SPIKE_UNRESOLVED/ },
   { name: "explicit not-found receipt permits frozen resend", lookup: { ok: true, result: notFound }, exit: 0, resend: true, stdout: /"state":"succeeded"/ },
   { name: "explicit not-found error permits frozen resend", lookup: { ok: false, error: notFound.error }, exit: 0, resend: true, stdout: /"state":"succeeded"/ },
   { name: "lookup unavailable is not absence", lookup: { ok: false, error: { code: "DB_BUSY", message: "DB_BUSY", retry: "same-key" } }, exit: 3, resend: false },
@@ -162,13 +162,13 @@ test("V26B: an unanswered send is resent only after a proven REQUEST_NOT_FOUND, 
     writeFileSync(join(s.home, "input.txt"), "words typed later\n");
     const second = await run(s.home, s.send("frozen-1"));
     assert.equal(second.code, 0, second.stderr);
-    assert.deepEqual(methods(p.seen), ["mail.send", "operation.get", "mail.send"]);
-    assert.deepEqual(p.seen[2]!.params, p.seen[0]!.params, "the resend was rebuilt instead of replayed");
-    assert.equal(p.seen[2]!.params.body, "the words first chosen\n");
+    assert.deepEqual(methods(p.seen), ["mail.send", "operation.get", "operation.get", "mail.send"]);
+    assert.deepEqual(p.seen[3]!.params, p.seen[0]!.params, "the resend was rebuilt instead of replayed");
+    assert.equal(p.seen[3]!.params.body, "the words first chosen\n");
     // Accepted now: a third run asks and does not send again.
     const third = await run(s.home, s.send("frozen-1"));
     assert.equal(third.code, 0, third.stderr);
-    assert.deepEqual(methods(p.seen).slice(3), ["operation.get"]);
+    assert.deepEqual(methods(p.seen).slice(4), ["operation.get"]);
   } finally { await p.close(); s.close(); }
 });
 
@@ -238,8 +238,11 @@ test("AV22 / ERR-001, CLI-003: a failure to retry under the same key names the k
         const result = await run(home, ["follow", "commons", "--request", key]);
         const stderr = result.stderr;
         assert.equal(result.code, exit, stderr);
-        assert.deepEqual(broker.seen.map(request => request.method), ["route.follow"]);
-        if (guided) assert.match(stderr, new RegExp(`--request ${key}; 새 key로 재실행하지 마세요`), "the key to ask again was not given");
+        assert.deepEqual(broker.seen.map(request => request.method), guided ? ["route.follow", "operation.get"] : ["route.follow"]);
+        if (guided) {
+          assert.deepEqual(broker.seen[1]!.params, { key }, "recovery only queries the original key, never resends the mutation");
+          assert.match(stderr, new RegExp(`--request ${key} with the same command; do not rerun with a new key`), "the key to ask again was not given");
+        }
         else assert.doesNotMatch(stderr, /--request/, "a failure never to retry was given a key to retry with");
       } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
     });
@@ -262,7 +265,7 @@ test("DR13 / CLI-003: a failure the broker says to look up again is exit 3 whate
       try {
         const result = await run(home, ["follow", "commons", "--request", "dr13-exit"]);
         assert.equal(result.code, exit, result.stderr);
-        if (failure.retry === "same-key") assert.match(result.stderr, /--request dr13-exit; 새 key로 재실행하지 마세요/);
+        if (failure.retry === "same-key") assert.match(result.stderr, /--request dr13-exit with the same command; do not rerun with a new key/);
       } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
     });
   }
@@ -276,7 +279,7 @@ test("AV28 / ERR-001: the CLI shows the actual value a conflict names", { timeou
   try {
     const result = await run(home, ["integrate", "2".repeat(40), "--expect", "3".repeat(40), "--request", "av28-cli"]);
     assert.equal(result.code, 2, result.stderr);
-    assert.match(result.stderr, new RegExp(`STALE_BASE: main이 expected와 다릅니다; actual을 기준으로 다시 하세요 \\(actual: ${actual}\\)`));
+    assert.match(result.stderr, new RegExp(`STALE_BASE: Main differs from expected; retry against actual \\(actual: ${actual}\\)`));
   } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
 });
 
@@ -295,3 +298,29 @@ test("DR1 / SB-002-C: a sent message's archive path is shown in the caller's vie
     assert.equal(await shown(), `/state/mail/archive/cur/${MESSAGE(7)}`, "without a view the recorded path is shown as it is");
   } finally { await p.close(); s.close(); }
 });
+
+
+for (const lost of ["drop", "deadline", "unavailable"] as const) {
+  for (const state of ["succeeded", "pending", "unknown", "failed", "absent", "malformed", "unavailable"] as const) {
+    test(`DR27/P0: ${lost} mutation answer is looked up once (${state}), never sent twice`, async () => {
+      const s = scene();
+      const terminal = state === "succeeded" ? sent(1) : state === "failed"
+        ? { operation: OP(1), state, error: { code: "CHECK_FAILED", message: "fixture", retry: "never" } }
+        : state === "absent" ? receiptNotFound : state === "malformed" ? { bad: true } : { operation: OP(1), state };
+      const p = await peer(s.home, request => {
+        if (request.method !== "operation.get") return lost === "drop" ? "drop" : { ok: false,
+          error: { code: lost === "deadline" ? "DEADLINE_EXCEEDED" : "BROKER_UNAVAILABLE", message: "answer lost", retry: "same-key" } };
+        return state === "unavailable" ? "drop" : { ok: true, result: terminal };
+      });
+      try {
+        const result = await run(s.home, s.send("observe-once"));
+        assert.equal(result.code, state === "succeeded" || state === "pending" ? 0 : state === "failed" ? 2 : 3, result.stderr);
+        assert.deepEqual(methods(p.seen), ["mail.send", "operation.get"]);
+        assert.deepEqual(p.seen[1]!.params, { key: "observe-once" });
+        const cached = new RequestCache(s.home).read("observe-once");
+        assert.ok(cached.kind === "present"); assert.equal((cached.value.params as Record<string, unknown>).body, "the words first chosen\n");
+        if (["absent", "malformed", "unavailable"].includes(state)) assert.match(result.stderr, /Acceptance status unknown.*observe-once/);
+      } finally { await p.close(); s.close(); }
+    });
+  }
+}

@@ -16,6 +16,9 @@ export function integrationResult(plan: ValidatedPlan<"git.integrate">): ResultF
     kind: "git.integrate", base: plan.base, candidate: plan.candidate,
     target: plan.target, policyRevision: plan.policyRevision,
     changed: plan.base !== plan.candidate,
+    ...(plan.publication === undefined ? {} : { publication: { message: plan.publication.message.id,
+      recipientCount: plan.publication.message.recipients.length, effectiveTier: plan.publication.tiered.effective,
+      authorityDigest: plan.publication.tiered.authorityDigest } }),
   };
 }
 

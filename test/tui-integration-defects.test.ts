@@ -270,9 +270,10 @@ test("the tool surface applies the projection when the host accepts it", () => {
     });
     const host = fakeHost();
     registerToolSurface(host as never, ["oma_mail_read"]);
-    assert.deepEqual(host.registered, ["web"], "facades register while loading");
+    assert.deepEqual(host.registered, [], "groups cannot overwrite tools before the complete registry is known");
     assert.deepEqual(host.active, ["read", "fetch", "danger"], "loading must not touch the active set");
     host.start();
+    assert.deepEqual(host.registered, ["web"]);
     assert.deepEqual(host.active, ["oma_mail_read", "read", "web"]);
     assert.ok(!host.active.includes("danger"));
     assert.ok(!host.active.includes("fetch"));

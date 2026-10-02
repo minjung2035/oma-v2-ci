@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { connect, type Server } from "node:net";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -16,6 +16,11 @@ import { newHostRecord, readHostRecord, writeHostRecord } from "../src/platform/
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { HOST_API_VERSION } from "../src/protocol/host-api.js";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
+import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
+import { newSessionBirth, publishSessionBirth } from "../src/runtime/session-mode.js";
+import { publishProjectBinding } from "../src/runtime/provision.js";
+import { modelWorkspacePathAt } from "../src/storage/paths.js";
+import { inspectMacGuestHistory, listMacGuestHistories } from "../src/platform/host/guest-histories.js";
 
 function memoryKeychain() {
   const items = new Map<string, string>();
@@ -43,6 +48,9 @@ async function world(t: import("node:test").TestContext, before?: (dir: string, 
     resolve: async () => ({ provider: "anthropic", model: "m", origin: "https://provider.invalid", apiKey: "sk-ant-api03-" + "r".repeat(40), headers: {} }),
     timings: { handshakeDeadlineMs: 2000, handshakeRetryMs: 20, drainDeadlineMs: 800, healthEveryMs: 1000, hungAfterMs: 2000,
       restarts: { max: 3, windowMs: 60_000, backoffMs: 20 } },
+    // Controlled bookmark boundary; this is not native NSURL evidence.
+    bookmarks: { create: async path => Buffer.from(path).toString("base64"),
+      resolve: async bookmark => Buffer.from(bookmark, "base64").toString("utf8") },
   });
   let shut = false;
   t.after(async () => {
@@ -109,18 +117,54 @@ test("MAC-211/MAC-712: after the guest reboots, no placeholder of the last boot 
 });
 
 test("§6/MAC-241 through the Host API: an import runs end to end under the UI's key, and the key's outcome can be asked for", async t => {
-  const { call, dir } = await world(t);
+  const { call, dir, driver, recordPath } = await world(t);
   const mac = join(dir, "mac"); mkdirSync(mac);
   const git = (...args: string[]) => spawnSync("git", ["-C", mac, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { encoding: "utf8" });
   git("init", "-q", "-b", "main"); writeFileSync(join(mac, "a"), "a\n"); git("add", "a"); git("commit", "-qm", "a");
   const head = git("rev-parse", "HEAD").stdout.trim();
-  const projectId = randomUUID();
+  const bound = await call("project.bind", { macRepo: mac, society: "demo" });
+  const projectId = (bound.result as { projectId: string }).projectId;
+  assert.equal(driver.starts, 0, "binding must not start the VM");
+  const unobserved = await call("project.extensions", { projectId });
+  assert.equal(unobserved.ok, false);
+  assert.equal((unobserved.error as { code: string }).code, "BROKER_UNAVAILABLE");
+  assert.equal(driver.starts, 0, "an absent settings observation must not start the VM");
+  assert.deepEqual((await call("project.bind", { macRepo: mac, society: "demo" })).result, bound.result);
+  assert.equal(readHostRecord(recordPath)!.projects.length, 1);
   const imported = await call("project.import", { projectId, macRepo: mac, branch: "main" }, "ui-import-1");
   assert.equal((imported.result as { head: string }).head, head, JSON.stringify(imported));
   const status = await call("request.status", { key: "ui-import-1" });
   assert.equal((status.result as { state: string }).state, "done");
   const again = await call("project.import", { projectId, macRepo: mac, branch: "main" }, "ui-import-1");
   assert.deepEqual(again.result, imported.result, "the same key is answered with the same outcome");
+  assert.deepEqual((await call("project.extensions", { projectId })).result, { extensions: [] });
+  assert.equal(readHostRecord(recordPath)!.projects[0]!.lastImport!.head, head);
+  const unrelated = join(dir, "unrelated"); mkdirSync(unrelated);
+  const wrong = await call("project.import", { projectId, macRepo: unrelated, branch: "main" }, "wrong-location");
+  assert.equal(wrong.ok, false);
+  const missing = await call("request.status", { key: "wrong-location" });
+  assert.equal(missing.ok, false);
+  assert.equal((missing.error as { code: string }).code, "REQUEST_NOT_FOUND");
+  // Host/guest history bridge with controlled native assets, not a Mac build.
+  const root = join(dir, "data", "oma", "demo"), mirror = join(dir, "projects", projectId);
+  publishProjectBinding(root, { society: "demo", canonicalProjectPath: mirror });
+  const birth = publishSessionBirth(root, newSessionBirth(root, "society", mirror));
+  mkdirSync(birth.history, { recursive: true });
+  const sessionId = randomUUID(), file = "saved.jsonl";
+  writeFileSync(join(birth.history, file), JSON.stringify({ type: "session", version: CURRENT_SESSION_VERSION,
+    id: sessionId, timestamp: "2026-10-02T00:00:00.000Z", cwd: modelWorkspacePathAt(root, "principal") }) + "\n", { mode: 0o600 });
+  const resources = join(dir, "OMA.app", "Contents", "Resources"), helperDir = join(resources, "..", "MacOS");
+  mkdirSync(join(resources, "git", "bin"), { recursive: true }); mkdirSync(helperDir);
+  symlinkSync("/usr/bin/git", join(resources, "git", "bin", "git"));
+  writeFileSync(join(helperDir, "oma-vmhelper"), `#!/bin/sh\ncat >/dev/null\ncat <<'OMA_JSON'\n${JSON.stringify({ path: mac })}\nOMA_JSON\n`, { mode: 0o700 });
+  const histories = await listMacGuestHistories(dir, resources);
+  assert.equal(histories.length, 1); assert.equal(histories[0]!.id, sessionId);
+  assert.equal(histories[0]!.cwd, mac); assert.match(histories[0]!.name!, /Society/);
+  assert.match(histories[0]!.path, /^oma-guest-history:/);
+  await inspectMacGuestHistory(dir, histories[0]!.path);
+  assert.equal(driver.starts, 1, "catalog and inspection must not start or reopen the engine");
+  const conflict = await call("session.resume", { projectId, society: "demo", sessionId, file });
+  assert.equal(conflict.ok, false); assert.equal((conflict.error as { code: string }).code, "ATTACH_CONFLICT");
 });
 
 test("P0V-105 (F-09): one host service per support directory -- a second is refused while the first runs, and may start once it has ended", async t => {

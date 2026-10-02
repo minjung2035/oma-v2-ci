@@ -20,7 +20,7 @@ import { runProcessSync, type ProcessObservation } from "../process/run.js";
 import { PreparationExecutor, requirePreparedSuccess } from "../process/preparation.js";
 import { GIT_ENV } from "../process/policies.js";
 import type { GitPaths } from "./paths.js";
-import type { GitObserver, GitObservation } from "./observe.js";
+import { observed as present, type GitObserver } from "./observe.js";
 import { consumeContextPublication, type ContextPublicationEvidence } from "./context-publication.js";
 import { decodeUtf8 } from "../domain/utf8.js";
 
@@ -34,10 +34,7 @@ const CONTEXT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   // Preparation must settle all writers before fsyncTree observes the worktree.
   GIT_CONFIG_KEY_8: "maintenance.auto", GIT_CONFIG_VALUE_8: "false",
 });
-function present<T>(observation: GitObservation<T>, name: string): T {
-  if (observation.kind === "present") return observation.value;
-  throw new StoreError(observation.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", `${name}: ${observation.kind}`);
-}
+
 function text(bytes: Uint8Array): string {
   try { return decodeUtf8(bytes); } catch { throw new StoreError("STORE_CORRUPT", "context Git returned malformed UTF-8 metadata"); }
 }
@@ -199,6 +196,15 @@ export class ContextRepository {
     }
     return entries;
   }
+  /** CTX-001/DR27: this is checked by the host, not trusted to the CLI.
+   * Compare immutable blob identities, so omissions and new documents count too. */
+  assertGoalOnly(candidate: Oid, base: Oid | null, accepted = false): void {
+    const before = base === null ? new Map<string, Oid>() : this.blobs(base);
+    const after = this.blobs(candidate);
+    before.delete("GOAL.md"); after.delete("GOAL.md");
+    if (before.size !== after.size || [...before].some(([path, oid]) => after.get(path) !== oid))
+      throw new StoreError(accepted ? "STORE_CORRUPT" : "INVALID_REQUEST", "GOAL mail must preserve every other context document");
+  }
   private blob(oid: Oid, entry: ContextEntry): Buffer {
     if (!Number.isSafeInteger(entry.bytes + 1)) throw new StoreError("UNSUPPORTED_PROFILE", "context blob observation exceeds the supported byte counter");
     const result = this.command(["--git-dir", this.paths.contextGit, "cat-file", "blob", oid], GIT_ENV, Math.max(1, entry.bytes + 1));
@@ -235,6 +241,7 @@ export class ContextRepository {
     if (observed.kind === "absent") this.importCandidate(join(plan.stagingPath, "commit-work"), plan.candidate);
     else present(observed, "accepted canonical context candidate");
     this.verifyCandidate(plan.candidate, plan.entries, plan.base);
+    if (plan.goalMail) this.assertGoalOnly(plan.candidate, plan.base, true);
   }
   publishSnapshot(operation: OperationOf<"context.publish">, proof: ContextPublicationEvidence): void {
     consumeContextPublication(proof, operation);
@@ -263,6 +270,7 @@ export class ContextRepository {
     const root = contextRevisionPathAt(this.paths.worldDir, plan.candidate);
     if (!lstatSync(root, { throwIfNoEntry: false })) return false;
     this.verifyCandidate(plan.candidate, plan.entries, plan.base);
+    if (plan.goalMail) this.assertGoalOnly(plan.candidate, plan.base, true);
     verifyContextRevision(root, plan.entries, true);
     return true;
   }

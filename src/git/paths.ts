@@ -11,7 +11,7 @@ export interface GitPaths {
    * integration check's deadline (P0V-29). */
   quarantineResources?: { cpuSeconds: number; memoryBytes: number; tasks: number; timeoutSeconds: number };
   checkRootfs?: string;
+  checkNode?: string;
   checkAssetsDir?: string;
-  checkTmpBytes?: number;
 }
 export interface CheckProfile { argv: string[]; env: Record<string, string> }

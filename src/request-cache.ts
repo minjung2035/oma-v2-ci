@@ -250,7 +250,12 @@ export class RequestCache {
       // it would be the regression the ordering exists to refuse.
       if (order === "stale") return frozen;
       const updated: CachedRequest = { ...frozen, lastReceipt: decoded.value };
-      try { replaceReceiptFile(this.path(key), JSON.stringify(updated)); }
+      const encoded = JSON.stringify(updated);
+      // Recovery can receive a multi-frame receipt. Keep the original freeze
+      // readable when that observation cannot fit the bounded local cache.
+      if (Buffer.byteLength(encoded) > this.metadataBytes)
+        throw new CacheError("CACHE_UNAVAILABLE", "receipt exceeds local cache budget; original request freeze preserved");
+      try { replaceReceiptFile(this.path(key), encoded); }
       catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt update failed: ${messageOf(error)}`); }
       return updated;
     });

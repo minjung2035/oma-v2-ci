@@ -9,7 +9,7 @@ export interface MailRecoveryPort {
 export interface RecoveryCounts { examined: number; repaired: number; remaining: number }
 export async function reconcileMailOperation(store: Store, mail: MailRecoveryPort, id: string): Promise<void> {
   const operation = store.operations.getById(id);
-  if (!operation || (operation.kind !== "mail.send" && operation.kind !== "agent.continue") ||
+  if (!operation || (operation.kind !== "attest.record" && operation.kind !== "mail.send" && operation.kind !== "agent.continue") ||
     (operation.state !== "pending" && operation.state !== "unknown")) return;
   const message = operation.plan.message;
   readImmutableBytes(mail.objectPath(message.id), message.sha256, message.bytes);
@@ -37,7 +37,7 @@ export async function reconcileOrdinaryMail(store: Store, mail: MailRecoveryPort
   const counts: RecoveryCounts = { examined: 0, repaired: 0, remaining: 0 };
   for (const id of snapshot) {
     const before = store.operations.getById(id);
-    if (!before || (before.kind !== "mail.send" && before.kind !== "agent.continue") ||
+    if (!before || (before.kind !== "attest.record" && before.kind !== "mail.send" && before.kind !== "agent.continue") ||
       (before.state !== "pending" && before.state !== "unknown")) continue;
     counts.examined++;
     try { await reconcileMailOperation(store, mail, id); }

@@ -42,7 +42,7 @@ function rawFrame(text: string): Buffer {
 }
 function frameOf(value: unknown): Buffer { return rawFrame(JSON.stringify(value)); }
 
-test("T02: fresh DDL applies; six entities; user_version=1; reapply rejected", () => {
+test("T02: fresh DDL applies; seven entities; user_version=3; reapply rejected", () => {
   const { store, dir } = freshStore();
   let closed = false;
   try {
@@ -50,13 +50,13 @@ test("T02: fresh DDL applies; six entities; user_version=1; reapply rejected", (
     try { assert.equal(other.transaction(() => 1), 1); } finally { other.close(); }
     const sql = readFileSync(SCHEMA_PATH, "utf8");
     assert.deepEqual([...sql.matchAll(/CREATE TABLE (\w+)/g)].map(match => match[1]).sort(),
-      ["agents", "batches", "deliveries", "operations", "subscriptions", "usage"]);
+      ["agents", "attestations", "batches", "deliveries", "operations", "subscriptions", "usage"]);
     store.close(); closed = true;
     mutateRawRowAfterClose(join(dir, "runtime.sqlite"), raw => {
-      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 1);
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 3);
       assert.throws(() => raw.exec(sql), /already exists/);
       raw.exec("ROLLBACK");
-      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 1);
+      assert.equal(raw.prepare("PRAGMA user_version").get()?.user_version, 3);
     });
   } finally { if (!closed) store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

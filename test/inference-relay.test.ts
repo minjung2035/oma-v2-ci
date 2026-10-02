@@ -438,3 +438,60 @@ test("AV2 / INF-007: a WebSocket upgrade keeps the same slots and is not compres
     assert.equal(handshake.headers["sec-websocket-extensions"], undefined, "compression would hide the key from the tripwire");
   } finally { await relay.close(); await provider.close(); socket.clean(); }
 });
+
+test("DR27 / WP10: a response with progress can exceed its silence budget; one that stalls is cut", { timeout: 10_000 }, async () => {
+  const provider = await tlsProvider(), socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {} }, { concurrent: 1, timeoutMs: 500 });
+  try {
+    provider.reply = { status: 200, chunks: ["a", "b", "c", "d"], delayMs: 0, gapMs: 200 };
+    assert.deepEqual(await throughBridge(socket.path, "/messages", "{}"), { status: 200, body: "abcd" });
+    provider.reply = { status: 200, chunks: ["a", "b"], delayMs: 0, gapMs: 2000 };
+    await new Promise<void>((resolve, reject) => {
+      const request = httpRequest({ socketPath: socket.path, path: "/messages", method: "POST" }, response => {
+        response.resume();
+        response.once("aborted", resolve);
+        response.once("end", () => reject(new Error("stalled response unexpectedly completed")));
+      });
+      request.on("error", reject); request.end("{}");
+    });
+    assert.equal(relay.observe().inFlight, 0);
+    assert.equal(relay.observe().failed, 1);
+    assert.equal(provider.seen.length, 2, "neither request was resent");
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("DR27 / WP10: upgraded streams retain a silence budget without limiting their total duration", { timeout: 10_000 }, async () => {
+  const provider = await tlsProvider(), socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {} }, { concurrent: 1, timeoutMs: 500 });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const request = httpRequest({ socketPath: socket.path, path: "/realtime", headers: { connection: "Upgrade", upgrade: "websocket" } });
+      request.on("error", reject);
+      request.on("upgrade", (_response, tunnel) => {
+        let echoed = 0;
+        const timer = setInterval(() => { tunnel.write("frame"); }, 180);
+        tunnel.on("data", () => { if (++echoed === 5) clearInterval(timer); });
+        tunnel.on("error", reject);
+        tunnel.once("close", () => {
+          clearInterval(timer);
+          try { assert.equal(echoed, 5, "active stream was killed at a total-duration deadline"); resolve(); }
+          catch (error) { reject(error); }
+        });
+      });
+      request.end();
+    });
+    assert.equal(relay.observe().inFlight, 0);
+    assert.equal(relay.observe().failed, 1, "silence after the last frame must end the abandoned tunnel");
+    assert.equal(provider.seen.length, 1);
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});
+
+test("DR27 / WP10: a relay's silence budget beyond the native timer range does not expire immediately", async () => {
+  const provider = await tlsProvider(), socket = scratchSocket();
+  const relay = await InferenceRelay.open(socket.path, { origin: provider.origin, headers: {} }, { concurrent: 1, timeoutMs: 40 * 24 * 3600 * 1000 });
+  try {
+    provider.reply = { status: 200, chunks: ["ok"], delayMs: 100 };
+    assert.deepEqual(await throughBridge(socket.path, "/messages", "{}"), { status: 200, body: "ok" });
+    assert.equal(relay.observe().failed, 0);
+  } finally { await relay.close(); await provider.close(); socket.clean(); }
+});

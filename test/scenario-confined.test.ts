@@ -13,16 +13,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { withScenario, type Scenario } from "./fixtures/scenario.js";
 import { SCRIPTED_KEY, call, continuesTurn, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
 import { projectGitPathAt } from "../src/storage/paths.js";
-import { principalWorkspace } from "../src/tui/session.js";
+import { commitRoleSet, readSettings, readSettingsForEditing, roleSetOf, writeSettings } from "../src/tui/sources/settings.js";
 
 const bwrap = spawnSync("bwrap", ["--version"]).status === 0;
 const OPTIONS = { timeout: 180_000, skip: bwrap ? false : "bubblewrap is not installed on this host" };
-const isResident = (request: ChatRequest): boolean => !(request.tools ?? []).some(tool => tool.function?.name === "oma_agent_create");
+const isResident = (request: ChatRequest): boolean => !(request.tools ?? []).some(tool => tool.function?.name === "oma_society");
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 const git = (s: Scenario, ...args: string[]): string => execFileSync("git", ["--git-dir", projectGitPathAt(s.root), ...args], { encoding: "utf8" }).trim();
 const bash = (command: string) => tools(call("bash", { command }));
@@ -139,11 +139,9 @@ test("SCN-C05: an integration against a main that has moved is refused with the 
 
 test("SCN-C06: the Principal publishes the shared context; a confined Resident reads it from /world", OPTIONS, async () => {
   await withScenario({ residents: ["worker-a"], confined: true }, async s => {
-    const goal = join(principalWorkspace(s.root), "context");
-    mkdirSync(goal, { recursive: true });
-    writeFileSync(join(goal, "GOAL.md"), "# 목표\n로그인 오류를 없앤다.\n");
+    const goal = "# 목표\n로그인 오류를 없앤다.\n";
     s.script(request => (continuesTurn(request) ? text("게시했습니다.")
-      : tools(call("oma_context_publish", { directory: goal, expect: "none", request: "ctx-1" }))));
+      : tools(call("oma_mail_send", { to: ["residents"], subject: "Goal", body: goal, intent: "goal", expectedRevision: "none", request: "ctx-1" }))));
     await s.prompt("목표를 게시해");
     const published = receiptIn(lastResult(s.provider.seen[1]!.body));
     assert.equal(published.state, "succeeded", JSON.stringify(published));
@@ -218,5 +216,45 @@ test("SCN-C09 / DR18 (D-8): the human's later commit reaches a confined Resident
       // The mirror is read-only inside: the sandbox's view of it cannot be written.
       assert.notEqual(git(s, "rev-parse", "refs/heads/main"), commit, "the canonical main moved without an integration (MAC-411)");
     } finally { rmSync(human, { recursive: true, force: true }); }
+  });
+});
+
+// The store as the engine's package manager leaves it on Linux, and as the
+// macOS engine keeps it: a link to the generation the Mac's packages arrived as.
+for (const layout of ["directory", "link"] as const)
+test(`SCN-C10 / DR25: a confined Resident's engine loads an installed package's extension from the read-only store (${layout}), and sees nothing else of the Human's`, OPTIONS, async () => {
+  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
+    // The store beside every session, and the engine home beside it.
+    const packages = join(dirname(s.root), ".packages");
+    const files = layout === "directory" ? packages : join(dirname(s.root), ".packages-generations", `p-${"b".repeat(64)}`);
+    if (layout === "link") { mkdirSync(files, { recursive: true }); symlinkSync(`.packages-generations/p-${"b".repeat(64)}`, packages); }
+    const entry = "packages:npm/node_modules/oma-hello-ext/extensions/hello.ts";
+    mkdirSync(join(files, dirname(entry.slice("packages:".length))), { recursive: true });
+    writeFileSync(join(files, entry.slice("packages:".length)), "export default function (pi) {\n  pi.registerTool({ name: \"hello_ext\", label: \"hello\", " +
+      "description: \"Say hello from an installed package.\", parameters: { type: \"object\", properties: {} },\n" +
+      "    async execute() { return { content: [{ type: \"text\", text: \"hello\" }], details: {} }; } });\n}\n");
+    mkdirSync(join(dirname(s.root), ".engine"), { recursive: true });
+    writeFileSync(join(dirname(s.root), ".engine", "auth.json"), "{\"secret\": \"login\"}\n");
+    const current = readSettings(s.configPath);
+    writeSettings(s.configPath, { ...current.config, installation: { ...current.config.installation, packages } });
+    const inline = readSettingsForEditing(s.configPath);
+    const roles = roleSetOf(inline.snapshot!);
+    const worker = inline.workerProfile!;
+    commitRoleSet(inline.snapshot!, inline.config, { ...roles, [worker]: { ...roles[worker]!, extensions: [...roles[worker]!.extensions, entry] } });
+    await s.restartBroker();
+    await assign(s, "worker-a", "설치된 확장을 확인하세요.", "c10");
+    s.script(request => (continuesTurn(request) ? text("확인했습니다.")
+      : bash("test -f /opt/oma-packages/npm/node_modules/oma-hello-ext/extensions/hello.ts && echo store-visible; " +
+        "touch /opt/oma-packages/x 2>/dev/null && echo store-writable || echo store-read-only; " +
+        "grep -c '[.]engine' /proc/self/mountinfo || true")));
+    const run = await s.activate("worker-a");
+    assert.equal(run.code, 0, run.stderr);
+    const requests = s.provider.seen.filter(item => isResident(item.body));
+    assert.ok((requests[0]!.body.tools ?? []).some(tool => tool.function?.name === "hello_ext"),
+      "the confined engine did not show the installed extension's tool");
+    const said = lastResult(requests[1]!.body);
+    assert.match(said, /store-visible/);
+    assert.match(said, /store-read-only/);
+    assert.match(said.trim().split("\n").at(-1) ?? "", /^0$/, `the Human's login is visible inside: ${said}`);
   });
 });

@@ -11,24 +11,38 @@ import { openSnapshotStore, pruneSnapshots, snapshotRunning, snapshotStopped } f
 import type { SessionLauncher } from "../src/platform/guest/host.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
+import { holdSocketNames } from "./fixtures/socket-names.js";
+import type { Server } from "node:net";
 
 async function world(t: import("node:test").TestContext, stopResult: "stopped" | "unknown" = "stopped") {
   const dir = mkdtempSync(join(tmpdir(), "oma-snapshot-"));
+  const socketNames = holdSocketNames(dir);
+  let holder: Server | null = null, driver: LocalDriver | null = null;
+  t.after(async () => {
+    try { if (driver !== null) await driver.dispose(); }
+    finally {
+      try { if (holder !== null) await new Promise<void>(resolve => holder!.close(() => resolve())); }
+      finally { socketNames.close(); rmSync(dir, { recursive: true, force: true }); }
+    }
+  });
   const societiesDir = join(dir, "data", "oma");
   mkdirSync(join(societiesDir, "demo", "state"), { recursive: true });
   const holderPath = join(dir, "demo.sock");
-  let holder = await listenSilently(holderPath);
+  holder = await listenSilently(holderPath);
   const stops: string[] = [];
   const launcher: SessionLauncher = { socketPath: () => holderPath, start: async () => {},
-    stop: async society => { stops.push(society); if (stopResult === "stopped") await new Promise(r => holder.close(r)); return stopResult; } };
+    stop: async society => {
+      stops.push(society);
+      if (stopResult === "stopped") { await new Promise<void>(resolve => holder!.close(() => resolve())); holder = null; }
+      return stopResult;
+    } };
   const instance = randomUUID();
-  const driver = new LocalDriver(dir, { dir: societiesDir, launcher }, instance);
+  driver = new LocalDriver(dir, { dir: societiesDir, launcher }, instance);
   await driver.start();
   const link = new GuestLink(driver, { hostVersion: "1.0.0", installationId: randomUUID(), instanceId: instance, expectImage: "2026.09.1",
     protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } }, { frameBytes: PLATFORM_FRAME_BYTES, helloDeadlineMs: 2000, requestTimeoutMs: 5000 });
   const snapshots = join(dir, "snapshots"); mkdirSync(snapshots);
   const statePath = join(dir, "state.img"); writeFileSync(statePath, "the state disk");
-  t.after(async () => { await driver.dispose(); await new Promise(r => holder.close(() => r(null))); rmSync(dir, { recursive: true, force: true }); });
   return { driver, link, snapshots, statePath, stops };
 }
 const copy = (from: string, to: string): void => { copyFileSync(from, to); };

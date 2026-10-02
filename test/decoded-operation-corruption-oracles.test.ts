@@ -16,8 +16,8 @@ const BASE = "1".repeat(40);
 const CANDIDATE = "2".repeat(40);
 const DIGEST = "0123456789abcdef".repeat(4);
 const KINDS = [
-  "mail.send", "mail.ack", "route.follow", "route.unfollow", "agent.create",
-  "agent.start", "agent.stop", "agent.continue", "git.submit", "git.integrate", "context.publish",
+  "attest.record", "mail.send", "mail.ack", "route.follow", "route.unfollow", "agent.create",
+  "society.set", "agent.start", "agent.stop", "agent.continue", "git.submit", "git.integrate", "context.publish",
 ] as const satisfies readonly MutationMethod[];
 
 interface Fixture {
@@ -43,7 +43,12 @@ function fixture(kind: MutationMethod): Fixture {
     contextRevision: null, replyHeaders: { replyTo: ["alice"], inReplyTo: null, references: [] },
   };
   const entries = [{ path: "GOAL.md", bytes: 1, sha256: DIGEST }];
+  const fact = { kind: "peer", identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: BASE,
+    candidate: CANDIDATE, policyRevision: "p1" }, verdict: "APPROVE", evidence: "Reviewed exact candidate" };
   const cases = {
+    "society.set": { payload: { state: "closed" }, plan: { kind, state: "closed" }, result: { kind, state: "closed" } },
+    "attest.record": { payload: fact, plan: { kind, fact, message: { ...message, kind: "result", to: ["commons"] } },
+      result: { kind, message: MESSAGE, recipientCount: 1, archivePath: `${ROOT}/mail/archive/cur/${MESSAGE}:2,` } },
     "mail.send": {
       payload: { to: ["alice"], subject: "subject", kind: "message", body: "body" },
       plan: { kind, message },
@@ -108,10 +113,10 @@ function fixture(kind: MutationMethod): Fixture {
     },
   } satisfies Record<MutationMethod, { payload: Record<string, unknown>; plan: Record<string, unknown>; result: Record<string, unknown> }>;
   const selected = cases[kind];
-  const ownedMessage = kind === "mail.send" || kind === "agent.continue" || kind === "agent.create" || kind === "git.submit" || kind === "context.publish";
+  const ownedMessage = kind === "attest.record" || kind === "mail.send" || kind === "agent.continue" || kind === "agent.create" || kind === "git.submit" || kind === "context.publish";
   const deliveries = ownedMessage ? [{ operation_id: OP, message_id: MESSAGE, recipient: "alice" }] : [];
   const raw: RawOperationRecord = {
-    id: OP, actor: kind === "agent.create" || kind === "context.publish" ? "principal" : "alice",
+    id: OP, actor: kind === "society.set" || kind === "agent.create" || kind === "context.publish" ? "principal" : "alice",
     request_key: "accepted-fixture", request_hash: requestHash(kind, selected.payload), kind,
     payload_json: JSON.stringify(selected.payload), plan_json: JSON.stringify(selected.plan),
     state: "pending", result_json: null, error_code: null, created_at_ms: 1000, updated_at_ms: 1000,
@@ -119,6 +124,7 @@ function fixture(kind: MutationMethod): Fixture {
   const context: OperationDecodeContext = {
     stateRoot: ROOT, repositoryIdentity: { society: "demo" },
     relations: {
+      attestation: id => id === OP && kind === "attest.record" ? { sequence: 1, operation_id: OP } : null,
       operation: () => null,
       agent: name => name === "alice" ? {
         name, profile: spec.profile, spec_hash: resolvedSpecDigest(spec), spec_json: JSON.stringify(spec),

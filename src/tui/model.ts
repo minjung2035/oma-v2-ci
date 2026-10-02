@@ -39,7 +39,17 @@ export interface NumberField {
 }
 export interface LinkField {
   readonly kind: "link"; readonly id: string; readonly label: string;
+  /** What the link currently stands for, when it has a value to show. */
+  readonly value?: string;
+  readonly blocked?: string | null;
 }
+
+/** DR24: Config rows that open the engine's own lists -- every model of every
+ * provider it is logged in to, then that model's effort levels -- in one go.
+ * The Principal's choice is the engine's default, for this session and the
+ * next; a Worker's is saved in the project's settings. */
+export const ENGINE_LINKS = Object.freeze({ "principal-model": "principal-model", "worker-model": "worker-model" } as const);
+export type EngineCommand = (typeof ENGINE_LINKS)[keyof typeof ENGINE_LINKS];
 export type ConfigField = ChoiceField | NumberField | LinkField;
 
 /** TUI-010: `locked` marks the core OMA extension, which is always first and
@@ -50,6 +60,8 @@ export interface ExtensionRow {
   readonly workers: boolean; readonly locked: boolean;
   /** WP14: declared by a role but its file is not there; it can only be removed. */
   readonly missing?: boolean;
+  /** DR25: the package `oma pi install` installed it from. */
+  readonly source?: string;
 }
 /** TUI-011: `unread` is derived by the caller from existing delivery facts.
  * The model stores no read state of its own.
@@ -63,7 +75,7 @@ export interface MailRow {
  */
 export interface DashboardData {
   readonly status:
-    | { readonly kind: "observed"; readonly observedAtMs: number; readonly ready: number;
+    | { readonly kind: "observed"; readonly observedAtMs: number; readonly created: number;
         /** P0V-39: null when a Resident's unit could not be observed. */
         readonly active: number | null; readonly pending: number;
         /** P0V-66: the Principal's messages not yet presented to its session
@@ -82,7 +94,13 @@ export interface DashboardData {
   /** WP15.05: the configured Principal model, and the one the running session
    * was started with (null when no session runs). Nothing here is the engine's
    * own report of the model it is using; no pinned API gives that. */
-  readonly principalModel: { readonly configured: string; readonly session: string | null };
+  readonly principalModel: { readonly configured: string; readonly session: string | null;
+    /** What the engine says it runs: model and effort, when its screen reported them. */
+    readonly engine?: string;
+    /** DR24: the configured profile leaves the model to the engine, so the engine's report is the model. */
+    readonly engineManaged?: boolean };
+  /** DR24: what a Worker runs, as the Worker model row says it. */
+  readonly workerModel?: string;
   /** The rootfs Residents are confined to, or null when none is declared. */
   readonly rootfs: string | null;
 }
@@ -95,7 +113,9 @@ export type Notice =
   /** WP15.03: the value was saved, but re-reading the configuration failed, so
    * the screen no longer shows it as current. */
   | { readonly kind: "saved-unread"; readonly label: string; readonly value: string; readonly reason: string }
-  | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
+  | { readonly kind: "extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean;
+      /** DR25: the package it came from, which names it on the screen. */
+      readonly source?: string }
   | { readonly kind: "save-failed"; readonly message: string }
   /** CONFIG-CONTRACT: the edit was committed and is what the file holds; that
    * it survives a power loss is what is not known yet. */
@@ -174,6 +194,7 @@ export type Effect =
   | { readonly kind: "set-number"; readonly field: string; readonly value: number }
   | { readonly kind: "set-extension"; readonly id: string; readonly role: "principal" | "workers"; readonly enabled: boolean }
   | { readonly kind: "submit-prompt"; readonly text: string }
+  | { readonly kind: "engine-command"; readonly command: EngineCommand }
   | { readonly kind: "prompt-limit"; readonly active: true; readonly cause: PromptOverflow }
   | { readonly kind: "prompt-limit"; readonly active: false }
   | { readonly kind: "quit" };
@@ -239,7 +260,13 @@ function fieldById(data: PanelData, id: string): ConfigField | undefined {
 }
 
 function beginEdit(state: State, field: ConfigField): Step {
-  if (field.kind === "link") return { state: { ...state, detail: { kind: "extensions", row: 0, column: 0 } }, effects: [] };
+  if (field.kind === "link") {
+    if (field.blocked) return { state, effects: [] };
+    const command = (ENGINE_LINKS as Readonly<Record<string, EngineCommand>>)[field.id];
+    // The engine's selector takes the screen; the panel gives it back.
+    if (command !== undefined) return { state: { ...state, open: false, edit: NO_EDIT }, effects: [{ kind: "engine-command", command }] };
+    return { state: { ...state, detail: { kind: "extensions", row: 0, column: 0 } }, effects: [] };
+  }
   // WP15: a field with no target or no effect is not edited; the reason is
   // already on screen where its apply time would be.
   if (field.blocked !== null) return { state, effects: [] };
@@ -262,11 +289,11 @@ function commitEdit(state: State, data: PanelData): Step {
     return { state: reverted, effects: [{ kind: "set-choice", field: field.id, value }] };
   }
   if (edit.kind === "number" && field.kind === "number") {
-    if (!/^\d{1,9}$/.test(edit.draft)) return { state: reverted, effects: [] };
+    if (!/^\d+$/.test(edit.draft)) return { state: reverted, effects: [] };
     const value = Number(edit.draft);
     // Out-of-range input reverts rather than silently clamping to a value the
     // user never confirmed.
-    if (value < field.min || value > field.max || value === field.value) return { state: reverted, effects: [] };
+    if (!Number.isSafeInteger(value) || value < field.min || value > field.max || value === field.value) return { state: reverted, effects: [] };
     return { state: reverted, effects: [{ kind: "set-number", field: field.id, value }] };
   }
   return { state: reverted, effects: [] };

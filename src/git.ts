@@ -1,5 +1,9 @@
+import { observed } from "./git/observe.js";
 // GIT/INT/CTX: composition and fixed repository observation boundaries.
 // Coordinators own intent/effect ordering; no candidate gate is relaxed here.
+import { decodeMutationPayload } from "./protocol/request-codec.js";
+import type { RiskTier } from "../implementation/contracts/values.js";
+import { AttestationModule } from "./attestation.js";
 import type { AuthContext, ContextEntry, Oid, Receipt } from "../implementation/contracts.js";
 import { Store } from "./store.js";
 import type { OperationOf } from "./storage/operation-codec.js";
@@ -8,7 +12,7 @@ import { assertNever } from "./domain/exhaustive.js";
 import { MailModule } from "./mail.js";
 import { isValidFullOid } from "./ids.js";
 import type { GitObservation, RefAfterCas } from "./git/observe.js";
-import { createCanonicalObserver, compareAndSwapCanonicalRef } from "./git/canonical-command.js";
+import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop } from "./git/canonical-command.js";
 import { IntegrationCoordinator } from "./git/integration.js";
 import { SubmitCoordinator, type SubmitInput } from "./git/submit.js";
 import { GitPublicationObserver } from "./git/publication.js";
@@ -23,12 +27,9 @@ export type { GitPaths, CheckProfile } from "./git/paths.js";
 export type { IntegrationPolicy } from "./git/integration-policy.js";
 export type PolicyRevisionReader = IntegrationPolicyReader;
 export const gitEnv = GIT_ENV;
-function observed<T>(observation: GitObservation<T>, what: string): T {
-  if (observation.kind === "present") return observation.value;
-  throw new StoreError(observation.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", `${what}: ${observation.kind}`);
-}
 
 export class GitModule {
+  readonly attestations: AttestationModule;
   private readonly integrationCoordinator: IntegrationCoordinator;
   private readonly submissionCoordinator: SubmitCoordinator;
   private readonly contextCoordinator: ContextCoordinator;
@@ -39,6 +40,7 @@ export class GitModule {
   constructor(
     private readonly paths: GitPaths, private readonly store: Store, mail: MailModule,
     integration: IntegrationPolicy | null = null, policyRevisionReader: PolicyRevisionReader | null = null,
+    private readonly candidateCheck: ((candidate: Oid, check: FrozenCheck) => Promise<void>) | null = null,
   ) {
     this.store.bindRepositoryIdentity({ society: paths.society });
     this.integrationCoordinator = new IntegrationCoordinator(store, {
@@ -49,7 +51,12 @@ export class GitModule {
       changedPaths: (base, candidate) => this.observations.changedPaths(paths.projectGit, base, candidate),
       compareAndSwap: (base, candidate) => this.casRef(paths.projectGit, "refs/heads/main", candidate, base),
       runCheck: (candidate, check) => this.runCheck(candidate, check),
-    }, integration, policyRevisionReader);
+      noopWitness: ref => this.observations.ref(paths.projectGit, ref),
+      authorizeNoop: (ref, candidate) => authorizeCanonicalNoop(this.observations, paths.projectGit, ref, candidate),
+      submitters: (base, candidate) => this.submitters(base, candidate),
+    }, integration, policyRevisionReader, mail);
+    this.attestations = new AttestationModule(store, mail, { exact: identity => this.integrationCoordinator.assertReviewIdentity(identity),
+      principal: () => this.integrationCoordinator.assertPrincipalDelegated() });
     this.quarantine = new QuarantineImporter(paths, candidate => this.canonicalHas(candidate));
     this.submissionCoordinator = new SubmitCoordinator(paths, store, mail, {
       verifyObjectFormat: oids => { this.objectFormat(paths.projectGit, oids); },
@@ -63,6 +70,7 @@ export class GitModule {
       current: () => this.currentContext(),
       observedObjectFormat: () => this.contextRepository.observedObjectFormat(),
       prepareCandidate: (tree, entries, expected) => this.prepareContextCandidate(tree, entries, expected),
+      assertGoalOnly: (candidate, expected) => this.contextRepository.assertGoalOnly(candidate, expected),
       preparationQuiescent: tree => this.contextRepository.preparationQuiescent(tree),
       ensureCandidate: operation => this.contextRepository.ensureCandidate(operation),
       compareAndSwap: (base, candidate) => this.casRef(paths.contextGit, "refs/heads/main", candidate, base),
@@ -90,6 +98,20 @@ export class GitModule {
   submit(auth: AuthContext, key: string, input: SubmitInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     return this.submissionCoordinator.submit(auth, key, input, bytes);
   }
+  private submitters(base: Oid, candidate: Oid): readonly string[] {
+    const changed = new Set(observed(this.observations.commits(this.paths.projectGit, base, candidate), "candidate commit range"));
+    const actors = new Set<string>();
+    for (const submission of this.store.operations.submissions()) {
+      if (submission.state === "failed") continue;
+      const ref = this.observations.ref(this.paths.projectGit, submission.plan.publishedRef);
+      if (ref.kind === "absent" && submission.state !== "succeeded") continue;
+      if (observed(ref, "authenticated submission ref") !== submission.plan.candidate)
+        throw new StoreError("STORE_CORRUPT", "published submission changed identity");
+      const contributed = observed(this.observations.commits(this.paths.projectGit, base, submission.plan.candidate), "submitted commit range");
+      if (submission.plan.candidate === candidate || contributed.some(commit => changed.has(commit))) actors.add(submission.actor);
+    }
+    return [...actors].sort();
+  }
   private canonicalHas(oid: string): boolean {
     const value = this.observations.commit(this.paths.projectGit, oid);
     return value.kind === "absent" ? false : observed(value, "canonical commit");
@@ -109,15 +131,15 @@ export class GitModule {
     if (after.kind === "third" && after.oid !== null) throw new StoreError("PUBLISHED_REF_CONFLICT", `CAS publish found another value for ${ref}`);
     throw new StoreError("REF_STATE_UNKNOWN", `published ref ${ref} is not proven after CAS`);
   }
-  integrate(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {
-    const frozen = Object.freeze({ candidate: input.candidate, expected: input.expected });
+  integrate(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid; tier?: RiskTier }): Promise<Receipt> {
+    const frozen = Object.freeze(decodeMutationPayload("git.integrate", input));
     return this.withWriter(() => this.integrationCoordinator.execute(auth, key, frozen));
   }
   isPublished(oid: Oid): boolean { return observed(this.observations.published(this.paths.projectGit), "published refs").includes(oid); }
   private currentMain(): Oid { return observed(this.observations.ref(this.paths.projectGit, "refs/heads/main"), "canonical main ref"); }
-  private async runCheck(_candidate: Oid, _check: FrozenCheck): Promise<void> {
-    // Unreachable: a policy with checks is refused before it is used (DR18).
-    throw new StoreError("UNSUPPORTED_PROFILE", "integration checks are not run by this version");
+  private runCheck(candidate: Oid, check: FrozenCheck): Promise<void> {
+    if (!this.candidateCheck) throw new StoreError("UNSUPPORTED_PROFILE", "trusted candidate check executor is unavailable");
+    return this.candidateCheck(candidate, check);
   }
   publishContext(auth: AuthContext, key: string, input: ContextInput, bytes: AsyncIterable<Uint8Array>): Promise<Receipt> {
     return this.withWriter(() => this.contextCoordinator.publish(auth, key, input, bytes));
@@ -154,7 +176,7 @@ export class GitModule {
         case "git.integrate": await this.integrationCoordinator.reconcile(operation); return;
         case "context.publish": await this.reconcileContext(operation); return;
         case "git.submit": await this.submissionCoordinator.reconcile(operation); return;
-        case "mail.send": case "agent.continue": case "mail.ack":
+        case "society.set": case "attest.record": case "mail.send": case "agent.continue": case "mail.ack":
         case "route.follow": case "route.unfollow":
         case "agent.create": case "agent.start": case "agent.stop": return;
         default: assertNever(operation);

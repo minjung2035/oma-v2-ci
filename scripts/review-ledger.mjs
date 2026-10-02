@@ -3,6 +3,7 @@
  * assignments, git history since the plan's baseline, the tree's tests and
  * implementation/review-notes.json. Run it; never edit the ledger by hand. */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { LEDGER, PLAN, oraclePresent, testNames } from "./review-closure.mjs";
 
@@ -14,7 +15,25 @@ const names = testNames(root);
 const oraclesOf = new Map(plan.tasks.map(task => [task.id, task.tests.map(test => typeof test === "string" ? test : test.id)]));
 const assigned = new Map(plan.production_review_assignments.map(row => [row.path, row.primary_review_task]));
 const read = new Map(notes.readUnchanged.map(entry => [entry.path, entry]));
+// A reviewed working-tree implementation is not "read unchanged". Bind its
+// explicit review to exact bytes; later edits require another review.
+const reviewedPaths = new Set();
+const reviewedChanges = new Map((notes.reviewedChanges ?? []).map(entry => {
+  if (!current.includes(entry.path) || reviewedPaths.has(entry.path))
+    throw new Error(`reviewed change is not a unique production file: ${entry.path}`);
+  reviewedPaths.add(entry.path);
+  const digest = createHash("sha256").update(readFileSync(entry.path)).digest("hex");
+  if (entry.sha256 !== digest) throw new Error(`reviewed change is stale: ${entry.path}`);
+  if (!entry.by?.length || !entry.oracles?.length || !entry.note || !entry.oracles.every(id => oraclePresent(names, id)))
+    throw new Error(`reviewed change lacks evidence: ${entry.path}`);
+  return [entry.path, entry];
+}));
 const base = plan.baseline_commit;
+// A commit reviewed different bytes. Neither that history nor a clause table
+// certifies edits still in the working tree; only a byte-bound review above can.
+const gitPaths = args => execFileSync("git", args, { encoding: "utf8" }).split("\0").filter(Boolean);
+const changed = new Set(gitPaths(["diff", "--name-only", "-z", "HEAD", "--"]));
+const committedPaths = new Set(gitPaths(["ls-tree", "-r", "--name-only", "-z", "HEAD"]));
 
 /** MAC clause ids as the macOS platform spec and its commits write them:
  * "MAC-210/211/230" and "MAC-619..623" name every clause listed or spanned. */
@@ -37,7 +56,7 @@ function macIds(text) {
  * early commits named a section ("§4.7") rather than a clause, so for those
  * files the table is where the clauses are written down. */
 function declaredClauses() {
-  const text = readFileSync("implementation/macos-platform.md", "utf8");
+  const text = readFileSync("docs/macos-platform.md", "utf8");
   const table = text.slice(text.indexOf("### 구현 현황"), text.indexOf("**NOT_BUILT**"));
   const declared = new Map();
   for (const line of table.split("\n")) {
@@ -57,9 +76,9 @@ const declared = declaredClauses();
 function changedBy(path) {
   const subjects = execFileSync("git", ["log", "--format=%s", `${base}..HEAD`, "--", path], { encoding: "utf8" });
   // WP cards of the plan, AV cards of the whole-codebase adversarial pass
-  // (implementation/consistency-decisions.md), DR design revisions
-  // (implementation/design-revisions.md) and Priority 0 findings
-  // (implementation/priority-0-audit.md) and MAC clauses of the macOS
+  // (docs/implementation/consistency-decisions.md), DR design revisions
+  // (docs/design-revisions.md) and Priority 0 findings
+  // (docs/priority-0-audit.md) and MAC clauses of the macOS
   // platform spec, whose oracle is their own id. A
   // finding range ("P0V-40..43") names every finding in it: a file a
   // P0V-only commit changed is changed, not "read and unchanged".
@@ -72,6 +91,17 @@ const files = [];
 for (const path of [...new Set([...current, ...assigned.keys()])].sort()) {
   const primary = assigned.get(path) ?? null;
   if (!current.includes(path)) { files.push({ path, primary, status: "REMOVED", by: changedBy(path), oracles: [] }); continue; }
+  if (reviewedChanges.has(path)) {
+    const review = reviewedChanges.get(path);
+    files.push({ path, primary, status: "CHANGED_WITH_ORACLE", by: review.by, oracles: review.oracles,
+      note: review.note, sha256: review.sha256 });
+    continue;
+  }
+  if (changed.has(path) || !committedPaths.has(path)) {
+    files.push({ path, primary, status: "NOT_REVIEWED", by: [], oracles: [],
+      note: "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes." });
+    continue;
+  }
   const committed = changedBy(path);
   const by = [...new Set([...committed, ...(committed.length > 0 || declared.has(path) ? declared.get(path) ?? [] : [])])].sort();
   if (by.length > 0) {

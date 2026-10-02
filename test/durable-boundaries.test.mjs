@@ -1,4 +1,4 @@
-/** P0-7 (PRIORITY-0.md): the durable boundaries come from the code, and each
+/** P0-7 (docs/PRIORITY-0.md): the durable boundaries come from the code, and each
  * one has a test that kills, retries or restarts right after it. */
 import test from "node:test";
 import assert from "node:assert/strict";

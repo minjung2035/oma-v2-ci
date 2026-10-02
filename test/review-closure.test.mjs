@@ -7,6 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { LEDGER, ORACLE_MAP, approval, oracleFindings, reviewFindings } from "../scripts/review-closure.mjs";
 
 const ledger = () => JSON.parse(readFileSync(LEDGER, "utf8"));
@@ -28,6 +29,25 @@ test("V32A: the committed ledger accounts for every current and baseline file, w
   assert.ok(value.files.length >= 220);
   for (const entry of value.files.filter(entry => entry.status === "CHANGED_WITH_ORACLE" || entry.status === "READ_UNCHANGED"))
     assert.ok(entry.by.length > 0 && entry.oracles.length > 0, entry.path);
+});
+
+test("DR27/V32A: historical review cannot certify unbound working-tree changes", () => {
+  const paths = command => execFileSync("git", command, { encoding: "utf8" }).split("\0").filter(Boolean);
+  const changed = new Set(paths(["diff", "--name-only", "-z", "HEAD", "--"]));
+  const committed = new Set(paths(["ls-tree", "-r", "--name-only", "-z", "HEAD"]));
+  for (const entry of ledger().files) {
+    if (entry.status === "REMOVED" || entry.sha256 !== undefined) continue;
+    if (changed.has(entry.path) || !committed.has(entry.path))
+      assert.ok(!["CHANGED_WITH_ORACLE", "READ_UNCHANGED"].includes(entry.status), entry.path);
+  }
+});
+
+test("V32A: a working-tree review is bound to the reviewed file bytes", () => {
+  const value = ledger();
+  const entry = value.files.find(entry => entry.sha256 !== undefined);
+  assert.ok(entry, "no byte-bound working-tree review");
+  entry.sha256 = "0".repeat(64);
+  assert.ok(problems(value).includes("reviewed change digest is stale"));
 });
 
 test("V32A: approval is refused while files are unreviewed or a required lane has not run", async () => {

@@ -21,11 +21,11 @@ export function receiptExit(receipt: Receipt): CliExitCode {
 export function receiptLines(receipt: Receipt, key: string): readonly string[] {
   switch (receipt.state) {
     case "succeeded": return [JSON.stringify(receipt)];
-    case "pending": return ["접수됨 / 아직 완료되지 않음", `재조회: 동일 command에 --request ${key}`];
+    case "pending": return ["Accepted / not yet complete", `Query again: use --request ${key} with the same command`];
     case "unknown": return [
-      `결과 불명확: ${receipt.reason ?? "authoritative evidence required"}`,
-      `재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요`,
+      `Outcome unknown: ${receipt.reason ?? "authoritative evidence required"}`,
+      `Query again: use --request ${key} with the same command; do not rerun with a new key`,
     ];
-    case "failed": return [receipt.error === undefined ? "실패: ?" : `실패: ${failureText(receipt.error)}`];
+    case "failed": return [receipt.error === undefined ? "Failed:?" : `Failed: ${failureText(receipt.error)}`];
   }
 }

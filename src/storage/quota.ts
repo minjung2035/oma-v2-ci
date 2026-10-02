@@ -6,7 +6,8 @@ import { NO_HOLD, releaseOnce, type Release, type ResourceCategory } from "../do
 
 function allocatedBytes(stat: Stats): number {
   const blocks = Number.isSafeInteger(stat.blocks) ? stat.blocks * 512 : 0;
-  return Math.max(stat.size, blocks);
+  // An empty inode still consumes storage metadata (INV10).
+  return Math.max(1, stat.size, blocks);
 }
 
 /** Count an owned tree without following symlinks or charging hardlinks twice. */

@@ -31,6 +31,7 @@ import type { Socket } from "node:net";
 import { chmodSync } from "node:fs";
 import { clearSocketName } from "../storage/socket-name.js";
 import { StoreError } from "../domain/errors.js";
+import { alarm, type Timer } from "./pi-rpc.js";
 import { trustedAbsolutePath } from "../protocol/run-lease.js";
 
 /** Headers that belong to one hop and must not be copied onto the next. */
@@ -74,7 +75,8 @@ export interface RelayLimits {
   /** Requests allowed to be in flight at once. Beyond it the relay refuses
    * rather than queueing, so a stuck provider cannot accumulate sockets. */
   readonly concurrent: number;
-  /** Milliseconds a forwarded request may take before it is abandoned. */
+  /** Milliseconds without provider progress, including connection setup and
+   * upgraded streams. This is not a whole-request or whole-delivery limit. */
   readonly timeoutMs: number;
 }
 
@@ -359,15 +361,19 @@ export class InferenceRelay {
     this.accepted += 1;
     this.inFlight += 1;
     let settled = false;
+    let silence: Timer | null = null;
     const settle = (): boolean => {
       if (settled) return false;
       settled = true;
+      silence?.cancel();
       this.inFlight -= 1;
       return true;
     };
 
     const upstream = httpsRequest(this.upstreamOptions(incoming.method ?? "POST", admitted.path,
       admitted.headers), response => {
+      progress();
+      response.on("data", progress);
       // INF-007: a response that carries the key back is cut off, never delivered.
       // Counted once, whether or not the response had already ended upstream.
       let cutOff = false;
@@ -385,13 +391,21 @@ export class InferenceRelay {
       response.on("end", () => { settle(); });
       response.on("error", () => { if (settle()) this.failed += 1; outgoing.destroy(); });
     });
-    upstream.setTimeout(this.limits.timeoutMs, () => {
-      // An abandoned request is reported as unclear, not retried (INF-004).
-      if (settle()) this.failed += 1;
-      upstream.destroy();
-      if (!outgoing.headersSent) this.refuse(outgoing, 504, "provider did not answer in time");
-      else outgoing.destroy();
-    });
+    // One monotonic clock covers DNS/connect/TLS and response silence. A
+    // socket-only timeout starts too late and overflows for large budgets.
+    const progress = (): void => {
+      if (settled) return;
+      silence?.cancel();
+      silence = alarm(this.limits.timeoutMs / 1000, () => {
+        if (!settle()) return;
+        this.failed += 1;
+        upstream.destroy();
+        if (!outgoing.headersSent) this.refuse(outgoing, 504, "provider did not answer in time");
+        else outgoing.destroy();
+      });
+    };
+    upstream.once("finish", progress);
+    progress();
     upstream.on("error", () => {
       if (settle()) this.failed += 1;
       if (!outgoing.headersSent) this.refuse(outgoing, 502, "provider request failed");
@@ -422,9 +436,11 @@ export class InferenceRelay {
     this.accepted += 1;
     this.inFlight += 1;
     let settled = false;
+    let silence: Timer | null = null;
     const settle = (): boolean => {
       if (settled) return false;
       settled = true;
+      silence?.cancel();
       this.inFlight -= 1;
       return true;
     };
@@ -442,19 +458,26 @@ export class InferenceRelay {
       if (cutOff) return;
       cutOff = true; settle(); this.failed += 1; upstream.destroy(); socket.destroy();
     };
-    upstream.setTimeout(this.limits.timeoutMs, () => {
-      if (settle()) this.failed += 1;
-      upstream.destroy();
-      socket.destroy();
-    });
+    const progress = (): void => {
+      if (settled) return;
+      silence?.cancel();
+      silence = alarm(this.limits.timeoutMs / 1000, () => {
+        if (!settle()) return;
+        this.failed += 1;
+        upstream.destroy(); provider?.destroy(); socket.destroy();
+      });
+    };
+    upstream.once("finish", progress);
+    progress();
     upstream.on("upgrade", (response, providerSocket, providerHead) => {
-      upstream.setTimeout(0);
+      progress();
       if (this.headersCarryKey(response.rawHeaders, response.statusMessage)) { providerSocket.destroy(); cut(); return; }
       const lines = [`HTTP/1.1 ${response.statusCode ?? 101} ${response.statusMessage ?? "Switching Protocols"}`];
       for (let index = 0; index < response.rawHeaders.length; index += 2)
         lines.push(`${response.rawHeaders[index]!}: ${response.rawHeaders[index + 1]!}`);
       socket.write(`${lines.join("\r\n")}\r\n\r\n`);
       provider = providerSocket;
+      providerSocket.on("data", progress);
       if (socket.destroyed) { providerSocket.destroy(); return; }
       const guard = this.guarded(() => { providerSocket.destroy(); cut(); });
       if (head.length > 0) providerSocket.write(head);
@@ -468,7 +491,10 @@ export class InferenceRelay {
     // A provider that refuses the upgrade answers with an ordinary response;
     // it travels back verbatim so the engine can fall back as it would on the host.
     upstream.on("response", response => {
-      upstream.setTimeout(0);
+      progress();
+      response.on("data", progress);
+      response.once("end", settle);
+      response.once("error", cut);
       if (this.headersCarryKey(response.rawHeaders, response.statusMessage)) { cut(); return; }
       const lines = [`HTTP/1.1 ${response.statusCode ?? 502} ${response.statusMessage ?? ""}`.trimEnd()];
       for (let index = 0; index < response.rawHeaders.length; index += 2) {

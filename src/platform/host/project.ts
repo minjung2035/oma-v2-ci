@@ -7,16 +7,21 @@
  * would run a program overridden on the command line; it runs only bundle,
  * fetch and inspection commands, never one that touches the working tree.
  */
+import { pipeline } from "node:stream/promises";
 import { createHash } from "node:crypto";
-import { closeSync, constants, createReadStream, fsyncSync, openSync, rmSync, statSync, writeSync } from "node:fs";
+import { closeSync, constants, createReadStream, fstatSync, fsyncSync, openSync, realpathSync, rmSync, statSync, writeSync } from "node:fs";
+import { dirname } from "node:path";
+import { withProjectSnapshot } from "../../git/project-snapshot.js";
+import { prepareHostProjectDirectory } from "./files.js";
 import type { Socket } from "node:net";
 import { StoreError } from "../../domain/errors.js";
 import { encodeFrame } from "../../frame.js";
 import { GIT_ENV } from "../../process/policies.js";
 import { decodeProcessText, runProcess } from "../../process/run.js";
-import { PlatformError, readLeadingFrame } from "../rpc.js";
+import { PlatformError, readLeadingResponse, unknownOutcome } from "../rpc.js";
+import { borrowedFileRange, withStreamSource } from "../stream-source.js";
 import { receiveDeclared, type Declared, type StreamSink } from "../stream-receive.js";
-import { responseProblem, type PlatformFailure } from "../../protocol/host-guest.js";
+import type { ProjectRecord } from "./record.js";
 
 /** Settings a repository could use to make git run a program, overridden. */
 const DISTRUST = [
@@ -30,6 +35,31 @@ export class MacGit {
   /** `executable`: the git bundled with the app, never the Xcode shim. */
   constructor(private readonly executable: string) {}
 
+  /** MAC-401/403: inspection uses the same distrust policy as transfers. */
+  async identity(repo: string): Promise<Pick<ProjectRecord, "gitCommonDir" | "objectFormat" | "rootCommits">> {
+    const format = await this.run(repo, ["rev-parse", "--show-object-format"], 30_000);
+    const common = await this.run(repo, ["rev-parse", "--path-format=absolute", "--git-common-dir"], 30_000);
+    const roots = await this.run(repo, ["rev-list", "--max-parents=0", "HEAD"], 30_000);
+    const objectFormat = format.stdout.trim();
+    const rootCommits = roots.stdout.trim().split("\n");
+    if (format.status !== 0 || common.status !== 0 || roots.status !== 0 ||
+        (objectFormat !== "sha1" && objectFormat !== "sha256") || !rootCommits.every(root =>
+          new RegExp(`^[0-9a-f]{${objectFormat === "sha256" ? 64 : 40}}$`).test(root)))
+      throw new StoreError("INVALID_REQUEST", "The project repository could not be identified");
+    let gitCommonDir: string;
+    try {
+      gitCommonDir = realpathSync(common.stdout.trim());
+      if (!statSync(gitCommonDir).isDirectory()) throw new Error("not a directory");
+    } catch { throw new StoreError("INVALID_REQUEST", "The project repository could not be identified"); }
+    return { objectFormat, gitCommonDir, rootCommits };
+  }
+
+  async verifyIdentity(repo: string, project: ProjectRecord): Promise<void> {
+    const current = await this.identity(repo);
+    if (current.objectFormat !== project.objectFormat || !current.rootCommits.some(root => project.rootCommits.includes(root)))
+      throw new StoreError("INVALID_REQUEST", "The project folder belongs to a different repository");
+  }
+
   async run(repo: string, argv: readonly string[], timeoutMs = 10 * 60_000): Promise<{ status: number; stdout: string; stderr: string }> {
     const result = await runProcess({ executable: this.executable, argv: ["-C", repo, ...DISTRUST, ...argv],
       env: { ...GIT_ENV }, timeoutMs, stdoutBytes: 4 * 1024 * 1024, stderrBytes: 1024 * 1024 });
@@ -42,6 +72,20 @@ export class MacGit {
     if (!BRANCH.test(branch)) throw new StoreError("INVALID_REQUEST", "invalid branch name");
     const head = await this.run(repo, ["rev-parse", "--verify", `refs/heads/${branch}^{commit}`]);
     if (head.status !== 0) throw new StoreError("INVALID_REQUEST", "the project has no such branch");
+    if (since === null) {
+      const checkout = await this.run(repo, ["rev-parse", "--verify", "HEAD^{commit}"]);
+      if (checkout.status !== 0 || checkout.stdout.trim() !== head.stdout.trim())
+        throw new StoreError("INVALID_REQUEST", "the initial snapshot must name the checked-out project branch");
+      const format = (await this.run(repo, ["rev-parse", "--show-object-format"])).stdout.trim();
+      if (format !== "sha1" && format !== "sha256") throw new StoreError("UNSUPPORTED_PROFILE", "unsupported project object format");
+      const snapshotHead = withProjectSnapshot({ source: repo, parent: head.stdout.trim(), sourceIsGit: true,
+        format, temporaryParent: dirname(out), executable: this.executable, prepare: prepareHostProjectDirectory }, snapshot => {
+        snapshot.git(["update-ref", `refs/heads/${branch}`, snapshot.head]);
+        snapshot.git(["bundle", "create", "-q", out, `refs/heads/${branch}`]);
+        return snapshot.head;
+      });
+      return { bytes: statSync(out).size, sha256: await sha256File(out), head: snapshotHead };
+    }
     const base = since !== null && (await this.run(repo, ["cat-file", "-e", `${since}^{commit}`])).status === 0 ? [`^${since}`] : [];
     const made = await this.run(repo, ["bundle", "create", "-q", out, `refs/heads/${branch}`, ...base]);
     if (made.status !== 0) throw new StoreError("INTERNAL_ERROR", "the project could not be bundled");
@@ -65,23 +109,33 @@ export async function sha256File(path: string): Promise<string> {
   return hash.digest("hex");
 }
 
-function failureOf(frame: Record<string, unknown>): PlatformError {
-  if (responseProblem(frame) !== null) return new PlatformError({ code: "ENGINE_UNAVAILABLE", message: "the engine's answer was malformed", retry: "same-key" });
-  return new PlatformError(frame.error as PlatformFailure);
-}
-
 /** §4.8 put: declares the file, sends it, and waits for the guest to say it
  * arrived as declared. */
 export async function putStream(opened: { socket: Socket; rest: Buffer }, key: string, path: string, frameBytes: number): Promise<void> {
   const { socket } = opened;
-  if (opened.rest.length > 0) socket.unshift(opened.rest);
-  const bytes = statSync(path).size;
-  const sha256 = await sha256File(path);
-  socket.write(encodeFrame({ v: 1, id: "put", method: "stream.put", params: { key, bytes, sha256 } }));
-  for await (const chunk of createReadStream(path)) if (!socket.write(chunk as Buffer)) await new Promise(resolve => socket.once("drain", resolve));
-  const answer = await readLeadingFrame(socket, frameBytes, 10 * 60_000);
-  socket.destroy();
-  if (answer.frame.ok !== true) throw failureOf(answer.frame);
+  // Keep the socket owned even while hashing or reading the file. Pipeline
+  // observes error/close as well as backpressure; a lost drain cannot hang it.
+  const failed = (): void => { socket.destroy(); };
+  socket.on("error", failed);
+  try {
+    if (opened.rest.length > 0) socket.unshift(opened.rest);
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    await withStreamSource(fd, async fd => {
+      const source = fstatSync(fd);
+      if (!source.isFile()) throw new StoreError("INVALID_REQUEST", "a stream source must be a regular file");
+      const bytes = source.size;
+      const hash = createHash("sha256");
+      if (bytes > 0) for await (const chunk of borrowedFileRange(fd, bytes)) hash.update(chunk as Buffer);
+      const sha256 = hash.digest("hex");
+      socket.write(encodeFrame({ v: 1, id: "put", method: "stream.put", params: { key, bytes, sha256 } }));
+      try {
+        if (bytes > 0) await pipeline(borrowedFileRange(fd, bytes), socket, { end: false });
+      } catch { throw unknownOutcome("the stream transfer could not be observed"); }
+      const answer = await readLeadingResponse(socket, "put", frameBytes, 10 * 60_000);
+      if (answer.result.bytes !== bytes || answer.result.sha256 !== sha256)
+        throw unknownOutcome("the engine's stream receipt was malformed");
+    });
+  } finally { socket.destroy(); socket.off("error", failed); }
 }
 
 /** §4.8 get: the declared stream into the sink `sinkFor` makes once the
@@ -92,9 +146,8 @@ export async function getStream(opened: { socket: Socket; rest: Buffer }, key: s
   if (opened.rest.length > 0) socket.unshift(opened.rest);
   try {
     socket.write(encodeFrame({ v: 1, id: "get", method: "stream.get", params: { key, kind } }));
-    const answer = await readLeadingFrame(socket, frameBytes, 60_000);
-    if (answer.frame.ok !== true) throw failureOf(answer.frame);
-    const declared = answer.frame.result as Record<string, unknown>;
+    const answer = await readLeadingResponse(socket, "get", frameBytes, 60_000);
+    const declared = answer.result;
     if (!Number.isSafeInteger(declared.bytes) || (declared.bytes as number) < 0 || typeof declared.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(declared.sha256))
       throw new PlatformError({ code: "ENGINE_UNAVAILABLE", message: "the engine's stream declaration was malformed", retry: "same-key" });
     const stream = { bytes: declared.bytes as number, sha256: declared.sha256 };

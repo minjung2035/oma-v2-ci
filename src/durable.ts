@@ -1,8 +1,11 @@
 // MUST [DB-009/M-003]: closed durable shapes and mandatory intrinsic relations.
 // No Store, filesystem reads, current defaults, or physical effects belong here.
+import { tieredAcceptanceCheck, tieredAcceptanceRelation } from "./domain/tier-snapshot.js";
+import { attestationProblem } from "./domain/attestation.js";
 import { isAbsolute } from "node:path";
 import type {
   MutationMethod,
+  MessagePlan,
   OperationPlan,
   OperationResult,
 } from "../implementation/contracts/durable.js";
@@ -12,6 +15,7 @@ import { resolvedSpecDigest } from "./domain/spec-identity.js";
 import { contextEntriesCheck as checkContextEntries } from "./domain/context-policy.js";
 import {
   messageIdForOperation,
+  contextNoopRefFor,
   isMailObjectRelativePathFor,
   isPublishedRefFor,
   residentUnitsFor,
@@ -24,6 +28,7 @@ import {
 } from "./storage/paths.js";
 import {
   checkArray,
+  checkOptional,
   checkEnum,
   checkInt,
   checkObject,
@@ -56,6 +61,16 @@ export type ResultFor<K extends MutationMethod> = NarrowKind<
 export type PlanFor<K extends MutationMethod> = K extends "git.integrate"
   ? NarrowKind<OperationPlan, K> & { result?: ResultFor<"git.integrate"> }
   : NarrowKind<OperationPlan, K>;
+/** The message owned by an immutable accepted plan, not by a file or a
+ * present-day recipient lookup. All ledger/publication readers share this. */
+export function ownedMessage(plan: OperationPlan): MessagePlan | null {
+  switch (plan.kind) {
+    case "attest.record": case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return plan.message;
+    case "agent.create": return plan.initialMessage;
+    case "git.integrate": return plan.publication?.message ?? null;
+    default: return null;
+  }
+}
 export interface RepositoryIdentity {
   readonly society: string;
 }
@@ -102,6 +117,8 @@ const integrateFields = {
   candidate: checkOid,
   policyRevision: nonEmpty,
   checkProfileDigest: sha256Check,
+  publication: checkOptional(checkObject({ message: messagePlanCheck, noopRef: value => value === null ? null : nonEmpty(value), tiered: tieredAcceptanceCheck })),
+
 };
 const integrateBaseCheck = checkObject(integrateFields);
 const integrateWithResultCheck = checkObject({
@@ -117,6 +134,9 @@ const publishedRefShape: Check = (value) => {
     : "invalid published ref";
 };
 const checks = {
+  "society.set": checkObject({ kind: checkEnum(["society.set"]), state: checkEnum(["open", "closed"]) }),
+  "attest.record": checkObject({ kind: checkEnum(["attest.record"] as const),
+    fact: value => attestationProblem(value), message: messagePlanCheck }),
   "mail.send": checkObject({
     kind: checkEnum(["mail.send"] as const),
     message: messagePlanCheck,
@@ -195,6 +215,8 @@ const checks = {
     entries: contextEntriesCheck,
     stagingPath: nonEmpty,
     message: messagePlanCheck,
+    goalMail: checkOptional(checkObject({ subject: checkString({ min: 1 }) })),
+    noopRef: checkOptional(value => value === null ? null : nonEmpty(value)),
   }),
 } satisfies Record<MutationMethod, Check>;
 
@@ -220,12 +242,7 @@ export function operationPlanCheck(
     )
       return "missing or invalid operation identity context";
     const plan = value as PlanFor<MutationMethod>;
-    const message =
-      "message" in plan && typeof plan.message === "object"
-        ? plan.message
-        : plan.kind === "agent.create"
-          ? plan.initialMessage
-          : null;
+    const message = ownedMessage(plan);
     if (message !== null) {
       // All v1 plans that own an EML have exactly one message at documented ordinal zero.
       if (
@@ -239,6 +256,7 @@ export function operationPlanCheck(
         return "duplicate frozen recipient";
     }
     switch (plan.kind) {
+      case "society.set": return context.actor === "principal" ? null : "society control requires the Principal actor";
       case "mail.ack":
         return plan.recipient === context.actor
           ? null
@@ -321,6 +339,9 @@ export function operationPlanCheck(
           ? null
           : "submit message kind/context mismatch";
       case "context.publish":
+        if (plan.noopRef !== undefined && plan.noopRef !== (plan.base === plan.candidate ? contextNoopRefFor(context.operationId) : null))
+          return "context no-op witness differs from its accepted identity";
+        if (plan.goalMail && context.actor !== "principal") return "GOAL mail requires the Principal actor";
         if (
           !isContextStagingPathFor(plan.stagingPath, {
             stateRoot: context.stateRoot,
@@ -337,9 +358,34 @@ export function operationPlanCheck(
           return "context message must retain its residents address";
         return null;
       case "git.integrate":
+        if (plan.publication) {
+          const tiered = plan.publication.tiered;
+          const invalid = tieredAcceptanceRelation(tiered, { repo: plan.repo, targetRef: plan.target,
+            expectedBase: plan.base, candidate: plan.candidate, policyRevision: plan.policyRevision }, context.actor, plan.checkProfileDigest);
+          if (invalid !== null) return invalid;
+          const levels = ["LOW", "MEDIUM", "HIGH"];
+          if (levels.indexOf(tiered.effective) < levels.indexOf(tiered.requested))
+            return "accepted tier is below the requested tier";
+          if ([tiered.approvers, tiered.activeFloors].some(values => new Set(values).size !== values.length))
+            return "integration authority contains duplicate evidence";
+          if (tiered.objections.length !== 0) return "accepted integration has active objections";
+          if (tiered.approvers.includes("principal") || tiered.approvers.includes(context.actor))
+            return "integration requester or Principal is counted as a peer";
+          if (tiered.effective !== "LOW" && tiered.approvers.length === 0)
+            return "accepted integration lacks an eligible peer";
+          if (tiered.effective === "HIGH" && tiered.principalDecision === null)
+            return "accepted HIGH integration lacks a Principal decision";
+        }
+        if (plan.publication && plan.publication.noopRef !== (plan.base === plan.candidate ? `refs/oma/integrations/${context.operationId}` : null))
+          return "integration no-op witness differs from its accepted identity";
+        if (plan.publication && (plan.publication.message.kind !== "result" || plan.publication.message.to.length !== 1 ||
+            plan.publication.message.to[0] !== "commons")) return "integration publication must name commons result mail";
         if (plan.result)
           return operationResultRelationCheck(kind, plan, plan.result, context);
         return null;
+      case "attest.record":
+        return plan.message.kind === "result" && plan.message.to.length === 1 && plan.message.to[0] === "commons"
+          ? null : "attestation publication must name commons as result mail";
       case "agent.start":
       case "agent.stop":
       case "mail.send":
@@ -365,6 +411,8 @@ export function operationResultRelationCheck(
     return "result kind differs from accepted plan";
   const row = result as unknown as Record<string, unknown>;
   switch (plan.kind) {
+    case "society.set": return row.state === plan.state ? null : "society result differs from accepted state";
+    case "attest.record":
     case "mail.send":
     case "agent.continue":
       if (
@@ -413,6 +461,13 @@ export function operationResultRelationCheck(
       ] as const)
         if (row[field] !== plan[field])
           return `integrate result ${field} differs from accepted plan`;
+      if (plan.publication) {
+        const publication = row.publication as Record<string, unknown> | undefined;
+        if (!publication || publication.message !== plan.publication.message.id ||
+            publication.recipientCount !== plan.publication.message.recipients.length ||
+            publication.effectiveTier !== plan.publication.tiered.effective || publication.authorityDigest !== plan.publication.tiered.authorityDigest)
+          return "integration publication differs from accepted plan";
+      } else if (row.publication !== undefined) return "historical integration cannot gain a publication";
       // Preserve the historical optional result shape and its explicit changed fact.
       return plan.result && row.changed !== plan.result.changed
         ? "integrate changed flag differs from accepted result"

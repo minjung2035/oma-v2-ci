@@ -16,12 +16,13 @@
  *   ← { event: "stopped", cause: "guest" | "error", message? }
  *   ← { event: "sleep" } | { event: "wake" }
  */
-import { connect, type Socket } from "node:net";
+import type { Socket } from "node:net";
 import { join } from "node:path";
 import type { ChildProcess } from "node:child_process";
+import { connectSocket } from "../rpc.js";
 import { StoreError } from "../../domain/errors.js";
 import { spawnSupervisedService } from "../../process/async.js";
-import type { VmDriver } from "./lifecycle.js";
+import type { VmDriver, VmStopCause } from "./lifecycle.js";
 import type { KeychainStore } from "./keychain.js";
 
 export interface VmConfig {
@@ -46,7 +47,7 @@ const LINE_BYTES = 1024 * 1024;
 
 export class VzDriver implements VmDriver, KeychainStore {
   private readonly pending = new Map<number, Pending>();
-  private readonly stopListeners: (() => void)[] = [];
+  private readonly stopListeners: ((cause: VmStopCause) => void)[] = [];
   private readonly powerListeners: ((event: "sleep" | "wake") => void)[] = [];
   private sequence = 0;
   private buffered = "";
@@ -55,11 +56,10 @@ export class VzDriver implements VmDriver, KeychainStore {
     private readonly socketDir: string, private readonly config: VmConfig) {
     channel.setEncoding("utf8");
     channel.on("data", (chunk: string) => { this.received(chunk); });
-    const gone = (): void => { this.helperGone(); };
-    // A helper that dies resets its end; the close that follows says the rest.
     channel.on("error", () => { channel.destroy(); });
-    channel.once("close", gone);
-    child.once("exit", gone);
+    channel.once("close", () => { this.channelGone(); });
+    child.once("exit", () => { this.helperGone(); });
+    child.once("error", () => { if (child.pid === undefined) this.helperGone(); });
   }
 
   /** The helper runs for as long as `omahostd` does. */
@@ -71,7 +71,7 @@ export class VzDriver implements VmDriver, KeychainStore {
     return new VzDriver(child, channel as Socket, socketDir, config);
   }
 
-  onStopped(listener: () => void): void { this.stopListeners.push(listener); }
+  onStopped(listener: (cause: VmStopCause) => void): void { this.stopListeners.push(listener); }
   /** §9.1: the Mac is going to sleep, or has woken. */
   onPower(listener: (event: "sleep" | "wake") => void): void { this.powerListeners.push(listener); }
 
@@ -84,7 +84,11 @@ export class VzDriver implements VmDriver, KeychainStore {
       let message: Record<string, unknown>;
       try { message = JSON.parse(line) as Record<string, unknown>; }
       catch { this.channel.destroy(); return; }
-      if (message.event === "stopped") { for (const listener of this.stopListeners) listener(); continue; }
+      if (message.event === "stopped") {
+        if (message.cause !== "guest" && message.cause !== "error") { this.channel.destroy(); return; }
+        for (const listener of this.stopListeners) listener(message.cause);
+        continue;
+      }
       if (message.event === "sleep" || message.event === "wake") { for (const listener of this.powerListeners) listener(message.event); continue; }
       const waiting = typeof message.id === "number" ? this.pending.get(message.id) : undefined;
       if (waiting === undefined) continue;
@@ -94,11 +98,15 @@ export class VzDriver implements VmDriver, KeychainStore {
     }
   }
 
-  private helperGone(): void {
+  private channelGone(): void {
     for (const waiting of this.pending.values()) waiting.reject(new StoreError("BROKER_UNAVAILABLE", "the VM helper ended"));
     this.pending.clear();
-    // Whatever was running ran inside the helper.
-    for (const listener of this.stopListeners.splice(0)) listener();
+  }
+
+  private helperGone(): void {
+    this.channelGone();
+    // P0-5: EOF rejects requests, but only actual helper exit proves VM death.
+    for (const listener of this.stopListeners.splice(0)) listener("error");
   }
 
   private ask(op: string, fields: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
@@ -113,12 +121,8 @@ export class VzDriver implements VmDriver, KeychainStore {
   async start(): Promise<void> { await this.ask("start", { config: { ...this.config, socketDir: this.socketDir } }); }
   async forceStop(): Promise<void> { await this.ask("forceStop"); }
 
-  connect(port: number): Promise<Socket> {
-    return new Promise((resolve, reject) => {
-      const socket = connect(join(this.socketDir, `port-${port}.sock`));
-      socket.once("connect", () => { resolve(socket); });
-      socket.once("error", reject);
-    });
+  connect(port: number, deadlineMs = 10_000): Promise<Socket> {
+    return connectSocket(join(this.socketDir, `port-${port}.sock`), deadlineMs);
   }
 
   async get(account: string): Promise<string | undefined> {

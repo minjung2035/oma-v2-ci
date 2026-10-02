@@ -363,11 +363,13 @@ test("T114: another session's handle is a conflict, not a failed authentication"
   });
 });
 
-test("T114: every OMA tool works from the engine, through the real CLI it starts", async () => {
+test("T114: Principal mail tools work through the real CLI without orchestration tools", async () => {
   await withEngine("oma-principal-tools-", async (society, engine) => {
-    const status = await engine.tool("oma_status");
-    assert.ok(status.ok, `oma_status failed: ${status.error}`);
-    assert.match(status.text!, /principal/);
+    for (const name of ["oma_status", "oma_logs", "oma_mail_ack", "oma_agent_create", "oma_context_publish"]) {
+      const refused = await engine.tool(name);
+      assert.equal(refused.ok, false);
+      assert.equal(refused.error, `no tool ${name}`);
+    }
 
     const sent = await engine.tool("oma_mail_send", { to: ["principal"], subject: "to myself", body: "evidence", kind: "message" });
     assert.ok(sent.ok, `oma_mail_send failed: ${sent.error}`);
@@ -380,15 +382,13 @@ test("T114: every OMA tool works from the engine, through the real CLI it starts
     assert.match(read.text!, /evidence/);
     const byPath = await engine.tool("oma_mail_read", { messageId: `/mail/archive/cur/${messageId}:2,` });
     assert.equal(byPath.text, read.text);
-    const acked = await engine.tool("oma_mail_ack", { messageId });
-    assert.ok(acked.ok, `oma_mail_ack failed: ${acked.error}`);
   });
 });
 
 test("T114: the CLI receives the credential on its own socket and never in its environment", async () => {
   await withEngine("oma-principal-probe-", async (_society, engine, grant) => {
     // The tool starts this probe exactly as it starts the CLI.
-    const answer = await engine.tool("oma_status");
+    const answer = await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
     assert.ok(answer.ok, `the probe did not run: ${answer.error}`);
     const probe = JSON.parse(answer.text!) as {
       environ: string;
@@ -420,7 +420,7 @@ test("T114: a re-registered engine gets a new credential and the old one stops w
     assert.notEqual(second.credential, first.credential);
     engine.grant(second.credential, second.sessionHandle);
     // The engine picks up the replacement without restarting.
-    const status = await engine.tool("oma_status");
+    const status = await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
     assert.ok(status.ok, `the engine did not take the new credential: ${status.error}`);
     // The old one is refused, even though it was valid a moment ago.
     const stale = channel();
@@ -440,11 +440,11 @@ test("T114: a credential from an earlier broker authorises nothing in a later on
     assert.notEqual(grant.credential, stale!.credential);
     // The engine is given the old broker's credential: nothing works.
     engine.grant(stale!.credential, stale!.sessionHandle);
-    const status = await engine.tool("oma_status");
+    const status = await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" });
     assert.equal(status.ok, false, "a credential from a stopped broker was accepted");
     // Given this broker's, it works again.
     engine.grant(grant.credential, grant.sessionHandle);
-    assert.ok((await engine.tool("oma_status")).ok);
+    assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" })).ok);
     void society;
   });
 });
@@ -511,7 +511,7 @@ test("T114 / PR-002: mail to the Principal is delivered into its live session an
     assert.equal((await delivery.tick()).kind, "idle");
     // V02C: observe actual stand-in engine responses, not the delivery planner.
     // A later tool reply fences this child's preceding stdin/events.
-    assert.ok((await engine.tool("oma_status")).ok);
+    assert.ok((await engine.tool("oma_mail_send", { to: ["principal"], subject: "credential probe", body: "local fixture", kind: "message" })).ok);
     assert.equal(engine.events.filter(event => event.type === "response" && event.command === "prompt").length, promptsBefore + 1);
   });
 });
@@ -725,7 +725,7 @@ test("T114 / PR-002: a Human prompt claims the session before it is written, so 
 test("T114 / PR-002: a Human prompt typed during a delivery waits in the host and is not folded into the delivery's run", async () => {
   const { session, sent, emit } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
-  emit(accept("b-00000000-0000-4000-8000-000000000000"));
+  await emit(accept("b-00000000-0000-4000-8000-000000000000"));
   assert.equal(session.busy, true);
 
   // The Human is never made to wait for mail, and never has to retype -- but
@@ -740,7 +740,7 @@ test("T114 / PR-002: a Human prompt typed during a delivery waits in the host an
   // The delivery's run ends. That one settle ends the whole run, and the
   // Human's prompt is written now -- as a prompt of its own, with no
   // streaming behaviour, because the engine is idle again.
-  emit(settled);
+  await emit(settled);
   assert.equal(sent.length, 2, "the Human's prompt was never written after the delivery settled");
   assert.deepEqual(sent[1], { id: "oma-tui-1", type: "prompt", message: "meanwhile, about the release" });
   // And the session is the Human's until that prompt's own run settles.
@@ -748,8 +748,8 @@ test("T114 / PR-002: a Human prompt typed during a delivery waits in the host an
   await assert.rejects(session.deliver("b-00000000-0000-4000-8000-000000000001"),
     (error: unknown) => error instanceof StoreError && error.code === "BATCH_CONFLICT");
 
-  emit(accept("oma-tui-1"));
-  emit(settled);
+  await emit(accept("oma-tui-1"));
+  await emit(settled);
   assert.equal(session.busy, false, "one settle did not end the Human's run");
   await session.deliver("b-00000000-0000-4000-8000-000000000001");
   assert.equal(sent.length, 3);
@@ -767,13 +767,13 @@ test("T114 / PR-002: every prompt typed while the session was spoken for runs, o
 
   const written: string[] = [];
   for (let run = 0; run < 3; run += 1) {
-    emit(settled);
+    await emit(settled);
     const last = sent.at(-1)!;
     written.push(String(last.message));
-    emit(accept(String(last.id)));
+    await emit(accept(String(last.id)));
     assert.equal(session.busy, true, `the session was free with ${2 - run} prompts still waiting`);
   }
-  emit(settled);
+  await emit(settled);
   assert.equal(session.busy, false, "the session never came back after its Human prompts had run");
   assert.deepEqual(written, ["first", "second", "third"]);
   assert.equal(sent.length, 4, "a prompt was written more than once");
@@ -788,7 +788,8 @@ test("T114 / PR-002: a prompt the engine refuses gives the session back and is s
   const { session, sent, failed, emit } = reservedSession();
   session.submit("hello");
   assert.equal(session.busy, true);
-  emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "no model selected" });
+  await new Promise(resolve => setImmediate(resolve));
+  await emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "no model selected" });
   assert.equal(session.busy, false, "a refused prompt left the session claimed");
   // Named, with its text: the Human was already told this prompt was taken, so
   // "a prompt was refused" would leave them unable to tell which and with
@@ -804,7 +805,7 @@ test("T114 / PR-002: a refused delivery command gives the session back and lets 
   const { session, sent, emit } = reservedSession();
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
   session.submit("while that runs");
-  emit({ type: "response", id: "b-00000000-0000-4000-8000-000000000000", command: "prompt", success: false, error: "busy" });
+  await emit({ type: "response", id: "b-00000000-0000-4000-8000-000000000000", command: "prompt", success: false, error: "busy" });
   assert.equal(sent.length, 2, "the Human's waiting prompt was dropped with the refused delivery");
   assert.equal(sent[1]!.message, "while that runs");
   assert.equal(session.busy, true);
@@ -813,12 +814,12 @@ test("T114 / PR-002: a refused delivery command gives the session back and lets 
 test("T114 / PR-002: a response for a prompt the session has moved on from changes nothing", async () => {
   const { session, sent, lines, emit } = reservedSession();
   session.submit("hello");
-  emit(settled);
+  await emit(settled);
   assert.equal(session.busy, false);
   // A late refusal for the prompt whose run already ended must not take a
   // claim away from whatever owns the session now.
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
-  emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "stale" });
+  await emit({ type: "response", id: String(sent[0]!.id), command: "prompt", success: false, error: "stale" });
   assert.equal(session.busy, true, "a stale response released a delivery's claim");
   assert.equal(lines.length, 0, lines.join(" | "));
 });
@@ -866,10 +867,10 @@ test("T114 / PR-002: the waiting prompt that could not be sent is named, and the
   await session.deliver("b-00000000-0000-4000-8000-000000000000");
   for (const text of ["first", "second", "third"]) assert.deepEqual(session.submit(text), { kind: "accepted" });
 
-  emit(settled);
+  await emit(settled);
   assert.equal(String(sent.at(-1)!.message), "first");
-  emit(accept(String(sent.at(-1)!.id)));
-  emit(settled);
+  await emit(accept(String(sent.at(-1)!.id)));
+  await emit(settled);
   await new Promise(resolve => setImmediate(resolve));
 
   assert.deepEqual(failed, [{ text: "second", reason: refusal.message }],
@@ -878,8 +879,8 @@ test("T114 / PR-002: the waiting prompt that could not be sent is named, and the
     ["/oma-deliver b-00000000-0000-4000-8000-000000000000", "first", "third"],
     "a prompt behind the failed one was lost with it");
   assert.equal(session.busy, true, "the session was left free while the prompt behind the failure ran");
-  emit(accept(String(sent.at(-1)!.id)));
-  emit(settled);
+  await emit(accept(String(sent.at(-1)!.id)));
+  await emit(settled);
   assert.equal(session.busy, false);
 
   // Negative control: with the same queue and no failing write, nothing is
@@ -888,8 +889,8 @@ test("T114 / PR-002: the waiting prompt that could not be sent is named, and the
   await clean.session.deliver("b-00000000-0000-4000-8000-000000000000");
   for (const text of ["first", "second", "third"]) clean.session.submit(text);
   for (let run = 0; run < 3; run += 1) {
-    clean.emit(settled);
-    clean.emit(accept(String(clean.sent.at(-1)!.id)));
+    await clean.emit(settled);
+    await clean.emit(accept(String(clean.sent.at(-1)!.id)));
   }
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(clean.failed, []);
@@ -906,9 +907,9 @@ test("T114 / PR-002: the busy report comes from the ownership itself, at every m
   assert.deepEqual(busy, [true]);
   // The delivery's run ends and the waiting prompt takes the session in the
   // same step: the screen is never told the session went idle in between.
-  emit({ type: "agent_settled" });
+  await emit({ type: "agent_settled" });
   assert.deepEqual(busy, [true, true]);
-  emit({ type: "agent_settled" });
+  await emit({ type: "agent_settled" });
   assert.deepEqual(busy, [true, true, false]);
 });
 
@@ -918,7 +919,7 @@ test("T120 / TUI-023: the host never retains a Human prompt beyond its UTF-8 fra
   state.frameBytes = 96;
   const refused = session.submit("가".repeat(12));
   assert.equal(refused.kind, "refused");
-  assert.match(refused.kind === "refused" ? refused.reason : "", /한도/);
+  assert.match(refused.kind === "refused" ? refused.reason : "", /prompt limit/);
   assert.equal(session.busy, false, "a rejected prompt claimed the session");
   assert.deepEqual(busy, [], "a rejected prompt changed the screen's busy state");
   assert.deepEqual(sent, [], "an oversized prompt reached the Pi transport");

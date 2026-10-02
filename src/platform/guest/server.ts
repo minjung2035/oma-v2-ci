@@ -16,9 +16,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import { chmodSync, chownSync } from "node:fs";
 import { clearSocketName } from "../../storage/socket-name.js";
 import { peerCred, socketDescriptor } from "../../leaf.js";
-import { FramedPeer, PlatformError, readHello } from "../rpc.js";
-import { productText } from "../product-text.js";
-import { ERROR_METADATA, StoreError, errorCodeOf } from "../../domain/errors.js";
+import { FramedPeer, platformFailure, readHello } from "../rpc.js";
 import {
   negotiate, requestProblem, HOST_GUEST_PROTOCOL,
   type Channel, type HelloParams, type HelloResult, type PlatformErrorCode,
@@ -129,16 +127,8 @@ export function serveRequests(peer: FramedPeer,
         answer[HANDOFF]?.();
       }
       catch (error) {
-        if (error instanceof PlatformError) {
-          const failure = error.failure;
-          safeRefuse(peer, id, failure.code, productText(failure.message) ? failure.message : failure.code, failure.retry);
-          return;
-        }
-        const code = errorCodeOf(error);
-        const category = ERROR_METADATA[code].category;
-        const retry = category === "transient" || category === "ambiguous" || category === "internal" ? "same-key" : "never";
-        const words = error instanceof StoreError && code !== "INTERNAL_ERROR" && productText(error.message) ? error.message : code;
-        safeRefuse(peer, id, code, words, retry);
+        const failure = platformFailure(error);
+        safeRefuse(peer, id, failure.code, failure.message, failure.retry);
       }
     });
   });

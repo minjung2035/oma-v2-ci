@@ -227,7 +227,10 @@ export class PrincipalDelivery {
         const waitMs = accepted === null ? Math.max(0, acceptBy - (this.options.now ?? performance.now.bind(performance))()) : 1000;
         if (accepted === null && waitMs === 0)
           throw new StoreError("SESSION_BOUNDARY_UNCONFIRMED", "the engine did not accept the delivery command in time");
-        await Promise.race([next, new Promise<void>(resolve => { setTimeout(resolve, Math.min(waitMs, 1000)).unref?.(); })]);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([next, new Promise<void>(resolve => { timer = setTimeout(resolve, Math.min(waitMs, 1000)); timer.unref?.(); })]);
+        } finally { clearTimeout(timer); }
         next = changed();
       }
       if (ended) throw new StoreError("PRINCIPAL_DISCONNECTED", "the principal session ended during delivery");

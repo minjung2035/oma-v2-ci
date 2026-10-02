@@ -25,6 +25,7 @@ import { basename, dirname, join, relative } from "node:path";
 import type { HostConfigV1 } from "../../implementation/contracts.js";
 import { StoreError, normalizeStorageFailure, unobserved } from "../domain/errors.js";
 import { validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../config.js";
+import { fileDigest } from "../storage/file-digest.js";
 import { readConfigurationSource } from "./operations.js";
 import {
   ensureDurableDirectory, fsyncDir, fsyncHeldDir, writeExclusiveFsyncedEntry, writeExclusiveFsyncedFile, faultAt, isDurabilityFault,
@@ -57,11 +58,19 @@ export interface ManagedRole {
   readonly toolSurface?: unknown;
   readonly prompt: Buffer;
 }
+/** A role as a whole, for DR25's whole-role-set edits: its extension entries,
+ * tool surface (absent: none) and prompt bytes. Its agent profile is the
+ * candidate's. */
+export type ManagedRoleSource = Omit<ManagedRole, "agentProfile">;
 export interface ManagedEdit {
   /** The complete candidate, already validated and revised by its owner. */
   readonly config: ValidatedConfigCandidate;
   /** Authored role parts that differ from the snapshot (extension selection). */
   readonly roles?: Readonly<Record<string, Partial<Pick<ManagedRole, "extensions">>>>;
+  /** DR25: every role, replacing the snapshot's -- how an inline configuration
+   * becomes a managed bundle, and how a session's configuration takes on its
+   * project's roles. Names exactly the candidate's agent profiles. */
+  readonly roleSet?: Readonly<Record<string, ManagedRoleSource>>;
 }
 export type ManagedCommit =
   | { readonly kind: "committed"; readonly generation: string }
@@ -124,8 +133,22 @@ export function managedGenerationOf(snapshot: Pick<ConfigurationSnapshot, "layou
  * candidate's agent profiles and any extension selection the edit replaces.
  * Prompt bytes are the ones the loader decoded (UTF-8, BOM kept). */
 export function managedRolesOf(snapshot: ManagedSource, edits: ManagedEdit["roles"] = {},
-  config: HostConfigV1 = snapshot.config): Record<string, ManagedRole> {
+  config: HostConfigV1 = snapshot.config, roleSet?: ManagedEdit["roleSet"]): Record<string, ManagedRole> {
   const roles: Record<string, ManagedRole> = Object.create(null);
+  if (roleSet !== undefined) {
+    // DR25: the whole set is the edit's; every agent profile has its role and no other role is named.
+    for (const name of Object.keys(roleSet)) if (!Object.hasOwn(config.agentProfiles, name))
+      throw new StoreError("UNSUPPORTED_PROFILE", `the role set names ${name}, which the candidate has no agent profile for`);
+    for (const name of Object.keys(config.agentProfiles)) {
+      const role = roleSet[name];
+      if (role === undefined) throw new StoreError("UNSUPPORTED_PROFILE", `the role set has no role for agent profile ${name}`);
+      if (!Array.isArray(role.extensions) || role.extensions.some(entry => typeof entry !== "string"))
+        throw new StoreError("INVALID_REQUEST", `role ${name} extensions are not a list of entries`);
+      roles[name] = Object.freeze({ agentProfile: config.agentProfiles[name], extensions: Object.freeze([...role.extensions]),
+        ...(role.toolSurface === undefined ? {} : { toolSurface: role.toolSurface }), prompt: Buffer.from(role.prompt) });
+    }
+    return roles;
+  }
   for (const [name, authored] of Object.entries(snapshot.authoredRoles)) {
     const value = authored.value;
     const change = edits[name];
@@ -151,11 +174,6 @@ export function managedRolesOf(snapshot: ManagedSource, edits: ManagedEdit["role
  * flushed, nothing else is published into that bundle (CONFIG-CONTRACT). */
 const unconfirmed = new Set<string>();
 
-function currentBytes(path: string): Buffer {
-  const stat = lstatSync(path);
-  if (!stat.isFile()) throw new StoreError("POLICY_CHANGED", `configuration file is no longer a regular file: ${path}`);
-  return readFileSync(path);
-}
 /** CONFIG-CONTRACT expected version: every file of the closure the edit was
  * read from still holds the bytes it held. The whole commit below is one
  * synchronous run, so no other edit of this process interleaves after this.
@@ -163,14 +181,14 @@ function currentBytes(path: string): Buffer {
  * cannot be read now is not known to have changed, and the edit waits. */
 function assertCurrent(snapshot: Pick<ConfigurationSnapshot, "sourceFiles">): void {
   for (const identity of snapshot.sourceFiles) {
-    let bytes: Buffer;
-    try { bytes = currentBytes(identity.path); }
+    let sha256: string;
+    try { sha256 = fileDigest(identity.path).sha256; }
     catch (error) {
       if (error instanceof StoreError) throw error;
       throw unobserved(error, `the configuration file ${identity.path}`) ??
         new StoreError("POLICY_CHANGED", `configuration changed since it was read: ${identity.path}`);
     }
-    if (createHash("sha256").update(bytes).digest("hex") !== identity.sha256)
+    if (sha256 !== identity.sha256)
       throw new StoreError("POLICY_CHANGED", "configuration changed since it was read; reload it before editing");
   }
 }
@@ -322,16 +340,18 @@ function assertReproduces(manifest: string, config: HostConfigV1, roles: Readonl
 export function commitManagedGeneration(snapshot: ManagedSource, edit: ManagedEdit, faults?: DurabilityObserver,
   limits: ManagedLimits = MANAGED_LIMITS): ManagedCommit {
   const layout = snapshot.layout;
-  if (layout.kind !== "operations")
+  // DR25: an inline configuration becomes a managed bundle only with a whole
+  // role set, published as its first generation; its file becomes the manifest.
+  if (layout.kind !== "operations" && edit.roleSet === undefined)
     throw new StoreError("UNSUPPORTED_PROFILE", "only an operations bundle is edited as managed generations");
-  const manifest = layout.index;
+  const manifest = layout.kind === "operations" ? layout.index : layout.path;
   const root = dirname(manifest);
   if (unconfirmed.has(root)) {
     try { fsyncDir(root); unconfirmed.delete(root); }
     catch (error) { throw storeFailure(error); }
   }
   assertCurrent(snapshot);
-  const roles = managedRolesOf(snapshot, edit.roles, edit.config);
+  const roles = managedRolesOf(snapshot, edit.roles, edit.config, edit.roleSet);
 
   const logical = logicalFiles(edit.config, roles);
   const id = generationIdOf(logical);

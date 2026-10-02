@@ -25,17 +25,17 @@ const TIMEOUT = { timeout: 120_000 };
 /** The newest tool result the engine handed the model. */
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
 
-test("SCN-P01: a Human asks for status; the model calls oma_status and reads the society's answer", TIMEOUT, async () => {
-  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_status", {})), text("상태를 확인했습니다.")] }, async s => {
-    const turn = await s.prompt("지금 society 상태를 알려줘");
+test("SCN-P01: a Human asks about code; the Principal reads canonical main without orchestration", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_git", { action: "ls-tree" })), text("코드를 확인했습니다.")] }, async s => {
+    const turn = await s.prompt("현재 프로젝트 코드를 확인해줘");
     assert.equal(s.provider.seen.length, 2, "the model was not asked again with the tool's result");
     const offered = (s.provider.seen[0]!.body.tools ?? []).map(tool => tool.function?.name);
-    for (const name of ["oma_status", "oma_mail_send", "oma_mail_read"]) assert.ok(offered.includes(name), `${name} was not offered to the model`);
-    assert.ok(!offered.includes("bash"), "the Principal's engine offered bash");
+    for (const name of ["oma_git", "oma_mail_send", "oma_mail_read"]) assert.ok(offered.includes(name), `${name} was not offered to the model`);
+    for (const name of ["bash", "write", "edit", "oma_status", "oma_mail_ack", "oma_agent_create"]) assert.ok(!offered.includes(name), name);
     const result = lastResult(s.provider.seen[1]!.body);
-    assert.match(result, /worker-a/, `the status the model read does not name the society's Resident: ${result}`);
+    assert.match(result, /"revision":"[a-f0-9]{40,64}"/, result);
     assert.ok(continuesTurn(s.provider.seen[1]!.body));
-    assert.ok(turn.lines.some(line => line.includes("상태를 확인했습니다")), JSON.stringify(turn.lines));
+    assert.ok(turn.lines.some(line => line.includes("코드를 확인했습니다")), JSON.stringify(turn.lines));
   });
 });
 
@@ -102,21 +102,19 @@ test("SCN-P03: mail to the Principal is delivered into its session, read, answer
   });
 });
 
-test("SCN-P04: the model acknowledges a delivered message and the ledger records it once", TIMEOUT, async () => {
+test("SCN-P04: Principal delivery and repeated reads never manufacture an acknowledgement", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
-    const sent = await s.residentSends("worker-a", { to: ["principal"], subject: "보고", body: "끝났습니다.", kind: "result" }, "w-r1") as { result: { result: { message: string } } };
+    const sent = await s.residentSends("worker-a", { to: ["principal"], subject: "Report", body: "Finished.", kind: "result" }, "w-r1") as { result: { result: { message: string } } };
     const message = sent.result.result.message;
-    s.script([tools(call("oma_mail_ack", { messageId: message, request: "ack-1" })), text("확인 처리했습니다.")]);
+    s.script([tools(call("oma_mail_read", { messageId: message })), text("Read.")]);
     assert.equal((await s.deliver()).kind, "delivered");
-    assert.equal(s.store.getDelivery(message, "principal")?.acknowledged, 1);
-    const acks = s.operations("principal").filter(row => row.kind === "mail.ack");
-    assert.equal(acks.length, 1);
-    assert.equal(acks[0]!.request_key, "ack-1");
-    // The same acknowledgement again, as a model repeats itself: no second operation.
-    s.script([tools(call("oma_mail_ack", { messageId: message, request: "ack-1" })), text("이미 확인했습니다.")]);
-    await s.prompt("그 메일 확인 처리 다시 해줘");
-    assert.equal(s.operations("principal").filter(row => row.kind === "mail.ack").length, 1);
-    assert.match(lastResult(s.provider.seen.at(-1)!.body), /succeeded/);
+    s.script([tools(call("oma_mail_read", { messageId: message })), text("Read again.")]);
+    await s.prompt("Read that message again.");
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /Finished/);
+    assert.equal(s.store.getDelivery(message, "principal")?.presented, 1);
+    assert.equal(s.store.getDelivery(message, "principal")?.acknowledged, 0);
+    assert.equal(s.operations("principal").filter(row => row.kind === "mail.ack").length, 0);
+    assert.equal((await s.deliver()).kind, "idle");
   });
 });
 
@@ -209,6 +207,58 @@ for (const [name, broken] of [["a server error", failing(500)], ["a cut stream",
     });
   });
 
+for (const broken of [{ kind: "disconnect" } as Reply, { kind: "cut" } as Reply, failing(503)])
+  for (const recover of [false, true])
+    test(`SCN-RETRY: ${broken.kind} retries five times, then ${recover ? "recovers" : "fails"} without replaying a tool`, TIMEOUT, async () => {
+      await withScenario({ residents: ["worker-a"] }, async s => {
+        s.script((_request, index) => {
+          if (index === 0) return tools(call("oma_mail_send", { to: ["worker-a"], subject: "재시도 경계", body: "한 번만" }));
+          return recover && index === 6 ? text("연결 복구 완료") : broken;
+        });
+        const turn = await s.prompt("메일을 보내고 결과를 알려줘");
+        assert.equal(s.provider.seen.length, 7, "one tool response, then the initial call and five retries");
+        const attempts = turn.events.filter(event => event.type === "auto_retry_start");
+        assert.deepEqual(attempts.map(event => [event.attempt, event.maxAttempts]), [1, 2, 3, 4, 5].map(n => [n, 5]));
+        const end = turn.events.find(event => event.type === "auto_retry_end");
+        assert.equal(end?.success, recover);
+        assert.equal(end?.attempt, 5);
+        assert.equal(principalSends(s).length, 1);
+        assert.equal(s.inbox("worker-a").length, 1);
+        assert.ok(turn.lines.some(line => line.includes(recover ? "Model API connection restored" : "Model API failed after 5 retries")));
+        for (const seen of s.provider.seen.slice(2))
+          assert.deepEqual(toolResults(seen.body), toolResults(s.provider.seen[1]!.body), "the completed tool result must survive retries");
+      });
+    });
+
+test("SCN-RETRY: closing the session during backoff cancels retries without replaying the completed tool", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"] }, async s => {
+    s.script((_request, index) => index === 0
+      ? tools(call("oma_mail_send", { to: ["worker-a"], subject: "취소 경계", body: "한 번만" }))
+      : failing(503));
+    let cancelled = false;
+    const off = s.session.onEvent(event => {
+      if (event.type === "auto_retry_start" && !cancelled) { cancelled = true; s.session.close(); }
+    });
+    try {
+      assert.equal(s.session.submit("메일을 보내고 응답해 줘").kind, "accepted");
+      await s.session.exited;
+      assert.equal(cancelled, true, "the test never reached retry backoff");
+      assert.equal(s.provider.seen.length, 2, "a cancelled backoff started another provider request");
+      assert.equal(principalSends(s).length, 1);
+      assert.equal(s.inbox("worker-a").length, 1);
+      assert.equal(s.events.some(event => event.type === "auto_retry_end" && event.success === true), false);
+    } finally { off(); }
+  });
+});
+
+test("SCN-RETRY: authentication failure does not retry", TIMEOUT, async () => {
+  await withScenario({ script: () => failing(401) }, async s => {
+    const refused = await s.prompt("응답해 줘");
+    assert.equal(s.provider.seen.length, 1);
+    assert.equal(refused.events.filter(event => event.type === "auto_retry_start").length, 0);
+  });
+});
+
 test("SCN-F02: a delivery whose model never answers is not completed; the mail stays and is presented again, then completed once", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const message = await residentAsks(s, "w-f2");
@@ -284,13 +334,14 @@ test("SCN-F06: a send while the broker is down is 'outcome unknown' with its key
   });
 });
 
-test("SCN-F07: after a broker restart the engine is registered again and its tools keep working without the Human", TIMEOUT, async () => {
-  await withScenario({ residents: ["worker-a"], script: [tools(call("oma_status", {})), text("1"), tools(call("oma_status", {})), text("2")] }, async s => {
-    await s.prompt("상태");
-    assert.match(lastResult(s.provider.seen[1]!.body), /worker-a/);
-    await s.restartBroker();
-    await s.prompt("다시 상태");
-    assert.match(lastResult(s.provider.seen[3]!.body), /worker-a/, lastResult(s.provider.seen[3]!.body));
+test("SCN-F07: after a broker restart the engine is registered again and authenticated tools keep working", TIMEOUT, async () => {
+  const open = tools(call("oma_society", { action: "open", request: "open-f07" }));
+  await withScenario({ residents: ["worker-a"], script: [open, text("Open."), open, text("Still open.")] }, async s => {
+    await s.prompt("Open Worker execution.");
+    const original = receiptIn(lastResult(s.provider.seen[1]!.body)); assert.equal(original.state, "succeeded");
+    await s.restartBroker(); await s.prompt("Look up the same request.");
+    assert.deepEqual(receiptIn(lastResult(s.provider.seen[3]!.body)), original);
+    assert.equal(s.operations("principal").filter(row => row.kind === "society.set").length, 1);
   });
 });
 
@@ -356,13 +407,13 @@ test("SCN-F11: a provider that stops answering mid-turn does not wedge the sessi
   await withScenario({ residents: ["worker-a"] }, async s => {
     s.script((_request, index) => (index < 3 ? { kind: "hang" } : text("이제 답합니다.")));
     await s.prompt("응답해", 60_000);
-    s.script([tools(call("oma_status", {})), text("상태 확인")]);
+    s.script([tools(call("oma_git", { action: "ls-tree" })), text("상태 확인")]);
     await s.prompt("상태", 30_000);
-    assert.match(lastResult(s.provider.seen.at(-1)!.body), /worker-a/);
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /"revision":"[a-f0-9]{40,64}"/);
   });
 });
 
-test("SCN-L01: delegate, get a reply, read it, acknowledge it, follow up, report -- every fact recorded once and threaded", TIMEOUT, async () => {
+test("SCN-L01: delegate, get a reply, read it, follow up, report -- every fact recorded once and threaded", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     // 1. The Human delegates; the model asks worker-a.
     s.script([tools(call("oma_mail_send", { to: ["worker-a"], subject: "로그인 버그", body: "재현하고 원인을 알려주세요.", kind: "question", request: "task-1" })), text("worker-a에게 맡겼습니다.")]);
@@ -372,21 +423,20 @@ test("SCN-L01: delegate, get a reply, read it, acknowledge it, follow up, report
     const answered = await s.residentSends("worker-a", { to: ["principal"], subject: "Re: 로그인 버그", body: "세션 만료 처리 누락입니다.", kind: "result", replyTo: task }, "w-l1") as { ok: boolean; result: { result: { message: string } } };
     assert.equal(answered.ok, true, JSON.stringify(answered));
     const answer = answered.result.result.message;
-    // 3. Delivered; the model reads it, acknowledges it and follows up in the same thread.
+    // 3. Delivered; the model reads it and follows up in the same thread.
     s.script((request, index) => {
       if (index === 0) return tools(call("oma_mail_read", { messageId: noticed(request.messages.map(textOf).join("\n"))[0]! }));
-      if (index === 1) return tools(call("oma_mail_ack", { messageId: answer, request: "ack-l1" }),
-        call("oma_mail_send", { to: ["worker-a"], subject: "Re: 로그인 버그", body: "수정해서 제출해 주세요.", replyTo: answer, request: "follow-1" }));
+      if (index === 1) return tools(call("oma_mail_send", { to: ["worker-a"], subject: "Re: 로그인 버그", body: "수정해서 제출해 주세요.", replyTo: answer, request: "follow-1" }));
       return text("원인을 받았고 수정을 요청했습니다.");
     });
     assert.equal((await s.deliver()).kind, "delivered");
-    // 4. The Human asks; the model reports from status.
-    s.script([tools(call("oma_status", {})), text("진행 중입니다.")]);
+    // 4. The Human asks; the model reports from the Worker reply, not status.
+    s.script([tools(call("oma_mail_read", { messageId: answer })), text("진행 중입니다.")]);
     await s.prompt("진행 상황은?");
     // The ledger holds each fact once.
     const kinds = s.operations("principal").map(row => `${row.kind}:${row.request_key}:${row.state}`).sort();
-    assert.deepEqual(kinds, ["mail.ack:ack-l1:succeeded", "mail.send:follow-1:succeeded", "mail.send:task-1:succeeded"]);
-    assert.equal(s.store.getDelivery(answer, "principal")?.acknowledged, 1);
+    assert.deepEqual(kinds, ["mail.send:follow-1:succeeded", "mail.send:task-1:succeeded"]);
+    assert.equal(s.store.getDelivery(answer, "principal")?.acknowledged, 0);
     assert.equal(s.store.getDelivery(answer, "principal")?.presented, 1);
     // The thread: the follow-up names the answer, and the answer the task.
     const followUp = s.inbox("worker-a").find(name => name !== task)!;
@@ -416,18 +466,18 @@ test("SCN-L02: the broker and the engine both restart mid-loop; the resumed sess
   });
 });
 
-test("SCN-L03: five rounds of mail, delivery and acknowledgement leave nothing prepared and nothing presented twice", TIMEOUT, async () => {
+test("SCN-L03: five rounds of mail, delivery and reading leave nothing prepared and nothing presented twice", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
     const messages: string[] = [];
     for (let round = 1; round <= 5; round += 1) {
       const message = await residentAsks(s, `w-round-${round}`, `라운드 ${round}`);
       messages.push(message);
-      s.script([tools(call("oma_mail_ack", { messageId: message, request: `ack-round-${round}` })), text(`라운드 ${round} 확인`)]);
+      s.script([tools(call("oma_mail_read", { messageId: message })), text(`라운드 ${round} 확인`)]);
       assert.equal((await s.deliver()).kind, "delivered", `round ${round}`);
     }
     for (const message of messages) {
       const delivery = s.store.getDelivery(message, "principal")!;
-      assert.deepEqual([delivery.presented, delivery.acknowledged], [1, 1]);
+      assert.deepEqual([delivery.presented, delivery.acknowledged], [1, 0]);
     }
     const notices = s.provider.seen.filter(entry => /path=\/mail\/archive\/cur\//.test(lastUserText(entry.body)) && !continuesTurn(entry.body));
     assert.equal(notices.length, 5, "a notice was presented more or less than once per round");
@@ -464,24 +514,25 @@ test("SCN-F13: a model's answer larger than a frame does not end the session; it
   await withScenario({ residents: ["worker-a"], script: [tools(call("oma_mail_send", { to: ["worker-a"], subject: "너무 김", body })), text("너무 깁니다.")] }, async s => {
     const turn = await s.prompt("긴 메일 보내");
     // DR15: the engine's event carrying the whole call is larger than the frame.
-    assert.ok(turn.lines.some(line => line.includes("한도를 넘어 표시하지 못했습니다")), JSON.stringify(turn.lines));
+    assert.ok(turn.lines.some(line => line.includes("exceeded the display limit")), JSON.stringify(turn.lines));
     assert.ok(s.session.running, "the session ended on an oversized event");
     assert.doesNotMatch(lastResult(s.provider.seen[1]!.body), /"state":"succeeded"/);
     assert.equal(s.operations("principal").filter(row => row.state === "succeeded").length, 0);
     assert.deepEqual(s.inbox("worker-a"), []);
     // The session goes on.
-    s.script([tools(call("oma_status", {})), text("계속 동작합니다.")]);
+    s.script([tools(call("oma_git", { action: "ls-tree" })), text("계속 동작합니다.")]);
     await s.prompt("상태");
-    assert.match(lastResult(s.provider.seen.at(-1)!.body), /worker-a/);
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /"revision":"[a-f0-9]{40,64}"/);
   });
 });
 
-test("SCN-F17: the model writes a file larger than a frame; the file is written and the session goes on", TIMEOUT, async () => {
+test("SCN-F17: an oversized attempted Principal write is refused and the session goes on", TIMEOUT, async () => {
   const content = "데이터 행입니다\n".repeat(20_000);
   await withScenario({ script: [tools(call("write", { path: "big-data.txt", content })), text("썼습니다.")] }, async s => {
     await s.prompt("큰 파일을 써");
     assert.ok(s.session.running, "writing a large file ended the session");
-    assert.equal(readFileSync(join(principalWorkspace(s.root), "big-data.txt"), "utf8"), content);
+    assert.equal(existsSync(join(principalWorkspace(s.root), "big-data.txt")), false);
+    assert.match(lastResult(s.provider.seen.at(-1)!.body), /not found|not available|unknown tool/i);
   });
 });
 
@@ -534,17 +585,6 @@ test("SCN-F16: mail that arrives while a delivery runs is delivered by the next 
     assert.equal(s.store.getDelivery(first, "principal")?.presented, 1);
     assert.equal(s.store.getDelivery(second, "principal")?.presented, 1);
     assert.notEqual(s.store.getDelivery(first, "principal")?.batchId, s.store.getDelivery(second, "principal")?.batchId);
-  });
-});
-
-test("SCN-P09: status of one agent names that agent and its pending mail", TIMEOUT, async () => {
-  await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
-    await s.residentSends("worker-b", { to: ["worker-a"], subject: "대기", body: "처리 대기" }, "w-p09");
-    s.script([tools(call("oma_status", { agent: "worker-a" })), text("확인")]);
-    await s.prompt("worker-a 상태");
-    const status = lastResult(s.provider.seen[1]!.body);
-    assert.match(status, /worker-a/);
-    assert.doesNotMatch(status, /worker-b/, "status of one agent listed another");
   });
 });
 

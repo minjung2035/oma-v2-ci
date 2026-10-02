@@ -17,6 +17,8 @@ export const RESIDENT_PATHS = Object.freeze({
   /** DR18 (D-8): the human's committed project history, read-only. */
   projectMirror: "/git/project-mirror.git",
   sessions: "/run/oma-sessions", libdir: "/opt/oma",
+  /** DR25: the packages the Human installed with `oma pi install`, read-only. */
+  packages: "/opt/oma-packages",
   /** INF-006: the relay's host end. The confined engine reaches a provider
    * through this socket, so the network namespace stays unshared. */
   inference: "/run/oma/inference.sock",
@@ -110,6 +112,9 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
       const target = `${RESIDENT_PATHS.libdir}/${path}`;
       return kind === "dir" ? ["--tmpfs", target, "--remount-ro", target] : ["--ro-bind", "/dev/null", target];
     }),
+    // DR25: only the package store -- package code and its package manager's
+    // list -- never the engine home, which holds the Human's login.
+    ...(h.packages === undefined ? [] : ["--ro-bind", h.packages, RESIDENT_PATHS.packages]),
     "--bind", dirs.workspace, RESIDENT_PATHS.workspace, "--bind", dirs.home, RESIDENT_PATHS.home,
     "--bind", dirs.sessions, RESIDENT_PATHS.sessions,
     "--ro-bind", dirs.archive, RESIDENT_PATHS.archive, "--ro-bind", dirs.selfMail, RESIDENT_PATHS.selfMail,
@@ -138,9 +143,10 @@ export function residentArgv(h: SandboxHost, lease: ValidatedRunLease,
  */
 /** The directory mounts of a Resident's plan, host root beside the path the
  * confined process sees -- the one table both translations read (INV04). */
-function residentMounts(libdir: string, dirs: ResidentDirectories): readonly (readonly [string, string])[] {
+function residentMounts(host: MountedInstallation, dirs: ResidentDirectories): readonly (readonly [string, string])[] {
   return [
-    [libdir, RESIDENT_PATHS.libdir], [dirs.workspace, RESIDENT_PATHS.workspace],
+    [host.libdir, RESIDENT_PATHS.libdir], ...(host.packages === undefined ? [] : [[host.packages, RESIDENT_PATHS.packages] as const]),
+    [dirs.workspace, RESIDENT_PATHS.workspace],
     [dirs.home, RESIDENT_PATHS.home], [dirs.sessions, RESIDENT_PATHS.sessions],
     [dirs.archive, RESIDENT_PATHS.archive], [dirs.selfMail, RESIDENT_PATHS.selfMail],
     [dirs.view, RESIDENT_PATHS.view], [dirs.world, RESIDENT_PATHS.world],
@@ -173,8 +179,11 @@ export function hostSessionPath(dirs: ResidentDirectories, insidePath: string): 
   return `${host}/${name}`;
 }
 
-export function confinedPath(libdir: string, dirs: ResidentDirectories, hostPath: string): string {
-  for (const [root, inside] of residentMounts(libdir, dirs)) {
+/** The installation a Resident's plan mounts: its files and (DR25) the installed packages. */
+export type MountedInstallation = Pick<SandboxHost, "libdir" | "packages">;
+
+export function confinedPath(host: MountedInstallation, dirs: ResidentDirectories, hostPath: string): string {
+  for (const [root, inside] of residentMounts(host, dirs)) {
     // A root may be written with a trailing separator (the installation path
     // `oma` records is); the comparison must not depend on that spelling.
     const host = root.length > 1 && root.endsWith("/") ? root.slice(0, -1) : root;
@@ -185,26 +194,9 @@ export function confinedPath(libdir: string, dirs: ResidentDirectories, hostPath
   throw new StoreError("AUTH_FAILED", "path is outside every mount the confined engine has");
 }
 
-/** Candidate recipe only; SandboxModule.candidate still refuses execution. */
-export function candidateArgv(h: SandboxHost, candidateDir: string, checkAssetsDir: string,
-  checkTmpBytes: number, command: readonly string[], env: Readonly<Record<string, string>> = {}): string[] {
-  validateSandboxHost(h);
-  if (!trustedAbsolutePath(candidateDir) || !trustedAbsolutePath(checkAssetsDir) || command.length === 0 || !command[0] ||
-    command.some(value => typeof value !== "string" || value.includes("\0")) || !Number.isSafeInteger(checkTmpBytes) || checkTmpBytes <= 0)
-    throw new StoreError("CHECK_FAILED", "candidate check command, paths or resources are invalid");
-  for (const [key, value] of Object.entries(env))
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0"))
-      throw new StoreError("CHECK_FAILED", "candidate environment is invalid");
-  const checkEnv = Object.entries(env).sort(([a], [b]) => a.localeCompare(b)).flatMap(([key, value]) => ["--setenv", key, value]);
-  return ["bwrap", "--unshare-all", "--new-session", "--die-with-parent", "--cap-drop", "ALL",
-    "--ro-bind", h.rootfs, "/", "--proc", "/proc", "--dev", "/dev", "--size", String(checkTmpBytes), "--tmpfs", "/tmp",
-    "--bind", candidateDir, "/candidate", "--ro-bind", checkAssetsDir, "/checks", "--clearenv",
-    "--setenv", "HOME", "/tmp", "--setenv", "PATH", "/usr/bin:/bin", ...checkEnv,
-    "--chdir", "/candidate", "--", ...command];
-}
 export function validateSandboxHost(h: SandboxHost): void {
   if (!trustedAbsolutePath(h.rootfs) || !trustedAbsolutePath(h.libdir) ||
-    !trustedAbsolutePath(h.node) || !trustedAbsolutePath(h.pi))
+    !trustedAbsolutePath(h.node) || !trustedAbsolutePath(h.pi) || (h.packages !== undefined && !trustedAbsolutePath(h.packages)))
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox host paths must be normalized non-root absolute paths");
   if (h.hidden !== undefined && (!Array.isArray(h.hidden) || h.hidden.some(entry =>
     typeof entry?.path !== "string" || entry.path.length === 0 || entry.path.startsWith("/") ||
@@ -228,9 +220,5 @@ export class SandboxModule {
     // the argv above, so nothing is inherited from whoever spawns bwrap.
     // Descriptor 3 carries the sandbox filter (sandboxSeccompFilter, DR18).
     return { argv, env: {}, inheritedFds: [0, 1, 2, SANDBOX_FILTER_FD] };
-  }
-  candidate(oid: string, checkProfile: string): SandboxPlan {
-    void oid; void checkProfile;
-    throw new StoreError("UNSUPPORTED_PROFILE", "integration checks are not run by this version (DR18)");
   }
 }

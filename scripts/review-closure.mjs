@@ -9,9 +9,10 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 export const LEDGER = "implementation/review-ledger.json";
-export const PLAN = "oma-v2-consistency-plan-b25961c/plan.json";
+export const PLAN = "docs/archive/oma-v2-consistency-plan-b25961c/plan.json";
 export const REVIEWED = Object.freeze(["CHANGED_WITH_ORACLE", "READ_UNCHANGED"]);
 export const STATUSES = Object.freeze([...REVIEWED, "CHANGED_WITHOUT_ORACLE", "NOT_REVIEWED", "REMOVED"]);
 /** Environment lanes release needs, and what this tree has recorded for them. */
@@ -52,6 +53,11 @@ export function reviewFindings(root, ledger = JSON.parse(readFileSync(join(root,
       if (!Array.isArray(entry.by) || entry.by.length === 0) findings.push({ path: entry.path, problem: "reviewed by no work package" });
       if (!Array.isArray(entry.oracles) || entry.oracles.length === 0) findings.push({ path: entry.path, problem: "reviewed with no oracle" });
       for (const id of entry.oracles ?? []) if (!oraclePresent(names, id)) findings.push({ path: entry.path, problem: `oracle ${id} is not a test in this tree` });
+      if (entry.sha256 !== undefined) {
+        let actual;
+        try { actual = createHash("sha256").update(readFileSync(join(root, entry.path))).digest("hex"); } catch { /* missing is stale */ }
+        if (entry.sha256 !== actual) findings.push({ path: entry.path, problem: "reviewed change digest is stale" });
+      }
     }
     if (entry.status === "REMOVED" && current.includes(entry.path)) findings.push({ path: entry.path, problem: "removed but still a production file" });
   }

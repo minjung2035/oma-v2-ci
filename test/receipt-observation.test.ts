@@ -19,13 +19,14 @@ import { ENTRY, boundaryOf, completeSession, evidenceOf, preparedFixture, type R
 
 /** The production runner's consume step with the engine and the broker
  * channel replaced by counters: the decision under test is the runner's own. */
-async function runnerConsume(t: TestContext, f: Fixture): Promise<{ deliveries: number; completions: Record<string, unknown>[]; error: unknown }> {
+async function runnerConsume(t: TestContext, f: Fixture, wait = false): Promise<{ deliveries: number; completions: Record<string, unknown>[]; error: unknown }> {
   const runner = new RunnerModule({ runRoot: join(f.root, "run"), stateRoot: f.root, society: "demo" }, "alice", TEST_PROTOCOL_LIMITS);
   let deliveries = 0;
   const completions: Record<string, unknown>[] = [];
   t.mock.method(runner as unknown as Record<string, () => unknown>, "adapter", () => ({
     deliver: async (batch: PreparedBatch) => {
       deliveries++;
+      if (wait) return null;
       return boundaryOf(batch, completeSession(f.root, batch, "redelivered.jsonl"));
     },
   }));
@@ -63,6 +64,22 @@ test("V06A: a verified receipt completes the batch and the runner presents nothi
     assert.equal(await liveComplete(f, session), null);
     assert.equal(f.store.getBatch(f.batch.id)?.state, "completed");
     assert.equal(f.presented(), 1);
+  } finally { f.close(); }
+});
+
+test("DR27: runner wait leaves no receipt or batch completion and preserves delivery and desired intent", async t => {
+  const f = await preparedFixture();
+  try {
+    const before = f.store.getDelivery(f.batch.messageIds[0]!, "alice");
+    const agent = f.store.getAgent("alice");
+    const result = await runnerConsume(t, f, true);
+    assert.equal(result.error, null);
+    assert.equal(result.deliveries, 1);
+    assert.deepEqual(result.completions, []);
+    assert.equal(existsSync(f.receipt), false);
+    assert.equal(f.store.getBatch(f.batch.id)?.state, "prepared");
+    assert.deepEqual(f.store.getDelivery(f.batch.messageIds[0]!, "alice"), before);
+    assert.deepEqual(f.store.getAgent("alice"), agent);
   } finally { f.close(); }
 });
 

@@ -1,6 +1,7 @@
 // MUST [M-003]: runtime schema validation at trust boundaries; unknown fields are
 // rejected; `as SomeType` is never validation. Validators return an error string
 // or null; they do not coerce.
+export { attestationProblem as attestationParamsCheck } from "./domain/attestation.js";
 import type { Json, RequestKey } from "../implementation/contracts/identity.js";
 import { contextEntriesCheck } from "./domain/context-policy.js";
 import {
@@ -11,6 +12,7 @@ import {
 export { contextPathCheck, contextFileCheck } from "./domain/context-policy.js";
 import {
   exactCandidateCheck,
+  mailHeaderValueCheck,
   headerMessageIdCheck,
   messageKindCheck,
   logicalAddressCheck as checkLogicalAddress,
@@ -224,6 +226,9 @@ export const messagePlanCheck = checkObject({
 /** MUST [DB-009/M-003]: result_json is a closed result variant keyed by kind. */
 export function operationResultCheck(kind: string): Check {
   switch (kind) {
+    case "society.set":
+      return checkObject({ kind: checkEnum([kind]), state: checkEnum(["open", "closed"]) });
+    case "attest.record":
     case "mail.send":
     case "agent.continue":
       return checkObject({
@@ -276,6 +281,8 @@ export function operationResultCheck(kind: string): Check {
         target: checkEnum(["refs/heads/main"]),
         policyRevision: checkString({ min: 1 }),
         changed: checkBool(),
+        publication: checkOptional(checkObject({ message: messageIdCheck, recipientCount: checkInt({ min: 0 }),
+          effectiveTier: checkEnum(["LOW", "MEDIUM", "HIGH"]), authorityDigest: checkString({ re: /^[0-9a-f]{64}$/ }) })),
       });
     case "context.publish":
       return checkObject({
@@ -295,7 +302,7 @@ export function mailParamsCheck(
 ): Check {
   const shape = checkObject({
     to: checkArray(checkAddress, { min: 0, max: l.addresses }),
-    subject: checkString({ max: l.subjectBytes }),
+    subject: value => checkString({ max: l.subjectBytes })(value) ?? mailHeaderValueCheck(value),
     kind: messageKindCheck,
     body: checkString({ max: l.mailBodyBytes }),
     approvalFor: checkOptional(exactCandidateCheck),
@@ -342,7 +349,7 @@ export function gitSubmitParamsCheck(
     exportRef: checkExportRef,
     prerequisites: checkArray(checkOid, { max: 1024 }),
     to: checkArray(checkAddress, { min: 0, max: l.addresses }),
-    subject: checkString({ max: l.subjectBytes }),
+    subject: value => checkString({ max: l.subjectBytes })(value) ?? mailHeaderValueCheck(value),
     body: checkString({ max: l.mailBodyBytes }),
     paths: checkArray(
       (v) =>
@@ -355,6 +362,7 @@ export function gitSubmitParamsCheck(
   });
 }
 export const gitIntegrateParamsCheck: Check = checkObject({
+  tier: checkOptional(checkEnum(["LOW", "MEDIUM", "HIGH"])),
   candidate: checkOid,
   expected: checkOid,
 });
@@ -372,11 +380,14 @@ export function contextPublishParamsCheck(l: ParamsLimits): Check {
         maxBytes: l.contextBytes,
       }),
     content: checkBlobDescriptor(l.contextBytes),
+    goalMail: checkOptional(checkObject({ subject: value => checkString({ min: 1, max: l.subjectBytes })(value) ?? mailHeaderValueCheck(value) })),
   });
   return (value) => {
     const invalid = shape(value);
     if (invalid) return invalid;
-    const input = value as { entries: unknown; content: { bytes: number } };
+    const input = value as { entries: { path: string; bytes: number }[]; content: { bytes: number }; goalMail?: unknown };
+    if (input.goalMail !== undefined && input.entries.find(entry => entry.path === "GOAL.md")!.bytes > l.mailBodyBytes)
+      return "GOAL mail body exceeds host mail limit";
     return contextEntriesCheck(input.entries, {
       requireSorted: true,
       contentBytes: input.content.bytes,
@@ -386,8 +397,14 @@ export function contextPublishParamsCheck(l: ParamsLimits): Check {
 export const operationGetParamsCheck: Check = checkObject({
   key: checkRequestKey,
 });
+export const operationReadParamsCheck: Check = checkObject({
+  key: checkRequestKey,
+  offset: checkInt({ min: 0 }),
+  sha256: checkOptional(checkString({ re: /^[0-9a-f]{64}$/ })),
+});
 export const statusGetParamsCheck: Check = checkObject({
   agent: checkOptional(checkActor),
+  after: checkOptional(checkActor),
 });
 export const logsReadParamsCheck: Check = checkObject({
   agent: checkActor,
@@ -397,11 +414,14 @@ export const mailAckParamsCheck: Check = checkObject({
   message: messageIdCheck,
 });
 export const routeParamsCheck: Check = checkObject({ topic: checkTopic });
+export const societySetParamsCheck: Check = checkObject({ state: checkEnum(["open", "closed"]) });
 export const agentActionParamsCheck: Check = checkObject({ agent: checkActor });
 export const agentContinueParamsCheck: Check = checkObject({
   note: checkString({ min: 1, max: 64 * 1024 }),
 });
-export const agentWaitParamsCheck: Check = checkObject({});
+export const agentWaitParamsCheck: Check = checkObject({
+  observe: checkOptional(value => value === true ? null : "observe must be true"),
+});
 
 /** Validated, normalized wire values ready for the domain layer. */
 export interface ValidatedEnvelope<M> {

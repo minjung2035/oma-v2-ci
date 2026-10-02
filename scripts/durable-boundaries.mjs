@@ -1,4 +1,4 @@
-/** P0-7 (PRIORITY-0.md): the durable boundaries of the product, taken from the
+/** P0-7 (docs/PRIORITY-0.md): the durable boundaries of the product, taken from the
  * code, and the kill/retry/restart tests that stand behind each one.
  *
  * A boundary is a production function that makes a fact durable: a Store
@@ -19,7 +19,7 @@ import { join } from "node:path";
 export const PRIMITIVES = Object.freeze({
   transaction: "db-commit",
   publishImmutableFile: "file-publication", replaceDerivedFile: "file-publication", writeAtomic: "file-publication",
-  publishNoReplace: "file-publication",
+  publishNoReplace: "file-publication", publishUserFile: "file-publication", replaceUserFile: "file-publication",
   writeExclusiveFsyncedFile: "file-publication", writeFsynced: "file-publication", writeExclusiveFsyncedEntry: "file-publication",
   publishStagedDirectory: "file-publication", replaceDerivedSymlink: "file-publication", publishBatchView: "file-publication",
   publishContextRevision: "file-publication", publishProjectBinding: "file-publication",
@@ -35,7 +35,7 @@ export const PRIMITIVE_MODULES = Object.freeze([
   "src/storage/operation-journal.ts", "src/storage/durable-fs.ts", "src/storage/immutable-file.ts", "src/storage/staged-tree.ts",
   "src/storage/contained-fs.ts", "src/storage/directory.ts", "src/storage/delivery-receipt.ts", "src/storage/context-snapshot.ts",
   "src/storage/submit-spool.ts", "src/storage/context-stream.ts", "src/storage/batch-view.ts", "src/config/generations.ts",
-  "src/git/canonical-command.ts", "src/storage/tree-lease.ts",
+  "src/git/canonical-command.ts", "src/storage/tree-lease.ts", "src/runtime/user-files.ts",
 ]);
 
 function calleeName(expression) {

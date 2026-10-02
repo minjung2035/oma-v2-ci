@@ -65,7 +65,10 @@ export async function checkPackage(rootInput) {
     // Loading the native boundary catches a missing Koffi binary. It does not
     // attest pidfd, SO_PEERPIDFD, cgroups, user namespaces or deploymentDigest.
     // Packages without a CJS entry are verified by manifest and lockfile only.
-    try { require(name); }
+    if (Array.isArray(found.pi?.extensions)) {
+      for (const entry of found.pi.extensions) requiredFile(resolve(root, "node_modules", name, entry));
+      requiredFile(join(root, "node_modules", name, "LICENSE"));
+    } else try { require(name); }
     catch (error) {
       if (error?.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED" && error?.code !== "ERR_REQUIRE_ESM") throw error;
     }

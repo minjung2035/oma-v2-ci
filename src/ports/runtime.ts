@@ -64,8 +64,6 @@ export interface SandboxCompositionInput {
 }
 export interface SandboxPort {
   resident(lease: RunLease, directories: SandboxDirectories, env?: Readonly<Record<string, string>>): SandboxPlan;
-  /** DR18: v1 runs no candidate checks; an implementation refuses with UNSUPPORTED_PROFILE. */
-  candidate(oid: string, checkProfile: string): SandboxPlan;
 }
 
 /** Observation callback is an internal boundary value, not a Views implementation. */
@@ -84,6 +82,9 @@ export interface SandboxHost {
    * the vendored engine, the trusted core extension and the model-facing CLI,
    * so the rootfs itself does not have to be rebuilt when OMA is updated. */
   libdir: string;
+  /** DR25: host path of the package store `oma pi install` installs into,
+   * mounted read-only inside when any role may load a package's extension. */
+  packages?: string | undefined;
   /** Host path of the pinned Node, mounted read-only as a single file. */
   node: string;
   /** TUI-003: installation paths hidden inside the sandbox, relative to
@@ -98,7 +99,6 @@ export interface SandboxHost {
   pi: string;
   piModeArgs: string[];
   tmpBytes: number;
-  checkResources: ResourceLimits;
   /** Host composition roots and existing limits, never new wire/config fields. */
   stateRoot?: string;
   runRoot?: string;

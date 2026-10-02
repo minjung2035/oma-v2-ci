@@ -42,10 +42,10 @@ function dispatcher(text: string, frameBytes: number) {
   const unused = (): never => {
     throw new Error("unexpected non-log effect");
   };
-  return new PublicDispatcher({
+  return new PublicDispatcher({ waitRun: () => { throw new Error("no live run in this fixture"); },
     store: {
       listAgents: () => [{ name: "alice" }],
-      getAgent: () => makeValidAgent("alice"),
+      getAgent: actor => actor === "alice" ? makeValidAgent("alice") : null,
       getReceipt: unused,
       hasOperation: unused,
     },
@@ -170,4 +170,13 @@ test("F3: raw journal byte truncation never manufactures a partial UTF-8 charact
     text: "A😀Z",
     truncated: false,
   });
+});
+
+
+test("DR27: nonexistent log target is refused instead of reported as an empty journal", async () => {
+  const response = await dispatcher("", limits.frameBytes).dispatch(auth,
+    { v: 1, id: "missing", method: "logs.read", params: { agent: "missing", sinceSeconds: 60 } }, null);
+  const decoded = decodeRpcReply("logs.read", response, "missing", { agent: "missing", sinceSeconds: 60 });
+  assert.equal(decoded.ok, false);
+  if (!decoded.ok) assert.equal(decoded.error.code, "ADDRESS_NOT_FOUND");
 });

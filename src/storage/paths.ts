@@ -4,6 +4,10 @@
  */
 import { isAbsolute, join, relative, sep } from "node:path";
 import { StoreError } from "../domain/errors.js";
+/** The shared committed project configuration, beside its Society roots. */
+export function projectSettingsPathAt(dataRoot: string, project: string): string {
+  return join(dataRoot, ".projects", project, "config.json");
+}
 import {
   agentRootFor, workspaceFor, runnerViewFor, batchViewFor, runnerReceiptFor, runnerSessionDirFor, sessionDirFor,
   mailObjectRelativePath, mailArchiveRelativePath, mailInboxRelativePath,

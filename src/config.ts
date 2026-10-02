@@ -1,3 +1,4 @@
+import { tieredPolicyCheck } from "./domain/integration-policy.js";
 // MUST [CFG-001/002/005]: closed host configuration, no unlimited defaults.
 import {
   readConfigurationSource,
@@ -8,7 +9,7 @@ import {
   type ConfigurationReadObserver,
   type RoleSettings,
 } from "./config/operations.js";
-import type { AgentProfile, HostConfigV1, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
+import type { AgentProfile, EffortLevel, HostConfigV1, ModelProfile, ResourceLimits } from "../implementation/contracts.js";
 import { StoreError } from "./domain/errors.js";
 import { isValidActorName, isValidSocietyName, isValidWirePath } from "./domain/identifiers.js";
 import { isCapability } from "./domain/capabilities.js";
@@ -17,7 +18,11 @@ import { PROTOCOL_LIMIT_FIELDS } from "./domain/limits.js";
 import type { IntegerField } from "./domain/integer-fields.js";
 import { isDeploymentDigest } from "./domain/deployment.js";
 import { isLogResponseFrameLimit } from "./protocol/log-response.js";
+import { isAbsolute, normalize } from "node:path";
 export { resolveChildSpec } from "./domain/child-policy.js";
+
+/** DR24: the engine's effort levels, in its order. */
+export const EFFORT_LEVELS: readonly EffortLevel[] = Object.freeze(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 function err(message: string): never { throw new StoreError("INVALID_REQUEST", `config: ${message}`); }
 function needString(value: unknown, what: string): string {
@@ -36,12 +41,14 @@ function needArray(value: unknown, what: string): unknown[] {
   if (!Array.isArray(value)) err(`${what} must be an array`);
   return value;
 }
-function closedKeys(record: Record<string, unknown>, keys: readonly string[], what: string): void {
-  for (const key of Object.keys(record)) if (!keys.includes(key)) err(what === "root" ? `unknown top-level field ${key}` : `${what}.${key} unknown`);
+/** A closed record: `keys` are required, `optional` may be absent, nothing else is allowed. */
+function closedKeys(record: Record<string, unknown>, keys: readonly string[], what: string, optional: readonly string[] = []): void {
+  for (const key of Object.keys(record))
+    if (!keys.includes(key) && !optional.includes(key)) err(what === "root" ? `unknown top-level field ${key}` : `${what}.${key} unknown`);
   for (const key of keys) if (!Object.hasOwn(record, key)) err(`${what}.${key} is required`);
 }
-function closedRecord(value: unknown, keys: readonly string[], what: string): Record<string, unknown> {
-  const record = needRecord(value, what); closedKeys(record, keys, what); return record;
+function closedRecord(value: unknown, keys: readonly string[], what: string, optional: readonly string[] = []): Record<string, unknown> {
+  const record = needRecord(value, what); closedKeys(record, keys, what, optional); return record;
 }
 function needIntegerFields(record: Record<string, unknown>, fields: Readonly<Record<string, IntegerField>>, what: string): void {
   closedKeys(record, Object.keys(fields), what);
@@ -85,6 +92,9 @@ function validatedSnapshot(config: HostConfigV1): ValidatedConfigCandidate {
     quota: Object.freeze({ ...config.quota }),
     integration: Object.freeze({
       ...config.integration,
+      ...(config.integration.tiered === undefined ? {} : { tiered: Object.freeze({ ...config.integration.tiered,
+        rules: Object.freeze(config.integration.tiered.rules.map(rule => Object.freeze({ ...rule,
+          statuses: Object.freeze([...rule.statuses]) }))) }) }),
       protectedPaths: Object.freeze([...config.integration.protectedPaths]),
       checks: Object.freeze(checks),
     }),
@@ -165,16 +175,22 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   if (cfg.schemaVersion !== 1) err("schemaVersion must be 1");
   const society = needString(cfg.society, "society");
   if (!isValidSocietyName(society)) err("invalid society name");
-  const installation = closedRecord(cfg.installation, ["node", "libdir", "rootfs", "deploymentDigest"], "installation");
+  const installation = closedRecord(cfg.installation, ["node", "libdir", "rootfs", "deploymentDigest"], "installation", ["packages"]);
   const node = needString(installation.node, "installation.node");
   const libdir = needString(installation.libdir, "installation.libdir");
   const rootfs = needString(installation.rootfs, "installation.rootfs");
   const deploymentDigest = needString(installation.deploymentDigest, "installation.deploymentDigest");
   if (!isDeploymentDigest(deploymentDigest)) err("installation.deploymentDigest must be a lowercase SHA-256 digest");
+  // DR25: where the extensions `oma pi install` installed live, when any role may name one.
+  const packages = installation.packages === undefined ? undefined : needString(installation.packages, "installation.packages");
+  if (packages !== undefined && (!isAbsolute(packages) || normalize(packages) !== packages || packages === "/"))
+    err("installation.packages must be a normalized absolute directory");
 
   const modelProfiles = needRecord(cfg.modelProfiles, "modelProfiles");
   for (const [name, value] of Object.entries(modelProfiles)) {
-    const profile = closedRecord(value, ["provider", "model", "credentialRef", "codecRevision", "pricingRevision", "maxInputTokens", "maxOutputTokens", "inferenceTimeoutSeconds"], `modelProfiles.${name}`);
+    const profile = closedRecord(value, ["provider", "model", "credentialRef", "codecRevision", "pricingRevision", "maxInputTokens", "maxOutputTokens", "inferenceTimeoutSeconds"], `modelProfiles.${name}`, ["thinking"]);
+    if (profile.thinking !== undefined && !(EFFORT_LEVELS as readonly unknown[]).includes(profile.thinking))
+      err(`modelProfiles.${name}.thinking must be one of ${EFFORT_LEVELS.join(", ")}`);
     for (const key of ["provider", "model", "credentialRef", "codecRevision", "pricingRevision"]) needString(profile[key], `modelProfiles.${name}.${key}`);
     for (const key of ["maxInputTokens", "maxOutputTokens", "inferenceTimeoutSeconds"]) needInt(profile[key], `modelProfiles.${name}.${key}`, 1);
   }
@@ -218,7 +234,8 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   if (principalReservedUnits > societyUnits) err("quota.principalReservedUnits exceeds quota.societyUnits");
   if (principalReservedSlots > inferenceSlots) err("quota.principalReservedSlots exceeds quota.inferenceSlots");
 
-  const integration = closedRecord(cfg.integration, ["policyRevision", "protectedPaths", "checks"], "integration");
+  const integration = closedRecord(cfg.integration, ["policyRevision", "protectedPaths", "checks"], "integration", ["tiered"]);
+  if (integration.tiered !== undefined && tieredPolicyCheck(integration.tiered) !== null) err("integration.tiered has invalid rules or authority");
   const policyRevision = needString(integration.policyRevision, "integration.policyRevision");
   const protectedPaths = needArray(integration.protectedPaths, "integration.protectedPaths");
   if (protectedPaths.some(value => typeof value !== "string" || (value !== "/" && !isValidWirePath(value.endsWith("/") ? value.slice(0, -1) : value)) || /[*?[\]{}!]/.test(value))) err("integration.protectedPaths must be safe literal paths");
@@ -239,11 +256,11 @@ export function validateConfig(raw: unknown): ValidatedConfigCandidate {
   const features = closedRecord(cfg.features, featureKeys, "features");
   for (const key of featureKeys) if (features[key] !== false) err(`features.${key} must be false in Core v1 default build`);
   return validatedSnapshot({
-    schemaVersion: 1, society, installation: { node, libdir, rootfs, deploymentDigest },
+    schemaVersion: 1, society, installation: { node, libdir, rootfs, deploymentDigest, ...(packages === undefined ? {} : { packages }) },
     modelProfiles: Object.assign(Object.create(null), modelProfiles) as HostConfigV1["modelProfiles"],
     agentProfiles: Object.assign(Object.create(null), agentProfiles) as HostConfigV1["agentProfiles"],
     principalProfile, initialResidents: initialResidents as HostConfigV1["initialResidents"], quota: quota as HostConfigV1["quota"],
-    integration: { policyRevision, protectedPaths: protectedPaths as string[], checks: checks as HostConfigV1["integration"]["checks"] },
+    integration: { policyRevision, ...(integration.tiered === undefined ? {} : { tiered: integration.tiered as NonNullable<HostConfigV1["integration"]["tiered"]> }), protectedPaths: protectedPaths as string[], checks: checks as HostConfigV1["integration"]["checks"] },
     limits: limits as unknown as HostConfigV1["limits"], features: { notmuch: false, reflinkSeed: false, formalApproval: false, egress: false },
   });
 }

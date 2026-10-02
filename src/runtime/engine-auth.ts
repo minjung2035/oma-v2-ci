@@ -87,6 +87,8 @@ export interface EngineAuth {
   readonly origin: string;
   readonly apiKey: string;
   readonly headers: Readonly<Record<string, string>>;
+  /** DR24: the engine's default effort, when the model is the engine's choice. */
+  readonly thinking?: string;
 }
 
 /** The engine's own credential store, when it is not the agent directory's
@@ -110,10 +112,12 @@ export async function resolveEngineAuth(
   const registry = new sdk.ModelRegistry(runtime);
   let wantedProvider = provider;
   let wantedModel = model;
+  let thinking: string | undefined;
   if (provider === "pi" && model === "current") {
     const settings = sdk.SettingsManager.create(agentDir, agentDir);
     wantedProvider = settings.getDefaultProvider() ?? "";
     wantedModel = settings.getDefaultModel() ?? "";
+    thinking = settings.getDefaultThinkingLevel();
     if (wantedProvider.length === 0 || wantedModel.length === 0)
       throw new StoreError("UNSUPPORTED_PROFILE",
         "the engine has no default model yet; log in and choose one in `oma` first");
@@ -130,7 +134,7 @@ export async function resolveEngineAuth(
   for (const [name, value] of Object.entries(auth.headers ?? {}))
     if (typeof value === "string") headers[name] = value;
   return Object.freeze({
-    provider: wantedProvider, model: wantedModel,
+    provider: wantedProvider, model: wantedModel, ...(thinking === undefined ? {} : { thinking }),
     origin: auth.baseUrl ?? found.baseUrl,
     apiKey: auth.apiKey, headers: Object.freeze(headers),
   });

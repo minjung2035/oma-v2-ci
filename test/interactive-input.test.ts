@@ -1,0 +1,165 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import type { EditorComponent } from "@earendil-works/pi-tui";
+import { ownedEditor } from "../src/tui/interactive-editor.js";
+import { CONVERSATION_BOUNDS } from "../src/tui/limits.js";
+
+test("Open TUI: Pi keeps its commands, shell and shortcuts; only a plain prompt goes to OMA", () => {
+  let draft = "";
+  const upstream: string[] = [];
+  const keys: string[] = [];
+  const history: string[] = [];
+  let panels = 0;
+  let refusals = 0;
+  const submitted: string[] = [];
+  const original = {
+    onSubmit: undefined as ((text: string) => void) | undefined,
+    onPasteImage: undefined as (() => void) | undefined,
+    actionHandlers: new Map<string, () => void>(),
+    addToHistory: (text: string) => { history.push(text); },
+    getText: () => draft, getExpandedText: () => draft,
+    setText: (value: string) => { draft = value; },
+    render: () => ["original upstream rendering"], invalidate: () => {},
+    // As Pi's editor does: Enter clears the draft and hands its text to onSubmit.
+    handleInput(value: string) {
+      keys.push(value);
+      if (value === "\r") { const text = draft.trim(); draft = ""; this.onSubmit?.(text); }
+      else if (!value.startsWith("\x1b") && !/[\x00-\x1f]/.test(value)) draft += value;
+    },
+  };
+  const editor = ownedEditor(original as unknown as EditorComponent, {
+    submit: value => submitted.push(value),
+    isCommand: text => text.startsWith("!") || ["settings", "new"].includes(text.slice(1).split(" ")[0]!) && text.startsWith("/"),
+    panel: () => { panels += 1; }, refuse: () => { refusals += 1; }, frameBytes: 262144,
+  });
+  // Pi wires its own submit handler after the factory returns.
+  editor.onSubmit = text => { upstream.push(text); };
+  (editor as unknown as { onPasteImage: () => void }).onPasteImage = () => { throw new Error("image paste reached Pi"); };
+  for (const line of ["Human draft", "/settings", "!ls -la", "/new", "/not-a-command here"]) {
+    editor.handleInput(line); editor.handleInput("\r");
+  }
+  assert.deepEqual(submitted, ["Human draft", "/not-a-command here"]);
+  assert.deepEqual(upstream, ["/settings", "!ls -la", "/new"]);
+  assert.deepEqual(history, ["Human draft", "/not-a-command here"]);
+  original.onPasteImage?.();
+  // Pi's own keys reach Pi; Ctrl+X is the control panel.
+  editor.handleInput("\x03"); editor.handleInput("\x1b");
+  assert.ok(keys.includes("\x03") && keys.includes("\x1b"));
+  editor.handleInput("\x18");
+  assert.equal(panels, 1);
+  assert.equal(keys.includes("\x18"), false);
+  // Every app action stays Pi's, except the follow-up key, which is a prompt of its own.
+  const selected: string[] = [];
+  original.actionHandlers.set("app.model.select", () => { selected.push("model"); });
+  original.actionHandlers.set("app.message.followUp", () => { selected.push("follow-up"); });
+  original.actionHandlers.get("app.model.select")!();
+  draft = "Follow up";
+  original.actionHandlers.get("app.message.followUp")!();
+  assert.deepEqual(selected, ["model"]);
+  assert.equal(submitted.at(-1), "Follow up");
+  assert.equal(draft, "");
+  assert.deepEqual(editor.render(80), ["original upstream rendering"]);
+  // Bounds: an oversized edit is undone and cannot submit a retained prefix.
+  draft = "Human draft";
+  editor.handleInput("x".repeat(CONVERSATION_BOUNDS.promptBytes.value));
+  assert.equal(draft, "Human draft"); assert.equal(refusals, 1);
+  const before = submitted.length;
+  editor.handleInput("\r");
+  assert.equal(submitted.length, before, "a rejected oversized edit cannot submit the retained prefix");
+  assert.equal(draft, "Human draft", "a refused submission gives the draft back");
+  editor.handleInput("!"); editor.handleInput("\r");
+  assert.equal(submitted.at(-1), "Human draft!");
+  draft = "Human draft!";
+  original.getText = () => "[paste marker]";
+  original.getExpandedText = () => draft;
+  editor.handleInput("x".repeat(CONVERSATION_BOUNDS.promptBytes.value));
+  assert.equal(draft, "Human draft!", "overflow recovery restores expanded paste contents, not an orphaned marker");
+});
+
+test("Open TUI: every command the engine lists as built in reaches the engine, not the model", async () => {
+  const { PI_BUILTIN_COMMANDS } = await import("../src/entry/pi-interactive-host.js");
+  // The engine's own list, read from its file: the mirror must cover it.
+  const engine = new URL("./core/slash-commands.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
+  const { BUILTIN_SLASH_COMMANDS } = await import(engine.href) as { BUILTIN_SLASH_COMMANDS: readonly { name: string }[] };
+  const missing = BUILTIN_SLASH_COMMANDS.map(command => command.name).filter(name => !PI_BUILTIN_COMMANDS.has(name));
+  assert.deepEqual(missing, []);
+});
+
+test("oma's identity: the engine's commands that would send the session to its developers or bring another session in are refused", async () => {
+  const { NOT_IN_OMA, PI_BUILTIN_COMMANDS } = await import("../src/entry/pi-interactive-host.js");
+  for (const name of ["bug", "import", "trust"]) {
+    assert.ok(PI_BUILTIN_COMMANDS.has(name), `${name} is not an engine command`);
+    assert.match(NOT_IN_OMA[name] ?? "", /oma/, `/${name} reaches the engine in oma`);
+  }
+  // What stays the engine's own: sharing, exporting and the session commands oma answers itself.
+  for (const name of ["share", "export", "new", "resume"]) assert.equal(NOT_IN_OMA[name], undefined, name);
+});
+
+test("oma's identity: /export writes to the Human's project under oma's name, as the engine's own parser reads it", async () => {
+  const { omaExportCommand } = await import("../src/entry/pi-interactive-host.js");
+  const engine = new URL("./modes/interactive/interactive-mode.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
+  const { InteractiveMode } = await import(engine.href) as { InteractiveMode: { prototype: { getPathCommandArgument(text: string, command: string): string | undefined } } };
+  const parse = (command: string) => InteractiveMode.prototype.getPathCommandArgument.call({}, command, "/export");
+  const session = "/state/oma/proj-1/principal/sessions/2026-09-29_abc.jsonl";
+  const cases: [string | undefined, string, string | null][] = [
+    [undefined, "/home/me/proj", "/home/me/proj/oma-session-2026-09-29_abc.html"],
+    ["out.html", "/home/me/proj", "/home/me/proj/out.html"],
+    ["notes/s.jsonl", "/home/me/proj", "/home/me/proj/notes/s.jsonl"],
+    [undefined, "/home/me/my proj", "/home/me/my proj/oma-session-2026-09-29_abc.html"],
+    ["/tmp/x.html", "/home/me/proj", null],
+    ["~/x.html", "/home/me/proj", null],
+  ];
+  for (const [given, project, expected] of cases) {
+    const command = omaExportCommand(given, project, session);
+    if (expected === null) { assert.equal(command, null, String(given)); continue; }
+    assert.equal(parse(command!), expected, `${String(given)} in ${project}`);
+  }
+  assert.equal(omaExportCommand(undefined, "/home/me/proj", undefined), null, "an unsaved session is the engine's to refuse");
+});
+
+test("oma's identity: a crash's extension advice and the terminal title say oma, not the engine's CLI", async () => {
+  const { ENGINE_EXTENSION_ADVICE, omaCrashHint, omaTerminalTitle } = await import("../src/entry/pi-interactive-host.js");
+  const engine = new URL("./modes/interactive/interactive-mode.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
+  const { formatCrashExtensionHint } = await import(engine.href) as { formatCrashExtensionHint(matches: string[]): string | undefined };
+  for (const matches of [["/ext/a.ts"], ["/ext/a.ts", "/ext/b.ts"]]) {
+    const words = formatCrashExtensionHint(matches)!;
+    assert.match(words, ENGINE_EXTENSION_ADVICE, "the engine's advice changed; oma's replacement no longer finds it");
+    const said = omaCrashHint(words)!;
+    assert.doesNotMatch(said, /pi config|pi -ne/);
+    assert.match(said, /Ctrl\+X > Config > Extensions/);
+    for (const match of matches) assert.ok(said.includes(match), "the extension a crash points at is still named");
+  }
+  assert.equal(omaCrashHint(undefined), undefined);
+  assert.equal(omaTerminalTitle(undefined, "/home/me/proj"), "oma - proj");
+  assert.equal(omaTerminalTitle("Alpha\x07\x1b]0;x", "/home/me/proj"), "oma - Alpha]0;x - proj", "a session name cannot end the title's escape");
+});
+
+test("DR24: the engine's session keys open oma's sessions, and its command list says oma", async () => {
+  const hosted: string[] = [];
+  const upstream: string[] = [];
+  let provided: { getSuggestions(): Promise<{ items: { value: string; label: string; description?: string }[]; prefix: string } | null> } | undefined;
+  const original = {
+    onSubmit: undefined as ((text: string) => void) | undefined,
+    actionHandlers: new Map<string, () => void>(),
+    getText: () => "", getExpandedText: () => "", setText: () => {},
+    render: () => [], invalidate: () => {}, handleInput: () => {},
+    setAutocompleteProvider(source: typeof provided) { provided = source; },
+  };
+  const editor = ownedEditor(original as unknown as EditorComponent, {
+    submit: () => {}, isCommand: () => true, panel: () => {}, refuse: () => {}, frameBytes: 262144,
+    extensionCommand: text => { hosted.push(text); return true; },
+    suggest: items => items.filter(item => item.value !== "oma-deliver").map(item => ({ ...item, description: `oma: ${item.value}` })),
+  });
+  editor.onSubmit = text => { upstream.push(text); };
+  original.actionHandlers.set("app.session.new", () => { throw new Error("the engine's own new session ran"); });
+  original.actionHandlers.set("app.session.resume", () => { throw new Error("the engine's own resume ran"); });
+  original.actionHandlers.get("app.session.new")!();
+  original.actionHandlers.get("app.session.resume")!();
+  assert.deepEqual(hosted, ["/new", "/resume"]);
+  assert.deepEqual(upstream, [], "a session key reached the engine's own command");
+  (editor as unknown as { setAutocompleteProvider(source: unknown): void }).setAutocompleteProvider({
+    getSuggestions: async () => ({ prefix: "/", items: [{ value: "quit", label: "quit", description: "Quit pi" },
+      { value: "oma-deliver", label: "oma-deliver" }] }),
+  });
+  assert.deepEqual((await provided!.getSuggestions())!.items, [{ value: "quit", label: "quit", description: "oma: quit" }]);
+});

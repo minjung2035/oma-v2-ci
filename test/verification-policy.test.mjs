@@ -78,6 +78,15 @@ test("V02C: stable consistency IDs and real fixture/checkpoint cases belong to e
   }
 });
 
+test("R35 dummy restart checks are required by durable without replacing power-loss evidence", () => {
+  assert.ok(lanes.durable.sourceFiles.includes("test/powercut-lane.test.mjs"));
+  for (const id of ["P9 simulation: real accepted mail", "P9 simulation: missing immutable bytes",
+    "P9 simulation: checkpoint failure", "P9 simulation: UNKNOWN", "P9 simulation: recovery child"]) {
+    assert.ok(lanes.durable.requiredNames.includes(id));
+    assert.equal(evaluateExecution({ exitCode: 0, tap: healthy, requiredNames: [id] }).status, "FAIL");
+  }
+});
+
 test("R35 Store opening oracles are required by durable and all lanes", () => {
   assert.ok(lanes.durable.files.includes("store-open.test.js"));
   assert.equal(lanes.all.files, "all");

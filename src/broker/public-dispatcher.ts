@@ -8,8 +8,10 @@ import { NO_HOLD, type Release, type ResourceGate } from "../domain/admission.js
 import { capabilitiesOf } from "../authority.js";
 import { isValidRequestKey } from "../ids.js";
 import { receiptNotFound } from "../protocol/receipts.js";
-import { PUBLIC_METHODS, isPublicMethod, decodePublicParams } from "../protocol/methods.js";
+import { PUBLIC_METHODS, isPublicMethod, decodePublicParams, principalRequestAllowed } from "../protocol/methods.js";
 import { errorAnswer, okAnswer } from "./replies.js";
+import { statusPage } from "../protocol/status-page.js";
+import { receiptChunk } from "../protocol/receipt-chunks.js";
 import { boundedLogResponse } from "../protocol/log-response.js";
 
 
@@ -36,6 +38,7 @@ export interface PublicViewsPort {
   readonly status: (agent: Actor | undefined, snapshot: StatusSnapshot) => AgentStatus[];
 }
 export interface PublicLifecyclePort {
+  readonly setSociety?: (auth: AuthContext, state: "open" | "closed", key: RequestKey) => Receipt;
   readonly create: (auth: AuthContext, input: AgentCreateInput, key: RequestKey) => Promise<Receipt>;
   readonly start: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt;
   readonly stop: (auth: AuthContext, agent: Actor, key: RequestKey) => Receipt;
@@ -43,10 +46,11 @@ export interface PublicLifecyclePort {
   readonly follow: (auth: AuthContext, topic: string, subscribe: boolean, key: RequestKey) => Receipt;
 }
 export interface PublicGitPort {
+  readonly attestations?: { record(auth: AuthContext, key: RequestKey, input: PublicMethods["attest.record"]["params"]): Promise<Receipt> };
   readonly knownRefs: () => { main: string; published: string[] };
   readonly isPublished: (oid: Oid) => boolean;
   readonly submit: (auth: AuthContext, key: RequestKey, input: PublicMethods["git.submit"]["params"], bytes: AsyncIterable<Uint8Array>) => Promise<Receipt>;
-  readonly integrate: (auth: AuthContext, key: RequestKey, input: { candidate: Oid; expected: Oid }) => Promise<Receipt>;
+  readonly integrate: (auth: AuthContext, key: RequestKey, input: PublicMethods["git.integrate"]["params"]) => Promise<Receipt>;
   readonly publishContext: (auth: AuthContext, key: RequestKey, input: PublicMethods["context.publish"]["params"], bytes: AsyncIterable<Uint8Array>) => Promise<Receipt>;
 }
 export interface PublicDispatchDependencies {
@@ -57,6 +61,7 @@ export interface PublicDispatchDependencies {
   readonly lifecycle: PublicLifecyclePort;
   readonly git: PublicGitPort | null;
   readonly limits: ProtocolLimits;
+  waitRun(auth: AuthContext, observe: boolean): boolean;
   isDraining(): boolean;
   assertAdmission(): void;
   /** D04: refuses what the category would consume beyond the logical limits. */
@@ -110,6 +115,8 @@ export class PublicDispatcher {
     if (need && (!auth.capabilities.has(need) || !actor || !capabilitiesOf(actor).has(need))) return fail("CAPABILITY_DENIED", `missing capability ${need}`, { capability: need });
     const params = this.checkParams(method, envelope.params);
     if (!params) return fail("INVALID_REQUEST", `invalid params for ${method}`);
+    if (auth.role === "principal" && auth.channel === "actor" && !principalRequestAllowed(method, params))
+      return fail("CAPABILITY_DENIED", "the Principal delegates routine work to Workers");
     if (hasStream && (descriptor.stream === "none" || (descriptor.stream === "optional-bundle" && !Object.hasOwn(params, "bundle")))) return fail("INVALID_REQUEST", "method does not accept this stream body");
     if (phase === "stream-preflight" || this.deps.isDraining() || descriptor.mode === "mutation") this.deps.assertAdmission();
     // Resources are judged once the action is known. Stream bytes are reserved by transport.
@@ -146,11 +153,17 @@ export class PublicDispatcher {
           // registry rows and pending counts are read after it, current.
           const snapshot = await units.statusSnapshot();
           if (this.deps.isDraining()) throw new StoreError("BROKER_UNAVAILABLE", "broker is draining", { details: { reason: "draining" } });
-          return okAnswer(id, { observedAtMs: snapshot.observedAtMs, agents: views.status(params.agent, snapshot) });
+          return statusPage(id, snapshot.observedAtMs, views.status(params.agent, snapshot), this.deps.limits.frameBytes, params.after);
         }
+        case "operation.read":
+          return receiptChunk(id, store.getReceipt(auth.actor, params.key) ?? receiptNotFound, params, this.deps.limits.frameBytes);
         case "operation.get": {
           const receipt = store.getReceipt(auth.actor, params.key);
           return okAnswer(id, receipt ?? receiptNotFound);
+        }
+        case "society.set": {
+          if (!lifecycle.setSociety) throw new StoreError("UNSUPPORTED_PROFILE", "society control owner unavailable");
+          return okAnswer(id, lifecycle.setSociety(auth, params.state, keyOf(request)));
         }
         case "mail.send": {
           if (params.approvalFor) {
@@ -159,6 +172,10 @@ export class PublicDispatcher {
           }
           return okAnswer(id, await mail.send(auth, keyOf(request), params));
         }
+        case "attest.record": {
+          if (!git?.attestations) throw new StoreError("UNSUPPORTED_PROFILE", "tiered attestation owner is unavailable");
+          return okAnswer(id, await git.attestations.record(auth, keyOf(request), params));
+        }
         case "mail.ack": return okAnswer(id, lifecycle.ack(auth, params.message, keyOf(request)));
         case "route.follow": return okAnswer(id, lifecycle.follow(auth, params.topic, true, keyOf(request)));
         case "route.unfollow": return okAnswer(id, lifecycle.follow(auth, params.topic, false, keyOf(request)));
@@ -166,7 +183,7 @@ export class PublicDispatcher {
         case "agent.stop": return okAnswer(id, lifecycle.stop(auth, params.agent, keyOf(request)));
         case "agent.create": return okAnswer(id, await lifecycle.create(auth, params, keyOf(request)));
         case "agent.continue": return okAnswer(id, await mail.send(auth, keyOf(request), { to: [auth.actor], subject: "continue", kind: "message", body: params.note }, { kind: "agent.continue", params: { note: params.note } }));
-        case "agent.wait": return okAnswer(id, { accepted: true });
+        case "agent.wait": return okAnswer(id, { accepted: this.deps.waitRun(auth, params.observe === true) });
         case "git.known": {
           if (!git) throw new StoreError("UNSUPPORTED_PROFILE", "git module unavailable");
           const refs = git.knownRefs();
@@ -194,7 +211,11 @@ export class PublicDispatcher {
           if (!git) throw new StoreError("UNSUPPORTED_PROFILE", "context module unavailable");
           return okAnswer(id, await git.publishContext(auth, keyOf(request), params, stream ?? emptyStream()));
         }
-        case "logs.read": return boundedLogResponse(id, await this.deps.readLogs(params.agent, params.sinceSeconds), this.deps.limits.frameBytes);
+        case "logs.read": {
+          if (this.deps.store.getAgent(params.agent) === null)
+            throw new StoreError("ADDRESS_NOT_FOUND", `agent ${params.agent} does not exist in this society`);
+          return boundedLogResponse(id, await this.deps.readLogs(params.agent, params.sinceSeconds), this.deps.limits.frameBytes);
+        }
         default: return assertNever(method);
       }
     } catch (error) { return this.deps.failureAnswer(id, error); }

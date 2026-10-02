@@ -1,7 +1,10 @@
 {
   "schema": 1,
   "sourceCommit": "dd7905bd8aef1e005a8279b4a9589f3e1a854d9a",
-  "note": "P23 reviewed internal contract ownership refinement. sourceBlob pins each pre-refinement file; current fingerprints cover minimal lookup/synchronous boundary and host-owned batch limits. Historical P17 declarations and explicit P23 deltas are checked independently in architecture-surfaces.json.",
+  "note": "sourceBlob/bodySha256 retain the P23 import migration baseline. bodyRefinements pins the later DR18 projectMirror, DR25 packages and DR29 removal of unused candidate/checkResources declarations; import bindings and aliases still use the baseline. Historical declarations and explicit owner deltas are checked independently in architecture-surfaces.json.",
+  "bodyRefinements": {
+    "src/ports/runtime.ts": "d2668e1d66ecf6e8c35076dbcef1de7fed0e99b6804860ac313bdc9d81a05692"
+  },
   "files": {
     "src/module-ports.ts": {
       "sourceBlob": "2b76bc9ea1b1f563393a1c1da359de2bb771ec60",
@@ -17,7 +20,7 @@
     },
     "src/ports/runtime.ts": {
       "sourceBlob": "18ff3990b027e92a0d0dc825552d4a01578a968a",
-      "bodySha256": "50bbf202c8f461a5f6cb41eb4368148773faa49cdd7e2d0365c93966dd1e3215",
+      "bodySha256": "661fc1ac2e176e421fc4c7cece70cf4f8dd5123f4744ca8f778c5b4063ba2180",
       "bindings": [["Actor", "Actor"], ["AgentStatus", "AgentStatus"], ["PreparedBatch", "PreparedBatch"], ["RunLease", "RunLease"], ["SandboxPlan", "SandboxPlan"], ["UnitObservation", "UnitObservation"], ["ResourceLimits", "ResourceLimits"], ["ProtocolLimits", "ProtocolLimits"]],
       "inline": []
     }

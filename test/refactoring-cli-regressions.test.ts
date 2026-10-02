@@ -183,7 +183,7 @@ test("R01 IPC-008: missing frozen body is not an empty body or successful cached
     const positive = await withPeer(home, args, receipt);
     assert.equal(positive.code, 0, positive.stderr); assert.deepEqual(positive.methods, ["operation.get"]);
     unlinkSync(cache.bodyPath("same-key")); const result = run(home, args);
-    assert.equal(result.status, 3, result.stderr); assert.match(result.stderr, /body|본문|복구/);
+    assert.equal(result.status, 3, result.stderr); assert.match(result.stderr, /body|본문|복구|Recovery/);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 

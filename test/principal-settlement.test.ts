@@ -143,3 +143,30 @@ test("V08B: conflicting or unavailable receipt evidence presents nothing and is 
     } finally { s.close(); }
   }
 });
+
+
+test("DR27/P0-4: each Principal delivery wake returns its observation timer", async t => {
+  const s = scene();
+  const pending = new Set<ReturnType<typeof setTimeout>>();
+  const schedule = globalThis.setTimeout, cancel = globalThis.clearTimeout;
+  let emit: (event: PiEvent) => void = () => {};
+  let unsubscribed = false;
+  s.session.onEvent = listener => { emit = listener; return () => { unsubscribed = true; }; };
+  s.session.deliver = async () => {};
+  t.mock.method(globalThis, "setTimeout", (callback: () => void, ms?: number) => {
+    const timer = schedule(() => { pending.delete(timer); callback(); }, ms);
+    pending.add(timer);
+    // Refusal wakes the production race before this timer fires.
+    queueMicrotask(() => emit({ type: "response", id: BATCH.id, command: "prompt", success: false }));
+    return timer;
+  });
+  t.mock.method(globalThis, "clearTimeout", (timer: ReturnType<typeof setTimeout>) => { pending.delete(timer); cancel(timer); });
+  try {
+    const delivery = new PrincipalDelivery(s.session, { prepare: async () => BATCH, complete: async () => assert.fail("refused delivery cannot complete") },
+      { stateRoot: s.root, frameBytes: TEST_VIEW_LIMITS.frameBytes, acceptMs: 10_000, retryAfterMs: 5000 });
+    const result = await delivery.tick();
+    assert.equal(result.kind, "failed");
+    assert.equal(unsubscribed, true);
+    assert.equal(pending.size, 0, "a wake retained the losing timeout");
+  } finally { for (const timer of pending) cancel(timer); s.close(); }
+});

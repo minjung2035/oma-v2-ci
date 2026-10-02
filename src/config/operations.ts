@@ -23,6 +23,7 @@ import {
   type ToolSurfaceConfig,
   type ToolSurfacePlan,
 } from "../domain/tool-surface.js";
+import { fileDigest } from "../storage/file-digest.js";
 import { decodeUtf8 } from "../domain/utf8.js";
 
 export interface RoleSettings {
@@ -154,19 +155,21 @@ function localPath(root: string, value: unknown): string {
 }
 class SourceClosure {
   private readonly identities = new Map<string, ConfigurationFileIdentity>();
+  private readonly documentBytes = new Map<string, number>();
   constructor(private readonly observer?: ConfigurationReadObserver) {}
-  add(path: string, stat: Stats, content: Buffer): void {
+  add(path: string, stat: Stats, sha256: string, document = false): void {
     const identity = Object.freeze({
-      path, dev: stat.dev, ino: stat.ino, bytes: content.length,
+      path, dev: stat.dev, ino: stat.ino, bytes: stat.size,
       mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs,
-      sha256: createHash("sha256").update(content).digest("hex"),
+      sha256,
     });
     const prior = this.identities.get(path);
     if (prior && (prior.dev !== identity.dev || prior.ino !== identity.ino || prior.sha256 !== identity.sha256))
       return invalid("configuration file identity changed within one snapshot");
     if (!prior) this.identities.set(path, identity);
     const files = this.identities.size;
-    const total = [...this.identities.values()].reduce((sum, value) => sum + value.bytes, 0);
+    if (document) this.documentBytes.set(path, stat.size);
+    const total = [...this.documentBytes.values()].reduce((sum, value) => sum + value, 0);
     if (files > CONFIGURATION_SOURCE_LIMITS.files || total > CONFIGURATION_SOURCE_LIMITS.bytes)
       throw new StoreError("LIMIT_EXCEEDED", "configuration source closure exceeds its file or byte budget");
     if (!prior) this.observer?.(Object.freeze({ phase: "source-read", path }));
@@ -201,7 +204,7 @@ function bytes(path: string, closure?: SourceClosure): Buffer {
     if (value.length !== before.size || after.dev !== before.dev || after.ino !== before.ino ||
         after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs)
       return invalid("configuration file changed while being read");
-    closure?.add(path, after, value);
+    closure?.add(path, after, createHash("sha256").update(value).digest("hex"), true);
     return value;
   } finally { closeSync(fd); }
 }
@@ -219,36 +222,56 @@ export function extensionListProblem(entries: unknown): string | null {
   for (const entry of entries as string[]) { const problem = extensionEntryProblem(entry); if (problem) return problem; }
   return null;
 }
-/** The shape of one entry: a normalized relative path to a JS/TS file. */
+/** DR25: an entry naming an extension `oma pi install` installed. The rest is
+ * a path relative to `installation.packages`, the one place such packages
+ * live; every other entry is relative to `installation.libdir`. */
+export const PACKAGE_ENTRY_PREFIX = "packages:";
+/** Where an extension's entry lives: the installation's own files, or the packages the Human installed. */
+export interface ExtensionRoots { readonly libdir: string; readonly packages?: string | undefined }
+
+/** The shape of one entry: a normalized relative path to a JS/TS file, in the
+ * installation or (DR25) among the installed packages. */
 export function extensionEntryProblem(entry: string): string | null {
-  if (!entry || entry.includes("\0") || entry.includes("\\") || isAbsolute(entry) ||
-      entry.split("/").some(part => !part || part === "." || part === ".."))
+  const path = entry.startsWith(PACKAGE_ENTRY_PREFIX) ? entry.slice(PACKAGE_ENTRY_PREFIX.length) : entry;
+  if (!path || path.includes("\0") || path.includes("\\") || isAbsolute(path) ||
+      path.split("/").some(part => !part || part === "." || part === ".."))
     return "extension entry must be a normalized relative file path";
-  if (!/\.(?:js|mjs|ts)$/.test(entry)) return "extension must be a local JS/TS file";
+  if (!/\.(?:js|mjs|ts)$/.test(path)) return "extension must be a local JS/TS file";
   return null;
+}
+/** The root an entry is relative to and its path there; a package entry
+ * without an installed-package directory names nothing. */
+function extensionLocation(roots: ExtensionRoots, entry: string): { readonly root: string; readonly path: string } {
+  if (!entry.startsWith(PACKAGE_ENTRY_PREFIX)) return { root: roots.libdir, path: entry };
+  if (roots.packages === undefined) return invalid("a package extension needs installation.packages");
+  return { root: roots.packages, path: entry.slice(PACKAGE_ENTRY_PREFIX.length) };
 }
 export type ExtensionAsset =
   | { readonly kind: "present"; readonly path: string; readonly sha256: string }
   | { readonly kind: "missing" }
   | { readonly kind: "refused"; readonly reason: string };
 /** WP14.01 observation adapter: the file an entry names, judged exactly as
- * the loader judges it -- inside libdir, reached through no symlink, a
- * regular file of at most 1 MiB. A missing file is reported as missing, so a
- * declaration can be removed without opening an asset that is not there. */
-export function observeExtensionAsset(libdir: string, entry: string): ExtensionAsset {
+ * the loader judges it -- inside its root (libdir, or DR25's installed
+ * packages), reached through no symlink, a regular file hashed with fixed memory. A
+ * missing file is reported as missing, so a declaration can be removed
+ * without opening an asset that is not there. */
+export function observeExtensionAsset(roots: ExtensionRoots, entry: string): ExtensionAsset {
   const problem = extensionEntryProblem(entry);
   if (problem) return Object.freeze({ kind: "refused", reason: problem });
-  if (!lstatSync(resolve(libdir, entry), { throwIfNoEntry: false })) return Object.freeze({ kind: "missing" });
+  let location: { readonly root: string; readonly path: string };
+  try { location = extensionLocation(roots, entry); }
+  catch (error) { return Object.freeze({ kind: "refused", reason: error instanceof Error ? error.message : String(error) }); }
   try {
-    const path = localPath(libdir, entry);
-    return Object.freeze({ kind: "present", path, sha256: createHash("sha256").update(bytes(path)).digest("hex") });
+    if (!lstatSync(resolve(location.root, location.path), { throwIfNoEntry: false })) return Object.freeze({ kind: "missing" });
+    const path = localPath(location.root, location.path);
+    return Object.freeze({ kind: "present", path, sha256: fileDigest(path).sha256 });
   } catch (error) {
     return Object.freeze({ kind: "refused", reason: error instanceof Error ? error.message : String(error) });
   }
 }
 function roleSettings(
   root: string,
-  libdir: string,
+  roots: ExtensionRoots,
   role: Record<string, unknown>,
   closure: SourceClosure,
   assets: boolean,
@@ -257,11 +280,11 @@ function roleSettings(
   const listProblem = extensionListProblem(entries);
   if (listProblem) return invalid(listProblem);
   const extensions = !assets ? [] : (entries as string[]).map((entry) => {
-    const path = localPath(libdir, entry);
-    return Object.freeze({
-      path,
-      sha256: createHash("sha256").update(bytes(path, closure)).digest("hex"),
-    });
+    const location = extensionLocation(roots, entry);
+    const path = localPath(location.root, location.path);
+    const observed = fileDigest(path);
+    closure.add(path, observed.stat, observed.sha256);
+    return Object.freeze({ path, sha256: observed.sha256 });
   });
   const prompt = decodeUtf8(bytes(localPath(root, role.promptFile), closure));
   return Object.freeze({
@@ -394,6 +417,10 @@ function readSource(path: string, observer: ConfigurationReadObserver | undefine
     const installation = record(host.installation, "installation");
     if (typeof installation.libdir !== "string" || !isAbsolute(installation.libdir))
       return invalid("installation.libdir must be absolute");
+    if (installation.packages !== undefined && (typeof installation.packages !== "string" || !isAbsolute(installation.packages)))
+      return invalid("installation.packages must be absolute");
+    const roots: ExtensionRoots = { libdir: installation.libdir,
+      ...(typeof installation.packages === "string" ? { packages: installation.packages } : {}) };
     const profiles: Record<string, unknown> = Object.create(null);
     const roles: Record<string, RoleSettings> = Object.create(null);
     const authoredRoles: Record<string, AuthoredRoleSource> = Object.create(null);
@@ -406,7 +433,7 @@ function readSource(path: string, observer: ConfigurationReadObserver | undefine
       );
       profiles[name] = role.agentProfile;
       authoredRoles[name] = Object.freeze({ path: file, value: Object.freeze({ ...role }) });
-      roles[name] = roleSettings(root, installation.libdir, role, closure, assets);
+      roles[name] = roleSettings(root, roots, role, closure, assets);
     }
     return {
       host: { ...host, modelProfiles: models, agentProfiles: profiles },

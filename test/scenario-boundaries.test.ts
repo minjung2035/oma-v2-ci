@@ -1,5 +1,5 @@
 /** Scenario tests at the boundaries the sixth review fixed, with only the
- * model scripted (fixtures/scenario.ts): the Principal's own file tools on
+ * model scripted (fixtures/scenario.ts): the Resident's file tools on
  * the host (P0V-74), the local inputs its CLI reads (P0V-78), the shared
  * context, and the order mail is delivered in when the clock goes back
  * (P0V-87). Each asserts durable facts -- files on the host, ledger rows,
@@ -9,12 +9,15 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { closeSync, existsSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readFileSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { withScenario } from "./fixtures/scenario.js";
-import { call, continuesTurn, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
+import { withScenario, SCENARIO_LIMITS } from "./fixtures/scenario.js";
+import { call, text, textOf, toolResults, tools, type ChatRequest } from "./fixtures/scripted-provider.js";
 import { principalWorkspace } from "../src/tui/session.js";
+import { workspacePathAt } from "../src/storage/paths.js";
+import { workspaceUsage } from "../src/extension/workspace-guard.js";
+import { sha256Hex } from "../src/hash.js";
 
 const TIMEOUT = { timeout: 180_000 };
 const lastResult = (request: ChatRequest | undefined): string => toolResults(request ?? { messages: [] }).at(-1)?.text ?? "";
@@ -25,88 +28,99 @@ const receiptIn = (result: string): { operation: string; state: string; result?:
 };
 const noticed = (notice: string): string[] => [...notice.matchAll(/path=\/mail\/archive\/cur\/(m-[0-9a-f-]+-\d+):2,/g)].map(match => match[1]!);
 
-test("SCN-B01: the Principal publishes the shared context from its workspace; the world holds exactly those bytes", TIMEOUT, async () => {
+const goalMail = (body: string, expectedRevision: string, request: string) => tools(call("oma_mail_send", {
+  to: ["residents"], subject: "Shared goal", body, intent: "goal", expectedRevision, request,
+}));
+
+test("SCN-B01: Principal GOAL mail preserves the exact other documents from its expected revision", TIMEOUT, async () => {
   await withScenario({ residents: ["worker-a"] }, async s => {
-    const directory = join(principalWorkspace(s.root), "context");
-    mkdirSync(join(directory, "decisions"), { recursive: true });
+    // A historical multi-document context is still supported. The model may
+    // now change only GOAL; the real CLI must carry these other bytes forward.
+    const files = [["GOAL.md", "# Before\n"], ["RATIONALE.md", "﻿Why\r\n"], ["decisions/001.md", "결정: 재시도는 세 번.\n"]] as const;
+    const content = Buffer.from(files.map(([, body]) => body).join(""));
+    const seed = await s.broker.dispatch({ actor: "principal", incarnation: s.store.getAgent("principal")!.incarnation,
+      role: "principal", channel: "actor", capabilities: new Set(["context.publish"]),
+      peer: { pid: process.pid, uid: process.getuid!(), gid: process.getgid!(), cgroup: null } },
+    { v: 1, id: "seed", method: "context.publish", request: "seed", params: {
+      expected: null, entries: files.map(([path, body]) => ({ path, bytes: Buffer.byteLength(body), sha256: sha256Hex(Buffer.from(body)) })),
+      content: { bytes: content.length, sha256: sha256Hex(content), mediaType: "application/vnd.oma.context-v1" },
+    } }, (async function* () { yield content; })()) as { ok: boolean };
+    assert.equal(seed.ok, true, JSON.stringify(seed));
+    const current = join(s.root, "world", "context", "current");
+    const base = readlinkSync(current).slice("revisions/".length);
     const goal = "# 목표\n결제 오류를 없앤다.\n";
-    writeFileSync(join(directory, "GOAL.md"), goal);
-    writeFileSync(join(directory, "decisions", "001.md"), "결정: 재시도는 세 번.\n");
-    s.script(request => (continuesTurn(request) ? text("게시했습니다.")
-      : tools(call("oma_context_publish", { directory: "context", expect: "none", request: "ctx-b01" }))));
-    await s.prompt("목표를 게시해");
+    s.script([goalMail(goal, base, "ctx-b01"), text("게시했습니다.")]);
+    await s.prompt("목표를 메일로 게시해");
     const receipt = receiptIn(lastResult(s.provider.seen[1]!.body));
     assert.equal(receipt.state, "succeeded", JSON.stringify(receipt));
-    const current = join(s.root, "world", "context", "current");
     assert.equal(readFileSync(join(current, "GOAL.md"), "utf8"), goal);
-    assert.equal(readFileSync(join(current, "decisions", "001.md"), "utf8"), "결정: 재시도는 세 번.\n");
+    for (const [path, body] of files.slice(1)) assert.equal(readFileSync(join(current, path), "utf8"), body);
     assert.match(readlinkSync(current), /^revisions\/[0-9a-f]{40,64}$/);
-    assert.equal(s.operations("principal").filter(row => row.kind === "context.publish").length, 1);
+    assert.equal(s.operations("principal").filter(row => row.kind === "context.publish").length, 2);
   });
 });
 
-test("SCN-B02: a context larger than the society's context bound is refused before it is read, and nothing is recorded (P0V-78)", TIMEOUT, async () => {
+test("SCN-B02: the retained context CLI input refuses an oversized stream before transport or acceptance (P0V-78)", TIMEOUT, async () => {
   await withScenario({}, async s => {
     const directory = join(principalWorkspace(s.root), "context");
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, "GOAL.md"), "# 목표\n");
-    // 9 MiB, sparse: above the 8 MiB the scenario's society allows.
     const big = openSync(join(directory, "RATIONALE.md"), "w");
-    ftruncateSync(big, 9 * 1024 * 1024);
-    closeSync(big);
-    s.script(request => (continuesTurn(request) ? text("너무 큽니다.")
-      : tools(call("oma_context_publish", { directory: "context", expect: "none", request: "ctx-b02" }))));
-    await s.prompt("목표를 게시해");
-    const result = lastResult(s.provider.seen[1]!.body);
-    assert.match(result, /larger than a request can carry \(8388608 bytes\)/, result);
-    assert.equal(s.operations("principal").filter(row => row.kind === "context.publish").length, 0, "a refused context was recorded");
+    try { ftruncateSync(big, 9 * 1024 * 1024); } finally { closeSync(big); }
+    // Exercise the CLI's production input owner without restoring the removed
+    // model-facing directory tool or weakening the separate mail body bound.
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e",
+      `import { prepareContextEffects } from ${JSON.stringify(new URL("../src/cli/effects/context.js", import.meta.url).href)}; prepareContextEffects(process.argv[1]);`, directory],
+    { encoding: "utf8", env: { OMA_CONTEXT_BYTES: String(SCENARIO_LIMITS.contextBytes) }, timeout: 10_000 });
+    assert.equal(result.status, 2, result.stderr);
+    assert.match(result.stderr, /larger than a request can carry \(8388608 bytes\)/);
+    assert.equal(s.operations("principal").filter(row => row.kind === "context.publish").length, 0);
     assert.equal(existsSync(join(s.root, "world", "context", "current")), false);
   });
 });
 
-test("SCN-B03: the Principal's write through a link its workspace holds is refused; nothing appears outside (P0V-74)", TIMEOUT, async () => {
-  const outside = mkdtempSync(join(tmpdir(), "oma-outside-"));
-  try {
-    await withScenario({}, async s => {
-      const workspace = principalWorkspace(s.root);
-      mkdirSync(workspace, { recursive: true });
-      // A link a checkout brought in, to a file that does not exist yet.
-      symlinkSync(join(outside, "planted"), join(workspace, "notes.md"));
-      mkdirSync(join(workspace, "docs"), { recursive: true });
-      s.script([
-        tools(call("write", { path: "notes.md", content: "pwned\n" })),
-        tools(call("write", { path: "docs/plan.md", content: "계획\n" })),
-        text("끝났습니다."),
-      ]);
-      await s.prompt("노트를 써");
-      const refused = toolResults(s.provider.seen[1]!.body).at(-1)?.text ?? "";
-      assert.match(refused, /workspace|link|refus/i, `the write through a link was not refused: ${refused}`);
-      assert.equal(existsSync(join(outside, "planted")), false, "a file appeared outside the workspace");
-      // An ordinary write in the same session lands where it was asked.
-      assert.equal(readFileSync(join(workspace, "docs", "plan.md"), "utf8"), "계획\n");
+test("SCN-B03: a Worker's write through a workspace link is refused; an ordinary write succeeds (P0V-74)", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
+    const workspace = workspacePathAt(s.root, "worker-a");
+    const outside = join(s.root, "outside"); mkdirSync(outside);
+    await s.residentSends("worker-b", { to: ["worker-a"], subject: "Notes", body: "Write notes." }, "task");
+    s.script((_request, index) => {
+      if (index === 0) {
+        // The actual runner has cloned and opened this Worker's workspace.
+        symlinkSync(join(outside, "planted"), join(workspace, "notes.md"));
+        return tools(call("write", { path: "notes.md", content: "pwned\n" }));
+      }
+      if (index === 1) return tools(call("write", { path: "docs/plan.md", content: "계획\n" }));
+      return text("끝났습니다.");
     });
-  } finally { rmSync(outside, { recursive: true, force: true }); }
+    const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
+    const refused = lastResult(s.provider.seen[1]!.body);
+    assert.match(refused, /workspace|link|refus/i, refused);
+    assert.equal(existsSync(join(outside, "planted")), false);
+    assert.equal(readFileSync(join(workspace, "docs", "plan.md"), "utf8"), "계획\n");
+  });
 });
 
-test("SCN-B04: writes the model makes together cannot exceed the workspace quota; the one that fits lands (P0V-74, R6-18)", TIMEOUT, async () => {
-  await withScenario({}, async s => {
-    const workspace = principalWorkspace(s.root);
-    mkdirSync(workspace, { recursive: true });
-    // The scenario's quota is 64 MiB; leave 300 bytes of it, in a sparse file.
-    const filler = openSync(join(workspace, "filler.bin"), "w");
-    ftruncateSync(filler, 64 * 1024 * 1024 - 300);
-    closeSync(filler);
+test("SCN-B04: concurrent Worker writes cannot exceed the workspace quota; the one that fits lands (P0V-74, R6-18)", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
+    const workspace = workspacePathAt(s.root, "worker-a");
+    const quota = JSON.parse(s.store.getAgent("worker-a")!.specJson).resources.workspaceBytes as number;
     const body = "x".repeat(200);
-    s.script([
-      // Two writes in one answer: each fits alone, not both.
-      tools(call("write", { path: "a.txt", content: body }, "w-a"), call("write", { path: "b.txt", content: body }, "w-b")),
-      text("썼습니다."),
-    ]);
-    await s.prompt("두 파일을 써");
+    await s.residentSends("worker-b", { to: ["worker-a"], subject: "Files", body: "Write two files." }, "task");
+    s.script((_request, index) => {
+      if (index !== 0) return text("썼습니다.");
+      const used = workspaceUsage(workspace, quota);
+      const filler = openSync(join(workspace, "filler.bin"), "w");
+      try { ftruncateSync(filler, quota - used - 301); } finally { closeSync(filler); }
+      return tools(call("write", { path: "a.txt", content: body }, "w-a"), call("write", { path: "b.txt", content: body }, "w-b"));
+    });
+    const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
     const landed = ["a.txt", "b.txt"].filter(name => existsSync(join(workspace, name)));
     assert.equal(landed.length, 1, `writes together exceeded the quota: ${landed.join(" ")}`);
+    assert.equal(readFileSync(join(workspace, landed[0]!), "utf8"), body);
     const results = toolResults(s.provider.seen[1]!.body).map(result => result.text).join("\n");
     assert.match(results, /quota would be exceeded/, results);
+    assert.ok(workspaceUsage(workspace, quota) <= quota);
   });
 });
 
@@ -135,23 +149,18 @@ test("SCN-B05: mail accepted after the clock was set back reaches the Principal 
 
 test("SCN-B06: a second publication on a stale base is refused with the actual base; on the actual base it moves the context", TIMEOUT, async () => {
   await withScenario({}, async s => {
-    const directory = join(principalWorkspace(s.root), "context");
-    mkdirSync(directory, { recursive: true });
-    writeFileSync(join(directory, "GOAL.md"), "# 목표 1\n");
-    const publish = (expect: string, request: string) => tools(call("oma_context_publish", { directory: "context", expect, request }));
-    s.script([publish("none", "ctx-1"), text("게시했습니다.")]);
+    s.script([goalMail("# 목표 1\n", "none", "ctx-1"), text("게시했습니다.")]);
     await s.prompt("목표를 게시해");
     const current = join(s.root, "world", "context", "current");
     const first = readlinkSync(current).slice("revisions/".length);
-    writeFileSync(join(directory, "GOAL.md"), "# 목표 2\n");
     // The model still believes nothing is published.
-    s.script([publish("none", "ctx-2"), text("충돌했습니다.")]);
+    s.script([goalMail("# 목표 2\n", "none", "ctx-2"), text("충돌했습니다.")]);
     await s.prompt("새 목표를 게시해");
     const refused = lastResult(s.provider.seen.at(-1)!.body);
     assert.match(refused, /CONTEXT_CONFLICT/, refused);
     assert.ok(refused.includes(first), `the refusal does not name the actual base: ${refused}`);
     assert.equal(readFileSync(join(current, "GOAL.md"), "utf8"), "# 목표 1\n", "a stale publication moved the context");
-    s.script([publish(first, "ctx-3"), text("다시 게시했습니다.")]);
+    s.script([goalMail("# 목표 2\n", first, "ctx-3"), text("다시 게시했습니다.")]);
     await s.prompt("현재 기준으로 다시 게시해");
     assert.equal(receiptIn(lastResult(s.provider.seen.at(-1)!.body)).state, "succeeded");
     assert.equal(readFileSync(join(current, "GOAL.md"), "utf8"), "# 목표 2\n");
@@ -239,5 +248,30 @@ test("SCN-B10 / S-02: a hundred commons messages reach no Principal session; the
     assert.deepEqual([...s.inbox("principal", "new"), ...s.inbox("principal", "cur")].map(name => name.replace(/:2,.*$/, "")), [question.result.result.message],
       "commons mail reached the Principal's mailbox");
     assert.equal((await s.deliver()).kind === "delivered", false, "a second delivery found more for the Principal");
+  });
+});
+
+
+test("DR27/INV10: a Worker cannot exhaust its workspace with empty files or parents, and can still rewrite an existing empty file", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a", "worker-b"] }, async s => {
+    const workspace = workspacePathAt(s.root, "worker-a");
+    const quota = JSON.parse(s.store.getAgent("worker-a")!.specJson).resources.workspaceBytes as number;
+    await s.residentSends("worker-b", { to: ["worker-a"], subject: "Empty files", body: "Write empty files." }, "task");
+    s.script((_request, index) => {
+      if (index === 0) {
+        const filler = openSync(join(workspace, "filler.bin"), "w");
+        try { ftruncateSync(filler, quota - workspaceUsage(workspace, quota) - 2); } finally { closeSync(filler); }
+        return tools(call("write", { path: "fits/empty", content: "" }));
+      }
+      if (index === 1) return tools(call("write", { path: "refused/empty", content: "" }));
+      if (index === 2) return tools(call("write", { path: "fits/empty", content: "" }));
+      return text("Done.");
+    });
+    const run = await s.activate("worker-a"); assert.equal(run.code, 0, run.stderr);
+    assert.equal(readFileSync(join(workspace, "fits/empty"), "utf8"), "");
+    assert.equal(existsSync(join(workspace, "refused")), false);
+    assert.match(lastResult(s.provider.seen[2]!.body), /quota would be exceeded/);
+    assert.doesNotMatch(lastResult(s.provider.seen[3]!.body), /quota|error|refus/i);
+    assert.equal(workspaceUsage(workspace, quota), quota);
   });
 });

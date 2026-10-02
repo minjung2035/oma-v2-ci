@@ -10,8 +10,9 @@ import { assertCurrentActor, capabilitiesOf } from "../authority.js";
 import { StoreError, AcceptedFailure, type EffectKnowledge, acceptedFailurePolicy, failureMessage } from "../domain/errors.js";
 import { requestHash } from "../hash.js";
 import { generateOperationId, generateMessageId, isValidRequestKey, isValidFullOid } from "../ids.js";
-import { mailObjectRelativePath, contextRevisionDisplayPath } from "../domain/derived.js";
+import { mailObjectRelativePath, contextRevisionDisplayPath, contextNoopRefFor } from "../domain/derived.js";
 import { contextStagingPathAt } from "../storage/paths.js";
+import { readContextEntry } from "../storage/context-files.js";
 import { prepareContextStream } from "../storage/context-stream.js";
 import { decodeMutationPayload } from "../protocol/request-codec.js";
 import { receiptOfOperation } from "../storage/receipt-projector.js";
@@ -29,6 +30,8 @@ export interface ContextEffects {
    * publication is never rejected for a format it cannot have observed. */
   observedObjectFormat(): "sha1" | "sha256" | null;
   prepareCandidate(tree: string, entries: ContextEntry[], expected: Oid | null): Oid | Promise<Oid>;
+  /** Explicit GOAL intent may change no other shared document. */
+  assertGoalOnly(candidate: Oid, expected: Oid | null): void;
   /** False while a native preparation that used this tree is not proven quiescent. */
   preparationQuiescent(tree: string): boolean;
   ensureCandidate(operation: OperationOf<"context.publish">): void;
@@ -93,6 +96,9 @@ export class ContextCoordinator {
     try { request = decodeMutationPayload("context.publish", input); }
     catch { throw new StoreError("INVALID_REQUEST", "invalid context caller payload"); }
     if (request.content.mediaType !== "application/vnd.oma.context-v1") throw new StoreError("INVALID_REQUEST", "invalid context media type");
+    if (request.goalMail && (auth.actor !== "principal" || auth.role !== "principal"))
+      throw new StoreError("CAPABILITY_DENIED", "only the Principal can publish an explicit GOAL mail");
+    if (request.goalMail) Object.freeze(request.goalMail);
     for (const entry of request.entries) Object.freeze(entry);
     Object.freeze(request.entries); Object.freeze(request.content); Object.freeze(request);
     const hash = requestHash("context.publish", request);
@@ -128,13 +134,15 @@ export class ContextCoordinator {
       { const actual = this.effects.current(); if (actual !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed", { details: { actual } }); }
       const candidate = await this.effects.prepareCandidate(tree.path, request.entries, request.expected);
       if (!isValidFullOid(candidate)) throw new StoreError("STORE_CORRUPT", "context preparation returned an invalid candidate identity");
+      if (request.goalMail) this.effects.assertGoalOnly(candidate, request.expected);
       assertCurrentActor(this.store, auth, "context.publish");
       { const actual = this.effects.current(); if (actual !== request.expected) throw new StoreError("CONTEXT_CONFLICT", "context base changed during preparation", { details: { actual } }); }
       const address = listAddress("residents", this.paths.society);
       const eml = await buildEml({ from: actorAddress(auth.actor, this.paths.society), to: [address], replyTo: [address],
-        subject: "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
+        subject: request.goalMail?.subject ?? "Shared context updated", kind: "context", contextRevision: candidate, inReplyTo: null, references: [],
         messageId: `${messageId}@${this.paths.society}.oma.invalid`,
-        body: `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\n참고: /world/context/current\n` });
+        body: request.goalMail ? readContextEntry(tree.path, request.entries.find(entry => entry.path === "GOAL.md")!).toString("utf8")
+          : `Revision: ${candidate}\n${contextRevisionDisplayPath(candidate)}/GOAL.md\nReference: /world/context/current\n` });
       const artifact = this.mail.freezeObject(messageId, eml);
       scope.register({ operationId: id, resource: artifact.path, owner: artifact,
         observe: () => frozenMessageDisposition(this.store, id, { id: messageId, sha256: eml.sha256 }) });
@@ -149,6 +157,8 @@ export class ContextCoordinator {
         this.requireWriterSlot();
         const recipients = expandAddresses(this.store, ["residents"], this.paths.society).recipients;
         const plan: PlanFor<"context.publish"> = { kind: "context.publish", base: request.expected, candidate,
+          noopRef: candidate === request.expected ? contextNoopRefFor(id) : null,
+          ...(request.goalMail ? { goalMail: { ...request.goalMail } } : {}),
           target: "refs/heads/main", entries: request.entries.map(entry => ({ ...entry })), stagingPath,
           message: { id: messageId, objectPath: mailObjectRelativePath(messageId), sha256: eml.sha256, bytes: eml.bytes,
             dateMs: eml.dateMs, to: ["residents"] as Address[], recipients, kind: "context", contextRevision: candidate,
@@ -174,6 +184,9 @@ export class ContextCoordinator {
         knowledge = "possible";
         const after = this.effects.compareAndSwap(operation.plan.base, operation.plan.candidate);
         if (after.kind !== "candidate") { this.unknown(id); return this.receipt(id); }
+      } else {
+        knowledge = "possible";
+        if (!this.publication.authorizeNoop(operation)) { this.unknown(id); return this.receipt(id); }
       }
       knowledge = "applied";
       await this.materializeAndSettle(operation);
@@ -185,8 +198,14 @@ export class ContextCoordinator {
     if (operation.state !== "pending" && operation.state !== "unknown") return;
     let knowledge: EffectKnowledge = "possible";
     try {
+      const noOp = operation.plan.base === operation.plan.candidate;
+      if (noOp && this.publication.hasNoopWitness(operation)) {
+        knowledge = "applied";
+        this.effects.ensureCandidate(operation);
+        await this.materializeAndSettle(operation); return;
+      }
       const main = this.effects.current();
-      if (main === operation.plan.candidate) {
+      if (!noOp && main === operation.plan.candidate) {
         knowledge = "applied";
         this.effects.ensureCandidate(operation);
         await this.materializeAndSettle(operation); return;
@@ -199,8 +218,12 @@ export class ContextCoordinator {
       this.requireRecoveryAuthority(operation.actor);
       if (this.effects.current() !== operation.plan.base) { this.unknown(operation.id); return; }
       knowledge = "possible";
-      const after = this.effects.compareAndSwap(operation.plan.base, operation.plan.candidate);
-      if (after.kind !== "candidate") { this.unknown(operation.id); return; }
+      if (noOp) {
+        if (!this.publication.authorizeNoop(operation)) { this.unknown(operation.id); return; }
+      } else {
+        const after = this.effects.compareAndSwap(operation.plan.base, operation.plan.candidate);
+        if (after.kind !== "candidate") { this.unknown(operation.id); return; }
+      }
       knowledge = "applied";
       await this.materializeAndSettle(operation);
     } catch (error) { this.rejectAccepted(operation.id, error, true, knowledge); }

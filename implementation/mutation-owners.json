@@ -9,6 +9,8 @@
     "validation": {
       "path": "src/validate.ts",
       "symbolByMutation": {
+        "attest.record": "attestationParamsCheck",
+        "society.set": "societySetParamsCheck",
         "mail.send": "mailParamsCheck",
         "agent.continue": "agentContinueParamsCheck",
         "mail.ack": "mailAckParamsCheck",
@@ -69,6 +71,70 @@
     "tests"
   ],
   "mutations": {
+    "society.set": {
+      "workflow": [{ "path": "src/lifecycle/society.ts", "symbol": "SocietyControl.set" }],
+      "persistence": [{ "path": "src/storage/operation-journal.ts", "symbol": "accepted operation journal" }],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [{ "path": "src/lifecycle/society.ts", "symbol": "SocietyControl.reconcile" }]
+      },
+      "cli": [{ "path": "src/cli/commands/society.ts", "symbol": "runSocietyCommand" }],
+      "tests": [
+        { "path": "test/society-control.test.ts", "symbol": "durable execution fence and quiescence" },
+        { "path": "test/society-schema.test.ts", "symbol": "migration preservation and rollback" }
+      ]
+    },
+    "attest.record": {
+      "workflow": [
+        {
+          "path": "src/attestation.ts",
+          "symbol": "AttestationModule.record"
+        },
+        {
+          "path": "src/mail.ts",
+          "symbol": "MailModule.recordAttestation"
+        }
+      ],
+      "persistence": [
+        {
+          "path": "src/storage/operation-transitions.ts",
+          "symbol": "OperationTransitions.insert"
+        },
+        {
+          "path": "src/mail/materializer.ts",
+          "symbol": "MailMaterializer"
+        }
+      ],
+      "recovery": {
+        "strategy": "physical-replay",
+        "owners": [
+          {
+            "path": "src/mail/reconcile.ts",
+            "symbol": "reconcileMailOperation"
+          }
+        ]
+      },
+      "cli": [
+        {
+          "path": "src/cli/commands/attestation.ts",
+          "symbol": "runAttestationCommand"
+        }
+      ],
+      "tests": [
+        {
+          "path": "test/attestation-ledger.test.ts",
+          "symbol": "immutable fact/mail and migration"
+        },
+        {
+          "path": "test/attestation-cli.test.ts",
+          "symbol": "frozen evidence CLI replay"
+        },
+        {
+          "path": "test/tiered-integration.test.ts",
+          "symbol": "exact attestation integration"
+        }
+      ]
+    },
     "mail.send": {
       "workflow": [
         { "path": "src/mail.ts", "symbol": "MailModule.send" }
@@ -272,7 +338,7 @@
         { "path": "src/git/integration.ts", "symbol": "IntegrationCoordinator" }
       ],
       "persistence": [
-        { "path": "src/git/publication.ts", "symbol": "main/ref publication" },
+        { "path": "src/git/integration-publication.ts", "symbol": "IntegrationPublicationObserver" },
         { "path": "src/storage/operation-journal.ts", "symbol": "accepted operation journal" }
       ],
       "recovery": {

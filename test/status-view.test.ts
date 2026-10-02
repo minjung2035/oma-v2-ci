@@ -49,14 +49,14 @@ test("T118: an oversized or linked status view is refused, not read into memory"
     writeFileSync(path, "x".repeat(4096));
     const observation = await new TuiTransport(root, "demo", 1024).status();
     assert.equal(observation.kind, "unknown");
-    assert.match((observation as { reason: string }).reason, /너무 큼/);
+    assert.match((observation as { reason: string }).reason, /too large/);
 
     // A link where the view should be is refused rather than followed.
     rmSync(path);
     symlinkSync("/etc/passwd", path);
     const linked = await new TuiTransport(root, "demo", 1024 * 1024).status();
     assert.equal(linked.kind, "unknown");
-    assert.match((linked as { reason: string }).reason, /읽지 못함/);
+    assert.match((linked as { reason: string }).reason, /Could not read/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -68,7 +68,7 @@ test("T118: a view dated ahead of the reader's clock is unknown, not current", a
     writeFileSync(statusViewPath(root), encodeStatusView("demo", { observedAtMs: now + 3_600_000, agents: [] }));
     const observation = await new TuiTransport(root, "demo", 1024 * 1024, () => now).status();
     assert.equal(observation.kind, "unknown", "a future-dated view passed as current");
-    assert.match((observation as { reason: string }).reason, /시계/);
+    assert.match((observation as { reason: string }).reason, /clock/);
     // Within one refresh interval of skew it is still an observation.
     writeFileSync(statusViewPath(root), encodeStatusView("demo", { observedAtMs: now + 1_000, agents: [] }));
     assert.equal((await new TuiTransport(root, "demo", 1024 * 1024, () => now).status()).kind, "observed");

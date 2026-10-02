@@ -268,7 +268,7 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
     assert.match(byLabel.get("Usage")!, /^unknown/);
     // WP28, P0V-66: what waits for the Principal's session is the ledger's
     // count, unknown here; the mailbox says only what arrived in no batch yet.
-    assert.match(byLabel.get("Mail")!, /^unknown \(principal 실행 endpoint 없음; [0-9:]+ 관측\) · 새 도착 2건$/);
+    assert.match(byLabel.get("Mail")!, /^unknown \(principal 실행 endpoint 없음; [0-9:]+ observed\) · 2 new arrivals$/);
 
     const observed = dashboardLines({
       config: cfg, principalModel: { configured: "strong", session: null }, unread: 0,
@@ -283,10 +283,10 @@ test("T98/TUI-012: the Dashboard keeps an unobserved value unknown instead of gu
     });
     const observedByLabel = new Map(observed.map(line => [line.label, line.value]));
     assert.equal(observedByLabel.get("Active"), "1");
-    assert.equal(observedByLabel.get("Workers"), "2 / 8");
+    assert.equal(observedByLabel.get("Workers"), "2 created / 8 max");
     assert.match(observedByLabel.get("Pending")!, /^3 \(/);
     assert.match(observedByLabel.get("Status")!, /^observed \(/);
-    assert.match(observedByLabel.get("Mail")!, /^0건 Principal 세션에 전달 대기 \([0-9:]+ 관측\) · 새 도착 0건$/);
+    assert.match(observedByLabel.get("Mail")!, /^0 pending delivery to the Principal session \([0-9:]+ observed\) · 0 new arrivals$/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -302,8 +302,8 @@ test("P0V-66 / R11, P0-5: mail in a batch prepared while the session was in a tu
           pending: 2, preparedBatches: 1, reason: null, runnerObservedAtMs: null }] },
     });
     const mail = new Map(lines.map(line => [line.label, line.value])).get("Mail")!;
-    assert.match(mail, /^2건 Principal 세션에 전달 대기 /, "prepared mail was shown as delivered");
-    assert.match(mail, /새 도착 0건$/);
+    assert.match(mail, /^2 pending delivery to the Principal session /, "prepared mail was shown as delivered");
+    assert.match(mail, /0 new arrivals$/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -321,9 +321,9 @@ test("TUI-012/SB-002-E: the Dashboard says whether Residents are confined", () =
     };
     // `/` is not a rootfs: SB-001 forbids binding the host root, so the value
     // means none was declared. The user has to be able to read that.
-    assert.match(line({ rootfs: "/" }), /비봉인/);
+    assert.match(line({ rootfs: "/" }), /Unconfined/);
     const confined = line({ rootfs: "/opt/oma/rootfs" });
-    assert.doesNotMatch(confined, /비봉인/);
+    assert.doesNotMatch(confined, /Unconfined/);
     assert.match(confined, /\/opt\/oma\/rootfs/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -336,7 +336,7 @@ test("TUI-021: the Dashboard reads the broker's status view and never invents on
     // No broker has published anything: unknown, with the reason.
     const absent = await transport.status();
     assert.equal(absent.kind, "unknown");
-    assert.match((absent as { reason: string }).reason, /broker 관측 없음/);
+    assert.match((absent as { reason: string }).reason, /No broker observation/);
 
     const row: AgentStatus = { agent: "a", desired: "enabled", activeState: "active", subState: "running",
       unitResult: "success", execMainStatus: 0, pending: 2, preparedBatches: 0, reason: null, runnerObservedAtMs: null };
@@ -349,7 +349,7 @@ test("TUI-021: the Dashboard reads the broker's status view and never invents on
     clock += STATUS_STALE_MS + 1;
     const stale = await transport.status();
     assert.equal(stale.kind, "unknown");
-    assert.match((stale as { reason: string }).reason, /멈춤/);
+    assert.match((stale as { reason: string }).reason, /stale/);
     // The last real observation time is kept so the screen can show its age.
     assert.equal(stale.observedAtMs, clock - STATUS_STALE_MS - 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -390,7 +390,7 @@ test("T92/TUI-004,014: the Principal session runs Pi in RPC mode with discovery 
   assert.equal(argv[1], "rpc");
   for (const flag of ["--no-approve", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-extensions"])
     assert.ok(argv.includes(flag), `missing ${flag}`);
-  assert.equal(argv[argv.indexOf("--exclude-tools") + 1], "bash,powershell");
+  assert.equal(argv[argv.indexOf("--exclude-tools") + 1], "bash,powershell,write,edit");
   // provider=pi/model=current uses the existing connection rather than pinning a model.
   assert.ok(!argv.includes("--model"));
   // The core extension is passed once, not duplicated by the profile list.
@@ -402,4 +402,44 @@ test("T92/TUI-004,014: the Principal session runs Pi in RPC mode with discovery 
     { society: "demo", provider: "openai-codex", model: "gpt", workspaceBytes: 1024, extensions: [] },
   );
   assert.equal(pinned[pinned.indexOf("--model") + 1], "openai-codex/gpt");
+});
+
+test("DR27/CREATE-003: the persistent Worker limit is a creation limit, not an activation limit", () => {
+  const root = scratch("oma-total-workers-");
+  try {
+    const path = join(root, "config.json");
+    writeFileSync(path, JSON.stringify(config(root)));
+    const before = readSettings(path);
+    const field = before.fields.find(field => field.id === WORKER_LIMIT)!;
+    assert.equal(field.label, "Max created workers");
+    assert.equal(field.kind === "number" && field.apply, "restart");
+    writeSettings(path, applyField(before, WORKER_LIMIT, 12));
+    const after = readSettings(path);
+    assert.deepEqual(after.config.quota, { ...before.config.quota, societyAgents: 12 });
+    assert.deepEqual(after.config.initialResidents, before.config.initialResidents);
+    assert.equal(after.fields.some(field => /active.*limit|limit.*active/i.test(field.label)), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+for (const desired of ["provisioning", "enabled", "stopped", "retired"] as const)
+  for (const activeState of ["active", "inactive"] as const)
+    test(`DR27/CREATE-003: ${desired}/${activeState} consumes one created slot; activity stays a separate observation`, () => {
+      const cfg = config("/fixture");
+      const status: AgentStatus = { agent: "worker", desired, activeState, subState: null, unitResult: null, execMainStatus: null,
+        pending: 0, preparedBatches: 0, reason: null, runnerObservedAtMs: null };
+      const rows = new Map(dashboardLines({ config: cfg, principalModel: { configured: "strong", session: null }, unread: 0,
+        observation: { kind: "observed", observedAtMs: 0, statuses: [status, { ...status, agent: "principal" }] },
+      }).map(row => [row.label, row.value]));
+      assert.equal(rows.get("Workers"), "1 created / 8 max");
+      assert.equal(rows.get("Active"), activeState === "active" ? "1" : "0");
+    });
+
+test("DR27/P0-5: an unknown unit does not erase its created slot or invent active capacity", () => {
+  const status: AgentStatus = { agent: "worker", desired: "enabled", activeState: null, subState: null, unitResult: null,
+    execMainStatus: null, pending: 0, preparedBatches: 0, reason: "Unit unavailable", runnerObservedAtMs: null };
+  const rows = new Map(dashboardLines({ config: config("/fixture"), principalModel: { configured: "strong", session: null }, unread: 0,
+    observation: { kind: "observed", observedAtMs: 0, statuses: [status] },
+  }).map(row => [row.label, row.value]));
+  assert.equal(rows.get("Workers"), "1 created / 8 max");
+  assert.match(rows.get("Active")!, /^unknown /);
 });

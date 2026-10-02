@@ -31,6 +31,8 @@ export const TERMINAL_BOUNDS = Object.freeze({
   pasteBytes: bound(16 * 1024, "bytes", "one bracketed paste the decoder assembles; a report that does not end within it is broken input, not a paste"),
   pasteIdleMs: bound(1000, "count", "milliseconds a started paste may stall before the decoder stops waiting for its end marker"),
   pasteBurstMs: bound(50, "count", "milliseconds after a paste ends during which an Enter is the paste's own newline rather than a submission no Human pressed"),
+  interactiveExitSeconds: bound(2, "count", "seconds for the interactive child to restore its terminal before forced termination"),
+  startupScreenMs: bound(10_000, "count", "milliseconds a start may take before this process shows its own screen instead of waiting for the engine's"),
 });
 
 export const CONVERSATION_BOUNDS = Object.freeze({
@@ -95,11 +97,11 @@ export function humanPromptFitsFrame(message: string, frameBytes: number): boole
 }
 
 export const CONFIG_BOUNDS = Object.freeze({
-  numberDraftDigits: bound(9, "count", "a settings number never needs more digits"),
+  numberDraftDigits: bound(String(Number.MAX_SAFE_INTEGER).length, "count", "digits needed by the configuration safe-integer contract"),
   revisionDigestHex: bound(32, "count", "hex digits of the content digest a policy revision carries"),
-  maxWorkerLimit: bound(4096, "count", "an editable cap the quota validator still has to accept"),
   maxInitialWorkers: bound(64, "count", "bootstrap seeds a population, not a fleet"),
   seedNameAttempts: bound(4096, "count", "bounds the search for a free seed name"),
+  engineNameChars: bound(200, "count", "a provider, model or effort name the engine's screen reports"),
 });
 
 export const READ_BOUNDS = Object.freeze({
@@ -110,7 +112,6 @@ export const READ_BOUNDS = Object.freeze({
   mailListRows: bound(200, "count", "messages one refresh reads a header for"),
   extensionScanDepth: bound(3, "count", "installed extensions are not nested deeper"),
   extensionScanEntries: bound(1024, "count", "directory entries one extension scan examines before it reports a partial list"),
-  roleExtensions: bound(16, "count", "the operations contract's per-role maximum"),
   // DR18 (D-1): distinct replaced texts written to the guest's log, once each.
   loggedWords: bound(256, "count", "a view redrawn every second must not fill the log with one reason"),
 });

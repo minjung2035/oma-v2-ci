@@ -30,7 +30,7 @@ test("P6 ledger: all six entities are inspected without changing accepted bytes 
   const f = fullFixture(t), before = f.store.getOperationById(f.id), snapshot = f.raw();
   const report = inspectLedger(snapshot, context(f.root)).report;
   assert.equal(report.status, "PASS", JSON.stringify(report));
-  assert.deepEqual(report.scanned, { agents: 2, operations: 1, subscriptions: 1, deliveries: 1, batches: 1, usage: 1 });
+  assert.deepEqual(report.scanned, { agents: 2, operations: 1, subscriptions: 1, deliveries: 1, batches: 1, usage: 1, attestations: 0 });
   assert.equal(report.pendingOperations, 1);
   assert.deepEqual(f.store.getOperationById(f.id), before);
   assert.equal(f.store.getDelivery(f.message, "alice").presented, 0);
@@ -51,7 +51,7 @@ test("P6 reader: symlink database, linked ancestor and unsupported version are r
   assert.throws(() => readDiagnosticSnapshot(linked), code("STORE_CORRUPT"));
   const alias = join(f.root, "alias"); symlinkSync(linked, alias);
   assert.throws(() => readDiagnosticSnapshot(alias), code("STORE_CORRUPT"));
-  const db = new DatabaseSync(join(f.root, "runtime.sqlite")); db.exec("PRAGMA user_version=2"); db.close();
+  const db = new DatabaseSync(join(f.root, "runtime.sqlite")); db.exec("PRAGMA user_version=77"); db.close();
   const before = hash(join(f.root, "runtime.sqlite"));
   assert.throws(() => readDiagnosticSnapshot(f.root), code("STORE_CORRUPT"));
   assert.equal(hash(join(f.root, "runtime.sqlite")), before);

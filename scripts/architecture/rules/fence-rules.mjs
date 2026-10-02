@@ -29,6 +29,7 @@ const RAW_SPAWNS = new Set(["spawn", "spawnSync"]);
  * argument. A caller that omits it is making the same decision as a raw spawn
  * without a fence, and answers here in the same way. */
 const FENCED_HELPERS = new Set(["spawnOwnedRpc", "spawnSupervisedService", "spawnSandboxed"]);
+const codeOnly = ts.createPrinter({ removeComments: true });
 
 const calleeName = node => {
   const callee = strip(node.expression);
@@ -67,7 +68,9 @@ export function fenceRuleFindings(root) {
       // A re-export names the helper without starting anything.
       if (ts.isExportDeclaration(node.parent)) return;
       const site = `${file}#${enclosingName(node)}`;
-      const passes = /fence/i.test(node.getText());
+      // Comments cannot establish descriptor propagation (MODE-006's private
+      // handoff pipe mentions the fence precisely because it carries no lease).
+      const passes = /fence/i.test(codeOnly.printNode(ts.EmitHint.Expression, node, source));
       const exemption = fenceExemptSpawnOwners[site];
       if (exemption !== undefined) claimed.add(site);
       if (passes && exemption !== undefined)

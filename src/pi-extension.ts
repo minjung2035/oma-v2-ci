@@ -10,10 +10,10 @@ import { realpathSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerDelivery } from "./extension/delivery.js";
 import { startInferenceBridge } from "./extension/inference-bridge.js";
-import { OMA_TOOL_NAMES, registerOmaTools } from "./extension/mail-tools.js";
+import { omaToolNames, registerOmaTools } from "./extension/mail-tools.js";
 import { integerEnv } from "./extension/shared.js";
 import { PrincipalChannel } from "./extension/principal-channel.js";
-import { registerToolSurface } from "./extension/tool-surface.js";
+import { parseSurfacePlan, registerToolSurface } from "./extension/tool-surface.js";
 import { TOOL_SCOPE_ENV, TOOL_SCOPE_SANDBOX, guardWorkspaceTools } from "./extension/workspace-guard.js";
 import { containWorkspaceTools } from "./extension/contained-tools.js";
 
@@ -26,14 +26,21 @@ export {
   expandedActiveTools, initialActiveTools, parseSurfacePlan, registerToolSurface,
 } from "./extension/tool-surface.js";
 
-export default function extension(pi: ExtensionAPI) {
+export default async function extension(pi: ExtensionAPI) {
   const workspace = realpathSync(process.cwd());
   // Holds nothing unless the product attached its private channel, which it
   // does only for the Principal's engine.
-  registerOmaTools(pi, workspace, PrincipalChannel.open());
-  registerToolSurface(pi, OMA_TOOL_NAMES);
-  startInferenceBridge(pi);
-  guardWorkspaceTools(pi, workspace);
-  containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX);
-  registerDelivery(pi);
+  const channel = PrincipalChannel.open();
+  const sandboxed = process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX;
+  const waitRequested = registerOmaTools(pi, workspace, channel);
+  const ownTools = omaToolNames(channel.attached);
+  const surface = parseSurfacePlan(process.env.OMA_TOOL_SURFACE);
+  const principalTools = new Set([...ownTools, "read", "grep", "find", "ls",
+    ...(surface.state === "plan" ? surface.plan.groups.map(group => group.name) : [])]);
+  const permitted = channel.attached ? (name: string) => principalTools.has(name) : undefined;
+  registerToolSurface(pi, ownTools, permitted);
+  guardWorkspaceTools(pi, workspace, sandboxed, channel.attached, permitted);
+  containWorkspaceTools(pi, workspace, integerEnv("OMA_WORKSPACE_BYTES"), sandboxed, channel.attached);
+  registerDelivery(pi, waitRequested);
+  await startInferenceBridge(pi);
 }

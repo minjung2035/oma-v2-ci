@@ -18,6 +18,8 @@ import { isRequestKey, isUuid, requestProblem } from "../../protocol/host-guest.
 import { isAbsolute } from "node:path";
 import { HOST_API_VERSION, hostApiHelloProblem, type HostApiHello } from "../../protocol/host-api.js";
 import type { VmState } from "./lifecycle.js";
+import { isValidSocietyName } from "../../domain/identifiers.js";
+import { checkedGuestHistory } from "../../protocol/guest-history.js";
 
 export interface HostApiBackend {
   state(): VmState;
@@ -31,6 +33,12 @@ export interface HostApiBackend {
   exportProject(key: string, params: { society: string; macRepo: string; since: string | null }): Promise<Record<string, unknown>>;
   /** §8.4: a stopped society's archive, encrypted at rest (MAC-621). */
   archive(key: string, society: string): Promise<Record<string, unknown>>;
+  /** DR25: the Mac's package store, carried to the engine whole; what was
+   * added is turned on in `projectId`'s project when one is named. */
+  syncPackages(key: string, params: { projectId: string | null; activate?: string | undefined }): Promise<Record<string, unknown>>;
+  bindProject?(params: { macRepo: string; society: string }): Promise<Record<string, unknown>>;
+  projectExtensions?(projectId: string): Promise<Record<string, unknown>>;
+  sessions?(method: "session.list" | "session.inspect" | "session.resume", params: Record<string, unknown>): Promise<Record<string, unknown>>;
 }
 
 export interface HostApiOptions {
@@ -126,6 +134,31 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
       case "society.list": return await forward("society.list", {});
       case "society.open": return await forward("society.open", { society: params.society, projectId: params.projectId });
       case "society.close": return await forward("society.close", { society: params.society, mode: params.mode });
+      case "project.bind": {
+        if (Object.keys(params).sort().join(",") !== "macRepo,society" || !isValidSocietyName(params.society) || key !== undefined)
+          throw new StoreError("INVALID_REQUEST", "project.bind names a project folder and a society");
+        if (backend.bindProject === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Project binding is unavailable");
+        return await backend.bindProject({ macRepo: macRepo(params.macRepo), society: params.society });
+      }
+      case "project.extensions": {
+        if (Object.keys(params).join(",") !== "projectId" || !isUuid(params.projectId) || key !== undefined)
+          throw new StoreError("INVALID_REQUEST", "project.extensions names a project");
+        if (backend.projectExtensions === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Project settings are unavailable");
+        // Observation must never start a VM or reopen a Society.
+        return await backend.projectExtensions(params.projectId);
+      }
+      case "session.list": {
+        if (!["projectId", "after,projectId"].includes(Object.keys(params).sort().join(",")) || !isUuid(params.projectId) || key !== undefined)
+          throw new StoreError("INVALID_REQUEST", "session.list names a project");
+        if (backend.sessions === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Saved guest histories are unavailable");
+        return await backend.sessions(method, params);
+      }
+      case "session.inspect": case "session.resume": {
+        const identity = checkedGuestHistory(params);
+        if (key !== undefined) throw new StoreError("INVALID_REQUEST", "Session requests do not accept a replay key");
+        if (backend.sessions === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Saved guest histories are unavailable");
+        return await backend.sessions(method, { ...identity });
+      }
       case "project.import": {
         if (!isUuid(params.projectId) || typeof params.branch !== "string") throw new StoreError("INVALID_REQUEST", "project.import names a project and a branch");
         await backend.start();
@@ -137,6 +170,13 @@ function serve(peer: FramedPeer, backend: HostApiBackend): void {
         return await backend.exportProject(keyed(key), { society: params.society, macRepo: macRepo(params.macRepo), since: since(params.since) });
       }
       case "request.status": return await forward("request.status", { key: params.key });
+      case "packages.sync": {
+        if (params.activate !== undefined && (typeof params.activate !== "string" || !/^(?:npm:|git:|https?:\/\/|ssh:\/\/|git@)/.test(params.activate)))
+          throw new StoreError("INVALID_REQUEST", "activate must name an installed package source");
+        if (params.projectId !== undefined && !isUuid(params.projectId)) throw new StoreError("INVALID_REQUEST", "packages.sync names a project by its id, or none");
+        await backend.start();
+        return await backend.syncPackages(keyed(key), { projectId: params.projectId === undefined ? null : params.projectId as string, activate: params.activate as string | undefined });
+      }
       case "archive.create": {
         if (typeof params.society !== "string") throw new StoreError("INVALID_REQUEST", "archive.create names a society");
         await backend.start();

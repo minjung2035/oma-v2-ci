@@ -16,10 +16,12 @@ function fixture() {
     mkdirSync(dirname(join(root, file)), { recursive: true });
     writeFileSync(join(root, file), bytes);
   };
-  const roots = ["implementation/contracts.ts", "implementation/schema-v1.sql", "implementation/systemd", "src"];
+  const schemas = ["schema-v1.sql", "schema-v2.sql", "schema-v3.sql", "schema-v1-to-v2.sql", "schema-v2-to-v3.sql"]
+    .map(name => `implementation/${name}`);
+  const roots = ["implementation/contracts.ts", ...schemas, "implementation/systemd", "src"];
   put("production-manifest.json", JSON.stringify(roots));
   put("implementation/contracts.ts");
-  put("implementation/schema-v1.sql", "SELECT 1;\n");
+  for (const schema of schemas) put(schema, "SELECT 1;\n");
   put("implementation/systemd/resident.service.in", "[Service]\nExecStart=/bin/true\n");
   put("src/domain/capabilities.ts");
   put("src/protocol/channel.ts");
@@ -188,8 +190,14 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
     };
     write({ ...cloc, header: { ...cloc.header, n_files: files.length } });
     assert.equal(assertMeasurementCurrent(f.root).status, "SOURCE_BOUND");
+    // DR20: a genuinely large source is measured, never refused by its size.
+    f.put("src/process/async.ts", "export const value = 1;\n".repeat(10001));
+    const large = measureWithCloc(f.root, files);
+    write({ ...large, header: { ...large.header, n_files: files.length } });
+    assert.ok(large.SUM.code > 10000);
+    assert.equal(assertMeasurementCurrent(f.root).status, "SOURCE_BOUND");
     // One count off by one, the total adjusted to keep every sum consistent.
-    const forged = JSON.parse(JSON.stringify(cloc));
+    const forged = JSON.parse(JSON.stringify(large));
     forged["src/process/async.ts"].code += 1;
     forged.SUM.code += 1;
     write({ ...forged, header: { ...forged.header, n_files: files.length } });
@@ -199,13 +207,13 @@ test("R38: the pinned tool re-measures real source and catches a forged count", 
 
 test("R38: the verification closure includes every class of local gate input", () => {
   assert.deepEqual(VERIFICATION_INPUT_ROOTS, [
-    "src", "test", "scripts", "implementation", ".github/workflows",
-    "architecture.md", "implementation-spec.md", "package.json", "package-lock.json",
+    "src", "test", "scripts", "implementation", "docs", ".github/workflows",
+    "package.json", "package-lock.json",
     "tsconfig.json", "tsconfig.build.json", "production-manifest.json", "production-files.txt",
     "production-loc.json", "production-loc-hashes.json",
   ]);
   assert.deepEqual(VERIFICATION_OUTPUT_EXCLUSIONS, [
-    "implementation/evidence/runtime-tests.log", "implementation/adversarial-review.md",
+    "implementation/evidence/runtime-tests.log", "docs/archive/adversarial-review.md",
   ]);
   const files = verificationInputFiles(REPO);
   for (const required of [
@@ -213,47 +221,48 @@ test("R38: the verification closure includes every class of local gate input", (
     "implementation/contracts.ts", "implementation/schema-v1.sql",
     "implementation/systemd/resident.service.in", "implementation/cloc-systemd.lang",
     "implementation/source-owners.json", "implementation/traceability.json",
-    "implementation/validation.md", "implementation/evidence/dependency-graph.json",
-    "implementation/tests/contracts.type-test.ts", "architecture.md", "implementation-spec.md",
+    "docs/implementation/validation.md", "implementation/evidence/dependency-graph.json",
+    "implementation/tests/contracts.type-test.ts", "docs/architecture.md", "docs/implementation-spec.md",
     "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json",
     "production-manifest.json", "production-files.txt", "production-loc.json",
     "production-loc-hashes.json", ".github/workflows/architecture-verification.yml",
   ]) assert.ok(files.includes(required), required);
   assert.equal(files.includes("implementation/evidence/runtime-tests.log"), false);
-  assert.equal(files.includes("implementation/adversarial-review.md"), false);
+  assert.equal(files.some(file => file.startsWith("docs/archive/")), false);
 });
 
 test("R38: package, compiler, owner, spec and workflow changes all change the verification digest", () => {
   const f = fixture();
   try {
     for (const root of VERIFICATION_INPUT_ROOTS) {
-      if (["src", "test", "scripts", "implementation", ".github/workflows"].includes(root))
+      if (["src", "test", "scripts", "implementation", "docs", ".github/workflows"].includes(root))
         f.put(`${root}/fixture.ts`);
       else f.put(root, `${root}\n`);
     }
     for (const file of [
-      "implementation/source-owners.json", "implementation/validation.md",
+      "implementation/source-owners.json", "docs/implementation/validation.md",
       "implementation/evidence/dependency-graph.json", "implementation/systemd/resident.service.in",
+      "docs/implementation-spec.md",
       ".github/workflows/architecture-verification.yml",
     ]) f.put(file, `${file}\n`);
     const before = verificationInputDigest(f.root);
-    for (const file of ["package.json", "tsconfig.json", "implementation/source-owners.json", "implementation-spec.md", ".github/workflows/architecture-verification.yml"]) {
+    for (const file of ["package.json", "tsconfig.json", "implementation/source-owners.json", "docs/implementation-spec.md", ".github/workflows/architecture-verification.yml"]) {
       const original = readFileSync(join(f.root, file));
       f.put(file, Buffer.concat([original, Buffer.from("changed\n")]));
       assert.notDeepEqual(verificationInputDigest(f.root), before, file);
       f.put(file, original);
       assert.deepEqual(verificationInputDigest(f.root), before, `${file} did not restore`);
     }
-    const validation = readFileSync(join(f.root, "implementation/validation.md"), "utf8");
-    f.put("implementation/validation.md", validation.replace("implementation/validation.md", "changed validation input"));
+    const validation = readFileSync(join(f.root, "docs/implementation/validation.md"), "utf8");
+    f.put("docs/implementation/validation.md", validation.replace("docs/implementation/validation.md", "changed validation input"));
     assert.notDeepEqual(verificationInputDigest(f.root), before);
-    f.put("implementation/validation.md", "verification input digest `" + "f".repeat(64) + "` (999 files)\n");
+    f.put("docs/implementation/validation.md", "verification input digest `" + "f".repeat(64) + "` (999 files)\n");
     const selfA = verificationInputDigest(f.root);
-    f.put("implementation/validation.md", "verification input digest `" + "0".repeat(64) + "` (1 files)\n");
+    f.put("docs/implementation/validation.md", "verification input digest `" + "0".repeat(64) + "` (1 files)\n");
     assert.deepEqual(verificationInputDigest(f.root), selfA, "the recorded digest field must be normalized");
     const outputBefore = verificationInputDigest(f.root);
     f.put("implementation/evidence/runtime-tests.log", "new runtime output\n");
-    f.put("implementation/adversarial-review.md", "generated report changed\n");
+    f.put("docs/archive/adversarial-review.md", "generated report changed\n");
     assert.deepEqual(verificationInputDigest(f.root), outputBefore, "verification outputs entered their own input digest");
     f.put("implementation/new-gate-input.json", "new input\n");
     assert.notDeepEqual(verificationInputDigest(f.root), outputBefore, "a new implementation input was omitted");
@@ -261,7 +270,7 @@ test("R38: package, compiler, owner, spec and workflow changes all change the ve
 });
 
 test("R38: the validation record names the verification inputs that were run, by their bytes", () => {
-  const record = readFileSync(new URL("../implementation/validation.md", import.meta.url), "utf8");
+  const record = readFileSync(new URL("../docs/implementation/validation.md", import.meta.url), "utf8");
   const quoted = [...record.matchAll(/verification input digest `([0-9a-f]{64})` \((\d+) files\)/g)]
     .map(([, value, files]) => ({ digest: value, files: Number(files) }));
   assert.equal(quoted.length, 1, "the validation record names no verification input digest, or more than one");
@@ -271,8 +280,8 @@ test("R38: the validation record names the verification inputs that were run, by
 
 test("R38: the figures the validation record quotes are the ones the artifact holds", () => {
   // A record that says one number while the artifact says another is how a
-  // reader ends up judging A-008 on a figure from an earlier commit.
-  const record = readFileSync(new URL("../implementation/validation.md", import.meta.url), "utf8");
+  // reader mistakes a figure from an earlier commit for the current measurement.
+  const record = readFileSync(new URL("../docs/implementation/validation.md", import.meta.url), "utf8");
   const report = JSON.parse(readFileSync(new URL("../production-loc.json", import.meta.url), "utf8"));
   const quoted = [...record.matchAll(/(\d+) files \/ ([\d,]+) code LOC/g)]
     .map(([, files, code]) => ({ files: Number(files), code: Number(code.replaceAll(",", "")) }));

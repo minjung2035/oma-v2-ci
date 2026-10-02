@@ -78,6 +78,7 @@ export function pinCgroup(path: string): CgroupPin {
 /** Owns the cgroup FD from opening through revoked-awaiting-death. */
 export class OwnedRun {
   private state: RunState = { phase: "opening" };
+  private waiting = false;
   readonly identity: RunIdentity;
   constructor(actor: Actor, incarnation: number, invocationId: string, private readonly pin: CgroupPin) {
     this.identity = Object.freeze({ actor, incarnation, invocationId, cgroupIdentity: pin.identity });
@@ -88,6 +89,10 @@ export class OwnedRun {
   get lease(): RunLease | null { return this.state.phase === "live" ? this.state.lease : null; }
   population(): Population { return this.state.phase === "closed" ? "unknown" : this.pin.population(); }
   matches(path: string): boolean { return this.state.phase === "live" && this.pin.matches(path); }
+  confirmOpening(cgroup: string): void {
+    if (this.state.phase !== "opening" || !this.pin.matches(cgroup) || this.pin.population() !== "populated")
+      throw new StoreError("STALE_RUN", "opening run is revoked or its pinned cgroup changed");
+  }
   publish(endpoint: RunEndpoint): RunLease {
     if (this.state.phase !== "opening") {
       endpoint.done();
@@ -96,6 +101,13 @@ export class OwnedRun {
     const lease = Object.freeze({ actor: this.identity.actor, incarnation: this.identity.incarnation, socketHostPath: endpoint.socketHostPath });
     this.state = { phase: "live", lease, endpoint };
     return lease;
+  }
+  /** RUN-003: ephemeral intent belongs to this live incarnation, never its successor. */
+  wait(incarnation: number, observe: boolean): boolean {
+    if (this.state.phase !== "live" || incarnation !== this.identity.incarnation)
+      throw new StoreError("STALE_RUN", "wait requires the current live run");
+    if (!observe) this.waiting = true;
+    return this.waiting;
   }
   revoke(): void {
     if (this.state.phase === "closed" || this.state.phase === "revoked-awaiting-death") return;

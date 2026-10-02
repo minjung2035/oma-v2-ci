@@ -1,3 +1,4 @@
+import { readableBody } from "../src/mail/display.js";
 // Phase 3 acceptance: maildir/routes/materializer/views (T14-T27 partial, T32)
 // plus process-kill crash tests T18-T22 using the external kill harness.
 import { test } from "node:test";
@@ -119,7 +120,7 @@ test("T17: reply header contract; CR/LF injection rejected", async () => {
     subject: "s", kind: "message", contextRevision: null,
     inReplyTo: null, references: [], messageId: "m-00000000-0000-4000-8000-000000000001-0@demo.oma.invalid", body: "x\r\ny",
   });
-  assert.ok(crlfBody.text.includes("x\r\ny"));
+  assert.equal(readableBody(crlfBody.text), "x\r\ny");
   assert.equal(topicAddress("auth", society), "topic-auth@demo.oma.invalid");
   assert.equal(listAddress("commons", society), "commons@demo.oma.invalid");
   seal({ store, dir });

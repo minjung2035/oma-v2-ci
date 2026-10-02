@@ -13,8 +13,9 @@ export const READ_FACETS = freezeTable({
   operations: {
     get: "getOperation", getById: "getOperationById", classifyKey: "claimKey", retried: "retriedOperation",
     recoverableIds: "recoverableOperations", physicalCreate: "findPhysicalCreate",
-    succeededContext: "findSucceededContext",
+    succeededContext: "findSucceededContext", latestAction: "latestAgentAction", latestSociety: "latestSocietyAction", submissions: "submittedOperations",
   },
+  attestations: { all: "attestationFacts" },
   agents: { get: "getAgent", all: "listAgents" },
   subscriptions: { subscribers: "subscribers", all: "allSubscriptions" },
   deliveries: { get: "getDelivery", pending: "pendingDeliveries", forOperation: "deliveriesForOperation" },

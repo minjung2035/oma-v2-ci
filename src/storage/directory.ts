@@ -84,6 +84,31 @@ export function removeOwnedTree(path: string): void {
     rmdirSync(entryAt(parent, basename(path))); fsyncSync(parent);
   } finally { closeSync(parent); }
 }
+/** DR24: a session's own tree, removed when the session ended having said
+ * nothing: its rootfs holds links and its run root sockets, which are unlinked
+ * as entries, never followed. Walks under held directories as removeOwnedTree does. */
+export function removeUnusedTree(path: string): void {
+  let parent: number;
+  try { parent = openDirectory(dirname(path)); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+  try {
+    if (!lstatSync(entryAt(parent, basename(path)), { throwIfNoEntry: false })?.isDirectory()) return;
+    const walk = (directory: number): void => {
+      fchmodSync(directory, 0o700);
+      for (const name of readdirSync(`/proc/self/fd/${directory}`)) {
+        const entry = entryAt(directory, name);
+        if (lstatSync(entry).isDirectory()) {
+          const child = openBeneath(directory, name, constants.O_RDONLY | constants.O_DIRECTORY);
+          try { walk(child); } finally { closeSync(child); }
+          rmdirSync(entry);
+        } else unlinkSync(entry);
+      }
+    };
+    const root = openBeneath(parent, basename(path), constants.O_RDONLY | constants.O_DIRECTORY);
+    try { walk(root); } finally { closeSync(root); }
+    rmdirSync(entryAt(parent, basename(path))); fsyncSync(parent);
+  } finally { closeSync(parent); }
+}
 /** Remove a caller-owned leaf without traversing a replaced parent. */
 export function removeOwnedFile(path: string): void {
   const parent = openDirectory(dirname(path));

@@ -13,6 +13,12 @@ export class StoreError extends Error {
     if (options?.details !== undefined) this.details = options.details;
   }
 }
+/** Cleanup can fail beside an effect, but never replaces its first failure. */
+export function primaryFailure(error: unknown): unknown {
+  let primary = error;
+  while (primary instanceof AggregateError && primary.errors.length > 0) primary = primary.errors[0];
+  return primary;
+}
 /** Normalize native storage exhaustion without interpreting operation phase.
  * SQLite's primary result code 13 is SQLITE_FULL (extended codes retain it). */
 export function normalizeStorageFailure(error: unknown): unknown {
@@ -23,8 +29,7 @@ export function normalizeStorageFailure(error: unknown): unknown {
   // nest, and it is restated whole -- its code, the facts its code may carry and,
   // for a coordinator's AcceptedFailure, that the operation had been accepted
   // and what is known of its effect. A cleanup failing beside it changes none of that.
-  let primary: unknown = error;
-  while (primary instanceof AggregateError && primary.errors.length > 0) primary = primary.errors[0];
+  const primary = primaryFailure(error);
   if (primary instanceof StoreError) return restated(primary, error);
   if (primary === null || typeof primary !== "object") return error;
   const code = "code" in primary ? primary.code : undefined;
@@ -122,7 +127,7 @@ export const ERROR_METADATA = Object.freeze({
   INVALID_OID: meta("input"), CANDIDATE_NOT_PUBLISHED: meta("input"), BUNDLE_INVALID: meta("input"),
   PREREQUISITE_MISSING: meta("input"), PUBLISHED_REF_CONFLICT: meta("conflict", "repository"),
   STALE_BASE: meta("conflict"), NOT_DESCENDANT: meta("input"), PROTECTED_PATH: meta("authority"),
-  CHECK_FAILED: meta("input"), POLICY_CHANGED: meta("conflict"),
+  INTEGRATION_CONDITIONS: meta("authority"), CHECK_FAILED: meta("input"), POLICY_CHANGED: meta("conflict"),
   REF_STATE_UNKNOWN: meta("ambiguous", "repository", 3), CANCELLED_BEFORE_COMMIT: meta("conflict"),
   CONTEXT_CONFLICT: meta("conflict", "repository"), QUOTA_EXCEEDED: meta("resource"),
   PROVIDER_FAILED: meta("input"), PROVIDER_OUTCOME_UNKNOWN: meta("ambiguous", "operation", 3),
@@ -256,6 +261,10 @@ export const ERROR_DETAILS: Readonly<Partial<Record<ErrorCode, Readonly<Record<s
   NOT_DESCENDANT: Object.freeze({ actual: FULL_OID_OR_NONE }),
   CONTEXT_CONFLICT: Object.freeze({ actual: FULL_OID_OR_NONE }),
   CAPABILITY_DENIED: Object.freeze({ capability: isCapability }),
+  INTEGRATION_CONDITIONS: Object.freeze({
+    effectiveTier: (value: unknown) => value === "LOW" || value === "MEDIUM" || value === "HIGH",
+    missing: (value: unknown) => typeof value === "string" && value.length > 0,
+  }),
   BROKER_UNAVAILABLE: Object.freeze({ reason: (value: unknown) => value === "busy" || value === "draining" }),
 });
 /** The details a failure of this code may carry, exactly, or undefined. */
@@ -271,30 +280,30 @@ export function publicDetails(code: ErrorCode, details: unknown): { readonly [ke
 /** DR3: what each code means, in the words a caller is shown. The error
  * table's meaning column; the retry a caller takes comes from `retry`. */
 export const ERROR_DESCRIPTIONS = Object.freeze({
-  INVALID_REQUEST: "요청 형식이 맞지 않습니다", UNSUPPORTED_VERSION: "지원하지 않는 protocol 버전입니다",
-  UNKNOWN_METHOD: "알 수 없는 method입니다", FRAME_TOO_LARGE: "요청이 frame 한도를 넘었습니다",
-  STREAM_INVALID: "전송한 내용이 선언과 맞지 않습니다", AUTH_FAILED: "호출자 신원을 확인하지 못했습니다",
-  STALE_RUN: "이 run은 더 이상 현재 run이 아닙니다(정지·재시작·폐기됨)", CAPABILITY_DENIED: "이 요청에 필요한 권한이 없습니다",
-  REQUEST_KEY_REUSED: "같은 request key가 다른 요청에 이미 쓰였습니다", REQUEST_NOT_FOUND: "이 key로 접수된 요청이 없습니다",
-  ADDRESS_NOT_FOUND: "그런 주소나 agent가 없습니다", AGENT_CONFLICT: "같은 이름의 agent가 다른 설정으로 있습니다",
-  AGENT_NOT_READY: "agent가 아직 준비되지 않았습니다", AGENT_RETIRED: "은퇴한 agent입니다",
-  GOAL_REQUIRED: "공유 GOAL이 아직 게시되지 않았습니다", LIMIT_EXCEEDED: "입력이 선언된 한도를 넘었습니다",
-  STORAGE_FULL: "저장 공간이 부족합니다", DB_BUSY: "저장소가 잠시 바쁩니다",
-  STORE_CORRUPT: "원본 무결성 오류로 변경이 멈췄습니다; host 복구가 필요합니다",
-  BROKER_UNAVAILABLE: "broker가 지금 이 요청을 처리할 수 없습니다", DEADLINE_EXCEEDED: "기한 안에 끝나지 않았습니다",
-  RUN_TERMINATION_UNKNOWN: "이전 실행의 종료를 확인하지 못했습니다", START_LIMIT: "systemd 시작 한도에 걸렸습니다; 명시적 start가 필요합니다",
-  PRINCIPAL_DISCONNECTED: "Principal 화면이 연결되어 있지 않습니다", ATTACH_CONFLICT: "이미 다른 Principal 세션이 연결되어 있습니다",
-  BATCH_CONFLICT: "batch의 소유나 내용이 맞지 않습니다", SESSION_BOUNDARY_UNCONFIRMED: "전달 완료의 증거가 충분하지 않습니다",
-  INVALID_OID: "commit id 형식이 맞지 않습니다", CANDIDATE_NOT_PUBLISHED: "candidate가 society에 게시되어 있지 않습니다",
-  BUNDLE_INVALID: "제출한 Git bundle이 올바르지 않습니다", PREREQUISITE_MISSING: "필요한 선행 commit이 없습니다",
-  PUBLISHED_REF_CONFLICT: "게시 ref가 이미 다른 값을 가리킵니다", STALE_BASE: "main이 expected와 다릅니다; actual을 기준으로 다시 하세요",
-  NOT_DESCENDANT: "candidate가 base의 후손이 아닙니다(fast-forward 불가)", PROTECTED_PATH: "보호 경로를 바꾸는 candidate입니다",
-  CHECK_FAILED: "host 검사를 통과하지 못했습니다", POLICY_CHANGED: "접수 뒤 host 정책이 바뀌었습니다",
-  REF_STATE_UNKNOWN: "canonical ref 상태를 확정할 수 없습니다", CANCELLED_BEFORE_COMMIT: "commit 전에 취소되었습니다",
-  CONTEXT_CONFLICT: "공유 context가 expected와 다릅니다; actual을 기준으로 다시 하세요", QUOTA_EXCEEDED: "예산 한도를 넘었습니다",
-  PROVIDER_FAILED: "모델 제공자 호출이 실패했습니다", PROVIDER_OUTCOME_UNKNOWN: "모델 제공자 호출의 결과가 불명확합니다",
-  UNSUPPORTED_PROFILE: "이 배포가 지원하지 않는 설정입니다", SPIKE_UNRESOLVED: "아직 검증되지 않아 막혀 있는 기능입니다",
-  INTERNAL_ERROR: "내부 오류입니다",
+  INVALID_REQUEST: "Invalid request format", UNSUPPORTED_VERSION: "Unsupported protocol version",
+  UNKNOWN_METHOD: "Unknown method", FRAME_TOO_LARGE: "Request exceeds the frame limit",
+  STREAM_INVALID: "Stream content does not match its declaration", AUTH_FAILED: "Could not authenticate the caller",
+  STALE_RUN: "This run is no longer current (stopped, restarted, or retired)", CAPABILITY_DENIED: "Insufficient permission for this request",
+  REQUEST_KEY_REUSED: "Request key was already used for a different request", REQUEST_NOT_FOUND: "No request was accepted under this key",
+  ADDRESS_NOT_FOUND: "Address or agent not found", AGENT_CONFLICT: "An agent with this name exists with different settings",
+  AGENT_NOT_READY: "Agent is not ready", AGENT_RETIRED: "Agent is retired",
+  GOAL_REQUIRED: "The shared GOAL has not been published", LIMIT_EXCEEDED: "Input exceeds the declared limit",
+  STORAGE_FULL: "Insufficient storage space", DB_BUSY: "Storage is temporarily busy",
+  STORE_CORRUPT: "Mutations stopped due to a source integrity error; host recovery is required",
+  BROKER_UNAVAILABLE: "The broker cannot process this request right now", DEADLINE_EXCEEDED: "The operation did not finish before its deadline",
+  RUN_TERMINATION_UNKNOWN: "Could not confirm termination of the previous run", START_LIMIT: "Systemd start limit reached; an explicit start is required",
+  PRINCIPAL_DISCONNECTED: "The Principal UI is not connected", ATTACH_CONFLICT: "Another Principal session is already attached",
+  BATCH_CONFLICT: "Batch ownership or content does not match", SESSION_BOUNDARY_UNCONFIRMED: "Insufficient evidence of delivery completion",
+  INVALID_OID: "Invalid commit ID format", CANDIDATE_NOT_PUBLISHED: "Candidate is not published to the society",
+  BUNDLE_INVALID: "Invalid Git bundle", PREREQUISITE_MISSING: "Required prerequisite commit is missing",
+  PUBLISHED_REF_CONFLICT: "Published ref already points to a different value", STALE_BASE: "Main differs from expected; retry against actual",
+  NOT_DESCENDANT: "Candidate is not a descendant of base (cannot fast-forward)", PROTECTED_PATH: "Candidate changes a protected path",
+  INTEGRATION_CONDITIONS: "Integration approval conditions are not met", CHECK_FAILED: "Host checks did not pass", POLICY_CHANGED: "Host policy changed after acceptance",
+  REF_STATE_UNKNOWN: "Cannot determine canonical ref state", CANCELLED_BEFORE_COMMIT: "Cancelled before commit",
+  CONTEXT_CONFLICT: "Shared context differs from expected; retry against actual", QUOTA_EXCEEDED: "Quota exceeded",
+  PROVIDER_FAILED: "Model provider call failed", PROVIDER_OUTCOME_UNKNOWN: "Model provider outcome is unknown",
+  UNSUPPORTED_PROFILE: "Configuration is unsupported by this deployment", SPIKE_UNRESOLVED: "Feature is blocked pending verification",
+  INTERNAL_ERROR: "Internal error",
 } satisfies Record<ErrorCode, string>);
 /** How a failure reads to its caller: the code, its words -- the authored text
  * a validation gave, or the table's -- and the facts its code may carry. */

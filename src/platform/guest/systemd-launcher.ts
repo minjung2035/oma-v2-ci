@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
 import { runProcess, type CommandSpec } from "../../process/run.js";
 import { listening, type SessionLauncher } from "./host.js";
+import { RESUME_SESSION_ENV } from "../../runtime/session-catalog.js";
 
 export interface SystemdLauncherOptions {
   /** Where the holders listen: the oma user's runtime directory. */
@@ -26,7 +27,7 @@ export function systemdSessionLauncher(options: SystemdLauncherOptions): Session
   const socketPath = (society: string): string => join(options.sessionsDir, `${society}.sock`);
   return {
     socketPath,
-    async start(society, projectDir) {
+    async start(society, projectDir, resume) {
       // P0V-106 (G13-04): a society is started only when its session is not
       // serving (host.ts opens one at a time), so a unit under its name is a
       // leftover -- one that never listened, or ended failed -- and is
@@ -34,7 +35,10 @@ export function systemdSessionLauncher(options: SystemdLauncherOptions): Session
       // answer; anything else shows in the start that follows.
       await runProcess(command("/usr/bin/systemctl", ["--user", "stop", unitOf(society)], options.env, 30_000));
       await runProcess(command("/usr/bin/systemctl", ["--user", "reset-failed", unitOf(society)], options.env, 10_000));
-      const setenv = Object.entries({ ...options.env, TERM: "xterm-256color" }).map(([key, value]) => `--setenv=${key}=${value}`);
+      const env = { ...options.env, TERM: "xterm-256color" };
+      delete (env as Record<string, string>)[RESUME_SESSION_ENV];
+      if (resume !== undefined) (env as Record<string, string>)[RESUME_SESSION_ENV] = resume;
+      const setenv = Object.entries(env).map(([key, value]) => `--setenv=${key}=${value}`);
       const result = await runProcess(command("/usr/bin/systemd-run", [
         "--user", `--unit=${unitOf(society)}`, "--collect", "--quiet",
         // SIGTERM to the holder alone, which asks `oma` to shut down; the rest
@@ -47,16 +51,20 @@ export function systemdSessionLauncher(options: SystemdLauncherOptions): Session
       ], options.env, 30_000));
       if (result.kind !== "exited" || result.exitCode !== 0)
         throw new StoreError("BROKER_UNAVAILABLE", "the society session could not be started");
-      for (let waited = 0; waited < 10_000; waited += 50) {
-        if (await listening(socketPath(society))) return;
-        await new Promise(resolve => setTimeout(resolve, 50));
+      const deadline = performance.now() + 10_000;
+      while (performance.now() < deadline) {
+        const remaining = Math.max(1, Math.ceil(deadline - performance.now()));
+        if (await listening(socketPath(society), Math.min(500, remaining))) return;
+        const pause = Math.min(50, deadline - performance.now());
+        if (pause > 0) await new Promise(resolve => setTimeout(resolve, pause));
       }
       throw new StoreError("BROKER_UNAVAILABLE", "the society session did not come up");
     },
     async stop(society, deadlineMs) {
       const result = await runProcess(command("/usr/bin/systemctl", ["--user", "stop", unitOf(society)], options.env, deadlineMs));
       if (result.kind !== "exited" || result.exitCode !== 0) return "unknown";
-      return (await listening(socketPath(society))) ? "unknown" : "stopped";
+      try { return (await listening(socketPath(society))) ? "unknown" : "stopped"; }
+      catch { return "unknown"; }
     },
   };
 }

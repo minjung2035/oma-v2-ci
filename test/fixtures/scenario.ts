@@ -18,7 +18,7 @@
 // Scenarios assert durable facts -- ledger rows, mailbox files, receipts, the
 // session history -- not screen text.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -33,6 +33,7 @@ import { validateConfig } from "../../src/config.js";
 import { defaultHostConfig } from "../../src/config/defaults.js";
 import { canonicalResourceLimits } from "../../src/domain/resources.js";
 import { GitModule } from "../../src/git.js";
+import { CandidateChecks } from "../../src/runtime/candidate-checks.js";
 import { QUARANTINE_RESOURCES } from "../../src/git/quarantine.js";
 import { integrationPolicyFromConfig } from "../../src/git/integration-policy.js";
 import { readCurrentHostPolicy } from "../../src/config.js";
@@ -46,9 +47,11 @@ import { LifecycleModule } from "../../src/lifecycle.js";
 import { provisionSociety, residentRootfsPath } from "../../src/runtime/provision.js";
 import { processIdentity, type ProcessIdentity } from "../../src/broker/process-ancestry.js";
 import { encodeHostMessage } from "../../src/protocol/host-channel.js";
-import { PrincipalSession, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../../src/tui/session.js";
+import { PrincipalSession, principalSessionProfile, newSessionHandle, principalEnvironment, principalSessionDir, principalWorkspace } from "../../src/tui/session.js";
 import { PrincipalDelivery, principalHostBroker, type DeliveryOutcome } from "../../src/runtime/principal-delivery.js";
 import { resolvePiRuntime } from "../../src/runtime/pi-runtime.js";
+import type { VerifiedExtension } from "../../src/runtime/extension-integrity.js";
+import { tryHoldSociety } from "../../src/runtime/society-lease.js";
 import type { PiEvent } from "../../src/runtime/pi-rpc.js";
 import { agentRootPathAt, projectGitPathAt, runnerViewPathAt, workspacePathAt } from "../../src/storage/paths.js";
 import { makeValidAgent } from "./spec.js";
@@ -164,6 +167,9 @@ export interface Scenario {
 }
 
 export interface ScenarioOptions {
+  /** Actual Open TUI, invoked only by a process running in the PTY harness. */
+  readonly interactive?: { readonly onUi: (event: PiEvent, session: PrincipalSession) => void };
+  readonly extensions?: readonly VerifiedExtension[];
   readonly script?: Script | readonly Reply[];
   /** Residents registered in the society (rows only; they never run here). */
   readonly residents?: readonly string[];
@@ -186,10 +192,14 @@ function composeBroker(root: string, runRoot: string, store: Store, host: HostSi
   const units = stand as unknown as UnitsModule;
   const mail = new MailModule({ stateRoot: root, society: SOCIETY }, store, 64, SCENARIO_LIMITS.batchMaxMessages, SCENARIO_LIMITS);
   const views = new ViewsModule(store, root, SOCIETY, "p");
-  const git = new GitModule({ stateRoot: root, projectGit: projectGitPathAt(root), contextGit: join(root, "repos", "context.git"),
+  const gitPaths = { stateRoot: root, projectGit: projectGitPathAt(root), contextGit: join(root, "repos", "context.git"),
     worldDir: join(root, "world"), society: SOCIETY, quarantineTmpBytes: config.limits.bundleBytes, quarantineResources: QUARANTINE_RESOURCES,
-    checkRootfs: config.installation.rootfs, checkAssetsDir: config.installation.rootfs, checkTmpBytes: 1,
-  }, store, mail, integrationPolicyFromConfig(config.integration), () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration));
+    checkRootfs: config.installation.rootfs, checkNode: config.installation.node, checkAssetsDir: config.installation.libdir,
+  };
+  const checks = new CandidateChecks(gitPaths);
+  const git = new GitModule(gitPaths, store, mail, integrationPolicyFromConfig(config.integration),
+    () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, SOCIETY).integration),
+    (candidate, check) => checks.run(candidate, check));
   const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, SOCIETY), () => store.inTransaction);
   const lifecycle = new LifecycleModule(store, units,
     { stateRoot: root, projectGit: projectGitPathAt(root), society: SOCIETY, hasGoal: () => true, activationAllowed: () => true,
@@ -203,8 +213,12 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
   // D03: a launched runner checks that its roots name this society under `oma`.
   const base = mkdtempSync(join(tmpdir(), "oma-scn-"));
   const root = join(base, "oma", SOCIETY);
-  const runRoot = join(base, "run", "oma", SOCIETY);
-  mkdirSync(root, { recursive: true }); mkdirSync(runRoot, { recursive: true });
+  const runDirectory = join(base, "run"), physicalRunRoot = join(runDirectory, "oma", SOCIETY);
+  mkdirSync(root, { recursive: true }); mkdirSync(physicalRunRoot, { recursive: true });
+  // Linux Unix-socket names fit sun_path even when TMPDIR is a long scratchpad.
+  // All bytes stay under base; this descriptor is held until its children end.
+  const runFd = process.platform === "linux" ? openSync(runDirectory, constants.O_RDONLY | constants.O_DIRECTORY) : undefined;
+  const runRoot = runFd === undefined ? physicalRunRoot : `/proc/${process.pid}/fd/${runFd}/oma/${SOCIETY}`;
   provisionSociety(root);
   // The society's configuration: the product's defaults with the scripted
   // model for Residents and no rootfs, so a runner runs its engine unconfined.
@@ -251,16 +265,21 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
   provider.configure(runtime.agentDir);
   const lines: string[] = [];
   const events: PiEvent[] = [];
-  const profile = { society: SOCIETY, provider: "fake", model: "scripted", extensions: [], workspaceBytes: 64 * 1024 * 1024 };
   const handle = newSessionHandle();
+  const fence = options.interactive ? tryHoldSociety(root) : null;
+  if (options.interactive) assert.ok(fence);
   const startSession = (): PrincipalSession => {
+    const profile = { ...principalSessionProfile(configPath, SOCIETY), provider: "fake", model: "scripted", workspaceBytes: 64 * 1024 * 1024,
+      ...(options.extensions === undefined ? {} : { extensions: options.extensions }) };
     const started = PrincipalSession.start(
       { piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: runtime.agentDir,
+        ...(options.interactive && fence ? { interactiveEntry: join(REPO, "dist/src/entry/pi-interactive.js"), fence: fence.fence, project: REPO } : {}),
         coreExtension: join(REPO, "dist/src/pi-extension.js"), sessionDir: principalSessionDir(root),
         workspace: principalWorkspace(root), home: principalWorkspace(root) },
       profile, { frameBytes: SCENARIO_LIMITS.frameBytes, idleStreamSeconds: SCENARIO_LIMITS.idleStreamSeconds, receiptWaitSeconds: SCENARIO_LIMITS.receiptWaitSeconds },
       { ...principalEnvironment({ stateRoot: root, runRoot, libdir: REPO }, profile, SCENARIO_LIMITS), ...trust },
       { onLine: line => { lines.push(line); }, onBusy: () => {}, onEnd: reason => { lines.push(`[end] ${reason}`); },
+        onUi: event => options.interactive?.onUi(event, started),
         onPromptFailed: (_text, reason) => { lines.push(`[prompt failed] ${reason}`); },
         onPromptUnconfirmed: (_text, reason) => { lines.push(`[prompt unconfirmed] ${reason}`); } },
     );
@@ -349,7 +368,7 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     async restartBroker() {
       await scenario.stopBroker();
       store = new Store(join(root, "runtime.sqlite"));
-      broker = composeBroker(root, runRoot, store, host, units, config, configPath);
+      broker = composeBroker(root, runRoot, store, host, units, readCurrentHostPolicy(configPath, SOCIETY), configPath);
       await broker.start();
       register();
     },
@@ -405,9 +424,12 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
     async close() {
       try { session.close(); } catch { /* already ended */ }
       const pid = session.pid;
-      if (pid !== null) try { process.kill(pid, "SIGKILL"); } catch { /* gone */ }
+      if (options.interactive) await session.exited;
+      else if (pid !== null) try { process.kill(pid, "SIGKILL"); } catch { /* gone */ }
+      fence?.release();
       await broker.drainAndClose().catch(() => undefined);
       await provider.close();
+      if (runFd !== undefined) closeSync(runFd);
       try { store.close(); } catch { /* the broker's drain closed it */ }
       // Published context revisions are sealed read-only (CTX); open them to remove.
       execFileSync("chmod", ["-R", "u+rwX", base]);

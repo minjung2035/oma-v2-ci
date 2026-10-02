@@ -7,7 +7,7 @@ export type { ErrorCode, Failure } from "./contracts/errors.js";
 export type { BlobDescriptor, GitReference, RiskTier, ExactCandidateIdentity, MailInput, AgentCreateInput, ContextEntry } from "./contracts/values.js";
 export type { OperationResult, Receipt, MutationMethod, MessagePlan, OperationPlan } from "./contracts/durable.js";
 export type { AuthContext, AgentStatus, PreparedBatch, BoundaryEvidence, RunLease, UnitObservation, SandboxPlan } from "./contracts/runtime.js";
-export type { ResolvedAgentSpec, ResourceLimits, ProtocolLimits, ModelProfile, AgentProfile, HostConfigV1 } from "./contracts/host.js";
+export type { ResolvedAgentSpec, ResourceLimits, ProtocolLimits, EffortLevel, ModelProfile, AgentProfile, HostConfigV1 } from "./contracts/host.js";
 export type { PublicMethods, PublicMethod, ReadMethod, EphemeralMethod, MutationRequest, ReadRequest, EphemeralRequest, Request, Response } from "./contracts/public-wire.js";
 export type { InternalMethods, InternalResults, InternalRequest, InternalResponse, Notification } from "./contracts/internal-wire.js";
 export type { Store, OperationReceiptPort, MailModule, UnitsModule, AsyncUnitsOrchestrationPort, GitModule, SandboxModule, PiAdapter, ViewsModule, ReconcileModule, BrokerModule, RunnerModule, CliModule } from "./contracts/module-contracts.js";

@@ -1,4 +1,7 @@
 // CLI entrypoint: command routing and top-level process failure only.
+import { runSocietyCommand } from "./cli/commands/society.js";
+import { runCodeCommand } from "./cli/commands/code.js";
+import { runAttestationCommand } from "./cli/commands/attestation.js";
 import { runAckCommand, runSendCommand } from "./cli/commands/send.js";
 import { runRouteCommand } from "./cli/commands/routes.js";
 import { runAgentCommand } from "./cli/commands/agent.js";
@@ -12,6 +15,10 @@ import { fatal, holdOutputUntilWritten, usage } from "./cli/exit.js";
 export async function main(argv: string[]): Promise<never> {
   const [command, ...rest] = argv;
   switch (command) {
+    case "society": return runSocietyCommand(rest);
+    case "code": return runCodeCommand(rest);
+    case "approve": case "object": case "revoke": case "challenge":
+      return runAttestationCommand(command, rest);
     case "send":
       return runSendCommand(rest);
     case "ack":

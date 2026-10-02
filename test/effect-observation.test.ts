@@ -71,10 +71,14 @@ test("V02C: independent raw SQL and physical Mail effects detect duplicate repla
       return join(root, dir, entries[0]!);
     });
     const bytes = files.map(observeFile);
-    for (const file of files)
-      assert.ok(
-        readFileSync(file, "utf8").includes("independent literal payload"),
-      );
+    for (const file of files) {
+      // Independent MIME observation: no production reader may mask a writer bug.
+      const raw = readFileSync(file, "utf8");
+      const at = raw.indexOf("\r\n\r\n");
+      assert.ok(at > 0);
+      assert.match(raw.slice(0, at), /^Content-Transfer-Encoding: base64$/m);
+      assert.equal(Buffer.from(raw.slice(at + 4), "base64").toString("utf8"), input.body);
+    }
     assert.equal(new Set(bytes.map((value) => value.sha256)).size, 1);
     await mail.send(gitAuth, "one-effect", input);
     assert.deepEqual(observeLedger(dbPath), before);

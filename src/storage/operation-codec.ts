@@ -6,11 +6,12 @@ import type { Json } from "../../implementation/contracts/identity.js";
 import type { MessagePlan, MutationMethod } from "../../implementation/contracts/durable.js";
 import type { PublicMethods } from "../../implementation/contracts/public-wire.js";
 import {
-  operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
+  ownedMessage, operationPlanCheck, operationResultRelationCheck, resolvedSpecCheck,
   type OperationPlanContext, type PlanFor, type RepositoryIdentity, type ResultFor,
 } from "../durable.js";
 import { isValidActor, isValidOperationId, isValidRequestKey } from "../domain/identifiers.js";
 import type { Actor, OperationId, RequestKey } from "../domain/identifiers.js";
+import { attestationTarget, attestationRelationProblem } from "../domain/attestation-relations.js";
 import { snapshotJson, canonicalJson } from "../domain/canonical-json.js";
 import { resolvedSpecDigest } from "../domain/spec-identity.js";
 import { requestHash } from "../hash.js";
@@ -55,6 +56,8 @@ const codecFor = (kind: MutationMethod): OperationCodec => Object.freeze({
     operationResultRelationCheck(kind, plan, result, context),
 });
 export const OPERATION_CODECS = Object.freeze({
+  "society.set": codecFor("society.set"),
+  "attest.record": codecFor("attest.record"),
   "mail.send": codecFor("mail.send"),
   "agent.continue": codecFor("agent.continue"),
   "mail.ack": codecFor("mail.ack"),
@@ -94,6 +97,8 @@ export interface OperationRelations {
   operation(id: string): unknown | null;
   agent(name: string): unknown | null;
   deliveries(operationId: string): readonly unknown[];
+  /** Required when decoding a DR27 fact; absent only in old v1 snapshots. */
+  attestation?(operationId: string): unknown | null;
 }
 export interface OperationDecodeContext {
   readonly stateRoot: string;
@@ -121,16 +126,13 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
   const a = [...new Set(left)].sort(); const b = [...new Set(right)].sort();
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
-function ownMessage(plan: PlanFor<MutationMethod>): MessagePlan | null {
-  switch (plan.kind) {
-    case "mail.send": case "agent.continue": case "git.submit": case "context.publish": return plan.message;
-    case "agent.create": return plan.initialMessage;
-    default: return null;
-  }
-}
 function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown): void {
   if (!record(payload)) corrupt("accepted payload is not an object");
   switch (plan.kind) {
+    case "society.set": if (plan.state !== payload.state) corrupt("society state differs from payload"); return;
+    case "attest.record":
+      if (!same(plan.fact, payload)) corrupt("attestation differs from its authenticated request");
+      return;
     case "mail.send": {
       if (plan.message.kind !== payload.kind || !same(plan.message.approvalFor ?? null, payload.approvalFor ?? null)) corrupt("mail kind/approval identity differs from payload");
       const to = payload.to as string[];
@@ -149,6 +151,8 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
       return;
     case "git.integrate":
       if (plan.candidate !== payload.candidate || plan.base !== payload.expected) corrupt("integrate base/candidate differs from payload");
+      if (plan.publication ? plan.publication.tiered.requested !== (payload.tier ?? "LOW") : payload.tier !== undefined)
+        corrupt("integration tier request differs from its accepted policy");
       return;
     case "git.submit": {
       if (plan.candidate !== payload.candidate || plan.exportRef !== payload.exportRef || !sameSet(plan.prerequisites, payload.prerequisites as string[])) corrupt("submit identity differs from payload");
@@ -161,6 +165,7 @@ function validatePayloadRelation(plan: PlanFor<MutationMethod>, payload: unknown
       return;
     }
     case "context.publish": {
+      if (!same(plan.goalMail ?? null, payload.goalMail ?? null)) corrupt("GOAL mail differs from its explicit accepted intent");
       if (plan.base !== payload.expected || !same(plan.entries, payload.entries)) corrupt("context frozen base/entries differ from payload");
       if (!record(payload.content)) corrupt("context content descriptor is missing");
       const total = plan.entries.reduce((sum, entry) => sum + entry.bytes, 0);
@@ -219,7 +224,28 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
       // operation-context checks. Workflow code consumes the returned union.
       const plan = planRaw as PlanFor<MutationMethod>;
       validatePayloadRelation(plan, payload);
-      validateDeliveries(value.id, ownMessage(plan), context.relations.deliveries(value.id));
+      validateDeliveries(value.id, ownedMessage(plan), context.relations.deliveries(value.id));
+      if (plan.kind === "attest.record") {
+        const index = context.relations.attestation?.(value.id);
+        if (!record(index) || Object.keys(index).length !== 2 || index.operation_id !== value.id ||
+            !safeInteger(index.sequence) || index.sequence < 1) corrupt("attestation acceptance index is missing or invalid");
+        const targetId = attestationTarget(plan.fact);
+        const targetRaw = targetId === null ? null : context.relations.operation(targetId);
+        const target = targetRaw === null ? null : decode(targetRaw);
+        if (target?.kind === "attest.record") {
+          const earlier = context.relations.attestation?.(target.id);
+          if (!record(earlier) || !safeInteger(earlier.sequence) || earlier.sequence >= index.sequence)
+            corrupt("attestation reference is not earlier in acceptance order");
+        }
+        const reference = target === null ? null : { actor: target.actor,
+          fact: target.kind === "attest.record" ? target.plan.fact : null,
+          integrated: target.kind === "git.integrate" && target.state === "succeeded" ? {
+            repo: target.plan.repo, targetRef: target.plan.target, expectedBase: target.plan.base,
+            candidate: target.plan.candidate, policyRevision: target.plan.policyRevision,
+          } : null };
+        const problem = attestationRelationProblem(value.actor, plan.fact, reference);
+        if (problem !== null) corrupt(problem);
+      }
       if (plan.kind === "agent.create") {
         const agent = context.relations.agent(plan.spec.name);
         if (!record(agent) || agent.name !== plan.spec.name || agent.profile !== plan.spec.profile || agent.spec_hash !== plan.specHash || agent.role !== "resident" || typeof agent.spec_json !== "string") corrupt("create agent/spec row identity mismatch");

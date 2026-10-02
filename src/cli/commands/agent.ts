@@ -8,7 +8,7 @@ import { call } from "../transport.js";
 const CREATE = { options: { "--from": "value", "--file": "value", "--request": "value" }, positional: { min: 2, max: 2 } } as const;
 const ACTION = { options: { "--request": "value" }, positional: { min: 2, max: 2 } } as const;
 const CONTINUE = { options: { "--note": "value", "--request": "value" }, positional: { min: 1, max: 1 } } as const;
-const WAIT = { options: {}, positional: { min: 1, max: 1 } } as const;
+const WAIT = { options: { "--observe": "value" }, positional: { min: 1, max: 1 } } as const;
 
 export async function runAgentCommand(args: string[]): Promise<never> {
   const sub = args[0];
@@ -56,10 +56,14 @@ export async function runAgentCommand(args: string[]): Promise<never> {
     );
   }
   if (sub === "wait") {
-    parseArguments(args, WAIT);
-    const replies = await call("agent.wait", {});
-    if (!replies[0]?.ok) finishFailure(replies[0], "wait: ");
-    console.log("wait accepted");
+    const parsed = parseArguments(args, WAIT);
+    const check = parsed.value("--observe");
+    if (check !== null && check !== "true") fail("--observe must be true", 2);
+    const observe = check !== null;
+    const replies = await call("agent.wait", observe ? { observe: true } : {});
+    const reply = replies[0];
+    if (!reply?.ok) finishFailure(reply, "wait: ");
+    console.log(observe ? JSON.stringify(reply.result) : "wait accepted; ending at the next safe tool boundary");
     return succeed();
   }
   return usage();

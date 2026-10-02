@@ -117,18 +117,18 @@ export function tryHoldSociety(stateRoot: string): SocietyLease | null {
     const held = holdAbstractName(name);
     if (held.kind === "held") return leaseOf(name, held.fd);
     if (held.kind === "failed")
-      throw new StoreError("BROKER_UNAVAILABLE", `society 임대를 평가할 수 없습니다 (errno ${held.errno})`);
+      throw new StoreError("BROKER_UNAVAILABLE", `Cannot evaluate the society lease (errno ${held.errno})`);
     const holder = abstractNameHolder(name);
     // A holder of another user is not another `oma` of this Human's: this
     // process cannot tell whether the society is owned, and must not answer as
     // if it had.
     if (holder.kind === "peer" && holder.cred.uid !== (process.geteuid?.() ?? holder.cred.uid))
-      throw new StoreError("BROKER_UNAVAILABLE", "다른 사용자의 프로세스가 이 society의 임대 이름을 쥐고 있습니다");
+      throw new StoreError("BROKER_UNAVAILABLE", "Another user's process holds this society's lease name");
     if (holder.kind !== "none") return null;
     // The holder let go between the refusal and the question. Ask again rather
     // than report an owner that no longer exists.
   }
-  throw new StoreError("BROKER_UNAVAILABLE", "society 임대의 소유자가 계속 바뀌어 확정할 수 없습니다");
+  throw new StoreError("BROKER_UNAVAILABLE", "The society lease owner keeps changing and cannot be determined");
 }
 
 function leaseOf(name: string, fence: number): SocietyLease {

@@ -2,12 +2,14 @@
 // Ownership of the engine's run ends only on settlement, refusal or the
 // session's end; unsent Human input comes back once, in order; input whose
 // acceptance is unknown is reported apart and never resent.
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { HostTenure, type FencedEngine } from "../src/runtime/host-tenure.js";
 import { PrincipalSession } from "../src/tui/session.js";
+import { PiRpcClient } from "../src/runtime/pi-rpc.js";
 import { PrincipalDelivery } from "../src/runtime/principal-delivery.js";
 import { TEST_VIEW_LIMITS } from "./fixtures/limits.js";
 
@@ -21,8 +23,9 @@ async function until(what: string, done: () => boolean, ms = 5000): Promise<void
   assert.fail(`timed out waiting for ${what}`);
 }
 
-function scripted() {
+function scripted(t?: TestContext, acquired?: (engine: FencedEngine) => void) {
   const root = mkdtempSync(join(tmpdir(), "oma-v09-"));
+  t?.after(() => rmSync(root, { recursive: true, force: true }));
   const log = join(root, "prompts.log");
   mkdirSync(join(root, "agents", "principal", "runner", "view"), { recursive: true });
   // AV3: the product's layout -- the model's workspace beside the session
@@ -35,6 +38,7 @@ function scripted() {
     { society: "demo", provider: "p", model: "m", extensions: [], workspaceBytes: 1024 },
     LIMITS, { PATH: process.env.PATH ?? "/usr/bin:/bin" },
     {
+      ...(acquired === undefined ? {} : { onAcquire: acquired }),
       onLine: () => {}, onBusy: busy => events.busy.push(busy), onEnd: () => { events.ends += 1; },
       onPromptFailed: (text, reason) => events.failed.push({ text, reason }),
       onPromptUnconfirmed: text => events.unconfirmed.push(text),
@@ -130,4 +134,66 @@ test("P0V-73 / F6, P0-4: a Principal engine that could not be spawned has ended,
     const outcome = await Promise.race([session.exited.then(() => "ended"), new Promise(resolve => setTimeout(() => resolve("pending"), 2000))]);
     assert.equal(outcome, "ended", "the session of a spawn that failed never ended");
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("DR27/P0-4: Principal event-registration failure returns the engine and private channels", { timeout: 5000 }, async t => {
+  const problem = new Error("injected Principal setup failure");
+  let client: PiRpcClient | undefined;
+  t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient) { client = this; throw problem; });
+  t.after(() => client?.close());
+  assert.throws(() => scripted(t), error => error === problem);
+  assert.ok(client);
+  assert.equal(client.child.killed, true, "no PrincipalSession received ownership");
+  for (const stream of client.child.stdio) if (stream) {
+    assert.equal(stream.destroyed, true, "private channel retained after failed setup");
+    assert.equal(stream.listenerCount("data"), 0, "failed session must detach its RPC reader before handoff returns");
+  }
+  await client.completion;
+});
+
+
+test("DR27/P0-4: failed Principal setup remains the tenure's engine until actual exit", { timeout: 5000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-failed-tenure-"));
+  const owner = HostTenure.take(root)!;
+  owner.brokerReady();
+  let acquired: FencedEngine | undefined;
+  let client: PiRpcClient | undefined;
+  const problem = new Error("setup after acquisition failed");
+  t.mock.method(PiRpcClient.prototype, "onEvent", function (this: PiRpcClient) {
+    client = this;
+    assert.equal(owner.canStartEngine, false, "child acquisition must precede fallible session wiring");
+    throw problem;
+  });
+  try {
+    assert.throws(() => scripted(t, engine => { acquired = engine; owner.adopt(engine); }), error => error === problem);
+    assert.ok(acquired); assert.ok(client);
+    assert.equal(client.child.killed, true);
+    assert.equal(owner.canStartEngine, false, "a kill request is not actual death");
+    await Promise.resolve();
+    assert.equal(client.child.exitCode, null);
+    assert.equal(client.child.signalCode, null);
+    assert.equal(owner.canStartEngine, false, "settling a stop request cannot resolve the exit observation");
+    owner.brokerLost(); owner.brokerReady();
+    assert.equal(owner.canStartEngine, false, "a broker restart must not release a failed engine");
+    await acquired.exited;
+    assert.equal(owner.canStartEngine, true);
+    t.mock.restoreAll();
+    const next = scripted(t, engine => owner.adopt(engine));
+    await next.close();
+  } finally { client?.close(); await owner.end(); rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("DR27/P0-4: rejected child acquisition still returns the child before any RPC wiring", { timeout: 5000 }, async t => {
+  const problem = new Error("host refused acquired engine");
+  let acquired: FencedEngine | undefined;
+  let rpcWiring = 0;
+  t.mock.method(PiRpcClient.prototype, "onEvent", () => { rpcWiring++; throw new Error("unexpected RPC setup"); });
+  try {
+    assert.throws(() => scripted(t, engine => { acquired = engine; throw problem; }), error => error === problem);
+    assert.ok(acquired);
+    assert.equal(rpcWiring, 0);
+    await acquired.exited;
+  } finally { acquired?.close(); await acquired?.exited; }
 });

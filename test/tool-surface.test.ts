@@ -6,12 +6,13 @@ import { tmpdir } from "node:os";
 import { StoreError } from "../src/domain/errors.js";
 import { DEPLOYMENT_LAYOUT } from "../src/domain/deployment.js";
 import { readConfigurationSource } from "../src/config/operations.js";
+import { guardWorkspaceTools } from "../src/extension/workspace-guard.js";
 import {
   SURFACE_LIMITS, encodeToolSurfacePlan, planToolSurface,
   type GroupSpec, type ToolSurfaceConfig,
 } from "../src/domain/tool-surface.js";
 import {
-  OMA_TOOL_NAMES, expandedActiveTools, initialActiveTools, parseSurfacePlan,
+  OMA_TOOL_NAMES, expandedActiveTools, initialActiveTools, parseSurfacePlan, registerToolSurface,
 } from "../src/pi-extension.js";
 
 const invalid = (error: unknown): boolean => error instanceof StoreError && error.code === "INVALID_REQUEST";
@@ -238,4 +239,93 @@ test("T100/TSP-002: a role file may declare a projection, and a bad one fails at
     }));
     assert.throws(() => readConfigurationSource(join(dir, "index.json")), invalid);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+/** The engine catches session_start errors. Only tool_call is the execution fence. */
+function projectionHost(plan: ToolSurfaceConfig | string, refuseApply = false, permitted?: (name: string) => boolean) {
+  const registry = new Map<string, { name: string; parameters: object; execute?: () => Promise<unknown> }>(
+    ["read", "fetch", "danger", "oma_mail_read"].map(name => [name, { name, parameters: {} }]));
+  const handlers = new Map<string, (...args: any[]) => unknown>();
+  let active = [...registry.keys()];
+  const previous = process.env.OMA_TOOL_SURFACE;
+  process.env.OMA_TOOL_SURFACE = typeof plan === "string" ? plan : encodeToolSurfacePlan(planToolSurface(plan));
+  try {
+    registerToolSurface({
+      on(event: string, handler: (...args: any[]) => unknown) { handlers.set(event, handler); },
+      registerTool(tool: { name: string; parameters: object }) { registry.set(tool.name, tool); },
+      getAllTools: () => [...registry.values()], getActiveTools: () => active,
+      setActiveTools(names: string[]) { if (refuseApply) throw new Error("injected apply failure"); active = names.filter(name => registry.has(name)); },
+    } as never, ["oma_mail_read"], permitted);
+  } finally {
+    if (previous === undefined) delete process.env.OMA_TOOL_SURFACE; else process.env.OMA_TOOL_SURFACE = previous;
+  }
+  return { registry, active: () => active, start: () => handlers.get("session_start")!(),
+    block: (name: string) => handlers.get("tool_call")!({ toolName: name }) as { block: boolean; reason: string } | undefined };
+}
+
+test("DR27 / TSP-001,007: colliding groups never overwrite built-in or OMA tools", () => {
+  for (const name of ["read", "oma_mail_read"]) {
+    const host = projectionHost(config({ groups: [group(name, [{ tool: "fetch" }])] }));
+    const original = host.registry.get(name);
+    assert.throws(() => host.start(), /conflicts with a registered tool/);
+    assert.equal(host.registry.get(name), original);
+    assert.deepEqual(host.active(), ["oma_mail_read"]);
+    assert.equal(host.block("read")?.block, true);
+    assert.equal(host.block("oma_mail_read"), undefined);
+  }
+});
+
+test("DR27 / TSP-007: unknown selectors refuse the projection without hiding collaboration", () => {
+  for (const plan of [config({ direct: ["missing"] }), config({ disabled: ["missing"] }),
+    config({ groups: [group("web", [{ tool: "missing" }])] })]) {
+    const host = projectionHost(plan);
+    assert.throws(() => host.start(), /references unknown tool/);
+    assert.equal(host.registry.has("web"), false);
+    assert.equal(host.block("danger")?.block, true);
+    assert.equal(host.block("oma_mail_read"), undefined);
+  }
+});
+
+test("DR27 / TSP-007: a swallowed startup failure cannot execute tools left active by a failed fallback", () => {
+  for (const plan of ["{", config({ groups: [group("web", [{ tool: "fetch" }])] })]) {
+    const host = projectionHost(plan, true);
+    assert.throws(() => host.start(), /could not be applied/);
+    assert.ok(host.active().includes("danger"), "negative control: the engine retained this tool");
+    assert.equal(host.block("danger")?.block, true);
+    assert.equal(host.block("oma_mail_read"), undefined);
+  }
+});
+
+test("DR27 / TSP-006: group registration waits for the full registry and remains additive across session starts", async () => {
+  const host = projectionHost(config({ groups: [group("web", [{ tool: "fetch" }])] }));
+  assert.equal(host.registry.has("web"), false);
+  host.start(); assert.deepEqual(host.active(), ["oma_mail_read", "web"]);
+  assert.equal(host.block("web"), undefined);
+  const facade = host.registry.get("web"); assert.ok(facade?.execute);
+  await facade.execute(); assert.deepEqual(host.active(), ["fetch", "oma_mail_read", "web"]);
+  await facade.execute(); assert.deepEqual(host.active(), ["fetch", "oma_mail_read", "web"]);
+  host.start(); assert.equal(host.registry.get("web"), facade);
+  assert.deepEqual(host.active(), ["oma_mail_read", "web"]);
+  host.registry.set("web", { name: "web", parameters: {} });
+  assert.throws(() => host.start(), /conflicts/);
+  assert.equal(host.block("web")?.block, true);
+});
+
+test("DR27: a Principal projection cannot activate routine tools directly or through a group", async () => {
+  const allowed = new Set(["read", "oma_mail_read", "files"]);
+  const permitted = (name: string): boolean => allowed.has(name);
+  const host = projectionHost(config({ defaultMode: "DIRECT", direct: ["danger"],
+    groups: [group("files", [{ tool: "read" }, { tool: "fetch" }])] }), false, permitted);
+  let guard!: (event: { toolName: string; input: object }) => { block: boolean } | undefined;
+  guardWorkspaceTools({ on: (_name: string, hook: typeof guard) => { guard = hook; } } as never,
+    "/tmp", false, true, permitted);
+  host.start();
+  assert.deepEqual(host.active(), ["files", "oma_mail_read"]);
+  await host.registry.get("files")!.execute!();
+  assert.deepEqual(host.active(), ["files", "oma_mail_read", "read"]);
+  assert.equal(guard({ toolName: "fetch", input: {} })?.block, true);
+  assert.equal(guard({ toolName: "danger", input: {} })?.block, true);
+  assert.equal(guard({ toolName: "read", input: { path: "." } }), undefined);
+  assert.equal(guard({ toolName: "write", input: { path: "." } })?.block, true);
+  assert.equal(guard({ toolName: "extension_alias", input: {} })?.block, true);
 });

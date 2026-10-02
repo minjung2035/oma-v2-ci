@@ -16,11 +16,14 @@ import { StoreError } from "../domain/errors.js";
 import type { ResourceCategory } from "../domain/admission.js";
 import {
   type Check,
+  attestationParamsCheck,
   agentActionParamsCheck,
+  societySetParamsCheck,
   agentContinueParamsCheck,
   agentCreateParamsCheck,
   agentWaitParamsCheck,
   checkActor,
+  checkEnum,
   checkInt,
   checkObject,
   checkOid,
@@ -33,6 +36,7 @@ import {
   mailAckParamsCheck,
   mailParamsCheck,
   operationGetParamsCheck,
+  operationReadParamsCheck,
   routeParamsCheck,
   statusGetParamsCheck,
 } from "../validate.js";
@@ -81,7 +85,31 @@ const fixed =
   () =>
     check;
 
+/** DR27: a live Principal reviews, communicates and controls safety. Legacy
+ * broad grants cannot restore routine orchestration through raw actor RPC. */
+export function principalRequestAllowed(method: PublicMethod, params: object): boolean {
+  switch (method) {
+    case "society.set": case "attest.record": case "mail.send":
+    case "agent.start": case "agent.stop": case "git.known":
+    case "operation.get": case "operation.read": return true;
+    case "context.publish": return Object.hasOwn(params, "goalMail");
+    case "mail.ack": case "route.follow": case "route.unfollow": case "agent.create":
+    case "agent.continue": case "agent.wait": case "git.submit": case "git.integrate":
+    case "status.get": case "logs.read": return false;
+  }
+}
+
 export const PUBLIC_METHODS = {
+  "society.set": {
+    mode: "mutation", key: "required", stream: "none", channel: "actor", result: "receipt",
+    capability: "agent.manage.descendants", resource: "safety-control", authority: ["current-actor", "current-capability"],
+    paramsCheck: fixed(societySetParamsCheck),
+  },
+  "attest.record": {
+    mode: "mutation", key: "required", stream: "none", channel: "actor", result: "receipt",
+    capability: "mail.send", resource: "admit", authority: ["current-actor", "current-capability"],
+    paramsCheck: context => value => attestationParamsCheck(value, context.limits.mailBodyBytes),
+  },
   "mail.send": {
     mode: "mutation",
     key: "required",
@@ -242,6 +270,17 @@ export const PUBLIC_METHODS = {
     resource: "read",
     authority: ["current-actor", "own-operation"],
     paramsCheck: fixed(operationGetParamsCheck),
+  },
+  "operation.read": {
+    mode: "read",
+    key: "forbidden",
+    stream: "none",
+    channel: "actor",
+    result: "operation.read",
+    capability: null,
+    resource: "read",
+    authority: ["current-actor", "own-operation"],
+    paramsCheck: fixed(operationReadParamsCheck),
   },
   "status.get": {
     mode: "read",

@@ -70,8 +70,8 @@ function fixture(): Fixture {
   const confinement: PiConfinement = {
     host: {
       rootfs: join(root, "rootfs"), libdir, node: "/usr/bin/node",
-      pi: confinedPath(libdir, dirs, paths.piEntry), piModeArgs: [],
-      tmpBytes: RESOURCES.tmpBytes, checkResources: RESOURCES,
+      pi: confinedPath({ libdir: libdir }, dirs, paths.piEntry), piModeArgs: [],
+      tmpBytes: RESOURCES.tmpBytes,
       stateRoot, runRoot, limits: { frameBytes: LIMITS.frameBytes, batchMaxMessages: LIMITS.batchMaxMessages },
     },
     lease, directories: dirs,
@@ -87,7 +87,7 @@ function fixture(): Fixture {
     mailArchive: paths.mailArchive, batchView: dirs.view, socket: paths.socket,
   };
   const profile = {
-    provider: "pi", model: "current", turnSeconds: 600, prompt: "",
+    provider: "pi", model: "current", inferenceSeconds: 600, prompt: "",
     workspaceBytes: RESOURCES.workspaceBytes, extensions: [],
   };
   const adapter = new PiAdapter({
@@ -100,7 +100,7 @@ function unconfinedAdapter(f: Fixture): PiAdapter {
   return new PiAdapter({
     actor: "alice", society: "s", limits: LIMITS,
     profile: {
-      provider: "pi", model: "current", turnSeconds: 600, prompt: "",
+      provider: "pi", model: "current", inferenceSeconds: 600, prompt: "",
       workspaceBytes: RESOURCES.workspaceBytes, extensions: [],
     },
     paths: {
@@ -184,7 +184,7 @@ test("T113 the confined engine reaches a provider through the relay, not the net
     assert.equal(setenv("OMA_INFERENCE_PROVIDER"), "anthropic");
     assert.equal(setenv("OMA_INFERENCE_PORT"), String(RESIDENT_INFERENCE_PORT));
     assert.equal(setenv("OMA_INFERENCE_KEY"), "sk-ant-api03-PLACEHOLDERplaceholder0000");
-    // The confined engine has no settings, so the host names the model.
+    // The confined engine has no host model settings, so the host names the model.
     const engineArgs = plan.args.slice(plan.args.lastIndexOf("--") + 1);
     assert.equal(engineArgs[engineArgs.indexOf("--model") + 1], "anthropic/claude-test");
   } finally { rmSync(f.root, { recursive: true, force: true }); }
@@ -194,14 +194,42 @@ test("T113 the engine's credential directory is never mounted into a Resident", 
   const f = fixture();
   try {
     const plan = f.adapter.spawnPlan();
-    // PR-004: provider credentials must not reach a model-facing sandbox. The
-    // agent directory holds them, so neither the variable naming it nor the
-    // directory itself may appear anywhere in the plan.
-    assert.equal(plan.args.includes("PI_CODING_AGENT_DIR"), false);
+    // PR-004: the host credential directory stays outside every mount. INF-001
+    // names a separate, reachable directory for the confined engine's settings;
+    // a variable's presence is not evidence that host credentials crossed over.
+    const at = plan.args.indexOf("PI_CODING_AGENT_DIR");
+    assert.ok(at > 0);
+    assert.equal(plan.args[at - 1], "--setenv");
+    assert.equal(plan.args[at + 1], confinedPath({ libdir: f.libdir }, f.dirs, join(f.dirs.home, "engine")));
+    assert.equal(plan.args.filter(value => value === "PI_CODING_AGENT_DIR").length, 1);
     assert.equal(plan.args.some(value => value.includes(f.paths.piAgentDir!)), false);
-    // The unconfined adapter does pass it, so the absence above is the
-    // confinement's doing and not a variable that stopped being set at all.
+    // Only the unconfined adapter receives the host engine state.
     assert.equal(unconfinedAdapter(f).spawnPlan().env.PI_CODING_AGENT_DIR, f.paths.piAgentDir);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("DR25: a Resident's sandbox mounts the installed packages read-only, and its engine loads a package's extension from there", () => {
+  const f = fixture();
+  try {
+    const packages = join(f.root, "packages");
+    const file = join(packages, "npm", "node_modules", "oma-hello-ext", "extensions", "hello.ts");
+    mkdirSync(join(file, ".."), { recursive: true });
+    writeFileSync(file, "export default function () {}\n");
+    const profile = { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: RESOURCES.workspaceBytes,
+      extensions: [{ path: file, sha256: "0".repeat(64) }] };
+    const adapterPaths = { piCommand: f.paths.piCommand!, piArgs: [f.paths.piEntry!], piAgentDir: f.paths.piAgentDir!,
+      coreExtension: f.paths.coreExtension!, cli: f.paths.cli!, workspace: f.dirs.workspace, sessionDir: f.dirs.sessions,
+      agentHome: f.dirs.home, mailArchive: f.paths.mailArchive!, batchView: f.dirs.view, socket: f.paths.socket! };
+    const plan = new PiAdapter({ actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
+      confinement: { ...f.confinement, host: { ...f.confinement.host, packages } } }).spawnPlan();
+    const at = plan.args.indexOf(packages);
+    assert.deepEqual(plan.args.slice(at - 1, at + 2), ["--ro-bind", packages, RESIDENT_PATHS.packages]);
+    assert.ok(plan.args.includes(`${RESIDENT_PATHS.packages}/npm/node_modules/oma-hello-ext/extensions/hello.ts`),
+      "the engine was not given the package's extension at its mount");
+    assert.ok(!plan.args.some(value => value.includes(f.paths.piAgentDir!)), "the engine home was mounted");
+    // With no package store declared, a package's file is under no mount: refused, not handed over.
+    assert.throws(() => new PiAdapter({ actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
+      confinement: f.confinement }).spawnPlan(), /outside every mount/);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -223,14 +251,14 @@ test("T113 a file outside every mount is refused rather than handed over", () =>
     // A role extension the operator placed outside the installation would be
     // verified on the host and then be missing inside; refusing is the only
     // answer that does not look like a working configuration.
-    assert.throws(() => confinedPath(f.libdir, f.dirs, "/etc/shadow"),
+    assert.throws(() => confinedPath({ libdir: f.libdir }, f.dirs, "/etc/shadow"),
       (error: unknown) => (error as { code?: string }).code === "AUTH_FAILED");
     // Prefix matching must not treat a sibling directory as contained.
-    assert.throws(() => confinedPath(f.libdir, f.dirs, `${f.libdir}-other/x.js`),
+    assert.throws(() => confinedPath({ libdir: f.libdir }, f.dirs, `${f.libdir}-other/x.js`),
       (error: unknown) => (error as { code?: string }).code === "AUTH_FAILED");
-    assert.equal(confinedPath(f.libdir, f.dirs, join(f.libdir, "a", "b.js")), `${RESIDENT_PATHS.libdir}/a/b.js`);
+    assert.equal(confinedPath({ libdir: f.libdir }, f.dirs, join(f.libdir, "a", "b.js")), `${RESIDENT_PATHS.libdir}/a/b.js`);
     // The installation path `oma` records ends in a separator; it must still match.
-    assert.equal(confinedPath(`${f.libdir}/`, f.dirs, join(f.libdir, "a", "b.js")), `${RESIDENT_PATHS.libdir}/a/b.js`);
+    assert.equal(confinedPath({ libdir: `${f.libdir}/` }, f.dirs, join(f.libdir, "a", "b.js")), `${RESIDENT_PATHS.libdir}/a/b.js`);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -292,7 +320,7 @@ test("AV17 / D01, SB-006: a session path the confined engine reports translates 
   try {
     const name = "2026-09-25T10-46-44-816Z_x.jsonl";
     assert.equal(hostSessionPath(f.dirs, `${RESIDENT_PATHS.sessions}/${name}`), join(f.dirs.sessions, name));
-    assert.equal(confinedPath(f.libdir, f.dirs, join(f.dirs.sessions, name)), `${RESIDENT_PATHS.sessions}/${name}`, "the two directions disagree");
+    assert.equal(confinedPath({ libdir: f.libdir }, f.dirs, join(f.dirs.sessions, name)), `${RESIDENT_PATHS.sessions}/${name}`, "the two directions disagree");
     for (const other of [`${RESIDENT_PATHS.workspace}/${name}`, `${RESIDENT_PATHS.sessions}/../x.jsonl`, `${RESIDENT_PATHS.sessions}/a/${name}`,
       `${RESIDENT_PATHS.sessions}/`, `${RESIDENT_PATHS.sessions}`, join(f.dirs.sessions, name), "/run/oma-sessionsX/x.jsonl"])
       assert.equal(hostSessionPath(f.dirs, other), null, other);

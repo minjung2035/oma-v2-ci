@@ -11,8 +11,10 @@
  * looks it up again by its key before it sends anything twice (MAC-241).
  */
 import type { Socket } from "node:net";
+import { connectEndpoint } from "../protocol/connection.js";
 import { FrameParser, encodeFrame } from "../frame.js";
-import { StoreError } from "../domain/errors.js";
+import { ERROR_METADATA, StoreError, errorCodeOf, primaryFailure } from "../domain/errors.js";
+import { productText } from "./product-text.js";
 import {
   helloParamsProblem, helloResultProblem, requestProblem, responseProblem,
   type HelloParams, type HelloResult, type PlatformFailure,
@@ -20,17 +22,59 @@ import {
 
 /** A failure the peer answered with, as the caller sees it. */
 export class PlatformError extends Error {
-  constructor(readonly failure: PlatformFailure) { super(`${failure.code}: ${failure.message}`); this.name = "PlatformError"; }
+  constructor(readonly failure: PlatformFailure, options?: ErrorOptions) { super(`${failure.code}: ${failure.message}`, options); this.name = "PlatformError"; }
 }
 /** The answer did not arrive, so what the request did is not known. */
 export function unknownOutcome(reason: string): PlatformError {
   return new PlatformError({ code: "ENGINE_UNAVAILABLE", message: reason, retry: "same-key" });
 }
 
+/** MAC-231/241: all request channels preserve the same error/retry meaning.
+ * Local unobserved/internal failures cannot become a permanent input refusal. */
+export function platformFailure(error: unknown): PlatformFailure {
+  const primary = primaryFailure(error);
+  if (primary instanceof PlatformError) {
+    const failure = primary.failure;
+    return { ...failure, message: productText(failure.message) ? failure.message : failure.code };
+  }
+  const code = errorCodeOf(error);
+  const category = ERROR_METADATA[code].category;
+  const retry = code === "STORAGE_FULL" ? "after-repair" :
+    category === "transient" || category === "ambiguous" || category === "internal" ? "same-key" : "never";
+  const message = primary instanceof StoreError && code !== "INTERNAL_ERROR" && productText(primary.message) ? primary.message : code;
+  return { code, message, retry };
+}
+
 export interface PeerOptions {
   readonly frameBytes: number;
   /** How long a request waits for its answer before it is an unknown outcome. */
   readonly requestTimeoutMs: number;
+}
+
+/** Platform phase budgets use native timers; only a pool's leading-frame
+ * reader may explicitly wait for the connection's lifetime. */
+function phaseBudget(milliseconds: number): void {
+  if (!Number.isSafeInteger(milliseconds) || milliseconds < 1 || milliseconds > 2_147_483_647)
+    throw new RangeError("platform phase timeout must be a positive timer-safe integer");
+}
+
+/** P0-4: one owner for a connection attempt. A deadline ends observation,
+ * not any request at the far end. No application bytes are read here. */
+export async function connectSocket(path: string, deadlineMs: number): Promise<Socket> {
+  try { return await connectEndpoint(path, deadlineMs); }
+  catch (error) {
+    if (error instanceof RangeError) throw error;
+    throw unknownOutcome("the connection could not be observed");
+  }
+}
+
+/** A response proves only the request it names; an invalid answer proves no
+ * outcome. Both JSON and leading-frame response readers use this decoder. */
+function responseResult(frame: Record<string, unknown>, id: string): Record<string, unknown> {
+  const problem = responseProblem(frame);
+  if (problem !== null || frame.id !== id) throw unknownOutcome(`the answer was malformed (${problem ?? "wrong id"})`);
+  if (frame.ok !== true) throw new PlatformError(frame.error as PlatformFailure);
+  return frame.result as Record<string, unknown>;
 }
 
 type Pending = { resolve(value: Record<string, unknown>): void; reject(error: Error): void; timer: NodeJS.Timeout };
@@ -51,11 +95,13 @@ export class FramedPeer {
   private readonly onError = (error: Error): void => { this.end(`the connection failed: ${error.message}`); };
 
   constructor(readonly socket: Socket, private readonly options: PeerOptions) {
+    phaseBudget(options.requestTimeoutMs);
     this.parser = new FrameParser(options.frameBytes);
     socket.on("data", this.onData);
     socket.once("end", this.onEnd);
     socket.once("close", this.onSocketClose);
     socket.on("error", this.onError);
+    socket.resume();
   }
 
   /** Hands the socket over to a byte channel: this peer stops reading it and
@@ -83,10 +129,8 @@ export class FramedPeer {
         const waiting = this.pending.get(frame.id)!;
         this.pending.delete(frame.id);
         clearTimeout(waiting.timer);
-        const problem = responseProblem(frame);
-        if (problem !== null) waiting.reject(unknownOutcome(`the answer was malformed (${problem})`));
-        else if (frame.ok === true) waiting.resolve(frame.result as Record<string, unknown>);
-        else waiting.reject(new PlatformError(frame.error as PlatformFailure));
+        try { waiting.resolve(responseResult(frame, frame.id)); }
+        catch (error) { waiting.reject(error as Error); }
         continue;
       }
       for (const listener of this.frameListeners) listener(frame);
@@ -119,14 +163,15 @@ export class FramedPeer {
     this.socket.write(bytes);
   }
 
-  request(method: string, params: Record<string, unknown>, key?: string): Promise<Record<string, unknown>> {
+  request(method: string, params: Record<string, unknown>, key?: string, timeoutMs = this.options.requestTimeoutMs): Promise<Record<string, unknown>> {
     const id = `r${++this.sequence}`;
     return new Promise((resolve, reject) => {
+      phaseBudget(timeoutMs);
       if (this.closed !== null) { reject(unknownOutcome(this.closed)); return; }
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(unknownOutcome(`no answer to ${method} within ${this.options.requestTimeoutMs} ms`));
-      }, this.options.requestTimeoutMs);
+        reject(unknownOutcome(`no answer to ${method} within ${timeoutMs} ms`));
+      }, timeoutMs);
       timer.unref();
       this.pending.set(id, { resolve, reject, timer });
       try { this.send({ v: 1, id, method, params, ...(key === undefined ? {} : { key }) }); }
@@ -146,6 +191,7 @@ export class FramedPeer {
    * reaches the peer before the connection ends; a peer that does not close
    * its side in time is cut off. */
   closeAfterFlush(reason: string, graceMs = 1000): void {
+    phaseBudget(graceMs);
     this.end(reason);
     const timer = setTimeout(() => { this.socket.destroy(); }, graceMs);
     timer.unref();
@@ -157,6 +203,7 @@ export class FramedPeer {
 /** The guest's side of a handshake: the first frame must be a valid hello. */
 export function readHello(peer: FramedPeer, deadlineMs: number): Promise<{ readonly id: string; readonly params: HelloParams }> {
   return new Promise((resolve, reject) => {
+    phaseBudget(deadlineMs);
     const timer = setTimeout(() => { peer.close("no hello"); reject(new StoreError("INVALID_REQUEST", "no hello before the deadline")); }, deadlineMs);
     timer.unref();
     let settled = false;
@@ -178,10 +225,10 @@ export function readHello(peer: FramedPeer, deadlineMs: number): Promise<{ reado
 }
 
 /** The host's side: send hello and check what the guest answered. */
-export async function sendHello(peer: FramedPeer, params: HelloParams): Promise<HelloResult> {
+export async function sendHello(peer: FramedPeer, params: HelloParams, deadlineMs?: number): Promise<HelloResult> {
   const problem = helloParamsProblem(params);
   if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
-  const result = await peer.request("hello", params as unknown as Record<string, unknown>);
+  const result = await peer.request("hello", params as unknown as Record<string, unknown>, undefined, deadlineMs);
   const invalid = helloResultProblem(result);
   if (invalid !== null) { peer.close(invalid); throw unknownOutcome(`the guest's hello was malformed (${invalid})`); }
   return result as unknown as HelloResult;
@@ -196,15 +243,25 @@ export async function sendHelloForBytes(socket: Socket, params: HelloParams, fra
   const problem = helloParamsProblem(params);
   if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
   socket.write(encodeFrame({ v: 1, id: "hello", method: "hello", params }));
+  try {
+    const answer = await readLeadingResponse(socket, "hello", frameBytes, deadlineMs);
+    const invalid = helloResultProblem(answer.result);
+    if (invalid !== null) throw unknownOutcome(`the guest's hello was malformed (${invalid})`);
+    return { result: answer.result as unknown as HelloResult, rest: answer.rest };
+  } catch (error) { socket.destroy(); throw error; }
+}
+
+/** The response half of a byte-channel exchange. Silence, broken framing
+ * and mismatched IDs are unknown outcomes, not input refusals (MAC-241). */
+export async function readLeadingResponse(socket: Socket, id: string, frameBytes: number, deadlineMs: number):
+  Promise<{ readonly result: Record<string, unknown>; readonly rest: Buffer }> {
   let answer: { frame: Record<string, unknown>; rest: Buffer };
   try { answer = await readLeadingFrame(socket, frameBytes, deadlineMs); }
-  catch (error) { socket.destroy(); throw unknownOutcome(`no answer to hello: ${error instanceof Error ? error.message : String(error)}`); }
-  const shape = responseProblem(answer.frame);
-  if (shape !== null || answer.frame.id !== "hello") { socket.destroy(); throw unknownOutcome(`the guest's hello answer was malformed (${shape ?? "wrong id"})`); }
-  if (answer.frame.ok !== true) { socket.destroy(); throw new PlatformError(answer.frame.error as PlatformFailure); }
-  const invalid = helloResultProblem(answer.frame.result);
-  if (invalid !== null) { socket.destroy(); throw unknownOutcome(`the guest's hello was malformed (${invalid})`); }
-  return { result: answer.frame.result as unknown as HelloResult, rest: answer.rest };
+  catch (error) {
+    if (error instanceof RangeError) throw error;
+    throw unknownOutcome("the response could not be observed");
+  }
+  return { result: responseResult(answer.frame, id), rest: answer.rest };
 }
 
 /** Reads exactly one frame from a socket that will then carry raw bytes (the
@@ -214,18 +271,24 @@ export async function sendHelloForBytes(socket: Socket, params: HelloParams, fra
  * egress connection is idle until an engine needs it. */
 export function readLeadingFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promise<{ readonly frame: Record<string, unknown>; readonly rest: Buffer }> {
   return new Promise((resolve, reject) => {
+    if (deadlineMs !== Number.POSITIVE_INFINITY) phaseBudget(deadlineMs);
     let buffered = Buffer.alloc(0);
+    let settled = false;
     const timer = Number.isFinite(deadlineMs)
-      ? setTimeout(() => finish(new StoreError("INVALID_REQUEST", "no leading frame before the deadline")), deadlineMs)
+      ? setTimeout(() => finish(new StoreError("BROKER_UNAVAILABLE", "no leading frame before the deadline")), deadlineMs)
       : null;
     timer?.unref();
     const finish = (error: Error | null, value?: { frame: Record<string, unknown>; rest: Buffer }): void => {
+      if (settled) return;
+      settled = true;
       if (timer !== null) clearTimeout(timer);
-      socket.off("data", onData); socket.off("close", onClose);
+      socket.off("data", onData); socket.off("end", onEnd); socket.off("error", onError); socket.off("close", onClose);
       socket.pause();
       if (error !== null) reject(error); else resolve(value!);
     };
     const onClose = (): void => finish(new StoreError("BROKER_UNAVAILABLE", "the connection closed before its leading frame"));
+    const onEnd = (): void => finish(new StoreError("BROKER_UNAVAILABLE", "the connection ended before its leading frame"));
+    const onError = (cause: Error): void => finish(new StoreError("BROKER_UNAVAILABLE", "the connection failed before its leading frame", { cause }));
     const onData = (chunk: Buffer): void => {
       buffered = Buffer.concat([buffered, chunk]);
       if (buffered.length < 4) return;
@@ -238,7 +301,12 @@ export function readLeadingFrame(socket: Socket, frameBytes: number, deadlineMs:
       catch (error) { finish(error as Error); return; }
       finish(null, { frame, rest: buffered.subarray(4 + length) });
     };
+    // readableEnded means EOF was consumed, unlike readable === false or a
+    // pending FIN: bytes buffered before an unread EOF still belong to us.
+    if (socket.destroyed || socket.readableEnded) { onClose(); return; }
     socket.on("data", onData);
+    socket.once("end", onEnd);
+    socket.once("error", onError);
     socket.once("close", onClose);
     socket.resume();
   });

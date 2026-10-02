@@ -72,18 +72,16 @@ test("V12B: aggregate source bytes are bounded even when each referenced file is
     const layout = configurationLayout(fixture.path);
     assert.equal(layout.kind, "operations");
     if (layout.kind !== "operations") return;
-    const rolePath = layout.roles.resident!;
-    const role = readJson(rolePath);
-    const entries = [role.extensions[0] as string];
-    const extensionDir = join(fixture.installation, "extensions");
-    mkdirSync(extensionDir, { recursive: true });
+    const manifest = readJson(fixture.path);
+    const role = readJson(layout.roles.resident!);
     for (let index = 0; index < 9; index++) {
-      const name = `large-${index}.js`;
-      writeFileSync(join(extensionDir, name), Buffer.alloc(1024 * 1024, 0x61));
-      entries.push(`extensions/${name}`);
+      const name = `extra-${index}`;
+      const prompt = `prompts/${name}.md`;
+      writeFileSync(join(fixture.output, prompt), Buffer.alloc(1024 * 1024, 0x61));
+      writeFileSync(join(fixture.output, `roles/${name}.json`), JSON.stringify({ ...role, promptFile: prompt }));
+      manifest.roles[name] = `roles/${name}.json`;
     }
-    role.extensions = entries;
-    writeFileSync(rolePath, JSON.stringify(role));
+    writeFileSync(fixture.path, JSON.stringify(manifest));
     assert.throws(() => loadConfigurationSnapshot(fixture.path), { code: "LIMIT_EXCEEDED" });
   } finally { fixture.close(); }
 });

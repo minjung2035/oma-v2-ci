@@ -89,17 +89,29 @@ export class HostTenure {
    * because a caller that gets `false` here has no correct thing left to do
    * with it, and the product shows the reason where the refusal happened. */
   assertOwned(what: string): void {
-    if (this.over) throw new StoreError("BROKER_UNAVAILABLE", `이 프로세스는 이 society를 소유하고 있지 않습니다: ${what}`);
+    if (this.over) throw new StoreError("BROKER_UNAVAILABLE", `This process does not own this society: ${what}`);
   }
 
   /** The engine this tenure runs. One at a time, and only while the tenure
    * holds: an engine adopted after the lease was given up would be a second
    * engine on a society this process no longer owns. */
   adopt(engine: FencedEngine): void {
-    this.assertOwned("Principal 엔진");
+    this.assertOwned("Principal engine");
     if (this.engine !== null) throw new StoreError("INTERNAL_ERROR", "a tenure runs one engine at a time");
     this.engine = engine;
+    void engine.exited.then(() => {
+      if (this.engine !== engine) return;
+      this.engine = null;
+      this.principalLive = false;
+    });
   }
+
+  /** Starting needs a live broker and the actual end of the previous engine,
+   * not an RPC error, a timeout, or a stop request. */
+  get canStartEngine(): boolean { return !this.over && this.brokerLive && this.engine === null; }
+
+  /** A failed setup still owns the terminal until the acquired child is gone. */
+  get engineExited(): Promise<void> { return this.engine?.exited ?? Promise.resolve(); }
 
   /** P0V-114 (G04-01), P0-4: a resource opened because this process owns the
    * society is the tenure's from then on, and ends with it. One handed over
@@ -120,12 +132,6 @@ export class HostTenure {
     });
     this.holdings.clear();
     return Promise.all(closing);
-  }
-
-  /** The engine ended by itself. Its registration ended with it. */
-  engineEnded(): void {
-    this.engine = null;
-    this.principalLive = false;
   }
 
   /** A broker of this host's is listening, so a registration may be attempted.
@@ -189,10 +195,13 @@ export class HostTenure {
       try {
         if (live !== null) {
           try { live.close(); } catch { /* the engine is ending either way */ }
-          await Promise.race([
-            live.exited,
-            new Promise<void>(resolve => { setTimeout(resolve, this.graceMs).unref?.(); }),
-          ]);
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              live.exited,
+              new Promise<void>(resolve => { timer = setTimeout(resolve, this.graceMs); timer.unref?.(); }),
+            ]);
+          } finally { clearTimeout(timer); }
         }
         await this.closeHoldings();
       } finally { this.lease.release(); }

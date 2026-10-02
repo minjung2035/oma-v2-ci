@@ -64,7 +64,7 @@ export class BatchCoordinator {
       lines.push(`${index + 1}. sender=${oneLine(headers.from)} subject=${oneLine(displaySubject(headers.subject))} kind=${message.kind} path=${mailArchiveDisplayPath(id)}${reply ? ` reply=${reply}` : ""}${context}`);
     }
     if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
-    lines.push("전체 목록: /inbox.md"); return lines.join("\n");
+    lines.push("Full list: /inbox.md"); return lines.join("\n");
   }
   /** The expected batch of a receipt comes from the ledger, never a caller,
    * as presented in delivery attempt `attempt` (DR9). */
@@ -81,6 +81,8 @@ export class BatchCoordinator {
     return batch;
   }
   async prepare(auth: AuthContext): Promise<PreparedBatch | null> {
+    // A closed society keeps queued mail, but starts no automatic model turn.
+    if (!this.store.societyOpen()) return null;
     const existing = this.store.preparedBatches(auth.actor);
     if (existing.length > 0) {
       const row = existing[0]!;
@@ -90,11 +92,14 @@ export class BatchCoordinator {
       const prepared = this.snapshot(row, auth.actor, auth.incarnation);
       return this.finishPrepared({ ...prepared, notice: this.noticeFor(auth.actor, prepared.messageIds, true) });
     }
-    const pending = selectBatch(this.store.pendingDeliveries(auth.actor).map(value => {
-      const message = this.messagePlan(value);
-      return { value, publicList: message.kind === "message" && message.to.length > 0 &&
-        message.to.every(to => to === "commons" || to === "residents" || to.startsWith("topic/")) };
-    }), this.maximum);
+    const candidates = function* (owner: BatchCoordinator) {
+      for (const value of owner.store.pendingDeliveryRows(auth.actor)) {
+        const message = owner.messagePlan(value);
+        yield { value, publicList: message.kind === "message" && message.to.length > 0 &&
+          message.to.every(to => to === "commons" || to === "residents" || to.startsWith("topic/")) };
+      }
+    };
+    const pending = selectBatch(candidates(this), this.maximum);
     if (pending.length === 0) return null;
     const batch = { id: generateBatchId(), agent: auth.actor, incarnation: auth.incarnation,
       messageIds: pending.map(delivery => delivery.messageId), sessionPath: null };
@@ -196,7 +201,7 @@ function heldParent(path: string): number | null {
 }
 function oneLine(value: string | null): string { return (value ?? "").replace(/\s+/g, " ").trim(); }
 /** DR6: true whether or not the earlier preparation ever reached the engine. */
-export const REDELIVERY_NOTICE = "재전달: 이 batch는 이전에 준비되었지만 완료가 확인되지 않아 다시 전달됩니다. 이미 받은 적이 있을 수 있습니다. 세션에 이 batch를 다룬 작업이 있으면 끝나지 않은 부분을 이어서 하세요.";
+export const REDELIVERY_NOTICE = "Redelivery: this batch was prepared before, but its completion was not confirmed, so it is delivered again. You may have received it already. If this session has work on this batch, continue whatever is unfinished.";
 export function batchOf(batch: { id: string; incarnation: number; messageIds: string[]; sessionPath: string | null }, agent: Actor, notice = batchNotice(batch.messageIds)): PreparedBatch {
   return { id: batch.id, agent, incarnation: batch.incarnation, messageIds: batch.messageIds,
     sessionPath: batch.sessionPath, deliveryMode: "followUp", notice, indexPath: "/inbox.md" };
@@ -204,5 +209,5 @@ export function batchOf(batch: { id: string; incarnation: number; messageIds: st
 export function batchNotice(ids: readonly string[]): string {
   const lines = ids.slice(0, 6).map((id, index) => `${index + 1}. mail ${id}`);
   if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
-  lines.push("전체 목록: /inbox.md"); return lines.join("\n");
+  lines.push("Full list: /inbox.md"); return lines.join("\n");
 }

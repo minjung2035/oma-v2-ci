@@ -59,7 +59,7 @@ function allowed(m: Model, rolled: boolean): Event[] {
 /** A broker restart, as in production: the previous broker drains and closes
  * its Store, and the next one opens the database again. */
 interface World { root: string; batch: PreparedBatch; store: Store; mail: MailModule; broker: Broker | null; invocations: number }
-async function restart(w: World): Promise<Broker & { tryOpen(): { incarnation: number } }> {
+async function restart(w: World): Promise<Broker & { tryOpen(): Promise<{ incarnation: number }> }> {
   if (w.broker) { await w.broker.drainAndClose(); w.broker = null; }
   else w.store.close();
   w.store = new Store(join(w.root, "runtime.sqlite"));
@@ -75,7 +75,7 @@ async function restart(w: World): Promise<Broker & { tryOpen(): { incarnation: n
     null, null, { stateRoot: w.root, runRoot: join(w.root, "run"), society: "demo", hasGoal: () => true });
   await broker.start();
   w.broker = broker;
-  const opened = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => { incarnation: number }).bind(broker);
+  const opened = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<{ incarnation: number }>).bind(broker);
   return Object.assign(broker, { tryOpen: () => opened("alice", id) });
 }
 
@@ -125,7 +125,7 @@ async function run(seed: number, steps: number): Promise<string[]> {
         const before = m.incarnation;
         const expected = expectOpen(m);
         let actual: Outcome;
-        try { broker.tryOpen(); actual = { opened: true }; }
+        try { await broker.tryOpen(); actual = { opened: true }; }
         catch (error) { actual = { opened: false, code: (error as { code: "BROKER_UNAVAILABLE" | "BATCH_CONFLICT" }).code }; }
         assert.deepEqual(actual, expected, `${label}: open`);
         if (m.incarnation !== before) rolled = true;

@@ -18,6 +18,7 @@ import { hostResolver } from "../platform/host/resolver.js";
 import { newHostRecord, readHostRecord, writeHostRecord } from "../platform/host/record.js";
 import { HOST_GUEST_PROTOCOL } from "../protocol/host-guest.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
+import { nativeProjectBookmarks } from "../platform/host/bookmark.js";
 
 const STATE_DISK_BYTES = 64 * 1024 ** 3;
 const GIB = 1024 ** 3;
@@ -33,7 +34,9 @@ if (process.platform !== "darwin") fail("omahostd runs on macOS");
 const userHome = process.env.HOME;
 if (process.env.OMA_HOST_HOME === undefined && (userHome === undefined || !userHome.startsWith("/"))) fail("HOME is not set");
 const home = process.env.OMA_HOST_HOME ?? join(userHome!, "Library", "Application Support", "OMA");
-const dirs = { run: join(home, "run"), vm: join(home, "vm"), engine: join(home, "engine"), logs: join(home, "logs"), archives: join(home, "archives") };
+const dirs = { run: join(home, "run"), vm: join(home, "vm"), engine: join(home, "engine"), logs: join(home, "logs"), archives: join(home, "archives"),
+  // DR25: the packages `oma pi` installs on the Mac, carried to the engine.
+  packages: join(home, "packages") };
 for (const dir of [home, ...Object.values(dirs), join(dirs.run, "vm")]) { mkdirSync(dir, { recursive: true, mode: 0o700 }); chmodSync(dir, 0o700); }
 const recordPath = join(home, "host-record.json");
 const record = readHostRecord(recordPath) ?? (() => { const fresh = newHostRecord(); writeHostRecord(recordPath, fresh); return fresh; })();
@@ -63,11 +66,12 @@ async function main(): Promise<void> {
   const service = await HostService.start({
     runDir: dirs.run, recordPath, driver, uid: process.getuid!(), git: join(bundle!, "Contents", "Resources", "git", "bin", "git"),
     archivesDir: dirs.archives, keychain: driver,
+    bookmarks: nativeProjectBookmarks(join(bundle!, "Contents", "MacOS", "oma-vmhelper")),
     identity: { hostVersion: process.env.OMA_APP_VERSION ?? "0.0.0", installationId: record.installationId, instanceId: record.instanceId,
       expectImage: image.version, protocol: { min: Math.max(1, HOST_GUEST_PROTOCOL - 1), max: HOST_GUEST_PROTOCOL } },
-    resolve: hostResolver(dirs.engine, driver),
+    resolve: hostResolver(dirs.engine, driver, join(bundle!, "Contents", "Resources")),
     power: listener => { driver.onPower(listener); },
-    statePath,
+    statePath, packagesDir: dirs.packages,
   });
   service.lifecycle.onState(state => {
     if (state !== "ready") return;

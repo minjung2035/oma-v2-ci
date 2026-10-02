@@ -15,7 +15,9 @@ import { randomUUID } from "node:crypto";
 import { FramedPeer, PlatformError, sendHello, sendHelloForBytes } from "../src/platform/rpc.js";
 import { startGuestServer, type GuestIdentity } from "../src/platform/guest/server.js";
 import { GuestHost, listening, type SessionLauncher } from "../src/platform/guest/host.js";
+import type { GuestArchives } from "../src/platform/guest/archive.js";
 import { publishProjectBinding } from "../src/runtime/provision.js";
+import { holdSocketNames } from "./fixtures/socket-names.js";
 import {
   HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES, TerminalFrameParser, encodeTerminalFrame, parseTerminalJson, resizePayload,
   type HelloParams,
@@ -34,7 +36,7 @@ const hello = (overrides: Partial<HelloParams> = {}): HelloParams => ({ channel:
 const code = (expected: string) => (error: unknown) => error instanceof PlatformError && error.failure.code === expected;
 
 /** Starts the holder as a child of the test; records what it was asked. */
-function localLauncher(dir: string): SessionLauncher & { started: { society: string; projectDir: string }[]; children: ChildProcess[] } {
+function localLauncher(dir: string, env: Record<string, string>): SessionLauncher & { started: { society: string; projectDir: string }[]; children: ChildProcess[] } {
   const started: { society: string; projectDir: string }[] = [];
   const children: ChildProcess[] = [];
   const socketPath = (society: string): string => join(dir, `${society}.sock`);
@@ -42,8 +44,8 @@ function localLauncher(dir: string): SessionLauncher & { started: { society: str
     started, children, socketPath,
     async start(society, projectDir) {
       started.push({ society, projectDir });
-      const child = spawn(process.execPath, [holderEntry, "--socket", socketPath(society), "--cwd", projectDir, "--", process.execPath, fakeTui],
-        { stdio: ["ignore", "ignore", "inherit"] });
+      const child = spawn(process.execPath, ["--import", join(here, "fixtures", "socket-names.js"), holderEntry, "--socket", socketPath(society), "--cwd", projectDir, "--", process.execPath, fakeTui],
+        { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, ...env } });
       children.push(child);
       for (let i = 0; i < 200 && !(await listening(socketPath(society))); i++) await new Promise(r => setTimeout(r, 20));
     },
@@ -57,26 +59,34 @@ function localLauncher(dir: string): SessionLauncher & { started: { society: str
   };
 }
 
-async function setup(t: import("node:test").TestContext) {
+async function setup(t: import("node:test").TestContext, archives?: GuestArchives) {
   const dir = mkdtempSync(join(tmpdir(), "oma-guesthost-"));
+  const socketNames = holdSocketNames(dir);
+  const launcher = localLauncher(dir, socketNames.env);
+  let server: Server | undefined;
+  const peers: FramedPeer[] = [];
+  const sockets = new Set<import("node:net").Socket>();
+  t.after(async () => {
+    try {
+      for (const peer of peers) peer.close();
+      for (const child of launcher.children) if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL"); await new Promise(r => child.once("exit", r));
+      }
+      for (const socket of sockets) socket.destroy();
+      if (server) await new Promise<void>(resolve => server!.close(() => resolve()));
+    } finally { socketNames.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
   const societiesDir = join(dir, "data", "oma"); const projectsDir = join(dir, "projects");
   mkdirSync(societiesDir, { recursive: true }); mkdirSync(projectsDir);
-  const launcher = localLauncher(dir);
-  const host = new GuestHost({ societiesDir, projectsDir, launcher, stopDeadlineMs: 5000 });
+  const host = new GuestHost({ societiesDir, projectsDir, launcher, stopDeadlineMs: 5000, ...(archives === undefined ? {} : { archives }) });
   const socketPath = join(dir, "society.sock");
-  const server: Server = await startGuestServer({ socketPath, identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
+  server = await startGuestServer({ socketPath, identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
     helloDeadlineMs: 2000, requestTimeoutMs: 10_000,
     channels: {
       society: { kind: "json", serve: ({ peer }) => host.serve(peer) },
       terminal: { kind: "bytes", serve: (socket, params) => host.terminal(socket, params) },
     } });
-  const peers: FramedPeer[] = [];
-  t.after(async () => {
-    for (const peer of peers) peer.close();
-    for (const child of launcher.children) if (child.exitCode === null) { child.kill("SIGKILL"); await new Promise(r => child.once("exit", r)); }
-    await new Promise<void>(resolve => server.close(() => resolve()));
-    rmSync(dir, { recursive: true, force: true });
-  });
+  server.on("connection", socket => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
   const open = async (params: HelloParams): Promise<FramedPeer> => {
     const socket = connect(socketPath);
     await new Promise<void>((resolve, reject) => { socket.once("connect", resolve); socket.once("error", reject); });
@@ -200,4 +210,75 @@ test("§4.6: a terminal for a society that is not open is refused in words the h
   const screen = await screenOf(socketPath, hello({ channel: "terminal", society: "demo" }));
   await screen.closed;
   assert.deepEqual(screen.state.controls, [{ kind: "refused", value: { code: "INVALID_REQUEST", message: "the society is not open" } }]);
+});
+
+
+function heldArchive(fail = false) {
+  let release!: () => void;
+  let entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  let calls = 0;
+  const archives = { async create() {
+    calls++;
+    if (calls > 1) throw new Error("archive already running");
+    entered(); await gate;
+    if (fail) throw new Error("archive could not finish");
+    return { files: 1 };
+  } } as unknown as GuestArchives;
+  return { archives, started, release: () => release(), calls: () => calls };
+}
+
+for (const fail of [false, true]) test(`DR27/MAC-240: overlapping archive cannot return its owner's fence; failed=${fail}`, { timeout: 10000 }, async t => {
+  const archive = heldArchive(fail);
+  const { host, open } = await setup(t, archive.archives);
+  const first = await open(hello()); const second = await open(hello());
+  const pending = first.request("archive.create", { society: "demo" }, "a1");
+  const settled = pending.then(value => ({ value, error: null }), error => ({ value: null, error }));
+  try {
+    await archive.started;
+    await assert.rejects(second.request("archive.create", { society: "demo" }, "a2"));
+    assert.equal(archive.calls(), 1, "the second archive acquired the first archive's slot");
+    await assert.rejects(host.open("demo", randomUUID()), { code: "BROKER_UNAVAILABLE" });
+    assert.throws(() => host.maintenanceBegin("m1"), { code: "BROKER_UNAVAILABLE" });
+  } finally { archive.release(); await settled; }
+  if (fail) assert.ok((await settled).error instanceof PlatformError);
+  else assert.deepEqual((await settled).value, { files: 1 });
+  assert.doesNotThrow(() => { assert.deepEqual(host.maintenanceBegin("m1"), { maintenance: true }); }, "archive owner returned its fence");
+  host.maintenanceEnd("m1");
+});
+
+test("DR27/MAC-320: maintenance and archive cannot overtake an in-flight society open", { timeout: 10000 }, async t => {
+  const archive = heldArchive();
+  const { host, open, launcher, importedMirror } = await setup(t, archive.archives);
+  const projectId = randomUUID(); importedMirror(projectId);
+  let release!: () => void; let entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  t.mock.method(launcher, "start", async () => { entered(); await gate; });
+  const pending = host.open("demo", projectId);
+  const settled = pending.then(value => ({ value, error: null }), error => ({ value: null, error }));
+  try {
+    await started;
+    assert.throws(() => host.maintenanceBegin("m1"), { code: "BROKER_UNAVAILABLE" });
+    const peer = await open(hello());
+    archive.release();
+    await assert.rejects(peer.request("archive.create", { society: "demo" }, "a1"), code("BROKER_UNAVAILABLE"));
+    assert.equal(archive.calls(), 0);
+  } finally { release(); archive.release(); await settled; }
+  assert.deepEqual((await settled).value, { state: "running" });
+  assert.deepEqual(host.maintenanceBegin("m1"), { maintenance: true });
+  host.maintenanceEnd("m1");
+});
+
+test("DR27/MAC-320: archive cannot begin while maintenance owns the engine", async t => {
+  const archive = heldArchive();
+  const { host, open } = await setup(t, archive.archives);
+  host.maintenanceBegin("m1");
+  const peer = await open(hello());
+  try {
+    archive.release();
+    await assert.rejects(peer.request("archive.create", { society: "demo" }, "a1"), code("BROKER_UNAVAILABLE"));
+    assert.equal(archive.calls(), 0);
+  } finally { host.maintenanceEnd("m1"); }
 });

@@ -6,17 +6,24 @@
  * `KeychainStore` is its get/put. This implements the engine's public
  * credential-store contract (`read`, `list`, `modify`, `delete`), so login,
  * refresh and format stay the engine's (INF-001): what changes is where the
- * blob is kept. Writes are serialized per item in this process, the one place
- * that writes it.
+ * blob is kept. Host resolution and Personal engines use the same per-item
+ * writer lock across processes; each mutation rereads the committed blob.
  */
 import { StoreError } from "../../domain/errors.js";
+import { withAsyncCleanup } from "../../process/cleanup.js";
 import type { EngineCredentials } from "../../runtime/engine-auth.js";
+import { ProcessLock } from "../../runtime/process-lock.js";
+import { ensureUserDirectory } from "../../runtime/user-files.js";
+import { dirname } from "node:path";
+import { setTimeout as pause } from "node:timers/promises";
 
 export interface KeychainStore {
   /** The item's value, or undefined when there is none. A locked or
    * unreadable Keychain throws (MAC-702): that is not "no credential". */
   get(account: string): Promise<string | undefined>;
   put(account: string, value: string): Promise<void>;
+  /** The writer helper inherits the lock and ends before it is returned. */
+  withWriter?<T>(fence: number, run: (writer: KeychainStore) => Promise<T>): Promise<T>;
 }
 
 type Blob = Record<string, Record<string, unknown>>;
@@ -40,7 +47,26 @@ function serialized<T>(account: string, run: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export function keychainCredentials(store: KeychainStore, account: string): EngineCredentials {
+/** P0-3: host resolver and Personal engines share one cross-process writer lock.
+ * Waiting measures contention only; no timeout reclassifies an in-flight write. */
+export function keychainCredentials(store: KeychainStore, account: string, lockPath?: string): EngineCredentials {
+  const write = <T>(run: (writer: KeychainStore) => Promise<T>, signal?: AbortSignal): Promise<T> => serialized(lockPath ?? account, async () => {
+    signal?.throwIfAborted();
+    if (lockPath === undefined) return run(store);
+    ensureUserDirectory(dirname(lockPath));
+    let lock: ProcessLock | null;
+    while ((lock = ProcessLock.tryAcquire(lockPath)) === null) await pause(25, undefined, { signal });
+    const held = lock;
+    return withAsyncCleanup(async () => {
+      signal?.throwIfAborted(); held.assertHeld(lockPath);
+      const fenced = (writer: KeychainStore): Promise<T> => run({ get: account => writer.get(account),
+        put: (account, value) => {
+          signal?.throwIfAborted(); held.assertHeld(lockPath);
+          return writer.put(account, value);
+        } });
+      return await (store.withWriter === undefined ? fenced(store) : store.withWriter(held.descriptor, fenced));
+    }, () => held.close());
+  });
   return {
     async read(providerId) {
       return parse(await store.get(account))[providerId] as Credential | undefined;
@@ -49,22 +75,22 @@ export function keychainCredentials(store: KeychainStore, account: string): Engi
       return Object.entries(parse(await store.get(account)))
         .map(([providerId, credential]) => ({ providerId, type: credential.type as "api_key" | "oauth" }));
     },
-    modify(providerId, fn) {
-      return serialized(account, async () => {
-        const blob = parse(await store.get(account));
+    modify(providerId, fn, options) {
+      return write(async writer => {
+        const blob = parse(await writer.get(account));
         const next = await fn(blob[providerId] as Credential | undefined);
         if (next === undefined) return blob[providerId] as Credential | undefined;
-        await store.put(account, JSON.stringify({ ...blob, [providerId]: next }));
+        await writer.put(account, JSON.stringify({ ...blob, [providerId]: next }));
         return next;
-      });
+      }, options?.signal);
     },
-    delete(providerId) {
-      return serialized(account, async () => {
-        const blob = parse(await store.get(account));
+    delete(providerId, options) {
+      return write(async writer => {
+        const blob = parse(await writer.get(account));
         if (!(providerId in blob)) return;
         const { [providerId]: _gone, ...rest } = blob;
-        await store.put(account, JSON.stringify(rest));
-      });
+        await writer.put(account, JSON.stringify(rest));
+      }, options?.signal);
     },
   } as EngineCredentials;
 }

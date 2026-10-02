@@ -5,9 +5,9 @@
 // bytes were measured. Hashing only executable source is also insufficient:
 // package scripts choose the gates, TypeScript options choose what they mean,
 // normative/owner inventories choose what must be proven, and the production
-// manifests and LOC records choose what A-008 reports.
+// manifests and LOC records determine whether measurements describe this source.
 //
-// `implementation/validation.md` is both a normative input and the output that
+// `docs/implementation/validation.md` is both a verification input and the output that
 // records this digest. Its one digest field is normalized before hashing to
 // break that self-reference; every other byte remains an input. Runtime logs
 // and the generated adversarial report are outputs. The generated dependency
@@ -23,9 +23,8 @@ export const VERIFICATION_INPUT_ROOTS = Object.freeze([
   "test",
   "scripts",
   "implementation",
+  "docs",
   ".github/workflows",
-  "architecture.md",
-  "implementation-spec.md",
   "package.json",
   "package-lock.json",
   "tsconfig.json",
@@ -38,14 +37,14 @@ export const VERIFICATION_INPUT_ROOTS = Object.freeze([
 
 export const VERIFICATION_OUTPUT_EXCLUSIONS = Object.freeze([
   "implementation/evidence/runtime-tests.log",
-  "implementation/adversarial-review.md",
+  "docs/archive/adversarial-review.md",
 ]);
 const EXCLUDED = new Set(VERIFICATION_OUTPUT_EXCLUSIONS);
 const VALIDATION_DIGEST = /verification input digest `[0-9a-f]{64}` \(\d+ files\)/g;
 
 function verificationBytes(root, file) {
   const bytes = readFileSync(join(root, file));
-  if (file !== "implementation/validation.md") return bytes;
+  if (file !== "docs/implementation/validation.md") return bytes;
   return Buffer.from(bytes.toString("utf8").replace(
     VALIDATION_DIGEST,
     "verification input digest `<self>` (<files> files)",

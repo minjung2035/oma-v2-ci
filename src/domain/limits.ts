@@ -35,3 +35,6 @@ export const protocolLimitsCheck = integerFieldsCheck(PROTOCOL_LIMIT_FIELDS);
 export function isProtocolLimits(value: unknown): value is ProtocolLimits {
   return protocolLimitsCheck(value) === null;
 }
+
+/** DR27: one CLI observation, not an accepted operation or task lifetime. */
+export const CLI_OBSERVATION_SECONDS = 180;

@@ -1,3 +1,4 @@
+import { readableBody } from "../src/mail/display.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -41,7 +42,8 @@ test("adversarial: EML header casing never rewrites collision text in the body",
     messageId: `${MESSAGE_ID}@demo.oma.invalid`,
     body: "first X-Oma-Kind: marker\nX-Oma-Context: marker",
   });
-  const body = eml.text.split(/\r?\n\r?\n/, 2)[1] ?? "";
+  const body = readableBody(eml.text);
+  assert.equal(body, "first X-Oma-Kind: marker\nX-Oma-Context: marker");
   assert.match(body, /X-Oma-Kind: marker/);
   assert.match(body, /X-Oma-Context: marker/);
 });

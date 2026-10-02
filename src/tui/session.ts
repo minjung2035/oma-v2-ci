@@ -1,31 +1,38 @@
 /** TUI-004/014: the Principal Pi session that the product owns.
  *
- * Pi runs in RPC mode only. Its built-in interactive surface, project
- * extensions, skills, prompt templates and shell tools are switched off at
- * argv, so there is nothing to hide afterwards. Peer content is never dressed
- * as a Human turn; this module only relays what the user typed here.
+ * The Principal uses Open TUI or the headless RPC test/adapter path. Both
+ * keep run admission here; interactive rendering adds no model authority.
+ * Project discovery, skills, templates and shell tools remain disabled.
+ * Peer content is never dressed as a Human turn.
  */
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import type { ProtocolLimits } from "../../implementation/contracts.js";
-import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnOwnedRpc, type ChildProcessWithoutNullStreams } from "../process/async.js";
+import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, stopOwnedChild, spawnOwnedRpc, spawnOwnedInteractive, type ChildProcess } from "../process/async.js";
+import { InteractiveChannel, INTERACTIVE_RPC_FD, INTERACTIVE_UI_FD } from "../runtime/interactive-channel.js";
+import type { FencedEngine } from "../runtime/host-tenure.js";
+import type { PiRpcStreams } from "../runtime/pi-rpc.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, encodeHostMessage } from "../protocol/host-channel.js";
 import { assertModelScope, modelWorkspacePathAt, projectGitPathAt, runnerViewPathAt, sessionDirPathAt } from "../storage/paths.js";
-import { PiRpcClient, SKIPPED_EVENT, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
+import { PiRpcClient, SKIPPED_EVENT, alarm, assertPiRpcLimits, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "../runtime/pi-rpc.js";
 import { assertExtensionIntegrity, verifiedPaths, type VerifiedExtension } from "../runtime/extension-integrity.js";
-import { PI_AGENT_DIR_ENV } from "../runtime/pi-runtime.js";
+import { PI_AGENT_DIR_ENV, preparePiRetry } from "../runtime/pi-runtime.js";
 import { loadConfiguration } from "../config.js";
 import { StoreError } from "../domain/errors.js";
 import { errorWords } from "./words.js";
 import { storedMailBytes } from "../domain/mail-values.js";
 import { encodeToolSurfacePlan } from "../domain/tool-surface.js";
-import { CONVERSATION_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
+import { CONVERSATION_BOUNDS, TERMINAL_BOUNDS, humanPromptFitsFrame, humanPromptRequestId } from "./limits.js";
 import type { PromptOutcome } from "./prompt.js";
 
 export interface SessionPaths {
   readonly piCommand: string;
+  readonly interactiveEntry?: string;
+  /** DR24: the session file to reopen (`/resume`), when not the society's latest. */
+  readonly sessionFile?: string;
+  readonly project?: string;
   /** Arguments preceding Pi's own flags, e.g. the vendored bundle entry. */
   readonly piArgs?: readonly string[] | undefined;
   /** OMA-owned agent directory, isolating this engine from the user's own Pi. */
@@ -122,9 +129,9 @@ export function principalEnvironment(
     OMA_AGENT_HOME: home,
     OMA_MAIL_ARCHIVE: join(paths.stateRoot, "mail", "archive", "cur"),
     OMA_CLI_PATH: join(paths.libdir, DEPLOYMENT_LAYOUT.cli),
-    // AV11: read by the trusted extension only, to name the society's main as
-    // the base of an agent the Principal creates; the model's tools never see it.
+    // DR27: fixed read-only code views, never a model-facing shell.
     OMA_PROJECT_GIT: projectGitPathAt(paths.stateRoot),
+    OMA_CONTEXT_GIT: join(paths.stateRoot, "repos", "context.git"),
     OMA_FRAME_BYTES: String(limits.frameBytes),
     // The mail tool reads stored messages, whose bound is not the body's (P0V-36).
     OMA_MAIL_BYTES: String(storedMailBytes(limits.mailBodyBytes)),
@@ -141,7 +148,10 @@ export function principalEnvironment(
 }
 
 export interface SessionSink {
+  /** P0-4: ownership begins before fallible RPC/UI setup, not at constructor return. */
+  readonly onAcquire?: (engine: FencedEngine) => void;
   readonly onLine: (line: string) => void;
+  readonly onUi?: (event: PiEvent) => void;
   readonly onBusy: (busy: boolean) => void;
   readonly onEnd: (reason: string) => void;
   /** One named prompt did not reach the engine, with the text it was.
@@ -169,7 +179,7 @@ export interface SessionSink {
 /** TUI-004: the Principal runs under the same role contract as a Resident —
  * its model, extensions, prompt and tool surface come from its role in the
  * configuration, never from defaults. An undeclared model is refused. */
-export function principalSessionProfile(configPath: string, society: string): SessionProfile {
+export function principalSessionProfile(configPath: string, society: string): SessionProfile & { readonly inferenceSeconds: number } {
   const configuration = loadConfiguration(configPath);
   const config = configuration.config;
   const modelName = config.agentProfiles[config.principalProfile]?.modelProfile ?? "";
@@ -181,7 +191,7 @@ export function principalSessionProfile(configPath: string, society: string): Se
   if (!Number.isSafeInteger(workspaceBytes) || (workspaceBytes ?? 0) <= 0)
     throw new StoreError("UNSUPPORTED_PROFILE", "the principal role declares no workspace quota");
   return {
-    society, provider: model.provider, model: model.model, workspaceBytes: workspaceBytes!,
+    society, provider: model.provider, model: model.model, inferenceSeconds: model.inferenceTimeoutSeconds, workspaceBytes: workspaceBytes!,
     extensions: (role?.extensions ?? []).map(extension => ({ path: extension.path, sha256: extension.sha256 })),
     ...(prompt.length > 0 ? { prompt } : {}),
     ...(role?.toolSurface ? { toolSurface: encodeToolSurfacePlan(role.toolSurface) } : {}),
@@ -196,7 +206,7 @@ export function sessionArgv(paths: SessionPaths, profile: SessionProfile): reado
     "--no-skills",
     "--no-prompt-templates",
     "--no-extensions",
-    "--exclude-tools", "bash,powershell",
+    "--exclude-tools", "bash,powershell,write,edit",
     "--session-dir", paths.sessionDir,
     // AV14, PR-003/TUI-004: the Human's context stays in the existing session;
     // a new TUI run resumes the most recent one, or starts one when there is none.
@@ -261,7 +271,11 @@ export function projectEvent(event: PiEvent): { readonly line?: string } {
   // DR15, P0-5: an event too large to hold was skipped; what it said is not
   // shown, and the screen says so rather than showing nothing.
   if (event.type === SKIPPED_EVENT)
-    return { line: `⚠ 엔진이 보낸 이벤트 하나(${String(event.bytes)} bytes)가 한도를 넘어 표시하지 못했습니다.` };
+    return { line: `⚠ An engine event (${String(event.bytes)} bytes) exceeded the display limit.` };
+  if (event.type === "auto_retry_start")
+    return { line: `⚠ Temporary model API error: waiting for retry ${String(event.attempt)}/${String(event.maxAttempts)}` };
+  if (event.type === "auto_retry_end")
+    return { line: event.success === true ? "Model API connection restored." : `⚠ Model API failed after ${String(event.attempt)} retries.` };
   if (event.type === "message_end") {
     const message = event.message;
     if (message === null || typeof message !== "object" || Array.isArray(message)) return {};
@@ -271,10 +285,10 @@ export function projectEvent(event: PiEvent): { readonly line?: string } {
     if (role === "assistant") {
       const stop = String(record.stopReason ?? "");
       if (stop === "error" || stop === "aborted")
-        return { line: `⚠ 응답이 ${stop} 상태로 끝났습니다.` };
+        return { line: `⚠ Response ended with status: ${stop}.` };
       return text.length > 0 ? { line: text } : {};
     }
-    if (role === "custom" && text.length > 0) return { line: `[알림] ${text}` };
+    if (role === "custom" && text.length > 0) return { line: `[Notice] ${text}` };
     return {};
   }
   return {};
@@ -282,6 +296,10 @@ export function projectEvent(event: PiEvent): { readonly line?: string } {
 
 export class PrincipalSession {
   private readonly rpc: PiRpcClient;
+  private ui: InteractiveChannel | null = null;
+  private ready = true;
+
+  sendUi(event: PiEvent): void { this.ui?.send(event); }
   private readonly channel: Socket;
   private sequence = 0;
   private closed = false;
@@ -327,7 +345,8 @@ export class PrincipalSession {
    * paid for was still running. */
   readonly exited: Promise<void>;
 
-  private constructor(private readonly child: ChildProcessWithoutNullStreams, limits: PiRpcLimits, private readonly sink: SessionSink) {
+  private constructor(private readonly child: ChildProcess, limits: PiRpcLimits, private readonly sink: SessionSink,
+    streams?: PiRpcStreams, uiSocket?: Socket) {
     this.frameBytes = limits.frameBytes;
     this.exited = new Promise<void>(resolve => {
       if (child.exitCode !== null || child.signalCode !== null) { resolve(); return; }
@@ -337,31 +356,101 @@ export class PrincipalSession {
       // error from a process that did start (a kill that failed) is not its end.
       child.once("error", () => { if (child.pid === undefined) resolve(); });
     });
-    this.rpc = new PiRpcClient(child, limits);
-    // The private socket the credential travels on. Kept open for the life of
-    // the session so a restarted broker's credential can replace the old one.
-    this.channel = child.stdio[HOST_CHANNEL_FD] as unknown as Socket;
-    this.channel.on("error", () => {});
-    this.rpc.onEvent(event => this.observe(event));
-    void this.rpc.completion.then(result => {
+    let rpc: PiRpcClient | null = null;
+    let startup: ReturnType<typeof alarm> | null = null;
+    try {
+      sink.onAcquire?.({
+        exited: this.exited,
+        close: () => {
+          if (rpc === null || this.closed) stopOwnedChild(child);
+          else this.close();
+        },
+      });
+      rpc = this.rpc = new PiRpcClient(child, limits, streams, uiSocket ? () => {
+        child.kill("SIGTERM");
+        const deadline = alarm(TERMINAL_BOUNDS.interactiveExitSeconds.value, () => {
+          if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        });
+        void this.exited.then(() => deadline.cancel());
+      } : undefined);
+      if (uiSocket) {
+        this.ready = false;
+        startup = alarm(limits.receiptWaitSeconds, () => this.close());
+        let sequence = 0;
+        let last: PiEvent | undefined;
+        this.ui = new InteractiveChannel(uiSocket, limits, event => {
+          if (event.type === "ready") {
+            if (this.ready) { this.close(); return; }
+            startup?.cancel(); this.ready = true; this.sink.onBusy(this.busy);
+          } else if (!this.ready) { this.close(); return; }
+          if (event.type === "human_input") {
+            if (last && event.id === last.id) { this.ui?.send(last); return; }
+            if (event.id !== `ui-${sequence + 1}` || typeof event.text !== "string") { this.close(); return; }
+            sequence += 1;
+            // Said so the screen can tell the Human the prompt waits its turn.
+            const queued = this.busy;
+            const outcome = this.submit(event.text);
+            last = { type: "input_result", id: event.id, accepted: outcome.kind === "accepted",
+              ...(outcome.kind === "refused" ? { reason: outcome.reason } : { queued }) };
+            this.ui?.send(last);
+          } else if (["ready", "quit", "panel_open", "panel_size", "panel_key", "sessions_request", "switch", "engine_state", "worker_model"].includes(event.type))
+            this.sink.onUi?.(event);
+          else this.close();
+        }, () => { startup?.cancel(); this.close(); });
+      }
+      // The private socket the credential travels on. Kept open for the life of
+      // the session so a restarted broker's credential can replace the old one.
+      this.channel = child.stdio[HOST_CHANNEL_FD] as unknown as Socket;
+      this.channel.on("error", () => {});
+      this.rpc.onEvent(event => this.observe(event));
+      void this.rpc.completion.then(async result => {
+        this.closed = true;
+        this.ui?.close();
+        const reason = result.state === "failed"
+          ? `Session ended with an error: ${errorWords(result.error)}`
+          : "Session ended.";
+        this.handBack(reason);
+        this.owner = null;
+        this.sink.onBusy(false);
+        if (uiSocket) await this.exited;
+        this.sink.onEnd(reason);
+      });
+    } catch (error) {
+      // No completed session was handed to the host. Returning partial owners
+      // must not emit onEnd or invite another prompt into this failed session.
       this.closed = true;
-      const reason = result.state === "failed"
-        ? `세션이 오류로 종료되었습니다: ${errorWords(result.error)}`
-        : "세션이 종료되었습니다.";
-      this.handBack(reason);
-      this.owner = null;
-      this.sink.onBusy(false);
-      this.sink.onEnd(reason);
-    });
+      startup?.cancel();
+      const errors: unknown[] = [error];
+      try { this.ui?.close(); } catch (cleanup) { errors.push(cleanup); }
+      try { rpc?.close(); } catch (cleanup) { errors.push(cleanup); }
+      try { stopOwnedChild(child); } catch (cleanup) { errors.push(cleanup); }
+      if (errors.length > 1) throw new AggregateError(errors, "Principal setup and cleanup failed");
+      throw error;
+    }
   }
 
   static start(paths: SessionPaths, profile: SessionProfile, limits: PiRpcLimits, env: Readonly<Record<string, string>>, sink: SessionSink): PrincipalSession {
+    // Validate before spawn: a constructor refusal must leave no ownerless child.
+    assertPiRpcLimits(limits);
     // TUI-010: the digests recorded for this role are checked again here, at the
     // last moment before the file is handed to Pi.
     assertExtensionIntegrity(profile.extensions);
     // PR-004: the model's tools are confined to `workspace`, which holds
     // neither the Human's session history nor the engine's credentials.
     assertModelScope(paths.workspace, [paths.sessionDir, ...(paths.piAgentDir === undefined ? [] : [paths.piAgentDir])]);
+    if (paths.piAgentDir !== undefined) preparePiRetry(paths.piAgentDir);
+    if (paths.interactiveEntry !== undefined) {
+      if (paths.fence === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "interactive session requires its lease descriptor");
+      const child = spawnOwnedInteractive(paths.piCommand, [paths.interactiveEntry, ...sessionArgv(paths, profile)], paths.workspace,
+        { ...sessionEnv(env, profile, paths), OMA_UI_IDLE_SECONDS: String(limits.idleStreamSeconds),
+          OMA_UI_RECEIPT_SECONDS: String(limits.receiptWaitSeconds), OMA_PROJECT_DISPLAY: paths.project ?? paths.workspace,
+          ...(paths.sessionFile === undefined ? {} : { OMA_SESSION_FILE: paths.sessionFile }),
+          TERM: process.env.TERM ?? "xterm-256color", ...(process.env.COLORTERM ? { COLORTERM: process.env.COLORTERM } : {}) }, paths.fence);
+      const channels: readonly unknown[] = child.stdio;
+      const rpc = channels[INTERACTIVE_RPC_FD] as Socket;
+      return new PrincipalSession(child, limits, sink, { stdin: rpc, stdout: rpc, stderr: child.stderr! },
+        channels[INTERACTIVE_UI_FD] as Socket);
+    }
     const child = spawnOwnedRpc(
       paths.piCommand,
       [...(paths.piArgs ?? []), ...sessionArgv(paths, profile)],
@@ -384,11 +473,11 @@ export class PrincipalSession {
         // claim has to be given back here or the session would stay the
         // refused prompt's for the rest of its life -- and the Human would
         // never learn that what they typed was not taken.
-        const detail = typeof event.error === "string" && event.error.length > 0 ? event.error : "사유를 알 수 없습니다";
+        const detail = typeof event.error === "string" && event.error.length > 0 ? event.error : "Unknown reason";
         // A Human prompt is named and handed back; a delivery command is the
         // product's own text and there is nothing to give back.
-        if (role === "human") this.sink.onPromptFailed(text, `엔진이 받지 않았습니다: ${detail}`);
-        else this.sink.onLine(`⚠ 엔진이 입력을 받아들이지 않았습니다: ${detail}`);
+        if (role === "human") this.sink.onPromptFailed(text, `The engine did not accept the input: ${detail}`);
+        else this.sink.onLine(`⚠ The engine rejected the input: ${detail}`);
         this.release(role);
       }
     }
@@ -471,7 +560,7 @@ export class PrincipalSession {
    * is takes the session the moment the run ends, in the same step that ends
    * it, so this never reads false with one still waiting. Delivery waits for
    * it to clear so a batch's boundary is never confused with a Human's turn. */
-  get busy(): boolean { return this.owner !== null; }
+  get busy(): boolean { return this.ready === false || this.owner !== null; }
 
   /** Hands the engine its credential on the private socket. A new one simply
    * replaces the previous one; the old broker that minted it is gone. */
@@ -526,15 +615,16 @@ export class PrincipalSession {
    * way a failed write from the waiting queue is.
    */
   submit(text: string): PromptOutcome {
+    if (this.ready === false) return { kind: "refused", reason: "Preparing the conversation UI." };
     if (this.closed) {
-      this.sink.onEnd("세션이 종료되어 전송할 수 없습니다.");
-      return { kind: "refused", reason: "세션이 종료되었습니다." };
+      this.sink.onEnd("Cannot send: the session has ended.");
+      return { kind: "refused", reason: "Session ended." };
     }
     if (!humanPromptFitsFrame(text, this.frameBytes))
-      return { kind: "refused", reason: "입력이 이 세션의 UTF-8 prompt 한도를 넘습니다." };
+      return { kind: "refused", reason: "Input exceeds this session's UTF-8 prompt limit." };
     if (this.busy) {
       if (this.waiting.length >= PrincipalSession.WAITING)
-        return { kind: "refused", reason: `${PrincipalSession.WAITING}개까지만 대기시킬 수 있습니다. 진행 중인 응답이 끝난 뒤 다시 보내 주세요.` };
+        return { kind: "refused", reason: `Only ${PrincipalSession.WAITING} prompts may wait. Try again after the current response finishes.` };
       this.waiting.push(text);
       return { kind: "accepted" };
     }
@@ -547,8 +637,9 @@ export class PrincipalSession {
    * closes; the completion that follows finds nothing left to hand back. */
   close(): void {
     if (this.closed) return;
-    this.handBack("세션을 닫았습니다.");
+    this.handBack("Session closed.");
     this.closed = true;
+    this.ui?.close();
     this.rpc.close();
   }
 }

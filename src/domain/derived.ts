@@ -57,6 +57,10 @@ export function submitStagingFor(operationId: string): string {
 export function submitBundleFor(operationId: string): string {
   return `${submitStagingFor(operationId)}/upload.bundle`;
 }
+/** CTX-003/P0: immutable authorization witness for a content-identical publication. */
+export function contextNoopRefFor(operationId: string): string {
+  return `refs/oma/context/${required(operationId, parseOperationId, "operation id")}`;
+}
 export function contextStagingFor(operationId: string): string {
   return `staging/context-${required(operationId, parseOperationId, "operation id")}`;
 }

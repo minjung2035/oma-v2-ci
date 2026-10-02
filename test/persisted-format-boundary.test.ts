@@ -32,7 +32,7 @@ const userVersion = (path: string): number => {
   finally { raw.close(); }
 };
 
-test("P8 version boundary: a fresh database is v1 and an unknown version fails closed without migration", () => {
+test("P8 version boundary: a fresh database is the current schema and an unknown version fails closed without migration", () => {
   const root = mkdtempSync(join(tmpdir(), "oma-format-version-"));
   const path = join(root, "runtime.sqlite");
   try {
@@ -42,11 +42,11 @@ test("P8 version boundary: a fresh database is v1 and an unknown version fails c
     assert.equal(userVersion(path), SCHEMA_USER_VERSION_WRITTEN);
 
     // An unknown persisted version is not a migration request.
-    mutateRawRowAfterClose(path, raw => raw.exec("PRAGMA user_version = 2"));
+    mutateRawRowAfterClose(path, raw => raw.exec("PRAGMA user_version = 77"));
     const before = readFileSync(path);
     assert.throws(() => new Store(path),
       (error: unknown) => error instanceof StoreError && error.code === "STORE_CORRUPT" && /no migration was attempted/.test(error.message));
-    assert.equal(userVersion(path), 2, "the persisted version is untouched");
+    assert.equal(userVersion(path), 77, "the persisted version is untouched");
     assert.deepEqual(readFileSync(path), before, "a refused open does not rewrite the database file");
   } finally { removeTree(root); }
 });

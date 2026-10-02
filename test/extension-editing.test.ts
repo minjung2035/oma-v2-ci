@@ -19,7 +19,7 @@ function placed() {
   writeFileSync(join(dir, "ok.js"), "export {};\n");
   writeFileSync(join(dir, "nested", "deep.mjs"), "export {};\n");
   symlinkSync("ok.js", join(dir, "link.js"));               // internal symlink
-  writeFileSync(join(dir, "big.js"), Buffer.alloc(1024 * 1024 + 1)); // over the loader's file budget
+  writeFileSync(join(dir, "big.js"), Buffer.alloc(1024 * 1024 + 1)); // executable assets are not configuration documents
   writeFileSync(join(dir, "notes.txt"), "not code\n");
   mkdirSync(join(dir, "folder.js"));                         // a directory with a code suffix
   return f;
@@ -30,7 +30,7 @@ test("V14A: the editor offers exactly the files the loader accepts, and an enabl
   try {
     const context = readExtensions(f.path, "principal", "resident");
     const offered = context.rows.map(row => row.id).filter(id => id !== CORE_EXTENSION).sort();
-    assert.deepEqual(offered, ["extensions/nested/deep.mjs", "extensions/ok.js"]);
+    assert.deepEqual(offered, ["extensions/big.js", "extensions/nested/deep.mjs", "extensions/ok.js"]);
     // The negative control: the loader's own verdict over the same candidates
     // (including ones the editor must not offer) agrees entry by entry.
     for (const entry of ["extensions/ok.js", "extensions/nested/deep.mjs", "extensions/link.js", "extensions/big.js",
@@ -38,7 +38,7 @@ test("V14A: the editor offers exactly the files the loader accepts, and an enabl
       f.edit("roles/resident.json", role => { role.extensions = [CORE_EXTENSION, entry]; });
       let loads = true;
       try { loadConfiguration(f.path); } catch { loads = false; }
-      assert.equal(observeExtensionAsset(f.installation, entry).kind === "present", loads, entry);
+      assert.equal(observeExtensionAsset({ libdir: f.installation }, entry).kind === "present", loads, entry);
       assert.equal(offered.includes(entry), loads, `editor and loader disagree on ${entry}`);
     }
     f.edit("roles/resident.json", role => { role.extensions = [CORE_EXTENSION]; });
@@ -50,7 +50,7 @@ test("V14A: the editor offers exactly the files the loader accepts, and an enabl
     // A refused enable changes nothing.
     const after = readExtensions(f.path, "principal", "resident");
     const manifest = readFileSync(f.path);
-    for (const entry of ["extensions/link.js", "extensions/big.js", "../escape.js", "/etc/passwd.js", "extensions/absent.js"])
+    for (const entry of ["extensions/link.js", "../escape.js", "/etc/passwd.js", "extensions/absent.js"])
       assert.throws(() => toggleExtension(after, entry, "principal", true), code("INVALID_REQUEST"), entry);
     assert.deepEqual(readFileSync(f.path), manifest);
     // The core stays first and cannot be removed.
@@ -70,7 +70,7 @@ test("V14A: the scan is bounded, follows no symlink and reports a partial list",
     symlinkSync(outside, join(dir, "aaa-linked-dir"));
     const context = readExtensions(f.path, "principal", "resident");
     assert.equal(context.scan, "partial");
-    assert.match(context.reason ?? "", /부분 목록/);
+    assert.match(context.reason ?? "", /partial list/);
     assert.ok(!context.rows.some(row => row.id.includes("aaa-linked-dir")), "a symlinked directory was traversed");
     assert.ok(context.rows.length <= 1025);
   } finally { f.close(); }
@@ -121,7 +121,7 @@ test("V14B: the repair does not loosen the loader: another invalid field keeps t
     const g = createCompleteConfigurationFixture();
     try {
       mkdirSync(join(g.installation, "extensions"), { recursive: true });
-      writeFileSync(join(g.installation, "extensions", "big.js"), Buffer.alloc(1024 * 1024 + 1));
+      mkdirSync(join(g.installation, "extensions", "big.js"));
       g.edit("roles/resident.json", role => { role.extensions = [CORE_EXTENSION, "extensions/big.js"]; });
       assert.equal(readExtensions(g.path, "principal", "resident").editable, false);
     } finally { g.close(); }

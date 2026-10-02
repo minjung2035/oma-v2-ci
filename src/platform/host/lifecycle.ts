@@ -13,13 +13,14 @@ import type { GuestLink, GuestPorts } from "./guest-link.js";
 export interface VmDriver extends GuestPorts {
   /** Boots the VM; resolves once it is running (not yet answering). */
   start(): Promise<void>;
-  /** Pulls the power: `VZVirtualMachine.stop()`. */
+  /** Resolves only after the VM is stopped (including a start in progress). */
   forceStop(): Promise<void>;
   /** The VM stopped, whoever stopped it: the guest powered off, it crashed,
    * or `forceStop` pulled the power. */
-  onStopped(listener: () => void): void;
+  onStopped(listener: (cause: VmStopCause) => void): void;
 }
 
+export type VmStopCause = "guest" | "error";
 export type VmState = "stopped" | "booting" | "handshaking" | "ready" | "draining" | "forced" | "crashed" | "failed";
 
 export interface LifecycleOptions {
@@ -40,20 +41,85 @@ export interface LifecycleOptions {
   /** MAC-331: at most `max` automatic restarts within `windowMs`. */
   readonly restarts: { readonly max: number; readonly windowMs: number; readonly backoffMs: number };
   /** What the host keeps in its record (`host-record`), for the next start's one line. */
-  readonly record: (event: "forced" | "crashed" | "failed") => void;
+  readonly record: (event: "clean" | "forced" | "crashed" | "failed") => void;
+}
+
+/** P0-4: continuations, peers and timers belong to one phase, never its successor. */
+class VmPhase {
+  private readonly controller = new AbortController();
+  private readonly timers = new Set<{ cancel(): void }>();
+  private readonly peers = new Set<FramedPeer>();
+  control: FramedPeer | null = null;
+  constructor(private readonly options: LifecycleOptions) {}
+  get active(): boolean { return !this.controller.signal.aborted; }
+  assertActive(): void { this.controller.signal.throwIfAborted(); }
+  cancel(reason: unknown = unavailable("the engine phase ended")): void {
+    if (!this.active) return;
+    this.controller.abort(reason);
+    for (const timer of this.timers) timer.cancel();
+    this.timers.clear();
+    for (const peer of this.peers) peer.close();
+    this.peers.clear(); this.control = null;
+  }
+  after(ms: number, run: () => void): { cancel(): void } {
+    this.assertActive();
+    const timer = this.options.after(ms, () => {
+      this.timers.delete(timer);
+      if (this.active) run();
+    });
+    this.timers.add(timer);
+    return { cancel: () => { timer.cancel(); this.timers.delete(timer); } };
+  }
+  observe<T>(work: Promise<T>): Promise<T> {
+    const signal = this.controller.signal;
+    return new Promise<T>((resolve, reject) => {
+      const abort = (): void => { reject(signal.reason); };
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) abort();
+      void work.then(value => { if (signal.aborted) reject(signal.reason); else resolve(value); }, reject)
+        .finally(() => { signal.removeEventListener("abort", abort); });
+    });
+  }
+  delay(ms: number): Promise<void> {
+    return this.observe(new Promise<void>(resolve => { this.after(ms, resolve); }));
+  }
+  open(channel: "control" | "society"): Promise<FramedPeer> {
+    this.assertActive();
+    return this.observe(this.options.link.json(channel, this.controller.signal).then(peer => {
+      if (!this.active) { peer.close(); this.assertActive(); }
+      this.peers.add(peer);
+      return peer;
+    }));
+  }
+  close(peer: FramedPeer): void { this.peers.delete(peer); peer.close(); }
+  request(peer: FramedPeer, method: string, params: Record<string, unknown>, key?: string): Promise<Record<string, unknown>> {
+    this.assertActive();
+    return this.observe(peer.request(method, params, key));
+  }
+}
+function unavailable(message: string): PlatformError {
+  return new PlatformError({ code: "ENGINE_UNAVAILABLE", message, retry: "same-key" });
+}
+interface VmRun {
+  phase: VmPhase;
+  readonly stopped: Promise<VmStopCause>;
+  ended(cause: VmStopCause): void;
+  cause: VmStopCause | null;
 }
 
 export class VmLifecycle {
   private current: VmState = "stopped";
   private readonly listeners: ((state: VmState) => void)[] = [];
-  private control: FramedPeer | null = null;
-  private watchdog: { cancel(): void } | null = null;
+  private run: VmRun | null = null;
+  private restart: VmPhase | null = null;
   private restartTimes: number[] = [];
-  private stoppedWaiter: (() => void) | null = null;
   private starting: Promise<void> | null = null;
+  private launching: Promise<void> | null = null;
+  private forcing: Promise<void> | null = null;
+  private closing: Promise<"stopped" | "forced"> | null = null;
 
   constructor(private readonly options: LifecycleOptions) {
-    options.driver.onStopped(() => { this.stoppedByDriver(); });
+    options.driver.onStopped(cause => { this.stoppedByDriver(cause); });
   }
 
   get state(): VmState { return this.current; }
@@ -66,135 +132,181 @@ export class VmLifecycle {
 
   /** Brings the VM to `ready`. Idempotent while starting or ready. */
   start(): Promise<void> {
+    if (this.closing !== null) return Promise.reject(unavailable("the engine is stopping"));
     if (this.current === "ready") return Promise.resolve();
     if (this.starting !== null) return this.starting;
     if (this.current === "failed")
       return Promise.reject(new PlatformError({ code: "ENGINE_UNAVAILABLE", message: "the engine needs repair", retry: "after-repair" }));
-    this.starting = this.boot().finally(() => { this.starting = null; });
-    return this.starting;
+    if (this.run !== null || this.launching !== null || this.forcing !== null)
+      return Promise.reject(unavailable("the previous engine has not finished"));
+    this.restart?.cancel(); this.restart = null;
+    let ended!: (cause: VmStopCause) => void;
+    const run: VmRun = { phase: new VmPhase(this.options), stopped: new Promise(resolve => { ended = resolve; }),
+      ended: cause => ended(cause), cause: null };
+    this.run = run;
+    const phase = run.phase;
+    const starting = Promise.resolve().then(() => this.boot(run, phase)).finally(() => {
+      if (this.starting === starting) this.starting = null;
+    });
+    this.starting = starting;
+    return starting;
   }
 
-  private async boot(): Promise<void> {
+  private async boot(run: VmRun, phase: VmPhase): Promise<void> {
+    phase.assertActive();
     this.enter("booting");
-    // A VM that never started sends no stop, so its restart is decided here;
-    // every other crash is decided where the driver reports the stop.
-    try { await this.options.driver.start(); }
-    catch (error) { this.enter("crashed"); this.options.record("crashed"); this.afterCrash(); throw error; }
-    this.enter("handshaking");
-    const deadline = this.options.now() + this.options.handshakeDeadlineMs;
-    for (;;) {
-      try { this.control = await this.options.link.json("control"); break; }
-      catch (error) {
-        // A guest of another image is not a slow guest: it is not retried.
-        if (error instanceof PlatformError && error.failure.code === "ENGINE_VERSION_SKEW") {
-          this.enter("failed"); this.options.record("failed");
-          await this.options.driver.forceStop();
-          throw error;
+    try {
+      const launching = Promise.resolve().then(() => { phase.assertActive(); return this.options.driver.start(); })
+        .finally(() => { if (this.launching === launching) this.launching = null; });
+      this.launching = launching;
+      await phase.observe(launching);
+      phase.assertActive();
+      this.enter("handshaking");
+      const deadline = phase.after(this.options.handshakeDeadlineMs,
+        () => phase.cancel(unavailable("the engine did not answer after starting")));
+      for (;;) {
+        try { phase.control = await phase.open("control"); break; }
+        catch (error) {
+          phase.assertActive();
+          if (error instanceof PlatformError && error.failure.code === "ENGINE_VERSION_SKEW") throw error;
+          await phase.delay(this.options.handshakeRetryMs);
         }
-        if (this.options.now() >= deadline) {
-          this.enter("crashed"); this.options.record("crashed");
-          await this.options.driver.forceStop();
-          throw new PlatformError({ code: "ENGINE_UNAVAILABLE", message: "the engine did not answer after starting", retry: "same-key" });
-        }
-        await new Promise<void>(resolve => { this.options.after(this.options.handshakeRetryMs, resolve); });
       }
+      // §9.2: the guest has no clock source of its own.
+      await phase.request(phase.control, "time.set", { wallMs: this.options.wallClock() });
+      phase.assertActive(); deadline.cancel();
+      this.enter("ready"); this.watch(run, phase);
+    } catch (error) {
+      if (this.run === run && run.phase === phase && this.closing === null) {
+        phase.cancel();
+        const incompatible = error instanceof PlatformError && error.failure.code === "ENGINE_VERSION_SKEW";
+        this.enter(incompatible ? "failed" : "crashed"); this.options.record(incompatible ? "failed" : "crashed");
+        try { await this.force(run); }
+        catch (cleanup) { throw new AggregateError([error, cleanup], "Engine startup and stop failed"); }
+      }
+      throw error;
     }
-    // §9.2: the guest has no clock source of its own.
-    await this.control.request("time.set", { wallMs: this.options.wallClock() });
-    this.enter("ready");
-    this.watch();
   }
 
-  /** §9.1: after a wake the guest's wall clock is behind; health says whether it lives. */
+  /** §9.1: after a wake the guest's wall clock is behind. */
   async woke(): Promise<void> {
-    if (this.current !== "ready" || this.control === null) return;
-    await this.control.request("time.set", { wallMs: this.options.wallClock() });
+    const phase = this.run?.phase;
+    if (this.current !== "ready" || !phase?.control) return;
+    await phase.request(phase.control, "time.set", { wallMs: this.options.wallClock() });
   }
 
-  /** MAC-330: an answer that is late is not a dead VM; no answer for
-   * `hungAfterMs` is. Only then is the power pulled. */
-  private watch(): void {
-    this.watchdog = this.options.after(this.options.healthEveryMs, () => {
-      this.watchdog = null;
-      if (this.current !== "ready") return;
-      // Only the silence of `hungAfterMs` judges. A refused answer or a lost
-      // connection is asked again meanwhile; it is not proof of a dead VM.
-      const hung = this.options.after(this.options.hungAfterMs, () => {
-        if (this.current !== "ready") return;
-        this.enter("crashed"); this.options.record("crashed");
-        void this.options.driver.forceStop();
+  private watch(run: VmRun, phase: VmPhase): void {
+    phase.after(this.options.healthEveryMs, () => {
+      const hung = phase.after(this.options.hungAfterMs, () => {
+        // MAC-330 authorizes a forced stop; silence is not proof of death.
+        phase.cancel(); this.enter("crashed"); this.options.record("crashed");
+        void this.force(run).catch(() => undefined); // force retains a failed owner on error.
       });
-      void this.healthy().then(() => { hung.cancel(); if (this.current === "ready") this.watch(); }, () => undefined);
+      void this.healthy(phase).then(() => {
+        hung.cancel(); if (phase.active) this.watch(run, phase);
+      }, () => undefined);
     });
   }
 
-  private async healthy(): Promise<void> {
+  private async healthy(phase: VmPhase): Promise<void> {
     for (;;) {
-      if (this.current !== "ready") throw new Error("no longer watched");
+      phase.assertActive();
       try {
-        if (this.control === null || this.control.isClosed) this.control = await this.options.link.json("control");
-        await this.control.request("health.get", {});
+        if (phase.control === null || phase.control.isClosed) {
+          if (phase.control !== null) phase.close(phase.control);
+          phase.control = await phase.open("control");
+        }
+        await phase.request(phase.control, "health.get", {});
         return;
-      } catch {
-        await new Promise<void>(resolve => { this.options.after(this.options.handshakeRetryMs, resolve); });
-      }
+      } catch { phase.assertActive(); await phase.delay(this.options.handshakeRetryMs); }
     }
   }
 
-  /** MAC-320: drain every society, then power off; past the deadline the
-   * power is pulled and the stop is `forced`. */
-  async stop(): Promise<"stopped" | "forced"> {
-    if (this.current === "stopped" || this.current === "failed" || this.current === "crashed") return "stopped";
-    if (this.starting !== null) await this.starting.catch(() => undefined);
-    this.watchdog?.cancel(); this.watchdog = null;
+  /** MAC-320: one stop owner, with its budget beginning even during startup. */
+  stop(): Promise<"stopped" | "forced"> {
+    if (this.closing !== null) return this.closing;
+    this.restart?.cancel(); this.restart = null;
+    const run = this.run;
+    // No new stop happened: do not turn an earlier forced/crashed fact into clean.
+    if (run === null) return Promise.resolve("stopped");
+    run.phase.cancel();
+    const phase = run.phase = new VmPhase(this.options);
+    const closing = Promise.resolve().then(() => this.drain(run, phase)).finally(() => {
+      phase.cancel(); if (this.closing === closing) this.closing = null;
+    });
+    this.closing = closing;
+    return closing;
+  }
+
+  private async drain(run: VmRun, phase: VmPhase): Promise<"stopped" | "forced"> {
     this.enter("draining");
-    const stopped = new Promise<boolean>(resolve => { this.stoppedWaiter = () => { resolve(true); }; });
-    const deadline = new Promise<boolean>(resolve => { this.options.after(this.options.drainDeadlineMs, () => { resolve(false); }); });
-    const drain = async (): Promise<void> => {
-      const society = await this.options.link.json("society");
-      try {
-        await society.request("maintenance.begin", {}, "power-off");
-        const listed = await society.request("society.list", {}) as { societies: { society: string; running: boolean }[] };
-        for (const entry of listed.societies)
-          if (entry.running) await society.request("society.close", { society: entry.society, mode: "stop" });
-      } finally { society.close(); }
-      const control = this.control ?? await this.options.link.json("control");
-      await control.request("power.off", {});
-    };
-    // A drain that fails still ends at the deadline; what it did is not
-    // assumed, the guest's own recovery settles it on the next boot.
-    void drain().catch(() => undefined);
-    const clean = await Promise.race([stopped, deadline]);
-    this.stoppedWaiter = null;
-    if (!clean) {
+    const deadline = phase.delay(this.options.drainDeadlineMs).then(() => null, error => {
+      if (run.cause !== null) return run.cause;
+      throw error;
+    });
+    // A failed drain is not success: wait for observed death or the stop policy.
+    void this.drainGuest(phase).catch(() => undefined);
+    const cause = await Promise.race([run.stopped, deadline]);
+    phase.cancel();
+    if (cause === null) {
       this.enter("forced"); this.options.record("forced");
-      await this.options.driver.forceStop();
-    }
-    this.control?.close(); this.control = null;
+      await this.force(run);
+    } else if (cause === "guest") this.options.record("clean");
+    else this.options.record("crashed");
     this.enter("stopped");
-    return clean ? "stopped" : "forced";
+    return cause === null ? "forced" : "stopped";
   }
 
-  private stoppedByDriver(): void {
-    this.control?.close(); this.control = null;
-    this.watchdog?.cancel(); this.watchdog = null;
-    if (this.stoppedWaiter !== null) { this.stoppedWaiter(); return; }
-    if (this.current === "draining" || this.current === "forced" || this.current === "stopped" || this.current === "failed") return;
+  private async drainGuest(phase: VmPhase): Promise<void> {
+    const society = await phase.open("society");
+    try {
+      await phase.request(society, "maintenance.begin", {}, "power-off");
+      const listed = await phase.request(society, "society.list", {}) as { societies: { society: string; running: boolean }[] };
+      for (const entry of listed.societies)
+        if (entry.running) await phase.request(society, "society.close", { society: entry.society, mode: "stop" });
+    } finally { phase.close(society); }
+    const control = await phase.open("control");
+    await phase.request(control, "power.off", {});
+  }
+
+  private force(run: VmRun): Promise<void> {
+    if (this.forcing !== null) return this.forcing;
+    const forcing = Promise.resolve().then(async () => {
+      if (run.cause === null) {
+        await this.options.driver.forceStop();
+        await run.stopped; // A command reply alone is not the stopped observation.
+      }
+    }).catch(error => {
+      if (this.run === run) { this.enter("failed"); this.options.record("failed"); }
+      throw error;
+    }).finally(() => { if (this.forcing === forcing) this.forcing = null; });
+    this.forcing = forcing;
+    return forcing;
+  }
+
+  private stoppedByDriver(cause: VmStopCause): void {
+    const run = this.run;
+    if (run === null) return;
+    run.cause = cause; run.ended(cause); run.phase.cancel(); this.run = null;
+    if (this.closing !== null || this.current === "failed") return;
     if (this.current !== "crashed") { this.enter("crashed"); this.options.record("crashed"); }
     this.afterCrash();
   }
 
-  /** MAC-331: a crashed VM restarts with back-off, at most `max` times in
-   * `windowMs`; after that it is `failed` and waits for the Human. */
+  /** MAC-331: restart only after the previous driver operations have returned. */
   private afterCrash(): void {
-    const now = this.options.now();
-    this.restartTimes = this.restartTimes.filter(at => now - at < this.options.restarts.windowMs);
-    if (this.restartTimes.length >= this.options.restarts.max) {
-      this.enter("failed"); this.options.record("failed");
-      return;
-    }
-    this.restartTimes.push(now);
-    const backoff = this.options.restarts.backoffMs * 2 ** (this.restartTimes.length - 1);
-    this.options.after(backoff, () => { if (this.current === "crashed") void this.start().catch(() => undefined); });
+    this.restart?.cancel();
+    const phase = this.restart = new VmPhase(this.options);
+    void phase.observe(Promise.allSettled([this.starting, this.launching, this.forcing])).then(() => {
+      phase.assertActive();
+      const now = this.options.now();
+      this.restartTimes = this.restartTimes.filter(at => now - at < this.options.restarts.windowMs);
+      if (this.restartTimes.length >= this.options.restarts.max) {
+        phase.cancel(); this.enter("failed"); this.options.record("failed"); return;
+      }
+      this.restartTimes.push(now);
+      const backoff = this.options.restarts.backoffMs * 2 ** (this.restartTimes.length - 1);
+      phase.after(backoff, () => { void this.start().catch(() => undefined); });
+    }).catch(() => undefined);
   }
 }

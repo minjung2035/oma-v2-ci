@@ -54,17 +54,14 @@ export function openTerminal(streams: TerminalStreams): Terminal {
   const { input, output } = streams;
   let restored = false;
   let previous: readonly string[] = [];
-  if (input.isTTY) input.setRawMode(true);
-  input.resume();
-  output.write(ALT_ON + CURSOR_OFF + PASTE_ON + CURSOR_KEYS_NORMAL + CLEAR);
-  // WP28: unconditional means every exit, not only the ones that remember to
-  // call restore(). A TTY write and setRawMode are synchronous, so they still
-  // happen inside an `exit` handler.
-  process.once("exit", () => terminal.restore());
+  const keyListeners: ((chunk: Buffer | string) => void)[] = [];
+  const resizeListeners: (() => void)[] = [];
+  const onExit = (): void => terminal.restore();
   const terminal: Terminal = {
     get columns() { return Math.max(TERMINAL_BOUNDS.minColumns.value, output.columns ?? TERMINAL_BOUNDS.assumedColumns.value); },
     get rows() { return Math.max(TERMINAL_BOUNDS.minRows.value, output.rows ?? TERMINAL_BOUNDS.assumedRows.value); },
     draw(lines) {
+      if (restored) return;
       // Redraw only when something changed, so an idle TUI does not stream
       // escape sequences at the terminal.
       if (lines.length === previous.length && lines.every((line, index) => line === previous[index])) return;
@@ -72,9 +69,12 @@ export function openTerminal(streams: TerminalStreams): Terminal {
       output.write(HOME + lines.join(NEWLINE));
     },
     onKeys(handler) {
-      input.on("data", chunk => handler(typeof chunk === "string" ? Buffer.from(chunk) : chunk));
+      if (restored) return;
+      const listener = (chunk: Buffer | string): void => handler(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      keyListeners.push(listener);
+      input.on("data", listener);
     },
-    onResize(handler) { output.on("resize", handler); },
+    onResize(handler) { if (restored) return; resizeListeners.push(handler); output.on("resize", handler); },
     repaint() {
       if (restored) return;
       previous = [];
@@ -84,10 +84,42 @@ export function openTerminal(streams: TerminalStreams): Terminal {
       if (restored) return;
       restored = true;
       previous = [];
-      try { if (input.isTTY) input.setRawMode(false); } catch { /* terminal already gone */ }
-      input.pause();
-      output.write(PASTE_OFF + CURSOR_ON + ALT_OFF);
+      releaseTerminalResources([
+        () => process.off("exit", onExit),
+        ...keyListeners.splice(0).map(listener => () => input.off("data", listener)),
+        ...resizeListeners.splice(0).map(listener => () => output.off("resize", listener)),
+        () => restoreTerminalModes(streams),
+      ]);
     },
   };
+  try {
+    if (input.isTTY) input.setRawMode(true);
+    input.resume();
+    output.write(ALT_ON + CURSOR_OFF + PASTE_ON + CURSOR_KEYS_NORMAL + CLEAR);
+    // WP28: even an exit that forgets restore returns the terminal. The owner
+    // exists before any fallible setup, including registration of this hook.
+    process.once("exit", onExit);
+  } catch (error) {
+    try { terminal.restore(); }
+    catch (cleanup) { throw new AggregateError([error, cleanup], "terminal setup and cleanup failed"); }
+    throw error;
+  }
   return terminal;
+}
+
+/** P0-4: one failed return must not strand the other terminal resources. */
+export function releaseTerminalResources(actions: readonly (() => void)[]): void {
+  const errors: unknown[] = [];
+  for (const action of actions) try { action(); } catch (error) { errors.push(error); }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, "terminal cleanup failed");
+}
+
+/** Also used after the interactive child has actually exited. */
+export function restoreTerminalModes({ input, output }: TerminalStreams, mouse = false): void {
+  releaseTerminalResources([
+    () => { if (input.isTTY) input.setRawMode(false); },
+    () => { input.pause(); },
+    () => { output.write((mouse ? `${ESC}[?1000l${ESC}[?1002l${ESC}[?1003l${ESC}[?1006l` : "") + PASTE_OFF + CURSOR_ON + ALT_OFF); },
+  ]);
 }

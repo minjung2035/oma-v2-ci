@@ -7,14 +7,18 @@
  */
 import { createHash } from "node:crypto";
 import { lstatSync } from "node:fs";
-import type { HostConfigV1 } from "../../../implementation/contracts.js";
+import { join } from "node:path";
+import type { EffortLevel, HostConfigV1, ModelProfile } from "../../../implementation/contracts.js";
 import { StoreError } from "../../domain/errors.js";
-import { loadConfigurationSnapshot, validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../../config.js";
-import type { ConfigurationLayout } from "../../config/operations.js";
+import { EFFORT_LEVELS, loadConfigurationSnapshot, loadEditableConfiguration, validateConfig,
+  type ConfigurationSnapshot, type ValidatedConfigCandidate } from "../../config.js";
+import { observeExtensionAsset, type ConfigurationLayout } from "../../config/operations.js";
+import { DEPLOYMENT_LAYOUT } from "../../domain/deployment.js";
+import { projectSettingsPathAt } from "../../storage/paths.js";
 import type { DurabilityObserver } from "../../storage/durable-fs.js";
 import {
   commitInlineConfiguration, commitManagedGeneration, createInlineConfiguration, managedRolesOf,
-  type ManagedLimits, type ManagedCommit, type ManagedEdit, type ManagedSource,
+  type ManagedLimits, type ManagedCommit, type ManagedEdit, type ManagedRoleSource, type ManagedSource,
 } from "../../config/generations.js";
 import type { ApplyScope, ConfigField } from "../model.js";
 import { CONFIG_BOUNDS } from "../limits.js";
@@ -37,6 +41,41 @@ export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
 export const EXTENSIONS = "extensions";
 
+/** DR24: a model and its effort, chosen from the engine's own lists. */
+export interface EngineModelChoice { readonly provider: string; readonly model: string; readonly thinking?: EffortLevel }
+/** What a Config field is set to: an option, a number, or a model from the engine's list. */
+export type FieldValue = string | number | EngineModelChoice;
+/** The model profile a Worker's own choice from the engine's list is kept in. */
+export const WORKER_MODEL_PROFILE = "worker";
+
+/** A model profile that leaves the model to the engine: its default, as its own settings name it. */
+export function followsEngine(profile: ModelProfile | undefined): boolean {
+  return profile?.provider === "pi" && profile.model === "current";
+}
+
+/** A name the engine's screen reported, or null when it is not one. */
+export function engineName(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 && value.length <= CONFIG_BOUNDS.engineNameChars.value ? value : null;
+}
+
+/** An engine choice as the engine's screen reported it, or null when it is not one. */
+export function engineModelChoiceOf(value: Readonly<Record<string, unknown>>): EngineModelChoice | null {
+  const provider = engineName(value.provider), model = engineName(value.model);
+  if (provider === null || model === null) return null;
+  if (value.thinking !== undefined && !(EFFORT_LEVELS as readonly unknown[]).includes(value.thinking)) return null;
+  return Object.freeze({ provider, model, ...(value.thinking === undefined ? {} : { thinking: value.thinking as EffortLevel }) });
+}
+
+/** DR24: what a Worker runs, as the Worker model row says it. */
+export function workerModelText(config: HostConfigV1, workerProfile: string | null): string {
+  const name = workerProfile === null ? undefined : config.agentProfiles[workerProfile]?.modelProfile;
+  const profile = name === undefined ? undefined : config.modelProfiles[name];
+  if (profile === undefined) return "unknown";
+  if (name === config.agentProfiles[config.principalProfile]?.modelProfile) return "Same as the Principal";
+  if (followsEngine(profile)) return "The engine's default";
+  return `${profile.provider}/${profile.model}${profile.thinking === undefined ? "" : ` · ${profile.thinking}`}`;
+}
+
 /** The authored layout behind the composed config. A split bundle is edited
  * as a whole managed generation whose manifest is replaced last (D02/WP13),
  * never patched file by file and never flattened into its index.
@@ -49,7 +88,9 @@ export type ConfigLayout = ConfigurationLayout;
 
 export interface Settings {
   readonly path: string;
-  readonly snapshot: ConfigurationSnapshot | null;
+  /** What an edit is committed against: the snapshot it was read as, or (WP14.03)
+   * the editing input of a bundle a declared extension file is missing from. */
+  readonly snapshot: ManagedSource | null;
   readonly layout: ConfigLayout;
   readonly config: HostConfigV1;
   /** The profile a Worker edit changes, or null when there is none of its own. */
@@ -81,7 +122,7 @@ export function residentProfiles(config: HostConfigV1): readonly string[] {
 
 /** WP15: a Worker field with no Worker profile to change. */
 const noWorkerProfile = (config: HostConfigV1): string | null =>
-  workerProfileOf(config) === null ? "Worker profile 없음: Principal 외의 agent profile을 먼저 설정하세요" : null;
+  workerProfileOf(config) === null ? "No worker profile: configure a non-Principal agent profile first" : null;
 /** The Worker profile a transform changes; its absence is refused, never a fallback. */
 function workerTarget(settings: Settings): string {
   const name = settings.workerProfile;
@@ -121,10 +162,105 @@ export function settingsOf(
   path: string,
   config: HostConfigV1,
   layout: ConfigLayout = { kind: "inline", path },
-  snapshot: ConfigurationSnapshot | null = null,
+  snapshot: ManagedSource | null = null,
  ): Settings {
   const workerProfile = workerProfileOf(config);
   return Object.freeze({ path, snapshot, layout, config, workerProfile, fields: fieldsOf(config, workerProfile) });
+}
+
+/** DR24: a project's OMA settings -- its model and agent profiles, workers,
+ * integration, limits -- held once, beside the societies of its sessions and
+ * in none of them. Every session's society configuration is made from it, so
+ * a setting saved in one session holds in the next and in the others. */
+export function projectSettingsPath(dataRoot: string, project: string): string {
+  return projectSettingsPathAt(dataRoot, project);
+}
+
+/** What a session's society has of its own: its name and the installation
+ * and rootfs it runs with, and (DR25) where the Human's installed packages
+ * are. The rest is the project's. */
+export interface SessionOwn {
+  readonly society: string; readonly node: string; readonly libdir: string;
+  readonly rootfs: string; readonly deploymentDigest: string; readonly packages?: string | undefined;
+}
+
+export function sessionConfigOf(project: HostConfigV1, own: SessionOwn): HostConfigV1 {
+  return { ...project, society: own.society,
+    installation: { node: own.node, libdir: own.libdir, rootfs: own.rootfs, deploymentDigest: own.deploymentDigest,
+      ...(own.packages === undefined ? {} : { packages: own.packages }) } };
+}
+
+/** DR25: the roles a configuration runs as, whole -- a bundle's authored
+ * roles, or an inline configuration's: the core extension and no prompt,
+ * which is how an engine runs a role an inline configuration names. */
+export function roleSetOf(source: ManagedSource): Record<string, ManagedRoleSource> {
+  const set: Record<string, ManagedRoleSource> = Object.create(null);
+  for (const name of Object.keys(source.config.agentProfiles)) {
+    const role = source.authoredRoles[name]?.value;
+    set[name] = role === undefined
+      ? Object.freeze({ extensions: Object.freeze([DEPLOYMENT_LAYOUT.extension]), prompt: Buffer.alloc(0) })
+      : Object.freeze({ extensions: Object.freeze([...role.extensions as string[]]),
+        ...(Object.hasOwn(role, "toolSurface") ? { toolSurface: role.toolSurface } : {}),
+        prompt: Buffer.from(source.roles[name]?.prompt ?? "", "utf8") });
+  }
+  return set;
+}
+
+/** DR25: commits a whole role set with the candidate -- how an inline
+ * configuration becomes a managed bundle, and how a session's configuration
+ * takes on its project's roles. The same writer, the same proof by the
+ * loader, the same refusal of a source changed since it was read. */
+export function commitRoleSet(snapshot: ManagedSource, config: HostConfigV1,
+  roleSet: Readonly<Record<string, ManagedRoleSource>>, faults?: DurabilityObserver): ManagedCommit {
+  const after = roleRevisionInput(managedRolesOf(snapshot, {}, config, roleSet));
+  if (snapshot.layout.kind === "operations" &&
+      sameMeaning(config, after, snapshot.config, roleRevisionInput(managedRolesOf(snapshot, {}, snapshot.config))))
+    return Object.freeze({ kind: "unchanged", generation: null });
+  return commitManagedGeneration(snapshot, { config: revised(config, after), roleSet }, faults);
+}
+
+/** A configuration as last committed: runnable, or -- when only a declared
+ * extension file is gone -- the editing input its repair is made from. */
+export function readSettingsForEditing(path: string): Settings {
+  try { return readSettings(path); }
+  catch (error) {
+    let editable: ReturnType<typeof loadEditableConfiguration>;
+    try { editable = loadEditableConfiguration(path); } catch { throw error; }
+    return settingsOf(path, editable.config, editable.layout, editable);
+  }
+}
+
+/** DR25: a project's settings are a managed bundle, so each role's
+ * extensions can be chosen; an inline one becomes one, running as it did. */
+export function projectBundle(path: string): Settings {
+  const settings = readSettingsForEditing(path);
+  if (settings.layout.kind === "operations") return settings;
+  commitRoleSet(settings.snapshot!, settings.config, roleSetOf(settings.snapshot!));
+  return readSettingsForEditing(path);
+}
+
+/** DR24/DR25: a session's configuration is its project's -- host settings,
+ * models and roles, their extensions, prompts and tool surfaces -- with the
+ * session's own name, rootfs and installation. An extension the project
+ * names whose file is gone is left out of the session, never loaded in its
+ * place, and reported; the project keeps it until the Human turns it off. */
+export function deriveSessionSettings(project: Settings, path: string, own: SessionOwn): { readonly settings: Settings; readonly missing: readonly string[] } {
+  if (project.snapshot === null) throw new StoreError("UNSUPPORTED_PROFILE", "a session is made only from the project's committed settings");
+  const config = sessionConfigOf(project.config, own);
+  const roots = { libdir: config.installation.libdir, packages: config.installation.packages };
+  const missing = new Set<string>();
+  const roleSet: Record<string, ManagedRoleSource> = Object.create(null);
+  for (const [name, role] of Object.entries(roleSetOf(project.snapshot))) {
+    const present = role.extensions.filter(entry => {
+      if (observeExtensionAsset(roots, entry).kind !== "missing") return true;
+      missing.add(entry); return false;
+    });
+    roleSet[name] = Object.freeze({ ...role, extensions: Object.freeze(present) });
+  }
+  if (lstatSync(path, { throwIfNoEntry: false }) === undefined) writeSettings(path, config);
+  const session = readSettingsForEditing(path);
+  commitRoleSet(session.snapshot!, config, roleSet);
+  return Object.freeze({ settings: readSettings(path), missing: Object.freeze([...missing].sort()) });
 }
 
 export function readSettings(path: string): Settings {
@@ -173,7 +309,7 @@ function withSeedCount(config: HostConfigV1, count: number, profile: string): Ho
 /** Pure. Returns the config that the caller then writes; it does not touch disk
  * so that the transform can be tested against the closed schema directly.
  */
-export function applyField(settings: Settings, field: string, value: string | number): HostConfigV1 {
+export function applyField(settings: Settings, field: string, value: FieldValue): HostConfigV1 {
   if (!Object.hasOwn(EDITABLE_FIELD_DESCRIPTORS, field))
     throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
   return EDITABLE_FIELD_DESCRIPTORS[field as EditableField].transform(settings, value);
@@ -195,7 +331,7 @@ function revised(config: HostConfigV1, roles?: Readonly<Record<string, unknown>>
 /** DR12, P0-3: an inline `config.json` is committed by the generation owner
  * (config/generations.ts): the expected version is the snapshot the edit was
  * read as, and the loader reproduces the candidate before the commit point. */
-function commitInlineEdit(snapshot: ConfigurationSnapshot, config: HostConfigV1, faults?: DurabilityObserver): ManagedCommit {
+function commitInlineEdit(snapshot: Pick<ConfigurationSnapshot, "config" | "layout" | "sourceFiles">, config: HostConfigV1, faults?: DurabilityObserver): ManagedCommit {
   if (sameMeaning(config, {}, snapshot.config, {})) return Object.freeze({ kind: "unchanged", generation: null });
   return commitInlineConfiguration(snapshot, revised(config), faults);
 }
@@ -247,12 +383,12 @@ export interface EditableFieldDescriptor {
    * same descriptor owns label, value, apply time and this refusal. */
   readonly blocked?: (config: HostConfigV1, bootstrap: BootstrapState) => string | null;
   readonly view: (config: HostConfigV1, workerProfile: string | null) => EditableFieldView;
-  readonly transform: (settings: Settings, value: string | number) => HostConfigV1;
+  readonly transform: (settings: Settings, value: FieldValue) => HostConfigV1;
 }
 
 /** D05: seeds are read by the first bootstrap only. */
 const seedsBlocked = (_config: HostConfigV1, bootstrap: BootstrapState): string | null =>
-  bootstrap === "done" ? "이미 bootstrap된 society: 기존 worker에 적용되지 않음" : null;
+  bootstrap === "done" ? "Society already bootstrapped: does not apply to existing workers" : null;
 
 const DESCRIPTOR_SOURCE = {
   [PRINCIPAL_MODEL]: Object.freeze({
@@ -263,7 +399,7 @@ const DESCRIPTOR_SOURCE = {
       value: config.agentProfiles[config.principalProfile]?.modelProfile ?? "",
       options: Object.keys(config.modelProfiles).sort(),
     }),
-    transform: (settings: Settings, value: string | number) => {
+    transform: (settings: Settings, value: FieldValue) => {
       const config = settings.config;
       assertKnown(typeof value === "string" && Object.hasOwn(config.modelProfiles, value), "unknown model profile");
       const profile = config.agentProfiles[config.principalProfile];
@@ -281,24 +417,37 @@ const DESCRIPTOR_SOURCE = {
       value: workerProfile === null ? "" : config.agentProfiles[workerProfile]?.modelProfile ?? "",
       options: Object.keys(config.modelProfiles).sort(),
     }),
-    transform: (settings: Settings, value: string | number) => {
+    transform: (settings: Settings, value: FieldValue) => {
       const config = settings.config;
-      assertKnown(typeof value === "string" && Object.hasOwn(config.modelProfiles, value), "unknown model profile");
       const name = workerTarget(settings);
       const profile = config.agentProfiles[name];
       assertKnown(profile !== undefined, "worker profile is missing from host config");
+      if (typeof value === "object") {
+        // DR24: a model from the engine's list is kept in the Worker's own
+        // model profile, with the limits the Worker ran with; a profile of that
+        // name another agent runs is not taken over.
+        const shared = Object.entries(config.agentProfiles)
+          .some(([other, agent]) => other !== name && agent.modelProfile === WORKER_MODEL_PROFILE);
+        assertKnown(!shared, `model profile ${WORKER_MODEL_PROFILE} is another agent's`);
+        const { thinking: _previous, ...base } = config.modelProfiles[profile!.modelProfile]!;
+        return { ...config,
+          modelProfiles: { ...config.modelProfiles, [WORKER_MODEL_PROFILE]: { ...base, provider: value.provider, model: value.model,
+            ...(value.thinking === undefined ? {} : { thinking: value.thinking }) } },
+          agentProfiles: { ...config.agentProfiles, [name]: { ...profile!, modelProfile: WORKER_MODEL_PROFILE } } };
+      }
+      assertKnown(typeof value === "string" && Object.hasOwn(config.modelProfiles, value), "unknown model profile");
       return { ...config, agentProfiles: { ...config.agentProfiles,
         [name]: { ...profile!, modelProfile: value as string } } };
     },
   }),
   [WORKER_LIMIT]: Object.freeze({
-    label: "Worker limit",
+    label: "Max created workers",
     apply: "restart",
     view: (config: HostConfigV1) => ({
-      kind: "number" as const, value: config.quota.societyAgents, min: 1, max: CONFIG_BOUNDS.maxWorkerLimit.value,
+      kind: "number" as const, value: config.quota.societyAgents, min: 0, max: Number.MAX_SAFE_INTEGER,
     }),
-    transform: (settings: Settings, value: string | number) => {
-      assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value > 0, "worker limit must be a positive integer");
+    transform: (settings: Settings, value: FieldValue) => {
+      assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "worker limit must be a non-negative integer");
       return { ...settings.config, quota: { ...settings.config.quota, societyAgents: value as number } };
     },
   }),
@@ -309,7 +458,7 @@ const DESCRIPTOR_SOURCE = {
     view: (config: HostConfigV1) => ({
       kind: "number" as const, value: config.initialResidents.length, min: 0, max: CONFIG_BOUNDS.maxInitialWorkers.value,
     }),
-    transform: (settings: Settings, value: string | number) => {
+    transform: (settings: Settings, value: FieldValue) => {
       assertKnown(typeof value === "number" && Number.isSafeInteger(value) && value >= 0, "initial workers must be a non-negative integer");
       // A seed needs a Worker profile only when one is added.
       const count = value as number;
@@ -321,11 +470,11 @@ const DESCRIPTOR_SOURCE = {
     apply: "bootstrap-only",
     // D05: with no seeds there is no target; the selection is not kept anywhere.
     blocked: (config: HostConfigV1, bootstrap: BootstrapState) => config.initialResidents.length === 0
-      ? "bootstrap worker 없음: Initial workers를 먼저 늘리세요" : seedsBlocked(config, bootstrap),
+      ? "No bootstrap workers: increase Initial workers first" : seedsBlocked(config, bootstrap),
     view: (config: HostConfigV1, workerProfile: string | null) => ({
       kind: "choice" as const, value: workerProfile ?? "", options: residentProfiles(config),
     }),
-    transform: (settings: Settings, value: string | number) => {
+    transform: (settings: Settings, value: FieldValue) => {
       const config = settings.config;
       assertKnown(config.initialResidents.length > 0, "there are no bootstrap workers to change");
       // The profiles the screen offers are the ones a Resident may run under.
@@ -346,7 +495,7 @@ const DESCRIPTOR_SOURCE = {
       value: workerProfile !== null && config.agentProfiles[workerProfile]?.capabilities.includes("code.integrate") ? "on" : "off",
       options: ["off", "on"],
     }),
-    transform: (settings: Settings, value: string | number) => {
+    transform: (settings: Settings, value: FieldValue) => {
       assertKnown(value === "on" || value === "off", "worker integrate is on or off");
       const config = settings.config;
       const name = workerTarget(settings);
@@ -369,7 +518,7 @@ export const EDITABLE_FIELD_DESCRIPTORS = PLACEMENT;
  * published as one managed generation.
  */
 export type FieldCommit = { readonly kind: "saved" } | { readonly kind: "unchanged" };
-export function commitField(settings: Settings, field: string, value: string | number, bootstrap: BootstrapState = "unknown"): FieldCommit {
+export function commitField(settings: Settings, field: string, value: FieldValue, bootstrap: BootstrapState = "unknown"): FieldCommit {
   if (!Object.hasOwn(EDITABLE_FIELD_DESCRIPTORS, field))
     throw new StoreError("INVALID_REQUEST", `unknown settings field ${field}`);
   const descriptor = EDITABLE_FIELD_DESCRIPTORS[field as EditableField];

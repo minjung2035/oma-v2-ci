@@ -1,4 +1,4 @@
-/** Priority 0, fourth review (implementation/priority-0-audit.md "4차 점검"):
+/** Priority 0, fourth review (docs/priority-0-audit.md "4차 점검"):
  * the findings of the whole-codebase external review, each tested where its
  * decision takes effect, with the reading the fix removed as the control. */
 import test from "node:test";
@@ -297,15 +297,21 @@ test("P0V-51 / F5, P0-1: with no Worker profile of its own, a Worker edit is ref
   for (const id of [WORKER_MODEL, WORKER_INTEGRATE]) {
     const field = fields.find(entry => entry.id === id);
     assert.ok(field !== undefined && field.kind !== "link");
-    assert.match(String(field.blocked), /Worker profile/, `${id} is offered`);
+    assert.match(String(field.blocked), /worker profile/i, `${id} is offered`);
   }
   for (const [field, value] of [[WORKER_INTEGRATE, "on"], [WORKER_MODEL, defaults.agentProfiles[defaults.principalProfile]!.modelProfile], [INITIAL_WORKERS, 1]] as const)
     assert.throws(() => applyField(settings, field, value), /no worker profile/, `${field} changed something`);
   assert.throws(() => applyField({ ...settings, config: { ...config, initialResidents: [{ name: "w", profile: defaults.principalProfile, brief: "b" }] } },
     WORKER_PROFILE, defaults.principalProfile), /unknown agent profile/, "a Resident was offered the Principal's profile");
-  // A profile the Principal names as its child is still the Workers' own.
-  assert.equal(settingsOf("/nonexistent/config.json", defaults).workerProfile, principal.childProfile);
-  assert.ok(applyField(settingsOf("/nonexistent/config.json", defaults), WORKER_INTEGRATE, "on").agentProfiles[principal.childProfile!]!.capabilities.includes("code.integrate"));
+  // DR27: host seeds select the Worker profile without giving the Principal creation authority.
+  const worker = defaults.initialResidents[0]!.profile;
+  assert.equal(settingsOf("/nonexistent/config.json", defaults).workerProfile, worker);
+  assert.ok(applyField(settingsOf("/nonexistent/config.json", defaults), WORKER_INTEGRATE, "on").agentProfiles[worker]!.capabilities.includes("code.integrate"));
+  // A legacy profile the Principal names as its child is still the Workers' own.
+  const legacy = validateConfig({ ...defaults, initialResidents: [], agentProfiles: {
+    ...defaults.agentProfiles, [defaults.principalProfile]: { ...principal, childProfile: worker },
+  } });
+  assert.equal(settingsOf("/nonexistent/config.json", legacy).workerProfile, worker);
 });
 
 test("P0V-39 / N16, P0-5: a Resident whose unit was not observed leaves the Active count unknown, never 0", () => {
@@ -388,7 +394,7 @@ test("P0V-36 / N13, P0-2: a message whose body is within the body limit is read 
   const plan = planPiSpawn({ actor: "alice", society: "demo", paths: { piCommand: "/usr/bin/node", coreExtension: "/opt/oma/ext.js", cli: "/opt/oma/cli.js",
     workspace: workspacePathAt(state, "alice"), sessionDir: runnerSessionDirPathAt(state, "alice"), agentHome: join(agentRootPathAt(state, "alice"), "home"),
     mailArchive: join(state, "mail", "archive", "cur"), batchView: runnerViewPathAt(state, "alice"), socket: "/run/oma/control.sock" },
-    profile: { provider: "p", model: "m", turnSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
+    profile: { provider: "p", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
     limits: { frameBytes: 256 * 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: bodyBytes } } as never);
   const told = plan.env.OMA_MAIL_BYTES ?? plan.args[plan.args.indexOf("OMA_MAIL_BYTES") + 1];
   assert.equal(Number(told), storedMailBytes(bodyBytes), "the Resident's engine was told the body limit");
@@ -462,15 +468,15 @@ test("P0V-40 / N17: a list longer than the screen keeps its selection on screen,
   const opened = drive(list, ["right", "right", "enter", ...down(50)]);
   const shown = screen(opened, list, rows, body);
   assert.match(shown, /^line 51\s*$/m, "the body cannot be scrolled");
-  assert.match(shown, /Esc 뒤로/, "the foot was pushed off the screen");
+  assert.match(shown, /Esc Back/, "the foot was pushed off the screen");
   assert.equal(shown.split("\n").length, rows);
 });
 
 test("P0V-42 / N19, P0-5: a body read only in part is shown as partial, not as the whole message", () => {
   const list = panel([mailRow("m-a", "large")]);
   const opened = drive(list, ["right", "right", "enter"]);
-  assert.match(screen(opened, list, 20, "beginning", true), /앞부분만 표시/);
-  assert.doesNotMatch(screen(opened, list, 20, "whole", false), /앞부분만 표시/);
+  assert.match(screen(opened, list, 20, "beginning", true), /showing the beginning only/i);
+  assert.doesNotMatch(screen(opened, list, 20, "whole", false), /showing the beginning only/i);
 });
 
 test("P0V-43 / N20: one refresh reads the headers of a bounded number of messages, the most recent, and counts the rest", { skip: process.getuid?.() === 0 }, () => {

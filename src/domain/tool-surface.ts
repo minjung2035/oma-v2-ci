@@ -8,7 +8,8 @@
  * This module is pure and owns validation only. It never loads an extension,
  * never registers a tool and never executes one. The flattened result is what
  * the trusted core extension applies inside Pi, so every cycle, duplicate and
- * unknown reference fails here rather than inside the sandbox.
+ * unknown group reference fails here. Only the extension's completed registry
+ * can judge live tool references and collisions; that check belongs there.
  */
 import { StoreError } from "./errors.js";
 

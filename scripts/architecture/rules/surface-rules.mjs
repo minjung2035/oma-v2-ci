@@ -3,19 +3,24 @@
 // a regex over source cannot tell an import from a comment, so those tests
 // passed or failed on prose. Every rule here reads the syntax tree.
 import ts from "typescript";
+import { extractEdges } from "../../dependency-graph.mjs";
 import { eachNode, exists, filesUnder, finding, normalizeRelativeImport, propertyName, sourceOf, strip } from "./shared.mjs";
 
 const EXTENSION_ENTRY = "src/pi-extension.ts";
 const EXTENSION_EXTERNALS = new Set(["@earendil-works/pi-coding-agent", "typebox"]);
 // TUI-020: each engine primitive has one owner, and only these names are borrowed.
 const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
-  "src/tui/view/text.ts": Object.freeze(["visibleWidth"]),
+  "src/tui/cells.ts": Object.freeze(["visibleWidth"]),
   "src/tui/keys.ts": Object.freeze(["parseKey"]),
+  // DR22: upstream owns the conversation; these adapters own input and lifetime, not layout.
+  "src/tui/interactive-editor.ts": Object.freeze(["EditorComponent", "matchesKey"]),
+  "src/runtime/interactive-display.ts": Object.freeze(["Text"]),
 });
 const VIEW = "src/tui/view/";
 const VIEW_SEAM = "src/tui/view/index.ts";
-const VIEW_CALLER = "src/tui/app.ts";
-const VIEW_MAY_IMPORT = [VIEW, "src/tui/model.ts", "src/tui/limits.ts", "src/domain/", "implementation/contracts"];
+// The chooser owns the terminal before a session/app exists, never alongside it.
+const VIEW_CALLERS = new Set(["src/tui/app.ts", "src/tui/session-mode.ts"]);
+const VIEW_MAY_IMPORT = [VIEW, "src/tui/model.ts", "src/tui/limits.ts", "src/tui/cells.ts", "src/domain/", "implementation/contracts"];
 // TUI-006: the two declared owners of product-surface writes.
 const TUI_WRITE_OWNERS = new Set(["src/tui/sources/settings.ts", "src/tui/sources/extensions.ts"]);
 const WRITE_CALLS = new Set([
@@ -26,6 +31,13 @@ const LEDGER_MODULES = new Set(["node:sqlite", "better-sqlite3"]);
 // The deployment layout names the product surface in order to hide it from
 // Residents (TUI-003); that is the one legitimate mention on the Resident side.
 const PRODUCT_SURFACE_DECLARATION = "src/domain/deployment.ts";
+// Host entries also run as separately installed processes; no router edge is
+// required for their product/model boundary to be enforced.
+const PRODUCT_ENTRIES = Object.freeze([
+  "src/entry/oma.ts", "src/entry/oma-society.ts", "src/entry/oma-mac.ts", "src/entry/personal-host.ts",
+  "src/entry/pi-personal.ts", "src/entry/pi-interactive.ts", "src/entry/pi-interactive-host.ts",
+]);
+const isProductFile = file => file.startsWith("src/tui/") || PRODUCT_ENTRIES.includes(file);
 const TUI_FORBIDDEN_CLOSURE = ["src/store.ts", "src/storage/transaction.ts", "src/storage/rows.ts", "src/durable.ts"];
 const PRODUCT_DECLARATIONS = new Set(["src/tui/limits.ts", "src/tui/view/layout.ts", "src/domain/tool-surface.ts", "src/config/defaults.ts"]);
 // Arch §23: closed unions whose switch must end in assertNever, so a new case
@@ -68,19 +80,18 @@ function edges(source) {
   return out;
 }
 
-/** Files reachable from `entry` through runtime relative imports. */
-function runtimeClosure(root, entry) {
+/** The lattice's extractor also sees literal import()/require() edges and
+ * erased re-exports; deferring a load cannot hide a runtime dependency here. */
+function runtimeClosure(root, entries) {
   const seen = new Set();
   const walk = file => {
     if (seen.has(file) || !exists(root, file)) return;
     seen.add(file);
-    for (const edge of edges(sourceOf(root, file))) {
-      if (edge.typeOnly) continue;
-      const target = normalizeRelativeImport(file, edge.specifier);
-      if (target) walk(target);
-    }
+    const { edges } = extractEdges({ source: sourceOf(root, file),
+      resolve: specifier => normalizeRelativeImport(file, specifier) });
+    for (const edge of edges) if (edge.kind === "runtime") walk(edge.to);
   };
-  walk(entry);
+  for (const entry of typeof entries === "string" ? [entries] : entries) walk(entry);
   return seen;
 }
 
@@ -197,8 +208,8 @@ function viewRules(root, findings) {
           findings.push(finding("tui-view-boundary", file, `imports ${edge.specifier}; the view performs no I/O`));
         if (target !== null && !VIEW_MAY_IMPORT.some(prefix => target.startsWith(prefix)))
           findings.push(finding("tui-view-boundary", file, `imports ${target}; the view sees only the model's data`));
-      } else if (target?.startsWith(VIEW) && !(file === VIEW_CALLER && target === VIEW_SEAM)) {
-        findings.push(finding("tui-view-boundary", file, `imports ${target}; only ${VIEW_CALLER} draws, through ${VIEW_SEAM}`));
+      } else if (target?.startsWith(VIEW) && !(VIEW_CALLERS.has(file) && target === VIEW_SEAM)) {
+        findings.push(finding("tui-view-boundary", file, `imports ${target}; only the app or pre-session chooser draws, through ${VIEW_SEAM}`));
       }
     }
   }
@@ -225,38 +236,36 @@ function surfaceEffectRules(root, findings) {
 }
 
 function closureRules(root, findings) {
-  if (exists(root, "src/entry/oma.ts")) {
-    const product = runtimeClosure(root, "src/entry/oma.ts");
-    for (const file of product) {
-      if (file === "src/cli.ts" || file.startsWith("src/cli/commands/") || file === "src/cli/arguments.ts" || file === "src/cli/exit.ts")
-        findings.push(finding("product-cli-separation", file, "the host product reaches the model-facing command surface"));
-      if (TUI_FORBIDDEN_CLOSURE.includes(file))
-        findings.push(finding("tui-ledger", file, "the host product reaches the durable store owner"));
-    }
+  for (const file of runtimeClosure(root, PRODUCT_ENTRIES)) {
+    if (file === "src/cli.ts" || file.startsWith("src/cli/commands/") || file === "src/cli/arguments.ts" || file === "src/cli/exit.ts")
+      findings.push(finding("product-cli-separation", file, "the host product reaches the model-facing command surface"));
+    if (TUI_FORBIDDEN_CLOSURE.includes(file))
+      findings.push(finding("tui-ledger", file, "the host product reaches the durable store owner"));
   }
   if (exists(root, "src/cli.ts"))
     for (const file of runtimeClosure(root, "src/cli.ts"))
-      if (file.startsWith("src/tui/") || file === "src/entry/oma.ts")
+      if (isProductFile(file))
         findings.push(finding("product-cli-separation", file, "the model-facing CLI reaches the host product"));
   // TUI-003: nothing a Resident runs can reach or name the product entrypoint.
   const resident = new Set([...runtimeClosure(root, "src/entry/runner.ts"), ...runtimeClosure(root, EXTENSION_ENTRY)]);
   for (const file of resident) {
-    if (file.startsWith("src/tui/") || file === "src/entry/oma.ts") {
+    if (isProductFile(file)) {
       findings.push(finding("resident-product-surface", file, "the Resident closure reaches the host product"));
       continue;
     }
     if (file === PRODUCT_SURFACE_DECLARATION) continue;
     for (const { text } of literalTexts(sourceOf(root, file)))
-      if (/\/tui\/|entry\/oma/.test(text))
+      if (/\/tui\//.test(text) || PRODUCT_ENTRIES.some(entry => text.includes(entry.slice(4, -3))))
         findings.push(finding("resident-product-surface", file, `names the host product (${text})`));
   }
 }
 
 function vocabularyRules(root, findings) {
-  // TUI-014: Pi is an engine, never a path the product offers.
-  for (const file of [...filesUnder(root, "src/tui"), ...present(root, ["src/entry/oma.ts"])])
+  // TUI-014: Pi is an engine, never a path the product offers. DR25: `oma pi
+  // <command>` is oma's own command, which runs the engine's over oma's store.
+  for (const file of [...filesUnder(root, "src/tui"), ...present(root, PRODUCT_ENTRIES)])
     for (const { text } of literalTexts(sourceOf(root, file)))
-      if (/\bpi (?:config|install|update)\b/.test(text))
+      if (/(?<!\boma )\bpi (?:config|install|update)\b/.test(text))
         findings.push(finding("product-pi-command", file, `offers a Pi command (${text})`));
   // TUI-003: the model-facing surfaces do not advertise the Human's panel.
   for (const file of [...filesUnder(root, "src/cli"), ...present(root, ["src/cli.ts", "src/views.ts"])])
@@ -566,16 +575,17 @@ function principalTurnOwnerRules(root, findings) {
 /** AV31, P0V-81: the termination signals a process can catch (glibc's
  * "Termination Signals", less SIGKILL). A process of this product that has a
  * drain takes it on each of them, and they are named together in one list
- * (runtime/broker-lifetime.ts), so a handler for one of them alone -- and the
+ * (process/host-loss.ts), so a handler for one of them alone -- and the
  * default action on the others -- cannot be written. */
 const TERMINATION_SIGNALS = Object.freeze(["SIGHUP", "SIGINT", "SIGQUIT", "SIGTERM"]);
-const HOST_LOSS_OWNER = "src/runtime/broker-lifetime.ts";
+const HOST_LOSS_OWNER = "src/process/host-loss.ts";
 const LISTENER_METHODS = new Set(["on", "once", "addListener", "prependListener", "prependOnceListener"]);
-/** The processes with a drain: the broker, a Resident's runner, the `oma`
- * TUI, the Mac service and its attach client, a guest's session holder, and
- * guestctl (whose drain is the thaw of a freeze it holds, MAC-620). */
+/** The owners with a drain, not the birth-only router: the broker, a
+ * Resident's runner, Society host, Personal child holder, pre-session chooser,
+ * Mac service and attach client, guest session holder and guestctl. */
 const DRAINING_PROCESSES = Object.freeze([
-  "src/entry/broker.ts", "src/entry/runner.ts", "src/entry/oma.ts", "src/entry/omahostd.ts",
+  "src/entry/broker.ts", "src/entry/runner.ts", "src/entry/oma-society.ts", "src/entry/omahostd.ts",
+  "src/runtime/personal-session.ts", "src/tui/session-mode.ts",
   "src/entry/guest-session.ts", "src/entry/guestctl.ts", "src/platform/host/attach-client.ts",
 ]);
 function hostLossSignalRules(root, findings) {
@@ -645,7 +655,7 @@ const WORDS_OWNER = "src/tui/words.ts";
 const ENGINE_CONTENT = Object.freeze({ "src/tui/session.ts": "event" });
 function errorWordsRules(root, findings) {
   const files = [...filesUnder(root, "src/tui").filter(file => file !== WORDS_OWNER && !file.startsWith(VIEW)),
-    ...present(root, ["src/entry/oma.ts"])];
+    ...present(root, ["src/entry/oma.ts", "src/entry/oma-society.ts"])];
   for (const file of files) {
     const caught = new Set();
     const source = sourceOf(root, file);

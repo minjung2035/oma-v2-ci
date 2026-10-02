@@ -11,21 +11,15 @@ import { integerEnv } from "./shared.js";
  * socket. Nothing here parses HTTP or holds a credential: the engine keeps its
  * codec and the host end attaches the real authorization.
  *
- * The provider is redirected at load, not after the listener is ready, because
- * the engine resolves models during startup and the first request cannot arrive
- * before a turn begins. Registering only `baseUrl` preserves the provider's
- * existing models and streaming behaviour.
- *
- * P0V-120 (G10-04): the provider names only a port this bridge holds. A
- * port that could not be listened on is held by someone else -- the
- * Principal's is chosen free on the host and can be taken before this listens
- * -- and whoever holds it must not receive the engine's requests. So the
- * provider is pointed at no one, then at a port the kernel gives this bridge.
+ * The engine awaits its extension factory before committing provider changes
+ * and resolving models. While binding, the provider names no reachable port;
+ * only a successful listener supplies its final address (P0V-120, G10-04).
+ * If the planned port was taken, the kernel chooses another loopback port.
  * It is never unregistered: that would restore the engine's own provider,
  * which would go around the relay.
  */
 const UNREACHABLE = "http://127.0.0.1:0";
-export function startInferenceBridge(pi: ExtensionAPI): void {
+export async function startInferenceBridge(pi: ExtensionAPI): Promise<void> {
   const socket = process.env.OMA_INFERENCE_SOCKET;
   const provider = process.env.OMA_INFERENCE_PROVIDER;
   const placeholder = process.env.OMA_INFERENCE_KEY;
@@ -41,20 +35,27 @@ export function startInferenceBridge(pi: ExtensionAPI): void {
   });
   // The key is a placeholder shaped like the real one; the host relay swaps it
   // back on the way out, so nothing inside ever holds the credential.
+  // What this load opened ends with it: an interactive engine loads its
+  // extensions again for each new session and would otherwise keep listening.
+  pi.on("session_shutdown", () => { server.close(); });
   const register = (baseUrl: string): void => { pi.registerProvider(provider, { baseUrl, apiKey: placeholder }); };
-  let planned = true;
-  server.on("listening", () => {
-    const address = server.address();
-    if (!planned && typeof address === "object" && address !== null) register(`http://127.0.0.1:${address.port}`);
+  register(UNREACHABLE);
+  await new Promise<void>(resolve => {
+    let planned = true;
+    server.on("listening", () => {
+      const address = server.address();
+      if (typeof address === "object" && address !== null) register(`http://127.0.0.1:${address.port}`);
+      server.unref();
+      resolve();
+    });
+    // Keep the override even if neither bind succeeds; unregistering or throwing
+    // from the factory would restore the provider that bypasses the relay.
+    server.on("error", error => {
+      process.stderr.write(`oma inference bridge unavailable: ${error instanceof Error ? error.message : String(error)}\n`);
+      register(UNREACHABLE);
+      if (planned) { planned = false; server.listen(0, "127.0.0.1"); }
+      else resolve();
+    });
+    server.listen(port, "127.0.0.1");
   });
-  // A bridge that cannot listen must not look like a working one. stderr is the
-  // runner's operational channel; the RPC stream is stdout and must stay clean.
-  server.on("error", error => {
-    process.stderr.write(`oma inference bridge unavailable: ${error instanceof Error ? error.message : String(error)}\n`);
-    register(UNREACHABLE);
-    if (planned) { planned = false; server.listen(0, "127.0.0.1"); }
-  });
-  server.unref();
-  server.listen(port, "127.0.0.1");
-  register(`http://127.0.0.1:${port}`);
 }

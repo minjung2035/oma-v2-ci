@@ -47,15 +47,15 @@ test("V28A: a message the TUI shows is still waiting for the Principal's session
     const dashboard = last();
     // P0V-66: with no observation, what waits for the session is unknown; the
     // mailbox says what arrived in no batch yet.
-    assert.match(dashboard, /Mail\s+unknown \(.*\) · 새 도착 1건/);
+    assert.match(dashboard, /Mail\s+unknown \(.*\) · 1 new arrivals/);
     assert.doesNotMatch(dashboard, /\bunread\b/, "the count was worded as the Human's reading");
     // No observation is shown as unknown with its reason, never as 0 or idle.
     assert.match(dashboard, /Active\s+unknown \(/);
     assert.match(dashboard, /Pending\s+unknown \(/);
     // The configured model is not the running one.
-    assert.match(dashboard, /review \(설정값 · 다음 세션부터 · 현재 세션은 standard로 시작\)/);
+    assert.match(dashboard, /review \(Configured; next session; current session started with standard\)/);
     app.feed(RIGHT); app.feed(RIGHT);
-    assert.match(last(), /● 새 도착\(아직 batch에 담기지 않음\) · 여기서 여는 것은 전달·확인이 아닙니다/);
+    assert.match(last(), /● New arrivals \(not yet batched\); opening here does not deliver or acknowledge them/);
     app.feed(ENTER);
     assert.match(last(), /어느 API를 쓸까요\?/, "the message did not open");
     // Opening it wrote nothing: still new, nothing in cur, same file.

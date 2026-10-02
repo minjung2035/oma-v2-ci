@@ -201,6 +201,6 @@ test("V21B: a startup stop that cannot be confirmed still leaves every other res
   for (const agent of ["alice", "bob"]) f.units.state.set(agent, running);
   f.units.stubborn.add("alice");
   await assert.rejects(f.reconcile.startup(false), { code: "RUN_TERMINATION_UNKNOWN" });
-  assert.deepEqual(f.units.stops, ["alice", "bob"], "one unconfirmed stop does not skip the next safety action");
+  assert.deepEqual(f.units.stops, ["alice", "bob", "carol"], "one unconfirmed stop does not skip any remaining Resident");
   assert.equal(f.units.observe("bob").activeState, "inactive");
 });

@@ -69,6 +69,18 @@ const hasError = (diagnostics, file, code, text) =>
       message(d).includes(text),
   );
 function interfaceSurface(text, file) {
+  // P0V-113 changes only the existing owner's readiness result. Project that
+  // exact delta out for BOTH positive and negative capability controls.
+  if (file === "src/broker/internal-dispatcher.ts")
+    text = replaceOnce(text, "openRun(actor: Actor, invocationId: string): Promise<RunLease>;", "openRun(actor: Actor, invocationId: string): RunLease;");
+  // DR27 adds only the explicit society/attestation ports and wait observation.
+  // Exact anchors protect the delta itself; the original capability golden stays fixed.
+  if (file === publicDispatcher) {
+    text = replaceOnce(text, '  readonly setSociety?: (auth: AuthContext, state: "open" | "closed", key: RequestKey) => Receipt;\n', "");
+    text = replaceOnce(text, '  readonly attestations?: { record(auth: AuthContext, key: RequestKey, input: PublicMethods["attest.record"]["params"]): Promise<Receipt> };\n', "");
+    text = replaceOnce(text, "  waitRun(auth: AuthContext, observe: boolean): boolean;\n", "");
+    text = replaceOnce(text, 'input: PublicMethods["git.integrate"]["params"]', "input: { candidate: Oid; expected: Oid }");
+  }
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   return declarationSurface(
     source.statements
@@ -135,8 +147,9 @@ test("P22 positive control: current production compiles and has closed operation
   assert.equal(ts.version, "5.9.3");
   assert.deepEqual(errors(baseline).map(message), []);
   assertOperationClosure(baseline);
-  for (const [file, expected] of Object.entries(snapshots.dispatch))
+  for (const [file, expected] of Object.entries(snapshots.dispatch)) {
     assert.deepEqual(interfaceSurface(read(file), file), expected);
+  }
 });
 
 test("P22 A: adding a public read method requires DTO, descriptor, handler and response decoder", () => {

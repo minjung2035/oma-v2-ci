@@ -1,16 +1,21 @@
 /** TS-001: durable contract owner. Declarations only; wire/persisted v1 unchanged. */
+import type { TieredAcceptance } from "./integration.js";
+import type { RiskTier } from "./values.js";
+import type { AttestationInput } from "./attestation.js";
 import type { Failure } from "./errors.js";
 import type { ResolvedAgentSpec } from "./host.js";
 import type { Actor, Address, MessageId, Oid, OperationId } from "./identity.js";
 import type { ContextEntry, ExactCandidateIdentity, MailInput } from "./values.js";
 
 export type OperationResult =
+  | { kind: "society.set"; state: "open" | "closed" }
+  | { kind: "attest.record"; message: MessageId; recipientCount: number; archivePath: string }
   | { kind: 'mail.send' | 'agent.continue'; message: MessageId; recipientCount: number; archivePath: string }
   | { kind: 'mail.ack'; message: MessageId; acknowledged: true }
   | { kind: 'route.follow' | 'route.unfollow'; topic: string; subscribed: boolean }
   | { kind: 'agent.create' | 'agent.start' | 'agent.stop'; agent: Actor; desired: 'provisioning' | 'enabled' | 'stopped' | 'retired'; remainingOperations: OperationId[] }
   | { kind: 'git.submit'; candidate: Oid; publishedRef: string; message: MessageId; recipientCount: number }
-  | { kind: 'git.integrate'; base: Oid; candidate: Oid; target: 'refs/heads/main'; policyRevision: string; changed: boolean }
+  | { kind: 'git.integrate'; base: Oid; candidate: Oid; target: 'refs/heads/main'; policyRevision: string; changed: boolean; publication?: { message: MessageId; recipientCount: number; effectiveTier: RiskTier; authorityDigest: string } }
   | { kind: 'context.publish'; previous: Oid | null; revision: Oid; message: MessageId; recipientCount: number };
 
 export interface Receipt<T = OperationResult> {
@@ -35,6 +40,8 @@ export interface MessagePlan {
 }
 
 export type OperationPlan =
+  | { kind: "society.set"; state: "open" | "closed" }
+  | { kind: "attest.record"; fact: AttestationInput; message: MessagePlan }
   | { kind: 'mail.send' | 'agent.continue'; message: MessagePlan }
   | { kind: 'mail.ack'; recipient: Actor; message: MessageId }
   | { kind: 'route.follow' | 'route.unfollow'; topic: string; agent: Actor }
@@ -47,6 +54,6 @@ export type OperationPlan =
       bundle: { path: string; sha256: string; bytes: number } | null;
       publishedRef: string; message: MessagePlan }
   | { kind: 'git.integrate'; repo: 'project'; target: 'refs/heads/main'; base: Oid;
-      candidate: Oid; policyRevision: string; checkProfileDigest: string }
+      candidate: Oid; policyRevision: string; checkProfileDigest: string; publication?: { tiered: TieredAcceptance; message: MessagePlan; noopRef: string | null } }
   | { kind: 'context.publish'; base: Oid | null; candidate: Oid;
-      target: 'refs/heads/main'; entries: ContextEntry[]; stagingPath: string; message: MessagePlan };
+      target: 'refs/heads/main'; entries: ContextEntry[]; stagingPath: string; message: MessagePlan; goalMail?: { subject: string }; noopRef?: string | null };

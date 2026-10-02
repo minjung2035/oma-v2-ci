@@ -59,6 +59,7 @@ export function receiveDeclared(socket: Socket, head: Buffer, declared: Declared
     if (head.length > 0) onData(head);
     if (declared.bytes === 0 && !done)
       finish(hash.digest("hex") === declared.sha256 ? null : new StoreError("STREAM_INVALID", "the stream is not what was declared"));
+    if (!done && (socket.destroyed || socket.readableEnded)) onEnd();
     if (!done) socket.resume();
   });
 }

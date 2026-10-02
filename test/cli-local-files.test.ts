@@ -20,7 +20,7 @@ import { buildEml } from "../src/mail/serialize.js";
 const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 
 interface Peer { readonly path: string; readonly frames: Record<string, unknown>[]; close(): Promise<void> }
-/** Records every request frame and refuses it, so nothing is ever accepted. */
+/** Records every request frame and reports an unavailable fixture, never success. */
 async function peer(root: string): Promise<Peer> {
   const frames: Record<string, unknown>[] = [];
   const path = join(root, "control.sock");
@@ -87,8 +87,9 @@ test("AV8 / FS-005, INV10: a file given to the CLI is read only if it is a regul
     const plain = join(root, "plain.txt");
     writeFileSync(plain, "the body\n");
     await cli(root, fixture.path, ["send", "--subject", "s", "--file", plain, "--", "commons"]);
-    assert.equal(fixture.frames.length, 1);
+    assert.deepEqual(fixture.frames.map(frame => frame.method), ["mail.send", "operation.get"]);
     assert.equal((fixture.frames[0]!.params as { body?: string }).body, "the body\n");
+    assert.equal((fixture.frames[1]!.params as { key?: string }).key, fixture.frames[0]!.request);
   } finally {
     await fixture.close();
     rmSync(root, { recursive: true, force: true });

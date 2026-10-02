@@ -151,7 +151,7 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.throws(() => decodeRunLease({ ...value, incarnation: 1 }, { actor: "alice", runRoot }), errorCode("AUTH_FAILED"));
   assert.throws(() => decodeRunLease(value, { actor: "bob", runRoot }), errorCode("AUTH_FAILED"));
   const host: SandboxHost = { rootfs: "/opt/oma/rootfs", libdir: "/opt/oma/lib", node: "/usr/bin/node", pi: "/opt/oma/lib/pi/cli.js",
-    piModeArgs: ["--mode", "rpc"], tmpBytes: TEST_RESOURCES.tmpBytes, checkResources: TEST_RESOURCES,
+    piModeArgs: ["--mode", "rpc"], tmpBytes: TEST_RESOURCES.tmpBytes,
     stateRoot, runRoot, limits: { frameBytes: 4096, batchMaxMessages: 24 } };
   const sandbox = new SandboxModule(host);
   const dirs = { workspace: workspacePathAt(stateRoot, "alice"), home: join(agentRootPathAt(stateRoot, "alice"), "home"),
@@ -169,7 +169,6 @@ test("R28: sandbox recipes bind decoded lease and private actor paths but never 
   assert.ok(plan.argv.includes(lease.socketHostPath)); assert.equal(plan.argv.includes(runRoot), false);
   assert.throws(() => sandbox.resident(lease, { ...dirs, workspace: workspacePathAt(stateRoot, "bob") }), errorCode("AUTH_FAILED"));
   assert.throws(() => sandbox.resident(value, dirs), errorCode("AUTH_FAILED"));
-  assert.throws(() => sandbox.candidate("a".repeat(40), "checks"), errorCode("UNSUPPORTED_PROFILE"));
 });
 
 // The run is the unit, not the message. Pi retries a retryable assistant
@@ -210,7 +209,7 @@ process.on("SIGTERM", () => process.exit(0));
     const batch = { id: "b-00000000-0000-4000-8000-000000000001", agent: "alice", incarnation: 1,
       messageIds: ["m-00000000-0000-4000-8000-000000000001-0"], sessionPath: null, deliveryMode: "followUp" as const,
       notice: "mail", indexPath: "/inbox.md" as const };
-    const adapter = new PiAdapter({ actor: "alice", society: "demo", profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
+    const adapter = new PiAdapter({ actor: "alice", society: "demo", profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", extensions: [], workspaceBytes: 1024 * 1024 },
       limits: { frameBytes: 65536, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24, mailBodyBytes: 1024 * 1024, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
       paths: { piCommand: command, coreExtension: core, cli, workspace: dirs.workspace!, sessionDir: dirs.sessions!,
         agentHome: dirs.home!, mailArchive: dirs.archive!, batchView: dirs.view!, socket: join(root, "control.sock") } });
@@ -219,4 +218,28 @@ process.on("SIGTERM", () => process.exit(0));
       sessionPath: join(dirs.sessions!, "owned.jsonl"), entryId: "0123abcd" });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+}
+
+for (const stage of ["stdout", "stderr", "stdin"] as const) {
+  test(`DR27/P0-4: partial RPC ${stage} registration failure returns its streams and child`, { timeout: 5000 }, async t => {
+    const child = spawn(process.execPath, ["-e", "process.stdin.resume(); setInterval(() => {}, 1000)"], { stdio: ["pipe", "pipe", "pipe"] });
+    const exited = once(child, "close");
+    t.after(async () => { child.kill("SIGKILL"); await exited; });
+    const problem = new Error(`injected ${stage} setup failure`);
+    const stream = child[stage];
+    const original = stream.on;
+    let injected = false;
+    t.mock.method(stream, "on", function (event: string, listener: (...args: unknown[]) => void) {
+      if (!injected && event === (stage === "stdin" ? "drain" : "data")) { injected = true; throw problem; }
+      return Reflect.apply(original, stream, [event, listener]);
+    });
+    assert.throws(() => new PiRpcClient(child, limits), error => error === problem);
+    assert.equal(child.killed, true, "construction never handed off the child");
+    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+      assert.equal(stream.destroyed, true);
+      assert.equal(stream.listenerCount("data"), 0);
+      assert.equal(stream.listenerCount("drain"), 0);
+    }
+    await exited;
+  });
 }

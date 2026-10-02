@@ -106,7 +106,7 @@ test("T115 an absent broker is reported as absent, not assumed running", async (
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("T115 the society starts from the project's committed history and nothing else", () => {
+test("DR27 the society starts from the project worktree snapshot, once", () => {
   const root = scratch();
   try {
     const project = join(root, "project");
@@ -118,7 +118,7 @@ test("T115 the society starts from the project's committed history and nothing e
     run(["add", "kept.txt"]);
     run(["commit", "-qm", "first"]);
     const head = run(["rev-parse", "HEAD"]);
-    // Work in progress stays the user's: neither an edit nor a new file travels.
+    // Work in progress travels without committing it into the user's repository.
     writeFileSync(join(project, "kept.txt"), "edited, not committed\n");
     writeFileSync(join(project, "new.txt"), "untracked\n");
 
@@ -126,9 +126,12 @@ test("T115 the society starts from the project's committed history and nothing e
     const report = provisionSociety(state, { projectDir: project });
     assert.equal(report.seedSource, "project");
     const projectGit = join(state, "repos", "project.git");
-    assert.equal(git(projectGit, ["rev-parse", "refs/heads/main"]), head);
-    assert.equal(git(projectGit, ["show", "refs/heads/main:kept.txt"]), "committed");
-    assert.equal(git(projectGit, ["ls-tree", "--name-only", "refs/heads/main"]), "kept.txt");
+    const snapshot = git(projectGit, ["rev-parse", "refs/heads/main"]);
+    assert.notEqual(snapshot, head);
+    assert.equal(git(projectGit, ["rev-parse", "refs/heads/main^"]), head);
+    assert.equal(git(projectGit, ["show", "refs/heads/main:kept.txt"]), "edited, not committed");
+    assert.equal(git(projectGit, ["ls-tree", "--name-only", "refs/heads/main"]), "kept.txt\nnew.txt");
+    assert.equal(run(["rev-parse", "HEAD"]), head);
 
     // After the first start the canonical history is the society's own; a new
     // commit in the directory does not move it.
@@ -136,7 +139,7 @@ test("T115 the society starts from the project's committed history and nothing e
     run(["commit", "-qm", "second"]);
     const again = provisionSociety(state, { projectDir: project });
     assert.equal(again.seeded, false);
-    assert.equal(git(projectGit, ["rev-parse", "refs/heads/main"]), head);
+    assert.equal(git(projectGit, ["rev-parse", "refs/heads/main"]), snapshot);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

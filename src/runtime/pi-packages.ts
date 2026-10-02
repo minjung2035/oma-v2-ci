@@ -1,0 +1,203 @@
+/** DR25: the Pi packages the Human installs for oma.
+ *
+ * `oma pi install <source>` runs the bundled engine's own package manager
+ * over one store beside every session, never the user's `~/.pi`. The store
+ * holds package code and the package manager's own list of what it installed,
+ * and nothing else: no login, no session. Every engine of every session reads
+ * an extension from it only when a role's extensions name it (TUI-010), by the
+ * file and digest the configuration loader pins, and a Resident's sandbox
+ * mounts it read-only.
+ *
+ * Which files of a package are extensions is the engine's rule (a package's
+ * `pi` manifest or its conventional directories). It is asked once, after
+ * every `oma pi` change, and its answer kept as the store's index, so a screen
+ * that lists extensions reads a file instead of running the engine's resolver.
+ */
+import { dirname, isAbsolute, join, relative } from "node:path";
+import { lstatSync, realpathSync } from "node:fs";
+import { StoreError, unobserved } from "../domain/errors.js";
+import { PACKAGE_ENTRY_PREFIX, extensionEntryProblem } from "../config/operations.js";
+import { readUserFile, replaceUserFile } from "./user-files.js";
+import { isUuid } from "../protocol/host-guest.js";
+
+/** The store's directory name, beside the engine home and every session. */
+export const PACKAGE_STORE = ".packages";
+/** On macOS the engine's store is a link to one of these: the packages the
+ * Mac installed, each published whole under the digest of what arrived. */
+export const PACKAGE_GENERATIONS = ".packages-generations";
+/** The store's index of extension entries, by package. */
+export const PACKAGE_INDEX = "oma-extensions.json";
+const INDEX_BYTES = 1024 * 1024;
+
+/** Where the packages are, for a society state root under oma's data directory. */
+export function packageStoreDir(stateRoot: string): string {
+  return join(dirname(stateRoot), PACKAGE_STORE);
+}
+
+/** One installed package and its extension entries, as configuration entries. */
+export interface InstalledPackage {
+  readonly source: string;
+  readonly entries: readonly string[];
+}
+
+/** The package commands `oma pi` runs, and why the others are not run. */
+export type PackageCommand =
+  | { readonly kind: "run"; readonly command: "install" | "remove" | "update" | "list"; readonly args: readonly string[]; readonly projectId?: string; readonly hostOnly?: true }
+  | { readonly kind: "refused"; readonly words: string };
+
+export const PACKAGE_USAGE = "usage: oma pi install <npm:… | git:… | https://… | ssh://…>\n" +
+  "       oma pi remove <source>\n" +
+  "       oma pi update <source> | --extension <source> | --extensions\n" +
+  "       oma pi list";
+
+/** A source the store holds a copy of. A local path is used where it lies,
+ * which no Resident's sandbox can see, so it is not one. */
+const REMOTE_SOURCE = /^(?:npm:|git:|https?:\/\/|ssh:\/\/|git@)/;
+
+/** DR25: what `oma pi <args>` runs. Everything the engine's package manager
+ * does over the store runs as it ships; refused are only what would reach
+ * past oma -- a project's own `.pi/` (the user's Pi's), the engine itself,
+ * which oma's installation pins, and anything that is not a package command. */
+export function packageCommand(args: readonly string[], macProject = false): PackageCommand {
+  const [name, ...rest] = args;
+  const refused = (words: string): PackageCommand => Object.freeze({ kind: "refused", words: `${words}\n${PACKAGE_USAGE}` });
+  const command = name === "uninstall" ? "remove" : name;
+  if (command !== "install" && command !== "remove" && command !== "update" && command !== "list") {
+    if (name === "config") return refused("Extensions are turned on and off for the Principal and Workers in oma's settings (Ctrl+X > Config > Extensions).");
+    return refused(name === undefined ? "oma pi runs the engine's package commands for oma." : `oma pi does not run the engine's "${name}"; oma is the session.`);
+  }
+  const given = new Set<string>();
+  const positional: string[] = [];
+  const forwarded = [name!];
+  let extension: string | undefined, projectId: string | undefined;
+  for (let index = 0; index < rest.length; index++) {
+    const word = rest[index]!;
+    const option = word === "-h" ? "--help" : word;
+    if (["-l", "--local", "-a", "--approve", "-na", "--no-approve"].includes(option))
+      return refused("A project's local packages are the user's Pi's (its .pi folder), not oma's; oma's packages are installed for every project.");
+    if (["--self", "--all", "--force", "--models"].includes(option))
+      return refused("The engine is updated with oma itself; oma pi update updates installed packages.");
+    if (option.startsWith("-")) {
+      if (option !== "--help" && !(command === "update" && ["--extensions", "--extension"].includes(option)) && !(macProject && ["--project", "--host-only"].includes(option)))
+        return refused(`Unknown package option ${word}.`);
+      if (given.has(option)) return refused(`${option} must be given once.`);
+      given.add(option);
+      if (option === "--extension" || option === "--project") {
+        const value = rest[++index];
+        if (!value || value.includes("\0")) return refused(`${option} requires a value.`);
+        if (option === "--project") {
+          if (!isUuid(value)) return refused("--project names a project by its id.");
+          projectId = value;
+        } else {
+          // The pinned package manager cannot represent an option-like source.
+          // Refuse it, rather than forwarding it as a different engine option.
+          if (value.startsWith("-")) return refused("--extension requires a package source, not an engine option.");
+          extension = value; forwarded.push(word, value);
+        }
+      } else if (option !== "--host-only") forwarded.push(word);
+    } else {
+      if (!word || word.includes("\0")) return refused("A package source must be nonempty.");
+      positional.push(word); forwarded.push(word);
+    }
+  }
+  if (given.has("--host-only") && projectId !== undefined) return refused("--host-only does not select a Society project.");
+  if (positional.length > 1 || (command === "list" && positional.length > 0)) return refused(`oma pi ${name} has too many sources.`);
+  if (command === "update") {
+    if (Number(extension !== undefined) + Number(given.has("--extensions")) + positional.length > 1)
+      return refused("Choose one package update target.");
+    if (positional.some(arg => arg === "pi" || arg === "self") ||
+        (!given.has("--help") && extension === undefined && !given.has("--extensions") && positional.length === 0))
+      return refused("The engine is updated with oma itself; oma pi update updates installed packages.");
+  }
+  if (!given.has("--help") && (command === "install" || command === "remove")) {
+    if (positional.length !== 1) return refused(`oma pi ${name} takes one source.`);
+    if (command === "install" && !REMOTE_SOURCE.test(positional[0]!))
+      return refused("A local path is used where it lies, which a Worker's sandbox cannot see; install an npm: or git: source.");
+  }
+  return Object.freeze({ kind: "run", command, args: Object.freeze(forwarded), ...(projectId === undefined ? {} : { projectId }),
+    ...(given.has("--host-only") ? { hostOnly: true as const } : {}) });
+}
+
+/** The store's directory itself: on macOS the engine's store is a link to its
+ * current generation (DR25), which the store's own files are read beneath. */
+export function packageStoreRoot(store: string): string | null {
+  try { return realpathSync(store); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw unobserved(error, "the package store") ?? error;
+  }
+}
+
+/** The store's index as last written, or none. */
+export function readPackageIndex(store: string): readonly InstalledPackage[] {
+  const root = packageStoreRoot(store);
+  if (root === null) return Object.freeze([]);
+  const file = readUserFile(join(root, PACKAGE_INDEX), INDEX_BYTES);
+  if (file === null) return Object.freeze([]);
+  let value: unknown;
+  const invalid = (): never => { throw new StoreError("STORE_CORRUPT", "the installed-package index is malformed"); };
+  try { value = JSON.parse(file); } catch { return invalid(); }
+  if (!Array.isArray(value)) return invalid();
+  const packages: InstalledPackage[] = [];
+  for (const entry of value) {
+    if (entry === null || typeof entry !== "object") return invalid();
+    const { source, entries } = entry as { source?: unknown; entries?: unknown };
+    if (typeof source !== "string" || !source || packages.some(item => item.source === source) || !Array.isArray(entries) ||
+        new Set(entries).size !== entries.length || entries.some(item => typeof item !== "string" || !item.startsWith(PACKAGE_ENTRY_PREFIX) || extensionEntryProblem(item) !== null)) return invalid();
+    packages.push(Object.freeze({ source, entries: Object.freeze([...entries as string[]]) }));
+  }
+  return Object.freeze(packages);
+}
+
+/** Asks the engine which files of each installed package are extensions, and
+ * keeps the answer as the store's index. A file outside the store, or reached
+ * through a link, is no entry: no Resident could be shown it. */
+export async function writePackageIndex(store: string): Promise<readonly InstalledPackage[]> {
+  const sdk = await import("@earendil-works/pi-coding-agent");
+  const settingsManager = sdk.SettingsManager.create(store, store, { projectTrusted: false });
+  const manager = new sdk.DefaultPackageManager({ cwd: store, agentDir: store, settingsManager });
+  const resolved = await manager.resolve(async () => "skip");
+  const base = realpathSync(store);
+  const bySource = new Map<string, string[]>();
+  for (const resource of resolved.extensions) {
+    if (!resource.enabled || resource.metadata.scope !== "user") continue;
+    let real: string;
+    try { real = realpathSync(resource.path); } catch { continue; }
+    const inside = relative(base, real);
+    if (real !== resource.path || !inside || inside.startsWith("..") || isAbsolute(inside)) continue;
+    if (!lstatSync(real).isFile() || !/\.(?:js|mjs|ts)$/.test(real)) continue;
+    const list = bySource.get(resource.metadata.source) ?? [];
+    list.push(`${PACKAGE_ENTRY_PREFIX}${inside}`);
+    bySource.set(resource.metadata.source, list);
+  }
+  const packages = manager.listConfiguredPackages().filter(entry => entry.scope === "user")
+    .map(entry => Object.freeze({ source: entry.source, entries: Object.freeze([...(bySource.get(entry.source) ?? [])].sort()) }));
+  replaceUserFile(join(store, PACKAGE_INDEX), `${JSON.stringify(packages, null, 2)}\n`);
+  return Object.freeze(packages);
+}
+
+/** DR25: a role's entries after the store changed from `before` to `after`.
+ * A package the role used keeps being used, by the entries it has now; one
+ * that is gone is dropped; entries of no package the store held are the
+ * role's own and stay as they are. */
+export function reconciledEntries(entries: readonly string[], before: readonly InstalledPackage[],
+  after: readonly InstalledPackage[]): readonly string[] {
+  const now = new Map(after.map(item => [item.source, item.entries]));
+  const owner = new Map<string, string>();
+  for (const item of before) for (const entry of item.entries) owner.set(entry, item.source);
+  const out: string[] = [];
+  const used = new Set<string>();
+  for (const entry of entries) {
+    const source = owner.get(entry);
+    if (source === undefined) { if (!out.includes(entry)) out.push(entry); continue; }
+    if (used.has(source)) continue;
+    used.add(source);
+    for (const current of now.get(source) ?? []) if (!out.includes(current)) out.push(current);
+  }
+  return Object.freeze(out);
+}
+
+/** An explicit install selects that source again; update preserves disabled roles. */
+export function packageActivation(command: PackageCommand): string | undefined {
+  if (command.kind !== "run" || command.command !== "install") return undefined;
+  return command.args.slice(1).find(arg => !arg.startsWith("-"));
+}

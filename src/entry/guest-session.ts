@@ -12,6 +12,7 @@ import { peerCred, socketDescriptor } from "../leaf.js";
 import { TerminalSession } from "../platform/guest/session.js";
 import { HOST_LOSS_SIGNALS } from "../runtime/broker-lifetime.js";
 import { PRODUCT_TEXT_ENV } from "../tui/words.js";
+import { HOST_SESSION_HANDOFF_ENV, HOST_SESSION_HANDOFF_FD } from "../runtime/session-handoff.js";
 
 function fail(message: string): never {
   process.stderr.write(`guest-session: ${message}\n`);
@@ -33,6 +34,7 @@ for (const [key, value] of Object.entries(process.env)) if (typeof value === "st
 env.TERM ??= "xterm-256color";
 // DR18 (D-1): the program's screen is shown on a Mac; it speaks product text.
 env[PRODUCT_TEXT_ENV] = "1";
+env[HOST_SESSION_HANDOFF_ENV] = String(HOST_SESSION_HANDOFF_FD);
 
 let session: TerminalSession;
 try { session = TerminalSession.start({ executable: executable!, argv: args, cwd, env }, { columns: 80, rows: 24, backlogBytes: 4 * 1024 * 1024 }); }

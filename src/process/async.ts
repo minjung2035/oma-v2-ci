@@ -152,6 +152,23 @@ function validDirectSpawn(executable: string, argv: readonly string[], cwd: stri
  * already holds the society open whether or not it knows what it is. */
 export const CHANNEL_FD = 3;
 export const SOCIETY_FENCE_FD = 4;
+/** P0-4: a failed setup never handed its child to a runtime owner. Return every
+ * private stream and request termination, attempting all cleanup. This is not
+ * an observation of death; callers retaining a lease must still observe it. */
+export function stopOwnedChild(child: ChildProcess): void {
+  const errors: unknown[] = [];
+  const attempt = (action: () => void): void => { try { action(); } catch (error) { errors.push(error); } };
+  const ignore = (): void => {};
+  attempt(() => { child.on("error", ignore); });
+  for (const stream of new Set(child.stdio)) if (stream) {
+    attempt(() => { stream.on("error", ignore); });
+    attempt(() => { stream.destroy(); });
+  }
+  if (child.exitCode === null && child.signalCode === null)
+    attempt(() => { child.kill("SIGKILL"); });
+  if (errors.length > 0) throw new AggregateError(errors, "Owned child cleanup failed");
+}
+
 /** Names the fence descriptor to a child that must pass it on. */
 export const SOCIETY_FENCE_ENV = "OMA_SOCIETY_FENCE_FD";
 
@@ -171,6 +188,15 @@ export function spawnOwnedRpc(executable: string, argv: readonly string[], cwd: 
   return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false,
     stdio: fencedStdio(["pipe", "pipe", "pipe"], channel ? "pipe" : "ignore", fence) }) as ChildProcessWithoutNullStreams;
 }
+/** The interactive child owns the real terminal; RPC and UI control use private
+ * sockets. Credential/fence slots keep their meaning across both launch modes. */
+export function spawnOwnedInteractive(executable: string, argv: readonly string[], cwd: string,
+  env: Readonly<Record<string, string>>, fence: number): ChildProcess {
+  validDirectSpawn(executable, argv, cwd, env);
+  return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false,
+    stdio: ["inherit", "inherit", "pipe", "pipe", fence, "pipe", "pipe"] });
+}
+
 /** A long-lived service this process owns, such as the society's broker.
  *
  * stdin is closed and stdout discarded: a supervised service shares the
@@ -226,7 +252,9 @@ export function spawnInTerminal(executable: string, argv: readonly string[], cwd
   validDirectSpawn(executable, argv, cwd, env);
   if (!Number.isSafeInteger(terminal) || terminal < 0) throw new StoreError("UNSUPPORTED_PROFILE", "a terminal child needs its terminal descriptor");
   return spawn("/usr/bin/setsid", ["--ctty", "--", executable, ...argv], { cwd, env: { ...env }, shell: false,
-    stdio: [terminal, terminal, "inherit"] });
+    // MODE-006: a separate private request pipe, never terminal output or a
+    // Society fence. Only the holder observes it; the engine does not inherit it.
+    stdio: [terminal, terminal, "inherit", "pipe"] });
 }
 /** DR18 (D-9): a program the Human uses directly, on this process's own
  * terminal -- stdin, stdout and stderr inherited -- while this process waits.
@@ -240,12 +268,52 @@ export function spawnInteractive(executable: string, argv: readonly string[], cw
   while (terminal.length < SOCIETY_FENCE_FD) terminal.push("ignore");
   return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false, stdio: [...terminal, fence] });
 }
-/** A sandbox's filter and its `--seccomp` argument come together: argv that
- * names a filter it is not given would fail on a descriptor no one opened,
- * and a filter its argv does not load would be no filter at all. */
-export function assertSandboxFilterPaired(argv: readonly string[], filter: Uint8Array | undefined): void {
-  if (argv.includes("--seccomp") !== (filter !== undefined))
-    throw new StoreError("UNSUPPORTED_PROFILE", "a sandbox's filter and its --seccomp argument come together");
+/** MODE-003/005: an independent Human session, not a Society child. Its
+ * history lock is inherited at 3 and Node IPC occupies 4; the caller retains
+ * the lock until actual close. No Society credential or lease is passed. */
+export function spawnSessionInteractive(executable: string, argv: readonly string[], cwd: string,
+  env: Readonly<Record<string, string>>, historyLock: number): ChildProcess {
+  validDirectSpawn(executable, argv, cwd, env);
+  if (!Number.isSafeInteger(historyLock) || historyLock < 0)
+    throw new StoreError("UNSUPPORTED_PROFILE", "a Human session needs its history lock descriptor");
+  return spawn(executable, [...argv], { cwd, env: { ...env }, shell: false,
+    stdio: ["inherit", "inherit", "inherit", historyLock, "ipc"] });
+}
+/** The pinned recipes' option grammar, not an allowlist of values. An option
+ * value may itself be "--", "--args" or "--seccomp"; only option positions
+ * carry meaning. The command and its arguments are never parsed here. */
+const SANDBOX_OPTION_ARITY: Readonly<Record<string, number>> = Object.freeze({
+  "--unshare-all": 0, "--unshare-net": 0, "--unshare-pid": 0,
+  "--new-session": 0, "--die-with-parent": 0, "--clearenv": 0,
+  "--cap-drop": 1, "--seccomp": 1, "--proc": 1, "--dev": 1,
+  "--size": 1, "--tmpfs": 1, "--remount-ro": 1, "--chdir": 1,
+  "--ro-bind": 2, "--bind": 2, "--ro-bind-try": 2, "--symlink": 2, "--setenv": 2,
+});
+function sandboxCommandBoundary(args: readonly string[], filter: Uint8Array | undefined): number {
+  let filters = 0;
+  for (let index = 0; index < args.length;) {
+    const option = args[index]!;
+    if (option === "--") {
+      if (!args[index + 1]) break;
+      if (filters !== (filter === undefined ? 0 : 1))
+        throw new StoreError("UNSUPPORTED_PROFILE", "a sandbox's filter and its --seccomp 3 argument come together");
+      return index;
+    }
+    if (option === "--args")
+      throw new StoreError("UNSUPPORTED_PROFILE", "sandbox arguments already have a private descriptor owner");
+    if (!Object.hasOwn(SANDBOX_OPTION_ARITY, option))
+      throw new StoreError("UNSUPPORTED_PROFILE", "unsupported sandbox option");
+    const arity = SANDBOX_OPTION_ARITY[option]!;
+    if (index + arity >= args.length)
+      throw new StoreError("UNSUPPORTED_PROFILE", "sandbox option arguments are incomplete");
+    if (option === "--seccomp") {
+      if (args[index + 1] !== "3")
+        throw new StoreError("UNSUPPORTED_PROFILE", "a sandbox's filter and its --seccomp 3 argument come together");
+      filters++;
+    }
+    index += arity + 1;
+  }
+  throw new StoreError("UNSUPPORTED_PROFILE", "sandbox options require an explicit command boundary");
 }
 
 /** DR18 (D-5), P0V-102 (G05-03): hands a started sandbox its filter on the
@@ -254,24 +322,39 @@ export function assertSandboxFilterPaired(argv: readonly string[], filter: Uint8
  * (a program bubblewrap could not read fails bubblewrap, which its spawner
  * observes). The one writer of the filter, for every sandbox spawn. */
 export function deliverSandboxFilter(channel: unknown, filter: Uint8Array): void {
+  deliverSandboxBytes(channel, filter);
+}
+function deliverSandboxBytes(channel: unknown, bytes: Uint8Array): void {
   const stream = channel as { on(event: "error", listener: () => void): void; end(bytes: Uint8Array): void } | null | undefined;
   if (stream === null || stream === undefined || typeof stream.end !== "function")
-    throw new StoreError("INTERNAL_ERROR", "a sandbox started without the descriptor its filter is read from");
+    throw new StoreError("INTERNAL_ERROR", "a sandbox started without its private input descriptor");
   stream.on("error", () => {});
-  stream.end(filter);
+  stream.end(bytes);
 }
 
-/** DR18 (D-5): a sandbox whose argv loads a filter (`--seccomp 3`) gets the
- * filter on descriptor 3, the way the adapter delivers it; argv that names a
- * filter it is not given is refused rather than left for bubblewrap to fail
- * on a descriptor this process never opened. */
-export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>, filter?: Uint8Array): ChildProcessWithoutNullStreams {
+/** DR27/SB-001: sandbox options (including placeholder environment values)
+ * reach bubblewrap through a private socket, while the command keeps its argv.
+ * Slot 3 remains the seccomp filter; slot 4 never holds a sandbox lease; slot 5
+ * carries NUL-separated options. Both sockets close after transmission, with
+ * no temporary file. EPIPE is settled by observing the child's actual exit. */
+export function spawnSandboxed(argv: readonly string[], env: Readonly<Record<string, string>>, filter?: Uint8Array,
+  cwd = "/"): ChildProcessWithoutNullStreams {
   if ((argv[0] !== "bwrap" && argv[0] !== "/usr/bin/bwrap") || argv.length < 2)
     throw new StoreError("UNSUPPORTED_PROFILE", "sandbox spawn requires direct pinned bubblewrap argv");
-  assertSandboxFilterPaired(argv, filter);
-  validDirectSpawn("/usr/bin/bwrap", argv.slice(1), "/", env);
-  const child = spawn("/usr/bin/bwrap", argv.slice(1), { env: { ...env }, shell: false,
-    stdio: filter === undefined ? ["pipe", "pipe", "pipe"] : ["pipe", "pipe", "pipe", "pipe"] }) as ChildProcessWithoutNullStreams;
-  if (filter !== undefined) deliverSandboxFilter(child.stdio[3], filter);
-  return child;
+  const args = argv.slice(1);
+  validDirectSpawn("/usr/bin/bwrap", args, cwd, env);
+  const boundary = sandboxCommandBoundary(args, filter);
+  const options = args.slice(0, boundary);
+  const encoded = Buffer.from(options.map(value => value + "\0").join(""));
+  const child = spawn("/usr/bin/bwrap", ["--args", "5", ...args.slice(boundary)], { cwd, env: { ...env }, shell: false,
+    stdio: ["pipe", "pipe", "pipe", filter === undefined ? "ignore" : "pipe", "ignore", "pipe"] }) as ChildProcessWithoutNullStreams;
+  try {
+    deliverSandboxBytes(child.stdio.at(5), encoded);
+    if (filter !== undefined) deliverSandboxFilter(child.stdio[3], filter);
+    return child;
+  } catch (error) {
+    try { stopOwnedChild(child); }
+    catch (cleanup) { throw new AggregateError([error, cleanup], "Sandbox setup and cleanup failed"); }
+    throw error;
+  }
 }

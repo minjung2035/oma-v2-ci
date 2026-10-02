@@ -13,8 +13,8 @@ export function runtimeAssets(root: string): RuntimeAssets {
     throw new StoreError("UNSUPPORTED_PROFILE", "installation root must be a normalized absolute directory");
   return Object.freeze({ root, schema: join(root, DEPLOYMENT_LAYOUT.schema), systemd: join(root, DEPLOYMENT_LAYOUT.systemd),
     contract: join(root, DEPLOYMENT_LAYOUT.contract), extension: join(root, DEPLOYMENT_LAYOUT.extension),
-    entries: Object.freeze({ broker: join(root, DEPLOYMENT_LAYOUT.entries.broker), runner: join(root, DEPLOYMENT_LAYOUT.entries.runner),
-      host: join(root, DEPLOYMENT_LAYOUT.entries.host), tui: join(root, DEPLOYMENT_LAYOUT.entries.tui) }) });
+    entries: Object.freeze(Object.fromEntries(Object.entries(DEPLOYMENT_LAYOUT.entries)
+      .map(([name, path]) => [name, join(root, path)])) as RuntimeAssets["entries"]) });
 }
 /** Module-relative legacy exports are checked, never searched through fallback
  * directories. A wrong LIBDIR cannot silently combine two installations.
@@ -32,6 +32,7 @@ export function assertRuntimeAssets(assets: RuntimeAssets, observed: { schema: s
     if (resolved === ".." || resolved.startsWith(`..${sep}`) || isAbsolute(resolved))
       throw new StoreError("UNSUPPORTED_PROFILE", "deployment asset escapes installation root");
   };
+  for (const migration of DEPLOYMENT_LAYOUT.schemaMigrations) requireEntry(join(assets.root, migration), false);
   requireEntry(assets.systemd, true); requireEntry(assets.schema, false); requireEntry(assets.contract, false); requireEntry(assets.extension, false);
   for (const entry of Object.values(assets.entries)) requireEntry(entry, false);
   for (const template of Object.keys(DEPLOYMENT_LAYOUT.templateEntries)) requireEntry(join(assets.systemd, template), false);

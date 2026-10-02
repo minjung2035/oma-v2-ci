@@ -3,18 +3,18 @@
  * This module is pure metadata plus read-only classification. It never decodes
  * a row into a workflow value, never rewrites accepted bytes, never re-derives a
  * legacy plan from the current state root, and never upgrades a legacy plan.
- * The v1 writer format is unchanged by this module's existence.
+ * Historical plan/result JSON is not rewritten by schema migration.
  */
 import { isValidFullOid } from "./identifiers.js";
 import { isMutationMethod } from "../protocol/receipt-codec.js";
 
 /** Versions this build reads and writes. A persisted version outside this set is
  * fail-closed: no migration is attempted and no rewrite happens. */
-export const SCHEMA_USER_VERSION_WRITTEN = 1;
-export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([1]);
+export const SCHEMA_USER_VERSION_WRITTEN = 3;
+export const SCHEMA_USER_VERSION_READABLE: readonly number[] = Object.freeze([1, 2, 3]);
 export const WIRE_PROTOCOL_VERSION = 1;
-/** The persisted plan/result shape written by this build. v2 is designed but not
- * written; there is no automatic v1 -> v2 upgrade path. */
+/** Existing operation shapes remain v1-readable. DR27 adds a closed mutation
+ * without rewriting any historical plan or declaring a new JSON envelope. */
 export const PLAN_FORMAT_WRITTEN = "v1" as const;
 export const PLAN_FORMAT_READABLE: readonly string[] = Object.freeze(["v1"]);
 

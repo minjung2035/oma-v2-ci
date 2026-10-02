@@ -12,7 +12,7 @@
  *    process and the child hold, and is written and closed before the child
  *    reads it. It is never in the child's environment or command line.
  *  - The child is bounded: its output is capped and it is terminated when the
- *    tool call is aborted or runs past its time.
+ *    tool call is aborted. A caller may also bound a single phase.
  *  - It inherits the society lease, so it cannot outlive this society's
  *    ownership (REC-007).
  */
@@ -33,13 +33,14 @@ const CREDENTIAL_FD = 3;
  * state: its agent home is `<stateRoot>/principal/private` and its request
  * cache is written underneath it. A CLI still running after the `oma` that
  * started this engine is gone is therefore exactly the second writer the lease
- * exists to prevent -- and it can run for its whole timeout after the host and
- * the engine have been killed, because a signal to the engine is not a signal
+ * exists to prevent -- and it can keep running after the host and the engine
+ * have been killed, because a signal to the engine is not a signal
  * to its children. So it inherits the lease like everything else the tenure
  * pays for, and the society cannot pass to another host until it exits. */
 export const SOCIETY_FENCE_ENV = "OMA_SOCIETY_FENCE_FD";
 export const SOCIETY_FENCE_FD = 4;
-/** Output a CLI answer may take up. Anything longer is not an answer OMA writes. */
+/** Model-facing output budget, not the terminal CLI's receipt reassembly limit.
+ * A larger answer is unobserved here, never evidence that its effect failed. */
 const OUTPUT_BYTES = 1024 * 1024;
 
 /** The inherited lease descriptor, or null when this engine was not started
@@ -71,7 +72,7 @@ export interface CliRun {
   readonly env: Readonly<Record<string, string>>;
   readonly grant: PrincipalGrant | null;
   readonly signal?: AbortSignal | undefined;
-  readonly timeoutMs: number;
+  readonly timeoutMs?: number;
 }
 
 export interface CliResult {
@@ -86,6 +87,9 @@ export interface CliResult {
 }
 
 export function runCliProcess(run: CliRun): Promise<CliResult> {
+  if (run.timeoutMs !== undefined && (!Number.isSafeInteger(run.timeoutMs) || run.timeoutMs < 1 || run.timeoutMs > 2_147_483_647))
+    throw new RangeError("CLI phase timeout must be a positive timer-safe integer");
+  if (run.signal?.aborted) return Promise.resolve({ code: 1, stdout: "", stderr: "", finished: false });
   const env: Record<string, string> = { ...run.env };
   if (run.grant !== null) env[CLI_CREDENTIAL_FD_ENV] = String(CREDENTIAL_FD);
   const fence = inheritedFence(process.env);
@@ -107,26 +111,30 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
     let stdoutBytes = 0; let stderrBytes = 0;
     let settled = false;
     let stopped = false;
+    let errored = false;
+    let escalation: ReturnType<typeof setTimeout> | undefined;
     const finish = (code: number, finished: boolean): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(escalation);
       run.signal?.removeEventListener("abort", abort);
       resolve({ code, stdout: Buffer.concat(stdout, stdoutBytes).toString("utf8"),
-        stderr: Buffer.concat(stderr, stderrBytes).toString("utf8"), finished: finished && !stopped });
+        stderr: Buffer.concat(stderr, stderrBytes).toString("utf8"), finished: finished && !stopped && !errored });
     };
     const terminate = (): void => {
-      if (child.exitCode !== null || child.signalCode !== null) return;
+      if (stopped || child.exitCode !== null || child.signalCode !== null) return;
       stopped = true;
       child.kill("SIGTERM");
-      setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); }, 5000).unref();
+      escalation = setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); }, 5000);
+      escalation.unref();
     };
     const abort = (): void => { terminate(); };
-    // P0V-27, P0-4: a child that could not be started reports it in an
-    // `error` event; it is observed before any path below can return.
-    child.once("error", () => finish(1, false));
-    const timer = setTimeout(terminate, run.timeoutMs);
-    timer.unref();
+    // P0V-27, P0-4: an error can be a failed signal, not child death.
+    // Even spawn failure emits close; that observation alone releases this owner.
+    child.on("error", () => { errored = true; terminate(); });
+    const timer = run.timeoutMs === undefined ? undefined : setTimeout(terminate, run.timeoutMs);
+    timer?.unref();
     if (run.signal?.aborted) terminate();
     else run.signal?.addEventListener("abort", abort, { once: true });
     const collect = (kept: Buffer[], add: (bytes: number) => void, current: () => number) => (chunk: Buffer) => {
@@ -138,9 +146,11 @@ export function runCliProcess(run: CliRun): Promise<CliResult> {
     child.stderr?.on("data", collect(stderr, bytes => { stderrBytes += bytes; }, () => stderrBytes));
     if (run.grant !== null) {
       const channel = child.stdio[CREDENTIAL_FD] as unknown as Socket | null;
-      if (!channel) { terminate(); finish(1, false); return; }
-      channel.on("error", () => {});
-      channel.end(`credential ${run.grant.credential} ${run.grant.sessionHandle}\n`);
+      if (!channel) terminate();
+      else {
+        channel.on("error", () => {});
+        channel.end(`credential ${run.grant.credential} ${run.grant.sessionHandle}\n`);
+      }
     }
     child.once("close", code => finish(code ?? 1, code !== null));
   });

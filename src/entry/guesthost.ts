@@ -10,6 +10,8 @@ import { RequestLedger } from "../platform/guest/requests.js";
 import { GuestProjects } from "../platform/guest/project.js";
 import { serveStream } from "../platform/guest/stream.js";
 import { GuestArchives } from "../platform/guest/archive.js";
+import { GuestPackages } from "../platform/guest/packages.js";
+import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { listening } from "../platform/guest/host.js";
 import { PLATFORM_FRAME_BYTES } from "../protocol/host-guest.js";
 
@@ -29,8 +31,18 @@ const ledger = new RequestLedger(join(dataDir, "requests"));
 const projects = new GuestProjects(join(dataDir, "projects"), join(dataHome, "oma"), ledger);
 const sessionsDir = runtimeDir;
 const archives = new GuestArchives(join(dataHome, "oma"), ledger, society => listening(join(sessionsDir, `${society}.sock`)));
+// DR25: the engine's processes run as the society sessions do.
+const engineEnv = {
+  HOME: process.env.HOME ?? join(dataDir, "home"),
+  XDG_DATA_HOME: dataHome,
+  XDG_RUNTIME_DIR: runtimeDir,
+  PATH: "/usr/local/bin:/usr/bin:/bin",
+  LANG: "C.UTF-8",
+};
+const packages = new GuestPackages({ ledger, projects, dataDir: join(dataHome, "oma"), libdir, node: process.execPath,
+  entry: join(libdir, DEPLOYMENT_LAYOUT.entries.guestPackages), env: engineEnv, timeoutMs: 10 * 60_000 });
 const host = new GuestHost({
-  archives,
+  archives, packages,
   societiesDir: join(dataHome, "oma"),
   projectsDir: join(dataDir, "projects"),
   projects, ledger,
@@ -40,11 +52,7 @@ const host = new GuestHost({
     node: process.execPath,
     libdir,
     env: {
-      HOME: process.env.HOME ?? join(dataDir, "home"),
-      XDG_DATA_HOME: dataHome,
-      XDG_RUNTIME_DIR: runtimeDir,
-      PATH: "/usr/local/bin:/usr/bin:/bin",
-      LANG: "C.UTF-8",
+      ...engineEnv,
       ...(process.env.DBUS_SESSION_BUS_ADDRESS === undefined ? {} : { DBUS_SESSION_BUS_ADDRESS: process.env.DBUS_SESSION_BUS_ADDRESS }),
     },
   }),

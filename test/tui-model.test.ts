@@ -192,8 +192,8 @@ test("TUI-007: the panel always shows when a setting takes effect", () => {
   const open = step(INITIAL, KEY.panel, data, FRAME_BYTES).state;
   const config = step(open, KEY.right, data, FRAME_BYTES).state;
   const text = render({ state: config, data, transcript: [], body: null, notice: null, busy: false, columns: 100, rows: 14 }).join("\n");
-  assert.match(text, /다음 세션부터/);
-  assert.match(text, /재시작 후/);
+  assert.match(text, /Next session/);
+  assert.match(text, /After restart/);
 });
 
 test("P0V-108 / F-06, TUI-002: what reorders or hides letters is not drawn, and the joiners that shape them are", () => {
@@ -215,4 +215,18 @@ test("P0V-108: a paste loses what the screen would not show, so the draft the Hu
   const paste = keys.find(key => key.kind === "paste") as { kind: "paste"; value: string } | undefined;
   assert.ok(paste, JSON.stringify(keys));
   assert.equal(paste.value, "rm -rf / ; echo ok\tdone\nnext");
+});
+
+
+test("TUI-007 / CFG-001: number editing accepts safe integers beyond nine digits, never rounded integers", () => {
+  const wide: PanelData = { ...data, config: [{ kind: "number", id: "worker-limit", label: "Worker limit",
+    value: 8, min: 0, max: Number.MAX_SAFE_INTEGER, apply: "restart", blocked: null }] };
+  for (const text of ["0", "1000000000", String(Number.MAX_SAFE_INTEGER), "9007199254740992"]) {
+    let state = INITIAL;
+    for (const key of [KEY.panel, KEY.right, KEY.enter, KEY.backspace, ...[...text].map(KEY.char)])
+      state = step(state, key, wide, FRAME_BYTES).state;
+    const result = step(state, KEY.enter, wide, FRAME_BYTES);
+    assert.deepEqual(result.effects, Number.isSafeInteger(Number(text))
+      ? [{ kind: "set-number", field: "worker-limit", value: Number(text) }] : []);
+  }
 });

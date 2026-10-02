@@ -21,10 +21,10 @@ import { removeOwnedFile, removeOwnedTree } from "./directory.js";
 
 export function leasePathOf(tree: string): string { return `${tree}.lease`; }
 
-function openLease(tree: string, create: boolean): number {
+function openLease(tree: string, create: boolean, exclusive = false): number {
   return withinDirectory(leasePathOf(tree), (parent, name) =>
     // openat2 refuses a mode without O_CREAT.
-    create ? openBeneath(parent, name, constants.O_RDWR | constants.O_NOFOLLOW | constants.O_CREAT, 0o600)
+    create ? openBeneath(parent, name, constants.O_RDWR | constants.O_NOFOLLOW | constants.O_CREAT | (exclusive ? constants.O_EXCL : 0), 0o600)
       : openBeneath(parent, name, constants.O_RDWR | constants.O_NOFOLLOW));
 }
 
@@ -34,8 +34,8 @@ export class TreeLease {
 
   /** Taken before the tree is made or worked in by a child. A lease another
    * process still holds is a tree someone is still working in. */
-  static take(tree: string): TreeLease {
-    const fd = openLease(tree, true);
+  static take(tree: string, exclusive = false): TreeLease {
+    const fd = openLease(tree, true, exclusive);
     const lock = lockFileDescriptor(fd);
     if (lock.kind === "held") return new TreeLease(fd, tree);
     closeSync(fd);

@@ -12,9 +12,9 @@ test("T95/TUI-001: the product surface adds no wire or internal socket method", 
   // that needed a new method would change these key sets.
   assert.deepEqual(Object.keys(PUBLIC_METHODS).sort(), [
     "agent.continue", "agent.create", "agent.start", "agent.stop", "agent.wait",
-    "context.publish", "git.integrate", "git.known", "git.submit",
-    "logs.read", "mail.ack", "mail.send", "operation.get", "route.follow",
-    "route.unfollow", "status.get",
+    "attest.record", "context.publish", "git.integrate", "git.known", "git.submit",
+    "logs.read", "mail.ack", "mail.send", "operation.get", "operation.read", "route.follow",
+    "route.unfollow", "society.set", "status.get",
   ]);
   assert.deepEqual(Object.keys(INTERNAL_METHODS).sort(), [
     "batch.complete", "batch.prepare", "batch.read",

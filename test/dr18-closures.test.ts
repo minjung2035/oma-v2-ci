@@ -33,7 +33,7 @@ test("DR18 / MAIL-001/002: a topic is followed by Residents; the Principal's fol
   assert.deepEqual(store.subscribers("release"), ["worker-a"]);
 });
 
-test("DR18 / S-01-CANDIDATE: checks are an unsupported configuration, and the root protects every change", async () => {
+test("DR18 / S-01-CANDIDATE: checks without resource profiles are refused, and the root protects every change", async () => {
   const { protectedPathMatches } = await import("../src/git/observe.js");
   const { assertSupportedIntegration, snapshotIntegrationPolicy } = await import("../src/git/integration-policy.js");
   for (const path of ["README.md", "src/a.ts", "deep/er/file", ".github/workflows/ci.yml"])
@@ -42,55 +42,43 @@ test("DR18 / S-01-CANDIDATE: checks are an unsupported configuration, and the ro
   assert.equal(protectedPathMatches("docs/a.md", "docs/"), true);
   assert.throws(() => assertSupportedIntegration(snapshotIntegrationPolicy({ policyRevision: "p", protectedPaths: [],
     checks: [{ id: "test", argv: ["/usr/bin/true"], env: {}, timeoutSeconds: 1 }] })),
-  (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /not run by this version/.test(error.message));
+  (error: unknown) => error instanceof StoreError && error.code === "UNSUPPORTED_PROFILE" && /resource profile/.test(error.message));
 });
 
-test("DR18 / D-9: `oma login` hands the terminal to the engine's own interactive mode over the society's engine directory, holding the society", async t => {
-  const { chmodSync, existsSync, mkdirSync: mkdir, realpathSync, writeFileSync } = await import("node:fs");
+test("DR18 / D-9, DR24: `oma login` hands the terminal to the engine's own login over the Human's one engine home, needing no session", async t => {
+  const { chmodSync, existsSync, mkdirSync: mkdir, readdirSync, writeFileSync } = await import("node:fs");
   const { spawnSync } = await import("node:child_process");
-  const { hostLaunchLocation } = await import("../src/runtime/assets.js");
-  const { publishProjectBinding } = await import("../src/runtime/provision.js");
-  const { writeSettings } = await import("../src/tui/sources/settings.js");
-  const { defaultHostConfig } = await import("../src/config/defaults.js");
-  const { HostTenure } = await import("../src/runtime/host-tenure.js");
+  const { tryHoldSociety } = await import("../src/runtime/society-lease.js");
+  const { ENGINE_HOME } = await import("../src/runtime/pi-runtime.js");
   const root = mkdtempSync(join(tmpdir(), "oma-login-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const repo = join(new URL(".", import.meta.url).pathname, "..", "..");
   const project = join(root, "project");
   mkdir(project);
   const env = { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: root, XDG_DATA_HOME: join(root, "data"), XDG_RUNTIME_DIR: join(root, "run") };
-  const configPath = join(root, "config.json");
-  const location = hostLaunchLocation("demo", env, configPath);
-  // The engine the society is pinned to: it reports what it was given and signs the directory.
+  const home = join(root, "data", "oma", ENGINE_HOME);
+  // The engine the login runs: it reports what it was given and signs the directory.
   const engine = join(root, "fake-pi.sh");
   writeFileSync(engine, "#!/bin/sh\nprintf 'dir=%s\\n' \"$PI_CODING_AGENT_DIR\"\n[ -e /proc/self/fd/4 ] && echo fence-held\nprintf ok > \"$PI_CODING_AGENT_DIR/logged-in\"\nexit 0\n");
   chmodSync(engine, 0o755);
-  const login = () => spawnSync(process.execPath, [join(repo, "dist/src/entry/oma.js"), "login", "--society", "demo", "--config", configPath],
+  const login = () => spawnSync(process.execPath, [join(repo, "dist/src/entry/oma.js"), "login"],
     { cwd: project, env: { ...env, OMA_PI_COMMAND: engine }, encoding: "utf8", timeout: 60_000 });
-
-  const none = login();
-  assert.notEqual(none.status, 0);
-  assert.match(none.stderr, /society가 아직 없습니다/, "a login made a society");
-  assert.equal(existsSync(location.stateRoot), false);
-
-  mkdir(join(location.stateRoot, "repos"), { recursive: true });
-  publishProjectBinding(location.stateRoot, { society: "demo", canonicalProjectPath: realpathSync(project) });
-  writeSettings(configPath, defaultHostConfig({ society: "demo", node: process.execPath, libdir: repo, rootfs: join(root, "rootfs"), deploymentDigest: "0".repeat(64) }));
-  const held = HostTenure.take(location.stateRoot);
-  assert.ok(held !== null);
-  const busy = login();
-  assert.notEqual(busy.status, 0);
-  assert.match(busy.stderr, /실행 중입니다/, "a login ran beside the society's running oma");
-  await held.end();
 
   const done = login();
   assert.equal(done.status, 0, done.stderr);
-  assert.match(done.stdout, new RegExp(`dir=${join(location.stateRoot, "pi").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), "the engine was not given the society's engine directory");
-  assert.match(done.stdout, /fence-held/, "the engine did not hold the society lease");
-  assert.equal(existsSync(join(location.stateRoot, "pi", "logged-in")), true);
-  const after = HostTenure.take(location.stateRoot);
-  assert.ok(after !== null, "the login kept the society after it ended");
-  await after.end();
+  assert.match(done.stdout, new RegExp(`dir=${home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), "the engine was not given the engine home");
+  assert.match(done.stdout, /fence-held/, "the engine did not hold the engine home's lease");
+  assert.equal(existsSync(join(home, "logged-in")), true);
+  // A login makes no session: no society is left behind by it.
+  assert.deepEqual(readdirSync(join(root, "data", "oma")).filter(name => !name.startsWith(".")), []);
+
+  // Two logins do not run at once.
+  const held = tryHoldSociety(home);
+  assert.ok(held !== null);
+  const busy = login();
+  assert.notEqual(busy.status, 0);
+  assert.match(busy.stderr, /Another oma login is running/);
+  held.release();
 });
 
 test("DR18 / D-8: every start brings the project's committed branch history into the society's mirror, and nothing else of the project", async t => {

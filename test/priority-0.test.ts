@@ -1,5 +1,5 @@
-/** Priority 0 (PRIORITY-0.md): the fixes the file-by-file audit
- * (implementation/priority-0-audit.md) derived from it, each tested where its
+/** Priority 0 (docs/PRIORITY-0.md): the fixes the file-by-file audit
+ * (docs/priority-0-audit.md) derived from it, each tested where its
  * decision takes effect. DR9 and DR11 are also tested beside their owners
  * (rollover-settlement, delivery-state-model, delivery-receipt-publication). */
 import test from "node:test";
@@ -138,7 +138,7 @@ test("P0V-10 / CREATE-003, P0-1: a host policy edited after a create was accepte
 test("DR13 / P0-5: a unit command that did not finish is an unknown outcome, not an unsupported profile", async () => {
   const unknown = { kind: "unknown", stdout: "", stderr: "", status: null, signal: null } as const;
   assert.equal(unitCommandError(unknown, "start")?.code, "DEADLINE_EXCEEDED");
-  assert.equal(unitCommandError({ ...unknown, kind: "failed", status: 1, stderr: "start-limit-hit" }, "start")?.code, "START_LIMIT");
+  assert.equal(unitCommandError({ ...unknown, kind: "failed", status: 1, stderr: "start-limit-hit" }, "start")?.code, "INTERNAL_ERROR");
   assert.equal(unitCommandError({ ...unknown, kind: "failed", status: 1 }, "start")?.code, "INTERNAL_ERROR");
   assert.equal(unitCommandError({ ...unknown, kind: "succeeded", status: 0 }, "start"), null);
   // The real path: a systemctl that is killed before it answers.
@@ -223,7 +223,7 @@ test("DR13 / P0-5: a CLI a tool stopped gave no answer; the tool says the outcom
     const stopped = await run(slow, 200);
     assert.equal(stopped.finished, false, "a CLI this process stopped did not answer");
     const unknown = cliFailure(stopped, ["send", "--request", "pi-key-1", "--", "b"]);
-    assert.match(unknown!.message, /결과 불명확/);
+    assert.match(unknown!.message, /Outcome unknown/);
     assert.match(unknown!.message, /pi-key-1/, "the key to look the outcome up with is named");
     const done = await run(answered, 10_000);
     assert.equal(done.finished, true);

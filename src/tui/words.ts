@@ -31,7 +31,7 @@ export function surfaceWords(text: string, instead: string): string {
 
 /** The words of anything thrown. */
 export function errorWords(error: unknown): string {
-  return surfaceWords(error instanceof Error ? error.message : String(error), `오류 코드 ${errorCodeOf(error)}`);
+  return surfaceWords(error instanceof Error ? error.message : String(error), `Error code ${errorCodeOf(error)}`);
 }
 
 /** Where a message for the Human goes when no screen is drawn. */

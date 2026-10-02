@@ -32,7 +32,8 @@
  * arrives, so everything the host ran on the strength of that lease must be
  * stopped by then.
  */
-import { connect, type Socket } from "node:net";
+import type { Socket } from "node:net";
+import { endpointListening } from "../protocol/connection.js";
 import { join } from "node:path";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnSupervisedService, type ChildProcess } from "../process/async.js";
 import { SOCIETY_OWNED_EXIT } from "./process-lock.js";
@@ -75,20 +76,14 @@ export interface BrokerHandle {
    * broker of this process's to ask, or it refused. */
   register(sessionHandle: string, pid: number): Promise<string | null>;
   /** Stops only a broker this handle started, and stops restarting it. */
-  stop(): void;
+  /** Stops the broker; resolves once it has exited. */
+  stop(): Promise<void>;
 }
 
-/** Answers whether a broker is listening by connecting to its admin endpoint.
- * A refused connection is the absence of a broker; anything else is left as an
- * unknown so a spawn is not skipped on an inconclusive probe. */
+/** Endpoint absence is not broker death; the society lease still owns
+ * admission. An inconclusive observation never authorizes a new spawn. */
 export function brokerListening(runRoot: string, timeoutMs = 500): Promise<boolean> {
-  return new Promise<boolean>(resolve => {
-    const socket = connect(join(runRoot, "admin.sock"));
-    const finish = (listening: boolean): void => { socket.destroy(); resolve(listening); };
-    socket.setTimeout(timeoutMs, () => { finish(false); });
-    socket.once("connect", () => { finish(true); });
-    socket.once("error", () => { finish(false); });
-  });
+  return endpointListening(join(runRoot, "admin.sock"), timeoutMs);
 }
 
 export interface SuperviseOptions {
@@ -133,7 +128,7 @@ function disownedHandle(state: BrokerState, reason: string): BrokerHandle {
     onLost: () => {},
     onDisowned: listener => { listener(reason); },
     register: async () => null,
-    stop: () => {},
+    stop: () => Promise.resolve(),
   };
 }
 
@@ -158,6 +153,8 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
   const restarts: number[] = [];
   let stopping = false;
   let current: Generation | null = null;
+  let restarting: ReturnType<typeof setTimeout> | null = null;
+  let closing: Promise<void> | null = null;
 
   /** Settles the registration this answer is for, and only that one. An answer
    * that names a session nothing is waiting for is a late answer to a
@@ -265,8 +262,9 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       // Doubling back-off within the window, so a broker that fails at once
       // does not spin; the first restart is quick because most ends are not.
       const delay = Math.min(250 * 2 ** (restarts.length - 1), 8000);
-      setTimeout(() => {
-        if (stopping) return;
+      const timer = setTimeout(() => {
+        if (stopping || restarting !== timer) return;
+        restarting = null;
         const next = start();
         if (typeof next === "string") {
           say(`broker could not be restarted: ${next}`);
@@ -275,7 +273,9 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
         }
         current = next;
         say("broker restarted");
-      }, delay).unref?.();
+      }, delay);
+      restarting = timer;
+      timer.unref?.();
     });
     return generation;
   };
@@ -326,11 +326,23 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       });
     },
     stop() {
+      if (closing !== null) return closing;
       stopping = true;
+      if (restarting !== null) clearTimeout(restarting);
+      restarting = null;
       const generation = current;
       current = null;
-      if (generation !== null && generation.child.exitCode === null && generation.child.signalCode === null)
-        generation.child.kill("SIGTERM");
+      if (generation !== null) {
+        const pending = generation.pending;
+        generation.pending = null;
+        pending?.settle(null);
+      }
+      if (generation === null || generation.child.exitCode !== null || generation.child.signalCode !== null)
+        return closing = Promise.resolve();
+      // P0-4/P0-5: every caller shares actual exit, not the signal request.
+      closing = new Promise<void>(resolve => { generation.child.once("exit", () => resolve()); });
+      generation.child.kill("SIGTERM");
+      return closing;
     },
   };
 }

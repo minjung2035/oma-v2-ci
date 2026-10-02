@@ -13,7 +13,7 @@
     "ReconcilePort": { "exported": true, "sha256": "d67d1c04dd5c386a438e02e092bb9914065bcad68d15fa46834c6decd9b6d404" },
     "SandboxCompositionInput": { "exported": true, "sha256": "8856a687abc1b79930b03c17268fd8b5fdd576dd1dd4e7f79d0b52df0862fcd1" },
     "SandboxDirectories": { "exported": true, "sha256": "0e6841a5a879f7e59c111ef86cc2ae4dadea7b7a4c55af918445f28aac3ad4c2" },
-    "SandboxHost": { "exported": true, "sha256": "079ec4ad5c1db7e5335a238a94b513c2aef0861dceefc1ce063e0aa41ab38997" },
+    "SandboxHost": { "exported": true, "sha256": "2c3e05b679d8a0de4c331880c6323ababf9dbce3f7942a0a04e8e15a02d41416" },
     "SandboxPort": { "exported": true, "sha256": "dbad98300f5a7096e1255a8ac087046b0a893a19b46f60c4a620414a746b6137" },
     "StorePort": { "exported": true, "sha256": "9cef16e042a8f138387f98f31aefef79a63b576c2c3a003505f8b7f4232135fa" },
     "SyncUnitsPort": { "exported": true, "sha256": "8c595a2774c641f61291967397c286ca38c8cab2a69c49d3deffa5aa3e2d6261" },
@@ -26,6 +26,10 @@
     "OperationLookup": { "exported": true, "sha256": "111427f8b44a9bab5fdd35394a7cee1f029e93108335f8c3b310c3ae7154af1c" },
     "SynchronousResult": { "exported": true, "sha256": "eff6ca6b80ff4d8f6d0a57857d75e79347fad0f7eb8da7d64cf45d271bbef60e" },
     "BatchViewLimits": { "exported": true, "sha256": "7c2b8b5b64fdd22cc23b59bc4cea13607b9e8ac802b8873c1d2508fe91bd0c84" }
+  },
+  "candidateOwnershipRefinement": {
+    "SandboxHost": { "exported": true, "sha256": "ccd0bae853e20568595a65e3a98975b91ecb63e0ba1c162268ccfa00dc667065" },
+    "SandboxPort": { "exported": true, "sha256": "94550d4ab7e5ead7be82d0bd240f1d565bbe63b049c7e768c9775cc5b6cf6b83" }
   },
   "dispatch": {
     "src/broker/public-dispatcher.ts": {

@@ -85,9 +85,12 @@ test("AV23 / arch §5.1, BATCH-002: a message reads back as the body its sender 
     encodings.add(/^Content-Transfer-Encoding: (.*)$/m.exec(eml.text)?.[1]?.trim() ?? "none");
     const shown = readableMail(eml.text);
     assert.equal(shown.slice(0, shown.indexOf("\r\n\r\n")), eml.text.slice(0, eml.text.indexOf("\r\n\r\n")), "the stored headers were changed");
-    assert.equal(shown.slice(shown.indexOf("\r\n\r\n") + 4).replace(/\r\n/g, "\n").replace(/\n+$/, ""), body.replace(/\n+$/, ""));
+    assert.equal(shown.slice(shown.indexOf("\r\n\r\n") + 4), body);
   }
-  assert.ok(encodings.has("base64") && encodings.has("quoted-printable"), `the cases did not reach both encodings: ${[...encodings].join(",")}`);
+  assert.deepEqual([...encodings], ["base64"], "fresh mail preserves exact body bytes");
+  // Historical quoted-printable remains readable even though fresh mail uses base64.
+  const legacy = "H: v\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nold =ED=95=9C=EA=B8=80=20\r\nsoft=\r\nline";
+  assert.equal(readableMail(legacy), "H: v\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nold 한글 \r\nsoftline");
   // Nothing is guessed: a body that does not decode exactly is shown as stored.
   for (const stored of ["H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n@@not base64@@", "H: v\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nbad =G1",
     "H: v\r\nContent-Transfer-Encoding: base64\r\n\r\n/w==", "H: v\r\n\r\nno declared encoding"])

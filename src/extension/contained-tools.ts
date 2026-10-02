@@ -14,33 +14,37 @@
  * not narrowed (SB-001: the mount plan is the boundary), so only write and
  * edit are replaced there.
  */
+import { dirname } from "node:path";
 import {
-  createEditToolDefinition, createGrepToolDefinition, createLsToolDefinition, createReadToolDefinition, createWriteToolDefinition,
+  createEditToolDefinition, createFindToolDefinition, createGrepToolDefinition, createLsToolDefinition, createReadToolDefinition, createWriteToolDefinition,
   detectSupportedImageMimeTypeFromFile, type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import {
-  WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, sizeWithin, withFileWithin, writeWithin,
+  WorkspaceRefusal, accessWithin, existsWithin, isDirectoryWithin, mkdirWithin, readWithin, readdirWithin, writeGrowthWithin, withFileWithin, writeWithin,
 } from "./contained-files.js";
+import { searchWorkspace } from "./contained-search.js";
 import { workspaceUsage } from "./workspace-guard.js";
 
-export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null, sandboxed: boolean): void {
+export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, workspaceBytes: number | null, sandboxed: boolean, readOnly = false): void {
   let writes: Promise<unknown> = Promise.resolve();
   const write = (path: string, content: string): Promise<void> => {
     const next = writes.catch(() => undefined).then(() => {
       if (!workspaceBytes) throw new WorkspaceRefusal("agent workspace quota is not configured");
-      const growth = Buffer.byteLength(content, "utf8") - sizeWithin(workspace, path);
+      const growth = writeGrowthWithin(workspace, path, Buffer.byteLength(content, "utf8"));
       if (growth > 0 && (growth > workspaceBytes || workspaceUsage(workspace, workspaceBytes - growth) > workspaceBytes - growth))
         throw new WorkspaceRefusal("agent workspace quota would be exceeded");
+      mkdirWithin(workspace, dirname(path));
       writeWithin(workspace, path, content);
     });
     writes = next;
     return next;
   };
-  pi.registerTool(createWriteToolDefinition(workspace, { operations: {
+  if (!readOnly) pi.registerTool(createWriteToolDefinition(workspace, { operations: {
     writeFile: (path, content) => write(path, content),
-    mkdir: async dir => { mkdirWithin(workspace, dir); },
+    // Parent creation is part of the same quota decision and serialized write.
+    mkdir: async () => {},
   } }));
-  pi.registerTool(createEditToolDefinition(workspace, { operations: {
+  if (!readOnly) pi.registerTool(createEditToolDefinition(workspace, { operations: {
     readFile: async path => readWithin(workspace, path),
     writeFile: (path, content) => write(path, content),
     access: async path => { accessWithin(workspace, path, true); },
@@ -51,13 +55,14 @@ export function containWorkspaceTools(pi: ExtensionAPI, workspace: string, works
     access: async path => { accessWithin(workspace, path, false); },
     detectImageMimeType: path => withFileWithin(workspace, path, held => detectSupportedImageMimeTypeFromFile(held)),
   } }));
-  // P0V-122 (G10-02): grep's own reads -- whether its start is a directory,
-  // the lines around a match -- are made as read's are. Its search is the
-  // engine's ripgrep, run without --follow.
-  pi.registerTool(createGrepToolDefinition(workspace, { operations: {
-    isDirectory: path => isDirectoryWithin(workspace, path),
-    readFile: path => readWithin(workspace, path).toString("utf8"),
-  } }));
+  // G10-02: the engine's walkers only see approved copies, including the
+  // context=0 fast path which never invokes a custom readFile operation.
+  const grep = createGrepToolDefinition(workspace);
+  pi.registerTool({ ...grep, execute: (id, params, signal, update, ctx) =>
+    searchWorkspace("grep", workspace, params, workspaceBytes, signal) });
+  const find = createFindToolDefinition(workspace);
+  pi.registerTool({ ...find, execute: (id, params, signal, update, ctx) =>
+    searchWorkspace("find", workspace, params, workspaceBytes, signal) });
   pi.registerTool(createLsToolDefinition(workspace, { operations: {
     exists: path => existsWithin(workspace, path),
     stat: path => { const directory = isDirectoryWithin(workspace, path); return { isDirectory: () => directory }; },

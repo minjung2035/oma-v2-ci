@@ -5,11 +5,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { connect, type Socket } from "node:net";
-import { existsSync, mkdtempSync, readdirSync, readlinkSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readdirSync, readlinkSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { CURRENT_SESSION_VERSION } from "@earendil-works/pi-coding-agent";
+import { newSessionBirth, publishSessionBirth } from "../src/runtime/session-mode.js";
+import { hostPersonalHistoryQuery } from "../src/platform/host/personal-histories.js";
+import { parseHostHistoryQuery } from "../src/protocol/host-history.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TerminalModes } from "../src/platform/terminal-modes.js";
+import { holdSocketNames } from "./fixtures/socket-names.js";
 import {
   TerminalFrameParser, encodeTerminalFrame, encodeTerminalJson, parseTerminalJson, resizePayload, type TerminalFrame,
 } from "../src/protocol/host-guest.js";
@@ -19,16 +25,51 @@ const holderEntry = join(here, "..", "src", "entry", "guest-session.js");
 const fakeTui = join(here, "..", "..", "test", "fixtures", "fake-tui.mjs");
 const setsid = existsSync("/usr/bin/setsid");
 
+test("DR29: actual private socket, host saved history and holder retain the live program until exit", { skip: !setsid, timeout: 15_000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-real-host-history-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const cwd = join(root, "project"), sessionRoot = join(root, ".personal", randomUUID()); mkdirSync(cwd);
+  const birth = publishSessionBirth(sessionRoot, newSessionBirth(sessionRoot, "personal", cwd));
+  mkdirSync(birth.history);
+  writeFileSync(join(birth.history, "saved.jsonl"), JSON.stringify({ type: "session", version: CURRENT_SESSION_VERSION,
+    id: randomUUID(), timestamp: "2026-10-02T00:00:00Z", cwd }) + "\n");
+  const { child, socketPath, exited } = await holder(t, [process.execPath, join(process.cwd(), "test/fixtures/host-history-bridge.mjs")]);
+  const screen = await Screen.attach(socketPath);
+  const handled = new Set<string>();
+  const responder = setInterval(() => {
+    for (const frame of screen.controls.filter(frame => frame.kind === "historyQuery")) {
+      const query = parseHostHistoryQuery(JSON.parse(frame.payload.toString()));
+      if (handled.has(query.id)) continue;
+      handled.add(query.id);
+      void hostPersonalHistoryQuery(root, query).then(result => screen.socket.write(encodeTerminalJson("histories", { id: query.id, result })));
+    }
+  }, 10);
+  t.after(() => clearInterval(responder));
+  await screen.until(/frame/, "controlled program"); screen.type("H");
+  await screen.until(/host-history-selected/, "observed saved history and flushed private EOF");
+  assert.equal(child.exitCode, null); assert.equal(screen.control("exit"), null);
+  screen.type("q"); await screen.closed;
+  const end = screen.control("exit"); assert.equal(end?.code, 0); assert.equal(end?.next, "resume");
+  assert.match(String(end?.history), /^oma-host-history:/); assert.equal(handled.size, 2); assert.equal(await exited, 0);
+});
+
 interface Holder { readonly child: ChildProcess; readonly socketPath: string; readonly exited: Promise<number | null>; log: string }
 async function holder(t: import("node:test").TestContext, program: readonly string[] = [process.execPath, fakeTui]): Promise<Holder> {
   const dir = mkdtempSync(join(tmpdir(), "oma-session-"));
+  const socketNames = holdSocketNames(dir);
   const socketPath = join(dir, "s.sock");
-  const child = spawn(process.execPath, [holderEntry, "--socket", socketPath, "--cwd", dir, "--", ...program],
-    { stdio: ["ignore", "ignore", "pipe"] });
+  let child: ChildProcess;
+  try {
+    child = spawn(process.execPath, ["--import", join(here, "fixtures", "socket-names.js"), holderEntry, "--socket", socketPath, "--cwd", dir, "--", ...program],
+      { stdio: ["ignore", "ignore", "pipe"], env: { ...process.env, ...socketNames.env } });
+  } catch (error) { socketNames.close(); rmSync(dir, { recursive: true, force: true }); throw error; }
   const exited = new Promise<number | null>(resolve => child.once("exit", code => resolve(code)));
   const held: Holder = { child, socketPath, exited, log: "" };
   child.stderr!.on("data", (chunk: Buffer) => { held.log += chunk.toString("utf8"); process.stderr.write(chunk); });
-  t.after(async () => { if (child.exitCode === null) { child.kill("SIGKILL"); await exited; } rmSync(dir, { recursive: true, force: true }); });
+  t.after(async () => {
+    try { if (child.exitCode === null && child.signalCode === null) { child.kill("SIGKILL"); await exited; } }
+    finally { socketNames.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
   for (let i = 0; i < 100 && !existsSync(socketPath); i++) await new Promise(r => setTimeout(r, 20));
   assert.ok(existsSync(socketPath), "the holder listens");
   return held;
@@ -135,6 +176,17 @@ test("MAC-221: the program's end reaches the attached screen, and the holder end
   assert.deepEqual(screen.control("exit"), { code: 0, signal: null });
   assert.equal(await exited, 0);
   assert.equal(existsSync(socketPath), false, "the socket is gone with it");
+});
+
+for (const failure of [false, true]) test(`MODE-006: a real holder does not send the queued host-new request before actual program exit; failure=${failure}`, { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { socketPath, child, exited } = await holder(t);
+  const screen = await Screen.attach(socketPath); await screen.until(/frame/, "the screen");
+  screen.type("N"); await screen.until(/host-new-requested/, "the private request was written");
+  assert.equal(child.exitCode, null); assert.equal(screen.control("exit"), null);
+  if (failure) { screen.type("F"); await screen.until(/host-new-requested/, "the still-live screen"); }
+  screen.type("q"); await screen.closed;
+  assert.deepEqual(screen.control("exit"), failure ? { code: 7, signal: null } : { code: 0, signal: null, next: "new" });
+  assert.equal(await exited, failure ? 7 : 0);
 });
 
 test("MAC-221: output the program wrote just before it ended reaches the screen before the end does", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {

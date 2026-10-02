@@ -8,7 +8,7 @@ import { StoreError } from "./domain/errors.js";
 import { decodeAgentSpec } from "./storage/rows.js";
 import { resolvedSpecDigest } from "./domain/spec-identity.js";
 
-type AuthorityReader = Pick<StoreReads, "getAgent">;
+type AuthorityReader = Pick<StoreReads, "getAgent" | "societyOpen">;
 
 /** P0V-91 (R6-14): the stored digest is required, so no caller can read a
  * spec without the check that it is the spec the row was accepted with. */
@@ -37,6 +37,7 @@ export function assertActorIdentity(store: AuthorityReader, auth: AuthContext): 
 /** Call again after every asynchronous preparation, inside acceptance/reservation. */
 export function assertCurrentActor(store: AuthorityReader, auth: AuthContext, need?: Capability): AgentRow {
   const actor = assertActorIdentity(store, auth);
+  if (actor.role === "resident" && !store.societyOpen()) throw new StoreError("AGENT_NOT_READY", "society execution is closed");
   if (actor.desired !== "enabled") throw new StoreError("STALE_RUN", "actor stopped, retired or is not ready");
   // Access the getter at the decision point; never retain its Set across an await.
   if (need && (!auth.capabilities.has(need) || !capabilitiesOf(actor).has(need)))

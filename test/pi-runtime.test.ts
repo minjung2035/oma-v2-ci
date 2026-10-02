@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { StoreError } from "../src/domain/errors.js";
 import {
-  PI_AGENT_DIR_ENV, PI_PACKAGE,
-  piAgentDir, piIsolationEnv, resolvePiRuntime,
+  ENGINE_HOME, PI_AGENT_DIR_ENV, PI_PACKAGE, adoptEngineHome,
+  piAgentDir, piIsolationEnv, preparePiRetry, preparePiInteractive, resolvePiRuntime,
 } from "../src/runtime/pi-runtime.js";
 import { sessionArgv, sessionEnv } from "../src/tui/session.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "../src/process/async.js";
@@ -17,6 +17,86 @@ import {
 import { readSettings } from "../src/tui/sources/settings.js";
 
 const scratch = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
+
+test("INF-001: engine retry settings preserve unrelated fields and allow exactly five outer retries", t => {
+  const root = scratch("oma-retry-settings-"); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "settings.json");
+  writeFileSync(path, JSON.stringify({ defaultProvider: "fake", theme: "dark", retry: {
+    enabled: false, maxRetries: 99, baseDelayMs: 50, maxAgentDelayMs: 200, provider: { maxRetries: 9, timeoutMs: 3000 },
+  } }));
+  preparePiRetry(root);
+  const result = JSON.parse(readFileSync(path, "utf8"));
+  assert.equal(result.defaultProvider, "fake"); assert.equal(result.theme, "dark");
+  assert.deepEqual(result.retry, { enabled: true, maxRetries: 5, baseDelayMs: 50, maxAgentDelayMs: 200,
+    provider: { maxRetries: 0, timeoutMs: 3000 } });
+  const bytes = readFileSync(path, "utf8"); preparePiRetry(root); assert.equal(readFileSync(path, "utf8"), bytes);
+  rmSync(path); preparePiRetry(root);
+  assert.deepEqual(JSON.parse(readFileSync(path, "utf8")).retry, { enabled: true, maxRetries: 5,
+    baseDelayMs: 1000, maxAgentDelayMs: 8000, provider: { maxRetries: 0 } });
+});
+
+test("Open TUI: the preview's look is the default, the Human's own choices are kept, telemetry to Pi stays off", t => {
+  const fresh = scratch("oma-open-defaults-"); t.after(() => rmSync(fresh, { recursive: true, force: true }));
+  preparePiInteractive(fresh);
+  const defaults = JSON.parse(readFileSync(join(fresh, "settings.json"), "utf8"));
+  const defaultUi = JSON.parse(readFileSync(join(fresh, "open-tui.json"), "utf8"));
+  assert.equal(defaults.theme, "oma"); assert.equal(defaults.hideThinkingBlock, true); assert.equal(defaults.quietStartup, true);
+  assert.equal(JSON.parse(readFileSync(join(fresh, "themes", "oma.json"), "utf8")).vars.accent, "#cba6f7");
+  assert.equal(defaultUi.thinkingPeek.lines, 0); assert.equal(defaultUi.telemetry.enabled, false);
+  assert.equal(defaultUi.footerSegments, undefined, "Open TUI's own footer defaults apply");
+  const root = scratch("oma-open-settings-"); t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, "settings.json"), JSON.stringify({ theme: "dark", hideThinkingBlock: false, enableAnalytics: true }));
+  writeFileSync(join(root, "open-tui.json"), JSON.stringify({ enabled: false, thinkingPeek: { lines: 2 }, footerSegments: { model: true } }));
+  preparePiInteractive(root);
+  const settings = JSON.parse(readFileSync(join(root, "settings.json"), "utf8"));
+  const ui = JSON.parse(readFileSync(join(root, "open-tui.json"), "utf8"));
+  assert.equal(settings.theme, "dark"); assert.equal(settings.hideThinkingBlock, false);
+  assert.equal(settings.enableAnalytics, false);
+  assert.equal(ui.enabled, true); assert.equal(ui.thinkingPeek.lines, 2);
+  assert.deepEqual(ui.footerSegments, { model: true });
+  const before = readFileSync(join(root, "open-tui.json"), "utf8");
+  preparePiInteractive(root); assert.equal(readFileSync(join(root, "open-tui.json"), "utf8"), before);
+});
+
+test("INF-001: unreadable, malformed or linked settings cannot silently disable the retry policy", t => {
+  const root = scratch("oma-retry-refuse-"); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "settings.json"), target = join(root, "original.json");
+  for (const bytes of ["{", "[]", '{"retry":[]}', '{"retry":{"provider":null}}']) {
+    writeFileSync(path, bytes); assert.throws(() => preparePiRetry(root)); assert.equal(readFileSync(path, "utf8"), bytes);
+  }
+  rmSync(path); writeFileSync(target, "{}");
+  for (const link of [symlinkSync, linkSync]) {
+    link(target, path); assert.throws(() => preparePiRetry(root)); assert.equal(readFileSync(target, "utf8"), "{}"); rmSync(path);
+  }
+});
+
+test("INF-001: the Resident adapter waits for five failed provider retries, then reports PROVIDER_FAILED without a boundary", { timeout: 30000 }, async t => {
+  const { PiAdapter } = await import("../src/runtime/pi-adapter.js");
+  const { scriptedProvider } = await import("./fixtures/scripted-provider.js");
+  const root = scratch("oma-resident-retry-");
+  const provider = await scriptedProvider(() => ({ kind: "cut" }));
+  t.after(async () => { await provider.close(); rmSync(root, { recursive: true, force: true }); });
+  for (const name of ["workspace", "sessions", "home", "archive", "view"]) mkdirSync(join(root, name));
+  const runtime = resolvePiRuntime({ stateRoot: root }); provider.configure(runtime.agentDir);
+  const batch = { id: "b-00000000-0000-4000-8000-000000000001", agent: "alice", incarnation: 1,
+    messageIds: [], sessionPath: null, deliveryMode: "followUp" as const, notice: "Read this mail", indexPath: "/inbox.md" as const };
+  writeFileSync(join(root, "view", `batch-${batch.id}.json`), JSON.stringify({ id: batch.id, agent: batch.agent,
+    incarnation: batch.incarnation, messageIds: batch.messageIds, deliveryMode: batch.deliveryMode, notice: batch.notice }));
+  const adapter = new PiAdapter({ actor: "alice", society: "demo",
+    profile: { provider: "fake", model: "scripted", inferenceSeconds: 20, prompt: "", extensions: [], workspaceBytes: 1 << 20 },
+    limits: { frameBytes: 1 << 20, idleStreamSeconds: 5, receiptWaitSeconds: 5, batchMaxMessages: 24, mailBodyBytes: 1 << 20, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
+    paths: { piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: runtime.agentDir,
+      coreExtension: join(process.cwd(), "dist/src/pi-extension.js"), cli: join(process.cwd(), "dist/src/cli.js"),
+      workspace: join(root, "workspace"), sessionDir: join(root, "sessions"), agentHome: join(root, "home"),
+      mailArchive: join(root, "archive"), batchView: join(root, "view"), socket: join(root, "absent.sock") } });
+  await assert.rejects(adapter.deliver(batch), { code: "PROVIDER_FAILED" });
+  assert.equal(provider.seen.length, 6);
+  provider.script([{ kind: "text", text: "Recovered" }]);
+  const boundary = await adapter.deliver(batch);
+  assert.ok(boundary);
+  assert.equal(boundary.batchId, batch.id);
+  assert.equal(provider.seen.length, 7);
+});
 
 /** An installation tree that ships its own engine, like a deployed OMA. */
 function installation(root: string, entry = "dist/bundle/cli.js"): string {
@@ -95,16 +175,48 @@ test("an installation without an engine fails closed instead of using a PATH Pi"
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("the engine is pointed at an OMA-owned agent directory, never the user's", () => {
+test("DR24: the engine is pointed at the Human's one OMA engine home, beside every session and never the user's own Pi", () => {
   const stateRoot = "/var/lib/oma/demo";
   const runtime = resolvePiRuntime({ stateRoot });
   assert.equal(runtime.agentDir, piAgentDir(stateRoot));
-  assert.equal(runtime.agentDir, join(stateRoot, "pi"));
+  assert.equal(runtime.agentDir, join("/var/lib/oma", ENGINE_HOME));
+  // Every session of every project shares it: a login and a model chosen once hold.
+  assert.equal(piAgentDir("/var/lib/oma/other-1234"), runtime.agentDir);
   const isolation = piIsolationEnv(runtime);
   assert.equal(isolation[PI_AGENT_DIR_ENV], runtime.agentDir);
   // The user's own Pi state must not appear anywhere in what we hand the engine.
   assert.doesNotMatch(runtime.agentDir, /(^|\/)\.pi(\/|$)/);
-  assert.ok(runtime.agentDir.startsWith(stateRoot));
+  assert.ok(runtime.agentDir.startsWith("/var/lib/oma/"));
+});
+
+test("DR24: the engine home takes on every earlier society's login, the newest where two hold one provider, and keeps its own", t => {
+  const data = scratch("oma-engine-home-"); t.after(() => rmSync(data, { recursive: true, force: true }));
+  const earlier = (society: string, auth: Record<string, unknown>, ageMs: number): void => {
+    mkdirSync(join(data, society, "pi", "bin"), { recursive: true });
+    writeFileSync(join(data, society, "pi", "auth.json"), JSON.stringify(auth));
+    writeFileSync(join(data, society, "pi", "settings.json"), JSON.stringify({ theme: society }));
+    writeFileSync(join(data, society, "pi", "bin", "rg"), "#!/bin/sh\n");
+    const when = new Date(Date.now() - ageMs);
+    utimesSync(join(data, society, "pi", "auth.json"), when, when);
+    utimesSync(join(data, society, "pi", "settings.json"), when, when);
+  };
+  earlier("first", { anthropic: { key: "old" }, groq: { key: "g" } }, 60_000);
+  earlier("second", { anthropic: { key: "new" } }, 1_000);
+  const home = join(data, ENGINE_HOME);
+  adoptEngineHome(home);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "auth.json"), "utf8")), { anthropic: { key: "new" }, groq: { key: "g" } });
+  assert.equal(JSON.parse(readFileSync(join(home, "settings.json"), "utf8")).theme, "second");
+  assert.equal(readFileSync(join(home, "bin", "rg"), "utf8"), "#!/bin/sh\n");
+  // Once the home has a login, a later start leaves it as the Human set it.
+  writeFileSync(join(home, "auth.json"), JSON.stringify({ openai: { key: "mine" } }));
+  adoptEngineHome(home);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "auth.json"), "utf8")), { openai: { key: "mine" } });
+  // A start that died after adopting the login and before the settings: the
+  // next start adopts what is still missing and leaves what was adopted.
+  rmSync(join(home, "settings.json"));
+  adoptEngineHome(home);
+  assert.equal(JSON.parse(readFileSync(join(home, "settings.json"), "utf8")).theme, "second");
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "auth.json"), "utf8")), { openai: { key: "mine" } });
 });
 
 test("the Principal session carries the isolation variable to the engine", () => {
@@ -184,8 +296,9 @@ test("T106/TUI-019: running in a bare project needs no setup command and no hand
     // A Resident does not get canonical main by default.
     assert.ok(!loaded.agentProfiles[DEFAULT_RESIDENT_PROFILE]!.capabilities.includes("code.integrate"));
     assert.ok(!loaded.agentProfiles[DEFAULT_PRINCIPAL_PROFILE]!.capabilities.includes("code.integrate"));
-    // No Residents are started before anyone asks for one.
-    assert.deepEqual(loaded.initialResidents, []);
+    // DR27: one host seed, still gated on GOAL before activation.
+    assert.deepEqual(loaded.initialResidents.map(seed => ({ name: seed.name, profile: seed.profile })),
+      [{ name: "worker-1", profile: DEFAULT_RESIDENT_PROFILE }]);
 
     // Every generated value is reachable from the Control Panel.
     const fields = readSettings(path).fields.map(field => field.id);

@@ -1,6 +1,14 @@
 /** INT-001..007: policy decisions own phase ordering; adapters own observations.
  * execute is never called by recovery. The surrounding GitModule serializes both.
  */
+import type { TieredAcceptance } from "../../implementation/contracts/integration.js";
+import type { RiskTier, ExactCandidateIdentity } from "../../implementation/contracts/values.js";
+import type { MailModule } from "../mail.js";
+import { PreacceptScope } from "../storage/preaccept-artifact.js";
+import { frozenMessageDisposition } from "../mail/materializer.js";
+import { IntegrationPublicationObserver } from "./integration-publication.js";
+import { TieredAuthority } from "./tiered-authority.js";
+import { canonicalJson } from "../hash.js";
 import type { AuthContext, Receipt, Oid } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";
 import type { OperationOf } from "../storage/operation-codec.js";
@@ -24,6 +32,9 @@ export interface IntegrationEffects {
   changedPaths(base: Oid, candidate: Oid): GitObservation<readonly ChangedPath[]>;
   compareAndSwap(base: Oid, candidate: Oid): RefAfterCas;
   runCheck(candidate: Oid, check: FrozenCheck): Promise<void>;
+  noopWitness?(ref: string): GitObservation<Oid>;
+  authorizeNoop?(ref: string, candidate: Oid): GitObservation<Oid>;
+  submitters?(base: Oid, candidate: Oid): readonly string[];
 }
 function observed<T>(observation: GitObservation<T>, description: string): T {
   if (observation.kind === "present") return observation.value;
@@ -37,6 +48,7 @@ export class IntegrationCoordinator {
     private readonly effects: IntegrationEffects,
     policy: IntegrationPolicy | null,
     private readonly policyReader: IntegrationPolicyReader | null = null,
+    private readonly mail: MailModule | null = null,
   ) {
     this.bound = policy === null ? null : snapshotIntegrationPolicy(policy);
   }
@@ -89,7 +101,18 @@ export class IntegrationCoordinator {
     return operation;
   }
   private receipt(id: string): Receipt { return receiptOfOperation(this.operation(id)); }
-  private succeed(operation: OperationOf<"git.integrate">): void {
+  private async succeed(operation: OperationOf<"git.integrate">): Promise<void> {
+    if (operation.plan.publication) {
+      if (this.mail === null) throw new StoreError("BROKER_UNAVAILABLE", "integration publication owner is unavailable");
+      const proof = new IntegrationPublicationObserver(this.effects).integration(operation);
+      try { await this.mail.publishGated(operation.id, proof); }
+      catch (error) {
+        if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
+        // PUB-002: the canonical effect is proven; an unavailable mail sink
+        // leaves publication pending, never rewrites that fact as a failed CAS.
+        return;
+      }
+    }
     const resultJson = JSON.stringify(integrationResult(operation.plan));
     this.store.transaction(tx => tx.setOperationSucceeded(operation.id, resultJson));
   }
@@ -112,6 +135,7 @@ export class IntegrationCoordinator {
     assertCurrentActor(this.store, auth, "code.integrate");
   }
   private requireRecoveryAuthority(actorName: string): void {
+    if (!this.store.societyOpen()) throw new StoreError("AGENT_NOT_READY", "society execution is closed");
     const actor = this.store.getAgent(actorName);
     if (actor?.desired === "stopped" || actor?.desired === "retired")
       throw new StoreError("CANCELLED_BEFORE_COMMIT", "stopped or retired actor cannot advance main during recovery");
@@ -130,6 +154,57 @@ export class IntegrationCoordinator {
         throw new StoreError("PROTECTED_PATH", "candidate touches a protected path");
     }
   }
+  private identity(plan: { base: string; candidate: string; policyRevision: string }): ExactCandidateIdentity {
+    return { repo: "project", targetRef: "refs/heads/main", expectedBase: plan.base, candidate: plan.candidate, policyRevision: plan.policyRevision };
+  }
+  private evaluate(policy: IntegrationSnapshot, actor: string, plan: { base: string; candidate: string; policyRevision: string },
+    requested: RiskTier): TieredAcceptance {
+    this.requireEligible(policy, plan.base, plan.candidate);
+    if (!this.effects.submitters) throw new StoreError("REF_STATE_UNKNOWN", "authenticated submit provenance is unavailable");
+    return new TieredAuthority(this.store, (base, candidate) => this.effects.submitters!(base, candidate)).evaluate(policy,
+      this.identity(plan), actor, requested, observed(this.effects.changedPaths(plan.base, plan.candidate), "tiered changed paths"));
+  }
+  private revalidateTier(policy: IntegrationSnapshot, operation: OperationOf<"git.integrate">): void {
+    const accepted = operation.plan.publication?.tiered;
+    // An old pending base intent must not acquire tiered meanings or bypass a newly enabled gate.
+    if (accepted === undefined) {
+      if (policy.tiered !== null) throw new StoreError("POLICY_CHANGED", "historical base integration requires its original policy");
+      return;
+    }
+    if (policy.tiered === null || policy.policyIdentity !== accepted.policyDigest)
+      throw new StoreError("POLICY_CHANGED", "accepted tiered policy changed");
+    const current = this.evaluate(policy, operation.actor, operation.plan, accepted.requested);
+    if (current.authorityDigest !== accepted.authorityDigest)
+      throw new StoreError("POLICY_CHANGED", "integration authority changed after acceptance; submit a new request with fresh evidence");
+  }
+  /** Called by attestation acceptance, not by historical replay. */
+  assertReviewIdentity(identity: ExactCandidateIdentity): void {
+    const policy = this.currentPolicy();
+    if (policy.tiered === null) throw new StoreError("UNSUPPORTED_PROFILE", "tiered attestation is not configured");
+    if (policy.policyRevision !== identity.policyRevision) throw new StoreError("POLICY_CHANGED", "review policy revision changed");
+    this.effects.verifyObjectFormat([identity.expectedBase, identity.candidate]);
+    if (observed(this.effects.main(), "review main") !== identity.expectedBase) throw new StoreError("STALE_BASE", "review base is not current main");
+    if (!observed(this.effects.published(), "review publication").includes(identity.candidate))
+      throw new StoreError("CANDIDATE_NOT_PUBLISHED", "review candidate is not published");
+  }
+  assertPrincipalDelegated(): void {
+    if (!this.currentPolicy().tiered?.principalDelegated) throw new StoreError("CAPABILITY_DENIED", "Human has not delegated Principal decisions");
+  }
+  private hasNoopWitness(operation: OperationOf<"git.integrate">): boolean {
+    const ref = operation.plan.publication?.noopRef;
+    if (!ref || !this.effects.noopWitness) throw new StoreError("REF_STATE_UNKNOWN", "no-op authorization witness is unavailable");
+    const witness = this.effects.noopWitness(ref);
+    if (witness.kind === "absent") return false;
+    if (observed(witness, "no-op authorization") !== operation.plan.candidate)
+      throw new StoreError("STORE_CORRUPT", "no-op authorization witness changed candidate");
+    return true;
+  }
+  private authorizeNoop(operation: OperationOf<"git.integrate">): void {
+    const ref = operation.plan.publication?.noopRef;
+    if (!ref || !this.effects.authorizeNoop) throw new StoreError("REF_STATE_UNKNOWN", "no-op authorization owner is unavailable");
+    if (observed(this.effects.authorizeNoop(ref, operation.plan.candidate), "no-op authorization") !== operation.plan.candidate)
+      throw new StoreError("STORE_CORRUPT", "no-op authorization witness changed candidate");
+  }
   private stillAtBase(operation: OperationOf<"git.integrate">): boolean {
     const main = this.effects.main();
     if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
@@ -144,7 +219,7 @@ export class IntegrationCoordinator {
     throw new AcceptedFailure(policy.code, failureMessage(error) ?? "integration observation or settlement failed", knowledge);
   }
 
-  async execute(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid }): Promise<Receipt> {
+  async execute(auth: AuthContext, key: string, input: { candidate: Oid; expected: Oid; tier?: RiskTier }): Promise<Receipt> {
     this.requireExecuteAuthority(auth, false);
     const hash = requestHash("git.integrate", input);
     const claim = this.store.claimKey(auth.actor, key, hash);
@@ -152,6 +227,8 @@ export class IntegrationCoordinator {
     if (claim === "reused") throw reused(auth.actor, key);
     const policy = this.currentPolicy();
     assertSupportedIntegration(policy);
+    if (policy.tiered === null && input.tier !== undefined)
+      throw new StoreError("UNSUPPORTED_PROFILE", "requested tier requires tiered integration");
     this.requireWriterSlot();
     this.effects.verifyObjectFormat([input.candidate, input.expected]);
     if (!observed(this.effects.published(), "admission published refs").includes(input.candidate))
@@ -160,20 +237,50 @@ export class IntegrationCoordinator {
     if (main !== input.expected)
       throw new StoreError("STALE_BASE", "main differs from expected", { details: { actual: main } });
     const id = generateOperationId();
-    const plan = {
+    const basePlan = {
       kind: "git.integrate" as const, repo: "project" as const, target: "refs/heads/main" as const,
       base: input.expected, candidate: input.candidate, policyRevision: policy.policyRevision,
       checkProfileDigest: policy.checkProfileDigest,
     };
-    const accepted = this.store.transaction(tx => {
-      this.requireExecuteAuthority(auth, false);
-      const current = this.store.claimKey(auth.actor, key, hash);
-      if (current === "retry") return "retry" as const;
-      if (current === "reused") throw reused(auth.actor, key);
-      this.requireWriterSlot();
-      return tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash,
-        kind: "git.integrate", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
-    });
+    const tiered = policy.tiered === null ? null : this.evaluate(policy, auth.actor, basePlan, input.tier ?? "LOW");
+    const scope: PreacceptScope = new PreacceptScope();
+    let accepted: "inserted" | "retry";
+    let plan: OperationOf<"git.integrate">["plan"] | typeof basePlan;
+    try {
+      let publication: { tiered: TieredAcceptance; message: import("../../implementation/contracts.js").MessagePlan; noopRef: string | null } | undefined;
+      if (tiered !== null) {
+        if (this.mail === null) throw new StoreError("UNSUPPORTED_PROFILE", "tiered requires its publication owner");
+        const prepared = await this.mail.freezeIntegration(auth, id, canonicalJson({ integration: id,
+          identity: this.identity(basePlan), previousMain: basePlan.base, currentMain: basePlan.candidate,
+          tiered: { requested: tiered.requested, effective: tiered.effective, reasons: tiered.reasons,
+            approvers: tiered.approvers, principalDecision: tiered.principalDecision, activeFloors: tiered.activeFloors,
+            policyDigest: tiered.policyDigest, authorityDigest: tiered.authorityDigest,
+            reviews: tiered.snapshot.reviews?.map(review => review.id),
+            scopeAssessments: tiered.snapshot.scopeAssessments?.map(assessment => assessment.attestation) },
+          checkProfileDigest: basePlan.checkProfileDigest }));
+        scope.register({ operationId: id, resource: prepared.artifact.path, owner: prepared.artifact,
+          observe: () => frozenMessageDisposition(this.store, id, prepared.message) });
+        this.verifyCurrentPolicy(basePlan.policyRevision);
+        const fresh = this.evaluate(policy, auth.actor, basePlan, input.tier ?? "LOW");
+        if (fresh.authorityDigest !== tiered.authorityDigest) throw new StoreError("POLICY_CHANGED", "integration authority changed during preparation");
+        publication = { tiered, message: prepared.message, noopRef: basePlan.base === basePlan.candidate ? `refs/oma/integrations/${id}` : null };
+      }
+      plan = { ...basePlan, ...(publication === undefined ? {} : { publication }) };
+      accepted = this.store.transaction(tx => {
+        this.requireExecuteAuthority(auth, false);
+        const current = this.store.claimKey(auth.actor, key, hash);
+        if (current === "retry") return "retry" as const;
+        if (current === "reused") throw reused(auth.actor, key);
+        this.requireWriterSlot();
+        if (publication !== undefined) publication.message.recipients = this.mail!.integrationRecipients();
+        const result = tx.acceptOperation({ id, actor: auth.actor, requestKey: key, requestHash: hash,
+          kind: "git.integrate", payloadJson: JSON.stringify(input), planJson: JSON.stringify(plan) });
+        if (result === "inserted" && publication !== undefined) tx.insertDeliveries(publication.message.recipients.map(recipient =>
+          ({ operationId: id, messageId: publication.message.id, recipient })));
+        return result;
+      });
+    } catch (error) { scope.settleFailure(error); }
+    scope.settle();
     if (accepted === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
     const operation = this.operation(id);
     let knowledge: EffectKnowledge = "none";
@@ -186,14 +293,18 @@ export class IntegrationCoordinator {
       this.verifyCurrentPolicy(plan.policyRevision);
       this.requireExecuteAuthority(auth, true);
       this.requireWriterSlot(id);
+      this.revalidateTier(policy, operation);
       // No-op integrations also retain the current authority/stop/policy checks.
       if (plan.base !== plan.candidate) {
         knowledge = "possible";
         const after = this.effects.compareAndSwap(plan.base, plan.candidate);
         if (after.kind !== "candidate") { this.unknown(id); return this.receipt(id); }
+      } else if (operation.plan.publication) {
+        knowledge = "possible";
+        this.authorizeNoop(operation);
       }
       knowledge = "applied";
-      this.succeed(operation);
+      await this.succeed(operation);
       return this.receipt(id);
     } catch (error) { return this.rejectAccepted(id, error, "accepted", knowledge); }
   }
@@ -201,17 +312,22 @@ export class IntegrationCoordinator {
   async reconcile(operation: OperationOf<"git.integrate">): Promise<void> {
     if (operation.state !== "pending" && operation.state !== "unknown") return;
     const plan = operation.plan;
-    // D06: a no-op has no CAS whose completion could prove its authorization, so
-    // main == candidate is no evidence; it repeats the current checks below. An
-    // applied non-no-op CAS is history and settles without new authority.
+    // D06/DR27: main equality alone never authorizes a no-op. New no-op
+    // plans carry an immutable Git authorization witness; legacy ones repeat
+    // the checks. Applied effects settle before observing current authority.
     const noOp = plan.base === plan.candidate;
     let knowledge: EffectKnowledge = "possible";
     try {
+      if (noOp && plan.publication && this.hasNoopWitness(operation)) {
+        knowledge = "applied";
+        await this.succeed(operation);
+        return;
+      }
       const main = this.effects.main();
       if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
       if (!noOp && main.kind === "present" && main.value === plan.candidate) {
         knowledge = "applied";
-        this.succeed(operation);
+        await this.succeed(operation);
         return;
       }
       if (main.kind !== "present" || main.value !== plan.base) { this.unknown(operation.id); return; }
@@ -222,6 +338,7 @@ export class IntegrationCoordinator {
         throw new StoreError("POLICY_CHANGED", "accepted integration policy no longer matches the configured profile");
       assertSupportedIntegration(policy);
       this.verifyCurrentPolicy(plan.policyRevision);
+      this.revalidateTier(policy, operation);
       this.requireRecoveryAuthority(operation.actor);
       this.effects.verifyObjectFormat([plan.base, plan.candidate]);
       this.requireEligible(policy, plan.base, plan.candidate);
@@ -231,13 +348,17 @@ export class IntegrationCoordinator {
       this.verifyCurrentPolicy(plan.policyRevision);
       this.requireRecoveryAuthority(operation.actor);
       this.requireWriterSlot(operation.id);
+      this.revalidateTier(policy, operation);
       if (!noOp) {
         knowledge = "possible";
         const after = this.effects.compareAndSwap(plan.base, plan.candidate);
         if (after.kind !== "candidate") { this.unknown(operation.id); return; }
+      } else if (operation.plan.publication) {
+        knowledge = "possible";
+        this.authorizeNoop(operation);
       }
       knowledge = "applied";
-      this.succeed(operation);
+      await this.succeed(operation);
     } catch (error) { this.rejectAccepted(operation.id, error, "recovering", knowledge); }
   }
 }

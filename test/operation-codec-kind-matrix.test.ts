@@ -40,7 +40,13 @@ const resultMail = message("result", ["commons"]);
 const contextMail = message("context", ["residents"], candidate);
 const entries = [{ path: "GOAL.md", bytes: 4, sha256: digest }];
 const integrateResult = { kind: "git.integrate", base, candidate, target: "refs/heads/main", policyRevision: "p1", changed: true };
+const review = { kind: "peer", identity: { repo: "project", targetRef: "refs/heads/main", expectedBase: base,
+  candidate, policyRevision: "p1" }, verdict: "APPROVE", evidence: "reviewed" };
 const fixtures: Fixture[] = [
+  { kind: "society.set", payload: { state: "closed" }, plan: { kind: "society.set", state: "closed" },
+    result: { kind: "society.set", state: "closed" } },
+  { kind: "attest.record", payload: review, plan: { kind: "attest.record", fact: review, message: resultMail }, owned: resultMail,
+    result: { kind: "attest.record", message: messageId, recipientCount: 1, archivePath: `${stateRoot}/mail/archive/cur/${messageId}:2,` } },
   { kind: "mail.send", payload: { to: ["alice"], subject: "subject", kind: "message", body: "body" },
     plan: { kind: "mail.send", message: mail }, owned: mail,
     result: { kind: "mail.send", message: messageId, recipientCount: 1, archivePath: `${stateRoot}/mail/archive/cur/${messageId}:2,` } },
@@ -70,12 +76,13 @@ const fixtures: Fixture[] = [
     result: { kind: "context.publish", previous: null, revision: candidate, message: messageId, recipientCount: 1 } },
 ];
 function raw(fixture: Fixture): RawOperationRecord {
-  return { id, actor: "alice", request_key: "frozen", request_hash: requestHash(fixture.kind, fixture.payload), kind: fixture.kind,
+  return { id, actor: fixture.kind === "society.set" ? "principal" : "alice", request_key: "frozen", request_hash: requestHash(fixture.kind, fixture.payload), kind: fixture.kind,
     payload_json: JSON.stringify(fixture.payload), plan_json: JSON.stringify(fixture.plan), state: "pending",
     result_json: null, error_code: null, created_at_ms: 1, updated_at_ms: 1 };
 }
 function context(fixture: Fixture): OperationDecodeContext {
   return { stateRoot, repositoryIdentity: { society: "demo" }, relations: {
+    attestation: target => fixture.kind === "attest.record" && target === id ? { sequence: 1, operation_id: id } : null,
     operation: () => null, agent: name => name === "alice" ? agent : null,
     deliveries: () => fixture.owned ? [{ operation_id: id, message_id: fixture.owned.id, recipient: "alice" }] : [],
   } };
@@ -85,11 +92,11 @@ const isCorrupt = (error: unknown): boolean => error instanceof StoreError && er
 test("P1 registry: every entry is bound to its own kind, not a neighbouring one", () => {
   // The registry binds each key to a closure over its kind. If an entry were
   // pasted from a neighbour, its own plan would still decode here but a foreign
-  // plan would be accepted, so both directions are checked for all eleven kinds.
+  // plan would be accepted, so both directions are checked for all thirteen kinds.
   const registryKeys = Object.keys(OPERATION_CODECS).sort();
   assert.deepEqual(registryKeys, fixtures.map(fixture => fixture.kind).sort());
   const planContext = (fixture: Fixture) => ({
-    operationId: id as never, actor: "alice" as never, stateRoot, repositoryIdentity: { society: "demo" },
+    operationId: id as never, actor: (fixture.kind === "society.set" ? "principal" : "alice") as never, stateRoot, repositoryIdentity: { society: "demo" },
   });
   for (const fixture of fixtures) {
     const ctx = planContext(fixture);
@@ -105,8 +112,8 @@ test("P1 registry: every entry is bound to its own kind, not a neighbouring one"
   }
 });
 
-test("all eleven kinds preserve raw bytes and decode consistent state-specific values", () => {
-  assert.equal(new Set(fixtures.map(fixture => fixture.kind)).size, 11);
+test("all thirteen kinds preserve raw bytes and decode consistent state-specific values", () => {
+  assert.equal(new Set(fixtures.map(fixture => fixture.kind)).size, 13);
   for (const fixture of fixtures) {
     const input = raw(fixture);
     const before = JSON.stringify(input);

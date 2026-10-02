@@ -10,6 +10,7 @@ import { ensureDirectory } from "../storage/directory.js";
 import { realpathSync } from "node:fs";
 import { hostSystemLayout } from "../runtime/resident-rootfs.js";
 import { residentsConfined } from "../sandbox.js";
+import { packageStoreRoot } from "../runtime/pi-packages.js";
 import { DEPLOYMENT_LAYOUT } from "../domain/deployment.js";
 import { parseCanonicalResourceLimits } from "../domain/resources.js";
 import { launchedLocation, type LaunchLocation } from "../runtime/assets.js";
@@ -67,11 +68,14 @@ ensureDirectory(piRuntime.agentDir, 0o700);
 const confinement = !residentsConfined(cfg.installation.rootfs) ? undefined : {
   rootfs: cfg.installation.rootfs,
   libdir: cfg.installation.libdir,
+  // DR25: the installed packages a role's extensions may name, mounted at the
+  // directory the loader pinned them in (on macOS the store is a link to it).
+  ...(cfg.installation.packages === undefined || packageStoreRoot(cfg.installation.packages) === null ? {}
+    : { packages: packageStoreRoot(cfg.installation.packages)! }),
   // Bound as a single file, so resolve a symlinked Node to the real binary.
   node: realpathSync(cfg.installation.node),
   systemBinds: hostSystemLayout().binds,
   tmpBytes: resources.tmpBytes,
-  checkResources: resources,
 };
 if (confinement === undefined)
   console.error(`runner ${agent}: no trusted rootfs is declared; the engine runs unconfined on this host`);

@@ -2,8 +2,9 @@
 // one sets, draws only when something changed (a start, a resize, Ctrl-L),
 // echoes what it is sent, and restores the modes when it quits on "q".
 import { spawn } from "node:child_process";
+import { requestHostNewSession } from "../../dist/src/runtime/session-handoff.js";
 process.stdin.setRawMode(true);
-let frame = 0;
+let frame = 0, requestedNew = false, exitCode = 0;
 const out = text => process.stdout.write(text);
 out("\u001b[?1049h\u001b[?25l\u001b[?2004h");
 const draw = () => { frame += 1; out(`\u001b[H\u001b[2Jframe ${frame} ${process.stdout.columns}x${process.stdout.rows} pid ${process.pid}`); };
@@ -12,7 +13,10 @@ process.stdout.on("resize", draw);
 process.stdin.on("data", data => {
   for (const byte of data) {
     if (byte === 0x0c) draw();
-    else if (byte === 0x71) { out("\u001b[?2004l\u001b[?25h\u001b[?1049l"); process.exit(0); }
+    else if (byte === 0x71) { out("\u001b[?2004l\u001b[?25h\u001b[?1049l"); process.exit(exitCode); }
+    // N queues the private request but stays alive; only q ends this writer.
+    else if (byte === 0x4e && !requestedNew) { requestedNew = true; requestHostNewSession(); out("host-new-requested"); }
+    else if (byte === 0x46) exitCode = 7;
     // "Q": a last burst larger than the terminal's buffer, then the end.
     else if (byte === 0x51) { out(`${"x".repeat(512 * 1024)}END\u001b[?1049l`); process.exit(0); }
     // "D": the end comes first, and a descendant still holding the terminal

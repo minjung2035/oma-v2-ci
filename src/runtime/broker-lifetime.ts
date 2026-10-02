@@ -42,10 +42,7 @@ export async function settleWithin(tasks: Iterable<Promise<unknown>>, seconds: n
  * shutdown and terminal restore, the Mac's attach client, a Resident's runner,
  * the Mac service, a guest's session holder. SIGQUIT was missing: its default
  * action ends a process with none of that, as SIGHUP's did. */
-export const HOST_LOSS_SIGNALS = Object.freeze(["SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"] as const);
-export function stopOnHostLoss(stop: () => void, target: Pick<NodeJS.Process, "once"> = process): void {
-  for (const signal of HOST_LOSS_SIGNALS) target.once(signal, stop);
-}
+export { HOST_LOSS_SIGNALS, stopOnHostLoss } from "../process/host-loss.js";
 
 export class BrokerLifetime {
   private current: LifetimePhase = "acquired";

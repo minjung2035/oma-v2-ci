@@ -17,7 +17,10 @@ Environment=OMA_PROFILE_HEX=@PROFILE_HEX@
 Environment=OMA_RESOURCES_HEX=@RESOURCES_HEX@
 ExecStart=@NODE@ @LIBDIR@/dist/src/entry/runner.js --society @SOCIETY@ --agent @AGENT@ --config @CONFIG_ARG@ --state-root @STATE_ARG@ --run-root @RUN_ARG@
 Restart=on-failure
+# DR27: bound crash pressure without bypassing the five-start/60s breaker.
 RestartSec=3s
+RestartSteps=4
+RestartMaxDelaySec=12s
 KillMode=control-group
 TimeoutStopSec=10s
 MemoryMax=@MEMORY_BYTES@

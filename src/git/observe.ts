@@ -32,6 +32,10 @@ export type GitObservation<T> =
   | { readonly kind: "absent"; readonly evidence: GitProcessEvidence }
   | { readonly kind: "unknown"; readonly reason: string; readonly evidence: GitProcessEvidence }
   | { readonly kind: "corrupt"; readonly reason: string; readonly evidence: GitProcessEvidence };
+export function observed<T>(observation: GitObservation<T>, what: string): T {
+  if (observation.kind === "present") return observation.value;
+  throw new StoreError(observation.kind === "corrupt" ? "STORE_CORRUPT" : "REF_STATE_UNKNOWN", `${what}: ${observation.kind}`);
+}
 export type GitObservationRunner = (args: readonly string[], input?: string) => GitProcessEvidence;
 export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
 export interface ChangedPath { readonly status: "A" | "M" | "D" | "T"; readonly path: string }
@@ -119,6 +123,16 @@ export class GitObserver {
     return { kind: "present", value: evidence.status === 0, evidence };
   }
 
+  commits(repository: string, base: string, candidate: string): GitObservation<readonly string[]> {
+    const evidence = this.run(["--git-dir", repository, "rev-list", `${gitOidArgument(base)}..${gitOidArgument(candidate)}`]);
+    if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "commit range unavailable");
+    const output = text(evidence.stdout);
+    if (output === null || (output !== "" && !output.endsWith("\n"))) return corrupt(evidence, "invalid commit range output");
+    const commits = output === "" ? [] : output.slice(0, -1).split("\n");
+    if (commits.some(oid => !isValidFullOid(oid) || oid.length !== base.length) || new Set(commits).size !== commits.length)
+      return corrupt(evidence, "invalid commit range identity");
+    return { kind: "present", value: commits, evidence };
+  }
   published(repository: string): GitObservation<readonly string[]> {
     const evidence = this.run(["--git-dir", repository, "for-each-ref", "--format=%(objectname)", "refs/oma/published/"]);
     if (uncertain(evidence) || evidence.status !== 0 || diagnostic(evidence)) return unknown(evidence, "published enumeration unavailable");

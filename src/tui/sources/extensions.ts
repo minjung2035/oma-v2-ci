@@ -1,8 +1,9 @@
-/** TUI-010: role-by-role extension selection over host-placed files only.
+/** TUI-010: role-by-role extension selection over host-placed files and
+ * (DR25) the packages the Human installed with `oma pi install`.
  *
  * This is not an installer. The list is what the host already put under
- * installation.libdir; there is no arbitrary path entry, no network fetch and
- * no Pi auto-discovery. The core OMA extension is always first and cannot be
+ * installation.libdir and what the package store's index names; there is no
+ * arbitrary path entry, no network fetch and no Pi auto-discovery. The core OMA extension is always first and cannot be
  * cleared. Selected files carry the SHA-256 that the runner re-checks before
  * start, so a file swapped after selection fails closed rather than loading.
  *
@@ -17,7 +18,8 @@ import { StoreError } from "../../domain/errors.js";
 import { errorWords } from "../words.js";
 import { DEPLOYMENT_LAYOUT } from "../../domain/deployment.js";
 import { loadConfigurationSnapshot, loadEditableConfiguration, type ConfigurationSnapshot } from "../../config.js";
-import { extensionEntryProblem, extensionListProblem, observeExtensionAsset } from "../../config/operations.js";
+import { extensionEntryProblem, extensionListProblem, observeExtensionAsset, type ExtensionRoots } from "../../config/operations.js";
+import type { InstalledPackage } from "../../runtime/pi-packages.js";
 import type { ManagedSource } from "../../config/generations.js";
 import { commitManagedEdit } from "./settings.js";
 import type { ExtensionRow } from "../model.js";
@@ -38,6 +40,8 @@ export interface RoleFile {
 export interface ExtensionContext {
   readonly editable: boolean;
   readonly libdir: string;
+  /** Where entries are: the installation, and (DR25) the installed packages. */
+  readonly roots: ExtensionRoots;
   readonly principalRole: string | null;
   readonly workerRole: string | null;
   readonly roles: readonly RoleFile[];
@@ -76,7 +80,7 @@ function scanLibdir(libdir: string): { readonly entries: readonly string[]; read
       if (stat.isDirectory()) { walk(full, depth + 1); continue; }
       const rel = relative(libdir, full);
       if (!stat.isFile() || extensionEntryProblem(rel) !== null) continue;
-      if (observeExtensionAsset(libdir, rel).kind !== "present") continue;
+      if (observeExtensionAsset({ libdir }, rel).kind !== "present") { unobserved = true; continue; }
       found.push(rel);
     }
   };
@@ -85,28 +89,30 @@ function scanLibdir(libdir: string): { readonly entries: readonly string[]; read
 }
 
 function rowsOf(available: readonly string[], principal: RoleFile | null, worker: RoleFile | null,
-  missing: ReadonlySet<string>): readonly ExtensionRow[] {
+  missing: ReadonlySet<string>, sources: ReadonlyMap<string, string>): readonly ExtensionRow[] {
   return Object.freeze(available.map(id => Object.freeze({
     id,
     principal: principal ? principal.extensions.includes(id) : id === CORE_EXTENSION,
     workers: worker ? worker.extensions.includes(id) : id === CORE_EXTENSION,
     locked: id === CORE_EXTENSION,
     ...(missing.has(id) ? { missing: true } : {}),
+    ...(sources.has(id) ? { source: sources.get(id)! } : {}),
   })));
 }
 
 const unmanaged = (reason: string): ExtensionContext => Object.freeze({
-  editable: false, libdir: "", principalRole: null, workerRole: null, roles: Object.freeze([]),
+  editable: false, libdir: "", roots: Object.freeze({ libdir: "" }), principalRole: null, workerRole: null, roles: Object.freeze([]),
   rows: Object.freeze([Object.freeze({ id: CORE_EXTENSION, principal: true, workers: true, locked: true })]),
   reason, snapshot: null, mode: "full" as const, scan: "complete" as const,
 });
 
-export function readExtensions(source: string | ConfigurationSnapshot, principalProfile: string, workerProfile: string | null): ExtensionContext {
+export function readExtensions(source: string | ManagedSource, principalProfile: string, workerProfile: string | null,
+  packages: readonly InstalledPackage[] = []): ExtensionContext {
   let snapshot: ManagedSource;
   let mode: "full" | "repair" = "full";
   try { snapshot = typeof source === "string" ? loadConfigurationSnapshot(source) : source; }
   catch (error) {
-    const unreadable = error instanceof StoreError ? `설정을 읽을 수 없습니다: ${errorWords(error)}` : "설정을 읽을 수 없습니다";
+    const unreadable = error instanceof StoreError ? `Cannot read settings: ${errorWords(error)}` : "Cannot read settings";
     // WP14.03: a configuration that fails only because a declared extension
     // file is gone can still be read as an editing input for its removal.
     if (typeof source !== "string") return unmanaged(unreadable);
@@ -114,24 +120,28 @@ export function readExtensions(source: string | ConfigurationSnapshot, principal
     catch { return unmanaged(unreadable); }
   }
   if (snapshot.layout.kind !== "operations")
-    return unmanaged("인라인 config.json은 role별 extension을 갖지 않습니다");
+    return unmanaged("Inline config.json has no per-role extensions");
   const libdir = snapshot.config.installation.libdir;
+  const roots: ExtensionRoots = Object.freeze({ libdir, packages: snapshot.config.installation.packages });
   const roles: RoleFile[] = [];
   const missing = new Set<string>();
   for (const [name, authored] of Object.entries(snapshot.authoredRoles)) {
     const role = authored.value;
     const entries = role.extensions;
     if (extensionListProblem(entries) !== null)
-      return unmanaged(`role ${name}의 extensions 형식이 올바르지 않습니다`);
-    for (const entry of entries as string[]) if (observeExtensionAsset(libdir, entry).kind === "missing") missing.add(entry);
+      return unmanaged(`Invalid extensions format for role ${name}`);
+    for (const entry of entries as string[]) if (observeExtensionAsset(roots, entry).kind === "missing") missing.add(entry);
     const { extensions: _authored, ...rest } = role;
     roles.push(Object.freeze({ name, path: authored.path,
       extensions: Object.freeze([...entries as string[]]), rest: Object.freeze(rest) }));
   }
+  // WP14.03: an editing input read for its missing files (DR25: the project's
+  // settings, read that way when a package was removed) is a repair input.
+  if (typeof source !== "string" && missing.size > 0) mode = "repair";
   // A repair input exists only for the missing-file case; anything else that
   // keeps the configuration from loading is not this screen's to fix.
   if (mode === "repair" && missing.size === 0)
-    return unmanaged("설정을 읽을 수 없습니다: 없는 extension 파일 때문이 아닙니다");
+    return unmanaged("Cannot read settings: not caused by a missing extension file");
   const principal = roles.find(role => role.name === principalProfile) ?? null;
   // P0V-51: no Worker profile of its own means no Worker column to edit, never
   // the Principal's role under the Worker's name.
@@ -140,15 +150,22 @@ export function readExtensions(source: string | ConfigurationSnapshot, principal
   const referenced = new Set<string>([CORE_EXTENSION]);
   for (const role of roles) for (const entry of role.extensions) referenced.add(entry);
   for (const entry of scanned.entries) referenced.add(entry);
+  // DR25: each installed package's extensions, named by the package they came from.
+  const sources = new Map<string, string>();
+  let partial = scanned.partial;
+  if (roots.packages !== undefined) for (const item of packages) for (const entry of item.entries) {
+    if (observeExtensionAsset(roots, entry).kind !== "present" && !referenced.has(entry)) { partial = true; continue; }
+    referenced.add(entry); sources.set(entry, item.source);
+  }
   const available = [CORE_EXTENSION, ...[...referenced].filter(id => id !== CORE_EXTENSION).sort()];
   const editable = principal !== null || worker !== null;
   return Object.freeze({
-    editable, libdir, principalRole: principal?.name ?? null, workerRole: worker?.name ?? null,
-    roles: Object.freeze(roles), rows: rowsOf(available, principal, worker, missing),
-    reason: !editable ? "해당 role 파일이 없습니다"
-      : mode === "repair" ? "없는 extension 파일이 선언되어 있습니다. 그 선언만 끌 수 있습니다"
-      : scanned.partial ? "extension 목록을 모두 살펴보지 못했습니다(부분 목록)" : null,
-    snapshot, mode, scan: scanned.partial ? "partial" : "complete",
+    editable, libdir, roots, principalRole: principal?.name ?? null, workerRole: worker?.name ?? null,
+    roles: Object.freeze(roles), rows: rowsOf(available, principal, worker, missing, sources),
+    reason: !editable ? "Role file is missing"
+      : mode === "repair" ? "A missing extension file is declared. Only that declaration can be disabled"
+      : partial ? "Could not scan all extensions (partial list)" : null,
+    snapshot, mode, scan: partial ? "partial" : "complete",
   });
 }
 
@@ -163,25 +180,25 @@ export function nextEntries(current: readonly string[], id: string, enabled: boo
 }
 
 export function toggleExtension(context: ExtensionContext, id: string, role: "principal" | "workers", enabled: boolean): void {
-  if (!context.editable) throw new StoreError("UNSUPPORTED_PROFILE", "이 설정 형식에서는 extension을 바꿀 수 없습니다");
+  if (!context.editable) throw new StoreError("UNSUPPORTED_PROFILE", "Extensions cannot be changed in this configuration format");
   if (id === CORE_EXTENSION) return;
   const name = role === "principal" ? context.principalRole : context.workerRole;
-  if (name === null) throw new StoreError("UNSUPPORTED_PROFILE", `대상 role 파일이 없습니다: ${role}`);
+  if (name === null) throw new StoreError("UNSUPPORTED_PROFILE", `Target role file is missing: ${role}`);
   const target = context.roles.find(entry => entry.name === name);
   if (!target) throw new StoreError("STORE_CORRUPT", "role file disappeared between read and write");
-  if (context.snapshot === null) throw new StoreError("UNSUPPORTED_PROFILE", "이 설정은 스냅샷 없이 바꿀 수 없습니다");
+  if (context.snapshot === null) throw new StoreError("UNSUPPORTED_PROFILE", "These settings cannot be changed without a snapshot");
   if (enabled) {
     if (context.mode === "repair")
-      throw new StoreError("UNSUPPORTED_PROFILE", "없는 extension 선언을 먼저 끄세요; 복구 중에는 다른 extension을 켤 수 없습니다");
+      throw new StoreError("UNSUPPORTED_PROFILE", "Disable missing extension declarations first; other extensions cannot be enabled during recovery");
     // Only a host-placed file the loader itself accepts is enabled.
-    const asset = observeExtensionAsset(context.libdir, id);
+    const asset = observeExtensionAsset(context.roots, id);
     if (asset.kind !== "present")
-      throw new StoreError("INVALID_REQUEST", `선택할 수 없는 extension입니다: ${id} (${asset.kind === "missing" ? "파일 없음" : asset.reason})`);
+      throw new StoreError("INVALID_REQUEST", `Extension is not selectable: ${id} (${asset.kind === "missing" ? "File missing" : asset.reason})`);
   } else {
     // WP14.03: removing a declaration needs no asset -- only the exact entry.
     if (!target.extensions.includes(id)) return;
-    if (context.mode === "repair" && observeExtensionAsset(context.libdir, id).kind !== "missing")
-      throw new StoreError("UNSUPPORTED_PROFILE", "복구 중에는 없는 extension 선언만 끌 수 있습니다");
+    if (context.mode === "repair" && observeExtensionAsset(context.roots, id).kind !== "missing")
+      throw new StoreError("UNSUPPORTED_PROFILE", "Only missing extension declarations can be disabled during recovery");
   }
   const entries = nextEntries(target.extensions, id, enabled);
   const problem = extensionListProblem(entries);

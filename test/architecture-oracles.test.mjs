@@ -268,6 +268,19 @@ test("P15 import syntax mutations share architecture and runtime closure classif
   );
 });
 
+test("DR27/P13: tier facts, retained codecs and snapshot mechanisms have distinct owners", () => {
+  const owners = {
+    "src/domain/attestation-relations.ts": "K0-values",
+    "src/domain/tier-evaluation.ts": "K0-values",
+    "src/domain/attestation.ts": "K1-codecs",
+    "src/domain/integration-policy.ts": "K1-codecs",
+    "src/domain/tier-snapshot.ts": "K1-codecs",
+    "src/storage/project-preparation.ts": "K2-mechanisms",
+    "src/storage/snapshot-reader.ts": "K2-mechanisms",
+  };
+  for (const [file, zone] of Object.entries(owners)) assert.equal(kernelZoneOf(file)?.name, zone, file);
+});
+
 test("P13 every semantic zone direction, exact membership and pure external capability are gated", () => {
   const representatives = [
     "src/domain/identifiers.ts",

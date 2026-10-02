@@ -29,7 +29,7 @@ const options = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd
 const roots = ["src/entry/broker.ts", "src/entry/runner.ts", "src/entry/host.ts", "src/cli.ts", "src/pi-extension.ts"];
 const { reachable, findings, external } = runtimeImportClosure({ rootDir: process.cwd(), roots, manifest, compilerOptions: options });
 const notReached = manifest.filter(file => file.endsWith(".ts") && !reachable.has(file));
-const acceptance = inventoryAcceptance([...normativeSources, "architecture.md"].map(source => ({ source, text: fs.readFileSync(source, "utf8") })));
+const acceptance = inventoryAcceptance([...normativeSources, "docs/architecture.md"].map(source => ({ source, text: fs.readFileSync(source, "utf8") })));
 const cell = value => String(value ?? "UNLINKED").replaceAll("|", "\\|").replaceAll("\n", " ");
 const lines = [
   "# Whole-scope adversarial audit ledger", "",
@@ -71,6 +71,7 @@ lines.push("", "## Proof and source-pin disposition", "",
   "Only fresh build/test execution on the named source closure can support new runtime evidence. A static report's successful exit is not that evidence.",
   "Use the explicit verification lanes and preserve their raw logs, execution status, full source digests, skip accounting and scope limitations.",
   "Unlinked rows and OPEN adapters remain unverified; no similarity-based test-name match fills them.");
-fs.writeFileSync("implementation/adversarial-review.md", lines.join("\n") + "\n");
+fs.mkdirSync("docs/archive", { recursive: true });
+fs.writeFileSync("docs/archive/adversarial-review.md", lines.join("\n") + "\n");
 console.log(`Classified ${rows.length} clauses; ${findings.length} static import-closure findings; runtime NOT_RUN; historical proof pins unchanged.`);
 process.exitCode = findings.length || missingTrace.length || extras.length || !acceptance.complete || rows.length === 0 ? 1 : 0;

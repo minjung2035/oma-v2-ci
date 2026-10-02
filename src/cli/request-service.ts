@@ -13,7 +13,8 @@ import { fail, finishFailure, finishReceipt, finishUnrecordedReceipt } from "./e
 
 const HOME = process.env.HOME ?? "/tmp";
 // P0V-112: made at first use, with the frame this CLI speaks -- a request's
-// metadata is at most the request and its receipt, a frame each.
+// metadata retains a two-frame cache budget. Larger recovered receipts are
+// printed without caching; the original request freeze is kept.
 let made: RequestCache | null = null;
 const cache = (): RequestCache => made ??= new RequestCache(HOME, readCacheFile, 2 * cliFrameBytes());
 
@@ -29,7 +30,7 @@ function readFrozen(key: string): CachedRequest | null {
   if (observed.kind === "present") return observed.value;
   if (observed.kind === "absent") return null;
   return fail(
-    `CACHE_${observed.kind === "corrupt" ? "CORRUPT" : "UNAVAILABLE"}: ${key}: ${observed.reason}; 원래 freeze를 복구하기 전에는 재전송하지 않음`,
+    `CACHE_${observed.kind === "corrupt" ? "CORRUPT" : "UNAVAILABLE"}: ${key}: ${observed.reason}; Not resending until the original frozen request is restored`,
     3,
   );
 }
@@ -39,7 +40,7 @@ function frozenBody(entry: CachedRequest): Uint8Array | undefined {
   const observed = cache().readBody(entry.key, entry.digest);
   if (observed.kind === "present") return observed.value;
   return fail(
-    `frozen request body ${observed.kind} for ${entry.key}${observed.kind === "absent" ? "" : `: ${observed.reason}`} (복구: 원래 freeze 보존; 새 payload 생성 금지)`,
+    `frozen request body ${observed.kind} for ${entry.key}${observed.kind === "absent" ? "" : `: ${observed.reason}`} (Recovery: preserve the original frozen request; do not create a new payload)`,
     3,
   );
 }
@@ -53,7 +54,7 @@ function settle(receipt: Receipt, key: string): never {
   try { cache().updateReceipt(key, receipt); }
   catch (error) {
     if (!(error instanceof CacheError)) throw error;
-    finishUnrecordedReceipt(receipt, key, `${error.code}: 요청 cache가 이 영수증을 기록하지 못함: ${error.message}`, error.code === "CACHE_CORRUPT");
+    finishUnrecordedReceipt(receipt, key, `${error.code}: Request cache could not record this receipt: ${error.message}`, error.code === "CACHE_CORRUPT");
   }
   finishReceipt(receipt, key);
 }
@@ -112,6 +113,23 @@ export async function replayOrSend(
   return settleFrozen(frozen, key, replay);
 }
 
+/** A lost answer permits observation, never a second effect. Even a lookup
+ * reporting absence does not turn this call into an automatic send loop. */
+async function recoverAnswer(frozen: CachedRequest, key: string): Promise<never> {
+  let reply;
+  try { reply = (await call("operation.get", { key }))[0]; }
+  catch { return acceptanceUnknown(key); }
+  if (reply?.ok === true) {
+    const decoded = decodeReceipt(reply.result, { expectedKind: frozen.method, allowNotFound: true });
+    if (decoded.ok && !isRequestNotFound(decoded.value)) settle(decoded.value, key);
+  }
+  return acceptanceUnknown(key);
+}
+
+function acceptanceUnknown(key: string): never {
+  fail(`Acceptance status unknown: ${key} (Recovery: use --request ${key} with the same command; do not rerun with a new key)`, 3);
+}
+
 /** The frozen request's outcome: looked up first when it may already have been
  * sent, and sent -- with its frozen body -- only when this is its first send or
  * the ledger has answered REQUEST_NOT_FOUND. P0V-38, P0-5: the lookup needs the
@@ -124,7 +142,7 @@ async function settleFrozen(frozen: CachedRequest, key: string, replay: boolean)
     try {
       lookup = await call("operation.get", { key });
     } catch {
-      fail(`미접수 여부 불명확: ${key} (복구: 원래 command에 --request ${key})`, 3);
+      return acceptanceUnknown(key);
     }
     const reply = lookup[0];
     if (reply?.ok === true) {
@@ -145,9 +163,11 @@ async function settleFrozen(frozen: CachedRequest, key: string, replay: boolean)
   try {
     replies = await call(frozen.method, requestPayload(frozen.params), key, body);
   } catch {
-    fail(`미접수 여부 불명확: ${key} (복구: 원래 command에 --request ${key})`, 3);
+    return recoverAnswer(frozen, key);
   }
   const reply = replies[0];
+  if (reply?.ok === false && ["DEADLINE_EXCEEDED", "BROKER_UNAVAILABLE"].includes(reply.error.code))
+    return recoverAnswer(frozen, key);
   if (reply?.ok === true) {
     const decoded = decodeReceipt(reply.result, { expectedKind: frozen.method });
     if (!decoded.ok) fail(`invalid mutation receipt: ${decoded.reason}; --request ${key}`, 3);

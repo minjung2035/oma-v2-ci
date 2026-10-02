@@ -11,6 +11,7 @@
 import { constants, copyFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { StoreError } from "../../domain/errors.js";
+import { withAsyncCleanup } from "../../process/cleanup.js";
 import { collectTemporaries, discardTemporary, publishMade, temporaryPath } from "./files.js";
 import type { GuestLink } from "./guest-link.js";
 
@@ -44,11 +45,11 @@ function publish(store: SnapshotStore, id: string, take: (partial: string) => Pr
   const sequence = 1 + Math.max(-1, ...readdirSync(store.dir).map(sequenceOf));
   const name = `${String(sequence).padStart(8, "0")}-${id}.img`;
   const partial = temporaryPath(store.dir, name);
-  return take(partial).then(kept => {
-    if (!kept) { discardTemporary(partial); throw new StoreError("BROKER_UNAVAILABLE", "the backup could not be made; try again"); }
+  return withAsyncCleanup(async () => {
+    if (!await take(partial)) throw new StoreError("BROKER_UNAVAILABLE", "the backup could not be made; try again");
     if (publishMade(partial, store.dir, name) === "existing") throw new StoreError("BROKER_UNAVAILABLE", "another backup took this name; try again");
     return join(store.dir, name);
-  }, error => { discardTemporary(partial); throw error; });
+  }, () => discardTemporary(partial));
 }
 
 /** With the VM stopped the disk is quiescent as it is. */

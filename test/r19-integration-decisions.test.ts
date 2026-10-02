@@ -19,6 +19,9 @@ const BASE = "1".repeat(40); const CANDIDATE = "2".repeat(40); const THIRD = "3"
 const EMPTY_DIGEST = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 const input = { candidate: CANDIDATE, expected: BASE };
 const basePolicy = (): IntegrationPolicy => ({ policyRevision: "p1", protectedPaths: [], checks: [] });
+const checkedPolicy = (): IntegrationPolicy => ({ ...basePolicy(), checks: [{ id: "trusted", argv: ["/bin/true"], env: {},
+  timeoutSeconds: 1, resources: { memoryBytes: 1024 * 1024, tasks: 16, cpuQuotaPercent: 10,
+    tmpBytes: 1024, workspaceBytes: 1024, stagingBytes: 1024, checkTimeoutSeconds: 1 } }] });
 const evidence: GitProcessEvidence = { status: 0, signal: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
 const present = <T>(value: T): GitObservation<T> => ({ kind: "present", value, evidence });
 const unavailable = <T>(): GitObservation<T> => ({ kind: "unknown", reason: "injected unavailable observation", evidence: { ...evidence, status: null } });
@@ -56,7 +59,7 @@ function fixture(policy: IntegrationPolicy | null = basePolicy(), reader: Integr
       if (model.cas !== null) return model.cas;
       model.main = present(candidate); return { kind: "candidate", oid: candidate };
     },
-    runCheck: async () => { record("check"); assert.fail("nonempty checks must remain gated"); },
+    runCheck: async () => { record("check"); },
   };
   return { root, store, auth, model, calls, effects,
     coordinator: new IntegrationCoordinator(store, effects, policy, reader),
@@ -150,6 +153,39 @@ test("R19: missing policy cannot enable a production legacyDirect path", async (
     assert.deepEqual(f.calls, []); assert.equal(f.store.getOperation("alice", "no-policy"), null);
   } finally { f.close(); }
 });
+
+for (const scenario of ["success", "failure", "unknown", "stop", "policy", "main"] as const)
+  test(`INT-004: trusted check ${scenario} is reobserved before CAS and retry preserves intent`, async t => {
+    let revision = "p1";
+    const f = fixture(checkedPolicy(), () => revision); t.after(() => f.close());
+    f.effects.runCheck = async (candidate, check) => {
+      assert.equal(candidate, CANDIDATE); assert.equal(check.id, "trusted");
+      assert.equal(f.store.inTransaction, false); assert.equal(operation(f.store, "checked").state, "pending");
+      await Promise.resolve();
+      f.calls.push("check");
+      if (scenario === "failure") throw new StoreError("CHECK_FAILED", "check returned nonzero");
+      if (scenario === "unknown") throw new StoreError("REF_STATE_UNKNOWN", "manager wait unavailable");
+      if (scenario === "stop") f.store.transaction(tx => tx.updateAgent({ name: "alice", desired: "stopped" }));
+      if (scenario === "policy") revision = "p2";
+      if (scenario === "main") f.model.main = present(THIRD);
+    };
+    if (["failure", "unknown", "stop", "policy"].includes(scenario))
+      await assert.rejects(f.coordinator.execute(f.auth, "checked", input), code(
+        scenario === "failure" ? "CHECK_FAILED" : scenario === "unknown" ? "REF_STATE_UNKNOWN" :
+          scenario === "stop" ? "CANCELLED_BEFORE_COMMIT" : "POLICY_CHANGED"));
+    else {
+      const receipt = await f.coordinator.execute(f.auth, "checked", input);
+      assert.equal(receipt.state, scenario === "success" ? "succeeded" : "unknown");
+    }
+    assert.equal(f.calls.filter(value => value === "cas").length, scenario === "success" ? 1 : 0);
+    const before = operation(f.store, "checked");
+    if (scenario !== "stop") {
+      const count = f.calls.length;
+      assert.equal((await f.coordinator.execute(f.auth, "checked", input)).state, before.state);
+      assert.equal(f.calls.length, count, "same-key retry does not rerun checks or CAS");
+      assert.equal(operation(f.store, "checked").planJson, before.planJson);
+    }
+  });
 
 for (const result of ["expected", "third", "unknown"] as const) {
   test(`R19: post-CAS ${result} remains unknown and blocks another repository writer`, async () => {

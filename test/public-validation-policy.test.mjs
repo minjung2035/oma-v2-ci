@@ -47,6 +47,8 @@ function fixture(transform = source => source) {
     "../protocol/methods.js": { PUBLIC_METHODS: table, isPublicMethod: method => Object.hasOwn(table, method),
       decodePublicParams(_method, params) { calls.params++; return state.rejectParams || !params || typeof params !== "object" ? null : params; } },
     "../protocol/log-response.js": logResponse,
+    "../protocol/status-page.js": { statusPage: (id, observedAtMs, agents) => replies.okAnswer(id, { observedAtMs, agents }) },
+    "../protocol/receipt-chunks.js": { receiptChunk() { throw new Error("unexpected chunk read in validation fixture"); } },
     "./replies.js": replies,
   }, transform);
   const effect = async (...args) => { calls.effects.push(args); return { accepted: true }; };
@@ -59,6 +61,7 @@ function fixture(transform = source => source) {
     mail: { send: effect }, units: { statusSnapshot: async () => ({ observedAtMs: 1, units: new Map(), failure: null }) },
     views: { status: () => [] }, lifecycle: {}, limits: {},
     git: { submit: effect, publishContext: effect, isPublished() { calls.order.push("published"); return false; } },
+    waitRun: () => true,
     isDraining: () => state.draining,
     assertAdmission() { calls.admission++; if (state.denyAdmission) throw new StoreError("BROKER_UNAVAILABLE", "admission closed"); },
     admitResource: () => () => undefined,

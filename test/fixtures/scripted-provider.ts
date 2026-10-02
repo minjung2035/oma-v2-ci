@@ -25,6 +25,8 @@ export interface ChatMessage {
 }
 export interface ChatRequest {
   readonly model?: string;
+  /** The effort the engine asked for, when its model reasons. */
+  readonly reasoning_effort?: string;
   readonly messages: readonly ChatMessage[];
   readonly tools?: readonly { readonly function?: { readonly name: string } }[];
 }
@@ -33,11 +35,13 @@ export interface ToolCall { readonly name: string; readonly args: unknown; reado
 /** What the scripted model answers one request with. */
 export type Reply =
   /** A plain answer that ends the turn. */
-  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "text"; readonly text: string; readonly thinking?: string }
   /** Tool calls (arguments as JSON, or `raw` as sent), optionally after some text. */
   | { readonly kind: "tools"; readonly calls: readonly (ToolCall & { readonly raw?: string })[]; readonly text?: string }
   /** The provider refuses the request. */
   | { readonly kind: "http-error"; readonly status: number; readonly body?: string }
+  /** The connection is cut before any response headers. */
+  | { readonly kind: "disconnect" }
   /** Headers and the start of an answer, then the connection is cut. */
   | { readonly kind: "cut" }
   /** Headers, then nothing: the provider stops answering. */
@@ -138,6 +142,7 @@ export async function scriptedProvider(initial: Script | readonly Reply[] = [], 
       response.end(JSON.stringify({ error: { message: reply.body ?? `scripted ${reply.status}`, type: "scripted" } }));
       return;
     }
+    if (reply.kind === "disconnect") { response.destroy(); return; }
     response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
     const base = { id: `chatcmpl-${seen.length}`, object: "chat.completion.chunk", created: 0, model: "scripted" };
     const send = (value: unknown): void => { response.write(`data: ${JSON.stringify(value)}\n\n`); };
@@ -149,6 +154,7 @@ export async function scriptedProvider(initial: Script | readonly Reply[] = [], 
       return;
     }
     if (reply.kind === "text") {
+      if (reply.thinking) send({ ...base, choices: [{ index: 0, delta: { role: "assistant", reasoning_content: reply.thinking } }] });
       send({ ...base, choices: [{ index: 0, delta: { role: "assistant", content: reply.text } }] });
       send({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } });
       response.end("data: [DONE]\n\n");
@@ -194,7 +200,9 @@ export async function scriptedProvider(initial: Script | readonly Reply[] = [], 
       // and reaches it through the runner's relay.
       writeFileSync(join(agentDir, "models.json"), JSON.stringify({ providers: {
         fake: { baseUrl, api: "openai-completions", apiKey: SCRIPTED_KEY, models: [
-          { id: "scripted", contextWindow: 200000, maxTokens: 8192 }, { id: "scripted-2", contextWindow: 200000, maxTokens: 8192 }] },
+          { id: "scripted", contextWindow: 200000, maxTokens: 8192 }, { id: "scripted-2", contextWindow: 200000, maxTokens: 8192 },
+          // DR24: a model with effort levels, which only the scenarios that choose it use.
+          { id: "scripted-thinking", reasoning: true, contextWindow: 200000, maxTokens: 8192 }] },
         groq: { baseUrl, apiKey: SCRIPTED_KEY },
       } }));
       // The engine's own retry policy stays on (INF-001); only its waits are

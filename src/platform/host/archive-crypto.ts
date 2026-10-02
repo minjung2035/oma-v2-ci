@@ -10,6 +10,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { closeSync, constants, fsyncSync, openSync, readSync, writeSync } from "node:fs";
 import { StoreError } from "../../domain/errors.js";
+import { withCleanup } from "../../process/cleanup.js";
 import type { StreamSink } from "../stream-receive.js";
 import { createTemporary, discardTemporary, publishTemporary } from "./files.js";
 
@@ -88,7 +89,8 @@ export class ArchiveSealer {
 export function sealedArchiveSink(dir: string, name: string, key: Buffer): StreamSink {
   const temporary = createTemporary(dir, name);
   let sealer: ArchiveSealer;
-  try { sealer = new ArchiveSealer(temporary.fd, key); } catch (error) { discardTemporary(temporary); throw error; }
+  try { sealer = new ArchiveSealer(temporary.fd, key); }
+  catch (error) { return withCleanup(() => { throw error; }, () => discardTemporary(temporary)); }
   return {
     write: chunk => { sealer.write(chunk); },
     complete: () => { sealer.finish(); publishTemporary(temporary, dir, name); },
@@ -100,47 +102,51 @@ export function sealedArchiveSink(dir: string, name: string, key: Buffer): Strea
 export function encryptArchive(plainPath: string, outPath: string, key: Buffer): void {
   if (key.length !== 32) throw new StoreError("INVALID_REQUEST", "an archive key is 32 bytes");
   const input = openSync(plainPath, "r");
-  const output = openSync(outPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-  try {
-    const sealer = new ArchiveSealer(output, key);
-    for (let position = 0; ;) {
-      const chunk = readFully(input, CHUNK, position);
-      if (chunk.length === 0) break;
-      sealer.write(chunk);
-      position += chunk.length;
-    }
-    sealer.finish();
-    fsyncSync(output);
-  } finally { closeSync(input); closeSync(output); }
+  withCleanup(() => {
+    const output = openSync(outPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+    withCleanup(() => {
+      const sealer = new ArchiveSealer(output, key);
+      for (let position = 0; ;) {
+        const chunk = readFully(input, CHUNK, position);
+        if (chunk.length === 0) break;
+        sealer.write(chunk);
+        position += chunk.length;
+      }
+      sealer.finish();
+      fsyncSync(output);
+    }, () => closeSync(output));
+  }, () => closeSync(input));
 }
 
 export function decryptArchive(inPath: string, outPath: string, key: Buffer): void {
   const input = openSync(inPath, "r");
-  const output = openSync(outPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-  try {
-    const head = readFully(input, MAGIC.length + 8, 0);
-    if (head.length !== MAGIC.length + 8 || !head.subarray(0, MAGIC.length).equals(MAGIC)) throw damaged();
-    const fileId = head.subarray(MAGIC.length);
-    let position = head.length; let index = 0;
-    for (;;) {
-      const length = readFully(input, 4, position);
-      if (length.length !== 4) throw damaged();
-      const size = length.readUInt32BE(0);
-      if (size > CHUNK) throw damaged();
-      const body = readFully(input, size, position + 4);
-      const tag = readFully(input, 16, position + 4 + size);
-      if (body.length !== size || tag.length !== 16) throw damaged();
-      position += 4 + size + 16;
-      const last = readFully(input, 1, position).length === 0;
-      const decipher = createDecipheriv("aes-256-gcm", key, nonce(fileId, index));
-      decipher.setAAD(aad(fileId, index, last));
-      decipher.setAuthTag(tag);
-      let plain: Buffer;
-      try { plain = Buffer.concat([decipher.update(body), decipher.final()]); } catch { throw damaged(); }
-      writeAll(output, plain);
-      if (last) break;
-      index += 1;
-    }
-    fsyncSync(output);
-  } finally { closeSync(input); closeSync(output); }
+  withCleanup(() => {
+    const output = openSync(outPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+    withCleanup(() => {
+      const head = readFully(input, MAGIC.length + 8, 0);
+      if (head.length !== MAGIC.length + 8 || !head.subarray(0, MAGIC.length).equals(MAGIC)) throw damaged();
+      const fileId = head.subarray(MAGIC.length);
+      let position = head.length; let index = 0;
+      for (;;) {
+        const length = readFully(input, 4, position);
+        if (length.length !== 4) throw damaged();
+        const size = length.readUInt32BE(0);
+        if (size > CHUNK) throw damaged();
+        const body = readFully(input, size, position + 4);
+        const tag = readFully(input, 16, position + 4 + size);
+        if (body.length !== size || tag.length !== 16) throw damaged();
+        position += 4 + size + 16;
+        const last = readFully(input, 1, position).length === 0;
+        const decipher = createDecipheriv("aes-256-gcm", key, nonce(fileId, index));
+        decipher.setAAD(aad(fileId, index, last));
+        decipher.setAuthTag(tag);
+        let plain: Buffer;
+        try { plain = Buffer.concat([decipher.update(body), decipher.final()]); } catch { throw damaged(); }
+        writeAll(output, plain);
+        if (last) break;
+        index += 1;
+      }
+      fsyncSync(output);
+    }, () => closeSync(output));
+  }, () => closeSync(input));
 }

@@ -13,6 +13,7 @@ import { surfaceWords } from "./words.js";
 export interface DashboardInput {
   readonly config: HostConfigV1;
   readonly principalModel: DashboardData["principalModel"];
+  readonly workerModel?: string;
   readonly unread: number | null;
   readonly observation: Observation;
 }
@@ -30,8 +31,9 @@ export function activeCount(statuses: readonly AgentStatus[]): number | null {
   return residents.filter(status => status.activeState === "active").length;
 }
 
-export function readyCount(statuses: readonly AgentStatus[]): number {
-  return statuses.filter(status => status.agent !== "principal" && status.desired !== "retired").length;
+/** CREATE-003: every registered Resident consumes a creation slot, including retired ones. */
+export function createdCount(statuses: readonly AgentStatus[]): number {
+  return statuses.filter(status => status.agent !== "principal").length;
 }
 
 export function dashboardData(input: DashboardInput): DashboardData {
@@ -39,17 +41,18 @@ export function dashboardData(input: DashboardInput): DashboardData {
   const status: DashboardData["status"] = observation.kind === "observed"
     ? {
       kind: "observed", observedAtMs: observation.observedAtMs,
-      ready: readyCount(observation.statuses), active: activeCount(observation.statuses),
+      created: createdCount(observation.statuses), active: activeCount(observation.statuses),
       pending: observation.statuses.reduce((total, row) => total + row.pending, 0),
       principalPending: observation.statuses.find(row => row.agent === "principal")?.pending ?? null,
     }
-    : { kind: "unknown", observedAtMs: observation.observedAtMs, reason: surfaceWords(observation.reason, "관측하지 못함") };
+    : { kind: "unknown", observedAtMs: observation.observedAtMs, reason: surfaceWords(observation.reason, "Not observed") };
   return Object.freeze({
     status,
     configuredWorkers: config.initialResidents.length,
     workerLimit: config.quota.societyAgents,
     unread: input.unread,
     principalModel: input.principalModel,
+    ...(input.workerModel === undefined ? {} : { workerModel: input.workerModel }),
     // `/` is not a rootfs: SB-001 forbids binding the host root, so the value
     // means none was declared.
     rootfs: config.installation.rootfs === "/" ? null : config.installation.rootfs,

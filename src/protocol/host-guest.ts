@@ -1,4 +1,4 @@
-/** MAC-2xx (implementation/macos-platform.md): the private protocol between
+/** MAC-2xx (docs/macos-platform.md): the private protocol between
  * the macOS host and the hidden Linux guest.
  *
  * Framing is the broker's own (IPC-001/002: uint32 BE length + strict JSON),
@@ -13,12 +13,15 @@
  */
 import type { ErrorCode } from "../../implementation/contracts/errors.js";
 import { isErrorCode } from "../domain/errors.js";
-import { isValidSocietyName } from "../domain/identifiers.js";
+import { isPlatformUuid, isValidSocietyName } from "../domain/identifiers.js";
+import { parseJsonObject } from "../frame.js";
+import { isHostHistoryReference, parseHostHistoryReference } from "./host-history.js";
+import { parseGuestHistoryReference } from "./guest-history.js";
 
 /** One protocol version, raised whenever a message's shape or meaning changes
  * (MAC-250). A host speaks the version of the image it ships and the one
  * before it; a guest speaks one. */
-export const HOST_GUEST_PROTOCOL = 1;
+export const HOST_GUEST_PROTOCOL = 4;
 
 /** The platform protocol's frame limit. A society's own limits
  * (`ProtocolLimits.frameBytes`) govern its broker; this governs the host-guest
@@ -53,8 +56,7 @@ export interface PlatformFailure {
   readonly retry: "never" | "same-key" | "after-repair";
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-export function isUuid(value: unknown): value is string { return typeof value === "string" && UUID.test(value); }
+export function isUuid(value: unknown): value is string { return isPlatformUuid(value); }
 const VERSION = /^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$/;
 const REQUEST_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export function isRequestKey(value: unknown): value is string { return typeof value === "string" && REQUEST_KEY.test(value); }
@@ -174,9 +176,9 @@ export function responseProblem(raw: Record<string, unknown>): string | null {
  * the few control messages are JSON. */
 export const TERMINAL_FRAME_BYTES = 64 * 1024;
 export const TERMINAL_KINDS = Object.freeze({
-  /** host → guest */ input: 0x01, resize: 0x02,
+  /** host → guest */ input: 0x01, resize: 0x02, histories: 0x04,
   /** guesthost → session holder, first and once: `{ takeover?: true }` */ attach: 0x03,
-  /** guest → host */ output: 0x81, exit: 0x82, detached: 0x83, refused: 0x84,
+  /** guest → host */ output: 0x81, exit: 0x82, detached: 0x83, refused: 0x84, historyQuery: 0x85,
 } as const);
 export type TerminalKind = keyof typeof TERMINAL_KINDS;
 const KIND_OF = new Map<number, TerminalKind>(Object.entries(TERMINAL_KINDS).map(([name, byte]) => [byte, name as TerminalKind]));
@@ -191,7 +193,7 @@ export function encodeTerminalFrame(kind: TerminalKind, payload: Uint8Array = Bu
   frame.set(payload, 5);
   return frame;
 }
-export function encodeTerminalJson(kind: "attach" | "exit" | "detached" | "refused", value: Record<string, unknown>): Buffer {
+export function encodeTerminalJson(kind: "attach" | "exit" | "detached" | "refused" | "historyQuery" | "histories", value: Record<string, unknown>): Buffer {
   return encodeTerminalFrame(kind, Buffer.from(JSON.stringify(value), "utf8"));
 }
 
@@ -212,6 +214,9 @@ export class TerminalFrameParser {
       this.buffered = this.buffered.subarray(4 + length);
     }
     return frames;
+  }
+  finish(): void {
+    if (this.buffered.length !== 0) throw new RangeError("EOF inside a terminal frame");
   }
 }
 
@@ -235,6 +240,38 @@ export function parseTerminalJson(payload: Buffer, required: readonly string[], 
   return value;
 }
 
+/** MODE-006: exit is the only host handoff; no path, argv or guest cwd is
+ * accepted. A requested new birth is valid only after a normal program end. */
+export interface TerminalExit {
+  readonly code: number | null;
+  readonly signal: string | null;
+  readonly next?: "new" | "resume";
+  readonly history?: string;
+}
+export function parseTerminalExit(payload: Buffer): TerminalExit | null {
+  let value: Record<string, unknown>;
+  try { value = parseJsonObject(payload).raw; } catch { return null; }
+  if (exactKeys(value, ["code", "signal"], ["next", "history"]) !== null ||
+      !(value.code === null || uint(value.code)) ||
+      !(value.signal === null || typeof value.signal === "string" && /^SIG[A-Z0-9]{1,16}$/.test(value.signal)) ||
+      Object.hasOwn(value, "next") && (value.next !== "new" && value.next !== "resume" || value.code !== 0 || value.signal !== null)) return null;
+  if (value.next === "resume") {
+    try { checkedResumeHistoryReference(value.history as string); } catch { return null; }
+  } else if (Object.hasOwn(value, "history")) return null;
+  return value as unknown as TerminalExit;
+}
+export function isNewSessionHandoff(value: Record<string, unknown>): boolean {
+  return exactKeys(value, ["next"]) === null && value.next === "new";
+}
+export function isResumeSessionHandoff(value: Record<string, unknown>): boolean {
+  if (exactKeys(value, ["next", "history"]) !== null || value.next !== "resume") return false;
+  try { checkedResumeHistoryReference(value.history as string); return true; } catch { return false; }
+}
+export function checkedResumeHistoryReference(value: string): void {
+  if (isHostHistoryReference(value)) parseHostHistoryReference(value);
+  else parseGuestHistoryReference(value);
+}
+
 /** §4.7: the first message on an egress connection, guest → host, in the
  * request envelope. `egress.placeholder` is answered and the connection
  * closes; after `egress.open` the connection carries the engine's HTTP. */
@@ -245,6 +282,8 @@ export interface EgressRun { readonly society: string; readonly actor: string; r
 export const EGRESS_ENGINE_MANAGED = "engine-managed";
 export interface EgressPlaceholderParams {
   readonly credentialRef: string; readonly provider: string; readonly model: string; readonly run: EgressRun;
+  /** DR27: model silence, supplied by the run owner; absent only for v1 peers. */
+  readonly inferenceSeconds?: number;
 }
 export interface EgressOpenParams {
   readonly placeholderId: string; readonly society: string; readonly actor: string; readonly incarnation: number;
@@ -262,10 +301,12 @@ function runProblem(value: unknown): string | null {
 }
 export function egressPlaceholderProblem(params: unknown): string | null {
   if (!object(params)) return "params must be an object";
-  const shape = exactKeys(params, ["credentialRef", "provider", "model", "run"]);
+  const shape = exactKeys(params, ["credentialRef", "provider", "model", "run"], ["inferenceSeconds"]);
   if (shape !== null) return shape;
   for (const key of ["credentialRef", "provider", "model"] as const)
     if (typeof params[key] !== "string" || !TOKEN.test(params[key] as string)) return `invalid ${key}`;
+  if (Object.hasOwn(params, "inferenceSeconds") && (!uint(params.inferenceSeconds) || params.inferenceSeconds === 0 ||
+    params.inferenceSeconds > Math.floor(Number.MAX_SAFE_INTEGER / 1000))) return "invalid inferenceSeconds";
   return runProblem(params.run);
 }
 export function egressOpenProblem(params: unknown): string | null {

@@ -2,10 +2,11 @@
  * hand it a prepared batch, and wait for the trusted boundary it reports.
  * How the process is started lives in `pi-spawn-plan.ts`.
  */
-import { assertSandboxFilterPaired, deliverSandboxFilter, spawnOwnedRpc } from "../process/async.js";
+import { spawnSandboxed, spawnOwnedRpc, stopOwnedChild } from "../process/async.js";
 import { realpathSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import type { PreparedBatch } from "../../implementation/contracts.js";
+import { CLI_OBSERVATION_SECONDS } from "../domain/limits.js";
 import { StoreError, unobserved } from "../domain/errors.js";
 import {
   PI_ADAPTER_REVISION,
@@ -13,9 +14,10 @@ import {
   type DeliveryBoundary,
 } from "../storage/delivery-receipt.js";
 import { assertExtensionIntegrity } from "./extension-integrity.js";
-import { PiRpcClient, alarm, type PiEvent, type Timer } from "./pi-rpc.js";
+import { PiRpcClient, alarm, assertPiRpcLimits, type PiEvent, type Timer } from "./pi-rpc.js";
 import { planPiSpawn, type PiAdapterOptions, type PiSpawnPlan } from "./pi-spawn-plan.js";
 import { hostSessionPath } from "../sandbox.js";
+import { preparePiRetry } from "./pi-runtime.js";
 
 function failure(
   code: "SESSION_BOUNDARY_UNCONFIRMED" | "PROVIDER_FAILED" | "UNSUPPORTED_PROFILE" | "DEADLINE_EXCEEDED",
@@ -33,7 +35,7 @@ function failure(
 function deadline(
   seconds: number,
   error: StoreError,
-): { promise: Promise<never>; rearm(): void; hold(): void; cancel(): void } {
+): { promise: Promise<never>; rearm(waitSeconds?: number): void; hold(): void; cancel(): void } {
   let fire: (reason: StoreError) => void = () => {};
   const promise = new Promise<never>((_, reject) => { fire = reject; });
   promise.catch(() => {});
@@ -42,7 +44,7 @@ function deadline(
   return {
     promise,
     /** Starts the budget again; a held one resumes, a cancelled one stays cancelled. */
-    rearm() { if (!live) return; timer?.cancel(); timer = alarm(seconds, () => fire(error)); },
+    rearm(waitSeconds = seconds) { if (!live) return; timer?.cancel(); timer = alarm(waitSeconds, () => fire(error)); },
     /** Stops the clock until the next rearm. */
     hold() { timer?.cancel(); timer = null; },
     cancel() { live = false; timer?.cancel(); timer = null; },
@@ -97,8 +99,38 @@ export function boundaryOf(
     entryId: value.entryId,
   };
 }
+/** RUN-003: a wait notice names only this attempt and cannot be a receipt.
+ * Mirrors the trusted extension's wire spelling (PI-001). */
+export function waitOf(event: PiEvent, batch: PreparedBatch): boolean {
+  const prefix = "OMA_PI_WAIT_V1 ";
+  if (event.type !== "extension_ui_request" || event.method !== "notify" ||
+    typeof event.message !== "string" || !event.message.startsWith(prefix)) return false;
+  let raw: unknown;
+  try { raw = JSON.parse(event.message.slice(prefix.length)); } catch { return false; }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const value = raw as Record<string, unknown>;
+  return Object.keys(value).length === 3 && value.adapterRevision === PI_ADAPTER_REVISION &&
+    value.batchId === batch.id && value.incarnation === batch.incarnation;
+}
+
+/** Control-phase evidence only; neither a wait request nor a receipt. */
+export function waitObservationOf(event: PiEvent, batch: PreparedBatch): "begin" | "end" | "failed" | null {
+  const prefix = "OMA_PI_WAIT_OBSERVATION_V1 ";
+  if (event.type !== "extension_ui_request" || event.method !== "notify" ||
+    typeof event.message !== "string" || !event.message.startsWith(prefix)) return null;
+  let raw: unknown;
+  try { raw = JSON.parse(event.message.slice(prefix.length)); } catch { return null; }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  if (Object.keys(value).length !== 4 || value.adapterRevision !== PI_ADAPTER_REVISION ||
+    value.batchId !== batch.id || value.incarnation !== batch.incarnation) return null;
+  return value.phase === "begin" || value.phase === "end" || value.phase === "failed" ? value.phase : null;
+}
+
 export class PiAdapter {
   constructor(private readonly options: PiAdapterOptions) {
+    if (!Number.isSafeInteger(options.profile.inferenceSeconds) || options.profile.inferenceSeconds <= 0)
+      throw failure("UNSUPPORTED_PROFILE", "Pi inference silence budget is unavailable");
     if (!Number.isSafeInteger(options.profile.workspaceBytes) || options.profile.workspaceBytes <= 0)
       throw failure("UNSUPPORTED_PROFILE", "Pi workspace quota is unavailable");
     for (const path of [
@@ -141,7 +173,9 @@ export class PiAdapter {
     const sessionPath = hostSessionPath(confinement.directories, boundary.sessionPath);
     return sessionPath === null ? null : { ...boundary, sessionPath };
   }
-  async deliver(batch: PreparedBatch): Promise<DeliveryBoundary> {
+  /** null is a deliberate wait after persisted tools, never delivery success. */
+  async deliver(batch: PreparedBatch): Promise<DeliveryBoundary | null> {
+    assertPiRpcLimits(this.options.limits);
     if (batch.agent !== this.options.actor)
       throw failure(
         "SESSION_BOUNDARY_UNCONFIRMED",
@@ -150,78 +184,126 @@ export class PiAdapter {
     // operations/README + TUI-010: the recorded digests are checked again here,
     // at the last moment before the file is handed to Pi.
     assertExtensionIntegrity(this.options.profile.extensions);
+    const agentDir = this.options.confinement === undefined ? this.options.paths.piAgentDir :
+      join(this.options.paths.agentHome, "engine");
+    if (agentDir !== undefined) preparePiRetry(agentDir);
     const spawn = this.spawnPlan();
     // DR18 (D-5): a confined engine's sandbox filter reaches bubblewrap on the
     // descriptor only this parent holds, and nowhere else.
-    assertSandboxFilterPaired(spawn.args, spawn.filter);
-    const child = spawnOwnedRpc(spawn.command, spawn.args, spawn.cwd, spawn.env, spawn.filter !== undefined);
-    if (spawn.filter !== undefined) deliverSandboxFilter(child.stdio[3], spawn.filter);
-    const rpc = new PiRpcClient(child, this.options.limits);
-    let accepted = false;
-    let settled = false;
-    let lastStop = "";
-    const providerFailed = (): boolean => ["error", "aborted"].includes(lastStop);
-    let boundary: DeliveryBoundary | null = null;
-    let wake!: () => void;
-    const changed = new Promise<void>((resolve) => {
-      wake = resolve;
+    const child = this.options.confinement === undefined
+      ? spawnOwnedRpc(spawn.command, spawn.args, spawn.cwd, spawn.env)
+      : spawnSandboxed([spawn.command, ...spawn.args], spawn.env, spawn.filter, spawn.cwd);
+    let childClosed = false;
+    let onClose!: () => void;
+    const closed = new Promise<void>(resolve => {
+      onClose = () => { childClosed = true; resolve(); };
+      child.once("close", onClose);
     });
-    // WP10/D06: four budgets, four meanings. Acceptance of the command
-    // (receiptWaitSeconds), silence between the engine's events
-    // (idleStreamSeconds, re-armed by every event), the whole delivery turn
-    // (the model profile's inferenceTimeoutSeconds) and the close after the
-    // settled boundary (receiptWaitSeconds). A long turn that keeps
-    // producing events is not idle, and neither is one running a tool it
-    // announced (AV24): that silence is the tool's, which the tool's own
-    // timeout and the turn budget bound. Idle is silence while the engine
-    // owes an event.
-    const acceptDeadline = deadline(this.options.limits.receiptWaitSeconds, failure(
-      "SESSION_BOUNDARY_UNCONFIRMED", "Pi did not accept the delivery command before the acceptance deadline"));
-    const idleDeadline = deadline(this.options.limits.idleStreamSeconds, failure(
-      "DEADLINE_EXCEEDED", "Pi produced no event for the configured idle stream budget"));
-    const turnDeadline = deadline(this.options.profile.turnSeconds, failure(
-      "DEADLINE_EXCEEDED", "the delivery turn exceeded the model's inference timeout"));
-    const tools = new Set<string>();
-    const unsubscribe = rpc.onEvent((event) => {
-      if (typeof event.toolCallId === "string") {
-        if (event.type === "tool_execution_start") tools.add(event.toolCallId);
-        if (event.type === "tool_execution_end") tools.delete(event.toolCallId);
-      }
-      if (tools.size > 0) idleDeadline.hold();
-      else idleDeadline.rearm();
-      if (
-        event.type === "response" &&
-        event.id === batch.id &&
-        event.command === "prompt"
-      ) {
-        accepted = event.success === true;
-        acceptDeadline.cancel();
-        if (!accepted) wake();
-      }
-      if (event.type === "message_end") {
-        // Remembered, not acted on. Pi retries a retryable failure and
-        // compacts before continuing the same run, so one failed assistant
-        // message is not the end of it; only the last one before the run
-        // settles says how the delivery ended.
-        const message = event.message;
-        if (
-          message &&
-          typeof message === "object" &&
-          !Array.isArray(message) &&
-          (message as Record<string, unknown>).role === "assistant"
-        )
-          lastStop = String(
-            (message as Record<string, unknown>).stopReason ?? "",
-          );
-      }
-      if (event.type === "agent_settled") settled = true;
-      const decoded = this.hostBoundary(boundaryOf(event, batch));
-      if (decoded) boundary = decoded;
-      if ((accepted && settled && boundary) || (settled && providerFailed()))
-        wake();
-    });
+    let rpc: PiRpcClient | null = null;
+    let unsubscribe: (() => void) | null = null;
+    let acceptDeadline: ReturnType<typeof deadline> | null = null;
+    let idleDeadline: ReturnType<typeof deadline> | null = null;
+    let inferenceDeadline: ReturnType<typeof deadline> | null = null;
+    let observationDeadline: ReturnType<typeof deadline> | null = null;
     let closeDeadline: ReturnType<typeof deadline> | null = null;
+    let primary: { error: unknown } | null = null;
     try {
+      rpc = new PiRpcClient(child, this.options.limits);
+      let accepted = false;
+      let settled = false;
+      let waiting = false;
+      let observingWait = false;
+      let waitUnobserved = false;
+      let lastStop = "";
+      const providerFailed = (): boolean => ["error", "aborted"].includes(lastStop);
+      let boundary: DeliveryBoundary | null = null;
+      let wake!: () => void;
+      const changed = new Promise<void>((resolve) => {
+        wake = resolve;
+      });
+      // DR27/WP10: a delivery can contain any number of requests and tools.
+      // Only silence has a budget: a model request (including before its first
+      // token) or compaction uses the model budget; control events use the RPC
+      // budget. Announced tools keep their own timeout/cancellation semantics.
+      // No elapsed delivery time is evidence of failure or task completion.
+      acceptDeadline = deadline(this.options.limits.receiptWaitSeconds, failure(
+        "SESSION_BOUNDARY_UNCONFIRMED", "Pi did not accept the delivery command before the acceptance deadline"));
+      idleDeadline = deadline(this.options.limits.idleStreamSeconds, failure(
+        "DEADLINE_EXCEEDED", "Pi produced no event for the configured idle stream budget"));
+      inferenceDeadline = deadline(this.options.profile.inferenceSeconds, failure(
+        "DEADLINE_EXCEEDED", "Pi inference or compaction produced no progress for the configured model silence budget"));
+      inferenceDeadline!.hold();
+      // One absolute CLI observation plus a bounded startup/drain allowance.
+      // Repeated begin/progress events cannot extend this phase indefinitely.
+      observationDeadline = deadline(CLI_OBSERVATION_SECONDS + this.options.limits.receiptWaitSeconds,
+        failure("SESSION_BOUNDARY_UNCONFIRMED", "Pi did not finish observing the current run's wait intent"));
+      observationDeadline!.hold();
+      const tools = new Set<string>();
+      let inferring = false;
+      let compacting = false;
+      unsubscribe = rpc.onEvent((event) => {
+        const observation = waitObservationOf(event, batch);
+        if (observation === "begin" && !observingWait) {
+          observingWait = true; observationDeadline!.rearm();
+        } else if (observingWait && (observation === "end" || observation === "failed")) {
+          observingWait = false; observationDeadline!.hold();
+          if (observation === "failed") waitUnobserved = true;
+        }
+        const message = event.message;
+        const assistant = message !== null && typeof message === "object" && !Array.isArray(message) &&
+          (message as Record<string, unknown>).role === "assistant";
+        // message_start can come only after the first provider bytes. turn_start
+        // is emitted before the request and protects silent initial reasoning.
+        if (event.type === "turn_start" || (assistant && ["message_start", "message_update"].includes(event.type))) inferring = true;
+        if ((assistant && event.type === "message_end") || event.type === "turn_end") inferring = false;
+        if (event.type === "compaction_start") compacting = true;
+        if (event.type === "compaction_end") compacting = false;
+        if (event.type === "agent_settled") { inferring = false; compacting = false; }
+        if (typeof event.toolCallId === "string") {
+          if (event.type === "tool_execution_start") tools.add(event.toolCallId);
+          if (event.type === "tool_execution_end") tools.delete(event.toolCallId);
+        }
+        if (compacting || inferring) { idleDeadline!.hold(); inferenceDeadline!.rearm(); }
+        else {
+          inferenceDeadline!.hold();
+          if (tools.size > 0 || observingWait) idleDeadline!.hold();
+          else if (event.type === "auto_retry_start" && typeof event.delayMs === "number" &&
+            Number.isSafeInteger(event.delayMs) && event.delayMs >= 0 && event.delayMs <= 8000)
+            idleDeadline!.rearm(this.options.limits.idleStreamSeconds + event.delayMs / 1000);
+          else idleDeadline!.rearm();
+        }
+        if (
+          event.type === "response" &&
+          event.id === batch.id &&
+          event.command === "prompt"
+        ) {
+          accepted = event.success === true;
+          acceptDeadline!.cancel();
+          if (!accepted) wake();
+        }
+        if (event.type === "message_end") {
+          // Remembered, not acted on. Pi retries a retryable failure and
+          // compacts before continuing the same run, so one failed assistant
+          // message is not the end of it; only the last one before the run
+          // settles says how the delivery ended.
+          const message = event.message;
+          if (
+            message &&
+            typeof message === "object" &&
+            !Array.isArray(message) &&
+            (message as Record<string, unknown>).role === "assistant"
+          )
+            lastStop = String(
+              (message as Record<string, unknown>).stopReason ?? "",
+            );
+        }
+        if (event.type === "agent_settled") settled = true;
+        const decoded = this.hostBoundary(boundaryOf(event, batch));
+        if (decoded) boundary = decoded;
+        if (waitOf(event, batch)) waiting = true;
+        if ((accepted && settled && !observingWait && (boundary || waiting || waitUnobserved)) || (settled && providerFailed()))
+          wake();
+      });
       await rpc.send({
         id: batch.id,
         type: "prompt",
@@ -231,7 +313,8 @@ export class PiAdapter {
         changed,
         acceptDeadline.promise,
         idleDeadline.promise,
-        turnDeadline.promise,
+        inferenceDeadline.promise,
+        observationDeadline.promise,
         rpc.completion.then((result) => {
           if (result.state === "failed") throw result.error;
           throw failure(
@@ -240,15 +323,17 @@ export class PiAdapter {
           );
         }),
       ]);
-      acceptDeadline.cancel(); idleDeadline.cancel(); turnDeadline.cancel();
+      acceptDeadline.cancel(); idleDeadline.cancel(); inferenceDeadline.cancel(); observationDeadline.cancel();
       if (!accepted)
         throw failure("SESSION_BOUNDARY_UNCONFIRMED", "Pi refused the delivery command");
-      if (!boundary && providerFailed())
+      if (waitUnobserved)
+        throw failure("SESSION_BOUNDARY_UNCONFIRMED", "Pi could not observe the current run's wait intent");
+      if (!waiting && !boundary && providerFailed())
         throw failure(
           "PROVIDER_FAILED",
           "Pi provider failed before the batch reached a settled boundary",
         );
-      if (!accepted || !settled || !boundary)
+      if (!accepted || !settled || observingWait || (!boundary && !waiting))
         throw failure(
           "SESSION_BOUNDARY_UNCONFIRMED",
           "Pi delivery evidence was incomplete",
@@ -261,19 +346,39 @@ export class PiAdapter {
           "Pi did not close after its settled boundary",
         ),
       );
-      const ended = await Promise.race([rpc.completion, closeDeadline.promise]);
+      // EOF ends a transport, not the process. Keep ownership until close.
+      const [ended] = await Promise.race([Promise.all([rpc.completion, closed]), closeDeadline.promise]);
       if (ended.state === "failed")
         throw failure(
           "SESSION_BOUNDARY_UNCONFIRMED",
           "Pi transport failed while sealing its session",
           ended.error,
         );
-      return boundary;
+      return waiting ? null : boundary;
+    } catch (error) {
+      primary = { error };
+      throw error;
     } finally {
-      acceptDeadline.cancel(); idleDeadline.cancel(); turnDeadline.cancel();
+      acceptDeadline?.cancel(); idleDeadline?.cancel(); inferenceDeadline?.cancel(); observationDeadline?.cancel();
       closeDeadline?.cancel();
-      unsubscribe();
-      rpc.close();
+      const cleanupErrors: unknown[] = [];
+      try { unsubscribe?.(); } catch (error) { cleanupErrors.push(error); }
+      try { if (rpc) rpc.close(); else stopOwnedChild(child); }
+      catch (error) { cleanupErrors.push(error); }
+      // Ending the transport is not child death. Observe OS close, or report
+      // an unconfirmed stop; elapsed time never creates a delivery receipt or
+      // proves that arbitrary descendants (the unit's responsibility) died.
+      if (!childClosed) {
+        const stopDeadline = deadline(this.options.limits.receiptWaitSeconds,
+          failure("SESSION_BOUNDARY_UNCONFIRMED", "Pi child termination could not be confirmed"));
+        try { await Promise.race([closed, stopDeadline.promise]); }
+        catch (cleanup) { cleanupErrors.push(cleanup); }
+        finally { stopDeadline.cancel(); child.off("close", onClose); }
+      }
+      if (cleanupErrors.length > 0) {
+        if (primary !== null) throw new AggregateError([primary.error, ...cleanupErrors], "Pi delivery and child termination failed");
+        throw new AggregateError(cleanupErrors, "Pi child termination failed");
+      }
     }
   }
 }

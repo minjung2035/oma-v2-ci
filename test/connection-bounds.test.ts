@@ -36,7 +36,7 @@ test("V26A: a connection flood on an actor socket is bounded, and the Resident i
   const flood: Socket[] = [];
   try {
     await broker.start();
-    const lease = (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => { socketHostPath: string }).call(broker, "alice", id);
+    const lease = await (Reflect.get(broker, "openRun") as (actor: string, invocation: string) => Promise<{ socketHostPath: string }>).call(broker, "alice", id);
     const served = () => (Reflect.get(broker, "connections") as Map<unknown, unknown>).size;
     for (let i = 0; i < 400; i += 1) { const socket = connect(lease.socketHostPath); socket.on("error", () => {}); flood.push(socket); }
     await settle(1500);

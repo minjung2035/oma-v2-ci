@@ -34,7 +34,7 @@ function productionModules(): string[] {
 }
 
 function install(prefix: string, options: { engine?: boolean } = {}): void {
-  for (const path of ["dist", "implementation/schema-v1.sql", "implementation/systemd", "package.json", "package-lock.json"])
+  for (const path of ["dist", "implementation/schema-v3.sql", "implementation/schema-v1-to-v2.sql", "implementation/schema-v2-to-v3.sql", "implementation/systemd", "package.json", "package-lock.json"])
     cpSync(join(source, path), join(prefix, path), { recursive: true });
   for (const module of productionModules()) {
     if (options.engine === false && module === `node_modules/${ENGINE}`) continue;
@@ -89,8 +89,8 @@ const runtime = resolvePiRuntime({ stateRoot: ${JSON.stringify(join(work, "state
 const version = spawnSync(runtime.executable, [...runtime.args, "--version"], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: ${JSON.stringify(work)} } });
 const entries = {};
 for (const [name, path] of Object.entries(DEPLOYMENT_LAYOUT.entries)) {
-  if (name === "tui") continue;
-  const loaded = spawnSync(process.execPath, [prefix + "/" + path], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: ${JSON.stringify(work)} } });
+  if (name === "tui" || name === "personalHost") continue;
+  const loaded = spawnSync(process.execPath, [prefix + "/" + path, ...(name === "society" ? ["--help"] : [])], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: ${JSON.stringify(work)} } });
   entries[name] = { status: loaded.status, stderr: loaded.stderr.slice(0, 300) };
 }
 const cli = spawnSync(process.execPath, [prefix + "/" + DEPLOYMENT_LAYOUT.cli], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: ${JSON.stringify(work)} } });
@@ -105,7 +105,8 @@ console.log(JSON.stringify({ bundle: runtime.bundle, version: version.stdout.tri
     // Each unit entry loads its whole module graph from the prefix and stops at
     // its own usage check; none reached into the source tree.
     for (const [name, loaded] of Object.entries(result.entries as Record<string, { status: number; stderr: string }>)) {
-      assert.notEqual(loaded.status, 0, `${name} started without arguments`);
+      if (name === "society") assert.equal(loaded.status, 0, loaded.stderr);
+      else assert.notEqual(loaded.status, 0, `${name} started without arguments`);
       assert.doesNotMatch(loaded.stderr, /source tree|Cannot find module|ERR_MODULE_NOT_FOUND/, `${name}: ${loaded.stderr}`);
     }
     assert.equal(result.cli.status, 2, result.cli.stderr);
@@ -137,6 +138,8 @@ test("V31B: the package check names a missing asset, a stale entry and a depende
   for (const [name, damage, expected] of [
     ["missing unit template", (prefix: string) => rmSync(join(prefix, "implementation/systemd/resident.service.in")), /resident\.service\.in|missing|asset/i],
     ["stale entry", (prefix: string) => rmSync(join(prefix, "dist/src/entry/runner.js")), /runner\.js|missing/i],
+    ["missing Personal engine", (prefix: string) => rmSync(join(prefix, "dist/src/entry/pi-personal.js")), /pi-personal\.js|missing/i],
+    ["missing Personal host", (prefix: string) => rmSync(join(prefix, "dist/src/entry/personal-host.js")), /personal-host\.js|missing/i],
     ["unlocked dependency", (prefix: string) => {
       const manifest = join(prefix, "node_modules/nodemailer/package.json");
       const value = JSON.parse(readFileSync(manifest, "utf8"));

@@ -4,39 +4,52 @@
  * directory, each published once and never replaced: its intent, before any
  * effect, and its outcome, after. The same key with other content is refused
  * (REQUEST_KEY_REUSED); the same request again is answered from its outcome.
- * A request whose intent is recorded and whose outcome is not was cut off:
+ * A request with intent but no outcome may still be running or was cut off:
  * every method kept here has an idempotent effect (fetching a verified bundle
- * into refs only it names, or reading), so it is run again to its outcome.
+ * into refs only it names, or reading), so an inactive request may be retried.
+ * Same-key calls cannot run beside the active owner; no waiting queue is kept.
  * No intent is proof the request never started (REQUEST_NOT_FOUND).
  *
  * This ledger is guesthost's own. A society's operation ledger is its
  * broker's, the only writer of its Store (REC-007); nothing here writes it.
  */
-import { createHash } from "node:crypto";
+import { JSON_NESTING_LIMIT, sha256Hex } from "../../domain/canonical-json.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { StoreError, errorCodeOf } from "../../domain/errors.js";
+import { StoreError, primaryFailure, unobserved } from "../../domain/errors.js";
 import { publishNoReplace, ensureDurableDirectory } from "../../storage/durable-fs.js";
-import { PlatformError } from "../rpc.js";
+import { PlatformError, platformFailure } from "../rpc.js";
 import { isRequestKey, type PlatformFailure } from "../../protocol/host-guest.js";
 
 type Outcome = { readonly ok: true; readonly result: Record<string, unknown> } | { readonly ok: false; readonly error: PlatformFailure };
 
-/** A stable digest of what was asked: key order does not change it. */
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value !== null && typeof value === "object")
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(",")}}`;
+/** MAC-240 legacy intent spelling includes explicit undefined object fields.
+ * Keep those persisted digests replayable; JSON_NESTING_LIMIT still applies
+ * before this compatibility encoder can recurse beyond the shared bound. */
+function canonical(value: unknown, depth = 0): string {
+  if (value !== null && typeof value === "object") {
+    if (depth >= JSON_NESTING_LIMIT)
+      throw new StoreError("INVALID_REQUEST", `JSON nesting exceeds ${JSON_NESTING_LIMIT}`);
+    if (Array.isArray(value)) return `[${value.map(item => canonical(item, depth + 1)).join(",")}]`;
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key], depth + 1)}`).join(",")}}`;
+  }
   return JSON.stringify(value);
 }
 
 export class RequestLedger {
+  private readonly active = new Set<string>();
   constructor(private readonly dir: string) { ensureDurableDirectory(dir, 0o700); }
 
-  private name(key: string): string { return createHash("sha256").update(key).digest("hex"); }
+  private name(key: string): string { return sha256Hex(key); }
   private read<T>(path: string): T | null {
-    try { return JSON.parse(readFileSync(path, "utf8")) as T; }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw new StoreError("STORE_CORRUPT", "a request record is damaged"); }
+    let bytes: string;
+    try { bytes = readFileSync(path, "utf8"); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw unobserved(error, "the request record") ?? error;
+    }
+    try { return JSON.parse(bytes) as T; }
+    catch (cause) { throw new StoreError("STORE_CORRUPT", "a request record is damaged", { cause }); }
   }
   /** Where a request may keep its bytes (a staged stream), by its key. */
   staging(key: string, suffix: string): string { return join(this.dir, `${this.name(key)}.${suffix}`); }
@@ -44,7 +57,7 @@ export class RequestLedger {
   async run(key: unknown, method: string, params: Record<string, unknown>, effect: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> {
     if (!isRequestKey(key)) throw new StoreError("INVALID_REQUEST", "this request needs a request key");
     const base = join(this.dir, this.name(key));
-    const digest = createHash("sha256").update(`${method}\n${canonical(params)}`).digest("hex");
+    const digest = sha256Hex(`${method}\n${canonical(params)}`);
     if (publishNoReplace(`${base}.intent.json`, JSON.stringify({ key, method, digest })) === "existing") {
       const intent = this.read<{ key: string; method: string; digest: string }>(`${base}.intent.json`);
       if (intent === null || intent.key !== key || intent.method !== method || intent.digest !== digest)
@@ -52,17 +65,23 @@ export class RequestLedger {
       const outcome = this.read<Outcome>(`${base}.outcome.json`);
       if (outcome !== null) return this.answer(outcome);
     }
-    let outcome: Outcome;
-    try { outcome = { ok: true, result: await effect() }; }
-    catch (error) {
-      if (error instanceof PlatformError) throw error;
-      const code = errorCodeOf(error);
-      // Only a refusal is an outcome; anything else leaves the request to run again.
-      if (code === "INTERNAL_ERROR" || code === "BROKER_UNAVAILABLE" || code === "STORAGE_FULL") throw error;
-      outcome = { ok: false, error: { code, message: error instanceof Error ? error.message : code, retry: "never" } };
-    }
-    publishNoReplace(`${base}.outcome.json`, JSON.stringify(outcome));
-    return this.answer(this.read<Outcome>(`${base}.outcome.json`) ?? outcome);
+    if (this.active.has(key)) throw new StoreError("BROKER_UNAVAILABLE", "this request is still running; observe or retry the same key");
+    this.active.add(key);
+    try {
+      let outcome: Outcome;
+      try { outcome = { ok: true, result: await effect() }; }
+      catch (error) {
+        if (primaryFailure(error) instanceof PlatformError) throw error;
+        const failure = platformFailure(error);
+        // The wire and the ledger share one judgment. Observation and repairable
+        // failures leave intent pending; existing terminal outcomes are read above
+        // unchanged, never reclassified under today's policy (P0-1/P0-5).
+        if (failure.retry !== "never") throw error;
+        outcome = { ok: false, error: failure };
+      }
+      publishNoReplace(`${base}.outcome.json`, JSON.stringify(outcome));
+      return this.answer(this.read<Outcome>(`${base}.outcome.json`) ?? outcome);
+    } finally { this.active.delete(key); }
   }
 
   private answer(outcome: Outcome): Record<string, unknown> {

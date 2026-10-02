@@ -1,6 +1,6 @@
-import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
+import type { SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { StoreError } from "../domain/errors.js";
-import { runProcess, runProcessSync, decodeProcessText, type ProcessObservation, type CommandSpec } from "./run.js";
+import { runProcess, runProcessSync, decodeProcessText, type ProcessObservation } from "./run.js";
 
 export const GIT_ENV: Readonly<NodeJS.ProcessEnv> = Object.freeze({
   HOME: "/nonexistent", PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
@@ -74,13 +74,4 @@ export function journalView(result: ProcessObservation): { bytes: Buffer; trunca
     throw new StoreError("INTERNAL_ERROR", `journalctl outcome is ${result.kind}` +
       (result.stderr.byteLength === 0 ? "" : `: ${result.stderr.toString("utf8").slice(0, 300)}`));
   return { bytes: result.stdout, truncated: false };
-}
-/** Explicitly interactive, host-user command policy. No shell concatenation.
- * Its inherited terminal output is not a captured observation or artifact proof.
- */
-export function runHostEditor(executable: string, argv: readonly string[], cwd: string, env: NodeJS.ProcessEnv): void {
-  const spec: CommandSpec = { executable, argv, cwd, env: { ...env }, timeoutMs: 30 * 60 * 1000, stdoutBytes: 0, stderrBytes: 0 };
-  const result = runProcessSync(spec, (command, args, options) => spawnSync(command, args, { ...options, stdio: "inherit" }));
-  if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "host editor timed out");
-  if (result.kind !== "exited" || result.exitCode !== 0) throw new StoreError("INVALID_REQUEST", "editor failed");
 }

@@ -10,15 +10,151 @@
  * Pi is vendored unmodified. This module resolves and isolates it; it does not
  * patch it, and OMA's own behaviour lives in the trusted core extension.
  */
-import { readFileSync, statSync } from "node:fs";
+import { OMA_THEME, OMA_THEME_NAME } from "./oma-theme.js";
+import { closeSync, fstatSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { ensureDirectory } from "../storage/directory.js";
+import { openDirectory, openRegularBeneath } from "../storage/contained-fs.js";
+import { replaceDerivedFile } from "../storage/durable-fs.js";
+import { ensureUserDirectory, readUserFile, replaceUserFile } from "./user-files.js";
+import { ProcessLock } from "./process-lock.js";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { StoreError, unobserved } from "../domain/errors.js";
+import { withCleanup } from "../process/cleanup.js";
+import { decodeUtf8 } from "../domain/utf8.js";
+import { isValidSocietyName } from "../domain/identifiers.js";
 
 export const PI_PACKAGE = "@earendil-works/pi-coding-agent";
 /** Pi derives this name from its own APP_NAME; pointing it elsewhere is the
  * supported way to keep one installation's state separate from another's. */
 export const PI_AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
+export const PI_PROVIDER_RETRIES = 5;
+
+/** INF-001: configure the engine's retry owner, never replay requests in the
+ * relay or restart a tool-bearing turn. Provider-internal retries are disabled
+ * so five retries mean six calls, not two nested retry budgets. Called before
+ * spawn, under the settings writer's lock; unrelated engine settings survive. */
+function prepareEngineFile(agentDir: string, name: string,
+  update: (settings: Record<string, unknown>) => Record<string, unknown>): void {
+  ensureUserDirectory(agentDir);
+  const lock = ProcessLock.acquire(join(agentDir, "oma-settings.lock"));
+  withCleanup(() => {
+    const bytes = readUserFile(join(agentDir, name), 1024 * 1024, { singleName: true });
+    const settings = bytes === null ? {} : settingsObject(JSON.parse(bytes));
+    const next = JSON.stringify(update(settings), null, 2) + "\n";
+    if (next !== bytes) replaceUserFile(join(agentDir, name), next);
+  }, () => lock.close());
+}
+
+function settingsObject(value: unknown): Record<string, unknown> {
+  if (value === undefined) return {};
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new StoreError("UNSUPPORTED_PROFILE", "engine settings must be an object");
+  return value as Record<string, unknown>;
+}
+
+export function preparePiRetry(agentDir: string): void {
+  prepareEngineFile(agentDir, "settings.json", settings => {
+    const retry = settingsObject(settings.retry);
+    const provider = settingsObject(retry.provider);
+    const delay = (value: unknown, fallback: number): number =>
+      typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 8000 ? value : fallback;
+    return { ...settings, retry: { ...retry, enabled: true, maxRetries: PI_PROVIDER_RETRIES,
+      baseDelayMs: delay(retry.baseDelayMs, 1000), maxAgentDelayMs: delay(retry.maxAgentDelayMs, 8000),
+      provider: { ...provider, maxRetries: 0 } } };
+  });
+}
+
+/** Presentation policy persists across Pi's own settings reloads. Only the
+ * society's isolated engine files are touched; unrelated choices survive. */
+export function preparePiInteractive(agentDir: string): void {
+  // The look of Open TUI's own preview is the default; what the Human then
+  // chooses in /settings or /open-tui is kept. Telemetry to Pi stays off.
+  prepareEngineFile(join(agentDir, "themes"), `${OMA_THEME_NAME}.json`, () => ({ ...OMA_THEME }));
+  prepareEngineFile(agentDir, "settings.json", settings => ({ ...settings,
+    theme: settings.theme ?? OMA_THEME_NAME,
+    hideThinkingBlock: settings.hideThinkingBlock ?? true, quietStartup: settings.quietStartup ?? true,
+    enableInstallTelemetry: false, enableAnalytics: false, enableSkillCommands: false, fullscreenExitOutput: "resume-hint",
+  }));
+  // Ctrl+X is oma's settings; the engine's copy stays on /copy, and its
+  // "clear all models" in the scoped-model list is left without a key.
+  prepareEngineFile(agentDir, "keybindings.json", keys => ({ ...keys, "app.message.copy": keys["app.message.copy"] ?? [],
+    "app.models.clearAll": keys["app.models.clearAll"] ?? [] }));
+  prepareEngineFile(agentDir, "open-tui.json", settings => ({ ...settings, enabled: true,
+    telemetry: settings.telemetry ?? { enabled: false }, thinkingPeek: settings.thinkingPeek ?? { lines: 0 } }));
+}
+
+/** A bounded regular file of `directory`, or null when there is none. Never
+ * follows a link. */
+export function engineFile(directory: string, name: string, bound: number): { bytes: Uint8Array; mtimeMs: number } | null {
+  let parent: number;
+  try { parent = openDirectory(directory); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
+  return withCleanup(() => {
+    let fd: number;
+    try { fd = openRegularBeneath(parent, name); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
+    return withCleanup(() => {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || stat.size > bound)
+        throw new StoreError("UNSUPPORTED_PROFILE", `engine file ${name} is not a bounded regular file`);
+      const bytes = Buffer.alloc(stat.size);
+      let used = 0;
+      while (used < bytes.length) {
+        const count = readSync(fd, bytes, used, bytes.length - used, used);
+        if (count === 0) throw new StoreError("UNSUPPORTED_PROFILE", `engine file ${name} changed while being read`);
+        used += count;
+      }
+      return { bytes, mtimeMs: stat.mtimeMs };
+    }, () => closeSync(fd));
+  }, () => closeSync(parent));
+}
+
+/** What an earlier engine directory of one society held and the one engine
+ * home takes on: its login, its own choices and its fetched tools. */
+const ADOPTED_FILES = Object.freeze(["settings.json", "open-tui.json", "keybindings.json", "models.json", "models-store.json"]);
+const ADOPTED_TOOLS = Object.freeze(["fd", "rg"]);
+const FILE_BYTES = 1024 * 1024;
+const TOOL_BYTES = 64 * 1024 * 1024;
+
+/** DR24: the engine home is one for the Human, as the engine's own is: a login,
+ * a model and a theme chosen once hold in every session. Before DR24 each
+ * society had its own; the first start after it adopts them -- every login any
+ * of them held (the newest where two hold the same provider) and the newest
+ * of each other file -- without removing or changing them. */
+export function adoptEngineHome(agentDir: string): void {
+  ensureDirectory(agentDir, 0o700);
+  const lock = ProcessLock.acquire(join(agentDir, "oma-settings.lock"));
+  withCleanup(() => {
+    const dataRoot = dirname(agentDir);
+    const earlier = readdirSync(dataRoot, { withFileTypes: true })
+      .filter(entry => entry.isDirectory() && isValidSocietyName(entry.name))
+      .map(entry => join(dataRoot, entry.name, "pi"));
+    if (engineFile(agentDir, "auth.json", FILE_BYTES) === null) {
+      const logins = earlier.map(dir => engineFile(dir, "auth.json", FILE_BYTES)).filter(found => found !== null)
+        .sort((a, b) => b.mtimeMs - a.mtimeMs);
+      const merged: Record<string, unknown> = {};
+      for (const login of logins) {
+        let value: unknown;
+        try { value = JSON.parse(decodeUtf8(login.bytes)); } catch { continue; }
+        if (value === null || typeof value !== "object" || Array.isArray(value)) continue;
+        for (const [provider, credential] of Object.entries(value)) if (!Object.hasOwn(merged, provider)) merged[provider] = credential;
+      }
+      if (Object.keys(merged).length > 0) replaceDerivedFile(join(agentDir, "auth.json"), `${JSON.stringify(merged, null, 2)}\n`, 0o600);
+    }
+    for (const name of ADOPTED_FILES) {
+      if (engineFile(agentDir, name, FILE_BYTES) !== null) continue;
+      const newest = earlier.map(dir => engineFile(dir, name, FILE_BYTES)).filter(found => found !== null)
+        .sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
+      if (newest) replaceDerivedFile(join(agentDir, name), newest.bytes, 0o600);
+    }
+    for (const name of ADOPTED_TOOLS) {
+      if (engineFile(join(agentDir, "bin"), name, TOOL_BYTES) !== null) continue;
+      const found = earlier.map(dir => engineFile(join(dir, "bin"), name, TOOL_BYTES)).find(tool => tool !== null);
+      if (found) replaceDerivedFile(join(agentDir, "bin", name), found.bytes, 0o755);
+    }
+  }, () => lock.close());
+}
 
 export interface PiRuntime {
   /** Executable to spawn. The bundle is JavaScript, so this is the Node that
@@ -84,11 +220,17 @@ function bundledEntry(libdir: string | undefined): string | null {
   return regularFile(manifest) ? entryFromPackage(manifest) : null;
 }
 
-/** The agent directory OMA gives Pi. It is inside the society's state root, so
- * it is backed up, removed and reasoned about with the rest of OMA's state.
- */
+/** Where the Human's engine state lives beside the societies: a name no
+ * society can have. */
+export const ENGINE_HOME = ".engine";
+
+/** The agent directory OMA gives Pi (DR24): one for the Human, beside the
+ * societies in OMA's own state root, never `~/.pi`. Login, the chosen model and
+ * effort, theme and keys are the Human's, as the engine's own are; what belongs
+ * to one session -- its conversation, mail, workers and repositories -- stays in
+ * that society. */
 export function piAgentDir(stateRoot: string): string {
-  return join(stateRoot, "pi");
+  return join(dirname(stateRoot), process.platform === "darwin" ? "engine" : ENGINE_HOME);
 }
 
 export function resolvePiRuntime(options: PiRuntimeOptions): PiRuntime {

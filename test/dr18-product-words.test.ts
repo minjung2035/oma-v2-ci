@@ -26,7 +26,7 @@ process.stdout.write("screen:" + errorWords(${leaking}) + "\\n");`;
   const mac = run(script, true);
   assert.equal(mac.status, 0, mac.stderr);
   assert.doesNotMatch(mac.stdout, /\/var\/lib|ENOENT/);
-  assert.match(mac.stdout, /screen:오류 코드 [A-Z_]+\n/);
+  assert.match(mac.stdout, /screen:Error code [A-Z_]+\n/);
   // The original is in the log, once for two readings of the same words.
   assert.equal(mac.stderr.split("/var/lib/oma/societies/a/config.json").length - 1, 1);
   const linux = run(script, false);
@@ -36,18 +36,18 @@ process.stdout.write("screen:" + errorWords(${leaking}) + "\\n");`;
 
 test("DR18 D-1: product text passes unchanged on a Mac's screen", () => {
   const mac = run(`import { errorWords, surfaceWords } from ${JSON.stringify(words)};
-process.stdout.write(errorWords(new Error("설정 파일의 형식이 맞지 않습니다")) + "|" + surfaceWords("broker 관측 없음", "x"));`, true);
-  assert.equal(mac.stdout, "설정 파일의 형식이 맞지 않습니다|broker 관측 없음");
+process.stdout.write(errorWords(new Error("설정 파일의 형식이 맞지 않습니다")) + "|" + surfaceWords("No broker observation", "x"));`, true);
+  assert.equal(mac.stdout, "설정 파일의 형식이 맞지 않습니다|No broker observation");
   assert.equal(mac.stderr, "");
 });
 
 test("DR18 D-1: a failure's message reaches the Human's screen: stdout on a Mac (stderr is the log there), stderr on Linux", () => {
-  const script = `import { fail } from ${JSON.stringify(exit)}; fail("설정을 읽을 수 없습니다", 2);`;
+  const script = `import { fail } from ${JSON.stringify(exit)}; fail("Cannot read settings", 2);`;
   const mac = run(script, true);
   assert.equal(mac.status, 2);
-  assert.equal(mac.stdout, "oma: 설정을 읽을 수 없습니다\n");
+  assert.equal(mac.stdout, "oma: Cannot read settings\n");
   const linux = run(script, false);
   assert.equal(linux.status, 2);
-  assert.equal(linux.stderr, "oma: 설정을 읽을 수 없습니다\n");
+  assert.equal(linux.stderr, "oma: Cannot read settings\n");
   assert.equal(linux.stdout, "");
 });

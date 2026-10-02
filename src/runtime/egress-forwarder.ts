@@ -19,6 +19,7 @@ import { connect, createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { StoreError } from "../domain/errors.js";
 import { FrameParser, encodeFrame } from "../frame.js";
+import { alarm, type Timer } from "./pi-rpc.js";
 import {
   EGRESS_ENGINE_MANAGED, egressPlaceholderResultProblem,
   type EgressOpenParams, type EgressPlaceholderParams, type EgressPlaceholderResult,
@@ -37,11 +38,13 @@ export interface EgressAsk {
 /** One frame from a connection that then ends. */
 function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
+    if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= 0) { socket.destroy(); reject(new RangeError("Invalid egress observation deadline")); return; }
     const parser = new FrameParser(frameBytes);
-    const timer = setTimeout(() => { done(new StoreError("BROKER_UNAVAILABLE", "the egress service did not answer in time")); }, deadlineMs);
-    timer.unref();
+    let timer: Timer | undefined, settled = false;
     const done = (error: Error | null, frame?: Record<string, unknown>): void => {
-      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      timer?.cancel();
       socket.removeAllListeners("data");
       socket.destroy();
       if (error !== null) reject(error); else resolve(frame!);
@@ -53,15 +56,16 @@ function oneFrame(socket: Socket, frameBytes: number, deadlineMs: number): Promi
     });
     socket.once("error", () => { done(new StoreError("BROKER_UNAVAILABLE", "the egress service is unavailable")); });
     socket.once("close", () => { done(new StoreError("BROKER_UNAVAILABLE", "the egress service closed without an answer")); });
+    timer = alarm(deadlineMs / 1000, () => done(new StoreError("BROKER_UNAVAILABLE", "the egress service did not answer in time")), true);
   });
 }
 
 /** The run's placeholder, issued by the host for this society, actor and
  * incarnation and for the engine-managed credential. */
 export async function requestEgressPlaceholder(ask: EgressAsk, run: EgressPlaceholderParams["run"], provider: string,
-  model: string): Promise<EgressPlaceholderResult> {
+  model: string, inferenceSeconds: number): Promise<EgressPlaceholderResult> {
   const socket = connect(ask.socket);
-  const params: EgressPlaceholderParams = { credentialRef: EGRESS_ENGINE_MANAGED, provider, model, run };
+  const params: EgressPlaceholderParams = { credentialRef: EGRESS_ENGINE_MANAGED, provider, model, run, inferenceSeconds };
   socket.once("connect", () => { socket.write(encodeFrame({ v: 1, id: randomUUID(), method: "egress.placeholder", params })); });
   const answer = await oneFrame(socket, ask.frameBytes, ask.deadlineMs);
   if (answer.ok !== true) {
@@ -150,13 +154,13 @@ function freeLoopbackPort(): Promise<number> {
 }
 
 export async function openPrincipalEgress(options: { readonly society: string; readonly runRoot: string; readonly provider: string;
-  readonly model: string; readonly modelProfile: string; readonly frameBytes: number; readonly deadlineMs: number;
+  readonly model: string; readonly modelProfile: string; readonly frameBytes: number; readonly deadlineMs: number; readonly inferenceSeconds: number;
   readonly env: Readonly<Record<string, string | undefined>> }): Promise<PrincipalEgress | null> {
   const egress = options.env[EGRESS_SOCKET_ENV];
   if (egress === undefined || egress.length === 0) return null;
   const run = { society: options.society, actor: "principal", incarnation: 0 };
   const issued = await requestEgressPlaceholder({ socket: egress, frameBytes: options.frameBytes, deadlineMs: options.deadlineMs },
-    run, options.provider, options.model);
+    run, options.provider, options.model, options.inferenceSeconds);
   const socketPath = join(options.runRoot, "principal-inference.sock");
   const forwarder = await EgressForwarder.listen(socketPath, egress,
     { placeholderId: issued.placeholderId, ...run, modelProfile: options.modelProfile }, 4);

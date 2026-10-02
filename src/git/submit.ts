@@ -47,6 +47,7 @@ export class SubmitCoordinator {
     this.active.set(id, task); return task;
   }
   private publicationAuthority(actorName: string, auth?: AuthContext): void {
+    if (!this.store.societyOpen()) throw new StoreError("AGENT_NOT_READY", "society execution is closed");
     const current = this.store.getAgent(actorName);
     if (current?.desired === "stopped" || current?.desired === "retired")
       throw new StoreError("CANCELLED_BEFORE_COMMIT", "stop or retire intent precedes submit publication");
@@ -128,7 +129,7 @@ export class SubmitCoordinator {
     } catch (error) { throw acceptedFailure(error); }
   }
   private async resultEml(actor: Actor, input: SubmitInput, displayTo: string[], publishedRef: string, messageId: string) {
-    const body = `${input.body}\n\n게시됨: ${publishedRef}\nCommit: ${input.candidate}\n${input.paths.length ? `경로: ${input.paths.join(", ")}\n` : ""}git fetch origin ${publishedRef}; git show FETCH_HEAD\n`;
+    const body = `${input.body}\n\nPublished: ${publishedRef}\nCommit: ${input.candidate}\n${input.paths.length ? `Paths: ${input.paths.join(", ")}\n` : ""}git fetch origin ${publishedRef}; git show FETCH_HEAD\n`;
     return buildEml({ from: actorAddress(actor, this.paths.society), to: displayTo,
       replyTo: defaultReplyTo(actorAddress(actor, this.paths.society), displayTo), subject: input.subject,
       kind: "result", contextRevision: null, inReplyTo: null, references: [], messageId: `${messageId}@${this.paths.society}.oma.invalid`, body });

@@ -209,7 +209,7 @@ export function prepareResidentRootfs(
   for (const path of ["/proc", "/dev", "/tmp", "/etc", dirname(RESIDENT_PATHS.node),
     RESIDENT_PATHS.workspace, RESIDENT_PATHS.home, RESIDENT_PATHS.archive, RESIDENT_PATHS.selfMail,
     RESIDENT_PATHS.view, RESIDENT_PATHS.world, RESIDENT_PATHS.projectGit, RESIDENT_PATHS.projectMirror, RESIDENT_PATHS.sessions,
-    RESIDENT_PATHS.libdir])
+    RESIDENT_PATHS.libdir, RESIDENT_PATHS.packages])
     ensureDirectory(inside(path));
   for (const path of [RESIDENT_PATHS.node, RESIDENT_PATHS.socket, RESIDENT_PATHS.inference])
     ensureFile(inside(path), pass);

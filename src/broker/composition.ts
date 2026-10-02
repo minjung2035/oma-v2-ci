@@ -72,6 +72,7 @@ export function createPublicDispatchPorts(
     status: (agent, snapshot) => views.statusOf(snapshot, agent),
   };
   const publicLifecycle: PublicLifecyclePort = {
+    setSociety: (auth, state, key) => lifecycle.setSociety(auth, state, key),
     create: (auth, input, key) => lifecycle.create(auth, input, key),
     start: (auth, agent, key) => lifecycle.start(auth, agent, key),
     stop: (auth, agent, key) => lifecycle.stop(auth, agent, key),
@@ -83,6 +84,7 @@ export function createPublicDispatchPorts(
     git === null
       ? null
       : {
+          attestations: { record: (auth, key, input) => git.attestations.record(auth, key, input) },
           knownRefs: () => git.knownRefs(),
           isPublished: (oid) => git.isPublished(oid),
           submit: (auth, key, input, bytes) =>

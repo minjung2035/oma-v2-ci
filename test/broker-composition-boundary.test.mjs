@@ -119,6 +119,7 @@ function fixture() {
     },
   };
   const lifecycle = {
+    setSociety() { calls.push("lifecycle.setSociety"); return "society"; },
     create() {},
     start() {},
     stop() {},
@@ -126,6 +127,10 @@ function fixture() {
     follow() {},
   };
   const git = {
+    attestations: {
+      store: { privateWriter: true },
+      record(...args) { calls.push(["attest.record", ...args]); return Promise.resolve("attestation"); },
+    },
     knownRefs() {
       calls.push("git.knownRefs");
       return { main: "main", published: [] };
@@ -186,10 +191,12 @@ test("P18 public composition exposes only projected capabilities and keeps looku
     "ack",
     "create",
     "follow",
+    "setSociety",
     "start",
     "stop",
   ]);
   assert.deepEqual(Object.keys(ports.git).sort(), [
+    "attestations",
     "integrate",
     "isPublished",
     "knownRefs",
@@ -197,6 +204,13 @@ test("P18 public composition exposes only projected capabilities and keeps looku
     "submit",
   ]);
 
+  assert.equal(ports.git.attestations === git.attestations, false, "the concrete owner must not escape through a nested port");
+  assert.deepEqual(Object.keys(ports.git.attestations), ["record"]);
+  const auth = { actor: "alice" }, input = { kind: "peer" };
+  assert.equal(await ports.git.attestations.record(auth, "key", input), "attestation");
+  assert.deepEqual(calls.pop(), ["attest.record", auth, "key", input]);
+  assert.equal(ports.lifecycle.setSociety({}, "closed", "request"), "society");
+  assert.equal(calls.pop(), "lifecycle.setSociety");
   const view = ports.store.getAgent("alice");
   assert.deepEqual(Object.keys(view).sort(), [
     "desired",

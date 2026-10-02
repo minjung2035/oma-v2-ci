@@ -214,7 +214,8 @@ test("WP25.03 / D05: a Resident runs with its accepted resources; the current pr
     assert.equal(run.status, 0, run.stderr);
     assert.equal(run.selected.profile.workspaceBytes, accepted.workspaceBytes, "the engine's workspace limit came from the current profile");
     assert.equal(run.selected.confinement.tmpBytes, accepted.tmpBytes, "the sandbox /tmp came from the current profile");
-    assert.deepEqual(run.selected.confinement.checkResources, accepted);
+    assert.equal(Object.hasOwn(run.selected.confinement, "checkResources"), false,
+      "candidate check resources belong to the integration profile, not the Resident sandbox");
     assert.equal(run.selected.profile.model.model, "model-b", "the model is the current profile's");
     // No accepted spec, or anything but its canonical text, is refused -- never
     // replaced by the current profile.

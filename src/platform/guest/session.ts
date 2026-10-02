@@ -13,11 +13,14 @@ import { closeSync } from "node:fs";
 import tty from "node:tty";
 import type { Socket } from "node:net";
 import type { ChildProcess } from "node:child_process";
+import type { Duplex } from "node:stream";
+import { FrameParser, encodeFrame, parseJsonObject } from "../../frame.js";
+import { parseHostHistoryQuery, type HostHistoryQuery } from "../../protocol/host-history.js";
 import { spawnInTerminal } from "../../process/async.js";
 import { openPseudoTerminal, setWindowSize } from "./pty.js";
 import { TerminalModes } from "../terminal-modes.js";
 import {
-  TERMINAL_FRAME_BYTES, TerminalFrameParser, encodeTerminalFrame, encodeTerminalJson, parseResize, parseTerminalJson,
+  TERMINAL_FRAME_BYTES, TerminalFrameParser, encodeTerminalFrame, encodeTerminalJson, parseResize, parseTerminalJson, isNewSessionHandoff, isResumeSessionHandoff,
 } from "../../protocol/host-guest.js";
 
 const REDRAW = Buffer.from([0x0c]);
@@ -35,7 +38,7 @@ export interface SessionOptions {
    * it reattaches and is drawn again rather than holding the program back. */
   readonly backlogBytes: number;
 }
-export interface SessionEnd { readonly code: number | null; readonly signal: string | null }
+export interface SessionEnd { readonly code: number | null; readonly signal: string | null; readonly next?: "new" | "resume"; readonly history?: string }
 
 type Screen = { readonly socket: Socket; readonly parser: TerminalFrameParser; attached: boolean; sized: boolean };
 
@@ -46,6 +49,8 @@ export class TerminalSession {
   private screen: Screen | null = null;
   private ended: SessionEnd | null = null;
   private readonly endListeners: ((end: SessionEnd) => void)[] = [];
+  private readonly historyChannel: Duplex | null;
+  private historyQuery: { query: HostHistoryQuery; screen: Screen } | null = null;
 
   private constructor(private readonly master: number, child: ChildProcess, private readonly options: SessionOptions) {
     this.child = child;
@@ -57,15 +62,60 @@ export class TerminalSession {
     // open is not waited for past a moment.
     let exited: SessionEnd | null = null;
     let drained = false;
-    const settle = (): void => { if (exited !== null && drained) this.finish(exited); };
-    this.terminal.on("error", () => { drained = true; settle(); });
-    this.terminal.on("end", () => { drained = true; settle(); });
+    const handoff = child.stdio[3] as Duplex | null;
+    this.historyChannel = handoff;
+    const requests = new FrameParser(TERMINAL_FRAME_BYTES - 1);
+    let handoffEnded = handoff === null, requested: { next: "new" | "resume"; history?: string } | null = null, invalidHandoff = false;
+    let drainTimer: ReturnType<typeof setTimeout> | undefined;
+    const settle = (): void => {
+      if (exited === null || !drained || !handoffEnded) return;
+      if (drainTimer !== undefined) clearTimeout(drainTimer);
+      drainTimer = undefined;
+      this.finish({ ...exited, ...(requested !== null && !invalidHandoff && exited.code === 0 && exited.signal === null ? requested : {}) });
+    };
+    handoff?.on("data", (chunk: Buffer) => {
+      if (invalidHandoff) return;
+      try {
+        for (const frame of requests.feed(chunk)) {
+          if (requested !== null) throw new Error("Invalid session handoff");
+          if (isNewSessionHandoff(frame.raw)) requested = { next: "new" };
+          else if (isResumeSessionHandoff(frame.raw)) requested = { next: "resume", history: frame.raw.history as string };
+          else this.requestHistory(parseHostHistoryQuery(frame.raw));
+        }
+      } catch { invalidHandoff = true; handoff.destroy(); }
+    });
+    handoff?.once("end", () => {
+      try { requests.finish(); } catch { invalidHandoff = true; }
+      this.historyQuery = null;
+      handoff.end();
+      handoffEnded = true; settle();
+    });
+    handoff?.on("error", () => { invalidHandoff = true; });
+    handoff?.once("close", () => {
+      if (!handoffEnded) invalidHandoff = true;
+      handoffEnded = true; settle();
+    });
+    const drain = (): void => { drained = true; settle(); };
+    this.terminal.on("error", drain);
+    this.terminal.once("end", drain);
+    this.terminal.once("close", drain);
     child.once("exit", (code, signal) => {
       exited = { code, signal };
-      setTimeout(() => { drained = true; settle(); }, 1000).unref();
+      if (!drained) {
+        drainTimer = setTimeout(drain, 1000);
+        drainTimer.unref();
+      }
       settle();
     });
-    child.once("error", () => { exited = { code: null, signal: null }; drained = true; settle(); });
+    // P0-5: ChildProcess also emits error when a signal could not be sent.
+    // Only exit proves death; close with no pid confirms a failed spawn.
+    child.on("error", () => {});
+    child.once("close", () => {
+      if (exited === null && child.pid === undefined) {
+        exited = { code: null, signal: null };
+        drain();
+      }
+    });
   }
 
   static start(program: SessionProgram, options: SessionOptions): TerminalSession {
@@ -87,7 +137,8 @@ export class TerminalSession {
   /** Asks the program to end the way a terminal's owner would (SIGTERM; the
    * product's `oma` then takes its own shutdown path). */
   terminate(): void {
-    if (this.ended === null) this.child.kill("SIGTERM");
+    if (this.ended === null && this.child.exitCode === null && this.child.signalCode === null)
+      this.child.kill("SIGTERM");
   }
 
   /** A connection from guesthost. Its first frame is `attach`. */
@@ -95,7 +146,7 @@ export class TerminalSession {
     const screen: Screen = { socket, parser: new TerminalFrameParser(), attached: false, sized: false };
     socket.on("data", (chunk: Buffer) => { this.fromScreen(screen, chunk); });
     socket.on("error", () => { socket.destroy(); });
-    socket.once("close", () => { if (this.screen === screen) this.screen = null; });
+    socket.once("close", () => { if (this.screen === screen) { this.historyUnavailable("The attached host screen closed"); this.screen = null; } });
   }
 
   private fromProgram(chunk: Buffer): void {
@@ -122,6 +173,20 @@ export class TerminalSession {
         continue;
       }
       if (this.screen !== screen) return;
+      if (frame.kind === "histories") {
+        let value: Record<string, unknown>;
+        try {
+          value = parseJsonObject(frame.payload).raw;
+          if (typeof value.id !== "string" || Object.keys(value).sort().join(",") !== (value.error === undefined ? "id,result" : "error,id") ||
+              (value.error === undefined ? !value.result || typeof value.result !== "object" || Array.isArray(value.result) :
+               typeof value.error !== "string" || value.error.length > 160)) throw new Error();
+        } catch { this.drop(screen); return; }
+        if (this.historyQuery?.screen === screen && this.historyQuery.query.id === value.id) {
+          this.historyQuery = null;
+          this.historyChannel?.write(encodeFrame(value));
+        }
+        continue;
+      }
       if (frame.kind === "input") { this.terminal.write(frame.payload); continue; }
       if (frame.kind === "resize") {
         const size = parseResize(frame.payload);
@@ -144,7 +209,7 @@ export class TerminalSession {
   /** MAC-220: one screen at a time; a takeover tells the previous one. */
   private attach(screen: Screen, takeover: boolean): boolean {
     if (this.ended !== null) {
-      screen.socket.end(encodeTerminalJson("exit", { code: this.ended.code, signal: this.ended.signal }));
+      screen.socket.end(encodeTerminalJson("exit", { ...this.ended }));
       return false;
     }
     const previous = this.screen;
@@ -152,24 +217,43 @@ export class TerminalSession {
       screen.socket.end(encodeTerminalJson("refused", { code: "ATTACH_CONFLICT", message: "this society is shown on another screen" }));
       return false;
     }
-    if (previous !== null) previous.socket.end(encodeTerminalJson("detached", { reason: "taken-over" }));
+    if (previous !== null) { this.historyUnavailable("Another host screen took over"); previous.socket.end(encodeTerminalJson("detached", { reason: "taken-over" })); }
     screen.attached = true;
     this.screen = screen;
     return true;
   }
 
   private drop(screen: Screen): void {
-    if (this.screen === screen) this.screen = null;
+    if (this.screen === screen) { this.historyUnavailable("Host history reply was lost"); this.screen = null; }
     screen.socket.destroy();
   }
 
   private finish(end: SessionEnd): void {
     if (this.ended !== null) return;
     this.ended = end;
+    this.historyQuery = null;
     const screen = this.screen;
     this.screen = null;
-    if (screen !== null) screen.socket.end(encodeTerminalJson("exit", { code: end.code, signal: end.signal }));
+    if (screen !== null) screen.socket.end(encodeTerminalJson("exit", { ...end }));
     this.terminal.destroy();
     for (const listener of this.endListeners) listener(end);
+  }
+
+  private requestHistory(query: HostHistoryQuery): void {
+    this.historyUnavailable("A newer host history observation replaced this one");
+    const screen = this.screen;
+    if (screen === null || !screen.sized) {
+      this.historyChannel?.write(encodeFrame({ id: query.id, error: "Attach a host terminal to observe Personal histories" }));
+      return;
+    }
+    this.historyQuery = { query, screen };
+    screen.socket.write(encodeTerminalJson("historyQuery", { ...query }));
+  }
+
+  private historyUnavailable(error: string): void {
+    if (this.historyQuery === null) return;
+    const { query } = this.historyQuery;
+    this.historyQuery = null;
+    this.historyChannel?.write(encodeFrame({ id: query.id, error }));
   }
 }

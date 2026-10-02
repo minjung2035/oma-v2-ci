@@ -5,13 +5,12 @@
  * owns them (P0-2); a committed link or anchor still resolves (P0-3).
  * Importing this module reads nothing. `node scripts/document-integrity.mjs`
  * checks this repository and exits 1 on any finding. */
-import { existsSync, readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { inventoryAcceptance, inventoryClauses, normativeSources } from "./traceability.mjs";
 
-export const ACCEPTANCE_OWNER = "implementation/test-matrix.md";
+export const ACCEPTANCE_OWNER = "docs/verification-spec.md";
 const ACCEPTANCE_ROW = /^\|\s*T(\d+)\s*\/\s*[^|]+\|/;
 
 /** Requirement IDs defined by more than one clause. */
@@ -71,15 +70,38 @@ export function brokenLinks(root, files) {
   return findings;
 }
 
+/** Authored Markdown, including new/untracked files, with immutable archives
+ * retained as records rather than evaluated as current guidance. */
+export function projectDocuments(root = ".") {
+  const ignored = new Set([".git", "node_modules", "dist", "data"]);
+  const files = [];
+  const walk = relative => {
+    for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
+      if (ignored.has(entry.name)) continue;
+      const path = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name.endsWith(".md")) files.push(path);
+    }
+  };
+  walk("");
+  return files.sort();
+}
+
+export function documentLayoutFindings(files) {
+  return files.filter(file => file !== "README.md" && !file.startsWith("docs/"))
+    .map(file => `${file}: project documentation belongs under docs/`);
+}
+
 export function documentIntegrity(root = ".") {
   const read = source => ({ source, text: readFileSync(join(root, source), "utf8") });
   const normative = normativeSources.map(read);
-  const tracked = spawnSync("git", ["-C", root, "ls-files", "*.md"], { encoding: "utf8" }).stdout.split("\n")
-    .filter(file => file && !file.startsWith("oma-v2-consistency-plan-b25961c/"));
+  const files = projectDocuments(root);
+  const current = files.filter(file => !file.startsWith("docs/archive/"));
   return [
+    ...documentLayoutFindings(files),
     ...duplicateRequirements(normative),
-    ...acceptanceFindings([...normative, read("architecture.md")]),
-    ...brokenLinks(root, tracked),
+    ...acceptanceFindings([...normative, read("docs/architecture.md")]),
+    ...brokenLinks(root, current),
   ];
 }
 

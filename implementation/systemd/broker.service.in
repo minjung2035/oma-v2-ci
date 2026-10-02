@@ -10,7 +10,10 @@ Type=notify
 NotifyAccess=main
 ExecStart=@NODE@ @LIBDIR@/dist/src/entry/broker.js --society @SOCIETY@
 Restart=on-failure
+# DR27: bound crash pressure without bypassing the five-start/60s breaker.
 RestartSec=3s
+RestartSteps=4
+RestartMaxDelaySec=12s
 KillMode=control-group
 TimeoutStopSec=15s
 UMask=0077

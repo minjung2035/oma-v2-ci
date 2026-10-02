@@ -15,7 +15,7 @@ import {
 
 /** How a connection to a guest port is made: vsock through the VM helper in
  * production, a local socket in tests. */
-export interface GuestPorts { connect(port: number): Promise<Socket> }
+export interface GuestPorts { connect(port: number, deadlineMs?: number): Promise<Socket> }
 
 export interface HostIdentity {
   readonly hostVersion: string;
@@ -55,19 +55,29 @@ export class GuestLink {
   }
 
   /** A control or society connection, after its hello. */
-  async json(channel: "control" | "society"): Promise<FramedPeer> {
-    const socket = await this.ports.connect(portOf(channel));
-    const peer = new FramedPeer(socket, { frameBytes: this.options.frameBytes, requestTimeoutMs: this.options.requestTimeoutMs });
-    try { this.observe(await sendHello(peer, this.hello(channel))); }
-    catch (error) { peer.close(); throw error; }
-    return peer;
+  async json(channel: "control" | "society", signal?: AbortSignal): Promise<FramedPeer> {
+    signal?.throwIfAborted();
+    const socket = await this.ports.connect(portOf(channel), this.options.helloDeadlineMs);
+    if (signal?.aborted) { socket.destroy(); signal.throwIfAborted(); }
+    let peer: FramedPeer;
+    try { peer = new FramedPeer(socket, { frameBytes: this.options.frameBytes, requestTimeoutMs: this.options.requestTimeoutMs }); }
+    catch (error) { socket.destroy(); throw error; }
+    const abort = (): void => { peer.close(); };
+    signal?.addEventListener("abort", abort, { once: true });
+    try {
+      const answer = await sendHello(peer, this.hello(channel), this.options.helloDeadlineMs);
+      signal?.throwIfAborted();
+      this.observe(answer);
+      return peer;
+    } catch (error) { peer.close(); throw error; }
+    finally { signal?.removeEventListener("abort", abort); }
   }
 
   /** A terminal, egress or stream connection, after its hello, with whatever
    * the guest sent right behind its answer. */
   async bytes(channel: "terminal" | "egress" | "stream", extra: { society?: string; takeover?: true } = {}):
     Promise<{ readonly socket: Socket; readonly rest: Buffer }> {
-    const socket = await this.ports.connect(portOf(channel));
+    const socket = await this.ports.connect(portOf(channel), this.options.helloDeadlineMs);
     let answered: { result: HelloResult; rest: Buffer };
     try { answered = await sendHelloForBytes(socket, this.hello(channel, extra), this.options.frameBytes, this.options.helloDeadlineMs); }
     catch (error) { socket.destroy(); throw error; }

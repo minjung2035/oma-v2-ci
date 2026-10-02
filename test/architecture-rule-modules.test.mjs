@@ -214,6 +214,20 @@ test("architecture fence rule names the enclosing function, not whatever declara
   assert.match(found[0].reason, /src\/runtime\/resident\.ts#startResident/);
 }));
 
+test("architecture fence rule never accepts a comment as a propagated descriptor", () => withFixture({
+  "src/extension/cli-process.ts": `import { spawn } from "node:child_process";
+export function runCliProcess(run: CliRun) {
+  return spawn(run.node, run.args, { /* society fence is absent */ stdio: [0, 1, 2] });
+}`,
+  "src/process/async.ts": `import { spawn } from "node:child_process";
+export function spawnInTerminal(program: string) {
+  return spawn(program, [], { /* private handoff, not a society fence */ stdio: [0, 1, 2, "pipe"] });
+}`,
+}, root => {
+  assert.equal(fenceFindings(root, "fence-propagation").length, 1);
+  assert.equal(fenceFindings(root, "fence-exemption-stale").some(value => value.reason.includes("spawnInTerminal passes")), false);
+}));
+
 test("architecture fence rule rejects a written exemption for a spawn that is not there", () => withFixture({
   "src/process/async.ts": "export const nothing = 1;",
 }, root => {

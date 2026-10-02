@@ -2,16 +2,20 @@
  * the CLI request service, not in the role-neutral protocol channel.
  */
 import { existsSync, fstatSync, readSync } from "node:fs";
-import type { PublicMethod } from "../../implementation/contracts.js";
+import type { PublicMethod, PublicMethods } from "../../implementation/contracts.js";
 import { BrokerChannel, type RpcReply } from "../protocol/channel.js";
 import { HOST_CHANNEL_FD, HOST_CHANNEL_LINE_BYTES, decodeHostMessage } from "../protocol/host-channel.js";
 import { StoreError } from "../domain/errors.js";
+import { collectReceipt, MAX_RECEIPT_BYTES } from "../protocol/receipt-chunks.js";
+import { PUBLIC_METHODS } from "../protocol/methods.js";
 import { isLogResponseFrameLimit } from "../protocol/log-response.js";
 import { fail } from "./exit.js";
+import { CLI_OBSERVATION_SECONDS } from "../domain/limits.js";
 
 // CFG-003: sandbox supplies the host's limit; only an omitted setting uses 256 KiB.
-// Preserve the CLI's absolute 60-second deadline independently of frame sizing.
-const CLI_DEADLINE_MS = 60000;
+// One observation, not a task lifetime. Allow a 120-second preparation step
+// to answer; a longer accepted operation can be looked up under its same key.
+const CLI_DEADLINE_MS = CLI_OBSERVATION_SECONDS * 1000;
 
 export function socketPath(): string {
   if (process.env.OMA_SOCKET) return process.env.OMA_SOCKET;
@@ -52,17 +56,20 @@ function streamBound(name: string, configured: string | undefined, reference: nu
   return bytes;
 }
 
-export async function callActor(
+async function callActorFrame(
   path: string,
   method: PublicMethod,
   params: Record<string, unknown>,
   request?: string,
   streamBytes?: Uint8Array,
+  deadline = performance.now() + CLI_DEADLINE_MS,
 ): Promise<RpcReply<PublicMethod>[]> {
   const frameBytes = cliFrameBytes();
   const grant = presentedGrant();
-  const channel = new BrokerChannel({ frameBytes, idleStreamSeconds: 60, receiptWaitSeconds: 60 });
-  const timer = setTimeout(() => channel.close(new StoreError("BROKER_UNAVAILABLE", "broker did not answer before the CLI deadline")), CLI_DEADLINE_MS);
+  const remaining = deadline - performance.now();
+  if (remaining <= 0) throw new StoreError("BROKER_UNAVAILABLE", "broker did not answer before the CLI deadline");
+  const channel = new BrokerChannel({ frameBytes, idleStreamSeconds: CLI_DEADLINE_MS / 1000, receiptWaitSeconds: CLI_DEADLINE_MS / 1000 });
+  const timer = setTimeout(() => channel.close(new StoreError("BROKER_UNAVAILABLE", "broker did not answer before the CLI deadline")), remaining);
   try {
     await channel.connect(path);
     await attachPrincipalSession(channel, grant);
@@ -75,6 +82,23 @@ export async function callActor(
     clearTimeout(timer);
     channel.close();
   }
+}
+
+/** Oversized handled answers are recovered by key, never by replaying an effect. */
+export async function callActor(path: string, method: PublicMethod, params: Record<string, unknown>,
+  request?: string, streamBytes?: Uint8Array): Promise<RpcReply<PublicMethod>[]> {
+  const deadline = performance.now() + CLI_DEADLINE_MS;
+  const replies = await callActorFrame(path, method, params, request, streamBytes, deadline);
+  const first = replies[0];
+  const key = method === "operation.get" ? params.key : PUBLIC_METHODS[method].mode === "mutation" ? request : undefined;
+  if (first?.ok !== false || first.error.code !== "FRAME_TOO_LARGE" || typeof key !== "string") return replies;
+  const receipt = await collectReceipt(key, MAX_RECEIPT_BYTES, async part => {
+    const reply = (await callActorFrame(path, "operation.read", part, undefined, undefined, deadline))[0];
+    if (!reply?.ok) throw new StoreError(reply?.error.code ?? "BROKER_UNAVAILABLE", reply?.error.message ?? "receipt chunk missing");
+    // The channel has decoded this exact method's result.
+    return reply.result as PublicMethods["operation.read"]["result"];
+  });
+  return [{ ok: true, result: receipt }];
 }
 
 /** Where the trusted extension puts a Principal credential for this process,

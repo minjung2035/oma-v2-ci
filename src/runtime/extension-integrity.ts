@@ -11,8 +11,7 @@
  * this check and Pi's own open, and it does not replace the deployment manifest
  * digest or Pi executable approval. It is asset identification, not containment.
  */
-import { createHash } from "node:crypto";
-import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
+import { fileDigest } from "../storage/file-digest.js";
 import { StoreError, unobserved } from "../domain/errors.js";
 
 export interface VerifiedExtension {
@@ -21,20 +20,6 @@ export interface VerifiedExtension {
 }
 
 const DIGEST = /^[0-9a-f]{64}$/;
-
-function digestOf(path: string): string {
-  // Open once and hash from that descriptor's contents so a path swapped
-  // between the stat and the read cannot be hashed as the original.
-  const fd = openSync(path, "r");
-  try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile())
-      throw new StoreError("UNSUPPORTED_PROFILE", `extension is not a regular file: ${path}`);
-    return createHash("sha256").update(readFileSync(fd)).digest("hex");
-  } finally {
-    closeSync(fd);
-  }
-}
 
 /** Throws unless every recorded extension still hashes to its recorded digest.
  * A missing, unreadable, non-regular or changed file refuses the start; there is
@@ -47,7 +32,7 @@ export function assertExtensionIntegrity(extensions: readonly VerifiedExtension[
       throw new StoreError("UNSUPPORTED_PROFILE", `extension digest is not a SHA-256: ${extension.path}`);
     let observed: string;
     try {
-      observed = digestOf(extension.path);
+      observed = fileDigest(extension.path).sha256;
     } catch (error) {
       if (error instanceof StoreError) throw error;
       throw unobserved(error, `the extension ${extension.path}`) ?? new StoreError(

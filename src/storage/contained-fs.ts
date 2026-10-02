@@ -7,6 +7,7 @@ import { basename, dirname } from "node:path";
 import { getSystemErrorName } from "node:util";
 import { load, errno } from "koffi";
 import { StoreError } from "../domain/errors.js";
+import { withCleanup } from "../process/cleanup.js";
 
 /** P0V-65, P0-4: gives back every descriptor it is handed, whichever of them
  * fails to close -- Linux releases a number even when close reports an error
@@ -106,18 +107,22 @@ export function openRegularBeneath(directory: number, path: string): number {
     path,
     0o10000000 /* O_PATH */ | constants.O_NOFOLLOW,
   );
+  let result: number | undefined;
   try {
-    if (!fstatSync(pin).isFile())
-      throw new StoreError(
-        "STORE_CORRUPT",
-        "contained entry is not a regular file",
+    return withCleanup(() => {
+      if (!fstatSync(pin).isFile())
+        throw new StoreError(
+          "STORE_CORRUPT",
+          "contained entry is not a regular file",
+        );
+      result = openSync(
+        `/proc/self/fd/${pin}`,
+        constants.O_RDONLY | constants.O_NONBLOCK,
       );
-    return openSync(
-      `/proc/self/fd/${pin}`,
-      constants.O_RDONLY | constants.O_NONBLOCK,
-    );
-  } finally {
-    closeSync(pin);
+      return result;
+    }, () => closeSync(pin));
+  } catch (error) {
+    return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
   }
 }
 /** Bootstrap a host-configured directory without following any pathname symlink.
@@ -131,14 +136,14 @@ export function openDirectory(path: string): number {
     constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
   );
   if (path === "/") return root;
+  let result: number | undefined;
   try {
-    return openBeneath(
-      root,
-      path.slice(1),
-      constants.O_RDONLY | constants.O_DIRECTORY,
-    );
-  } finally {
-    closeSync(root);
+    return withCleanup(() => {
+      result = openBeneath(root, path.slice(1), constants.O_RDONLY | constants.O_DIRECTORY);
+      return result;
+    }, () => closeSync(root));
+  } catch (error) {
+    return withCleanup(() => { throw error; }, () => { if (result !== undefined) closeSync(result); });
   }
 }
 /** A single directory entry under an OWNED descriptor. The only followed magic
@@ -192,6 +197,5 @@ export function withinDirectory<T>(path: string, body: (parent: number, name: st
   if (leaf === "" || leaf === "." || leaf === "..")
     throw new StoreError("STORE_CORRUPT", `path has no entry to act on: ${path}`);
   const parent = openDirectory(dirname(path));
-  try { return body(parent, leaf); }
-  finally { closeSync(parent); }
+  return withCleanup(() => body(parent, leaf), () => closeSync(parent));
 }

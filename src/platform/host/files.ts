@@ -16,18 +16,42 @@
  *   removed (`collectTemporaries`).
  */
 import { randomUUID } from "node:crypto";
-import { closeSync, constants, fsyncSync, linkSync, openSync, readdirSync, renameSync, rmSync, unlinkSync, writeSync } from "node:fs";
-import { join } from "node:path";
+import { closeSync, constants, fsyncSync, linkSync, mkdirSync, openSync, readdirSync, renameSync, rmSync, unlinkSync, writeSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { assertHostDirectoryLayout } from "../../runtime/assets.js";
 import { StoreError } from "../../domain/errors.js";
+import { withCleanup } from "../../process/cleanup.js";
+import { lockFileDescriptor } from "../../leaf.js";
+import { disposeProjectPreparation, type ProjectPreparation } from "../../storage/project-preparation.js";
 
 const TEMPORARY = /^\..+\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.partial$/;
 
-export interface HostTemporary { readonly path: string; readonly fd: number }
+export interface HostTemporary { readonly path: string; readonly fd: number; close(): void }
+
+/** Private host metadata, outside a Society's state tree. Mutable files still
+ * require their caller's writer lock; this does not grant a sandbox boundary. */
+export function ensureHostUserDirectory(path: string): void {
+  assertHostDirectoryLayout(path, true);
+  let current = "/";
+  for (const component of path.slice(1).split("/").filter(Boolean)) {
+    current = join(current, component);
+    try { mkdirSync(current, { mode: 0o700 }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    assertHostDirectoryLayout(current);
+  }
+  // A retry must flush names left visible by a failed earlier mkdir, too.
+  for (let current = path; ; current = dirname(current)) {
+    fsyncDirectory(current);
+    if (dirname(current) === current) break;
+  }
+}
 
 /** A temporary for `name` in `dir`, open for writing, made here and nowhere else. */
 export function createTemporary(dir: string, name: string): HostTemporary {
   const path = temporaryPath(dir, name);
-  return { path, fd: openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600) };
+  const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  let closed = false;
+  return { path, fd, close() { if (closed) return; closed = true; closeSync(fd); } };
 }
 
 /** A temporary's name for `name`, for a writer that makes the file itself
@@ -39,30 +63,31 @@ export function temporaryPath(dir: string, name: string): string {
 
 export function fsyncDirectory(dir: string): void {
   const fd = openSync(dir, constants.O_RDONLY);
-  try { fsyncSync(fd); } finally { closeSync(fd); }
+  withCleanup(() => fsyncSync(fd), () => closeSync(fd));
 }
 
 /** Publishes a written temporary as `name` without replacing one: "existing"
  * when the name is already there (the temporary is removed). The temporary's
  * descriptor is flushed and closed here. */
 export function publishTemporary(temporary: HostTemporary, dir: string, name: string): "created" | "existing" {
-  try { fsyncSync(temporary.fd); } finally { closeSync(temporary.fd); }
+  withCleanup(() => fsyncSync(temporary.fd), () => temporary.close());
   return linkInto(temporary.path, dir, name);
 }
 
 /** Publishes a temporary its maker wrote and closed (a clone): flushed here. */
 export function publishMade(path: string, dir: string, name: string): "created" | "existing" {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  try { fsyncSync(fd); } finally { closeSync(fd); }
+  withCleanup(() => fsyncSync(fd), () => closeSync(fd));
   return linkInto(path, dir, name);
 }
 
 function linkInto(path: string, dir: string, name: string): "created" | "existing" {
   try { linkSync(path, join(dir, name)); }
   catch (error) {
-    rmSync(path, { force: true });
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") return "existing";
-    throw error;
+    return withCleanup(() => {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return "existing" as const;
+      throw error;
+    }, () => rmSync(path, { force: true }));
   }
   unlinkSync(path);
   fsyncDirectory(dir);
@@ -72,21 +97,22 @@ function linkInto(path: string, dir: string, name: string): "created" | "existin
 /** Discards a temporary that will not be published. Its descriptor, if the
  * caller still holds it, is closed. */
 export function discardTemporary(temporary: HostTemporary | string): void {
-  if (typeof temporary !== "string") { try { closeSync(temporary.fd); } catch { /* already closed */ } }
-  rmSync(typeof temporary === "string" ? temporary : temporary.path, { force: true });
+  withCleanup(() => { if (typeof temporary !== "string") temporary.close(); },
+    () => rmSync(typeof temporary === "string" ? temporary : temporary.path, { force: true }));
 }
 
 /** Replaces the file at `path` whole (the host record, which is rewritten
  * in place): a temporary, flushed, renamed over it, the directory flushed. */
 export function replaceFile(dir: string, name: string, bytes: string | Uint8Array): void {
   const temporary = createTemporary(dir, name);
-  try {
-    for (let at = 0, data = typeof bytes === "string" ? Buffer.from(bytes) : bytes; at < data.length;) at += writeSync(temporary.fd, data, at, data.length - at);
-    fsyncSync(temporary.fd);
-  } catch (error) { discardTemporary(temporary); throw error; }
-  closeSync(temporary.fd);
-  renameSync(temporary.path, join(dir, name));
-  fsyncDirectory(dir);
+  withCleanup(() => {
+    withCleanup(() => {
+      for (let at = 0, data = typeof bytes === "string" ? Buffer.from(bytes) : bytes; at < data.length;) at += writeSync(temporary.fd, data, at, data.length - at);
+      fsyncSync(temporary.fd);
+    }, () => temporary.close());
+    renameSync(temporary.path, join(dir, name));
+    fsyncDirectory(dir);
+  }, () => discardTemporary(temporary));
 }
 
 /** The temporaries in `dir`: at start, under the host lock, they are a dead
@@ -99,4 +125,37 @@ export function collectTemporaries(dir: string): string[] {
     removed.push(name);
   }
   return removed;
+}
+
+/** DR27: a private snapshot tree in the host's transfer directory, never a
+ * society state tree. The host lock owns this namespace. The inherited flock
+ * additionally prevents cleanup while an orphaned Git child still writes. */
+export function prepareHostProjectDirectory(path: string): ProjectPreparation {
+  const leasePath = `${path}.lease`;
+  const descriptor = openSync(leasePath, constants.O_CREAT | constants.O_EXCL | constants.O_RDWR | constants.O_NOFOLLOW, 0o600);
+  let closed = false;
+  const release = (): void => { if (!closed) { closed = true; closeSync(descriptor); } };
+  const collect = (): void => {
+    const check = openSync(leasePath, constants.O_RDWR | constants.O_NOFOLLOW);
+    withCleanup(() => {
+      if (lockFileDescriptor(check).kind === "held") {
+        rmSync(path, { recursive: true, force: true });
+        unlinkSync(leasePath);
+      }
+    }, () => closeSync(check));
+  };
+  let made = false;
+  try {
+    if (lockFileDescriptor(descriptor).kind !== "held")
+      throw new StoreError("BROKER_UNAVAILABLE", "snapshot preparation could not hold its lease");
+    mkdirSync(path, { mode: 0o700 }); made = true;
+    return { path, descriptor,
+      openContent: () => openSync(join(path, "content"), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600),
+      dispose() { disposeProjectPreparation(release, collect); },
+    };
+  } catch (error) {
+    try { disposeProjectPreparation(release, () => { if (made) collect(); else unlinkSync(leasePath); }); }
+    catch (cleanup) { throw new AggregateError([error, cleanup], "host snapshot preparation and cleanup failed"); }
+    throw error;
+  }
 }

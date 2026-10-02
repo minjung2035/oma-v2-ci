@@ -59,7 +59,7 @@ test("extension-dynamic-load and extension-execute: no run-time loading, no invo
 
 test("engine-primitive-owner: one owner per borrowed primitive, and no borrowed layout", () => {
   withTree({
-    "src/tui/view/text.ts": 'import { visibleWidth } from "@earendil-works/pi-tui"; export const w = visibleWidth;',
+    "src/tui/cells.ts": 'import { visibleWidth } from "@earendil-works/pi-tui"; export const w = visibleWidth;',
     "src/tui/keys.ts": 'import { parseKey } from "@earendil-works/pi-tui"; export const k = parseKey;',
   }, findings => assert.deepEqual(findings, []));
   withTree({ "src/tui/view/text.ts": 'import { truncateToWidth } from "@earendil-works/pi-tui";' },
@@ -70,18 +70,23 @@ test("engine-primitive-owner: one owner per borrowed primitive, and no borrowed 
     findings => assert.ok(has(findings, "engine-primitive-owner")));
 });
 
-test("tui-view-boundary: the view sees only data, and only the app draws through the seam", () => {
+test("tui-view-boundary: the view sees only data, and only terminal owners draw through the seam", () => {
   withTree({
     "src/tui/view/index.ts": 'export { render } from "./screens.js";',
     "src/tui/view/screens.ts": 'import type { State } from "../model.js"; export const render = (s: State) => s;',
     "src/tui/model.ts": "export interface State { open: boolean }",
     "src/tui/app.ts": 'import { render } from "./view/index.js";',
+    "src/tui/session-mode.ts": 'import { renderSessionMode } from "./view/index.js";',
   }, findings => clean(findings, "tui-view-boundary"));
   withTree({ "src/tui/view/screens.ts": 'import { readFileSync } from "node:fs";' },
     findings => assert.ok(has(findings, "tui-view-boundary")));
   withTree({ "src/tui/view/screens.ts": 'import { readMailbox } from "../sources/mail.js";', "src/tui/sources/mail.ts": "export const readMailbox = 1;" },
     findings => assert.ok(has(findings, "tui-view-boundary")));
   withTree({ "src/tui/view/text.ts": "export const fit = 1;", "src/tui/app.ts": 'import { fit } from "./view/text.js";' },
+    findings => assert.ok(has(findings, "tui-view-boundary")));
+  withTree({ "src/tui/view/text.ts": "export const pad = 1;", "src/tui/session-mode.ts": 'import { pad } from "./view/text.js";' },
+    findings => assert.ok(has(findings, "tui-view-boundary")));
+  withTree({ "src/tui/view/index.ts": "export const render = 1;", "src/tui/arbitrary.ts": 'import { render } from "./view/index.js";' },
     findings => assert.ok(has(findings, "tui-view-boundary")));
   withTree({ "src/tui/view/index.ts": "export const render = 1;", "src/entry/oma.ts": 'import { render } from "../tui/view/index.js";' },
     findings => assert.ok(has(findings, "tui-view-boundary")));
@@ -132,9 +137,48 @@ test("product-cli-separation and resident-product-surface: closures do not cross
     findings => clean(findings, "product-cli-separation", "resident-product-surface"));
 });
 
+test("product closures: dynamic import, require and re-export carry the same runtime boundaries", () => {
+  for (const load of ['() => import("./oma-society.js")', '() => require("./oma-society.js")']) {
+    withTree({
+      "src/entry/oma.ts": `export const start = ${load};`,
+      "src/entry/oma-society.ts": 'export { start } from "../runtime/hidden.js";',
+      "src/runtime/hidden.ts": 'export const start = () => import("../cli/arguments.js");',
+      "src/cli/arguments.ts": "export const parse = 1;",
+    }, findings => assert.ok(findings.some(value => value.rule === "product-cli-separation" && value.file === "src/cli/arguments.ts")));
+    withTree({
+      "src/entry/oma.ts": `export const start = ${load};`,
+      "src/entry/oma-society.ts": 'export const start = () => import("../store.js");',
+      "src/store.ts": "export class Store {}",
+    }, findings => assert.ok(has(findings, "tui-ledger")));
+  }
+  withTree({ "src/entry/oma.ts": 'export type { State } from "../cli/arguments.js";',
+    "src/cli/arguments.ts": "export interface State {}" }, findings => clean(findings, "product-cli-separation"));
+});
+
+test("product entries: every independently launched host entry is covered and hidden from Residents", () => {
+  for (const entry of ["oma-society", "personal-host", "pi-personal", "oma-mac", "pi-interactive", "pi-interactive-host"]) {
+    const file = `src/entry/${entry}.ts`;
+    withTree({ [file]: 'import { parse } from "../cli/arguments.js";', "src/cli/arguments.ts": "export const parse = 1;" },
+      findings => assert.ok(has(findings, "product-cli-separation"), entry));
+    for (const origin of ["src/entry/runner.ts", "src/cli.ts"])
+      withTree({ [origin]: `export const start = () => import("${origin === "src/cli.ts" ? "./entry/" : "./"}${entry}.js");`, [file]: "export {};" },
+        findings => assert.ok(has(findings, origin === "src/cli.ts" ? "product-cli-separation" : "resident-product-surface"), entry));
+    withTree({ "src/entry/runner.ts": `export const entry = "dist/src/entry/${entry}.js";` },
+      findings => assert.ok(has(findings, "resident-product-surface"), entry));
+  }
+});
+
 test("product-pi-command and model-surface-product-words", () => {
   withTree({ "src/tui/app.ts": 'export const hint = "run pi install";' },
     findings => assert.ok(has(findings, "product-pi-command")));
+  // DR25: oma's own command is not the engine's.
+  withTree({ "src/tui/app.ts": 'export const hint = "run oma pi install npm:x";' },
+    findings => assert.ok(!has(findings, "product-pi-command")));
+  withTree({ "src/tui/app.ts": 'export const hint = "or pi update, as a Pi user would";' },
+    findings => assert.ok(has(findings, "product-pi-command")));
+  for (const entry of ["oma-society", "personal-host", "pi-personal", "oma-mac", "pi-interactive", "pi-interactive-host"])
+    withTree({ [`src/entry/${entry}.ts`]: 'export const hint = "run pi install";' },
+      findings => assert.ok(has(findings, "product-pi-command"), entry));
   withTree({ "src/cli/exit.ts": 'export const usage = "press Ctrl+X";' },
     findings => assert.ok(has(findings, "model-surface-product-words")));
   // Near miss: the same words in a comment are not shown to anyone.
@@ -296,10 +340,10 @@ export function runCliProcess(run) {
 });
 
 test("host-loss-signals (AV31, P0V-81): a process with a drain takes it on every termination signal, from the one list", () => {
-  const owner = list => ({ "src/runtime/broker-lifetime.ts": `export const HOST_LOSS_SIGNALS = Object.freeze([${list}] as const);
+  const owner = list => ({ "src/process/host-loss.ts": `export const HOST_LOSS_SIGNALS = Object.freeze([${list}] as const);
 export function stopOnHostLoss(stop, target = process) { for (const signal of HOST_LOSS_SIGNALS) target.once(signal, stop); }` });
   const full = '"SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"';
-  const entry = body => ({ "src/entry/runner.ts": `import { HOST_LOSS_SIGNALS, stopOnHostLoss } from "../runtime/broker-lifetime.js";\n${body}` });
+  const entry = body => ({ "src/entry/runner.ts": `import { HOST_LOSS_SIGNALS, stopOnHostLoss } from "../process/host-loss.js";\n${body}` });
   // Accept: the helper, or a loop over the list.
   withTree({ ...owner(full), ...entry("stopOnHostLoss(() => {});") }, findings => clean(findings, "host-loss-signals"));
   withTree({ ...owner(full), ...entry("for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => {});") },
@@ -315,9 +359,19 @@ export function stopOnHostLoss(stop, target = process) { for (const signal of HO
   withTree({ ...owner(full), ...entry("const stop = () => {};") }, findings => {
     assert.ok(findings.some(value => value.rule === "host-loss-signals" && value.file === "src/entry/runner.ts" && value.reason.includes("has a drain")));
   });
+  // The birth router has no acquired runtime to drain. Its selected owners do.
+  withTree({ ...owner(full), "src/entry/oma.ts": 'export const choose = () => import("./oma-society.js");' },
+    findings => clean(findings, "host-loss-signals"));
+  for (const file of ["src/entry/oma-society.ts", "src/runtime/personal-session.ts", "src/tui/session-mode.ts"]) {
+    withTree({ ...owner(full), [file]: "const stop = () => {};" }, findings => {
+      assert.ok(findings.some(value => value.rule === "host-loss-signals" && value.file === file && value.reason.includes("has a drain")));
+    });
+    withTree({ ...owner(full), [file]: "for (const signal of HOST_LOSS_SIGNALS) process.on(signal, () => {});" },
+      findings => clean(findings, "host-loss-signals"));
+  }
   // Reject: the list lost a termination signal.
   withTree({ ...owner('"SIGTERM", "SIGINT", "SIGHUP"'), ...entry("stopOnHostLoss(() => {});") }, findings => {
-    assert.ok(findings.some(value => value.rule === "host-loss-signals" && value.file === "src/runtime/broker-lifetime.ts" && value.reason.includes("SIGQUIT")));
+    assert.ok(findings.some(value => value.rule === "host-loss-signals" && value.file === "src/process/host-loss.ts" && value.reason.includes("SIGQUIT")));
   });
   // Near miss: signalling a child, and other process events, are not handling one.
   withTree({ ...owner(full), ...entry('stopOnHostLoss(() => {}); child.kill("SIGTERM"); process.on("uncaughtException", () => {}); process.on("SIGWINCH", () => {});') },
@@ -349,6 +403,7 @@ test("error-words-owner (DR18, D-1): an error's words on the product surface com
   // Reject: each way a file reads a thrown value's words itself.
   for (const [file, text] of [
     ["src/entry/oma.ts", "try { f(); } catch (error) { fail(error instanceof Error ? 'x' : 'y'); }"],
+    ["src/entry/oma-society.ts", "try { f(); } catch (error) { fail(String(error)); }"],
     ["src/tui/app.ts", "const text = failure.message;"],
     ["src/tui/sources/mail.ts", "try { f(); } catch (error) { note(String(error)); }"],
     ["src/tui/session.ts", "const text = result.message;"],

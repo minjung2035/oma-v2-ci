@@ -40,8 +40,8 @@ export class TuiTransport {
     try {
       fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       const stat = fstatSync(fd);
-      if (!stat.isFile()) return { reason: "status view가 정규 파일이 아님" };
-      if (stat.size > this.maxBytes) return { reason: "status view가 너무 큼" };
+      if (!stat.isFile()) return { reason: "Status view is not a regular file" };
+      if (stat.size > this.maxBytes) return { reason: "Status view is too large" };
       const buffer = Buffer.allocUnsafe(stat.size);
       let filled = 0;
       while (filled < stat.size) {
@@ -51,7 +51,7 @@ export class TuiTransport {
       }
       return { text: buffer.subarray(0, filled).toString("utf8") };
     } catch (error) {
-      return { reason: (error as { code?: string }).code === "ENOENT" ? "broker 관측 없음" : "status view를 읽지 못함" };
+      return { reason: (error as { code?: string }).code === "ENOENT" ? "No broker observation" : "Could not read the status view" };
     } finally { if (fd !== undefined) closeSync(fd); }
   }
 
@@ -67,11 +67,11 @@ export class TuiTransport {
     const { observedAtMs, agents } = decoded.view;
     if (checkedAtMs - observedAtMs > STATUS_STALE_MS)
       // The last time is carried so the screen can say how old it is.
-      return Promise.resolve({ kind: "unknown", reason: "broker 관측이 멈춤", observedAtMs });
+      return Promise.resolve({ kind: "unknown", reason: "Broker observation is stale", observedAtMs });
     // A view dated ahead of this clock cannot be aged: after the clock is set
     // back it would pass as current for as long as the jump. It is not current.
     if (observedAtMs - checkedAtMs > STATUS_REFRESH_MS)
-      return Promise.resolve({ kind: "unknown", reason: "broker 관측 시각이 이 시계보다 앞섬(시계 변경)", observedAtMs: checkedAtMs });
+      return Promise.resolve({ kind: "unknown", reason: "Broker observation is ahead of this clock (clock changed)", observedAtMs: checkedAtMs });
     return Promise.resolve({ kind: "observed", statuses: agents, observedAtMs });
   }
 }

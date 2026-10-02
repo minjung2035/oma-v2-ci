@@ -1,6 +1,6 @@
 /** TS-001: host contract owner. Declarations only; wire/persisted v1 unchanged. */
 import type { Actor, Capability } from "./identity.js";
-import type { AgentCreateInput } from "./values.js";
+import type { AgentCreateInput, RiskTier } from "./values.js";
 
 /** MUST [CREATE-002]: Broker-owned result of host policy resolution, never wire input. */
 export interface ResolvedAgentSpec extends Pick<AgentCreateInput, 'name' | 'from' | 'brief'> {
@@ -23,6 +23,13 @@ export interface ResourceLimits {
   checkTimeoutSeconds: number;
 }
 
+export interface TieredPolicy {
+  repositoryFloor: RiskTier;
+  highPeerFloor: number;
+  principalDelegated: boolean;
+  rules: { path: string; tier: RiskTier; statuses: ("A" | "M" | "D" | "T")[] }[];
+}
+
 export interface ProtocolLimits {
   frameBytes: number;
   mailBodyBytes: number;
@@ -38,10 +45,15 @@ export interface ProtocolLimits {
   receiptWaitSeconds: number;
 }
 
+/** The effort levels the engine runs a model with, as it names them. */
+export type EffortLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
 export interface ModelProfile {
   provider: string; model: string; credentialRef: string; codecRevision: string;
   pricingRevision: string; maxInputTokens: number; maxOutputTokens: number;
   inferenceTimeoutSeconds: number;
+  /** DR24: the effort the model runs with; the engine's default when absent. */
+  thinking?: EffortLevel;
   // The engine owns provider selection and pricing (INF-001); these fields are
   // deployment-declared names it resolves, not a price formula OMA evaluates.
 }
@@ -53,7 +65,7 @@ export interface AgentProfile {
 
 export interface HostConfigV1 {
   schemaVersion: 1; society: string;
-  installation: { node: string; libdir: string; rootfs: string; deploymentDigest: string };
+  installation: { node: string; libdir: string; rootfs: string; deploymentDigest: string; packages?: string };
   modelProfiles: Record<string, ModelProfile>;
   agentProfiles: Record<string, AgentProfile>;
   principalProfile: string;
@@ -66,6 +78,7 @@ export interface HostConfigV1 {
   };
   integration: {
     policyRevision: string; protectedPaths: string[];
+    tiered?: TieredPolicy;
     checks: { id: string; argv: string[]; env: Record<string,string>; resources: ResourceLimits }[];
   };
   limits: ProtocolLimits;

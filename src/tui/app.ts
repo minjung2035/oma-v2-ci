@@ -14,7 +14,7 @@ import {
   mailIdentity, type DashboardData, type Effect, type ExtensionRow, type MailBody, type MailboxRead, type MailRow, type Notice, type PanelData, type State,
 } from "./model.js";
 import { mailScrollLimit, render, type ViewInput } from "./view/index.js";
-import type { ConfigField } from "./model.js";
+import type { ConfigField, EngineCommand } from "./model.js";
 import { Transcript } from "./transcript.js";
 import { returnedPrompt, type PromptOutcome } from "./prompt.js";
 import type { Terminal } from "./screen.js";
@@ -33,6 +33,8 @@ export interface AppPorts {
    * reported acceptance later could only report it into a transcript that had
    * already shown the prompt as sent. */
   readonly submitPrompt: (text: string) => PromptOutcome;
+  /** Opens one of the engine's own selectors on its screen. */
+  readonly engineCommand?: (command: EngineCommand) => void;
   readonly quit: () => void;
 }
 
@@ -42,7 +44,7 @@ export type SetFieldOutcome =
 
 const EMPTY: PanelData = Object.freeze({
   dashboard: Object.freeze({
-    status: Object.freeze({ kind: "unknown" as const, observedAtMs: 0, reason: "아직 관측하지 않음" }),
+    status: Object.freeze({ kind: "unknown" as const, observedAtMs: 0, reason: "Not yet observed" }),
     configuredWorkers: 0, workerLimit: 0, unread: null, principalModel: Object.freeze({ configured: "unknown", session: null }), rootfs: null,
   }),
   config: Object.freeze([]), extensions: Object.freeze([]), mail: Object.freeze([]), mailUnreadable: null, mailOmitted: 0,
@@ -57,6 +59,7 @@ export class TuiApp {
   private busy = false;
   private readonly keys = new KeyDecoder();
   private pendingTimer: ReturnType<typeof setTimeout> | null = null;
+  private closed = false;
 
   constructor(private readonly ports: AppPorts, private readonly terminal: Terminal, private readonly frameBytes: number) {}
 
@@ -64,6 +67,7 @@ export class TuiApp {
    * the UI never keeps a value that a port no longer reports.
    */
   refresh(): void {
+    if (this.closed) return;
     const mailbox = this.ports.mail();
     this.data = Object.freeze({
       dashboard: this.ports.dashboard(),
@@ -105,8 +109,8 @@ export class TuiApp {
   /** A prompt the session took but could not deliver, named and given back.
    *
    * A prompt that waited for a running turn was echoed as sent when it was
-   * taken, so a later failure has to say which one it was: `⚠ 전송하지
-   * 못했습니다` under three echoed prompts names none of them. The text is
+   * taken, so a later failure has to say which one it was: `⚠ Could not send`
+   * under three echoed prompts names none of them. The text is
    * written into the conversation as not sent -- the transcript owns its own
    * bounds, and a long prompt is stored as several lines rather than cut -- and
    * is put back into the draft when the draft is empty, so the usual case
@@ -114,7 +118,7 @@ export class TuiApp {
    * is not overwritten; the conversation still holds the text to copy from.
    */
   returnPrompt(text: string, reason: string): void {
-    this.append(`✗ 보내지 못한 입력: ${text.replace(/\n/g, "\n  ")}`);
+    this.append(`✗ Unsent input: ${text.replace(/\n/g, "\n  ")}`);
     const draft = this.state.prompt;
     const empty = draft.text.length === 0 && draft.overflow === null;
     if (empty) this.state = { ...this.state, prompt: returnedPrompt(text) };
@@ -122,7 +126,17 @@ export class TuiApp {
     this.draw();
   }
 
+  /** P0-4: the decoder and its timer end with this app, before terminal return. */
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.pendingTimer !== null) clearTimeout(this.pendingTimer);
+    this.pendingTimer = null;
+    this.keys.finish();
+  }
+
   feed(chunk: Uint8Array): void {
+    if (this.closed) return;
     // One decoder lives as long as the app: terminal reads are neither UTF-8,
     // escape-sequence nor paste boundaries. Whatever the decoder has started
     // and not finished gets exactly one deadline -- the decoder says how long,
@@ -132,14 +146,17 @@ export class TuiApp {
     if (this.pendingTimer !== null) clearTimeout(this.pendingTimer);
     this.pendingTimer = null;
     for (const key of this.keys.push(chunk)) this.apply(key);
+    if (this.closed) return;
     const delay = this.keys.pendingDelayMs;
     if (delay !== null) {
-      this.pendingTimer = setTimeout(() => {
+      const timer = setTimeout(() => {
+        if (this.closed || this.pendingTimer !== timer) return;
         this.pendingTimer = null;
         for (const key of this.keys.flushPending()) this.apply(key);
         this.draw();
       }, delay);
-      this.pendingTimer.unref();
+      this.pendingTimer = timer;
+      timer.unref();
     }
     this.draw();
   }
@@ -150,6 +167,7 @@ export class TuiApp {
   }
 
   private apply(key: Key): void {
+    if (this.closed) return;
     // Ctrl-L, the terminal convention: the whole screen again, nothing else.
     if (key.kind === "redraw") { this.terminal.repaint(); return; }
     const result = step(this.state, key, this.data, this.frameBytes);
@@ -172,10 +190,14 @@ export class TuiApp {
           this.notice = this.saved(effect.field, String(effect.value), outcome);
           return;
         }
+        case "engine-command":
+          this.ports.engineCommand?.(effect.command);
+          return;
         case "set-extension":
           this.ports.setExtension(effect.id, effect.role, effect.enabled);
           this.refresh();
-          this.notice = { kind: "extension", id: effect.id, role: effect.role, enabled: effect.enabled };
+          const source = this.ports.extensions().find(row => row.id === effect.id)?.source;
+          this.notice = { kind: "extension", id: effect.id, role: effect.role, enabled: effect.enabled, ...(source === undefined ? {} : { source }) };
           return;
         case "submit-prompt": {
           // Taking the prompt and showing it are one step. The session answers
@@ -200,6 +222,7 @@ export class TuiApp {
           else if (this.notice?.kind === "prompt-limit") this.notice = null;
           return;
         case "quit":
+          this.close();
           this.ports.quit();
           return;
         default:
@@ -232,6 +255,7 @@ export class TuiApp {
   }
 
   draw(): void {
+    if (this.closed) return;
     const detail = this.state.detail;
     // P0V-41: the message open is the one the Human opened, found by identity
     // in this refresh's list, not whatever now sits at its old position.

@@ -220,7 +220,7 @@ test("UNIT-002: systemd executes literal paths containing spaces and specifiers"
   } finally { cleanup(); }
 });
 
-test("T36: start-limit is exposed, never auto-reset; explicit start repairs", async () => {
+test("T36: explicit start-limit evidence is exposed; ambiguous failure stays ambiguous without reset", async () => {
   const { env, cleanup } = envOf();
   try {
     seedPrincipalAndA(env.store);
@@ -245,15 +245,18 @@ WantedBy=default.target
     while (waited < 12000) {
       await new Promise(resolve => setTimeout(resolve, 200));
       waited += 200;
-      if (env.units.startLimitStatus("a") !== null) break;
+      if (env.units.observe("a").activeState === "failed") break;
     }
-    let sawStartLimit = false;
-    for (let i = 0; i < 10; i++) if (env.units.startLimitStatus("a") !== null) sawStartLimit = true;
-    assert.equal(sawStartLimit, true);
-    assert.equal(env.units.observe("a").activeState, "failed");
-    // WP25: a start the limit refuses is named as such, never auto-reset.
-    assert.throws(() => env.units.start("a", false), (error: unknown) => error instanceof StoreError && error.code === "START_LIMIT");
-    assert.equal(env.units.startLimitStatus("a"), "start_limit", "a refused start reset the limit");
+    const failed = env.units.observe("a");
+    assert.equal(failed.activeState, "failed");
+    const explicit = failed.result === "start-limit-hit";
+    assert.ok(explicit || failed.result === "exit-code");
+    for (let i = 0; i < 10; i++) assert.equal(env.units.startLimitStatus("a"), explicit ? "start_limit" : null);
+    // DR27/P0-5 supersedes WP25's cumulative-counter heuristic. Some managers
+    // retain exit-code: expose that failure, not a guessed cause or a repair.
+    assert.throws(() => env.units.start("a", false), (error: unknown) => error instanceof StoreError &&
+      error.code === (env.units.startLimitStatus("a") === "start_limit" ? "START_LIMIT" : "INTERNAL_ERROR"));
+    assert.equal(env.units.observe("a").activeState, "failed", "a refused start reset the failed state");
   } finally { cleanup(); }
 });
 
@@ -632,15 +635,21 @@ setInterval(() => {}, 1000);
     const failedReplies = JSON.parse(readFileSync(failureFile, "utf8"));
     assert.equal(failedReplies.first.error.code, "INTERNAL_ERROR");
     assert.equal(failedReplies.retry.error.code, "STALE_RUN");
-    assert.equal(env.store.getAgent("dynamic")!.incarnation, 5);
-    const failedFd = Reflect.get(broker, "runLeases").get("dynamic").cgroupFd;
+    // P0V-113: a failed endpoint takes no incarnation, but its invocation
+    // remains fenced until the pinned cgroup is proven dead.
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 4);
+    const failedRun = Reflect.get(broker, "runLeases").get("dynamic");
+    assert.equal(failedRun.phase, "revoked-awaiting-death");
+    assert.equal(failedRun.lease, null);
+    const failedFd = failedRun.cgroupFd;
     assert.match(readFileSync(`/proc/self/fd/${failedFd}/cgroup.events`, "utf8"), /^populated 1$/m);
-    env.units.stop("dynamic", 5);
+    env.units.stop("dynamic", 4);
+    assert.equal(env.units.confirmDead("dynamic", 4), true);
     rmSync(failedDir);
     writeFileSync(wrapper, originalWrapper);
     env.units.start("dynamic", false);
-    for (let i = 0; i < 500 && env.store.getAgent("dynamic")!.incarnation === 5; i++) await new Promise(resolve => setTimeout(resolve, 20));
-    assert.equal(env.store.getAgent("dynamic")!.incarnation, 6);
+    for (let i = 0; i < 500 && env.store.getAgent("dynamic")!.incarnation === 4; i++) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(env.store.getAgent("dynamic")!.incarnation, 5);
     assert.equal(env.store.preparedBatches("dynamic")[0]!.id, prepared.id);
   } finally {
     await broker?.drainAndClose();

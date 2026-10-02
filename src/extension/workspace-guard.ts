@@ -28,11 +28,9 @@ function inside(root: string, path: string): boolean {
 /** R6-01: every component that exists is looked at itself (lstat), from the
  * root down, and a link anywhere -- one that points nowhere included -- is
  * refused; what does not exist yet is a name to be made. This is the early
- * refusal every path tool gets. The effect of read/write/edit/ls, and grep's
- * own reads, are also made through the containment primitives
- * (contained-tools.ts); grep and find walk with the engine's ripgrep and fd
- * from a start this check has seen, and the pinned engine runs neither with
- * --follow, so a link met in the walk is not followed (P0V-122, G10-02). */
+ * refusal every path tool gets. File effects use descriptor-relative
+ * containment too. grep/find walk a private copy made through those same
+ * descriptors, never a workspace pathname this early check once saw. */
 function allowedWorkspacePath(root: string, input: unknown): boolean {
   if (typeof input !== "string" || input.includes("\0")) return false;
   const target = resolve(root, input);
@@ -59,6 +57,9 @@ export function workspaceUsage(root: string, stopAfter: number): number {
     // directory below.
     try { stat = lstatSync(path); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; return stopAfter + 1; }
+    // Every name costs metadata, even empty files, directories and aliases.
+    total += 1;
+    if (total > stopAfter) return total;
     if (stat.isFile()) {
       const identity = `${stat.dev}:${stat.ino}`;
       if (files.has(identity)) continue;
@@ -81,8 +82,13 @@ export const TOOL_SCOPE_ENV = "OMA_TOOL_SCOPE";
 export const TOOL_SCOPE_SANDBOX = "sandbox";
 
 export function guardWorkspaceTools(pi: ExtensionAPI, workspace: string,
-  sandboxed = process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX): void {
+  sandboxed = process.env[TOOL_SCOPE_ENV] === TOOL_SCOPE_SANDBOX, readOnly = false,
+  permitted?: (name: string) => boolean): void {
   pi.on("tool_call", (event) => {
+    if (permitted && !permitted(event.toolName))
+      return { block: true, reason: "this tool is outside the Principal's read, mail, review and safety role" };
+    if (readOnly && WRITE_TOOLS.includes(event.toolName))
+      return { block: true, reason: "the Principal reviews code but does not write or edit files; publish GOAL through explicit mail intent" };
     if (event.toolName === "bash" || event.toolName === "powershell")
       return sandboxed ? undefined : {
         block: true,

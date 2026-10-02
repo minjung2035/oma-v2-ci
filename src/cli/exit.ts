@@ -23,6 +23,12 @@ export function fail(message: string, code: CliExitCode): never {
   process.exit(code);
 }
 
+/** A read-only structured view ends through the same output owner as receipts. */
+export function finishRead(value: unknown): never {
+  process.stdout.write(JSON.stringify(value) + "\n");
+  process.exit(0);
+}
+
 export function usage(): never {
   console.error([
     "usage:",
@@ -34,11 +40,19 @@ export function usage(): never {
     "  oma agent create <name> --from <revision> --file <brief> [--request K]",
     "  oma agent start <name> [--request K] | oma agent stop <name> [--request K]",
     "  oma agent continue --note <text> [--request K]",
-    "  oma agent wait",
+    "  oma agent wait [--observe true]",
+    "  Principal: oma society open|close [--request K]",
     "  oma submit <revision> [--to <address> ...] [--subject S] [--file summary] [--path repo-path ...] [--request K]",
-    "  oma integrate <published-full-oid> --expect <full-oid> [--request K]",
+    "  oma integrate <published-full-oid> --expect <full-oid> [--tier LOW|MEDIUM|HIGH] [--request K]",
+    "  oma approve|object <candidate> --base B --target main --policy-revision R --file evidence [--request K]",
+    "  Principal: approve <candidate> ... --decision ACCEPT|REQUEST_REVISION|REJECT",
+    "  oma revoke <own-attestation-op> --file evidence [--request K]",
+    "  oma challenge <integration-op> --candidate C --base B --target main --policy-revision R --file evidence [--request K]",
+    "  Principal: challenge <challenge-op> --valid true|false [--floor MEDIUM|HIGH --scope text] --file evidence",
+    "  Principal: challenge <finding-op> --applies true|false --candidate C --base B --target main --policy-revision R --file evidence",
     "  oma context publish <dir> --expect <oid-or-none> [--request K]",
-    "  oma status [agent]",
+    "  oma code show|diff|log|ls-tree|grep [--revision main|oid] [--base main|oid] [--path P] [--pattern text]",
+    "  oma status [agent] [--after agent] (continue with the returned next cursor)",
     "  oma logs <agent> --since <duration>",
     "  each option once (--to/--path may repeat); an option's value is the next argument as written;",
     "  arguments after -- are never options",
@@ -53,7 +67,7 @@ export function finishFailure(reply: { error?: unknown } | undefined, prefix = "
   const decoded = decodeFailure(reply?.error);
   if (!decoded.ok) fail(`${prefix}invalid broker failure: ${decoded.reason}${key === undefined ? "" : `; --request ${key}`}`, 3);
   const again = key !== undefined && decoded.value.retry === "same-key"
-    ? ` (재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요)` : "";
+    ? ` (Query again: use --request ${key} with the same command; do not rerun with a new key)` : "";
   // DR3 (AV28): the code, its words and the facts its code may carry.
   fail(`${prefix}${failureText(decoded.value)}${again}`, errorExit(decoded.value.code, decoded.value.retry));
 }
@@ -79,7 +93,7 @@ export function finishReceipt(receipt: Receipt, key: string): never {
  * earlier one is unknown (3), otherwise the receipt's own exit stands. */
 export function finishUnrecordedReceipt(receipt: Receipt, key: string, reason: string, contradicted: boolean): never {
   for (const line of receiptLines(inCallerView(receipt), key)) console.log(line);
-  console.error(`oma: ${reason} (재조회: 동일 command에 --request ${key}; 새 key로 재실행하지 마세요)`);
+  console.error(`oma: ${reason} (Query again: use --request ${key} with the same command; do not rerun with a new key)`);
   process.exit(contradicted ? 3 : receiptExit(receipt));
 }
 

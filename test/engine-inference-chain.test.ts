@@ -94,9 +94,13 @@ test("T116 the credential is resolved by the engine from OMA's own agent directo
         (error: unknown) => code(error) === "UNSUPPORTED_PROFILE");
       // Once the engine's own settings name a default, that is what is used.
       writeFileSync(join(agentDir, "settings.json"),
-        JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-fable-5" }));
+        JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-fable-5", defaultThinkingLevel: "high" }));
       const current = await resolveEngineAuth(agentDir, "pi", "current");
       assert.equal(`${current.provider}/${current.model}`, "anthropic/claude-fable-5");
+      // DR24: the engine's default effort comes with its default model; a
+      // named model's effort is its profile's, not the engine's default.
+      assert.equal(current.thinking, "high");
+      assert.equal(auth.thinking, undefined);
     });
     // No credential anywhere: refused with a reason, not a request without one.
     await withEnv({ ANTHROPIC_API_KEY: undefined }, async () => {

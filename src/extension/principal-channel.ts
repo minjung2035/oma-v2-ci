@@ -21,6 +21,8 @@ export const PRINCIPAL_CHANNEL_FD = 3;
 /** Mirrors the credential message of the host channel grammar. */
 const CREDENTIAL_LINE = /^credential ([0-9a-f]{64}) ([0-9a-f]{32})$/;
 const LINE_BYTES = 128;
+/** Where this process keeps its one channel, across module instances. */
+const PROCESS_CHANNEL = Symbol.for("oma.principal-channel");
 
 export interface PrincipalGrant {
   readonly credential: string;
@@ -39,9 +41,17 @@ export class PrincipalChannel {
 
   /** Listens on the descriptor the product attached, or holds nothing when
    * this engine was not started with one -- a Resident's never is. A
-   * descriptor that is not a socket is not trusted as the channel. */
+   * descriptor that is not a socket is not trusted as the channel.
+   *
+   * The descriptor is the process's, not one extension load's: an interactive
+   * engine loads its extensions again for every new, resumed or forked
+   * session, and a descriptor can be wrapped only once. Every load in this
+   * process shares the one channel. */
   static open(env: NodeJS.ProcessEnv = process.env): PrincipalChannel {
+    const shared = globalThis as { [PROCESS_CHANNEL]?: PrincipalChannel };
+    if (env === process.env && shared[PROCESS_CHANNEL]) return shared[PROCESS_CHANNEL];
     const channel = new PrincipalChannel();
+    if (env === process.env) shared[PROCESS_CHANNEL] = channel;
     if (env[PRINCIPAL_CHANNEL_ENV] !== String(PRINCIPAL_CHANNEL_FD)) return channel;
     try { if (!fstatSync(PRINCIPAL_CHANNEL_FD).isSocket()) return channel; }
     catch { return channel; }

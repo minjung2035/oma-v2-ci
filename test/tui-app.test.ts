@@ -112,8 +112,8 @@ test("TUI-007: confirming a choice writes through the port and reports when it a
   for (const chunk of [CTRL_X, RIGHT, ENTER, UP, ENTER]) h.app.feed(chunk);
   assert.deepEqual(h.writes, [{ field: "worker-model", value: "cheap" }]);
   const frame = h.last();
-  assert.match(frame, /저장됨/);
-  assert.match(frame, /다음 worker 활성화부터/);
+  assert.match(frame, /Saved/);
+  assert.match(frame, /Next worker activation/);
 });
 
 test("TUI-007: a rejected write says nothing was saved and keeps the previous value visible", () => {
@@ -122,26 +122,26 @@ test("TUI-007: a rejected write says nothing was saved and keeps the previous va
   });
   for (const chunk of [CTRL_X, RIGHT, ENTER, UP, ENTER]) h.app.feed(chunk);
   const frame = h.last();
-  assert.match(frame, /저장하지 못했습니다/);
-  assert.doesNotMatch(frame, /· 저장됨/);
+  assert.match(frame, /Could not save/);
+  assert.doesNotMatch(frame, /· Saved/);
 });
 
 test("DR13 / P0-5, CONFIG-CONTRACT: a committed edit whose flush failed says it was saved, not that nothing was saved", () => {
   const unconfirmed = () => { throw new StoreError("INTERNAL_ERROR", "configuration was published but its durability is unconfirmed", { details: { publication: "unconfirmed" } }); };
   const h = harness({ setField: unconfirmed });
   for (const chunk of [CTRL_X, RIGHT, ENTER, UP, ENTER]) h.app.feed(chunk);
-  assert.match(h.last(), /저장됨 · 디스크에 남았는지는 아직 확인되지 않았습니다/);
-  assert.doesNotMatch(h.last(), /저장하지 못했습니다/);
+  assert.match(h.last(), /Saved; durability is unconfirmed/);
+  assert.doesNotMatch(h.last(), /Could not save/);
   const toggled = harness({ setExtension: unconfirmed });
   for (const chunk of [CTRL_X, RIGHT, DOWN, ENTER, DOWN, ENTER]) toggled.app.feed(chunk);
-  assert.match(toggled.last(), /저장됨 · 디스크에 남았는지는/);
+  assert.match(toggled.last(), /Saved; durability/);
 });
 
 test("TUI-010: toggling an extension routes the role and the new state to the port", () => {
   const h = harness();
   for (const chunk of [CTRL_X, RIGHT, DOWN, ENTER, DOWN, ENTER]) h.app.feed(chunk);
   assert.deepEqual(h.toggles, [{ id: "extensions/review.js", role: "principal", enabled: true }]);
-  assert.match(h.last(), /Principal 사용 · 저장됨/);
+  assert.match(h.last(), /Principal enabled · Saved/);
 });
 
 test("arch 23.3: a submitted prompt reaches the session once and is echoed in the transcript", () => {
@@ -182,9 +182,9 @@ test("TUI-011: the Mail detail shows the message body and Esc returns to the lis
 test("TUI-012: the busy indicator reflects session state without inventing a result", () => {
   const h = harness();
   h.app.setBusy(true);
-  assert.match(h.last(), /응답 생성 중/);
+  assert.match(h.last(), /Generating response/);
   h.app.setBusy(false);
-  assert.doesNotMatch(h.last(), /응답 생성 중/);
+  assert.doesNotMatch(h.last(), /Generating response/);
 });
 
 test("the transcript is bounded so a long session cannot grow without limit", () => {
@@ -221,14 +221,14 @@ test("T120 / TUI-023: an oversized paste is rejected as a whole instead of submi
     "the retained draft grew past its declared UTF-8 byte bound");
   assert.equal(h.app.snapshot.prompt.overflow, "typed",
     "bytes without the terminal's brackets arrive as typing, and say so");
-  assert.match(h.last(), /입력 한도 초과/);
+  assert.match(h.last(), /Input limit exceeded/);
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, [], "a bounded prefix must not impersonate the complete paste");
-  assert.match(h.last(), /전송하지 않습니다/);
+  assert.match(h.last(), /not sent/);
 
   h.app.key({ kind: "backspace" });
   assert.equal(h.app.snapshot.prompt.overflow, null);
-  assert.doesNotMatch(h.last(), /입력 한도 초과/);
+  assert.doesNotMatch(h.last(), /Input limit exceeded/);
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, ["가".repeat(Math.floor(cap / 3) - 1)]);
 });
@@ -363,8 +363,8 @@ test("T120 / TUI-023: a paste over the decoder's bound is refused whole, never a
   h.app.feed(paste(big));
   assert.equal(h.app.snapshot.prompt.text, "");
   assert.equal(h.app.snapshot.prompt.overflow, "paste");
-  assert.match(h.last(), /붙여넣기 한도 초과/);
-  assert.match(h.last(), /아무것도 입력되지 않았습니다/);
+  assert.match(h.last(), /Paste limit exceeded/);
+  assert.match(h.last(), /nothing was inserted/);
   assert.doesNotMatch(h.last(), /Backspace/,
     "a paste that added nothing must not be answered by deleting what the Human typed");
   h.app.feed(ENTER);
@@ -385,7 +385,7 @@ test("TUI-002: a paste the terminal never ended is rejected whole, and the keybo
   await new Promise(resolve => setTimeout(resolve, TERMINAL_BOUNDS.pasteIdleMs.value + 50));
   assert.equal(h.app.snapshot.prompt.text, "", "the fragment reached the draft after the deadline");
   assert.equal(h.app.snapshot.prompt.overflow, "paste");
-  assert.match(h.last(), /붙여넣기 한도 초과/);
+  assert.match(h.last(), /Paste limit exceeded/);
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, [], "a fragment must not be submittable as the paste");
 
@@ -427,7 +427,7 @@ test("arch 23.3: a prompt the session refused is not echoed as sent and comes ba
   assert.deepEqual(h.prompts, ["안녕"]);
   assert.equal(h.app.snapshot.prompt.text, "안녕", "a refusal must not cost the Human the text");
   assert.deepEqual(h.app.lines, [], "a refused prompt must not read as one the Principal has");
-  assert.match(h.last(), /전송하지 못했습니다/);
+  assert.match(h.last(), /Could not send/);
   assert.match(h.last(), /대기열이 가득 찼습니다/);
 
   // Contrast: the same keystrokes, accepted, are echoed exactly once.
@@ -435,7 +435,7 @@ test("arch 23.3: a prompt the session refused is not echoed as sent and comes ba
   h.app.feed(ENTER);
   assert.deepEqual(h.prompts, ["안녕", "안녕"]);
   assert.deepEqual(h.app.lines, ["> 안녕"]);
-  assert.doesNotMatch(h.last(), /전송하지 못했습니다/);
+  assert.doesNotMatch(h.last(), /Could not send/);
 });
 
 test("TUI-013: produced control bytes are drawn as text, never as terminal instructions", () => {
@@ -484,7 +484,7 @@ test("T120 / TUI-023: recovery from a refused paste never spends a character the
   h.app.feed(paste("a".repeat(TERMINAL_BOUNDS.pasteBytes.value + 1)));
   assert.equal(h.app.snapshot.prompt.text, "hello", "a refused paste must not touch the draft");
   assert.equal(h.app.snapshot.prompt.overflow, "paste");
-  assert.match(h.last(), /붙여넣기 한도 초과/);
+  assert.match(h.last(), /Paste limit exceeded/);
   assert.doesNotMatch(h.last(), /Backspace/, "the way out named a key that deletes the Human's text");
 
   h.app.key({ kind: "backspace" });
@@ -616,23 +616,23 @@ test("T114 / TUI-023: a prompt that was never delivered is named, and given back
   assert.deepEqual(h.prompts, ["첫 번째"]);
 
   h.app.returnPrompt("첫 번째", "socket closed");
-  assert.ok(h.app.lines.some(line => line.includes("보내지 못한 입력: 첫 번째")),
+  assert.ok(h.app.lines.some(line => line.includes("Unsent input: 첫 번째")),
     "the transcript does not say which prompt was lost, or what it said");
   assert.equal(h.app.snapshot.prompt.text, "첫 번째",
     "an empty draft is where a failed prompt belongs, ready to send again");
-  assert.match(h.last(), /전송하지 못했습니다/);
+  assert.match(h.last(), /Could not send/);
   assert.match(h.last(), /socket closed/);
   // "Do I have to retype it?" is the part the Human acts on, and the notice
   // line is cut to the screen's width, so matching it here is also the guard
   // against the wording growing past that bound.
-  assert.match(h.last(), /입력은 그대로 있습니다/);
+  assert.match(h.last(), /input remains in the draft/);
 
   // The cause is the one part of that line the engine controls the length of.
   // A failure reported with a wall of text must not cost the Human the answer
   // to that question -- the cause is what gets cut, not the recovery.
   const long = harness();
   long.app.returnPrompt("짧은 입력", "x".repeat(4000));
-  assert.match(long.last(), /입력은 그대로 있습니다/,
+  assert.match(long.last(), /input remains in the draft/,
     "a long failure reason pushed the recovery off the screen");
   assert.equal(long.app.snapshot.prompt.text, "짧은 입력");
   assert.ok(long.terminal.frames[long.terminal.frames.length - 1]!.every(line => [...line].length <= 100),
@@ -647,11 +647,51 @@ test("T114 / TUI-023: a failed prompt never overwrites what the Human is typing"
     "returning a failed prompt destroyed the draft the Human was in the middle of");
   assert.ok(h.app.lines.some(line => line.includes("보내지 못한 것")),
     "the text that was not sent is nowhere the Human can copy it from");
-  assert.match(h.last(), /대화에 남겨 두었습니다/);
+  assert.match(h.last(), /input is kept in the conversation/);
 
   // The kept text is recoverable in full, newlines and all.
   const multi = harness();
   multi.app.feed(Buffer.from("x"));
   multi.app.returnPrompt("one\ntwo", "socket closed");
-  assert.deepEqual(multi.app.lines, ["✗ 보내지 못한 입력: one", "  two"]);
+  assert.deepEqual(multi.app.lines, ["✗ Unsent input: one", "  two"]);
+});
+
+function manualInputTimers(t: import("node:test").TestContext) {
+  const live = new Set<{ run(): void; unref(): void }>();
+  t.mock.method(globalThis, "setTimeout", (run: () => void) => {
+    const timer = { run, unref() {} }; live.add(timer); return timer;
+  });
+  t.mock.method(globalThis, "clearTimeout", (timer: { run(): void; unref(): void }) => { live.delete(timer); });
+  return live;
+}
+function closeApp(app: TuiApp): void {
+  const owner = app as TuiApp & { close?: () => void };
+  assert.equal(typeof owner.close, "function", "the app must return its input owner");
+  owner.close!();
+}
+test("DR27/P0-4: app close returns partial input and a late callback cannot redraw", t => {
+  const timers = manualInputTimers(t), h = harness();
+  h.app.feed(Buffer.from(ESC)); const old = [...timers][0]!;
+  assert.equal(timers.size, 1); closeApp(h.app); closeApp(h.app);
+  assert.equal(timers.size, 0);
+  assert.equal((h.app as unknown as { keys: KeyDecoder }).keys.pendingDelayMs, null);
+  const frames = h.terminal.frames.length, state = h.app.snapshot;
+  old.run(); h.app.feed(Buffer.from("late\n")); h.app.key({ kind: "redraw" }); h.app.draw(); h.app.refresh();
+  assert.equal(h.terminal.frames.length, frames); assert.equal(h.terminal.repaints, 0);
+  assert.equal(h.app.snapshot, state); assert.equal(h.prompts.length, 0); assert.equal(timers.size, 0);
+});
+test("DR27/P0-4: a replaced partial-input callback cannot consume the current token", t => {
+  const timers = manualInputTimers(t), h = harness();
+  h.app.feed(Buffer.from(ESC)); const old = [...timers][0]!;
+  h.app.feed(Buffer.from("[")); const current = [...timers][0]!;
+  const frames = h.terminal.frames.length;
+  old.run(); assert.equal(h.terminal.frames.length, frames, "an old callback acted on the new decoder token");
+  assert.ok(timers.has(current)); h.app.feed(Buffer.from("C")); assert.equal(timers.size, 0);
+  assert.equal(h.app.snapshot.prompt.text, ""); closeApp(h.app);
+});
+test("DR27/P0-4: quit ends input before later keys in the same terminal read", t => {
+  const timers = manualInputTimers(t), h = harness();
+  h.app.feed(Buffer.from("\x03late\n\x1b"));
+  assert.equal(h.quits.length, 1); assert.equal(h.prompts.length, 0);
+  assert.equal(timers.size, 0); assert.equal(h.app.snapshot.prompt.text, "");
 });

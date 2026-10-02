@@ -1,4 +1,7 @@
 // MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
+import { ownedMessage } from "./durable.js";
+import type { AttestationInput } from "../implementation/contracts/attestation.js";
+import { canonicalJson } from "./domain/canonical-json.js";
 import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, RequestKey, AuthContext, PreparedBatch, BoundaryEvidence, Receipt } from "../implementation/contracts.js";
@@ -17,7 +20,7 @@ import { buildFrozenMessage } from "./mail/serialize.js";
 import { defaultLogicalReplyTo, messagePlanFrom } from "./mail/facts.js";
 import { expandAddresses, logicalReplyAddress } from "./mail/routing.js";
 import type { ParsedEmlHeaders } from "./mail/headers.js";
-import { MailMaterializer, frozenMessageDisposition, operationMessage, type PublicationEvidence } from "./mail/materializer.js";
+import { MailMaterializer, frozenMessageDisposition, type PublicationEvidence } from "./mail/materializer.js";
 import { BatchCoordinator, type SettlementOutcome, type SettlementQuiescence } from "./mail/batches.js";
 import { reconcileOrdinaryMail, type RecoveryCounts } from "./mail/reconcile.js";
 import type { BatchViewLimits } from "./protocol/batch-view.js";
@@ -51,6 +54,16 @@ export class MailModule {
   inboxNewPath(actor: Actor, id: MessageId): string { return mailInboxPathAt(this.paths.stateRoot, actor, id, "new"); }
   inboxCurPath(actor: Actor, id: MessageId): string { return mailInboxPathAt(this.paths.stateRoot, actor, id, "cur"); }
   async send(auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }): Promise<Receipt> {
+    return this.sendOwned(auth, key, input, requestContext);
+  }
+  recordAttestation(auth: AuthContext, key: RequestKey, fact: AttestationInput, observeAuthority: () => void,
+    accept: () => void): Promise<Receipt> {
+    return this.sendOwned(auth, key, { to: ["commons"], kind: "result", subject: `Attestation: ${fact.kind}`,
+      body: canonicalJson(fact) }, { kind: "attest.record", params: fact, fact, observeAuthority, accept });
+  }
+  private async sendOwned(auth: AuthContext, key: RequestKey, input: MailInput,
+    requestContext?: { kind: "mail.send" | "agent.continue"; params: Json } |
+      { kind: "attest.record"; params: AttestationInput; fact: AttestationInput; observeAuthority: () => void; accept: () => void }): Promise<Receipt> {
     const operationKind = requestContext?.kind ?? "mail.send";
     const requestParams = requestContext?.params ?? input as unknown as Json;
     const society = this.paths.society;
@@ -91,13 +104,16 @@ export class MailModule {
       const artifact = this.freezeObject(messageId, eml);
       scope.register({ operationId: opId, resource: artifact.path, owner: artifact,
         observe: () => frozenMessageDisposition(this.store, opId, { id: messageId, sha256: eml.sha256 }) });
+      if (requestContext?.kind === "attest.record") requestContext.observeAuthority();
       txClaim = this.store.transaction(tx => {
         assertCurrentActor(this.store, auth, "mail.send");
         const current = this.store.claimKey(auth.actor, key, newHash);
         if (current === "retry") return "retry" as const;
         if (current === "reused") throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
         route.recipients = expandAddresses(this.store, logicalTo, society).recipients;
-        const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients) };
+        if (requestContext?.kind === "attest.record") requestContext.accept();
+        const plan = { kind: operationKind, message: messagePlanFrom(eml, route.recipients),
+          ...(requestContext?.kind === "attest.record" ? { fact: requestContext.fact } : {}) };
         const accepted = tx.acceptOperation({ id: opId, actor: auth.actor, requestKey: key, requestHash: newHash,
           kind: operationKind, payloadJson: JSON.stringify(requestParams), planJson: JSON.stringify(plan) });
         if (accepted === "inserted") tx.insertDeliveries(route.recipients.map(recipient => ({ messageId, recipient, operationId: opId })));
@@ -124,17 +140,22 @@ export class MailModule {
     const parsed = parseMessageId(id);
     const operation = parsed && this.store.getOperationById(parsed.operationId);
     if (!operation) throw new StoreError("INVALID_REQUEST", "reply target is not accepted");
-    switch (operation.kind) {
-      case "mail.send": case "agent.continue": case "git.submit": case "context.publish": break;
-      case "agent.create":
-        if (operation.plan.initialMessage !== null) break;
-        throw new StoreError("INVALID_REQUEST", "reply target owns no separate message");
-      default: throw new StoreError("INVALID_REQUEST", "reply target owns no message");
-    }
-    const message = operationMessage(operation);
+    const message = ownedMessage(operation.plan);
+    if (message === null) throw new StoreError("INVALID_REQUEST", "reply target owns no message");
     if (message.id !== id) throw new StoreError("INVALID_REQUEST", "reply target message is unknown");
     return this.materializer.headers(message);
   }
+  async freezeIntegration(auth: AuthContext, operationId: string, body: string): Promise<{ message: MessagePlan; artifact: PreacceptArtifact }> {
+    const messageId = generateMessageId(operationId, 0);
+    const eml = await buildFrozenMessage({ id: messageId, sender: auth.actor, society: this.paths.society,
+      to: ["commons"], kind: "result", contextRevision: null,
+      replyHeaders: { replyTo: ["commons"], inReplyTo: null, references: [] },
+    }, { subject: "Canonical integration", body });
+    const artifact = this.freezeObject(messageId, eml);
+    // Acceptance refreshes recipients synchronously after all preparation.
+    return { message: messagePlanFrom(eml, []), artifact };
+  }
+  integrationRecipients(): string[] { return expandAddresses(this.store, ["commons"], this.paths.society).recipients; }
   async freezeCreateInitial(auth: AuthContext, operationId: string, recipient: Actor, brief: string): Promise<{ message: MessagePlan; artifact: PreacceptArtifact }> {
     const messageId = generateMessageId(operationId, 0);
     const eml = await buildFrozenMessage({ id: messageId, sender: auth.actor, society: this.paths.society,

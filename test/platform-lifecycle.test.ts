@@ -63,7 +63,7 @@ test("MAC-301/MAC-320: a start ends ready with the guest's clock set; a stop dra
   assert.deepEqual(driver.calls.filter(call => call !== "time.set:true"), ["maintenance.begin", "society.list", "society.close", "power.off"],
     "maintenance first, the societies next, the power last");
   assert.deepEqual(states.slice(3), ["draining", "stopped"]);
-  assert.deepEqual(records, []);
+  assert.deepEqual(records, ["clean"]);
   assert.equal(driver.forced, 0);
 });
 

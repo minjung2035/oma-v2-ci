@@ -11,7 +11,7 @@ import { join } from "node:path";
 import type { AuthContext, UnitObservation } from "../implementation/contracts.js";
 import { Store } from "../src/store.js";
 import { MailModule } from "../src/mail.js";
-import { UnitsModule, STATUS_CHUNK, type UnitCommandOutcome } from "../src/units.js";
+import { UnitsModule, STATUS_CHUNK, unitCommandError, type UnitCommandOutcome } from "../src/units.js";
 import { StatusRefresh } from "../src/views/status-refresh.js";
 import { ViewsModule } from "../src/views.js";
 import { pendingWork, pendingWorkByAgent } from "../src/views/pending-work.js";
@@ -250,4 +250,81 @@ test("AV12 / INV02, T36: an explicit start resets only a failed unit; an unloade
     failed.units.start("a", true);
     assert.ok(failed.calls.some(argv => argv[0] === "reset-failed"), "an explicit start did not repair a failed unit");
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+for (const [name, state, result, restarts, burst, expected] of [
+  ["old restarts across expired windows", "failed", "exit-code", 700, 5, null],
+  ["exactly one historical burst", "failed", "exit-code", 5, 5, null],
+  ["explicit current limit", "failed", "start-limit-hit", 0, 5, "start_limit"],
+  ["stale limit after restart", "active", "start-limit-hit", 700, 5, null],
+  ["inactive old failure", "inactive", "start-limit-hit", 700, 5, null],
+] as const) {
+  test(`DR27: start-limit observation uses current evidence, not ${name}`, () => {
+    const root = mkdtempSync(join(tmpdir(), "oma-limit-"));
+    try {
+      const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "u"));
+      const calls: string[][] = [];
+      Reflect.set(units, "command", (argv: string[]): UnitCommandOutcome => {
+        calls.push(argv);
+        assert.equal(argv[0], "show", "a diagnostic must never repair the unit");
+        return ok(block(argv[1]!, state).replace("Result=success", `Result=${result}`) +
+          `NRestarts=${restarts}\nStartLimitBurst=${burst}\n`);
+      });
+      assert.equal(units.startLimitStatus("a"), expected);
+      assert.equal(calls.length, 1, "cumulative counters are neither a second clock nor evidence of a current limit");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+for (const [name, outcome] of [
+  ["unobserved command", { ...ok(""), kind: "unknown", status: null }],
+  ["failed command", { ...ok(""), kind: "failed", status: 1 }],
+  ["incomplete properties", ok("ActiveState=failed\nResult=start-limit-hit\n")],
+  ["contradictory properties", ok(block("a", "failed").replace("Result=success", "Result=start-limit-hit\nResult=exit-code"))],
+] satisfies Array<[string, UnitCommandOutcome]>) {
+  test(`DR27: start-limit is unconfirmed after ${name}`, () => {
+    const root = mkdtempSync(join(tmpdir(), "oma-limit-"));
+    try {
+      const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "u"));
+      Reflect.set(units, "command", () => outcome);
+      assert.equal(units.startLimitStatus("a"), null);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+for (const [kind, result, expected] of [
+  ["failed", "exit-code", "INTERNAL_ERROR"],
+  ["failed", "start-limit-hit", "START_LIMIT"],
+  ["unknown", "start-limit-hit", "DEADLINE_EXCEEDED"],
+  ["unknown", "exit-code", "DEADLINE_EXCEEDED"],
+] as const) {
+  test(`DR27: ${kind} start with ${result} preserves the command's knowledge`, () => {
+    const root = mkdtempSync(join(tmpdir(), "oma-limit-"));
+    try {
+      const units = new UnitsModule("demo", { node: process.execPath, libdir: root, state: root, society: "demo", agent: "" }, join(root, "u"));
+      const calls: string[][] = [];
+      Reflect.set(units, "command", (argv: string[]): UnitCommandOutcome => {
+        calls.push(argv);
+        if (argv[0] === "start") return { kind, stdout: "", stderr: "Job for oma-demo-start-limit.service failed.", status: kind === "failed" ? 1 : null, signal: null };
+        if (argv[0] === "show" && argv[1]?.endsWith(".path"))
+          return ok(argv[2] === "--property=UnitFileState" ? "enabled\n" : "active\n");
+        if (argv[0] === "show") return ok(block(argv[1]!, "failed").replace("Result=success", `Result=${result}`) +
+          "NRestarts=700\nStartLimitBurst=5\n");
+        return ok("");
+      });
+      assert.throws(() => units.start("a", false), { code: expected });
+      assert.equal(calls.filter(argv => argv[0] === "start").length, 1, "never retry a failed or unobserved effect");
+      assert.equal(calls.some(argv => argv[0] === "reset-failed"), false, "diagnosis is not repair authority");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+test("DR27: command prose or a unit name is not structured start-limit evidence", () => {
+  for (const verb of ["start", "stop", "show", "enable", "reset-failed"]) {
+    for (const text of ["start-limit-hit", "Job for oma-demo-start-limit.service failed.", "Failed to stop start-limit.service: Permission denied."]) {
+      assert.equal(unitCommandError({ kind: "failed", stdout: "", stderr: text, status: 1, signal: null }, verb)?.code, "INTERNAL_ERROR");
+      assert.equal(unitCommandError({ kind: "unknown", stdout: text, stderr: text, status: null, signal: null }, verb)?.code, "DEADLINE_EXCEEDED");
+    }
+  }
 });

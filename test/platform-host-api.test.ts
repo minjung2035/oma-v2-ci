@@ -19,6 +19,7 @@ import { startHostApi, type HostApiBackend } from "../src/platform/host/host-api
 import { attachTerminal, type AttachTerminal } from "../src/platform/host/attach-client.js";
 import { GUEST_PORTS, HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { HOST_API_VERSION } from "../src/protocol/host-api.js";
+import { holdSocketNames } from "./fixtures/socket-names.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const holderEntry = join(here, "..", "src", "entry", "guest-session.js");
@@ -29,14 +30,30 @@ const setsid = existsSync("/usr/bin/setsid");
 
 async function world(t: import("node:test").TestContext, options: { uid?: number } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "oma-hostapi-"));
+  const socketNames = holdSocketNames(dir);
+  const children: ChildProcess[] = [], servers: Server[] = [];
+  const sockets = new Set<import("node:net").Socket>();
+  t.after(async () => {
+    try {
+      for (const child of children) if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL"); await new Promise(r => child.once("exit", r));
+      }
+      for (const socket of sockets) socket.destroy();
+      await Promise.all(servers.map(server => new Promise(r => server.close(r))));
+    } finally { socketNames.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+  const owned = (server: Server): Server => {
+    servers.push(server);
+    server.on("connection", socket => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
+    return server;
+  };
   const societiesDir = join(dir, "data", "oma"); const projectsDir = join(dir, "projects");
   mkdirSync(societiesDir, { recursive: true }); mkdirSync(projectsDir);
-  const children: ChildProcess[] = [];
   const launcher: SessionLauncher = {
     socketPath: society => join(dir, `${society}.sock`),
     async start(society, projectDir) {
-      children.push(spawn(process.execPath, [holderEntry, "--socket", join(dir, `${society}.sock`), "--cwd", projectDir, "--", process.execPath, fakeTui],
-        { stdio: ["ignore", "ignore", "inherit"] }));
+      children.push(spawn(process.execPath, ["--import", join(here, "fixtures", "socket-names.js"), holderEntry, "--socket", join(dir, `${society}.sock`), "--cwd", projectDir, "--", process.execPath, fakeTui],
+        { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, ...socketNames.env } }));
       for (let i = 0; i < 200 && !(await listening(join(dir, `${society}.sock`))); i++) await new Promise(r => setTimeout(r, 20));
     },
     async stop() { return "unknown"; },
@@ -45,11 +62,11 @@ async function world(t: import("node:test").TestContext, options: { uid?: number
   const identity = (): GuestIdentity => ({ instanceId: INSTANCE, guestImage: "2026.09.1", bootId: "8f14e45f-ceea-4e7a-9f6b-1b1a2c3d4e5f",
     stateSchema: { written: 1, readable: [1] }, capabilities: [] });
   const guestSocket = join(dir, "society.sock");
-  const guest: Server = await startGuestServer({ socketPath: guestSocket, identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
+  owned(await startGuestServer({ socketPath: guestSocket, identity, bridge: self, frameBytes: PLATFORM_FRAME_BYTES,
     helloDeadlineMs: 2000, requestTimeoutMs: 5000, channels: {
       society: { kind: "json", serve: ({ peer }) => guestHost.serve(peer) },
       terminal: { kind: "bytes", serve: (socket, hello) => guestHost.terminal(socket, hello) },
-    } });
+    } }));
   const link = new GuestLink({ connect: async port => {
     assert.equal(port, GUEST_PORTS.society);
     const socket = connect(guestSocket);
@@ -61,20 +78,12 @@ async function world(t: import("node:test").TestContext, options: { uid?: number
     state: () => "ready", start: async () => {}, stop: async () => "stopped",
     society: () => link.json("society"),
     terminal: (society, takeover) => link.bytes("terminal", { society, ...(takeover ? { takeover: true as const } : {}) }),
-    importProject: async () => ({}), exportProject: async () => ({}), archive: async () => ({}),
+    importProject: async () => ({}), exportProject: async () => ({}), archive: async () => ({}), syncPackages: async () => ({}),
   };
   const token = randomBytes(32).toString("hex");
   const apiSocket = join(dir, "hostapi.sock");
-  const api: Server = await startHostApi({ socketPath: apiSocket, token, backend, frameBytes: PLATFORM_FRAME_BYTES,
-    helloDeadlineMs: 2000, requestTimeoutMs: 5000, uid: options.uid ?? self.uid });
-  const sockets = new Set<import("node:net").Socket>();
-  for (const server of [api, guest]) server.on("connection", socket => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
-  t.after(async () => {
-    for (const child of children) if (child.exitCode === null) { child.kill("SIGKILL"); await new Promise(r => child.once("exit", r)); }
-    for (const socket of sockets) socket.destroy();
-    await Promise.all([api, guest].map(server => new Promise(r => server.close(r))));
-    rmSync(dir, { recursive: true, force: true });
-  });
+  owned(await startHostApi({ socketPath: apiSocket, token, backend, frameBytes: PLATFORM_FRAME_BYTES,
+    helloDeadlineMs: 2000, requestTimeoutMs: 5000, uid: options.uid ?? self.uid }));
   const projectId = randomUUID();
   const mirror = join(projectsDir, projectId);
   mkdirSync(mirror);
@@ -132,6 +141,19 @@ test("MAC-020: the society calls reach guesthost and its refusals come back as t
   assert.equal((refused.answer as { error: { code: string } }).error.code, "INVALID_REQUEST");
   const opened = await call(apiSocket, token, "society.open", { society: "demo", projectId });
   assert.deepEqual((opened.answer as { result: unknown }).result, { state: "running" });
+});
+
+test("MODE-006: host-new crosses the real guest holder and Host API only after child death, with attach returned", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {
+  const { apiSocket, token, projectId } = await world(t);
+  await call(apiSocket, token, "society.open", { society: "demo", projectId });
+  const screen = new Screen(); let settled = false;
+  const ended = attachTerminal({ socketPath: apiSocket, token, society: "demo", takeover: false,
+    frameBytes: PLATFORM_FRAME_BYTES, deadlineMs: 5000, terminal: screen }).then(end => { settled = true; return end; });
+  await screen.until(/frame/, "the relayed screen"); screen.input.write("N");
+  await screen.until(/host-new-requested/, "the private request"); assert.equal(settled, false);
+  screen.input.write("q"); assert.deepEqual(await ended, { kind: "exit", code: 0, signal: null, next: "new" });
+  assert.equal(screen.input.listenerCount("data"), 0); assert.equal(screen.input.isPaused(), true);
+  assert.ok(screen.shown.endsWith("\u001b[?1049l"), "the screen was restored before the host gets the choice");
 });
 
 test("P0V-81 / AV31: a Mac client asked to end puts its terminal back and leaves the session running", { skip: setsid ? false : "util-linux setsid is not available" }, async t => {

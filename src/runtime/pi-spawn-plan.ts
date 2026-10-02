@@ -9,6 +9,7 @@
 import type { Actor, ProtocolLimits } from "../../implementation/contracts.js";
 import { verifiedPaths, type VerifiedExtension } from "./extension-integrity.js";
 import { PI_AGENT_DIR_ENV } from "./pi-runtime.js";
+import { join } from "node:path";
 import { RESIDENT_INFERENCE_PORT, RESIDENT_PATHS, SANDBOX_EXECUTABLE, confinedPath, residentArgv, type ResidentDirectories, type SandboxHost } from "../sandbox.js";
 import type { ValidatedRunLease } from "../protocol/run-lease.js";
 import { StoreError } from "../domain/errors.js";
@@ -36,15 +37,19 @@ export interface PiInference {
   readonly model: string;
   /** Same shape as the real key, swapped back by the relay on the way out. */
   readonly placeholder: string;
+  /** DR24: the engine's default effort, resolved on the host with the model. */
+  readonly thinking?: string | undefined;
 }
 
 export interface PiAdapterProfile {
   readonly provider: string;
   readonly model: string;
-  /** WP10/D06: the whole delivery turn's budget -- the model profile's
-   * `inferenceTimeoutSeconds`. Idle, acceptance and drain have their own. */
-  readonly turnSeconds: number;
+  /** DR27/WP10: silence during one inference or compaction, not the sum of
+   * a delivery's model requests and tools. Progress restarts this budget. */
+  readonly inferenceSeconds: number;
   readonly prompt: string;
+  /** DR24: the effort the engine runs with -- the profile's, else the engine's default. */
+  readonly thinking?: string | undefined;
   readonly workspaceBytes: number;
   /** Recorded at configuration load and re-verified immediately before spawn.
    * The digest travels with the path so the check cannot be skipped here. */
@@ -115,7 +120,7 @@ function pathView(options: PiAdapterOptions): PathView {
     // the directory roots, so it is the one entry the table cannot resolve.
     path === confinement.lease.socketHostPath
       ? RESIDENT_PATHS.socket
-      : confinedPath(confinement.host.libdir, confinement.directories, path);
+      : confinedPath(confinement.host, confinement.directories, path);
 }
 
 /** AV13: set in a confined engine's environment, and nowhere else. The trusted
@@ -183,7 +188,7 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
     "--session-dir",
     inside(options.paths.sessionDir),
     // AV14, arch §7: the runner joins one Pi session to the mail queue, and an
-    // activation resumes it ("Pi session 재개 또는 새 session"): the most recent
+    // activation resumes it ("resume Pi session or create a new session"): the most recent
     // session in this directory, or a new one when there is none.
     "--continue",
     "--name",
@@ -207,6 +212,7 @@ function engineArgv(options: PiAdapterOptions, inside: PathView = path => path):
       "--model",
       `${options.profile.provider}/${options.profile.model}`,
     );
+  if (options.profile.thinking !== undefined) args.push("--thinking", options.profile.thinking);
   if (options.profile.prompt.length > 0)
     args.push("--append-system-prompt", options.profile.prompt);
   return args;
@@ -238,6 +244,7 @@ export function planPiSpawn(options: PiAdapterOptions): PiSpawnPlan {
   const relay = confinement.inference;
   const environment = {
     ...omaEnvironment(options, inside),
+    [PI_AGENT_DIR_ENV]: inside(join(options.paths.agentHome, "engine")),
     // The trusted extension's one statement of where it runs: inside the
     // sandbox, the mount plan is the boundary of its tools (TSP-009).
     [TOOL_SCOPE_ENV]: TOOL_SCOPE_SANDBOX,

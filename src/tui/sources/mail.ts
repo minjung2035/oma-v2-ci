@@ -169,7 +169,7 @@ function rowsIn(directory: string, unread: boolean, budget: number): DirectoryRo
         id: name,
         from: addressName(headers["from"]),
         kind: headers["x-oma-kind"] ?? "message",
-        subject: headers["subject"] ?? "(제목 없음)",
+        subject: headers["subject"] ?? "(No subject)",
         unread,
         path,
       }),

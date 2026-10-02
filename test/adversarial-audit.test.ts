@@ -1,4 +1,4 @@
-// Adversarial audit tests for implementation-spec.md cross-checks.
+// Adversarial audit tests for docs/implementation-spec.md cross-checks.
 // Targets gaps that happy-path phase tests are unlikely to catch.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ import {
   defaultReplyTo,
   parseEmlHeaders,
 } from "../src/mail.js";
-import { candidateArgv } from "../src/sandbox.js";
+import { candidateCheckCommand } from "../src/runtime/candidate-checks.js";
 import { renderUnit, unitName, UNIT_TPL_DIR } from "../src/units.js";
 import { Broker } from "../src/broker.js";
 import { Store } from "../src/store.js";
@@ -171,18 +171,25 @@ test("AUD-2: generated units preserve the fixed cgroup/lifecycle boundary", () =
   assert.doesNotMatch(resident, /^(?:AmbientCapabilities|CapabilityBoundingSet|User|Group)=/m);
   assert.match(broker, /^Restart=on-failure$/m);
   assert.match(broker, /^Type=notify$/m);
+  for (const service of [resident, broker]) {
+    assert.match(service, /^RestartSec=3s$/m);
+    assert.match(service, /^RestartSteps=4$/m);
+    assert.match(service, /^RestartMaxDelaySec=12s$/m);
+    assert.match(service, /^StartLimitIntervalSec=60s$/m);
+    assert.match(service, /^StartLimitBurst=5$/m);
+    // systemd's geometric intervals, including the refusal-triggering attempt:
+    // 3, 4.24, 6, 8.49, 12 seconds must still fit in the rate-limit window.
+    const delays = Array.from({ length: 5 }, (_, i) => 3 * (12 / 3) ** (i / 4));
+    assert.ok(delays.reduce((sum, delay) => sum + delay, 0) < 60);
+  }
 });
 
 test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
-  const argv = candidateArgv(
-    {
-      rootfs: "/rootfs",
-      libdir: "/opt/oma",
-      node: "/usr/bin/node",
-      pi: "/usr/bin/pi",
-      piModeArgs: [],
-      tmpBytes: 1024,
-      checkResources: {
+  const argv = candidateCheckCommand(
+    { stateRoot: "/state", projectGit: "/state/project.git", contextGit: "/state/context.git", worldDir: "/state/world",
+      society: "demo", quarantineTmpBytes: 1024, checkRootfs: "/rootfs", checkNode: process.execPath, checkAssetsDir: "/checks" },
+    "a".repeat(40), { id: "audit", argv: ["/checks/run"], env: { SAFE: "1" }, timeoutSeconds: 1,
+      resources: {
         memoryBytes: 1024,
         tasks: 8,
         cpuQuotaPercent: 100,
@@ -191,13 +198,7 @@ test("AUD-3: candidate sandbox argv does not inherit host environment", () => {
         stagingBytes: 1024,
         checkTimeoutSeconds: 1,
       },
-    },
-    "/candidate",
-    "/checks",
-    1024,
-    ["/checks/run"],
-    { SAFE: "1" },
-  );
+    }, []).argv;
   const clear = argv.indexOf("--clearenv");
   assert.ok(clear >= 0);
   assert.ok(argv.includes("SAFE"));

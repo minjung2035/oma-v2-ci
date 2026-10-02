@@ -1,0 +1,153 @@
+// Installed oma, real bundled Pi/Open TUI and tools; only inference is scripted.
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { scriptedProvider, call, tools, text, failing, lastUserText, toolResults } from '../../dist/test/fixtures/scripted-provider.js';
+import { updatePersonalSettings } from '../../dist/src/runtime/personal-settings.js';
+import { defaultSocietyFor } from '../../dist/src/config/defaults.js';
+import { sha256Hex } from '../../dist/src/hash.js';
+import { ensureProjectSettings } from '../../dist/src/tui/project-settings.js';
+import { readExtensions, toggleExtension } from '../../dist/src/tui/sources/extensions.js';
+
+const [root, ending = 'tools'] = process.argv.slice(2);
+const cwd = join(root, 'project'), outside = join(root, 'user', 'hyprland.conf');
+const home = join(root, 'home'), data = join(root, 'data', 'oma'), store = join(data, '.packages');
+mkdirSync(cwd, { recursive: true }); mkdirSync(join(root, 'user')); mkdirSync(home);
+mkdirSync(store, { recursive: true });
+writeFileSync(outside, 'monitor=old\n');
+mkdirSync(join(cwd, '.pi')); writeFileSync(join(cwd, '.pi', 'SYSTEM.md'), 'PROJECT_CONTEXT_SENTINEL');
+writeFileSync(join(cwd, 'AGENTS.md'), 'SOCIETY_PROMPT_SENTINEL');
+const extension = join(store, 'fixture.mjs');
+writeFileSync(extension, `import { readFileSync, writeFileSync } from 'node:fs';
+export default pi => {
+  pi.registerCommand('fixture-reload-update', { description: 'Update this fixture extension', handler(_args, ctx) {
+    const file = ${JSON.stringify(extension)}, source = readFileSync(file, 'utf8');
+    const needle = ['description: ', "'A local fixture tool'"].join('');
+    if (source.indexOf(needle) < 0 || source.indexOf(needle) !== source.lastIndexOf(needle)) throw new Error('Fixture tool declaration is not unique');
+    writeFileSync(file, source.replace(needle, "description: 'UPDATED_FIXTURE_TOOL'"));
+    writeFileSync(${JSON.stringify(join(root, 'reload-mutation.json'))}, JSON.stringify({ kind: 'update' }));
+    ctx.ui.notify('Fixture extension updated', 'info');
+  } });
+  pi.registerCommand('fixture-reload-failure', { description: 'Make this fixture extension refuse reload', handler(_args, ctx) {
+    writeFileSync(${JSON.stringify(extension)}, 'export default () => { throw new Error("FIXTURE_RELOAD_FAILURE"); };\\n');
+    writeFileSync(${JSON.stringify(join(root, 'reload-mutation.json'))}, JSON.stringify({ kind: 'failure' }));
+    ctx.ui.notify('Fixture reload failure prepared', 'info');
+  } });
+  pi.registerCommand('fixture-break-project', { description: 'Make the old fixture project unreadable', handler(_args, ctx) {
+    const path = ${JSON.stringify(join(root, 'project-settings.json'))};
+    const { config } = JSON.parse(readFileSync(path, 'utf8'));
+    writeFileSync(config, '{broken');
+    ctx.ui.notify('Fixture old project settings damaged', 'info');
+  } });
+  pi.registerCommand('fixture-fork', { description: 'Fork this fixture at its saved leaf', async handler(_args, ctx) {
+    await ctx.fork(ctx.sessionManager.getLeafId(), { position: 'at' });
+  } });
+  pi.registerTool({ name: 'personal_fixture', label: 'Personal fixture', description: 'A local fixture tool',
+    parameters: { type: 'object', properties: {}, required: [] },
+    async execute() { return { content: [{ type: 'text', text: 'EXTENSION_TOOL_COMPLETE' }], details: {} }; } });
+};\n`);
+writeFileSync(join(store, 'oma-extensions.json'), JSON.stringify([{ source: 'npm:local-fixture', entries: ['packages:fixture.mjs'] }]));
+const projectSeed = ending.startsWith('project-seed');
+let projectSettings;
+if (projectSeed) {
+  const project = defaultSocietyFor(realpathSync(cwd), sha256Hex(realpathSync(cwd)));
+  const settings = ensureProjectSettings(data, project, process.cwd());
+  const index = [{ source: 'npm:local-fixture', entries: ['packages:fixture.mjs'] }];
+  toggleExtension(readExtensions(settings.path, settings.config.principalProfile, settings.workerProfile, index), 'packages:fixture.mjs', 'principal', true);
+  projectSettings = readFileSync(settings.path);
+  writeFileSync(join(root, 'project-settings.json'), JSON.stringify({ config: settings.path }));
+} else updatePersonalSettings({ dataRoot: data, libdir: process.cwd(), packages: store }, ['packages:fixture.mjs']);
+const provider = await scriptedProvider(ending === 'tools' ? [
+  tools(call('read', { path: outside })),
+  tools(call('write', { path: outside, content: 'monitor=new\n' })),
+  tools(call('edit', { path: outside, oldText: 'monitor=new', newText: 'monitor=edited' })),
+  tools(call('bash', { command: `printf 'shell=done\\n' >> '${outside}'` })),
+  tools(call('personal_fixture', {})),
+  text('PERSONAL_TOOLS_COMPLETE'),
+] : (request, index) => {
+  if (ending === 'retry' && index === 0) return failing();
+  if (ending === 'cancel' && index === 0) return { kind: 'hang' };
+  if (ending.includes('extensions')) return text(`PERSONAL_RESPONSE_COMPLETE ${index}`);
+  if (projectSeed && index === 0) return tools(call('personal_fixture', {}));
+  return text(`PERSONAL_RESPONSE_COMPLETE ${index} ${lastUserText(request)}`);
+});
+const engine = join(data, '.engine'); provider.configure(engine);
+const settings = JSON.parse(readFileSync(join(engine, 'settings.json'), 'utf8'));
+writeFileSync(join(engine, 'settings.json'), JSON.stringify({ ...settings, defaultProvider: 'fake', defaultModel: 'scripted' }));
+const child = spawn('oma', ending === 'chooser' ? [] : ['--mode', 'personal'], {
+  cwd, stdio: 'inherit', env: { PATH: process.env.PATH, HOME: home, XDG_DATA_HOME: join(root, 'data'),
+    XDG_RUNTIME_DIR: join(root, 'run'), TERM: 'xterm-256color', PI_OFFLINE: '1' },
+});
+let code;
+try {
+  const exit = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
+  code = exit.code;
+  writeFileSync(join(root, 'engine-exit.json'), JSON.stringify(exit));
+  assert.equal(exit.signal, null);
+  if (ending.startsWith('reload-')) {
+    assert.equal(JSON.parse(readFileSync(join(root, 'reload-mutation.json'), 'utf8')).kind, ending.slice('reload-'.length));
+    const changed = readFileSync(extension, 'utf8');
+    if (ending === 'reload-update') assert.ok(changed.includes("label: 'Personal fixture', description: 'UPDATED_FIXTURE_TOOL'"));
+    else assert.equal(changed, 'export default () => { throw new Error("FIXTURE_RELOAD_FAILURE"); };\n');
+  }
+  assert.equal(code, ending === 'reload-failure' ? 1 : 0);
+  const ids = readdirSync(join(data, '.personal')).filter(name => !name.includes('.'));
+  const births = ids.map(id => JSON.parse(readFileSync(join(data, '.personal', id, 'session-mode.json'), 'utf8')));
+  assert.ok(births.length > 0); assert.ok(births.every(birth => birth.mode === 'personal' && birth.cwd === cwd));
+  const names = provider.seen[0]?.body.tools.map(tool => tool.function.name) ?? [];
+  if (ending === 'tools') {
+    assert.deepEqual(readFileSync(outside, 'utf8'), 'monitor=edited\nshell=done\n');
+    assert.equal(provider.seen.length, 6);
+    for (const name of ['read', 'write', 'edit', 'bash', 'personal_fixture']) assert.ok(names.includes(name), name);
+    assert.ok(toolResults(provider.seen.at(-1).body).some(result => result.text.includes('EXTENSION_TOOL_COMPLETE')));
+  }
+  const expected = ending === 'tools' ? 6 : projectSeed ? ending === 'project-seed-resume' ? 3 : 2
+    : ['extensions', 'new', 'resume', 'fork', 'fork-ui', 'fork-cancel', 'reload-update', 'retry', 'cancel'].includes(ending) ? 2 : 1;
+  assert.equal(provider.seen.length, expected, ending);
+  for (const request of provider.seen) assert.doesNotMatch(JSON.stringify(request.body), /SOCIETY_PROMPT_SENTINEL|PROJECT_CONTEXT_SENTINEL/);
+  if (ending === 'config') {
+    const chosen = JSON.parse(readFileSync(join(engine, 'settings.json'), 'utf8'));
+    assert.equal(chosen.defaultModel, 'scripted-thinking'); assert.equal(chosen.defaultThinkingLevel, 'minimal');
+    assert.equal(provider.seen[0].body.model, 'scripted-thinking');
+  }
+  if (ending.includes('extensions')) {
+    const chosen = JSON.parse(readFileSync(join(data, '.personal', 'settings.json'), 'utf8'));
+    assert.deepEqual(chosen.extensions, []);
+    const lastNames = provider.seen.at(-1).body.tools.map(tool => tool.function.name);
+    assert.ok(!lastNames.includes('personal_fixture'));
+  }
+  if (ending.startsWith('fork')) {
+    const histories = readdirSync(births[0].history).filter(name => name.endsWith('.jsonl'));
+    assert.equal(histories.length, ending === 'fork-cancel' ? 1 : 2);
+    const previousAnswer = message => JSON.stringify(message.content).includes('PERSONAL_RESPONSE_COMPLETE 0');
+    const second = provider.seen[1].body;
+    assert.equal(second.messages.some(previousAnswer), ending !== 'fork-ui', 'fork UI excludes the selected turn; cancel and at-leaf fork keep it');
+    assert.equal(lastUserText(second), ending === 'fork-cancel' ? 'Continue after cancelled fork' : 'Change the temporary user config');
+    for (const file of histories) {
+      const header = JSON.parse(readFileSync(join(births[0].history, file), 'utf8').split('\n')[0]);
+      assert.equal(header.cwd, cwd);
+    }
+  }
+  if (ending === 'reload-update') {
+    const tool = provider.seen[1].body.tools.find(tool => tool.function.name === 'personal_fixture');
+    assert.equal(tool?.function.description, 'UPDATED_FIXTURE_TOOL');
+  }
+  if (ending.startsWith('reload-')) {
+    const saved = JSON.parse(readFileSync(join(data, '.personal', 'settings.json'), 'utf8'));
+    assert.deepEqual(saved.extensions, ['packages:fixture.mjs'], 'reload failure cannot erase the selected extension');
+    assert.equal(readdirSync(births[0].history).filter(name => name.endsWith('.jsonl')).length, 1);
+  }
+  if (projectSeed) {
+    const config = JSON.parse(readFileSync(join(root, 'project-settings.json'), 'utf8')).config;
+    assert.deepEqual(JSON.parse(readFileSync(join(data, '.personal', 'settings.json'), 'utf8')).extensions, ['packages:fixture.mjs']);
+    assert.ok(names.includes('personal_fixture'));
+    assert.ok(toolResults(provider.seen[1].body).some(result => result.text.includes('EXTENSION_TOOL_COMPLETE')));
+    if (ending === 'project-seed-resume') assert.equal(readFileSync(config, 'utf8'), '{broken');
+    else assert.deepEqual(readFileSync(config), projectSettings, 'Personal may observe but not rewrite the project');
+  }
+  assert.ok(names.every(name => !name.startsWith('oma_')));
+  assert.deepEqual(readdirSync(data).sort(), projectSeed ? ['.engine', '.packages', '.personal', '.projects'] : ['.engine', '.packages', '.personal']);
+  writeFileSync(join(root, 'facts.json'), JSON.stringify({ requests: provider.seen.length, births: births.length, names }));
+} finally { await provider.close(); }
+process.exitCode = code ?? 1;

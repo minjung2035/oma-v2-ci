@@ -1,4 +1,4 @@
-// MUST [DB-001..009]: sole broker writer; synchronous transactions; six entities.
+// MUST [DB-001..009]: sole broker writer; synchronous transactions.
 // No Git/systemd/fsync/await inside transactions (M-004).
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync, lstatSync } from "node:fs";
@@ -10,7 +10,7 @@ import type { RepositoryIdentity, OperationPlanContext } from "./durable.js";
 import type { DecodedOperation, OperationOf } from "./storage/operation-codec.js";
 import { LedgerReader, type PendingWorkRows } from "./storage/ledger-reader.js";
 import { assertDirectory } from "./storage/directory.js";
-import { LEDGER_TABLES, DIAGNOSTIC_READ_LIMITS, type DiagnosticReadLimits, type DiagnosticSnapshot, type LedgerTable } from "./storage/diagnostic-snapshot.js";
+import { LEDGER_TABLES, ledgerTables, DIAGNOSTIC_READ_LIMITS, type DiagnosticReadLimits, type DiagnosticSnapshot, type LedgerTable } from "./storage/diagnostic-snapshot.js";
 import { fullRow, safeInteger, type AgentRow, type DeliveryRow, type BatchRow, type SubscriptionRow, type UsageRow } from "./storage/rows.js";
 import { LedgerTransitions, type DeliveryIdentity, type PreparedBatchInput, type UsageReservation } from "./storage/transitions.js";
 import { OperationTransitions, type NewOperation } from "./storage/operation-transitions.js";
@@ -26,7 +26,7 @@ export type { DecodedOperation } from "./storage/operation-codec.js";
 export type { AgentRow, DeliveryRow, BatchRow, SubscriptionRow, UsageRow } from "./storage/rows.js";
 export type { Transaction, StoreReads, StoreWrites } from "./storage/transaction.js";
 
-export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v1.sql", import.meta.url));
+export const SCHEMA_PATH = fileURLToPath(new URL("../../implementation/schema-v3.sql", import.meta.url));
 export type OperationRow = DecodedOperation;
 /** SQLITE_BUSY or SQLITE_LOCKED, read from SQLite's result code rather than
  * from its message (P0V-69). */
@@ -121,17 +121,18 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
     const version = safeInteger(fullRow(db.prepare("PRAGMA user_version").get(), ["user_version"], "schema version").user_version, "schema version");
     if (!SCHEMA_USER_VERSION_READABLE.includes(version))
       throw new StoreError("STORE_CORRUPT", `diagnostics require a readable schema version; found ${version} and no migration was attempted`);
+    const expectedTables = ledgerTables(version);
     const schema = [];
     for (const row of db.prepare("SELECT name,type,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND type IN ('table','view','trigger')").iterate()) {
-      if (schema.length >= LEDGER_TABLES.length) throw new StoreError("STORE_CORRUPT", "unexpected diagnostic database objects");
+      if (schema.length >= expectedTables.length) throw new StoreError("STORE_CORRUPT", "unexpected diagnostic database objects");
       schema.push(row);
     }
-    if (schema.length !== LEDGER_TABLES.length || schema.some(row => row.type !== "table" || typeof row.name !== "string" ||
-      !LEDGER_TABLES.some(table => table === row.name) || typeof row.sql !== "string" || /CREATE\s+VIRTUAL/i.test(row.sql)))
-      throw new StoreError("STORE_CORRUPT", "diagnostic database entity set differs from v1");
+    if (schema.length !== expectedTables.length || schema.some(row => row.type !== "table" || typeof row.name !== "string" ||
+      !expectedTables.some(table => table === row.name) || typeof row.sql !== "string" || /CREATE\s+VIRTUAL/i.test(row.sql)))
+      throw new StoreError("STORE_CORRUPT", "diagnostic database entity set differs from its schema version");
     let rows = 0, bytes = 0;
-    const tables: Record<LedgerTable, unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [] };
-    for (const table of LEDGER_TABLES) {
+    const tables: Record<LedgerTable, unknown[]> = { agents: [], operations: [], subscriptions: [], deliveries: [], batches: [], usage: [], attestations: [] };
+    for (const table of expectedTables) {
       // Table names come only from the closed constant, never from persisted SQL.
       for (const row of db.prepare(`SELECT * FROM ${table}`).iterate()) {
         if (++rows > limits.maxRows) throw new StoreError("LIMIT_EXCEEDED", "diagnostic row budget exceeded");
@@ -142,6 +143,7 @@ export function readDiagnosticSnapshot(stateRoot: string, limits: DiagnosticRead
       }
       Object.freeze(tables[table]);
     }
+    if (version === 1) delete (tables as Partial<typeof tables>).attestations;
     const integrity = db.prepare("PRAGMA integrity_check(100)").all().map(row => String(row.integrity_check));
     const foreignKeys: unknown[] = [];
     for (const row of db.prepare("PRAGMA foreign_key_check").iterate()) {
@@ -161,6 +163,7 @@ const DEFAULT_BUSY_RETRIES = 5;
 export class Store {
   private readonly readViews = readFacets(this);
   readonly operations = this.readViews.operations;
+  readonly attestations = this.readViews.attestations;
   readonly agents = this.readViews.agents;
   readonly subscriptions = this.readViews.subscriptions;
   readonly deliveries = this.readViews.deliveries;
@@ -192,7 +195,7 @@ export class Store {
       this.db.exec("PRAGMA synchronous = FULL");
       // R6-19: the bound on how long this synchronous connection -- and so the
       // broker's event loop -- waits for another writer's lock (validation,
-      // "알려진 한계"). A watchdog, if one is added, must be longer.
+      // "known limitations"). A watchdog, if one is added, must be longer.
       this.db.exec("PRAGMA busy_timeout = 5000");
       this.migrate();
       this.reader = new LedgerReader(this.db, dirname(path), () => this.repositoryIdentity);
@@ -223,12 +226,26 @@ export class Store {
     const version = this.userVersion();
     // P8: the readable version set is explicit. Anything else fails closed with
     // no migration attempt and no rewrite of the existing file.
-    if (SCHEMA_USER_VERSION_READABLE.includes(version)) return;
-    if (version !== 0) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
+    if (version === SCHEMA_USER_VERSION_WRITTEN) return;
+    if (version !== 0 && version !== 1 && version !== 2) throw new StoreError("STORE_CORRUPT", `unexpected schema user_version ${version}; no migration was attempted`);
     let ddl: string;
-    try { ddl = readFileSync(SCHEMA_PATH, "utf8"); }
+    try {
+      ddl = version === 0 ? readFileSync(SCHEMA_PATH, "utf8") :
+        (version === 1 ? readFileSync(fileURLToPath(new URL("../../implementation/schema-v1-to-v2.sql", import.meta.url)), "utf8")
+          .replace("PRAGMA user_version = 2;", "").replace("BEGIN EXCLUSIVE;", "") : "") +
+        readFileSync(fileURLToPath(new URL("../../implementation/schema-v2-to-v3.sql", import.meta.url)), "utf8");
+      if (version === 1) ddl = "BEGIN EXCLUSIVE;\n" + ddl.replace("BEGIN EXCLUSIVE;", "");
+    }
     catch (error) { throw unobserved(error, "the schema file") ?? new StoreError("STORE_CORRUPT", `schema file unreadable: ${(error as Error).message}`, { cause: error }); }
-    try { this.db.exec(ddl); }
+    try {
+      if (version !== 0) this.db.exec("PRAGMA foreign_keys = OFF");
+      this.db.exec(ddl);
+      if (version !== 0) {
+        if (this.db.prepare("PRAGMA foreign_key_check").get() !== undefined)
+          throw new StoreError("STORE_CORRUPT", "schema migration found a foreign-key violation");
+        this.db.exec("COMMIT");
+      }
+    }
     catch (error) {
       let failure: unknown = error;
       if (this.db.isTransaction) {
@@ -239,6 +256,7 @@ export class Store {
       if (normalized instanceof StoreError) throw normalized;
       throw new StoreError("STORE_CORRUPT", `migration failed: ${(error as Error).message}`, { cause: failure });
     }
+    finally { if (version !== 0) this.db.exec("PRAGMA foreign_keys = ON"); }
     if (this.userVersion() !== SCHEMA_USER_VERSION_WRITTEN)
       throw new StoreError("STORE_CORRUPT", `migration did not set user_version=${SCHEMA_USER_VERSION_WRITTEN}`);
   }
@@ -342,6 +360,14 @@ export class Store {
     return operation;
   }
   getOperationById(id: OperationId): OperationRow | null { return this.journal.getById(id); }
+  latestSocietyAction() { return this.reader.latestSocietyAction(); }
+  societyOpen(): boolean {
+    const action = this.latestSocietyAction();
+    return action === null || (action.plan.state === "open" && action.state === "succeeded");
+  }
+  latestAgentAction(agent: Actor, actor?: Actor) { return this.reader.latestAction(agent, actor); }
+  submittedOperations() { return this.reader.submissions(); }
+  attestationFacts() { return this.reader.attestations(); }
   findPhysicalCreate(name: Actor, specHash: string): OperationOf<"agent.create"> | null { return this.reader.physicalCreate(name, specHash); }
   recoverableOperations(): OperationId[] { return this.journal.recoverableIds(); }
   /** CTX-006: a prepared tree or current symlink is not a completed GOAL.
@@ -375,6 +401,7 @@ export class Store {
   markMaterialized(message: MessageId, recipient: Actor): void { this.transitions.markMaterialized(message, recipient); }
   markAcknowledged(message: MessageId, recipient: Actor): void { this.transitions.markAcknowledged(message, recipient); }
   pendingDeliveries(agent: Actor): DeliveryRow[] { return this.reader.pendingDeliveries(agent); }
+  pendingDeliveryRows(agent: Actor): IterableIterator<DeliveryRow> { return this.reader.pendingDeliveryRows(agent); }
   getDelivery(message: MessageId, recipient: Actor): DeliveryRow | null { return this.reader.delivery(message, recipient); }
   deliveriesForOperation(id: OperationId): DeliveryRow[] { return this.reader.operationDeliveries(id); }
   insertPreparedBatch(batch: PreparedBatchInput): void { this.transitions.insertPreparedBatch(batch); }

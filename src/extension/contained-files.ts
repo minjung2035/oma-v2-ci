@@ -11,8 +11,10 @@
  * already held. The extension may use only Node built-ins (PI-001), so this
  * is openat2's RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS spelled with them.
  */
-import { closeSync, constants, fstatSync, ftruncateSync, mkdirSync, openSync, readSync, readdirSync, writeSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { closeSync, constants, fstatSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, opendirSync, readSync, readdirSync, rmSync, writeSync } from "node:fs";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
+import { setImmediate } from "node:timers/promises";
 
 export class WorkspaceRefusal extends Error {
   constructor(message: string) { super(message); this.name = "WorkspaceRefusal"; }
@@ -45,7 +47,9 @@ function refusedLink(error: unknown): never {
 
 /** A descriptor on the directory `components` names, walked from the root. */
 function openDirectoryWithin(root: string, components: readonly string[], create: boolean): number {
-  let fd = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY);
+  let fd: number;
+  try { fd = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
+  catch (error) { refusedLink(error); }
   try {
     for (const part of components) {
       let next: number;
@@ -70,7 +74,7 @@ function openEntryWithin(root: string, path: string, flags: number, mode = 0o644
   if (components.length === 0) {
     // The workspace itself: a directory, which no tool writes as a file.
     if ((flags & (constants.O_WRONLY | constants.O_RDWR)) !== 0) throw new WorkspaceRefusal("tool path is the workspace itself");
-    return openSync(root, constants.O_RDONLY | constants.O_DIRECTORY);
+    return openDirectoryWithin(root, [], false);
   }
   const parent = openDirectoryWithin(root, components.slice(0, -1), false);
   try {
@@ -111,12 +115,32 @@ export function accessWithin(root: string, path: string, write: boolean): void {
   try { ownedFile(fd); } finally { closeSync(fd); }
 }
 
-/** The size the entry has now, or 0 when it does not exist yet. */
-export function sizeWithin(root: string, path: string): number {
-  let fd: number;
-  try { fd = openEntryWithin(root, path, constants.O_RDONLY); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0; throw error; }
-  try { ownedFile(fd); return fstatSync(fd).size; } finally { closeSync(fd); }
+/** Exact logical growth: a new name costs one byte, and file content is
+ * charged separately. Missing parents are counted before any are created.
+ * The contained tool owns the serialized decision, not the engine's mkdir. */
+export function writeGrowthWithin(root: string, path: string, bytes: number): number {
+  const components = componentsWithin(root, path);
+  if (components.length === 0) throw new WorkspaceRefusal("tool path is the workspace itself");
+  let fd = openDirectoryWithin(root, [], false);
+  try {
+    for (let index = 0; index < components.length - 1; index++) {
+      let next: number;
+      try { next = openSync(entryAt(fd, components[index]!), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return bytes + components.length - index;
+        refusedLink(error);
+      }
+      const previous = fd; fd = next; closeSync(previous);
+    }
+    let file: number;
+    try { file = openSync(entryAt(fd, components.at(-1)!), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return bytes + 1;
+      refusedLink(error);
+    }
+    try { ownedFile(file); return bytes - fstatSync(file).size; }
+    finally { closeSync(file); }
+  } finally { closeSync(fd); }
 }
 
 export function writeWithin(root: string, path: string, content: string | Buffer): void {
@@ -143,6 +167,108 @@ export function isDirectoryWithin(root: string, path: string): boolean {
 export function existsWithin(root: string, path: string): boolean {
   try { closeSync(openEntryWithin(root, path, constants.O_RDONLY)); return true; }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+}
+
+/** G10-02: pathname walkers see only a private copy of approved inodes, never
+ * the mutable workspace. The root and every descendant stay held while read.
+ * Entry metadata costs one byte of the same finite workspace budget; directory
+ * depth is bounded before acquiring another descriptor. No links are copied. */
+export async function withSearchSnapshot<T>(root: string, path: string, maximum: number | null,
+  signal: AbortSignal | undefined, use: (snapshot: string, target: string) => Promise<T>): Promise<T> {
+  const parts = componentsWithin(root, path);
+  if (!maximum || !Number.isSafeInteger(maximum) || maximum < 1)
+    throw new WorkspaceRefusal("agent workspace quota is not configured");
+  const temp = openDirectoryWithin(tmpdir(), [], false);
+  let base: string;
+  try { base = mkdtempSync(entryAt(temp, "oma-search-")); }
+  catch (error) { closeSync(temp); throw error; }
+  const baseName = basename(base);
+  const snapshot = join(tmpdir(), baseName, "workspace");
+  let destination: number | undefined;
+  let remaining = maximum;
+  const check = (): void => { if (signal?.aborted) throw new WorkspaceRefusal("search aborted"); };
+  const charge = (bytes: number): void => {
+    remaining -= bytes;
+    if (remaining < 0) throw new WorkspaceRefusal("search snapshot exceeds workspace budget");
+  };
+  const copy = async (fd: number, parent: number, name: string, depth: number): Promise<void> => {
+    check(); charge(1);
+    const stat = fstatSync(fd);
+    if (stat.isDirectory()) {
+      if (depth > 128) throw new WorkspaceRefusal("search directory nesting exceeds bound");
+      mkdirSync(entryAt(parent, name), { mode: 0o700 });
+      const target = openSync(entryAt(parent, name), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+      let directory: ReturnType<typeof opendirSync> | undefined;
+      try { directory = opendirSync(`/proc/self/fd/${fd}`); }
+      catch (error) { closeSync(target); throw error; }
+      try {
+        for (let entry = directory.readSync(); entry !== null; entry = directory.readSync()) {
+          check(); charge(1);
+          // Repository internals are not a search input. An empty .git at the
+          // copy's root stops parent ignore discovery without importing config.
+          if (entry.name === ".git") continue;
+          let child: number;
+          try { child = openSync(entryAt(fd, entry.name), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+          catch (error) {
+            if (["ENOENT", "ELOOP"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
+            throw error;
+          }
+          try {
+            const current = fstatSync(child);
+            if (current.isDirectory() || (current.isFile() && current.nlink === 1))
+              await copy(child, target, entry.name, depth + 1);
+          } finally { closeSync(child); }
+        }
+      } finally { try { directory.closeSync(); } finally { closeSync(target); } }
+    } else {
+      ownedFile(fd);
+      charge(stat.size);
+      const out = openSync(entryAt(parent, name), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+      try {
+        const buffer = Buffer.alloc(Math.min(stat.size + 1, 64 * 1024));
+        let used = 0;
+        for (;;) {
+          check();
+          const count = readSync(fd, buffer, 0, buffer.length, null);
+          if (count === 0) break;
+          used += count;
+          if (used > stat.size) throw new WorkspaceRefusal("search input grew during snapshot");
+          for (let at = 0; at < count;) at += writeSync(out, buffer, at, count - at);
+          await setImmediate();
+        }
+        if (used !== stat.size) throw new WorkspaceRefusal("search input changed during snapshot");
+        ownedFile(fd);
+      } finally { closeSync(out); }
+    }
+    await setImmediate();
+  };
+  try {
+    destination = openSync(entryAt(temp, baseName), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    const fd = openDirectoryWithin(root, [], false);
+    try {
+      // Validate the explicit target beneath the same held root we copy. Do not
+      // resolve the workspace pathname a second time between check and use.
+      let selected = openSync(`/proc/self/fd/${fd}`, constants.O_RDONLY | constants.O_DIRECTORY);
+      try {
+        for (const [index, part] of parts.entries()) {
+          let next: number;
+          try { next = openSync(entryAt(selected, part), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK |
+            (index < parts.length - 1 ? constants.O_DIRECTORY : 0)); }
+          catch (error) { refusedLink(error); }
+          closeSync(selected); selected = next;
+        }
+        if (!fstatSync(selected).isDirectory()) ownedFile(selected);
+      } finally { closeSync(selected); }
+      await copy(fd, destination, "workspace", 0);
+    } finally { closeSync(fd); }
+    const copied = openSync(entryAt(destination, "workspace"), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try { mkdirSync(entryAt(copied, ".git"), { mode: 0o700 }); } finally { closeSync(copied); }
+    check();
+    return await use(snapshot, join(snapshot, ...parts));
+  } finally {
+    if (destination !== undefined) closeSync(destination);
+    try { rmSync(entryAt(temp, baseName), { recursive: true, force: true }); } finally { closeSync(temp); }
+  }
 }
 
 export function readdirWithin(root: string, path: string): string[] {

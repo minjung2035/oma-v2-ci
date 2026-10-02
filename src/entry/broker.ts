@@ -11,6 +11,7 @@ import { Broker } from "../broker.js";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD } from "../protocol/host-channel.js";
 import { openSupervisionChannel } from "../runtime/supervision-channel.js";
 import { GitModule } from "../git.js";
+import { CandidateChecks } from "../runtime/candidate-checks.js";
 import { QUARANTINE_RESOURCES } from "../git/quarantine.js";
 import { repairSociety } from "../runtime/provision.js";
 import { integrationPolicyFromConfig, snapshotIntegrationPolicy, assertSupportedIntegration } from "../git/integration-policy.js";
@@ -169,12 +170,15 @@ async function main(): Promise<void> {
       agent => store.getAgent(agent)?.incarnation ?? null);
     const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits);
     const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
-    const git = new GitModule({ stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
+    const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
       worldDir: join(stateRoot, "world"), society, quarantineTmpBytes: cfg.limits.bundleBytes,
       quarantineResources: QUARANTINE_RESOURCES,
-      checkRootfs: cfg.installation.rootfs, checkAssetsDir: cfg.installation.rootfs,
-      checkTmpBytes: Math.max(1, ...cfg.integration.checks.map(check => check.resources.tmpBytes)),
-    }, store, mail, integrationPolicy, () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration));
+      checkRootfs: cfg.installation.rootfs, checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir,
+    };
+    const checks = new CandidateChecks(gitPaths);
+    const git = new GitModule(gitPaths, store, mail, integrationPolicy,
+      () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration),
+      (candidate, check) => checks.run(candidate, check));
     const hasGoal = (): boolean => git.hasCommittedContext();
     const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
       hasGoal, activationAllowed: () => lifetime.permitsActivation,
@@ -208,7 +212,7 @@ async function main(): Promise<void> {
           // activation can wake one on it. A repair that fails ends startup:
           // no broker listens and no engine starts over a rootfs the product
           // cannot vouch for.
-          for (const path of repairSociety(stateRoot)) console.error(`rootfs 항목을 기대값으로 되돌렸습니다: ${path}`);
+          for (const path of repairSociety(stateRoot)) console.error(`Restored rootfs entry to its expected value: ${path}`);
           await lifecycle.bootstrap(cfg); validateStoredProfiles();
         });
         if (store.getAgent("principal")) {

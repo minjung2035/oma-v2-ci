@@ -36,8 +36,8 @@ test("V15A: seed fields are editable only while they can still take effect, and 
       assert.equal(blocked(fields, WORKER_PROFILE), null, state);
     }
     const done = fieldsOf(settings.config, settings.workerProfile, "done");
-    assert.match(blocked(done, INITIAL_WORKERS) ?? "", /이미 bootstrap/);
-    assert.match(blocked(done, WORKER_PROFILE) ?? "", /이미 bootstrap/);
+    assert.match(blocked(done, INITIAL_WORKERS) ?? "", /already bootstrapped/);
+    assert.match(blocked(done, WORKER_PROFILE) ?? "", /already bootstrapped/);
     // Fields read at later starts stay editable after bootstrap.
     for (const id of [PRINCIPAL_MODEL, WORKER_MODEL, WORKER_LIMIT]) assert.equal(blocked(done, id), null, id);
     // The writer refuses what the screen does not offer, and writes nothing.
@@ -54,7 +54,7 @@ test("V15A: with no seeds the bootstrap profile is shown with no target, not hid
     const settings = readSettings(f.path);
     assert.equal(settings.config.initialResidents.length, 0);
     const fields = fieldsOf(settings.config, settings.workerProfile, "pending");
-    assert.match(blocked(fields, WORKER_PROFILE) ?? "", /bootstrap worker 없음/);
+    assert.match(blocked(fields, WORKER_PROFILE) ?? "", /No bootstrap workers/);
     const before = readFileSync(f.path);
     assert.throws(() => commitField(settings, WORKER_PROFILE, "verifier", "pending"));
     assert.deepEqual(readFileSync(f.path), before, "a profile choice with no seed to carry it was stored somewhere");
@@ -88,9 +88,9 @@ test("V15A / WP15.03: confirming the value already configured writes nothing and
 test("V15B: the dashboard shows the configured model as configured, and the running session's as what it started with", () => {
   const rows = (configured: string, session: string | null) =>
     dashboardRows({ ...unknownDashboard(), principalModel: { configured, session } }).find(row => row.label === "Model")!.value;
-  assert.match(rows("review", null), /^review \(설정값 · 실행 중인 세션 없음\)$/);
-  assert.match(rows("review", "review"), /^review \(설정값 · 현재 세션도 이 설정으로 시작\)$/);
-  assert.match(rows("review", "standard"), /^review \(설정값 · 다음 세션부터 · 현재 세션은 standard로 시작\)$/);
+  assert.match(rows("review", null), /^review \(Configured; no running session\)$/);
+  assert.match(rows("review", "review"), /^review \(Configured; current session started with this setting\)$/);
+  assert.match(rows("review", "standard"), /^review \(Configured; next session; current session started with standard\)$/);
   for (const value of [rows("review", null), rows("review", "review"), rows("review", "standard")])
     assert.doesNotMatch(value, /현재 모델|running model|active model/, "a configured value was labelled as the observed model");
 });

@@ -51,13 +51,16 @@ test("the generated configuration passes core's own closed validator unchanged",
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a default configuration never grants canonical main or seeds a population", () => {
+test("a default configuration seeds one autonomous Worker without canonical main authority", () => {
   const root = scratch("oma-couple-grant-");
   try {
     const config = installedConfig(root);
     for (const [name, profile] of Object.entries(config.agentProfiles))
       assert.ok(!profile.capabilities.includes("code.integrate"), `${name} must not integrate by default`);
-    assert.deepEqual(config.initialResidents, []);
+    assert.equal(config.initialResidents.length, 1);
+    assert.equal(config.initialResidents[0]!.profile, "resident");
+    assert.equal(config.agentProfiles[config.principalProfile]!.childProfile, null);
+    assert.ok(!config.agentProfiles[config.principalProfile]!.capabilities.includes("agent.create"));
     // A child can never exceed its parent's delegable set (CREATE-002's rule).
     const principal = config.agentProfiles[config.principalProfile]!;
     const childName = principal.childProfile;
@@ -110,7 +113,9 @@ test("a tool surface declared in a role reaches the loader as a validated plan",
 test("the product surface did not widen the broker's method surface", () => {
   // The TUI and the projection are read and configuration work. If either had
   // needed a new socket method, these closed sets would have changed.
-  assert.equal(Object.keys(PUBLIC_METHODS).length, 16);
+  // IPC-008 adds the actor/key-bound receipt read, not a TUI capability.
+  assert.equal(Object.keys(PUBLIC_METHODS).length, 19);
+  assert.equal(PUBLIC_METHODS["operation.read"].mode, "read");
   assert.equal(Object.keys(INTERNAL_METHODS).length, 10);
   for (const name of Object.keys(PUBLIC_METHODS))
     assert.doesNotMatch(name, /tui|surface|panel|config\./i, `${name} looks like a product-surface method`);

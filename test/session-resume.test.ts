@@ -1,5 +1,5 @@
 /** AV14 -- arch §7: the runner joins one Pi session to the mail queue, and an
- * activation resumes it ("Pi session 재개 또는 새 session"); PR-003/TUI-004:
+ * activation resumes it ("resume Pi session or create a new session"); PR-003/TUI-004:
  * the Principal's Human context stays in its existing session.
  *
  * The functional run with a real provider found every Resident activation
@@ -68,7 +68,7 @@ test("AV14 / arch §7: a Resident's activation resumes its existing session inst
     const dirs = { workspace: join(root, "workspace"), sessions: join(root, "sessions"), home: join(root, "home"), view: join(root, "view"), agent: join(root, "agent"), archive: join(root, "archive") };
     for (const path of Object.values(dirs)) mkdirSync(path, { recursive: true });
     const adapter = new PiAdapter({ actor: "alice", society: "s", limits: LIMITS,
-      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 20, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 20, extensions: [] },
       paths: { piCommand: runtime.executable, piArgs: [...runtime.args], piAgentDir: dirs.agent,
         coreExtension: join(LIBDIR, "dist/src/pi-extension.js"), cli: join(LIBDIR, "dist/src/cli.js"),
         workspace: dirs.workspace, sessionDir: dirs.sessions, agentHome: dirs.home,

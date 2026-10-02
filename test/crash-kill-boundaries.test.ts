@@ -6,7 +6,7 @@
  * the boundary and kills itself at the chosen point, so nothing of it runs
  * after -- no finally block, no cleanup -- and the parent reads what is left
  * with the product's own loaders. Not power loss: the page cache survives a
- * process death (validation, "알려진 한계"). */
+ * process death (validation, "known limitations"). */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";

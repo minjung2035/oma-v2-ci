@@ -5,7 +5,6 @@ import type {
   ModelProfile,
   PreparedBatch,
   ProtocolLimits,
-  ResourceLimits,
 } from "../implementation/contracts.js";
 import { dirname } from "node:path";
 import { confinedPath, type ResidentDirectories } from "./sandbox.js";
@@ -60,12 +59,13 @@ export interface RunnerConfinement {
   readonly rootfs: string;
   /** Host path of the OMA installation, mounted read-only inside. */
   readonly libdir: string;
+  /** DR25: host path of the installed packages, mounted read-only inside. */
+  readonly packages?: string | undefined;
   /** Host path of the pinned Node, bound read-only into the sandbox. */
   readonly node: string;
   /** Operating-system paths bound read-only over the rootfs (SB-001). */
   readonly systemBinds: readonly string[];
   readonly tmpBytes: number;
-  readonly checkResources: ResourceLimits;
 }
 export interface RunnerPaths {
   readonly runRoot: string;
@@ -166,7 +166,7 @@ export class RunnerModule {
       if (!this.paths.society) throw new StoreError("UNSUPPORTED_PROFILE", "confined inference configuration is incomplete");
       const run = { society: this.paths.society, actor: this.lease.actor, incarnation: this.lease.incarnation };
       const issued = await requestEgressPlaceholder({ socket: egress, frameBytes: this.limits.frameBytes, deadlineMs: this.limits.receiptWaitSeconds * 1000 },
-        run, this.profile.model.provider, this.profile.model.model);
+        run, this.profile.model.provider, this.profile.model.model, this.profile.model.inferenceTimeoutSeconds);
       const forwarder = await EgressForwarder.listen(socketHostPath, egress,
         { placeholderId: issued.placeholderId, ...run, modelProfile: this.profile.modelProfile ?? this.profile.name }, 4);
       return { relay: forwarder, inference: { socketHostPath, provider: issued.provider, model: issued.model, placeholder: issued.placeholder } };
@@ -175,8 +175,8 @@ export class RunnerModule {
     const placeholder = placeholderFor(auth.apiKey);
     const relay = await InferenceRelay.open(socketHostPath,
       { origin: auth.origin, headers: auth.headers, substitute: { placeholder, secret: auth.apiKey } },
-      { concurrent: 4, timeoutMs: this.limits.idleStreamSeconds * 1000 });
-    return { relay, inference: { socketHostPath, provider: auth.provider, model: auth.model, placeholder } };
+      { concurrent: 4, timeoutMs: this.profile.model.inferenceTimeoutSeconds * 1000 });
+    return { relay, inference: { socketHostPath, provider: auth.provider, model: auth.model, placeholder, thinking: auth.thinking } };
   }
   private adapter(batch: PreparedBatch, inference?: PiInference): PiAdapter {
     const { stateRoot, society, piCommand, piArgs, piAgentDir, coreExtension, cli } = this.paths;
@@ -220,8 +220,9 @@ export class RunnerModule {
       profile: {
         provider: this.profile.model.provider,
         model: this.profile.model.model,
-        turnSeconds: this.profile.model.inferenceTimeoutSeconds,
+        inferenceSeconds: this.profile.model.inferenceTimeoutSeconds,
         prompt: this.profile.settings?.prompt ?? "",
+        thinking: this.profile.model.thinking ?? inference?.thinking,
         workspaceBytes: this.profile.workspaceBytes!,
         // The recorded {path, sha256} pairs travel intact to the spawn site,
         // including the core extension so its digest is re-checked too.
@@ -268,14 +269,14 @@ export class RunnerModule {
       host: {
         rootfs: declared.rootfs,
         libdir: declared.libdir,
+        ...(declared.packages === undefined ? {} : { packages: declared.packages }),
         node: declared.node,
         systemBinds: declared.systemBinds,
         hidden: productSurfaceMasks(declared.libdir),
-        pi: confinedPath(declared.libdir, directories, entry),
+        pi: confinedPath(declared, directories, entry),
         // The adapter replaces this with the engine flags it composes.
         piModeArgs: [],
         tmpBytes: declared.tmpBytes,
-        checkResources: declared.checkResources,
         stateRoot: this.paths.stateRoot!,
         runRoot: this.paths.runRoot,
         limits: this.limits,
@@ -308,6 +309,8 @@ export class RunnerModule {
         let boundary;
         try { boundary = await this.adapter(batch, opened?.inference).deliver(batch); }
         finally { await opened?.relay.close(); }
+        // RUN-003: graceful yield leaves the prepared batch and mail untouched.
+        if (boundary === null) return;
         receipt = publishDeliveryReceipt(
           stateRoot,
           batch,

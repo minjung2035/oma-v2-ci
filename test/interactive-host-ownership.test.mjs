@@ -1,0 +1,233 @@
+// DR27: run the interactive host, substituting engine/stream boundaries, not its UI lifetime.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { Script } from 'node:vm';
+import path from 'node:path';
+import ts from 'typescript';
+const code = ts.transpileModule(readFileSync('src/entry/pi-interactive-host.ts', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText.replaceAll('import.meta.url', '"file:///fake/dist/src/entry/pi-interactive-host.js"');
+const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+async function world({ setModel, init, resourceReload, dispose, fail, moduleClose, observe } = {}) {
+  const timers = new Set(), channels = [], hooks = {}, sent = [], picks = [], changes = [], signals = [], commands = {}, modules = [];
+  const session = { model: { id: 'initial', provider: 'fake' }, thinkingLevel: 'off',
+    modelRuntime: {}, scopedModels: [], sessionManager: {},
+    subscribe() { return () => {}; },
+    async abort() { modules.push('abort'); },
+    async reload(options) { hooks.session_shutdown({ reason: 'reload' }); await resourceLoader.reload(options); hooks.session_start({}, context); },
+    async setModel(model) { changes.push(['model', model.id]); this.model = model; await setModel?.(); },
+    getAvailableThinkingLevels() { return ['off', 'high']; },
+    setThinkingLevel(level) { changes.push(['effort', level]); this.thinkingLevel = level; },
+  };
+  const context = { ui: {
+    setEditorComponent(factory) { factory({}, {}, {}); }, setHeader() {}, setFooter() {}, notify() {},
+    custom(factory) { return new Promise(resolve => {
+      const component = factory({ terminal: { columns: 80, rows: 24 }, requestRender() {} }, {}, {}, resolve);
+      picks.push(component);
+    }); },
+    select() { return new Promise(resolve => picks.push({ kind: 'worker-kind', choose: resolve })); },
+  } };
+  class InteractiveMode {
+    async init() { hooks.session_start({}, context); context.ui.setEditorComponent(() => ({})); await init?.({ hooks, channels }); }
+    constructor() { if (fail === 'constructor') throw new Error('injected constructor'); }
+    stop() {}
+    async handleFatalRuntimeError(_prefix, error) { modules.push(['fatal', error]); }
+    handleExportCommand() {} getCrashExtensionHint() {} showManagedToolStatus() {}
+  }
+  const resourceLoader = { async reload(options) { modules.push('resources-reload'); await resourceReload?.(options); },
+    getExtensions: () => ({ runtime: { invalidate() { modules.push('resources-invalidate'); } } }) };
+  const runtime = { session, async switchSession(path) { changes.push(['switch', path]); }, services: { resourceLoader },
+    async dispose() { modules.push('dispose'); hooks.session_shutdown({ reason: 'quit' }); await dispose?.(); } };
+  const dependencies = {
+    'node:net': { Socket: class {} }, 'node:fs': { readFileSync: () => '{"version":"test"}' },
+    'node:os': { userInfo: () => ({ homedir: '/home/fake' }) }, 'node:path': path,
+    'node:module': { createRequire: () => ({ resolve: () => '/fake/pi-open-tui/package.json' }) },
+    '@earendil-works/pi-coding-agent': {
+      VERSION: 'test', InteractiveMode,
+      async createAgentSessionRuntime(factory) { await factory({ sessionManager: {} }); return runtime; },
+      async createAgentSessionServices(options) {
+        options.resourceLoaderOptions.extensionFactories[0]({ registerMarkdownTransformer() {}, registerCommand(name, command) { commands[name] = command; }, registerShortcut() {},
+          on(event, handler) { hooks[event] = handler; } });
+        return { settingsManager: { applyOverrides() {} }, resourceLoader, diagnostics: {} };
+      },
+      async createAgentSessionFromServices() { if (fail === 'session') throw new Error('injected session'); return { session }; },
+      SettingsManager: { create() {} }, SessionManager: { continueRecent() {}, async listAll() { return []; } },
+      SessionSelectorComponent: class { constructor(load, _all, choose, cancel, quit) { Object.assign(this, { kind: 'resume', load, choose, cancel, quit }); } },
+      ModelSelectorComponent: class { constructor(_tui, _current, _runtime, _models, choose) { this.kind = 'model'; this.choose = choose; } },
+      ThinkingSelectorComponent: class { constructor(_current, _levels, choose) { this.kind = 'effort'; this.choose = choose; } },
+      DynamicBorder: class { render() { return []; } },
+    },
+    '../runtime/interactive-channel.js': { INTERACTIVE_UI_FD: 6, INTERACTIVE_RPC_FD: 5,
+      InteractiveChannel: class { constructor(_socket, _limits, accept, ended) { this.accept = accept; this.ended = ended; channels.push(this); }
+        send(event) { sent.push(event); } } },
+    '../tui/interactive-editor.js': { ownedEditor: (editor, handlers) => { Object.assign(commands, handlers); return editor; } },
+    '../runtime/interactive-display.js': { safeToolPresentation: value => value },
+    '../tui/panel-style.js': { stylePanel: () => [] }, '../tui/open-tui-brand.js': {},
+    '../tui/project-session-directories.js': { ProjectSessionDirectories: class { close() {} async snapshot() { return { dirs: ['/sessions'], histories: [] }; } } },
+    '../protocol/host-history.js': { parseHostHistoryReference() { throw new Error('No remote history in this fixture'); } },
+    '../runtime/pi-runtime.js': { preparePiInteractive() {} }, '../tui/limits.js': {},
+    '../runtime/extension-modules.js': { ExtensionModules: class {
+      refresh() { modules.push('modules-refresh'); }
+      close() { modules.push('modules-close'); moduleClose?.(); }
+    } },
+    '../domain/unseen-text.js': { UNSEEN: /[\x00-\x1f]/g, UNSEEN_EXCEPT_LAYOUT: /[\x00-\x08]/g },
+    '../config.js': { EFFORT_LEVELS: ['off', 'high'] },
+  };
+  const module = { exports: {} };
+  new Script(code).runInNewContext({ module, exports: module.exports, URL, Buffer,
+    process: { argv: ['node', 'fake', '--session-dir', '/sessions'], env: {
+      OMA_FRAME_BYTES: '262144', OMA_UI_IDLE_SECONDS: '30', OMA_UI_RECEIPT_SECONDS: '30', PI_CODING_AGENT_DIR: '/engine',
+    }, cwd: () => '/work', pid: 123, kill(pid, signal) { signals.push([pid, signal]); }, stdout: { write() {} } },
+    setTimeout(run) { const timer = { run, unref() {} }; timers.add(timer); return timer; },
+    clearTimeout(timer) { timers.delete(timer); },
+    require(name) { assert.ok(Object.hasOwn(dependencies, name), name); return dependencies[name]; },
+  });
+  observe?.({ modules, runtime, hooks });
+  await module.exports.runInteractive();
+  if (!observe) modules.length = 0;
+  return { timers, hooks, sent, picks, changes, channels, signals, context, runtime, commands, modules,
+    command(command = 'principal-model') { channels[0].accept({ type: 'engine_command', command }); },
+    tick() { for (const timer of [...timers]) { timers.delete(timer); timer.run(); } },
+  };
+}
+test('interactive owner: native extension identity advances before the existing loader reloads and returns on quit', async () => {
+  const w = await world();
+  await w.runtime.services.resourceLoader.reload();
+  assert.deepEqual(w.modules, ['modules-refresh', 'resources-reload']);
+  await w.runtime.dispose(); await w.runtime.dispose();
+  assert.deepEqual(w.modules, ['modules-refresh', 'resources-reload', 'abort', 'dispose', 'modules-close']);
+});
+test('interactive owner: rejected reload waits for runtime cleanup before fatal presentation', async () => {
+  let finish;
+  const problem = new Error('injected reload'), w = await world({ resourceReload: async () => { throw problem; },
+    dispose: () => new Promise(resolve => { finish = resolve; }) });
+  const pending = assert.rejects(w.runtime.session.reload(), error => error === problem); await flush();
+  assert.deepEqual(w.modules, ['modules-refresh', 'resources-reload', 'resources-invalidate', 'abort', 'dispose']);
+  finish(); await pending;
+  assert.equal(w.modules.filter(value => value === 'modules-close').length, 1);
+  assert.deepEqual(w.modules.at(-1), ['fatal', problem]);
+});
+for (const failure of ['session', 'constructor', 'init']) test(`interactive owner: ${failure} failure returns the acquired extension owners`, async () => {
+  let observed;
+  await assert.rejects(world({ fail: failure, init: failure === 'init' ? () => { throw new Error('injected init'); } : undefined,
+    observe: value => { observed = value; } }), new RegExp(`injected ${failure}`));
+  assert.equal(observed.modules.filter(value => value === 'modules-close').length, 1);
+  assert.equal(observed.modules.filter(value => value === (failure === 'session' ? 'resources-invalidate' : 'dispose')).length, 1);
+});
+test('interactive owner: primary and module-hook cleanup failures remain visible together', async () => {
+  const cleanup = new Error('injected hook cleanup');
+  await assert.rejects(world({ fail: 'constructor', moduleClose: () => { throw cleanup; } }), error =>
+    error.name === 'AggregateError' && error.errors.some(value => value.message === 'injected constructor') && error.errors.includes(cleanup));
+});
+test('interactive owner: normal model then effort is persisted and the panel returns', async () => {
+  const w = await world(); w.command(); w.tick();
+  assert.equal(w.picks[0].kind, 'model'); w.picks[0].choose({ id: 'chosen', provider: 'fake' }); await flush();
+  assert.equal(w.picks[1].kind, 'effort'); w.picks[1].choose('high'); await flush();
+  assert.deepEqual(w.changes, [['model', 'chosen'], ['effort', 'high']]); w.tick(); await flush();
+  assert.ok(w.sent.some(event => event.type === 'panel_open'));
+});
+for (const end of ['quit', 'resume', 'new', 'fork', 'reload', 'channel']) {
+  test(`interactive owner: ${end} returns deferred UI tasks and fences old callbacks`, async () => {
+    const w = await world(); w.command(); w.hooks.model_select();
+    const old = [...w.timers]; assert.equal(old.length, 2);
+    if (end === 'channel') w.channels[0].ended(); else w.hooks.session_shutdown({ reason: end });
+    assert.equal(w.timers.size, 0, 'old UI deferred tasks outlived their session');
+    const sent = w.sent.length; for (const timer of old) timer.run(); await flush();
+    assert.equal(w.picks.length, 0); assert.equal(w.sent.length, sent); assert.equal(w.timers.size, 0);
+  });
+}
+for (const end of ['quit', 'resume']) for (const step of ['model', 'effort', 'worker-kind', 'worker-model', 'worker-effort']) {
+  test(`interactive owner: ${end} during ${step} cannot persist or reopen UI`, async () => {
+    const w = await world(); const worker = step.startsWith('worker'); w.command(worker ? 'worker-model' : 'principal-model'); w.tick();
+    if (worker && step !== 'worker-kind') { w.picks.at(-1).choose('Choose a model and effort'); await flush(); }
+    if (step.endsWith('effort')) { w.picks.at(-1).choose({ id: 'chosen', provider: 'fake', reasoning: true }); await flush(); }
+    const before = w.changes.length; w.hooks.session_shutdown({ reason: end });
+    if (end === 'resume') w.hooks.session_start({}, w.context);
+    const pending = w.picks.at(-1), count = w.picks.length;
+    pending.choose(step === 'worker-kind' ? 'Same as the Principal' : step.endsWith('effort') ? 'high' : { id: 'late', provider: 'fake', reasoning: true });
+    await flush(); w.tick(); await flush();
+    assert.equal(w.changes.length, before, 'a stopped selector changed persistent settings');
+    assert.equal(w.picks.length, count); assert.equal(w.timers.size, 0);
+    assert.equal(w.sent.some(event => event.type === 'worker_model' || event.type === 'panel_open'), false);
+  });
+}
+
+test('interactive owner: a replacement accepts fresh selections but rejects the old deferred callbacks', async () => {
+  const w = await world(); w.command(); w.hooks.thinking_level_select(); const old = [...w.timers];
+  w.hooks.session_shutdown({ reason: 'resume' }); w.hooks.session_start({}, w.context);
+  const sent = w.sent.length; for (const timer of old) timer.run(); await flush();
+  assert.equal(w.picks.length, 0); assert.equal(w.sent.length, sent);
+  w.command('worker-model'); w.tick(); w.picks.at(-1).choose('Same as the Principal'); await flush();
+  assert.ok(w.sent.some(event => event.type === 'worker_model' && event.same === true));
+  assert.equal(w.timers.size, 1);
+});
+test('interactive owner: a consumed callback runs once and the reopen timer is returned at shutdown', async () => {
+  const w = await world(); w.command(); const old = [...w.timers][0]; w.tick(); old.run();
+  assert.equal(w.picks.length, 1); w.picks[0].choose(undefined); await flush();
+  const reopen = [...w.timers][0]; assert.ok(reopen);
+  w.hooks.session_shutdown({ reason: 'quit' }); assert.equal(w.timers.size, 0);
+  reopen.run(); await flush(); assert.equal(w.sent.some(event => event.type === 'panel_open'), false);
+});
+test('interactive owner: an already accepted model change does not open effort after the session ends', async () => {
+  let finish;
+  const w = await world({ setModel: () => new Promise(resolve => { finish = resolve; }) });
+  w.command(); w.tick(); w.picks[0].choose({ id: 'accepted', provider: 'fake' }); await flush();
+  assert.deepEqual(w.changes, [['model', 'accepted']]);
+  w.hooks.session_shutdown({ reason: 'resume' }); w.hooks.session_start({}, w.context);
+  const sent = w.sent.length; finish(); await flush(); w.tick();
+  assert.equal(w.picks.length, 1); assert.equal(w.sent.length, sent);
+});
+for (const command of ['principal-model', 'worker-model']) {
+  test(`interactive owner: an ended channel cannot acquire ${command}`, async () => {
+    const w = await world(); w.channels[0].ended(); w.command(command); w.hooks.model_select(); w.tick();
+    assert.equal(w.picks.length, 0); assert.equal(w.timers.size, 0);
+    assert.deepEqual(w.signals, [[123, 'SIGTERM']]);
+  });
+}
+
+for (const choice of ['Same as the Principal', 'Choose a model and effort']) {
+  test(`interactive owner: worker ${choice} persists normally`, async () => {
+    const w = await world(); w.command('worker-model'); w.tick(); w.picks[0].choose(choice); await flush();
+    if (choice !== 'Same as the Principal') {
+      w.picks[1].choose({ id: 'worker', provider: 'fake', reasoning: true }); await flush();
+      w.picks[2].choose('high'); await flush();
+    }
+    const event = w.sent.find(event => event.type === 'worker_model'); assert.ok(event);
+    if (choice === 'Same as the Principal') assert.equal(event.same, true);
+    else assert.deepEqual([event.provider, event.model, event.thinking], ['fake', 'worker', 'high']);
+    w.tick(); await flush(); assert.ok(w.sent.some(event => event.type === 'panel_open'));
+  });
+}
+test('interactive owner: old panel cleanup cannot clear the replacement panel', async () => {
+  const w = await world(); w.command(); w.tick(); w.picks[0].choose(undefined); await flush(); w.tick();
+  const old = w.picks.at(-1); assert.equal(typeof old.render, 'function');
+  w.hooks.session_shutdown({ reason: 'resume' }); w.hooks.session_start({}, w.context);
+  w.command(); w.tick(); w.picks.at(-1).choose(undefined); await flush(); w.tick(); await flush();
+  const sent = w.sent.length;
+  assert.equal(old.render(80).length, 0); old.handleInput('old'); assert.equal(w.sent.length, sent);
+  w.picks.at(-1).handleInput('current'); assert.equal(w.sent.at(-1).data, 'current');
+  w.hooks.session_shutdown({ reason: 'quit' }); await flush();
+});
+test('interactive owner: channel loss during initialization never reports readiness', async () => {
+  const w = await world({ init: ({ channels }) => channels[0].ended() });
+  assert.equal(w.sent.some(event => event.type === 'ready' || event.type === 'engine_state'), false);
+  w.command(); w.tick(); assert.equal(w.picks.length, 0);
+});
+
+for (const path of ['/sessions/old.jsonl', '/other/old.jsonl']) {
+  test(`interactive owner: an old resume selector cannot switch to ${path}`, async () => {
+    const w = await world(); assert.equal(w.commands.extensionCommand('/resume'), true);
+    const selector = w.picks.at(-1); assert.equal(selector.kind, 'resume');
+    w.hooks.session_shutdown({ reason: 'resume' }); w.hooks.session_start({}, w.context);
+    const sent = w.sent.length; selector.choose(path); selector.quit(); await flush();
+    assert.equal(w.changes.length, 0); assert.equal(w.sent.length, sent);
+    assert.equal((await selector.load()).length, 0);
+  });
+}
+test('interactive owner: the current resume selector retains same-society and other-society behavior', async () => {
+  const w = await world(); w.commands.extensionCommand('/resume'); w.picks.at(-1).choose('/sessions/current.jsonl'); await flush();
+  assert.deepEqual(w.changes, [['switch', '/sessions/current.jsonl']]);
+  w.commands.extensionCommand('/resume'); w.picks.at(-1).choose('/other/current.jsonl'); await flush();
+  assert.ok(w.sent.some(event => event.type === 'switch' && event.session === '/other/current.jsonl'));
+});

@@ -69,7 +69,7 @@ export function lifecycleReplayFixture() {
     getReceipt: (actor: string, key: string) => { const operation = store.getOperation(actor, key); return operation ? receiptOfOperation(operation) : null; },
     hasOperation: (actor: string, key: string) => store.getOperation(actor, key) !== null,
   };
-  const dispatcher = new PublicDispatcher({ store: publicStore, mail, lifecycle, git: null,
+  const dispatcher = new PublicDispatcher({ waitRun: () => { throw new Error("no live run in this fixture"); }, store: publicStore, mail, lifecycle, git: null,
     units: { statusSnapshot: () => Promise.reject(new Error("status is not part of the action replay fixture")) },
     views: { status: () => { throw new Error("status is not part of the action replay fixture"); } }, limits,
     isDraining: () => false, assertAdmission() {}, admitResource: () => () => undefined, refreshViews() {},

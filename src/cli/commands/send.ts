@@ -1,3 +1,5 @@
+import { isValidFullOid } from "../../domain/identifiers.js";
+import { prepareGoalEffects } from "../effects/goal.js";
 import { basename } from "node:path";
 import { parseMessageFileId } from "../../ids.js";
 import { exactCandidateCheck, isMailKind } from "../../domain/mail-values.js";
@@ -9,7 +11,7 @@ import { effect, randKey } from "../request-service.js";
 
 const SEND = {
   options: { "--subject": "value", "--file": "value", "--kind": "value", "--reply": "value", "--request": "value",
-    "--candidate": "value", "--expect": "value", "--policy-revision": "value" },
+    "--intent": "value", "--candidate": "value", "--expect": "value", "--policy-revision": "value" },
   positional: { min: 0, max: Number.MAX_SAFE_INTEGER },
 } as const;
 const ACK = { options: { "--request": "value" }, positional: { min: 1, max: 1 } } as const;
@@ -17,6 +19,22 @@ const ACK = { options: { "--request": "value" }, positional: { min: 1, max: 1 } 
 export function runSendCommand(args: string[]): Promise<never> {
   const parsed = parseArguments(args, SEND);
   const to = [...parsed.positional];
+  const intent = parsed.value("--intent");
+  if (intent !== null) {
+    if (intent !== "goal") fail("unknown mail intent", 2);
+    const expected = parsed.value("--expect"), subject = parsed.value("--subject"), file = parsed.value("--file");
+    if (expected === null || (expected !== "none" && !isValidFullOid(expected))) fail("GOAL mail requires --expect <oid|none>", 2);
+    if (!subject || !file || to.length !== 1 || to[0] !== "residents") fail("GOAL mail requires residents, --subject and --file", 2);
+    if (["--kind", "--reply", "--candidate", "--policy-revision"].some(name => parsed.value(name) !== null))
+      fail("GOAL mail cannot include ordinary mail kind, reply or approval fields", 2);
+    const base = expected === "none" ? null : expected;
+    return effect("context.publish", keyOf(parsed) ?? randKey(), () => {
+      const prepared = prepareGoalEffects(file, base);
+      return { method: "context.publish", params: { expected: base, goalMail: { subject }, entries: prepared.entries,
+        content: { ...prepared.digest, mediaType: "application/vnd.oma.context-v1" } }, digest: prepared.digest, stream: prepared.content };
+    }, () => ({ expected: base, goalMail: { subject } }));
+  }
+
   const subject = parsed.value("--subject");
   const reply = parsed.value("--reply");
   if (to.length === 0 && !reply) fail("send requires an address (or --reply)", 2);

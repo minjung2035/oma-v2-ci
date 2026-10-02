@@ -10,7 +10,7 @@ function fixture(frameBytes: number, main: string, published: string[]) {
   const unused = (): never => {
     throw new Error("unexpected fixture effect");
   };
-  const dispatcher = new PublicDispatcher({
+  const dispatcher = new PublicDispatcher({ waitRun: () => { throw new Error("no live run in this fixture"); },
     store: {
       listAgents: () => [{ name: "a" }],
       getAgent: () => makeValidAgent("a"),

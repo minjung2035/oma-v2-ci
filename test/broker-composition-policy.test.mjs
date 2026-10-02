@@ -356,7 +356,7 @@ test("P0V-58 / R03, DR16: the rootfs is put right after the startup quiescence a
   for (const later of ["bootstrap", "listen", "notify", "activate"])
     assert.ok(order("repair:/data/oma/fixture") < order(later), `${later} came before the repair: ${calls.join(" ")}`);
   assert.equal(calls.filter(name => name.startsWith("repair:")).length, 1);
-  assert.ok(lines.some(line => /rootfs 항목을 기대값으로 되돌렸습니다: \/data\/oma\/fixture\/rootfs\/etc\/passwd/.test(line)), lines.join(" | "));
+  assert.ok(lines.some(line => /Restored rootfs entry to its expected value: \/data\/oma\/fixture\/rootfs\/etc\/passwd/.test(line)), lines.join(" | "));
 });
 
 test("P0V-58 / DR16: a rootfs that could not be put right ends startup: nothing listens and nothing wakes", async () => {

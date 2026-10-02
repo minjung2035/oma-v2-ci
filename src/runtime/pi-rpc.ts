@@ -1,5 +1,6 @@
 // Gated Pi RPC transport. This helper neither starts Runner consumption nor proves S-03.
-import type { ChildProcessWithoutNullStreams } from "../process/async.js";
+import type { ChildProcess, ChildProcessWithoutNullStreams } from "node:child_process";
+import type { Readable, Writable } from "node:stream";
 import { performance } from "node:perf_hooks";
 import type { ProtocolLimits } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
@@ -9,6 +10,11 @@ export type PiRpcLimits = Pick<
   ProtocolLimits,
   "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds"
 >;
+export function assertPiRpcLimits(limits: PiRpcLimits): void {
+  if (!limits || [limits.frameBytes, limits.idleStreamSeconds, limits.receiptWaitSeconds]
+    .some(value => !Number.isSafeInteger(value) || value <= 0))
+    throw new StoreError("UNSUPPORTED_PROFILE", "Pi transport requires explicit positive channel limits");
+}
 /** DR15: the event a PiRpcClient's observers receive in place of an engine
  * event whose line was larger than the frame. `bytes` is the line's size. */
 export const SKIPPED_EVENT = "oma_event_skipped";
@@ -18,7 +24,7 @@ export interface Timer {
 /** WP10.02: the one deadline primitive. Measured on the monotonic clock and
  * re-armed in native-sized steps, so a budget longer than the platform timer
  * limit neither fires early nor overflows. Cancel is final. */
-export function alarm(seconds: number, action: () => void): Timer {
+export function alarm(seconds: number, action: () => void, unref = false): Timer {
   const deadline = performance.now() + seconds * 1000;
   let active = true;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -31,6 +37,7 @@ export function alarm(seconds: number, action: () => void): Timer {
       return;
     }
     timer = setTimeout(tick, Math.max(1, Math.min(0x7fffffff, remaining)));
+    if (unref) timer.unref();
   };
   tick();
   return {
@@ -60,7 +67,14 @@ export function commandWasNotWritten(error: unknown): boolean {
   return typeof error === "object" && error !== null && UNWRITTEN.has(error);
 }
 
+export interface PiRpcStreams {
+  readonly stdin: Writable;
+  readonly stdout: Readable;
+  readonly stderr: Readable;
+}
+
 export class PiRpcClient {
+  private readonly streams: PiRpcStreams;
   private readonly reader: JsonlReader;
   private readonly limits: Readonly<PiRpcLimits>;
   private readonly observers = new Set<(event: PiEvent) => void>();
@@ -76,21 +90,15 @@ export class PiRpcClient {
    * zero queued parsed events; observers are synchronous and may unsubscribe.
    */
   constructor(
-    readonly child: ChildProcessWithoutNullStreams,
+    readonly child: ChildProcess,
     limits: PiRpcLimits,
+    streams?: PiRpcStreams,
+    private readonly stopChild?: () => void,
   ) {
-    if (
-      !limits ||
-      [
-        limits.frameBytes,
-        limits.idleStreamSeconds,
-        limits.receiptWaitSeconds,
-      ].some((value) => !Number.isSafeInteger(value) || value <= 0)
-    )
-      throw new StoreError(
-        "UNSUPPORTED_PROFILE",
-        "Pi transport requires explicit positive channel limits",
-      );
+    if (!streams && (!child.stdin || !child.stdout || !child.stderr))
+      throw new StoreError("UNSUPPORTED_PROFILE", "Pi transport requires explicit streams");
+    this.streams = streams ?? child as ChildProcessWithoutNullStreams;
+    assertPiRpcLimits(limits);
     this.limits = Object.freeze({ ...limits });
     // DR15: an engine event larger than the frame is skipped whole and
     // reported, as one event, to everyone who reads this engine's events.
@@ -100,15 +108,21 @@ export class PiRpcClient {
     });
     // P0V-27, P0-4: first, so a child that could not be started cannot end
     // this process with an unhandled `error` while the rest is attached.
-    child.once("error", this.onError);
-    child.stdout.on("data", this.onData);
-    child.stdout.once("end", this.onEnd);
-    child.stdout.on("error", this.onError);
-    child.stderr.on("data", this.onStderr);
-    child.stderr.on("error", this.onError);
-    child.stdin.on("error", this.onError);
-    child.stdin.on("drain", this.onDrain);
-    child.once("close", this.onChildClose);
+    try {
+      child.once("error", this.onError);
+      this.streams.stdout.on("data", this.onData);
+      this.streams.stdout.once("end", this.onEnd);
+      this.streams.stdout.on("error", this.onError);
+      this.streams.stderr.on("data", this.onStderr);
+      this.streams.stderr.on("error", this.onError);
+      this.streams.stdin.on("error", this.onError);
+      this.streams.stdin.on("drain", this.onDrain);
+      child.once("close", this.onChildClose);
+    } catch (error) {
+      try { this.terminate(error); }
+      catch (cleanup) { throw new AggregateError([error, cleanup], "Pi transport setup and cleanup failed"); }
+      throw error;
+    }
   }
   get diagnosticMetadata(): Readonly<{ stderrBytes: number }> {
     return { stderrBytes: this.stderrCount };
@@ -239,7 +253,7 @@ export class PiRpcClient {
       };
       this.pending = pending;
       try {
-        const accepted = this.child.stdin.write(`${text}\n`, (error) => {
+        const accepted = this.streams.stdin.write(`${text}\n`, (error) => {
           if (this.pending !== pending) return;
           if (error) {
             this.terminate(error);
@@ -276,26 +290,27 @@ export class PiRpcClient {
         ),
     );
     const child = this.child;
-    child.stdout.off("data", this.onData);
-    child.stdout.off("end", this.onEnd);
-    child.stdout.off("error", this.onError);
-    child.stderr.off("data", this.onStderr);
-    child.stderr.off("error", this.onError);
-    child.stdin.off("error", this.onError);
-    child.stdin.off("drain", this.onDrain);
+    this.streams.stdout.off("data", this.onData);
+    this.streams.stdout.off("end", this.onEnd);
+    this.streams.stdout.off("error", this.onError);
+    this.streams.stderr.off("data", this.onStderr);
+    this.streams.stderr.off("error", this.onError);
+    this.streams.stdin.off("error", this.onError);
+    this.streams.stdin.off("drain", this.onDrain);
     child.off("error", this.onError);
     child.off("close", this.onChildClose);
     // Late OS stream errors are absorbed after ownership is released, not emitted
     // as unhandled EventEmitter errors or delivered to stale observers.
     const ignore = (): void => {};
     child.on("error", ignore);
-    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+    for (const stream of [this.streams.stdin, this.streams.stdout, this.streams.stderr]) {
       stream.on("error", ignore);
       stream.destroy();
     }
     if (child.exitCode === null && child.signalCode === null) {
       try {
-        child.kill("SIGKILL");
+        if (this.stopChild) this.stopChild();
+        else child.kill("SIGKILL");
       } catch {
         /* only this owned child */
       }

@@ -28,10 +28,11 @@ const limits: ProtocolLimits = {
 };
 const context = { limits };
 
-test("public/internal registries are closed, disjoint, and classify all 11 mutations", () => {
-  assert.equal(Object.keys(PUBLIC_METHODS).length, 16);
+test("public/internal registries are closed, disjoint, and classify all 13 mutations", () => {
+  assert.equal(Object.keys(PUBLIC_METHODS).length, 19);
+  assert.deepEqual(PUBLIC_METHODS["operation.read"].authority, ["current-actor", "own-operation"]);
   assert.equal(Object.keys(INTERNAL_METHODS).length, 10);
-  assert.equal(Object.values(PUBLIC_METHODS).filter(d => d.mode === "mutation").length, 11);
+  assert.equal(Object.values(PUBLIC_METHODS).filter(d => d.mode === "mutation").length, 13);
   for (const [method, descriptor] of Object.entries(PUBLIC_METHODS)) {
     assert.equal(isInternalMethod(method), false);
     assert.equal(descriptor.key, descriptor.mode === "mutation" ? "required" : "forbidden");
@@ -61,6 +62,9 @@ test("conditional authority and stream policy are not replaced with capability-o
 
 test("the shared params decoder is closed and consumes the caller's host limits", () => {
   assert.deepEqual(decodePublicParams("agent.wait", {}, context), {});
+  assert.deepEqual(decodePublicParams("agent.wait", { observe: true }, context), { observe: true });
+  for (const observe of [false, null, 1, "true"])
+    assert.equal(decodePublicParams("agent.wait", { observe }, context), null);
   assert.equal(decodePublicParams("agent.wait", { request: "extra" }, context), null);
   const mail = { to: ["alice"], subject: "subject", kind: "message", body: "body" };
   assert.deepEqual(decodePublicParams("mail.send", mail, context), mail);

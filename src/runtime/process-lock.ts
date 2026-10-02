@@ -2,6 +2,7 @@ import { closeSync, constants, fstatSync, openSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { lockFileDescriptor } from "../leaf.js";
 import { StoreError } from "../domain/errors.js";
+import { withCleanup } from "../process/cleanup.js";
 
 /** The exit status a process uses to say "the society already has an owner",
  * as distinct from "I failed to start". They are not interchangeable: the
@@ -42,7 +43,9 @@ export class ProcessLock {
       const stat = fstatSync(fd, { bigint: true });
       if (!stat.isFile() || stat.nlink !== 1n) throw new StoreError("BROKER_UNAVAILABLE", "process lock is not an exclusively named regular file");
       return new ProcessLock(fd, target, stat.dev, stat.ino);
-    } catch (error) { if (held) closeSync(fd); throw error; }
+    } catch (error) {
+      return withCleanup(() => { throw error; }, () => { if (held) closeSync(fd); });
+    }
   }
   /** The open descriptor the lock lives on.
    *

@@ -10,7 +10,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { observedStorageBytes } from "../src/storage/quota.js";
@@ -77,10 +77,10 @@ test("AV7 / INV02, arch §23.5: a mailbox that cannot be listed is not an empty 
     app.feed(CTRL_X);
     // P0V-66: what waits for the session is the ledger's (unknown here); the
     // mailbox that could not be listed makes what arrived unknown, not 0.
-    assert.match(last(), /Mail\s+unknown \(.*\) · 새 도착 unknown \(메일함을 읽지 못함\)/);
-    assert.doesNotMatch(last(), /0건/, "the Dashboard counted an unlisted mailbox as none waiting");
+    assert.match(last(), /Mail\s+unknown \(.*\) · New arrivals unknown \(mailbox unreadable\)/);
+    assert.doesNotMatch(last(), /\b0 new arrivals/, "the Dashboard counted an unlisted mailbox as none waiting");
     app.feed(RIGHT); app.feed(RIGHT);
-    assert.match(last(), /메일함 일부를 읽지 못함 \(EACCES/, "the Mail screen did not say part of the mailbox was unread");
+    assert.match(last(), /Part of the mailbox is unreadable \(EACCES/, "the Mail screen did not say part of the mailbox was unread");
     assert.match(last(), /settled/, "what could be read was not shown");
   });
 });
@@ -104,4 +104,19 @@ test("DR13 / INV02: a message file that cannot be read now is not 'no message'; 
     chmodSync(join(pending, "m2"), 0o600);
     assert.equal(unreadCount(paths), 2);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("DR27/INV10: an empty stored inode has positive cost; a hardlink does not double-charge its data", t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-empty-storage-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const empty = join(root, "empty"); writeFileSync(empty, "");
+  assert.ok(observedStorageBytes(empty) >= 1);
+  const before = observedStorageBytes(root);
+  for (let n = 0; n < 100; n++) writeFileSync(join(root, `empty-${n}`), "");
+  assert.ok(observedStorageBytes(root) >= before + 100);
+  const large = join(root, "large"); writeFileSync(large, "x".repeat(128 * 1024));
+  const one = observedStorageBytes(root);
+  linkSync(large, join(root, "alias"));
+  assert.ok(observedStorageBytes(root) < one + observedStorageBytes(large));
 });

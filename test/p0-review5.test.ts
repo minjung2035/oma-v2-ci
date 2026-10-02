@@ -164,9 +164,8 @@ test("P0V-59 / R04, P0-1: a unit another state tree's society of the same name i
   assert.throws(() => ours.assertResidentNamesFree("alice"), conflict, "a create was accepted onto another tree's unit");
   assert.throws(() => ours.ensureResident("alice", "p", resources), conflict);
   assert.throws(() => ours.start("alice", false), conflict);
-  // This society has no unit under the name: stopping it touches nothing, and
-  // what is observed is that absence, not the other society's Resident.
-  assert.equal(ours.stop("alice", 1).activeState, "inactive");
+  // Stopping touches no foreign unit, but cannot prove an earlier run dead.
+  assert.throws(() => ours.stop("alice", 1), { code: "RUN_TERMINATION_UNKNOWN" });
   assert.equal(ours.observe("alice").cgroup, "");
   assert.equal(readFileSync(join(dir, "oma-demo-alice.service"), "utf8"), service, "another tree's unit was replaced");
   const calls = (() => { try { return readFileSync(log, "utf8"); } catch { return ""; } })();

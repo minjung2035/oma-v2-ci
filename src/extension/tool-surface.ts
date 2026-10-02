@@ -4,9 +4,9 @@ import { textResult } from "./shared.js";
 
 /** TSP-005..008: apply the host-validated tool surface projection.
  *
- * The plan arrives already validated: cycles, duplicates, unknown references
- * and limits were rejected at config load. Inside the sandbox this code only
- * does set arithmetic over Pi's own tool registry. It never loads an extension,
+ * The plan's structure is validated at config load. The live registry can only
+ * be checked after extensions load: group names must not replace real tools,
+ * and selectors must resolve. This code never loads an extension,
  * never wraps a tool and never executes another extension's handler — opening a
  * group activates the real tools so Pi's own pipeline runs them.
  */
@@ -99,16 +99,30 @@ export function expandedActiveTools(
   return { next: [...active].sort(), revealed };
 }
 
-export function registerToolSurface(pi: ExtensionAPI, always: readonly string[]): void {
+export function registerToolSurface(pi: ExtensionAPI, always: readonly string[], permitted?: (name: string) => boolean): void {
   const parsed = parseSurfacePlan(process.env.OMA_TOOL_SURFACE);
-  if (parsed.state === "absent") return;
+  if (parsed.state === "absent") {
+    if (permitted) pi.on("session_start", () => pi.setActiveTools(pi.getActiveTools().filter(permitted)));
+    return;
+  }
+  let refusal: string | null = "OMA tool surface has not been validated";
+  // Pi reports session_start exceptions but continues running. The effect
+  // boundary must stay closed even if applying the fallback itself fails.
+  pi.on("tool_call", event => refusal !== null && !always.includes(event.toolName)
+    ? { block: true, reason: refusal } : undefined);
   // TSP-007: the projection is a containment decision, so a host that refuses
   // the change leaves the surface in an unproven state. Failing loudly is the
   // only outcome that cannot silently expose a tool meant to be disabled.
   const apply = (names: readonly string[], phase: string): void => {
-    try { pi.setActiveTools([...names]); }
-    catch (error) {
-      throw new Error(`OMA tool surface ${phase} could not be applied: ${error instanceof Error ? error.message : String(error)}`);
+    try {
+      const allowed = permitted ? names.filter(permitted) : names;
+      pi.setActiveTools([...allowed]);
+      const actual = new Set(pi.getActiveTools());
+      if (actual.size !== new Set(allowed).size || allowed.some(name => !actual.has(name)))
+        throw new Error("the engine did not apply the exact active tool set");
+    } catch (error) {
+      refusal = `OMA tool surface ${phase} could not be applied: ${error instanceof Error ? error.message : String(error)}`;
+      throw new Error(refusal);
     }
   };
   if (parsed.state === "malformed") {
@@ -116,19 +130,24 @@ export function registerToolSurface(pi: ExtensionAPI, always: readonly string[])
     // extensions are still loading, and throwing here would stop the trusted
     // extension from loading at all. The surface is narrowed at session start,
     // before the model can call anything.
-    pi.on("session_start", () => { apply(always, `fallback (${parsed.reason})`); });
+    refusal = `OMA tool surface is malformed: ${parsed.reason}`;
+    pi.on("session_start", () => { apply(always, `fallback (${parsed.reason})`); throw new Error(refusal!); });
     return;
   }
   const plan = parsed.plan;
-  for (const group of plan.groups) {
+  const registeredGroups = new Map<string, unknown>();
+  const registerGroups = (): void => { for (const group of plan.groups) {
+    if (registeredGroups.has(group.name)) continue;
+    const parameters = Type.Object({});
     pi.registerTool({
       name: group.name,
       label: group.name,
       description: `${group.description} Opening this group enables its tools for the next turn.`,
       promptSnippet: "Open a tool group to reveal the tools it contains.",
-      parameters: Type.Object({}),
+      parameters,
       executionMode: "sequential",
       async execute() {
+        if (refusal !== null) throw new Error(refusal);
         // An unreadable active set must not be treated as empty: that would
         // deactivate every tool the session already had.
         let active: readonly string[];
@@ -136,7 +155,7 @@ export function registerToolSurface(pi: ExtensionAPI, always: readonly string[])
         catch (error) {
           throw new Error(`OMA tool surface could not read the active tools: ${error instanceof Error ? error.message : String(error)}`);
         }
-        const { next, revealed } = expandedActiveTools(active, group.children);
+        const { next, revealed } = expandedActiveTools(active, permitted ? group.children.filter(permitted) : group.children);
         apply(next, `group "${group.name}"`);
         const text = revealed.length === 0
           ? `${group.name}: already enabled (${group.children.join(", ")})`
@@ -144,17 +163,34 @@ export function registerToolSurface(pi: ExtensionAPI, always: readonly string[])
         return textResult(text, { group: group.name, revealed });
       },
     });
-  }
+    registeredGroups.set(group.name, parameters);
+  } };
   const project = (): void => {
-    let registered: string[];
-    try { registered = pi.getAllTools().map((tool) => tool.name); }
-    catch (error) {
-      throw new Error(`OMA tool surface could not read the registered tools: ${error instanceof Error ? error.message : String(error)}`);
+    refusal = "OMA tool surface has not been validated";
+    try {
+      let tools: ReturnType<ExtensionAPI["getAllTools"]>;
+      try { tools = pi.getAllTools(); }
+      catch (error) {
+        throw new Error(`OMA tool surface could not read the registered tools: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      const registered = new Set(tools.map(tool => tool.name));
+      for (const group of plan.groups) {
+        const existing = tools.find(tool => tool.name === group.name);
+        if (always.includes(group.name) || (existing && (!registeredGroups.has(group.name) || existing.parameters !== registeredGroups.get(group.name))))
+          throw new Error(`OMA tool surface group "${group.name}" conflicts with a registered tool`);
+      }
+      for (const name of [...plan.direct, ...plan.disabled, ...plan.grouped])
+        if (!registered.has(name)) throw new Error(`OMA tool surface references unknown tool "${name}"`);
+      registerGroups();
+      apply(initialActiveTools(plan, [...registered], always), "projection");
+      refusal = null;
+    } catch (error) {
+      refusal = error instanceof Error ? error.message : String(error);
+      apply(always, "fallback");
+      throw error;
     }
-    apply(initialActiveTools(plan, registered, always), "projection");
   };
-  // Registering tools is allowed while loading; reading or setting the active
-  // set is not. The projection therefore happens only at session start, which
-  // still precedes any model turn.
+  // Pi allows post-bind registration. Validate before registering groups so
+  // neither a built-in nor another extension's handler can be overwritten.
   pi.on("session_start", () => { project(); });
 }

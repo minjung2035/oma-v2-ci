@@ -12,6 +12,7 @@ import { reconcileMailOperation, type RecoveryCounts } from "./mail/reconcile.js
 import { OperationRecovery, type RecoveryRow } from "./reconcile/operations.js";
 import { GitModule } from "./git.js";
 import { UnitsModule } from "./units.js";
+import { quiesceResidents } from "./lifecycle/society.js";
 import { LifecycleModule } from "./lifecycle.js";
 import { pendingWork } from "./views/pending-work.js";
 import { collectUnacceptedArtifacts, type PreacceptCollection } from "./reconcile/preaccept.js";
@@ -29,8 +30,8 @@ export interface ReconcilePaths {
  * a workspace or activate, so they are never disguised as settlement. */
 function recoveryCategory(kind: RecoveryRow["kind"]): ResourceCategory {
   switch (kind) {
-    case "mail.send": case "agent.continue": case "mail.ack": case "route.follow": case "route.unfollow": return "settle";
-    case "agent.stop": return "safety-control";
+    case "attest.record": case "mail.send": case "agent.continue": case "mail.ack": case "route.follow": case "route.unfollow": return "settle";
+    case "society.set": case "agent.stop": return "safety-control";
     case "agent.create": case "agent.start": case "git.submit": case "git.integrate": case "context.publish": return "admit";
     default: return assertNever(kind);
   }
@@ -61,25 +62,11 @@ export class ReconcileModule {
   get preacceptCollection(): PreacceptCollection | null { return this.collected; }
   private collected: PreacceptCollection | null = null;
   get unitDiagnostics(): readonly UnitRecoveryDiagnostic[] { return this.diagnostics; }
-  private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true; }
+  private activation(allowed = true): boolean { return allowed && this.paths.activationAllowed() === true && this.store.societyOpen(); }
   private admit(category: ResourceCategory): Release { return this.paths.resourceGate?.(category) ?? NO_HOLD; }
   /** Every resident gets its stop attempt; one unconfirmed death does not skip the rest. */
   private quiesceResidents(): void {
-    const failures: unknown[] = [];
-    for (const agent of this.store.listAgents()) {
-      if (agent.role !== "resident") continue;
-      try {
-        this.admit("safety-control")();
-        if (!this.units.confirmDead(agent.name, agent.incarnation)) this.units.stop(agent.name, agent.incarnation);
-        if (!this.units.confirmDead(agent.name, agent.incarnation)) throw new StoreError("RUN_TERMINATION_UNKNOWN", `startup cannot prove ${agent.name} terminated`);
-      } catch (error) { failures.push(error); }
-    }
-    if (failures.length === 0) return;
-    // Corruption stays the reported fact so it still reaches the sticky fence.
-    const primary = failures.find(error => errorCodeOf(error) === "STORE_CORRUPT") ?? failures[0];
-    if (failures.length === 1) throw primary;
-    throw new StoreError(errorCodeOf(primary), primary instanceof Error ? primary.message : "startup cannot prove every resident terminated",
-      { cause: new AggregateError(failures, "startup cannot prove every resident terminated") });
+    quiesceResidents(this.store, this.units, this.paths.resourceGate);
   }
   /** D03: the drain of a broker whose Residents are bound to no unit. The
    * same per-resident stop and death proof as startup, so a later startup finds
@@ -106,14 +93,14 @@ export class ReconcileModule {
         const operation = this.store.getOperationById(id);
         if (!operation || (operation.state !== "pending" && operation.state !== "unknown")) continue;
         switch (operation.kind) {
-          case "mail.send": case "agent.continue":
+          case "attest.record": case "mail.send": case "agent.continue":
             try {
               const release = this.admit(recoveryCategory(operation.kind));
               try { await reconcileMailOperation(this.store, this.mail, id); } finally { release(); }
             }
             catch (error) { this.retainRecoveryFailure(error); }
             break;
-          case "agent.create": case "agent.start": case "agent.stop":
+          case "society.set": case "agent.create": case "agent.start": case "agent.stop":
           case "git.submit": case "git.integrate": case "context.publish":
             await this.recover(operation, allowActivation); break;
           // These operations commit their complete effect within a single DB T.
@@ -129,7 +116,8 @@ export class ReconcileModule {
     const release = this.admit(recoveryCategory(operation.kind));
     try {
       switch (operation.kind) {
-        case "mail.send": case "agent.continue": await reconcileMailOperation(this.store, this.mail, operation.id); return;
+        case "society.set": this.lifecycle.reconcileSociety(operation.id); return;
+        case "attest.record": case "mail.send": case "agent.continue": await reconcileMailOperation(this.store, this.mail, operation.id); return;
         case "agent.create": await this.lifecycle.reconcileCreate(operation.id, this.activation(allowed)); return;
         case "agent.start": case "agent.stop": this.lifecycle.reconcileAction(operation.id, this.activation(allowed)); return;
         case "git.submit": case "git.integrate": case "context.publish":
@@ -182,7 +170,7 @@ export class ReconcileModule {
           if (current.desired === "retired") {
             diagnostics.push({ agent: agent.name, outcome: "unknown", reason: "retired_during_observation" }); continue;
           }
-          if (current.desired === "stopped") {
+          if (current.desired === "stopped" || !this.store.societyOpen()) {
             // Do not trust an old async inactive observation as death proof.
             if (!this.units.confirmDead(current.name, current.incarnation)) {
               this.admit("safety-control")();

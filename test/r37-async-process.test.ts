@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { startProcess, runProcess } from "../src/process/async.js";
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import { once } from "node:events";
+import { startProcess, runProcess, spawnSandboxed, stopOwnedChild } from "../src/process/async.js";
 import { PreparationExecutor } from "../src/process/preparation.js";
 import type { CommandSpec } from "../src/process/command.js";
 
@@ -86,4 +89,39 @@ test("R37: an uncertain native outcome keeps the preparation owner blocked", { s
   controller.abort();
   assert.notEqual((await first).kind, "exited"); assert.equal(executor.blocked, true);
   await assert.rejects(executor.run(command("process.exit(0)")), { code: "REF_STATE_UNKNOWN" });
+});
+
+
+for (const slot of [5, 3]) {
+  test(`DR27/P0-4: sandbox descriptor ${slot} setup failure retains its original error and releases the child`, { timeout: 5000 }, async t => {
+    // Exercise the actual spawn/transfer owner with local pipes, not bubblewrap
+    // or a manager. No deployment rootfs or provider is used here.
+    const child = childProcess.spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"],
+      { stdio: ["pipe", "pipe", "pipe", "pipe", "ignore", "pipe"] });
+    const exited = once(child, "close");
+    t.after(async () => { t.mock.restoreAll(); syncBuiltinESMExports(); child.kill("SIGKILL"); await exited; });
+    const channel = child.stdio[slot] as import("node:stream").Writable;
+    const problem = new Error(`injected descriptor ${slot} write failure`);
+    t.mock.method(channel, "end", () => { throw problem; });
+    t.mock.method(childProcess, "spawn", () => child);
+    syncBuiltinESMExports();
+    assert.throws(() => spawnSandboxed(["bwrap", "--seccomp", "3", "--", "/bin/true"], {}, new Uint8Array([0])), error => error === problem);
+    assert.equal(child.killed, true, "a transfer failure never hands the child to a caller");
+    for (const stream of child.stdio) if (stream) assert.equal(stream.destroyed, true);
+    await exited;
+  });
+}
+
+test("DR27/P0-4: failed stream return still attempts every other child resource", { timeout: 5000 }, async t => {
+  const child = childProcess.spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { stdio: ["pipe", "pipe", "pipe"] });
+  const exited = once(child, "close");
+  const problem = new Error("injected stream return failure");
+  const destroy = child.stdin.destroy;
+  const fault = t.mock.method(child.stdin, "destroy", function () { destroy.call(child.stdin); throw problem; });
+  t.after(async () => { fault.mock.restore(); child.kill("SIGKILL"); await exited; });
+  assert.throws(() => stopOwnedChild(child), error => error instanceof AggregateError && error.errors[0] === problem);
+  assert.equal(child.killed, true);
+  assert.equal(child.stdout.destroyed, true); assert.equal(child.stderr.destroyed, true);
+  fault.mock.restore();
+  await exited;
 });

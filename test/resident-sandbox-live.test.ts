@@ -94,7 +94,7 @@ test("T117 a confined Resident reaches its provider only through the relay, with
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
@@ -105,10 +105,8 @@ test("T117 a confined Resident reaches its provider only through the relay, with
         host: {
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
-          pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
+          pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           tmpBytes: 64 * 1024 * 1024,
-          checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
-            workspaceBytes: 1 << 24, stagingBytes: 1 << 24, checkTimeoutSeconds: 30 },
           stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -189,7 +187,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
       sessions: runnerSessionDirPathAt(stateRoot, actor),
     };
     for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
-    const notice = "새 연락 1건. 전체 목록: /inbox.md\n1. mail m-00000000-0000-4000-8000-0000000000a7-0";
+    const notice = "새 연락 1건. Full list: /inbox.md\n1. mail m-00000000-0000-4000-8000-0000000000a7-0";
     const batch = { id: "b-00000000-0000-4000-8000-0000000000a7", agent: actor, incarnation: 1, deliveryMode: "followUp" as const,
       notice, messageIds: ["m-00000000-0000-4000-8000-0000000000a7-0"], sessionPath: null, indexPath: "/inbox.md" as const };
     writeFileSync(join(directories.view, `batch-${batch.id}.json`), JSON.stringify({ id: batch.id, agent: actor, incarnation: 1,
@@ -208,7 +206,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 1 << 20, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "anthropic", model: "claude-fable-5", turnSeconds: 90, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "anthropic", model: "claude-fable-5", inferenceSeconds: 90, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
@@ -219,10 +217,8 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
         host: {
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
-          pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
+          pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           tmpBytes: 64 * 1024 * 1024,
-          checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
-            workspaceBytes: 1 << 24, stagingBytes: 1 << 24, checkTimeoutSeconds: 30 },
           stateRoot, runRoot, limits: { frameBytes: 1 << 20, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -230,6 +226,7 @@ test("V27A: the bundled engine, on the production plan, delivers a batch to a se
       },
     });
     const boundary = await adapter.deliver(batch);
+    assert.ok(boundary);
     assert.equal(boundary.batchId, batch.id);
     assert.match(boundary.entryId, /^[0-9a-f]{8}$/);
     // The notification is one fact; the entry in the engine's own session file
@@ -344,7 +341,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
     for (const path of Object.values(directories)) mkdirSync(path, { recursive: true });
     const manifest = {
       id: "b-00000000-0000-4000-8000-000000000000", agent: actor, incarnation: 1, deliveryMode: "followUp",
-      notice: "새 연락 1건. 전체 목록: /inbox.md\n1. mail m-00000000-0000-4000-8000-000000000001-0",
+      notice: "새 연락 1건. Full list: /inbox.md\n1. mail m-00000000-0000-4000-8000-000000000001-0",
       messageIds: ["m-00000000-0000-4000-8000-000000000001-0"],
     };
     writeFileSync(join(directories.view, `batch-${manifest.id}.json`), JSON.stringify(manifest));
@@ -358,7 +355,7 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
@@ -369,10 +366,8 @@ test("T117 a confined Resident loads the trusted extension and receives mail as 
         host: {
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
-          pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
+          pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           tmpBytes: 64 * 1024 * 1024,
-          checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
-            workspaceBytes: 1 << 24, stagingBytes: 1 << 24, checkTimeoutSeconds: 30 },
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -445,7 +440,7 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
@@ -456,10 +451,8 @@ test("T117 the host product's code cannot be read inside a Resident (TUI-003)", 
         host: {
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: masks,
-          pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
+          pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           tmpBytes: 64 * 1024 * 1024,
-          checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
-            workspaceBytes: 1 << 24, stagingBytes: 1 << 24, checkTimeoutSeconds: 30 },
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },
         lease, directories,
@@ -521,7 +514,7 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
     const adapter = new PiAdapter({
       actor, society: "live",
       limits: { frameBytes: 262144, idleStreamSeconds: 60, receiptWaitSeconds: 30, batchMaxMessages: 24, mailBodyBytes: 4096, contextBytes: 1 << 20, bundleBytes: 1 << 20 },
-      profile: { provider: "pi", model: "current", turnSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
+      profile: { provider: "pi", model: "current", inferenceSeconds: 600, prompt: "", workspaceBytes: 1 << 24, extensions: [] },
       paths: {
         piCommand: runtime.executable, piArgs: runtime.args, piAgentDir: join(stateRoot, "pi"),
         coreExtension: join(root, "dist/src/pi-extension.js"), cli: join(root, "dist/src/cli.js"),
@@ -532,10 +525,8 @@ test("AV16 / CLI-001, arch §11.1: inside the production sandbox `oma` is the in
         host: {
           rootfs: residentRootfsPath(stateRoot), libdir: root,
           node: realpathSync(process.execPath), systemBinds: hostSystemLayout().binds, hidden: productSurfaceMasks(root),
-          pi: confinedPath(root, directories, runtime.args[0]!), piModeArgs: [],
+          pi: confinedPath({ libdir: root }, directories, runtime.args[0]!), piModeArgs: [],
           tmpBytes: 64 * 1024 * 1024,
-          checkResources: { memoryBytes: 1 << 30, tasks: 64, cpuQuotaPercent: 100, tmpBytes: 1 << 26,
-            workspaceBytes: 1 << 24, stagingBytes: 1 << 24, checkTimeoutSeconds: 30 },
           stateRoot, runRoot, limits: { frameBytes: 262144, batchMaxMessages: 24 },
         },
         lease, directories,

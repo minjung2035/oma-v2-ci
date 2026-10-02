@@ -12,7 +12,7 @@ export type { StoreWrites } from "./facets.js";
 
 const BRAND: unique symbol = Symbol("StoreTransaction");
 export type StoreReads = Pick<Store,
-  "getAgent" | "listAgents" | "subscribers" | "allSubscriptions" | "claimKey" |
+  "societyOpen" | "getAgent" | "listAgents" | "subscribers" | "allSubscriptions" | "claimKey" |
   "getOperation" | "getOperationById" | "findPhysicalCreate" | "recoverableOperations" |
   "getDelivery" | "pendingDeliveries" | "deliveriesForOperation" | "getBatch" |
   "preparedBatches" | "pendingBatchesFor" | "getUsage" | "usageRows"

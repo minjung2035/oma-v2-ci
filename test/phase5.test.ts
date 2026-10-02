@@ -29,7 +29,7 @@ import { ViewsModule } from "../src/views.js";
 import { LifecycleModule } from "../src/lifecycle.js";
 import { Broker, peerCgroup } from "../src/broker.js";
 import { FrameParser, encodeFrame } from "../src/frame.js";
-import { candidateArgv } from "../src/sandbox.js";
+import { candidateCheckCommand } from "../src/runtime/candidate-checks.js";
 import { PI_ADAPTER_REVISION, publishDeliveryReceipt } from "../src/storage/delivery-receipt.js";
 import type {
   AuthContext,
@@ -387,7 +387,7 @@ socket.on("data", chunk => { data = Buffer.concat([data, chunk]); if (data.lengt
   }
 });
 
-test("RUN-001: a populated pinned old cgroup blocks incarnation handoff", () => {
+test("RUN-001: a populated pinned old cgroup blocks incarnation handoff", async () => {
   const env = envOf();
   const cgroup = readFileSync("/proc/self/cgroup", "utf8").trim().split("::")[1]!;
   const registry = Reflect.get(env.broker, "runLeases") as RunRegistry;
@@ -404,7 +404,7 @@ test("RUN-001: a populated pinned old cgroup blocks incarnation handoff", () => 
     const previous = registry.begin("a", 1, "1".repeat(32), cgroup);
     const baseline = observe("a");
     units.observe = () => ({ ...baseline, cgroup, invocationId: "2".repeat(32) });
-    assert.throws(() => Reflect.get(env.broker, "openRun").call(env.broker, "a", "2".repeat(32)), /previous invocation cgroup/);
+    await assert.rejects(() => Reflect.get(env.broker, "openRun").call(env.broker, "a", "2".repeat(32)), /previous invocation cgroup/);
     assert.equal(env.store.getAgent("a")!.incarnation, 1);
     assert.equal(previous.population(), "populated", "a pinned cgroup is observed, never assumed dead");
   } finally { units.observe = observe; env.cleanup(); }
@@ -547,7 +547,7 @@ test("T25 deterministic core: capped batches alternate direct and public mail", 
       ["direct", "public", "direct", "public"],
     );
     assert.match(batch.notice, /sender=.*subject=.*kind=.*path=\/mail\/archive\/cur\//);
-    assert.match(batch.notice, /전체 목록: \/inbox\.md/);
+    assert.match(batch.notice, /Full list: \/inbox\.md/);
     await mail.send(auth("b", ["mail.send"]), "late-direct", {
       to: ["a"],
       subject: "late",
@@ -619,14 +619,10 @@ test("prepared batch manifest shape stays compatible with the trusted extension"
 
 
 test("SB-005-negative: candidate argv rejects empty commands and keeps tmp cap", () => {
-  const host = {
-    rootfs: "/trusted/rootfs",
-    libdir: "/opt/oma",
-    node: "/usr/bin/node",
-    pi: "/usr/bin/pi",
-    piModeArgs: [],
-    tmpBytes: 4096,
-    checkResources: {
+  const paths = { stateRoot: "/state", projectGit: "/state/project.git", contextGit: "/state/context.git", worldDir: "/state/world",
+    society: "demo", quarantineTmpBytes: 1024, checkRootfs: "/trusted/rootfs", checkNode: process.execPath, checkAssetsDir: "/checks" };
+  const check = { id: "bounds", argv: ["/bin/true"], env: {}, timeoutSeconds: 1,
+    resources: {
       memoryBytes: 1,
       tasks: 1,
       cpuQuotaPercent: 1,
@@ -636,17 +632,17 @@ test("SB-005-negative: candidate argv rejects empty commands and keeps tmp cap",
       checkTimeoutSeconds: 1,
     },
   };
-  const argv = candidateArgv(host, "/candidate", "/checks", 4096, ["/bin/true"]);
-  const size = argv.indexOf("--size");
+  const argv = candidateCheckCommand(paths, "a".repeat(40), check, []).argv;
+  const size = argv.lastIndexOf("--size");
   assert.notEqual(size, -1);
   assert.equal(argv[size + 1], "4096");
   assert.throws(
-    () => candidateArgv(host, "/candidate", "/checks", 0, ["/bin/true"]),
-    (e: unknown) => e instanceof Error && (e as { code?: string }).code === "CHECK_FAILED",
+    () => candidateCheckCommand(paths, "a".repeat(40), { ...check, resources: { ...check.resources, tmpBytes: 0 } }, []),
+    (e: unknown) => e instanceof Error && (e as { code?: string }).code === "UNSUPPORTED_PROFILE",
   );
   assert.throws(
-    () => candidateArgv(host, "/candidate", "/checks", 4096, []),
-    (e: unknown) => e instanceof Error && (e as { code?: string }).code === "CHECK_FAILED",
+    () => candidateCheckCommand(paths, "a".repeat(40), { ...check, argv: [] }, []),
+    (e: unknown) => e instanceof Error && (e as { code?: string }).code === "UNSUPPORTED_PROFILE",
   );
 });
 

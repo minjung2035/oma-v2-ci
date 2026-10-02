@@ -18,6 +18,7 @@ import type { SessionLauncher } from "../src/platform/guest/host.js";
 import { HOST_GUEST_PROTOCOL, PLATFORM_FRAME_BYTES } from "../src/protocol/host-guest.js";
 import { HOST_API_VERSION } from "../src/protocol/host-api.js";
 import { LocalDriver, listenSilently } from "./fixtures/local-guest.js";
+import { holdSocketNames } from "./fixtures/socket-names.js";
 
 const KEY = randomBytes(32);
 function sealedRoundTrip(dir: string, plain: Buffer): { sealed: string; open: () => Buffer } {
@@ -51,6 +52,18 @@ test("MAC-621: an archive is sealed in chunks that open only whole, in order, an
 
 async function world(t: import("node:test").TestContext, running: boolean, storageFloorBytes = 0) {
   const dir = mkdtempSync(join(tmpdir(), "oma-archive-"));
+  const socketNames = holdSocketNames(dir);
+  let holder: Server | null = null, driver: LocalDriver | null = null, service: HostService | null = null;
+  t.after(async () => {
+    try { if (service !== null) await service.shutdown(); }
+    finally {
+      try { if (driver !== null) await driver.dispose(); }
+      finally {
+        try { if (holder !== null) await new Promise<void>(resolve => holder!.close(() => resolve())); }
+        finally { socketNames.close(); rmSync(dir, { recursive: true, force: true }); }
+      }
+    }
+  });
   const runDir = join(dir, "run"); mkdirSync(runDir);
   const recordPath = join(dir, "host-record.json"); const record = newHostRecord(); writeHostRecord(recordPath, record);
   const societiesDir = join(dir, "data", "oma");
@@ -59,17 +72,16 @@ async function world(t: import("node:test").TestContext, running: boolean, stora
   writeFileSync(join(root, "config.json"), "{}"); writeFileSync(join(root, "store.db"), "db"); writeFileSync(join(root, "store.db-wal"), "wal");
   writeFileSync(join(root, "mail/cur/1"), "a letter"); writeFileSync(join(root, "run/broker.sock"), "not kept");
   const holderPath = join(dir, "demo.sock");
-  const holder: Server | null = running ? await listenSilently(holderPath) : null;
+  holder = running ? await listenSilently(holderPath) : null;
   const launcher: SessionLauncher = { socketPath: () => holderPath, start: async () => {}, stop: async () => "stopped" };
-  const driver = new LocalDriver(dir, { dir: societiesDir, launcher }, record.instanceId);
+  driver = new LocalDriver(dir, { dir: societiesDir, launcher }, record.instanceId);
   const keychain = new Map<string, string>();
-  const service = await HostService.start({ runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git",
+  service = await HostService.start({ runDir, recordPath, driver, uid: process.getuid!(), git: "/usr/bin/git",
     archivesDir: join(dir, "archives"), storageFloorBytes, keychain: { get: async a => keychain.get(a), put: async (a, v) => { keychain.set(a, v); } },
     identity: { hostVersion: "1.0.0", installationId: record.installationId, instanceId: record.instanceId, expectImage: "2026.09.1",
       protocol: { min: HOST_GUEST_PROTOCOL, max: HOST_GUEST_PROTOCOL } },
     resolve: async () => { throw new Error("unused"); },
     timings: { handshakeDeadlineMs: 2000, handshakeRetryMs: 20, drainDeadlineMs: 800, healthEveryMs: 1000, hungAfterMs: 2000, restarts: { max: 3, windowMs: 60_000, backoffMs: 20 } } });
-  t.after(async () => { await service.shutdown().catch(() => undefined); await driver.dispose(); await new Promise(r => holder === null ? r(null) : holder.close(r)); rmSync(dir, { recursive: true, force: true }); });
   const token = readFileSync(join(runDir, "token"), "utf8").trim();
   const call = async (method: string, params: Record<string, unknown>, key?: string): Promise<Record<string, unknown>> => {
     const socket = connect(join(runDir, "hostapi.sock"));

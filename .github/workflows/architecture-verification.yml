@@ -52,7 +52,7 @@ jobs:
       - name: Record which bytes of that commit were verified
         # A commit name says which revision was meant; it does not say which
         # bytes ran. This is the same closure the local R38 gate compares
-        # against `implementation/validation.md`, taken before any generator
+        # against `docs/implementation/validation.md`, taken before any generator
         # rewrites an input, so the evidence and the record answer to one
         # number -- and that number is filed under one commit.
         run: |

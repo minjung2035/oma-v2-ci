@@ -9,6 +9,10 @@ import { join } from "node:path";
 import { StoreError } from "../src/domain/errors.js";
 import { keychainCredentials, type KeychainStore } from "../src/platform/host/keychain.js";
 import { hostResolver } from "../src/platform/host/resolver.js";
+import { ProcessLock } from "../src/runtime/process-lock.js";
+import { renameSync } from "node:fs";
+import { setTimeout as pause } from "node:timers/promises";
+import { spawn } from "node:child_process";
 
 const KEY = "sk-ant-api03-" + "k".repeat(40);
 function memoryKeychain(initial: Record<string, string> = {}): KeychainStore & { items: Map<string, string>; locked: boolean; writes: number } {
@@ -68,4 +72,77 @@ test("§7.2: writes to the credential are serialized, each seeing the one before
   assert.deepEqual((await store.list()).map(entry => entry.providerId).sort(), ["a", "b", "c"]);
   await store.delete("b");
   assert.equal(await store.read("b"), undefined);
+});
+
+for (const value of ["{", "null", "[]"]) test(`Keychain credential owner: corrupt ${value} is not an empty blob`, async () => {
+  const keychain = memoryKeychain({ "engine-managed": value }), store = keychainCredentials(keychain, "engine-managed");
+  await assert.rejects(store.read("fixture"), code("STORE_CORRUPT"));
+  await assert.rejects(store.list(), code("STORE_CORRUPT"));
+  await assert.rejects(store.modify("fixture", async () => ({ type: "api_key", key: "fixture" }) as never), code("STORE_CORRUPT"));
+  await assert.rejects(store.delete("fixture"), code("STORE_CORRUPT"));
+  assert.equal(keychain.writes, 0); assert.equal(keychain.items.get("engine-managed"), value);
+});
+
+test("Keychain credential owner: helper actual close, not successful put, returns the writer lock", async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-keychain-lock-")), lockPath = join(root, "credentials.lock");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const keychain = memoryKeychain(); let returned = false, finish!: () => void, acquired!: () => void;
+  const entered = new Promise<void>(resolve => { acquired = resolve; });
+  const store = keychainCredentials({ ...keychain, async withWriter(fence, run) {
+    assert.ok(Number.isInteger(fence)); assert.equal(ProcessLock.tryAcquire(lockPath), null);
+    const result = await run(keychain); acquired();
+    await new Promise<void>(resolve => { finish = resolve; }); return result;
+  } }, "engine-managed", lockPath);
+  const result = store.modify("fixture", async () => ({ type: "api_key", key: "local-fixture" }) as never).then(() => { returned = true; });
+  await entered; assert.equal(keychain.writes, 1); assert.equal(returned, false);
+  assert.equal(ProcessLock.tryAcquire(lockPath), null);
+  finish(); await result;
+  const lock = ProcessLock.tryAcquire(lockPath); assert.ok(lock); lock.close();
+});
+
+test("Keychain credential owner: abort while waiting for another process lock writes nothing", async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-keychain-abort-")), lockPath = join(root, "credentials.lock");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const held = ProcessLock.acquire(lockPath), keychain = memoryKeychain(), controller = new AbortController();
+  try {
+    const store = keychainCredentials(keychain, "engine-managed", lockPath);
+    const pending = store.modify("fixture", async () => ({ type: "api_key", key: "fixture" }) as never, { signal: controller.signal });
+    const refused = assert.rejects(pending, error => error instanceof Error && error.name === "AbortError");
+    await pause(35); controller.abort(); await refused;
+    assert.equal(keychain.writes, 0); assert.equal(ProcessLock.tryAcquire(lockPath), null);
+  } finally { held.close(); }
+});
+
+test("Keychain credential owner: a replaced lock pathname after the callback cannot authorize put", async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-keychain-inode-")), lockPath = join(root, "credentials.lock");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const keychain = memoryKeychain(), store = keychainCredentials(keychain, "engine-managed", lockPath);
+  await assert.rejects(store.modify("fixture", async () => {
+    renameSync(lockPath, join(root, "old.lock")); writeFileSync(lockPath, "");
+    return { type: "api_key", key: "fixture" } as never;
+  }), code("BROKER_UNAVAILABLE"));
+  assert.equal(keychain.writes, 0);
+  const lock = ProcessLock.tryAcquire(join(root, "old.lock")); assert.ok(lock); lock.close();
+});
+
+test("Keychain credential owner: concurrent processes reread the previous committed fixture blob", { timeout: 10_000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), "oma-keychain-processes-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const blob = join(root, "fixture-credentials.json"), lockPath = join(root, "credentials.lock");
+  writeFileSync(blob, "{}");
+  const module = new URL("../src/platform/host/keychain.js", import.meta.url).href;
+  const script = `import { readFileSync, writeFileSync } from "node:fs";
+import { keychainCredentials } from ${JSON.stringify(module)};
+import { setTimeout as pause } from "node:timers/promises";
+const store = keychainCredentials({ async get() { return readFileSync(${JSON.stringify(blob)}, "utf8"); },
+  async put(_account, value) { writeFileSync(${JSON.stringify(blob)}, value); } }, "fixture", ${JSON.stringify(lockPath)});
+await store.modify(process.argv[1], async current => { if (current !== undefined) throw new Error("not first");
+  await pause(40); return { type: "api_key", key: "local-fixture" }; });`;
+  await Promise.all(["a", "b", "c", "d"].map(provider => new Promise<void>((resolve, reject) => {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", script, provider], { env: { PATH: "/usr/bin:/bin", HOME: root }, stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = ""; child.stderr.on("data", chunk => { stderr += chunk; }); child.on("error", reject);
+    child.once("close", status => { if (status === 0) resolve(); else reject(new Error(`fixture process failed: ${stderr}`)); });
+  })));
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(blob, "utf8"))).sort(), ["a", "b", "c", "d"]);
+  const lock = ProcessLock.tryAcquire(lockPath); assert.ok(lock); lock.close();
 });

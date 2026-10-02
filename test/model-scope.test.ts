@@ -75,7 +75,7 @@ test("AV3 / INV04, INV09, PR-004: an engine whose workspace overlaps what the pr
     workspace, sessionDir: runnerSessionDirPathAt(state, "alice"), agentHome: join(agentRootPathAt(state, "alice"), "home"),
     mailArchive: join(state, "mail", "archive", "cur"), batchView: runnerViewPathAt(state, "alice"), socket: "/run/oma/control.sock" });
   const options = (workspace: string) => ({ actor: "alice", society: "demo", paths: paths(workspace),
-    profile: { provider: "p", model: "m", turnSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
+    profile: { provider: "p", model: "m", inferenceSeconds: 1, prompt: "", workspaceBytes: 1024, extensions: [] },
     limits: { frameBytes: 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1, batchMaxMessages: 4, mailBodyBytes: 1024 } }) as never;
   for (const workspace of [agentRootPathAt(state, "alice"), join(runnerSessionDirPathAt(state, "alice"), "w")])
     assert.throws(() => planPiSpawn(options(workspace)), (error: unknown) => code(error) === "UNSUPPORTED_PROFILE", workspace);

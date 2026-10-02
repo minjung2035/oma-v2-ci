@@ -1,15 +1,9 @@
-/** DR18 (D-9): how a Human logs the society's engine in and picks its model.
- *
- * PRODUCT asks for two things at once: OMA builds no authentication screen of
- * its own, and the engine's sessions run only in RPC mode. Both hold here.
- * `oma login` hands the terminal to the bundled engine's own interactive mode
- * over this society's engine directory -- the one every session of this
- * society reads its credentials and model settings from -- and the Human uses
- * the engine's own login and model selection there. When it exits, the next
- * `oma` start runs its session in RPC mode over what was written. */
-import { piIsolationEnv, resolvePiRuntime } from "../runtime/pi-runtime.js";
+/** DR18 (D-9) / DR25: the Human uses the bundled engine's own login or package
+ * command, not an OMA authentication screen. OMA's engine directory (or package
+ * store) is explicit; the caller holds its fence until the child actually closes. */
+import { PI_AGENT_DIR_ENV, piIsolationEnv, resolvePiRuntime } from "../runtime/pi-runtime.js";
 import { spawnInteractive } from "../process/async.js";
-import { ensureDirectory } from "../storage/directory.js";
+import { ensureUserDirectory } from "../runtime/user-files.js";
 
 export interface EngineLogin {
   readonly stateRoot: string;
@@ -21,19 +15,27 @@ export interface EngineLogin {
   /** The Human's environment, which the engine's own flows need (a browser,
    * a terminal type); the engine directory is set over it. */
   readonly env: Readonly<Record<string, string | undefined>>;
+  /** DR25: a package command instead of the login -- its arguments, run over
+   * the package store as the engine's agent directory. */
+  readonly packages?: { readonly store: string; readonly args: readonly string[] } | undefined;
 }
 
 /** Runs the engine's interactive mode and answers with its exit status. */
 export function runEngineLogin(login: EngineLogin): Promise<number> {
   const runtime = resolvePiRuntime({ stateRoot: login.stateRoot, libdir: login.libdir, override: login.override });
-  ensureDirectory(runtime.agentDir, 0o700);
+  const agentDir = login.packages?.store ?? runtime.agentDir;
+  ensureUserDirectory(agentDir);
   const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(login.env)) if (typeof value === "string") env[name] = value;
-  Object.assign(env, piIsolationEnv(runtime));
-  const child = spawnInteractive(runtime.executable, runtime.args, runtime.agentDir, env, login.fence);
+  // The user's own Pi settings (its agent and session directories) are not oma's engine's.
+  for (const [name, value] of Object.entries(login.env))
+    if (typeof value === "string" && !name.startsWith("PI_CODING_AGENT_")) env[name] = value;
+  Object.assign(env, piIsolationEnv(runtime), { [PI_AGENT_DIR_ENV]: agentDir });
+  const child = spawnInteractive(runtime.executable, [...runtime.args, ...(login.packages?.args ?? [])], agentDir, env, login.fence);
   return new Promise(resolve => {
-    child.once("error", () => { resolve(1); });
-    // Ended by a signal: not a login that finished.
-    child.once("exit", code => { resolve(code ?? 1); });
+    let failed = false;
+    // An error/exit notification cannot return the caller's lock while the
+    // child's own handles are still open. Spawn failure also ends with close.
+    child.once("close", (code, signal) => { resolve(failed || signal !== null ? 1 : code ?? 1); });
+    child.on("error", () => { failed = true; });
   });
 }

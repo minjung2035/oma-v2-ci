@@ -2,15 +2,17 @@
  * machine, the guest link, egress, the Host API, and the host record. The
  * entry adds only the Mac-specific pieces (the VM helper, the paths). */
 import type { Server } from "node:net";
-import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { GuestLink, type HostIdentity } from "./guest-link.js";
 import { VmLifecycle, type LifecycleOptions, type VmDriver } from "./lifecycle.js";
 import { EgressHost, type EgressHostOptions } from "./egress.js";
 import { startHostApi } from "./host-api.js";
-import { readHostRecord, writeHostRecord, type HostRecord } from "./record.js";
-import { MacGit, fileSink, getStream, putStream } from "./project.js";
+import { readHostRecord, writeHostRecord, type HostRecord, type ProjectRecord } from "./record.js";
+import type { ProjectBookmarks } from "./bookmark.js";
+import { MacGit, fileSink, getStream, putStream, sha256File } from "./project.js";
+import { writePackageArchive } from "../package-archive.js";
 import { sealedArchiveSink } from "./archive-crypto.js";
 import { collectTemporaries } from "./files.js";
 import { ProcessLock } from "../../runtime/process-lock.js";
@@ -46,6 +48,9 @@ export interface HostServiceOptions {
   /** MAC-660's floor, when it is not the spec's max(5 GiB, 10% of the state
    * disk): the free space below which new transfers are refused. */
   readonly storageFloorBytes?: number;
+  /** DR25: the package store `oma pi` installs into on the Mac. */
+  readonly packagesDir?: string;
+  readonly bookmarks?: ProjectBookmarks;
 }
 
 const GIB = 1024 ** 3;
@@ -87,6 +92,7 @@ export class HostService {
 
   private static async startHeld(options: HostServiceOptions, lock: ProcessLock): Promise<HostService> {
     const record = (update: (current: HostRecord) => HostRecord): void => {
+      lock.assertHeld(join(options.runDir, "omahostd.lock"));
       const current = readHostRecord(options.recordPath);
       if (current !== null) writeHostRecord(options.recordPath, update(current));
     };
@@ -100,8 +106,9 @@ export class HostService {
     });
     const egress = new EgressHost({
       open: () => link.bytes("egress"), resolve: options.resolve,
-      // The product's default idleStreamSeconds: the host reads no society's configuration.
-      limits: { concurrent: 4, timeoutMs: 30_000 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
+      // v1 guests supplied no model budget. v2 carries it per run, not as a
+      // host-wide RPC timeout. The compatibility value is the old model default.
+      limits: { concurrent: 4, timeoutMs: 600_000 }, frameBytes: PLATFORM_FRAME_BYTES, maxPool: 32,
     });
     lifecycle.onState(state => {
       if (state === "ready") {
@@ -113,12 +120,24 @@ export class HostService {
     link.onReboot(() => { void egress.forgetBoot(); });
     options.power?.(event => { if (event === "wake") void lifecycle.woke().catch(() => undefined); });
 
-    const stopRecorded = async (): Promise<"stopped" | "forced"> => {
-      const result = await lifecycle.stop();
-      if (result === "stopped") record(current => ({ ...current, lastStop: "clean" }));
-      return result;
-    };
+    const stopRecorded = (): Promise<"stopped" | "forced"> => lifecycle.stop();
     const git = new MacGit(options.git);
+    const projects = (): readonly ProjectRecord[] => {
+      const current = readHostRecord(options.recordPath);
+      if (current === null) throw new StoreError("STORE_CORRUPT", "The app's project record is missing");
+      return current.projects;
+    };
+    const bookmarks = (): ProjectBookmarks => {
+      if (options.bookmarks === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Project bookmarks are unavailable");
+      return options.bookmarks;
+    };
+    const projectRepo = async (project: ProjectRecord, requested?: string): Promise<string> => {
+      const repo = realpathSync(await bookmarks().resolve(project.bookmark));
+      if (requested !== undefined && realpathSync(requested) !== repo)
+        throw new StoreError("INVALID_REQUEST", "The project folder does not match its saved bookmark; bind its new location first");
+      await git.verifyIdentity(repo, project);
+      return repo;
+    };
     const transfer = join(options.runDir, "transfer");
     mkdirSync(transfer, { recursive: true, mode: 0o700 });
     mkdirSync(options.archivesDir, { recursive: true, mode: 0o700 });
@@ -142,20 +161,89 @@ export class HostService {
         stop: stopRecorded,
         society: () => link.json("society"),
         terminal: (society, takeover) => link.bytes("terminal", { society, ...(takeover ? { takeover: true as const } : {}) }),
+        bindProject: async params => {
+          const repo = realpathSync(params.macRepo);
+          const identity = await git.identity(repo);
+          const bookmark = await bookmarks().create(repo);
+          if (realpathSync(await bookmarks().resolve(bookmark)) !== repo)
+            throw new StoreError("BROKER_UNAVAILABLE", "The project bookmark does not identify the selected folder");
+          // The existing writer re-reads after the asynchronous inspection.
+          // Repeating a bind for this Society keeps its original project ID.
+          let selected: ProjectRecord | undefined;
+          record(current => {
+            const prior = current.projects.find(p => p.society === params.society);
+            if (prior !== undefined && (prior.objectFormat !== identity.objectFormat ||
+                !identity.rootCommits.some(root => prior.rootCommits.includes(root))))
+              throw new StoreError("INVALID_REQUEST", "This Society is bound to another repository");
+            selected = prior === undefined ? { ...identity, projectId: randomUUID(), society: params.society,
+              displayName: basename(repo).slice(0, 200), bookmark } : { ...prior, bookmark };
+            return { ...current, projects: [...current.projects.filter(p => p.society !== params.society), selected] };
+          });
+          if (selected === undefined) throw new StoreError("STORE_CORRUPT", "The app's project record is missing");
+          return { projectId: selected.projectId, displayName: selected.displayName, society: selected.society };
+        },
+        projectExtensions: async projectId => {
+          const project = projects().find(p => p.projectId === projectId);
+          if (project === undefined) throw new StoreError("INVALID_REQUEST", "The project is not bound on this Mac");
+          if (lifecycle.state !== "ready") throw new StoreError("BROKER_UNAVAILABLE", "Project settings require an already running engine");
+          const peer = await link.json("society");
+          try { return await peer.request("project.extensions", { projectId }); }
+          finally { peer.close(); }
+        },
+        sessions: async (method, params) => {
+          const project = projects().find(p => p.projectId === params.projectId);
+          if (project === undefined || params.society !== undefined && params.society !== project.society)
+            throw new StoreError("INVALID_REQUEST", "That history is not bound to a project on this Mac");
+          if (method === "session.resume") await lifecycle.start();
+          else if (lifecycle.state !== "ready") throw new StoreError("BROKER_UNAVAILABLE", "Guest histories require an already running engine");
+          await projectRepo(project);
+          const peer = await link.json("society");
+          try { return await peer.request(method, { ...params, society: project.society }); }
+          finally { peer.close(); }
+        },
         importProject: async (key, params) => {
+          const project = projects().find(p => p.projectId === params.projectId);
+          if (project === undefined) throw new StoreError("INVALID_REQUEST", "Bind the project on this Mac before importing it");
+          const repo = await projectRepo(project, params.macRepo);
           const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.import.bundle`);
           assertRoom(transfer, 0, floor);
           try {
-            const bundled = await git.bundle(params.macRepo, params.branch, params.since, file);
+            const bundled = await git.bundle(repo, params.branch, params.since, file);
             await putStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
             const society = await link.json("society");
             try {
-              return await society.request("project.import",
+              const result = await society.request("project.import",
                 { projectId: params.projectId, branch: params.branch, bundle: { bytes: bundled.bytes, sha256: bundled.sha256 } }, key);
+              if (typeof result.head !== "string" || !new RegExp(`^[0-9a-f]{${project.objectFormat === "sha256" ? 64 : 40}}$`).test(result.head))
+                throw new StoreError("BROKER_UNAVAILABLE", "The import result could not be observed");
+              const head = result.head;
+              record(current => ({ ...current, projects: current.projects.map(p => p.projectId === project.projectId
+                ? { ...p, lastImport: { head, at: Date.now() } } : p) }));
+              return result;
+            } finally { society.close(); }
+          } finally { rmSync(file, { force: true }); }
+        },
+        syncPackages: async (key, params) => {
+          if (options.packagesDir === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "this OMA keeps no packages");
+          const file = join(transfer, `${createHash("sha256").update(key).digest("hex")}.packages`);
+          assertRoom(transfer, 0, floor);
+          try {
+            // The whole store, as it is now: what `oma pi` installed and the list it keeps.
+            rmSync(file, { force: true });
+            await writePackageArchive(options.packagesDir, file);
+            const declared = { bytes: statSync(file).size, sha256: await sha256File(file) };
+            await putStream(await link.bytes("stream"), key, file, PLATFORM_FRAME_BYTES);
+            const society = await link.json("society");
+            try {
+              return await society.request("packages.replace",
+                { archive: declared, ...(params.activate === undefined ? {} : { activate: params.activate }), ...(params.projectId === null ? {} : { projectId: params.projectId }) }, key);
             } finally { society.close(); }
           } finally { rmSync(file, { force: true }); }
         },
         exportProject: async (key, params) => {
+          const project = projects().find(p => p.society === params.society);
+          if (project === undefined) throw new StoreError("INVALID_REQUEST", "The Society is not bound to a project on this Mac");
+          const repo = await projectRepo(project, params.macRepo);
           const society = await link.json("society");
           let exported: Record<string, unknown>;
           try { exported = await society.request("project.export", { society: params.society, ...(params.since === null ? {} : { since: params.since }) }, key); }
@@ -164,7 +252,12 @@ export class HostService {
           try {
             await getStream(await link.bytes("stream"), key, declared => { assertRoom(transfer, declared.bytes, floor); return fileSink(file); },
               PLATFORM_FRAME_BYTES);
-            return { ...exported, ...(await git.fetchExport(params.macRepo, file)), ref: "refs/remotes/oma/main" };
+            // Recheck immediately before writing the Human's repository.
+            await git.verifyIdentity(repo, project);
+            const fetched = await git.fetchExport(repo, file);
+            record(current => ({ ...current, projects: current.projects.map(p => p.projectId === project.projectId
+              ? { ...p, lastExport: { head: fetched.head, at: Date.now() } } : p) }));
+            return { ...exported, ...fetched, ref: "refs/remotes/oma/main" };
           } finally { rmSync(file, { force: true }); }
         },
         archive: async (key, society) => {

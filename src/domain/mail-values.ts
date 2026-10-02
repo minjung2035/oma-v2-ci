@@ -16,13 +16,17 @@ export const MAIL_HEADER_BYTES = 256 * 1024;
  * within `bodyBytes`. The two are different units: the body limit counts the
  * UTF-8 text the sender wrote, and the stored message is that text after its
  * transfer encoding, plus its header block. Quoted-printable is the widest
- * encoding the writer chooses: every byte may become "=XX", and every output
+ * retained legacy encoding (fresh bodies use Base64): every byte may become "=XX", and every output
  * line of at most 76 characters may end in a soft break ("=" CRLF). A reader
  * that bounded the stored file by the body limit refused ordinary mail (a
  * Korean body of about 190 KB, under a 256 KiB body limit). */
 export function storedMailBytes(bodyBytes: number): number {
   const encoded = 3 * bodyBytes;
   return MAIL_HEADER_BYTES + encoded + 3 * Math.ceil(encoded / 73) + 2;
+}
+/** MAIL-003/P0V-118: one header value is one string line, never coerced. */
+export function mailHeaderValueCheck(value: unknown): string | null {
+  return typeof value !== "string" ? "not a string" : /[\r\n]/.test(value) ? "contains CR/LF" : null;
 }
 export function isMailKind(value: unknown): value is MailInput["kind"] {
   return typeof value === "string" && Object.hasOwn(KINDS, value);
@@ -59,7 +63,8 @@ export function parseRfcMessageId(value: unknown): RfcMessageId | null {
     ? value as RfcMessageId : null;
 }
 
-/** This tuple is a mail claim. It is never an authorization attestation. */
+/** One exact tuple grammar. Its container determines whether it is a mail claim
+ * or authenticated attestation; these bytes alone never confer authority. */
 export function exactCandidateCheck(value: unknown): string | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return "expected approval identity object";
   const identity = value as Record<string, unknown>;

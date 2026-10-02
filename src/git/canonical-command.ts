@@ -1,7 +1,7 @@
 // GIT-004/008: bounded canonical command adapter. Effect exit status is never CAS proof.
 import { GIT_ENV } from "../process/policies.js";
 import { runProcessSync } from "../process/run.js";
-import { GitObserver, classifyRefAfterCas, gitOidArgument, gitRefArgument, type GitProcessEvidence, type RefAfterCas } from "./observe.js";
+import { GitObserver, classifyRefAfterCas, gitOidArgument, gitRefArgument, type GitProcessEvidence, type GitObservation, type RefAfterCas } from "./observe.js";
 
 export const GIT_BIN = "/usr/bin/git";
 export const CANONICAL_PROCESS_LIMITS = { timeout: 120000, maxBuffer: 4 * 1024 * 1024 } as const;
@@ -39,4 +39,16 @@ export function createCanonicalRef(observations: GitObserver, repository: string
     CANONICAL_PROCESS_LIMITS.timeout, CANONICAL_PROCESS_LIMITS.maxBuffer);
   const after = classifyRefAfterCas(observations.ref(repository, ref), null, candidate);
   return { after, created: after.kind === "candidate" && made.status === 0 };
+}
+
+/** DR27: a no-op has no changed main ref to witness completed authorization.
+ * Verify main and create one immutable operation ref in the same Git ref
+ * transaction. Only that one ref changes, so there is no multi-ref crash-
+ * atomicity assumption. A child exit is not proof: read the witness afterwards. */
+export function authorizeCanonicalNoop(observations: GitObserver, repository: string, ref: string,
+  candidate: string): GitObservation<string> {
+  evidence(["--git-dir", repository, "update-ref", "--stdin"], CANONICAL_PROCESS_LIMITS.timeout,
+    CANONICAL_PROCESS_LIMITS.maxBuffer, `start\nverify refs/heads/main ${gitOidArgument(candidate)}\n` +
+      `create ${gitRefArgument(ref)} ${gitOidArgument(candidate)}\nprepare\ncommit\n`);
+  return observations.ref(repository, ref);
 }

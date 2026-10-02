@@ -1,4 +1,4 @@
-/** DR1–DR7 (implementation/design-revisions.md): design revisions after the
+/** DR1–DR7 (docs/design-revisions.md): design revisions after the
  * real-provider functional runs, each tested where its decision takes effect. */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -13,8 +13,8 @@ const defaults = (): HostConfigV1 => defaultHostConfig({ society: "demo", node: 
   rootfs: "/state/rootfs", deploymentDigest: "a".repeat(64) });
 const input = { name: "worker", from: "a".repeat(40), brief: "b" };
 function created(cfg: HostConfigV1): readonly string[] {
-  const principal = cfg.agentProfiles[cfg.principalProfile]!;
-  const child = resolveChildSpec(cfg, { name: "principal", profile: cfg.principalProfile, capabilities: principal.capabilities }, input);
+  const parent = cfg.agentProfiles.parent!;
+  const child = resolveChildSpec(cfg, { name: "parent", profile: "parent", capabilities: parent.capabilities }, input);
   assert.ok(child);
   return child.spec.capabilities;
 }
@@ -27,24 +27,25 @@ test("DR4 / A-002, CREATE-002: code.integrate is given by the host's profile, no
   assert.deepEqual([...HOST_GRANTED], ["code.integrate"]);
   const cfg = defaults();
   const principal = cfg.agentProfiles[cfg.principalProfile]!;
-  const worker = principal.childProfile!;
+  assert.equal(principal.childProfile, null, "DR27: the Principal is not a child orchestrator");
+  const worker = "resident";
+  cfg.agentProfiles.parent = structuredClone(cfg.agentProfiles[worker]!);
   // By default no one has it (AUTH-001, TUI-019).
   assert.equal(principal.capabilities.includes("code.integrate"), false);
   assert.equal(created(cfg).includes("code.integrate"), false);
-  // The host turns it on for workers: a Resident the Principal creates has it,
-  // though the Principal neither holds nor delegates it.
+  // The host turns it on for children, though their parent neither holds nor delegates it.
   const on = structuredClone(cfg);
   on.agentProfiles[worker]!.capabilities = [...on.agentProfiles[worker]!.capabilities, "code.integrate"];
   assert.equal(created(on).includes("code.integrate"), true);
   assert.equal(on.agentProfiles[on.principalProfile]!.capabilities.includes("code.integrate"), false, "the Principal was given it");
   // A parent that holds and delegates it gives nothing the child profile lacks.
   const parentOnly = structuredClone(cfg);
-  const p = parentOnly.agentProfiles[parentOnly.principalProfile]!;
+  const p = parentOnly.agentProfiles.parent!;
   p.capabilities = [...p.capabilities, "code.integrate"]; p.delegable = [...p.delegable, "code.integrate"];
   assert.equal(created(parentOnly).includes("code.integrate"), false);
   // Every other capability is still the intersection: nothing widens by role.
   const narrowed = structuredClone(on);
-  narrowed.agentProfiles[narrowed.principalProfile]!.delegable = [];
+  narrowed.agentProfiles.parent!.delegable = [];
   assert.deepEqual(created(narrowed), ["code.integrate"]);
 });
 
@@ -55,7 +56,7 @@ test("DR4 / TUI-019, TUI-007, LIFE-008: the Human turns worker integrate on and 
     const field = before.fields.find(entry => entry.id === WORKER_INTEGRATE);
     assert.ok(field && field.kind === "choice");
     assert.equal(field.value, "off");
-    assert.equal(applyLabel(field.apply), "이후 만드는 worker부터");
+    assert.equal(applyLabel(field.apply), "New workers only");
     assert.equal(commitField(before, WORKER_INTEGRATE, "on").kind, "saved");
     const on = readSettings(f.path);
     assert.ok(on.config.agentProfiles[on.workerProfile!]!.capabilities.includes("code.integrate"));
@@ -87,7 +88,7 @@ test("DR3 / ERR-001: a failure carries only the facts its code may, and every co
     assert.equal(carried(code, details), undefined, `${code} ${JSON.stringify(details)}`);
   assert.equal(publicFailure(new StoreError("STALE_BASE", "x", { details: { actual: oid } })).message, "STALE_BASE", "the wire message stays the code");
   assert.equal(failureText({ code: "CAPABILITY_DENIED", message: "CAPABILITY_DENIED", details: { capability: "git.submit" } }),
-    "CAPABILITY_DENIED: 이 요청에 필요한 권한이 없습니다 (capability: git.submit)");
+    "CAPABILITY_DENIED: Insufficient permission for this request (capability: git.submit)");
   // An authored validation sentence is kept as it was written.
   assert.equal(failureText({ code: "INVALID_REQUEST", message: "invalid params for mail.send" }), "INVALID_REQUEST: invalid params for mail.send");
 });

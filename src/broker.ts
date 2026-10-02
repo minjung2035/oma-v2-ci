@@ -114,6 +114,13 @@ export class Broker {
     this.statusRefresh = new StatusRefresh(() => this.store.agentNames(), agents => this.units.observeStatus(agents));
     const publicPorts = createPublicDispatchPorts(this.store, mail, this.statusRefresh, this.views, lifecycle, git, limits);
     this.publicDispatcher = new PublicDispatcher({ ...publicPorts,
+      waitRun: (auth, observe) => {
+        if (auth.role !== "resident" || auth.channel !== "actor")
+          throw new StoreError("CAPABILITY_DENIED", "wait is a Resident's own run intent");
+        const run = this.runLeases.get(auth.actor);
+        if (!run) throw new StoreError("STALE_RUN", "wait requires a live run");
+        return run.wait(auth.incarnation, observe);
+      },
       isDraining: () => this.draining, assertAdmission: () => this.health.assertAdmission(), admitResource: this.admitResource,
       failureAnswer: (id, error) => this.failureAnswer(id, error), refreshViews: () => this.refreshViews(),
       readLogs: (agent, sinceSeconds) => this.readLogs(agent, sinceSeconds) });
@@ -282,7 +289,7 @@ export class Broker {
       throw new StoreError("UNSUPPORTED_PROFILE", "actor socket path exceeds Linux sun_path");
     return dir;
   }
-  private listenActor(actor: Actor, incarnation = this.store.getAgent(actor)?.incarnation ?? 0): { socketHostPath: string; done: () => void } {
+  private listenActor(actor: Actor, incarnation = this.store.getAgent(actor)?.incarnation ?? 0): { socketHostPath: string; ready: Promise<void>; done: () => void } {
     const dir = this.actorSocketDirectoryAfterAdmission(actor, incarnation);
     const path = actorSocketPathAt(this.paths.runRoot, actor, incarnation);
     mkdirSync(dir, { recursive: true });
@@ -303,7 +310,7 @@ export class Broker {
       if (run?.identity.incarnation === incarnation) { try { run.revoke(); } catch (error) { this.cleanupError(error); } }
     });
     this.listen(server, path); this.actorServers.add(server);
-    return { socketHostPath: path, done: () => {
+    return { socketHostPath: path, ready: this.listeners.get(server)!, done: () => {
       if (revoked) return;
       revoked = true;
       for (const socket of sockets) this.fail(socket, { code: "STALE_RUN", message: "run endpoint revoked", retry: "never" });
@@ -437,8 +444,9 @@ export class Broker {
   private dispatchInternal(raw: Record<string, unknown>, peer: BoundPeer, stream: AsyncIterable<Uint8Array> | null, channel: "runner" | "host"): Promise<object> {
     return this.internalDispatcher.dispatch(raw, peer, stream, channel);
   }
-  private openRun(actor: Actor, invocationId: string): RunLease {
+  private async openRun(actor: Actor, invocationId: string): Promise<RunLease> {
     this.health.assertAdmission();
+    if (!this.store.societyOpen()) throw new StoreError("AGENT_NOT_READY", "society execution is closed");
     const agent = this.store.getAgent(actor);
     if (!agent) throw new StoreError("ADDRESS_NOT_FOUND", `no agent ${actor}`);
     resolvedSpecOf(agent);
@@ -458,23 +466,28 @@ export class Broker {
     if (!Number.isSafeInteger(next)) throw new StoreError("STORE_CORRUPT", "incarnation exhausted");
     this.actorSocketDirectory(actor, next);
     const record = this.runLeases.begin(actor, next, invocationId, observation.cgroup);
-    let endpoint: { socketHostPath: string; done: () => void } | null = null;
+    let endpoint: ReturnType<Broker["listenActor"]> | null = null;
     try {
       // D01/WP07: settle the prepared batches from their own receipts before the
       // new run exists, under the opening run's quiescence. DR9: the batches
       // left -- receipt proven absent -- are not rewritten; the new lease is
       // simply their next delivery attempt.
       const absent = this.settlePreviousIncarnation(actor);
-      // P0V-113 (G03-broker-r2-01): the new incarnation's endpoint is made
-      // before the incarnation is committed, so nothing that can fail comes
-      // after the commit: a failed open leaves the incarnation where it was.
-      // Until the commit it serves nobody (handleActor refuses an incarnation
-      // the ledger does not hold).
+      // P0V-113 (G03-broker-r2-01): a pathname is not a listening endpoint.
+      // Until readiness and commit it serves nobody; neither synchronous nor
+      // asynchronous preparation failure consumes an incarnation.
       endpoint = this.listenActor(actor, next);
+      await endpoint.ready;
+      this.health.assertAdmission();
+      const currentUnit = this.units.observe(actor);
+      if (this.draining || !this.store.societyOpen() || this.runLeases.get(actor) !== record ||
+          currentUnit.activeState === "unknown" || currentUnit.invocationId !== invocationId || !currentUnit.cgroup)
+        throw new StoreError("STALE_RUN", "run admission changed while the endpoint was opening");
+      record.confirmOpening(currentUnit.cgroup);
       this.store.transaction(tx => {
         this.health.assertAdmission();
         const current = this.store.getAgent(actor);
-        if (!current || current.incarnation !== agent.incarnation || current.desired !== "enabled") throw new StoreError("STALE_RUN", "run admission changed before incarnation commit");
+        if (!this.store.societyOpen() || !current || current.incarnation !== agent.incarnation || current.desired !== "enabled") throw new StoreError("STALE_RUN", "run admission changed before incarnation commit");
         const prepared = this.store.preparedBatches(actor).map(row => row.id).sort();
         if (prepared.length !== absent.length || prepared.some((id, index) => id !== absent[index]))
           throw new StoreError("STALE_RUN", "prepared batches changed between settlement and rollover");

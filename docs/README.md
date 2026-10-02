@@ -1,78 +1,81 @@
 # 문서 지도
 
-이 저장소의 모든 문서가 무엇을 소유하는지, 어느 문서가 우선하는지, 새 정보를 어디에 적는지를 이 문서 한 곳이 정한다.
-다른 문서의 "읽기 순서"는 이 지도를 줄여 보인 것이며, 어긋나면 이 지도를 고친다. 이 지도의 규칙은 [PRIORITY-0](../PRIORITY-0.md)의
-"문서와 식별자에도 같은 원칙"에서 나온다.
+문서의 진입점과 주제별 owner는 이 파일 하나가 정한다. 루트 README는 진입 링크만 제공한다. 실제 TypeScript contract·SQL schema·unit template·기계 판독 map은 코드 입력이므로 저장소의 `implementation/`에 둔다.
 
 ## 처음 읽는 사람
 
-1. [PRODUCT.md](../PRODUCT.md) — 무엇을 왜 만드는가(의도)
-2. [PRIORITY-0.md](../PRIORITY-0.md) — 모든 판단의 최상위 원칙
-3. 이 지도 — 나머지 문서가 어디에 있고 무엇을 소유하는가
-4. 할 일에 따라: 코드를 고친다면 [MAINTENANCE.md](../MAINTENANCE.md), 지금 상태를 알려면 [HANDOFF.md](../HANDOFF.md)와 [validation.md](../implementation/validation.md), 운영한다면 [operations/README.md](../operations/README.md)
+1. [PRIORITY-0](PRIORITY-0.md): 확정된 사실과 현재 권한을 분리하는 최상위 원칙.
+2. [PRODUCT](PRODUCT.md): 제품의 목적과 경계.
+3. [HANDOFF](HANDOFF.md): 최신 사용자 요청과 재개점.
+4. 아래 주제의 기준 문서. 실제 실행 여부와 한계는 [validation](implementation/validation.md)에서 확인한다.
 
-## 문서의 종류와 권위
+## 주제별 기준 문서
 
-문서는 여섯 종류다. 종류가 권위를 정한다. 같은 사실을 두 종류의 문서에 적지 않는다.
-
-| 종류 | 문서 | 무엇을 소유하는가 |
+| 찾는 내용 | 기준 문서 | 소유 범위 |
 |---|---|---|
-| **원칙** | [PRIORITY-0.md](../PRIORITY-0.md) | 모든 설계·수정·시험 판단의 최상위 기준. 규범이나 코드가 이 원칙과 충돌하면 규범을 고친다 |
-| **규범**(구속력 있는 계약) | [architecture.md](../architecture.md) | 상위 설계 계약. bytes를 N-001이 결박하므로 고치지 않는다. 이 문서와 어긋나는 판단은 결정 기록(DR)에 적는다 |
-| | [implementation-spec.md](../implementation-spec.md) | 구현 MUST/MUST NOT. 규범 문장의 owner |
-| | [physical-ordering](../implementation/physical-ordering.md), [integration-policy](../implementation/integration-policy.md), [compliance](../implementation/compliance.md), [loc-budget](../implementation/loc-budget.md), [test-matrix](../implementation/test-matrix.md), [spikes](../implementation/spikes.md), [systemd/README](../implementation/systemd/README.md), [store-opening](../implementation/store-opening.md), [contracts/README](../implementation/contracts/README.md) | spec을 구체화하는 계약(순서, tiered 정책, release trace, LOC 측정, 수용 시험, OPEN spike, unit template, Store 열기, contract owner) |
-| | `implementation/contracts.ts`, `contracts/`, `schema-v1.sql`, `systemd/*.in` | 문서가 아니라 실제 wire·durable·deployment 선언 |
-| | [macos-platform](../implementation/macos-platform.md) | macOS용 OMA 플랫폼 규격(host와 hidden Linux VM). DR18로 수용한 규범이며, 바꾼 기존 규범은 DR18에 있다 |
-| **결정 기록** | [consistency-decisions.md](../implementation/consistency-decisions.md) | 계획의 D01–D06, 카드(WP)별 결정, 재검토와 AV1–AV31, ENG1. 규범이 **왜** 그런지 |
-| | [design-revisions.md](../implementation/design-revisions.md) | 설계 수정 DR1–DR18과 그것이 바꾼 규범, architecture와 어긋나는 문장 |
-| **점검 기록** | [priority-0-audit.md](../implementation/priority-0-audit.md) | Priority 0 파일 단위 점검의 근거(파일:줄), 코드 발견 P0V-01–P0V-24와 수정 commit, 변이 결과, 14차 실제 점검, 문서·식별자 발견 P0D-01–P0D-14, 외부 전수 검토를 판정한 4차 점검 P0V-25–P0V-53, 시나리오 시험이 찾은 P0V-54–P0V-55 |
-| **지침**(비규범) | [MAINTENANCE.md](../MAINTENANCE.md) | 사람과 AI가 코드를 고칠 때의 작업 규율 |
-| | [PRODUCT.md](../PRODUCT.md) | 제품 의도. 규범을 소유하지 않는다 |
-| | [operations/README.md](../operations/README.md) | 운영자 안내(설정 형식, 관리형 편집, 지원 범위). 계약은 spec이 소유한다 |
-| | [test/fixtures/README.md](../test/fixtures/README.md) | fixture 층이 무엇을 증명하고 무엇을 증명하지 않는가 |
-| **현재 상태** | [implementation/validation.md](../implementation/validation.md) | 현재 검증 판정, 시험 수·LOC 같은 모든 수치, 알려진 한계, 재검증 명령. 수치는 여기에만 적는다. 끝의 VAL 조항은 규범이다 |
-| | [HANDOFF.md](../HANDOFF.md) | 다음 작업자의 재개점: 판정 한 줄, 환경, 도구와 절차, 남은 일 |
-| **색인·과거** | [README.md](../README.md), 이 지도, [implementation/README.md](../implementation/README.md) | 진입점과 색인. 사실을 소유하지 않는다 |
-| | [archive.md](archive.md) | 현재 tree에서 뺀 과거 기록이 있는 Git snapshot |
+| 프로젝트 수정 방법 | [MAINTENANCE](MAINTENANCE.md) | 작업 규율과 변경·검증 절차 |
+| 실행·설정·세션·package·extension | [운영 안내](operations.md) | 사용 방법. wire/durable 계약을 정의하지 않음 |
+| Core 구현 계약 | [implementation-spec](implementation-spec.md) | 신원·권한·IPC·메일·Git·lifecycle·복구·제품 표면과 physical ordering·Store opening·contract owner·unit renderer |
+| 기존 tiered 정책 | [integration-policy](implementation/integration-policy.md) | 기존 attestation/finding/scope 정책. 수용 변경의 근거는 연결된 DR |
+| 다음 merge/review/challenge 구현 | [merge-review-spec](merge-review-spec.md) | 최신 대화의 설계안. 이번 정리에서 본문을 변경하지 않음 |
+| macOS host와 hidden Linux VM | [macos-platform](macos-platform.md) | RPC·VM·project·credential·image·복구 계약과 helper 안내 |
+| 시험·release evidence·LOC·qualification·fixture | [verification-spec](verification-spec.md) | 기존 TEST/COMP/LOC/SP/VAL 조항과 수용 번호의 단일 owner |
+| 현재 실행 결과·한계·재검증 | [validation](implementation/validation.md) | 현재 판정과 수치의 단일 owner. 과거 실행 이력은 archive |
 
-계획 원본 `oma-v2-consistency-plan-b25961c/`는 바꾸지 않는 입력이다(`SHA256SUMS.txt`). 이 저장소의 결정 기록이 계획을 어떻게 적용했는지 적는다.
+같은 동작의 규범은 한 owner에서 정의하고 다른 문서는 연결한다. 문장 존재 자체가 구현 완료나 시험 통과를 뜻하지 않는다.
+
+## 현재 계약·설계안·과거 기록
+
+| 종류 | 위치 | 의미 |
+|---|---|---|
+| 최상위 원칙 | PRIORITY-0 | 모든 계약과 작업 판단의 기준 |
+| 구현·검증 계약 | 위 implementation-spec, integration-policy, macos-platform, verification-spec | 구현해야 할 조건 |
+| 설계안 | merge-review-spec | 다음 변경의 목표. 이미 활성 정책·코드로 전환됐다고 해석하지 않음 |
+| 지침 | PRODUCT, MAINTENANCE, operations | 의도와 사용 방법. 계약의 의미를 덮어쓰지 않음 |
+| 현재 상태 | HANDOFF, validation | 재개점과 실제 검증 판정 |
+| 고정 기준본 | [architecture](architecture.md) | N-001이 결박한 원문. 기존 설계의 배경과 상위 기준 |
+| 결정 기록 | [design-revisions](design-revisions.md), [consistency-decisions](implementation/consistency-decisions.md) | 규범을 정한 이유와 작성 당시의 결정 |
+| 점검 기록 | [priority-0-audit](priority-0-audit.md) | P0V/P0D 발견과 수정 근거 |
+| 보관 기록·입력 원본 | [archive](archive.md) | 과거 검증·인계, 고정 계획, 외부 리뷰와 Git snapshot |
+
+고정 architecture 원문은 수정하지 않는다. 그 원문 상대 링크가 유지되도록 연결된 문서는 `docs/implementation/`에 둔다. architecture의 오래된 UI·tier/floor·LOC 문장을 현재 동작으로 단독 인용하지 않는다. 수용된 변경은 해당 규범과 DR을 함께 확인한다. 결정 기록의 OPEN/ACCEPTED/당시 실행 결과도 현재 판정을 대신하지 않는다.
 
 ### 우선순위
 
-충돌하면 이 순서로 판단한다. 편한 쪽을 고르지 않는다(MAINTENANCE §1 "문서 충돌 처리").
-
-1. **PRIORITY-0** — 원칙. "최상위 원칙"은 이 문서만을 뜻한다.
-2. **architecture.md** — 규범 가운데 최상위인 설계 계약. 그 문장과 어긋나는 결정은 design-revisions가 기록하고, 그 결정의 규범 문장은 spec이 가진다.
-3. **implementation-spec.md**, 그다음 implementation/의 규범 문서와 선언.
-4. **결정 기록** — 규범이 왜 그런지 설명한다. 규범 문장을 대신하지 않는다.
-5. **지침·현재 상태·색인** — 규범의 의미를 덮어쓰지 않는다.
-
-결정 기록의 절 제목에 붙은 상태(예: "runtime evidence pending")는 **작성 당시의 상태**다. 지금의 검증 상태는 validation.md가 소유한다.
-
-## 규범이 다루는 범위
-
-| 주제 | architecture | spec | acceptance |
-|---|---|---|---|
-| Core runtime | §§1–22 | §§1–17, §20 | T01–T77 |
-| tiered integration | §§12.5–12.8 | [integration-policy](../implementation/integration-policy.md) | T78–T90(예약 대역, 행 없음, tiered 출시 차단) |
-| 제품 표면·엔진 | §23.1–23.9, §§23.11–23.13 | §18 | T91–T98, T104–T127(대역은 test-matrix의 TEST-008 표) |
-| tool 표면 투영 | §23.10 | §19 | T99–T103 |
-
-절 번호가 바뀌면 이 표부터 고친다. 절 번호를 본문 여러 곳에 적지 않는다.
+PRIORITY-0가 최상위다. architecture는 고정 상위 기준본이며, 사용자 결정에 따라 달라진 설계는 DR에 이유를 기록하고 구현 계약이 변경된 규범을 소유한다. 불일치는 구현 결함·stale 설명·미결정 설계·명시적 미지원 중 무엇인지 표시한다. 설계안이나 과거 기록만으로 활성 권한과 과거 fact의 의미를 바꾸지 않는다.
 
 ## 새 정보를 어디에 적는가
 
 | 새 정보 | 적는 곳 |
 |---|---|
-| 규범의 의미가 바뀌었다 | spec(또는 해당 implementation 규범 문서). 설계 판단이 함께 바뀌면 design-revisions에 DR로 이유를 적는다. architecture는 고치지 않는다 |
-| 계획 카드나 적대적 점검의 결정 | consistency-decisions의 해당 절 |
-| Priority 0 점검의 다음 회차 | priority-0-audit(새 파일을 만들지 않는다) |
-| 반복 적용되는 작업 규율 | MAINTENANCE |
-| 검증 실행 결과, 시험 수, LOC, 알려진 한계 | validation(다른 문서에는 수치를 적지 않는다) |
-| 다음 작업자가 바로 알아야 할 상태 | HANDOFF |
-| owner·경계·증거의 기계 판독 정보 | `implementation/*.json` map |
-| 특정 작업의 일회성 상세(commit 목록, 작업 일지) | commit 설명과 Git history. 현재 tree에 closure 문서를 더하지 않는다 |
+| Core MUST/MUST NOT과 physical ordering·Store·contract·unit 경계 | implementation-spec |
+| 기존 tiered 정책 | integration-policy |
+| 다음 merge/review 정책의 설계 | merge-review-spec. 채택 시 그 문서의 전환 절차 적용 |
+| macOS 플랫폼 계약 | macos-platform |
+| 수용 시험·증거·qualification·측정 요구 | verification-spec |
+| 설계 선택의 이유 | design-revisions. 기존 DR 번호의 뜻을 재사용하지 않음 |
+| 계획 카드·적대적 검토의 이유 | consistency-decisions |
+| Priority 0 발견과 점검 | priority-0-audit |
+| 현재 실행 판정·로그·수치·한계 | validation |
+| 최신 요청·다음 작업·제약 | HANDOFF |
+| 반복 작업 규율·제품 의도·운영 방법 | MAINTENANCE, PRODUCT, operations |
+| 과거 시점의 긴 기록·입력 원본 | archive. 과거 PASS를 현재 PASS로 사용하지 않음 |
 
-현재 tree에서 과거 기록을 빼면 [archive.md](archive.md)에 그 snapshot commit과 위치를 적는다. 과거 기록의 `current`, PASS 수, LOC, TODO는 지금의 사실이 아니다.
+문서 이동·통합은 요구 ID·수용 번호·확정된 기록의 의미를 바꾸지 않는다. 계약 이동 시 source-owners와 trace inventory를 실제 위치로 맞추고 이전 evidence를 자동 승격하지 않는다. architecture와 계획 원본의 byte 결박을 유지한다.
 
-이 규칙의 목적은 문서 수를 줄이는 것이 아니다. 사람이든 AI든 "지금의 사실"을 찾을 때 과거 snapshot이나 다른 종류의 문서를 읽지 않게 하는 것이다.
+## machine-readable map
+
+현재 source owner나 실행 수치를 문서에 복제하지 않는다.
+
+| 파일 | 용도 |
+|---|---|
+| [source-owners.json](../implementation/source-owners.json) | requirement별 production owner·entrypoint·call path·negative test |
+| [mutation-owners.json](../implementation/mutation-owners.json) | durable mutation owner와 change surface |
+| [durable-boundaries.json](../implementation/durable-boundaries.json) | kill·retry·restart가 필요한 경계 |
+| [traceability.json](../implementation/traceability.json) | 규범 fingerprint와 evidence inventory |
+| [oracle-map.json](../implementation/oracle-map.json) | 계획 oracle과 verification lane |
+| [review-notes.json](../implementation/review-notes.json), [review-ledger.json](../implementation/review-ledger.json) | byte에 결박된 검토 기록과 생성 ledger |
+| [contract-direction-plan.json](../implementation/contract-direction-plan.json) | contract 의존 방향 결정 |
+| [broker-lifecycle-review.json](../implementation/broker-lifecycle-review.json) | broker lifecycle 경계 검토 |
+
+Production inventory·LOC·dependency graph·review ledger·trace inventory는 생성 도구로 갱신한다. 예전 값을 새 측정처럼 손으로 보정하지 않는다. 현재 결과는 validation이 소유한다.
