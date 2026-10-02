@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "c12b2649e6a8d456254ca97065ca2e0d2512a0aade4306c8b1e65ef2e7f83eba",
-  "report": "6459dd02c12c14bbb8ecc5d68a2e955d2e15a752c36e18b7f4e40b6abae55b0a",
+  "report": "5c62b097f74b20faa95ba8f9988c9d24d9c3285820ecb9ff8b46a9263cce26b7",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -253,7 +253,7 @@
     },
     {
       "path": "src/domain/attestation.ts",
-      "sha256": "bf39358c476e7e724e6fa5db94f2ca6dab3a8f97b2492a8b4ebdfcaa975c7ccb"
+      "sha256": "25f092935135ac794ea2e06789e0baa43ea7671c52a6eb6cb762589597684f33"
     },
     {
       "path": "src/domain/canonical-json.ts",
@@ -357,7 +357,7 @@
     },
     {
       "path": "src/durable.ts",
-      "sha256": "d200eeb818db86951d491d19ff3d4a987b43d79b4668ecf520f53a74be0b11b7"
+      "sha256": "4aa06e651339525c8ad71e1487072c014af3c1888b3900cb782f22ac6d348700"
     },
     {
       "path": "src/entry/broker.ts",
@@ -489,7 +489,7 @@
     },
     {
       "path": "src/git.ts",
-      "sha256": "e302d3d0881a3f64c2e8d210a6bb4ee9a873438701af1dac5989adbd50dd0aab"
+      "sha256": "84d493bbd3ada0824bf35deb5d737b18ce5d6ac2949b6a916795c09beba1db1b"
     },
     {
       "path": "src/git/approval.ts",
@@ -501,7 +501,7 @@
     },
     {
       "path": "src/git/canonical-command.ts",
-      "sha256": "9fe15ca143c7c12beac7c3c4b3884421df4f9ffde1617896faf3b3374ca612e3"
+      "sha256": "d5e77a2bfbe053e7adc73d9ad1a8db9e1f40779c010e3c066f518f1de0d1d3eb"
     },
     {
       "path": "src/git/context-publication.ts",
@@ -945,7 +945,7 @@
     },
     {
       "path": "src/protocol/response-codec.ts",
-      "sha256": "f3887cec5cfa63896a70fdecd1be12dbc68c94470bf5205a027deeb5e6aa3dae"
+      "sha256": "89e199633c648a9e6047b91520e50689b47a5f5d7164e46b579a44b7b9df35a9"
     },
     {
       "path": "src/protocol/run-lease.ts",
@@ -977,7 +977,7 @@
     },
     {
       "path": "src/review.ts",
-      "sha256": "db1d871e7ce2a2335e100c74a40c278f08d44a4607c594b25fb87a008271045a"
+      "sha256": "b8ffc4ec33c18450b27497c640a4d9b7e7d3961ad22b396f021afbe3f8fcfcbd"
     },
     {
       "path": "src/rpc-client.ts",
@@ -1197,7 +1197,7 @@
     },
     {
       "path": "src/storage/operation-codec.ts",
-      "sha256": "9bca0e0744d449f99a366112e10c2235d1bc5d356a6e99cb2c99f7b7e1aa7f7f"
+      "sha256": "0471569bd9168ccaa204fdee7902c17c05c25c42225ee6338da50aa68f7ec4d5"
     },
     {
       "path": "src/storage/operation-journal.ts",

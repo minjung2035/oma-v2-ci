@@ -12,7 +12,7 @@ import { assertNever } from "./domain/exhaustive.js";
 import { MailModule } from "./mail.js";
 import { isValidFullOid } from "./ids.js";
 import type { GitObservation, RefAfterCas } from "./git/observe.js";
-import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop, canonicalMergeDiff } from "./git/canonical-command.js";
+import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop, canonicalMergeDiff, canonicalRevertCommit } from "./git/canonical-command.js";
 import { IntegrationCoordinator } from "./git/integration.js";
 import { ReviewModule, type ReviewBounds } from "./review.js";
 import { SubmitCoordinator, type SubmitInput } from "./git/submit.js";
@@ -71,6 +71,8 @@ export class GitModule {
       changedPaths: (base, candidate) => this.observations.changedPaths(paths.projectGit, base, candidate),
       submitters: (base, candidate) => this.submitters(base, candidate),
       mergeDiff: (base, candidate, maxBytes) => canonicalMergeDiff(paths.projectGit, base, candidate, maxBytes),
+      prepareRevert: input => canonicalRevertCommit(paths.projectGit, { ...input, society: paths.society }),
+      publishCandidateRef: (ref, candidate) => this.publishRef(ref, candidate),
       applyMerge: operation => this.integrationCoordinator.applyMerge(operation),
       withWriter: work => this.withWriter(work),
     }, reviewBounds, paths.society);

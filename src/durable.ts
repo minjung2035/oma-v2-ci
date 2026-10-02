@@ -127,7 +127,7 @@ const integrateFields = {
   merge: checkOptional(checkObject({
     version: (value) => value === 1 ? null : "merge plan must declare version 1",
     request: operationIdCheck,
-    name: (value) => typeof value === "string" && /^merge-[0-9a-f]{8}$/.test(value) ? null : "invalid merge request name",
+    name: (value) => isReviewRequestName(value) ? null : "invalid merge request name",
     tier: checkEnum(["LOW", "MEDIUM", "HIGH"] as const),
     notice: checkArray(messagePlanCheck),
   })),
@@ -404,7 +404,8 @@ export function operationPlanCheck(
             plan.publication.message.to[0] !== "commons")) return "integration publication must name commons result mail";
         if (plan.merge !== undefined) {
           if (plan.publication !== undefined) return "merge and publication are mutually exclusive";
-          if (plan.merge.name !== reviewRequestNameFor("merge", plan.merge.request))
+          if (plan.merge.name !== reviewRequestNameFor("merge", plan.merge.request) &&
+              plan.merge.name !== reviewRequestNameFor("challenge", plan.merge.request))
             return "merge request name differs from its request operation";
           for (const [index, notice] of plan.merge.notice.entries()) {
             const meta = notice.review;

@@ -1761,13 +1761,13 @@
   }
  ],
  "files": 355,
- "runtimeEdges": 1530,
+ "runtimeEdges": 1532,
  "typeOnlyEdges": 415,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 283,
   "L2-facts -> L1-kernel": 35,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 216,
+  "L3-workflow -> L1-kernel": 218,
   "L3-workflow -> L2-facts": 14,
   "L3-workflow -> L3-workflow": 67,
   "L4-orchestration -> L1-kernel": 290,
@@ -1798,7 +1798,7 @@
  ],
  "fanIn": {
   "src/domain/errors.ts": 195,
-  "src/domain/identifiers.ts": 59,
+  "src/domain/identifiers.ts": 60,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,
   "src/ids.ts": 28,
@@ -1809,9 +1809,9 @@
   "src/cli/exit.ts": 20,
   "src/frame.ts": 20,
   "src/hash.ts": 20,
+  "src/domain/derived.ts": 18,
   "src/process/run.ts": 18,
-  "src/store.ts": 18,
-  "src/domain/deployment.ts": 17
+  "src/store.ts": 18
  },
  "fanOut": {
   "src/entry/oma-society.ts": 40,
@@ -1820,8 +1820,8 @@
   "src/entry/broker.ts": 28,
   "src/entry/oma-mac.ts": 19,
   "src/git.ts": 18,
+  "src/review.ts": 18,
   "src/git/context-repository.ts": 17,
-  "src/review.ts": 17,
   "src/git/context.ts": 15,
   "src/lifecycle/create.ts": 15,
   "src/reconcile.ts": 15,

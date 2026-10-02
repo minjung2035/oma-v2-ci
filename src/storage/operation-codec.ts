@@ -312,21 +312,24 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
           const problem = reviewFactRelationProblem(value.actor, fact, request);
           if (problem !== null) corrupt(problem);
           if (request !== null && request.open !== null) {
-            const requestId = fact.kind === "challenge.open" ? fact.target.request
-              : fact.kind === "merge.open" ? value.id : fact.request;
+            // An open fact's messages name the new request itself; every other
+            // fact's name the request it references.
+            const isOpen = fact.kind === "merge.open" || fact.kind === "challenge.open";
+            const open = isOpen ? fact : request.open;
+            const requestId = isOpen ? value.id : fact.request;
             const named = (payload as { name?: unknown }).name;
-            if ((fact.kind === "review" || fact.kind === "vote" || fact.kind === "cancel") && named !== request.open.name)
+            if ((fact.kind === "review" || fact.kind === "vote" || fact.kind === "cancel") && named !== open.name)
               corrupt("review payload names a different request");
             for (const message of plan.messages) {
-              if (message.review === undefined || message.review.name !== request.open.name || message.review.request !== requestId)
+              if (message.review === undefined || message.review.name !== open.name || message.review.request !== requestId)
                 corrupt("review message differs from its request");
-              if (message.review.role === "approval" && !same(message.approvalFor ?? null, request.open.identity))
+              if (message.review.role === "approval" && !same(message.approvalFor ?? null, open.identity))
                 corrupt("approval mail names a different candidate identity");
             }
             // A succeeded review result names the request's frozen name.
             const result = value.state === "succeeded" && typeof value.result_json === "string"
               ? json(value.result_json, "operation result") : null;
-            if (record(result) && typeof result.request === "string" && result.request !== request.open.name)
+            if (record(result) && typeof result.request === "string" && result.request !== open.name)
               corrupt("review attestation result names a different request");
           }
         } else {
@@ -344,8 +347,8 @@ export function decodeOperation(raw: unknown, context: OperationDecodeContext): 
         const requestRaw = context.relations.operation(plan.merge.request);
         const request = requestRaw === null ? null : decode(requestRaw);
         if (request === null || request.kind !== "attest.record" || !("messages" in request.plan) ||
-            request.plan.fact.kind !== "merge.open")
-          corrupt("merge integration names no merge request");
+            (request.plan.fact.kind !== "merge.open" && request.plan.fact.kind !== "challenge.open"))
+          corrupt("merge integration names no review request");
         const open = request.plan.fact;
         if (request.actor !== value.actor) corrupt("merge integration actor differs from its requester");
         if (open.name !== plan.merge.name || open.tier !== plan.merge.tier ||

@@ -3,6 +3,7 @@ import { GIT_ENV } from "../process/policies.js";
 import { StoreError } from "../domain/errors.js";
 import { runProcessSync } from "../process/run.js";
 import { GitObserver, classifyRefAfterCas, gitOidArgument, gitRefArgument, type GitProcessEvidence, type GitObservation, type RefAfterCas } from "./observe.js";
+import { isValidFullOid } from "../domain/identifiers.js";
 
 export const GIT_BIN = "/usr/bin/git";
 export const CANONICAL_PROCESS_LIMITS = { timeout: 120000, maxBuffer: 4 * 1024 * 1024 } as const;
@@ -77,3 +78,51 @@ export function canonicalMergeDiff(repository: string, base: string, candidate: 
   try { return result.stdout.toString("utf8"); }
   catch { throw new StoreError("INTERNAL_ERROR", "canonical merge diff is not UTF-8 text"); }
 }
+
+/** mail-v1 §7: the broker prepares a revert of an applied merge on canonical
+ * main. `git merge-tree --write-tree --merge-base=<applied candidate> <main>
+ * <target base>` merges the pre-merge base into main relative to the merge's
+ * candidate: its tree is main with the merge's diff reversed. Exit 1 reports
+ * conflicts (the conflicted paths follow the tree line with --name-only);
+ * exit 0 whose tree equals main's own means the merged change is no longer
+ * present. The revert commit's parent is main; author/committer is the OMA
+ * identity, argv-only, no hooks or external merge drivers. */
+export function canonicalRevertCommit(repository: string, input: {
+  readonly mergeBase: string; readonly main: string; readonly base: string;
+  readonly message: string; readonly society: string;
+}): string {
+  const merge = runProcessSync({ executable: GIT_BIN,
+    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "merge-tree", "--write-tree", "--name-only",
+      "--no-messages",
+      `--merge-base=${gitOidArgument(input.mergeBase)}`, gitOidArgument(input.main), gitOidArgument(input.base)],
+    env: GIT_ENV, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout,
+    stdoutBytes: CANONICAL_PROCESS_LIMITS.maxBuffer, stderrBytes: 8192 });
+  if (merge.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge-tree timed out");
+  if (merge.kind !== "exited" || (merge.exitCode !== 0 && merge.exitCode !== 1))
+    throw new StoreError("REF_STATE_UNKNOWN", `canonical merge-tree is ${merge.kind}${merge.exitCode !== null ? ` ${merge.exitCode}` : ""}`);
+  const lines = merge.stdout.toString("utf8").split("\n").filter(line => line.length > 0);
+  if (merge.exitCode === 1)
+    throw new StoreError("REVERT_CONFLICT", "the revert conflicts with later work on main",
+      { details: { paths: lines.slice(1, 65), artifact: "none" } });
+  const tree = lines[0] ?? "";
+  if (!isValidFullOid(tree)) throw new StoreError("REF_STATE_UNKNOWN", "merge-tree wrote no tree");
+  const mainTree = runProcessSync({ executable: GIT_BIN,
+    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "rev-parse", `${gitOidArgument(input.main)}^{tree}`],
+    env: GIT_ENV, timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: 256, stderrBytes: 256 });
+  if (mainTree.kind !== "exited" || mainTree.exitCode !== 0)
+    throw new StoreError("REF_STATE_UNKNOWN", "canonical main tree is not observable");
+  if (mainTree.stdout.toString("utf8").trim() === tree)
+    throw new StoreError("INVALID_REQUEST", "the merged change is no longer present on main");
+  const commit = runProcessSync({ executable: GIT_BIN,
+    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, "commit-tree", gitOidArgument(tree),
+      "-p", gitOidArgument(input.main), "-m", input.message],
+    env: { ...GIT_ENV, GIT_AUTHOR_NAME: "OMA", GIT_AUTHOR_EMAIL: `oma@${input.society}.oma.invalid`,
+      GIT_COMMITTER_NAME: "OMA", GIT_COMMITTER_EMAIL: `oma@${input.society}.oma.invalid` },
+    timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: 256, stderrBytes: 8192 });
+  if (commit.kind !== "exited" || commit.exitCode !== 0)
+    throw new StoreError("REF_STATE_UNKNOWN", `canonical commit-tree is ${commit.kind}`);
+  const oid = commit.stdout.toString("utf8").trim();
+  if (!isValidFullOid(oid)) throw new StoreError("REF_STATE_UNKNOWN", "commit-tree wrote no commit");
+  return oid;
+}
+

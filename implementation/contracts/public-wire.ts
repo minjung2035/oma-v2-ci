@@ -11,7 +11,7 @@ import type { AgentCreateInput, BlobDescriptor, ContextEntry, MailInput } from "
 /** mail-v1 §8: one request entry in a Worker-facing review status answer. */
 export interface ReviewStatusEntry {
   index: number; sequence: number; actor: Actor;
-  kind: "review" | "vote" | "cancel" | "refresh"; verdict?: "approve" | "reject";
+  kind: "review" | "vote" | "cancel" | "refresh" | "challenge.open"; verdict?: "approve" | "reject";
 }
 export interface ReviewRequestSummary {
   name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
@@ -23,7 +23,9 @@ export interface ReviewRequestStatus {
   name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
   reason: string; requester: Actor; identity: ExactCandidateIdentity;
   display: string; required: number; approvers: Actor[]; rejectors: Actor[];
-  principal: { approval: MessageId | null; sent: boolean; decision: "approve" | "reject" | null };
+  principal: { approval: MessageId | null; sent: boolean; decision: "approve" | "reject" | null;
+    /** The approval the latest Principal vote named, even after it lapsed. */
+    decisionApproval: MessageId | null };
   integration: { operation: OperationId; state: "pending" | "succeeded" | "failed" | "unknown";
     error: ErrorCode | null } | null;
   entries: ReviewStatusEntry[]; missing: string[]; main: ReviewMainObservation;

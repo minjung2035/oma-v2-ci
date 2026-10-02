@@ -19,6 +19,7 @@ import { reviewInputProblem } from "./domain/attestation.js";
 import { canonicalJson, snapshotJson } from "./domain/canonical-json.js";
 import { StoreError, acceptedFailure, errorCodeOf } from "./domain/errors.js";
 import { applyRequestKeyFor, refreshRequestKeyFor, reviewRequestNameFor } from "./domain/identifiers.js";
+import { publishedRefFor } from "./domain/derived.js";
 import { expandAddresses } from "./mail/routing.js";
 import { rfcMessageIdFor } from "./mail/addresses.js";
 import { PreacceptScope, type PreacceptArtifact } from "./storage/preaccept-artifact.js";
@@ -50,6 +51,16 @@ export interface ReviewEffects {
   /** §6: the canonical merge diff for the completion notice. Output bounded at
    * maxBytes; LIMIT_EXCEEDED marks the request oversize. */
   mergeDiff(base: Oid, candidate: Oid, maxBytes: number): string;
+  /** §7: the broker's revert commit on canonical main — merge-tree against the
+   * applied merge's candidate, commit-tree with the OMA identity. Throws
+   * REVERT_CONFLICT (details.paths), INVALID_REQUEST when the merged change is
+   * already absent, or a state error on unobservable Git. */
+  prepareRevert(input: { readonly mergeBase: Oid; readonly main: Oid; readonly base: Oid;
+    readonly message: string }): Oid;
+  /** §7: publish the prepared revert under refs/oma/published/<actor>/<op> by
+   * CAS null→oid, before the acceptance transaction. */
+  publishCandidateRef(ref: string, candidate: Oid): void;
+
   /** §5.3: execute an accepted merge integration inside the held writer. */
   applyMerge(operation: OperationOf<"git.integrate">): Promise<void>;
   /** Cancellation serializes with integration CAS through the same writer. */
@@ -176,8 +187,8 @@ export class ReviewModule {
     // §5.4: an accepted open or vote may make the request ready; advance inside
     // its own try/catch so no application failure rewrites this receipt.
     if ((receipt.state === "succeeded" || receipt.state === "pending" || receipt.state === "unknown") &&
-        (value.kind === "merge.open" || value.kind === "vote")) {
-      const requestId = value.kind === "merge.open"
+        (value.kind === "merge.open" || value.kind === "challenge.open" || value.kind === "vote")) {
+      const requestId = (value.kind === "merge.open" || value.kind === "challenge.open")
         ? this.store.getOperation(auth.actor, key)?.id
         : this.requestByName(value.name)?.operation.id;
       if (requestId !== undefined)
@@ -210,7 +221,7 @@ export class ReviewModule {
       txClaim = this.store.transaction(tx => {
         if (auth !== null) {
           const agent = assertCurrentActor(this.store, auth, "mail.send");
-          if (prepared.fact.kind === "merge.open" && !capabilitiesOf(agent).has("git.submit"))
+          if (isOpenFact(prepared.fact) && !capabilitiesOf(agent).has("git.submit"))
             throw new StoreError("CAPABILITY_DENIED", "git.submit was revoked before acceptance",
               { details: { capability: "git.submit" } });
         } else if (this.store.getAgent(actor) === null)
@@ -236,6 +247,16 @@ export class ReviewModule {
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
     if (txClaim === "retry") return receiptOfOperation(this.store.retriedOperation(actor, key));
+    // §7: the accepted prepared challenge's revert is published under the
+    // challenger's refs/oma/published ref now (never before T). A failure here
+    // must not rewrite the receipt: recovery republishes it from advanceAll.
+    if (prepared.fact.kind === "challenge.open" && prepared.fact.prepared) {
+      try { this.ensureChallengePublished(prepared.id, actor, prepared.fact); }
+      catch (error) {
+        console.error(JSON.stringify({ event: "review.challenge.publish", request: prepared.id,
+          code: errorCodeOf(error) }));
+      }
+    }
     try {
       let materializedAll = true;
       try { await this.mail.materialize(prepared.id); }
@@ -259,6 +280,10 @@ export class ReviewModule {
       if (duplicate !== null)
         throw new StoreError("REQUEST_EXISTS", "a non-terminal request already covers this change",
           { details: { name: duplicate } });
+      return;
+    }
+    if (prepared.fact.kind === "challenge.open") {
+      this.assertChallengeUnchanged(prepared.fact);
       return;
     }
     const open = this.requestByName(prepared.name);
@@ -315,8 +340,161 @@ export class ReviewModule {
       case "merge.open": return this.prepareOpen(auth, input, policy);
       case "review": case "vote": return this.prepareEntry(auth, input, policy);
       case "cancel": return this.prepareCancel(auth, input);
-      case "challenge.open":
-        throw new StoreError("UNSUPPORTED_PROFILE", "oma_challenge is not yet available");
+      case "challenge.open": return this.prepareChallenge(auth, input, policy);
+    }
+  }
+
+  /** §7: an applied challenge of the same target is a hard duplicate; a live
+   * challenge with the same revert identity is one too. */
+  private duplicateChallenge(fact: Extract<ReviewFact, { kind: "challenge.open" }>): string | null {
+    for (const open of this.openRequests()) {
+      const existing = open.operation.plan.fact;
+      if (!isOpenFact(existing) || existing.kind !== "challenge.open" ||
+          existing.target.request !== fact.target.request) continue;
+      const state = reviewState(this.inputFor(open));
+      if (state.integration?.state === "succeeded") return existing.name;
+      if (state.terminal === null && state.integration === null &&
+          existing.identity.expectedBase === fact.identity.expectedBase &&
+          existing.identity.candidate === fact.identity.candidate &&
+          existing.identity.policyRevision === fact.identity.policyRevision &&
+          existing.tier === fact.tier) return existing.name;
+    }
+    return null;
+  }
+
+  /** T-side re-derivation for a challenge open: the target merge must still be
+   * applied (same integration), and no other challenge may have slipped in. */
+  private assertChallengeUnchanged(fact: Extract<ReviewFact, { kind: "challenge.open" }>): void {
+    const drift = () => new StoreError("BROKER_UNAVAILABLE",
+      "review state changed; retry the same request key", { details: { reason: "busy" } });
+    const target = this.requestByName(fact.target.name);
+    const targetPlan = target === null ? null : target.operation.plan;
+    const targetFact = targetPlan !== null && "messages" in targetPlan ? targetPlan.fact : null;
+    if (targetFact === null || targetFact.kind !== "merge.open") throw drift();
+    const targetState = reviewState(this.inputFor(target!));
+    if (targetState.integration?.state !== "succeeded" ||
+        targetState.integration.operation !== fact.target.integration) throw drift();
+    const duplicate = this.duplicateChallenge(fact);
+    if (duplicate !== null)
+      throw new StoreError("REQUEST_EXISTS", "an applied or identical challenge already covers this merge",
+        { details: { name: duplicate } });
+  }
+
+  /** §7: a challenge names an applied merge.open; the caller may supply its own
+   * revert candidate or leave the broker to prepare one on canonical main. */
+  private async prepareChallenge(auth: AuthContext, input: Extract<ReviewInput, { kind: "challenge.open" }>,
+      policy: IntegrationSnapshot): Promise<PreparedReview> {
+    const agent = assertCurrentActor(this.store, auth, "mail.send");
+    if (agent.role !== "resident")
+      throw new StoreError("CAPABILITY_DENIED", "only a Worker opens a challenge");
+    if (!capabilitiesOf(agent).has("git.submit"))
+      throw new StoreError("CAPABILITY_DENIED", "git.submit is required to open a challenge",
+        { details: { capability: "git.submit" } });
+    const targetOpen = this.requestByName(input.merge);
+    if (targetOpen === null)
+      throw new StoreError("INVALID_REQUEST", `unknown request ${input.merge}`);
+    const targetPlan = targetOpen.operation.plan;
+    if (!("messages" in targetPlan))
+      throw new StoreError("STORE_CORRUPT", "target merge owns no message list");
+    const targetFact = targetPlan.fact;
+    if (targetFact.kind !== "merge.open")
+      throw new StoreError("INVALID_REQUEST",
+        "a challenge needs an applied merge; cancel a request that is not applied yet");
+    const targetState = reviewState(this.inputFor(targetOpen));
+    if (targetState.integration === null || targetState.integration.state !== "succeeded")
+      throw new StoreError("INVALID_REQUEST",
+        "a challenge needs an applied merge; cancel a request that is not applied yet");
+    if (targetFact.tier === "HIGH" && input.tier !== "HIGH")
+      throw new StoreError("INTEGRATION_CONDITIONS", "a HIGH merge can only be challenged at HIGH");
+    for (const open of this.openRequests()) {
+      const existing = open.operation.plan.fact;
+      if (!isOpenFact(existing) || existing.kind !== "challenge.open" ||
+          existing.target.request !== targetOpen.operation.id) continue;
+      if (reviewState(this.inputFor(open)).integration?.state === "succeeded")
+        throw new StoreError("REQUEST_EXISTS", "an applied challenge already covers this merge",
+          { details: { name: existing.name } });
+    }
+    const id = generateOperationId();
+    const name = reviewRequestNameFor("challenge", id);
+    let candidate: Oid, expectedBase: Oid, submitters: string[], prepared: boolean;
+    let refArtifact: { readonly ref: string; readonly candidate: Oid } | undefined;
+    if (input.candidate !== undefined) {
+      // A caller-provided revert faces the same live checks as a merge.open
+      // candidate except the tier floor: challenge tiers are LOW or HIGH by rule.
+      candidate = input.candidate; expectedBase = input.base!;
+      if (candidate === expectedBase)
+        throw new StoreError("INVALID_REQUEST", "challenge candidate equals its base");
+      this.effects.verifyObjectFormat([expectedBase, candidate]);
+      if (!observed(this.effects.published(), "candidate publication").includes(candidate))
+        throw new StoreError("CANDIDATE_NOT_PUBLISHED", "candidate is not published");
+      const main = observed(this.effects.main(), "canonical main");
+      if (main !== expectedBase)
+        throw new StoreError("STALE_BASE", "main differs from base; fetch the latest main and build a new candidate",
+          { details: { actual: main } });
+      if (!observed(this.effects.ancestry(expectedBase, candidate), "candidate ancestry"))
+        throw new StoreError("NOT_DESCENDANT", "candidate does not descend from base");
+      const changes = observed(this.effects.changedPaths(expectedBase, candidate), "candidate changed paths");
+      if (policy.protectedPaths.some(path => changes.some(change => protectedPathMatches(change.path, path))))
+        throw new StoreError("PROTECTED_PATH", "candidate touches a protected path");
+      submitters = [...this.effects.submitters(expectedBase, candidate)].sort();
+      prepared = false;
+    } else {
+      // The broker reverts the applied merge on canonical main. Only the
+      // commit object exists before acceptance; its refs/oma/published ref is
+      // an effect of the accepted fact (acceptPrepared / advance repair).
+      prepared = true;
+      const main = observed(this.effects.main(), "canonical main");
+      expectedBase = main;
+      candidate = this.effects.prepareRevert({ mergeBase: targetFact.identity.candidate, main,
+        base: targetFact.identity.expectedBase,
+        message: `Revert ${targetFact.name}: ${targetFact.title}
+
+Challenge ${name}` });
+      const changes = observed(this.effects.changedPaths(expectedBase, candidate), "revert changed paths");
+      if (policy.protectedPaths.some(path => changes.some(change => protectedPathMatches(change.path, path))))
+        throw new StoreError("PROTECTED_PATH", "the prepared revert touches a protected path");
+      submitters = [];
+    }
+    const fact: ReviewFact = { kind: "challenge.open", version: 1, name, title: input.title,
+      reason: input.reason, tier: input.tier,
+      identity: { repo: "project", targetRef: "refs/heads/main", expectedBase, candidate,
+        policyRevision: policy.policyRevision },
+      submitters, prepared,
+      target: { name: targetFact.name, request: targetOpen.operation.id,
+        integration: targetState.integration.operation, identity: { ...targetFact.identity },
+        tier: targetFact.tier } };
+    const duplicate = this.duplicateChallenge(fact);
+    if (duplicate !== null)
+      throw new StoreError("REQUEST_EXISTS", "an applied or identical challenge already covers this merge",
+        { details: { name: duplicate } });
+    const open = { sequence: 0, operation: { id, actor: auth.actor } as OperationOf<"attest.record"> };
+    const entry: ReviewEntry = { sequence: 0, operation: id, actor: auth.actor, fact, messages: [] };
+    const eligible = new Set(this.store.listAgents()
+      .filter(a => a.role === "resident" && a.desired === "enabled").map(a => a.name));
+    const after0 = reviewState({ open: entry, entries: [], integration: null,
+      eligible, highPeerFloor: policy.tiered!.highPeerFloor });
+    // Challenges always have a review thread — LOW challenges too (§7).
+    const emissions: Emission[] = [{
+      to: ["residents"], kind: "message",
+      subject: this.cutSubject(`[${name}] ${input.title} (rev 0)`),
+      body: this.threadBody(after0, fact, [], null),
+      replyHeaders: { replyTo: ["residents"], inReplyTo: null, references: [] },
+      audience: "workers", review: { role: "thread", request: id, name, revision: 0 } }];
+    const frozen = await this.freeze(id, auth.actor, emissions);
+    return { id, fact, payload: input, emissions, frozen, before: null, after0, open, name };
+  }
+
+  /** §7: an accepted prepared challenge owns its published ref. Idempotent:
+   * absent → CAS null→oid; already the same oid → done; another oid is a
+   * corruption the accepted fact cannot own. */
+  private ensureChallengePublished(operationId: OperationId, actor: Actor,
+      fact: Extract<ReviewFact, { kind: "challenge.open" }>): void {
+    try {
+      this.effects.publishCandidateRef(publishedRefFor(actor, operationId), fact.identity.candidate);
+    } catch (error) {
+      if (error instanceof StoreError && error.code === "PUBLISHED_REF_CONFLICT")
+        throw new StoreError("STORE_CORRUPT", "the challenge's published ref holds another candidate");
+      throw error;
     }
   }
 
@@ -669,6 +847,14 @@ export class ReviewModule {
   }
 
   private async advanceRequest(open: { sequence: number; operation: OperationOf<"attest.record"> }): Promise<void> {
+    const openPlan = open.operation.plan;
+    if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
+    const openFact = openPlan.fact;
+    if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
+    // §7: a prepared challenge's published ref is an effect of the accepted
+    // fact; a crash after T is repaired here, at every sweep.
+    if (openFact.kind === "challenge.open" && openFact.prepared)
+      this.ensureChallengePublished(open.operation.id, open.operation.actor, openFact);
     let state = reviewState(this.inputFor(open));
     // 1. A broker-derived refresh fact: main moved (request goes stale), or a
     // sent approval drifted invalid through reviewer eligibility alone.
@@ -917,16 +1103,20 @@ export class ReviewModule {
       missing.push("the completion notice exceeds the document bound; split the change");
     const sent = state.entries.some(entry =>
       entry.messages.some(message => message.review?.role === "approval"));
+    const latestPrincipal = [...state.entries].reverse()
+      .find(entry => entry.fact.kind === "vote" && entry.actor === PRINCIPAL);
     return {
       name: state.name, kind: state.kind, tier: state.tier, title: openFact.title,
       reason: openFact.reason, requester: state.requester, identity: { ...state.identity },
       display: state.display, required: state.required,
       approvers: [...state.approvers], rejectors: [...state.rejectors],
       principal: { approval: state.approval?.id ?? null, sent,
-        // The evaluator's `principal` is the latest Principal vote on the
-        // current approval — null when that approval is gone or undecided.
-        decision: state.principal !== null && state.principal.fact.kind === "vote"
-          ? state.principal.fact.verdict : null },
+        // The latest Principal vote on this request — still shown after its
+        // approval lapsed (a reject's own op withdraws it).
+        decision: latestPrincipal !== undefined && latestPrincipal.fact.kind === "vote"
+          ? latestPrincipal.fact.verdict : null,
+        decisionApproval: latestPrincipal !== undefined && latestPrincipal.fact.kind === "vote"
+          ? latestPrincipal.fact.approval : null },
       integration: state.integration === null ? null
         : { operation: state.integration.operation, state: state.integration.state,
             error: state.integration.errorCode },

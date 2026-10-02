@@ -3,13 +3,13 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 356,
-    "n_lines": 47089,
+    "n_lines": 47336,
     "report_file": "production-loc.json"
   },
   "src/review.ts": {
-    "blank": 40,
-    "comment": 90,
-    "code": 867,
+    "blank": 46,
+    "comment": 116,
+    "code": 1025,
     "language": "TypeScript"
   },
   "src/entry/oma-society.ts": {
@@ -21,7 +21,7 @@
   "src/durable.ts": {
     "blank": 6,
     "comment": 14,
-    "code": 557,
+    "code": 558,
     "language": "TypeScript"
   },
   "src/entry/pi-interactive-host.ts": {
@@ -84,16 +84,16 @@
     "code": 381,
     "language": "TypeScript"
   },
+  "src/storage/operation-codec.ts": {
+    "blank": 3,
+    "comment": 21,
+    "code": 376,
+    "language": "TypeScript"
+  },
   "src/store.ts": {
     "blank": 4,
     "comment": 51,
     "code": 376,
-    "language": "TypeScript"
-  },
-  "src/storage/operation-codec.ts": {
-    "blank": 3,
-    "comment": 19,
-    "code": 375,
     "language": "TypeScript"
   },
   "src/runtime/inference-relay.ts": {
@@ -321,7 +321,7 @@
   "src/git.ts": {
     "blank": 2,
     "comment": 11,
-    "code": 197,
+    "code": 199,
     "language": "TypeScript"
   },
   "src/storage/immutable-file.ts": {
@@ -560,7 +560,7 @@
   },
   "src/domain/attestation.ts": {
     "blank": 7,
-    "comment": 14,
+    "comment": 15,
     "code": 139,
     "language": "TypeScript"
   },
@@ -630,16 +630,16 @@
     "code": 117,
     "language": "TypeScript"
   },
+  "src/protocol/response-codec.ts": {
+    "blank": 2,
+    "comment": 7,
+    "code": 117,
+    "language": "TypeScript"
+  },
   "src/storage/quota.ts": {
     "blank": 4,
     "comment": 19,
     "code": 117,
-    "language": "TypeScript"
-  },
-  "src/protocol/response-codec.ts": {
-    "blank": 2,
-    "comment": 7,
-    "code": 116,
     "language": "TypeScript"
   },
   "src/storage/snapshot-reader.ts": {
@@ -790,6 +790,12 @@
     "blank": 7,
     "comment": 34,
     "code": 97,
+    "language": "TypeScript"
+  },
+  "src/git/canonical-command.ts": {
+    "blank": 6,
+    "comment": 26,
+    "code": 96,
     "language": "TypeScript"
   },
   "src/reconcile/operations.ts": {
@@ -1234,12 +1240,6 @@
     "blank": 6,
     "comment": 23,
     "code": 58,
-    "language": "TypeScript"
-  },
-  "src/git/canonical-command.ts": {
-    "blank": 4,
-    "comment": 18,
-    "code": 57,
     "language": "TypeScript"
   },
   "src/protocol/host-history.ts": {
@@ -2143,9 +2143,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1902,
-    "comment": 7537,
-    "code": 37650,
+    "blank": 1910,
+    "comment": 7574,
+    "code": 37852,
     "nFiles": 356
   }
 }

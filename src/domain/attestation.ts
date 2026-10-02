@@ -72,7 +72,8 @@ export function reviewInputProblem(value: unknown, limits: ReviewInputLimits): s
       if (!(object(row, ["kind", "merge", "tier", "title", "reason"]) ||
           object(row, ["kind", "merge", "tier", "title", "reason", "candidate", "base"])))
         return "invalid challenge request";
-      if (!mergeRequestName(row.merge) || (row.tier !== "LOW" && row.tier !== "HIGH") ||
+      // Any review request name passes grammar; acceptance decides it is a merge.
+      if (!isReviewRequestName(row.merge) || (row.tier !== "LOW" && row.tier !== "HIGH") ||
           !reviewTitle(row.title, limits.subjectBytes) || !boundedText(row.reason, text))
         return "invalid challenge request";
       return row.candidate === undefined ? null
