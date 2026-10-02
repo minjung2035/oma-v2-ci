@@ -4,7 +4,7 @@
 import type { PublicMethods, PublicMethod, InternalMethods, InternalResults, Failure, MutationMethod } from "../../implementation/contracts.js";
 import { StoreError } from "../domain/errors.js";
 import { parseActor, parseBatchId, parseMessageFileId, parseOperationId } from "../domain/identifiers.js";
-import { checkObject, checkArray, checkString, checkInt, checkBool, checkEnum, checkOid, checkOptional, type Check } from "../validate.js";
+import { checkObject, checkArray, checkString, checkInt, checkBool, checkEnum, checkOid, checkOptional, exactCandidateCheck, type Check } from "../validate.js";
 import { PUBLIC_METHODS, isPublicMethod, isInternalMethod } from "./methods.js";
 import { decodeReceipt, decodeFailure } from "./receipt-codec.js";
 
@@ -36,6 +36,40 @@ const agentStatus = checkObject({
   activeState: nullable(string), subState: nullable(string), unitResult: nullable(string), execMainStatus: nullable(nonnegative),
   pending: nonnegative, preparedBatches: nonnegative, reason: nullable(string), runnerObservedAtMs: nullable(nonnegative),
 });
+const riskTier = checkEnum(["LOW", "MEDIUM", "HIGH"] as const);
+const reviewKind = checkEnum(["merge", "challenge"] as const);
+const reviewMain = checkObject({ oid: nullable(checkOid), observedAtMs: nonnegative });
+const reviewTarget = checkObject({ name: checkString({ min: 1 }), integration: operationId, identity: exactCandidateCheck });
+const reviewStatusDetail = checkObject({
+  name: checkString({ min: 1 }), kind: reviewKind, tier: riskTier, title: string, reason: string,
+  requester: actor, identity: exactCandidateCheck, display: string, required: nonnegative,
+  approvers: checkArray(actor), rejectors: checkArray(actor),
+  principal: checkObject({ approval: nullable(messageId), sent: checkBool(),
+    decision: nullable(checkEnum(["approve", "reject"] as const)) }),
+  integration: nullable(checkObject({ operation: operationId,
+    state: checkEnum(["pending", "succeeded", "failed", "unknown"] as const), error: nullable(string) })),
+  entries: checkArray(checkObject({ index: checkInt({ min: 1 }), sequence: nonnegative, actor,
+    kind: checkEnum(["review", "vote", "cancel", "refresh"] as const),
+    verdict: checkOptional(checkEnum(["approve", "reject"] as const)) })),
+  missing: checkArray(string), main: reviewMain, target: checkOptional(reviewTarget),
+});
+const reviewStatusList = checkObject({
+  requests: checkArray(checkObject({ name: checkString({ min: 1 }), kind: reviewKind, tier: riskTier,
+    title: string, requester: actor, display: string })),
+  omitted: nonnegative, main: reviewMain,
+});
+const reviewStatusPrincipal = checkObject({
+  name: checkString({ min: 1 }), kind: reviewKind, tier: riskTier, title: string,
+  identity: exactCandidateCheck, approval: nullable(messageId), display: string,
+  target: checkOptional(reviewTarget),
+});
+/** The answer's variant is decided by shape: entries → Worker detail,
+ * requests → Worker list, otherwise the minimal Principal view. */
+const reviewStatusResult: Check = value => {
+  if (reviewStatusDetail(value) === null) return null;
+  if (reviewStatusList(value) === null) return null;
+  return reviewStatusPrincipal(value) ?? "invalid review.status result";
+};
 type ReadResultMethod = Exclude<PublicMethod, MutationMethod | "operation.get">;
 const checks = {
   "operation.read": checkObject({ sha256: checkString({ re: /^[0-9a-f]{64}$/ }), bytes: checkInt({ min: 1 }), offset: nonnegative,
@@ -43,6 +77,7 @@ const checks = {
   "agent.wait": checkObject({ accepted: checkBool() }),
   "git.known": checkObject({ hasCandidate: checkBool(), prerequisites: checkArray(checkOid) }),
   "status.get": checkObject({ observedAtMs: nonnegative, agents: checkArray(agentStatus), next: checkOptional(actor) }),
+  "review.status": reviewStatusResult,
   "logs.read": checkObject({ text: string, truncated: checkBool(), observedAtMs: nonnegative }),
   "runner.open": checkObject({ actor, incarnation: nonnegative, socketHostPath: checkString({ min: 1 }) }),
   "runner.pending": checkObject({ pending: nonnegative, recoverableBatchIds: checkArray(batchId) }),

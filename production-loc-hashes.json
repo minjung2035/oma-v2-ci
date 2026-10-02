@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "c12b2649e6a8d456254ca97065ca2e0d2512a0aade4306c8b1e65ef2e7f83eba",
-  "report": "ab8a3b81b969331a4c636b3af8a3307e825eff2f48be71522aadbd6dd7ca8cfe",
+  "report": "6459dd02c12c14bbb8ecc5d68a2e955d2e15a752c36e18b7f4e40b6abae55b0a",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -101,7 +101,7 @@
     },
     {
       "path": "src/broker/public-dispatcher.ts",
-      "sha256": "bd66bfe001dfc37e9e7633dc02a5b38c80ffcd832a0162e579db165a92499103"
+      "sha256": "7388337bd81431699dae89e6b2a9a9b8e947289ed240a0859e0ee5774ecfffbe"
     },
     {
       "path": "src/broker/replies.ts",
@@ -917,7 +917,7 @@
     },
     {
       "path": "src/protocol/methods.ts",
-      "sha256": "559e09141bbddc823c411898f43cf43debc693ad445be88f9466bccb985f5775"
+      "sha256": "e9e1f3f372fe7f7570d5d2193367035cec422816a8920be64166038b852c6796"
     },
     {
       "path": "src/protocol/operation-results.ts",
@@ -945,7 +945,7 @@
     },
     {
       "path": "src/protocol/response-codec.ts",
-      "sha256": "4ce62958d19892ffb3b05bd4ac1f86b89c8c79a4d77a812bb81b4cc2c8ecf84c"
+      "sha256": "f3887cec5cfa63896a70fdecd1be12dbc68c94470bf5205a027deeb5e6aa3dae"
     },
     {
       "path": "src/protocol/run-lease.ts",
@@ -977,7 +977,7 @@
     },
     {
       "path": "src/review.ts",
-      "sha256": "95fec4ea60494db04ba4032b692a69ab6ca2887c718de5e09ad07408b76f5872"
+      "sha256": "db1d871e7ce2a2335e100c74a40c278f08d44a4607c594b25fb87a008271045a"
     },
     {
       "path": "src/rpc-client.ts",
@@ -1413,7 +1413,7 @@
     },
     {
       "path": "src/validate.ts",
-      "sha256": "cfa2fcf59e26f29e2e6d31808539cc6408d5323d03f450540007eccb8ba43afe"
+      "sha256": "2c05c44254d871fd136bae493b72ac1a6901bb9c533f6db15d9282bf72ca043c"
     },
     {
       "path": "src/views.ts",

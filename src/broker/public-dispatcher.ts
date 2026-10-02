@@ -47,6 +47,8 @@ export interface PublicLifecyclePort {
 }
 export interface PublicGitPort {
   readonly attestations?: { record(auth: AuthContext, key: RequestKey, input: PublicMethods["attest.record"]["params"]): Promise<Receipt> };
+  /** mail-v1 §8: the review read model; absent on deployments without a Git module. */
+  readonly reviews?: { status(auth: AuthContext, name: string | undefined, frameBytes: number, responseId: string): PublicMethods["review.status"]["result"] };
   readonly knownRefs: () => { main: string; published: string[] };
   readonly isPublished: (oid: Oid) => boolean;
   readonly submit: (auth: AuthContext, key: RequestKey, input: PublicMethods["git.submit"]["params"], bytes: AsyncIterable<Uint8Array>) => Promise<Receipt>;
@@ -210,6 +212,10 @@ export class PublicDispatcher {
         case "context.publish": {
           if (!git) throw new StoreError("UNSUPPORTED_PROFILE", "context module unavailable");
           return okAnswer(id, await git.publishContext(auth, keyOf(request), params, stream ?? emptyStream()));
+        }
+        case "review.status": {
+          if (!git?.reviews) throw new StoreError("UNSUPPORTED_PROFILE", "review status owner is unavailable");
+          return okAnswer(id, git.reviews.status(auth, params.name, this.deps.limits.frameBytes, id));
         }
         case "logs.read": {
           if (this.deps.store.getAgent(params.agent) === null)

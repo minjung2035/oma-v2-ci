@@ -39,6 +39,7 @@ import {
   operationReadParamsCheck,
   routeParamsCheck,
   statusGetParamsCheck,
+  reviewStatusParamsCheck,
 } from "../validate.js";
 
 /** What a method's parameter check may depend on. P0V-125 (G02-ledger-r2-01):
@@ -91,7 +92,7 @@ export function principalRequestAllowed(method: PublicMethod, params: object): b
   switch (method) {
     case "society.set": case "attest.record": case "mail.send":
     case "agent.start": case "agent.stop": case "git.known":
-    case "operation.get": case "operation.read": return true;
+    case "operation.get": case "operation.read": case "review.status": return true;
     case "context.publish": return Object.hasOwn(params, "goalMail");
     case "mail.ack": case "route.follow": case "route.unfollow": case "agent.create":
     case "agent.continue": case "agent.wait": case "git.submit": case "git.integrate":
@@ -292,6 +293,17 @@ export const PUBLIC_METHODS = {
     resource: "read",
     authority: ["current-actor"],
     paramsCheck: fixed(statusGetParamsCheck),
+  },
+  "review.status": {
+    mode: "read",
+    key: "forbidden",
+    stream: "none",
+    channel: "actor",
+    result: "review.status",
+    capability: null,
+    resource: "read",
+    authority: ["current-actor"],
+    paramsCheck: fixed(reviewStatusParamsCheck),
   },
   "logs.read": {
     mode: "read",

@@ -3,13 +3,13 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 356,
-    "n_lines": 46909,
+    "n_lines": 47089,
     "report_file": "production-loc.json"
   },
   "src/review.ts": {
-    "blank": 35,
-    "comment": 80,
-    "code": 758,
+    "blank": 40,
+    "comment": 90,
+    "code": 867,
     "language": "TypeScript"
   },
   "src/entry/oma-society.ts": {
@@ -39,13 +39,13 @@
   "src/validate.ts": {
     "blank": 22,
     "comment": 28,
-    "code": 474,
+    "code": 477,
     "language": "TypeScript"
   },
   "src/protocol/methods.ts": {
     "blank": 8,
     "comment": 18,
-    "code": 443,
+    "code": 455,
     "language": "TypeScript"
   },
   "src/config/generations.ts": {
@@ -264,16 +264,16 @@
     "code": 219,
     "language": "TypeScript"
   },
+  "src/broker/public-dispatcher.ts": {
+    "blank": 3,
+    "comment": 18,
+    "code": 214,
+    "language": "TypeScript"
+  },
   "src/mail.ts": {
     "blank": 1,
     "comment": 19,
     "code": 214,
-    "language": "TypeScript"
-  },
-  "src/broker/public-dispatcher.ts": {
-    "blank": 3,
-    "comment": 17,
-    "code": 209,
     "language": "TypeScript"
   },
   "src/reconcile.ts": {
@@ -636,6 +636,12 @@
     "code": 117,
     "language": "TypeScript"
   },
+  "src/protocol/response-codec.ts": {
+    "blank": 2,
+    "comment": 7,
+    "code": 116,
+    "language": "TypeScript"
+  },
   "src/storage/snapshot-reader.ts": {
     "blank": 1,
     "comment": 9,
@@ -898,12 +904,6 @@
     "blank": 3,
     "comment": 2,
     "code": 85,
-    "language": "TypeScript"
-  },
-  "src/protocol/response-codec.ts": {
-    "blank": 2,
-    "comment": 5,
-    "code": 83,
     "language": "TypeScript"
   },
   "src/runtime/personal-session.ts": {
@@ -2143,9 +2143,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1897,
-    "comment": 7524,
-    "code": 37488,
+    "blank": 1902,
+    "comment": 7537,
+    "code": 37650,
     "nFiles": 356
   }
 }

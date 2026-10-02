@@ -1,12 +1,46 @@
 /** TS-001: public-wire contract owner. Declarations only. IPC-008 adds receipt
  * chunks and explicit status continuation; durable v1 records are unchanged. */
-import type { RiskTier } from "./values.js";
+import type { ExactCandidateIdentity, RiskTier } from "./values.js";
 import type { AttestationInput } from "./attestation.js";
 import type { MutationMethod, Receipt } from "./durable.js";
-import type { Failure } from "./errors.js";
-import type { Actor, Address, MessageId, Oid, RequestKey } from "./identity.js";
+import type { ErrorCode, Failure } from "./errors.js";
+import type { Actor, Address, MessageId, OperationId, Oid, RequestKey } from "./identity.js";
 import type { AgentStatus } from "./runtime.js";
 import type { AgentCreateInput, BlobDescriptor, ContextEntry, MailInput } from "./values.js";
+
+/** mail-v1 §8: one request entry in a Worker-facing review status answer. */
+export interface ReviewStatusEntry {
+  index: number; sequence: number; actor: Actor;
+  kind: "review" | "vote" | "cancel" | "refresh"; verdict?: "approve" | "reject";
+}
+export interface ReviewRequestSummary {
+  name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
+  requester: Actor; display: string;
+}
+export interface ReviewMainObservation { oid: Oid | null; observedAtMs: number }
+/** The Worker's full request detail. */
+export interface ReviewRequestStatus {
+  name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
+  reason: string; requester: Actor; identity: ExactCandidateIdentity;
+  display: string; required: number; approvers: Actor[]; rejectors: Actor[];
+  principal: { approval: MessageId | null; sent: boolean; decision: "approve" | "reject" | null };
+  integration: { operation: OperationId; state: "pending" | "succeeded" | "failed" | "unknown";
+    error: ErrorCode | null } | null;
+  entries: ReviewStatusEntry[]; missing: string[]; main: ReviewMainObservation;
+  target?: { name: string; integration: OperationId; identity: ExactCandidateIdentity };
+}
+/** The Worker's list answer, newest first, bounded by the frame limit. */
+export interface ReviewRequestList {
+  requests: ReviewRequestSummary[]; omitted: number; main: ReviewMainObservation;
+}
+/** What the Principal may see: only a request its approval mail named or one
+ * already applied, and only these fields. */
+export interface ReviewPrincipalStatus {
+  name: string; kind: "merge" | "challenge"; tier: RiskTier; title: string;
+  identity: ExactCandidateIdentity; approval: MessageId | null; display: string;
+  target?: { name: string; integration: OperationId; identity: ExactCandidateIdentity };
+}
+export type ReviewStatusResult = ReviewRequestStatus | ReviewRequestList | ReviewPrincipalStatus;
 
 export interface PublicMethods {
   "society.set": { params: { state: "open" | "closed" }; result: Receipt };
@@ -36,11 +70,15 @@ export interface PublicMethods {
    * Pages are live observations, not a multi-request registry snapshot. */
   'status.get': { params: { agent?: Actor; after?: Actor }; result: { observedAtMs: number; agents: AgentStatus[]; next?: Actor } };
   'logs.read': { params: { agent: Actor; sinceSeconds: number }; result: { text: string; truncated: boolean; observedAtMs: number } };
+  /** mail-v1 §8: the read model over the review ledger. Workers see every
+   * request; the Principal sees only a request its approval mail named (or an
+   * applied one), and only the fields the approval flow already gave it. */
+  'review.status': { params: { name?: string }; result: ReviewStatusResult };
 }
 
 export type PublicMethod = keyof PublicMethods;
 
-export type ReadMethod = 'operation.get' | 'operation.read' | 'status.get' | 'logs.read' | 'git.known';
+export type ReadMethod = 'operation.get' | 'operation.read' | 'status.get' | 'logs.read' | 'git.known' | 'review.status';
 
 export type EphemeralMethod = 'agent.wait';
 

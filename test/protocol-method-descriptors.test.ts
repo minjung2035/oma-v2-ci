@@ -29,7 +29,7 @@ const limits: ProtocolLimits = {
 const context = { limits };
 
 test("public/internal registries are closed, disjoint, and classify all 13 mutations", () => {
-  assert.equal(Object.keys(PUBLIC_METHODS).length, 19);
+  assert.equal(Object.keys(PUBLIC_METHODS).length, 20);
   assert.deepEqual(PUBLIC_METHODS["operation.read"].authority, ["current-actor", "own-operation"]);
   assert.equal(Object.keys(INTERNAL_METHODS).length, 10);
   assert.equal(Object.values(PUBLIC_METHODS).filter(d => d.mode === "mutation").length, 13);

@@ -31,6 +31,7 @@ const vectors = {
 const additions = {
   'society.set': { state: 'closed' },
   'attest.record': { kind: 'peer', identity: { repo: 'project', targetRef: 'refs/heads/main', expectedBase: oid, candidate: oid, policyRevision: 'p1' }, verdict: 'APPROVE', evidence: 'Exact candidate reviewed' },
+  'review.status': { name: 'merge-1a2b3c4d' },
 };
 for (const [method, params] of Object.entries({ ...vectors, ...additions })) {
   test(`P2 wire golden: ${method} retains values and rejects extra fields`, () => {

@@ -44,6 +44,8 @@ const REVIEWED_CHANGES = Object.freeze({
     ["  'operation.read': { params: { key: RequestKey; offset: number; sha256?: string }; result: { sha256: string; bytes: number; offset: number; data: string; next: number | null } };", ""],
     ["params: { agent?: Actor; after?: Actor }; result: { observedAtMs: number; agents: AgentStatus[]; next?: Actor }", "params: { agent?: Actor }; result: { observedAtMs: number; agents: AgentStatus[] }"],
     ["'operation.get' | 'operation.read' | 'status.get'", "'operation.get' | 'status.get'"],
+    [" | 'review.status'", ""],
+    ["\n  /** mail-v1 §8: the read model over the review ledger. Workers see every\n   * request; the Principal sees only a request its approval mail named (or an\n   * applied one), and only the fields the approval flow already gave it. */\n  'review.status': { params: { name?: string }; result: ReviewStatusResult };", ""],
   ],
   "implementation/contracts/host.ts": [
     ["    tiered?: TieredPolicy;", ""],
@@ -55,7 +57,7 @@ const REVIEWED_CHANGES = Object.freeze({
 /** DR24: the one public name the reviewed additions export. */
 const REVIEWED_NAMES = Object.freeze(["EffortLevel"]);
 /** Additions declared with `export type` (the rest are `export interface`). */
-const ADDITION_TYPE_NAMES = new Set(["PrincipalDecision", "AttestationInput", "LegacyAttestationInput", "ReviewInput", "ReviewFact", "ReviewMailMeta"]);
+const ADDITION_TYPE_NAMES = new Set(["PrincipalDecision", "AttestationInput", "LegacyAttestationInput", "ReviewInput", "ReviewFact", "ReviewMailMeta", "ReviewStatusResult"]);
 function beforeReviewedChanges(text, file) {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   for (const node of [...source.statements].reverse()) {

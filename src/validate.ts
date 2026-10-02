@@ -493,6 +493,9 @@ export const statusGetParamsCheck: Check = checkObject({
   agent: checkOptional(checkActor),
   after: checkOptional(checkActor),
 });
+export const reviewStatusParamsCheck: Check = checkObject({
+  name: checkOptional(requestNameCheck),
+});
 export const logsReadParamsCheck: Check = checkObject({
   agent: checkActor,
   sinceSeconds: checkInt({ min: 1, max: 31536000 }),
