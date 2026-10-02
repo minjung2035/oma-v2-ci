@@ -5,7 +5,7 @@ import type { Address, MessagePlan } from "../../implementation/contracts.js";
 import { Store, type DeliveryRow, type OperationRow } from "../store.js";
 import { ownedMessages } from "../durable.js";
 import { StoreError } from "../domain/errors.js";
-import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "../storage/paths.js";
+import { mailObjectPathAt, mailAudiencePathAt, mailInboxPathAt } from "../storage/paths.js";
 import { publishImmutableFile, readImmutableBytes } from "../storage/immutable-file.js";
 import { parseDisplayedAddress } from "./addresses.js";
 import { decodeSubject, parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
@@ -106,7 +106,8 @@ export class MailMaterializer {
   }
   private publish(operation: OperationRow): void {
     const messages = namedMessages(operation);
-    if (messages.length === 0) throw new StoreError("STORE_CORRUPT", `operation ${operation.kind} owns no message`);
+    // A review operation may legitimately own no mail; nothing publishes then.
+    if (messages.length === 0) return;
     const deliveries = this.store.deliveriesForOperation(operation.id);
     const ownedIds = new Set(messages.map(message => message.id));
     if (deliveries.some(delivery => !ownedIds.has(delivery.messageId)))
@@ -130,7 +131,7 @@ export class MailMaterializer {
         if (body.length !== goal.bytes || sha256Hex(body) !== goal.sha256 || decodeSubject(headers.subject) !== operation.plan.goalMail.subject)
           throw new StoreError("STORE_CORRUPT", "GOAL mail differs from the accepted document or subject");
       }
-      publishImmutableFile(mailObjectPathAt(this.stateRoot, message.id), mailArchivePathAt(this.stateRoot, message.id), message.sha256);
+      publishImmutableFile(mailObjectPathAt(this.stateRoot, message.id), mailAudiencePathAt(this.stateRoot, message), message.sha256);
       for (const delivery of owned) {
         this.publishDelivery(message, delivery);
         this.store.transaction(tx => tx.markMaterialized(delivery.messageId, delivery.recipient));

@@ -19,6 +19,9 @@ export function integrationResult(plan: ValidatedPlan<"git.integrate">): ResultF
     ...(plan.publication === undefined ? {} : { publication: { message: plan.publication.message.id,
       recipientCount: plan.publication.message.recipients.length, effectiveTier: plan.publication.tiered.effective,
       authorityDigest: plan.publication.tiered.authorityDigest } }),
+    ...(plan.merge === undefined ? {} : { merge: { name: plan.merge.name,
+      notices: plan.merge.notice.map(notice => notice.id),
+      recipientCount: plan.merge.notice.reduce((total, notice) => total + notice.recipients.length, 0) } }),
   };
 }
 

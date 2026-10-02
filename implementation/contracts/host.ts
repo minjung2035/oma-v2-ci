@@ -24,6 +24,8 @@ export interface ResourceLimits {
 }
 
 export interface TieredPolicy {
+  /** "mail-v1" selects the mail review protocol; absent is legacy attestation. */
+  review?: "mail-v1";
   repositoryFloor: RiskTier;
   highPeerFloor: number;
   principalDelegated: boolean;

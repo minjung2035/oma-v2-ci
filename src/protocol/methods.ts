@@ -108,7 +108,7 @@ export const PUBLIC_METHODS = {
   "attest.record": {
     mode: "mutation", key: "required", stream: "none", channel: "actor", result: "receipt",
     capability: "mail.send", resource: "admit", authority: ["current-actor", "current-capability"],
-    paramsCheck: context => value => attestationParamsCheck(value, context.limits.mailBodyBytes),
+    paramsCheck: context => value => attestationParamsCheck(value, context.limits),
   },
   "mail.send": {
     mode: "mutation",

@@ -10,7 +10,7 @@ export function projectSettingsPathAt(dataRoot: string, project: string): string
 }
 import {
   agentRootFor, workspaceFor, runnerViewFor, batchViewFor, runnerReceiptFor, runnerSessionDirFor, sessionDirFor,
-  mailObjectRelativePath, mailArchiveRelativePath, mailInboxRelativePath,
+  mailObjectRelativePath, mailArchiveRelativePath, mailWorkersRelativePath, mailInboxRelativePath,
   submitStagingFor, submitBundleFor, contextStagingFor, contextRevisionFor, modelWorkspaceFor,
   actorSocketDirectoryFor, actorSocketFor,
 } from "../domain/derived.js";
@@ -67,6 +67,13 @@ export function mailObjectPathAt(stateRoot: string, messageId: string): string {
 }
 export function mailArchivePathAt(stateRoot: string, messageId: string): string {
   return join(stateRoot, mailArchiveRelativePath(messageId));
+}
+export function mailWorkersPathAt(stateRoot: string, messageId: string): string {
+  return join(stateRoot, mailWorkersRelativePath(messageId));
+}
+/** The archive directory a message belongs to by audience. */
+export function mailAudiencePathAt(stateRoot: string, message: { id: string; audience?: "workers" }): string {
+  return message.audience === "workers" ? mailWorkersPathAt(stateRoot, message.id) : mailArchivePathAt(stateRoot, message.id);
 }
 export function mailInboxPathAt(stateRoot: string, actor: string, messageId: string, folder: "new" | "cur"): string {
   return join(stateRoot, mailInboxRelativePath(actor, messageId, folder));

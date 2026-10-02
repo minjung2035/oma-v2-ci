@@ -1,7 +1,7 @@
 // MUST [M-003]: runtime schema validation at trust boundaries; unknown fields are
 // rejected; `as SomeType` is never validation. Validators return an error string
 // or null; they do not coerce.
-export { attestationProblem as attestationParamsCheck } from "./domain/attestation.js";
+export { attestationInputProblem as attestationParamsCheck } from "./domain/attestation.js";
 import type { Json, RequestKey } from "../implementation/contracts/identity.js";
 import { contextEntriesCheck } from "./domain/context-policy.js";
 import {
@@ -29,6 +29,7 @@ import {
   isValidWirePath,
   isValidMessageId,
   isValidOperationId,
+  isReviewRequestName,
 } from "./domain/identifiers.js";
 
 export type Check = (v: unknown) => string | null;
@@ -204,7 +205,41 @@ const messageIdCheck: Check = (value) =>
 const operationIdCheck: Check = (value) =>
   isValidOperationId(value) ? null : "invalid operation id";
 
-export const messagePlanCheck = checkObject({
+const requestNameCheck: Check = (value) =>
+  isReviewRequestName(value) ? null : "invalid review request name";
+/** The durable review-mail metadata grammar; role fixes kind, audience and
+ * logical addressing in the cross-field checks below. */
+const reviewMailMetaCheck: Check = (value) => {
+  if (!isPlainObject(value)) return `expected object, got ${typeName(value)}`;
+  switch ((value as { role?: unknown }).role) {
+    case "thread":
+      return checkObject({ role: checkEnum(["thread"] as const), request: operationIdCheck,
+        name: requestNameCheck, revision: checkInt({ min: 0 }) })(value);
+    case "approval": {
+      const invalid = checkObject({ role: checkEnum(["approval"] as const), request: operationIdCheck,
+        name: requestNameCheck, votes: checkArray(operationIdCheck, { min: 1 }) })(value);
+      if (invalid !== null) return invalid;
+      const votes = (value as { votes: string[] }).votes;
+      return new Set(votes).size === votes.length ? null : "duplicate approval votes";
+    }
+    case "withdrawn":
+      return checkObject({ role: checkEnum(["withdrawn"] as const), request: operationIdCheck,
+        name: requestNameCheck, approval: messageIdCheck })(value);
+    case "decision":
+      return checkObject({ role: checkEnum(["decision"] as const), request: operationIdCheck,
+        name: requestNameCheck, approval: messageIdCheck })(value);
+    case "notice": {
+      const invalid = checkObject({ role: checkEnum(["notice"] as const), request: operationIdCheck,
+        name: requestNameCheck, part: checkInt({ min: 1 }), parts: checkInt({ min: 1 }),
+        sha256: checkString({ re: /^[0-9a-f]{64}$/ }), bytes: checkInt({ min: 0 }) })(value);
+      if (invalid !== null) return invalid;
+      const meta = value as { part: number; parts: number };
+      return meta.part <= meta.parts ? null : "notice part exceeds parts";
+    }
+    default: return "invalid review mail role";
+  }
+};
+const messagePlanShapeCheck = checkObject({
   id: messageIdCheck,
   objectPath: (value) =>
     isMailObjectRelativePath(value) ? null : "invalid mail object path",
@@ -215,6 +250,8 @@ export const messagePlanCheck = checkObject({
   recipients: checkArray((v) => (v === "principal" ? null : checkActor(v))),
   kind: messageKindCheck,
   approvalFor: checkOptional(exactCandidateCheck),
+  audience: checkOptional(checkEnum(["workers"] as const)),
+  review: checkOptional(reviewMailMetaCheck),
   contextRevision: (v) => (v === null ? null : checkOid(v)),
   replyHeaders: checkObject({
     replyTo: checkArray(checkLogicalAddress),
@@ -222,6 +259,38 @@ export const messagePlanCheck = checkObject({
     references: checkArray(headerMessageIdCheck),
   }),
 });
+/** Review mail roles pin the frozen kind, logical addressing and audience. */
+export const messagePlanCheck: Check = (value) => {
+  const invalid = messagePlanShapeCheck(value);
+  if (invalid !== null) return invalid;
+  const plan = value as {
+    kind: string; to: string[]; audience?: string; approvalFor?: unknown;
+    review?: { role: string };
+  };
+  const toIs = (expected: readonly string[]) =>
+    plan.to.length === expected.length && expected.every((address, index) => plan.to[index] === address);
+  if (plan.review === undefined)
+    return plan.audience === undefined ? null : "workers audience requires review metadata";
+  const hidden = plan.audience === undefined;
+  switch (plan.review.role) {
+    case "thread":
+      return plan.kind === "message" && plan.audience === "workers" && toIs(["residents"])
+        ? null : "thread review mail is a workers-audience message to residents";
+    case "approval":
+      return plan.kind === "approval_required" && hidden && plan.approvalFor !== undefined && toIs(["principal"])
+        ? null : "approval review mail is an approval_required to the Principal";
+    case "withdrawn":
+      return plan.kind === "message" && hidden && toIs(["principal"])
+        ? null : "withdrawn review mail is a message to the Principal";
+    case "decision":
+      return plan.kind === "result" && hidden && toIs(["principal"])
+        ? null : "decision review mail is a result to the Principal";
+    case "notice":
+      return plan.kind === "result" && hidden && toIs(["commons", "principal"])
+        ? null : "notice review mail is a result to commons and the Principal";
+    default: return "invalid review mail role";
+  }
+};
 
 /** MUST [DB-009/M-003]: result_json is a closed result variant keyed by kind. */
 export function operationResultCheck(kind: string): Check {
@@ -229,6 +298,22 @@ export function operationResultCheck(kind: string): Check {
     case "society.set":
       return checkObject({ kind: checkEnum([kind]), state: checkEnum(["open", "closed"]) });
     case "attest.record":
+      return (value) => {
+        if (!isPlainObject(value)) return `expected object, got ${typeName(value)}`;
+        if (Object.hasOwn(value, "request"))
+          return checkObject({
+            kind: checkEnum(["attest.record"] as const),
+            request: requestNameCheck,
+            messages: checkArray(messageIdCheck),
+            recipientCount: checkInt({ min: 0 }),
+          })(value);
+        return checkObject({
+          kind: checkEnum(["attest.record"] as const),
+          message: messageIdCheck,
+          recipientCount: checkInt({ min: 0 }),
+          archivePath: checkString({ min: 1 }),
+        })(value);
+      };
     case "mail.send":
     case "agent.continue":
       return checkObject({
@@ -283,6 +368,8 @@ export function operationResultCheck(kind: string): Check {
         changed: checkBool(),
         publication: checkOptional(checkObject({ message: messageIdCheck, recipientCount: checkInt({ min: 0 }),
           effectiveTier: checkEnum(["LOW", "MEDIUM", "HIGH"]), authorityDigest: checkString({ re: /^[0-9a-f]{64}$/ }) })),
+        merge: checkOptional(checkObject({ name: requestNameCheck, notices: checkArray(messageIdCheck),
+          recipientCount: checkInt({ min: 0 }) })),
       });
     case "context.publish":
       return checkObject({

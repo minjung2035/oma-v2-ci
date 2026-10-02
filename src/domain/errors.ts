@@ -1,7 +1,7 @@
 /** ERR-001/002: pure error vocabulary. No Store, filesystem or process dependency. */
 import type { ErrorCode, Failure } from "../../implementation/contracts/errors.js";
 import { isCapability } from "./capabilities.js";
-import { isValidFullOid } from "./identifiers.js";
+import { isValidFullOid, isValidMessageId, isValidWirePath, isReviewRequestName } from "./identifiers.js";
 
 export class StoreError extends Error {
   /** DR3: facts this failure may tell its caller. `publicFailure` keeps only
@@ -131,6 +131,8 @@ export const ERROR_METADATA = Object.freeze({
   REF_STATE_UNKNOWN: meta("ambiguous", "repository", 3), CANCELLED_BEFORE_COMMIT: meta("conflict"),
   CONTEXT_CONFLICT: meta("conflict", "repository"), QUOTA_EXCEEDED: meta("resource"),
   PROVIDER_FAILED: meta("input"), PROVIDER_OUTCOME_UNKNOWN: meta("ambiguous", "operation", 3),
+  REQUEST_CLOSED: meta("conflict"), REQUEST_EXISTS: meta("conflict"), SELF_REVIEW: meta("authority"),
+  APPROVAL_STALE: meta("conflict"), REVERT_CONFLICT: meta("conflict"),
   UNSUPPORTED_PROFILE: meta("unsupported", "none", 4), SPIKE_UNRESOLVED: meta("unsupported", "none", 4),
   INTERNAL_ERROR: meta("internal", "operation", 3),
 } satisfies Record<ErrorCode, ErrorMetadata>);
@@ -266,6 +268,17 @@ export const ERROR_DETAILS: Readonly<Partial<Record<ErrorCode, Readonly<Record<s
     missing: (value: unknown) => typeof value === "string" && value.length > 0,
   }),
   BROKER_UNAVAILABLE: Object.freeze({ reason: (value: unknown) => value === "busy" || value === "draining" }),
+  REQUEST_CLOSED: Object.freeze({
+    name: (value: unknown) => isReviewRequestName(value),
+    state: (value: unknown) => value === "applied" || value === "cancelled" || value === "rejected" ||
+      value === "stale" || value === "applying",
+  }),
+  REQUEST_EXISTS: Object.freeze({ name: (value: unknown) => isReviewRequestName(value) }),
+  APPROVAL_STALE: Object.freeze({ current: (value: unknown) => value === null || isValidMessageId(value) }),
+  REVERT_CONFLICT: Object.freeze({
+    paths: (value: unknown) => Array.isArray(value) && value.every(item => isValidWirePath(item)),
+    artifact: (value: unknown) => value === "none",
+  }),
 });
 /** The details a failure of this code may carry, exactly, or undefined. */
 export function publicDetails(code: ErrorCode, details: unknown): { readonly [key: string]: string | null } | undefined {
@@ -303,6 +316,9 @@ export const ERROR_DESCRIPTIONS = Object.freeze({
   CONTEXT_CONFLICT: "Shared context differs from expected; retry against actual", QUOTA_EXCEEDED: "Quota exceeded",
   PROVIDER_FAILED: "Model provider call failed", PROVIDER_OUTCOME_UNKNOWN: "Model provider outcome is unknown",
   UNSUPPORTED_PROFILE: "Configuration is unsupported by this deployment", SPIKE_UNRESOLVED: "Feature is blocked pending verification",
+  REQUEST_CLOSED: "The merge or challenge request is closed", REQUEST_EXISTS: "A review request for this change already exists",
+  SELF_REVIEW: "The requester or a submitter cannot vote on their own change", APPROVAL_STALE: "The named approval is no longer current",
+  REVERT_CONFLICT: "The revert could not be built without conflicting changes",
   INTERNAL_ERROR: "Internal error",
 } satisfies Record<ErrorCode, string>);
 /** How a failure reads to its caller: the code, its words -- the authored text

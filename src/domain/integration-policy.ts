@@ -9,6 +9,7 @@ export const protectedPathCheck: Check = value => {
   return isValidWirePath(value.endsWith("/") ? value.slice(0, -1) : value) ? null : "invalid protected path";
 };
 export const tieredPolicyCheck = checkObject({
+  review: checkOptional(checkEnum(["mail-v1"])),
   repositoryFloor: riskTierCheck, highPeerFloor: checkInt({ min: 1 }), principalDelegated: checkBool(),
   rules: checkArray(checkObject({ path: protectedPathCheck, tier: riskTierCheck,
     statuses: checkArray(checkEnum(["A", "M", "D", "T"]), { min: 1 }) })),

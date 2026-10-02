@@ -46,6 +46,7 @@ test("DR27: accepted fact, commons mail and receipt share one stable identity; r
   assert.equal(receipt.state, "succeeded");
   const { operation, sequence } = f.store.attestations.all()[0]!;
   assert.equal(sequence, 1); assert.equal(operation!.actor, "alice");
+  assert.ok(!("messages" in operation!.plan));
   assert.deepEqual(operation!.plan.message.to, ["commons"]);
   assert.deepEqual(operation!.plan.message.recipients, ["alice", "bob"]);
   assert.equal(f.store.deliveries.forOperation(operation!.id).length, 2);
@@ -74,6 +75,7 @@ test("DR27: publication failure retains the fact; recovery publishes its origina
   assert.equal(result.repaired, 1);
   const after = f.store.attestations.all()[0]!.operation;
   assert.equal(after.planJson, before.planJson); assert.equal(after.state, "succeeded");
+  assert.ok(!("messages" in after.plan));
   assert.deepEqual(after.plan.message.recipients, ["alice", "bob"]);
   assert.equal(f.store.deliveries.get(after.plan.message.id, "later"), null);
 });

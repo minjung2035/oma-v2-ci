@@ -123,6 +123,18 @@ export function mailArchiveRelativePath(messageId: string): string {
 export function mailArchiveDisplayPath(messageId: string): string {
   return `/${mailArchiveRelativePath(messageId)}`;
 }
+/** Review thread mail addressed to `residents` publishes to a workers-only
+ * archive directory, never the public archive. */
+export function mailWorkersRelativePath(messageId: string): string {
+  return `mail/workers/cur/${maildirCurName(messageId)}`;
+}
+export function mailWorkersDisplayPath(messageId: string): string {
+  return `/${mailWorkersRelativePath(messageId)}`;
+}
+/** The archive a message belongs to by audience. */
+export function mailAudienceDisplayPath(message: { id: string; audience?: string }): string {
+  return message.audience === "workers" ? mailWorkersDisplayPath(message.id) : mailArchiveDisplayPath(message.id);
+}
 export function mailInboxRelativePath(actor: string, messageId: string, folder: "new" | "cur"): string {
   if (folder !== "new" && folder !== "cur") throw new TypeError("invalid mailbox folder");
   const owner = required(actor, parseActor, "actor");

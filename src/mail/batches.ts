@@ -5,7 +5,7 @@ import type { Actor, AuthContext, BoundaryEvidence, MessageId, PreparedBatch } f
 import { Store, type DeliveryRow } from "../store.js";
 import { StoreError } from "../domain/errors.js";
 import { generateBatchId } from "../ids.js";
-import { mailArchiveDisplayPath, contextRevisionDisplayPath } from "../domain/derived.js";
+import { mailAudienceDisplayPath, contextRevisionDisplayPath } from "../domain/derived.js";
 import { mailObjectPathAt, mailInboxPathAt, runnerReceiptPathAt } from "../storage/paths.js";
 import { ensureDurableDirectory, fsyncHeldDir } from "../storage/durable-fs.js";
 import { observeImmutableEntry, readImmutableBytes, type ImmutableObservation } from "../storage/immutable-file.js";
@@ -61,7 +61,7 @@ export class BatchCoordinator {
       const message = this.messagePlan(delivery); const headers = this.materializer.headers(message);
       const reply = headers.inReplyTo ?? headers.references.at(-1) ?? null;
       const context = message.contextRevision ? ` context=${contextRevisionDisplayPath(message.contextRevision)}${message.kind === "context" ? "/GOAL.md" : ""}` : "";
-      lines.push(`${index + 1}. sender=${oneLine(headers.from)} subject=${oneLine(displaySubject(headers.subject))} kind=${message.kind} path=${mailArchiveDisplayPath(id)}${reply ? ` reply=${reply}` : ""}${context}`);
+      lines.push(`${index + 1}. sender=${oneLine(headers.from)} subject=${oneLine(displaySubject(headers.subject))} kind=${message.kind} path=${mailAudienceDisplayPath(message)}${reply ? ` reply=${reply}` : ""}${context}`);
     }
     if (ids.length > 6) lines.push(`… +${ids.length - 6} more`);
     lines.push("Full list: /inbox.md"); return lines.join("\n");

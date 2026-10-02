@@ -1,6 +1,6 @@
 /** DR27/S-08: authentication and live authority apply at acceptance only. The
  * fact is then immutable, even if mail publication is pending or its author stops. */
-import type { AttestationInput } from "../implementation/contracts/attestation.js";
+import type { AttestationInput, LegacyAttestationInput } from "../implementation/contracts/attestation.js";
 import type { AuthContext, Receipt } from "../implementation/contracts.js";
 import type { ExactCandidateIdentity } from "../implementation/contracts/values.js";
 import type { Store } from "./store.js";
@@ -25,7 +25,7 @@ export class AttestationModule {
     const copied = snapshotJson(input);
     const problem = attestationProblem(copied);
     if (problem !== null) throw new StoreError("INVALID_REQUEST", problem);
-    const fact = copied as AttestationInput;
+    const fact = copied as LegacyAttestationInput; // attestationProblem proved the legacy variant
     const hash = requestHash("attest.record", copied);
     const prior = this.store.operations.classifyKey(auth.actor, key, hash);
     if (prior === "retry") return receiptOfOperation(this.store.operations.retried(auth.actor, key));

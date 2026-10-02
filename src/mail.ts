@@ -1,6 +1,6 @@
 // MAIL-001..010: acceptance orchestration; publication and batch views have explicit owners.
 import { ownedMessages } from "./durable.js";
-import type { AttestationInput } from "../implementation/contracts/attestation.js";
+import type { LegacyAttestationInput } from "../implementation/contracts/attestation.js";
 import { canonicalJson } from "./domain/canonical-json.js";
 import { ensureDirectory, removeOwnedFile } from "./storage/directory.js";
 import { join } from "node:path";
@@ -11,7 +11,7 @@ import { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js"
 export { receiptOfOperation as receiptOf } from "./storage/receipt-projector.js";
 import { assertCurrentActor } from "./authority.js";
 import { generateMessageId, generateOperationId, parseMessageId } from "./ids.js";
-import { mailObjectPathAt, mailArchivePathAt, mailInboxPathAt } from "./storage/paths.js";
+import { mailObjectPathAt, mailArchivePathAt, mailWorkersPathAt, mailInboxPathAt } from "./storage/paths.js";
 import { sha256Hex, requestHash, canonicalRequestParams } from "./hash.js";
 import { fsyncDir, writeExclusiveFsyncedFile as writeFsynced } from "./storage/durable-fs.js";
 import { publishImmutableFile, readImmutableBytes } from "./storage/immutable-file.js";
@@ -50,20 +50,25 @@ export class MailModule {
     this.batches = new BatchCoordinator(store, paths.stateRoot, this.materializer, batchMaxMessages, viewLimits);
   }
   objectPath(id: MessageId): string { return mailObjectPathAt(this.paths.stateRoot, id); }
-  archivePath(id: MessageId): string { return mailArchivePathAt(this.paths.stateRoot, id); }
+  /** The archive a message belongs to by audience: workers-only mail publishes
+   * to S/mail/workers instead of the public archive. */
+  archivePath(id: MessageId, audience?: "workers"): string {
+    return audience === "workers" ? mailWorkersPathAt(this.paths.stateRoot, id)
+      : mailArchivePathAt(this.paths.stateRoot, id);
+  }
   inboxNewPath(actor: Actor, id: MessageId): string { return mailInboxPathAt(this.paths.stateRoot, actor, id, "new"); }
   inboxCurPath(actor: Actor, id: MessageId): string { return mailInboxPathAt(this.paths.stateRoot, actor, id, "cur"); }
   async send(auth: AuthContext, key: RequestKey, input: MailInput, requestContext?: { kind: "mail.send" | "agent.continue"; params: Json }): Promise<Receipt> {
     return this.sendOwned(auth, key, input, requestContext);
   }
-  recordAttestation(auth: AuthContext, key: RequestKey, fact: AttestationInput, observeAuthority: () => void,
+  recordAttestation(auth: AuthContext, key: RequestKey, fact: LegacyAttestationInput, observeAuthority: () => void,
     accept: () => void): Promise<Receipt> {
     return this.sendOwned(auth, key, { to: ["commons"], kind: "result", subject: `Attestation: ${fact.kind}`,
       body: canonicalJson(fact) }, { kind: "attest.record", params: fact, fact, observeAuthority, accept });
   }
   private async sendOwned(auth: AuthContext, key: RequestKey, input: MailInput,
     requestContext?: { kind: "mail.send" | "agent.continue"; params: Json } |
-      { kind: "attest.record"; params: AttestationInput; fact: AttestationInput; observeAuthority: () => void; accept: () => void }): Promise<Receipt> {
+      { kind: "attest.record"; params: LegacyAttestationInput; fact: LegacyAttestationInput; observeAuthority: () => void; accept: () => void }): Promise<Receipt> {
     const operationKind = requestContext?.kind ?? "mail.send";
     const requestParams = requestContext?.params ?? input as unknown as Json;
     const society = this.paths.society;
