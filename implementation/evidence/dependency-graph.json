@@ -79,6 +79,7 @@
   "src/domain/persisted-formats.ts",
   "src/domain/request-identity.ts",
   "src/domain/resources.ts",
+  "src/domain/review-evaluation.ts",
   "src/domain/session-mode.ts",
   "src/domain/spec-identity.ts",
   "src/domain/tier-evaluation.ts",
@@ -377,6 +378,7 @@
      "src/domain/mail-values.ts",
      "src/domain/request-identity.ts",
      "src/domain/resources.ts",
+     "src/domain/review-evaluation.ts",
      "src/domain/session-mode.ts",
      "src/domain/spec-identity.ts",
      "src/domain/tier-evaluation.ts",
@@ -479,7 +481,7 @@
    }
   ],
   "runtimeEdgeMatrix": {
-   "K0-values -> K0-values": 26,
+   "K0-values -> K0-values": 27,
    "K1-codecs -> K0-values": 64,
    "K1-codecs -> K1-codecs": 27,
    "K2-mechanisms -> K0-values": 61,
@@ -1694,7 +1696,7 @@
     "src/mail/headers.ts",
     "src/store.ts"
    ],
-   "files": 101
+   "files": 102
   },
   {
    "index": 2,
@@ -1756,14 +1758,14 @@
    "files": 89
   }
  ],
- "files": 353,
- "runtimeEdges": 1508,
- "typeOnlyEdges": 405,
+ "files": 354,
+ "runtimeEdges": 1510,
+ "typeOnlyEdges": 410,
  "runtimeEdgeMatrix": {
-  "L1-kernel -> L1-kernel": 282,
+  "L1-kernel -> L1-kernel": 283,
   "L2-facts -> L1-kernel": 35,
   "L2-facts -> L2-facts": 5,
-  "L3-workflow -> L1-kernel": 202,
+  "L3-workflow -> L1-kernel": 203,
   "L3-workflow -> L2-facts": 13,
   "L3-workflow -> L3-workflow": 62,
   "L4-orchestration -> L1-kernel": 290,
@@ -1793,7 +1795,7 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 192,
+  "src/domain/errors.ts": 193,
   "src/domain/identifiers.ts": 58,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,
