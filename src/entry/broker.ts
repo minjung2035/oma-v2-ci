@@ -179,7 +179,8 @@ async function main(): Promise<void> {
     const git = new GitModule(gitPaths, store, mail, integrationPolicy,
       () => integrationPolicyFromConfig(readCurrentHostPolicy(configPath, society).integration),
       (candidate, check) => checks.run(candidate, check),
-      { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes });
+      { mailBodyBytes: cfg.limits.mailBodyBytes, subjectBytes: cfg.limits.subjectBytes,
+        bundleBytes: cfg.limits.bundleBytes });
     const hasGoal = (): boolean => git.hasCommittedContext();
     const lifecycle = new LifecycleModule(store, units, { stateRoot, projectGit: projectGitPathAt(stateRoot), society,
       hasGoal, activationAllowed: () => lifetime.permitsActivation,

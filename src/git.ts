@@ -12,7 +12,7 @@ import { assertNever } from "./domain/exhaustive.js";
 import { MailModule } from "./mail.js";
 import { isValidFullOid } from "./ids.js";
 import type { GitObservation, RefAfterCas } from "./git/observe.js";
-import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop } from "./git/canonical-command.js";
+import { createCanonicalObserver, compareAndSwapCanonicalRef, authorizeCanonicalNoop, canonicalMergeDiff } from "./git/canonical-command.js";
 import { IntegrationCoordinator } from "./git/integration.js";
 import { ReviewModule, type ReviewBounds } from "./review.js";
 import { SubmitCoordinator, type SubmitInput } from "./git/submit.js";
@@ -43,7 +43,7 @@ export class GitModule {
     private readonly paths: GitPaths, private readonly store: Store, mail: MailModule,
     integration: IntegrationPolicy | null = null, policyRevisionReader: PolicyRevisionReader | null = null,
     private readonly candidateCheck: ((candidate: Oid, check: FrozenCheck) => Promise<void>) | null = null,
-    reviewBounds: ReviewBounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512 },
+    reviewBounds: ReviewBounds = { mailBodyBytes: 256 * 1024, subjectBytes: 512, bundleBytes: 256 * 1024 * 1024 },
   ) {
     this.store.bindRepositoryIdentity({ society: paths.society });
     this.integrationCoordinator = new IntegrationCoordinator(store, {
@@ -57,7 +57,10 @@ export class GitModule {
       noopWitness: ref => this.observations.ref(paths.projectGit, ref),
       authorizeNoop: (ref, candidate) => authorizeCanonicalNoop(this.observations, paths.projectGit, ref, candidate),
       submitters: (base, candidate) => this.submitters(base, candidate),
-    }, integration, policyRevisionReader, mail);
+    }, integration, policyRevisionReader, mail,
+      // The reviews field is assigned below; the gate is only invoked by
+      // applyMerge, long after construction completes.
+      request => this.reviews.assertApplicable(request));
     this.reviews = new ReviewModule(store, mail, {
       policy: () => this.integrationCoordinator.boundPolicy(),
       currentPolicy: () => this.integrationCoordinator.currentIntegrationPolicy(),
@@ -67,6 +70,8 @@ export class GitModule {
       ancestry: (base, candidate) => this.observations.ancestry(paths.projectGit, base, candidate),
       changedPaths: (base, candidate) => this.observations.changedPaths(paths.projectGit, base, candidate),
       submitters: (base, candidate) => this.submitters(base, candidate),
+      mergeDiff: (base, candidate, maxBytes) => canonicalMergeDiff(paths.projectGit, base, candidate, maxBytes),
+      applyMerge: operation => this.integrationCoordinator.applyMerge(operation),
       withWriter: work => this.withWriter(work),
     }, reviewBounds, paths.society);
     this.attestations = new AttestationModule(store, mail, { exact: identity => this.integrationCoordinator.assertReviewIdentity(identity),

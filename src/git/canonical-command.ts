@@ -1,5 +1,6 @@
 // GIT-004/008: bounded canonical command adapter. Effect exit status is never CAS proof.
 import { GIT_ENV } from "../process/policies.js";
+import { StoreError } from "../domain/errors.js";
 import { runProcessSync } from "../process/run.js";
 import { GitObserver, classifyRefAfterCas, gitOidArgument, gitRefArgument, type GitProcessEvidence, type GitObservation, type RefAfterCas } from "./observe.js";
 
@@ -51,4 +52,28 @@ export function authorizeCanonicalNoop(observations: GitObserver, repository: st
     CANONICAL_PROCESS_LIMITS.maxBuffer, `start\nverify refs/heads/main ${gitOidArgument(candidate)}\n` +
       `create ${gitRefArgument(ref)} ${gitOidArgument(candidate)}\nprepare\ncommit\n`);
   return observations.ref(repository, ref);
+}
+
+/** The pinned safe configuration every broker-run diff/merge-tree against the
+ * canonical repository carries: no hooks, no fsmonitor, no attributes, no
+ * external diff driver and no network protocol. */
+export const CANONICAL_SAFE_ARGS: readonly string[] = ["--no-pager", "-c", "core.hooksPath=/dev/null",
+  "-c", "core.fsmonitor=false", "-c", "core.attributesFile=/dev/null", "-c", "diff.external=",
+  "-c", "protocol.allow=never"];
+
+/** mail-v1 §6: the canonical merge diff for a completion notice. Output is
+ * caller-bounded; exceeding maxBytes throws LIMIT_EXCEEDED and a non-zero or
+ * unobserved exit is a REF_STATE_UNKNOWN observation failure, never a diff. */
+export function canonicalMergeDiff(repository: string, base: string, candidate: string, maxBytes: number): string {
+  const result = runProcessSync({ executable: GIT_BIN,
+    argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository,
+      "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color", base, candidate],
+    env: { ...GIT_ENV, GIT_LITERAL_PATHSPECS: "1" },
+    timeoutMs: CANONICAL_PROCESS_LIMITS.timeout, stdoutBytes: maxBytes, stderrBytes: 8192 });
+  if (result.kind === "output-limited") throw new StoreError("LIMIT_EXCEEDED", "merge diff exceeds its document bound");
+  if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge diff timed out");
+  if (result.kind !== "exited" || result.exitCode !== 0)
+    throw new StoreError("REF_STATE_UNKNOWN", `canonical merge diff is ${result.kind}${result.exitCode !== null ? ` ${result.exitCode}` : ""}`);
+  try { return result.stdout.toString("utf8"); }
+  catch { throw new StoreError("INTERNAL_ERROR", "canonical merge diff is not UTF-8 text"); }
 }

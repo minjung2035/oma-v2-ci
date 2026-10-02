@@ -430,7 +430,7 @@ export function operationPlanCheck(
         const roles: Record<string, readonly string[]> = {
           "merge.open": ["thread"], "challenge.open": ["thread"], review: ["thread"],
           vote: ["thread", "approval", "withdrawn", "decision"],
-          cancel: ["thread", "withdrawn"], refresh: ["thread", "withdrawn"],
+          cancel: ["thread", "withdrawn"], refresh: ["thread", "withdrawn", "approval"],
         };
         for (const message of plan.messages) {
           const meta = message.review;

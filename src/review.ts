@@ -3,8 +3,9 @@
  * status decisions are pure in domain/review-evaluation.js; this module owns
  * live Git observation, message freezing and the acceptance transaction.
  *
- * No review fact creates or runs an integration here; a request reaches
- * `ready` and waits for the integration owner (advance is a later step). */
+ * §5 lives here too: advance/advanceAll accept broker-derived refresh facts and
+ * create the request's single integration; the actual application belongs to
+ * IntegrationCoordinator.applyMerge behind the effects port. */
 import type {
   Actor, Address, AuthContext, MessageId, Oid, OperationId, Receipt,
   ExactCandidateIdentity, MessagePlan, RiskTier,
@@ -16,14 +17,14 @@ import type { MailModule } from "./mail.js";
 import { assertActorIdentity, assertCurrentActor, capabilitiesOf } from "./authority.js";
 import { reviewInputProblem } from "./domain/attestation.js";
 import { canonicalJson, snapshotJson } from "./domain/canonical-json.js";
-import { StoreError, acceptedFailure } from "./domain/errors.js";
-import { applyRequestKeyFor, reviewRequestNameFor } from "./domain/identifiers.js";
+import { StoreError, acceptedFailure, errorCodeOf } from "./domain/errors.js";
+import { applyRequestKeyFor, refreshRequestKeyFor, reviewRequestNameFor } from "./domain/identifiers.js";
 import { expandAddresses } from "./mail/routing.js";
 import { rfcMessageIdFor } from "./mail/addresses.js";
 import { PreacceptScope, type PreacceptArtifact } from "./storage/preaccept-artifact.js";
 import { frozenMessageDisposition } from "./mail/materializer.js";
 import { receiptOfOperation } from "./storage/receipt-projector.js";
-import { requestHash } from "./hash.js";
+import { requestHash, sha256Hex } from "./hash.js";
 import { generateMessageId, generateOperationId } from "./ids.js";
 import { deterministicTier, type IntegrationSnapshot } from "./git/integration-policy.js";
 import { maximumTier } from "./domain/tier-evaluation.js";
@@ -45,11 +46,20 @@ export interface ReviewEffects {
   ancestry(base: Oid, candidate: Oid): GitObservation<boolean>;
   changedPaths(base: Oid, candidate: Oid): GitObservation<readonly ChangedPath[]>;
   submitters(base: Oid, candidate: Oid): readonly string[];
+  /** §6: the canonical merge diff for the completion notice. Output bounded at
+   * maxBytes; LIMIT_EXCEEDED marks the request oversize. */
+  mergeDiff(base: Oid, candidate: Oid, maxBytes: number): string;
+  /** §5.3: execute an accepted merge integration inside the held writer. */
+  applyMerge(operation: OperationOf<"git.integrate">): Promise<void>;
   /** Cancellation serializes with integration CAS through the same writer. */
   withWriter<T>(work: () => Promise<T>): Promise<T>;
 }
 
-export interface ReviewBounds { readonly mailBodyBytes: number; readonly subjectBytes: number }
+export interface ReviewBounds {
+  readonly mailBodyBytes: number; readonly subjectBytes: number;
+  /** Completion notices larger than this are never created (the request waits). */
+  readonly bundleBytes: number;
+}
 
 /** One outgoing review message plus the logical addresses whose live
  * expansion fills `plan.recipients` inside the acceptance transaction. */
@@ -67,7 +77,8 @@ interface Emission {
 interface PreparedReview {
   readonly id: OperationId;
   readonly fact: ReviewFact;
-  readonly payload: ReviewInput;
+  /** The caller input, or the frozen fact itself for broker-derived refresh. */
+  readonly payload: ReviewInput | ReviewFact;
   readonly emissions: readonly Emission[];
   readonly frozen: readonly { readonly message: MessagePlan; readonly artifact: PreacceptArtifact }[];
   /** The state before and after the new fact without its own messages; null
@@ -160,12 +171,34 @@ export class ReviewModule {
     const policy = this.effects.currentPolicy();
     const run = async () => this.accept(auth, key, value, hash, policy);
     // Cancel holds the writer so a pending integration cannot CAS past it.
-    return value.kind === "cancel" ? this.effects.withWriter(run) : run();
+    const receipt = value.kind === "cancel" ? await this.effects.withWriter(run) : await run();
+    // §5.4: an accepted open or vote may make the request ready; advance inside
+    // its own try/catch so no application failure rewrites this receipt.
+    if ((receipt.state === "succeeded" || receipt.state === "pending" || receipt.state === "unknown") &&
+        (value.kind === "merge.open" || value.kind === "vote")) {
+      const requestId = value.kind === "merge.open"
+        ? this.store.getOperation(auth.actor, key)?.id
+        : this.requestByName(value.name)?.operation.id;
+      if (requestId !== undefined)
+        try { await this.advance(requestId); }
+        catch (error) {
+          console.error(JSON.stringify({ event: "review.advance", request: requestId, code: errorCodeOf(error) }));
+        }
+    }
+    return receipt;
   }
 
   private async accept(auth: AuthContext, key: string, input: ReviewInput,
       hash: string, policy: IntegrationSnapshot): Promise<Receipt> {
     const prepared = await this.prepare(auth, input, policy);
+    return this.acceptPrepared(prepared, auth, auth.actor, key, hash);
+  }
+
+  /** The shared acceptance tail: preaccept scope, T re-derivation, recipients,
+   * operation + deliveries, settle, materialize, succeeded. `auth` is null for
+   * broker-derived refresh facts (the requester may be stopped or retired). */
+  private async acceptPrepared(prepared: PreparedReview, auth: AuthContext | null, actor: Actor,
+      key: string, hash: string): Promise<Receipt> {
     const scope: PreacceptScope = new PreacceptScope();
     let txClaim: "inserted" | "retry";
     try {
@@ -174,11 +207,14 @@ export class ReviewModule {
           observe: () => frozenMessageDisposition(this.store, prepared.id,
             { id: frozen.message.id, sha256: frozen.message.sha256 }) });
       txClaim = this.store.transaction(tx => {
-        const agent = assertCurrentActor(this.store, auth, "mail.send");
-        if (input.kind === "merge.open" && !capabilitiesOf(agent).has("git.submit"))
-          throw new StoreError("CAPABILITY_DENIED", "git.submit was revoked before acceptance",
-            { details: { capability: "git.submit" } });
-        const current = this.store.claimKey(auth.actor, key, hash);
+        if (auth !== null) {
+          const agent = assertCurrentActor(this.store, auth, "mail.send");
+          if (prepared.fact.kind === "merge.open" && !capabilitiesOf(agent).has("git.submit"))
+            throw new StoreError("CAPABILITY_DENIED", "git.submit was revoked before acceptance",
+              { details: { capability: "git.submit" } });
+        } else if (this.store.getAgent(actor) === null)
+          throw new StoreError("STORE_CORRUPT", "review refresh names a missing actor");
+        const current = this.store.claimKey(actor, key, hash);
         if (current === "retry") return "retry" as const;
         if (current === "reused")
           throw new StoreError("REQUEST_KEY_REUSED", `request key ${key} already used with a different payload`);
@@ -187,7 +223,7 @@ export class ReviewModule {
         for (const [index, emission] of prepared.emissions.entries())
           (plans[index] as { recipients: string[] }).recipients =
             [...expandAddresses(this.store, emission.to, this.society).recipients].sort();
-        const accepted = tx.acceptOperation({ id: prepared.id, actor: auth.actor, requestKey: key,
+        const accepted = tx.acceptOperation({ id: prepared.id, actor, requestKey: key,
           requestHash: hash, kind: "attest.record", payloadJson: JSON.stringify(prepared.payload),
           planJson: JSON.stringify({ kind: "attest.record", fact: prepared.fact, messages: plans }) });
         if (accepted === "inserted")
@@ -198,7 +234,7 @@ export class ReviewModule {
       });
     } catch (error) { scope.settleFailure(error); }
     scope.settle();
-    if (txClaim === "retry") return receiptOfOperation(this.store.retriedOperation(auth.actor, key));
+    if (txClaim === "retry") return receiptOfOperation(this.store.retriedOperation(actor, key));
     try {
       let materializedAll = true;
       try { await this.mail.materialize(prepared.id); }
@@ -208,7 +244,7 @@ export class ReviewModule {
           kind: "attest.record", request: prepared.name,
           messages: prepared.frozen.map(frozen => frozen.message.id),
           recipientCount: prepared.frozen.reduce((sum, frozen) => sum + frozen.message.recipients.length, 0) })));
-      const finalOp = this.store.getOperation(auth.actor, key);
+      const finalOp = this.store.getOperation(actor, key);
       if (!finalOp) throw new StoreError("STORE_CORRUPT", "accepted review operation missing");
       return receiptOfOperation(finalOp);
     } catch (error) { throw acceptedFailure(error); }
@@ -424,6 +460,22 @@ export class ReviewModule {
     const newEntry: ReviewEntry = { sequence: lastSequence + 1, operation: id, actor: auth.actor, fact, messages: [] };
     const after0 = reviewState({ ...inputFor, entries: [...inputFor.entries, newEntry] });
     const effects = planEffects(before, after0);
+    const decision = fact.kind === "vote" && auth.actor === PRINCIPAL && input.kind === "vote"
+      ? { approval: input.approval!, verdict: fact.verdict, body: fact.body } : null;
+    const emissions = this.entryEmissions(id, open, openFact, inputFor, before, after0, newEntry, effects, decision);
+    const frozen = await this.freeze(id, auth.actor, emissions);
+    return { id, fact, payload: input, emissions, frozen, before, after0, open, name: before.name };
+  }
+
+  /** The shared emissions for an entry fact: its thread revision (except LOW
+   * merges, which have no thread) plus the planEffects Principal mail and an
+   * optional Principal decision copy. */
+  private entryEmissions(id: OperationId,
+      open: { sequence: number; operation: OperationOf<"attest.record"> },
+      openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
+      inputFor: ReviewStateInput, before: ReviewState, after0: ReviewState, newEntry: ReviewEntry,
+      effects: ReturnType<typeof planEffects>,
+      decision: { approval: MessageId; verdict: "approve" | "reject"; body: string } | null): Emission[] {
     const hasThread = !(openFact.kind === "merge.open" && openFact.tier === "LOW");
     const priorThread = this.lastThreadMessage(inputFor);
     const revision = this.threadRevisionCount(inputFor);
@@ -454,17 +506,14 @@ export class ReviewModule {
         replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: null, references: [] },
         review: { role: "approval", request: open.operation.id, name: before.name, votes: [...effects.approve] } });
     }
-    if (fact.kind === "vote" && auth.actor === PRINCIPAL && input.kind === "vote") {
-      const approvalId = input.approval!;
+    if (decision !== null)
       emissions.push({
         to: [PRINCIPAL], kind: "result", subject: this.cutSubject(`[${before.name}] decision recorded`),
-        body: `Principal ${fact.verdict} on approval ${approvalId} for ${before.name}:\n${fact.body}`,
-        replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: rfcMessageIdFor(approvalId, this.society),
-          references: this.referencesTo(inputFor, approvalId) },
-        review: { role: "decision", request: open.operation.id, name: before.name, approval: approvalId } });
-    }
-    const frozen = await this.freeze(id, auth.actor, emissions);
-    return { id, fact, payload: input, emissions, frozen, before, after0, open, name: before.name };
+        body: `Principal ${decision.verdict} on approval ${decision.approval} for ${before.name}:\n${decision.body}`,
+        replyHeaders: { replyTo: [PRINCIPAL], inReplyTo: rfcMessageIdFor(decision.approval, this.society),
+          references: this.referencesTo(inputFor, decision.approval) },
+        review: { role: "decision", request: open.operation.id, name: before.name, approval: decision.approval } });
+    return emissions;
   }
 
   private referencesTo(input: ReviewStateInput, messageId: MessageId): string[] {
@@ -508,7 +557,9 @@ export class ReviewModule {
       : "fact";
     const text = fact.kind === "review" || fact.kind === "vote" ? fact.body
       : fact.kind === "cancel" ? fact.reason
-      : fact.kind === "refresh" ? (fact.main === null ? "main is unchanged" : `main is now ${fact.main}`)
+      : fact.kind === "refresh" ? (fact.main === null
+        ? "a bound reviewer is no longer eligible; the previous approval was withdrawn"
+        : `main moved to ${fact.main}; this request is stale; open a new request on the latest main`)
       : "";
     return `[${ordinal}] ${entry.actor} ${action}:\n${text}`;
   }
@@ -585,5 +636,238 @@ export class ReviewModule {
     for (const [ordinal, emission] of emissions.entries())
       frozen.push(await this.mail.freezeReviewMessage(id, ordinal, sender, emission));
     return frozen;
+  }
+
+  /* ---- §5 application ---- */
+
+  /** Requests whose completion notice once exceeded the document bound; the
+   * sweep never recomputes their diff (step 7 status explains). */
+  private readonly oversize = new Set<OperationId>();
+
+  /** Advance one request toward application. Runs under the Git writer; a busy
+   * writer surfaces BROKER_UNAVAILABLE to the caller, which skips it. */
+  async advance(requestId: OperationId): Promise<void> {
+    await this.effects.withWriter(async () => {
+      const open = this.openRequests().find(candidate => candidate.operation.id === requestId);
+      if (open !== undefined) await this.advanceRequest(open);
+    });
+  }
+  /** Every open request, in attestation sequence order. A single request's
+   * refusal must not starve the others; corruption always propagates. */
+  async advanceAll(): Promise<void> {
+    await this.effects.withWriter(async () => {
+      for (const open of this.openRequests()) {
+        try { await this.advanceRequest(open); }
+        catch (error) {
+          if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
+          console.error(JSON.stringify({ event: "review.advance", request: open.operation.id,
+            code: errorCodeOf(error) }));
+        }
+      }
+    });
+  }
+
+  private async advanceRequest(open: { sequence: number; operation: OperationOf<"attest.record"> }): Promise<void> {
+    let state = reviewState(this.inputFor(open));
+    // 1. A broker-derived refresh fact: main moved (request goes stale), or a
+    // sent approval drifted invalid through reviewer eligibility alone.
+    if (state.terminal === null && state.integration === null) {
+      const main = this.effects.main();
+      if (main.kind === "corrupt")
+        throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
+      if (main.kind === "present" && main.value !== state.identity.expectedBase) {
+        await this.acceptRefresh(open, state, main.value);
+        state = reviewState(this.inputFor(open));
+      } else if (state.approval !== null && !state.approvalValid) {
+        await this.acceptRefresh(open, state, null);
+        state = reviewState(this.inputFor(open));
+      }
+    }
+    // 2. A ready request whose base is still main gets its one integration.
+    if (!state.ready) return;
+    const main = this.effects.main();
+    if (main.kind === "corrupt")
+      throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
+    if (main.kind !== "present" || main.value !== state.identity.expectedBase) return;
+    if (this.oversize.has(state.request)) return;
+    if (this.store.recoverableOperations()
+        .some(id => this.store.getOperationById(id)?.kind === "git.integrate")) return;
+    let policy: IntegrationSnapshot;
+    try { policy = this.effects.currentPolicy(); }
+    catch (error) {
+      if (error instanceof StoreError && error.code === "BROKER_UNAVAILABLE") return;
+      throw error;
+    }
+    if (policy.policyRevision !== state.identity.policyRevision) return;
+    await this.createIntegration(open, state, policy);
+  }
+
+  /** The refresh fact is accepted through the same machinery as caller facts:
+   * one scope, T re-derivation, deliveries, materialize, result — only the
+   * actor assertion differs (the requester's agent row must exist, nothing more). */
+  private async acceptRefresh(open: { sequence: number; operation: OperationOf<"attest.record"> },
+      before: ReviewState, main: Oid | null): Promise<void> {
+    const openPlan = open.operation.plan;
+    if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
+    const openFact = openPlan.fact;
+    if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
+    const inputFor = this.inputFor(open);
+    const requester = open.operation.actor;
+    const fact: ReviewFact = { kind: "refresh", version: 1, request: open.operation.id, main };
+    const count = inputFor.entries.filter(entry => entry.fact.kind === "refresh").length;
+    const id = generateOperationId();
+    const lastSequence = inputFor.entries.at(-1)?.sequence ?? inputFor.open.sequence;
+    const newEntry: ReviewEntry = { sequence: lastSequence + 1, operation: id, actor: requester, fact, messages: [] };
+    const after0 = reviewState({ ...inputFor, entries: [...inputFor.entries, newEntry] });
+    const effects = planEffects(before, after0);
+    const emissions = this.entryEmissions(id, open, openFact, inputFor, before, after0, newEntry, effects, null);
+    const frozen = await this.freeze(id, requester, emissions);
+    await this.acceptPrepared({ id, fact, payload: fact, emissions, frozen, before, after0, open,
+      name: before.name }, null, requester,
+      refreshRequestKeyFor(open.operation.id, count), requestHash("attest.record", fact));
+  }
+
+  /** §5.3's synchronous pre-CAS gate: the request must still be ready with its
+   * own integration out of the picture. A cancel cancels; anything else that
+   * would apply an unready request is a conditions refusal. */
+  assertApplicable(requestId: OperationId): void {
+    const open = this.openRequests().find(candidate => candidate.operation.id === requestId);
+    if (open === undefined) throw new StoreError("STORE_CORRUPT", "merge plan names a missing review request");
+    const state = reviewState({ ...this.inputFor(open), integration: null });
+    if (state.terminal === "cancelled")
+      throw new StoreError("CANCELLED_BEFORE_COMMIT", "the request was cancelled before main CAS");
+    if (!state.ready)
+      throw new StoreError("INTEGRATION_CONDITIONS",
+        `request ${state.name} is not ready to apply (${state.display})`);
+  }
+
+  /** Create the request's single integration and apply it, still inside the
+   * writer. The notice parts are frozen before T; recipients are resolved in T. */
+  private async createIntegration(open: { sequence: number; operation: OperationOf<"attest.record"> },
+      state: ReviewState, policy: IntegrationSnapshot): Promise<void> {
+    const openPlan = open.operation.plan;
+    if (!("messages" in openPlan)) throw new StoreError("STORE_CORRUPT", "review open owns no message list");
+    const openFact = openPlan.fact;
+    if (!isOpenFact(openFact)) throw new StoreError("STORE_CORRUPT", "request names a non-open fact");
+    const id = generateOperationId();
+    let diff: string;
+    try {
+      diff = this.effects.mergeDiff(state.identity.expectedBase, state.identity.candidate,
+        this.bounds.bundleBytes + 1);
+    } catch (error) {
+      if (error instanceof StoreError && error.code === "LIMIT_EXCEEDED") { this.markOversize(state, null); return; }
+      throw error;
+    }
+    const document = this.noticeDocument(id, state, openFact, diff);
+    const bytes = Buffer.byteLength(document, "utf8");
+    if (bytes > this.bounds.bundleBytes) { this.markOversize(state, bytes); return; }
+    const digest = sha256Hex(document);
+    const chunks = this.splitNotice(document);
+    const emissions: Emission[] = chunks.map((chunk, index) => ({
+      to: ["commons", PRINCIPAL], kind: "result",
+      subject: this.cutSubject(`[${state.name}] applied: ${openFact.title} (part ${index + 1}/${chunks.length})`),
+      body: `Part ${index + 1}/${chunks.length} of the ${state.name} completion notice ` +
+        `(document ${bytes} bytes, sha256 ${digest}); concatenate the parts after this line in order.
+` +
+        chunk,
+      replyHeaders: { replyTo: [], inReplyTo: null, references: [] },
+      review: { role: "notice", request: state.request, name: state.name,
+        part: index + 1, parts: chunks.length, sha256: digest, bytes } }));
+    const frozen = await this.freeze(id, state.requester, emissions);
+    const applyKey = applyRequestKeyFor(state.request);
+    const payload = { candidate: state.identity.candidate, expected: state.identity.expectedBase, tier: state.tier };
+    const hash = requestHash("git.integrate", payload);
+    const scope: PreacceptScope = new PreacceptScope();
+    let created = false;
+    try {
+      for (const part of frozen)
+        scope.register({ operationId: id, resource: part.artifact.path, owner: part.artifact,
+          observe: () => frozenMessageDisposition(this.store, id,
+            { id: part.message.id, sha256: part.message.sha256 }) });
+      created = this.store.transaction(tx => {
+        const fresh = reviewState(this.inputFor(open));
+        // An integration already at the apply key surfaces in fresh.integration;
+        // skipping silently is the idempotent path, drifting readiness refuses.
+        if (fresh.integration !== null) return false;
+        if (!fresh.ready)
+          throw new StoreError("BROKER_UNAVAILABLE", "review state changed; retry the same request key",
+            { details: { reason: "busy" } });
+        if (this.store.recoverableOperations()
+            .some(other => this.store.getOperationById(other)?.kind === "git.integrate")) return false;
+        const recipients = [...expandAddresses(this.store, ["commons", PRINCIPAL], this.society).recipients].sort();
+        const plans = frozen.map(part => part.message);
+        for (const plan of plans) (plan as { recipients: string[] }).recipients = recipients;
+        const plan = { kind: "git.integrate" as const, repo: "project" as const, target: "refs/heads/main" as const,
+          base: state.identity.expectedBase, candidate: state.identity.candidate,
+          policyRevision: state.identity.policyRevision, checkProfileDigest: policy.checkProfileDigest,
+          merge: { version: 1 as const, request: state.request, name: state.name, tier: state.tier,
+            notice: plans } };
+        const accepted = tx.acceptOperation({ id, actor: state.requester, requestKey: applyKey,
+          requestHash: hash, kind: "git.integrate", payloadJson: JSON.stringify(payload),
+          planJson: JSON.stringify(plan) });
+        if (accepted === "inserted")
+          for (const plan of plans)
+            tx.insertDeliveries(plan.recipients.map(recipient =>
+              ({ operationId: id, messageId: plan.id, recipient })));
+        return accepted === "inserted";
+      });
+    } catch (error) { scope.settleFailure(error); }
+    scope.settle();
+    if (!created) return;
+    const operation = this.store.getOperation(state.requester, applyKey);
+    if (operation === null || operation.kind !== "git.integrate")
+      throw new StoreError("STORE_CORRUPT", "accepted merge integration missing");
+    await this.effects.applyMerge(operation);
+  }
+
+  private markOversize(state: ReviewState, bytes: number | null): void {
+    this.oversize.add(state.request);
+    console.error(JSON.stringify({ event: "review.notice.oversize", request: state.request,
+      name: state.name, bytes }));
+  }
+
+  /** §6: the completion notice document, then the bounded part bodies. */
+  private noticeDocument(integrationId: OperationId, state: ReviewState,
+      openFact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>, diff: string): string {
+    const entries = state.entries.map((entry, index) => this.describeEntry(index + 1, entry));
+    const lowMerge = openFact.kind === "merge.open" && openFact.tier === "LOW";
+    const principal = state.principal !== null && state.principal.fact.kind === "vote"
+      ? `${state.principal.fact.body} (approval ${state.principal.fact.approval})` : "none";
+    return `OMA ${openFact.kind === "merge.open" ? "merge" : "revert"} applied: ${state.name} — ${openFact.title}` +
+      `\nIntegration operation: ${integrationId}   Tier: ${state.tier}   Requester: ${state.requester}` +
+      `\nPrevious main: ${state.identity.expectedBase}\nNew main: ${state.identity.candidate}` +
+      (openFact.kind === "challenge.open"
+        ? `\nReverts merge ${openFact.target.name} (integration ${openFact.target.integration})` : "") +
+      `\n\nReason:\n${openFact.reason}\n\nReviews and votes:\n` +
+      `${lowMerge ? "none — LOW is applied without prior review" : entries.join("\n")}` +
+      `\n\nPrincipal: ${principal}\n\n` +
+      `Diff (git diff --binary --full-index --no-ext-diff --no-textconv --no-color ` +
+      `${state.identity.expectedBase} ${state.identity.candidate}):\n` +
+      diff;
+  }
+
+  /** Split the document into part chunks of at most mailBodyBytes − 4096,
+   * cutting at a line end inside the window when one exists, else on a UTF-8
+   * code point boundary; concatenating the chunks restores the document. */
+  private splitNotice(document: string): string[] {
+    const bytes = Buffer.from(document, "utf8");
+    const budget = this.bounds.mailBodyBytes - 4096;
+    if (budget <= 0) throw new StoreError("INTERNAL_ERROR", "mail body bound cannot hold a notice part");
+    const chunks: Buffer[] = [];
+    let at = 0;
+    while (at < bytes.length) {
+      if (bytes.length - at <= budget) { chunks.push(bytes.subarray(at)); break; }
+      const lastBreak = bytes.lastIndexOf(0x0a, at + budget);
+      let cut: number;
+      if (lastBreak >= at) cut = lastBreak + 1 - at;
+      else {
+        cut = budget;
+        while (cut > 0 && (bytes[at + cut]! & 0b1100_0000) === 0b1000_0000) cut--;
+        if (cut === 0) throw new StoreError("INTERNAL_ERROR", "mail bound splits a UTF-8 sequence");
+      }
+      chunks.push(bytes.subarray(at, at + cut));
+      at += cut;
+    }
+    return chunks.map(chunk => chunk.toString("utf8"));
   }
 }

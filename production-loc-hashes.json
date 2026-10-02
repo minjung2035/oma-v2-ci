@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "c12b2649e6a8d456254ca97065ca2e0d2512a0aade4306c8b1e65ef2e7f83eba",
-  "report": "b340ee245338e91df1eb3ac7ad84536852640dd84dd1de15c5c0bb852c6b8954",
+  "report": "ab8a3b81b969331a4c636b3af8a3307e825eff2f48be71522aadbd6dd7ca8cfe",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -173,7 +173,7 @@
     },
     {
       "path": "src/cli/effects/code.ts",
-      "sha256": "9551d1b9d082d740382fa96e9a8cc844668288fe6f94691573635b41f96019fe"
+      "sha256": "c6c33e2f578fd2513bcade6a8f73f47030c9df513e3de37848b7c98eeab58d5c"
     },
     {
       "path": "src/cli/effects/context.ts",
@@ -357,11 +357,11 @@
     },
     {
       "path": "src/durable.ts",
-      "sha256": "4a663e01ea04236f3069a01e0de3bda20632dca73d63c309e4cb7ee09243ffc2"
+      "sha256": "d200eeb818db86951d491d19ff3d4a987b43d79b4668ecf520f53a74be0b11b7"
     },
     {
       "path": "src/entry/broker.ts",
-      "sha256": "6b278d4b71c5241268fd420c8c1a4af337c06c5fb19835f5cd7b6e58ad521c06"
+      "sha256": "543b7a1ca8cfa9e48a2a1dcc4f6b509cde5d4095dd36b9a941c577ddc40cbb3e"
     },
     {
       "path": "src/entry/guest-packages.ts",
@@ -489,7 +489,7 @@
     },
     {
       "path": "src/git.ts",
-      "sha256": "52275d86a096d57aa89fecbbf1811444dac19c0f24e8c6443f8f3712243b0b7f"
+      "sha256": "e302d3d0881a3f64c2e8d210a6bb4ee9a873438701af1dac5989adbd50dd0aab"
     },
     {
       "path": "src/git/approval.ts",
@@ -501,7 +501,7 @@
     },
     {
       "path": "src/git/canonical-command.ts",
-      "sha256": "ad40fcffa154cbd961d5ff80d60a03ed3e4c0337b5a38e94ce565d67331a1033"
+      "sha256": "9fe15ca143c7c12beac7c3c4b3884421df4f9ffde1617896faf3b3374ca612e3"
     },
     {
       "path": "src/git/context-publication.ts",
@@ -521,11 +521,11 @@
     },
     {
       "path": "src/git/integration-publication.ts",
-      "sha256": "7e18ef8638afb35e57bd27c7110a0e6281b3be25dd4cb0aed8a0a385f2a4eaa9"
+      "sha256": "0456acd8ff622ecb13b3d95319f02c334ce0ebfccb5f7489ee058f872463f735"
     },
     {
       "path": "src/git/integration.ts",
-      "sha256": "c2aa2bcbec2e3d901ae800b501de74dc6601165622f3eba22a327357e7c08e51"
+      "sha256": "8886528f8ebfe43566d34a47ceeab6e9d0090b0fb7deef41f167b23c5b5693d5"
     },
     {
       "path": "src/git/observe.ts",
@@ -961,7 +961,7 @@
     },
     {
       "path": "src/reconcile.ts",
-      "sha256": "399b918e7520097f35af823a51dcf9948fa2087b0d71512855b2cd5887b2df50"
+      "sha256": "056c7c3c0ea53ed6dfd6c443b33b9c8331f0b704f33e647afc7c8aea4cb1aa50"
     },
     {
       "path": "src/reconcile/operations.ts",
@@ -977,7 +977,7 @@
     },
     {
       "path": "src/review.ts",
-      "sha256": "06cc50037daf3cec6fcc973c74a1eaa88d02f8d31fdfe121ccc8fffd55f50d57"
+      "sha256": "95fec4ea60494db04ba4032b692a69ab6ca2887c718de5e09ad07408b76f5872"
     },
     {
       "path": "src/rpc-client.ts",

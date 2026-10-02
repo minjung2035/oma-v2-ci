@@ -57,7 +57,8 @@ function fixture() {
       reconcileCreate: async (id, allowed) => { calls.push(["create", id, allowed]); },
       reconcileAction: (id, allowed) => { calls.push(["action", id, allowed]); },
     },
-    git: { reconcile: async id => { calls.push(["git", id]); } },
+    git: { reconcile: async id => { calls.push(["git", id]); },
+      reviews: { advanceAll: async () => { calls.push(["reviews"]); } } },
     quiesceResidents: () => { calls.push(["quiesce"]); },
     assertCanonicalHealthyAsync: async () => { calls.push(["health"]); },
     retainRecoveryFailure: error => { throw error; },
@@ -99,7 +100,10 @@ test("P3 recovery: startup keeps quiesce/health/requiesce and distinct DB-only h
   await value.startup(false, async () => { calls.push(["prepare"]); });
   // DR10: the collection runs after the quiesce and before anything is prepared.
   assert.deepEqual(calls.slice(0, 5), [["quiesce"], ["collect"], ["health"], ["quiesce"], ["prepare"]]);
-  const physical = calls.slice(5);
+  // mail-v1: startup ends with a reviews advance sweep for requests that
+  // became ready while the broker was down.
+  assert.deepEqual(calls.at(-1), ["reviews"]);
+  const physical = calls.slice(5, -1);
   assert.equal(physical.length, kinds.length - 3);
   assert.deepEqual(physical, kinds.filter(kind => !["mail.ack", "route.follow", "route.unfollow"].includes(kind)).map(kind =>
     kind === "agent.create" ? ["create", kind, false]

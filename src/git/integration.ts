@@ -9,7 +9,7 @@ import { frozenMessageDisposition } from "../mail/materializer.js";
 import { IntegrationPublicationObserver } from "./integration-publication.js";
 import { TieredAuthority } from "./tiered-authority.js";
 import { canonicalJson } from "../hash.js";
-import type { AuthContext, Receipt, Oid } from "../../implementation/contracts.js";
+import type { AuthContext, OperationId, Receipt, Oid } from "../../implementation/contracts.js";
 import { Store, reused } from "../store.js";
 import type { OperationOf } from "../storage/operation-codec.js";
 import { assertCurrentActor, capabilitiesOf } from "../authority.js";
@@ -49,6 +49,9 @@ export class IntegrationCoordinator {
     policy: IntegrationPolicy | null,
     private readonly policyReader: IntegrationPolicyReader | null = null,
     private readonly mail: MailModule | null = null,
+    /** mail-v1: the synchronous pre-CAS review-state gate owned by
+     * ReviewModule.assertApplicable. Required for any plan.merge. */
+    private readonly reviewGate: ((request: OperationId) => void) | null = null,
   ) {
     this.bound = policy === null ? null : snapshotIntegrationPolicy(policy);
   }
@@ -106,7 +109,7 @@ export class IntegrationCoordinator {
   }
   private receipt(id: string): Receipt { return receiptOfOperation(this.operation(id)); }
   private async succeed(operation: OperationOf<"git.integrate">): Promise<void> {
-    if (operation.plan.publication) {
+    if (operation.plan.publication || operation.plan.merge) {
       if (this.mail === null) throw new StoreError("BROKER_UNAVAILABLE", "integration publication owner is unavailable");
       const proof = new IntegrationPublicationObserver(this.effects).integration(operation);
       try { await this.mail.publishGated(operation.id, proof); }
@@ -315,9 +318,65 @@ export class IntegrationCoordinator {
     } catch (error) { return this.rejectAccepted(id, error, "accepted", knowledge); }
   }
 
+  /** DR27/§5.3: execute a reviewed merge application. Accepted by
+   * ReviewModule.advance inside the writer and replayed by reconcile; the
+   * review's own evaluation owns readiness, this owner owns the live checks
+   * and the CAS boundary. Never used for the legacy revalidateTier path. */
+  async applyMerge(operation: OperationOf<"git.integrate">): Promise<void> {
+    if (operation.state !== "pending" && operation.state !== "unknown") return;
+    const plan = operation.plan;
+    if (plan.merge === undefined)
+      throw new StoreError("STORE_CORRUPT", "reviewed application requires a merge plan");
+    let knowledge: EffectKnowledge = "possible";
+    try {
+      const main = this.effects.main();
+      if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
+      if (main.kind === "present" && main.value === plan.candidate) {
+        // The canonical effect already happened (a completed CAS whose result
+        // write never committed): publish the frozen notices and settle.
+        knowledge = "applied";
+        await this.succeed(operation);
+        return;
+      }
+      if (main.kind !== "present" || main.value !== plan.base) { this.unknown(operation.id); return; }
+      knowledge = "none";
+      const policy = this.policy();
+      if (policy.checkProfileDigest !== plan.checkProfileDigest)
+        throw new StoreError("POLICY_CHANGED", "accepted integration policy no longer matches the configured profile");
+      assertSupportedIntegration(policy);
+      this.verifyCurrentPolicy(plan.policyRevision);
+      this.requireEligible(policy, plan.base, plan.candidate);
+      for (const check of policy.checks) await this.effects.runCheck(plan.candidate, check);
+      if (!this.stillAtBase(operation)) return;
+      this.requireEligible(policy, plan.base, plan.candidate);
+      this.verifyCurrentPolicy(plan.policyRevision);
+      // Merge authority: the society is open; the requester exists, is still
+      // enabled (a stop/retire between review and CAS cancels the application),
+      // and still holds its durable git.submit capability.
+      if (!this.store.societyOpen()) throw new StoreError("AGENT_NOT_READY", "society execution is closed");
+      const requester = this.store.getAgent(operation.actor);
+      if (requester?.desired === "stopped" || requester?.desired === "retired")
+        throw new StoreError("CANCELLED_BEFORE_COMMIT", "stop or retire intent was accepted before main CAS");
+      if (!requester || !capabilitiesOf(requester).has("git.submit"))
+        throw new StoreError("CAPABILITY_DENIED", "the requester's current durable submit authority is unavailable");
+      // The last synchronous check before CAS: the request must still be ready
+      // (a cancel fact cancels; any other unreadiness is a conditions refusal).
+      if (this.reviewGate === null) throw new StoreError("STORE_CORRUPT", "review gate owner is unavailable");
+      this.reviewGate(plan.merge.request);
+      this.requireWriterSlot(operation.id);
+      knowledge = "possible";
+      const after = this.effects.compareAndSwap(plan.base, plan.candidate);
+      if (after.kind !== "candidate") { this.unknown(operation.id); return; }
+      knowledge = "applied";
+      await this.succeed(operation);
+    } catch (error) { this.rejectAccepted(operation.id, error, "recovering", knowledge); }
+  }
+
   async reconcile(operation: OperationOf<"git.integrate">): Promise<void> {
     if (operation.state !== "pending" && operation.state !== "unknown") return;
     const plan = operation.plan;
+    if (plan.merge !== undefined) return this.applyMerge(operation);
+
     // D06/DR27: main equality alone never authorizes a no-op. New no-op
     // plans carry an immutable Git authorization witness; legacy ones repeat
     // the checks. Applied effects settle before observing current authority.

@@ -3,8 +3,14 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 356,
-    "n_lines": 46512,
+    "n_lines": 46909,
     "report_file": "production-loc.json"
+  },
+  "src/review.ts": {
+    "blank": 35,
+    "comment": 80,
+    "code": 758,
+    "language": "TypeScript"
   },
   "src/entry/oma-society.ts": {
     "blank": 29,
@@ -16,12 +22,6 @@
     "blank": 6,
     "comment": 14,
     "code": 557,
-    "language": "TypeScript"
-  },
-  "src/review.ts": {
-    "blank": 23,
-    "comment": 35,
-    "code": 520,
     "language": "TypeScript"
   },
   "src/entry/pi-interactive-host.ts": {
@@ -78,6 +78,12 @@
     "code": 388,
     "language": "TypeScript"
   },
+  "src/git/integration.ts": {
+    "blank": 7,
+    "comment": 41,
+    "code": 381,
+    "language": "TypeScript"
+  },
   "src/store.ts": {
     "blank": 4,
     "comment": 51,
@@ -94,12 +100,6 @@
     "blank": 39,
     "comment": 112,
     "code": 373,
-    "language": "TypeScript"
-  },
-  "src/git/integration.ts": {
-    "blank": 5,
-    "comment": 28,
-    "code": 337,
     "language": "TypeScript"
   },
   "src/runtime/pi-adapter.ts": {
@@ -276,6 +276,12 @@
     "code": 209,
     "language": "TypeScript"
   },
+  "src/reconcile.ts": {
+    "blank": 1,
+    "comment": 30,
+    "code": 207,
+    "language": "TypeScript"
+  },
   "src/domain/review-evaluation.ts": {
     "blank": 8,
     "comment": 32,
@@ -306,12 +312,6 @@
     "code": 201,
     "language": "TypeScript"
   },
-  "src/reconcile.ts": {
-    "blank": 1,
-    "comment": 27,
-    "code": 201,
-    "language": "TypeScript"
-  },
   "src/diagnostics/ledger.ts": {
     "blank": 2,
     "comment": 5,
@@ -320,8 +320,8 @@
   },
   "src/git.ts": {
     "blank": 2,
-    "comment": 9,
-    "code": 194,
+    "comment": 11,
+    "code": 197,
     "language": "TypeScript"
   },
   "src/storage/immutable-file.ts": {
@@ -363,7 +363,7 @@
   "src/entry/broker.ts": {
     "blank": 3,
     "comment": 57,
-    "code": 179,
+    "code": 180,
     "language": "TypeScript"
   },
   "src/protocol/channel.ts": {
@@ -1236,6 +1236,12 @@
     "code": 58,
     "language": "TypeScript"
   },
+  "src/git/canonical-command.ts": {
+    "blank": 4,
+    "comment": 18,
+    "code": 57,
+    "language": "TypeScript"
+  },
   "src/protocol/host-history.ts": {
     "blank": 2,
     "comment": 1,
@@ -1506,12 +1512,6 @@
     "code": 42,
     "language": "TypeScript"
   },
-  "src/git/canonical-command.ts": {
-    "blank": 2,
-    "comment": 12,
-    "code": 40,
-    "language": "TypeScript"
-  },
   "src/tui/dashboard.ts": {
     "blank": 4,
     "comment": 16,
@@ -1628,8 +1628,8 @@
   },
   "src/git/integration-publication.ts": {
     "blank": 1,
-    "comment": 2,
-    "code": 34,
+    "comment": 4,
+    "code": 35,
     "language": "TypeScript"
   },
   "src/git/tiered-authority.ts": {
@@ -2143,9 +2143,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1881,
-    "comment": 7453,
-    "code": 37178,
+    "blank": 1897,
+    "comment": 7524,
+    "code": 37488,
     "nFiles": 356
   }
 }

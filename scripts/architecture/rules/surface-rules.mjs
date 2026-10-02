@@ -408,6 +408,10 @@ function functionBody(source, name) {
 }
 
 const OMA_NAME = /^OMA_[A-Z0-9_]+$/;
+/** Engine-only names: the worker archive exists only inside a Resident's
+ * sandbox; the Principal's session must never set it, and its absence is how
+ * the Principal's engine is told it has no worker archive. */
+const ENGINE_ONLY_ENV = new Set(["OMA_WORKER_ARCHIVE"]);
 const isProcessEnv = value =>
   ts.isPropertyAccessExpression(value) && value.name.text === "env" &&
   ts.isIdentifier(value.expression) && value.expression.text === "process";
@@ -545,7 +549,7 @@ function principalSessionEnvRules(root, findings) {
       findings.push(finding("principal-session-env", ENV_FORWARDERS[0].file,
         `the model-facing CLI reads ${name}, but the environment the tools build does not carry it`));
   for (const name of forwarder.copied)
-    if (OMA_NAME.test(name) && !produced.has(name))
+    if (OMA_NAME.test(name) && !produced.has(name) && !ENGINE_ONLY_ENV.has(name))
       findings.push(finding("principal-session-env", ENV_PRODUCER,
         `${name} is copied to the CLI from the engine's environment, but the Principal's session environment never sets it`));
 }

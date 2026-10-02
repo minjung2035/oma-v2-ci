@@ -109,6 +109,11 @@ export class ReconcileModule {
           default: assertNever(operation);
         }
       }
+      // mail-v1 §5.4: startup advances every request that became ready while
+      // the broker was down; a failure is a recovery observation, not a gate.
+      if (this.git !== null)
+        try { await this.git.reviews.advanceAll(); }
+        catch (error) { this.retainRecoveryFailure(error); }
     } catch (error) { observeStoreFailure(this.store, error); throw error; }
     finally { this.starting = false; }
   }
@@ -149,6 +154,10 @@ export class ReconcileModule {
     const work = Promise.resolve().then(() => sweepScope.run(this, async () => {
       try {
         const counts = await this.operations.sweep();
+        // mail-v1 §5.4: the 5 s sweep retries advance for ready requests.
+        if (this.git !== null)
+          try { await this.git.reviews.advanceAll(); }
+          catch (error) { this.retainRecoveryFailure(error); }
         await this.observeUnits();
         return counts;
       } catch (error) { observeStoreFailure(this.store, error); throw error; }

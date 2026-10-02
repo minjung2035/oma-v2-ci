@@ -5,11 +5,11 @@ import { isAbsolute } from "node:path";
 import { isValidFullOid, isValidWirePath } from "../../domain/identifiers.js";
 import { StoreError } from "../../domain/errors.js";
 import { GitObserver, observed } from "../../git/observe.js";
+import { CANONICAL_SAFE_ARGS } from "../../git/canonical-command.js";
 import { GIT_ENV, runGitText } from "../../process/policies.js";
 import { runProcessSync } from "../../process/run.js";
 
-const SAFE = ["--no-pager", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
-  "-c", "core.attributesFile=/dev/null", "-c", "diff.external=", "-c", "protocol.allow=never"];
+const SAFE = CANONICAL_SAFE_ARGS;
 const MAXIMUM = 768 * 1024;
 export interface CodeView {
   readonly action: "show" | "diff" | "log" | "ls-tree" | "grep";

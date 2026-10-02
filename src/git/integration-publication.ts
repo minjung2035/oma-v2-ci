@@ -15,9 +15,11 @@ export class IntegrationPublicationObserver {
   constructor(private readonly observations: IntegrationPublicationObservations) {}
   integration(operation: OperationOf<"git.integrate">): IntegrationPublicationEvidence {
     const { plan } = operation;
-    if ((operation.state !== "pending" && operation.state !== "unknown") || !plan.publication)
+    if ((operation.state !== "pending" && operation.state !== "unknown") || (!plan.publication && !plan.merge))
       throw new StoreError("STORE_CORRUPT", "integration publication requires accepted nonterminal intent");
-    const observation = plan.base === plan.candidate
+    // A reviewed merge is never a no-op (merge.open refuses candidate === base);
+    // the noop witness branch exists only for the legacy publication shape.
+    const observation = plan.base === plan.candidate && plan.publication !== undefined
       ? (plan.publication.noopRef === null ? undefined : this.observations.noopWitness?.(plan.publication.noopRef))
       : this.observations.main();
     if (observation?.kind !== "present" || observation.value !== plan.candidate)
@@ -31,7 +33,8 @@ export class IntegrationPublicationObserver {
 export function consumeIntegrationPublication(proof: unknown, operation: OperationOf<"git.integrate">): void {
   const facts = proof !== null && typeof proof === "object" ? issued.get(proof) : undefined;
   if (!facts || facts.id !== operation.id || facts.actor !== operation.actor || facts.planJson !== operation.planJson ||
-      (operation.state !== "pending" && operation.state !== "unknown") || !operation.plan.publication)
+      (operation.state !== "pending" && operation.state !== "unknown") ||
+      (operation.plan.publication === undefined && operation.plan.merge === undefined))
     throw new StoreError("REF_STATE_UNKNOWN", "integration mail requires fresh matching canonical effect evidence");
   issued.delete(proof as object);
 }
