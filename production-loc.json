@@ -2,8 +2,8 @@
   "header": {
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
-    "n_files": 356,
-    "n_lines": 47336,
+    "n_files": 354,
+    "n_lines": 47542,
     "report_file": "production-loc.json"
   },
   "src/review.ts": {
@@ -246,6 +246,12 @@
     "code": 226,
     "language": "TypeScript"
   },
+  "src/cli/commands/merge.ts": {
+    "blank": 20,
+    "comment": 15,
+    "code": 225,
+    "language": "TypeScript"
+  },
   "src/extension/contained-files.ts": {
     "blank": 16,
     "comment": 38,
@@ -336,6 +342,12 @@
     "code": 192,
     "language": "TypeScript"
   },
+  "src/cli/request-service.ts": {
+    "blank": 15,
+    "comment": 27,
+    "code": 188,
+    "language": "TypeScript"
+  },
   "src/storage/preaccept-artifact.ts": {
     "blank": 19,
     "comment": 29,
@@ -406,12 +418,6 @@
     "blank": 9,
     "comment": 8,
     "code": 170,
-    "language": "TypeScript"
-  },
-  "src/cli/request-service.ts": {
-    "blank": 12,
-    "comment": 22,
-    "code": 168,
     "language": "TypeScript"
   },
   "src/diagnostics/integrity.ts": {
@@ -930,12 +936,6 @@
     "code": 82,
     "language": "TypeScript"
   },
-  "src/cli/exit.ts": {
-    "blank": 10,
-    "comment": 21,
-    "code": 81,
-    "language": "TypeScript"
-  },
   "src/storage/context-snapshot.ts": {
     "blank": 2,
     "comment": 12,
@@ -958,6 +958,12 @@
     "blank": 3,
     "comment": 32,
     "code": 80,
+    "language": "TypeScript"
+  },
+  "src/cli/exit.ts": {
+    "blank": 10,
+    "comment": 21,
+    "code": 79,
     "language": "TypeScript"
   },
   "src/domain/tier-evaluation.ts": {
@@ -1018,6 +1024,12 @@
     "blank": 5,
     "comment": 5,
     "code": 74,
+    "language": "TypeScript"
+  },
+  "src/cli/effects.ts": {
+    "blank": 10,
+    "comment": 20,
+    "code": 73,
     "language": "TypeScript"
   },
   "src/extension/workspace-guard.ts": {
@@ -1134,6 +1146,12 @@
     "code": 64,
     "language": "TypeScript"
   },
+  "src/cli/effects/code.ts": {
+    "blank": 1,
+    "comment": 7,
+    "code": 64,
+    "language": "TypeScript"
+  },
   "src/platform/host/guest-link.ts": {
     "blank": 9,
     "comment": 15,
@@ -1168,18 +1186,6 @@
     "blank": 2,
     "comment": 4,
     "code": 63,
-    "language": "TypeScript"
-  },
-  "src/cli/effects.ts": {
-    "blank": 8,
-    "comment": 17,
-    "code": 62,
-    "language": "TypeScript"
-  },
-  "src/cli/effects/code.ts": {
-    "blank": 1,
-    "comment": 6,
-    "code": 62,
     "language": "TypeScript"
   },
   "src/lifecycle/registry-operations.ts": {
@@ -1294,12 +1300,6 @@
     "blank": 5,
     "comment": 19,
     "code": 53,
-    "language": "TypeScript"
-  },
-  "src/cli/commands/attestation.ts": {
-    "blank": 1,
-    "comment": 3,
-    "code": 52,
     "language": "TypeScript"
   },
   "src/platform/guest/systemd-launcher.ts": {
@@ -1422,12 +1422,6 @@
     "code": 47,
     "language": "TypeScript"
   },
-  "src/cli.ts": {
-    "blank": 2,
-    "comment": 1,
-    "code": 46,
-    "language": "TypeScript"
-  },
   "src/entry/guest-session.ts": {
     "blank": 4,
     "comment": 14,
@@ -1510,6 +1504,12 @@
     "blank": 5,
     "comment": 25,
     "code": 42,
+    "language": "TypeScript"
+  },
+  "src/cli.ts": {
+    "blank": 2,
+    "comment": 1,
+    "code": 41,
     "language": "TypeScript"
   },
   "src/tui/dashboard.ts": {
@@ -1854,12 +1854,6 @@
     "code": 22,
     "language": "TypeScript"
   },
-  "src/cli/commands/integrate.ts": {
-    "blank": 2,
-    "comment": 0,
-    "code": 21,
-    "language": "TypeScript"
-  },
   "src/platform/stream-source.ts": {
     "blank": 2,
     "comment": 6,
@@ -1955,12 +1949,6 @@
     "comment": 2,
     "code": 14,
     "language": "OMA systemd"
-  },
-  "src/cli/commands/code.ts": {
-    "blank": 1,
-    "comment": 0,
-    "code": 14,
-    "language": "TypeScript"
   },
   "src/entry/guest-packages.ts": {
     "blank": 3,
@@ -2143,9 +2131,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1910,
-    "comment": 7574,
-    "code": 37852,
-    "nFiles": 356
+    "blank": 1931,
+    "comment": 7595,
+    "code": 38016,
+    "nFiles": 354
   }
 }

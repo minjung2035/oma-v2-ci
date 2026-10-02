@@ -29,11 +29,9 @@ src/cli.ts
 src/cli/arguments.ts
 src/cli/cache-codec.ts
 src/cli/commands/agent.ts
-src/cli/commands/attestation.ts
-src/cli/commands/code.ts
 src/cli/commands/context.ts
-src/cli/commands/integrate.ts
 src/cli/commands/logs.ts
+src/cli/commands/merge.ts
 src/cli/commands/routes.ts
 src/cli/commands/send.ts
 src/cli/commands/society.ts

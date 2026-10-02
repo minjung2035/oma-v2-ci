@@ -1,12 +1,10 @@
 // CLI entrypoint: command routing and top-level process failure only.
 import { runSocietyCommand } from "./cli/commands/society.js";
-import { runCodeCommand } from "./cli/commands/code.js";
-import { runAttestationCommand } from "./cli/commands/attestation.js";
 import { runAckCommand, runSendCommand } from "./cli/commands/send.js";
 import { runRouteCommand } from "./cli/commands/routes.js";
 import { runAgentCommand } from "./cli/commands/agent.js";
 import { runSubmitCommand } from "./cli/commands/submit.js";
-import { runIntegrateCommand } from "./cli/commands/integrate.js";
+import { runMergeCommand, runChallengeCommand } from "./cli/commands/merge.js";
 import { runContextCommand } from "./cli/commands/context.js";
 import { runStatusCommand } from "./cli/commands/status.js";
 import { runLogsCommand } from "./cli/commands/logs.js";
@@ -16,9 +14,8 @@ export async function main(argv: string[]): Promise<never> {
   const [command, ...rest] = argv;
   switch (command) {
     case "society": return runSocietyCommand(rest);
-    case "code": return runCodeCommand(rest);
-    case "approve": case "object": case "revoke": case "challenge":
-      return runAttestationCommand(command, rest);
+    case "merge": return runMergeCommand(rest);
+    case "challenge": return runChallengeCommand(rest);
     case "send":
       return runSendCommand(rest);
     case "ack":
@@ -31,8 +28,6 @@ export async function main(argv: string[]): Promise<never> {
       return runAgentCommand(rest);
     case "submit":
       return runSubmitCommand(rest);
-    case "integrate":
-      return runIntegrateCommand(rest);
     case "context":
       if (rest[0] === "publish") return runContextCommand(rest.slice(1));
       return usage();

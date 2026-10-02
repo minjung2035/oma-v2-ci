@@ -127,8 +127,8 @@ const mutations: Array<[string, (home: string) => string[]]> = [
   ["agent.continue", () => ["agent", "continue", "--note", "hello"]],
   ["submit", (home) => ["submit", "HEAD", "--file", join(home, "input.txt")]],
   [
-    "integrate",
-    () => ["integrate", "1".repeat(40), "--expect", "2".repeat(40)],
+    "merge review",
+    (home) => ["merge", "review", "merge-abcd1234", "--file", join(home, "input.txt")],
   ],
   [
     "context.publish",

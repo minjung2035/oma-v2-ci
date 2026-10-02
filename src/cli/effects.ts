@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { FULL_OID_RE } from "../ids.js";
+import { isValidFullOid } from "../domain/identifiers.js";
 import { runGitText } from "../process/policies.js";
 import { fail } from "./exit.js";
 import { cliFrameBytes } from "./transport.js";
@@ -73,6 +74,21 @@ export function readBody(path: string | null): string {
   } catch {
     return fail(`cannot read UTF-8 text file: ${path}`, 2);
   }
+}
+
+/** The workspace clone's recorded upstream base (`clone --single-branch main`
+ * leaves refs/remotes/origin/main), or null when it is absent. */
+export function recordedBase(): string | null {
+  const result = runGitText(["rev-parse", "--verify", "--quiet", "--end-of-options", "refs/remotes/origin/main^{commit}"],
+    { cwd: process.cwd() });
+  const oid = result.status === 0 ? result.stdout.trim() : "";
+  return isValidFullOid(oid) ? oid : null;
+}
+
+/** Uncommitted work is never part of a resolved candidate; `merge open` warns. */
+export function workspaceDirty(): boolean {
+  const status = runGitText(["status", "--porcelain"], { cwd: process.cwd(), maxBuffer: 256 * 1024 });
+  return status.status === 0 && status.stdout.trim().length > 0;
 }
 
 export function resolveOid(revision: string): string {

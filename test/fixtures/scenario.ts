@@ -179,9 +179,9 @@ export interface ScenarioOptions {
    * bubblewrap in the society's generated rootfs, with bash, reaching the
    * (then TLS) scripted provider only through the runner's relay. */
   readonly confined?: boolean;
-  /** "Worker integrate" on, as the Control Panel sets it (DR4): Residents
-   * hold code.integrate. Off by default, as in the product's defaults. */
-  readonly integrate?: boolean;
+  /** Withhold git.submit, as the Control Panel can (DR4): a Resident without
+   * it cannot publish candidates or open a merge request. */
+  readonly submit?: boolean;
 }
 
 /** A broker over the society's state, composed as entry/broker.ts composes
@@ -231,7 +231,8 @@ export async function startScenario(options: ScenarioOptions = {}): Promise<Scen
       "scripted-2": { provider: "fake", model: "scripted-2", credentialRef: "engine-managed",
       codecRevision: "scripted", pricingRevision: "unpinned", maxInputTokens: 1, maxOutputTokens: 1, inferenceTimeoutSeconds: 120 } },
     agentProfiles: { ...defaults.agentProfiles, [residentProfile]: { ...defaults.agentProfiles[residentProfile]!, modelProfile: "scripted",
-      capabilities: [...defaults.agentProfiles[residentProfile]!.capabilities, ...(options.integrate === true ? ["code.integrate" as const] : [])] } } });
+      capabilities: [...defaults.agentProfiles[residentProfile]!.capabilities
+        .filter(capability => options.submit !== false || capability !== "git.submit")] } } });
   const configPath = join(root, "config.json");
   writeFileSync(configPath, JSON.stringify(config, null, 2));
   const residentResources = config.agentProfiles[residentProfile]!.resources;

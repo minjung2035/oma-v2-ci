@@ -50,13 +50,19 @@ function frozenBody(entry: CachedRequest): Uint8Array | undefined {
  * the key the Human needs to ask again -- without them a retry takes a new
  * key and repeats the effect. A receipt contradicting the cache's earlier
  * observation of the same request is reported as unknown. */
-function settle(receipt: Receipt, key: string): never {
+/** The broker's receipt is remembered in the request cache, then returned to
+ * the caller -- merge open keeps its own sequencing after a git.submit. */
+function recorded(receipt: Receipt, key: string): Receipt {
   try { cache().updateReceipt(key, receipt); }
   catch (error) {
     if (!(error instanceof CacheError)) throw error;
     finishUnrecordedReceipt(receipt, key, `${error.code}: Request cache could not record this receipt: ${error.message}`, error.code === "CACHE_CORRUPT");
   }
-  finishReceipt(receipt, key);
+  return receipt;
+}
+
+function settle(receipt: Receipt, key: string): never {
+  finishReceipt(recorded(receipt, key), key);
 }
 
 export interface FreshBuild {
@@ -71,13 +77,13 @@ export function randKey(): string {
 }
 
 /** Only an explicit, decoded REQUEST_NOT_FOUND lookup permits frozen resend. */
-export async function replayOrSend(
+async function freezeThenSend(
   method: MutationMethod,
   params: Record<string, unknown>,
   key: string,
   digest?: { bytes: number; sha256: string },
   streamBytes?: Uint8Array,
-): Promise<never> {
+): Promise<Receipt> {
   const payload = requestPayload(params);
   const cached = readFrozen(key);
   let frozen: CachedRequest;
@@ -110,18 +116,28 @@ export async function replayOrSend(
       throw error;
     }
   }
-  return settleFrozen(frozen, key, replay);
+  return resolveFrozen(frozen, key, replay);
+}
+
+export async function replayOrSend(
+  method: MutationMethod,
+  params: Record<string, unknown>,
+  key: string,
+  digest?: { bytes: number; sha256: string },
+  streamBytes?: Uint8Array,
+): Promise<never> {
+  return finishReceipt(await freezeThenSend(method, params, key, digest, streamBytes), key);
 }
 
 /** A lost answer permits observation, never a second effect. Even a lookup
  * reporting absence does not turn this call into an automatic send loop. */
-async function recoverAnswer(frozen: CachedRequest, key: string): Promise<never> {
+async function recoverReceipt(frozen: CachedRequest, key: string): Promise<Receipt> {
   let reply;
   try { reply = (await call("operation.get", { key }))[0]; }
   catch { return acceptanceUnknown(key); }
   if (reply?.ok === true) {
     const decoded = decodeReceipt(reply.result, { expectedKind: frozen.method, allowNotFound: true });
-    if (decoded.ok && !isRequestNotFound(decoded.value)) settle(decoded.value, key);
+    if (decoded.ok && !isRequestNotFound(decoded.value)) return recorded(decoded.value, key);
   }
   return acceptanceUnknown(key);
 }
@@ -136,7 +152,7 @@ function acceptanceUnknown(key: string): never {
  * key alone, so a body that is missing or cannot be read now never keeps the
  * broker's receipt from the Human; it matters only for the resend, and there it
  * is still never rebuilt from anything but the freeze. */
-async function settleFrozen(frozen: CachedRequest, key: string, replay: boolean): Promise<never> {
+async function resolveFrozen(frozen: CachedRequest, key: string, replay: boolean): Promise<Receipt> {
   if (replay) {
     let lookup;
     try {
@@ -148,7 +164,7 @@ async function settleFrozen(frozen: CachedRequest, key: string, replay: boolean)
     if (reply?.ok === true) {
       const decoded = decodeReceipt(reply.result, { expectedKind: frozen.method, allowNotFound: true });
       if (!decoded.ok) fail(`invalid operation lookup: ${decoded.reason}; --request ${key}`, 3);
-      if (!isRequestNotFound(decoded.value)) settle(decoded.value, key);
+      if (!isRequestNotFound(decoded.value)) return recorded(decoded.value, key);
     } else {
       const decoded = decodeFailure(reply?.error);
       if (!decoded.ok || decoded.value.code !== "REQUEST_NOT_FOUND")
@@ -163,15 +179,15 @@ async function settleFrozen(frozen: CachedRequest, key: string, replay: boolean)
   try {
     replies = await call(frozen.method, requestPayload(frozen.params), key, body);
   } catch {
-    return recoverAnswer(frozen, key);
+    return recoverReceipt(frozen, key);
   }
   const reply = replies[0];
   if (reply?.ok === false && ["DEADLINE_EXCEEDED", "BROKER_UNAVAILABLE"].includes(reply.error.code))
-    return recoverAnswer(frozen, key);
+    return recoverReceipt(frozen, key);
   if (reply?.ok === true) {
     const decoded = decodeReceipt(reply.result, { expectedKind: frozen.method });
     if (!decoded.ok) fail(`invalid mutation receipt: ${decoded.reason}; --request ${key}`, 3);
-    settle(decoded.value, key);
+    return recorded(decoded.value, key);
   }
   return finishFailure(reply, "", key);
 }
@@ -183,6 +199,18 @@ export async function effect(
   build: () => FreshBuild | Promise<FreshBuild>,
   comparable: () => Record<string, unknown>,
 ): Promise<never> {
+  return finishReceipt(await requestReceipt(expectedMethod, key, build, comparable), key);
+}
+
+/** `merge open` runs a candidate publication and then the open under its own
+ * keys: the same frozen-request discipline as effect(), but the decoded
+ * receipt returns to the caller instead of ending the process. */
+export async function requestReceipt(
+  expectedMethod: MutationMethod,
+  key: string,
+  build: () => FreshBuild | Promise<FreshBuild>,
+  comparable: () => Record<string, unknown>,
+): Promise<Receipt> {
   const cached = readFrozen(key);
   if (cached !== null) {
     const mismatch = requestIntentConflict(
@@ -193,10 +221,10 @@ export async function effect(
       fail(`REQUEST_KEY_REUSED: key ${key} conflicts with explicit argument ${mismatch}`, 2);
     // The frozen request is replayed as frozen; its body is read only if the
     // ledger says it was never accepted (P0V-38).
-    return settleFrozen(cached, key, true);
+    return resolveFrozen(cached, key, true);
   }
   const fresh = await build();
   if (fresh.method !== expectedMethod)
     throw new Error("fresh request builder returned a different method");
-  return replayOrSend(fresh.method, fresh.params, key, fresh.digest, fresh.stream);
+  return freezeThenSend(fresh.method, fresh.params, key, fresh.digest, fresh.stream);
 }

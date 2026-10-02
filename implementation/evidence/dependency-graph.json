@@ -30,11 +30,9 @@
   "src/cli/arguments.ts",
   "src/cli/cache-codec.ts",
   "src/cli/commands/agent.ts",
-  "src/cli/commands/attestation.ts",
-  "src/cli/commands/code.ts",
   "src/cli/commands/context.ts",
-  "src/cli/commands/integrate.ts",
   "src/cli/commands/logs.ts",
+  "src/cli/commands/merge.ts",
   "src/cli/commands/routes.ts",
   "src/cli/commands/send.ts",
   "src/cli/commands/society.ts",
@@ -1757,12 +1755,12 @@
     "src/extension/",
     "src/rpc-client.ts"
    ],
-   "files": 89
+   "files": 87
   }
  ],
- "files": 355,
- "runtimeEdges": 1532,
- "typeOnlyEdges": 415,
+ "files": 353,
+ "runtimeEdges": 1529,
+ "typeOnlyEdges": 416,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 283,
   "L2-facts -> L1-kernel": 35,
@@ -1774,11 +1772,11 @@
   "L4-orchestration -> L2-facts": 7,
   "L4-orchestration -> L3-workflow": 17,
   "L4-orchestration -> L4-orchestration": 148,
-  "L5-entry -> L1-kernel": 137,
+  "L5-entry -> L1-kernel": 139,
   "L5-entry -> L2-facts": 3,
   "L5-entry -> L3-workflow": 9,
   "L5-entry -> L4-orchestration": 114,
-  "L5-entry -> L5-entry": 185
+  "L5-entry -> L5-entry": 180
  },
  "upwardTypeOnlyEdges": [
   {
@@ -1797,18 +1795,18 @@
   ]
  ],
  "fanIn": {
-  "src/domain/errors.ts": 195,
-  "src/domain/identifiers.ts": 60,
+  "src/domain/errors.ts": 196,
+  "src/domain/identifiers.ts": 62,
   "src/storage/paths.ts": 31,
   "src/protocol/host-guest.ts": 29,
-  "src/ids.ts": 28,
   "src/storage/contained-fs.ts": 28,
+  "src/ids.ts": 27,
   "src/storage/directory.ts": 26,
   "src/storage/durable-fs.ts": 26,
   "src/domain/canonical-json.ts": 22,
-  "src/cli/exit.ts": 20,
   "src/frame.ts": 20,
   "src/hash.ts": 20,
+  "src/cli/exit.ts": 18,
   "src/domain/derived.ts": 18,
   "src/process/run.ts": 18,
   "src/store.ts": 18

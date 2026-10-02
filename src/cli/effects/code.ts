@@ -12,7 +12,7 @@ import { runProcessSync } from "../../process/run.js";
 const SAFE = CANONICAL_SAFE_ARGS;
 const MAXIMUM = 768 * 1024;
 export interface CodeView {
-  readonly action: "show" | "diff" | "log" | "ls-tree" | "grep";
+  readonly action: "show" | "diff" | "log" | "ls-tree" | "grep" | "merge-diff";
   readonly revision: string;
   readonly base?: string;
   readonly path?: string;
@@ -20,14 +20,14 @@ export interface CodeView {
 }
 export function readCode(repository: string, input: CodeView): { revision: string; base?: string; text: string } {
   if (!isAbsolute(repository)) throw new StoreError("INVALID_REQUEST", "code repository must be absolute");
-  if (!["show", "diff", "log", "ls-tree", "grep"].includes(input.action))
+  if (!["show", "diff", "log", "ls-tree", "grep", "merge-diff"].includes(input.action))
     throw new StoreError("INVALID_REQUEST", "unsupported code view");
   if (input.path !== undefined && (!isValidWirePath(input.path) || input.path.split("/").some(part => part.toLowerCase() === ".git")))
     throw new StoreError("INVALID_REQUEST", "code path must be repository-relative");
   if ((input.action === "grep") !== (input.pattern !== undefined) ||
       (input.pattern !== undefined && (input.pattern.length === 0 || input.pattern.includes("\0"))))
     throw new StoreError("INVALID_REQUEST", "a grep view requires a nonempty text pattern");
-  if ((input.action === "diff") !== (input.base !== undefined))
+  if ((input.action === "diff" || input.action === "merge-diff") !== (input.base !== undefined))
     throw new StoreError("INVALID_REQUEST", "only a diff view requires a base revision");
   if (input.action === "show" && input.path === undefined)
     throw new StoreError("INVALID_REQUEST", "a show view requires a file path");
@@ -58,6 +58,9 @@ export function readCode(repository: string, input: CodeView): { revision: strin
   switch (input.action) {
     case "show": args = ["show", "--no-ext-diff", "--no-textconv", `${target}:${input.path}`]; break;
     case "diff": args = ["diff", "--no-ext-diff", "--no-textconv", "--no-color", base!, target, "--", ...path]; break;
+    // mail-v1 `merge diff`: the byte-exact patch a reviewer applies elsewhere.
+    case "merge-diff": args = ["diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color",
+      base!, target, "--", ...path]; break;
     case "log": args = ["log", "--no-show-signature", "--no-color", "--format=%H %s", "-n", "100", target, "--", ...path]; break;
     case "ls-tree": args = ["ls-tree", "-r", "--long", target, "--", ...path]; break;
     case "grep": args = ["grep", "--no-textconv", "--no-ext-grep", "-I", "-n", "-F", "-e", input.pattern!, target, "--", ...path]; break;

@@ -69,7 +69,7 @@ const reviewStatusPrincipal = checkObject({
 const reviewStatusResult: Check = value => {
   if (reviewStatusDetail(value) === null) return null;
   if (reviewStatusList(value) === null) return null;
-  return reviewStatusPrincipal(value) ?? "invalid review.status result";
+  return reviewStatusPrincipal(value);
 };
 type ReadResultMethod = Exclude<PublicMethod, MutationMethod | "operation.get">;
 const checks = {

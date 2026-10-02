@@ -7,8 +7,8 @@
  * placeholder the sandbox holds for the key. The scripted provider speaks
  * TLS as one of the engine's own catalogue providers (fixtures/
  * scripted-provider.ts), and the broker has its Git module, so a Resident's
- * commit, `oma submit` and `oma integrate` run through quarantine and CAS.
- * Not provider evidence (P0-5; INF-001).
+ * commit, `oma submit` and `oma merge open` run through quarantine, review
+ * and CAS. Not provider evidence (P0-5; INF-001).
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -96,44 +96,45 @@ test("SCN-C03: submitting the same request twice publishes one candidate under o
   });
 });
 
-test("SCN-C04: a Resident integrates its published candidate with the right expectation; main moves exactly there", OPTIONS, async () => {
-  await withScenario({ residents: ["worker-a"], confined: true, integrate: true }, async s => {
+test("SCN-C04: a Resident's LOW merge request applies itself; main moves exactly to its candidate", OPTIONS, async () => {
+  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const before = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "제출하고 통합하세요.", "c04");
     s.script((request, index) => {
-      if (index === 0) return bash(`${COMMIT} && oma submit HEAD --to principal --subject '통합 대상' --request sub-c04`);
-      if (index === 1) {
-        const candidate = receiptIn(lastResult(request)).result!.candidate!;
-        return bash(`oma integrate ${candidate} --expect ${before} --request int-c04`);
-      }
+      if (index === 0) return bash(`${COMMIT} && echo 통합 > /tmp/reason.md && oma merge open --tier LOW --title 통합 --file /tmp/reason.md --request mrg-c04`);
       return text("통합했습니다.");
     });
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const integrated = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body));
-    assert.equal(integrated.state, "succeeded", JSON.stringify(integrated));
+    const opened = receiptIn(lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body));
+    assert.equal(opened.state, "succeeded", JSON.stringify(opened));
     const candidate = git(s, "for-each-ref", "--format=%(objectname)", "refs/oma/published/");
     assert.equal(git(s, "rev-parse", "refs/heads/main"), candidate, "main did not move to the candidate");
+    assert.notEqual(git(s, "rev-parse", "refs/heads/main"), before);
     assert.equal(s.operations("worker-a").filter(row => row.kind === "git.integrate" && row.state === "succeeded").length, 1);
   });
 });
 
-test("SCN-C05: an integration against a main that has moved is refused with the actual main, and changes nothing", OPTIONS, async () => {
-  await withScenario({ residents: ["worker-a"], confined: true, integrate: true }, async s => {
+test("SCN-C05: a merge open on a base main has left is refused with the actual main, and changes nothing", OPTIONS, async () => {
+  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
     const main = git(s, "rev-parse", "refs/heads/main");
-    await assign(s, "worker-a", "잘못된 기대로 통합해 보세요.", "c05");
-    const stale = "b".repeat(40);
+    await assign(s, "worker-a", "지난 기준으로 통합해 보세요.", "c05");
     s.script((request, index) => {
-      if (index === 0) return bash(`${COMMIT} && oma submit HEAD --to principal --subject '대상' --request sub-c05`);
-      if (index === 1) return bash(`oma integrate ${receiptIn(lastResult(request)).result!.candidate!} --expect ${stale} --request int-c05; echo "exit=$?"`);
+      // The workspace's origin/main stays at the fetched base; after the first
+      // request applies, opening on it is stale.
+      if (index === 0) return bash(`${COMMIT} && echo 첫번째 > /tmp/r1.md && oma merge open --tier LOW --title 첫번째 --file /tmp/r1.md --request mrg-c05a`);
+      if (index === 1) return bash(`${COMMIT} && echo 두번째 > /tmp/r2.md && oma merge open --tier LOW --title 두번째 --file /tmp/r2.md --base refs/remotes/origin/main --request mrg-c05b; echo "exit=$?"`);
       return text("거절됐습니다.");
     });
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
     const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body);
-    assert.match(refused, /STALE_BASE|NOT_DESCENDANT|PREREQUISITE_MISSING|INVALID/, refused);
-    assert.match(refused, /exit=2/, "a refused integration did not exit as a settled failure (CLI-003)");
-    assert.equal(git(s, "rev-parse", "refs/heads/main"), main, "main moved on a refused integration");
+    assert.match(refused, /STALE_BASE/, refused);
+    assert.match(refused, /exit=2/, "a refused open did not exit as a settled failure (CLI-003)");
+    const after = git(s, "rev-parse", "refs/heads/main");
+    assert.notEqual(after, main, "the first LOW merge should have applied");
+    assert.equal(s.operations("worker-a").filter(row => row.kind === "attest.record" && row.state === "succeeded").length, 1,
+      "only the fresh request was accepted");
   });
 });
 
@@ -153,18 +154,17 @@ test("SCN-C06: the Principal publishes the shared context; a confined Resident r
   });
 });
 
-test("SCN-C07: without Worker integrate a Resident's integration is refused and main does not move (AUTH-001)", OPTIONS, async () => {
-  await withScenario({ residents: ["worker-a"], confined: true }, async s => {
+test("SCN-C07: without git.submit a Resident's merge open is refused and main does not move (AUTH-001)", OPTIONS, async () => {
+  await withScenario({ residents: ["worker-a"], confined: true, submit: false }, async s => {
     const main = git(s, "rev-parse", "refs/heads/main");
     await assign(s, "worker-a", "통합해 보세요.", "c07");
     s.script((request, index) => {
-      if (index === 0) return bash(`${COMMIT} && oma submit HEAD --to principal --subject '대상' --request sub-c07`);
-      if (index === 1) return bash(`oma integrate ${receiptIn(lastResult(request)).result!.candidate!} --expect ${main} --request int-c07; echo "exit=$?"`);
+      if (index === 0) return bash(`${COMMIT} && echo 이유 > /tmp/r.md && oma merge open --tier LOW --title 통합 --file /tmp/r.md --request mrg-c07; echo "exit=$?"`);
       return text("권한이 없습니다.");
     });
     const run = await s.activate("worker-a");
     assert.equal(run.code, 0, run.stderr);
-    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[2]!.body);
+    const refused = lastResult(s.provider.seen.filter(entry => isResident(entry.body))[1]!.body);
     assert.match(refused, /CAPABILITY_DENIED/, refused);
     assert.match(refused, /exit=2/);
     assert.equal(git(s, "rev-parse", "refs/heads/main"), main);

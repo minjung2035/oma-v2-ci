@@ -116,8 +116,12 @@
       },
       "cli": [
         {
-          "path": "src/cli/commands/attestation.ts",
-          "symbol": "runAttestationCommand"
+          "path": "src/cli/commands/merge.ts",
+          "symbol": "runMergeCommand"
+        },
+        {
+          "path": "src/cli/commands/merge.ts",
+          "symbol": "runChallengeCommand"
         }
       ],
       "tests": [
@@ -126,8 +130,8 @@
           "symbol": "immutable fact/mail and migration"
         },
         {
-          "path": "test/attestation-cli.test.ts",
-          "symbol": "frozen evidence CLI replay"
+          "path": "test/merge-cli.test.ts",
+          "symbol": "review CLI freeze/replay"
         },
         {
           "path": "test/tiered-integration.test.ts",
@@ -348,7 +352,7 @@
         ]
       },
       "cli": [
-        { "path": "src/cli/commands/integrate.ts", "symbol": "runIntegrateCommand" }
+        { "path": "src/cli/commands/merge.ts", "symbol": "runMergeCommand (status view; the CLI no longer issues git.integrate)" }
       ],
       "tests": [
         { "path": "test/r19-integration-decisions.test.ts", "symbol": "integration decisions" },

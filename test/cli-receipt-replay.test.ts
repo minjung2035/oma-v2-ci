@@ -277,7 +277,9 @@ test("AV28 / ERR-001: the CLI shows the actual value a conflict names", { timeou
   const actual = "1".repeat(40);
   const broker = await peer(home, () => ({ ok: false, error: { code: "STALE_BASE", message: "STALE_BASE", retry: "never", details: { actual } } }));
   try {
-    const result = await run(home, ["integrate", "2".repeat(40), "--expect", "3".repeat(40), "--request", "av28-cli"]);
+    const body = join(home, "body.txt");
+    writeFileSync(body, "reason\n");
+    const result = await run(home, ["merge", "review", "merge-abcd1234", "--file", body, "--request", "av28-cli"]);
     assert.equal(result.code, 2, result.stderr);
     assert.match(result.stderr, new RegExp(`STALE_BASE: Main differs from expected; retry against actual \\(actual: ${actual}\\)`));
   } finally { await broker.close(); rmSync(home, { recursive: true, force: true }); }
