@@ -140,7 +140,8 @@ function rowsFor(input: ViewInput): { readonly fixed: string[]; readonly rows: s
     selected, rows: data.mail.map((row, index) => {
       const marker = index === selected ? ">" : " ";
       const flag = row.unread ? "●" : " ";
-      return `${marker}${flag} ${pad(row.from, LAYOUT_BOUNDS.senderColumn.value)}${pad(row.kind, LAYOUT_BOUNDS.kindColumn.value)}${row.subject}`;
+      const thread = (row.threadCount ?? 0) > 1 ? `(${row.threadCount})` : "";
+      return `${marker}${flag} ${pad(row.from, LAYOUT_BOUNDS.senderColumn.value)}${pad(row.kind, LAYOUT_BOUNDS.kindColumn.value)}${thread}${row.subject}`;
     }) };
 }
 
@@ -183,6 +184,8 @@ function mailDetailParts(input: ViewInput, notice: string | null) {
     `Kind: ${message.kind}`,
     `Subject: ${message.subject}`,
     `Path: ${message.path}`,
+    ...(message.earlier ?? []).map((path, index) =>
+      `Earlier in this thread ${index + 1}/${message.earlier!.length}: ${path}`),
     "─".repeat(Math.max(0, columns)),
     ...(body?.truncated ? [fit("(Showing the beginning only; the stored mail exceeds the read limit)", columns)] : []),
   ];

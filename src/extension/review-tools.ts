@@ -102,8 +102,8 @@ export function registerReviewTools(pi: ExtensionAPI, context: ReviewToolContext
       label: kind === "merge" ? "Merge review requests" : "Challenge an applied merge",
       description: principal
         ? kind === "merge"
-          ? "Read a merge request's patch and vote on the approval mail it sent you. diff pages the exact base→candidate patch; vote names that approval with approve or reject and its reason. Only recorded votes count."
-          : "Read a challenge's patch and vote on the approval mail it sent you. diff pages the exact patch; view chooses the revert (default) or the merge it reverts."
+          ? "Decide the HIGH merge requests whose approval mail reaches you. diff pages the exact base→candidate patch of a request you can see; vote names that approval mail's id with approve or reject and its reason. You do not open, review or cancel requests, assign reviewers, or poll; LOW and MEDIUM completions arrive as notice mail by themselves."
+          : "Decide a challenge's approval when its mail reaches you. diff pages the exact patch; view chooses the revert (default) or the merge it reverts; vote names the approval id from the mail. Only recorded votes count."
         : kind === "merge"
           ? "Work a merge request through review mail. open names a tier and freezes the candidate and base; review adds discussion; vote approves or rejects with a body (only recorded votes count; you cannot approve your own request); status reads it; cancel ends it; diff pages the exact base→candidate patch. A LOW merge applies without further review; a MEDIUM or HIGH one then needs peer and, for HIGH, Principal approval."
           : "Challenge a merge that already applied: open prepares a revert (or takes your own candidate+base), then reviews and votes like a merge request until it applies. diff's view chooses the revert (default) or the original merge's patch.",

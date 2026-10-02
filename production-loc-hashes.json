@@ -1,7 +1,7 @@
 {
   "cloc": "2.08",
   "manifest": "598e9a9f21c08f501bcd4adc83caaf70e5880724e26ec90286164473d7ef1ce7",
-  "report": "e0b521a827a02bc8a3f455ae5049bcbb3e06da3c01dc26cca2786c2bd80f33c7",
+  "report": "2d88a06145fa73c36327f2e142226bc40f596dc6bfc5573ead405d00de869147",
   "files": [
     {
       "path": "implementation/contracts.ts",
@@ -461,7 +461,7 @@
     },
     {
       "path": "src/extension/review-tools.ts",
-      "sha256": "813c7c9f3ba6afe3dd4cba00abbc56edc91d44bccdd05abd24e2f00fb5d50a62"
+      "sha256": "20ce6ccc2446c5332d44bbd31211a0277351cd588c15653353cc4a41f771eb59"
     },
     {
       "path": "src/extension/shared.ts",
@@ -613,7 +613,7 @@
     },
     {
       "path": "src/mail/batches.ts",
-      "sha256": "c358dea3bb0c7472cc49b2d97495d85ff6276da1014aa15a992b44b37a46e71d"
+      "sha256": "5fbec7ca1f7437d6f0980f05dd3693cdbb56839d3253962122856c1dcdf06bae"
     },
     {
       "path": "src/mail/display.ts",
@@ -1141,7 +1141,7 @@
     },
     {
       "path": "src/storage/batch-view.ts",
-      "sha256": "f78d7937c8a38cfded73517c26cf9a65260e14af2485ab7df61c1ae2dd7f218d"
+      "sha256": "0d228bc362fdf75a9dd0653848a3f452b9f65a65a332412d8f0e008c99181d35"
     },
     {
       "path": "src/storage/contained-fs.ts",
@@ -1293,7 +1293,7 @@
     },
     {
       "path": "src/tui/model.ts",
-      "sha256": "cdf1fb61a3c6c146539319b282dd019bde014c48a9eb236c8131b75a13576d57"
+      "sha256": "b0675f161b1883b75dd10a330200fc072746006078c13bbf0bca2e18e2d4ac8a"
     },
     {
       "path": "src/tui/open-tui-brand.ts",
@@ -1341,7 +1341,7 @@
     },
     {
       "path": "src/tui/sources/mail.ts",
-      "sha256": "c25549917eb0aeec3a2ac899cff523f021dcd942c00134f989ae987beca09dca"
+      "sha256": "f275e664138b367f11c805c656dcf253da843ca7712598b1f5a567c8cfa232d5"
     },
     {
       "path": "src/tui/sources/settings.ts",
@@ -1377,7 +1377,7 @@
     },
     {
       "path": "src/tui/view/screens.ts",
-      "sha256": "146ebfe0133b8698e126f795e936e890eb676a0391629e31319d154df5013b15"
+      "sha256": "48d4e11a06965cf6a82e522618da7140ad09cacec76bfcc33d74ffc81afb74b5"
     },
     {
       "path": "src/tui/view/session-mode.ts",
@@ -1413,7 +1413,7 @@
     },
     {
       "path": "src/views.ts",
-      "sha256": "6ecc8c61cb703a0617ee6e2068e50162cedcb68e3dbbfb6144a12af67911dce2"
+      "sha256": "38c73bb9b4aeb853b36526e8b5772849e98433fd0f174e4645d84905223d2b5c"
     },
     {
       "path": "src/views/pending-work.ts",

@@ -69,6 +69,11 @@ export interface ExtensionRow {
 export interface MailRow {
   readonly id: string; readonly from: string; readonly kind: string;
   readonly subject: string; readonly unread: boolean; readonly path: string;
+  /** The total messages of this row's thread (absent/1 = no folding); earlier
+   * messages' paths stay listed on the open message's detail. */
+  readonly threadCount?: number;
+  /** Earlier messages of this thread, oldest first, as stored file paths. */
+  readonly earlier?: readonly string[];
 }
 /** TUI-012: what the Dashboard knows, as data. How it is worded belongs to the
  * view. An unobserved status carries its reason and time rather than a guess.

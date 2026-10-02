@@ -3,7 +3,7 @@
     "cloc_url": "github.com/AlDanial/cloc",
     "cloc_version": "2.08",
     "n_files": 355,
-    "n_lines": 47683,
+    "n_lines": 47820,
     "report_file": "production-loc.json"
   },
   "src/review.ts": {
@@ -116,8 +116,8 @@
   },
   "src/tui/model.ts": {
     "blank": 34,
-    "comment": 86,
-    "code": 330,
+    "comment": 89,
+    "code": 332,
     "language": "TypeScript"
   },
   "src/units.ts": {
@@ -348,6 +348,12 @@
     "code": 188,
     "language": "TypeScript"
   },
+  "src/tui/sources/mail.ts": {
+    "blank": 18,
+    "comment": 69,
+    "code": 188,
+    "language": "TypeScript"
+  },
   "src/storage/preaccept-artifact.ts": {
     "blank": 19,
     "comment": 29,
@@ -360,16 +366,22 @@
     "code": 184,
     "language": "TypeScript"
   },
+  "src/tui/view/screens.ts": {
+    "blank": 15,
+    "comment": 35,
+    "code": 184,
+    "language": "TypeScript"
+  },
+  "src/mail/batches.ts": {
+    "blank": 2,
+    "comment": 33,
+    "code": 183,
+    "language": "TypeScript"
+  },
   "src/platform/host/host-api.ts": {
     "blank": 7,
     "comment": 17,
     "code": 182,
-    "language": "TypeScript"
-  },
-  "src/tui/view/screens.ts": {
-    "blank": 15,
-    "comment": 35,
-    "code": 181,
     "language": "TypeScript"
   },
   "src/entry/broker.ts": {
@@ -394,12 +406,6 @@
     "blank": 3,
     "comment": 16,
     "code": 179,
-    "language": "TypeScript"
-  },
-  "src/mail/batches.ts": {
-    "blank": 2,
-    "comment": 33,
-    "code": 178,
     "language": "TypeScript"
   },
   "src/runtime/pi-runtime.ts": {
@@ -519,12 +525,6 @@
   "src/runtime/pi-packages.ts": {
     "blank": 12,
     "comment": 41,
-    "code": 150,
-    "language": "TypeScript"
-  },
-  "src/tui/sources/mail.ts": {
-    "blank": 15,
-    "comment": 54,
     "code": 150,
     "language": "TypeScript"
   },
@@ -666,6 +666,12 @@
     "code": 115,
     "language": "TypeScript"
   },
+  "src/views.ts": {
+    "blank": 1,
+    "comment": 26,
+    "code": 115,
+    "language": "TypeScript"
+  },
   "src/platform/host/files.ts": {
     "blank": 13,
     "comment": 36,
@@ -753,12 +759,6 @@
   "src/lifecycle/workspace.ts": {
     "blank": 1,
     "comment": 20,
-    "code": 100,
-    "language": "TypeScript"
-  },
-  "src/views.ts": {
-    "blank": 1,
-    "comment": 26,
     "code": 100,
     "language": "TypeScript"
   },
@@ -1281,6 +1281,12 @@
   "src/process/run.ts": {
     "blank": 1,
     "comment": 8,
+    "code": 55,
+    "language": "TypeScript"
+  },
+  "src/storage/batch-view.ts": {
+    "blank": 3,
+    "comment": 13,
     "code": 55,
     "language": "TypeScript"
   },
@@ -1968,12 +1974,6 @@
     "code": 13,
     "language": "TypeScript"
   },
-  "src/storage/batch-view.ts": {
-    "blank": 1,
-    "comment": 4,
-    "code": 13,
-    "language": "TypeScript"
-  },
   "src/tui/view/labels.ts": {
     "blank": 3,
     "comment": 3,
@@ -2137,9 +2137,9 @@
     "language": "TypeScript"
   },
   "SUM": {
-    "blank": 1940,
-    "comment": 7623,
-    "code": 38120,
+    "blank": 1945,
+    "comment": 7650,
+    "code": 38225,
     "nFiles": 355
   }
 }

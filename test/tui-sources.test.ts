@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -232,6 +232,46 @@ test("T98/TUI-011: unread comes from the mailbox position, and no read state is 
     readBody(join(box.newDir, "m-1"), 4096);
     assert.deepEqual(readMailbox(box).rows, before);
     assert.equal(unreadCount(box), 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("mail-v1 / spec §6: a thread folds into the latest arrival's row; earlier revisions stay reachable", () => {
+  const root = scratch("oma-tui-thread-");
+  try {
+    const box = principalMailbox(root);
+    mkdirSync(box.newDir, { recursive: true });
+    mkdirSync(box.curDir, { recursive: true });
+    const rfc = (id: string) => `<${id}@demo.oma.invalid>`;
+    const eml = (id: string, subject: string, references: string[]): string =>
+      ["From: principal-society@demo.oma.invalid", `Subject: ${subject}`, "X-OMA-Kind: message",
+        `Message-ID: ${rfc(id)}`, ...(references.length ? [`References: ${references.map(rfc).join(" ")}`] : []), "", "body", ""].join("\n");
+    // Three revisions of one request's thread: root, reply, reply-to-reply.
+    // The middle one is already read (cur/), the rest are new.
+    const write = (dir: string, name: string, text: string, seconds: number): void => {
+      const path = join(dir, name);
+      writeFileSync(path, text);
+      const when = new Date(2026, 0, 1, 0, 0, seconds);
+      utimesSync(path, when, when);
+    };
+    write(box.curDir, "m-aaaaaaaa-0000-4000-8000-000000000001-0:2,", eml("m-aaaaaaaa-0000-4000-8000-000000000001-0", "[merge-deadbeef] change (rev 0)", []), 1);
+    write(box.newDir, "m-bbbbbbbb-0000-4000-8000-000000000002-0", eml("m-bbbbbbbb-0000-4000-8000-000000000002-0", "[merge-deadbeef] change (rev 1)", ["m-aaaaaaaa-0000-4000-8000-000000000001-0"]), 2);
+    write(box.newDir, "m-cccccccc-0000-4000-8000-000000000003-0", eml("m-cccccccc-0000-4000-8000-000000000003-0", "[merge-deadbeef] change (rev 2)",
+      ["m-aaaaaaaa-0000-4000-8000-000000000001-0", "m-bbbbbbbb-0000-4000-8000-000000000002-0"]), 3);
+    write(box.newDir, "m-dddddddd-0000-4000-8000-000000000004-0", eml("m-dddddddd-0000-4000-8000-000000000004-0", "an unrelated mail", []), 4);
+
+    const rows = readMailbox(box).rows;
+    assert.equal(rows.length, 2, "four messages fold into two rows");
+    const folded = rows.find(row => row.id === "m-cccccccc-0000-4000-8000-000000000003-0")!;
+    assert.ok(folded, "the latest revision is the row");
+    assert.equal(folded.threadCount, 3);
+    assert.equal(folded.unread, true, "an unread member keeps the row unread");
+    assert.deepEqual(folded.earlier!.length, 2);
+    assert.ok(folded.earlier![0]!.includes("m-aaaaaaaa"), "the earliest revision is listed first");
+    assert.ok(folded.earlier![1]!.includes("m-bbbbbbbb"));
+    assert.equal(rows.find(row => row.id === "m-dddddddd-0000-4000-8000-000000000004-0")!.threadCount, 1);
+    // The fold never moves, renames or writes files.
+    assert.equal(readMailbox(box).rows.length, 2);
+    assert.equal(unreadCount(box), 3, "delivery facts are untouched: three unread messages remain");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

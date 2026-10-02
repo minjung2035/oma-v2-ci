@@ -116,8 +116,26 @@ function listDir(path: string): { readonly names: readonly string[] } | { readon
   }
 }
 
-type DirectoryRows = { readonly rows: readonly { row: MailRow; deliveredAtMs: number }[]; readonly unreadable: string | null; readonly omitted: number };
+type DirectoryRows = { readonly rows: readonly { row: MailRow; deliveredAtMs: number; threadKey: string | null }[];
+  readonly unreadable: string | null; readonly omitted: number };
 type Entry = { readonly name: string; readonly deliveredAtMs: number };
+
+/** mail-v1: the messages of one review request (thread revisions, withdrawn/
+ * decision notes, a HIGH approval and its successor) arrive separately and
+ * answer each other. The screen folds a thread into one row for its latest
+ * arrival -- the earlier ones are counted, and their paths stay listed on the
+ * open message's detail, so every arrival is still reachable and the fold
+ * changes no delivery or acknowledgement fact. The root is the first
+ * References entry, else the In-Reply-To, else the message's own Message-ID --
+ * the headers this same reader already parses. */
+function threadKeyOf(headers: Readonly<Record<string, string>>): string | null {
+  const normalize = (value: string | undefined): string | null => {
+    const token = value?.trim().match(/^<([^>]*)>$/)?.[1] ?? value?.trim() ?? null;
+    return token !== null && token.length > 0 ? token : null;
+  };
+  return normalize(headers["references"]?.split(/\s+/).filter(Boolean)[0])
+    ?? normalize(headers["in-reply-to"]) ?? normalize(headers["message-id"]);
+}
 
 /** A mailbox directory's messages, most recently delivered first, by a name
  * observation only (lstat): a regular file is a message, a directory or a
@@ -153,7 +171,7 @@ function entriesIn(directory: string): { readonly entries: readonly Entry[]; rea
  * read now is not known to be no message: the rows that were read are kept,
  * and the directory says it was not wholly read, as one it cannot list does. */
 function rowsIn(directory: string, unread: boolean, budget: number): DirectoryRows {
-  const rows: { row: MailRow; deliveredAtMs: number }[] = [];
+  const rows: { row: MailRow; deliveredAtMs: number; threadKey: string | null }[] = [];
   const listed = entriesIn(directory);
   let unreadable = listed.unreadable;
   const shown = listed.entries.slice(0, Math.max(0, budget));
@@ -165,6 +183,7 @@ function rowsIn(directory: string, unread: boolean, budget: number): DirectoryRo
     const { headers } = parseMessage(read.text);
     rows.push({
       deliveredAtMs: read.deliveredAtMs,
+      threadKey: threadKeyOf(headers),
       row: Object.freeze({
         id: name,
         from: addressName(headers["from"]),
@@ -172,6 +191,8 @@ function rowsIn(directory: string, unread: boolean, budget: number): DirectoryRo
         subject: headers["subject"] ?? "(No subject)",
         unread,
         path,
+        threadCount: 1,
+        earlier: [],
       }),
     });
   }
@@ -185,7 +206,37 @@ function rowsIn(directory: string, unread: boolean, budget: number): DirectoryRo
  * is what orders the list. Entries that arrived in the same millisecond keep a
  * stable order by name so the screen does not reshuffle between refreshes.
  */
-function byArrival(rows: readonly { row: MailRow; deliveredAtMs: number }[]): readonly MailRow[] {
+type Entry2 = { readonly row: MailRow; readonly deliveredAtMs: number; readonly threadKey: string | null };
+
+/** One row per thread: the latest arrival carries the count, and is placed
+ * where it arrived; an unread member makes the folded row unread. Messages
+ * without a thread key stay single rows. */
+function foldThreads(entries: readonly Entry2[]): readonly Entry2[] {
+  const groups = new Map<string, Entry2[]>();
+  for (const entry of entries) {
+    if (entry.threadKey === null) continue;
+    const group = groups.get(entry.threadKey) ?? [];
+    group.push(entry); groups.set(entry.threadKey, group);
+  }
+  const folded: Entry2[] = [];
+  for (const entry of entries) {
+    if (entry.threadKey === null || groups.get(entry.threadKey)!.length < 2) { folded.push(entry); continue; }
+    const group = groups.get(entry.threadKey)!;
+    // "Latest" is the list's own order: most recent arrival first, a stable
+    // name order for a tie. The thread's other members fold under it.
+    const ordered = [...group].sort((a, b) => b.deliveredAtMs - a.deliveredAtMs
+      || a.row.id.localeCompare(b.row.id));
+    const latest = ordered[0]!;
+    if (entry !== latest) continue;   // earlier members fold into the latest
+    const earlier = ordered.slice(1).reverse().map(member => member.row.path);
+    folded.push({ ...latest, row: Object.freeze({ ...latest.row,
+      unread: group.some(member => member.row.unread),
+      threadCount: group.length, earlier }) });
+  }
+  return folded;
+}
+
+function byArrival(rows: readonly Entry2[]): readonly MailRow[] {
   return [...rows]
     .sort((left, right) => right.deliveredAtMs - left.deliveredAtMs || left.row.id.localeCompare(right.row.id))
     .map(entry => entry.row);
@@ -195,8 +246,13 @@ export function readMailbox(paths: MailboxPaths): MailboxRead {
   const budget = READ_BOUNDS.mailListRows.value;
   const pending = rowsIn(paths.newDir, true, budget);
   const settled = rowsIn(paths.curDir, false, budget - pending.rows.length);
+  // Threads fold across both directories -- a thread can straddle them -- but
+  // the screen's contract stays: unread rows first, by arrival, then read rows.
+  const folded = foldThreads([...pending.rows, ...settled.rows]);
+  const unreadRows = folded.filter(entry => entry.row.unread);
+  const readRows = folded.filter(entry => !entry.row.unread);
   return Object.freeze({
-    rows: Object.freeze([...byArrival(pending.rows), ...byArrival(settled.rows)]),
+    rows: Object.freeze([...byArrival(unreadRows), ...byArrival(readRows)]),
     unreadable: pending.unreadable ?? settled.unreadable,
     omitted: pending.omitted + settled.omitted,
   });

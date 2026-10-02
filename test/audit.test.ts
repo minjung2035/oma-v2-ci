@@ -1102,7 +1102,8 @@ test("LIFE-009 entry: fresh broker seeds once and restart ignores population edi
     await run();
     const start = readFileSync(join(state, "world", "START.md"), "utf8");
     assert.match(start, /--subject/);
-    assert.match(start, /QUESTION.*MINIMUM CONTEXT.*UNCERTAINTY/);
+    assert.match(start, /oma_merge open/);
+    assert.match(start, /only recorded votes count/);
     assert.match(
       readFileSync(join(state, "world", "agents.tsv"), "utf8"),
       /child\tresident\tenabled\tchild/,

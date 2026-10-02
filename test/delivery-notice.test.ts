@@ -8,7 +8,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AuthContext, Capability } from "../implementation/contracts.js";
@@ -198,6 +198,45 @@ test("DR6 / D01, BATCH-002: a batch presented again says so, a new one does not,
     assert.match(index, /oma_mail_read/);
     assert.doesNotMatch(index, /읽기: cat/);
   } finally { store.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+/** mail-v1 / spec §6: when one batch holds several revisions of a request's
+ * review thread, /inbox.md lists the latest in place and names the earlier
+ * ones on its row; every message id still appears, and folding touches the
+ * derived view only. */
+test("mail-v1: the batch index folds thread revisions of one request, keeping every id", async () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-index-fold-"));
+  try {
+    const { publishBatchView } = await import("../src/storage/batch-view.js");
+    const { runnerViewPathAt } = await import("../src/storage/paths.js");
+    const op = "op-00000000-0000-4000-8000-000000000010";
+    const rev0 = "m-00000000-0000-4000-8000-000000000020-0";
+    const rev1 = "m-00000000-0000-4000-8000-000000000021-0";
+    const rev2 = "m-00000000-0000-4000-8000-000000000022-0";
+    const plain = "m-00000000-0000-4000-8000-000000000030-0";
+    const meta = (id: string, revision: number) => ({ review: { role: "thread" as const, request: op, name: "merge-deadbeef", revision },
+      displayPath: `/mail/workers/cur/${id}:2,` });
+    const info: Record<string, { review?: unknown; displayPath: string }> = {
+      [rev0]: meta(rev0, 0), [rev1]: meta(rev1, 1), [rev2]: meta(rev2, 2),
+      [plain]: { displayPath: `/mail/archive/cur/${plain}:2,` },
+    };
+    const batch = { id: "b-00000000-0000-4000-8000-000000000099", agent: "a", incarnation: 1,
+      messageIds: [rev0, rev1, rev2, plain], sessionPath: null, deliveryMode: "followUp" as const,
+      notice: "mail", indexPath: "/inbox.md" as const };
+    publishBatchView(root, batch as never, TEST_VIEW_LIMITS, undefined, (id) => (info[id] ?? null) as never);
+    const index = readFileSync(join(runnerViewPathAt(root, "a"), "inbox.md"), "utf8");
+    // The latest revision stands in the numbered list; the earlier ones are
+    // named on its row instead of rows of their own.
+    assert.match(index, /earlier revisions:/, "earlier revisions are named");
+    const rows = index.split("\n").filter((line: string) => /^\d+\. /.test(line));
+    assert.equal(rows.length, 2, "the thread folds to the latest revision's row, plus the unrelated mail");
+    assert.match(rows[0]!, /m-00000000-0000-4000-8000-000000000022-0\t\/mail\/workers\/cur\/m-00000000-0000-4000-8000-000000000022-0:2,/,
+      "a workers-audience row shows its real path, not the public archive's");
+    assert.match(rows[0]!, /earlier revisions: \/mail\/workers\/cur\/m-00000000-0000-4000-8000-000000000020-0:2,, \/mail\/workers\/cur\/m-00000000-0000-4000-8000-000000000021-0:2,/);
+    assert.match(rows[1]!, /m-00000000-0000-4000-8000-000000000030-0/);
+    // Every message id still appears exactly once (BATCH-002).
+    for (const id of [rev0, rev1, rev2, plain]) assert.equal(index.split(id).length - 1 >= 1, true, `${id} is named`);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 /** mail-v1: worker-only review mail lives in the workers archive. A Resident

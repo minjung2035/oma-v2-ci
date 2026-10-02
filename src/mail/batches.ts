@@ -77,7 +77,12 @@ export class BatchCoordinator {
     // Check the same bytes the extension will consume before changing Maildir views.
     encodeBatchView(batch, this.limits);
     this.moveToCur(batch.agent, batch.messageIds);
-    publishBatchView(this.stateRoot, batch, this.limits);
+    publishBatchView(this.stateRoot, batch, this.limits, undefined, (id) => {
+      const delivery = this.store.getDelivery(id, batch.agent);
+      if (delivery === null) return null;
+      const message = this.messagePlan(delivery);
+      return { review: message.review, displayPath: mailAudienceDisplayPath(message) };
+    });
     return batch;
   }
   async prepare(auth: AuthContext): Promise<PreparedBatch | null> {
