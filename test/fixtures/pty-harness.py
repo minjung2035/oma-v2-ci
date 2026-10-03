@@ -35,15 +35,31 @@ def main():
             print(json.dumps({"exited": False, "code": None, "echo": False, "icanon": False, "output": out.hex(), "ready": False}))
             os.kill(pid, signal.SIGKILL)
             return
+    # Steps may carry "expect": after the step's fixed wait, keep reading until
+    # that marker shows up in output emitted since the last write (bounded by
+    # "expect_timeout"). This is the same race as the initial "ready" wait: on a
+    # loaded host the program can still be drawing when the pause expires, and
+    # the next write lands on the wrong screen and is lost. A missed expect
+    # proceeds like a short wait -- the final assertions still see the screen.
+    pos = len(out)
+    missed = 0
     for step in spec["steps"]:
         if "write" in step:
             os.write(master, bytes.fromhex(step["write"]))
+            pos = len(out)
         if "resize" in step:
             rows, cols = step["resize"]
             fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         if "signal" in step:
             os.kill(pid, getattr(signal, step["signal"]))
         pump(step.get("wait", 0.2))
+        if "expect" in step:
+            needle = bytes.fromhex(step["expect"])
+            deadline = time.time() + step.get("expect_timeout", 20)
+            while needle not in out[pos:] and time.time() < deadline:
+                pump(0.05)
+            if needle not in out[pos:]:
+                missed += 1
     # Waited by the clock, not by rounds: once the program has closed its side,
     # a read answers EIO at once and a round takes no time at all.
     status = None
@@ -64,6 +80,7 @@ def main():
         "echo": bool(lflag & termios.ECHO),
         "icanon": bool(lflag & termios.ICANON),
         "output": out.hex(),
+        "expectMissed": missed,
     }))
     if status is None:
         os.kill(pid, signal.SIGKILL)
