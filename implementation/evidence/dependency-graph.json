@@ -1849,7 +1849,7 @@
  ],
  "files": 377,
  "runtimeEdges": 1607,
- "typeOnlyEdges": 425,
+ "typeOnlyEdges": 424,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 310,
   "L2-facts -> L1-kernel": 36,

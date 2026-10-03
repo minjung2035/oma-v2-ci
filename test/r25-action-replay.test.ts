@@ -88,6 +88,50 @@ test("AV-20261003-27/R25: a same-key terminal receipt replays over a GOAL withdr
   } finally { f.close(); }
 });
 
+for (const kind of ["agent.start", "agent.stop"] as const) {
+  test(`AV-20261003-27/P0 ${kind}: a terminal same-key receipt replays over a retired target`, async () => {
+    const f = lifecycleReplayFixture();
+    try {
+      const accepted = await f.dispatch(kind, `terminal-${kind}`);
+      assert.match(JSON.stringify(accepted), /"state":"succeeded"/);
+      const operation = (accepted as { result: { operation: string } }).result.operation;
+      // enabled->retired and stopped->retired are both legal desired moves
+      // (store validDesiredTransition); the target's new state must not
+      // re-judge what was durably accepted under this key.
+      f.store.transaction(tx => tx.updateAgent({ name: "a", desired: "retired" }));
+      const replay = await f.dispatch(kind, `terminal-${kind}`);
+      assert.equal((replay as { result: { operation: string; state: string } }).result.operation, operation);
+      assert.equal((replay as { result: { state: string } }).result.state, "succeeded",
+        "the recorded terminal receipt wins over the retired target state; it is not re-judged");
+      assert.equal(f.units.effects.length, 1, "a replay runs no new physical effect");
+      // A fresh key on the same retired target is still refused by the fence.
+      const fresh = await f.dispatch(kind, `fresh-${kind}`);
+      assert.match(JSON.stringify(fresh), /AGENT_RETIRED/);
+      assert.equal(f.store.getOperation("manager", `fresh-${kind}`), null, "a refused fresh request leaves no row");
+      assert.equal(f.units.effects.length, 1);
+      // D06: current management authority still precedes the replay -- a grant
+      // revoked after acceptance does not read the terminal receipt back.
+      f.capabilities.clear();
+      const revoked = await f.dispatch(kind, `terminal-${kind}`);
+      assert.match(JSON.stringify(revoked), /CAPABILITY_DENIED/);
+      assert.equal(f.units.effects.length, 1);
+    } finally { f.close(); }
+  });
+  test(`AV-20261003-27/P0 ${kind}: an unresolved same-key retry over a retired target reports unknown, not a refusal`, async () => {
+    const f = lifecycleReplayFixture();
+    try {
+      const prior = f.seedPending(kind, `unresolved-${kind}`, "pending");
+      f.store.transaction(tx => tx.updateAgent({ name: "a", desired: "retired" }));
+      const replay = await f.dispatch(kind, `unresolved-${kind}`);
+      assert.match(JSON.stringify(replay), /"state":"unknown"/,
+        "an accepted intent superseded by retirement is reported, never reinterpreted as a new refusal");
+      assert.equal(f.store.getOperationById(prior.id)?.state, "unknown");
+      assert.equal(f.store.getOperationById(prior.id)?.planJson, prior.planJson);
+      assert.deepEqual(f.units.effects, [], "retirement never authorizes the old intent a new effect");
+    } finally { f.close(); }
+  });
+}
+
 test("R25: no GOAL, provisioning, retired and unknown death retain their own rejection boundaries", async () => {
   const f = lifecycleReplayFixture();
   try {
